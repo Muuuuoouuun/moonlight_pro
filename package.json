@@ -1,15 +1,25 @@
 {
   "name": "com-moon",
   "private": true,
+  "packageManager": "npm@11.9.0",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
-    "build": "turbo build",
-    "dev": "turbo dev"
+    "build": "turbo run build",
+    "check:connections": "node ./scripts/check-connections.mjs",
+    "dev": "turbo run dev",
+    "dev:hub": "npm --workspace @com-moon/hub run dev",
+    "dev:engine": "npm --workspace @com-moon/engine run dev",
+    "dev:web": "npm --workspace @com-moon/web run dev",
+    "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
-    "turbo": "latest"
+    "@types/node": "^24.5.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "turbo": "^2.5.6",
+    "typescript": "^5.9.2"
   }
 }

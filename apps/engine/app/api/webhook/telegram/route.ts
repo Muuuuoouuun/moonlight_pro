@@ -1,24 +1,29 @@
 import { NextResponse } from "next/server";
-import { logError } from "@/packages/hub-gateway/logger";
+
+import { logError } from "@com-moon/hub-gateway";
+
+import { runTelegramUpdate } from "../../../../lib/run";
+
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
     const update = await req.json();
-    console.log("[Telegram Hook Received]", update);
+    const result = await runTelegramUpdate(update);
 
-    // 1. n8n 웹훅 토스 (실제 자동화 파이프라인)
-    // const n8nResponse = await fetch(process.env.N8N_WEBHOOK_URL!, {
-    //   method: "POST",
-    //   body: JSON.stringify(update),
-    // });
-
-    return NextResponse.json({ status: "ok" });
+    return NextResponse.json({
+      status: result.status,
+      runId: result.runId,
+      command: result.command,
+      response: result.response,
+    });
   } catch (error) {
     await logError({
       context: "telegram-webhook",
       payload: { error: String(error) },
       trace: "telegram-api",
       timestamp: new Date().toISOString(),
+      level: "error",
     });
     return NextResponse.json({ error: "Processing failed" }, { status: 500 });
   }

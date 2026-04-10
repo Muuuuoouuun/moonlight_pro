@@ -4,10 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build"
+    "build": "next build",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@com-moon/hub-gateway": "*",
     "@com-moon/content-manager": "*",
-    "next": "14.2.0"
+    "next": "14.2.0",
+    "react": "^18",
+    "react-dom": "^18"
   }
 }
