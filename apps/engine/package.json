@@ -1,0 +1,13 @@
+{
+  "name": "@com-moon/engine",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build"
+  },
+  "dependencies": {
+    "@com-moon/content-manager": "*",
+    "next": "14.2.0"
+  }
+}

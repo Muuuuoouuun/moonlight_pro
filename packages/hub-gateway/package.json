@@ -1,0 +1,5 @@
+{
+  "name": "@com-moon/hub-gateway",
+  "version": "0.0.1",
+  "main": "index.ts"
+}
