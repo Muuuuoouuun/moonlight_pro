@@ -29,6 +29,8 @@
 - `GET /api/health`
 - `POST /api/webhook/telegram`
 - `POST /api/webhook/project`
+- `POST /api/webhook/project/openclaw`
+- `POST /api/webhook/project/moltbot`
 
 관련 코드:
 
@@ -50,9 +52,12 @@
 | Supabase | 시스템 원장, 로그, 프로젝트, task, sync 상태 저장 | REST + DB | Implemented | Hub, Engine, `packages/hub-gateway` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` 또는 `SUPABASE_ANON_KEY`, `COM_MOON_DEFAULT_WORKSPACE_ID` | 실제 workspace 기준으로 env 채우고 live 데이터 연결 |
 | Telegram | 인바운드 명령, 빠른 운영 입력 | Webhook intake | Ready | `/api/webhook/telegram`, `automation_runs`, `webhook_events` | 공개 Engine URL, Telegram bot webhook 등록 | 봇 webhook를 engine URL에 연결하고 smoke test 실행 |
 | Project tools | 외부 PM/진행률 도구에서 progress/PMS 이벤트 수집 | Generic webhook | Ready | `/api/webhook/project`, `project_updates`, `routine_checks`, `projects` | 공개 Engine URL, 공급자 payload mapping | 먼저 하나의 PM 도구 payload를 webhook contract에 맞춤 |
+| OpenClaw | 외부 agent workflow에서 프로젝트/운영 이벤트 전달 | Shared webhook alias | Ready | `/api/webhook/project/openclaw`, `project_updates`, `webhook_events` | 공개 Engine URL, `COM_MOON_SHARED_WEBHOOK_SECRET` 권장, payload field mapping | OpenClaw outbound webhook를 alias route에 연결하고 첫 smoke test 실행 |
+| Moltbot | bot/operator workflow에서 PMS 또는 project 이벤트 전달 | Shared webhook alias | Ready | `/api/webhook/project/moltbot`, `project_updates`, `routine_checks`, `webhook_events` | 공개 Engine URL, `COM_MOON_SHARED_WEBHOOK_SECRET` 권장, payload field mapping | Moltbot payload를 alias route에 보내고 routine or progress event를 확인 |
 | GitHub | 작업 히스토리, PR 리뷰 상태, 이슈 압력, milestone 기반 로드맵 | API read / sync | Ready | `Work OS > PMS`, `Work OS > Roadmap`, `integration_connections`, `sync_runs` | `GITHUB_TOKEN`, `GITHUB_REPOSITORIES` | 메인 repo부터 연결해서 PR/issue/milestone이 PMS와 로드맵에 보이게 만들기 |
 | Notion | 프로젝트, task, 의사결정, 노트, 문서 허브화 | API sync | Planned | `integration_connections`, `field_mappings`, `sync_runs` | `NOTION_TOKEN`, database IDs | projects/tasks 2개 DB부터 매핑 설계 |
-| Google Calendar | 일정, 마감일, cadence 블록 연결 | OAuth + sync | Planned | `routine_checks`, `projects.due_at`, `tasks.due_at`, `sync_runs` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `GOOGLE_CALENDAR_ID` | 이벤트를 routine/task/project 중 어디에 넣을지 먼저 확정 |
+| Google Calendar | 일정, 마감일, cadence 블록 연결 | OAuth + sync + event write | Ready | `Work OS > Calendar`, `routine_checks`, `projects.due_at`, `tasks.due_at`, `sync_runs` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALENDAR_ID` | Google OAuth env를 채우고 Work OS > Calendar에서 연결 후 실제 캘린더를 하나 붙이기 |
+| Samsung Calendar | Galaxy 기기 일정 가시성 | Google account sync on device | Supported via Google sync | `Work OS > Calendar` | Google Calendar 연결, Samsung Calendar 앱에서 같은 Google 계정 sync | 허브에서는 Google Calendar를 source로 연결하고, Galaxy 기기에서는 그 캘린더를 표시 |
 | Email | 리드 follow-up, 인바운드 메일, 캠페인/알림 발송 | Inbox sync + send provider | Planned | `leads`, `campaigns`, `campaign_runs`, `sync_runs` | Gmail API 또는 IMAP 선택, SMTP/Resend/Postmark 등 발송 provider 선택 | inbox sync와 outbound send 중 1차 범위를 먼저 결정 |
 | Slack | 에러 알림, approval loop, lightweight command | Bot + webhook | Planned | `error_logs`, `sync_runs`, `automation_runs`, `webhook_events` | `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, 채널 라우팅 규칙 | 실패 알림부터 시작하고 양방향 command는 나중에 추가 |
 
@@ -121,6 +126,23 @@ Slack은 강력하지만 쉽게 잡음 채널이 되기 때문에, 먼저 source
 
 이 구조 덕분에 Notion, Slack workflow, Zapier, Make, ClickUp, Asana 같은 도구를 같은 intake lane으로 묶을 수 있다.
 
+공유 agent alias:
+
+- `POST /api/webhook/project/openclaw`
+- `POST /api/webhook/project/moltbot`
+
+권장 인증:
+
+- `x-com-moon-shared-secret: <COM_MOON_SHARED_WEBHOOK_SECRET>`
+- 또는 `Authorization: Bearer <COM_MOON_SHARED_WEBHOOK_SECRET>`
+
+공유 alias는 nested payload도 받는다.
+
+- `meta.workspaceId`, `meta.provider`, `meta.source`
+- `project.id`, `project.title`, `project.status`, `project.progress`, `project.nextAction`
+- `event.type`, `event.summary`, `event.note`
+- `check.checkType`
+
 ### Notion
 
 가장 먼저 붙일 만한 지식/프로젝트 시스템이다.
@@ -140,18 +162,39 @@ Slack은 강력하지만 쉽게 잡음 채널이 되기 때문에, 먼저 source
 
 ### Google Calendar
 
-Calendar는 단순 이벤트 표출보다 rhythm과 due-date를 정리하는 용도로 쓰는 게 좋다.
+Google Calendar는 이제 직접 연결 가능한 1차 일정 provider다.
+
+현재 구현 범위:
+
+- Google OAuth 연결
+- `Work OS > Calendar` 안에서 외부 Google 일정 읽기
+- 허브에서 Google 일정 생성 / 수정
+- sync 이력 `integration_connections`, `sync_runs` 기록
 
 권장 1차 범위:
 
 - 정기 일정 -> `routine_checks`
 - 프로젝트 마감 -> `projects.due_at`
 - 작업 마감 -> `tasks.due_at`
+- 외부 회의 / 일정 -> `Work OS > Calendar` shared schedule
 
 피해야 할 것:
 
 - 모든 캘린더 이벤트를 task로 복제
 - 개인 일정과 운영 cadence를 같은 lane에 혼합
+- 연결 전에 `GOOGLE_REFRESH_TOKEN` 같은 수동 토큰 주입을 전제로 설계
+
+### Samsung Calendar
+
+Samsung Calendar는 허브에서 직접 web API로 다루기보다, 같은 Google Calendar를 기기에서 동기화하는 경로가 현실적이다.
+
+권장 흐름:
+
+1. 허브에서 Google Calendar 연결
+2. 허브에서 일정 생성 / 수정
+3. Galaxy 기기의 Samsung Calendar에서 같은 Google 계정 calendar sync 활성화
+
+이 방식이면 허브, Google Calendar, Samsung Calendar가 같은 일정 원본을 공유하게 된다.
 
 ### Email
 

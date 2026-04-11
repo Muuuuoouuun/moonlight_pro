@@ -43,23 +43,23 @@ One accent color, a small number of surface styles, and deliberate typography be
 
 ## 4. Visual Direction
 
-Working direction name: `Smoked Command Deck`
+Working direction name: `Moonstone Command Deck`
 
-One-line mood: *the quiet authority of a yacht bridge, a trading desk,
-or a mission-control room — premium because it looks precise, not because
-it looks shiny.*
+One-line mood: *the cool precision of a flight instrument panel, a surgical
+console, or a satellite operations room — premium because it is calibrated,
+not because it is decorated.*
 
 Keywords:
 
-- smoked graphite
-- champagne metal
+- void black
+- moonstone silver
+- frost white (public only)
 - platinum text
-- warm parchment (public only)
 - rim-lit edges
 - whisper borders
-- hardware-grade precision
+- instrument-grade precision
 
-### Reference Synthesis, `Linear x Bloomberg x Vacheron`
+### Reference Synthesis, `Linear x Apple x Bloomberg`
 
 This is the outside reference mix for Com_Moon.
 
@@ -69,129 +69,115 @@ This is the outside reference mix for Com_Moon.
 - ultra-thin borders and low-noise typography
 - restrained motion that highlights state changes instead of decoration
 
+`Apple (Pro hardware / Final Cut)` gives us:
+
+- cool silver-white as a *signal* of precision, never decoration
+- moonstone sheen on controls and CTAs — not warm gold, but cool blue-silver
+- the sense that every component is machined to tolerance, not styled
+
 `Bloomberg Terminal` gives us:
 
 - command-deck information rhythm: status, count, next action
 - monospace for numbers, sans for labels, no decorative flourish
 - dense layouts that still feel calm because hierarchy is unambiguous
 
-`Vacheron Constantin / high-end horology` gives us:
-
-- champagne metal as a *signal*, never as decoration
-- brushed-metal gradients only on edges, dials, and controls
-- the sense that every surface is machined, not painted
-
 Com_Moon should not copy any of these directly.
 
 The real blend should be:
 
-- `apps/web`: `55% Linear`, `25% Bloomberg`, `20% Vacheron` (still public, still editorial pacing, but darker and more precise than before)
-- `apps/hub`: `30% Linear`, `55% Bloomberg`, `15% Vacheron` (full control-tower energy)
-- `content workspace`: `45% Linear`, `35% Bloomberg`, `20% Vacheron`
+- `apps/web`: `50% Linear`, `30% Apple`, `20% Bloomberg` (frost silver canvas, editorial pacing, moonstone CTA)
+- `apps/hub`: `35% Linear`, `40% Bloomberg`, `25% Apple` (full void-black control-deck energy)
+- `content workspace`: `45% Linear`, `30% Bloomberg`, `25% Apple`
 
 In practice that means:
 
-- hub surfaces are **dark by default**, with smoked-ink canvases, whisper borders, and champagne-metal accents on CTAs and KPIs
-- public surfaces stay **lighter** (warm parchment) but use graphite text, metal rules, and the same champagne CTA language — so the two feel like one hardware family with different lighting
+- hub surfaces are **dark by default**, with void-black canvases, whisper borders, and moonstone-silver accents on CTAs and KPIs
+- public surfaces stay **lighter** (frost silver-white) but use onyx text, silver rules, and the same moonstone CTA language — so the two feel like one precision instrument family with different lighting
 - both surfaces avoid colored gradients on large areas; gradients live only on buttons, rim-lit card edges, and signature marks
 
 Do not import these reference patterns blindly:
 
-- Linear's cool SaaS blue or purple accent
+- Warm gold / amber / champagne accents
 - Bloomberg's amber-on-black news-ticker density
-- Glossy chrome, blown-glass, or "Web3" metallic sheen
-- Cold greige / generic enterprise grayscale
+- Glossy chrome, mirror reflections, or "Web3" metallic sheen
+- Warm greige or cream canvases
 - Full-bleed radial gradients used as decoration
 
 ### Public Surface Mood
 
-- Warm parchment canvas, graphite ink
-- Champagne metal CTA and rule lines
+- Frost silver-white canvas, onyx ink
+- Moonstone silver CTA and rule lines
 - Serif display headlines, generous breathing
-- Trust-building proof blocks anchored by metal dividers
+- Trust-building proof blocks anchored by silver dividers
 
 ### Hub Surface Mood
 
-- Smoked-ink canvas, platinum text
+- Void-black canvas, platinum text
 - Dense information rhythm with whisper borders
-- Champagne metal used semantically (signal, CTA, emphasized KPI)
+- Moonstone silver used semantically (signal, CTA, emphasized KPI)
 - Sticky command strip; status chips over decoration
-
-### Public Surface Mood
-
-- Lighter background
-- More breathing room
-- Bigger type
-- Narrative sections
-- Trust-building proof blocks
-
-### Hub Surface Mood
-
-- Denser information rhythm
-- Stronger contrast between cards
-- Status color used semantically, not decoratively
-- Sticky controls and compact summaries
 
 ## 5. Color System
 
-The palette has two sides — a **dark ink stack** for hub surfaces and a
-**warm parchment stack** for public surfaces — bridged by a single
-**champagne metal** accent that carries brand identity across both.
+The palette has two sides — a **void black stack** for hub surfaces and a
+**frost silver stack** for public surfaces — bridged by a single
+**moonstone accent** (cool blue-silver) that carries brand identity across both.
 
-Moss green is retired. There is no brand green anywhere in the system.
+Warm champagne, moss green, and amber tones are retired.
+There is no warm gold anywhere in the system.
 
 ### Core Palette
 
 ```css
 :root {
-  /* ── Dark ink stack (hub canvas, feature panels) ─────────────── */
-  --cm-ink-900: #0e1114; /* deepest canvas, hub body background */
-  --cm-ink-800: #15191e; /* standard card on dark */
-  --cm-ink-700: #1d222a; /* elevated card, hover lift */
-  --cm-ink-600: #2a313b; /* strong border, pressed state */
+  /* ── Void black stack (hub canvas, feature panels) ───────────── */
+  --cm-ink-900: #0c1018; /* deepest void, hub body background */
+  --cm-ink-800: #131923; /* standard card on dark */
+  --cm-ink-700: #1b2332; /* elevated card, hover lift */
+  --cm-ink-600: #26304a; /* strong border, pressed state */
 
-  /* ── Warm parchment stack (public canvas) ────────────────────── */
-  --cm-parchment: #ede9e0;      /* public body background */
-  --cm-parchment-soft: #f6f3ec; /* cards on parchment */
-  --cm-parchment-deep: #e2ddd0; /* muted section band */
+  /* ── Frost silver stack (public canvas) ──────────────────────── */
+  --cm-parchment: #f0f2f7;      /* public body background */
+  --cm-parchment-soft: #f4f5f8; /* cards on frost */
+  --cm-parchment-deep: #e2e6ef; /* muted section band */
 
-  /* ── Champagne metal (the single brand accent) ───────────────── */
-  --cm-metal-300: #e8dfcb; /* highlight, KPI numbers on dark */
-  --cm-metal-400: #cdbf9e; /* default accent, link underline */
-  --cm-metal-500: #a8986f; /* primary CTA base */
-  --cm-metal-600: #7d6f4a; /* pressed / hover on dark */
+  /* ── Moonstone accent (the single brand accent) ──────────────── */
+  --cm-metal-300: #d6dff0; /* highlight, KPI numbers on dark */
+  --cm-metal-400: #a8b8d4; /* default accent, link underline */
+  --cm-metal-500: #5274a8; /* primary CTA base */
+  --cm-metal-600: #365888; /* pressed / hover on dark */
 
   /* ── Text ─────────────────────────────────────────────────────── */
-  --cm-platinum: #e9ebee;       /* primary text on dark */
-  --cm-platinum-soft: #9ba3ad;  /* secondary text on dark */
-  --cm-graphite: #171a1f;       /* primary text on parchment */
-  --cm-graphite-soft: #55606b;  /* secondary text on parchment */
+  --cm-platinum: #e8edf4;       /* primary text on dark */
+  --cm-platinum-soft: #7e8c9e;  /* secondary text on dark */
+  --cm-graphite: #0c1018;       /* primary text on frost */
+  --cm-graphite-soft: #4a5568;  /* secondary text on frost */
 
   /* ── Hairlines ────────────────────────────────────────────────── */
-  --cm-line-dark: rgba(255, 255, 255, 0.08);
-  --cm-line-dark-strong: rgba(255, 255, 255, 0.14);
-  --cm-line-light: rgba(23, 26, 31, 0.10);
-  --cm-line-light-strong: rgba(23, 26, 31, 0.18);
+  --cm-line-dark: rgba(255, 255, 255, 0.07);
+  --cm-line-dark-strong: rgba(255, 255, 255, 0.12);
+  --cm-line-light: rgba(12, 16, 24, 0.08);
+  --cm-line-light-strong: rgba(12, 16, 24, 0.16);
 
-  /* ── Semantic status (used sparingly) ─────────────────────────── */
-  --cm-ok-500: #6fa28a;   /* success (muted, non-green-branded) */
-  --cm-warn-500: #c4a15a; /* warning, brass-leaning */
-  --cm-risk-500: #b5574a; /* error / destructive */
-  --cm-info-500: #6d8aa4; /* neutral informational */
+  /* ── Semantic status (muted; never compete with moonstone) ─────── */
+  --cm-ok-500: #5a8f7a;   /* success (muted teal) */
+  --cm-warn-500: #9e8040; /* warning, brass-cooled */
+  --cm-risk-500: #a04040; /* error / destructive */
+  --cm-info-500: #5070a0; /* neutral informational */
 
   /* ── Signature gradients (accent only, never background fill) ── */
   --cm-grad-metal: linear-gradient(
     135deg,
-    #e8dfcb 0%,
-    #cdbf9e 38%,
-    #a8986f 70%,
-    #7d6f4a 100%
+    #d6dff0 0%,
+    #a8b8d4 38%,
+    #5274a8 70%,
+    #365888 100%
   );
-  --cm-grad-ink: linear-gradient(180deg, #15191e 0%, #0e1114 100%);
+  --cm-grad-ink: linear-gradient(180deg, #131923 0%, #0c1018 100%);
   --cm-grad-rim: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.10) 0%,
-    rgba(255, 255, 255, 0) 60%
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0) 55%
   );
 }
 ```
@@ -200,9 +186,9 @@ Moss green is retired. There is no brand green anywhere in the system.
 
 - **Brand anchor is `--cm-metal-500`.** Every primary CTA uses
   `--cm-grad-metal` with a `--cm-grad-rim` overlay on the top edge.
-- **Dark ink stack is the hub default.** Hub pages set their body to
+- **Void black stack is the hub default.** Hub pages set their body to
   `--cm-ink-900` and build up with `--cm-ink-800` / `--cm-ink-700`.
-- **Parchment stack is the web default.** Web pages stay on
+- **Frost silver stack is the web default.** Web pages stay on
   `--cm-parchment` with `--cm-parchment-soft` cards. Occasional
   `--cm-ink-900` feature panels are allowed for premium moments
   (hero, case-study reveals, pricing anchor).
@@ -212,10 +198,11 @@ Moss green is retired. There is no brand green anywhere in the system.
   `--cm-grad-rim` belongs on the top edge of raised elements to
   simulate rim lighting.
 - **Status colors are muted on purpose.** They must not compete with
-  the metal accent. Use them on chips, dots, and left-border accents,
+  the moonstone accent. Use them on chips, dots, and left-border accents,
   not as full card fills.
-- **Do not introduce any green, purple, or bright blue.** The only
-  blue in the system is `--cm-info-500` for neutral notices.
+- **Do not introduce warm gold, green, or purple.** `--cm-info-500` is
+  the only cool-blue in the system and is reserved for neutral notices.
+  The moonstone accent (`--cm-metal-500`) is the single permitted blue-silver.
 
 ## 6. Typography
 

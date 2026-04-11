@@ -54,8 +54,8 @@ export default async function AutomationWebhooksPage() {
       <div className="stack">
         <SectionCard
           kicker="Smoke Test"
-          title="Send a project webhook from the hub"
-          description="This is the fastest operator path for confirming engine intake and persistence behavior."
+          title="Send a webhook smoke test from the hub"
+          description="This is the fastest operator path for confirming generic and shared intake behavior before an external bot is wired in."
         >
           <WebhookTestForm
             defaultWorkspaceId={defaultWorkspaceId}

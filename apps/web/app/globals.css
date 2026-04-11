@@ -7,12 +7,12 @@
  * resolving while we migrate to the new tokens.
  */
 :root {
-  --font-display: "Iowan Old Style";
-  --font-body: "Pretendard Variable";
-  --font-mono: "SFMono-Regular";
+  --font-display: var(--cm-font-serif);
+  --font-body: var(--cm-font-sans);
+  --font-mono: var(--cm-font-mono);
   --bg: var(--cm-parchment);
   --bg-strong: var(--cm-parchment-deep);
-  --surface: rgba(255, 251, 245, 0.84);
+  --surface: rgba(248, 249, 252, 0.84);
   --surface-strong: var(--cm-parchment-soft);
   --surface-deep: var(--cm-parchment-deep);
   --ink: var(--cm-graphite);
@@ -21,23 +21,14 @@
   --line: var(--cm-line-light);
   --line-strong: var(--cm-line-light-strong);
   --accent: var(--cm-metal-500);
-  --accent-soft: rgba(205, 191, 158, 0.14);
+  --accent-soft: rgba(82, 116, 168, 0.14);
   --accent-ink: var(--cm-parchment-soft);
   --warm: var(--cm-metal-400);
   --shadow: var(--cm-shadow-panel-light);
   --shadow-soft: var(--cm-shadow-card-light);
-  --serif:
-    var(--font-display),
-    "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Times New Roman",
-    Georgia, serif;
-  --sans:
-    var(--font-body),
-    "Pretendard Variable", "Pretendard", "SUIT Variable", "Apple SD Gothic Neo",
-    "Noto Sans KR", sans-serif;
-  --mono:
-    var(--font-mono),
-    "SFMono-Regular", "IBM Plex Mono", "JetBrains Mono", Consolas, Menlo,
-    monospace;
+  --serif: var(--cm-font-serif);
+  --sans: var(--cm-font-sans);
+  --mono: var(--cm-font-mono);
 }
 
 * {
@@ -52,15 +43,15 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(168, 152, 111, 0.12), transparent 24%),
-    radial-gradient(circle at 85% 20%, rgba(205, 191, 158, 0.08), transparent 28%),
-    linear-gradient(180deg, #fcf9f3 0%, var(--bg) 100%);
+    radial-gradient(circle at top left, rgba(82, 116, 168, 0.06), transparent 26%),
+    radial-gradient(circle at 88% 18%, rgba(82, 116, 168, 0.04), transparent 30%),
+    linear-gradient(180deg, #f7f8fc 0%, var(--bg) 100%);
   color: var(--text);
   font-family: var(--sans);
 }
 
 ::selection {
-  background: rgba(205, 191, 158, 0.14);
+  background: rgba(82, 116, 168, 0.16);
 }
 
 a {
@@ -96,8 +87,8 @@ select {
   top: 0;
   z-index: 10;
   backdrop-filter: blur(16px);
-  background: rgba(248, 243, 236, 0.82);
-  border-bottom: 1px solid rgba(25, 26, 21, 0.08);
+  background: rgba(244, 245, 248, 0.90);
+  border-bottom: 1px solid rgba(12, 16, 24, 0.08);
 }
 
 .topbar-inner {
@@ -203,22 +194,22 @@ select {
 .primary-link {
   background: var(--accent);
   color: var(--accent-ink);
-  box-shadow: 0 12px 24px rgba(205, 191, 158, 0.16);
+  box-shadow: 0 12px 24px rgba(82, 116, 168, 0.18);
 }
 
 .secondary-link {
   border: 1px solid var(--line);
-  background: rgba(255, 250, 242, 0.8);
+  background: rgba(244, 245, 250, 0.82);
 }
 
 .topbar-cta:hover,
 .primary-link:hover {
-  background: #0b5a42;
+  background: #3a5f8a;
 }
 
 .secondary-link:hover {
   border-color: var(--line-strong);
-  background: rgba(255, 252, 248, 0.96);
+  background: rgba(248, 249, 253, 0.96);
   box-shadow: var(--shadow-soft);
 }
 
@@ -226,7 +217,7 @@ select {
 .primary-link:focus-visible,
 .secondary-link:focus-visible,
 .topnav a:focus-visible {
-  outline: 2px solid rgba(205, 191, 158, 0.24);
+  outline: 2px solid rgba(82, 116, 168, 0.28);
   outline-offset: 3px;
 }
 
@@ -255,8 +246,8 @@ select {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 32px;
-  background: linear-gradient(180deg, rgba(255, 252, 247, 0.9), rgba(246, 241, 232, 0.74));
-  box-shadow: 0 18px 48px rgba(23, 22, 18, 0.06);
+  background: linear-gradient(180deg, rgba(248, 249, 252, 0.92), rgba(234, 236, 242, 0.76));
+  box-shadow: 0 18px 48px rgba(12, 16, 24, 0.06);
 }
 
 .hero-copy-panel::before,
@@ -270,7 +261,7 @@ select {
   position: absolute;
   inset: 0 0 auto 0;
   height: 1px;
-  background: linear-gradient(90deg, rgba(205, 191, 158, 0.24), rgba(168, 152, 111, 0.2));
+  background: linear-gradient(90deg, rgba(82, 116, 168, 0.18), rgba(166, 184, 212, 0.14));
   pointer-events: none;
 }
 
@@ -390,10 +381,10 @@ select {
   display: grid;
   gap: 10px;
   padding: 16px;
-  border: 1px solid rgba(205, 191, 158, 0.1);
+  border: 1px solid rgba(82, 116, 168, 0.10);
   border-radius: 24px;
-  background: rgba(255, 253, 249, 0.88);
-  box-shadow: 0 12px 26px rgba(23, 22, 18, 0.05);
+  background: rgba(248, 249, 252, 0.90);
+  box-shadow: 0 12px 26px rgba(12, 16, 24, 0.05);
 }
 
 .proof-card p {
@@ -431,8 +422,8 @@ select {
   overflow: hidden;
   background:
     radial-gradient(circle at 58% 28%, rgba(255, 255, 255, 0.88), transparent 34%),
-    radial-gradient(circle at 16% 18%, rgba(205, 191, 158, 0.08), transparent 24%),
-    linear-gradient(180deg, rgba(255, 253, 248, 0.96) 0%, rgba(239, 233, 224, 0.96) 100%);
+    radial-gradient(circle at 16% 18%, rgba(82, 116, 168, 0.06), transparent 24%),
+    linear-gradient(180deg, rgba(248, 249, 253, 0.96) 0%, rgba(232, 235, 244, 0.96) 100%);
 }
 
 .hero-line-art {
@@ -452,8 +443,8 @@ select {
   height: 56px;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 30% 30%, #e8dfcb, #cdbf9e 60%, #7d6f4a 100%);
-  box-shadow: 0 18px 40px rgba(168, 152, 111, 0.28);
+    radial-gradient(circle at 30% 30%, #d6dff0, #a8b8d4 60%, #5274a8 100%);
+  box-shadow: 0 18px 40px rgba(82, 116, 168, 0.28);
 }
 
 .floating-note,
@@ -463,14 +454,14 @@ select {
 .mini-kpi-grid article {
   border: 1px solid var(--line);
   border-radius: 24px;
-  background: linear-gradient(180deg, rgba(255, 252, 246, 0.94), rgba(248, 243, 235, 0.84));
+  background: linear-gradient(180deg, rgba(248, 249, 252, 0.94), rgba(234, 236, 242, 0.86));
 }
 
 .floating-note {
   position: static;
   width: auto;
   padding: 20px;
-  box-shadow: 0 16px 34px rgba(23, 22, 18, 0.08);
+  box-shadow: 0 16px 34px rgba(12, 16, 24, 0.08);
 }
 
 .floating-note h2 {
@@ -490,7 +481,7 @@ select {
 .floating-note li,
 .workspace-card li {
   padding: 9px 0;
-  border-top: 1px solid rgba(25, 26, 21, 0.08);
+  border-top: 1px solid rgba(12, 16, 24, 0.08);
   color: var(--muted);
 }
 
@@ -511,7 +502,7 @@ select {
 .signal-band {
   padding: 88px 0;
   background:
-    linear-gradient(180deg, rgba(239, 232, 219, 0.6) 0%, rgba(246, 241, 232, 0.1) 100%);
+    linear-gradient(180deg, rgba(224, 228, 240, 0.50) 0%, rgba(234, 236, 242, 0.08) 100%);
 }
 
 .section-heading {
@@ -569,7 +560,7 @@ select {
   padding: 8px 12px;
   border-radius: 999px;
   background: var(--surface-strong);
-  border: 1px solid rgba(25, 26, 21, 0.07);
+  border: 1px solid rgba(12, 16, 24, 0.07);
   color: var(--muted);
   font-size: 0.85rem;
 }
@@ -612,8 +603,8 @@ select {
 .workspace-section {
   padding: 94px 0;
   background:
-    radial-gradient(circle at 15% 20%, rgba(205, 191, 158, 0.14), transparent 26%),
-    linear-gradient(180deg, #ece5d8 0%, #f6f1e8 100%);
+    radial-gradient(circle at 15% 20%, rgba(82, 116, 168, 0.07), transparent 28%),
+    linear-gradient(180deg, #e2e5f0 0%, #eceff7 100%);
 }
 
 .workspace-inner {
@@ -627,8 +618,8 @@ select {
   gap: 18px;
   padding: 18px;
   background:
-    linear-gradient(145deg, rgba(251, 247, 240, 0.94) 0%, rgba(236, 239, 232, 0.94) 100%);
-  border-color: rgba(205, 191, 158, 0.12);
+    linear-gradient(145deg, rgba(247, 249, 252, 0.94) 0%, rgba(232, 235, 243, 0.94) 100%);
+  border-color: rgba(82, 116, 168, 0.12);
 }
 
 .workspace-sidebar,
@@ -639,7 +630,7 @@ select {
 
 .workspace-card {
   padding: 20px;
-  background: linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(247, 242, 233, 0.88));
+  background: linear-gradient(180deg, rgba(248, 249, 252, 0.98), rgba(234, 236, 242, 0.92));
 }
 
 .workspace-card strong,
@@ -657,7 +648,7 @@ select {
 }
 
 .workspace-card-strong {
-  background: rgba(255, 252, 247, 0.98);
+  background: rgba(248, 249, 252, 0.98);
 }
 
 .workspace-toolbar {
@@ -667,8 +658,8 @@ select {
   gap: 16px;
   padding: 18px 22px;
   border-radius: 24px;
-  background: rgba(255, 252, 247, 0.74);
-  border: 1px solid rgba(205, 191, 158, 0.12);
+  background: rgba(248, 249, 252, 0.76);
+  border: 1px solid rgba(82, 116, 168, 0.12);
   color: var(--ink);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
@@ -686,7 +677,7 @@ select {
 
 .workspace-toolbar div span {
   padding: 8px 12px;
-  border: 1px solid rgba(205, 191, 158, 0.12);
+  border: 1px solid rgba(82, 116, 168, 0.12);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.72);
   font-family: var(--mono);
@@ -702,7 +693,7 @@ select {
 
 .mini-kpi-grid article {
   padding: 18px 18px 20px;
-  background: linear-gradient(180deg, rgba(255, 251, 245, 0.98), rgba(246, 241, 232, 0.9));
+  background: linear-gradient(180deg, rgba(248, 249, 252, 0.98), rgba(234, 236, 242, 0.92));
 }
 
 .mini-kpi-grid p,
@@ -732,18 +723,18 @@ select {
 
 .desk-panel {
   padding: 20px;
-  background: linear-gradient(180deg, rgba(255, 251, 245, 0.98), rgba(246, 241, 232, 0.9));
+  background: linear-gradient(180deg, rgba(248, 249, 252, 0.98), rgba(234, 236, 242, 0.92));
 }
 
 .desk-panel-soft {
-  background: linear-gradient(180deg, rgba(243, 241, 235, 0.96), rgba(235, 236, 229, 0.94));
+  background: linear-gradient(180deg, rgba(237, 239, 244, 0.96), rgba(228, 231, 239, 0.94));
 }
 
 .compact-list li + li,
 .health-stack div + div {
   margin-top: 14px;
   padding-top: 14px;
-  border-top: 1px solid rgba(25, 26, 21, 0.08);
+  border-top: 1px solid rgba(12, 16, 24, 0.08);
 }
 
 .compact-list strong,
@@ -772,7 +763,7 @@ select {
 
 .use-case-card {
   padding: 24px;
-  background: rgba(255, 252, 247, 0.82);
+  background: rgba(248, 249, 252, 0.84);
 }
 
 .use-case-card p {
@@ -790,7 +781,7 @@ select {
   justify-content: space-between;
   gap: 24px;
   padding: 24px 28px;
-  background: rgba(255, 250, 242, 0.88);
+  background: rgba(244, 245, 250, 0.90);
 }
 
 .cta-bar h2 {
@@ -808,8 +799,8 @@ select {
 
 .site-footer {
   padding: 34px 0 42px;
-  background: #111310;
-  color: rgba(245, 238, 225, 0.78);
+  background: #0c1018;
+  color: rgba(232, 237, 244, 0.78);
 }
 
 .footer-inner {
@@ -820,13 +811,13 @@ select {
 
 .brand-lockup-invert .brand-mark {
   background: var(--warm);
-  color: #fff7f1;
+  color: #f0f4fa;
 }
 
 .brand-lockup-invert .brand-text strong,
 .brand-lockup-invert .brand-text span,
 .footer-links p {
-  color: #f5eee1;
+  color: #e8edf4;
 }
 
 .footer-brand p {
@@ -849,7 +840,7 @@ select {
 
 .footer-links li {
   margin-top: 12px;
-  color: rgba(245, 238, 225, 0.72);
+  color: rgba(232, 237, 244, 0.72);
 }
 
 @media (max-width: 1280px) {

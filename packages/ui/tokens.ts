@@ -1,56 +1,56 @@
 /**
- * Com_Moon Design Tokens — TypeScript mirror.
+ * Com_Moon Design Tokens — TypeScript mirror of `tokens.css`.
  *
- * Source of truth lives in `tokens.css` and DESIGN.md §5.
- * Shape: Smoked Command Deck — dark ink stack + warm parchment stack
- * bridged by a single champagne metal accent.
+ * Source of truth lives in `tokens.css` and DESIGN.md §4–§5.
+ * Shape: Moonstone Command Deck — void-black stack + frost silver stack
+ * bridged by a single moonstone (cool blue-silver) accent.
  *
  * If you change a value here, change it in `tokens.css` as well.
  */
 
 export const colors = {
   ink: {
-    900: "#0e1114",
-    800: "#15191e",
-    700: "#1d222a",
-    600: "#2a313b",
+    900: "#0c1018",
+    800: "#131923",
+    700: "#1b2332",
+    600: "#26304a",
   },
   parchment: {
-    base: "#ede9e0",
-    soft: "#f6f3ec",
-    deep: "#e2ddd0",
+    base: "#f0f2f7",
+    soft: "#f4f5f8",
+    deep: "#e2e6ef",
   },
   metal: {
-    300: "#e8dfcb",
-    400: "#cdbf9e",
-    500: "#a8986f",
-    600: "#7d6f4a",
+    300: "#d6dff0",
+    400: "#a8b8d4",
+    500: "#5274a8",
+    600: "#365888",
   },
   text: {
-    platinum: "#e9ebee",
-    platinumSoft: "#9ba3ad",
-    graphite: "#171a1f",
-    graphiteSoft: "#55606b",
+    platinum: "#e8edf4",
+    platinumSoft: "#7e8c9e",
+    graphite: "#0c1018",
+    graphiteSoft: "#4a5568",
   },
   line: {
-    dark: "rgba(255, 255, 255, 0.08)",
-    darkStrong: "rgba(255, 255, 255, 0.14)",
-    light: "rgba(23, 26, 31, 0.10)",
-    lightStrong: "rgba(23, 26, 31, 0.18)",
+    dark: "rgba(255, 255, 255, 0.07)",
+    darkStrong: "rgba(255, 255, 255, 0.12)",
+    light: "rgba(12, 16, 24, 0.08)",
+    lightStrong: "rgba(12, 16, 24, 0.16)",
   },
   status: {
-    ok: "#6fa28a",
-    warn: "#c4a15a",
-    risk: "#b5574a",
-    info: "#6d8aa4",
+    ok: "#5a8f7a",
+    warn: "#9e8040",
+    risk: "#a04040",
+    info: "#5070a0",
   },
 } as const;
 
 export const gradients = {
   metal:
-    "linear-gradient(135deg, #e8dfcb 0%, #cdbf9e 38%, #a8986f 70%, #7d6f4a 100%)",
-  ink: "linear-gradient(180deg, #15191e 0%, #0e1114 100%)",
-  rim: "linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 60%)",
+    "linear-gradient(135deg, #d6dff0 0%, #a8b8d4 38%, #5274a8 70%, #365888 100%)",
+  ink: "linear-gradient(180deg, #131923 0%, #0c1018 100%)",
+  rim: "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 55%)",
 } as const;
 
 export const fonts = {
@@ -87,11 +87,11 @@ export const containers = {
 } as const;
 
 export const shadows = {
-  cardDark: "0 14px 28px rgba(0, 0, 0, 0.45)",
-  panelDark: "0 24px 60px rgba(0, 0, 0, 0.55)",
-  cardLight: "0 14px 28px rgba(23, 26, 31, 0.08)",
-  panelLight: "0 24px 60px rgba(23, 26, 31, 0.12)",
-  metalGlow: "0 0 24px rgba(205, 191, 158, 0.22)",
+  cardDark: "0 14px 28px rgba(0, 0, 0, 0.50)",
+  panelDark: "0 24px 60px rgba(0, 0, 0, 0.60)",
+  cardLight: "0 14px 28px rgba(12, 16, 24, 0.07)",
+  panelLight: "0 24px 60px rgba(12, 16, 24, 0.10)",
+  metalGlow: "0 0 28px rgba(82, 116, 168, 0.22)",
 } as const;
 
 export const motion = {

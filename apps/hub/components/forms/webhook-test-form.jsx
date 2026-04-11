@@ -74,6 +74,15 @@ export function WebhookTestForm({ defaultWorkspaceId = "", defaultEngineUrl = ""
           <input className="field-input" name="projectId" placeholder="optional linked project UUID" />
         </label>
 
+        <label className="field">
+          <span>Target Route</span>
+          <select className="field-input" defaultValue="generic" name="targetRoute">
+            <option value="generic">generic /api/webhook/project</option>
+            <option value="openclaw">shared /api/webhook/project/openclaw</option>
+            <option value="moltbot">shared /api/webhook/project/moltbot</option>
+          </select>
+        </label>
+
         <label className="field field-span-2">
           <span>Webhook Title</span>
           <input className="field-input" defaultValue="Project webhook smoke test" name="title" required />
@@ -126,7 +135,8 @@ export function WebhookTestForm({ defaultWorkspaceId = "", defaultEngineUrl = ""
           {pending ? "Sending..." : "Send Webhook Smoke Test"}
         </button>
         <p className="form-note">
-          엔진 URL이 설정되어 있으면 실제 project webhook으로 전송하고, 없으면 preview 응답을 돌려줍니다.
+          엔진 URL이 설정되어 있으면 선택한 webhook route로 전송하고, 없으면 preview 응답을 돌려줍니다.
+          공유 route는 Hub env에 `COM_MOON_SHARED_WEBHOOK_SECRET`가 있으면 같이 붙여서 보냅니다.
         </p>
       </div>
 

@@ -15,6 +15,7 @@ import {
   parseTelegramCommand,
   type TelegramUpdate,
 } from "./telegram";
+import { listSharedProjectWebhookRoutes } from "./shared-webhook";
 
 const DEFAULT_CARD_NEWS_TEMPLATE_ID = "classin_cardnews_math_v3";
 type SupabaseFilter = [string, string];
@@ -520,7 +521,12 @@ export async function runTelegramUpdate(update: TelegramUpdate): Promise<EngineR
       const finishedAt = new Date().toISOString();
       const response = {
         message: "Webhook surface is ready.",
-        routes: ["/api/webhook/telegram", "/api/webhook/project", "/api/health"],
+        routes: [
+          "/api/webhook/telegram",
+          "/api/webhook/project",
+          ...listSharedProjectWebhookRoutes(),
+          "/api/health",
+        ],
       };
 
       await logEvent({
