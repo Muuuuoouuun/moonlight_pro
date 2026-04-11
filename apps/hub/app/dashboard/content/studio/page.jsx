@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { getContentBrandReference, resolveContentBrand } from "@/lib/dashboard-contexts";
@@ -111,6 +112,66 @@ function renderPreview(value) {
     .replace(/\n/g, "<br />");
 }
 
+function parseSlides(value) {
+  const lines = value.split("\n");
+  const slides = [];
+  let cover = { title: "", body: [] };
+  let current = null;
+  let cta = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+
+    if (line.startsWith("# ")) {
+      cover = { title: line.replace(/^# /, "").trim(), body: [] };
+      continue;
+    }
+
+    if (line.startsWith("## ")) {
+      if (current) slides.push(current);
+      current = { title: line.replace(/^## /, "").trim(), body: [] };
+      continue;
+    }
+
+    if (/^\*\*CTA\*\*$/i.test(line.trim())) {
+      cta = { title: "CTA", body: [] };
+      current = null;
+      continue;
+    }
+
+    if (cta) {
+      if (line.trim()) cta.body.push(line.trim());
+      continue;
+    }
+
+    if (current) {
+      if (line.trim()) current.body.push(line.replace(/^- /, "").trim());
+    } else if (line.trim()) {
+      cover.body.push(line.trim());
+    }
+  }
+
+  if (current) slides.push(current);
+
+  const all = [];
+  if (cover.title || cover.body.length) {
+    all.push({ id: "cover", label: "Cover", title: cover.title, body: cover.body });
+  }
+  slides.forEach((slide, index) => {
+    all.push({
+      id: `slide-${index + 1}`,
+      label: `Slide ${index + 1}`,
+      title: slide.title,
+      body: slide.body,
+    });
+  });
+  if (cta) {
+    all.push({ id: "cta", label: "CTA", title: cta.title, body: cta.body });
+  }
+
+  return all;
+}
+
 export default function ContentStudioPage() {
   const searchParams = useSearchParams();
   const [templateId, setTemplateId] = useState(templatePresets[0].id);
@@ -123,6 +184,7 @@ export default function ContentStudioPage() {
   const wordCount = draft.trim().split(/\s+/).filter(Boolean).length;
   const sectionCount = (draft.match(/^## /gm) || []).length;
   const selectedTemplate = templatePresets.find((item) => item.id === templateId) ?? templatePresets[0];
+  const slides = useMemo(() => parseSlides(draft), [draft]);
 
   function applyTemplate(nextTemplateId) {
     setTemplateId(nextTemplateId);
@@ -262,19 +324,43 @@ export default function ContentStudioPage() {
           <SectionCard
             kicker="Preview"
             title="Publish frame"
-            description="This is the composition the next export or automation step will build on."
+            description="Each slide should hold a single message; the preview makes that contract visible."
           >
-            <div className="preview-card">
-              <div className="preview-head">
-                <span className="chip">1080 × 1080</span>
-                <span className="chip">{channel}</span>
-              </div>
-              <div className="preview-stage" dangerouslySetInnerHTML={{ __html: renderPreview(draft) }} />
-              <div className="preview-foot">
-                <span className="chip">{selectedBrand.label}</span>
-                <span className="chip">{selectedTemplate.label}</span>
-                <span className="chip">CTA ready</span>
-              </div>
+            <div className="studio-slide-stack">
+              {slides.length === 0 ? (
+                <div className="preview-card">
+                  <div className="preview-head">
+                    <span className="chip">1080 × 1080</span>
+                    <span className="chip">{channel}</span>
+                  </div>
+                  <div
+                    className="preview-stage"
+                    dangerouslySetInnerHTML={{ __html: renderPreview(draft) }}
+                  />
+                </div>
+              ) : (
+                slides.map((slide) => (
+                  <div className="preview-card" key={slide.id}>
+                    <div className="preview-head">
+                      <span className="chip">{slide.label}</span>
+                      <span className="chip">{channel}</span>
+                    </div>
+                    <div className="preview-stage">
+                      {slide.title ? <h2>{slide.title}</h2> : null}
+                      {slide.body.map((line, index) => (
+                        <p key={`${slide.id}-${index}`}>{line}</p>
+                      ))}
+                      {slide.body.length === 0 && !slide.title ? (
+                        <p className="muted">빈 슬라이드 — 메시지를 추가하세요.</p>
+                      ) : null}
+                    </div>
+                    <div className="preview-foot">
+                      <span className="chip">{selectedBrand.label}</span>
+                      <span className="chip">{selectedTemplate.label}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </SectionCard>
 
@@ -304,6 +390,30 @@ export default function ContentStudioPage() {
                     publish or automation review.
                   </p>
                 </div>
+              </div>
+              <div className="template-row">
+                <div>
+                  <strong>Email handoff</strong>
+                  <p>
+                    Pair this draft with a warm follow-up or weekly brief template before it
+                    leaves the studio.
+                  </p>
+                </div>
+                <Link className="button button-secondary" href="/dashboard/automations/email">
+                  Open email lane
+                </Link>
+              </div>
+              <div className="template-row">
+                <div>
+                  <strong>Send to publish queue</strong>
+                  <p>
+                    Drop the current draft into the publish queue when the slides feel ready for
+                    distribution.
+                  </p>
+                </div>
+                <Link className="button button-ghost" href="/dashboard/content/publish">
+                  Publish lane
+                </Link>
               </div>
             </div>
           </SectionCard>

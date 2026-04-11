@@ -13,6 +13,16 @@ const WORK_NAV_ITEMS = [
     description: "Portfolio movement and blockers",
   },
   {
+    href: "/dashboard/work/management",
+    label: "Management",
+    description: "Per-project progress, tasks, and GitHub signals",
+  },
+  {
+    href: "/dashboard/work/calendar",
+    label: "Calendar",
+    description: "Shared schedule, due dates, and progress timing",
+  },
+  {
     href: "/dashboard/work/pms",
     label: "PMS",
     description: "GitHub delivery pulse and operator control",
@@ -21,6 +31,11 @@ const WORK_NAV_ITEMS = [
     href: "/dashboard/work/roadmap",
     label: "Roadmap",
     description: "Milestones, release lanes, and risk",
+  },
+  {
+    href: "/dashboard/work/plan",
+    label: "Plan tracker",
+    description: "계획 vs 현재 — 페이즈·프로젝트 변동 현황판",
   },
   {
     href: "/dashboard/work/rhythm",

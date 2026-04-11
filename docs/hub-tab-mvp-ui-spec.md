@@ -24,12 +24,21 @@
 - `/dashboard/content` = Content
 - `/dashboard/automations` = Automations
 - `/dashboard/evolution` = Evolution
+- `/dashboard/daily-brief` = Daily Brief
+- `/dashboard/playbooks` = Playbooks
+- `/dashboard/settings` = Settings
+- `/dashboard/command` = Command
 
 ### 세부 탭
 
 - `Work OS`
   - `/dashboard/work`
   - `/dashboard/work/projects`
+  - `/dashboard/work/management`
+  - `/dashboard/work/calendar`
+  - `/dashboard/work/pms`
+  - `/dashboard/work/roadmap`
+  - `/dashboard/work/plan`
   - `/dashboard/work/rhythm`
   - `/dashboard/work/decisions`
 
@@ -52,12 +61,19 @@
   - `/dashboard/automations/runs`
   - `/dashboard/automations/webhooks`
   - `/dashboard/automations/integrations`
+  - `/dashboard/automations/email`
 
 - `Evolution`
   - `/dashboard/evolution`
   - `/dashboard/evolution/logs`
   - `/dashboard/evolution/issues`
   - `/dashboard/evolution/activity`
+
+- `Utility Tabs`
+  - `/dashboard/daily-brief`
+  - `/dashboard/playbooks`
+  - `/dashboard/settings`
+  - `/dashboard/command`
 
 ## 3. 제품 원칙
 
@@ -102,7 +118,7 @@
 
 규칙:
 
-- 탑레벨은 6개를 넘기지 않는다
+- 핵심 운영 레인은 6개 안에 유지하고, `Daily Brief / Playbooks / Settings / Command`는 보조 유틸리티 섹션으로 취급한다
 - 레거시 진입점은 사이드바에 직접 노출하지 않는다
 - 현재 활성 섹션만 강한 배경 강조
 
@@ -1267,6 +1283,7 @@ MVP 블록:
 
 - 모든 탑레벨 탭 접근 가능
 - 각 섹션별 최소 3~5개 세부 탭
+- `Daily Brief / Playbooks / Settings / Command` utility tabs
 - `Revenue audience switcher`
 - `Content brand switcher`
 - KPI strip
@@ -1283,6 +1300,91 @@ MVP 블록:
 - 차트 중심 시각화
 - 권한 관리
 - 멀티 유저 협업 UI
+
+## 12.5 유틸리티 탭 상세 설계
+
+### Daily Brief
+
+목적:
+
+- 하루 시작 전 가장 중요한 판단만 압축해서 본다
+
+핵심 질문:
+
+- 오늘 먼저 움직여야 할 세 가지는 무엇인가
+- 승인이나 응답 대기 중인 것은 무엇인가
+- 리스크가 어디서 올라오고 있는가
+
+MVP 블록:
+
+- Today KPI
+- Next 3 actions
+- Approval queue
+- Risk watch
+- Cross-lane movement
+- Day rhythm prompts
+
+### Playbooks
+
+목적:
+
+- 반복되는 운영 업무를 명시적 SOP로 고정한다
+
+핵심 질문:
+
+- 지금 바로 실행할 수 있는 playbook은 무엇인가
+- 어떤 trigger가 어떤 실행으로 이어지는가
+- 사람 개입과 자동화 경계는 어디인가
+
+MVP 블록:
+
+- Playbook category strip
+- What to run now
+- Recurring playbook cards
+- Step-by-step execution list
+- Automation hooks
+- Rules and handoff
+
+### Settings
+
+목적:
+
+- 운영 환경, 연결 상태, 가드레일을 한 번에 점검한다
+
+핵심 질문:
+
+- 지금 어떤 환경값과 연결이 실제로 준비돼 있는가
+- 어떤 매핑이 빠져 있어 위험한가
+- 운영상 반드시 지켜야 할 보호 규칙은 무엇인가
+
+MVP 블록:
+
+- Environment posture
+- Data source state
+- Integration readiness
+- Mapping checklist
+- Guardrails
+
+### Command
+
+목적:
+
+- 검색과 명령 dispatch를 한 조작면으로 묶는다
+
+핵심 질문:
+
+- 지금 가장 빠르게 실행할 수 있는 명령은 무엇인가
+- 최근 어떤 명령이나 자동화가 돌았는가
+- 어떤 syntax로 어떤 lane에 진입할 수 있는가
+
+MVP 블록:
+
+- Search-first hero
+- Quick commands
+- Intake queue
+- Recent runs
+- Suggested actions
+- Syntax examples
 
 ## 13. 모바일 UI 상세
 
@@ -1351,23 +1453,23 @@ MVP 블록:
 
 ### 우선순위 A
 
-- `Revenue`에 company/contact join 추가
-- `Content`에 asset/variant 관계 강화
-- `Automations`에 webhook_events / sync_runs 밀도 확대
-- `Evolution`에 issue/log/run 연결
+- `Revenue` audience split: `All / Individual / Company`
+- `Content` brand operating layer: tone, forbidden language, key message, publish rhythm
+- `Overview` today-first decision stack: approvals, next-three-actions, cross-lane movement
 
 ### 우선순위 B
 
-- Studio export flow
-- publish retry UI
-- activity filter
-- decision-to-task 연결
+- shared detail drawer
+- `Automations` failure triage, retry, human handoff
+- `Evolution` issue/log/run/improvement 연결
 
 ### 우선순위 C
 
-- charts
-- user customization
-- saved views
+- `Daily Brief` hardening
+- `Playbooks` hardening
+- `Settings` hardening
+- `Command` hardening
+- saved views and optional personalization
 
 ## 16.5 데이터 모델 보강 권장
 

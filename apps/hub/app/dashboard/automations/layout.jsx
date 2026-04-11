@@ -21,6 +21,11 @@ const AUTOMATION_NAV_ITEMS = [
     label: "Integrations",
     description: "Connected systems and sync health",
   },
+  {
+    href: "/dashboard/automations/email",
+    label: "Email",
+    description: "Templates, queue, and outbound delivery",
+  },
 ];
 
 export default function AutomationsLayout({ children }) {

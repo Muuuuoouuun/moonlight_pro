@@ -1,15 +1,39 @@
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import {
   activityFeed as fallbackActivityFeed,
+  aiAgents as fallbackAiAgents,
+  aiChatComposerSuggestions as fallbackAiChatSuggestions,
+  aiChatMessages as fallbackAiChatMessages,
+  aiChatThreads as fallbackAiChatThreads,
+  aiCouncilSessions as fallbackAiCouncilSessions,
+  aiOpenOrders as fallbackAiOpenOrders,
+  aiOrderTemplates as fallbackAiOrderTemplates,
+  aiOsPulse as fallbackAiOsPulse,
   automationCards as fallbackAutomationCards,
   automationRuns as fallbackAutomationRuns,
   commandCenterQueue as fallbackCommandCenterQueue,
   contentAttention as fallbackContentAttention,
   contentPipeline as fallbackContentPipeline,
+  contentQueueRoster as fallbackContentQueueRoster,
   contentSummary as fallbackContentSummary,
   contentVariants as fallbackContentVariants,
+  emailBlocks as fallbackEmailBlocks,
+  emailChannels as fallbackEmailChannels,
+  emailQueue as fallbackEmailQueue,
+  emailRules as fallbackEmailRules,
+  emailSegments as fallbackEmailSegments,
+  emailSends as fallbackEmailSends,
+  emailTemplates as fallbackEmailTemplates,
+  emailVariables as fallbackEmailVariables,
   logItems as fallbackLogItems,
   operationsBoard as fallbackOperationsBoard,
+  planDriftItems as fallbackPlanDriftItems,
+  planMilestones as fallbackPlanMilestones,
+  planPhases as fallbackPlanPhases,
+  planProjects as fallbackPlanProjects,
+  planSnapshot as fallbackPlanSnapshot,
   pmsBoard as fallbackPmsBoard,
   publishQueue as fallbackPublishQueue,
   projectPortfolio as fallbackProjectPortfolio,
@@ -21,6 +45,38 @@ import {
   webhookEndpoints as fallbackWebhookEndpoints,
   weeklyReview as fallbackWeeklyReview,
 } from "@/lib/dashboard-data";
+import {
+  WORK_CONTEXTS,
+} from "@/lib/dashboard-contexts";
+import {
+  fetchLatestGoogleCalendarConnection,
+  listGoogleCalendarEvents,
+} from "@/lib/google-calendar";
+
+const CALENDAR_TIMEZONE = "Asia/Seoul";
+const DEFAULT_PROJECTS_ROOT = "/Users/bigmac_moon/Desktop/Projects";
+const LOCAL_WORK_PROJECT_BINDINGS = [
+  {
+    contextValue: "com_moon",
+    directory: "moonlight_pro",
+    repository: "Muuuuoouuun/moonlight_pro",
+  },
+  {
+    contextValue: "classinkr-web",
+    directory: "classinkr-web",
+    repository: "classinkr-main/classinkr-web",
+  },
+  {
+    contextValue: "sales_branding_dash",
+    directory: "sales_dash",
+    repository: "Muuuuoouuun/sales_branding_dash",
+  },
+  {
+    contextValue: "ai-command-pot",
+    directory: "ai-command-pot",
+    repository: "Muuuuoouuun/ai-command-pot",
+  },
+];
 
 function resolveSupabaseConfig() {
   const url = process.env.SUPABASE_URL?.trim();
@@ -533,6 +589,93 @@ function compactText(value, maxLength = 96) {
   return `${normalized.slice(0, maxLength - 1)}...`;
 }
 
+function parseDateValue(value) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatCalendarDateKey(value) {
+  const parsed = parseDateValue(value);
+
+  if (!parsed) {
+    return "";
+  }
+
+  try {
+    return new Intl.DateTimeFormat("sv-SE", {
+      timeZone: CALENDAR_TIMEZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(parsed);
+  } catch {
+    return parsed.toISOString().slice(0, 10);
+  }
+}
+
+function formatDateOnly(value) {
+  const parsed = parseDateValue(value);
+
+  if (!parsed) {
+    return "Unknown";
+  }
+
+  try {
+    return new Intl.DateTimeFormat("ko-KR", {
+      timeZone: CALENDAR_TIMEZONE,
+      month: "short",
+      day: "numeric",
+    }).format(parsed);
+  } catch {
+    return value;
+  }
+}
+
+function isPastDateValue(value) {
+  const parsed = parseDateValue(value);
+
+  if (!parsed) {
+    return false;
+  }
+
+  return parsed.getTime() < Date.now();
+}
+
+function buildCalendarEvent({
+  date,
+  title,
+  detail,
+  kind,
+  source,
+  project,
+  tone,
+  isAllDay = false,
+  isOverdue = false,
+}) {
+  const parsed = parseDateValue(date);
+
+  if (!parsed) {
+    return null;
+  }
+
+  return {
+    date: parsed.toISOString(),
+    dateKey: formatCalendarDateKey(parsed),
+    time: isAllDay ? formatDateOnly(parsed) : formatTimestamp(parsed),
+    title,
+    detail,
+    kind,
+    source,
+    project,
+    tone,
+    isOverdue,
+  };
+}
+
 function normalizeGitHubRepoSlug(value) {
   if (!value) {
     return "";
@@ -549,6 +692,204 @@ function normalizeGitHubRepoSlug(value) {
 function parseGitHubRepoFromRemote(value) {
   const normalized = normalizeGitHubRepoSlug(value);
   return /^[^/]+\/[^/]+$/.test(normalized) ? normalized : "";
+}
+
+function resolveProjectsRoot() {
+  return (process.env.COM_MOON_PROJECTS_ROOT?.trim() || DEFAULT_PROJECTS_ROOT).replace(/\/$/, "");
+}
+
+function getWorkContextMeta(contextValue) {
+  return (
+    WORK_CONTEXTS.find((item) => item.value === contextValue) || {
+      value: contextValue,
+      label: humanizeValue(contextValue),
+      description: "Project context",
+    }
+  );
+}
+
+function resolveLocalWorkProjectBindings() {
+  const root = resolveProjectsRoot();
+
+  return LOCAL_WORK_PROJECT_BINDINGS.map((item) => ({
+    ...item,
+    path: join(root, item.directory),
+    context: getWorkContextMeta(item.contextValue),
+  }));
+}
+
+function readGitValue(cwd, args) {
+  try {
+    return execFileSync("git", ["-C", cwd, ...args], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return "";
+  }
+}
+
+function readAheadBehindCounts(cwd) {
+  const counts = readGitValue(cwd, ["rev-list", "--left-right", "--count", "HEAD...@{upstream}"]);
+
+  if (!counts) {
+    return {
+      aheadCount: 0,
+      behindCount: 0,
+      hasUpstream: false,
+    };
+  }
+
+  const [aheadValue, behindValue] = counts.split(/\s+/).map((item) => Number.parseInt(item, 10));
+
+  return {
+    aheadCount: Number.isFinite(aheadValue) ? aheadValue : 0,
+    behindCount: Number.isFinite(behindValue) ? behindValue : 0,
+    hasUpstream: true,
+  };
+}
+
+function buildLocalRepositoryStatus({ exists, isGitRepo, remoteRepository, dirtyCount, aheadCount, behindCount }) {
+  if (!exists) {
+    return {
+      statusLabel: "missing path",
+      statusTone: "danger",
+    };
+  }
+
+  if (!isGitRepo) {
+    return {
+      statusLabel: "no repo",
+      statusTone: "danger",
+    };
+  }
+
+  if (!remoteRepository) {
+    return {
+      statusLabel: "local only",
+      statusTone: "warning",
+    };
+  }
+
+  if (dirtyCount > 0) {
+    return {
+      statusLabel: "dirty",
+      statusTone: "warning",
+    };
+  }
+
+  if (aheadCount > 0 && behindCount > 0) {
+    return {
+      statusLabel: "diverged",
+      statusTone: "danger",
+    };
+  }
+
+  if (behindCount > 0) {
+    return {
+      statusLabel: "behind",
+      statusTone: "warning",
+    };
+  }
+
+  if (aheadCount > 0) {
+    return {
+      statusLabel: "ahead",
+      statusTone: "blue",
+    };
+  }
+
+  return {
+    statusLabel: "synced",
+    statusTone: "green",
+  };
+}
+
+function buildLocalRepositoryDetail({ dirtyCount, aheadCount, behindCount, hasUpstream, branch }) {
+  const parts = [branch || "unknown branch"];
+
+  if (dirtyCount > 0) {
+    parts.push(`${dirtyCount} local changes`);
+  }
+
+  if (aheadCount > 0) {
+    parts.push(`${aheadCount} ahead`);
+  }
+
+  if (behindCount > 0) {
+    parts.push(`${behindCount} behind`);
+  }
+
+  if (!hasUpstream) {
+    parts.push("no upstream");
+  }
+
+  return parts.join(" · ");
+}
+
+export function getLocalProjectRepositoryData() {
+  const projects = resolveLocalWorkProjectBindings().map((binding) => {
+    const exists = existsSync(binding.path);
+    const isGitRepo = exists && readGitValue(binding.path, ["rev-parse", "--is-inside-work-tree"]) === "true";
+    const branch = isGitRepo ? readGitValue(binding.path, ["rev-parse", "--abbrev-ref", "HEAD"]) : "";
+    const remoteUrl = isGitRepo ? readGitValue(binding.path, ["remote", "get-url", "origin"]) : "";
+    const remoteRepository = parseGitHubRepoFromRemote(remoteUrl);
+    const porcelain = isGitRepo ? readGitValue(binding.path, ["status", "--porcelain"]) : "";
+    const dirtyCount = porcelain ? porcelain.split("\n").filter(Boolean).length : 0;
+    const { aheadCount, behindCount, hasUpstream } = isGitRepo
+      ? readAheadBehindCounts(binding.path)
+      : { aheadCount: 0, behindCount: 0, hasUpstream: false };
+    const lastCommitAt = isGitRepo ? readGitValue(binding.path, ["log", "-1", "--format=%cI"]) : "";
+    const lastCommitMessage = isGitRepo ? readGitValue(binding.path, ["log", "-1", "--format=%s"]) : "";
+    const { statusLabel, statusTone } = buildLocalRepositoryStatus({
+      exists,
+      isGitRepo,
+      remoteRepository,
+      dirtyCount,
+      aheadCount,
+      behindCount,
+    });
+
+    return {
+      contextValue: binding.contextValue,
+      contextLabel: binding.context.label,
+      contextDescription: binding.context.description,
+      directory: binding.directory,
+      path: binding.path,
+      repository: remoteRepository || binding.repository,
+      remoteRepository,
+      branch,
+      dirtyCount,
+      aheadCount,
+      behindCount,
+      hasUpstream,
+      exists,
+      isGitRepo,
+      lastCommitAt,
+      lastCommitMessage: compactText(lastCommitMessage || "No local commit detected yet."),
+      statusLabel,
+      statusTone,
+      detail: buildLocalRepositoryDetail({
+        dirtyCount,
+        aheadCount,
+        behindCount,
+        hasUpstream,
+        branch,
+      }),
+    };
+  });
+
+  return {
+    projects,
+    totals: {
+      trackedProjectCount: projects.length,
+      connectedRepositoryCount: projects.filter((item) => item.isGitRepo && item.repository).length,
+      dirtyRepositoryCount: projects.filter((item) => item.dirtyCount > 0).length,
+      aheadRepositoryCount: projects.filter((item) => item.aheadCount > 0).length,
+      behindRepositoryCount: projects.filter((item) => item.behindCount > 0).length,
+      missingRepositoryCount: projects.filter((item) => !item.exists || !item.isGitRepo).length,
+    },
+  };
 }
 
 function readGitHubRepoFromOrigin() {
@@ -570,9 +911,12 @@ function resolveGitHubRepositories() {
     process.env.GITHUB_REPOSITORIES?.split(/[,\n]/)
       .map((item) => parseGitHubRepoFromRemote(item))
       .filter(Boolean) || [];
+  const localRepositories = getLocalProjectRepositoryData()
+    .projects.map((item) => parseGitHubRepoFromRemote(item.repository))
+    .filter(Boolean);
 
-  if (envRepositories.length) {
-    return [...new Set(envRepositories)];
+  if (envRepositories.length || localRepositories.length) {
+    return [...new Set([...envRepositories, ...localRepositories])];
   }
 
   const fallbackRepository = parseGitHubRepoFromRemote(
@@ -607,12 +951,6 @@ function makeGitHubHeaders() {
 }
 
 async function fetchGitHubJson(pathname, params = {}) {
-  const repositories = resolveGitHubRepositories();
-
-  if (!repositories.length) {
-    return null;
-  }
-
   const url = `${resolveGitHubApiBase()}${pathname}${buildGitHubQuery(params)}`;
 
   try {
@@ -637,7 +975,7 @@ async function fetchGitHubRepoBundle(repository) {
     .map((item) => encodeURIComponent(item))
     .join("/");
 
-  const [repo, openPulls, closedPulls, issues, commits, milestones] = await Promise.all([
+  const [repo, openPulls, closedPulls, issues, commits, milestones, releases] = await Promise.all([
     fetchGitHubJson(`/repos/${encodedRepository}`),
     fetchGitHubJson(`/repos/${encodedRepository}/pulls`, {
       state: "open",
@@ -666,6 +1004,12 @@ async function fetchGitHubRepoBundle(repository) {
       direction: "asc",
       per_page: 12,
     }),
+    // Release log (Slice 3). Returns [] when no releases have been cut,
+    // in which case the release log page will fall back to grouped
+    // merged PR rows as an auto-changelog.
+    fetchGitHubJson(`/repos/${encodedRepository}/releases`, {
+      per_page: 12,
+    }),
   ]);
 
   return {
@@ -676,6 +1020,7 @@ async function fetchGitHubRepoBundle(repository) {
     issues: (Array.isArray(issues) ? issues : []).filter((item) => !item.pull_request),
     commits: Array.isArray(commits) ? commits : [],
     milestones: Array.isArray(milestones) ? milestones : [],
+    releases: Array.isArray(releases) ? releases : [],
   };
 }
 
@@ -833,13 +1178,181 @@ function mapGitHubRoadmapRows(bundles) {
         statusLabel: item.open_issues ? "active" : "completed",
         statusTone: item.due_on && new Date(item.due_on) < new Date() ? "danger" : item.open_issues ? "blue" : "green",
         progress,
+        // Formatted for display; `dueAt` below is the raw ISO value used by
+        // client horizon bucketing (Now / Next / Later).
         due: item.due_on ? formatShortDate(item.due_on) : "No due date",
+        dueAt: item.due_on || null,
         detail: `${item.closed_issues} closed / ${item.open_issues} open`,
       });
     });
   });
 
   return roadmapRows;
+}
+
+/**
+ * Conventional-commit / keyword-based release type classifier.
+ *
+ * Given a release title or commit message, pick the best `type` tag
+ * (`feat` | `fix` | `refactor` | `chore` | `breaking`) so the patch-note
+ * UI can color each bullet consistently.
+ */
+function classifyReleaseEntry(text) {
+  if (!text) return "chore";
+  const lower = text.toLowerCase();
+  if (lower.includes("breaking") || lower.startsWith("!")) return "breaking";
+  if (/^(feat|feature)[:(]/i.test(text) || lower.includes("feat")) return "feat";
+  if (/^fix[:(]/i.test(text) || lower.includes("fix") || lower.includes("patch")) return "fix";
+  if (/^(refactor|perf)[:(]/i.test(text) || lower.includes("refactor") || lower.includes("perf"))
+    return "refactor";
+  return "chore";
+}
+
+/**
+ * Convert a GitHub release markdown body (or a list of merged PR titles)
+ * into a compact list of bullet rows for the release log UI. Each bullet
+ * has `{ kind, text }` where `kind` is the type chip tone.
+ */
+function extractReleaseBullets(body, fallbackTitles = []) {
+  const lines = (body || "")
+    .split("\n")
+    .map((line) => line.replace(/^\s*[-*•]\s?/, "").trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"))
+    .slice(0, 6);
+
+  const source = lines.length ? lines : fallbackTitles.slice(0, 6);
+  return source.map((text) => ({
+    kind: classifyReleaseEntry(text),
+    text: text.replace(/^\[(feat|fix|chore|refactor|perf|breaking)\]\s*/i, ""),
+  }));
+}
+
+function mapGitHubReleaseRows(bundles) {
+  const rows = [];
+
+  (bundles || []).forEach((bundle) => {
+    const repositoryLabel = getGitHubRepoLabel(bundle.repository);
+    const releases = Array.isArray(bundle.releases) ? bundle.releases : [];
+
+    if (releases.length) {
+      releases.forEach((release) => {
+        if (release.draft) return;
+        rows.push({
+          id: `${repositoryLabel}-${release.id || release.tag_name}`,
+          repository: repositoryLabel,
+          tagName: release.tag_name || release.name || "unreleased",
+          title: release.name || release.tag_name || "Untitled release",
+          publishedAt: release.published_at || release.created_at || null,
+          htmlUrl: release.html_url || null,
+          prerelease: Boolean(release.prerelease),
+          author: release.author
+            ? {
+                login: release.author.login || "",
+                avatarUrl: release.author.avatar_url || "",
+              }
+            : null,
+          bullets: extractReleaseBullets(release.body),
+          source: "release",
+        });
+      });
+      return;
+    }
+
+    // Auto-changelog fallback: group merged PRs by day, synthesize
+    // a release row per day so repos without tagged releases still
+    // produce something meaningful on the patch-note rail.
+    const byDay = new Map();
+    (bundle.mergedPulls || []).forEach((pull) => {
+      if (!pull.merged_at) return;
+      const dayKey = pull.merged_at.slice(0, 10);
+      if (!byDay.has(dayKey)) byDay.set(dayKey, []);
+      byDay.get(dayKey).push(pull);
+    });
+
+    Array.from(byDay.entries())
+      .sort(([left], [right]) => (right > left ? 1 : -1))
+      .slice(0, 4)
+      .forEach(([day, pulls]) => {
+        rows.push({
+          id: `${repositoryLabel}-auto-${day}`,
+          repository: repositoryLabel,
+          tagName: `auto · ${day}`,
+          title: `Merged ${pulls.length} PR${pulls.length > 1 ? "s" : ""}`,
+          publishedAt: pulls[0].merged_at,
+          htmlUrl: pulls[0].html_url || null,
+          prerelease: false,
+          author: pulls[0].user
+            ? {
+                login: pulls[0].user.login || "",
+                avatarUrl: pulls[0].user.avatar_url || "",
+              }
+            : null,
+          bullets: extractReleaseBullets(
+            "",
+            pulls.map((pull) => pull.title || `PR #${pull.number}`),
+          ),
+          source: "auto-changelog",
+        });
+      });
+  });
+
+  return rows
+    .sort(
+      (left, right) =>
+        new Date(right.publishedAt || 0).getTime() - new Date(left.publishedAt || 0).getTime(),
+    )
+    .slice(0, 18);
+}
+
+/**
+ * Group release rows by calendar week for the patch-note rail UI.
+ * Each returned group has a `key` ("2026-W15"), a human `title`, and
+ * an ordered list of rows.
+ */
+function groupReleaseRowsByWeek(rows, locale = "ko-KR") {
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+
+  const now = new Date();
+  const isoWeek = (date) => {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const week = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+    return { year: d.getUTCFullYear(), week };
+  };
+
+  const groups = new Map();
+  rows.forEach((row) => {
+    const published = row.publishedAt ? new Date(row.publishedAt) : null;
+    if (!published || Number.isNaN(published.getTime())) {
+      const key = "undated";
+      if (!groups.has(key)) {
+        groups.set(key, { key, title: "Undated", sortAt: 0, rows: [] });
+      }
+      groups.get(key).rows.push(row);
+      return;
+    }
+    const { year, week } = isoWeek(published);
+    const key = `${year}-W${String(week).padStart(2, "0")}`;
+    if (!groups.has(key)) {
+      // Title: compute a human label per relative distance from now.
+      const { year: nowY, week: nowW } = isoWeek(now);
+      const delta = (nowY - year) * 52 + (nowW - week);
+      const title =
+        delta <= 0
+          ? "이번 주"
+          : delta === 1
+            ? "지난 주"
+            : delta <= 4
+              ? `${delta}주 전`
+              : new Intl.DateTimeFormat(locale, { month: "short", year: "numeric" }).format(published);
+      groups.set(key, { key, title, sortAt: published.getTime(), rows: [] });
+    }
+    groups.get(key).rows.push(row);
+  });
+
+  return Array.from(groups.values()).sort((left, right) => right.sortAt - left.sortAt);
 }
 
 function buildGitHubAlerts(bundles, syncRuns = []) {
@@ -896,12 +1409,298 @@ function buildGitHubAlerts(bundles, syncRuns = []) {
       ];
 }
 
+function resolveGoogleEventDateRange(event) {
+  const startValue = event.start?.dateTime || event.start?.date;
+  const endValue = event.end?.dateTime || event.end?.date || startValue;
+
+  return {
+    startValue,
+    endValue,
+    isAllDay: !event.start?.dateTime,
+  };
+}
+
+function buildWorkCalendarSchedule({
+  projects,
+  tasks,
+  milestones,
+  publishLogs,
+  githubBundles,
+  googleEvents,
+}) {
+  const now = Date.now();
+  const projectNameById = new Map(
+    (projects || []).map((item) => [item.id, item.name || item.title || "Untitled project"]),
+  );
+  const scheduleEvents = [];
+
+  (projects || []).forEach((item) => {
+    if (!item.due_at) {
+      return;
+    }
+
+    scheduleEvents.push(
+      buildCalendarEvent({
+        date: item.due_at,
+        title: item.name || "Untitled project",
+        detail: item.next_action || "Project due date is approaching.",
+        kind: "Project due",
+        source: "Hub",
+        project: item.name || "Project",
+        tone:
+          item.status === "blocked"
+            ? "danger"
+            : item.status === "completed"
+              ? "green"
+              : "blue",
+        isOverdue: item.status !== "completed" && new Date(item.due_at).getTime() < now,
+      }),
+    );
+  });
+
+  (tasks || []).forEach((item) => {
+    if (!item.due_at || normalizeTaskStatus(item.status) === "done") {
+      return;
+    }
+
+    const statusMeta = getTaskStatusMeta(item.status);
+
+    scheduleEvents.push(
+      buildCalendarEvent({
+        date: item.due_at,
+        title: item.title || "Task",
+        detail: item.next_action || "Task due date is approaching.",
+        kind: "Task due",
+        source: "Tasks",
+        project: projectNameById.get(item.project_id) || "Unassigned",
+        tone: statusMeta.tone,
+        isOverdue: statusMeta.value !== "done" && new Date(item.due_at).getTime() < now,
+      }),
+    );
+  });
+
+  (milestones || []).forEach((item) => {
+    if (!item.target_date) {
+      return;
+    }
+
+    const projectName = projectNameById.get(item.project_id) || "Unassigned project";
+    const tone =
+      item.status === "done"
+        ? "green"
+        : item.status === "blocked"
+          ? "danger"
+          : item.status === "active"
+            ? "blue"
+            : "warning";
+
+    scheduleEvents.push(
+      buildCalendarEvent({
+        date: item.target_date,
+        title: item.title || "Milestone",
+        detail: `${projectName} milestone target date.`,
+        kind: "Milestone",
+        source: "Hub",
+        project: projectName,
+        tone,
+        isAllDay: true,
+        isOverdue: item.status !== "done" && isPastDateValue(item.target_date),
+      }),
+    );
+  });
+
+  (publishLogs || []).forEach((item) => {
+    const eventDate = item.published_at || item.created_at;
+
+    if (!eventDate) {
+      return;
+    }
+
+    scheduleEvents.push(
+      buildCalendarEvent({
+        date: eventDate,
+        title: item.payload?.title || `${item.channel || "Channel"} publish`,
+        detail:
+          item.status === "queued"
+            ? "Queued publish is waiting to go out."
+            : item.status === "failed"
+              ? "Publish attempt needs intervention."
+              : "Publish event was recorded.",
+        kind: item.status === "queued" ? "Publish queue" : "Publish",
+        source: item.channel || "Content",
+        project: "Content",
+        tone: item.status === "failed" ? "danger" : item.status === "queued" ? "warning" : "green",
+        isOverdue: item.status === "queued" && new Date(eventDate).getTime() < now,
+      }),
+    );
+  });
+
+  (githubBundles || []).forEach((bundle) => {
+    const repositoryLabel = getGitHubRepoLabel(bundle.repository);
+
+    bundle.milestones.forEach((item) => {
+      if (!item.due_on) {
+        return;
+      }
+
+      scheduleEvents.push(
+        buildCalendarEvent({
+          date: item.due_on,
+          title: item.title,
+          detail: `${repositoryLabel} · ${item.closed_issues} closed / ${item.open_issues} open`,
+          kind: "GitHub milestone",
+          source: repositoryLabel,
+          project: repositoryLabel,
+          tone: item.open_issues ? (isPastDateValue(item.due_on) ? "danger" : "blue") : "green",
+          isAllDay: true,
+          isOverdue: item.open_issues > 0 && isPastDateValue(item.due_on),
+        }),
+      );
+    });
+  });
+
+  (googleEvents || []).forEach((item) => {
+    const range = resolveGoogleEventDateRange(item);
+
+    if (!range.startValue) {
+      return;
+    }
+
+    scheduleEvents.push(
+      buildCalendarEvent({
+        date: range.startValue,
+        title: item.summary || "Google Calendar event",
+        detail: item.description || item.location || "Synced from Google Calendar.",
+        kind: "External event",
+        source: "Google Calendar",
+        project: "Shared calendar",
+        tone: item.status === "cancelled" ? "muted" : "blue",
+        isAllDay: range.isAllDay,
+        isOverdue:
+          item.status !== "cancelled" &&
+          parseDateValue(range.endValue || range.startValue)?.getTime() < now,
+      }),
+    );
+  });
+
+  return scheduleEvents
+    .filter(Boolean)
+    .sort((left, right) => new Date(left.date) - new Date(right.date))
+    .slice(0, 40);
+}
+
+function buildWorkCalendarProgress({ updates, decisions, publishLogs, githubBundles, projects }) {
+  const projectNameById = new Map(
+    (projects || []).map((item) => [item.id, item.name || item.title || "Untitled project"]),
+  );
+  const progressEvents = [];
+
+  (updates || []).forEach((item) => {
+    progressEvents.push(
+      buildCalendarEvent({
+        date: item.happened_at || item.created_at,
+        title: item.title || "Project update",
+        detail: item.summary || item.next_action || "Progress event captured.",
+        kind: "Progress",
+        source: "Hub",
+        project: projectNameById.get(item.project_id) || "Shared lane",
+        tone: toTone(item.status),
+      }),
+    );
+  });
+
+  (decisions || []).forEach((item) => {
+    progressEvents.push(
+      buildCalendarEvent({
+        date: item.decided_at || item.created_at,
+        title: item.title || "Decision",
+        detail: item.summary || item.rationale || "Decision captured.",
+        kind: "Decision",
+        source: "Review",
+        project: projectNameById.get(item.project_id) || "Shared lane",
+        tone: "blue",
+      }),
+    );
+  });
+
+  (publishLogs || []).forEach((item) => {
+    progressEvents.push(
+      buildCalendarEvent({
+        date: item.published_at || item.created_at,
+        title: item.payload?.title || `${item.channel || "Channel"} publish`,
+        detail:
+          item.status === "failed"
+            ? "Publish attempt failed and needs a retry."
+            : item.status === "queued"
+              ? "Publish was queued."
+              : "Publish completed.",
+        kind: "Publish",
+        source: item.channel || "Content",
+        project: "Content",
+        tone: item.status === "failed" ? "danger" : item.status === "queued" ? "warning" : "green",
+      }),
+    );
+  });
+
+  (githubBundles || []).forEach((bundle) => {
+    const repositoryLabel = getGitHubRepoLabel(bundle.repository);
+
+    bundle.commits.slice(0, 4).forEach((item) => {
+      progressEvents.push(
+        buildCalendarEvent({
+          date: item.commit?.author?.date || item.commit?.committer?.date,
+          title: `${repositoryLabel} commit`,
+          detail: compactText(item.commit?.message || "Commit captured."),
+          kind: "Commit",
+          source: repositoryLabel,
+          project: repositoryLabel,
+          tone: "green",
+        }),
+      );
+    });
+
+    bundle.mergedPulls.slice(0, 3).forEach((item) => {
+      progressEvents.push(
+        buildCalendarEvent({
+          date: item.merged_at || item.updated_at,
+          title: `${repositoryLabel} PR #${item.number}`,
+          detail: compactText(item.title || "Merged pull request"),
+          kind: "Merged PR",
+          source: repositoryLabel,
+          project: repositoryLabel,
+          tone: "blue",
+        }),
+      );
+    });
+  });
+
+  return progressEvents
+    .filter(Boolean)
+    .sort((left, right) => new Date(right.date) - new Date(left.date))
+    .slice(0, 16);
+}
+
+function buildWorkCalendarSourceStats(scheduleEvents) {
+  return {
+    projectDueCount: scheduleEvents.filter((item) => item.kind === "Project due").length,
+    taskDueCount: scheduleEvents.filter((item) => item.kind === "Task due").length,
+    milestoneCount: scheduleEvents.filter(
+      (item) => item.kind === "Milestone" || item.kind === "GitHub milestone",
+    ).length,
+    publishCount: scheduleEvents.filter(
+      (item) => item.kind === "Publish" || item.kind === "Publish queue",
+    ).length,
+    externalEventCount: scheduleEvents.filter((item) => item.kind === "External event").length,
+  };
+}
+
 async function getGitHubWorkspaceData() {
   const repositories = resolveGitHubRepositories();
   const token = resolveGitHubToken();
 
   if (!repositories.length) {
     return {
+      bundles: [],
       repositories: [],
       repoCards: mapGitHubRepoCards([]),
       activityRows: [],
@@ -966,6 +1765,7 @@ async function getGitHubWorkspaceData() {
   );
 
   return {
+    bundles,
     repositories,
     repoCards: mapGitHubRepoCards(bundles),
     activityRows: mapGitHubActivityRows(bundles),
@@ -999,6 +1799,9 @@ async function getGitHubWorkspaceData() {
         time: formatTimestamp(item.finished_at || item.started_at),
         tone: toTone(item.status),
       })) || [],
+    // Raw ISO timestamp of the most recent sync run, exposed so the
+    // client-side <HubSyncBadge /> can tick a relative time label.
+    lastSyncAt: recentSync?.finished_at || recentSync?.started_at || null,
     totals,
     hasLiveData,
   };
@@ -1203,23 +2006,36 @@ function mapWebhookEndpoints(rows, health) {
     return fallbackWebhookEndpoints;
   }
 
-  if (rows?.length) {
-    return rows.map((item) => ({
+  const merged = new Map();
+
+  (rows || []).forEach((item) => {
+    const method = "POST";
+    const key = `${method}:${item.route_path}`;
+    merged.set(key, {
       name: item.name,
-      method: "POST",
+      method,
       path: item.route_path,
       status: item.status || "active",
       note: `${item.provider} integration endpoint`,
-    }));
-  }
+    });
+  });
 
-  return health.routes.map((route) => ({
-    name: route.path.replace("/api/", "").replace(/\//g, " ").replace(/\b\w/g, (char) => char.toUpperCase()),
-    method: route.method,
-    path: route.path,
-    status: "active",
-    note: "Detected from engine health route.",
-  }));
+  (health?.routes || []).forEach((route) => {
+    const key = `${route.method}:${route.path}`;
+    const existing = merged.get(key);
+
+    merged.set(key, {
+      name:
+        existing?.name ||
+        route.path.replace("/api/", "").replace(/\//g, " ").replace(/\b\w/g, (char) => char.toUpperCase()),
+      method: route.method,
+      path: route.path,
+      status: existing?.status || "active",
+      note: existing?.note || "Detected from engine health route.",
+    });
+  });
+
+  return Array.from(merged.values());
 }
 
 function mapLogItems(logs) {
@@ -1431,6 +2247,7 @@ function mapLocalRoadmapRows(milestones, projects, updates) {
                 : "warning",
         progress,
         due: item.target_date ? formatShortDate(item.target_date) : "No target date",
+        dueAt: item.target_date || null,
         detail:
           latest?.next_action ||
           project?.next_action ||
@@ -1450,6 +2267,7 @@ function mapLocalRoadmapRows(milestones, projects, updates) {
       statusTone: item.statusTone,
       progress: item.progress,
       due: "No target date",
+      dueAt: null,
       detail: item.nextAction,
     }));
 }
@@ -1562,11 +2380,13 @@ export async function getWorkPmsPageData() {
   return {
     ...pmsData,
     githubConnection: githubData.connection,
+    githubBundles: githubData.bundles,
     githubRepoCards: githubData.repoCards,
     githubActivityRows: githubData.activityRows,
     githubAlerts: githubData.alerts,
     githubSyncRows: githubData.syncRows,
     githubTotals: githubData.totals,
+    githubLastSyncAt: githubData.lastSyncAt,
     hasGitHubData: githubData.hasLiveData,
   };
 }
@@ -1591,7 +2411,133 @@ export async function getRoadmapPageData() {
     roadmapAlerts: githubData.alerts,
     githubConnection: githubData.connection,
     githubTotals: githubData.totals,
+    githubLastSyncAt: githubData.lastSyncAt,
     hasGitHubData: githubData.hasLiveData,
+  };
+}
+
+/**
+ * Release log page data for `/dashboard/work/releases`.
+ *
+ * Pulls the same GitHub bundles as PMS/Roadmap (they share the
+ * workspace cache inside a single request), converts them into
+ * release rows (or auto-changelog rows), then groups by week.
+ */
+export async function getReleaseLogPageData() {
+  const githubData = await getGitHubWorkspaceData();
+  const releaseRows = mapGitHubReleaseRows(githubData.bundles);
+  const weekGroups = groupReleaseRowsByWeek(releaseRows);
+
+  const releasedCount = releaseRows.filter((row) => row.source === "release").length;
+  const autoCount = releaseRows.filter((row) => row.source === "auto-changelog").length;
+  const thisWeek = weekGroups.find((group) => group.title === "이번 주")?.rows.length || 0;
+
+  return {
+    releaseRows,
+    weekGroups,
+    releasedCount,
+    autoCount,
+    thisWeek,
+    githubConnection: githubData.connection,
+    githubTotals: githubData.totals,
+    githubLastSyncAt: githubData.lastSyncAt,
+    hasGitHubData: githubData.hasLiveData,
+  };
+}
+
+export async function getWorkCalendarPageData() {
+  const [
+    projects,
+    tasks,
+    milestones,
+    updates,
+    checks,
+    decisions,
+    publishLogs,
+    githubData,
+    googleCalendarConnection,
+  ] =
+    await Promise.all([
+      fetchRows("projects", {
+        limit: 16,
+        order: "due_at.asc.nullslast",
+        filters: [["status", inFilter(["draft", "active", "blocked"])]],
+      }),
+      fetchRows("tasks", {
+        limit: 20,
+        order: "due_at.asc.nullslast",
+        filters: [["status", inFilter(["inbox", "todo", "doing", "blocked"])]],
+      }),
+      fetchRows("milestones", { limit: 16, order: "target_date.asc.nullslast" }),
+      fetchRows("project_updates", { limit: 10, order: "happened_at.desc" }),
+      fetchRows("routine_checks", { limit: 8, order: "created_at.desc" }),
+      fetchRows("decisions", { limit: 8, order: "decided_at.desc" }),
+      fetchRows("publish_logs", { limit: 10, order: "created_at.desc" }),
+      getGitHubWorkspaceData(),
+      fetchLatestGoogleCalendarConnection(),
+    ]);
+
+  const googleEventsResult = googleCalendarConnection?.status === "connected"
+    ? await listGoogleCalendarEvents({
+        calendarId: googleCalendarConnection.config?.calendarId || process.env.GOOGLE_CALENDAR_ID?.trim() || "primary",
+        timeMin: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        timeMax: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString(),
+        maxResults: 24,
+      })
+    : { ok: false, items: [] };
+
+  const scheduleEvents = buildWorkCalendarSchedule({
+    projects,
+    tasks,
+    milestones,
+    publishLogs,
+    githubBundles: githubData.bundles,
+    googleEvents: googleEventsResult.items,
+  });
+
+  return {
+    scheduleEvents,
+    progressEvents: buildWorkCalendarProgress({
+      updates,
+      decisions,
+      publishLogs,
+      githubBundles: githubData.bundles,
+      projects,
+    }),
+    cadenceRows: mapRoutineChecks(checks),
+    sourceStats: buildWorkCalendarSourceStats(scheduleEvents),
+    githubConnection: githubData.connection,
+    githubTotals: githubData.totals,
+    hasGitHubData: githubData.hasLiveData,
+    googleCalendarConnection: googleCalendarConnection
+      ? {
+          status: googleCalendarConnection.status || "pending",
+          tone:
+            googleCalendarConnection.status === "connected"
+              ? "green"
+              : googleCalendarConnection.status === "error"
+                ? "danger"
+                : "warning",
+          title:
+            googleCalendarConnection.status === "connected"
+              ? "Google Calendar connected"
+              : "Google Calendar needs attention",
+          detail: googleCalendarConnection.last_synced_at
+            ? `Last synced ${formatTimestamp(googleCalendarConnection.last_synced_at)}`
+            : "Connection exists, but no successful sync has been recorded yet.",
+          calendarId:
+            googleCalendarConnection.config?.calendarId ||
+            process.env.GOOGLE_CALENDAR_ID?.trim() ||
+            "primary",
+        }
+      : {
+          status: "planned",
+          tone: "warning",
+          title: "Google Calendar not connected",
+          detail: "Connect Google Calendar to sync external schedules and create or update shared events.",
+          calendarId: process.env.GOOGLE_CALENDAR_ID?.trim() || "primary",
+        },
+    hasGoogleCalendarData: Boolean(googleEventsResult.ok && googleEventsResult.items.length),
   };
 }
 
@@ -1615,6 +2561,169 @@ export async function getAutomationsPageData() {
       : fallbackAutomationCards,
     automationRuns: mapAutomationRuns(runs),
     webhookEndpoints: mappedEndpoints,
+  };
+}
+
+function mapEmailChannelStatus(channels) {
+  return channels.reduce(
+    (acc, channel) => {
+      acc.total += 1;
+      if (channel.status === "primary" || channel.status === "ready") {
+        acc.live += 1;
+      }
+      return acc;
+    },
+    { live: 0, total: 0 },
+  );
+}
+
+function buildEmailSummary({ channels, templates, queue, sends }) {
+  const channelMeta = mapEmailChannelStatus(channels);
+  const scheduled = queue.filter((item) => item.status === "scheduled").length;
+  const blocked = queue.filter((item) => item.status === "blocked" || item.status === "draft").length;
+  const failed = sends.filter((item) => item.status === "failed").length;
+  const delivered = sends.filter((item) => item.status === "delivered").length;
+
+  return [
+    {
+      title: "Channels live",
+      value: `${channelMeta.live}/${channelMeta.total}`,
+      detail: "Resend, n8n, and Gmail can each carry a different kind of email.",
+      badge: "Routing",
+      tone: "blue",
+    },
+    {
+      title: "Templates",
+      value: String(templates.length).padStart(2, "0"),
+      detail: "Each template declares its delivery channel and audience scope.",
+      badge: "Library",
+    },
+    {
+      title: "Queued sends",
+      value: String(scheduled).padStart(2, "0"),
+      detail: blocked
+        ? `${blocked} more waiting on review or trigger before they can move.`
+        : "Everything queued has a clear next move.",
+      badge: "Pending",
+      tone: "warning",
+    },
+    {
+      title: "Recent delivered",
+      value: String(delivered).padStart(2, "0"),
+      detail: failed ? `${failed} send needs operator attention.` : "Last batch landed cleanly.",
+      badge: "Output",
+      tone: failed ? "danger" : "green",
+    },
+  ];
+}
+
+export async function getEmailAutomationPageData() {
+  // Live wiring will read from email_templates / email_queue / email_sends
+  // tables once provider work begins. Until then we serve seed data so the
+  // UI represents the operating model already.
+  const channels = fallbackEmailChannels;
+  const templates = fallbackEmailTemplates;
+  const queue = fallbackEmailQueue;
+  const sends = fallbackEmailSends;
+  const rules = fallbackEmailRules;
+  const segments = fallbackEmailSegments;
+  const variables = fallbackEmailVariables;
+  const blocks = fallbackEmailBlocks;
+
+  return {
+    emailSummary: buildEmailSummary({ channels, templates, queue, sends }),
+    emailChannels: channels,
+    emailTemplates: templates,
+    emailQueue: queue,
+    emailSends: sends,
+    emailRules: rules,
+    emailSegments: segments,
+    emailVariables: variables,
+    emailBlocks: blocks,
+  };
+}
+
+function buildPlanSummary({ phases, projects, milestones }) {
+  const onTrack = phases.filter(
+    (item) => item.status === "ahead" || item.varianceDays <= 3,
+  ).length;
+  const behind = phases.filter((item) => item.status === "behind").length;
+  const watch = phases.filter((item) => item.status === "watch").length;
+  const driftingProjects = projects.filter((item) => item.varianceDays > 3);
+  const avgDrift =
+    projects.length === 0
+      ? 0
+      : Math.round(
+          projects.reduce((sum, item) => sum + item.varianceDays, 0) / projects.length,
+        );
+  const criticalCount = milestones.filter(
+    (item) => item.status === "behind" && item.varianceDays >= 14,
+  ).length;
+
+  return [
+    {
+      title: "Phases on track",
+      value: `${onTrack}/${phases.length}`,
+      detail:
+        behind > 0
+          ? `${behind} phase 가 명확히 지연 중, ${watch} phase 는 감시 필요.`
+          : "모든 페이즈가 계획선 안에서 움직이는 중.",
+      badge: "Plan",
+      tone: behind > 0 ? "warning" : "green",
+    },
+    {
+      title: "Projects drifting",
+      value: String(driftingProjects.length).padStart(2, "0"),
+      detail: driftingProjects.length
+        ? "계획 대비 4일 이상 지연된 프로젝트 수."
+        : "모든 프로젝트가 계획선 ±3일 안.",
+      badge: "Drift",
+      tone: driftingProjects.length ? "warning" : "green",
+    },
+    {
+      title: "Avg drift (days)",
+      value: avgDrift > 0 ? `+${avgDrift}` : String(avgDrift),
+      detail: "프로젝트 평균 일정 편차. 음수면 계획보다 빠른 상태.",
+      badge: "Variance",
+      tone: avgDrift > 7 ? "danger" : avgDrift > 3 ? "warning" : "blue",
+    },
+    {
+      title: "Critical risks",
+      value: String(criticalCount).padStart(2, "0"),
+      detail: criticalCount
+        ? "14일 이상 지연된 마일스톤 — 즉시 조정 필요."
+        : "치명적 지연 없음.",
+      badge: "Risk",
+      tone: criticalCount ? "danger" : "green",
+    },
+  ];
+}
+
+export async function getPlanTrackerPageData() {
+  // Live wiring will read from a `plan_baselines` view that joins planned
+  // milestones with actual project state. Until then we serve seed data so the
+  // operator can see the variance shape immediately.
+  const phases = fallbackPlanPhases;
+  const projects = fallbackPlanProjects;
+  const milestones = fallbackPlanMilestones;
+  const drift = fallbackPlanDriftItems;
+  const snapshot = fallbackPlanSnapshot;
+
+  return {
+    planSnapshot: snapshot,
+    planSummary: buildPlanSummary({ phases, projects, milestones }),
+    planPhases: phases,
+    planProjects: projects,
+    planMilestones: [...milestones].sort((left, right) => right.varianceDays - left.varianceDays),
+    planDriftItems: drift,
+  };
+}
+
+export async function getContentQueuePageData() {
+  const base = await getContentPageData();
+  return {
+    ...base,
+    contentQueueRoster: fallbackContentQueueRoster,
   };
 }
 
@@ -1685,5 +2794,25 @@ export async function getCommandCenterPageData() {
     quickCommands: fallbackQuickCommands,
     commandCenterQueue: queue.length ? queue : fallbackCommandCenterQueue,
     automationRuns: mapAutomationRuns(runs),
+  };
+}
+
+/**
+ * AI Console page data. The AI tab renders four surfaces (overview, chat,
+ * council, orders) that all share the same upstream signals: agents, threads,
+ * council sessions, open orders, and an OS pulse. Today the repo ships static
+ * fallbacks — when a real AI orchestrator lands, swap the implementation here
+ * and every sub-page will inherit it automatically.
+ */
+export async function getAiConsolePageData() {
+  return {
+    agents: fallbackAiAgents,
+    chatThreads: fallbackAiChatThreads,
+    chatMessages: fallbackAiChatMessages,
+    chatSuggestions: fallbackAiChatSuggestions,
+    councilSessions: fallbackAiCouncilSessions,
+    openOrders: fallbackAiOpenOrders,
+    orderTemplates: fallbackAiOrderTemplates,
+    osPulse: fallbackAiOsPulse,
   };
 }
