@@ -1,0 +1,218 @@
+{
+  "meta": {
+    "title": "Com_Moon · Smoked Command Deck",
+    "description": "A quiet operating desk that wires brand, content, sales, and operations into a single flow."
+  },
+  "locale": {
+    "ko": "KO",
+    "en": "EN",
+    "ariaLabel": "Switch language"
+  },
+  "brand": {
+    "name": "Com_Moon",
+    "tagline": "Public Surface",
+    "footerTagline": "Smoked Command Deck"
+  },
+  "nav": {
+    "loop": "Loop",
+    "desk": "Desk",
+    "useCases": "Use Cases",
+    "contact": "Contact",
+    "cta": "Start a project"
+  },
+  "hero": {
+    "eyebrow": "Com_Moon Public",
+    "chips": { "content": "Content", "lead": "Lead", "ops": "Ops" },
+    "titleLine1": "Content, leads, and ops",
+    "titleLine2": "running on a single loop —",
+    "titleLine3": "a quiet growth desk",
+    "copy": "Com_Moon keeps the trust you build outside and the judgment you run inside on the same page. Public content earns attention, responses become structured leads, and those signals flow back into operating priorities and automation.",
+    "primaryAction": "See the desk flow",
+    "secondaryAction": "See how inquiries move",
+    "proof": {
+      "trust": {
+        "kicker": "Trust loop",
+        "value": "Content → Lead",
+        "detail": "Content builds trust, and every response turns into an inquiry and the next concrete action."
+      },
+      "signal": {
+        "kicker": "Operating signal",
+        "value": "Lead → Ops",
+        "detail": "Every signal captured in public flows back into sales and operating decisions inside the hub."
+      },
+      "mobile": {
+        "kicker": "Mobile reality",
+        "value": "5-second clarity",
+        "detail": "Check numbers, capture ideas, and trigger the next action from a phone without friction."
+      }
+    },
+    "floatingNote": {
+      "label": "This week",
+      "title": "Today's signals",
+      "items": {
+        "draft": "3 card-news drafts",
+        "inbound": "5 new inquiries",
+        "followup": "2 priority follow-ups"
+      }
+    },
+    "floatingWindow": {
+      "label": "Operator note",
+      "headline": "Push only the topics that already earned a response — operations get sharper fast.",
+      "body": "This week's publishing, lead follow-up, and proposal priorities live on the same board."
+    }
+  },
+  "loop": {
+    "eyebrow": "The Loop",
+    "title": "Signals from outside reshape how you operate inside",
+    "copy": "Public isn't a brochure — it's a sensor. What people responded to, which inquiries showed up, and what to push next should all loop back into the hub's judgment.",
+    "pillars": {
+      "content": {
+        "title": "Content Engine",
+        "body": "Turn ideas into card news, posts, and insight pieces that steadily build public trust.",
+        "points": {
+          "one": "Card-news publishing",
+          "two": "Insight archive",
+          "three": "Content series ops"
+        }
+      },
+      "lead": {
+        "title": "Lead Capture",
+        "body": "No response gets lost. Inquiries and reactions become structured leads with a clear next action.",
+        "points": {
+          "one": "Inquiry conversion",
+          "two": "Source tracking",
+          "three": "Follow-up design"
+        }
+      },
+      "ops": {
+        "title": "Operating Signal",
+        "body": "Public outcomes flow back into the hub OS and become the signal for what to push next.",
+        "points": {
+          "one": "Priority reordering",
+          "two": "Rhythm adjustment",
+          "three": "Automation triggers"
+        }
+      }
+    }
+  },
+  "story": {
+    "eyebrow": "Why This Shape",
+    "title": "Not a pretty landing — a landing that shows how you work",
+    "copy": "Com_Moon's public surface can't stop at \"here's what we do.\" The rhythm of content, how responses get captured, and how it all flows back into operating decisions should be visible in the structure itself.",
+    "workflows": {
+      "one": {
+        "title": "Build trust outside",
+        "body": "Public content is a sample of how Com_Moon thinks and works, not a billboard."
+      },
+      "two": {
+        "title": "Catch responses as leads",
+        "body": "Likes and views aren't the finish line. Record who engaged and what happens next."
+      },
+      "three": {
+        "title": "Loop it back into operations",
+        "body": "Content performance and inbound flow show up inside as priorities, automations, and execution state."
+      }
+    }
+  },
+  "workspace": {
+    "eyebrow": "Preview The Desk",
+    "title": "An operating preview from public to hub",
+    "copy": "Same brand, different pressure. Outside has room to breathe; inside is denser. Not a hard cut — the same material under different light.",
+    "sidebar": {
+      "today": {
+        "label": "Today",
+        "title": "What to check now",
+        "items": {
+          "one": "Follow up on 2 inbound leads",
+          "two": "Approve card-news for publishing",
+          "three": "Review failing automation logs"
+        }
+      },
+      "signal": {
+        "label": "Signal",
+        "title": "This week's highest-response topics",
+        "body": "Brand ops structuring / Content automation / Practical sales flow"
+      }
+    },
+    "toolbar": {
+      "title": "Dashboard",
+      "tabs": { "content": "Content", "leads": "Leads", "ops": "Ops" }
+    },
+    "kpi": {
+      "ops": { "label": "Active ops", "value": "12", "sub": "In progress this week" },
+      "leads": { "label": "New leads", "value": "05", "sub": "Today's inbound" },
+      "queue": { "label": "Awaiting publish", "value": "03", "sub": "Approval only" }
+    },
+    "desk": {
+      "leadQueue": {
+        "label": "Lead Queue",
+        "items": {
+          "one": { "title": "Brand proposal inquiry", "meta": "Today 09:20 · Content inbound" },
+          "two": { "title": "Ops automation consult", "meta": "Yesterday 18:40 · Awaiting reply" },
+          "three": { "title": "Card-news production", "meta": "Yesterday 14:10 · Scheduling" }
+        }
+      },
+      "automation": {
+        "label": "Automation Health",
+        "items": {
+          "publish": { "title": "09:00 Publish Flow", "status": "Success" },
+          "sync": { "title": "11:30 Lead Sync", "status": "Retry needed" },
+          "report": { "title": "14:00 Report Draft", "status": "Queued" }
+        }
+      }
+    }
+  },
+  "useCases": {
+    "eyebrow": "Use Cases",
+    "title": "The scenes Com_Moon has to do well",
+    "items": {
+      "intro": {
+        "title": "Turn a services page into operating language",
+        "body": "Not a pretty brochure — a public structure that makes how you actually work visible."
+      },
+      "response": {
+        "title": "Don't lose content responses",
+        "body": "Catch reactions from card news or essays as leads and wire them into the sales flow."
+      },
+      "today": {
+        "title": "See what to push today, instantly",
+        "body": "Open the hub and the priority across ops, leads, content, and automation is on one screen."
+      }
+    }
+  },
+  "ctaBand": {
+    "eyebrow": "Start A Conversation",
+    "title": "Which problem do you want to hold on to right now?",
+    "body": "Landing structure, content ops, lead flow, hub OS — we start by sorting out what's blocking you.",
+    "action": "Send an inquiry"
+  },
+  "footer": {
+    "description": "A public surface and hub OS that wire brand, content, sales, and operations into a single flow.",
+    "groups": {
+      "surface": {
+        "title": "Surface",
+        "links": {
+          "landing": "Public landing",
+          "contentHub": "Content hub",
+          "caseNotes": "Case notes"
+        }
+      },
+      "os": {
+        "title": "OS",
+        "links": {
+          "dashboard": "Dashboard",
+          "leads": "Leads",
+          "operations": "Operations"
+        }
+      },
+      "loop": {
+        "title": "Loop",
+        "links": {
+          "automations": "Automations",
+          "logs": "Logs",
+          "contentDesk": "Content desk"
+        }
+      }
+    }
+  }
+}

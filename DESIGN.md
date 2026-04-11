@@ -43,17 +43,79 @@ One accent color, a small number of surface styles, and deliberate typography be
 
 ## 4. Visual Direction
 
-Working direction name: `Editorial Command Deck`
+Working direction name: `Smoked Command Deck`
+
+One-line mood: *the quiet authority of a yacht bridge, a trading desk,
+or a mission-control room — premium because it looks precise, not because
+it looks shiny.*
 
 Keywords:
 
-- moss green
-- parchment white
-- smoked ink
-- brass signal
-- rounded glass panels
-- thin utility lines
-- strong type hierarchy
+- smoked graphite
+- champagne metal
+- platinum text
+- warm parchment (public only)
+- rim-lit edges
+- whisper borders
+- hardware-grade precision
+
+### Reference Synthesis, `Linear x Bloomberg x Vacheron`
+
+This is the outside reference mix for Com_Moon.
+
+`Linear` gives us:
+
+- dark operational surfaces that stay legible at high density
+- ultra-thin borders and low-noise typography
+- restrained motion that highlights state changes instead of decoration
+
+`Bloomberg Terminal` gives us:
+
+- command-deck information rhythm: status, count, next action
+- monospace for numbers, sans for labels, no decorative flourish
+- dense layouts that still feel calm because hierarchy is unambiguous
+
+`Vacheron Constantin / high-end horology` gives us:
+
+- champagne metal as a *signal*, never as decoration
+- brushed-metal gradients only on edges, dials, and controls
+- the sense that every surface is machined, not painted
+
+Com_Moon should not copy any of these directly.
+
+The real blend should be:
+
+- `apps/web`: `55% Linear`, `25% Bloomberg`, `20% Vacheron` (still public, still editorial pacing, but darker and more precise than before)
+- `apps/hub`: `30% Linear`, `55% Bloomberg`, `15% Vacheron` (full control-tower energy)
+- `content workspace`: `45% Linear`, `35% Bloomberg`, `20% Vacheron`
+
+In practice that means:
+
+- hub surfaces are **dark by default**, with smoked-ink canvases, whisper borders, and champagne-metal accents on CTAs and KPIs
+- public surfaces stay **lighter** (warm parchment) but use graphite text, metal rules, and the same champagne CTA language — so the two feel like one hardware family with different lighting
+- both surfaces avoid colored gradients on large areas; gradients live only on buttons, rim-lit card edges, and signature marks
+
+Do not import these reference patterns blindly:
+
+- Linear's cool SaaS blue or purple accent
+- Bloomberg's amber-on-black news-ticker density
+- Glossy chrome, blown-glass, or "Web3" metallic sheen
+- Cold greige / generic enterprise grayscale
+- Full-bleed radial gradients used as decoration
+
+### Public Surface Mood
+
+- Warm parchment canvas, graphite ink
+- Champagne metal CTA and rule lines
+- Serif display headlines, generous breathing
+- Trust-building proof blocks anchored by metal dividers
+
+### Hub Surface Mood
+
+- Smoked-ink canvas, platinum text
+- Dense information rhythm with whisper borders
+- Champagne metal used semantically (signal, CTA, emphasized KPI)
+- Sticky command strip; status chips over decoration
 
 ### Public Surface Mood
 
@@ -72,41 +134,88 @@ Keywords:
 
 ## 5. Color System
 
+The palette has two sides — a **dark ink stack** for hub surfaces and a
+**warm parchment stack** for public surfaces — bridged by a single
+**champagne metal** accent that carries brand identity across both.
+
+Moss green is retired. There is no brand green anywhere in the system.
+
 ### Core Palette
 
 ```css
 :root {
-  --cm-bg: #f6f3ee;
-  --cm-surface: #fffdf8;
-  --cm-surface-muted: #f0ece4;
-  --cm-panel: rgba(255, 255, 255, 0.82);
-  --cm-line: rgba(18, 29, 24, 0.10);
-  --cm-text: #15211c;
-  --cm-text-soft: #5c665f;
+  /* ── Dark ink stack (hub canvas, feature panels) ─────────────── */
+  --cm-ink-900: #0e1114; /* deepest canvas, hub body background */
+  --cm-ink-800: #15191e; /* standard card on dark */
+  --cm-ink-700: #1d222a; /* elevated card, hover lift */
+  --cm-ink-600: #2a313b; /* strong border, pressed state */
 
-  --cm-green-700: #084734;
-  --cm-green-600: #0f6046;
-  --cm-green-500: #2d7a5e;
-  --cm-green-100: #e7f1eb;
+  /* ── Warm parchment stack (public canvas) ────────────────────── */
+  --cm-parchment: #ede9e0;      /* public body background */
+  --cm-parchment-soft: #f6f3ec; /* cards on parchment */
+  --cm-parchment-deep: #e2ddd0; /* muted section band */
 
-  --cm-brass-500: #b8892d;
-  --cm-brass-100: #f4ead3;
+  /* ── Champagne metal (the single brand accent) ───────────────── */
+  --cm-metal-300: #e8dfcb; /* highlight, KPI numbers on dark */
+  --cm-metal-400: #cdbf9e; /* default accent, link underline */
+  --cm-metal-500: #a8986f; /* primary CTA base */
+  --cm-metal-600: #7d6f4a; /* pressed / hover on dark */
 
-  --cm-red-500: #a94a3d;
-  --cm-red-100: #f7e4e0;
+  /* ── Text ─────────────────────────────────────────────────────── */
+  --cm-platinum: #e9ebee;       /* primary text on dark */
+  --cm-platinum-soft: #9ba3ad;  /* secondary text on dark */
+  --cm-graphite: #171a1f;       /* primary text on parchment */
+  --cm-graphite-soft: #55606b;  /* secondary text on parchment */
 
-  --cm-blue-500: #2f6486;
-  --cm-blue-100: #e4eff6;
+  /* ── Hairlines ────────────────────────────────────────────────── */
+  --cm-line-dark: rgba(255, 255, 255, 0.08);
+  --cm-line-dark-strong: rgba(255, 255, 255, 0.14);
+  --cm-line-light: rgba(23, 26, 31, 0.10);
+  --cm-line-light-strong: rgba(23, 26, 31, 0.18);
+
+  /* ── Semantic status (used sparingly) ─────────────────────────── */
+  --cm-ok-500: #6fa28a;   /* success (muted, non-green-branded) */
+  --cm-warn-500: #c4a15a; /* warning, brass-leaning */
+  --cm-risk-500: #b5574a; /* error / destructive */
+  --cm-info-500: #6d8aa4; /* neutral informational */
+
+  /* ── Signature gradients (accent only, never background fill) ── */
+  --cm-grad-metal: linear-gradient(
+    135deg,
+    #e8dfcb 0%,
+    #cdbf9e 38%,
+    #a8986f 70%,
+    #7d6f4a 100%
+  );
+  --cm-grad-ink: linear-gradient(180deg, #15191e 0%, #0e1114 100%);
+  --cm-grad-rim: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.10) 0%,
+    rgba(255, 255, 255, 0) 60%
+  );
 }
 ```
 
 ### Usage Rules
 
-- `--cm-green-700` is the brand anchor and primary CTA color.
-- Brass is for "attention worth tracking", not for generic decoration.
-- Red only appears on errors, risk, destructive actions.
-- Blue is reserved for informational states and system notices.
-- Public pages can use softer translucent surfaces. Hub pages should use more solid surfaces for legibility.
+- **Brand anchor is `--cm-metal-500`.** Every primary CTA uses
+  `--cm-grad-metal` with a `--cm-grad-rim` overlay on the top edge.
+- **Dark ink stack is the hub default.** Hub pages set their body to
+  `--cm-ink-900` and build up with `--cm-ink-800` / `--cm-ink-700`.
+- **Parchment stack is the web default.** Web pages stay on
+  `--cm-parchment` with `--cm-parchment-soft` cards. Occasional
+  `--cm-ink-900` feature panels are allowed for premium moments
+  (hero, case-study reveals, pricing anchor).
+- **Gradients are for edges and controls only.** Never fill a hero
+  background, never fill a card body. `--cm-grad-metal` belongs on
+  buttons, underline rules, KPI borders, and signature marks.
+  `--cm-grad-rim` belongs on the top edge of raised elements to
+  simulate rim lighting.
+- **Status colors are muted on purpose.** They must not compete with
+  the metal accent. Use them on chips, dots, and left-border accents,
+  not as full card fills.
+- **Do not introduce any green, purple, or bright blue.** The only
+  blue in the system is `--cm-info-500` for neutral notices.
 
 ## 6. Typography
 
@@ -266,12 +375,16 @@ Bad:
 
 Do not ship these:
 
-- Generic gradient SaaS hero
+- Generic gradient SaaS hero (no colored gradients on large surfaces)
 - Overpacked dashboard with 12 cards above the fold
-- Neon accent colors that break the green system
+- Neon or jewel-tone accents that break the champagne metal system
+- Any reintroduction of brand green, bright blue, or purple
+- Glossy chrome, mirror reflections, or Web3 metallic sheen
 - Center-aligned everything
 - Chart-heavy screens with no clear operator action
 - Decorative icons used as filler
+- Dark mode applied only by inverting colors (the hub is dark-native,
+  not dark-themed)
 
 ## 14. Implementation Mapping
 

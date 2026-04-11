@@ -1,18 +1,41 @@
 import { SectionCard } from "@/components/dashboard/section-card";
 import { SummaryCard } from "@/components/dashboard/summary-card";
 import { RoutineCheckForm } from "@/components/forms/routine-check-form";
+import { resolveWorkContext, scopeMappedItemsByWorkContext } from "@/lib/dashboard-contexts";
 import { getPmsPageData } from "@/lib/server-data";
 
-export default async function WorkRhythmPage() {
+export default async function WorkRhythmPage({ searchParams }) {
   const { pmsBoard, weeklyReview, taskQueue } = await getPmsPageData();
   const defaultWorkspaceId =
     process.env.COM_MOON_DEFAULT_WORKSPACE_ID?.trim() ||
     process.env.DEFAULT_WORKSPACE_ID?.trim() ||
     "";
+  const selectedProject = resolveWorkContext(searchParams?.project);
+  const scopedChecks = scopeMappedItemsByWorkContext(
+    pmsBoard,
+    selectedProject.value,
+    (item) => [item.title, item.detail, item.rhythm],
+  );
+  const scopedReview = scopeMappedItemsByWorkContext(
+    weeklyReview,
+    selectedProject.value,
+    (item) => [item.title, item.detail],
+  );
+  const scopedTasks = scopeMappedItemsByWorkContext(
+    taskQueue,
+    selectedProject.value,
+    (item) => [item.title, item.detail, item.project],
+  );
 
-  const doneChecks = pmsBoard.filter((item) => item.status === "done").length;
-  const pendingChecks = pmsBoard.filter((item) => item.status === "pending").length;
-  const blockedChecks = pmsBoard.filter((item) => item.status === "blocked").length;
+  const doneChecks = scopedChecks.items.filter((item) => item.status === "done").length;
+  const pendingChecks = scopedChecks.items.filter((item) => item.status === "pending").length;
+  const blockedChecks = scopedChecks.items.filter((item) => item.status === "blocked").length;
+  const scopeNote =
+    selectedProject.value === "all"
+      ? "Cadence blocks from every project stay visible together."
+      : scopedChecks.isFallback && scopedReview.isFallback && scopedTasks.isFallback
+        ? `${selectedProject.label} is selected, but rhythm rows are still shared until project-level cadence tagging is richer.`
+        : `${selectedProject.label} rhythm is now driving this review lane.`;
 
   return (
     <div className="app-page">
@@ -22,6 +45,10 @@ export default async function WorkRhythmPage() {
         <p>
           Rhythm is the cadence layer of the OS. It keeps the operator from drifting into reactive work
           by making checkpoints and review prompts explicit.
+        </p>
+        <p className="page-context">
+          <strong>{selectedProject.label}</strong>
+          <span>{scopeNote}</span>
         </p>
       </section>
 
@@ -43,7 +70,7 @@ export default async function WorkRhythmPage() {
         />
         <SummaryCard
           title="Reset Prompts"
-          value={String(weeklyReview.length)}
+          value={String(scopedReview.items.length)}
           detail="Short prompts for the weekly reset loop."
           badge="Review"
           tone="muted"
@@ -66,7 +93,7 @@ export default async function WorkRhythmPage() {
           description="Each block should have a time, a purpose, and a visible status."
         >
           <div className="check-grid">
-            {pmsBoard.map((item) => (
+            {scopedChecks.items.map((item) => (
               <article className="check-card" key={item.title}>
                 <div className="project-head">
                   <div>
@@ -92,7 +119,7 @@ export default async function WorkRhythmPage() {
           description="A weekly pass keeps project motion and operating judgment aligned."
         >
           <ul className="note-list">
-            {weeklyReview.map((item) => (
+            {scopedReview.items.map((item) => (
               <li className="note-row" key={item.title}>
                 <div>
                   <strong>{item.title}</strong>
@@ -111,7 +138,7 @@ export default async function WorkRhythmPage() {
         description="Cadence is useful when it points at the concrete tasks that need motion right now."
       >
         <ul className="task-list">
-          {taskQueue.map((item) => (
+          {scopedTasks.items.map((item) => (
             <li className="task-item" key={`${item.title}-${item.project}`}>
               <div>
                 <strong>{item.title}</strong>

@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import {
   activityFeed as fallbackActivityFeed,
   automationCards as fallbackAutomationCards,
@@ -49,6 +50,19 @@ function resolveEngineUrl() {
   }
 
   return null;
+}
+
+function resolveGitHubApiBase() {
+  return (process.env.GITHUB_API_BASE_URL?.trim() || "https://api.github.com").replace(/\/$/, "");
+}
+
+function resolveGitHubToken() {
+  return (
+    process.env.GITHUB_TOKEN?.trim() ||
+    process.env.GITHUB_PERSONAL_ACCESS_TOKEN?.trim() ||
+    process.env.GH_TOKEN?.trim() ||
+    ""
+  );
 }
 
 function makeHeaders(apiKey, withCount = false) {
@@ -519,6 +533,477 @@ function compactText(value, maxLength = 96) {
   return `${normalized.slice(0, maxLength - 1)}...`;
 }
 
+function normalizeGitHubRepoSlug(value) {
+  if (!value) {
+    return "";
+  }
+
+  return String(value)
+    .trim()
+    .replace(/^https?:\/\/github\.com\//i, "")
+    .replace(/^git@github\.com:/i, "")
+    .replace(/\.git$/i, "")
+    .replace(/^\/+|\/+$/g, "");
+}
+
+function parseGitHubRepoFromRemote(value) {
+  const normalized = normalizeGitHubRepoSlug(value);
+  return /^[^/]+\/[^/]+$/.test(normalized) ? normalized : "";
+}
+
+function readGitHubRepoFromOrigin() {
+  try {
+    const remote = execSync("git remote get-url origin", {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+
+    return parseGitHubRepoFromRemote(remote);
+  } catch {
+    return "";
+  }
+}
+
+function resolveGitHubRepositories() {
+  const envRepositories =
+    process.env.GITHUB_REPOSITORIES?.split(/[,\n]/)
+      .map((item) => parseGitHubRepoFromRemote(item))
+      .filter(Boolean) || [];
+
+  if (envRepositories.length) {
+    return [...new Set(envRepositories)];
+  }
+
+  const fallbackRepository = parseGitHubRepoFromRemote(
+    process.env.GITHUB_DEFAULT_REPOSITORY?.trim() || readGitHubRepoFromOrigin(),
+  );
+
+  return fallbackRepository ? [fallbackRepository] : [];
+}
+
+function buildGitHubQuery(params) {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value != null) {
+      searchParams.set(key, String(value));
+    }
+  });
+
+  const query = searchParams.toString();
+  return query ? `?${query}` : "";
+}
+
+function makeGitHubHeaders() {
+  const token = resolveGitHubToken();
+
+  return {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "com-moon-hub",
+    "X-GitHub-Api-Version": "2022-11-28",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+async function fetchGitHubJson(pathname, params = {}) {
+  const repositories = resolveGitHubRepositories();
+
+  if (!repositories.length) {
+    return null;
+  }
+
+  const url = `${resolveGitHubApiBase()}${pathname}${buildGitHubQuery(params)}`;
+
+  try {
+    const response = await fetch(url, {
+      headers: makeGitHubHeaders(),
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function fetchGitHubRepoBundle(repository) {
+  const encodedRepository = repository
+    .split("/")
+    .map((item) => encodeURIComponent(item))
+    .join("/");
+
+  const [repo, openPulls, closedPulls, issues, commits, milestones] = await Promise.all([
+    fetchGitHubJson(`/repos/${encodedRepository}`),
+    fetchGitHubJson(`/repos/${encodedRepository}/pulls`, {
+      state: "open",
+      sort: "updated",
+      direction: "desc",
+      per_page: 12,
+    }),
+    fetchGitHubJson(`/repos/${encodedRepository}/pulls`, {
+      state: "closed",
+      sort: "updated",
+      direction: "desc",
+      per_page: 12,
+    }),
+    fetchGitHubJson(`/repos/${encodedRepository}/issues`, {
+      state: "open",
+      sort: "updated",
+      direction: "desc",
+      per_page: 20,
+    }),
+    fetchGitHubJson(`/repos/${encodedRepository}/commits`, {
+      per_page: 12,
+    }),
+    fetchGitHubJson(`/repos/${encodedRepository}/milestones`, {
+      state: "open",
+      sort: "due_on",
+      direction: "asc",
+      per_page: 12,
+    }),
+  ]);
+
+  return {
+    repository,
+    repo,
+    openPulls: Array.isArray(openPulls) ? openPulls : [],
+    mergedPulls: (Array.isArray(closedPulls) ? closedPulls : []).filter((item) => item.merged_at),
+    issues: (Array.isArray(issues) ? issues : []).filter((item) => !item.pull_request),
+    commits: Array.isArray(commits) ? commits : [],
+    milestones: Array.isArray(milestones) ? milestones : [],
+  };
+}
+
+function getGitHubRepoLabel(repository) {
+  return repository.split("/")[1] || repository;
+}
+
+function formatShortDate(value) {
+  if (!value) {
+    return "No date";
+  }
+
+  try {
+    return new Intl.DateTimeFormat("ko-KR", {
+      month: "short",
+      day: "numeric",
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function toProgress(total, completed) {
+  if (!total) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, Math.round((completed / total) * 100)));
+}
+
+function getGitHubBundleTone(bundle) {
+  if (bundle.openPulls.some((item) => item.draft)) {
+    return "warning";
+  }
+
+  if (bundle.issues.length > 8) {
+    return "danger";
+  }
+
+  return "blue";
+}
+
+function mapGitHubRepoCards(bundles) {
+  const liveBundles = (bundles || []).filter((bundle) => bundle.repo);
+
+  if (!liveBundles.length) {
+    return [
+      {
+        title: "GitHub lane waiting for configuration",
+        owner: "Connect at least one repository",
+        status: "pending",
+        statusLabel: "pending",
+        statusTone: "warning",
+        progress: 0,
+        milestone: "Add GITHUB_TOKEN and GITHUB_REPOSITORIES",
+        nextAction: "Once connected, this board will show PR pressure, issue flow, and push timing.",
+        risk: "No repository data",
+        taskSummary: "No repositories connected yet.",
+        taskLead: "Start with the main repo, then add sidecars as separate owner/repo pairs.",
+      },
+    ];
+  }
+
+  return liveBundles.map((bundle) => {
+    const repositoryLabel = getGitHubRepoLabel(bundle.repository);
+    const milestone = bundle.milestones[0];
+    const issueTotal = milestone ? milestone.open_issues + milestone.closed_issues : bundle.issues.length;
+    const closedTotal = milestone ? milestone.closed_issues : bundle.mergedPulls.length;
+
+    return {
+      title: repositoryLabel,
+      owner: bundle.repo.owner?.login ? `${bundle.repo.owner.login} / ${bundle.repo.default_branch}` : bundle.repository,
+      status: bundle.openPulls.length ? "active" : bundle.issues.length ? "draft" : "completed",
+      statusLabel: bundle.openPulls.length ? "shipping" : bundle.issues.length ? "tracking" : "quiet",
+      statusTone: getGitHubBundleTone(bundle),
+      progress: toProgress(issueTotal || 1, closedTotal),
+      milestone: milestone?.title || "No GitHub milestone attached yet.",
+      nextAction: bundle.openPulls[0]?.title || bundle.issues[0]?.title || "No urgent GitHub action is visible right now.",
+      risk:
+        bundle.issues.length > 8
+          ? `${bundle.issues.length} open issues`
+          : bundle.openPulls.some((item) => item.draft)
+            ? "Draft PRs still need finishing"
+            : "Controlled",
+      taskSummary: `${bundle.openPulls.length} open PRs · ${bundle.issues.length} open issues · ${bundle.commits.length} recent commits`,
+      taskLead:
+        bundle.repo.pushed_at
+          ? `Last push ${formatTimestamp(bundle.repo.pushed_at)}`
+          : "No recent push recorded.",
+    };
+  });
+}
+
+function mapGitHubActivityRows(bundles) {
+  const activity = [];
+
+  (bundles || []).forEach((bundle) => {
+    const repositoryLabel = getGitHubRepoLabel(bundle.repository);
+
+    bundle.commits.slice(0, 4).forEach((item) => {
+      activity.push({
+        title: `${repositoryLabel} commit`,
+        detail: compactText(item.commit?.message || "Commit captured."),
+        time: formatTimestamp(item.commit?.author?.date),
+        tone: "green",
+        repository: repositoryLabel,
+        occurredAt: item.commit?.author?.date || item.commit?.committer?.date || "",
+      });
+    });
+
+    bundle.openPulls.slice(0, 4).forEach((item) => {
+      activity.push({
+        title: `${repositoryLabel} PR #${item.number}`,
+        detail: compactText(item.title || "Open pull request"),
+        time: formatTimestamp(item.updated_at),
+        tone: item.draft ? "warning" : "blue",
+        repository: repositoryLabel,
+        occurredAt: item.updated_at || "",
+      });
+    });
+
+    bundle.issues.slice(0, 4).forEach((item) => {
+      activity.push({
+        title: `${repositoryLabel} issue #${item.number}`,
+        detail: compactText(item.title || "Open issue"),
+        time: formatTimestamp(item.updated_at),
+        tone: item.labels?.length ? "warning" : "muted",
+        repository: repositoryLabel,
+        occurredAt: item.updated_at || "",
+      });
+    });
+  });
+
+  return activity
+    .sort((left, right) => new Date(right.occurredAt || 0) - new Date(left.occurredAt || 0))
+    .slice(0, 10)
+    .map(({ occurredAt, ...item }) => item);
+}
+
+function mapGitHubRoadmapRows(bundles) {
+  const roadmapRows = [];
+
+  (bundles || []).forEach((bundle) => {
+    const repositoryLabel = getGitHubRepoLabel(bundle.repository);
+
+    bundle.milestones.forEach((item) => {
+      const total = item.open_issues + item.closed_issues;
+      const progress = toProgress(total || 1, item.closed_issues);
+
+      roadmapRows.push({
+        title: item.title,
+        lane: repositoryLabel,
+        source: "GitHub milestone",
+        status: item.open_issues ? "active" : "completed",
+        statusLabel: item.open_issues ? "active" : "completed",
+        statusTone: item.due_on && new Date(item.due_on) < new Date() ? "danger" : item.open_issues ? "blue" : "green",
+        progress,
+        due: item.due_on ? formatShortDate(item.due_on) : "No due date",
+        detail: `${item.closed_issues} closed / ${item.open_issues} open`,
+      });
+    });
+  });
+
+  return roadmapRows;
+}
+
+function buildGitHubAlerts(bundles, syncRuns = []) {
+  const alerts = [];
+
+  (bundles || []).forEach((bundle) => {
+    const repositoryLabel = getGitHubRepoLabel(bundle.repository);
+
+    if (!bundle.repo) {
+      alerts.push({
+        title: `${repositoryLabel} needs repository access`,
+        detail: "Check token scope or repository visibility before treating GitHub as a source of truth.",
+        tone: "warning",
+      });
+      return;
+    }
+
+    if (bundle.openPulls.some((item) => item.draft)) {
+      alerts.push({
+        title: `${repositoryLabel} has draft PRs in flight`,
+        detail: "Draft work is visible, but still needs review or a merge plan before it counts as shipped motion.",
+        tone: "warning",
+      });
+    }
+
+    if (bundle.issues.length > 8) {
+      alerts.push({
+        title: `${repositoryLabel} issue pressure is rising`,
+        detail: `${bundle.issues.length} open issues are visible. Pull one or two into the roadmap instead of letting the queue blur together.`,
+        tone: "danger",
+      });
+    }
+  });
+
+  (syncRuns || [])
+    .filter((item) => item.status === "failure")
+    .slice(0, 1)
+    .forEach((item) => {
+      alerts.push({
+        title: "GitHub sync run failed",
+        detail: item.error_message || "A sync run recorded a failure and still needs inspection.",
+        tone: "danger",
+      });
+    });
+
+  return alerts.length
+    ? alerts.slice(0, 6)
+    : [
+        {
+          title: "GitHub lane is calm",
+          detail: "No urgent PR, issue, or sync signals are visible right now.",
+          tone: "green",
+        },
+      ];
+}
+
+async function getGitHubWorkspaceData() {
+  const repositories = resolveGitHubRepositories();
+  const token = resolveGitHubToken();
+
+  if (!repositories.length) {
+    return {
+      repositories: [],
+      repoCards: mapGitHubRepoCards([]),
+      activityRows: [],
+      roadmapRows: [],
+      alerts: buildGitHubAlerts([]),
+      connection: {
+        status: "pending",
+        tone: "warning",
+        title: "GitHub is not configured",
+        detail: "Add GITHUB_REPOSITORIES and optionally GITHUB_TOKEN to read issues, PRs, commits, and milestones.",
+      },
+      syncRows: [],
+      totals: {
+        repositoryCount: 0,
+        openPullCount: 0,
+        openIssueCount: 0,
+        recentCommitCount: 0,
+        roadmapCount: 0,
+        mergedPullCount: 0,
+      },
+      hasLiveData: false,
+    };
+  }
+
+  const [bundles, connections] = await Promise.all([
+    Promise.all(repositories.map((item) => fetchGitHubRepoBundle(item))),
+    fetchRows("integration_connections", {
+      limit: 4,
+      order: "created_at.desc",
+      filters: [["provider", "eq.github"]],
+    }),
+  ]);
+
+  const connectionIds = (connections || []).map((item) => item.id).filter(Boolean);
+  const syncRuns = connectionIds.length
+    ? await fetchRows("sync_runs", {
+        limit: 8,
+        order: "started_at.desc",
+        filters: [["connection_id", inFilter(connectionIds)]],
+      })
+    : null;
+  const hasLiveData = bundles.some((bundle) => bundle.repo);
+  const recentSync = (syncRuns || [])[0];
+  const latestConnection = (connections || [])[0];
+  const totals = bundles.reduce(
+    (summary, bundle) => ({
+      repositoryCount: summary.repositoryCount + (bundle.repo ? 1 : 0),
+      openPullCount: summary.openPullCount + bundle.openPulls.length,
+      openIssueCount: summary.openIssueCount + bundle.issues.length,
+      recentCommitCount: summary.recentCommitCount + bundle.commits.length,
+      roadmapCount: summary.roadmapCount + bundle.milestones.length,
+      mergedPullCount: summary.mergedPullCount + bundle.mergedPulls.length,
+    }),
+    {
+      repositoryCount: 0,
+      openPullCount: 0,
+      openIssueCount: 0,
+      recentCommitCount: 0,
+      roadmapCount: 0,
+      mergedPullCount: 0,
+    },
+  );
+
+  return {
+    repositories,
+    repoCards: mapGitHubRepoCards(bundles),
+    activityRows: mapGitHubActivityRows(bundles),
+    roadmapRows: mapGitHubRoadmapRows(bundles),
+    alerts: buildGitHubAlerts(bundles, syncRuns || []),
+    connection: {
+      status:
+        latestConnection?.status ||
+        (hasLiveData ? "connected" : token ? "pending" : "warning"),
+      tone:
+        latestConnection?.status === "error"
+          ? "danger"
+          : hasLiveData
+            ? "green"
+            : token
+              ? "warning"
+              : "muted",
+      title: hasLiveData
+        ? `${repositories.length} GitHub ${pluralize(repositories.length, "repo", "repos")} visible`
+        : "GitHub is configured but not readable yet",
+      detail: recentSync?.finished_at
+        ? `Last sync ${formatTimestamp(recentSync.finished_at)}`
+        : hasLiveData
+          ? "Live repository reads are working. Add sync automation later to persist ledger history."
+          : "Repository discovery is present, but live GitHub reads still need token scope or visibility.",
+    },
+    syncRows:
+      (syncRuns || []).map((item) => ({
+        title: item.status || "sync run",
+        detail: item.error_message || "GitHub sync run captured.",
+        time: formatTimestamp(item.finished_at || item.started_at),
+        tone: toTone(item.status),
+      })) || [],
+    totals,
+    hasLiveData,
+  };
+}
+
 function mapContentPipeline(items) {
   if (!items?.length) {
     return fallbackContentPipeline;
@@ -906,6 +1391,69 @@ function buildSystemChecks(health, projectCount, routineCount) {
   ];
 }
 
+function mapLocalRoadmapRows(milestones, projects, updates) {
+  const projectById = new Map((projects || []).map((item) => [item.id, item]));
+  const latestByProject = new Map();
+
+  (updates || []).forEach((item) => {
+    if (item.project_id && !latestByProject.has(item.project_id)) {
+      latestByProject.set(item.project_id, item);
+    }
+  });
+
+  if (milestones?.length) {
+    return milestones.map((item) => {
+      const project = item.project_id ? projectById.get(item.project_id) : null;
+      const latest = item.project_id ? latestByProject.get(item.project_id) : null;
+      const status = item.status || "planned";
+      const progress =
+        status === "done"
+          ? 100
+          : status === "active"
+            ? maybe(latest?.progress, 64)
+            : status === "blocked"
+              ? maybe(latest?.progress, 36)
+              : 18;
+
+      return {
+        title: item.title || "Milestone",
+        lane: project?.name || "Unassigned project",
+        source: "Hub milestone",
+        status,
+        statusLabel: humanizeValue(status),
+        statusTone:
+          status === "done"
+            ? "green"
+            : status === "blocked"
+              ? "danger"
+              : status === "active"
+                ? "blue"
+                : "warning",
+        progress,
+        due: item.target_date ? formatShortDate(item.target_date) : "No target date",
+        detail:
+          latest?.next_action ||
+          project?.next_action ||
+          "Define the next delivery move before this milestone turns into a vague intent.",
+      };
+    });
+  }
+
+  return mapProjectRows(projects, updates, [])
+    .slice(0, 6)
+    .map((item) => ({
+      title: item.milestone,
+      lane: item.title,
+      source: "Hub project",
+      status: item.status,
+      statusLabel: item.statusLabel,
+      statusTone: item.statusTone,
+      progress: item.progress,
+      due: "No target date",
+      detail: item.nextAction,
+    }));
+}
+
 export async function getDashboardPageData() {
   const [projectCount, pmsCount, leadCount, errorCount, projects, tasks, updates, runs, logs, health] =
     await Promise.all([
@@ -1002,6 +1550,48 @@ export async function getPmsPageData() {
     pmsBoard: mapRoutineChecks(checks),
     weeklyReview: mapWeeklyReview(decisions, updates),
     taskQueue: mapTaskQueue(tasks, projects),
+  };
+}
+
+export async function getWorkPmsPageData() {
+  const [pmsData, githubData] = await Promise.all([
+    getPmsPageData(),
+    getGitHubWorkspaceData(),
+  ]);
+
+  return {
+    ...pmsData,
+    githubConnection: githubData.connection,
+    githubRepoCards: githubData.repoCards,
+    githubActivityRows: githubData.activityRows,
+    githubAlerts: githubData.alerts,
+    githubSyncRows: githubData.syncRows,
+    githubTotals: githubData.totals,
+    hasGitHubData: githubData.hasLiveData,
+  };
+}
+
+export async function getRoadmapPageData() {
+  const [milestones, projects, updates, githubData] = await Promise.all([
+    fetchRows("milestones", { limit: 10, order: "created_at.desc" }),
+    fetchRows("projects", { limit: 10, order: "created_at.desc" }),
+    fetchRows("project_updates", { limit: 10, order: "happened_at.desc" }),
+    getGitHubWorkspaceData(),
+  ]);
+
+  const localRoadmapRows = mapLocalRoadmapRows(milestones, projects, updates);
+  const localShippingRows = mapProjectUpdates(updates).map((item) => ({
+    ...item,
+    repository: "Hub",
+  }));
+
+  return {
+    roadmapRows: [...localRoadmapRows, ...githubData.roadmapRows].slice(0, 12),
+    shippingRows: [...githubData.activityRows.slice(0, 6), ...localShippingRows.slice(0, 4)].slice(0, 10),
+    roadmapAlerts: githubData.alerts,
+    githubConnection: githubData.connection,
+    githubTotals: githubData.totals,
+    hasGitHubData: githubData.hasLiveData,
   };
 }
 

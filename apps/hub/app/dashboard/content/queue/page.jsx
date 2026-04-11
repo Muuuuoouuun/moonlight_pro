@@ -1,5 +1,7 @@
+import { ContentBrandReference } from "@/components/dashboard/content-brand-reference";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { SummaryCard } from "@/components/dashboard/summary-card";
+import { getContentBrandReference, resolveContentBrand } from "@/lib/dashboard-contexts";
 import { getContentPageData } from "@/lib/server-data";
 
 function summarizePipeline(contentPipeline) {
@@ -12,9 +14,11 @@ function summarizePipeline(contentPipeline) {
   }));
 }
 
-export default async function ContentQueuePage() {
+export default async function ContentQueuePage({ searchParams }) {
   const { contentAttention, contentPipeline } = await getContentPageData();
   const queueSummary = summarizePipeline(contentPipeline);
+  const selectedBrand = resolveContentBrand(searchParams?.brand);
+  const brandReference = getContentBrandReference(selectedBrand.value);
 
   return (
     <>
@@ -25,10 +29,16 @@ export default async function ContentQueuePage() {
       </section>
 
       <div className="stack">
+        <ContentBrandReference reference={brandReference} compact />
+
         <SectionCard
           kicker="Queue"
           title="Every piece and its next move"
-          description="The queue should tell you what exists, where it is stuck, and what action gets it moving again."
+          description={
+            selectedBrand.value === "all"
+              ? "The queue should tell you what exists, where it is stuck, and what action gets it moving again."
+              : `${selectedBrand.label} is selected. Queue rows stay shared until brand keys are added to the content model.`
+          }
         >
           <div className="lane-grid">
             {contentPipeline.map((stage) => (

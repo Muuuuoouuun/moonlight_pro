@@ -55,6 +55,181 @@ export default async function DashboardPage() {
       </section>
 
       <SectionCard
+        kicker="GitHub"
+        title="Delivery cockpit entry"
+        description="GitHub-backed PMS and roadmap are discoverable from the hub home before you enter the Work OS lanes."
+        action={
+          <Link className="button button-secondary" href="/dashboard/work/pms">
+            Open GitHub PMS
+          </Link>
+        }
+      >
+        <div className="project-grid">
+          <article className="project-card">
+            <div className="project-head">
+              <div>
+                <h3>PMS pulse</h3>
+                <p>Execution pressure, review queue, and blocked work.</p>
+              </div>
+              <span className="legend-chip" data-tone="blue">
+                MVP
+              </span>
+            </div>
+            <div className="inline-legend">
+              <span className="legend-chip" data-tone="warning">
+                Review requests
+              </span>
+              <span className="legend-chip" data-tone="danger">
+                Blockers
+              </span>
+              <span className="legend-chip" data-tone="green">
+                Shipping
+              </span>
+            </div>
+            <dl className="detail-stack">
+              <div>
+                <dt>Surface</dt>
+                <dd>Open issues, PRs needing review, overdue follow-up, and stale work.</dd>
+              </div>
+              <div>
+                <dt>Best for</dt>
+                <dd>Daily delivery checks and quick operator decisions.</dd>
+              </div>
+            </dl>
+            <div className="hero-actions">
+              <Link className="button button-primary" href="/dashboard/work/pms">
+                Open PMS
+              </Link>
+              <Link className="button button-secondary" href="/dashboard/work">
+                View Work OS
+              </Link>
+            </div>
+          </article>
+
+          <article className="project-card">
+            <div className="project-head">
+              <div>
+                <h3>Roadmap view</h3>
+                <p>Milestones, horizon planning, and delivery risk.</p>
+              </div>
+              <span className="legend-chip" data-tone="blue">
+                Now / Next / Later
+              </span>
+            </div>
+            <div className="inline-legend">
+              <span className="legend-chip">Milestones</span>
+              <span className="legend-chip" data-tone="warning">
+                Slip risk
+              </span>
+              <span className="legend-chip" data-tone="muted">
+                Backlog
+              </span>
+            </div>
+            <dl className="detail-stack">
+              <div>
+                <dt>Surface</dt>
+                <dd>Roadmap milestones, release horizons, and unresolved dependencies.</dd>
+              </div>
+              <div>
+                <dt>Best for</dt>
+                <dd>Planning the next delivery window and keeping scope visible.</dd>
+              </div>
+            </dl>
+            <div className="hero-actions">
+              <Link className="button button-primary" href="/dashboard/work/roadmap">
+                Open Roadmap
+              </Link>
+              <Link className="button button-secondary" href="/dashboard/work/pms">
+                Compare with PMS
+              </Link>
+            </div>
+          </article>
+
+          <article className="project-card">
+            <div className="project-head">
+              <div>
+                <h3>Integration setup</h3>
+                <p>Connection state, sync health, and repo mapping.</p>
+              </div>
+              <span className="legend-chip" data-tone="muted">
+                GitHub
+              </span>
+            </div>
+            <div className="inline-legend">
+              <span className="legend-chip" data-tone="green">
+                Connected
+              </span>
+              <span className="legend-chip" data-tone="warning">
+                Pending
+              </span>
+              <span className="legend-chip" data-tone="danger">
+                Error
+              </span>
+            </div>
+            <dl className="detail-stack">
+              <div>
+                <dt>Surface</dt>
+                <dd>Repo registration, sync cadence, and webhook intake health.</dd>
+              </div>
+              <div>
+                <dt>Best for</dt>
+                <dd>Wiring GitHub into the delivery model without changing the shell.</dd>
+              </div>
+            </dl>
+            <div className="hero-actions">
+              <Link className="button button-primary" href="/dashboard/automations/integrations">
+                Open Integrations
+              </Link>
+              <Link className="button button-secondary" href="/dashboard/evolution/logs">
+                Check Logs
+              </Link>
+            </div>
+          </article>
+
+          <article className="project-card">
+            <div className="project-head">
+              <div>
+                <h3>Signal flow</h3>
+                <p>How GitHub events become hub objects.</p>
+              </div>
+              <span className="legend-chip" data-tone="green">
+                Mockup
+              </span>
+            </div>
+            <div className="inline-legend">
+              <span className="legend-chip" data-tone="blue">
+                Issues
+              </span>
+              <span className="legend-chip" data-tone="blue">
+                PRs
+              </span>
+              <span className="legend-chip" data-tone="blue">
+                Milestones
+              </span>
+            </div>
+            <dl className="detail-stack">
+              <div>
+                <dt>Flow</dt>
+                <dd>GitHub event intake feeds the PMS pulse, then promotes milestone data into roadmap.</dd>
+              </div>
+              <div>
+                <dt>Operator action</dt>
+                <dd>Use the hub home to jump into the right lane before the day fragments.</dd>
+              </div>
+            </dl>
+            <div className="hero-actions">
+              <Link className="button button-primary" href="/dashboard/automations/integrations">
+                Review Setup
+              </Link>
+              <Link className="button button-secondary" href="/dashboard/work/roadmap">
+                Open Delivery Plan
+              </Link>
+            </div>
+          </article>
+        </div>
+      </SectionCard>
+
+      <SectionCard
         kicker="Sections"
         title="OS lanes"
         description="The hub is organized into five operating lanes so the next decision has a home before the day gets noisy."

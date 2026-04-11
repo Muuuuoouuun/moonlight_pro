@@ -33,6 +33,12 @@ Think of Com_Moon as:
 - a public editorial storefront
 - connected to a private command desk
 
+Reference alignment for the current design pass:
+
+- [`Claude x Notion hybrid plan`](/Users/bigmac_moon/Desktop/Projects/moonlight_pro/docs/claude-notion-hybrid-ui-plan.md)
+
+That reference plan should guide taste decisions while this document keeps execution order and route scope grounded in the real repo.
+
 That means the frontend should feel less like "marketing site + admin" and more like "outer skin + inner control room".
 
 ```mermaid
@@ -66,6 +72,8 @@ flowchart LR
 Detailed tab-by-tab product spec:
 
 - [`docs/hub-tab-mvp-ui-spec.md`](/Users/bigmac_moon/Desktop/Projects/moonlight_pro/docs/hub-tab-mvp-ui-spec.md)
+- GitHub-backed Work OS MVP mockup and wireframe:
+  - [`docs/github-workos-mvp-mockup.md`](/Users/bigmac_moon/Desktop/Projects/moonlight_pro/docs/github-workos-mvp-mockup.md)
 
 #### MVP Routes
 

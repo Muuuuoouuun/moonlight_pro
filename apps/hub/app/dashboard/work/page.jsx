@@ -1,27 +1,60 @@
 import { SectionCard } from "@/components/dashboard/section-card";
 import { SummaryCard } from "@/components/dashboard/summary-card";
+import { resolveWorkContext, scopeMappedItemsByWorkContext } from "@/lib/dashboard-contexts";
 import { getPmsPageData, getProjectsPageData } from "@/lib/server-data";
 
 function countProjects(projectPortfolio, predicate) {
   return projectPortfolio.filter(predicate).length;
 }
 
-export default async function WorkOverviewPage() {
+export default async function WorkOverviewPage({ searchParams }) {
   const [{ projectPortfolio, projectUpdates, taskQueue }, { pmsBoard, weeklyReview }] = await Promise.all([
     getProjectsPageData(),
     getPmsPageData(),
   ]);
-
-  const activeProjects = countProjects(projectPortfolio, (project) => project.status === "active");
-  const blockedProjects = countProjects(
+  const selectedProject = resolveWorkContext(searchParams?.project);
+  const scopedProjects = scopeMappedItemsByWorkContext(
     projectPortfolio,
+    selectedProject.value,
+    (project) => [project.title, project.owner, project.milestone, project.nextAction, project.risk, project.taskLead],
+  );
+  const scopedUpdates = scopeMappedItemsByWorkContext(
+    projectUpdates,
+    selectedProject.value,
+    (item) => [item.title, item.detail],
+  );
+  const scopedTasks = scopeMappedItemsByWorkContext(
+    taskQueue,
+    selectedProject.value,
+    (item) => [item.title, item.detail, item.project],
+  );
+  const scopedRhythm = scopeMappedItemsByWorkContext(
+    pmsBoard,
+    selectedProject.value,
+    (item) => [item.title, item.detail, item.rhythm],
+  );
+  const scopedReview = scopeMappedItemsByWorkContext(
+    weeklyReview,
+    selectedProject.value,
+    (item) => [item.title, item.detail],
+  );
+
+  const activeProjects = countProjects(scopedProjects.items, (project) => project.status === "active");
+  const blockedProjects = countProjects(
+    scopedProjects.items,
     (project) =>
       project.status === "blocked" ||
       project.risk === "Critical" ||
       project.risk.toLowerCase().includes("blocked"),
   );
-  const cadenceBlocks = pmsBoard.length;
-  const resetPrompts = weeklyReview.length;
+  const cadenceBlocks = scopedRhythm.items.length;
+  const resetPrompts = scopedReview.items.length;
+  const scopeNote =
+    selectedProject.value === "all"
+      ? "All project lanes are visible together."
+      : scopedProjects.isFallback && scopedTasks.isFallback && scopedUpdates.isFallback
+        ? `${selectedProject.label} is selected, but live rows are still falling back to the shared lane until exact project naming is wired.`
+        : `${selectedProject.label} context is locked into the current work view.`;
 
   return (
     <div className="app-page">
@@ -31,6 +64,10 @@ export default async function WorkOverviewPage() {
         <p>
           The work lane keeps active projects, recurring reviews, and decision follow-through visible
           enough to act on without turning the hub into a status museum.
+        </p>
+        <p className="page-context">
+          <strong>{selectedProject.label}</strong>
+          <span>{scopeNote}</span>
         </p>
       </section>
 
@@ -71,7 +108,7 @@ export default async function WorkOverviewPage() {
           description="The live project board keeps milestones, next actions, and risk visible in one scan."
         >
           <div className="project-grid">
-            {projectPortfolio.map((project) => (
+            {scopedProjects.items.map((project) => (
               <article className="project-card" key={project.title}>
                 <div className="project-head">
                   <div>
@@ -122,7 +159,7 @@ export default async function WorkOverviewPage() {
           description="Tasks keep the rhythm lane tied to concrete next moves instead of abstract intent."
         >
           <ul className="task-list">
-            {taskQueue.map((item) => (
+            {scopedTasks.items.map((item) => (
               <li className="task-item" key={`${item.title}-${item.project}`}>
                 <div>
                   <strong>{item.title}</strong>
@@ -147,7 +184,7 @@ export default async function WorkOverviewPage() {
           description="Progress matters when the update carries a next move instead of just a timestamp."
         >
           <div className="timeline">
-            {projectUpdates.map((item) => (
+            {scopedUpdates.items.map((item) => (
               <div className="timeline-item" key={item.title}>
                 <div className="inline-legend">
                   <span className="legend-chip" data-tone={item.tone}>

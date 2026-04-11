@@ -5,6 +5,8 @@
   "types": "index.ts",
   "exports": {
     ".": "./index.ts",
-    "./button": "./button.tsx"
+    "./button": "./button.tsx",
+    "./tokens": "./tokens.ts",
+    "./tokens.css": "./tokens.css"
   }
 }

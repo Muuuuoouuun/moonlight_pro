@@ -7,7 +7,7 @@ export const navigationItems = [
   {
     href: "/dashboard/work",
     label: "Work OS",
-    description: "Projects, rhythm, and decisions",
+    description: "Projects, PMS, roadmap, and decisions",
     children: [
       {
         href: "/dashboard/work",
@@ -22,7 +22,17 @@ export const navigationItems = [
       {
         href: "/dashboard/work/pms",
         label: "PMS",
-        description: "Cadence, PMS, and routine reviews",
+        description: "GitHub shipping pulse and operator cadence",
+      },
+      {
+        href: "/dashboard/work/roadmap",
+        label: "Roadmap",
+        description: "Milestones, release lanes, and delivery risk",
+      },
+      {
+        href: "/dashboard/work/decisions",
+        label: "Decisions",
+        description: "Calls, review notes, and follow-through",
       },
     ],
   },
@@ -466,6 +476,125 @@ export const automationCards = [
     status: "active",
     route: "/api/health",
     detail: "A fast inspection route exposes commands, webhooks, and service readiness.",
+  },
+];
+
+export const integrationCatalog = [
+  {
+    provider: "Supabase",
+    lane: "Source of truth",
+    status: "connected",
+    tone: "green",
+    priority: "P0",
+    mode: "REST + database",
+    required: [
+      "SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY",
+      "COM_MOON_DEFAULT_WORKSPACE_ID",
+    ],
+    detail: "The hub, engine, logs, webhook ledger, and sync ledger all read and write through Supabase.",
+    nextAction: "Fill the env values and seed one real workspace before wiring more providers.",
+  },
+  {
+    provider: "Telegram",
+    lane: "Inbound command lane",
+    status: "ready",
+    tone: "blue",
+    priority: "P0",
+    mode: "Webhook intake",
+    required: [
+      "Public engine URL",
+      "Telegram bot webhook registration",
+    ],
+    detail: "The engine already exposes /api/webhook/telegram and can process slash-style command payloads.",
+    nextAction: "Register the Telegram bot webhook against the engine URL and run one smoke test.",
+  },
+  {
+    provider: "Project tools",
+    lane: "PM / external progress",
+    status: "ready",
+    tone: "blue",
+    priority: "P0",
+    mode: "Webhook intake",
+    required: [
+      "Public engine URL",
+      "Payload mapping to /api/webhook/project",
+    ],
+    detail: "Any PM tool can report progress and PMS events through the generic project webhook contract.",
+    nextAction: "Map one external project system into the webhook payload and verify persistence.",
+  },
+  {
+    provider: "GitHub",
+    lane: "Build history and roadmap",
+    status: "ready",
+    tone: "blue",
+    priority: "P0",
+    mode: "REST sync",
+    required: [
+      "GITHUB_TOKEN",
+      "GITHUB_REPOSITORIES",
+    ],
+    detail: "GitHub should feed commit motion, PR state, issue pressure, and milestone progress directly into PMS and roadmap views.",
+    nextAction: "Add one token and the tracked repositories, then surface issues, PRs, commits, and milestones inside Work OS.",
+  },
+  {
+    provider: "Notion",
+    lane: "Projects, docs, decisions",
+    status: "planned",
+    tone: "warning",
+    priority: "P1",
+    mode: "API sync",
+    required: [
+      "NOTION_TOKEN",
+      "Notion database IDs",
+    ],
+    detail: "Best fit for syncing projects, tasks, decisions, notes, and operating docs into the hub ledger.",
+    nextAction: "Create one integration_connections row and define field_mappings for projects and tasks first.",
+  },
+  {
+    provider: "Google Calendar",
+    lane: "Cadence and due dates",
+    status: "planned",
+    tone: "warning",
+    priority: "P1",
+    mode: "OAuth + sync",
+    required: [
+      "GOOGLE_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET",
+      "GOOGLE_REFRESH_TOKEN",
+      "GOOGLE_CALENDAR_ID",
+    ],
+    detail: "Calendar events should feed routine checks, review cadence, and project or task due dates.",
+    nextAction: "Lock the event-to-routine and event-to-task mapping before building the first sync job.",
+  },
+  {
+    provider: "Email",
+    lane: "Inbox and outbound",
+    status: "planned",
+    tone: "warning",
+    priority: "P1",
+    mode: "Inbox sync + send provider",
+    required: [
+      "Choose Gmail API or IMAP for inbox sync",
+      "Choose SMTP, Resend, or Postmark for outbound mail",
+    ],
+    detail: "Email should support lead follow-up, campaign sends, and inbound message visibility in one lane.",
+    nextAction: "Decide whether inbox sync or outbound send is the first milestone, then standardize the provider.",
+  },
+  {
+    provider: "Slack",
+    lane: "Alerts and approvals",
+    status: "planned",
+    tone: "warning",
+    priority: "P2",
+    mode: "Bot + webhook",
+    required: [
+      "SLACK_BOT_TOKEN",
+      "SLACK_SIGNING_SECRET",
+      "Target channel routing",
+    ],
+    detail: "Slack is best used for failure alerts, approval requests, and lightweight operator commands.",
+    nextAction: "Start with error_logs and sync_runs alerts before adding two-way command handling.",
   },
 ];
 

@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { SectionCard } from "@/components/dashboard/section-card";
+import { getContentBrandReference, resolveContentBrand } from "@/lib/dashboard-contexts";
 
 const templatePresets = [
   {
@@ -110,11 +112,14 @@ function renderPreview(value) {
 }
 
 export default function ContentStudioPage() {
+  const searchParams = useSearchParams();
   const [templateId, setTemplateId] = useState(templatePresets[0].id);
   const [channel, setChannel] = useState(channelPresets[0]);
   const [draft, setDraft] = useState(buildDraft(templatePresets[0].id));
   const [copied, setCopied] = useState(false);
 
+  const selectedBrand = resolveContentBrand(searchParams.get("brand"));
+  const brandReference = getContentBrandReference(selectedBrand.value);
   const wordCount = draft.trim().split(/\s+/).filter(Boolean).length;
   const sectionCount = (draft.match(/^## /gm) || []).length;
   const selectedTemplate = templatePresets.find((item) => item.id === templateId) ?? templatePresets[0];
@@ -140,9 +145,18 @@ export default function ContentStudioPage() {
       <SectionCard
         kicker="Studio status"
         title="Current drafting context"
-        description="The studio should keep the message, format, and next handoff visible at the same time."
+        description={
+          selectedBrand.value === "all"
+            ? "The studio should keep the message, format, and next handoff visible at the same time."
+            : `${selectedBrand.label} is selected, so the studio keeps one brand voice in focus while shared rows remain visible elsewhere.`
+        }
       >
         <div className="studio-metric-grid">
+          <div className="mini-metric">
+            <span>Brand scope</span>
+            <strong>{selectedBrand.label}</strong>
+            <p>{brandReference.rule}</p>
+          </div>
           <div className="mini-metric">
             <span>Template</span>
             <strong>{selectedTemplate.label}</strong>
@@ -161,6 +175,7 @@ export default function ContentStudioPage() {
             <p>Enough structure to hand off without bloating the carousel.</p>
           </div>
         </div>
+        <p className="context-footnote">{brandReference.status}</p>
       </SectionCard>
 
       <div className="editor-layout">
@@ -256,7 +271,7 @@ export default function ContentStudioPage() {
               </div>
               <div className="preview-stage" dangerouslySetInnerHTML={{ __html: renderPreview(draft) }} />
               <div className="preview-foot">
-                <span className="chip">Brand green</span>
+                <span className="chip">{selectedBrand.label}</span>
                 <span className="chip">{selectedTemplate.label}</span>
                 <span className="chip">CTA ready</span>
               </div>
@@ -284,7 +299,10 @@ export default function ContentStudioPage() {
               <div className="template-row">
                 <div>
                   <strong>Next action</strong>
-                  <p>Approve the hook, then send the draft into publish or automation review.</p>
+                  <p>
+                    Approve the hook in the {selectedBrand.label} tone, then send the draft into
+                    publish or automation review.
+                  </p>
                 </div>
               </div>
             </div>

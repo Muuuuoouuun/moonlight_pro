@@ -1,11 +1,21 @@
 import Link from "next/link";
+import { ContentBrandReference } from "@/components/dashboard/content-brand-reference";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { SummaryCard } from "@/components/dashboard/summary-card";
+import {
+  appendQueryParam,
+  getContentBrandReference,
+  resolveContentBrand,
+} from "@/lib/dashboard-contexts";
 import { getContentPageData } from "@/lib/server-data";
 
-export default async function ContentPage() {
+export default async function ContentPage({ searchParams }) {
   const { contentAttention, contentPipeline, contentSummary, contentVariants, publishQueue } =
     await getContentPageData();
+  const selectedBrand = resolveContentBrand(searchParams?.brand);
+  const brandReference = getContentBrandReference(selectedBrand.value);
+  const queueHref = appendQueryParam("/dashboard/content/queue", "brand", selectedBrand.value === "all" ? "" : selectedBrand.value);
+  const studioHref = appendQueryParam("/dashboard/content/studio", "brand", selectedBrand.value === "all" ? "" : selectedBrand.value);
 
   return (
     <>
@@ -17,16 +27,22 @@ export default async function ContentPage() {
 
       <div className="dashboard-grid">
         <div className="stack">
+          <ContentBrandReference reference={brandReference} />
+
           <SectionCard
           kicker="Pipeline"
           title="Content flow"
-          description="Keep the production path small enough that work moves without rethinking the whole system."
+          description={
+            selectedBrand.value === "all"
+              ? "Keep the production path small enough that work moves without rethinking the whole system."
+              : `${selectedBrand.label} scope is selected. Shared rows stay visible until brand metadata is wired into the content tables.`
+          }
           action={
             <>
-              <Link className="button button-secondary" href="/dashboard/content/queue">
+              <Link className="button button-secondary" href={queueHref}>
                 Open queue
               </Link>
-              <Link className="button button-primary" href="/dashboard/content/studio">
+              <Link className="button button-primary" href={studioHref}>
                 Open studio
               </Link>
             </>
@@ -136,7 +152,7 @@ export default async function ContentPage() {
                   <strong>Draft the next card-news piece</strong>
                   <p>Move straight into the studio with a template and channel already selected.</p>
                 </div>
-                <Link className="button button-primary" href="/dashboard/content/studio">
+                <Link className="button button-primary" href={studioHref}>
                   Studio
                 </Link>
               </div>

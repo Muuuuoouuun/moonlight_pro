@@ -1,90 +1,6 @@
-const navItems = [
-  { label: "Loop", href: "#loop" },
-  { label: "Desk", href: "#desk" },
-  { label: "Use Cases", href: "#use-cases" },
-  { label: "Contact", href: "#contact" },
-];
+import { useTranslations } from "next-intl";
 
-const proofItems = [
-  {
-    value: "Content -> Lead",
-    label: "콘텐츠가 신뢰를 만들고 바로 문의와 후속 액션으로 이어집니다.",
-  },
-  {
-    value: "Lead -> Ops",
-    label: "퍼블릭에서 들어온 신호가 허브의 세일즈와 운영 판단으로 돌아옵니다.",
-  },
-  {
-    value: "Mobile-first",
-    label: "밖에서도 숫자 확인, 메모 기록, 다음 액션 결정이 가능한 운영 감각을 지향합니다.",
-  },
-];
-
-const pillars = [
-  {
-    title: "Content Engine",
-    body: "아이디어를 카드뉴스, 블로그, 인사이트 글로 이어 붙여 퍼블릭 신뢰를 쌓습니다.",
-    points: ["카드뉴스 발행", "인사이트 아카이브", "콘텐츠 시리즈 운영"],
-  },
-  {
-    title: "Lead Capture",
-    body: "반응은 흘려보내지 않고, 문의와 리드로 구조화해 다음 액션으로 넘깁니다.",
-    points: ["문의 전환", "소스 추적", "후속 액션 설계"],
-  },
-  {
-    title: "Operating Signal",
-    body: "퍼블릭 성과는 다시 허브 OS로 돌아가 무엇을 밀어야 하는지 결정하는 신호가 됩니다.",
-    points: ["우선순위 재정렬", "운영 리듬 조정", "자동화 트리거"],
-  },
-];
-
-const workflows = [
-  {
-    label: "01",
-    title: "밖에서 신뢰를 만든다",
-    body: "공개 콘텐츠는 단순 홍보물이 아니라, Com_Moon의 판단력과 방식이 드러나는 샘플이어야 합니다.",
-  },
-  {
-    label: "02",
-    title: "반응을 리드로 붙잡는다",
-    body: "좋아요나 조회수로 끝내지 않고, 누가 관심을 보였는지와 무엇을 다음에 해야 하는지를 남깁니다.",
-  },
-  {
-    label: "03",
-    title: "운영 판단으로 되돌린다",
-    body: "콘텐츠 성과와 문의 흐름은 내부 대시보드에서 우선순위, 자동화, 실행 상태로 이어집니다.",
-  },
-];
-
-const useCases = [
-  {
-    title: "서비스 소개를 운영 언어로 바꾸기",
-    body: "예쁜 소개 페이지가 아니라, 실제 일하는 방식과 결과 흐름을 보이게 만드는 퍼블릭 구조.",
-  },
-  {
-    title: "콘텐츠 반응을 놓치지 않기",
-    body: "카드뉴스나 글에서 들어온 반응을 리드와 후속 액션으로 붙잡아 세일즈 흐름과 연결.",
-  },
-  {
-    title: "오늘 뭘 밀어야 하는지 바로 보기",
-    body: "허브에 들어가면 운영 건, 리드, 콘텐츠, 자동화 상태가 한 화면에서 우선순위로 보이는 설계.",
-  },
-];
-
-const footerGroups = [
-  {
-    title: "Surface",
-    links: ["Public landing", "Content hub", "Case notes"],
-  },
-  {
-    title: "OS",
-    links: ["Dashboard", "Leads", "Operations"],
-  },
-  {
-    title: "Loop",
-    links: ["Automations", "Logs", "Content desk"],
-  },
-];
+import { LanguageSwitcher } from "../components/language-switcher";
 
 function HeroLineArt() {
   return (
@@ -111,7 +27,43 @@ function HeroLineArt() {
   );
 }
 
+/*
+ * Static key tables for the repeated card grids.
+ *
+ * The rendered order and structure is identical across locales, so we
+ * only need stable keys to look up translations. Each NAV entry holds
+ * the translation key and the in-page anchor.
+ */
+const NAV_KEYS = [
+  ["loop", "#loop"],
+  ["desk", "#desk"],
+  ["useCases", "#use-cases"],
+  ["contact", "#contact"],
+] as const;
+
+const PROOF_KEYS = ["trust", "signal", "mobile"] as const;
+const PILLAR_KEYS = ["content", "lead", "ops"] as const;
+const PILLAR_POINT_KEYS = ["one", "two", "three"] as const;
+const WORKFLOW_KEYS = ["one", "two", "three"] as const;
+const USE_CASE_KEYS = ["intro", "response", "today"] as const;
+const FOOTER_GROUP_KEYS = ["surface", "os", "loop"] as const;
+const FOOTER_LINK_KEYS: Record<
+  (typeof FOOTER_GROUP_KEYS)[number],
+  readonly string[]
+> = {
+  surface: ["landing", "contentHub", "caseNotes"],
+  os: ["dashboard", "leads", "operations"],
+  loop: ["automations", "logs", "contentDesk"],
+};
+const FLOATING_NOTE_ITEM_KEYS = ["draft", "inbound", "followup"] as const;
+const SIDEBAR_TODAY_ITEM_KEYS = ["one", "two", "three"] as const;
+const KPI_KEYS = ["ops", "leads", "queue"] as const;
+const LEAD_QUEUE_KEYS = ["one", "two", "three"] as const;
+const AUTOMATION_KEYS = ["publish", "sync", "report"] as const;
+
 export default function WebHomePage() {
+  const t = useTranslations();
+
   return (
     <main className="web-page">
       <header className="topbar">
@@ -119,63 +71,63 @@ export default function WebHomePage() {
           <a className="brand-lockup" href="#top">
             <span className="brand-mark">CM</span>
             <span className="brand-text">
-              <strong>Com_Moon</strong>
-              <span>Public Surface</span>
+              <strong>{t("brand.name")}</strong>
+              <span>{t("brand.tagline")}</span>
             </span>
           </a>
 
           <nav className="topnav" aria-label="Primary">
-            {navItems.map((item) => (
-              <a key={item.href} href={item.href}>
-                {item.label}
+            {NAV_KEYS.map(([key, href]) => (
+              <a key={href} href={href}>
+                {t(`nav.${key}`)}
               </a>
             ))}
           </nav>
 
-          <a className="topbar-cta" href="mailto:hello@com-moon.local">
-            협업 문의
-          </a>
+          <div style={{ display: "inline-flex", alignItems: "center" }}>
+            <LanguageSwitcher />
+            <a className="topbar-cta" href="mailto:hello@com-moon.local">
+              {t("nav.cta")}
+            </a>
+          </div>
         </div>
       </header>
 
       <section className="hero-section web-shell" id="top">
         <div className="hero-copy-panel">
-          <p className="eyebrow">Com_Moon Public</p>
+          <p className="eyebrow">{t("hero.eyebrow")}</p>
           <div className="chip-row" aria-label="Key themes">
-            <span>Content</span>
-            <span>Lead</span>
-            <span>Ops</span>
+            <span>{t("hero.chips.content")}</span>
+            <span>{t("hero.chips.lead")}</span>
+            <span>{t("hero.chips.ops")}</span>
           </div>
           <h1 className="display-title">
-            콘텐츠, 리드, 운영이
+            {t("hero.titleLine1")}
             <br />
-            같은 흐름으로 도는
+            {t("hero.titleLine2")}
             <br />
-            조용한 성장 데스크
+            {t("hero.titleLine3")}
           </h1>
-          <p className="hero-copy">
-            Com_Moon은 바깥의 신뢰와 안쪽의 판단이 따로 놀지 않게 만듭니다. 퍼블릭
-            콘텐츠로 관심을 만들고, 반응을 리드로 구조화하고, 그 결과를 다시 운영
-            우선순위와 자동화 흐름으로 되돌립니다.
-          </p>
+          <p className="hero-copy">{t("hero.copy")}</p>
 
           <div className="hero-actions">
             <a href="#desk" className="primary-link">
-              데스크 흐름 보기
+              {t("hero.primaryAction")}
             </a>
             <a href="#contact" className="secondary-link">
-              문의 동선 보기
+              {t("hero.secondaryAction")}
             </a>
           </div>
 
-          <dl className="proof-inline">
-            {proofItems.map((item) => (
-              <div key={item.value}>
-                <dt>{item.value}</dt>
-                <dd>{item.label}</dd>
-              </div>
+          <section className="proof-inline" aria-label="Trust proof">
+            {PROOF_KEYS.map((key) => (
+              <article key={key} className="proof-card">
+                <p>{t(`hero.proof.${key}.kicker`)}</p>
+                <strong>{t(`hero.proof.${key}.value`)}</strong>
+                <span>{t(`hero.proof.${key}.detail`)}</span>
+              </article>
             ))}
-          </dl>
+          </section>
         </div>
 
         <div className="hero-visual-panel" aria-hidden="true">
@@ -183,19 +135,19 @@ export default function WebHomePage() {
           <HeroLineArt />
 
           <article className="floating-note">
-            <p className="note-label">This week</p>
-            <h2>오늘의 신호</h2>
+            <p className="note-label">{t("hero.floatingNote.label")}</p>
+            <h2>{t("hero.floatingNote.title")}</h2>
             <ul>
-              <li>카드뉴스 초안 3건</li>
-              <li>문의 유입 5건</li>
-              <li>팔로업 우선 2건</li>
+              {FLOATING_NOTE_ITEM_KEYS.map((key) => (
+                <li key={key}>{t(`hero.floatingNote.items.${key}`)}</li>
+              ))}
             </ul>
           </article>
 
           <article className="floating-window">
-            <p className="window-label">Operator note</p>
-            <strong>퍼블릭 반응이 좋았던 주제부터 다시 밀기</strong>
-            <span>이번 주 콘텐츠 배포, 리드 후속, 제안서 우선순위를 같은 판 위에서 봅니다.</span>
+            <p className="window-label">{t("hero.floatingWindow.label")}</p>
+            <strong>{t("hero.floatingWindow.headline")}</strong>
+            <span>{t("hero.floatingWindow.body")}</span>
           </article>
         </div>
       </section>
@@ -203,24 +155,22 @@ export default function WebHomePage() {
       <section className="signal-band" id="loop">
         <div className="web-shell">
           <div className="section-heading">
-            <p className="eyebrow">The Loop</p>
-            <h2 className="section-title">밖에서 들어온 신호가 안쪽 운영을 바꿉니다</h2>
-            <p className="section-copy">
-              퍼블릭은 브로셔가 아니라 센서입니다. 무엇에 사람들이 반응했고, 어떤 문의가
-              생겼고, 무엇을 다음에 밀어야 하는지가 다시 허브 OS의 판단으로 이어져야
-              합니다.
-            </p>
+            <p className="eyebrow">{t("loop.eyebrow")}</p>
+            <h2 className="section-title">{t("loop.title")}</h2>
+            <p className="section-copy">{t("loop.copy")}</p>
           </div>
 
           <div className="pillar-grid">
-            {pillars.map((pillar) => (
-              <article key={pillar.title} className="pillar-card">
+            {PILLAR_KEYS.map((key) => (
+              <article key={key} className="pillar-card">
                 <p className="pillar-kicker">Public Layer</p>
-                <h3>{pillar.title}</h3>
-                <p>{pillar.body}</p>
+                <h3>{t(`loop.pillars.${key}.title`)}</h3>
+                <p>{t(`loop.pillars.${key}.body`)}</p>
                 <ul>
-                  {pillar.points.map((point) => (
-                    <li key={point}>{point}</li>
+                  {PILLAR_POINT_KEYS.map((pointKey) => (
+                    <li key={pointKey}>
+                      {t(`loop.pillars.${key}.points.${pointKey}`)}
+                    </li>
                   ))}
                 </ul>
               </article>
@@ -231,22 +181,18 @@ export default function WebHomePage() {
 
       <section className="story-section web-shell">
         <div className="story-copy">
-          <p className="eyebrow">Why This Shape</p>
-          <h2 className="section-title">예쁜 랜딩보다, 일하는 방식이 보이는 랜딩</h2>
-          <p className="section-copy">
-            Com_Moon의 퍼블릭 화면은 "우리가 뭘 합니다"에서 멈추면 안 됩니다. 콘텐츠가
-            어떤 리듬으로 생산되고, 반응을 어떻게 붙잡고, 어떤 운영 판단으로
-            되돌아가는지가 화면 구조 자체에서 느껴져야 합니다.
-          </p>
+          <p className="eyebrow">{t("story.eyebrow")}</p>
+          <h2 className="section-title">{t("story.title")}</h2>
+          <p className="section-copy">{t("story.copy")}</p>
         </div>
 
         <div className="workflow-list">
-          {workflows.map((workflow) => (
-            <article key={workflow.label} className="workflow-card">
-              <span>{workflow.label}</span>
+          {WORKFLOW_KEYS.map((key, index) => (
+            <article key={key} className="workflow-card">
+              <span>{String(index + 1).padStart(2, "0")}</span>
               <div>
-                <h3>{workflow.title}</h3>
-                <p>{workflow.body}</p>
+                <h3>{t(`story.workflows.${key}.title`)}</h3>
+                <p>{t(`story.workflows.${key}.body`)}</p>
               </div>
             </article>
           ))}
@@ -256,95 +202,90 @@ export default function WebHomePage() {
       <section className="workspace-section" id="desk">
         <div className="web-shell workspace-inner">
           <div className="section-heading section-heading-center">
-            <p className="eyebrow">Preview The Desk</p>
-            <h2 className="section-title">퍼블릭에서 허브로 이어지는 운영 프리뷰</h2>
-            <p className="section-copy">
-              같은 브랜드 안에서 바깥은 여백 있게, 안쪽은 더 조밀하게. 한 번에 전환되는
-              느낌이 아니라 같은 재질의 다른 압력으로 보여야 합니다.
-            </p>
+            <p className="eyebrow">{t("workspace.eyebrow")}</p>
+            <h2 className="section-title">{t("workspace.title")}</h2>
+            <p className="section-copy">{t("workspace.copy")}</p>
           </div>
 
           <div className="workspace-frame">
             <aside className="workspace-sidebar">
               <div className="workspace-card workspace-card-strong">
-                <p className="card-label">Today</p>
-                <strong>지금 확인할 것</strong>
+                <p className="card-label">
+                  {t("workspace.sidebar.today.label")}
+                </p>
+                <strong>{t("workspace.sidebar.today.title")}</strong>
                 <ul>
-                  <li>유입 리드 2건 후속</li>
-                  <li>카드뉴스 발행 승인</li>
-                  <li>자동화 실패 로그 점검</li>
+                  {SIDEBAR_TODAY_ITEM_KEYS.map((key) => (
+                    <li key={key}>
+                      {t(`workspace.sidebar.today.items.${key}`)}
+                    </li>
+                  ))}
                 </ul>
               </div>
 
               <div className="workspace-card">
-                <p className="card-label">Signal</p>
-                <strong>이번 주 반응이 높았던 주제</strong>
-                <span>브랜딩 운영 구조화 / 콘텐츠 자동화 / 실무형 세일즈 흐름</span>
+                <p className="card-label">
+                  {t("workspace.sidebar.signal.label")}
+                </p>
+                <strong>{t("workspace.sidebar.signal.title")}</strong>
+                <span>{t("workspace.sidebar.signal.body")}</span>
               </div>
             </aside>
 
             <div className="workspace-main">
               <div className="workspace-toolbar">
-                <span>Dashboard</span>
+                <span>{t("workspace.toolbar.title")}</span>
                 <div>
-                  <span>Content</span>
-                  <span>Leads</span>
-                  <span>Ops</span>
+                  <span>{t("workspace.toolbar.tabs.content")}</span>
+                  <span>{t("workspace.toolbar.tabs.leads")}</span>
+                  <span>{t("workspace.toolbar.tabs.ops")}</span>
                 </div>
               </div>
 
               <div className="mini-kpi-grid">
-                <article>
-                  <p>운영 건</p>
-                  <strong>12</strong>
-                  <span>이번 주 진행 중</span>
-                </article>
-                <article>
-                  <p>신규 리드</p>
-                  <strong>05</strong>
-                  <span>오늘 유입 기준</span>
-                </article>
-                <article>
-                  <p>발행 대기</p>
-                  <strong>03</strong>
-                  <span>승인만 남음</span>
-                </article>
+                {KPI_KEYS.map((key) => (
+                  <article key={key}>
+                    <p>{t(`workspace.kpi.${key}.label`)}</p>
+                    <strong>{t(`workspace.kpi.${key}.value`)}</strong>
+                    <span>{t(`workspace.kpi.${key}.sub`)}</span>
+                  </article>
+                ))}
               </div>
 
               <div className="desk-grid">
                 <article className="desk-panel">
-                  <p className="card-label">Lead Queue</p>
+                  <p className="card-label">
+                    {t("workspace.desk.leadQueue.label")}
+                  </p>
                   <ul className="compact-list">
-                    <li>
-                      <strong>브랜딩 제안 문의</strong>
-                      <span>오늘 09:20 · 콘텐츠 유입</span>
-                    </li>
-                    <li>
-                      <strong>운영 자동화 상담</strong>
-                      <span>어제 18:40 · 이메일 응답 대기</span>
-                    </li>
-                    <li>
-                      <strong>카드뉴스 제작 요청</strong>
-                      <span>어제 14:10 · 미팅 일정 조율</span>
-                    </li>
+                    {LEAD_QUEUE_KEYS.map((key) => (
+                      <li key={key}>
+                        <strong>
+                          {t(`workspace.desk.leadQueue.items.${key}.title`)}
+                        </strong>
+                        <span>
+                          {t(`workspace.desk.leadQueue.items.${key}.meta`)}
+                        </span>
+                      </li>
+                    ))}
                   </ul>
                 </article>
 
                 <article className="desk-panel desk-panel-soft">
-                  <p className="card-label">Automation Health</p>
+                  <p className="card-label">
+                    {t("workspace.desk.automation.label")}
+                  </p>
                   <div className="health-stack">
-                    <div>
-                      <strong>09:00 Publish Flow</strong>
-                      <span>Success</span>
-                    </div>
-                    <div>
-                      <strong>11:30 Lead Sync</strong>
-                      <span>Retry needed</span>
-                    </div>
-                    <div>
-                      <strong>14:00 Report Draft</strong>
-                      <span>Queued</span>
-                    </div>
+                    {AUTOMATION_KEYS.map((key) => (
+                      <div key={key}>
+                        <strong>
+                          {t(`workspace.desk.automation.items.${key}.title`)}
+                        </strong>
+                        <span>
+                          {t(`workspace.desk.automation.items.${key}.status`)}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </article>
               </div>
@@ -355,15 +296,15 @@ export default function WebHomePage() {
 
       <section className="use-case-section web-shell" id="use-cases">
         <div className="section-heading">
-          <p className="eyebrow">Use Cases</p>
-          <h2 className="section-title">Com_Moon이 잘해야 하는 장면들</h2>
+          <p className="eyebrow">{t("useCases.eyebrow")}</p>
+          <h2 className="section-title">{t("useCases.title")}</h2>
         </div>
 
         <div className="use-case-grid">
-          {useCases.map((item) => (
-            <article key={item.title} className="use-case-card">
-              <h3>{item.title}</h3>
-              <p>{item.body}</p>
+          {USE_CASE_KEYS.map((key) => (
+            <article key={key} className="use-case-card">
+              <h3>{t(`useCases.items.${key}.title`)}</h3>
+              <p>{t(`useCases.items.${key}.body`)}</p>
             </article>
           ))}
         </div>
@@ -372,11 +313,15 @@ export default function WebHomePage() {
       <section className="cta-section web-shell" id="contact">
         <div className="cta-bar">
           <div>
-            <p className="eyebrow">Start A Conversation</p>
-            <h2>지금 붙잡고 싶은 문제는 어떤 건가요?</h2>
+            <p className="eyebrow">{t("ctaBand.eyebrow")}</p>
+            <h2>{t("ctaBand.title")}</h2>
+            <p className="cta-note">{t("ctaBand.body")}</p>
           </div>
-          <a href="mailto:hello@com-moon.local?subject=Com_Moon%20inquiry" className="primary-link">
-            문의 보내기
+          <a
+            href="mailto:hello@com-moon.local?subject=Com_Moon%20inquiry"
+            className="primary-link"
+          >
+            {t("ctaBand.action")}
           </a>
         </div>
       </section>
@@ -387,22 +332,22 @@ export default function WebHomePage() {
             <a className="brand-lockup brand-lockup-invert" href="#top">
               <span className="brand-mark">CM</span>
               <span className="brand-text">
-                <strong>Com_Moon</strong>
-                <span>Editorial Command Deck</span>
+                <strong>{t("brand.name")}</strong>
+                <span>{t("brand.footerTagline")}</span>
               </span>
             </a>
-            <p>
-              브랜드, 콘텐츠, 세일즈, 운영을 한 흐름으로 묶는 퍼블릭 표면과 허브 OS.
-            </p>
+            <p>{t("footer.description")}</p>
           </div>
 
           <div className="footer-links">
-            {footerGroups.map((group) => (
-              <div key={group.title}>
-                <p>{group.title}</p>
+            {FOOTER_GROUP_KEYS.map((groupKey) => (
+              <div key={groupKey}>
+                <p>{t(`footer.groups.${groupKey}.title`)}</p>
                 <ul>
-                  {group.links.map((link) => (
-                    <li key={link}>{link}</li>
+                  {FOOTER_LINK_KEYS[groupKey].map((linkKey) => (
+                    <li key={linkKey}>
+                      {t(`footer.groups.${groupKey}.links.${linkKey}`)}
+                    </li>
                   ))}
                 </ul>
               </div>

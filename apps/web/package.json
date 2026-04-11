@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@com-moon/ui": "*",
     "next": "14.2.0",
+    "next-intl": "^4.9.1",
     "react": "^18",
     "react-dom": "^18"
   }

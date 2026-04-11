@@ -1,12 +1,14 @@
 import { SectionCard } from "@/components/dashboard/section-card";
 import { SummaryCard } from "@/components/dashboard/summary-card";
+import { resolveWorkContext, scopeMappedItemsByWorkContext } from "@/lib/dashboard-contexts";
 import { fetchRows, formatTimestamp, getPmsPageData } from "@/lib/server-data";
 
-export default async function WorkDecisionsPage() {
+export default async function WorkDecisionsPage({ searchParams }) {
   const [{ weeklyReview }, decisions] = await Promise.all([
     getPmsPageData(),
     fetchRows("decisions", { limit: 6, order: "decided_at.desc" }),
   ]);
+  const selectedProject = resolveWorkContext(searchParams?.project);
 
   const decisionEntries =
     decisions?.map((item) => ({
@@ -18,6 +20,22 @@ export default async function WorkDecisionsPage() {
       ...item,
       time: index === 0 ? "Now" : index === 1 ? "Next" : "Later",
     }));
+  const scopedDecisions = scopeMappedItemsByWorkContext(
+    decisionEntries,
+    selectedProject.value,
+    (item) => [item.title, item.detail],
+  );
+  const scopedReview = scopeMappedItemsByWorkContext(
+    weeklyReview,
+    selectedProject.value,
+    (item) => [item.title, item.detail],
+  );
+  const scopeNote =
+    selectedProject.value === "all"
+      ? "Recent calls from every project stay visible together."
+      : scopedDecisions.isFallback && scopedReview.isFallback
+        ? `${selectedProject.label} is selected, but decision rows still fall back to the shared review lane when project references are implicit.`
+        : `${selectedProject.label} decisions are now centered in this view.`;
 
   return (
     <div className="app-page">
@@ -28,18 +46,22 @@ export default async function WorkDecisionsPage() {
           This page keeps the calls that changed direction visible long enough to act on them. A good
           decision log says what changed, why it changed, and what should move next.
         </p>
+        <p className="page-context">
+          <strong>{selectedProject.label}</strong>
+          <span>{scopeNote}</span>
+        </p>
       </section>
 
       <section className="summary-grid" aria-label="Decision summary metrics">
         <SummaryCard
           title="Recent Decisions"
-          value={String(decisionEntries.length)}
+          value={String(scopedDecisions.items.length)}
           detail="Important calls remain visible after the meeting ends."
           badge="Signal"
         />
         <SummaryCard
           title="Review Prompts"
-          value={String(weeklyReview.length)}
+          value={String(scopedReview.items.length)}
           detail="Weekly prompts keep judgment tied to execution."
           badge="Reset"
           tone="muted"
@@ -67,7 +89,7 @@ export default async function WorkDecisionsPage() {
           description="Keep each entry short enough to scan and concrete enough to reuse later."
         >
           <div className="timeline">
-            {decisionEntries.map((item) => (
+            {scopedDecisions.items.map((item) => (
               <div className="timeline-item" key={`${item.title}-${item.time}`}>
                 <div className="inline-legend">
                   <span className="legend-chip" data-tone="blue">
@@ -87,7 +109,7 @@ export default async function WorkDecisionsPage() {
           description="Use the review lane to decide whether the work actually changed, not just whether activity happened."
         >
           <ul className="note-list">
-            {weeklyReview.map((item) => (
+            {scopedReview.items.map((item) => (
               <li className="note-row" key={item.title}>
                 <div>
                   <strong>{item.title}</strong>
