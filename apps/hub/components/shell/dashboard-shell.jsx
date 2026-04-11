@@ -1,7 +1,9 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Button, StatusChip } from "@com-moon/ui";
 import {
   getActiveNavigationSection,
   getActiveNavigationView,
@@ -9,120 +11,157 @@ import {
   navigationItems,
   shellActions,
 } from "@/lib/dashboard-data";
+import { LanguageSwitcher } from "./language-switcher";
+
+const BUTTON_VARIANT = {
+  primary: "primary",
+  secondary: "secondary",
+  ghost: "ghost",
+};
 
 export function DashboardShell({ children }) {
   const pathname = usePathname();
+  const tBrand = useTranslations("brand");
+  const tShell = useTranslations("shell");
+  const tNav = useTranslations("nav");
+  const tAction = useTranslations("shellAction");
+
   const currentSection = getActiveNavigationSection(pathname);
   const currentView = getActiveNavigationView(pathname, currentSection);
-  const sectionViews = currentSection.children?.length ? currentSection.children : [currentSection];
-  const sectionTitle =
-    currentView.href !== currentSection.href ? `${currentSection.label} / ${currentView.label}` : currentSection.label;
+  const sectionLabel = tNav(`${currentSection.i18nKey}.label`);
+  const sectionDescription = tNav(`${currentSection.i18nKey}.description`);
+  const viewLabel = tNav(`${currentView.i18nKey}.label`);
+  const viewDescription = tNav(`${currentView.i18nKey}.description`);
+
+  const coreLanes = navigationItems.filter((item) => (item.group || "core") === "core");
+  const utilityLanes = navigationItems.filter((item) => item.group === "utility");
+  const sectionViews = currentSection.children?.length ? currentSection.children : [];
 
   return (
-    <div className="os-shell">
-      <aside className="sidebar">
-        <Link className="brand" href="/dashboard" aria-label="Com_Moon OS home">
-          <span className="brand-mark">M</span>
-          <span className="brand-label">
-            <strong>Com_Moon OS</strong>
-            <span>Private hub shell</span>
+    <div className="hub-shell">
+      <aside className="hub-shell__nav" aria-label="Primary navigation">
+        <Link className="hub-shell__brand" href="/dashboard" aria-label={`${tBrand("name")} home`}>
+          <span className="hub-shell__brand-mark" aria-hidden="true">◐</span>
+          <span className="hub-shell__brand-text">
+            <strong>{tBrand("name")}</strong>
+            <span>{tBrand("tagline")}</span>
           </span>
         </Link>
 
-        <div className="nav-section">
-          <p className="nav-kicker">Workspace</p>
-          <div className="nav-list">
-            {navigationItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="nav-link"
-                data-active={matchesNavigationPath(pathname, item.href)}
-                aria-current={matchesNavigationPath(pathname, item.href) ? "page" : undefined}
-              >
-                <strong>{item.label}</strong>
-                <span>{item.description}</span>
-              </Link>
-            ))}
-          </div>
-        </div>
+        <nav className="hub-shell__nav-group" aria-label={tShell("coreLanesKicker")}>
+          <p className="hub-shell__nav-kicker">{tShell("coreLanesKicker")}</p>
+          <ul className="hub-shell__nav-list">
+            {coreLanes.map((item) => {
+              const active = matchesNavigationPath(pathname, item.href);
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    className="hub-shell__nav-link"
+                    data-active={active ? "true" : undefined}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    <span className="hub-shell__nav-link-label">
+                      {tNav(`${item.i18nKey}.label`)}
+                    </span>
+                    <span className="hub-shell__nav-link-desc">
+                      {tNav(`${item.i18nKey}.description`)}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
 
-        <div className="sidebar-foot">
-          <span className="status-pill">Protected shell</span>
-          <p className="sidebar-note">{currentSection.description}</p>
-          <div className="status-grid">
-            <div className="status-item">
-              <span>Section</span>
-              <strong>{currentSection.label}</strong>
-            </div>
-            <div className="status-item">
-              <span>Current view</span>
-              <strong>{currentView.label}</strong>
-            </div>
-            <div className="status-item">
-              <span>Focus</span>
-              <strong>{currentView.description}</strong>
-            </div>
-          </div>
+        {utilityLanes.length ? (
+          <nav className="hub-shell__nav-group" aria-label={tShell("utilityTabsKicker")}>
+            <p className="hub-shell__nav-kicker">{tShell("utilityTabsKicker")}</p>
+            <ul className="hub-shell__nav-list">
+              {utilityLanes.map((item) => {
+                const active = matchesNavigationPath(pathname, item.href);
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      className="hub-shell__nav-link"
+                      data-active={active ? "true" : undefined}
+                      aria-current={active ? "page" : undefined}
+                    >
+                      <span className="hub-shell__nav-link-label">
+                        {tNav(`${item.i18nKey}.label`)}
+                      </span>
+                      <span className="hub-shell__nav-link-desc">
+                        {tNav(`${item.i18nKey}.description`)}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        ) : null}
+
+        <div className="hub-shell__nav-foot">
+          <StatusChip tone="accent">{tShell("protectedShellPill")}</StatusChip>
+          <p>{sectionDescription}</p>
         </div>
       </aside>
 
-      <div className="shell-main">
-        <header className="topbar">
-          <div className="topbar-copy">
-            <div className="crumb">
-              <small>Com_Moon Hub</small>
-              <strong>{sectionTitle}</strong>
-            </div>
-            <p className="topbar-note">
-              {currentSection.description}. {currentView.description}
-            </p>
+      <div className="hub-shell__main">
+        <header className="hub-shell__topbar">
+          <div className="hub-shell__topbar-crumb">
+            <p className="hub-shell__topbar-kicker">{tBrand("crumbEyebrow")}</p>
+            <h1 className="hub-shell__topbar-title">
+              {sectionLabel}
+              {currentView.href !== currentSection.href ? (
+                <span className="hub-shell__topbar-title-tail">
+                  {tShell("sectionSeparator")}
+                  {viewLabel}
+                </span>
+              ) : null}
+            </h1>
+            <p className="hub-shell__topbar-note">{viewDescription}</p>
           </div>
-          <div className="topbar-actions">
+          <div className="hub-shell__topbar-actions">
+            <LanguageSwitcher />
             {shellActions.map((action) => (
-              <Link
-                key={action.href}
-                className={`button button-${action.tone}`}
-                data-active={matchesNavigationPath(pathname, action.href) ? "true" : "false"}
-                href={action.href}
-              >
-                {action.label}
+              <Link key={action.href} href={action.href} className="hub-shell__topbar-action-link">
+                <Button
+                  variant={BUTTON_VARIANT[action.tone] || "secondary"}
+                  surface="dark"
+                  tabIndex={-1}
+                >
+                  {tAction(action.i18nKey)}
+                </Button>
               </Link>
             ))}
           </div>
         </header>
 
         {sectionViews.length > 1 ? (
-          <section className="shell-context-bar" aria-label={`${currentSection.label} views`}>
-            <div className="shell-context-head">
-              <div>
-                <p className="shell-context-kicker">{currentSection.label} Views</p>
-                <strong>{currentView.label}</strong>
-                <span>{currentView.description}</span>
-              </div>
-              <p className="shell-context-note">
-                같은 섹션 안에서 무엇을 보고 있는지 잃지 않게, 현재 뷰와 다음 전환 후보를
-                한 줄에서 바로 드러냅니다.
-              </p>
-            </div>
-            <div className="shell-context-switcher">
-              {sectionViews.map((view) => (
+          <nav
+            className="hub-shell__subnav"
+            aria-label={`${sectionLabel}${tShell("contextAriaSuffix")}`}
+          >
+            {sectionViews.map((view) => {
+              const active = matchesNavigationPath(pathname, view.href);
+              return (
                 <Link
                   key={view.href}
-                  className="shell-context-link"
-                  data-active={matchesNavigationPath(pathname, view.href) ? "true" : "false"}
-                  aria-current={matchesNavigationPath(pathname, view.href) ? "page" : undefined}
                   href={view.href}
+                  className="hub-shell__subnav-link"
+                  data-active={active ? "true" : undefined}
+                  aria-current={active ? "page" : undefined}
                 >
-                  <strong>{view.label}</strong>
-                  <span>{view.description}</span>
+                  {tNav(`${view.i18nKey}.label`)}
                 </Link>
-              ))}
-            </div>
-          </section>
+              );
+            })}
+          </nav>
         ) : null}
 
-        <main className="workspace">{children}</main>
+        <main className="hub-shell__content">{children}</main>
       </div>
     </div>
   );

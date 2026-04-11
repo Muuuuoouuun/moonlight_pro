@@ -1,3 +1,5 @@
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages } from "next-intl/server";
 import { Calistoga, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -30,11 +32,16 @@ export const viewport = {
   themeColor: "#084734",
 };
 
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
-    <html lang="ko">
+    <html lang={locale}>
       <body className={`app-body ${displayFont.variable} ${bodyFont.variable} ${monoFont.variable}`}>
-        {children}
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          {children}
+        </NextIntlClientProvider>
       </body>
     </html>
   );

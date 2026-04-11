@@ -1,0 +1,205 @@
+{
+  "locale": {
+    "ko": "KO",
+    "en": "EN",
+    "ariaLabel": "언어 전환"
+  },
+  "brand": {
+    "name": "Com_Moon OS",
+    "tagline": "프라이빗 허브 쉘",
+    "crumbEyebrow": "Com_Moon Hub"
+  },
+  "shell": {
+    "coreLanesKicker": "코어 레인",
+    "utilityTabsKicker": "유틸리티 탭",
+    "protectedShellPill": "보호된 쉘",
+    "statusSection": "섹션",
+    "statusCurrentView": "현재 뷰",
+    "statusFocus": "포커스",
+    "contextViewsSuffix": " 뷰",
+    "contextAriaSuffix": " 뷰 전환",
+    "contextNote": "같은 섹션 안에서 무엇을 보고 있는지 잃지 않게, 현재 뷰와 다음 전환 후보를 한 줄에서 바로 드러냅니다.",
+    "sectionSeparator": " / "
+  },
+  "shellAction": {
+    "openBrief": "브리프 열기",
+    "openWork": "Work OS 열기",
+    "openStudio": "스튜디오 열기",
+    "openCommand": "커맨드 열기",
+    "openAiConsole": "AI 콘솔 열기"
+  },
+  "nav": {
+    "overview": {
+      "label": "개요",
+      "description": "오늘의 신호·경보·운영 펄스"
+    },
+    "work": {
+      "label": "Work OS",
+      "description": "프로젝트, PMS, 로드맵, 의사결정"
+    },
+    "workOverview": {
+      "label": "개요",
+      "description": "포커스 스택과 실행 펄스"
+    },
+    "workProjects": {
+      "label": "프로젝트",
+      "description": "포트폴리오, 블로커, 마일스톤"
+    },
+    "workManagement": {
+      "label": "관리",
+      "description": "프로젝트별 진행, 태스크, GitHub 신호"
+    },
+    "workCalendar": {
+      "label": "캘린더",
+      "description": "공유 일정, 마감일, 진행 타이밍"
+    },
+    "workRhythm": {
+      "label": "리듬",
+      "description": "케이던스 체크와 반복 제어 루프"
+    },
+    "workPms": {
+      "label": "PMS",
+      "description": "GitHub 배포 펄스와 운영자 케이던스"
+    },
+    "workRoadmap": {
+      "label": "로드맵",
+      "description": "마일스톤, 릴리스 레인, 딜리버리 리스크"
+    },
+    "workDecisions": {
+      "label": "의사결정",
+      "description": "결정, 리뷰 노트, 후속 이행"
+    },
+    "workReleases": {
+      "label": "릴리스",
+      "description": "패치노트와 주 단위 배송 로그"
+    },
+    "revenue": {
+      "label": "Revenue",
+      "description": "리드, 거래, 계정, 케이스"
+    },
+    "revenueOverview": {
+      "label": "개요",
+      "description": "파이프라인 건강도와 다음 움직임"
+    },
+    "revenueLeads": {
+      "label": "리드",
+      "description": "웜 인바운드와 팔로업 큐"
+    },
+    "revenueDeals": {
+      "label": "거래",
+      "description": "거래 단계와 클로즈 리스크"
+    },
+    "revenueAccounts": {
+      "label": "계정",
+      "description": "고객 상태와 계정 건강도"
+    },
+    "revenueCases": {
+      "label": "케이스",
+      "description": "고객 작업과 에스컬레이션"
+    },
+    "content": {
+      "label": "Content",
+      "description": "큐, 스튜디오, 에셋, 발행"
+    },
+    "contentOverview": {
+      "label": "개요",
+      "description": "파이프라인 건강도와 발행 케이던스"
+    },
+    "contentQueue": {
+      "label": "큐",
+      "description": "아이디어, 브리프, 리뷰 상태"
+    },
+    "contentStudio": {
+      "label": "스튜디오",
+      "description": "카드뉴스 초안 워크스페이스"
+    },
+    "contentAssets": {
+      "label": "에셋",
+      "description": "결과물, 파일, 원본 자료"
+    },
+    "contentPublish": {
+      "label": "발행",
+      "description": "배포 이력과 채널 상태"
+    },
+    "automations": {
+      "label": "Automations",
+      "description": "실행, 웹훅, 에이전트, 싱크 상태"
+    },
+    "automationsOverview": {
+      "label": "개요",
+      "description": "머신 상태와 최근 결과"
+    },
+    "automationsRuns": {
+      "label": "실행",
+      "description": "실행 펄스와 실패"
+    },
+    "automationsWebhooks": {
+      "label": "웹훅",
+      "description": "엔드포인트 카탈로그와 수신 이력"
+    },
+    "automationsIntegrations": {
+      "label": "연동",
+      "description": "연결된 시스템과 싱크 실행"
+    },
+    "automationsEmail": {
+      "label": "이메일",
+      "description": "템플릿, 큐, 아웃바운드 발송"
+    },
+    "evolution": {
+      "label": "Evolution",
+      "description": "로그, 이슈, 메모, 활동"
+    },
+    "evolutionOverview": {
+      "label": "개요",
+      "description": "자가 개선 루프와 오너십"
+    },
+    "evolutionLogs": {
+      "label": "로그",
+      "description": "에러, 경고, 수정 상태"
+    },
+    "evolutionIssues": {
+      "label": "이슈",
+      "description": "운영 리스크와 완화 상태"
+    },
+    "evolutionActivity": {
+      "label": "활동",
+      "description": "OS 전반의 최근 변경사항"
+    },
+    "dailyBrief": {
+      "label": "데일리 브리프",
+      "description": "아침 브리프, 승인, 다음 세 가지 액션"
+    },
+    "playbooks": {
+      "label": "플레이북",
+      "description": "반복 SOP, 트리거 규칙, 핸드오프 레시피"
+    },
+    "command": {
+      "label": "커맨드",
+      "description": "하나의 팔레트에서 검색·라우팅·디스패치"
+    },
+    "ai": {
+      "label": "AI 콘솔",
+      "description": "챗, 카운슬, 그리고 Claude·Codex에 직접 오더"
+    },
+    "aiOverview": {
+      "label": "개요",
+      "description": "에이전트 상태, OS 펄스, 오픈 오더를 한 화면에"
+    },
+    "aiChat": {
+      "label": "챗",
+      "description": "Claude와 Codex에게 바로 메시지를 보내는 레일"
+    },
+    "aiCouncil": {
+      "label": "카운슬",
+      "description": "Claude ↔ Codex가 상의·검토·결정을 주고받는 자리"
+    },
+    "aiOrders": {
+      "label": "오더",
+      "description": "직접 오더, 작업 생성·수정, 실행 추적"
+    },
+    "settings": {
+      "label": "설정",
+      "description": "환경 설정, 매핑, 세이프가드"
+    }
+  }
+}
