@@ -2,8 +2,13 @@ import { LogEntry } from "./types"
 
 // ─── Supabase REST insert (fetch — no extra dependency) ───────────────────────
 async function persistToSupabase(entry: LogEntry & { severity: string }): Promise<void> {
-  const url  = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const url =
+    process.env.SUPABASE_URL ??
+    process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   // Skip if env vars not configured (dev / placeholder)
   if (!url || !key || url.includes("placeholder")) return

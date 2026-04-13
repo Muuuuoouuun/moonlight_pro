@@ -29,6 +29,8 @@ const STATUS_MAP: Record<
 > = {
   // Content
   draft:     { label: "초안",   variant: "muted" },
+  in_review: { label: "검토중", variant: "info" },
+  scheduled: { label: "예약됨", variant: "warning" },
   published: { label: "발행됨", variant: "success" },
   archived:  { label: "보관됨", variant: "default" },
   // Lead
@@ -37,6 +39,7 @@ const STATUS_MAP: Record<
   qualified: { label: "적격",   variant: "success" },
   // Deal / Ops
   active:    { label: "활성",   variant: "success" },
+  on_hold:   { label: "보류",   variant: "warning" },
   closed:    { label: "종료",   variant: "muted" },
   won:       { label: "성사",   variant: "success" },
   lost:      { label: "실패",   variant: "danger" },

@@ -1,10 +1,10 @@
 "use client"
-import { useEffect, useState, useCallback, useRef } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { supabase } from "../../../lib/supabase"
-import { DataTable, type Column, StatusBadge, SlidePanel } from "@com-moon/ui"
+import { DataTable, type Column, StatusBadge, SlidePanel, toast } from "@com-moon/ui"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type OpsStatus = "active" | "closed"
+type OpsStatus = "active" | "on_hold" | "closed"
 type OpsCase = { id: string; title: string; description: string; status: OpsStatus; created_at: string }
 type CaseDraft = { title: string; description: string }
 
@@ -60,10 +60,13 @@ function AddCaseForm({ onAdd }: { onAdd: (d: CaseDraft) => Promise<void> }) {
 }
 
 // ─── Status Toggle ────────────────────────────────────────────────────────────
+const STATUS_CYCLE: OpsStatus[] = ["active", "on_hold", "closed"]
+
 function StatusToggle({ id, status, onChange }: { id: string; status: OpsStatus; onChange: (id: string, s: OpsStatus) => void }) {
+  const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(status) + 1) % STATUS_CYCLE.length]
   return (
     <button
-      onClick={(e) => { e.stopPropagation(); onChange(id, status === "active" ? "closed" : "active") }}
+      onClick={(e) => { e.stopPropagation(); onChange(id, next) }}
       className="group"
     >
       <StatusBadge
@@ -129,16 +132,21 @@ function useOpsCases() {
   }, [])
 
   const add = useCallback(async (draft: CaseDraft) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("operation_cases")
       .insert({ ...draft, status: "active", created_at: new Date().toISOString() })
       .select()
       .single()
-    if (data) setCases((prev) => [data as OpsCase, ...prev])
+    if (error) { toast.error("등록 실패"); return }
+    if (data) {
+      setCases((prev) => [data as OpsCase, ...prev])
+      toast.success(`"${draft.title}" 등록됐습니다`)
+    }
   }, [])
 
   const toggleStatus = useCallback(async (id: string, status: OpsStatus) => {
-    await supabase.from("operation_cases").update({ status }).eq("id", id)
+    const { error } = await supabase.from("operation_cases").update({ status }).eq("id", id)
+    if (error) { toast.error("상태 변경 실패"); return }
     setCases((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)))
   }, [])
 
@@ -154,10 +162,14 @@ export default function OpsPage() {
   const [panelOpen, setPanelOpen] = useState(false)
   const columns = buildColumns(toggleStatus)
 
+  const onHoldCnt = allCases.filter((c) => c.status === "on_hold").length
+  const closedCnt = allCases.filter((c) => c.status === "closed").length
+
   const filterBtns: { key: OpsStatus | "all"; label: string }[] = [
-    { key: "all",    label: `전체 ${allCases.length}` },
-    { key: "active", label: `활성 ${activeCnt}` },
-    { key: "closed", label: `종료 ${allCases.length - activeCnt}` },
+    { key: "all",     label: `전체 ${allCases.length}` },
+    { key: "active",  label: `활성 ${activeCnt}` },
+    { key: "on_hold", label: `보류 ${onHoldCnt}` },
+    { key: "closed",  label: `종료 ${closedCnt}` },
   ]
 
   return (

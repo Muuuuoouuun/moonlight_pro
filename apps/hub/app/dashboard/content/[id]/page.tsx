@@ -2,11 +2,12 @@
 import { useState, useCallback, useEffect } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { supabase } from "../../../../lib/supabase"
+import { toast } from "@com-moon/ui"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type CardNewsData = { title: string; subtitle: string; body: string }
 type SaveState = "idle" | "saving" | "saved" | "error"
-type ContentStatus = "draft" | "published" | "archived"
+type ContentStatus = "draft" | "in_review" | "scheduled" | "published" | "archived"
 
 // ─── Toolbar ──────────────────────────────────────────────────────────────────
 function Toolbar({
@@ -23,14 +24,18 @@ function Toolbar({
   onArchive: () => void
 }) {
   const statusLabel: Record<ContentStatus, string> = {
-    draft: "초안",
+    draft:     "초안",
+    in_review: "검토중",
+    scheduled: "예약됨",
     published: "발행됨",
-    archived: "보관됨",
+    archived:  "보관됨",
   }
   const statusColor: Record<ContentStatus, string> = {
-    draft: "text-[#9BA8B5] bg-[#F8F8F9]",
+    draft:     "text-[#9BA8B5] bg-[#F8F8F9]",
+    in_review: "text-[#4B6EF5] bg-[#F0F4FF]",
+    scheduled: "text-[#D97706] bg-[#FFFBEB]",
     published: "text-[#16A34A] bg-[#F0FDF4]",
-    archived: "text-[#6B7280] bg-[#F0F0F2]",
+    archived:  "text-[#6B7280] bg-[#F0F0F2]",
   }
 
   return (
@@ -204,13 +209,22 @@ export default function ContentEditPage() {
       .eq("id", id)
     if (error) {
       setSaveState("error")
+      toast.error("저장 실패 — 다시 시도해주세요")
       setTimeout(() => setSaveState("idle"), 2500)
       return
     }
     if (nextStatus) setStatus(nextStatus)
     setSaveState("saved")
-    if (nextStatus === "published") setTimeout(() => router.push("/dashboard/content"), 800)
-    else setTimeout(() => setSaveState("idle"), 2200)
+    if (nextStatus === "published") {
+      toast.success("발행됐습니다")
+      setTimeout(() => router.push("/dashboard/content"), 800)
+    } else if (nextStatus === "archived") {
+      toast.info("보관됐습니다")
+      setTimeout(() => setSaveState("idle"), 2200)
+    } else {
+      toast.success("저장됐습니다")
+      setTimeout(() => setSaveState("idle"), 2200)
+    }
   }, [data, id, router])
 
   if (loading) return <LoadingSkeleton />

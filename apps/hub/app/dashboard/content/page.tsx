@@ -6,7 +6,7 @@ import { DataTable, type Column } from "@com-moon/ui"
 import { StatusBadge } from "@com-moon/ui"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type ContentStatus = "draft" | "published" | "archived"
+type ContentStatus = "draft" | "in_review" | "scheduled" | "published" | "archived"
 type ContentItem = {
   id: string
   title: string
@@ -20,6 +20,8 @@ type ContentItem = {
 const FILTERS: { key: ContentStatus | "all"; label: string }[] = [
   { key: "all",       label: "전체" },
   { key: "draft",     label: "초안" },
+  { key: "in_review", label: "검토중" },
+  { key: "scheduled", label: "예약됨" },
   { key: "published", label: "발행됨" },
   { key: "archived",  label: "보관됨" },
 ]

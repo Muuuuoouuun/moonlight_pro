@@ -1,8 +1,7 @@
 "use client"
 import { useEffect, useState } from "react"
 import { supabase } from "../../../lib/supabase"
-import { DataTable, type Column } from "@com-moon/ui"
-import { StatusBadge } from "@com-moon/ui"
+import { DataTable, type Column, StatusBadge, toast } from "@com-moon/ui"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ErrorLog = {
@@ -117,8 +116,10 @@ function useErrorLogs() {
   }, [])
 
   async function clear() {
-    await supabase.from("error_logs").update({ archived: true }).eq("archived", false)
+    const { error } = await supabase.from("error_logs").update({ archived: true }).eq("archived", false)
+    if (error) { toast.error("로그 삭제 실패"); return }
     setLogs([])
+    toast.info("로그를 지웠습니다")
   }
 
   return { logs, loading, clear }
@@ -166,7 +167,7 @@ export default function SystemPage() {
             {confirmClear ? (
               <>
                 <button
-                  onClick={() => { clear(); setConfirmClear(false) }}
+                  onClick={async () => { await clear(); setConfirmClear(false) }}
                   className="px-2.5 py-1 text-xs font-medium text-white bg-[#DC2626] rounded-lg hover:bg-[#B91C1C] transition-colors duration-100"
                 >
                   확인

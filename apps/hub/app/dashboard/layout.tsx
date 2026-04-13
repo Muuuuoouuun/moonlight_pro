@@ -69,8 +69,8 @@ function IcSystem() {
 const NAV: NavItem[] = [
   { href: "/dashboard",            label: "대시보드", icon: <IcGrid /> },
   { href: "/dashboard/content",    label: "콘텐츠",  icon: <IcContent /> },
-  { href: "/dashboard/sales",      label: "세일즈",  icon: <IcSales />,      disabled: true, dividerBefore: true },
-  { href: "/dashboard/ops",        label: "운영",    icon: <IcOps />,        disabled: true },
+  { href: "/dashboard/sales",      label: "세일즈",  icon: <IcSales />,      dividerBefore: true },
+  { href: "/dashboard/ops",        label: "운영",    icon: <IcOps /> },
   { href: "/dashboard/automation", label: "자동화",  icon: <IcAutomation />, disabled: true, dividerBefore: true, mobileHidden: true },
   { href: "/dashboard/system",     label: "시스템",  icon: <IcSystem /> },
 ]

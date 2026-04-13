@@ -2,6 +2,7 @@
 import { useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../../../lib/supabase"
+import { toast } from "@com-moon/ui"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type CardNewsData = { title: string; subtitle: string; body: string }
@@ -203,7 +204,7 @@ export default function ContentNewPage() {
   const [saveState, setSaveState] = useState<SaveState>("idle")
 
   const save = useCallback(async (status: "draft" | "published") => {
-    if (!data.title.trim()) return
+    if (!data.title.trim()) { toast.warning("제목을 입력하세요"); return }
     setSaveState("saving")
     const { error } = await supabase.from("content_items").insert({
       title: data.title,
@@ -215,13 +216,16 @@ export default function ContentNewPage() {
     })
     if (error) {
       setSaveState("error")
+      toast.error("저장 실패 — 다시 시도해주세요")
       setTimeout(() => setSaveState("idle"), 2500)
       return
     }
     setSaveState("saved")
     if (status === "published") {
+      toast.success("발행됐습니다")
       setTimeout(() => router.push("/dashboard/content"), 800)
     } else {
+      toast.success("초안 저장됐습니다")
       setTimeout(() => setSaveState("idle"), 2200)
     }
   }, [data, router])

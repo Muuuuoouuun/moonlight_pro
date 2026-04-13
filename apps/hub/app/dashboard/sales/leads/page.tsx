@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useState, useCallback } from "react"
 import { supabase } from "../../../../lib/supabase"
-import { DataTable, type Column, StatusBadge, SlidePanel } from "@com-moon/ui"
+import { DataTable, type Column, StatusBadge, SlidePanel, toast } from "@com-moon/ui"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type LeadStatus = "new" | "contacted" | "qualified" | "won" | "lost"
@@ -146,16 +146,21 @@ function useLeads() {
   }, [])
 
   const add = useCallback(async (draft: LeadDraft) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("leads")
       .insert({ ...draft, status: "new", created_at: new Date().toISOString() })
       .select()
       .single()
-    if (data) setLeads((prev) => [data as Lead, ...prev])
+    if (error) { toast.error("리드 추가 실패"); return }
+    if (data) {
+      setLeads((prev) => [data as Lead, ...prev])
+      toast.success(`${draft.name} 리드 추가됐습니다`)
+    }
   }, [])
 
   const updateStatus = useCallback(async (id: string, status: LeadStatus) => {
-    await supabase.from("leads").update({ status }).eq("id", id)
+    const { error } = await supabase.from("leads").update({ status }).eq("id", id)
+    if (error) { toast.error("상태 변경 실패"); return }
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)))
   }, [])
 
