@@ -18,6 +18,7 @@ export async function GET() {
     routes: [
       { method: "POST", path: "/api/webhook/telegram" },
       { method: "POST", path: "/api/webhook/project" },
+      { method: "POST", path: "/api/email/send" },
       ...sharedRoutes,
       { method: "GET", path: "/api/health" },
     ],

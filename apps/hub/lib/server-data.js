@@ -2617,20 +2617,170 @@ function buildEmailSummary({ channels, templates, queue, sends }) {
   ];
 }
 
+function buildGmailConnectHref(workspaceId = "") {
+  const params = new URLSearchParams({
+    returnPath: "/dashboard/automations/email",
+  });
+
+  if (workspaceId) {
+    params.set("workspaceId", workspaceId);
+  }
+
+  return `/api/email/gmail/connect?${params.toString()}`;
+}
+
+function buildLiveEmailChannels(channels, gmailConnection, defaultWorkspaceId = "") {
+  const hasResendConfig = Boolean(
+    process.env.RESEND_API_KEY?.trim() && process.env.EMAIL_FROM_ADDRESS?.trim(),
+  );
+  const hasGoogleOAuthConfig = Boolean(
+    process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim(),
+  );
+  const gmailAddress = gmailConnection?.config?.email || "";
+
+  return channels.map((channel) => {
+    if (channel.id === "resend") {
+      return hasResendConfig
+        ? {
+            ...channel,
+            status: "primary",
+            tone: "green",
+            detail: `Resend ready. Sending from ${process.env.EMAIL_FROM_ADDRESS?.trim()}.`,
+            nextAction: "Run one dry-run from the email lane before live send.",
+          }
+        : {
+            ...channel,
+            status: "planned",
+            tone: "warning",
+            detail: "Resend env is missing. Add RESEND_API_KEY and EMAIL_FROM_ADDRESS.",
+            nextAction: "Fill the engine env, then return for a dry-run.",
+          };
+    }
+
+    if (channel.id === "gmail") {
+      if (gmailConnection?.status === "connected") {
+        return {
+          ...channel,
+          status: "ready",
+          tone: "blue",
+          detail: gmailAddress
+            ? `Gmail OAuth connected for ${gmailAddress}. Personal-name sends can go live.`
+            : "Gmail OAuth connected. Personal-name sends can go live.",
+          nextAction: "Run one control-inbox dry-run before the first live warm send.",
+          connectHref: buildGmailConnectHref(defaultWorkspaceId),
+        };
+      }
+
+      return hasGoogleOAuthConfig
+        ? {
+            ...channel,
+            status: "planned",
+            tone: "warning",
+            detail: "Google OAuth client is ready, but Gmail is not connected yet.",
+            nextAction: "Connect Gmail and grant gmail.send scope.",
+            connectHref: buildGmailConnectHref(defaultWorkspaceId),
+          }
+        : {
+            ...channel,
+            status: "planned",
+            tone: "warning",
+            detail: "Google OAuth env is missing. Fill GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET first.",
+            nextAction: "Add Google OAuth env, then connect Gmail.",
+          };
+    }
+
+    return channel;
+  });
+}
+
+function mapEmailRunStatus(value, action = "send") {
+  if (value === "failure") {
+    return "failed";
+  }
+
+  if (action !== "send") {
+    return "draft";
+  }
+
+  if (value === "success") {
+    return "delivered";
+  }
+
+  return value || "draft";
+}
+
+function mapEmailRunsToSends(runs) {
+  if (!runs?.length) {
+    return [];
+  }
+
+  return runs
+    .filter((item) => item.payload?.kind === "email_send")
+    .map((item) => {
+      const payload = item.payload || {};
+      const subject = payload.subject || payload.templateName || "Email send";
+      const action = payload.action || "send";
+      const recipient = payload.recipient || "recipient";
+
+      return {
+        id: item.id || `${payload.provider || "email"}-${item.finished_at || item.started_at}`,
+        title: action === "send" ? subject : `Dry-run — ${subject}`,
+        channel: payload.provider || "resend",
+        status: mapEmailRunStatus(item.status, action),
+        time: formatTimestamp(item.finished_at || item.started_at),
+        detail:
+          item.error_message ||
+          (action === "send"
+            ? `To ${recipient}`
+            : `Previewed for ${recipient} before live send.`),
+      };
+    })
+    .slice(0, 8);
+}
+
 export async function getEmailAutomationPageData() {
-  // Live wiring will read from email_templates / email_queue / email_sends
-  // tables once provider work begins. Until then we serve seed data so the
-  // UI represents the operating model already.
-  const channels = fallbackEmailChannels;
+  const defaultWorkspaceId =
+    process.env.COM_MOON_DEFAULT_WORKSPACE_ID?.trim() ||
+    process.env.DEFAULT_WORKSPACE_ID?.trim() ||
+    "";
+  const gmailFilters = [["provider", "eq.google_gmail"]];
+
+  if (defaultWorkspaceId) {
+    gmailFilters.push(["workspace_id", `eq.${defaultWorkspaceId}`]);
+  }
+
+  const [gmailConnections, syncRuns] = await Promise.all([
+    fetchRows("integration_connections", {
+      filters: gmailFilters,
+      order: "created_at.desc",
+      limit: 1,
+    }),
+    fetchRows("sync_runs", {
+      order: "started_at.desc",
+      limit: 24,
+    }),
+  ]);
+
+  const gmailConnection = gmailConnections?.[0] || null;
+  const channels = buildLiveEmailChannels(
+    fallbackEmailChannels,
+    gmailConnection,
+    defaultWorkspaceId,
+  );
   const templates = fallbackEmailTemplates;
   const queue = fallbackEmailQueue;
-  const sends = fallbackEmailSends;
+  const liveSends = mapEmailRunsToSends(syncRuns);
+  const sends = liveSends.length
+    ? [...liveSends, ...fallbackEmailSends].slice(0, Math.max(liveSends.length, 4))
+    : fallbackEmailSends;
   const rules = fallbackEmailRules;
   const segments = fallbackEmailSegments;
   const variables = fallbackEmailVariables;
   const blocks = fallbackEmailBlocks;
 
   return {
+    defaultWorkspaceId,
+    gmailConnection,
     emailSummary: buildEmailSummary({ channels, templates, queue, sends }),
     emailChannels: channels,
     emailTemplates: templates,

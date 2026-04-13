@@ -33,8 +33,44 @@ function resolveSegmentId(segments, value) {
   return segments.find((item) => item.id === normalized)?.id ?? segments[0]?.id ?? "all";
 }
 
+function resolveEmailMessage(value) {
+  if (Array.isArray(value)) {
+    return resolveEmailMessage(value[0]);
+  }
+
+  if (value === "connected") {
+    return {
+      tone: "green",
+      title: "Gmail connected",
+      detail: "Google OAuth connection is complete. Personal-name sends can now route through Gmail.",
+    };
+  }
+
+  if (value === "oauth-denied" || value === "connect-failed" || value === "missing-google-config") {
+    return {
+      tone: "danger",
+      title: "Gmail connection needs attention",
+      detail:
+        value === "missing-google-config"
+          ? "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are missing in the hub env."
+          : "Gmail OAuth did not complete cleanly. Retry the connect flow and check the integration lane.",
+    };
+  }
+
+  if (value === "missing-code") {
+    return {
+      tone: "warning",
+      title: "Missing Gmail OAuth callback code",
+      detail: "Google returned without an authorization code. Retry the Gmail connect flow.",
+    };
+  }
+
+  return null;
+}
+
 export default async function EmailAutomationPage({ searchParams }) {
   const {
+    defaultWorkspaceId,
     emailSummary,
     emailChannels,
     emailTemplates,
@@ -46,6 +82,7 @@ export default async function EmailAutomationPage({ searchParams }) {
     emailBlocks,
   } = await getEmailAutomationPageData();
 
+  const emailMessage = resolveEmailMessage(searchParams?.gmail);
   const selectedSegmentId = resolveSegmentId(emailSegments, searchParams?.segment);
   const selectedSegment =
     emailSegments.find((item) => item.id === selectedSegmentId) ?? emailSegments[0];
@@ -70,6 +107,13 @@ export default async function EmailAutomationPage({ searchParams }) {
           <SummaryCard key={metric.title} {...metric} />
         ))}
       </section>
+
+      {emailMessage ? (
+        <div className="status-note" data-tone={emailMessage.tone}>
+          <strong>{emailMessage.title}</strong>
+          <p>{emailMessage.detail}</p>
+        </div>
+      ) : null}
 
       <div className="stack">
         <SectionCard
@@ -106,6 +150,7 @@ export default async function EmailAutomationPage({ searchParams }) {
             variables={emailVariables}
             blocks={emailBlocks}
             channels={emailChannels}
+            defaultWorkspaceId={defaultWorkspaceId}
           />
         </SectionCard>
 
@@ -141,6 +186,13 @@ export default async function EmailAutomationPage({ searchParams }) {
                 <p className="check-detail">
                   <strong>Next</strong> · {channel.nextAction}
                 </p>
+                {channel.connectHref ? (
+                  <div className="hero-actions">
+                    <Link className="button button-secondary" href={channel.connectHref}>
+                      {channel.status === "ready" ? "Reconnect Gmail" : "Connect Gmail"}
+                    </Link>
+                  </div>
+                ) : null}
               </article>
             ))}
           </div>

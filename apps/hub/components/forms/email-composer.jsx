@@ -55,6 +55,42 @@ function defaultBodyForTemplate(template) {
   return `${template.subject}\n\n본문을 작성하세요.\n\n— {{signature}}\n`;
 }
 
+function channelLabel(channels, channelId) {
+  return channels.find((item) => item.id === channelId)?.name ?? channelId ?? "—";
+}
+
+function normalizeResponseTone(status) {
+  if (status === "sent") {
+    return "green";
+  }
+
+  if (status === "preview") {
+    return "warning";
+  }
+
+  return "danger";
+}
+
+function responseTitle(status) {
+  if (status === "sent") {
+    return "발송 완료";
+  }
+
+  if (status === "preview") {
+    return "Dry-run 완료";
+  }
+
+  return "발송 오류";
+}
+
+function previewRecipient(segment, recipientName, recipientEmail) {
+  if (!recipientEmail) {
+    return `${segment.label} · ${segment.count.toLocaleString()}명`;
+  }
+
+  return recipientName ? `${recipientName} <${recipientEmail}>` : recipientEmail;
+}
+
 export function EmailComposer({
   segments,
   initialSegmentId,
@@ -62,6 +98,7 @@ export function EmailComposer({
   variables,
   blocks,
   channels,
+  defaultWorkspaceId = "",
 }) {
   const initialSegment =
     segments.find((item) => item.id === initialSegmentId) ?? segments[0];
@@ -81,26 +118,31 @@ export function EmailComposer({
   const template =
     templates.find((item) => item.id === templateId) ?? initialTemplate ?? null;
 
+  const [recipientName, setRecipientName] = useState(initialSegment.sample?.lead_name ?? "");
+  const [recipientEmail, setRecipientEmail] = useState("");
   const [subject, setSubject] = useState(template?.subject ?? "");
   const [body, setBody] = useState(defaultBodyForTemplate(template));
   const [activeField, setActiveField] = useState("body");
   const [statusMessage, setStatusMessage] = useState(
     "변수 칩이나 블록을 클릭하면 커서 위치에 바로 삽입됩니다.",
   );
+  const [pendingAction, setPendingAction] = useState("");
+  const [result, setResult] = useState(null);
 
   const subjectRef = useRef(null);
   const bodyRef = useRef(null);
 
-  // When the template changes, refresh subject + body so the operator never edits the wrong template by accident
   useEffect(() => {
     if (!template) return;
     setSubject(template.subject);
     setBody(defaultBodyForTemplate(template));
+    setResult(null);
     setStatusMessage(`템플릿 "${template.name}" 로딩됨.`);
   }, [template?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When the segment changes, snap the template back to one that fits the audience
   useEffect(() => {
+    setRecipientName(segment.sample?.lead_name ?? "");
+
     if (segment.audience === "any") return;
     if (template?.audience === segment.audience) return;
     const next = findMatchingTemplate(matchingTemplates, segment.audience);
@@ -163,25 +205,87 @@ export function EmailComposer({
     if (!template) return;
     setSubject(template.subject);
     setBody(defaultBodyForTemplate(template));
+    setResult(null);
     setStatusMessage("초안을 템플릿 기본값으로 되돌렸습니다.");
   }
 
-  function dryRunPreview() {
-    setStatusMessage(
-      `Dry-run 준비 완료 → ${channelLabel(channels, template?.channel)} 채널 / ${segment.label} (${segment.count}명) — 실제 발송 전 검수 단계입니다.`,
-    );
-  }
-
-  function scheduleSend() {
-    setStatusMessage(
-      `예약 큐에 올리기 → ${segment.label} (${segment.count}명) · ${channelLabel(channels, template?.channel)}. 백엔드 연결 후 실제 enqueue 됩니다.`,
-    );
-  }
-
   function saveDraft() {
+    setResult(null);
     setStatusMessage(
       `초안 저장 → "${template?.name ?? "Untitled"}" 의 사본으로 보관됩니다.`,
     );
+  }
+
+  async function runDeliveryAction(action) {
+    if (!template) {
+      setResult({
+        status: "error",
+        error: "템플릿을 먼저 고르세요.",
+      });
+      setStatusMessage("템플릿을 먼저 고르세요.");
+      return;
+    }
+
+    if (!recipientEmail.trim()) {
+      setResult({
+        status: "error",
+        error: "수신 이메일을 입력해야 dry-run 또는 실발송이 가능합니다.",
+      });
+      setStatusMessage("수신 이메일을 입력해야 dry-run 또는 실발송이 가능합니다.");
+      return;
+    }
+
+    setPendingAction(action);
+
+    try {
+      const response = await fetch("/api/email/send", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          action,
+          workspaceId: defaultWorkspaceId,
+          channel: template.channel,
+          recipientEmail,
+          recipientName,
+          subject,
+          body,
+          fromName: sample.signature,
+          templateId: template.id,
+          templateName: template.name,
+          segmentId: segment.id,
+          segmentLabel: segment.label,
+          audience: segment.audience,
+        }),
+      });
+
+      const data = await response.json();
+      setResult(data);
+
+      if (data.status === "sent") {
+        setStatusMessage(`실발송 완료 → ${channelLabel(channels, template.channel)} 채널.`);
+        return;
+      }
+
+      if (data.status === "preview") {
+        setStatusMessage(
+          `Dry-run 완료 → ${channelLabel(channels, template.channel)} 채널 준비 상태를 확인했습니다.`,
+        );
+        return;
+      }
+
+      setStatusMessage(data.error || data.message || "발송 중 오류가 발생했습니다.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setResult({
+        status: "error",
+        error: message,
+      });
+      setStatusMessage(message);
+    } finally {
+      setPendingAction("");
+    }
   }
 
   const sample = segment.sample;
@@ -189,6 +293,8 @@ export function EmailComposer({
   const bodyPreview = resolveVariables(body, sample);
   const usedTokens = listUsedTokens(`${subject}\n${body}`);
   const totalChars = body.length;
+  const liveSendDisabled = pendingAction === "send" || template?.channel === "n8n";
+  const dryRunDisabled = pendingAction === "dry-run";
 
   return (
     <div className="composer-shell">
@@ -229,6 +335,37 @@ export function EmailComposer({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="composer-field">
+            <label className="composer-label" htmlFor="composer-recipient-name">
+              수신자 이름
+            </label>
+            <input
+              id="composer-recipient-name"
+              className="composer-input"
+              type="text"
+              value={recipientName}
+              onChange={(event) => setRecipientName(event.target.value)}
+              placeholder="예: 문준혁"
+            />
+          </div>
+
+          <div className="composer-field">
+            <label className="composer-label" htmlFor="composer-recipient-email">
+              수신 이메일
+            </label>
+            <input
+              id="composer-recipient-email"
+              className="composer-input"
+              type="email"
+              value={recipientEmail}
+              onChange={(event) => setRecipientEmail(event.target.value)}
+              placeholder="control inbox 또는 실제 수신자 이메일"
+            />
+            <p className="muted tiny">
+              첫 버전은 명시적인 1명 수신 기준으로 dry-run / 즉시 발송만 연결합니다.
+            </p>
           </div>
 
           <div className="composer-field">
@@ -311,16 +448,42 @@ export function EmailComposer({
             <button type="button" className="button button-ghost" onClick={saveDraft}>
               초안 저장
             </button>
-            <button type="button" className="button button-secondary" onClick={dryRunPreview}>
-              Dry-run
+            <button
+              type="button"
+              className="button button-secondary"
+              disabled={dryRunDisabled}
+              onClick={() => void runDeliveryAction("dry-run")}
+            >
+              {pendingAction === "dry-run" ? "Dry-run 중..." : "Dry-run"}
             </button>
-            <button type="button" className="button button-primary" onClick={scheduleSend}>
-              발송 예약
+            <button
+              type="button"
+              className="button button-primary"
+              disabled={liveSendDisabled}
+              onClick={() => void runDeliveryAction("send")}
+            >
+              {template?.channel === "n8n"
+                ? "n8n 예정"
+                : pendingAction === "send"
+                  ? "발송 중..."
+                  : "즉시 발송"}
             </button>
           </div>
           <p className="composer-status" role="status" aria-live="polite">
             {statusMessage}
           </p>
+
+          {result ? (
+            <div className="status-note" data-tone={normalizeResponseTone(result.status)}>
+              <strong>{responseTitle(result.status)}</strong>
+              <p>{result.message || result.error || "응답을 해석하지 못했습니다."}</p>
+              {result.preview?.from ? (
+                <p className="status-note-subtle">
+                  {result.preview.from} → {(result.preview.to || []).join(", ")}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <aside className="composer-preview">
@@ -331,9 +494,7 @@ export function EmailComposer({
           <dl className="composer-preview-meta">
             <div>
               <dt>To</dt>
-              <dd>
-                {segment.label} · {segment.count.toLocaleString()}명
-              </dd>
+              <dd>{previewRecipient(segment, recipientName, recipientEmail)}</dd>
             </div>
             <div>
               <dt>From</dt>
@@ -361,8 +522,4 @@ export function EmailComposer({
       </div>
     </div>
   );
-}
-
-function channelLabel(channels, channelId) {
-  return channels.find((item) => item.id === channelId)?.name ?? channelId ?? "—";
 }
