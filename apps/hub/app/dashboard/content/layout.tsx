@@ -3,8 +3,9 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 const SUB_NAV = [
-  { href: "/dashboard/content",     label: "목록" },
-  { href: "/dashboard/content/new", label: "새 콘텐츠" },
+  { href: "/dashboard/content",           label: "목록" },
+  { href: "/dashboard/content/new",       label: "새 콘텐츠" },
+  { href: "/dashboard/content/campaigns", label: "캠페인" },
 ]
 
 function SubNav() {

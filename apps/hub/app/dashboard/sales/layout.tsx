@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 const SUB_NAV = [
   { href: "/dashboard/sales",        label: "파이프라인" },
   { href: "/dashboard/sales/leads",  label: "리드" },
+  { href: "/dashboard/sales/deals",  label: "딜" },
 ]
 
 function SubNav() {
