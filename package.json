@@ -1,6 +1,7 @@
 {
   "name": "com-moon",
   "private": true,
+  "packageManager": "npm@11.11.1",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -10,6 +11,10 @@
     "dev": "turbo dev"
   },
   "devDependencies": {
-    "turbo": "latest"
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "turbo": "latest",
+    "typescript": "^6.0.2"
   }
 }
