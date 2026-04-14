@@ -1,9 +1,13 @@
-node_modules
-.next
-.turbo
-dist
-coverage
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+.turbo/
+**/.turbo/
+dist/
+coverage/
 .DS_Store
+Thumbs.db
 *.tsbuildinfo
 .env
 .env.*
@@ -13,7 +17,4 @@ coverage
 !.env.*.example
 !**/.env.example
 !**/.env.*.example
-.gstack/
-.gstack/
-.gstack/
 .gstack/

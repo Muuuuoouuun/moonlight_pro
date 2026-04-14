@@ -95,3 +95,13 @@ export async function logWarning(entry: LogEntry) {
   await persistLogEntry(normalized);
   return normalized;
 }
+
+export async function logWarn(entry: LogEntry) {
+  return logWarning(entry);
+}
+
+export async function logInfo(entry: LogEntry) {
+  const normalized = emit("info", entry);
+  await persistLogEntry(normalized);
+  return normalized;
+}
