@@ -8,10 +8,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@com-moon/hub-gateway": "*",
     "@com-moon/content-manager": "*",
-    "next": "14.2.0",
-    "react": "^18",
-    "react-dom": "^18"
+    "@com-moon/hub-gateway": "*",
+    "next": "^15.5.15",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
   }
 }

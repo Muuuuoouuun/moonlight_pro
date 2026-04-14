@@ -11,9 +11,9 @@ import {
 export const runtime = "nodejs";
 
 type RouteContext = {
-  params: {
+  params: Promise<{
     provider: string;
-  };
+  }>;
 };
 
 function resolveProvider(providerParam: string) {
@@ -21,7 +21,8 @@ function resolveProvider(providerParam: string) {
 }
 
 export async function GET(_req: Request, context: RouteContext) {
-  const provider = resolveProvider(context.params.provider);
+  const { provider: providerParam } = await context.params;
+  const provider = resolveProvider(providerParam);
 
   if (!provider) {
     return NextResponse.json(
@@ -68,7 +69,8 @@ export async function GET(_req: Request, context: RouteContext) {
 }
 
 export async function POST(req: Request, context: RouteContext) {
-  const provider = resolveProvider(context.params.provider);
+  const { provider: providerParam } = await context.params;
+  const provider = resolveProvider(providerParam);
 
   if (!provider) {
     return NextResponse.json(
