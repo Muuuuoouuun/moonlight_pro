@@ -26,15 +26,6 @@ const EVOLUTION_NAV_ITEMS = [
 export default function EvolutionLayout({ children }) {
   return (
     <div className="app-page">
-      <section className="page-head">
-        <p className="eyebrow">Evolution</p>
-        <h1>Logs, issues, and system memory</h1>
-        <p>
-          This section is the OS memory layer. It keeps failures, follow-ups, and recent changes visible
-          so the next version of the system is easier to operate than the last one.
-        </p>
-      </section>
-
       <DashboardSectionNav label="Evolution" items={EVOLUTION_NAV_ITEMS} />
       {children}
     </div>

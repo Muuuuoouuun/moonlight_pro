@@ -32,15 +32,6 @@ const CONTENT_NAV_ITEMS = [
 export default function ContentLayout({ children }) {
   return (
     <div className="app-page">
-      <section className="page-head">
-        <p className="eyebrow">Content</p>
-        <h1>Editorial workspace and publish loop</h1>
-        <p>
-          This section turns content into a visible production system. The work stays split into
-          queue, studio, assets, and publish so the next piece always has a clear path forward.
-        </p>
-      </section>
-
       <DashboardSectionNav
         label="Content"
         items={CONTENT_NAV_ITEMS}

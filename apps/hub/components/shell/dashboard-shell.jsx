@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -11,6 +12,7 @@ import {
   navigationItems,
   shellActions,
 } from "@/lib/dashboard-data";
+import { CommandPalette } from "./command-palette";
 import { LanguageSwitcher } from "./language-switcher";
 
 const BUTTON_VARIANT = {
@@ -19,8 +21,42 @@ const BUTTON_VARIANT = {
   ghost: "ghost",
 };
 
+function resolveNavCopy(tNav, item) {
+  if (!item?.i18nKey) {
+    return {
+      label: item?.label ?? item?.href ?? "Untitled",
+      description: item?.description ?? "",
+    };
+  }
+
+  try {
+    return {
+      label: tNav(`${item.i18nKey}.label`),
+      description: tNav(`${item.i18nKey}.description`),
+    };
+  } catch {
+    return {
+      label: item?.label ?? item?.href ?? "Untitled",
+      description: item?.description ?? "",
+    };
+  }
+}
+
+function resolveActionLabel(tAction, action) {
+  if (!action?.i18nKey) {
+    return action?.label ?? action?.href ?? "Action";
+  }
+
+  try {
+    return tAction(action.i18nKey);
+  } catch {
+    return action?.label ?? action?.href ?? "Action";
+  }
+}
+
 export function DashboardShell({ children }) {
   const pathname = usePathname();
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const tBrand = useTranslations("brand");
   const tShell = useTranslations("shell");
   const tNav = useTranslations("nav");
@@ -36,6 +72,48 @@ export function DashboardShell({ children }) {
   const coreLanes = navigationItems.filter((item) => (item.group || "core") === "core");
   const utilityLanes = navigationItems.filter((item) => item.group === "utility");
   const sectionViews = currentSection.children?.length ? currentSection.children : [];
+  const paletteItems = useMemo(() => {
+    const navigationEntries = navigationItems.flatMap((item) => {
+      const sectionCopy = resolveNavCopy(tNav, item);
+      const sectionEntries = [
+        {
+          href: item.href === "/dashboard/command" ? "/dashboard/command-center" : item.href,
+          label: sectionCopy.label,
+          description: sectionCopy.description,
+          section: (item.group || "core") === "utility" ? "Utility" : "Lane",
+          keywords: `${item.label || ""} ${item.description || ""}`,
+        },
+      ];
+
+      const childEntries =
+        item.children?.map((view) => {
+          const viewCopy = resolveNavCopy(tNav, view);
+          return {
+            href: view.href,
+            label: `${sectionCopy.label} · ${viewCopy.label}`,
+            description: viewCopy.description || sectionCopy.description,
+            section: sectionCopy.label,
+            keywords: `${view.label || ""} ${view.description || ""}`,
+          };
+        }) ?? [];
+
+      return [...sectionEntries, ...childEntries];
+    });
+
+    const actionEntries = shellActions.map((action) => ({
+      href: action.href === "/dashboard/command" ? "/dashboard/command-center" : action.href,
+      label: resolveActionLabel(tAction, action),
+      description: action.label || "Quick action",
+      section: "Action",
+      keywords: `${action.label || ""} ${action.href || ""}`,
+    }));
+
+    return [...navigationEntries, ...actionEntries];
+  }, [tAction, tNav]);
+
+  function openPalette() {
+    setIsPaletteOpen(true);
+  }
 
   return (
     <div className="hub-shell">
@@ -105,6 +183,10 @@ export function DashboardShell({ children }) {
         <div className="hub-shell__nav-foot">
           <StatusChip tone="accent">{tShell("protectedShellPill")}</StatusChip>
           <p>{sectionDescription}</p>
+          <button type="button" className="hub-shell__nav-command" onClick={openPalette}>
+            <span>Quick jump</span>
+            <kbd>⌘/Ctrl + K</kbd>
+          </button>
         </div>
       </aside>
 
@@ -126,15 +208,33 @@ export function DashboardShell({ children }) {
           <div className="hub-shell__topbar-actions">
             <LanguageSwitcher />
             {shellActions.map((action) => (
-              <Link key={action.href} href={action.href} className="hub-shell__topbar-action-link">
+              action.href === "/dashboard/command" ? (
                 <Button
-                  variant={BUTTON_VARIANT[action.tone] || "secondary"}
+                  key={action.href}
+                  type="button"
+                  variant="ghost"
                   surface="dark"
-                  tabIndex={-1}
+                  className="hub-shell__command-trigger-button"
+                  onClick={openPalette}
                 >
-                  {tAction(action.i18nKey)}
+                  <span>{resolveActionLabel(tAction, action)}</span>
+                  <kbd>⌘K</kbd>
                 </Button>
-              </Link>
+              ) : (
+                <Link
+                  key={action.href}
+                  href={action.href}
+                  className="hub-shell__topbar-action-link"
+                >
+                  <Button
+                    variant={BUTTON_VARIANT[action.tone] || "secondary"}
+                    surface="dark"
+                    tabIndex={-1}
+                  >
+                    {resolveActionLabel(tAction, action)}
+                  </Button>
+                </Link>
+              )
             ))}
           </div>
         </header>
@@ -163,6 +263,12 @@ export function DashboardShell({ children }) {
 
         <main className="hub-shell__content">{children}</main>
       </div>
+
+      <CommandPalette
+        items={paletteItems}
+        isOpen={isPaletteOpen}
+        onOpenChange={setIsPaletteOpen}
+      />
     </div>
   );
 }

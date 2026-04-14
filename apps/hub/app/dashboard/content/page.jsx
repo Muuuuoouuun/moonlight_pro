@@ -19,7 +19,7 @@ export default async function ContentPage({ searchParams }) {
 
   return (
     <>
-      <section className="summary-grid" aria-label="Content summary metrics">
+      <section className="summary-grid" aria-label="콘텐츠 요약 지표">
         {contentSummary.map((metric) => (
           <SummaryCard key={metric.title} {...metric} />
         ))}
@@ -30,20 +30,20 @@ export default async function ContentPage({ searchParams }) {
           <ContentBrandReference reference={brandReference} />
 
           <SectionCard
-          kicker="Pipeline"
-          title="Content flow"
+          kicker="파이프라인"
+          title="콘텐츠 흐름"
           description={
             selectedBrand.value === "all"
-              ? "Keep the production path small enough that work moves without rethinking the whole system."
-              : `${selectedBrand.label} scope is selected. Shared rows stay visible until brand metadata is wired into the content tables.`
+              ? "생산 경로를 작게 유지해서 시스템 전체를 다시 해석하지 않아도 일이 앞으로 움직이게 합니다."
+              : `${selectedBrand.label} 범위를 선택했습니다. 브랜드 메타데이터가 콘텐츠 테이블에 연결되기 전까지는 공용 행도 함께 보입니다.`
           }
           action={
             <>
               <Link className="button button-secondary" href={queueHref}>
-                Open queue
+                큐 열기
               </Link>
               <Link className="button button-primary" href={studioHref}>
-                Open studio
+                스튜디오 열기
               </Link>
             </>
           }
@@ -74,9 +74,9 @@ export default async function ContentPage({ searchParams }) {
           </SectionCard>
 
           <SectionCard
-            kicker="Variants"
-            title="Current output pack"
-            description="Different formats should still read like they came from the same operating mind."
+            kicker="변형본"
+            title="현재 산출물 팩"
+            description="포맷이 달라도 같은 운영 감각에서 나온 결과처럼 읽혀야 합니다."
           >
             <div className="project-grid">
               {contentVariants.map((item) => (
@@ -101,9 +101,9 @@ export default async function ContentPage({ searchParams }) {
 
         <div className="stack">
           <SectionCard
-            kicker="Publish lane"
-            title="Recent distribution history"
-            description="Publishing should say what moved, when it moved, and where the result landed."
+            kicker="발행 레인"
+            title="최근 배포 이력"
+            description="발행은 무엇이, 언제, 어디로 나갔는지 바로 말해줘야 합니다."
           >
             <div className="timeline">
               {publishQueue.map((item) => (
@@ -122,9 +122,9 @@ export default async function ContentPage({ searchParams }) {
           </SectionCard>
 
           <SectionCard
-            kicker="Attention"
-            title="What needs operator judgment"
-            description="This list should stay short enough that the next move stays obvious."
+            kicker="주의"
+            title="운영 판단이 필요한 것"
+            description="이 목록은 짧게 유지되어야 다음 움직임이 바로 보입니다."
           >
             <ul className="note-list">
               {contentAttention.map((item) => (
@@ -142,36 +142,36 @@ export default async function ContentPage({ searchParams }) {
           </SectionCard>
 
           <SectionCard
-            kicker="Loop"
-            title="Next move"
-            description="The content lane should always point at the next concrete action."
+            kicker="루프"
+            title="다음 움직임"
+            description="콘텐츠 레인은 언제나 다음 구체적 액션을 가리켜야 합니다."
           >
             <div className="template-grid">
               <div className="template-row">
                 <div>
-                  <strong>Draft the next card-news piece</strong>
-                  <p>Move straight into the studio with a template and channel already selected.</p>
+                  <strong>다음 카드뉴스 초안 시작</strong>
+                  <p>템플릿과 채널이 이미 잡힌 상태로 바로 스튜디오에 들어갑니다.</p>
                 </div>
                 <Link className="button button-primary" href={studioHref}>
-                  Studio
+                  스튜디오
                 </Link>
               </div>
               <div className="template-row">
                 <div>
-                  <strong>Inspect the machine</strong>
-                  <p>Check whether recent runs or webhooks are slowing the publish loop down.</p>
+                  <strong>엔진 상태 점검</strong>
+                  <p>최근 런이나 웹훅이 발행 루프를 느리게 만드는지 확인합니다.</p>
                 </div>
                 <Link className="button button-secondary" href="/dashboard/automations">
-                  Automations
+                  자동화
                 </Link>
               </div>
               <div className="template-row">
                 <div>
-                  <strong>Close the failure loop</strong>
-                  <p>Review the logs when content work stalls or the handoff feels unclear.</p>
+                  <strong>실패 루프 닫기</strong>
+                  <p>콘텐츠 작업이 막히거나 핸드오프가 흐릴 때 로그를 검토합니다.</p>
                 </div>
                 <Link className="button button-ghost" href="/dashboard/evolution/logs">
-                  Logs
+                  로그
                 </Link>
               </div>
             </div>

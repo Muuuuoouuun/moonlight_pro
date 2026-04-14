@@ -2,7 +2,13 @@ import Link from "next/link";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { SummaryCard } from "@/components/dashboard/summary-card";
 import { ProjectUpdateForm } from "@/components/forms/project-update-form";
-import { resolveWorkContext, scopeMappedItemsByWorkContext } from "@/lib/dashboard-contexts";
+import {
+  buildContentStudioHref,
+  getProjectStudioConfig,
+  inferWorkContextFromProject,
+  resolveWorkContext,
+  scopeMappedItemsByWorkContext,
+} from "@/lib/dashboard-contexts";
 import { getProjectsPageData } from "@/lib/server-data";
 
 const VIEW_OPTIONS = [
@@ -110,6 +116,49 @@ function buildProjectsHref(searchParams, overrides = {}) {
 
   const query = params.toString();
   return query ? `/dashboard/work/projects?${query}` : "/dashboard/work/projects";
+}
+
+function buildScopedWorkHref(path, projectValue) {
+  if (!projectValue || projectValue === "all") {
+    return path;
+  }
+
+  const params = new URLSearchParams({
+    project: projectValue,
+  });
+
+  return `${path}?${params.toString()}`;
+}
+
+function buildPublishHref(brandValue) {
+  if (!brandValue || brandValue === "all") {
+    return "/dashboard/content/publish";
+  }
+
+  const params = new URLSearchParams({
+    brand: brandValue,
+  });
+
+  return `/dashboard/content/publish?${params.toString()}`;
+}
+
+function getProjectLaneLinks(project) {
+  const context = inferWorkContextFromProject(project);
+  const studioConfig = getProjectStudioConfig(context.value);
+
+  return {
+    context,
+    studioConfig,
+    studioHref: buildContentStudioHref({
+      project: context.value,
+      brand: studioConfig.brand,
+      template: studioConfig.templateId,
+      channel: studioConfig.channel,
+    }),
+    managementHref: buildScopedWorkHref("/dashboard/work/management", context.value),
+    pmsHref: buildScopedWorkHref("/dashboard/work/pms", context.value),
+    publishHref: buildPublishHref(studioConfig.brand),
+  };
 }
 
 function resolveView(value) {
@@ -225,6 +274,19 @@ export default async function WorkProjectsPage({ searchParams }) {
     selectedFocus.value === "all"
       ? "The full project portfolio is visible."
       : `${selectedFocus.label} view is active. ${selectedFocus.description}`;
+  const selectedStudioConfig = getProjectStudioConfig(selectedProject.value);
+  const selectedStudioHref = buildContentStudioHref({
+    project: selectedProject.value,
+    brand: selectedStudioConfig.brand,
+    template: selectedStudioConfig.templateId,
+    channel: selectedStudioConfig.channel,
+  });
+  const selectedManagementHref = buildScopedWorkHref(
+    "/dashboard/work/management",
+    selectedProject.value,
+  );
+  const selectedPmsHref = buildScopedWorkHref("/dashboard/work/pms", selectedProject.value);
+  const selectedPublishHref = buildPublishHref(selectedStudioConfig.brand);
 
   return (
     <div className="app-page">
@@ -324,6 +386,90 @@ export default async function WorkProjectsPage({ searchParams }) {
         </SectionCard>
 
         <SectionCard
+          kicker="Connected"
+          title="프로젝트를 다음 레인으로 바로 밀기"
+          description="프로젝트 화면 안에서 바로 콘텐츠, 매니지먼트, PMS로 넘어갈 수 있어야 실제 운영이 덜 끊깁니다."
+        >
+          <div className="project-grid">
+            <article className="project-card">
+              <div className="project-head">
+                <div>
+                  <h3>Content Studio</h3>
+                  <p>{selectedStudioConfig.studioTitle}</p>
+                </div>
+                <span className="legend-chip" data-tone="blue">
+                  Studio
+                </span>
+              </div>
+              <p className="check-detail">{selectedStudioConfig.storyAngle}</p>
+              <div className="hero-actions">
+                <Link className="button button-secondary" href={selectedStudioHref}>
+                  Open studio
+                </Link>
+              </div>
+            </article>
+
+            <article className="project-card">
+              <div className="project-head">
+                <div>
+                  <h3>Management</h3>
+                  <p>Compare execution, risk, and repo motion</p>
+                </div>
+                <span className="legend-chip" data-tone="warning">
+                  Review
+                </span>
+              </div>
+              <p className="check-detail">
+                프로젝트가 실제로 움직였는지, 콘텐츠 작업과 실행 신호가 맞물리는지 바로 확인합니다.
+              </p>
+              <div className="hero-actions">
+                <Link className="button button-secondary" href={selectedManagementHref}>
+                  Open management
+                </Link>
+              </div>
+            </article>
+
+            <article className="project-card">
+              <div className="project-head">
+                <div>
+                  <h3>PMS</h3>
+                  <p>Record the next operating move</p>
+                </div>
+                <span className="legend-chip" data-tone="muted">
+                  Cadence
+                </span>
+              </div>
+              <p className="check-detail">
+                카드뉴스나 프로젝트 업데이트가 실제 루틴과 후속 액션으로 이어졌는지 다시 붙입니다.
+              </p>
+              <div className="hero-actions">
+                <Link className="button button-ghost" href={selectedPmsHref}>
+                  Open PMS
+                </Link>
+              </div>
+            </article>
+
+            <article className="project-card">
+              <div className="project-head">
+                <div>
+                  <h3>Publish lane</h3>
+                  <p>Move ready drafts into distribution</p>
+                </div>
+                <span className="legend-chip" data-tone="green">
+                  Ship
+                </span>
+              </div>
+              <p className="check-detail">{selectedStudioConfig.publishHint}</p>
+              <div className="hero-actions">
+                <Link className="button button-secondary" href={selectedPublishHref}>
+                  Open publish
+                </Link>
+              </div>
+            </article>
+          </div>
+        </SectionCard>
+
+        <SectionCard
           kicker="Portfolio"
           title={selectedView.value === "board" ? "Status lanes" : "Progress list"}
           description={
@@ -346,21 +492,36 @@ export default async function WorkProjectsPage({ searchParams }) {
 
                   <div className="lane-list">
                     {lane.items.length ? (
-                      lane.items.map((project) => (
-                        <div className="lane-item lane-item-project" key={project.title}>
-                          <div className="lane-item-head">
-                            <strong>{project.title}</strong>
-                            <span className="legend-chip" data-tone={project.statusTone}>
-                              {project.progress}%
-                            </span>
+                      lane.items.map((project) => {
+                        const projectLinks = getProjectLaneLinks(project);
+
+                        return (
+                          <div className="lane-item lane-item-project" key={project.title}>
+                            <div className="lane-item-head">
+                              <strong>{project.title}</strong>
+                              <span className="legend-chip" data-tone={project.statusTone}>
+                                {project.progress}%
+                              </span>
+                            </div>
+                            <span>{project.owner}</span>
+                            <p>{project.nextAction}</p>
+                            <p className="tiny muted">
+                              {project.milestone} · {project.risk}
+                            </p>
+                            <div className="lane-item-actions">
+                              <Link className="inline-action-button" href={projectLinks.studioHref}>
+                                Studio
+                              </Link>
+                              <Link
+                                className="inline-action-button"
+                                href={projectLinks.managementHref}
+                              >
+                                Manage
+                              </Link>
+                            </div>
                           </div>
-                          <span>{project.owner}</span>
-                          <p>{project.nextAction}</p>
-                          <p className="tiny muted">
-                            {project.milestone} · {project.risk}
-                          </p>
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <div className="lane-item lane-item-empty">
                         <strong>No projects here</strong>
@@ -373,52 +534,74 @@ export default async function WorkProjectsPage({ searchParams }) {
             </div>
           ) : (
             <div className="portfolio-list">
-              {displayedProjects.map((project) => (
-                <article className="portfolio-row" key={project.title}>
-                  <div className="portfolio-row-main">
-                    <div className="project-head">
-                      <div>
-                        <h3>{project.title}</h3>
-                        <p>{project.owner}</p>
+              {displayedProjects.map((project) => {
+                const projectLinks = getProjectLaneLinks(project);
+
+                return (
+                  <article className="portfolio-row" key={project.title}>
+                    <div className="portfolio-row-main">
+                      <div className="project-head">
+                        <div>
+                          <h3>{project.title}</h3>
+                          <p>{project.owner}</p>
+                        </div>
+                        <div className="inline-legend">
+                          <span className="legend-chip" data-tone={project.statusTone}>
+                            {project.statusLabel}
+                          </span>
+                          <span className="legend-chip" data-tone="muted">
+                            {project.progress}%
+                          </span>
+                        </div>
                       </div>
-                      <div className="inline-legend">
-                        <span className="legend-chip" data-tone={project.statusTone}>
-                          {project.statusLabel}
-                        </span>
-                        <span className="legend-chip" data-tone="muted">
-                          {project.progress}%
-                        </span>
+
+                      <div className="progress-row">
+                        <div className="progress-track" aria-hidden="true">
+                          <span style={{ width: `${project.progress}%` }} />
+                        </div>
+                        <strong>{project.progress}%</strong>
                       </div>
                     </div>
 
-                    <div className="progress-row">
-                      <div className="progress-track" aria-hidden="true">
-                        <span style={{ width: `${project.progress}%` }} />
+                    <div className="portfolio-row-meta">
+                      <div className="portfolio-row-block">
+                        <span>Milestone</span>
+                        <strong>{project.milestone}</strong>
                       </div>
-                      <strong>{project.progress}%</strong>
+                      <div className="portfolio-row-block">
+                        <span>Next Action</span>
+                        <strong>{project.nextAction}</strong>
+                      </div>
+                      <div className="portfolio-row-block">
+                        <span>Task Lane</span>
+                        <strong>{project.taskSummary}</strong>
+                      </div>
+                      <div className="portfolio-row-block">
+                        <span>Risk</span>
+                        <strong>{project.risk}</strong>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="portfolio-row-meta">
-                    <div className="portfolio-row-block">
-                      <span>Milestone</span>
-                      <strong>{project.milestone}</strong>
+                    <div className="portfolio-row-actions">
+                      <span className="muted tiny">{projectLinks.studioConfig.studioTitle}</span>
+                      <div className="inline-action-row">
+                        <Link className="inline-action-button" href={projectLinks.studioHref}>
+                          Open studio
+                        </Link>
+                        <Link className="inline-action-button" href={projectLinks.managementHref}>
+                          Open management
+                        </Link>
+                        <Link className="inline-action-button" href={projectLinks.pmsHref}>
+                          Open PMS
+                        </Link>
+                        <Link className="inline-action-button" href={projectLinks.publishHref}>
+                          Open publish
+                        </Link>
+                      </div>
                     </div>
-                    <div className="portfolio-row-block">
-                      <span>Next Action</span>
-                      <strong>{project.nextAction}</strong>
-                    </div>
-                    <div className="portfolio-row-block">
-                      <span>Task Lane</span>
-                      <strong>{project.taskSummary}</strong>
-                    </div>
-                    <div className="portfolio-row-block">
-                      <span>Risk</span>
-                      <strong>{project.risk}</strong>
-                    </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </SectionCard>

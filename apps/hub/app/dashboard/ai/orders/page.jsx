@@ -20,7 +20,8 @@ const PRIORITIES = [
 const LANES = ["Hub UX", "Engine", "Content", "Automations", "Revenue", "Work OS"];
 
 export default async function AiOrdersPage() {
-  const { openOrders, orderTemplates } = await getAiConsolePageData();
+  const { agents, openOrders, orderTemplates, quickOrderTemplates, recentRecalls } =
+    await getAiConsolePageData();
 
   const running = openOrders.filter((order) => order.status === "실행 중").length;
   const waitingReview = openOrders.filter((order) => order.status === "리뷰 대기").length;
@@ -30,11 +31,11 @@ export default async function AiOrdersPage() {
   return (
     <div className="app-page">
       <section className="page-head">
-        <p className="eyebrow">AI · Orders</p>
-        <h1>에이전트에게 바로 오더</h1>
+        <p className="eyebrow">Agent · Orders</p>
+        <h1>누구에게 무엇을 시킬지 빠르게 정하고 바로 큐에 넣는 자리</h1>
         <p>
-          챗은 대화, 카운슬은 협의, 여기는 실행 단위입니다. 오더는 타겟 에이전트, 우선순위, 레인, 마감을 달고
-          큐로 들어가며, 작업 생성과 수정도 같은 폼에서 처리합니다.
+          좋은 Orders 화면은 긴 설명보다 빠른 배정이 먼저입니다. 작업 종류를 고르고, 적합한 에이전트를 보고,
+          컨텍스트를 붙여 보내는 흐름이 가장 중요합니다.
         </p>
       </section>
 
@@ -42,28 +43,28 @@ export default async function AiOrdersPage() {
         <SummaryCard
           title="실행 중"
           value={String(running)}
-          detail="에이전트가 지금 붙잡고 있는 오더."
+          detail="에이전트가 지금 붙잡고 있는 오더 수."
           badge="Live"
           tone="blue"
         />
         <SummaryCard
           title="리뷰 대기"
           value={String(waitingReview)}
-          detail="에이전트가 결과를 내놓고 승인 대기 중인 오더."
+          detail="결과는 나왔고 승인이나 확인이 필요한 오더 수."
           badge="Review"
           tone="warning"
         />
         <SummaryCard
           title="큐 대기"
           value={String(queued)}
-          detail="배정되지 않았거나 선행 작업이 안 끝난 오더."
+          detail="배정되거나 선행 작업이 끝나기를 기다리는 오더 수."
           badge="Queue"
           tone="muted"
         />
         <SummaryCard
           title="오늘 완료"
           value={String(done)}
-          detail="에이전트가 오늘 마친 오더 수."
+          detail="오늘 처리 완료된 오더 수."
           badge="Done"
           tone="green"
         />
@@ -71,9 +72,61 @@ export default async function AiOrdersPage() {
 
       <div className="split-grid">
         <SectionCard
+          kicker="Quick start"
+          title="자주 쓰는 빠른 오더"
+          description="빈 폼보다 빠른 선택지가 먼저 보이도록, 자주 쓰는 작업 유형을 위에 둡니다."
+        >
+          <div className="agent-template-list">
+            {quickOrderTemplates.map((template) => (
+              <article className="agent-template-card" key={template.id}>
+                <div>
+                  <strong>{template.title}</strong>
+                  <p>{template.prompt}</p>
+                </div>
+                <div className="agent-template-meta">
+                  <span className="legend-chip" data-tone="blue">
+                    {template.target}
+                  </span>
+                  <span className="legend-chip" data-tone="warning">
+                    {template.defaultPriority}
+                  </span>
+                  <span className="legend-chip" data-tone="muted">
+                    {template.shortcut}
+                  </span>
+                </div>
+              </article>
+            ))}
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          kicker="Dispatch hints"
+          title="지금 누구에게 보내기 좋은가"
+          description="상태, 강점, 최근 작업을 같이 보여줘서 오더 배정을 빠르게 만듭니다."
+        >
+          <ul className="note-list">
+            {agents.map((agent) => (
+              <li className="note-row" key={agent.id}>
+                <div>
+                  <strong>{agent.name}</strong>
+                  <p>
+                    {agent.specialties.slice(0, 2).join(" · ")} · 최근 {agent.lastShip}
+                  </p>
+                </div>
+                <span className="legend-chip" data-tone={agent.workloadState === "hot" ? "warning" : "green"}>
+                  {agent.workloadState}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      </div>
+
+      <div className="split-grid">
+        <SectionCard
           kicker="New Order"
-          title="오더 때리기"
-          description="한 번에 하나의 결과만 나오도록 — 타겟, 제목, 마감, 노트, 이렇게 네 칸이면 충분합니다."
+          title="오더 만들기"
+          description="한 번에 하나의 결과만 나오도록, 타겟, 제목, 마감, 지시사항만 먼저 받습니다."
         >
           <form className="ai-order-form" aria-label="Dispatch a new order">
             <div className="ai-order-form-grid">
@@ -85,7 +138,7 @@ export default async function AiOrdersPage() {
                   id="order-title"
                   name="title"
                   type="text"
-                  placeholder="예: AI 콘솔 오더 폼 실제 POST 배선"
+                  placeholder="예: Agent 탭 Orders 화면 실제 POST 배선"
                   disabled
                 />
               </div>
@@ -144,7 +197,7 @@ export default async function AiOrdersPage() {
                   id="order-note"
                   name="note"
                   rows={4}
-                  placeholder="무엇을 원하고, 어떤 파일/범위를 건드리며, 완료의 기준이 무엇인지."
+                  placeholder="원하는 결과, 건드릴 범위, 완료 기준을 짧게 적습니다."
                   disabled
                 />
               </div>
@@ -167,10 +220,25 @@ export default async function AiOrdersPage() {
         </SectionCard>
 
         <SectionCard
-          kicker="Templates"
-          title="반복 오더 템플릿"
-          description="자주 쓰는 오더는 템플릿으로 굳혀둡니다. 클릭하면 위 폼에 채워집니다."
+          kicker="Context"
+          title="바로 붙일 수 있는 이전 문맥"
+          description="최근 재호출된 작업은 새 오더에 컨텍스트로 바로 붙여 보내기 좋습니다."
         >
+          <ul className="note-list">
+            {recentRecalls.map((recall) => (
+              <li className="note-row" key={recall.id}>
+                <div>
+                  <strong>{recall.title}</strong>
+                  <p>
+                    {recall.reason} · {recall.requestedAt}
+                  </p>
+                </div>
+                <span className="legend-chip" data-tone="muted">
+                  {recall.status}
+                </span>
+              </li>
+            ))}
+          </ul>
           <ul className="note-list">
             {orderTemplates.map((template) => (
               <li className="note-row" key={template.id}>
@@ -192,10 +260,10 @@ export default async function AiOrdersPage() {
       <SectionCard
         kicker="Open Orders"
         title="오픈 오더"
-        description="카드 하나 = 하나의 실행 단위. 상태, 마감, 에이전트, 노트까지 한 장에서 드러냅니다."
+        description="카드 하나가 하나의 실행 단위입니다. 상태, 마감, 에이전트, 메모를 같은 장에서 읽습니다."
         action={
           <Link className="button button-ghost" href="/dashboard/ai">
-            Overview로 →
+            Agent Home으로 →
           </Link>
         }
       >

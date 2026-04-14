@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { SectionCard } from "@/components/dashboard/section-card";
-import { SummaryCard } from "@/components/dashboard/summary-card";
 import { getAiConsolePageData } from "@/lib/server-data";
 
 function getAgentTone(status) {
@@ -16,135 +15,270 @@ function getAgentTone(status) {
   return "muted";
 }
 
+function getWorkloadTone(state) {
+  if (state === "overloaded") {
+    return "danger";
+  }
+  if (state === "hot") {
+    return "warning";
+  }
+  if (state === "warm") {
+    return "blue";
+  }
+  return "green";
+}
+
+function getVisualToken(token) {
+  if (token === "planner") return "Strategy desk";
+  if (token === "builder") return "Build rig";
+  if (token === "ops") return "Run dock";
+  return "Agent lane";
+}
+
 export default async function AiConsolePage() {
-  const { agents, openOrders, osPulse, councilSessions, chatThreads } =
-    await getAiConsolePageData();
+  const {
+    agents,
+    chatThreads,
+    councilSessions,
+    officeLayout,
+    openOrders,
+    osPulse,
+    quickOrderTemplates,
+    recentRecalls,
+  } = await getAiConsolePageData();
 
   const liveAgentCount = agents.filter(
     (agent) => agent.status === "ready" || agent.status === "live" || agent.status === "working",
   ).length;
-
+  const readyAgents = agents.filter((agent) => agent.status === "ready" || agent.status === "live");
+  const hotAgents = agents.filter((agent) => agent.workloadState === "hot" || agent.workloadState === "overloaded");
+  const reusableThreads = chatThreads.filter((thread) => thread.status !== "paused");
   const openOrderCount = openOrders.filter((order) => order.status !== "완료").length;
   const activeCouncilCount = councilSessions.filter((session) => session.status !== "완료").length;
   const unreadThreadCount = chatThreads.reduce((total, thread) => total + (thread.unread || 0), 0);
 
   return (
     <div className="app-page">
-      <section className="page-head">
-        <p className="eyebrow">AI Console</p>
-        <h1>에이전트 하나의 지휘탑</h1>
-        <p>
-          Claude와 Codex에게 바로 오더를 때리고, 두 모델이 상의하는 자리를 붙이고, 작업 생성과 자동화 상황을 같은
-          프레임 안에서 쫓아가기 위한 콘솔입니다.
-        </p>
-        <p className="page-context">
-          <strong>Signal first</strong>
-          <span>
-            먼저 "지금 뭐 돌아가고 있지?" 한 줄로 답하고, 그 다음에야 챗/카운슬/오더 뷰로 내려갑니다.
-          </span>
-        </p>
+      <section className="operator-header">
+        <p className="operator-header__eyebrow">Agent Home</p>
+        <h1>에이전트를 다시 부르고, 바로 오더를 내리는 운영 홈</h1>
+        <p>누가 바로 투입 가능한지, 누가 바쁜지, 어떤 스레드와 오더가 먼저 열려야 하는지를 첫 화면에서 바로 판단합니다.</p>
       </section>
 
-      <section className="summary-grid" aria-label="AI console summary">
-        <SummaryCard
-          title="활성 에이전트"
-          value={`${liveAgentCount} / ${agents.length}`}
-          detail="가용한 추론 레인 수. 과부하 레인은 오렌지로 표시됩니다."
-          badge="Agents"
-          tone="green"
-        />
-        <SummaryCard
-          title="오픈 오더"
-          value={String(openOrderCount)}
-          detail="실행 중이거나 리뷰 대기 중인 오더 — 완료된 오더는 제외."
-          badge="Orders"
-          tone="blue"
-        />
-        <SummaryCard
-          title="진행 중인 카운슬"
-          value={String(activeCouncilCount)}
-          detail="Claude와 Codex가 상의·검토하고 있는 주제 수."
-          badge="Council"
-          tone="warning"
-        />
-        <SummaryCard
-          title="읽지 않은 대화"
-          value={String(unreadThreadCount)}
-          detail="새 메시지가 쌓인 스레드 수 — 챗 레일에서 바로 확인하세요."
-          badge="Chat"
-          tone="muted"
-        />
+      <div className="operator-actions" aria-label="AI primary actions">
+        <Link className="button button-primary" href="/dashboard/ai/orders">
+          새 오더 만들기
+        </Link>
+        <Link className="button button-secondary" href="/dashboard/ai/chat">
+          스레드 이어가기
+        </Link>
+        <Link className="button button-secondary" href="/dashboard/ai/council">
+          카운슬 열기
+        </Link>
+      </div>
+
+      <section className="signal-strip" aria-label="Agent home summary">
+        <article className="signal-strip__item">
+          <span>Live agents</span>
+          <strong>{`${liveAgentCount} / ${agents.length}`}</strong>
+          <p>지금 바로 부를 수 있는 작업 파트너 수.</p>
+        </article>
+        <article className="signal-strip__item">
+          <span>Ready recall</span>
+          <strong>{String(readyAgents.length)}</strong>
+          <p>바로 재호출 가능한 레인.</p>
+        </article>
+        <article className="signal-strip__item">
+          <span>Hot workload</span>
+          <strong>{String(hotAgents.length)}</strong>
+          <p>재배정 판단이 먼저 필요한 바쁜 레인.</p>
+        </article>
+        <article className="signal-strip__item">
+          <span>Reusable threads</span>
+          <strong>{String(reusableThreads.length)}</strong>
+          <p>문맥을 이어붙일 수 있는 활성 스레드.</p>
+        </article>
       </section>
 
       <div className="split-grid">
         <SectionCard
-          kicker="Agents"
-          title="에이전트 보드"
-          description="누가 뭐에 붙어 있고, 지금 얼마나 여유가 있는지. 오더를 던지기 전에 한 번만 봅니다."
+          kicker="Quick dispatch"
+          title="지금 바로 보내는 액션"
+          description="요약보다 먼저, 다시 부르기와 빠른 배정이 첫 화면에 오도록 정리했습니다."
           action={
-            <div className="hero-actions">
-              <Link className="button button-primary" href="/dashboard/ai/orders">
-                오더 때리기
-              </Link>
-              <Link className="button button-secondary" href="/dashboard/ai/chat">
-                챗 열기
-              </Link>
-            </div>
+            <Link className="button button-ghost" href="/dashboard/ai/orders">
+              Orders 열기
+            </Link>
           }
         >
-          <div className="ai-agent-grid">
-            {agents.map((agent) => (
-              <article className="ai-agent-card" key={agent.id}>
-                <header className="ai-agent-head">
-                  <div>
-                    <p className="ai-agent-name">{agent.name}</p>
-                    <p className="ai-agent-role">{agent.role}</p>
-                  </div>
-                  <span className="legend-chip" data-tone={getAgentTone(agent.status)}>
-                    {agent.status}
+          <div className="agent-template-list">
+            {quickOrderTemplates.map((template) => (
+              <article className="agent-template-card" key={template.id}>
+                <div>
+                  <strong>{template.title}</strong>
+                  <p>{template.prompt}</p>
+                </div>
+                <div className="agent-template-meta">
+                  <span className="legend-chip" data-tone="blue">
+                    {template.target}
                   </span>
-                </header>
-                <dl className="ai-agent-stats">
-                  <div>
-                    <dt>Latency</dt>
-                    <dd>{agent.latency}</dd>
-                  </div>
-                  <div>
-                    <dt>Load</dt>
-                    <dd>{agent.load}</dd>
-                  </div>
-                </dl>
-                <p className="ai-agent-focus">{agent.focus}</p>
+                  <span className="legend-chip" data-tone="muted">
+                    {template.shortcut}
+                  </span>
+                  <span className="legend-chip" data-tone="warning">
+                    {template.defaultPriority}
+                  </span>
+                </div>
               </article>
             ))}
           </div>
         </SectionCard>
 
         <SectionCard
-          kicker="OS Pulse"
-          title="OS · 자동화 스냅샷"
-          description="다른 탭을 열지 않아도 지금 OS가 어떤 상태인지 한 번에 잡히도록 — 작업, 자동화, 콘텐츠, 매출 네 축."
+          kicker="Recent recall"
+          title="방금 다시 불린 에이전트"
+          description="최근 재호출 흐름을 먼저 보여줘서, 같은 맥락을 다시 쓰기 쉽게 만듭니다."
         >
-          <ul className="note-list">
-            {osPulse.map((pulse) => (
-              <li className="note-row" key={pulse.label}>
-                <div>
-                  <strong>{pulse.label}</strong>
-                  <p>{pulse.detail}</p>
-                </div>
-                <span className="legend-chip" data-tone={pulse.tone}>
-                  {pulse.value}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <div className="agent-recall-stack">
+            {recentRecalls.slice(0, 3).map((recall) => {
+              const agent = agents.find((item) => item.id === recall.agentId);
+              return (
+                <article className="agent-recall-card" key={recall.id}>
+                  <div className="agent-recall-head">
+                    <div>
+                      <strong>{agent?.name}</strong>
+                      <p>{recall.title}</p>
+                    </div>
+                    <span className="legend-chip" data-tone={getAgentTone(agent?.status)}>
+                      {recall.status}
+                    </span>
+                  </div>
+                  <p className="agent-recall-meta">
+                    {recall.reason} · {recall.requestedAt}
+                  </p>
+                </article>
+              );
+            })}
+          </div>
         </SectionCard>
       </div>
 
       <SectionCard
+        kicker="Office"
+        title="오피스 플로어"
+        description="누가 어느 역할에 붙어 있는지, 텍스트 목록보다 빠르게 훑을 수 있게 배치합니다."
+      >
+        <div className="agent-office-grid">
+          {officeLayout.zones.map((zone) => (
+            <article className="agent-office-zone" key={zone.id}>
+              <header className="agent-office-zone-head">
+                <div>
+                  <strong>{zone.label}</strong>
+                  <p>{zone.description}</p>
+                </div>
+                <span className="legend-chip" data-tone={zone.tone}>
+                  {zone.occupiedAgentIds.length} occupied
+                </span>
+              </header>
+              <div className="agent-office-seats">
+                {zone.occupiedAgentIds.map((agentId) => {
+                  const agent = agents.find((item) => item.id === agentId);
+                  if (!agent) return null;
+
+                  return (
+                    <article className="agent-office-seat" key={agent.id}>
+                      <div className="agent-office-seat-top">
+                        <span className="agent-office-token">{getVisualToken(agent.visualToken)}</span>
+                        <span className="legend-chip" data-tone={getWorkloadTone(agent.workloadState)}>
+                          {agent.workloadState}
+                        </span>
+                      </div>
+                      <strong>{agent.name}</strong>
+                      <p>{agent.currentTaskTitle}</p>
+                    </article>
+                  );
+                })}
+              </div>
+            </article>
+          ))}
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        kicker="Roster"
+        title="다시 부를 에이전트 로스터"
+        description="누가 무엇을 잘하고, 지금 어디에 붙어 있는지, 마지막으로 무엇을 마쳤는지 한 번에 읽히게 합니다."
+      >
+        <div className="ai-agent-grid">
+          {agents.map((agent) => (
+            <article className="ai-agent-card ai-agent-card-detailed" key={agent.id}>
+              <header className="ai-agent-head">
+                <div>
+                  <p className="ai-agent-name">{agent.name}</p>
+                  <p className="ai-agent-role">{agent.role}</p>
+                </div>
+                <span className="legend-chip" data-tone={getAgentTone(agent.status)}>
+                  {agent.status}
+                </span>
+              </header>
+              <div className="agent-card-chip-row">
+                <span className="legend-chip" data-tone={getWorkloadTone(agent.workloadState)}>
+                  {agent.workloadState}
+                </span>
+                <span className="legend-chip" data-tone="muted">
+                  {agent.workspace}
+                </span>
+              </div>
+              <dl className="ai-agent-stats">
+                <div>
+                  <dt>Latency</dt>
+                  <dd>{agent.latency}</dd>
+                </div>
+                <div>
+                  <dt>Load</dt>
+                  <dd>{agent.load}</dd>
+                </div>
+                <div>
+                  <dt>Queue</dt>
+                  <dd>{agent.queueDepth}</dd>
+                </div>
+                <div>
+                  <dt>Last active</dt>
+                  <dd>{agent.lastActiveAt}</dd>
+                </div>
+              </dl>
+              <p className="ai-agent-focus">{agent.focus}</p>
+              <div className="agent-card-block">
+                <strong>잘하는 일</strong>
+                <div className="agent-card-chip-row">
+                  {agent.specialties.map((specialty) => (
+                    <span className="legend-chip" data-tone="muted" key={specialty}>
+                      {specialty}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="agent-card-block">
+                <strong>최근 산출물</strong>
+                <p>{agent.lastShip}</p>
+              </div>
+              <div className="hero-actions agent-card-actions">
+                <Link className="button button-primary" href="/dashboard/ai/orders">
+                  다시 부르기
+                </Link>
+                <Link className="button button-secondary" href="/dashboard/ai/chat">
+                  컨텍스트 보기
+                </Link>
+              </div>
+            </article>
+          ))}
+        </div>
+      </SectionCard>
+
+      <SectionCard
         kicker="Open Orders"
         title="실행 중인 오더"
-        description="지금 움직이고 있는 오더와 그에 붙은 에이전트. 카드 하나 = 한 단위의 작업."
+        description="지금 움직이고 있는 오더와 그에 붙은 에이전트. 카드 하나가 하나의 실행 단위입니다."
         action={
           <Link className="button button-ghost" href="/dashboard/ai/orders">
             전체 오더로 →
@@ -186,41 +320,12 @@ export default async function AiConsolePage() {
 
       <div className="split-grid">
         <SectionCard
-          kicker="Council"
-          title="에이전트 상의 중"
-          description="Claude와 Codex가 하나의 주제를 놓고 주고받는 턴 로그. 결정까지의 과정을 숨기지 않습니다."
-          action={
-            <Link className="button button-ghost" href="/dashboard/ai/council">
-              카운슬로 →
-            </Link>
-          }
-        >
-          <div className="timeline">
-            {councilSessions.map((session) => (
-              <div className="timeline-item" key={session.id}>
-                <div className="inline-legend">
-                  <span className="legend-chip" data-tone={session.tone}>
-                    {session.status}
-                  </span>
-                  <span className="legend-chip" data-tone="muted">
-                    {session.members.join(" · ")}
-                  </span>
-                </div>
-                <strong>{session.topic}</strong>
-                <p>{session.turns[session.turns.length - 1]?.body}</p>
-                <span className="muted tiny">{session.turns.length}개의 턴</span>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          kicker="Chat"
-          title="최근 대화"
-          description="챗 레일에 쌓여 있는 대화. 읽지 않은 메시지가 있는 스레드부터 눈에 들어오게 합니다."
+          kicker="Reusable threads"
+          title="이어붙이기 좋은 스레드"
+          description="지난번 문맥을 살려 다시 돌리기 좋은 스레드부터 위에 둡니다."
           action={
             <Link className="button button-ghost" href="/dashboard/ai/chat">
-              챗으로 →
+              스레드로 →
             </Link>
           }
         >
@@ -239,6 +344,42 @@ export default async function AiConsolePage() {
               </li>
             ))}
           </ul>
+        </SectionCard>
+
+        <SectionCard
+          kicker="OS Pulse"
+          title="에이전트가 보고 있는 운영 스냅샷"
+          description="다른 탭을 열지 않아도 지금 OS가 어떤 상태인지 한 번에 잡히도록 묶습니다."
+          action={
+            <Link className="button button-ghost" href="/dashboard/ai/council">
+              카운슬 {activeCouncilCount}건 →
+            </Link>
+          }
+        >
+          <ul className="note-list">
+            {osPulse.map((pulse) => (
+              <li className="note-row" key={pulse.label}>
+                <div>
+                  <strong>{pulse.label}</strong>
+                  <p>{pulse.detail}</p>
+                </div>
+                <span className="legend-chip" data-tone={pulse.tone}>
+                  {pulse.value}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="agent-footer-strip">
+            <span className="legend-chip" data-tone="warning">
+              unread {unreadThreadCount}
+            </span>
+            <span className="legend-chip" data-tone="blue">
+              open orders {openOrderCount}
+            </span>
+            <span className="legend-chip" data-tone="green">
+              active council {activeCouncilCount}
+            </span>
+          </div>
         </SectionCard>
       </div>
     </div>

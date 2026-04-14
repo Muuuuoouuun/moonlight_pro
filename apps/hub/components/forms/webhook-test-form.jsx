@@ -14,7 +14,14 @@ function normalizeResponseTone(status) {
   return "danger";
 }
 
-export function WebhookTestForm({ defaultWorkspaceId = "", defaultEngineUrl = "" }) {
+export function WebhookTestForm({
+  defaultWorkspaceId = "",
+  defaultEngineUrl = "",
+  defaultTargetRoute = "generic",
+  defaultTitle = "Project webhook smoke test",
+  defaultSummary = "Smoke test fired from Hub OS to confirm project progress intake.",
+  defaultNextAction = "Verify webhook persistence in automation and log views.",
+}) {
   const [result, setResult] = useState(null);
   const [pending, setPending] = useState(false);
 
@@ -76,7 +83,7 @@ export function WebhookTestForm({ defaultWorkspaceId = "", defaultEngineUrl = ""
 
         <label className="field">
           <span>Target Route</span>
-          <select className="field-input" defaultValue="generic" name="targetRoute">
+          <select className="field-input" defaultValue={defaultTargetRoute} name="targetRoute">
             <option value="generic">generic /api/webhook/project</option>
             <option value="openclaw">shared /api/webhook/project/openclaw</option>
             <option value="moltbot">shared /api/webhook/project/moltbot</option>
@@ -85,14 +92,14 @@ export function WebhookTestForm({ defaultWorkspaceId = "", defaultEngineUrl = ""
 
         <label className="field field-span-2">
           <span>Webhook Title</span>
-          <input className="field-input" defaultValue="Project webhook smoke test" name="title" required />
+          <input className="field-input" defaultValue={defaultTitle} name="title" required />
         </label>
 
         <label className="field field-span-2">
           <span>Summary</span>
           <textarea
             className="field-textarea"
-            defaultValue="Smoke test fired from Hub OS to confirm project progress intake."
+            defaultValue={defaultSummary}
             name="summary"
             rows={3}
           />
@@ -115,7 +122,7 @@ export function WebhookTestForm({ defaultWorkspaceId = "", defaultEngineUrl = ""
 
         <label className="field field-span-2">
           <span>Next Action</span>
-          <input className="field-input" defaultValue="Verify webhook persistence in automation and log views." name="nextAction" />
+          <input className="field-input" defaultValue={defaultNextAction} name="nextAction" />
         </label>
 
         <label className="field">

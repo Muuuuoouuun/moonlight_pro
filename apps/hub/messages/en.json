@@ -26,7 +26,7 @@
     "openWork": "Open Work OS",
     "openStudio": "Open Studio",
     "openCommand": "Open Command",
-    "openAiConsole": "Open AI Console"
+    "openAiConsole": "Open Agents"
   },
   "nav": {
     "overview": {
@@ -177,17 +177,21 @@
       "label": "Command",
       "description": "Search, route, and dispatch work from one palette"
     },
+    "operations": {
+      "label": "Operations",
+      "description": "Unified console for AI dispatch, automation health, and action-required work"
+    },
     "ai": {
-      "label": "AI Console",
-      "description": "Chat, council, and direct orders to Claude and Codex"
+      "label": "Agents",
+      "description": "Recall agents, dispatch work, and watch the operating floor"
     },
     "aiOverview": {
       "label": "Overview",
-      "description": "Agent status, OS pulse, and open orders in one frame"
+      "description": "Roster, quick dispatch, and office pulse at a glance"
     },
     "aiChat": {
-      "label": "Chat",
-      "description": "Rail for talking directly to Claude and Codex"
+      "label": "Threads",
+      "description": "Reusable threads and direct messaging with active agents"
     },
     "aiCouncil": {
       "label": "Council",

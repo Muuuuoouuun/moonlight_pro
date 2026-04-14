@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+const EMAIL_DRAFT_STORAGE_KEY_PREFIX = "com-moon:email-composer-draft:v1";
+
 function findMatchingTemplate(templates, audience) {
   return (
     templates.find((item) => item.audience === audience) ??
@@ -91,6 +93,41 @@ function previewRecipient(segment, recipientName, recipientEmail) {
   return recipientName ? `${recipientName} <${recipientEmail}>` : recipientEmail;
 }
 
+function formatDraftTimestamp(value) {
+  if (!value) {
+    return "";
+  }
+
+  try {
+    return new Intl.DateTimeFormat("ko-KR", {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch {
+    return "";
+  }
+}
+
+function readStoredDraft(storageKey) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export function EmailComposer({
   segments,
   initialSegmentId,
@@ -100,6 +137,7 @@ export function EmailComposer({
   channels,
   defaultWorkspaceId = "",
 }) {
+  const storageKey = `${EMAIL_DRAFT_STORAGE_KEY_PREFIX}:${defaultWorkspaceId || "local"}`;
   const initialSegment =
     segments.find((item) => item.id === initialSegmentId) ?? segments[0];
   const [segmentId, setSegmentId] = useState(initialSegment.id);
@@ -128,12 +166,20 @@ export function EmailComposer({
   );
   const [pendingAction, setPendingAction] = useState("");
   const [result, setResult] = useState(null);
+  const [lastSavedAt, setLastSavedAt] = useState("");
 
   const subjectRef = useRef(null);
   const bodyRef = useRef(null);
+  const skipTemplateSyncRef = useRef(false);
+  const skipSegmentSyncRef = useRef(false);
+  const draftHydratedRef = useRef(false);
 
   useEffect(() => {
     if (!template) return;
+    if (skipTemplateSyncRef.current) {
+      skipTemplateSyncRef.current = false;
+      return;
+    }
     setSubject(template.subject);
     setBody(defaultBodyForTemplate(template));
     setResult(null);
@@ -141,6 +187,11 @@ export function EmailComposer({
   }, [template?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (skipSegmentSyncRef.current) {
+      skipSegmentSyncRef.current = false;
+      return;
+    }
+
     setRecipientName(segment.sample?.lead_name ?? "");
 
     if (segment.audience === "any") return;
@@ -151,6 +202,77 @@ export function EmailComposer({
       setStatusMessage(`${segment.label} 세그먼트에 맞춰 템플릿을 자동 추천했습니다.`);
     }
   }, [segmentId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const savedDraft = readStoredDraft(storageKey);
+    draftHydratedRef.current = true;
+
+    if (!savedDraft) {
+      return;
+    }
+
+    const nextSegmentId =
+      segments.find((item) => item.id === savedDraft.segmentId)?.id ?? initialSegment.id;
+    const nextTemplateId =
+      templates.find((item) => item.id === savedDraft.templateId)?.id ?? initialTemplate?.id ?? "";
+
+    skipSegmentSyncRef.current = true;
+    skipTemplateSyncRef.current = true;
+
+    setSegmentId(nextSegmentId);
+    setTemplateId(nextTemplateId);
+    setRecipientName(savedDraft.recipientName ?? initialSegment.sample?.lead_name ?? "");
+    setRecipientEmail(savedDraft.recipientEmail ?? "");
+    setSubject(savedDraft.subject ?? initialTemplate?.subject ?? "");
+    setBody(savedDraft.body ?? defaultBodyForTemplate(initialTemplate));
+    setActiveField(savedDraft.activeField === "subject" ? "subject" : "body");
+    setLastSavedAt(savedDraft.updatedAt ?? "");
+    setStatusMessage(
+      savedDraft.updatedAt
+        ? `로컬 초안 복구됨 · ${formatDraftTimestamp(savedDraft.updatedAt)}`
+        : "로컬 초안 복구됨",
+    );
+  }, [initialSegment.id, initialSegment.sample?.lead_name, initialTemplate, segments, storageKey, templates]);
+
+  useEffect(() => {
+    if (!draftHydratedRef.current) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      try {
+        const updatedAt = new Date().toISOString();
+        window.localStorage.setItem(
+          storageKey,
+          JSON.stringify({
+            version: 1,
+            segmentId,
+            templateId,
+            recipientName,
+            recipientEmail,
+            subject,
+            body,
+            activeField,
+            updatedAt,
+          }),
+        );
+        setLastSavedAt(updatedAt);
+      } catch {
+        // Ignore localStorage failures without breaking the form.
+      }
+    }, 700);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    activeField,
+    body,
+    recipientEmail,
+    recipientName,
+    segmentId,
+    storageKey,
+    subject,
+    templateId,
+  ]);
 
   function insertAtCursor(token) {
     const isSubject = activeField === "subject";
@@ -206,14 +328,76 @@ export function EmailComposer({
     setSubject(template.subject);
     setBody(defaultBodyForTemplate(template));
     setResult(null);
+    try {
+      window.localStorage.removeItem(storageKey);
+      setLastSavedAt("");
+    } catch {
+      // Ignore localStorage failures during reset.
+    }
     setStatusMessage("초안을 템플릿 기본값으로 되돌렸습니다.");
   }
 
   function saveDraft() {
+    const updatedAt = new Date().toISOString();
+
+    try {
+      window.localStorage.setItem(
+        storageKey,
+        JSON.stringify({
+          version: 1,
+          segmentId,
+          templateId,
+          recipientName,
+          recipientEmail,
+          subject,
+          body,
+          activeField,
+          updatedAt,
+        }),
+      );
+      setLastSavedAt(updatedAt);
+    } catch {
+      // Ignore localStorage failures on manual save.
+    }
+
     setResult(null);
     setStatusMessage(
-      `초안 저장 → "${template?.name ?? "Untitled"}" 의 사본으로 보관됩니다.`,
+      `초안 저장됨 · ${formatDraftTimestamp(updatedAt)} · "${template?.name ?? "Untitled"}"`,
     );
+  }
+
+  function applySegmentSample() {
+    if (!template) {
+      setStatusMessage("템플릿을 먼저 고르세요.");
+      return;
+    }
+
+    setRecipientName(segment.sample?.lead_name ?? "");
+    setSubject(template.subject);
+    setBody(defaultBodyForTemplate(template));
+    setActiveField("body");
+    setResult(null);
+    setStatusMessage(
+      `${segment.label} 샘플값을 다시 채웠습니다. 수신 이메일만 입력하면 바로 dry-run 할 수 있습니다.`,
+    );
+
+    requestAnimationFrame(() => {
+      bodyRef.current?.focus();
+    });
+  }
+
+  async function copyToClipboard(value, label) {
+    if (!value.trim()) {
+      setStatusMessage(`${label}이 비어 있어 복사할 내용이 없습니다.`);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(value);
+      setStatusMessage(`${label} 복사됨.`);
+    } catch {
+      setStatusMessage(`${label} 복사 실패. 브라우저 권한을 확인하세요.`);
+    }
   }
 
   async function runDeliveryAction(action) {
@@ -264,6 +448,12 @@ export function EmailComposer({
       setResult(data);
 
       if (data.status === "sent") {
+        try {
+          window.localStorage.removeItem(storageKey);
+          setLastSavedAt("");
+        } catch {
+          // Ignore storage cleanup failures after send.
+        }
         setStatusMessage(`실발송 완료 → ${channelLabel(channels, template.channel)} 채널.`);
         return;
       }
@@ -295,6 +485,49 @@ export function EmailComposer({
   const totalChars = body.length;
   const liveSendDisabled = pendingAction === "send" || template?.channel === "n8n";
   const dryRunDisabled = pendingAction === "dry-run";
+  const saveStatusLabel = lastSavedAt ? `자동 저장 ${formatDraftTimestamp(lastSavedAt)}` : "로컬 초안 없음";
+  const previewMailText = [
+    `To: ${previewRecipient(segment, recipientName, recipientEmail)}`,
+    `From: ${sample.signature}`,
+    `Subject: ${subjectPreview || "—"}`,
+    "",
+    bodyPreview || "—",
+  ].join("\n");
+
+  useEffect(() => {
+    const handleShortcut = (event) => {
+      const isModifierPressed = event.metaKey || event.ctrlKey;
+      if (!isModifierPressed) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+
+      if (key === "s") {
+        event.preventDefault();
+        saveDraft();
+        return;
+      }
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+
+        if (event.shiftKey) {
+          if (!liveSendDisabled) {
+            void runDeliveryAction("send");
+          }
+          return;
+        }
+
+        if (!dryRunDisabled) {
+          void runDeliveryAction("dry-run");
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [dryRunDisabled, liveSendDisabled, pendingAction, recipientEmail, saveDraft, subject, body]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="composer-shell">
@@ -441,6 +674,33 @@ export function EmailComposer({
             </div>
           </div>
 
+          <div className="hero-actions" aria-label="Composer quick actions">
+            <button type="button" className="button button-ghost" onClick={applySegmentSample}>
+              샘플 다시 채우기
+            </button>
+            <button
+              type="button"
+              className="button button-ghost"
+              onClick={() => void copyToClipboard(subjectPreview, "제목")}
+            >
+              제목 복사
+            </button>
+            <button
+              type="button"
+              className="button button-ghost"
+              onClick={() => void copyToClipboard(bodyPreview, "본문")}
+            >
+              본문 복사
+            </button>
+            <button
+              type="button"
+              className="button button-ghost"
+              onClick={() => void copyToClipboard(previewMailText, "미리보기")}
+            >
+              미리보기 복사
+            </button>
+          </div>
+
           <div className="composer-actions">
             <button type="button" className="button button-ghost" onClick={resetDraft}>
               초안 리셋
@@ -466,8 +726,14 @@ export function EmailComposer({
                 ? "n8n 예정"
                 : pendingAction === "send"
                   ? "발송 중..."
-                  : "즉시 발송"}
+                : "즉시 발송"}
             </button>
+          </div>
+          <div className="composer-helper-row">
+            <span className="composer-helper-chip">{saveStatusLabel}</span>
+            <span className="composer-helper-chip">⌘/Ctrl + S 저장</span>
+            <span className="composer-helper-chip">⌘/Ctrl + Enter dry-run</span>
+            <span className="composer-helper-chip">Shift + ⌘/Ctrl + Enter 발송</span>
           </div>
           <p className="composer-status" role="status" aria-live="polite">
             {statusMessage}

@@ -4,37 +4,37 @@ import { SummaryCard } from "@/components/dashboard/summary-card";
 
 const playbookFamilies = [
   {
-    title: "Delivery",
-    detail: "GitHub PRs, issue pressure, and work that needs a fast owner.",
-    count: "2 playbooks",
+    title: "전달",
+    detail: "GitHub PR, 이슈 압력, 빠른 담당 지정이 필요한 일.",
+    count: "플레이북 2개",
     tone: "blue",
     href: "/dashboard/work/pms",
   },
   {
-    title: "Planning",
-    detail: "Rhythm, roadmap, and the weekly reset loop.",
-    count: "1 playbook",
+    title: "계획",
+    detail: "리듬, 로드맵, 주간 리셋 루프.",
+    count: "플레이북 1개",
     tone: "muted",
     href: "/dashboard/work/roadmap",
   },
   {
-    title: "Content",
-    detail: "Brand publish loops, queue triage, and studio handoff rules.",
-    count: "1 playbook",
+    title: "콘텐츠",
+    detail: "브랜드 발행 루프, 큐 분류, 스튜디오 핸드오프 규칙.",
+    count: "플레이북 1개",
     tone: "green",
     href: "/dashboard/content/queue",
   },
   {
-    title: "Revenue",
-    detail: "Lead follow-up, account care, and deal movement checks.",
-    count: "1 playbook",
+    title: "매출",
+    detail: "리드 후속 대응, 계정 관리, 딜 이동 점검.",
+    count: "플레이북 1개",
     tone: "warning",
     href: "/dashboard/revenue/leads",
   },
   {
-    title: "Recovery",
-    detail: "Logs, failures, and anything that needs a human fast.",
-    count: "1 playbook",
+    title: "복구",
+    detail: "로그, 실패, 사람의 빠른 개입이 필요한 일.",
+    count: "플레이북 1개",
     tone: "danger",
     href: "/dashboard/evolution/issues",
   },
@@ -42,30 +42,30 @@ const playbookFamilies = [
 
 const whatToRunNow = [
   {
-    title: "Run the Daily Delivery Sweep",
-    reason: "Open PRs and blocked issues should be sorted before the day fragments.",
-    action: "Open PMS",
+    title: "데일리 전달 스윕 실행",
+    reason: "열린 PR과 막힌 이슈는 하루가 쪼개지기 전에 먼저 정리해야 합니다.",
+    action: "PMS 열기",
     href: "/dashboard/work/pms",
     tone: "blue",
   },
   {
-    title: "Run Content Publish Review",
-    reason: "Queued assets should either move to publish or be re-scoped quickly.",
-    action: "Open Content Queue",
+    title: "콘텐츠 발행 리뷰 실행",
+    reason: "큐에 있는 에셋은 빠르게 발행으로 넘기거나 다시 범위를 조정해야 합니다.",
+    action: "콘텐츠 큐 열기",
     href: "/dashboard/content/queue",
     tone: "green",
   },
   {
-    title: "Run the Weekly Planning Reset",
-    reason: "Roadmap risk stays easier to correct when the lane is reviewed on schedule.",
-    action: "Open Roadmap",
+    title: "주간 계획 리셋 실행",
+    reason: "로드맵 리스크는 일정한 주기로 리뷰할수록 수정하기 쉽습니다.",
+    action: "로드맵 열기",
     href: "/dashboard/work/roadmap",
     tone: "muted",
   },
   {
-    title: "Run Incident Escalation",
-    reason: "If logs or syncs look off, the recovery playbook should be the first move.",
-    action: "Open Logs",
+    title: "인시던트 에스컬레이션 실행",
+    reason: "로그나 동기화가 이상해 보이면 복구 플레이북이 첫 액션이어야 합니다.",
+    action: "로그 열기",
     href: "/dashboard/evolution/logs",
     tone: "danger",
   },
@@ -206,80 +206,80 @@ export default function PlaybooksPage() {
       <section className="hero">
         <div className="hero-grid">
           <div className="hero-copy">
-            <p className="eyebrow">Work OS</p>
-            <h1>Playbooks</h1>
+            <p className="eyebrow">워크 OS</p>
+            <h1>플레이북</h1>
             <p className="hero-lede">
-              A recurring SOP surface for work that should not be rediscovered every time. Each playbook
-              carries the trigger, the owner, the steps, and the automation hook in one place.
+              매번 다시 발견하면 안 되는 일을 위한 반복 SOP 화면입니다. 각 플레이북은
+              트리거, 담당자, 단계, 자동화 훅을 한곳에 담습니다.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href="/dashboard/work/pms">
-                Open PMS
+                PMS 열기
               </Link>
               <Link className="button button-secondary" href="/dashboard/automations/integrations">
-                Review Hooks
+                훅 검토
               </Link>
               <Link className="button button-ghost" href="/dashboard/evolution/issues">
-                Check Recovery
+                복구 확인
               </Link>
             </div>
           </div>
 
           <div className="hero-panel">
-            <p className="section-kicker">Operating model</p>
-            <h2>Categories, triggers, steps, owners, and hooks</h2>
+            <p className="section-kicker">운영 모델</p>
+            <h2>카테고리, 트리거, 단계, 담당자, 훅</h2>
             <p>
-              The page is designed as a live-useful mockup: good enough to operate from today, clear
-              enough to wire into automation later.
+              이 페이지는 바로 운영에 쓸 수 있는 목업을 목표로 했습니다. 오늘부터 써도 될 만큼 충분하고,
+              나중에 자동화로 연결할 만큼 충분히 명확해야 합니다.
             </p>
             <div className="hero-chip-row">
-              <span className="chip">Recurring SOP</span>
-              <span className="chip">MVP mockup</span>
-              <span className="chip">Human + automation</span>
+              <span className="chip">반복 SOP</span>
+              <span className="chip">MVP 목업</span>
+              <span className="chip">사람 + 자동화</span>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="summary-grid" aria-label="Playbook summary metrics">
+      <section className="summary-grid" aria-label="플레이북 요약 지표">
         <SummaryCard
-          title="Families"
+          title="카테고리"
           value={String(playbookFamilies.length)}
-          detail="Recurring playbook groups that keep the operating system organized."
-          badge="Structure"
+          detail="운영 시스템을 정리된 상태로 유지하는 반복 플레이북 묶음입니다."
+          badge="구조"
           tone="blue"
         />
         <SummaryCard
-          title="Playbooks"
+          title="플레이북"
           value={String(playbookCatalog.length)}
-          detail="MVP cards that describe the work in enough detail to act on it."
-          badge="Catalog"
+          detail="바로 실행할 수 있을 정도로 구체적인 MVP 카드입니다."
+          badge="카탈로그"
           tone="green"
         />
         <SummaryCard
-          title="Automation hooks"
+          title="자동화 훅"
           value={String(automationHooks.length)}
-          detail="The handoff points where recurring work can become machine-assisted."
-          badge="Hooks"
+          detail="반복 작업이 기계 보조로 넘어갈 수 있는 핸드오프 지점입니다."
+          badge="훅"
           tone="warning"
         />
         <SummaryCard
-          title="Run now"
+          title="지금 실행"
           value={String(whatToRunNow.length)}
-          detail="Shortlist of the playbooks that deserve attention first."
-          badge="Priority"
+          detail="가장 먼저 주의를 줘야 하는 플레이북의 짧은 목록입니다."
+          badge="우선"
           tone="danger"
         />
       </section>
 
       <div className="split-grid">
         <SectionCard
-          kicker="What to run now"
-          title="Immediate playbook shortlist"
-          description="These are the recurring SOPs that should be easiest to launch from the page."
+          kicker="지금 실행"
+          title="즉시 실행 플레이북"
+          description="이 페이지에서 가장 바로 띄우기 쉬워야 하는 반복 SOP들입니다."
           action={
             <Link className="button button-secondary" href="/dashboard/automations">
-              Open Automations
+              자동화 열기
             </Link>
           }
         >
@@ -295,7 +295,7 @@ export default function PlaybooksPage() {
                     {item.action}
                   </span>
                   <Link className="button button-ghost" href={item.href}>
-                    Open
+                    열기
                   </Link>
                 </div>
               </div>
@@ -304,9 +304,9 @@ export default function PlaybooksPage() {
         </SectionCard>
 
         <SectionCard
-          kicker="Categories"
-          title="Playbook families"
-          description="The library should be grouped by operating intent so the right SOP is easy to find."
+          kicker="카테고리"
+          title="플레이북 묶음"
+          description="라이브러리는 운영 의도별로 묶여 있어야 맞는 SOP를 바로 찾을 수 있습니다."
         >
           <div className="project-grid">
             {playbookFamilies.map((family) => (
@@ -322,10 +322,10 @@ export default function PlaybooksPage() {
                 </div>
                 <div className="hero-actions">
                   <Link className="button button-secondary" href={family.href}>
-                    Open lane
+                    레인 열기
                   </Link>
                   <Link className="button button-ghost" href="#catalog">
-                    View SOPs
+                    SOP 보기
                   </Link>
                 </div>
               </article>
@@ -335,9 +335,9 @@ export default function PlaybooksPage() {
       </div>
 
       <SectionCard
-        kicker="Catalog"
-        title="Recurring SOP playbooks"
-        description="Each card shows the operating context, the trigger, the owner, the hook, and the step-by-step path."
+        kicker="카탈로그"
+        title="반복 SOP 플레이북"
+        description="각 카드는 운영 맥락, 트리거, 담당자, 훅, 단계별 경로를 함께 보여줍니다."
       >
         <div className="project-grid" id="catalog">
           {playbookCatalog.map((item) => (
@@ -365,15 +365,15 @@ export default function PlaybooksPage() {
 
               <dl className="detail-stack">
                 <div>
-                  <dt>Trigger</dt>
+                  <dt>트리거</dt>
                   <dd>{item.trigger}</dd>
                 </div>
                 <div>
-                  <dt>Owner</dt>
+                  <dt>담당자</dt>
                   <dd>{item.owner}</dd>
                 </div>
                 <div>
-                  <dt>Automation Hook</dt>
+                  <dt>자동화 훅</dt>
                   <dd>{item.hook}</dd>
                 </div>
               </dl>
@@ -383,7 +383,7 @@ export default function PlaybooksPage() {
                   <div className="timeline-item" key={`${item.title}-${index}`}>
                     <div className="inline-legend">
                       <span className="legend-chip" data-tone={item.tone}>
-                        Step {index + 1}
+                        단계 {index + 1}
                       </span>
                     </div>
                     <strong>{step}</strong>
@@ -397,9 +397,9 @@ export default function PlaybooksPage() {
 
       <div className="split-grid">
         <SectionCard
-          kicker="Automation hooks"
-          title="Where playbooks hand off"
-          description="These are the default integration points the SOP library should grow into."
+          kicker="자동화 훅"
+          title="플레이북이 넘겨주는 지점"
+          description="SOP 라이브러리가 기본적으로 자라가야 할 연동 지점들입니다."
         >
           <div className="template-grid">
             {automationHooks.map((hook) => (
@@ -409,7 +409,7 @@ export default function PlaybooksPage() {
                   <p>{hook.detail}</p>
                 </div>
                 <span className="legend-chip" data-tone={hook.tone}>
-                  Hook
+                  훅
                 </span>
               </div>
             ))}
@@ -417,9 +417,9 @@ export default function PlaybooksPage() {
         </SectionCard>
 
         <SectionCard
-          kicker="Rules"
-          title="How to keep the library useful"
-          description="The best playbooks stay short, explicit, and easy to hand off."
+          kicker="규칙"
+          title="라이브러리를 유용하게 유지하는 법"
+          description="좋은 플레이북은 짧고, 분명하고, 넘기기 쉬워야 합니다."
         >
           <ul className="note-list">
             {operatingRules.map((rule) => (
