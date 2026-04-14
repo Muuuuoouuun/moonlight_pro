@@ -1,1 +1,1 @@
-export * from "./card-news/generator";
+export * from "./card-news";

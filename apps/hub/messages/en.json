@@ -1,0 +1,205 @@
+{
+  "locale": {
+    "ko": "KO",
+    "en": "EN",
+    "ariaLabel": "Language switch"
+  },
+  "brand": {
+    "name": "Com_Moon OS",
+    "tagline": "Private hub shell",
+    "crumbEyebrow": "Com_Moon Hub"
+  },
+  "shell": {
+    "coreLanesKicker": "Core Lanes",
+    "utilityTabsKicker": "Utility Tabs",
+    "protectedShellPill": "Protected shell",
+    "statusSection": "Section",
+    "statusCurrentView": "Current view",
+    "statusFocus": "Focus",
+    "contextViewsSuffix": " Views",
+    "contextAriaSuffix": " views",
+    "contextNote": "So you never lose track of what you're looking at inside a section — the current view and its next-switch candidates are pinned in one line.",
+    "sectionSeparator": " / "
+  },
+  "shellAction": {
+    "openBrief": "Open Brief",
+    "openWork": "Open Work OS",
+    "openStudio": "Open Studio",
+    "openCommand": "Open Command",
+    "openAiConsole": "Open AI Console"
+  },
+  "nav": {
+    "overview": {
+      "label": "Overview",
+      "description": "Today, alerts, and operating pulse"
+    },
+    "work": {
+      "label": "Work OS",
+      "description": "Projects, PMS, roadmap, and decisions"
+    },
+    "workOverview": {
+      "label": "Overview",
+      "description": "Focus stack and execution pulse"
+    },
+    "workProjects": {
+      "label": "Projects",
+      "description": "Portfolio, blockers, and milestones"
+    },
+    "workManagement": {
+      "label": "Management",
+      "description": "Per-project progress, tasks, and GitHub signals"
+    },
+    "workCalendar": {
+      "label": "Calendar",
+      "description": "Shared schedule, due dates, and progress timing"
+    },
+    "workRhythm": {
+      "label": "Rhythm",
+      "description": "Cadence checks and recurring control loops"
+    },
+    "workPms": {
+      "label": "PMS",
+      "description": "GitHub shipping pulse and operator cadence"
+    },
+    "workRoadmap": {
+      "label": "Roadmap",
+      "description": "Milestones, release lanes, and delivery risk"
+    },
+    "workDecisions": {
+      "label": "Decisions",
+      "description": "Calls, review notes, and follow-through"
+    },
+    "workReleases": {
+      "label": "Releases",
+      "description": "Patch notes and weekly shipping log"
+    },
+    "revenue": {
+      "label": "Revenue",
+      "description": "Leads, deals, accounts, and cases"
+    },
+    "revenueOverview": {
+      "label": "Overview",
+      "description": "Pipeline health and next moves"
+    },
+    "revenueLeads": {
+      "label": "Leads",
+      "description": "Warm inbound and follow-up queue"
+    },
+    "revenueDeals": {
+      "label": "Deals",
+      "description": "Opportunity stages and close risk"
+    },
+    "revenueAccounts": {
+      "label": "Accounts",
+      "description": "Customer state and account health"
+    },
+    "revenueCases": {
+      "label": "Cases",
+      "description": "Customer work and escalations"
+    },
+    "content": {
+      "label": "Content",
+      "description": "Queue, studio, assets, and publish"
+    },
+    "contentOverview": {
+      "label": "Overview",
+      "description": "Pipeline health and publishing cadence"
+    },
+    "contentQueue": {
+      "label": "Queue",
+      "description": "Ideas, briefs, and review states"
+    },
+    "contentStudio": {
+      "label": "Studio",
+      "description": "Card-news drafting workspace"
+    },
+    "contentAssets": {
+      "label": "Assets",
+      "description": "Outputs, files, and source material"
+    },
+    "contentPublish": {
+      "label": "Publish",
+      "description": "Distribution history and channel status"
+    },
+    "automations": {
+      "label": "Automations",
+      "description": "Runs, webhooks, agents, and sync health"
+    },
+    "automationsOverview": {
+      "label": "Overview",
+      "description": "Machine status and recent output"
+    },
+    "automationsRuns": {
+      "label": "Runs",
+      "description": "Execution pulse and failures"
+    },
+    "automationsWebhooks": {
+      "label": "Webhooks",
+      "description": "Endpoint catalog and intake history"
+    },
+    "automationsIntegrations": {
+      "label": "Integrations",
+      "description": "Connected systems and sync runs"
+    },
+    "automationsEmail": {
+      "label": "Email",
+      "description": "Templates, queue, and outbound delivery"
+    },
+    "evolution": {
+      "label": "Evolution",
+      "description": "Logs, issues, memos, and activity"
+    },
+    "evolutionOverview": {
+      "label": "Overview",
+      "description": "Self-improvement loop and ownership"
+    },
+    "evolutionLogs": {
+      "label": "Logs",
+      "description": "Errors, warnings, and fix status"
+    },
+    "evolutionIssues": {
+      "label": "Issues",
+      "description": "Operational risk and mitigation state"
+    },
+    "evolutionActivity": {
+      "label": "Activity",
+      "description": "Recent changes across the OS"
+    },
+    "dailyBrief": {
+      "label": "Daily Brief",
+      "description": "Morning brief, approvals, and next three actions"
+    },
+    "playbooks": {
+      "label": "Playbooks",
+      "description": "Recurring SOPs, trigger rules, and handoff recipes"
+    },
+    "command": {
+      "label": "Command",
+      "description": "Search, route, and dispatch work from one palette"
+    },
+    "ai": {
+      "label": "AI Console",
+      "description": "Chat, council, and direct orders to Claude and Codex"
+    },
+    "aiOverview": {
+      "label": "Overview",
+      "description": "Agent status, OS pulse, and open orders in one frame"
+    },
+    "aiChat": {
+      "label": "Chat",
+      "description": "Rail for talking directly to Claude and Codex"
+    },
+    "aiCouncil": {
+      "label": "Council",
+      "description": "Let Claude and Codex review, debate, and converge"
+    },
+    "aiOrders": {
+      "label": "Orders",
+      "description": "Direct orders, task creation, and execution tracking"
+    },
+    "settings": {
+      "label": "Settings",
+      "description": "Environment posture, mappings, and safeguards"
+    }
+  }
+}

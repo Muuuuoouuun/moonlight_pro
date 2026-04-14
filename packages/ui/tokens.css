@@ -1,0 +1,164 @@
+/*
+ * Com_Moon Design Tokens — Moonstone Silver System
+ * Source of truth: DESIGN.md §4 and §5.
+ *
+ * Two-sided palette:
+ *   - Void black stack  → hub surface (control tower / mission deck)
+ *   - Frost silver      → web surface  (editorial public)
+ * bridged by a single moonstone accent (cool blue-silver).
+ *
+ * Do not redefine these values inside individual apps. Apps should
+ * import this file once and consume the variables. The legacy
+ * alias block at the bottom keeps pre-migration code compiling while
+ * we move consumers onto the canonical `--cm-*` tokens.
+ */
+
+:root {
+  /* ═══ Void black stack (hub canvas, feature panels) ════════════ */
+  --cm-ink-900: #0c1018;
+  --cm-ink-800: #131923;
+  --cm-ink-700: #1b2332;
+  --cm-ink-600: #26304a;
+
+  /* ═══ Frost silver stack (public canvas) ═══════════════════════ */
+  --cm-parchment: #f0f2f7;
+  --cm-parchment-soft: #f4f5f8;
+  --cm-parchment-deep: #e2e6ef;
+
+  /* ═══ Moonstone accent (the single brand accent) ════════════════ */
+  --cm-metal-300: #d6dff0;
+  --cm-metal-400: #a8b8d4;
+  --cm-metal-500: #5274a8;
+  --cm-metal-600: #365888;
+
+  /* ═══ Text ═════════════════════════════════════════════════════ */
+  --cm-platinum: #e8edf4;
+  --cm-platinum-soft: #7e8c9e;
+  --cm-graphite: #0c1018;
+  --cm-graphite-soft: #4a5568;
+
+  /* ═══ Hairlines ════════════════════════════════════════════════ */
+  --cm-line-dark: rgba(255, 255, 255, 0.07);
+  --cm-line-dark-strong: rgba(255, 255, 255, 0.12);
+  --cm-line-light: rgba(12, 16, 24, 0.08);
+  --cm-line-light-strong: rgba(12, 16, 24, 0.16);
+
+  /* ═══ Semantic status (muted; never compete with moonstone) ════ */
+  --cm-ok-500: #5a8f7a;
+  --cm-warn-500: #9e8040;
+  --cm-risk-500: #a04040;
+  --cm-info-500: #5070a0;
+
+  /* ═══ Signature gradients (accent only, never background fill) ═ */
+  --cm-grad-metal: linear-gradient(
+    135deg,
+    #d6dff0 0%,
+    #a8b8d4 38%,
+    #5274a8 70%,
+    #365888 100%
+  );
+  --cm-grad-ink: linear-gradient(180deg, #131923 0%, #0c1018 100%);
+  --cm-grad-rim: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0) 55%
+  );
+
+  /* ═══ Typography · Families ════════════════════════════════════ */
+  --cm-font-serif:
+    "MaruBuri", "Iowan Old Style", "Palatino Linotype", "Book Antiqua",
+    "Times New Roman", Georgia, serif;
+  --cm-font-sans:
+    "Pretendard Variable", "Pretendard", "SUIT Variable",
+    "Apple SD Gothic Neo", "Noto Sans KR", "Helvetica Neue", Arial, sans-serif;
+  --cm-font-mono:
+    "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas,
+    monospace;
+
+  /* ═══ Typography · Roles ═══════════════════════════════════════ */
+  --cm-text-display: clamp(2.5rem, 4.4vw, 3.75rem);
+  --cm-text-heading: clamp(1.5rem, 2.4vw, 2rem);
+  --cm-text-body: 1rem;
+  --cm-text-label: 0.75rem;
+  --cm-text-mono: 0.875rem;
+
+  --cm-leading-tight: 1.15;
+  --cm-leading-snug: 1.35;
+  --cm-leading-normal: 1.55;
+
+  /* ═══ Spacing scale (4 → 96) ═══════════════════════════════════ */
+  --cm-space-1: 4px;
+  --cm-space-2: 8px;
+  --cm-space-3: 12px;
+  --cm-space-4: 16px;
+  --cm-space-5: 24px;
+  --cm-space-6: 32px;
+  --cm-space-7: 48px;
+  --cm-space-8: 64px;
+  --cm-space-9: 96px;
+
+  /* ═══ Radius ═══════════════════════════════════════════════════ */
+  --cm-radius-sm: 12px;
+  --cm-radius-md: 20px;
+  --cm-radius-lg: 28px;
+  --cm-radius-pill: 999px;
+
+  /* ═══ Containers ═══════════════════════════════════════════════ */
+  --cm-container-public: min(1120px, calc(100vw - 32px));
+  --cm-container-hub: min(1440px, calc(100vw - 24px));
+
+  /* ═══ Elevation ════════════════════════════════════════════════ */
+  --cm-shadow-card-dark: 0 14px 28px rgba(0, 0, 0, 0.50);
+  --cm-shadow-panel-dark: 0 24px 60px rgba(0, 0, 0, 0.60);
+  --cm-shadow-card-light: 0 14px 28px rgba(12, 16, 24, 0.07);
+  --cm-shadow-panel-light: 0 24px 60px rgba(12, 16, 24, 0.10);
+  --cm-shadow-metal-glow: 0 0 28px rgba(82, 116, 168, 0.22);
+
+  /* ═══ Motion ═══════════════════════════════════════════════════ */
+  --cm-motion-page: 220ms;
+  --cm-motion-card: 160ms;
+  --cm-motion-dialog: 180ms;
+  --cm-motion-hover: 120ms;
+  --cm-ease-standard: cubic-bezier(0.2, 0.6, 0.2, 1);
+
+  /* ═══ Quality bar ══════════════════════════════════════════════ */
+  --cm-touch-min: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --cm-motion-page: 0ms;
+    --cm-motion-card: 0ms;
+    --cm-motion-dialog: 0ms;
+    --cm-motion-hover: 0ms;
+  }
+}
+
+/*
+ * Legacy alias layer.
+ *
+ * Hub and web globals.css previously defined green/parchment tokens
+ * directly. We keep the old variable names resolving so pre-migration
+ * rules still work, but point them at the new canonical values. When a
+ * file is migrated to `--cm-*` tokens, the corresponding alias should
+ * be removed from that file's `:root` block.
+ */
+:root {
+  --cm-green-700: var(--cm-metal-500);
+  --cm-green-600: var(--cm-metal-600);
+  --cm-green-500: var(--cm-metal-400);
+  --cm-green-100: var(--cm-parchment-deep);
+  --cm-brass-500: var(--cm-metal-500);
+  --cm-brass-100: var(--cm-metal-300);
+  --cm-red-500: var(--cm-risk-500);
+  --cm-red-100: rgba(160, 64, 64, 0.14);
+  --cm-blue-500: var(--cm-info-500);
+  --cm-blue-100: rgba(80, 112, 160, 0.14);
+  --cm-bg: var(--cm-parchment);
+  --cm-surface: var(--cm-parchment-soft);
+  --cm-surface-muted: var(--cm-parchment-deep);
+  --cm-panel: rgba(255, 255, 255, 0.88);
+  --cm-line: var(--cm-line-light);
+  --cm-text: var(--cm-graphite);
+  --cm-text-soft: var(--cm-graphite-soft);
+}

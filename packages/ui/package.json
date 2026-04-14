@@ -1,16 +1,20 @@
 {
   "name": "@com-moon/ui",
-  "version": "0.1.0",
+  "version": "0.0.2",
   "main": "index.ts",
-  "dependencies": {
-    "class-variance-authority": "^0.7.0"
-  },
-  "peerDependencies": {
-    "react": ">=18",
-    "react-dom": ">=18"
-  },
-  "devDependencies": {
-    "@types/react": "^18.0.0",
-    "typescript": "^5.0.0"
+  "types": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./button": "./button.tsx",
+    "./surface": "./surface.tsx",
+    "./stack": "./stack.tsx",
+    "./section-header": "./section-header.tsx",
+    "./kpi-card": "./kpi-card.tsx",
+    "./status-chip": "./status-chip.tsx",
+    "./empty-state": "./empty-state.tsx",
+    "./skeleton": "./skeleton.tsx",
+    "./tokens": "./tokens.ts",
+    "./tokens.css": "./tokens.css",
+    "./primitives.css": "./primitives.css"
   }
 }

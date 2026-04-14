@@ -1,2 +1,2 @@
-export * from "./logger"
-export * from "./types"
+export type { HubStatus, LogEntry, LogLevel } from "./types";
+export { logError, logEvent, logWarning } from "./logger";

@@ -1,5 +1,11 @@
 {
   "name": "@com-moon/hub-gateway",
   "version": "0.0.1",
-  "main": "index.ts"
+  "main": "index.ts",
+  "types": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./logger": "./logger.ts",
+    "./types": "./types.ts"
+  }
 }

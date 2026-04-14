@@ -1,61 +1,97 @@
-import { LogEntry } from "./types"
+import type { LogEntry, LogLevel } from "./types";
 
-// ─── Supabase REST insert (fetch — no extra dependency) ───────────────────────
-async function persistToSupabase(entry: LogEntry & { severity: string }): Promise<void> {
-  const url =
-    process.env.SUPABASE_URL ??
-    process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  // Skip if env vars not configured (dev / placeholder)
-  if (!url || !key || url.includes("placeholder")) return
-
-  await fetch(`${url}/rest/v1/error_logs`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      Prefer: "return=minimal",
-    },
-    body: JSON.stringify({
-      context:   entry.context,
-      payload:   entry.payload,
-      trace:     entry.trace,
-      timestamp: entry.timestamp,
-      severity:  entry.severity,
-    }),
-  })
+interface SupabaseLogConfig {
+  url: string;
+  apiKey: string;
+  table: string;
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
+function resolveSupabaseLogConfig(): SupabaseLogConfig | null {
+  const url = process.env.SUPABASE_URL?.trim();
+  const apiKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
+    process.env.SUPABASE_ANON_KEY?.trim();
+  const table = process.env.SUPABASE_ERROR_LOGS_TABLE?.trim() || "error_logs";
 
-export async function logError(entry: LogEntry): Promise<void> {
-  console.error("[HUB-OS-ERROR]", JSON.stringify(entry))
+  if (!url || !apiKey) {
+    return null;
+  }
+
+  return {
+    url: url.replace(/\/$/, ""),
+    apiKey,
+    table,
+  };
+}
+
+async function persistLogEntry(entry: LogEntry) {
+  const config = resolveSupabaseLogConfig();
+
+  if (!config) {
+    return false;
+  }
+
   try {
-    await persistToSupabase({ ...entry, severity: "error" })
-  } catch {
-    // logger must never throw — fail silently
+    const response = await fetch(`${config.url}/rest/v1/${config.table}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        apikey: config.apiKey,
+        authorization: `Bearer ${config.apiKey}`,
+        prefer: "return=minimal",
+      },
+      body: JSON.stringify(entry),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      console.warn("[HUB-OS-LOG-PERSIST-FAILED]", response.status, detail);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.warn("[HUB-OS-LOG-PERSIST-ERROR]", String(error));
+    return false;
   }
 }
 
-export async function logWarn(entry: LogEntry): Promise<void> {
-  console.warn("[HUB-OS-WARN]", JSON.stringify(entry))
-  try {
-    await persistToSupabase({ ...entry, severity: "warn" })
-  } catch {
-    // fail silently
+function emit(level: LogLevel, entry: LogEntry) {
+  const normalized = {
+    ...entry,
+    level: entry.level ?? level,
+    source: entry.source ?? "system",
+    timestamp: entry.timestamp || new Date().toISOString(),
+  };
+
+  const prefix = `[HUB-OS-${level.toUpperCase()}]`;
+  const message = JSON.stringify(normalized);
+
+  if (level === "error") {
+    console.error(prefix, message);
+  } else if (level === "warn") {
+    console.warn(prefix, message);
+  } else {
+    console.log(prefix, message);
   }
+
+  return normalized;
 }
 
-export async function logInfo(entry: LogEntry): Promise<void> {
-  console.info("[HUB-OS-INFO]", JSON.stringify(entry))
-  try {
-    await persistToSupabase({ ...entry, severity: "info" })
-  } catch {
-    // fail silently
-  }
+export async function logEvent(entry: LogEntry) {
+  const normalized = emit(entry.level ?? "info", entry);
+  await persistLogEntry(normalized);
+  return normalized;
+}
+
+export async function logError(entry: LogEntry) {
+  const normalized = emit("error", entry);
+  await persistLogEntry(normalized);
+  return normalized;
+}
+
+export async function logWarning(entry: LogEntry) {
+  const normalized = emit("warn", entry);
+  await persistLogEntry(normalized);
+  return normalized;
 }

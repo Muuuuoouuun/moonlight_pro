@@ -3,9 +3,35 @@ export interface CardNewsInput {
   templateId: string;
 }
 
-export async function generateCardNews(input: CardNewsInput) {
-  // 기존 classin_cardnews_math_v3.html 기조 유지
-  // 템플릿 처리 로직 이식
-  console.log("Generating Card News for:", input.topic);
-  return { status: "success", topic: input.topic };
+export interface CardNewsResult {
+  status: "success";
+  topic: string;
+  templateId: string;
+  title: string;
+  summary: string;
+  slideCount: number;
+  generatedAt: string;
+}
+
+export async function generateCardNews(input: CardNewsInput): Promise<CardNewsResult> {
+  const topic = input.topic.trim();
+  const templateId = input.templateId.trim();
+
+  if (!topic) {
+    throw new Error("Card news topic is required.");
+  }
+
+  if (!templateId) {
+    throw new Error("Card news templateId is required.");
+  }
+
+  return {
+    status: "success",
+    topic,
+    templateId,
+    title: `${topic} 카드뉴스`,
+    summary: `${templateId} 템플릿 기반 카드뉴스 초안을 준비했습니다.`,
+    slideCount: 5,
+    generatedAt: new Date().toISOString(),
+  };
 }
