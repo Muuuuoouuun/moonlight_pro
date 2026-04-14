@@ -4,6 +4,8 @@ import {
   decodeGoogleCalendarState,
   exchangeGoogleCalendarCode,
   recordGoogleCalendarSync,
+  getGoogleCalendarOAuthNonceCookieName,
+  normalizeGoogleCalendarReturnPath,
   resolveGoogleCalendarRedirectUri,
   saveGoogleCalendarConnection,
 } from "@/lib/google-calendar";
@@ -15,11 +17,42 @@ export async function GET(req) {
   const { searchParams, origin } = req.nextUrl;
   const code = searchParams.get("code");
   const error = searchParams.get("error");
-  const state = decodeGoogleCalendarState(searchParams.get("state"));
-  const workspaceId = state.workspaceId || resolveDefaultWorkspaceId();
-  const calendarId = state.calendarId || process.env.GOOGLE_CALENDAR_ID?.trim() || "primary";
-  const returnPath = state.returnPath || "/dashboard/work/calendar";
+  const nonceCookieName = getGoogleCalendarOAuthNonceCookieName();
+  const nonceCookie = req.cookies.get(nonceCookieName)?.value || null;
+  const state = decodeGoogleCalendarState(searchParams.get("state"), nonceCookie);
+  const workspaceId = state?.workspaceId || resolveDefaultWorkspaceId();
+  const calendarId = state?.calendarId || process.env.GOOGLE_CALENDAR_ID?.trim() || "primary";
+  const returnPath = normalizeGoogleCalendarReturnPath(
+    state?.returnPath,
+    "/dashboard/work/calendar",
+  );
   const target = new URL(returnPath, origin);
+
+  const redirect = () => {
+    const response = NextResponse.redirect(target);
+    response.cookies.set({
+      name: nonceCookieName,
+      value: "",
+      path: "/",
+      expires: new Date(0),
+      maxAge: 0,
+    });
+    return response;
+  };
+
+  if (!state) {
+    await recordGoogleCalendarSync({
+      workspaceId,
+      status: "failure",
+      payload: {
+        provider: "google_calendar",
+        action: "oauth_callback",
+      },
+      errorMessage: "invalid-oauth-state",
+    });
+    target.searchParams.set("calendar", "connect-failed");
+    return redirect();
+  }
 
   if (error) {
     await recordGoogleCalendarSync({
@@ -32,12 +65,12 @@ export async function GET(req) {
       errorMessage: error,
     });
     target.searchParams.set("calendar", "oauth-denied");
-    return NextResponse.redirect(target);
+    return redirect();
   }
 
   if (!code) {
     target.searchParams.set("calendar", "missing-code");
-    return NextResponse.redirect(target);
+    return redirect();
   }
 
   try {
@@ -63,7 +96,7 @@ export async function GET(req) {
     });
 
     target.searchParams.set("calendar", "connected");
-    return NextResponse.redirect(target);
+    return redirect();
   } catch (callbackError) {
     await recordGoogleCalendarSync({
       workspaceId,
@@ -76,6 +109,6 @@ export async function GET(req) {
       errorMessage: callbackError instanceof Error ? callbackError.message : String(callbackError),
     });
     target.searchParams.set("calendar", "connect-failed");
-    return NextResponse.redirect(target);
+    return redirect();
   }
 }

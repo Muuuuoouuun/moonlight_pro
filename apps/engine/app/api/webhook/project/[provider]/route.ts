@@ -3,8 +3,9 @@ import { NextResponse } from "next/server";
 import { failProjectWebhook, handleProjectWebhook } from "../../../../../lib/project-webhook";
 import {
   buildSharedProjectWebhookPayload,
+  getSharedWebhookAuthDetails,
   normalizeSharedWebhookProvider,
-  SHARED_WEBHOOK_SECRET_HEADER,
+  listSharedProjectWebhookRoutes,
   validateSharedWebhookRequest,
 } from "../../../../../lib/shared-webhook";
 
@@ -34,14 +35,14 @@ export async function GET(_req: Request, context: RouteContext) {
     );
   }
 
+  const auth = getSharedWebhookAuthDetails();
+
   return NextResponse.json({
     status: "ok",
     provider,
     route: `/api/webhook/project/${provider}`,
-    auth: {
-      header: SHARED_WEBHOOK_SECRET_HEADER,
-      requiredWhenConfigured: true,
-    },
+    auth,
+    sharedProviderRoutes: listSharedProjectWebhookRoutes(),
     accepts: {
       meta: {
         workspaceId: "string",
@@ -82,22 +83,22 @@ export async function POST(req: Request, context: RouteContext) {
     );
   }
 
+  const auth = validateSharedWebhookRequest(req);
+  if (!auth.ok) {
+    return NextResponse.json(
+      {
+        status: "unauthorized",
+        error: auth.error,
+        provider,
+      },
+      { status: 401 },
+    );
+  }
+
   let body: Record<string, unknown> = {};
 
   try {
     body = await req.json();
-
-    const auth = validateSharedWebhookRequest(req);
-    if (!auth.ok) {
-      return NextResponse.json(
-        {
-          status: "unauthorized",
-          error: auth.error,
-          provider,
-        },
-        { status: 401 },
-      );
-    }
 
     const payload = buildSharedProjectWebhookPayload(body, provider);
     const result = await handleProjectWebhook(payload);

@@ -4,6 +4,11 @@ import {
   resolveSupabaseConfig,
   updateSupabaseRecord,
 } from "@/lib/server-write";
+import {
+  createGoogleOAuthStateToken,
+  decodeGoogleOAuthStateToken,
+  normalizeGoogleReturnPath,
+} from "@/lib/google-oauth-state";
 
 const GOOGLE_GMAIL_PROVIDER = "google_gmail";
 const GOOGLE_GMAIL_SYNC_SOURCE = "google_gmail";
@@ -81,26 +86,25 @@ async function fetchSupabaseRows(table, options = {}) {
   }
 }
 
-function encodeState(value) {
-  return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
-}
+export function decodeGoogleGmailState(value, expectedNonce = null) {
+  const payload = decodeGoogleOAuthStateToken({
+    provider: GOOGLE_GMAIL_PROVIDER,
+    token: value,
+  });
 
-export function decodeGoogleGmailState(value) {
-  if (!value) {
-    return {};
+  if (!payload || (expectedNonce && payload.nonce !== expectedNonce)) {
+    return null;
   }
 
-  try {
-    return JSON.parse(Buffer.from(String(value), "base64url").toString("utf8"));
-  } catch {
-    return {};
-  }
+  return payload.data || {};
 }
 
-export function resolveGoogleGmailRedirectUri(origin) {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || origin || "";
+export function normalizeGoogleGmailReturnPath(value, fallback = "/dashboard/automations/email") {
+  return normalizeGoogleReturnPath(value, fallback);
+}
 
-  return `${baseUrl.replace(/\/$/, "")}/api/email/gmail/callback`;
+export function getGoogleGmailOAuthNonceCookieName() {
+  return "com_moon_google_gmail_oauth_nonce";
 }
 
 export function buildGoogleGmailAuthUrl({
@@ -115,6 +119,20 @@ export function buildGoogleGmailAuthUrl({
     return null;
   }
 
+  const safeReturnPath = normalizeGoogleGmailReturnPath(returnPath);
+  const state = createGoogleOAuthStateToken({
+    provider: GOOGLE_GMAIL_PROVIDER,
+    data: {
+      workspaceId,
+      mailbox,
+      returnPath: safeReturnPath,
+    },
+  });
+
+  if (!state) {
+    return null;
+  }
+
   const params = new URLSearchParams({
     client_id: oauth.clientId,
     redirect_uri: resolveGoogleGmailRedirectUri(origin),
@@ -122,14 +140,20 @@ export function buildGoogleGmailAuthUrl({
     access_type: "offline",
     prompt: "consent",
     scope: GOOGLE_SCOPES.join(" "),
-    state: encodeState({
-      workspaceId,
-      mailbox,
-      returnPath,
-    }),
+    state: state.token,
   });
 
-  return `${GOOGLE_AUTH_URL}?${params.toString()}`;
+  return {
+    authUrl: `${GOOGLE_AUTH_URL}?${params.toString()}`,
+    nonce: state.nonce,
+    returnPath: safeReturnPath,
+  };
+}
+
+export function resolveGoogleGmailRedirectUri(origin) {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || origin || "";
+
+  return `${baseUrl.replace(/\/$/, "")}/api/email/gmail/callback`;
 }
 
 async function exchangeGoogleToken(params) {

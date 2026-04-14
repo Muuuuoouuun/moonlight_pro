@@ -4,6 +4,11 @@ import {
   resolveSupabaseConfig,
   updateSupabaseRecord,
 } from "@/lib/server-write";
+import {
+  createGoogleOAuthStateToken,
+  decodeGoogleOAuthStateToken,
+  normalizeGoogleReturnPath,
+} from "@/lib/google-oauth-state";
 
 const GOOGLE_CALENDAR_PROVIDER = "google_calendar";
 const GOOGLE_CALENDAR_SYNC_SOURCE = "google_calendar";
@@ -78,20 +83,25 @@ async function fetchSupabaseRows(table, options = {}) {
   }
 }
 
-function encodeState(value) {
-  return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
+export function decodeGoogleCalendarState(value, expectedNonce = null) {
+  const payload = decodeGoogleOAuthStateToken({
+    provider: GOOGLE_CALENDAR_PROVIDER,
+    token: value,
+  });
+
+  if (!payload || (expectedNonce && payload.nonce !== expectedNonce)) {
+    return null;
+  }
+
+  return payload.data || {};
 }
 
-export function decodeGoogleCalendarState(value) {
-  if (!value) {
-    return {};
-  }
+export function normalizeGoogleCalendarReturnPath(value, fallback = "/dashboard/work/calendar") {
+  return normalizeGoogleReturnPath(value, fallback);
+}
 
-  try {
-    return JSON.parse(Buffer.from(String(value), "base64url").toString("utf8"));
-  } catch {
-    return {};
-  }
+export function getGoogleCalendarOAuthNonceCookieName() {
+  return "com_moon_google_calendar_oauth_nonce";
 }
 
 export function resolveGoogleCalendarRedirectUri(origin) {
@@ -116,6 +126,20 @@ export function buildGoogleCalendarAuthUrl({
     return null;
   }
 
+  const safeReturnPath = normalizeGoogleCalendarReturnPath(returnPath);
+  const state = createGoogleOAuthStateToken({
+    provider: GOOGLE_CALENDAR_PROVIDER,
+    data: {
+      workspaceId,
+      calendarId,
+      returnPath: safeReturnPath,
+    },
+  });
+
+  if (!state) {
+    return null;
+  }
+
   const params = new URLSearchParams({
     client_id: oauth.clientId,
     redirect_uri: resolveGoogleCalendarRedirectUri(origin),
@@ -123,14 +147,14 @@ export function buildGoogleCalendarAuthUrl({
     access_type: "offline",
     prompt: "consent",
     scope: GOOGLE_SCOPES.join(" "),
-    state: encodeState({
-      workspaceId,
-      calendarId,
-      returnPath,
-    }),
+    state: state.token,
   });
 
-  return `${GOOGLE_AUTH_URL}?${params.toString()}`;
+  return {
+    authUrl: `${GOOGLE_AUTH_URL}?${params.toString()}`,
+    nonce: state.nonce,
+    returnPath: safeReturnPath,
+  };
 }
 
 async function exchangeGoogleToken(params) {

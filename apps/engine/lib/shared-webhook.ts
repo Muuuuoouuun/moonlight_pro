@@ -10,8 +10,16 @@ export type SharedProjectWebhookProvider = (typeof SHARED_PROJECT_WEBHOOK_PROVID
 type JsonRecord = Record<string, unknown>;
 type AuthResult = {
   ok: boolean;
-  mode: "open" | "header" | "bearer";
+  mode: "header" | "bearer";
   error?: string;
+};
+type SharedWebhookAuthDetails = {
+  required: true;
+  configured: boolean;
+  header: string;
+  bearer: string;
+  accepted: Array<"header" | "bearer">;
+  note: string;
 };
 
 function asRecord(value: unknown): JsonRecord | null {
@@ -117,13 +125,29 @@ export function listSharedProjectWebhookRoutes() {
   return SHARED_PROJECT_WEBHOOK_PROVIDERS.map((provider) => `/api/webhook/project/${provider}`);
 }
 
+export function getSharedWebhookAuthDetails(): SharedWebhookAuthDetails {
+  const configured = Boolean(process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim());
+
+  return {
+    required: true,
+    configured,
+    header: SHARED_WEBHOOK_SECRET_HEADER,
+    bearer: "Authorization: Bearer <secret>",
+    accepted: ["header", "bearer"],
+    note: configured
+      ? "Provide either the shared secret header or a bearer token matching COM_MOON_SHARED_WEBHOOK_SECRET."
+      : "COM_MOON_SHARED_WEBHOOK_SECRET must be set; requests without it are rejected.",
+  };
+}
+
 export function validateSharedWebhookRequest(req: Request): AuthResult {
   const expectedSecret = process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim();
 
   if (!expectedSecret) {
     return {
-      ok: true,
-      mode: "open",
+      ok: false,
+      mode: "header",
+      error: "Shared webhook secret is not configured.",
     };
   }
 
