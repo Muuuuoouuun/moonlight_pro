@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OperatingPulseMiniBoard } from "@/components/dashboard/operating-pulse";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { SummaryCard } from "@/components/dashboard/summary-card";
 import { getAiConsolePageData } from "@/lib/server-data";
@@ -17,7 +18,7 @@ function getAgentTone(status) {
 }
 
 export default async function AiConsolePage() {
-  const { agents, openOrders, osPulse, councilSessions, chatThreads } =
+  const { agents, openOrders, operatingPulse, councilSessions, chatThreads } =
     await getAiConsolePageData();
 
   const liveAgentCount = agents.filter(
@@ -121,23 +122,11 @@ export default async function AiConsolePage() {
         </SectionCard>
 
         <SectionCard
-          kicker="OS Pulse"
-          title="OS · 자동화 스냅샷"
-          description="다른 탭을 열지 않아도 지금 OS가 어떤 상태인지 한 번에 잡히도록 — 작업, 자동화, 콘텐츠, 매출 네 축."
+          kicker="Machine Pulse"
+          title="AI · 자동화 스냅샷"
+          description='먼저 "지금 뭐가 돌고 있지?"에 답한 뒤 에이전트에게 오더를 던집니다. 같은 pulse를 AI 콘솔에서도 바로 봅니다.'
         >
-          <ul className="note-list">
-            {osPulse.map((pulse) => (
-              <li className="note-row" key={pulse.label}>
-                <div>
-                  <strong>{pulse.label}</strong>
-                  <p>{pulse.detail}</p>
-                </div>
-                <span className="legend-chip" data-tone={pulse.tone}>
-                  {pulse.value}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <OperatingPulseMiniBoard pulse={operatingPulse} />
         </SectionCard>
       </div>
 

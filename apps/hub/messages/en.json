@@ -5,9 +5,9 @@
     "ariaLabel": "Language switch"
   },
   "brand": {
-    "name": "Com_Moon OS",
+    "name": "moonlight 프로젝트",
     "tagline": "Private hub shell",
-    "crumbEyebrow": "Com_Moon Hub"
+    "crumbEyebrow": "moonlight 프로젝트"
   },
   "shell": {
     "coreLanesKicker": "Core Lanes",
@@ -65,6 +65,10 @@
       "label": "Roadmap",
       "description": "Milestones, release lanes, and delivery risk"
     },
+    "workPlan": {
+      "label": "Plan Board",
+      "description": "Plan vs. current state for phase and project drift"
+    },
     "workDecisions": {
       "label": "Decisions",
       "description": "Calls, review notes, and follow-through"
@@ -112,6 +116,10 @@
     "contentStudio": {
       "label": "Studio",
       "description": "Card-news drafting workspace"
+    },
+    "contentCampaigns": {
+      "label": "Campaigns",
+      "description": "Briefs, handoffs, and follow-up paths"
     },
     "contentAssets": {
       "label": "Assets",
@@ -184,6 +192,10 @@
     "aiOverview": {
       "label": "Overview",
       "description": "Agent status, OS pulse, and open orders in one frame"
+    },
+    "aiOffice": {
+      "label": "Situation Deck",
+      "description": "Operator board for reading agents, orders, and activity in one scene"
     },
     "aiChat": {
       "label": "Chat",

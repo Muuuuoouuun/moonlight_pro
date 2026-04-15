@@ -123,6 +123,7 @@ create table content_items (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   owner_id uuid references profiles(id) on delete set null,
+  brand_key text,
   title text not null,
   source_idea text,
   source_type text not null default 'idea' check (source_type in ('idea', 'brief', 'meeting', 'research', 'repurpose')),
@@ -135,6 +136,7 @@ create table content_variants (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   content_id uuid not null references content_items(id) on delete cascade,
+  brand_key text,
   variant_type text not null check (variant_type in ('card_news', 'blog', 'newsletter', 'social_post', 'landing_copy')),
   title text,
   body text not null default '',
@@ -146,6 +148,7 @@ create table content_assets (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   variant_id uuid not null references content_variants(id) on delete cascade,
+  brand_key text,
   asset_type text not null check (asset_type in ('image', 'html', 'zip', 'thumbnail', 'source')),
   storage_path text not null,
   meta jsonb not null default '{}'::jsonb,
@@ -156,6 +159,7 @@ create table publish_logs (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   variant_id uuid not null references content_variants(id) on delete cascade,
+  brand_key text,
   channel text not null,
   status text not null default 'queued' check (status in ('queued', 'published', 'failed')),
   external_id text,
@@ -215,8 +219,12 @@ create table campaigns (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   name text not null,
+  brand_key text,
   channel text not null,
   status text not null default 'draft' check (status in ('draft', 'active', 'paused', 'completed')),
+  goal text,
+  next_action text,
+  handoff text,
   start_date date,
   end_date date,
   created_at timestamptz not null default now()
@@ -286,7 +294,7 @@ create table agents (
   workspace_id uuid not null references workspaces(id) on delete cascade,
   name text not null,
   agent_type text not null default 'system' check (agent_type in ('system', 'strategist', 'content', 'sales', 'ops')),
-  status text not null default 'idle' check (status in ('idle', 'running', 'error', 'disabled')),
+  status text not null default 'idle' check (status in ('idle', 'running', 'error', 'disabled', 'ready', 'working', 'live', 'paused')),
   config jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
@@ -332,6 +340,65 @@ create table memos (
   title text not null,
   body text not null default '',
   created_at timestamptz not null default now()
+);
+
+create table ai_threads (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  title text not null,
+  target text not null default 'both' check (target in ('claude', 'codex', 'both', 'engine')),
+  status text not null default 'active' check (status in ('active', 'paused', 'draft', 'archived')),
+  preview text,
+  unread integer not null default 0,
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create table ai_messages (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  thread_id uuid not null references ai_threads(id) on delete cascade,
+  author text not null check (author in ('operator', 'claude', 'codex', 'engine', 'system')),
+  author_label text not null,
+  body text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create table ai_council_sessions (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  topic text not null,
+  members jsonb not null default '[]'::jsonb,
+  status text not null default 'active' check (status in ('draft', 'active', 'hold', 'done')),
+  tone text not null default 'blue',
+  context text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table ai_council_turns (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  session_id uuid not null references ai_council_sessions(id) on delete cascade,
+  author text not null check (author in ('Claude', 'Codex', 'Engine')),
+  stance text not null,
+  body text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create table ai_orders (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  title text not null,
+  target text not null default 'claude' check (target in ('claude', 'codex', 'both', 'engine')),
+  status text not null default 'queued' check (status in ('draft', 'queued', 'running', 'review', 'done')),
+  priority text not null default 'P1' check (priority in ('P0', 'P1', 'P2', 'P3')),
+  lane text not null default 'Work OS',
+  due_label text,
+  note text not null default '',
+  tone text not null default 'muted',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table prompt_templates (
@@ -457,10 +524,19 @@ create index idx_projects_workspace_status on projects (workspace_id, status);
 create index idx_project_updates_workspace_happened on project_updates (workspace_id, happened_at desc);
 create index idx_tasks_workspace_status on tasks (workspace_id, status);
 create index idx_content_items_workspace_status on content_items (workspace_id, status);
+create index idx_content_items_workspace_brand on content_items (workspace_id, brand_key, status);
 create index idx_content_variants_content on content_variants (content_id, variant_type);
+create index idx_content_variants_workspace_brand on content_variants (workspace_id, brand_key, status);
+create index idx_content_assets_workspace_brand on content_assets (workspace_id, brand_key, created_at desc);
+create index idx_publish_logs_workspace_brand on publish_logs (workspace_id, brand_key, status);
+create index idx_campaigns_workspace_brand on campaigns (workspace_id, brand_key, status);
 create index idx_leads_workspace_status on leads (workspace_id, status);
 create index idx_operation_cases_workspace_status on operation_cases (workspace_id, status);
 create index idx_automation_runs_workspace_status on automation_runs (workspace_id, status);
+create index idx_ai_threads_workspace_updated on ai_threads (workspace_id, updated_at desc);
+create index idx_ai_messages_thread_created on ai_messages (thread_id, created_at asc);
+create index idx_ai_council_sessions_workspace_updated on ai_council_sessions (workspace_id, updated_at desc);
+create index idx_ai_orders_workspace_updated on ai_orders (workspace_id, updated_at desc);
 create index idx_sync_runs_workspace_status on sync_runs (workspace_id, status);
 create index idx_webhook_events_workspace_received on webhook_events (workspace_id, received_at desc);
 create index idx_error_logs_workspace_timestamp on error_logs (workspace_id, timestamp desc);

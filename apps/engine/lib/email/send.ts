@@ -1,6 +1,8 @@
+import { randomUUID } from "crypto";
+
 import { logError, logEvent } from "@com-moon/hub-gateway";
 
-import { insertSupabaseRecord } from "../supabase-rest";
+import { insertSupabaseRecord, updateSupabaseRecord } from "../supabase-rest";
 import { sendWithGmail } from "./gmail";
 import { sendWithResend } from "./resend";
 import { type EmailRecipient } from "./format";
@@ -27,29 +29,60 @@ function normalizeString(value: string | null | undefined, fallback = "") {
 }
 
 async function recordEmailSync({
+  runId,
   workspaceId,
   connectionId = null,
   status,
   payload,
+  startedAt,
   errorMessage = null,
 }: {
+  runId: string;
   workspaceId?: string | null;
   connectionId?: string | null;
   status: string;
   payload: Record<string, unknown>;
+  startedAt: string;
   errorMessage?: string | null;
 }) {
+  return updateSupabaseRecord(
+    "sync_runs",
+    [["id", `eq.${runId}`]],
+    {
+      connection_id: connectionId,
+      status,
+      payload: {
+        kind: "email_send",
+        ...payload,
+      },
+      error_message: errorMessage,
+      started_at: startedAt,
+      finished_at: new Date().toISOString(),
+    },
+  );
+}
+
+async function initializeEmailSync({
+  runId,
+  workspaceId,
+  startedAt,
+  payload,
+}: {
+  runId: string;
+  workspaceId?: string | null;
+  startedAt: string;
+  payload: Record<string, unknown>;
+}) {
   return insertSupabaseRecord("sync_runs", {
+    id: runId,
     workspace_id: workspaceId || null,
-    connection_id: connectionId,
-    status,
+    status: "running",
     payload: {
       kind: "email_send",
       ...payload,
     },
-    error_message: errorMessage,
-    started_at: new Date().toISOString(),
-    finished_at: new Date().toISOString(),
+    error_message: null,
+    started_at: startedAt,
   });
 }
 
@@ -63,6 +96,8 @@ function buildRecipient(input: EmailSendRequest): EmailRecipient[] {
 }
 
 export async function sendEmail(input: EmailSendRequest) {
+  const runId = randomUUID();
+  const startedAt = new Date().toISOString();
   const action = normalizeString(input.action, "dry-run");
   const dryRun = action !== "send";
   const channel = normalizeString(input.channel, "resend").toLowerCase();
@@ -85,6 +120,26 @@ export async function sendEmail(input: EmailSendRequest) {
     };
   }
 
+  const basePayload = {
+    provider: channel,
+    action,
+    recipient: to[0].email,
+    subject,
+    templateId: normalizeString(input.templateId) || null,
+    templateName: normalizeString(input.templateName) || null,
+    segmentId: normalizeString(input.segmentId) || null,
+    segmentLabel: normalizeString(input.segmentLabel) || null,
+    audience: normalizeString(input.audience) || null,
+    messageId: null,
+  };
+
+  await initializeEmailSync({
+    runId,
+    workspaceId,
+    startedAt,
+    payload: basePayload,
+  });
+
   const result =
     channel === "gmail"
       ? await sendWithGmail({
@@ -105,16 +160,8 @@ export async function sendEmail(input: EmailSendRequest) {
           replyTo: normalizeString(input.replyTo) || undefined,
         });
 
-  const basePayload = {
-    provider: channel,
-    action,
-    recipient: to[0].email,
-    subject,
-    templateId: normalizeString(input.templateId) || null,
-    templateName: normalizeString(input.templateName) || null,
-    segmentId: normalizeString(input.segmentId) || null,
-    segmentLabel: normalizeString(input.segmentLabel) || null,
-    audience: normalizeString(input.audience) || null,
+  const finalPayload = {
+    ...basePayload,
     messageId: "messageId" in result ? result.messageId : null,
   };
 
@@ -122,10 +169,12 @@ export async function sendEmail(input: EmailSendRequest) {
     const timestamp = new Date().toISOString();
 
     await recordEmailSync({
+      runId,
       workspaceId,
       connectionId: "connection" in result ? result.connection?.id || null : null,
       status: "failure",
-      payload: basePayload,
+      payload: finalPayload,
+      startedAt,
       errorMessage: result.reason,
     });
 
@@ -136,7 +185,7 @@ export async function sendEmail(input: EmailSendRequest) {
       timestamp,
       workspace_id: workspaceId || undefined,
       payload: {
-        ...basePayload,
+        ...finalPayload,
         error: result.reason,
       },
     });
@@ -147,10 +196,12 @@ export async function sendEmail(input: EmailSendRequest) {
   const timestamp = new Date().toISOString();
 
   await recordEmailSync({
+    runId,
     workspaceId,
     connectionId: "connection" in result ? result.connection?.id || null : null,
     status: "success",
-    payload: basePayload,
+    payload: finalPayload,
+    startedAt,
   });
 
   await logEvent({
@@ -159,7 +210,7 @@ export async function sendEmail(input: EmailSendRequest) {
     trace: "apps/engine/lib/email/send.ts",
     timestamp,
     workspace_id: workspaceId || undefined,
-    payload: basePayload,
+    payload: finalPayload,
   });
 
   return result;

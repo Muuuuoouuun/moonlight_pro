@@ -10,7 +10,11 @@ import {
   StatusChip,
   Surface,
 } from "@com-moon/ui";
-import { getDashboardPageData } from "@/lib/server-data";
+import {
+  OperatingPulsePanel,
+  OperatingPulseSummaryCards,
+} from "@/components/dashboard/operating-pulse";
+import { getDashboardPageData, getOperatingPulseData } from "@/lib/server-data";
 
 // Map legacy `tone` strings from dashboard-data.js → StatusChip/KpiDelta tones.
 const TONE_MAP = {
@@ -38,27 +42,29 @@ function toDeltaTone(tone) {
 }
 
 export default async function DashboardPage() {
-  const {
-    activityFeed,
-    projectUpdates,
-    summaryStats,
-    systemChecks,
-    todayFocus,
-    webhookEndpoints,
-  } = await getDashboardPageData();
+  const [
+    {
+      activityFeed,
+      projectUpdates,
+      summaryStats,
+      systemChecks,
+      todayFocus,
+      webhookEndpoints,
+    },
+    operatingPulse,
+  ] = await Promise.all([getDashboardPageData(), getOperatingPulseData()]);
 
   const attentionStats = summaryStats.slice(0, 4);
 
   return (
     <Stack gap={6}>
-      {/* ─── Status strip ─────────────────────────────────────── */}
       <Surface tone="feature" as="section" aria-label="오늘의 운영 상태">
         <Stack gap={5}>
           <div>
             <Cluster gap={2}>
               <StatusChip tone="accent">오늘의 판단면</StatusChip>
               <StatusChip tone="ok" plain>
-                Shell Live
+                운영 중
               </StatusChip>
             </Cluster>
             <h1
@@ -75,7 +81,7 @@ export default async function DashboardPage() {
                 maxWidth: "28ch",
               }}
             >
-              지금 무엇이 중요한가.
+              지금 무엇이 가장 먼저 움직여야 하는가.
             </h1>
             <p
               style={{
@@ -87,8 +93,8 @@ export default async function DashboardPage() {
                 wordBreak: "keep-all",
               }}
             >
-              상황판이 아니라 오늘의 판단면. 숫자보다 다음 액션이 먼저 보이게
-              구성했습니다.
+              상황판이 아니라 실행면입니다. 숫자보다 다음 행동이 먼저 보이도록
+              핵심 신호와 우선순위를 앞에 배치했습니다.
             </p>
           </div>
           <Cluster gap={2}>
@@ -99,7 +105,7 @@ export default async function DashboardPage() {
             </Link>
             <Link href="/dashboard/work">
               <Button variant="secondary" surface="dark" tabIndex={-1}>
-                Work OS 이동
+                워크 OS 열기
               </Button>
             </Link>
             <Link href="/dashboard/content/studio">
@@ -111,12 +117,11 @@ export default async function DashboardPage() {
         </Stack>
       </Surface>
 
-      {/* ─── KPI strip ────────────────────────────────────────── */}
       <section aria-label="운영 지표 스트립">
         <SectionHeader
-          eyebrow="Signals"
-          title="이번 라운드의 지표"
-          description="하루 동안 주목해야 하는 숫자 네 가지. 숫자를 그만 세고 다음 행동으로 바로 이어집니다."
+          eyebrow="핵심 신호"
+          title="이번 라운드에서 먼저 볼 지표"
+          description="하루 동안 가장 먼저 확인해야 할 네 가지 숫자입니다. 수치 확인에서 멈추지 않고 바로 다음 행동으로 이어지게 구성했습니다."
         />
         <Grid cols={4} gap={4} collapse="md">
           {attentionStats.map((stat) => (
@@ -132,16 +137,27 @@ export default async function DashboardPage() {
         </Grid>
       </section>
 
-      {/* ─── Next 3 actions ───────────────────────────────────── */}
+      <section aria-label="기계 펄스">
+        <SectionHeader
+          eyebrow="기계 펄스"
+          title="AI · 자동화 · 시스템 상태"
+          description="지금 돌고 있는지, 쉬고 있는지, 오늘 얼마나 움직였는지를 한 화면에서 확인합니다."
+        />
+        <Stack gap={4}>
+          <OperatingPulseSummaryCards pulse={operatingPulse} ariaLabel="기계 펄스 요약" />
+          <OperatingPulsePanel pulse={operatingPulse} compact />
+        </Stack>
+      </section>
+
       <section aria-label="다음 세 가지 액션">
         <SectionHeader
-          eyebrow="Next 3"
-          title="오늘 반드시 할 것"
-          description="하루를 작게 만들고, 가장 중요한 세 가지만 남깁니다."
+          eyebrow="다음 3개"
+          title="오늘 반드시 처리할 일"
+          description="하루를 작게 접어서 가장 중요한 세 가지 행동만 남깁니다."
           action={
             <Link href="/dashboard/playbooks">
               <Button variant="secondary" surface="dark" tabIndex={-1}>
-                플레이북 보기
+                플레이북 확인
               </Button>
             </Link>
           }
@@ -156,7 +172,7 @@ export default async function DashboardPage() {
                       {String(index + 1).padStart(2, "0")}
                     </StatusChip>
                     <StatusChip tone="neutral" plain>
-                      지금
+                      우선
                     </StatusChip>
                   </Cluster>
                   <h3
@@ -190,12 +206,12 @@ export default async function DashboardPage() {
           </Grid>
         ) : (
           <EmptyState
-            title="오늘의 액션이 비어 있습니다"
-            description="플레이북에서 오늘의 3가지 액션을 가져오거나, 데일리 브리프를 다시 작성해보세요."
+            title="오늘의 액션이 아직 없습니다"
+            description="플레이북에서 오늘의 세 가지 액션을 불러오거나, 데일리 브리프를 다시 작성해보세요."
             action={
               <Link href="/dashboard/daily-brief">
                 <Button variant="secondary" surface="dark" tabIndex={-1}>
-                  브리프 작성
+                  브리프 열기
                 </Button>
               </Link>
             }
@@ -203,18 +219,17 @@ export default async function DashboardPage() {
         )}
       </section>
 
-      {/* ─── Cross-lane feed + System health ──────────────────── */}
       <Grid cols={2} gap={5} collapse="md">
         <Stack gap={5}>
           <section aria-label="레인 간 움직임">
             <SectionHeader
-              eyebrow="Cross-lane feed"
-              title="레인을 가로지르는 움직임"
-              description="일이 어느 레인에서 움직였는지, 다음에 어디로 가는지 한 줄로 남깁니다."
+              eyebrow="교차 레인"
+              title="어디에서 어디로 움직였는지"
+              description="작업이 어느 레인에서 발생했고 다음에 어디로 넘어가는지 한 줄로 남깁니다."
               action={
                 <Link href="/dashboard/evolution/activity">
                   <Button variant="ghost" surface="dark" tabIndex={-1}>
-                    전체 활동
+                    전체 활동 보기
                   </Button>
                 </Link>
               }
@@ -279,24 +294,24 @@ export default async function DashboardPage() {
                     </article>
                   ))
                 ) : (
-                  <EmptyState
-                    title="최근 활동이 없습니다"
-                    description="엔진 intake가 열리면 활동 타임라인이 여기에 나타납니다."
-                  />
-                )}
+                <EmptyState
+                  title="최근 활동이 없습니다"
+                  description="엔진 수신이 열리면 활동 타임라인이 여기에 나타납니다."
+                />
+              )}
               </Stack>
             </Surface>
           </section>
 
           <section aria-label="프로젝트 움직임">
             <SectionHeader
-              eyebrow="Approvals & movement"
+              eyebrow="승인과 움직임"
               title="승인 대기 · 프로젝트 움직임"
               description="블로킹이 바쁨 뒤에 숨지 않게, 다음 결정이 명시적으로 남습니다."
               action={
                 <Link href="/dashboard/work">
                   <Button variant="ghost" surface="dark" tabIndex={-1}>
-                    Work OS
+                    워크 OS
                   </Button>
                 </Link>
               }
@@ -346,8 +361,8 @@ export default async function DashboardPage() {
                 ))
               ) : (
                 <EmptyState
-                  title="대기 중인 승인이 없습니다"
-                  description="새로운 결정이 생기면 여기에 올라옵니다."
+                  title="대기 중인 승인 없음"
+                  description="새로운 결정이 생기면 이곳에 표시됩니다."
                 />
               )}
             </Stack>
@@ -357,7 +372,7 @@ export default async function DashboardPage() {
         <Stack gap={5}>
           <section aria-label="시스템 상태">
             <SectionHeader
-              eyebrow="System"
+              eyebrow="시스템"
               title="허브 쉘 상태"
               description="운영 면이 살아 있는지 먼저 확인합니다. 숨은 고장은 이 블록에서 드러납니다."
             />
@@ -373,11 +388,11 @@ export default async function DashboardPage() {
             </Grid>
           </section>
 
-          <section aria-label="엔진 intake">
+          <section aria-label="엔진 수신">
             <SectionHeader
-              eyebrow="Engine"
-              title="웹훅 intake"
-              description="intake가 막히면 운영 루프가 멈춥니다. 경로별 상태를 먼저 노출합니다."
+              eyebrow="엔진"
+              title="웹훅 수신 상태"
+              description="수신 경로가 막히면 운영 루프가 멈춥니다. 경로별 상태를 먼저 노출합니다."
               action={
                 <Link href="/dashboard/automations/webhooks">
                   <Button variant="ghost" surface="dark" tabIndex={-1}>
@@ -436,8 +451,8 @@ export default async function DashboardPage() {
                   ))
                 ) : (
                   <EmptyState
-                    title="등록된 intake가 없습니다"
-                    description="엔진에 웹훅 경로를 연결하면 여기 나타납니다."
+                    title="등록된 수신 경로가 없습니다"
+                    description="엔진에 웹훅 경로를 연결하면 이곳에 나타납니다."
                   />
                 )}
               </Stack>

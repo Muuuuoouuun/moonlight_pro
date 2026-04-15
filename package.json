@@ -8,8 +8,10 @@
   ],
   "scripts": {
     "build": "turbo run build",
+    "build:hub": "turbo run build --filter=@com-moon/hub --filter=@com-moon/engine",
     "check:connections": "node ./scripts/check-connections.mjs",
-    "dev": "turbo run dev",
+    "dev": "turbo run dev --filter=@com-moon/hub --filter=@com-moon/engine",
+    "dev:all": "turbo run dev",
     "dev:hub": "npm --workspace @com-moon/hub run dev",
     "dev:engine": "npm --workspace @com-moon/engine run dev",
     "dev:web": "npm --workspace @com-moon/web run dev",

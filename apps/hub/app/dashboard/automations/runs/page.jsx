@@ -6,39 +6,51 @@ function countRuns(items, predicate) {
   return items.filter(predicate).length;
 }
 
+const TONE_LABEL = {
+  warning: "주의",
+  danger: "위험",
+  blue: "정보",
+  green: "정상",
+  muted: "중립",
+};
+
+function getToneLabel(tone) {
+  return TONE_LABEL[tone] || tone;
+}
+
 export default async function AutomationRunsPage() {
-  const { automationRuns } = await getAutomationsPageData();
+  const { automationRuns, automationTriage } = await getAutomationsPageData();
 
   return (
     <>
-      <section className="summary-grid" aria-label="Automation run summary">
+      <section className="summary-grid" aria-label="자동화 실행 요약">
         <SummaryCard
-          title="Successful"
+          title="성공"
           value={String(countRuns(automationRuns, (item) => item.status === "success"))}
-          detail="Recent runs that completed cleanly."
-          badge="Healthy"
+          detail="최근 정상적으로 끝난 실행 수입니다."
+          badge="건강"
         />
         <SummaryCard
-          title="Queued / Ready"
+          title="대기 / 준비"
           value={String(countRuns(automationRuns, (item) => item.status === "queued" || item.status === "ready"))}
-          detail="Runs waiting for dispatch or review."
-          badge="Waiting"
+          detail="디스패치나 검토를 기다리는 실행 수입니다."
+          badge="대기"
           tone="warning"
         />
         <SummaryCard
-          title="Watch"
+          title="주시"
           value={String(countRuns(automationRuns, (item) => item.status === "failure"))}
-          detail="Runs that need a retry or operator inspection."
-          badge="Attention"
+          detail="재시도나 운영자 점검이 필요한 실행 수입니다."
+          badge="주의"
           tone="danger"
         />
       </section>
 
       <div className="split-grid">
         <SectionCard
-          kicker="Runs"
-          title="Execution pulse"
-          description="Each run should explain what happened without forcing the operator to reconstruct the story."
+          kicker="실행"
+          title="실행 펄스"
+          description="각 실행은 운영자가 스토리를 재구성하지 않아도 무슨 일이 있었는지 설명해야 합니다."
         >
           <div className="timeline">
             {automationRuns.map((item) => (
@@ -61,32 +73,58 @@ export default async function AutomationRunsPage() {
         </SectionCard>
 
         <SectionCard
-          kicker="Rules"
-          title="Dispatch guardrails"
-          description="Runs stay trustworthy when the queue is readable and failure handling is boring."
+          kicker="규칙"
+          title="디스패치 가드레일"
+          description="큐가 읽히고 실패 처리가 지루할수록 실행은 더 신뢰할 수 있습니다."
         >
           <ul className="note-list">
             <li className="note-row">
               <div>
-                <strong>Queue before complexity</strong>
-                <p>If the next run is not obvious, the lane is already doing too much.</p>
+                <strong>복잡함보다 큐를 먼저 본다</strong>
+                <p>다음 실행이 분명하지 않다면 이 레인은 이미 너무 많은 일을 하고 있는 것입니다.</p>
               </div>
             </li>
             <li className="note-row">
               <div>
-                <strong>Failures should name the broken step</strong>
-                <p>The operator should know what to retry without reading raw traces first.</p>
+                <strong>실패는 깨진 단계를 이름 붙여야 한다</strong>
+                <p>운영자는 원시 트레이스를 읽지 않고도 무엇을 재시도할지 알아야 합니다.</p>
               </div>
             </li>
             <li className="note-row">
               <div>
-                <strong>Successful runs should teach reuse</strong>
-                <p>When an automation works, the input and output pattern should be easy to repeat.</p>
+                <strong>성공한 실행은 재사용을 가르쳐야 한다</strong>
+                <p>자동화가 잘 돌았다면 입력과 출력 패턴도 쉽게 반복 가능해야 합니다.</p>
               </div>
             </li>
           </ul>
         </SectionCard>
       </div>
+
+      <SectionCard
+        kicker="핸드오프"
+        title="실패 분류와 다음 디스패치"
+        description="재시도는 명시적이어야 하고, 자동화가 더 이상 정답이 아닌 순간도 같은 수준으로 보여야 합니다."
+      >
+        <div className="template-grid">
+          {automationTriage.map((item) => (
+            <div className="template-row" key={item.id}>
+              <div>
+                <strong>{item.title}</strong>
+                <p>{item.detail}</p>
+                <p className="check-detail">
+                  <strong>다음</strong> · {item.nextAction}
+                </p>
+                <p className="check-detail">
+                  <strong>핸드오프</strong> · {item.handoff}
+                </p>
+              </div>
+              <span className="legend-chip" data-tone={item.tone}>
+                {getToneLabel(item.tone)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
     </>
   );
 }

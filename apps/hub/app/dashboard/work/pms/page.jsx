@@ -1,12 +1,20 @@
 import Link from "next/link";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { HubSyncBadge } from "@/components/dashboard/hub-sync-badge";
+import { WorkContextBridge } from "@/components/dashboard/work-context-bridge";
 import {
   NewSinceDot,
   SinceLastVisitProvider,
 } from "@/components/dashboard/since-last-visit";
 import { resolveWorkContext, scopeMappedItemsByWorkContext } from "@/lib/dashboard-contexts";
-import { getWorkPmsPageData } from "@/lib/server-data";
+import { getLocalProjectRepositoryData, getProjectsPageData, getWorkPmsPageData } from "@/lib/server-data";
+import {
+  buildWorkContextHref,
+  formatWorkMetric,
+  getVisibleWorkContexts,
+  scopeStrictWorkItems,
+  sumWorkValues,
+} from "@/lib/work-context-bridge";
 
 const PMS_TABS = [
   { value: "ship", labelKey: "Ship Pulse" },
@@ -103,7 +111,254 @@ function deriveFocusCards(bundles = [], alerts = [], repoCards = []) {
   return { blocker, nextMove, mergedThisWeek };
 }
 
+function buildPmsSignalCards({ bundles = [], alerts = [], checks = [], tasks = [], mergedThisWeek = 0 }) {
+  const openPullCount = sumWorkValues(bundles.map((item) => item.openPulls.length));
+  const draftPullCount = sumWorkValues(
+    bundles.map((item) => item.openPulls.filter((pull) => pull.draft).length),
+  );
+  const openIssueCount = sumWorkValues(bundles.map((item) => item.issues.length));
+  const recentCommitCount = sumWorkValues(bundles.map((item) => item.commits.length));
+  const blockedTaskCount = tasks.filter((item) => item.status === "blocked").length;
+  const dangerAlertCount = alerts.filter((item) => item.tone === "danger").length;
+  const warningAlertCount = alerts.filter((item) => item.tone === "warning").length;
+
+  return [
+    {
+      key: "blockers",
+      tone: "danger",
+      kicker: "Red Point",
+      title: "Immediate intervention",
+      value: String(dangerAlertCount + blockedTaskCount).padStart(2, "0"),
+      label: dangerAlertCount
+        ? `${dangerAlertCount} danger alert${dangerAlertCount === 1 ? "" : "s"} visible`
+        : blockedTaskCount
+          ? `${blockedTaskCount} blocked task${blockedTaskCount === 1 ? "" : "s"} visible`
+          : "No red lane right now",
+      detail:
+        alerts.find((item) => item.tone === "danger")?.detail ||
+        tasks.find((item) => item.status === "blocked")?.detail ||
+        "Nothing is flashing red in the current PMS surface.",
+    },
+    {
+      key: "review",
+      tone: "warning",
+      kicker: "Amber Point",
+      title: "Review pressure",
+      value: String(openPullCount).padStart(2, "0"),
+      label: draftPullCount
+        ? `${draftPullCount} draft PR${draftPullCount === 1 ? "" : "s"} still need finish`
+        : warningAlertCount
+          ? `${warningAlertCount} watch signal${warningAlertCount === 1 ? "" : "s"} visible`
+          : "Review queue is controlled",
+      detail:
+        draftPullCount > 0
+          ? "Draft PRs are where momentum most often slows down. Finish or kill them fast."
+          : "Open PR load is visible, but not currently spilling into a red zone.",
+    },
+    {
+      key: "motion",
+      tone: "blue",
+      kicker: "Blue Point",
+      title: "Shipping motion",
+      value: String(recentCommitCount).padStart(2, "0"),
+      label: `${mergedThisWeek} merge${mergedThisWeek === 1 ? "" : "s"} landed this week`,
+      detail:
+        recentCommitCount > 0
+          ? "Commits and merges are still feeding the board, so this lane reads as active rather than decorative."
+          : "No recent repository motion is visible. The board may look healthy while delivery is quiet.",
+    },
+    {
+      key: "cadence",
+      tone: "green",
+      kicker: "Green Point",
+      title: "Cadence memory",
+      value: String(checks.length).padStart(2, "0"),
+      label: checks.length
+        ? `${checks.length} ritual check${checks.length === 1 ? "" : "s"} are keeping the loop visible`
+        : "Cadence layer is still empty",
+      detail:
+        checks.length > 0
+          ? `${openIssueCount} open issue${openIssueCount === 1 ? "" : "s"} are now framed by an explicit review rhythm instead of pure inbox pressure.`
+          : "No cadence signal is recorded yet. Add one review or reset loop before the week blurs.",
+    },
+  ];
+}
+
+function buildPmsLaneRows(bundles = []) {
+  return (bundles || [])
+    .filter((bundle) => bundle.repository)
+    .slice(0, 4)
+    .map((bundle) => {
+      const repo = (bundle.repository || "").split("/")[1] || bundle.repository || "Repository";
+      const openPullCount = bundle.openPulls.length;
+      const openIssueCount = bundle.issues.length;
+      const draftPullCount = bundle.openPulls.filter((item) => item.draft).length;
+      const milestone = bundle.milestones[0];
+      const totalIssues = milestone ? milestone.open_issues + milestone.closed_issues : openIssueCount;
+      const progress = milestone
+        ? totalIssues
+          ? Math.round((milestone.closed_issues / totalIssues) * 100)
+          : 0
+        : openPullCount
+          ? 64
+          : openIssueCount
+            ? 38
+            : 84;
+
+      let tone = "green";
+      let status = "quiet";
+
+      if (openIssueCount > 8) {
+        tone = "danger";
+        status = "issue pressure";
+      } else if (draftPullCount > 0) {
+        tone = "warning";
+        status = "draft handoff";
+      } else if (openPullCount > 0) {
+        tone = "blue";
+        status = "shipping";
+      }
+
+      return {
+        repo,
+        tone,
+        status,
+        progress,
+        meta: `${openPullCount} PR · ${openIssueCount} issue · ${bundle.commits.length} commit`,
+        lead:
+          bundle.openPulls[0]?.title ||
+          milestone?.title ||
+          bundle.issues[0]?.title ||
+          "No immediate queue visible",
+      };
+    });
+}
+
+function projectSelector(item) {
+  return [item.title, item.owner, item.milestone, item.nextAction, item.risk, item.taskLead];
+}
+
+function taskSelector(item) {
+  return [item.title, item.detail, item.project];
+}
+
+function checkSelector(item) {
+  return [item.title, item.detail, item.rhythm];
+}
+
+function repoSelector(item) {
+  return [item.title, item.owner, item.milestone, item.nextAction, item.risk, item.taskLead];
+}
+
+function alertSelector(item) {
+  return [item.title, item.detail];
+}
+
+function bundleSelector(bundle) {
+  return [
+    bundle.repository,
+    bundle.repo?.name,
+    bundle.repo?.full_name,
+    bundle.repo?.description,
+    ...bundle.milestones.map((item) => item.title),
+    ...bundle.openPulls.map((item) => item.title),
+    ...bundle.issues.map((item) => item.title),
+    ...bundle.commits.slice(0, 6).map((item) => item.commit?.message),
+  ];
+}
+
+function buildPmsBridgeRows({
+  selectedContextValue,
+  projectPortfolio,
+  taskQueue,
+  pmsBoard,
+  githubRepoCards,
+  githubAlerts,
+  githubBundles,
+  localRepositories,
+}) {
+  const localRepositoryByContext = new Map(
+    (localRepositories || []).map((item) => [item.contextValue, item]),
+  );
+
+  return getVisibleWorkContexts(selectedContextValue).map((context) => {
+    const projects = scopeStrictWorkItems(projectPortfolio, context.value, projectSelector);
+    const tasks = scopeStrictWorkItems(taskQueue, context.value, taskSelector);
+    const checks = scopeStrictWorkItems(pmsBoard, context.value, checkSelector);
+    const repoCards = scopeStrictWorkItems(githubRepoCards, context.value, repoSelector);
+    const alerts = scopeStrictWorkItems(githubAlerts, context.value, alertSelector);
+    const bundles = scopeStrictWorkItems(githubBundles, context.value, bundleSelector);
+    const localRepository = localRepositoryByContext.get(context.value);
+    const openPullCount = sumWorkValues(bundles.map((item) => item.openPulls.length));
+    const openIssueCount = sumWorkValues(bundles.map((item) => item.issues.length));
+    const recentCommitCount = sumWorkValues(bundles.map((item) => item.commits.length));
+    const blockerCount =
+      tasks.filter((item) => item.status === "blocked").length +
+      alerts.filter((item) => item.tone === "warning" || item.tone === "danger").length +
+      projects.filter((item) => item.status === "blocked").length;
+
+    let statusTone = localRepository?.statusTone || "muted";
+    let statusLabel = localRepository?.statusLabel || "idle";
+
+    if (blockerCount > 0 || localRepository?.statusTone === "danger") {
+      statusTone = "danger";
+      statusLabel = blockerCount > 0 ? "blocked" : localRepository?.statusLabel || "attention";
+    } else if (openIssueCount > 8 || localRepository?.statusTone === "warning") {
+      statusTone = "warning";
+      statusLabel = openIssueCount > 8 ? "pressure" : localRepository?.statusLabel || "watch";
+    } else if (openPullCount > 0 || recentCommitCount > 0) {
+      statusTone = "blue";
+      statusLabel = "shipping";
+    } else if (checks.length > 0 || repoCards.length > 0) {
+      statusTone = "green";
+      statusLabel = "steady";
+    }
+
+    const headline =
+      alerts[0]?.title ||
+      (openPullCount > 0
+        ? `${openPullCount} PR${openPullCount === 1 ? "" : "s"} and ${recentCommitCount} recent commits are active`
+        : checks.length > 0
+          ? `${checks.length} cadence check${checks.length === 1 ? "" : "s"} are backing this lane`
+          : "PMS needs one live repo or review signal to stay honest");
+    const detail = [
+      repoCards[0]?.nextAction ||
+        projects[0]?.nextAction ||
+        "Keep the next repo move and the next operating decision attached to the same lane.",
+      localRepository?.repository
+        ? `${localRepository.repository} · ${localRepository.detail}`
+        : "Local workspace mapping is still missing for this context.",
+    ].join(" ");
+
+    return {
+      key: context.value,
+      label: context.label,
+      description: context.description,
+      statusTone,
+      statusLabel,
+      headline,
+      detail,
+      metrics: [
+        { label: "PRs", value: formatWorkMetric(openPullCount), tone: openPullCount ? "blue" : "muted" },
+        { label: "Issues", value: formatWorkMetric(openIssueCount), tone: openIssueCount ? "warning" : "muted" },
+        { label: "Commits", value: formatWorkMetric(recentCommitCount), tone: recentCommitCount ? "green" : "muted" },
+        { label: "Cadence", value: formatWorkMetric(checks.length), tone: checks.length ? "blue" : "muted" },
+      ],
+      links: [
+        { label: "Projects", href: buildWorkContextHref("/dashboard/work/projects", context.value) },
+        { label: "Roadmap", href: buildWorkContextHref("/dashboard/work/roadmap", context.value) },
+        { label: "Management", href: buildWorkContextHref("/dashboard/work/management", context.value) },
+      ],
+    };
+  });
+}
+
 export default async function WorkPmsPage({ searchParams }) {
+  const [{ projectPortfolio }, pmsData] = await Promise.all([
+    getProjectsPageData(),
+    getWorkPmsPageData(),
+  ]);
+  const localRepositoryData = getLocalProjectRepositoryData();
   const {
     pmsBoard,
     weeklyReview,
@@ -117,10 +372,10 @@ export default async function WorkPmsPage({ searchParams }) {
     githubTotals,
     githubLastSyncAt,
     hasGitHubData,
-  } = await getWorkPmsPageData();
-
-  const selectedProject = resolveWorkContext(searchParams?.project);
-  const activeTab = resolveActiveTab(searchParams);
+  } = pmsData;
+  const params = (await searchParams) ?? {};
+  const selectedProject = resolveWorkContext(params?.project);
+  const activeTab = resolveActiveTab(params);
 
   const scopedRepoCards = scopeMappedItemsByWorkContext(
     githubRepoCards,
@@ -136,6 +391,11 @@ export default async function WorkPmsPage({ searchParams }) {
     githubAlerts,
     selectedProject.value,
     (item) => [item.title, item.detail],
+  );
+  const scopedBundles = scopeMappedItemsByWorkContext(
+    githubBundles,
+    selectedProject.value,
+    bundleSelector,
   );
   const scopedChecks = scopeMappedItemsByWorkContext(
     pmsBoard,
@@ -153,10 +413,28 @@ export default async function WorkPmsPage({ searchParams }) {
     (item) => [item.title, item.detail],
   );
 
-  const focus = deriveFocusCards(githubBundles, scopedAlerts.items, scopedRepoCards.items);
+  const focus = deriveFocusCards(scopedBundles.items, scopedAlerts.items, scopedRepoCards.items);
+  const signalCards = buildPmsSignalCards({
+    bundles: scopedBundles.items,
+    alerts: scopedAlerts.items,
+    checks: scopedChecks.items,
+    tasks: scopedTasks.items,
+    mergedThisWeek: focus.mergedThisWeek,
+  });
+  const laneRows = buildPmsLaneRows(scopedBundles.items);
 
-  const danagerAlertCount = scopedAlerts.items.filter((item) => item.tone === "danger").length;
+  const dangerAlertCount = scopedAlerts.items.filter((item) => item.tone === "danger").length;
   const slipCandidate = focus.blocker ? 1 : 0;
+  const bridgeRows = buildPmsBridgeRows({
+    selectedContextValue: selectedProject.value,
+    projectPortfolio,
+    taskQueue,
+    pmsBoard,
+    githubRepoCards,
+    githubAlerts,
+    githubBundles,
+    localRepositories: localRepositoryData.projects,
+  });
   const syncTone =
     githubConnection?.tone === "danger"
       ? "danger"
@@ -214,11 +492,11 @@ export default async function WorkPmsPage({ searchParams }) {
             </li>
             <li
               className="hub-kpi-strip__cell hub-rim"
-              data-rim={danagerAlertCount ? "danger" : "default"}
+              data-rim={dangerAlertCount ? "danger" : "default"}
             >
               <span className="hub-kpi-strip__label">블록 신호</span>
               <span className="hub-kpi-strip__value">
-                {String(danagerAlertCount).padStart(2, "0")}
+                {String(dangerAlertCount).padStart(2, "0")}
               </span>
               <span className="hub-kpi-strip__meta">
                 danger 티어 얼럿
@@ -246,6 +524,77 @@ export default async function WorkPmsPage({ searchParams }) {
               </span>
             </li>
           </ul>
+
+          <div className="hub-pms__signal-wall">
+            <article className="hub-pms__signal-board hub-rim" data-rim={dangerAlertCount ? "danger" : "alert"}>
+              <div className="hub-pms__signal-board-head">
+                <div>
+                  <p className="hub-pms__micro-kicker">Color map</p>
+                  <h2>운영 포인트 배치</h2>
+                  <p>빨강은 즉시 개입, 황색은 리뷰 병목, 파랑은 배송 전환, 녹색은 리듬 유지 구역입니다.</p>
+                </div>
+                <span className="legend-chip" data-tone={hasGitHubData ? "blue" : "muted"}>
+                  PMS color logic
+                </span>
+              </div>
+              <div className="hub-pms__signal-spectrum">
+                {signalCards.map((item) => (
+                  <article className="hub-pms__signal-card" data-tone={item.tone} key={item.key}>
+                    <div className="hub-pms__signal-card-head">
+                      <span className="hub-pms__signal-dot" data-tone={item.tone} />
+                      <div>
+                        <p>{item.kicker}</p>
+                        <h3>{item.title}</h3>
+                      </div>
+                    </div>
+                    <strong>{item.value}</strong>
+                    <span className="hub-pms__signal-label">{item.label}</span>
+                    <p>{item.detail}</p>
+                  </article>
+                ))}
+              </div>
+            </article>
+
+            <article className="hub-pms__lane-radar hub-rim" data-rim={slipCandidate ? "alert" : "default"}>
+              <div className="hub-pms__lane-radar-head">
+                <div>
+                  <p className="hub-pms__micro-kicker">Lane radar</p>
+                  <h2>리포별 색 분포</h2>
+                  <p>레포마다 어떤 색이 우세한지 한 줄씩 보여줘서, 어디에 손을 넣을지 먼저 정렬합니다.</p>
+                </div>
+              </div>
+              {laneRows.length ? (
+                <div className="hub-pms__lane-list">
+                  {laneRows.map((row) => (
+                    <article className="hub-pms__lane-row" data-tone={row.tone} key={row.repo}>
+                      <div className="hub-pms__lane-row-head">
+                        <div className="hub-pms__lane-row-title">
+                          <span className="hub-pms__signal-dot" data-tone={row.tone} />
+                          <strong>{row.repo}</strong>
+                        </div>
+                        <span className="legend-chip" data-tone={row.tone}>
+                          {row.status}
+                        </span>
+                      </div>
+                      <p className="hub-pms__lane-row-lead">{row.lead}</p>
+                      <div className="hub-pms__lane-row-meta">
+                        <span>{row.meta}</span>
+                        <span>{row.progress}% confidence</span>
+                      </div>
+                      <div className="hub-pms__lane-track" aria-hidden="true">
+                        <span data-tone={row.tone} style={{ width: `${row.progress}%` }} />
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="hub-pms__lane-empty">
+                  <strong>GitHub lane not visible yet</strong>
+                  <p>리포 연결이 들어오면 이곳에 레포별 색 분포와 배송 온도가 나타납니다.</p>
+                </div>
+              )}
+            </article>
+          </div>
 
           <div className="hub-pms__focus-grid">
             <article
@@ -318,6 +667,14 @@ export default async function WorkPmsPage({ searchParams }) {
           </div>
         </section>
 
+        <SectionCard
+          kicker="Connections"
+          title="Delivery lane bridge"
+          description="Projects, PMS, and roadmap now share one context deck so the active lane stays intact when you jump across views."
+        >
+          <WorkContextBridge rows={bridgeRows} />
+        </SectionCard>
+
         {/* ── Layer B · 디테일 탭 ─────────────────────────────── */}
         <section aria-label="PMS detail tabs">
           <div className="hub-pms__tabs" role="tablist">
@@ -343,9 +700,9 @@ export default async function WorkPmsPage({ searchParams }) {
                 title="Repository shipping motion"
                 description="어떤 리포가 움직이고, 무엇이 막혀 있고, 다음 조치가 무엇인지 한 번에."
               >
-                <div className="project-grid">
+                <div className="hub-pms__repo-grid">
                   {scopedRepoCards.items.slice(0, 4).map((project) => (
-                    <article className="project-card" key={project.title}>
+                    <article className="hub-pms__repo-card" data-tone={project.statusTone} key={project.title}>
                       <div className="project-head">
                         <div>
                           <h3>{project.title}</h3>
@@ -361,6 +718,15 @@ export default async function WorkPmsPage({ searchParams }) {
                           <span style={{ width: `${project.progress}%` }} />
                         </div>
                         <strong>{project.progress}%</strong>
+                      </div>
+
+                      <div className="hub-pms__repo-pills">
+                        <span className="legend-chip" data-tone={project.statusTone}>
+                          {project.taskSummary}
+                        </span>
+                        <span className="legend-chip" data-tone={project.risk === "Controlled" ? "green" : "warning"}>
+                          {project.risk}
+                        </span>
                       </div>
 
                       <dl className="detail-stack">
@@ -419,9 +785,9 @@ export default async function WorkPmsPage({ searchParams }) {
                 title="케이던스 체크와 후속 이행"
                 description="GitHub 는 리뷰 리추얼을 더 날카롭게 만들 뿐, 대체하지 않습니다."
               >
-                <div className="check-grid">
+                <div className="hub-pms__cadence-grid">
                   {scopedChecks.items.slice(0, 6).map((item) => (
-                    <article className="check-card" key={item.title}>
+                    <article className="hub-pms__cadence-card" data-tone={item.statusTone} key={item.title}>
                       <div className="project-head">
                         <div>
                           <h3>{item.title}</h3>
@@ -454,7 +820,7 @@ export default async function WorkPmsPage({ searchParams }) {
                 title="실행 대기 상위"
                 description="운영자가 다음으로 집중해야 할 상위 5개 태스크만 여기 노출됩니다."
               >
-                <ul className="task-list">
+                <ul className="hub-pms__queue-list">
                   {(scopedTasks.items.length
                     ? scopedTasks.items.slice(0, 5)
                     : [
@@ -467,7 +833,7 @@ export default async function WorkPmsPage({ searchParams }) {
                         },
                       ]
                   ).map((item) => (
-                    <li className="task-item" key={`${item.title}-${item.project}`}>
+                    <li className="hub-pms__queue-item" data-tone={item.statusTone} key={`${item.title}-${item.project}`}>
                       <div>
                         <strong>{item.title}</strong>
                         <p>{item.detail}</p>

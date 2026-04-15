@@ -1,35 +1,37 @@
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
-import { Calistoga, Inter, JetBrains_Mono } from "next/font/google";
+import { IBM_Plex_Mono, Noto_Sans_KR, Noto_Serif_KR } from "next/font/google";
 import "./globals.css";
 
-const displayFont = Calistoga({
+const displayFont = Noto_Serif_KR({
   subsets: ["latin"],
-  weight: "400",
-  variable: "--font-display",
+  weight: ["400", "500", "700"],
+  variable: "--cm-font-serif",
 });
 
-const bodyFont = Inter({
+const bodyFont = Noto_Sans_KR({
   subsets: ["latin"],
-  variable: "--font-body",
+  weight: ["400", "500", "700"],
+  variable: "--cm-font-sans",
 });
 
-const monoFont = JetBrains_Mono({
+const monoFont = IBM_Plex_Mono({
   subsets: ["latin"],
-  variable: "--font-mono",
+  weight: ["400", "500", "600"],
+  variable: "--cm-font-mono",
 });
 
 export const metadata = {
-  title: "Com_Moon OS",
-  description: "Private operating shell for operations, content, and command center workflows.",
+  title: "moonlight 프로젝트",
+  description: "운영, 콘텐츠, 커맨드를 한곳에서 다루는 moonlight 프로젝트의 프라이빗 허브입니다.",
   manifest: "/manifest.json",
-  applicationName: "Com_Moon OS",
+  applicationName: "moonlight 프로젝트",
 };
 
 export const viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#084734",
+  themeColor: "#5274a8",
 };
 
 export default async function RootLayout({ children }) {

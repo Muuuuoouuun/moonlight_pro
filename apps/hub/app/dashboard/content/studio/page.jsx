@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { SectionCard } from "@/components/dashboard/section-card";
@@ -9,22 +9,22 @@ import { getContentBrandReference, resolveContentBrand } from "@/lib/dashboard-c
 const templatePresets = [
   {
     id: "hook-proof-cta",
-    label: "Hook / Proof / CTA",
+    label: "후킹 / 증거 / CTA",
     summary: "짧고 선명한 카드뉴스 기본형",
   },
   {
     id: "problem-shift-action",
-    label: "Problem / Shift / Action",
+    label: "문제 / 전환 / 행동",
     summary: "문제 인식에서 행동 유도까지 밀어주는 구조",
   },
   {
     id: "ops-note",
-    label: "Operator Note",
+    label: "운영자 노트",
     summary: "운영 메모를 퍼블릭 톤으로 바꾸는 구조",
   },
 ];
 
-const channelPresets = ["Instagram", "Insights", "Newsletter", "Landing"];
+const channelPresets = ["인스타그램", "인사이트", "뉴스레터", "랜딩"];
 
 const handoffRules = [
   "한 장에는 한 메시지만 남기기",
@@ -155,12 +155,12 @@ function parseSlides(value) {
 
   const all = [];
   if (cover.title || cover.body.length) {
-    all.push({ id: "cover", label: "Cover", title: cover.title, body: cover.body });
+    all.push({ id: "cover", label: "표지", title: cover.title, body: cover.body });
   }
   slides.forEach((slide, index) => {
     all.push({
       id: `slide-${index + 1}`,
-      label: `Slide ${index + 1}`,
+      label: `슬라이드 ${index + 1}`,
       title: slide.title,
       body: slide.body,
     });
@@ -174,17 +174,30 @@ function parseSlides(value) {
 
 export default function ContentStudioPage() {
   const searchParams = useSearchParams();
-  const [templateId, setTemplateId] = useState(templatePresets[0].id);
-  const [channel, setChannel] = useState(channelPresets[0]);
-  const [draft, setDraft] = useState(buildDraft(templatePresets[0].id));
-  const [copied, setCopied] = useState(false);
-
   const selectedBrand = resolveContentBrand(searchParams.get("brand"));
   const brandReference = getContentBrandReference(selectedBrand.value);
+  const defaultTemplateId = brandReference.recommendedTemplateId || templatePresets[0].id;
+  const defaultChannel = brandReference.recommendedChannel || channelPresets[0];
+  const [templateId, setTemplateId] = useState(defaultTemplateId);
+  const [channel, setChannel] = useState(defaultChannel);
+  const [draft, setDraft] = useState(buildDraft(defaultTemplateId));
+  const [copied, setCopied] = useState(false);
   const wordCount = draft.trim().split(/\s+/).filter(Boolean).length;
   const sectionCount = (draft.match(/^## /gm) || []).length;
   const selectedTemplate = templatePresets.find((item) => item.id === templateId) ?? templatePresets[0];
   const slides = useMemo(() => parseSlides(draft), [draft]);
+
+  useEffect(() => {
+    const nextTemplateId = brandReference.recommendedTemplateId || templatePresets[0].id;
+    setTemplateId(nextTemplateId);
+    setChannel(brandReference.recommendedChannel || channelPresets[0]);
+    setDraft(buildDraft(nextTemplateId));
+    setCopied(false);
+  }, [
+    brandReference.recommendedChannel,
+    brandReference.recommendedTemplateId,
+    selectedBrand.value,
+  ]);
 
   function applyTemplate(nextTemplateId) {
     setTemplateId(nextTemplateId);
@@ -205,46 +218,62 @@ export default function ContentStudioPage() {
   return (
     <div className="stack">
       <SectionCard
-        kicker="Studio status"
-        title="Current drafting context"
+        kicker="스튜디오 상태"
+        title="현재 초안 맥락"
         description={
           selectedBrand.value === "all"
-            ? "The studio should keep the message, format, and next handoff visible at the same time."
-            : `${selectedBrand.label} is selected, so the studio keeps one brand voice in focus while shared rows remain visible elsewhere.`
+            ? "스튜디오는 메시지, 포맷, 다음 핸드오프를 동시에 보이게 유지해야 합니다."
+            : `${selectedBrand.label}을 선택했으므로 공용 행은 다른 곳에 남겨 두되, 이 스튜디오는 하나의 브랜드 보이스에 집중합니다.`
         }
       >
         <div className="studio-metric-grid">
           <div className="mini-metric">
-            <span>Brand scope</span>
+            <span>브랜드 범위</span>
             <strong>{selectedBrand.label}</strong>
             <p>{brandReference.rule}</p>
           </div>
           <div className="mini-metric">
-            <span>Template</span>
+            <span>톤 가이드</span>
+            <strong>{brandReference.toneKeywords}</strong>
+            <p>{brandReference.forbiddenLanguage}</p>
+          </div>
+          <div className="mini-metric">
+            <span>템플릿</span>
             <strong>{selectedTemplate.label}</strong>
             <p>{selectedTemplate.summary}</p>
           </div>
           <div className="mini-metric">
-            <span>Target channel</span>
+            <span>목표 채널</span>
             <strong>{channel}</strong>
-            <p>Draft is being shaped for this distribution surface first.</p>
+            <p>{`권장 경로: ${brandReference.recommendedChannel}`}</p>
           </div>
           <div className="mini-metric">
-            <span>Draft size</span>
-            <strong>
-              {wordCount} words / {sectionCount} slides
-            </strong>
-            <p>Enough structure to hand off without bloating the carousel.</p>
+            <span>발행 리듬</span>
+            <strong>{brandReference.publishRhythm}</strong>
+            <p>{brandReference.ctaPattern}</p>
           </div>
+          <div className="mini-metric">
+            <span>초안 크기</span>
+            <strong>
+              {wordCount}어절 / {sectionCount}장
+            </strong>
+            <p>캐러셀을 과하게 불리지 않고도 넘길 수 있는 최소 구조를 유지합니다.</p>
+          </div>
+        </div>
+        <div className="status-note">
+          <strong>{selectedBrand.label} 운영 노트</strong>
+          <p>{brandReference.keyMessage}</p>
+          <p className="status-note-subtle">{`CTA · ${brandReference.ctaPattern}`}</p>
+          <p className="status-note-subtle">{`피해야 할 표현 · ${brandReference.forbiddenLanguage}`}</p>
         </div>
         <p className="context-footnote">{brandReference.status}</p>
       </SectionCard>
 
       <div className="editor-layout">
         <SectionCard
-          kicker="Draft"
-          title="Card copy"
-          description="Write the message in a format the team can review and the next automation can reshape."
+          kicker="초안"
+          title="카드 카피"
+          description="팀이 검토할 수 있고 다음 자동화가 다시 가공할 수 있는 형식으로 메시지를 씁니다."
           action={
             <div className="editor-toolbar">
               <button
@@ -255,15 +284,15 @@ export default function ContentStudioPage() {
                 }}
                 type="button"
               >
-                Reset draft
+                초안 초기화
               </button>
               <button className="button button-primary" onClick={copyDraft} type="button">
-                {copied ? "Copied" : "Copy draft"}
+                {copied ? "복사됨" : "초안 복사"}
               </button>
               <span className="editor-status" role="status" aria-live="polite">
                 {copied
-                  ? "Copied to clipboard. Ready for publish handoff."
-                  : "Keep the hook, proof, and CTA clearly separated."}
+                  ? "클립보드에 복사했습니다. 발행 핸드오프 준비가 끝났습니다."
+                  : "후킹, 증거, CTA를 분명히 분리해 둡니다."}
               </span>
             </div>
           }
@@ -271,7 +300,10 @@ export default function ContentStudioPage() {
           <div className="editor-frame">
             <div className="studio-option-grid">
               <div className="studio-option-stack">
-                <span className="section-kicker">Template preset</span>
+                <span className="section-kicker">템플릿 프리셋</span>
+                <p className="footnote">
+                  {`${selectedBrand.label} 권장 · ${brandReference.recommendedTemplateLabel}`}
+                </p>
                 <div className="studio-button-row">
                   {templatePresets.map((template) => (
                     <button
@@ -289,7 +321,8 @@ export default function ContentStudioPage() {
               </div>
 
               <div className="studio-option-stack">
-                <span className="section-kicker">Primary channel</span>
+                <span className="section-kicker">주 채널</span>
+                <p className="footnote">{`권장 경로 · ${brandReference.recommendedChannel}`}</p>
                 <div className="studio-chip-row">
                   {channelPresets.map((item) => (
                     <button
@@ -311,20 +344,19 @@ export default function ContentStudioPage() {
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               spellCheck="false"
-              aria-label="Card news draft editor"
+              aria-label="카드뉴스 초안 편집기"
             />
             <p className="footnote">
-              Tip: keep the hook, the proof, and the CTA separated so the publish automation can reshape
-              the draft without guessing the structure.
+              팁: 후킹, 증거, CTA를 분리해 두면 발행 자동화가 구조를 추측하지 않고도 초안을 다시 가공할 수 있습니다.
             </p>
           </div>
         </SectionCard>
 
         <div className="preview-frame">
           <SectionCard
-            kicker="Preview"
-            title="Publish frame"
-            description="Each slide should hold a single message; the preview makes that contract visible."
+            kicker="미리보기"
+            title="발행 프레임"
+            description="각 슬라이드는 하나의 메시지만 담아야 하며, 이 미리보기가 그 계약을 보이게 합니다."
           >
             <div className="studio-slide-stack">
               {slides.length === 0 ? (
@@ -365,70 +397,71 @@ export default function ContentStudioPage() {
           </SectionCard>
 
           <SectionCard
-            kicker="Handoff"
-            title="What the next lane needs"
-            description="The editor is only useful if the publish and automation lanes can understand what to do next."
+            kicker="핸드오프"
+            title="다음 레인이 필요로 하는 것"
+            description="발행 레인과 자동화 레인이 다음에 무엇을 해야 하는지 이해할 수 있을 때만 이 편집기는 유효합니다."
           >
             <div className="template-grid">
               <div className="template-row">
                 <div>
-                  <strong>Export target</strong>
-                  <p>{channel} first, then repurpose into adjacent formats if the signal is good.</p>
+                  <strong>핵심 메시지</strong>
+                  <p>{brandReference.keyMessage}</p>
                 </div>
               </div>
               <div className="template-row">
                 <div>
-                  <strong>Template contract</strong>
-                  <p>{selectedTemplate.summary}</p>
+                  <strong>출력 대상</strong>
+                  <p>{`${channel}을 먼저 보내고, 신호가 좋으면 인접 포맷으로 다시 씁니다.`}</p>
                 </div>
               </div>
               <div className="template-row">
                 <div>
-                  <strong>Next action</strong>
+                  <strong>템플릿 계약</strong>
+                  <p>{`${selectedTemplate.summary} · ${brandReference.formatFocus}`}</p>
+                </div>
+              </div>
+              <div className="template-row">
+                <div>
+                  <strong>다음 액션</strong>
+                  <p>{brandReference.handoffNote}</p>
+                </div>
+              </div>
+              <div className="template-row">
+                <div>
+                  <strong>이메일 핸드오프</strong>
                   <p>
-                    Approve the hook in the {selectedBrand.label} tone, then send the draft into
-                    publish or automation review.
-                  </p>
-                </div>
-              </div>
-              <div className="template-row">
-                <div>
-                  <strong>Email handoff</strong>
-                  <p>
-                    Pair this draft with a warm follow-up or weekly brief template before it
-                    leaves the studio.
+                    이 초안이 스튜디오를 떠나기 전에 따뜻한 후속 메일이나 주간 브리프 템플릿과 짝지어 둡니다.
                   </p>
                 </div>
                 <Link className="button button-secondary" href="/dashboard/automations/email">
-                  Open email lane
+                  이메일 레인 열기
                 </Link>
               </div>
               <div className="template-row">
                 <div>
-                  <strong>Send to publish queue</strong>
+                  <strong>발행 큐로 보내기</strong>
                   <p>
-                    Drop the current draft into the publish queue when the slides feel ready for
-                    distribution.
+                    슬라이드가 배포 준비가 됐다고 느껴지면 현재 초안을 발행 큐로 넘깁니다.
                   </p>
                 </div>
                 <Link className="button button-ghost" href="/dashboard/content/publish">
-                  Publish lane
+                  발행 레인
                 </Link>
               </div>
             </div>
           </SectionCard>
 
           <SectionCard
-            kicker="Rules"
-            title="Studio guardrails"
-            description="A lightweight checklist keeps drafts short, sharp, and easy to repurpose."
+            kicker="규칙"
+            title="스튜디오 가드레일"
+            description="가벼운 체크리스트가 초안을 짧고 선명하며 재활용하기 쉽게 유지합니다."
           >
             <ul className="note-list">
               {handoffRules.map((rule) => (
                 <li className="note-row" key={rule}>
                   <div>
                     <strong>{rule}</strong>
-                    <p>The studio should make this rule easier to follow than to ignore.</p>
+                    <p>이 규칙은 무시하기보다 따르기 쉬워야 합니다.</p>
                   </div>
                 </li>
               ))}

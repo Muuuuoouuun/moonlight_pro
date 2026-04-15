@@ -10,16 +10,30 @@ import {
 import { getContentQueuePageData } from "@/lib/server-data";
 
 const STAGE_OPTIONS = [
-  { value: "all", label: "All" },
-  { value: "idea", label: "Idea" },
-  { value: "draft", label: "Draft" },
-  { value: "review", label: "Review" },
+  { value: "all", label: "전체" },
+  { value: "idea", label: "아이디어" },
+  { value: "draft", label: "초안" },
+  { value: "review", label: "리뷰" },
 ];
 
 const STAGE_TONE = {
   idea: "muted",
   draft: "warning",
   review: "blue",
+};
+
+const STAGE_LABEL = {
+  idea: "아이디어",
+  draft: "초안",
+  review: "리뷰",
+};
+
+const TONE_LABEL = {
+  warning: "주의",
+  danger: "위험",
+  blue: "정보",
+  green: "정상",
+  muted: "중립",
 };
 
 function resolveStageFilter(value) {
@@ -32,25 +46,45 @@ function summarizePipeline(contentPipeline) {
     title: stage.title,
     value: String(stage.items.length),
     detail: stage.note,
-    badge: index === 0 ? "Input" : index === 1 ? "Draft" : index === 2 ? "Review" : "Ship",
+    badge: index === 0 ? "투입" : index === 1 ? "초안" : index === 2 ? "리뷰" : "발행",
     tone: index === 0 ? "muted" : index === 1 ? "warning" : index === 2 ? "blue" : "green",
   }));
 }
 
+function getBrandLabel(value) {
+  const resolved = resolveContentBrand(value);
+  return resolved.value === "all" && value && value !== "all" ? value : resolved.label;
+}
+
+function getStageLabel(value) {
+  return STAGE_LABEL[value] || value;
+}
+
+function getToneLabel(value) {
+  return TONE_LABEL[value] || value;
+}
+
 export default async function ContentQueuePage({ searchParams }) {
-  const { contentAttention, contentPipeline, contentQueueRoster } = await getContentQueuePageData();
+  const params = (await searchParams) ?? {};
+  const selectedBrand = resolveContentBrand(params?.brand);
+  const { contentAttention, contentPipeline, contentQueueRoster } = await getContentQueuePageData(
+    selectedBrand.value,
+  );
   const queueSummary = summarizePipeline(contentPipeline);
-  const selectedBrand = resolveContentBrand(searchParams?.brand);
   const brandReference = getContentBrandReference(selectedBrand.value);
-  const selectedStage = resolveStageFilter(searchParams?.stage);
+  const selectedStage = resolveStageFilter(params?.stage);
+  const brandScopedRoster =
+    selectedBrand.value === "all"
+      ? contentQueueRoster
+      : contentQueueRoster.filter((item) => item.brand === selectedBrand.value);
   const filteredRoster =
     selectedStage.value === "all"
-      ? contentQueueRoster
-      : contentQueueRoster.filter((item) => item.stage === selectedStage.value);
+      ? brandScopedRoster
+      : brandScopedRoster.filter((item) => item.stage === selectedStage.value);
 
   return (
     <>
-      <section className="summary-grid" aria-label="Content queue summary">
+      <section className="summary-grid" aria-label="콘텐츠 큐 요약">
         {queueSummary.map((item) => (
           <SummaryCard key={item.title} {...item} />
         ))}
@@ -60,12 +94,12 @@ export default async function ContentQueuePage({ searchParams }) {
         <ContentBrandReference reference={brandReference} compact />
 
         <SectionCard
-          kicker="Queue"
-          title="Every piece and its next move"
+          kicker="큐"
+          title="모든 콘텐츠와 다음 움직임"
           description={
             selectedBrand.value === "all"
-              ? "The queue should tell you what exists, where it is stuck, and what action gets it moving again."
-              : `${selectedBrand.label} is selected. Queue rows stay shared until brand keys are added to the content model.`
+              ? "큐는 지금 무엇이 있고, 어디에서 막혔고, 어떤 액션이 다시 움직이게 하는지 말해줘야 합니다."
+              : `${selectedBrand.label} 범위가 선택되었습니다. 브랜드 태그 행부터 먼저 좁혀지고, 공용 행은 메타데이터가 채워질 때까지 함께 보입니다.`
           }
         >
           <div className="lane-grid">
@@ -83,7 +117,18 @@ export default async function ContentQueuePage({ searchParams }) {
                   {stage.items.map((item) => (
                     <div className="lane-item" key={`${stage.title}-${item.title}`}>
                       <strong>{item.title}</strong>
-                      <span>{item.meta}</span>
+                      {selectedBrand.value === "all" && item.brand ? (
+                        <div className="inline-legend">
+                          <span className="legend-chip" data-tone="muted">
+                            {item.meta}
+                          </span>
+                          <span className="legend-chip" data-tone="blue">
+                            {getBrandLabel(item.brand)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span>{item.meta}</span>
+                      )}
                       <p>{item.nextAction}</p>
                     </div>
                   ))}
@@ -94,9 +139,9 @@ export default async function ContentQueuePage({ searchParams }) {
         </SectionCard>
 
         <SectionCard
-          kicker="Roster"
-          title="Who is moving what"
-          description="The pipeline lanes show shape; this list shows accountability and the next concrete move."
+          kicker="로스터"
+          title="누가 무엇을 움직이는가"
+          description="파이프라인 레인이 형태를 보여준다면, 이 목록은 책임과 다음 구체적 액션을 보여줍니다."
           action={
             <div className="inline-legend">
               {STAGE_OPTIONS.map((option) => {
@@ -124,7 +169,7 @@ export default async function ContentQueuePage({ searchParams }) {
           }
         >
           {filteredRoster.length === 0 ? (
-            <p className="check-detail">No items in the {selectedStage.label.toLowerCase()} stage right now.</p>
+            <p className="check-detail">현재 {selectedStage.label} 단계에 있는 항목이 없습니다.</p>
           ) : (
             <div className="template-grid">
               {filteredRoster.map((item) => (
@@ -132,20 +177,21 @@ export default async function ContentQueuePage({ searchParams }) {
                   <div>
                     <strong>{item.title}</strong>
                     <p className="check-detail">
-                      <strong>Owner</strong> · {item.owner} · <strong>Due</strong> · {item.due}
+                      <strong>담당</strong> · {item.owner} · <strong>기한</strong> · {item.due}
                     </p>
                     <p className="check-detail">
-                      <strong>Next</strong> · {item.nextAction}
+                      <strong>다음</strong> · {item.nextAction}
                     </p>
                   </div>
                   <div className="inline-legend">
                     <span className="legend-chip" data-tone={STAGE_TONE[item.stage] ?? "muted"}>
-                      {item.stage}
+                      {getStageLabel(item.stage)}
                     </span>
-                    <span className="endpoint-pill">
-                      <span>brand</span>
-                      <code>{item.brand}</code>
-                    </span>
+                    {selectedBrand.value === "all" ? (
+                      <span className="legend-chip" data-tone="blue">
+                        {getBrandLabel(item.brand)}
+                      </span>
+                    ) : null}
                     <Link
                       className="button button-ghost"
                       href={appendQueryParam(
@@ -154,7 +200,7 @@ export default async function ContentQueuePage({ searchParams }) {
                         item.brand === "all" ? "" : item.brand,
                       )}
                     >
-                      Studio
+                      스튜디오
                     </Link>
                   </div>
                 </div>
@@ -164,9 +210,9 @@ export default async function ContentQueuePage({ searchParams }) {
         </SectionCard>
 
         <SectionCard
-          kicker="Review"
-          title="What should not drift"
-          description="Review is where content quality survives or quietly falls apart."
+          kicker="리뷰"
+          title="흘러가면 안 되는 것"
+          description="리뷰는 콘텐츠 품질이 살아남거나 조용히 무너지는 갈림길입니다."
         >
           <ul className="note-list">
             {contentAttention.map((item) => (
@@ -176,7 +222,7 @@ export default async function ContentQueuePage({ searchParams }) {
                   <p>{item.detail}</p>
                 </div>
                 <span className="legend-chip" data-tone={item.tone}>
-                  {item.tone}
+                  {getToneLabel(item.tone)}
                 </span>
               </li>
             ))}

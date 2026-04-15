@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "COM_MOON_NEXT_DIST_DIR=.next-dev next dev --turbopack",
+    "dev:webpack": "COM_MOON_NEXT_DIST_DIR=.next-dev-webpack next dev",
     "build": "next build",
     "start": "next start"
   },

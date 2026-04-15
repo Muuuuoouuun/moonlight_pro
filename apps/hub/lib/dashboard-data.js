@@ -1,296 +1,308 @@
 /**
- * Navigation items carry both the original English `label`/`description`
- * (kept as a fallback for legacy consumers that read the fields directly,
- * e.g. `dashboard/page.jsx`) and an `i18nKey` pointing into the `nav.*`
- * namespace of the hub's translation messages. The dashboard shell
- * resolves labels through `useTranslations("nav")` + `i18nKey`, so the
- * shell chrome always matches the user's active locale.
+ * Navigation items carry locale-aware `label`/`description` fallbacks for
+ * legacy consumers that still read the fields directly, plus an `i18nKey`
+ * pointing into the `nav.*` namespace of the hub's translation messages.
+ * The dashboard shell resolves labels through `useTranslations("nav")`
+ * + `i18nKey`, so the shell chrome always matches the user's active locale.
  */
 export const navigationItems = [
   {
     href: "/dashboard",
     i18nKey: "overview",
-    label: "Overview",
-    description: "Today, alerts, and operating pulse",
+    label: "개요",
+    description: "오늘의 신호, 알림, 운영 펄스",
     group: "core",
   },
   {
     href: "/dashboard/work",
     i18nKey: "work",
-    label: "Work OS",
-    description: "Projects, PMS, roadmap, and decisions",
+    label: "워크 OS",
+    description: "프로젝트, PMS, 로드맵, 의사결정",
     group: "core",
     children: [
       {
         href: "/dashboard/work",
         i18nKey: "workOverview",
-        label: "Overview",
-        description: "Focus stack and execution pulse",
+        label: "개요",
+        description: "집중 스택과 실행 펄스",
       },
       {
         href: "/dashboard/work/projects",
         i18nKey: "workProjects",
-        label: "Projects",
-        description: "Portfolio, blockers, and milestones",
+        label: "프로젝트",
+        description: "포트폴리오, 블로커, 마일스톤",
       },
       {
         href: "/dashboard/work/management",
         i18nKey: "workManagement",
-        label: "Management",
-        description: "Per-project progress, tasks, and GitHub signals",
+        label: "관리",
+        description: "프로젝트별 진행, 작업, GitHub 신호",
       },
       {
         href: "/dashboard/work/calendar",
         i18nKey: "workCalendar",
-        label: "Calendar",
-        description: "Shared schedule, due dates, and progress timing",
+        label: "일정",
+        description: "공유 일정, 마감일, 진행 타이밍",
       },
       {
         href: "/dashboard/work/rhythm",
         i18nKey: "workRhythm",
-        label: "Rhythm",
-        description: "Cadence checks and recurring control loops",
+        label: "리듬",
+        description: "케이던스 점검과 반복 제어 루프",
       },
       {
         href: "/dashboard/work/pms",
         i18nKey: "workPms",
         label: "PMS",
-        description: "GitHub shipping pulse and operator cadence",
+        description: "GitHub 배포 펄스와 운영 케이던스",
       },
       {
         href: "/dashboard/work/roadmap",
         i18nKey: "workRoadmap",
-        label: "Roadmap",
-        description: "Milestones, release lanes, and delivery risk",
+        label: "로드맵",
+        description: "마일스톤, 릴리스 레인, 전달 리스크",
       },
       {
         href: "/dashboard/work/plan",
-        label: "Plan tracker",
-        description: "계획 vs 현재 — 페이즈·프로젝트 변동 현황판",
+        i18nKey: "workPlan",
+        label: "계획판",
+        description: "계획과 현재를 비교하는 페이즈·프로젝트 현황판",
       },
       {
         href: "/dashboard/work/decisions",
         i18nKey: "workDecisions",
-        label: "Decisions",
-        description: "Calls, review notes, and follow-through",
+        label: "의사결정",
+        description: "판단, 리뷰 노트, 후속 이행",
       },
       {
         href: "/dashboard/work/releases",
         i18nKey: "workReleases",
-        label: "Releases",
-        description: "Patch notes and weekly shipping log",
+        label: "릴리스",
+        description: "패치 노트와 주간 배포 로그",
       },
     ],
   },
   {
     href: "/dashboard/revenue",
     i18nKey: "revenue",
-    label: "Revenue",
-    description: "Leads, deals, accounts, and cases",
+    label: "매출",
+    description: "리드, 거래, 계정, 케이스",
     group: "core",
     children: [
       {
         href: "/dashboard/revenue",
         i18nKey: "revenueOverview",
-        label: "Overview",
-        description: "Pipeline health and next moves",
+        label: "개요",
+        description: "파이프라인 건강도와 다음 움직임",
       },
       {
         href: "/dashboard/revenue/leads",
         i18nKey: "revenueLeads",
-        label: "Leads",
-        description: "Warm inbound and follow-up queue",
+        label: "리드",
+        description: "웜 인바운드와 팔로업 큐",
       },
       {
         href: "/dashboard/revenue/deals",
         i18nKey: "revenueDeals",
-        label: "Deals",
-        description: "Opportunity stages and close risk",
+        label: "거래",
+        description: "기회 단계와 클로즈 리스크",
       },
       {
         href: "/dashboard/revenue/accounts",
         i18nKey: "revenueAccounts",
-        label: "Accounts",
-        description: "Customer state and account health",
+        label: "계정",
+        description: "고객 상태와 계정 건강도",
       },
       {
         href: "/dashboard/revenue/cases",
         i18nKey: "revenueCases",
-        label: "Cases",
-        description: "Customer work and escalations",
+        label: "케이스",
+        description: "고객 작업과 에스컬레이션",
       },
     ],
   },
   {
     href: "/dashboard/content",
     i18nKey: "content",
-    label: "Content",
-    description: "Queue, studio, assets, and publish",
+    label: "콘텐츠",
+    description: "큐, 스튜디오, 자산, 발행",
     group: "core",
     children: [
       {
         href: "/dashboard/content",
         i18nKey: "contentOverview",
-        label: "Overview",
-        description: "Pipeline health and publishing cadence",
+        label: "개요",
+        description: "파이프라인 건강도와 발행 케이던스",
       },
       {
         href: "/dashboard/content/queue",
         i18nKey: "contentQueue",
-        label: "Queue",
-        description: "Ideas, briefs, and review states",
+        label: "대기열",
+        description: "아이디어, 브리프, 검토 상태",
       },
       {
         href: "/dashboard/content/studio",
         i18nKey: "contentStudio",
-        label: "Studio",
-        description: "Card-news drafting workspace",
+        label: "스튜디오",
+        description: "카드뉴스 초안 작업 공간",
+      },
+      {
+        href: "/dashboard/content/campaigns",
+        i18nKey: "contentCampaigns",
+        label: "캠페인",
+        description: "브리프, 핸드오프, 후속 경로",
       },
       {
         href: "/dashboard/content/assets",
         i18nKey: "contentAssets",
-        label: "Assets",
-        description: "Outputs, files, and source material",
+        label: "자산",
+        description: "결과물, 파일, 원본 자료",
       },
       {
         href: "/dashboard/content/publish",
         i18nKey: "contentPublish",
-        label: "Publish",
-        description: "Distribution history and channel status",
+        label: "발행",
+        description: "배포 이력과 채널 상태",
       },
     ],
   },
   {
     href: "/dashboard/automations",
     i18nKey: "automations",
-    label: "Automations",
-    description: "Runs, webhooks, agents, and sync health",
+    label: "자동화",
+    description: "실행, 웹훅, 에이전트, 동기화 상태",
     group: "core",
     children: [
       {
         href: "/dashboard/automations",
         i18nKey: "automationsOverview",
-        label: "Overview",
-        description: "Machine status and recent output",
+        label: "개요",
+        description: "머신 상태와 최근 결과",
       },
       {
         href: "/dashboard/automations/runs",
         i18nKey: "automationsRuns",
-        label: "Runs",
-        description: "Execution pulse and failures",
+        label: "실행",
+        description: "실행 펄스와 실패",
       },
       {
         href: "/dashboard/automations/webhooks",
         i18nKey: "automationsWebhooks",
-        label: "Webhooks",
-        description: "Endpoint catalog and intake history",
+        label: "웹훅",
+        description: "엔드포인트 목록과 수신 이력",
       },
       {
         href: "/dashboard/automations/integrations",
         i18nKey: "automationsIntegrations",
-        label: "Integrations",
-        description: "Connected systems and sync runs",
+        label: "연동",
+        description: "연결된 시스템과 동기화 실행",
       },
       {
         href: "/dashboard/automations/email",
         i18nKey: "automationsEmail",
-        label: "Email",
-        description: "Templates, queue, and outbound delivery",
+        label: "이메일",
+        description: "템플릿, 큐, 발신 배포",
       },
     ],
   },
   {
     href: "/dashboard/evolution",
     i18nKey: "evolution",
-    label: "Evolution",
-    description: "Logs, issues, memos, and activity",
+    label: "개선",
+    description: "로그, 이슈, 메모, 활동",
     group: "core",
     children: [
       {
         href: "/dashboard/evolution",
         i18nKey: "evolutionOverview",
-        label: "Overview",
-        description: "Self-improvement loop and ownership",
+        label: "개요",
+        description: "자가 개선 루프와 소유권",
       },
       {
         href: "/dashboard/evolution/logs",
         i18nKey: "evolutionLogs",
-        label: "Logs",
-        description: "Errors, warnings, and fix status",
+        label: "로그",
+        description: "에러, 경고, 수정 상태",
       },
       {
         href: "/dashboard/evolution/issues",
         i18nKey: "evolutionIssues",
-        label: "Issues",
-        description: "Operational risk and mitigation state",
+        label: "이슈",
+        description: "운영 리스크와 완화 상태",
       },
       {
         href: "/dashboard/evolution/activity",
         i18nKey: "evolutionActivity",
-        label: "Activity",
-        description: "Recent changes across the OS",
+        label: "활동",
+        description: "OS 전반의 최근 변경사항",
       },
     ],
   },
   {
     href: "/dashboard/daily-brief",
     i18nKey: "dailyBrief",
-    label: "Daily Brief",
-    description: "Morning brief, approvals, and next three actions",
+    label: "일일 브리프",
+    description: "아침 브리프, 승인, 다음 세 가지 액션",
     group: "utility",
   },
   {
     href: "/dashboard/playbooks",
     i18nKey: "playbooks",
-    label: "Playbooks",
-    description: "Recurring SOPs, trigger rules, and handoff recipes",
+    label: "플레이북",
+    description: "반복 SOP, 트리거 규칙, 핸드오프 레시피",
     group: "utility",
   },
   {
     href: "/dashboard/command",
     i18nKey: "command",
-    label: "Command",
-    description: "Search, route, and dispatch work from one palette",
+    label: "커맨드",
+    description: "하나의 팔레트에서 검색, 라우팅, 디스패치",
     group: "utility",
   },
   {
     href: "/dashboard/ai",
     i18nKey: "ai",
-    label: "AI Console",
-    description: "Chat, council, and direct orders to Claude and Codex",
+    label: "AI 콘솔",
+    description: "챗, 카운슬, 그리고 Claude·Codex에 직접 오더",
     group: "utility",
     children: [
       {
         href: "/dashboard/ai",
         i18nKey: "aiOverview",
-        label: "Overview",
-        description: "Agent status, OS pulse, and open orders at a glance",
+        label: "개요",
+        description: "에이전트 상태, OS 펄스, 오픈 오더를 한 화면에",
+      },
+      {
+        href: "/dashboard/ai/office",
+        i18nKey: "aiOffice",
+        label: "상황실",
+        description: "에이전트, 오더, 활동 로그를 하나의 장면으로 읽는 운영 보드",
       },
       {
         href: "/dashboard/ai/chat",
         i18nKey: "aiChat",
-        label: "Chat",
-        description: "Multi-agent chat with Claude and Codex in one rail",
+        label: "채팅",
+        description: "Claude와 Codex에게 바로 메시지를 보내는 레일",
       },
       {
         href: "/dashboard/ai/council",
         i18nKey: "aiCouncil",
-        label: "Council",
-        description: "Let Claude and Codex review, debate, and converge",
+        label: "카운슬",
+        description: "Claude와 Codex가 검토하고 토론하며 수렴하는 자리",
       },
       {
         href: "/dashboard/ai/orders",
         i18nKey: "aiOrders",
-        label: "Orders",
-        description: "Direct orders, task creation, and execution tracking",
+        label: "오더",
+        description: "직접 오더, 작업 생성·수정, 실행 추적",
       },
     ],
   },
   {
     href: "/dashboard/settings",
     i18nKey: "settings",
-    label: "Settings",
-    description: "Environment posture, mappings, and safeguards",
+    label: "설정",
+    description: "환경 설정, 매핑, 세이프가드",
     group: "utility",
   },
 ];
@@ -303,31 +315,31 @@ export const shellActions = [
   {
     href: "/dashboard/daily-brief",
     i18nKey: "openBrief",
-    label: "Open Brief",
+    label: "브리프 열기",
     tone: "secondary",
   },
   {
     href: "/dashboard/work",
     i18nKey: "openWork",
-    label: "Open Work OS",
+    label: "워크 OS 열기",
     tone: "secondary",
   },
   {
     href: "/dashboard/content/studio",
     i18nKey: "openStudio",
-    label: "Open Studio",
+    label: "스튜디오 열기",
     tone: "primary",
   },
   {
     href: "/dashboard/command",
     i18nKey: "openCommand",
-    label: "Open Command",
+    label: "커맨드 열기",
     tone: "ghost",
   },
   {
     href: "/dashboard/ai",
     i18nKey: "openAiConsole",
-    label: "Open AI Console",
+    label: "AI 콘솔 열기",
     tone: "ghost",
   },
 ];
@@ -851,6 +863,40 @@ export const automationRuns = [
   },
 ];
 
+export const automationTriage = [
+  {
+    id: "triage-publish-handoff",
+    title: "Publish handoff needs a retry path",
+    tone: "danger",
+    detail:
+      "When the publish event misses n8n or outbound email, the content cools off before follow-up starts.",
+    nextAction: "Replay the last publish payload with the matching campaign context attached.",
+    handoff:
+      "If the second retry fails, move the handoff into /dashboard/automations/email and mark the run manual.",
+  },
+  {
+    id: "triage-webhook-contract",
+    title: "Webhook payload contract should stay visible",
+    tone: "warning",
+    detail:
+      "Shared routes are live, but provider-specific payload drift can still break the first clean intake.",
+    nextAction:
+      "Keep one smoke-test payload per provider and compare against the last successful event.",
+    handoff:
+      "If external mapping is unclear, stop automation growth and hand the decision to the operator.",
+  },
+  {
+    id: "triage-human-review",
+    title: "Human review should happen before silent retries",
+    tone: "blue",
+    detail:
+      "Not every failure should be retried automatically. Some need a person to decide whether the message still deserves to move.",
+    nextAction: "Show the broken step, the last good output, and one explicit next button.",
+    handoff:
+      "Route the decision into Content, Email, or Logs rather than hiding it in a background worker.",
+  },
+];
+
 export const contentSummary = [
   {
     title: "Idea Backlog",
@@ -889,11 +935,13 @@ export const contentPipeline = [
     items: [
       {
         title: "브랜딩 운영 구조화",
+        brand: "sinabro",
         meta: "research",
         nextAction: "문제 정의를 한 줄로 줄이기",
       },
       {
         title: "실무형 세일즈 리듬",
+        brand: "bridgemaker",
         meta: "meeting",
         nextAction: "카드뉴스 첫 장 훅 만들기",
       },
@@ -905,11 +953,13 @@ export const contentPipeline = [
     items: [
       {
         title: "콘텐츠 자동화 실전 흐름",
+        brand: "moonpm",
         meta: "brief",
         nextAction: "증거 문장과 CTA 정리",
       },
       {
         title: "문의 전환형 랜딩 구조",
+        brand: "class-moon",
         meta: "idea",
         nextAction: "독자 문제를 더 앞에 배치",
       },
@@ -921,11 +971,13 @@ export const contentPipeline = [
     items: [
       {
         title: "허브 OS 운영 데스크 소개",
+        brand: "gore",
         meta: "repurpose",
         nextAction: "퍼블릭 톤과 허브 톤 차이 검수",
       },
       {
         title: "카드뉴스 템플릿 실험",
+        brand: "holyfuncollector",
         meta: "research",
         nextAction: "첫 장 문장 리듬 다듬기",
       },
@@ -937,11 +989,13 @@ export const contentPipeline = [
     items: [
       {
         title: "이번 주 운영 브리프",
+        brand: "sinabro",
         meta: "scheduled",
         nextAction: "뉴스레터 요약본까지 같이 발송",
       },
       {
         title: "브랜딩 제안 구조 메모",
+        brand: "bridgemaker",
         meta: "published",
         nextAction: "반응 기반 후속 인사이트 작성",
       },
@@ -954,7 +1008,7 @@ export const contentQueueRoster = [
     id: "queue-idea-1",
     title: "브랜딩 운영 구조화",
     stage: "idea",
-    brand: "classin",
+    brand: "sinabro",
     owner: "Boss",
     due: "이번 주",
     nextAction: "문제 정의를 한 줄로 줄이기",
@@ -964,7 +1018,7 @@ export const contentQueueRoster = [
     id: "queue-idea-2",
     title: "실무형 세일즈 리듬",
     stage: "idea",
-    brand: "moltbot",
+    brand: "bridgemaker",
     owner: "Content lane",
     due: "다음 주",
     nextAction: "카드뉴스 첫 장 훅 만들기",
@@ -974,7 +1028,7 @@ export const contentQueueRoster = [
     id: "queue-draft-1",
     title: "콘텐츠 자동화 실전 흐름",
     stage: "draft",
-    brand: "classin",
+    brand: "moonpm",
     owner: "Boss",
     due: "내일",
     nextAction: "증거 문장과 CTA 정리",
@@ -984,7 +1038,7 @@ export const contentQueueRoster = [
     id: "queue-draft-2",
     title: "문의 전환형 랜딩 구조",
     stage: "draft",
-    brand: "classin",
+    brand: "class-moon",
     owner: "Web lane",
     due: "이번 주",
     nextAction: "독자 문제를 더 앞에 배치",
@@ -994,7 +1048,7 @@ export const contentQueueRoster = [
     id: "queue-review-1",
     title: "허브 OS 운영 데스크 소개",
     stage: "review",
-    brand: "moltbot",
+    brand: "gore",
     owner: "Boss",
     due: "오늘",
     nextAction: "퍼블릭 톤과 허브 톤 차이 검수",
@@ -1004,7 +1058,7 @@ export const contentQueueRoster = [
     id: "queue-review-2",
     title: "카드뉴스 템플릿 실험",
     stage: "review",
-    brand: "moltbot",
+    brand: "holyfuncollector",
     owner: "Content lane",
     due: "오늘",
     nextAction: "첫 장 문장 리듬 다듬기",
@@ -1015,6 +1069,7 @@ export const contentQueueRoster = [
 export const contentVariants = [
   {
     title: "브랜딩 운영 구조화 카드뉴스",
+    brand: "sinabro",
     type: "Card News",
     status: "ready",
     channel: "Instagram",
@@ -1022,6 +1077,7 @@ export const contentVariants = [
   },
   {
     title: "콘텐츠 자동화 인사이트 글",
+    brand: "moonpm",
     type: "Blog",
     status: "draft",
     channel: "Insights",
@@ -1029,6 +1085,7 @@ export const contentVariants = [
   },
   {
     title: "이번 주 운영 메모",
+    brand: "sinabro",
     type: "Newsletter",
     status: "published",
     channel: "Email",
@@ -1036,6 +1093,7 @@ export const contentVariants = [
   },
   {
     title: "문의 전환형 랜딩 카피",
+    brand: "class-moon",
     type: "Landing Copy",
     status: "ready",
     channel: "Web",
@@ -1046,6 +1104,7 @@ export const contentVariants = [
 export const contentAssets = [
   {
     title: "brand-ops-carousel-v3",
+    brand: "sinabro",
     kind: "1080 PNG pack",
     source: "Card News",
     detail: "Final export set for the current carousel draft.",
@@ -1053,6 +1112,7 @@ export const contentAssets = [
   },
   {
     title: "automation-insight-hero",
+    brand: "moonpm",
     kind: "Hero image",
     source: "Blog",
     detail: "Visual asset reserved for the long-form insight post.",
@@ -1060,6 +1120,7 @@ export const contentAssets = [
   },
   {
     title: "landing-proof-strip-copy",
+    brand: "class-moon",
     kind: "Copy block",
     source: "Landing Copy",
     detail: "Reusable trust/proof language for homepage and case notes.",
@@ -1067,6 +1128,7 @@ export const contentAssets = [
   },
   {
     title: "weekly-brief-source-note",
+    brand: "bridgemaker",
     kind: "Source memo",
     source: "Newsletter",
     detail: "Short operator memo that can be repurposed into follow-up content.",
@@ -1077,6 +1139,7 @@ export const contentAssets = [
 export const publishQueue = [
   {
     title: "브랜딩 운영 구조화 카드뉴스",
+    brand: "sinabro",
     channel: "Instagram",
     status: "queued",
     time: "Today",
@@ -1084,6 +1147,7 @@ export const publishQueue = [
   },
   {
     title: "이번 주 운영 메모",
+    brand: "sinabro",
     channel: "Email",
     status: "published",
     time: "09:10",
@@ -1091,6 +1155,7 @@ export const publishQueue = [
   },
   {
     title: "문의 전환형 랜딩 카피",
+    brand: "class-moon",
     channel: "Web",
     status: "published",
     time: "Yesterday",
@@ -1113,6 +1178,40 @@ export const contentAttention = [
     title: "실패 로그를 콘텐츠 맥락으로 묶기",
     detail: "If an automation fails, the content item that triggered it should still be easy to locate.",
     tone: "green",
+  },
+];
+
+export const contentCampaigns = [
+  {
+    id: "campaign-sinabro-retention",
+    title: "시나브로 리텐션 리프레시",
+    brand: "sinabro",
+    channel: "Email + Instagram",
+    status: "active",
+    goal: "최근 반응한 독자를 다시 답장 리듬으로 끌어오는 것.",
+    nextAction: "카드뉴스 1건과 warm follow-up 메일을 같은 날 묶어 발송.",
+    handoff: "Studio -> Publish -> Email",
+  },
+  {
+    id: "campaign-bridgemaker-proof",
+    title: "BridgeMaker 증거 전개",
+    brand: "bridgemaker",
+    channel: "Landing + Newsletter",
+    status: "draft",
+    goal: "클라이언트 proof를 랜딩과 메일에 같은 메시지로 맞추는 것.",
+    nextAction:
+      "랜딩 proof strip 카피와 client handoff 메일 문장을 같은 기준으로 재정렬.",
+    handoff: "Content -> Revenue follow-up",
+  },
+  {
+    id: "campaign-moonpm-ops",
+    title: "MoonPM 운영 인사이트 시리즈",
+    brand: "moonpm",
+    channel: "Insights + Newsletter",
+    status: "scheduled",
+    goal: "운영 시스템 인사이트를 연속 시리즈로 쌓아 신뢰를 높이는 것.",
+    nextAction: "이번 주 operator note 초안 1건을 금요일 브리프에 연결.",
+    handoff: "Studio -> Insights -> Weekly brief",
   },
 ];
 

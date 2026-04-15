@@ -5,25 +5,25 @@
     "ariaLabel": "언어 전환"
   },
   "brand": {
-    "name": "Com_Moon OS",
-    "tagline": "프라이빗 허브 쉘",
-    "crumbEyebrow": "Com_Moon Hub"
+    "name": "moonlight 프로젝트",
+    "tagline": "비공개 허브 셸",
+    "crumbEyebrow": "moonlight 프로젝트"
   },
   "shell": {
-    "coreLanesKicker": "코어 레인",
-    "utilityTabsKicker": "유틸리티 탭",
-    "protectedShellPill": "보호된 쉘",
+    "coreLanesKicker": "핵심 구역",
+    "utilityTabsKicker": "보조 탭",
+    "protectedShellPill": "보호된 허브",
     "statusSection": "섹션",
-    "statusCurrentView": "현재 뷰",
-    "statusFocus": "포커스",
-    "contextViewsSuffix": " 뷰",
-    "contextAriaSuffix": " 뷰 전환",
-    "contextNote": "같은 섹션 안에서 무엇을 보고 있는지 잃지 않게, 현재 뷰와 다음 전환 후보를 한 줄에서 바로 드러냅니다.",
+    "statusCurrentView": "현재 보기",
+    "statusFocus": "집중",
+    "contextViewsSuffix": " 보기",
+    "contextAriaSuffix": " 보기 전환",
+    "contextNote": "같은 섹션 안에서 지금 보고 있는 화면과 다음 전환 후보를 한 줄에서 바로 드러냅니다.",
     "sectionSeparator": " / "
   },
   "shellAction": {
     "openBrief": "브리프 열기",
-    "openWork": "Work OS 열기",
+    "openWork": "워크 OS 열기",
     "openStudio": "스튜디오 열기",
     "openCommand": "커맨드 열기",
     "openAiConsole": "AI 콘솔 열기"
@@ -31,10 +31,10 @@
   "nav": {
     "overview": {
       "label": "개요",
-      "description": "오늘의 신호·경보·운영 펄스"
+      "description": "오늘의 신호, 경보, 운영 펄스"
     },
     "work": {
-      "label": "Work OS",
+      "label": "워크 OS",
       "description": "프로젝트, PMS, 로드맵, 의사결정"
     },
     "workOverview": {
@@ -50,31 +50,35 @@
       "description": "프로젝트별 진행, 태스크, GitHub 신호"
     },
     "workCalendar": {
-      "label": "캘린더",
+      "label": "일정",
       "description": "공유 일정, 마감일, 진행 타이밍"
     },
     "workRhythm": {
       "label": "리듬",
-      "description": "케이던스 체크와 반복 제어 루프"
+      "description": "케이던스 점검과 반복 제어 루프"
     },
     "workPms": {
       "label": "PMS",
-      "description": "GitHub 배포 펄스와 운영자 케이던스"
+      "description": "GitHub 배포 펄스와 운영 케이던스"
     },
     "workRoadmap": {
       "label": "로드맵",
-      "description": "마일스톤, 릴리스 레인, 딜리버리 리스크"
+      "description": "마일스톤, 릴리스 레인, 전달 리스크"
+    },
+    "workPlan": {
+      "label": "계획판",
+      "description": "계획과 현재를 비교하는 페이즈·프로젝트 현황판"
     },
     "workDecisions": {
       "label": "의사결정",
-      "description": "결정, 리뷰 노트, 후속 이행"
+      "description": "판단, 리뷰 노트, 후속 이행"
     },
     "workReleases": {
       "label": "릴리스",
-      "description": "패치노트와 주 단위 배송 로그"
+      "description": "패치 노트와 주간 배포 로그"
     },
     "revenue": {
-      "label": "Revenue",
+      "label": "매출",
       "description": "리드, 거래, 계정, 케이스"
     },
     "revenueOverview": {
@@ -87,7 +91,7 @@
     },
     "revenueDeals": {
       "label": "거래",
-      "description": "거래 단계와 클로즈 리스크"
+      "description": "기회 단계와 클로즈 리스크"
     },
     "revenueAccounts": {
       "label": "계정",
@@ -98,23 +102,27 @@
       "description": "고객 작업과 에스컬레이션"
     },
     "content": {
-      "label": "Content",
-      "description": "큐, 스튜디오, 에셋, 발행"
+      "label": "콘텐츠",
+      "description": "큐, 스튜디오, 자산, 발행"
     },
     "contentOverview": {
       "label": "개요",
       "description": "파이프라인 건강도와 발행 케이던스"
     },
     "contentQueue": {
-      "label": "큐",
+      "label": "대기열",
       "description": "아이디어, 브리프, 리뷰 상태"
     },
     "contentStudio": {
       "label": "스튜디오",
-      "description": "카드뉴스 초안 워크스페이스"
+      "description": "카드뉴스 초안 작업 공간"
+    },
+    "contentCampaigns": {
+      "label": "캠페인",
+      "description": "브리프, 핸드오프, 후속 경로"
     },
     "contentAssets": {
-      "label": "에셋",
+      "label": "자산",
       "description": "결과물, 파일, 원본 자료"
     },
     "contentPublish": {
@@ -122,8 +130,8 @@
       "description": "배포 이력과 채널 상태"
     },
     "automations": {
-      "label": "Automations",
-      "description": "실행, 웹훅, 에이전트, 싱크 상태"
+      "label": "자동화",
+      "description": "실행, 웹훅, 에이전트, 동기화 상태"
     },
     "automationsOverview": {
       "label": "개요",
@@ -135,18 +143,18 @@
     },
     "automationsWebhooks": {
       "label": "웹훅",
-      "description": "엔드포인트 카탈로그와 수신 이력"
+      "description": "엔드포인트 목록과 수신 이력"
     },
     "automationsIntegrations": {
       "label": "연동",
-      "description": "연결된 시스템과 싱크 실행"
+      "description": "연결된 시스템과 동기화 실행"
     },
     "automationsEmail": {
       "label": "이메일",
-      "description": "템플릿, 큐, 아웃바운드 발송"
+      "description": "템플릿, 큐, 발신 배포"
     },
     "evolution": {
-      "label": "Evolution",
+      "label": "개선",
       "description": "로그, 이슈, 메모, 활동"
     },
     "evolutionOverview": {
@@ -166,7 +174,7 @@
       "description": "OS 전반의 최근 변경사항"
     },
     "dailyBrief": {
-      "label": "데일리 브리프",
+      "label": "일일 브리프",
       "description": "아침 브리프, 승인, 다음 세 가지 액션"
     },
     "playbooks": {
@@ -175,7 +183,7 @@
     },
     "command": {
       "label": "커맨드",
-      "description": "하나의 팔레트에서 검색·라우팅·디스패치"
+      "description": "하나의 팔레트에서 검색, 라우팅, 디스패치"
     },
     "ai": {
       "label": "AI 콘솔",
@@ -185,13 +193,17 @@
       "label": "개요",
       "description": "에이전트 상태, OS 펄스, 오픈 오더를 한 화면에"
     },
+    "aiOffice": {
+      "label": "상황실",
+      "description": "에이전트, 오더, 활동 로그를 하나의 장면으로 읽는 운영 보드"
+    },
     "aiChat": {
-      "label": "챗",
+      "label": "채팅",
       "description": "Claude와 Codex에게 바로 메시지를 보내는 레일"
     },
     "aiCouncil": {
       "label": "카운슬",
-      "description": "Claude ↔ Codex가 상의·검토·결정을 주고받는 자리"
+      "description": "Claude와 Codex가 검토하고 토론하며 수렴하는 자리"
     },
     "aiOrders": {
       "label": "오더",

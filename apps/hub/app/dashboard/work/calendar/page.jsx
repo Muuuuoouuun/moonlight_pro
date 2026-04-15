@@ -48,7 +48,7 @@ function buildHorizonDays() {
 
     return {
       key: formatDayKey(date),
-      weekday: index === 0 ? "Today" : index === 1 ? "Tomorrow" : formatWeekday(date),
+      weekday: index === 0 ? "오늘" : index === 1 ? "내일" : formatWeekday(date),
       month: formatMonth(date),
       day: formatDayNumber(date),
     };
@@ -75,27 +75,27 @@ function resolveCalendarMessage(value) {
   if (value === "connected") {
     return {
       tone: "green",
-      title: "Google Calendar connected",
-      detail: "OAuth connection is complete. External Google events can now flow into the shared schedule.",
+      title: "Google Calendar 연결이 완료되었습니다",
+      detail: "OAuth 연결이 끝났습니다. 이제 외부 Google 이벤트가 공용 일정으로 함께 들어옵니다.",
     };
   }
 
   if (value === "oauth-denied" || value === "connect-failed" || value === "missing-google-config") {
     return {
       tone: "danger",
-      title: "Calendar connection needs attention",
+      title: "캘린더 연결을 점검해야 합니다",
       detail:
         value === "missing-google-config"
-          ? "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are missing in the hub env."
-          : "Google Calendar connection did not complete cleanly. Retry the connect flow and check the integration ledger.",
+          ? "허브 환경 변수에 GOOGLE_CLIENT_ID와 GOOGLE_CLIENT_SECRET가 없습니다."
+          : "Google Calendar 연결이 정상적으로 끝나지 않았습니다. 연결 절차를 다시 시도하고 연동 기록을 확인하세요.",
     };
   }
 
   if (value === "missing-code") {
     return {
       tone: "warning",
-      title: "Missing OAuth callback code",
-      detail: "Google returned without an authorization code. Retry the connection flow.",
+      title: "OAuth 콜백 코드가 없습니다",
+      detail: "Google이 인증 코드 없이 돌아왔습니다. 연결 절차를 다시 시도하세요.",
     };
   }
 
@@ -122,6 +122,18 @@ function getDayTone(items) {
   return "green";
 }
 
+const CONNECTION_STATUS_LABEL = {
+  connected: "연결됨",
+  pending: "대기",
+  disconnected: "미연결",
+  ready: "준비",
+  error: "오류",
+};
+
+function getConnectionStatusLabel(status) {
+  return CONNECTION_STATUS_LABEL[status] || status;
+}
+
 export default async function WorkCalendarPage({ searchParams }) {
   const {
     scheduleEvents,
@@ -138,8 +150,9 @@ export default async function WorkCalendarPage({ searchParams }) {
     process.env.COM_MOON_DEFAULT_WORKSPACE_ID?.trim() ||
     process.env.DEFAULT_WORKSPACE_ID?.trim() ||
     "";
-  const selectedProject = resolveWorkContext(searchParams?.project);
-  const calendarMessage = resolveCalendarMessage(searchParams?.calendar);
+  const params = (await searchParams) ?? {};
+  const selectedProject = resolveWorkContext(params?.project);
+  const calendarMessage = resolveCalendarMessage(params?.calendar);
   const scopedSchedule = scopeMappedItemsByWorkContext(
     scheduleEvents,
     selectedProject.value,
@@ -172,19 +185,19 @@ export default async function WorkCalendarPage({ searchParams }) {
   const scheduleAgenda = [...overdueItems, ...upcomingItems].slice(0, 10);
   const scopeNote =
     selectedProject.value === "all"
-      ? "Projects, milestones, cadence, content publish timing, and GitHub milestone dates are visible together."
+      ? "프로젝트, 마일스톤, 케이던스, 콘텐츠 발행 시점, GitHub 마일스톤 날짜를 한 화면에서 함께 봅니다."
       : scopedSchedule.isFallback && scopedProgress.isFallback && scopedCadence.isFallback
-        ? `${selectedProject.label} is selected, but some calendar rows still rely on the shared lane until date-linked project references are richer.`
-        : `${selectedProject.label} calendar context is active.`;
+        ? `${selectedProject.label} 범위가 선택되었지만 날짜 기준 프로젝트 연결이 더 풍부해지기 전까지 일부 일정 행은 공용 레인을 함께 사용합니다.`
+        : `${selectedProject.label} 일정 맥락이 현재 화면에 반영되어 있습니다.`;
 
   return (
     <div className="app-page">
       <section className="page-head">
-        <p className="eyebrow">Work OS</p>
-        <h1>Calendar and shared schedule view</h1>
+        <p className="eyebrow">워크 OS</p>
+        <h1>캘린더와 공용 일정 보기</h1>
         <p>
-          This calendar pulls together due dates, milestones, cadence blocks, publish timing, and
-          progress motion so the team can see what is coming, what slipped, and what already moved.
+          이 캘린더는 기한, 마일스톤, 케이던스 블록, 발행 시점, 진행 변화를 한데 모아
+          무엇이 다가오고, 무엇이 밀렸고, 무엇이 이미 움직였는지 보이게 만듭니다.
         </p>
         <p className="page-context">
           <strong>{selectedProject.label}</strong>
@@ -192,33 +205,33 @@ export default async function WorkCalendarPage({ searchParams }) {
         </p>
       </section>
 
-      <section className="summary-grid" aria-label="Calendar summary metrics">
+      <section className="summary-grid" aria-label="캘린더 요약 지표">
         <SummaryCard
-          title="Next 14 Days"
+          title="다음 14일"
           value={String(horizonItems.length)}
-          detail="Scheduled items currently landing in the calendar horizon."
-          badge="Schedule"
+          detail="현재 캘린더 지평선 안에 들어온 일정 수입니다."
+          badge="일정"
           tone="blue"
         />
         <SummaryCard
-          title="Overdue"
+          title="기한 초과"
           value={String(overdueItems.length)}
-          detail="Due items that have already slipped past their intended date."
-          badge="Risk"
+          detail="원래 일정을 이미 지나 버린 항목 수입니다."
+          badge="리스크"
           tone="danger"
         />
         <SummaryCard
-          title="Cadence Blocks"
+          title="케이던스 블록"
           value={String(scopedCadence.items.length)}
-          detail="Recurring rhythm rows kept visible inside the shared calendar lane."
-          badge="Rhythm"
+          detail="반복 리듬 항목을 공용 일정 레인 안에서 계속 보이게 유지합니다."
+          badge="리듬"
           tone="warning"
         />
         <SummaryCard
-          title="Progress Signals"
+          title="진행 신호"
           value={String(scopedProgress.items.length)}
-          detail="Recent updates, decisions, commits, and publish motion."
-          badge="Motion"
+          detail="최근 업데이트, 의사결정, 커밋, 발행 움직임을 집계합니다."
+          badge="움직임"
           tone={hasGitHubData ? "green" : "muted"}
         />
       </section>
@@ -232,58 +245,57 @@ export default async function WorkCalendarPage({ searchParams }) {
 
       <div className="split-grid">
         <SectionCard
-          kicker="Connection"
-          title={githubConnection.title}
-          description={githubConnection.detail}
+          kicker="연결"
+          title="공용 일정 신호 현황"
+          description="프로젝트, 작업, 마일스톤, 발행 이벤트, 외부 일정이 현재 캘린더 레인에 얼마나 연결되어 있는지 보여줍니다."
         >
           <div className="metric-grid">
             <article className="mini-metric">
-              <span>Projects Due</span>
+              <span>프로젝트 기한</span>
               <strong>{sourceStats.projectDueCount}</strong>
-              <p>Project-level due dates currently mapped into the shared calendar.</p>
+              <p>공용 캘린더에 현재 연결된 프로젝트 단위 기한입니다.</p>
             </article>
             <article className="mini-metric">
-              <span>Tasks Due</span>
+              <span>작업 기한</span>
               <strong>{sourceStats.taskDueCount}</strong>
-              <p>Action-level commitments with explicit due timing.</p>
+              <p>명시적인 기한이 붙은 액션 단위 약속입니다.</p>
             </article>
             <article className="mini-metric">
-              <span>Milestones</span>
+              <span>마일스톤</span>
               <strong>{sourceStats.milestoneCount}</strong>
-              <p>Hub and GitHub milestone dates that shape the roadmap horizon.</p>
+              <p>로드맵 지평선을 만드는 허브와 GitHub의 마일스톤 날짜입니다.</p>
             </article>
             <article className="mini-metric">
-              <span>Shared Pushes</span>
+              <span>공용 발행</span>
               <strong>{sourceStats.publishCount}</strong>
-              <p>Queued or completed publish events visible alongside work schedules.</p>
+              <p>업무 일정 옆에서 함께 보이는 대기 또는 완료 발행 이벤트입니다.</p>
             </article>
             <article className="mini-metric">
-              <span>External Events</span>
+              <span>외부 이벤트</span>
               <strong>{sourceStats.externalEventCount}</strong>
-              <p>Google Calendar events merged into the shared schedule horizon.</p>
+              <p>공용 일정 지평선에 합쳐진 Google Calendar 이벤트입니다.</p>
             </article>
           </div>
           <p className="footnote">
-            {githubTotals.repositoryCount} repos and {hasGoogleCalendarData ? "live" : "pending"} Google calendar
-            signals are contributing to this view.
+            {githubTotals.repositoryCount}개 저장소와 {hasGoogleCalendarData ? "실시간" : "대기"} Google Calendar 신호가 이 화면에 반영되고 있습니다.
           </p>
         </SectionCard>
 
         <SectionCard
-          kicker="Cadence"
-          title="Shared recurring schedule"
-          description="Use cadence as the repeating frame around the calendar so meetings, review blocks, and daily checks stay visible."
+          kicker="케이던스"
+          title="공용 반복 일정"
+          description="미팅, 리뷰 블록, 데일리 체크가 계속 보이도록 캘린더 바깥의 반복 프레임으로 케이던스를 사용합니다."
         >
           <div className="check-grid">
             {(scopedCadence.items.length
               ? scopedCadence.items
               : [
                   {
-                    title: "No cadence blocks recorded yet",
-                    rhythm: "Pending",
-                    detail: "Routine checks will appear here once the operating rhythm is logged inside the hub.",
+                    title: "아직 기록된 케이던스 블록이 없습니다",
+                    rhythm: "대기",
+                    detail: "허브 안에 운영 리듬이 기록되면 반복 체크가 여기에 표시됩니다.",
                     statusTone: "muted",
-                    statusLabel: "pending",
+                    statusLabel: "대기",
                   },
                 ]
             ).map((item) => (
@@ -306,23 +318,23 @@ export default async function WorkCalendarPage({ searchParams }) {
 
       <div className="split-grid">
         <SectionCard
-          kicker="Connect"
-          title={googleCalendarConnection.title}
-          description={googleCalendarConnection.detail}
+          kicker="연동"
+          title="Google Calendar 연결"
+          description="공용 일정 레인에서 Google Calendar를 읽고 쓰기 위한 연결 상태를 관리합니다."
         >
           <div className="template-grid">
             <div className="template-row">
               <div>
-                <strong>Connection mode</strong>
-                <p>Google Calendar uses OAuth, then event reads and writes flow through the shared integration ledger.</p>
+                <strong>연결 방식</strong>
+                <p>Google Calendar는 OAuth를 사용하고, 이후 읽기/쓰기 이벤트는 공용 연동 기록을 통과합니다.</p>
               </div>
               <span className="legend-chip" data-tone={googleCalendarConnection.tone}>
-                {googleCalendarConnection.status}
+                {getConnectionStatusLabel(googleCalendarConnection.status)}
               </span>
             </div>
             <div className="template-row">
               <div>
-                <strong>Calendar target</strong>
+                <strong>대상 캘린더</strong>
                 <p>{googleCalendarConnection.calendarId}</p>
               </div>
             </div>
@@ -330,19 +342,18 @@ export default async function WorkCalendarPage({ searchParams }) {
           <GoogleCalendarConnectForm
             defaultWorkspaceId={defaultWorkspaceId}
             defaultCalendarId={googleCalendarConnection.calendarId}
-            detail="Samsung Calendar users can surface the same events by syncing this Google calendar in the Samsung Calendar app."
+            detail="Samsung Calendar 사용자는 같은 Google Calendar를 삼성 캘린더 앱에 동기화해 동일한 이벤트를 볼 수 있습니다."
             status={googleCalendarConnection.status}
           />
           <p className="footnote">
-            Samsung Calendar direct web API is not wired here. The supported path is syncing the same Google calendar
-            on the Galaxy device so created or adjusted events show up in Samsung Calendar too.
+            Samsung Calendar의 직접 웹 API는 아직 연결되어 있지 않습니다. 지원 경로는 Galaxy 기기에서 같은 Google Calendar를 동기화해 생성·수정된 이벤트가 삼성 캘린더에도 보이게 하는 방식입니다.
           </p>
         </SectionCard>
 
         <SectionCard
-          kicker="Adjust"
-          title="Create or adjust shared schedule"
-          description="This form writes directly to Google Calendar. Leave the event ID empty to create a new event, or fill it to patch an existing one."
+          kicker="조정"
+          title="공용 일정 생성 및 수정"
+          description="이 폼은 Google Calendar에 직접 기록합니다. 새 이벤트를 만들려면 event ID를 비워 두고, 기존 이벤트를 수정하려면 값을 채워 넣습니다."
         >
           <GoogleCalendarEventForm
             defaultWorkspaceId={defaultWorkspaceId}
@@ -352,9 +363,9 @@ export default async function WorkCalendarPage({ searchParams }) {
       </div>
 
       <SectionCard
-        kicker="Horizon"
-        title="Two-week shared calendar"
-        description="This board keeps upcoming due dates, milestones, and publish timing in one scan. Each day card shows the strongest schedule signal first."
+        kicker="지평선"
+        title="2주 공용 캘린더"
+        description="다가오는 기한, 마일스톤, 발행 시점을 한눈에 묶습니다. 각 날짜 카드는 가장 강한 일정 신호를 먼저 보여줍니다."
       >
         <div className="calendar-grid">
           {horizonDays.map((day) => {
@@ -375,7 +386,7 @@ export default async function WorkCalendarPage({ searchParams }) {
                   </div>
                   <div className="calendar-day-number">
                     <strong>{day.day}</strong>
-                    <span>{items.length} items</span>
+                    <span>{items.length}개 항목</span>
                   </div>
                 </div>
 
@@ -397,13 +408,13 @@ export default async function WorkCalendarPage({ searchParams }) {
                     ))
                   ) : (
                     <div className="calendar-empty">
-                      <strong>Open day</strong>
-                      <p>No shared schedule items are mapped here yet.</p>
+                      <strong>비어 있는 날</strong>
+                      <p>아직 이 날짜에 연결된 공용 일정 항목이 없습니다.</p>
                     </div>
                   )}
                 </div>
 
-                {items.length > 3 ? <p className="footnote">+{items.length - 3} more items</p> : null}
+                {items.length > 3 ? <p className="footnote">+{items.length - 3}개 더 있음</p> : null}
               </article>
             );
           })}
@@ -412,22 +423,22 @@ export default async function WorkCalendarPage({ searchParams }) {
 
       <div className="split-grid">
         <SectionCard
-          kicker="Agenda"
-          title="What needs attention next"
-          description="Overdue items float to the top, then upcoming commitments follow in date order."
+          kicker="아젠다"
+          title="다음으로 주목할 것"
+          description="기한 초과 항목이 먼저 올라오고, 이후 일정은 날짜순으로 이어집니다."
         >
           <div className="calendar-agenda">
             {(scheduleAgenda.length
               ? scheduleAgenda
               : [
                   {
-                    title: "No calendar items yet",
-                    detail: "Once due dates, milestones, or queued publishes are recorded, they will appear here.",
-                    time: "Pending",
-                    kind: "Calendar",
+                    title: "아직 캘린더 항목이 없습니다",
+                    detail: "기한, 마일스톤, 대기 중 발행이 기록되면 여기에 표시됩니다.",
+                    time: "대기 중",
+                    kind: "캘린더",
                     tone: "muted",
-                    project: "Shared lane",
-                    source: "Shared",
+                    project: "공용 레인",
+                    source: "공용",
                   },
                 ]
             ).map((item) => (
@@ -452,21 +463,21 @@ export default async function WorkCalendarPage({ searchParams }) {
         </SectionCard>
 
         <SectionCard
-          kicker="Progress"
-          title="Recent motion on the calendar"
-          description="Progress history belongs next to scheduled work so the calendar shows not just plans, but actual movement."
+          kicker="진행"
+          title="캘린더 위 최근 움직임"
+          description="캘린더가 계획만이 아니라 실제 움직임까지 보여주도록, 진행 이력은 일정 옆에 붙어 있어야 합니다."
         >
           <div className="timeline">
             {(scopedProgress.items.length
               ? scopedProgress.items
               : [
                   {
-                    title: "No progress signals captured yet",
-                    detail: "Project updates, decisions, commits, and publish motion will appear here once the linked systems write to the ledger.",
-                    time: "Pending",
+                    title: "아직 포착된 진행 신호가 없습니다",
+                    detail: "프로젝트 업데이트, 의사결정, 커밋, 발행 움직임은 연결된 시스템이 기록을 남기기 시작하면 여기에 표시됩니다.",
+                    time: "대기 중",
                     tone: "muted",
-                    kind: "Progress",
-                    project: "Shared lane",
+                    kind: "진행",
+                    project: "공용 레인",
                   },
                 ]
             ).map((item) => (

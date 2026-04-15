@@ -8,6 +8,7 @@ import {
   fetchSupabaseRows,
   inFilter,
   insertSupabaseRecord,
+  updateSupabaseRecord,
 } from "./supabase-rest";
 import {
   getTelegramMessage,
@@ -257,37 +258,91 @@ async function persistEngineArtifacts({
     status === "completed" ? "success" : status === "failed" ? "failure" : "ignored";
   const webhookStatus =
     status === "completed" ? "processed" : status === "failed" ? "failed" : "ignored";
+  const inputPayload = {
+    source: "telegram",
+    command,
+    text,
+    update_id: update.update_id ?? null,
+  };
+  const webhookPayload = {
+    text,
+    update_id: update.update_id ?? null,
+    command,
+  };
+
+  await Promise.all([
+    updateSupabaseRecord(
+      "automation_runs",
+      [makeFilter("id", `eq.${runId}`)],
+      {
+        status: automationStatus,
+        input_payload: inputPayload,
+        output_payload:
+          response && typeof response === "object" ? response : { value: response ?? null },
+        error_message: errorMessage ?? null,
+        finished_at: finishedAt,
+      },
+    ),
+    updateSupabaseRecord(
+      "webhook_events",
+      [makeFilter("id", `eq.${runId}`)],
+      {
+        status: webhookStatus,
+        payload: webhookPayload,
+        error_message: errorMessage ?? null,
+        processed_at: finishedAt,
+      },
+    ),
+  ]);
+}
+
+async function initializeEngineArtifacts({
+  runId,
+  command,
+  update,
+  text,
+  startedAt,
+}: {
+  runId: string;
+  command: string | null;
+  update: TelegramUpdate;
+  text: string | null;
+  startedAt: string;
+}) {
+  const workspaceId = resolveWorkspaceId();
+
+  if (!workspaceId) {
+    return;
+  }
 
   await Promise.all([
     insertSupabaseRecord("automation_runs", {
       id: runId,
       workspace_id: workspaceId,
-      status: automationStatus,
+      status: "running",
       input_payload: {
         source: "telegram",
         command,
         text,
         update_id: update.update_id ?? null,
       },
-      output_payload:
-        response && typeof response === "object" ? response : { value: response ?? null },
-      error_message: errorMessage ?? null,
+      output_payload: {},
+      error_message: null,
       created_at: startedAt,
-      finished_at: finishedAt,
     }),
     insertSupabaseRecord("webhook_events", {
+      id: runId,
       workspace_id: workspaceId,
       event_type: command ? `telegram.${command}` : "telegram.update",
       source: "telegram",
-      status: webhookStatus,
+      status: "received",
       payload: {
         text,
         update_id: update.update_id ?? null,
         command,
       },
-      error_message: errorMessage ?? null,
+      error_message: null,
       received_at: startedAt,
-      processed_at: finishedAt,
     }),
   ]);
 }
@@ -321,6 +376,14 @@ export async function runTelegramUpdate(update: TelegramUpdate): Promise<EngineR
     trace: `telegram:${runId}`,
     timestamp: startedAt,
     level: "info",
+  });
+
+  await initializeEngineArtifacts({
+    runId,
+    command: command?.name ?? null,
+    update,
+    text,
+    startedAt,
   });
 
   if (!command) {

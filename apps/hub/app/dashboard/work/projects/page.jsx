@@ -1,9 +1,17 @@
 import Link from "next/link";
+import { WorkContextBridge } from "@/components/dashboard/work-context-bridge";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { SummaryCard } from "@/components/dashboard/summary-card";
 import { ProjectUpdateForm } from "@/components/forms/project-update-form";
 import { resolveWorkContext, scopeMappedItemsByWorkContext } from "@/lib/dashboard-contexts";
-import { getProjectsPageData } from "@/lib/server-data";
+import { getLocalProjectRepositoryData, getProjectsPageData, getWorkPmsPageData } from "@/lib/server-data";
+import {
+  buildWorkContextHref,
+  formatWorkMetric,
+  getVisibleWorkContexts,
+  scopeStrictWorkItems,
+  sumWorkValues,
+} from "@/lib/work-context-bridge";
 
 const VIEW_OPTIONS = [
   {
@@ -181,15 +189,122 @@ function groupProjectsByLane(projects) {
   }));
 }
 
+function projectSelector(project) {
+  return [project.title, project.owner, project.milestone, project.nextAction, project.risk, project.taskLead];
+}
+
+function taskSelector(item) {
+  return [item.title, item.detail, item.project];
+}
+
+function repoSelector(item) {
+  return [item.title, item.owner, item.milestone, item.nextAction, item.risk, item.taskLead];
+}
+
+function bundleSelector(bundle) {
+  return [
+    bundle.repository,
+    bundle.repo?.name,
+    bundle.repo?.full_name,
+    bundle.repo?.description,
+    ...bundle.milestones.map((item) => item.title),
+    ...bundle.openPulls.map((item) => item.title),
+    ...bundle.issues.map((item) => item.title),
+  ];
+}
+
+function buildProjectBridgeRows({
+  selectedContextValue,
+  projectPortfolio,
+  taskQueue,
+  githubRepoCards,
+  githubBundles,
+  localRepositories,
+}) {
+  const localRepositoryByContext = new Map(
+    (localRepositories || []).map((item) => [item.contextValue, item]),
+  );
+
+  return getVisibleWorkContexts(selectedContextValue).map((context) => {
+    const projects = scopeStrictWorkItems(projectPortfolio, context.value, projectSelector);
+    const tasks = scopeStrictWorkItems(taskQueue, context.value, taskSelector);
+    const repoCards = scopeStrictWorkItems(githubRepoCards, context.value, repoSelector);
+    const bundles = scopeStrictWorkItems(githubBundles, context.value, bundleSelector);
+    const localRepository = localRepositoryByContext.get(context.value);
+    const activeProjects = projects.filter((item) => item.status === "active").length;
+    const blockedProjects = projects.filter((item) => isBlockedProject(item)).length;
+    const openPullCount = sumWorkValues(bundles.map((item) => item.openPulls.length));
+    const openIssueCount = sumWorkValues(bundles.map((item) => item.issues.length));
+
+    let statusTone = localRepository?.statusTone || "muted";
+    let statusLabel = localRepository?.statusLabel || "queued";
+
+    if (blockedProjects > 0 || localRepository?.statusTone === "danger") {
+      statusTone = "danger";
+      statusLabel = blockedProjects > 0 ? "blocked" : localRepository?.statusLabel || "attention";
+    } else if (openIssueCount > 8 || localRepository?.statusTone === "warning") {
+      statusTone = "warning";
+      statusLabel = openIssueCount > 8 ? "pressure" : localRepository?.statusLabel || "watch";
+    } else if (openPullCount > 0) {
+      statusTone = "blue";
+      statusLabel = "shipping";
+    } else if (activeProjects > 0 || repoCards.length > 0) {
+      statusTone = "green";
+      statusLabel = "active";
+    }
+
+    const headline =
+      blockedProjects > 0
+        ? `${blockedProjects} blocker signal${blockedProjects === 1 ? "" : "s"} need a clear handoff`
+        : openPullCount > 0
+          ? `${openPullCount} PR${openPullCount === 1 ? "" : "s"} are feeding this lane`
+          : tasks.length > 0
+            ? `${tasks.length} queued task${tasks.length === 1 ? "" : "s"} are ready to move`
+            : "Connect the next project move before this lane goes quiet";
+    const detail = [
+      projects[0]?.nextAction || repoCards[0]?.nextAction || "Keep next action, PMS, and roadmap visible from the same lane.",
+      localRepository?.repository
+        ? `${localRepository.repository} · ${localRepository.detail}`
+        : "Local workspace mapping is still missing for this context.",
+    ].join(" ");
+
+    return {
+      key: context.value,
+      label: context.label,
+      description: context.description,
+      statusTone,
+      statusLabel,
+      headline,
+      detail,
+      metrics: [
+        { label: "Active", value: formatWorkMetric(activeProjects), tone: activeProjects ? "green" : "muted" },
+        { label: "Blocked", value: formatWorkMetric(blockedProjects), tone: blockedProjects ? "danger" : "muted" },
+        { label: "Tasks", value: formatWorkMetric(tasks.length), tone: tasks.length ? "blue" : "muted" },
+        { label: "PRs", value: formatWorkMetric(openPullCount), tone: openPullCount ? "blue" : "muted" },
+      ],
+      links: [
+        { label: "PMS", href: buildWorkContextHref("/dashboard/work/pms", context.value) },
+        { label: "Roadmap", href: buildWorkContextHref("/dashboard/work/roadmap", context.value) },
+        { label: "Management", href: buildWorkContextHref("/dashboard/work/management", context.value) },
+      ],
+    };
+  });
+}
+
 export default async function WorkProjectsPage({ searchParams }) {
-  const { projectPortfolio, projectUpdates, taskQueue } = await getProjectsPageData();
+  const [{ projectPortfolio, projectUpdates, taskQueue }, { githubRepoCards, githubBundles }] = await Promise.all([
+    getProjectsPageData(),
+    getWorkPmsPageData(),
+  ]);
+  const localRepositoryData = getLocalProjectRepositoryData();
   const defaultWorkspaceId =
     process.env.COM_MOON_DEFAULT_WORKSPACE_ID?.trim() ||
     process.env.DEFAULT_WORKSPACE_ID?.trim() ||
     "";
-  const selectedProject = resolveWorkContext(searchParams?.project);
-  const selectedView = resolveView(searchParams?.view);
-  const selectedFocus = resolveFocus(searchParams?.focus);
+  const params = (await searchParams) ?? {};
+  const selectedProject = resolveWorkContext(params?.project);
+  const selectedView = resolveView(params?.view);
+  const selectedFocus = resolveFocus(params?.focus);
   const scopedProjects = scopeMappedItemsByWorkContext(
     projectPortfolio,
     selectedProject.value,
@@ -213,6 +328,14 @@ export default async function WorkProjectsPage({ searchParams }) {
   const blockedProjects = displayedProjects.filter((project) => isBlockedProject(project)).length;
   const completedProjects = displayedProjects.filter((project) => project.status === "completed").length;
   const laneGroups = groupProjectsByLane(displayedProjects);
+  const bridgeRows = buildProjectBridgeRows({
+    selectedContextValue: selectedProject.value,
+    projectPortfolio,
+    taskQueue,
+    githubRepoCards,
+    githubBundles,
+    localRepositories: localRepositoryData.projects,
+  });
   const visibleTasks =
     selectedFocus.value === "all" ? scopedTasks.items : filterTasksByProjects(scopedTasks.items, displayedProjects);
   const scopeNote =
@@ -270,6 +393,14 @@ export default async function WorkProjectsPage({ searchParams }) {
 
       <div className="stack">
         <SectionCard
+          kicker="Connections"
+          title="Projects -> PMS -> Roadmap handoff"
+          description="Each work lane now keeps project motion, queue pressure, and repository state on one bridge so the next screen still shares the same context."
+        >
+          <WorkContextBridge rows={bridgeRows} />
+        </SectionCard>
+
+        <SectionCard
           kicker="Views"
           title="Choose the project operating view"
           description="Use board view for quick triage and list view for compact progress scanning. Focus chips act like saved views for the current context."
@@ -282,7 +413,7 @@ export default async function WorkProjectsPage({ searchParams }) {
                   <Link
                     className="context-link"
                     data-active={item.value === selectedView.value ? "true" : "false"}
-                    href={buildProjectsHref(searchParams, {
+                    href={buildProjectsHref(params, {
                       view: item.value === VIEW_OPTIONS[0].value ? "" : item.value,
                     })}
                     key={item.value}
@@ -301,7 +432,7 @@ export default async function WorkProjectsPage({ searchParams }) {
                   <Link
                     className="context-link"
                     data-active={item.value === selectedFocus.value ? "true" : "false"}
-                    href={buildProjectsHref(searchParams, {
+                    href={buildProjectsHref(params, {
                       focus: item.value === FOCUS_OPTIONS[0].value ? "" : item.value,
                     })}
                     key={item.value}

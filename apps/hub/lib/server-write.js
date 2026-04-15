@@ -155,7 +155,7 @@ function buildProjectWebhookRequestBody(payload, target) {
   };
 }
 
-export async function insertSupabaseRecord(table, record) {
+async function writeSupabase(table, method, record, { filters = [], returning = false } = {}) {
   const config = resolveSupabaseConfig();
 
   if (!config) {
@@ -166,13 +166,14 @@ export async function insertSupabaseRecord(table, record) {
   }
 
   try {
-    const response = await fetch(`${config.url}/rest/v1/${table}`, {
-      method: "POST",
+    const query = method === "PATCH" ? buildFilterQuery(filters) : "";
+    const response = await fetch(`${config.url}/rest/v1/${table}${query}`, {
+      method,
       headers: {
         "content-type": "application/json",
         apikey: config.apiKey,
         authorization: `Bearer ${config.apiKey}`,
-        prefer: "return=minimal",
+        prefer: returning ? "return=representation" : "return=minimal",
       },
       body: JSON.stringify(record),
       cache: "no-store",
@@ -187,9 +188,13 @@ export async function insertSupabaseRecord(table, record) {
       };
     }
 
+    const data = returning ? await response.json().catch(() => null) : null;
+
     return {
       persisted: true,
       reason: "ok",
+      rows: Array.isArray(data) ? data : data ? [data] : [],
+      row: Array.isArray(data) ? data[0] || null : data || null,
     };
   } catch (error) {
     return {
@@ -198,6 +203,14 @@ export async function insertSupabaseRecord(table, record) {
       detail: String(error),
     };
   }
+}
+
+export async function insertSupabaseRecord(table, record, options = {}) {
+  return writeSupabase(table, "POST", record, options);
+}
+
+export async function insertSupabaseRecords(table, records, options = {}) {
+  return writeSupabase(table, "POST", records, options);
 }
 
 function buildFilterQuery(filters = []) {
@@ -211,49 +224,11 @@ function buildFilterQuery(filters = []) {
   return query ? `?${query}` : "";
 }
 
-export async function updateSupabaseRecord(table, filters = [], record = {}) {
-  const config = resolveSupabaseConfig();
-
-  if (!config) {
-    return {
-      persisted: false,
-      reason: "missing-config",
-    };
-  }
-
-  try {
-    const response = await fetch(`${config.url}/rest/v1/${table}${buildFilterQuery(filters)}`, {
-      method: "PATCH",
-      headers: {
-        "content-type": "application/json",
-        apikey: config.apiKey,
-        authorization: `Bearer ${config.apiKey}`,
-        prefer: "return=minimal",
-      },
-      body: JSON.stringify(record),
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      return {
-        persisted: false,
-        reason: `http-${response.status}`,
-        detail,
-      };
-    }
-
-    return {
-      persisted: true,
-      reason: "ok",
-    };
-  } catch (error) {
-    return {
-      persisted: false,
-      reason: "request-failed",
-      detail: String(error),
-    };
-  }
+export async function updateSupabaseRecord(table, filters = [], record = {}, options = {}) {
+  return writeSupabase(table, "PATCH", record, {
+    ...options,
+    filters,
+  });
 }
 
 export function buildProjectUpdateRecord(payload) {

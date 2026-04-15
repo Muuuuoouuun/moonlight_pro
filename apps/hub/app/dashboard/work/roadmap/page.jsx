@@ -1,12 +1,19 @@
 import { SectionCard } from "@/components/dashboard/section-card";
 import { HubSyncBadge } from "@/components/dashboard/hub-sync-badge";
+import { WorkContextBridge } from "@/components/dashboard/work-context-bridge";
 import {
   NewSinceDot,
   SinceLastVisitProvider,
 } from "@/components/dashboard/since-last-visit";
 import { bucketRoadmapByHorizon, ROADMAP_HORIZON_WINDOW } from "@/lib/dashboard-data";
 import { resolveWorkContext, scopeMappedItemsByWorkContext } from "@/lib/dashboard-contexts";
-import { getRoadmapPageData } from "@/lib/server-data";
+import { getLocalProjectRepositoryData, getProjectsPageData, getRoadmapPageData } from "@/lib/server-data";
+import {
+  buildWorkContextHref,
+  formatWorkMetric,
+  getVisibleWorkContexts,
+  scopeStrictWorkItems,
+} from "@/lib/work-context-bridge";
 
 const HORIZONS = [
   {
@@ -64,7 +71,100 @@ function HorizonCard({ row }) {
   );
 }
 
+function roadmapSelector(item) {
+  return [item.title, item.lane, item.source, item.detail];
+}
+
+function shippingSelector(item) {
+  return [item.title, item.detail, item.repository];
+}
+
+function projectSelector(item) {
+  return [item.title, item.owner, item.milestone, item.nextAction, item.risk, item.taskLead];
+}
+
+function buildRoadmapBridgeRows({
+  selectedContextValue,
+  roadmapRows,
+  shippingRows,
+  projectPortfolio,
+  localRepositories,
+}) {
+  const localRepositoryByContext = new Map(
+    (localRepositories || []).map((item) => [item.contextValue, item]),
+  );
+
+  return getVisibleWorkContexts(selectedContextValue).map((context) => {
+    const roadmap = scopeStrictWorkItems(roadmapRows, context.value, roadmapSelector);
+    const shipping = scopeStrictWorkItems(shippingRows, context.value, shippingSelector);
+    const projects = scopeStrictWorkItems(projectPortfolio, context.value, projectSelector);
+    const horizon = bucketRoadmapByHorizon(roadmap);
+    const slipCount = horizon.now.filter((item) => item.slipTone === "slip").length;
+    const localRepository = localRepositoryByContext.get(context.value);
+
+    let statusTone = localRepository?.statusTone || "muted";
+    let statusLabel = localRepository?.statusLabel || "idle";
+
+    if (slipCount > 0 || localRepository?.statusTone === "danger") {
+      statusTone = "danger";
+      statusLabel = slipCount > 0 ? "slipping" : localRepository?.statusLabel || "attention";
+    } else if (horizon.now.length > 0 || localRepository?.statusTone === "warning") {
+      statusTone = "warning";
+      statusLabel = horizon.now.length > 0 ? "now" : localRepository?.statusLabel || "watch";
+    } else if (horizon.next.length > 0 || shipping.length > 0) {
+      statusTone = "blue";
+      statusLabel = "queued";
+    } else if (projects.length > 0 || roadmap.length > 0) {
+      statusTone = "green";
+      statusLabel = "steady";
+    }
+
+    const headline =
+      slipCount > 0
+        ? `${slipCount} roadmap item${slipCount === 1 ? "" : "s"} already slipped`
+        : horizon.now[0]?.title
+          ? `${horizon.now[0].title} is sitting in the NOW horizon`
+          : horizon.next[0]?.title
+            ? `${horizon.next[0].title} is the next roadmap transition`
+            : "Roadmap needs one dated milestone to stay sharp";
+    const detail = [
+      shipping[0]?.detail ||
+        projects[0]?.nextAction ||
+        "Keep the next milestone and the latest shipping signal on the same board.",
+      localRepository?.repository
+        ? `${localRepository.repository} · ${localRepository.detail}`
+        : "Local workspace mapping is still missing for this context.",
+    ].join(" ");
+
+    return {
+      key: context.value,
+      label: context.label,
+      description: context.description,
+      statusTone,
+      statusLabel,
+      headline,
+      detail,
+      metrics: [
+        { label: "Now", value: formatWorkMetric(horizon.now.length), tone: horizon.now.length ? "warning" : "muted" },
+        { label: "Next", value: formatWorkMetric(horizon.next.length), tone: horizon.next.length ? "blue" : "muted" },
+        { label: "Slip", value: formatWorkMetric(slipCount), tone: slipCount ? "danger" : "muted" },
+        { label: "Ship", value: formatWorkMetric(shipping.length), tone: shipping.length ? "green" : "muted" },
+      ],
+      links: [
+        { label: "Projects", href: buildWorkContextHref("/dashboard/work/projects", context.value) },
+        { label: "PMS", href: buildWorkContextHref("/dashboard/work/pms", context.value) },
+        { label: "Management", href: buildWorkContextHref("/dashboard/work/management", context.value) },
+      ],
+    };
+  });
+}
+
 export default async function WorkRoadmapPage({ searchParams }) {
+  const [{ projectPortfolio }, roadmapData] = await Promise.all([
+    getProjectsPageData(),
+    getRoadmapPageData(),
+  ]);
+  const localRepositoryData = getLocalProjectRepositoryData();
   const {
     roadmapRows,
     shippingRows,
@@ -73,9 +173,10 @@ export default async function WorkRoadmapPage({ searchParams }) {
     githubTotals,
     githubLastSyncAt,
     hasGitHubData,
-  } = await getRoadmapPageData();
+  } = roadmapData;
 
-  const selectedProject = resolveWorkContext(searchParams?.project);
+  const params = (await searchParams) ?? {};
+  const selectedProject = resolveWorkContext(params?.project);
   const scopedRoadmap = scopeMappedItemsByWorkContext(
     roadmapRows,
     selectedProject.value,
@@ -99,6 +200,13 @@ export default async function WorkRoadmapPage({ searchParams }) {
     later: horizon.later.length,
   };
   const slipCount = horizon.now.filter((row) => row.slipTone === "slip").length;
+  const bridgeRows = buildRoadmapBridgeRows({
+    selectedContextValue: selectedProject.value,
+    roadmapRows,
+    shippingRows,
+    projectPortfolio,
+    localRepositories: localRepositoryData.projects,
+  });
 
   const syncTone =
     githubConnection?.tone === "danger"
@@ -177,6 +285,14 @@ export default async function WorkRoadmapPage({ searchParams }) {
             </li>
           </ul>
         </section>
+
+        <SectionCard
+          kicker="Connections"
+          title="Roadmap to shipping bridge"
+          description="This deck keeps horizon pressure, project motion, and workspace repository state aligned so roadmap review does not drift away from delivery reality."
+        >
+          <WorkContextBridge rows={bridgeRows} />
+        </SectionCard>
 
         <section aria-label="Horizon board">
           <div className="hub-roadmap__horizon">

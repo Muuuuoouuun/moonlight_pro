@@ -1,25 +1,23 @@
 import Link from "next/link";
+import { AiChatWorkspace } from "@/components/dashboard/ai-chat-workspace";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { getAiConsolePageData } from "@/lib/server-data";
 
-const CHAT_TARGETS = [
-  { id: "both", label: "Claude + Codex" },
-  { id: "claude", label: "Claude" },
-  { id: "codex", label: "Codex" },
-  { id: "engine", label: "Engine" },
-];
-
-function getAuthorTone(author) {
-  if (author === "claude") return "blue";
-  if (author === "codex") return "green";
-  if (author === "operator") return "warning";
-  return "muted";
+function resolveFirst(value) {
+  return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function AiChatPage() {
+export default async function AiChatPage({ searchParams }) {
+  const params = (await searchParams) ?? {};
   const { chatThreads, chatMessages, chatSuggestions, agents } = await getAiConsolePageData();
-
-  const activeThread = chatThreads[0];
+  const initialDraft = resolveFirst(params?.draft) || resolveFirst(params?.target)
+    ? {
+        title: resolveFirst(params?.title) || "",
+        body: resolveFirst(params?.draft) || "",
+        target: resolveFirst(params?.target) || "both",
+        source: resolveFirst(params?.source) || "",
+      }
+    : null;
 
   return (
     <div className="app-page">
@@ -32,152 +30,13 @@ export default async function AiChatPage() {
         </p>
       </section>
 
-      <div className="ai-chat-frame">
-        <aside className="ai-chat-rail" aria-label="Chat threads">
-          <div className="ai-chat-rail-head">
-            <div>
-              <p className="section-kicker">Threads</p>
-              <h2 className="section-title" style={{ fontSize: "18px" }}>
-                열려 있는 대화
-              </h2>
-            </div>
-            <button type="button" className="button button-ghost" disabled>
-              + 새 스레드
-            </button>
-          </div>
-          <ul className="ai-thread-list">
-            {chatThreads.map((thread, index) => (
-              <li
-                className="ai-thread-item"
-                data-active={index === 0 ? "true" : "false"}
-                key={thread.id}
-              >
-                <div className="ai-thread-head">
-                  <strong>{thread.title}</strong>
-                  {thread.unread > 0 ? (
-                    <span className="legend-chip" data-tone="warning">
-                      {thread.unread}
-                    </span>
-                  ) : null}
-                </div>
-                <p className="ai-thread-preview">{thread.preview}</p>
-                <div className="ai-thread-meta">
-                  <span>{thread.target}</span>
-                  <span>{thread.updated}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <div className="ai-chat-rail-foot">
-            <p className="section-kicker">Agents online</p>
-            <ul className="inline-legend" style={{ flexWrap: "wrap" }}>
-              {agents.map((agent) => (
-                <li
-                  className="legend-chip"
-                  data-tone={agent.status === "ready" || agent.status === "live" ? "green" : "blue"}
-                  key={agent.id}
-                >
-                  {agent.name} · {agent.status}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </aside>
-
-        <div className="ai-chat-pane">
-          <header className="ai-chat-pane-head">
-            <div>
-              <p className="section-kicker">Thread</p>
-              <h2 className="section-title" style={{ fontSize: "20px" }}>
-                {activeThread.title}
-              </h2>
-              <p className="muted">
-                {activeThread.target} · {activeThread.updated}
-              </p>
-            </div>
-            <div className="ai-chat-target-switch" role="tablist" aria-label="Chat target">
-              {CHAT_TARGETS.map((target, index) => (
-                <button
-                  key={target.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={index === 0 ? "true" : "false"}
-                  data-active={index === 0 ? "true" : "false"}
-                  className="ai-chat-target-btn"
-                  disabled
-                >
-                  {target.label}
-                </button>
-              ))}
-            </div>
-          </header>
-
-          <div className="ai-chat-stream">
-            {chatMessages.map((message) => (
-              <article
-                className="ai-chat-bubble"
-                data-author={message.author}
-                key={message.id}
-              >
-                <header>
-                  <span className="legend-chip" data-tone={getAuthorTone(message.author)}>
-                    {message.authorLabel}
-                  </span>
-                  <span className="muted tiny">{message.time}</span>
-                </header>
-                <p>{message.body}</p>
-              </article>
-            ))}
-          </div>
-
-          <form className="ai-chat-composer" aria-label="Message composer">
-            <div className="ai-chat-composer-row">
-              <label htmlFor="ai-chat-target" className="section-kicker">
-                타겟
-              </label>
-              <select id="ai-chat-target" name="target" disabled>
-                {CHAT_TARGETS.map((target) => (
-                  <option key={target.id} value={target.id}>
-                    {target.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <textarea
-              className="ai-chat-composer-input"
-              rows={3}
-              placeholder="여기에 오더나 질문을 입력하세요. / 로 명령, @ 로 에이전트, # 로 레인을 붙일 수 있습니다."
-              disabled
-            />
-            <div className="ai-chat-suggest">
-              {chatSuggestions.map((suggestion) => (
-                <button
-                  key={suggestion}
-                  type="button"
-                  className="legend-chip"
-                  data-tone="muted"
-                  disabled
-                >
-                  <code>{suggestion}</code>
-                </button>
-              ))}
-            </div>
-            <div className="ai-chat-composer-actions">
-              <p className="muted tiny">
-                프론트 스캐폴드 단계라 전송은 비활성화 — 연결되면 `/api/ai/chat` 로 POST 됩니다.
-              </p>
-              <div className="hero-actions">
-                <button type="button" className="button button-secondary" disabled>
-                  초안 저장
-                </button>
-                <button type="button" className="button button-primary" disabled>
-                  보내기
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
-      </div>
+      <AiChatWorkspace
+        initialThreads={chatThreads}
+        initialMessages={chatMessages}
+        initialSuggestions={chatSuggestions}
+        initialAgents={agents}
+        initialDraft={initialDraft}
+      />
 
       <SectionCard
         kicker="Bridge"

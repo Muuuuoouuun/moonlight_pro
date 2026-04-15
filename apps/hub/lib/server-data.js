@@ -1,6 +1,6 @@
 import { execFileSync, execSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   activityFeed as fallbackActivityFeed,
   aiAgents as fallbackAiAgents,
@@ -10,11 +10,13 @@ import {
   aiCouncilSessions as fallbackAiCouncilSessions,
   aiOpenOrders as fallbackAiOpenOrders,
   aiOrderTemplates as fallbackAiOrderTemplates,
-  aiOsPulse as fallbackAiOsPulse,
   automationCards as fallbackAutomationCards,
   automationRuns as fallbackAutomationRuns,
+  automationTriage as fallbackAutomationTriage,
   commandCenterQueue as fallbackCommandCenterQueue,
+  contentCampaigns as fallbackContentCampaigns,
   contentAttention as fallbackContentAttention,
+  contentAssets as fallbackContentAssets,
   contentPipeline as fallbackContentPipeline,
   contentQueueRoster as fallbackContentQueueRoster,
   contentSummary as fallbackContentSummary,
@@ -49,26 +51,68 @@ import {
   WORK_CONTEXTS,
 } from "@/lib/dashboard-contexts";
 import {
+  buildCampaignPreview,
+  getCampaignRunTone,
+  getCampaignStatusTone,
+} from "@/lib/content-campaigns";
+import {
+  formatAiClock,
+  getAiAuthorLabel,
+  getAiCouncilStatusLabel,
+  getAiOrderStatusLabel,
+  getAiOrderTone,
+  getAiTargetLabel,
+  normalizeAiTarget,
+  normalizeAiCouncilMembers,
+} from "@/lib/ai-console";
+import {
   fetchLatestGoogleCalendarConnection,
   listGoogleCalendarEvents,
 } from "@/lib/google-calendar";
 
 const CALENDAR_TIMEZONE = "Asia/Seoul";
+const OPERATING_PULSE_HOURS = 24;
 const DEFAULT_PROJECTS_ROOT = "/Users/bigmac_moon/Desktop/Projects";
+const SERVER_QUERY_CACHE_TTL_MS = 15_000;
+const ENGINE_HEALTH_CACHE_TTL_MS = 10_000;
+const LOCAL_REPOSITORY_CACHE_TTL_MS = 30_000;
+const GITHUB_WORKSPACE_CACHE_TTL_MS = 30_000;
+
+let localProjectRepositoryCache = {
+  expiresAt: 0,
+  value: null,
+};
+
+let gitHubWorkspaceCache = {
+  key: "",
+  expiresAt: 0,
+  value: null,
+  promise: null,
+};
+
+const serverQueryCache = new Map();
+const CACHE_MISS = Symbol("cache-miss");
+
+let engineHealthCache = {
+  expiresAt: 0,
+  value: undefined,
+  promise: null,
+};
+
 const LOCAL_WORK_PROJECT_BINDINGS = [
   {
     contextValue: "com_moon",
-    directory: "moonlight_pro",
+    directory: "com_moon",
     repository: "Muuuuoouuun/moonlight_pro",
   },
   {
     contextValue: "classinkr-web",
-    directory: "classinkr-web",
+    directory: "classin_home",
     repository: "classinkr-main/classinkr-web",
   },
   {
     contextValue: "sales_branding_dash",
-    directory: "sales_dash",
+    directory: "sales_branding_dash",
     repository: "Muuuuoouuun/sales_branding_dash",
   },
   {
@@ -106,6 +150,14 @@ function resolveEngineUrl() {
   }
 
   return null;
+}
+
+function resolveDefaultWorkspaceId() {
+  return (
+    process.env.COM_MOON_DEFAULT_WORKSPACE_ID?.trim() ||
+    process.env.DEFAULT_WORKSPACE_ID?.trim() ||
+    ""
+  );
 }
 
 function resolveGitHubApiBase() {
@@ -166,6 +218,38 @@ function extractCount(contentRange) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function getTimedCache(cacheKey) {
+  const cached = serverQueryCache.get(cacheKey);
+
+  if (!cached) {
+    return CACHE_MISS;
+  }
+
+  if (cached.promise) {
+    return cached.promise;
+  }
+
+  if (Date.now() < cached.expiresAt) {
+    return cached.value;
+  }
+
+  serverQueryCache.delete(cacheKey);
+  return CACHE_MISS;
+}
+
+function setTimedCacheValue(cacheKey, value, ttl = SERVER_QUERY_CACHE_TTL_MS) {
+  serverQueryCache.set(cacheKey, {
+    value,
+    expiresAt: Date.now() + ttl,
+  });
+}
+
+function setTimedCachePromise(cacheKey, promise) {
+  serverQueryCache.set(cacheKey, {
+    promise,
+  });
+}
+
 export async function fetchRows(table, options = {}) {
   const config = resolveSupabaseConfig();
 
@@ -173,20 +257,35 @@ export async function fetchRows(table, options = {}) {
     return null;
   }
 
-  try {
-    const response = await fetch(buildRestUrl(config.url, table, options), {
-      headers: makeHeaders(config.apiKey),
-      cache: "no-store",
-    });
+  const cacheKey = JSON.stringify(["rows", config.url, table, options]);
+  const cached = getTimedCache(cacheKey);
+  if (cached !== CACHE_MISS) {
+    return cached;
+  }
 
-    if (!response.ok) {
+  const request = (async () => {
+    try {
+      const response = await fetch(buildRestUrl(config.url, table, options), {
+        headers: makeHeaders(config.apiKey),
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        setTimedCacheValue(cacheKey, null);
+        return null;
+      }
+
+      const data = await response.json();
+      setTimedCacheValue(cacheKey, data);
+      return data;
+    } catch {
+      setTimedCacheValue(cacheKey, null);
       return null;
     }
+  })();
 
-    return await response.json();
-  } catch {
-    return null;
-  }
+  setTimedCachePromise(cacheKey, request);
+  return request;
 }
 
 export async function countRows(table, filters = []) {
@@ -196,30 +295,45 @@ export async function countRows(table, filters = []) {
     return null;
   }
 
-  try {
-    const response = await fetch(
-      buildRestUrl(config.url, table, {
-        select: "id",
-        filters,
-        limit: 1,
-      }),
-      {
-        headers: {
-          ...makeHeaders(config.apiKey, true),
-          Range: "0-0",
-        },
-        cache: "no-store",
-      },
-    );
+  const cacheKey = JSON.stringify(["count", config.url, table, filters]);
+  const cached = getTimedCache(cacheKey);
+  if (cached !== CACHE_MISS) {
+    return cached;
+  }
 
-    if (!response.ok) {
+  const request = (async () => {
+    try {
+      const response = await fetch(
+        buildRestUrl(config.url, table, {
+          select: "id",
+          filters,
+          limit: 1,
+        }),
+        {
+          headers: {
+            ...makeHeaders(config.apiKey, true),
+            Range: "0-0",
+          },
+          cache: "no-store",
+        },
+      );
+
+      if (!response.ok) {
+        setTimedCacheValue(cacheKey, null);
+        return null;
+      }
+
+      const count = extractCount(response.headers.get("content-range"));
+      setTimedCacheValue(cacheKey, count);
+      return count;
+    } catch {
+      setTimedCacheValue(cacheKey, null);
       return null;
     }
+  })();
 
-    return extractCount(response.headers.get("content-range"));
-  } catch {
-    return null;
-  }
+  setTimedCachePromise(cacheKey, request);
+  return request;
 }
 
 export async function fetchEngineHealth() {
@@ -229,25 +343,59 @@ export async function fetchEngineHealth() {
     return null;
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 1200);
-
-  try {
-    const response = await fetch(`${engineUrl}/api/health`, {
-      cache: "no-store",
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return await response.json();
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
+  if (engineHealthCache.value !== undefined && Date.now() < engineHealthCache.expiresAt) {
+    return engineHealthCache.value;
   }
+
+  if (engineHealthCache.promise) {
+    return engineHealthCache.promise;
+  }
+
+  const request = (async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1200);
+
+    try {
+      const response = await fetch(`${engineUrl}/api/health`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        engineHealthCache = {
+          value: null,
+          expiresAt: Date.now() + ENGINE_HEALTH_CACHE_TTL_MS,
+          promise: null,
+        };
+        return null;
+      }
+
+      const data = await response.json();
+      engineHealthCache = {
+        value: data,
+        expiresAt: Date.now() + ENGINE_HEALTH_CACHE_TTL_MS,
+        promise: null,
+      };
+      return data;
+    } catch {
+      engineHealthCache = {
+        value: null,
+        expiresAt: Date.now() + ENGINE_HEALTH_CACHE_TTL_MS,
+        promise: null,
+      };
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
+  })();
+
+  engineHealthCache = {
+    value: engineHealthCache.value,
+    expiresAt: engineHealthCache.expiresAt,
+    promise: request,
+  };
+
+  return request;
 }
 
 export function formatTimestamp(value) {
@@ -617,6 +765,42 @@ function formatCalendarDateKey(value) {
   }
 }
 
+function formatCalendarHour(value) {
+  const parsed = parseDateValue(value);
+
+  if (!parsed) {
+    return null;
+  }
+
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: CALENDAR_TIMEZONE,
+      hour: "2-digit",
+      hour12: false,
+    }).formatToParts(parsed);
+    const hour = Number.parseInt(parts.find((part) => part.type === "hour")?.value || "", 10);
+    return Number.isFinite(hour) ? hour : null;
+  } catch {
+    return parsed.getHours();
+  }
+}
+
+function formatHourLabel(hour) {
+  return `${String(hour).padStart(2, "0")}:00`;
+}
+
+function formatMinutesLabel(value) {
+  const minutes = Math.max(0, Math.round(Number(value) || 0));
+
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const remainder = minutes % 60;
+    return remainder ? `${hours}h ${remainder}m` : `${hours}h`;
+  }
+
+  return `${minutes}m`;
+}
+
 function formatDateOnly(value) {
   const parsed = parseDateValue(value);
 
@@ -695,7 +879,14 @@ function parseGitHubRepoFromRemote(value) {
 }
 
 function resolveProjectsRoot() {
-  return (process.env.COM_MOON_PROJECTS_ROOT?.trim() || DEFAULT_PROJECTS_ROOT).replace(/\/$/, "");
+  const configuredRoot = process.env.COM_MOON_PROJECTS_ROOT?.trim();
+
+  if (configuredRoot) {
+    return configuredRoot.replace(/\/$/, "");
+  }
+
+  const inferredRoot = inferProjectsRootFromCwd();
+  return (inferredRoot || DEFAULT_PROJECTS_ROOT).replace(/\/$/, "");
 }
 
 function getWorkContextMeta(contextValue) {
@@ -716,6 +907,34 @@ function resolveLocalWorkProjectBindings() {
     path: join(root, item.directory),
     context: getWorkContextMeta(item.contextValue),
   }));
+}
+
+function countBoundDirectories(root) {
+  return LOCAL_WORK_PROJECT_BINDINGS.filter((item) => existsSync(join(root, item.directory))).length;
+}
+
+function inferProjectsRootFromCwd() {
+  let current = process.cwd();
+  let bestRoot = "";
+  let bestScore = 0;
+
+  for (let step = 0; current && step < 8; step += 1) {
+    const score = countBoundDirectories(current);
+
+    if (score > bestScore) {
+      bestRoot = current;
+      bestScore = score;
+    }
+
+    const parent = dirname(current);
+    if (!parent || parent === current) {
+      break;
+    }
+
+    current = parent;
+  }
+
+  return bestRoot;
 }
 
 function readGitValue(cwd, args) {
@@ -828,6 +1047,11 @@ function buildLocalRepositoryDetail({ dirtyCount, aheadCount, behindCount, hasUp
 }
 
 export function getLocalProjectRepositoryData() {
+  const now = Date.now();
+  if (localProjectRepositoryCache.value && now < localProjectRepositoryCache.expiresAt) {
+    return localProjectRepositoryCache.value;
+  }
+
   const projects = resolveLocalWorkProjectBindings().map((binding) => {
     const exists = existsSync(binding.path);
     const isGitRepo = exists && readGitValue(binding.path, ["rev-parse", "--is-inside-work-tree"]) === "true";
@@ -879,7 +1103,7 @@ export function getLocalProjectRepositoryData() {
     };
   });
 
-  return {
+  const result = {
     projects,
     totals: {
       trackedProjectCount: projects.length,
@@ -890,6 +1114,13 @@ export function getLocalProjectRepositoryData() {
       missingRepositoryCount: projects.filter((item) => !item.exists || !item.isGitRepo).length,
     },
   };
+
+  localProjectRepositoryCache = {
+    value: result,
+    expiresAt: now + LOCAL_REPOSITORY_CACHE_TTL_MS,
+  };
+
+  return result;
 }
 
 function readGitHubRepoFromOrigin() {
@@ -1694,8 +1925,124 @@ function buildWorkCalendarSourceStats(scheduleEvents) {
   };
 }
 
-async function getGitHubWorkspaceData() {
-  const repositories = resolveGitHubRepositories();
+function normalizeContentBrandToken(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
+function resolveContentBrandToken(item) {
+  return normalizeContentBrandToken(
+    item?.brand_key ||
+      item?.brand ||
+      item?.payload?.brand_key ||
+      item?.payload?.brand ||
+      item?.meta?.brand_key ||
+      "",
+  );
+}
+
+function scopeContentRowsByBrand(rows, selectedBrand) {
+  if (!rows?.length || !selectedBrand || selectedBrand === "all") {
+    return rows;
+  }
+
+  const normalizedSelected = normalizeContentBrandToken(selectedBrand);
+  const hasExplicitBrand = rows.some((item) => resolveContentBrandToken(item));
+
+  if (!hasExplicitBrand) {
+    return rows;
+  }
+
+  return rows.filter((item) => {
+    const token = resolveContentBrandToken(item);
+    return !token || token === normalizedSelected;
+  });
+}
+
+function scopeContentPipelineByBrand(stages, selectedBrand) {
+  if (!stages?.length || !selectedBrand || selectedBrand === "all") {
+    return stages;
+  }
+
+  const hasExplicitBrand = stages.some((stage) =>
+    (stage.items || []).some((item) => resolveContentBrandToken(item)),
+  );
+
+  if (!hasExplicitBrand) {
+    return stages;
+  }
+
+  const normalizedSelected = normalizeContentBrandToken(selectedBrand);
+
+  return stages.map((stage) => ({
+    ...stage,
+    items: (stage.items || []).filter((item) => {
+      const token = resolveContentBrandToken(item);
+      return !token || token === normalizedSelected;
+    }),
+  }));
+}
+
+function buildScopedContentSummary(summary, pipeline, attention, selectedBrand) {
+  if (!summary?.length || !selectedBrand || selectedBrand === "all") {
+    return summary;
+  }
+
+  const hasExplicitBrand = (pipeline || []).some((stage) =>
+    (stage.items || []).some((item) => resolveContentBrandToken(item)),
+  );
+
+  if (!hasExplicitBrand) {
+    return summary;
+  }
+
+  const stageCounts = (pipeline || []).reduce(
+    (acc, stage) => {
+      acc[stage.title] = (stage.items || []).length;
+      return acc;
+    },
+    {},
+  );
+
+  return summary.map((item) => {
+    if (item.title === "Idea Backlog") {
+      return {
+        ...item,
+        value: String(stageCounts.Idea || 0),
+        detail: "This selected brand's raw topics still waiting for a sharper angle and first hook.",
+      };
+    }
+
+    if (item.title === "Draft + Review") {
+      return {
+        ...item,
+        value: String((stageCounts.Draft || 0) + (stageCounts.Review || 0)),
+        detail: "Pieces in writing or operator review for the current brand lane.",
+      };
+    }
+
+    if (item.title === "Scheduled / Published") {
+      return {
+        ...item,
+        value: String(stageCounts.Publish || 0),
+        detail: "Brand-scoped work already queued or recently shipped.",
+      };
+    }
+
+    if (item.title === "Attention") {
+      return {
+        ...item,
+        value: String((attention || []).length),
+        detail: "Judgment calls or machine warnings still visible inside this brand lane.",
+      };
+    }
+
+    return item;
+  });
+}
+
+async function buildGitHubWorkspaceData(repositories) {
   const token = resolveGitHubToken();
 
   if (!repositories.length) {
@@ -1807,6 +2154,61 @@ async function getGitHubWorkspaceData() {
   };
 }
 
+async function getGitHubWorkspaceData() {
+  const repositories = resolveGitHubRepositories();
+  const cacheKey = JSON.stringify({
+    repositories,
+    apiBase: resolveGitHubApiBase(),
+    hasToken: Boolean(resolveGitHubToken()),
+  });
+  const now = Date.now();
+
+  if (
+    gitHubWorkspaceCache.value &&
+    gitHubWorkspaceCache.key === cacheKey &&
+    now < gitHubWorkspaceCache.expiresAt
+  ) {
+    return gitHubWorkspaceCache.value;
+  }
+
+  if (gitHubWorkspaceCache.promise && gitHubWorkspaceCache.key === cacheKey) {
+    return gitHubWorkspaceCache.promise;
+  }
+
+  const promise = buildGitHubWorkspaceData(repositories)
+    .then((result) => {
+      gitHubWorkspaceCache = {
+        key: cacheKey,
+        value: result,
+        expiresAt: Date.now() + GITHUB_WORKSPACE_CACHE_TTL_MS,
+        promise: null,
+      };
+
+      return result;
+    })
+    .catch((error) => {
+      if (gitHubWorkspaceCache.key === cacheKey) {
+        gitHubWorkspaceCache = {
+          key: cacheKey,
+          value: null,
+          expiresAt: 0,
+          promise: null,
+        };
+      }
+
+      throw error;
+    });
+
+  gitHubWorkspaceCache = {
+    key: cacheKey,
+    value: gitHubWorkspaceCache.key === cacheKey ? gitHubWorkspaceCache.value : null,
+    expiresAt: gitHubWorkspaceCache.key === cacheKey ? gitHubWorkspaceCache.expiresAt : 0,
+    promise,
+  };
+
+  return promise;
+}
+
 function mapContentPipeline(items) {
   if (!items?.length) {
     return fallbackContentPipeline;
@@ -1843,6 +2245,7 @@ function mapContentPipeline(items) {
       .slice(0, 3)
       .map((item) => ({
         title: item.title,
+        brand: resolveContentBrandToken(item) || null,
         meta: item.source_type || item.status || "content",
         nextAction: item.next_action || "Define the next action before this item stalls.",
       })),
@@ -1866,10 +2269,62 @@ function mapContentVariants(variants, publishLogs) {
 
     return {
       title: item.title || `${humanizeValue(item.variant_type)} draft`,
+      brand: resolveContentBrandToken(item) || resolveContentBrandToken(publish) || null,
       type: humanizeValue(item.variant_type),
       status: item.status || publish?.status || "draft",
       channel: publish?.channel || "Workspace",
       detail: compactText(item.body) || "Variant ready for operator review.",
+    };
+  });
+}
+
+function resolveContentAssetStatus(asset, variant) {
+  const explicitStatus =
+    asset?.meta?.status ||
+    asset?.meta?.lifecycle ||
+    asset?.payload?.status ||
+    String(asset?.status || "")
+      .trim()
+      .toLowerCase();
+
+  if (explicitStatus) {
+    return String(explicitStatus);
+  }
+
+  if (variant?.status === "archived") {
+    return "archived";
+  }
+
+  if (variant?.status === "draft") {
+    return "draft";
+  }
+
+  return "ready";
+}
+
+function mapContentAssets(assets, variants) {
+  if (!assets?.length) {
+    return fallbackContentAssets;
+  }
+
+  const variantById = new Map((variants || []).map((item) => [item.id, item]));
+
+  return assets.slice(0, 10).map((asset) => {
+    const variant = variantById.get(asset.variant_id);
+    const status = resolveContentAssetStatus(asset, variant);
+    const detail =
+      asset.meta?.summary ||
+      asset.meta?.note ||
+      (asset.storage_path ? `Stored at ${asset.storage_path}` : "Asset stored for the next publish pass.");
+
+    return {
+      title: asset.meta?.title || asset.storage_path?.split("/").pop() || humanizeValue(asset.asset_type),
+      brand: resolveContentBrandToken(asset) || resolveContentBrandToken(variant) || null,
+      kind: humanizeValue(asset.asset_type),
+      source: variant?.title || humanizeValue(variant?.variant_type) || "Content asset",
+      detail,
+      status,
+      createdAt: asset.created_at || null,
     };
   });
 }
@@ -1886,6 +2341,7 @@ function mapPublishQueue(logs, variants) {
 
     return {
       title: variant?.title || item.payload?.title || `${item.channel || "Unknown"} publish`,
+      brand: resolveContentBrandToken(item) || resolveContentBrandToken(variant) || null,
       channel: item.channel || "Unknown",
       status: item.status || "queued",
       time: formatTimestamp(item.published_at || item.created_at),
@@ -1951,6 +2407,7 @@ function buildContentAttention(items, runs, logs) {
     .forEach((item) => {
       attention.push({
         title: item.title,
+        brand: resolveContentBrandToken(item) || null,
         detail: item.next_action || "This content item still needs operator judgment.",
         tone: item.status === "review" ? "blue" : "warning",
       });
@@ -1982,6 +2439,880 @@ function buildContentAttention(items, runs, logs) {
     });
 
   return attention.length ? attention : fallbackContentAttention;
+}
+
+function buildContentAssetsSummary(assetRows, variants) {
+  const assets = assetRows || [];
+  const variantRows = variants || [];
+
+  return {
+    capturedCount: assets.filter((item) => item.status !== "archived").length,
+    draftCount: assets.filter((item) => item.status === "draft").length,
+    archivedCount: assets.filter((item) => item.status === "archived").length,
+    variantCount: variantRows.length,
+  };
+}
+
+function buildContentPublishSummary(queue) {
+  const rows = queue || [];
+
+  return {
+    queuedCount: rows.filter((item) => item.status === "queued").length,
+    publishedCount: rows.filter((item) => item.status === "published").length,
+    failedCount: rows.filter((item) => item.status === "failed").length,
+    channelCount: new Set(rows.map((item) => item.channel).filter(Boolean)).size,
+  };
+}
+
+function mapContentCampaigns(campaigns, runs) {
+  const latestRunByCampaign = new Map();
+  (runs || []).forEach((item) => {
+    if (item.campaign_id && !latestRunByCampaign.has(item.campaign_id)) {
+      latestRunByCampaign.set(item.campaign_id, item);
+    }
+  });
+
+  const sourceCampaigns =
+    campaigns?.length
+      ? campaigns.slice(0, 6)
+      : fallbackContentCampaigns.map((item) => ({
+          id: item.id,
+          name: item.title,
+          brand_key: item.brand,
+          channel: item.channel,
+          status: item.status,
+          goal: item.goal,
+          next_action: item.nextAction,
+          handoff: item.handoff,
+        }));
+
+  return sourceCampaigns.map((item) => {
+    const run = latestRunByCampaign.get(item.id);
+
+    return buildCampaignPreview({
+      id: item.id,
+      name: item.name,
+      brand_key: resolveContentBrandToken(item) || resolveContentBrandToken(run) || null,
+      channel: item.channel || run?.payload?.channel || "Content",
+      status: item.status || "draft",
+      goal: item.goal || run?.payload?.goal || "Campaign brief is ready for alignment.",
+      next_action:
+        item.next_action ||
+        run?.result_summary ||
+        "Lock the next content move and the follow-up lane together.",
+      handoff:
+        item.handoff || run?.payload?.handoff || "Content -> Publish -> Follow-up",
+      start_date: item.start_date || null,
+      end_date: item.end_date || null,
+      run_status: run?.status || "",
+      run_summary: run?.result_summary || "",
+    });
+  });
+}
+
+function mapCampaignRuns(runs, campaigns) {
+  const campaignCards = campaigns?.length ? campaigns : mapContentCampaigns([], []);
+  const campaignById = new Map(campaignCards.map((item) => [item.id, item]));
+
+  if (!runs?.length) {
+    return campaignCards.slice(0, 4).map((item) => ({
+      id: `${item.id}-fallback-run`,
+      campaignId: item.id,
+      title: item.title,
+      brand: item.brand || null,
+      brandLabel: item.brandLabel,
+      status: item.status === "active" ? "running" : item.status === "completed" ? "success" : "queued",
+      tone: item.status === "active" ? "blue" : item.status === "completed" ? "green" : "warning",
+      detail: item.nextAction,
+      handoff: item.handoff,
+      time: item.window,
+    }));
+  }
+
+  return runs.slice(0, 10).map((item, index) => {
+    const campaign = campaignById.get(item.campaign_id);
+    const brand = resolveContentBrandToken(item) || campaign?.brand || null;
+    const status = item.status || "queued";
+
+    return {
+      id: item.id || `campaign-run-${index}`,
+      campaignId: item.campaign_id || campaign?.id || `campaign-${index}`,
+      title: campaign?.title || item.payload?.campaign_title || "Campaign handoff",
+      brand,
+      brandLabel: brand ? campaign?.brandLabel || brand : campaign?.brandLabel || "Shared lane",
+      status,
+      tone: getCampaignRunTone(status),
+      detail:
+        item.result_summary ||
+        item.payload?.goal ||
+        campaign?.nextAction ||
+        "Campaign handoff captured.",
+      handoff: item.payload?.handoff || campaign?.handoff || "Content -> Publish -> Follow-up",
+      time: formatTimestamp(item.created_at),
+    };
+  });
+}
+
+function buildCampaignCoverage(campaigns, items, variants, publishLogs) {
+  const contentPool = items?.length
+    ? mapContentPipeline(items).flatMap((stage) => stage.items || [])
+    : fallbackContentPipeline.flatMap((stage) => stage.items || []);
+  const variantPool = variants?.length
+    ? mapContentVariants(variants, publishLogs || [])
+    : fallbackContentVariants;
+  const publishPool = publishLogs?.length
+    ? mapPublishQueue(publishLogs, variants || [])
+    : fallbackPublishQueue;
+
+  return (campaigns || []).map((campaign) => {
+    const brand = resolveContentBrandToken(campaign);
+    const sameBrand = (row) => {
+      const token = resolveContentBrandToken(row);
+      return !brand || !token || token === brand;
+    };
+    const relatedContent = contentPool.filter(sameBrand).slice(0, 3);
+    const relatedVariants = variantPool.filter(sameBrand).slice(0, 3);
+    const relatedPublish = publishPool.filter(sameBrand).slice(0, 3);
+
+    return {
+      ...campaign,
+      contentCount: relatedContent.length,
+      variantCount: relatedVariants.length,
+      publishCount: relatedPublish.length,
+      relatedContent: relatedContent.map((item) => ({
+        title: item.title,
+        detail: item.nextAction || item.meta || item.detail || "Follow-up pending.",
+        status: item.stage || item.status || "content",
+      })),
+      relatedOutputs: [...relatedVariants, ...relatedPublish].slice(0, 4).map((item) => ({
+        title: item.title,
+        detail: item.detail || item.meta || "Output ready.",
+        status: item.status || item.channel || "ready",
+      })),
+    };
+  });
+}
+
+function buildCampaignSummary(campaigns, runs) {
+  const sourceCampaigns = campaigns || [];
+  const sourceRuns = runs || [];
+  const liveCount = sourceCampaigns.filter((item) => item.status === "active").length;
+  const queuedCount = sourceRuns.filter((item) => item.status === "queued" || item.status === "running").length;
+  const completedCount = sourceCampaigns.filter((item) => item.status === "completed").length;
+  const brandCount = new Set(sourceCampaigns.map((item) => item.brand).filter(Boolean)).size;
+
+  return [
+    {
+      title: "Live campaigns",
+      value: String(liveCount).padStart(2, "0"),
+      detail: liveCount ? "지금 움직이는 캠페인입니다." : "활성 캠페인이 아직 없습니다.",
+      badge: "Live",
+      tone: liveCount ? "green" : "muted",
+    },
+    {
+      title: "Queued handoffs",
+      value: String(queuedCount).padStart(2, "0"),
+      detail: queuedCount ? "콘텐츠 -> 이메일/퍼블리시 handoff가 대기 중입니다." : "대기 중인 handoff가 없습니다.",
+      badge: "Handoff",
+      tone: queuedCount ? "warning" : "blue",
+    },
+    {
+      title: "Covered brands",
+      value: String(brandCount).padStart(2, "0"),
+      detail: brandCount ? "브랜드별 운영 레인이 campaign surface에 반영됩니다." : "아직 brand scope가 비어 있습니다.",
+      badge: "Scope",
+      tone: "blue",
+    },
+    {
+      title: "Completed loops",
+      value: String(completedCount).padStart(2, "0"),
+      detail: completedCount ? "종료된 캠페인도 기록으로 남겨 다음 루프에 재사용합니다." : "완료된 캠페인이 아직 없습니다.",
+      badge: "Closed",
+      tone: completedCount ? "green" : "muted",
+    },
+  ];
+}
+
+function buildEmailCampaignHandoffs(campaigns, runs) {
+  const latestRunByCampaign = new Map();
+
+  (runs || []).forEach((item) => {
+    if (item.campaign_id && !latestRunByCampaign.has(item.campaign_id)) {
+      latestRunByCampaign.set(item.campaign_id, item);
+    }
+  });
+
+  return (campaigns || []).map((campaign) => {
+    const run = latestRunByCampaign.get(campaign.id);
+    return {
+      ...campaign.emailHandoff,
+      id: campaign.id,
+      title: campaign.title,
+      brand: campaign.brand,
+      brandLabel: campaign.brandLabel,
+      channel: campaign.channel,
+      status: campaign.status,
+      statusTone: getCampaignStatusTone(campaign.status),
+      goal: campaign.goal,
+      nextAction: campaign.nextAction,
+      handoff: campaign.handoff,
+      runStatus: run?.status || campaign.runStatus || "",
+      runTone: getCampaignRunTone(run?.status || campaign.runStatus || "queued"),
+      runSummary: run?.result_summary || campaign.runSummary || campaign.nextAction,
+    };
+  });
+}
+
+function mapContentQueueRoster(items) {
+  if (!items?.length) {
+    return fallbackContentQueueRoster;
+  }
+
+  return items
+    .filter((item) => ["idea", "draft", "review"].includes(item.status))
+    .slice(0, 10)
+    .map((item, index) => ({
+      id: item.id || `content-queue-${index}`,
+      title: item.title,
+      stage: item.status,
+      brand: resolveContentBrandToken(item) || null,
+      owner: item.owner_id ? "Workspace owner" : "Content lane",
+      due:
+        item.status === "review"
+          ? "오늘"
+          : item.status === "draft"
+            ? "오늘 오후"
+            : "이번 주",
+      nextAction:
+        item.next_action ||
+        (item.status === "idea"
+          ? "첫 메시지와 훅부터 고정."
+          : item.status === "draft"
+            ? "문장 리듬과 proof block 정리."
+            : "리뷰 피드백 반영 후 publish handoff."),
+      note: item.source_type || "content",
+    }));
+}
+
+function mapAiAgents(rows) {
+  if (!rows?.length) {
+    return fallbackAiAgents;
+  }
+
+  const sourceRows = rows.filter(
+    (item) => ["Claude", "Codex", "Engine"].includes(item.name) || item.status !== "idle",
+  );
+
+  return (sourceRows.length ? sourceRows : rows).slice(0, 6).map((item) => ({
+    id: item.id,
+    name: item.name,
+    role:
+      item.config?.role ||
+      `${humanizeValue(item.agent_type)} agent`,
+    status: item.status || "idle",
+    latency: item.config?.latency || "—",
+    load: item.config?.load || "—",
+    focus: item.config?.focus || "No live focus set yet.",
+    tone: item.config?.tone || toTone(item.status),
+  }));
+}
+
+function mapAiThreads(rows, messages) {
+  if (!rows?.length) {
+    return fallbackAiChatThreads;
+  }
+
+  const latestMessageByThread = new Map();
+  (messages || []).forEach((item) => {
+    if (item.thread_id && !latestMessageByThread.has(item.thread_id)) {
+      latestMessageByThread.set(item.thread_id, item);
+    }
+  });
+
+  return rows.slice(0, 8).map((item) => {
+    const latestMessage = latestMessageByThread.get(item.id);
+
+    return {
+      id: item.id,
+      title: item.title || "AI thread",
+      target: getAiTargetLabel(item.target),
+      updated: formatTimestamp(item.updated_at || item.created_at),
+      preview: item.preview || compactText(latestMessage?.body || "Awaiting first message."),
+      unread: Number.isFinite(item.unread) ? item.unread : 0,
+      status: item.status || "active",
+    };
+  });
+}
+
+function mapAiMessages(rows, activeThreadId) {
+  if (!rows?.length) {
+    return fallbackAiChatMessages;
+  }
+
+  const sourceRows = activeThreadId
+    ? rows.filter((item) => item.thread_id === activeThreadId)
+    : rows;
+
+  if (!sourceRows.length) {
+    return fallbackAiChatMessages;
+  }
+
+  return [...sourceRows]
+    .sort((left, right) => new Date(left.created_at) - new Date(right.created_at))
+    .slice(-24)
+    .map((item) => ({
+    id: item.id,
+    author: item.author,
+    authorLabel: item.author_label || getAiAuthorLabel(item.author),
+    time: formatAiClock(item.created_at),
+    body: item.body,
+    }));
+}
+
+function mapAiCouncilSessions(rows, turns) {
+  if (!rows?.length) {
+    return fallbackAiCouncilSessions;
+  }
+
+  const turnsBySession = new Map();
+  (turns || []).forEach((item) => {
+    const group = turnsBySession.get(item.session_id) || [];
+    group.push({
+      author: item.author,
+      stance: item.stance,
+      createdAt: item.created_at,
+      time: formatAiClock(item.created_at),
+      body: item.body,
+    });
+    turnsBySession.set(item.session_id, group);
+  });
+
+  return rows.slice(0, 8).map((item) => ({
+    id: item.id,
+    topic: item.topic,
+    members: normalizeAiCouncilMembers(item.members),
+    status: getAiCouncilStatusLabel(item.status),
+    tone: item.tone || "blue",
+    turns:
+      (turnsBySession.get(item.id) || [])
+        .sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt))
+        .map(({ createdAt, ...turn }) => turn),
+  }));
+}
+
+function mapAiOrders(rows) {
+  if (!rows?.length) {
+    return fallbackAiOpenOrders;
+  }
+
+  return rows.slice(0, 10).map((item) => ({
+    id: item.id,
+    title: item.title,
+    target: getAiTargetLabel(item.target),
+    status: getAiOrderStatusLabel(item.status),
+    tone: item.tone || getAiOrderTone(item.status),
+    priority: item.priority || "P1",
+    lane: item.lane || "Work OS",
+    due: item.due_label || "오늘",
+    note: item.note || "No order note yet.",
+  }));
+}
+
+function isCalendarDate(value, dateKey) {
+  return formatCalendarDateKey(value) === dateKey;
+}
+
+function calculateDurationMinutes(startValue, endValue = null) {
+  const start = parseDateValue(startValue);
+  const end = parseDateValue(endValue || new Date().toISOString());
+
+  if (!start || !end) {
+    return 0;
+  }
+
+  return Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
+}
+
+function buildOperatingPulseMachine({
+  hasEngineUrl,
+  health,
+  runningCount,
+  queuedCount,
+  failureCount,
+  attentionCount,
+  totalToday,
+  liveRoutes,
+}) {
+  if (hasEngineUrl && !health) {
+    return {
+      status: "down",
+      statusLabel: "Health Down",
+      statusTone: "danger",
+      summary: "Engine health route is not responding.",
+      detail: "Engine URL is configured, but the health endpoint did not answer in time.",
+    };
+  }
+
+  if (failureCount > 0 || attentionCount > 2) {
+    return {
+      status: "attention",
+      statusLabel: "Needs Review",
+      statusTone: attentionCount > 4 ? "danger" : "warning",
+      summary: `${failureCount} failure ${failureCount === 1 ? "signal" : "signals"} visible today.`,
+      detail: `${runningCount} running · ${queuedCount} queued · ${liveRoutes} visible routes.`,
+    };
+  }
+
+  if (runningCount > 0) {
+    return {
+      status: "running",
+      statusLabel: "Running",
+      statusTone: "blue",
+      summary: `${runningCount} live ${runningCount === 1 ? "run" : "runs"} in motion right now.`,
+      detail: queuedCount
+        ? `${queuedCount} more waiting behind the current execution lane.`
+        : `${liveRoutes} routes are visible and the machine is moving cleanly.`,
+    };
+  }
+
+  if (queuedCount > 0) {
+    return {
+      status: "queued",
+      statusLabel: "Queued",
+      statusTone: "warning",
+      summary: `${queuedCount} queued ${queuedCount === 1 ? "run" : "runs"} waiting for dispatch.`,
+      detail: "The system is awake, but nothing is actively executing right now.",
+    };
+  }
+
+  if (totalToday > 0) {
+    return {
+      status: "steady",
+      statusLabel: "Steady",
+      statusTone: "green",
+      summary: `${totalToday} runs already completed today.`,
+      detail: `${liveRoutes} routes visible and no urgent machine signal is open.`,
+    };
+  }
+
+  return {
+    status: "quiet",
+    statusLabel: "Quiet",
+    statusTone: "muted",
+    summary: "No meaningful machine activity has landed today yet.",
+    detail: hasEngineUrl
+      ? `${liveRoutes} routes are visible, but the system is currently resting.`
+      : "Engine URL is not configured, so live route posture still falls back to stored rows.",
+  };
+}
+
+function buildOperatingRunRows(automationRuns, syncRuns) {
+  const automationRows = (automationRuns || []).map((item) => {
+    const status = item.status || "queued";
+    const startedAt = item.created_at || item.finished_at || null;
+    const durationMinutes =
+      status === "queued" ? 0 : calculateDurationMinutes(startedAt, item.finished_at || null);
+
+    return {
+      id: item.id || `automation-${startedAt || item.created_at || "unknown"}`,
+      title:
+        item.output_payload?.title ||
+        item.input_payload?.command ||
+        item.error_message ||
+        "Automation run",
+      lane: "Automation",
+      source: humanizeValue(item.input_payload?.source || item.input_payload?.command || "engine"),
+      status,
+      statusTone: toTone(status),
+      detail:
+        item.error_message ||
+        item.output_payload?.summary ||
+        item.input_payload?.text ||
+        "Automation result captured.",
+      time: formatTimestamp(item.finished_at || startedAt),
+      durationLabel: durationMinutes ? formatMinutesLabel(durationMinutes) : "Pending",
+      isLive: status === "running" || status === "queued",
+      sortAt: item.finished_at || startedAt || item.created_at || null,
+    };
+  });
+
+  const syncRows = (syncRuns || []).map((item) => {
+    const status = item.status || "queued";
+    const startedAt = item.started_at || item.finished_at || null;
+    const durationMinutes =
+      status === "queued" ? 0 : calculateDurationMinutes(startedAt, item.finished_at || null);
+
+    return {
+      id: item.id || `sync-${startedAt || item.finished_at || "unknown"}`,
+      title: humanizeValue(item.payload?.kind || "sync run"),
+      lane: "Sync",
+      source: humanizeValue(item.payload?.provider || item.payload?.kind || "integration"),
+      status,
+      statusTone: toTone(status),
+      detail:
+        item.error_message ||
+        item.payload?.summary ||
+        "Synchronization event captured.",
+      time: formatTimestamp(item.finished_at || startedAt),
+      durationLabel: durationMinutes ? formatMinutesLabel(durationMinutes) : "Pending",
+      isLive: status === "running" || status === "queued",
+      sortAt: item.finished_at || startedAt || null,
+    };
+  });
+
+  const merged = [...automationRows, ...syncRows].sort(
+    (left, right) => new Date(right.sortAt || 0).getTime() - new Date(left.sortAt || 0).getTime(),
+  );
+
+  return merged.length ? merged : [];
+}
+
+function buildOperatingSourceRows({
+  automationToday,
+  syncToday,
+  webhookToday,
+  unresolvedErrors,
+  connections,
+}) {
+  const connectionErrors = (connections || []).filter((item) => item.status === "error").length;
+  const automationFailures = automationToday.filter((item) => item.status === "failure").length;
+  const syncFailures = syncToday.filter((item) => item.status === "failure").length;
+  const webhookFailures = webhookToday.filter((item) => item.status === "failed").length;
+
+  return [
+    {
+      id: "automation",
+      title: "Automation lane",
+      value: `${automationToday.length} today`,
+      detail:
+        automationToday.filter((item) => item.status === "running").length > 0
+          ? "Active execution is visible in the main automation lane."
+          : automationFailures > 0
+            ? `${automationFailures} run failures need a retry or review.`
+            : "No automation failure signal is open right now.",
+      meta: `${automationToday.filter((item) => item.status === "running").length} running · ${automationToday.filter((item) => item.status === "queued").length} queued`,
+      tone: automationFailures > 0 ? "danger" : automationToday.length ? "blue" : "muted",
+    },
+    {
+      id: "sync",
+      title: "Sync lane",
+      value: `${syncToday.length} today`,
+      detail:
+        syncFailures > 0
+          ? `${syncFailures} sync failures were recorded.`
+          : "Integration syncs are quiet or healthy.",
+      meta: `${syncToday.filter((item) => item.status === "running").length} running · ${syncToday.filter((item) => item.status === "queued").length} queued`,
+      tone: syncFailures > 0 ? "danger" : syncToday.length ? "green" : "muted",
+    },
+    {
+      id: "webhooks",
+      title: "Webhook intake",
+      value: `${webhookToday.length} events`,
+      detail:
+        webhookFailures > 0
+          ? `${webhookFailures} webhook events failed during processing.`
+          : "Webhook intake is landing without visible processing failures.",
+      meta: `${webhookToday.filter((item) => item.status === "processed").length} processed today`,
+      tone: webhookFailures > 0 ? "danger" : webhookToday.length ? "blue" : "muted",
+    },
+    {
+      id: "errors",
+      title: "Error loop",
+      value: `${(unresolvedErrors || []).length} open`,
+      detail:
+        (unresolvedErrors || []).length > 0
+          ? `${connectionErrors} integration connections and ${(unresolvedErrors || []).length} unresolved logs still need operator attention.`
+          : "No unresolved machine errors are visible.",
+      meta: `${connectionErrors} connection errors`,
+      tone: (unresolvedErrors || []).length > 0 || connectionErrors > 0 ? "warning" : "green",
+    },
+  ];
+}
+
+function buildOperatingAttentionItems({
+  hasEngineUrl,
+  health,
+  automationRuns,
+  syncRuns,
+  unresolvedErrors,
+  connections,
+}) {
+  const items = [];
+
+  if (hasEngineUrl && !health) {
+    items.push({
+      id: "engine-health",
+      title: "Engine health check is failing",
+      detail: "The shell cannot confirm route posture, so live machine status may be stale.",
+      tone: "danger",
+      meta: "Check COM_MOON_ENGINE_URL and the engine process first.",
+    });
+  }
+
+  const latestAutomationFailure = (automationRuns || []).find((item) => item.status === "failure");
+  if (latestAutomationFailure) {
+    items.push({
+      id: "automation-failure",
+      title: latestAutomationFailure.output_payload?.title || "Automation failure captured",
+      detail:
+        latestAutomationFailure.error_message ||
+        latestAutomationFailure.output_payload?.summary ||
+        "An automation run failed and still needs triage.",
+      tone: "danger",
+      meta: formatTimestamp(latestAutomationFailure.finished_at || latestAutomationFailure.created_at),
+    });
+  }
+
+  const latestSyncFailure = (syncRuns || []).find((item) => item.status === "failure");
+  if (latestSyncFailure) {
+    items.push({
+      id: "sync-failure",
+      title: humanizeValue(latestSyncFailure.payload?.kind || "sync failure"),
+      detail: latestSyncFailure.error_message || "A synchronization run failed.",
+      tone: "warning",
+      meta: formatTimestamp(latestSyncFailure.finished_at || latestSyncFailure.started_at),
+    });
+  }
+
+  if ((unresolvedErrors || []).length > 0) {
+    items.push({
+      id: "open-errors",
+      title: `${unresolvedErrors.length} unresolved machine ${unresolvedErrors.length === 1 ? "error" : "errors"}`,
+      detail:
+        unresolvedErrors[0]?.payload?.error ||
+        unresolvedErrors[0]?.trace ||
+        "The error loop still has visible work to clear.",
+      tone: "warning",
+      meta: "Review Evolution logs before adding more automation surface area.",
+    });
+  }
+
+  const erroredConnections = (connections || []).filter((item) => item.status === "error");
+  if (erroredConnections.length > 0) {
+    items.push({
+      id: "integration-errors",
+      title: `${erroredConnections.length} integration ${erroredConnections.length === 1 ? "connection" : "connections"} in error`,
+      detail:
+        erroredConnections[0]?.last_synced_at
+          ? `Last failing sync ${formatTimestamp(erroredConnections[0].last_synced_at)}`
+          : "At least one provider is configured but not healthy.",
+      tone: "warning",
+      meta: "Open Automations → Integrations for provider-level context.",
+    });
+  }
+
+  return items.slice(0, 4);
+}
+
+function buildOperatingOsPulse({ pulse, agentCount = null }) {
+  return [
+    {
+      label: "System",
+      value: pulse.machine.statusLabel,
+      detail: pulse.machine.summary,
+      tone: pulse.machine.statusTone,
+    },
+    {
+      label: "Automations",
+      value: `${pulse.metrics.runningCount} live`,
+      detail: `${pulse.metrics.totalToday} runs today · ${pulse.metrics.successRateLabel} success.`,
+      tone: pulse.metrics.failureCount > 0 ? "warning" : pulse.metrics.runningCount > 0 ? "blue" : "green",
+    },
+    {
+      label: "Intake",
+      value: `${pulse.metrics.webhookEventsToday} events`,
+      detail: `${pulse.metrics.liveRoutes} routes visible · ${pulse.metrics.connectedIntegrations} integrations connected.`,
+      tone: pulse.metrics.liveRoutes > 0 ? "blue" : "muted",
+    },
+    {
+      label: "Agents",
+      value: agentCount == null ? "Live" : `${agentCount} tracked`,
+      detail: `${pulse.metrics.activeMinutesLabel} active time today · ${pulse.metrics.attentionCount} attention signals.`,
+      tone: agentCount ? "green" : "muted",
+    },
+  ];
+}
+
+export async function getOperatingPulseData() {
+  const workspaceId = resolveDefaultWorkspaceId();
+  const workspaceFilters = workspaceId ? [["workspace_id", `eq.${workspaceId}`]] : [];
+  const hasEngineUrl = Boolean(resolveEngineUrl());
+  const todayKey = formatCalendarDateKey(new Date());
+
+  const [health, automationRuns, syncRuns, webhookEvents, unresolvedErrors, connections, endpoints] =
+    await Promise.all([
+      fetchEngineHealth(),
+      fetchRows("automation_runs", {
+        limit: 48,
+        order: "created_at.desc",
+        filters: workspaceFilters,
+      }),
+      fetchRows("sync_runs", {
+        limit: 48,
+        order: "started_at.desc",
+        filters: workspaceFilters,
+      }),
+      fetchRows("webhook_events", {
+        limit: 96,
+        order: "received_at.desc",
+        filters: workspaceFilters,
+      }),
+      fetchRows("error_logs", {
+        limit: 24,
+        order: "timestamp.desc",
+        filters: [...workspaceFilters, ["resolved", boolFilter(false)]],
+      }),
+      fetchRows("integration_connections", {
+        limit: 12,
+        order: "created_at.desc",
+        filters: workspaceFilters,
+      }),
+      fetchRows("webhook_endpoints", {
+        limit: 16,
+        order: "created_at.desc",
+        filters: workspaceFilters,
+      }),
+    ]);
+
+  const automationToday = (automationRuns || []).filter((item) => isCalendarDate(item.created_at, todayKey));
+  const syncToday = (syncRuns || []).filter((item) => isCalendarDate(item.started_at || item.finished_at, todayKey));
+  const webhookToday = (webhookEvents || []).filter((item) =>
+    isCalendarDate(item.received_at || item.processed_at, todayKey),
+  );
+
+  const dayBuckets = Array.from({ length: OPERATING_PULSE_HOURS }, (_, hour) => ({
+    hour,
+    hourLabel: formatHourLabel(hour),
+    count: 0,
+    successCount: 0,
+    failureCount: 0,
+    runningCount: 0,
+    webhookCount: 0,
+    tone: "muted",
+  }));
+
+  const addBucketEvent = (value, status, countKey = "count") => {
+    const hour = formatCalendarHour(value);
+    if (hour == null || !dayBuckets[hour]) {
+      return;
+    }
+
+    dayBuckets[hour][countKey] += 1;
+
+    if (status === "failure" || status === "failed") {
+      dayBuckets[hour].failureCount += 1;
+    } else if (status === "running") {
+      dayBuckets[hour].runningCount += 1;
+    } else if (status === "success" || status === "processed") {
+      dayBuckets[hour].successCount += 1;
+    }
+  };
+
+  automationToday.forEach((item) => addBucketEvent(item.created_at || item.finished_at, item.status || "queued"));
+  syncToday.forEach((item) => addBucketEvent(item.started_at || item.finished_at, item.status || "queued"));
+  webhookToday.forEach((item) => addBucketEvent(item.received_at || item.processed_at, item.status || "processed", "webhookCount"));
+
+  dayBuckets.forEach((bucket) => {
+    bucket.count += bucket.webhookCount;
+    if (bucket.failureCount > 0) {
+      bucket.tone = "danger";
+    } else if (bucket.runningCount > 0) {
+      bucket.tone = "blue";
+    } else if (bucket.count > 0) {
+      bucket.tone = "green";
+    }
+  });
+
+  const liveRuns = buildOperatingRunRows(automationRuns, syncRuns);
+  const visibleRuns = (liveRuns.filter((item) => item.isLive).length
+    ? liveRuns.filter((item) => item.isLive)
+    : liveRuns
+  ).slice(0, 6);
+
+  const runningCount = liveRuns.filter((item) => item.status === "running").length;
+  const queuedCount = liveRuns.filter((item) => item.status === "queued").length;
+  const failureCount =
+    automationToday.filter((item) => item.status === "failure").length +
+    syncToday.filter((item) => item.status === "failure").length;
+  const successCount =
+    automationToday.filter((item) => item.status === "success").length +
+    syncToday.filter((item) => item.status === "success").length;
+  const totalToday = automationToday.length + syncToday.length;
+  const activeMinutes =
+    automationToday.reduce((sum, item) => {
+      if (item.status === "queued") {
+        return sum;
+      }
+      return sum + calculateDurationMinutes(item.created_at, item.finished_at || null);
+    }, 0) +
+    syncToday.reduce((sum, item) => {
+      if (item.status === "queued") {
+        return sum;
+      }
+      return sum + calculateDurationMinutes(item.started_at, item.finished_at || null);
+    }, 0);
+  const successRate =
+    successCount + failureCount > 0 ? Math.round((successCount / (successCount + failureCount)) * 100) : null;
+  const mappedRoutes =
+    (endpoints || []).length || health?.routes?.length ? mapWebhookEndpoints(endpoints, health) : [];
+  const liveRoutes = mappedRoutes.length;
+  const connectedIntegrations = (connections || []).filter((item) => item.status === "connected").length;
+  const connectionErrorCount = (connections || []).filter((item) => item.status === "error").length;
+  const attentionCount = failureCount + (unresolvedErrors || []).length + connectionErrorCount + (hasEngineUrl && !health ? 1 : 0);
+  const machine = buildOperatingPulseMachine({
+    hasEngineUrl,
+    health,
+    runningCount,
+    queuedCount,
+    failureCount,
+    attentionCount,
+    totalToday,
+    liveRoutes,
+  });
+
+  const pulse = {
+    snapshotAt: health?.timestamp || new Date().toISOString(),
+    machine,
+    metrics: {
+      runningCount,
+      queuedCount,
+      failureCount,
+      successCount,
+      totalToday,
+      activeMinutes,
+      activeMinutesLabel: formatMinutesLabel(activeMinutes),
+      successRate,
+      successRateLabel: successRate == null ? "No sample" : `${successRate}%`,
+      liveRoutes,
+      webhookEventsToday: webhookToday.length,
+      connectedIntegrations,
+      attentionCount,
+    },
+    routes: mappedRoutes,
+    heatmap: dayBuckets.map((bucket) => ({
+      ...bucket,
+      totalLabel: `${bucket.count} events`,
+    })),
+    liveRuns: visibleRuns,
+    sourceRows: buildOperatingSourceRows({
+      automationToday,
+      syncToday,
+      webhookToday,
+      unresolvedErrors,
+      connections,
+    }),
+    attentionItems: buildOperatingAttentionItems({
+      hasEngineUrl,
+      health,
+      automationRuns,
+      syncRuns,
+      unresolvedErrors,
+      connections,
+    }),
+  };
+
+  pulse.osPulse = buildOperatingOsPulse({ pulse });
+  return pulse;
 }
 
 function mapAutomationRuns(runs) {
@@ -2301,7 +3632,7 @@ export async function getDashboardPageData() {
   };
 }
 
-export async function getContentPageData() {
+export async function getContentPageData(selectedBrand = "all") {
   const [
     ideaCount,
     draftCount,
@@ -2312,6 +3643,8 @@ export async function getContentPageData() {
     publishLogs,
     runs,
     logs,
+    campaigns,
+    campaignRuns,
   ] = await Promise.all([
     countRows("content_items", [["status", "eq.idea"]]),
     countRows("content_items", [["status", inFilter(["draft", "review"])]]),
@@ -2322,14 +3655,95 @@ export async function getContentPageData() {
     fetchRows("publish_logs", { limit: 8, order: "created_at.desc" }),
     fetchRows("automation_runs", { limit: 4, order: "created_at.desc" }),
     fetchRows("error_logs", { limit: 4, order: "timestamp.desc" }),
+    fetchRows("campaigns", { limit: 6, order: "created_at.desc" }),
+    fetchRows("campaign_runs", { limit: 8, order: "created_at.desc" }),
   ]);
 
+  const mappedPipeline = scopeContentPipelineByBrand(mapContentPipeline(items), selectedBrand);
+  const mappedVariants = scopeContentRowsByBrand(
+    mapContentVariants(variants, publishLogs),
+    selectedBrand,
+  );
+  const mappedPublishQueue = scopeContentRowsByBrand(
+    mapPublishQueue(publishLogs, variants),
+    selectedBrand,
+  );
+  const mappedAttention = scopeContentRowsByBrand(
+    buildContentAttention(items, runs, logs),
+    selectedBrand,
+  );
+  const mappedCampaigns = scopeContentRowsByBrand(
+    mapContentCampaigns(campaigns, campaignRuns),
+    selectedBrand,
+  );
+  const summary = buildContentSummary({ ideaCount, draftCount, publishCount, attentionCount });
+
   return {
-    contentSummary: buildContentSummary({ ideaCount, draftCount, publishCount, attentionCount }),
-    contentPipeline: mapContentPipeline(items),
-    contentVariants: mapContentVariants(variants, publishLogs),
-    publishQueue: mapPublishQueue(publishLogs, variants),
-    contentAttention: buildContentAttention(items, runs, logs),
+    contentSummary: buildScopedContentSummary(
+      summary,
+      mappedPipeline,
+      mappedAttention,
+      selectedBrand,
+    ),
+    contentPipeline: mappedPipeline,
+    contentVariants: mappedVariants,
+    publishQueue: mappedPublishQueue,
+    contentAttention: mappedAttention,
+    contentCampaigns: mappedCampaigns,
+  };
+}
+
+export async function getContentCampaignsPageData(selectedBrand = "all") {
+  const [campaigns, campaignRuns, items, variants, publishLogs] = await Promise.all([
+    fetchRows("campaigns", { limit: 8, order: "created_at.desc" }),
+    fetchRows("campaign_runs", { limit: 12, order: "created_at.desc" }),
+    fetchRows("content_items", { limit: 16, order: "created_at.desc" }),
+    fetchRows("content_variants", { limit: 12, order: "created_at.desc" }),
+    fetchRows("publish_logs", { limit: 12, order: "created_at.desc" }),
+  ]);
+
+  const mappedCampaigns = scopeContentRowsByBrand(
+    buildCampaignCoverage(mapContentCampaigns(campaigns, campaignRuns), items, variants, publishLogs),
+    selectedBrand,
+  );
+  const mappedRuns = scopeContentRowsByBrand(
+    mapCampaignRuns(campaignRuns, mappedCampaigns),
+    selectedBrand,
+  );
+
+  return {
+    campaignSummary: buildCampaignSummary(mappedCampaigns, mappedRuns),
+    campaignCards: mappedCampaigns,
+    campaignRuns: mappedRuns,
+  };
+}
+
+export async function getContentAssetsPageData(selectedBrand = "all") {
+  const [assets, variants] = await Promise.all([
+    fetchRows("content_assets", { limit: 10, order: "created_at.desc" }),
+    fetchRows("content_variants", { limit: 10, order: "created_at.desc" }),
+  ]);
+
+  const mappedAssets = scopeContentRowsByBrand(mapContentAssets(assets, variants), selectedBrand);
+  const mappedVariants = scopeContentRowsByBrand(mapContentVariants(variants, []), selectedBrand);
+
+  return {
+    contentAssets: mappedAssets,
+    assetSummary: buildContentAssetsSummary(mappedAssets, mappedVariants),
+  };
+}
+
+export async function getContentPublishPageData(selectedBrand = "all") {
+  const [publishLogs, variants] = await Promise.all([
+    fetchRows("publish_logs", { limit: 10, order: "created_at.desc" }),
+    fetchRows("content_variants", { limit: 10, order: "created_at.desc" }),
+  ]);
+
+  const publishQueue = scopeContentRowsByBrand(mapPublishQueue(publishLogs, variants), selectedBrand);
+
+  return {
+    publishQueue,
+    publishSummary: buildContentPublishSummary(publishQueue),
   };
 }
 
@@ -2560,6 +3974,7 @@ export async function getAutomationsPageData() {
         }))
       : fallbackAutomationCards,
     automationRuns: mapAutomationRuns(runs),
+    automationTriage: fallbackAutomationTriage,
     webhookEndpoints: mappedEndpoints,
   };
 }
@@ -2738,7 +4153,7 @@ function mapEmailRunsToSends(runs) {
     .slice(0, 8);
 }
 
-export async function getEmailAutomationPageData() {
+export async function getEmailAutomationPageData(selectedCampaignId = "") {
   const defaultWorkspaceId =
     process.env.COM_MOON_DEFAULT_WORKSPACE_ID?.trim() ||
     process.env.DEFAULT_WORKSPACE_ID?.trim() ||
@@ -2749,7 +4164,7 @@ export async function getEmailAutomationPageData() {
     gmailFilters.push(["workspace_id", `eq.${defaultWorkspaceId}`]);
   }
 
-  const [gmailConnections, syncRuns] = await Promise.all([
+  const [gmailConnections, syncRuns, campaigns, campaignRuns] = await Promise.all([
     fetchRows("integration_connections", {
       filters: gmailFilters,
       order: "created_at.desc",
@@ -2759,6 +4174,8 @@ export async function getEmailAutomationPageData() {
       order: "started_at.desc",
       limit: 24,
     }),
+    fetchRows("campaigns", { limit: 8, order: "created_at.desc" }),
+    fetchRows("campaign_runs", { limit: 12, order: "created_at.desc" }),
   ]);
 
   const gmailConnection = gmailConnections?.[0] || null;
@@ -2777,6 +4194,12 @@ export async function getEmailAutomationPageData() {
   const segments = fallbackEmailSegments;
   const variables = fallbackEmailVariables;
   const blocks = fallbackEmailBlocks;
+  const emailCampaignHandoffs = buildEmailCampaignHandoffs(
+    mapContentCampaigns(campaigns, campaignRuns),
+    campaignRuns,
+  );
+  const selectedCampaignHandoff =
+    emailCampaignHandoffs.find((item) => item.id === selectedCampaignId) || null;
 
   return {
     defaultWorkspaceId,
@@ -2790,6 +4213,8 @@ export async function getEmailAutomationPageData() {
     emailSegments: segments,
     emailVariables: variables,
     emailBlocks: blocks,
+    emailCampaignHandoffs,
+    selectedCampaignHandoff,
   };
 }
 
@@ -2869,11 +4294,18 @@ export async function getPlanTrackerPageData() {
   };
 }
 
-export async function getContentQueuePageData() {
-  const base = await getContentPageData();
+export async function getContentQueuePageData(selectedBrand = "all") {
+  const [base, items] = await Promise.all([
+    getContentPageData(selectedBrand),
+    fetchRows("content_items", { limit: 12, order: "created_at.desc" }),
+  ]);
+
   return {
     ...base,
-    contentQueueRoster: fallbackContentQueueRoster,
+    contentQueueRoster: scopeContentRowsByBrand(
+      mapContentQueueRoster(items),
+      selectedBrand,
+    ),
   };
 }
 
@@ -2955,14 +4387,379 @@ export async function getCommandCenterPageData() {
  * and every sub-page will inherit it automatically.
  */
 export async function getAiConsolePageData() {
+  const [
+    agents,
+    threads,
+    messages,
+    councilSessions,
+    councilTurns,
+    orders,
+    operatingPulse,
+  ] = await Promise.all([
+    fetchRows("agents", { limit: 8, order: "created_at.asc" }),
+    fetchRows("ai_threads", { limit: 8, order: "updated_at.desc" }),
+    fetchRows("ai_messages", { limit: 40, order: "created_at.desc" }),
+    fetchRows("ai_council_sessions", { limit: 8, order: "updated_at.desc" }),
+    fetchRows("ai_council_turns", { limit: 40, order: "created_at.desc" }),
+    fetchRows("ai_orders", { limit: 10, order: "updated_at.desc" }),
+    getOperatingPulseData(),
+  ]);
+
+  const mappedThreads = mapAiThreads(threads, messages);
+  const activeThreadId = mappedThreads[0]?.id || null;
+  const mappedAgents = mapAiAgents(agents);
+
   return {
-    agents: fallbackAiAgents,
-    chatThreads: fallbackAiChatThreads,
-    chatMessages: fallbackAiChatMessages,
+    agents: mappedAgents,
+    chatThreads: mappedThreads,
+    chatMessages: mapAiMessages(messages, activeThreadId),
     chatSuggestions: fallbackAiChatSuggestions,
-    councilSessions: fallbackAiCouncilSessions,
-    openOrders: fallbackAiOpenOrders,
+    councilSessions: mapAiCouncilSessions(councilSessions, councilTurns),
+    openOrders: mapAiOrders(orders),
     orderTemplates: fallbackAiOrderTemplates,
-    osPulse: fallbackAiOsPulse,
+    osPulse: buildOperatingOsPulse({ pulse: operatingPulse, agentCount: mappedAgents.length }),
+    operatingPulse,
+  };
+}
+
+function matchesAiOfficeTarget(targetLabel, agentName) {
+  const normalizedTarget = normalizeAiTarget(targetLabel);
+  const normalizedAgent = normalizeAiTarget(agentName);
+
+  if (normalizedAgent === "engine") {
+    return normalizedTarget === "engine";
+  }
+
+  if (normalizedTarget === "both") {
+    return normalizedAgent === "claude" || normalizedAgent === "codex";
+  }
+
+  return normalizedTarget === normalizedAgent;
+}
+
+function buildAiOfficeCommandStrip({ agents, openOrders, operatingPulse, activityTicker }) {
+  const activeAgentCount = agents.filter((agent) =>
+    ["ready", "live", "working"].includes(agent.status),
+  ).length;
+  const runningOrders = openOrders.filter((item) => item.status === "실행 중").length;
+  const reviewOrders = openOrders.filter((item) => item.status === "리뷰 대기").length;
+  const attentionCount = activityTicker.filter((item) => item.tone === "danger" || item.tone === "warning").length;
+
+  return [
+    {
+      title: "활성 에이전트",
+      value: `${activeAgentCount} / ${agents.length}`,
+      detail: activeAgentCount
+        ? "현재 응답 가능한 레인 수입니다. 포커스와 부하를 함께 보세요."
+        : "가용한 에이전트 레인이 아직 보이지 않습니다.",
+      badge: "Agents",
+      tone: activeAgentCount ? "green" : "muted",
+    },
+    {
+      title: "실행 중 오더",
+      value: String(runningOrders),
+      detail: runningOrders
+        ? "지금 실제로 움직이는 작업 단위입니다."
+        : "오더는 있으나 현재 붙어 있는 실행 레인은 없습니다.",
+      badge: "Orders",
+      tone: runningOrders ? "blue" : "muted",
+    },
+    {
+      title: "리뷰 대기",
+      value: String(reviewOrders),
+      detail: reviewOrders
+        ? "결과는 나왔고 사람 확인이 필요한 오더입니다."
+        : "리뷰 대기 오더는 현재 없습니다.",
+      badge: "Review",
+      tone: reviewOrders ? "warning" : "green",
+    },
+    {
+      title: "Machine pulse",
+      value: operatingPulse.machine.statusLabel,
+      detail: attentionCount
+        ? `${attentionCount}개 activity signal 이 attention 레인에 걸려 있습니다.`
+        : operatingPulse.machine.summary,
+      badge: "Engine",
+      tone: operatingPulse.machine.statusTone,
+    },
+  ];
+}
+
+function buildAiOfficeOrderRail(openOrders) {
+  return [
+    {
+      id: "queued",
+      label: "큐 대기",
+      description: "아직 배정되지 않았거나 선행 흐름을 기다리는 오더",
+      tone: "muted",
+      items: openOrders.filter((item) => item.status === "큐 대기"),
+    },
+    {
+      id: "running",
+      label: "실행 중",
+      description: "에이전트가 지금 붙어 있는 라이브 오더",
+      tone: "blue",
+      items: openOrders.filter((item) => item.status === "실행 중"),
+    },
+    {
+      id: "review",
+      label: "리뷰 대기",
+      description: "결과가 나왔고 사람 승인이나 확인을 기다리는 오더",
+      tone: "warning",
+      items: openOrders.filter((item) => item.status === "리뷰 대기"),
+    },
+    {
+      id: "done",
+      label: "오늘 완료",
+      description: "최근 완료된 오더와 닫힌 흐름",
+      tone: "green",
+      items: openOrders.filter((item) => item.status === "완료"),
+    },
+  ];
+}
+
+function buildAiOfficeActivityTicker({
+  messages,
+  councilTurns,
+  orders,
+  automationRuns,
+  projectUpdates,
+  errorLogs,
+}) {
+  const items = [];
+
+  (messages || []).slice(0, 5).forEach((item) => {
+    items.push({
+      id: `message-${item.id}`,
+      title: `${getAiAuthorLabel(item.author)}가 새 메시지를 남김`,
+      detail: compactText(item.body || "메시지가 기록되었습니다.", 96),
+      time: formatTimestamp(item.created_at),
+      tone:
+        item.author === "operator"
+          ? "warning"
+          : item.author === "codex"
+            ? "green"
+            : item.author === "engine"
+              ? "muted"
+              : "blue",
+      href: "/dashboard/ai/chat",
+      sortAt: item.created_at,
+    });
+  });
+
+  (councilTurns || []).slice(0, 4).forEach((item) => {
+    items.push({
+      id: `council-${item.id}`,
+      title: `${item.author || "Agent"}가 카운슬에 ${item.stance || "검토"} 턴을 남김`,
+      detail: compactText(item.body || "카운슬 턴이 기록되었습니다.", 96),
+      time: formatTimestamp(item.created_at),
+      tone: item.stance === "결정" ? "green" : item.stance === "보류" ? "warning" : "blue",
+      href: "/dashboard/ai/council",
+      sortAt: item.created_at,
+    });
+  });
+
+  (orders || []).slice(0, 4).forEach((item) => {
+    items.push({
+      id: `order-${item.id}`,
+      title: `${item.title || "Order"} · ${getAiOrderStatusLabel(item.status)}`,
+      detail: item.note || "오더 상태가 갱신되었습니다.",
+      time: formatTimestamp(item.updated_at || item.created_at),
+      tone: toTone(item.status),
+      href: "/dashboard/ai/orders",
+      sortAt: item.updated_at || item.created_at,
+    });
+  });
+
+  (automationRuns || []).slice(0, 4).forEach((item) => {
+    items.push({
+      id: `automation-${item.id}`,
+      title:
+        item.status === "failure"
+          ? "Engine run failure"
+          : item.status === "running"
+            ? "Engine run in motion"
+            : "Automation run updated",
+      detail:
+        item.error_message ||
+        item.output_payload?.summary ||
+        item.input_payload?.text ||
+        "자동화 레인에서 새 실행이 기록되었습니다.",
+      time: formatTimestamp(item.finished_at || item.created_at),
+      tone: toTone(item.status),
+      href: "/dashboard/automations/runs",
+      sortAt: item.finished_at || item.created_at,
+    });
+  });
+
+  (projectUpdates || []).slice(0, 3).forEach((item) => {
+    items.push({
+      id: `update-${item.id}`,
+      title: item.title || "프로젝트 업데이트",
+      detail: item.next_action || item.summary || "업데이트가 기록되었습니다.",
+      time: formatTimestamp(item.happened_at || item.created_at),
+      tone: toTone(item.status),
+      href: "/dashboard/work/management",
+      sortAt: item.happened_at || item.created_at,
+    });
+  });
+
+  (errorLogs || []).slice(0, 3).forEach((item) => {
+    items.push({
+      id: `log-${item.id}`,
+      title: item.context || "운영 로그",
+      detail: item.payload?.error || item.trace || "로그 이벤트가 기록되었습니다.",
+      time: formatTimestamp(item.timestamp || item.created_at),
+      tone: item.level === "error" ? "danger" : "warning",
+      href: "/dashboard/evolution/logs",
+      sortAt: item.timestamp || item.created_at,
+    });
+  });
+
+  return items
+    .sort((left, right) => new Date(right.sortAt || 0).getTime() - new Date(left.sortAt || 0).getTime())
+    .slice(0, 12)
+    .map(({ sortAt, ...item }) => item);
+}
+
+function buildAiOfficeMemoryLane({ memos, errorLogs, decisions }) {
+  const items = [];
+
+  (memos || []).slice(0, 3).forEach((item) => {
+    items.push({
+      id: `memo-${item.id}`,
+      title: item.title || item.topic || "운영 메모",
+      detail: compactText(item.body || item.summary || item.note || "메모가 저장되었습니다.", 120),
+      meta: formatTimestamp(item.created_at),
+      tone: "blue",
+      href: "/dashboard/evolution",
+      sortAt: item.created_at,
+    });
+  });
+
+  (decisions || []).slice(0, 2).forEach((item) => {
+    items.push({
+      id: `decision-${item.id}`,
+      title: item.title || "최근 결정",
+      detail: compactText(item.summary || item.rationale || "결정이 기록되었습니다.", 120),
+      meta: formatTimestamp(item.decided_at || item.created_at),
+      tone: "green",
+      href: "/dashboard/work/decisions",
+      sortAt: item.decided_at || item.created_at,
+    });
+  });
+
+  (errorLogs || []).slice(0, 2).forEach((item) => {
+    items.push({
+      id: `open-log-${item.id}`,
+      title: item.context || "미해결 로그",
+      detail: compactText(item.payload?.error || item.trace || "해결이 필요한 로그가 있습니다.", 120),
+      meta: item.resolved ? "resolved" : "open",
+      tone: item.level === "error" ? "danger" : "warning",
+      href: "/dashboard/evolution/logs",
+      sortAt: item.timestamp || item.created_at,
+    });
+  });
+
+  return items
+    .sort((left, right) => new Date(right.sortAt || 0).getTime() - new Date(left.sortAt || 0).getTime())
+    .slice(0, 6)
+    .map(({ sortAt, ...item }) => item);
+}
+
+function buildAiOfficeAgents({
+  agents,
+  openOrders,
+  chatThreads,
+  councilSessions,
+  activityTicker,
+  operatingPulse,
+}) {
+  return agents.map((agent) => {
+    const relatedOrders = openOrders.filter((item) => matchesAiOfficeTarget(item.target, agent.name));
+    const relatedThreads = chatThreads.filter((item) => matchesAiOfficeTarget(item.target, agent.name));
+    const relatedSessions = councilSessions.filter((item) => item.members.includes(agent.name));
+    const recentActivity = activityTicker.find((item) => {
+      if (agent.name === "Engine") {
+        return item.href === "/dashboard/automations/runs";
+      }
+
+      return item.title.includes(agent.name);
+    });
+    const liveRun =
+      agent.name === "Engine"
+        ? operatingPulse.liveRuns.find((item) => item.lane === "Automation" || item.source === "Engine")
+        : null;
+
+    return {
+      ...agent,
+      activeOrder: relatedOrders[0] || null,
+      assignedCount: relatedOrders.length,
+      threadCount: relatedThreads.length,
+      councilCount: relatedSessions.length,
+      recentAction: recentActivity?.time || liveRun?.time || relatedThreads[0]?.updated || "대기 중",
+    };
+  });
+}
+
+export async function getAiOfficePageData() {
+  const [
+    aiData,
+    messages,
+    councilTurns,
+    orders,
+    automationRuns,
+    projectUpdates,
+    memos,
+    errorLogs,
+    decisions,
+  ] = await Promise.all([
+    getAiConsolePageData(),
+    fetchRows("ai_messages", { limit: 12, order: "created_at.desc" }),
+    fetchRows("ai_council_turns", { limit: 12, order: "created_at.desc" }),
+    fetchRows("ai_orders", { limit: 12, order: "updated_at.desc" }),
+    fetchRows("automation_runs", { limit: 8, order: "created_at.desc" }),
+    fetchRows("project_updates", { limit: 6, order: "happened_at.desc" }),
+    fetchRows("memos", { limit: 4, order: "created_at.desc" }),
+    fetchRows("error_logs", {
+      limit: 4,
+      order: "timestamp.desc",
+      filters: [["resolved", "eq.false"]],
+    }),
+    fetchRows("decisions", { limit: 4, order: "decided_at.desc" }),
+  ]);
+
+  const activityTicker = buildAiOfficeActivityTicker({
+    messages,
+    councilTurns,
+    orders,
+    automationRuns,
+    projectUpdates,
+    errorLogs,
+  });
+  const orderRail = buildAiOfficeOrderRail(aiData.openOrders);
+  const agents = buildAiOfficeAgents({
+    agents: aiData.agents,
+    openOrders: aiData.openOrders,
+    chatThreads: aiData.chatThreads,
+    councilSessions: aiData.councilSessions,
+    activityTicker,
+    operatingPulse: aiData.operatingPulse,
+  });
+
+  return {
+    commandStrip: buildAiOfficeCommandStrip({
+      agents,
+      openOrders: aiData.openOrders,
+      operatingPulse: aiData.operatingPulse,
+      activityTicker,
+    }),
+    agents,
+    orderRail,
+    activityTicker,
+    memoryLane: buildAiOfficeMemoryLane({ memos, errorLogs, decisions }),
+    chatThreads: aiData.chatThreads,
+    councilSessions: aiData.councilSessions,
+    operatingPulse: aiData.operatingPulse,
   };
 }

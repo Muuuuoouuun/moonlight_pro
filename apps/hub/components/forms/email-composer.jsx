@@ -99,6 +99,11 @@ export function EmailComposer({
   blocks,
   channels,
   defaultWorkspaceId = "",
+  initialTemplateId = "",
+  initialRecipientName = "",
+  initialSubject = "",
+  initialBody = "",
+  initialStatusMessage = "",
 }) {
   const initialSegment =
     segments.find((item) => item.id === initialSegmentId) ?? segments[0];
@@ -114,17 +119,19 @@ export function EmailComposer({
     matchingTemplates.length ? matchingTemplates : templates,
     segment.audience,
   );
-  const [templateId, setTemplateId] = useState(initialTemplate?.id ?? "");
+  const [templateId, setTemplateId] = useState(initialTemplateId || initialTemplate?.id || "");
   const template =
     templates.find((item) => item.id === templateId) ?? initialTemplate ?? null;
 
-  const [recipientName, setRecipientName] = useState(initialSegment.sample?.lead_name ?? "");
+  const [recipientName, setRecipientName] = useState(
+    initialRecipientName || initialSegment.sample?.lead_name || "",
+  );
   const [recipientEmail, setRecipientEmail] = useState("");
-  const [subject, setSubject] = useState(template?.subject ?? "");
-  const [body, setBody] = useState(defaultBodyForTemplate(template));
+  const [subject, setSubject] = useState(initialSubject || template?.subject || "");
+  const [body, setBody] = useState(initialBody || defaultBodyForTemplate(template));
   const [activeField, setActiveField] = useState("body");
   const [statusMessage, setStatusMessage] = useState(
-    "변수 칩이나 블록을 클릭하면 커서 위치에 바로 삽입됩니다.",
+    initialStatusMessage || "변수 칩이나 블록을 클릭하면 커서 위치에 바로 삽입됩니다.",
   );
   const [pendingAction, setPendingAction] = useState("");
   const [result, setResult] = useState(null);
@@ -133,15 +140,27 @@ export function EmailComposer({
   const bodyRef = useRef(null);
 
   useEffect(() => {
+    setSegmentId(initialSegmentId);
+  }, [initialSegmentId]);
+
+  useEffect(() => {
     if (!template) return;
+    if (initialTemplateId && template.id === initialTemplateId) {
+      setResult(null);
+      setSubject(initialSubject || template.subject);
+      setBody(initialBody || defaultBodyForTemplate(template));
+      setStatusMessage(initialStatusMessage || `템플릿 "${template.name}" 로딩됨.`);
+      return;
+    }
+
     setSubject(template.subject);
     setBody(defaultBodyForTemplate(template));
     setResult(null);
     setStatusMessage(`템플릿 "${template.name}" 로딩됨.`);
-  }, [template?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [template?.id, initialTemplateId, initialSubject, initialBody, initialStatusMessage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    setRecipientName(segment.sample?.lead_name ?? "");
+    setRecipientName(initialRecipientName || segment.sample?.lead_name || "");
 
     if (segment.audience === "any") return;
     if (template?.audience === segment.audience) return;
@@ -150,7 +169,30 @@ export function EmailComposer({
       setTemplateId(next.id);
       setStatusMessage(`${segment.label} 세그먼트에 맞춰 템플릿을 자동 추천했습니다.`);
     }
-  }, [segmentId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [segmentId, initialRecipientName]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!initialTemplateId && !initialRecipientName && !initialSubject && !initialBody && !initialStatusMessage) {
+      return;
+    }
+
+    if (initialTemplateId) {
+      setTemplateId(initialTemplateId);
+    }
+    if (initialRecipientName) {
+      setRecipientName(initialRecipientName);
+    }
+    if (initialSubject) {
+      setSubject(initialSubject);
+    }
+    if (initialBody) {
+      setBody(initialBody);
+    }
+    if (initialStatusMessage) {
+      setStatusMessage(initialStatusMessage);
+    }
+    setResult(null);
+  }, [initialTemplateId, initialRecipientName, initialSubject, initialBody, initialStatusMessage]);
 
   function insertAtCursor(token) {
     const isSubject = activeField === "subject";

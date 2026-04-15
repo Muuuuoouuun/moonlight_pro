@@ -55,9 +55,10 @@ export function DashboardSectionNav({ label, items, context }) {
                 className="section-nav-link"
                 data-active={active ? "true" : "false"}
                 href={buildHref(item.href)}
+                title={item.description || item.label}
+                aria-current={active ? "page" : undefined}
               >
                 <strong>{item.label}</strong>
-                <span>{item.description}</span>
               </Link>
             );
           })}
@@ -66,14 +67,7 @@ export function DashboardSectionNav({ label, items, context }) {
 
       {context && currentContext ? (
         <section className="section-context-bar" aria-label={context.label}>
-          <div className="section-context-head">
-            <div>
-              <p className="section-context-kicker">{context.label}</p>
-              <strong className="section-context-current">{currentContext.label}</strong>
-            </div>
-            <p className="section-context-note">{currentContext.description}</p>
-          </div>
-
+          <p className="section-context-kicker">{context.label}</p>
           <div className="context-switcher">
             {context.items.map((item) => (
               <Link
@@ -83,6 +77,8 @@ export function DashboardSectionNav({ label, items, context }) {
                 href={buildHref(pathname, {
                   [context.queryKey]: item.value === context.defaultValue ? null : item.value,
                 })}
+                title={item.description || item.label}
+                aria-current={item.value === currentContext.value ? "true" : undefined}
               >
                 {item.label}
               </Link>

@@ -1,6 +1,6 @@
 {
-  "name": "Com_Moon OS",
-  "short_name": "Com_Moon",
+  "name": "moonlight 프로젝트",
+  "short_name": "moonlight",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#F9F8F6",

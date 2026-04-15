@@ -1,6 +1,6 @@
 export function SummaryCard({ title, value, detail, badge, tone = "green" }) {
   return (
-    <article className="summary-card">
+    <article className="summary-card" data-tone={tone}>
       <div className="summary-label">
         <h3 className="summary-title">{title}</h3>
         {badge ? (

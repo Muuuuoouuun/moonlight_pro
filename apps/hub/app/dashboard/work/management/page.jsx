@@ -271,7 +271,8 @@ export default async function WorkManagementPage({ searchParams }) {
     githubBundles,
     hasGitHubData,
   } = pmsData;
-  const selectedProject = resolveWorkContext(searchParams?.project);
+  const params = (await searchParams) ?? {};
+  const selectedProject = resolveWorkContext(params?.project);
   const panels = buildManagementPanels({
     projectPortfolio,
     projectUpdates,

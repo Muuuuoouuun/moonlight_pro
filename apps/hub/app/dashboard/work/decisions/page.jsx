@@ -8,7 +8,8 @@ export default async function WorkDecisionsPage({ searchParams }) {
     getPmsPageData(),
     fetchRows("decisions", { limit: 6, order: "decided_at.desc" }),
   ]);
-  const selectedProject = resolveWorkContext(searchParams?.project);
+  const params = (await searchParams) ?? {};
+  const selectedProject = resolveWorkContext(params?.project);
 
   const decisionEntries =
     decisions?.map((item) => ({

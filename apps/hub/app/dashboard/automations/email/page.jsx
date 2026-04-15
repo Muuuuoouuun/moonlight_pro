@@ -68,7 +68,31 @@ function resolveEmailMessage(value) {
   return null;
 }
 
+function resolveFirst(value) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function buildCampaignOrderHref(campaign) {
+  if (!campaign?.title) {
+    return "/dashboard/ai/orders";
+  }
+
+  const params = new URLSearchParams({
+    title: `${campaign.title} handoff`,
+    target: campaign.channel.toLowerCase().includes("landing") ? "codex" : "both",
+    priority: campaign.status === "active" ? "P1" : "P2",
+    lane: "Content",
+    due: campaign.status === "active" ? "오늘 17:00" : "이번 주",
+    note: [`Goal: ${campaign.goal}`, `Next: ${campaign.nextAction}`, `Handoff: ${campaign.handoff}`].join("\n"),
+    source: campaign.title,
+  });
+
+  return `/dashboard/ai/orders?${params.toString()}`;
+}
+
 export default async function EmailAutomationPage({ searchParams }) {
+  const params = (await searchParams) ?? {};
+  const selectedCampaignId = resolveFirst(params?.campaign);
   const {
     defaultWorkspaceId,
     emailSummary,
@@ -80,10 +104,15 @@ export default async function EmailAutomationPage({ searchParams }) {
     emailSegments,
     emailVariables,
     emailBlocks,
-  } = await getEmailAutomationPageData();
+    emailCampaignHandoffs,
+    selectedCampaignHandoff,
+  } = await getEmailAutomationPageData(selectedCampaignId);
 
-  const emailMessage = resolveEmailMessage(searchParams?.gmail);
-  const selectedSegmentId = resolveSegmentId(emailSegments, searchParams?.segment);
+  const emailMessage = resolveEmailMessage(params?.gmail);
+  const selectedSegmentId = resolveSegmentId(
+    emailSegments,
+    resolveFirst(params?.segment) || selectedCampaignHandoff?.segmentId,
+  );
   const selectedSegment =
     emailSegments.find((item) => item.id === selectedSegmentId) ?? emailSegments[0];
 
@@ -127,7 +156,11 @@ export default async function EmailAutomationPage({ searchParams }) {
                   key={segment.id}
                   className="legend-chip"
                   data-tone={selectedSegmentId === segment.id ? segment.tone : "muted"}
-                  href={`/dashboard/automations/email?segment=${segment.id}`}
+                  href={
+                    selectedCampaignId
+                      ? `/dashboard/automations/email?campaign=${selectedCampaignId}&segment=${segment.id}`
+                      : `/dashboard/automations/email?segment=${segment.id}`
+                  }
                 >
                   {segment.label} · {segment.count}
                 </Link>
@@ -136,6 +169,95 @@ export default async function EmailAutomationPage({ searchParams }) {
           }
         >
           <p className="check-detail">{selectedSegment.note}</p>
+        </SectionCard>
+
+        <SectionCard
+          kicker="Campaign handoff"
+          title={
+            selectedCampaignHandoff
+              ? `${selectedCampaignHandoff.title} -> Email`
+              : "Campaign to email bridge"
+          }
+          description="Campaign brief에서 고른 audience 와 template 를 Email lane 이 그대로 이어받습니다."
+          action={
+            selectedCampaignHandoff ? (
+              <>
+                <Link
+                  className="button button-secondary"
+                  href={`/dashboard/content/campaigns?campaign=${selectedCampaignHandoff.id}`}
+                >
+                  Campaign lane
+                </Link>
+                <Link
+                  className="button button-primary"
+                  href={buildCampaignOrderHref(selectedCampaignHandoff)}
+                >
+                  AI order
+                </Link>
+              </>
+            ) : null
+          }
+        >
+          <div className="inline-legend">
+            {emailCampaignHandoffs.map((campaign) => (
+              <Link
+                key={campaign.id}
+                className="legend-chip"
+                data-tone={selectedCampaignId === campaign.id ? campaign.statusTone : "muted"}
+                href={`/dashboard/automations/email?campaign=${campaign.id}&segment=${campaign.segmentId}`}
+              >
+                {campaign.title}
+              </Link>
+            ))}
+          </div>
+
+          {selectedCampaignHandoff ? (
+            <div className="project-grid" style={{ marginTop: "16px" }}>
+              <article className="project-card">
+                <div className="project-head">
+                  <div>
+                    <h3>{selectedCampaignHandoff.brandLabel}</h3>
+                    <p>{selectedCampaignHandoff.channel}</p>
+                  </div>
+                  <span className="legend-chip" data-tone={selectedCampaignHandoff.statusTone}>
+                    {selectedCampaignHandoff.status}
+                  </span>
+                </div>
+                <p className="check-detail">{selectedCampaignHandoff.goal}</p>
+                <p className="check-detail">
+                  <strong>Next</strong> · {selectedCampaignHandoff.nextAction}
+                </p>
+                <p className="check-detail">
+                  <strong>Flow</strong> · {selectedCampaignHandoff.handoff}
+                </p>
+              </article>
+
+              <article className="project-card">
+                <div className="project-head">
+                  <div>
+                    <h3>Recommended send</h3>
+                    <p>{selectedCampaignHandoff.segmentLabel}</p>
+                  </div>
+                  <span className="legend-chip" data-tone="green">
+                    {selectedCampaignHandoff.templateName}
+                  </span>
+                </div>
+                <p className="check-detail">
+                  <strong>Audience</strong> · {selectedCampaignHandoff.audience}
+                </p>
+                <p className="check-detail">
+                  <strong>Subject</strong> · {selectedCampaignHandoff.subject}
+                </p>
+                <p className="check-detail">
+                  <strong>Run</strong> · {selectedCampaignHandoff.runSummary}
+                </p>
+              </article>
+            </div>
+          ) : (
+            <p className="check-detail" style={{ marginTop: "16px" }}>
+              캠페인을 하나 고르면 해당 brief 에 맞는 세그먼트와 템플릿이 컴포저에 바로 반영됩니다.
+            </p>
+          )}
         </SectionCard>
 
         <SectionCard
@@ -151,6 +273,15 @@ export default async function EmailAutomationPage({ searchParams }) {
             blocks={emailBlocks}
             channels={emailChannels}
             defaultWorkspaceId={defaultWorkspaceId}
+            initialTemplateId={selectedCampaignHandoff?.templateId}
+            initialRecipientName={selectedCampaignHandoff?.recipientName}
+            initialSubject={selectedCampaignHandoff?.subject}
+            initialBody={selectedCampaignHandoff?.body}
+            initialStatusMessage={
+              selectedCampaignHandoff
+                ? `"${selectedCampaignHandoff.title}" handoff 초안을 불러왔습니다. 필요하면 그대로 다듬어 발송하세요.`
+                : undefined
+            }
           />
         </SectionCard>
 

@@ -1,26 +1,19 @@
 "use client";
 
-import { useLocale, useTranslations } from "next-intl";
+import { useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
 import { locales, LOCALE_COOKIE } from "@/i18n/config";
 
-/**
- * Hub KO / EN switcher.
- *
- * Mirrors apps/web/components/language-switcher.tsx: writes the chosen
- * locale to the `NEXT_LOCALE` cookie (one year) and triggers
- * `router.refresh()` so the next request re-resolves messages through
- * the next-intl request config. No URL prefix, no full reload.
- *
- * Mounted in the dashboard shell topbar so operators can toggle
- * language from anywhere inside the hub.
- */
+const LOCALE_LABELS = {
+  ko: "국문",
+  en: "영문",
+};
+
 export function LanguageSwitcher() {
   const router = useRouter();
   const locale = useLocale();
-  const t = useTranslations("locale");
   const [isPending, startTransition] = useTransition();
 
   function switchTo(next) {
@@ -35,7 +28,7 @@ export function LanguageSwitcher() {
     <div
       className="lang-switch"
       role="group"
-      aria-label={t("ariaLabel")}
+      aria-label="언어 전환"
       data-pending={isPending ? "true" : undefined}
     >
       {locales.map((code, index) => (
@@ -47,7 +40,7 @@ export function LanguageSwitcher() {
             aria-pressed={locale === code}
             onClick={() => switchTo(code)}
           >
-            {t(code)}
+            {LOCALE_LABELS[code] || code.toUpperCase()}
           </button>
         </span>
       ))}

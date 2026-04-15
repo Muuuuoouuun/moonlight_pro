@@ -1,59 +1,57 @@
 import { ContentBrandReference } from "@/components/dashboard/content-brand-reference";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { SummaryCard } from "@/components/dashboard/summary-card";
-import { getContentBrandReference, resolveContentBrand } from "@/lib/dashboard-contexts";
-import { countRows, fetchRows, formatTimestamp } from "@/lib/server-data";
+import {
+  getContentBrandLabel,
+  getContentBrandReference,
+  resolveContentBrand,
+} from "@/lib/dashboard-contexts";
+import { formatTimestamp, getContentAssetsPageData } from "@/lib/server-data";
+
+const ASSET_STATUS_LABEL = {
+  ready: "준비됨",
+  archived: "보관됨",
+  draft: "초안",
+};
+
+function getAssetStatusLabel(status) {
+  return ASSET_STATUS_LABEL[status] || status;
+}
 
 export default async function ContentAssetsPage({ searchParams }) {
-  const [assets, variants, readyCount, draftCount, archivedCount] = await Promise.all([
-    fetchRows("content_assets", { limit: 8, order: "created_at.desc" }),
-    fetchRows("content_variants", { limit: 8, order: "created_at.desc" }),
-    countRows("content_assets", [["asset_type", "neq.placeholder"]]),
-    countRows("content_variants", [["status", "eq.draft"]]),
-    countRows("content_variants", [["status", "eq.archived"]]),
-  ]);
-  const selectedBrand = resolveContentBrand(searchParams?.brand);
+  const params = (await searchParams) ?? {};
+  const selectedBrand = resolveContentBrand(params?.brand);
+  const { contentAssets, assetSummary } = await getContentAssetsPageData(selectedBrand.value);
   const brandReference = getContentBrandReference(selectedBrand.value);
-
-  const assetRows =
-    assets?.map((asset) => ({
-      title: asset.asset_type || "asset",
-      meta: asset.storage_path || "Pending storage path",
-      status: "ready",
-      detail: `Captured ${formatTimestamp(asset.created_at)}`,
-    })) || [];
-  const variantCount = variants?.length ?? 0;
-  const draftVariantCount = (variants || []).filter((item) => item.status === "draft").length;
-  const archivedVariantCount = (variants || []).filter((item) => item.status === "archived").length;
 
   return (
     <>
-      <section className="summary-grid" aria-label="Content asset summary">
+      <section className="summary-grid" aria-label="콘텐츠 에셋 요약">
         <SummaryCard
-          title="Captured Assets"
-          value={String(readyCount ?? assetRows.length)}
-          detail="Outputs that are reusable or ready for the next publish pass."
-          badge="Library"
+          title="확보된 에셋"
+          value={String(assetSummary.capturedCount)}
+          detail="재사용 가능하거나 다음 발행 패스에 바로 쓸 수 있는 결과물입니다."
+          badge="라이브러리"
         />
         <SummaryCard
-          title="Draft Assets"
-          value={String(draftCount ?? draftVariantCount)}
-          detail="Variants still waiting for a clearer message or final visual pass."
-          badge="Draft"
+          title="초안 에셋"
+          value={String(assetSummary.draftCount)}
+          detail="더 선명한 메시지나 마지막 비주얼 검수가 필요한 변형 결과물입니다."
+          badge="초안"
           tone="warning"
         />
         <SummaryCard
-          title="Archived"
-          value={String(archivedCount ?? archivedVariantCount)}
-          detail="Past source material that can still be repurposed later."
-          badge="Archive"
+          title="보관"
+          value={String(assetSummary.archivedCount)}
+          detail="나중에 다시 전용할 수 있는 과거 원본 자료입니다."
+          badge="보관"
           tone="muted"
         />
         <SummaryCard
-          title="Variant Links"
-          value={String(variantCount)}
-          detail="Current output formats connected to the content lane."
-          badge="Pack"
+          title="변형 연결"
+          value={String(assetSummary.variantCount)}
+          detail="현재 콘텐츠 레인과 연결된 출력 포맷 수입니다."
+          badge="패키지"
           tone="blue"
         />
       </section>
@@ -63,62 +61,80 @@ export default async function ContentAssetsPage({ searchParams }) {
 
         <div className="split-grid">
           <SectionCard
-            kicker="Library"
-            title="Current asset shelf"
+            kicker="라이브러리"
+            title="현재 에셋 선반"
             description={
               selectedBrand.value === "all"
-                ? "Assets should be easy to reuse without turning the workspace into a file graveyard."
-                : `${selectedBrand.label} is selected. Asset rows remain shared until brand metadata is stored with each content asset.`
+                ? "에셋은 작업 공간을 파일 무덤으로 만들지 않으면서도 쉽게 재사용할 수 있어야 합니다."
+                : `${selectedBrand.label} 범위가 선택되었습니다. 브랜드 키가 있는 행부터 먼저 좁혀지고, 오래된 공용 행은 백필이 끝날 때까지 함께 보입니다.`
             }
           >
             <div className="timeline">
-              {(assetRows.length
-                ? assetRows
+              {(contentAssets.length
+                ? contentAssets
                 : [
                     {
-                      title: "Asset lane waiting for data",
-                      meta: "content assets",
+                      title: "에셋 레인이 데이터를 기다리는 중입니다",
+                      source: "콘텐츠 에셋",
                       status: "ready",
-                      detail: "Once assets are generated, this shelf will show output type and storage path.",
+                      kind: "공용 레인",
+                      detail: "에셋이 생성되면 이 선반에 출력 유형, 브랜드 범위, 저장 경로가 표시됩니다.",
                     },
                   ]
               ).map((asset) => (
-                <div className="timeline-item" key={`${asset.title}-${asset.meta}`}>
+                <div className="timeline-item" key={`${asset.title}-${asset.source}`}>
                   <div className="inline-legend">
-                    <span className="legend-chip" data-tone={asset.status === "ready" ? "green" : "warning"}>
-                      {asset.status}
+                    <span
+                      className="legend-chip"
+                      data-tone={
+                        asset.status === "ready"
+                          ? "green"
+                          : asset.status === "archived"
+                            ? "muted"
+                            : "warning"
+                      }
+                    >
+                      {getAssetStatusLabel(asset.status)}
                     </span>
+                    {selectedBrand.value === "all" && asset.brand ? (
+                      <span className="legend-chip" data-tone="muted">
+                        {getContentBrandLabel(asset.brand)}
+                      </span>
+                    ) : null}
                   </div>
                   <strong>{asset.title}</strong>
-                  <p>{asset.meta}</p>
-                  <span className="muted tiny">{asset.detail}</span>
+                  <p>{`${asset.kind} · ${asset.source}`}</p>
+                  <span className="muted tiny">
+                    {asset.createdAt ? `확보 ${formatTimestamp(asset.createdAt)} · ` : ""}
+                    {asset.detail}
+                  </span>
                 </div>
               ))}
             </div>
           </SectionCard>
 
           <SectionCard
-            kicker="Rules"
-            title="How the library stays useful"
-            description="An asset system is only good when the next person can tell what is reusable and what is stale."
+            kicker="원칙"
+            title="라이브러리를 계속 쓸모 있게 유지하는 법"
+            description="다음 사람이 무엇을 재사용할 수 있고 무엇이 오래된 것인지 바로 구분할 수 있어야 에셋 시스템이 살아 있습니다."
           >
             <ul className="note-list">
               <li className="note-row">
                 <div>
-                  <strong>Name by use, not by mood</strong>
-                  <p>An asset should say what it is for, not just when it was made.</p>
+                  <strong>분위기가 아니라 용도로 이름 짓습니다</strong>
+                  <p>에셋은 언제 만들었는지가 아니라 무엇에 쓰는지 말해줘야 합니다.</p>
                 </div>
               </li>
               <li className="note-row">
                 <div>
-                  <strong>Keep source material close</strong>
-                  <p>The draft, export, and reuse note should remain traceable from the same workspace.</p>
+                  <strong>원본을 가까이 둡니다</strong>
+                  <p>초안, 익스포트, 재사용 노트는 같은 작업 공간에서 추적 가능해야 합니다.</p>
                 </div>
               </li>
               <li className="note-row">
                 <div>
-                  <strong>Archive aggressively</strong>
-                  <p>If something is outdated, mark it instead of letting it quietly confuse the next pass.</p>
+                  <strong>보관 처리를 망설이지 않습니다</strong>
+                  <p>오래된 결과물은 조용히 혼란을 만들게 두지 말고 명시적으로 표시해야 합니다.</p>
                 </div>
               </li>
             </ul>
