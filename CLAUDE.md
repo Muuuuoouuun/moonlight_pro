@@ -53,6 +53,26 @@
 - `docs/hub-minimal-practical-redesign-plan.md`
 - `design-system/references/*/DESIGN.md`
 
+## Skill routing
+
+When the user's request matches an available skill, ALWAYS invoke it using the Skill
+tool as your FIRST action. Do NOT answer directly, do NOT use other tools first.
+The skill has specialized workflows that produce better results than ad-hoc answers.
+
+Key routing rules:
+- Product ideas, "is this worth building", brainstorming → invoke office-hours
+- Bugs, errors, "why is this broken", 500 errors → invoke investigate
+- Ship, deploy, push, create PR → invoke ship
+- QA, test the site, find bugs → invoke qa
+- Code review, check my diff → invoke review
+- Update docs after shipping → invoke document-release
+- Weekly retro → invoke retro
+- Design system, brand → invoke design-consultation
+- Visual audit, design polish → invoke design-review
+- Architecture review → invoke plan-eng-review
+- Save progress, checkpoint, resume → invoke checkpoint
+- Code quality, health check → invoke health
+
 ## 누락된 레거시 툴링
 - 예전 문서에 적힌 repo-local `ui-ux-pro-max` 검색 스크립트는 현재 저장소에 없다.
 - `office-hours`, `investigate`, `qa`, `review` 같은 레거시 skill 이름도 이 저장소에 설치되어 있지 않다.
