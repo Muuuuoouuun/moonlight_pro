@@ -53,7 +53,9 @@ const HANDOFF_RULES = [
 
 // Guardrail: storage version lets us invalidate older shapes safely.
 const STORAGE_VERSION = 1;
-const STORAGE_KEY = "cm_hub_content_studio_draft_v1";
+const STORAGE_KEY_LEGACY = "cm_hub_content_studio_draft_v1";
+const DRAFTS_KEY = "cm_studio_drafts_v2";
+const MAX_DRAFTS = 10;
 
 function createSlideId() {
   return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -65,9 +67,27 @@ function blankSlide(kind = "body", patch = {}) {
     kind,
     title: "",
     bullets: [""],
+    style: { bg: "default", align: "left", emphasis: "normal" },
     ...patch,
   };
 }
+
+const STYLE_BG_OPTIONS = [
+  { value: "default", label: "기본" },
+  { value: "dark", label: "다크" },
+  { value: "accent", label: "액센트" },
+  { value: "warm", label: "따뜻한" },
+];
+
+const STYLE_ALIGN_OPTIONS = [
+  { value: "left", label: "좌측" },
+  { value: "center", label: "중앙" },
+];
+
+const STYLE_EMPHASIS_OPTIONS = [
+  { value: "normal", label: "보통" },
+  { value: "bold", label: "강조" },
+];
 
 function buildTemplate(templateId) {
   if (templateId === "problem-shift-action") {
@@ -190,24 +210,49 @@ function renderAsMarkdown(doc) {
   return lines.join("\n").trim();
 }
 
-function loadSavedDoc() {
+function createDraftId() {
+  return `d_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function draftTitle(doc) {
+  const cover = doc.slides?.find((s) => s.kind === "cover");
+  return cover?.title || "무제 초안";
+}
+
+function loadDraftsStore() {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    // Migration: if old v1 key exists, promote it into the new structure.
+    const legacyRaw = window.localStorage.getItem(STORAGE_KEY_LEGACY);
+    if (legacyRaw) {
+      const legacy = JSON.parse(legacyRaw);
+      if (legacy && legacy.version === STORAGE_VERSION && Array.isArray(legacy.slides) && legacy.slides.length > 0) {
+        const id = createDraftId();
+        const store = {
+          drafts: [{ ...legacy, id, updatedAt: legacy.updatedAt || Date.now() }],
+          activeDraftId: id,
+        };
+        window.localStorage.setItem(DRAFTS_KEY, JSON.stringify(store));
+        window.localStorage.removeItem(STORAGE_KEY_LEGACY);
+        return store;
+      }
+      window.localStorage.removeItem(STORAGE_KEY_LEGACY);
+    }
+
+    const raw = window.localStorage.getItem(DRAFTS_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || parsed.version !== STORAGE_VERSION) return null;
-    if (!Array.isArray(parsed.slides) || parsed.slides.length === 0) return null;
+    if (!parsed || !Array.isArray(parsed.drafts) || parsed.drafts.length === 0) return null;
     return parsed;
   } catch {
     return null;
   }
 }
 
-function persistDoc(doc) {
+function persistDraftsStore(store) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
+    window.localStorage.setItem(DRAFTS_KEY, JSON.stringify(store));
   } catch {
     // Ignore storage quota errors — autosave is best-effort.
   }
@@ -232,6 +277,8 @@ export default function ContentStudioPage() {
   const defaultChannel =
     brandReference.recommendedChannel || CHANNEL_PRESETS[0];
 
+  const [drafts, setDrafts] = useState([]);
+  const [activeDraftId, setActiveDraftId] = useState(null);
   const [doc, setDoc] = useState(() =>
     buildInitialDoc(selectedBrand.value, defaultTemplateId, defaultChannel),
   );
@@ -240,35 +287,49 @@ export default function ContentStudioPage() {
   const [assetPickerOpen, setAssetPickerOpen] = useState(false);
   const hasHydratedRef = useRef(false);
 
-  // Hydrate from localStorage exactly once on first client render. If the
-  // saved doc targets a different brand than the URL, we still load it but
-  // mark brand from URL (URL is the source of truth for scope).
+  // Hydrate from localStorage exactly once on first client render. Reads
+  // the multi-draft store (migrating legacy v1 key if needed).
   useEffect(() => {
     if (hasHydratedRef.current) return;
     hasHydratedRef.current = true;
-    const saved = loadSavedDoc();
-    if (saved) {
+    const store = loadDraftsStore();
+    if (store && store.drafts.length > 0) {
+      setDrafts(store.drafts);
+      const activeId = store.activeDraftId || store.drafts[0].id;
+      setActiveDraftId(activeId);
+      const active = store.drafts.find((d) => d.id === activeId) || store.drafts[0];
       setDoc({
-        ...saved,
+        ...active,
         brand: selectedBrand.value,
         updatedAt: Date.now(),
       });
-      setSavedAt(saved.updatedAt || null);
+      setSavedAt(active.updatedAt || null);
+    } else {
+      // First visit — seed one draft from the initial doc.
+      const id = createDraftId();
+      const initial = { ...buildInitialDoc(selectedBrand.value, defaultTemplateId, defaultChannel), id };
+      setDrafts([initial]);
+      setActiveDraftId(id);
+      setDoc(initial);
     }
-    // We intentionally only read on mount. Brand changes below flow through
-    // reset; we don't want to re-read storage on every brand switch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Debounced autosave: whenever doc changes, schedule a save in 600ms.
+  // Debounced autosave: whenever doc changes, persist the full drafts array.
   useEffect(() => {
-    if (!hasHydratedRef.current) return undefined;
+    if (!hasHydratedRef.current || !activeDraftId) return undefined;
     const id = window.setTimeout(() => {
-      persistDoc(doc);
+      setDrafts((prev) => {
+        const updated = prev.map((d) =>
+          d.id === activeDraftId ? { ...doc, id: activeDraftId, updatedAt: Date.now() } : d,
+        );
+        persistDraftsStore({ drafts: updated, activeDraftId });
+        return updated;
+      });
       setSavedAt(Date.now());
     }, 600);
     return () => window.clearTimeout(id);
-  }, [doc]);
+  }, [doc, activeDraftId]);
 
   // Brand change from URL — reset draft to the brand-recommended template
   // preset. We don't want stale brand-specific copy bleeding across brands.
@@ -370,21 +431,87 @@ export default function ContentStudioPage() {
       );
       if (!ok) return;
     }
-    setDoc(buildInitialDoc(selectedBrand.value, doc.templateId, doc.channel));
+    const reset = { ...buildInitialDoc(selectedBrand.value, doc.templateId, doc.channel), id: activeDraftId };
+    setDoc(reset);
     setHandoffNote(null);
-  }, [doc.channel, doc.templateId, selectedBrand.value]);
+  }, [activeDraftId, doc.channel, doc.templateId, selectedBrand.value]);
 
   const applyTemplate = useCallback(
     (templateId) => {
-      setDoc(buildInitialDoc(selectedBrand.value, templateId, doc.channel));
+      setDoc({ ...buildInitialDoc(selectedBrand.value, templateId, doc.channel), id: activeDraftId });
       setHandoffNote(null);
     },
-    [doc.channel, selectedBrand.value],
+    [activeDraftId, doc.channel, selectedBrand.value],
   );
 
   const setChannel = useCallback((channel) => {
     setDoc((prev) => ({ ...prev, channel, updatedAt: Date.now() }));
   }, []);
+
+  const updateSlideStyle = useCallback((field, value) => {
+    setDoc((prev) => ({
+      ...prev,
+      slides: prev.slides.map((slide) =>
+        slide.id === prev.activeSlideId
+          ? { ...slide, style: { ...(slide.style || { bg: "default", align: "left", emphasis: "normal" }), [field]: value } }
+          : slide,
+      ),
+      updatedAt: Date.now(),
+    }));
+  }, []);
+
+  const switchDraft = useCallback((draftId) => {
+    // Persist current doc into drafts before switching.
+    setDrafts((prev) => {
+      const updated = prev.map((d) =>
+        d.id === activeDraftId ? { ...doc, id: activeDraftId, updatedAt: Date.now() } : d,
+      );
+      persistDraftsStore({ drafts: updated, activeDraftId: draftId });
+      const next = updated.find((d) => d.id === draftId);
+      if (next) {
+        setDoc({ ...next, brand: selectedBrand.value });
+        setSavedAt(next.updatedAt || null);
+      }
+      setActiveDraftId(draftId);
+      return updated;
+    });
+    setHandoffNote(null);
+  }, [activeDraftId, doc, selectedBrand.value]);
+
+  const createNewDraft = useCallback(() => {
+    if (drafts.length >= MAX_DRAFTS) {
+      setHandoffNote({ tone: "warn", message: `초안은 최대 ${MAX_DRAFTS}개까지 만들 수 있습니다.` });
+      return;
+    }
+    const id = createDraftId();
+    const newDoc = { ...buildInitialDoc(selectedBrand.value, defaultTemplateId, defaultChannel), id };
+    setDrafts((prev) => {
+      const updated = prev.map((d) =>
+        d.id === activeDraftId ? { ...doc, id: activeDraftId, updatedAt: Date.now() } : d,
+      );
+      const next = [...updated, newDoc];
+      persistDraftsStore({ drafts: next, activeDraftId: id });
+      return next;
+    });
+    setActiveDraftId(id);
+    setDoc(newDoc);
+    setHandoffNote(null);
+  }, [activeDraftId, defaultChannel, defaultTemplateId, doc, drafts.length, selectedBrand.value]);
+
+  const deleteCurrentDraft = useCallback(() => {
+    if (drafts.length <= 1) return;
+    if (typeof window !== "undefined" && !window.confirm("이 초안을 삭제할까요?")) return;
+    setDrafts((prev) => {
+      const next = prev.filter((d) => d.id !== activeDraftId);
+      const nextActive = next[0];
+      persistDraftsStore({ drafts: next, activeDraftId: nextActive.id });
+      setActiveDraftId(nextActive.id);
+      setDoc({ ...nextActive, brand: selectedBrand.value });
+      setSavedAt(nextActive.updatedAt || null);
+      return next;
+    });
+    setHandoffNote(null);
+  }, [activeDraftId, drafts.length, selectedBrand.value]);
 
   const copyMarkdown = useCallback(async () => {
     try {
@@ -539,8 +666,44 @@ export default function ContentStudioPage() {
 
       {/* ── Three-column workbench ────────────────────────────────── */}
       <div className="studio__grid">
-        {/* Left rail — slide list (drag reorder) */}
+        {/* Left rail — draft switcher + slide list (drag reorder) */}
         <aside className="studio__rail" aria-label="슬라이드 목록">
+          <div className="studio__drafts">
+            <label className="studio__drafts-label">
+              <span>초안</span>
+              <select
+                className="studio__drafts-select"
+                value={activeDraftId || ""}
+                onChange={(event) => switchDraft(event.target.value)}
+              >
+                {drafts.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {draftTitle(d)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="studio__drafts-actions">
+              <button
+                type="button"
+                className="studio__drafts-btn"
+                onClick={createNewDraft}
+                title="새 초안"
+              >
+                + 새 초안
+              </button>
+              <button
+                type="button"
+                className="studio__drafts-btn studio__drafts-btn--danger"
+                onClick={deleteCurrentDraft}
+                disabled={drafts.length <= 1}
+                title="현재 초안 삭제"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+
           <div className="studio__rail-head">
             <strong>슬라이드</strong>
             <span>
@@ -600,6 +763,51 @@ export default function ContentStudioPage() {
             <span className="studio__editor-pos">
               {doc.slides.findIndex((slide) => slide.id === activeSlide.id) + 1}/{doc.slides.length}
             </span>
+          </div>
+
+          <div className="studio__style-row">
+            <span className="studio__style-label">스타일</span>
+            <div className="studio__style-controls">
+              <div className="studio__style-group">
+                {STYLE_BG_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className="studio__style-btn"
+                    data-active={(activeSlide.style?.bg || "default") === opt.value}
+                    onClick={() => updateSlideStyle("bg", opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <div className="studio__style-group">
+                {STYLE_ALIGN_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className="studio__style-btn"
+                    data-active={(activeSlide.style?.align || "left") === opt.value}
+                    onClick={() => updateSlideStyle("align", opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <div className="studio__style-group">
+                {STYLE_EMPHASIS_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className="studio__style-btn"
+                    data-active={(activeSlide.style?.emphasis || "normal") === opt.value}
+                    onClick={() => updateSlideStyle("emphasis", opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           <label className="studio__field">
@@ -671,6 +879,9 @@ export default function ContentStudioPage() {
           <div
             className="studio__preview-stage"
             data-kind={activeSlide.kind}
+            data-bg={activeSlide.style?.bg || "default"}
+            data-align={activeSlide.style?.align || "left"}
+            data-emphasis={activeSlide.style?.emphasis || "normal"}
           >
             {activeSlide.title ? (
               <h2>{activeSlide.title}</h2>
