@@ -7,3 +7,4 @@ export * from "./status-chip";
 export * from "./empty-state";
 export * from "./skeleton";
 export * from "./tokens";
+export * from "./viz";

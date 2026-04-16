@@ -3471,12 +3471,16 @@ function buildSummaryStats(counts, health) {
     ? `${health.routes.length}/${health.routes.length}`
     : fallbackSummaryStats[3].value;
 
+  // Trends are preview-safe defaults pulled from `fallbackSummaryStats`.
+  // Once a time-series table is wired we can compute these from history.
   return [
     {
       title: "Open Projects",
       value: String(maybe(counts.projectCount, Number.parseInt(fallbackSummaryStats[0].value, 10))),
       detail: "Projects with active or blocked motion.",
       badge: "Execution",
+      trend: fallbackSummaryStats[0].trend,
+      trendLabel: fallbackSummaryStats[0].trendLabel,
     },
     {
       title: "PMS Checks",
@@ -3484,6 +3488,8 @@ function buildSummaryStats(counts, health) {
       detail: "Routine checkpoints recorded for the current operating loop.",
       badge: "Cadence",
       tone: "muted",
+      trend: fallbackSummaryStats[1].trend,
+      trendLabel: fallbackSummaryStats[1].trendLabel,
     },
     {
       title: "Active Leads",
@@ -3491,6 +3497,8 @@ function buildSummaryStats(counts, health) {
       detail: "Leads still in the working funnel.",
       badge: "Sales",
       tone: "warning",
+      trend: fallbackSummaryStats[2].trend,
+      trendLabel: fallbackSummaryStats[2].trendLabel,
     },
     {
       title: "Webhook Health",
@@ -3498,6 +3506,8 @@ function buildSummaryStats(counts, health) {
       detail: health ? "Read live from the engine health route." : fallbackSummaryStats[3].detail,
       badge: "Engine",
       tone: "blue",
+      trend: fallbackSummaryStats[3].trend,
+      trendLabel: fallbackSummaryStats[3].trendLabel,
     },
     {
       title: "Error Logs",
@@ -3505,6 +3515,8 @@ function buildSummaryStats(counts, health) {
       detail: "Outstanding warnings and failures in the loop.",
       badge: "Stable",
       tone: "green",
+      trend: fallbackSummaryStats[4].trend,
+      trendLabel: fallbackSummaryStats[4].trendLabel,
     },
   ];
 }

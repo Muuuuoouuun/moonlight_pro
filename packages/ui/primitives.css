@@ -452,3 +452,82 @@
     animation: none;
   }
 }
+
+/* ───── Metric + Sparkline bundle ───────────────────────────────── */
+.cm-metric-spark {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--cm-radius-md);
+  border: 1px solid var(--cm-line-dark);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.cm-metric-spark__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cm-metric-spark__label {
+  margin: 0;
+  font-family: var(--cm-font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cm-platinum-soft);
+}
+
+.cm-metric-spark__delta {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(82, 116, 168, 0.12);
+  color: var(--cm-metal-300);
+  font-family: var(--cm-font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.cm-metric-spark__delta[data-tone="up"] {
+  background: rgba(90, 143, 122, 0.14);
+  color: var(--cm-ok-500);
+}
+
+.cm-metric-spark__delta[data-tone="down"] {
+  background: rgba(160, 64, 64, 0.14);
+  color: var(--cm-risk-500);
+}
+
+.cm-metric-spark__delta[data-tone="warn"] {
+  background: rgba(158, 128, 64, 0.14);
+  color: var(--cm-warn-500);
+}
+
+.cm-metric-spark__body {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cm-metric-spark__value {
+  font-family: var(--cm-font-mono);
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--cm-platinum);
+  font-variant-numeric: tabular-nums;
+}
+
+.cm-metric-spark__detail {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--cm-platinum-soft);
+}

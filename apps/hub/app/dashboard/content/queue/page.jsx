@@ -1,7 +1,7 @@
 import Link from "next/link";
+import { PipelineBar } from "@com-moon/ui";
 import { ContentBrandReference } from "@/components/dashboard/content-brand-reference";
 import { SectionCard } from "@/components/dashboard/section-card";
-import { SummaryCard } from "@/components/dashboard/summary-card";
 import {
   appendQueryParam,
   getContentBrandReference,
@@ -41,13 +41,13 @@ function resolveStageFilter(value) {
   return STAGE_OPTIONS.find((option) => option.value === normalized) ?? STAGE_OPTIONS[0];
 }
 
-function summarizePipeline(contentPipeline) {
+const PIPELINE_SEGMENT_TONES = ["muted", "warn", "accent", "ok"];
+
+function toPipelineSegments(contentPipeline) {
   return contentPipeline.map((stage, index) => ({
-    title: stage.title,
-    value: String(stage.items.length),
-    detail: stage.note,
-    badge: index === 0 ? "투입" : index === 1 ? "초안" : index === 2 ? "리뷰" : "발행",
-    tone: index === 0 ? "muted" : index === 1 ? "warning" : index === 2 ? "blue" : "green",
+    label: stage.title,
+    value: stage.items.length,
+    tone: PIPELINE_SEGMENT_TONES[index] ?? "muted",
   }));
 }
 
@@ -70,7 +70,8 @@ export default async function ContentQueuePage({ searchParams }) {
   const { contentAttention, contentPipeline, contentQueueRoster } = await getContentQueuePageData(
     selectedBrand.value,
   );
-  const queueSummary = summarizePipeline(contentPipeline);
+  const pipelineSegments = toPipelineSegments(contentPipeline);
+  const pipelineTotal = pipelineSegments.reduce((acc, segment) => acc + segment.value, 0);
   const brandReference = getContentBrandReference(selectedBrand.value);
   const selectedStage = resolveStageFilter(params?.stage);
   const brandScopedRoster =
@@ -84,10 +85,27 @@ export default async function ContentQueuePage({ searchParams }) {
 
   return (
     <>
-      <section className="summary-grid" aria-label="콘텐츠 큐 요약">
-        {queueSummary.map((item) => (
-          <SummaryCard key={item.title} {...item} />
-        ))}
+      <section className="queue-pipeline-visual" aria-label="콘텐츠 파이프라인 흐름">
+        <div className="queue-pipeline-head">
+          <p className="queue-pipeline-total">
+            <strong>{pipelineTotal}</strong>
+            <span>아이디어에서 발행까지 현재 살아 있는 아이템</span>
+          </p>
+          <ul className="queue-pipeline-legend">
+            {pipelineSegments.map((segment) => (
+              <li key={segment.label} data-tone={segment.tone}>
+                <span className="queue-pipeline-swatch" aria-hidden="true" />
+                <strong>{segment.value}</strong>
+                <span>{segment.label}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <PipelineBar
+          segments={pipelineSegments}
+          ariaLabel="콘텐츠 파이프라인 단계별 분포"
+          height={12}
+        />
       </section>
 
       <div className="stack">

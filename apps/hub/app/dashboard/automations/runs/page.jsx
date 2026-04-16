@@ -1,9 +1,21 @@
+import { StatusRibbon } from "@com-moon/ui";
 import { SectionCard } from "@/components/dashboard/section-card";
-import { SummaryCard } from "@/components/dashboard/summary-card";
 import { getAutomationsPageData } from "@/lib/server-data";
 
 function countRuns(items, predicate) {
   return items.filter(predicate).length;
+}
+
+function statusToRibbonCell(item) {
+  const status =
+    item.status === "success"
+      ? "ok"
+      : item.status === "failure"
+        ? "risk"
+        : item.status === "queued" || item.status === "ready"
+          ? "warn"
+          : "muted";
+  return { status, label: `${item.title} · ${item.time}` };
 }
 
 const TONE_LABEL = {
@@ -20,30 +32,36 @@ function getToneLabel(tone) {
 
 export default async function AutomationRunsPage() {
   const { automationRuns, automationTriage } = await getAutomationsPageData();
+  const successCount = countRuns(automationRuns, (item) => item.status === "success");
+  const waitingCount = countRuns(
+    automationRuns,
+    (item) => item.status === "queued" || item.status === "ready",
+  );
+  const failureCount = countRuns(automationRuns, (item) => item.status === "failure");
+  const ribbonCells = automationRuns.slice(0, 32).map(statusToRibbonCell);
 
   return (
     <>
-      <section className="summary-grid" aria-label="자동화 실행 요약">
-        <SummaryCard
-          title="성공"
-          value={String(countRuns(automationRuns, (item) => item.status === "success"))}
-          detail="최근 정상적으로 끝난 실행 수입니다."
-          badge="건강"
+      <section className="runs-ribbon-panel" aria-label="자동화 실행 상태 리본">
+        <div className="runs-ribbon-legend">
+          <span>
+            <strong>{successCount}</strong>
+            <em>성공</em>
+          </span>
+          <span>
+            <strong>{waitingCount}</strong>
+            <em>대기</em>
+          </span>
+          <span>
+            <strong>{failureCount}</strong>
+            <em>실패</em>
+          </span>
+        </div>
+        <StatusRibbon
+          cells={ribbonCells}
+          ariaLabel="최근 자동화 실행의 성공·실패 타임라인"
         />
-        <SummaryCard
-          title="대기 / 준비"
-          value={String(countRuns(automationRuns, (item) => item.status === "queued" || item.status === "ready"))}
-          detail="디스패치나 검토를 기다리는 실행 수입니다."
-          badge="대기"
-          tone="warning"
-        />
-        <SummaryCard
-          title="주시"
-          value={String(countRuns(automationRuns, (item) => item.status === "failure"))}
-          detail="재시도나 운영자 점검이 필요한 실행 수입니다."
-          badge="주의"
-          tone="danger"
-        />
+        <p className="runs-ribbon-note">최근 실행 {ribbonCells.length}건을 좌→우 시간순으로 읽습니다.</p>
       </section>
 
       <div className="split-grid">

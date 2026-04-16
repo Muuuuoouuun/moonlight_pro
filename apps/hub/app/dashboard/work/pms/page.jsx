@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DistributionDots } from "@com-moon/ui";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { HubSyncBadge } from "@/components/dashboard/hub-sync-badge";
 import { WorkContextBridge } from "@/components/dashboard/work-context-bridge";
@@ -423,6 +424,35 @@ export default async function WorkPmsPage({ searchParams }) {
   });
   const laneRows = buildPmsLaneRows(scopedBundles.items);
 
+  // PR age dots — how old is each open PR in days? The distribution reads
+  // the queue at a glance: a cluster at the left = healthy, a long tail
+  // at the right = stale reviews the operator should bump.
+  const prAgeDots = (() => {
+    const nowMs = Date.now();
+    const out = [];
+    scopedBundles.items.forEach((bundle) => {
+      const repoLabel = (bundle.repository || "").split("/")[1] || bundle.repository;
+      (bundle.openPulls || []).forEach((pull) => {
+        const createdMs = pull.created_at
+          ? new Date(pull.created_at).getTime()
+          : pull.updated_at
+            ? new Date(pull.updated_at).getTime()
+            : nowMs;
+        const days = Math.max(0, Math.round((nowMs - createdMs) / (24 * 60 * 60 * 1000)));
+        const tone = days >= 14 ? "risk" : days >= 7 ? "warn" : "accent";
+        out.push({
+          value: days,
+          tone,
+          label: `${repoLabel} #${pull.number} · ${days}일 열림${pull.draft ? " · draft" : ""}`,
+        });
+      });
+    });
+    return out;
+  })();
+  const prAgeMax = prAgeDots.length
+    ? Math.max(14, ...prAgeDots.map((dot) => dot.value))
+    : 14;
+
   const dangerAlertCount = scopedAlerts.items.filter((item) => item.tone === "danger").length;
   const slipCandidate = focus.blocker ? 1 : 0;
   const bridgeRows = buildPmsBridgeRows({
@@ -524,6 +554,35 @@ export default async function WorkPmsPage({ searchParams }) {
               </span>
             </li>
           </ul>
+
+          {prAgeDots.length ? (
+            <section className="pms-pr-age" aria-label="열린 PR 나이 분포">
+              <div className="pms-pr-age-head">
+                <div>
+                  <p className="hub-pms__micro-kicker">PR age</p>
+                  <h2>열린 PR의 나이 분포</h2>
+                  <p>
+                    점이 왼쪽에 모이면 건강한 큐, 오른쪽에 늘어서면 오래 멈춘 PR입니다.
+                    {" "}
+                    <em>0~6일 최근</em>, <em>7~13일 주시</em>, <em>14일 이상 정체</em>.
+                  </p>
+                </div>
+              </div>
+              <DistributionDots
+                dots={prAgeDots}
+                max={prAgeMax}
+                width={560}
+                height={56}
+                ticks={[
+                  { value: 0, label: "0d" },
+                  { value: 7, label: "7d" },
+                  { value: 14, label: "14d" },
+                  { value: prAgeMax, label: `${prAgeMax}d` },
+                ]}
+                ariaLabel="열린 PR 나이 분포 도트 플롯"
+              />
+            </section>
+          ) : null}
 
           <div className="hub-pms__signal-wall">
             <article className="hub-pms__signal-board hub-rim" data-rim={dangerAlertCount ? "danger" : "alert"}>

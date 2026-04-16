@@ -5,6 +5,7 @@ import {
   EmptyState,
   Grid,
   KpiCard,
+  MetricWithSpark,
   SectionHeader,
   Stack,
   StatusChip,
@@ -121,17 +122,19 @@ export default async function DashboardPage() {
         <SectionHeader
           eyebrow="핵심 신호"
           title="이번 라운드에서 먼저 볼 지표"
-          description="하루 동안 가장 먼저 확인해야 할 네 가지 숫자입니다. 수치 확인에서 멈추지 않고 바로 다음 행동으로 이어지게 구성했습니다."
+          description="숫자 확인에서 멈추지 않도록 7일 추세를 함께 보여줍니다."
         />
         <Grid cols={4} gap={4} collapse="md">
           {attentionStats.map((stat) => (
-            <KpiCard
+            <MetricWithSpark
               key={stat.title}
               label={stat.badge || stat.title}
               value={stat.value}
+              detail={stat.detail}
+              trend={stat.trend}
+              trendLabel={stat.trendLabel}
               delta={stat.tone ? stat.badge : undefined}
               deltaTone={toDeltaTone(stat.tone)}
-              detail={stat.detail}
             />
           ))}
         </Grid>

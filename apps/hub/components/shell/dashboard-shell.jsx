@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -11,6 +11,7 @@ import {
   navigationItems,
   shellActions,
 } from "@/lib/dashboard-data";
+import { CommandPalette } from "./command-palette";
 import { LanguageSwitcher } from "./language-switcher";
 
 const BUTTON_VARIANT = {
@@ -99,6 +100,37 @@ export function DashboardShell({ children }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefetchedRoutesRef = useRef(new Set());
+  const [navOpen, setNavOpen] = useState(false);
+
+  // Close the mobile nav whenever the route changes — a tap on a lane
+  // should dismiss the sheet without waiting for explicit close.
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
+
+  // Lock body scroll while the nav sheet is open so the underlying page
+  // doesn't scroll away from under the user's touch.
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    if (!navOpen) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [navOpen]);
+
+  // Escape key closes the sheet.
+  useEffect(() => {
+    if (!navOpen) return undefined;
+    const handler = (event) => {
+      if (event.key === "Escape") {
+        setNavOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [navOpen]);
 
   const currentSection = getActiveNavigationSection(pathname);
   const currentView = getActiveNavigationView(pathname, currentSection);
@@ -155,8 +187,24 @@ export function DashboardShell({ children }) {
   );
 
   return (
-    <div className="hub-shell" data-view-mode={compactView ? "compact" : "overview"}>
-      <aside className="hub-shell__nav" aria-label="주 내비게이션">
+    <div
+      className="hub-shell"
+      data-view-mode={compactView ? "compact" : "overview"}
+      data-nav-open={navOpen ? "true" : undefined}
+    >
+      {navOpen ? (
+        <button
+          type="button"
+          aria-label="내비게이션 닫기"
+          className="hub-shell__nav-backdrop"
+          onClick={() => setNavOpen(false)}
+        />
+      ) : null}
+      <aside
+        className="hub-shell__nav"
+        aria-label="주 내비게이션"
+        data-mobile-open={navOpen ? "true" : undefined}
+      >
         <Link className="hub-shell__brand" href="/dashboard" aria-label="moonlight 프로젝트 홈">
           <span className="hub-shell__brand-mark" aria-hidden="true">
             ◐
@@ -222,6 +270,17 @@ export function DashboardShell({ children }) {
 
       <div className="hub-shell__main">
         <header className="hub-shell__topbar">
+          <button
+            type="button"
+            className="hub-shell__nav-toggle"
+            aria-label={navOpen ? "내비게이션 닫기" : "내비게이션 열기"}
+            aria-expanded={navOpen ? "true" : "false"}
+            onClick={() => setNavOpen((open) => !open)}
+          >
+            <span aria-hidden="true" />
+            <span aria-hidden="true" />
+            <span aria-hidden="true" />
+          </button>
           <div className="hub-shell__topbar-crumb">
             <p className="hub-shell__topbar-kicker">moonlight 프로젝트</p>
             <h1 className="hub-shell__topbar-title">
@@ -275,6 +334,7 @@ export function DashboardShell({ children }) {
 
         <main className="hub-shell__content">{children}</main>
       </div>
+      <CommandPalette />
     </div>
   );
 }

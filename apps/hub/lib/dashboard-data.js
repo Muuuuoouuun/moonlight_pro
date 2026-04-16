@@ -21,12 +21,6 @@ export const navigationItems = [
     group: "core",
     children: [
       {
-        href: "/dashboard/work",
-        i18nKey: "workOverview",
-        label: "개요",
-        description: "집중 스택과 실행 펄스",
-      },
-      {
         href: "/dashboard/work/projects",
         i18nKey: "workProjects",
         label: "프로젝트",
@@ -90,12 +84,6 @@ export const navigationItems = [
     group: "core",
     children: [
       {
-        href: "/dashboard/revenue",
-        i18nKey: "revenueOverview",
-        label: "개요",
-        description: "파이프라인 건강도와 다음 움직임",
-      },
-      {
         href: "/dashboard/revenue/leads",
         i18nKey: "revenueLeads",
         label: "리드",
@@ -128,12 +116,6 @@ export const navigationItems = [
     description: "큐, 스튜디오, 자산, 발행",
     group: "core",
     children: [
-      {
-        href: "/dashboard/content",
-        i18nKey: "contentOverview",
-        label: "개요",
-        description: "파이프라인 건강도와 발행 케이던스",
-      },
       {
         href: "/dashboard/content/queue",
         i18nKey: "contentQueue",
@@ -174,12 +156,6 @@ export const navigationItems = [
     group: "core",
     children: [
       {
-        href: "/dashboard/automations",
-        i18nKey: "automationsOverview",
-        label: "개요",
-        description: "머신 상태와 최근 결과",
-      },
-      {
         href: "/dashboard/automations/runs",
         i18nKey: "automationsRuns",
         label: "실행",
@@ -212,12 +188,6 @@ export const navigationItems = [
     description: "로그, 이슈, 메모, 활동",
     group: "core",
     children: [
-      {
-        href: "/dashboard/evolution",
-        i18nKey: "evolutionOverview",
-        label: "개요",
-        description: "자가 개선 루프와 소유권",
-      },
       {
         href: "/dashboard/evolution/logs",
         i18nKey: "evolutionLogs",
@@ -266,12 +236,6 @@ export const navigationItems = [
     description: "챗, 카운슬, 그리고 Claude·Codex에 직접 오더",
     group: "utility",
     children: [
-      {
-        href: "/dashboard/ai",
-        i18nKey: "aiOverview",
-        label: "개요",
-        description: "에이전트 상태, OS 펄스, 오픈 오더를 한 화면에",
-      },
       {
         href: "/dashboard/ai/office",
         i18nKey: "aiOffice",
@@ -439,6 +403,8 @@ export const summaryStats = [
     value: "06",
     detail: "2 need milestone updates before the next work block.",
     badge: "Execution",
+    trend: [4, 4, 5, 5, 6, 5, 6],
+    trendLabel: "최근 7일 오픈 프로젝트 추이",
   },
   {
     title: "PMS Checks",
@@ -446,6 +412,8 @@ export const summaryStats = [
     detail: "Morning, midday, and weekly review lanes are visible.",
     badge: "Cadence",
     tone: "muted",
+    trend: [3, 2, 3, 3, 3, 3, 3],
+    trendLabel: "최근 7일 PMS 체크 추이",
   },
   {
     title: "Active Leads",
@@ -453,6 +421,8 @@ export const summaryStats = [
     detail: "3 are warm and ready for follow-up.",
     badge: "Sales",
     tone: "warning",
+    trend: [9, 11, 12, 14, 15, 17, 18],
+    trendLabel: "최근 7일 활성 리드 추이",
   },
   {
     title: "Webhook Health",
@@ -460,6 +430,8 @@ export const summaryStats = [
     detail: "Telegram and health endpoints are live, project intake is ready.",
     badge: "Engine",
     tone: "blue",
+    trend: [2, 3, 3, 2, 2, 3, 2],
+    trendLabel: "최근 7일 웹훅 가동 채널 수",
   },
   {
     title: "Error Logs",
@@ -467,6 +439,8 @@ export const summaryStats = [
     detail: "All tracked with a clear fix owner.",
     badge: "Stable",
     tone: "green",
+    trend: [6, 5, 4, 4, 3, 3, 3],
+    trendLabel: "최근 7일 에러 로그 추이",
   },
 ];
 
