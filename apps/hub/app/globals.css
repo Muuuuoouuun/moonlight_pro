@@ -388,6 +388,152 @@ button {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+ * Publish lane — compact status strip + card-news preview grid.
+ * ═══════════════════════════════════════════════════════════════ */
+.publish-strip {
+  display: grid;
+  gap: 12px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.publish-strip__metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.publish-strip__metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.publish-strip__metric strong {
+  font-family: var(--cm-font-mono);
+  font-size: 1.2rem;
+  color: var(--cm-platinum);
+  font-variant-numeric: tabular-nums;
+}
+
+.publish-strip__metric span {
+  font-size: 0.78rem;
+  color: var(--cm-platinum-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.publish-strip__metric[data-tone="ok"] strong { color: var(--cm-ok-500); }
+.publish-strip__metric[data-tone="accent"] strong { color: var(--cm-metal-300); }
+.publish-strip__metric[data-tone="risk"] strong { color: var(--cm-risk-500); }
+
+.publish-strip__ribbon {
+  display: grid;
+  gap: 6px;
+}
+
+.publish-strip__note {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--cm-platinum-soft);
+}
+
+.publish-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.publish-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.publish-card__frame {
+  display: grid;
+  gap: 8px;
+  padding: 18px 16px;
+  background:
+    radial-gradient(circle at top left, rgba(82, 116, 168, 0.06), transparent 60%),
+    rgba(19, 25, 35, 0.92);
+  border-bottom: 1px solid var(--line);
+  min-height: 100px;
+}
+
+.publish-card[data-status="published"] .publish-card__frame {
+  background:
+    radial-gradient(circle at top left, rgba(90, 143, 122, 0.08), transparent 60%),
+    rgba(19, 25, 35, 0.92);
+}
+
+.publish-card[data-status="failed"] .publish-card__frame {
+  background:
+    radial-gradient(circle at top left, rgba(160, 64, 64, 0.08), transparent 60%),
+    rgba(19, 25, 35, 0.92);
+}
+
+.publish-card__channel {
+  display: inline-block;
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  font-family: var(--cm-font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cm-platinum-soft);
+}
+
+.publish-card__title {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  color: var(--cm-platinum);
+  word-break: keep-all;
+}
+
+.publish-card__meta {
+  display: grid;
+  gap: 6px;
+  padding: 12px 16px;
+}
+
+.publish-card__meta p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--cm-platinum-soft);
+  line-height: 1.5;
+}
+
+.publish-card__time {
+  font-family: var(--cm-font-mono);
+  font-size: 0.72rem;
+  color: var(--cm-platinum-soft);
+  letter-spacing: 0.05em;
+}
+
+.publish-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+@media (max-width: 560px) {
+  .publish-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
  * Content Studio — slide-first authoring workbench.
  * Three-column grid: rail · editor · preview. The rail is draggable,
  * the editor is bullets-only, and the preview renders a 1080² frame.
