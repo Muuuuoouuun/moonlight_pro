@@ -68,7 +68,7 @@ const PAGE_MAP = {
   'dashboard/agents/council': () => <AgentsCouncil />,
   'dashboard/agents/orders': () => <AgentsOrders />,
   'dashboard/agents/office': () => <AgentsOffice />,
-  'dashboard/evolution': () => <Evolution />,
+  'dashboard/evolution': (n) => <Evolution onNavigate={n} />,
   'dashboard/settings': () => <Settings />,
 };
 

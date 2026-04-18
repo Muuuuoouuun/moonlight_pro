@@ -2,17 +2,45 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Card, Button, Avatar, Tabs, SectionTitle } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Tabs, SectionTitle, Kbd } from "../hub-primitives";
 import { EVOLUTION_LOG } from "../hub-data";
 
-export function Evolution() {
+const PLAYBOOK_FAMILIES = [
+  { key: 'delivery', label: 'Delivery',  tone: 'info',     count: 2, detail: 'GitHub PR · 이슈 압력 · 빠른 담당 지정' },
+  { key: 'planning', label: 'Planning',  tone: 'moon',     count: 1, detail: '리듬 · 로드맵 · 주간 리셋 루프' },
+  { key: 'content',  label: 'Content',   tone: 'success',  count: 1, detail: '브랜드 발행 루프 · 큐 분류 · Studio 핸드오프' },
+  { key: 'revenue',  label: 'Revenue',   tone: 'warning',  count: 1, detail: '리드 후속 · 계정 관리 · 딜 이동 점검' },
+  { key: 'recovery', label: 'Recovery',  tone: 'danger',   count: 1, detail: '로그 · 실패 · 사람의 빠른 개입' },
+];
+
+const PLAYBOOK_CATALOG = [
+  { name: 'Daily Delivery Sweep',   family: 'delivery', cadence: 'Daily',    trigger: '09:00 · 열린 PR / stale review',  owner: 'Me' },
+  { name: 'Incident Escalation',    family: 'recovery', cadence: 'On alert', trigger: 'Run log err · uptime drop',        owner: 'Operator' },
+  { name: 'Weekly Planning Reset',  family: 'planning', cadence: 'Weekly',   trigger: '금 16:00 · Rhythm 4/5 미달 시',     owner: 'Me' },
+  { name: 'Publish Review Loop',    family: 'content',  cadence: 'Daily',    trigger: 'Queue draft ≥ 2 · 발행 4h 전',      owner: 'Writer' },
+  { name: 'Deal Movement Check',    family: 'revenue',  cadence: 'Weekly',   trigger: 'Neg 단계 ≥ 10일 정체',              owner: 'Me' },
+  { name: 'Referral Follow-up',     family: 'revenue',  cadence: 'Daily',    trigger: 'Referral lead 무응답 ≥ 2일',         owner: 'Me' },
+];
+
+const QUICK_COMMANDS = [
+  { slash: '/brief',     label: '아침 브리프 열기',    dest: 'dashboard/daily-brief',        tone: 'moon' },
+  { slash: '/work',      label: 'Work OS 집중 모드',   dest: 'dashboard/work/projects',      tone: 'info' },
+  { slash: '/studio',    label: 'Studio 드래프트',     dest: 'dashboard/content/studio',     tone: 'success' },
+  { slash: '/pipeline',  label: 'Revenue 파이프라인',  dest: 'dashboard/revenue/overview',   tone: 'warning' },
+  { slash: '/flows',     label: 'Flow 캔버스 열기',    dest: 'dashboard/automations/flows',  tone: 'moon' },
+  { slash: '/council',   label: 'Council 소집',        dest: 'dashboard/agents/council',     tone: 'info' },
+  { slash: '/office',    label: 'VR Office 라이브',    dest: 'dashboard/agents/office',      tone: 'moon' },
+  { slash: '/runs',      label: '자동화 Run log',      dest: 'dashboard/automations/runs',   tone: 'danger' },
+];
+
+export function Evolution({ onNavigate }) {
   const tagTone = { upgrade: 'moon', bug: 'danger', insight: 'info', note: 'neutral' };
   return (
-    <div style={{ padding: 'var(--section-gap)', maxWidth: 1000, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+    <div style={{ padding: 'var(--section-gap)', maxWidth: 1100, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Evolution</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch', lineHeight: 1.5 }}>시스템이 어떻게 변하고 있는지 · 업그레이드 · 이슈 · 인사이트 · 기록</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch', lineHeight: 1.5 }}>시스템이 어떻게 변하고 있는지 · 바꾸는 법(Playbooks) · 실행하는 법(Commands) · 기록(Log)</div>
         </div>
         <div style={{ flex: 1 }} />
         <Tabs tabs={[{key:'all',label:'All'},{key:'up',label:'Upgrades'},{key:'issue',label:'Issues'},{key:'insight',label:'Insights'}]} active="all" onChange={()=>{}} style={{ borderBottom: 'none' }} />
@@ -38,6 +66,86 @@ export function Evolution() {
         </Card>
       </div>
 
+      {/* Playbooks — how the system changes */}
+      <div>
+        <SectionTitle subtitle="운영 절차 · 시스템을 바꾸는 방법" right={<Button variant="outline" size="xs" icon="plus">Playbook</Button>}>
+          Playbooks
+        </SectionTitle>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--gap)', marginBottom: 'var(--gap)' }}>
+          {PLAYBOOK_FAMILIES.map(f => (
+            <Card key={f.key} style={{ cursor: 'pointer' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <Dot tone={f.tone} size={8} />
+                <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{f.label}</span>
+                <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{f.count}</span>
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>{f.detail}</div>
+            </Card>
+          ))}
+        </div>
+        <Card pad={false}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 110px 1fr 100px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            <span>Playbook</span><span>Family</span><span>Cadence</span><span>Trigger</span><span>Owner</span><span style={{ textAlign: 'right' }} />
+          </div>
+          {PLAYBOOK_CATALOG.map((p, i) => {
+            const fam = PLAYBOOK_FAMILIES.find(f => f.key === p.family);
+            return (
+              <div key={p.name} style={{
+                display: 'grid', gridTemplateColumns: '1fr 120px 110px 1fr 100px 80px',
+                padding: '12px 16px', alignItems: 'center', gap: 10,
+                borderBottom: i < PLAYBOOK_CATALOG.length - 1 ? '1px solid var(--line-soft)' : 'none',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Iconed name="folder" size={13} style={{ color: 'var(--fg-faint)' }} />
+                  <span style={{ fontSize: 13 }}>{p.name}</span>
+                </div>
+                <Badge tone={fam.tone} size="xs">{fam.label}</Badge>
+                <span style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>{p.cadence}</span>
+                <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.trigger}</span>
+                <span style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>{p.owner}</span>
+                <div style={{ textAlign: 'right' }}>
+                  <Button variant="ghost" size="xs" iconRight="arrowRight">Run</Button>
+                </div>
+              </div>
+            );
+          })}
+        </Card>
+      </div>
+
+      {/* Commands — how the system is operated */}
+      <div>
+        <SectionTitle
+          subtitle="빠른 이동 + 슬래시 커맨드 · 시스템을 실행하는 방법"
+          right={<span style={{ fontSize: 10.5, color: 'var(--fg-faint)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><Kbd>⌘</Kbd><Kbd>K</Kbd> palette</span>}
+        >
+          Commands
+        </SectionTitle>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--gap)' }}>
+          {QUICK_COMMANDS.map(c => (
+            <button key={c.slash} onClick={() => onNavigate?.(c.dest)} style={{
+              textAlign: 'left', padding: 'var(--card-pad)',
+              background: 'var(--surface)', border: '1px solid var(--line-soft)',
+              borderRadius: 'var(--r-lg)', boxShadow: 'var(--shadow-card)',
+              display: 'flex', flexDirection: 'column', gap: 8, cursor: 'pointer',
+              transition: 'border-color .15s ease, transform .1s ease',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--line)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--line-soft)'; }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Dot tone={c.tone} />
+                <span className="mono" style={{ fontSize: 12, color: 'var(--moon-300)' }}>{c.slash}</span>
+                <div style={{ flex: 1 }} />
+                <Iconed name="arrowRight" size={12} style={{ color: 'var(--fg-faint)' }} />
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--fg)' }}>{c.label}</div>
+              <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>→ /{c.dest}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Log — what's actually changing */}
       <div>
         <SectionTitle>Log</SectionTitle>
         <Card pad={false}>

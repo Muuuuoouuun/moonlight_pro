@@ -3,10 +3,10 @@ import { getLocale, getMessages } from "next-intl/server";
 import "./globals.css";
 
 export const metadata = {
-  title: "Com_Moon OS",
-  description: "Private operating shell for operations, content, and command center workflows.",
+  title: "Moonlight",
+  description: "Moonlight Hub — 1인·소규모 창업자용 운영 OS.",
   manifest: "/manifest.json",
-  applicationName: "Com_Moon OS",
+  applicationName: "Moonlight",
 };
 
 export const viewport = {

@@ -1,4 +1,4 @@
-# Classin Web — Claude Code 지침
+# Moonlight — Claude Code 지침
 
 ## 프로젝트 개요
 - Next.js 14 (App Router) + TypeScript + Tailwind CSS

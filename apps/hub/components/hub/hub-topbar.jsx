@@ -5,7 +5,7 @@ import { Iconed } from "./hub-icons";
 import { IconButton, Button } from "./hub-primitives";
 
 const LABELS = {
-  'dashboard': 'Hub',
+  'dashboard': 'Moonlight',
   'daily-brief': 'Daily Brief',
   'work': 'Work', 'calendar': 'Calendar', 'projects': 'Projects', 'decisions': 'Decisions', 'roadmap': 'Roadmap', 'rhythm': 'Rhythm',
   'content': 'Content', 'studio': 'Studio', 'queue': 'Queue', 'campaigns': 'Campaigns',
