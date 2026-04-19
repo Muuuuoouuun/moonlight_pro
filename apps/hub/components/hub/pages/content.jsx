@@ -35,6 +35,62 @@ export function Studio() {
   ]);
   const [activeSlide, setActiveSlide] = React.useState(0);
   const [drag, setDrag] = React.useState(null);
+  const [extraSuggestions, setExtraSuggestions] = React.useState([]);
+  const [pendingSend, setPendingSend] = React.useState(null); // 'publish' | 'schedule' | null
+  const [lastSentAt, setLastSentAt] = React.useState(null);
+
+  const formatTime = (d) => {
+    try {
+      return new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(d);
+    } catch {
+      return d.toISOString().slice(11, 19);
+    }
+  };
+
+  async function dispatchEmail(action) {
+    setPendingSend(action);
+    const startedAt = Date.now();
+    const dryRun = action === 'schedule';
+    try {
+      const response = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: dryRun ? 'dry-run' : 'send',
+          channel: 'resend',
+          to: 'me@moonlight.pro',
+          recipientEmail: 'me@moonlight.pro',
+          subject: title,
+          body,
+          dryRun,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < 100) await new Promise(r => setTimeout(r, 100 - elapsed));
+
+      if (!response.ok && data.status !== 'preview' && data.status !== 'sent') {
+        const msg = data.error || data.message || `HTTP ${response.status}`;
+        setExtraSuggestions(s => [{ tone: 'danger', text: `발행 실패 — ${msg}` }, ...s]);
+        return;
+      }
+
+      const now = new Date();
+      setLastSentAt(now);
+      if (dryRun) {
+        const detail = data.message || data.status || 'ok';
+        setExtraSuggestions(s => [{ tone: 'info', text: `dry-run · ${detail}` }, ...s]);
+      } else {
+        const id = data.id ?? data.preview?.id ?? 'preview';
+        setExtraSuggestions(s => [{ tone: 'info', text: `발행 요청 — id: ${id}` }, ...s]);
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      setExtraSuggestions(s => [{ tone: 'danger', text: `발행 실패 — ${msg}` }, ...s]);
+    } finally {
+      setPendingSend(null);
+    }
+  }
 
   const wordCount = body.split(/\s+/).filter(Boolean).length;
   const readingTime = Math.max(1, Math.round(wordCount / 180));
@@ -69,11 +125,28 @@ export function Studio() {
           </span>
           <div style={{ flex: 1 }} />
           <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>
-            {mode === 'blog' ? `saved 12s ago · ${wordCount} words · ${readingTime}min read` : `saved 8s ago · ${slides.length} slides · Instagram 1080×1080`}
+            {lastSentAt
+              ? `sent · ${formatTime(lastSentAt)}`
+              : mode === 'blog'
+              ? `saved 12s ago · ${wordCount} words · ${readingTime}min read`
+              : `saved 8s ago · ${slides.length} slides · Instagram 1080×1080`}
           </span>
           <IconButton icon="eye" tooltip="Preview" />
-          <Button variant="secondary" size="sm">Schedule</Button>
-          <Button variant="primary" size="sm" icon="send">Publish</Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => dispatchEmail('schedule')}
+          >
+            {pendingSend === 'schedule' ? 'Sending…' : 'Schedule'}
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            icon="send"
+            onClick={() => dispatchEmail('publish')}
+          >
+            {pendingSend === 'publish' ? 'Sending…' : 'Publish'}
+          </Button>
         </div>
 
         {mode === 'blog' && (
@@ -200,7 +273,7 @@ export function Studio() {
         </div>
         <div className="scroll-y" style={{ flex: 1, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em' }}>Suggestions</div>
-          {(mode === 'blog' ? [
+          {[...extraSuggestions, ...(mode === 'blog' ? [
             { tone: 'info', text: '제목 A/B: "결정 노트: 네 칸이면 충분하다"' },
             { tone: 'moon', text: '"네 칸" 섹션 끝에 독자 질문 한 줄 추가 추천' },
             { tone: 'warning', text: '중복 표현 감지: "기억에 남지 않는다" (2회)' },
@@ -208,7 +281,7 @@ export function Studio() {
             { tone: 'info', text: '카드 1 훅 강화: 숫자를 앞에 — "4칸"' },
             { tone: 'moon', text: '카드 2–5 배경색 톤을 한 계열로 통일 추천' },
             { tone: 'warning', text: '마지막 카드 CTA 누락 — 저장/공유 유도' },
-          ]).map((s, i) => (
+          ])].map((s, i) => (
             <div key={i} style={{
               padding: '10px 11px', background: 'var(--surface-2)',
               border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',

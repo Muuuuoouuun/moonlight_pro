@@ -56,13 +56,6 @@ export const NAV_TREE = [
 
 // 기타 (Archive) — existing unique pages not covered by the new design
 export const LEGACY_TREE = [
-  { key: 'operations',     label: 'Operations',      icon: 'signal',    path: 'dashboard/operations' },
-  { key: 'pms',            label: 'PMS',             icon: 'projects',  path: 'dashboard/pms' },
-  { key: 'playbooks',      label: 'Playbooks',       icon: 'folder',    path: 'dashboard/playbooks' },
-  { key: 'command-center', label: 'Command Center',  icon: 'command',   path: 'dashboard/command-center' },
-  { key: 'card-news',      label: 'Card News',       icon: 'queue',     path: 'dashboard/card-news' },
-  { key: 'logs',           label: 'Logs',            icon: 'runs',      path: 'dashboard/logs' },
-  { key: 'routine',        label: 'Routine',         icon: 'rhythm',    path: 'dashboard/routine' },
   { key: 'work-management',label: 'Work · Manage',   icon: 'work',      path: 'dashboard/work/management' },
   { key: 'work-plan',      label: 'Work · Plan',     icon: 'roadmap',   path: 'dashboard/work/plan' },
   { key: 'work-releases',  label: 'Work · Releases', icon: 'git',       path: 'dashboard/work/releases' },
@@ -70,9 +63,6 @@ export const LEGACY_TREE = [
   { key: 'content-assets', label: 'Content · Assets',icon: 'folder',    path: 'dashboard/content/assets' },
   { key: 'content-publish',label: 'Content · Publish',icon: 'send',     path: 'dashboard/content/publish' },
   { key: 'automations-integ', label: 'Integrations', icon: 'link',      path: 'dashboard/automations/integrations' },
-  { key: 'evolution-activity', label: 'Evo · Activity', icon: 'signal', path: 'dashboard/evolution/activity' },
-  { key: 'evolution-issues',   label: 'Evo · Issues',   icon: 'flag',   path: 'dashboard/evolution/issues' },
-  { key: 'evolution-logs',     label: 'Evo · Logs',     icon: 'runs',   path: 'dashboard/evolution/logs' },
 ];
 
 export const BRIEF_SIGNALS = [
@@ -335,3 +325,103 @@ export const BRAND_TODOS = [
   { id: 't-nm-1', brand: '22nomad', project: 'nm-1', title: 'About 페이지 초안', due: '다음주', done: false, priority: 'low', assignee: 'Me' },
   { id: 't-nm-2', brand: '22nomad', project: 'nm-1', title: '도메인 DNS 연결',  due: '이번주', done: false, priority: 'low', assignee: 'Me' },
 ];
+
+// Account CRM detail — activity logs, contacts, notes, MRR
+// Additive — keyed by account name (matches Accounts list in revenue.jsx)
+export const ACCOUNT_DETAIL = {
+  '클래스인': {
+    mrr: 2400000,
+    contacts: [
+      { name: '김지수', role: '대표',     email: 'kim@classin.co',   phone: '010-2341-5821', lastContact: '오늘 11:02' },
+      { name: '박유진', role: '운영 매니저', email: 'park@classin.co',  phone: '010-8821-3345', lastContact: '3일 전' },
+      { name: '이한결', role: '법무 담당', email: 'legal@classin.co', phone: '010-5582-7710', lastContact: '어제' },
+    ],
+    activity: [
+      { at: '오늘 11:02', type: 'email',   who: 'Me',      msg: 'Spring Cohort 계약서 초안 발송. 24시간 내 회신 요청.' },
+      { at: '어제 16:40', type: 'call',    who: 'Me',      msg: '김 대표 15분 통화 — 결제 조건 2안 합의, 문서화 예정.' },
+      { at: '2일 전',    type: 'meeting', who: 'Me + Kim', msg: 'Discovery 2차 — 코호트 일정, 강사 명단, NDA 범위 확정.' },
+      { at: '3일 전',    type: 'note',    who: 'Me',      msg: '법무 검토 포인트: 환불 정책, 데이터 소유권, 강의 녹화 재사용.' },
+      { at: '1주 전',    type: 'deal',    who: 'Council', msg: 'DEAL-031 스테이지 Proposal → Negotiation 이동.' },
+    ],
+    notes: [
+      { at: '오늘 09:10', pinned: true,  body: '김 대표는 결정 속도 빠름. 이메일보다 통화 > 회의 요약 패턴이 잘 맞음.' },
+      { at: '2일 전',    pinned: false, body: '강사 풀 확장 시 수익 분배 구조 재논의 필요.' },
+      { at: '1주 전',    pinned: false, body: '레퍼런스 공개 가능 — 런칭 이후 케이스 스터디 협의.' },
+    ],
+  },
+  'Studio Park': {
+    mrr: 1800000,
+    contacts: [
+      { name: '박소연', role: '크리에이티브 디렉터', email: 'park@studiopark.kr', phone: '010-3347-9902', lastContact: '3일 전' },
+      { name: '정민호', role: '프로젝트 매니저',      email: 'pm@studiopark.kr',   phone: '010-7745-2213', lastContact: '1주 전' },
+    ],
+    activity: [
+      { at: '3일 전', type: 'email',   who: 'Me',        msg: '리브랜딩 제안서 v2 전달. 무드보드 3안 첨부.' },
+      { at: '5일 전', type: 'meeting', who: 'Me + 박소연', msg: '킥오프 미팅 — 방향성 "차분한 정밀함"으로 수렴.' },
+      { at: '1주 전', type: 'note',    who: 'Me',        msg: '기존 로고 폐기 동의. 새 심볼 + 워드마크 세트 필요.' },
+      { at: '2주 전', type: 'deal',    who: 'Me',        msg: 'DEAL-029 생성 — 리브랜딩 범위 1차 정의.' },
+    ],
+    notes: [
+      { at: '3일 전', pinned: true,  body: '박 디렉터는 디테일 확인 깊게 하는 편. 제안 전 내부 리뷰 한 바퀴 더 돌리기.' },
+      { at: '1주 전', pinned: false, body: '가이드라인 범위: 로고 · 타이포 · 컬러 · 포토 · 레이아웃 그리드.' },
+    ],
+  },
+  'Beanly Coffee': {
+    mrr: 600000,
+    contacts: [
+      { name: '홍지민', role: '브랜드 매니저', email: 'hong@beanly.kr',  phone: '010-2290-4417', lastContact: '오늘' },
+      { name: '차유리', role: '마케팅',       email: 'cha@beanly.kr',   phone: '010-8834-1120', lastContact: '5일 전' },
+    ],
+    activity: [
+      { at: '오늘 14:15', type: 'email',   who: 'Me',         msg: '온라인 전략 제안 프레임 발송 — 3단계 로드맵 요약.' },
+      { at: '어제',       type: 'note',    who: 'Me',         msg: '이벤트에서 받은 명함 3장 정리. 신규 매장 오픈 4월 말.' },
+      { at: '3일 전',    type: 'meeting', who: 'Me + 홍지민', msg: '커피 한잔 미팅 — 자사몰 런칭 관심 확인.' },
+    ],
+    notes: [
+      { at: '어제', pinned: false, body: '매장 중심 → DTC 전환 초기. Shopify 전제로 논의 진행.' },
+    ],
+  },
+  '베어브릭': {
+    mrr: 2000000,
+    contacts: [
+      { name: '오세진', role: '콜라보 총괄', email: 'oh@bearbrick.kr',  phone: '010-7788-3322', lastContact: '2주 전' },
+      { name: '김하린', role: '운영 매니저', email: 'kim@bearbrick.kr', phone: '010-4412-8865', lastContact: '3주 전' },
+    ],
+    activity: [
+      { at: '2주 전', type: 'deal',    who: 'Me',         msg: 'DEAL-014 Won — 콜라보 런칭 4/1 완료. ₩7.8M 정산.' },
+      { at: '3주 전', type: 'meeting', who: 'Me + 오세진', msg: '런칭 킥오프 — 수량, 채널, 프로모션 일정 확정.' },
+      { at: '1개월 전', type: 'call',   who: 'Me',         msg: '오 총괄 20분 통화 — 다음 시즌 콜라보 의향 확인.' },
+    ],
+    notes: [
+      { at: '2주 전', pinned: true, body: '다음 시즌 콜라보 재구성 가능. 내부 리소스 배분 체크 필요.' },
+    ],
+  },
+  '이재민': {
+    mrr: 400000,
+    contacts: [
+      { name: '이재민', role: '개인 코칭 수강생', email: 'jaemin.lee@gmail.com', phone: '010-5521-9908', lastContact: '오늘' },
+    ],
+    activity: [
+      { at: '오늘 08:45', type: 'meeting', who: 'Me', msg: '3개월 코칭 1회차 — 목표 설정, 주간 리듬 템플릿 공유.' },
+      { at: '어제',       type: 'email',   who: 'Me', msg: '결제 영수증 재발행. Stripe 링크 전달.' },
+      { at: '3일 전',    type: 'note',    who: 'Me', msg: '현재 프리랜서 디자이너. 2인 스튜디오 전환 고민 단계.' },
+    ],
+    notes: [
+      { at: '오늘', pinned: true, body: '월 1회 90분 세션 + 주간 비동기 체크인 포맷으로 진행.' },
+    ],
+  },
+  '정하윤': {
+    mrr: 300000,
+    contacts: [
+      { name: '정하윤', role: '프리랜서 자문', email: 'hayoon.jung@outlook.com', phone: '010-6614-2207', lastContact: '어제' },
+    ],
+    activity: [
+      { at: '어제',    type: 'call',    who: 'Me', msg: '월간 자문 통화 — Q2 캠페인 방향 리뷰.' },
+      { at: '1주 전', type: 'email',   who: 'Me', msg: '자문 리포트 3월호 발송.' },
+      { at: '2주 전', type: 'note',    who: 'Me', msg: '리테이너 구조 만족도 높음. 6개월 연장 가능성 높음.' },
+    ],
+    notes: [
+      { at: '1주 전', pinned: false, body: '자문 범위: 브랜드 · 마케팅 · 채용 전반. 월 2회 비동기 + 1회 통화.' },
+    ],
+  },
+};

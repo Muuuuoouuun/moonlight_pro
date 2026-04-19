@@ -6,6 +6,63 @@ import { Badge, Card, IconButton, Button, Progress } from "../hub-primitives";
 import { DECISIONS } from "../hub-data";
 
 export function Calendar() {
+  const [gcalStatus, setGcalStatus] = React.useState('idle');
+  const [gcalMessage, setGcalMessage] = React.useState('');
+
+  async function connectGoogleCalendar() {
+    setGcalStatus('connecting');
+    setGcalMessage('');
+    try {
+      const response = await fetch('/api/calendar/google/connect', { redirect: 'manual' });
+      let data = null;
+      try { data = await response.clone().json(); } catch { data = null; }
+
+      if (data && data.url) {
+        window.open(data.url, '_blank');
+        setGcalStatus('connecting');
+        setGcalMessage('Google OAuth 창을 열었습니다.');
+        return;
+      }
+
+      if (data && data.preview === true) {
+        setGcalStatus('preview');
+        setGcalMessage(data.message || 'Google Calendar env 미설정 — preview 모드.');
+        return;
+      }
+
+      // Fallback: route may redirect (3xx opaque) — treat as OAuth launch
+      if (response.type === 'opaqueredirect' || response.redirected || response.status === 0) {
+        window.open('/api/calendar/google/connect', '_blank');
+        setGcalStatus('connecting');
+        setGcalMessage('Google OAuth 창을 열었습니다.');
+        return;
+      }
+
+      setGcalStatus('error');
+      setGcalMessage(`응답 해석 실패 (status ${response.status}).`);
+    } catch (error) {
+      setGcalStatus('error');
+      setGcalMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  const gcalLabel = gcalStatus === 'connected'
+    ? '● Google Calendar synced 2m ago'
+    : gcalStatus === 'connecting'
+    ? '● Connecting…'
+    : gcalStatus === 'preview'
+    ? '● Preview only (env missing)'
+    : gcalStatus === 'error'
+    ? '● Connect failed'
+    : '● Not connected';
+  const gcalColor = gcalStatus === 'connected'
+    ? 'var(--success)'
+    : gcalStatus === 'preview'
+    ? 'var(--warning)'
+    : gcalStatus === 'error'
+    ? 'var(--danger)'
+    : 'var(--fg-faint)';
+
   const hours = Array.from({ length: 12 }, (_, i) => 8 + i);
   const days = ['월 14','화 15','수 16','목 17','금 18','토 19','일 20'];
   const events = [
@@ -29,7 +86,17 @@ export function Calendar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500, letterSpacing: '-0.01em' }}>Calendar</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>April 14 – 20 · <span style={{ color: 'var(--success)' }}>● Google Calendar synced 2m ago</span></div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <span>April 14 – 20</span>
+            <span style={{ color: 'var(--fg-faint)' }}>·</span>
+            <span style={{ color: gcalColor }}>{gcalLabel}</span>
+            <Button variant="ghost" size="xs" onClick={connectGoogleCalendar}>
+              {gcalStatus === 'connecting' ? 'Connecting…' : gcalStatus === 'connected' ? 'Reconnect' : 'Connect Google Calendar'}
+            </Button>
+          </div>
+          {gcalMessage && (
+            <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>{gcalMessage}</div>
+          )}
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 6 }}>

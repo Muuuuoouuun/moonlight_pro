@@ -130,6 +130,41 @@ export function Webhooks() {
     { name: 'Custom — Form submission', url: 'https://moonlight.pro/hooks/form', status: 'ok', lastHit: 'Today', count24: 6 },
   ];
   const sTone = { ok: 'success', warn: 'warning', err: 'danger' };
+  const [testState, setTestState] = React.useState({}); // { [idx]: { tone: 'success'|'warning'|'danger', label, pending } }
+
+  async function runHookTest(idx, hook) {
+    setTestState(s => ({ ...s, [idx]: { pending: true } }));
+    try {
+      const response = await fetch('/api/webhooks/project-test', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ slug: hook.name, source: hook.url }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      let entry;
+      if (data && data.preview === true) {
+        entry = { tone: 'warning', label: 'preview' };
+      } else if (response.ok && (data.status === 'sent' || data.sent)) {
+        entry = { tone: 'success', label: '✓ sent' };
+      } else if (response.ok) {
+        entry = { tone: 'warning', label: 'preview' };
+      } else {
+        entry = { tone: 'danger', label: 'failed' };
+      }
+      setTestState(s => ({ ...s, [idx]: entry }));
+      setTimeout(() => {
+        setTestState(s => {
+          const next = { ...s };
+          if (next[idx] && next[idx].label === entry.label) delete next[idx];
+          return next;
+        });
+      }, 4000);
+    } catch (error) {
+      setTestState(s => ({ ...s, [idx]: { tone: 'danger', label: 'failed' } }));
+    }
+  }
+
   return (
     <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -141,18 +176,32 @@ export function Webhooks() {
         <Button variant="primary" size="sm" icon="plus">Endpoint</Button>
       </div>
       <Card pad={false}>
-        {hooks.map((h, i) => (
-          <div key={i} style={{ padding: '14px 16px', borderBottom: i < hooks.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+        {hooks.map((h, i) => {
+          const state = testState[i];
+          return (
+          <div key={i} style={{
+            padding: '14px 16px',
+            borderBottom: i < hooks.length - 1 ? '1px solid var(--line-soft)' : 'none',
+            background: state && state.label
+              ? (state.tone === 'success' ? 'var(--success-bg)' : state.tone === 'warning' ? 'var(--warning-bg)' : state.tone === 'danger' ? 'var(--danger-bg)' : 'transparent')
+              : 'transparent',
+            transition: 'background-color .4s ease',
+          }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <Dot tone={sTone[h.status]} />
               <span style={{ fontSize: 13, fontWeight: 500 }}>{h.name}</span>
               <div style={{ flex: 1 }} />
+              {state && state.label && (
+                <Badge tone={state.tone} size="xs">{state.label}</Badge>
+              )}
               <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{h.count24}/24h · {h.lastHit}</span>
+              <IconButton icon="play" tooltip="Send test" onClick={() => runHookTest(i, h)} />
               <IconButton icon="moreV" />
             </div>
             <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 6, paddingLeft: 16 }}>{h.url}</div>
           </div>
-        ))}
+          );
+        })}
       </Card>
     </div>
   );

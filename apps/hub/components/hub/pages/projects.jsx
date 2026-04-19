@@ -16,6 +16,43 @@ export function Projects() {
   const [brandMenuOpen, setBrandMenuOpen] = React.useState(false);
   const [sidebarHidden, setSidebarHidden] = React.useState(false);
   const brandMenuRef = React.useRef(null);
+  const [orderPending, setOrderPending] = React.useState(false);
+  const [orderResult, setOrderResult] = React.useState(null); // { tone: 'ok'|'err', label }
+
+  const formatTime = (d) => {
+    try {
+      return new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(d);
+    } catch {
+      return d.toISOString().slice(11, 19);
+    }
+  };
+
+  async function sendProjectOrder(project) {
+    if (!project || orderPending) return;
+    setOrderPending(true);
+    setOrderResult(null);
+    const startedAt = Date.now();
+    try {
+      const response = await fetch('/api/projects/update', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ projectId: project.id, status: project.status, title: project.name }),
+      });
+      const data = await response.json().catch(() => ({}));
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < 100) await new Promise(r => setTimeout(r, 100 - elapsed));
+
+      if (response.ok || data.status === 'saved' || data.status === 'preview') {
+        setOrderResult({ tone: 'ok', label: `↗ ${formatTime(new Date())}` });
+      } else {
+        setOrderResult({ tone: 'err', label: data.error || data.message || `실패 ${response.status}` });
+      }
+    } catch (error) {
+      setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setOrderPending(false);
+    }
+  }
 
   const projects = brand === 'all' ? BRAND_PROJECTS : BRAND_PROJECTS.filter(p => p.brand === brand);
   const brandTodos = brand === 'all' ? todos : todos.filter(t => t.brand === brand);
@@ -461,9 +498,28 @@ export function Projects() {
                       </div>
                     </div>
                   </div>
-                  <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', gap: 6 }}>
+                  <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Button variant="primary" size="sm" icon="chat" style={{ flex: 1 }}>열기</Button>
-                    <Button variant="outline" size="sm" icon="orders">주문 보내기</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon="orders"
+                      onClick={() => sendProjectOrder(p)}
+                    >
+                      {orderPending ? 'Sending…' : '주문 보내기'}
+                    </Button>
+                    {orderResult && !orderPending && (
+                      <span
+                        className="mono"
+                        style={{
+                          fontSize: 10.5,
+                          color: orderResult.tone === 'ok' ? 'var(--success)' : 'var(--danger)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {orderResult.label}
+                      </span>
+                    )}
                   </div>
                 </aside>
               );
