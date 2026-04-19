@@ -1,0 +1,155 @@
+/* Moonlight Pro — Design Tokens (scoped to .hub-app) */
+.hub-app, .hub-app[data-theme="dark"] {
+  --bg:            oklch(0.155 0.005 250);
+  --surface:       oklch(0.195 0.006 250);
+  --surface-2:     oklch(0.225 0.007 250);
+  --surface-3:     oklch(0.255 0.008 250);
+  --elevated:      oklch(0.285 0.009 250);
+
+  --line:          oklch(0.30 0.008 250 / 0.6);
+  --line-soft:     oklch(0.30 0.008 250 / 0.3);
+  --line-strong:   oklch(0.40 0.009 250 / 0.8);
+
+  --moon-50:       oklch(0.96 0.004 250);
+  --moon-100:      oklch(0.92 0.005 250);
+  --moon-200:      oklch(0.86 0.006 250);
+  --moon-300:      oklch(0.78 0.008 250);
+  --moon-400:      oklch(0.68 0.009 250);
+  --moon-500:      oklch(0.58 0.010 250);
+  --moon-600:      oklch(0.48 0.009 250);
+  --moon-700:      oklch(0.38 0.008 250);
+
+  --fg:            var(--moon-100);
+  --fg-muted:      var(--moon-400);
+  --fg-dim:        var(--moon-500);
+  --fg-faint:      var(--moon-600);
+
+  --success:       oklch(0.74 0.11 155);
+  --success-bg:    oklch(0.30 0.05 155 / 0.25);
+  --warning:       oklch(0.80 0.12 85);
+  --warning-bg:    oklch(0.32 0.06 85 / 0.25);
+  --danger:        oklch(0.68 0.16 25);
+  --danger-bg:     oklch(0.32 0.08 25 / 0.25);
+  --info:          oklch(0.72 0.08 230);
+  --info-bg:       oklch(0.30 0.04 230 / 0.25);
+
+  --personal:      oklch(0.76 0.05 200);
+  --personal-bg:   oklch(0.30 0.03 200 / 0.3);
+  --company:       oklch(0.78 0.04 290);
+  --company-bg:    oklch(0.30 0.03 290 / 0.3);
+
+  --shadow-soft: 0 1px 0 0 oklch(1 0 0 / 0.03) inset, 0 0 0 1px var(--line-soft);
+  --shadow-card:
+    0 1px 0 0 oklch(1 0 0 / 0.04) inset,
+    0 0 0 1px var(--line-soft),
+    0 8px 24px -12px oklch(0 0 0 / 0.4);
+  --shadow-pop:
+    0 1px 0 0 oklch(1 0 0 / 0.06) inset,
+    0 0 0 1px var(--line),
+    0 20px 60px -20px oklch(0 0 0 / 0.6);
+
+  --font-sans: 'Inter Tight', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --row-h: 36px;
+  --pad-y: 10px;
+  --pad-x: 14px;
+  --gap: 12px;
+  --section-gap: 24px;
+  --card-pad: 20px;
+
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+}
+
+.hub-app[data-theme="light"] {
+  --bg:            oklch(0.985 0.003 250);
+  --surface:       oklch(1 0 0);
+  --surface-2:     oklch(0.965 0.004 250);
+  --surface-3:     oklch(0.935 0.005 250);
+  --elevated:      oklch(1 0 0);
+
+  --line:          oklch(0.82 0.006 250 / 0.9);
+  --line-soft:     oklch(0.88 0.005 250 / 0.8);
+  --line-strong:   oklch(0.72 0.007 250 / 0.9);
+
+  --moon-50:       oklch(0.22 0.008 250);
+  --moon-100:      oklch(0.30 0.008 250);
+  --moon-200:      oklch(0.38 0.008 250);
+  --moon-300:      oklch(0.46 0.009 250);
+  --moon-400:      oklch(0.56 0.009 250);
+  --moon-500:      oklch(0.66 0.008 250);
+  --moon-600:      oklch(0.76 0.006 250);
+  --moon-700:      oklch(0.88 0.005 250);
+
+  --fg:            oklch(0.20 0.008 250);
+  --fg-muted:      oklch(0.42 0.008 250);
+  --fg-dim:        oklch(0.54 0.008 250);
+  --fg-faint:      oklch(0.66 0.007 250);
+
+  --success:       oklch(0.48 0.14 155);
+  --success-bg:    oklch(0.94 0.04 155 / 0.6);
+  --warning:       oklch(0.55 0.14 65);
+  --warning-bg:    oklch(0.95 0.06 85 / 0.6);
+  --danger:        oklch(0.52 0.19 25);
+  --danger-bg:     oklch(0.95 0.05 25 / 0.6);
+  --info:          oklch(0.48 0.14 230);
+  --info-bg:       oklch(0.94 0.05 230 / 0.6);
+
+  --personal:      oklch(0.42 0.1 200);
+  --personal-bg:   oklch(0.94 0.04 200 / 0.7);
+  --company:       oklch(0.42 0.1 290);
+  --company-bg:    oklch(0.94 0.04 290 / 0.7);
+
+  --shadow-soft: 0 1px 0 0 oklch(1 0 0 / 0.6) inset, 0 0 0 1px var(--line-soft);
+  --shadow-card:
+    0 1px 0 0 oklch(1 0 0 / 0.8) inset,
+    0 0 0 1px var(--line-soft),
+    0 8px 24px -14px oklch(0.3 0.01 250 / 0.1);
+  --shadow-pop:
+    0 1px 0 0 oklch(1 0 0 / 0.9) inset,
+    0 0 0 1px var(--line),
+    0 20px 60px -20px oklch(0.3 0.01 250 / 0.18);
+}
+
+.hub-app[data-density="compact"] { --row-h: 30px; --pad-y: 6px; --pad-x: 10px; --gap: 8px; --section-gap: 16px; --card-pad: 14px; }
+.hub-app[data-density="relaxed"] { --row-h: 44px; --pad-y: 14px; --pad-x: 18px; --gap: 16px; --section-gap: 32px; --card-pad: 28px; }
+
+.hub-app, .hub-app * { box-sizing: border-box; }
+.hub-app {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.005em;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  transition: background 0.2s, color 0.2s;
+}
+.hub-app button { font-family: inherit; color: inherit; background: none; border: none; cursor: pointer; padding: 0; }
+.hub-app input, .hub-app textarea { font-family: inherit; color: inherit; }
+.hub-app a { color: inherit; text-decoration: none; }
+.hub-app .mono { font-family: var(--font-mono); font-feature-settings: 'ss02'; letter-spacing: -0.02em; }
+
+.hub-app ::-webkit-scrollbar { width: 10px; height: 10px; }
+.hub-app ::-webkit-scrollbar-track { background: transparent; }
+.hub-app ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+.hub-app ::-webkit-scrollbar-thumb:hover { background: var(--line-strong); border: 2px solid transparent; background-clip: padding-box; }
+
+.hub-app .hairline-t { border-top: 1px solid var(--line-soft); }
+.hub-app .hairline-b { border-bottom: 1px solid var(--line-soft); }
+
+.hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; border-radius: 2px; }
+
+@keyframes mlMoonPulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
+@keyframes mlFadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.hub-app .fade-up { animation: mlFadeUp 0.2s ease-out; }
+
+.hub-app .scroll-y { overflow-y: auto; }

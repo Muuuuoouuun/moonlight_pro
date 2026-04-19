@@ -1,5 +1,5 @@
 {
-  "name": "com-moon",
+  "name": "moonlight",
   "private": true,
   "packageManager": "npm@11.9.0",
   "workspaces": [
