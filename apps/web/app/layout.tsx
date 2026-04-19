@@ -1,20 +1,9 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, IBM_Plex_Mono, Inter } from "next/font/google";
+import { IBM_Plex_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 
 import "./globals.css";
-
-const displayFont = Cormorant_Garamond({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  variable: "--font-display",
-});
-
-const bodyFont = Inter({
-  subsets: ["latin"],
-  variable: "--font-body",
-});
 
 const monoFont = IBM_Plex_Mono({
   subsets: ["latin"],
@@ -40,7 +29,7 @@ export default async function RootLayout({
 
   return (
     <html lang={locale}>
-      <body className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable}`}>
+      <body className={monoFont.variable}>
         <NextIntlClientProvider locale={locale} messages={messages}>
           {children}
         </NextIntlClientProvider>

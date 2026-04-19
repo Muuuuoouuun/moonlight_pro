@@ -1,5 +1,48 @@
 @import "@com-moon/ui/tokens.css";
 
+/* ── Local fonts ─────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'SUIT Variable';
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/SUIT-Variable.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'MaruBuri';
+  font-weight: 200;
+  font-display: swap;
+  src: url('/fonts/MaruBuri-ExtraLight.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'MaruBuri';
+  font-weight: 300;
+  font-display: swap;
+  src: url('/fonts/MaruBuri-Light.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'MaruBuri';
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/MaruBuri-Regular.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'MaruBuri';
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/MaruBuri-SemiBold.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'MaruBuri';
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/MaruBuri-Bold.woff') format('woff');
+}
+
 /*
  * Legacy web variables. New code should consume the canonical
  * `--cm-*` tokens from `@com-moon/ui/tokens.css`. The aliases
@@ -45,7 +88,7 @@ body {
   background:
     radial-gradient(circle at top left, rgba(82, 116, 168, 0.06), transparent 26%),
     radial-gradient(circle at 88% 18%, rgba(82, 116, 168, 0.04), transparent 30%),
-    linear-gradient(180deg, #f7f8fc 0%, var(--bg) 100%);
+    linear-gradient(180deg, var(--cm-parchment-soft) 0%, var(--bg) 100%);
   color: var(--text);
   font-family: var(--sans);
 }
@@ -204,7 +247,7 @@ select {
 
 .topbar-cta:hover,
 .primary-link:hover {
-  background: #3a5f8a;
+  background: var(--cm-metal-600);
 }
 
 .secondary-link:hover {
@@ -604,7 +647,7 @@ select {
   padding: 94px 0;
   background:
     radial-gradient(circle at 15% 20%, rgba(82, 116, 168, 0.07), transparent 28%),
-    linear-gradient(180deg, #e2e5f0 0%, #eceff7 100%);
+    linear-gradient(180deg, var(--cm-parchment-deep) 0%, var(--cm-parchment-soft) 100%);
 }
 
 .workspace-inner {

@@ -1,6 +1,13 @@
+import { IBM_Plex_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import "./globals.css";
+
+const monoFont = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-mono",
+});
 
 export const metadata = {
   title: "Com_Moon OS",
@@ -21,7 +28,7 @@ export default async function RootLayout({ children }) {
 
   return (
     <html lang={locale}>
-      <body className="app-body">
+      <body className={`app-body ${monoFont.variable}`}>
         <NextIntlClientProvider locale={locale} messages={messages}>
           {children}
         </NextIntlClientProvider>

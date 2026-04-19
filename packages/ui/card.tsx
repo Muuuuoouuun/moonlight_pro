@@ -1,21 +1,18 @@
 import { cva, type VariantProps } from "class-variance-authority"
 import * as React from "react"
 
-// Moon Design System — Card v2
-// Palette: White #FFFFFF · Surface #F8F8F9 · Border rgba(0,0,0,0.07) · Silver #9BA8B5
-
 const cardVariants = cva(
   [
-    "rounded-2xl bg-white text-[#0F0F0F]",
+    "rounded-2xl bg-[var(--surface,#fff)] text-[var(--text,#0c1018)]",
     "transition-all duration-200",
   ],
   {
     variants: {
       variant: {
-        default:  "border border-[rgba(0,0,0,0.07)] shadow-sm",
+        default:  "border border-[var(--line,rgba(12,16,24,0.08))] shadow-sm",
         elevated: "shadow-md hover:shadow-lg hover:-translate-y-0.5",
-        bordered: "border-2 border-[#0F0F0F]",
-        silver:   "border border-[#9BA8B5] bg-[#F8F8F9]",
+        bordered: "border-2 border-[var(--text,#0c1018)]",
+        silver:   "border border-[var(--cm-metal-400,#a8b8d4)] bg-[var(--surface-strong,#f4f5f8)]",
         ghost:    "bg-transparent border-none shadow-none",
       },
       interactive: {
@@ -57,7 +54,7 @@ export const CardTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttribut
     <h3
       ref={ref}
       className={[
-        "text-base font-semibold leading-snug text-[#0F0F0F] tracking-tight",
+        "text-base font-semibold leading-snug text-[var(--text,#0c1018)] tracking-tight",
         className,
       ]
         .filter(Boolean)
@@ -74,7 +71,7 @@ export const CardDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <p
     ref={ref}
-    className={["text-sm text-[#6B7280] leading-relaxed", className].filter(Boolean).join(" ")}
+    className={["text-sm text-[var(--muted,#4a5568)] leading-relaxed", className].filter(Boolean).join(" ")}
     {...props}
   />
 ))
@@ -96,7 +93,7 @@ export const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<
     <div
       ref={ref}
       className={[
-        "flex items-center px-6 py-4 border-t border-[rgba(0,0,0,0.06)]",
+        "flex items-center px-6 py-4 border-t border-[var(--line,rgba(12,16,24,0.08))]",
         className,
       ]
         .filter(Boolean)

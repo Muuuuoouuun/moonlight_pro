@@ -1,6 +1,49 @@
 @import "@com-moon/ui/tokens.css";
 @import "@com-moon/ui/primitives.css";
 
+/* ── Local fonts ─────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'SUIT Variable';
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/SUIT-Variable.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'MaruBuri';
+  font-weight: 200;
+  font-display: swap;
+  src: url('/fonts/MaruBuri-ExtraLight.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'MaruBuri';
+  font-weight: 300;
+  font-display: swap;
+  src: url('/fonts/MaruBuri-Light.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'MaruBuri';
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/MaruBuri-Regular.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'MaruBuri';
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/MaruBuri-SemiBold.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'MaruBuri';
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/MaruBuri-Bold.woff') format('woff');
+}
+
 /*
  * Hub legacy variables — remapped to the Smoked Command Deck palette.
  *
@@ -23,6 +66,8 @@
   --bg-alt: var(--cm-ink-800);
   --panel: var(--cm-ink-800);
   --panel-strong: var(--cm-ink-700);
+  --surface: var(--cm-ink-800);
+  --surface-strong: var(--cm-ink-700);
   --line: var(--cm-line-dark);
   --line-strong: var(--cm-line-dark-strong);
   --text: var(--cm-platinum);
@@ -404,7 +449,7 @@ button {
   gap: 14px;
   padding: 20px;
   border: 1px solid var(--cm-line-dark-strong);
-  border-radius: 24px;
+  border-radius: var(--cm-radius-md);
   background:
     radial-gradient(circle at top right, rgba(82, 116, 168, 0.10), transparent 34%),
     linear-gradient(180deg, rgba(19, 25, 35, 0.96), rgba(12, 16, 24, 0.98));
@@ -453,7 +498,7 @@ button {
   width: 100%;
   padding: 15px 16px;
   border: 1px solid var(--cm-line-dark-strong);
-  border-radius: 18px;
+  border-radius: var(--cm-radius-md);
   background: rgba(255, 255, 255, 0.06);
   color: var(--cm-platinum);
   font-size: 0.96rem;
@@ -480,7 +525,7 @@ button {
   width: 100%;
   padding: 14px 15px;
   border: 1px solid var(--cm-line-dark);
-  border-radius: 18px;
+  border-radius: var(--cm-radius-md);
   text-align: left;
   background: rgba(255, 255, 255, 0.04);
   color: var(--cm-platinum);
@@ -899,7 +944,7 @@ button {
   gap: 14px;
   padding: 20px;
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: var(--cm-radius-md);
   background: rgba(255, 255, 255, 0.02);
   color: var(--text);
   box-shadow: none;
@@ -947,7 +992,7 @@ button {
   display: grid;
   gap: 12px;
   padding: 16px;
-  border-radius: 14px;
+  border-radius: var(--cm-radius-sm);
   background: rgba(255, 255, 255, 0.025);
   border: 1px solid var(--line);
 }
@@ -1004,7 +1049,7 @@ button {
   gap: 10px;
   padding: 16px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--cm-radius-sm);
   position: relative;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.02);
@@ -1077,8 +1122,8 @@ button {
 }
 
 .summary-badge[data-tone="blue"] {
-  background: rgba(47, 100, 134, 0.1);
-  color: #2f6486;
+  background: rgba(80, 112, 160, 0.1);
+  color: var(--cm-info-500);
 }
 
 .summary-badge[data-tone="danger"] {
@@ -1166,7 +1211,7 @@ button {
   justify-content: space-between;
   gap: 14px;
   padding: 14px 15px;
-  border-radius: 18px;
+  border-radius: var(--cm-radius-md);
   border: 1px solid var(--line);
   position: relative;
   overflow: hidden;
@@ -1201,7 +1246,7 @@ button {
 
 .mini-metric {
   padding: 16px;
-  border-radius: 18px;
+  border-radius: var(--cm-radius-md);
   border: 1px solid var(--line);
   position: relative;
   overflow: hidden;
@@ -1236,7 +1281,7 @@ button {
   gap: 6px;
   margin: 4px 0 0;
   padding: 14px 16px;
-  border-radius: 18px;
+  border-radius: var(--cm-radius-md);
   border: 1px solid rgba(82, 116, 168, 0.10);
   background: rgba(255, 255, 255, 0.04);
 }
@@ -1263,7 +1308,7 @@ button {
 
 .brand-reference-item {
   padding: 16px;
-  border-radius: 18px;
+  border-radius: var(--cm-radius-md);
   border: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.04));
 }
@@ -1344,8 +1389,8 @@ button {
 }
 
 .legend-chip[data-tone="blue"] {
-  background: rgba(47, 100, 134, 0.1);
-  color: #2f6486;
+  background: rgba(80, 112, 160, 0.1);
+  color: var(--cm-info-500);
 }
 
 .legend-chip[data-tone="green"] {
@@ -1430,7 +1475,7 @@ button {
   display: grid;
   gap: 6px;
   padding: 14px;
-  border-radius: 16px;
+  border-radius: var(--cm-radius-sm);
   border: 1px solid rgba(82, 116, 168, 0.10);
   background: rgba(255, 255, 255, 0.04);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
@@ -1530,7 +1575,7 @@ button {
   display: grid;
   gap: 6px;
   padding: 14px;
-  border-radius: 16px;
+  border-radius: var(--cm-radius-sm);
   border: 1px solid rgba(82, 116, 168, 0.10);
   background: rgba(255, 255, 255, 0.05);
 }
@@ -1734,7 +1779,7 @@ button {
   gap: 10px;
   min-height: 48px;
   padding: 0 14px;
-  border-radius: 16px;
+  border-radius: var(--cm-radius-sm);
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.92);
   color: var(--text);
@@ -1757,7 +1802,7 @@ button {
 .field-textarea {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--cm-radius-sm);
   background: rgba(255, 255, 255, 0.06);
   color: var(--text);
   padding: 14px 15px;
@@ -1798,7 +1843,7 @@ button {
   display: grid;
   gap: 6px;
   padding: 14px 15px;
-  border-radius: 16px;
+  border-radius: var(--cm-radius-sm);
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.05);
 }
@@ -1906,7 +1951,7 @@ button {
   display: grid;
   gap: 4px;
   padding: 12px 14px;
-  border-radius: 16px;
+  border-radius: var(--cm-radius-sm);
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.05);
 }
@@ -2024,7 +2069,7 @@ button {
 .studio-toggle,
 .studio-chip-toggle {
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--cm-radius-sm);
   background: rgba(255, 255, 255, 0.05);
   color: var(--text);
   transition:
@@ -2078,7 +2123,7 @@ button {
   resize: vertical;
   padding: 18px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 22px;
+  border-radius: var(--cm-radius-md);
   background:
     linear-gradient(180deg, rgba(7, 11, 18, 0.82), rgba(10, 13, 20, 0.88));
   color: var(--text);
@@ -2115,7 +2160,7 @@ button {
   display: grid;
   gap: 10px;
   padding: 14px;
-  border-radius: 18px;
+  border-radius: var(--cm-radius-md);
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.05);
   color: var(--text);
@@ -2444,7 +2489,7 @@ button {
   justify-content: space-between;
   gap: 12px;
   padding: 14px 15px;
-  border-radius: 16px;
+  border-radius: var(--cm-radius-sm);
   border: 1px solid var(--line);
   position: relative;
   overflow: hidden;
@@ -2481,7 +2526,7 @@ button {
   display: grid;
   gap: 6px;
   padding: 14px 15px;
-  border-radius: 16px;
+  border-radius: var(--cm-radius-sm);
   border: 1px solid var(--line);
   position: relative;
   overflow: hidden;
@@ -2603,7 +2648,7 @@ button {
   display: grid;
   gap: 6px;
   padding: 12px;
-  border-radius: 16px;
+  border-radius: var(--cm-radius-sm);
   border: 1px solid rgba(82, 116, 168, 0.10);
   background: rgba(255, 255, 255, 0.05);
 }
@@ -2663,7 +2708,7 @@ button {
   position: relative;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 22px;
+  border-radius: var(--cm-radius-md);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.04));
 }
 
@@ -2706,7 +2751,7 @@ button {
 .management-progress {
   min-width: 120px;
   padding: 12px 14px;
-  border-radius: 18px;
+  border-radius: var(--cm-radius-md);
   border: 1px solid rgba(82, 116, 168, 0.12);
   background: rgba(82, 116, 168, 0.10);
   text-align: right;
@@ -2737,7 +2782,7 @@ button {
   display: grid;
   gap: 8px;
   padding: 14px;
-  border-radius: 18px;
+  border-radius: var(--cm-radius-md);
   border: 1px solid rgba(82, 116, 168, 0.10);
   background: rgba(255, 255, 255, 0.05);
 }
@@ -3428,7 +3473,7 @@ button {
   width: 100%;
   padding: 12px 14px;
   border: 1px solid var(--line, rgba(255, 255, 255, 0.07));
-  border-radius: 14px;
+  border-radius: var(--cm-radius-sm);
   background: rgba(255, 255, 255, 0.05);
   color: var(--text);
   font-size: 0.94rem;
@@ -3500,7 +3545,7 @@ button {
   gap: 2px;
   padding: 10px 14px;
   border: 1px solid var(--line, rgba(255, 255, 255, 0.07));
-  border-radius: 14px;
+  border-radius: var(--cm-radius-sm);
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
   text-align: left;
@@ -3575,7 +3620,7 @@ button {
   display: grid;
   gap: 12px;
   padding: 18px;
-  border-radius: 22px;
+  border-radius: var(--cm-radius-md);
   border: 1px solid var(--cm-line-dark-strong, rgba(255, 255, 255, 0.12));
   background: var(--cm-grad-rim), var(--cm-grad-ink);
   color: var(--cm-platinum, #e8edf4);
@@ -3619,7 +3664,7 @@ button {
   margin: 0;
   padding: 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
+  border-radius: var(--cm-radius-sm);
   background: rgba(0, 0, 0, 0.25);
   color: rgba(255, 255, 255, 0.9);
   font-family: inherit;
@@ -3911,7 +3956,7 @@ button {
 
 .agent-recall-card {
   padding: 14px 15px;
-  border-radius: 18px;
+  border-radius: var(--cm-radius-md);
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.07);
 }
@@ -3950,7 +3995,7 @@ button {
   display: grid;
   gap: 14px;
   padding: 16px;
-  border-radius: 18px;
+  border-radius: var(--cm-radius-md);
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.03);
 }
@@ -3983,7 +4028,7 @@ button {
   display: grid;
   gap: 8px;
   padding: 14px;
-  border-radius: 16px;
+  border-radius: var(--cm-radius-sm);
   border: 1px solid rgba(82, 116, 168, 0.14);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.03));
 }
@@ -4023,7 +4068,7 @@ button {
   display: grid;
   gap: 12px;
   padding: 16px;
-  border-radius: 18px;
+  border-radius: var(--cm-radius-md);
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.03);
 }
@@ -4125,7 +4170,7 @@ button {
 .ai-thread-item {
   padding: 12px 14px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--cm-radius-sm);
   background: rgba(255, 255, 255, 0.03);
   cursor: pointer;
   transition: border-color 160ms ease, background 160ms ease;
@@ -4236,7 +4281,7 @@ button {
   gap: 6px;
   padding: 14px 16px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--cm-radius-sm);
   background: rgba(255, 255, 255, 0.03);
   max-width: 85%;
 }
@@ -4297,7 +4342,7 @@ button {
 .ai-chat-composer-input {
   resize: vertical;
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: var(--cm-radius-sm);
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.03);
   color: var(--text);
@@ -4389,7 +4434,7 @@ button {
 .ai-council-turn {
   padding: 14px 16px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--cm-radius-sm);
   background: rgba(255, 255, 255, 0.03);
   display: flex;
   flex-direction: column;
@@ -4532,7 +4577,7 @@ button {
   flex-direction: column;
   gap: 6px;
   padding: 16px 18px 18px;
-  border-radius: 16px;
+  border-radius: var(--cm-radius-sm);
   border: 1px solid var(--cm-line-dark);
   background: rgba(255, 255, 255, 0.04);
   min-height: 108px;
@@ -4877,7 +4922,7 @@ button {
   flex-direction: column;
   gap: 8px;
   padding: 14px 14px 12px;
-  border-radius: 14px;
+  border-radius: var(--cm-radius-sm);
   border: 1px solid var(--cm-line-dark);
   background: rgba(255, 255, 255, 0.045);
 }
@@ -4955,13 +5000,13 @@ button {
 }
 
 .hub-roadmap__slip-chip[data-tone="slip"] {
-  color: #f0a8a8;
+  color: var(--cm-risk-500);
   border-color: rgba(160, 64, 64, 0.4);
   background: rgba(160, 64, 64, 0.12);
 }
 
 .hub-roadmap__slip-chip[data-tone="soon"] {
-  color: #e8cfa2;
+  color: var(--cm-warn-500);
   border-color: rgba(158, 128, 64, 0.38);
   background: rgba(158, 128, 64, 0.1);
 }
@@ -5032,7 +5077,7 @@ button {
   flex-direction: column;
   gap: 10px;
   padding: 18px 20px;
-  border-radius: 18px;
+  border-radius: var(--cm-radius-md);
   border: 1px solid var(--cm-line-dark);
   background: rgba(255, 255, 255, 0.04);
 }
@@ -5124,12 +5169,12 @@ button {
 }
 
 .hub-releases__type-chip[data-kind="fix"] {
-  color: #e8cfa2;
+  color: var(--cm-warn-500);
   border-color: rgba(158, 128, 64, 0.4);
 }
 
 .hub-releases__type-chip[data-kind="breaking"] {
-  color: #f0a8a8;
+  color: var(--cm-risk-500);
   border-color: rgba(160, 64, 64, 0.4);
 }
 
@@ -5172,7 +5217,7 @@ button {
 .hub-releases__empty {
   padding: 28px 24px;
   border: 1px dashed var(--cm-line-dark-strong);
-  border-radius: 16px;
+  border-radius: var(--cm-radius-sm);
   color: var(--muted);
   font-size: 0.82rem;
   text-align: center;
@@ -5304,7 +5349,7 @@ button {
   display: grid;
   gap: 10px;
   padding: 18px;
-  border-radius: 18px;
+  border-radius: var(--cm-radius-md);
   border: 1px solid var(--line, rgba(255, 255, 255, 0.07));
   background: rgba(255, 255, 255, 0.04);
 }
@@ -5417,7 +5462,7 @@ button {
 
 .plan-table-row {
   padding: 14px 12px;
-  border-radius: 14px;
+  border-radius: var(--cm-radius-sm);
   border: 1px solid var(--line, rgba(255, 255, 255, 0.07));
   background: rgba(255, 255, 255, 0.04);
   font-size: 0.86rem;
