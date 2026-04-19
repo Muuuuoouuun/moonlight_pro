@@ -54,16 +54,34 @@ export const NAV_TREE = [
   { key: 'settings',  label: 'Settings',  icon: 'settings',  path: 'dashboard/settings' },
 ];
 
-// 기타 (Archive) — existing unique pages not covered by the new design
-export const LEGACY_TREE = [
-  { key: 'work-management',label: 'Work · Manage',   icon: 'work',      path: 'dashboard/work/management' },
-  { key: 'work-plan',      label: 'Work · Plan',     icon: 'roadmap',   path: 'dashboard/work/plan' },
-  { key: 'work-releases',  label: 'Work · Releases', icon: 'git',       path: 'dashboard/work/releases' },
-  { key: 'work-pms',       label: 'Work · PMS',      icon: 'projects',  path: 'dashboard/work/pms' },
-  { key: 'content-assets', label: 'Content · Assets',icon: 'folder',    path: 'dashboard/content/assets' },
-  { key: 'content-publish',label: 'Content · Publish',icon: 'send',     path: 'dashboard/content/publish' },
-  { key: 'automations-integ', label: 'Integrations', icon: 'link',      path: 'dashboard/automations/integrations' },
-];
+// 기타 (Archive) — empty: every legacy concept is now folded into the
+// canonical Moonlight Pro sections. Old direct URLs still resolve via the
+// LegacyPlaceholder so deep links don't 404, but nothing surfaces in the nav.
+export const LEGACY_TREE = [];
+
+// Map old standalone routes → their new home. Used by LegacyPlaceholder
+// to point users at the canonical destination.
+export const LEGACY_REDIRECTS = {
+  'dashboard/work/management':            { to: 'dashboard/work/projects', label: 'Projects (PMS 통합)' },
+  'dashboard/work/plan':                  { to: 'dashboard/work/roadmap',  label: 'Roadmap' },
+  'dashboard/work/releases':              { to: 'dashboard/evolution',     label: 'Evolution · Log' },
+  'dashboard/work/pms':                   { to: 'dashboard/work/projects', label: 'Projects' },
+  'dashboard/content/assets':             { to: 'dashboard/content/studio', label: 'Studio' },
+  'dashboard/content/publish':            { to: 'dashboard/content/queue', label: 'Queue' },
+  'dashboard/automations/integrations':   { to: 'dashboard/settings',      label: 'Settings · Integrations' },
+  'dashboard/operations':                 { to: 'dashboard/daily-brief',   label: 'Daily Brief' },
+  'dashboard/pms':                        { to: 'dashboard/work/projects', label: 'Projects' },
+  'dashboard/playbooks':                  { to: 'dashboard/evolution',     label: 'Evolution · Playbooks' },
+  'dashboard/command-center':             { to: 'dashboard/evolution',     label: 'Evolution · Commands' },
+  'dashboard/command':                    { to: 'dashboard/evolution',     label: 'Evolution · Commands' },
+  'dashboard/card-news':                  { to: 'dashboard/content/studio', label: 'Studio (Carousel)' },
+  'dashboard/logs':                       { to: 'dashboard/automations/runs', label: 'Run log' },
+  'dashboard/routine':                    { to: 'dashboard/work/rhythm',   label: 'Rhythm' },
+  'dashboard/evolution/activity':         { to: 'dashboard/evolution',     label: 'Evolution' },
+  'dashboard/evolution/issues':           { to: 'dashboard/evolution',     label: 'Evolution' },
+  'dashboard/evolution/logs':             { to: 'dashboard/evolution',     label: 'Evolution · Log' },
+  'dashboard/projects':                   { to: 'dashboard/work/projects', label: 'Projects' },
+};
 
 export const BRIEF_SIGNALS = [
   { id: 's1', tone: 'danger', kind: 'Revenue',

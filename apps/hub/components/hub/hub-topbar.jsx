@@ -19,7 +19,7 @@ const LABELS = {
   'integrations': 'Integrations', 'activity': 'Activity', 'issues': 'Issues',
 };
 
-export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme }) {
+export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, onTweaksToggle }) {
   const segments = path.split('/').filter(Boolean);
   const now = new Date();
   const weekday = ['일','월','화','수','목','금','토'][now.getDay()];
@@ -89,6 +89,7 @@ export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme })
         }}>
         <span style={{ fontSize: 13 }}>{theme === 'dark' ? '☾' : '☀'}</span>
       </button>
+      <IconButton icon="settings" tooltip="Tweaks" onClick={onTweaksToggle} />
       <IconButton icon="bell" tooltip="Notifications" />
       <Button variant="primary" size="sm" icon="plus">New</Button>
     </header>

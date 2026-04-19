@@ -164,7 +164,8 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
           );
         })}
 
-        {/* 기타 — legacy archive */}
+        {/* 기타 — legacy archive (hidden when empty) */}
+        {LEGACY_TREE.length > 0 && (
         <div style={{ marginTop: 8, borderTop: '1px solid var(--line-soft)', paddingTop: 6 }}>
           <button onClick={() => setOpen(o => ({ ...o, __legacy: !o.__legacy }))} style={{
             width: '100%', display: 'flex', alignItems: 'center', gap: 9,
@@ -205,6 +206,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
             </div>
           )}
         </div>
+        )}
       </div>
 
       <div style={{

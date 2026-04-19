@@ -141,7 +141,12 @@ const LEADS_GRID = '26px 1fr 112px 112px 124px 100px 90px 92px';
 
 export function Leads() {
   const [filter, setFilter] = React.useState('all');
-  const filtered = LEADS.filter(l => filter === 'all' || l.type === filter);
+  const [search, setSearch] = React.useState('');
+  const term = search.trim().toLowerCase();
+  const filtered = LEADS.filter(l =>
+    (filter === 'all' || l.type === filter) &&
+    (!term || l.name.toLowerCase().includes(term) || l.source.toLowerCase().includes(term) || l.stage.toLowerCase().includes(term))
+  );
   const stageTone = { New: 'info', Contact: 'moon', Qualified: 'success', Lost: 'danger' };
 
   return (
@@ -166,7 +171,7 @@ export function Leads() {
             </button>
           ))}
         </div>
-        <Input placeholder="Search leads" icon="search" />
+        <Input placeholder="이름·소스·단계 검색…" icon="search" value={search} onChange={setSearch} />
         <div style={{ width: 8 }} />
         <Button variant="primary" size="sm" icon="plus">Lead</Button>
       </div>
@@ -175,6 +180,15 @@ export function Leads() {
         <div style={{ display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span /><span>Name</span><span>Type</span><span>Source</span><span>Stage</span><span>Value</span><span>Owner</span><span style={{ textAlign: 'right' }}>Last</span>
         </div>
+        {filtered.length === 0 && (
+          <div style={{ padding: '36px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <Iconed name="search" size={20} style={{ color: 'var(--fg-faint)' }} />
+            <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>일치하는 리드가 없습니다.</div>
+            <div style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>
+              {term ? <>"<span className="mono">{search}</span>" 검색 결과 0건 · 필터: {filter}</> : <>필터: {filter} · {LEADS.length}건 중 0건</>}
+            </div>
+          </div>
+        )}
         {filtered.map((l, i) => (
           <div key={l.id} style={{
             display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12,

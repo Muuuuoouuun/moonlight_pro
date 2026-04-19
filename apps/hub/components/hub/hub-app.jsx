@@ -8,7 +8,7 @@ import { Sidebar } from "./hub-sidebar";
 import { TopBar } from "./hub-topbar";
 import { CommandPalette } from "./hub-command-palette";
 import { TweaksPanel } from "./hub-tweaks-panel";
-import { LEGACY_TREE } from "./hub-data";
+import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
 
 import { DailyBrief } from "./pages/daily-brief";
 import { Calendar, Decisions, Roadmap, Rhythm } from "./pages/work";
@@ -19,9 +19,10 @@ import { AutomationsIndex, EmailAutomation, Webhooks, Runs, Flows } from "./page
 import { AgentsChat, AgentsCouncil, AgentsOrders, AgentsOffice } from "./pages/agents";
 import { Evolution, Settings } from "./pages/evolution-settings";
 
-function LegacyPlaceholder({ path }) {
+function LegacyPlaceholder({ path, onNavigate }) {
   const hit = LEGACY_TREE.find(x => x.path === path);
-  const label = hit?.label || path.split('/').slice(-1)[0];
+  const redirect = LEGACY_REDIRECTS[path];
+  const label = hit?.label || (redirect ? path.split('/').slice(-1)[0] : path.split('/').slice(-1)[0]);
   return (
     <div style={{ padding: 'var(--section-gap)', maxWidth: 720, margin: '0 auto', width: '100%' }}>
       <div style={{
@@ -30,15 +31,37 @@ function LegacyPlaceholder({ path }) {
         border: '1px dashed var(--line)',
         borderRadius: 'var(--r-lg)',
       }}>
-        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>기타 · Archive</div>
+        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>Archive · 이동됨</div>
         <div style={{ fontSize: 18, fontWeight: 500, marginTop: 6 }}>{label}</div>
-        <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.55 }}>
-          이전 구현이 이 경로에 있었습니다. 디자인 시스템 정합 작업이 완료될 때까지 자리만 유지합니다.
-          필요하면 해당 기존 페이지를 다시 연결하거나 디자인의 정식 섹션으로 재편성할 수 있어요.
-        </div>
-        <div className="mono" style={{ marginTop: 12, fontSize: 11, color: 'var(--fg-faint)' }}>
-          /{path}
-        </div>
+        {redirect ? (
+          <>
+            <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.55 }}>
+              이 경로의 기능은 <span style={{ color: 'var(--moon-200)', fontWeight: 500 }}>{redirect.label}</span> 로 흡수됐어요.
+              해당 섹션에서 이어서 작업하시면 됩니다.
+            </div>
+            <div style={{ marginTop: 14, display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button onClick={() => onNavigate?.(redirect.to)} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '7px 14px', fontSize: 12.5, fontWeight: 500,
+                color: 'var(--bg)', background: 'var(--moon-200)',
+                border: '1px solid var(--moon-100)', borderRadius: 'var(--r-sm)',
+                cursor: 'pointer',
+              }}>
+                {redirect.label} 열기 →
+              </button>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>/{path}</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.55 }}>
+              알려진 매핑이 없는 경로입니다. 사이드바에서 정식 섹션을 골라주세요.
+            </div>
+            <div className="mono" style={{ marginTop: 12, fontSize: 11, color: 'var(--fg-faint)' }}>
+              /{path}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -125,7 +148,7 @@ export function HubApp() {
   }, []);
 
   const render = PAGE_MAP[path];
-  const page = render ? render(navigate) : <LegacyPlaceholder path={path} />;
+  const page = render ? render(navigate) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
 
   return (
     <div ref={rootRef} className="hub-app" data-theme={theme} data-density={density}>
@@ -141,6 +164,7 @@ export function HubApp() {
           <TopBar
             path={path}
             onNavigate={navigate}
+            onTweaksToggle={() => setTweaksOpen(o => !o)}
             density={density}
             onDensity={setDensity}
             theme={theme}
