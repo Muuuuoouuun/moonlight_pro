@@ -18,3 +18,5 @@ Thumbs.db
 !**/.env.example
 !**/.env.*.example
 .gstack/
+.claude/
+
