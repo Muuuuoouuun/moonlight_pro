@@ -24,6 +24,30 @@ function resolveSupabaseLogConfig(): SupabaseLogConfig | null {
   };
 }
 
+function isOpaqueSupabaseApiKey(apiKey: string) {
+  return apiKey.startsWith("sb_publishable_") || apiKey.startsWith("sb_secret_");
+}
+
+function makeSupabaseHeaders(apiKey: string, options: { contentType?: string; prefer?: string } = {}) {
+  const headers: Record<string, string> = {
+    apikey: apiKey,
+  };
+
+  if (options.contentType) {
+    headers["content-type"] = options.contentType;
+  }
+
+  if (!isOpaqueSupabaseApiKey(apiKey)) {
+    headers.authorization = `Bearer ${apiKey}`;
+  }
+
+  if (options.prefer) {
+    headers.prefer = options.prefer;
+  }
+
+  return headers;
+}
+
 async function persistLogEntry(entry: LogEntry) {
   const config = resolveSupabaseLogConfig();
 
@@ -34,12 +58,10 @@ async function persistLogEntry(entry: LogEntry) {
   try {
     const response = await fetch(`${config.url}/rest/v1/${config.table}`, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        apikey: config.apiKey,
-        authorization: `Bearer ${config.apiKey}`,
+      headers: makeSupabaseHeaders(config.apiKey, {
+        contentType: "application/json",
         prefer: "return=minimal",
-      },
+      }),
       body: JSON.stringify(entry),
     });
 

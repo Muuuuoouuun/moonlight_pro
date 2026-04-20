@@ -1,5 +1,6 @@
 import {
   insertSupabaseRecord,
+  makeSupabaseHeaders,
   resolveDefaultWorkspaceId,
   resolveSupabaseConfig,
   updateSupabaseRecord,
@@ -61,10 +62,7 @@ async function fetchSupabaseRows(table, options = {}) {
 
   try {
     const response = await fetch(url, {
-      headers: {
-        apikey: config.apiKey,
-        authorization: `Bearer ${config.apiKey}`,
-      },
+      headers: makeSupabaseHeaders(config.apiKey),
       cache: "no-store",
     });
 
