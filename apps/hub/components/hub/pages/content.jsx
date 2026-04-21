@@ -3,7 +3,66 @@
 import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle } from "../hub-primitives";
-import { CONTENT_QUEUE, CAMPAIGNS } from "../hub-data";
+import {
+  CONTENT_QUEUE as FALLBACK_CONTENT_QUEUE,
+  CAMPAIGNS as FALLBACK_CAMPAIGNS,
+} from "../hub-data";
+
+function useContentLedger() {
+  const [state, setState] = React.useState({
+    source: "mock",
+    syncState: "mock",
+    items: [],
+    variants: [],
+    publishLogs: [],
+    queue: FALLBACK_CONTENT_QUEUE,
+    pipeline: [],
+    attention: [],
+    summary: null,
+  });
+
+  React.useEffect(() => {
+    let active = true;
+
+    async function loadLedger() {
+      setState((s) => ({ ...s, syncState: "loading" }));
+      try {
+        const response = await fetch("/api/hub/content", { cache: "no-store" });
+        const data = await response.json().catch(() => null);
+
+        if (!active || !response.ok || !data || data.status === "error") {
+          if (active) setState((s) => ({ ...s, syncState: "mock" }));
+          return;
+        }
+
+        if (data.source === "supabase" && data.queue?.length) {
+          setState({
+            source: data.source,
+            syncState: "live",
+            items: data.items || [],
+            variants: data.variants || [],
+            publishLogs: data.publishLogs || [],
+            queue: data.queue,
+            pipeline: data.pipeline || [],
+            attention: data.attention || [],
+            summary: data.summary || null,
+          });
+        } else {
+          setState((s) => ({ ...s, syncState: "mock" }));
+        }
+      } catch {
+        if (active) setState((s) => ({ ...s, syncState: "mock" }));
+      }
+    }
+
+    loadLedger();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return state;
+}
 
 export function Studio() {
   const [mode, setMode] = React.useState('blog');
@@ -321,16 +380,25 @@ export function Studio() {
 }
 
 export function Queue() {
+  const ledger = useContentLedger();
+  const queue = ledger.queue?.length ? ledger.queue : FALLBACK_CONTENT_QUEUE;
   const statusTone = { Draft: 'warning', Scheduled: 'info', Review: 'moon', Idea: 'neutral', Outline: 'neutral', Published: 'success' };
+  const draftCount = queue.filter(c => c.status === 'Draft').length;
+  const scheduledCount = queue.filter(c => c.status === 'Scheduled').length;
   return (
     <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Publishing queue</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>{CONTENT_QUEUE.length} items in pipeline</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+            {queue.length} items in pipeline
+            <span className="mono" style={{ marginLeft: 8, color: ledger.syncState === 'live' ? 'var(--success)' : ledger.syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
+              {ledger.syncState === 'live' ? 'live' : ledger.syncState === 'loading' ? 'syncing' : 'mock'}
+            </span>
+          </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Tabs tabs={[{key:'all',label:'All',count:6},{key:'draft',label:'Draft',count:1},{key:'scheduled',label:'Scheduled',count:2}]} active="all" onChange={()=>{}} style={{ borderBottom: 'none' }} />
+        <Tabs tabs={[{key:'all',label:'All',count:queue.length},{key:'draft',label:'Draft',count:draftCount},{key:'scheduled',label:'Scheduled',count:scheduledCount}]} active="all" onChange={()=>{}} style={{ borderBottom: 'none' }} />
         <Button variant="primary" size="sm" icon="plus">Draft</Button>
       </div>
 
@@ -338,11 +406,11 @@ export function Queue() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 110px 110px 130px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>Title</span><span>Kind</span><span>Channel</span><span>Status</span><span>When</span><span style={{ textAlign: 'right' }}>Author</span>
         </div>
-        {CONTENT_QUEUE.map((c, i) => (
+        {queue.map((c, i) => (
           <div key={c.id} style={{
             display: 'grid', gridTemplateColumns: '1fr 110px 110px 110px 130px 80px',
             padding: '12px 16px', alignItems: 'center',
-            borderBottom: i < CONTENT_QUEUE.length - 1 ? '1px solid var(--line-soft)' : 'none',
+            borderBottom: i < queue.length - 1 ? '1px solid var(--line-soft)' : 'none',
           }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -353,7 +421,7 @@ export function Queue() {
             </div>
             <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{c.kind}</span>
             <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{c.channel}</span>
-            <span><Badge tone={statusTone[c.status]} size="xs">{c.status}</Badge></span>
+            <span><Badge tone={statusTone[c.status] || 'neutral'} size="xs">{c.status}</Badge></span>
             <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{c.when}</span>
             <span style={{ textAlign: 'right', fontSize: 12, color: 'var(--fg-muted)' }}>{c.author}</span>
           </div>
@@ -370,14 +438,14 @@ export function Campaigns() {
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Campaigns</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>{CAMPAIGNS.length} multi-channel initiatives</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>{FALLBACK_CAMPAIGNS.length} multi-channel initiatives</div>
         </div>
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="sm" icon="plus">Campaign</Button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 'var(--gap)' }}>
-        {CAMPAIGNS.map(c => (
+        {FALLBACK_CAMPAIGNS.map(c => (
           <Card key={c.id}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <div style={{ flex: 1 }}>

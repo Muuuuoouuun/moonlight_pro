@@ -3,7 +3,53 @@
 import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, IconButton, Button, Progress } from "../hub-primitives";
-import { DECISIONS } from "../hub-data";
+import { DECISIONS as FALLBACK_DECISIONS, RITUALS as FALLBACK_RITUALS } from "../hub-data";
+
+function useWorkLedger() {
+  const [state, setState] = React.useState({
+    source: 'mock',
+    decisions: FALLBACK_DECISIONS,
+    rituals: FALLBACK_RITUALS,
+    summary: null,
+    syncState: 'mock',
+  });
+
+  React.useEffect(() => {
+    let active = true;
+
+    async function load() {
+      setState((prev) => ({ ...prev, syncState: 'loading' }));
+      try {
+        const response = await fetch('/api/hub/work', { cache: 'no-store' });
+        const data = await response.json().catch(() => null);
+
+        if (!active || !response.ok || !data || data.status === 'error') {
+          if (active) setState((prev) => ({ ...prev, syncState: 'mock' }));
+          return;
+        }
+
+        if (data.source === 'supabase') {
+          setState({
+            source: data.source,
+            decisions: data.decisions?.length ? data.decisions : FALLBACK_DECISIONS,
+            rituals: data.rituals?.length ? data.rituals : FALLBACK_RITUALS,
+            summary: data.summary || null,
+            syncState: 'live',
+          });
+        } else {
+          setState((prev) => ({ ...prev, syncState: 'mock' }));
+        }
+      } catch {
+        if (active) setState((prev) => ({ ...prev, syncState: 'mock' }));
+      }
+    }
+
+    load();
+    return () => { active = false; };
+  }, []);
+
+  return state;
+}
 
 export function Calendar() {
   const [gcalStatus, setGcalStatus] = React.useState('idle');
@@ -159,19 +205,27 @@ export function Calendar() {
 }
 
 export function Decisions() {
+  const { decisions, syncState } = useWorkLedger();
+  const list = decisions?.length ? decisions : FALLBACK_DECISIONS;
+
   return (
     <div style={{ padding: 'var(--section-gap)', maxWidth: 1000, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Decisions</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch', lineHeight: 1.5 }}>실행의 근거가 되는 결정들의 타임라인. 각 결정에는 맥락·선택·근거를 남깁니다.</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch', lineHeight: 1.5 }}>
+            실행의 근거가 되는 결정들의 타임라인. 각 결정에는 맥락·선택·근거를 남깁니다.
+            <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
+              {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
+            </span>
+          </div>
         </div>
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="sm" icon="plus">Record decision</Button>
       </div>
       <div style={{ position: 'relative', paddingLeft: 28 }}>
         <div style={{ position: 'absolute', left: 11, top: 6, bottom: 6, width: 1, background: 'var(--line-soft)' }} />
-        {DECISIONS.map(d => (
+        {list.map(d => (
           <div key={d.id} style={{ position: 'relative', marginBottom: 18 }}>
             <div style={{ position: 'absolute', left: -21, top: 14, width: 10, height: 10, borderRadius: 999, background: 'var(--bg)', border: '2px solid var(--moon-400)' }} />
             <Card>
@@ -254,32 +308,47 @@ export function Roadmap() {
 }
 
 export function Rhythm() {
-  const rituals = [
-    { name: 'Daily Brief · 07:00', streak: 23, weeks: [1,1,1,1,1,1,1] },
-    { name: 'Deep work block · 14:00', streak: 12, weeks: [1,1,1,0,1,1,1] },
-    { name: 'Weekly Review · 금', streak: 3, weeks: [1,1,1,1,0,0,0] },
-    { name: 'Monthly retrospective', streak: 4, weeks: [1,1,1,1,0,0,0] },
-    { name: 'Evening shutdown · 22:00', streak: 8, weeks: [1,0,1,1,1,1,0] },
-  ];
+  const { rituals: liveRituals, summary, syncState } = useWorkLedger();
+  const rituals = liveRituals?.length ? liveRituals : FALLBACK_RITUALS;
+
+  const completed = summary?.ritualsCompletedThisWeek ?? rituals.filter(r => r.weeks?.some(v => v === 1)).length;
+  const total = summary?.ritualsTotalThisWeek ?? rituals.length;
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  let longestStreak = summary?.longestStreak ?? 0;
+  let longestStreakRitual = summary?.longestStreakRitual ?? '';
+  if (!summary) {
+    rituals.forEach(r => {
+      if ((r.streak || 0) > longestStreak) {
+        longestStreak = r.streak;
+        longestStreakRitual = r.name;
+      }
+    });
+  }
 
   return (
     <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
       <div>
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Rhythm</h2>
-        <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>루틴은 실행의 인프라</div>
+        <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+          루틴은 실행의 인프라
+          <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
+            {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
+          </span>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>This week</div>
-          <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="mono">4 / 5</div>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>rituals completed · Weekly Review 남음</div>
-          <div style={{ marginTop: 14 }}><Progress value={80} /></div>
+          <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="mono">{completed} / {total}</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>rituals completed</div>
+          <div style={{ marginTop: 14 }}><Progress value={percent} /></div>
         </Card>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Longest streak</div>
-          <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="mono">23 <span style={{ fontSize: 14, color: 'var(--fg-faint)' }}>days</span></div>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>Daily Brief · 3월 27일부터</div>
+          <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="mono">{longestStreak} <span style={{ fontSize: 14, color: 'var(--fg-faint)' }}>days</span></div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{longestStreakRitual || '루틴 체크인 기록 없음'}</div>
         </Card>
       </div>
 
@@ -287,24 +356,27 @@ export function Rhythm() {
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'grid', gridTemplateColumns: '1fr 160px 90px 100px' }}>
           <span>Ritual</span><span>Last 7 days</span><span>Streak</span><span style={{ textAlign: 'right' }}>Action</span>
         </div>
-        {rituals.map((r, i) => (
-          <div key={i} style={{ padding: '14px 16px', borderBottom: i < rituals.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'grid', gridTemplateColumns: '1fr 160px 90px 100px', alignItems: 'center' }}>
-            <span style={{ fontSize: 13 }}>{r.name}</span>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {r.weeks.map((v, j) => (
-                <div key={j} style={{
-                  width: 18, height: 18, borderRadius: 4,
-                  background: v ? 'var(--moon-500)' : 'var(--surface-3)',
-                  border: v ? 'none' : '1px solid var(--line-soft)',
-                }} />
-              ))}
+        {rituals.map((r, i) => {
+          const weeks = Array.isArray(r.weeks) ? r.weeks : [0,0,0,0,0,0,0];
+          return (
+            <div key={r.id || r.name || i} style={{ padding: '14px 16px', borderBottom: i < rituals.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'grid', gridTemplateColumns: '1fr 160px 90px 100px', alignItems: 'center' }}>
+              <span style={{ fontSize: 13 }}>{r.name}</span>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {weeks.map((v, j) => (
+                  <div key={j} style={{
+                    width: 18, height: 18, borderRadius: 4,
+                    background: v ? 'var(--moon-500)' : 'var(--surface-3)',
+                    border: v ? 'none' : '1px solid var(--line-soft)',
+                  }} />
+                ))}
+              </div>
+              <span className="mono" style={{ fontSize: 12, color: (r.streak || 0) > 10 ? 'var(--success)' : 'var(--fg-muted)' }}>{r.streak || 0}d</span>
+              <div style={{ textAlign: 'right' }}>
+                <Button variant="ghost" size="xs">Check in</Button>
+              </div>
             </div>
-            <span className="mono" style={{ fontSize: 12, color: r.streak > 10 ? 'var(--success)' : 'var(--fg-muted)' }}>{r.streak}d</span>
-            <div style={{ textAlign: 'right' }}>
-              <Button variant="ghost" size="xs">Check in</Button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </Card>
     </div>
   );

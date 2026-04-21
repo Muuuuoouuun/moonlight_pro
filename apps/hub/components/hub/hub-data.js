@@ -180,6 +180,14 @@ export const DECISIONS = [
   { id: 'd4', title: 'Notion에서 내부 Hub로 프로젝트 이전', date: '4월 2일', status: 'Committed', by: 'Me', reason: '컨텍스트 파편화', links: 5 },
 ];
 
+export const RITUALS = [
+  { id: 'r1', name: 'Daily Brief · 07:00', streak: 23, weeks: [1,1,1,1,1,1,1] },
+  { id: 'r2', name: 'Deep work block · 14:00', streak: 12, weeks: [1,1,1,0,1,1,1] },
+  { id: 'r3', name: 'Weekly Review · 금', streak: 3, weeks: [1,1,1,1,0,0,0] },
+  { id: 'r4', name: 'Monthly retrospective', streak: 4, weeks: [1,1,1,1,0,0,0] },
+  { id: 'r5', name: 'Evening shutdown · 22:00', streak: 8, weeks: [1,0,1,1,1,1,0] },
+];
+
 export const LEADS = [
   { id: 'l1', name: '클래스인 — 김지수 대표', type: 'company', source: 'Referral', stage: 'Qualified', value: '₩18M', last: '2일 전', owner: 'Me' },
   { id: 'l2', name: '이재민 (개인 코칭)', type: 'personal', source: 'Newsletter', stage: 'New', value: '₩1.2M', last: '오늘', owner: 'Me' },

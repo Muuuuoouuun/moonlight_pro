@@ -3,16 +3,78 @@
 import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Progress, SectionTitle, Kbd } from "../hub-primitives";
-import { AUTOMATIONS, RUN_LOG } from "../hub-data";
+import { AUTOMATIONS as FALLBACK_AUTOMATIONS, RUN_LOG as FALLBACK_RUN_LOG } from "../hub-data";
+
+function useAutomationsLedger() {
+  const [state, setState] = React.useState({
+    source: 'mock',
+    syncState: 'mock',
+    automations: FALLBACK_AUTOMATIONS,
+    runs: FALLBACK_RUN_LOG,
+    webhookEvents: [],
+    errors: [],
+    integrations: [],
+    summary: {
+      runsToday: 23,
+      failuresToday: 0,
+      activeAutomations: FALLBACK_AUTOMATIONS.filter(a => a.status === 'Active').length,
+      webhookEventsToday: 0,
+      integrationsConnected: 0,
+    },
+  });
+
+  React.useEffect(() => {
+    let active = true;
+    async function load() {
+      setState(s => ({ ...s, syncState: 'loading' }));
+      try {
+        const response = await fetch('/api/hub/automations', { cache: 'no-store' });
+        const data = await response.json().catch(() => null);
+        if (!active || !response.ok || !data || data.status === 'error') {
+          if (active) setState(s => ({ ...s, syncState: 'mock' }));
+          return;
+        }
+        if (data.source === 'supabase') {
+          setState({
+            source: 'supabase',
+            syncState: 'live',
+            automations: data.automations?.length ? data.automations : FALLBACK_AUTOMATIONS,
+            runs: data.runs?.length ? data.runs : FALLBACK_RUN_LOG,
+            webhookEvents: data.webhookEvents || [],
+            errors: data.errors || [],
+            integrations: data.integrations || [],
+            summary: data.summary || {},
+          });
+        } else {
+          setState(s => ({ ...s, syncState: 'mock' }));
+        }
+      } catch {
+        if (active) setState(s => ({ ...s, syncState: 'mock' }));
+      }
+    }
+    load();
+    return () => { active = false; };
+  }, []);
+
+  return state;
+}
 
 export function AutomationsIndex({ onNavigate }) {
   const sTone = { Active: 'success', Paused: 'warning', Error: 'danger' };
+  const { automations, summary, syncState } = useAutomationsLedger();
+  const activeCount = summary?.activeAutomations ?? automations.filter(a => a.status === 'Active').length;
+  const runsTodayCount = summary?.runsToday ?? 23;
   return (
     <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Automations</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>{AUTOMATIONS.filter(a => a.status === 'Active').length} active flows · 23 runs in last 24h</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+            {activeCount} active flows · {runsTodayCount} runs in last 24h
+            <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
+              {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
+            </span>
+          </div>
         </div>
         <div style={{ flex: 1 }} />
         <Button variant="secondary" size="sm" icon="runs" onClick={() => onNavigate('dashboard/automations/runs')}>Run log</Button>
@@ -24,11 +86,11 @@ export function AutomationsIndex({ onNavigate }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px 110px 130px 140px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>Flow</span><span>Trigger</span><span>Status</span><span>Last run</span><span>Success (24h)</span><span style={{ textAlign: 'right' }} />
         </div>
-        {AUTOMATIONS.map((a, i) => (
+        {automations.map((a, i) => (
           <div key={a.id} style={{
             display: 'grid', gridTemplateColumns: '1fr 200px 110px 130px 140px 80px',
             padding: '12px 16px', alignItems: 'center',
-            borderBottom: i < AUTOMATIONS.length - 1 ? '1px solid var(--line-soft)' : 'none',
+            borderBottom: i < automations.length - 1 ? '1px solid var(--line-soft)' : 'none',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Iconed name="zap" size={13} style={{ color: 'var(--moon-300)' }} />
@@ -122,13 +184,37 @@ export function EmailAutomation() {
   );
 }
 
+const FALLBACK_HOOKS = [
+  { name: 'Stripe — payment_succeeded', url: 'https://moonlight.pro/hooks/stripe', status: 'ok', lastHit: '1h ago', count24: 4 },
+  { name: 'Calendly — invite.created', url: 'https://moonlight.pro/hooks/calendly', status: 'ok', lastHit: '3h ago', count24: 2 },
+  { name: 'Notion — page.updated', url: 'https://moonlight.pro/hooks/notion', status: 'warn', lastHit: '5h ago', count24: 11 },
+  { name: 'Custom — Form submission', url: 'https://moonlight.pro/hooks/form', status: 'ok', lastHit: 'Today', count24: 6 },
+];
+
+function aggregateWebhookEndpoints(events) {
+  if (!events?.length) return [];
+  const byKey = new Map();
+  events.forEach(ev => {
+    const key = `${ev.source}·${ev.eventType}`;
+    const entry = byKey.get(key) || {
+      name: `${ev.source} — ${ev.eventType}`,
+      url: `https://moonlight.pro/hooks/${ev.source}`,
+      status: 'ok',
+      lastHit: ev.lastHit,
+      count24: 0,
+    };
+    entry.count24 += 1;
+    if (ev.status === 'err') entry.status = 'err';
+    else if (ev.status === 'warn' && entry.status !== 'err') entry.status = 'warn';
+    byKey.set(key, entry);
+  });
+  return Array.from(byKey.values());
+}
+
 export function Webhooks() {
-  const hooks = [
-    { name: 'Stripe — payment_succeeded', url: 'https://moonlight.pro/hooks/stripe', status: 'ok', lastHit: '1h ago', count24: 4 },
-    { name: 'Calendly — invite.created', url: 'https://moonlight.pro/hooks/calendly', status: 'ok', lastHit: '3h ago', count24: 2 },
-    { name: 'Notion — page.updated', url: 'https://moonlight.pro/hooks/notion', status: 'warn', lastHit: '5h ago', count24: 11 },
-    { name: 'Custom — Form submission', url: 'https://moonlight.pro/hooks/form', status: 'ok', lastHit: 'Today', count24: 6 },
-  ];
+  const { webhookEvents, syncState } = useAutomationsLedger();
+  const liveHooks = aggregateWebhookEndpoints(webhookEvents);
+  const hooks = liveHooks.length ? liveHooks : FALLBACK_HOOKS;
   const sTone = { ok: 'success', warn: 'warning', err: 'danger' };
   const [testState, setTestState] = React.useState({}); // { [idx]: { tone: 'success'|'warning'|'danger', label, pending } }
 
@@ -170,7 +256,12 @@ export function Webhooks() {
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Webhooks</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>{hooks.length} endpoints</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+            {hooks.length} endpoints
+            <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
+              {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
+            </span>
+          </div>
         </div>
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="sm" icon="plus">Endpoint</Button>
@@ -209,12 +300,19 @@ export function Webhooks() {
 
 export function Runs() {
   const sIcon = { ok: { c: 'var(--success)', t: '●' }, warn: { c: 'var(--warning)', t: '▲' }, err: { c: 'var(--danger)', t: '✕' } };
+  const { runs, syncState } = useAutomationsLedger();
+  const rows = runs?.length ? runs : FALLBACK_RUN_LOG;
   return (
     <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Run log</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Real-time automation execution log</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+            Real-time automation execution log
+            <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
+              {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
+            </span>
+          </div>
         </div>
         <div style={{ flex: 1 }} />
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--success)' }}>
@@ -224,10 +322,10 @@ export function Runs() {
       </div>
       <Card pad={false} style={{ background: 'oklch(0.17 0.005 250)' }}>
         <div className="mono" style={{ padding: '12px 14px', fontSize: 12 }}>
-          {RUN_LOG.map((r, i) => (
+          {rows.map((r, i) => (
             <div key={r.id} style={{
               display: 'grid', gridTemplateColumns: '90px 24px 180px 70px 1fr',
-              padding: '5px 0', borderBottom: i < RUN_LOG.length - 1 ? '1px dashed var(--line-soft)' : 'none',
+              padding: '5px 0', borderBottom: i < rows.length - 1 ? '1px dashed var(--line-soft)' : 'none',
               alignItems: 'center', gap: 10,
             }}>
               <span style={{ color: 'var(--fg-faint)' }}>{r.at}</span>

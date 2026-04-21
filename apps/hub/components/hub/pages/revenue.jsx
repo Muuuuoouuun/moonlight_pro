@@ -3,21 +3,107 @@
 import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider } from "../hub-primitives";
-import { LEADS, DEAL_STAGES, DEALS, BRANDS, ACCOUNT_DETAIL } from "../hub-data";
+import {
+  LEADS as FALLBACK_LEADS,
+  DEAL_STAGES as FALLBACK_DEAL_STAGES,
+  DEALS as FALLBACK_DEALS,
+  BRANDS,
+  ACCOUNT_DETAIL,
+} from "../hub-data";
 
 const fmt = v => '₩' + (v / 1000000).toFixed(1) + 'M';
 
+const FALLBACK_ACCOUNTS = [
+  { name: '클래스인',        type: 'company',  deals: 2, value: 18000000, last: '오늘',    lastAt: '11:02', health: 'warning', owner: 'Me' },
+  { name: 'Studio Park',     type: 'company',  deals: 1, value: 6000000,  last: '3일 전',  lastAt: '3d',    health: 'ok',      owner: 'Me' },
+  { name: 'Beanly Coffee',   type: 'company',  deals: 1, value: 4200000,  last: '오늘',    lastAt: '14:15', health: 'ok',      owner: 'Council' },
+  { name: 'Han 스튜디오',    type: 'company',  deals: 1, value: 3500000,  last: '5일 전',  lastAt: '5d',    health: 'warning', owner: 'Me' },
+  { name: '베어브릭',         type: 'company',  deals: 1, value: 7800000,  last: '2주 전',  lastAt: '14d',   health: 'ok',      owner: 'Me' },
+  { name: '이재민',           type: 'personal', deals: 1, value: 1200000,  last: '오늘',    lastAt: '08:45', health: 'ok',      owner: 'Me' },
+  { name: '정하윤',           type: 'personal', deals: 1, value: 900000,   last: '어제',    lastAt: '1d',    health: 'ok',      owner: 'Me' },
+  { name: 'Jihoon (코칭)',    type: 'personal', deals: 1, value: 600000,   last: '오늘',    lastAt: '16:00', health: 'ok',      owner: 'Me' },
+];
+
+const FALLBACK_CASES = [
+  { id: 'CS-104', title: 'Spring Cohort 계약 검토', account: '클래스인', type: 'company', status: 'Open', priority: 'high', opened: '3일 전', owner: 'Me' },
+  { id: 'CS-103', title: '결제 영수증 재발행', account: '이재민', type: 'personal', status: 'Waiting', priority: 'low', opened: '어제', owner: 'Automation' },
+  { id: 'CS-102', title: '뉴스레터 구독 취소 이슈', account: 'Studio Park', type: 'company', status: 'Open', priority: 'med', opened: '2일 전', owner: 'Me' },
+  { id: 'CS-101', title: '도메인 인증 재설정', account: 'Moonlight', type: 'company', status: 'Resolved', priority: 'med', opened: '5일 전', owner: 'Me' },
+  { id: 'CS-099', title: '코칭 일정 재조정', account: 'Jihoon', type: 'personal', status: 'Resolved', priority: 'low', opened: '지난 주', owner: 'Me' },
+];
+
+function useRevenueLedger() {
+  const [ledger, setLedger] = React.useState({
+    source: 'mock',
+    leads: FALLBACK_LEADS,
+    deals: FALLBACK_DEALS,
+    stages: FALLBACK_DEAL_STAGES,
+    accounts: FALLBACK_ACCOUNTS,
+    cases: FALLBACK_CASES,
+    summary: null,
+  });
+  const [syncState, setSyncState] = React.useState('mock');
+
+  React.useEffect(() => {
+    let active = true;
+    async function load() {
+      setSyncState('loading');
+      try {
+        const response = await fetch('/api/hub/revenue', { cache: 'no-store' });
+        const data = await response.json().catch(() => null);
+        if (!active || !response.ok || !data || data.status === 'error') {
+          if (active) setSyncState('mock');
+          return;
+        }
+        if (data.source === 'supabase') {
+          setLedger({
+            source: 'supabase',
+            leads: data.leads?.length ? data.leads : FALLBACK_LEADS,
+            deals: data.deals?.length ? data.deals : FALLBACK_DEALS,
+            stages: data.stages?.length ? data.stages : FALLBACK_DEAL_STAGES,
+            accounts: data.accounts?.length ? data.accounts : FALLBACK_ACCOUNTS,
+            cases: data.cases?.length ? data.cases : FALLBACK_CASES,
+            summary: data.summary || null,
+          });
+          setSyncState('live');
+        } else {
+          setSyncState('mock');
+        }
+      } catch {
+        if (active) setSyncState('mock');
+      }
+    }
+    load();
+    return () => { active = false; };
+  }, []);
+
+  return { ledger, syncState };
+}
+
+function SyncBadge({ state }) {
+  const label = state === 'live' ? 'live' : state === 'loading' ? 'syncing' : 'mock';
+  const color = state === 'live' ? 'var(--success)' : state === 'loading' ? 'var(--warning)' : 'var(--fg-faint)';
+  return <span className="mono" style={{ marginLeft: 8, fontSize: 10.5, color }}>{label}</span>;
+}
+
 export function RevenueOverview() {
-  const mrr = 8400000, mrrPrev = 7500000;
+  const { ledger, syncState } = useRevenueLedger();
+  const LEADS = ledger.leads;
+  const DEALS = ledger.deals;
+  const DEAL_STAGES = ledger.stages;
+  const summary = ledger.summary;
+
+  const mrr = summary?.mrr || 8400000;
+  const mrrPrev = summary?.mrrPrev || 7500000;
   const pipelineByStage = DEAL_STAGES.map(s => ({
     ...s,
     sum: DEALS.filter(d => d.stage === s.key).reduce((a, b) => a + b.value, 0),
     count: DEALS.filter(d => d.stage === s.key).length,
   }));
-  const pipeline = pipelineByStage.reduce((a, b) => a + b.sum, 0);
-  const openLeads = LEADS.length;
-  const openDeals = DEALS.filter(d => d.stage !== 'won').length;
-  const wonMTD = DEALS.filter(d => d.stage === 'won').reduce((a, b) => a + b.value, 0);
+  const pipeline = summary?.pipeline ?? pipelineByStage.reduce((a, b) => a + b.sum, 0);
+  const openLeads = summary?.leadsCount ?? LEADS.length;
+  const openDeals = summary?.openDeals ?? DEALS.filter(d => d.stage !== 'won').length;
+  const wonMTD = summary?.wonMTD ?? DEALS.filter(d => d.stage === 'won').reduce((a, b) => a + b.value, 0);
   const byBrand = BRANDS.filter(b => b.key !== 'all').slice(0, 6).map((b, i) => ({
     ...b, mrr: [2.4, 1.8, 0.6, 2.0, 0.9, 0.7][i] * 1000000,
   }));
@@ -28,7 +114,9 @@ export function RevenueOverview() {
       <div style={{ display: 'flex', alignItems: 'flex-end' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Revenue overview</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>4월 · 이번 달 요약</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+            4월 · 이번 달 요약<SyncBadge state={syncState} />
+          </div>
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
@@ -140,6 +228,8 @@ export function RevenueOverview() {
 const LEADS_GRID = '26px 1fr 112px 112px 124px 100px 90px 92px';
 
 export function Leads() {
+  const { ledger, syncState } = useRevenueLedger();
+  const LEADS = ledger.leads;
   const [filter, setFilter] = React.useState('all');
   const [search, setSearch] = React.useState('');
   const term = search.trim().toLowerCase();
@@ -154,7 +244,10 @@ export function Leads() {
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Leads</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>{LEADS.length} leads · {LEADS.filter(l => l.type === 'personal').length} personal · {LEADS.filter(l => l.type === 'company').length} company</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+            {LEADS.length} leads · {LEADS.filter(l => l.type === 'personal').length} personal · {LEADS.filter(l => l.type === 'company').length} company
+            <SyncBadge state={syncState} />
+          </div>
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, marginRight: 8 }}>
@@ -223,9 +316,16 @@ export function Leads() {
 }
 
 export function Deals() {
-  const [deals, setDeals] = React.useState(DEALS);
+  const { ledger, syncState } = useRevenueLedger();
+  const DEAL_STAGES = ledger.stages;
+  const [deals, setDeals] = React.useState(ledger.deals);
   const [drag, setDrag] = React.useState(null);
   const [filter, setFilter] = React.useState('all');
+
+  // Sync local deals state when live data arrives
+  React.useEffect(() => {
+    setDeals(ledger.deals);
+  }, [ledger.deals]);
 
   const totals = DEAL_STAGES.reduce((acc, s) => {
     const items = deals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
@@ -242,6 +342,7 @@ export function Deals() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Deals</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             Pipeline <span className="mono" style={{ color: 'var(--fg)' }}>{fmt(grandTotal)}</span> across {DEAL_STAGES.length} stages
+            <SyncBadge state={syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -324,13 +425,8 @@ export function Deals() {
 const CASES_GRID = '80px 1fr 160px 112px 100px 100px 110px 90px';
 
 export function Cases() {
-  const cases = [
-    { id: 'CS-104', title: 'Spring Cohort 계약 검토', account: '클래스인', type: 'company', status: 'Open', priority: 'high', opened: '3일 전', owner: 'Me' },
-    { id: 'CS-103', title: '결제 영수증 재발행', account: '이재민', type: 'personal', status: 'Waiting', priority: 'low', opened: '어제', owner: 'Automation' },
-    { id: 'CS-102', title: '뉴스레터 구독 취소 이슈', account: 'Studio Park', type: 'company', status: 'Open', priority: 'med', opened: '2일 전', owner: 'Me' },
-    { id: 'CS-101', title: '도메인 인증 재설정', account: 'Moonlight', type: 'company', status: 'Resolved', priority: 'med', opened: '5일 전', owner: 'Me' },
-    { id: 'CS-099', title: '코칭 일정 재조정', account: 'Jihoon', type: 'personal', status: 'Resolved', priority: 'low', opened: '지난 주', owner: 'Me' },
-  ];
+  const { ledger, syncState } = useRevenueLedger();
+  const cases = ledger.cases?.length ? ledger.cases : FALLBACK_CASES;
   const sTone = { Open: 'warning', Waiting: 'info', Resolved: 'success' };
   const pTone = { high: 'danger', med: 'warning', low: 'neutral' };
 
@@ -339,7 +435,10 @@ export function Cases() {
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Cases</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Support & account issues · {cases.filter(c => c.status !== 'Resolved').length} open</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+            Support & account issues · {cases.filter(c => c.status !== 'Resolved').length} open
+            <SyncBadge state={syncState} />
+          </div>
         </div>
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="sm" icon="plus">Case</Button>
@@ -380,16 +479,6 @@ export function Cases() {
 
 // ---------- ACCOUNTS (lightweight CRM) ----------
 
-const ACCOUNTS = [
-  { name: '클래스인',        type: 'company',  deals: 2, value: 18000000, last: '오늘',    lastAt: '11:02', health: 'warning', owner: 'Me' },
-  { name: 'Studio Park',     type: 'company',  deals: 1, value: 6000000,  last: '3일 전',  lastAt: '3d',    health: 'ok',      owner: 'Me' },
-  { name: 'Beanly Coffee',   type: 'company',  deals: 1, value: 4200000,  last: '오늘',    lastAt: '14:15', health: 'ok',      owner: 'Council' },
-  { name: 'Han 스튜디오',    type: 'company',  deals: 1, value: 3500000,  last: '5일 전',  lastAt: '5d',    health: 'warning', owner: 'Me' },
-  { name: '베어브릭',         type: 'company',  deals: 1, value: 7800000,  last: '2주 전',  lastAt: '14d',   health: 'ok',      owner: 'Me' },
-  { name: '이재민',           type: 'personal', deals: 1, value: 1200000,  last: '오늘',    lastAt: '08:45', health: 'ok',      owner: 'Me' },
-  { name: '정하윤',           type: 'personal', deals: 1, value: 900000,   last: '어제',    lastAt: '1d',    health: 'ok',      owner: 'Me' },
-  { name: 'Jihoon (코칭)',    type: 'personal', deals: 1, value: 600000,   last: '오늘',    lastAt: '16:00', health: 'ok',      owner: 'Me' },
-];
 const H_TONE = { ok: 'success', warning: 'warning', risk: 'danger' };
 
 const ACT_ICON = { email: 'email', meeting: 'calendar', call: 'signal', note: 'edit', deal: 'deals' };
@@ -724,6 +813,8 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote })
 }
 
 export function Accounts() {
+  const { ledger, syncState } = useRevenueLedger();
+  const ACCOUNTS = ledger.accounts?.length ? ledger.accounts : FALLBACK_ACCOUNTS;
   const [view, setView] = React.useState('cards'); // cards | list | detail
   const [search, setSearch] = React.useState('');
   const [filter, setFilter] = React.useState('all');
@@ -810,6 +901,7 @@ export function Accounts() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Accounts</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {ACCOUNTS.filter(a => a.type === 'company').length} companies · {ACCOUNTS.filter(a => a.type === 'personal').length} individuals
+            <SyncBadge state={syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
