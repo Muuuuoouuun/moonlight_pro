@@ -26,12 +26,28 @@ function resolveSupabaseRestConfig(): SupabaseRestConfig | null {
   };
 }
 
-function makeHeaders(apiKey: string, withCount = false) {
-  return {
+function isOpaqueSupabaseApiKey(apiKey: string) {
+  return apiKey.startsWith("sb_publishable_") || apiKey.startsWith("sb_secret_");
+}
+
+function makeHeaders(apiKey: string, options: { contentType?: string; prefer?: string } = {}) {
+  const headers: Record<string, string> = {
     apikey: apiKey,
-    authorization: `Bearer ${apiKey}`,
-    ...(withCount ? { prefer: "count=exact" } : {}),
   };
+
+  if (options.contentType) {
+    headers["content-type"] = options.contentType;
+  }
+
+  if (!isOpaqueSupabaseApiKey(apiKey)) {
+    headers.authorization = `Bearer ${apiKey}`;
+  }
+
+  if (options.prefer) {
+    headers.prefer = options.prefer;
+  }
+
+  return headers;
 }
 
 function buildRestUrl(baseUrl: string, table: string, options: SupabaseQueryOptions = {}) {
@@ -119,7 +135,7 @@ export async function countSupabaseRows(table: string, filters: Array<[string, s
       }),
       {
         headers: {
-          ...makeHeaders(config.apiKey, true),
+          ...makeHeaders(config.apiKey, { prefer: "count=exact" }),
           Range: "0-0",
         },
         cache: "no-store",
@@ -149,11 +165,10 @@ export async function insertSupabaseRecord(table: string, record: Record<string,
   try {
     const response = await fetch(buildMutationUrl(config.url, table), {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...makeHeaders(config.apiKey),
+      headers: makeHeaders(config.apiKey, {
+        contentType: "application/json",
         prefer: "return=minimal",
-      },
+      }),
       body: JSON.stringify(record),
     });
 
@@ -203,11 +218,10 @@ export async function updateSupabaseRecord(
   try {
     const response = await fetch(buildMutationUrl(config.url, table, filters), {
       method: "PATCH",
-      headers: {
-        "content-type": "application/json",
-        ...makeHeaders(config.apiKey),
+      headers: makeHeaders(config.apiKey, {
+        contentType: "application/json",
         prefer: "return=minimal",
-      },
+      }),
       body: JSON.stringify(record),
     });
 

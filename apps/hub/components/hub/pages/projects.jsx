@@ -3,18 +3,30 @@
 import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar } from "../hub-primitives";
-import { BRANDS, BRAND_PROJECTS, BRAND_TODOS, KANBAN_COLUMNS } from "../hub-data";
+import {
+  BRANDS as FALLBACK_BRANDS,
+  BRAND_PROJECTS as FALLBACK_PROJECTS,
+  BRAND_TODOS as FALLBACK_TODOS,
+  KANBAN_COLUMNS as FALLBACK_COLUMNS,
+} from "../hub-data";
 
 export function Projects() {
   const [brand, setBrand] = React.useState('all');
   const [view, setView] = React.useState('tree');
-  const [todos, setTodos] = React.useState(BRAND_TODOS);
+  const [ledger, setLedger] = React.useState({
+    source: 'mock',
+    brands: FALLBACK_BRANDS,
+    projects: FALLBACK_PROJECTS,
+    columns: FALLBACK_COLUMNS,
+  });
+  const [todos, setTodos] = React.useState(FALLBACK_TODOS);
   const [drag, setDrag] = React.useState(null);
-  const [cols, setCols] = React.useState(KANBAN_COLUMNS);
+  const [cols, setCols] = React.useState(FALLBACK_COLUMNS);
   const [expanded, setExpanded] = React.useState(() => new Set(['pm-1', 'bm-1']));
   const [openDetail, setOpenDetail] = React.useState(null);
   const [brandMenuOpen, setBrandMenuOpen] = React.useState(false);
   const [sidebarHidden, setSidebarHidden] = React.useState(false);
+  const [syncState, setSyncState] = React.useState('mock');
   const brandMenuRef = React.useRef(null);
   const [orderPending, setOrderPending] = React.useState(false);
   const [orderResult, setOrderResult] = React.useState(null); // { tone: 'ok'|'err', label }
@@ -54,9 +66,54 @@ export function Projects() {
     }
   }
 
-  const projects = brand === 'all' ? BRAND_PROJECTS : BRAND_PROJECTS.filter(p => p.brand === brand);
+  const brands = ledger.brands?.length ? ledger.brands : FALLBACK_BRANDS;
+  const allProjects = ledger.projects?.length ? ledger.projects : FALLBACK_PROJECTS;
+  const projects = brand === 'all' ? allProjects : allProjects.filter(p => p.brand === brand);
   const brandTodos = brand === 'all' ? todos : todos.filter(t => t.brand === brand);
-  const currentBrand = BRANDS.find(b => b.key === brand);
+  const currentBrand = brands.find(b => b.key === brand) || brands[0] || FALLBACK_BRANDS[0];
+
+  React.useEffect(() => {
+    let active = true;
+
+    async function loadLedger() {
+      setSyncState('loading');
+      try {
+        const response = await fetch('/api/hub/projects', { cache: 'no-store' });
+        const data = await response.json().catch(() => null);
+
+        if (!active || !response.ok || !data || data.status === 'error') {
+          if (active) setSyncState('mock');
+          return;
+        }
+
+        if (data.source === 'supabase' && data.projects?.length) {
+          setLedger({
+            source: data.source,
+            brands: data.brands?.length ? data.brands : FALLBACK_BRANDS,
+            projects: data.projects,
+            columns: data.columns?.length ? data.columns : FALLBACK_COLUMNS,
+          });
+          setTodos(data.todos?.length ? data.todos : []);
+          setCols(data.columns?.length ? data.columns : FALLBACK_COLUMNS);
+          setExpanded(new Set(data.projects.slice(0, 2).map(p => p.id)));
+          setSyncState('live');
+        } else {
+          setSyncState('mock');
+        }
+      } catch {
+        if (active) setSyncState('mock');
+      }
+    }
+
+    loadLedger();
+    return () => { active = false; };
+  }, []);
+
+  React.useEffect(() => {
+    if (!brands.some(b => b.key === brand)) {
+      setBrand('all');
+    }
+  }, [brand, brands]);
 
   const toggleTodo = (id) => setTodos(ts => ts.map(t => t.id === id ? { ...t, done: !t.done } : t));
   const toggleExpand = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -70,8 +127,8 @@ export function Projects() {
     });
   };
 
-  const statusTone = { 'In progress': 'info', 'Review': 'warning', 'Planning': 'moon', 'Backlog': 'neutral' };
-  const prioTone = { high: 'danger', med: 'warning', low: 'neutral' };
+  const statusTone = { 'In progress': 'info', Review: 'warning', Planning: 'moon', Backlog: 'neutral', Blocked: 'danger', Done: 'success' };
+  const prioTone = { critical: 'danger', high: 'danger', med: 'warning', medium: 'warning', low: 'neutral' };
 
   React.useEffect(() => {
     const close = (e) => { if (brandMenuRef.current && !brandMenuRef.current.contains(e.target)) setBrandMenuOpen(false); };
@@ -86,16 +143,16 @@ export function Projects() {
         <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center' }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-faint)' }}>Brands</div>
-            <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>브랜드 포맷 · {BRANDS.length - 1}개</div>
+            <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>브랜드 포맷 · {brands.length - 1}개</div>
           </div>
           <IconButton icon="chevronL" size={24} iconSize={13} onClick={() => setSidebarHidden(true)} tooltip="접기" />
         </div>
         <div className="scroll-y" style={{ flex: 1, padding: 6 }}>
-          {BRANDS.map(b => {
+          {brands.map(b => {
             const active = brand === b.key;
-            const count = b.key === 'all' ? BRAND_PROJECTS.length : (b.projects || 0);
+            const count = b.key === 'all' ? allProjects.length : (b.projects || 0);
             const changes = b.key === 'all'
-              ? BRANDS.filter(x => x.key !== 'all').reduce((s, x) => s + (x.changes || 0), 0)
+              ? brands.filter(x => x.key !== 'all').reduce((s, x) => s + (x.changes || 0), 0)
               : (b.changes || 0);
             return (
               <button key={b.key} onClick={() => setBrand(b.key)} style={{
@@ -152,7 +209,7 @@ export function Projects() {
               <span style={{ fontSize: 16, position: 'relative' }}>
                 {currentBrand.glyph}
                 {(() => {
-                  const totalChanges = BRANDS.filter(b => b.key !== 'all').reduce((s, b) => s + (b.changes || 0), 0);
+                  const totalChanges = brands.filter(b => b.key !== 'all').reduce((s, b) => s + (b.changes || 0), 0);
                   if (brand === 'all' && totalChanges > 0) {
                     return (
                       <span style={{
@@ -182,7 +239,7 @@ export function Projects() {
               </span>
               <span style={{ fontSize: 13, fontWeight: 500, letterSpacing: '-0.005em' }}>{currentBrand.name}</span>
               <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)', background: 'var(--surface)', padding: '1px 5px', borderRadius: 4, border: '1px solid var(--line-soft)' }}>
-                {brand === 'all' ? BRAND_PROJECTS.length : (currentBrand.projects || 0)}
+                {brand === 'all' ? allProjects.length : (currentBrand.projects || 0)}
               </span>
               <span style={{ fontSize: 9, color: 'var(--fg-faint)', marginLeft: 2, transform: brandMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>▼</span>
             </button>
@@ -195,12 +252,12 @@ export function Projects() {
                 padding: 4, display: 'flex', flexDirection: 'column',
               }}>
                 <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>브랜드 몰아보기</div>
-                {BRANDS.map(b => {
+                {brands.map(b => {
                   const active = brand === b.key;
-                  const count = b.key === 'all' ? BRAND_PROJECTS.length : (b.projects || 0);
+                  const count = b.key === 'all' ? allProjects.length : (b.projects || 0);
                   const bTodos = todos.filter(t => b.key === 'all' || t.brand === b.key).filter(t => !t.done).length;
                   const changes = b.key === 'all'
-                    ? BRANDS.filter(x => x.key !== 'all').reduce((s, x) => s + (x.changes || 0), 0)
+                    ? brands.filter(x => x.key !== 'all').reduce((s, x) => s + (x.changes || 0), 0)
                     : (b.changes || 0);
                   return (
                     <button key={b.key} onClick={() => { setBrand(b.key); setBrandMenuOpen(false); }} style={{
@@ -258,6 +315,9 @@ export function Projects() {
           <div>
             <div style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>
               {projects.length} projects · {brandTodos.filter(t => !t.done).length} open todos · {currentBrand.desc}
+              <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
+                {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
+              </span>
             </div>
           </div>
           <div style={{ flex: 1 }} />
@@ -279,8 +339,10 @@ export function Projects() {
               <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
                 {[
                   { key: 'In progress', label: '진행중', tone: 'var(--info)' },
+                  { key: 'Blocked',     label: '막힘',   tone: 'var(--danger)' },
                   { key: 'Review',      label: '검토',   tone: 'var(--warning)' },
                   { key: 'Planning',    label: '계획',   tone: 'var(--moon-400)' },
+                  { key: 'Done',        label: '완료',   tone: 'var(--success)' },
                   { key: 'Backlog',     label: '백로그', tone: 'var(--fg-faint)' },
                 ].map(group => {
                   const groupProjects = projects.filter(p => p.status === group.key);
@@ -309,7 +371,7 @@ export function Projects() {
                         {groupProjects.map((p, pi) => {
                           const isOpen = expanded.has(p.id);
                           const pTodos = todos.filter(t => t.project === p.id);
-                          const pBrand = BRANDS.find(b => b.key === p.brand);
+                          const pBrand = brands.find(b => b.key === p.brand) || brands[0] || FALLBACK_BRANDS[0];
                           const isSel = openDetail === p.id;
                           return (
                             <React.Fragment key={p.id}>
@@ -347,7 +409,7 @@ export function Projects() {
                                   <Avatar name={p.owner} size={22} tone={p.owner === 'Me' ? 'moon' : p.owner === 'Council' ? 'info' : 'neutral'} />
                                 </div>
                                 <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{p.due}</span>
-                                <div><Badge tone={statusTone[p.status]} size="xs">{p.status === 'In progress' ? '작업 중' : p.status === 'Review' ? '검토' : p.status === 'Planning' ? '계획' : p.status}</Badge></div>
+                                <div><Badge tone={statusTone[p.status]} size="xs">{p.status === 'In progress' ? '작업 중' : p.status === 'Review' ? '검토' : p.status === 'Planning' ? '계획' : p.status === 'Blocked' ? '막힘' : p.status === 'Done' ? '완료' : p.status}</Badge></div>
                               </div>
 
                               {isOpen && (
@@ -413,9 +475,9 @@ export function Projects() {
             </div>
 
             {openDetail && (() => {
-              const p = BRAND_PROJECTS.find(x => x.id === openDetail);
+              const p = allProjects.find(x => x.id === openDetail);
               if (!p) return null;
-              const pBrand = BRANDS.find(b => b.key === p.brand);
+              const pBrand = brands.find(b => b.key === p.brand) || brands[0] || FALLBACK_BRANDS[0];
               const pTodos = todos.filter(t => t.project === p.id);
               const doneCount = pTodos.filter(t => t.done).length;
               return (
@@ -531,15 +593,15 @@ export function Projects() {
           <div className="scroll-y" style={{ flex: 1, padding: 'var(--section-gap)' }}>
             <div style={{ maxWidth: 880, margin: '0 auto' }}>
               {['오늘','내일','이번주','다음주'].map(bucket => {
-                const items = brandTodos.filter(t => t.due === bucket || (bucket === '이번주' && ['이번주','4/20','4/21','4/22','4/23'].includes(t.due)));
+                const items = brandTodos.filter(t => t.bucket === bucket || t.due === bucket || (bucket === '이번주' && ['이번주','4/20','4/21','4/22','4/23'].includes(t.due)));
                 if (!items.length) return null;
                 return (
                   <div key={bucket} style={{ marginBottom: 'var(--section-gap)' }}>
                     <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 8 }}>{bucket} · {items.length}</div>
                     <Card pad={false}>
                       {items.map((t, i) => {
-                        const proj = BRAND_PROJECTS.find(p => p.id === t.project);
-                        const pBrand = BRANDS.find(b => b.key === t.brand);
+                        const proj = allProjects.find(p => p.id === t.project);
+                        const pBrand = brands.find(b => b.key === t.brand) || brands[0] || FALLBACK_BRANDS[0];
                         return (
                           <div key={t.id} style={{
                             display: 'grid', gridTemplateColumns: '22px 1fr 140px 100px 80px',

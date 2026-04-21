@@ -115,6 +115,22 @@ async function fetchJson(url, options = {}) {
   }
 }
 
+function isOpaqueSupabaseApiKey(apiKey) {
+  return apiKey.startsWith("sb_publishable_") || apiKey.startsWith("sb_secret_");
+}
+
+function makeSupabaseHeaders(apiKey) {
+  const headers = {
+    apikey: apiKey,
+  };
+
+  if (!isOpaqueSupabaseApiKey(apiKey)) {
+    headers.authorization = `Bearer ${apiKey}`;
+  }
+
+  return headers;
+}
+
 function resolveWorkspaceId(env) {
   return env.COM_MOON_DEFAULT_WORKSPACE_ID || env.DEFAULT_WORKSPACE_ID || "";
 }
@@ -147,10 +163,7 @@ async function checkSupabase(label, env, failures) {
   }
 
   const result = await fetchJson(`${url}/rest/v1/projects?select=id&limit=1`, {
-    headers: {
-      apikey: apiKey,
-      authorization: `Bearer ${apiKey}`,
-    },
+    headers: makeSupabaseHeaders(apiKey),
   });
 
   if (result.ok) {

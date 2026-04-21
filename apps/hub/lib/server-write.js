@@ -20,6 +20,30 @@ export function resolveSupabaseConfig() {
   };
 }
 
+function isOpaqueSupabaseApiKey(apiKey) {
+  return apiKey.startsWith("sb_publishable_") || apiKey.startsWith("sb_secret_");
+}
+
+export function makeSupabaseHeaders(apiKey, { contentType, prefer } = {}) {
+  const headers = {
+    apikey: apiKey,
+  };
+
+  if (contentType) {
+    headers["content-type"] = contentType;
+  }
+
+  if (!isOpaqueSupabaseApiKey(apiKey)) {
+    headers.authorization = `Bearer ${apiKey}`;
+  }
+
+  if (prefer) {
+    headers.prefer = prefer;
+  }
+
+  return headers;
+}
+
 export function resolveDefaultWorkspaceId() {
   return (
     process.env.COM_MOON_DEFAULT_WORKSPACE_ID?.trim() ||
@@ -168,12 +192,10 @@ export async function insertSupabaseRecord(table, record) {
   try {
     const response = await fetch(`${config.url}/rest/v1/${table}`, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        apikey: config.apiKey,
-        authorization: `Bearer ${config.apiKey}`,
+      headers: makeSupabaseHeaders(config.apiKey, {
+        contentType: "application/json",
         prefer: "return=minimal",
-      },
+      }),
       body: JSON.stringify(record),
       cache: "no-store",
     });
@@ -224,12 +246,10 @@ export async function updateSupabaseRecord(table, filters = [], record = {}) {
   try {
     const response = await fetch(`${config.url}/rest/v1/${table}${buildFilterQuery(filters)}`, {
       method: "PATCH",
-      headers: {
-        "content-type": "application/json",
-        apikey: config.apiKey,
-        authorization: `Bearer ${config.apiKey}`,
+      headers: makeSupabaseHeaders(config.apiKey, {
+        contentType: "application/json",
         prefer: "return=minimal",
-      },
+      }),
       body: JSON.stringify(record),
       cache: "no-store",
     });

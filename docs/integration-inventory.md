@@ -12,6 +12,42 @@
 
 ## 현재 코드에 이미 있는 통합 뼈대
 
+## 2026-04-20 Supabase 연결 이후 작업 예정
+
+Supabase는 이제 Hub/Engine의 1차 원장으로 본다. 다음 연결들은 모두 "외부 서비스가 source of truth"가 아니라
+`Engine -> Supabase ledger -> Hub`로 흘러 들어오는 입력/실행 채널이다.
+
+### 권장 순서
+
+| 순서 | 연결 | 역할 | 우선순위 | 난이도 | 1차 완료 조건 |
+| ---: | --- | --- | --- | --- | --- |
+| 1 | Engine public URL + shared secret | 외부 webhook/API가 들어오는 안전한 정문 | P0 | Low | `GET /api/health`가 공개 URL에서 응답하고 `COM_MOON_SHARED_WEBHOOK_SECRET`가 설정됨 |
+| 2 | Project webhook smoke test | 외부 진행 이벤트를 `project_updates`, `webhook_events`에 남기는 공통 intake 검증 | P0 | Low-Mid | `/api/webhook/project/openclaw` 또는 `/moltbot`으로 보낸 테스트 이벤트가 Supabase에 기록됨 |
+| 3 | Telegram | 모바일 운영 리모컨, 빠른 명령 입력 | P0 | Mid | `/ping`, `/projects`, `/webhooks`가 Telegram에서 실행되고 run/event ledger가 남음 |
+| 4 | GitHub read sync | 실제 개발/배송 상태 source | P0.5 | Mid | repo/issue/PR/milestone 요약이 Work OS에 표시되고 `sync_runs`가 남음 |
+| 5 | Google Calendar | 일정, 마감, cadence 관리 | P1 | Mid-High | OAuth 연결 후 테스트 이벤트 생성/조회가 되고 `sync_runs`가 남음 |
+| 6 | Resend outbound email | 리드 follow-up, 운영/캠페인 메일 발송 | P1 | Mid | `/api/email/send` dry-run과 실제 테스트 발송 1건이 성공함 |
+| 7 | Gmail send | 개인/운영 Gmail 발송 채널 | P1 | Mid | Gmail OAuth connection 저장 후 send 테스트가 성공함 |
+| 8 | Notion read sync | 프로젝트/태스크/결정/노트 지식 소스 흡수 | P1 | High | Projects DB, Tasks DB read-only sync와 field mapping이 확정됨 |
+| 9 | Slack failure alert | 실패 알림과 approval 요청 채널 | P2 | Mid | `error_logs`, `sync_runs` failure가 지정 채널로 알림됨 |
+
+### 바로 다음 실행 체크리스트
+
+1. Engine 배포 URL을 정하고 Hub env의 `COM_MOON_ENGINE_URL`에 반영한다.
+2. Hub/Engine env에 같은 `COM_MOON_SHARED_WEBHOOK_SECRET`를 설정한다.
+3. 공개 URL에서 `GET /api/health`를 확인한다.
+4. Hub의 webhook smoke test 또는 curl로 `/api/webhook/project/openclaw`에 테스트 payload를 보낸다.
+5. Supabase에서 `webhook_events`, `project_updates`, `routine_checks` 기록을 확인한다.
+6. 기록이 남으면 Telegram webhook을 등록하고 `/ping`, `/projects`, `/webhooks`를 테스트한다.
+7. 그 다음 GitHub read sync를 붙여 Work OS의 실제 배송 상태를 가져온다.
+
+### 보안상 먼저 막을 것
+
+- `POST /api/webhook/project` 기본 라우트에도 shared secret 검증을 적용하거나 provider alias 경로로 통일한다.
+- Telegram webhook에 `X-Telegram-Bot-Api-Secret-Token` 검증을 추가한다.
+- `webhook_events`에 `provider_event_id` 또는 `external_id` 기반 중복 방지 전략을 적용한다.
+- 실패/부분 성공 응답은 `accepted`로 뭉개지 말고 `partial`, `failed`, `duplicate`로 구분한다.
+
 ### 데이터 / 연결 레저
 
 - `integration_connections`: 외부 시스템 연결 상태와 설정 저장
@@ -243,10 +279,12 @@ Slack은 소통 채널이지 원장이 아니다. 원장은 계속 Hub + Supabas
 
 ## 지금 바로 해야 하는 것
 
-- Supabase live env 채우기
+- Supabase live env는 채워진 상태로 보고, connection check를 커밋 전/배포 후에 다시 실행
 - Engine public URL 확정
+- Hub/Engine shared secret 설정
+- 외부 PM/agent 도구 1개를 `/api/webhook/project/openclaw` 또는 `/api/webhook/project/moltbot`에 연결
 - Telegram webhook 등록
-- 외부 PM 도구 1개를 `/api/webhook/project`에 연결
-- Notion 또는 Calendar 중 다음 source of truth 후보 1개 선택
+- GitHub read sync를 다음 Work OS source로 연결
+- Calendar, Email, Notion은 그 다음 순서로 1개씩 연결
 
 이 순서대로 가면 연결이 늘어나도 시스템이 무너지지 않는다.
