@@ -22,6 +22,9 @@
     "./tokens.css": "./tokens.css",
     "./primitives.css": "./primitives.css"
   },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "class-variance-authority": "^0.7.0"
   },

@@ -35,7 +35,7 @@ MVP:
 ### 2. `POST /api/webhook/project` 기본 라우트 인증
 
 상태:
-- `todo`
+- `done`
 
 문제:
 - `apps/engine/app/api/webhook/project/route.ts`는 시크릿 검사 없이 `handleProjectWebhook`을 호출한다.
@@ -52,7 +52,7 @@ MVP:
 ### 3. `runTelegramUpdate`의 `/webhooks` 분기 ledger 누락 수정
 
 상태:
-- `todo`
+- `done`
 
 문제:
 - `apps/engine/lib/run.ts`의 `/webhooks` 명령 분기는 다른 명령과 달리 `persistEngineArtifacts`를 호출하지 않고 바로 return한다.
@@ -68,7 +68,7 @@ MVP:
 ### 4. `handleProjectWebhook` 실패 응답 정직화
 
 상태:
-- `todo`
+- `done`
 
 문제:
 - `apps/engine/lib/project-webhook.ts`는 모든 Supabase 쓰기가 `{ persisted: false }`여도 최상위 응답은 `status: "accepted"` 고정이다.
@@ -85,28 +85,34 @@ MVP:
 ### 5. 멱등성(idempotency)
 
 상태:
-- `todo`
+- `shipped`
 
 문제:
 - Telegram은 5xx 시 업데이트를 재전송한다. `update_id` dedup 없음 → `/cardnews`가 중복 실행 가능.
 - Project webhook은 동일 payload가 두 번 들어오면 `webhook_events` / `project_updates`가 두 번 insert된다.
 
 MVP:
-- `webhook_events`에 `(source, external_id)` 유니크 인덱스 추가.
-  - Telegram: `external_id = telegram:{update_id}`
-  - Project provider: `external_id = {provider}:{eventId}` 또는 payload hash
-- `insertSupabaseRecord`에 `prefer: "resolution=ignore-duplicates"` 옵션 전달 경로 추가.
+- `webhook_events`에 `(workspace_id, source, provider_event_id)` partial unique index 추가.
+  - Telegram: `provider_event_id = telegram:{update_id}`
+  - Project provider: `provider_event_id = {provider}:{eventId}` 또는 payload hash
+- `insertSupabaseRecord`가 PostgREST `23505`/409를 `reason: "duplicate"`로 분류.
 - 중복 감지 시 Engine 응답은 `status: "duplicate"` + 200.
 
 후속:
 - `automation_runs`에도 동일 전략 적용(재시도 dedup).
+
+현재 반영:
+- Project webhook은 `provider_event_id`/`correlation_id`를 채우고 기존 `webhook_events`를 조회해 duplicate 응답을 반환한다.
+- Project webhook은 DB unique conflict도 duplicate로 해석해 `project_updates` 추가 insert를 건너뛴다.
+- Telegram은 command 실행 전에 `update_id` 기반 `webhook_events` reservation을 먼저 생성하고, duplicate면 side effect 없이 ignored 응답을 반환한다.
+- `supabase/migrations/20260425_0002_webhook_event_idempotency.sql`가 기존 중복 provider id를 suffix 처리한 뒤 partial unique index를 생성한다.
 
 ## P1 — 운영 루프를 실제로 닫는다
 
 ### 6. Telegram 사용자에게 결과 회신
 
 상태:
-- `todo`
+- `done`
 
 문제:
 - `runTelegramUpdate`는 결과를 호출자(HTTP 응답)에만 돌려준다.
@@ -125,7 +131,7 @@ MVP:
 ### 7. Hub → Engine intent dispatch 엔드포인트
 
 상태:
-- `todo`
+- `in_progress`
 
 문제:
 - 지금 Engine은 intake만 있고, Hub가 "이 카드뉴스 다시 만들어줘", "이 run 재시도해줘"를 보낼 엔드포인트가 없다.
@@ -175,6 +181,10 @@ MVP:
 
 후속:
 - Shared domain 쪽에서 템플릿/채널 규칙 확장(`docs/engine-os-separation-ui-plan.md` §14 P2).
+
+현재 반영:
+- `/cardnews` 생성 결과를 `content_items`와 `content_variants` draft로 저장하고 `automation_runs.output_payload`에 id를 포함한다.
+- Telegram 원문 채팅으로 직접 회신하는 단계는 6번과 함께 남아 있다.
 
 ### 10. Provider adapter 슬롯 확장
 

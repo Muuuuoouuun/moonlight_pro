@@ -1,12 +1,23 @@
 import { NextResponse } from "next/server";
 
+import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { buildRoutineCheckRecord, insertSupabaseRecord } from "@/lib/server-write";
 
 export const runtime = "nodejs";
 
 export async function POST(req) {
   try {
-    const payload = await req.json();
+    const guard = assertHubWriteAllowed(req);
+    if (guard) {
+      return guard;
+    }
+
+    const parsed = await readHubWriteJson(req);
+    if (parsed.error) {
+      return parsed.error;
+    }
+
+    const payload = parsed.data;
     const record = buildRoutineCheckRecord(payload);
 
     if (!record.workspace_id) {

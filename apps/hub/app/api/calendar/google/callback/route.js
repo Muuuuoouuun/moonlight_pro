@@ -16,9 +16,22 @@ export async function GET(req) {
   const code = searchParams.get("code");
   const error = searchParams.get("error");
   const state = decodeGoogleCalendarState(searchParams.get("state"));
+  const fallbackReturnPath = "/dashboard/work/calendar";
+
+  if (state.invalid) {
+    const target = new URL(fallbackReturnPath, origin);
+    target.searchParams.set("calendar", "invalid-state");
+    return NextResponse.redirect(target);
+  }
+
   const workspaceId = state.workspaceId || resolveDefaultWorkspaceId();
   const calendarId = state.calendarId || process.env.GOOGLE_CALENDAR_ID?.trim() || "primary";
-  const returnPath = state.returnPath || "/dashboard/work/calendar";
+  const returnPath =
+    typeof state.returnPath === "string" &&
+    state.returnPath.startsWith("/") &&
+    !state.returnPath.startsWith("//")
+      ? state.returnPath
+      : fallbackReturnPath;
   const target = new URL(returnPath, origin);
 
   if (error) {

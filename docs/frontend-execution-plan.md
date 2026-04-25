@@ -1,10 +1,12 @@
 # Com_Moon Frontend Execution Plan
 
+> Status: historical pre-detach plan. The active frontend is now Hub only; public web routes were removed from the workspace to keep execution focused.
+
 ## 1. Current Truth
 
 The repo already tells us the real situation:
 
-- [`apps/web`](/Users/bigmac_moon/Desktop/Projects/moonlight_pro/apps/web) has a lightweight public landing skeleton.
+- The former public landing skeleton has been detached from the active workspace.
 - [`apps/hub`](/Users/bigmac_moon/Desktop/Projects/moonlight_pro/apps/hub) has an early dashboard and a card-news editor prototype.
 - [`packages/ui`](/Users/bigmac_moon/Desktop/Projects/moonlight_pro/packages/ui) exists, but it is not yet a real shared design system.
 - Both apps depend on Next 14, but there is no shared frontend foundation yet for tokens, layout, and reusable state patterns.
@@ -15,14 +17,12 @@ This is good news. The product shape is visible. The frontend just needs one opi
 
 ## 2. Frontend Goal
 
-Build one coherent experience with two jobs:
+Build one coherent active experience:
 
-1. Public surface that converts trust into leads.
-2. Private surface that converts signals into action.
+1. Private surface that converts signals into action.
 
 The user outcome is simple:
 
-- a visitor understands what Com_Moon does in under 30 seconds
 - an operator sees what matters in under 5 seconds
 - content, lead capture, and operating decisions feel like one loop
 
@@ -30,8 +30,8 @@ The user outcome is simple:
 
 Think of Com_Moon as:
 
-- a public editorial storefront
-- connected to a private command desk
+- a private command desk
+- connected to an intake and execution engine
 
 Reference alignment for the current design pass:
 
@@ -39,19 +39,19 @@ Reference alignment for the current design pass:
 
 That reference plan should guide taste decisions while this document keeps execution order and route scope grounded in the real repo.
 
-That means the frontend should feel less like "marketing site + admin" and more like "outer skin + inner control room".
+That means the frontend should feel like an inner control room, not a generic admin dashboard.
 
 ```mermaid
 flowchart LR
-    A["Public Content"] --> B["Lead Capture"]
-    B --> C["Hub Dashboard"]
-    C --> D["Operations + Automations"]
-    D --> A
+    A["External Signal"] --> B["Engine Intake"]
+    B --> C["Supabase Ledger"]
+    C --> D["Hub Dashboard"]
+    D --> E["Operations + Automations"]
 ```
 
 ## 4. Information Architecture
 
-### Public Surface, `apps/web`
+### Detached Public Surface
 
 #### MVP Routes
 
@@ -380,7 +380,7 @@ Adopt one system across both apps:
 Reason:
 
 - `apps/hub` already reads like utility-class UI
-- `apps/web` already has strong visual tokens in CSS
+- the detached public surface already had strong visual-token exploration
 - combining tokens plus utilities gives speed without losing brand control
 
 ### Rendering
@@ -409,7 +409,7 @@ packages/ui/
   patterns/
   shells/
 
-apps/web/app/
+detached public app/
   (marketing)/
     page.tsx
     insights/
@@ -560,7 +560,7 @@ If implementation starts right after this plan, the first tickets should be:
 
 1. Create shared tokens and typography contract in [`packages/ui`](/Users/bigmac_moon/Desktop/Projects/moonlight_pro/packages/ui).
 2. Build `AppShell`, `SectionCard`, `Button`, `Badge`, `Input`, `EmptyState`, `Skeleton`.
-3. Refactor [`apps/web/app/page.tsx`](/Users/bigmac_moon/Desktop/Projects/moonlight_pro/apps/web/app/page.tsx) to match the final homepage section order.
+3. Keep public homepage work out of the active workspace until the Hub/Engine loop is stable.
 4. Rebuild [`apps/hub/app/dashboard/page.tsx`](/Users/bigmac_moon/Desktop/Projects/moonlight_pro/apps/hub/app/dashboard/page.tsx) around operator priority, not raw counts alone.
 5. Keep [`apps/hub/app/dashboard/card-news/page.tsx`](/Users/bigmac_moon/Desktop/Projects/moonlight_pro/apps/hub/app/dashboard/card-news/page.tsx) as a compatibility redirect into `Content > Studio`, then move shared card-news rules into `packages/content-manager`.
 

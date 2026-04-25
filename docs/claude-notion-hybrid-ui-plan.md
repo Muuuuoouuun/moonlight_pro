@@ -1,5 +1,7 @@
 # Claude x Notion Hybrid UI Plan
 
+> Status: historical design reference. The public web app has been detached from the active workspace; use this document only for taste notes that still apply to Hub and content workspace work.
+
 ## Goal
 
 Use the reference set from [`awesome-design-md`](https://github.com/VoltAgent/awesome-design-md/tree/main) as taste input, not as a template.
@@ -10,7 +12,7 @@ The target is:
 - `Notion` for structural clarity, calm utility, and information discipline
 - `Com_Moon` for the actual brand signal: content, leads, and operations in one loop
 
-This plan turns those references into a product-specific UI system for `apps/web`, `apps/hub`, and the content workspace.
+This plan turns those references into a product-specific UI system for Hub and the content workspace.
 
 ## Reference Read
 
@@ -68,7 +70,7 @@ Avoid:
 
 ## Product Translation
 
-### 1. Public Surface, `apps/web`
+### 1. Detached Public Surface
 
 Direction:
 
@@ -187,7 +189,6 @@ Rules:
 Files:
 
 - [DESIGN.md](/Users/bigmac_moon/Desktop/Projects/moonlight_pro/DESIGN.md)
-- [apps/web/app/globals.css](/Users/bigmac_moon/Desktop/Projects/moonlight_pro/apps/web/app/globals.css)
 - [apps/hub/app/globals.css](/Users/bigmac_moon/Desktop/Projects/moonlight_pro/apps/hub/app/globals.css)
 
 Do:
@@ -198,9 +199,7 @@ Do:
 
 ### Phase 2. Refine Public Surface
 
-Files:
-
-- [apps/web/app/page.tsx](/Users/bigmac_moon/Desktop/Projects/moonlight_pro/apps/web/app/page.tsx)
+Status: detached from active workspace.
 
 Do:
 

@@ -56,15 +56,10 @@ export function WebhookTestForm({
   return (
     <form className="action-form" onSubmit={handleSubmit}>
       <div className="form-grid">
-        <label className="field field-span-2">
+        <div className="field field-span-2">
           <span>Engine URL</span>
-          <input
-            className="field-input"
-            defaultValue={defaultEngineUrl}
-            name="engineUrl"
-            placeholder="예: http://localhost:3001"
-          />
-        </label>
+          <div className="field-static">{defaultEngineUrl || "COM_MOON_ENGINE_URL not configured"}</div>
+        </div>
 
         <label className="field">
           <span>Workspace ID</span>
@@ -142,8 +137,8 @@ export function WebhookTestForm({
           {pending ? "Sending..." : "Send Webhook Smoke Test"}
         </button>
         <p className="form-note">
-          엔진 URL이 설정되어 있으면 선택한 webhook route로 전송하고, 없으면 preview 응답을 돌려줍니다.
-          공유 route는 Hub env에 `COM_MOON_SHARED_WEBHOOK_SECRET`가 있으면 같이 붙여서 보냅니다.
+          Hub env의 `COM_MOON_ENGINE_URL`만 대상으로 사용합니다. 공유 route는
+          `COM_MOON_SHARED_WEBHOOK_SECRET`가 있으면 서버에서만 붙여서 보냅니다.
         </p>
       </div>
 

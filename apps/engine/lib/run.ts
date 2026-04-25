@@ -8,6 +8,7 @@ import {
   fetchSupabaseRows,
   inFilter,
   insertSupabaseRecord,
+  updateSupabaseRecord,
 } from "./supabase-rest";
 import {
   getTelegramMessage,
@@ -35,6 +36,46 @@ function makeFilter(key: string, value: string): SupabaseFilter {
 function withWorkspaceFilter(filters: SupabaseFilter[] = []) {
   const workspaceId = resolveWorkspaceId();
   return workspaceId ? [makeFilter("workspace_id", `eq.${workspaceId}`), ...filters] : filters;
+}
+
+function resolveTelegramProviderEventId(update: TelegramUpdate) {
+  return update.update_id == null ? null : `telegram:${String(update.update_id)}`;
+}
+
+async function reserveTelegramUpdate(update: TelegramUpdate, startedAt: string) {
+  const workspaceId = resolveWorkspaceId();
+  const providerEventId = resolveTelegramProviderEventId(update);
+
+  if (!workspaceId || !providerEventId) {
+    return {
+      reserved: true,
+      workspaceId,
+      providerEventId,
+      reason: workspaceId ? "missing-provider-event-id" : "missing-workspace",
+    };
+  }
+
+  const reservation = await insertSupabaseRecord("webhook_events", {
+    workspace_id: workspaceId,
+    event_type: "telegram.update",
+    source: "telegram",
+    status: "received",
+    correlation_id: providerEventId,
+    provider_event_id: providerEventId,
+    payload: {
+      update_id: update.update_id,
+      phase: "received",
+    },
+    received_at: startedAt,
+  });
+
+  return {
+    reserved: reservation.persisted,
+    workspaceId,
+    providerEventId,
+    reason: reservation.reason,
+    detail: reservation.detail,
+  };
 }
 
 function normalizeProjectStatus(value: string | null | undefined) {
@@ -257,12 +298,30 @@ async function persistEngineArtifacts({
     status === "completed" ? "success" : status === "failed" ? "failure" : "ignored";
   const webhookStatus =
     status === "completed" ? "processed" : status === "failed" ? "failed" : "ignored";
+  const providerEventId =
+    resolveTelegramProviderEventId(update);
+  const correlationId = providerEventId || `telegram:${runId}`;
+  const webhookEventPatch = {
+    event_type: command ? `telegram.${command}` : "telegram.update",
+    status: webhookStatus,
+    correlation_id: correlationId,
+    provider_event_id: providerEventId,
+    payload: {
+      text,
+      update_id: update.update_id ?? null,
+      command,
+    },
+    error_message: errorMessage ?? null,
+    processed_at: finishedAt,
+  };
 
-  await Promise.all([
+  const mutations: Array<Promise<unknown>> = [
     insertSupabaseRecord("automation_runs", {
       id: runId,
       workspace_id: workspaceId,
       status: automationStatus,
+      correlation_id: correlationId,
+      provider_event_id: providerEventId,
       input_payload: {
         source: "telegram",
         command,
@@ -275,21 +334,32 @@ async function persistEngineArtifacts({
       created_at: startedAt,
       finished_at: finishedAt,
     }),
-    insertSupabaseRecord("webhook_events", {
-      workspace_id: workspaceId,
-      event_type: command ? `telegram.${command}` : "telegram.update",
-      source: "telegram",
-      status: webhookStatus,
-      payload: {
-        text,
-        update_id: update.update_id ?? null,
-        command,
-      },
-      error_message: errorMessage ?? null,
-      received_at: startedAt,
-      processed_at: finishedAt,
-    }),
-  ]);
+  ];
+
+  if (providerEventId) {
+    mutations.push(
+      updateSupabaseRecord(
+        "webhook_events",
+        [
+          makeFilter("workspace_id", `eq.${workspaceId}`),
+          makeFilter("source", "eq.telegram"),
+          makeFilter("provider_event_id", `eq.${providerEventId}`),
+        ],
+        webhookEventPatch,
+      ),
+    );
+  } else {
+    mutations.push(
+      insertSupabaseRecord("webhook_events", {
+        workspace_id: workspaceId,
+        source: "telegram",
+        received_at: startedAt,
+        ...webhookEventPatch,
+      }),
+    );
+  }
+
+  await Promise.all(mutations);
 }
 
 export interface EngineRunResult {
@@ -305,6 +375,23 @@ export interface EngineRunResult {
 export async function runTelegramUpdate(update: TelegramUpdate): Promise<EngineRunResult> {
   const runId = randomUUID();
   const startedAt = new Date().toISOString();
+  const reservation = await reserveTelegramUpdate(update, startedAt);
+  if (!reservation.reserved && reservation.reason === "duplicate") {
+    const finishedAt = new Date().toISOString();
+    return {
+      runId,
+      source: "telegram",
+      status: "ignored",
+      command: null,
+      response: {
+        message: "Duplicate Telegram update ignored.",
+        providerEventId: reservation.providerEventId,
+      },
+      startedAt,
+      finishedAt,
+    };
+  }
+
   const message = getTelegramMessage(update);
   const text = getTelegramText(update);
   const command = parseTelegramCommand(text);
@@ -362,6 +449,65 @@ export async function runTelegramUpdate(update: TelegramUpdate): Promise<EngineR
         topic,
         templateId: DEFAULT_CARD_NEWS_TEMPLATE_ID,
       });
+      const workspaceId = resolveWorkspaceId();
+      const contentItemId = randomUUID();
+      const contentVariantId = randomUUID();
+      const contentPersistence = workspaceId
+        ? await Promise.all([
+            insertSupabaseRecord("content_items", {
+              id: contentItemId,
+              workspace_id: workspaceId,
+              title: result.title,
+              source_idea: topic,
+              idea_source: "telegram",
+              source_type: "idea",
+              status: "draft",
+              summary: result.summary,
+              next_action: "Review the generated draft in Content > Queue.",
+              visibility: "private",
+              meta: {
+                generated_by: "telegram",
+                template_id: result.templateId,
+                run_id: runId,
+              },
+              created_at: result.generatedAt,
+              updated_at: result.generatedAt,
+            }),
+            insertSupabaseRecord("content_variants", {
+              id: contentVariantId,
+              workspace_id: workspaceId,
+              content_id: contentItemId,
+              variant_type: "card_news",
+              title: result.title,
+              body: JSON.stringify(result),
+              summary: result.summary,
+              excerpt: result.summary,
+              status: "draft",
+              visibility: "private",
+              meta: {
+                generated_by: "telegram",
+                template_id: result.templateId,
+                slide_count: result.slideCount,
+                run_id: runId,
+              },
+              created_at: result.generatedAt,
+              updated_at: result.generatedAt,
+            }),
+          ])
+        : [
+            { persisted: false, reason: "missing-workspace" },
+            { persisted: false, reason: "missing-workspace" },
+          ];
+      const response = {
+        ...result,
+        contentItemId: workspaceId ? contentItemId : null,
+        contentVariantId: workspaceId ? contentVariantId : null,
+        hubPath: "/dashboard/content/queue",
+        persistence: {
+          contentItem: contentPersistence[0],
+          contentVariant: contentPersistence[1],
+        },
+      };
 
       const finishedAt = new Date().toISOString();
 
@@ -371,7 +517,7 @@ export async function runTelegramUpdate(update: TelegramUpdate): Promise<EngineR
           runId,
           command: command.name,
           topic,
-          result,
+          result: response,
         },
         trace: `telegram:${runId}`,
         timestamp: finishedAt,
@@ -384,7 +530,7 @@ export async function runTelegramUpdate(update: TelegramUpdate): Promise<EngineR
         status: "completed",
         update,
         text,
-        response: result,
+        response,
         startedAt,
         finishedAt,
       });
@@ -394,7 +540,7 @@ export async function runTelegramUpdate(update: TelegramUpdate): Promise<EngineR
         source: "telegram",
         status: "completed",
         command: command.name,
-        response: result,
+        response,
         startedAt,
         finishedAt,
       };
@@ -539,6 +685,17 @@ export async function runTelegramUpdate(update: TelegramUpdate): Promise<EngineR
         trace: `telegram:${runId}`,
         timestamp: finishedAt,
         level: "info",
+      });
+
+      await persistEngineArtifacts({
+        runId,
+        command: command.name,
+        status: "completed",
+        update,
+        text,
+        response,
+        startedAt,
+        finishedAt,
       });
 
       return {

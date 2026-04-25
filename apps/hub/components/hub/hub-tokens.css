@@ -153,3 +153,24 @@
 .hub-app .fade-up { animation: mlFadeUp 0.2s ease-out; }
 
 .hub-app .scroll-y { overflow-y: auto; }
+
+@media (pointer: coarse), (max-width: 720px) {
+  .hub-app {
+    height: 100dvh;
+  }
+
+  .hub-app button {
+    min-height: 44px;
+  }
+
+  .hub-app button[title],
+  .hub-app button[aria-label] {
+    min-width: 44px;
+  }
+
+  .hub-app input,
+  .hub-app textarea,
+  .hub-app select {
+    min-height: 44px;
+  }
+}

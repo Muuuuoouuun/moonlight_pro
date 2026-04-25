@@ -52,20 +52,12 @@ export function resolveDefaultWorkspaceId() {
   );
 }
 
-function resolveEngineUrl(override) {
-  return (
-    override?.trim() ||
-    process.env.COM_MOON_ENGINE_URL?.trim() ||
-    ""
-  ).replace(/\/$/, "");
+function resolveEngineUrl() {
+  return (process.env.COM_MOON_ENGINE_URL?.trim() || "").replace(/\/$/, "");
 }
 
-function resolveSharedWebhookSecret(override) {
-  return (
-    override?.trim() ||
-    process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim() ||
-    ""
-  );
+function resolveSharedWebhookSecret() {
+  return process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim() || "";
 }
 
 function normalizeString(value, fallback = "") {
@@ -314,7 +306,7 @@ export function buildRoutineCheckRecord(payload) {
 }
 
 export async function sendProjectWebhook(payload) {
-  const engineUrl = resolveEngineUrl(payload.engineUrl);
+  const engineUrl = resolveEngineUrl();
   const target = normalizeWebhookTarget(payload.targetRoute);
   const routePath = resolveProjectWebhookPath(target);
 
@@ -330,8 +322,8 @@ export async function sendProjectWebhook(payload) {
     "content-type": "application/json",
   };
 
-  const sharedSecret = resolveSharedWebhookSecret(payload.sharedWebhookSecret);
-  if ((target === "openclaw" || target === "moltbot") && sharedSecret) {
+  const sharedSecret = resolveSharedWebhookSecret();
+  if (sharedSecret) {
     headers[SHARED_WEBHOOK_SECRET_HEADER] = sharedSecret;
   }
 

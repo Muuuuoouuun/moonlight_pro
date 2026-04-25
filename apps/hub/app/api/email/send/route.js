@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
 export const runtime = "nodejs";
@@ -14,6 +15,10 @@ function normalizeString(value, fallback = "") {
 
 function resolveEngineUrl() {
   return (process.env.COM_MOON_ENGINE_URL?.trim() || "").replace(/\/$/, "");
+}
+
+function resolveSharedWebhookSecret() {
+  return process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim() || "";
 }
 
 function buildEmailPayload(payload) {
@@ -39,7 +44,17 @@ function buildEmailPayload(payload) {
 
 export async function POST(req) {
   try {
-    const payload = buildEmailPayload(await req.json());
+    const guard = assertHubWriteAllowed(req);
+    if (guard) {
+      return guard;
+    }
+
+    const parsed = await readHubWriteJson(req);
+    if (parsed.error) {
+      return parsed.error;
+    }
+
+    const payload = buildEmailPayload(parsed.data);
 
     if (!payload.recipientEmail) {
       return NextResponse.json(
@@ -78,6 +93,9 @@ export async function POST(req) {
       method: "POST",
       headers: {
         "content-type": "application/json",
+        ...(resolveSharedWebhookSecret()
+          ? { "x-com-moon-shared-secret": resolveSharedWebhookSecret() }
+          : {}),
       },
       body: JSON.stringify(payload),
       cache: "no-store",

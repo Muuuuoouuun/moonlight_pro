@@ -33,6 +33,32 @@ const QUICK_COMMANDS = [
   { slash: '/runs',      label: '자동화 Run log',      dest: 'dashboard/automations/runs',   tone: 'danger' },
 ];
 
+const SAFE_INCOMING_BASE_URL = 'https://hooks.moonlight.pro/v1/in/{workspace}';
+
+const SETTINGS_API_KEYS = [
+  { name: 'Default (personal)', ref: 'key_personal_default', fingerprint: 'A28B', scopes: 'read · write', created: 'Vault managed', lastUsed: '3분 전' },
+  { name: 'Gmail automation', ref: 'key_gmail_automation', fingerprint: 'E3D4', scopes: 'automations', created: 'Vault managed', lastUsed: '12분 전' },
+  { name: 'Newsletter pipeline', ref: 'key_newsletter_pipeline', fingerprint: '6F8', scopes: 'content · automations', created: 'Vault managed', lastUsed: '어제' },
+  { name: 'Claude Code (local)', ref: 'key_claude_local', fingerprint: '6C3', scopes: 'read-only', created: 'Local vault', lastUsed: '5일 전' },
+];
+
+const INCOMING_WEBHOOKS = [
+  { slug: 'stripe-payments', source: 'Stripe', events: 'payment_succeeded · refunded', hits24: 4, last: '1시간 전', active: true },
+  { slug: 'calendly-invites', source: 'Calendly', events: 'invitee.created · canceled', hits24: 2, last: '3시간 전', active: true },
+  { slug: 'github-deploys', source: 'GitHub', events: 'deployment_status', hits24: 11, last: '14분 전', active: true },
+  { slug: 'ghost-newsletter', source: 'Ghost', events: 'post.published', hits24: 0, last: '3일 전', active: false },
+];
+
+const OUTGOING_WEBHOOKS = [
+  { slug: 'zapier-leads', source: 'Zapier', events: 'lead.created', hits24: 7, last: '22분 전', active: true, fingerprint: 'B2K9' },
+  { slug: 'slack-revenue', source: 'Slack', events: 'payment.succeeded', hits24: 4, last: '1시간 전', active: true, fingerprint: 'Q1' },
+  { slug: 'make-content', source: 'Make', events: 'content.published', hits24: 1, last: '어제', active: true, fingerprint: 'E1D' },
+];
+
+function maskFingerprint(fingerprint) {
+  return `•••• •••• •••• ${fingerprint}`;
+}
+
 export function Evolution({ onNavigate }) {
   const tagTone = { upgrade: 'moon', bug: 'danger', insight: 'info', note: 'neutral' };
   return (
@@ -180,7 +206,7 @@ function CopyRow({ value, mono }) {
         display: 'inline-flex', alignItems: 'center', gap: 5,
         height: 24, padding: '0 8px',
         background: copied ? 'var(--success)' : 'var(--surface)',
-        color: copied ? '#fff' : 'var(--fg-muted)',
+        color: copied ? 'var(--bg)' : 'var(--fg-muted)',
         border: '1px solid var(--line)', borderRadius: 4,
         fontSize: 11, fontFamily: 'var(--font-sans)',
         transition: 'background .15s, color .15s',
@@ -197,14 +223,19 @@ function KeyRow({ item, last, kind }) {
   const [copied, setCopied] = React.useState(false);
 
   const displayValue = (() => {
-    if (kind === 'key') return revealed ? item.id : `mk_live_${'•'.repeat(28)}${item.id.slice(-4)}`;
-    if (kind === 'webhook') return `https://hooks.moonlight.pro/v1/in/wsp_2k9f4/${item.slug}`;
-    if (kind === 'outgoing') return item.url;
+    if (kind === 'key') {
+      return revealed
+        ? `Fingerprint ${item.fingerprint} · full key hidden after creation`
+        : maskFingerprint(item.fingerprint);
+    }
+    if (kind === 'webhook') return `${SAFE_INCOMING_BASE_URL}/${item.slug}`;
+    if (kind === 'outgoing') return `${item.source} endpoint · ${maskFingerprint(item.fingerprint)}`;
     return '';
   })();
+  const copyValue = kind === 'key' ? item.ref : displayValue;
 
   const copy = () => {
-    navigator.clipboard?.writeText(displayValue).catch(() => {});
+    navigator.clipboard?.writeText(copyValue).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 1200);
   };
@@ -252,7 +283,7 @@ function KeyRow({ item, last, kind }) {
         </div>
         {kind !== 'key' && <Badge tone={item.active ? 'success' : 'neutral'} size="xs">{item.active ? 'active' : 'paused'}</Badge>}
         {kind === 'key' && (
-          <button onClick={() => setRevealed(r => !r)} title={revealed ? 'Hide' : 'Reveal'} style={{
+          <button onClick={() => setRevealed(r => !r)} title={revealed ? 'Hide details' : 'Show details'} style={{
             width: 26, height: 26, borderRadius: 6,
             background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
             color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -264,7 +295,7 @@ function KeyRow({ item, last, kind }) {
           display: 'inline-flex', alignItems: 'center', gap: 5,
           height: 26, padding: '0 10px',
           background: copied ? 'var(--success)' : 'var(--surface-2)',
-          color: copied ? '#fff' : 'var(--fg-muted)',
+          color: copied ? 'var(--bg)' : 'var(--fg-muted)',
           border: '1px solid var(--line-soft)', borderRadius: 6,
           fontSize: 11, transition: 'background .15s, color .15s',
         }}>
@@ -332,13 +363,8 @@ export function Settings() {
       <div>
         <SectionTitle>API keys</SectionTitle>
         <Card pad={false}>
-          {[
-            { name: 'Default (personal)', id: 'mk_live_9f2c7a31b4e88d05c1a3b9e7f4d6a28b', scopes: 'read · write', created: '2025-02-14', lastUsed: '3분 전' },
-            { name: 'Gmail automation', id: 'mk_live_b41e7f0d2a9c4683de5f1b7a9c02e3d4', scopes: 'automations', created: '2025-03-02', lastUsed: '12분 전' },
-            { name: 'Newsletter pipeline', id: 'mk_live_c83d1a9e5f2b46078e41d37c92b5a6f8', scopes: 'content · automations', created: '2025-03-19', lastUsed: '어제' },
-            { name: 'Claude Code (local)', id: 'mk_live_4e71f2c806a9d34b7c1f8e25ad09b6c3', scopes: 'read-only', created: '2025-04-01', lastUsed: '5일 전' },
-          ].map((k, i, arr) => (
-            <KeyRow key={k.id} item={k} last={i === arr.length - 1} kind="key" />
+          {SETTINGS_API_KEYS.map((k, i, arr) => (
+            <KeyRow key={k.ref} item={k} last={i === arr.length - 1} kind="key" />
           ))}
           <div style={{ padding: '10px 18px', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-2)' }}>
             <Iconed name="plus" size={12} style={{ color: 'var(--fg-faint)' }} />
@@ -361,17 +387,12 @@ export function Settings() {
               <div style={{ flex: 1 }} />
               <Badge tone="success" size="xs">live</Badge>
             </div>
-            <CopyRow value="https://hooks.moonlight.pro/v1/in/wsp_2k9f4" mono />
+            <CopyRow value={SAFE_INCOMING_BASE_URL} mono />
             <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>
               외부 서비스에서 이 기본 URL에 <code className="mono" style={{ fontSize: 10.5, padding: '1px 5px', background: 'var(--surface-3)', borderRadius: 4 }}>/{'<slug>'}</code>를 붙여 POST 요청을 보냅니다.
             </div>
           </div>
-          {[
-            { slug: 'stripe-payments', source: 'Stripe', events: 'payment_succeeded · refunded', hits24: 4, last: '1시간 전', active: true },
-            { slug: 'calendly-invites', source: 'Calendly', events: 'invitee.created · canceled', hits24: 2, last: '3시간 전', active: true },
-            { slug: 'github-deploys', source: 'GitHub', events: 'deployment_status', hits24: 11, last: '14분 전', active: true },
-            { slug: 'ghost-newsletter', source: 'Ghost', events: 'post.published', hits24: 0, last: '3일 전', active: false },
-          ].map((w, i, arr) => (
+          {INCOMING_WEBHOOKS.map((w, i, arr) => (
             <KeyRow key={w.slug} item={w} last={i === arr.length - 1} kind="webhook" />
           ))}
           <div style={{ padding: '10px 18px', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-2)' }}>
@@ -386,11 +407,7 @@ export function Settings() {
       <div>
         <SectionTitle>Outgoing webhooks</SectionTitle>
         <Card pad={false}>
-          {[
-            { slug: 'zapier-leads', source: 'Zapier', events: 'lead.created', hits24: 7, last: '22분 전', active: true, url: 'https://hooks.zapier.com/hooks/catch/1823945/b2k9f4' },
-            { slug: 'slack-revenue', source: 'Slack', events: 'payment.succeeded', hits24: 4, last: '1시간 전', active: true, url: 'https://hooks.slack.com/services/T01/B02/xPlBk9f4q1' },
-            { slug: 'make-content', source: 'Make', events: 'content.published', hits24: 1, last: '어제', active: true, url: 'https://hook.eu2.make.com/a7f3b29c4e1d' },
-          ].map((w, i, arr) => (
+          {OUTGOING_WEBHOOKS.map((w, i, arr) => (
             <KeyRow key={w.slug} item={w} last={i === arr.length - 1} kind="outgoing" />
           ))}
         </Card>

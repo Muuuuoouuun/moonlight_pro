@@ -96,6 +96,43 @@ export function inFilter(values: string[]) {
   return `in.(${values.join(",")})`;
 }
 
+export async function checkSupabaseRest(table = "projects") {
+  const config = resolveSupabaseRestConfig();
+
+  if (!config) {
+    return {
+      configured: false,
+      reachable: false,
+      status: null,
+      reason: "missing-config",
+    };
+  }
+
+  try {
+    const response = await fetch(buildRestUrl(config.url, table, {
+      select: "id",
+      limit: 1,
+    }), {
+      headers: makeHeaders(config.apiKey),
+      cache: "no-store",
+    });
+
+    return {
+      configured: true,
+      reachable: response.ok,
+      status: response.status,
+      reason: response.ok ? "ok" : `http-${response.status}`,
+    };
+  } catch (error) {
+    return {
+      configured: true,
+      reachable: false,
+      status: null,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 export async function fetchSupabaseRows(table: string, options: SupabaseQueryOptions = {}) {
   const config = resolveSupabaseRestConfig();
 
@@ -174,9 +211,15 @@ export async function insertSupabaseRecord(table: string, record: Record<string,
 
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
+      const isDuplicate =
+        response.status === 409 &&
+        (detail.includes("23505") ||
+          detail.includes("duplicate key value") ||
+          detail.includes("idx_webhook_events_provider_event"));
+
       return {
         persisted: false,
-        reason: `http-${response.status}`,
+        reason: isDuplicate ? "duplicate" : `http-${response.status}`,
         detail,
       };
     }

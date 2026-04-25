@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState } from "../hub-primitives";
 import {
   CONTENT_QUEUE as FALLBACK_CONTENT_QUEUE,
   CAMPAIGNS as FALLBACK_CAMPAIGNS,
@@ -35,16 +35,16 @@ function useContentLedger() {
           return;
         }
 
-        if (data.source === "supabase" && data.queue?.length) {
+        if (data.source === "supabase") {
           setState({
             source: data.source,
             syncState: "live",
-            items: data.items || [],
-            variants: data.variants || [],
-            publishLogs: data.publishLogs || [],
-            queue: data.queue,
-            pipeline: data.pipeline || [],
-            attention: data.attention || [],
+            items: Array.isArray(data.items) ? data.items : [],
+            variants: Array.isArray(data.variants) ? data.variants : [],
+            publishLogs: Array.isArray(data.publishLogs) ? data.publishLogs : [],
+            queue: Array.isArray(data.queue) ? data.queue : [],
+            pipeline: Array.isArray(data.pipeline) ? data.pipeline : [],
+            attention: Array.isArray(data.attention) ? data.attention : [],
             summary: data.summary || null,
           });
         } else {
@@ -381,7 +381,9 @@ export function Studio() {
 
 export function Queue() {
   const ledger = useContentLedger();
-  const queue = ledger.queue?.length ? ledger.queue : FALLBACK_CONTENT_QUEUE;
+  const queue = ledger.source === "supabase"
+    ? (Array.isArray(ledger.queue) ? ledger.queue : [])
+    : (ledger.queue?.length ? ledger.queue : FALLBACK_CONTENT_QUEUE);
   const statusTone = { Draft: 'warning', Scheduled: 'info', Review: 'moon', Idea: 'neutral', Outline: 'neutral', Published: 'success' };
   const draftCount = queue.filter(c => c.status === 'Draft').length;
   const scheduledCount = queue.filter(c => c.status === 'Scheduled').length;
@@ -406,6 +408,14 @@ export function Queue() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 110px 110px 130px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>Title</span><span>Kind</span><span>Channel</span><span>Status</span><span>When</span><span style={{ textAlign: 'right' }}>Author</span>
         </div>
+        {queue.length === 0 && (
+          <EmptyState
+            icon="queue"
+            title="발행 큐가 비어 있습니다"
+            description={ledger.syncState === 'live' ? 'Supabase content_items/content_variants 원장에 표시할 콘텐츠가 없습니다.' : '초안을 만들면 큐와 파이프라인에 표시됩니다.'}
+            action={<Button variant="primary" size="sm" icon="plus">Draft</Button>}
+          />
+        )}
         {queue.map((c, i) => (
           <div key={c.id} style={{
             display: 'grid', gridTemplateColumns: '1fr 110px 110px 110px 130px 80px',

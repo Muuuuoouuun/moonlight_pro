@@ -121,9 +121,18 @@ export function validateSharedWebhookRequest(req: Request): AuthResult {
   const expectedSecret = process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim();
 
   if (!expectedSecret) {
+    if (process.env.COM_MOON_ALLOW_OPEN_WEBHOOKS?.trim() === "true") {
+      return {
+        ok: true,
+        mode: "open",
+      };
+    }
+
     return {
-      ok: true,
-      mode: "open",
+      ok: false,
+      mode: "header",
+      error:
+        "COM_MOON_SHARED_WEBHOOK_SECRET is not configured. Set COM_MOON_ALLOW_OPEN_WEBHOOKS=true only for local smoke tests.",
     };
   }
 
@@ -204,6 +213,19 @@ export function buildSharedProjectWebhookPayload(
     eventType:
       pickString(records, ["eventType", "event_type", "type", "kind"]) ||
       `project.${provider}.update`,
+    providerEventId: nullToUndefined(
+      pickString(records, [
+        "providerEventId",
+        "provider_event_id",
+        "externalId",
+        "external_id",
+        "eventId",
+        "event_id",
+      ]),
+    ),
+    correlationId: nullToUndefined(
+      pickString(records, ["correlationId", "correlation_id", "traceId", "trace_id"]),
+    ),
     provider,
     source: pickString(records, ["source", "sourceName", "origin"]) || provider,
     checkType: nullToUndefined(pickString(records, ["checkType", "check_type", "cadence", "routine"])),

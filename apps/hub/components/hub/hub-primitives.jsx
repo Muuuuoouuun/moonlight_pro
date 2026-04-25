@@ -84,6 +84,42 @@ export function SectionTitle({ children, right, style, subtitle }) {
   );
 }
 
+export function EmptyState({ icon = 'inbox', title, description, action, style }) {
+  return (
+    <div style={{
+      minHeight: 180,
+      padding: '32px 20px',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 9,
+      textAlign: 'center',
+      color: 'var(--fg-muted)',
+      ...style,
+    }}>
+      <div style={{
+        width: 34,
+        height: 34,
+        borderRadius: 'var(--r-sm)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--surface-2)',
+        border: '1px solid var(--line-soft)',
+        color: 'var(--fg-faint)',
+      }}>
+        <Iconed name={icon} size={16} />
+      </div>
+      <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--fg)' }}>{title}</div>
+      {description && (
+        <div style={{ fontSize: 12, lineHeight: 1.55, color: 'var(--fg-faint)', maxWidth: 360 }}>{description}</div>
+      )}
+      {action && <div style={{ marginTop: 4 }}>{action}</div>}
+    </div>
+  );
+}
+
 export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRight, style, onClick, active, type = 'button' }) {
   const sizes = {
     xs: { h: 24, px: 8, fs: 12, gap: 5 },

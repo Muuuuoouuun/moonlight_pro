@@ -1,15 +1,25 @@
 import { NextResponse } from "next/server";
 
-import { buildGoogleCalendarAuthUrl } from "@/lib/google-calendar";
+import {
+  buildGoogleCalendarAuthUrl,
+  hasGoogleCalendarOAuthStateSecret,
+} from "@/lib/google-calendar";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
 export const runtime = "nodejs";
 
 export async function GET(req) {
   const { searchParams, origin } = req.nextUrl;
-  const workspaceId = searchParams.get("workspaceId") || resolveDefaultWorkspaceId();
+  const workspaceId = resolveDefaultWorkspaceId();
   const calendarId = searchParams.get("calendarId") || process.env.GOOGLE_CALENDAR_ID?.trim() || "primary";
   const returnPath = searchParams.get("returnPath") || "/dashboard/work/calendar";
+
+  if (!hasGoogleCalendarOAuthStateSecret()) {
+    const target = new URL(returnPath, origin);
+    target.searchParams.set("calendar", "missing-oauth-state-secret");
+    return NextResponse.redirect(target);
+  }
+
   const authUrl = buildGoogleCalendarAuthUrl({
     origin,
     workspaceId,

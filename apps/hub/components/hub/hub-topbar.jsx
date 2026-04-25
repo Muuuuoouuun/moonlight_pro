@@ -81,13 +81,14 @@ export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, o
       <IconButton icon="sparkle" tooltip="Ask Agents" onClick={() => onNavigate('dashboard/agents/chat')} />
       <button onClick={() => onTheme(theme === 'dark' ? 'light' : 'dark')}
         title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
+        aria-label={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
         style={{
           width: 28, height: 28, borderRadius: 'var(--r-sm)',
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           color: 'var(--fg-muted)',
           border: '1px solid var(--line-soft)', background: 'var(--surface-2)',
         }}>
-        <span style={{ fontSize: 13 }}>{theme === 'dark' ? '☾' : '☀'}</span>
+        <Iconed name={theme === 'dark' ? 'moon' : 'sun'} size={13} />
       </button>
       <IconButton icon="settings" tooltip="Tweaks" onClick={onTweaksToggle} />
       <IconButton icon="bell" tooltip="Notifications" />

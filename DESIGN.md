@@ -8,15 +8,12 @@
 
 Moonlight is not a generic SaaS dashboard.
 
-It is one operating system with two surfaces:
+It is one operating system with two active layers:
 
-- `apps/web`: public surface that earns trust, publishes content, and turns attention into leads.
 - `apps/hub`: private operating surface that turns signals into decisions, routines, and execution.
+- `apps/engine`: intake and execution layer that validates inputs, writes ledger records, and triggers actions.
 
-The design job is to make these two surfaces feel related without making them identical.
-
-Public should feel editorial, clear, and confident.
-Hub should feel operational, calm, and fast.
+The public web surface has been detached from this workspace. The design job now is to make the Hub feel operational, calm, and fast while keeping Engine feedback visible through status, logs, and next actions.
 
 ## 2. Brand Thesis
 
@@ -32,7 +29,7 @@ If the product feels "busy", "crypto-like", or "default SaaS blue", we missed.
 
 1. **Show signal first.** The first screen answers "what matters right now?" in under 5 seconds.
 2. **Make action obvious.** Every section has a primary next step, not just density.
-3. **Same visual family, different pressure.** Public earns trust. Hub closes the loop.
+3. **Close the loop.** Intake, ledger state, and operator action should feel like one system.
 4. **Respect mobile reality.** The founder checks numbers, captures ideas, and triggers workflows from a phone.
 5. **Restraint wins.** One accent, a small surface vocabulary, deliberate typography.
 
@@ -45,8 +42,8 @@ panel or a surgical console. Premium because it is calibrated, not decorated.
 Bloomberg (command-deck rhythm: status / count / next action).
 
 - `apps/hub`: dark-native. Void surfaces, moonstone silver accents, hairline borders.
-- `apps/web`: lighter frost canvas. Same moonstone accent, same rule vocabulary, more breathing room.
-- `Content / Studio` surfaces: mid density between hub and web.
+- `apps/engine`: invisible by default, surfaced through health, status, run logs, and webhook outcomes.
+- `Content / Studio` surfaces: slightly lower density inside Hub so drafting and review have breathing room.
 
 **Do not reintroduce:**
 - Warm gold / amber / champagne accents
@@ -135,7 +132,7 @@ Defined in `apps/hub/components/hub/hub-tokens.css` and scoped under `.hub-app`.
 | -------- | --------------------- | ----------------------------------------------- |
 | UI Sans  | `Inter Tight`         | Everything except numbers and display headings. |
 | Data Mono| `JetBrains Mono`      | IDs, metrics, timestamps, keybindings, diffs.   |
-| Display  | `MaruBuri` (web only) | Public editorial headlines.                     |
+| Display  | `Inter Tight`         | Page-level moments only; avoid decorative display type in dense Hub surfaces. |
 
 Fallbacks: `ui-sans-serif, system-ui, sans-serif` for sans, `ui-monospace, monospace` for mono.
 

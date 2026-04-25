@@ -1,8 +1,8 @@
 /**
  * Canonical locale configuration for the Com_Moon Hub (private OS).
  *
- * Mirrors apps/web/i18n/config.ts so both surfaces share the same
- * cookie contract (NEXT_LOCALE) and the same Korean-first default.
+ * The Hub owns the active UI locale contract after the public web surface
+ * was detached from this workspace.
  *
  * Keep this file free of server-only imports so it can be consumed by
  * the client bundle (language switcher, client components).

@@ -16,9 +16,22 @@ export async function GET(req) {
   const code = searchParams.get("code");
   const error = searchParams.get("error");
   const state = decodeGoogleGmailState(searchParams.get("state"));
+  const fallbackReturnPath = "/dashboard/automations/email";
+
+  if (state.invalid) {
+    const target = new URL(fallbackReturnPath, origin);
+    target.searchParams.set("gmail", "invalid-state");
+    return NextResponse.redirect(target);
+  }
+
   const workspaceId = state.workspaceId || resolveDefaultWorkspaceId();
   const mailbox = state.mailbox || "me";
-  const returnPath = state.returnPath || "/dashboard/automations/email";
+  const returnPath =
+    typeof state.returnPath === "string" &&
+    state.returnPath.startsWith("/") &&
+    !state.returnPath.startsWith("//")
+      ? state.returnPath
+      : fallbackReturnPath;
   const target = new URL(returnPath, origin);
 
   if (error) {

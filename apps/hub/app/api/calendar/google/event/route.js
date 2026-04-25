@@ -4,6 +4,7 @@ import {
   createOrUpdateGoogleCalendarEvent,
   recordGoogleCalendarSync,
 } from "@/lib/google-calendar";
+import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
 export const runtime = "nodejs";
@@ -33,7 +34,17 @@ function buildPreview(payload) {
 
 export async function POST(req) {
   try {
-    const payload = buildPreview(await req.json());
+    const guard = assertHubWriteAllowed(req);
+    if (guard) {
+      return guard;
+    }
+
+    const parsed = await readHubWriteJson(req);
+    if (parsed.error) {
+      return parsed.error;
+    }
+
+    const payload = buildPreview(parsed.data);
 
     if (!payload.workspaceId) {
       return NextResponse.json(

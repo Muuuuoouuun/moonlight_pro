@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 
 import { logError, logEvent } from "@com-moon/hub-gateway";
 
-import { insertSupabaseRecord, updateSupabaseRecord } from "./supabase-rest";
+import { fetchSupabaseRows, insertSupabaseRecord, updateSupabaseRecord } from "./supabase-rest";
 
 const PROJECT_STATUSES = new Set(["reported", "active", "blocked", "done"]);
 const CHECK_TYPES = new Set(["morning", "midday", "evening", "weekly"]);
@@ -19,6 +19,8 @@ export interface ProjectWebhookPayload {
   nextAction?: string;
   eventType?: string;
   provider?: string;
+  providerEventId?: string;
+  correlationId?: string;
   source?: string;
   checkType?: string;
   note?: string;
@@ -99,6 +101,85 @@ function clampProgress(value?: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+function normalizeIdentifier(value: unknown) {
+  if (typeof value === "string") {
+    return value.trim() || null;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  return null;
+}
+
+function resolvePayloadIdentifier(payload: Record<string, unknown>) {
+  return (
+    normalizeIdentifier(payload.providerEventId) ||
+    normalizeIdentifier(payload.externalId) ||
+    normalizeIdentifier(payload.eventId) ||
+    normalizeIdentifier(payload.id)
+  );
+}
+
+function resolveProviderEventId(input: ProjectWebhookPayload, source: string) {
+  const rawPayload = input.payload && typeof input.payload === "object" ? input.payload : {};
+  const candidate =
+    normalizeIdentifier(input.providerEventId) || resolvePayloadIdentifier(rawPayload);
+
+  if (!candidate) {
+    return null;
+  }
+
+  return candidate.includes(":") ? candidate : `${source}:${candidate}`;
+}
+
+async function findDuplicateWebhookEvent({
+  workspaceId,
+  source,
+  providerEventId,
+}: {
+  workspaceId: string;
+  source: string;
+  providerEventId: string | null;
+}) {
+  if (!workspaceId || !providerEventId) {
+    return null;
+  }
+
+  const rows = await fetchSupabaseRows("webhook_events", {
+    limit: 1,
+    filters: [
+      ["workspace_id", `eq.${workspaceId}`],
+      ["source", `eq.${source}`],
+      ["provider_event_id", `eq.${providerEventId}`],
+    ],
+  });
+
+  return rows?.[0] || null;
+}
+
+function summarizePersistence({
+  webhookEventRecord,
+  projectUpdateRecord,
+}: {
+  webhookEventRecord: Awaited<ReturnType<typeof insertSupabaseRecord>>;
+  projectUpdateRecord: Awaited<ReturnType<typeof insertSupabaseRecord>>;
+}) {
+  const essential = [webhookEventRecord, projectUpdateRecord];
+  const persistedCount = essential.filter((item) => item.persisted).length;
+
+  if (persistedCount === essential.length) {
+    return "accepted";
+  }
+
+  if (persistedCount > 0) {
+    return "partial";
+  }
+
+  return "failed";
+}
+
 export async function handleProjectWebhook(input: ProjectWebhookPayload) {
   const eventId = randomUUID();
   const updateId = randomUUID();
@@ -120,11 +201,37 @@ export async function handleProjectWebhook(input: ProjectWebhookPayload) {
     eventType,
     provider: input.provider?.trim() || "manual",
     source: input.source?.trim() || "webhook",
+    providerEventId: null as string | null,
+    correlationId: normalizeIdentifier(input.correlationId),
     checkType: normalizeCheckType(input.checkType),
     note: input.note?.trim() || null,
     payload: input.payload ?? {},
     receivedAt,
   };
+  normalized.providerEventId = resolveProviderEventId(input, normalized.source);
+  normalized.correlationId =
+    normalized.correlationId || normalized.providerEventId || `project-webhook:${eventId}`;
+
+  const duplicate = await findDuplicateWebhookEvent({
+    workspaceId,
+    source: normalized.source,
+    providerEventId: normalized.providerEventId,
+  });
+
+  if (duplicate) {
+    return {
+      status: "duplicate",
+      eventId: duplicate.id || eventId,
+      projectUpdateId: null,
+      normalized,
+      persistence: {
+        webhookEvent: { persisted: true, reason: "duplicate" },
+        projectUpdate: { persisted: false, reason: "duplicate" },
+        routineCheck: { persisted: false, reason: "duplicate" },
+        project: { persisted: false, reason: "duplicate" },
+      },
+    };
+  }
 
   await logEvent({
     context: "project-webhook",
@@ -143,11 +250,34 @@ export async function handleProjectWebhook(input: ProjectWebhookPayload) {
         event_type: eventType,
         source: normalized.source,
         status: "processed",
+        correlation_id: normalized.correlationId,
+        provider_event_id: normalized.providerEventId,
         payload: normalized.payload,
         received_at: receivedAt,
         processed_at: new Date().toISOString(),
       })
     : { persisted: false, reason: "missing-workspace" };
+
+  if (webhookEventRecord.reason === "duplicate") {
+    const persistedDuplicate = await findDuplicateWebhookEvent({
+      workspaceId,
+      source: normalized.source,
+      providerEventId: normalized.providerEventId,
+    });
+
+    return {
+      status: "duplicate",
+      eventId: persistedDuplicate?.id || eventId,
+      projectUpdateId: null,
+      normalized,
+      persistence: {
+        webhookEvent: webhookEventRecord,
+        projectUpdate: { persisted: false, reason: "duplicate" },
+        routineCheck: { persisted: false, reason: "duplicate" },
+        project: { persisted: false, reason: "duplicate" },
+      },
+    };
+  }
 
   const projectUpdateRecord =
     workspaceId && (normalized.projectId || normalized.title)
@@ -163,6 +293,7 @@ export async function handleProjectWebhook(input: ProjectWebhookPayload) {
           progress: normalized.progress,
           milestone: normalized.milestone,
           next_action: normalized.nextAction,
+          correlation_id: normalized.correlationId,
           payload: normalized.payload,
           happened_at: receivedAt,
         })
@@ -177,6 +308,10 @@ export async function handleProjectWebhook(input: ProjectWebhookPayload) {
           project_id: normalized.projectId,
           check_type: normalized.checkType,
           status: routineStatus,
+          meta: {
+            correlation_id: normalized.correlationId,
+            provider_event_id: normalized.providerEventId,
+          },
           note: normalized.note || normalized.summary,
           checked_at: routineStatus === "done" ? receivedAt : null,
         })
@@ -198,9 +333,13 @@ export async function handleProjectWebhook(input: ProjectWebhookPayload) {
           projectPatch,
         )
       : { persisted: false, reason: "missing-project" };
+  const persistenceStatus = summarizePersistence({
+    webhookEventRecord,
+    projectUpdateRecord,
+  });
 
   return {
-    status: "accepted",
+    status: persistenceStatus,
     eventId,
     projectUpdateId: updateId,
     normalized,

@@ -391,6 +391,8 @@ create table webhook_events (
   event_type text not null,
   source text not null default 'webhook',
   status text not null default 'received' check (status in ('received', 'processed', 'ignored', 'failed')),
+  correlation_id text,
+  provider_event_id text,
   payload jsonb not null default '{}'::jsonb,
   error_message text,
   received_at timestamptz not null default now(),
@@ -463,5 +465,8 @@ create index idx_operation_cases_workspace_status on operation_cases (workspace_
 create index idx_automation_runs_workspace_status on automation_runs (workspace_id, status);
 create index idx_sync_runs_workspace_status on sync_runs (workspace_id, status);
 create index idx_webhook_events_workspace_received on webhook_events (workspace_id, received_at desc);
+create unique index idx_webhook_events_provider_event
+  on webhook_events (workspace_id, source, provider_event_id)
+  where provider_event_id is not null;
 create index idx_error_logs_workspace_timestamp on error_logs (workspace_id, timestamp desc);
 create index idx_activity_logs_workspace_created on activity_logs (workspace_id, created_at desc);

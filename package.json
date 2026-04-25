@@ -3,16 +3,18 @@
   "private": true,
   "packageManager": "npm@11.9.0",
   "workspaces": [
-    "apps/*",
+    "apps/hub",
+    "apps/engine",
     "packages/*"
   ],
   "scripts": {
     "build": "turbo run build",
+    "check:contracts": "node ./scripts/check-contracts.mjs",
     "check:connections": "node ./scripts/check-connections.mjs",
     "dev": "turbo run dev",
     "dev:hub": "npm --workspace @com-moon/hub run dev",
     "dev:engine": "npm --workspace @com-moon/engine run dev",
-    "dev:web": "npm --workspace @com-moon/web run dev",
+    "lint": "turbo run lint",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {

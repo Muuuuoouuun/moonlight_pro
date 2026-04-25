@@ -1,12 +1,12 @@
 /*
- * Com_Moon primitives — the minimal surface language that both
- * `apps/web` and `apps/hub` share. All values resolve to tokens from
- * `tokens.css`, so a primitive never introduces a color, radius, or
- * motion curve on its own. See DESIGN.md §8.
+ * Com_Moon primitives — the minimal surface language for Hub and any
+ * future operator-facing surfaces. All values resolve to tokens from
+ * `tokens.css`, so a primitive never introduces a color, radius, or motion
+ * curve on its own. See DESIGN.md §8.
  *
  * Class naming: `cm-<component>` root, `cm-<component>__<part>` parts,
  * and data-* attributes for variants. Keep it simple — these are the
- * only classes both apps are allowed to rely on directly.
+ * only primitive classes apps are allowed to rely on directly.
  */
 
 /* ───── Button ──────────────────────────────────────────────────── */

@@ -421,7 +421,7 @@ create index if not exists idx_automation_runs_correlation
   on automation_runs (workspace_id, correlation_id)
   where correlation_id is not null;
 
-create index if not exists idx_webhook_events_provider_event
+create unique index if not exists idx_webhook_events_provider_event
   on webhook_events (workspace_id, source, provider_event_id)
   where provider_event_id is not null;
 

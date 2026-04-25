@@ -2,13 +2,27 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Avatar } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState } from "../hub-primitives";
 import {
   BRANDS as FALLBACK_BRANDS,
   BRAND_PROJECTS as FALLBACK_PROJECTS,
   BRAND_TODOS as FALLBACK_TODOS,
   KANBAN_COLUMNS as FALLBACK_COLUMNS,
 } from "../hub-data";
+
+const EMPTY_ALL_BRAND = {
+  key: 'all',
+  id: 'all',
+  name: '전체 브랜드',
+  glyph: '◐',
+  tone: 'moon',
+  kind: 'index',
+  desc: '모든 프로젝트',
+  projects: 0,
+  tasks: 0,
+  open: 0,
+  changes: 0,
+};
 
 export function Projects() {
   const [brand, setBrand] = React.useState('all');
@@ -66,11 +80,16 @@ export function Projects() {
     }
   }
 
-  const brands = ledger.brands?.length ? ledger.brands : FALLBACK_BRANDS;
-  const allProjects = ledger.projects?.length ? ledger.projects : FALLBACK_PROJECTS;
+  const isLiveLedger = ledger.source === 'supabase';
+  const brands = isLiveLedger
+    ? (ledger.brands?.length ? ledger.brands : [EMPTY_ALL_BRAND])
+    : (ledger.brands?.length ? ledger.brands : FALLBACK_BRANDS);
+  const allProjects = isLiveLedger
+    ? (Array.isArray(ledger.projects) ? ledger.projects : [])
+    : (ledger.projects?.length ? ledger.projects : FALLBACK_PROJECTS);
   const projects = brand === 'all' ? allProjects : allProjects.filter(p => p.brand === brand);
   const brandTodos = brand === 'all' ? todos : todos.filter(t => t.brand === brand);
-  const currentBrand = brands.find(b => b.key === brand) || brands[0] || FALLBACK_BRANDS[0];
+  const currentBrand = brands.find(b => b.key === brand) || brands[0] || EMPTY_ALL_BRAND;
 
   React.useEffect(() => {
     let active = true;
@@ -86,16 +105,18 @@ export function Projects() {
           return;
         }
 
-        if (data.source === 'supabase' && data.projects?.length) {
+        if (data.source === 'supabase') {
+          const liveProjects = Array.isArray(data.projects) ? data.projects : [];
+          const liveColumns = Array.isArray(data.columns) ? data.columns : [];
           setLedger({
             source: data.source,
-            brands: data.brands?.length ? data.brands : FALLBACK_BRANDS,
-            projects: data.projects,
-            columns: data.columns?.length ? data.columns : FALLBACK_COLUMNS,
+            brands: data.brands?.length ? data.brands : [EMPTY_ALL_BRAND],
+            projects: liveProjects,
+            columns: liveColumns,
           });
-          setTodos(data.todos?.length ? data.todos : []);
-          setCols(data.columns?.length ? data.columns : FALLBACK_COLUMNS);
-          setExpanded(new Set(data.projects.slice(0, 2).map(p => p.id)));
+          setTodos(Array.isArray(data.todos) ? data.todos : []);
+          setCols(liveColumns);
+          setExpanded(new Set(liveProjects.slice(0, 2).map(p => p.id)));
           setSyncState('live');
         } else {
           setSyncState('mock');
@@ -143,7 +164,7 @@ export function Projects() {
         <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center' }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-faint)' }}>Brands</div>
-            <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>브랜드 포맷 · {brands.length - 1}개</div>
+            <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>브랜드 포맷 · {Math.max(0, brands.length - 1)}개</div>
           </div>
           <IconButton icon="chevronL" size={24} iconSize={13} onClick={() => setSidebarHidden(true)} tooltip="접기" />
         </div>
@@ -337,6 +358,16 @@ export function Projects() {
           <div style={{ display: 'grid', gridTemplateColumns: openDetail ? '1fr 360px' : '1fr', flex: 1, overflow: 'hidden' }}>
             <div className="scroll-y" style={{ padding: 'var(--section-gap)' }}>
               <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+                {projects.length === 0 && (
+                  <Card>
+                    <EmptyState
+                      icon="projects"
+                      title="프로젝트 원장이 비어 있습니다"
+                      description="Supabase 연결은 live 상태입니다. 첫 프로젝트를 만들거나 외부 project webhook을 보내면 이 목록에 바로 표시됩니다."
+                      action={<Button variant="primary" size="sm" icon="plus">Project</Button>}
+                    />
+                  </Card>
+                )}
                 {[
                   { key: 'In progress', label: '진행중', tone: 'var(--info)' },
                   { key: 'Blocked',     label: '막힘',   tone: 'var(--danger)' },
@@ -371,7 +402,7 @@ export function Projects() {
                         {groupProjects.map((p, pi) => {
                           const isOpen = expanded.has(p.id);
                           const pTodos = todos.filter(t => t.project === p.id);
-                          const pBrand = brands.find(b => b.key === p.brand) || brands[0] || FALLBACK_BRANDS[0];
+                          const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
                           const isSel = openDetail === p.id;
                           return (
                             <React.Fragment key={p.id}>
@@ -477,7 +508,7 @@ export function Projects() {
             {openDetail && (() => {
               const p = allProjects.find(x => x.id === openDetail);
               if (!p) return null;
-              const pBrand = brands.find(b => b.key === p.brand) || brands[0] || FALLBACK_BRANDS[0];
+              const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
               const pTodos = todos.filter(t => t.project === p.id);
               const doneCount = pTodos.filter(t => t.done).length;
               return (
@@ -592,6 +623,16 @@ export function Projects() {
         {view === 'todos' && (
           <div className="scroll-y" style={{ flex: 1, padding: 'var(--section-gap)' }}>
             <div style={{ maxWidth: 880, margin: '0 auto' }}>
+              {brandTodos.length === 0 && (
+                <Card>
+                  <EmptyState
+                    icon="orders"
+                    title="열린 할 일이 없습니다"
+                    description={syncState === 'live' ? 'Supabase tasks 원장에 표시할 항목이 없습니다.' : '할 일이 생기면 날짜 버킷별로 정리됩니다.'}
+                    action={<Button variant="primary" size="sm" icon="plus">To-do</Button>}
+                  />
+                </Card>
+              )}
               {['오늘','내일','이번주','다음주'].map(bucket => {
                 const items = brandTodos.filter(t => t.bucket === bucket || t.due === bucket || (bucket === '이번주' && ['이번주','4/20','4/21','4/22','4/23'].includes(t.due)));
                 if (!items.length) return null;
@@ -601,7 +642,7 @@ export function Projects() {
                     <Card pad={false}>
                       {items.map((t, i) => {
                         const proj = allProjects.find(p => p.id === t.project);
-                        const pBrand = brands.find(b => b.key === t.brand) || brands[0] || FALLBACK_BRANDS[0];
+                        const pBrand = brands.find(b => b.key === t.brand) || brands[0] || EMPTY_ALL_BRAND;
                         return (
                           <div key={t.id} style={{
                             display: 'grid', gridTemplateColumns: '22px 1fr 140px 100px 80px',
@@ -658,6 +699,9 @@ export function Projects() {
                   <IconButton icon="plus" size={22} iconSize={12} />
                 </div>
                 <div className="scroll-y" style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {col.cards.length === 0 && (
+                    <div style={{ padding: '18px 8px', fontSize: 11.5, color: 'var(--fg-faint)', textAlign: 'center' }}>카드 없음</div>
+                  )}
                   {col.cards.map(c => (
                     <div key={c.id} draggable onDragStart={() => setDrag(c.id)} onDragEnd={() => setDrag(null)}
                       style={{

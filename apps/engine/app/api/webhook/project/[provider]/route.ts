@@ -11,9 +11,9 @@ import {
 export const runtime = "nodejs";
 
 type RouteContext = {
-  params: {
+  params: Promise<{
     provider: string;
-  };
+  }>;
 };
 
 function resolveProvider(providerParam: string) {
@@ -21,7 +21,8 @@ function resolveProvider(providerParam: string) {
 }
 
 export async function GET(_req: Request, context: RouteContext) {
-  const provider = resolveProvider(context.params.provider);
+  const { provider: providerParam } = await context.params;
+  const provider = resolveProvider(providerParam);
 
   if (!provider) {
     return NextResponse.json(
@@ -68,7 +69,8 @@ export async function GET(_req: Request, context: RouteContext) {
 }
 
 export async function POST(req: Request, context: RouteContext) {
-  const provider = resolveProvider(context.params.provider);
+  const { provider: providerParam } = await context.params;
+  const provider = resolveProvider(providerParam);
 
   if (!provider) {
     return NextResponse.json(
@@ -80,11 +82,7 @@ export async function POST(req: Request, context: RouteContext) {
     );
   }
 
-  let body: Record<string, unknown> = {};
-
   try {
-    body = await req.json();
-
     const auth = validateSharedWebhookRequest(req);
     if (!auth.ok) {
       return NextResponse.json(
@@ -97,8 +95,37 @@ export async function POST(req: Request, context: RouteContext) {
       );
     }
 
+    let body: Record<string, unknown>;
+
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        {
+          status: "invalid-json",
+          error: "Request body must be valid JSON.",
+          provider,
+        },
+        { status: 400 },
+      );
+    }
+
     const payload = buildSharedProjectWebhookPayload(body, provider);
     const result = await handleProjectWebhook(payload);
+    const statusCode =
+      result.status === "duplicate"
+        ? 200
+        : result.status === "accepted"
+          ? 202
+          : result.status === "partial"
+            ? 207
+            : result.persistence.webhookEvent.reason === "missing-config" ||
+                result.persistence.projectUpdate.reason === "missing-config"
+              ? 202
+              : result.persistence.webhookEvent.reason === "missing-workspace" ||
+                  result.persistence.projectUpdate.reason === "missing-workspace"
+                ? 400
+            : 500;
 
     return NextResponse.json(
       {
@@ -106,10 +133,10 @@ export async function POST(req: Request, context: RouteContext) {
         provider,
         auth: auth.mode,
       },
-      { status: 202 },
+      { status: statusCode },
     );
   } catch (error) {
-    await failProjectWebhook(error, body);
+    await failProjectWebhook(error, {});
     return NextResponse.json(
       {
         status: "failed",

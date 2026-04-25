@@ -1,19 +1,19 @@
 # Moonlight — Codex 지침
 
 ## 프로젝트 개요
-- Next.js 14 (App Router) + TypeScript + Tailwind CSS
-- Supabase (인증, DB), Recharts (차트), Lucide (아이콘)
-- 관리자(`/admin`), 파트너 포털(`/partner`), 랜딩 페이지(`/`)
+- Next.js App Router monorepo (`apps/hub`, `apps/engine`) + TypeScript/JavaScript
+- Supabase REST ledger 중심: Hub는 운영 판단 UI, Engine은 webhook/intake/실행 기록
+- Hub(`/dashboard/**`)와 Engine(`/api/**`)이 현역 실행 표면이며, public web은 active workspace에서 분리됨
 
 ## 디자인 시스템
 @DESIGN.md
 
 ## 코드 규칙
 - 컴포넌트: `components/` — 페이지 전용이 아닌 경우만 분리
-- 관리자 API: `app/api/admin/` — `verifyAdmin()` 필수
-- 파트너 API: `app/api/partner/` — `verifyPartner()` 필수
-- 데이터 레이어: `lib/repositories/` — DB 접근은 여기서만
-- Supabase 없는 환경: `data/*.json` 폴백 사용
+- Hub read API: `apps/hub/app/api/hub/` → `apps/hub/lib/repositories/` 사용
+- Engine write/intake API: `apps/engine/app/api/` — 공개 POST는 shared secret 또는 provider secret 검증
+- Hub → Engine 호출은 `COM_MOON_SHARED_WEBHOOK_SECRET`를 전달
+- Supabase 없는 환경은 명시적 `preview`/empty state로 표시하고 mock과 live 데이터를 섞지 않음
 
 ## UI 작업 시 필수 체크
 - 색상: DESIGN.md 팔레트만 사용 (warm gold/그린/보라 금지, 문스톤 `#5274a8` 액센트)
@@ -53,7 +53,8 @@ python3 .Codex/skills/ui-ux-pro-max/scripts/search.py "data table status badge" 
 
 ## 브랜치 구조
 - `main`: 프로덕션
-- `codex/Bae`: 현재 파트너 포털 + 어드민 개발 브랜치
+- `codex/*`: Codex 작업 브랜치
+- 현재 P0 hardening 작업 브랜치: `codex/moonlight-p0-hardening`
 
 ## Skill routing
 

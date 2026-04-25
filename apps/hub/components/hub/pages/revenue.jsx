@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState } from "../hub-primitives";
 import {
   LEADS as FALLBACK_LEADS,
   DEAL_STAGES as FALLBACK_DEAL_STAGES,
@@ -11,7 +11,53 @@ import {
   ACCOUNT_DETAIL,
 } from "../hub-data";
 
-const fmt = v => '₩' + (v / 1000000).toFixed(1) + 'M';
+const fmt = v => {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n === 0) return '₩0';
+  return '₩' + (n / 1000000).toFixed(1) + 'M';
+};
+
+function formatPercentDelta(current, previous) {
+  if (!Number.isFinite(current) || !Number.isFinite(previous)) return '—';
+  if (previous === 0) return current === 0 ? '0%' : 'new';
+  const delta = Math.round(((current - previous) / previous) * 100);
+  return `${delta > 0 ? '+' : ''}${delta}%`;
+}
+
+function buildRevenueAttention(leads, deals) {
+  const items = [];
+  deals
+    .filter((deal) => deal.stage !== 'won' && deal.stage !== 'lost' && Number(deal.age) > 10)
+    .slice(0, 3)
+    .forEach((deal) => {
+      items.push({
+        tone: 'warning',
+        t: `${deal.name} — ${deal.age}d stalled`,
+        s: 'follow-up 필요',
+      });
+    });
+
+  const newLeads = leads.filter((lead) => lead.stage === 'New').length;
+  if (newLeads > 0) {
+    items.push({
+      tone: 'info',
+      t: `신규 리드 ${newLeads}건`,
+      s: '분류·할당 필요',
+    });
+  }
+
+  const wonDeals = deals.filter((deal) => deal.stage === 'won');
+  if (wonDeals.length > 0) {
+    const wonTotal = wonDeals.reduce((sum, deal) => sum + deal.value, 0);
+    items.push({
+      tone: 'success',
+      t: `Won ${wonDeals.length}건 · ${fmt(wonTotal)}`,
+      s: '온보딩 킥오프',
+    });
+  }
+
+  return items.slice(0, 4);
+}
 
 const FALLBACK_ACCOUNTS = [
   { name: '클래스인',        type: 'company',  deals: 2, value: 18000000, last: '오늘',    lastAt: '11:02', health: 'warning', owner: 'Me' },
@@ -58,11 +104,11 @@ function useRevenueLedger() {
         if (data.source === 'supabase') {
           setLedger({
             source: 'supabase',
-            leads: data.leads?.length ? data.leads : FALLBACK_LEADS,
-            deals: data.deals?.length ? data.deals : FALLBACK_DEALS,
-            stages: data.stages?.length ? data.stages : FALLBACK_DEAL_STAGES,
-            accounts: data.accounts?.length ? data.accounts : FALLBACK_ACCOUNTS,
-            cases: data.cases?.length ? data.cases : FALLBACK_CASES,
+            leads: Array.isArray(data.leads) ? data.leads : [],
+            deals: Array.isArray(data.deals) ? data.deals : [],
+            stages: Array.isArray(data.stages) && data.stages.length ? data.stages : FALLBACK_DEAL_STAGES,
+            accounts: Array.isArray(data.accounts) ? data.accounts : [],
+            cases: Array.isArray(data.cases) ? data.cases : [],
             summary: data.summary || null,
           });
           setSyncState('live');
@@ -92,22 +138,37 @@ export function RevenueOverview() {
   const DEALS = ledger.deals;
   const DEAL_STAGES = ledger.stages;
   const summary = ledger.summary;
+  const isLiveLedger = ledger.source === 'supabase';
 
-  const mrr = summary?.mrr || 8400000;
-  const mrrPrev = summary?.mrrPrev || 7500000;
+  const mrr = summary?.mrr ?? (isLiveLedger ? 0 : 8400000);
+  const mrrPrev = summary?.mrrPrev ?? (isLiveLedger ? 0 : 7500000);
   const pipelineByStage = DEAL_STAGES.map(s => ({
     ...s,
     sum: DEALS.filter(d => d.stage === s.key).reduce((a, b) => a + b.value, 0),
     count: DEALS.filter(d => d.stage === s.key).length,
   }));
+  const hasPipelineValue = pipelineByStage.some(s => s.sum > 0);
   const pipeline = summary?.pipeline ?? pipelineByStage.reduce((a, b) => a + b.sum, 0);
   const openLeads = summary?.leadsCount ?? LEADS.length;
   const openDeals = summary?.openDeals ?? DEALS.filter(d => d.stage !== 'won').length;
   const wonMTD = summary?.wonMTD ?? DEALS.filter(d => d.stage === 'won').reduce((a, b) => a + b.value, 0);
-  const byBrand = BRANDS.filter(b => b.key !== 'all').slice(0, 6).map((b, i) => ({
-    ...b, mrr: [2.4, 1.8, 0.6, 2.0, 0.9, 0.7][i] * 1000000,
-  }));
+  const newThisMonth = summary?.newThisMonth ?? (isLiveLedger ? 0 : 12);
+  const wonDealsCount = DEALS.filter(d => d.stage === 'won').length;
+  const byBrand = isLiveLedger
+    ? []
+    : BRANDS.filter(b => b.key !== 'all').slice(0, 6).map((b, i) => ({
+      ...b,
+      mrr: [2.4, 1.8, 0.6, 2.0, 0.9, 0.7][i] * 1000000,
+    }));
   const totalBrandMRR = byBrand.reduce((a, b) => a + b.mrr, 0);
+  const attentionItems = isLiveLedger
+    ? buildRevenueAttention(LEADS, DEALS)
+    : [
+      { tone: 'danger', t: '클래스인 — 계약서 응답 2일째', s: '리마인드 메일 추천' },
+      { tone: 'warning', t: 'Studio Park — 제안서 14일 정체', s: 'follow-up 필요' },
+      { tone: 'info', t: '이번 주 신규 리드 +12', s: '분류·할당 필요' },
+      { tone: 'success', t: 'Won: 베어브릭 콜라보 ₩7.8M', s: '온보딩 킥오프' },
+    ];
 
   return (
     <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
@@ -128,15 +189,15 @@ export function RevenueOverview() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
         {[
-          { l: 'MRR', v: fmt(mrr), d: `+${Math.round((mrr - mrrPrev) / mrrPrev * 100)}%`, tone: 'success' },
+          { l: 'MRR', v: fmt(mrr), d: formatPercentDelta(mrr, mrrPrev), tone: mrr > mrrPrev ? 'success' : 'neutral' },
           { l: 'Pipeline', v: fmt(pipeline), d: `${openDeals} deals`, tone: 'moon' },
-          { l: 'Open leads', v: openLeads, d: '이번달 신규 12', tone: 'info' },
-          { l: 'Won MTD', v: fmt(wonMTD), d: '1 deal', tone: 'success' },
+          { l: 'Open leads', v: openLeads, d: `이번달 신규 ${newThisMonth}`, tone: 'info' },
+          { l: 'Won MTD', v: fmt(wonMTD), d: `${wonDealsCount} deals`, tone: wonMTD > 0 ? 'success' : 'neutral' },
         ].map((k, i) => (
           <Card key={i}>
             <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>{k.l}</div>
             <div className="mono" style={{ fontSize: 26, marginTop: 10, fontWeight: 500 }}>{k.v}</div>
-            <div style={{ fontSize: 11, color: `var(--${k.tone})`, marginTop: 4 }}>{k.d}</div>
+            <div style={{ fontSize: 11, color: k.tone === 'neutral' ? 'var(--fg-faint)' : `var(--${k.tone})`, marginTop: 4 }}>{k.d}</div>
           </Card>
         ))}
       </div>
@@ -149,13 +210,15 @@ export function RevenueOverview() {
             <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{fmt(pipeline)}</span>
           </div>
           <div style={{ display: 'flex', height: 28, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--line-soft)' }}>
-            {pipelineByStage.map(s => (
+            {hasPipelineValue ? pipelineByStage.map(s => (
               <div key={s.key} title={`${s.label} · ${fmt(s.sum)}`} style={{
-                flex: s.sum || 0.1,
+                flex: s.sum,
                 background: `var(--${s.color === 'neutral' ? 'fg-faint' : s.color === 'moon' ? 'moon-500' : s.color})`,
                 opacity: 0.9,
               }} />
-            ))}
+            )) : (
+              <div title="No pipeline value" style={{ flex: 1, background: 'var(--surface-3)' }} />
+            )}
           </div>
           <div style={{ display: 'flex', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
             {pipelineByStage.map(s => (
@@ -171,13 +234,21 @@ export function RevenueOverview() {
         <Card>
           <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Revenue by brand</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {byBrand.length === 0 && (
+              <EmptyState
+                icon="revenue"
+                title="브랜드별 매출 집계 없음"
+                description="Supabase revenue 원장은 live입니다. 브랜드별 매출 join이 준비되면 이 패널이 자동으로 채워집니다."
+                style={{ minHeight: 170, padding: '22px 12px' }}
+              />
+            )}
             {byBrand.map(b => (
               <div key={b.key} style={{ display: 'grid', gridTemplateColumns: '24px 1fr 72px', gap: 10, alignItems: 'center' }}>
                 <span style={{ fontSize: 14 }}>{b.glyph}</span>
                 <div>
                   <div style={{ fontSize: 12, marginBottom: 4 }}>{b.name}</div>
                   <div style={{ height: 5, background: 'var(--surface-3)', borderRadius: 999, overflow: 'hidden' }}>
-                    <div style={{ width: `${(b.mrr / totalBrandMRR) * 100}%`, height: '100%', background: 'var(--moon-400)' }} />
+                    <div style={{ width: totalBrandMRR > 0 ? `${(b.mrr / totalBrandMRR) * 100}%` : '0%', height: '100%', background: 'var(--moon-400)' }} />
                   </div>
                 </div>
                 <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', textAlign: 'right' }}>{fmt(b.mrr)}</span>
@@ -190,6 +261,14 @@ export function RevenueOverview() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Top deals</div>
+          {DEALS.length === 0 && (
+            <EmptyState
+              icon="deals"
+              title="딜이 없습니다"
+              description={isLiveLedger ? 'Supabase deals 원장에 표시할 딜이 없습니다.' : '딜이 생기면 금액순으로 표시됩니다.'}
+              style={{ minHeight: 170, padding: '22px 12px' }}
+            />
+          )}
           {DEALS.slice().sort((a,b) => b.value - a.value).slice(0, 5).map((d, i, arr) => (
             <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 80px', gap: 10, padding: '9px 0', alignItems: 'center', borderBottom: i < arr.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
               <div style={{ minWidth: 0 }}>
@@ -204,12 +283,15 @@ export function RevenueOverview() {
 
         <Card>
           <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Attention needed</div>
-          {[
-            { tone: 'danger', t: '클래스인 — 계약서 응답 2일째', s: '리마인드 메일 추천' },
-            { tone: 'warning', t: 'Studio Park — 제안서 14일 정체', s: 'follow-up 필요' },
-            { tone: 'info', t: '이번 주 신규 리드 +12', s: '분류·할당 필요' },
-            { tone: 'success', t: 'Won: 베어브릭 콜라보 ₩7.8M', s: '온보딩 킥오프' },
-          ].map((x, i, arr) => (
+          {attentionItems.length === 0 && (
+            <EmptyState
+              icon="bell"
+              title="주의가 필요한 항목이 없습니다"
+              description="stalled deal, 신규 리드, won deal 신호가 생기면 여기에 올라옵니다."
+              style={{ minHeight: 170, padding: '22px 12px' }}
+            />
+          )}
+          {attentionItems.map((x, i, arr) => (
             <div key={i} style={{ display: 'flex', gap: 10, padding: '9px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
               <Dot tone={x.tone} />
               <div>
@@ -426,7 +508,9 @@ const CASES_GRID = '80px 1fr 160px 112px 100px 100px 110px 90px';
 
 export function Cases() {
   const { ledger, syncState } = useRevenueLedger();
-  const cases = ledger.cases?.length ? ledger.cases : FALLBACK_CASES;
+  const cases = ledger.source === 'supabase'
+    ? (Array.isArray(ledger.cases) ? ledger.cases : [])
+    : (Array.isArray(ledger.cases) ? ledger.cases : FALLBACK_CASES);
   const sTone = { Open: 'warning', Waiting: 'info', Resolved: 'success' };
   const pTone = { high: 'danger', med: 'warning', low: 'neutral' };
 
@@ -447,6 +531,13 @@ export function Cases() {
         <div style={{ display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>ID</span><span>Title</span><span>Account</span><span>Type</span><span>Priority</span><span>Status</span><span>Opened</span><span style={{ textAlign: 'right' }}>Owner</span>
         </div>
+        {cases.length === 0 && (
+          <EmptyState
+            icon="cases"
+            title="운영 케이스가 없습니다"
+            description={syncState === 'live' ? 'Supabase operation_cases 원장에 표시할 케이스가 없습니다.' : '지원/운영 이슈가 생기면 계정과 함께 표시됩니다.'}
+          />
+        )}
         {cases.map((c, i) => (
           <div key={c.id} style={{
             display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12,
@@ -814,12 +905,14 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote })
 
 export function Accounts() {
   const { ledger, syncState } = useRevenueLedger();
-  const ACCOUNTS = ledger.accounts?.length ? ledger.accounts : FALLBACK_ACCOUNTS;
+  const ACCOUNTS = ledger.source === 'supabase'
+    ? (Array.isArray(ledger.accounts) ? ledger.accounts : [])
+    : (Array.isArray(ledger.accounts) ? ledger.accounts : FALLBACK_ACCOUNTS);
   const [view, setView] = React.useState('cards'); // cards | list | detail
   const [search, setSearch] = React.useState('');
   const [filter, setFilter] = React.useState('all');
   const [selected, setSelected] = React.useState(null);
-  const [details, setDetails] = React.useState(() => ({ ...ACCOUNT_DETAIL }));
+  const [details, setDetails] = React.useState({});
 
   const term = search.trim().toLowerCase();
   const filtered = ACCOUNTS.filter(a =>
@@ -834,7 +927,7 @@ export function Accounts() {
     }
   }, [view, filtered, selected]);
 
-  const getDetail = (name) => details[name] || emptyDetail();
+  const getDetail = (name) => details[name] || (ledger.source === 'supabase' ? null : ACCOUNT_DETAIL[name]) || emptyDetail();
 
   const pushActivity = (name, entry) => {
     setDetails(prev => {
@@ -972,7 +1065,14 @@ export function Accounts() {
             </Card>
           ))}
           {filtered.length === 0 && (
-            <div style={{ fontSize: 12, color: 'var(--fg-faint)', padding: '20px 0' }}>일치하는 계정이 없습니다.</div>
+            <Card style={{ gridColumn: '1 / -1' }}>
+              <EmptyState
+                icon="accounts"
+                title="계정이 없습니다"
+                description={syncState === 'live' ? 'Supabase customer_accounts 원장에 표시할 계정이 없습니다.' : '필터나 검색어를 조정하면 계정을 다시 찾을 수 있습니다.'}
+                action={<Button variant="primary" size="sm" icon="plus">Account</Button>}
+              />
+            </Card>
           )}
         </div>
       )}
@@ -1025,7 +1125,11 @@ export function Accounts() {
             </div>
           ))}
           {filtered.length === 0 && (
-            <div style={{ fontSize: 12, color: 'var(--fg-faint)', padding: '20px 16px' }}>일치하는 계정이 없습니다.</div>
+            <EmptyState
+              icon="accounts"
+              title="계정이 없습니다"
+              description={syncState === 'live' ? 'Supabase customer_accounts 원장이 비어 있습니다.' : '필터나 검색어를 조정하면 계정을 다시 찾을 수 있습니다.'}
+            />
           )}
         </Card>
       )}
@@ -1066,7 +1170,12 @@ export function Accounts() {
                 );
               })}
               {filtered.length === 0 && (
-                <div style={{ fontSize: 12, color: 'var(--fg-faint)', padding: '16px' }}>일치하는 계정이 없습니다.</div>
+                <EmptyState
+                  icon="accounts"
+                  title="계정 없음"
+                  description="선택할 계정이 없습니다."
+                  style={{ minHeight: 220, padding: '24px 12px' }}
+                />
               )}
             </div>
           </div>

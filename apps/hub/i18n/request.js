@@ -14,7 +14,8 @@ import { defaultLocale, isLocale, LOCALE_COOKIE } from "./config.js";
  * `next.config.mjs`.
  */
 export default getRequestConfig(async () => {
-  const cookieLocale = cookies().get(LOCALE_COOKIE)?.value;
+  const cookieStore = await cookies();
+  const cookieLocale = cookieStore.get(LOCALE_COOKIE)?.value;
   const locale = isLocale(cookieLocale) ? cookieLocale : defaultLocale;
 
   return {

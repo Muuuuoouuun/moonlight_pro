@@ -5,6 +5,7 @@ import {
   resolveSupabaseConfig,
   updateSupabaseRecord,
 } from "@/lib/server-write";
+import { createHmac, timingSafeEqual } from "crypto";
 
 const GOOGLE_CALENDAR_PROVIDER = "google_calendar";
 const GOOGLE_CALENDAR_SYNC_SOURCE = "google_calendar";
@@ -76,8 +77,46 @@ async function fetchSupabaseRows(table, options = {}) {
   }
 }
 
+function resolveOAuthStateSecret() {
+  return (
+    process.env.COM_MOON_OAUTH_STATE_SECRET?.trim() ||
+    process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim() ||
+    ""
+  );
+}
+
+export function hasGoogleCalendarOAuthStateSecret() {
+  return Boolean(resolveOAuthStateSecret());
+}
+
+function signStatePayload(payload) {
+  const secret = resolveOAuthStateSecret();
+
+  if (!secret) {
+    return "";
+  }
+
+  return createHmac("sha256", secret).update(payload).digest("base64url");
+}
+
+function safeEquals(a, b) {
+  const aBuffer = Buffer.from(String(a || ""));
+  const bBuffer = Buffer.from(String(b || ""));
+
+  return aBuffer.length === bBuffer.length && timingSafeEqual(aBuffer, bBuffer);
+}
+
 function encodeState(value) {
-  return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
+  const payload = Buffer.from(
+    JSON.stringify({
+      ...value,
+      iat: Date.now(),
+    }),
+    "utf8",
+  ).toString("base64url");
+  const signature = signStatePayload(payload);
+
+  return signature ? `${payload}.${signature}` : payload;
 }
 
 export function decodeGoogleCalendarState(value) {
@@ -86,16 +125,34 @@ export function decodeGoogleCalendarState(value) {
   }
 
   try {
-    return JSON.parse(Buffer.from(String(value), "base64url").toString("utf8"));
+    const raw = String(value);
+    const [payload, signature] = raw.split(".");
+    const expected = signStatePayload(payload);
+
+    if (!expected || !signature || !safeEquals(expected, signature)) {
+      return { invalid: true };
+    }
+
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
   } catch {
-    return {};
+    return { invalid: true };
   }
+}
+
+function sanitizeReturnPath(value, fallback) {
+  const path = typeof value === "string" ? value.trim() : "";
+
+  if (!path || !path.startsWith("/") || path.startsWith("//")) {
+    return fallback;
+  }
+
+  return path;
 }
 
 export function resolveGoogleCalendarRedirectUri(origin) {
   const baseUrl =
+    process.env.COM_MOON_HUB_URL?.trim() ||
     process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    process.env.COM_MOON_ENGINE_URL?.trim() ||
     origin ||
     "";
 
@@ -110,7 +167,7 @@ export function buildGoogleCalendarAuthUrl({
 }) {
   const oauth = resolveGoogleOAuthConfig();
 
-  if (!oauth) {
+  if (!oauth || !hasGoogleCalendarOAuthStateSecret()) {
     return null;
   }
 
@@ -122,9 +179,9 @@ export function buildGoogleCalendarAuthUrl({
     prompt: "consent",
     scope: GOOGLE_SCOPES.join(" "),
     state: encodeState({
-      workspaceId,
+      workspaceId: workspaceId || resolveDefaultWorkspaceId(),
       calendarId,
-      returnPath,
+      returnPath: sanitizeReturnPath(returnPath, "/dashboard/work/calendar"),
     }),
   });
 

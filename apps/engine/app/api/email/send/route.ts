@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { sendEmail, type EmailSendRequest } from "../../../../lib/email/send";
+import {
+  SHARED_WEBHOOK_SECRET_HEADER,
+  validateSharedWebhookRequest,
+} from "../../../../lib/shared-webhook";
 
 export const runtime = "nodejs";
 
@@ -36,6 +40,10 @@ export async function GET() {
   return NextResponse.json({
     status: "ok",
     route: "/api/email/send",
+    auth: {
+      header: SHARED_WEBHOOK_SECRET_HEADER,
+      requiredWhenConfigured: true,
+    },
     accepts: {
       action: "dry-run | send",
       channel: "resend | gmail",
@@ -57,6 +65,17 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const auth = validateSharedWebhookRequest(req);
+    if (!auth.ok) {
+      return NextResponse.json(
+        {
+          status: "unauthorized",
+          error: auth.error,
+        },
+        { status: 401 },
+      );
+    }
+
     const input = buildEmailRequest((await req.json()) as Record<string, unknown>);
     const result = await sendEmail(input);
 

@@ -2,8 +2,57 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Card, IconButton, Button, Progress } from "../hub-primitives";
+import { Badge, Card, IconButton, Button, Progress, EmptyState } from "../hub-primitives";
 import { DECISIONS as FALLBACK_DECISIONS, RITUALS as FALLBACK_RITUALS } from "../hub-data";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const EN_MONTH = new Intl.DateTimeFormat('en-US', { month: 'long' });
+
+function startOfWeek(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + mondayOffset);
+  return d;
+}
+
+function sameDate(a, b) {
+  return a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate();
+}
+
+function addDays(date, days) {
+  return new Date(date.getTime() + days * DAY_MS);
+}
+
+function formatWeekRange(days) {
+  const first = days[0];
+  const last = days[days.length - 1];
+  const firstMonth = EN_MONTH.format(first);
+  const lastMonth = EN_MONTH.format(last);
+  if (firstMonth === lastMonth) return `${firstMonth} ${first.getDate()} – ${last.getDate()}`;
+  return `${firstMonth} ${first.getDate()} – ${lastMonth} ${last.getDate()}`;
+}
+
+function buildCalendarWeek(now) {
+  const weekStart = startOfWeek(now);
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  return {
+    days,
+    labels: days.map(d => `${['일','월','화','수','목','금','토'][d.getDay()]} ${d.getDate()}`),
+    weekLabel: formatWeekRange(days),
+    todayIndex: days.findIndex(d => sameDate(d, now)),
+  };
+}
+
+function buildRoadmapMonths(now) {
+  return Array.from({ length: 4 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    return EN_MONTH.format(d);
+  });
+}
 
 function useWorkLedger() {
   const [state, setState] = React.useState({
@@ -31,8 +80,8 @@ function useWorkLedger() {
         if (data.source === 'supabase') {
           setState({
             source: data.source,
-            decisions: data.decisions?.length ? data.decisions : FALLBACK_DECISIONS,
-            rituals: data.rituals?.length ? data.rituals : FALLBACK_RITUALS,
+            decisions: Array.isArray(data.decisions) ? data.decisions : [],
+            rituals: Array.isArray(data.rituals) ? data.rituals : [],
             summary: data.summary || null,
             syncState: 'live',
           });
@@ -52,8 +101,14 @@ function useWorkLedger() {
 }
 
 export function Calendar() {
+  const [now, setNow] = React.useState(() => new Date());
   const [gcalStatus, setGcalStatus] = React.useState('idle');
   const [gcalMessage, setGcalMessage] = React.useState('');
+
+  React.useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 60000);
+    return () => window.clearInterval(id);
+  }, []);
 
   async function connectGoogleCalendar() {
     setGcalStatus('connecting');
@@ -110,7 +165,7 @@ export function Calendar() {
     : 'var(--fg-faint)';
 
   const hours = Array.from({ length: 12 }, (_, i) => 8 + i);
-  const days = ['월 14','화 15','수 16','목 17','금 18','토 19','일 20'];
+  const { labels: days, weekLabel, todayIndex } = buildCalendarWeek(now);
   const events = [
     { day: 0, start: 10, end: 11, title: 'Weekly kickoff', tone: 'moon' },
     { day: 0, start: 14, end: 16, title: 'Moonlight Web v2 — deep work', tone: 'moon' },
@@ -133,7 +188,7 @@ export function Calendar() {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500, letterSpacing: '-0.01em' }}>Calendar</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <span>April 14 – 20</span>
+            <span>{weekLabel}</span>
             <span style={{ color: 'var(--fg-faint)' }}>·</span>
             <span style={{ color: gcalColor }}>{gcalLabel}</span>
             <Button variant="ghost" size="xs" onClick={connectGoogleCalendar}>
@@ -162,9 +217,9 @@ export function Calendar() {
         <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', borderBottom: '1px solid var(--line-soft)' }}>
           <div />
           {days.map((d, i) => (
-            <div key={d} style={{ padding: '10px 12px', borderLeft: '1px solid var(--line-soft)', fontSize: 11.5, color: i === 4 ? 'var(--fg)' : 'var(--fg-muted)' }}>
+            <div key={d} style={{ padding: '10px 12px', borderLeft: '1px solid var(--line-soft)', fontSize: 11.5, color: i === todayIndex ? 'var(--fg)' : 'var(--fg-muted)' }}>
               {d}
-              {i === 4 && <span style={{ marginLeft: 6, color: 'var(--moon-300)' }}>· Today</span>}
+              {i === todayIndex && <span style={{ marginLeft: 6, color: 'var(--moon-300)' }}>· Today</span>}
             </div>
           ))}
         </div>
@@ -206,7 +261,7 @@ export function Calendar() {
 
 export function Decisions() {
   const { decisions, syncState } = useWorkLedger();
-  const list = decisions?.length ? decisions : FALLBACK_DECISIONS;
+  const list = Array.isArray(decisions) ? decisions : [];
 
   return (
     <div style={{ padding: 'var(--section-gap)', maxWidth: 1000, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
@@ -225,6 +280,16 @@ export function Decisions() {
       </div>
       <div style={{ position: 'relative', paddingLeft: 28 }}>
         <div style={{ position: 'absolute', left: 11, top: 6, bottom: 6, width: 1, background: 'var(--line-soft)' }} />
+        {list.length === 0 && (
+          <Card>
+            <EmptyState
+              icon="decisions"
+              title="결정 기록이 없습니다"
+              description={syncState === 'live' ? 'Supabase decisions 원장에 아직 기록된 결정이 없습니다.' : '중요한 판단을 남기면 타임라인에 쌓입니다.'}
+              action={<Button variant="primary" size="sm" icon="plus">Record decision</Button>}
+            />
+          </Card>
+        )}
         {list.map(d => (
           <div key={d.id} style={{ position: 'relative', marginBottom: 18 }}>
             <div style={{ position: 'absolute', left: -21, top: 14, width: 10, height: 10, borderRadius: 999, background: 'var(--bg)', border: '2px solid var(--moon-400)' }} />
@@ -249,7 +314,7 @@ export function Decisions() {
 }
 
 export function Roadmap() {
-  const months = ['April','May','June','July'];
+  const months = React.useMemo(() => buildRoadmapMonths(new Date()), []);
   const items = [
     { name: 'Moonlight Web v2 launch', start: 0, len: 1, tone: 'moon', tag: null },
     { name: '클래스인 Spring Cohort', start: 0.5, len: 1.2, tone: 'company', tag: 'company' },
@@ -309,7 +374,7 @@ export function Roadmap() {
 
 export function Rhythm() {
   const { rituals: liveRituals, summary, syncState } = useWorkLedger();
-  const rituals = liveRituals?.length ? liveRituals : FALLBACK_RITUALS;
+  const rituals = Array.isArray(liveRituals) ? liveRituals : [];
 
   const completed = summary?.ritualsCompletedThisWeek ?? rituals.filter(r => r.weeks?.some(v => v === 1)).length;
   const total = summary?.ritualsTotalThisWeek ?? rituals.length;
@@ -356,6 +421,14 @@ export function Rhythm() {
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'grid', gridTemplateColumns: '1fr 160px 90px 100px' }}>
           <span>Ritual</span><span>Last 7 days</span><span>Streak</span><span style={{ textAlign: 'right' }}>Action</span>
         </div>
+        {rituals.length === 0 && (
+          <EmptyState
+            icon="rhythm"
+            title="루틴 체크 기록이 없습니다"
+            description={syncState === 'live' ? 'Supabase routine_checks 원장이 비어 있습니다.' : '체크인을 기록하면 주간 리듬과 streak가 계산됩니다.'}
+            style={{ minHeight: 220 }}
+          />
+        )}
         {rituals.map((r, i) => {
           const weeks = Array.isArray(r.weeks) ? r.weeks : [0,0,0,0,0,0,0];
           return (

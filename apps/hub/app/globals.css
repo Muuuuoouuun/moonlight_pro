@@ -1814,6 +1814,21 @@ button {
   min-height: 48px;
 }
 
+.field-static {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--cm-radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  padding: 14px 15px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .field-textarea {
   resize: vertical;
   min-height: 112px;

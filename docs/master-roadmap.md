@@ -12,7 +12,7 @@ Com_Moon은 3개 프로젝트(classinkr-web, sales_branding_dash, ai-command-pot
 ## 3. 단계별 마일스톤 (Milestones)
 
 ### [Phase 0] 기반 구축 (Completed)
-- **Turborepo 환경 구축**: 3개 모듈 통합 구조 완료.
+- **Turborepo 환경 구축**: Hub / Engine / packages 중심 실행 구조 완료.
 - **PWA/Supabase 설정**: 모바일 환경 구축 및 데이터 DB 연동.
 - **핵심 인프라**: `lib/hub-gateway`, `packages/content-manager` 생성.
 
@@ -35,7 +35,6 @@ Com_Moon은 3개 프로젝트(classinkr-web, sales_branding_dash, ai-command-pot
 - **Strategist AI**: 클매기(나)의 지표 분석 및 의사결정 제안 활성화.
 
 ## 4. 운영체제 구조 (OS Structure)
-- **apps/web**: 고객용 랜딩 및 홍보 페이지.
 - **apps/hub**: 관리자용 통합 OS (대시보드, PMS, 카드뉴스 에디터).
 - **apps/engine**: n8n 연동 및 AI 컨트롤 타워.
 - **packages/**: 공통 UI, 게이트웨이, 콘텐츠 매니저 패키지.

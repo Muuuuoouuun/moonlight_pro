@@ -2,8 +2,16 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Progress, SectionTitle, Kbd } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Progress, SectionTitle, Kbd, EmptyState } from "../hub-primitives";
 import { AUTOMATIONS as FALLBACK_AUTOMATIONS, RUN_LOG as FALLBACK_RUN_LOG } from "../hub-data";
+
+const EMPTY_AUTOMATION_SUMMARY = {
+  runsToday: 0,
+  failuresToday: 0,
+  activeAutomations: 0,
+  webhookEventsToday: 0,
+  integrationsConnected: 0,
+};
 
 function useAutomationsLedger() {
   const [state, setState] = React.useState({
@@ -38,12 +46,12 @@ function useAutomationsLedger() {
           setState({
             source: 'supabase',
             syncState: 'live',
-            automations: data.automations?.length ? data.automations : FALLBACK_AUTOMATIONS,
-            runs: data.runs?.length ? data.runs : FALLBACK_RUN_LOG,
-            webhookEvents: data.webhookEvents || [],
-            errors: data.errors || [],
-            integrations: data.integrations || [],
-            summary: data.summary || {},
+            automations: Array.isArray(data.automations) ? data.automations : [],
+            runs: Array.isArray(data.runs) ? data.runs : [],
+            webhookEvents: Array.isArray(data.webhookEvents) ? data.webhookEvents : [],
+            errors: Array.isArray(data.errors) ? data.errors : [],
+            integrations: Array.isArray(data.integrations) ? data.integrations : [],
+            summary: { ...EMPTY_AUTOMATION_SUMMARY, ...(data.summary || {}) },
           });
         } else {
           setState(s => ({ ...s, syncState: 'mock' }));
@@ -86,6 +94,14 @@ export function AutomationsIndex({ onNavigate }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px 110px 130px 140px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>Flow</span><span>Trigger</span><span>Status</span><span>Last run</span><span>Success (24h)</span><span style={{ textAlign: 'right' }} />
         </div>
+        {automations.length === 0 && (
+          <EmptyState
+            icon="automations"
+            title="자동화 원장이 비어 있습니다"
+            description={syncState === 'live' ? 'Supabase automations 테이블에 표시할 flow가 없습니다.' : 'flow를 만들면 실행 상태와 성공률이 여기에 표시됩니다.'}
+            action={<Button variant="primary" size="sm" icon="plus">Flow</Button>}
+          />
+        )}
         {automations.map((a, i) => (
           <div key={a.id} style={{
             display: 'grid', gridTemplateColumns: '1fr 200px 110px 130px 140px 80px',
@@ -214,7 +230,7 @@ function aggregateWebhookEndpoints(events) {
 export function Webhooks() {
   const { webhookEvents, syncState } = useAutomationsLedger();
   const liveHooks = aggregateWebhookEndpoints(webhookEvents);
-  const hooks = liveHooks.length ? liveHooks : FALLBACK_HOOKS;
+  const hooks = syncState === 'live' ? liveHooks : (liveHooks.length ? liveHooks : FALLBACK_HOOKS);
   const sTone = { ok: 'success', warn: 'warning', err: 'danger' };
   const [testState, setTestState] = React.useState({}); // { [idx]: { tone: 'success'|'warning'|'danger', label, pending } }
 
@@ -267,6 +283,14 @@ export function Webhooks() {
         <Button variant="primary" size="sm" icon="plus">Endpoint</Button>
       </div>
       <Card pad={false}>
+        {hooks.length === 0 && (
+          <EmptyState
+            icon="webhook"
+            title="수신된 webhook 이벤트가 없습니다"
+            description="Project webhook smoke test나 Telegram webhook이 들어오면 endpoint별 활동이 집계됩니다."
+            action={<Button variant="primary" size="sm" icon="play" onClick={() => runHookTest(0, { name: 'Project smoke test', url: '/api/webhooks/project-test' })}>Send test</Button>}
+          />
+        )}
         {hooks.map((h, i) => {
           const state = testState[i];
           return (
@@ -301,7 +325,10 @@ export function Webhooks() {
 export function Runs() {
   const sIcon = { ok: { c: 'var(--success)', t: '●' }, warn: { c: 'var(--warning)', t: '▲' }, err: { c: 'var(--danger)', t: '✕' } };
   const { runs, syncState } = useAutomationsLedger();
-  const rows = runs?.length ? runs : FALLBACK_RUN_LOG;
+  const rows = syncState === 'live'
+    ? (Array.isArray(runs) ? runs : [])
+    : (runs?.length ? runs : FALLBACK_RUN_LOG);
+  const liveLabel = syncState === 'live' ? 'Live' : syncState === 'loading' ? 'Syncing' : 'Mock';
   return (
     <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -317,11 +344,19 @@ export function Runs() {
         <div style={{ flex: 1 }} />
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--success)' }}>
           <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--success)', animation: 'mlMoonPulse 1.5s infinite' }} />
-          Live
+          {liveLabel}
         </span>
       </div>
       <Card pad={false} style={{ background: 'oklch(0.17 0.005 250)' }}>
         <div className="mono" style={{ padding: '12px 14px', fontSize: 12 }}>
+          {rows.length === 0 && (
+            <EmptyState
+              icon="runs"
+              title="실행 로그가 없습니다"
+              description="Engine이 automation_runs에 기록을 남기면 이 로그가 채워집니다."
+              style={{ minHeight: 220 }}
+            />
+          )}
           {rows.map((r, i) => (
             <div key={r.id} style={{
               display: 'grid', gridTemplateColumns: '90px 24px 180px 70px 1fr',

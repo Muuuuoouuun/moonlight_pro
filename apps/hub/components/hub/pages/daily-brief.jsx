@@ -5,6 +5,22 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, Checkbox, Progress, Sparkline } from "../hub-primitives";
 import { BRIEF_SIGNALS, TODAY_BLOCKS, METRICS } from "../hub-data";
 
+function formatBriefDate(date) {
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date).replace(',', ' ·').replace(',', ' ·');
+}
+
+function greetingFor(date) {
+  const hour = date.getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
 function SignalCard({ s }) {
   const [expanded, setExpanded] = React.useState(s.id === 's1');
   const [decided, setDecided] = React.useState(null);
@@ -81,15 +97,21 @@ function MetricCard({ m }) {
 }
 
 export function DailyBrief({ onNavigate }) {
+  const [now, setNow] = React.useState(() => new Date());
   const [blocks, setBlocks] = React.useState(TODAY_BLOCKS);
   const toggle = (i) => setBlocks(bs => bs.map((b, j) => j === i ? { ...b, done: !b.done } : b));
+
+  React.useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 60000);
+    return () => window.clearInterval(id);
+  }, []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', padding: 'var(--section-gap)', maxWidth: 1400, margin: '0 auto', width: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}>
         <div>
-          <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Friday · April 18 · 2026</div>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em' }}>Good afternoon, <span style={{ color: 'var(--moon-300)' }}>Hyeon</span></h1>
+          <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>{formatBriefDate(now)}</div>
+          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em' }}>{greetingFor(now)}, <span style={{ color: 'var(--moon-300)' }}>Hyeon</span></h1>
           <div style={{ marginTop: 6, fontSize: 13.5, color: 'var(--fg-muted)', maxWidth: '60ch', lineHeight: 1.55 }}>
             5개의 신호가 오늘 결정이 필요해요. 그중 <span style={{ color: 'var(--danger)' }}>1개는 매출 리스크</span>, <span style={{ color: 'var(--warning)' }}>2개는 오늘 마감</span>.
           </div>
