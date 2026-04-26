@@ -1,5 +1,6 @@
+import { randomUUID } from "crypto";
+
 import {
-  eqFilter,
   fetchSupabaseRows,
   inFilter,
   withWorkspaceFilter,
@@ -9,6 +10,7 @@ import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 const ITEM_STATUSES = ["idea", "draft", "review", "scheduled", "published", "archived"];
 const VARIANT_STATUSES = ["draft", "ready", "published", "archived"];
 const LOG_STATUSES = ["queued", "published", "failed"];
+const VARIANT_TYPES = ["newsletter", "blog_insight", "card_news", "x_thread", "reels_script"];
 
 const ITEM_STATUS_LABEL = {
   idea: "Idea",
@@ -22,23 +24,94 @@ const ITEM_STATUS_LABEL = {
 const VARIANT_KIND_LABEL = {
   card_news: "Carousel",
   blog: "Blog",
+  blog_insight: "Insight",
   newsletter: "Newsletter",
   social_post: "Thread",
+  x_thread: "Thread",
+  reels_script: "Reels",
   landing_copy: "Blog",
 };
 
 const VARIANT_CHANNEL_LABEL = {
   card_news: "Instagram",
   blog: "Web",
+  blog_insight: "Web",
   newsletter: "Email",
   social_post: "X",
+  x_thread: "X",
+  reels_script: "Reels",
   landing_copy: "Web",
 };
 
-function clampProgress(value) {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.max(0, Math.min(100, parsed));
+function normalizeString(value, fallback = "") {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  return value.trim() || fallback;
+}
+
+function normalizeNullableString(value) {
+  const normalized = normalizeString(value);
+  return normalized || null;
+}
+
+function normalizeItemStatus(value, fallback = "draft") {
+  const normalized = normalizeString(value, fallback).toLowerCase();
+  return ITEM_STATUSES.includes(normalized) ? normalized : fallback;
+}
+
+function normalizeVariantStatus(value, fallback = "draft") {
+  const normalized = normalizeString(value, fallback).toLowerCase();
+  return VARIANT_STATUSES.includes(normalized) ? normalized : fallback;
+}
+
+function normalizeVariantType(value, fallback = "blog_insight") {
+  const normalized = normalizeString(value, fallback).toLowerCase();
+  const aliases = {
+    blog: "blog_insight",
+    insight: "blog_insight",
+    carousel: "card_news",
+    thread: "x_thread",
+    social_post: "x_thread",
+    reels: "reels_script",
+    reel: "reels_script",
+    video_script: "reels_script",
+  };
+  const candidate = aliases[normalized] || normalized;
+  return VARIANT_TYPES.includes(candidate) ? candidate : fallback;
+}
+
+function normalizeVisibility(value) {
+  const normalized = normalizeString(value, "private").toLowerCase();
+  return ["private", "workspace", "public"].includes(normalized) ? normalized : "private";
+}
+
+function normalizeBody(value) {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (value == null) {
+    return "";
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function buildContentMeta(payload, action) {
+  return {
+    origin: "hub-studio",
+    action,
+    local_mirror: Boolean(payload.localMirror),
+    template_id: normalizeNullableString(payload.templateId),
+    brand_key: normalizeNullableString(payload.brandKey),
+    automation_recipe_id: normalizeNullableString(payload.automationRecipeId),
+  };
 }
 
 function formatShortDate(value) {
@@ -92,16 +165,18 @@ function mapItems(rows, variants) {
   return rows.map((row) => {
     const status = ITEM_STATUSES.includes(row.status) ? row.status : "draft";
     const whenSource = row.scheduled_at || row.published_at || row.updated_at || row.created_at;
+    const variant = variants.find((v) => v.content_id === row.id);
 
     return {
       id: row.id,
+      variantId: variant?.id || null,
       title: titleFromItem(row),
       summary: row.summary || row.source_idea || "",
       slug: row.slug || null,
       status,
       statusLabel: ITEM_STATUS_LABEL[status] || "Draft",
-      kind: resolveItemKind(row, variants),
-      channel: resolveItemChannel(row, variants),
+      kind: variant?.variant_type ? (VARIANT_KIND_LABEL[variant.variant_type] || "Blog") : resolveItemKind(row, variants),
+      channel: variant?.variant_type ? (VARIANT_CHANNEL_LABEL[variant.variant_type] || "Web") : resolveItemChannel(row, variants),
       when: formatShortDate(whenSource),
       author: row.owner_id ? "Me" : "Team",
       nextAction: row.next_action || "",
@@ -228,6 +303,7 @@ function buildSummary(items, publishLogs) {
 function buildQueue(items) {
   return items.map((item) => ({
     id: item.id,
+    variantId: item.variantId,
     title: item.title,
     kind: item.kind,
     channel: item.channel,
@@ -235,6 +311,115 @@ function buildQueue(items) {
     when: item.when,
     author: item.author,
   }));
+}
+
+export function buildContentDraftRecords(payload = {}) {
+  const workspaceId = normalizeString(payload.workspaceId) || resolveDefaultWorkspaceId();
+  const timestamp = new Date().toISOString();
+  const contentId = normalizeString(payload.contentId) || randomUUID();
+  const variantId = normalizeString(payload.variantId) || randomUUID();
+  const variantType = normalizeVariantType(payload.variantType);
+  const title = normalizeString(payload.title, "Untitled content draft");
+  const summary = normalizeNullableString(payload.summary);
+  const sourceIdea = normalizeString(payload.sourceIdea) || title;
+  const visibility = normalizeVisibility(payload.visibility);
+
+  const itemRecord = {
+    id: contentId,
+    workspace_id: workspaceId || null,
+    brand_id: normalizeNullableString(payload.brandId),
+    title,
+    source_idea: sourceIdea,
+    idea_source: normalizeString(payload.ideaSource, "studio"),
+    source_type: normalizeString(payload.sourceType, "manual"),
+    status: normalizeItemStatus(payload.status),
+    summary,
+    next_action: normalizeNullableString(payload.nextAction),
+    slug: normalizeNullableString(payload.slug),
+    scheduled_at: normalizeNullableString(payload.scheduledAt),
+    visibility,
+    meta: buildContentMeta(payload, "create"),
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+
+  const variantRecord = {
+    id: variantId,
+    workspace_id: workspaceId || null,
+    content_id: contentId,
+    variant_type: variantType,
+    title,
+    body: normalizeBody(payload.body),
+    summary,
+    excerpt: normalizeNullableString(payload.excerpt) || summary,
+    status: normalizeVariantStatus(payload.variantStatus),
+    slug: normalizeNullableString(payload.slug),
+    scheduled_at: normalizeNullableString(payload.scheduledAt),
+    visibility,
+    meta: {
+      ...buildContentMeta(payload, "create"),
+      preview_kind: normalizeNullableString(payload.previewKind),
+    },
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+
+  return {
+    workspaceId,
+    contentId,
+    variantId,
+    itemRecord,
+    variantRecord,
+  };
+}
+
+export function buildContentDraftUpdateRecords(payload = {}) {
+  const workspaceId = normalizeString(payload.workspaceId) || resolveDefaultWorkspaceId();
+  const timestamp = new Date().toISOString();
+  const contentId = normalizeString(payload.contentId);
+  const variantId = normalizeString(payload.variantId);
+  const variantType = normalizeVariantType(payload.variantType);
+  const title = normalizeString(payload.title, "Untitled content draft");
+  const summary = normalizeNullableString(payload.summary);
+  const visibility = normalizeVisibility(payload.visibility);
+
+  const itemPatch = {
+    title,
+    source_idea: normalizeString(payload.sourceIdea) || title,
+    status: normalizeItemStatus(payload.status),
+    summary,
+    next_action: normalizeNullableString(payload.nextAction),
+    slug: normalizeNullableString(payload.slug),
+    scheduled_at: normalizeNullableString(payload.scheduledAt),
+    visibility,
+    meta: buildContentMeta(payload, "update"),
+    updated_at: timestamp,
+  };
+
+  const variantPatch = {
+    variant_type: variantType,
+    title,
+    body: normalizeBody(payload.body),
+    summary,
+    excerpt: normalizeNullableString(payload.excerpt) || summary,
+    status: normalizeVariantStatus(payload.variantStatus),
+    slug: normalizeNullableString(payload.slug),
+    scheduled_at: normalizeNullableString(payload.scheduledAt),
+    visibility,
+    meta: {
+      ...buildContentMeta(payload, "update"),
+      preview_kind: normalizeNullableString(payload.previewKind),
+    },
+    updated_at: timestamp,
+  };
+
+  return {
+    workspaceId,
+    contentId,
+    variantId,
+    itemPatch,
+    variantPatch,
+  };
 }
 
 export async function getContentLedger() {

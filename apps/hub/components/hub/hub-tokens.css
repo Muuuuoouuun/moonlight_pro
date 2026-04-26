@@ -226,6 +226,64 @@
   -webkit-overflow-scrolling: touch;
 }
 
+.campaign-war-room,
+.campaign-war-room > * {
+  min-width: 0;
+}
+
+.campaign-war-room {
+  transition: grid-template-columns 220ms ease;
+}
+
+.campaign-war-room__list,
+.campaign-war-room__detail,
+.campaign-detail-frame {
+  transition:
+    opacity 180ms ease,
+    transform 220ms ease,
+    border-color 180ms ease,
+    box-shadow 220ms ease;
+}
+
+.campaign-war-room__list {
+  overflow: hidden;
+}
+
+.campaign-war-room[data-focus="true"] {
+  grid-template-columns: 0 minmax(0, 1fr) !important;
+  column-gap: 0 !important;
+}
+
+.campaign-war-room[data-focus="true"] .campaign-war-room__list {
+  opacity: 0;
+  transform: translateX(-8px);
+  pointer-events: none;
+}
+
+.campaign-war-room[data-focus="true"] .campaign-war-room__detail {
+  transform: translateY(-2px);
+}
+
+.campaign-war-room[data-focus="true"] .campaign-detail-frame {
+  border-color: var(--line);
+  box-shadow: 0 18px 48px -28px oklch(0 0 0 / 0.65);
+}
+
+.campaign-tab-stage[data-focus="true"] {
+  animation: mlCampaignFocusIn 180ms ease-out;
+}
+
+@keyframes mlCampaignFocusIn {
+  from {
+    opacity: 0.82;
+    transform: translateY(4px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @media (pointer: coarse), (max-width: 720px) {
   .hub-app {
     height: 100dvh;
@@ -440,6 +498,14 @@
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
+  .campaign-war-room {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .campaign-war-room[data-focus="true"] .campaign-war-room__list {
+    display: none !important;
+  }
+
   .hub-detail-card {
     flex-direction: column !important;
   }
@@ -481,5 +547,16 @@
 
   .hub-table-card .scroll-y > div:not([class]) {
     min-width: 640px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .campaign-war-room,
+  .campaign-war-room__list,
+  .campaign-war-room__detail,
+  .campaign-detail-frame,
+  .campaign-tab-stage[data-focus="true"] {
+    animation: none !important;
+    transition: none !important;
   }
 }
