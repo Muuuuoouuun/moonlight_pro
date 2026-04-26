@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Tabs, SectionTitle, Kbd } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Tabs, SectionTitle, Kbd, EmptyState } from "../hub-primitives";
 import { EVOLUTION_LOG } from "../hub-data";
 
 const PLAYBOOK_FAMILIES = [
@@ -60,19 +60,33 @@ function maskFingerprint(fingerprint) {
 }
 
 export function Evolution({ onNavigate }) {
+  const [tab, setTab] = React.useState('all');
   const tagTone = { upgrade: 'moon', bug: 'danger', insight: 'info', note: 'neutral' };
+  const tabs = [
+    { key: 'all', label: 'All', count: EVOLUTION_LOG.length },
+    { key: 'up', label: 'Upgrades', count: EVOLUTION_LOG.filter(e => e.tag === 'upgrade').length },
+    { key: 'issue', label: 'Issues', count: EVOLUTION_LOG.filter(e => e.type === 'issue' || e.tag === 'bug').length },
+    { key: 'insight', label: 'Insights', count: EVOLUTION_LOG.filter(e => e.tag === 'insight').length },
+  ];
+  const filteredLog = EVOLUTION_LOG.filter(e => {
+    if (tab === 'up') return e.tag === 'upgrade';
+    if (tab === 'issue') return e.type === 'issue' || e.tag === 'bug';
+    if (tab === 'insight') return e.tag === 'insight';
+    return true;
+  });
+  const activeLabel = tabs.find(t => t.key === tab)?.label || 'All';
   return (
-    <div style={{ padding: 'var(--section-gap)', maxWidth: 1100, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', maxWidth: 1100, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Evolution</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch', lineHeight: 1.5 }}>시스템이 어떻게 변하고 있는지 · 바꾸는 법(Playbooks) · 실행하는 법(Commands) · 기록(Log)</div>
         </div>
         <div style={{ flex: 1 }} />
-        <Tabs tabs={[{key:'all',label:'All'},{key:'up',label:'Upgrades'},{key:'issue',label:'Issues'},{key:'insight',label:'Insights'}]} active="all" onChange={()=>{}} style={{ borderBottom: 'none' }} />
+        <Tabs className="hub-toolbar" tabs={tabs} active={tab} onChange={setTab} ariaLabel="Evolution log filters" style={{ borderBottom: 'none' }} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--gap)' }}>
+      <div className="hub-grid--three" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>System version</div>
           <div className="mono" style={{ fontSize: 22, fontWeight: 500, marginTop: 8 }}>v2.3.1</div>
@@ -97,7 +111,7 @@ export function Evolution({ onNavigate }) {
         <SectionTitle subtitle="운영 절차 · 시스템을 바꾸는 방법" right={<Button variant="outline" size="xs" icon="plus">Playbook</Button>}>
           Playbooks
         </SectionTitle>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--gap)', marginBottom: 'var(--gap)' }}>
+        <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--gap)', marginBottom: 'var(--gap)' }}>
           {PLAYBOOK_FAMILIES.map(f => (
             <Card key={f.key} style={{ cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -109,7 +123,7 @@ export function Evolution({ onNavigate }) {
             </Card>
           ))}
         </div>
-        <Card pad={false}>
+        <Card pad={false} className="hub-table-card">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 110px 1fr 100px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
             <span>Playbook</span><span>Family</span><span>Cadence</span><span>Trigger</span><span>Owner</span><span style={{ textAlign: 'right' }} />
           </div>
@@ -146,7 +160,7 @@ export function Evolution({ onNavigate }) {
         >
           Commands
         </SectionTitle>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--gap)' }}>
+        <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--gap)' }}>
           {QUICK_COMMANDS.map(c => (
             <button key={c.slash} onClick={() => onNavigate?.(c.dest)} style={{
               textAlign: 'left', padding: 'var(--card-pad)',
@@ -173,10 +187,21 @@ export function Evolution({ onNavigate }) {
 
       {/* Log — what's actually changing */}
       <div>
-        <SectionTitle>Log</SectionTitle>
+        <SectionTitle
+          right={<span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{filteredLog.length} / {EVOLUTION_LOG.length}</span>}
+        >
+          {activeLabel} Log
+        </SectionTitle>
         <Card pad={false}>
-          {EVOLUTION_LOG.map((e, i) => (
-            <div key={i} style={{ padding: '14px 18px', borderBottom: i < EVOLUTION_LOG.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+          {filteredLog.length === 0 && (
+            <EmptyState
+              icon="evolution"
+              title={`${activeLabel} 기록이 없습니다`}
+              description="해당 카테고리의 변경 기록이 생기면 여기에 표시됩니다."
+            />
+          )}
+          {filteredLog.map((e, i) => (
+            <div key={`${e.at}-${e.tag}-${i}`} style={{ padding: '14px 18px', borderBottom: i < filteredLog.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
               <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', width: 100, flexShrink: 0, paddingTop: 2 }}>{e.at}</span>
               <Badge tone={tagTone[e.tag]} size="xs" style={{ flexShrink: 0 }}>{e.tag}</Badge>
               <div style={{ fontSize: 13, color: 'var(--fg-muted)', lineHeight: 1.55, flex: 1 }}>{e.msg}</div>
@@ -314,7 +339,7 @@ function KeyRow({ item, last, kind }) {
 
 export function Settings() {
   return (
-    <div style={{ padding: 'var(--section-gap)', maxWidth: 900, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', maxWidth: 900, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
       <div>
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Settings</h2>
         <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Workspace · integrations · profile</div>

@@ -8,7 +8,7 @@ import { CHAT_THREAD, COUNCIL, ORDERS } from "../hub-data";
 export function AgentsChat() {
   const [input, setInput] = React.useState('');
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', height: '100%', overflow: 'hidden' }}>
+    <div className="hub-chat-shell" style={{ display: 'grid', gridTemplateColumns: '240px 1fr', height: '100%', overflow: 'hidden' }}>
       <aside style={{ borderRight: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center' }}>
           <span style={{ fontSize: 12, fontWeight: 600, flex: 1 }}>Conversations</span>
@@ -102,8 +102,8 @@ export function AgentsChat() {
 
 export function AgentsCouncil() {
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Council</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch' }}>5명의 전문 에이전트가 함께 의논. 브리핑·결정에 근거 제공.</div>
@@ -111,7 +111,7 @@ export function AgentsCouncil() {
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="sm" icon="sparkle">Convene</Button>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--gap)' }}>
+      <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--gap)' }}>
         {COUNCIL.map(a => (
           <Card key={a.key} style={{ cursor: 'pointer' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -139,8 +139,8 @@ export function AgentsCouncil() {
 export function AgentsOrders() {
   const sTone = { done: 'success', review: 'warning', draft: 'neutral' };
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Agent orders</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>에이전트에게 내린 작업 · 자동 스케줄 + 온디맨드</div>
@@ -148,7 +148,7 @@ export function AgentsOrders() {
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="sm" icon="plus">New order</Button>
       </div>
-      <Card pad={false}>
+      <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: '110px 100px 1fr 100px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>When</span><span>Assignee</span><span>Task</span><span>Status</span><span style={{ textAlign: 'right' }} />
         </div>
@@ -321,7 +321,7 @@ export function AgentsOffice() {
   const liveCount = OFFICE_AGENTS.filter(a => a.status !== 'idle').length;
 
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%', overflow: 'auto' }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%', overflow: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>VR Office</h2>
@@ -338,7 +338,7 @@ export function AgentsOffice() {
         <Button variant="secondary" size="sm" icon="sparkle" style={{ marginLeft: 8 }}>Convene all</Button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 300px', gap: 'var(--gap)', alignItems: 'start' }}>
+      <div className="hub-grid--three" style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 300px', gap: 'var(--gap)', alignItems: 'start' }}>
         <Card pad={false} style={{ padding: 20, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, background: 'var(--surface-2)' }}>
           <PixelRoom selected={sel} onSelect={setSel} />
           <div style={{ display: 'flex', gap: 16, fontSize: 10.5, color: 'var(--fg-faint)' }}>
@@ -432,7 +432,7 @@ export function AgentsOffice() {
           <div style={{ flex: 1 }} />
           <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>auto · 18:24</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        <div className="hub-grid--four" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
           {[
             { k: 'morning', label: 'Morning', sub: '05–09 · 조용 · 창 밝음', active: false },
             { k: 'focus', label: 'Focus', sub: '09–13 · 딥워크', active: false },

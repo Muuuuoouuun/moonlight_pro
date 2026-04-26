@@ -36,7 +36,7 @@ function SignalCard({ s }) {
       opacity: decided ? 0.55 : 1,
       transition: 'opacity .2s',
     }}>
-      <div onClick={() => setExpanded(e => !e)} style={{ padding: 'var(--card-pad)', cursor: 'pointer', display: 'flex', gap: 14 }}>
+      <div className="hub-stackable-row" onClick={() => setExpanded(e => !e)} style={{ padding: 'var(--card-pad)', cursor: 'pointer', display: 'flex', gap: 14 }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 2 }}>
           <Dot tone={s.tone} size={8} />
         </div>
@@ -107,8 +107,8 @@ export function DailyBrief({ onNavigate }) {
   }, []);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', padding: 'var(--section-gap)', maxWidth: 1400, margin: '0 auto', width: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}>
+    <div className="hub-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', padding: 'var(--section-gap)', maxWidth: 1400, margin: '0 auto', width: '100%' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}>
         <div>
           <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>{formatBriefDate(now)}</div>
           <h1 style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em' }}>{greetingFor(now)}, <span style={{ color: 'var(--moon-300)' }}>Hyeon</span></h1>
@@ -116,17 +116,17 @@ export function DailyBrief({ onNavigate }) {
             5개의 신호가 오늘 결정이 필요해요. 그중 <span style={{ color: 'var(--danger)' }}>1개는 매출 리스크</span>, <span style={{ color: 'var(--warning)' }}>2개는 오늘 마감</span>.
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="hub-page-actions" style={{ display: 'flex', gap: 8 }}>
           <Button variant="secondary" size="md" icon="sparkle" onClick={() => onNavigate('dashboard/agents/chat')}>Ask Council</Button>
           <Button variant="outline" size="md" icon="clock">Start 15m focus</Button>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
+      <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
         {METRICS.map(m => <MetricCard key={m.label} m={m} />)}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 'var(--section-gap)' }}>
+      <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 'var(--section-gap)' }}>
         <div>
           <SectionTitle right={<div style={{ display: 'flex', gap: 6 }}>
             <Badge tone="danger" size="xs">1 urgent</Badge>

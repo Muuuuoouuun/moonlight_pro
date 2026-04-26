@@ -5,7 +5,7 @@ import { Iconed } from "./hub-icons";
 import { IconButton, Avatar, Kbd } from "./hub-primitives";
 import { NAV_TREE, LEGACY_TREE } from "./hub-data";
 
-export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openPalette }) {
+export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openPalette, className }) {
   const [open, setOpen] = React.useState(() => {
     const o = {};
     for (const n of NAV_TREE) if (n.children) o[n.key] = true;
@@ -21,7 +21,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
 
   if (collapsed) {
     return (
-      <aside style={{
+      <aside className={`${className || ''} hub-sidebar-root--collapsed`} style={{
         width: 56, flexShrink: 0,
         background: 'var(--surface)',
         borderRight: '1px solid var(--line-soft)',
@@ -57,7 +57,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
   }
 
   return (
-    <aside style={{
+    <aside className={className} style={{
       width: 232, flexShrink: 0,
       background: 'var(--surface)',
       borderRight: '1px solid var(--line-soft)',

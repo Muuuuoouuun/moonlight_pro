@@ -57,9 +57,9 @@ export function Kbd({ children, style }) {
   );
 }
 
-export function Card({ children, style, pad = true, interactive = false }) {
+export function Card({ children, style, pad = true, interactive = false, className }) {
   return (
-    <div style={{
+    <div className={className} style={{
       background: 'var(--surface)',
       border: '1px solid var(--line-soft)',
       borderRadius: 'var(--r-lg)',
@@ -120,7 +120,7 @@ export function EmptyState({ icon = 'inbox', title, description, action, style }
   );
 }
 
-export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRight, style, onClick, active, type = 'button' }) {
+export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRight, style, onClick, active, type = 'button', className }) {
   const sizes = {
     xs: { h: 24, px: 8, fs: 12, gap: 5 },
     sm: { h: 30, px: 11, fs: 12.5, gap: 6 },
@@ -157,7 +157,7 @@ export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRig
   };
   const v = variants[variant];
   return (
-    <button type={type} onClick={onClick} style={{
+    <button type={type} className={className} onClick={onClick} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: s.gap,
       height: s.h, padding: `0 ${s.px}px`, fontSize: s.fs, fontWeight: 500,
       borderRadius: 'var(--r-sm)', whiteSpace: 'nowrap', transition: 'all .12s ease',
@@ -170,9 +170,9 @@ export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRig
   );
 }
 
-export function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tooltip, style }) {
+export function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tooltip, style, className }) {
   return (
-    <button onClick={onClick} title={tooltip} style={{
+    <button className={className} onClick={onClick} title={tooltip} aria-label={tooltip} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       width: size, height: size,
       color: tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)',
@@ -241,13 +241,13 @@ export function Divider({ style }) {
   return <div style={{ height: 1, background: 'var(--line-soft)', ...style }} />;
 }
 
-export function Tabs({ tabs, active, onChange, style }) {
+export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
   return (
-    <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--line-soft)', ...style }}>
+    <div className={className} role="tablist" aria-label={ariaLabel} style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--line-soft)', ...style }}>
       {tabs.map(t => {
         const isActive = t.key === active;
         return (
-          <button key={t.key} onClick={() => onChange(t.key)} style={{
+          <button key={t.key} type="button" role="tab" aria-selected={isActive} onClick={() => onChange?.(t.key)} style={{
             padding: '8px 12px', fontSize: 12.5, fontWeight: 500,
             color: isActive ? 'var(--fg)' : 'var(--fg-dim)',
             borderBottom: `1px solid ${isActive ? 'var(--moon-200)' : 'transparent'}`,
@@ -284,11 +284,11 @@ export function Checkbox({ checked, onChange, size = 14 }) {
   );
 }
 
-export function Input({ placeholder, icon, value, onChange, style, size = 'sm' }) {
+export function Input({ placeholder, icon, value, onChange, style, size = 'sm', className }) {
   const sizes = { sm: { h: 30, fs: 12.5 }, md: { h: 34, fs: 13 } };
   const s = sizes[size];
   return (
-    <div style={{
+    <div className={className} style={{
       display: 'inline-flex', alignItems: 'center', gap: 8,
       height: s.h, padding: '0 10px',
       background: 'var(--surface-2)',

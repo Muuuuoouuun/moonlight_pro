@@ -166,7 +166,7 @@ export function Studio() {
   const cur = slides[activeSlide] || slides[0];
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', height: '100%', overflow: 'hidden' }}>
+    <div className="hub-studio-shell" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', height: '100%', overflow: 'hidden' }}>
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
@@ -269,9 +269,9 @@ export function Studio() {
               }}>＋</button>
             </div>
 
-            <div className="scroll-y" style={{ flex: 1, padding: 'var(--section-gap)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', gap: 24 }}>
+            <div className="hub-studio-canvas scroll-y" style={{ flex: 1, padding: 'var(--section-gap)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', gap: 24 }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-                <div style={{
+                <div className="hub-carousel-preview" style={{
                   width: 420, height: 420, background: cur.bg, borderRadius: 12,
                   position: 'relative', overflow: 'hidden',
                   boxShadow: '0 20px 60px -20px oklch(0 0 0 / 0.5)',
@@ -296,7 +296,7 @@ export function Studio() {
                 </div>
               </div>
 
-              <Card style={{ width: 320 }}>
+              <Card className="hub-studio-card" style={{ width: 320 }}>
                 <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 10 }}>Slide {activeSlide + 1}</div>
                 <label style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Title</label>
                 <input value={cur.title} onChange={e => updateSlide(activeSlide, { title: e.target.value })}
@@ -380,6 +380,7 @@ export function Studio() {
 }
 
 export function Queue() {
+  const [tab, setTab] = React.useState('all');
   const ledger = useContentLedger();
   const queue = ledger.source === "supabase"
     ? (Array.isArray(ledger.queue) ? ledger.queue : [])
@@ -387,40 +388,51 @@ export function Queue() {
   const statusTone = { Draft: 'warning', Scheduled: 'info', Review: 'moon', Idea: 'neutral', Outline: 'neutral', Published: 'success' };
   const draftCount = queue.filter(c => c.status === 'Draft').length;
   const scheduledCount = queue.filter(c => c.status === 'Scheduled').length;
+  const tabs = [
+    { key: 'all', label: 'All', count: queue.length },
+    { key: 'draft', label: 'Draft', count: draftCount },
+    { key: 'scheduled', label: 'Scheduled', count: scheduledCount },
+  ];
+  const visibleQueue = tab === 'all'
+    ? queue
+    : queue.filter(c => c.status.toLowerCase() === tab);
+  const activeLabel = tabs.find(t => t.key === tab)?.label || 'All';
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Publishing queue</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            {queue.length} items in pipeline
+            {visibleQueue.length}{tab !== 'all' ? ` of ${queue.length}` : ''} items in pipeline
             <span className="mono" style={{ marginLeft: 8, color: ledger.syncState === 'live' ? 'var(--success)' : ledger.syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
               {ledger.syncState === 'live' ? 'live' : ledger.syncState === 'loading' ? 'syncing' : 'mock'}
             </span>
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Tabs tabs={[{key:'all',label:'All',count:queue.length},{key:'draft',label:'Draft',count:draftCount},{key:'scheduled',label:'Scheduled',count:scheduledCount}]} active="all" onChange={()=>{}} style={{ borderBottom: 'none' }} />
+        <Tabs className="hub-toolbar" tabs={tabs} active={tab} onChange={setTab} ariaLabel="Publishing queue filters" style={{ borderBottom: 'none' }} />
         <Button variant="primary" size="sm" icon="plus">Draft</Button>
       </div>
 
-      <Card pad={false}>
+      <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 110px 110px 130px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>Title</span><span>Kind</span><span>Channel</span><span>Status</span><span>When</span><span style={{ textAlign: 'right' }}>Author</span>
         </div>
-        {queue.length === 0 && (
+        {visibleQueue.length === 0 && (
           <EmptyState
             icon="queue"
-            title="발행 큐가 비어 있습니다"
-            description={ledger.syncState === 'live' ? 'Supabase content_items/content_variants 원장에 표시할 콘텐츠가 없습니다.' : '초안을 만들면 큐와 파이프라인에 표시됩니다.'}
+            title={tab === 'all' ? '발행 큐가 비어 있습니다' : `${activeLabel} 항목이 없습니다`}
+            description={tab === 'all'
+              ? (ledger.syncState === 'live' ? 'Supabase content_items/content_variants 원장에 표시할 콘텐츠가 없습니다.' : '초안을 만들면 큐와 파이프라인에 표시됩니다.')
+              : `${activeLabel} 상태의 콘텐츠가 생기면 이 필터에 표시됩니다.`}
             action={<Button variant="primary" size="sm" icon="plus">Draft</Button>}
           />
         )}
-        {queue.map((c, i) => (
+        {visibleQueue.map((c, i) => (
           <div key={c.id} style={{
             display: 'grid', gridTemplateColumns: '1fr 110px 110px 110px 130px 80px',
             padding: '12px 16px', alignItems: 'center',
-            borderBottom: i < queue.length - 1 ? '1px solid var(--line-soft)' : 'none',
+            borderBottom: i < visibleQueue.length - 1 ? '1px solid var(--line-soft)' : 'none',
           }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -444,8 +456,8 @@ export function Queue() {
 export function Campaigns() {
   const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral' };
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Campaigns</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>{FALLBACK_CAMPAIGNS.length} multi-channel initiatives</div>
@@ -454,7 +466,7 @@ export function Campaigns() {
         <Button variant="primary" size="sm" icon="plus">Campaign</Button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 'var(--gap)' }}>
+      <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 'var(--gap)' }}>
         {FALLBACK_CAMPAIGNS.map(c => (
           <Card key={c.id}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>

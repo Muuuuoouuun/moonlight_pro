@@ -19,7 +19,7 @@ const LABELS = {
   'integrations': 'Integrations', 'activity': 'Activity', 'issues': 'Issues',
 };
 
-export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, onTweaksToggle }) {
+export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, onTweaksToggle, onSidebarOpen }) {
   const segments = path.split('/').filter(Boolean);
   const now = new Date();
   const weekday = ['일','월','화','수','목','금','토'][now.getDay()];
@@ -28,7 +28,7 @@ export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, o
   const mm = String(now.getMinutes()).padStart(2, '0');
 
   return (
-    <header style={{
+    <header className="hub-topbar" style={{
       height: 48, flexShrink: 0,
       background: 'var(--surface)',
       borderBottom: '1px solid var(--line-soft)',
@@ -36,7 +36,9 @@ export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, o
       padding: '0 16px',
       gap: 14,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+      <IconButton className="hub-mobile-only" icon="menu" tooltip="Open navigation" onClick={onSidebarOpen} />
+
+      <div className="hub-topbar__crumbs" style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
         {segments.map((s, i) => {
           const isLast = i === segments.length - 1;
           return (
@@ -59,7 +61,7 @@ export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, o
 
       <div style={{ flex: 1 }} />
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 10px',
+      <div className="hub-topbar__meta" style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 10px',
         background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
         borderRadius: 999, fontSize: 11.5, color: 'var(--fg-muted)',
       }}>
@@ -67,7 +69,7 @@ export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, o
         <span className="mono" style={{ color: 'var(--fg)' }}>{weekday} · {m}/{d} · {hh}:{mm}</span>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
+      <div className="hub-topbar__density" style={{ display: 'flex', alignItems: 'center', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
         {['compact','default','relaxed'].map(d => (
           <button key={d} onClick={() => onDensity(d)} style={{
             padding: '4px 9px', fontSize: 11, fontWeight: 500, borderRadius: 4,
@@ -78,7 +80,7 @@ export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, o
         ))}
       </div>
 
-      <IconButton icon="sparkle" tooltip="Ask Agents" onClick={() => onNavigate('dashboard/agents/chat')} />
+      <IconButton className="hub-topbar__secondary" icon="sparkle" tooltip="Ask Agents" onClick={() => onNavigate('dashboard/agents/chat')} />
       <button onClick={() => onTheme(theme === 'dark' ? 'light' : 'dark')}
         title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
         aria-label={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
@@ -91,8 +93,8 @@ export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, o
         <Iconed name={theme === 'dark' ? 'moon' : 'sun'} size={13} />
       </button>
       <IconButton icon="settings" tooltip="Tweaks" onClick={onTweaksToggle} />
-      <IconButton icon="bell" tooltip="Notifications" />
-      <Button variant="primary" size="sm" icon="plus">New</Button>
+      <IconButton className="hub-topbar__secondary" icon="bell" tooltip="Notifications" />
+      <Button className="hub-topbar__primary-action" variant="primary" size="sm" icon="plus">New</Button>
     </header>
   );
 }

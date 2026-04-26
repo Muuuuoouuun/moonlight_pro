@@ -183,8 +183,8 @@ export function Calendar() {
   const toneBd = { moon: 'var(--moon-600)', company: 'oklch(0.5 0.04 290 / 0.5)', personal: 'oklch(0.5 0.04 200 / 0.5)', info: 'oklch(0.5 0.06 230 / 0.5)', warning: 'oklch(0.5 0.09 85 / 0.5)' };
 
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500, letterSpacing: '-0.01em' }}>Calendar</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
@@ -200,12 +200,12 @@ export function Calendar() {
           )}
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div className="hub-toolbar" style={{ display: 'flex', gap: 6 }}>
           <IconButton icon="chevronL" />
           <Button variant="secondary" size="sm">Today</Button>
           <IconButton icon="chevronR" />
         </div>
-        <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
+        <div className="hub-toolbar" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
           {['Day','Week','Month'].map(v => (
             <button key={v} style={{ padding: '4px 10px', fontSize: 11.5, borderRadius: 4, color: v === 'Week' ? 'var(--fg)' : 'var(--fg-faint)', background: v === 'Week' ? 'var(--surface-3)' : 'transparent' }}>{v}</button>
           ))}
@@ -213,7 +213,7 @@ export function Calendar() {
         <Button variant="primary" size="sm" icon="plus">Event</Button>
       </div>
 
-      <Card pad={false} style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <Card pad={false} className="hub-table-card" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', borderBottom: '1px solid var(--line-soft)' }}>
           <div />
           {days.map((d, i) => (
@@ -264,8 +264,8 @@ export function Decisions() {
   const list = Array.isArray(decisions) ? decisions : [];
 
   return (
-    <div style={{ padding: 'var(--section-gap)', maxWidth: 1000, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', maxWidth: 1000, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Decisions</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch', lineHeight: 1.5 }}>
@@ -327,8 +327,8 @@ export function Roadmap() {
   const toneMap = { moon: 'var(--moon-400)', company: 'var(--company)', personal: 'var(--personal)' };
 
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Roadmap</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Q2 outlook · 7 initiatives</div>
@@ -337,7 +337,7 @@ export function Roadmap() {
         <Button variant="secondary" size="sm" icon="sparkle">Let Council draft Q3</Button>
       </div>
 
-      <Card pad={false}>
+      <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', borderBottom: '1px solid var(--line-soft)' }}>
           <div style={{ padding: '10px 14px', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Initiative</div>
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
@@ -392,7 +392,7 @@ export function Rhythm() {
   }
 
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
       <div>
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Rhythm</h2>
         <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
@@ -403,7 +403,7 @@ export function Rhythm() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
+      <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>This week</div>
           <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="mono">{completed} / {total}</div>
@@ -417,7 +417,7 @@ export function Rhythm() {
         </Card>
       </div>
 
-      <Card pad={false}>
+      <Card pad={false} className="hub-table-card">
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'grid', gridTemplateColumns: '1fr 160px 90px 100px' }}>
           <span>Ritual</span><span>Last 7 days</span><span>Streak</span><span style={{ textAlign: 'right' }}>Action</span>
         </div>

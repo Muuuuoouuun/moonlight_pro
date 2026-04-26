@@ -111,6 +111,7 @@ export function HubApp() {
   if (PARENT_JUMP[path]) path = PARENT_JUMP[path];
 
   const [collapsed, setCollapsed] = React.useState(false);
+  const [navOpen, setNavOpen] = React.useState(false);
   const [density, setDensity] = React.useState('default');
   const [theme, setTheme] = React.useState('dark');
   const [paletteOpen, setPaletteOpen] = React.useState(false);
@@ -134,6 +135,7 @@ export function HubApp() {
   const navigate = React.useCallback((p) => {
     const target = PARENT_JUMP[p] || p;
     router.push('/' + target);
+    setNavOpen(false);
   }, [router]);
 
   React.useEffect(() => {
@@ -149,28 +151,37 @@ export function HubApp() {
 
   const render = PAGE_MAP[path];
   const page = render ? render(navigate) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
+  const sidebarCollapsed = collapsed && !navOpen;
 
   return (
     <div ref={rootRef} className="hub-app" data-theme={theme} data-density={density}>
-      <div style={{ display: 'flex', height: '100vh', width: '100%', overflow: 'hidden' }}>
+      <div className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'}>
+        <button
+          type="button"
+          className="hub-mobile-backdrop"
+          aria-label="Close navigation"
+          onClick={() => setNavOpen(false)}
+        />
         <Sidebar
+          className="hub-sidebar-root"
           active={path}
           onNavigate={navigate}
-          collapsed={collapsed}
+          collapsed={sidebarCollapsed}
           onToggleCollapse={() => setCollapsed(c => !c)}
           openPalette={() => setPaletteOpen(true)}
         />
-        <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <main className="hub-main">
           <TopBar
             path={path}
             onNavigate={navigate}
+            onSidebarOpen={() => setNavOpen(true)}
             onTweaksToggle={() => setTweaksOpen(o => !o)}
             density={density}
             onDensity={setDensity}
             theme={theme}
             onTheme={setTheme}
           />
-          <div key={path} className="scroll-y fade-up" style={{ flex: 1, overflow: 'auto', background: 'var(--bg)' }}>
+          <div key={path} className="hub-content scroll-y fade-up">
             {page}
           </div>
         </main>

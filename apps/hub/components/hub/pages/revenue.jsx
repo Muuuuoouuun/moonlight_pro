@@ -171,8 +171,8 @@ export function RevenueOverview() {
     ];
 
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Revenue overview</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
@@ -180,14 +180,14 @@ export function RevenueOverview() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
+        <div className="hub-page-actions" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
           {['MTD','QTD','YTD'].map(p => (
             <button key={p} style={{ padding: '4px 10px', fontSize: 11.5, borderRadius: 4, color: p === 'MTD' ? 'var(--fg)' : 'var(--fg-faint)', background: p === 'MTD' ? 'var(--surface-3)' : 'transparent' }}>{p}</button>
           ))}
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
+      <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
         {[
           { l: 'MRR', v: fmt(mrr), d: formatPercentDelta(mrr, mrrPrev), tone: mrr > mrrPrev ? 'success' : 'neutral' },
           { l: 'Pipeline', v: fmt(pipeline), d: `${openDeals} deals`, tone: 'moon' },
@@ -202,7 +202,7 @@ export function RevenueOverview() {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 'var(--gap)' }}>
+      <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>Pipeline by stage</div>
@@ -258,7 +258,7 @@ export function RevenueOverview() {
         </Card>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
+      <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Top deals</div>
           {DEALS.length === 0 && (
@@ -322,8 +322,8 @@ export function Leads() {
   const stageTone = { New: 'info', Contact: 'moon', Qualified: 'success', Lost: 'danger' };
 
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Leads</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
@@ -332,7 +332,7 @@ export function Leads() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, marginRight: 8 }}>
+        <div className="hub-toolbar" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, marginRight: 8 }}>
           {[{ k: 'all', l: 'All' },{ k: 'personal', l: 'Personal' },{ k: 'company', l: 'Company' }].map(t => (
             <button key={t.k} onClick={() => setFilter(t.k)} style={{
               padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
@@ -346,12 +346,12 @@ export function Leads() {
             </button>
           ))}
         </div>
-        <Input placeholder="이름·소스·단계 검색…" icon="search" value={search} onChange={setSearch} />
+        <Input className="hub-toolbar" placeholder="이름·소스·단계 검색…" icon="search" value={search} onChange={setSearch} />
         <div style={{ width: 8 }} />
         <Button variant="primary" size="sm" icon="plus">Lead</Button>
       </div>
 
-      <Card pad={false}>
+      <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span /><span>Name</span><span>Type</span><span>Source</span><span>Stage</span><span>Value</span><span>Owner</span><span style={{ textAlign: 'right' }}>Last</span>
         </div>
@@ -418,8 +418,8 @@ export function Deals() {
   const move = (id, to) => setDeals(ds => ds.map(d => d.id === id ? { ...d, stage: to } : d));
 
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Deals</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
@@ -428,7 +428,7 @@ export function Deals() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, marginRight: 8 }}>
+        <div className="hub-toolbar" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, marginRight: 8 }}>
           {[{k:'all',l:'All'},{k:'personal',l:'Personal'},{k:'company',l:'Company'}].map(t => (
             <button key={t.k} onClick={() => setFilter(t.k)} style={{
               padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
@@ -440,7 +440,7 @@ export function Deals() {
         <Button variant="primary" size="sm" icon="plus">Deal</Button>
       </div>
 
-      <div style={{ display: 'flex', gap: 'var(--gap)', overflowX: 'auto', flex: 1, paddingBottom: 4 }}>
+      <div className="hub-scroll-x" style={{ display: 'flex', gap: 'var(--gap)', overflowX: 'auto', flex: 1, paddingBottom: 4 }}>
         {DEAL_STAGES.map(s => {
           const items = deals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
           return (
@@ -515,8 +515,8 @@ export function Cases() {
   const pTone = { high: 'danger', med: 'warning', low: 'neutral' };
 
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Cases</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
@@ -527,7 +527,7 @@ export function Cases() {
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="sm" icon="plus">Case</Button>
       </div>
-      <Card pad={false}>
+      <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>ID</span><span>Title</span><span>Account</span><span>Type</span><span>Priority</span><span>Status</span><span>Opened</span><span style={{ textAlign: 'right' }}>Owner</span>
         </div>
@@ -987,9 +987,9 @@ export function Accounts() {
   };
 
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%', minHeight: 0 }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%', minHeight: 0 }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Accounts</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
@@ -1029,13 +1029,13 @@ export function Accounts() {
           ))}
         </div>
 
-        <Input placeholder="계정 검색…" icon="search" value={search} onChange={setSearch} />
+        <Input className="hub-toolbar" placeholder="계정 검색…" icon="search" value={search} onChange={setSearch} />
         <Button variant="primary" size="sm" icon="plus">Account</Button>
       </div>
 
       {/* Content by view */}
       {view === 'cards' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--gap)' }}>
+        <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--gap)' }}>
           {filtered.map(a => (
             <Card key={a.name} interactive style={{ cursor: 'pointer' }}>
               <div onClick={() => openDetail(a.name)}>
@@ -1078,7 +1078,7 @@ export function Accounts() {
       )}
 
       {view === 'list' && (
-        <Card pad={false}>
+        <Card pad={false} className="hub-table-card">
           <div style={{
             display: 'grid',
             gridTemplateColumns: '32px 1.6fr 110px 70px 110px 70px 120px 100px 100px',
@@ -1135,7 +1135,7 @@ export function Accounts() {
       )}
 
       {view === 'detail' && (
-        <Card pad={false} style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+        <Card pad={false} className="hub-detail-card" style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
           <div style={{ width: '30%', minWidth: 240, borderRight: '1px solid var(--line-soft)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
               {filtered.length} accounts

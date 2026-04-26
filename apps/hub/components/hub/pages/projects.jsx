@@ -158,7 +158,7 @@ export function Projects() {
   }, [brandMenuOpen]);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: sidebarHidden ? '1fr' : '240px 1fr', height: '100%', overflow: 'hidden' }}>
+    <div className="hub-workspace-shell" style={{ display: 'grid', gridTemplateColumns: sidebarHidden ? '1fr' : '240px 1fr', height: '100%', overflow: 'hidden' }}>
       {!sidebarHidden && (
       <aside style={{ borderRight: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center' }}>
@@ -215,7 +215,7 @@ export function Projects() {
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="hub-page-header" style={{ padding: '14px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 12 }}>
           {sidebarHidden && (
             <IconButton icon="chevronR" size={28} iconSize={14} onClick={() => setSidebarHidden(false)} tooltip="브랜드 사이드바 펼치기" />
           )}
@@ -355,7 +355,7 @@ export function Projects() {
         </div>
 
         {view === 'tree' && (
-          <div style={{ display: 'grid', gridTemplateColumns: openDetail ? '1fr 360px' : '1fr', flex: 1, overflow: 'hidden' }}>
+          <div className="hub-projects-main-grid" style={{ display: 'grid', gridTemplateColumns: openDetail ? '1fr 360px' : '1fr', flex: 1, overflow: 'hidden' }}>
             <div className="scroll-y" style={{ padding: 'var(--section-gap)' }}>
               <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
                 {projects.length === 0 && (
@@ -385,7 +385,7 @@ export function Projects() {
                         <div style={{ fontSize: 12.5, fontWeight: 600 }}>{group.label}</div>
                         <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4 }}>{groupProjects.length}</span>
                       </div>
-                      <Card pad={false}>
+                      <Card pad={false} className="hub-table-card">
                         <div style={{
                           display: 'grid', gridTemplateColumns: '22px 18px 1fr 36px 100px 120px',
                           padding: '8px 14px', background: 'var(--surface-2)',
@@ -681,7 +681,7 @@ export function Projects() {
         )}
 
         {view === 'board' && (
-          <div style={{ display: 'flex', gap: 'var(--gap)', overflowX: 'auto', flex: 1, padding: 'var(--section-gap)' }}>
+            <div className="hub-scroll-x" style={{ display: 'flex', gap: 'var(--gap)', overflowX: 'auto', flex: 1, padding: 'var(--section-gap)' }}>
             {cols.map(col => (
               <div key={col.key}
                 onDragOver={e => e.preventDefault()}

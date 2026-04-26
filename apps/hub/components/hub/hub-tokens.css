@@ -127,8 +127,8 @@
   font-feature-settings: 'cv11', 'ss01', 'ss03';
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  letter-spacing: -0.005em;
-  height: 100vh;
+  letter-spacing: 0;
+  height: 100dvh;
   width: 100%;
   overflow: hidden;
   transition: background 0.2s, color 0.2s;
@@ -154,6 +154,78 @@
 
 .hub-app .scroll-y { overflow-y: auto; }
 
+.hub-shell {
+  display: flex;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.hub-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.hub-content {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  background: var(--bg);
+}
+
+.hub-mobile-backdrop,
+.hub-mobile-only {
+  display: none !important;
+}
+
+.hub-topbar {
+  min-width: 0;
+}
+
+.hub-topbar__crumbs {
+  flex: 0 1 auto;
+}
+
+.hub-page-header {
+  min-width: 0;
+}
+
+.hub-page-actions,
+.hub-toolbar {
+  min-width: 0;
+}
+
+.hub-table-card {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hub-table-card > div:not([class]) {
+  min-width: 720px;
+}
+
+.hub-table-card > .mono {
+  min-width: 720px;
+}
+
+.hub-table-card .scroll-y > div:not([class]) {
+  min-width: 720px;
+}
+
+.hub-table-card > [role="tabpanel"],
+.hub-table-card > [data-empty="true"] {
+  min-width: 0;
+}
+
+.hub-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 @media (pointer: coarse), (max-width: 720px) {
   .hub-app {
     height: 100dvh;
@@ -172,5 +244,242 @@
   .hub-app textarea,
   .hub-app select {
     min-height: 44px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .hub-grid--metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .hub-grid--split,
+  .hub-grid--two,
+  .hub-grid--three {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .hub-app {
+    --section-gap: 16px;
+    --card-pad: 16px;
+  }
+
+  .hub-mobile-only {
+    display: inline-flex !important;
+  }
+
+  .hub-mobile-hidden,
+  .hub-topbar__meta,
+  .hub-topbar__density,
+  .hub-topbar__secondary {
+    display: none !important;
+  }
+
+  .hub-mobile-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    background: oklch(0.10 0.006 250 / 0.68);
+    border: 0;
+    min-height: 0 !important;
+    padding: 0;
+    backdrop-filter: blur(8px);
+  }
+
+  .hub-shell[data-nav-open="true"] .hub-mobile-backdrop {
+    display: block !important;
+  }
+
+  .hub-sidebar-root {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    z-index: 1000 !important;
+    width: min(84vw, 304px) !important;
+    max-width: 304px !important;
+    height: 100dvh !important;
+    transform: translateX(-104%);
+    transition: transform 0.18s ease;
+    box-shadow: var(--shadow-pop);
+  }
+
+  .hub-shell[data-nav-open="true"] .hub-sidebar-root {
+    transform: translateX(0);
+  }
+
+  .hub-main {
+    width: 100%;
+  }
+
+  .hub-topbar {
+    height: auto !important;
+    min-height: 52px;
+    padding: 8px 12px !important;
+    gap: 8px !important;
+  }
+
+  .hub-topbar__crumbs {
+    flex: 1 1 auto !important;
+    overflow: hidden;
+  }
+
+  .hub-topbar__crumbs button {
+    max-width: 34vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-height: 34px !important;
+  }
+
+  .hub-topbar__primary-action {
+    padding-inline: 10px !important;
+  }
+
+  .hub-page,
+  .hub-page-shell {
+    max-width: none !important;
+    padding: var(--section-gap) !important;
+  }
+
+  .hub-page-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .hub-page-header > div[style*="flex: 1"] {
+    display: none !important;
+  }
+
+  .hub-page-header > div[style*="width: 8"] {
+    display: none !important;
+  }
+
+  .hub-page-header > button,
+  .hub-page-header > .hub-toolbar,
+  .hub-page-header > .hub-page-actions,
+  .hub-page-header > [role="tablist"] {
+    max-width: 100%;
+  }
+
+  .hub-page-actions,
+  .hub-toolbar {
+    width: 100% !important;
+    flex-wrap: wrap !important;
+  }
+
+  .hub-stackable-row {
+    flex-wrap: wrap;
+  }
+
+  .hub-stackable-row > * {
+    min-width: 0;
+  }
+
+  .hub-page-actions > *,
+  .hub-toolbar > * {
+    flex: 1 1 auto;
+  }
+
+  .hub-grid--metrics,
+  .hub-grid--four {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .hub-grid--split,
+  .hub-grid--two,
+  .hub-grid--three {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .hub-card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)) !important;
+  }
+
+  .hub-table-card {
+    border-radius: var(--r-lg);
+  }
+
+  .hub-studio-shell,
+  .hub-workspace-shell,
+  .hub-chat-shell {
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
+    min-height: 100%;
+    overflow: visible !important;
+  }
+
+  .hub-studio-shell > aside {
+    border-left: 0 !important;
+    border-top: 1px solid var(--line-soft) !important;
+    min-height: 280px;
+  }
+
+  .hub-studio-canvas {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .hub-studio-card {
+    width: 100% !important;
+  }
+
+  .hub-carousel-preview {
+    width: min(100%, 420px) !important;
+    height: auto !important;
+    aspect-ratio: 1 / 1;
+  }
+
+  .hub-chat-shell > aside,
+  .hub-workspace-shell > aside {
+    display: none !important;
+  }
+
+  .hub-projects-main-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .hub-detail-card {
+    flex-direction: column !important;
+  }
+
+  .hub-detail-card > * {
+    width: 100% !important;
+    min-width: 0 !important;
+    border-right: 0 !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .hub-app {
+    --section-gap: 12px;
+    --card-pad: 14px;
+  }
+
+  .hub-grid--metrics,
+  .hub-grid--four {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .hub-page-actions > *,
+  .hub-toolbar > * {
+    flex-basis: 100%;
+  }
+
+  .hub-topbar__crumbs button {
+    max-width: 42vw;
+  }
+
+  .hub-table-card > div:not([class]) {
+    min-width: 640px;
+  }
+
+  .hub-table-card > .mono {
+    min-width: 640px;
+  }
+
+  .hub-table-card .scroll-y > div:not([class]) {
+    min-width: 640px;
   }
 }

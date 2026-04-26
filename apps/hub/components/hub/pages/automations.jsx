@@ -73,8 +73,8 @@ export function AutomationsIndex({ onNavigate }) {
   const activeCount = summary?.activeAutomations ?? automations.filter(a => a.status === 'Active').length;
   const runsTodayCount = summary?.runsToday ?? 23;
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Automations</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
@@ -90,7 +90,7 @@ export function AutomationsIndex({ onNavigate }) {
         <Button variant="primary" size="sm" icon="plus">Flow</Button>
       </div>
 
-      <Card pad={false}>
+      <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px 110px 130px 140px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>Flow</span><span>Trigger</span><span>Status</span><span>Last run</span><span>Success (24h)</span><span style={{ textAlign: 'right' }} />
         </div>
@@ -134,12 +134,12 @@ export function AutomationsIndex({ onNavigate }) {
 
 export function EmailAutomation() {
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', maxWidth: 1100 }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', maxWidth: 1100 }}>
       <div>
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Email automations</h2>
         <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Gmail 수신 · Resend 발송</div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
+      <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
             <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -181,7 +181,7 @@ export function EmailAutomation() {
       </div>
 
       <SectionTitle>Tag rules</SectionTitle>
-      <Card pad={false}>
+      <Card pad={false} className="hub-table-card">
         {[
           { cond: 'from:@* AND subject 한정', then: 'tag: Lead · create CRM', tone: 'moon' },
           { cond: 'subject contains "invoice"', then: 'tag: Finance · archive 30d', tone: 'info' },
@@ -268,8 +268,8 @@ export function Webhooks() {
   }
 
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Webhooks</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
@@ -330,8 +330,8 @@ export function Runs() {
     : (runs?.length ? runs : FALLBACK_RUN_LOG);
   const liveLabel = syncState === 'live' ? 'Live' : syncState === 'loading' ? 'Syncing' : 'Mock';
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Run log</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
@@ -347,7 +347,7 @@ export function Runs() {
           {liveLabel}
         </span>
       </div>
-      <Card pad={false} style={{ background: 'oklch(0.17 0.005 250)' }}>
+      <Card pad={false} className="hub-table-card" style={{ background: 'oklch(0.17 0.005 250)' }}>
         <div className="mono" style={{ padding: '12px 14px', fontSize: 12 }}>
           {rows.length === 0 && (
             <EmptyState
@@ -526,7 +526,7 @@ export function Flows() {
   const selectedNode = graph.nodes.find(n => n.id === selNode) || graph.nodes[0];
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr 300px', height: '100%', overflow: 'hidden' }}>
+    <div className="hub-workspace-shell" style={{ display: 'grid', gridTemplateColumns: '240px 1fr 300px', height: '100%', overflow: 'hidden' }}>
       <aside style={{ borderRight: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center' }}>
           <div style={{ flex: 1 }}>
