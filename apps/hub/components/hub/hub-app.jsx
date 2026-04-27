@@ -97,8 +97,8 @@ const PAGE_MAP = {
 
 const PARENT_JUMP = {
   'dashboard': 'dashboard/daily-brief',
-  'dashboard/work': 'dashboard/work/calendar',
-  'dashboard/content': 'dashboard/content/studio',
+  'dashboard/work': 'dashboard/work/projects',
+  'dashboard/content': 'dashboard/content/queue',
   'dashboard/revenue': 'dashboard/revenue/overview',
   'dashboard/agents': 'dashboard/agents/chat',
 };

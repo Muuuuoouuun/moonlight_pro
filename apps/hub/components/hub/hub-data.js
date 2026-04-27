@@ -1,57 +1,63 @@
-// Navigation + sample data for Moonlight Pro Hub
-// Design's NAV_TREE on top; existing-but-non-overlapping routes consolidated
-// into a bottom "기타" (Archive / Legacy) group.
+// Navigation + sample data for Moonlight Pro Hub.
+// The sidebar is ordered by admin operating cadence:
+// brief signal -> execution -> revenue -> publishing -> automation -> agents -> system.
+// Low-frequency or novelty surfaces stay reachable by URL, but do not compete in the nav.
 
 export const NAV_TREE = [
   { key: 'daily-brief', label: 'Daily Brief', icon: 'brief', path: 'dashboard/daily-brief' },
   {
     key: 'work', label: 'Work', icon: 'work',
     children: [
-      { key: 'calendar',  label: 'Calendar',  icon: 'calendar',  path: 'dashboard/work/calendar' },
       { key: 'projects',  label: 'Projects',  icon: 'projects',  path: 'dashboard/work/projects' },
+      { key: 'calendar',  label: 'Calendar',  icon: 'calendar',  path: 'dashboard/work/calendar' },
+      { key: 'rhythm',    label: 'Rhythm',    icon: 'rhythm',    path: 'dashboard/work/rhythm' },
       { key: 'decisions', label: 'Decisions', icon: 'decisions', path: 'dashboard/work/decisions' },
       { key: 'roadmap',   label: 'Roadmap',   icon: 'roadmap',   path: 'dashboard/work/roadmap' },
-      { key: 'rhythm',    label: 'Rhythm',    icon: 'rhythm',    path: 'dashboard/work/rhythm' },
-    ],
-  },
-  {
-    key: 'content', label: 'Content', icon: 'content',
-    children: [
-      { key: 'studio',    label: 'Studio',    icon: 'studio',    path: 'dashboard/content/studio' },
-      { key: 'queue',     label: 'Queue',     icon: 'queue',     path: 'dashboard/content/queue' },
-      { key: 'campaigns', label: 'Campaigns', icon: 'campaigns', path: 'dashboard/content/campaigns' },
     ],
   },
   {
     key: 'revenue', label: 'Revenue', icon: 'revenue',
     children: [
       { key: 'overview', label: 'Overview', icon: 'revenue',  path: 'dashboard/revenue/overview' },
-      { key: 'leads',    label: 'Leads',    icon: 'leads',    path: 'dashboard/revenue/leads' },
       { key: 'deals',    label: 'Deals',    icon: 'deals',    path: 'dashboard/revenue/deals' },
-      { key: 'cases',    label: 'Cases',    icon: 'cases',    path: 'dashboard/revenue/cases' },
+      { key: 'leads',    label: 'Leads',    icon: 'leads',    path: 'dashboard/revenue/leads' },
       { key: 'accounts', label: 'Accounts', icon: 'accounts', path: 'dashboard/revenue/accounts' },
+      { key: 'cases',    label: 'Cases',    icon: 'cases',    path: 'dashboard/revenue/cases' },
+    ],
+  },
+  {
+    key: 'content', label: 'Content', icon: 'content',
+    children: [
+      { key: 'queue',     label: 'Queue',     icon: 'queue',     path: 'dashboard/content/queue' },
+      { key: 'studio',    label: 'Studio',    icon: 'studio',    path: 'dashboard/content/studio' },
+      { key: 'campaigns', label: 'Campaigns', icon: 'campaigns', path: 'dashboard/content/campaigns' },
     ],
   },
   {
     key: 'automations', label: 'Automations', icon: 'automations',
     children: [
+      { key: 'runs',     label: 'Runs',     icon: 'runs',    path: 'dashboard/automations/runs' },
       { key: 'flows',    label: 'Flows',    icon: 'zap',     path: 'dashboard/automations/flows' },
       { key: 'email',    label: 'Email',    icon: 'email',   path: 'dashboard/automations/email' },
       { key: 'webhooks', label: 'Webhooks', icon: 'webhook', path: 'dashboard/automations/webhooks' },
-      { key: 'runs',     label: 'Runs',     icon: 'runs',    path: 'dashboard/automations/runs' },
     ],
   },
   {
     key: 'agents', label: 'Agents', icon: 'agents',
     children: [
       { key: 'chat',    label: 'Chat',      icon: 'chat',    path: 'dashboard/agents/chat' },
-      { key: 'council', label: 'Council',   icon: 'council', path: 'dashboard/agents/council' },
       { key: 'orders',  label: 'Orders',    icon: 'orders',  path: 'dashboard/agents/orders' },
+      { key: 'council', label: 'Council',   icon: 'council', path: 'dashboard/agents/council' },
       { key: 'office',  label: 'VR Office', icon: 'agents',  path: 'dashboard/agents/office' },
     ],
   },
-  { key: 'evolution', label: 'Evolution', icon: 'evolution', path: 'dashboard/evolution' },
-  { key: 'settings',  label: 'Settings',  icon: 'settings',  path: 'dashboard/settings' },
+  {
+    key: 'system', label: 'System', icon: 'settings',
+    children: [
+      { key: 'evolution', label: 'Evolution', icon: 'evolution', path: 'dashboard/evolution' },
+      { key: 'settings',  label: 'Settings',  icon: 'settings',  path: 'dashboard/settings' },
+    ],
+  },
 ];
 
 // 기타 (Archive) — empty: every legacy concept is now folded into the
