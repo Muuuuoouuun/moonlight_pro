@@ -43,6 +43,32 @@ function envFileHasKeys(filepath, keys) {
   );
 }
 
+function parseQuotedValues(valueList) {
+  return Array.from(valueList.matchAll(/'([^']+)'|"([^"]+)"/g), (match) => match[1] || match[2]);
+}
+
+function valuesEqual(left, right) {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
+}
+
+function extractJsStringArray(text, constName) {
+  const match = text.match(new RegExp(`const\\s+${constName}\\s*=\\s*\\[([^\\]]+)\\]`));
+  return match ? parseQuotedValues(match[1]) : [];
+}
+
+function extractSchemaVariantTypes(text) {
+  const match = text.match(/variant_type\s+text\s+not\s+null\s+check\s*\(\s*variant_type\s+in\s*\(([^)]+)\)\s*\)/);
+  return match ? parseQuotedValues(match[1]) : [];
+}
+
+function extractContentVariantConstraintTypes(text) {
+  const match = text.match(/add\s+constraint\s+content_variants_variant_type_check\s+check\s*\(\s*variant_type\s+in\s*\(([\s\S]*?)\)\s*\)/i);
+  return match ? parseQuotedValues(match[1]) : [];
+}
+
 const pkg = readJson("package.json");
 const lock = readText("package-lock.json");
 
@@ -128,6 +154,33 @@ assert(
   "partial unique index present",
 );
 assert(
+  existsSync(path.join(root, "supabase/setup/00_live_schema.sql")) &&
+    existsSync(path.join(root, "supabase/setup/01_storage.sql")) &&
+    existsSync(path.join(root, "supabase/setup/02_rls_policies.sql")) &&
+    existsSync(path.join(root, "supabase/setup/03_seed_dev_workspace.sql")) &&
+    existsSync(path.join(root, "supabase/setup/99_smoke_checks.sql")),
+  "Supabase live setup pack",
+  "schema, storage, RLS, seed, and smoke SQL present",
+);
+assert(
+  readText("supabase/setup/00_live_schema.sql").includes("'blog_insight'") &&
+    readText("supabase/setup/00_live_schema.sql").includes("'x_thread'") &&
+    readText("supabase/setup/00_live_schema.sql").includes("'reels_script'") &&
+    readText("supabase/migrations/20260602_0004_live_setup_contracts.sql").includes(
+      "content_variants_variant_type_check",
+    ),
+  "Supabase content variant contract",
+  "setup and migration allow current Hub variant types",
+);
+assert(
+  readText("supabase/setup/00_live_schema.sql").includes("workspace_id uuid not null references public.workspaces") &&
+    readText("supabase/migrations/20260602_0004_live_setup_contracts.sql").includes(
+      "alter table if exists public.milestones",
+    ),
+  "Supabase milestone workspace contract",
+  "RLS target tables have workspace scope",
+);
+assert(
   readText("apps/engine/lib/shared-webhook.ts").includes("COM_MOON_ALLOW_OPEN_WEBHOOKS"),
   "shared webhook open mode",
   "explicit local flag required",
@@ -136,6 +189,31 @@ assert(
   readText("apps/engine/app/api/webhook/telegram/route.ts").includes("COM_MOON_ALLOW_OPEN_WEBHOOKS"),
   "telegram webhook open mode",
   "explicit local flag required",
+);
+const sharedWebhookText = readText("apps/engine/lib/shared-webhook.ts");
+const telegramWebhookText = readText("apps/engine/app/api/webhook/telegram/route.ts");
+assert(
+  [sharedWebhookText, telegramWebhookText].every((text) =>
+    text.includes("isLocalOpenWebhookModeAllowed") &&
+    text.includes('process.env.NODE_ENV !== "production"') &&
+    text.includes('process.env.VERCEL_ENV !== "production"'),
+  ),
+  "webhook open mode production guard",
+  "shared and Telegram open modes are local-only",
+);
+const projectWebhookText = readText("apps/engine/lib/project-webhook.ts");
+const projectWebhookRouteText = readText("apps/engine/app/api/webhook/project/route.ts");
+const sharedProjectWebhookRouteText = readText("apps/engine/app/api/webhook/project/[provider]/route.ts");
+assert(
+  projectWebhookText.includes("createHash") &&
+    projectWebhookText.includes("stableStringify") &&
+    projectWebhookText.includes("idempotencyKey") &&
+    projectWebhookText.includes("derivePayloadEventId") &&
+    projectWebhookRouteText.includes("idempotency-key") &&
+    sharedProjectWebhookRouteText.includes("idempotency-key") &&
+    sharedWebhookText.includes("idempotencyKey"),
+  "project webhook idempotency fallback",
+  "provider event ID falls back to Idempotency-Key header or stable payload digest",
 );
 assert(
   readText("apps/hub/lib/server-write.js").includes("process.env.COM_MOON_ENGINE_URL") &&
@@ -148,6 +226,45 @@ assert(
   existsSync(path.join(root, "apps/hub/lib/hub-write-guard.js")),
   "Hub write guard",
   "present",
+);
+
+const contentLedger = readText("apps/hub/lib/repositories/content-ledger.js");
+const schema = readText("supabase/schema.sql");
+const contentVariantMigrationPath =
+  "supabase/migrations/20260602_0003_content_variant_type_contract.sql";
+const contentVariantMigration = existsSync(path.join(root, contentVariantMigrationPath))
+  ? readText(contentVariantMigrationPath)
+  : "";
+const liveSetupSchema = existsSync(path.join(root, "supabase/setup/00_live_schema.sql"))
+  ? readText("supabase/setup/00_live_schema.sql")
+  : "";
+const liveSetupMigration = existsSync(
+  path.join(root, "supabase/migrations/20260602_0004_live_setup_contracts.sql"),
+)
+  ? readText("supabase/migrations/20260602_0004_live_setup_contracts.sql")
+  : "";
+const repositoryVariantTypes = extractJsStringArray(contentLedger, "VARIANT_TYPES");
+const schemaVariantTypes = extractSchemaVariantTypes(schema);
+const contentVariantContractSources = [
+  ["schema", schemaVariantTypes],
+  ["migration", extractContentVariantConstraintTypes(contentVariantMigration)],
+  ["live-setup", extractContentVariantConstraintTypes(liveSetupSchema)],
+  ["live-migration", extractContentVariantConstraintTypes(liveSetupMigration)],
+];
+const variantContractMismatch = contentVariantContractSources.filter(
+  ([, values]) => !valuesEqual(repositoryVariantTypes, values),
+);
+
+assert(
+  repositoryVariantTypes.length > 0 &&
+    valuesEqual(repositoryVariantTypes, schemaVariantTypes) &&
+    variantContractMismatch.length === 0,
+  "content variant type contract",
+  valuesEqual(repositoryVariantTypes, schemaVariantTypes) && variantContractMismatch.length === 0
+    ? `${repositoryVariantTypes.length} variant types match repository, schema, and migration`
+    : `repository=${repositoryVariantTypes.join(",") || "none"} mismatches=${variantContractMismatch
+        .map(([label, values]) => `${label}:${values.join(",") || "none"}`)
+        .join(" ")}`,
 );
 
 if (failures.length) {

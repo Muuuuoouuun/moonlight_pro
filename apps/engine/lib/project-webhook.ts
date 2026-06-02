@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 import { logError, logEvent } from "@com-moon/hub-gateway";
 
@@ -20,6 +20,7 @@ export interface ProjectWebhookPayload {
   eventType?: string;
   provider?: string;
   providerEventId?: string;
+  idempotencyKey?: string;
   correlationId?: string;
   source?: string;
   checkType?: string;
@@ -126,16 +127,61 @@ function resolvePayloadIdentifier(payload: Record<string, unknown>) {
   );
 }
 
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+  }
+
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, entryValue]) => entryValue !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right));
+
+    return `{${entries
+      .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableStringify(entryValue)}`)
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value ?? null);
+}
+
+function prefixProviderEventId(source: string, value: string) {
+  return value.includes(":") ? value : `${source}:${value}`;
+}
+
+function resolvePayloadIdempotencyKey(input: ProjectWebhookPayload, rawPayload: Record<string, unknown>) {
+  return (
+    normalizeIdentifier(input.idempotencyKey) ||
+    normalizeIdentifier(rawPayload.idempotencyKey) ||
+    normalizeIdentifier(rawPayload.idempotency_key)
+  );
+}
+
+function derivePayloadEventId(input: ProjectWebhookPayload, source: string) {
+  const digest = createHash("sha256")
+    .update(stableStringify({ source, input }))
+    .digest("hex")
+    .slice(0, 32);
+
+  return `${source}:payload:${digest}`;
+}
+
 function resolveProviderEventId(input: ProjectWebhookPayload, source: string) {
   const rawPayload = input.payload && typeof input.payload === "object" ? input.payload : {};
   const candidate =
     normalizeIdentifier(input.providerEventId) || resolvePayloadIdentifier(rawPayload);
 
-  if (!candidate) {
-    return null;
+  if (candidate) {
+    return prefixProviderEventId(source, candidate);
   }
 
-  return candidate.includes(":") ? candidate : `${source}:${candidate}`;
+  const idempotencyKey = resolvePayloadIdempotencyKey(input, rawPayload);
+
+  if (idempotencyKey) {
+    return prefixProviderEventId(source, `idempotency:${idempotencyKey}`);
+  }
+
+  return derivePayloadEventId(input, source);
 }
 
 async function findDuplicateWebhookEvent({

@@ -135,7 +135,7 @@ create table content_variants (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   content_id uuid not null references content_items(id) on delete cascade,
-  variant_type text not null check (variant_type in ('card_news', 'blog', 'newsletter', 'social_post', 'landing_copy')),
+  variant_type text not null check (variant_type in ('newsletter', 'blog_insight', 'card_news', 'x_thread', 'reels_script')),
   title text,
   body text not null default '',
   status text not null default 'draft' check (status in ('draft', 'ready', 'published', 'archived')),

@@ -60,6 +60,7 @@ export async function GET(_req: Request, context: RouteContext) {
         type: "string",
         summary: "string",
         note: "string",
+        idempotencyKey: "Idempotency-Key header or provider event ID payload field",
       },
       check: {
         checkType: "morning | midday | evening | weekly",
@@ -110,7 +111,9 @@ export async function POST(req: Request, context: RouteContext) {
       );
     }
 
-    const payload = buildSharedProjectWebhookPayload(body, provider);
+    const payload = buildSharedProjectWebhookPayload(body, provider, {
+      idempotencyKey: req.headers.get("idempotency-key")?.trim() || null,
+    });
     const result = await handleProjectWebhook(payload);
     const statusCode =
       result.status === "duplicate"

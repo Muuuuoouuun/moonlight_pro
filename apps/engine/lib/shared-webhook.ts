@@ -97,6 +97,14 @@ function resolveBearerToken(req: Request) {
   return header.slice(7).trim() || null;
 }
 
+function isLocalOpenWebhookModeAllowed() {
+  return (
+    process.env.COM_MOON_ALLOW_OPEN_WEBHOOKS?.trim() === "true" &&
+    process.env.NODE_ENV !== "production" &&
+    process.env.VERCEL_ENV !== "production"
+  );
+}
+
 export function normalizeSharedWebhookProvider(
   value: string | null | undefined,
 ): SharedProjectWebhookProvider | null {
@@ -121,7 +129,7 @@ export function validateSharedWebhookRequest(req: Request): AuthResult {
   const expectedSecret = process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim();
 
   if (!expectedSecret) {
-    if (process.env.COM_MOON_ALLOW_OPEN_WEBHOOKS?.trim() === "true") {
+    if (isLocalOpenWebhookModeAllowed()) {
       return {
         ok: true,
         mode: "open",
@@ -132,7 +140,7 @@ export function validateSharedWebhookRequest(req: Request): AuthResult {
       ok: false,
       mode: "header",
       error:
-        "COM_MOON_SHARED_WEBHOOK_SECRET is not configured. Set COM_MOON_ALLOW_OPEN_WEBHOOKS=true only for local smoke tests.",
+        "COM_MOON_SHARED_WEBHOOK_SECRET is not configured. COM_MOON_ALLOW_OPEN_WEBHOOKS=true is local-only and refused in production.",
     };
   }
 
@@ -171,6 +179,7 @@ export function validateSharedWebhookRequest(req: Request): AuthResult {
 export function buildSharedProjectWebhookPayload(
   input: unknown,
   providerHint: SharedProjectWebhookProvider,
+  options: { idempotencyKey?: string | null } = {},
 ): ProjectWebhookPayload {
   const root = asRecord(input);
   const meta = asRecord(root?.meta) || asRecord(root?.metadata);
@@ -222,6 +231,10 @@ export function buildSharedProjectWebhookPayload(
         "eventId",
         "event_id",
       ]),
+    ),
+    idempotencyKey: nullToUndefined(
+      options.idempotencyKey ||
+        pickString(records, ["idempotencyKey", "idempotency_key"]),
     ),
     correlationId: nullToUndefined(
       pickString(records, ["correlationId", "correlation_id", "traceId", "trace_id"]),

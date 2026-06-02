@@ -30,6 +30,7 @@ export async function GET() {
       milestone: "string",
       nextAction: "string",
       checkType: "morning | midday | evening | weekly",
+      idempotencyKey: "Idempotency-Key header or providerEventId/externalId/eventId/id payload field",
     },
   });
 }
@@ -61,7 +62,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await handleProjectWebhook(body);
+    const idempotencyKey = req.headers.get("idempotency-key")?.trim() || undefined;
+    const result = await handleProjectWebhook({
+      ...body,
+      idempotencyKey,
+    });
     const statusCode =
       result.status === "duplicate"
         ? 200
