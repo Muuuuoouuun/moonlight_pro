@@ -5,24 +5,40 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd } from "../hub-primitives";
 import { CHAT_THREAD, COUNCIL, ORDERS } from "../hub-data";
 
-export function AgentsChat() {
+export function AgentsChat({ onNavigate }) {
   const [input, setInput] = React.useState('');
+  const [thread, setThread] = React.useState(CHAT_THREAD);
+  const [conversations, setConversations] = React.useState([
+    { name: '뉴스레터 #47 2번 섹션', agent: 'Writer', time: '지금', active: true },
+    { name: '5월 로드맵 1차', agent: 'Council', time: '2h', active: false },
+    { name: 'Gmail 태그 규칙 튜닝', agent: 'Operator', time: '어제', active: false },
+    { name: '리드 레퍼럴 분석', agent: 'Analyst', time: '2d', active: false },
+    { name: '가격 실험 가설', agent: 'Strategist', time: '3d', active: false },
+  ]);
+  const [pinned, setPinned] = React.useState(false);
+  const send = () => {
+    const text = input.trim();
+    if (!text) return;
+    setThread(prev => [...prev, { role: 'user', text }, { role: 'agent', name: 'Writer', text: '받았어요. 이 요청은 Studio 초안과 연결해 둘게요.', hasAction: true }]);
+    setInput('');
+  };
+  const startConversation = () => {
+    setConversations(prev => [
+      { name: '새 대화', agent: 'Council', time: '지금', active: true },
+      ...prev.map(c => ({ ...c, active: false })),
+    ]);
+    setThread([{ role: 'agent', name: 'Council', text: '새 대화를 시작합니다. 무엇을 판단할까요?' }]);
+  };
   return (
     <div className="hub-chat-shell" style={{ display: 'grid', gridTemplateColumns: '240px 1fr', height: '100%', overflow: 'hidden' }}>
       <aside style={{ borderRight: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center' }}>
           <span style={{ fontSize: 12, fontWeight: 600, flex: 1 }}>Conversations</span>
-          <IconButton icon="plus" size={24} iconSize={13} />
+          <IconButton icon="plus" size={24} iconSize={13} tooltip="New conversation" onClick={startConversation} />
         </div>
         <div className="scroll-y" style={{ flex: 1, padding: 6 }}>
-          {[
-            { name: '뉴스레터 #47 2번 섹션', agent: 'Writer', time: '지금', active: true },
-            { name: '5월 로드맵 1차', agent: 'Council', time: '2h', active: false },
-            { name: 'Gmail 태그 규칙 튜닝', agent: 'Operator', time: '어제', active: false },
-            { name: '리드 레퍼럴 분석', agent: 'Analyst', time: '2d', active: false },
-            { name: '가격 실험 가설', agent: 'Strategist', time: '3d', active: false },
-          ].map((c, i) => (
-            <button key={i} style={{
+          {conversations.map((c, i) => (
+            <button key={i} onClick={() => setConversations(prev => prev.map((item, idx) => ({ ...item, active: idx === i })))} style={{
               width: '100%', padding: '9px 10px', marginBottom: 1,
               background: c.active ? 'var(--surface-3)' : 'transparent',
               border: c.active ? '1px solid var(--line)' : '1px solid transparent',
@@ -46,12 +62,12 @@ export function AgentsChat() {
             <div style={{ fontSize: 13, fontWeight: 500 }}>뉴스레터 #47 2번 섹션</div>
             <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>Writer · content·copy specialist</div>
           </div>
-          <Button variant="outline" size="sm" icon="link">Pin to Brief</Button>
+          <Button variant={pinned ? 'secondary' : 'outline'} size="sm" icon="link" onClick={() => setPinned(v => !v)}>{pinned ? 'Pinned' : 'Pin to Brief'}</Button>
         </div>
 
         <div className="scroll-y" style={{ flex: 1, padding: '20px 20px 10px' }}>
           <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
-            {CHAT_THREAD.map((m, i) => (
+            {thread.map((m, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, flexDirection: m.role === 'user' ? 'row-reverse' : 'row' }}>
                 {m.role === 'agent' && <Avatar name="W" size={24} tone="moon" />}
                 {m.role === 'user' && <Avatar name="H" size={24} />}
@@ -69,8 +85,8 @@ export function AgentsChat() {
                   </div>
                   {m.hasAction && (
                     <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
-                      <Button variant="primary" size="xs" icon="arrowRight">Open in Studio</Button>
-                      <Button variant="ghost" size="xs">View alternatives</Button>
+                      <Button variant="primary" size="xs" icon="arrowRight" onClick={() => onNavigate?.('dashboard/content/studio?new=draft')}>Open in Studio</Button>
+                      <Button variant="ghost" size="xs" onClick={() => setThread(prev => [...prev, { role: 'agent', name: 'Writer', text: '대안 1) 더 실용적인 체크리스트형\n대안 2) 사례 중심 서사형\n대안 3) 짧은 선언문형' }])}>View alternatives</Button>
                     </div>
                   )}
                 </div>
@@ -87,11 +103,11 @@ export function AgentsChat() {
               color: 'var(--fg)', fontSize: 13.5, lineHeight: 1.5,
             }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-              <Button variant="ghost" size="xs" icon="upload">Attach</Button>
-              <Button variant="ghost" size="xs" icon="link">Link decision</Button>
+              <Button variant="ghost" size="xs" icon="upload" onClick={() => setInput(v => v ? `${v}\n[첨부: context]` : '[첨부: context]')}>Attach</Button>
+              <Button variant="ghost" size="xs" icon="link" onClick={() => onNavigate?.('dashboard/work/decisions?new=decision')}>Link decision</Button>
               <div style={{ flex: 1 }} />
               <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>Writer · Haiku 4.5</span>
-              <Button variant="primary" size="xs" icon="send">Send</Button>
+              <Button variant="primary" size="xs" icon="send" onClick={send}>Send</Button>
             </div>
           </div>
         </div>
@@ -100,7 +116,7 @@ export function AgentsChat() {
   );
 }
 
-export function AgentsCouncil() {
+export function AgentsCouncil({ onNavigate }) {
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
@@ -109,11 +125,11 @@ export function AgentsCouncil() {
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch' }}>5명의 전문 에이전트가 함께 의논. 브리핑·결정에 근거 제공.</div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="sparkle">Convene</Button>
+        <Button variant="primary" size="sm" icon="sparkle" onClick={() => onNavigate?.('dashboard/agents/chat?prompt=council')}>Convene</Button>
       </div>
       <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--gap)' }}>
         {COUNCIL.map(a => (
-          <Card key={a.key} style={{ cursor: 'pointer' }}>
+          <Card key={a.key} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.(`dashboard/agents/chat?agent=${a.key}`)}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
               <div style={{
                 width: 36, height: 36, borderRadius: 999,
@@ -136,8 +152,18 @@ export function AgentsCouncil() {
   );
 }
 
-export function AgentsOrders() {
+export function AgentsOrders({ onNavigate }) {
   const sTone = { done: 'success', review: 'warning', draft: 'neutral' };
+  const [orders, setOrders] = React.useState(ORDERS);
+  const createOrder = () => {
+    setOrders(prev => [{
+      id: `local-order-${Date.now()}`,
+      at: '방금',
+      to: 'Council',
+      what: '새 오더 초안',
+      status: 'draft',
+    }, ...prev]);
+  };
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
@@ -146,13 +172,13 @@ export function AgentsOrders() {
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>에이전트에게 내린 작업 · 자동 스케줄 + 온디맨드</div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus">New order</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createOrder}>New order</Button>
       </div>
       <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: '110px 100px 1fr 100px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>When</span><span>Assignee</span><span>Task</span><span>Status</span><span style={{ textAlign: 'right' }} />
         </div>
-        {ORDERS.map((o, i) => (
+        {orders.map((o, i) => (
           <div key={o.id} style={{
             display: 'grid', gridTemplateColumns: '110px 100px 1fr 100px 80px',
             padding: '12px 16px', alignItems: 'center',
@@ -163,7 +189,7 @@ export function AgentsOrders() {
             <span style={{ fontSize: 13 }}>{o.what}</span>
             <Badge tone={sTone[o.status]} size="xs">{o.status}</Badge>
             <div style={{ textAlign: 'right' }}>
-              <Button variant="ghost" size="xs" iconRight="arrowRight">Open</Button>
+              <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(`dashboard/agents/chat?order=${o.id}`)}>Open</Button>
             </div>
           </div>
         ))}
@@ -315,13 +341,15 @@ const OFFICE_FEED = [
   { at: '25분 전', who: 'Analyst', ev: '전환 대시보드 새로고침 · 주간 +3.2%', tone: 'success' },
 ];
 
-export function AgentsOffice() {
+export function AgentsOffice({ onNavigate }) {
   const [sel, setSel] = React.useState('writer');
+  const [fullscreen, setFullscreen] = React.useState(false);
+  const [preset, setPreset] = React.useState('evening');
   const agent = OFFICE_AGENTS.find(a => a.key === sel) || OFFICE_AGENTS[0];
   const liveCount = OFFICE_AGENTS.filter(a => a.status !== 'idle').length;
 
   return (
-    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%', overflow: 'auto' }}>
+    <div className="hub-page" data-focus={fullscreen ? 'true' : 'false'} style={{ padding: fullscreen ? 0 : 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%', overflow: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>VR Office</h2>
@@ -334,8 +362,8 @@ export function AgentsOffice() {
             <span className="mono">{liveCount} / {OFFICE_AGENTS.length} active</span>
           </div>
         </div>
-        <Button variant="outline" size="sm" icon="eye">Fullscreen</Button>
-        <Button variant="secondary" size="sm" icon="sparkle" style={{ marginLeft: 8 }}>Convene all</Button>
+        <Button variant={fullscreen ? 'secondary' : 'outline'} size="sm" icon="eye" onClick={() => setFullscreen(v => !v)}>{fullscreen ? 'Windowed' : 'Fullscreen'}</Button>
+        <Button variant="secondary" size="sm" icon="sparkle" style={{ marginLeft: 8 }} onClick={() => onNavigate?.('dashboard/agents/council')}>Convene all</Button>
       </div>
 
       <div className="hub-grid--three" style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 300px', gap: 'var(--gap)', alignItems: 'start' }}>
@@ -390,10 +418,10 @@ export function AgentsOffice() {
             )}
           </div>
           <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
-            <Button variant="primary" size="sm" icon="chat">Open chat</Button>
-            <Button variant="outline" size="sm" icon="orders">Give order</Button>
+            <Button variant="primary" size="sm" icon="chat" onClick={() => onNavigate?.(`dashboard/agents/chat?agent=${agent.key}`)}>Open chat</Button>
+            <Button variant="outline" size="sm" icon="orders" onClick={() => onNavigate?.(`dashboard/agents/orders?agent=${agent.key}`)}>Give order</Button>
             <div style={{ flex: 1 }} />
-            <IconButton icon="more" />
+            <IconButton icon="more" tooltip="Open orders" onClick={() => onNavigate?.('dashboard/agents/orders')} />
           </div>
         </Card>
 
@@ -434,21 +462,27 @@ export function AgentsOffice() {
         </div>
         <div className="hub-grid--four" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
           {[
-            { k: 'morning', label: 'Morning', sub: '05–09 · 조용 · 창 밝음', active: false },
-            { k: 'focus', label: 'Focus', sub: '09–13 · 딥워크', active: false },
-            { k: 'council', label: 'Council', sub: '회의 모드 · 중앙 테이블', active: false },
-            { k: 'evening', label: 'Evening', sub: '17–22 · 램프 따뜻', active: true },
-          ].map(p => (
-            <button key={p.k} style={{
+            { k: 'morning', label: 'Morning', sub: '05–09 · 조용 · 창 밝음' },
+            { k: 'focus', label: 'Focus', sub: '09–13 · 딥워크' },
+            { k: 'council', label: 'Council', sub: '회의 모드 · 중앙 테이블' },
+            { k: 'evening', label: 'Evening', sub: '17–22 · 램프 따뜻' },
+          ].map(p => {
+            const active = preset === p.k;
+            return (
+            <button key={p.k} onClick={() => {
+              setPreset(p.k);
+              if (p.k === 'council') onNavigate?.('dashboard/agents/council');
+            }} style={{
               padding: 12, textAlign: 'left',
-              background: p.active ? 'var(--surface-3)' : 'var(--surface-2)',
-              border: p.active ? '1px solid var(--moon-500)' : '1px solid var(--line-soft)',
+              background: active ? 'var(--surface-3)' : 'var(--surface-2)',
+              border: active ? '1px solid var(--moon-500)' : '1px solid var(--line-soft)',
               borderRadius: 'var(--r-sm)',
             }}>
               <div style={{ fontSize: 12.5, fontWeight: 500, marginBottom: 2 }}>{p.label}</div>
               <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{p.sub}</div>
             </button>
-          ))}
+          );
+          })}
         </div>
       </Card>
     </div>

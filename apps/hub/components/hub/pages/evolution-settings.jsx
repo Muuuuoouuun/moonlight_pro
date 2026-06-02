@@ -55,13 +55,162 @@ const OUTGOING_WEBHOOKS = [
   { slug: 'make-content', source: 'Make', events: 'content.published', hits24: 1, last: '어제', active: true, fingerprint: 'E1D' },
 ];
 
+const EMPTY_META_THREADS_STATUS = {
+  status: 'loading',
+  provider: 'meta_threads',
+  brandHandle: 'moon.classin',
+  configured: false,
+  connection: null,
+  setup: null,
+};
+
+const EMPTY_INSTAGRAM_STATUS = {
+  status: 'loading',
+  provider: 'instagram_api',
+  brandHandle: 'moon.classin',
+  configured: false,
+  connection: null,
+  setup: null,
+};
+
 function maskFingerprint(fingerprint) {
   return `•••• •••• •••• ${fingerprint}`;
 }
 
+function formatShortDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
+}
+
+function buildMetaThreadsIntegration(status) {
+  const brandHandle = status?.brandHandle || 'moon.classin';
+  const profileHandle = status?.connection?.profileHandle || `@${brandHandle}`;
+  const expiresAt = formatShortDate(status?.connection?.expiresAt);
+
+  if (status?.status === 'connected') {
+    return {
+      n: 'Meta Threads',
+      s: 'Connected',
+      t: 'success',
+      i: 'globe',
+      provider: 'meta_threads',
+      detail: `${profileHandle}${expiresAt ? ` · token ${expiresAt}` : ''}`,
+      action: 'Reconnect',
+    };
+  }
+
+  if (status?.status === 'ready') {
+    return {
+      n: 'Meta Threads',
+      s: 'Ready',
+      t: 'moon',
+      i: 'globe',
+      provider: 'meta_threads',
+      detail: `@${brandHandle} · OAuth ready`,
+      action: 'Connect',
+    };
+  }
+
+  if (status?.status === 'loading') {
+    return {
+      n: 'Meta Threads',
+      s: 'Checking',
+      t: 'neutral',
+      i: 'globe',
+      provider: 'meta_threads',
+      detail: `@${brandHandle}`,
+      action: 'Connect',
+      disabled: true,
+    };
+  }
+
+  return {
+    n: 'Meta Threads',
+    s: 'Needs config',
+    t: 'warning',
+    i: 'globe',
+    provider: 'meta_threads',
+    detail: `@${brandHandle} · env`,
+    action: 'Connect',
+    disabled: true,
+  };
+}
+
+function buildInstagramIntegration(status) {
+  const brandHandle = status?.brandHandle || 'moon.classin';
+  const profileHandle = status?.connection?.profileHandle || `@${brandHandle}`;
+  const expiresAt = formatShortDate(status?.connection?.expiresAt);
+  const accountType = status?.connection?.accountType;
+
+  if (status?.status === 'connected') {
+    return {
+      n: 'Instagram API',
+      s: 'Connected',
+      t: 'success',
+      i: 'globe',
+      provider: 'instagram_api',
+      detail: `${profileHandle}${accountType ? ` · ${accountType}` : ''}${expiresAt ? ` · token ${expiresAt}` : ''}`,
+      action: 'Reconnect',
+    };
+  }
+
+  if (status?.status === 'ready') {
+    return {
+      n: 'Instagram API',
+      s: 'Ready',
+      t: 'moon',
+      i: 'globe',
+      provider: 'instagram_api',
+      detail: `@${brandHandle} · OAuth ready`,
+      action: 'Connect',
+    };
+  }
+
+  if (status?.status === 'loading') {
+    return {
+      n: 'Instagram API',
+      s: 'Checking',
+      t: 'neutral',
+      i: 'globe',
+      provider: 'instagram_api',
+      detail: `@${brandHandle}`,
+      action: 'Connect',
+      disabled: true,
+    };
+  }
+
+  return {
+    n: 'Instagram API',
+    s: 'Needs config',
+    t: 'warning',
+    i: 'globe',
+    provider: 'instagram_api',
+    detail: `@${brandHandle} · env`,
+    action: 'Connect',
+    disabled: true,
+  };
+}
+
 export function Evolution({ onNavigate }) {
   const [tab, setTab] = React.useState('all');
+  const [lastRun, setLastRun] = React.useState(null);
   const tagTone = { upgrade: 'moon', bug: 'danger', insight: 'info', note: 'neutral' };
+  const playbookTarget = (family) => ({
+    delivery: 'dashboard/agents/orders?new=delivery',
+    recovery: 'dashboard/automations/runs',
+    planning: 'dashboard/work/rhythm',
+    content: 'dashboard/content/queue',
+    revenue: 'dashboard/revenue/deals',
+  }[family] || 'dashboard/evolution');
   const tabs = [
     { key: 'all', label: 'All', count: EVOLUTION_LOG.length },
     { key: 'up', label: 'Upgrades', count: EVOLUTION_LOG.filter(e => e.tag === 'upgrade').length },
@@ -108,9 +257,14 @@ export function Evolution({ onNavigate }) {
 
       {/* Playbooks — how the system changes */}
       <div>
-        <SectionTitle subtitle="운영 절차 · 시스템을 바꾸는 방법" right={<Button variant="outline" size="xs" icon="plus">Playbook</Button>}>
+        <SectionTitle subtitle="운영 절차 · 시스템을 바꾸는 방법" right={<Button variant="outline" size="xs" icon="plus" onClick={() => onNavigate?.('dashboard/agents/orders?new=playbook')}>Playbook</Button>}>
           Playbooks
         </SectionTitle>
+        {lastRun && (
+          <div className="mono" style={{ fontSize: 11, color: 'var(--success)', marginBottom: 8 }}>
+            queued · {lastRun}
+          </div>
+        )}
         <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--gap)', marginBottom: 'var(--gap)' }}>
           {PLAYBOOK_FAMILIES.map(f => (
             <Card key={f.key} style={{ cursor: 'pointer' }}>
@@ -144,7 +298,17 @@ export function Evolution({ onNavigate }) {
                 <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.trigger}</span>
                 <span style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>{p.owner}</span>
                 <div style={{ textAlign: 'right' }}>
-                  <Button variant="ghost" size="xs" iconRight="arrowRight">Run</Button>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    iconRight="arrowRight"
+                    onClick={() => {
+                      setLastRun(p.name);
+                      onNavigate?.(playbookTarget(p.family));
+                    }}
+                  >
+                    Run
+                  </Button>
                 </div>
               </div>
             );
@@ -337,7 +501,114 @@ function KeyRow({ item, last, kind }) {
   );
 }
 
-export function Settings() {
+export function Settings({ onNavigate }) {
+  const [integrations, setIntegrations] = React.useState([
+    { n: 'Google Calendar', s: 'Connected', t: 'success', i: 'calendar', dest: 'dashboard/work/calendar' },
+    { n: 'Gmail', s: 'Connected', t: 'success', i: 'inbox', dest: 'dashboard/automations/email' },
+    { n: 'Resend', s: 'Connected', t: 'success', i: 'send', dest: 'dashboard/automations/email' },
+    { n: 'Stripe', s: 'Connected', t: 'success', i: 'revenue', dest: 'dashboard/revenue/overview' },
+    { n: 'Notion', s: 'Read-only', t: 'warning', i: 'content', dest: 'dashboard/content/queue' },
+    { n: 'Slack', s: 'Not connected', t: 'neutral', i: 'chat', dest: 'dashboard/agents/chat' },
+  ]);
+  const [apiKeys, setApiKeys] = React.useState(SETTINGS_API_KEYS);
+  const [incomingWebhooks, setIncomingWebhooks] = React.useState(INCOMING_WEBHOOKS);
+  const [metaThreadsStatus, setMetaThreadsStatus] = React.useState(EMPTY_META_THREADS_STATUS);
+  const [instagramStatus, setInstagramStatus] = React.useState(EMPTY_INSTAGRAM_STATUS);
+  const [exportedAt, setExportedAt] = React.useState(null);
+  const [profileEditing, setProfileEditing] = React.useState(false);
+  React.useEffect(() => {
+    let active = true;
+
+    async function loadSocialStatus(path, emptyStatus, setter) {
+      try {
+        const response = await fetch(path, { cache: 'no-store' });
+        const data = await response.json().catch(() => null);
+        if (!active) return;
+
+        if (response.ok && data) {
+          setter({ ...emptyStatus, ...data });
+        } else {
+          setter(s => ({ ...s, status: 'missing-config' }));
+        }
+      } catch {
+        if (active) setter(s => ({ ...s, status: 'missing-config' }));
+      }
+    }
+
+    loadSocialStatus('/api/social/meta/threads/status', EMPTY_META_THREADS_STATUS, setMetaThreadsStatus);
+    loadSocialStatus('/api/social/instagram/status', EMPTY_INSTAGRAM_STATUS, setInstagramStatus);
+    return () => { active = false; };
+  }, []);
+  const integrationRows = React.useMemo(() => {
+    const metaRow = buildMetaThreadsIntegration(metaThreadsStatus);
+    const instagramRow = buildInstagramIntegration(instagramStatus);
+    return [
+      ...integrations.slice(0, 3),
+      instagramRow,
+      metaRow,
+      ...integrations.slice(3),
+    ];
+  }, [integrations, instagramStatus, metaThreadsStatus]);
+  const connectIntegration = (name) => {
+    setIntegrations(prev => prev.map(it => (
+      it.n === name && it.s === 'Not connected'
+        ? { ...it, s: 'Connected', t: 'success' }
+        : it
+    )));
+  };
+  const createKey = () => {
+    const suffix = String(Math.floor(Math.random() * 900 + 100));
+    setApiKeys(prev => [{
+      name: 'New workspace key',
+      ref: `key_local_${Date.now()}`,
+      fingerprint: suffix,
+      scopes: 'read · write',
+      created: 'Just now',
+      lastUsed: 'never',
+    }, ...prev]);
+  };
+  const addEndpoint = () => {
+    setIncomingWebhooks(prev => [{
+      slug: `custom-${prev.length + 1}`,
+      source: 'Custom',
+      events: 'event.created',
+      hits24: 0,
+      last: 'never',
+      active: false,
+    }, ...prev]);
+  };
+  const connectMetaThreads = () => {
+    if (metaThreadsStatus.status !== 'ready' && metaThreadsStatus.status !== 'connected') return;
+    const brand = encodeURIComponent(metaThreadsStatus.brandHandle || 'moon.classin');
+    window.location.href = `/api/social/meta/threads/connect?brand=${brand}&returnPath=/dashboard/settings`;
+  };
+  const connectInstagram = () => {
+    if (instagramStatus.status !== 'ready' && instagramStatus.status !== 'connected') return;
+    const brand = encodeURIComponent(instagramStatus.brandHandle || 'moon.classin');
+    window.location.href = `/api/social/instagram/connect?brand=${brand}&returnPath=/dashboard/settings`;
+  };
+  const socialSetupRows = React.useMemo(() => {
+    const fallbackSetup = instagramStatus.setup || metaThreadsStatus.setup;
+    const rows = [];
+
+    if (instagramStatus.setup?.oauthRedirectUri) {
+      rows.push(['Instagram OAuth callback', instagramStatus.setup.oauthRedirectUri]);
+    }
+    if (metaThreadsStatus.setup?.oauthRedirectUri) {
+      rows.push(['Threads OAuth callback', metaThreadsStatus.setup.oauthRedirectUri]);
+    }
+    if (metaThreadsStatus.setup?.deauthorizeCallbackUrl) {
+      rows.push(['Threads remove callback', metaThreadsStatus.setup.deauthorizeCallbackUrl]);
+    }
+    if (metaThreadsStatus.setup?.dataDeletionCallbackUrl) {
+      rows.push(['Threads deletion callback', metaThreadsStatus.setup.dataDeletionCallbackUrl]);
+    }
+    if (fallbackSetup?.privacyUrl) rows.push(['Privacy', fallbackSetup.privacyUrl]);
+    if (fallbackSetup?.termsUrl) rows.push(['Terms', fallbackSetup.termsUrl]);
+    if (fallbackSetup?.dataDeletionUrl) rows.push(['Data deletion instructions', fallbackSetup.dataDeletionUrl]);
+
+    return rows;
+  }, [instagramStatus.setup, metaThreadsStatus.setup]);
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', maxWidth: 900, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
       <div>
@@ -354,48 +625,79 @@ export function Settings() {
               <div style={{ fontSize: 15, fontWeight: 500 }}>Hyeon Park</div>
               <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>hyeon@moonlight.pro · Founder · KST</div>
             </div>
-            <Button variant="outline" size="sm">Edit</Button>
+            <Button variant={profileEditing ? 'secondary' : 'outline'} size="sm" onClick={() => setProfileEditing(v => !v)}>
+              {profileEditing ? 'Editing' : 'Edit'}
+            </Button>
           </div>
+          {profileEditing && (
+            <div className="mono" style={{ marginTop: 10, fontSize: 11, color: 'var(--fg-faint)' }}>
+              profile edit mode · local preview
+            </div>
+          )}
         </Card>
       </div>
 
       <div>
         <SectionTitle>Integrations</SectionTitle>
         <Card pad={false}>
-          {[
-            { n: 'Google Calendar', s: 'Connected', t: 'success', i: 'calendar' },
-            { n: 'Gmail', s: 'Connected', t: 'success', i: 'inbox' },
-            { n: 'Resend', s: 'Connected', t: 'success', i: 'send' },
-            { n: 'Stripe', s: 'Connected', t: 'success', i: 'revenue' },
-            { n: 'Notion', s: 'Read-only', t: 'warning', i: 'content' },
-            { n: 'Slack', s: 'Not connected', t: 'neutral', i: 'chat' },
-          ].map((it, i, arr) => (
+          {integrationRows.map((it, i, arr) => (
             <div key={it.n} style={{ padding: '14px 18px', borderBottom: i < arr.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-muted)' }}>
                 <Iconed name={it.i} size={15} />
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 500 }}>{it.n}</div>
-                <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>{it.s}</div>
+                <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>{it.detail || it.s}</div>
               </div>
               <Badge tone={it.t} size="xs">{it.s}</Badge>
-              <Button variant="ghost" size="sm">{it.s === 'Not connected' ? 'Connect' : 'Manage'}</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                style={it.disabled ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+                onClick={() => {
+                  if (it.disabled) return;
+                  if (it.provider === 'meta_threads') {
+                    connectMetaThreads();
+                    return;
+                  }
+                  if (it.provider === 'instagram_api') {
+                    connectInstagram();
+                    return;
+                  }
+                  if (it.s === 'Not connected') connectIntegration(it.n);
+                  else onNavigate?.(it.dest);
+                }}
+              >
+                {it.action || (it.s === 'Not connected' ? 'Connect' : 'Manage')}
+              </Button>
             </div>
           ))}
         </Card>
+        {socialSetupRows.length > 0 && (
+          <div style={{ marginTop: 10 }}>
+            <Card pad={false}>
+              {socialSetupRows.map(([label, value], i, arr) => (
+                <div key={label} style={{ padding: '12px 18px', borderBottom: i < arr.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+                  <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)', marginBottom: 6 }}>{label}</div>
+                  <CopyRow value={value} mono />
+                </div>
+              ))}
+            </Card>
+          </div>
+        )}
       </div>
 
       <div>
         <SectionTitle>API keys</SectionTitle>
         <Card pad={false}>
-          {SETTINGS_API_KEYS.map((k, i, arr) => (
+          {apiKeys.map((k, i, arr) => (
             <KeyRow key={k.ref} item={k} last={i === arr.length - 1} kind="key" />
           ))}
           <div style={{ padding: '10px 18px', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-2)' }}>
             <Iconed name="plus" size={12} style={{ color: 'var(--fg-faint)' }} />
             <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>새 API 키 발급</span>
             <div style={{ flex: 1 }} />
-            <Button variant="outline" size="sm" icon="plus">Create key</Button>
+            <Button variant="outline" size="sm" icon="plus" onClick={createKey}>Create key</Button>
           </div>
         </Card>
         <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -417,14 +719,14 @@ export function Settings() {
               외부 서비스에서 이 기본 URL에 <code className="mono" style={{ fontSize: 10.5, padding: '1px 5px', background: 'var(--surface-3)', borderRadius: 4 }}>/{'<slug>'}</code>를 붙여 POST 요청을 보냅니다.
             </div>
           </div>
-          {INCOMING_WEBHOOKS.map((w, i, arr) => (
+          {incomingWebhooks.map((w, i, arr) => (
             <KeyRow key={w.slug} item={w} last={i === arr.length - 1} kind="webhook" />
           ))}
           <div style={{ padding: '10px 18px', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface-2)' }}>
             <Iconed name="webhook" size={12} style={{ color: 'var(--fg-faint)' }} />
             <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>Outgoing webhooks · 발생 이벤트를 외부로 푸시</span>
             <div style={{ flex: 1 }} />
-            <Button variant="outline" size="sm" icon="plus">Add endpoint</Button>
+            <Button variant="outline" size="sm" icon="plus" onClick={addEndpoint}>Add endpoint</Button>
           </div>
         </Card>
       </div>
@@ -459,8 +761,13 @@ export function Settings() {
               <div style={{ fontSize: 13, fontWeight: 500 }}>Export workspace</div>
               <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', marginTop: 3 }}>모든 데이터를 JSON + Markdown으로 내보내기</div>
             </div>
-            <Button variant="outline" size="sm" icon="download">Export</Button>
+            <Button variant="outline" size="sm" icon="download" onClick={() => setExportedAt(new Date())}>Export</Button>
           </div>
+          {exportedAt && (
+            <div className="mono" style={{ marginTop: 10, fontSize: 11, color: 'var(--success)' }}>
+              export prepared · {exportedAt.toLocaleTimeString('ko-KR', { hour12: false })}
+            </div>
+          )}
         </Card>
       </div>
     </div>

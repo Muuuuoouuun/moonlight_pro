@@ -47,11 +47,15 @@ function normalizeStatus(value?: string) {
     return "reported";
   }
 
+  if (["active", "doing", "in_progress", "in progress", "review"].includes(normalized)) {
+    return "active";
+  }
+
   if (["completed", "complete"].includes(normalized)) {
     return "done";
   }
 
-  if (["draft", "planned", "queued", "ready", "pending"].includes(normalized)) {
+  if (["draft", "planned", "planning", "backlog", "queued", "ready", "pending"].includes(normalized)) {
     return "reported";
   }
 
@@ -317,9 +321,12 @@ export async function handleProjectWebhook(input: ProjectWebhookPayload) {
         })
       : { persisted: false, reason: "not-a-check" };
 
+  const projectStatus = toProjectRecordStatus(normalized.status);
   const projectPatch = {
-    ...(toProjectRecordStatus(normalized.status) ? { status: toProjectRecordStatus(normalized.status) } : {}),
+    ...(projectStatus ? { status: projectStatus } : {}),
+    ...(normalized.progress !== null ? { progress: normalized.progress } : {}),
     ...(normalized.nextAction ? { next_action: normalized.nextAction } : {}),
+    ...(projectStatus || normalized.progress !== null || normalized.nextAction ? { last_activity_at: receivedAt } : {}),
   };
 
   const projectRecord =

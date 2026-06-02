@@ -85,6 +85,19 @@ function normalizeProgress(value) {
 
 function normalizeProjectStatus(value) {
   const normalized = normalizeString(value, "reported").toLowerCase();
+
+  if (["in progress", "in_progress", "doing", "active"].includes(normalized)) {
+    return "active";
+  }
+
+  if (["completed", "complete", "done"].includes(normalized)) {
+    return "done";
+  }
+
+  if (["draft", "planned", "planning", "review", "backlog", "queued", "pending"].includes(normalized)) {
+    return "reported";
+  }
+
   return PROJECT_UPDATE_STATUSES.has(normalized) ? normalized : "reported";
 }
 

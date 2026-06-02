@@ -28,8 +28,10 @@ Supabase는 이제 Hub/Engine의 1차 원장으로 본다. 다음 연결들은 �
 | 5 | Google Calendar | 일정, 마감, cadence 관리 | P1 | Mid-High | OAuth 연결 후 테스트 이벤트 생성/조회가 되고 `sync_runs`가 남음 |
 | 6 | Resend outbound email | 리드 follow-up, 운영/캠페인 메일 발송 | P1 | Mid | `/api/email/send` dry-run과 실제 테스트 발송 1건이 성공함 |
 | 7 | Gmail send | 개인/운영 Gmail 발송 채널 | P1 | Mid | Gmail OAuth connection 저장 후 send 테스트가 성공함 |
-| 8 | Notion read sync | 프로젝트/태스크/결정/노트 지식 소스 흡수 | P1 | High | Projects DB, Tasks DB read-only sync와 field mapping이 확정됨 |
-| 9 | Slack failure alert | 실패 알림과 approval 요청 채널 | P2 | Mid | `error_logs`, `sync_runs` failure가 지정 채널로 알림됨 |
+| 8 | Instagram API | `moon.classin`/Classmooni Instagram 발행/상태 연결 | P1 | Mid | Instagram OAuth로 `instagram_api` connection과 sync run이 남음 |
+| 9 | Meta Threads | `moon.classin` 브랜드 발행/상태 연결 | P1 | Mid | Threads OAuth로 `meta_threads` connection과 sync run이 남음 |
+| 10 | Notion read sync | 프로젝트/태스크/결정/노트 지식 소스 흡수 | P1 | High | Projects DB, Tasks DB read-only sync와 field mapping이 확정됨 |
+| 11 | Slack failure alert | 실패 알림과 approval 요청 채널 | P2 | Mid | `error_logs`, `sync_runs` failure가 지정 채널로 알림됨 |
 
 ### 바로 다음 실행 체크리스트
 
@@ -95,6 +97,8 @@ Supabase는 이제 Hub/Engine의 1차 원장으로 본다. 다음 연결들은 �
 | Google Calendar | 일정, 마감일, cadence 블록 연결 | OAuth + sync + event write | Ready | `Work OS > Calendar`, `routine_checks`, `projects.due_at`, `tasks.due_at`, `sync_runs` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALENDAR_ID` | Google OAuth env를 채우고 Work OS > Calendar에서 연결 후 실제 캘린더를 하나 붙이기 |
 | Samsung Calendar | Galaxy 기기 일정 가시성 | Google account sync on device | Supported via Google sync | `Work OS > Calendar` | Google Calendar 연결, Samsung Calendar 앱에서 같은 Google 계정 sync | 허브에서는 Google Calendar를 source로 연결하고, Galaxy 기기에서는 그 캘린더를 표시 |
 | Email | 리드 follow-up, 인바운드 메일, 캠페인/알림 발송 | Inbox sync + send provider | Planned | `leads`, `campaigns`, `campaign_runs`, `sync_runs` | Gmail API 또는 IMAP 선택, SMTP/Resend/Postmark 등 발송 provider 선택 | inbox sync와 outbound send 중 1차 범위를 먼저 결정 |
+| Instagram API | `moon.classin`/Classmooni Instagram content lane | Instagram Login OAuth + token ledger | Ready | `/api/social/instagram/connect`, `/api/social/instagram/callback`, `integration_connections`, `sync_runs`, Settings > Integrations | `COM_MOON_INSTAGRAM_APP_ID`, `COM_MOON_INSTAGRAM_APP_SECRET`, `COM_MOON_INSTAGRAM_BRAND_HANDLE`, `COM_MOON_OAUTH_STATE_SECRET`, 공개 Hub URL | Meta Dashboard의 Instagram OAuth redirect에 `/api/social/instagram/callback`를 등록하고 Settings에서 연결 |
+| Meta Threads | `moon.classin` 브랜드 content lane | OAuth + token ledger + removal callbacks | Ready | `/api/social/meta/threads/connect`, `/api/social/meta/threads/callback`, `/api/social/meta/threads/deauthorize`, `/api/social/meta/threads/data-deletion`, `integration_connections`, `sync_runs`, Settings > Integrations | `COM_MOON_META_THREADS_APP_ID`, `COM_MOON_META_THREADS_APP_SECRET`, `COM_MOON_META_THREADS_BRAND_HANDLE`, `COM_MOON_OAUTH_STATE_SECRET`, 공개 Hub URL | Meta Dashboard의 Threads OAuth/제거/삭제 callback을 Settings URL로 등록하고 연결 |
 | Slack | 에러 알림, approval loop, lightweight command | Bot + webhook | Planned | `error_logs`, `sync_runs`, `automation_runs`, `webhook_events` | `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, 채널 라우팅 규칙 | 실패 알림부터 시작하고 양방향 command는 나중에 추가 |
 
 ## 권장 연결 순서
@@ -113,6 +117,8 @@ Supabase는 이제 Hub/Engine의 1차 원장으로 본다. 다음 연결들은 �
 - Notion
 - Google Calendar
 - Email
+- Instagram API
+- Meta Threads
 
 이 단계에서 업무, 리듬, 커뮤니케이션의 실제 운영 정보가 허브로 흘러들어온다.
 
@@ -196,6 +202,29 @@ OpenClaw가 Moonlight로 응답할 때는 기존 inbound lane을 그대로 쓴�
 
 - `POST /api/webhook/project/openclaw`
 
+### Projects folder bridge
+
+로컬 `~/Desktop/Projects` 아래의 여러 프로젝트는 아직 같은 원장에 직접 연결되어 있지 않다. 1차 연결은 각 프로젝트를 별도 API로 억지로 붙이는 방식이 아니라,
+문서/설정/웹훅 계획을 Moonlight의 공통 project webhook contract로 정규화하는 방식으로 시작한다.
+
+실행 명령:
+
+```bash
+npm run inventory:project-connections -- --output docs/projects-connection-inventory.md --json-output docs/projects-connection-payloads.json
+```
+
+이 명령은 다음을 생성한다.
+
+- `docs/projects-connection-inventory.md` — 프로젝트별 연결 신호, 필요한 env key, 다음 액션
+- `docs/projects-connection-payloads.json` — `/api/webhook/project/openclaw` 또는 generic project webhook로 보낼 수 있는 smoke payload
+
+운영 원칙:
+
+- 실제 `.env`는 읽지 않고 `.env.example` / `.env.local.example`의 변수명만 수집한다.
+- 프로젝트별 외부 연결은 먼저 `project.connection.inventory` 이벤트로 레저에 기록한다.
+- 그 다음 각 프로젝트의 실제 provider payload를 `OpenClaw`, `Moltbot`, 또는 generic project webhook route로 매핑한다.
+- `COM_MOON_PROJECTS_ROOT` 기본값은 `/Users/bigmac_moon/Desktop/Projects`이며, 다른 머신에서는 env로 덮어쓴다.
+
 ### Notion
 
 가장 먼저 붙일 만한 지식/프로젝트 시스템이다.
@@ -265,6 +294,70 @@ Samsung Calendar는 허브에서 직접 web API로 다루기보다, 같은 Googl
 
 - 첫 단계는 outbound send 또는 inbox sync 중 하나만
 - 둘 다 동시에 시작하지 않기
+
+### Instagram API
+
+`moon.classin`/Classmooni Instagram professional account를 Instagram API with Instagram Login으로 연결하는 lane이다.
+Meta Dashboard의 `Instagram 앱 ID`와 `Instagram 앱 시크릿 코드`를 사용하며, Facebook Login 기반 Instagram Graph API와는 callback과 권한 흐름이 다르다.
+
+현재 구현 범위:
+
+- `GET /api/social/instagram/status` — env/config/connection 상태와 Meta Dashboard 입력 URL 확인
+- `GET /api/social/instagram/connect` — Instagram OAuth authorization window로 이동
+- `GET /api/social/instagram/callback` — code 교환, long-lived token 교환, `/me` profile 확인, `integration_connections` 저장
+- `/legal/privacy`, `/legal/terms`, `/legal/data-deletion` — Meta Basic settings 입력용 고지 URL
+
+기본 scope:
+
+- `instagram_business_basic`
+- `instagram_business_content_publish`
+
+필요하면 env에서 `COM_MOON_INSTAGRAM_SCOPES`로 `instagram_business_manage_comments`, `instagram_business_manage_messages`, `instagram_business_manage_insights` 등을 추가한다. 추가 권한은 App Review 또는 Advanced Access가 필요할 수 있다.
+
+필요한 Meta Dashboard 값:
+
+- 앱 도메인: Hub 공개 URL의 host
+- 개인정보처리방침 URL: `https://<hub-host>/legal/privacy`
+- 서비스 약관 URL: `https://<hub-host>/legal/terms`
+- 데이터 삭제 안내 URL: `https://<hub-host>/legal/data-deletion`
+- OAuth redirect URI: `https://<hub-host>/api/social/instagram/callback`
+
+주의:
+
+- Instagram token exchange는 authorization URL에 넣은 `redirect_uri`와 callback handler가 사용하는 `redirect_uri`가 byte-for-byte로 같아야 한다.
+- callback이 저장하는 토큰은 Supabase `integration_connections.config.accessToken`에 들어간다. 운영에서는 service role 보호와 RLS 정책을 유지한다.
+- 연결 계정 username이 `COM_MOON_INSTAGRAM_BRAND_HANDLE`과 다르면 저장은 하되 `sync_runs.payload.profileVerified=false`로 남긴다.
+
+### Meta Threads
+
+`moon.classin` 브랜드 계정을 Threads API로 연결하는 lane이다. 부모 Facebook 앱 자격증명과 Threads 앱 자격증명이 동시에 보일 수 있으므로,
+OAuth에는 Meta Dashboard의 `Threads 앱 ID`와 `Threads 앱 시크릿 코드`를 사용한다.
+
+현재 구현 범위:
+
+- `GET /api/social/meta/threads/status` — env/config/connection 상태와 Meta Dashboard 입력 URL 확인
+- `GET /api/social/meta/threads/connect` — Threads OAuth authorization window로 이동
+- `GET /api/social/meta/threads/callback` — code 교환, long-lived token 교환, 프로필 확인, `integration_connections` 저장
+- `POST /api/social/meta/threads/deauthorize` — 앱 제거 callback `signed_request` 검증 후 연결 disable
+- `POST /api/social/meta/threads/data-deletion` — 데이터 삭제 callback `signed_request` 검증 후 연결 disable 및 `confirmation_code` 응답
+- `/legal/privacy`, `/legal/terms`, `/legal/data-deletion` — Meta Basic settings 입력용 고지 URL
+
+필요한 Meta Dashboard 값:
+
+- 앱 도메인: Hub 공개 URL의 host
+- 개인정보처리방침 URL: `https://<hub-host>/legal/privacy`
+- 서비스 약관 URL: `https://<hub-host>/legal/terms`
+- 데이터 삭제 안내 URL: `https://<hub-host>/legal/data-deletion`
+- OAuth redirect URI: `https://<hub-host>/api/social/meta/threads/callback`
+- 제거 callback URL: `https://<hub-host>/api/social/meta/threads/deauthorize`
+- 삭제 callback URL: `https://<hub-host>/api/social/meta/threads/data-deletion`
+
+주의:
+
+- app secret이 노출되면 Meta Dashboard에서 rotate 후 `.env.local`을 다시 설정한다.
+- callback이 저장하는 토큰은 Supabase `integration_connections.config.accessToken`에 들어간다. 운영에서는 service role 보호와 RLS 정책을 유지한다.
+- 연결 시 반환된 Threads username이 `COM_MOON_META_THREADS_BRAND_HANDLE`과 다르면 저장하지 않고 `account-mismatch`로 되돌린다.
+- 제거/삭제 callback은 Meta `signed_request`를 Threads app secret으로 검증한다. app secret이 빠져 있으면 callback은 400을 반환한다.
 
 ### Slack
 

@@ -19,7 +19,7 @@ const LABELS = {
   'integrations': 'Integrations', 'activity': 'Activity', 'issues': 'Issues',
 };
 
-export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, onTweaksToggle, onSidebarOpen }) {
+export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, onTweaksToggle, onSidebarOpen, onNew }) {
   const segments = path.split('/').filter(Boolean);
   const now = new Date();
   const weekday = ['일','월','화','수','목','금','토'][now.getDay()];
@@ -93,8 +93,8 @@ export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, o
         <Iconed name={theme === 'dark' ? 'moon' : 'sun'} size={13} />
       </button>
       <IconButton icon="settings" tooltip="Tweaks" onClick={onTweaksToggle} />
-      <IconButton className="hub-topbar__secondary" icon="bell" tooltip="Notifications" />
-      <Button className="hub-topbar__primary-action" variant="primary" size="sm" icon="plus">New</Button>
+      <IconButton className="hub-topbar__secondary" icon="bell" tooltip="Open Daily Brief" onClick={() => onNavigate('dashboard/daily-brief')} />
+      <Button className="hub-topbar__primary-action" variant="primary" size="sm" icon="plus" onClick={onNew}>New</Button>
     </header>
   );
 }

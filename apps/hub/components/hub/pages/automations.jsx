@@ -70,8 +70,16 @@ function useAutomationsLedger() {
 export function AutomationsIndex({ onNavigate }) {
   const sTone = { Active: 'success', Paused: 'warning', Error: 'danger' };
   const { automations, summary, syncState } = useAutomationsLedger();
-  const activeCount = summary?.activeAutomations ?? automations.filter(a => a.status === 'Active').length;
+  const [statusOverrides, setStatusOverrides] = React.useState({});
+  const rows = automations.map(a => statusOverrides[a.id] ? { ...a, status: statusOverrides[a.id] } : a);
+  const activeCount = rows.filter(a => a.status === 'Active').length || summary?.activeAutomations || 0;
   const runsTodayCount = summary?.runsToday ?? 23;
+  const toggleAutomation = (automation) => {
+    setStatusOverrides(prev => ({
+      ...prev,
+      [automation.id]: automation.status === 'Active' ? 'Paused' : 'Active',
+    }));
+  };
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
@@ -87,7 +95,7 @@ export function AutomationsIndex({ onNavigate }) {
         <div style={{ flex: 1 }} />
         <Button variant="secondary" size="sm" icon="runs" onClick={() => onNavigate('dashboard/automations/runs')}>Run log</Button>
         <div style={{ width: 8 }} />
-        <Button variant="primary" size="sm" icon="plus">Flow</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={() => onNavigate('dashboard/automations/flows?new=flow')}>Flow</Button>
       </div>
 
       <Card pad={false} className="hub-table-card">
@@ -99,10 +107,10 @@ export function AutomationsIndex({ onNavigate }) {
             icon="automations"
             title="자동화 원장이 비어 있습니다"
             description={syncState === 'live' ? 'Supabase automations 테이블에 표시할 flow가 없습니다.' : 'flow를 만들면 실행 상태와 성공률이 여기에 표시됩니다.'}
-            action={<Button variant="primary" size="sm" icon="plus">Flow</Button>}
+            action={<Button variant="primary" size="sm" icon="plus" onClick={() => onNavigate('dashboard/automations/flows?new=flow')}>Flow</Button>}
           />
         )}
-        {automations.map((a, i) => (
+        {rows.map((a, i) => (
           <div key={a.id} style={{
             display: 'grid', gridTemplateColumns: '1fr 200px 110px 130px 140px 80px',
             padding: '12px 16px', alignItems: 'center',
@@ -122,8 +130,12 @@ export function AutomationsIndex({ onNavigate }) {
               <div style={{ flex: 1 }}><Progress value={a.runs24 ? (a.success / a.runs24) * 100 : 0} tone={a.success === a.runs24 ? 'success' : 'warning'} /></div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <IconButton icon={a.status === 'Active' ? 'pause' : 'play'} />
-              <IconButton icon="moreV" />
+              <IconButton
+                icon={a.status === 'Active' ? 'pause' : 'play'}
+                tooltip={a.status === 'Active' ? 'Pause flow' : 'Resume flow'}
+                onClick={() => toggleAutomation(a)}
+              />
+              <IconButton icon="moreV" tooltip="Open flow canvas" onClick={() => onNavigate('dashboard/automations/flows')} />
             </div>
           </div>
         ))}
@@ -132,7 +144,7 @@ export function AutomationsIndex({ onNavigate }) {
   );
 }
 
-export function EmailAutomation() {
+export function EmailAutomation({ onNavigate }) {
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', maxWidth: 1100 }}>
       <div>
@@ -155,8 +167,8 @@ export function EmailAutomation() {
             수신 메일을 Leads · Support · Personal로 자동 태깅. 신규 리드는 CRM에 자동 추가.
           </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
-            <Button variant="outline" size="xs">Rules</Button>
-            <Button variant="ghost" size="xs">Logs</Button>
+            <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/automations/flows')}>Rules</Button>
+            <Button variant="ghost" size="xs" onClick={() => onNavigate?.('dashboard/automations/runs')}>Logs</Button>
           </div>
         </Card>
         <Card>
@@ -174,8 +186,8 @@ export function EmailAutomation() {
             뉴스레터, 트랜잭션 메일, 리마인더 발송. 스케줄된 발송은 Queue에서 관리.
           </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
-            <Button variant="outline" size="xs">Templates</Button>
-            <Button variant="ghost" size="xs">Deliverability</Button>
+            <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/content/studio?new=draft')}>Templates</Button>
+            <Button variant="ghost" size="xs" onClick={() => onNavigate?.('dashboard/automations/runs')}>Deliverability</Button>
           </div>
         </Card>
       </div>
@@ -192,7 +204,9 @@ export function EmailAutomation() {
             <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>{r.cond}</span>
             <Iconed name="arrowRight" size={13} style={{ color: 'var(--fg-faint)' }} />
             <div><Badge tone={r.tone} size="xs">{r.then}</Badge></div>
-            <div style={{ textAlign: 'right' }}><IconButton icon="moreV" size={22} iconSize={12} /></div>
+            <div style={{ textAlign: 'right' }}>
+              <IconButton icon="moreV" size={22} iconSize={12} tooltip="Open flow rules" onClick={() => onNavigate?.('dashboard/automations/flows')} />
+            </div>
           </div>
         ))}
       </Card>
@@ -227,7 +241,7 @@ function aggregateWebhookEndpoints(events) {
   return Array.from(byKey.values());
 }
 
-export function Webhooks() {
+export function Webhooks({ onNavigate }) {
   const { webhookEvents, syncState } = useAutomationsLedger();
   const liveHooks = aggregateWebhookEndpoints(webhookEvents);
   const hooks = syncState === 'live' ? liveHooks : (liveHooks.length ? liveHooks : FALLBACK_HOOKS);
@@ -280,7 +294,7 @@ export function Webhooks() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus">Endpoint</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={() => onNavigate?.('dashboard/settings')}>Endpoint</Button>
       </div>
       <Card pad={false}>
         {hooks.length === 0 && (
@@ -311,7 +325,7 @@ export function Webhooks() {
               )}
               <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{h.count24}/24h · {h.lastHit}</span>
               <IconButton icon="play" tooltip="Send test" onClick={() => runHookTest(i, h)} />
-              <IconButton icon="moreV" />
+              <IconButton icon="moreV" tooltip="Manage endpoint" onClick={() => onNavigate?.('dashboard/settings')} />
             </div>
             <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 6, paddingLeft: 16 }}>{h.url}</div>
           </div>
@@ -488,15 +502,46 @@ function FlowField({ label, value, mono }) {
   );
 }
 
-export function Flows() {
+export function Flows({ onNavigate }) {
+  const [flowLibrary, setFlowLibrary] = React.useState(FLOW_LIBRARY);
+  const [flowGraphs, setFlowGraphs] = React.useState(FLOW_GRAPHS);
   const [sel, setSel] = React.useState('f1');
   const [selNode, setSelNode] = React.useState('n1');
-  const graph = FLOW_GRAPHS[sel];
-  const flowMeta = FLOW_LIBRARY.find(f => f.id === sel);
+  const graph = flowGraphs[sel] || flowGraphs.f1;
+  const flowMeta = flowLibrary.find(f => f.id === sel) || flowLibrary[0];
 
   const canvasRef = React.useRef(null);
   const panState = React.useRef({ dragging: false, moved: false, x: 0, y: 0, sl: 0, st: 0 });
   const [grabbing, setGrabbing] = React.useState(false);
+  const [zoom, setZoom] = React.useState(100);
+  const [testState, setTestState] = React.useState(null);
+  const createFlow = () => {
+    const id = `local-flow-${Date.now()}`;
+    const nextFlow = { id, name: '새 Flow', status: 'Paused', nodes: 2, runs24: 0, success: 0 };
+    const nextGraph = {
+      title: '새 Flow',
+      description: '새 자동화 흐름 초안.',
+      trigger: { type: 'Manual', event: 'draft' },
+      nodes: [
+        { id: 'n1', kind: 'trigger', app: 'clock', title: 'Manual trigger', sub: 'draft', col: 0, row: 1 },
+        { id: 'n2', kind: 'action', app: 'db', title: 'DB · 기록', sub: 'preview', col: 1, row: 1 },
+      ],
+      edges: [{ from: 'n1', to: 'n2' }],
+    };
+    setFlowLibrary(prev => [nextFlow, ...prev]);
+    setFlowGraphs(prev => ({ ...prev, [id]: nextGraph }));
+    setSel(id);
+    setSelNode('n1');
+  };
+  const toggleFlow = () => {
+    setFlowLibrary(prev => prev.map(f => (
+      f.id === sel ? { ...f, status: f.status === 'Active' ? 'Paused' : 'Active' } : f
+    )));
+  };
+  const markTest = (label) => {
+    setTestState(label);
+    window.setTimeout(() => setTestState(null), 2500);
+  };
 
   const onPanDown = (e) => {
     if (e.button !== 0) return;
@@ -531,15 +576,15 @@ export function Flows() {
         <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center' }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>Flows</div>
-            <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 3 }}>{FLOW_LIBRARY.filter(f => f.status === 'Active').length} active</div>
+            <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 3 }}>{flowLibrary.filter(f => f.status === 'Active').length} active</div>
           </div>
-          <IconButton icon="plus" size={24} iconSize={13} />
+          <IconButton icon="plus" size={24} iconSize={13} tooltip="Create flow" onClick={createFlow} />
         </div>
         <div className="scroll-y" style={{ flex: 1, padding: 6 }}>
-          {FLOW_LIBRARY.map(f => {
+          {flowLibrary.map(f => {
             const active = sel === f.id;
             return (
-              <button key={f.id} onClick={() => { setSel(f.id); setSelNode(FLOW_GRAPHS[f.id].nodes[0].id); }} style={{
+              <button key={f.id} onClick={() => { setSel(f.id); setSelNode((flowGraphs[f.id] || flowGraphs.f1).nodes[0].id); }} style={{
                 width: '100%', padding: '9px 10px', marginBottom: 2, textAlign: 'left',
                 background: active ? 'var(--surface-3)' : 'transparent',
                 border: active ? '1px solid var(--line)' : '1px solid transparent',
@@ -578,9 +623,10 @@ export function Flows() {
           <div style={{ flex: 1 }} />
           <Badge tone={flowMeta.status === 'Active' ? 'success' : 'warning'} size="xs">{flowMeta.status}</Badge>
           <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{flowMeta.success}/{flowMeta.runs24} · 24h</span>
-          <IconButton icon="eye" tooltip="Test run" />
-          <IconButton icon={flowMeta.status === 'Active' ? 'pause' : 'play'} />
-          <Button variant="outline" size="sm" icon="runs">Runs</Button>
+          {testState && <Badge tone="success" size="xs">{testState}</Badge>}
+          <IconButton icon="eye" tooltip="Test run" onClick={() => markTest('test queued')} />
+          <IconButton icon={flowMeta.status === 'Active' ? 'pause' : 'play'} tooltip={flowMeta.status === 'Active' ? 'Pause flow' : 'Resume flow'} onClick={toggleFlow} />
+          <Button variant="outline" size="sm" icon="runs" onClick={() => onNavigate?.('dashboard/automations/runs')}>Runs</Button>
         </div>
 
         <div ref={canvasRef}
@@ -669,9 +715,9 @@ export function Flows() {
           <Kbd>⌘D</Kbd><span>복제</span>
           <div style={{ flex: 1 }} />
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-            <button style={{ width: 22, height: 20, color: 'var(--fg-muted)' }}>−</button>
-            <span className="mono" style={{ fontSize: 11, padding: '0 6px' }}>100%</span>
-            <button style={{ width: 22, height: 20, color: 'var(--fg-muted)' }}>+</button>
+            <button onClick={() => setZoom(z => Math.max(60, z - 10))} style={{ width: 22, height: 20, color: 'var(--fg-muted)' }}>−</button>
+            <span className="mono" style={{ fontSize: 11, padding: '0 6px' }}>{zoom}%</span>
+            <button onClick={() => setZoom(z => Math.min(140, z + 10))} style={{ width: 22, height: 20, color: 'var(--fg-muted)' }}>+</button>
           </div>
           <span className="mono">last run {flowMeta.status === 'Active' ? '2분 전' : 'paused'}</span>
         </div>
@@ -739,8 +785,8 @@ export function Flows() {
           </div>
         </div>
         <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', gap: 6 }}>
-          <Button variant="outline" size="sm" icon="play" style={{ flex: 1 }}>Test node</Button>
-          <IconButton icon="moreV" />
+          <Button variant="outline" size="sm" icon="play" style={{ flex: 1 }} onClick={() => markTest(`${selectedNode.id} ok`)}>Test node</Button>
+          <IconButton icon="moreV" tooltip="Open run log" onClick={() => onNavigate?.('dashboard/automations/runs')} />
         </div>
       </aside>
     </div>

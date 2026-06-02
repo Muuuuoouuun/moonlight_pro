@@ -82,6 +82,30 @@ envFileHasKeys("apps/hub/.env.example", [
   "COM_MOON_OAUTH_STATE_SECRET",
 ]);
 
+const activeMasterDocs = [
+  "docs/master-plan.md",
+  "docs/master-roadmap.md",
+  "docs/master-directive.md",
+];
+const retiredPremisePatterns = [
+  "3개 프로젝트",
+  "Landing (Public)",
+  "클래스인 그린",
+  "#084734",
+  "코드 패치 자동화",
+];
+
+for (const doc of activeMasterDocs) {
+  const text = readText(doc);
+  const stale = retiredPremisePatterns.filter((pattern) => text.includes(pattern));
+
+  assert(
+    stale.length === 0,
+    `${doc} retired premises`,
+    stale.length ? `stale premise text: ${stale.join(", ")}` : "active strategy is current",
+  );
+}
+
 assert(
   existsSync(path.join(root, "apps/hub/app/api/health/route.js")),
   "Hub health endpoint",

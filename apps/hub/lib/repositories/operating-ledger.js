@@ -58,6 +58,21 @@ function formatShortDate(value) {
   }).format(date);
 }
 
+function formatActivityTime(value) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
 function resolveDueBucket(value) {
   if (!value) return "다음주";
 
@@ -95,9 +110,11 @@ function buildAllBrand(projectCount, openTodoCount, changeCount) {
   };
 }
 
-function mapBrands(rows, projects, todos) {
+function mapBrands(rows, projects, todos, updates) {
   const projectCounts = new Map();
   const todoCounts = new Map();
+  const changeCounts = new Map();
+  const projectById = new Map(projects.map((project) => [project.id, project]));
 
   projects.forEach((project) => {
     projectCounts.set(project.brand, (projectCounts.get(project.brand) || 0) + 1);
@@ -107,6 +124,12 @@ function mapBrands(rows, projects, todos) {
     if (!todo.done) {
       todoCounts.set(todo.brand, (todoCounts.get(todo.brand) || 0) + 1);
     }
+  });
+
+  updates.forEach((update) => {
+    const project = projectById.get(update.projectId);
+    if (!project?.brand) return;
+    changeCounts.set(project.brand, (changeCounts.get(project.brand) || 0) + 1);
   });
 
   const brands = rows.map((row, index) => {
@@ -124,38 +147,46 @@ function mapBrands(rows, projects, todos) {
       projects: projectCounts.get(key) || 0,
       tasks: todoCounts.get(key) || 0,
       open: todoCounts.get(key) || 0,
-      changes: 0,
+      changes: changeCounts.get(key) || 0,
     };
   });
 
   const openTodoCount = todos.filter((todo) => !todo.done).length;
 
   return [
-    buildAllBrand(projects.length, openTodoCount, 0),
+    buildAllBrand(projects.length, openTodoCount, updates.length),
     ...brands,
   ];
 }
 
-function mapProjects(rows, brandById, taskStats) {
+function mapProjects(rows, brandById, taskStats, updateStats) {
   return rows.map((row) => {
     const brand = row.brand_id && brandById.get(row.brand_id);
     const stats = taskStats.get(row.id) || { total: 0, done: 0 };
+    const updates = updateStats.get(row.id) || { count: 0, latest: null };
+    const latestProgress = Number.isFinite(updates.latest?.progress)
+      ? updates.latest.progress
+      : null;
+    const progress = latestProgress ?? clampProgress(row.progress);
 
     return {
       id: row.id,
       brand: brand?.slug || "all",
       name: row.name,
       status: normalizeProjectStatus(row.status),
-      progress: clampProgress(row.progress),
+      progress,
       due: formatShortDate(row.due_at),
       owner: row.owner_id ? "Me" : "Unassigned",
       tag: row.meta?.tag || null,
       tasks: stats.total,
       done: stats.done,
-      summary: row.summary || row.next_action || "",
-      nextAction: row.next_action || "",
+      changes: updates.count,
+      summary: row.summary || updates.latest?.summary || row.next_action || "",
+      nextAction: row.next_action || updates.latest?.nextAction || "",
       createdAt: row.created_at,
-      lastActivityAt: row.last_activity_at || row.updated_at || row.created_at,
+      createdAtLabel: formatShortDate(row.created_at),
+      lastActivityAt: updates.latest?.happenedAt || row.last_activity_at || row.updated_at || row.created_at,
+      lastActivityLabel: formatActivityTime(updates.latest?.happenedAt || row.last_activity_at || row.updated_at || row.created_at),
     };
   });
 }
@@ -177,6 +208,81 @@ function mapTodos(rows, projectById, brandById) {
       assignee: row.owner_id ? "Me" : "Unassigned",
     };
   });
+}
+
+function mapProjectUpdates(rows) {
+  return rows.map((row) => ({
+    id: row.id,
+    projectId: row.project_id || "",
+    source: row.source || "manual",
+    eventType: row.event_type || "project.progress",
+    status: row.status || "reported",
+    title: row.title || "Project update",
+    summary: row.summary || "",
+    progress: Number.isFinite(row.progress) ? row.progress : null,
+    milestone: row.milestone || "",
+    nextAction: row.next_action || "",
+    correlationId: row.correlation_id || null,
+    providerEventId: row.provider_event_id || null,
+    happenedAt: row.happened_at || row.created_at,
+    happenedAtLabel: formatActivityTime(row.happened_at || row.created_at),
+  }));
+}
+
+function buildUpdateStats(updates) {
+  const stats = new Map();
+
+  updates.forEach((update) => {
+    if (!update.projectId) return;
+
+    const current = stats.get(update.projectId) || { count: 0, latest: null };
+    current.count += 1;
+
+    if (
+      !current.latest ||
+      new Date(update.happenedAt).getTime() > new Date(current.latest.happenedAt).getTime()
+    ) {
+      current.latest = update;
+    }
+
+    stats.set(update.projectId, current);
+  });
+
+  return stats;
+}
+
+function mapDecisions(rows) {
+  return rows.map((row) => ({
+    id: row.id,
+    projectId: row.project_id || "",
+    title: row.title || "Decision",
+    summary: row.summary || row.rationale || "",
+    decidedAt: row.decided_at || row.created_at,
+    decidedAtLabel: formatActivityTime(row.decided_at || row.created_at),
+  }));
+}
+
+function mapNotes(rows) {
+  return rows.map((row) => ({
+    id: row.id,
+    projectId: row.project_id || "",
+    title: row.title || "Note",
+    body: row.body || "",
+    createdAt: row.created_at,
+    createdAtLabel: formatActivityTime(row.created_at),
+  }));
+}
+
+function mapRoutineChecks(rows) {
+  return rows.map((row) => ({
+    id: row.id,
+    projectId: row.project_id || "",
+    checkType: row.check_type || "check",
+    status: row.status || "pending",
+    note: row.note || "",
+    checkedAt: row.checked_at || row.created_at,
+    checkedAtLabel: formatActivityTime(row.checked_at || row.created_at),
+  }));
 }
 
 function buildBoardColumns(projects, todos) {
@@ -240,11 +346,15 @@ export async function getProjectLedger() {
       brands: [],
       projects: [],
       todos: [],
+      updates: [],
+      decisions: [],
+      notes: [],
+      checks: [],
       columns: [],
     };
   }
 
-  const [brandRows, projectRows, taskRows] = await Promise.all([
+  const [brandRows, projectRows, taskRows, updateRows, decisionRows, noteRows, routineRows] = await Promise.all([
     fetchSupabaseRows("brands", {
       order: "name.asc",
       filters: withWorkspaceFilter([["status", eqFilter("active")]]),
@@ -263,6 +373,26 @@ export async function getProjectLedger() {
         ["status", inFilter(["inbox", "todo", "doing", "blocked", "done"])],
       ]),
     }),
+    fetchSupabaseRows("project_updates", {
+      limit: 120,
+      order: "happened_at.desc",
+      filters: withWorkspaceFilter(),
+    }),
+    fetchSupabaseRows("decisions", {
+      limit: 80,
+      order: "decided_at.desc",
+      filters: withWorkspaceFilter(),
+    }),
+    fetchSupabaseRows("notes", {
+      limit: 80,
+      order: "created_at.desc",
+      filters: withWorkspaceFilter(),
+    }),
+    fetchSupabaseRows("routine_checks", {
+      limit: 80,
+      order: "created_at.desc",
+      filters: withWorkspaceFilter(),
+    }),
   ]);
 
   if (!brandRows || !projectRows || !taskRows) {
@@ -273,6 +403,10 @@ export async function getProjectLedger() {
       brands: [],
       projects: [],
       todos: [],
+      updates: [],
+      decisions: [],
+      notes: [],
+      checks: [],
       columns: [],
     };
   }
@@ -289,9 +423,11 @@ export async function getProjectLedger() {
     taskStats.set(task.project_id, stats);
   });
 
+  const updates = mapProjectUpdates(updateRows || []);
+  const updateStats = buildUpdateStats(updates);
   const todos = mapTodos(taskRows, projectById, brandById);
-  const projects = mapProjects(projectRows, brandById, taskStats);
-  const brands = mapBrands(brandRows, projects, todos);
+  const projects = mapProjects(projectRows, brandById, taskStats, updateStats);
+  const brands = mapBrands(brandRows, projects, todos, updates);
 
   return {
     source: "supabase",
@@ -300,6 +436,10 @@ export async function getProjectLedger() {
     brands,
     projects,
     todos,
+    updates,
+    decisions: mapDecisions(decisionRows || []),
+    notes: mapNotes(noteRows || []),
+    checks: mapRoutineChecks(routineRows || []),
     columns: buildBoardColumns(projects, todos),
   };
 }

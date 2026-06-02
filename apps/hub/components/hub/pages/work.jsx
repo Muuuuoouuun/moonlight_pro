@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, IconButton, Button, Progress, EmptyState } from "../hub-primitives";
 import { DECISIONS as FALLBACK_DECISIONS, RITUALS as FALLBACK_RITUALS } from "../hub-data";
@@ -54,6 +55,12 @@ function buildRoadmapMonths(now) {
   });
 }
 
+function formatHour(value) {
+  const hour = Math.floor(value);
+  const minutes = Math.round((value - hour) * 60);
+  return `${hour}:${String(minutes).padStart(2, '0')}`;
+}
+
 function useWorkLedger() {
   const [state, setState] = React.useState({
     source: 'mock',
@@ -101,14 +108,48 @@ function useWorkLedger() {
 }
 
 export function Calendar() {
+  const searchParams = useSearchParams();
   const [now, setNow] = React.useState(() => new Date());
+  const [weekOffset, setWeekOffset] = React.useState(0);
+  const [viewMode, setViewMode] = React.useState('Week');
   const [gcalStatus, setGcalStatus] = React.useState('idle');
   const [gcalMessage, setGcalMessage] = React.useState('');
+  const focusAppliedRef = React.useRef(false);
+  const [events, setEvents] = React.useState(() => [
+    { day: 0, start: 10, end: 11, title: 'Weekly kickoff', tone: 'moon' },
+    { day: 0, start: 14, end: 16, title: 'Moonlight Web v2 — deep work', tone: 'moon' },
+    { day: 1, start: 9, end: 10, title: '뉴스레터 outline', tone: 'moon' },
+    { day: 1, start: 15, end: 16.5, title: '클래스인 2차 미팅', tone: 'company' },
+    { day: 2, start: 11, end: 12, title: 'Council sync', tone: 'info' },
+    { day: 2, start: 16, end: 17, title: '자문 — 정하윤', tone: 'personal' },
+    { day: 3, start: 10, end: 11.5, title: 'Pricing workshop', tone: 'moon' },
+    { day: 4, start: 10, end: 11, title: '클래스인 Discovery', tone: 'company' },
+    { day: 4, start: 16, end: 17, title: '코칭 — Jihoon', tone: 'personal' },
+    { day: 4, start: 11.5, end: 13, title: '뉴스레터 마감', tone: 'warning' },
+  ]);
 
   React.useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60000);
     return () => window.clearInterval(id);
   }, []);
+
+  React.useEffect(() => {
+    const minutes = Number(searchParams.get('focus'));
+    if (!minutes || focusAppliedRef.current) return;
+    const week = buildCalendarWeek(now);
+    setWeekOffset(0);
+    setEvents(prev => [
+      ...prev,
+      {
+        day: week.todayIndex >= 0 ? week.todayIndex : 0,
+        start: 13,
+        end: 13 + Math.max(15, minutes) / 60,
+        title: `${minutes}m focus block`,
+        tone: 'moon',
+      },
+    ]);
+    focusAppliedRef.current = true;
+  }, [now, searchParams]);
 
   async function connectGoogleCalendar() {
     setGcalStatus('connecting');
@@ -165,19 +206,21 @@ export function Calendar() {
     : 'var(--fg-faint)';
 
   const hours = Array.from({ length: 12 }, (_, i) => 8 + i);
-  const { labels: days, weekLabel, todayIndex } = buildCalendarWeek(now);
-  const events = [
-    { day: 0, start: 10, end: 11, title: 'Weekly kickoff', tone: 'moon' },
-    { day: 0, start: 14, end: 16, title: 'Moonlight Web v2 — deep work', tone: 'moon' },
-    { day: 1, start: 9, end: 10, title: '뉴스레터 outline', tone: 'moon' },
-    { day: 1, start: 15, end: 16.5, title: '클래스인 2차 미팅', tone: 'company' },
-    { day: 2, start: 11, end: 12, title: 'Council sync', tone: 'info' },
-    { day: 2, start: 16, end: 17, title: '자문 — 정하윤', tone: 'personal' },
-    { day: 3, start: 10, end: 11.5, title: 'Pricing workshop', tone: 'moon' },
-    { day: 4, start: 10, end: 11, title: '클래스인 Discovery', tone: 'company' },
-    { day: 4, start: 16, end: 17, title: '코칭 — Jihoon', tone: 'personal' },
-    { day: 4, start: 11.5, end: 13, title: '뉴스레터 마감', tone: 'warning' },
-  ];
+  const viewedDate = addDays(now, weekOffset * 7);
+  const { labels: days, weekLabel, todayIndex } = buildCalendarWeek(viewedDate);
+  const addEvent = () => {
+    const today = buildCalendarWeek(viewedDate).todayIndex;
+    setEvents(prev => [
+      ...prev,
+      {
+        day: today >= 0 ? today : 0,
+        start: 13,
+        end: 14,
+        title: '새 일정',
+        tone: 'moon',
+      },
+    ]);
+  };
   const toneBg = { moon: 'oklch(0.35 0.008 250 / 0.9)', company: 'var(--company-bg)', personal: 'var(--personal-bg)', info: 'var(--info-bg)', warning: 'var(--warning-bg)' };
   const toneFg = { moon: 'var(--moon-100)', company: 'var(--company)', personal: 'var(--personal)', info: 'var(--info)', warning: 'var(--warning)' };
   const toneBd = { moon: 'var(--moon-600)', company: 'oklch(0.5 0.04 290 / 0.5)', personal: 'oklch(0.5 0.04 200 / 0.5)', info: 'oklch(0.5 0.06 230 / 0.5)', warning: 'oklch(0.5 0.09 85 / 0.5)' };
@@ -201,16 +244,16 @@ export function Calendar() {
         </div>
         <div style={{ flex: 1 }} />
         <div className="hub-toolbar" style={{ display: 'flex', gap: 6 }}>
-          <IconButton icon="chevronL" />
-          <Button variant="secondary" size="sm">Today</Button>
-          <IconButton icon="chevronR" />
+          <IconButton icon="chevronL" tooltip="Previous week" onClick={() => setWeekOffset(v => v - 1)} />
+          <Button variant="secondary" size="sm" onClick={() => setWeekOffset(0)}>Today</Button>
+          <IconButton icon="chevronR" tooltip="Next week" onClick={() => setWeekOffset(v => v + 1)} />
         </div>
         <div className="hub-toolbar" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
           {['Day','Week','Month'].map(v => (
-            <button key={v} style={{ padding: '4px 10px', fontSize: 11.5, borderRadius: 4, color: v === 'Week' ? 'var(--fg)' : 'var(--fg-faint)', background: v === 'Week' ? 'var(--surface-3)' : 'transparent' }}>{v}</button>
+            <button key={v} onClick={() => setViewMode(v)} style={{ padding: '4px 10px', fontSize: 11.5, borderRadius: 4, color: v === viewMode ? 'var(--fg)' : 'var(--fg-faint)', background: v === viewMode ? 'var(--surface-3)' : 'transparent' }}>{v}</button>
           ))}
         </div>
-        <Button variant="primary" size="sm" icon="plus">Event</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={addEvent}>Event</Button>
       </div>
 
       <Card pad={false} className="hub-table-card" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -246,7 +289,7 @@ export function Calendar() {
                       fontSize: 11, fontWeight: 500, overflow: 'hidden',
                     }}>
                       {e.title}
-                      <div className="mono" style={{ fontSize: 9.5, opacity: 0.7, marginTop: 3 }}>{e.start}:00 – {Math.floor(e.end)}:{e.end % 1 ? '30' : '00'}</div>
+                      <div className="mono" style={{ fontSize: 9.5, opacity: 0.7, marginTop: 3 }}>{formatHour(e.start)} – {formatHour(e.end)}</div>
                     </div>
                   );
                 })}
@@ -260,8 +303,29 @@ export function Calendar() {
 }
 
 export function Decisions() {
+  const searchParams = useSearchParams();
   const { decisions, syncState } = useWorkLedger();
-  const list = Array.isArray(decisions) ? decisions : [];
+  const [localDecisions, setLocalDecisions] = React.useState([]);
+  const createdFromQueryRef = React.useRef(false);
+  const createDecision = React.useCallback(() => {
+    const id = `local-decision-${Date.now()}`;
+    const createdAt = new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(new Date());
+    setLocalDecisions(prev => [{
+      id,
+      title: '새 결정 기록',
+      date: createdAt,
+      status: 'Draft',
+      by: 'Me',
+      reason: '맥락, 선택지, 근거를 이어서 적어주세요.',
+      links: 0,
+    }, ...prev]);
+  }, []);
+  React.useEffect(() => {
+    if (searchParams.get('new') !== 'decision' || createdFromQueryRef.current) return;
+    createDecision();
+    createdFromQueryRef.current = true;
+  }, [createDecision, searchParams]);
+  const list = [...localDecisions, ...(Array.isArray(decisions) ? decisions : [])];
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', maxWidth: 1000, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
@@ -276,7 +340,7 @@ export function Decisions() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus">Record decision</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision</Button>
       </div>
       <div style={{ position: 'relative', paddingLeft: 28 }}>
         <div style={{ position: 'absolute', left: 11, top: 6, bottom: 6, width: 1, background: 'var(--line-soft)' }} />
@@ -286,7 +350,7 @@ export function Decisions() {
               icon="decisions"
               title="결정 기록이 없습니다"
               description={syncState === 'live' ? 'Supabase decisions 원장에 아직 기록된 결정이 없습니다.' : '중요한 판단을 남기면 타임라인에 쌓입니다.'}
-              action={<Button variant="primary" size="sm" icon="plus">Record decision</Button>}
+              action={<Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision</Button>}
             />
           </Card>
         )}
@@ -315,7 +379,7 @@ export function Decisions() {
 
 export function Roadmap() {
   const months = React.useMemo(() => buildRoadmapMonths(new Date()), []);
-  const items = [
+  const [items, setItems] = React.useState(() => [
     { name: 'Moonlight Web v2 launch', start: 0, len: 1, tone: 'moon', tag: null },
     { name: '클래스인 Spring Cohort', start: 0.5, len: 1.2, tone: 'company', tag: 'company' },
     { name: 'Pricing experiment Q2', start: 1, len: 2, tone: 'moon', tag: null },
@@ -323,7 +387,12 @@ export function Roadmap() {
     { name: '개인 브랜드 사이트', start: 1.2, len: 1.5, tone: 'personal', tag: 'personal' },
     { name: 'Partner referral program', start: 1.5, len: 1.5, tone: 'moon', tag: null },
     { name: 'Agents Orders v3', start: 2, len: 1, tone: 'moon', tag: null },
-  ];
+  ]);
+  const draftQ3 = () => {
+    setItems(prev => prev.some(it => it.name === 'Council Q3 draft')
+      ? prev
+      : [...prev, { name: 'Council Q3 draft', start: 3, len: 0.8, tone: 'moon', tag: null }]);
+  };
   const toneMap = { moon: 'var(--moon-400)', company: 'var(--company)', personal: 'var(--personal)' };
 
   return (
@@ -334,7 +403,7 @@ export function Roadmap() {
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Q2 outlook · 7 initiatives</div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="secondary" size="sm" icon="sparkle">Let Council draft Q3</Button>
+        <Button variant="secondary" size="sm" icon="sparkle" onClick={draftQ3}>Let Council draft Q3</Button>
       </div>
 
       <Card pad={false} className="hub-table-card">
@@ -374,6 +443,7 @@ export function Roadmap() {
 
 export function Rhythm() {
   const { rituals: liveRituals, summary, syncState } = useWorkLedger();
+  const [checkedRituals, setCheckedRituals] = React.useState(() => new Set());
   const rituals = Array.isArray(liveRituals) ? liveRituals : [];
 
   const completed = summary?.ritualsCompletedThisWeek ?? rituals.filter(r => r.weeks?.some(v => v === 1)).length;
@@ -430,7 +500,9 @@ export function Rhythm() {
           />
         )}
         {rituals.map((r, i) => {
-          const weeks = Array.isArray(r.weeks) ? r.weeks : [0,0,0,0,0,0,0];
+          const isChecked = checkedRituals.has(r.id || r.name || i);
+          const weeks = Array.isArray(r.weeks) ? [...r.weeks] : [0,0,0,0,0,0,0];
+          if (isChecked) weeks[weeks.length - 1] = 1;
           return (
             <div key={r.id || r.name || i} style={{ padding: '14px 16px', borderBottom: i < rituals.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'grid', gridTemplateColumns: '1fr 160px 90px 100px', alignItems: 'center' }}>
               <span style={{ fontSize: 13 }}>{r.name}</span>
@@ -445,7 +517,20 @@ export function Rhythm() {
               </div>
               <span className="mono" style={{ fontSize: 12, color: (r.streak || 0) > 10 ? 'var(--success)' : 'var(--fg-muted)' }}>{r.streak || 0}d</span>
               <div style={{ textAlign: 'right' }}>
-                <Button variant="ghost" size="xs">Check in</Button>
+                <Button
+                  variant={isChecked ? 'secondary' : 'ghost'}
+                  size="xs"
+                  onClick={() => {
+                    const key = r.id || r.name || i;
+                    setCheckedRituals(prev => {
+                      const next = new Set(prev);
+                      next.has(key) ? next.delete(key) : next.add(key);
+                      return next;
+                    });
+                  }}
+                >
+                  {isChecked ? 'Checked' : 'Check in'}
+                </Button>
               </div>
             </div>
           );
