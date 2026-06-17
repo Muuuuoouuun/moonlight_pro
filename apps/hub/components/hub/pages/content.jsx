@@ -83,12 +83,47 @@ function bodySummary(body) {
   return body.replace(/\s+/g, " ").trim().slice(0, 180);
 }
 
+function statusKeyOf(item) {
+  if (item?.statusKey) return item.statusKey;
+  return String(item?.status || "").toLowerCase();
+}
+
+function chooseDefaultBrand(brands = [], preferred) {
+  if (!brands.length) return null;
+  if (preferred) {
+    const byPreferred = brands.find((brand) => brand.id === preferred || brand.key === preferred);
+    if (byPreferred) return byPreferred;
+  }
+  return (
+    brands.find((brand) => brand.kind === "content") ||
+    brands.find((brand) => brand.key === "classmoon") ||
+    brands.find((brand) => brand.key === "moonpm") ||
+    brands[0]
+  );
+}
+
+function handoffEventLabel(event, status) {
+  if (event === "manual_exported") return "Manual export";
+  if (event === "asset_exported") return "Asset export";
+  if (status === "failed") return "Failed";
+  if (status === "published") return "Published";
+  return "Handoff";
+}
+
+function handoffTone(status) {
+  if (status === "failed") return "danger";
+  if (status === "published") return "success";
+  return "info";
+}
+
 function useContentLedger() {
   const [state, setState] = React.useState({
     source: "mock",
     syncState: "mock",
+    brands: [],
     items: [],
     variants: [],
+    assets: [],
     publishLogs: [],
     queue: FALLBACK_CONTENT_QUEUE,
     pipeline: [],
@@ -114,8 +149,10 @@ function useContentLedger() {
           setState({
             source: data.source,
             syncState: "live",
+            brands: Array.isArray(data.brands) ? data.brands : [],
             items: Array.isArray(data.items) ? data.items : [],
             variants: Array.isArray(data.variants) ? data.variants : [],
+            assets: Array.isArray(data.assets) ? data.assets : [],
             publishLogs: Array.isArray(data.publishLogs) ? data.publishLogs : [],
             queue: Array.isArray(data.queue) ? data.queue : [],
             pipeline: Array.isArray(data.pipeline) ? data.pipeline : [],
@@ -142,8 +179,10 @@ function useContentLedger() {
 export function Studio() {
   const searchParams = useSearchParams();
   const itemParam = searchParams.get("item");
+  const brandParam = searchParams.get("brand");
   const ledger = useContentLedger();
   const [mode, setMode] = React.useState('blog');
+  const [selectedBrandId, setSelectedBrandId] = React.useState("");
   const [contentId, setContentId] = React.useState(null);
   const [variantId, setVariantId] = React.useState(null);
   const [title, setTitle] = React.useState('결정을 기록하는 노트의 구조');
@@ -177,6 +216,7 @@ export function Studio() {
   const [extraSuggestions, setExtraSuggestions] = React.useState([]);
   const [pendingSend, setPendingSend] = React.useState(null); // 'publish' | 'schedule' | null
   const [lastSentAt, setLastSentAt] = React.useState(null);
+  const [localHandoffLogs, setLocalHandoffLogs] = React.useState([]);
   const [autoSave, setAutoSave] = React.useState(true);
   const [localMirror, setLocalMirror] = React.useState(true);
   const [saveState, setSaveState] = React.useState('idle');
@@ -193,7 +233,9 @@ export function Studio() {
     }
   };
 
-  const variantType = mode === 'carousel' ? 'card_news' : 'blog_insight';
+  const brands = ledger.brands || [];
+  const selectedBrand = brands.find((brand) => brand.id === selectedBrandId) || chooseDefaultBrand(brands, brandParam);
+  const variantType = mode === 'carousel' ? 'card_news' : 'blog';
   const currentBodyPayload = React.useMemo(() => (
     mode === 'carousel'
       ? { slides, format: 'instagram-carousel', export: { target: 'google_drive' } }
@@ -204,6 +246,7 @@ export function Studio() {
     if (!draft) return;
     if (draft.contentId) setContentId(draft.contentId);
     if (draft.variantId) setVariantId(draft.variantId);
+    if (draft.brandId) setSelectedBrandId(draft.brandId);
     if (draft.mode === 'carousel' || draft.mode === 'blog') setMode(draft.mode);
     if (typeof draft.title === 'string') setTitle(draft.title);
     if (typeof draft.body === 'string') setBody(draft.body);
@@ -228,6 +271,13 @@ export function Studio() {
   }, [applyDraft, itemParam]);
 
   React.useEffect(() => {
+    const nextBrand = chooseDefaultBrand(brands, brandParam);
+    if (!selectedBrandId && nextBrand?.id) {
+      setSelectedBrandId(nextBrand.id);
+    }
+  }, [brandParam, brands, selectedBrandId]);
+
+  React.useEffect(() => {
     if (!itemParam || loadedItemRef.current === itemParam || ledger.source !== "supabase") return;
 
     const item = ledger.items.find((candidate) => candidate.id === itemParam);
@@ -241,6 +291,7 @@ export function Studio() {
 
     setContentId(item.id);
     setVariantId(variant?.id || item.variantId || null);
+    setSelectedBrandId(item.brandId || "");
     setMode(nextMode);
     setTitle(variant?.title || item.title);
     if (nextMode === "carousel" && nextSlides) {
@@ -261,6 +312,7 @@ export function Studio() {
     const draft = {
       contentId,
       variantId,
+      brandId: selectedBrand?.id || selectedBrandId || null,
       mode,
       title,
       body,
@@ -273,7 +325,7 @@ export function Studio() {
     }, 450);
 
     return () => window.clearTimeout(timer);
-  }, [body, contentId, localMirror, mode, slides, title, variantId]);
+  }, [body, contentId, localMirror, mode, selectedBrand, selectedBrandId, slides, title, variantId]);
 
   const saveDraft = React.useCallback(async (reason = "manual") => {
     if (!autoSave && reason === "autosave") return;
@@ -288,9 +340,12 @@ export function Studio() {
         body: JSON.stringify({
           contentId,
           variantId,
+          brandId: selectedBrand?.id || null,
+          brandKey: selectedBrand?.key || null,
           title,
           body: currentBodyPayload,
           sourceIdea: title,
+          sourceType: "idea",
           summary: mode === "carousel" ? `${slides.length} card news slides` : bodySummary(body),
           excerpt: mode === "carousel" ? slides[0]?.sub || slides[0]?.title || "" : bodySummary(body),
           status: "draft",
@@ -312,12 +367,14 @@ export function Studio() {
       setLastSavedAt(new Date().toISOString());
       setSaveState(data.status === "preview" ? "preview" : "saved");
       setDirty(false);
+      return data;
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       setSaveState("error");
       setExtraSuggestions(s => [{ tone: 'danger', text: `저장 실패 — ${msg}` }, ...s]);
+      return null;
     }
-  }, [autoSave, body, contentId, currentBodyPayload, localMirror, mode, slides, title, variantId, variantType]);
+  }, [autoSave, body, contentId, currentBodyPayload, localMirror, mode, selectedBrand, slides, title, variantId, variantType]);
 
   React.useEffect(() => {
     if (!autoSave || !dirty) return undefined;
@@ -329,50 +386,117 @@ export function Studio() {
     return () => window.clearTimeout(timer);
   }, [autoSave, dirty, saveDraft]);
 
-  async function dispatchEmail(action) {
+  async function recordHandoff(action) {
     setPendingSend(action);
     const startedAt = Date.now();
-    const dryRun = action === 'schedule';
+    const isSchedule = action === 'schedule';
+    const channel = mode === 'blog' ? 'Web' : 'Instagram';
+    const exportProfile = mode === 'blog' ? 'web-article-handoff' : 'google-drive-carousel';
+
     try {
-      const response = await fetch('/api/email/send', {
+      const needsSave = dirty || !contentId || !variantId;
+      const saved = needsSave ? await saveDraft("handoff") : null;
+      if (needsSave && !saved) {
+        throw new Error("초안 저장이 완료되지 않아 handoff를 중단했습니다.");
+      }
+
+      const nextContentId = saved?.contentId || contentId;
+      const nextVariantId = saved?.variantId || variantId;
+      const serializedBody = typeof currentBodyPayload === "string"
+        ? currentBodyPayload
+        : JSON.stringify(currentBodyPayload);
+      const encodedSize = typeof TextEncoder !== "undefined"
+        ? new TextEncoder().encode(serializedBody).length
+        : serializedBody.length;
+
+      if (!nextContentId || !nextVariantId) {
+        throw new Error("초안을 먼저 저장해야 handoff를 기록할 수 있습니다.");
+      }
+
+      const response = await fetch('/api/hub/content', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          action: dryRun ? 'dry-run' : 'send',
-          channel: 'resend',
-          to: 'me@moonlight.pro',
-          recipientEmail: 'me@moonlight.pro',
-          subject: title,
-          body,
-          dryRun,
+          action: isSchedule ? 'handoff' : 'export',
+          handoffAction: action,
+          event: isSchedule ? 'handoff_requested' : 'manual_exported',
+          status: isSchedule ? 'queued' : 'published',
+          provider: isSchedule ? 'n8n' : 'manual',
+          contentId: nextContentId,
+          variantId: nextVariantId,
+          brandId: selectedBrand?.id || null,
+          brandKey: selectedBrand?.key || null,
+          title,
+          channel,
+          targetChannel: mode === 'blog' ? 'MoonPM Web' : 'Instagram carousel',
+          variantType,
+          exportProfile,
+          recordAsset: !isSchedule,
+          assetType: mode === 'blog' ? 'html' : 'source',
+          mimeType: mode === 'blog' ? 'text/html' : 'application/json',
+          sizeBytes: encodedSize,
+          note: isSchedule
+            ? 'Studio toolbar handoff request. External delivery is handled by automation.'
+            : 'Studio toolbar manual export log. No external delivery was sent from the Hub.',
         }),
       });
       const data = await response.json().catch(() => ({}));
       const elapsed = Date.now() - startedAt;
       if (elapsed < 100) await new Promise(r => setTimeout(r, 100 - elapsed));
 
-      if (!response.ok && data.status !== 'preview' && data.status !== 'sent') {
+      if (!response.ok && data.status !== 'preview' && data.status !== 'logged') {
         const msg = data.error || data.message || `HTTP ${response.status}`;
-        setExtraSuggestions(s => [{ tone: 'danger', text: `발행 실패 — ${msg}` }, ...s]);
+        setExtraSuggestions(s => [{ tone: 'danger', text: `handoff 실패 — ${msg}` }, ...s]);
         return;
       }
 
       const now = new Date();
       setLastSentAt(now);
-      if (dryRun) {
-        const detail = data.message || data.status || 'ok';
-        setExtraSuggestions(s => [{ tone: 'info', text: `dry-run · ${detail}` }, ...s]);
-      } else {
-        const id = data.id ?? data.preview?.id ?? 'preview';
-        setExtraSuggestions(s => [{ tone: 'info', text: `발행 요청 — id: ${id}` }, ...s]);
-      }
+      setLocalHandoffLogs(s => [{
+        id: data.logId || `local-${Date.now()}`,
+        variantId: nextVariantId,
+        contentId: nextContentId,
+        channel,
+        status: isSchedule ? 'queued' : 'published',
+        event: isSchedule ? 'handoff_requested' : 'manual_exported',
+        provider: isSchedule ? 'n8n' : 'manual',
+        targetChannel: mode === 'blog' ? 'MoonPM Web' : 'Instagram carousel',
+        exportProfile,
+        when: formatTime(now),
+        createdAt: now.toISOString(),
+      }, ...s]);
+      const detail = data.assetId ? ` · asset ${String(data.assetId).slice(0, 8)}` : '';
+      setExtraSuggestions(s => [{
+        tone: isSchedule ? 'info' : 'moon',
+        text: isSchedule
+          ? `handoff queued · ${String(data.logId || 'preview').slice(0, 8)}`
+          : `manual export logged · ${String(data.logId || 'preview').slice(0, 8)}${detail}`,
+      }, ...s]);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      setExtraSuggestions(s => [{ tone: 'danger', text: `발행 실패 — ${msg}` }, ...s]);
+      setExtraSuggestions(s => [{ tone: 'danger', text: `handoff 실패 — ${msg}` }, ...s]);
     } finally {
       setPendingSend(null);
     }
   }
+
+  const handoffLogs = React.useMemo(() => {
+    const allLogs = [...localHandoffLogs, ...(ledger.publishLogs || [])];
+    const seen = new Set();
+
+    return allLogs
+      .filter((log) => (
+        (variantId && log.variantId === variantId) ||
+        (contentId && log.contentId === contentId)
+      ))
+      .filter((log) => {
+        const key = log.id || `${log.event}-${log.createdAt}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 5);
+  }, [contentId, ledger.publishLogs, localHandoffLogs, variantId]);
 
   const wordCount = body.split(/\s+/).filter(Boolean).length;
   const readingTime = Math.max(1, Math.round(wordCount / 180));
@@ -429,7 +553,7 @@ export function Studio() {
           <div style={{ flex: 1 }} />
           <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>
             {lastSentAt
-              ? `sent · ${formatTime(lastSentAt)}`
+              ? `handoff · ${formatTime(lastSentAt)}`
               : saveLabel}
           </span>
           <IconButton
@@ -454,17 +578,17 @@ export function Studio() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => dispatchEmail('schedule')}
+            onClick={() => recordHandoff('schedule')}
           >
-            {pendingSend === 'schedule' ? 'Sending…' : 'Schedule'}
+            {pendingSend === 'schedule' ? 'Queuing…' : 'Schedule'}
           </Button>
           <Button
             variant="primary"
             size="sm"
             icon="send"
-            onClick={() => dispatchEmail('publish')}
+            onClick={() => recordHandoff('publish')}
           >
-            {pendingSend === 'publish' ? 'Sending…' : 'Publish'}
+            {pendingSend === 'publish' ? 'Logging…' : 'Publish'}
           </Button>
         </div>
 
@@ -605,6 +729,86 @@ export function Studio() {
           <div style={{ fontSize: 12.5, fontWeight: 500, flex: 1 }}>Writer · Studio Agent</div>
         </div>
         <div className="scroll-y" style={{ flex: 1, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em' }}>Brand</div>
+          <div style={{
+            padding: 10,
+            background: 'var(--surface-2)',
+            border: '1px solid var(--line-soft)',
+            borderRadius: 'var(--r-sm)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {brands.length === 0 && (
+                <Badge tone="neutral" variant="outline" size="xs">Workspace default</Badge>
+              )}
+              {brands.map((brand) => {
+                const active = selectedBrand?.id === brand.id;
+                return (
+                  <button
+                    key={brand.id}
+                    onClick={() => {
+                      setSelectedBrandId(brand.id);
+                      setDirty(true);
+                    }}
+                    style={{
+                      minHeight: 28,
+                      padding: '5px 8px',
+                      borderRadius: 'var(--r-sm)',
+                      border: active ? '1px solid var(--line-strong)' : '1px solid var(--line-soft)',
+                      background: active ? 'var(--surface-3)' : 'transparent',
+                      color: active ? 'var(--fg)' : 'var(--fg-muted)',
+                      fontSize: 11.5,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
+                    }}
+                  >
+                    <span className="mono" style={{ color: active ? 'var(--moon-200)' : 'var(--fg-faint)' }}>{brand.glyph}</span>
+                    {brand.name}
+                  </button>
+                );
+              })}
+            </div>
+            {selectedBrand && (
+              <>
+                <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.45 }}>
+                  {selectedBrand.description || selectedBrand.voice}
+                </div>
+                {(selectedBrand.philosophy || selectedBrand.direction) && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 0', borderTop: '1px solid var(--line-soft)', borderBottom: '1px solid var(--line-soft)' }}>
+                    {selectedBrand.philosophy && (
+                      <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.45 }}>
+                        <span className="mono" style={{ color: 'var(--fg-faint)', marginRight: 6 }}>철학</span>{selectedBrand.philosophy}
+                      </div>
+                    )}
+                    {selectedBrand.direction && (
+                      <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.45 }}>
+                        <span className="mono" style={{ color: 'var(--fg-faint)', marginRight: 6 }}>방향</span>{selectedBrand.direction}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {(selectedBrand.keywords || []).length > 0 && (
+                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                    {selectedBrand.keywords.slice(0, 5).map((keyword) => (
+                      <Badge key={keyword} tone={selectedBrand.tone || 'neutral'} variant="outline" size="xs">{keyword}</Badge>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {(selectedBrand.rules || []).slice(0, 3).map((rule) => (
+                    <div key={rule} style={{ display: 'grid', gridTemplateColumns: '12px 1fr', gap: 6, fontSize: 11.5, color: 'var(--fg-faint)', lineHeight: 1.35 }}>
+                      <Dot tone={selectedBrand.tone || 'moon'} size={5} style={{ marginTop: 5 }} />
+                      <span>{rule}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em' }}>Suggestions</div>
           {[...extraSuggestions, ...(mode === 'blog' ? [
             { tone: 'info', text: '제목 A/B: "결정 노트: 네 칸이면 충분하다"' },
@@ -628,13 +832,48 @@ export function Studio() {
               </div>
             </div>
           ))}
+          <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em', marginTop: 8 }}>Handoff history</div>
+          <div style={{
+            padding: 10,
+            background: 'var(--surface-2)',
+            border: '1px solid var(--line-soft)',
+            borderRadius: 'var(--r-sm)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}>
+            {handoffLogs.length === 0 && (
+              <div style={{ fontSize: 12, color: 'var(--fg-faint)', lineHeight: 1.45 }}>
+                Schedule 또는 Publish를 누르면 Supabase publish_logs에 기록됩니다.
+              </div>
+            )}
+            {handoffLogs.map((log) => (
+              <div key={log.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                    <Badge tone={handoffTone(log.status)} size="xs">{handoffEventLabel(log.event, log.status)}</Badge>
+                    <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {log.provider || 'hub'} · {log.channel || log.targetChannel || 'Web'}
+                    </span>
+                  </div>
+                  <div style={{ marginTop: 3, fontSize: 11.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {log.exportProfile || log.targetChannel || 'content handoff'}
+                  </div>
+                </div>
+                <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{log.when}</span>
+              </div>
+            ))}
+          </div>
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em', marginTop: 8 }}>Settings</div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line-soft)' }}>
-              <span>Channel</span><span style={{ color: 'var(--fg)' }}>{mode === 'blog' ? 'Email (Resend)' : 'Instagram + X'}</span>
+              <span>Channel</span><span style={{ color: 'var(--fg)' }}>{mode === 'blog' ? 'Web handoff' : 'Instagram handoff'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line-soft)' }}>
               <span>Audience</span><span style={{ color: 'var(--fg)' }}>{mode === 'blog' ? '2,143 subscribers' : '공개'}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line-soft)' }}>
+              <span>Brand</span><span style={{ color: 'var(--fg)' }}>{selectedBrand?.name || 'Workspace'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
               <span>Schedule</span><span style={{ color: 'var(--fg)' }}>오늘 18:00</span>
@@ -656,25 +895,45 @@ export function Studio() {
 export function Queue() {
   const router = useRouter();
   const [tab, setTab] = React.useState('all');
+  const [brandFilter, setBrandFilter] = React.useState('all');
   const ledger = useContentLedger();
+  const brands = ledger.brands || [];
   const queue = ledger.source === "supabase"
     ? (Array.isArray(ledger.queue) ? ledger.queue : [])
     : (ledger.queue?.length ? ledger.queue : FALLBACK_CONTENT_QUEUE);
-  const statusTone = { Draft: 'warning', Scheduled: 'info', Review: 'moon', Idea: 'neutral', Outline: 'neutral', Published: 'success' };
-  const draftCount = queue.filter(c => c.status === 'Draft').length;
-  const scheduledCount = queue.filter(c => c.status === 'Scheduled').length;
+  const statusTone = {
+    Inbox: 'neutral',
+    Drafting: 'warning',
+    Ready: 'moon',
+    'Handed off': 'info',
+    Watch: 'success',
+    Archived: 'neutral',
+    Draft: 'warning',
+    Scheduled: 'info',
+    Review: 'moon',
+    Idea: 'neutral',
+    Outline: 'neutral',
+    Published: 'success',
+  };
   const tabs = [
     { key: 'all', label: 'All', count: queue.length },
-    { key: 'draft', label: 'Draft', count: draftCount },
-    { key: 'scheduled', label: 'Scheduled', count: scheduledCount },
+    { key: 'idea', label: 'Inbox', count: queue.filter(c => statusKeyOf(c) === 'idea').length },
+    { key: 'draft', label: 'Drafting', count: queue.filter(c => statusKeyOf(c) === 'draft').length },
+    { key: 'review', label: 'Ready', count: queue.filter(c => statusKeyOf(c) === 'review').length },
+    { key: 'scheduled', label: 'Handed off', count: queue.filter(c => statusKeyOf(c) === 'scheduled').length },
+    { key: 'published', label: 'Watch', count: queue.filter(c => statusKeyOf(c) === 'published').length },
   ];
-  const visibleQueue = tab === 'all'
+  const filteredByBrand = brandFilter === 'all'
     ? queue
-    : queue.filter(c => c.status.toLowerCase() === tab);
+    : queue.filter(c => c.brandId === brandFilter || c.brandKey === brandFilter);
+  const visibleQueue = tab === 'all'
+    ? filteredByBrand
+    : filteredByBrand.filter(c => statusKeyOf(c) === tab);
   const activeLabel = tabs.find(t => t.key === tab)?.label || 'All';
   const openStudio = React.useCallback((id) => {
-    router.push(`/dashboard/content/studio${id ? `?item=${encodeURIComponent(id)}` : '?new=draft'}`);
-  }, [router]);
+    const brandParam = brandFilter !== 'all' ? `&brand=${encodeURIComponent(brandFilter)}` : '';
+    router.push(`/dashboard/content/studio${id ? `?item=${encodeURIComponent(id)}` : '?new=draft'}${id ? '' : brandParam}`);
+  }, [brandFilter, router]);
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -692,9 +951,44 @@ export function Queue() {
         <Button variant="primary" size="sm" icon="plus" onClick={() => openStudio()}>Draft</Button>
       </div>
 
+      {brands.length > 0 && (
+        <div className="hub-toolbar" style={{ display: 'flex', gap: 6, alignItems: 'center', overflowX: 'auto', paddingBottom: 2 }}>
+          {[{ id: 'all', key: 'all', name: 'All brands', glyph: '◐', tone: 'moon' }, ...brands].map((brand) => {
+            const active = brandFilter === brand.id || brandFilter === brand.key;
+            const count = brand.id === 'all'
+              ? queue.length
+              : queue.filter((item) => item.brandId === brand.id || item.brandKey === brand.key).length;
+            return (
+              <button
+                key={brand.id}
+                onClick={() => setBrandFilter(brand.id)}
+                style={{
+                  height: 32,
+                  padding: '0 10px',
+                  borderRadius: 'var(--r-sm)',
+                  border: active ? '1px solid var(--line-strong)' : '1px solid var(--line-soft)',
+                  background: active ? 'var(--surface-3)' : 'var(--surface)',
+                  color: active ? 'var(--fg)' : 'var(--fg-muted)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  fontSize: 12,
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                <span className="mono" style={{ color: active ? 'var(--moon-200)' : 'var(--fg-faint)' }}>{brand.glyph}</span>
+                {brand.name}
+                <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <Card pad={false} className="hub-table-card">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 110px 110px 130px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          <span>Title</span><span>Kind</span><span>Channel</span><span>Status</span><span>When</span><span style={{ textAlign: 'right' }}>Author</span>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 110px 100px 120px 130px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+          <span>Title</span><span>Kind</span><span>Channel</span><span>Brand</span><span>Lane</span><span>When</span><span style={{ textAlign: 'right' }}>Author</span>
         </div>
         {visibleQueue.length === 0 && (
           <EmptyState
@@ -708,7 +1002,7 @@ export function Queue() {
         )}
         {visibleQueue.map((c, i) => (
           <div key={c.id} style={{
-            display: 'grid', gridTemplateColumns: '1fr 110px 110px 110px 130px 80px',
+            display: 'grid', gridTemplateColumns: '1fr 110px 110px 100px 120px 130px 80px',
             padding: '12px 16px', alignItems: 'center',
             borderBottom: i < visibleQueue.length - 1 ? '1px solid var(--line-soft)' : 'none',
             cursor: 'pointer',
@@ -731,6 +1025,9 @@ export function Queue() {
             </div>
             <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{c.kind}</span>
             <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{c.channel}</span>
+            <span>
+              <Badge tone={c.brandTone || 'neutral'} variant="outline" size="xs">{c.brandGlyph || '•'} {c.brandName || '—'}</Badge>
+            </span>
             <span><Badge tone={statusTone[c.status] || 'neutral'} size="xs">{c.status}</Badge></span>
             <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{c.when}</span>
             <span style={{ textAlign: 'right', fontSize: 12, color: 'var(--fg-muted)' }}>{c.author}</span>

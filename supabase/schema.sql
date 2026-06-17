@@ -123,23 +123,42 @@ create table content_items (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   owner_id uuid references profiles(id) on delete set null,
+  brand_id uuid references brands(id) on delete set null,
   title text not null,
   source_idea text,
-  source_type text not null default 'idea' check (source_type in ('idea', 'brief', 'meeting', 'research', 'repurpose')),
+  idea_source text,
+  source_type text not null default 'idea' check (source_type in ('idea', 'brief', 'meeting', 'research', 'repurpose', 'manual', 'studio', 'import')),
   status text not null default 'draft' check (status in ('idea', 'draft', 'review', 'scheduled', 'published', 'archived')),
+  summary text,
   next_action text,
-  created_at timestamptz not null default now()
+  slug text,
+  scheduled_at timestamptz,
+  published_at timestamptz,
+  visibility text not null default 'private',
+  meta jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table content_variants (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   content_id uuid not null references content_items(id) on delete cascade,
-  variant_type text not null check (variant_type in ('card_news', 'blog', 'newsletter', 'social_post', 'landing_copy')),
+  variant_type text not null check (variant_type in ('card_news', 'blog', 'blog_insight', 'newsletter', 'social_post', 'x_thread', 'reels_script', 'landing_copy')),
   title text,
   body text not null default '',
+  summary text,
+  excerpt text,
   status text not null default 'draft' check (status in ('draft', 'ready', 'published', 'archived')),
-  created_at timestamptz not null default now()
+  slug text,
+  seo_title text,
+  seo_description text,
+  scheduled_at timestamptz,
+  published_at timestamptz,
+  visibility text not null default 'private',
+  meta jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table content_assets (
@@ -148,8 +167,13 @@ create table content_assets (
   variant_id uuid not null references content_variants(id) on delete cascade,
   asset_type text not null check (asset_type in ('image', 'html', 'zip', 'thumbnail', 'source')),
   storage_path text not null,
+  file_name text,
+  mime_type text,
+  size_bytes bigint,
+  checksum text,
   meta jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table publish_logs (
@@ -158,10 +182,14 @@ create table publish_logs (
   variant_id uuid not null references content_variants(id) on delete cascade,
   channel text not null,
   status text not null default 'queued' check (status in ('queued', 'published', 'failed')),
+  provider text,
+  target_url text,
   external_id text,
+  attempt_count integer not null default 1,
   payload jsonb not null default '{}'::jsonb,
   published_at timestamptz,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 -- ============================================================================

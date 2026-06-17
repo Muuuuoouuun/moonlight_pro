@@ -7,6 +7,39 @@ import {
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
 const BRAND_GLYPHS = ["◐", "◇", "✦", "◆", "●", "□", "△", "◎", "◌", "✧"];
+const CANONICAL_BRAND_ORDER = {
+  sinabro: 10,
+  gore: 20,
+  holyfuncollector: 30,
+  bridgemaker: 40,
+  moonpm: 50,
+  classmoon: 60,
+  studyseagull: 70,
+  politicofficer: 80,
+  "22nomad": 90,
+};
+const CANONICAL_BRAND_TONES = {
+  sinabro: "info",
+  gore: "company",
+  holyfuncollector: "warning",
+  bridgemaker: "moon",
+  moonpm: "warning",
+  classmoon: "info",
+  studyseagull: "danger",
+  politicofficer: "info",
+  "22nomad": "personal",
+};
+const CANONICAL_BRAND_GLYPHS = {
+  sinabro: "✦",
+  gore: "◌",
+  holyfuncollector: "✧",
+  bridgemaker: "◇",
+  moonpm: "◐",
+  classmoon: "□",
+  studyseagull: "△",
+  politicofficer: "◎",
+  "22nomad": "◻",
+};
 
 function clampProgress(value) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
@@ -44,6 +77,22 @@ function normalizeBrandKind(kind) {
   if (["community", "content"].includes(normalized)) return "warning";
 
   return "moon";
+}
+
+function resolveBrandOrder(key, meta, index) {
+  const parsed = Number.parseInt(String(meta?.order ?? ""), 10);
+  if (Number.isFinite(parsed)) return parsed;
+  return CANONICAL_BRAND_ORDER[key] ?? 1000 + index;
+}
+
+function resolveBrandTone(key, kind, meta) {
+  if (typeof meta?.tone === "string" && meta.tone.trim()) return meta.tone.trim();
+  return CANONICAL_BRAND_TONES[key] || normalizeBrandKind(kind);
+}
+
+function resolveBrandGlyph(key, meta, index) {
+  if (typeof meta?.glyph === "string" && meta.glyph.trim()) return meta.glyph.trim();
+  return CANONICAL_BRAND_GLYPHS[key] || BRAND_GLYPHS[index % BRAND_GLYPHS.length];
 }
 
 function formatShortDate(value) {
@@ -117,16 +166,23 @@ function mapBrands(rows, projects, todos) {
       key,
       id: row.id,
       name: row.name,
-      glyph: meta.glyph || BRAND_GLYPHS[index % BRAND_GLYPHS.length],
-      tone: meta.tone || normalizeBrandKind(row.kind),
+      glyph: resolveBrandGlyph(key, meta, index),
+      tone: resolveBrandTone(key, row.kind, meta),
       kind: row.kind || "brand",
       desc: row.description || "운영 브랜드",
+      philosophy: typeof meta.philosophy === "string" ? meta.philosophy : "",
+      direction: typeof meta.direction === "string" ? meta.direction : "",
+      cadence: typeof meta.cadence === "string" ? meta.cadence : "",
       projects: projectCounts.get(key) || 0,
       tasks: todoCounts.get(key) || 0,
       open: todoCounts.get(key) || 0,
       changes: 0,
+      sortOrder: resolveBrandOrder(key, meta, index),
     };
-  });
+  }).sort((a, b) => (
+    a.sortOrder - b.sortOrder ||
+    a.name.localeCompare(b.name, "ko")
+  )).map(({ sortOrder, ...brand }) => brand);
 
   const openTodoCount = todos.filter((todo) => !todo.done).length;
 

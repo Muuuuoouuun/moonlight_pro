@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
 import {
+  buildContentAssetRecord,
   buildContentDraftRecords,
   buildContentDraftUpdateRecords,
+  buildContentHandoffRecord,
   getContentLedger,
 } from "@/lib/repositories/content-ledger";
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
@@ -41,6 +43,86 @@ export async function POST(req) {
     const parsed = await readHubWriteJson(req, { maxBytes: 256 * 1024 });
     if (parsed.error) {
       return parsed.error;
+    }
+
+    const action = typeof parsed.data?.action === "string"
+      ? parsed.data.action.trim().toLowerCase()
+      : "";
+
+    if (action === "handoff" || action === "export") {
+      const handoff = buildContentHandoffRecord(parsed.data);
+
+      if (!handoff.variantId) {
+        return NextResponse.json(
+          {
+            status: "error",
+            error: "variantId is required to record a content handoff.",
+          },
+          { status: 400 },
+        );
+      }
+
+      if (!handoff.workspaceId) {
+        return NextResponse.json(
+          {
+            status: "preview",
+            message: "Workspace ID is not configured yet. Content handoff is preview only.",
+            contentId: handoff.contentId,
+            variantId: handoff.variantId,
+            logId: handoff.logId,
+            event: handoff.event,
+          },
+          { status: 202 },
+        );
+      }
+
+      const logPersistence = await insertSupabaseRecord("publish_logs", handoff.logRecord);
+      const shouldRecordAsset = action === "export" || parsed.data?.recordAsset === true;
+      const asset = shouldRecordAsset
+        ? buildContentAssetRecord({
+            ...parsed.data,
+            event: parsed.data.event || handoff.event,
+          })
+        : null;
+      const assetPersistence = logPersistence.persisted && asset
+        ? await insertSupabaseRecord("content_assets", asset.assetRecord)
+        : asset
+        ? { persisted: false, reason: "publish-log-not-persisted" }
+        : { persisted: true, reason: "not-requested" };
+      const persisted = logPersistence.persisted && assetPersistence.persisted;
+
+      if (!persisted) {
+        return NextResponse.json(
+          {
+            status: "preview",
+            message: "Content handoff payload is valid, but persistence is not configured or failed.",
+            contentId: handoff.contentId,
+            variantId: handoff.variantId,
+            logId: handoff.logId,
+            assetId: asset?.assetId || null,
+            event: handoff.event,
+            persistence: {
+              log: logPersistence,
+              asset: assetPersistence,
+            },
+          },
+          { status: 202 },
+        );
+      }
+
+      return NextResponse.json({
+        status: "logged",
+        message: "Content handoff recorded in Supabase.",
+        contentId: handoff.contentId,
+        variantId: handoff.variantId,
+        logId: handoff.logId,
+        assetId: asset?.assetId || null,
+        event: handoff.event,
+        persistence: {
+          log: logPersistence,
+          asset: assetPersistence,
+        },
+      });
     }
 
     const draft = buildContentDraftRecords(parsed.data);

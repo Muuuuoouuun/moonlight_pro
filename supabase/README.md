@@ -7,6 +7,8 @@ Com_Moon Hub OS의 현재 로컬 스키마와 시드 데이터를 정리한 안�
 - `schema.sql`: 현재 허브/엔진이 읽고 쓰는 통합 ledger 스키마
 - `seed.sql`: 로컬 또는 스테이징에서 바로 붙여볼 수 있는 기본 데이터
 - `migrations/20260420_0001_supabase_first_foundation.sql`: Supabase-first P0 원장 보강 migration
+- `migrations/20260427_0003_content_os_variant_contract.sql`: Content OS variant/source constraint 보강 migration
+- `migrations/20260427_0004_canonical_brand_directory.sql`: Hub fallback과 live 브랜드 디렉토리 정렬
 - `seed.supabase_first.sql`: foundation migration 이후 넣는 브랜드/프로젝트 seed 보강
 - `policies/supabase_first_rls.sql`: Auth 연결 후 적용할 RLS 정책 초안
 
@@ -23,14 +25,19 @@ Com_Moon Hub OS의 현재 로컬 스키마와 시드 데이터를 정리한 안�
 1. Supabase SQL Editor에서 `schema.sql` 실행
 2. 샘플 데이터가 필요하면 `seed.sql` 실행
 3. `migrations/20260420_0001_supabase_first_foundation.sql` 실행
-4. 샘플 브랜드/프로젝트 문맥이 필요하면 `seed.supabase_first.sql` 실행
-5. 앱 환경 변수에 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `COM_MOON_DEFAULT_WORKSPACE_ID`를 채움
-6. Supabase Auth와 실제 사용자를 연결한 뒤 `policies/supabase_first_rls.sql` 실행
+4. `migrations/20260425_0002_webhook_event_idempotency.sql` 실행
+5. `migrations/20260427_0003_content_os_variant_contract.sql` 실행
+6. `migrations/20260427_0004_canonical_brand_directory.sql` 실행
+7. 샘플 브랜드/프로젝트/콘텐츠 문맥이 필요하면 `seed.supabase_first.sql` 실행
+8. 앱 환경 변수에 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `COM_MOON_DEFAULT_WORKSPACE_ID`를 채움
+9. Supabase Auth와 실제 사용자를 연결한 뒤 `policies/supabase_first_rls.sql` 실행
 
 ## 설계 포인트
 
 - 허브와 엔진이 같은 REST 계약을 바라보도록 테이블 이름을 통일했습니다.
 - `project_updates`, `routine_checks`, `webhook_events`, `error_logs`가 운영 신호의 기본 기록 레이어입니다.
+- Content Studio의 `Schedule`/`Publish`는 외부 발송을 직접 실행하지 않고 `publish_logs`에 handoff/export 이벤트를 기록합니다.
+- 수동 export 스냅샷은 `content_assets`에 `hub://content/...` storage path로 남겨 자동화 전 단계도 추적합니다.
 - `seed.sql`은 허브 UI가 mock-only 상태를 벗어나도록 최소 동작 데이터를 넣는 데 초점을 둡니다.
 - P0 설계 기준은 `운영 원장 + 로그 원장 + 공개 콘텐츠 뷰`입니다.
 - 자세한 설계 기준은 `docs/supabase-first-operating-ledger.md`를 참고합니다.
