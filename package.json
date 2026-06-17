@@ -11,6 +11,7 @@
     "build": "turbo run build",
     "check:contracts": "node ./scripts/check-contracts.mjs",
     "check:connections": "node ./scripts/check-connections.mjs",
+    "check:sheets": "node ./scripts/check-sheets-normalize.mjs",
     "dev": "turbo run dev",
     "dev:hub": "npm --workspace @com-moon/hub run dev",
     "dev:engine": "npm --workspace @com-moon/engine run dev",
