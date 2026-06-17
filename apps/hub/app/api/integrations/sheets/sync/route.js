@@ -17,7 +17,23 @@ function safeEqual(a, b) {
   return aBuffer.length === bBuffer.length && timingSafeEqual(aBuffer, bBuffer);
 }
 
+// Same-origin dashboard requests are trusted (browser sends Origin on POST), so
+// the in-app "Sync now" button works without shipping the write-secret to the
+// client. External/cron callers still authenticate with the write-secret. For a
+// single-operator localhost tool this is an acceptable tradeoff; the Origin check
+// is not a hard control against forged non-browser requests.
+function isSameOrigin(req) {
+  const origin = (req.headers.get("origin") || "").replace(/\/$/, "");
+  if (!origin) return false;
+  const allowed = [process.env.COM_MOON_HUB_URL, process.env.NEXT_PUBLIC_APP_URL]
+    .map((u) => (u || "").trim().replace(/\/$/, ""))
+    .filter(Boolean);
+  try { allowed.push(new URL(req.url).origin); } catch {}
+  return allowed.includes(origin);
+}
+
 function authorize(req) {
+  if (isSameOrigin(req)) return { ok: true };
   const secret = process.env.COM_MOON_HUB_WRITE_SECRET?.trim();
   if (!secret) {
     return { ok: false, status: 503, reason: "write-secret-not-configured" };

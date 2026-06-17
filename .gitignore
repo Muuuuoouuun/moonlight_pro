@@ -20,3 +20,5 @@ Thumbs.db
 !**/.env.*.example
 .gstack/
 .claude/
+# Personal MCP config (local eeoCRM SSE on :3010 — not team-shareable)
+.mcp.json

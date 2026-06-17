@@ -16,6 +16,7 @@ import { Projects } from "./pages/projects";
 import { Studio, Queue, Campaigns } from "./pages/content";
 import { RevenueOverview, Leads, Deals, Cases, Accounts } from "./pages/revenue";
 import { AutomationsIndex, EmailAutomation, Webhooks, Runs, Flows } from "./pages/automations";
+import { SheetsSync } from "./pages/sheets-sync";
 import { AgentsChat, AgentsCouncil, AgentsOrders, AgentsOffice } from "./pages/agents";
 import { Evolution, Settings } from "./pages/evolution-settings";
 
@@ -87,6 +88,7 @@ const PAGE_MAP = {
   'dashboard/automations/email': () => <EmailAutomation />,
   'dashboard/automations/webhooks': () => <Webhooks />,
   'dashboard/automations/runs': () => <Runs />,
+  'dashboard/automations/sheets': () => <SheetsSync />,
   'dashboard/agents/chat': () => <AgentsChat />,
   'dashboard/agents/council': () => <AgentsCouncil />,
   'dashboard/agents/orders': () => <AgentsOrders />,

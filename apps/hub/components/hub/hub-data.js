@@ -40,6 +40,7 @@ export const NAV_TREE = [
       { key: 'flows',    label: 'Flows',    icon: 'zap',     path: 'dashboard/automations/flows' },
       { key: 'email',    label: 'Email',    icon: 'email',   path: 'dashboard/automations/email' },
       { key: 'webhooks', label: 'Webhooks', icon: 'webhook', path: 'dashboard/automations/webhooks' },
+      { key: 'sheets',   label: 'Sheets',   icon: 'leads',   path: 'dashboard/automations/sheets' },
     ],
   },
   {
