@@ -129,6 +129,8 @@ function useContentLedger() {
     pipeline: [],
     attention: [],
     summary: null,
+    ideaQueue: [],
+    cadence: null,
   });
 
   React.useEffect(() => {
@@ -158,6 +160,8 @@ function useContentLedger() {
             pipeline: Array.isArray(data.pipeline) ? data.pipeline : [],
             attention: Array.isArray(data.attention) ? data.attention : [],
             summary: data.summary || null,
+            ideaQueue: Array.isArray(data.ideaQueue) ? data.ideaQueue : [],
+            cadence: data.cadence || null,
           });
         } else {
           setState((s) => ({ ...s, syncState: "mock" }));
@@ -926,9 +930,13 @@ export function Queue() {
   const filteredByBrand = brandFilter === 'all'
     ? queue
     : queue.filter(c => c.brandId === brandFilter || c.brandKey === brandFilter);
-  const visibleQueue = tab === 'all'
+  const cadence = ledger.cadence;
+  const visibleQueueBase = tab === 'all'
     ? filteredByBrand
     : filteredByBrand.filter(c => statusKeyOf(c) === tab);
+  const visibleQueue = tab === 'idea'
+    ? [...visibleQueueBase].sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0))
+    : visibleQueueBase;
   const activeLabel = tabs.find(t => t.key === tab)?.label || 'All';
   const openStudio = React.useCallback((id) => {
     const brandParam = brandFilter !== 'all' ? `&brand=${encodeURIComponent(brandFilter)}` : '';
@@ -950,6 +958,45 @@ export function Queue() {
         <Tabs className="hub-toolbar" tabs={tabs} active={tab} onChange={setTab} ariaLabel="Publishing queue filters" style={{ borderBottom: 'none' }} />
         <Button variant="primary" size="sm" icon="plus" onClick={() => openStudio()}>Draft</Button>
       </div>
+
+      {cadence && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
+          padding: '12px 16px', border: '1px solid var(--line-soft)',
+          borderRadius: 'var(--r-lg)', background: 'var(--surface)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>이번 주 발행</span>
+            <span className="mono" style={{ fontSize: 20, fontWeight: 600, color: 'var(--fg)', letterSpacing: '-0.02em' }}>
+              {cadence.published}<span style={{ color: 'var(--fg-faint)', fontWeight: 400 }}>/{cadence.goal}</span>
+            </span>
+            <Badge tone={cadence.behind ? 'warning' : 'success'} size="xs">
+              {cadence.behind ? `${cadence.remaining}건 남음` : '목표 달성'}
+            </Badge>
+          </div>
+          <div style={{ width: 1, height: 24, background: 'var(--line-soft)' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>아이디어 큐</span>
+            <span className="mono" style={{ fontSize: 15, color: cadence.queueDepth >= 10 ? 'var(--fg)' : 'var(--warning)' }}>{cadence.queueDepth}</span>
+            {cadence.queueDepth < 10 && <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>· 10개 이상 권장</span>}
+          </div>
+          <div style={{ flex: 1 }} />
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 28 }} aria-hidden="true">
+            {(cadence.recentWeeks || []).map((w) => (
+              <div
+                key={w.week}
+                title={`${w.week} · ${w.count}건`}
+                style={{
+                  width: 18,
+                  height: Math.max(3, Math.min(28, (w.count / Math.max(cadence.goal, 1)) * 28)),
+                  borderRadius: 3,
+                  background: w.current ? 'var(--moon-300)' : 'var(--surface-3)',
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {brands.length > 0 && (
         <div className="hub-toolbar" style={{ display: 'flex', gap: 6, alignItems: 'center', overflowX: 'auto', paddingBottom: 2 }}>
@@ -1021,6 +1068,9 @@ export function Queue() {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
               <Iconed name={c.kind === 'Newsletter' ? 'email' : c.kind === 'Blog' ? 'content' : c.kind === 'Reel' ? 'play' : 'send'} size={13} style={{ color: 'var(--fg-faint)' }} />
+              {c.rank != null && (
+                <span className="mono" title="아이디어 랭크" style={{ fontSize: 10.5, color: 'var(--moon-300)', flexShrink: 0 }}>{Math.round(c.rank)}</span>
+              )}
               <span style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.title}</span>
             </div>
             <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{c.kind}</span>

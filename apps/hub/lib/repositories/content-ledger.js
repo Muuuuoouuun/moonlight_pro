@@ -342,6 +342,8 @@ function mapItems(rows, variants, brandById) {
       brandName: brand?.name || "No brand",
       brandTone: brand?.tone || "neutral",
       brandGlyph: brand?.glyph || "•",
+      rankScore: Number.isFinite(row.rank_score) ? Number(row.rank_score) : 0,
+      cadenceWeek: row.cadence_week || null,
       createdAt: row.created_at,
       updatedAt: row.updated_at || row.created_at,
     };
@@ -517,7 +519,94 @@ function buildQueue(items) {
     brandName: item.brandName,
     brandTone: item.brandTone,
     brandGlyph: item.brandGlyph,
+    rank: item.status === "idea" ? effectiveIdeaRank(item) : null,
   }));
+}
+
+const ISO_DAY_MS = 86400000;
+
+// ISO-8601 week string, e.g. "2026-W25". Buckets publishing cadence by week.
+function isoWeek(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const target = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dayNr = (target.getUTCDay() + 6) % 7; // Mon=0 … Sun=6
+  target.setUTCDate(target.getUTCDate() - dayNr + 3); // Thursday of this week
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const firstDayNr = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNr + 3);
+  const week = 1 + Math.round((target.getTime() - firstThursday.getTime()) / (7 * ISO_DAY_MS));
+  return `${target.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+// Fallback idea-queue ranker (Sales OS v1.1). Uses the stored rank_score when an
+// explicit ranker has set it; otherwise scores on repo-internal signals so the
+// queue is useful from day one (ClassIn sales brand first, more-developed ideas
+// higher). See docs/sales-os-direction.md §5 — refined with real engagement data.
+function effectiveIdeaRank(item) {
+  if (Number.isFinite(item.rankScore) && item.rankScore > 0) return item.rankScore;
+  let score = 50;
+  if (item.brandKey === "classmoon") score += 30; // ClassIn sales brand priority
+  if (item.summary && item.summary.length > 24) score += 12; // developed angle
+  if (item.nextAction) score += 6;
+  return score;
+}
+
+function buildIdeaQueue(items, limit = 12) {
+  return items
+    .filter((item) => item.status === "idea")
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      summary: item.summary,
+      kind: item.kind,
+      channel: item.channel,
+      brandKey: item.brandKey,
+      brandName: item.brandName,
+      brandTone: item.brandTone,
+      brandGlyph: item.brandGlyph,
+      rank: effectiveIdeaRank(item),
+      ranked: Number.isFinite(item.rankScore) && item.rankScore > 0,
+      when: item.when,
+    }))
+    .sort((a, b) => b.rank - a.rank || a.title.localeCompare(b.title, "ko"))
+    .slice(0, limit);
+}
+
+const CADENCE_WEEKS = 4;
+
+// Publishing cadence (Sales OS v1.1): published items per ISO week vs a weekly
+// goal, so the operator sees "n/goal, behind/ahead". Counts come from
+// published_at (cadence_week backfills it when set explicitly).
+function buildCadence(items, goal = 5) {
+  const now = new Date();
+  const currentWeek = isoWeek(now);
+  const weekOf = (item) => item.cadenceWeek || (item.publishedAt ? isoWeek(item.publishedAt) : null);
+
+  const counts = new Map();
+  items
+    .filter((item) => item.status === "published")
+    .forEach((item) => {
+      const week = weekOf(item);
+      if (week) counts.set(week, (counts.get(week) || 0) + 1);
+    });
+
+  const recentWeeks = [];
+  for (let i = CADENCE_WEEKS - 1; i >= 0; i -= 1) {
+    const week = isoWeek(new Date(now.getTime() - i * 7 * ISO_DAY_MS));
+    recentWeeks.push({ week, count: counts.get(week) || 0, current: week === currentWeek });
+  }
+
+  const thisWeek = counts.get(currentWeek) || 0;
+  return {
+    week: currentWeek,
+    goal,
+    published: thisWeek,
+    remaining: Math.max(0, goal - thisWeek),
+    behind: thisWeek < goal,
+    queueDepth: items.filter((item) => item.status === "idea").length,
+    recentWeeks,
+  };
 }
 
 export function buildContentDraftRecords(payload = {}) {
@@ -727,6 +816,8 @@ export async function getContentLedger() {
       pipeline: buildPipeline([]),
       attention: [],
       summary: buildSummary([], []),
+      ideaQueue: [],
+      cadence: buildCadence([]),
     };
   }
 
@@ -776,6 +867,8 @@ export async function getContentLedger() {
       pipeline: buildPipeline([]),
       attention: [],
       summary: buildSummary([], []),
+      ideaQueue: [],
+      cadence: buildCadence([]),
     };
   }
 
@@ -800,5 +893,7 @@ export async function getContentLedger() {
     pipeline: buildPipeline(items),
     attention: buildAttention(items, publishLogs),
     summary: buildSummary(items, publishLogs),
+    ideaQueue: buildIdeaQueue(items),
+    cadence: buildCadence(items),
   };
 }
