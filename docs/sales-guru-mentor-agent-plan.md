@@ -46,8 +46,8 @@ Guru는 이 공백을 메운다.
 | role | `영업 멘토 · 딜 코칭` |
 | tone | `moon` (DESIGN 토큰 — 신규 색 도입 금지) |
 | 성격 | 직설적·구체적·방향 제시형. 칭찬보다 "다음 한 수"에 집중 |
-| 지식 베이스 | `docs/sales-guru-knowledge-base.md` — 12인 세일즈 구루 플레이북(운영자 제공) |
-| 출력 형식 | 진단 → 리스크 → 다음 액션 (brief route의 한국어 3단 구조 재사용) |
+| 지식 베이스 | 3종(운영자 제공). ① `docs/sales-guru-knowledge-base.md` 12인 세일즈 구루 플레이북 ② `docs/sales-decision-styles.md` 구매자 의사결정 7스타일 ③ `docs/marketing-branding-gurus.md` 마케팅/브랜딩 3인(고딘·오길비·밀러) |
+| 출력 형식 | (선택) 구매자 스타일 진단 → 진단 → 리스크 → 다음 액션 (brief route의 한국어 3단 구조 확장) |
 | 모델 | Engine 기본 모델 (`gemini-3-flash-preview`), Chat 표기는 페르소나명만 노출 |
 
 **멘토 보이스(Copy tone, DESIGN §10 준수)**
@@ -72,6 +72,16 @@ Guru는 이 공백을 메운다.
 | `deal-review` | 단일 deal + account activity/notes | 막힌 지점 진단 + 다음 액션 |
 | `proposal-critique` | 사용자가 붙인 초안 텍스트 | 구조/설득력 피드백 3점 |
 | `weekly-retro` | 최근 7일 deal 이동 + won/lost | 패턴 + 다음 주 1개 실험 |
+
+### 5.1 구매자 의사결정 스타일 적응 (cross-cutting)
+
+`docs/sales-decision-styles.md`의 7스타일(논리형·관계형·권위형·직관형·안정형·체면형·집단합의형)은
+모든 모드에 걸치는 **번역 레이어**다. 핵심 원칙: *"사람을 바꾸려 하지 말고, 메시지를 그 사람의 언어로 번역하라."*
+
+- **deal-review**에서 Guru는 account의 activity/notes(대화 신호)를 보고 **추정 스타일**을 먼저 제시하고,
+  같은 다음 액션을 그 스타일의 언어로 변환한다 (예: 권위형 → "한 줄 결론+성과 수치", 안정형 → "레퍼런스+단계적 도입").
+- 신호가 부족하면 단정하지 않고 **"스타일 미확인 — 다음 미팅에서 확인할 질문"** 으로 돌려준다.
+- 스타일이 account 노트에 명시돼 있으면 그대로 인용, 없으면 추정임을 표기(사실성 가드).
 
 ## 6. 데이터 / 연동 매핑
 
@@ -122,9 +132,10 @@ Guru는 **새 데이터 소스를 만들지 않고** 기존 원장을 읽고 쓴
 ## 8. 멘토 프롬프트 설계
 
 `brief/route.ts`의 `buildPrompt` 패턴을 확장. 한국어 3단 출력 골격을 유지한다.
-멘토의 **판단 프레임**은 지식 베이스(`docs/sales-guru-knowledge-base.md`)의 12인 기법에서 가져오며,
-그 "에이전트 매핑" 표가 모드별로 어떤 구루 기법을 1차 근거로 쓸지 정의한다.
-단, 사실(딜 상태·금액·접촉 이력)은 항상 원장에서 인용하고 플레이북으로 단정하지 않는다.
+멘토의 **판단 프레임**은 3종 지식 베이스에서 가져오며(§14 매핑표가 모드별 1차 근거를 정의),
+**사실**(딜 상태·금액·접촉 이력)은 항상 원장에서만 인용하고 지식 베이스로 단정하지 않는다.
+지식 베이스는 토큰이 크므로 전체를 매 호출에 넣지 않고, 모드별로 필요한 섹션 발췌만
+systemInstruction에 주입한다(예: deal-review → Keenan 4층 + 의사결정 스타일표).
 
 ```
 systemInstruction:
@@ -188,13 +199,35 @@ P0는 데이터 변경 없이 프론트만으로 가치 검증 가능 → 가장
 
 ## 13. 구현 체크리스트 (파일 기준)
 
-- [x] `docs/sales-guru-knowledge-base.md` — 12인 플레이북 지식 베이스 (운영자 제공 PDF 정리)
+- [x] `docs/sales-guru-knowledge-base.md` — 12인 세일즈 구루 플레이북 (운영자 제공 원본)
+- [x] `docs/sales-decision-styles.md` — 구매자 의사결정 7스타일 (운영자 제공)
+- [x] `docs/marketing-branding-gurus.md` — 마케팅/브랜딩 3인 (운영자 제공)
 - [ ] `apps/hub/components/hub/hub-data.js` — `COUNCIL`에 `guru` 추가
 - [ ] `apps/hub/components/hub/pages/agents.jsx` — `OFFICE_AGENTS`에 guru, Chat 페르소나 분기
 - [ ] `apps/engine/app/api/ai/sales-mentor/route.ts` — 신규 (brief route 템플릿)
 - [ ] `apps/hub/app/api/hub/sales-mentor/route.ts` — Engine proxy (+ shared secret)
 - [ ] `apps/hub/components/hub/pages/revenue.jsx` — Overview "Guru 코칭" 패널, Deals/Accounts 액션
 - [ ] (P3) Agents Orders에 `weekly-retro` 스케줄 오더 등록
+
+## 14. 지식 베이스 → 모드 매핑
+
+> 각 모드가 3종 지식 베이스에서 어떤 프레임을 1차 근거로 인용하는지 정의한다.
+> systemInstruction 발췌 주입과 프롬프트 설계의 기준표. Guru는 코칭 시
+> "어느 구루/스타일의 어떤 프레임"인지 1줄로 출처를 밝혀 신뢰를 만든다
+> (예: *"Keenan 4층 기준, 지금 Layer 3(매출 영향)이 비어 있습니다"*).
+
+| Guru 모드 | 세일즈 구루 플레이북 | 의사결정 스타일 | 마케팅/브랜딩 |
+| --- | --- | --- | --- |
+| `pipeline-triage` | Cardone 10X Contact·정체, Ross MEDDIC, Tracy 시간 우선순위 | 스타일별 정체 원인 추정 | — |
+| `deal-review` | Keenan 4층 GAP, Voss 협상, Belfort 확신 온도, Ziglar 5장애물 | **핵심** — 추정 스타일 + 언어 번역 | — |
+| `proposal-critique` | Rackham SPIN·Benefit, Keenan Change of State | 타깃 스타일에 맞춘 톤 | **핵심** — Miller SB7(고객=영웅), Ogilvy 카피, Godin SVM/포지셔닝 |
+| `weekly-retro` | Girard 파일·팔로업, Lemkin churn·expansion, Hill 목표 | 스타일별 win/lost 패턴 | Godin 부족/허락(반복 고객) |
+
+**적용 규칙**
+- 지식 베이스는 **판단 프레임**으로만 쓰고, 사실은 항상 deals/accounts 원장에서 인용.
+- 마케팅 3인은 주로 메시지/제안/콘텐츠 코칭(`proposal-critique`)에서 발동 —
+  영업 클로징 모드에서는 세일즈 12인이 우선, 마케팅은 보조.
+- 의사결정 스타일은 `deal-review`의 첫 단계(스타일 진단)로 항상 시도, 신호 부족 시 미확인 처리.
 
 ---
 
