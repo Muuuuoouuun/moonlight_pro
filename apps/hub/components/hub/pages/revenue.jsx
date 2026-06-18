@@ -134,6 +134,7 @@ function SyncBadge({ state }) {
 
 export function RevenueOverview() {
   const { ledger, syncState } = useRevenueLedger();
+  const [period, setPeriod] = React.useState('MTD');
   const LEADS = ledger.leads;
   const DEALS = ledger.deals;
   const DEAL_STAGES = ledger.stages;
@@ -182,7 +183,7 @@ export function RevenueOverview() {
         <div style={{ flex: 1 }} />
         <div className="hub-page-actions" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
           {['MTD','QTD','YTD'].map(p => (
-            <button key={p} style={{ padding: '4px 10px', fontSize: 11.5, borderRadius: 4, color: p === 'MTD' ? 'var(--fg)' : 'var(--fg-faint)', background: p === 'MTD' ? 'var(--surface-3)' : 'transparent' }}>{p}</button>
+            <button key={p} onClick={() => setPeriod(p)} style={{ padding: '4px 10px', fontSize: 11.5, borderRadius: 4, color: p === period ? 'var(--fg)' : 'var(--fg-faint)', background: p === period ? 'var(--surface-3)' : 'transparent' }}>{p}</button>
           ))}
         </div>
       </div>
@@ -311,7 +312,8 @@ const LEADS_GRID = '26px 1fr 112px 112px 124px 100px 90px 92px';
 
 export function Leads() {
   const { ledger, syncState } = useRevenueLedger();
-  const LEADS = ledger.leads;
+  const [localLeads, setLocalLeads] = React.useState([]);
+  const LEADS = [...localLeads, ...ledger.leads];
   const [filter, setFilter] = React.useState('all');
   const [search, setSearch] = React.useState('');
   const term = search.trim().toLowerCase();
@@ -320,6 +322,18 @@ export function Leads() {
     (!term || l.name.toLowerCase().includes(term) || l.source.toLowerCase().includes(term) || l.stage.toLowerCase().includes(term))
   );
   const stageTone = { New: 'info', Contact: 'moon', Qualified: 'success', Lost: 'danger' };
+  const createLead = () => {
+    setLocalLeads(prev => [{
+      id: `local-lead-${Date.now()}`,
+      name: '새 리드',
+      type: filter === 'personal' || filter === 'company' ? filter : 'company',
+      source: 'Manual',
+      stage: 'New',
+      value: '₩0',
+      last: '방금',
+      owner: 'Me',
+    }, ...prev]);
+  };
 
   const cardFileRef = React.useRef(null);
   const [cardState, setCardState] = React.useState(null); // { phase, status, fields, error }
@@ -380,7 +394,7 @@ export function Leads() {
         <Button variant="secondary" size="sm" icon="plus" onClick={() => cardFileRef.current?.click()}>명함</Button>
         <input ref={cardFileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onCardFile} />
         <div style={{ width: 6 }} />
-        <Button variant="primary" size="sm" icon="plus">Lead</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createLead}>Lead</Button>
       </div>
 
       {cardState && (() => {
@@ -480,6 +494,18 @@ export function Deals() {
   }, {});
   const grandTotal = deals.filter(d => filter === 'all' || d.type === filter).reduce((a, b) => a + b.value, 0);
   const move = (id, to) => setDeals(ds => ds.map(d => d.id === id ? { ...d, stage: to } : d));
+  const createDeal = () => {
+    setDeals(prev => [{
+      id: `LOCAL-${Date.now().toString().slice(-4)}`,
+      name: '새 딜',
+      type: filter === 'personal' || filter === 'company' ? filter : 'company',
+      stage: DEAL_STAGES[0]?.key || 'lead',
+      value: 0,
+      owner: 'Me',
+      close: '미정',
+      age: 0,
+    }, ...prev]);
+  };
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%' }}>
@@ -501,7 +527,7 @@ export function Deals() {
             }}>{t.l}</button>
           ))}
         </div>
-        <Button variant="primary" size="sm" icon="plus">Deal</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createDeal}>Deal</Button>
       </div>
 
       <div className="hub-scroll-x" style={{ display: 'flex', gap: 'var(--gap)', overflowX: 'auto', flex: 1, paddingBottom: 4 }}>
@@ -572,11 +598,25 @@ const CASES_GRID = '80px 1fr 160px 112px 100px 100px 110px 90px';
 
 export function Cases() {
   const { ledger, syncState } = useRevenueLedger();
-  const cases = ledger.source === 'supabase'
+  const [localCases, setLocalCases] = React.useState([]);
+  const ledgerCases = ledger.source === 'supabase'
     ? (Array.isArray(ledger.cases) ? ledger.cases : [])
     : (Array.isArray(ledger.cases) ? ledger.cases : FALLBACK_CASES);
+  const cases = [...localCases, ...ledgerCases];
   const sTone = { Open: 'warning', Waiting: 'info', Resolved: 'success' };
   const pTone = { high: 'danger', med: 'warning', low: 'neutral' };
+  const createCase = () => {
+    setLocalCases(prev => [{
+      id: `CASE-${Date.now().toString().slice(-4)}`,
+      title: '새 운영 케이스',
+      account: '미지정',
+      type: 'company',
+      priority: 'med',
+      status: 'Open',
+      opened: '방금',
+      owner: 'Me',
+    }, ...prev]);
+  };
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
@@ -589,7 +629,7 @@ export function Cases() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus">Case</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createCase}>Case</Button>
       </div>
       <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
@@ -969,9 +1009,11 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote })
 
 export function Accounts() {
   const { ledger, syncState } = useRevenueLedger();
-  const ACCOUNTS = ledger.source === 'supabase'
+  const [localAccounts, setLocalAccounts] = React.useState([]);
+  const ledgerAccounts = ledger.source === 'supabase'
     ? (Array.isArray(ledger.accounts) ? ledger.accounts : [])
     : (Array.isArray(ledger.accounts) ? ledger.accounts : FALLBACK_ACCOUNTS);
+  const ACCOUNTS = [...localAccounts, ...ledgerAccounts];
   const [view, setView] = React.useState('cards'); // cards | list | detail
   const [search, setSearch] = React.useState('');
   const [filter, setFilter] = React.useState('all');
@@ -1049,6 +1091,21 @@ export function Accounts() {
     setSelected(name);
     setView('detail');
   };
+  const createAccount = () => {
+    const name = '새 계정';
+    setLocalAccounts(prev => [{
+      name,
+      type: filter === 'personal' || filter === 'company' ? filter : 'company',
+      health: 'ok',
+      value: 0,
+      deals: 0,
+      last: '방금',
+      owner: 'Me',
+      lastAt: '방금',
+    }, ...prev]);
+    setSelected(name);
+    setView('detail');
+  };
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%', minHeight: 0 }}>
@@ -1094,7 +1151,7 @@ export function Accounts() {
         </div>
 
         <Input className="hub-toolbar" placeholder="계정 검색…" icon="search" value={search} onChange={setSearch} />
-        <Button variant="primary" size="sm" icon="plus">Account</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>
       </div>
 
       {/* Content by view */}
@@ -1134,7 +1191,7 @@ export function Accounts() {
                 icon="accounts"
                 title="계정이 없습니다"
                 description={syncState === 'live' ? 'Supabase customer_accounts 원장에 표시할 계정이 없습니다.' : '필터나 검색어를 조정하면 계정을 다시 찾을 수 있습니다.'}
-                action={<Button variant="primary" size="sm" icon="plus">Account</Button>}
+                action={<Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>}
               />
             </Card>
           )}

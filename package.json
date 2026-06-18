@@ -17,6 +17,9 @@
     "dev": "turbo run dev",
     "dev:hub": "npm --workspace @com-moon/hub run dev",
     "dev:engine": "npm --workspace @com-moon/engine run dev",
+    "inventory:project-connections": "node ./scripts/inventory-project-connections.mjs",
+    "openclaw:relay": "node ./scripts/openclaw-local-relay.mjs",
+    "test": "node --test scripts/*.test.mjs apps/hub/lib/*.test.mjs",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck"
   },

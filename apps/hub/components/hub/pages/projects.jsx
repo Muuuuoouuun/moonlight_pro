@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState } from "../hub-primitives";
 import {
@@ -24,13 +25,53 @@ const EMPTY_ALL_BRAND = {
   changes: 0,
 };
 
+function DetailSection({ title, count = 0, empty, children }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 8, display: 'flex', alignItems: 'center' }}>
+        <span style={{ flex: 1 }}>{title}</span>
+        <span className="mono" style={{ color: 'var(--fg-faint)' }}>{count}</span>
+      </div>
+      {count > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{children}</div>
+      ) : (
+        <div style={{ padding: '10px 11px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg-faint)', fontSize: 11.5 }}>
+          {empty}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ActivityRow({ title, body, meta, badge, tone = 'neutral' }) {
+  return (
+    <div style={{ padding: '9px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+        {badge && <Badge tone={tone} size="xs">{badge}</Badge>}
+        <div style={{ flex: 1, minWidth: 0, fontSize: 12.2, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+        {meta && <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{meta}</span>}
+      </div>
+      {body && (
+        <div style={{ marginTop: 5, color: 'var(--fg-muted)', fontSize: 11.5, lineHeight: 1.45 }}>
+          {body}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Projects() {
+  const searchParams = useSearchParams();
   const [brand, setBrand] = React.useState('all');
   const [view, setView] = React.useState('tree');
   const [ledger, setLedger] = React.useState({
     source: 'mock',
     brands: FALLBACK_BRANDS,
     projects: FALLBACK_PROJECTS,
+    updates: [],
+    decisions: [],
+    notes: [],
+    checks: [],
     columns: FALLBACK_COLUMNS,
   });
   const [todos, setTodos] = React.useState(FALLBACK_TODOS);
@@ -42,6 +83,7 @@ export function Projects() {
   const [sidebarHidden, setSidebarHidden] = React.useState(false);
   const [syncState, setSyncState] = React.useState('mock');
   const brandMenuRef = React.useRef(null);
+  const createdFromQueryRef = React.useRef(false);
   const [orderPending, setOrderPending] = React.useState(false);
   const [orderResult, setOrderResult] = React.useState(null); // { tone: 'ok'|'err', label }
 
@@ -112,6 +154,10 @@ export function Projects() {
             source: data.source,
             brands: data.brands?.length ? data.brands : [EMPTY_ALL_BRAND],
             projects: liveProjects,
+            updates: Array.isArray(data.updates) ? data.updates : [],
+            decisions: Array.isArray(data.decisions) ? data.decisions : [],
+            notes: Array.isArray(data.notes) ? data.notes : [],
+            checks: Array.isArray(data.checks) ? data.checks : [],
             columns: liveColumns,
           });
           setTodos(Array.isArray(data.todos) ? data.todos : []);
@@ -139,6 +185,48 @@ export function Projects() {
   const toggleTodo = (id) => setTodos(ts => ts.map(t => t.id === id ? { ...t, done: !t.done } : t));
   const toggleExpand = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  const createProject = React.useCallback((status = 'In progress') => {
+    const id = `local-project-${Date.now()}`;
+    const projectBrand = brand === 'all' ? (brands.find(b => b.key !== 'all')?.key || 'moonpm') : brand;
+    const project = {
+      id,
+      brand: projectBrand,
+      name: '새 프로젝트',
+      status,
+      progress: 0,
+      due: '이번주',
+      owner: 'Me',
+      tag: null,
+      tasks: 0,
+      done: 0,
+    };
+    setLedger(prev => ({ ...prev, projects: [project, ...(prev.projects || [])] }));
+    setExpanded(prev => new Set([...prev, id]));
+    setOpenDetail(id);
+    setView('tree');
+  }, [brand, brands]);
+
+  const createTodo = React.useCallback((projectId = openDetail) => {
+    const project = allProjects.find(p => p.id === projectId) || projects[0] || allProjects[0];
+    const todoBrand = project?.brand || (brand === 'all' ? 'moonpm' : brand);
+    const todoProject = project?.id || 'inbox';
+    const id = `local-todo-${Date.now()}`;
+    setTodos(prev => [{
+      id,
+      brand: todoBrand,
+      project: todoProject,
+      title: '새 할 일',
+      due: '오늘',
+      done: false,
+      priority: 'med',
+      assignee: 'Me',
+    }, ...prev]);
+    if (project?.id) {
+      setExpanded(prev => new Set([...prev, project.id]));
+      setOpenDetail(project.id);
+    }
+  }, [allProjects, brand, openDetail, projects]);
+
   const moveCard = (cardId, toCol) => {
     setCols(cs => {
       let card;
@@ -148,14 +236,42 @@ export function Projects() {
     });
   };
 
+  const createBoardCard = React.useCallback((colKey) => {
+    const id = `local-card-${Date.now()}`;
+    setCols(prev => prev.map(col => (
+      col.key === colKey
+        ? {
+          ...col,
+          cards: [{
+            id,
+            title: '새 카드',
+            tag: null,
+            priority: 'med',
+            project: currentBrand?.name || 'Moonlight',
+            due: 'Today',
+          }, ...col.cards],
+        }
+        : col
+    )));
+    setView('board');
+  }, [currentBrand]);
+
   const statusTone = { 'In progress': 'info', Review: 'warning', Planning: 'moon', Backlog: 'neutral', Blocked: 'danger', Done: 'success' };
   const prioTone = { critical: 'danger', high: 'danger', med: 'warning', medium: 'warning', low: 'neutral' };
+  const updateTone = { reported: 'neutral', active: 'info', blocked: 'danger', done: 'success' };
+  const checkTone = { pending: 'neutral', done: 'success', skipped: 'warning', blocked: 'danger' };
 
   React.useEffect(() => {
     const close = (e) => { if (brandMenuRef.current && !brandMenuRef.current.contains(e.target)) setBrandMenuOpen(false); };
     if (brandMenuOpen) document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, [brandMenuOpen]);
+
+  React.useEffect(() => {
+    if (searchParams.get('new') !== 'project' || createdFromQueryRef.current) return;
+    createProject();
+    createdFromQueryRef.current = true;
+  }, [createProject, searchParams]);
 
   return (
     <div className="hub-workspace-shell" style={{ display: 'grid', gridTemplateColumns: sidebarHidden ? '1fr' : '240px 1fr', height: '100%', overflow: 'hidden' }}>
@@ -351,7 +467,7 @@ export function Projects() {
               }}>{t.l}</button>
             ))}
           </div>
-          <Button variant="primary" size="sm" icon="plus">{view === 'todos' ? 'To-do' : 'Project'}</Button>
+          <Button variant="primary" size="sm" icon="plus" onClick={() => view === 'todos' ? createTodo() : createProject()}>{view === 'todos' ? 'To-do' : 'Project'}</Button>
         </div>
 
         {view === 'tree' && (
@@ -364,7 +480,7 @@ export function Projects() {
                       icon="projects"
                       title="프로젝트 원장이 비어 있습니다"
                       description="Supabase 연결은 live 상태입니다. 첫 프로젝트를 만들거나 외부 project webhook을 보내면 이 목록에 바로 표시됩니다."
-                      action={<Button variant="primary" size="sm" icon="plus">Project</Button>}
+                      action={<Button variant="primary" size="sm" icon="plus" onClick={() => createProject()}>Project</Button>}
                     />
                   </Card>
                 )}
@@ -483,7 +599,7 @@ export function Projects() {
                                       <Badge tone={t.done ? 'success' : 'neutral'} size="xs">{t.done ? '완료' : '열림'}</Badge>
                                     </div>
                                   ))}
-                                  <button style={{
+                                  <button onClick={() => createTodo(p.id)} style={{
                                     width: '100%', padding: '8px 14px 10px 66px', textAlign: 'left',
                                     fontSize: 11.5, color: 'var(--fg-faint)',
                                     borderTop: pTodos.length ? '1px solid var(--line-soft)' : 'none',
@@ -493,7 +609,7 @@ export function Projects() {
                             </React.Fragment>
                           );
                         })}
-                        <button style={{
+                        <button onClick={() => createProject(group.key)} style={{
                           width: '100%', padding: '10px 14px', textAlign: 'left',
                           fontSize: 11.5, color: 'var(--fg-faint)',
                           borderTop: '1px solid var(--line-soft)',
@@ -510,6 +626,10 @@ export function Projects() {
               if (!p) return null;
               const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
               const pTodos = todos.filter(t => t.project === p.id);
+              const pUpdates = (ledger.updates || []).filter(u => u.projectId === p.id).slice(0, 5);
+              const pDecisions = (ledger.decisions || []).filter(d => d.projectId === p.id).slice(0, 4);
+              const pNotes = (ledger.notes || []).filter(n => n.projectId === p.id).slice(0, 4);
+              const pChecks = (ledger.checks || []).filter(c => c.projectId === p.id).slice(0, 4);
               const doneCount = pTodos.filter(t => t.done).length;
               return (
                 <aside style={{ borderLeft: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -537,13 +657,17 @@ export function Projects() {
                       <span className="mono" style={{ color: 'var(--fg)' }}>{p.due}</span>
                       <span style={{ color: 'var(--fg-faint)' }}>진행률</span>
                       <span className="mono">{p.progress}% · {p.done}/{p.tasks}</span>
+                      <span style={{ color: 'var(--fg-faint)' }}>최근 활동</span>
+                      <span className="mono" style={{ color: 'var(--fg-muted)' }}>{p.lastActivityLabel || '미정'}</span>
+                      <span style={{ color: 'var(--fg-faint)' }}>다음 액션</span>
+                      <span style={{ color: 'var(--fg-muted)' }}>{p.nextAction || '아직 지정되지 않음'}</span>
                       <span style={{ color: 'var(--fg-faint)' }}>생성</span>
-                      <span className="mono" style={{ color: 'var(--fg-muted)' }}>2026·03·14</span>
+                      <span className="mono" style={{ color: 'var(--fg-muted)' }}>{p.createdAtLabel || '미정'}</span>
                     </div>
                     <div>
                       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 6 }}>설명</div>
                       <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.55 }}>
-                        {pBrand.desc}. 이 프로젝트는 {p.status === 'In progress' ? '활발히 진행 중' : p.status === 'Review' ? '최종 검토 단계' : '초기 계획 단계'}이며, {pTodos.length}개의 하위 아이템으로 구성됩니다.
+                        {p.summary || `${pBrand.desc}. 이 프로젝트는 ${p.status === 'In progress' ? '활발히 진행 중' : p.status === 'Review' ? '최종 검토 단계' : '초기 계획 단계'}이며, ${pTodos.length}개의 하위 아이템으로 구성됩니다.`}
                       </div>
                     </div>
                     <div>
@@ -563,36 +687,63 @@ export function Projects() {
                             <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)' }}>{t.due}</span>
                           </div>
                         ))}
-                        <button style={{ padding: '6px 8px', textAlign: 'left', fontSize: 11.5, color: 'var(--fg-faint)' }}>＋ 항목 추가</button>
+                        <button onClick={() => createTodo(p.id)} style={{ padding: '6px 8px', textAlign: 'left', fontSize: 11.5, color: 'var(--fg-faint)' }}>＋ 항목 추가</button>
                       </div>
                     </div>
-                    <div>
-                      <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 6 }}>참고 자료 · 사진</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
-                        {[{ hue: 280, label: 'ref-1.png' },{ hue: 220, label: 'ref-2.png' },{ hue: 160, label: 'moodboard.jpg' }].map((r, i) => (
-                          <div key={i} style={{
-                            aspectRatio: '1 / 1', borderRadius: 'var(--r-sm)', overflow: 'hidden',
-                            background: `linear-gradient(135deg, oklch(0.35 0.08 ${r.hue}), oklch(0.22 0.04 ${r.hue}))`,
-                            border: '1px solid var(--line-soft)',
-                            position: 'relative', cursor: 'zoom-in',
-                          }}>
-                            <div style={{
-                              position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)',
-                              fontSize: 20, opacity: 0.45,
-                            }}>🖼</div>
-                            <div className="mono" style={{ position: 'absolute', left: 5, bottom: 4, fontSize: 9, color: 'rgba(255,255,255,0.8)' }}>{r.label}</div>
-                          </div>
-                        ))}
-                        <button style={{
-                          aspectRatio: '1 / 1', borderRadius: 'var(--r-sm)',
-                          background: 'var(--surface-2)', border: '1px dashed var(--line)',
-                          color: 'var(--fg-faint)', fontSize: 20,
-                        }}>＋</button>
-                      </div>
-                    </div>
+                    <DetailSection title="최근 업데이트" count={pUpdates.length} empty={syncState === 'live' ? '이 프로젝트에 연결된 update가 아직 없습니다.' : 'live 연결 후 project_updates가 여기에 표시됩니다.'}>
+                      {pUpdates.map(update => (
+                        <ActivityRow
+                          key={update.id}
+                          title={update.title}
+                          body={update.summary || update.nextAction}
+                          meta={update.progress !== null && update.progress !== undefined ? `${update.progress}%` : update.happenedAtLabel}
+                          badge={update.source}
+                          tone={updateTone[update.status] || 'neutral'}
+                        />
+                      ))}
+                    </DetailSection>
+                    <DetailSection title="결정" count={pDecisions.length} empty="이 프로젝트에 연결된 결정 기록이 없습니다.">
+                      {pDecisions.map(decision => (
+                        <ActivityRow
+                          key={decision.id}
+                          title={decision.title}
+                          body={decision.summary}
+                          meta={decision.decidedAtLabel}
+                          badge="decision"
+                          tone="moon"
+                        />
+                      ))}
+                    </DetailSection>
+                    <DetailSection title="노트" count={pNotes.length} empty="이 프로젝트에 연결된 노트가 없습니다.">
+                      {pNotes.map(note => (
+                        <ActivityRow
+                          key={note.id}
+                          title={note.title}
+                          body={note.body}
+                          meta={note.createdAtLabel}
+                          badge="note"
+                          tone="neutral"
+                        />
+                      ))}
+                    </DetailSection>
+                    <DetailSection title="루틴 체크" count={pChecks.length} empty="이 프로젝트에 연결된 routine check가 없습니다.">
+                      {pChecks.map(check => (
+                        <ActivityRow
+                          key={check.id}
+                          title={check.checkType}
+                          body={check.note}
+                          meta={check.checkedAtLabel}
+                          badge={check.status}
+                          tone={checkTone[check.status] || 'neutral'}
+                        />
+                      ))}
+                    </DetailSection>
                   </div>
                   <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Button variant="primary" size="sm" icon="chat" style={{ flex: 1 }}>열기</Button>
+                    <Button variant="primary" size="sm" icon="chat" style={{ flex: 1 }} onClick={() => {
+                      setExpanded(prev => new Set([...prev, p.id]));
+                      setView('tree');
+                    }}>열기</Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -629,7 +780,7 @@ export function Projects() {
                     icon="orders"
                     title="열린 할 일이 없습니다"
                     description={syncState === 'live' ? 'Supabase tasks 원장에 표시할 항목이 없습니다.' : '할 일이 생기면 날짜 버킷별로 정리됩니다.'}
-                    action={<Button variant="primary" size="sm" icon="plus">To-do</Button>}
+                    action={<Button variant="primary" size="sm" icon="plus" onClick={() => createTodo()}>To-do</Button>}
                   />
                 </Card>
               )}
@@ -696,7 +847,7 @@ export function Projects() {
                   <span style={{ fontSize: 12, fontWeight: 600 }}>{col.label}</span>
                   <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', padding: '1px 6px', background: 'var(--surface-3)', borderRadius: 4 }}>{col.cards.length}</span>
                   <div style={{ flex: 1 }} />
-                  <IconButton icon="plus" size={22} iconSize={12} />
+                  <IconButton icon="plus" size={22} iconSize={12} tooltip="Add card" onClick={() => createBoardCard(col.key)} />
                 </div>
                 <div className="scroll-y" style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {col.cards.length === 0 && (

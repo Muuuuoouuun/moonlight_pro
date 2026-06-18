@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "crypto";
 
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
 
 export const HUB_WRITE_SECRET_HEADER = "x-com-moon-hub-write-secret";
 const DEFAULT_MAX_JSON_BYTES = 64 * 1024;
@@ -65,6 +65,10 @@ function resolveHubWriteSecret() {
   return process.env.COM_MOON_HUB_WRITE_SECRET?.trim() || "";
 }
 
+function isProductionRuntime() {
+  return process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
+}
+
 function isHubWriteAllowedBySecret(req, expectedSecret) {
   if (!expectedSecret) {
     return false;
@@ -85,18 +89,20 @@ export function assertHubWriteAllowed(req) {
     return null;
   }
 
-  const requestOrigin = resolveRequestOrigin(req);
-  const expectedOrigins = resolveExpectedOrigins(req);
+  if (!isProductionRuntime()) {
+    const requestOrigin = resolveRequestOrigin(req);
+    const expectedOrigins = resolveExpectedOrigins(req);
 
-  if (requestOrigin && expectedOrigins.has(requestOrigin)) {
-    return null;
+    if (requestOrigin && expectedOrigins.has(requestOrigin)) {
+      return null;
+    }
   }
 
   return NextResponse.json(
     {
       status: "forbidden",
       error:
-        "Hub write routes require a same-origin request or a valid Hub write secret.",
+        "Hub write routes require a valid Hub write secret in production.",
     },
     { status: expectedSecret ? 401 : 403 },
   );

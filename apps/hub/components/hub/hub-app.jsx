@@ -86,17 +86,17 @@ const PAGE_MAP = {
   'dashboard/revenue/accounts': () => <Accounts />,
   'dashboard/revenue/followups': () => <Followups />,
   'dashboard/automations': (n) => <AutomationsIndex onNavigate={n} />,
-  'dashboard/automations/flows': () => <Flows />,
-  'dashboard/automations/email': () => <EmailAutomation />,
-  'dashboard/automations/webhooks': () => <Webhooks />,
+  'dashboard/automations/flows': (n) => <Flows onNavigate={n} />,
+  'dashboard/automations/email': (n) => <EmailAutomation onNavigate={n} />,
+  'dashboard/automations/webhooks': (n) => <Webhooks onNavigate={n} />,
   'dashboard/automations/runs': () => <Runs />,
   'dashboard/automations/sheets': () => <SheetsSync />,
-  'dashboard/agents/chat': () => <AgentsChat />,
-  'dashboard/agents/council': () => <AgentsCouncil />,
-  'dashboard/agents/orders': () => <AgentsOrders />,
-  'dashboard/agents/office': () => <AgentsOffice />,
+  'dashboard/agents/chat': (n) => <AgentsChat onNavigate={n} />,
+  'dashboard/agents/council': (n) => <AgentsCouncil onNavigate={n} />,
+  'dashboard/agents/orders': (n) => <AgentsOrders onNavigate={n} />,
+  'dashboard/agents/office': (n) => <AgentsOffice onNavigate={n} />,
   'dashboard/evolution': (n) => <Evolution onNavigate={n} />,
-  'dashboard/settings': () => <Settings />,
+  'dashboard/settings': (n) => <Settings onNavigate={n} />,
 };
 
 const PARENT_JUMP = {
@@ -137,8 +137,9 @@ export function HubApp() {
   }, [theme]);
 
   const navigate = React.useCallback((p) => {
-    const target = PARENT_JUMP[p] || p;
-    router.push('/' + target);
+    const [basePath, suffix = ''] = String(p || '').split(/(?=[?#])/, 2);
+    const target = PARENT_JUMP[basePath] || basePath;
+    router.push('/' + target + suffix);
     setNavOpen(false);
   }, [router]);
 
@@ -178,6 +179,7 @@ export function HubApp() {
           <TopBar
             path={path}
             onNavigate={navigate}
+            onNew={() => setPaletteOpen(true)}
             onSidebarOpen={() => setNavOpen(true)}
             onTweaksToggle={() => setTweaksOpen(o => !o)}
             density={density}

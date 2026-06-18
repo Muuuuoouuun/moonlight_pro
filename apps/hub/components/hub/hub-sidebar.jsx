@@ -218,7 +218,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
           <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Hyeon Park</div>
           <div style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>Founder · Pro</div>
         </div>
-        <IconButton icon="bell" size={24} iconSize={13} />
+        <IconButton icon="bell" size={24} iconSize={13} tooltip="Open Daily Brief" onClick={() => onNavigate('dashboard/daily-brief')} />
       </div>
     </aside>
   );

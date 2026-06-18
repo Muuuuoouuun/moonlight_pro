@@ -17,11 +17,11 @@ export function CommandPalette({ open, onClose, onNavigate }) {
       if (n.children) for (const c of n.children) flat.push({ kind: 'Navigate', label: `${n.label} › ${c.label}`, path: c.path, icon: c.icon });
     }
     for (const c of LEGACY_TREE) flat.push({ kind: 'Archive', label: `기타 › ${c.label}`, path: c.path, icon: c.icon });
-    flat.push({ kind: 'Action', label: 'New Decision 기록', icon: 'decisions' });
-    flat.push({ kind: 'Action', label: 'New Project', icon: 'projects' });
-    flat.push({ kind: 'Action', label: 'New Content draft', icon: 'studio' });
-    flat.push({ kind: 'Action', label: 'Start 15m focus timer', icon: 'clock' });
-    flat.push({ kind: 'Action', label: 'Ask Council — next week plan', icon: 'council' });
+    flat.push({ kind: 'Action', label: 'New Decision 기록', path: 'dashboard/work/decisions?new=decision', icon: 'decisions' });
+    flat.push({ kind: 'Action', label: 'New Project', path: 'dashboard/work/projects?new=project', icon: 'projects' });
+    flat.push({ kind: 'Action', label: 'New Content draft', path: 'dashboard/content/studio?new=draft', icon: 'studio' });
+    flat.push({ kind: 'Action', label: 'Start 15m focus timer', path: 'dashboard/work/calendar?focus=15', icon: 'clock' });
+    flat.push({ kind: 'Action', label: 'Ask Council — next week plan', path: 'dashboard/agents/chat?prompt=next-week-plan', icon: 'council' });
     return flat;
   }, []);
 
@@ -44,7 +44,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
     if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(0, i - 1)); }
     if (e.key === 'Enter') {
       const it = filtered[idx];
-      if (it && (it.kind === 'Navigate' || it.kind === 'Archive')) { onNavigate(it.path); onClose(); }
+      if (it?.path) { onNavigate(it.path); onClose(); }
       else onClose();
     }
   };
@@ -77,7 +77,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
             <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--fg-faint)', fontSize: 13 }}>No results</div>
           )}
           {filtered.map((it, i) => (
-            <button key={i} onClick={() => { if (it.kind === 'Navigate' || it.kind === 'Archive') onNavigate(it.path); onClose(); }} onMouseEnter={() => setIdx(i)} style={{
+            <button key={i} onClick={() => { if (it.path) onNavigate(it.path); onClose(); }} onMouseEnter={() => setIdx(i)} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10,
               padding: '9px 12px', borderRadius: 'var(--r-sm)',
               background: idx === i ? 'var(--surface-3)' : 'transparent',

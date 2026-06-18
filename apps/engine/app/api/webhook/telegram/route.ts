@@ -21,11 +21,19 @@ function safeSecretEquals(expected: string, candidate: string) {
   );
 }
 
+function isLocalOpenWebhookModeAllowed() {
+  return (
+    process.env.COM_MOON_ALLOW_OPEN_WEBHOOKS?.trim() === "true" &&
+    process.env.NODE_ENV !== "production" &&
+    process.env.VERCEL_ENV !== "production"
+  );
+}
+
 function validateTelegramSecret(req: Request) {
   const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
 
   if (!expectedSecret) {
-    if (process.env.COM_MOON_ALLOW_OPEN_WEBHOOKS?.trim() === "true") {
+    if (isLocalOpenWebhookModeAllowed()) {
       return { ok: true, mode: "open" };
     }
 
@@ -33,7 +41,7 @@ function validateTelegramSecret(req: Request) {
       ok: false,
       mode: "header",
       error:
-        "TELEGRAM_WEBHOOK_SECRET is not configured. Set COM_MOON_ALLOW_OPEN_WEBHOOKS=true only for local smoke tests.",
+        "TELEGRAM_WEBHOOK_SECRET is not configured. COM_MOON_ALLOW_OPEN_WEBHOOKS=true is local-only and refused in production.",
     };
   }
 

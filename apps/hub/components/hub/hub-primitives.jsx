@@ -57,9 +57,9 @@ export function Kbd({ children, style }) {
   );
 }
 
-export function Card({ children, style, pad = true, interactive = false, className }) {
+export function Card({ children, style, pad = true, interactive = false, className, ...props }) {
   return (
-    <div className={className} style={{
+    <div {...props} className={className} style={{
       background: 'var(--surface)',
       border: '1px solid var(--line-soft)',
       borderRadius: 'var(--r-lg)',

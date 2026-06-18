@@ -1,29 +1,70 @@
-# Com_Moon Hub OS: Master Plan & Architecture
+# Moonlight Master Directive
 
-## 1. 개요 (Overview)
-Com_Moon은 3개 프로젝트(classinkr-web, sales_branding_dash, ai-command-pot)를 통합 관리하는 Hub OS입니다.
+Status: active directive
+Updated: 2026-05-02
 
-## 2. 서비스 레이어
-- **Hub (Private OS)**: 나(보스)만 보는 운영 허브. 상태 확인, 판단, 승인, 우선순위 조정이 일어나는 레이어.
-- **Engine (Execution)**: webhook intake, 명령 처리, payload 정규화, 실행 기록을 담당하는 실행 레이어.
-- **Landing (Public)**: 고객용 랜딩 페이지 (블로그, 콘텐츠 배포, 서비스 홍보).
-- **Shared Domain**: 카드뉴스 같은 재사용 가능한 업무 로직을 묶는 공통 패키지 레이어.
+## Directive
 
-## 3. 핵심 아키텍처
-- **Monorepo (Turborepo)**: 코드 공유 및 의존성 관리.
-- **Hub OS + Engine 분리**: Hub는 운영 판단, Engine은 실행과 intake를 담당.
-- **Supabase Ledger**: `automation_runs`, `webhook_events`, `project_updates`, `error_logs` 같은 운영 원장 저장.
-- **Automations**: 수동/정기 작업 실행 상태를 Hub에서 보고 Engine으로 전달.
-- **Self-Improving Loop**: 오류 발생 시 시스템이 자체 기록하고 개선안을 제안(Self-Evolution).
+Moonlight exists to turn scattered work, business, content, revenue, automation, and knowledge signals into action.
 
-## 4. 로직 및 지침
-- **에러 기록 방식**: `error_logs` 테이블에 context/payload/trace 정보 즉시 적재.
-- **역할 분리 원칙**: Engine은 UI를 소유하지 않고, Hub는 provider별 실행 세부사항을 소유하지 않는다.
-- **편의성 레이어**: `편의성`은 별도 탑레벨 탭이 아니라 `Command Center` 유틸리티 레이어로 둔다.
-- **디자인 철학**: 모바일 쾌적성(PWA) + 클래스인 그린(#084734) 중심의 미니멀리즘.
-- **역할 분담**: 클매기(나)는 전략 분석가(Strategist)로서 일일 보고 및 액션 제안.
+The product is successful when the operator opens Hub first and immediately knows:
 
-## 5. 단계별 마일스톤
-- **Phase 1**: 허브(개인 OS) 기반 구축 및 로그인(Supabase) 통합.
-- **Phase 2**: Work OS / Revenue / Content / Automations / Evolution 운영 화면 정리.
-- **Phase 3**: Engine 실행 레이어 정리, shared domain 확장, 자동화 및 자가 발전 루틴 도입.
+- what changed,
+- what matters,
+- what is blocked,
+- what to do next,
+- what failed,
+- what decision was made.
+
+## Product Boundary
+
+Moonlight is not limited to three legacy projects. `classinkr-web`, `sales_branding_dash`, and `ai-command-pot` are seed contexts only.
+
+Every current or future project/business/info stream must enter the same command loop:
+
+```text
+signal -> ledger -> priority -> action/decision -> execution -> result/repair
+```
+
+## Active Architecture
+
+- `apps/hub`: private command surface for reading, deciding, approving, and dispatching intent.
+- `apps/engine`: intake and execution layer for validation, normalization, provider calls, and ledger writes.
+- `supabase`: operating ledger for state, history, correlation, decisions, and failures.
+- `packages/*`: shared domain logic and reusable UI/domain primitives.
+
+The public web app is not active in this workspace. Public proof can return later as an export layer produced from real private ledger activity.
+
+## Non-Negotiables
+
+- Hub must not own provider execution details.
+- Engine must not own UI.
+- Public POST routes require shared/provider secrets unless explicitly local open mode is enabled.
+- Supabase-less states must be honest `preview` or empty states.
+- Mock and live data must not be blended as if both were real.
+- Every important record should have `next_action`, owner/due context, or a clear waiting reason.
+- Failures must be visible, classifiable, and repairable.
+
+## Retired Premises
+
+- Retired: "Moonlight is a hub for three projects."
+- Retired: "Landing/Public is an active product layer in this workspace."
+- Retired: "Self-Evolution means automatic code patching."
+- Retired: "Classinkr green is the design anchor."
+
+Replacement:
+
+- Moonlight is a founder command loop for all active work and business information.
+- Public proof waits until private execution has gravity.
+- AI proposes repair, a human approves, the ledger remembers.
+- Design follows `DESIGN.md` and Moonlight Pro moonstone tokens.
+
+## Build Priority
+
+1. Close daily action loops.
+2. Harden Engine intake and idempotency.
+3. Make Hub states honest: live, preview, degraded, partial, failed.
+4. Convert content ideas into variant/handoff history.
+5. Convert revenue signals into follow-up actions.
+6. Convert failures into repair queues.
+7. Only then expand public proof or broader automation.

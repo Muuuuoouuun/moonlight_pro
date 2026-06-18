@@ -21,16 +21,151 @@ function greetingFor(date) {
   return 'Good evening';
 }
 
-function SignalCard({ s }) {
+const SIGNAL_TARGETS = {
+  draft: 'dashboard/content/studio?new=draft',
+  escalate: 'dashboard/revenue/deals',
+  followup: 'dashboard/revenue/deals?draft=followup',
+  deals: 'dashboard/revenue/deals',
+  leads: 'dashboard/revenue/leads',
+  revenue: 'dashboard/revenue/overview',
+  wait: 'dashboard/work/rhythm',
+  write: 'dashboard/content/studio',
+  queue: 'dashboard/content/queue',
+  delay: 'dashboard/content/queue',
+  review: 'dashboard/automations/runs',
+  flows: 'dashboard/automations/flows',
+  dismiss: 'dashboard/daily-brief',
+  accept: 'dashboard/work/roadmap',
+  chat: 'dashboard/agents/chat',
+  hold: 'dashboard/work/decisions',
+  start: 'dashboard/work/rhythm?check=weekly-review',
+  projects: 'dashboard/work/projects',
+  decision: 'dashboard/work/decisions?new=decision',
+  rhythm: 'dashboard/work/rhythm',
+  focus: 'dashboard/work/calendar?focus=15',
+};
+
+const CONTEXT_TARGETS = {
+  Revenue: 'dashboard/revenue/deals',
+  Content: 'dashboard/content/queue',
+  Automation: 'dashboard/automations/runs',
+  Agent: 'dashboard/agents/council',
+  Rhythm: 'dashboard/work/rhythm',
+  Work: 'dashboard/work/projects',
+};
+
+function syncTone(state) {
+  if (state === 'live') return 'success';
+  if (state === 'error') return 'danger';
+  if (state === 'mixed' || state === 'preview' || state === 'syncing') return 'warning';
+  return 'neutral';
+}
+
+function sourceLabel(state) {
+  if (state === 'live') return 'live';
+  if (state === 'error') return 'error';
+  if (state === 'syncing') return 'syncing';
+  if (state === 'mixed') return 'mixed';
+  return 'preview';
+}
+
+function useDailyBriefLedger() {
+  const [state, setState] = React.useState({
+    syncState: 'syncing',
+    generatedAt: null,
+    sources: [],
+    summary: null,
+    metrics: METRICS,
+    signals: BRIEF_SIGNALS,
+    blocks: TODAY_BLOCKS,
+  });
+
+  React.useEffect(() => {
+    let active = true;
+
+    async function load() {
+      setState((prev) => ({ ...prev, syncState: 'syncing' }));
+      try {
+        const response = await fetch('/api/hub/daily-brief', { cache: 'no-store' });
+        const data = await response.json().catch(() => null);
+        if (!active || !response.ok || !data) {
+          if (active) setState((prev) => ({ ...prev, syncState: 'preview' }));
+          return;
+        }
+
+        const liveCount = Number(data.summary?.liveCount || 0);
+        const sourceCount = Array.isArray(data.sources) ? data.sources.length : 0;
+        const nextSyncState = liveCount > 0 && liveCount === sourceCount
+          ? 'live'
+          : liveCount > 0
+          ? 'mixed'
+          : 'preview';
+
+        setState({
+          syncState: nextSyncState,
+          generatedAt: data.generatedAt || null,
+          sources: Array.isArray(data.sources) ? data.sources : [],
+          summary: data.summary || null,
+          metrics: liveCount > 0 && Array.isArray(data.metrics) && data.metrics.length ? data.metrics : METRICS,
+          signals: Array.isArray(data.signals) && data.signals.length ? data.signals : BRIEF_SIGNALS,
+          blocks: Array.isArray(data.blocks) && data.blocks.length ? data.blocks : TODAY_BLOCKS,
+        });
+      } catch {
+        if (active) setState((prev) => ({ ...prev, syncState: 'preview' }));
+      }
+    }
+
+    load();
+    return () => { active = false; };
+  }, []);
+
+  return state;
+}
+
+function DataTrustStrip({ state }) {
+  const liveCount = Number(state.summary?.liveCount || 0);
+  const sourceCount = state.sources.length;
+  const label = state.syncState === 'mixed'
+    ? `${liveCount}/${sourceCount || 5} live`
+    : sourceLabel(state.syncState);
+  const detail = state.syncState === 'preview'
+    ? 'preview data · Supabase 연결 후 live 전환'
+    : state.syncState === 'mixed'
+    ? '일부 원장은 live, 일부는 preview'
+    : state.syncState === 'syncing'
+    ? '원장 상태 확인 중'
+    : '모든 운영 원장 live';
+
+  return (
+    <Card style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: 'var(--surface-2)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        <Iconed name="signal" size={14} style={{ color: 'var(--moon-300)' }} />
+        <Badge tone={syncTone(state.syncState)} size="xs">{label}</Badge>
+        <span style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>{detail}</span>
+      </div>
+      <div style={{ flex: 1 }} />
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {state.sources.map((source) => (
+          <Badge key={source.key} tone={syncTone(source.state)} variant="outline" size="xs">
+            {source.label} · {sourceLabel(source.state)}
+          </Badge>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function SignalCard({ s, onNavigate }) {
   const [expanded, setExpanded] = React.useState(s.id === 's1');
   const [decided, setDecided] = React.useState(null);
   const borderTone = { danger: 'oklch(0.5 0.1 25 / 0.5)', warning: 'oklch(0.5 0.09 85 / 0.5)', success: 'oklch(0.5 0.08 155 / 0.5)', info: 'oklch(0.5 0.06 230 / 0.5)' }[s.tone] || 'var(--line)';
+  const openContext = () => onNavigate?.(CONTEXT_TARGETS[s.kind] || 'dashboard/daily-brief');
 
   return (
     <div style={{
       background: 'var(--surface)',
       border: '1px solid var(--line-soft)',
-      borderLeft: `2px solid ${borderTone}`,
+      borderLeft: `1px solid ${borderTone}`,
       borderRadius: 'var(--r-lg)',
       overflow: 'hidden',
       opacity: decided ? 0.55 : 1,
@@ -64,12 +199,16 @@ function SignalCard({ s }) {
         <div style={{ padding: '0 var(--card-pad) var(--card-pad)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {s.decisions.map((d, i) => (
             <Button key={i} variant={d.primary ? 'primary' : 'secondary'} size="sm" icon={d.primary ? 'bolt' : null}
-              onClick={() => setDecided(d.label)}>
+              onClick={() => {
+                setDecided(d.label);
+                const target = SIGNAL_TARGETS[d.action];
+                if (target && target !== 'dashboard/daily-brief') onNavigate?.(target);
+              }}>
               {d.label}
             </Button>
           ))}
           <div style={{ flex: 1 }} />
-          <Button variant="ghost" size="sm" icon="moreV">More context</Button>
+          <Button variant="ghost" size="sm" icon="moreV" onClick={openContext}>More context</Button>
         </div>
       )}
     </div>
@@ -185,6 +324,7 @@ function ContentCadenceCard({ onNavigate }) {
 
 export function DailyBrief({ onNavigate }) {
   const [now, setNow] = React.useState(() => new Date());
+  const ledger = useDailyBriefLedger();
   const [blocks, setBlocks] = React.useState(TODAY_BLOCKS);
   const toggle = (i) => setBlocks(bs => bs.map((b, j) => j === i ? { ...b, done: !b.done } : b));
 
@@ -193,6 +333,21 @@ export function DailyBrief({ onNavigate }) {
     return () => window.clearInterval(id);
   }, []);
 
+  React.useEffect(() => {
+    setBlocks(ledger.blocks);
+  }, [ledger.blocks]);
+
+  const urgentCount = ledger.summary?.urgentCount ?? ledger.signals.filter(s => s.tone === 'danger').length;
+  const todayCount = ledger.summary?.todayCount ?? ledger.signals.filter(s => s.tone === 'warning').length;
+  const signalCount = ledger.signals.length;
+  const statusCopy = ledger.syncState === 'live'
+    ? '모든 운영 원장이 live입니다.'
+    : ledger.syncState === 'mixed'
+    ? 'live 원장과 preview 원장을 분리해 보여주고 있어요.'
+    : ledger.syncState === 'syncing'
+    ? '운영 원장 상태를 확인하고 있어요.'
+    : 'preview 데이터입니다. Supabase 연결 후 live 운영으로 전환됩니다.';
+
   return (
     <div className="hub-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', padding: 'var(--section-gap)', maxWidth: 1400, margin: '0 auto', width: '100%' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}>
@@ -200,30 +355,32 @@ export function DailyBrief({ onNavigate }) {
           <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>{formatBriefDate(now)}</div>
           <h1 style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em' }}>{greetingFor(now)}, <span style={{ color: 'var(--moon-300)' }}>Hyeon</span></h1>
           <div style={{ marginTop: 6, fontSize: 13.5, color: 'var(--fg-muted)', maxWidth: '60ch', lineHeight: 1.55 }}>
-            5개의 신호가 오늘 결정이 필요해요. 그중 <span style={{ color: 'var(--danger)' }}>1개는 매출 리스크</span>, <span style={{ color: 'var(--warning)' }}>2개는 오늘 마감</span>.
+            {signalCount}개의 신호가 오늘 결정이 필요해요. 그중 <span style={{ color: 'var(--danger)' }}>{urgentCount}개는 즉시 확인</span>, <span style={{ color: 'var(--warning)' }}>{todayCount}개는 오늘 처리</span>. {statusCopy}
           </div>
         </div>
         <div className="hub-page-actions" style={{ display: 'flex', gap: 8 }}>
           <Button variant="secondary" size="md" icon="sparkle" onClick={() => onNavigate('dashboard/agents/chat')}>Ask Council</Button>
-          <Button variant="outline" size="md" icon="clock">Start 15m focus</Button>
+          <Button variant="outline" size="md" icon="clock" onClick={() => onNavigate('dashboard/work/calendar?focus=15')}>Start 15m focus</Button>
         </div>
       </div>
 
+      <DataTrustStrip state={ledger} />
+
       <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
-        {METRICS.map(m => <MetricCard key={m.label} m={m} />)}
+        {ledger.metrics.map(m => <MetricCard key={m.label} m={m} />)}
       </div>
 
       <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 'var(--section-gap)' }}>
         <div>
           <SectionTitle right={<div style={{ display: 'flex', gap: 6 }}>
-            <Badge tone="danger" size="xs">1 urgent</Badge>
-            <Badge tone="warning" size="xs">2 today</Badge>
-            <Badge tone="success" size="xs">1 ok</Badge>
+            <Badge tone="danger" size="xs">{urgentCount} urgent</Badge>
+            <Badge tone="warning" size="xs">{todayCount} today</Badge>
+            <Badge tone="success" size="xs">{Math.max(0, signalCount - urgentCount - todayCount)} ok</Badge>
           </div>}>
             Signal feed
           </SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {BRIEF_SIGNALS.map(s => <SignalCard key={s.id} s={s} />)}
+            {ledger.signals.map(s => <SignalCard key={s.id} s={s} onNavigate={onNavigate} />)}
           </div>
         </div>
 

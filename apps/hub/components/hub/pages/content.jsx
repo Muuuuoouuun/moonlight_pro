@@ -218,6 +218,7 @@ export function Studio() {
   const [activeSlide, setActiveSlide] = React.useState(0);
   const [drag, setDrag] = React.useState(null);
   const [extraSuggestions, setExtraSuggestions] = React.useState([]);
+  const [dismissedSuggestionKeys, setDismissedSuggestionKeys] = React.useState(() => new Set());
   const [pendingSend, setPendingSend] = React.useState(null); // 'publish' | 'schedule' | null
   const [lastSentAt, setLastSentAt] = React.useState(null);
   const [localHandoffLogs, setLocalHandoffLogs] = React.useState([]);
@@ -534,8 +535,38 @@ export function Studio() {
     setSlides(s => s.filter((_, j) => j !== i));
     setDirty(true);
   };
+  const applyToolbarAction = (tool) => {
+    if (!tool) return;
+    if (tool === 'ai') {
+      setExtraSuggestions(s => [{ tone: 'moon', text: 'AI 제안 생성 — 도입부를 더 짧게 다듬어보세요.' }, ...s]);
+      return;
+    }
+    const snippets = {
+      h1: '\n# 새 섹션\n',
+      h2: '\n## 새 소제목\n',
+      bold: '**강조**',
+      italic: '_기울임_',
+      link: '[링크](https://moonlight.pro)',
+      image: '\n![설명](image-url)\n',
+    };
+    setBody(prev => `${prev}${snippets[tool] || ''}`);
+    setDirty(true);
+  };
 
   const cur = slides[activeSlide] || slides[0];
+  const baseSuggestions = mode === 'blog' ? [
+    { key: 'blog-title', tone: 'info', text: '제목 A/B: "결정 노트: 네 칸이면 충분하다"' },
+    { key: 'blog-question', tone: 'moon', text: '"네 칸" 섹션 끝에 독자 질문 한 줄 추가 추천' },
+    { key: 'blog-repeat', tone: 'warning', text: '중복 표현 감지: "기억에 남지 않는다" (2회)' },
+  ] : [
+    { key: 'card-hook', tone: 'info', text: '카드 1 훅 강화: 숫자를 앞에 — "4칸"' },
+    { key: 'card-color', tone: 'moon', text: '카드 2–5 배경색 톤을 한 계열로 통일 추천' },
+    { key: 'card-cta', tone: 'warning', text: '마지막 카드 CTA 누락 — 저장/공유 유도' },
+  ];
+  const suggestions = [
+    ...extraSuggestions.map((s, i) => ({ ...s, key: `extra-${i}`, extraIndex: i })),
+    ...baseSuggestions.filter(s => !dismissedSuggestionKeys.has(s.key)),
+  ];
 
   return (
     <div className="hub-studio-shell" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', height: '100%', overflow: 'hidden' }}>
@@ -578,7 +609,11 @@ export function Studio() {
             onClick={() => saveDraft("manual")}
             style={{ color: saveState === 'error' ? 'var(--danger)' : 'var(--fg-muted)' }}
           />
-          <IconButton icon="eye" tooltip="Preview" />
+          <IconButton
+            icon="eye"
+            tooltip="Preview"
+            onClick={() => setExtraSuggestions(s => [{ tone: 'info', text: 'Preview refreshed in the editor.' }, ...s])}
+          />
           <Button
             variant="secondary"
             size="sm"
@@ -600,10 +635,10 @@ export function Studio() {
           <>
             <div style={{ padding: '8px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', gap: 4, flexShrink: 0 }}>
               {[
-                { i: 'sparkle', t: 'AI' }, { t: '|' }, { l: 'H1' }, { l: 'H2' }, { l: 'B', style: { fontWeight: 700 } },
-                { l: 'i', style: { fontStyle: 'italic' } }, { t: '|' }, { i: 'link' }, { i: 'upload', t: 'Image' },
+                { i: 'sparkle', t: 'AI', action: 'ai' }, { t: '|' }, { l: 'H1', action: 'h1' }, { l: 'H2', action: 'h2' }, { l: 'B', action: 'bold', style: { fontWeight: 700 } },
+                { l: 'i', action: 'italic', style: { fontStyle: 'italic' } }, { t: '|' }, { i: 'link', action: 'link' }, { i: 'upload', t: 'Image', action: 'image' },
               ].map((b, i) => b.t === '|' ? <div key={i} style={{ width: 1, background: 'var(--line-soft)', margin: '0 2px' }} /> : (
-                <button key={i} style={{ height: 26, padding: '0 9px', borderRadius: 4, fontSize: 11.5, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 5, ...(b.style || {}) }}>
+                <button key={i} onClick={() => applyToolbarAction(b.action)} style={{ height: 26, padding: '0 9px', borderRadius: 4, fontSize: 11.5, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 5, ...(b.style || {}) }}>
                   {b.i && <Iconed name={b.i} size={12} />}
                   {b.l && <span>{b.l}</span>}
                   {b.t && <span>{b.t}</span>}
@@ -714,7 +749,17 @@ export function Studio() {
                   ))}
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <Button variant="outline" size="xs" icon="upload">Photo</Button>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    icon="upload"
+                    onClick={() => {
+                      addSlide();
+                      setExtraSuggestions(s => [{ tone: 'info', text: 'Photo placeholder slide added.' }, ...s]);
+                    }}
+                  >
+                    Photo
+                  </Button>
                   <div style={{ flex: 1 }} />
                   <Button variant="ghost" size="xs" onClick={() => removeSlide(activeSlide)}>Delete</Button>
                 </div>
@@ -814,15 +859,7 @@ export function Studio() {
           </div>
 
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em' }}>Suggestions</div>
-          {[...extraSuggestions, ...(mode === 'blog' ? [
-            { tone: 'info', text: '제목 A/B: "결정 노트: 네 칸이면 충분하다"' },
-            { tone: 'moon', text: '"네 칸" 섹션 끝에 독자 질문 한 줄 추가 추천' },
-            { tone: 'warning', text: '중복 표현 감지: "기억에 남지 않는다" (2회)' },
-          ] : [
-            { tone: 'info', text: '카드 1 훅 강화: 숫자를 앞에 — "4칸"' },
-            { tone: 'moon', text: '카드 2–5 배경색 톤을 한 계열로 통일 추천' },
-            { tone: 'warning', text: '마지막 카드 CTA 누락 — 저장/공유 유도' },
-          ])].map((s, i) => (
+          {suggestions.map((s, i) => (
             <div key={i} style={{
               padding: '10px 11px', background: 'var(--surface-2)',
               border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
@@ -831,8 +868,38 @@ export function Studio() {
               <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}><Dot tone={s.tone} /></div>
               {s.text}
               <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                <Button variant="outline" size="xs">Apply</Button>
-                <Button variant="ghost" size="xs">Skip</Button>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => {
+                    if (mode === 'blog') {
+                      setBody(prev => `${prev}\n\n> 적용한 제안: ${s.text}`);
+                    } else {
+                      updateSlide(activeSlide, { sub: s.text.slice(0, 64) });
+                    }
+                    setDirty(true);
+                    if (typeof s.extraIndex === 'number') {
+                      setExtraSuggestions(prev => prev.filter((_, idx) => idx !== s.extraIndex));
+                    } else {
+                      setDismissedSuggestionKeys(prev => new Set([...prev, s.key]));
+                    }
+                  }}
+                >
+                  Apply
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => {
+                    if (typeof s.extraIndex === 'number') {
+                      setExtraSuggestions(prev => prev.filter((_, idx) => idx !== s.extraIndex));
+                    } else {
+                      setDismissedSuggestionKeys(prev => new Set([...prev, s.key]));
+                    }
+                  }}
+                >
+                  Skip
+                </Button>
               </div>
             </div>
           ))}
@@ -1306,6 +1373,7 @@ function CampaignLine({ label, value, tone = 'moon' }) {
 }
 
 function CampaignTabPanel({ tab, campaign, detail }) {
+  const router = useRouter();
   const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral', Live: 'success', Scheduled: 'info', Review: 'moon', Idea: 'neutral' };
 
   if (tab === 'strategy') {
@@ -1405,7 +1473,15 @@ function CampaignTabPanel({ tab, campaign, detail }) {
               <span style={{ fontSize: 12.5, color: 'var(--fg-muted)' }}>{item}</span>
             </div>
           ))}
-          <Button variant="outline" size="sm" icon="studio" style={{ marginTop: 12, width: '100%' }}>Open Studio</Button>
+          <Button
+            variant="outline"
+            size="sm"
+            icon="studio"
+            style={{ marginTop: 12, width: '100%' }}
+            onClick={() => router.push(`/dashboard/content/studio?new=draft&campaign=${encodeURIComponent(campaign.id)}`)}
+          >
+            Open Studio
+          </Button>
         </Card>
       </div>
     );
@@ -1529,13 +1605,32 @@ function CampaignTabPanel({ tab, campaign, detail }) {
 }
 
 export function Campaigns() {
+  const router = useRouter();
   const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral' };
+  const [campaigns, setCampaigns] = React.useState(FALLBACK_CAMPAIGNS);
   const [selectedId, setSelectedId] = React.useState(FALLBACK_CAMPAIGNS[0]?.id);
   const [tab, setTab] = React.useState('pulse');
   const [focusMode, setFocusMode] = React.useState(false);
-  const selected = FALLBACK_CAMPAIGNS.find(c => c.id === selectedId) || FALLBACK_CAMPAIGNS[0];
+  const selected = campaigns.find(c => c.id === selectedId) || campaigns[0];
   const detail = CAMPAIGN_WAR_ROOMS[selected.id] || CAMPAIGN_WAR_ROOMS.cm1;
   const activeTabLabel = CAMPAIGN_TABS.find(t => t.key === tab)?.label || 'Pulse';
+  const createCampaign = () => {
+    const id = `local-campaign-${Date.now()}`;
+    const next = {
+      id,
+      name: '새 캠페인',
+      status: 'Draft',
+      channels: ['Email'],
+      progress: 0,
+      end: '미정',
+      goal: '목표 설정',
+      current: 0,
+    };
+    setCampaigns(prev => [next, ...prev]);
+    setSelectedId(id);
+    setTab('pulse');
+    setFocusMode(true);
+  };
 
   React.useEffect(() => {
     if (!focusMode) return;
@@ -1568,7 +1663,7 @@ export function Campaigns() {
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Content 안에서 Revenue, Automations, Decisions를 캠페인 기준으로 묶는 war room</div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus">Campaign</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createCampaign}>Campaign</Button>
       </div>
 
       <div
@@ -1577,7 +1672,7 @@ export function Campaigns() {
         style={{ display: 'grid', gridTemplateColumns: '320px minmax(0, 1fr)', gap: 'var(--gap)', alignItems: 'start' }}
       >
         <aside className="campaign-war-room__list" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {FALLBACK_CAMPAIGNS.map(c => {
+          {campaigns.map(c => {
             const active = c.id === selected.id;
             const cDetail = CAMPAIGN_WAR_ROOMS[c.id] || detail;
             return (
@@ -1686,7 +1781,14 @@ export function Campaigns() {
                 >
                   {focusMode ? 'Exit focus' : 'Focus'}
                 </Button>
-                <Button variant="outline" size="sm" icon="decisions">Decision</Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon="decisions"
+                  onClick={() => router.push(`/dashboard/work/decisions?new=decision&campaign=${encodeURIComponent(selected.id)}`)}
+                >
+                  Decision
+                </Button>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginTop: 18 }}>

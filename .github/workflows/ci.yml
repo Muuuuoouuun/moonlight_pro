@@ -29,6 +29,9 @@ jobs:
       - name: Contract checks
         run: npm run check:contracts
 
+      - name: Tests
+        run: npm test
+
       - name: Build
         run: npm run build
 
