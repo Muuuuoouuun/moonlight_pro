@@ -46,6 +46,7 @@ Guru는 이 공백을 메운다.
 | role | `영업 멘토 · 딜 코칭` |
 | tone | `moon` (DESIGN 토큰 — 신규 색 도입 금지) |
 | 성격 | 직설적·구체적·방향 제시형. 칭찬보다 "다음 한 수"에 집중 |
+| 지식 베이스 | `docs/sales-guru-knowledge-base.md` — 12인 세일즈 구루 플레이북(운영자 제공) |
 | 출력 형식 | 진단 → 리스크 → 다음 액션 (brief route의 한국어 3단 구조 재사용) |
 | 모델 | Engine 기본 모델 (`gemini-3-flash-preview`), Chat 표기는 페르소나명만 노출 |
 
@@ -121,6 +122,9 @@ Guru는 **새 데이터 소스를 만들지 않고** 기존 원장을 읽고 쓴
 ## 8. 멘토 프롬프트 설계
 
 `brief/route.ts`의 `buildPrompt` 패턴을 확장. 한국어 3단 출력 골격을 유지한다.
+멘토의 **판단 프레임**은 지식 베이스(`docs/sales-guru-knowledge-base.md`)의 12인 기법에서 가져오며,
+그 "에이전트 매핑" 표가 모드별로 어떤 구루 기법을 1차 근거로 쓸지 정의한다.
+단, 사실(딜 상태·금액·접촉 이력)은 항상 원장에서 인용하고 플레이북으로 단정하지 않는다.
 
 ```
 systemInstruction:
@@ -184,6 +188,7 @@ P0는 데이터 변경 없이 프론트만으로 가치 검증 가능 → 가장
 
 ## 13. 구현 체크리스트 (파일 기준)
 
+- [x] `docs/sales-guru-knowledge-base.md` — 12인 플레이북 지식 베이스 (운영자 제공 PDF 정리)
 - [ ] `apps/hub/components/hub/hub-data.js` — `COUNCIL`에 `guru` 추가
 - [ ] `apps/hub/components/hub/pages/agents.jsx` — `OFFICE_AGENTS`에 guru, Chat 페르소나 분기
 - [ ] `apps/engine/app/api/ai/sales-mentor/route.ts` — 신규 (brief route 템플릿)
