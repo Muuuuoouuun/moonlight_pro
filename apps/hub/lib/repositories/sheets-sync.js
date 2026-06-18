@@ -8,6 +8,7 @@ import {
   countSupabaseRows,
   eqFilter,
   fetchSupabaseRows,
+  inFilter,
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import {
@@ -219,12 +220,17 @@ async function findCompanyByMatchKey(workspaceId, matchKey) {
 export async function promoteStagedLeads({
   workspaceId = resolveDefaultWorkspaceId(),
   limit = 200,
+  intakeIds = null,
 } = {}) {
   const config = resolveSupabaseConfig();
   if (!config || !workspaceId) return { ok: false, reason: "missing-config" };
 
+  const pendingFilters = [["status", eqFilter("pending")]];
+  if (Array.isArray(intakeIds) && intakeIds.length) {
+    pendingFilters.push(["id", inFilter(intakeIds)]);
+  }
   const pendingRows = await fetchSupabaseRows(STAGING_TABLE, {
-    filters: withWorkspaceFilter([["status", eqFilter("pending")]]),
+    filters: withWorkspaceFilter(pendingFilters),
     order: "created_at.asc",
     limit,
   });
@@ -265,13 +271,37 @@ export async function promoteStagedLeads({
       outcome = "promoted";
     }
 
+    // Create/link a contact (decision-maker) when we have a name. Business cards
+    // carry title/email, so the person becomes a first-class contact, not just meta.
+    let contactId = null;
+    const contactName = n.contact_name;
+    if (contactName) {
+      const existingContact = await fetchSupabaseRows("contacts", {
+        filters: withWorkspaceFilter([["company_id", eqFilter(company.id)], ["name", eqFilter(contactName)]]),
+        limit: 1,
+      });
+      if (Array.isArray(existingContact) && existingContact[0]) {
+        contactId = existingContact[0].id;
+      } else {
+        const createdContact = await insertReturning("contacts", {
+          workspace_id: workspaceId,
+          company_id: company.id,
+          name: contactName,
+          email: n.email || null,
+          title: n.title || null,
+        });
+        contactId = createdContact && !createdContact.error ? createdContact.id : null;
+      }
+    }
+
     const lead = await insertReturning("leads", {
       workspace_id: workspaceId,
       company_id: company.id,
+      contact_id: contactId,
       name: n.name || company.name,
       email: n.email || null,
       source: n.source || "google_sheets",
-      channel: "sheet-import",
+      channel: n.source === "business_card" ? "business-card" : "sheet-import",
       status: n.status || "new",
       score: 0,
       next_action: null,

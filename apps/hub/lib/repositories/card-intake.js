@@ -24,7 +24,9 @@ export function buildCardIntakeRecord(extracted = {}, { imageRef = null } = {}) 
     source: "business_card",
     source_ref: `card:${cardId}`,
     raw: { extracted, image_ref: imageRef },
-    normalized,
+    // match_key lives inside `normalized` too — promoteStagedLeads reads
+    // `row.normalized.match_key` (same contract as the sheets import path).
+    normalized: { ...normalized, match_key: matchKey },
     match_key: matchKey,
     status,
     note: disposition === "rejected" ? "식별 불가 (이름·전화 없음)" : null,
