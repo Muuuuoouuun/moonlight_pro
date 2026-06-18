@@ -132,7 +132,92 @@ function SyncBadge({ state }) {
   return <span className="mono" style={{ marginLeft: 8, fontSize: 10.5, color }}>{label}</span>;
 }
 
-export function RevenueOverview() {
+function GuruCoachPanel({ onNavigate }) {
+  const [state, setState] = React.useState('idle'); // idle | loading | done | preview | error
+  const [text, setText] = React.useState('');
+  const [note, setNote] = React.useState('');
+
+  const run = async () => {
+    setState('loading');
+    setText('');
+    setNote('');
+    try {
+      const res = await fetch('/api/hub/sales-mentor', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mode: 'pipeline-triage' }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.status === 'generated' && data.text) {
+        setText(data.text);
+        setState('done');
+      } else if (data?.status === 'preview') {
+        setNote(data.error || 'Engine이 아직 연결되지 않았습니다.');
+        setState('preview');
+      } else {
+        setNote(data?.reason || data?.error || '코칭을 생성하지 못했습니다.');
+        setState('error');
+      }
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : String(e));
+      setState('error');
+    }
+  };
+
+  return (
+    <Card>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>Guru 코칭</div>
+            <Badge tone="moon" size="xs">영업 멘토</Badge>
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', marginTop: 2 }}>이번 주 파이프라인 분류 — 무엇부터 손댈지</div>
+        </div>
+        <div style={{ flex: 1 }} />
+        <Button variant="primary" size="sm" icon="sparkle" onClick={run} disabled={state === 'loading'}>
+          {state === 'loading' ? '분석 중…' : state === 'done' ? '다시 분류' : '파이프라인 분류'}
+        </Button>
+      </div>
+
+      {state === 'idle' && (
+        <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.6 }}>
+          Guru에게 이번 주 파이프라인 분류를 요청하세요. 정체 딜·신규 리드·Won 신호를 근거로
+          가장 먼저 손대야 할 3건과 이유를 우선순위로 제시합니다.
+        </div>
+      )}
+
+      {state === 'loading' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
+          <div style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
+          원장을 읽고 코칭을 정리하는 중…
+        </div>
+      )}
+
+      {state === 'done' && (
+        <div>
+          <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{text}</div>
+          <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
+            <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/agents/chat?agent=guru')}>Chat에서 이어가기</Button>
+          </div>
+        </div>
+      )}
+
+      {(state === 'preview' || state === 'error') && (
+        <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.55 }}>
+          <Badge tone={state === 'preview' ? 'neutral' : 'danger'} size="xs">{state === 'preview' ? 'preview' : 'error'}</Badge>
+          <span style={{ marginLeft: 8 }}>
+            {state === 'preview'
+              ? 'Engine이 아직 연결되지 않아 코칭을 생성할 수 없습니다. (COM_MOON_ENGINE_URL 미설정)'
+              : note}
+          </span>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+export function RevenueOverview({ onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
   const [period, setPeriod] = React.useState('MTD');
   const LEADS = ledger.leads;
@@ -303,6 +388,8 @@ export function RevenueOverview() {
           ))}
         </Card>
       </div>
+
+      <GuruCoachPanel onNavigate={onNavigate} />
     </div>
   );
 }

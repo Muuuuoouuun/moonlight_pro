@@ -77,7 +77,7 @@ const PAGE_MAP = {
   'dashboard/content/studio': () => <Studio />,
   'dashboard/content/queue': () => <Queue />,
   'dashboard/content/campaigns': () => <Campaigns />,
-  'dashboard/revenue/overview': () => <RevenueOverview />,
+  'dashboard/revenue/overview': (n) => <RevenueOverview onNavigate={n} />,
   'dashboard/revenue/leads': () => <Leads />,
   'dashboard/revenue/deals': () => <Deals />,
   'dashboard/revenue/cases': () => <Cases />,

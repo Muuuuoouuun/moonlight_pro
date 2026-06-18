@@ -261,6 +261,7 @@ export const COUNCIL = [
   { key: 'writer',     label: 'Writer',     role: '콘텐츠·카피',   tone: 'moon',     last: '뉴스레터 2번 섹션 초안' },
   { key: 'operator',   label: 'Operator',   role: '자동화·프로세스', tone: 'warning', last: 'Gmail 태그 규칙 튜닝 제안' },
   { key: 'coach',      label: 'Coach',      role: '리듬·회고',     tone: 'personal', last: '금요일 리뷰 리마인드' },
+  { key: 'guru',       label: 'Guru',       role: '영업 멘토·딜 코칭', tone: 'moon',    last: '클래스인 딜 진단 — Layer 3 비어있음' },
 ];
 
 export const ORDERS = [

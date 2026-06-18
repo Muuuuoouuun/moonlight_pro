@@ -202,11 +202,12 @@ P0는 데이터 변경 없이 프론트만으로 가치 검증 가능 → 가장
 - [x] `docs/sales-guru-knowledge-base.md` — 12인 세일즈 구루 플레이북 (운영자 제공 원본)
 - [x] `docs/sales-decision-styles.md` — 구매자 의사결정 7스타일 (운영자 제공)
 - [x] `docs/marketing-branding-gurus.md` — 마케팅/브랜딩 3인 (운영자 제공)
-- [ ] `apps/hub/components/hub/hub-data.js` — `COUNCIL`에 `guru` 추가
-- [ ] `apps/hub/components/hub/pages/agents.jsx` — `OFFICE_AGENTS`에 guru, Chat 페르소나 분기
-- [ ] `apps/engine/app/api/ai/sales-mentor/route.ts` — 신규 (brief route 템플릿)
-- [ ] `apps/hub/app/api/hub/sales-mentor/route.ts` — Engine proxy (+ shared secret)
-- [ ] `apps/hub/components/hub/pages/revenue.jsx` — Overview "Guru 코칭" 패널, Deals/Accounts 액션
+- [x] `apps/hub/components/hub/hub-data.js` — `COUNCIL`에 `guru` 추가
+- [x] `apps/hub/components/hub/pages/agents.jsx` — `OFFICE_AGENTS`에 guru, Chat 페르소나 분기(`?agent=guru`)
+- [x] `apps/engine/app/api/ai/sales-mentor/route.ts` — 신규 (brief route 템플릿, 4개 모드)
+- [x] `apps/hub/app/api/hub/sales-mentor/route.js` — Engine proxy (원장 컨텍스트 + shared secret)
+- [x] `apps/hub/components/hub/pages/revenue.jsx` — Overview "Guru 코칭" 패널(`pipeline-triage`)
+- [ ] (다음) Deals 카드 `Guru에게 진단 요청` · Accounts `Ask Guru` 액션 (`deal-review`)
 - [ ] (P3) Agents Orders에 `weekly-retro` 스케줄 오더 등록
 
 ## 14. 지식 베이스 → 모드 매핑

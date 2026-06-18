@@ -5,8 +5,39 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd } from "../hub-primitives";
 import { CHAT_THREAD, COUNCIL, ORDERS } from "../hub-data";
 
+const CHAT_PERSONAS = {
+  writer: {
+    name: 'Writer',
+    role: 'content·copy specialist',
+    title: '뉴스레터 #47 2번 섹션',
+    model: 'Haiku 4.5',
+    reply: {
+      text: '받았어요. 이 요청은 Studio 초안과 연결해 둘게요.',
+      actionLabel: 'Open in Studio',
+      actionTo: 'dashboard/content/studio?new=draft',
+      altText: '대안 1) 더 실용적인 체크리스트형\n대안 2) 사례 중심 서사형\n대안 3) 짧은 선언문형',
+    },
+  },
+  guru: {
+    name: 'Guru',
+    role: '영업 멘토 · 딜 코칭',
+    title: '영업 멘토 세션',
+    model: 'Opus 4.8',
+    intro: [
+      { role: 'agent', name: 'Guru', text: '영업 멘토입니다. Revenue 원장(딜·리드·계정)을 근거로 "지금 무엇을 놓치고 있고, 다음 한 수가 무엇인지"를 코칭합니다.\n\n무엇을 볼까요?\n· 이번 주 파이프라인 분류\n· 특정 딜 진단 (어느 단계에서 막혔는지)\n· 제안서/이메일/반론 대응 다듬기' },
+    ],
+    reply: {
+      text: '받았어요. 원장에서 해당 맥락을 읽고 진단 → 리스크 → 다음 액션으로 정리해 돌려줄게요.',
+      actionLabel: 'Revenue 열기',
+      actionTo: 'dashboard/revenue/overview',
+      altText: 'Keenan 4층: Layer 3(매출 영향)·Layer 4(개인 임팩트)를 아직 안 건드렸어요.\nVoss: "무엇이 결정을 어렵게 하나요?"로 저항을 먼저 열어보죠.',
+    },
+  },
+};
+
 export function AgentsChat({ onNavigate }) {
   const [input, setInput] = React.useState('');
+  const [agentKey, setAgentKey] = React.useState('writer');
   const [thread, setThread] = React.useState(CHAT_THREAD);
   const [conversations, setConversations] = React.useState([
     { name: '뉴스레터 #47 2번 섹션', agent: 'Writer', time: '지금', active: true },
@@ -16,10 +47,27 @@ export function AgentsChat({ onNavigate }) {
     { name: '가격 실험 가설', agent: 'Strategist', time: '3d', active: false },
   ]);
   const [pinned, setPinned] = React.useState(false);
+  const persona = CHAT_PERSONAS[agentKey] || CHAT_PERSONAS.writer;
+
+  // Persona is selected via ?agent=<key> (e.g. from Council / VR Office).
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const a = new URLSearchParams(window.location.search).get('agent');
+    if (a && CHAT_PERSONAS[a] && a !== 'writer') {
+      const p = CHAT_PERSONAS[a];
+      setAgentKey(a);
+      if (p.intro) setThread(p.intro);
+      setConversations(prev => [
+        { name: p.title, agent: p.name, time: '지금', active: true },
+        ...prev.map(c => ({ ...c, active: false })),
+      ]);
+    }
+  }, []);
+
   const send = () => {
     const text = input.trim();
     if (!text) return;
-    setThread(prev => [...prev, { role: 'user', text }, { role: 'agent', name: 'Writer', text: '받았어요. 이 요청은 Studio 초안과 연결해 둘게요.', hasAction: true }]);
+    setThread(prev => [...prev, { role: 'user', text }, { role: 'agent', name: persona.name, text: persona.reply.text, hasAction: true }]);
     setInput('');
   };
   const startConversation = () => {
@@ -57,10 +105,10 @@ export function AgentsChat({ onNavigate }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Avatar name="Writer" size={26} tone="moon" />
+          <Avatar name={persona.name} size={26} tone="moon" />
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>뉴스레터 #47 2번 섹션</div>
-            <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>Writer · content·copy specialist</div>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>{persona.title}</div>
+            <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{persona.name} · {persona.role}</div>
           </div>
           <Button variant={pinned ? 'secondary' : 'outline'} size="sm" icon="link" onClick={() => setPinned(v => !v)}>{pinned ? 'Pinned' : 'Pin to Brief'}</Button>
         </div>
@@ -69,7 +117,7 @@ export function AgentsChat({ onNavigate }) {
           <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
             {thread.map((m, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, flexDirection: m.role === 'user' ? 'row-reverse' : 'row' }}>
-                {m.role === 'agent' && <Avatar name="W" size={24} tone="moon" />}
+                {m.role === 'agent' && <Avatar name={(m.name || persona.name).slice(0, 1)} size={24} tone="moon" />}
                 {m.role === 'user' && <Avatar name="H" size={24} />}
                 <div style={{ maxWidth: '75%' }}>
                   {m.role === 'agent' && <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginBottom: 4 }}>{m.name}</div>}
@@ -85,8 +133,8 @@ export function AgentsChat({ onNavigate }) {
                   </div>
                   {m.hasAction && (
                     <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
-                      <Button variant="primary" size="xs" icon="arrowRight" onClick={() => onNavigate?.('dashboard/content/studio?new=draft')}>Open in Studio</Button>
-                      <Button variant="ghost" size="xs" onClick={() => setThread(prev => [...prev, { role: 'agent', name: 'Writer', text: '대안 1) 더 실용적인 체크리스트형\n대안 2) 사례 중심 서사형\n대안 3) 짧은 선언문형' }])}>View alternatives</Button>
+                      <Button variant="primary" size="xs" icon="arrowRight" onClick={() => onNavigate?.(persona.reply.actionTo)}>{persona.reply.actionLabel}</Button>
+                      <Button variant="ghost" size="xs" onClick={() => setThread(prev => [...prev, { role: 'agent', name: persona.name, text: persona.reply.altText }])}>View alternatives</Button>
                     </div>
                   )}
                 </div>
@@ -97,7 +145,7 @@ export function AgentsChat({ onNavigate }) {
 
         <div style={{ padding: '12px 20px 16px', borderTop: '1px solid var(--line-soft)' }}>
           <div style={{ maxWidth: 720, margin: '0 auto', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', padding: 10 }}>
-            <textarea value={input} onChange={e => setInput(e.target.value)} placeholder="Message Writer…" style={{
+            <textarea value={input} onChange={e => setInput(e.target.value)} placeholder={`Message ${persona.name}…`} style={{
               width: '100%', minHeight: 52, resize: 'none',
               background: 'transparent', border: 'none', outline: 'none',
               color: 'var(--fg)', fontSize: 13.5, lineHeight: 1.5,
@@ -106,7 +154,7 @@ export function AgentsChat({ onNavigate }) {
               <Button variant="ghost" size="xs" icon="upload" onClick={() => setInput(v => v ? `${v}\n[첨부: context]` : '[첨부: context]')}>Attach</Button>
               <Button variant="ghost" size="xs" icon="link" onClick={() => onNavigate?.('dashboard/work/decisions?new=decision')}>Link decision</Button>
               <div style={{ flex: 1 }} />
-              <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>Writer · Haiku 4.5</span>
+              <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{persona.name} · {persona.model}</span>
               <Button variant="primary" size="xs" icon="send" onClick={send}>Send</Button>
             </div>
           </div>
@@ -204,6 +252,7 @@ const OFFICE_AGENTS = [
   { key: 'strategist', label: 'Strategist', role: '장기·우선순위', color: '#ffd68f', x: 3, y: 1, task: '5월 플랜 초안', status: 'reading', mood: '관조' },
   { key: 'operator', label: 'Operator', role: '자동화·실행', color: '#b4e8a8', x: 0, y: 3, task: 'Gmail 태그 규칙 튜닝', status: 'running', mood: '작업' },
   { key: 'council', label: 'Council', role: '합의·결정', color: '#ffaebb', x: 2, y: 3, task: 'Thread 예약 발행 검토', status: 'meeting', mood: '논의' },
+  { key: 'guru', label: 'Guru', role: '영업 멘토·딜 코칭', color: '#a9c6e8', x: 4, y: 1, task: '클래스인 딜 진단', status: 'reading', mood: '코칭' },
   { key: 'you', label: 'Hyeon (나)', role: 'Founder', color: '#f0e6d8', x: 4, y: 3, task: '브리핑 읽는 중', status: 'idle', mood: '휴식' },
 ];
 
@@ -332,6 +381,7 @@ function PixelRoom({ selected, onSelect }) {
 }
 
 const OFFICE_FEED = [
+  { at: '지금', who: 'Guru', ev: '클래스인 딜 — Keenan 4층 진단: Layer 3(매출 영향) 비어있음', tone: 'moon' },
   { at: '지금', who: 'Writer', ev: '초안 2번 섹션 860자 작성 완료', tone: 'info' },
   { at: '2분 전', who: 'Analyst', ev: '리드 17건 중 4건에 "레퍼럴" 태그 추가', tone: 'moon' },
   { at: '5분 전', who: 'Operator', ev: 'Gmail 규칙 v3 배포 · 오탐 -82%', tone: 'success' },
