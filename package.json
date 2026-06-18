@@ -12,6 +12,7 @@
     "check:contracts": "node ./scripts/check-contracts.mjs",
     "check:connections": "node ./scripts/check-connections.mjs",
     "check:sheets": "node ./scripts/check-sheets-normalize.mjs",
+    "check:cards": "node ./scripts/check-card-intake.mjs",
     "db:migrate": "node ./scripts/apply-migrations.mjs",
     "dev": "turbo run dev",
     "dev:hub": "npm --workspace @com-moon/hub run dev",
