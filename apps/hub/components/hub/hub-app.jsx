@@ -15,6 +15,7 @@ import { Calendar, Decisions, Roadmap, Rhythm } from "./pages/work";
 import { Projects } from "./pages/projects";
 import { Studio, Queue, Campaigns } from "./pages/content";
 import { RevenueOverview, Leads, Deals, Cases, Accounts } from "./pages/revenue";
+import { Followups } from "./pages/followups";
 import { AutomationsIndex, EmailAutomation, Webhooks, Runs, Flows } from "./pages/automations";
 import { SheetsSync } from "./pages/sheets-sync";
 import { AgentsChat, AgentsCouncil, AgentsOrders, AgentsOffice } from "./pages/agents";
@@ -83,6 +84,7 @@ const PAGE_MAP = {
   'dashboard/revenue/deals': () => <Deals />,
   'dashboard/revenue/cases': () => <Cases />,
   'dashboard/revenue/accounts': () => <Accounts />,
+  'dashboard/revenue/followups': () => <Followups />,
   'dashboard/automations': (n) => <AutomationsIndex onNavigate={n} />,
   'dashboard/automations/flows': () => <Flows />,
   'dashboard/automations/email': () => <EmailAutomation />,

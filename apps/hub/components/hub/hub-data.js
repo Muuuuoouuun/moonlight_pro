@@ -23,6 +23,7 @@ export const NAV_TREE = [
       { key: 'leads',    label: 'Leads',    icon: 'leads',    path: 'dashboard/revenue/leads' },
       { key: 'accounts', label: 'Accounts', icon: 'accounts', path: 'dashboard/revenue/accounts' },
       { key: 'cases',    label: 'Cases',    icon: 'cases',    path: 'dashboard/revenue/cases' },
+      { key: 'followups',label: 'Follow-ups',icon: 'bell',    path: 'dashboard/revenue/followups' },
     ],
   },
   {
