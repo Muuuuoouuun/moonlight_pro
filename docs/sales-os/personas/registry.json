@@ -5,6 +5,9 @@
   "loop_command": "/team",
   "contract": "docs/sales-os/personas/_contract.md",
   "context_spine": "docs/sales-os/context-spine.md",
+  "capture_spine": "docs/sales-os/capture-spine.md",
+  "commands": { "loop": "/team", "capture": "/inbox" },
+  "db_seed": "supabase/migrations/20260618_0010_agents_personas_inbox.sql",
   "activation": "selective",
   "personas": [
     {

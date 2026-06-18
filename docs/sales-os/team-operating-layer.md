@@ -56,9 +56,11 @@
 | `personas/03-production.md` | ④ 제작 |
 | `personas/04-review-gate.md` | ⑤ 검수 + Codex 프로토콜 |
 | `personas/registry.json` | 기계가 읽는 레지스트리 (나중에 Hub가 import) |
-| `context-spine.md` | 360 스키마 + 소스 레지스트리 + 조립 계약 ("결합 방법 전부") |
-| `team-command.md` | `/team` 커맨드 **커밋 미러**(`.claude/`는 gitignored) — 다른 환경선 본문을 `.claude/commands/team.md`로 복사 |
-| `.claude/commands/team.md` | 실행 가능한 `/team` 지휘 커맨드 (로컬 개인 — 커밋 안 됨) |
+| `context-spine.md` | 360 스키마 + 소스 레지스트리 + 조립 계약 (*읽기* — "결합 방법 전부") |
+| `capture-spine.md` | 현장 한 줄 캡처 → 분류·라우팅 → 기존 테이블 (*쓰기* — 인테이크/캡처) |
+| `team-command.md` / `inbox-command.md` | `/team`·`/inbox` 커맨드 **커밋 미러**(`.claude/`는 gitignored) |
+| `.claude/commands/{team,inbox}.md` | 실행 가능한 `/team`(풀 루프)·`/inbox`(캡처 라우터) (로컬 개인 — 커밋 안 됨) |
+| `supabase/migrations/20260618_0010_*.sql` | agents 5 페르소나 시드 + `lead_intake_raw.source='inbox'` (별도 적용) |
 
 ## 4. 기존과의 관계
 
