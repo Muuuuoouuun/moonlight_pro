@@ -43,6 +43,7 @@ const SIGNAL_TARGETS = {
   decision: 'dashboard/work/decisions?new=decision',
   rhythm: 'dashboard/work/rhythm',
   focus: 'dashboard/work/calendar?focus=15',
+  queueApprovals: 'dashboard/daily-brief',
 };
 
 const CONTEXT_TARGETS = {
@@ -235,6 +236,93 @@ function MetricCard({ m }) {
   );
 }
 
+const WO_KIND_TONE = {
+  outcome: 'moon', lead: 'moon', dm: 'moon',
+  idea: 'info', engagement: 'info',
+  review: 'warning', note: 'neutral',
+};
+
+// The 1-click approval cockpit — proposed work orders (persona/inbox/guru) decided in place.
+// registry.json no_auto_send=true: nothing executes without this click.
+function ApprovalQueueCard({ onNavigate }) {
+  const [orders, setOrders] = React.useState([]);
+  const [state, setState] = React.useState('loading');
+  const [busyId, setBusyId] = React.useState(null);
+
+  React.useEffect(() => {
+    let active = true;
+    fetch('/api/hub/work-orders?status=proposed', { cache: 'no-store' })
+      .then((r) => r.json().catch(() => null))
+      .then((d) => {
+        if (!active) return;
+        if (d && Array.isArray(d.orders)) {
+          setOrders(d.orders);
+          setState(d.source === 'supabase' ? 'live' : 'empty');
+        } else {
+          setState('empty');
+        }
+      })
+      .catch(() => active && setState('empty'));
+    return () => { active = false; };
+  }, []);
+
+  async function decide(id, status) {
+    if (busyId) return;
+    setBusyId(id);
+    try {
+      const res = await fetch('/api/hub/work-orders', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, status }),
+      });
+      if (res.ok) setOrders((prev) => prev.filter((o) => o.id !== id));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const pending = orders.length;
+
+  return (
+    <div>
+      <SectionTitle right={<Badge tone={pending ? 'moon' : 'success'} size="xs">{pending} 대기</Badge>}>
+        승인 큐
+      </SectionTitle>
+      <Card pad={false}>
+        {pending === 0 ? (
+          <div style={{ padding: 14, fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+            {state === 'loading'
+              ? '큐 확인 중…'
+              : '승인 대기 중인 제안이 없습니다. /inbox·/team이 제안을 올리면 여기서 1클릭으로 처리합니다.'}
+          </div>
+        ) : (
+          orders.map((o, i) => (
+            <div key={o.id} style={{
+              display: 'flex', alignItems: 'flex-start', gap: 10,
+              padding: '11px 14px', opacity: busyId === o.id ? 0.5 : 1,
+              borderBottom: i < orders.length - 1 ? '1px solid var(--line-soft)' : 'none',
+            }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <Badge tone={WO_KIND_TONE[o.kind] || 'neutral'} size="xs">{o.kind}</Badge>
+                  <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)' }}>{o.persona}{o.channel ? ` · ${o.channel}` : ''}</span>
+                </div>
+                <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {o.title}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <Button variant="primary" size="xs" onClick={() => decide(o.id, 'approved')}>승인</Button>
+                <Button variant="ghost" size="xs" onClick={() => decide(o.id, 'dismissed')}>보류</Button>
+              </div>
+            </div>
+          ))
+        )}
+      </Card>
+    </div>
+  );
+}
+
 function ContentCadenceCard({ onNavigate }) {
   const [data, setData] = React.useState(null);
   const [state, setState] = React.useState("loading");
@@ -385,6 +473,8 @@ export function DailyBrief({ onNavigate }) {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+          <ApprovalQueueCard onNavigate={onNavigate} />
+
           <div>
             <SectionTitle right={<span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{blocks.filter(b => b.done).length}/{blocks.length}</span>}>Today</SectionTitle>
             <Card pad={false}>

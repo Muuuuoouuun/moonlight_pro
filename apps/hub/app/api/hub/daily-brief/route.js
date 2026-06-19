@@ -5,6 +5,7 @@ import { getContentLedger } from "@/lib/repositories/content-ledger";
 import { getProjectLedger } from "@/lib/repositories/operating-ledger";
 import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
 import { getWorkLedger } from "@/lib/repositories/work-ledger";
+import { getWorkOrders } from "@/lib/sales-os/work-orders";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +33,96 @@ function metric(label, value, delta, tone = "moon", spark = [3, 4, 3, 5, 4, 6, 5
 
 function action(label, actionKey, primary = false) {
   return { label, action: actionKey, primary };
+}
+
+// Cross-pillar risk: the strategist judgment a solo operator lacks bandwidth for.
+// (a) best-effort — a stale deal and a blocked project that share a name token = one account
+//     at risk on two fronts. (b) reliable — when >=2 danger fronts pile up today, surface the
+//     convergence so the operator triages once instead of pillar-by-pillar.
+const RISK_STOP = new Set(["도입", "프로젝트", "deal", "project", "리뉴얼", "운영"]);
+
+function nameTokens(name) {
+  return String(name || "")
+    .toLowerCase()
+    .split(/[\s·,/|—\-]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2 && !RISK_STOP.has(t));
+}
+
+function buildUnifiedRiskSignals(revenue, projects, automations) {
+  const staleDeals = (Array.isArray(revenue.deals) ? revenue.deals : []).filter(
+    (d) => d.stage !== "won" && d.stage !== "lost" && Number(d.age) >= 10,
+  );
+  const blocked = (Array.isArray(projects.projects) ? projects.projects : []).filter(
+    (p) => p.status === "Blocked",
+  );
+  const failedRuns = (Array.isArray(automations.runs) ? automations.runs : []).filter(
+    (r) => r.status === "err" || r.statusKey === "failure",
+  );
+
+  // (a) name-overlap join — same account on two fronts
+  for (const deal of staleDeals) {
+    const dealTokens = new Set(nameTokens(deal.name));
+    for (const project of blocked) {
+      const overlap = nameTokens(project.name).find((t) => dealTokens.has(t));
+      if (overlap) {
+        return [{
+          id: `risk-converge-${deal.id}-${project.id}`,
+          tone: "danger",
+          kind: "Risk",
+          title: `${overlap} — 두 전선에서 위험`,
+          summary: `정체 딜 "${deal.name}"(${deal.age}일)과 막힌 프로젝트 "${project.name}"이 같은 축에서 동시에 위험합니다. 한 번에 정리하세요.`,
+          meta: "Cross-pillar · deal × project",
+          source: { from: "Risk", ref: deal.id },
+          decisions: [
+            action("딜 열기", "deals", true),
+            action("프로젝트 열기", "projects"),
+            action("오늘 보류", "wait"),
+          ],
+        }];
+      }
+    }
+  }
+
+  // (b) convergence — >=2 danger fronts today
+  const fronts = [];
+  if (staleDeals.length) fronts.push(`정체 딜 ${staleDeals.length}`);
+  if (blocked.length) fronts.push(`막힌 프로젝트 ${blocked.length}`);
+  if (failedRuns.length) fronts.push(`실패 run ${failedRuns.length}`);
+  if (fronts.length >= 2) {
+    return [{
+      id: "risk-convergence",
+      tone: "danger",
+      kind: "Risk",
+      title: `복합 리스크 — ${fronts.length}개 전선`,
+      summary: `${fronts.join(" · ")}이(가) 동시에 쌓였습니다. 우선순위를 정해 한 화면에서 처리하세요.`,
+      meta: "Cross-pillar · convergence",
+      source: { from: "Risk", ref: "TODAY" },
+      decisions: [
+        action("Revenue 보기", "revenue", true),
+        action("프로젝트 보기", "projects"),
+      ],
+    }];
+  }
+
+  return [];
+}
+
+// Pending approvals nudge — the proposed work-order queue surfaced in the signal feed.
+function buildApprovalSignals(queue) {
+  const pending = queue?.pending || 0;
+  if (!pending) return [];
+  const preview = (queue.orders || []).slice(0, 3).map((o) => o.title).join(" · ");
+  return [{
+    id: "queue-approvals",
+    tone: "info",
+    kind: "Queue",
+    title: `승인 대기 ${pending}건`,
+    summary: preview || "페르소나·인박스가 제안한 액션이 승인을 기다립니다.",
+    meta: "Work orders · proposed",
+    source: { from: "Queue", ref: "PROPOSED" },
+    decisions: [action("승인 큐 확인", "queueApprovals", true)],
+  }];
 }
 
 function buildRevenueSignals(revenue) {
@@ -286,12 +377,13 @@ function buildSources(results) {
 }
 
 export async function GET() {
-  const [projectsResult, workResult, contentResult, revenueResult, automationsResult] = await Promise.allSettled([
+  const [projectsResult, workResult, contentResult, revenueResult, automationsResult, ordersResult] = await Promise.allSettled([
     getProjectLedger(),
     getWorkLedger(),
     getContentLedger(),
     getRevenueLedger(),
     getAutomationsLedger(),
+    getWorkOrders({ status: "proposed", limit: 20 }),
   ]);
 
   const results = {
@@ -307,15 +399,23 @@ export async function GET() {
   const content = readLedger(contentResult);
   const revenue = readLedger(revenueResult);
   const automations = readLedger(automationsResult);
+  const ordersLedger = readLedger(ordersResult, { source: "preview", orders: [] });
+  const queue = {
+    source: ordersLedger.source || "preview",
+    pending: Array.isArray(ordersLedger.orders) ? ordersLedger.orders.length : 0,
+    orders: Array.isArray(ordersLedger.orders) ? ordersLedger.orders.slice(0, 12) : [],
+  };
   const sources = buildSources(results);
   const liveCount = sources.filter((source) => source.state === "live").length;
   const errorCount = sources.filter((source) => source.state === "error").length;
   const signals = [
+    ...buildUnifiedRiskSignals(revenue, projects, automations),
+    ...buildApprovalSignals(queue),
     ...buildRevenueSignals(revenue),
     ...buildContentSignals(content),
     ...buildAutomationSignals(automations),
     ...buildWorkSignals(projects, work),
-  ].slice(0, 6);
+  ].slice(0, 7);
 
   return NextResponse.json({
     status: errorCount ? "partial" : liveCount ? "live" : "preview",
@@ -333,5 +433,6 @@ export async function GET() {
     metrics: buildMetrics(revenue, content, automations, projects),
     signals,
     blocks: buildBlocks(projects, content),
+    queue,
   });
 }
