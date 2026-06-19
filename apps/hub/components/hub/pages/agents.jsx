@@ -264,44 +264,120 @@ export function AgentsCouncil({ onNavigate }) {
   );
 }
 
+const WO_STATUS_TONE = { proposed: 'warning', approved: 'info', executed: 'success', dismissed: 'neutral', done: 'success', review: 'warning', draft: 'neutral' };
+
+function shortWhen(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const diff = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (diff < 1) return '방금';
+  if (diff < 60) return `${diff}분 전`;
+  if (diff < 1440) return `${Math.floor(diff / 60)}시간 전`;
+  return new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric' }).format(d);
+}
+
+// Live render: real work_orders (the semi-auto queue) + the seeded 5-persona roster.
+// Falls back to the static ORDERS sample when the Supabase spine isn't connected (demo).
 export function AgentsOrders({ onNavigate }) {
-  const sTone = { done: 'success', review: 'warning', draft: 'neutral' };
-  const [orders, setOrders] = React.useState(ORDERS);
-  const createOrder = () => {
-    setOrders(prev => [{
-      id: `local-order-${Date.now()}`,
-      at: '방금',
-      to: 'Council',
-      what: '새 오더 초안',
-      status: 'draft',
-    }, ...prev]);
-  };
+  const [orders, setOrders] = React.useState(null); // null = loading
+  const [personas, setPersonas] = React.useState([]);
+  const [live, setLive] = React.useState(false);
+  const [busyId, setBusyId] = React.useState(null);
+
+  React.useEffect(() => {
+    let active = true;
+    fetch('/api/hub/work-orders', { cache: 'no-store' })
+      .then((r) => r.json().catch(() => null))
+      .then((d) => {
+        if (!active) return;
+        if (d && Array.isArray(d.orders) && d.source === 'supabase') {
+          setOrders(d.orders);
+          setLive(true);
+        } else {
+          setOrders([]);
+          setLive(false);
+        }
+      })
+      .catch(() => active && (setOrders([]), setLive(false)));
+    fetch('/api/hub/agents', { cache: 'no-store' })
+      .then((r) => r.json().catch(() => null))
+      .then((d) => { if (active && d && Array.isArray(d.personas)) setPersonas(d.personas); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  async function decide(id, status) {
+    if (busyId) return;
+    setBusyId(id);
+    try {
+      const res = await fetch('/api/hub/work-orders', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, status }),
+      });
+      if (res.ok) setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // Live rows from work_orders, else the static sample (demo) so the page is never empty.
+  const rows = live && Array.isArray(orders)
+    ? orders.map((o) => ({ id: o.id, at: shortWhen(o.proposedAt), to: o.persona, what: o.title, status: o.status, live: true }))
+    : (orders === null ? [] : ORDERS.map((o) => ({ ...o, live: false })));
+
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Agent orders</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>에이전트에게 내린 작업 · 자동 스케줄 + 온디맨드</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>페르소나·인박스가 올린 제안 큐 · 1클릭 승인</div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createOrder}>New order</Button>
+        <Badge tone={live ? 'success' : 'neutral'} size="xs">{live ? 'live' : 'demo'}</Badge>
       </div>
+
+      {personas.length > 0 && (
+        <Card pad={false} style={{ padding: '10px 14px', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', background: 'var(--surface-2)' }}>
+          <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Personas</span>
+          {personas.map((p) => (
+            <Badge key={p.id} tone={p.status === 'idle' ? 'neutral' : 'moon'} variant="outline" size="xs">
+              {p.nameKo || p.id} · {p.emits}
+            </Badge>
+          ))}
+        </Card>
+      )}
+
       <Card pad={false} className="hub-table-card">
-        <div style={{ display: 'grid', gridTemplateColumns: '110px 100px 1fr 100px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          <span>When</span><span>Assignee</span><span>Task</span><span>Status</span><span style={{ textAlign: 'right' }} />
+        <div style={{ display: 'grid', gridTemplateColumns: '100px 90px 1fr 90px 120px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+          <span>When</span><span>Persona</span><span>Proposal</span><span>Status</span><span style={{ textAlign: 'right' }} />
         </div>
-        {orders.map((o, i) => (
+        {rows.length === 0 && (
+          <div style={{ padding: 16, fontSize: 12.5, color: 'var(--fg-muted)' }}>
+            {orders === null ? '큐 확인 중…' : '대기 중인 제안이 없습니다. /inbox·/team이 제안을 올리면 여기에 쌓입니다.'}
+          </div>
+        )}
+        {rows.map((o, i) => (
           <div key={o.id} style={{
-            display: 'grid', gridTemplateColumns: '110px 100px 1fr 100px 80px',
+            display: 'grid', gridTemplateColumns: '100px 90px 1fr 90px 120px',
             padding: '12px 16px', alignItems: 'center',
-            borderBottom: i < ORDERS.length - 1 ? '1px solid var(--line-soft)' : 'none',
+            opacity: busyId === o.id ? 0.5 : 1,
+            borderBottom: i < rows.length - 1 ? '1px solid var(--line-soft)' : 'none',
           }}>
             <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{o.at}</span>
             <span style={{ fontSize: 12, color: 'var(--moon-300)' }}>{o.to}</span>
-            <span style={{ fontSize: 13 }}>{o.what}</span>
-            <Badge tone={sTone[o.status]} size="xs">{o.status}</Badge>
-            <div style={{ textAlign: 'right' }}>
-              <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(`dashboard/agents/chat?order=${o.id}`)}>Open</Button>
+            <span style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.what}</span>
+            <Badge tone={WO_STATUS_TONE[o.status] || 'neutral'} size="xs">{o.status}</Badge>
+            <div style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+              {o.live && o.status === 'proposed' ? (
+                <>
+                  <Button variant="primary" size="xs" onClick={() => decide(o.id, 'approved')}>승인</Button>
+                  <Button variant="ghost" size="xs" onClick={() => decide(o.id, 'dismissed')}>보류</Button>
+                </>
+              ) : (
+                <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(`dashboard/agents/chat?order=${o.id}`)}>Open</Button>
+              )}
             </div>
           </div>
         ))}
