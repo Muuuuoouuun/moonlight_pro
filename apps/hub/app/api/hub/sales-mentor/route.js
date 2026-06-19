@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
-import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
+import { recordAgentRun } from "@/lib/sales-os/agent-runs";
+import { assembleSalesContext } from "@/lib/sales-os/context-assembler";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,40 +49,32 @@ async function callEngine(body) {
   return { status: response.status, data };
 }
 
-const trim = (arr, n) => (Array.isArray(arr) ? arr.slice(0, n) : []);
+// One-line fingerprint of the assembled context for the episodic-memory log.
+function summarizeContext(ctx) {
+  if (!ctx) return null;
+  const d = Array.isArray(ctx.deals) ? ctx.deals.length : 0;
+  const l = Array.isArray(ctx.leads) ? ctx.leads.length : 0;
+  const o = ctx.outcomes?.recent?.length || 0;
+  const m = Array.isArray(ctx.missing) ? ctx.missing.length : 0;
+  return `src=${ctx.source} deals=${d} leads=${l} outcomes=${o} missing=${m}${ctx.focus ? " focus=1" : ""}`;
+}
 
-// Build a compact sales context from the existing revenue ledger so the Engine
-// route stays focused on the LLM + persistence (see plan §7.1 / §7.2).
-async function buildSalesContext(mode, ref) {
-  let ledger;
+// Store a compact recommendation snapshot (jsonb) — cap large payloads so the log stays cheap.
+function trimRecommendation(data) {
+  if (data == null) return null;
+  if (typeof data === "string") return { text: data.slice(0, 2000) };
   try {
-    ledger = await getRevenueLedger();
-  } catch (error) {
-    return { source: "preview", error: error instanceof Error ? error.message : String(error) };
+    const json = JSON.stringify(data);
+    return json.length <= 4000 ? data : { truncated: true, preview: json.slice(0, 2000) };
+  } catch {
+    return null;
   }
+}
 
-  const context = {
-    source: ledger.source,
-    summary: ledger.summary || null,
-    stages: ledger.stages || [],
-    deals: trim(ledger.deals, 40),
-    leads: trim(ledger.leads, 40),
-    accounts: trim(ledger.accounts, 40),
-    cases: trim(ledger.cases, 20),
-  };
-
-  if (ref && mode === "deal-review") {
-    const needle = ref.toLowerCase();
-    context.focus = {
-      ref,
-      deals: (ledger.deals || []).filter(
-        (d) => String(d.id).toLowerCase() === needle || (d.name || "").toLowerCase().includes(needle),
-      ),
-      accounts: (ledger.accounts || []).filter((a) => (a.name || "").toLowerCase().includes(needle)),
-    };
-  }
-
-  return context;
+function resultStateFromStatus(status) {
+  if (status >= 200 && status < 300) return "ok";
+  if (status === 202) return "needs_human"; // engine preview / not configured
+  return "error";
 }
 
 export async function POST(req) {
@@ -100,8 +93,22 @@ export async function POST(req) {
   const ref = typeof input.ref === "string" ? input.ref.trim() || null : null;
   const draft = typeof input.draft === "string" ? input.draft : null;
 
-  const context = await buildSalesContext(mode, ref);
+  const context = await assembleSalesContext({ mode, ref });
   const result = await callEngine({ mode, ref, draft, context });
+
+  // Episodic memory: log what Guru recommended so the next call can remember it (best-effort).
+  try {
+    await recordAgentRun({
+      agent: "guru",
+      mode,
+      ref,
+      inputSummary: summarizeContext(context),
+      recommendation: trimRecommendation(result.data),
+      result: resultStateFromStatus(result.status),
+    });
+  } catch {
+    // logging is best-effort — never let it break the coaching response.
+  }
 
   return NextResponse.json(result.data, { status: result.status });
 }
