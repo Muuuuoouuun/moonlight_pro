@@ -12,6 +12,9 @@ Com_Moon Hub OS의 현재 로컬 스키마와 시드 데이터를 정리한 안�
 - `migrations/20260602_0003_content_variant_type_contract.sql`: content_variants variant_type 5종 정리 + 데이터 마이그레이션
 - `migrations/20260602_0004_live_setup_contracts.sql`: 기존 Supabase 프로젝트용 live contract 보정 migration
 - `migrations/20260617_0005`~`20260618_0009`: Sales OS (시트 동기화·CRM owner-names·content idea cadence·outreach outcomes·명함 source)
+- `migrations/20260618_0010_agents_personas_inbox.sql`: 5 페르소나 agents 시드 + `lead_intake_raw.source='inbox'`
+- `migrations/20260619_0011_work_orders_agent_runs.sql`: 반자동 승인 큐(`work_orders`) + 에피소드 메모리(`agent_runs`)
+- `apply-pending.sql`: **편의 번들** — 0003→0011을 시점순으로 묶은 단일 파일(멱등). 대시보드 SQL Editor에 한 번에 붙여넣기용. 정본은 위 개별 migration 파일.
 - `seed.supabase_first.sql`: foundation migration 이후 넣는 브랜드/프로젝트 seed 보강
 - `policies/supabase_first_rls.sql`: Auth 연결 후 적용할 RLS 정책 초안
 - `setup/`: 새 Supabase 프로젝트에 순서대로 적용하는 live setup pack
@@ -40,8 +43,10 @@ Com_Moon Hub OS의 현재 로컬 스키마와 시드 데이터를 정리한 안�
 1. `migrations/20260602_0004_live_setup_contracts.sql` 실행
 2. `setup/01_storage.sql` 실행
 3. `setup/99_smoke_checks.sql` 실행
-4. Sales OS 마이그레이션 적용: `20260602_0003`(variant_type 5종) + `20260617_0005`~`20260618_0009`(시트 동기화·CRM owner-names·content idea cadence·outreach outcomes·명함 source). `npm run db:migrate` 또는 SQL Editor.
+4. Sales OS 마이그레이션 적용 (0003→0011): **간편 경로** = `apply-pending.sql` 전체를 SQL Editor에 붙여넣고 Run (멱등, 원자적). **개별 경로** = PAT(`SUPABASE_ACCESS_TOKEN=sbp_...`) 설정 후 `node scripts/apply-migrations.mjs <파일들…>`. 포함: `20260602_0003`(variant_type 5종)·`0004`·`0005`~`0009`(시트·CRM·cadence·outcomes·명함)·`0010`(페르소나 시드·inbox)·`0011`(work_orders·agent_runs).
 5. 앱 환경 변수를 실제 project URL/key/workspace ID로 맞춘 뒤 `npm run check:connections` 실행
+
+> 번호 메모: `0003`·`0004`는 `20260427`·`20260602` 두 벌이 있습니다(브랜치 병합 흔적). 적용은 날짜 접두사 순서대로 — `apply-pending.sql`이 그 순서를 이미 반영합니다.
 
 ## 설계 포인트
 
