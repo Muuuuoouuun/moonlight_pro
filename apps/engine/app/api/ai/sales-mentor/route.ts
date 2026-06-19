@@ -49,6 +49,9 @@ const SYSTEM_INSTRUCTION = [
   "판단 프레임은 12인 세일즈 구루 플레이북에서 가져오되, 사실(딜 상태·금액·접촉 이력)은",
   "제공된 ledger snapshot에서만 인용하고, 데이터에 없는 사실은 단정하지 않습니다.",
   "근거가 된 프레임은 한 줄로 출처를 밝힙니다 (예: \"Keenan 4층 기준 Layer 3이 비어 있음\").",
+  "context.brand(classmoon) 가드레일을 지키고, 금지 표현(과장·보장·단정, 혁신적·차세대·시너지 같은 default SaaS 톤)을 쓰지 않습니다.",
+  "context.outcomes.recent는 실제 접촉 이력이니 다음 액션의 근거로 삼고, context.memory.recent_runs(이전 코칭)와 중복되지 않게 연속성을 유지합니다.",
+  "context.missing[]에 적힌 소스는 데이터 공백이므로 그 슬라이스의 사실은 추정하지 않습니다.",
 ].join("\n");
 
 async function readJson(req: Request) {
@@ -59,6 +62,45 @@ async function readJson(req: Request) {
 function normalizeMode(value: unknown): Mode {
   const key = typeof value === "string" ? value.trim() : "";
   return (key in MODES ? key : "pipeline-triage") as Mode;
+}
+
+// Readable digest of the 360 context-assembler slices, so the model attends to the
+// brand guardrails / contact history / prior-coaching memory instead of only the raw blob.
+// Defensive: tolerates the old flat context shape (every slice optional).
+function digest360(context: any): string {
+  if (!context || typeof context !== "object") return "";
+  const lines: string[] = [];
+
+  const brand = context.brand;
+  if (brand && (brand.forbidden?.length || brand.rules?.length)) {
+    lines.push(`브랜드 가드레일 (${brand.voice ?? "classmoon"}): 금지=${(brand.forbidden ?? []).join(", ") || "-"}`);
+  }
+
+  const outcomes = context.outcomes?.recent;
+  if (Array.isArray(outcomes) && outcomes.length) {
+    const recent = outcomes
+      .slice(0, 5)
+      .map((o: any) => `${o.action ?? "?"}${o.at ? `(${String(o.at).slice(0, 10)})` : ""}`)
+      .join(" · ");
+    lines.push(`최근 접촉 결과: ${recent}`);
+  }
+
+  const runs = context.memory?.recent_runs;
+  if (Array.isArray(runs) && runs.length) {
+    lines.push(`이전 코칭 ${runs.length}건 기록됨 — 연속성을 유지하고 같은 조언을 반복하지 마라.`);
+  }
+
+  const focus = context.focus;
+  if (focus && focus.found) {
+    lines.push(`포커스 딜: ${focus.entity?.company ?? "?"} · ${focus.entity?.stage ?? "?"} · last_touch=${focus.ledger?.last_touch ?? "무접촉"}`);
+  }
+
+  const missing = context.missing;
+  if (Array.isArray(missing) && missing.length) {
+    lines.push(`데이터 공백(추정 금지): ${missing.map((m: any) => m.source).join(", ")}`);
+  }
+
+  return lines.length ? ["360 컨텍스트 요약:", ...lines].join("\n") : "";
 }
 
 function buildPrompt(mode: Mode, context: unknown, draft?: string | null) {
@@ -77,6 +119,11 @@ function buildPrompt(mode: Mode, context: unknown, draft?: string | null) {
 
   if (draft && draft.trim()) {
     lines.push("", "검토할 초안:", draft.trim());
+  }
+
+  const digest = digest360(context);
+  if (digest) {
+    lines.push("", digest);
   }
 
   lines.push("", "Sales ledger snapshot:", JSON.stringify(context ?? {}, null, 2));
