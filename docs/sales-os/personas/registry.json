@@ -1,0 +1,81 @@
+{
+  "version": "1.3",
+  "name": "Sales OS — AI 팀 운영 레이어",
+  "operator": { "name": "문준혁", "crm_owner_id": "3935704427463307" },
+  "loop_command": "/team",
+  "contract": "docs/sales-os/personas/_contract.md",
+  "context_spine": "docs/sales-os/context-spine.md",
+  "capture_spine": "docs/sales-os/capture-spine.md",
+  "commands": { "loop": "/team", "capture": "/inbox" },
+  "db_seed": "supabase/migrations/20260618_0010_agents_personas_inbox.sql",
+  "activation": "selective",
+  "personas": [
+    {
+      "id": "order",
+      "name_ko": "오더",
+      "name_en": "Dispatch",
+      "role": "신호 읽고 작업지시서 발행 + 360 조립 + 건별 활성 페르소나 선택",
+      "reads": ["all-sources-delta"],
+      "emits": "work_order[]",
+      "tools": ["eeoCRM", "supabase", "sheets"],
+      "gate": "n/a",
+      "file": "docs/sales-os/personas/00-order-dispatch.md"
+    },
+    {
+      "id": "sales",
+      "name_ko": "세일즈",
+      "name_en": "Deals & Follow-up",
+      "role": "딜 다음수 + 반론 대응 + 팔로업 위생(최대 잡무)",
+      "reads": ["entity", "crm_facts", "ledger"],
+      "emits": "{ next_action, objection, followups[] }",
+      "tools": ["eeoCRM:read", "supabase:read"],
+      "gate": "outbound→codex",
+      "file": "docs/sales-os/personas/01-sales-followup.md"
+    },
+    {
+      "id": "content",
+      "name_ko": "콘텐츠",
+      "name_en": "Ideas & Cadence",
+      "role": "아이디어 큐 + 발행 케이던스 + 앵글·랭킹 (작성 대행 아님; 마케팅 신호 흡수)",
+      "reads": ["content", "social_signals", "brand"],
+      "emits": "{ ideas[], cadence_note, today_pick }",
+      "tools": ["supabase:read"],
+      "gate": "internal→auto / publish→production",
+      "file": "docs/sales-os/personas/02-content.md"
+    },
+    {
+      "id": "production",
+      "name_ko": "제작",
+      "name_en": "Asset Scaffold",
+      "role": "승인 앵글 → 채널 포맷 골격(카드뉴스·릴스·스레드) — 발행 마찰 제거",
+      "reads": ["approved_idea", "brand", "channel"],
+      "emits": "{ channel, format, skeleton, thread_split?, notes }",
+      "tools": ["supabase:read"],
+      "gate": "outbound→codex",
+      "file": "docs/sales-os/personas/03-production.md"
+    },
+    {
+      "id": "review",
+      "name_ko": "검수",
+      "name_en": "Review & Gate",
+      "role": "내부 브랜드·사실 셀프리뷰 → Codex 외부 적대 게이트 (브랜딩 흡수)",
+      "reads": ["outbound_candidate"],
+      "emits": "{ internal_review, gate, codex_verdict?, disposition, reasons[], regeneration }",
+      "tools": ["codex"],
+      "gate": "orchestrates",
+      "file": "docs/sales-os/personas/04-review-gate.md"
+    }
+  ],
+  "absorbed": {
+    "marketing": "오더 트리아지 + 콘텐츠 social_signals 반영 (전용 광고 작업은 vNext, classin_home 읽기)",
+    "branding": "검수 일관성 체크 + 콘텐츠/제작 가드레일"
+  },
+  "gates": {
+    "one_way_door": "human",
+    "outbound_copy": "codex",
+    "internal": "auto",
+    "result_states": ["pass", "fail", "error", "needs_human"],
+    "fail_policy": "1회 자동 재생성 → needs_human",
+    "no_auto_send": true
+  }
+}

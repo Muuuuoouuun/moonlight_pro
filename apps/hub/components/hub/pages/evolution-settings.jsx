@@ -25,12 +25,13 @@ const PLAYBOOK_CATALOG = [
 const QUICK_COMMANDS = [
   { slash: '/brief',     label: '아침 브리프 열기',    dest: 'dashboard/daily-brief',        tone: 'moon' },
   { slash: '/work',      label: 'Work OS 집중 모드',   dest: 'dashboard/work/projects',      tone: 'info' },
-  { slash: '/studio',    label: 'Studio 드래프트',     dest: 'dashboard/content/studio',     tone: 'success' },
   { slash: '/pipeline',  label: 'Revenue 파이프라인',  dest: 'dashboard/revenue/overview',   tone: 'warning' },
-  { slash: '/flows',     label: 'Flow 캔버스 열기',    dest: 'dashboard/automations/flows',  tone: 'moon' },
-  { slash: '/council',   label: 'Council 소집',        dest: 'dashboard/agents/council',     tone: 'info' },
-  { slash: '/office',    label: 'VR Office 라이브',    dest: 'dashboard/agents/office',      tone: 'moon' },
+  { slash: '/queue',     label: '발행 큐 점검',        dest: 'dashboard/content/queue',      tone: 'success' },
+  { slash: '/studio',    label: 'Studio 드래프트',     dest: 'dashboard/content/studio',     tone: 'success' },
   { slash: '/runs',      label: '자동화 Run log',      dest: 'dashboard/automations/runs',   tone: 'danger' },
+  { slash: '/flows',     label: 'Flow 캔버스 열기',    dest: 'dashboard/automations/flows',  tone: 'moon' },
+  { slash: '/orders',    label: '에이전트 작업 큐',    dest: 'dashboard/agents/orders',      tone: 'info' },
+  { slash: '/council',   label: 'Council 소집',        dest: 'dashboard/agents/council',     tone: 'info' },
 ];
 
 const SAFE_INCOMING_BASE_URL = 'https://hooks.moonlight.pro/v1/in/{workspace}';

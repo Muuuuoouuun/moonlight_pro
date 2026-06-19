@@ -235,6 +235,93 @@ function MetricCard({ m }) {
   );
 }
 
+function ContentCadenceCard({ onNavigate }) {
+  const [data, setData] = React.useState(null);
+  const [state, setState] = React.useState("loading");
+
+  React.useEffect(() => {
+    let active = true;
+    fetch("/api/hub/content", { cache: "no-store" })
+      .then((r) => r.json().catch(() => null))
+      .then((d) => {
+        if (!active) return;
+        if (d && d.source === "supabase" && d.cadence) {
+          setData({ cadence: d.cadence, ideas: Array.isArray(d.ideaQueue) ? d.ideaQueue : [] });
+          setState("live");
+        } else {
+          setState("mock");
+        }
+      })
+      .catch(() => active && setState("mock"));
+    return () => { active = false; };
+  }, []);
+
+  const syncTone = state === "live" ? "var(--success)" : state === "loading" ? "var(--warning)" : "var(--fg-faint)";
+  const syncLabel = state === "live" ? "live" : state === "loading" ? "syncing" : "mock";
+  const cadence = data?.cadence;
+  const ideas = data?.ideas || [];
+  const pct = cadence ? Math.min(100, Math.round((cadence.published / Math.max(cadence.goal, 1)) * 100)) : 0;
+
+  return (
+    <div>
+      <SectionTitle right={<span className="mono" style={{ fontSize: 10.5, color: syncTone }}>{syncLabel}</span>}>
+        콘텐츠 발행
+      </SectionTitle>
+      <Card>
+        {state === "live" && cadence ? (
+          <>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span className="mono" style={{ fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em" }}>
+                {cadence.published}<span style={{ color: "var(--fg-faint)", fontWeight: 400 }}>/{cadence.goal}</span>
+              </span>
+              <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>이번 주</span>
+              <div style={{ flex: 1 }} />
+              <Badge tone={cadence.behind ? "warning" : "success"} size="xs">
+                {cadence.behind ? `${cadence.remaining}건 남음` : "목표 달성"}
+              </Badge>
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <Progress value={pct} tone={cadence.behind ? "warning" : "success"} />
+            </div>
+            <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)" }}>오늘의 아이디어</span>
+              <span className="mono" style={{ fontSize: 10.5, color: cadence.queueDepth >= 10 ? "var(--fg-faint)" : "var(--warning)" }}>큐 {cadence.queueDepth}</span>
+            </div>
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+              {ideas.slice(0, 3).map((idea) => (
+                <button
+                  key={idea.id}
+                  onClick={() => onNavigate("dashboard/content/queue")}
+                  style={{
+                    textAlign: "left", display: "flex", alignItems: "center", gap: 8,
+                    padding: "7px 9px", background: "var(--surface-2)",
+                    border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)",
+                  }}
+                >
+                  <span className="mono" style={{ fontSize: 10.5, color: "var(--moon-300)", flexShrink: 0 }}>{Math.round(idea.rank)}</span>
+                  <span style={{ fontSize: 12, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{idea.title}</span>
+                </button>
+              ))}
+              {ideas.length === 0 && (
+                <div style={{ fontSize: 12, color: "var(--fg-faint)" }}>큐에 아이디어가 없습니다. Studio에서 추가하세요.</div>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.5 }}>
+              Supabase 콘텐츠 원장이 연결되면 이번 주 발행 진척과 아이디어 큐가 여기에 표시됩니다.
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <Button variant="outline" size="sm" icon="queue" onClick={() => onNavigate("dashboard/content/queue")}>Queue 열기</Button>
+            </div>
+          </>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 export function DailyBrief({ onNavigate }) {
   const [now, setNow] = React.useState(() => new Date());
   const ledger = useDailyBriefLedger();
@@ -319,6 +406,8 @@ export function DailyBrief({ onNavigate }) {
               ))}
             </Card>
           </div>
+
+          <ContentCadenceCard onNavigate={onNavigate} />
 
           <div>
             <SectionTitle>This week rhythm</SectionTitle>

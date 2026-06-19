@@ -15,7 +15,9 @@ import { Calendar, Decisions, Roadmap, Rhythm } from "./pages/work";
 import { Projects } from "./pages/projects";
 import { Studio, Queue, Campaigns } from "./pages/content";
 import { RevenueOverview, Leads, Deals, Cases, Accounts } from "./pages/revenue";
+import { Followups } from "./pages/followups";
 import { AutomationsIndex, EmailAutomation, Webhooks, Runs, Flows } from "./pages/automations";
+import { SheetsSync } from "./pages/sheets-sync";
 import { AgentsChat, AgentsCouncil, AgentsOrders, AgentsOffice } from "./pages/agents";
 import { Evolution, Settings } from "./pages/evolution-settings";
 
@@ -82,11 +84,13 @@ const PAGE_MAP = {
   'dashboard/revenue/deals': () => <Deals />,
   'dashboard/revenue/cases': () => <Cases />,
   'dashboard/revenue/accounts': () => <Accounts />,
+  'dashboard/revenue/followups': () => <Followups />,
   'dashboard/automations': (n) => <AutomationsIndex onNavigate={n} />,
   'dashboard/automations/flows': (n) => <Flows onNavigate={n} />,
   'dashboard/automations/email': (n) => <EmailAutomation onNavigate={n} />,
   'dashboard/automations/webhooks': (n) => <Webhooks onNavigate={n} />,
   'dashboard/automations/runs': () => <Runs />,
+  'dashboard/automations/sheets': () => <SheetsSync />,
   'dashboard/agents/chat': (n) => <AgentsChat onNavigate={n} />,
   'dashboard/agents/council': (n) => <AgentsCouncil onNavigate={n} />,
   'dashboard/agents/orders': (n) => <AgentsOrders onNavigate={n} />,
@@ -97,8 +101,8 @@ const PAGE_MAP = {
 
 const PARENT_JUMP = {
   'dashboard': 'dashboard/daily-brief',
-  'dashboard/work': 'dashboard/work/calendar',
-  'dashboard/content': 'dashboard/content/studio',
+  'dashboard/work': 'dashboard/work/projects',
+  'dashboard/content': 'dashboard/content/queue',
   'dashboard/revenue': 'dashboard/revenue/overview',
   'dashboard/agents': 'dashboard/agents/chat',
 };

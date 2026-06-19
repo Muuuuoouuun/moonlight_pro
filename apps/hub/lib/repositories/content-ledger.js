@@ -10,15 +10,25 @@ import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 const ITEM_STATUSES = ["idea", "draft", "review", "scheduled", "published", "archived"];
 const VARIANT_STATUSES = ["draft", "ready", "published", "archived"];
 const LOG_STATUSES = ["queued", "published", "failed"];
-const VARIANT_TYPES = ["newsletter", "blog_insight", "card_news", "x_thread", "reels_script"];
+const ASSET_TYPES = ["image", "html", "zip", "thumbnail", "source"];
+const VARIANT_TYPES = [
+  "newsletter",
+  "blog",
+  "blog_insight",
+  "card_news",
+  "social_post",
+  "x_thread",
+  "reels_script",
+  "landing_copy",
+];
 
 const ITEM_STATUS_LABEL = {
-  idea: "Idea",
-  draft: "Draft",
-  review: "Review",
-  scheduled: "Scheduled",
-  published: "Published",
-  archived: "Idea",
+  idea: "Inbox",
+  draft: "Drafting",
+  review: "Ready",
+  scheduled: "Handed off",
+  published: "Watch",
+  archived: "Archived",
 };
 
 const VARIANT_KIND_LABEL = {
@@ -41,6 +51,39 @@ const VARIANT_CHANNEL_LABEL = {
   x_thread: "X",
   reels_script: "Reels",
   landing_copy: "Web",
+};
+const CANONICAL_BRAND_ORDER = {
+  sinabro: 10,
+  gore: 20,
+  holyfuncollector: 30,
+  bridgemaker: 40,
+  moonpm: 50,
+  classmoon: 60,
+  studyseagull: 70,
+  politicofficer: 80,
+  "22nomad": 90,
+};
+const CANONICAL_BRAND_TONES = {
+  sinabro: "info",
+  gore: "company",
+  holyfuncollector: "warning",
+  bridgemaker: "moon",
+  moonpm: "warning",
+  classmoon: "info",
+  studyseagull: "danger",
+  politicofficer: "info",
+  "22nomad": "personal",
+};
+const CANONICAL_BRAND_GLYPHS = {
+  sinabro: "✦",
+  gore: "◌",
+  holyfuncollector: "✧",
+  bridgemaker: "◇",
+  moonpm: "◐",
+  classmoon: "□",
+  studyseagull: "△",
+  politicofficer: "◎",
+  "22nomad": "◻",
 };
 
 function normalizeString(value, fallback = "") {
@@ -66,14 +109,24 @@ function normalizeVariantStatus(value, fallback = "draft") {
   return VARIANT_STATUSES.includes(normalized) ? normalized : fallback;
 }
 
+function normalizeLogStatus(value, fallback = "queued") {
+  const normalized = normalizeString(value, fallback).toLowerCase();
+  return LOG_STATUSES.includes(normalized) ? normalized : fallback;
+}
+
+function normalizeAssetType(value, fallback = "source") {
+  const normalized = normalizeString(value, fallback).toLowerCase();
+  return ASSET_TYPES.includes(normalized) ? normalized : fallback;
+}
+
 function normalizeVariantType(value, fallback = "blog_insight") {
   const normalized = normalizeString(value, fallback).toLowerCase();
   const aliases = {
-    blog: "blog_insight",
-    insight: "blog_insight",
+    insight: "blog",
+    blog_insight: "blog",
     carousel: "card_news",
-    thread: "x_thread",
-    social_post: "x_thread",
+    thread: "social_post",
+    x_thread: "social_post",
     reels: "reels_script",
     reel: "reels_script",
     video_script: "reels_script",
@@ -112,6 +165,106 @@ function buildContentMeta(payload, action) {
     brand_key: normalizeNullableString(payload.brandKey),
     automation_recipe_id: normalizeNullableString(payload.automationRecipeId),
   };
+}
+
+function buildLogPayload(payload, event, channel) {
+  const rawPayload = payload.payload && typeof payload.payload === "object" && !Array.isArray(payload.payload)
+    ? payload.payload
+    : {};
+
+  return {
+    ...rawPayload,
+    origin: "hub-studio",
+    event,
+    action: normalizeString(payload.handoffAction) || normalizeString(payload.action, "handoff"),
+    content_id: normalizeNullableString(payload.contentId),
+    brand_id: normalizeNullableString(payload.brandId),
+    brand_key: normalizeNullableString(payload.brandKey),
+    target_channel: normalizeNullableString(payload.targetChannel) || channel,
+    export_profile: normalizeNullableString(payload.exportProfile),
+    title: normalizeNullableString(payload.title),
+    scheduled_for: normalizeNullableString(payload.scheduledFor),
+    note: normalizeNullableString(payload.note),
+  };
+}
+
+function buildAssetMeta(payload, event) {
+  const rawMeta = payload.meta && typeof payload.meta === "object" && !Array.isArray(payload.meta)
+    ? payload.meta
+    : {};
+
+  return {
+    ...rawMeta,
+    origin: "hub-studio",
+    event,
+    content_id: normalizeNullableString(payload.contentId),
+    brand_id: normalizeNullableString(payload.brandId),
+    brand_key: normalizeNullableString(payload.brandKey),
+    export_profile: normalizeNullableString(payload.exportProfile),
+    title: normalizeNullableString(payload.title),
+    channel: normalizeNullableString(payload.channel),
+  };
+}
+
+function normalizeArray(value, fallback = []) {
+  return Array.isArray(value) ? value.filter(Boolean).map(String) : fallback;
+}
+
+function resolveBrandTone(slug, kind, meta) {
+  if (typeof meta?.tone === "string" && meta.tone.trim()) return meta.tone.trim();
+  if (CANONICAL_BRAND_TONES[slug]) return CANONICAL_BRAND_TONES[slug];
+  if (kind === "content") return "warning";
+  if (kind === "education") return "info";
+  if (kind === "personal") return "personal";
+  if (kind === "agency") return "company";
+  return "neutral";
+}
+
+function resolveBrandGlyph(slug, meta) {
+  if (typeof meta?.glyph === "string" && meta.glyph.trim()) return meta.glyph.trim();
+  if (CANONICAL_BRAND_GLYPHS[slug]) return CANONICAL_BRAND_GLYPHS[slug];
+  return "•";
+}
+
+function resolveBrandOrder(slug, meta, index) {
+  const parsed = Number.parseInt(String(meta?.order ?? ""), 10);
+  if (Number.isFinite(parsed)) return parsed;
+  return CANONICAL_BRAND_ORDER[slug] ?? 1000 + index;
+}
+
+function mapBrands(rows) {
+  return rows.map((row, index) => {
+    const meta = row.meta && typeof row.meta === "object" ? row.meta : {};
+    const slug = normalizeString(row.slug, row.id);
+    const kind = normalizeString(row.kind, "brand");
+
+    return {
+      id: row.id,
+      key: slug,
+      name: normalizeString(row.name, slug),
+      kind,
+      glyph: resolveBrandGlyph(slug, meta),
+      tone: resolveBrandTone(slug, kind, meta),
+      colorHex: row.color_hex || "#5274a8",
+      description: row.description || "",
+      philosophy: normalizeString(meta.philosophy),
+      direction: normalizeString(meta.direction),
+      cadence: normalizeString(meta.cadence),
+      voice: normalizeString(meta.voice, kind === "content" ? "long-form, reflective, precise" : "operator-first, concrete, calm"),
+      keywords: normalizeArray(meta.keywords),
+      channels: normalizeArray(meta.channels),
+      rules: normalizeArray(meta.content_rules, [
+        "Make the next action explicit.",
+        "Keep proof close to the claim.",
+        "Avoid decorative copy without an operator signal.",
+      ]),
+      forbidden: normalizeArray(meta.forbidden_terms),
+      sortOrder: resolveBrandOrder(slug, meta, index),
+    };
+  }).sort((a, b) => (
+    a.sortOrder - b.sortOrder ||
+    a.name.localeCompare(b.name, "ko")
+  )).map(({ sortOrder, ...brand }) => brand);
 }
 
 function formatShortDate(value) {
@@ -161,11 +314,12 @@ function resolveItemKind(item, variants) {
   return "Blog";
 }
 
-function mapItems(rows, variants) {
+function mapItems(rows, variants, brandById) {
   return rows.map((row) => {
     const status = ITEM_STATUSES.includes(row.status) ? row.status : "draft";
     const whenSource = row.scheduled_at || row.published_at || row.updated_at || row.created_at;
     const variant = variants.find((v) => v.content_id === row.id);
+    const brand = row.brand_id ? brandById.get(row.brand_id) : null;
 
     return {
       id: row.id,
@@ -184,6 +338,12 @@ function mapItems(rows, variants) {
       publishedAt: row.published_at || null,
       visibility: row.visibility || "private",
       brandId: row.brand_id || null,
+      brandKey: brand?.key || null,
+      brandName: brand?.name || "No brand",
+      brandTone: brand?.tone || "neutral",
+      brandGlyph: brand?.glyph || "•",
+      rankScore: Number.isFinite(row.rank_score) ? Number(row.rank_score) : 0,
+      cadenceWeek: row.cadence_week || null,
       createdAt: row.created_at,
       updatedAt: row.updated_at || row.created_at,
     };
@@ -216,12 +376,24 @@ function mapPublishLogs(rows, variantById) {
   return rows.map((row) => {
     const status = LOG_STATUSES.includes(row.status) ? row.status : "queued";
     const variant = row.variant_id ? variantById.get(row.variant_id) : null;
+    const payload = row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+      ? row.payload
+      : {};
+    const event = normalizeString(payload.event, status === "published" ? "manual_exported" : "handoff_requested");
+
     return {
       id: row.id,
       variantId: row.variant_id,
       contentId: variant?.contentId || null,
       channel: row.channel || variant?.channel || "Web",
       status,
+      event,
+      action: normalizeString(payload.action),
+      title: normalizeString(payload.title, variant?.title || ""),
+      brandId: normalizeNullableString(payload.brand_id),
+      brandKey: normalizeNullableString(payload.brand_key),
+      targetChannel: normalizeNullableString(payload.target_channel) || row.channel || variant?.channel || "Web",
+      exportProfile: normalizeNullableString(payload.export_profile),
       provider: row.provider || null,
       targetUrl: row.target_url || null,
       externalId: row.external_id || null,
@@ -229,17 +401,48 @@ function mapPublishLogs(rows, variantById) {
       publishedAt: row.published_at || null,
       when: formatShortDate(row.published_at || row.created_at),
       createdAt: row.created_at,
+      updatedAt: row.updated_at || row.created_at,
+    };
+  });
+}
+
+function mapAssets(rows, variantById) {
+  return rows.map((row) => {
+    const variant = row.variant_id ? variantById.get(row.variant_id) : null;
+    const meta = row.meta && typeof row.meta === "object" && !Array.isArray(row.meta)
+      ? row.meta
+      : {};
+    const storagePath = row.storage_path || "";
+    const fallbackFileName = storagePath.split("/").filter(Boolean).pop() || storagePath || "asset";
+
+    return {
+      id: row.id,
+      variantId: row.variant_id,
+      contentId: variant?.contentId || null,
+      type: normalizeAssetType(row.asset_type),
+      storagePath,
+      fileName: row.file_name || fallbackFileName,
+      mimeType: row.mime_type || null,
+      sizeBytes: Number.isFinite(row.size_bytes) ? row.size_bytes : null,
+      checksum: row.checksum || null,
+      event: normalizeString(meta.event),
+      provider: normalizeString(meta.provider),
+      exportProfile: normalizeString(meta.export_profile),
+      targetUrl: normalizeNullableString(meta.target_url),
+      when: formatShortDate(row.updated_at || row.created_at),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at || row.created_at,
     };
   });
 }
 
 function buildPipeline(items) {
   const stages = [
-    { key: "idea",      label: "Idea" },
-    { key: "draft",     label: "Draft" },
-    { key: "review",    label: "Review" },
-    { key: "scheduled", label: "Scheduled" },
-    { key: "published", label: "Published" },
+    { key: "idea",      label: "Inbox" },
+    { key: "draft",     label: "Drafting" },
+    { key: "review",    label: "Ready" },
+    { key: "scheduled", label: "Handed off" },
+    { key: "published", label: "Watch" },
   ];
 
   return stages.map((stage) => ({
@@ -307,10 +510,103 @@ function buildQueue(items) {
     title: item.title,
     kind: item.kind,
     channel: item.channel,
+    statusKey: item.status,
     status: item.statusLabel,
     when: item.when,
     author: item.author,
+    brandId: item.brandId,
+    brandKey: item.brandKey,
+    brandName: item.brandName,
+    brandTone: item.brandTone,
+    brandGlyph: item.brandGlyph,
+    rank: item.status === "idea" ? effectiveIdeaRank(item) : null,
   }));
+}
+
+const ISO_DAY_MS = 86400000;
+
+// ISO-8601 week string, e.g. "2026-W25". Buckets publishing cadence by week.
+function isoWeek(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const target = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dayNr = (target.getUTCDay() + 6) % 7; // Mon=0 … Sun=6
+  target.setUTCDate(target.getUTCDate() - dayNr + 3); // Thursday of this week
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const firstDayNr = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNr + 3);
+  const week = 1 + Math.round((target.getTime() - firstThursday.getTime()) / (7 * ISO_DAY_MS));
+  return `${target.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+// Fallback idea-queue ranker (Sales OS v1.1). Uses the stored rank_score when an
+// explicit ranker has set it; otherwise scores on repo-internal signals so the
+// queue is useful from day one (ClassIn sales brand first, more-developed ideas
+// higher). See docs/sales-os-direction.md §5 — refined with real engagement data.
+function effectiveIdeaRank(item) {
+  if (Number.isFinite(item.rankScore) && item.rankScore > 0) return item.rankScore;
+  let score = 50;
+  if (item.brandKey === "classmoon") score += 30; // ClassIn sales brand priority
+  if (item.summary && item.summary.length > 24) score += 12; // developed angle
+  if (item.nextAction) score += 6;
+  return score;
+}
+
+function buildIdeaQueue(items, limit = 12) {
+  return items
+    .filter((item) => item.status === "idea")
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      summary: item.summary,
+      kind: item.kind,
+      channel: item.channel,
+      brandKey: item.brandKey,
+      brandName: item.brandName,
+      brandTone: item.brandTone,
+      brandGlyph: item.brandGlyph,
+      rank: effectiveIdeaRank(item),
+      ranked: Number.isFinite(item.rankScore) && item.rankScore > 0,
+      when: item.when,
+    }))
+    .sort((a, b) => b.rank - a.rank || a.title.localeCompare(b.title, "ko"))
+    .slice(0, limit);
+}
+
+const CADENCE_WEEKS = 4;
+
+// Publishing cadence (Sales OS v1.1): published items per ISO week vs a weekly
+// goal, so the operator sees "n/goal, behind/ahead". Counts come from
+// published_at (cadence_week backfills it when set explicitly).
+function buildCadence(items, goal = 5) {
+  const now = new Date();
+  const currentWeek = isoWeek(now);
+  const weekOf = (item) => item.cadenceWeek || (item.publishedAt ? isoWeek(item.publishedAt) : null);
+
+  const counts = new Map();
+  items
+    .filter((item) => item.status === "published")
+    .forEach((item) => {
+      const week = weekOf(item);
+      if (week) counts.set(week, (counts.get(week) || 0) + 1);
+    });
+
+  const recentWeeks = [];
+  for (let i = CADENCE_WEEKS - 1; i >= 0; i -= 1) {
+    const week = isoWeek(new Date(now.getTime() - i * 7 * ISO_DAY_MS));
+    recentWeeks.push({ week, count: counts.get(week) || 0, current: week === currentWeek });
+  }
+
+  const thisWeek = counts.get(currentWeek) || 0;
+  return {
+    week: currentWeek,
+    goal,
+    published: thisWeek,
+    remaining: Math.max(0, goal - thisWeek),
+    behind: thisWeek < goal,
+    queueDepth: items.filter((item) => item.status === "idea").length,
+    recentWeeks,
+  };
 }
 
 export function buildContentDraftRecords(payload = {}) {
@@ -331,7 +627,7 @@ export function buildContentDraftRecords(payload = {}) {
     title,
     source_idea: sourceIdea,
     idea_source: normalizeString(payload.ideaSource, "studio"),
-    source_type: normalizeString(payload.sourceType, "manual"),
+    source_type: normalizeString(payload.sourceType, "idea"),
     status: normalizeItemStatus(payload.status),
     summary,
     next_action: normalizeNullableString(payload.nextAction),
@@ -422,6 +718,87 @@ export function buildContentDraftUpdateRecords(payload = {}) {
   };
 }
 
+export function buildContentHandoffRecord(payload = {}) {
+  const workspaceId = normalizeString(payload.workspaceId) || resolveDefaultWorkspaceId();
+  const timestamp = new Date().toISOString();
+  const contentId = normalizeString(payload.contentId);
+  const variantId = normalizeString(payload.variantId);
+  const event = normalizeString(
+    payload.event,
+    payload.action === "export" ? "manual_exported" : "handoff_requested",
+  ).toLowerCase();
+  const status = normalizeLogStatus(
+    payload.status,
+    event === "manual_exported" || payload.action === "export" ? "published" : "queued",
+  );
+  const channel = normalizeString(
+    payload.channel || payload.targetChannel,
+    VARIANT_CHANNEL_LABEL[normalizeVariantType(payload.variantType)] || "Web",
+  );
+
+  const logRecord = {
+    id: normalizeString(payload.logId) || randomUUID(),
+    workspace_id: workspaceId || null,
+    variant_id: variantId,
+    channel,
+    status,
+    provider: normalizeNullableString(payload.provider) || (status === "published" ? "manual" : "n8n"),
+    target_url: normalizeNullableString(payload.targetUrl),
+    external_id: normalizeNullableString(payload.externalId),
+    attempt_count: 1,
+    payload: buildLogPayload(payload, event, channel),
+    published_at: status === "published" ? (normalizeNullableString(payload.publishedAt) || timestamp) : normalizeNullableString(payload.publishedAt),
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+
+  return {
+    workspaceId,
+    contentId,
+    variantId,
+    logId: logRecord.id,
+    event,
+    status,
+    logRecord,
+  };
+}
+
+export function buildContentAssetRecord(payload = {}) {
+  const workspaceId = normalizeString(payload.workspaceId) || resolveDefaultWorkspaceId();
+  const timestamp = new Date().toISOString();
+  const contentId = normalizeString(payload.contentId);
+  const variantId = normalizeString(payload.variantId);
+  const event = normalizeString(payload.event, "manual_exported").toLowerCase();
+  const assetType = normalizeAssetType(payload.assetType, payload.action === "export" ? "source" : "html");
+  const extension = assetType === "html" ? "html" : assetType === "zip" ? "zip" : "json";
+  const safeTimestamp = timestamp.replace(/[:.]/g, "-");
+  const storagePath = normalizeString(payload.storagePath) || `hub://content/${variantId}/${safeTimestamp}.${extension}`;
+
+  const assetRecord = {
+    id: normalizeString(payload.assetId) || randomUUID(),
+    workspace_id: workspaceId || null,
+    variant_id: variantId,
+    asset_type: assetType,
+    storage_path: storagePath,
+    file_name: normalizeNullableString(payload.fileName) || storagePath.split("/").filter(Boolean).pop() || `content-asset.${extension}`,
+    mime_type: normalizeNullableString(payload.mimeType) || (assetType === "html" ? "text/html" : "application/json"),
+    size_bytes: Number.isFinite(payload.sizeBytes) ? payload.sizeBytes : null,
+    checksum: normalizeNullableString(payload.checksum),
+    meta: buildAssetMeta(payload, event),
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+
+  return {
+    workspaceId,
+    contentId,
+    variantId,
+    assetId: assetRecord.id,
+    event,
+    assetRecord,
+  };
+}
+
 export async function getContentLedger() {
   const workspaceId = resolveDefaultWorkspaceId();
 
@@ -430,17 +807,21 @@ export async function getContentLedger() {
       source: "preview",
       configured: false,
       workspaceId: null,
+      brands: [],
       items: [],
       variants: [],
+      assets: [],
       publishLogs: [],
       queue: [],
       pipeline: buildPipeline([]),
       attention: [],
       summary: buildSummary([], []),
+      ideaQueue: [],
+      cadence: buildCadence([]),
     };
   }
 
-  const [itemRows, variantRows, logRows] = await Promise.all([
+  const [itemRows, variantRows, logRows, assetRows, brandRows] = await Promise.all([
     fetchSupabaseRows("content_items", {
       limit: 80,
       order: "updated_at.desc",
@@ -458,6 +839,18 @@ export async function getContentLedger() {
       order: "created_at.desc",
       filters: withWorkspaceFilter(),
     }),
+    fetchSupabaseRows("content_assets", {
+      limit: 100,
+      order: "created_at.desc",
+      filters: withWorkspaceFilter(),
+    }),
+    fetchSupabaseRows("brands", {
+      limit: 40,
+      order: "name.asc",
+      filters: withWorkspaceFilter([
+        ["status", "eq.active"],
+      ]),
+    }),
   ]);
 
   if (!itemRows || !variantRows || !logRows) {
@@ -465,31 +858,42 @@ export async function getContentLedger() {
       source: "preview",
       configured: true,
       workspaceId,
+      brands: [],
       items: [],
       variants: [],
+      assets: [],
       publishLogs: [],
       queue: [],
       pipeline: buildPipeline([]),
       attention: [],
       summary: buildSummary([], []),
+      ideaQueue: [],
+      cadence: buildCadence([]),
     };
   }
 
+  const brands = Array.isArray(brandRows) ? mapBrands(brandRows) : [];
+  const brandById = new Map(brands.map((brand) => [brand.id, brand]));
   const variants = mapVariants(variantRows);
   const variantById = new Map(variants.map((v) => [v.id, v]));
-  const items = mapItems(itemRows, variantRows);
+  const items = mapItems(itemRows, variantRows, brandById);
   const publishLogs = mapPublishLogs(logRows, variantById);
+  const assets = Array.isArray(assetRows) ? mapAssets(assetRows, variantById) : [];
 
   return {
     source: "supabase",
     configured: true,
     workspaceId,
+    brands,
     items,
     variants,
+    assets,
     publishLogs,
     queue: buildQueue(items),
     pipeline: buildPipeline(items),
     attention: buildAttention(items, publishLogs),
     summary: buildSummary(items, publishLogs),
+    ideaQueue: buildIdeaQueue(items),
+    cadence: buildCadence(items),
   };
 }

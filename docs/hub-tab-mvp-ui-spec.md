@@ -164,7 +164,7 @@ MVP 액션:
 우선 적용 대상:
 
 - `Revenue` = `All / Individual / Company`
-- `Content` = `All Brands / 시나브로 / 고래(Go;Re) / HolyFunCollector / BridgeMaker / MoonPM / Class.Moon / Study.Seagull / Politic Officer / 22th.Nomad`
+- `Content` = `All Brands / 시나브로 / 고래(Go;Re) / HolyFunCollector / BridgeMaker / MoonPM / Class.Moon / Study.Seagull / Politic_Officer / 22th.Nomad`
 - `Work OS` = `All Projects / Com_Moon / classinkr-web / sales_branding_dash / ai-command-pot`
 
 규칙:
@@ -745,7 +745,7 @@ Brand scope:
 - `MoonPM`
 - `Class.Moon`
 - `Study.Seagull`
-- `Politic Officer`
+- `Politic_Officer`
 - `22th.Nomad`
 
 운영 의미:

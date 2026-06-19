@@ -335,6 +335,35 @@ export function Leads() {
     }, ...prev]);
   };
 
+  const cardFileRef = React.useRef(null);
+  const [cardState, setCardState] = React.useState(null); // { phase, status, fields, error }
+  async function onCardFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCardState({ phase: 'reading' });
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.onerror = () => reject(new Error('파일 읽기 실패'));
+        r.readAsDataURL(file);
+      });
+      const mime = (/data:(.*?);base64,/.exec(dataUrl) || [])[1] || file.type || 'image/jpeg';
+      const imageBase64 = dataUrl.split(',')[1];
+      const resp = await fetch('/api/hub/cards', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ imageBase64, mimeType: mime }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      setCardState({ phase: 'done', status: data.status || 'error', fields: data.fields, error: data.error });
+    } catch (err) {
+      setCardState({ phase: 'done', status: 'error', error: err instanceof Error ? err.message : String(err) });
+    } finally {
+      e.target.value = '';
+    }
+  }
+
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
@@ -362,8 +391,43 @@ export function Leads() {
         </div>
         <Input className="hub-toolbar" placeholder="이름·소스·단계 검색…" icon="search" value={search} onChange={setSearch} />
         <div style={{ width: 8 }} />
+        <Button variant="secondary" size="sm" icon="plus" onClick={() => cardFileRef.current?.click()}>명함</Button>
+        <input ref={cardFileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onCardFile} />
+        <div style={{ width: 6 }} />
         <Button variant="primary" size="sm" icon="plus" onClick={createLead}>Lead</Button>
       </div>
+
+      {cardState && (() => {
+        const reading = cardState.phase === 'reading';
+        const s = cardState.status;
+        const tone = reading ? 'info' : s === 'promoted' ? 'success' : s === 'review' ? 'warning' : s === 'preview' ? 'moon' : 'danger';
+        const label = reading ? '추출 중' : s === 'promoted' ? '추가됨' : s === 'review' ? '확인 필요' : s === 'rejected' ? '식별 불가' : s === 'preview' ? '미리보기' : '실패';
+        const f = cardState.fields || {};
+        const summary = reading
+          ? '명함을 읽고 있습니다…'
+          : s === 'rejected'
+          ? '이름·전화가 없어 식별할 수 없습니다. 다시 촬영하거나 직접 입력하세요.'
+          : s === 'error'
+          ? (cardState.error || '추출에 실패했습니다.')
+          : [f.company, f.name, f.phone].filter(Boolean).join(' · ') || '추출된 필드가 없습니다.';
+        return (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 14px', border: '1px solid var(--line-soft)',
+            borderRadius: 'var(--r-lg)', background: 'var(--surface)',
+          }}>
+            <Badge tone={tone} size="xs">{label}</Badge>
+            <span style={{ fontSize: 12.5, color: 'var(--fg-muted)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summary}</span>
+            <div style={{ flex: 1 }} />
+            {s === 'promoted' && (
+              <Button variant="ghost" size="xs" onClick={() => window.location.reload()}>목록 새로고침</Button>
+            )}
+            {!reading && (
+              <Button variant="ghost" size="xs" onClick={() => setCardState(null)}>닫기</Button>
+            )}
+          </div>
+        );
+      })()}
 
       <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
