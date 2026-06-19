@@ -4,9 +4,41 @@ import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd } from "../hub-primitives";
 import { CHAT_THREAD, COUNCIL, ORDERS } from "../hub-data";
+import { requestGuruCoaching, GURU_MODE_LABEL, GURU_PREVIEW_NOTE } from "../guru-client";
+
+const CHAT_PERSONAS = {
+  writer: {
+    name: 'Writer',
+    role: 'content·copy specialist',
+    title: '뉴스레터 #47 2번 섹션',
+    model: 'Haiku 4.5',
+    reply: {
+      text: '받았어요. 이 요청은 Studio 초안과 연결해 둘게요.',
+      actionLabel: 'Open in Studio',
+      actionTo: 'dashboard/content/studio?new=draft',
+      altText: '대안 1) 더 실용적인 체크리스트형\n대안 2) 사례 중심 서사형\n대안 3) 짧은 선언문형',
+    },
+  },
+  guru: {
+    name: 'Guru',
+    role: '영업 멘토 · 딜 코칭',
+    title: '영업 멘토 세션',
+    model: 'Opus 4.8',
+    intro: [
+      { role: 'agent', name: 'Guru', text: '영업 멘토입니다. Revenue 원장(딜·리드·계정)을 근거로 "지금 무엇을 놓치고 있고, 다음 한 수가 무엇인지"를 코칭합니다.\n\n무엇을 볼까요?\n· 이번 주 파이프라인 분류\n· 특정 딜 진단 (어느 단계에서 막혔는지)\n· 제안서/이메일/반론 대응 다듬기' },
+    ],
+    reply: {
+      text: '받았어요. 원장에서 해당 맥락을 읽고 진단 → 리스크 → 다음 액션으로 정리해 돌려줄게요.',
+      actionLabel: 'Revenue 열기',
+      actionTo: 'dashboard/revenue/overview',
+      altText: 'Keenan 4층: Layer 3(매출 영향)·Layer 4(개인 임팩트)를 아직 안 건드렸어요.\nVoss: "무엇이 결정을 어렵게 하나요?"로 저항을 먼저 열어보죠.',
+    },
+  },
+};
 
 export function AgentsChat({ onNavigate }) {
   const [input, setInput] = React.useState('');
+  const [agentKey, setAgentKey] = React.useState('writer');
   const [thread, setThread] = React.useState(CHAT_THREAD);
   const [conversations, setConversations] = React.useState([
     { name: '뉴스레터 #47 2번 섹션', agent: 'Writer', time: '지금', active: true },
@@ -16,10 +48,77 @@ export function AgentsChat({ onNavigate }) {
     { name: '가격 실험 가설', agent: 'Strategist', time: '3d', active: false },
   ]);
   const [pinned, setPinned] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const busyRef = React.useRef(false);
+  const persona = CHAT_PERSONAS[agentKey] || CHAT_PERSONAS.writer;
+
+  // Run a real coaching pass against the Engine and stream it into the thread.
+  const runGuru = React.useCallback(async (mode, { ref = null, draft = null, label } = {}) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    const userText = label || draft || GURU_MODE_LABEL[mode] || '코칭 요청';
+    setBusy(true);
+    setThread(prev => [
+      ...prev,
+      { role: 'user', text: userText },
+      { role: 'agent', name: 'Guru', pending: true },
+    ]);
+    const r = await requestGuruCoaching({ mode, ref, draft });
+    setThread(prev => {
+      const next = prev.slice();
+      for (let i = next.length - 1; i >= 0; i--) {
+        if (next[i].pending) {
+          next[i] = {
+            role: 'agent',
+            name: 'Guru',
+            text:
+              r.state === 'done'
+                ? r.text
+                : r.state === 'preview'
+                ? GURU_PREVIEW_NOTE
+                : `코칭을 생성하지 못했어요: ${r.note || ''}`,
+          };
+          break;
+        }
+      }
+      return next;
+    });
+    busyRef.current = false;
+    setBusy(false);
+  }, []);
+
+  // Persona is selected via ?agent=<key>; ?mode=&ref= auto-runs live coaching.
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const q = new URLSearchParams(window.location.search);
+    const a = q.get('agent');
+    if (a && CHAT_PERSONAS[a] && a !== 'writer') {
+      const p = CHAT_PERSONAS[a];
+      setAgentKey(a);
+      if (p.intro) setThread(p.intro);
+      setConversations(prev => [
+        { name: p.title, agent: p.name, time: '지금', active: true },
+        ...prev.map(c => ({ ...c, active: false })),
+      ]);
+      const mode = q.get('mode');
+      const ref = q.get('ref');
+      if (a === 'guru' && mode && GURU_MODE_LABEL[mode]) {
+        const label = ref ? `${GURU_MODE_LABEL[mode]}: ${ref}` : GURU_MODE_LABEL[mode];
+        runGuru(mode, { ref, label });
+      }
+    }
+  }, [runGuru]);
+
   const send = () => {
     const text = input.trim();
     if (!text) return;
-    setThread(prev => [...prev, { role: 'user', text }, { role: 'agent', name: 'Writer', text: '받았어요. 이 요청은 Studio 초안과 연결해 둘게요.', hasAction: true }]);
+    if (agentKey === 'guru') {
+      // A typed message to the mentor is treated as a draft to critique.
+      setInput('');
+      runGuru('proposal-critique', { draft: text, label: text });
+      return;
+    }
+    setThread(prev => [...prev, { role: 'user', text }, { role: 'agent', name: persona.name, text: persona.reply.text, hasAction: true }]);
     setInput('');
   };
   const startConversation = () => {
@@ -57,10 +156,10 @@ export function AgentsChat({ onNavigate }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Avatar name="Writer" size={26} tone="moon" />
+          <Avatar name={persona.name} size={26} tone="moon" />
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>뉴스레터 #47 2번 섹션</div>
-            <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>Writer · content·copy specialist</div>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>{persona.title}</div>
+            <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{persona.name} · {persona.role}</div>
           </div>
           <Button variant={pinned ? 'secondary' : 'outline'} size="sm" icon="link" onClick={() => setPinned(v => !v)}>{pinned ? 'Pinned' : 'Pin to Brief'}</Button>
         </div>
@@ -69,7 +168,7 @@ export function AgentsChat({ onNavigate }) {
           <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
             {thread.map((m, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, flexDirection: m.role === 'user' ? 'row-reverse' : 'row' }}>
-                {m.role === 'agent' && <Avatar name="W" size={24} tone="moon" />}
+                {m.role === 'agent' && <Avatar name={(m.name || persona.name).slice(0, 1)} size={24} tone="moon" />}
                 {m.role === 'user' && <Avatar name="H" size={24} />}
                 <div style={{ maxWidth: '75%' }}>
                   {m.role === 'agent' && <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginBottom: 4 }}>{m.name}</div>}
@@ -81,12 +180,17 @@ export function AgentsChat({ onNavigate }) {
                     fontSize: 13, lineHeight: 1.55,
                     whiteSpace: 'pre-wrap',
                   }}>
-                    {m.text}
+                    {m.pending ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--fg-muted)' }}>
+                        <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
+                        원장을 읽고 코칭을 정리하는 중…
+                      </span>
+                    ) : m.text}
                   </div>
                   {m.hasAction && (
                     <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
-                      <Button variant="primary" size="xs" icon="arrowRight" onClick={() => onNavigate?.('dashboard/content/studio?new=draft')}>Open in Studio</Button>
-                      <Button variant="ghost" size="xs" onClick={() => setThread(prev => [...prev, { role: 'agent', name: 'Writer', text: '대안 1) 더 실용적인 체크리스트형\n대안 2) 사례 중심 서사형\n대안 3) 짧은 선언문형' }])}>View alternatives</Button>
+                      <Button variant="primary" size="xs" icon="arrowRight" onClick={() => onNavigate?.(persona.reply.actionTo)}>{persona.reply.actionLabel}</Button>
+                      <Button variant="ghost" size="xs" onClick={() => setThread(prev => [...prev, { role: 'agent', name: persona.name, text: persona.reply.altText }])}>View alternatives</Button>
                     </div>
                   )}
                 </div>
@@ -96,8 +200,16 @@ export function AgentsChat({ onNavigate }) {
         </div>
 
         <div style={{ padding: '12px 20px 16px', borderTop: '1px solid var(--line-soft)' }}>
+          {agentKey === 'guru' && (
+            <div style={{ maxWidth: 720, margin: '0 auto 8px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[['pipeline-triage', '파이프라인 분류'], ['weekly-retro', '주간 회고']].map(([m, l]) => (
+                <Button key={m} variant="outline" size="xs" icon="sparkle" disabled={busy} onClick={() => runGuru(m, {})}>{l}</Button>
+              ))}
+              <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', alignSelf: 'center' }}>· 메시지를 보내면 제안/이메일 초안으로 보고 검토합니다</span>
+            </div>
+          )}
           <div style={{ maxWidth: 720, margin: '0 auto', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', padding: 10 }}>
-            <textarea value={input} onChange={e => setInput(e.target.value)} placeholder="Message Writer…" style={{
+            <textarea value={input} onChange={e => setInput(e.target.value)} placeholder={`Message ${persona.name}…`} style={{
               width: '100%', minHeight: 52, resize: 'none',
               background: 'transparent', border: 'none', outline: 'none',
               color: 'var(--fg)', fontSize: 13.5, lineHeight: 1.5,
@@ -106,8 +218,8 @@ export function AgentsChat({ onNavigate }) {
               <Button variant="ghost" size="xs" icon="upload" onClick={() => setInput(v => v ? `${v}\n[첨부: context]` : '[첨부: context]')}>Attach</Button>
               <Button variant="ghost" size="xs" icon="link" onClick={() => onNavigate?.('dashboard/work/decisions?new=decision')}>Link decision</Button>
               <div style={{ flex: 1 }} />
-              <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>Writer · Haiku 4.5</span>
-              <Button variant="primary" size="xs" icon="send" onClick={send}>Send</Button>
+              <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{persona.name} · {persona.model}</span>
+              <Button variant="primary" size="xs" icon="send" onClick={send} disabled={busy}>Send</Button>
             </div>
           </div>
         </div>
@@ -204,6 +316,7 @@ const OFFICE_AGENTS = [
   { key: 'strategist', label: 'Strategist', role: '장기·우선순위', color: '#ffd68f', x: 3, y: 1, task: '5월 플랜 초안', status: 'reading', mood: '관조' },
   { key: 'operator', label: 'Operator', role: '자동화·실행', color: '#b4e8a8', x: 0, y: 3, task: 'Gmail 태그 규칙 튜닝', status: 'running', mood: '작업' },
   { key: 'council', label: 'Council', role: '합의·결정', color: '#ffaebb', x: 2, y: 3, task: 'Thread 예약 발행 검토', status: 'meeting', mood: '논의' },
+  { key: 'guru', label: 'Guru', role: '영업 멘토·딜 코칭', color: '#a9c6e8', x: 4, y: 1, task: '클래스인 딜 진단', status: 'reading', mood: '코칭' },
   { key: 'you', label: 'Hyeon (나)', role: 'Founder', color: '#f0e6d8', x: 4, y: 3, task: '브리핑 읽는 중', status: 'idle', mood: '휴식' },
 ];
 
@@ -332,6 +445,7 @@ function PixelRoom({ selected, onSelect }) {
 }
 
 const OFFICE_FEED = [
+  { at: '지금', who: 'Guru', ev: '클래스인 딜 — Keenan 4층 진단: Layer 3(매출 영향) 비어있음', tone: 'moon' },
   { at: '지금', who: 'Writer', ev: '초안 2번 섹션 860자 작성 완료', tone: 'info' },
   { at: '2분 전', who: 'Analyst', ev: '리드 17건 중 4건에 "레퍼럴" 태그 추가', tone: 'moon' },
   { at: '5분 전', who: 'Operator', ev: 'Gmail 규칙 v3 배포 · 오탐 -82%', tone: 'success' },
