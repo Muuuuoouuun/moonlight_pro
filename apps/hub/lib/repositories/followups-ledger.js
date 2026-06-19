@@ -7,7 +7,9 @@
 // Channels follow the real motion (NO email): early=전화/문자, mid=방문, 고객=카톡.
 
 import { eqFilter, fetchSupabaseRows, inFilter, withWorkspaceFilter } from "@/lib/server-read";
-import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
+import { resolveDefaultWorkspaceId, resolveSupabaseConfig, updateSupabaseRecord } from "@/lib/server-write";
+
+import { momentumScore, outcomeBoost, priorityFor } from "@/lib/sales-os/followup-scoring";
 
 // Days since last touch before a stage is "overdue".
 const STALE_DAYS = { new: 2, qualified: 3, nurturing: 4, contact: 4, proposal: 3, negotiation: 2 };
@@ -80,9 +82,12 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
     if (!overdue) return;
 
     const outcome = lastOutcomeByLead.get(lead.id) || (lead.company_id && lastOutcomeByCompany.get(lead.company_id));
+    const outcomeAge = outcome ? daysSince(outcome.occurred_at) : null;
     const why = outcome
-      ? `마지막 ${outcome.action} ${daysSince(outcome.occurred_at) ?? "?"}일 전 · ${stage}`
+      ? `마지막 ${outcome.action} ${outcomeAge ?? "?"}일 전 · ${stage}`
       : `${since == null ? "무접촉" : `${since}일째 무접촉`} · ${stage}`;
+
+    const boost = outcomeBoost({ action: outcome?.action, ageDays: outcomeAge });
 
     items.push({
       kind: "lead",
@@ -96,7 +101,9 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
       daysSince: since,
       nextAction: lead.next_action || "다음 행동 정하기",
       score: toNum(lead.score, 0),
-      priority: (since == null ? threshold : since) * 10 + toNum(lead.score, 0) / 10,
+      lastAction: outcome?.action || null,
+      momentum: Math.round(boost),
+      priority: priorityFor({ sinceDays: since, threshold, valueTerm: toNum(lead.score, 0) / 10, boost }),
     });
   });
 
@@ -110,9 +117,12 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
     if (since != null && since < threshold) return;
 
     const outcome = deal.company_id && lastOutcomeByCompany.get(deal.company_id);
+    const outcomeAge = outcome ? daysSince(outcome.occurred_at) : null;
     const why = outcome
-      ? `마지막 ${outcome.action} ${daysSince(outcome.occurred_at) ?? "?"}일 전 · ${stage}`
+      ? `마지막 ${outcome.action} ${outcomeAge ?? "?"}일 전 · ${stage}`
       : `${since == null ? "활동 없음" : `${since}일째 정체`} · ${stage}`;
+
+    const boost = outcomeBoost({ action: outcome?.action, ageDays: outcomeAge });
 
     items.push({
       kind: "deal",
@@ -126,7 +136,9 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
       daysSince: since,
       nextAction: "단계 진전 액션 정하기",
       amount: toNum(deal.amount, 0),
-      priority: (since == null ? threshold : since) * 10 + toNum(deal.amount, 0) / 1000000,
+      lastAction: outcome?.action || null,
+      momentum: Math.round(boost),
+      priority: priorityFor({ sinceDays: since, threshold, valueTerm: toNum(deal.amount, 0) / 1000000, boost }),
     });
   });
 
@@ -140,4 +152,67 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
     items: capped,
     summary: { overdue: items.length, dueToday, total: items.length, shown: capped.length },
   };
+}
+
+// Periodic leads.score recompute (the learning sink writes back). Operator/cron-triggered —
+// NOT run on read, since it mutates production leads. Aggregates each active lead's outreach
+// history into a 0-100 momentum score and persists it only when it moved (avoids churn writes).
+export async function recomputeLeadScores({ workspaceId = resolveDefaultWorkspaceId(), minDelta = 3 } = {}) {
+  const config = resolveSupabaseConfig();
+  if (!config || !workspaceId) {
+    return { persisted: false, reason: config ? "missing-workspace" : "missing-config", updated: 0, scanned: 0 };
+  }
+
+  const [leads, outcomes] = await Promise.all([
+    fetchSupabaseRows("leads", {
+      filters: withWorkspaceFilter([["status", inFilter(["new", "qualified", "nurturing"])]]),
+      limit: 500,
+    }),
+    fetchSupabaseRows("outreach_outcomes", { filters: withWorkspaceFilter(), order: "occurred_at.desc", limit: 1000 }),
+  ]);
+
+  if (!leads) {
+    return { persisted: false, reason: "leads-unavailable", updated: 0, scanned: 0 };
+  }
+
+  // Aggregate outcomes per lead (lead_id, falling back to company_id).
+  const byLead = new Map();
+  const byCompany = new Map();
+  const pushTo = (map, key, value) => {
+    if (!key) return;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(value);
+  };
+  (outcomes || []).forEach((o) => {
+    if (o.lead_id) pushTo(byLead, o.lead_id, o);
+    else if (o.company_id) pushTo(byCompany, o.company_id, o);
+  });
+
+  let updated = 0;
+  for (const lead of leads) {
+    const history = [
+      ...(byLead.get(lead.id) || []),
+      ...(lead.company_id ? byCompany.get(lead.company_id) || [] : []),
+    ];
+    const last = history[0]; // outcomes already occurred_at desc
+    const count = (action) => history.filter((o) => String(o.action || "").toLowerCase() === action).length;
+    const score = momentumScore({
+      lastAction: last?.action || null,
+      ageDays: last ? daysSince(last.occurred_at) : null,
+      replies: count("replied"),
+      meetings: count("meeting"),
+      noResponses: count("no_response"),
+    });
+
+    if (Math.abs(score - toNum(lead.score, 0)) < minDelta) continue;
+
+    const res = await updateSupabaseRecord(
+      "leads",
+      [["id", eqFilter(lead.id)], ["workspace_id", eqFilter(workspaceId)]],
+      { score },
+    );
+    if (res.persisted) updated += 1;
+  }
+
+  return { persisted: true, reason: "ok", updated, scanned: leads.length };
 }

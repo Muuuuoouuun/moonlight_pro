@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { getFollowups } from "@/lib/repositories/followups-ledger";
+import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
+import { getFollowups, recomputeLeadScores } from "@/lib/repositories/followups-ledger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,6 +15,31 @@ export async function GET(req) {
       status: data.source === "supabase" ? "live" : "preview",
       ...data,
     });
+  } catch (error) {
+    return NextResponse.json(
+      { status: "error", error: error instanceof Error ? error.message : String(error) },
+      { status: 500 },
+    );
+  }
+}
+
+// POST { action: "recompute-scores" } — operator/cron-triggered leads.score recompute.
+// Write-guarded: this mutates production leads, so it never runs on read.
+export async function POST(req) {
+  const guard = assertHubWriteAllowed(req);
+  if (guard) return guard;
+
+  const parsed = await readHubWriteJson(req);
+  if (parsed.error) return parsed.error;
+
+  const action = typeof parsed.data?.action === "string" ? parsed.data.action : "";
+  if (action !== "recompute-scores") {
+    return NextResponse.json({ status: "error", error: "Unknown action." }, { status: 400 });
+  }
+
+  try {
+    const result = await recomputeLeadScores({});
+    return NextResponse.json({ status: result.persisted ? "ok" : "skipped", ...result });
   } catch (error) {
     return NextResponse.json(
       { status: "error", error: error instanceof Error ? error.message : String(error) },
