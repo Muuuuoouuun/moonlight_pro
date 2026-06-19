@@ -207,8 +207,18 @@ P0는 데이터 변경 없이 프론트만으로 가치 검증 가능 → 가장
 - [x] `apps/engine/app/api/ai/sales-mentor/route.ts` — 신규 (brief route 템플릿, 4개 모드)
 - [x] `apps/hub/app/api/hub/sales-mentor/route.js` — Engine proxy (원장 컨텍스트 + shared secret)
 - [x] `apps/hub/components/hub/pages/revenue.jsx` — Overview "Guru 코칭" 패널(`pipeline-triage`)
-- [ ] (다음) Deals 카드 `Guru에게 진단 요청` · Accounts `Ask Guru` 액션 (`deal-review`)
+- [x] `apps/hub/components/hub/guru-client.js` — 공용 클라이언트 헬퍼(`requestGuruCoaching`/`guruChatPath`)
+- [x] Deals 카드 `Guru에게 진단 요청` · Accounts `Ask Guru` → `deal-review` 딥링크
+- [x] AgentsChat 라이브 코칭 — 딥링크 `?mode=&ref=` 자동 실행 + 빠른 액션 칩(분류/회고) + 타이핑→제안 검토(`proposal-critique`)
 - [ ] (P3) Agents Orders에 `weekly-retro` 스케줄 오더 등록
+
+### 실사용 흐름 (end-to-end)
+
+1. **Revenue › Overview** "파이프라인 분류" → Guru가 우선순위 3건 코칭 → "Chat에서 이어가기"
+2. **Revenue › Deals** 카드의 ✦ → `chat?agent=guru&mode=deal-review&ref=<id>` 자동 실행 → 막힌 층 진단
+3. **Revenue › Accounts** Detail의 `Ask Guru` → 해당 계정 `deal-review` 자동 실행
+4. **Agents › Chat(guru)** 칩으로 분류/회고 즉시 실행, 제안/이메일 초안 붙여넣고 Send → 검토 피드백
+모든 경로가 단일 멘토 스레드(`agent=guru`)로 수렴하며, 결과는 `project_updates(source:guru)`로 적재된다.
 
 ## 14. 지식 베이스 → 모드 매핑
 

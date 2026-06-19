@@ -4,6 +4,7 @@ import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd } from "../hub-primitives";
 import { CHAT_THREAD, COUNCIL, ORDERS } from "../hub-data";
+import { requestGuruCoaching, GURU_MODE_LABEL, GURU_PREVIEW_NOTE } from "../guru-client";
 
 const CHAT_PERSONAS = {
   writer: {
@@ -47,12 +48,50 @@ export function AgentsChat({ onNavigate }) {
     { name: '가격 실험 가설', agent: 'Strategist', time: '3d', active: false },
   ]);
   const [pinned, setPinned] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const busyRef = React.useRef(false);
   const persona = CHAT_PERSONAS[agentKey] || CHAT_PERSONAS.writer;
 
-  // Persona is selected via ?agent=<key> (e.g. from Council / VR Office).
+  // Run a real coaching pass against the Engine and stream it into the thread.
+  const runGuru = React.useCallback(async (mode, { ref = null, draft = null, label } = {}) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    const userText = label || draft || GURU_MODE_LABEL[mode] || '코칭 요청';
+    setBusy(true);
+    setThread(prev => [
+      ...prev,
+      { role: 'user', text: userText },
+      { role: 'agent', name: 'Guru', pending: true },
+    ]);
+    const r = await requestGuruCoaching({ mode, ref, draft });
+    setThread(prev => {
+      const next = prev.slice();
+      for (let i = next.length - 1; i >= 0; i--) {
+        if (next[i].pending) {
+          next[i] = {
+            role: 'agent',
+            name: 'Guru',
+            text:
+              r.state === 'done'
+                ? r.text
+                : r.state === 'preview'
+                ? GURU_PREVIEW_NOTE
+                : `코칭을 생성하지 못했어요: ${r.note || ''}`,
+          };
+          break;
+        }
+      }
+      return next;
+    });
+    busyRef.current = false;
+    setBusy(false);
+  }, []);
+
+  // Persona is selected via ?agent=<key>; ?mode=&ref= auto-runs live coaching.
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
-    const a = new URLSearchParams(window.location.search).get('agent');
+    const q = new URLSearchParams(window.location.search);
+    const a = q.get('agent');
     if (a && CHAT_PERSONAS[a] && a !== 'writer') {
       const p = CHAT_PERSONAS[a];
       setAgentKey(a);
@@ -61,12 +100,24 @@ export function AgentsChat({ onNavigate }) {
         { name: p.title, agent: p.name, time: '지금', active: true },
         ...prev.map(c => ({ ...c, active: false })),
       ]);
+      const mode = q.get('mode');
+      const ref = q.get('ref');
+      if (a === 'guru' && mode && GURU_MODE_LABEL[mode]) {
+        const label = ref ? `${GURU_MODE_LABEL[mode]}: ${ref}` : GURU_MODE_LABEL[mode];
+        runGuru(mode, { ref, label });
+      }
     }
-  }, []);
+  }, [runGuru]);
 
   const send = () => {
     const text = input.trim();
     if (!text) return;
+    if (agentKey === 'guru') {
+      // A typed message to the mentor is treated as a draft to critique.
+      setInput('');
+      runGuru('proposal-critique', { draft: text, label: text });
+      return;
+    }
     setThread(prev => [...prev, { role: 'user', text }, { role: 'agent', name: persona.name, text: persona.reply.text, hasAction: true }]);
     setInput('');
   };
@@ -129,7 +180,12 @@ export function AgentsChat({ onNavigate }) {
                     fontSize: 13, lineHeight: 1.55,
                     whiteSpace: 'pre-wrap',
                   }}>
-                    {m.text}
+                    {m.pending ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--fg-muted)' }}>
+                        <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
+                        원장을 읽고 코칭을 정리하는 중…
+                      </span>
+                    ) : m.text}
                   </div>
                   {m.hasAction && (
                     <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
@@ -144,6 +200,14 @@ export function AgentsChat({ onNavigate }) {
         </div>
 
         <div style={{ padding: '12px 20px 16px', borderTop: '1px solid var(--line-soft)' }}>
+          {agentKey === 'guru' && (
+            <div style={{ maxWidth: 720, margin: '0 auto 8px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[['pipeline-triage', '파이프라인 분류'], ['weekly-retro', '주간 회고']].map(([m, l]) => (
+                <Button key={m} variant="outline" size="xs" icon="sparkle" disabled={busy} onClick={() => runGuru(m, {})}>{l}</Button>
+              ))}
+              <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', alignSelf: 'center' }}>· 메시지를 보내면 제안/이메일 초안으로 보고 검토합니다</span>
+            </div>
+          )}
           <div style={{ maxWidth: 720, margin: '0 auto', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', padding: 10 }}>
             <textarea value={input} onChange={e => setInput(e.target.value)} placeholder={`Message ${persona.name}…`} style={{
               width: '100%', minHeight: 52, resize: 'none',
@@ -155,7 +219,7 @@ export function AgentsChat({ onNavigate }) {
               <Button variant="ghost" size="xs" icon="link" onClick={() => onNavigate?.('dashboard/work/decisions?new=decision')}>Link decision</Button>
               <div style={{ flex: 1 }} />
               <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{persona.name} · {persona.model}</span>
-              <Button variant="primary" size="xs" icon="send" onClick={send}>Send</Button>
+              <Button variant="primary" size="xs" icon="send" onClick={send} disabled={busy}>Send</Button>
             </div>
           </div>
         </div>

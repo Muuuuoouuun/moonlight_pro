@@ -10,6 +10,7 @@ import {
   BRANDS,
   ACCOUNT_DETAIL,
 } from "../hub-data";
+import { requestGuruCoaching, guruChatPath } from "../guru-client";
 
 const fmt = v => {
   const n = Number(v);
@@ -141,26 +142,13 @@ function GuruCoachPanel({ onNavigate }) {
     setState('loading');
     setText('');
     setNote('');
-    try {
-      const res = await fetch('/api/hub/sales-mentor', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ mode: 'pipeline-triage' }),
-      });
-      const data = await res.json().catch(() => null);
-      if (data?.status === 'generated' && data.text) {
-        setText(data.text);
-        setState('done');
-      } else if (data?.status === 'preview') {
-        setNote(data.error || 'Engine이 아직 연결되지 않았습니다.');
-        setState('preview');
-      } else {
-        setNote(data?.reason || data?.error || '코칭을 생성하지 못했습니다.');
-        setState('error');
-      }
-    } catch (e) {
-      setNote(e instanceof Error ? e.message : String(e));
-      setState('error');
+    const r = await requestGuruCoaching({ mode: 'pipeline-triage' });
+    if (r.state === 'done') {
+      setText(r.text);
+      setState('done');
+    } else {
+      setNote(r.note || '');
+      setState(r.state);
     }
   };
 
@@ -198,7 +186,7 @@ function GuruCoachPanel({ onNavigate }) {
         <div>
           <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{text}</div>
           <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
-            <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/agents/chat?agent=guru')}>Chat에서 이어가기</Button>
+            <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(guruChatPath())}>Chat에서 이어가기</Button>
           </div>
         </div>
       )}
@@ -498,7 +486,7 @@ export function Leads() {
   );
 }
 
-export function Deals() {
+export function Deals({ onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
   const DEAL_STAGES = ledger.stages;
   const [deals, setDeals] = React.useState(ledger.deals);
@@ -591,6 +579,13 @@ export function Deals() {
                     <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 6 }}>
                       <span className="mono" style={{ fontSize: 9.5, color: 'var(--fg-faint)' }}>{d.id}</span>
                       <div style={{ flex: 1 }} />
+                      <IconButton
+                        icon="sparkle"
+                        size={20}
+                        iconSize={12}
+                        tooltip="Guru에게 진단 요청"
+                        onClick={(e) => { e.stopPropagation(); onNavigate?.(guruChatPath({ mode: 'deal-review', ref: d.id })); }}
+                      />
                       <Badge tone={d.type === 'personal' ? 'personal' : 'company'} size="xs">
                         {d.type === 'personal' ? 'P' : 'C'}
                       </Badge>
@@ -841,7 +836,7 @@ function QuickActions({ onAction }) {
   );
 }
 
-function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote }) {
+function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, onNavigate }) {
   const [tab, setTab] = React.useState('activity');
   const [noteText, setNoteText] = React.useState('');
   if (!account) {
@@ -902,8 +897,16 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote })
             </div>
           </div>
         </div>
-        <div style={{ marginTop: 14 }}>
+        <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <QuickActions onAction={onAction} />
+          <Button
+            variant="secondary"
+            size="xs"
+            icon="sparkle"
+            onClick={() => onNavigate?.(guruChatPath({ mode: 'deal-review', ref: account.name }))}
+          >
+            Ask Guru
+          </Button>
         </div>
       </div>
 
@@ -1030,7 +1033,7 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote })
   );
 }
 
-export function Accounts() {
+export function Accounts({ onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
   const [localAccounts, setLocalAccounts] = React.useState([]);
   const ledgerAccounts = ledger.source === 'supabase'
@@ -1331,6 +1334,7 @@ export function Accounts() {
               onLog={selectedAcc ? handleLog(selectedAcc.name) : () => {}}
               onPinNote={selectedAcc ? handlePinNote(selectedAcc.name) : () => {}}
               onAddNote={selectedAcc ? handleAddNote(selectedAcc.name) : () => {}}
+              onNavigate={onNavigate}
             />
           </div>
         </Card>
