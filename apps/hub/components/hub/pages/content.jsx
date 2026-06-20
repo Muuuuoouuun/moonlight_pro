@@ -9,6 +9,7 @@ import {
   CAMPAIGNS as FALLBACK_CAMPAIGNS,
 } from "../hub-data";
 import { getWorkspace, filterContentByWorkspace } from "../workspace-map";
+import { requestCouncilAdvice, councilChatPath, COUNCIL_PREVIEW_NOTE } from "../council-client";
 
 const STUDIO_DRAFT_DB = "moonlight-content-studio";
 const STUDIO_DRAFT_STORE = "drafts";
@@ -183,6 +184,7 @@ function useContentLedger() {
 
 export function Studio({ workspace }) {
   const ws = getWorkspace(workspace);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const itemParam = searchParams.get("item");
   const brandParam = searchParams.get("brand");
@@ -230,6 +232,7 @@ export function Studio({ workspace }) {
   const [lastSavedAt, setLastSavedAt] = React.useState(null);
   const [localSavedAt, setLocalSavedAt] = React.useState(null);
   const [dirty, setDirty] = React.useState(false);
+  const [council, setCouncil] = React.useState({ state: 'idle', text: '', note: '' }); // Council content-critique (live AI)
   const loadedItemRef = React.useRef(null);
 
   const formatTime = (d) => {
@@ -549,10 +552,24 @@ export function Studio({ workspace }) {
     setSlides(s => s.filter((_, j) => j !== i));
     setDirty(true);
   };
+  // Live Council content-critique (Writer lens) against the Engine brand-mentor.
+  const runCouncilCritique = React.useCallback(async () => {
+    setCouncil({ state: 'loading', text: '', note: '' });
+    const draft = mode === 'carousel'
+      ? `${title}\n\n${slides.map((s, i) => `${i + 1}. ${s.title} — ${s.sub}`).join('\n')}`
+      : `${title}\n\n${body}`;
+    const r = await requestCouncilAdvice({ mode: 'content-critique', draft });
+    if (r.state === 'done') {
+      setCouncil({ state: 'done', text: r.text, note: '' });
+    } else {
+      setCouncil({ state: r.state, text: '', note: r.note || '' });
+    }
+  }, [body, mode, slides, title]);
+
   const applyToolbarAction = (tool) => {
     if (!tool) return;
     if (tool === 'ai') {
-      setExtraSuggestions(s => [{ tone: 'moon', text: 'AI 제안 생성 — 도입부를 더 짧게 다듬어보세요.' }, ...s]);
+      runCouncilCritique();
       return;
     }
     const snippets = {
@@ -810,9 +827,40 @@ export function Studio({ workspace }) {
       <aside style={{ borderLeft: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <Iconed name="sparkle" size={14} style={{ color: 'var(--moon-300)' }} />
-          <div style={{ fontSize: 12.5, fontWeight: 500, flex: 1 }}>Writer · Studio Agent</div>
+          <div style={{ fontSize: 12.5, fontWeight: 500, flex: 1 }}>Council · Writer 자문</div>
+          <Button variant="primary" size="xs" icon="sparkle" disabled={council.state === 'loading'} onClick={runCouncilCritique}>
+            {council.state === 'loading' ? '검토 중…' : council.state === 'done' ? '다시 검토' : 'Council 검토'}
+          </Button>
         </div>
         <div className="scroll-y" style={{ flex: 1, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {council.state !== 'idle' && (
+            <div style={{ padding: 11, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Badge tone="moon" size="xs">Council 검토</Badge>
+                <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>Writer 렌즈 · 초안 진단</span>
+                <div style={{ flex: 1 }} />
+                <IconButton icon="x" size={20} iconSize={11} tooltip="닫기" onClick={() => setCouncil({ state: 'idle', text: '', note: '' })} />
+              </div>
+              {council.state === 'loading' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-muted)' }}>
+                  <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
+                  원장·브랜드 보이스를 읽고 검토하는 중…
+                </div>
+              )}
+              {council.state === 'done' && (
+                <>
+                  <div style={{ fontSize: 12, color: 'var(--fg)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{council.text}</div>
+                  <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => router.push('/' + councilChatPath({ mode: 'content-critique' }))}>Chat에서 이어가기</Button>
+                </>
+              )}
+              {(council.state === 'preview' || council.state === 'error') && (
+                <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+                  <Badge tone={council.state === 'preview' ? 'neutral' : 'danger'} size="xs">{council.state === 'preview' ? 'preview' : 'error'}</Badge>
+                  <span style={{ marginLeft: 6 }}>{council.state === 'preview' ? COUNCIL_PREVIEW_NOTE : council.note}</span>
+                </div>
+              )}
+            </div>
+          )}
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em' }}>Brand</div>
           <div style={{
             padding: 10,

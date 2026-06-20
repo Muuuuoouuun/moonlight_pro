@@ -1,9 +1,10 @@
 "use client";
 
 import React from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState } from "../hub-primitives";
+import { requestCouncilAdvice, councilChatPath, COUNCIL_MODE_LABEL, COUNCIL_PREVIEW_NOTE } from "../council-client";
 import {
   BRANDS as FALLBACK_BRANDS,
   BRAND_PROJECTS as FALLBACK_PROJECTS,
@@ -66,9 +67,95 @@ function ActivityRow({ title, body, meta, badge, tone = 'neutral' }) {
   );
 }
 
+const COUNCIL_MODES = [
+  { k: 'brand-strategy', l: '브랜드 전략' },
+  { k: 'audience-analysis', l: '오디언스 분석' },
+  { k: 'flow-review', l: '플로우 점검' },
+  { k: 'meeting-synthesis', l: '회의록 정리' },
+];
+
+// Council brand advisor — the brand-side counterpart of revenue.jsx's GuruCoachPanel.
+// Modes cover brand strategy, audience(고객) analysis, flow review, and meeting-note synthesis.
+// meeting-synthesis takes pasted notes as the draft; the others read the assembled brand context.
+function CouncilBrandPanel({ router, focusRef = null, focusLabel = null }) {
+  const [mode, setMode] = React.useState('brand-strategy');
+  const [notes, setNotes] = React.useState('');
+  const [res, setRes] = React.useState({ state: 'idle', text: '', note: '' });
+  const needsNotes = mode === 'meeting-synthesis';
+
+  const run = async () => {
+    setRes({ state: 'loading', text: '', note: '' });
+    const draft = needsNotes ? notes.trim() : null;
+    const r = await requestCouncilAdvice({ mode, ref: focusRef, draft });
+    if (r.state === 'done') setRes({ state: 'done', text: r.text, note: '' });
+    else setRes({ state: r.state, text: '', note: r.note || '' });
+  };
+
+  return (
+    <Card>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>Council 자문</div>
+            <Badge tone="moon" size="xs">브랜드 advisor</Badge>
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', marginTop: 2 }}>
+            {focusLabel ? `${focusLabel} · ` : ''}콘텐츠·브랜드·프로젝트 원장 기반 추천 조언
+          </div>
+        </div>
+        <div style={{ flex: 1 }} />
+        <Button variant="primary" size="sm" icon="sparkle" disabled={res.state === 'loading' || (needsNotes && !notes.trim())} onClick={run}>
+          {res.state === 'loading' ? '자문 중…' : COUNCIL_MODE_LABEL[mode]}
+        </Button>
+      </div>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: needsNotes || res.state !== 'idle' ? 12 : 0 }}>
+        {COUNCIL_MODES.map(m => (
+          <button key={m.k} onClick={() => setMode(m.k)} style={{
+            padding: '5px 11px', fontSize: 11.5, borderRadius: 999,
+            border: '1px solid ' + (mode === m.k ? 'var(--moon-500)' : 'var(--line-soft)'),
+            background: mode === m.k ? 'var(--surface-3)' : 'var(--surface-2)',
+            color: mode === m.k ? 'var(--fg)' : 'var(--fg-muted)',
+          }}>{m.l}</button>
+        ))}
+      </div>
+      {needsNotes && (
+        <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="회의록·메모를 붙여넣으면 결정·오너·기한이 분명한 액션으로 정리합니다."
+          rows={3} style={{
+            width: '100%', resize: 'vertical', marginBottom: res.state !== 'idle' ? 12 : 0,
+            background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
+            color: 'var(--fg)', fontSize: 12.5, lineHeight: 1.5, padding: 10, outline: 'none', fontFamily: 'inherit',
+          }} />
+      )}
+      {res.state === 'loading' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
+          <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
+          원장·브랜드 보이스를 읽고 자문을 정리하는 중…
+        </div>
+      )}
+      {res.state === 'done' && (
+        <div>
+          <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{res.text}</div>
+          <div style={{ marginTop: 12 }}>
+            <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => router.push('/' + councilChatPath({ mode, ref: focusRef }))}>Chat에서 이어가기</Button>
+          </div>
+        </div>
+      )}
+      {(res.state === 'preview' || res.state === 'error') && (
+        <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.55 }}>
+          <Badge tone={res.state === 'preview' ? 'neutral' : 'danger'} size="xs">{res.state === 'preview' ? 'preview' : 'error'}</Badge>
+          <span style={{ marginLeft: 8 }}>{res.state === 'preview' ? COUNCIL_PREVIEW_NOTE : res.note}</span>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export function Projects({ workspace }) {
   const ws = getWorkspace(workspace);
+  const router = useRouter();
   const searchParams = useSearchParams();
+  // Council advisor is brand-side; keep it off the ClassIn/회사 sales lanes (that's Guru's domain).
+  const councilEnabled = workspace !== 'classin' && workspace !== 'company';
   const [brand, setBrand] = React.useState('all');
   const [view, setView] = React.useState('tree');
   const [ledger, setLedger] = React.useState({
@@ -490,6 +577,7 @@ export function Projects({ workspace }) {
           <div className="hub-projects-main-grid" style={{ display: 'grid', gridTemplateColumns: openDetail ? '1fr 360px' : '1fr', flex: 1, overflow: 'hidden' }}>
             <div className="scroll-y" style={{ padding: 'var(--section-gap)' }}>
               <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+                {councilEnabled && <CouncilBrandPanel router={router} />}
                 {projects.length === 0 && ws && allProjects.length === 0 ? (
                   <Card>
                     <EmptyState
@@ -768,6 +856,16 @@ export function Projects({ workspace }) {
                       setExpanded(prev => new Set([...prev, p.id]));
                       setView('tree');
                     }}>열기</Button>
+                    {councilEnabled && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        icon="sparkle"
+                        onClick={() => router.push('/' + councilChatPath({ mode: 'brand-strategy', ref: p.id }))}
+                      >
+                        Council
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
