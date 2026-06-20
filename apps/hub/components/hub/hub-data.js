@@ -1,35 +1,29 @@
 // Navigation + sample data for Moonlight Pro Hub.
-// real_v1 IA — the sidebar leads with the three workstreams that actually run
-// first, then the cross-cutting AI + operating tooling:
-//   Daily Brief (global) -> 클래스인 -> 회사 -> 브랜드 업무 -> Agents -> Work -> System
-// Each workspace deep-links existing pages with a workspace scope; membership is
-// defined in workspace-map.js. Legacy functional routes stay live in PAGE_MAP
-// (reachable by URL / ⌘K) so nothing 404s — they just no longer crowd the nav.
+// real_v1 IA — grounded in the operator's real situation:
+//   • 클래스인 = the company they currently work at (today the only live money +
+//     real workload). "회사" is merged into this single primary workspace.
+//   • 브랜드   = their own brands (창업 준비) — kept, but separate from 클래스인.
+//   • 기존 메뉴 = the full functional menus, folded into a collapsed bottom
+//     section (secondary:true) to tidy up gradually ("차차 정리").
+// Workspaces deep-link existing pages with a workspace scope (workspace-map.js);
+// every functional route stays live in PAGE_MAP so nothing 404s.
 
 export const NAV_TREE = [
   { key: 'daily-brief', label: 'Daily Brief', icon: 'brief', path: 'dashboard/daily-brief' },
 
-  // ── Workspace 1: 클래스인 (education / class business) ────────────────────
+  // ── Workspace 1: 클래스인 — 현 직장(회사). 회사 + 클래스인 병합, 유일한 실수익. ──
   {
-    key: 'classin', label: '클래스인', icon: 'classin', workspace: true,
+    key: 'classin', label: '클래스인', icon: 'building', workspace: true,
     children: [
-      { key: 'cohorts',        label: '코호트·수강생', icon: 'projects', path: 'dashboard/classin/cohorts' },
-      { key: 'classin-content',label: '콘텐츠',        icon: 'content',  path: 'dashboard/classin/content' },
-      { key: 'classin-revenue',label: '결제·리드',     icon: 'leads',    path: 'dashboard/classin/revenue' },
+      { key: 'classin-pipeline',   label: '업무·파이프라인', icon: 'deals',       path: 'dashboard/classin/pipeline' },
+      { key: 'classin-projects',   label: '프로젝트',        icon: 'projects',    path: 'dashboard/classin/projects' },
+      { key: 'classin-revenue',    label: '결제·리드',       icon: 'leads',       path: 'dashboard/classin/revenue' },
+      { key: 'classin-automations',label: '자동화',          icon: 'automations', path: 'dashboard/classin/automations' },
     ],
   },
-  // ── Workspace 2: 회사 (agency + product company ops) ──────────────────────
+  // ── Workspace 2: 브랜드 — 내 브랜드 / 창업 준비. 이전 브랜드 유지. ──
   {
-    key: 'company', label: '회사', icon: 'building', workspace: true,
-    children: [
-      { key: 'pipeline',           label: '딜·파이프라인', icon: 'deals',       path: 'dashboard/company/pipeline' },
-      { key: 'company-projects',   label: '프로젝트',      icon: 'projects',    path: 'dashboard/company/projects' },
-      { key: 'company-automations',label: '자동화',        icon: 'automations', path: 'dashboard/company/automations' },
-    ],
-  },
-  // ── Workspace 3: 브랜드 업무 (brand / content publishing) ─────────────────
-  {
-    key: 'brand', label: '브랜드 업무', icon: 'brand', workspace: true,
+    key: 'brand', label: '브랜드', icon: 'brand', workspace: true,
     children: [
       { key: 'brand-projects', label: '브랜드·프로젝트', icon: 'projects', path: 'dashboard/brand/projects' },
       { key: 'brand-studio',   label: '콘텐츠 스튜디오', icon: 'studio',   path: 'dashboard/brand/studio' },
@@ -37,9 +31,9 @@ export const NAV_TREE = [
     ],
   },
 
-  // ── Cross-cutting AI layer ────────────────────────────────────────────────
+  // ════ 기존 메뉴 — 하단·접힘 (차차 정리). secondary:true → divider + collapsed. ════
   {
-    key: 'agents', label: 'Agents', icon: 'agents',
+    key: 'agents', label: 'Agents', icon: 'agents', secondary: true,
     children: [
       { key: 'chat',    label: 'Chat',      icon: 'chat',    path: 'dashboard/agents/chat' },
       { key: 'orders',  label: 'Orders',    icon: 'orders',  path: 'dashboard/agents/orders' },
@@ -47,9 +41,8 @@ export const NAV_TREE = [
       { key: 'office',  label: 'VR Office', icon: 'agents',  path: 'dashboard/agents/office' },
     ],
   },
-  // ── Founder operating rhythm ──────────────────────────────────────────────
   {
-    key: 'work', label: 'Work', icon: 'work',
+    key: 'work', label: 'Work', icon: 'work', secondary: true,
     children: [
       { key: 'calendar',  label: 'Calendar',  icon: 'calendar',  path: 'dashboard/work/calendar' },
       { key: 'rhythm',    label: 'Rhythm',    icon: 'rhythm',    path: 'dashboard/work/rhythm' },
@@ -57,15 +50,40 @@ export const NAV_TREE = [
       { key: 'roadmap',   label: 'Roadmap',   icon: 'roadmap',   path: 'dashboard/work/roadmap' },
     ],
   },
-  // ── System (cross-workspace + platform) ───────────────────────────────────
   {
-    key: 'system', label: 'System', icon: 'settings',
+    key: 'revenue', label: 'Revenue', icon: 'revenue', secondary: true,
     children: [
-      { key: 'revenue-all',label: 'Revenue (전체)', icon: 'revenue',     path: 'dashboard/revenue/overview' },
-      { key: 'followups',  label: 'Follow-ups',     icon: 'bell',        path: 'dashboard/revenue/followups' },
-      { key: 'automations',label: 'Automations',    icon: 'automations', path: 'dashboard/automations/runs' },
-      { key: 'evolution',  label: 'Evolution',      icon: 'evolution',   path: 'dashboard/evolution' },
-      { key: 'settings',   label: 'Settings',       icon: 'settings',    path: 'dashboard/settings' },
+      { key: 'overview', label: 'Overview',   icon: 'revenue',  path: 'dashboard/revenue/overview' },
+      { key: 'deals',    label: 'Deals',      icon: 'deals',    path: 'dashboard/revenue/deals' },
+      { key: 'leads',    label: 'Leads',      icon: 'leads',    path: 'dashboard/revenue/leads' },
+      { key: 'accounts', label: 'Accounts',   icon: 'accounts', path: 'dashboard/revenue/accounts' },
+      { key: 'cases',    label: 'Cases',      icon: 'cases',    path: 'dashboard/revenue/cases' },
+      { key: 'followups',label: 'Follow-ups', icon: 'bell',     path: 'dashboard/revenue/followups' },
+    ],
+  },
+  {
+    key: 'content', label: 'Content', icon: 'content', secondary: true,
+    children: [
+      { key: 'queue',     label: 'Queue',     icon: 'queue',     path: 'dashboard/content/queue' },
+      { key: 'studio',    label: 'Studio',    icon: 'studio',    path: 'dashboard/content/studio' },
+      { key: 'campaigns', label: 'Campaigns', icon: 'campaigns', path: 'dashboard/content/campaigns' },
+    ],
+  },
+  {
+    key: 'automations', label: 'Automations', icon: 'automations', secondary: true,
+    children: [
+      { key: 'runs',     label: 'Runs',     icon: 'runs',    path: 'dashboard/automations/runs' },
+      { key: 'flows',    label: 'Flows',    icon: 'zap',     path: 'dashboard/automations/flows' },
+      { key: 'email',    label: 'Email',    icon: 'email',   path: 'dashboard/automations/email' },
+      { key: 'webhooks', label: 'Webhooks', icon: 'webhook', path: 'dashboard/automations/webhooks' },
+      { key: 'sheets',   label: 'Sheets',   icon: 'leads',   path: 'dashboard/automations/sheets' },
+    ],
+  },
+  {
+    key: 'system', label: 'System', icon: 'settings', secondary: true,
+    children: [
+      { key: 'evolution', label: 'Evolution', icon: 'evolution', path: 'dashboard/evolution' },
+      { key: 'settings',  label: 'Settings',  icon: 'settings',  path: 'dashboard/settings' },
     ],
   },
 ];

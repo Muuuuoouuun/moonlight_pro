@@ -264,7 +264,8 @@ export function AgentsCouncil({ onNavigate }) {
   );
 }
 
-const WO_STATUS_TONE = { proposed: 'warning', approved: 'info', executed: 'success', dismissed: 'neutral', done: 'success', review: 'warning', draft: 'neutral' };
+const WO_STATUS_TONE = { proposed: 'warning', approved: 'info', executing: 'warning', executed: 'success', dismissed: 'neutral', done: 'success', review: 'warning', draft: 'neutral' };
+const WO_EXECUTABLE_STATUSES = new Set(['approved']);
 
 function shortWhen(iso) {
   if (!iso) return '—';
@@ -322,6 +323,26 @@ export function AgentsOrders({ onNavigate }) {
     }
   }
 
+  async function execute(id) {
+    if (busyId) return;
+    setBusyId(id);
+    try {
+      const res = await fetch('/api/hub/work-orders', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, action: 'execute' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const completed = ['logged', 'sent', 'marked_executed'].includes(data.status) ||
+        data.workOrderExecution?.persisted ||
+        data.persistence?.workOrderExecution?.persisted;
+      if (completed) setOrders((prev) => prev.filter((o) => o.id !== id));
+      else if (res.ok) setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: 'approved' } : o)));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   // Live rows from work_orders, else the static sample (demo) so the page is never empty.
   const rows = live && Array.isArray(orders)
     ? orders.map((o) => ({ id: o.id, at: shortWhen(o.proposedAt), to: o.persona, what: o.title, status: o.status, live: true }))
@@ -372,8 +393,13 @@ export function AgentsOrders({ onNavigate }) {
             <div style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
               {o.live && o.status === 'proposed' ? (
                 <>
-                  <Button variant="primary" size="xs" onClick={() => decide(o.id, 'approved')}>승인</Button>
-                  <Button variant="ghost" size="xs" onClick={() => decide(o.id, 'dismissed')}>보류</Button>
+                  <Button variant="primary" size="xs" disabled={busyId === o.id} onClick={() => decide(o.id, 'approved')}>승인</Button>
+                  <Button variant="ghost" size="xs" disabled={busyId === o.id} onClick={() => decide(o.id, 'dismissed')}>보류</Button>
+                </>
+              ) : o.live && WO_EXECUTABLE_STATUSES.has(o.status) ? (
+                <>
+                  <Button variant="primary" size="xs" icon="play" disabled={busyId === o.id} onClick={() => execute(o.id)}>실행</Button>
+                  <Button variant="ghost" size="xs" disabled={busyId === o.id} onClick={() => decide(o.id, 'dismissed')}>보류</Button>
                 </>
               ) : (
                 <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(`dashboard/agents/chat?order=${o.id}`)}>Open</Button>

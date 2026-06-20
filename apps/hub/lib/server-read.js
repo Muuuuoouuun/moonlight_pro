@@ -1,4 +1,4 @@
-import { makeSupabaseHeaders, resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
+import { makeSupabaseHeaders, resolveDefaultWorkspaceId, resolveSupabaseConfig } from "./server-write.js";
 
 function buildRestUrl(baseUrl, table, options = {}) {
   const { select = "*", filters = [], limit, order } = options;

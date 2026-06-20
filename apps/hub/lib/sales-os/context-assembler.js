@@ -18,6 +18,10 @@ import {
   outcomesForEntity,
   selectBrand,
 } from "@/lib/sales-os/context-schema";
+import {
+  buildLeadSourceMix,
+  getClassInOperatorContext,
+} from "@/lib/sales-os/operator-context";
 
 const trim = (arr, n) => (Array.isArray(arr) ? arr.slice(0, n) : []);
 
@@ -45,10 +49,16 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
 
   const normalizedOutcomes = (outcomesRes?.outcomes || []).map(normalizeOutcome).filter(Boolean);
   const brand = selectBrand(content?.brands);
+  const leadSourceMix = buildLeadSourceMix(ledger.leads || []);
+  const operator = getClassInOperatorContext({
+    leadSourceMix,
+    monthlyKpi: ledger.summary?.classinMonthlyKpi || null,
+  });
 
   const context = {
     source: ledger.source,
     summary: ledger.summary || null,
+    operator,
     stages: ledger.stages || [],
     deals: trim(ledger.deals, 40),
     leads: trim(ledger.leads, 40),

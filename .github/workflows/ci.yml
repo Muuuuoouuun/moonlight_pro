@@ -29,6 +29,9 @@ jobs:
       - name: Contract checks
         run: npm run check:contracts
 
+      - name: ClassIn sales checks
+        run: npm run check:classin
+
       - name: Tests
         run: npm test
 

@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 
 import { getAutomationsLedger } from "@/lib/repositories/automations-ledger";
 import { getContentLedger } from "@/lib/repositories/content-ledger";
+import { getFollowups } from "@/lib/repositories/followups-ledger";
 import { getProjectLedger } from "@/lib/repositories/operating-ledger";
 import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
 import { getWorkLedger } from "@/lib/repositories/work-ledger";
+import { getRecentAgentRuns } from "@/lib/sales-os/agent-runs";
 import { getWorkOrders } from "@/lib/sales-os/work-orders";
 
 export const runtime = "nodejs";
@@ -170,6 +172,46 @@ function buildRevenueSignals(revenue) {
   }
 
   return signals;
+}
+
+function buildFollowupSignals(followups) {
+  const items = Array.isArray(followups.items) ? followups.items : [];
+  if (!items.length) return [];
+
+  const top = items.slice(0, 3);
+  const urgent = top.some((item) => Number(item.priority || 0) >= 80);
+  return [{
+    id: "followups-today",
+    tone: urgent ? "danger" : "warning",
+    kind: "Revenue",
+    title: `오늘 연락 ${items.length}건`,
+    summary: top.map((item) => `${item.name}(${item.channel})`).join(" · "),
+    meta: "Follow-ups · ClassIn cadence",
+    source: { from: "Followups", ref: "TODAY" },
+    decisions: [
+      action("Follow-ups 열기", "followup", true),
+      action("리드 보기", "leads"),
+    ],
+  }];
+}
+
+function buildGuruSignals(runsLedger) {
+  const runs = Array.isArray(runsLedger.runs) ? runsLedger.runs : [];
+  if (!runs.length) return [];
+  const latest = runs[0];
+  return [{
+    id: `guru-memory-${latest.id}`,
+    tone: latest.result === "error" ? "warning" : "info",
+    kind: "Agent",
+    title: "최근 Guru 코칭 이어가기",
+    summary: `${latest.mode || "sales"} · ${latest.ref || "pipeline"} — 이전 조언과 중복되지 않게 다음 액션을 정리하세요.`,
+    meta: `Guru · ${latest.ranAt ? latest.ranAt.slice(0, 10) : "recent"}`,
+    source: { from: "Guru", ref: latest.id },
+    decisions: [
+      action("Guru 열기", "chat", true),
+      action("승인 큐 확인", "queueApprovals"),
+    ],
+  }];
 }
 
 function buildContentSignals(content) {
@@ -353,17 +395,29 @@ function buildMetrics(revenue, content, automations, projects) {
   const revenueSummary = revenue.summary || {};
   const contentSummary = content.summary || {};
   const automationSummary = automations.summary || {};
+  const classinKpi = revenueSummary.classinMonthlyKpi || null;
   const openProjects = Array.isArray(projects.projects)
     ? projects.projects.filter((project) => project.status !== "Done").length
     : 0;
 
-  return [
+  const base = [
     metric("MRR", formatMoney(revenueSummary.mrr || 0), revenueSummary.mrr ? "ledger" : "waiting", revenueSummary.mrr ? "success" : "neutral"),
     metric("Pipeline", formatMoney(revenueSummary.pipeline || 0), `${revenueSummary.openDeals || 0} deals`, "moon"),
     metric("Published", String(contentSummary.published || 0), `${contentSummary.drafts || 0} drafts`, "info"),
     metric("Runs failed", String(automationSummary.failuresToday || 0), `${automationSummary.runsToday || 0} runs`, automationSummary.failuresToday ? "warning" : "success"),
     metric("Open work", String(openProjects), "active projects", "moon"),
-  ].slice(0, 4);
+  ];
+
+  if (classinKpi?.targets) {
+    base.unshift(metric(
+      "ClassIn",
+      `${classinKpi.actual?.contracts || 0}/${classinKpi.targets.monthlyContractTarget || 60}`,
+      `${classinKpi.actual?.units || 0}대 · ${classinKpi.actual?.revenueCny || 0} CNY`,
+      (classinKpi.actual?.contracts || 0) > 0 ? "success" : "moon",
+    ));
+  }
+
+  return base.slice(0, 4);
 }
 
 function buildSources(results) {
@@ -372,17 +426,21 @@ function buildSources(results) {
     { key: "work", label: "Work", state: ledgerState(results.work) },
     { key: "content", label: "Content", state: ledgerState(results.content) },
     { key: "revenue", label: "Revenue", state: ledgerState(results.revenue) },
+    { key: "followups", label: "Followups", state: ledgerState(results.followups) },
     { key: "automations", label: "Automations", state: ledgerState(results.automations) },
+    { key: "guru", label: "Guru", state: ledgerState(results.guruRuns) },
   ];
 }
 
 export async function GET() {
-  const [projectsResult, workResult, contentResult, revenueResult, automationsResult, ordersResult] = await Promise.allSettled([
+  const [projectsResult, workResult, contentResult, revenueResult, automationsResult, followupsResult, guruRunsResult, ordersResult] = await Promise.allSettled([
     getProjectLedger(),
     getWorkLedger(),
     getContentLedger(),
     getRevenueLedger(),
     getAutomationsLedger(),
+    getFollowups({ limit: 12 }),
+    getRecentAgentRuns({ agent: "guru", limit: 3 }),
     getWorkOrders({ status: "proposed", limit: 20 }),
   ]);
 
@@ -392,6 +450,8 @@ export async function GET() {
     content: contentResult,
     revenue: revenueResult,
     automations: automationsResult,
+    followups: followupsResult,
+    guruRuns: guruRunsResult,
   };
 
   const projects = readLedger(projectsResult);
@@ -399,6 +459,8 @@ export async function GET() {
   const content = readLedger(contentResult);
   const revenue = readLedger(revenueResult);
   const automations = readLedger(automationsResult);
+  const followups = readLedger(followupsResult);
+  const guruRuns = readLedger(guruRunsResult);
   const ordersLedger = readLedger(ordersResult, { source: "preview", orders: [] });
   const queue = {
     source: ordersLedger.source || "preview",
@@ -411,6 +473,8 @@ export async function GET() {
   const signals = [
     ...buildUnifiedRiskSignals(revenue, projects, automations),
     ...buildApprovalSignals(queue),
+    ...buildFollowupSignals(followups),
+    ...buildGuruSignals(guruRuns),
     ...buildRevenueSignals(revenue),
     ...buildContentSignals(content),
     ...buildAutomationSignals(automations),

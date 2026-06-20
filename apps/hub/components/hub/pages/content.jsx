@@ -451,6 +451,18 @@ export function Studio({ workspace }) {
       const elapsed = Date.now() - startedAt;
       if (elapsed < 100) await new Promise(r => setTimeout(r, 100 - elapsed));
 
+      if (data.status === 'approval_required') {
+        const workOrderId = data.workOrder?.id || data.workOrder?.record?.id || null;
+        const persisted = data.workOrder?.persisted;
+        setExtraSuggestions(s => [{
+          tone: persisted ? 'info' : 'warning',
+          text: persisted
+            ? `승인 큐에 올림 · ${String(workOrderId || 'approval').slice(0, 8)} · 외부 전달/업로드는 실행하지 않았습니다.`
+            : `승인 필요 · 큐 저장 실패 · 외부 전달/업로드는 실행하지 않았습니다.`,
+        }, ...s]);
+        return;
+      }
+
       if (!response.ok && data.status !== 'preview' && data.status !== 'logged') {
         const msg = data.error || data.message || `HTTP ${response.status}`;
         setExtraSuggestions(s => [{ tone: 'danger', text: `handoff 실패 — ${msg}` }, ...s]);
@@ -642,7 +654,7 @@ export function Studio({ workspace }) {
             size="sm"
             onClick={() => recordHandoff('schedule')}
           >
-            {pendingSend === 'schedule' ? 'Queuing…' : 'Schedule'}
+            {pendingSend === 'schedule' ? 'Queuing…' : 'Request schedule'}
           </Button>
           <Button
             variant="primary"
@@ -650,7 +662,7 @@ export function Studio({ workspace }) {
             icon="send"
             onClick={() => recordHandoff('publish')}
           >
-            {pendingSend === 'publish' ? 'Logging…' : 'Publish'}
+            {pendingSend === 'publish' ? 'Queuing…' : 'Request publish'}
           </Button>
         </div>
 
@@ -938,7 +950,7 @@ export function Studio({ workspace }) {
           }}>
             {handoffLogs.length === 0 && (
               <div style={{ fontSize: 12, color: 'var(--fg-faint)', lineHeight: 1.45 }}>
-                Schedule 또는 Publish를 누르면 Supabase publish_logs에 기록됩니다.
+                Request 버튼은 먼저 승인 큐에 올립니다. 승인 후 실행된 handoff/export만 여기에 기록됩니다.
               </div>
             )}
             {handoffLogs.map((log) => (

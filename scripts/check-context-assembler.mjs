@@ -14,6 +14,10 @@ import {
   outcomesForEntity,
   selectBrand,
 } from "../apps/hub/lib/sales-os/context-schema.js";
+import {
+  buildLeadSourceMix,
+  getClassInOperatorContext,
+} from "../apps/hub/lib/sales-os/operator-context.js";
 
 const failures = [];
 
@@ -88,6 +92,20 @@ ok("focus missing notes eeoCRM + leads + contacts", focus.missing.length === 3 &
 const noDeal = buildFocusOperatingContext({ deal: null });
 eq("focus no deal -> found false", noDeal.found, false);
 eq("focus no deal -> missing deals", noDeal.missing[0].source, "deals");
+
+// --- ClassIn operator context (Guru guardrails) ---
+const mix = buildLeadSourceMix([
+  { source: "meta_ads", meta: { campaign: "설명회" } },
+  { source: "threads", channel: "threads-dm" },
+  { source: "google_sheets" },
+]);
+eq("operator lead source mix total", mix.total, 3);
+eq("operator lead source mix meta", mix.metaAds, 1);
+eq("operator lead source mix threads", mix.threads, 1);
+const op = getClassInOperatorContext({ leadSourceMix: mix });
+eq("operator lane key", op.lane.key, "classin_sales");
+eq("operator crm no push", op.crm.companyCrmWrite, false);
+ok("operator target tracks contracts", op.targets.monthlyContractTarget >= 60);
 
 console.log("");
 if (failures.length) {

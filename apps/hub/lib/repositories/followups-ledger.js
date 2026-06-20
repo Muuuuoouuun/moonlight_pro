@@ -10,17 +10,53 @@ import { eqFilter, fetchSupabaseRows, inFilter, withWorkspaceFilter } from "@/li
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig, updateSupabaseRecord } from "@/lib/server-write";
 
 import { momentumScore, outcomeBoost, priorityFor } from "@/lib/sales-os/followup-scoring";
+import {
+  isExplanationLead,
+  isMetaAdsLead,
+  isThreadsLead,
+  isValidLeadFlag,
+} from "@/lib/sales-os/operator-context";
 
 // Days since last touch before a stage is "overdue".
 const STALE_DAYS = { new: 2, qualified: 3, nurturing: 4, contact: 4, proposal: 3, negotiation: 2 };
 const DEFAULT_STALE = 3;
 
 // Stage → suggested channel (real motion, no email).
-function channelFor(stage) {
+function channelFor(stage, record = {}) {
   const s = String(stage || "").toLowerCase();
+  if (isThreadsLead(record)) return "스레드 DM";
+  if (isExplanationLead(record) || isMetaAdsLead(record)) return "문자/전화";
   if (["won", "customer", "closed"].includes(s)) return "카톡";
   if (["proposal", "negotiation", "prop", "neg"].includes(s)) return "방문";
   return "전화/문자";
+}
+
+function thresholdForLead(stage, lead) {
+  if (isExplanationLead(lead)) return 1;
+  if (isThreadsLead(lead)) return 2;
+  if (isMetaAdsLead(lead) && stage === "new") return 1;
+  return STALE_DAYS[stage] ?? DEFAULT_STALE;
+}
+
+function sourceBoost(lead) {
+  let boost = 0;
+  if (isExplanationLead(lead)) boost += 35;
+  if (isThreadsLead(lead)) boost += 25;
+  if (isMetaAdsLead(lead)) boost += 15;
+  if (isValidLeadFlag(lead)) boost += 20;
+  const customerState = String(lead.meta?.customer_state || "").toLowerCase();
+  if (/(만료|소진|충전|저활용|못.?쓰|expiry|depletion|recharge|low usage)/.test(customerState)) boost += 20;
+  return boost;
+}
+
+function sourceReason(lead) {
+  const labels = [];
+  if (isExplanationLead(lead)) labels.push("설명회 신청");
+  if (isThreadsLead(lead)) labels.push("Threads 관심");
+  if (isMetaAdsLead(lead)) labels.push("광고 리드");
+  if (isValidLeadFlag(lead)) labels.push("유효 표시");
+  if (lead.meta?.customer_state) labels.push(`고객상태 ${lead.meta.customer_state}`);
+  return labels.length ? `${labels.join(" · ")} · ` : "";
 }
 
 function daysSince(value) {
@@ -77,17 +113,18 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
     const stage = String(lead.status || "new").toLowerCase();
     const touch = lead.last_touch_at || lead.updated_at || lead.created_at;
     const since = daysSince(touch);
-    const threshold = STALE_DAYS[stage] ?? DEFAULT_STALE;
+    const threshold = thresholdForLead(stage, lead);
     const overdue = since == null || since >= threshold;
     if (!overdue) return;
 
     const outcome = lastOutcomeByLead.get(lead.id) || (lead.company_id && lastOutcomeByCompany.get(lead.company_id));
     const outcomeAge = outcome ? daysSince(outcome.occurred_at) : null;
+    const reasonPrefix = sourceReason(lead);
     const why = outcome
-      ? `마지막 ${outcome.action} ${outcomeAge ?? "?"}일 전 · ${stage}`
-      : `${since == null ? "무접촉" : `${since}일째 무접촉`} · ${stage}`;
+      ? `${reasonPrefix}마지막 ${outcome.action} ${outcomeAge ?? "?"}일 전 · ${stage}`
+      : `${reasonPrefix}${since == null ? "무접촉" : `${since}일째 무접촉`} · ${stage}`;
 
-    const boost = outcomeBoost({ action: outcome?.action, ageDays: outcomeAge });
+    const boost = outcomeBoost({ action: outcome?.action, ageDays: outcomeAge }) + sourceBoost(lead);
 
     items.push({
       kind: "lead",
@@ -96,7 +133,7 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
       company: company?.name || null,
       phone: company?.phone || lead.meta?.phone || null,
       stage,
-      channel: channelFor(stage),
+      channel: channelFor(stage, lead),
       why,
       daysSince: since,
       nextAction: lead.next_action || "다음 행동 정하기",
@@ -131,7 +168,7 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
       company: company?.name || null,
       phone: company?.phone || null,
       stage,
-      channel: channelFor(stage),
+      channel: channelFor(stage, deal),
       why,
       daysSince: since,
       nextAction: "단계 진전 액션 정하기",

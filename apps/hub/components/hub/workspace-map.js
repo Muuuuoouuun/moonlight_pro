@@ -1,9 +1,12 @@
 // Workspace map — the real operating layer for Moonlight Pro Hub.
 //
-// The sidebar is organized around the three workstreams that actually run first:
-//   1. classin  (클래스인)    — my education / class business line
-//   2. company  (회사)        — agency + product company operations
-//   3. brand    (브랜드 업무)  — brand / content publishing work
+// The sidebar is organized around the live workstreams that actually run first:
+//   1. classin  (클래스인)    — current company sales/ops lane
+//   2. brand    (브랜드 업무)  — brand / content publishing work
+//
+// `company` remains below as a legacy-compatible lens for older routes. In the
+// active IA, company work is folded into ClassIn because that is the user's live
+// revenue surface.
 //
 // Each workspace declares which REAL records belong to it. Pages read these
 // membership sets to scope their live data (and fall back to an explicit
@@ -26,23 +29,32 @@ export const WORKSPACES = {
     label: '클래스인',
     glyph: '🎓',
     icon: 'classin',
-    desc: '교육 · 코호트 · 수강생',
-    // Education brands — class business runs through these labels.
-    brands: ['classmoon', 'studyseagull'],
-    // Revenue lens: education deals/leads. No dedicated field in the current
-    // schema, so this matches by brand association / account keyword and is
-    // empty (preview) until real education revenue is tagged.
-    // Keywords are intentionally specific — the bare English token 'class' was
-    // dropped because it substring-matches unrelated names (e.g. "Classic Co").
-    revenueTypes: [],
-    accountKeywords: ['클래스', '코호트', '수강', '강의', 'cohort'],
+    desc: '회사 영업 · 파이프라인 · 고객관리',
+    // ClassIn current-company work can still carry older brand tags from the
+    // project ledger, so include the known labels until records get explicit
+    // workspace/lane tags.
+    brands: ['classmoon', 'studyseagull', 'bridgemaker', 'moonpm'],
+    revenueTypes: ['company'],
+    accountKeywords: [
+      'classin',
+      'class in',
+      '클래스인',
+      '설명회',
+      '전자칠판',
+      '충전',
+      '소진',
+      '광고',
+      'meta',
+      '캠페인',
+      'cohort',
+    ],
   },
   company: {
     key: 'company',
     label: '회사',
     glyph: '🏢',
     icon: 'building',
-    desc: '딜 · 파이프라인 · 운영',
+    desc: 'Legacy · 클래스인으로 흡수',
     // Agency (BridgeMaker), the hub tool itself (MoonPM), research (Politic_Officer).
     brands: ['bridgemaker', 'moonpm', 'politicofficer'],
     // Company pipeline = all company-type deals/leads.
@@ -93,13 +105,21 @@ export function brandInWorkspace(brandKey, ws) {
 export function filterProjectsByWorkspace(projects, ws) {
   const w = getWorkspace(ws);
   if (!w || !Array.isArray(projects)) return projects || [];
-  return projects.filter((p) => w.brands.includes(p.brand));
+  return projects.filter((p) =>
+    p.workspace === ws ||
+    w.brands.includes(p.brand) ||
+    matchAccountKeyword(p.name || p.title, w.accountKeywords)
+  );
 }
 
 export function filterTodosByWorkspace(todos, ws) {
   const w = getWorkspace(ws);
   if (!w || !Array.isArray(todos)) return todos || [];
-  return todos.filter((t) => w.brands.includes(t.brand));
+  return todos.filter((t) =>
+    t.workspace === ws ||
+    w.brands.includes(t.brand) ||
+    matchAccountKeyword(t.title || t.name, w.accountKeywords)
+  );
 }
 
 export function filterBrandsByWorkspace(brands, ws) {

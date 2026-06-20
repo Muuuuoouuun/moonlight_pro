@@ -85,10 +85,13 @@ alter table if exists public.content_variants
   add constraint content_variants_variant_type_check
   check (variant_type in (
     'newsletter',
+    'blog',
     'blog_insight',
     'card_news',
+    'social_post',
     'x_thread',
-    'reels_script'
+    'reels_script',
+    'landing_copy'
   ));
 
 create index if not exists idx_content_items_workspace_brand_status_updated

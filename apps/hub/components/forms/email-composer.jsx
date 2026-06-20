@@ -66,7 +66,7 @@ function normalizeResponseTone(status) {
     return "green";
   }
 
-  if (status === "preview") {
+  if (status === "preview" || status === "approval_required") {
     return "warning";
   }
 
@@ -80,6 +80,10 @@ function responseTitle(status) {
 
   if (status === "preview") {
     return "Dry-run 완료";
+  }
+
+  if (status === "approval_required") {
+    return "승인 대기";
   }
 
   return "발송 오류";
@@ -465,6 +469,14 @@ export function EmailComposer({
         return;
       }
 
+      if (data.status === "approval_required") {
+        const workOrderId = data.workOrder?.id || data.workOrder?.order?.id || data.workOrder?.record?.id || null;
+        setStatusMessage(
+          `승인 큐에 올림 · ${String(workOrderId || "approval").slice(0, 8)} · 고객 이메일은 아직 발송되지 않았습니다.`,
+        );
+        return;
+      }
+
       setStatusMessage(data.error || data.message || "발송 중 오류가 발생했습니다.");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -725,15 +737,15 @@ export function EmailComposer({
               {template?.channel === "n8n"
                 ? "n8n 예정"
                 : pendingAction === "send"
-                  ? "발송 중..."
-                : "즉시 발송"}
+                  ? "요청 중..."
+                : "승인 요청"}
             </button>
           </div>
           <div className="composer-helper-row">
             <span className="composer-helper-chip">{saveStatusLabel}</span>
             <span className="composer-helper-chip">⌘/Ctrl + S 저장</span>
             <span className="composer-helper-chip">⌘/Ctrl + Enter dry-run</span>
-            <span className="composer-helper-chip">Shift + ⌘/Ctrl + Enter 발송</span>
+            <span className="composer-helper-chip">Shift + ⌘/Ctrl + Enter 승인 요청</span>
           </div>
           <p className="composer-status" role="status" aria-live="polite">
             {statusMessage}
@@ -746,6 +758,11 @@ export function EmailComposer({
               {result.preview?.from ? (
                 <p className="status-note-subtle">
                   {result.preview.from} → {(result.preview.to || []).join(", ")}
+                </p>
+              ) : null}
+              {result.workOrder?.id || result.workOrder?.order?.id || result.workOrder?.record?.id ? (
+                <p className="status-note-subtle">
+                  work order · {String(result.workOrder?.id || result.workOrder?.order?.id || result.workOrder?.record?.id).slice(0, 8)}
                 </p>
               ) : null}
             </div>

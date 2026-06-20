@@ -5,6 +5,7 @@ import {
   SHARED_WEBHOOK_SECRET_HEADER,
   validateSharedWebhookRequest,
 } from "../../../../lib/shared-webhook";
+import { fetchSupabaseRows } from "../../../../lib/supabase-rest";
 
 export const runtime = "nodejs";
 
@@ -33,7 +34,74 @@ function buildEmailRequest(payload: Record<string, unknown>): EmailSendRequest {
     segmentId: normalizeString(payload.segmentId) || null,
     segmentLabel: normalizeString(payload.segmentLabel) || null,
     audience: normalizeString(payload.audience) || null,
+    approvedWorkOrderId:
+      normalizeString(payload.approvedWorkOrderId) ||
+      normalizeString(payload.workOrderId) ||
+      null,
   };
+}
+
+function eqFilter(value: string) {
+  return `eq.${value}`;
+}
+
+function valueAtPath(obj: Record<string, unknown>, path: string) {
+  return path
+    .split(".")
+    .filter(Boolean)
+    .reduce<unknown>((acc, key) => {
+      if (acc && typeof acc === "object" && key in acc) {
+        return (acc as Record<string, unknown>)[key];
+      }
+      return undefined;
+    }, obj);
+}
+
+function expectedBodyMatches(body: Record<string, unknown>, expected: Record<string, unknown>) {
+  return Object.entries(expected).every(([key, value]) => {
+    if (value == null || value === "") return true;
+    return String(valueAtPath(body || {}, key) ?? "") === String(value);
+  });
+}
+
+async function validateEmailApproval(input: EmailSendRequest) {
+  if (normalizeString(input.action, "dry-run") !== "send") {
+    return { ok: true, reason: "dry-run" };
+  }
+  if (!input.workspaceId || !input.approvedWorkOrderId) {
+    return { ok: false, reason: "missing-approval" };
+  }
+
+  const rows = await fetchSupabaseRows("work_orders", {
+    filters: [
+      ["workspace_id", eqFilter(input.workspaceId)],
+      ["id", eqFilter(input.approvedWorkOrderId)],
+    ],
+    limit: 1,
+  });
+  const order = rows?.[0] as
+    | {
+        status?: string;
+        gate?: string;
+        kind?: string;
+        body?: Record<string, unknown>;
+      }
+    | undefined;
+  if (!order) return { ok: false, reason: "approval-not-found" };
+  if (order.status !== "executing") return { ok: false, reason: "approval-not-claimed" };
+  if (order.gate !== "human_approval") return { ok: false, reason: "approval-gate-mismatch" };
+  if (order.kind !== "email_send") return { ok: false, reason: "approval-kind-mismatch" };
+  if (!expectedBodyMatches(order.body || {}, {
+    recipientEmail: input.recipientEmail,
+    subject: input.subject,
+    body: input.body,
+    channel: input.channel,
+    templateId: input.templateId,
+    audience: input.audience,
+  })) {
+    return { ok: false, reason: "approval-body-mismatch" };
+  }
+  return { ok: true, reason: "ok" };
 }
 
 export async function GET() {
@@ -59,6 +127,7 @@ export async function GET() {
       segmentId: "string (optional)",
       segmentLabel: "string (optional)",
       audience: "string (optional)",
+      approvedWorkOrderId: "string (required for action=send after Hub claims an approved work order)",
     },
   });
 }
@@ -77,6 +146,17 @@ export async function POST(req: Request) {
     }
 
     const input = buildEmailRequest((await req.json()) as Record<string, unknown>);
+    const approval = await validateEmailApproval(input);
+    if (!approval.ok) {
+      return NextResponse.json(
+        {
+          status: "approval_required",
+          error: `Approved matching workOrderId is required before email send (${approval.reason}).`,
+        },
+        { status: 403 },
+      );
+    }
+
     const result = await sendEmail(input);
 
     if (!result.ok) {

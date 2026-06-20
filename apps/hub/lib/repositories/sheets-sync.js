@@ -24,8 +24,29 @@ import {
   resolveSheetsConnection,
   writeSheetValues,
 } from "@/lib/google-sheets";
+import {
+  classinLeadChannel,
+  classinLeadScore,
+  classinNextAction,
+} from "@/lib/sales-os/operator-context";
 
 const STAGING_TABLE = "lead_intake_raw";
+
+function sheetSourceRef(sheetName, normalized) {
+  const sheet = String(sheetName || "Leads").trim() || "Leads";
+  const ref = normalized?.source_ref || "row:unknown";
+  return `${sheet}!${ref}`;
+}
+
+function compactMeta(obj) {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, value]) => {
+      if (value == null) return false;
+      if (typeof value === "string" && !value.trim()) return false;
+      return true;
+    }),
+  );
+}
 
 // --- local insert-with-return (server-write inserts are return=minimal) ------
 
@@ -173,13 +194,14 @@ export async function importSheetToStaging({
         skipped += 1;
         continue;
       }
+      const sourceRef = sheetSourceRef(sheetName, normalized);
       const result = await insertStagingRow({
         workspace_id: workspaceId || null,
         connection_id: connection.connectionId,
         source: "google_sheets",
-        source_ref: normalized.source_ref,
+        source_ref: sourceRef,
         raw: obj,
-        normalized,
+        normalized: { ...normalized, sheet_name: sheetName, source_ref: sourceRef },
         match_key: normalized.match_key,
         status: "pending",
       });
@@ -260,7 +282,14 @@ export async function promoteStagedLeads({
         address: n.address || null,
         match_key: n.match_key,
         status: "prospect",
-        meta: { source: n.source || "google_sheets", intake_id: row.id },
+        meta: compactMeta({
+          source: n.source || "google_sheets",
+          source_transport: "google_sheets",
+          lane: "classin_sales",
+          intake_id: row.id,
+          campaign: n.campaign_name,
+          form_id: n.form_id,
+        }),
       });
       if (!created || created.error) {
         await patchRows(STAGING_TABLE, [["id", eqFilter(row.id)]], { status: "review", note: created?.error || "company-insert-failed" });
@@ -301,13 +330,39 @@ export async function promoteStagedLeads({
       name: n.name || company.name,
       email: n.email || null,
       source: n.source || "google_sheets",
-      channel: n.source === "business_card" ? "business-card" : "sheet-import",
+      channel: classinLeadChannel(n),
       status: n.status || "new",
-      score: 0,
-      next_action: null,
+      score: classinLeadScore(n),
+      next_action: classinNextAction(n),
       last_touch_at: now,
       updated_at: now,
-      meta: { match_key: n.match_key, address: n.address || null, contact_name: n.contact_name || null, intake_id: row.id, note: n.note || null },
+      meta: compactMeta({
+        lane: "classin_sales",
+        source_transport: row.source || "google_sheets",
+        source_family: n.source || "google_sheets",
+        source_ref: n.source_ref || row.source_ref || null,
+        sheet_name: n.sheet_name || null,
+        match_key: n.match_key,
+        address: n.address || null,
+        contact_name: n.contact_name || null,
+        intake_id: row.id,
+        note: n.note || null,
+        campaign: n.campaign_name || null,
+        ad_name: n.ad_name || null,
+        adset_name: n.adset_name || null,
+        ad_id: n.ad_id || null,
+        form_name: n.form_name || null,
+        form_id: n.form_id || null,
+        created_time: n.created_time || null,
+        intent: n.intent || null,
+        validity: n.validity || null,
+        unit_count: n.unit_count ?? null,
+        revenue_cny: n.revenue_cny ?? null,
+        currency: n.currency || (n.revenue_cny ? "CNY" : null),
+        crm_stage: n.crm_stage || null,
+        customer_state: n.customer_state || null,
+        extra: n.extra && Object.keys(n.extra).length ? n.extra : null,
+      }),
     });
 
     if (!lead || lead.error) {

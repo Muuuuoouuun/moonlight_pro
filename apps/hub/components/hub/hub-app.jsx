@@ -73,10 +73,14 @@ const PAGE_MAP = {
   'dashboard/daily-brief': (n) => <DailyBrief onNavigate={n} />,
 
   // ── real_v1 workspaces → existing pages scoped by workspace ──
-  // 클래스인 (education)
+  // 클래스인 (current company sales lane)
+  'dashboard/classin/pipeline': (n) => <Deals workspace="classin" onNavigate={n} />,
+  'dashboard/classin/projects': () => <Projects workspace="classin" />,
+  'dashboard/classin/revenue': () => <Leads workspace="classin" />,
+  'dashboard/classin/automations': () => <SheetsSync />,
+  // Legacy ClassIn routes kept alive while old bookmarks exist.
   'dashboard/classin/cohorts': () => <Projects workspace="classin" />,
   'dashboard/classin/content': () => <Queue workspace="classin" />,
-  'dashboard/classin/revenue': () => <Leads workspace="classin" />,
   // 회사 (company ops)
   'dashboard/company/pipeline': (n) => <Deals workspace="company" onNavigate={n} />,
   'dashboard/company/projects': () => <Projects workspace="company" />,
@@ -116,7 +120,7 @@ const PAGE_MAP = {
 
 const PARENT_JUMP = {
   'dashboard': 'dashboard/daily-brief',
-  'dashboard/classin': 'dashboard/classin/cohorts',
+  'dashboard/classin': 'dashboard/classin/pipeline',
   'dashboard/company': 'dashboard/company/pipeline',
   'dashboard/brand': 'dashboard/brand/projects',
   'dashboard/work': 'dashboard/work/calendar',

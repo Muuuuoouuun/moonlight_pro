@@ -240,7 +240,7 @@ alter table if exists content_variants
 
 alter table if exists content_variants
   add constraint content_variants_variant_type_check
-  check (variant_type in ('newsletter', 'blog_insight', 'card_news', 'x_thread', 'reels_script'));
+  check (variant_type in ('newsletter', 'blog', 'blog_insight', 'card_news', 'social_post', 'x_thread', 'reels_script', 'landing_copy'));
 
 commit;
 
@@ -335,10 +335,13 @@ alter table if exists public.content_variants
   add constraint content_variants_variant_type_check
   check (variant_type in (
     'newsletter',
+    'blog',
     'blog_insight',
     'card_news',
+    'social_post',
     'x_thread',
-    'reels_script'
+    'reels_script',
+    'landing_copy'
   ));
 
 create index if not exists idx_content_items_workspace_brand_status_updated
@@ -858,7 +861,7 @@ create table if not exists public.work_orders (
   asset_id text,
   channel text,                              -- phone | visit | kakao | email | dm | publish | other
   status text not null default 'proposed'
-    check (status in ('proposed', 'approved', 'executed', 'dismissed')),
+    check (status in ('proposed', 'approved', 'executing', 'executed', 'dismissed')),
   gate text,                                 -- 페르소나 gate: outbound->codex | internal->auto | orchestrates | n/a
   source text not null default 'team'
     check (source in ('team', 'inbox', 'guru', 'manual')),
@@ -881,6 +884,15 @@ create index if not exists idx_work_orders_company
   on public.work_orders (workspace_id, company_id);
 create index if not exists idx_work_orders_run
   on public.work_orders (run_id);
+
+-- 20260620_0012_work_orders_execution_claim.sql
+-- Add transient execution-claim status for duplicate-send prevention.
+alter table if exists public.work_orders
+  drop constraint if exists work_orders_status_check;
+
+alter table if exists public.work_orders
+  add constraint work_orders_status_check
+  check (status in ('proposed', 'approved', 'executing', 'executed', 'dismissed'));
 
 
 -- end of apply-pending.sql

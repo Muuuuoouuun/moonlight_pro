@@ -24,7 +24,7 @@ function greetingFor(date) {
 const SIGNAL_TARGETS = {
   draft: 'dashboard/content/studio?new=draft',
   escalate: 'dashboard/revenue/deals',
-  followup: 'dashboard/revenue/deals?draft=followup',
+  followup: 'dashboard/revenue/followups',
   deals: 'dashboard/revenue/deals',
   leads: 'dashboard/revenue/leads',
   revenue: 'dashboard/revenue/overview',
@@ -240,7 +240,33 @@ const WO_KIND_TONE = {
   outcome: 'moon', lead: 'moon', dm: 'moon',
   idea: 'info', engagement: 'info',
   review: 'warning', note: 'neutral',
+  content_handoff: 'info', content_export: 'moon', email_send: 'warning',
+  sales_next_action: 'moon',
 };
+const WO_STATUS_TONE = { proposed: 'warning', approved: 'info', executing: 'warning', executed: 'success', dismissed: 'neutral' };
+const WO_EXECUTABLE_KINDS = new Set(['content_handoff', 'content_export', 'email_send']);
+
+function workOrderStatusLabel(status) {
+  return ({ proposed: '대기', approved: '승인됨', executing: '실행중', executed: '실행됨', dismissed: '보류' })[status] || status;
+}
+
+function workOrderHint(order) {
+  const body = order.body || {};
+  if (order.kind === 'email_send') {
+    return [body.recipientEmail, body.subject].filter(Boolean).join(' · ') || '고객 이메일 발송 요청';
+  }
+  if (order.kind === 'content_handoff' || order.kind === 'content_export') {
+    return [body.targetChannel || body.channel, body.exportProfile, body.event].filter(Boolean).join(' · ') || '콘텐츠 전달/업로드 승인 요청';
+  }
+  if (body.summary) return String(body.summary).slice(0, 150);
+  if (body.raw) return String(body.raw).slice(0, 150);
+  return order.channel ? `${order.channel} · ${order.source}` : order.source || 'Moonlight work order';
+}
+
+function executeLabel(order) {
+  if (WO_EXECUTABLE_KINDS.has(order.kind)) return '실행';
+  return '완료';
+}
 
 // The 1-click approval cockpit — proposed work orders (persona/inbox/guru) decided in place.
 // registry.json no_auto_send=true: nothing executes without this click.
@@ -248,13 +274,14 @@ function ApprovalQueueCard({ onNavigate }) {
   const [orders, setOrders] = React.useState([]);
   const [state, setState] = React.useState('loading');
   const [busyId, setBusyId] = React.useState(null);
+  const [message, setMessage] = React.useState(null);
 
-  React.useEffect(() => {
-    let active = true;
-    fetch('/api/hub/work-orders?status=proposed', { cache: 'no-store' })
+  const load = React.useCallback(() => {
+    setState('loading');
+    setMessage(null);
+    return fetch('/api/hub/work-orders?status=proposed,approved', { cache: 'no-store' })
       .then((r) => r.json().catch(() => null))
       .then((d) => {
-        if (!active) return;
         if (d && Array.isArray(d.orders)) {
           setOrders(d.orders);
           setState(d.source === 'supabase' ? 'live' : 'empty');
@@ -262,30 +289,114 @@ function ApprovalQueueCard({ onNavigate }) {
           setState('empty');
         }
       })
-      .catch(() => active && setState('empty'));
-    return () => { active = false; };
+      .catch(() => setState('empty'));
   }, []);
+
+  React.useEffect(() => {
+    let active = true;
+    load().finally(() => {
+      if (!active) return;
+    });
+    return () => { active = false; };
+  }, [load]);
 
   async function decide(id, status) {
     if (busyId) return;
     setBusyId(id);
+    setMessage(null);
     try {
       const res = await fetch('/api/hub/work-orders', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id, status }),
       });
-      if (res.ok) setOrders((prev) => prev.filter((o) => o.id !== id));
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setOrders((prev) => status === 'approved'
+          ? prev.map((o) => (o.id === id ? { ...o, status: 'approved' } : o))
+          : prev.filter((o) => o.id !== id));
+        setMessage({ tone: status === 'approved' ? 'info' : 'neutral', text: status === 'approved' ? '승인됨 · 실행 전 최종 큐에 유지됩니다.' : '보류 처리됨.' });
+      } else {
+        setMessage({ tone: 'danger', text: data.reason || data.error || `처리 실패 (${res.status})` });
+      }
     } finally {
       setBusyId(null);
     }
   }
 
-  const pending = orders.length;
+  async function execute(id) {
+    if (busyId) return;
+    setBusyId(id);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/hub/work-orders', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, action: 'execute' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const completed = ['logged', 'sent', 'marked_executed'].includes(data.status) ||
+        data.workOrderExecution?.persisted ||
+        data.persistence?.workOrderExecution?.persisted;
+
+      if (completed) {
+        setOrders((prev) => prev.filter((o) => o.id !== id));
+        setMessage({ tone: 'success', text: data.message || '실행 완료 · work_order가 executed로 전환됐습니다.' });
+      } else {
+        setMessage({
+          tone: res.ok ? 'warning' : 'danger',
+          text: data.error || data.message || `실행 대기 · ${data.status || res.status}`,
+        });
+      }
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const proposed = orders.filter((o) => o.status === 'proposed');
+  const approved = orders.filter((o) => o.status === 'approved');
+  const pending = proposed.length + approved.length;
+  const renderOrder = (o, i, total) => (
+    <div key={o.id} style={{
+      display: 'flex', alignItems: 'flex-start', gap: 10,
+      padding: '11px 14px', opacity: busyId === o.id ? 0.5 : 1,
+      borderBottom: i < total - 1 ? '1px solid var(--line-soft)' : 'none',
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+          <Badge tone={WO_STATUS_TONE[o.status] || 'neutral'} size="xs">{workOrderStatusLabel(o.status)}</Badge>
+          <Badge tone={WO_KIND_TONE[o.kind] || 'neutral'} size="xs">{o.kind}</Badge>
+          <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)' }}>{o.persona}{o.channel ? ` · ${o.channel}` : ''}</span>
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {o.title}
+        </div>
+        <div style={{ marginTop: 3, fontSize: 11.5, color: 'var(--fg-faint)', lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {workOrderHint(o)}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+        {o.status === 'proposed' ? (
+          <>
+            <Button variant="primary" size="xs" disabled={busyId === o.id} onClick={() => decide(o.id, 'approved')}>승인</Button>
+            <Button variant="ghost" size="xs" disabled={busyId === o.id} onClick={() => decide(o.id, 'dismissed')}>보류</Button>
+          </>
+        ) : (
+          <>
+            <Button variant="primary" size="xs" icon={WO_EXECUTABLE_KINDS.has(o.kind) ? 'play' : 'check'} disabled={busyId === o.id} onClick={() => execute(o.id)}>{executeLabel(o)}</Button>
+            <Button variant="ghost" size="xs" disabled={busyId === o.id} onClick={() => decide(o.id, 'dismissed')}>보류</Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div>
-      <SectionTitle right={<Badge tone={pending ? 'moon' : 'success'} size="xs">{pending} 대기</Badge>}>
+      <SectionTitle right={<div style={{ display: 'flex', gap: 6 }}>
+        <Badge tone={proposed.length ? 'warning' : 'success'} size="xs">{proposed.length} 대기</Badge>
+        <Badge tone={approved.length ? 'info' : 'neutral'} size="xs">{approved.length} 승인됨</Badge>
+      </div>}>
         승인 큐
       </SectionTitle>
       <Card pad={false}>
@@ -296,27 +407,20 @@ function ApprovalQueueCard({ onNavigate }) {
               : '승인 대기 중인 제안이 없습니다. /inbox·/team이 제안을 올리면 여기서 1클릭으로 처리합니다.'}
           </div>
         ) : (
-          orders.map((o, i) => (
-            <div key={o.id} style={{
-              display: 'flex', alignItems: 'flex-start', gap: 10,
-              padding: '11px 14px', opacity: busyId === o.id ? 0.5 : 1,
-              borderBottom: i < orders.length - 1 ? '1px solid var(--line-soft)' : 'none',
-            }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <Badge tone={WO_KIND_TONE[o.kind] || 'neutral'} size="xs">{o.kind}</Badge>
-                  <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)' }}>{o.persona}{o.channel ? ` · ${o.channel}` : ''}</span>
-                </div>
-                <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {o.title}
-                </div>
+          <>
+            {proposed.map((o, i) => renderOrder(o, i, proposed.length + (approved.length ? 1 : 0)))}
+            {approved.length ? (
+              <div style={{ padding: '7px 14px', background: 'var(--surface-2)', borderTop: proposed.length ? '1px solid var(--line-soft)' : 'none', borderBottom: '1px solid var(--line-soft)' }}>
+                <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>APPROVED · EXECUTE WHEN READY</span>
               </div>
-              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                <Button variant="primary" size="xs" onClick={() => decide(o.id, 'approved')}>승인</Button>
-                <Button variant="ghost" size="xs" onClick={() => decide(o.id, 'dismissed')}>보류</Button>
-              </div>
-            </div>
-          ))
+            ) : null}
+            {approved.map((o, i) => renderOrder(o, i, approved.length))}
+          </>
+        )}
+        {message && (
+          <div style={{ padding: '9px 14px', borderTop: '1px solid var(--line-soft)', fontSize: 11.5, color: message.tone === 'danger' ? 'var(--danger)' : message.tone === 'success' ? 'var(--success)' : message.tone === 'warning' ? 'var(--warning)' : 'var(--fg-muted)' }}>
+            {message.text}
+          </div>
         )}
       </Card>
     </div>

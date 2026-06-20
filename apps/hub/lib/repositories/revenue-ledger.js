@@ -5,6 +5,7 @@ import {
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { getClassInTargets, isValidLeadFlag } from "@/lib/sales-os/operator-context";
 
 const DEAL_STAGES = [
   { key: "lead", label: "Lead", color: "neutral" },
@@ -45,6 +46,60 @@ const CASE_PRIORITY = new Set(["low", "medium", "high", "critical"]);
 function toNumber(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function lowerText(...values) {
+  return values
+    .filter((v) => v != null)
+    .map((v) => String(v).toLowerCase())
+    .join(" ");
+}
+
+function metaNumber(meta, keys, fallback = 0) {
+  for (const key of keys) {
+    const value = meta?.[key];
+    if (value == null || String(value).trim() === "") continue;
+    const n = Number(String(value ?? "").replace(/,/g, ""));
+    if (Number.isFinite(n)) return n;
+  }
+  return fallback;
+}
+
+function isCurrentMonth(value) {
+  if (!value) return false;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  const now = new Date();
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+}
+
+function resolveWorkspace(row) {
+  const meta = row?.meta || {};
+  if (meta.workspace) return meta.workspace;
+  if (meta.lane === "classin_sales") return "classin";
+  return null;
+}
+
+function resolveBrand(row) {
+  const meta = row?.meta || {};
+  return meta.brand || meta.brand_key || meta.brandKey || null;
+}
+
+function isClassInRaw(row) {
+  const meta = row?.meta || {};
+  if (meta.lane === "classin_sales" || meta.workspace === "classin") return true;
+  const hay = lowerText(
+    row?.source,
+    row?.channel,
+    row?.title,
+    row?.name,
+    meta.source_family,
+    meta.campaign,
+    meta.form_name,
+    meta.intent,
+    meta.note,
+  );
+  return /(classin|class in|클래스인|설명회|전자칠판|meta_ads|광고|캠페인)/.test(hay);
 }
 
 function normalizeStage(value) {
@@ -127,6 +182,8 @@ function mapLead(row, companyById, contactById) {
     id: row.id,
     name: displayName,
     type,
+    workspace: resolveWorkspace(row),
+    brand: resolveBrand(row),
     source: row.source || row.channel || "—",
     stage: LEAD_STAGE_LABEL[statusKey] || "New",
     value: value ? formatMoneyLabel(value) : "—",
@@ -145,6 +202,8 @@ function mapDeal(row, companyById) {
     id: row.id,
     name,
     type,
+    workspace: resolveWorkspace(row),
+    brand: resolveBrand(row),
     stage,
     value: toNumber(row.amount, 0),
     owner: row.owner_id ? "Me" : "Unassigned",
@@ -203,7 +262,45 @@ function mapCase(row, accountById) {
   };
 }
 
-function buildSummary(leads, deals) {
+function buildClassInMonthlyKpi(leadRows, dealRows) {
+  const targets = getClassInTargets();
+  const classinLeads = (leadRows || []).filter(isClassInRaw);
+  const classinDeals = (dealRows || []).filter(isClassInRaw);
+  const wonThisMonth = classinDeals.filter((row) => {
+    const stage = normalizeStage(row.stage);
+    return stage === "won" && isCurrentMonth(row.won_at || row.closed_at || row.last_activity_at || row.updated_at || row.created_at);
+  });
+
+  const contracts = wonThisMonth.length;
+  const units = wonThisMonth.reduce((sum, row) => sum + metaNumber(row.meta, ["unit_count", "units", "hardware_units"], 0), 0);
+  const revenueCny = wonThisMonth.reduce((sum, row) => {
+    const meta = row.meta || {};
+    const explicit = metaNumber(meta, ["revenue_cny", "amount_cny"], null);
+    if (explicit != null) return sum + explicit;
+    const currency = String(meta.currency || row.currency || "").toUpperCase();
+    return currency === "CNY" ? sum + toNumber(row.amount, 0) : sum;
+  }, 0);
+  const newLeads = classinLeads.filter((row) => isCurrentMonth(row.created_at || row.updated_at || row.last_touch_at)).length;
+  const validLeads = classinLeads.filter((row) => {
+    const status = String(row.status || "").toLowerCase();
+    return ["qualified", "nurturing", "won"].includes(status) || isValidLeadFlag(row);
+  }).length;
+
+  const pct = (value, target) => (target > 0 ? Math.round((value / target) * 1000) / 10 : 0);
+  return {
+    month: new Date().toISOString().slice(0, 7),
+    targets,
+    actual: { contracts, units, revenueCny, newLeads, validLeads },
+    progress: {
+      contractsPct: pct(contracts, targets.monthlyContractTarget),
+      unitsPct: pct(units, targets.monthlyUnitTarget),
+      revenuePct: pct(revenueCny, targets.monthlyRevenueTargetCny),
+    },
+    note: "ClassIn lane is inferred from meta.lane/workspace/source keywords until company CRM read adapters provide stronger facts.",
+  };
+}
+
+function buildSummary(leads, deals, leadRows = [], dealRows = []) {
   const pipeline = deals.filter(d => d.stage !== "won" && d.stage !== "lost")
     .reduce((sum, d) => sum + d.value, 0);
   const wonMTD = deals.filter(d => d.stage === "won").reduce((sum, d) => sum + d.value, 0);
@@ -217,6 +314,7 @@ function buildSummary(leads, deals) {
     newThisMonth: leads.filter(l => l.stage === "New").length,
     openDeals: deals.filter(d => d.stage !== "won" && d.stage !== "lost").length,
     wonMTD,
+    classinMonthlyKpi: buildClassInMonthlyKpi(leadRows, dealRows),
   };
 }
 
@@ -238,6 +336,7 @@ function emptyLedger(configured, workspaceId) {
       newThisMonth: 0,
       openDeals: 0,
       wonMTD: 0,
+      classinMonthlyKpi: buildClassInMonthlyKpi([], []),
     },
   };
 }
@@ -303,7 +402,7 @@ export async function getRevenueLedger() {
   const accounts = accountRows.map(row => mapAccount(row, dealStatsByCompany));
   const leads = leadRows.map(row => mapLead(row, companyById, contactById));
   const cases = caseRows.map(row => mapCase(row, accountRaw));
-  const summary = buildSummary(leads, deals);
+  const summary = buildSummary(leads, deals, leadRows, dealRows);
 
   return {
     source: "supabase",
