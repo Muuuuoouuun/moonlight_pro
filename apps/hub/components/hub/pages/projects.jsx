@@ -10,6 +10,12 @@ import {
   BRAND_TODOS as FALLBACK_TODOS,
   KANBAN_COLUMNS as FALLBACK_COLUMNS,
 } from "../hub-data";
+import {
+  getWorkspace,
+  filterBrandsByWorkspace,
+  filterProjectsByWorkspace,
+  filterTodosByWorkspace,
+} from "../workspace-map";
 
 const EMPTY_ALL_BRAND = {
   key: 'all',
@@ -60,7 +66,8 @@ function ActivityRow({ title, body, meta, badge, tone = 'neutral' }) {
   );
 }
 
-export function Projects() {
+export function Projects({ workspace }) {
+  const ws = getWorkspace(workspace);
   const searchParams = useSearchParams();
   const [brand, setBrand] = React.useState('all');
   const [view, setView] = React.useState('tree');
@@ -123,14 +130,23 @@ export function Projects() {
   }
 
   const isLiveLedger = ledger.source === 'supabase';
-  const brands = isLiveLedger
+  const rawBrands = isLiveLedger
     ? (ledger.brands?.length ? ledger.brands : [EMPTY_ALL_BRAND])
     : (ledger.brands?.length ? ledger.brands : FALLBACK_BRANDS);
-  const allProjects = isLiveLedger
+  const rawProjects = isLiveLedger
     ? (Array.isArray(ledger.projects) ? ledger.projects : [])
     : (ledger.projects?.length ? ledger.projects : FALLBACK_PROJECTS);
+  // Workspace scope: restrict to this workspace's brands/projects/todos.
+  // With no workspace, the filters return their input unchanged (global behavior).
+  const brands = ws ? filterBrandsByWorkspace(rawBrands, workspace) : rawBrands;
+  const allProjects = ws ? filterProjectsByWorkspace(rawProjects, workspace) : rawProjects;
+  const scopedTodos = ws ? filterTodosByWorkspace(todos, workspace) : todos;
+  // Scoped 'all' = first brand in this workspace, or its scoped 'all' index.
+  const wsDefaultBrand = ws
+    ? (brands.find(b => b.key !== 'all')?.key || brands[0]?.key || 'all')
+    : 'all';
   const projects = brand === 'all' ? allProjects : allProjects.filter(p => p.brand === brand);
-  const brandTodos = brand === 'all' ? todos : todos.filter(t => t.brand === brand);
+  const brandTodos = brand === 'all' ? scopedTodos : scopedTodos.filter(t => t.brand === brand);
   const currentBrand = brands.find(b => b.key === brand) || brands[0] || EMPTY_ALL_BRAND;
 
   React.useEffect(() => {
@@ -178,9 +194,9 @@ export function Projects() {
 
   React.useEffect(() => {
     if (!brands.some(b => b.key === brand)) {
-      setBrand('all');
+      setBrand(wsDefaultBrand);
     }
-  }, [brand, brands]);
+  }, [brand, brands, wsDefaultBrand]);
 
   const toggleTodo = (id) => setTodos(ts => ts.map(t => t.id === id ? { ...t, done: !t.done } : t));
   const toggleExpand = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -392,7 +408,7 @@ export function Projects() {
                 {brands.map(b => {
                   const active = brand === b.key;
                   const count = b.key === 'all' ? allProjects.length : (b.projects || 0);
-                  const bTodos = todos.filter(t => b.key === 'all' || t.brand === b.key).filter(t => !t.done).length;
+                  const bTodos = scopedTodos.filter(t => b.key === 'all' || t.brand === b.key).filter(t => !t.done).length;
                   const changes = b.key === 'all'
                     ? brands.filter(x => x.key !== 'all').reduce((s, x) => s + (x.changes || 0), 0)
                     : (b.changes || 0);
@@ -474,7 +490,15 @@ export function Projects() {
           <div className="hub-projects-main-grid" style={{ display: 'grid', gridTemplateColumns: openDetail ? '1fr 360px' : '1fr', flex: 1, overflow: 'hidden' }}>
             <div className="scroll-y" style={{ padding: 'var(--section-gap)' }}>
               <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
-                {projects.length === 0 && (
+                {projects.length === 0 && ws && allProjects.length === 0 ? (
+                  <Card>
+                    <EmptyState
+                      icon="projects"
+                      title={`${ws.label} — 아직 연결된 프로젝트가 없습니다.`}
+                      description="브랜드를 이 워크스페이스에 연결하면 여기에 표시됩니다."
+                    />
+                  </Card>
+                ) : projects.length === 0 && (
                   <Card>
                     <EmptyState
                       icon="projects"
@@ -517,7 +541,7 @@ export function Projects() {
                         </div>
                         {groupProjects.map((p, pi) => {
                           const isOpen = expanded.has(p.id);
-                          const pTodos = todos.filter(t => t.project === p.id);
+                          const pTodos = scopedTodos.filter(t => t.project === p.id);
                           const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
                           const isSel = openDetail === p.id;
                           return (
@@ -625,7 +649,7 @@ export function Projects() {
               const p = allProjects.find(x => x.id === openDetail);
               if (!p) return null;
               const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
-              const pTodos = todos.filter(t => t.project === p.id);
+              const pTodos = scopedTodos.filter(t => t.project === p.id);
               const pUpdates = (ledger.updates || []).filter(u => u.projectId === p.id).slice(0, 5);
               const pDecisions = (ledger.decisions || []).filter(d => d.projectId === p.id).slice(0, 4);
               const pNotes = (ledger.notes || []).filter(n => n.projectId === p.id).slice(0, 4);

@@ -1,49 +1,43 @@
 // Navigation + sample data for Moonlight Pro Hub.
-// The sidebar is ordered by admin operating cadence:
-// brief signal -> execution -> revenue -> publishing -> automation -> agents -> system.
-// Low-frequency or novelty surfaces stay reachable by URL, but do not compete in the nav.
+// real_v1 IA — the sidebar leads with the three workstreams that actually run
+// first, then the cross-cutting AI + operating tooling:
+//   Daily Brief (global) -> 클래스인 -> 회사 -> 브랜드 업무 -> Agents -> Work -> System
+// Each workspace deep-links existing pages with a workspace scope; membership is
+// defined in workspace-map.js. Legacy functional routes stay live in PAGE_MAP
+// (reachable by URL / ⌘K) so nothing 404s — they just no longer crowd the nav.
 
 export const NAV_TREE = [
   { key: 'daily-brief', label: 'Daily Brief', icon: 'brief', path: 'dashboard/daily-brief' },
+
+  // ── Workspace 1: 클래스인 (education / class business) ────────────────────
   {
-    key: 'work', label: 'Work', icon: 'work',
+    key: 'classin', label: '클래스인', icon: 'classin', workspace: true,
     children: [
-      { key: 'projects',  label: 'Projects',  icon: 'projects',  path: 'dashboard/work/projects' },
-      { key: 'calendar',  label: 'Calendar',  icon: 'calendar',  path: 'dashboard/work/calendar' },
-      { key: 'rhythm',    label: 'Rhythm',    icon: 'rhythm',    path: 'dashboard/work/rhythm' },
-      { key: 'decisions', label: 'Decisions', icon: 'decisions', path: 'dashboard/work/decisions' },
-      { key: 'roadmap',   label: 'Roadmap',   icon: 'roadmap',   path: 'dashboard/work/roadmap' },
+      { key: 'cohorts',        label: '코호트·수강생', icon: 'projects', path: 'dashboard/classin/cohorts' },
+      { key: 'classin-content',label: '콘텐츠',        icon: 'content',  path: 'dashboard/classin/content' },
+      { key: 'classin-revenue',label: '결제·리드',     icon: 'leads',    path: 'dashboard/classin/revenue' },
     ],
   },
+  // ── Workspace 2: 회사 (agency + product company ops) ──────────────────────
   {
-    key: 'revenue', label: 'Revenue', icon: 'revenue',
+    key: 'company', label: '회사', icon: 'building', workspace: true,
     children: [
-      { key: 'overview', label: 'Overview', icon: 'revenue',  path: 'dashboard/revenue/overview' },
-      { key: 'deals',    label: 'Deals',    icon: 'deals',    path: 'dashboard/revenue/deals' },
-      { key: 'leads',    label: 'Leads',    icon: 'leads',    path: 'dashboard/revenue/leads' },
-      { key: 'accounts', label: 'Accounts', icon: 'accounts', path: 'dashboard/revenue/accounts' },
-      { key: 'cases',    label: 'Cases',    icon: 'cases',    path: 'dashboard/revenue/cases' },
-      { key: 'followups',label: 'Follow-ups',icon: 'bell',    path: 'dashboard/revenue/followups' },
+      { key: 'pipeline',           label: '딜·파이프라인', icon: 'deals',       path: 'dashboard/company/pipeline' },
+      { key: 'company-projects',   label: '프로젝트',      icon: 'projects',    path: 'dashboard/company/projects' },
+      { key: 'company-automations',label: '자동화',        icon: 'automations', path: 'dashboard/company/automations' },
     ],
   },
+  // ── Workspace 3: 브랜드 업무 (brand / content publishing) ─────────────────
   {
-    key: 'content', label: 'Content', icon: 'content',
+    key: 'brand', label: '브랜드 업무', icon: 'brand', workspace: true,
     children: [
-      { key: 'queue',     label: 'Queue',     icon: 'queue',     path: 'dashboard/content/queue' },
-      { key: 'studio',    label: 'Studio',    icon: 'studio',    path: 'dashboard/content/studio' },
-      { key: 'campaigns', label: 'Campaigns', icon: 'campaigns', path: 'dashboard/content/campaigns' },
+      { key: 'brand-projects', label: '브랜드·프로젝트', icon: 'projects', path: 'dashboard/brand/projects' },
+      { key: 'brand-studio',   label: '콘텐츠 스튜디오', icon: 'studio',   path: 'dashboard/brand/studio' },
+      { key: 'brand-queue',    label: '발행 큐',         icon: 'queue',    path: 'dashboard/brand/queue' },
     ],
   },
-  {
-    key: 'automations', label: 'Automations', icon: 'automations',
-    children: [
-      { key: 'runs',     label: 'Runs',     icon: 'runs',    path: 'dashboard/automations/runs' },
-      { key: 'flows',    label: 'Flows',    icon: 'zap',     path: 'dashboard/automations/flows' },
-      { key: 'email',    label: 'Email',    icon: 'email',   path: 'dashboard/automations/email' },
-      { key: 'webhooks', label: 'Webhooks', icon: 'webhook', path: 'dashboard/automations/webhooks' },
-      { key: 'sheets',   label: 'Sheets',   icon: 'leads',   path: 'dashboard/automations/sheets' },
-    ],
-  },
+
+  // ── Cross-cutting AI layer ────────────────────────────────────────────────
   {
     key: 'agents', label: 'Agents', icon: 'agents',
     children: [
@@ -53,11 +47,25 @@ export const NAV_TREE = [
       { key: 'office',  label: 'VR Office', icon: 'agents',  path: 'dashboard/agents/office' },
     ],
   },
+  // ── Founder operating rhythm ──────────────────────────────────────────────
+  {
+    key: 'work', label: 'Work', icon: 'work',
+    children: [
+      { key: 'calendar',  label: 'Calendar',  icon: 'calendar',  path: 'dashboard/work/calendar' },
+      { key: 'rhythm',    label: 'Rhythm',    icon: 'rhythm',    path: 'dashboard/work/rhythm' },
+      { key: 'decisions', label: 'Decisions', icon: 'decisions', path: 'dashboard/work/decisions' },
+      { key: 'roadmap',   label: 'Roadmap',   icon: 'roadmap',   path: 'dashboard/work/roadmap' },
+    ],
+  },
+  // ── System (cross-workspace + platform) ───────────────────────────────────
   {
     key: 'system', label: 'System', icon: 'settings',
     children: [
-      { key: 'evolution', label: 'Evolution', icon: 'evolution', path: 'dashboard/evolution' },
-      { key: 'settings',  label: 'Settings',  icon: 'settings',  path: 'dashboard/settings' },
+      { key: 'revenue-all',label: 'Revenue (전체)', icon: 'revenue',     path: 'dashboard/revenue/overview' },
+      { key: 'followups',  label: 'Follow-ups',     icon: 'bell',        path: 'dashboard/revenue/followups' },
+      { key: 'automations',label: 'Automations',    icon: 'automations', path: 'dashboard/automations/runs' },
+      { key: 'evolution',  label: 'Evolution',      icon: 'evolution',   path: 'dashboard/evolution' },
+      { key: 'settings',   label: 'Settings',       icon: 'settings',    path: 'dashboard/settings' },
     ],
   },
 ];
@@ -223,13 +231,15 @@ export const DEALS = [
   { id: 'DEAL-014', name: '베어브릭 콜라보',          type: 'company',  stage: 'won',  value: 7800000,  owner: 'Me',      close: '4월 1일',  age: 32 },
 ];
 
+// brandKey ties each item to a brand (= workspace lens). Newsletters/threads
+// ride brand-work labels (sinabro / 22nomad); product posts stay on moonpm.
 export const CONTENT_QUEUE = [
-  { id: 'c1', title: '뉴스레터 #47 — 4월 둘째 주',       kind: 'Newsletter', channel: 'Email',     status: 'Draft',     when: '오늘 18:00', author: 'Me' },
-  { id: 'c2', title: '1인 창업자의 운영 OS 만들기',      kind: 'Blog',       channel: 'Web',       status: 'Scheduled', when: '4/21 10:00',  author: 'Me' },
-  { id: 'c3', title: 'Moonlight 대시보드 스크린샷 릴',   kind: 'Reel',       channel: 'Instagram', status: 'Review',    when: '4/20 12:00',  author: 'Me' },
-  { id: 'c4', title: '가격 실험 회고',                   kind: 'Blog',       channel: 'Web',       status: 'Idea',      when: '미정',        author: 'Me' },
-  { id: 'c5', title: '뉴스레터 #48 — 4월 셋째 주',       kind: 'Newsletter', channel: 'Email',     status: 'Outline',   when: '4/25 18:00',  author: 'Me' },
-  { id: 'c6', title: 'Thread — 결정 기록하기',           kind: 'Thread',     channel: 'X',         status: 'Scheduled', when: '4/19 09:00',  author: 'Council' },
+  { id: 'c1', title: '뉴스레터 #47 — 4월 둘째 주',       kind: 'Newsletter', channel: 'Email',     status: 'Draft',     when: '오늘 18:00', author: 'Me',      brandKey: 'sinabro' },
+  { id: 'c2', title: '1인 창업자의 운영 OS 만들기',      kind: 'Blog',       channel: 'Web',       status: 'Scheduled', when: '4/21 10:00',  author: 'Me',      brandKey: 'moonpm' },
+  { id: 'c3', title: 'Moonlight 대시보드 스크린샷 릴',   kind: 'Reel',       channel: 'Instagram', status: 'Review',    when: '4/20 12:00',  author: 'Me',      brandKey: 'moonpm' },
+  { id: 'c4', title: '가격 실험 회고',                   kind: 'Blog',       channel: 'Web',       status: 'Idea',      when: '미정',        author: 'Me',      brandKey: 'moonpm' },
+  { id: 'c5', title: '뉴스레터 #48 — 4월 셋째 주',       kind: 'Newsletter', channel: 'Email',     status: 'Outline',   when: '4/25 18:00',  author: 'Me',      brandKey: 'sinabro' },
+  { id: 'c6', title: 'Thread — 결정 기록하기',           kind: 'Thread',     channel: 'X',         status: 'Scheduled', when: '4/19 09:00',  author: 'Council', brandKey: '22nomad' },
 ];
 
 export const CAMPAIGNS = [

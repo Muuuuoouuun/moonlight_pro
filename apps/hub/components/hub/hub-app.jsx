@@ -71,6 +71,21 @@ function LegacyPlaceholder({ path, onNavigate }) {
 
 const PAGE_MAP = {
   'dashboard/daily-brief': (n) => <DailyBrief onNavigate={n} />,
+
+  // ── real_v1 workspaces → existing pages scoped by workspace ──
+  // 클래스인 (education)
+  'dashboard/classin/cohorts': () => <Projects workspace="classin" />,
+  'dashboard/classin/content': () => <Queue workspace="classin" />,
+  'dashboard/classin/revenue': () => <Leads workspace="classin" />,
+  // 회사 (company ops)
+  'dashboard/company/pipeline': (n) => <Deals workspace="company" onNavigate={n} />,
+  'dashboard/company/projects': () => <Projects workspace="company" />,
+  'dashboard/company/automations': () => <Runs />,
+  // 브랜드 업무 (brand work)
+  'dashboard/brand/projects': () => <Projects workspace="brand" />,
+  'dashboard/brand/studio': () => <Studio workspace="brand" />,
+  'dashboard/brand/queue': () => <Queue workspace="brand" />,
+
   'dashboard/work/calendar': () => <Calendar />,
   'dashboard/work/projects': () => <Projects />,
   'dashboard/work/decisions': () => <Decisions />,
@@ -101,10 +116,15 @@ const PAGE_MAP = {
 
 const PARENT_JUMP = {
   'dashboard': 'dashboard/daily-brief',
-  'dashboard/work': 'dashboard/work/projects',
+  'dashboard/classin': 'dashboard/classin/cohorts',
+  'dashboard/company': 'dashboard/company/pipeline',
+  'dashboard/brand': 'dashboard/brand/projects',
+  'dashboard/work': 'dashboard/work/calendar',
   'dashboard/content': 'dashboard/content/queue',
   'dashboard/revenue': 'dashboard/revenue/overview',
+  'dashboard/automations': 'dashboard/automations/runs',
   'dashboard/agents': 'dashboard/agents/chat',
+  'dashboard/system': 'dashboard/revenue/overview',
 };
 
 export function HubApp() {

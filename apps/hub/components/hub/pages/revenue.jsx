@@ -11,6 +11,7 @@ import {
   ACCOUNT_DETAIL,
 } from "../hub-data";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
+import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace } from "../workspace-map";
 
 const fmt = v => {
   const n = Number(v);
@@ -385,10 +386,12 @@ export function RevenueOverview({ onNavigate }) {
 // Shared grid template for Leads rows — gap between columns so badges never butt the next cell
 const LEADS_GRID = '26px 1fr 112px 112px 124px 100px 90px 92px';
 
-export function Leads() {
+export function Leads({ workspace }) {
   const { ledger, syncState } = useRevenueLedger();
   const [localLeads, setLocalLeads] = React.useState([]);
-  const LEADS = [...localLeads, ...ledger.leads];
+  const ws = getWorkspace(workspace);
+  const LEADS = filterLeadsByWorkspace([...localLeads, ...ledger.leads], workspace);
+  const wsEmpty = Boolean(ws) && LEADS.length === 0;
   const [filter, setFilter] = React.useState('all');
   const [search, setSearch] = React.useState('');
   const term = search.trim().toLowerCase();
@@ -407,6 +410,8 @@ export function Leads() {
       value: '₩0',
       last: '방금',
       owner: 'Me',
+      // Tag in-workspace creates so the scoped view doesn't silently drop them.
+      ...(ws ? { workspace } : {}),
     }, ...prev]);
   };
 
@@ -504,6 +509,18 @@ export function Leads() {
         );
       })()}
 
+      {wsEmpty && (
+        <Card>
+          <EmptyState
+            icon="leads"
+            title={`${ws.label} — 아직 연결된 리드가 없습니다.`}
+            description={`${ws.label} 워크스페이스에 매칭되는 리드가 없습니다. 리드를 등록하거나 원장에 ${ws.label} 태그가 연결되면 여기에 표시됩니다.`}
+            style={{ minHeight: 200, padding: '28px 12px' }}
+          />
+        </Card>
+      )}
+
+      {!wsEmpty && (
       <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span /><span>Name</span><span>Type</span><span>Source</span><span>Stage</span><span>Value</span><span>Owner</span><span style={{ textAlign: 'right' }}>Last</span>
@@ -546,11 +563,12 @@ export function Leads() {
           </div>
         ))}
       </Card>
+      )}
     </div>
   );
 }
 
-export function Deals({ onNavigate }) {
+export function Deals({ workspace, onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
   const DEAL_STAGES = ledger.stages;
   const [deals, setDeals] = React.useState(ledger.deals);
@@ -562,12 +580,16 @@ export function Deals({ onNavigate }) {
     setDeals(ledger.deals);
   }, [ledger.deals]);
 
+  const ws = getWorkspace(workspace);
+  const scopedDeals = filterDealsByWorkspace(deals, workspace);
+  const wsEmpty = Boolean(ws) && scopedDeals.length === 0;
+
   const totals = DEAL_STAGES.reduce((acc, s) => {
-    const items = deals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
+    const items = scopedDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
     acc[s.key] = { count: items.length, sum: items.reduce((a, b) => a + b.value, 0) };
     return acc;
   }, {});
-  const grandTotal = deals.filter(d => filter === 'all' || d.type === filter).reduce((a, b) => a + b.value, 0);
+  const grandTotal = scopedDeals.filter(d => filter === 'all' || d.type === filter).reduce((a, b) => a + b.value, 0);
   const move = (id, to) => setDeals(ds => ds.map(d => d.id === id ? { ...d, stage: to } : d));
   const createDeal = () => {
     setDeals(prev => [{
@@ -579,6 +601,8 @@ export function Deals({ onNavigate }) {
       owner: 'Me',
       close: '미정',
       age: 0,
+      // Tag in-workspace creates so the scoped pipeline doesn't silently drop them.
+      ...(ws ? { workspace } : {}),
     }, ...prev]);
   };
 
@@ -605,9 +629,21 @@ export function Deals({ onNavigate }) {
         <Button variant="primary" size="sm" icon="plus" onClick={createDeal}>Deal</Button>
       </div>
 
+      {wsEmpty && (
+        <Card>
+          <EmptyState
+            icon="deals"
+            title={`${ws.label} — 아직 연결된 딜이 없습니다.`}
+            description={`${ws.label} 워크스페이스에 매칭되는 딜이 없습니다. 딜을 등록하거나 원장에 ${ws.label} 태그가 연결되면 파이프라인이 채워집니다.`}
+            style={{ minHeight: 200, padding: '28px 12px' }}
+          />
+        </Card>
+      )}
+
+      {!wsEmpty && (
       <div className="hub-scroll-x" style={{ display: 'flex', gap: 'var(--gap)', overflowX: 'auto', flex: 1, paddingBottom: 4 }}>
         {DEAL_STAGES.map(s => {
-          const items = deals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
+          const items = scopedDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
           return (
             <div key={s.key}
               onDragOver={e => e.preventDefault()}
@@ -671,6 +707,7 @@ export function Deals({ onNavigate }) {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

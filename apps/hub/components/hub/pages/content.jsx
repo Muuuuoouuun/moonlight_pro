@@ -8,6 +8,7 @@ import {
   CONTENT_QUEUE as FALLBACK_CONTENT_QUEUE,
   CAMPAIGNS as FALLBACK_CAMPAIGNS,
 } from "../hub-data";
+import { getWorkspace, filterContentByWorkspace } from "../workspace-map";
 
 const STUDIO_DRAFT_DB = "moonlight-content-studio";
 const STUDIO_DRAFT_STORE = "drafts";
@@ -180,7 +181,8 @@ function useContentLedger() {
   return state;
 }
 
-export function Studio() {
+export function Studio({ workspace }) {
+  const ws = getWorkspace(workspace);
   const searchParams = useSearchParams();
   const itemParam = searchParams.get("item");
   const brandParam = searchParams.get("brand");
@@ -582,6 +584,27 @@ export function Studio() {
             ))}
           </div>
           <Badge tone="warning" size="xs">Draft</Badge>
+          {ws && (
+            <span
+              title={`${ws.label} 워크스페이스 스코프`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                height: 22,
+                padding: '0 9px',
+                borderRadius: 999,
+                border: '1px solid var(--line-soft)',
+                background: 'var(--surface-2)',
+                color: 'var(--fg-muted)',
+                fontSize: 11,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>스코프</span>
+              {ws.label}
+            </span>
+          )}
           <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
             {mode === 'blog' ? <>Web article · <span className="mono">{contentId ? contentId.slice(0, 8) : 'LOCAL'}</span></> : <>Card News · <span className="mono">{variantId ? variantId.slice(0, 8) : 'LOCAL'}</span> · {slides.length} slides</>}
           </span>
@@ -963,15 +986,17 @@ export function Studio() {
   );
 }
 
-export function Queue() {
+export function Queue({ workspace }) {
+  const ws = getWorkspace(workspace);
   const router = useRouter();
   const [tab, setTab] = React.useState('all');
   const [brandFilter, setBrandFilter] = React.useState('all');
   const ledger = useContentLedger();
   const brands = ledger.brands || [];
-  const queue = ledger.source === "supabase"
+  const queueSource = ledger.source === "supabase"
     ? (Array.isArray(ledger.queue) ? ledger.queue : [])
     : (ledger.queue?.length ? ledger.queue : FALLBACK_CONTENT_QUEUE);
+  const queue = filterContentByWorkspace(queueSource, workspace);
   const statusTone = {
     Inbox: 'neutral',
     Drafting: 'warning',
@@ -1104,7 +1129,15 @@ export function Queue() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 110px 100px 120px 130px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>Title</span><span>Kind</span><span>Channel</span><span>Brand</span><span>Lane</span><span>When</span><span style={{ textAlign: 'right' }}>Author</span>
         </div>
-        {visibleQueue.length === 0 && (
+        {visibleQueue.length === 0 && ws && (
+          <EmptyState
+            icon="queue"
+            title={`${ws.label} — 아직 연결된 콘텐츠가 없습니다.`}
+            description="콘텐츠에 워크스페이스 태그가 붙으면 여기에 모입니다."
+            action={<Button variant="primary" size="sm" icon="plus" onClick={() => openStudio()}>Draft</Button>}
+          />
+        )}
+        {visibleQueue.length === 0 && !ws && (
           <EmptyState
             icon="queue"
             title={tab === 'all' ? '발행 큐가 비어 있습니다' : `${activeLabel} 항목이 없습니다`}
