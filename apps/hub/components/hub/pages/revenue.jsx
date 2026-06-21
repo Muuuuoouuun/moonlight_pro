@@ -386,11 +386,81 @@ export function RevenueOverview({ onNavigate }) {
 // Shared grid template for Leads rows — gap between columns so badges never butt the next cell
 const LEADS_GRID = '26px 1fr 112px 112px 124px 100px 90px 92px';
 
+const DRAWER_INPUT_STYLE = {
+  height: 32,
+  padding: '0 10px',
+  fontSize: 13,
+  background: 'var(--surface-2)',
+  color: 'var(--fg)',
+  border: '1px solid var(--line)',
+  borderRadius: 'var(--r-sm)',
+  outline: 'none',
+  width: '100%',
+};
+
+// Editable detail drawer for a single record (lead or deal). Field-driven so leads and deals
+// share one editor; edits flow up via onChange(key, value) and the parent owns the state.
+function EditDrawer({ title, subtitle, record, fields, onChange, onClose }) {
+  React.useEffect(() => {
+    if (!record) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [record, onClose]);
+  if (!record) return null;
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / 0.4)', zIndex: 60 }} />
+      <aside style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(380px, 92vw)', zIndex: 61,
+        background: 'var(--surface)', borderLeft: '1px solid var(--line)',
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '-8px 0 32px -12px oklch(0 0 0 / 0.5)',
+      }}>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 500 }}>{title}</div>
+            {subtitle && <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}
+          </div>
+          <IconButton icon="x" size={24} iconSize={13} tooltip="닫기" onClick={onClose} />
+        </div>
+        <div className="scroll-y" style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {fields.map(f => (
+            <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)' }}>{f.label}</span>
+              {f.type === 'select' ? (
+                <select value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
+                  {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              ) : (
+                <input
+                  type={f.inputType || 'text'}
+                  value={record[f.key] ?? ''}
+                  placeholder={f.placeholder || ''}
+                  onChange={e => onChange(f.key, f.inputType === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value)}
+                  style={DRAWER_INPUT_STYLE}
+                />
+              )}
+            </label>
+          ))}
+        </div>
+        <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', justifyContent: 'flex-end' }}>
+          <Button variant="primary" size="sm" onClick={onClose}>완료</Button>
+        </div>
+      </aside>
+    </>
+  );
+}
+
 export function Leads({ workspace }) {
   const { ledger, syncState } = useRevenueLedger();
   const [localLeads, setLocalLeads] = React.useState([]);
+  const [leadEdits, setLeadEdits] = React.useState({}); // { [id]: patch } — overlays any lead (local or ledger)
+  const [editLeadId, setEditLeadId] = React.useState(null);
   const ws = getWorkspace(workspace);
-  const LEADS = filterLeadsByWorkspace([...localLeads, ...ledger.leads], workspace);
+  const mergedLeads = [...localLeads, ...ledger.leads].map(l => (leadEdits[l.id] ? { ...l, ...leadEdits[l.id] } : l));
+  const LEADS = filterLeadsByWorkspace(mergedLeads, workspace);
+  const editingLead = editLeadId ? mergedLeads.find(l => l.id === editLeadId) : null;
   const wsEmpty = Boolean(ws) && LEADS.length === 0;
   const [filter, setFilter] = React.useState('all');
   const [search, setSearch] = React.useState('');
@@ -401,8 +471,9 @@ export function Leads({ workspace }) {
   );
   const stageTone = { New: 'info', Contact: 'moon', Qualified: 'success', Lost: 'danger' };
   const createLead = () => {
+    const id = `local-lead-${Date.now()}`;
     setLocalLeads(prev => [{
-      id: `local-lead-${Date.now()}`,
+      id,
       name: '새 리드',
       type: filter === 'personal' || filter === 'company' ? filter : 'company',
       source: 'Manual',
@@ -413,6 +484,7 @@ export function Leads({ workspace }) {
       // Tag in-workspace creates so the scoped view doesn't silently drop them.
       ...(ws ? { workspace } : {}),
     }, ...prev]);
+    setEditLeadId(id); // open the editor immediately so the new lead can be filled in
   };
 
   const cardFileRef = React.useRef(null);
@@ -537,9 +609,10 @@ export function Leads({ workspace }) {
         {filtered.map((l, i) => (
           <div key={l.id} style={{
             display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12,
-            padding: '12px 16px', alignItems: 'center',
+            padding: '12px 16px', alignItems: 'center', cursor: 'pointer',
             borderBottom: i < filtered.length - 1 ? '1px solid var(--line-soft)' : 'none',
           }}
+            onClick={() => setEditLeadId(l.id)}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
@@ -564,6 +637,22 @@ export function Leads({ workspace }) {
         ))}
       </Card>
       )}
+
+      <EditDrawer
+        title={editingLead ? (editingLead.name || '리드 편집') : ''}
+        subtitle="리드 정보 편집"
+        record={editingLead}
+        fields={[
+          { key: 'name', label: '이름' },
+          { key: 'type', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
+          { key: 'source', label: '소스', placeholder: 'Referral · Website · Meta…' },
+          { key: 'stage', label: '단계', type: 'select', options: [{ value: 'New', label: 'New' }, { value: 'Contact', label: 'Contact' }, { value: 'Qualified', label: 'Qualified' }, { value: 'Lost', label: 'Lost' }] },
+          { key: 'value', label: '금액', placeholder: '₩0' },
+          { key: 'owner', label: '담당' },
+        ]}
+        onChange={(key, val) => setLeadEdits(prev => ({ ...prev, [editLeadId]: { ...prev[editLeadId], [key]: val } }))}
+        onClose={() => setEditLeadId(null)}
+      />
     </div>
   );
 }
@@ -574,11 +663,13 @@ export function Deals({ workspace, onNavigate }) {
   const [deals, setDeals] = React.useState(ledger.deals);
   const [drag, setDrag] = React.useState(null);
   const [filter, setFilter] = React.useState('all');
+  const [editDealId, setEditDealId] = React.useState(null);
 
   // Sync local deals state when live data arrives
   React.useEffect(() => {
     setDeals(ledger.deals);
   }, [ledger.deals]);
+  const editingDeal = editDealId ? deals.find(d => d.id === editDealId) : null;
 
   const ws = getWorkspace(workspace);
   const scopedDeals = filterDealsByWorkspace(deals, workspace);
@@ -592,8 +683,9 @@ export function Deals({ workspace, onNavigate }) {
   const grandTotal = scopedDeals.filter(d => filter === 'all' || d.type === filter).reduce((a, b) => a + b.value, 0);
   const move = (id, to) => setDeals(ds => ds.map(d => d.id === id ? { ...d, stage: to } : d));
   const createDeal = () => {
+    const id = `LOCAL-${Date.now().toString().slice(-4)}`;
     setDeals(prev => [{
-      id: `LOCAL-${Date.now().toString().slice(-4)}`,
+      id,
       name: '새 딜',
       type: filter === 'personal' || filter === 'company' ? filter : 'company',
       stage: DEAL_STAGES[0]?.key || 'lead',
@@ -604,6 +696,7 @@ export function Deals({ workspace, onNavigate }) {
       // Tag in-workspace creates so the scoped pipeline doesn't silently drop them.
       ...(ws ? { workspace } : {}),
     }, ...prev]);
+    setEditDealId(id); // open the editor immediately so the new deal can be filled in
   };
 
   return (
@@ -667,6 +760,7 @@ export function Deals({ workspace, onNavigate }) {
                 {items.map(d => (
                   <div key={d.id}
                     draggable
+                    onClick={() => setEditDealId(d.id)}
                     onDragStart={() => setDrag(d.id)}
                     onDragEnd={() => setDrag(null)}
                     style={{
@@ -708,6 +802,22 @@ export function Deals({ workspace, onNavigate }) {
         })}
       </div>
       )}
+
+      <EditDrawer
+        title={editingDeal ? (editingDeal.name || '딜 편집') : ''}
+        subtitle={editingDeal ? `${editingDeal.id} · 딜 정보 편집` : ''}
+        record={editingDeal}
+        fields={[
+          { key: 'name', label: '딜 이름' },
+          { key: 'type', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
+          { key: 'stage', label: '단계', type: 'select', options: DEAL_STAGES.map(s => ({ value: s.key, label: s.label })) },
+          { key: 'value', label: '금액 (₩)', inputType: 'number', placeholder: '0' },
+          { key: 'close', label: '예상 마감', placeholder: '5월 12일' },
+          { key: 'owner', label: '담당' },
+        ]}
+        onChange={(key, val) => setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, [key]: val } : d)))}
+        onClose={() => setEditDealId(null)}
+      />
     </div>
   );
 }
