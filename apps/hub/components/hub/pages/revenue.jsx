@@ -262,7 +262,7 @@ export function RevenueOverview({ onNavigate }) {
         </div>
       </div>
 
-      <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
+      <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--gap)' }}>
         {[
           { l: 'MRR', v: fmt(mrr), d: formatPercentDelta(mrr, mrrPrev), tone: mrr > mrrPrev ? 'success' : 'neutral' },
           { l: 'Pipeline', v: fmt(pipeline), d: `${openDeals} deals`, tone: 'moon' },
@@ -277,7 +277,7 @@ export function RevenueOverview({ onNavigate }) {
         ))}
       </div>
 
-      <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 'var(--gap)' }}>
+      <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(0, 1fr)', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>Pipeline by stage</div>

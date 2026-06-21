@@ -558,11 +558,11 @@ export function DailyBrief({ onNavigate }) {
 
       <DataTrustStrip state={ledger} />
 
-      <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
+      <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--gap)' }}>
         {ledger.metrics.map(m => <MetricCard key={m.label} m={m} />)}
       </div>
 
-      <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 'var(--section-gap)' }}>
+      <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(0, 1fr)', gap: 'var(--section-gap)' }}>
         <div>
           <SectionTitle right={<div style={{ display: 'flex', gap: 6 }}>
             <Badge tone="danger" size="xs">{urgentCount} urgent</Badge>
