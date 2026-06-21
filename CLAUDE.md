@@ -5,6 +5,15 @@
 - Supabase REST ledger 중심: Hub는 운영 판단 UI, Engine은 webhook/intake/실행 기록
 - Hub(`/dashboard/**`)와 Engine(`/api/**`)이 현역 실행 표면이며, public web은 active workspace에서 분리됨
 
+### 사이드바 3-Workspace 구조 (real_v1)
+Hub 사이드바는 `apps/hub/components/hub/workspace-map.js`(SSOT)에 정의된 3개 워크스페이스로 구성됨:
+- **클래스인** — 사용자 자신의 교육/클래스 비즈니스 (코호트, 수강생, 강의 결제). 브랜드: `classmoon`, `studyseagull`. ⚠️ Hub의 client 계정 `클래스인`(회사 딜)과 이름이 같으나 다른 개념
+- **회사** — 에이전시·제품 회사 운영. 브랜드: `bridgemaker`, `moonpm`, `politicofficer`
+- **브랜드 업무** — 브랜드/콘텐츠/퍼블리싱. 브랜드: `sinabro`, `gore`, `holyfuncollector`, `22nomad`
+
+IA 순서: Daily Brief (전역) → 클래스인 → 회사 → 브랜드 업무 → Agents → Work → System
+브랜드 재배치는 `workspace-map.js`의 `brands` 배열 하나만 수정하면 됨
+
 ## 디자인 시스템
 @DESIGN.md
 
@@ -14,6 +23,21 @@
 - Engine write/intake API: `apps/engine/app/api/` — 공개 POST는 shared secret 또는 provider secret 검증
 - Hub → Engine 호출은 `COM_MOON_SHARED_WEBHOOK_SECRET`를 전달
 - Supabase 없는 환경은 명시적 `preview`/empty state로 표시하고 mock과 live 데이터를 섞지 않음
+
+### 주요 Hub 클라이언트 모듈
+- `hub-app.jsx` — 루트 앱, PAGE_MAP 등록, 워크스페이스 라우팅
+- `workspace-map.js` — 브랜드→워크스페이스 매핑 SSOT
+- `hub-data.js` — NAV_TREE, 데이터 모델
+- `council-client.js` — Brand Council 클라이언트 (콘텐츠 심의 + 브랜드 보이스 검토)
+- `guru-client.js` — Sales Guru 멘토 에이전트 클라이언트 (리드 코칭 + 360 컨텍스트)
+- `hub-primitives.jsx` — 디자인 시스템 기본 컴포넌트 (Badge, Card, Button 등)
+
+### Sales OS 데이터 레이어
+- `leads` 테이블: 리드 + `leads.score` 스코링 필드
+- `work_orders` 테이블: 에이전트 작업 지시 큐
+- `agent_runs` 테이블: 에이전트 실행 기록
+- `lead_intake_raw` 테이블: 명함/소스별 원시 유입 데이터
+- 명함 intake 파이프라인: Gemini vision extract → staging → promote to leads
 
 ## UI 작업 시 필수 체크
 - 색상: DESIGN.md 팔레트만 사용 (warm gold/그린/보라 금지, 문스톤 `#5274a8` 액센트)
@@ -53,8 +77,8 @@ python3 .claude/skills/ui-ux-pro-max/scripts/search.py "data table status badge"
 
 ## 브랜치 구조
 - `main`: 프로덕션
-- `codex/*`: Codex 작업 브랜치
-- 현재 P0 hardening 작업 브랜치: `codex/moonlight-p0-hardening`
+- `real_v1`: 현재 주력 개발 브랜치 — 3-workspace IA, Sales OS, Brand Council, Guru 포함
+- `codex/*`: Codex 에이전트 작업 브랜치
 
 ## Skill routing
 
