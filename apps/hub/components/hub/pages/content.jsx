@@ -8,7 +8,7 @@ import {
   CONTENT_QUEUE as FALLBACK_CONTENT_QUEUE,
   CAMPAIGNS as FALLBACK_CAMPAIGNS,
 } from "../hub-data";
-import { getWorkspace, filterContentByWorkspace } from "../workspace-map";
+import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
 import { requestCouncilAdvice, councilChatPath, COUNCIL_PREVIEW_NOTE } from "../council-client";
 
 const STUDIO_DRAFT_DB = "moonlight-content-studio";
@@ -188,6 +188,7 @@ export function Studio({ workspace }) {
   const searchParams = useSearchParams();
   const itemParam = searchParams.get("item");
   const brandParam = searchParams.get("brand");
+  const wantCouncil = searchParams.get("council") === "1"; // ?council=1 → auto-run Council 검토 (Queue ✨)
   const ledger = useContentLedger();
   const [mode, setMode] = React.useState('blog');
   const [selectedBrandId, setSelectedBrandId] = React.useState("");
@@ -243,7 +244,8 @@ export function Studio({ workspace }) {
     }
   };
 
-  const brands = ledger.brands || [];
+  // Scope the brand picker to this workspace's brands (브랜드 part shouldn't offer ClassIn/회사 brands).
+  const brands = ws ? filterBrandsByWorkspace(ledger.brands || [], workspace) : (ledger.brands || []);
   const selectedBrand = brands.find((brand) => brand.id === selectedBrandId) || chooseDefaultBrand(brands, brandParam);
   const variantType = mode === 'carousel' ? 'card_news' : 'blog';
   const currentBodyPayload = React.useMemo(() => (
@@ -565,6 +567,15 @@ export function Studio({ workspace }) {
       setCouncil({ state: r.state, text: '', note: r.note || '' });
     }
   }, [body, mode, slides, title]);
+
+  // Auto-run the critique once when arriving via the Queue ✨ (?council=1), after the item loads.
+  const councilAutoRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!wantCouncil || councilAutoRef.current) return;
+    if (itemParam && loadedItemRef.current !== itemParam) return; // wait for the item draft to load
+    councilAutoRef.current = true;
+    runCouncilCritique();
+  }, [wantCouncil, itemParam, contentId, runCouncilCritique]);
 
   const applyToolbarAction = (tool) => {
     if (!tool) return;
@@ -1052,7 +1063,7 @@ export function Queue({ workspace }) {
   const [tab, setTab] = React.useState('all');
   const [brandFilter, setBrandFilter] = React.useState('all');
   const ledger = useContentLedger();
-  const brands = ledger.brands || [];
+  const brands = ws ? filterBrandsByWorkspace(ledger.brands || [], workspace) : (ledger.brands || []);
   const queueSource = ledger.source === "supabase"
     ? (Array.isArray(ledger.queue) ? ledger.queue : [])
     : (ledger.queue?.length ? ledger.queue : FALLBACK_CONTENT_QUEUE);
@@ -1094,6 +1105,10 @@ export function Queue({ workspace }) {
     const brandParam = brandFilter !== 'all' ? `&brand=${encodeURIComponent(brandFilter)}` : '';
     router.push(`/dashboard/content/studio${id ? `?item=${encodeURIComponent(id)}` : '?new=draft'}${id ? '' : brandParam}`);
   }, [brandFilter, router]);
+  // Open the item in Studio and auto-run the Council 검토 (Writer lens) on the full draft.
+  const openCouncilCritique = React.useCallback((id) => {
+    router.push(`/dashboard/content/studio?item=${encodeURIComponent(id)}&council=1`);
+  }, [router]);
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1240,7 +1255,16 @@ export function Queue({ workspace }) {
             </span>
             <span><Badge tone={statusTone[c.status] || 'neutral'} size="xs">{c.status}</Badge></span>
             <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{c.when}</span>
-            <span style={{ textAlign: 'right', fontSize: 12, color: 'var(--fg-muted)' }}>{c.author}</span>
+            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+              <IconButton
+                icon="sparkle"
+                size={20}
+                iconSize={11}
+                tooltip="Council 검토"
+                onClick={(e) => { e.stopPropagation(); openCouncilCritique(c.id); }}
+              />
+              <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{c.author}</span>
+            </span>
           </div>
         ))}
       </Card>

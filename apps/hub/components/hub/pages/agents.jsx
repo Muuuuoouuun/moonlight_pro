@@ -297,20 +297,32 @@ export function AgentsChat({ onNavigate }) {
   );
 }
 
+// Each roster card lands in a live session: brand advisors auto-run their Council mode,
+// Guru keeps its own sales-mentor thread, draft-dependent lenses (writer/coach) open the
+// Council session so the operator can paste the draft first.
+const COUNCIL_CARD_LINK = {
+  strategist: councilChatPath({ mode: 'brand-strategy' }),
+  analyst: councilChatPath({ mode: 'audience-analysis' }),
+  operator: councilChatPath({ mode: 'flow-review' }),
+  writer: councilChatPath(),
+  coach: councilChatPath(),
+  guru: 'dashboard/agents/chat?agent=guru',
+};
+
 export function AgentsCouncil({ onNavigate }) {
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Council</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch' }}>5명의 전문 에이전트가 함께 의논. 브리핑·결정에 근거 제공.</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch' }}>전문 에이전트가 함께 의논. 브리핑·결정에 근거 제공.</div>
         </div>
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="sm" icon="sparkle" onClick={() => onNavigate?.(councilChatPath({ mode: 'brand-strategy' }))}>Convene</Button>
       </div>
       <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--gap)' }}>
         {COUNCIL.map(a => (
-          <Card key={a.key} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.(`dashboard/agents/chat?agent=${a.key}`)}>
+          <Card key={a.key} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.(COUNCIL_CARD_LINK[a.key] || councilChatPath())}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
               <div style={{
                 width: 36, height: 36, borderRadius: 999,
