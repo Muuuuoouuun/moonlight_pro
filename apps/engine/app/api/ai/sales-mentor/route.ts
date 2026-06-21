@@ -190,7 +190,7 @@ export async function POST(req: Request) {
   const result = await generateGeminiText({
     systemInstruction: SYSTEM_INSTRUCTION,
     prompt: buildPrompt(mode, context, draft),
-    maxOutputTokens: typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 768,
+    maxOutputTokens: typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 8192,
   });
   const finishedAt = new Date().toISOString();
 
