@@ -34,12 +34,23 @@ async function callEngine(body) {
     headers["x-com-moon-shared-secret"] = sharedSecret;
   }
 
-  const response = await fetch(`${engineUrl}${ENGINE_PATH}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-    cache: "no-store",
-  });
+  let response;
+  try {
+    response = await fetch(`${engineUrl}${ENGINE_PATH}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+  } catch (error) {
+    // Engine configured but unreachable (down / wrong URL): degrade to a clean error the
+    // client normalizes, instead of throwing a 500. Honest preview/error states are part
+    // of the design (CLAUDE.md: never mix mock + live).
+    return {
+      status: 502,
+      data: { status: "error", reason: `Engine 연결 실패: ${error instanceof Error ? error.message : String(error)}` },
+    };
+  }
   const text = await response.text();
   let data = null;
   try {
