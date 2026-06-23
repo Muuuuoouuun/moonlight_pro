@@ -222,6 +222,7 @@ function mapAccount(row, dealStatsByCompany) {
   const lastAt = row.updated_at || row.started_at || row.created_at;
 
   return {
+    id: row.id,
     name: row.name,
     type,
     deals: stats.deals,

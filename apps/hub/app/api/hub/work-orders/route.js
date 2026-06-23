@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { executeApprovedWorkOrder } from "@/lib/sales-os/work-order-executor";
-import { decideWorkOrder, getQueueSummary, getWorkOrders } from "@/lib/sales-os/work-orders";
+import { createWorkOrder, decideWorkOrder, getQueueSummary, getWorkOrders } from "@/lib/sales-os/work-orders";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +26,7 @@ export async function GET(req) {
 
 // POST { id, status } — the 1-click decision (approve | dismiss | executed).
 // POST { id, action: "execute" } — replay an approved external work order, or mark manual work done.
+// POST { action: "create", persona, kind, title, dealId, ... } — propose a new queue item.
 export async function POST(req) {
   const guard = assertHubWriteAllowed(req);
   if (guard) return guard;
@@ -37,6 +38,21 @@ export async function POST(req) {
   const id = typeof input.id === "string" ? input.id : null;
   const action = typeof input.action === "string" ? input.action.trim().toLowerCase() : "";
   const status = typeof input.status === "string" ? input.status : null;
+
+  if (action === "create") {
+    const result = await createWorkOrder({
+      persona: input.persona,
+      kind: input.kind,
+      title: input.title,
+      body: input.body && typeof input.body === "object" ? input.body : {},
+      leadId: input.leadId || null,
+      dealId: input.dealId || null,
+      companyId: input.companyId || null,
+      channel: input.channel || null,
+      source: input.source || "manual",
+    });
+    return NextResponse.json(result, { status: result.persisted ? 200 : 202 });
+  }
 
   if (action === "execute") {
     const result = await executeApprovedWorkOrder({ req, id });

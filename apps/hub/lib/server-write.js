@@ -316,6 +316,53 @@ export async function updateSupabaseRecord(table, filters = [], record = {}, opt
   }
 }
 
+export async function deleteSupabaseRecord(table, filters = []) {
+  const config = resolveSupabaseConfig();
+
+  if (!config) {
+    return {
+      persisted: false,
+      reason: "missing-config",
+    };
+  }
+
+  if (!Array.isArray(filters) || filters.length === 0) {
+    // Refuse an unfiltered DELETE — that would wipe the whole table.
+    return {
+      persisted: false,
+      reason: "missing-filter",
+    };
+  }
+
+  try {
+    const response = await fetch(`${config.url}/rest/v1/${table}${buildFilterQuery(filters)}`, {
+      method: "DELETE",
+      headers: makeSupabaseHeaders(config.apiKey, { prefer: "return=minimal" }),
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      return {
+        persisted: false,
+        reason: `http-${response.status}`,
+        detail,
+      };
+    }
+
+    return {
+      persisted: true,
+      reason: "ok",
+    };
+  } catch (error) {
+    return {
+      persisted: false,
+      reason: "request-failed",
+      detail: String(error),
+    };
+  }
+}
+
 export function buildProjectUpdateRecord(payload) {
   const workspaceId = normalizeString(payload.workspaceId) || resolveDefaultWorkspaceId();
 

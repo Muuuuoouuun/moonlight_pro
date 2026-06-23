@@ -19,6 +19,23 @@ const fmt = v => {
   return '₩' + (n / 1000000).toFixed(1) + 'M';
 };
 
+// Persist a drawer edit to the Supabase-backed write route. `kind` is 'lead' | 'deal',
+// `op` is 'create' | 'update'. Returns { ok, status, id } — `ok` only when the row was
+// actually saved; 'preview' means the backend isn't configured and the local row stands.
+async function saveRevenueRecord(kind, op, record) {
+  try {
+    const resp = await fetch(`/api/hub/revenue/${kind}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ op, ...record }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    return { ok: resp.ok && data.status === 'saved', status: data.status || 'error', id: data.id, data };
+  } catch (err) {
+    return { ok: false, status: 'error', error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 function formatPercentDelta(current, previous) {
   if (!Number.isFinite(current) || !Number.isFinite(previous)) return '—';
   if (previous === 0) return current === 0 ? '0%' : 'new';
@@ -400,13 +417,35 @@ const DRAWER_INPUT_STYLE = {
 
 // Editable detail drawer for a single record (lead or deal). Field-driven so leads and deals
 // share one editor; edits flow up via onChange(key, value) and the parent owns the state.
-function EditDrawer({ title, subtitle, record, fields, onChange, onClose }) {
+function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete }) {
+  const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | error
   React.useEffect(() => {
     if (!record) return undefined;
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [record, onClose]);
+  // Reset feedback whenever the drawer switches to a different record.
+  React.useEffect(() => { setSaveState('idle'); }, [record?.id]);
+
+  const handleDone = async () => {
+    if (!onSave) { onClose(); return; }
+    setSaveState('saving');
+    const r = await onSave();
+    if (r?.ok) { setSaveState('idle'); onClose(); }
+    else { setSaveState(r?.status === 'preview' ? 'preview' : 'error'); }
+  };
+
+  // Delete is optimistic: the parent drops the row from local state and best-effort persists
+  // the removal, then we close regardless (a failed ledger delete simply reappears on refresh).
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    if (typeof window !== 'undefined' && !window.confirm('이 항목을 삭제할까요? 되돌릴 수 없습니다.')) return;
+    setSaveState('saving');
+    await onDelete();
+    onClose();
+  };
+
   if (!record) return null;
   return (
     <>
@@ -444,8 +483,24 @@ function EditDrawer({ title, subtitle, record, fields, onChange, onClose }) {
             </label>
           ))}
         </div>
-        <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', justifyContent: 'flex-end' }}>
-          <Button variant="primary" size="sm" onClick={onClose}>완료</Button>
+        <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          {onDelete && (
+            <Button variant="ghost" size="sm" onClick={handleDelete} disabled={saveState === 'saving'} style={{ color: 'var(--danger)' }}>삭제</Button>
+          )}
+          <div style={{ flex: 1, minWidth: 0, fontSize: 11, lineHeight: 1.4 }}>
+            {saveState === 'preview' && (
+              <span style={{ color: 'var(--fg-muted)' }}>저장 위치(Supabase)가 설정되지 않아 로컬에만 반영됩니다.</span>
+            )}
+            {saveState === 'error' && (
+              <span style={{ color: 'var(--danger)' }}>저장에 실패했습니다. 다시 시도하세요.</span>
+            )}
+          </div>
+          {(saveState === 'preview' || saveState === 'error') && (
+            <Button variant="ghost" size="sm" onClick={onClose}>닫기</Button>
+          )}
+          <Button variant="primary" size="sm" onClick={handleDone} disabled={saveState === 'saving'}>
+            {saveState === 'saving' ? '저장 중…' : '완료'}
+          </Button>
         </div>
       </aside>
     </>
@@ -456,9 +511,12 @@ export function Leads({ workspace }) {
   const { ledger, syncState } = useRevenueLedger();
   const [localLeads, setLocalLeads] = React.useState([]);
   const [leadEdits, setLeadEdits] = React.useState({}); // { [id]: patch } — overlays any lead (local or ledger)
+  const [deletedLeadIds, setDeletedLeadIds] = React.useState(() => new Set()); // hide removed ledger rows
   const [editLeadId, setEditLeadId] = React.useState(null);
   const ws = getWorkspace(workspace);
-  const mergedLeads = [...localLeads, ...ledger.leads].map(l => (leadEdits[l.id] ? { ...l, ...leadEdits[l.id] } : l));
+  const mergedLeads = [...localLeads, ...ledger.leads]
+    .filter(l => !deletedLeadIds.has(l.id))
+    .map(l => (leadEdits[l.id] ? { ...l, ...leadEdits[l.id] } : l));
   const LEADS = filterLeadsByWorkspace(mergedLeads, workspace);
   const editingLead = editLeadId ? mergedLeads.find(l => l.id === editLeadId) : null;
   const wsEmpty = Boolean(ws) && LEADS.length === 0;
@@ -485,6 +543,37 @@ export function Leads({ workspace }) {
       ...(ws ? { workspace } : {}),
     }, ...prev]);
     setEditLeadId(id); // open the editor immediately so the new lead can be filled in
+  };
+
+  // Persist the drawer edit. New local rows (id `local-lead-…`) insert; on success the
+  // returned real id replaces the local one so a later edit takes the update path.
+  const persistLead = async () => {
+    if (!editingLead) return { ok: false, status: 'error' };
+    const isNew = String(editLeadId).startsWith('local-lead-');
+    const r = await saveRevenueRecord('lead', isNew ? 'create' : 'update', editingLead);
+    if (r.ok && isNew && r.id) {
+      const realId = r.id;
+      setLocalLeads(prev => prev.map(l => (l.id === editLeadId ? { ...l, id: realId } : l)));
+      setLeadEdits(prev => {
+        if (!prev[editLeadId]) return prev;
+        const next = { ...prev, [realId]: prev[editLeadId] };
+        delete next[editLeadId];
+        return next;
+      });
+      setEditLeadId(realId);
+    }
+    return r;
+  };
+
+  // Delete: drop the row locally (optimistic) and best-effort remove it from the ledger.
+  // Unsaved local rows (no DB id) skip the network call entirely.
+  const deleteLead = async () => {
+    if (!editLeadId) return { ok: false };
+    const isLocal = String(editLeadId).startsWith('local-lead-');
+    setLocalLeads(prev => prev.filter(l => l.id !== editLeadId));
+    setDeletedLeadIds(prev => new Set(prev).add(editLeadId));
+    if (isLocal) return { ok: true, status: 'local' };
+    return saveRevenueRecord('lead', 'delete', { id: editLeadId });
   };
 
   const cardFileRef = React.useRef(null);
@@ -651,6 +740,8 @@ export function Leads({ workspace }) {
           { key: 'owner', label: '담당' },
         ]}
         onChange={(key, val) => setLeadEdits(prev => ({ ...prev, [editLeadId]: { ...prev[editLeadId], [key]: val } }))}
+        onSave={persistLead}
+        onDelete={deleteLead}
         onClose={() => setEditLeadId(null)}
       />
     </div>
@@ -664,6 +755,31 @@ export function Deals({ workspace, onNavigate }) {
   const [drag, setDrag] = React.useState(null);
   const [filter, setFilter] = React.useState('all');
   const [editDealId, setEditDealId] = React.useState(null);
+  const [queuedDeals, setQueuedDeals] = React.useState(() => new Set()); // deals with a proposed follow-up
+
+  // Propose a follow-up work order for a stalled deal. Optimistic: the card flags "제안됨"
+  // immediately; the queue item lands in work_orders (status 'proposed') for operator approval.
+  const queueFollowup = async (deal) => {
+    if (queuedDeals.has(deal.id)) return;
+    setQueuedDeals(prev => new Set(prev).add(deal.id));
+    try {
+      await fetch('/api/hub/work-orders', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          persona: 'guru',
+          kind: 'followup',
+          title: `${deal.name} — ${deal.age}d 정체 follow-up`,
+          dealId: String(deal.id).startsWith('LOCAL-') ? null : deal.id,
+          source: 'manual',
+          body: { reason: 'stalled', age: deal.age, stage: deal.stage, value: deal.value },
+        }),
+      });
+    } catch {
+      // optimistic — leave the flag set even if the queue write is unreachable
+    }
+  };
 
   // Sync local deals state when live data arrives
   React.useEffect(() => {
@@ -681,7 +797,14 @@ export function Deals({ workspace, onNavigate }) {
     return acc;
   }, {});
   const grandTotal = scopedDeals.filter(d => filter === 'all' || d.type === filter).reduce((a, b) => a + b.value, 0);
-  const move = (id, to) => setDeals(ds => ds.map(d => d.id === id ? { ...d, stage: to } : d));
+  const move = (id, to) => {
+    setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: to } : d)));
+    // Persist the stage change in the background; the optimistic move stands regardless.
+    // Unsaved local cards (no DB id) only persist once saved through the drawer.
+    if (!String(id).startsWith('LOCAL-')) {
+      saveRevenueRecord('deal', 'update', { id, stage: to });
+    }
+  };
   const createDeal = () => {
     const id = `LOCAL-${Date.now().toString().slice(-4)}`;
     setDeals(prev => [{
@@ -697,6 +820,30 @@ export function Deals({ workspace, onNavigate }) {
       ...(ws ? { workspace } : {}),
     }, ...prev]);
     setEditDealId(id); // open the editor immediately so the new deal can be filled in
+  };
+
+  // Persist the drawer edit. New local rows (id `LOCAL-…`) insert; on success the returned
+  // real id replaces the local one so a later edit takes the update path. `close` (free-text)
+  // and `owner` are not reversed back to expected_close_at / owner_id — best-effort by design.
+  const persistDeal = async () => {
+    if (!editingDeal) return { ok: false, status: 'error' };
+    const isNew = String(editDealId).startsWith('LOCAL-');
+    const r = await saveRevenueRecord('deal', isNew ? 'create' : 'update', editingDeal);
+    if (r.ok && isNew && r.id) {
+      const realId = r.id;
+      setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, id: realId } : d)));
+      setEditDealId(realId);
+    }
+    return r;
+  };
+
+  // Delete: drop the card locally (optimistic) and best-effort remove it from the ledger.
+  const deleteDeal = async () => {
+    if (!editDealId) return { ok: false };
+    const isLocal = String(editDealId).startsWith('LOCAL-');
+    setDeals(ds => ds.filter(d => d.id !== editDealId));
+    if (isLocal) return { ok: true, status: 'local' };
+    return saveRevenueRecord('deal', 'delete', { id: editDealId });
   };
 
   return (
@@ -773,6 +920,16 @@ export function Deals({ workspace, onNavigate }) {
                     <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 6 }}>
                       <span className="mono" style={{ fontSize: 9.5, color: 'var(--fg-faint)' }}>{d.id}</span>
                       <div style={{ flex: 1 }} />
+                      {d.age > 10 && s.key !== 'won' && s.key !== 'lost' && (
+                        <IconButton
+                          icon="queue"
+                          size={20}
+                          iconSize={12}
+                          tooltip={queuedDeals.has(d.id) ? 'follow-up 제안됨' : 'follow-up 작업 큐에 추가'}
+                          onClick={(e) => { e.stopPropagation(); queueFollowup(d); }}
+                          style={queuedDeals.has(d.id) ? { color: 'var(--success)' } : undefined}
+                        />
+                      )}
                       <IconButton
                         icon="sparkle"
                         size={20}
@@ -816,6 +973,8 @@ export function Deals({ workspace, onNavigate }) {
           { key: 'owner', label: '담당' },
         ]}
         onChange={(key, val) => setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, [key]: val } : d)))}
+        onSave={persistDeal}
+        onDelete={deleteDeal}
         onClose={() => setEditDealId(null)}
       />
     </div>
@@ -828,15 +987,22 @@ const CASES_GRID = '80px 1fr 160px 112px 100px 100px 110px 90px';
 export function Cases() {
   const { ledger, syncState } = useRevenueLedger();
   const [localCases, setLocalCases] = React.useState([]);
+  const [caseEdits, setCaseEdits] = React.useState({}); // { [id]: patch } — overlays any case
+  const [deletedCaseIds, setDeletedCaseIds] = React.useState(() => new Set());
+  const [editCaseId, setEditCaseId] = React.useState(null);
   const ledgerCases = ledger.source === 'supabase'
     ? (Array.isArray(ledger.cases) ? ledger.cases : [])
     : (Array.isArray(ledger.cases) ? ledger.cases : FALLBACK_CASES);
-  const cases = [...localCases, ...ledgerCases];
+  const cases = [...localCases, ...ledgerCases]
+    .filter(c => !deletedCaseIds.has(c.id))
+    .map(c => (caseEdits[c.id] ? { ...c, ...caseEdits[c.id] } : c));
+  const editingCase = editCaseId ? cases.find(c => c.id === editCaseId) : null;
   const sTone = { Open: 'warning', Waiting: 'info', Resolved: 'success' };
   const pTone = { high: 'danger', med: 'warning', low: 'neutral' };
   const createCase = () => {
+    const id = `CASE-${Date.now()}`;
     setLocalCases(prev => [{
-      id: `CASE-${Date.now().toString().slice(-4)}`,
+      id,
       title: '새 운영 케이스',
       account: '미지정',
       type: 'company',
@@ -845,6 +1011,34 @@ export function Cases() {
       opened: '방금',
       owner: 'Me',
     }, ...prev]);
+    setEditCaseId(id);
+  };
+
+  const persistCase = async () => {
+    if (!editingCase) return { ok: false, status: 'error' };
+    const isNew = String(editCaseId).startsWith('CASE-');
+    const r = await saveRevenueRecord('case', isNew ? 'create' : 'update', editingCase);
+    if (r.ok && isNew && r.id) {
+      const realId = r.id;
+      setLocalCases(prev => prev.map(c => (c.id === editCaseId ? { ...c, id: realId } : c)));
+      setCaseEdits(prev => {
+        if (!prev[editCaseId]) return prev;
+        const next = { ...prev, [realId]: prev[editCaseId] };
+        delete next[editCaseId];
+        return next;
+      });
+      setEditCaseId(realId);
+    }
+    return r;
+  };
+
+  const deleteCase = async () => {
+    if (!editCaseId) return { ok: false };
+    const isLocal = String(editCaseId).startsWith('CASE-');
+    setLocalCases(prev => prev.filter(c => c.id !== editCaseId));
+    setDeletedCaseIds(prev => new Set(prev).add(editCaseId));
+    if (isLocal) return { ok: true, status: 'local' };
+    return saveRevenueRecord('case', 'delete', { id: editCaseId });
   };
 
   return (
@@ -874,9 +1068,10 @@ export function Cases() {
         {cases.map((c, i) => (
           <div key={c.id} style={{
             display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12,
-            padding: '12px 16px', alignItems: 'center',
+            padding: '12px 16px', alignItems: 'center', cursor: 'pointer',
             borderBottom: i < cases.length - 1 ? '1px solid var(--line-soft)' : 'none',
           }}
+            onClick={() => setEditCaseId(c.id)}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
@@ -897,6 +1092,24 @@ export function Cases() {
           </div>
         ))}
       </Card>
+
+      <EditDrawer
+        title={editingCase ? (editingCase.title || '케이스 편집') : ''}
+        subtitle={editingCase ? `${editingCase.id} · 운영 케이스 편집` : ''}
+        record={editingCase}
+        fields={[
+          { key: 'title', label: '제목' },
+          { key: 'account', label: '계정', placeholder: '계정·고객명' },
+          { key: 'type', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
+          { key: 'priority', label: '우선순위', type: 'select', options: [{ value: 'low', label: 'Low' }, { value: 'med', label: 'Med' }, { value: 'high', label: 'High' }] },
+          { key: 'status', label: '상태', type: 'select', options: [{ value: 'Open', label: 'Open' }, { value: 'Waiting', label: 'Waiting' }, { value: 'Resolved', label: 'Resolved' }] },
+          { key: 'owner', label: '담당' },
+        ]}
+        onChange={(key, val) => setCaseEdits(prev => ({ ...prev, [editCaseId]: { ...prev[editCaseId], [key]: val } }))}
+        onSave={persistCase}
+        onDelete={deleteCase}
+        onClose={() => setEditCaseId(null)}
+      />
     </div>
   );
 }
@@ -1047,7 +1260,7 @@ function QuickActions({ onAction }) {
   );
 }
 
-function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, onNavigate }) {
+function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, onNavigate, onEdit }) {
   const [tab, setTab] = React.useState('activity');
   const [noteText, setNoteText] = React.useState('');
   if (!account) {
@@ -1118,6 +1331,9 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
           >
             Ask Guru
           </Button>
+          {onEdit && (
+            <Button variant="outline" size="xs" icon="edit" onClick={() => onEdit(account)}>편집</Button>
+          )}
         </div>
       </div>
 
@@ -1247,15 +1463,25 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
 export function Accounts({ onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
   const [localAccounts, setLocalAccounts] = React.useState([]);
-  const ledgerAccounts = ledger.source === 'supabase'
-    ? (Array.isArray(ledger.accounts) ? ledger.accounts : [])
-    : (Array.isArray(ledger.accounts) ? ledger.accounts : FALLBACK_ACCOUNTS);
-  const ACCOUNTS = [...localAccounts, ...ledgerAccounts];
+  const [accountEdits, setAccountEdits] = React.useState({}); // { [stableKey]: patch } — overlays any row
+  const [deletedAccountKeys, setDeletedAccountKeys] = React.useState(() => new Set());
   const [view, setView] = React.useState('cards'); // cards | list | detail
   const [search, setSearch] = React.useState('');
   const [filter, setFilter] = React.useState('all');
   const [selected, setSelected] = React.useState(null);
   const [details, setDetails] = React.useState({});
+  const [editAccountKey, setEditAccountKey] = React.useState(null); // stable key of the row being edited
+  const [editOrigName, setEditOrigName] = React.useState(null); // name at open-time, to keep name-keyed selection in sync on rename
+  const [accountDraft, setAccountDraft] = React.useState(null); // decoupled draft so the list stays stable while typing
+  const ledgerAccounts = ledger.source === 'supabase'
+    ? (Array.isArray(ledger.accounts) ? ledger.accounts : [])
+    : (Array.isArray(ledger.accounts) ? ledger.accounts : FALLBACK_ACCOUNTS);
+  // Attach a stable key (Supabase id, a generated local key, or name for mock rows) so edits and
+  // deletes survive renames — the name-keyed selection UI keeps working on top of it.
+  const ACCOUNTS = [...localAccounts, ...ledgerAccounts]
+    .map(a => ({ ...a, _key: a._key || a.id || a.name }))
+    .filter(a => !deletedAccountKeys.has(a._key))
+    .map(a => (accountEdits[a._key] ? { ...a, ...accountEdits[a._key] } : a));
 
   const term = search.trim().toLowerCase();
   const filtered = ACCOUNTS.filter(a =>
@@ -1328,10 +1554,17 @@ export function Accounts({ onNavigate }) {
     setSelected(name);
     setView('detail');
   };
+  const openEditAccount = (account) => {
+    if (!account) return;
+    setEditAccountKey(account._key || account.id || account.name);
+    setEditOrigName(account.name);
+    setAccountDraft({ ...account });
+  };
+
   const createAccount = () => {
-    const name = '새 계정';
-    setLocalAccounts(prev => [{
-      name,
+    const newAcc = {
+      _key: `local-acct-${Date.now()}`,
+      name: '새 계정',
       type: filter === 'personal' || filter === 'company' ? filter : 'company',
       health: 'ok',
       value: 0,
@@ -1339,9 +1572,36 @@ export function Accounts({ onNavigate }) {
       last: '방금',
       owner: 'Me',
       lastAt: '방금',
-    }, ...prev]);
-    setSelected(name);
+    };
+    setLocalAccounts(prev => [newAcc, ...prev]);
+    setSelected(newAcc.name);
     setView('detail');
+    openEditAccount(newAcc); // open the editor immediately so the new account can be named
+  };
+
+  // Persist an account edit. Ledger rows (Supabase id) update; local rows insert. The edit is
+  // reflected locally via the stable-key overlay either way, so renames never desync.
+  const persistAccount = async () => {
+    if (!accountDraft) return { ok: false, status: 'error' };
+    const key = editAccountKey;
+    const isLocal = !accountDraft.id;
+    const r = await saveRevenueRecord('account', isLocal ? 'create' : 'update', accountDraft);
+    setAccountEdits(prev => ({ ...prev, [key]: { ...accountDraft } }));
+    // Stamp the returned DB id onto the local row so a later edit takes the update path.
+    if (isLocal && r.id) setLocalAccounts(prev => prev.map(a => (a._key === key ? { ...a, id: r.id } : a)));
+    if (accountDraft.name !== editOrigName && selected === editOrigName) setSelected(accountDraft.name);
+    return r;
+  };
+
+  const deleteAccount = async () => {
+    if (!editAccountKey) return { ok: false };
+    const key = editAccountKey;
+    const draftId = accountDraft?.id;
+    setLocalAccounts(prev => prev.filter(a => a._key !== key));
+    setDeletedAccountKeys(prev => new Set(prev).add(key));
+    if (selected === editOrigName) { setSelected(null); setView('cards'); }
+    if (!draftId) return { ok: true, status: 'local' };
+    return saveRevenueRecord('account', 'delete', { id: draftId });
   };
 
   return (
@@ -1546,10 +1806,28 @@ export function Accounts({ onNavigate }) {
               onPinNote={selectedAcc ? handlePinNote(selectedAcc.name) : () => {}}
               onAddNote={selectedAcc ? handleAddNote(selectedAcc.name) : () => {}}
               onNavigate={onNavigate}
+              onEdit={openEditAccount}
             />
           </div>
         </Card>
       )}
+
+      <EditDrawer
+        title={accountDraft ? (accountDraft.name || '계정 편집') : ''}
+        subtitle="계정 정보 편집"
+        record={accountDraft}
+        fields={[
+          { key: 'name', label: '계정명' },
+          { key: 'type', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
+          { key: 'health', label: '헬스', type: 'select', options: [{ value: 'ok', label: '양호' }, { value: 'warning', label: '주의' }, { value: 'risk', label: '위험' }] },
+          { key: 'owner', label: '담당' },
+          { key: 'note', label: '메모', placeholder: '계정 메모·다음 액션' },
+        ]}
+        onChange={(key, val) => setAccountDraft(prev => (prev ? { ...prev, [key]: val } : prev))}
+        onSave={persistAccount}
+        onDelete={deleteAccount}
+        onClose={() => { setEditAccountKey(null); setEditOrigName(null); setAccountDraft(null); }}
+      />
     </div>
   );
 }
