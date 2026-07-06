@@ -188,6 +188,12 @@ function mapLead(row, companyById, contactById) {
     brand: resolveBrand(row),
     source: row.source || row.channel || "—",
     stage: LEAD_STAGE_LABEL[statusKey] || "New",
+    score: toNumber(row.score, 0),
+    // Guru deal-review focus context reads these (context-schema.js) — keep them on the
+    // projection so the 360 context no longer has to report them as missing[].
+    nextAction: row.next_action || null,
+    contactName: contact?.name || null,
+    contactEmail: contact?.email || null,
     value: value ? formatMoneyLabel(value) : "—",
     // Lightweight tags (meta-backed). 유입경로 is `source` above; these four editable in the drawer.
     region: meta.region || "",
@@ -207,6 +213,7 @@ function mapDeal(row, companyById) {
 
   return {
     id: row.id,
+    leadId: row.lead_id || null, // ties the deal back to its lead for Guru focus context
     name,
     type,
     workspace: resolveWorkspace(row),

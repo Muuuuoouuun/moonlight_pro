@@ -90,8 +90,15 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
       ) || null;
     const account =
       (ledger.accounts || []).find((a) => (a.name || "").toLowerCase().includes(needle)) || null;
+    // Lead match: prefer the deal's own lead_id link, fall back to a name-substring match —
+    // this is what fills score/next_action_hint/contact in the focus context.
+    const lead = deal
+      ? (ledger.leads || []).find((l) => deal.leadId && l.id === deal.leadId) ||
+        (ledger.leads || []).find((l) => (l.name || "").toLowerCase().includes((deal.name || "").toLowerCase())) ||
+        null
+      : null;
     const entityOutcomes = deal ? outcomesForEntity(normalizedOutcomes, { dealId: deal.id }) : [];
-    context.focus = buildFocusOperatingContext({ deal, account, entityOutcomes, brand });
+    context.focus = buildFocusOperatingContext({ deal, account, lead, entityOutcomes, brand });
   }
 
   return context;

@@ -278,8 +278,22 @@ export function RevenueOverview({ onNavigate }) {
   const wonMTD = summary?.wonMTD ?? DEALS.filter(d => d.stage === 'won').reduce((a, b) => a + b.value, 0);
   const newThisMonth = summary?.newThisMonth ?? (isLiveLedger ? 0 : 12);
   const wonDealsCount = DEALS.filter(d => d.stage === 'won').length;
+  // Live join: group won-deal value by the deal's brand meta (mapDeal → resolveBrand).
+  // Brands outside the BRANDS registry still show, with a neutral glyph and their raw key.
   const byBrand = isLiveLedger
-    ? []
+    ? (() => {
+      const sums = new Map();
+      DEALS.filter(d => d.stage === 'won' && d.brand).forEach(d => {
+        sums.set(d.brand, (sums.get(d.brand) || 0) + Number(d.value || 0));
+      });
+      return [...sums.entries()]
+        .map(([key, mrr]) => {
+          const meta = BRANDS.find(b => b.key === key);
+          return { key, name: meta?.name || key, glyph: meta?.glyph || '◾', mrr };
+        })
+        .sort((a, b) => b.mrr - a.mrr)
+        .slice(0, 6);
+    })()
     : BRANDS.filter(b => b.key !== 'all').slice(0, 6).map((b, i) => ({
       ...b,
       mrr: [2.4, 1.8, 0.6, 2.0, 0.9, 0.7][i] * 1000000,
@@ -386,7 +400,7 @@ export function RevenueOverview({ onNavigate }) {
               <EmptyState
                 icon="revenue"
                 title="브랜드별 매출 집계 없음"
-                description="Supabase revenue 원장은 live입니다. 브랜드별 매출 join이 준비되면 이 패널이 자동으로 채워집니다."
+                description="won 딜에 brand 메타가 붙으면 여기 자동 집계됩니다. (딜 meta.brand · Supabase live)"
                 style={{ minHeight: 170, padding: '22px 12px' }}
               />
             )}
@@ -472,7 +486,7 @@ export function RevenueOverview({ onNavigate }) {
 }
 
 // Shared grid template for Leads rows — gap between columns so badges never butt the next cell
-const LEADS_GRID = '26px 1fr 112px 112px 124px 100px 90px 92px';
+const LEADS_GRID = '26px 1fr 112px 112px 124px 64px 100px 90px 92px';
 
 // Compact meta tags under a lead name — 지역·규모·현재 상황·도입 댓수 (blank ones are skipped).
 function LeadTagChips({ lead }) {
@@ -620,6 +634,7 @@ export function Leads({ workspace }) {
   const wsEmpty = Boolean(ws) && LEADS.length === 0;
   const [filter, setFilter] = React.useState('all');
   const [stageFilter, setStageFilter] = React.useState('all');
+  const [sortByScore, setSortByScore] = React.useState(false);
   const [search, setSearch] = React.useState('');
   const term = search.trim().toLowerCase();
   const filtered = LEADS.filter(l =>
@@ -627,6 +642,7 @@ export function Leads({ workspace }) {
     (stageFilter === 'all' || l.stage === stageFilter) &&
     (!term || l.name.toLowerCase().includes(term) || l.source.toLowerCase().includes(term) || l.stage.toLowerCase().includes(term))
   );
+  const visibleLeads = sortByScore ? filtered.slice().sort((a, b) => (b.score || 0) - (a.score || 0)) : filtered;
   const stageTone = { New: 'info', Contact: 'moon', Qualified: 'success', Lost: 'danger' };
   const createLead = () => {
     const id = `local-lead-${Date.now()}`;
@@ -731,6 +747,13 @@ export function Leads({ workspace }) {
           ))}
         </div>
         <Input className="hub-toolbar" placeholder="이름·소스·단계 검색…" icon="search" value={search} onChange={setSearch} />
+        <button className="hub-toolbar" onClick={() => setSortByScore(v => !v)} style={{
+          padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
+          color: sortByScore ? 'var(--fg)' : 'var(--fg-faint)',
+          background: sortByScore ? 'var(--surface-3)' : 'transparent',
+        }}>
+          Score
+        </button>
         <div style={{ width: 8 }} />
         <Button variant="secondary" size="sm" icon="plus" onClick={() => cardFileRef.current?.click()}>명함</Button>
         <input ref={cardFileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onCardFile} />
@@ -806,7 +829,7 @@ export function Leads({ workspace }) {
       {!wsEmpty && (
       <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          <span /><span>Name</span><span>Type</span><span>Source</span><span>Stage</span><span>Value</span><span>Owner</span><span style={{ textAlign: 'right' }}>Last</span>
+          <span /><span>Name</span><span>Type</span><span>Source</span><span>Stage</span><span>Score</span><span>Value</span><span>Owner</span><span style={{ textAlign: 'right' }}>Last</span>
         </div>
         {filtered.length === 0 && (
           <div style={{ padding: '36px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -817,11 +840,11 @@ export function Leads({ workspace }) {
             </div>
           </div>
         )}
-        {filtered.map((l, i) => (
+        {visibleLeads.map((l, i) => (
           <div key={l.id} style={{
             display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12,
             padding: '12px 16px', alignItems: 'center', cursor: 'pointer',
-            borderBottom: i < filtered.length - 1 ? '1px solid var(--line-soft)' : 'none',
+            borderBottom: i < visibleLeads.length - 1 ? '1px solid var(--line-soft)' : 'none',
           }}
             onClick={() => setEditLeadId(l.id)}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
@@ -844,6 +867,13 @@ export function Leads({ workspace }) {
             <span style={{ paddingRight: 8, minWidth: 0 }}>
               <Badge tone={stageTone[l.stage]} size="xs" variant="outline">{l.stage}</Badge>
             </span>
+            {typeof l.score === 'number' && l.score > 0 ? (
+              <span className="mono" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <Dot tone={l.score >= 70 ? 'success' : l.score >= 40 ? 'warning' : 'neutral'} />{l.score}
+              </span>
+            ) : (
+              <span className="mono" style={{ fontSize: 12, color: 'var(--fg-faint)' }}>—</span>
+            )}
             <span className="mono" style={{ fontSize: 12 }}>{l.value}</span>
             <span style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.owner}</span>
             <span className="mono" style={{ textAlign: 'right', fontSize: 11.5, color: 'var(--fg-faint)' }}>{l.last}</span>
@@ -886,7 +916,10 @@ export function Deals({ workspace, onNavigate }) {
   const [filter, setFilter] = React.useState('all');
   const [stalledOnly, setStalledOnly] = React.useState(false);
   const [editDealId, setEditDealId] = React.useState(null);
+  const [editDealPrevStage, setEditDealPrevStage] = React.useState(null);
   const [queuedDeals, setQueuedDeals] = React.useState(() => new Set()); // deals with a proposed follow-up
+  const [guruDeal, setGuruDeal] = React.useState(null);
+  const [guru, setGuru] = React.useState({ phase: 'idle', text: '', state: null });
 
   // Propose a follow-up work order for a stalled deal. Optimistic: the card flags "제안됨"
   // immediately; the queue item lands in work_orders (status 'proposed') for operator approval.
@@ -918,6 +951,13 @@ export function Deals({ workspace, onNavigate }) {
   }, [ledger.deals]);
   const editingDeal = editDealId ? deals.find(d => d.id === editDealId) : null;
 
+  React.useEffect(() => {
+    if (!guruDeal) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setGuruDeal(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [guruDeal]);
+
   const ws = getWorkspace(workspace);
   const scopedDeals = filterDealsByWorkspace(deals, workspace);
   const wsEmpty = Boolean(ws) && scopedDeals.length === 0;
@@ -932,17 +972,65 @@ export function Deals({ workspace, onNavigate }) {
   // Header total stays the true pipeline (type filter only) — stalledOnly narrows the board, not the fact.
   const grandTotal = scopedDeals.filter(d => filter === 'all' || d.type === filter).reduce((a, b) => a + b.value, 0);
   const stalledCount = scopedDeals.filter(d => (filter === 'all' || d.type === filter) && isStalled(d)).length;
+  const openDealEditor = (deal) => {
+    setEditDealPrevStage(deal?.stage ?? null);
+    setEditDealId(deal?.id ?? null);
+  };
+  const fireStageTransition = (deal, from, to) => {
+    if (!deal || String(deal.id).toLowerCase().startsWith('local-') || from === to) return;
+    if (to === 'won' && from !== 'won') {
+      fetch('/api/hub/work-orders', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          persona: 'guru',
+          kind: 'onboarding',
+          title: `[Won] ${deal.name} 온보딩 시작 제안`,
+          dealId: deal.id,
+          body: { reason: 'won-trigger', stage_from: from, value: deal.value },
+          source: 'manual',
+        }),
+      }).catch(() => {});
+      saveActivity('create', {
+        dealId: deal.id,
+        entityType: 'deal',
+        kind: 'deal',
+        body: `[Won] ${deal.name} — 계약 성사 (${from} → won)`,
+      }).catch(() => {});
+    }
+    if (to === 'lost' && from !== 'lost') {
+      saveActivity('create', {
+        dealId: deal.id,
+        entityType: 'deal',
+        kind: 'update',
+        body: `[Lost] ${deal.name} — 실패 처리 (${from} → lost)`,
+      }).catch(() => {});
+    }
+  };
+  const openGuruDiagnosis = async (deal) => {
+    setGuruDeal(deal);
+    setGuru({ phase: 'loading', text: '', state: null });
+    try {
+      const r = await requestGuruCoaching({ mode: 'deal-review', ref: deal.id });
+      setGuru({ phase: 'done', text: r.text || r.note || '', state: r.state });
+    } catch (err) {
+      setGuru({ phase: 'done', text: err instanceof Error ? err.message : '진단 요청에 실패했습니다.', state: 'error' });
+    }
+  };
   const move = (id, to) => {
+    const cur = deals.find(d => d.id === id);
     setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: to } : d)));
     // Persist the stage change in the background; the optimistic move stands regardless.
     // Unsaved local cards (no DB id) only persist once saved through the drawer.
-    if (!String(id).startsWith('LOCAL-')) {
+    if (!String(id).toLowerCase().startsWith('local-')) {
       saveRevenueRecord('deal', 'update', { id, stage: to });
     }
+    if (cur) fireStageTransition(cur, cur.stage, to);
   };
   const createDeal = () => {
     const id = `LOCAL-${Date.now().toString().slice(-4)}`;
-    setDeals(prev => [{
+    const deal = {
       id,
       name: '새 딜',
       type: filter === 'personal' || filter === 'company' ? filter : 'company',
@@ -953,8 +1041,9 @@ export function Deals({ workspace, onNavigate }) {
       age: 0,
       // Tag in-workspace creates so the scoped pipeline doesn't silently drop them.
       ...(ws ? { workspace } : {}),
-    }, ...prev]);
-    setEditDealId(id); // open the editor immediately so the new deal can be filled in
+    };
+    setDeals(prev => [deal, ...prev]);
+    openDealEditor(deal); // open the editor immediately so the new deal can be filled in
   };
 
   // Persist the drawer edit. New local rows (id `LOCAL-…`) insert; on success the returned
@@ -962,12 +1051,17 @@ export function Deals({ workspace, onNavigate }) {
   // and `owner` are not reversed back to expected_close_at / owner_id — best-effort by design.
   const persistDeal = async () => {
     if (!editingDeal) return { ok: false, status: 'error' };
-    const isNew = String(editDealId).startsWith('LOCAL-');
+    const isNew = String(editDealId).toLowerCase().startsWith('local-');
+    const savedDeal = { ...editingDeal };
     const r = await saveRevenueRecord('deal', isNew ? 'create' : 'update', editingDeal);
     if (r.ok && isNew && r.id) {
       const realId = r.id;
+      savedDeal.id = realId;
       setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, id: realId } : d)));
       setEditDealId(realId);
+    }
+    if (r.ok && editDealPrevStage && editDealPrevStage !== savedDeal.stage && (savedDeal.stage === 'won' || savedDeal.stage === 'lost')) {
+      fireStageTransition(savedDeal, editDealPrevStage, savedDeal.stage);
     }
     return r;
   };
@@ -975,7 +1069,7 @@ export function Deals({ workspace, onNavigate }) {
   // Delete: drop the card locally (optimistic) and best-effort remove it from the ledger.
   const deleteDeal = async () => {
     if (!editDealId) return { ok: false };
-    const isLocal = String(editDealId).startsWith('LOCAL-');
+    const isLocal = String(editDealId).toLowerCase().startsWith('local-');
     setDeals(ds => ds.filter(d => d.id !== editDealId));
     if (isLocal) return { ok: true, status: 'local' };
     return saveRevenueRecord('deal', 'delete', { id: editDealId });
@@ -1061,7 +1155,7 @@ export function Deals({ workspace, onNavigate }) {
                 {items.map(d => (
                   <div key={d.id}
                     draggable
-                    onClick={() => setEditDealId(d.id)}
+                    onClick={() => openDealEditor(d)}
                     onDragStart={() => setDrag(d.id)}
                     onDragEnd={() => { setDrag(null); setOverStage(null); }}
                     style={{
@@ -1089,7 +1183,7 @@ export function Deals({ workspace, onNavigate }) {
                         size={20}
                         iconSize={12}
                         tooltip="Guru에게 진단 요청"
-                        onClick={(e) => { e.stopPropagation(); onNavigate?.(guruChatPath({ mode: 'deal-review', ref: d.id })); }}
+                        onClick={(e) => { e.stopPropagation(); openGuruDiagnosis(d); }}
                       />
                       <Badge tone={d.type === 'personal' ? 'personal' : 'company'} size="xs">
                         {d.type === 'personal' ? 'P' : 'C'}
@@ -1114,6 +1208,57 @@ export function Deals({ workspace, onNavigate }) {
       </div>
       )}
 
+      {guruDeal && (
+        <>
+          <div className="hub-drawer-overlay" onClick={() => setGuruDeal(null)} style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / 0.4)', zIndex: 60 }} />
+          <aside className="hub-drawer" style={{
+            position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(440px, 92vw)', zIndex: 61,
+            background: 'var(--surface)', borderLeft: '1px solid var(--line-soft)',
+            display: 'flex', flexDirection: 'column',
+            boxShadow: '-8px 0 32px -12px oklch(0 0 0 / 0.5)',
+          }}>
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 500 }}>Guru 딜 진단</div>
+                <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>{guruDeal.name} · {guruDeal.stage} · {fmt(guruDeal.value)}</div>
+              </div>
+              <IconButton icon="x" size={24} iconSize={13} tooltip="닫기" onClick={() => setGuruDeal(null)} />
+            </div>
+            <div className="scroll-y" style={{ flex: 1, padding: 16 }}>
+              {guru.phase === 'loading' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
+                  <div style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
+                  컨텍스트 조립 → Engine 진단 중…
+                </div>
+              )}
+              {guru.phase === 'done' && guru.state === 'done' && (
+                <div style={{ fontSize: 13, lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{guru.text}</div>
+              )}
+              {guru.phase === 'done' && guru.state === 'preview' && (
+                <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.55 }}>
+                  <Badge tone="neutral" size="xs">preview</Badge>
+                  <span style={{ marginLeft: 8 }}>Engine이 아직 연결되지 않아 코칭을 생성할 수 없습니다. (COM_MOON_ENGINE_URL 미설정)</span>
+                </div>
+              )}
+              {guru.phase === 'done' && guru.state === 'error' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
+                  <div style={{ fontSize: 12, color: 'var(--danger)', lineHeight: 1.55 }}>
+                    Guru 진단에 실패했습니다. 잠시 후 다시 시도하세요.
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => openGuruDiagnosis(guruDeal)}>다시 시도</Button>
+                </div>
+              )}
+            </div>
+            <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Button variant="ghost" size="sm" onClick={() => openGuruDiagnosis(guruDeal)} disabled={guru.phase === 'loading'}>다시 진단</Button>
+              <div style={{ flex: 1 }} />
+              <Button variant="secondary" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.(guruChatPath({ mode: 'deal-review', ref: guruDeal.id }))}>Chat에서 이어가기</Button>
+              <Button variant="primary" size="sm" onClick={() => setGuruDeal(null)}>닫기</Button>
+            </div>
+          </aside>
+        </>
+      )}
+
       <EditDrawer
         title={editingDeal ? (editingDeal.name || '딜 편집') : ''}
         subtitle={editingDeal ? `${editingDeal.id} · 딜 정보 편집` : ''}
@@ -1121,7 +1266,10 @@ export function Deals({ workspace, onNavigate }) {
         fields={[
           { key: 'name', label: '딜 이름' },
           { key: 'type', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
-          { key: 'stage', label: '단계', type: 'select', options: DEAL_STAGES.map(s => ({ value: s.key, label: s.label })) },
+          { key: 'stage', label: '단계', type: 'select', options: [
+            ...DEAL_STAGES.map(s => ({ value: s.key, label: s.label })),
+            ...(DEAL_STAGES.some(s => s.key === 'lost') ? [] : [{ value: 'lost', label: 'Lost' }]),
+          ] },
           { key: 'value', label: '금액 (₩)', inputType: 'number', placeholder: '0' },
           { key: 'close', label: '예상 마감', placeholder: '5월 12일' },
           { key: 'owner', label: '담당' },
@@ -1129,7 +1277,7 @@ export function Deals({ workspace, onNavigate }) {
         onChange={(key, val) => setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, [key]: val } : d)))}
         onSave={persistDeal}
         onDelete={deleteDeal}
-        onClose={() => setEditDealId(null)}
+        onClose={() => { setEditDealId(null); setEditDealPrevStage(null); }}
       />
     </div>
   );
@@ -1145,14 +1293,21 @@ export function Cases() {
   const [deletedCaseIds, setDeletedCaseIds] = React.useState(() => new Set());
   const [editCaseId, setEditCaseId] = React.useState(null);
   const [statusFilter, setStatusFilter] = React.useState('all');
+  const [typeFilter, setTypeFilter] = React.useState('all');
+  const [search, setSearch] = React.useState('');
   const ledgerCases = ledger.source === 'supabase'
     ? (Array.isArray(ledger.cases) ? ledger.cases : [])
     : (Array.isArray(ledger.cases) ? ledger.cases : FALLBACK_CASES);
   const cases = [...localCases, ...ledgerCases]
     .filter(c => !deletedCaseIds.has(c.id))
     .map(c => (caseEdits[c.id] ? { ...c, ...caseEdits[c.id] } : c));
+  const term = search.trim().toLowerCase();
   // Signal first: keep incoming order but sink resolved cases below live ones.
-  const visibleCases = (statusFilter === 'all' ? cases : cases.filter(c => c.status === statusFilter))
+  const visibleCases = cases.filter(c =>
+    (statusFilter === 'all' || c.status === statusFilter) &&
+    (typeFilter === 'all' || c.type === typeFilter) &&
+    (!term || String(c.title || '').toLowerCase().includes(term) || String(c.account || '').toLowerCase().includes(term))
+  )
     .slice()
     .sort((a, b) => Number(a.status === 'Resolved') - Number(b.status === 'Resolved'));
   const editingCase = editCaseId ? cases.find(c => c.id === editCaseId) : null;
@@ -1211,6 +1366,22 @@ export function Cases() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
+        <div className="hub-toolbar" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, marginRight: 8 }}>
+          {[{ k: 'all', l: 'All' },{ k: 'personal', l: 'Personal' },{ k: 'company', l: 'Company' }].map(t => (
+            <button key={t.k} onClick={() => setTypeFilter(t.k)} style={{
+              padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
+              color: typeFilter === t.k ? 'var(--fg)' : 'var(--fg-faint)',
+              background: typeFilter === t.k ? 'var(--surface-3)' : 'transparent',
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+            }}>
+              {t.k === 'personal' && <Dot tone="personal" />}
+              {t.k === 'company' && <Dot tone="company" />}
+              {t.l}
+            </button>
+          ))}
+        </div>
+        <Input className="hub-toolbar" placeholder="제목·계정 검색…" icon="search" value={search} onChange={setSearch} />
+        <div style={{ width: 8 }} />
         <div className="hub-toolbar" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, marginRight: 8 }}>
           {[{ k: 'all', l: 'All' },{ k: 'Open', l: 'Open' },{ k: 'Waiting', l: 'Waiting' },{ k: 'Resolved', l: 'Resolved' }].map(t => {
             const count = t.k === 'all' ? cases.length : cases.filter(c => c.status === t.k).length;

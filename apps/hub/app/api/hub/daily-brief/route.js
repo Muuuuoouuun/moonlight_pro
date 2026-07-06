@@ -7,6 +7,7 @@ import { getProjectLedger } from "@/lib/repositories/operating-ledger";
 import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
 import { getWorkLedger } from "@/lib/repositories/work-ledger";
 import { getRecentAgentRuns } from "@/lib/sales-os/agent-runs";
+import { scanStalledDeals } from "@/lib/sales-os/stalled-scan";
 import { getWorkOrders } from "@/lib/sales-os/work-orders";
 
 export const runtime = "nodejs";
@@ -467,6 +468,24 @@ export async function GET() {
     pending: Array.isArray(ordersLedger.orders) ? ordersLedger.orders.length : 0,
     orders: Array.isArray(ordersLedger.orders) ? ordersLedger.orders.slice(0, 12) : [],
   };
+
+  // Opportunistic stalled-deal scan — idempotent (dedupes on open followup per deal),
+  // so piggybacking on every brief load keeps the approval queue fresh without cron
+  // infra. Reuses the already-fetched revenue ledger; a scan failure never blocks the brief.
+  try {
+    const scan = await scanStalledDeals({ ledger: revenue });
+    if (scan?.created > 0) {
+      const refreshed = await getWorkOrders({ status: "proposed", limit: 20 });
+      if (refreshed.source === "supabase") {
+        queue.source = refreshed.source;
+        queue.pending = refreshed.orders.length;
+        queue.orders = refreshed.orders.slice(0, 12);
+      }
+    }
+  } catch {
+    // brief must render even if the scan fails
+  }
+
   const sources = buildSources(results);
   const liveCount = sources.filter((source) => source.state === "live").length;
   const errorCount = sources.filter((source) => source.state === "error").length;

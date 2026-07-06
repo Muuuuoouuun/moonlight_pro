@@ -93,6 +93,28 @@ const noDeal = buildFocusOperatingContext({ deal: null });
 eq("focus no deal -> found false", noDeal.found, false);
 eq("focus no deal -> missing deals", noDeal.missing[0].source, "deals");
 
+// --- buildFocusOperatingContext with a matched lead (score/next_action/contact filled) ---
+const focusWithLead = buildFocusOperatingContext({
+  deal: { id: "D1", leadId: "L1", name: "강남학원 도입", stage: "prop", value: 3000000 },
+  account: { name: "강남학원" },
+  lead: { id: "L1", score: 72, nextAction: "설명회 후 견적 발송", contactName: "김원장", contactEmail: "kim@academy.kr" },
+  entityOutcomes: [],
+  brand: { voice: "classmoon", rules: ["R"], forbidden: ["F"] },
+});
+eq("focus+lead score filled", focusWithLead.ledger.score, 72);
+eq("focus+lead next_action filled", focusWithLead.ledger.next_action_hint, "설명회 후 견적 발송");
+eq("focus+lead contact filled", focusWithLead.entity.contact, "김원장 <kim@academy.kr>");
+eq("focus+lead lead_id filled", focusWithLead.entity.lead_id, "L1");
+ok("focus+lead missing only eeoCRM", focusWithLead.missing.length === 1 && focusWithLead.missing[0].source === "eeoCRM");
+
+// Lead matched but no contact attached → contacts still reported missing.
+const focusNoContact = buildFocusOperatingContext({
+  deal: { id: "D1", name: "강남학원 도입", stage: "prop", value: 3000000 },
+  lead: { id: "L1", score: 0, nextAction: null, contactName: null, contactEmail: null },
+});
+eq("focus+lead zero score -> null (unscored)", focusNoContact.ledger.score, null);
+ok("focus+lead no contact -> contacts missing", focusNoContact.missing.some((m) => m.source === "contacts") && focusNoContact.missing.some((m) => m.source === "eeoCRM") && focusNoContact.missing.length === 2);
+
 // --- ClassIn operator context (Guru guardrails) ---
 const mix = buildLeadSourceMix([
   { source: "meta_ads", meta: { campaign: "설명회" } },
