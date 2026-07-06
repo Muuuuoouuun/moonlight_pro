@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Sparkline } from "../hub-primitives";
 import {
   LEADS as FALLBACK_LEADS,
   DEAL_STAGES as FALLBACK_DEAL_STAGES,
@@ -53,6 +53,7 @@ function buildRevenueAttention(leads, deals) {
         tone: 'warning',
         t: `${deal.name} — ${deal.age}d stalled`,
         s: 'follow-up 필요',
+        go: 'dashboard/revenue/deals',
       });
     });
 
@@ -62,6 +63,7 @@ function buildRevenueAttention(leads, deals) {
       tone: 'info',
       t: `신규 리드 ${newLeads}건`,
       s: '분류·할당 필요',
+      go: 'dashboard/revenue/leads',
     });
   }
 
@@ -72,6 +74,7 @@ function buildRevenueAttention(leads, deals) {
       tone: 'success',
       t: `Won ${wonDeals.length}건 · ${fmt(wonTotal)}`,
       s: '온보딩 킥오프',
+      go: 'dashboard/revenue/accounts',
     });
   }
 
@@ -256,11 +259,27 @@ export function RevenueOverview({ onNavigate }) {
   const attentionItems = isLiveLedger
     ? buildRevenueAttention(LEADS, DEALS)
     : [
-      { tone: 'danger', t: '클래스인 — 계약서 응답 2일째', s: '리마인드 메일 추천' },
-      { tone: 'warning', t: 'Studio Park — 제안서 14일 정체', s: 'follow-up 필요' },
-      { tone: 'info', t: '이번 주 신규 리드 +12', s: '분류·할당 필요' },
-      { tone: 'success', t: 'Won: 베어브릭 콜라보 ₩7.8M', s: '온보딩 킥오프' },
+      { tone: 'danger', t: '클래스인 — 계약서 응답 2일째', s: '리마인드 메일 추천', go: 'dashboard/revenue/deals' },
+      { tone: 'warning', t: 'Studio Park — 제안서 14일 정체', s: 'follow-up 필요', go: 'dashboard/revenue/deals' },
+      { tone: 'info', t: '이번 주 신규 리드 +12', s: '분류·할당 필요', go: 'dashboard/revenue/leads' },
+      { tone: 'success', t: 'Won: 베어브릭 콜라보 ₩7.8M', s: '온보딩 킥오프', go: 'dashboard/revenue/accounts' },
     ];
+
+  // Summary data stays month-scope until the ledger exposes QTD/YTD aggregates —
+  // the toggle drives the caption so the header never shows a stale hardcoded month.
+  const now = new Date();
+  const periodLabel = period === 'QTD'
+    ? `Q${Math.floor(now.getMonth() / 3) + 1} · 분기 요약`
+    : period === 'YTD'
+    ? `${now.getFullYear()}년 · 연간 요약`
+    : `${now.getMonth() + 1}월 · 이번 달 요약`;
+
+  const kpis = [
+    { l: 'MRR', v: fmt(mrr), d: formatPercentDelta(mrr, mrrPrev), tone: mrr > mrrPrev ? 'success' : 'neutral', go: 'dashboard/revenue/accounts', trend: isLiveLedger ? null : [6.2, 6.8, 6.5, 7.1, 7.5, 7.5, 8.4], trendTone: 'success' },
+    { l: 'Pipeline', v: fmt(pipeline), d: `${openDeals} deals`, tone: 'moon', go: 'dashboard/revenue/deals', trend: isLiveLedger ? null : [24, 28, 26, 31, 30, 33, 33.5], trendTone: 'moon' },
+    { l: 'Open leads', v: openLeads, d: `이번달 신규 ${newThisMonth}`, tone: 'info', go: 'dashboard/revenue/leads', trend: isLiveLedger ? null : [3, 5, 4, 7, 9, 12, 12], trendTone: 'moon' },
+    { l: 'Won MTD', v: fmt(wonMTD), d: `${wonDealsCount} deals`, tone: wonMTD > 0 ? 'success' : 'neutral', go: 'dashboard/revenue/deals', trend: null },
+  ];
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
@@ -268,7 +287,7 @@ export function RevenueOverview({ onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Revenue overview</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            4월 · 이번 달 요약<SyncBadge state={syncState} />
+            {periodLabel}<SyncBadge state={syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -280,15 +299,22 @@ export function RevenueOverview({ onNavigate }) {
       </div>
 
       <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--gap)' }}>
-        {[
-          { l: 'MRR', v: fmt(mrr), d: formatPercentDelta(mrr, mrrPrev), tone: mrr > mrrPrev ? 'success' : 'neutral' },
-          { l: 'Pipeline', v: fmt(pipeline), d: `${openDeals} deals`, tone: 'moon' },
-          { l: 'Open leads', v: openLeads, d: `이번달 신규 ${newThisMonth}`, tone: 'info' },
-          { l: 'Won MTD', v: fmt(wonMTD), d: `${wonDealsCount} deals`, tone: wonMTD > 0 ? 'success' : 'neutral' },
-        ].map((k, i) => (
-          <Card key={i}>
-            <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>{k.l}</div>
-            <div className="mono" style={{ fontSize: 26, marginTop: 10, fontWeight: 500 }}>{k.v}</div>
+        {kpis.map((k) => (
+          <Card key={k.l} interactive onClick={() => onNavigate?.(k.go)}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>{k.l}</span>
+              <span style={{ flex: 1 }} />
+              <Iconed name="arrowRight" size={11} style={{ color: 'var(--fg-faint)', opacity: 0.6 }} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+              <div className="mono" style={{ fontSize: 26, marginTop: 10, fontWeight: 500 }}>{k.v}</div>
+              <div style={{ flex: 1 }} />
+              {k.trend && (
+                <span style={{ marginBottom: 4 }}>
+                  <Sparkline values={k.trend} width={60} height={18} tone={k.trendTone} />
+                </span>
+              )}
+            </div>
             <div style={{ fontSize: 11, color: k.tone === 'neutral' ? 'var(--fg-faint)' : `var(--${k.tone})`, marginTop: 4 }}>{k.d}</div>
           </Card>
         ))}
@@ -296,10 +322,11 @@ export function RevenueOverview({ onNavigate }) {
 
       <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(0, 1fr)', gap: 'var(--gap)' }}>
         <Card>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>Pipeline by stage</div>
             <div style={{ flex: 1 }} />
             <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{fmt(pipeline)}</span>
+            <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/revenue/deals')}>Deals</Button>
           </div>
           <div style={{ display: 'flex', height: 28, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--line-soft)' }}>
             {hasPipelineValue ? pipelineByStage.map(s => (
@@ -352,7 +379,11 @@ export function RevenueOverview({ onNavigate }) {
 
       <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Top deals</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>Top deals</div>
+            <div style={{ flex: 1 }} />
+            <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/revenue/deals')}>전체 보기</Button>
+          </div>
           {DEALS.length === 0 && (
             <EmptyState
               icon="deals"
@@ -384,12 +415,23 @@ export function RevenueOverview({ onNavigate }) {
             />
           )}
           {attentionItems.map((x, i, arr) => (
-            <div key={i} style={{ display: 'flex', gap: 10, padding: '9px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+            <div key={i}
+              onClick={() => x.go && onNavigate?.(x.go)}
+              onMouseEnter={e => { if (x.go) e.currentTarget.style.background = 'var(--surface-2)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10,
+                padding: '9px 8px', margin: '0 -8px', borderRadius: 'var(--r-sm)',
+                cursor: x.go ? 'pointer' : 'default',
+                borderBottom: i < arr.length - 1 ? '1px solid var(--line-soft)' : 'none',
+              }}
+            >
               <Dot tone={x.tone} />
-              <div>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12.5 }}>{x.t}</div>
                 <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 2 }}>{x.s}</div>
               </div>
+              {x.go && <Iconed name="chevronR" size={12} style={{ color: 'var(--fg-faint)', marginTop: 2, flexShrink: 0 }} />}
             </div>
           ))}
         </Card>
@@ -415,8 +457,9 @@ const DRAWER_INPUT_STYLE = {
   width: '100%',
 };
 
-// Editable detail drawer for a single record (lead or deal). Field-driven so leads and deals
-// share one editor; edits flow up via onChange(key, value) and the parent owns the state.
+// Editable detail drawer for a Revenue record (lead / deal / case / account). Field-driven so
+// every lane shares one editor; edits flow up via onChange(key, value) while the parent owns
+// persistence (onSave) and optimistic delete (onDelete). Slide-in motion lives on .hub-drawer.
 function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete }) {
   const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | error
   React.useEffect(() => {
@@ -449,8 +492,8 @@ function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave
   if (!record) return null;
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / 0.4)', zIndex: 60 }} />
-      <aside style={{
+      <div className="hub-drawer-overlay" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / 0.4)', zIndex: 60 }} />
+      <aside className="hub-drawer" style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(380px, 92vw)', zIndex: 61,
         background: 'var(--surface)', borderLeft: '1px solid var(--line)',
         display: 'flex', flexDirection: 'column',
@@ -521,10 +564,12 @@ export function Leads({ workspace }) {
   const editingLead = editLeadId ? mergedLeads.find(l => l.id === editLeadId) : null;
   const wsEmpty = Boolean(ws) && LEADS.length === 0;
   const [filter, setFilter] = React.useState('all');
+  const [stageFilter, setStageFilter] = React.useState('all');
   const [search, setSearch] = React.useState('');
   const term = search.trim().toLowerCase();
   const filtered = LEADS.filter(l =>
     (filter === 'all' || l.type === filter) &&
+    (stageFilter === 'all' || l.stage === stageFilter) &&
     (!term || l.name.toLowerCase().includes(term) || l.source.toLowerCase().includes(term) || l.stage.toLowerCase().includes(term))
   );
   const stageTone = { New: 'info', Contact: 'moon', Qualified: 'success', Lost: 'danger' };
@@ -638,6 +683,28 @@ export function Leads({ workspace }) {
         <Button variant="primary" size="sm" icon="plus" onClick={createLead}>Lead</Button>
       </div>
 
+      {!wsEmpty && LEADS.length > 0 && (
+        <div className="hub-toolbar" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {Object.keys(stageTone).map(st => {
+            const count = LEADS.filter(l => l.stage === st).length;
+            const active = stageFilter === st;
+            return (
+              <button key={st} onClick={() => setStageFilter(active ? 'all' : st)} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '5px 10px', fontSize: 11.5, borderRadius: 999,
+                border: `1px solid ${active ? 'var(--line-strong)' : 'var(--line-soft)'}`,
+                background: active ? 'var(--surface-3)' : 'var(--surface)',
+                color: active ? 'var(--fg)' : 'var(--fg-muted)',
+              }}>
+                <Dot tone={stageTone[st]} />
+                {st}
+                <span className="mono" style={{ fontSize: 10.5, color: active ? 'var(--fg)' : 'var(--fg-faint)' }}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {cardState && (() => {
         const reading = cardState.phase === 'reading';
         const s = cardState.status;
@@ -691,7 +758,7 @@ export function Leads({ workspace }) {
             <Iconed name="search" size={20} style={{ color: 'var(--fg-faint)' }} />
             <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>일치하는 리드가 없습니다.</div>
             <div style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>
-              {term ? <>"<span className="mono">{search}</span>" 검색 결과 0건 · 필터: {filter}</> : <>필터: {filter} · {LEADS.length}건 중 0건</>}
+              {term ? <>"<span className="mono">{search}</span>" 검색 결과 0건 · 필터: {filter}{stageFilter !== 'all' ? ` · ${stageFilter}` : ''}</> : <>필터: {filter}{stageFilter !== 'all' ? ` · ${stageFilter}` : ''} · {LEADS.length}건 중 0건</>}
             </div>
           </div>
         )}
@@ -753,7 +820,9 @@ export function Deals({ workspace, onNavigate }) {
   const DEAL_STAGES = ledger.stages;
   const [deals, setDeals] = React.useState(ledger.deals);
   const [drag, setDrag] = React.useState(null);
+  const [overStage, setOverStage] = React.useState(null);
   const [filter, setFilter] = React.useState('all');
+  const [stalledOnly, setStalledOnly] = React.useState(false);
   const [editDealId, setEditDealId] = React.useState(null);
   const [queuedDeals, setQueuedDeals] = React.useState(() => new Set()); // deals with a proposed follow-up
 
@@ -791,12 +860,16 @@ export function Deals({ workspace, onNavigate }) {
   const scopedDeals = filterDealsByWorkspace(deals, workspace);
   const wsEmpty = Boolean(ws) && scopedDeals.length === 0;
 
+  const isStalled = (d) => d.stage !== 'won' && d.stage !== 'lost' && Number(d.age) > 10;
+  const matches = (d) => (filter === 'all' || d.type === filter) && (!stalledOnly || isStalled(d));
   const totals = DEAL_STAGES.reduce((acc, s) => {
-    const items = scopedDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
+    const items = scopedDeals.filter(d => d.stage === s.key && matches(d));
     acc[s.key] = { count: items.length, sum: items.reduce((a, b) => a + b.value, 0) };
     return acc;
   }, {});
+  // Header total stays the true pipeline (type filter only) — stalledOnly narrows the board, not the fact.
   const grandTotal = scopedDeals.filter(d => filter === 'all' || d.type === filter).reduce((a, b) => a + b.value, 0);
+  const stalledCount = scopedDeals.filter(d => (filter === 'all' || d.type === filter) && isStalled(d)).length;
   const move = (id, to) => {
     setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: to } : d)));
     // Persist the stage change in the background; the optimistic move stands regardless.
@@ -866,6 +939,22 @@ export function Deals({ workspace, onNavigate }) {
             }}>{t.l}</button>
           ))}
         </div>
+        {stalledCount > 0 && (
+          <button
+            onClick={() => setStalledOnly(v => !v)}
+            title={stalledOnly ? '전체 딜 보기' : '정체 딜만 보기'}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '4px 10px', fontSize: 11.5, borderRadius: 999, marginRight: 8,
+              border: `1px solid ${stalledOnly ? 'oklch(0.5 0.1 25 / 0.5)' : 'var(--line-soft)'}`,
+              background: stalledOnly ? 'var(--danger-bg)' : 'var(--surface-2)',
+              color: 'var(--danger)',
+            }}
+          >
+            <Iconed name="clock" size={11} />
+            {stalledCount} stalled
+          </button>
+        )}
         <Button variant="primary" size="sm" icon="plus" onClick={createDeal}>Deal</Button>
       </div>
 
@@ -883,17 +972,20 @@ export function Deals({ workspace, onNavigate }) {
       {!wsEmpty && (
       <div className="hub-scroll-x" style={{ display: 'flex', gap: 'var(--gap)', overflowX: 'auto', flex: 1, paddingBottom: 4 }}>
         {DEAL_STAGES.map(s => {
-          const items = scopedDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
+          const items = scopedDeals.filter(d => d.stage === s.key && matches(d));
+          const isOver = Boolean(drag) && overStage === s.key;
           return (
             <div key={s.key}
-              onDragOver={e => e.preventDefault()}
-              onDrop={() => drag && move(drag, s.key)}
+              onDragOver={e => { e.preventDefault(); if (drag) setOverStage(s.key); }}
+              onDragLeave={() => setOverStage(cur => (cur === s.key ? null : cur))}
+              onDrop={() => { if (drag) move(drag, s.key); setOverStage(null); }}
               style={{
                 width: 260, flexShrink: 0,
-                background: 'var(--surface)',
-                border: '1px solid var(--line-soft)',
+                background: isOver ? 'var(--surface-2)' : 'var(--surface)',
+                border: `1px solid ${isOver ? 'var(--line-strong)' : 'var(--line-soft)'}`,
                 borderRadius: 'var(--r-lg)',
                 display: 'flex', flexDirection: 'column',
+                transition: 'background .12s ease, border-color .12s ease',
               }}>
               <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -909,7 +1001,7 @@ export function Deals({ workspace, onNavigate }) {
                     draggable
                     onClick={() => setEditDealId(d.id)}
                     onDragStart={() => setDrag(d.id)}
-                    onDragEnd={() => setDrag(null)}
+                    onDragEnd={() => { setDrag(null); setOverStage(null); }}
                     style={{
                       background: 'var(--surface-2)',
                       border: '1px solid var(--line-soft)',
@@ -946,7 +1038,7 @@ export function Deals({ workspace, onNavigate }) {
                       <span className="mono" style={{ fontSize: 12, color: 'var(--moon-200)' }}>{fmt(d.value)}</span>
                       <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{d.close}</span>
                     </div>
-                    {d.age > 10 && s.key === 'neg' && (
+                    {isStalled(d) && (
                       <div style={{ marginTop: 6, fontSize: 10, color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                         <Iconed name="clock" size={10} /> {d.age}d stalled
                       </div>
@@ -990,12 +1082,17 @@ export function Cases() {
   const [caseEdits, setCaseEdits] = React.useState({}); // { [id]: patch } — overlays any case
   const [deletedCaseIds, setDeletedCaseIds] = React.useState(() => new Set());
   const [editCaseId, setEditCaseId] = React.useState(null);
+  const [statusFilter, setStatusFilter] = React.useState('all');
   const ledgerCases = ledger.source === 'supabase'
     ? (Array.isArray(ledger.cases) ? ledger.cases : [])
     : (Array.isArray(ledger.cases) ? ledger.cases : FALLBACK_CASES);
   const cases = [...localCases, ...ledgerCases]
     .filter(c => !deletedCaseIds.has(c.id))
     .map(c => (caseEdits[c.id] ? { ...c, ...caseEdits[c.id] } : c));
+  // Signal first: keep incoming order but sink resolved cases below live ones.
+  const visibleCases = (statusFilter === 'all' ? cases : cases.filter(c => c.status === statusFilter))
+    .slice()
+    .sort((a, b) => Number(a.status === 'Resolved') - Number(b.status === 'Resolved'));
   const editingCase = editCaseId ? cases.find(c => c.id === editCaseId) : null;
   const sTone = { Open: 'warning', Waiting: 'info', Resolved: 'success' };
   const pTone = { high: 'danger', med: 'warning', low: 'neutral' };
@@ -1052,24 +1149,42 @@ export function Cases() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
+        <div className="hub-toolbar" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, marginRight: 8 }}>
+          {[{ k: 'all', l: 'All' },{ k: 'Open', l: 'Open' },{ k: 'Waiting', l: 'Waiting' },{ k: 'Resolved', l: 'Resolved' }].map(t => {
+            const count = t.k === 'all' ? cases.length : cases.filter(c => c.status === t.k).length;
+            return (
+              <button key={t.k} onClick={() => setStatusFilter(t.k)} style={{
+                padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
+                color: statusFilter === t.k ? 'var(--fg)' : 'var(--fg-faint)',
+                background: statusFilter === t.k ? 'var(--surface-3)' : 'transparent',
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+              }}>
+                {t.l}
+                <span className="mono" style={{ fontSize: 10 }}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
         <Button variant="primary" size="sm" icon="plus" onClick={createCase}>Case</Button>
       </div>
       <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>ID</span><span>Title</span><span>Account</span><span>Type</span><span>Priority</span><span>Status</span><span>Opened</span><span style={{ textAlign: 'right' }}>Owner</span>
         </div>
-        {cases.length === 0 && (
+        {visibleCases.length === 0 && (
           <EmptyState
             icon="cases"
-            title="운영 케이스가 없습니다"
-            description={syncState === 'live' ? 'Supabase operation_cases 원장에 표시할 케이스가 없습니다.' : '지원/운영 이슈가 생기면 계정과 함께 표시됩니다.'}
+            title={statusFilter !== 'all' && cases.length > 0 ? `${statusFilter} 상태의 케이스가 없습니다` : '운영 케이스가 없습니다'}
+            description={statusFilter !== 'all' && cases.length > 0
+              ? '상태 필터를 All로 되돌리면 전체 케이스가 표시됩니다.'
+              : syncState === 'live' ? 'Supabase operation_cases 원장에 표시할 케이스가 없습니다.' : '지원/운영 이슈가 생기면 계정과 함께 표시됩니다.'}
           />
         )}
-        {cases.map((c, i) => (
+        {visibleCases.map((c, i) => (
           <div key={c.id} style={{
             display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12,
             padding: '12px 16px', alignItems: 'center', cursor: 'pointer',
-            borderBottom: i < cases.length - 1 ? '1px solid var(--line-soft)' : 'none',
+            borderBottom: i < visibleCases.length - 1 ? '1px solid var(--line-soft)' : 'none',
           }}
             onClick={() => setEditCaseId(c.id)}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
@@ -1103,6 +1218,7 @@ export function Cases() {
           { key: 'type', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
           { key: 'priority', label: '우선순위', type: 'select', options: [{ value: 'low', label: 'Low' }, { value: 'med', label: 'Med' }, { value: 'high', label: 'High' }] },
           { key: 'status', label: '상태', type: 'select', options: [{ value: 'Open', label: 'Open' }, { value: 'Waiting', label: 'Waiting' }, { value: 'Resolved', label: 'Resolved' }] },
+          { key: 'opened', label: '오픈 시점' },
           { key: 'owner', label: '담당' },
         ]}
         onChange={(key, val) => setCaseEdits(prev => ({ ...prev, [editCaseId]: { ...prev[editCaseId], [key]: val } }))}
@@ -1549,6 +1665,9 @@ export function Accounts({ onNavigate }) {
   };
 
   const selectedAcc = filtered.find(a => a.name === selected) || null;
+  // Health signal counts surfaced in the header (merged from origin/real_v1's Revenue redesign).
+  const warnCount = ACCOUNTS.filter(a => a.health === 'warning').length;
+  const riskCount = ACCOUNTS.filter(a => a.health === 'risk').length;
 
   const openDetail = (name) => {
     setSelected(name);
@@ -1612,6 +1731,8 @@ export function Accounts({ onNavigate }) {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Accounts</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {ACCOUNTS.filter(a => a.type === 'company').length} companies · {ACCOUNTS.filter(a => a.type === 'personal').length} individuals
+            {riskCount > 0 && <span style={{ color: 'var(--danger)', marginLeft: 8 }}>위험 {riskCount}</span>}
+            {warnCount > 0 && <span style={{ color: 'var(--warning)', marginLeft: 8 }}>주의 {warnCount}</span>}
             <SyncBadge state={syncState} />
           </div>
         </div>
@@ -1655,7 +1776,7 @@ export function Accounts({ onNavigate }) {
       {view === 'cards' && (
         <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--gap)' }}>
           {filtered.map(a => (
-            <Card key={a.name} interactive style={{ cursor: 'pointer' }}>
+            <Card key={a._key} interactive style={{ cursor: 'pointer' }}>
               <div onClick={() => openDetail(a.name)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                   <Avatar name={a.name} size={36} tone={a.type === 'personal' ? 'personal' : 'company'} />
@@ -1666,6 +1787,13 @@ export function Accounts({ onNavigate }) {
                       <HealthDot health={a.health} />
                     </div>
                   </div>
+                  <IconButton
+                    icon="edit"
+                    size={24}
+                    iconSize={12}
+                    tooltip="계정 편집"
+                    onClick={(e) => { e.stopPropagation(); openEditAccount(a); }}
+                  />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, paddingTop: 10, borderTop: '1px solid var(--line-soft)' }}>
                   <div>
@@ -1708,7 +1836,7 @@ export function Accounts({ onNavigate }) {
             <span /><span>Name</span><span>Type</span><span>Health</span><span>Value</span><span>Deals</span><span>Last contact</span><span>Owner</span><span style={{ textAlign: 'right' }}>마지막 접점 시간</span>
           </div>
           {filtered.map((a, i) => (
-            <div key={a.name}
+            <div key={a._key}
               onClick={() => openDetail(a.name)}
               style={{
                 display: 'grid',
@@ -1762,7 +1890,7 @@ export function Accounts({ onNavigate }) {
               {filtered.map(a => {
                 const isSel = a.name === selected;
                 return (
-                  <div key={a.name}
+                  <div key={a._key}
                     onClick={() => setSelected(a.name)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,

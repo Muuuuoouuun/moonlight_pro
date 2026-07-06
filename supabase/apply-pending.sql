@@ -895,4 +895,23 @@ alter table if exists public.work_orders
   check (status in ('proposed', 'approved', 'executing', 'executed', 'dismissed'));
 
 
+-- 20260702_0013_eeocrm_source.sql
+-- Allow eeoCRM (Xiaoshouyi personal MCP) intake as a lead_intake_raw source.
+-- Widens the same source check constraint 0009/0010 already widened.
+do $$
+declare c text;
+begin
+  select conname into c from pg_constraint
+   where conrelid = 'public.lead_intake_raw'::regclass
+     and pg_get_constraintdef(oid) like '%source%';
+  if c is not null then
+    execute format('alter table public.lead_intake_raw drop constraint %I', c);
+  end if;
+end $$;
+
+alter table public.lead_intake_raw
+  add constraint lead_intake_raw_source_check
+  check (source in ('google_sheets', 'csv', 'manual', 'naver', 'business_card', 'inbox', 'eeocrm'));
+
+
 -- end of apply-pending.sql

@@ -18,6 +18,7 @@ import { RevenueOverview, Leads, Deals, Cases, Accounts } from "./pages/revenue"
 import { Followups } from "./pages/followups";
 import { AutomationsIndex, EmailAutomation, Webhooks, Runs, Flows } from "./pages/automations";
 import { SheetsSync } from "./pages/sheets-sync";
+import { EeocrmSync } from "./pages/eeocrm-sync";
 import { AgentsChat, AgentsCouncil, AgentsOrders, AgentsOffice } from "./pages/agents";
 import { Evolution, Settings } from "./pages/evolution-settings";
 
@@ -110,6 +111,7 @@ const PAGE_MAP = {
   'dashboard/automations/webhooks': (n) => <Webhooks onNavigate={n} />,
   'dashboard/automations/runs': () => <Runs />,
   'dashboard/automations/sheets': () => <SheetsSync />,
+  'dashboard/automations/eeocrm': () => <EeocrmSync />,
   'dashboard/agents/chat': (n) => <AgentsChat onNavigate={n} />,
   'dashboard/agents/council': (n) => <AgentsCouncil onNavigate={n} />,
   'dashboard/agents/orders': (n) => <AgentsOrders onNavigate={n} />,

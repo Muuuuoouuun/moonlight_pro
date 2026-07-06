@@ -77,6 +77,7 @@ export const NAV_TREE = [
       { key: 'email',    label: 'Email',    icon: 'email',   path: 'dashboard/automations/email' },
       { key: 'webhooks', label: 'Webhooks', icon: 'webhook', path: 'dashboard/automations/webhooks' },
       { key: 'sheets',   label: 'Sheets',   icon: 'leads',   path: 'dashboard/automations/sheets' },
+      { key: 'eeocrm',   label: 'eeoCRM',   icon: 'leads',   path: 'dashboard/automations/eeocrm' },
     ],
   },
   {
