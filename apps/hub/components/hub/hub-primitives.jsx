@@ -87,7 +87,7 @@ export function SectionTitle({ children, right, style, subtitle }) {
 
 export function EmptyState({ icon = 'inbox', title, description, action, style }) {
   return (
-    <div style={{
+    <div data-empty="true" style={{
       minHeight: 180,
       padding: '32px 20px',
       display: 'flex',

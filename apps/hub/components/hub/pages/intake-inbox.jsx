@@ -109,7 +109,7 @@ function EditRow({ row, onCancel, onSaved }) {
   );
 }
 
-export function IntakeInbox() {
+export function IntakeInbox({ onNavigate }) {
   const [syncState, setSyncState] = React.useState("loading"); // loading | live | mock
   const [rows, setRows] = React.useState([]);
   const [statusFilter, setStatusFilter] = React.useState("all");
@@ -255,6 +255,7 @@ export function IntakeInbox() {
             {filtered.map((row, i) => {
               const isLast = i === filtered.length - 1;
               const canAct = row.status === "pending" || row.status === "review";
+              const canOpenLead = (row.status === "promoted" || row.status === "merged") && row.leadId;
               const isEditing = editingId === row.id;
               return (
                 <div key={row.id} style={{ display: "grid", gridTemplateColumns: isEditing ? "1fr" : ROW_GRID }}>
@@ -293,7 +294,18 @@ export function IntakeInbox() {
                           <Button variant="ghost" size="xs" icon="x" style={{ color: "var(--danger)" }} onClick={() => reject(row)} disabled={busyId === row.id}>거절</Button>
                         </>
                       ) : (
-                        <span className="mono" style={{ fontSize: 11, color: "var(--fg-faint)" }}>{row.at}</span>
+                        <>
+                          {canOpenLead && (
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => onNavigate?.(`dashboard/classin/revenue?lead=${encodeURIComponent(row.leadId)}`)}
+                            >
+                              리드 열기 →
+                            </Button>
+                          )}
+                          <span className="mono" style={{ fontSize: 11, color: "var(--fg-faint)" }}>{row.at}</span>
+                        </>
                       )}
                     </div>
                   </div>

@@ -21,6 +21,12 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
     return false;
   };
 
+  React.useEffect(() => {
+    const activeGroup = NAV_TREE.find(item => item.children?.some(c => c.path === active));
+    if (!activeGroup) return;
+    setOpen(o => (o[activeGroup.key] ? o : { ...o, [activeGroup.key]: true }));
+  }, [active]);
+
   if (collapsed) {
     return (
       <aside className={`${className || ''} hub-sidebar-root--collapsed`} style={{

@@ -227,7 +227,7 @@ function mapDeal(row, companyById) {
   };
 }
 
-function mapAccount(row, dealStatsByCompany) {
+function mapAccount(row, dealStatsByCompany, contactsByCompany) {
   const type = resolveType(row);
   const stats = (row.company_id && dealStatsByCompany.get(row.company_id)) || {
     deals: 0,
@@ -235,6 +235,9 @@ function mapAccount(row, dealStatsByCompany) {
   };
   const health = resolveHealth(row.health_score, row.status);
   const lastAt = row.updated_at || row.started_at || row.created_at;
+  // Contacts attached from the company-grouped map. Only real `contacts` columns are mapped
+  // (name/title/email — no `phone` column in schema.sql), with '' fallbacks for the display shape.
+  const contacts = (row.company_id && contactsByCompany?.get(row.company_id)) || [];
 
   return {
     id: row.id,
@@ -247,6 +250,7 @@ function mapAccount(row, dealStatsByCompany) {
     lastAt: formatRelativeShort(lastAt),
     health,
     owner: row.owner_id ? "Me" : "Unassigned",
+    contacts,
   };
 }
 
@@ -405,6 +409,21 @@ export async function getRevenueLedger() {
   const companyById = new Map((companyRows || []).map(c => [c.id, c]));
   const contactById = new Map((contactRows || []).map(c => [c.id, c]));
 
+  // Group contacts by company so each account projection can carry its own roster.
+  // Shape mirrors the DetailPanel contacts tab; `phone` has no column in schema.sql → ''.
+  const contactsByCompany = new Map();
+  (contactRows || []).forEach(row => {
+    if (!row.company_id) return;
+    const list = contactsByCompany.get(row.company_id) || [];
+    list.push({
+      name: row.name || "",
+      role: row.title || "",
+      email: row.email || "",
+      phone: "",
+    });
+    contactsByCompany.set(row.company_id, list);
+  });
+
   const deals = dealRows.map(row => mapDeal(row, companyById));
   const dealStatsByCompany = new Map();
   dealRows.forEach(row => {
@@ -416,7 +435,7 @@ export async function getRevenueLedger() {
   });
 
   const accountRaw = new Map(accountRows.map(a => [a.id, a]));
-  const accounts = accountRows.map(row => mapAccount(row, dealStatsByCompany));
+  const accounts = accountRows.map(row => mapAccount(row, dealStatsByCompany, contactsByCompany));
   const leads = leadRows.map(row => mapLead(row, companyById, contactById));
   const cases = caseRows.map(row => mapCase(row, accountRaw));
   const summary = buildSummary(leads, deals, leadRows, dealRows);

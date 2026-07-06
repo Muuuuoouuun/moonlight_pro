@@ -23,12 +23,11 @@ function greetingFor(date) {
 
 const SIGNAL_TARGETS = {
   draft: 'dashboard/content/studio?new=draft',
-  escalate: 'dashboard/revenue/deals',
-  followup: 'dashboard/revenue/followups',
-  deals: 'dashboard/revenue/deals',
-  leads: 'dashboard/revenue/leads',
-  revenue: 'dashboard/revenue/overview',
-  wait: 'dashboard/work/rhythm',
+  escalate: 'dashboard/classin/pipeline',
+  followup: 'dashboard/classin/pipeline',
+  deals: 'dashboard/classin/pipeline',
+  leads: 'dashboard/classin/revenue',
+  revenue: 'dashboard/classin/revenue',
   write: 'dashboard/content/studio',
   queue: 'dashboard/content/queue',
   delay: 'dashboard/content/queue',
@@ -36,7 +35,7 @@ const SIGNAL_TARGETS = {
   flows: 'dashboard/automations/flows',
   dismiss: 'dashboard/daily-brief',
   accept: 'dashboard/work/roadmap',
-  chat: 'dashboard/agents/chat',
+  chat: 'dashboard/agents/chat?agent=guru',
   hold: 'dashboard/work/decisions',
   start: 'dashboard/work/rhythm?check=weekly-review',
   projects: 'dashboard/work/projects',
@@ -47,13 +46,35 @@ const SIGNAL_TARGETS = {
 };
 
 const CONTEXT_TARGETS = {
-  Revenue: 'dashboard/revenue/deals',
+  Revenue: 'dashboard/classin/pipeline',
+  Risk: 'dashboard/classin/pipeline',
   Content: 'dashboard/content/queue',
   Automation: 'dashboard/automations/runs',
   Agent: 'dashboard/agents/council',
+  Queue: 'approval-queue',
   Rhythm: 'dashboard/work/rhythm',
   Work: 'dashboard/work/projects',
 };
+
+function briefDecisionStorageKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `hub:brief-decided:${y}-${m}-${d}`;
+}
+
+function resolveSignalTarget(signal, decision) {
+  const target = decision.target || SIGNAL_TARGETS[decision.action];
+  if (!target) return null;
+  if (
+    signal.source?.from === 'Deals' &&
+    signal.source?.ref &&
+    target === 'dashboard/classin/pipeline'
+  ) {
+    return `${target}?deal=${encodeURIComponent(signal.source.ref)}`;
+  }
+  return target;
+}
 
 function syncTone(state) {
   if (state === 'live') return 'success';
@@ -79,6 +100,7 @@ function useDailyBriefLedger() {
     metrics: METRICS,
     signals: BRIEF_SIGNALS,
     blocks: TODAY_BLOCKS,
+    queue: null,
   });
 
   React.useEffect(() => {
@@ -110,6 +132,7 @@ function useDailyBriefLedger() {
           metrics: liveCount > 0 && Array.isArray(data.metrics) && data.metrics.length ? data.metrics : METRICS,
           signals: Array.isArray(data.signals) && data.signals.length ? data.signals : BRIEF_SIGNALS,
           blocks: Array.isArray(data.blocks) && data.blocks.length ? data.blocks : TODAY_BLOCKS,
+          queue: data.queue || null,
         });
       } catch {
         if (active) setState((prev) => ({ ...prev, syncState: 'preview' }));
@@ -156,11 +179,17 @@ function DataTrustStrip({ state }) {
   );
 }
 
-function SignalCard({ s, onNavigate }) {
-  const [expanded, setExpanded] = React.useState(s.id === 's1');
-  const [decided, setDecided] = React.useState(null);
+function SignalCard({ s, onNavigate, onApprovalQueueFocus, defaultExpanded = false, decided = null, onDecision }) {
+  const [expanded, setExpanded] = React.useState(defaultExpanded);
   const borderTone = { danger: 'oklch(0.5 0.1 25 / 0.5)', warning: 'oklch(0.5 0.09 85 / 0.5)', success: 'oklch(0.5 0.08 155 / 0.5)', info: 'oklch(0.5 0.06 230 / 0.5)' }[s.tone] || 'var(--line)';
-  const openContext = () => onNavigate?.(CONTEXT_TARGETS[s.kind] || 'dashboard/daily-brief');
+  const contextTarget = CONTEXT_TARGETS[s.kind];
+  const openContext = () => {
+    if (contextTarget === 'approval-queue') {
+      onApprovalQueueFocus?.();
+      return;
+    }
+    if (contextTarget) onNavigate?.(contextTarget);
+  };
 
   return (
     <div style={{
@@ -201,15 +230,19 @@ function SignalCard({ s, onNavigate }) {
           {s.decisions.map((d, i) => (
             <Button key={i} variant={d.primary ? 'primary' : 'secondary'} size="sm" icon={d.primary ? 'bolt' : null}
               onClick={() => {
-                setDecided(d.label);
-                const target = SIGNAL_TARGETS[d.action];
-                if (target && target !== 'dashboard/daily-brief') onNavigate?.(target);
+                onDecision?.(s.id, d.label);
+                const target = resolveSignalTarget(s, d);
+                if (target === 'dashboard/daily-brief') {
+                  onApprovalQueueFocus?.();
+                } else if (target) {
+                  onNavigate?.(target);
+                }
               }}>
               {d.label}
             </Button>
           ))}
           <div style={{ flex: 1 }} />
-          <Button variant="ghost" size="sm" icon="moreV" onClick={openContext}>More context</Button>
+          {contextTarget && <Button variant="ghost" size="sm" icon="moreV" onClick={openContext}>More context</Button>}
         </div>
       )}
     </div>
@@ -242,6 +275,7 @@ const WO_KIND_TONE = {
   review: 'warning', note: 'neutral',
   content_handoff: 'info', content_export: 'moon', email_send: 'warning',
   sales_next_action: 'moon',
+  followup: 'moon', onboarding: 'success',
 };
 const WO_STATUS_TONE = { proposed: 'warning', approved: 'info', executing: 'warning', executed: 'success', dismissed: 'neutral' };
 const WO_EXECUTABLE_KINDS = new Set(['content_handoff', 'content_export', 'email_send']);
@@ -252,6 +286,14 @@ function workOrderStatusLabel(status) {
 
 function workOrderHint(order) {
   const body = order.body || {};
+  if (order.kind === 'followup') {
+    const parts = [
+      body.stage,
+      Number.isFinite(Number(body.age)) ? `${body.age}일 정체` : null,
+      body.value ? `₩${Number(body.value).toLocaleString('ko-KR')}` : null,
+    ].filter(Boolean);
+    return parts.join(' · ') || body.dealName || '정체 딜 팔로업 승인 요청';
+  }
   if (order.kind === 'email_send') {
     return [body.recipientEmail, body.subject].filter(Boolean).join(' · ') || '고객 이메일 발송 요청';
   }
@@ -270,18 +312,28 @@ function executeLabel(order) {
 
 // The 1-click approval cockpit — proposed work orders (persona/inbox/guru) decided in place.
 // registry.json no_auto_send=true: nothing executes without this click.
-function ApprovalQueueCard({ onNavigate }) {
-  const [orders, setOrders] = React.useState([]);
-  const [state, setState] = React.useState('loading');
+function ApprovalQueueCard({ onNavigate, initialQueue, highlight }) {
+  const initialOrders = Array.isArray(initialQueue?.orders) ? initialQueue.orders : [];
+  const [orders, setOrders] = React.useState(initialOrders);
+  const [state, setState] = React.useState(initialQueue ? (initialQueue.source === 'supabase' ? 'live' : 'empty') : 'loading');
   const [busyId, setBusyId] = React.useState(null);
   const [message, setMessage] = React.useState(null);
+  const hasInitialQueue = React.useRef(!!initialQueue);
 
-  const load = React.useCallback(() => {
+  React.useEffect(() => {
+    if (!initialQueue || !Array.isArray(initialQueue.orders)) return;
+    hasInitialQueue.current = true;
+    setOrders(initialQueue.orders);
+    setState(initialQueue.source === 'supabase' ? 'live' : 'empty');
+  }, [initialQueue]);
+
+  const load = React.useCallback((options = {}) => {
     setState('loading');
     setMessage(null);
     return fetch('/api/hub/work-orders?status=proposed,approved', { cache: 'no-store' })
       .then((r) => r.json().catch(() => null))
       .then((d) => {
+        if (options.ignoreIfInitial && hasInitialQueue.current) return;
         if (d && Array.isArray(d.orders)) {
           setOrders(d.orders);
           setState(d.source === 'supabase' ? 'live' : 'empty');
@@ -294,7 +346,8 @@ function ApprovalQueueCard({ onNavigate }) {
 
   React.useEffect(() => {
     let active = true;
-    load().finally(() => {
+    if (initialQueue) return () => { active = false; };
+    load({ ignoreIfInitial: true }).finally(() => {
       if (!active) return;
     });
     return () => { active = false; };
@@ -376,6 +429,9 @@ function ApprovalQueueCard({ onNavigate }) {
         </div>
       </div>
       <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+        {o.dealId && (
+          <Button variant="ghost" size="xs" disabled={busyId === o.id} onClick={() => onNavigate?.(`dashboard/classin/pipeline?deal=${encodeURIComponent(o.dealId)}`)}>딜 열기</Button>
+        )}
         {o.status === 'proposed' ? (
           <>
             <Button variant="primary" size="xs" disabled={busyId === o.id} onClick={() => decide(o.id, 'approved')}>승인</Button>
@@ -392,7 +448,12 @@ function ApprovalQueueCard({ onNavigate }) {
   );
 
   return (
-    <div>
+    <div id="approval-queue" style={{
+      outline: highlight ? '1px solid var(--moon-300)' : '1px solid transparent',
+      outlineOffset: 3,
+      borderRadius: 'var(--r-lg)',
+      transition: 'outline-color .18s',
+    }}>
       <SectionTitle right={<div style={{ display: 'flex', gap: 6 }}>
         <Badge tone={proposed.length ? 'warning' : 'success'} size="xs">{proposed.length} 대기</Badge>
         <Badge tone={approved.length ? 'info' : 'neutral'} size="xs">{approved.length} 승인됨</Badge>
@@ -518,7 +579,26 @@ export function DailyBrief({ onNavigate }) {
   const [now, setNow] = React.useState(() => new Date());
   const ledger = useDailyBriefLedger();
   const [blocks, setBlocks] = React.useState(TODAY_BLOCKS);
+  const decisionStorageKey = React.useMemo(() => briefDecisionStorageKey(now), [now]);
+  const [decisions, setDecisions] = React.useState({});
+  const [queueHighlight, setQueueHighlight] = React.useState(false);
   const toggle = (i) => setBlocks(bs => bs.map((b, j) => j === i ? { ...b, done: !b.done } : b));
+
+  const focusApprovalQueue = React.useCallback(() => {
+    document.getElementById('approval-queue')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setQueueHighlight(true);
+    window.setTimeout(() => setQueueHighlight(false), 1200);
+  }, []);
+
+  const rememberDecision = React.useCallback((id, label) => {
+    setDecisions((prev) => {
+      const next = { ...prev, [id]: label };
+      try {
+        window.localStorage.setItem(decisionStorageKey, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, [decisionStorageKey]);
 
   React.useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60000);
@@ -528,6 +608,15 @@ export function DailyBrief({ onNavigate }) {
   React.useEffect(() => {
     setBlocks(ledger.blocks);
   }, [ledger.blocks]);
+
+  React.useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(decisionStorageKey);
+      setDecisions(stored ? JSON.parse(stored) || {} : {});
+    } catch {
+      setDecisions({});
+    }
+  }, [decisionStorageKey]);
 
   const urgentCount = ledger.summary?.urgentCount ?? ledger.signals.filter(s => s.tone === 'danger').length;
   const todayCount = ledger.summary?.todayCount ?? ledger.signals.filter(s => s.tone === 'warning').length;
@@ -551,7 +640,7 @@ export function DailyBrief({ onNavigate }) {
           </div>
         </div>
         <div className="hub-page-actions" style={{ display: 'flex', gap: 8 }}>
-          <Button variant="secondary" size="md" icon="sparkle" onClick={() => onNavigate('dashboard/agents/chat')}>Ask Council</Button>
+          <Button variant="secondary" size="md" icon="sparkle" onClick={() => onNavigate('dashboard/agents/chat?agent=council')}>Ask Council</Button>
           <Button variant="outline" size="md" icon="clock" onClick={() => onNavigate('dashboard/work/calendar?focus=15')}>Start 15m focus</Button>
         </div>
       </div>
@@ -572,12 +661,22 @@ export function DailyBrief({ onNavigate }) {
             Signal feed
           </SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {ledger.signals.map(s => <SignalCard key={s.id} s={s} onNavigate={onNavigate} />)}
+            {ledger.signals.map((s, index) => (
+              <SignalCard
+                key={s.id}
+                s={s}
+                onNavigate={onNavigate}
+                onApprovalQueueFocus={focusApprovalQueue}
+                defaultExpanded={index === 0 || s.tone === 'danger'}
+                decided={decisions[s.id] || null}
+                onDecision={rememberDecision}
+              />
+            ))}
           </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
-          <ApprovalQueueCard onNavigate={onNavigate} />
+          <ApprovalQueueCard onNavigate={onNavigate} initialQueue={ledger.queue} highlight={queueHighlight} />
 
           <div>
             <SectionTitle right={<span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{blocks.filter(b => b.done).length}/{blocks.length}</span>}>Today</SectionTitle>

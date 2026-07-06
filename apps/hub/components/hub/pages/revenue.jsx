@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Sparkline, EditDrawer } from "../hub-primitives";
 import {
@@ -514,18 +515,33 @@ function LeadTagChips({ lead }) {
   );
 }
 
-export function Leads({ workspace }) {
+export function Leads({ workspace, onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
+  const searchParams = useSearchParams();
   const [localLeads, setLocalLeads] = React.useState([]);
   const [leadEdits, setLeadEdits] = React.useState({}); // { [id]: patch } — overlays any lead (local or ledger)
   const [deletedLeadIds, setDeletedLeadIds] = React.useState(() => new Set()); // hide removed ledger rows
   const [editLeadId, setEditLeadId] = React.useState(null);
+  const [convertNote, setConvertNote] = React.useState(null); // { tone, text } — inline 리드→딜 전환 feedback
   const ws = getWorkspace(workspace);
   const mergedLeads = [...localLeads, ...ledger.leads]
     .filter(l => !deletedLeadIds.has(l.id))
     .map(l => (leadEdits[l.id] ? { ...l, ...leadEdits[l.id] } : l));
   const LEADS = filterLeadsByWorkspace(mergedLeads, workspace);
   const editingLead = editLeadId ? mergedLeads.find(l => l.id === editLeadId) : null;
+
+  // Deep-link: ?lead=<id> opens that lead's EditDrawer once the ledger has loaded and the
+  // lead exists in the merged list. Guarded per param value so closing the drawer is sticky.
+  const leadParam = searchParams.get('lead');
+  const consumedLeadRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!leadParam || syncState === 'loading') return;
+    if (consumedLeadRef.current === leadParam) return;
+    if (mergedLeads.some(l => String(l.id) === String(leadParam))) {
+      consumedLeadRef.current = leadParam;
+      setEditLeadId(leadParam);
+    }
+  }, [leadParam, syncState, mergedLeads]);
   const wsEmpty = Boolean(ws) && LEADS.length === 0;
   const [filter, setFilter] = React.useState('all');
   const [stageFilter, setStageFilter] = React.useState('all');
@@ -585,6 +601,41 @@ export function Leads({ workspace }) {
     setDeletedLeadIds(prev => new Set(prev).add(editLeadId));
     if (isLocal) return { ok: true, status: 'local' };
     return saveRevenueRecord('lead', 'delete', { id: editLeadId });
+  };
+
+  // 리드 → 딜 전환. Creates a deal seeded from the lead (value accepts '₩1.2M' style — parsed
+  // server-side by buildDealWrite), logs a [전환] activity, then deep-links to the pipeline.
+  // Preview (DB down): keep the drawer open and surface an inline note near the button.
+  const [converting, setConverting] = React.useState(false);
+  const convertLeadToDeal = async () => {
+    if (!editingLead || converting) return;
+    setConverting(true);
+    setConvertNote(null);
+    const r = await saveRevenueRecord('deal', 'create', {
+      name: editingLead.name,
+      type: editingLead.type,
+      stage: 'qual',
+      value: editingLead.value,
+      ...(editingLead.workspace ? { workspace: editingLead.workspace } : (ws ? { workspace } : {})),
+    });
+    setConverting(false);
+    if (r.ok && r.id) {
+      saveActivity('create', {
+        leadId: String(editingLead.id).startsWith('local-lead-') ? null : editingLead.id,
+        entityType: 'lead',
+        kind: 'deal',
+        body: `[전환] ${editingLead.name} → 딜 생성`,
+      }).catch(() => {});
+      const target = ws ? 'dashboard/classin/pipeline' : 'dashboard/revenue/deals';
+      onNavigate?.(`${target}?deal=${r.id}`);
+    } else {
+      setConvertNote({
+        tone: r.status === 'preview' ? 'neutral' : 'danger',
+        text: r.status === 'preview'
+          ? '저장 위치(Supabase)가 설정되지 않아 딜을 생성할 수 없습니다.'
+          : '딜 전환에 실패했습니다. 다시 시도하세요.',
+      });
+    }
   };
 
   const cardFileRef = React.useRef(null);
@@ -703,6 +754,9 @@ export function Leads({ workspace }) {
             {s === 'promoted' && (
               <Button variant="ghost" size="xs" onClick={() => window.location.reload()}>목록 새로고침</Button>
             )}
+            {(s === 'review' || s === 'rejected') && (
+              <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/classin/intake')}>인박스에서 검토 →</Button>
+            )}
             {!reading && (
               <Button variant="ghost" size="xs" onClick={() => setCardState(null)}>닫기</Button>
             )}
@@ -796,14 +850,42 @@ export function Leads({ workspace }) {
         onChange={(key, val) => setLeadEdits(prev => ({ ...prev, [editLeadId]: { ...prev[editLeadId], [key]: val } }))}
         onSave={persistLead}
         onDelete={deleteLead}
-        onClose={() => setEditLeadId(null)}
+        onClose={() => { setEditLeadId(null); setConvertNote(null); }}
       />
+
+      {/* 리드 → 딜 전환 — anchored above the EditDrawer footer. Non-local leads only. */}
+      {editingLead && !String(editLeadId).startsWith('local-lead-') && (
+        <div style={{
+          position: 'fixed', right: 0, bottom: 60, zIndex: 62,
+          width: 'min(380px, 92vw)',
+          padding: '10px 16px',
+          borderTop: '1px solid var(--line-soft)',
+          background: 'var(--surface)',
+          display: 'flex', flexDirection: 'column', gap: 8,
+        }}>
+          {convertNote && (
+            <div style={{ fontSize: 11, lineHeight: 1.4, color: convertNote.tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)' }}>
+              {convertNote.text}
+            </div>
+          )}
+          <Button
+            variant={editingLead.stage === 'Qualified' ? 'primary' : 'secondary'}
+            size="sm"
+            icon="deals"
+            onClick={convertLeadToDeal}
+            disabled={converting}
+          >
+            {converting ? '전환 중…' : '딜로 전환'}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
 
 export function Deals({ workspace, onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
+  const searchParams = useSearchParams();
   const DEAL_STAGES = ledger.stages;
   const [deals, setDeals] = React.useState(ledger.deals);
   const [drag, setDrag] = React.useState(null);
@@ -812,9 +894,41 @@ export function Deals({ workspace, onNavigate }) {
   const [stalledOnly, setStalledOnly] = React.useState(false);
   const [editDealId, setEditDealId] = React.useState(null);
   const [editDealPrevStage, setEditDealPrevStage] = React.useState(null);
-  const [queuedDeals, setQueuedDeals] = React.useState(() => new Set()); // deals with a proposed follow-up
+  const [queuedDeals, setQueuedDeals] = React.useState(() => new Set()); // deals with a proposed follow-up (seeded from the queue on mount)
   const [guruDeal, setGuruDeal] = React.useState(null);
   const [guru, setGuru] = React.useState({ phase: 'idle', text: '', state: null });
+  const [guruSaved, setGuruSaved] = React.useState(false); // '활동으로 저장' one-shot in the diagnosis drawer
+  const [toast, setToast] = React.useState(null); // { text, action? } — transient bottom-right feedback
+  const toastTimerRef = React.useRef(null);
+
+  // Show a transient toast (auto-dismiss ~4s). `action` = { label, go } renders a mini link button.
+  const showToast = React.useCallback((text, action = null) => {
+    setToast({ text, action });
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
+  }, []);
+  React.useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
+
+  // Seed the queued set once from the approval queue so already-proposed follow-ups render as
+  // "queued" (no double-proposing). Only kind 'followup' orders with a dealId count.
+  const queueSeededRef = React.useRef(false);
+  React.useEffect(() => {
+    if (queueSeededRef.current) return;
+    queueSeededRef.current = true;
+    let active = true;
+    (async () => {
+      try {
+        const resp = await fetch('/api/hub/work-orders?status=proposed', { cache: 'no-store' });
+        const data = await resp.json().catch(() => null);
+        const orders = Array.isArray(data?.orders) ? data.orders : [];
+        const ids = orders.filter(o => o.kind === 'followup' && o.dealId).map(o => o.dealId);
+        if (active && ids.length) setQueuedDeals(prev => { const next = new Set(prev); ids.forEach(id => next.add(id)); return next; });
+      } catch {
+        // queue unreachable — leave the set as-is
+      }
+    })();
+    return () => { active = false; };
+  }, []);
 
   // Propose a follow-up work order for a stalled deal. Optimistic: the card flags "제안됨"
   // immediately; the queue item lands in work_orders (status 'proposed') for operator approval.
@@ -838,6 +952,7 @@ export function Deals({ workspace, onNavigate }) {
     } catch {
       // optimistic — leave the flag set even if the queue write is unreachable
     }
+    showToast('follow-up 제안이 큐에 추가됨 · Daily Brief에서 승인', { label: '브리프 열기', go: 'dashboard/daily-brief' });
   };
 
   // Sync local deals state when live data arrives
@@ -893,6 +1008,7 @@ export function Deals({ workspace, onNavigate }) {
         kind: 'deal',
         body: `[Won] ${deal.name} — 계약 성사 (${from} → won)`,
       }).catch(() => {});
+      showToast('온보딩 제안 생성됨 · 승인 대기', { label: '브리프 열기', go: 'dashboard/daily-brief' });
     }
     if (to === 'lost' && from !== 'lost') {
       saveActivity('create', {
@@ -905,6 +1021,7 @@ export function Deals({ workspace, onNavigate }) {
   };
   const openGuruDiagnosis = async (deal) => {
     setGuruDeal(deal);
+    setGuruSaved(false);
     setGuru({ phase: 'loading', text: '', state: null });
     try {
       const r = await requestGuruCoaching({ mode: 'deal-review', ref: deal.id });
@@ -913,6 +1030,36 @@ export function Deals({ workspace, onNavigate }) {
       setGuru({ phase: 'done', text: err instanceof Error ? err.message : '진단 요청에 실패했습니다.', state: 'error' });
     }
   };
+
+  // Save the Guru diagnosis as a deal note (crm_activities). Truncate the body at ~2000 chars.
+  const saveGuruDiagnosis = async () => {
+    if (!guruDeal || guruSaved) return;
+    const body = `[Guru 진단] ${guru.text}`.slice(0, 2000);
+    const r = await saveActivity('create', {
+      dealId: String(guruDeal.id).toLowerCase().startsWith('local-') ? null : guruDeal.id,
+      entityType: 'deal',
+      kind: 'note',
+      body,
+    });
+    if (r.ok) setGuruSaved(true);
+  };
+
+  // Deep-link: ?deal=<id> opens that deal's EditDrawer; ?deal=<id>&guru=1 opens the Guru
+  // diagnosis drawer instead. One-shot per param value; silent if the deal isn't in the list.
+  const dealParam = searchParams.get('deal');
+  const guruParam = searchParams.get('guru');
+  const consumedDealRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!dealParam || syncState === 'loading') return;
+    const token = `${dealParam}:${guruParam || ''}`;
+    if (consumedDealRef.current === token) return;
+    const target = deals.find(d => String(d.id) === String(dealParam));
+    if (!target) return;
+    consumedDealRef.current = token;
+    if (guruParam === '1') openGuruDiagnosis(target);
+    else openDealEditor(target);
+  }, [dealParam, guruParam, syncState, deals]);
+
   const move = (id, to) => {
     const cur = deals.find(d => d.id === id);
     setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: to } : d)));
@@ -1068,9 +1215,9 @@ export function Deals({ workspace, onNavigate }) {
                           icon="queue"
                           size={20}
                           iconSize={12}
-                          tooltip={queuedDeals.has(d.id) ? 'follow-up 제안됨' : 'follow-up 작업 큐에 추가'}
-                          onClick={(e) => { e.stopPropagation(); queueFollowup(d); }}
-                          style={queuedDeals.has(d.id) ? { color: 'var(--success)' } : undefined}
+                          tooltip={queuedDeals.has(d.id) ? '큐에 있음' : 'follow-up 작업 큐에 추가'}
+                          onClick={(e) => { e.stopPropagation(); if (!queuedDeals.has(d.id)) queueFollowup(d); }}
+                          style={queuedDeals.has(d.id) ? { color: 'var(--moon-200)' } : undefined}
                         />
                       )}
                       <IconButton
@@ -1144,14 +1291,40 @@ export function Deals({ workspace, onNavigate }) {
                 </div>
               )}
             </div>
-            <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <Button variant="ghost" size="sm" onClick={() => openGuruDiagnosis(guruDeal)} disabled={guru.phase === 'loading'}>다시 진단</Button>
+              {guru.phase === 'done' && guru.state === 'done' && (
+                <Button variant="outline" size="sm" icon="edit" onClick={saveGuruDiagnosis} disabled={guruSaved}>
+                  {guruSaved ? '저장됨' : '활동으로 저장'}
+                </Button>
+              )}
               <div style={{ flex: 1 }} />
-              <Button variant="secondary" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.(guruChatPath({ mode: 'deal-review', ref: guruDeal.id }))}>Chat에서 이어가기</Button>
-              <Button variant="primary" size="sm" onClick={() => setGuruDeal(null)}>닫기</Button>
+              {guruDeal.age > 10 && guruDeal.stage !== 'won' && guruDeal.stage !== 'lost' ? (
+                <Button variant="primary" size="sm" icon="queue" onClick={() => queueFollowup(guruDeal)}>follow-up 큐에 추가</Button>
+              ) : (
+                <Button variant="primary" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.(guruChatPath({ mode: 'deal-review', ref: guruDeal.id }))}>Chat에서 이어가기</Button>
+              )}
             </div>
           </aside>
         </>
+      )}
+
+      {toast && (
+        <div style={{
+          position: 'fixed', right: 20, bottom: 20, zIndex: 70,
+          maxWidth: 'min(360px, calc(100vw - 40px))',
+          padding: '11px 14px',
+          background: 'var(--surface)',
+          border: '1px solid var(--line-soft)',
+          borderRadius: 'var(--r-lg)',
+          boxShadow: '0 8px 24px -12px oklch(0 0 0 / 0.55)',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45 }}>{toast.text}</span>
+          {toast.action && (
+            <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => { onNavigate?.(toast.action.go); setToast(null); }}>{toast.action.label}</Button>
+          )}
+        </div>
       )}
 
       <EditDrawer
@@ -1647,11 +1820,13 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
                     <span style={{ fontSize: 13, fontWeight: 500 }}>{c.name}</span>
                     <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>· {c.role}</span>
                   </div>
-                  <div className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    <span>{c.email}</span>
-                    <span>{c.phone}</span>
-                  </div>
-                  <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3 }}>Last: {c.lastContact}</div>
+                  {(c.email || c.phone) && (
+                    <div className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      {c.email && <span>{c.email}</span>}
+                      {c.phone && <span>{c.phone}</span>}
+                    </div>
+                  )}
+                  {c.lastContact && <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3 }}>Last: {c.lastContact}</div>}
                 </div>
                 <ContactMenu onAction={(kind) => onAction(kind, c.name)} />
               </div>
@@ -1717,6 +1892,7 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
 
 export function Accounts({ onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
+  const searchParams = useSearchParams();
   const [localAccounts, setLocalAccounts] = React.useState([]);
   const [accountEdits, setAccountEdits] = React.useState({}); // { [stableKey]: patch } — overlays any row
   const [deletedAccountKeys, setDeletedAccountKeys] = React.useState(() => new Set());
@@ -1744,6 +1920,21 @@ export function Accounts({ onNavigate }) {
     (!term || a.name.toLowerCase().includes(term))
   );
 
+  // Deep-link: ?acct=<accountId-or-name> selects it and switches to detail. One-shot per param
+  // value; silent if no account in the merged list matches. Runs before the validity effect so a
+  // matched selection sticks.
+  const acctParam = searchParams.get('acct');
+  const consumedAcctRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!acctParam || syncState === 'loading') return;
+    if (consumedAcctRef.current === acctParam) return;
+    const hit = ACCOUNTS.find(a => String(a.id) === String(acctParam) || a.name === acctParam);
+    if (!hit) return;
+    consumedAcctRef.current = acctParam;
+    setSelected(hit.name);
+    setView('detail');
+  }, [acctParam, syncState, ACCOUNTS]);
+
   // Keep selection valid across filter changes
   React.useEffect(() => {
     if (view === 'detail' && !filtered.find(a => a.name === selected)) {
@@ -1751,7 +1942,21 @@ export function Accounts({ onNavigate }) {
     }
   }, [view, filtered, selected]);
 
-  const getDetail = (name) => details[name] || (ledger.source === 'supabase' ? null : ACCOUNT_DETAIL[name]) || emptyDetail();
+  // Detail for the panel. Live mode: local `details[name]` (fetched activity/notes) wins; when it
+  // carries no contacts, surface the ledger row's `account.contacts`. Mock mode keeps ACCOUNT_DETAIL.
+  // Never mix live account + mock contacts — a live account with no contacts stays empty.
+  const getDetail = (account) => {
+    const name = typeof account === 'string' ? account : account?.name;
+    const isLive = ledger.source === 'supabase';
+    const base = details[name] || (isLive ? null : ACCOUNT_DETAIL[name]) || emptyDetail();
+    if (isLive && typeof account === 'object' && account) {
+      const hasLocalContacts = Array.isArray(base.contacts) && base.contacts.length > 0;
+      if (!hasLocalContacts) {
+        return { ...base, contacts: Array.isArray(account.contacts) ? account.contacts : [] };
+      }
+    }
+    return base;
+  };
 
   const tmpId = () => `tmp-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
@@ -1790,13 +1995,31 @@ export function Accounts({ onNavigate }) {
     });
   };
 
+  // QuickActions 'New deal' — create a real deal named after the account, then deep-link to the
+  // pipeline. Preview (DB down): log the intent as an activity so the click still leaves a trace.
+  const createDealForAccount = async (name) => {
+    const acc = ACCOUNTS.find(a => a.name === name);
+    if (!acc) return;
+    const r = await saveRevenueRecord('deal', 'create', {
+      name: acc.name,
+      type: acc.type,
+      stage: 'qual',
+    });
+    if (r.ok && r.id) {
+      onNavigate?.(`dashboard/revenue/deals?deal=${r.id}`);
+    } else {
+      const full = pushActivity(name, { type: 'deal', msg: '새 딜 초안 생성' });
+      persistActivityEntry(name, full);
+    }
+  };
+
   const handleAction = (name) => (kind, contactName) => {
+    if (kind === 'deal') { createDealForAccount(name); return; }
     const labels = {
       email:   contactName ? `${contactName}에게 이메일 발송 기록` : '이메일 발송 기록',
       meeting: contactName ? `${contactName}와 미팅 일정 등록` : '미팅 일정 등록',
       chat:    contactName ? `${contactName} 채팅 스레드 오픈` : '채팅 스레드 오픈',
       call:    contactName ? `${contactName} 통화 기록` : '통화 기록',
-      deal:    '새 딜 초안 생성',
       note:    '노트 추가 (간단)',
     };
     const type = kind === 'chat' || kind === 'note' ? 'update' : kind;
@@ -2146,7 +2369,7 @@ export function Accounts({ onNavigate }) {
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <DetailPanel
               account={selectedAcc}
-              detail={selectedAcc ? getDetail(selectedAcc.name) : null}
+              detail={selectedAcc ? getDetail(selectedAcc) : null}
               onAction={selectedAcc ? handleAction(selectedAcc.name) : () => {}}
               onLog={selectedAcc ? handleLog(selectedAcc.name) : () => {}}
               onPinNote={selectedAcc ? handlePinNote(selectedAcc.name) : () => {}}

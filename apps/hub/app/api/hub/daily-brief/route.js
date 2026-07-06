@@ -35,8 +35,8 @@ function metric(label, value, delta, tone = "moon", spark = [3, 4, 3, 5, 4, 6, 5
   return { label, value, delta, tone, spark };
 }
 
-function action(label, actionKey, primary = false) {
-  return { label, action: actionKey, primary };
+function action(label, actionKey, primary = false, target = null) {
+  return target ? { label, action: actionKey, primary, target } : { label, action: actionKey, primary };
 }
 
 // Cross-pillar risk: the strategist judgment a solo operator lacks bandwidth for.
@@ -149,7 +149,7 @@ function buildRevenueSignals(revenue) {
         meta: `Deal · ${formatMoney(deal.value)} · close ${deal.close}`,
         source: { from: "Deals", ref: deal.id },
         decisions: [
-          action("리마인드 초안", "followup", true),
+          action("팔로업 열기", "followup", true),
           action("딜 보드 열기", "deals"),
           action("오늘 보류", "wait"),
         ],
@@ -201,6 +201,8 @@ function buildGuruSignals(runsLedger) {
   const runs = Array.isArray(runsLedger.runs) ? runsLedger.runs : [];
   if (!runs.length) return [];
   const latest = runs[0];
+  const mode = encodeURIComponent(latest.mode || "sales");
+  const ref = encodeURIComponent(latest.ref || "pipeline");
   return [{
     id: `guru-memory-${latest.id}`,
     tone: latest.result === "error" ? "warning" : "info",
@@ -210,7 +212,7 @@ function buildGuruSignals(runsLedger) {
     meta: `Guru · ${latest.ranAt ? latest.ranAt.slice(0, 10) : "recent"}`,
     source: { from: "Guru", ref: latest.id },
     decisions: [
-      action("Guru 열기", "chat", true),
+      action("Guru 열기", "chat", true, `dashboard/agents/chat?agent=guru&mode=${mode}&ref=${ref}`),
       action("승인 큐 확인", "queueApprovals"),
     ],
   }];
