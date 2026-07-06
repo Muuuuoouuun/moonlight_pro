@@ -307,22 +307,25 @@ export function Decisions() {
   const { decisions, syncState } = useWorkLedger();
   const [localDecisions, setLocalDecisions] = React.useState([]);
   const createdFromQueryRef = React.useRef(false);
-  const createDecision = React.useCallback(() => {
+  const createDecision = React.useCallback((campaignRef = null) => {
     const id = `local-decision-${Date.now()}`;
     const createdAt = new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(new Date());
     setLocalDecisions(prev => [{
       id,
-      title: '새 결정 기록',
+      title: campaignRef ? '새 결정 기록 (캠페인 연계)' : '새 결정 기록',
       date: createdAt,
       status: 'Draft',
       by: 'Me',
-      reason: '맥락, 선택지, 근거를 이어서 적어주세요.',
-      links: 0,
+      // campaign:<id> tag makes the Campaigns → Decisions deep link round-trip traceable.
+      reason: campaignRef
+        ? `campaign:${campaignRef} — 맥락, 선택지, 근거를 이어서 적어주세요.`
+        : '맥락, 선택지, 근거를 이어서 적어주세요.',
+      links: campaignRef ? 1 : 0,
     }, ...prev]);
   }, []);
   React.useEffect(() => {
     if (searchParams.get('new') !== 'decision' || createdFromQueryRef.current) return;
-    createDecision();
+    createDecision(searchParams.get('campaign'));
     createdFromQueryRef.current = true;
   }, [createDecision, searchParams]);
   const list = [...localDecisions, ...(Array.isArray(decisions) ? decisions : [])];

@@ -118,6 +118,31 @@ function handoffTone(status) {
   return "info";
 }
 
+function parseCouncilSuggestionItems(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return [];
+
+  const cleanItem = (item) => item
+    .replace(/^\s*(?:[-·]\s+|\d+[.)]\s+)/, "")
+    .trim();
+  const hasMeaning = (item) => item.replace(/[\s\-·*#.:;,'"()[\]{}]/g, "").length >= 4;
+  const bulletParts = raw
+    .split(/(?:^|\n)\s*(?:[-·]\s+|\d+[.)]\s+)/)
+    .map(cleanItem)
+    .filter((item) => item && hasMeaning(item));
+  const hasBulletMarkers = /(?:^|\n)\s*(?:[-·]\s+|\d+[.)]\s+)/.test(raw);
+  const normalizedBulletParts = hasBulletMarkers && !/^\s*(?:[-·]\s+|\d+[.)]\s+)/.test(raw)
+    ? bulletParts.slice(1)
+    : bulletParts;
+  const lineParts = raw
+    .split(/\n+/)
+    .map(cleanItem)
+    .filter((item) => item && hasMeaning(item));
+  const parts = normalizedBulletParts.length > 1 ? normalizedBulletParts : lineParts;
+
+  return parts.slice(0, 5);
+}
+
 function useContentLedger() {
   const [state, setState] = React.useState({
     source: "mock",
@@ -273,7 +298,6 @@ export function Studio({ workspace }) {
   const [activeSlide, setActiveSlide] = React.useState(0);
   const [drag, setDrag] = React.useState(null);
   const [extraSuggestions, setExtraSuggestions] = React.useState([]);
-  const [dismissedSuggestionKeys, setDismissedSuggestionKeys] = React.useState(() => new Set());
   const [pendingSend, setPendingSend] = React.useState(null); // 'publish' | 'schedule' | null
   const [lastSentAt, setLastSentAt] = React.useState(null);
   const [localHandoffLogs, setLocalHandoffLogs] = React.useState([]);
@@ -284,6 +308,7 @@ export function Studio({ workspace }) {
   const [localSavedAt, setLocalSavedAt] = React.useState(null);
   const [dirty, setDirty] = React.useState(false);
   const [council, setCouncil] = React.useState({ state: 'idle', text: '', note: '' }); // Council content-critique (live AI)
+  const [councilSuggestions, setCouncilSuggestions] = React.useState({ state: 'idle', text: '', note: '', items: [], parsedItems: false });
   const loadedItemRef = React.useRef(null);
 
   const formatTime = (d) => {
@@ -618,6 +643,26 @@ export function Studio({ workspace }) {
     }
   }, [body, mode, slides, title]);
 
+  const runCouncilSuggestions = React.useCallback(async () => {
+    setCouncilSuggestions({ state: 'loading', text: '', note: '', items: [], parsedItems: false });
+    const draft = mode === 'carousel'
+      ? `${title}\n\n${slides.map((s, i) => `${i + 1}. ${s.title} — ${s.sub}`).join('\n')}`
+      : `${title}\n\n${body}`;
+    const r = await requestCouncilAdvice({ mode: 'content-critique', draft });
+    if (r.state === 'done') {
+      const items = parseCouncilSuggestionItems(r.text);
+      setCouncilSuggestions({
+        state: 'done',
+        text: r.text || '',
+        note: '',
+        items,
+        parsedItems: items.length > 0,
+      });
+    } else {
+      setCouncilSuggestions({ state: r.state, text: '', note: r.note || '', items: [], parsedItems: false });
+    }
+  }, [body, mode, slides, title]);
+
   // Auto-run the critique once when arriving via the Queue ✨ (?council=1), after the item loads.
   const councilAutoRef = React.useRef(false);
   React.useEffect(() => {
@@ -646,19 +691,14 @@ export function Studio({ workspace }) {
   };
 
   const cur = slides[activeSlide] || slides[0];
-  const baseSuggestions = mode === 'blog' ? [
-    { key: 'blog-title', tone: 'info', text: '제목 A/B: "결정 노트: 네 칸이면 충분하다"' },
-    { key: 'blog-question', tone: 'moon', text: '"네 칸" 섹션 끝에 독자 질문 한 줄 추가 추천' },
-    { key: 'blog-repeat', tone: 'warning', text: '중복 표현 감지: "기억에 남지 않는다" (2회)' },
-  ] : [
-    { key: 'card-hook', tone: 'info', text: '카드 1 훅 강화: 숫자를 앞에 — "4칸"' },
-    { key: 'card-color', tone: 'moon', text: '카드 2–5 배경색 톤을 한 계열로 통일 추천' },
-    { key: 'card-cta', tone: 'warning', text: '마지막 카드 CTA 누락 — 저장/공유 유도' },
-  ];
   const suggestions = [
     ...extraSuggestions.map((s, i) => ({ ...s, key: `extra-${i}`, extraIndex: i })),
-    ...baseSuggestions.filter(s => !dismissedSuggestionKeys.has(s.key)),
   ];
+  const councilSuggestionCards = councilSuggestions.items.map((text, i) => ({
+    key: `council-suggestion-${i}`,
+    tone: i === 0 ? 'moon' : 'info',
+    text,
+  }));
 
   return (
     <div className="hub-studio-shell" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', height: '100%', overflow: 'hidden' }}>
@@ -1004,7 +1044,7 @@ export function Studio({ workspace }) {
 
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em' }}>Suggestions</div>
           {suggestions.map((s, i) => (
-            <div key={i} style={{
+            <div key={s.key || i} style={{
               padding: '10px 11px', background: 'var(--surface-2)',
               border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
               fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.5,
@@ -1024,8 +1064,6 @@ export function Studio({ workspace }) {
                     setDirty(true);
                     if (typeof s.extraIndex === 'number') {
                       setExtraSuggestions(prev => prev.filter((_, idx) => idx !== s.extraIndex));
-                    } else {
-                      setDismissedSuggestionKeys(prev => new Set([...prev, s.key]));
                     }
                   }}
                 >
@@ -1037,8 +1075,6 @@ export function Studio({ workspace }) {
                   onClick={() => {
                     if (typeof s.extraIndex === 'number') {
                       setExtraSuggestions(prev => prev.filter((_, idx) => idx !== s.extraIndex));
-                    } else {
-                      setDismissedSuggestionKeys(prev => new Set([...prev, s.key]));
                     }
                   }}
                 >
@@ -1047,6 +1083,121 @@ export function Studio({ workspace }) {
               </div>
             </div>
           ))}
+          {councilSuggestions.state === 'idle' && (
+            <div style={{
+              padding: '10px 11px',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--line-soft)',
+              borderRadius: 'var(--r-sm)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}>
+              <div style={{ flex: 1, fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+                초안 기반 제안을 생성하려면 Council에 요청하세요.
+              </div>
+              <Button variant="secondary" size="xs" onClick={runCouncilSuggestions}>제안 생성</Button>
+            </div>
+          )}
+          {councilSuggestions.state === 'loading' && (
+            <div style={{
+              padding: '10px 11px',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--line-soft)',
+              borderRadius: 'var(--r-sm)',
+              fontSize: 12,
+              color: 'var(--fg-muted)',
+              lineHeight: 1.5,
+            }}>
+              브랜드 보이스 기준으로 검토 중…
+            </div>
+          )}
+          {councilSuggestions.state === 'done' && councilSuggestionCards.length > 0 && councilSuggestionCards.map((s) => (
+            <div key={s.key} style={{
+              padding: '10px 11px', background: 'var(--surface-2)',
+              border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
+              fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.5,
+            }}>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}><Dot tone={s.tone} /></div>
+              {s.text}
+              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => {
+                    if (mode === 'blog') {
+                      setBody(prev => `${prev}\n\n> 적용한 제안: ${s.text}`);
+                    } else {
+                      updateSlide(activeSlide, { sub: s.text.slice(0, 64) });
+                    }
+                    setDirty(true);
+                    setCouncilSuggestions(prev => ({
+                      ...prev,
+                      items: prev.items.filter((item) => item !== s.text),
+                    }));
+                  }}
+                >
+                  Apply
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => {
+                    setCouncilSuggestions(prev => ({
+                      ...prev,
+                      items: prev.items.filter((item) => item !== s.text),
+                    }));
+                  }}
+                >
+                  Skip
+                </Button>
+              </div>
+            </div>
+          ))}
+          {councilSuggestions.state === 'done' && !councilSuggestions.parsedItems && (
+            <div style={{
+              padding: '10px 11px',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--line-soft)',
+              borderRadius: 'var(--r-sm)',
+              fontSize: 12,
+              color: 'var(--fg-muted)',
+              lineHeight: 1.5,
+              whiteSpace: 'pre-wrap',
+            }}>
+              {councilSuggestions.text}
+            </div>
+          )}
+          {councilSuggestions.state === 'preview' && (
+            <div style={{
+              padding: '10px 11px',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--line-soft)',
+              borderRadius: 'var(--r-sm)',
+              fontSize: 11.5,
+              color: 'var(--fg-muted)',
+              lineHeight: 1.5,
+            }}>
+              <Badge tone="neutral" size="xs">preview</Badge>
+              <span style={{ marginLeft: 6 }}>{COUNCIL_PREVIEW_NOTE}</span>
+            </div>
+          )}
+          {councilSuggestions.state === 'error' && (
+            <div style={{
+              padding: '10px 11px',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--line-soft)',
+              borderRadius: 'var(--r-sm)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}>
+              <div style={{ flex: 1, fontSize: 12, color: 'var(--danger)', lineHeight: 1.5 }}>
+                제안을 생성하지 못했습니다.
+              </div>
+              <Button variant="ghost" size="xs" onClick={runCouncilSuggestions}>다시 시도</Button>
+            </div>
+          )}
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em', marginTop: 8 }}>Handoff history</div>
           <div style={{
             padding: 10,
