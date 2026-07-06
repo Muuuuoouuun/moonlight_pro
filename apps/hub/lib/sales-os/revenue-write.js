@@ -70,6 +70,17 @@ export function buildLeadWrite(payload = {}) {
   if (payload.value != null) metaPatch.value = parseMoneyLabel(payload.value);
   if (payload.workspace) metaPatch.workspace = payload.workspace;
 
+  // Lightweight lead tags — 지역·규모·현재 상황·도입 댓수. Live in meta so no schema churn;
+  // 유입경로 stays on the `source` column above. `undefined` means "untouched" (skip); an
+  // explicit "" clears the tag. units is a positive integer or null.
+  if (payload.region !== undefined) metaPatch.region = String(payload.region).trim() || null;
+  if (payload.scale !== undefined) metaPatch.scale = String(payload.scale).trim() || null;
+  if (payload.situation !== undefined) metaPatch.situation = String(payload.situation).trim() || null;
+  if (payload.units !== undefined) {
+    const n = Number(payload.units);
+    metaPatch.units = Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+  }
+
   return { columns, metaPatch };
 }
 

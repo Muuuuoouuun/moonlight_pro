@@ -176,7 +176,9 @@ function mapLead(row, companyById, contactById) {
     "Unnamed lead";
 
   const statusKey = String(row.status || "new").toLowerCase();
-  const value = toNumber(row?.meta?.value ?? row?.score * 100000, 0);
+  const meta = row?.meta || {};
+  const value = toNumber(meta.value ?? row?.score * 100000, 0);
+  const units = toNumber(meta.units ?? meta.unit_count, 0);
 
   return {
     id: row.id,
@@ -187,6 +189,11 @@ function mapLead(row, companyById, contactById) {
     source: row.source || row.channel || "—",
     stage: LEAD_STAGE_LABEL[statusKey] || "New",
     value: value ? formatMoneyLabel(value) : "—",
+    // Lightweight tags (meta-backed). 유입경로 is `source` above; these four editable in the drawer.
+    region: meta.region || "",
+    scale: meta.scale || "",
+    situation: meta.situation || "",
+    units: units > 0 ? units : "",
     last: formatRelative(row.last_touch_at || row.updated_at || row.created_at),
     owner: row.owner_id ? "Me" : "Unassigned",
   };
@@ -223,6 +230,7 @@ function mapAccount(row, dealStatsByCompany) {
 
   return {
     id: row.id,
+    companyId: row.company_id || null,
     name: row.name,
     type,
     deals: stats.deals,

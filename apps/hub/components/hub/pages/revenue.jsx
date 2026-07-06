@@ -36,6 +36,35 @@ async function saveRevenueRecord(kind, op, record) {
   }
 }
 
+// Activity timeline persistence (crm_activities). create/pin/delete via POST; read via GET.
+async function saveActivity(op, payload) {
+  try {
+    const resp = await fetch('/api/hub/revenue/activity', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ op, ...payload }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    return { ok: resp.ok && data.status === 'saved', status: data.status || 'error', activity: data.activity, id: data.id };
+  } catch (err) {
+    return { ok: false, status: 'error', error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function fetchActivities({ accountId, leadId, dealId }) {
+  const q = new URLSearchParams();
+  if (accountId) q.set('accountId', accountId);
+  if (leadId) q.set('leadId', leadId);
+  if (dealId) q.set('dealId', dealId);
+  try {
+    const resp = await fetch(`/api/hub/revenue/activity?${q.toString()}`);
+    const data = await resp.json().catch(() => ({}));
+    return { ok: resp.ok, status: data.status || 'error', activities: Array.isArray(data.activities) ? data.activities : [] };
+  } catch {
+    return { ok: false, status: 'error', activities: [] };
+  }
+}
+
 function formatPercentDelta(current, previous) {
   if (!Number.isFinite(current) || !Number.isFinite(previous)) return '—';
   if (previous === 0) return current === 0 ? '0%' : 'new';
@@ -445,6 +474,32 @@ export function RevenueOverview({ onNavigate }) {
 // Shared grid template for Leads rows — gap between columns so badges never butt the next cell
 const LEADS_GRID = '26px 1fr 112px 112px 124px 100px 90px 92px';
 
+// Compact meta tags under a lead name — 지역·규모·현재 상황·도입 댓수 (blank ones are skipped).
+function LeadTagChips({ lead }) {
+  const chips = [];
+  if (lead.region) chips.push({ icon: 'globe', text: lead.region });
+  if (lead.units) chips.push({ icon: 'tag', text: `${lead.units}대` });
+  if (lead.scale) chips.push({ icon: null, text: lead.scale });
+  if (lead.situation) chips.push({ icon: null, text: lead.situation });
+  if (chips.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 3 }}>
+      {chips.map((c, i) => (
+        <span key={i} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 3,
+          fontSize: 10, color: 'var(--fg-faint)',
+          background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
+          borderRadius: 4, padding: '1px 6px',
+          whiteSpace: 'nowrap', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {c.icon && <Iconed name={c.icon} size={9} />}
+          {c.text}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 const DRAWER_INPUT_STYLE = {
   height: 32,
   padding: '0 10px',
@@ -775,7 +830,10 @@ export function Leads({ workspace }) {
             <span style={{ paddingRight: 4, display: 'flex' }}>
               <Avatar name={l.name.replace(/^.*—\s*/, '')} size={22} tone={l.type === 'personal' ? 'personal' : 'company'} />
             </span>
-            <span style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</div>
+              <LeadTagChips lead={l} />
+            </div>
             <span style={{ paddingRight: 8, minWidth: 0 }}>
               <Badge tone={l.type === 'personal' ? 'personal' : 'company'} size="xs">
                 <Iconed name={l.type === 'personal' ? 'user' : 'building'} size={9} />
@@ -801,7 +859,11 @@ export function Leads({ workspace }) {
         fields={[
           { key: 'name', label: '이름' },
           { key: 'type', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
-          { key: 'source', label: '소스', placeholder: 'Referral · Website · Meta…' },
+          { key: 'source', label: '유입경로 (소스)', placeholder: 'Referral · Website · Meta · 설명회…' },
+          { key: 'region', label: '지역', placeholder: '서울 · 경기 · 부산…' },
+          { key: 'scale', label: '규모', placeholder: '학생수 · 직원수 · 매출 규모' },
+          { key: 'situation', label: '현재 상황', placeholder: '검토중 · 경쟁사 사용 · 예산확보…' },
+          { key: 'units', label: '도입 댓수', inputType: 'number', placeholder: '0' },
           { key: 'stage', label: '단계', type: 'select', options: [{ value: 'New', label: 'New' }, { value: 'Contact', label: 'Contact' }, { value: 'Qualified', label: 'Qualified' }, { value: 'Lost', label: 'Lost' }] },
           { key: 'value', label: '금액', placeholder: '₩0' },
           { key: 'owner', label: '담당' },
@@ -1234,9 +1296,20 @@ export function Cases() {
 
 const H_TONE = { ok: 'success', warning: 'warning', risk: 'danger' };
 
-const ACT_ICON = { email: 'email', meeting: 'calendar', call: 'signal', note: 'edit', deal: 'deals' };
-const ACT_TONE = { email: 'info', meeting: 'moon', call: 'warning', note: 'neutral', deal: 'success' };
-const ACT_LABEL = { email: 'Email', meeting: 'Meeting', call: 'Call', note: 'Note', deal: 'Deal' };
+const ACT_ICON = {
+  call: 'signal', meeting: 'calendar', info_session: 'brief', demo: 'play',
+  visit: 'flag', email: 'email', update: 'bell', note: 'edit', deal: 'deals',
+};
+const ACT_TONE = {
+  call: 'warning', meeting: 'moon', info_session: 'info', demo: 'success',
+  visit: 'personal', email: 'info', update: 'neutral', note: 'neutral', deal: 'success',
+};
+const ACT_LABEL = {
+  call: '통화', meeting: '미팅', info_session: '설명회', demo: '데모',
+  visit: '방문', email: '이메일', update: '소식', note: '노트', deal: '딜',
+};
+// Kinds offered in the Activity composer. Notes live in their own tab, so 'note' is excluded here.
+const ACTIVITY_KIND_OPTIONS = ['call', 'meeting', 'info_session', 'demo', 'visit', 'email', 'update', 'deal'];
 
 function emptyDetail() {
   return { mrr: 0, contacts: [], activity: [], notes: [] };
@@ -1310,14 +1383,14 @@ function ContactMenu({ onAction }) {
 }
 
 function LogComposer({ onLog }) {
-  const [type, setType] = React.useState('note');
+  const [type, setType] = React.useState('call');
   const [text, setText] = React.useState('');
   const save = () => {
     const body = text.trim();
     if (!body) return;
     onLog({ type, msg: body });
     setText('');
-    setType('note');
+    setType('call');
   };
   return (
     <div style={{
@@ -1350,7 +1423,7 @@ function LogComposer({ onLog }) {
             outline: 'none',
           }}
         >
-          {Object.keys(ACT_LABEL).map(k => <option key={k} value={k}>{ACT_LABEL[k]}</option>)}
+          {ACTIVITY_KIND_OPTIONS.map(k => <option key={k} value={k}>{ACT_LABEL[k]}</option>)}
         </select>
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="xs" onClick={save}>Save</Button>
@@ -1614,13 +1687,40 @@ export function Accounts({ onNavigate }) {
 
   const getDetail = (name) => details[name] || (ledger.source === 'supabase' ? null : ACCOUNT_DETAIL[name]) || emptyDetail();
 
+  const tmpId = () => `tmp-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+
+  // Optimistically prepend an activity entry, returning the full row (with temp id) for reconciliation.
   const pushActivity = (name, entry) => {
+    const full = { id: entry.id || tmpId(), at: '방금', who: 'Me', ...entry };
     setDetails(prev => {
       const cur = prev[name] || emptyDetail();
-      return {
-        ...prev,
-        [name]: { ...cur, activity: [{ at: '방금', who: 'Me', ...entry }, ...cur.activity] },
-      };
+      return { ...prev, [name]: { ...cur, activity: [full, ...cur.activity] } };
+    });
+    return full;
+  };
+
+  // Persist a logged activity to crm_activities (live accounts only) and swap the temp id for the real one.
+  const persistActivityEntry = (name, full) => {
+    const acc = ACCOUNTS.find(a => a.name === name);
+    if (!acc?.id) return; // local/mock account — session-only, matches the preview pattern
+    saveActivity('create', {
+      accountId: acc.id, companyId: acc.companyId || null, entityType: 'account',
+      kind: full.type, body: full.msg,
+    }).then(r => {
+      if (!r.ok || !r.activity) return;
+      setDetails(prev => {
+        const cur = prev[name];
+        if (!cur) return prev;
+        return {
+          ...prev,
+          [name]: {
+            ...cur,
+            activity: cur.activity.map(a => a.id === full.id
+              ? { id: r.activity.id, type: r.activity.kind, msg: r.activity.body, who: r.activity.who, at: r.activity.at }
+              : a),
+          },
+        };
+      });
     });
   };
 
@@ -1633,34 +1733,54 @@ export function Accounts({ onNavigate }) {
       deal:    '새 딜 초안 생성',
       note:    '노트 추가 (간단)',
     };
-    const type = kind === 'chat' ? 'note' : kind;
-    pushActivity(name, { type, msg: labels[kind] || `${kind} 액션` });
+    const type = kind === 'chat' || kind === 'note' ? 'update' : kind;
+    const full = pushActivity(name, { type, msg: labels[kind] || `${kind} 액션` });
+    persistActivityEntry(name, full);
   };
 
   const handleLog = (name) => ({ type, msg }) => {
-    pushActivity(name, { type, msg });
+    const full = pushActivity(name, { type, msg });
+    persistActivityEntry(name, full);
   };
 
   const handlePinNote = (name) => (note) => {
+    const nextPinned = !note.pinned;
     setDetails(prev => {
       const cur = prev[name] || emptyDetail();
       return {
         ...prev,
         [name]: {
           ...cur,
-          notes: cur.notes.map(n => n === note ? { ...n, pinned: !n.pinned } : n),
+          notes: cur.notes.map(n => ((note.id && n.id === note.id) || n === note) ? { ...n, pinned: nextPinned } : n),
         },
       };
     });
+    if (note.id && !String(note.id).startsWith('tmp-')) {
+      const acc = ACCOUNTS.find(a => a.name === name);
+      if (acc?.id) saveActivity('pin', { id: note.id, pinned: nextPinned });
+    }
   };
 
   const handleAddNote = (name) => (body) => {
+    const localId = tmpId();
     setDetails(prev => {
       const cur = prev[name] || emptyDetail();
-      return {
-        ...prev,
-        [name]: { ...cur, notes: [{ at: '방금', pinned: false, body }, ...cur.notes] },
-      };
+      return { ...prev, [name]: { ...cur, notes: [{ id: localId, at: '방금', pinned: false, body }, ...cur.notes] } };
+    });
+    const acc = ACCOUNTS.find(a => a.name === name);
+    if (!acc?.id) return;
+    saveActivity('create', {
+      accountId: acc.id, companyId: acc.companyId || null, entityType: 'account', kind: 'note', body,
+    }).then(r => {
+      if (!r.ok || !r.activity) return;
+      setDetails(prev => {
+        const cur = prev[name];
+        if (!cur) return prev;
+        return {
+          ...prev,
+          [name]: { ...cur, notes: cur.notes.map(n => n.id === localId ? { id: r.activity.id, body: r.activity.body, pinned: r.activity.pinned, at: r.activity.at } : n) },
+        };
+      });
     });
   };
 
@@ -1668,6 +1788,28 @@ export function Accounts({ onNavigate }) {
   // Health signal counts surfaced in the header (merged from origin/real_v1's Revenue redesign).
   const warnCount = ACCOUNTS.filter(a => a.health === 'warning').length;
   const riskCount = ACCOUNTS.filter(a => a.health === 'risk').length;
+
+  // Load a live account's saved activity/notes the first time it's opened in detail view.
+  // Guarded by a ref so re-renders don't refetch (which would clobber optimistic local entries).
+  const loadedActivityRef = React.useRef(new Set());
+  React.useEffect(() => {
+    const acc = selectedAcc;
+    if (view !== 'detail' || !acc || !acc.id || loadedActivityRef.current.has(acc.id)) return undefined;
+    loadedActivityRef.current.add(acc.id);
+    let cancelled = false;
+    fetchActivities({ accountId: acc.id }).then(res => {
+      if (cancelled || res.status !== 'live') return;
+      const activity = res.activities.filter(a => a.kind !== 'note')
+        .map(a => ({ id: a.id, type: a.kind, msg: a.body, who: a.who, at: a.at }));
+      const notes = res.activities.filter(a => a.kind === 'note')
+        .map(a => ({ id: a.id, body: a.body, pinned: a.pinned, at: a.at }));
+      setDetails(prev => {
+        const cur = prev[acc.name] || emptyDetail();
+        return { ...prev, [acc.name]: { ...cur, activity, notes } };
+      });
+    });
+    return () => { cancelled = true; };
+  }, [view, selectedAcc?.id, selectedAcc?.name]);
 
   const openDetail = (name) => {
     setSelected(name);
