@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { Iconed } from "./hub-icons";
 
 export function Badge({ children, tone = 'neutral', variant = 'soft', size = 'sm', style }) {
@@ -189,6 +190,107 @@ export function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tool
     >
       <Iconed name={icon} size={iconSize} />
     </button>
+  );
+}
+
+const DRAWER_INPUT_STYLE = {
+  height: 32,
+  padding: '0 10px',
+  fontSize: 13,
+  background: 'var(--surface-2)',
+  color: 'var(--fg)',
+  border: '1px solid var(--line)',
+  borderRadius: 'var(--r-sm)',
+  outline: 'none',
+  width: '100%',
+};
+
+// Shared field-driven edit drawer. Revenue behavior is canonical for save feedback,
+// ESC close, and optimistic delete confirmation.
+export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)' }) {
+  const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | error
+  React.useEffect(() => {
+    if (!record) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [record, onClose]);
+  React.useEffect(() => { setSaveState('idle'); }, [record?.id]);
+
+  const handleDone = async () => {
+    if (!onSave) { onClose(); return; }
+    setSaveState('saving');
+    const r = await onSave();
+    if (r?.ok) { setSaveState('idle'); onClose(); }
+    else { setSaveState(r?.status === 'preview' ? 'preview' : 'error'); }
+  };
+
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    if (typeof window !== 'undefined' && !window.confirm('이 항목을 삭제할까요? 되돌릴 수 없습니다.')) return;
+    setSaveState('saving');
+    await onDelete();
+    onClose();
+  };
+
+  if (!record) return null;
+  return (
+    <>
+      <div className="hub-drawer-overlay" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / 0.4)', zIndex: 60 }} />
+      <aside className="hub-drawer" style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0, width, zIndex: 61,
+        background: 'var(--surface)', borderLeft: '1px solid var(--line)',
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '-8px 0 32px -12px oklch(0 0 0 / 0.5)',
+      }}>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 500 }}>{title}</div>
+            {subtitle && <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}
+          </div>
+          <IconButton icon="x" size={24} iconSize={13} tooltip="닫기" onClick={onClose} />
+        </div>
+        <div className="scroll-y" style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {fields.map(f => (
+            <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)' }}>{f.label}</span>
+              {f.type === 'select' ? (
+                <select value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
+                  {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              ) : (
+                <input
+                  type={f.inputType || 'text'}
+                  value={record[f.key] ?? ''}
+                  placeholder={f.placeholder || ''}
+                  onChange={e => onChange(f.key, f.inputType === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value)}
+                  style={DRAWER_INPUT_STYLE}
+                />
+              )}
+            </label>
+          ))}
+        </div>
+        <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          {onDelete && (
+            <Button variant="ghost" size="sm" onClick={handleDelete} disabled={saveState === 'saving'} style={{ color: 'var(--danger)' }}>삭제</Button>
+          )}
+          <div style={{ flex: 1, minWidth: 0, fontSize: 11, lineHeight: 1.4 }}>
+            {saveState === 'preview' && (
+              <span style={{ color: 'var(--fg-muted)' }}>저장 위치(Supabase)가 설정되지 않아 로컬에만 반영됩니다.</span>
+            )}
+            {saveState === 'error' && (
+              <span style={{ color: 'var(--danger)' }}>저장에 실패했습니다. 다시 시도하세요.</span>
+            )}
+          </div>
+          {(saveState === 'preview' || saveState === 'error') && (
+            <Button variant="ghost" size="sm" onClick={onClose}>닫기</Button>
+          )}
+          <Button variant="primary" size="sm" onClick={handleDone} disabled={saveState === 'saving'}>
+            {saveState === 'saving' ? '저장 중…' : '완료'}
+          </Button>
+        </div>
+      </aside>
+    </>
   );
 }
 

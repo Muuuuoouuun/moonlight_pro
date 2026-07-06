@@ -20,6 +20,7 @@ import { AutomationsIndex, EmailAutomation, Webhooks, Runs, Flows } from "./page
 import { SheetsSync } from "./pages/sheets-sync";
 import { EeocrmSync } from "./pages/eeocrm-sync";
 import { IntakeInbox } from "./pages/intake-inbox";
+import { Segments } from "./pages/segments";
 import { AgentsChat, AgentsCouncil, AgentsOrders, AgentsOffice } from "./pages/agents";
 import { Evolution, Settings } from "./pages/evolution-settings";
 
@@ -80,6 +81,7 @@ const PAGE_MAP = {
   'dashboard/classin/projects': () => <Projects workspace="classin" />,
   'dashboard/classin/revenue': () => <Leads workspace="classin" />,
   'dashboard/classin/intake': () => <IntakeInbox />,
+  'dashboard/classin/segments': () => <Segments workspace="classin" />,
   'dashboard/classin/automations': () => <SheetsSync />,
   // Legacy ClassIn routes kept alive while old bookmarks exist.
   'dashboard/classin/cohorts': () => <Projects workspace="classin" />,
@@ -102,6 +104,7 @@ const PAGE_MAP = {
   'dashboard/revenue/overview': (n) => <RevenueOverview onNavigate={n} />,
   'dashboard/revenue/leads': () => <Leads />,
   'dashboard/revenue/intake': () => <IntakeInbox />,
+  'dashboard/revenue/segments': () => <Segments />,
   'dashboard/revenue/deals': (n) => <Deals onNavigate={n} />,
   'dashboard/revenue/cases': () => <Cases />,
   'dashboard/revenue/accounts': (n) => <Accounts onNavigate={n} />,
