@@ -18,6 +18,7 @@ export const NAV_TREE = [
       { key: 'classin-pipeline',   label: '업무·파이프라인', icon: 'deals',       path: 'dashboard/classin/pipeline' },
       { key: 'classin-projects',   label: '프로젝트',        icon: 'projects',    path: 'dashboard/classin/projects' },
       { key: 'classin-revenue',    label: '결제·리드',       icon: 'leads',       path: 'dashboard/classin/revenue' },
+      { key: 'classin-intake',    label: '리드 인박스',      icon: 'inbox',       path: 'dashboard/classin/intake' },
       { key: 'classin-automations',label: '자동화',          icon: 'automations', path: 'dashboard/classin/automations' },
     ],
   },
@@ -116,6 +117,11 @@ export const LEGACY_REDIRECTS = {
   'dashboard/evolution/issues':           { to: 'dashboard/evolution',     label: 'Evolution' },
   'dashboard/evolution/logs':             { to: 'dashboard/evolution',     label: 'Evolution · Log' },
   'dashboard/projects':                   { to: 'dashboard/work/projects', label: 'Projects' },
+  // 회사(company) workspace retired — absorbed into 클래스인 (workspace-map.js).
+  'dashboard/company/pipeline':           { to: 'dashboard/classin/pipeline', label: '클래스인 · 업무·파이프라인' },
+  'dashboard/company/projects':           { to: 'dashboard/classin/projects', label: '클래스인 · 프로젝트' },
+  'dashboard/company/automations':        { to: 'dashboard/classin/automations', label: '클래스인 · 자동화' },
+  'dashboard/company':                    { to: 'dashboard/classin/pipeline', label: '클래스인' },
 };
 
 export const BRIEF_SIGNALS = [

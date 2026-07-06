@@ -4,6 +4,12 @@ import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Progress, SectionTitle, Kbd, EmptyState } from "../hub-primitives";
 import { AUTOMATIONS as FALLBACK_AUTOMATIONS, RUN_LOG as FALLBACK_RUN_LOG } from "../hub-data";
+import {
+  BULK_SENDER_PATTERNS,
+  SUPPORT_KEYWORDS,
+  LEAD_INQUIRY_KEYWORDS,
+  PERSONAL_EMAIL_DOMAINS,
+} from "@/lib/email-lead-classifier";
 
 const EMPTY_AUTOMATION_SUMMARY = {
   runsToday: 0,
@@ -144,7 +150,131 @@ export function AutomationsIndex({ onNavigate }) {
   );
 }
 
+// Real tag rules — sourced straight from the classifier's exported keyword
+// constants so this table can never drift from what the engine actually does.
+const EMAIL_TAG_RULES = [
+  {
+    cond: `from: ${BULK_SENDER_PATTERNS.slice(0, 3).join(', ')} 등`,
+    then: 'tag: Ignore · 대량/알림성 발신',
+    tone: 'neutral',
+  },
+  {
+    cond: `subject/snippet: ${SUPPORT_KEYWORDS.slice(0, 4).join(', ')}`,
+    then: 'tag: Support',
+    tone: 'info',
+  },
+  {
+    cond: `개인 도메인: ${PERSONAL_EMAIL_DOMAINS.slice(0, 3).join(', ')} 등`,
+    then: 'tag: Personal',
+    tone: 'personal',
+  },
+  {
+    cond: `업무 도메인 + ${LEAD_INQUIRY_KEYWORDS.slice(0, 4).join(', ')} 등`,
+    then: 'tag: Lead · Intake Inbox 스테이징',
+    tone: 'moon',
+  },
+];
+
+function useGmailConnectionStatus() {
+  const [state, setState] = React.useState({ syncState: 'loading', data: null });
+
+  const reload = React.useCallback(async () => {
+    setState((s) => ({ ...s, syncState: 'loading' }));
+    try {
+      const response = await fetch('/api/email/gmail/status', { cache: 'no-store' });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data) {
+        setState({ syncState: 'error', data: null });
+        return;
+      }
+      setState({ syncState: 'live', data });
+    } catch {
+      setState({ syncState: 'error', data: null });
+    }
+  }, []);
+
+  React.useEffect(() => {
+    let active = true;
+    (async () => {
+      await reload();
+      if (!active) return;
+    })();
+    return () => { active = false; };
+  }, [reload]);
+
+  return { ...state, reload };
+}
+
+function GmailScanControl() {
+  const [scanState, setScanState] = React.useState({ pending: false, result: null, tone: null });
+
+  async function runScan() {
+    setScanState({ pending: true, result: null, tone: null });
+    try {
+      const response = await fetch('/api/hub/email/scan', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok && data.status === 'ok') {
+        setScanState({
+          pending: false,
+          result: `스캔 ${data.scanned ?? 0} · 리드 후보 ${data.staged ?? 0}건 staging${data.skipped ? ` · 중복 ${data.skipped}건 skip` : ''} → 리드 인박스에서 검토`,
+          tone: 'success',
+        });
+      } else if (data.status === 'preview') {
+        setScanState({
+          pending: false,
+          result: `preview · ${data.reason || 'Gmail 연결이 필요합니다'}`,
+          tone: 'warning',
+        });
+      } else {
+        setScanState({
+          pending: false,
+          result: `실패 · ${data.error || data.reason || response.status}`,
+          tone: 'danger',
+        });
+      }
+    } catch (error) {
+      setScanState({ pending: false, result: `실패 · ${error?.message || 'request-failed'}`, tone: 'danger' });
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <Button variant="primary" size="xs" icon="play" onClick={runScan} disabled={scanState.pending}>
+          {scanState.pending ? '스캔 중…' : '지금 스캔'}
+        </Button>
+      </div>
+      {scanState.result && (
+        <div style={{
+          fontSize: 11, lineHeight: 1.5,
+          color: scanState.tone === 'success' ? 'var(--success)' : scanState.tone === 'warning' ? 'var(--warning)' : scanState.tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)',
+        }}>
+          {scanState.result}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function EmailAutomation({ onNavigate }) {
+  const { syncState, data: gmailStatus } = useGmailConnectionStatus();
+  const connected = gmailStatus?.status === 'connected';
+  const gmailEmail = gmailStatus?.connection?.email || gmailStatus?.senderEmail || null;
+  const gmailBadgeTone = connected ? 'success' : gmailStatus?.status === 'ready' ? 'warning' : 'neutral';
+  const gmailBadgeLabel = connected ? 'Active' : gmailStatus?.status === 'ready' ? 'Ready' : syncState === 'loading' ? '확인 중' : 'Not connected';
+  const gmailSubline = connected
+    ? `${gmailEmail || 'me'} · connected`
+    : gmailStatus?.status === 'ready'
+    ? '연결 대기 · OAuth 완료 필요'
+    : syncState === 'loading'
+    ? '상태 확인 중…'
+    : '연결되지 않음';
+
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', maxWidth: 1100 }}>
       <div>
@@ -159,14 +289,15 @@ export function EmailAutomation({ onNavigate }) {
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13.5, fontWeight: 500 }}>Gmail</div>
-              <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>hyeon@moonlight.pro · connected</div>
+              <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{gmailSubline}</div>
             </div>
-            <Badge tone="success" size="xs">Active</Badge>
+            <Badge tone={gmailBadgeTone} size="xs">{gmailBadgeLabel}</Badge>
           </div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.6 }}>
-            수신 메일을 Leads · Support · Personal로 자동 태깅. 신규 리드는 CRM에 자동 추가.
+            수신 메일을 Lead · Support · Personal · Ignore로 분류. 리드 후보는 Intake Inbox에 스테이징되며, 검토 후 CRM으로 승격합니다.
           </div>
-          <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
+          <GmailScanControl />
+          <div style={{ marginTop: 10, display: 'flex', gap: 6 }}>
             <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/automations/flows')}>Rules</Button>
             <Button variant="ghost" size="xs" onClick={() => onNavigate?.('dashboard/automations/runs')}>Logs</Button>
           </div>
@@ -194,13 +325,8 @@ export function EmailAutomation({ onNavigate }) {
 
       <SectionTitle>Tag rules</SectionTitle>
       <Card pad={false} className="hub-table-card">
-        {[
-          { cond: 'from:@* AND subject 한정', then: 'tag: Lead · create CRM', tone: 'moon' },
-          { cond: 'subject contains "invoice"', then: 'tag: Finance · archive 30d', tone: 'info' },
-          { cond: 'from: jihoon@*, jaemin@*', then: 'tag: Personal', tone: 'personal' },
-          { cond: 'has Stripe link', then: 'tag: Revenue · notify', tone: 'success' },
-        ].map((r, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 20px 1fr 60px', alignItems: 'center', padding: '12px 16px', borderBottom: i < 3 ? '1px solid var(--line-soft)' : 'none', gap: 10 }}>
+        {EMAIL_TAG_RULES.map((r, i) => (
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 20px 1fr 60px', alignItems: 'center', padding: '12px 16px', borderBottom: i < EMAIL_TAG_RULES.length - 1 ? '1px solid var(--line-soft)' : 'none', gap: 10 }}>
             <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>{r.cond}</span>
             <Iconed name="arrowRight" size={13} style={{ color: 'var(--fg-faint)' }} />
             <div><Badge tone={r.tone} size="xs">{r.then}</Badge></div>

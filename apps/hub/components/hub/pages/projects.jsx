@@ -18,6 +18,9 @@ import {
   filterTodosByWorkspace,
 } from "../workspace-map";
 
+// PMS Board persistence key — localStorage v1 (see cols state + effect below).
+const PMS_BOARD_STORAGE_KEY = 'hub:pms-board:v1';
+
 const EMPTY_ALL_BRAND = {
   key: 'all',
   id: 'all',
@@ -154,8 +157,9 @@ export function Projects({ workspace }) {
   const ws = getWorkspace(workspace);
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Council advisor is brand-side; keep it off the ClassIn/회사 sales lanes (that's Guru's domain).
-  const councilEnabled = workspace !== 'classin' && workspace !== 'company';
+  // Council advisor is brand-side; keep it off the ClassIn sales lane (that's Guru's domain).
+  // 회사(company) workspace was absorbed into classin — see workspace-map.js.
+  const councilEnabled = workspace !== 'classin';
   const [brand, setBrand] = React.useState('all');
   const [view, setView] = React.useState('tree');
   const [ledger, setLedger] = React.useState({
@@ -170,7 +174,17 @@ export function Projects({ workspace }) {
   });
   const [todos, setTodos] = React.useState(FALLBACK_TODOS);
   const [drag, setDrag] = React.useState(null);
-  const [cols, setCols] = React.useState(FALLBACK_COLUMNS);
+  // localStorage v1 — DB(tasks 테이블) 승격은 보드↔태스크 매핑 설계 후.
+  const [cols, setCols] = React.useState(() => {
+    if (typeof window === 'undefined') return FALLBACK_COLUMNS;
+    try {
+      const saved = window.localStorage.getItem(PMS_BOARD_STORAGE_KEY);
+      const parsed = saved ? JSON.parse(saved) : null;
+      return Array.isArray(parsed) && parsed.length ? parsed : FALLBACK_COLUMNS;
+    } catch {
+      return FALLBACK_COLUMNS;
+    }
+  });
   const [expanded, setExpanded] = React.useState(() => new Set(['pm-1', 'bm-1']));
   const [openDetail, setOpenDetail] = React.useState(null);
   const [brandMenuOpen, setBrandMenuOpen] = React.useState(false);
@@ -358,6 +372,23 @@ export function Projects({ workspace }) {
     )));
     setView('board');
   }, [currentBrand]);
+
+  // localStorage v1 — DB(tasks 테이블) 승격은 보드↔태스크 매핑 설계 후.
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(PMS_BOARD_STORAGE_KEY, JSON.stringify(cols));
+    } catch {
+      // quota or serialization errors — ignore, board still works in-memory.
+    }
+  }, [cols]);
+
+  const resetBoard = React.useCallback(() => {
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.removeItem(PMS_BOARD_STORAGE_KEY); } catch { /* ignore */ }
+    }
+    setCols(FALLBACK_COLUMNS);
+  }, []);
 
   const statusTone = { 'In progress': 'info', Review: 'warning', Planning: 'moon', Backlog: 'neutral', Blocked: 'danger', Done: 'success' };
   const prioTone = { critical: 'danger', high: 'danger', med: 'warning', medium: 'warning', low: 'neutral' };
@@ -570,6 +601,9 @@ export function Projects({ workspace }) {
               }}>{t.l}</button>
             ))}
           </div>
+          {view === 'board' && (
+            <Button variant="ghost" size="sm" onClick={resetBoard}>보드 초기화</Button>
+          )}
           <Button variant="primary" size="sm" icon="plus" onClick={() => view === 'todos' ? createTodo() : createProject()}>{view === 'todos' ? 'To-do' : 'Project'}</Button>
         </div>
 

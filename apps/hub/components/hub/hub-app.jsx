@@ -19,6 +19,7 @@ import { Followups } from "./pages/followups";
 import { AutomationsIndex, EmailAutomation, Webhooks, Runs, Flows } from "./pages/automations";
 import { SheetsSync } from "./pages/sheets-sync";
 import { EeocrmSync } from "./pages/eeocrm-sync";
+import { IntakeInbox } from "./pages/intake-inbox";
 import { AgentsChat, AgentsCouncil, AgentsOrders, AgentsOffice } from "./pages/agents";
 import { Evolution, Settings } from "./pages/evolution-settings";
 
@@ -78,14 +79,13 @@ const PAGE_MAP = {
   'dashboard/classin/pipeline': (n) => <Deals workspace="classin" onNavigate={n} />,
   'dashboard/classin/projects': () => <Projects workspace="classin" />,
   'dashboard/classin/revenue': () => <Leads workspace="classin" />,
+  'dashboard/classin/intake': () => <IntakeInbox />,
   'dashboard/classin/automations': () => <SheetsSync />,
   // Legacy ClassIn routes kept alive while old bookmarks exist.
   'dashboard/classin/cohorts': () => <Projects workspace="classin" />,
   'dashboard/classin/content': () => <Queue workspace="classin" />,
-  // 회사 (company ops)
-  'dashboard/company/pipeline': (n) => <Deals workspace="company" onNavigate={n} />,
-  'dashboard/company/projects': () => <Projects workspace="company" />,
-  'dashboard/company/automations': () => <Runs />,
+  // 회사 (company) workspace routes retired — absorbed into 클래스인.
+  // See workspace-map.js header + LEGACY_REDIRECTS in hub-data.js.
   // 브랜드 업무 (brand work)
   'dashboard/brand/projects': () => <Projects workspace="brand" />,
   'dashboard/brand/studio': () => <Studio workspace="brand" />,
@@ -101,6 +101,7 @@ const PAGE_MAP = {
   'dashboard/content/campaigns': () => <Campaigns />,
   'dashboard/revenue/overview': (n) => <RevenueOverview onNavigate={n} />,
   'dashboard/revenue/leads': () => <Leads />,
+  'dashboard/revenue/intake': () => <IntakeInbox />,
   'dashboard/revenue/deals': (n) => <Deals onNavigate={n} />,
   'dashboard/revenue/cases': () => <Cases />,
   'dashboard/revenue/accounts': (n) => <Accounts onNavigate={n} />,
@@ -123,7 +124,6 @@ const PAGE_MAP = {
 const PARENT_JUMP = {
   'dashboard': 'dashboard/daily-brief',
   'dashboard/classin': 'dashboard/classin/pipeline',
-  'dashboard/company': 'dashboard/company/pipeline',
   'dashboard/brand': 'dashboard/brand/projects',
   'dashboard/work': 'dashboard/work/calendar',
   'dashboard/content': 'dashboard/content/queue',

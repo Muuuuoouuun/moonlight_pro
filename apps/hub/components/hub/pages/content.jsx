@@ -1606,7 +1606,14 @@ function CampaignTabPanel({ tab, campaign, detail }) {
 
   if (tab === 'audience') {
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 'var(--gap)' }}>
+      <div>
+        <SectionTitle
+          subtitle="실제 leads/accounts 연동 전 일러스트레이션입니다."
+          right={<Badge tone="warning" size="xs">예시 데이터</Badge>}
+        >
+          Audience
+        </SectionTitle>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 'var(--gap)' }}>
         {detail.audience.map((item) => (
           <Card key={item.segment}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1629,6 +1636,7 @@ function CampaignTabPanel({ tab, campaign, detail }) {
             </div>
           </Card>
         ))}
+        </div>
       </div>
     );
   }
