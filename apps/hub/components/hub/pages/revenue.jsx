@@ -1871,7 +1871,17 @@ export function Accounts({ onNavigate }) {
         .map(a => ({ id: a.id, body: a.body, pinned: a.pinned, at: a.at }));
       setDetails(prev => {
         const cur = prev[acc.name] || emptyDetail();
-        return { ...prev, [acc.name]: { ...cur, activity, notes } };
+        // Merge, don't replace: the operator may have logged entries while this fetch
+        // was in flight (optimistic tmp- rows, or already-reconciled real ids the server
+        // response predates). Keep any local row whose id isn't in the fetched set.
+        const fetchedActivityIds = new Set(activity.map(a => a.id));
+        const fetchedNoteIds = new Set(notes.map(n => n.id));
+        const localActivity = (cur.activity || []).filter(a => a.id && !fetchedActivityIds.has(a.id));
+        const localNotes = (cur.notes || []).filter(n => n.id && !fetchedNoteIds.has(n.id));
+        return {
+          ...prev,
+          [acc.name]: { ...cur, activity: [...localActivity, ...activity], notes: [...localNotes, ...notes] },
+        };
       });
     });
     return () => { cancelled = true; };

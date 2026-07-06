@@ -6,6 +6,16 @@ import { scanGmailForLeads } from "@/lib/repositories/gmail-intake";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Hard ceiling on messages fetched per scan — protects the operator's Gmail quota
+// from an oversized (or malicious) maxMessages value.
+const MAX_MESSAGES_CAP = 50;
+
+function clampMaxMessages(value) {
+  const n = Number.parseInt(value, 10);
+  if (!Number.isFinite(n) || n <= 0) return 20;
+  return Math.min(n, MAX_MESSAGES_CAP);
+}
+
 function statusToHttp(status) {
   if (status === "ok") return 200;
   if (status === "preview") return 202;
@@ -23,11 +33,9 @@ export async function POST(req) {
   const parsed = await readHubWriteJson(req).catch(() => ({ data: {} }));
   if (parsed.error) return parsed.error;
 
-  const maxMessages = Number.parseInt(parsed.data?.maxMessages, 10);
-
   try {
     const result = await scanGmailForLeads({
-      maxMessages: Number.isFinite(maxMessages) && maxMessages > 0 ? maxMessages : 20,
+      maxMessages: clampMaxMessages(parsed.data?.maxMessages),
     });
     return NextResponse.json(result, { status: statusToHttp(result.status) });
   } catch (error) {
@@ -40,13 +48,18 @@ export async function POST(req) {
 
 // GET — cheap dry-run summary: classify without staging anything, so the
 // automations UI can show "N candidates" before committing to a real scan.
+// Guarded like POST even though it writes nothing to OUR ledger: it still
+// refreshes the Gmail token and reads inbox metadata, so an unauthenticated
+// caller could burn Gmail quota and learn mailbox classification counts.
 export async function GET(req) {
+  const guard = assertHubWriteAllowed(req);
+  if (guard) return guard;
+
   const { searchParams } = new URL(req.url);
-  const maxMessages = Number.parseInt(searchParams.get("maxMessages"), 10);
 
   try {
     const result = await scanGmailForLeads({
-      maxMessages: Number.isFinite(maxMessages) && maxMessages > 0 ? maxMessages : 20,
+      maxMessages: clampMaxMessages(searchParams.get("maxMessages")),
       dryRun: true,
     });
     return NextResponse.json(result, { status: statusToHttp(result.status) });

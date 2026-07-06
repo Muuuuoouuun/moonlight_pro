@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { assertHubWriteAllowed } from "@/lib/hub-write-guard";
 import { getAutomationsLedger } from "@/lib/repositories/automations-ledger";
 import { getContentLedger } from "@/lib/repositories/content-ledger";
 import { getFollowups } from "@/lib/repositories/followups-ledger";
@@ -433,7 +434,7 @@ function buildSources(results) {
   ];
 }
 
-export async function GET() {
+export async function GET(req) {
   const [projectsResult, workResult, contentResult, revenueResult, automationsResult, followupsResult, guruRunsResult, ordersResult] = await Promise.allSettled([
     getProjectLedger(),
     getWorkLedger(),
@@ -469,11 +470,17 @@ export async function GET() {
     orders: Array.isArray(ordersLedger.orders) ? ordersLedger.orders.slice(0, 12) : [],
   };
 
-  // Opportunistic stalled-deal scan — idempotent (dedupes on open followup per deal),
-  // so piggybacking on every brief load keeps the approval queue fresh without cron
-  // infra. Reuses the already-fetched revenue ledger; a scan failure never blocks the brief.
+  // Opportunistic stalled-deal scan — idempotent (dedupes on open followup per deal,
+  // enforced by uq_work_orders_open_followup at the DB level), so piggybacking on the
+  // brief keeps the approval queue fresh without cron infra. Because this GET would
+  // otherwise become an unauthenticated write path, the scan only runs when the request
+  // passes the same write guard as the POST routes (operator session / secret / dev
+  // origin); anonymous or bot hits get a pure read-only brief. A scan failure never
+  // blocks the brief.
   try {
-    const scan = await scanStalledDeals({ ledger: revenue });
+    const scan = assertHubWriteAllowed(req) === null
+      ? await scanStalledDeals({ ledger: revenue })
+      : null;
     if (scan?.created > 0) {
       const refreshed = await getWorkOrders({ status: "proposed", limit: 20 });
       if (refreshed.source === "supabase") {

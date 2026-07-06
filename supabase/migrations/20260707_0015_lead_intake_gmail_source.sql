@@ -1,7 +1,9 @@
 -- Allow Gmail-scanned lead candidates as a lead_intake_raw source (Sales OS).
--- Additive: widens the source check constraint. Safe after 0009.
--- Mirrors 20260618_0009_business_card_source.sql's idempotent constraint
--- recreation so re-running this migration is a no-op.
+-- Additive: widens the source check constraint. Safe after 0013 — the recreated
+-- check must carry EVERY previously-allowed value ('business_card' from 0009,
+-- 'inbox' from 0010, 'eeocrm' from 0013), or applying this migration would fail
+-- on rows using them / silently break those intake paths.
+-- Idempotent constraint recreation so re-running is a no-op.
 do $$
 declare c text;
 begin
@@ -15,4 +17,4 @@ end $$;
 
 alter table public.lead_intake_raw
   add constraint lead_intake_raw_source_check
-  check (source in ('google_sheets', 'csv', 'manual', 'naver', 'business_card', 'gmail'));
+  check (source in ('google_sheets', 'csv', 'manual', 'naver', 'business_card', 'inbox', 'eeocrm', 'gmail'));

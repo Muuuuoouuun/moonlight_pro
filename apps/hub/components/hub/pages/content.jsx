@@ -2080,11 +2080,26 @@ export function Campaigns() {
       const data = await response.json().catch(() => null);
       if (data?.status === 'saved' && data.id) {
         // Swap the optimistic local id for the real one so later PATCHes target it.
+        // If the operator edited status while the create was in flight, that edit only
+        // lives locally (updateCampaignStatus skips PATCH on local ids) — preserve it
+        // over the server row and persist it now that a real id exists.
+        let dirtyStatus = null;
         ledger.setState(s => ({
           ...s,
-          campaigns: s.campaigns.map(c => (c.id === localId ? { ...c, ...(data.campaign || {}), id: data.id } : c)),
+          campaigns: s.campaigns.map(c => {
+            if (c.id !== localId) return c;
+            if (c.status !== draft.status) dirtyStatus = c.status;
+            return { ...c, ...(data.campaign || {}), id: data.id, ...(dirtyStatus ? { status: dirtyStatus } : {}) };
+          }),
         }));
-        setSelectedId(data.id);
+        setSelectedId(prev => (prev === localId ? data.id : prev));
+        if (dirtyStatus) {
+          fetch('/api/hub/campaigns', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ op: 'update', id: data.id, status: dirtyStatus }),
+          }).catch(() => {});
+        }
       }
       // preview/error: keep the optimistic local row — same contract as the Revenue drawer.
     } catch {
