@@ -243,6 +243,9 @@ export async function promoteStagedLeads({
   workspaceId = resolveDefaultWorkspaceId(),
   limit = 200,
   intakeIds = null,
+  // Tags the sync_runs row so per-source status views (getSheetsSyncStatus,
+  // getEeocrmSyncStatus) can filter their own history instead of sharing one feed.
+  provider = "google_sheets",
 } = {}) {
   const config = resolveSupabaseConfig();
   if (!config || !workspaceId) return { ok: false, reason: "missing-config" };
@@ -384,7 +387,7 @@ export async function promoteStagedLeads({
   await recordGoogleSheetsSync({
     workspaceId,
     status: "success",
-    payload: { action: "promote", promoted, merged: mergedCount, review, total: pendingRows.length },
+    payload: { provider, action: "promote", promoted, merged: mergedCount, review, total: pendingRows.length },
   });
   return { ok: true, promoted, merged: mergedCount, review, total: pendingRows.length };
 }
