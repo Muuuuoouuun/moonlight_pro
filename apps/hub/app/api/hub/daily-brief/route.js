@@ -378,6 +378,7 @@ function buildBlocks(projects, content) {
         kind: projectById.get(todo.project)?.name || "Task",
         tag: todo.priority === "high" ? "company" : null,
         done: false,
+        todoId: todo.id,
       });
     });
 

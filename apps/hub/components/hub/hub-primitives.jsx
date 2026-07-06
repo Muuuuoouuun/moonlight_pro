@@ -207,7 +207,7 @@ const DRAWER_INPUT_STYLE = {
 
 // Shared field-driven edit drawer. Revenue behavior is canonical for save feedback,
 // ESC close, and optimistic delete confirmation.
-export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)' }) {
+export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)', children }) {
   const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | error
   React.useEffect(() => {
     if (!record) return undefined;
@@ -269,6 +269,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
               )}
             </label>
           ))}
+          {children}
         </div>
         <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10 }}>
           {onDelete && (

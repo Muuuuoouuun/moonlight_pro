@@ -5,7 +5,57 @@ import { Iconed } from "./hub-icons";
 import { IconButton, Avatar, Kbd } from "./hub-primitives";
 import { NAV_TREE, LEGACY_TREE } from "./hub-data";
 
+// Best-effort nav count badges — fetched once on mount, never polled.
+// Keyed by nav child `key` (not path) so callers can look up via item.key.
+function useSidebarCounts() {
+  const [counts, setCounts] = React.useState({});
+
+  React.useEffect(() => {
+    let active = true;
+
+    fetch('/api/hub/intake', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        if (!active) return;
+        const rows = Array.isArray(d?.rows) ? d.rows : Array.isArray(d?.items) ? d.items : [];
+        const pending = rows.filter(row => row?.status === 'pending' || row?.status === 'review').length;
+        setCounts(c => ({ ...c, 'classin-intake': pending }));
+      })
+      .catch(() => {});
+
+    fetch('/api/hub/followups', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        if (!active) return;
+        const items = Array.isArray(d?.items) ? d.items : [];
+        // followups-ledger.js summary shape: { overdue, dueToday, total, shown }.
+        const due = Number.isFinite(d?.summary?.dueToday) ? d.summary.dueToday : items.length;
+        setCounts(c => ({ ...c, 'classin-followups': due }));
+      })
+      .catch(() => {});
+
+    return () => { active = false; };
+  }, []);
+
+  return counts;
+}
+
+function CountBadge({ n }) {
+  if (!n) return null;
+  return (
+    <span className="mono" style={{
+      fontSize: 10, lineHeight: 1, flexShrink: 0,
+      color: n > 0 ? 'var(--moon-300)' : 'var(--fg-faint)',
+      padding: '2px 5px', borderRadius: 999,
+      border: '1px solid var(--line-soft)',
+    }}>
+      {n}
+    </span>
+  );
+}
+
 export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openPalette, className }) {
+  const counts = useSidebarCounts();
   const [open, setOpen] = React.useState(() => {
     const o = {};
     // Lead with the three workspaces expanded; secondary groups (Agents / Work /
@@ -166,7 +216,8 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
                         onMouseLeave={e => { if (!cAct) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fg-dim)'; } }}
                       >
                         <Iconed name={c.icon} size={12} style={{ color: 'var(--fg-faint)' }} />
-                        <span>{c.label}</span>
+                        <span style={{ flex: 1 }}>{c.label}</span>
+                        <CountBadge n={counts[c.key]} />
                       </button>
                     );
                   })}

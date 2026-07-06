@@ -15,12 +15,14 @@ export const NAV_TREE = [
   {
     key: 'classin', label: '클래스인', icon: 'building', workspace: true,
     children: [
-      { key: 'classin-pipeline',   label: '업무·파이프라인', icon: 'deals',       path: 'dashboard/classin/pipeline' },
-      { key: 'classin-projects',   label: '프로젝트',        icon: 'projects',    path: 'dashboard/classin/projects' },
-      { key: 'classin-revenue',    label: '결제·리드',       icon: 'leads',       path: 'dashboard/classin/revenue' },
-      { key: 'classin-intake',    label: '리드 인박스',      icon: 'inbox',       path: 'dashboard/classin/intake' },
-      { key: 'classin-segments',  label: '세그먼트',         icon: 'filter',      path: 'dashboard/classin/segments' },
-      { key: 'classin-automations',label: '자동화',          icon: 'automations', path: 'dashboard/classin/automations' },
+      { key: 'classin-intake',      label: '리드 인박스',      icon: 'inbox',       path: 'dashboard/classin/intake',      keywords: ['intake', 'inbox', '명함', '인박스'] },
+      { key: 'classin-revenue',     label: '결제·리드',        icon: 'leads',       path: 'dashboard/classin/revenue',     keywords: ['leads', '리드'] },
+      { key: 'classin-segments',    label: '세그먼트',         icon: 'filter',      path: 'dashboard/classin/segments',    keywords: ['segments', '세그먼트'] },
+      { key: 'classin-pipeline',    label: '업무·파이프라인',  icon: 'deals',       path: 'dashboard/classin/pipeline',    keywords: ['deals', '딜', '칸반', 'pipeline'] },
+      { key: 'classin-accounts',    label: '고객·계정',        icon: 'accounts',    path: 'dashboard/classin/accounts',    keywords: ['accounts', '계정', '고객'] },
+      { key: 'classin-followups',   label: 'Follow-ups',       icon: 'bell',        path: 'dashboard/classin/followups',   keywords: ['followup', '팔로업'] },
+      { key: 'classin-projects',    label: '프로젝트',         icon: 'projects',    path: 'dashboard/classin/projects' },
+      { key: 'classin-automations', label: '자동화',           icon: 'automations', path: 'dashboard/classin/automations' },
     ],
   },
   // ── Workspace 2: 브랜드 — 내 브랜드 / 창업 준비. 이전 브랜드 유지. ──

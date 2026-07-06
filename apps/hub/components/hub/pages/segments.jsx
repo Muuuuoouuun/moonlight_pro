@@ -93,9 +93,16 @@ function SyncBadge({ state }) {
   return <Badge tone={tone} size="xs" variant="outline" style={{ marginLeft: 8 }}>{label}</Badge>;
 }
 
-export function Segments({ workspace }) {
+export function Segments({ workspace, onNavigate }) {
   const { syncState, source, leads: allLeads } = useLeadsLedger();
   const ws = getWorkspace(workspace);
+  // Clicking a member row deep-links to that lead's drawer. Mirror the workspace path pick used by
+  // the Revenue pages: classin scope opens the classin Leads surface, else the flat leads route.
+  const openLead = (lead) => {
+    if (!lead || lead.id == null) return;
+    const base = workspace === 'classin' ? 'dashboard/classin/revenue' : 'dashboard/revenue/leads';
+    onNavigate?.(`${base}?lead=${lead.id}`);
+  };
   const leads = filterLeadsByWorkspace(allLeads, workspace);
   const [dimension, setDimension] = React.useState('source');
   const [search, setSearch] = React.useState('');
@@ -179,10 +186,15 @@ export function Segments({ workspace }) {
                 {isOpen && (
                   <div style={{ marginTop: 10, borderTop: '1px solid var(--line-soft)', paddingTop: 6 }}>
                     {seg.members.map((l, i) => (
-                      <div key={l.id || i} style={{
-                        display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0',
-                        borderBottom: i < seg.members.length - 1 ? '1px solid var(--line-soft)' : 'none',
-                      }}>
+                      <div key={l.id || i}
+                        onClick={(e) => { e.stopPropagation(); openLead(l); }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px', margin: '0 -8px',
+                          borderRadius: 'var(--r-sm)', cursor: l.id != null ? 'pointer' : 'default',
+                          borderBottom: i < seg.members.length - 1 ? '1px solid var(--line-soft)' : 'none',
+                        }}>
                         <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</span>
                         <Badge tone={STAGE_TONE[l.stage] || 'neutral'} size="xs" variant="outline">{l.stage}</Badge>
                         {Number(l.score) > 0 && <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{l.score}</span>}

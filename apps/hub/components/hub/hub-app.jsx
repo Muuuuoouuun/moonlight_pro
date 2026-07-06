@@ -82,6 +82,8 @@ const PAGE_MAP = {
   'dashboard/classin/revenue': (n) => <Leads workspace="classin" onNavigate={n} />,
   'dashboard/classin/intake': (n) => <IntakeInbox onNavigate={n} />,
   'dashboard/classin/segments': (n) => <Segments workspace="classin" onNavigate={n} />,
+  'dashboard/classin/accounts': (n) => <Accounts onNavigate={n} />,
+  'dashboard/classin/followups': () => <Followups />,
   'dashboard/classin/automations': () => <SheetsSync />,
   // Legacy ClassIn routes kept alive while old bookmarks exist.
   'dashboard/classin/cohorts': () => <Projects workspace="classin" />,

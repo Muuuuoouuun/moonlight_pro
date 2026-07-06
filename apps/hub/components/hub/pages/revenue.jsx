@@ -141,6 +141,10 @@ function useRevenueLedger() {
     summary: null,
   });
   const [syncState, setSyncState] = React.useState('mock');
+  // Bump to re-run the fetch effect. reload() surfaces it so callers (business-card promote,
+  // score recompute) can refresh the ledger in place instead of a full window reload.
+  const [reloadTick, setReloadTick] = React.useState(0);
+  const reload = React.useCallback(() => setReloadTick(t => t + 1), []);
 
   React.useEffect(() => {
     let active = true;
@@ -173,9 +177,9 @@ function useRevenueLedger() {
     }
     load();
     return () => { active = false; };
-  }, []);
+  }, [reloadTick]);
 
-  return { ledger, syncState };
+  return { ledger, syncState, reload };
 }
 
 function SyncBadge({ state }) {
@@ -515,14 +519,173 @@ function LeadTagChips({ lead }) {
   );
 }
 
+// Mini kanban-card chips for a joined lead — reuses LeadTagChips' visual language (region · units)
+// but inline and capped at 2 so the card height gain stays ≤ 1 line. Renders null when absent.
+function DealLeadMiniChips({ lead }) {
+  if (!lead) return null;
+  const chips = [];
+  if (lead.region) chips.push({ icon: 'globe', text: lead.region });
+  if (lead.units) chips.push({ icon: 'tag', text: `${lead.units}대` });
+  if (chips.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap', marginBottom: 8, overflow: 'hidden' }}>
+      {chips.slice(0, 2).map((c, i) => (
+        <span key={i} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 3,
+          fontSize: 9.5, color: 'var(--fg-faint)',
+          background: 'var(--surface-3)', border: '1px solid var(--line-soft)',
+          borderRadius: 4, padding: '1px 5px',
+          whiteSpace: 'nowrap', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {c.icon && <Iconed name={c.icon} size={8} />}
+          {c.text}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Reusable activity timeline for the Lead/Deal EditDrawer children slot. Mirrors the Accounts
+// optimistic pattern (pushActivity tmp-id → server id swap + in-flight merge). Skips entirely for
+// unsaved local rows; in preview (no live ledger) shows a muted note instead of fabricating rows.
+function DrawerTimeline({ entityType, entityId, title = '활동 타임라인' }) {
+  const isLocal = String(entityId ?? '').startsWith('local-') || String(entityId ?? '').toLowerCase().startsWith('local-');
+  const [rows, setRows] = React.useState([]);
+  const [phase, setPhase] = React.useState('idle'); // idle | loading | live | preview
+  const [kind, setKind] = React.useState('call');
+  const [body, setBody] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    if (isLocal || !entityId) { setRows([]); setPhase('idle'); return undefined; }
+    let cancelled = false;
+    setPhase('loading');
+    setRows([]);
+    const q = entityType === 'deal' ? { dealId: entityId } : { leadId: entityId };
+    fetchActivities(q).then(res => {
+      if (cancelled) return;
+      if (res.status === 'live') {
+        setRows(res.activities.map(a => ({ id: a.id, kind: a.kind, body: a.body, at: a.at, who: a.who })));
+        setPhase('live');
+      } else {
+        setPhase('preview');
+      }
+    });
+    return () => { cancelled = true; };
+  }, [entityType, entityId, isLocal]);
+
+  if (isLocal || !entityId) return null;
+
+  const log = async () => {
+    const text = body.trim();
+    if (!text || saving) return;
+    const tmp = `tmp-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    setRows(prev => [{ id: tmp, kind, body: text, at: '방금', who: 'Me' }, ...prev]);
+    setBody('');
+    setSaving(true);
+    const payload = entityType === 'deal'
+      ? { dealId: entityId, entityType: 'deal', kind, body: text }
+      : { leadId: entityId, entityType: 'lead', kind, body: text };
+    const r = await saveActivity('create', payload);
+    setSaving(false);
+    if (r.ok && r.activity) {
+      setRows(prev => prev.map(a => a.id === tmp
+        ? { id: r.activity.id, kind: r.activity.kind, body: r.activity.body, at: r.activity.at, who: r.activity.who }
+        : a));
+    }
+  };
+
+  const visible = rows.slice(0, 30);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+      <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)' }}>{title}</div>
+
+      {/* Mini composer */}
+      <div style={{
+        background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
+        borderRadius: 'var(--r-sm)', padding: 8, display: 'flex', flexDirection: 'column', gap: 8,
+      }}>
+        <textarea
+          value={body}
+          onChange={e => setBody(e.target.value)}
+          placeholder="활동 기록… (통화·미팅·이메일 메모)"
+          rows={2}
+          style={{
+            width: '100%', resize: 'vertical', background: 'transparent', border: 'none', outline: 'none',
+            color: 'var(--fg)', fontSize: 12.5, fontFamily: 'inherit', lineHeight: 1.5,
+          }}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <select
+            value={kind}
+            onChange={e => setKind(e.target.value)}
+            style={{
+              height: 26, padding: '0 8px', fontSize: 11.5,
+              background: 'var(--surface-3)', color: 'var(--fg)',
+              border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', outline: 'none',
+            }}
+          >
+            {ACTIVITY_KIND_OPTIONS.map(k => <option key={k} value={k}>{ACT_LABEL[k]}</option>)}
+          </select>
+          <div style={{ flex: 1 }} />
+          <Button variant="primary" size="xs" onClick={log} disabled={saving || !body.trim()}>기록</Button>
+        </div>
+      </div>
+
+      {/* Timeline rows */}
+      {phase === 'preview' && (
+        <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', padding: '6px 0', lineHeight: 1.5 }}>
+          기록 없음 · Supabase 연결 시 저장됩니다
+        </div>
+      )}
+      {phase === 'live' && visible.length === 0 && (
+        <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', padding: '6px 0' }}>아직 기록이 없습니다.</div>
+      )}
+      {(phase === 'live' || rows.length > 0) && visible.length > 0 && (
+        <div className="scroll-y" style={{ display: 'flex', flexDirection: 'column', maxHeight: 240 }}>
+          {visible.map((a, i) => (
+            <div key={a.id} style={{
+              display: 'grid', gridTemplateColumns: '18px 1fr auto', gap: 10, padding: '9px 0',
+              borderBottom: i < visible.length - 1 ? '1px solid var(--line-soft)' : 'none',
+              alignItems: 'flex-start',
+            }}>
+              <span style={{ color: `var(--${ACT_TONE[a.kind] === 'neutral' ? 'fg-muted' : ACT_TONE[a.kind] || 'fg-muted'})`, marginTop: 1 }}>
+                <Iconed name={ACT_ICON[a.kind] || 'edit'} size={13} />
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{a.body}</div>
+                <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3, display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <Badge tone={ACT_TONE[a.kind] || 'neutral'} size="xs" variant="outline">{ACT_LABEL[a.kind] || a.kind}</Badge>
+                  <span>{a.who}</span>
+                </div>
+              </div>
+              <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{a.at}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Leads({ workspace, onNavigate }) {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState, reload } = useRevenueLedger();
   const searchParams = useSearchParams();
   const [localLeads, setLocalLeads] = React.useState([]);
   const [leadEdits, setLeadEdits] = React.useState({}); // { [id]: patch } — overlays any lead (local or ledger)
   const [deletedLeadIds, setDeletedLeadIds] = React.useState(() => new Set()); // hide removed ledger rows
   const [editLeadId, setEditLeadId] = React.useState(null);
   const [convertNote, setConvertNote] = React.useState(null); // { tone, text } — inline 리드→딜 전환 feedback
+  const [toast, setToast] = React.useState(null); // { text } — transient bottom-right feedback (score recompute)
+  const [recomputing, setRecomputing] = React.useState(false);
+  const toastTimerRef = React.useRef(null);
+  const showToast = React.useCallback((text) => {
+    setToast({ text });
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
+  }, []);
+  React.useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
   const ws = getWorkspace(workspace);
   const mergedLeads = [...localLeads, ...ledger.leads]
     .filter(l => !deletedLeadIds.has(l.id))
@@ -638,6 +801,31 @@ export function Leads({ workspace, onNavigate }) {
     }
   };
 
+  // 스코어 재계산 — POST the existing followups recompute action, then reload the ledger in place.
+  // Same-origin write (operator session/origin covers the guard, like the other Revenue writes).
+  const recomputeScores = async () => {
+    if (recomputing) return;
+    setRecomputing(true);
+    try {
+      const resp = await fetch('/api/hub/followups', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'recompute-scores' }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (resp.ok && (data.status === 'ok' || data.status === 'skipped')) {
+        showToast(data.status === 'ok' ? '스코어 재계산 완료' : '재계산 완료 · 반영할 리드 없음');
+        reload();
+      } else {
+        showToast('스코어 재계산 실패 · 다시 시도하세요');
+      }
+    } catch {
+      showToast('스코어 재계산 실패 · 다시 시도하세요');
+    } finally {
+      setRecomputing(false);
+    }
+  };
+
   const cardFileRef = React.useRef(null);
   const [cardState, setCardState] = React.useState(null); // { phase, status, fields, error }
   async function onCardFile(e) {
@@ -700,6 +888,9 @@ export function Leads({ workspace, onNavigate }) {
         }}>
           Score
         </button>
+        <Button className="hub-toolbar" variant="ghost" size="xs" icon="bolt" onClick={recomputeScores} disabled={recomputing} style={{ marginLeft: 4 }}>
+          {recomputing ? '재계산 중…' : '스코어 재계산'}
+        </Button>
         <div style={{ width: 8 }} />
         <Button variant="secondary" size="sm" icon="plus" onClick={() => cardFileRef.current?.click()}>명함</Button>
         <input ref={cardFileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onCardFile} />
@@ -752,7 +943,7 @@ export function Leads({ workspace, onNavigate }) {
             <span style={{ fontSize: 12.5, color: 'var(--fg-muted)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summary}</span>
             <div style={{ flex: 1 }} />
             {s === 'promoted' && (
-              <Button variant="ghost" size="xs" onClick={() => window.location.reload()}>목록 새로고침</Button>
+              <Button variant="ghost" size="xs" onClick={() => { reload(); setCardState(null); }}>목록 새로고침</Button>
             )}
             {(s === 'review' || s === 'rejected') && (
               <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/classin/intake')}>인박스에서 검토 →</Button>
@@ -851,7 +1042,11 @@ export function Leads({ workspace, onNavigate }) {
         onSave={persistLead}
         onDelete={deleteLead}
         onClose={() => { setEditLeadId(null); setConvertNote(null); }}
-      />
+      >
+        {editingLead && (
+          <DrawerTimeline entityType="lead" entityId={editingLead.id} title="활동 타임라인" />
+        )}
+      </EditDrawer>
 
       {/* 리드 → 딜 전환 — anchored above the EditDrawer footer. Non-local leads only. */}
       {editingLead && !String(editLeadId).startsWith('local-lead-') && (
@@ -879,6 +1074,21 @@ export function Leads({ workspace, onNavigate }) {
           </Button>
         </div>
       )}
+
+      {toast && (
+        <div style={{
+          position: 'fixed', right: 20, bottom: 20, zIndex: 70,
+          maxWidth: 'min(360px, calc(100vw - 40px))',
+          padding: '11px 14px',
+          background: 'var(--surface)',
+          border: '1px solid var(--line-soft)',
+          borderRadius: 'var(--r-lg)',
+          boxShadow: '0 8px 24px -12px oklch(0 0 0 / 0.55)',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45 }}>{toast.text}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -892,6 +1102,7 @@ export function Deals({ workspace, onNavigate }) {
   const [overStage, setOverStage] = React.useState(null);
   const [filter, setFilter] = React.useState('all');
   const [stalledOnly, setStalledOnly] = React.useState(false);
+  const [search, setSearch] = React.useState('');
   const [editDealId, setEditDealId] = React.useState(null);
   const [editDealPrevStage, setEditDealPrevStage] = React.useState(null);
   const [queuedDeals, setQueuedDeals] = React.useState(() => new Set()); // deals with a proposed follow-up (seeded from the queue on mount)
@@ -972,8 +1183,20 @@ export function Deals({ workspace, onNavigate }) {
   const scopedDeals = filterDealsByWorkspace(deals, workspace);
   const wsEmpty = Boolean(ws) && scopedDeals.length === 0;
 
+  // Join a deal back to its lead (by leadId) so the drawer can link out and the kanban card can
+  // surface region/units chips. Keyed on the live ledger's leads; empty in preview/mock.
+  const leadById = React.useMemo(() => {
+    const m = new Map();
+    (ledger.leads || []).forEach(l => { if (l && l.id != null) m.set(String(l.id), l); });
+    return m;
+  }, [ledger.leads]);
+  const leadForDeal = (deal) => (deal && deal.leadId != null ? leadById.get(String(deal.leadId)) || null : null);
+
+  const term = search.trim().toLowerCase();
   const isStalled = (d) => d.stage !== 'won' && d.stage !== 'lost' && Number(d.age) > 10;
-  const matches = (d) => (filter === 'all' || d.type === filter) && (!stalledOnly || isStalled(d));
+  const matches = (d) => (filter === 'all' || d.type === filter)
+    && (!stalledOnly || isStalled(d))
+    && (!term || String(d.name || '').toLowerCase().includes(term) || String(d.owner || '').toLowerCase().includes(term));
   const totals = DEAL_STAGES.reduce((acc, s) => {
     const items = scopedDeals.filter(d => d.stage === s.key && matches(d));
     acc[s.key] = { count: items.length, sum: items.reduce((a, b) => a + b.value, 0) };
@@ -1137,6 +1360,7 @@ export function Deals({ workspace, onNavigate }) {
             }}>{t.l}</button>
           ))}
         </div>
+        <Input className="hub-toolbar" placeholder="딜·담당 검색…" icon="search" value={search} onChange={setSearch} style={{ marginRight: 8 }} />
         {stalledCount > 0 && (
           <button
             onClick={() => setStalledOnly(v => !v)}
@@ -1232,6 +1456,7 @@ export function Deals({ workspace, onNavigate }) {
                       </Badge>
                     </div>
                     <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.4, marginBottom: 8 }}>{d.name}</div>
+                    <DealLeadMiniChips lead={leadForDeal(d)} />
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                       <span className="mono" style={{ fontSize: 12, color: 'var(--moon-200)' }}>{fmt(d.value)}</span>
                       <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{d.close}</span>
@@ -1346,7 +1571,33 @@ export function Deals({ workspace, onNavigate }) {
         onSave={persistDeal}
         onDelete={deleteDeal}
         onClose={() => { setEditDealId(null); setEditDealPrevStage(null); }}
-      />
+      >
+        {editingDeal && (() => {
+          const linkedLead = leadForDeal(editingDeal);
+          // Mirror convertLeadToDeal's path pick: in-workspace → classin, else the flat leads route.
+          const leadPath = ws ? 'dashboard/classin/revenue' : 'dashboard/revenue/leads';
+          return (
+            <>
+              {linkedLead && (
+                <div style={{
+                  display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4,
+                  padding: 10, background: 'var(--surface-2)',
+                  border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)' }}>연결된 리드</span>
+                    <div style={{ flex: 1 }} />
+                    <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(`${leadPath}?lead=${linkedLead.id}`)}>리드 열기</Button>
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--fg)' }}>{linkedLead.name}</div>
+                  <LeadTagChips lead={linkedLead} />
+                </div>
+              )}
+              <DrawerTimeline entityType="deal" entityId={editingDeal.id} title="활동 타임라인" />
+            </>
+          );
+        })()}
+      </EditDrawer>
     </div>
   );
 }
