@@ -182,6 +182,56 @@ function useContentLedger() {
   return state;
 }
 
+// Campaigns ledger — same fetch-on-mount / source contract as useContentLedger,
+// scoped to /api/hub/campaigns. syncState mirrors the Publishing queue badge
+// ('loading' | 'live' | 'mock') so Campaigns reads honestly when Supabase isn't
+// configured instead of silently mixing mock + live rows.
+function useCampaignLedger() {
+  const [state, setState] = React.useState({
+    source: "mock",
+    syncState: "mock",
+    campaigns: FALLBACK_CAMPAIGNS,
+  });
+
+  const reload = React.useCallback(async () => {
+    setState((s) => ({ ...s, syncState: "loading" }));
+    try {
+      const response = await fetch("/api/hub/campaigns", { cache: "no-store" });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || !data || data.status === "error") {
+        setState((s) => ({ ...s, syncState: "mock" }));
+        return;
+      }
+
+      if (data.source === "supabase") {
+        setState({
+          source: data.source,
+          syncState: "live",
+          campaigns: Array.isArray(data.campaigns) ? data.campaigns : [],
+        });
+      } else {
+        setState((s) => ({ ...s, syncState: "mock" }));
+      }
+    } catch {
+      setState((s) => ({ ...s, syncState: "mock" }));
+    }
+  }, []);
+
+  React.useEffect(() => {
+    let active = true;
+    (async () => {
+      if (!active) return;
+      await reload();
+    })();
+    return () => {
+      active = false;
+    };
+  }, [reload]);
+
+  return { ...state, reload, setState };
+}
+
 export function Studio({ workspace }) {
   const ws = getWorkspace(workspace);
   const router = useRouter();
@@ -1729,20 +1779,49 @@ function CampaignTabPanel({ tab, campaign, detail }) {
   );
 }
 
+// Status select options for the inline status editor. Value is the DB-shaped
+// status key (matches campaigns.status check constraint); label is what the
+// war-room card already renders via sTone/Badge.
+const CAMPAIGN_STATUS_OPTIONS = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'active', label: 'Active' },
+  { value: 'paused', label: 'Planning' },
+  { value: 'completed', label: 'Done' },
+];
+
+// Tiny local live/mock indicator — mirrors the Publishing queue badge (line
+// ~1119) but Campaigns doesn't import from revenue.jsx/EditDrawer per the
+// concurrent-refactor constraint, so it's redefined here.
+function CampaignSyncBadge({ syncState }) {
+  const color = syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)';
+  const label = syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock';
+  return <span className="mono" style={{ marginLeft: 8, color }}>{label}</span>;
+}
+
 export function Campaigns() {
   const router = useRouter();
-  const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral' };
-  const [campaigns, setCampaigns] = React.useState(FALLBACK_CAMPAIGNS);
+  const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral', Done: 'success' };
+  const ledger = useCampaignLedger();
+  const campaigns = ledger.campaigns;
   const [selectedId, setSelectedId] = React.useState(FALLBACK_CAMPAIGNS[0]?.id);
   const [tab, setTab] = React.useState('pulse');
   const [focusMode, setFocusMode] = React.useState(false);
   const selected = campaigns.find(c => c.id === selectedId) || campaigns[0];
-  const detail = CAMPAIGN_WAR_ROOMS[selected.id] || CAMPAIGN_WAR_ROOMS.cm1;
+  const detail = CAMPAIGN_WAR_ROOMS[selected?.id] || CAMPAIGN_WAR_ROOMS.cm1;
   const activeTabLabel = CAMPAIGN_TABS.find(t => t.key === tab)?.label || 'Pulse';
-  const createCampaign = () => {
-    const id = `local-campaign-${Date.now()}`;
-    const next = {
-      id,
+
+  // Keep the selection valid once live data replaces the fallback list.
+  React.useEffect(() => {
+    if (!campaigns.length) return;
+    if (!campaigns.some(c => c.id === selectedId)) {
+      setSelectedId(campaigns[0].id);
+    }
+  }, [campaigns, selectedId]);
+
+  const createCampaign = React.useCallback(async () => {
+    const localId = `local-campaign-${Date.now()}`;
+    const draft = {
+      id: localId,
       name: '새 캠페인',
       status: 'Draft',
       channels: ['Email'],
@@ -1751,11 +1830,65 @@ export function Campaigns() {
       goal: '목표 설정',
       current: 0,
     };
-    setCampaigns(prev => [next, ...prev]);
-    setSelectedId(id);
+    ledger.setState(s => ({ ...s, campaigns: [draft, ...s.campaigns] }));
+    setSelectedId(localId);
     setTab('pulse');
     setFocusMode(true);
-  };
+
+    try {
+      const response = await fetch('/api/hub/campaigns', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          op: 'create',
+          name: draft.name,
+          status: draft.status,
+          channels: draft.channels,
+          progress: draft.progress,
+          goal: draft.goal,
+          current: draft.current,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (data?.status === 'saved' && data.id) {
+        // Swap the optimistic local id for the real one so later PATCHes target it.
+        ledger.setState(s => ({
+          ...s,
+          campaigns: s.campaigns.map(c => (c.id === localId ? { ...c, ...(data.campaign || {}), id: data.id } : c)),
+        }));
+        setSelectedId(data.id);
+      }
+      // preview/error: keep the optimistic local row — same contract as the Revenue drawer.
+    } catch {
+      // Network failure — keep the optimistic local row, stay silent (matches Revenue drawer behavior).
+    }
+  }, [ledger]);
+
+  // Inline status edit — optimistic PATCH, mirrors createCampaign's fire-and-keep-local pattern.
+  const updateCampaignStatus = React.useCallback(async (id, nextLabel) => {
+    const prevCampaigns = campaigns;
+    ledger.setState(s => ({
+      ...s,
+      campaigns: s.campaigns.map(c => (c.id === id ? { ...c, status: nextLabel } : c)),
+    }));
+
+    if (String(id).startsWith('local-campaign-')) return; // not persisted yet, nothing to PATCH
+
+    try {
+      const response = await fetch('/api/hub/campaigns', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ op: 'update', id, status: nextLabel }),
+      });
+      const data = await response.json().catch(() => null);
+      if (data?.status === 'error') {
+        // Roll back on a hard error only — preview keeps the optimistic value.
+        ledger.setState(s => ({ ...s, campaigns: prevCampaigns }));
+      }
+    } catch {
+      // Network failure — keep the optimistic value, consistent with createCampaign.
+    }
+  }, [campaigns, ledger]);
 
   React.useEffect(() => {
     if (!focusMode) return;
@@ -1785,12 +1918,27 @@ export function Campaigns() {
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Campaigns</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Content 안에서 Revenue, Automations, Decisions를 캠페인 기준으로 묶는 war room</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+            Content 안에서 Revenue, Automations, Decisions를 캠페인 기준으로 묶는 war room
+            <CampaignSyncBadge syncState={ledger.syncState} />
+          </div>
         </div>
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="sm" icon="plus" onClick={createCampaign}>Campaign</Button>
       </div>
 
+      {campaigns.length === 0 && (
+        <EmptyState
+          icon="campaigns"
+          title="아직 캠페인이 없습니다"
+          description={ledger.syncState === 'live'
+            ? 'Supabase campaigns 원장에 표시할 캠페인이 없습니다.'
+            : '캠페인을 만들면 war room에 표시됩니다.'}
+          action={<Button variant="primary" size="sm" icon="plus" onClick={createCampaign}>Campaign</Button>}
+        />
+      )}
+
+      {selected && (
       <div
         className="campaign-war-room"
         data-focus={focusMode ? 'true' : 'false'}
@@ -1822,7 +1970,30 @@ export function Campaigns() {
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                        <Badge tone={sTone[c.status]} size="xs">{c.status}</Badge>
+                        <select
+                          aria-label={`${c.name} 상태 변경`}
+                          value={CAMPAIGN_STATUS_OPTIONS.find(opt => opt.label === c.status)?.value || 'draft'}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            const opt = CAMPAIGN_STATUS_OPTIONS.find(o => o.value === e.target.value);
+                            if (opt) updateCampaignStatus(c.id, opt.label);
+                          }}
+                          style={{
+                            appearance: 'none',
+                            fontSize: 11,
+                            fontWeight: 500,
+                            padding: '3px 20px 3px 8px',
+                            borderRadius: 999,
+                            border: '1px solid var(--line-soft)',
+                            background: `var(--surface-3) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5L5 6.5L8 3.5' stroke='%235274a8' stroke-width='1.3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 6px center`,
+                            color: `var(--${sTone[c.status] === 'success' ? 'success' : sTone[c.status] === 'warning' ? 'warning' : 'fg-muted'})`,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {CAMPAIGN_STATUS_OPTIONS.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
                         <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>ends {c.end}</span>
                       </div>
                       <div style={{ fontSize: 14.5, fontWeight: 500, letterSpacing: '-0.01em', color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
@@ -1937,6 +2108,7 @@ export function Campaigns() {
           </div>
         </section>
       </div>
+      )}
     </div>
   );
 }
