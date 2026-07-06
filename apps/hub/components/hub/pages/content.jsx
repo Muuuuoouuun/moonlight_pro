@@ -257,6 +257,39 @@ function useCampaignLedger() {
   return { ...state, reload, setState };
 }
 
+// Revenue leads for the Audience tab join — fetched once per Campaigns mount.
+// Mirrors the source contract above ('mock' | 'supabase') so the audience tab
+// can tell a real empty match from "Supabase isn't configured" and never mix
+// live leads into the illustrative rows.
+function useAudienceLeads() {
+  const [state, setState] = React.useState({ source: "mock", leads: [] });
+
+  React.useEffect(() => {
+    let active = true;
+
+    (async () => {
+      try {
+        const response = await fetch("/api/hub/revenue", { cache: "no-store" });
+        const data = await response.json().catch(() => null);
+        if (!active || !response.ok || !data || data.status === "error") return;
+
+        setState({
+          source: data.source === "supabase" ? "supabase" : "mock",
+          leads: Array.isArray(data.leads) ? data.leads : [],
+        });
+      } catch {
+        // Network failure — keep the mock/empty fallback, matches useCampaignLedger.
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return state;
+}
+
 export function Studio({ workspace }) {
   const ws = getWorkspace(workspace);
   const router = useRouter();
@@ -1662,6 +1695,15 @@ const CAMPAIGN_TABS = [
   { key: 'automation', label: 'Automation' },
 ];
 
+// Stage-appropriate next action for the live Audience join (keyed by leads.stage
+// label from revenue-ledger's LEAD_STAGE_LABEL: New / Contact / Qualified / Lost).
+const AUDIENCE_STAGE_NEXT = {
+  New: '첫 컨택',
+  Contact: '후속 미팅',
+  Qualified: '제안/견적',
+  Lost: '재접촉 검토',
+};
+
 function CampaignMetric({ item }) {
   return (
     <div style={{
@@ -1690,7 +1732,7 @@ function CampaignLine({ label, value, tone = 'moon' }) {
   );
 }
 
-function CampaignTabPanel({ tab, campaign, detail }) {
+function CampaignTabPanel({ tab, campaign, detail, audienceLeads }) {
   const router = useRouter();
   const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral', Live: 'success', Scheduled: 'info', Review: 'moon', Idea: 'neutral' };
 
@@ -1806,16 +1848,50 @@ function CampaignTabPanel({ tab, campaign, detail }) {
   }
 
   if (tab === 'audience') {
+    // Live join: leads.meta.campaign (free-text ad-set/campaign name from ad imports)
+    // matched case-insensitively against this campaign's name, either direction
+    // (imported ad-set names are rarely an exact match to the Hub campaign name).
+    const campaignName = String(campaign?.name || '').trim().toLowerCase();
+    const liveMatches = campaignName
+      ? (audienceLeads?.leads || []).filter((lead) => {
+          const leadCampaign = String(lead?.campaign || '').trim().toLowerCase();
+          if (!leadCampaign) return false;
+          return leadCampaign.includes(campaignName) || campaignName.includes(leadCampaign);
+        })
+      : [];
+    const isLive = audienceLeads?.source === 'supabase' && liveMatches.length > 0;
+
+    const liveRows = isLive
+      ? Object.values(
+          liveMatches.reduce((groups, lead) => {
+            const stageLabel = lead.stage || 'New';
+            const group = groups[stageLabel] || { segment: stageLabel, count: 0, scoreSum: 0, next: AUDIENCE_STAGE_NEXT[stageLabel] || '후속 미팅', source: 'Leads' };
+            group.count += 1;
+            group.scoreSum += Number(lead.score) || 0;
+            groups[stageLabel] = group;
+            return groups;
+          }, {}),
+        ).map((group) => ({
+          segment: group.segment,
+          count: group.count,
+          fit: Math.round(group.scoreSum / group.count),
+          next: group.next,
+          source: group.source,
+        }))
+      : [];
+
+    const rows = isLive ? liveRows : detail.audience;
+
     return (
       <div>
         <SectionTitle
-          subtitle="실제 leads/accounts 연동 전 일러스트레이션입니다."
-          right={<Badge tone="warning" size="xs">예시 데이터</Badge>}
+          subtitle={isLive ? 'leads 원장에서 이 캠페인과 매칭된 실제 오디언스입니다.' : '실제 leads/accounts 연동 전 일러스트레이션입니다.'}
+          right={isLive ? <Badge tone="success" size="xs">live</Badge> : <Badge tone="warning" size="xs">예시 데이터</Badge>}
         >
           Audience
         </SectionTitle>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 'var(--gap)' }}>
-        {detail.audience.map((item) => (
+        {rows.map((item) => (
           <Card key={item.segment}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Avatar name={item.segment} size={30} tone={item.fit >= 75 ? 'personal' : 'company'} />
@@ -1954,6 +2030,7 @@ export function Campaigns() {
   const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral', Done: 'success' };
   const ledger = useCampaignLedger();
   const campaigns = ledger.campaigns;
+  const audienceLeads = useAudienceLeads();
   const [selectedId, setSelectedId] = React.useState(FALLBACK_CAMPAIGNS[0]?.id);
   const [tab, setTab] = React.useState('pulse');
   const [focusMode, setFocusMode] = React.useState(false);
@@ -2255,7 +2332,7 @@ export function Campaigns() {
           </Card>
 
           <div className="campaign-tab-stage" data-focus={focusMode ? 'true' : 'false'} key={`${selected.id}-${tab}-${focusMode ? 'focus' : 'normal'}`}>
-            <CampaignTabPanel tab={tab} campaign={selected} detail={detail} />
+            <CampaignTabPanel tab={tab} campaign={selected} detail={detail} audienceLeads={audienceLeads} />
           </div>
         </section>
       </div>

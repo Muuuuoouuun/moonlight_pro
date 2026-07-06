@@ -199,6 +199,7 @@ function mapLead(row, companyById, contactById) {
     region: meta.region || "",
     scale: meta.scale || "",
     situation: meta.situation || "",
+    campaign: meta.campaign || null,
     units: units > 0 ? units : "",
     last: formatRelative(row.last_touch_at || row.updated_at || row.created_at),
     owner: row.owner_id ? "Me" : "Unassigned",
