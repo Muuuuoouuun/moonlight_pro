@@ -4,6 +4,7 @@ import {
   buildGoogleGmailAuthUrl,
   hasGoogleGmailOAuthStateSecret,
 } from "@/lib/google-gmail";
+import { resolveOperatorEmail } from "@/lib/sales-os/operator-scope";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
 export const runtime = "nodejs";
@@ -11,7 +12,7 @@ export const runtime = "nodejs";
 export async function GET(req) {
   const { searchParams, origin } = req.nextUrl;
   const workspaceId = resolveDefaultWorkspaceId();
-  const mailbox = searchParams.get("mailbox") || "me";
+  const mailbox = searchParams.get("mailbox") || resolveOperatorEmail();
   const returnPath = searchParams.get("returnPath") || "/dashboard/automations/email";
 
   if (!hasGoogleGmailOAuthStateSecret()) {

@@ -126,7 +126,7 @@ export function Segments({ workspace, onNavigate }) {
           value={dimension}
           onChange={(key) => { setDimension(key); setExpanded(null); }}
         />
-        <Input className="hub-toolbar" placeholder="리드 이름 검색…" icon="search" value={search} onChange={setSearch} />
+        <Input className="hub-toolbar" ariaLabel="리드 이름 검색" placeholder="리드 이름 검색…" icon="search" value={search} onChange={setSearch} />
       </div>
 
       {segments.length === 0 && (
@@ -149,8 +149,17 @@ export function Segments({ workspace, onNavigate }) {
         {segments.map((seg) => {
           const isOpen = expanded === seg.label;
           return (
-            <Card key={seg.label} interactive style={{ cursor: 'pointer' }} >
-              <div onClick={() => setExpanded(isOpen ? null : seg.label)}>
+            <Card key={seg.label} style={{ padding: 0, overflow: 'hidden' }}>
+              <button
+                type="button"
+                aria-expanded={isOpen}
+                aria-label={`${seg.label} 세그먼트 ${isOpen ? '접기' : '펼치기'}`}
+                onClick={() => setExpanded(isOpen ? null : seg.label)}
+                style={{
+                  width: '100%', padding: 'var(--card-pad)', textAlign: 'left',
+                  display: 'block', color: 'inherit',
+                }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 500, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {seg.label}
@@ -171,26 +180,30 @@ export function Segments({ workspace, onNavigate }) {
                     <div className="mono" style={{ fontSize: 12.5, marginTop: 3 }}>{seg.qualified}</div>
                   </div>
                 </div>
-                {isOpen && (
-                  <div style={{ marginTop: 10, borderTop: '1px solid var(--line-soft)', paddingTop: 6 }}>
+              </button>
+              {isOpen && (
+                  <div style={{ borderTop: '1px solid var(--line-soft)', padding: '6px var(--card-pad) var(--card-pad)' }}>
                     {seg.members.map((l, i) => (
-                      <div key={l.id || i}
+                      <button key={l.id || i}
+                        type="button"
+                        disabled={l.id == null}
+                        aria-label={`${l.name} 리드 열기`}
                         onClick={(e) => { e.stopPropagation(); openLead(l); }}
                         onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                         style={{
-                          display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px', margin: '0 -8px',
+                          width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px', margin: '0 -8px',
                           borderRadius: 'var(--r-sm)', cursor: l.id != null ? 'pointer' : 'default',
                           borderBottom: i < seg.members.length - 1 ? '1px solid var(--line-soft)' : 'none',
+                          textAlign: 'left', opacity: l.id == null ? 0.6 : 1,
                         }}>
                         <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</span>
                         <Badge tone={STAGE_TONE[l.stage] || 'neutral'} size="xs" variant="outline">{l.stage}</Badge>
                         {Number(l.score) > 0 && <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{l.score}</span>}
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
-              </div>
             </Card>
           );
         })}

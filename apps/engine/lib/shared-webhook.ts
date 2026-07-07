@@ -3,7 +3,7 @@ import { timingSafeEqual } from "crypto";
 import type { ProjectWebhookPayload } from "./project-webhook";
 
 export const SHARED_WEBHOOK_SECRET_HEADER = "x-com-moon-shared-secret";
-export const SHARED_PROJECT_WEBHOOK_PROVIDERS = ["openclaw", "moltbot"] as const;
+export const SHARED_PROJECT_WEBHOOK_PROVIDERS = ["moltbot"] as const;
 
 export type SharedProjectWebhookProvider = (typeof SHARED_PROJECT_WEBHOOK_PROVIDERS)[number];
 
@@ -109,10 +109,6 @@ export function normalizeSharedWebhookProvider(
   value: string | null | undefined,
 ): SharedProjectWebhookProvider | null {
   const normalized = value?.trim().toLowerCase().replace(/[\s_]+/g, "") || "";
-
-  if (normalized === "openclaw") {
-    return "openclaw";
-  }
 
   if (normalized === "moltbot" || normalized === "molt-bot") {
     return "moltbot";

@@ -83,6 +83,38 @@ function computeDurationMs(startedAt, finishedAt) {
   return Math.max(0, end - start);
 }
 
+function compactPayloadValue(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return `${value.length} item${value.length === 1 ? "" : "s"}`;
+  if (typeof value === "object") {
+    const entries = Object.entries(value)
+      .filter(([, v]) => v != null && v !== "")
+      .slice(0, 4)
+      .map(([key, v]) => {
+        if (Array.isArray(v)) return `${key}: ${v.length}`;
+        if (typeof v === "object") return `${key}: ${Object.keys(v || {}).length}`;
+        return `${key}: ${String(v)}`;
+      });
+    return entries.length ? entries.join(" · ") : "object";
+  }
+  return String(value);
+}
+
+function resolveRunDetail(row) {
+  const payload = row.output_payload && typeof row.output_payload === "object"
+    ? row.output_payload
+    : {};
+  return compactPayloadValue(
+    row.error_message ||
+    payload.summary ||
+    payload.detail ||
+    payload.message ||
+    "ok"
+  );
+}
+
 function resolveTriggerLabel(trigger) {
   if (!trigger) return "Manual";
   if (trigger.trigger_type === "schedule") {
@@ -128,7 +160,7 @@ function mapRuns(rows, automationById) {
       status: RUN_STATUS_TONE[statusKey] || "ok",
       statusKey,
       ms: duration == null ? 0 : duration,
-      detail: row.error_message || row.output_payload?.summary || row.output_payload?.detail || "ok",
+      detail: resolveRunDetail(row),
       correlationId: row.correlation_id || null,
       providerEventId: row.provider_event_id || null,
       startedAt: row.created_at,

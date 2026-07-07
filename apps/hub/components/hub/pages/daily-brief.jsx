@@ -200,7 +200,14 @@ function SignalCard({ s, onNavigate, onApprovalQueueFocus, defaultExpanded = fal
       opacity: decided ? 0.55 : 1,
       transition: 'opacity .2s',
     }}>
-      <div className="hub-stackable-row" onClick={() => setExpanded(e => !e)} style={{ padding: 'var(--card-pad)', cursor: 'pointer', display: 'flex', gap: 14 }}>
+      <button
+        type="button"
+        className="hub-stackable-row"
+        aria-expanded={expanded}
+        aria-label={`${s.title} 상세 ${expanded ? '접기' : '펼치기'}`}
+        onClick={() => setExpanded(e => !e)}
+        style={{ width: '100%', padding: 'var(--card-pad)', cursor: 'pointer', display: 'flex', gap: 14, textAlign: 'left' }}
+      >
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 2 }}>
           <Dot tone={s.tone} size={8} />
         </div>
@@ -223,7 +230,7 @@ function SignalCard({ s, onNavigate, onApprovalQueueFocus, defaultExpanded = fal
           )}
         </div>
         <Iconed name="chevronD" size={14} style={{ color: 'var(--fg-faint)', transform: expanded ? '' : 'rotate(-90deg)', transition: 'transform .15s' }} />
-      </div>
+      </button>
       {expanded && !decided && (
         <div style={{ padding: '0 var(--card-pad) var(--card-pad)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {s.decisions.map((d, i) => (
@@ -282,6 +289,121 @@ function MetricCard({ m, onNavigate }) {
       </div>
       <div style={{ marginTop: 6, fontSize: 11.5, color: m.tone === 'success' ? 'var(--success)' : m.tone === 'warning' ? 'var(--warning)' : 'var(--fg-faint)' }}>{m.delta}</div>
     </div>
+  );
+}
+
+function CoreActionCenter({ ledger, blocks, onNavigate, onApprovalQueueFocus }) {
+  const primarySignal = ledger.signals[0] || null;
+  const pendingQueue = Number(ledger.queue?.pending || 0);
+  const remainingBlocks = blocks.filter((block) => !block.done).length;
+  const urgentCount = ledger.summary?.urgentCount ?? ledger.signals.filter(signal => signal.tone === 'danger').length;
+  const firstTarget = primarySignal?.decisions?.[0]
+    ? resolveSignalTarget(primarySignal, primarySignal.decisions[0])
+    : null;
+
+  const actions = [
+    {
+      key: 'next',
+      icon: urgentCount ? 'bolt' : 'signal',
+      tone: urgentCount ? 'danger' : 'moon',
+      title: primarySignal ? primarySignal.title : '오늘 액션 정리',
+      meta: primarySignal ? `${primarySignal.kind} · ${primarySignal.meta}` : `${remainingBlocks}개 블록 남음`,
+      body: primarySignal ? primarySignal.summary : '신호가 없으면 생성·기록·일정부터 정리합니다.',
+      cta: primarySignal ? '최우선 열기' : 'Today 보기',
+      onClick: () => {
+        if (firstTarget === 'dashboard/daily-brief') onApprovalQueueFocus?.();
+        else if (firstTarget) onNavigate?.(firstTarget);
+        else document.getElementById('today-blocks')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      },
+    },
+    {
+      key: 'create',
+      icon: 'plus',
+      tone: 'moon',
+      title: '생성',
+      meta: '딜 · 고객 · 프로젝트',
+      body: '새 딜은 보드 lane의 + 딜에서, 고객은 Accounts에서 바로 만듭니다.',
+      cta: '딜 보드',
+      onClick: () => onNavigate?.('dashboard/classin/pipeline'),
+    },
+    {
+      key: 'memo',
+      icon: 'edit',
+      tone: 'info',
+      title: '메모 / 결정',
+      meta: '맥락 남기기',
+      body: '회의 메모, 선택 근거, 다음 액션을 결정 기록으로 남깁니다.',
+      cta: '기록하기',
+      onClick: () => onNavigate?.('dashboard/work/decisions?new=decision'),
+    },
+    {
+      key: 'customer',
+      icon: 'accounts',
+      tone: pendingQueue ? 'warning' : 'moon',
+      title: '고객 상태',
+      meta: pendingQueue ? `${pendingQueue}개 승인/처리 대기` : '상태 · 기록 확인',
+      body: '고객별 헬스, 최근 접점, 노트와 활동 타임라인을 확인합니다.',
+      cta: '고객 열기',
+      onClick: () => onNavigate?.('dashboard/classin/accounts'),
+    },
+    {
+      key: 'schedule',
+      icon: 'clock',
+      tone: 'neutral',
+      title: '일정',
+      meta: `${remainingBlocks}개 남음`,
+      body: '오늘 블록과 15분 집중 시간을 캘린더에 바로 올립니다.',
+      cta: '15m focus',
+      onClick: () => onNavigate?.('dashboard/work/calendar?focus=15'),
+    },
+  ];
+
+  return (
+    <Card style={{ padding: 14, background: 'var(--surface)', border: '1px solid var(--line-soft)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>오늘의 실행 허브</div>
+          <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', marginTop: 2 }}>생성 · 관리 · 메모 · 일정 · 고객 기록을 한 번에</div>
+        </div>
+        <div style={{ flex: 1 }} />
+        <Badge tone={urgentCount ? 'danger' : 'moon'} size="xs">{urgentCount ? `${urgentCount} urgent` : 'clear'}</Badge>
+        <Badge tone={pendingQueue ? 'warning' : 'neutral'} size="xs">{pendingQueue} queue</Badge>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
+        {actions.map((action) => (
+          <button
+            key={action.key}
+            type="button"
+            onClick={action.onClick}
+            style={{
+              minHeight: 136,
+              padding: 12,
+              textAlign: 'left',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--line-soft)',
+              borderRadius: 'var(--r-sm)',
+              color: 'var(--fg)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              cursor: 'pointer',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: action.tone === 'danger' ? 'var(--danger)' : action.tone === 'warning' ? 'var(--warning)' : 'var(--moon-300)' }}>
+                <Iconed name={action.icon} size={14} />
+              </span>
+              <span style={{ fontSize: 12.5, fontWeight: 600 }}>{action.title}</span>
+            </div>
+            <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{action.meta}</div>
+            <div style={{ flex: 1, fontSize: 11.5, lineHeight: 1.45, color: 'var(--fg-muted)' }}>{action.body}</div>
+            <span style={{ fontSize: 11.5, color: 'var(--moon-200)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              {action.cta}<Iconed name="arrowRight" size={11} />
+            </span>
+          </button>
+        ))}
+      </div>
+    </Card>
   );
 }
 
@@ -663,6 +785,13 @@ export function DailyBrief({ onNavigate }) {
 
       <DataTrustStrip state={ledger} />
 
+      <CoreActionCenter
+        ledger={ledger}
+        blocks={blocks}
+        onNavigate={onNavigate}
+        onApprovalQueueFocus={focusApprovalQueue}
+      />
+
       <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--gap)' }}>
         {ledger.metrics.map(m => <MetricCard key={m.label} m={m} onNavigate={onNavigate} />)}
       </div>
@@ -694,16 +823,29 @@ export function DailyBrief({ onNavigate }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
           <ApprovalQueueCard onNavigate={onNavigate} initialQueue={ledger.queue} highlight={queueHighlight} />
 
-          <div>
+          <div id="today-blocks">
             <SectionTitle right={<span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{blocks.filter(b => b.done).length}/{blocks.length}</span>}>Today</SectionTitle>
             <Card pad={false}>
               {blocks.map((b, i) => (
-                <div key={i} onClick={() => toggle(i)} style={{
+                <div
+                  key={i}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={!!b.done}
+                  aria-label={`${b.title} 완료 토글`}
+                  onClick={() => toggle(i)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      toggle(i);
+                    }
+                  }}
+                  style={{
                   display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '10px 14px', cursor: 'pointer',
+                  minHeight: 44, padding: '10px 14px', cursor: 'pointer',
                   borderBottom: i < blocks.length - 1 ? '1px solid var(--line-soft)' : 'none',
                 }}>
-                  <Checkbox checked={!!b.done} onChange={() => toggle(i)} />
+                  <Checkbox checked={!!b.done} ariaLabel={`${b.title} 완료 토글`} onChange={() => toggle(i)} />
                   <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', width: 38 }}>{b.time}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12.5, color: b.done ? 'var(--fg-faint)' : 'var(--fg)', textDecoration: b.done ? 'line-through' : 'none' }}>{b.title}</div>

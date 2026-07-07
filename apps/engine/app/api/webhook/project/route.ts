@@ -16,10 +16,7 @@ export async function GET() {
       header: SHARED_WEBHOOK_SECRET_HEADER,
       requiredWhenConfigured: true,
     },
-    sharedProviderRoutes: [
-      "/api/webhook/project/openclaw",
-      "/api/webhook/project/moltbot",
-    ],
+    sharedProviderRoutes: ["/api/webhook/project/moltbot"],
     accepts: {
       workspaceId: "string (optional if COM_MOON_DEFAULT_WORKSPACE_ID is configured)",
       projectId: "uuid (optional)",

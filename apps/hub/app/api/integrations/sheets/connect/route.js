@@ -4,6 +4,7 @@ import {
   buildGoogleSheetsAuthUrl,
   hasGoogleSheetsOAuthStateSecret,
 } from "@/lib/google-sheets";
+import { resolvePersonalLeadsSpreadsheetId } from "@/lib/sales-os/operator-scope";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
 export const runtime = "nodejs";
@@ -15,7 +16,7 @@ export async function GET(req) {
   const workspaceId = resolveDefaultWorkspaceId();
   const spreadsheetId =
     searchParams.get("spreadsheetId") ||
-    process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim() ||
+    resolvePersonalLeadsSpreadsheetId() ||
     "";
   const returnPath = searchParams.get("returnPath") || RETURN_PATH;
 

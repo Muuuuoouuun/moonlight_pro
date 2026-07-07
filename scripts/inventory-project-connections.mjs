@@ -605,7 +605,7 @@ function renderMarkdown(inventory, maxEvidence) {
     "",
     `- Projects scanned: ${inventory.projects.length}`,
     `- Projects with connection signals: ${connectedProjects.length}`,
-    `- Moonlight intake route: \`POST /api/webhook/project/openclaw\` or \`POST /api/webhook/project\``,
+    `- Moonlight intake route: \`POST /api/webhook/project\``,
     "",
     "| Project | Readiness | Providers | Env keys | Next action |",
     "| --- | --- | --- | --- | --- |",

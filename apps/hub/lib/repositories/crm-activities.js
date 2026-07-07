@@ -69,6 +69,11 @@ function mapActivity(row) {
   };
 }
 
+function activityTime(row) {
+  const t = new Date(row.occurred_at || row.created_at || 0).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
 // Log one interaction. entityType is inferred from which id is set when not explicit.
 export async function recordActivity({
   workspaceId = resolveDefaultWorkspaceId(),
@@ -116,22 +121,37 @@ export async function getActivitiesFor({
   accountId = null,
   leadId = null,
   dealId = null,
+  companyId = null,
   limit = 100,
 } = {}) {
   if (!workspaceId) return { source: "preview", activities: [] };
-  if (!accountId && !leadId && !dealId) return { source: "preview", activities: [] };
+  if (!accountId && !leadId && !dealId && !companyId) return { source: "preview", activities: [] };
 
-  const filters = [["workspace_id", eqFilter(workspaceId)]];
-  if (accountId) filters.push(["account_id", eqFilter(accountId)]);
-  else if (leadId) filters.push(["lead_id", eqFilter(leadId)]);
-  else if (dealId) filters.push(["deal_id", eqFilter(dealId)]);
+  const scopes = [
+    accountId ? ["account_id", accountId] : null,
+    leadId ? ["lead_id", leadId] : null,
+    dealId ? ["deal_id", dealId] : null,
+    companyId ? ["company_id", companyId] : null,
+  ].filter(Boolean);
 
-  const rows = await fetchSupabaseRows("crm_activities", {
-    filters,
+  const results = await Promise.all(scopes.map(([key, value]) => fetchSupabaseRows("crm_activities", {
+    filters: [["workspace_id", eqFilter(workspaceId)], [key, eqFilter(value)]],
     order: "occurred_at.desc",
     limit,
-  });
-  if (!rows) return { source: "preview", activities: [] };
+  })));
+
+  let hasLiveResult = false;
+  const byId = new Map();
+  for (const rows of results) {
+    if (!Array.isArray(rows)) continue;
+    hasLiveResult = true;
+    for (const row of rows) byId.set(row.id, row);
+  }
+  if (!hasLiveResult) return { source: "preview", activities: [] };
+
+  const rows = Array.from(byId.values())
+    .sort((a, b) => activityTime(b) - activityTime(a))
+    .slice(0, limit);
 
   return { source: "supabase", activities: rows.map(mapActivity) };
 }

@@ -659,7 +659,15 @@ export function Studio({ workspace }) {
     setDirty(true);
   };
   const removeSlide = (i) => {
-    setSlides(s => s.filter((_, j) => j !== i));
+    if (slides.length <= 1) {
+      setExtraSuggestions(prev => [{ tone: 'warning', text: 'Carousel needs at least one slide.' }, ...prev]);
+      return;
+    }
+    setSlides(s => {
+      const next = s.filter((_, j) => j !== i);
+      return next.length ? next : s;
+    });
+    setActiveSlide(Math.max(0, Math.min(i, slides.length - 2)));
     setDirty(true);
   };
   // Live Council content-critique (Writer lens) against the Engine brand-mentor.
@@ -723,7 +731,7 @@ export function Studio({ workspace }) {
     setDirty(true);
   };
 
-  const cur = slides[activeSlide] || slides[0];
+  const cur = slides[activeSlide] || slides[0] || { title: '', sub: '', bg: 'var(--surface-2)' };
   const suggestions = [
     ...extraSuggestions.map((s, i) => ({ ...s, key: `extra-${i}`, extraIndex: i })),
   ];
@@ -820,7 +828,7 @@ export function Studio({ workspace }) {
                 { i: 'sparkle', t: 'AI', action: 'ai' }, { t: '|' }, { l: 'H1', action: 'h1' }, { l: 'H2', action: 'h2' }, { l: 'B', action: 'bold', style: { fontWeight: 700 } },
                 { l: 'i', action: 'italic', style: { fontStyle: 'italic' } }, { t: '|' }, { i: 'link', action: 'link' }, { i: 'upload', t: 'Image', action: 'image' },
               ].map((b, i) => b.t === '|' ? <div key={i} style={{ width: 1, background: 'var(--line-soft)', margin: '0 2px' }} /> : (
-                <button key={i} onClick={() => applyToolbarAction(b.action)} style={{ height: 26, padding: '0 9px', borderRadius: 4, fontSize: 11.5, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 5, ...(b.style || {}) }}>
+                <button key={i} aria-label={b.l || b.t || b.action} onClick={() => applyToolbarAction(b.action)} style={{ height: 26, padding: '0 9px', borderRadius: 4, fontSize: 11.5, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 5, ...(b.style || {}) }}>
                   {b.i && <Iconed name={b.i} size={12} />}
                   {b.l && <span>{b.l}</span>}
                   {b.t && <span>{b.t}</span>}
@@ -829,12 +837,12 @@ export function Studio({ workspace }) {
             </div>
             <div className="scroll-y" style={{ flex: 1, padding: '40px 20px' }}>
               <div style={{ maxWidth: 680, margin: '0 auto' }}>
-                <input value={title} onChange={e => { setTitle(e.target.value); setDirty(true); }} style={{
+                <input aria-label="Article title" value={title} onChange={e => { setTitle(e.target.value); setDirty(true); }} style={{
                   width: '100%', background: 'transparent', border: 'none', outline: 'none',
                   color: 'var(--fg)', fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4,
                 }} />
                 <div style={{ fontSize: 13, color: 'var(--fg-faint)', marginBottom: 28 }}>By Hyeon Park · Web article preview 우선 · n8n handoff 대기</div>
-                <textarea value={body} onChange={e => { setBody(e.target.value); setDirty(true); }} style={{
+                <textarea aria-label="Article body" value={body} onChange={e => { setBody(e.target.value); setDirty(true); }} style={{
                   width: '100%', minHeight: 420, background: 'transparent', border: 'none', outline: 'none', resize: 'none',
                   color: 'var(--fg)', fontSize: 15, lineHeight: 1.7, fontFamily: 'var(--font-sans)', letterSpacing: '-0.005em',
                 }} />
@@ -865,7 +873,10 @@ export function Studio({ workspace }) {
           <>
             <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', gap: 8, overflowX: 'auto', flexShrink: 0 }}>
               {slides.map((s, i) => (
-                <div key={s.id}
+                <button key={s.id}
+                  type="button"
+                  aria-label={`Slide ${i + 1} 선택`}
+                  aria-pressed={activeSlide === i}
                   draggable onDragStart={() => setDrag(i)}
                   onDragOver={e => e.preventDefault()}
                   onDrop={() => drag !== null && moveSlide(drag, i)}
@@ -873,16 +884,17 @@ export function Studio({ workspace }) {
                   style={{
                     width: 72, height: 72, flexShrink: 0, position: 'relative', cursor: 'grab',
                     borderRadius: 8, background: s.bg,
-                    border: activeSlide === i ? '2px solid var(--moon-200)' : '1px solid var(--line-soft)',
+                    border: `1px solid ${activeSlide === i ? 'var(--moon-200)' : 'var(--line-soft)'}`,
+                    boxShadow: activeSlide === i ? 'inset 0 0 0 1px var(--moon-200)' : 'none',
                     display: 'flex', flexDirection: 'column', padding: 6, justifyContent: 'flex-end',
                     color: '#fff', fontSize: 8, lineHeight: 1.2,
                     opacity: drag === i ? 0.4 : 1,
                   }}>
                   <div style={{ fontWeight: 600 }}>{s.title.slice(0, 18)}</div>
                   <div style={{ position: 'absolute', top: 3, left: 6, fontSize: 8, color: 'rgba(255,255,255,0.6)' }} className="mono">{i + 1}</div>
-                </div>
+                </button>
               ))}
-              <button onClick={addSlide} style={{
+              <button aria-label="슬라이드 추가" onClick={addSlide} style={{
                 width: 72, height: 72, flexShrink: 0, border: '1px dashed var(--line)', borderRadius: 8,
                 background: 'var(--surface-2)', color: 'var(--fg-muted)', fontSize: 20,
               }}>＋</button>
@@ -918,15 +930,15 @@ export function Studio({ workspace }) {
               <Card className="hub-studio-card" style={{ width: 320 }}>
                 <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 10 }}>Slide {activeSlide + 1}</div>
                 <label style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Title</label>
-                <input value={cur.title} onChange={e => updateSlide(activeSlide, { title: e.target.value })}
+                <input aria-label="Slide title" value={cur.title} onChange={e => updateSlide(activeSlide, { title: e.target.value })}
                   style={{ width: '100%', marginTop: 4, marginBottom: 12, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', fontSize: 13, outline: 'none' }} />
                 <label style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Subtitle</label>
-                <input value={cur.sub} onChange={e => updateSlide(activeSlide, { sub: e.target.value })}
+                <input aria-label="Slide subtitle" value={cur.sub} onChange={e => updateSlide(activeSlide, { sub: e.target.value })}
                   style={{ width: '100%', marginTop: 4, marginBottom: 12, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', fontSize: 13, outline: 'none' }} />
                 <label style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Background</label>
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, marginBottom: 14, flexWrap: 'wrap' }}>
                   {['oklch(0.35 0.04 280)','oklch(0.35 0.05 220)','oklch(0.35 0.05 180)','oklch(0.35 0.05 150)','oklch(0.35 0.05 85)','oklch(0.35 0.06 30)','oklch(0.28 0.01 250)','oklch(0.95 0 0)'].map(c => (
-                    <button key={c} onClick={() => updateSlide(activeSlide, { bg: c })}
+                    <button key={c} aria-label="슬라이드 배경색 선택" aria-pressed={cur.bg === c} onClick={() => updateSlide(activeSlide, { bg: c })}
                       style={{ width: 26, height: 26, borderRadius: 6, background: c, border: cur.bg === c ? '2px solid var(--moon-200)' : '1px solid var(--line-soft)' }} />
                   ))}
                 </div>
@@ -943,7 +955,7 @@ export function Studio({ workspace }) {
                     Photo
                   </Button>
                   <div style={{ flex: 1 }} />
-                  <Button variant="ghost" size="xs" onClick={() => removeSlide(activeSlide)}>Delete</Button>
+                  <Button variant="ghost" size="xs" disabled={slides.length <= 1} onClick={() => removeSlide(activeSlide)}>Delete</Button>
                 </div>
                 <div style={{ marginTop: 12, padding: 10, background: 'var(--surface-2)', borderRadius: 'var(--r-sm)', border: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
                   <Iconed name="sparkle" size={11} style={{ color: 'var(--moon-300)' }} /> 드래그로 순서 편집 · 썸네일 클릭으로 선택
@@ -1278,7 +1290,7 @@ export function Studio({ workspace }) {
         <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)' }}>
             <Iconed name="sparkle" size={12} style={{ color: 'var(--moon-300)' }} />
-            <input placeholder={mode === 'blog' ? 'Ask Writer…' : 'Ask Studio — slide copy, layout…'} style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--fg)', fontSize: 12 }} />
+            <input aria-label={mode === 'blog' ? 'Ask Writer' : 'Ask Studio'} placeholder={mode === 'blog' ? 'Ask Writer…' : 'Ask Studio — slide copy, layout…'} style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--fg)', fontSize: 12 }} />
             <Kbd>⏎</Kbd>
           </div>
         </div>

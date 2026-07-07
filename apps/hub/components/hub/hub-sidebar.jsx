@@ -200,9 +200,23 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
               </button>
               {isOpen && (
                 <div style={{ paddingLeft: 12, marginTop: 1, marginBottom: 4, borderLeft: '1px solid var(--line-soft)', marginLeft: 15 }}>
-                  {item.children.map(c => {
+                  {item.children.map((c, index) => {
                     const cAct = active === c.path;
+                    const showSection = Boolean(c.section && c.section !== item.children[index - 1]?.section);
                     return (
+                      <React.Fragment key={c.key}>
+                      {showSection && (
+                        <div style={{
+                          padding: index === 0 ? '4px 8px 3px' : '8px 8px 3px',
+                          fontSize: 9.5,
+                          fontWeight: 600,
+                          letterSpacing: '0.08em',
+                          textTransform: 'uppercase',
+                          color: 'var(--fg-faint)',
+                        }}>
+                          {c.section}
+                        </div>
+                      )}
                       <button key={c.key} onClick={() => onNavigate(c.path)} style={{
                         width: '100%', display: 'flex', alignItems: 'center', gap: 8,
                         height: 27, padding: '0 8px', marginBottom: 1,
@@ -219,6 +233,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
                         <span style={{ flex: 1 }}>{c.label}</span>
                         <CountBadge n={counts[c.key]} />
                       </button>
+                      </React.Fragment>
                     );
                   })}
                 </div>

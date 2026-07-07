@@ -18,8 +18,9 @@ export async function GET(req) {
     const accountId = searchParams.get("accountId");
     const leadId = searchParams.get("leadId");
     const dealId = searchParams.get("dealId");
+    const companyId = searchParams.get("companyId");
 
-    const result = await getActivitiesFor({ accountId, leadId, dealId });
+    const result = await getActivitiesFor({ accountId, leadId, dealId, companyId });
     return NextResponse.json({
       status: result.source === "supabase" ? "live" : "preview",
       ...result,

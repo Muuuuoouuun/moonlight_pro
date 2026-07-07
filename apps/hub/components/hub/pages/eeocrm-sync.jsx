@@ -48,6 +48,7 @@ export function EeocrmSync() {
     staging: {},
     recentRuns: [],
     mcpUrl: null,
+    ownerId: null,
   });
   const [busy, setBusy] = React.useState(null);
   const [msg, setMsg] = React.useState(null);
@@ -67,6 +68,7 @@ export function EeocrmSync() {
         staging: d.staging || {},
         recentRuns: Array.isArray(d.recentRuns) ? d.recentRuns : [],
         mcpUrl: d.mcpUrl || null,
+        ownerId: d.ownerId || d.expectedOwnerId || null,
       });
     } catch {
       setState((s) => ({ ...s, syncState: "error" }));
@@ -78,6 +80,7 @@ export function EeocrmSync() {
   }, [load]);
 
   const runSync = async (action) => {
+    if (busy) return;
     setBusy(action);
     setMsg(null);
     try {
@@ -100,7 +103,7 @@ export function EeocrmSync() {
     }
   };
 
-  const { syncState, lastSyncAt, staging, recentRuns, mcpUrl } = state;
+  const { syncState, lastSyncAt, staging, recentRuns, mcpUrl, ownerId } = state;
 
   return (
     <div className="hub-page" style={{ padding: "var(--section-gap)", display: "flex", flexDirection: "column", gap: "var(--gap)", maxWidth: 1100 }}>
@@ -129,6 +132,9 @@ export function EeocrmSync() {
               {mcpUrl || "http://localhost:3010/sse"}
               {lastSyncAt ? ` · 최근 ${new Date(lastSyncAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}
             </div>
+            <div className="mono" style={{ marginTop: 2, fontSize: 10.5, color: "var(--fg-faint)" }}>
+              ownerId {ownerId || "3935704427463307"} · junhyuk
+            </div>
           </div>
         </div>
 
@@ -148,9 +154,9 @@ export function EeocrmSync() {
         </div>
 
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <Button variant="primary" size="sm" icon="bolt" onClick={() => runSync("all")} active={busy === "all"}>{busy === "all" ? "동기화 중…" : "전체 동기화"}</Button>
-          <Button variant="outline" size="sm" icon="download" onClick={() => runSync("import")} active={busy === "import"}>CRM→DB import</Button>
-          <Button variant="outline" size="sm" icon="check" onClick={() => runSync("promote")} active={busy === "promote"}>승격(dedupe)</Button>
+          <Button variant="primary" size="sm" icon="bolt" onClick={() => runSync("all")} active={busy === "all"} disabled={!!busy}>{busy === "all" ? "동기화 중…" : "전체 동기화"}</Button>
+          <Button variant="outline" size="sm" icon="download" onClick={() => runSync("import")} active={busy === "import"} disabled={!!busy}>{busy === "import" ? "import 중…" : "CRM→DB import"}</Button>
+          <Button variant="outline" size="sm" icon="check" onClick={() => runSync("promote")} active={busy === "promote"} disabled={!!busy}>{busy === "promote" ? "승격 중…" : "승격(dedupe)"}</Button>
         </div>
         {msg && (
           <div style={{ marginTop: 10, fontSize: 12, color: `var(--${msg.tone})`, display: "flex", alignItems: "flex-start", gap: 6 }}>

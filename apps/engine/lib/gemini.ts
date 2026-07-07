@@ -19,7 +19,7 @@ export function getGeminiIntegrationStatus() {
     model:
       process.env.GEMINI_MODEL?.trim() ||
       process.env.AI_DEFAULT_MODEL?.trim() ||
-      "gemini-3-flash-preview",
+      "gemini-3.5-flash",
     apiBaseUrl:
       process.env.GEMINI_API_BASE_URL?.trim() ||
       "https://generativelanguage.googleapis.com/v1beta",

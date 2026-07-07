@@ -91,7 +91,7 @@ export function sanitizeReturnPath(value, fallback) {
   return path;
 }
 
-export function buildGoogleAuthUrl({ scopes, redirectUri, state, prompt = "consent" }) {
+export function buildGoogleAuthUrl({ scopes, redirectUri, state, prompt = "consent", loginHint = "" }) {
   const oauth = resolveGoogleOAuthConfig();
 
   if (!oauth || !hasOAuthStateSecret()) {
@@ -107,6 +107,9 @@ export function buildGoogleAuthUrl({ scopes, redirectUri, state, prompt = "conse
     scope: (scopes || []).join(" "),
     state,
   });
+  if (loginHint) {
+    params.set("login_hint", loginHint);
+  }
 
   return `${GOOGLE_AUTH_URL}?${params.toString()}`;
 }

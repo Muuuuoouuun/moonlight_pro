@@ -17,6 +17,7 @@ import {
   resolveSupabaseConfig,
 } from "@/lib/server-write";
 import { mapRowToIntake, rowsToObjects } from "@/lib/sheets-normalize";
+import { fetchGoogleUserEmail } from "@/lib/google-oauth";
 import {
   getValidAccessToken,
   readSheetValues,
@@ -24,6 +25,12 @@ import {
   resolveSheetsConnection,
   writeSheetValues,
 } from "@/lib/google-sheets";
+import {
+  assertOperatorEmail,
+  assertPersonalLeadsSpreadsheetId,
+  resolveOperatorEmail,
+  resolvePersonalLeadsSpreadsheetId,
+} from "@/lib/sales-os/operator-scope";
 import {
   classinLeadChannel,
   classinLeadScore,
@@ -46,6 +53,23 @@ function compactMeta(obj) {
       return true;
     }),
   );
+}
+
+function scopeFailureDetail(check) {
+  return [check.reason, check.source, check.actual ? `actual=${check.actual}` : null, check.expected ? `expected=${check.expected}` : null]
+    .filter(Boolean)
+    .join(" ");
+}
+
+async function assertSheetsPersonalScope(connection, accessToken) {
+  const sheetCheck = assertPersonalLeadsSpreadsheetId(connection?.spreadsheetId);
+  if (!sheetCheck.ok) return sheetCheck;
+
+  const email = connection?.config?.email || await fetchGoogleUserEmail(accessToken);
+  const emailCheck = assertOperatorEmail(email, "google_sheets");
+  if (!emailCheck.ok) return emailCheck;
+
+  return { ok: true, email: emailCheck.email, spreadsheetId: sheetCheck.spreadsheetId };
 }
 
 // --- local insert-with-return (server-write inserts are return=minimal) ------
@@ -139,10 +163,10 @@ export async function getSheetsSyncStatus(workspaceId = resolveDefaultWorkspaceI
       order: "started_at.desc",
       limit: 10,
     }),
-    countSupabaseRows(STAGING_TABLE, withWorkspaceFilter([["status", eqFilter("pending")]])),
-    countSupabaseRows(STAGING_TABLE, withWorkspaceFilter([["status", eqFilter("promoted")]])),
-    countSupabaseRows(STAGING_TABLE, withWorkspaceFilter([["status", eqFilter("merged")]])),
-    countSupabaseRows(STAGING_TABLE, withWorkspaceFilter([["status", eqFilter("review")]])),
+    countSupabaseRows(STAGING_TABLE, withWorkspaceFilter([["status", eqFilter("pending")], ["source", eqFilter("google_sheets")]])),
+    countSupabaseRows(STAGING_TABLE, withWorkspaceFilter([["status", eqFilter("promoted")], ["source", eqFilter("google_sheets")]])),
+    countSupabaseRows(STAGING_TABLE, withWorkspaceFilter([["status", eqFilter("merged")], ["source", eqFilter("google_sheets")]])),
+    countSupabaseRows(STAGING_TABLE, withWorkspaceFilter([["status", eqFilter("review")], ["source", eqFilter("google_sheets")]])),
   ]);
 
   const connection = connectionRows?.[0] || null;
@@ -151,7 +175,9 @@ export async function getSheetsSyncStatus(workspaceId = resolveDefaultWorkspaceI
     source: "supabase",
     configured: true,
     connected: Boolean(connection?.config?.refreshToken) || Boolean(process.env.GOOGLE_SHEETS_REFRESH_TOKEN?.trim()),
-    spreadsheetId: connection?.config?.spreadsheetId || process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim() || null,
+    spreadsheetId: connection?.config?.spreadsheetId || resolvePersonalLeadsSpreadsheetId() || null,
+    expectedOperatorEmail: resolveOperatorEmail(),
+    expectedSpreadsheetId: resolvePersonalLeadsSpreadsheetId() || null,
     lastSyncAt: connection?.last_synced_at || null,
     staging: { pending: pending ?? 0, promoted: promoted ?? 0, merged: merged ?? 0, review: review ?? 0 },
     recentRuns: (recentRuns || []).map((r) => ({
@@ -178,6 +204,18 @@ export async function importSheetToStaging({
   try {
     const accessToken = await getValidAccessToken(connection);
     if (!accessToken) return { ok: false, reason: "auth-failed" };
+
+    const scopeCheck = await assertSheetsPersonalScope(connection, accessToken);
+    if (!scopeCheck.ok) {
+      await recordGoogleSheetsSync({
+        workspaceId,
+        connectionId: connection.connectionId,
+        status: "failure",
+        payload: { action: "import", sheet: sheetName, scope: "personal" },
+        errorMessage: scopeFailureDetail(scopeCheck),
+      });
+      return { ok: false, reason: scopeCheck.reason, detail: scopeFailureDetail(scopeCheck) };
+    }
 
     const values = await readSheetValues({
       accessToken,
@@ -253,6 +291,8 @@ export async function promoteStagedLeads({
   const pendingFilters = [["status", eqFilter("pending")]];
   if (Array.isArray(intakeIds) && intakeIds.length) {
     pendingFilters.push(["id", inFilter(intakeIds)]);
+  } else if (provider) {
+    pendingFilters.push(["source", eqFilter(provider)]);
   }
   const pendingRows = await fetchSupabaseRows(STAGING_TABLE, {
     filters: withWorkspaceFilter(pendingFilters),
@@ -405,6 +445,18 @@ export async function pushLeadsToSheet({
   try {
     const accessToken = await getValidAccessToken(connection);
     if (!accessToken) return { ok: false, reason: "auth-failed" };
+
+    const scopeCheck = await assertSheetsPersonalScope(connection, accessToken);
+    if (!scopeCheck.ok) {
+      await recordGoogleSheetsSync({
+        workspaceId,
+        connectionId: connection.connectionId,
+        status: "failure",
+        payload: { action: "push", sheet: sheetName, scope: "personal" },
+        errorMessage: scopeFailureDetail(scopeCheck),
+      });
+      return { ok: false, reason: scopeCheck.reason, detail: scopeFailureDetail(scopeCheck) };
+    }
 
     const [leads, companies] = await Promise.all([
       fetchSupabaseRows("leads", {

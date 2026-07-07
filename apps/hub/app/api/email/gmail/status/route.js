@@ -5,6 +5,7 @@ import {
   fetchLatestGoogleGmailConnection,
   hasGoogleGmailOAuthStateSecret,
 } from "@/lib/google-gmail";
+import { resolveOperatorEmail } from "@/lib/sales-os/operator-scope";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
 export const runtime = "nodejs";
@@ -69,6 +70,7 @@ export async function GET(req) {
     hasOAuthStateSecret: hasGoogleGmailOAuthStateSecret(),
     hasFallbackRefreshToken: fallbackRefreshTokenConfigured(),
     senderEmail: process.env.GMAIL_SENDER_EMAIL?.trim() || null,
+    expectedOperatorEmail: resolveOperatorEmail(),
     connection: summarizeConnection(connection),
     setup: {
       oauthRedirectUri: `${origin}/api/email/gmail/callback`,

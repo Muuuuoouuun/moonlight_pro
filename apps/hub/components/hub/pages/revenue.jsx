@@ -1651,6 +1651,14 @@ export function Deals({ workspace, onNavigate }) {
     return id;
   };
   const createDeal = () => createDealInStage();
+  const newDealParam = searchParams.get('new');
+  const consumedNewDealRef = React.useRef(null);
+  React.useEffect(() => {
+    if (newDealParam !== 'deal' || syncState === 'loading') return;
+    if (consumedNewDealRef.current === newDealParam) return;
+    consumedNewDealRef.current = newDealParam;
+    createDealInStage();
+  }, [newDealParam, syncState]);
 
   // Persist the drawer edit. New local rows (id `LOCAL-…`) insert; on success the returned
   // real id replaces the local one so a later edit takes the update path. `close` (free-text)
@@ -2264,6 +2272,98 @@ function HealthDot({ health }) {
   );
 }
 
+const HEALTH_COPY = {
+  ok: { label: '양호', tone: 'moon', next: '진행 딜과 최근 기록을 유지하세요.' },
+  warning: { label: '주의', tone: 'warning', next: '최근 접점과 다음 약속을 확인하세요.' },
+  risk: { label: '위험', tone: 'danger', next: '오늘 접점과 미해결 이슈를 먼저 확인하세요.' },
+};
+
+function healthCopy(health) {
+  return HEALTH_COPY[health] || HEALTH_COPY.ok;
+}
+
+function AccountSignalChip({ account }) {
+  const h = healthCopy(account.health);
+  const label = account.health === 'risk'
+    ? '위험 · 우선 확인'
+    : account.health === 'warning'
+    ? '주의 · 접점 필요'
+    : account.deals > 0
+    ? `${account.deals} deals`
+    : '기록 대기';
+  return (
+    <Badge tone={h.tone} size="xs" variant="outline" style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      {label}
+    </Badge>
+  );
+}
+
+function AccountStatusStrip({ account, detail, onActivityFocus, onNoteFocus, onDealFocus }) {
+  const d = detail || emptyDetail();
+  const h = healthCopy(account.health);
+  const recent = (d.activity || []).slice(0, 3);
+  const pinned = (d.notes || []).find(n => n.pinned) || null;
+  const latest = recent[0];
+  const recentTitle = latest ? '최근 기록' : '최근 업데이트';
+  const recentBody = latest ? latest.msg : `${account.last || '—'} · ${account.lastAt || '—'}`;
+
+  return (
+    <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
+      <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 10, minHeight: 112 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <HealthDot health={account.health} />
+          <span style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>상태</span>
+        </div>
+        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <Badge tone={h.tone} size="xs" variant="outline">{h.label}</Badge>
+          <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{account.owner}</span>
+        </div>
+        <div style={{ marginTop: 8, fontSize: 11.5, lineHeight: 1.45, color: 'var(--fg-muted)' }}>{h.next}</div>
+      </div>
+
+      <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 10, minHeight: 112 }}>
+        <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>다음 액션</div>
+        <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45 }}>{account.deals > 0 ? '진행 딜 확인 후 고객 기록을 남기세요.' : '첫 딜 또는 활동 기록을 만들어 맥락을 시작하세요.'}</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+          <Button variant="secondary" size="xs" icon="edit" onClick={onActivityFocus}>활동 기록</Button>
+          <Button variant="outline" size="xs" icon="deals" onClick={onDealFocus}>딜</Button>
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 10, minHeight: 112 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{recentTitle}</span>
+          <Badge tone="neutral" size="xs" variant="outline">{(d.activity || []).length}</Badge>
+        </div>
+        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {recent.length === 0 ? (
+            <div style={{ fontSize: 11.5, lineHeight: 1.45, color: 'var(--fg-muted)' }}>{recentBody}</div>
+          ) : recent.map((a, i) => (
+            <div key={a.id || `${a.at}-${i}`} style={{ display: 'grid', gridTemplateColumns: '14px 1fr auto', gap: 6, alignItems: 'start' }}>
+              <span style={{ color: `var(--${ACT_TONE[a.type] === 'neutral' ? 'fg-muted' : ACT_TONE[a.type] || 'fg-muted'})`, marginTop: 1 }}>
+                <Iconed name={ACT_ICON[a.type] || 'edit'} size={12} />
+              </span>
+              <span style={{ fontSize: 11.5, lineHeight: 1.35, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.msg}</span>
+              <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{a.at}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 10, minHeight: 112 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>핀 노트</span>
+          <Iconed name="star" size={11} style={{ color: pinned ? 'var(--moon-300)' : 'var(--fg-faint)' }} />
+        </div>
+        <div style={{ marginTop: 8, fontSize: 11.5, color: pinned ? 'var(--fg)' : 'var(--fg-muted)', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+          {pinned ? pinned.body : '중요 노트가 아직 없습니다.'}
+        </div>
+        <Button variant="ghost" size="xs" icon="edit" onClick={onNoteFocus} style={{ marginTop: 8 }}>노트 추가</Button>
+      </div>
+    </div>
+  );
+}
+
 function ContactMenu({ onAction }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef(null);
@@ -2370,11 +2470,11 @@ function LogComposer({ onLog }) {
 
 function QuickActions({ onAction }) {
   const acts = [
-    { k: 'email',   label: 'Send email',       variant: 'primary',  icon: 'email' },
-    { k: 'meeting', label: 'Schedule meeting', variant: 'outline',  icon: 'calendar' },
-    { k: 'deal',    label: 'New deal',         variant: 'outline',  icon: 'deals' },
-    { k: 'call',    label: 'Log call',         variant: 'outline',  icon: 'signal' },
-    { k: 'note',    label: 'Add note',         variant: 'outline',  icon: 'edit' },
+    { k: 'email',   label: '이메일',     variant: 'primary',  icon: 'email' },
+    { k: 'meeting', label: '미팅 잡기',   variant: 'outline',  icon: 'calendar' },
+    { k: 'deal',    label: '새 딜',      variant: 'outline',  icon: 'deals' },
+    { k: 'call',    label: '통화 기록',   variant: 'outline',  icon: 'signal' },
+    { k: 'note',    label: '노트 추가',   variant: 'outline',  icon: 'edit' },
   ];
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -2389,6 +2489,22 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
   const [tab, setTab] = React.useState('activity');
   const [noteText, setNoteText] = React.useState('');
   const [activityKind, setActivityKind] = React.useState('all');
+  const noteInputRef = React.useRef(null);
+  const focusNotes = React.useCallback(() => {
+    setTab('notes');
+    setTimeout(() => noteInputRef.current?.focus(), 0);
+  }, []);
+  const focusActivity = React.useCallback(() => {
+    setTab('activity');
+  }, []);
+  const handleQuickAction = React.useCallback((kind, contactName) => {
+    if (kind === 'note') {
+      focusNotes();
+      return;
+    }
+    if (kind === 'call') focusActivity();
+    onAction(kind, contactName);
+  }, [focusActivity, focusNotes, onAction]);
   if (!account) {
     return (
       <div style={{
@@ -2470,7 +2586,7 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
           </div>
         </div>
         <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <QuickActions onAction={onAction} />
+          <QuickActions onAction={handleQuickAction} />
           <Button
             variant="secondary"
             size="xs"
@@ -2483,6 +2599,13 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
             <Button variant="outline" size="xs" icon="edit" onClick={() => onEdit(account)}>편집</Button>
           )}
         </div>
+        <AccountStatusStrip
+          account={account}
+          detail={d}
+          onActivityFocus={focusActivity}
+          onNoteFocus={focusNotes}
+          onDealFocus={() => onAction('deal')}
+        />
       </div>
 
       {/* Tabs */}
@@ -2571,6 +2694,7 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
               display: 'flex', flexDirection: 'column', gap: 8,
             }}>
               <textarea
+                ref={noteInputRef}
                 aria-label="계정 노트 추가"
                 value={noteText}
                 onChange={e => setNoteText(e.target.value)}
@@ -2750,7 +2874,8 @@ export function Accounts({ onNavigate }) {
       stage: 'qual',
     });
     if (r.ok && r.id) {
-      onNavigate?.(`dashboard/revenue/deals?deal=${r.id}`);
+      const inClassin = typeof window !== 'undefined' && window.location.pathname.includes('/classin/');
+      onNavigate?.(crmTabPath(inClassin ? 'classin' : undefined, 'deals', `?deal=${encodeURIComponent(r.id)}`));
     } else {
       const full = pushActivity(name, { type: 'deal', msg: '새 딜 초안 생성' });
       persistActivityEntry(name, full);
@@ -2830,7 +2955,7 @@ export function Accounts({ onNavigate }) {
     if (view !== 'detail' || !acc || !acc.id || loadedActivityRef.current.has(acc.id)) return undefined;
     loadedActivityRef.current.add(acc.id);
     let cancelled = false;
-    fetchActivities({ accountId: acc.id }).then(res => {
+    fetchActivities({ accountId: acc.id, companyId: acc.companyId }).then(res => {
       if (cancelled || res.status !== 'live') return;
       const activity = res.activities.filter(a => a.kind !== 'note')
         .map(a => ({ id: a.id, type: a.kind, msg: a.body, who: a.who, at: a.at }));
@@ -2882,6 +3007,14 @@ export function Accounts({ onNavigate }) {
     setView('detail');
     openEditAccount(newAcc); // open the editor immediately so the new account can be named
   };
+  const newAccountParam = searchParams.get('new');
+  const consumedNewAccountRef = React.useRef(null);
+  React.useEffect(() => {
+    if (newAccountParam !== 'account' || syncState === 'loading') return;
+    if (consumedNewAccountRef.current === newAccountParam) return;
+    consumedNewAccountRef.current = newAccountParam;
+    createAccount();
+  }, [newAccountParam, syncState]);
 
   // Persist an account edit. Ledger rows (Supabase id) update; local rows insert. The edit is
   // reflected locally via the stable-key overlay either way, so renames never desync.
@@ -2957,6 +3090,7 @@ export function Accounts({ onNavigate }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
                       <Badge tone={a.type === 'personal' ? 'personal' : 'company'} size="xs">{a.type === 'personal' ? 'Personal' : 'Company'}</Badge>
                       <HealthDot health={a.health} />
+                      <AccountSignalChip account={a} />
                     </div>
                   </div>
                   <IconButton
@@ -3043,7 +3177,7 @@ export function Accounts({ onNavigate }) {
               </span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <HealthDot health={a.health} />
-                <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{a.health}</span>
+                <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{healthCopy(a.health).label}</span>
               </span>
               <span className="mono" style={{ fontSize: 12, color: 'var(--moon-200)' }}>{fmt(a.value)}</span>
               <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{a.deals}</span>
@@ -3103,6 +3237,9 @@ export function Accounts({ onNavigate }) {
                       </div>
                       <div className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>
                         {fmt(a.value)} · <span style={{ color: 'var(--fg-faint)' }}>{a.last}</span>
+                      </div>
+                      <div style={{ marginTop: 4 }}>
+                        <AccountSignalChip account={a} />
                       </div>
                     </div>
                   </div>

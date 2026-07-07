@@ -92,8 +92,10 @@ const PAGE_MAP = {
   // See workspace-map.js header + LEGACY_REDIRECTS in hub-data.js.
   // 브랜드 업무 (brand work)
   'dashboard/brand/projects': () => <Projects workspace="brand" />,
+  'dashboard/brand/campaigns': () => <Campaigns />,
   'dashboard/brand/studio': () => <Studio workspace="brand" />,
   'dashboard/brand/queue': () => <Queue workspace="brand" />,
+  'dashboard/brand/council': (n) => <AgentsCouncil onNavigate={n} />,
 
   'dashboard/work/calendar': () => <Calendar />,
   'dashboard/work/projects': () => <Projects />,
@@ -159,6 +161,12 @@ function writeStoredPreference(key, value) {
   } catch { /* ignore unavailable storage */ }
 }
 
+function isEditableShortcutTarget(target) {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+}
+
 export function HubApp() {
   const router = useRouter();
   const pathname = usePathname() || '/dashboard';
@@ -197,6 +205,7 @@ export function HubApp() {
 
   React.useEffect(() => {
     const onKey = (e) => {
+      if (e.defaultPrevented || e.repeat || e.isComposing || isEditableShortcutTarget(e.target)) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setPaletteOpen(o => !o);

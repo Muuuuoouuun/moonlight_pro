@@ -77,6 +77,184 @@ const COUNCIL_MODES = [
   { k: 'meeting-synthesis', l: '회의록 정리' },
 ];
 
+const PROJECT_UPDATE_STATUS_OPTIONS = [
+  { value: 'active', label: '진행' },
+  { value: 'blocked', label: '막힘' },
+  { value: 'done', label: '완료' },
+  { value: 'reported', label: '기록' },
+];
+
+function updateStatusForProject(project) {
+  if (project?.status === 'Blocked') return 'blocked';
+  if (project?.status === 'Done') return 'done';
+  if (project?.status === 'In progress') return 'active';
+  return 'reported';
+}
+
+function projectStatusFromUpdateStatus(status, fallback) {
+  if (status === 'blocked') return 'Blocked';
+  if (status === 'done') return 'Done';
+  if (status === 'active') return 'In progress';
+  return fallback;
+}
+
+function ProjectUpdateComposer({ project, onSaved }) {
+  const [summary, setSummary] = React.useState('');
+  const [nextAction, setNextAction] = React.useState('');
+  const [progress, setProgress] = React.useState(project?.progress ?? 0);
+  const [status, setStatus] = React.useState(updateStatusForProject(project));
+  const [state, setState] = React.useState('idle'); // idle | saving | saved | preview | error
+
+  React.useEffect(() => {
+    setSummary('');
+    setNextAction(project?.nextAction || '');
+    setProgress(project?.progress ?? 0);
+    setStatus(updateStatusForProject(project));
+    setState('idle');
+  }, [project?.id, project?.nextAction, project?.progress, project?.status]);
+
+  if (!project) return null;
+
+  const submit = async () => {
+    if (state === 'saving') return;
+    setState('saving');
+    const numericProgress = Math.max(0, Math.min(100, Number(progress) || 0));
+    const body = {
+      projectId: project.id,
+      title: project.name,
+      summary: summary.trim() || null,
+      status,
+      progress: numericProgress,
+      nextAction: nextAction.trim() || null,
+      eventType: 'manual.progress',
+    };
+
+    try {
+      const response = await fetch('/api/projects/update', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json().catch(() => ({}));
+      const saved = response.ok && data.status === 'saved';
+      const preview = response.ok && data.status === 'preview';
+      const update = {
+        id: `local-update-${Date.now()}`,
+        projectId: project.id,
+        source: 'hub',
+        eventType: body.eventType,
+        status,
+        title: project.name,
+        summary: body.summary || '',
+        progress: numericProgress,
+        milestone: '',
+        nextAction: body.nextAction || '',
+        happenedAt: new Date().toISOString(),
+        happenedAtLabel: '방금',
+      };
+      onSaved?.({
+        update,
+        projectPatch: {
+          progress: numericProgress,
+          nextAction: body.nextAction || project.nextAction,
+          status: projectStatusFromUpdateStatus(status, project.status),
+          lastActivityLabel: '방금',
+        },
+      });
+      setSummary('');
+      setState(saved ? 'saved' : preview ? 'preview' : 'error');
+    } catch {
+      setState('error');
+    }
+  };
+
+  const statusColor = state === 'error'
+    ? 'var(--danger)'
+    : state === 'saved'
+    ? 'var(--success)'
+    : state === 'preview'
+    ? 'var(--fg-muted)'
+    : 'var(--fg-faint)';
+
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 8,
+      padding: 10, background: 'var(--surface-2)',
+      border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', flex: 1 }}>Quick update</div>
+        {state !== 'idle' && (
+          <span className="mono" style={{ fontSize: 10.5, color: statusColor }}>
+            {state === 'saving' ? 'saving' : state === 'saved' ? 'saved' : state === 'preview' ? 'preview' : 'error'}
+          </span>
+        )}
+      </div>
+      <textarea
+        aria-label="프로젝트 업데이트 요약"
+        rows={3}
+        value={summary}
+        onChange={(event) => setSummary(event.target.value)}
+        placeholder="진행 상황, 막힌 지점, 공유할 맥락"
+        style={{
+          width: '100%', resize: 'vertical', minHeight: 74,
+          background: 'var(--surface)', border: '1px solid var(--line-soft)',
+          borderRadius: 'var(--r-sm)', color: 'var(--fg)',
+          fontSize: 12.5, lineHeight: 1.5, padding: 9, outline: 'none',
+          fontFamily: 'inherit',
+        }}
+      />
+      <input
+        aria-label="다음 액션"
+        value={nextAction}
+        onChange={(event) => setNextAction(event.target.value)}
+        placeholder="다음 액션"
+        style={{
+          height: 30, background: 'var(--surface)', border: '1px solid var(--line-soft)',
+          borderRadius: 'var(--r-sm)', color: 'var(--fg)', fontSize: 12.5,
+          padding: '0 9px', outline: 'none',
+        }}
+      />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 88px', gap: 8 }}>
+        <select
+          aria-label="업데이트 상태"
+          value={status}
+          onChange={(event) => setStatus(event.target.value)}
+          style={{ height: 30, background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', fontSize: 12, padding: '0 8px' }}
+        >
+          {PROJECT_UPDATE_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+        <input
+          aria-label="진행률"
+          type="number"
+          min="0"
+          max="100"
+          inputMode="numeric"
+          value={progress}
+          onChange={(event) => setProgress(event.target.value)}
+          style={{ height: 30, background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', fontSize: 12, padding: '0 8px' }}
+        />
+      </div>
+      <Button
+        variant="primary"
+        size="sm"
+        icon="plus"
+        onClick={submit}
+        disabled={state === 'saving' || (!summary.trim() && !nextAction.trim())}
+        style={{ width: '100%' }}
+      >
+        {state === 'saving' ? '저장 중…' : '업데이트 남기기'}
+      </Button>
+      {state === 'preview' && (
+        <div style={{ fontSize: 11, color: 'var(--fg-faint)', lineHeight: 1.45 }}>Supabase/workspace 설정이 없어 로컬 상세에만 반영됩니다.</div>
+      )}
+      {state === 'error' && (
+        <div style={{ fontSize: 11, color: 'var(--danger)', lineHeight: 1.45 }}>업데이트 저장에 실패했습니다. 다시 시도하세요.</div>
+      )}
+    </div>
+  );
+}
+
 // Council brand advisor — the brand-side counterpart of revenue.jsx's GuruCoachPanel.
 // Modes cover brand strategy, audience(고객) analysis, flow review, and meeting-note synthesis.
 // meeting-synthesis takes pasted notes as the draft; the others read the assembled brand context.
@@ -122,7 +300,7 @@ function CouncilBrandPanel({ router, focusRef = null, focusLabel = null }) {
         ))}
       </div>
       {needsNotes && (
-        <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="회의록·메모를 붙여넣으면 결정·오너·기한이 분명한 액션으로 정리합니다."
+        <textarea aria-label="자문에 사용할 회의록 또는 메모" value={notes} onChange={e => setNotes(e.target.value)} placeholder="회의록·메모를 붙여넣으면 결정·오너·기한이 분명한 액션으로 정리합니다."
           rows={3} style={{
             width: '100%', resize: 'vertical', marginBottom: res.state !== 'idle' ? 12 : 0,
             background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
@@ -388,6 +566,19 @@ export function Projects({ workspace }) {
       try { window.localStorage.removeItem(PMS_BOARD_STORAGE_KEY); } catch { /* ignore */ }
     }
     setCols(FALLBACK_COLUMNS);
+  }, []);
+
+  const applyProjectUpdate = React.useCallback(({ update, projectPatch }) => {
+    if (!update?.projectId) return;
+    setLedger(prev => ({
+      ...prev,
+      projects: (prev.projects || []).map(project => (
+        project.id === update.projectId
+          ? { ...project, ...projectPatch }
+          : project
+      )),
+      updates: [update, ...(prev.updates || [])],
+    }));
   }, []);
 
   const statusTone = { 'In progress': 'info', Review: 'warning', Planning: 'moon', Backlog: 'neutral', Blocked: 'danger', Done: 'success' };
@@ -683,7 +874,7 @@ export function Projects({ workspace }) {
                                 }}>
                                   <span style={{ display: 'inline-block', transition: 'transform .15s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', fontSize: 10 }}>▶</span>
                                 </button>
-                                <input type="checkbox" style={{ margin: 0, accentColor: 'var(--moon-400)' }} onClick={e => e.stopPropagation()} />
+                                <input type="checkbox" aria-label={`${p.name} 선택`} style={{ margin: 0, accentColor: 'var(--moon-400)' }} onClick={e => e.stopPropagation()} />
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                                   <span style={{ fontSize: 14 }}>{pBrand.glyph}</span>
                                   <div style={{ minWidth: 0, flex: 1 }}>
@@ -816,6 +1007,7 @@ export function Projects({ workspace }) {
                         {p.summary || `${pBrand.desc}. 이 프로젝트는 ${p.status === 'In progress' ? '활발히 진행 중' : p.status === 'Review' ? '최종 검토 단계' : '초기 계획 단계'}이며, ${pTodos.length}개의 하위 아이템으로 구성됩니다.`}
                       </div>
                     </div>
+                    <ProjectUpdateComposer project={p} onSaved={applyProjectUpdate} />
                     <div>
                       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 8, display: 'flex', alignItems: 'center' }}>
                         <span style={{ flex: 1 }}>체크리스트 · {doneCount}/{pTodos.length}</span>
@@ -946,7 +1138,7 @@ export function Projects({ workspace }) {
                 return (
                   <div key={bucket} style={{ marginBottom: 'var(--section-gap)' }}>
                     <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 8 }}>{bucket} · {items.length}</div>
-                    <Card pad={false}>
+                    <Card pad={false} className="hub-table-card">
                       {items.map((t, i) => {
                         const proj = allProjects.find(p => p.id === t.project);
                         const pBrand = brands.find(b => b.key === t.brand) || brands[0] || EMPTY_ALL_BRAND;

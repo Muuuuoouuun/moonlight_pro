@@ -39,7 +39,7 @@ const CHAT_PERSONAS = {
     name: 'Council',
     role: 'Writer · Strategist · Analyst 자문단',
     title: '브랜드 카운슬 세션',
-    model: 'Gemini',
+    model: 'Gemini 3.5',
     intro: [
       { role: 'agent', name: 'Council', text: '브랜드 카운슬입니다. 콘텐츠·브랜드·프로젝트 원장(발행 케이던스·아이디어 큐·진행 프로젝트)을 근거로 "지금 무엇을 놓치고 있고, 다음 한 수가 무엇인지"를 자문합니다.\n\n무엇을 볼까요?\n· 브랜드 전략 (이번 주 우선순위)\n· 오디언스 분석 (누가 무엇에 반응하나)\n· 회의록 정리 (붙여넣으면 결정·액션으로)\n· 플로우 점검 (아이디어→발행 병목)' },
     ],
@@ -278,7 +278,7 @@ export function AgentsChat({ onNavigate }) {
             </div>
           )}
           <div style={{ maxWidth: 720, margin: '0 auto', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', padding: 10 }}>
-            <textarea value={input} onChange={e => setInput(e.target.value)} placeholder={`Message ${persona.name}…`} style={{
+            <textarea aria-label={`${persona.name}에게 메시지`} value={input} onChange={e => setInput(e.target.value)} placeholder={`Message ${persona.name}…`} style={{
               width: '100%', minHeight: 52, resize: 'none',
               background: 'transparent', border: 'none', outline: 'none',
               color: 'var(--fg)', fontSize: 13.5, lineHeight: 1.5,
@@ -288,7 +288,7 @@ export function AgentsChat({ onNavigate }) {
               <Button variant="ghost" size="xs" icon="link" onClick={() => onNavigate?.('dashboard/work/decisions?new=decision')}>Link decision</Button>
               <div style={{ flex: 1 }} />
               <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{persona.name} · {persona.model}</span>
-              <Button variant="primary" size="xs" icon="send" onClick={send} disabled={busy}>Send</Button>
+              <Button variant="primary" size="xs" icon="send" onClick={send} disabled={busy || !input.trim()}>Send</Button>
             </div>
           </div>
         </div>

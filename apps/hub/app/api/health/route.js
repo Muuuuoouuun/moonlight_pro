@@ -69,15 +69,6 @@ export async function GET() {
           process.env.GOOGLE_CLIENT_SECRET?.trim(),
       ),
       githubConfigured: Boolean(process.env.GITHUB_REPOSITORIES?.trim()),
-      openClawConfigured: Boolean(
-        process.env.OPENCLAW_LOCAL_URL?.trim() ||
-          process.env.OPENCLAW_REMOTE_URL?.trim() ||
-          (
-            process.env.TELEGRAM_BOT_TOKEN?.trim() &&
-            process.env.OPENCLAW_TELEGRAM_CHAT_ID?.trim()
-          ) ||
-          process.env.OPENCLAW_SLACK_WEBHOOK_URL?.trim(),
-      ),
       geminiConfigured: Boolean(
         process.env.GEMINI_API_KEY?.trim() ||
           process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim(),
@@ -90,7 +81,6 @@ export async function GET() {
       { method: "GET", path: "/api/email/gmail/connect" },
       { method: "POST", path: "/api/email/send" },
       { method: "POST", path: "/api/integrations/github/sync" },
-      { method: "POST", path: "/api/integrations/openclaw/sync" },
       { method: "POST", path: "/api/projects/update" },
       { method: "POST", path: "/api/routine/check" },
       { method: "POST", path: "/api/webhooks/project-test" },

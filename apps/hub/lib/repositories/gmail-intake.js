@@ -18,11 +18,13 @@ import {
 } from "@/lib/server-write";
 import {
   fetchRecentGmailMessages,
+  fetchGoogleUserEmail,
   getValidGmailAccessToken,
   resolveGmailConnection,
 } from "@/lib/google-gmail";
 import { classifyEmailForLead } from "@/lib/email-lead-classifier";
 import { computeMatchKey } from "@/lib/sheets-normalize";
+import { assertOperatorEmail } from "@/lib/sales-os/operator-scope";
 
 const STAGING_TABLE = "lead_intake_raw";
 
@@ -126,6 +128,17 @@ export async function scanGmailForLeads({
   const accessToken = await getValidGmailAccessToken(connection);
   if (!accessToken) {
     return previewResult("gmail-auth-failed", byDisposition);
+  }
+
+  const email = connection?.config?.email || await fetchGoogleUserEmail(accessToken);
+  const scopeCheck = assertOperatorEmail(email, "google_gmail");
+  if (!scopeCheck.ok) {
+    return {
+      ...previewResult(scopeCheck.reason, byDisposition),
+      detail: scopeCheck.actual
+        ? `actual=${scopeCheck.actual} expected=${scopeCheck.expected}`
+        : `expected=${scopeCheck.expected}`,
+    };
   }
 
   let messages;

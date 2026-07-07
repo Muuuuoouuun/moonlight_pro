@@ -5,6 +5,7 @@ import {
   resolveSupabaseConfig,
   updateSupabaseRecord,
 } from "@/lib/server-write";
+import { assertOperatorEmail, resolveOperatorEmail } from "@/lib/sales-os/operator-scope";
 import { createHmac, timingSafeEqual } from "crypto";
 
 const GOOGLE_GMAIL_PROVIDER = "google_gmail";
@@ -172,7 +173,7 @@ export function resolveGoogleGmailRedirectUri(origin) {
 export function buildGoogleGmailAuthUrl({
   origin,
   workspaceId = resolveDefaultWorkspaceId(),
-  mailbox = "me",
+  mailbox = resolveOperatorEmail(),
   returnPath = "/dashboard/automations/email",
 }) {
   const oauth = resolveGoogleOAuthConfig();
@@ -188,6 +189,7 @@ export function buildGoogleGmailAuthUrl({
     access_type: "offline",
     prompt: "consent",
     scope: GOOGLE_SCOPES.join(" "),
+    login_hint: mailbox,
     state: encodeState({
       workspaceId: workspaceId || resolveDefaultWorkspaceId(),
       mailbox,
@@ -261,7 +263,7 @@ export async function fetchLatestGoogleGmailConnection(
   return rows?.[0] || null;
 }
 
-async function fetchGoogleUserEmail(accessToken) {
+export async function fetchGoogleUserEmail(accessToken) {
   if (!accessToken) {
     return null;
   }
@@ -296,9 +298,13 @@ export async function saveGoogleGmailConnection({
     (await fetchGoogleUserEmail(tokenData.access_token)) ||
     existing?.config?.email ||
     null;
+  const emailCheck = assertOperatorEmail(resolvedEmail, GOOGLE_GMAIL_PROVIDER);
+  if (!emailCheck.ok) {
+    throw new Error(emailCheck.reason);
+  }
   const config = {
     provider: "Gmail",
-    mailbox: mailbox || "me",
+    mailbox: mailbox || resolveOperatorEmail(),
     scope: tokenData.scope || GOOGLE_SCOPES.join(" "),
     accessToken: tokenData.access_token || "",
     refreshToken: tokenData.refresh_token || existing?.config?.refreshToken || "",
@@ -375,7 +381,7 @@ export async function resolveGmailConnection(workspaceId = resolveDefaultWorkspa
       refreshToken: stored.config.refreshToken,
       accessToken: stored.config.accessToken || null,
       expiresAt: stored.config.expiresAt || null,
-      mailbox: stored.config.mailbox || "me",
+      mailbox: stored.config.mailbox || resolveOperatorEmail(),
     };
   }
 
@@ -391,7 +397,7 @@ export async function resolveGmailConnection(workspaceId = resolveDefaultWorkspa
       refreshToken: envRefresh,
       accessToken: null,
       expiresAt: null,
-      mailbox: "me",
+      mailbox: resolveOperatorEmail(),
     };
   }
 

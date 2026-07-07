@@ -2,7 +2,7 @@
 // Matches the engine's lib/gemini auth/parsing pattern (x-goog-api-key header).
 
 const BASE = (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-const MODEL = process.env.GEMINI_MODEL || "gemini-3-flash-preview";
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
 const PROMPT = `이 명함 이미지에서 아래 필드를 추출해 JSON만 출력해. 불확실한 값은 추측하지 말고 null로 둬.
 {"name": 사람 이름 또는 null, "company": 회사/학원/기관명 또는 null, "phone": 전화번호 또는 null, "email": 이메일 또는 null, "title": 직책 또는 null, "address": 주소 또는 null}`;

@@ -1,10 +1,12 @@
 // Navigation + sample data for Moonlight Pro Hub.
-// real_v1 IA — grounded in the operator's real situation:
+// real_v2 IA — grounded in the operator's real situation:
 //   • 클래스인 = the company they currently work at (today the only live money +
 //     real workload). "회사" is merged into this single primary workspace.
 //   • 브랜드   = their own brands (창업 준비) — kept, but separate from 클래스인.
 //   • 기존 메뉴 = the full functional menus, folded into a collapsed bottom
 //     section (secondary:true) to tidy up gradually ("차차 정리").
+// Workspace children are ordered by operating flow, not by old feature buckets:
+//   capture → qualify → execute → maintain → systems.
 // Workspaces deep-link existing pages with a workspace scope (workspace-map.js);
 // every functional route stays live in PAGE_MAP so nothing 404s.
 
@@ -15,23 +17,25 @@ export const NAV_TREE = [
   {
     key: 'classin', label: '클래스인', icon: 'building', workspace: true,
     children: [
-      { key: 'classin-intake',      label: '리드 인박스',      icon: 'inbox',       path: 'dashboard/classin/intake',      keywords: ['intake', 'inbox', '명함', '인박스'] },
-      { key: 'classin-revenue',     label: '결제·리드',        icon: 'leads',       path: 'dashboard/classin/revenue',     keywords: ['leads', '리드'] },
-      { key: 'classin-segments',    label: '세그먼트',         icon: 'filter',      path: 'dashboard/classin/segments',    keywords: ['segments', '세그먼트'] },
-      { key: 'classin-pipeline',    label: '업무·파이프라인',  icon: 'deals',       path: 'dashboard/classin/pipeline',    keywords: ['deals', '딜', '칸반', 'pipeline'] },
-      { key: 'classin-accounts',    label: '고객·계정',        icon: 'accounts',    path: 'dashboard/classin/accounts',    keywords: ['accounts', '계정', '고객'] },
-      { key: 'classin-followups',   label: 'Follow-ups',       icon: 'bell',        path: 'dashboard/classin/followups',   keywords: ['followup', '팔로업'] },
-      { key: 'classin-projects',    label: '프로젝트',         icon: 'projects',    path: 'dashboard/classin/projects' },
-      { key: 'classin-automations', label: '시트 동기화',     icon: 'automations', path: 'dashboard/classin/automations', keywords: ['sheets', '시트', 'sync', '자동화'] },
+      { key: 'classin-intake',      section: '인입',   label: '리드 인박스',     icon: 'inbox',       path: 'dashboard/classin/intake',      keywords: ['capture', 'intake', 'inbox', '명함', '인박스'] },
+      { key: 'classin-revenue',     section: '인입',   label: '리드·결제',       icon: 'leads',       path: 'dashboard/classin/revenue',     keywords: ['qualify', 'leads', '리드', '결제'] },
+      { key: 'classin-segments',    section: '인입',   label: '세그먼트',        icon: 'filter',      path: 'dashboard/classin/segments',    keywords: ['qualify', 'segments', '세그먼트'] },
+      { key: 'classin-pipeline',    section: '실행',   label: '업무·파이프라인', icon: 'deals',       path: 'dashboard/classin/pipeline',    keywords: ['execute', 'deals', '딜', '칸반', 'pipeline'] },
+      { key: 'classin-followups',   section: '실행',   label: 'Follow-ups',      icon: 'bell',        path: 'dashboard/classin/followups',   keywords: ['maintain', 'followup', '팔로업'] },
+      { key: 'classin-accounts',    section: '실행',   label: '고객·계정',       icon: 'accounts',    path: 'dashboard/classin/accounts',    keywords: ['maintain', 'accounts', '계정', '고객'] },
+      { key: 'classin-projects',    section: '실행',   label: '프로젝트',        icon: 'projects',    path: 'dashboard/classin/projects',    keywords: ['execute', 'projects', '프로젝트'] },
+      { key: 'classin-automations', section: '시스템', label: '시트 동기화',     icon: 'automations', path: 'dashboard/classin/automations', keywords: ['systems', 'sheets', '시트', 'sync', '자동화'] },
     ],
   },
   // ── Workspace 2: 브랜드 — 내 브랜드 / 창업 준비. 이전 브랜드 유지. ──
   {
     key: 'brand', label: '브랜드', icon: 'brand', workspace: true,
     children: [
-      { key: 'brand-projects', label: '브랜드·프로젝트', icon: 'projects', path: 'dashboard/brand/projects' },
-      { key: 'brand-studio',   label: '콘텐츠 스튜디오', icon: 'studio',   path: 'dashboard/brand/studio' },
-      { key: 'brand-queue',    label: '발행 큐',         icon: 'queue',    path: 'dashboard/brand/queue' },
+      { key: 'brand-projects',  section: '계획', label: '프로젝트', icon: 'projects',  path: 'dashboard/brand/projects',  keywords: ['plan', '브랜드', '프로젝트'] },
+      { key: 'brand-campaigns', section: '계획', label: '캠페인',   icon: 'campaigns', path: 'dashboard/brand/campaigns', keywords: ['campaign', 'war room', '캠페인'] },
+      { key: 'brand-studio',    section: '제작', label: '스튜디오', icon: 'studio',    path: 'dashboard/brand/studio',    keywords: ['create', 'content', 'draft', '콘텐츠', '초안'] },
+      { key: 'brand-queue',     section: '제작', label: '발행 큐',  icon: 'queue',     path: 'dashboard/brand/queue',     keywords: ['publish', 'queue', '발행', '큐'] },
+      { key: 'brand-council',   section: '판단', label: 'AI 자문',  icon: 'council',   path: 'dashboard/brand/council',   keywords: ['council', 'brand strategy', '브랜드 전략', '자문'] },
     ],
   },
 
@@ -108,6 +112,9 @@ export const LEGACY_REDIRECTS = {
   'dashboard/work/pms':                   { to: 'dashboard/work/projects', label: 'Projects' },
   'dashboard/content/assets':             { to: 'dashboard/content/studio', label: 'Studio' },
   'dashboard/content/publish':            { to: 'dashboard/content/queue', label: 'Queue' },
+  'dashboard/brand/content':              { to: 'dashboard/brand/studio', label: '브랜드 · 스튜디오' },
+  'dashboard/brand/publish':              { to: 'dashboard/brand/queue', label: '브랜드 · 발행 큐' },
+  'dashboard/brand/campaign':             { to: 'dashboard/brand/campaigns', label: '브랜드 · 캠페인' },
   'dashboard/automations/integrations':   { to: 'dashboard/settings',      label: 'Settings · Integrations' },
   'dashboard/operations':                 { to: 'dashboard/daily-brief',   label: 'Daily Brief' },
   'dashboard/pms':                        { to: 'dashboard/work/projects', label: 'Projects' },

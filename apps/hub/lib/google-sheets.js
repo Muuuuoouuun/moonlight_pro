@@ -24,6 +24,12 @@ import {
   refreshGoogleAccessToken,
   sanitizeReturnPath,
 } from "@/lib/google-oauth";
+import {
+  assertOperatorEmail,
+  assertPersonalLeadsSpreadsheetId,
+  resolveOperatorEmail,
+  resolvePersonalLeadsSpreadsheetId,
+} from "@/lib/sales-os/operator-scope";
 
 const GOOGLE_SHEETS_PROVIDER = "google_sheets";
 const SHEETS_API_BASE = "https://sheets.googleapis.com/v4/spreadsheets";
@@ -90,10 +96,11 @@ export function buildGoogleSheetsAuthUrl({
   return buildGoogleAuthUrl({
     scopes: SHEETS_SCOPES,
     redirectUri: resolveGoogleSheetsRedirectUri(origin),
+    loginHint: resolveOperatorEmail(),
     state: encodeState({
       provider: GOOGLE_SHEETS_PROVIDER,
       workspaceId: workspaceId || resolveDefaultWorkspaceId(),
-      spreadsheetId,
+      spreadsheetId: spreadsheetId || resolvePersonalLeadsSpreadsheetId(),
       returnPath: sanitizeReturnPath(returnPath, DEFAULT_RETURN_PATH),
     }),
   });
@@ -124,9 +131,20 @@ export async function saveGoogleSheetsConnection({
   tokenData,
 }) {
   const existing = await fetchLatestGoogleSheetsConnection(workspaceId);
+  const resolvedSpreadsheetId = spreadsheetId || resolvePersonalLeadsSpreadsheetId();
+  const sheetCheck = assertPersonalLeadsSpreadsheetId(resolvedSpreadsheetId);
+  if (!sheetCheck.ok) {
+    throw new Error(sheetCheck.reason);
+  }
+
   const email = (await fetchGoogleUserEmail(tokenData.access_token)) || existing?.config?.email || null;
+  const emailCheck = assertOperatorEmail(email, GOOGLE_SHEETS_PROVIDER);
+  if (!emailCheck.ok) {
+    throw new Error(emailCheck.reason);
+  }
+
   const config = buildConnectionConfig(tokenData, {
-    spreadsheetId,
+    spreadsheetId: resolvedSpreadsheetId,
     email,
     existing: existing?.config,
   });
@@ -175,6 +193,7 @@ export async function recordGoogleSheetsSync({
 // Returns a working connection descriptor or null. Prefers a stored OAuth
 // grant; falls back to the single-operator env token.
 export async function resolveSheetsConnection(workspaceId = resolveDefaultWorkspaceId()) {
+  const personalSpreadsheetId = resolvePersonalLeadsSpreadsheetId();
   const stored = await fetchLatestGoogleSheetsConnection(workspaceId);
   if (stored?.config?.refreshToken) {
     return {
@@ -184,12 +203,11 @@ export async function resolveSheetsConnection(workspaceId = resolveDefaultWorksp
       refreshToken: stored.config.refreshToken,
       accessToken: stored.config.accessToken || null,
       expiresAt: stored.config.expiresAt || null,
-      spreadsheetId: stored.config.spreadsheetId || process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim() || "",
+      spreadsheetId: stored.config.spreadsheetId || personalSpreadsheetId || "",
     };
   }
 
   const envRefresh = process.env.GOOGLE_SHEETS_REFRESH_TOKEN?.trim();
-  const envSheet = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
   if (envRefresh) {
     return {
       source: "env",
@@ -198,7 +216,7 @@ export async function resolveSheetsConnection(workspaceId = resolveDefaultWorksp
       refreshToken: envRefresh,
       accessToken: null,
       expiresAt: null,
-      spreadsheetId: envSheet || "",
+      spreadsheetId: personalSpreadsheetId || "",
     };
   }
 

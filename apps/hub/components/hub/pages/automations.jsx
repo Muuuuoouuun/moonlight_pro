@@ -501,7 +501,7 @@ export function Runs() {
               <span style={{ color: sIcon[r.status].c, textAlign: 'center' }}>{sIcon[r.status].t}</span>
               <span style={{ color: 'var(--fg)' }}>{r.flow}</span>
               <span style={{ color: 'var(--fg-faint)', textAlign: 'right' }}>{r.ms}ms</span>
-              <span style={{ color: 'var(--fg-muted)' }}>{r.detail}</span>
+              <span style={{ color: 'var(--fg-muted)' }}>{typeof r.detail === 'string' ? r.detail : JSON.stringify(r.detail)}</span>
             </div>
           ))}
         </div>

@@ -217,7 +217,7 @@ async function checkGitHubIntegration(label, env, failures) {
 async function checkGeminiIntegration(label, env, failures) {
   const apiKey = env.GEMINI_API_KEY || env.GOOGLE_GENERATIVE_AI_API_KEY || "";
   const apiBaseUrl = (env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-  const model = env.GEMINI_MODEL || env.AI_DEFAULT_MODEL || "gemini-3-flash-preview";
+  const model = env.GEMINI_MODEL || env.AI_DEFAULT_MODEL || "gemini-3.5-flash";
 
   if (!apiKey) {
     printResult("WARN", `${label} Gemini integration`, "missing GEMINI_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY");
@@ -241,37 +241,6 @@ async function checkGeminiIntegration(label, env, failures) {
     `models check failed (${result.status || "no-status"})`,
   );
   failures.push(`${label}:GEMINI_INTEGRATION`);
-}
-
-function checkOpenClawIntegration(label, env) {
-  const localUrl = env.OPENCLAW_LOCAL_URL?.trim();
-  const remoteUrl = env.OPENCLAW_REMOTE_URL?.trim();
-  const telegramReady = Boolean(env.TELEGRAM_BOT_TOKEN?.trim() && env.OPENCLAW_TELEGRAM_CHAT_ID?.trim());
-  const slackReady = Boolean(env.OPENCLAW_SLACK_WEBHOOK_URL?.trim());
-  const projectId = env.OPENCLAW_PROJECT_ID?.trim();
-  const configuredTransports = [
-    localUrl ? "local" : "",
-    remoteUrl ? "remote" : "",
-    telegramReady ? "telegram" : "",
-    slackReady ? "slack" : "",
-  ].filter(Boolean);
-
-  if (!projectId) {
-    printResult("WARN", `${label} OpenClaw project`, "missing OPENCLAW_PROJECT_ID");
-  } else {
-    printResult("PASS", `${label} OpenClaw project`, projectId);
-  }
-
-  if (!configuredTransports.length) {
-    printResult(
-      "WARN",
-      `${label} OpenClaw transport`,
-      "missing OPENCLAW_LOCAL_URL, OPENCLAW_REMOTE_URL, Telegram chat, or Slack webhook",
-    );
-    return;
-  }
-
-  printResult("PASS", `${label} OpenClaw transport`, configuredTransports.join(", "));
 }
 
 async function checkSupabase(label, env, failures) {
@@ -394,8 +363,6 @@ async function main() {
   printSection("Integrations");
   await checkGitHubIntegration("Hub", hubEnv, failures);
   await checkGitHubIntegration("Engine", engineEnv, failures);
-  checkOpenClawIntegration("Hub", hubEnv);
-  checkOpenClawIntegration("Engine", engineEnv);
   await checkGeminiIntegration("Hub", hubEnv, failures);
   await checkGeminiIntegration("Engine", engineEnv, failures);
 

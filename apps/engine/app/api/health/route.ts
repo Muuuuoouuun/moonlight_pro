@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 
 import { getGeminiIntegrationStatus } from "../../../lib/gemini";
 import { getGitHubIntegrationStatus } from "../../../lib/github-sync";
-import { getOpenClawIntegrationStatus } from "../../../lib/openclaw-sync";
 import { checkSupabaseRest } from "../../../lib/supabase-rest";
 import { listSharedProjectWebhookRoutes } from "../../../lib/shared-webhook";
 
@@ -24,7 +23,6 @@ export async function GET() {
     },
     integrations: {
       github: getGitHubIntegrationStatus(),
-      openclaw: getOpenClawIntegrationStatus(),
       gemini: getGeminiIntegrationStatus(),
     },
     auth: {
@@ -38,7 +36,6 @@ export async function GET() {
       { method: "POST", path: "/api/webhook/project" },
       { method: "POST", path: "/api/email/send" },
       { method: "POST", path: "/api/integrations/github/sync" },
-      { method: "POST", path: "/api/integrations/openclaw/sync" },
       { method: "POST", path: "/api/ai/brief" },
       ...sharedRoutes,
       { method: "GET", path: "/api/health" },

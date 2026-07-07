@@ -13,7 +13,7 @@ const LABELS = {
   'company': '회사 Legacy',
   'brand': '브랜드',
   'work': 'Work', 'calendar': 'Calendar', 'projects': 'Projects', 'decisions': 'Decisions', 'roadmap': 'Roadmap', 'rhythm': 'Rhythm',
-  'content': 'Content', 'studio': 'Studio', 'queue': 'Queue', 'campaigns': 'Campaigns',
+  'content': 'Content', 'studio': '스튜디오', 'queue': '발행 큐', 'campaigns': '캠페인',
   'revenue': 'Revenue', 'overview': 'Overview', 'leads': 'Leads', 'deals': 'Deals', 'cases': 'Cases', 'accounts': '고객·계정',
   'automations': 'Automations', 'flows': 'Flows', 'email': 'Email', 'webhooks': 'Webhooks', 'runs': 'Runs', 'sheets': 'Sheets',
   'agents': 'Agents', 'chat': 'Chat', 'council': 'Council', 'orders': 'Orders', 'office': 'VR Office',
@@ -42,6 +42,17 @@ function OperatorSessionControl() {
   const [operatorSecret, setOperatorSecret] = React.useState('');
   const [operatorBusy, setOperatorBusy] = React.useState(false);
   const [operatorMessage, setOperatorMessage] = React.useState(null);
+  const panelRef = React.useRef(null);
+  const secretInputRef = React.useRef(null);
+  const previousFocusRef = React.useRef(null);
+  const panelId = React.useId();
+  const titleId = React.useId();
+  const descriptionId = React.useId();
+
+  const closeOperatorPanel = React.useCallback(() => {
+    setOperatorPanelOpen(false);
+    setTimeout(() => previousFocusRef.current?.focus?.(), 0);
+  }, []);
 
   const refreshOperatorSession = React.useCallback(async () => {
     setOperatorBusy(true);
@@ -90,6 +101,23 @@ function OperatorSessionControl() {
     load();
     return () => { active = false; };
   }, []);
+
+  React.useEffect(() => {
+    if (!operatorPanelOpen) return undefined;
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setTimeout(() => {
+      if (operatorSession.status !== 'authenticated' && operatorSession.configured !== false) {
+        secretInputRef.current?.focus();
+      } else {
+        panelRef.current?.focus();
+      }
+    }, 0);
+    const onKey = (event) => {
+      if (event.key === 'Escape') closeOperatorPanel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [closeOperatorPanel, operatorPanelOpen, operatorSession.configured, operatorSession.status]);
 
   async function loginOperatorSession() {
     setOperatorBusy(true);
@@ -153,6 +181,9 @@ function OperatorSessionControl() {
       <IconButton
         icon={active ? 'check' : 'lock'}
         tooltip={tooltip}
+        aria-haspopup="dialog"
+        aria-expanded={operatorPanelOpen}
+        aria-controls={operatorPanelOpen ? panelId : undefined}
         onClick={() => setOperatorPanelOpen((open) => !open)}
         style={{
           color: toneColor,
@@ -161,7 +192,14 @@ function OperatorSessionControl() {
         }}
       />
       {operatorPanelOpen && (
-        <div style={{
+        <div
+          ref={panelRef}
+          id={panelId}
+          role="dialog"
+          aria-labelledby={titleId}
+          aria-describedby={descriptionId}
+          tabIndex={-1}
+          style={{
           position: 'absolute',
           top: 36,
           right: 0,
@@ -175,16 +213,18 @@ function OperatorSessionControl() {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Iconed name={active ? 'check' : 'lock'} size={14} style={{ color: toneColor }} />
-            <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--fg)' }}>Operator session</div>
+            <div id={titleId} style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--fg)' }}>Operator session</div>
             <div style={{ flex: 1 }} />
             <span className="mono" style={{ fontSize: 10.5, color: toneColor }}>{active ? 'active' : configured ? 'locked' : 'missing'}</span>
           </div>
-          <div style={{ marginTop: 8, fontSize: 11.5, lineHeight: 1.55, color: 'var(--fg-muted)' }}>
+          <div id={descriptionId} style={{ marginTop: 8, fontSize: 11.5, lineHeight: 1.55, color: 'var(--fg-muted)' }}>
             {operatorStatusMessage(operatorSession)}
           </div>
           {!active && configured && (
             <input
+              ref={secretInputRef}
               type="password"
+              aria-label="Hub write secret"
               autoComplete="off"
               spellCheck={false}
               value={operatorSecret}

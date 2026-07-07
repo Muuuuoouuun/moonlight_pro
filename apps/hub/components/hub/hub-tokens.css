@@ -147,6 +147,10 @@
 .hub-app .hairline-b { border-bottom: 1px solid var(--line-soft); }
 
 .hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; border-radius: 2px; }
+.hub-app .hub-input:focus-within {
+  outline: 1px solid var(--moon-300);
+  outline-offset: 2px;
+}
 
 @keyframes mlMoonPulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
 @keyframes mlFadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
@@ -391,7 +395,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    min-height: 34px !important;
+    min-height: 44px !important;
   }
 
   .hub-topbar__primary-action {

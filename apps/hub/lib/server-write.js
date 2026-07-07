@@ -2,7 +2,7 @@ const PROJECT_UPDATE_STATUSES = new Set(["reported", "active", "blocked", "done"
 const ROUTINE_CHECK_TYPES = new Set(["morning", "midday", "evening", "weekly"]);
 const ROUTINE_CHECK_STATUSES = new Set(["pending", "done", "skipped", "blocked"]);
 const SHARED_WEBHOOK_SECRET_HEADER = "x-com-moon-shared-secret";
-const PROJECT_WEBHOOK_TARGETS = new Set(["generic", "openclaw", "moltbot"]);
+const PROJECT_WEBHOOK_TARGETS = new Set(["generic", "moltbot"]);
 
 export function resolveSupabaseConfig() {
   const url = process.env.SUPABASE_URL?.trim();
@@ -117,7 +117,7 @@ function normalizeWebhookTarget(value) {
 }
 
 function resolveProjectWebhookPath(target) {
-  if (target === "openclaw" || target === "moltbot") {
+  if (target === "moltbot") {
     return `/api/webhook/project/${target}`;
   }
 
@@ -135,7 +135,7 @@ function buildProjectWebhookRequestBody(payload, target) {
   const nextAction = normalizeNullableString(payload.nextAction);
   const checkType = normalizeNullableString(payload.checkType);
 
-  if (target === "openclaw" || target === "moltbot") {
+  if (target === "moltbot") {
     return {
       meta: {
         workspaceId,

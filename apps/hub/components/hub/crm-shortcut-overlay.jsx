@@ -35,7 +35,13 @@ export function ShortcutOverlay({ open, onClose }) {
       display: "flex", justifyContent: "center", paddingTop: "16vh",
       animation: "mlFadeUp .15s ease-out",
     }}>
-      <div onClick={(e) => e.stopPropagation()} style={{
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="키보드 단축키"
+        data-shortcut-overlay="true"
+        onClick={(e) => e.stopPropagation()}
+        style={{
         width: 380, maxWidth: "90vw", height: "fit-content",
         background: "var(--surface-2)", border: "1px solid var(--line)",
         borderRadius: "var(--r-lg)", boxShadow: "var(--shadow-pop)", padding: 16,

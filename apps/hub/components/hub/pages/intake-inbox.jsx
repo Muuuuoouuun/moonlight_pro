@@ -31,6 +31,12 @@ const SOURCE_FILTERS = [
 ];
 
 const ROW_GRID = "70px 1fr 150px 160px 90px 1fr 44px 72px max-content";
+const EDIT_FIELDS = [
+  { key: "name", label: "기관명", type: "text", autoComplete: "organization" },
+  { key: "contactName", label: "담당자", type: "text", autoComplete: "name" },
+  { key: "phone", label: "전화", type: "tel", autoComplete: "tel" },
+  { key: "email", label: "이메일", type: "email", autoComplete: "email" },
+];
 
 // Fetch helper mirroring saveRevenueRecord in revenue.jsx: returns { ok, status, row/result }.
 async function postIntakeOp(body) {
@@ -88,11 +94,23 @@ function EditRow({ row, onCancel, onSaved }) {
       flexDirection: "column",
       gap: 8,
     }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-        <Input placeholder="기관명" value={fields.name} onChange={(v) => setFields((f) => ({ ...f, name: v }))} />
-        <Input placeholder="담당자" value={fields.contactName} onChange={(v) => setFields((f) => ({ ...f, contactName: v }))} />
-        <Input placeholder="전화" value={fields.phone} onChange={(v) => setFields((f) => ({ ...f, phone: v }))} />
-        <Input placeholder="이메일" value={fields.email} onChange={(v) => setFields((f) => ({ ...f, email: v }))} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 }}>
+        {EDIT_FIELDS.map((field) => (
+          <label key={field.key} style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0 }}>
+            <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--fg-faint)" }}>
+              {field.label}
+            </span>
+            <Input
+              ariaLabel={field.label}
+              placeholder={field.label}
+              type={field.type}
+              autoComplete={field.autoComplete}
+              value={fields[field.key]}
+              onChange={(v) => setFields((f) => ({ ...f, [field.key]: v }))}
+              style={{ width: "100%" }}
+            />
+          </label>
+        ))}
       </div>
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
         <Button variant="primary" size="xs" icon="check" onClick={save} disabled={saving}>{saving ? "저장 중…" : "저장"}</Button>

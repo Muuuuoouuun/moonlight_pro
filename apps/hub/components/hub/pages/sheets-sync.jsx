@@ -12,6 +12,15 @@ const STAGING_LABELS = [
 ];
 
 const RUN_TONE = { success: "success", failure: "danger", running: "warning", queued: "neutral" };
+const ERROR_HINT = {
+  "operator-email-mismatch": "연결된 Google 계정이 junhyuk.mun@classin.com이 아닙니다.",
+  "missing-operator-email": "연결된 Google 계정 이메일을 확인할 수 없습니다.",
+  "personal-leads-spreadsheet-mismatch": "개인 리드 시트 ID와 다른 스프레드시트입니다.",
+  "missing-personal-leads-spreadsheet-id": "개인 리드 시트 ID가 설정되지 않았습니다.",
+  "missing-spreadsheet-id": "스프레드시트 ID가 없습니다.",
+  "not-connected": "Google Sheets 연결이 없습니다.",
+  "auth-failed": "Google Sheets 인증 갱신에 실패했습니다.",
+};
 
 function shortId(id) {
   if (!id) return "—";
@@ -21,9 +30,21 @@ function shortId(id) {
 function summarize(action, results) {
   if (!results) return "완료";
   const parts = [];
-  if (results.import) parts.push(`import ${results.import.imported ?? 0}건(skip ${results.import.skipped ?? 0})`);
-  if (results.promote) parts.push(`promote 신규 ${results.promote.promoted ?? 0}·매칭 ${results.promote.merged ?? 0}·검토 ${results.promote.review ?? 0}`);
-  if (results.push) parts.push(`push ${results.push.pushed ?? 0}행`);
+  if (results.import) {
+    parts.push(results.import.ok === false
+      ? `import 실패 — ${ERROR_HINT[results.import.reason] || results.import.reason}`
+      : `import ${results.import.imported ?? 0}건(skip ${results.import.skipped ?? 0})`);
+  }
+  if (results.promote) {
+    parts.push(results.promote.ok === false
+      ? `promote 실패 — ${results.promote.reason || ""}`
+      : `promote 신규 ${results.promote.promoted ?? 0}·매칭 ${results.promote.merged ?? 0}·검토 ${results.promote.review ?? 0}`);
+  }
+  if (results.push) {
+    parts.push(results.push.ok === false
+      ? `push 실패 — ${ERROR_HINT[results.push.reason] || results.push.reason}`
+      : `push ${results.push.pushed ?? 0}행`);
+  }
   return parts.length ? parts.join(" · ") : "완료";
 }
 
@@ -32,6 +53,8 @@ export function SheetsSync() {
     syncState: "loading",
     connected: false,
     spreadsheetId: null,
+    expectedOperatorEmail: null,
+    expectedSpreadsheetId: null,
     lastSyncAt: null,
     staging: {},
     recentRuns: [],
@@ -52,6 +75,8 @@ export function SheetsSync() {
         syncState: d.status === "live" ? "live" : "preview",
         connected: Boolean(d.connected),
         spreadsheetId: d.spreadsheetId || null,
+        expectedOperatorEmail: d.expectedOperatorEmail || null,
+        expectedSpreadsheetId: d.expectedSpreadsheetId || null,
         lastSyncAt: d.lastSyncAt || null,
         staging: d.staging || {},
         recentRuns: Array.isArray(d.recentRuns) ? d.recentRuns : [],
@@ -66,6 +91,7 @@ export function SheetsSync() {
   }, [load]);
 
   const runSync = async (action) => {
+    if (busy) return;
     setBusy(action);
     setMsg(null);
     try {
@@ -92,7 +118,7 @@ export function SheetsSync() {
     window.location.href = "/api/integrations/sheets/connect";
   };
 
-  const { syncState, connected, spreadsheetId, lastSyncAt, staging, recentRuns } = state;
+  const { syncState, connected, spreadsheetId, expectedOperatorEmail, expectedSpreadsheetId, lastSyncAt, staging, recentRuns } = state;
 
   return (
     <div className="hub-page" style={{ padding: "var(--section-gap)", display: "flex", flexDirection: "column", gap: "var(--gap)", maxWidth: 1100 }}>
@@ -120,6 +146,9 @@ export function SheetsSync() {
               {spreadsheetId ? `sheet ${shortId(spreadsheetId)}` : "스프레드시트 미지정"}
               {lastSyncAt ? ` · 최근 ${new Date(lastSyncAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}
             </div>
+            <div className="mono" style={{ marginTop: 2, fontSize: 10.5, color: "var(--fg-faint)" }}>
+              {expectedOperatorEmail || "junhyuk.mun@classin.com"} · 개인 리드 시트 {shortId(expectedSpreadsheetId || spreadsheetId)}
+            </div>
           </div>
           <Badge tone={connected ? "success" : "neutral"} size="xs">{connected ? "연결됨" : "미연결"}</Badge>
         </div>
@@ -145,11 +174,11 @@ export function SheetsSync() {
               ))}
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <Button variant="primary" size="sm" icon="bolt" onClick={() => runSync("all")} active={busy === "all"}>{busy === "all" ? "동기화 중…" : "전체 동기화"}</Button>
-              <Button variant="outline" size="sm" icon="download" onClick={() => runSync("import")} active={busy === "import"}>시트→DB import</Button>
-              <Button variant="outline" size="sm" icon="check" onClick={() => runSync("promote")} active={busy === "promote"}>승격(dedupe)</Button>
-              <Button variant="outline" size="sm" icon="upload" onClick={() => runSync("push")} active={busy === "push"}>DB→시트 push</Button>
-              <Button variant="ghost" size="sm" icon="link" onClick={connect}>재연결</Button>
+              <Button variant="primary" size="sm" icon="bolt" onClick={() => runSync("all")} active={busy === "all"} disabled={!!busy}>{busy === "all" ? "동기화 중…" : "전체 동기화"}</Button>
+              <Button variant="outline" size="sm" icon="download" onClick={() => runSync("import")} active={busy === "import"} disabled={!!busy}>{busy === "import" ? "import 중…" : "시트→DB import"}</Button>
+              <Button variant="outline" size="sm" icon="check" onClick={() => runSync("promote")} active={busy === "promote"} disabled={!!busy}>{busy === "promote" ? "승격 중…" : "승격(dedupe)"}</Button>
+              <Button variant="outline" size="sm" icon="upload" onClick={() => runSync("push")} active={busy === "push"} disabled={!!busy}>{busy === "push" ? "push 중…" : "DB→시트 push"}</Button>
+              <Button variant="ghost" size="sm" icon="link" onClick={connect} disabled={!!busy}>재연결</Button>
             </div>
             {msg && (
               <div style={{ marginTop: 10, fontSize: 12, color: `var(--${msg.tone})`, display: "flex", alignItems: "center", gap: 6 }}>

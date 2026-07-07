@@ -42,7 +42,7 @@ function shouldYield() {
   if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) {
     return true;
   }
-  if (document.querySelector('[data-drawer-open="true"]')) return true;
+  if (document.querySelector('[data-drawer-open="true"], [role="dialog"], [data-shortcut-overlay="true"]')) return true;
   return false;
 }
 
@@ -50,6 +50,7 @@ export function useCrmKeyboard({ enabled = true, selection, onNew, onEditSelecte
   React.useEffect(() => {
     if (!enabled) return undefined;
     const onKey = (e) => {
+      if (e.defaultPrevented || e.isComposing) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return; // leave ⌘K etc. alone
       if (shouldYield()) return;
       const k = e.key;
