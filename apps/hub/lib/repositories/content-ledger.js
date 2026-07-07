@@ -1,11 +1,12 @@
 import { randomUUID } from "crypto";
 
 import {
+  eqFilter,
   fetchSupabaseRows,
   inFilter,
   withWorkspaceFilter,
 } from "@/lib/server-read";
-import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { insertSupabaseRecord, resolveDefaultWorkspaceId } from "@/lib/server-write";
 
 const ITEM_STATUSES = ["idea", "draft", "review", "scheduled", "published", "archived"];
 const VARIANT_STATUSES = ["draft", "ready", "published", "archived"];
@@ -895,5 +896,76 @@ export async function getContentLedger() {
     summary: buildSummary(items, publishLogs),
     ideaQueue: buildIdeaQueue(items),
     cadence: buildCadence(items),
+  };
+}
+
+// ── content_outcomes ledger (Phase 2 ⓐ) ────────────────────────────────────
+// The content-side mirror of outcomes-ledger.js: the "did it work?" sink the Council
+// audience-analysis mode was missing. Write: recordContentOutcome (operator logs a metric
+// after publishing). Read: getRecentContentOutcomes (brand-context assembles a 4-week
+// rollup from these). metric is free text — the schema doesn't presume which metric the
+// operator has decided to track (design OQ2). Backed by migration 0020 `content_outcomes`.
+
+export async function recordContentOutcome({
+  workspaceId = resolveDefaultWorkspaceId(),
+  variantId = null,
+  contentId = null,
+  brandKey = null,
+  channel = null,
+  metric = null,
+  value = 0,
+  measuredAt = null,
+  source = "manual",
+  note = null,
+} = {}) {
+  if (!workspaceId) return { persisted: false, reason: "missing-workspace" };
+  const metricName = normalizeString(metric);
+  if (!metricName) return { persisted: false, reason: "missing-metric" };
+
+  const numeric = Number(value);
+  return insertSupabaseRecord("content_outcomes", {
+    workspace_id: workspaceId,
+    variant_id: variantId || null,
+    content_id: contentId || null,
+    brand_key: normalizeString(brandKey) || null,
+    channel: normalizeString(channel) || null,
+    metric: metricName,
+    value: Number.isFinite(numeric) ? numeric : 0,
+    measured_at: measuredAt || new Date().toISOString(),
+    source: source === "api" ? "api" : "manual",
+    note: normalizeString(note) || null,
+  });
+}
+
+// Recent content outcomes, newest first. Optionally scoped to one brand.
+export async function getRecentContentOutcomes({
+  workspaceId = resolveDefaultWorkspaceId(),
+  limit = 200,
+  brandKey = null,
+} = {}) {
+  if (!workspaceId) return { source: "preview", outcomes: [] };
+
+  const scoped = brandKey ? [["brand_key", eqFilter(brandKey)]] : [];
+  const rows = await fetchSupabaseRows("content_outcomes", {
+    filters: withWorkspaceFilter(scoped),
+    order: "measured_at.desc",
+    limit,
+  });
+  if (!rows) return { source: "preview", outcomes: [] };
+
+  return {
+    source: "supabase",
+    outcomes: rows.map((r) => ({
+      id: r.id,
+      variantId: r.variant_id,
+      contentId: r.content_id,
+      brandKey: r.brand_key,
+      channel: r.channel,
+      metric: r.metric,
+      value: Number(r.value) || 0,
+      measuredAt: r.measured_at,
+      source: r.source,
+      note: r.note,
+    })),
   };
 }
