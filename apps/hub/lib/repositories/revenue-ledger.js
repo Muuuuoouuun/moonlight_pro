@@ -192,6 +192,7 @@ function mapLead(row, companyById, contactById) {
     // Guru deal-review focus context reads these (context-schema.js) — keep them on the
     // projection so the 360 context no longer has to report them as missing[].
     nextAction: row.next_action || null,
+    account: company?.name || null, // company name → cross-link to the Accounts tab (?acct=)
     contactName: contact?.name || null,
     contactEmail: contact?.email || null,
     value: value ? formatMoneyLabel(value) : "—",
@@ -215,6 +216,7 @@ function mapDeal(row, companyById) {
   return {
     id: row.id,
     leadId: row.lead_id || null, // ties the deal back to its lead for Guru focus context
+    account: company?.name || null, // company name → cross-link to the Accounts tab (?acct=)
     name,
     type,
     workspace: resolveWorkspace(row),

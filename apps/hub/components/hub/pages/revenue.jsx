@@ -69,6 +69,17 @@ async function fetchActivities({ accountId, leadId, dealId }) {
   }
 }
 
+// Cross-tab navigation path for a logical CRM entity, staying in the caller's workspace.
+// classin workspace uses its own routes (revenue=Leads, pipeline=Deals, accounts=Accounts);
+// elsewhere the standalone revenue routes — so a jump never drops the operator into a
+// different workspace.
+function crmTabPath(workspace, tab, params = '') {
+  const map = workspace === 'classin'
+    ? { leads: 'dashboard/classin/revenue', deals: 'dashboard/classin/pipeline', accounts: 'dashboard/classin/accounts' }
+    : { leads: 'dashboard/revenue/leads', deals: 'dashboard/revenue/deals', accounts: 'dashboard/revenue/accounts' };
+  return (map[tab] || map.leads) + params;
+}
+
 function formatPercentDelta(current, previous) {
   if (!Number.isFinite(current) || !Number.isFinite(previous)) return '—';
   if (previous === 0) return current === 0 ? '0%' : 'new';
@@ -261,7 +272,7 @@ function GuruCoachPanel({ onNavigate }) {
 // + Deals board so the operator sees who to contact without leaving the page. Silent in preview /
 // when empty (mock/live discipline). 기록 dual-writes (outcome + activity, same as QuickLogBar);
 // 스누즈 sets meta.snooze_until so getFollowups suppresses the row until due.
-function TodayFollowupStrip({ onNavigate, limit = 5 }) {
+function TodayFollowupStrip({ onNavigate, workspace, limit = 5 }) {
   const [state, setState] = React.useState({ status: 'loading', items: [], summary: {} });
   const [done, setDone] = React.useState({});
 
@@ -307,7 +318,11 @@ function TodayFollowupStrip({ onNavigate, limit = 5 }) {
         {items.map((item, i) => (
           <div key={`${item.kind}-${item.id}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderTop: i > 0 ? '1px solid var(--line-soft)' : 'none', opacity: done[item.id] ? 0.55 : 1, minWidth: 0 }}>
             <Badge tone="moon" size="xs">{item.channel}</Badge>
-            <span style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap' }}>{item.name}</span>
+            <button
+              onClick={() => onNavigate?.(crmTabPath(workspace, item.kind === 'lead' ? 'leads' : 'deals', `?${item.kind === 'lead' ? 'lead' : 'deal'}=${encodeURIComponent(item.id)}`))}
+              title="열기"
+              style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap', color: 'var(--fg)', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+            >{item.name}</button>
             <span style={{ fontSize: 11.5, color: 'var(--fg-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{item.why}</span>
             <div style={{ flex: 1 }} />
             {done[item.id] ? (
@@ -1297,6 +1312,11 @@ export function Leads({ workspace, onNavigate }) {
       >
         {editingLead && (
           <>
+            {editingLead.account && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(crmTabPath(workspace, 'accounts', `?acct=${encodeURIComponent(editingLead.account)}`))}>고객 보기</Button>
+              </div>
+            )}
             <QuickLogBar entityType="lead" entityId={editingLead.id} />
             <DrawerTimeline entityType="lead" entityId={editingLead.id} title="활동 타임라인" />
           </>
@@ -1658,7 +1678,7 @@ export function Deals({ workspace, onNavigate }) {
         <Button variant="primary" size="sm" icon="plus" onClick={createDeal}>Deal</Button>
       </div>
 
-      <TodayFollowupStrip onNavigate={onNavigate} />
+      <TodayFollowupStrip onNavigate={onNavigate} workspace={workspace} />
 
       {wsEmpty && (
         <Card>
@@ -1890,6 +1910,16 @@ export function Deals({ workspace, onNavigate }) {
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--fg)' }}>{linkedLead.name}</div>
                   <LeadTagChips lead={linkedLead} />
+                </div>
+              )}
+              {(editingDeal.leadId || editingDeal.account) && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {editingDeal.leadId && (
+                    <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(crmTabPath(workspace, 'leads', `?lead=${encodeURIComponent(editingDeal.leadId)}`))}>리드 보기</Button>
+                  )}
+                  {editingDeal.account && (
+                    <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(crmTabPath(workspace, 'accounts', `?acct=${encodeURIComponent(editingDeal.account)}`))}>고객 보기</Button>
+                  )}
                 </div>
               )}
               <QuickLogBar entityType="deal" entityId={editingDeal.id} />
