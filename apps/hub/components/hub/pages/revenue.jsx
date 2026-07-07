@@ -673,6 +673,7 @@ export function Leads({ workspace, onNavigate }) {
   const [leadEdits, setLeadEdits] = React.useState({}); // { [id]: patch } — overlays any lead (local or ledger)
   const [deletedLeadIds, setDeletedLeadIds] = React.useState(() => new Set()); // hide removed ledger rows
   const [editLeadId, setEditLeadId] = React.useState(null);
+  const [leadAddText, setLeadAddText] = React.useState(''); // inline quick-add row text
   const [convertNote, setConvertNote] = React.useState(null); // { tone, text } — inline 리드→딜 전환 feedback
   const [toast, setToast] = React.useState(null); // { text } — transient bottom-right feedback (score recompute)
   const [recomputing, setRecomputing] = React.useState(false);
@@ -730,6 +731,29 @@ export function Leads({ workspace, onNavigate }) {
       ...(ws ? { workspace } : {}),
     }, ...prev]);
     setEditLeadId(id); // open the editor immediately so the new lead can be filled in
+  };
+
+  // Inline quick-add: create a lead from just a name, persist immediately, keep it in the list
+  // (no drawer). Mirrors createLead's minimal shape + persistLead's id-swap on success.
+  const createLeadInline = (name) => {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return;
+    const id = `local-lead-${Date.now()}`;
+    const lead = {
+      id,
+      name: trimmed,
+      type: filter === 'personal' || filter === 'company' ? filter : 'company',
+      source: 'Manual',
+      stage: 'New',
+      value: '₩0',
+      last: '방금',
+      owner: 'Me',
+      ...(ws ? { workspace } : {}),
+    };
+    setLocalLeads(prev => [lead, ...prev]);
+    saveRevenueRecord('lead', 'create', lead).then(r => {
+      if (r.ok && r.id) setLocalLeads(prev => prev.map(l => (l.id === id ? { ...l, id: r.id } : l)));
+    });
   };
 
   // Persist the drawer edit. New local rows (id `local-lead-…`) insert; on success the
@@ -963,6 +987,18 @@ export function Leads({ workspace, onNavigate }) {
       <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span /><span>Name</span><span>Type</span><span>Source</span><span>Stage</span><span>Score</span><span>Value</span><span>Owner</span><span style={{ textAlign: 'right' }}>Last</span>
+        </div>
+        <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--line-soft)' }}>
+          <Input
+            placeholder="+ 리드 이름 입력 후 Enter"
+            value={leadAddText}
+            onChange={setLeadAddText}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && leadAddText.trim()) { createLeadInline(leadAddText); setLeadAddText(''); }
+              else if (e.key === 'Escape') { setLeadAddText(''); }
+            }}
+            style={{ display: 'flex', width: '100%' }}
+          />
         </div>
         {filtered.length === 0 && (
           <div style={{ padding: '36px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -1641,6 +1677,7 @@ export function Cases({ onNavigate }) {
   const [caseEdits, setCaseEdits] = React.useState({}); // { [id]: patch } — overlays any case
   const [deletedCaseIds, setDeletedCaseIds] = React.useState(() => new Set());
   const [editCaseId, setEditCaseId] = React.useState(null);
+  const [caseAddText, setCaseAddText] = React.useState(''); // inline quick-add row text
   const [statusFilter, setStatusFilter] = React.useState('all');
   const [typeFilter, setTypeFilter] = React.useState('all');
   const [search, setSearch] = React.useState('');
@@ -1675,6 +1712,27 @@ export function Cases({ onNavigate }) {
       owner: 'Me',
     }, ...prev]);
     setEditCaseId(id);
+  };
+
+  // Inline quick-add: create a case from just a title, persist immediately, no drawer.
+  const createCaseInline = (title) => {
+    const trimmed = String(title || '').trim();
+    if (!trimmed) return;
+    const id = `CASE-${Date.now()}`;
+    const c = {
+      id,
+      title: trimmed,
+      account: '미지정',
+      type: 'company',
+      priority: 'med',
+      status: 'Open',
+      opened: '방금',
+      owner: 'Me',
+    };
+    setLocalCases(prev => [c, ...prev]);
+    saveRevenueRecord('case', 'create', c).then(r => {
+      if (r.ok && r.id) setLocalCases(prev => prev.map(x => (x.id === id ? { ...x, id: r.id } : x)));
+    });
   };
 
   const persistCase = async () => {
@@ -1739,6 +1797,18 @@ export function Cases({ onNavigate }) {
       <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>ID</span><span>Title</span><span>Account</span><span>Type</span><span>Priority</span><span>Status</span><span>Opened</span><span style={{ textAlign: 'right' }}>Owner</span>
+        </div>
+        <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--line-soft)' }}>
+          <Input
+            placeholder="+ 케이스 제목 입력 후 Enter"
+            value={caseAddText}
+            onChange={setCaseAddText}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && caseAddText.trim()) { createCaseInline(caseAddText); setCaseAddText(''); }
+              else if (e.key === 'Escape') { setCaseAddText(''); }
+            }}
+            style={{ display: 'flex', width: '100%' }}
+          />
         </div>
         {visibleCases.length === 0 && (
           <EmptyState
