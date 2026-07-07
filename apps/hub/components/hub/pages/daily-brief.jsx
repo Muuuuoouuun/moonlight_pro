@@ -215,6 +215,9 @@ function SignalCard({ s, onNavigate, onApprovalQueueFocus, defaultExpanded = fal
             {s.title}
           </div>
           <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.55, maxWidth: '70ch' }}>{s.summary}</div>
+          {s.evidence && (
+            <div className="mono" style={{ marginTop: 6, fontSize: 11, color: 'var(--moon-400)', letterSpacing: '-0.01em' }}>{s.evidence}</div>
+          )}
           {decided && (
             <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--success)' }}>
               <Iconed name="check" size={12} />

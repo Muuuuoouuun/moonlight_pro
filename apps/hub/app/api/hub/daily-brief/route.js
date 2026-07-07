@@ -5,6 +5,7 @@ import { getAutomationsLedger } from "@/lib/repositories/automations-ledger";
 import { getContentLedger } from "@/lib/repositories/content-ledger";
 import { getFollowups } from "@/lib/repositories/followups-ledger";
 import { getProjectLedger } from "@/lib/repositories/operating-ledger";
+import { getRecentOutcomes } from "@/lib/repositories/outcomes-ledger";
 import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
 import { getWorkLedger } from "@/lib/repositories/work-ledger";
 import { getRecentAgentRuns } from "@/lib/sales-os/agent-runs";
@@ -29,6 +30,13 @@ function formatMoney(amount) {
   if (n >= 1000000) return `₩${(n / 1000000).toFixed(1)}M`;
   if (n >= 1000) return `₩${Math.round(n / 1000)}K`;
   return `₩${n}`;
+}
+
+function formatShortDate(value) {
+  if (!value) return "미정";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "미정";
+  return new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric" }).format(date);
 }
 
 function metric(label, value, delta, tone = "moon", spark = [3, 4, 3, 5, 4, 6, 5, 7], target = null) {
@@ -129,9 +137,21 @@ function buildApprovalSignals(queue) {
   }];
 }
 
-function buildRevenueSignals(revenue) {
+// Latest outreach outcome per deal id — powers the rung-3 "왜 정체인가" evidence line
+// on stalled-deal signals. Outcomes arrive newest-first (occurred_at.desc), so the first
+// match per deal is the most recent contact.
+function lastContactByDeal(outcomes) {
+  const byDeal = new Map();
+  for (const o of Array.isArray(outcomes) ? outcomes : []) {
+    if (o?.dealId && !byDeal.has(o.dealId)) byDeal.set(o.dealId, o);
+  }
+  return byDeal;
+}
+
+function buildRevenueSignals(revenue, outcomes = []) {
   const deals = Array.isArray(revenue.deals) ? revenue.deals : [];
   const leads = Array.isArray(revenue.leads) ? revenue.leads : [];
+  const lastContact = lastContactByDeal(outcomes);
   const signals = [];
 
   deals
@@ -140,6 +160,11 @@ function buildRevenueSignals(revenue) {
     .slice(0, 2)
     .forEach((deal) => {
       const danger = Number(deal.age) >= 14 || Number(deal.value) >= 10000000;
+      const contact = lastContact.get(deal.id);
+      // Absence of contact is itself valid stall evidence — say so, don't drop the line.
+      const evidence = contact
+        ? `근거: 마지막 접촉 ${contact.action}${contact.occurredAt ? ` · ${formatShortDate(contact.occurredAt)}` : ""}`
+        : "근거: 최근 접촉 기록 없음";
       signals.push({
         id: `revenue-stale-${deal.id}`,
         tone: danger ? "danger" : "warning",
@@ -147,6 +172,7 @@ function buildRevenueSignals(revenue) {
         title: `${deal.name} — ${deal.age}일째 정체`,
         summary: `${deal.stage} 단계에서 마지막 활동이 오래됐습니다. 오늘 follow-up을 보내거나 다음 액션을 명확히 정해야 합니다.`,
         meta: `Deal · ${formatMoney(deal.value)} · close ${deal.close}`,
+        evidence,
         source: { from: "Deals", ref: deal.id },
         decisions: [
           action("팔로업 열기", "followup", true),
@@ -440,7 +466,7 @@ function buildSources(results) {
 }
 
 export async function GET(req) {
-  const [projectsResult, workResult, contentResult, revenueResult, automationsResult, followupsResult, guruRunsResult, ordersResult] = await Promise.allSettled([
+  const [projectsResult, workResult, contentResult, revenueResult, automationsResult, followupsResult, guruRunsResult, ordersResult, outcomesResult] = await Promise.allSettled([
     getProjectLedger(),
     getWorkLedger(),
     getContentLedger(),
@@ -449,6 +475,9 @@ export async function GET(req) {
     getFollowups({ limit: 12 }),
     getRecentAgentRuns({ agent: "guru", limit: 3 }),
     getWorkOrders({ status: "proposed", limit: 20 }),
+    // limit 100: the default 30 can push an older last-contact out of the window,
+    // mislabeling a stalled deal as "no contact" when there is one (rung 3 evidence).
+    getRecentOutcomes({ limit: 100 }),
   ]);
 
   const results = {
@@ -468,6 +497,7 @@ export async function GET(req) {
   const automations = readLedger(automationsResult);
   const followups = readLedger(followupsResult);
   const guruRuns = readLedger(guruRunsResult);
+  const outcomes = readLedger(outcomesResult, { source: "preview", outcomes: [] });
   const ordersLedger = readLedger(ordersResult, { source: "preview", orders: [] });
   const queue = {
     source: ordersLedger.source || "preview",
@@ -506,7 +536,7 @@ export async function GET(req) {
     ...buildApprovalSignals(queue),
     ...buildFollowupSignals(followups),
     ...buildGuruSignals(guruRuns),
-    ...buildRevenueSignals(revenue),
+    ...buildRevenueSignals(revenue, outcomes.outcomes),
     ...buildContentSignals(content),
     ...buildAutomationSignals(automations),
     ...buildWorkSignals(projects, work),

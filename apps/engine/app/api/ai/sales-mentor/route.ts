@@ -100,6 +100,29 @@ function digest360(context: any): string {
     lines.push(`포커스 딜: ${focus.entity?.company ?? "?"} · ${focus.entity?.stage ?? "?"} · last_touch=${focus.ledger?.last_touch ?? "무접촉"}`);
   }
 
+  const wl = context.summary?.recentWonLost;
+  if (wl && (wl.won?.count || wl.lost?.count)) {
+    const money = (amount: Record<string, number> | undefined) => {
+      const parts = Object.entries(amount || {})
+        .filter(([, v]) => Number(v) > 0)
+        .map(([cur, v]) => `${cur} ${Math.round(Number(v)).toLocaleString()}`);
+      return parts.length ? parts.join(" · ") : "-";
+    };
+    const srcMix = (by: Record<string, number> | undefined) => {
+      const parts = Object.entries(by || {})
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
+        .map(([src, n]) => `${src} ${n}`);
+      return parts.length ? parts.join(" · ") : "-";
+    };
+    const approx = wl.approx ? " (일부 종료시점 근사치)" : "";
+    lines.push(
+      `최근 ${wl.windowDays ?? 28}일 성과${approx}: won ${wl.won?.count ?? 0}건 (${money(wl.won?.amount)}) · lost ${wl.lost?.count ?? 0}건 (${money(wl.lost?.amount)})`,
+    );
+    lines.push(
+      `승/패 소스 분해: won[${srcMix(wl.sources?.won)}] · lost[${srcMix(wl.sources?.lost)}]`,
+    );
+  }
+
   const operator = context.operator;
   if (operator && typeof operator === "object") {
     const target = operator.targets || {};

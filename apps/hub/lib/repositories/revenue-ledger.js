@@ -321,6 +321,52 @@ function buildClassInMonthlyKpi(leadRows, dealRows) {
   };
 }
 
+// Recent won/lost rollup — the "did it work?" slice the Guru weekly-retro prompt was
+// missing. Computed on raw dealRows (not the mapped/trimmed 40-row projection) so the
+// 4-week window sees every terminal deal. won/lost match the raw DB stage directly —
+// both are canonical DB values, so we skip normalizeStage (whose DEAL_STAGES list omits
+// 'lost'). won_at/lost_at are stamped by the DB trigger (migration 0018); deals closed
+// before that trigger fall back to updated_at and flag the window as approximate. Source
+// is joined from the deal's lead (deals has no source column); the 120-row leads window
+// or an unlinked deal yields 'unknown'. Amounts stay split by currency (KRW/CNY) — never
+// summed, since the operator tracks ClassIn revenue in CNY.
+function buildRecentWonLost(leadRows, dealRows, windowDays = 28) {
+  const cutoff = Date.now() - windowDays * 24 * 60 * 60 * 1000;
+  const leadSourceById = new Map(
+    (leadRows || []).map((l) => [l.id, String(l.source || "").trim() || null]),
+  );
+
+  const won = { count: 0, amount: {} };
+  const lost = { count: 0, amount: {} };
+  const sources = { won: {}, lost: {} };
+  let approx = false;
+
+  for (const row of dealRows || []) {
+    const stage = String(row.stage || "").toLowerCase();
+    if (stage !== "won" && stage !== "lost") continue;
+
+    const stampRaw = stage === "won" ? row.won_at : row.lost_at;
+    const stamp = stampRaw || row.updated_at || row.last_activity_at || row.created_at;
+    if (stampRaw == null) approx = true;
+    const t = stamp ? new Date(stamp).getTime() : NaN;
+    if (!Number.isFinite(t) || t < cutoff) continue;
+
+    const bucket = stage === "won" ? won : lost;
+    bucket.count += 1;
+
+    const currency = String(row.meta?.currency || row.currency || "KRW").toUpperCase();
+    bucket.amount[currency] = (bucket.amount[currency] || 0) + toNumber(row.amount, 0);
+
+    const source =
+      leadSourceById.get(row.lead_id) ||
+      (row.meta?.source ? String(row.meta.source).trim() : null) ||
+      "unknown";
+    sources[stage][source] = (sources[stage][source] || 0) + 1;
+  }
+
+  return { windowDays, won, lost, sources, approx };
+}
+
 function buildSummary(leads, deals, leadRows = [], dealRows = []) {
   const pipeline = deals.filter(d => d.stage !== "won" && d.stage !== "lost")
     .reduce((sum, d) => sum + d.value, 0);
@@ -336,6 +382,7 @@ function buildSummary(leads, deals, leadRows = [], dealRows = []) {
     openDeals: deals.filter(d => d.stage !== "won" && d.stage !== "lost").length,
     wonMTD,
     classinMonthlyKpi: buildClassInMonthlyKpi(leadRows, dealRows),
+    recentWonLost: buildRecentWonLost(leadRows, dealRows),
   };
 }
 
@@ -358,6 +405,7 @@ function emptyLedger(configured, workspaceId) {
       openDeals: 0,
       wonMTD: 0,
       classinMonthlyKpi: buildClassInMonthlyKpi([], []),
+      recentWonLost: buildRecentWonLost([], []),
     },
   };
 }
