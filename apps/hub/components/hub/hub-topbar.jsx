@@ -9,11 +9,12 @@ const LABELS = {
   'daily-brief': 'Daily Brief',
   // real_v1 workspaces
   'classin': '클래스인', 'cohorts': '코호트', 'pipeline': '업무·파이프라인',
+  'intake': '리드 인박스', 'segments': '세그먼트', 'followups': 'Follow-ups', 'eeocrm': 'eeoCRM',
   'company': '회사 Legacy',
   'brand': '브랜드',
   'work': 'Work', 'calendar': 'Calendar', 'projects': 'Projects', 'decisions': 'Decisions', 'roadmap': 'Roadmap', 'rhythm': 'Rhythm',
   'content': 'Content', 'studio': 'Studio', 'queue': 'Queue', 'campaigns': 'Campaigns',
-  'revenue': 'Revenue', 'overview': 'Overview', 'leads': 'Leads', 'deals': 'Deals', 'cases': 'Cases', 'accounts': 'Accounts',
+  'revenue': 'Revenue', 'overview': 'Overview', 'leads': 'Leads', 'deals': 'Deals', 'cases': 'Cases', 'accounts': '고객·계정',
   'automations': 'Automations', 'flows': 'Flows', 'email': 'Email', 'webhooks': 'Webhooks', 'runs': 'Runs', 'sheets': 'Sheets',
   'agents': 'Agents', 'chat': 'Chat', 'council': 'Council', 'orders': 'Orders', 'office': 'VR Office',
   'evolution': 'Evolution', 'settings': 'Settings',

@@ -31,8 +31,8 @@ function formatMoney(amount) {
   return `₩${n}`;
 }
 
-function metric(label, value, delta, tone = "moon", spark = [3, 4, 3, 5, 4, 6, 5, 7]) {
-  return { label, value, delta, tone, spark };
+function metric(label, value, delta, tone = "moon", spark = [3, 4, 3, 5, 4, 6, 5, 7], target = null) {
+  return target ? { label, value, delta, tone, spark, target } : { label, value, delta, tone, spark };
 }
 
 function action(label, actionKey, primary = false, target = null) {
@@ -406,10 +406,10 @@ function buildMetrics(revenue, content, automations, projects) {
     : 0;
 
   const base = [
-    metric("MRR", formatMoney(revenueSummary.mrr || 0), revenueSummary.mrr ? "ledger" : "waiting", revenueSummary.mrr ? "success" : "neutral"),
-    metric("Pipeline", formatMoney(revenueSummary.pipeline || 0), `${revenueSummary.openDeals || 0} deals`, "moon"),
-    metric("Published", String(contentSummary.published || 0), `${contentSummary.drafts || 0} drafts`, "info"),
-    metric("Runs failed", String(automationSummary.failuresToday || 0), `${automationSummary.runsToday || 0} runs`, automationSummary.failuresToday ? "warning" : "success"),
+    metric("MRR", formatMoney(revenueSummary.mrr || 0), revenueSummary.mrr ? "ledger" : "waiting", revenueSummary.mrr ? "success" : "neutral", undefined, "dashboard/revenue/overview"),
+    metric("Pipeline", formatMoney(revenueSummary.pipeline || 0), `${revenueSummary.openDeals || 0} deals`, "moon", undefined, "dashboard/classin/pipeline"),
+    metric("Published", String(contentSummary.published || 0), `${contentSummary.drafts || 0} drafts`, "info", undefined, "dashboard/content/queue"),
+    metric("Runs failed", String(automationSummary.failuresToday || 0), `${automationSummary.runsToday || 0} runs`, automationSummary.failuresToday ? "warning" : "success", undefined, "dashboard/automations/runs"),
     metric("Open work", String(openProjects), "active projects", "moon"),
   ];
 
@@ -419,6 +419,8 @@ function buildMetrics(revenue, content, automations, projects) {
       `${classinKpi.actual?.contracts || 0}/${classinKpi.targets.monthlyContractTarget || 60}`,
       `${classinKpi.actual?.units || 0}대 · ${classinKpi.actual?.revenueCny || 0} CNY`,
       (classinKpi.actual?.contracts || 0) > 0 ? "success" : "moon",
+      undefined,
+      "dashboard/classin/pipeline",
     ));
   }
 

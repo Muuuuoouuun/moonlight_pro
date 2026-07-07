@@ -108,7 +108,7 @@ const PAGE_MAP = {
   'dashboard/revenue/intake': (n) => <IntakeInbox onNavigate={n} />,
   'dashboard/revenue/segments': (n) => <Segments onNavigate={n} />,
   'dashboard/revenue/deals': (n) => <Deals onNavigate={n} />,
-  'dashboard/revenue/cases': () => <Cases />,
+  'dashboard/revenue/cases': (n) => <Cases onNavigate={n} />,
   'dashboard/revenue/accounts': (n) => <Accounts onNavigate={n} />,
   'dashboard/revenue/followups': () => <Followups />,
   'dashboard/automations': (n) => <AutomationsIndex onNavigate={n} />,

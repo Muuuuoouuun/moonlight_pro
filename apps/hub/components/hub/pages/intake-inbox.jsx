@@ -30,7 +30,7 @@ const SOURCE_FILTERS = [
   { key: "google_sheets", label: "시트" },
 ];
 
-const ROW_GRID = "70px 1fr 150px 160px 90px 1fr 80px 160px";
+const ROW_GRID = "70px 1fr 150px 160px 90px 1fr 44px 72px max-content";
 
 // Fetch helper mirroring saveRevenueRecord in revenue.jsx: returns { ok, status, row/result }.
 async function postIntakeOp(body) {
@@ -201,7 +201,7 @@ export function IntakeInbox({ onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="ghost" size="sm" icon="search" onClick={load}>새로고침</Button>
+        <IconButton icon="runs" size={28} iconSize={14} tooltip="새로고침" onClick={load} />
       </div>
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -234,7 +234,7 @@ export function IntakeInbox({ onNavigate }) {
         ) : (
           <>
             <div style={{ display: "grid", gridTemplateColumns: ROW_GRID, gap: 12, padding: "10px 16px", borderBottom: "1px solid var(--line-soft)", fontSize: 11, color: "var(--fg-faint)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-              <span>Source</span><span>Name</span><span>Contact</span><span>Phone / Email</span><span>Status</span><span>Note</span><span></span><span style={{ textAlign: "right" }}>Created</span>
+              <span>Source</span><span>Name</span><span>Contact</span><span>Phone / Email</span><span>Status</span><span>Note</span><span></span><span style={{ textAlign: "right" }}>생성</span><span style={{ textAlign: "right" }}>작업</span>
             </div>
             {filtered.map((row, i) => {
               const isLast = i === filtered.length - 1;
@@ -271,6 +271,7 @@ export function IntakeInbox({ onNavigate }) {
                         <IconButton icon="edit" tooltip="수정" onClick={() => setEditingId(isEditing ? null : row.id)} />
                       )}
                     </span>
+                    <div className="mono" style={{ fontSize: 11, color: "var(--fg-faint)", textAlign: "right" }}>{row.at}</div>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
                       {canAct ? (
                         <>
@@ -288,16 +289,10 @@ export function IntakeInbox({ onNavigate }) {
                               리드 열기 →
                             </Button>
                           )}
-                          <span className="mono" style={{ fontSize: 11, color: "var(--fg-faint)" }}>{row.at}</span>
                         </>
                       )}
                     </div>
                   </div>
-                  {canAct && (
-                    <div className="mono" style={{ display: isEditing ? "none" : "flex", justifyContent: "flex-end", padding: "0 16px 6px", fontSize: 10.5, color: "var(--fg-faint)" }}>
-                      {row.at}
-                    </div>
-                  )}
                   {errorId === row.id && (
                     <div style={{ padding: "0 16px 8px", fontSize: 11.5, color: "var(--danger)", display: "flex", alignItems: "center", gap: 6 }}>
                       <Dot tone="danger" />저장 실패 — 네트워크 또는 서버 상태를 확인하세요.

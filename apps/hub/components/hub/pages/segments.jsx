@@ -10,7 +10,7 @@ import React from 'react';
 
 import { LEADS as FALLBACK_LEADS } from "../hub-data";
 import { Iconed } from "../hub-icons";
-import { Badge, Card, Dot, EmptyState, Input, SyncBadge, SegmentedControl } from "../hub-primitives";
+import { Badge, Button, Card, Dot, EmptyState, Input, SyncBadge, SegmentedControl } from "../hub-primitives";
 import { filterLeadsByWorkspace, getWorkspace } from "../workspace-map";
 
 // Same ledger endpoint the Revenue pages use; local copy so this page stays
@@ -137,6 +137,9 @@ export function Segments({ workspace, onNavigate }) {
             description={source === 'supabase'
               ? '리드가 없거나 검색 결과가 비어 있습니다.'
               : 'Supabase 연결 후 리드가 쌓이면 유입경로·지역·규모·스코어별로 자동 그룹핑됩니다.'}
+            action={source === 'supabase' ? (
+              <Button variant="primary" size="sm" icon="inbox" onClick={() => onNavigate?.('dashboard/classin/intake')}>리드 인박스 열기</Button>
+            ) : null}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>

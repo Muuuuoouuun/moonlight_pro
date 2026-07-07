@@ -317,7 +317,7 @@ export function RevenueOverview({ onNavigate }) {
     : `${now.getMonth() + 1}월 · 이번 달 요약`;
 
   const kpis = [
-    { l: 'MRR', v: fmt(mrr), d: formatPercentDelta(mrr, mrrPrev), tone: mrr > mrrPrev ? 'success' : 'neutral', go: 'dashboard/revenue/accounts', trend: isLiveLedger ? null : [6.2, 6.8, 6.5, 7.1, 7.5, 7.5, 8.4], trendTone: 'success' },
+    { l: isLiveLedger ? 'MRR (추정)' : 'MRR', v: fmt(mrr), d: isLiveLedger ? 'won MTD 기반 추정' : formatPercentDelta(mrr, mrrPrev), tone: mrr > mrrPrev ? 'success' : 'neutral', go: 'dashboard/revenue/accounts', trend: isLiveLedger ? null : [6.2, 6.8, 6.5, 7.1, 7.5, 7.5, 8.4], trendTone: 'success' },
     { l: 'Pipeline', v: fmt(pipeline), d: `${openDeals} deals`, tone: 'moon', go: 'dashboard/revenue/deals', trend: isLiveLedger ? null : [24, 28, 26, 31, 30, 33, 33.5], trendTone: 'moon' },
     { l: 'Open leads', v: openLeads, d: `이번달 신규 ${newThisMonth}`, tone: 'info', go: 'dashboard/revenue/leads', trend: isLiveLedger ? null : [3, 5, 4, 7, 9, 12, 12], trendTone: 'moon' },
     { l: 'Won MTD', v: fmt(wonMTD), d: `${wonDealsCount} deals`, tone: wonMTD > 0 ? 'success' : 'neutral', go: 'dashboard/revenue/deals', trend: null },
@@ -870,10 +870,13 @@ export function Leads({ workspace, onNavigate }) {
         />
         <Input className="hub-toolbar" placeholder="이름·소스·단계 검색…" icon="search" value={search} onChange={setSearch} />
         <button className="hub-toolbar" onClick={() => setSortByScore(v => !v)} style={{
-          padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-          color: sortByScore ? 'var(--fg)' : 'var(--fg-faint)',
-          background: sortByScore ? 'var(--surface-3)' : 'transparent',
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          padding: '4px 10px', fontSize: 11.5, borderRadius: 999,
+          border: `1px solid ${sortByScore ? 'var(--line-strong)' : 'var(--line-soft)'}`,
+          color: sortByScore ? 'var(--fg)' : 'var(--fg-muted)',
+          background: sortByScore ? 'var(--surface-3)' : 'var(--surface-2)',
         }}>
+          <Dot tone="success" />
           Score
         </button>
         <Button className="hub-toolbar" variant="ghost" size="xs" icon="bolt" onClick={recomputeScores} disabled={recomputing} style={{ marginLeft: 4 }}>
@@ -1354,7 +1357,7 @@ export function Deals({ workspace, onNavigate }) {
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 5,
               padding: '4px 10px', fontSize: 11.5, borderRadius: 999, marginRight: 8,
-              border: `1px solid ${stalledOnly ? 'oklch(0.5 0.1 25 / 0.5)' : 'var(--line-soft)'}`,
+              border: `1px solid ${stalledOnly ? 'var(--line-strong)' : 'var(--line-soft)'}`,
               background: stalledOnly ? 'var(--danger-bg)' : 'var(--surface-2)',
               color: 'var(--danger)',
             }}
@@ -1583,7 +1586,7 @@ export function Deals({ workspace, onNavigate }) {
 // Shared grid template for Cases — gap added so Type/Priority/Status chips never butt the next column
 const CASES_GRID = '80px 1fr 160px 112px 100px 100px 110px 90px';
 
-export function Cases() {
+export function Cases({ onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
   const [localCases, setLocalCases] = React.useState([]);
   const [caseEdits, setCaseEdits] = React.useState({}); // { [id]: patch } — overlays any case
@@ -1709,7 +1712,21 @@ export function Cases() {
           >
             <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{c.id}</span>
             <span style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.title}</span>
-            <span style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.account}</span>
+            <span
+              onClick={(e) => {
+                if (!c.account || c.account === '—') return;
+                e.stopPropagation();
+                onNavigate?.('dashboard/revenue/accounts?acct=' + encodeURIComponent(c.account));
+              }}
+              onMouseEnter={e => { if (c.account && c.account !== '—') e.currentTarget.style.color = 'var(--moon-300)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--fg-muted)'; }}
+              style={{
+                fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                cursor: c.account && c.account !== '—' ? 'pointer' : 'default',
+              }}
+            >
+              {c.account}
+            </span>
             <span style={{ paddingRight: 8, minWidth: 0 }}>
               <Badge tone={c.type === 'personal' ? 'personal' : 'company'} size="xs">{c.type === 'personal' ? 'Personal' : 'Company'}</Badge>
             </span>
@@ -1797,10 +1814,10 @@ function ContactMenu({ onAction }) {
   }, [open]);
 
   const items = [
-    { key: 'email',   icon: 'email',    label: '📧 Send email' },
-    { key: 'meeting', icon: 'calendar', label: '📅 Schedule meeting' },
-    { key: 'chat',    icon: 'chat',     label: '💬 Open chat thread' },
-    { key: 'call',    icon: 'signal',   label: '📞 Log call' },
+    { key: 'email',   icon: 'email',    label: '이메일 보내기' },
+    { key: 'meeting', icon: 'calendar', label: '미팅 잡기' },
+    { key: 'chat',    icon: 'chat',     label: '채팅 스레드' },
+    { key: 'call',    icon: 'signal',   label: '통화 기록' },
   ];
 
   return (
@@ -1820,7 +1837,7 @@ function ContactMenu({ onAction }) {
             <button key={it.key}
               onClick={() => { onAction(it.key); setOpen(false); }}
               style={{
-                display: 'flex', alignItems: 'center', width: '100%',
+                display: 'flex', alignItems: 'center', gap: 7, width: '100%',
                 padding: '7px 10px', fontSize: 12, color: 'var(--fg)',
                 background: 'transparent', border: 'none', borderRadius: 4,
                 cursor: 'pointer', textAlign: 'left',
@@ -1828,6 +1845,7 @@ function ContactMenu({ onAction }) {
               onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
+              <Iconed name={it.icon} size={13} />
               {it.label}
             </button>
           ))}
@@ -1907,6 +1925,7 @@ function QuickActions({ onAction }) {
 function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, onNavigate, onEdit }) {
   const [tab, setTab] = React.useState('activity');
   const [noteText, setNoteText] = React.useState('');
+  const [activityKind, setActivityKind] = React.useState('all');
   if (!account) {
     return (
       <div style={{
@@ -1921,6 +1940,17 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
   }
 
   const d = detail || emptyDetail();
+  const activityKindOptions = [
+    { key: 'all', label: '전체' },
+    { key: 'call', label: '통화' },
+    { key: 'meeting', label: '미팅' },
+    { key: 'info_session', label: '설명회' },
+    { key: 'demo', label: '데모' },
+    { key: 'visit', label: '방문' },
+  ];
+  const visibleActivity = d.activity.length > 15 && activityKind !== 'all'
+    ? d.activity.filter(a => a.type === activityKind)
+    : d.activity;
   const tabs = [
     { key: 'activity', label: 'Activity', count: d.activity.length },
     { key: 'contacts', label: 'Contacts', count: d.contacts.length },
@@ -1989,15 +2019,22 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
         {tab === 'activity' && (
           <>
             <LogComposer onLog={onLog} />
+            {d.activity.length > 15 && (
+              <SegmentedControl
+                options={activityKindOptions}
+                value={activityKind}
+                onChange={setActivityKind}
+              />
+            )}
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {d.activity.length === 0 && (
+              {visibleActivity.length === 0 && (
                 <div style={{ fontSize: 12, color: 'var(--fg-faint)', padding: '12px 0' }}>아직 기록이 없습니다.</div>
               )}
-              {d.activity.map((a, i) => (
+              {visibleActivity.map((a, i) => (
                 <div key={i} style={{
                   display: 'grid', gridTemplateColumns: '18px 1fr auto',
                   gap: 10, padding: '10px 0',
-                  borderBottom: i < d.activity.length - 1 ? '1px solid var(--line-soft)' : 'none',
+                  borderBottom: i < visibleActivity.length - 1 ? '1px solid var(--line-soft)' : 'none',
                   alignItems: 'flex-start',
                 }}>
                   <span style={{ color: `var(--${ACT_TONE[a.type] === 'neutral' ? 'fg-muted' : ACT_TONE[a.type]})`, marginTop: 1 }}>
@@ -2112,7 +2149,15 @@ export function Accounts({ onNavigate }) {
   const [localAccounts, setLocalAccounts] = React.useState([]);
   const [accountEdits, setAccountEdits] = React.useState({}); // { [stableKey]: patch } — overlays any row
   const [deletedAccountKeys, setDeletedAccountKeys] = React.useState(() => new Set());
-  const [view, setView] = React.useState('cards'); // cards | list | detail
+  const [view, setView] = React.useState(() => {
+    if (typeof window === 'undefined') return 'cards';
+    try {
+      const saved = window.localStorage.getItem('hub:accounts-view:v1');
+      return saved === 'cards' || saved === 'list' || saved === 'detail' ? saved : 'cards';
+    } catch {
+      return 'cards';
+    }
+  }); // cards | list | detail
   const [search, setSearch] = React.useState('');
   const [filter, setFilter] = React.useState('all');
   const [selected, setSelected] = React.useState(null);
@@ -2129,6 +2174,14 @@ export function Accounts({ onNavigate }) {
     .map(a => ({ ...a, _key: a._key || a.id || a.name }))
     .filter(a => !deletedAccountKeys.has(a._key))
     .map(a => (accountEdits[a._key] ? { ...a, ...accountEdits[a._key] } : a));
+
+  React.useEffect(() => {
+    try {
+      window.localStorage.setItem('hub:accounts-view:v1', view);
+    } catch {
+      // ignore storage failures; the visible view state still works for this session
+    }
+  }, [view]);
 
   const term = search.trim().toLowerCase();
   const filtered = ACCOUNTS.filter(a =>

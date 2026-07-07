@@ -2,23 +2,22 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, SectionTitle, Button, Checkbox, Progress, Sparkline } from "../hub-primitives";
+import { Badge, Dot, Card, SectionTitle, Button, Checkbox, Progress, Sparkline, SyncBadge } from "../hub-primitives";
 import { BRIEF_SIGNALS, TODAY_BLOCKS, METRICS } from "../hub-data";
 
 function formatBriefDate(date) {
-  return new Intl.DateTimeFormat('en-US', {
-    weekday: 'long',
+  return new Intl.DateTimeFormat('ko-KR', {
     month: 'long',
     day: 'numeric',
-    year: 'numeric',
+    weekday: 'long',
   }).format(date).replace(',', ' ·').replace(',', ' ·');
 }
 
 function greetingFor(date) {
   const hour = date.getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
+  if (hour < 12) return '좋은 아침이에요';
+  if (hour < 18) return '좋은 오후예요';
+  return '수고 많았어요, 오늘 마무리해요';
 }
 
 const SIGNAL_TARGETS = {
@@ -249,15 +248,32 @@ function SignalCard({ s, onNavigate, onApprovalQueueFocus, defaultExpanded = fal
   );
 }
 
-function MetricCard({ m }) {
+function MetricCard({ m, onNavigate }) {
+  const [hovered, setHovered] = React.useState(false);
+  const clickable = Boolean(m.target);
+
   return (
-    <div style={{
-      background: 'var(--surface)',
-      border: '1px solid var(--line-soft)',
-      borderRadius: 'var(--r-lg)',
-      padding: 'var(--card-pad)',
-      boxShadow: 'var(--shadow-soft)',
-    }}>
+    <div
+      onClick={clickable ? () => onNavigate?.(m.target) : undefined}
+      onMouseEnter={clickable ? () => setHovered(true) : undefined}
+      onMouseLeave={clickable ? () => setHovered(false) : undefined}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={clickable ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onNavigate?.(m.target);
+        }
+      } : undefined}
+      style={{
+        background: hovered ? 'var(--surface-2)' : 'var(--surface)',
+        border: '1px solid var(--line-soft)',
+        borderRadius: 'var(--r-lg)',
+        padding: 'var(--card-pad)',
+        boxShadow: 'var(--shadow-soft)',
+        cursor: clickable ? 'pointer' : undefined,
+        transition: clickable ? 'background .16s ease, border-color .16s ease' : undefined,
+      }}>
       <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 500 }}>{m.label}</div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 8 }}>
         <div style={{ fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em' }} className="mono">{m.value}</div>
@@ -648,7 +664,7 @@ export function DailyBrief({ onNavigate }) {
       <DataTrustStrip state={ledger} />
 
       <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--gap)' }}>
-        {ledger.metrics.map(m => <MetricCard key={m.label} m={m} />)}
+        {ledger.metrics.map(m => <MetricCard key={m.label} m={m} onNavigate={onNavigate} />)}
       </div>
 
       <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(0, 1fr)', gap: 'var(--section-gap)' }}>
@@ -703,7 +719,7 @@ export function DailyBrief({ onNavigate }) {
           <ContentCadenceCard onNavigate={onNavigate} />
 
           <div>
-            <SectionTitle>This week rhythm</SectionTitle>
+            <SectionTitle>This week rhythm <SyncBadge state="preview" /></SectionTitle>
             <Card>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <div style={{ fontSize: 13, fontWeight: 500 }}>4/5 rituals done</div>

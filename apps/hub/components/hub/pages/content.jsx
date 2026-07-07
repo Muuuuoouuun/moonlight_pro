@@ -2207,13 +2207,13 @@ export function Campaigns() {
                             if (opt) updateCampaignStatus(c.id, opt.label);
                           }}
                           style={{
-                            appearance: 'none',
                             fontSize: 11,
                             fontWeight: 500,
-                            padding: '3px 20px 3px 8px',
+                            minHeight: 32,
+                            padding: '5px 8px',
                             borderRadius: 999,
                             border: '1px solid var(--line-soft)',
-                            background: `var(--surface-3) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5L5 6.5L8 3.5' stroke='%235274a8' stroke-width='1.3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 6px center`,
+                            background: 'var(--surface-3)',
                             color: `var(--${sTone[c.status] === 'success' ? 'success' : sTone[c.status] === 'warning' ? 'warning' : 'fg-muted'})`,
                             cursor: 'pointer',
                           }}

@@ -22,7 +22,7 @@ export const NAV_TREE = [
       { key: 'classin-accounts',    label: '고객·계정',        icon: 'accounts',    path: 'dashboard/classin/accounts',    keywords: ['accounts', '계정', '고객'] },
       { key: 'classin-followups',   label: 'Follow-ups',       icon: 'bell',        path: 'dashboard/classin/followups',   keywords: ['followup', '팔로업'] },
       { key: 'classin-projects',    label: '프로젝트',         icon: 'projects',    path: 'dashboard/classin/projects' },
-      { key: 'classin-automations', label: '자동화',           icon: 'automations', path: 'dashboard/classin/automations' },
+      { key: 'classin-automations', label: '시트 동기화',     icon: 'automations', path: 'dashboard/classin/automations', keywords: ['sheets', '시트', 'sync', '자동화'] },
     ],
   },
   // ── Workspace 2: 브랜드 — 내 브랜드 / 창업 준비. 이전 브랜드 유지. ──
