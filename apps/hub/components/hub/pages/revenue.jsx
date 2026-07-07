@@ -55,11 +55,12 @@ async function saveActivity(op, payload) {
   }
 }
 
-async function fetchActivities({ accountId, leadId, dealId }) {
+async function fetchActivities({ accountId, leadId, dealId, companyId }) {
   const q = new URLSearchParams();
   if (accountId) q.set('accountId', accountId);
   if (leadId) q.set('leadId', leadId);
   if (dealId) q.set('dealId', dealId);
+  if (companyId) q.set('companyId', companyId);
   try {
     const resp = await fetch(`/api/hub/revenue/activity?${q.toString()}`);
     const data = await resp.json().catch(() => ({}));
@@ -1376,12 +1377,14 @@ export function Deals({ workspace, onNavigate }) {
   const [deals, setDeals] = React.useState(ledger.deals);
   const [drag, setDrag] = React.useState(null);
   const [overStage, setOverStage] = React.useState(null);
+  const [movingDeals, setMovingDeals] = React.useState(() => new Set());
   const [filter, setFilter] = React.useState('all');
   const [stalledOnly, setStalledOnly] = React.useState(false);
   const [search, setSearch] = React.useState('');
   const [editDealId, setEditDealId] = React.useState(null);
   const [addStage, setAddStage] = React.useState(null); // kanban column with an open inline quick-add
   const [addText, setAddText] = React.useState('');
+  const [companyCleared, setCompanyCleared] = React.useState(null); // ?company= filter dismissed for this value
   const [editDealPrevStage, setEditDealPrevStage] = React.useState(null);
   const [queuedDeals, setQueuedDeals] = React.useState(() => new Set()); // deals with a proposed follow-up (seeded from the queue on mount)
   const [guruDeal, setGuruDeal] = React.useState(null);
@@ -1389,6 +1392,8 @@ export function Deals({ workspace, onNavigate }) {
   const [guruSaved, setGuruSaved] = React.useState(false); // '활동으로 저장' one-shot in the diagnosis drawer
   const [toast, setToast] = React.useState(null); // { text, action? } — transient bottom-right feedback
   const toastTimerRef = React.useRef(null);
+  const moveSeqRef = React.useRef(0);
+  const latestMoveRef = React.useRef(new Map());
 
   // Show a transient toast (auto-dismiss ~4s). `action` = { label, go } renders a mini link button.
   const showToast = React.useCallback((text, action = null) => {
@@ -1407,7 +1412,7 @@ export function Deals({ workspace, onNavigate }) {
     let active = true;
     (async () => {
       try {
-        const resp = await fetch('/api/hub/work-orders?status=proposed', { cache: 'no-store' });
+        const resp = await fetch('/api/hub/work-orders?status=proposed,approved,executing', { cache: 'no-store' });
         const data = await resp.json().catch(() => null);
         const orders = Array.isArray(data?.orders) ? data.orders : [];
         const ids = orders.filter(o => o.kind === 'followup' && o.dealId).map(o => o.dealId);
@@ -1425,7 +1430,7 @@ export function Deals({ workspace, onNavigate }) {
     if (queuedDeals.has(deal.id)) return;
     setQueuedDeals(prev => new Set(prev).add(deal.id));
     try {
-      await fetch('/api/hub/work-orders', {
+      const resp = await fetch('/api/hub/work-orders', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -1438,8 +1443,24 @@ export function Deals({ workspace, onNavigate }) {
           body: { reason: 'stalled', age: deal.age, stage: deal.stage, value: deal.value },
         }),
       });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data.persisted === false) {
+        setQueuedDeals(prev => {
+          const next = new Set(prev);
+          next.delete(deal.id);
+          return next;
+        });
+        showToast(data.reason === 'missing-workspace' ? 'workspace 설정이 없어 큐는 생성되지 않음' : 'follow-up 큐 생성 실패');
+        return;
+      }
     } catch {
-      // optimistic — leave the flag set even if the queue write is unreachable
+      setQueuedDeals(prev => {
+        const next = new Set(prev);
+        next.delete(deal.id);
+        return next;
+      });
+      showToast('follow-up 큐 생성 실패');
+      return;
     }
     showToast('follow-up 제안이 큐에 추가됨 · Daily Brief에서 승인', { label: '브리프 열기', go: 'dashboard/daily-brief' });
   };
@@ -1470,10 +1491,14 @@ export function Deals({ workspace, onNavigate }) {
   }, [ledger.leads]);
   const leadForDeal = (deal) => (deal && deal.leadId != null ? leadById.get(String(deal.leadId)) || null : null);
 
+  const companyParam = searchParams.get('company');
+  const companyFilter = companyParam && companyCleared !== companyParam ? companyParam : null;
+  const companyName = companyFilter ? (scopedDeals.find(d => String(d.companyId) === String(companyFilter))?.account || null) : null;
   const term = search.trim().toLowerCase();
   const isStalled = (d) => d.stage !== 'won' && d.stage !== 'lost' && Number(d.age) > 10;
   const matches = (d) => (filter === 'all' || d.type === filter)
     && (!stalledOnly || isStalled(d))
+    && (!companyFilter || String(d.companyId) === String(companyFilter))
     && (!term || String(d.name || '').toLowerCase().includes(term) || String(d.owner || '').toLowerCase().includes(term));
   const totals = DEAL_STAGES.reduce((acc, s) => {
     const items = scopedDeals.filter(d => d.stage === s.key && matches(d));
@@ -1489,6 +1514,12 @@ export function Deals({ workspace, onNavigate }) {
   };
   const fireStageTransition = (deal, from, to) => {
     if (!deal || String(deal.id).toLowerCase().startsWith('local-') || from === to) return;
+    saveActivity('create', {
+      dealId: deal.id,
+      entityType: 'deal',
+      kind: 'deal',
+      body: `[Stage] ${deal.name} — ${from} → ${to}`,
+    }).catch(() => {});
     if (to === 'won' && from !== 'won') {
       fetch('/api/hub/work-orders', {
         method: 'POST',
@@ -1561,20 +1592,40 @@ export function Deals({ workspace, onNavigate }) {
     else openDealEditor(target);
   }, [dealParam, guruParam, syncState, deals]);
 
-  const move = (id, to) => {
+  const move = async (id, to) => {
     const cur = deals.find(d => d.id === id);
+    if (!cur || cur.stage === to) return;
     setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: to } : d)));
     // Persist the stage change in the background; the optimistic move stands regardless.
     // Unsaved local cards (no DB id) only persist once saved through the drawer.
     if (!String(id).toLowerCase().startsWith('local-')) {
-      saveRevenueRecord('deal', 'update', { id, stage: to });
+      const token = `${id}:${++moveSeqRef.current}`;
+      latestMoveRef.current.set(id, token);
+      setMovingDeals(prev => new Set(prev).add(id));
+      const r = await saveRevenueRecord('deal', 'update', { id, stage: to });
+      if (latestMoveRef.current.get(id) !== token) return;
+      latestMoveRef.current.delete(id);
+      setMovingDeals(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      if (r.status === 'preview') {
+        showToast('저장 위치가 없어 로컬에서만 단계가 이동됨');
+      } else if (!r.ok && r.status !== 'noop') {
+        setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: cur.stage } : d)));
+        showToast('단계 이동 저장 실패 · 이전 단계로 되돌림');
+        return;
+      } else if (r.ok) {
+        fireStageTransition(cur, cur.stage, to);
+      }
+      return;
     }
-    if (cur) fireStageTransition(cur, cur.stage, to);
   };
   // Create a deal directly in `stageKey`. With a `title` (inline column quick-add) it persists
   // immediately and stays put; without one (top button) it opens the editor to be filled in.
   const createDealInStage = (stageKey = DEAL_STAGES[0]?.key || 'lead', title = '') => {
-    const id = `LOCAL-${Date.now().toString().slice(-4)}`;
+    const id = `LOCAL-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
     const deal = {
       id,
       name: title || '새 딜',
@@ -1591,6 +1642,8 @@ export function Deals({ workspace, onNavigate }) {
     if (title) {
       saveRevenueRecord('deal', 'create', deal).then(r => {
         if (r.ok && r.id) setDeals(ds => ds.map(d => (d.id === id ? { ...d, id: r.id } : d)));
+        else if (r.status === 'preview') showToast('저장 위치가 없어 새 딜은 로컬에서만 생성됨');
+        else if (!r.ok) showToast('새 딜 저장 실패 · 로컬 카드로 유지됨');
       });
     } else {
       openDealEditor(deal); // open the editor immediately so the new deal can be filled in
@@ -1680,6 +1733,14 @@ export function Deals({ workspace, onNavigate }) {
 
       <TodayFollowupStrip onNavigate={onNavigate} workspace={workspace} />
 
+      {companyFilter && (
+        <div style={{ display: 'inline-flex', alignSelf: 'flex-start', alignItems: 'center', gap: 6, padding: '5px 10px', fontSize: 11.5, borderRadius: 999, border: '1px solid var(--line)', background: 'var(--surface-2)', color: 'var(--fg-muted)' }}>
+          <Iconed name="filter" size={11} />
+          {companyName ? `고객: ${companyName}` : '이 고객의 딜'}
+          <button onClick={() => setCompanyCleared(companyParam)} aria-label="회사 필터 해제" style={{ background: 'transparent', border: 'none', color: 'var(--fg-faint)', cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>×</button>
+        </div>
+      )}
+
       {wsEmpty && (
         <Card>
           <EmptyState
@@ -1729,7 +1790,7 @@ export function Deals({ workspace, onNavigate }) {
                       border: '1px solid var(--line-soft)',
                       borderRadius: 'var(--r-sm)',
                       padding: '10px 11px', cursor: 'grab',
-                      opacity: drag === d.id ? 0.4 : 1,
+                      opacity: drag === d.id ? 0.4 : movingDeals.has(d.id) ? 0.65 : 1,
                       outline: selection.selectedId === d.id ? '1px solid var(--moon-300)' : 'none',
                       outlineOffset: 2,
                     }}>
@@ -1768,6 +1829,12 @@ export function Deals({ workspace, onNavigate }) {
                         <Iconed name="clock" size={10} /> {d.age}d stalled
                       </div>
                     )}
+                    {movingDeals.has(d.id) && (
+                      <div style={{ marginTop: 6, fontSize: 10, color: 'var(--fg-faint)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ width: 5, height: 5, borderRadius: 999, background: 'var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
+                        저장 중
+                      </div>
+                    )}
                   </div>
                 ))}
                 {addStage === s.key ? (
@@ -1777,7 +1844,7 @@ export function Deals({ workspace, onNavigate }) {
                     value={addText}
                     onChange={setAddText}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && addText.trim()) { createDealInStage(s.key, addText.trim()); setAddText(''); }
+                      if (e.key === 'Enter' && addText.trim()) { createDealInStage(s.key, addText.trim()); setAddStage(null); setAddText(''); }
                       else if (e.key === 'Escape') { setAddStage(null); setAddText(''); }
                     }}
                     style={{ display: 'flex' }}
@@ -2374,7 +2441,18 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
             <div style={{ display: 'flex', gap: 18, marginTop: 10 }}>
               <div>
                 <div style={{ fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Deals</div>
-                <div style={{ fontSize: 13, marginTop: 3 }}>{account.deals}</div>
+                {account.deals > 0 && account.companyId ? (
+                  <button
+                    onClick={() => {
+                      const inClassin = typeof window !== 'undefined' && window.location.pathname.includes('/classin/');
+                      onNavigate?.(crmTabPath(inClassin ? 'classin' : undefined, 'deals', `?company=${encodeURIComponent(account.companyId)}`));
+                    }}
+                    title="이 고객의 딜 보기"
+                    style={{ fontSize: 13, marginTop: 3, color: 'var(--moon-200)', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+                  >{account.deals} →</button>
+                ) : (
+                  <div style={{ fontSize: 13, marginTop: 3 }}>{account.deals}</div>
+                )}
               </div>
               <div>
                 <div style={{ fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Value</div>

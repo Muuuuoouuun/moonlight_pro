@@ -216,6 +216,7 @@ function mapDeal(row, companyById) {
   return {
     id: row.id,
     leadId: row.lead_id || null, // ties the deal back to its lead for Guru focus context
+    companyId: row.company_id || null, // ties the deal to its account (?company= filter)
     account: company?.name || null, // company name → cross-link to the Accounts tab (?acct=)
     name,
     type,
