@@ -49,7 +49,7 @@ test("buildLeadWrite drops unknown stages and never emits owner/last", () => {
   assert.deepEqual(metaPatch, {});
 });
 
-test("buildDealWrite maps name→title, validates stage key, value→amount", () => {
+test("buildDealWrite maps name→title, reverse-maps stage key→DB value, value→amount", () => {
   const { columns, metaPatch } = buildDealWrite({
     name: "베어브릭 콜라보",
     stage: "neg",
@@ -58,15 +58,32 @@ test("buildDealWrite maps name→title, validates stage key, value→amount", ()
     close: "5월 12일", // best-effort: not reversed
   });
   assert.equal(columns.title, "베어브릭 콜라보");
-  assert.equal(columns.stage, "neg");
+  assert.equal(columns.stage, "negotiation"); // display key 'neg' → DB value 'negotiation'
   assert.equal(columns.amount, 7_800_000);
   assert.equal("expected_close_at" in columns, false);
   assert.deepEqual(metaPatch, { account_kind: "personal" });
 });
 
+test("buildDealWrite reverse-maps every display stage key to its DB value", () => {
+  // The DB CHECK (migration 0018) allows prospect/qualified/proposal/negotiation/won/lost.
+  // Writing the raw display key silently failed the constraint — this map is the fix.
+  const expected = {
+    lead: "prospect",
+    qual: "qualified",
+    prop: "proposal",
+    neg: "negotiation",
+    won: "won",
+    lost: "lost",
+  };
+  for (const [key, dbValue] of Object.entries(expected)) {
+    const { columns } = buildDealWrite({ stage: key });
+    assert.equal(columns.stage, dbValue, `${key} should map to ${dbValue}`);
+  }
+});
+
 test("buildDealWrite rejects non-canonical stage values", () => {
   const { columns } = buildDealWrite({ stage: "negotiation" });
-  assert.equal("stage" in columns, false); // only lead/qual/prop/neg/won/lost pass through
+  assert.equal("stage" in columns, false); // only lead/qual/prop/neg/won/lost are valid input keys
 });
 
 test("buildCaseWrite maps display status/priority labels back to DB enums", () => {

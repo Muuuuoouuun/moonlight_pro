@@ -25,6 +25,19 @@ const LEAD_STATUS_BY_STAGE = {
 // Canonical deal stage keys (mapDeal normalizes DB aliases down to these).
 const DEAL_STAGE_KEYS = new Set(["lead", "qual", "prop", "neg", "won", "lost"]);
 
+// Reverse of mapDeal's normalization: display key → DB `deals.stage` value. The DB CHECK
+// (migration 0018) allows prospect/qualified/proposal/negotiation/won/lost. Writing the raw
+// display key (lead/qual/prop/neg) fails the constraint and silently downgrades to preview —
+// this map makes every stage persist and round-trip through the read-side STAGE_ALIASES.
+const STAGE_KEY_TO_DB = {
+  lead: "prospect",
+  qual: "qualified",
+  prop: "proposal",
+  neg: "negotiation",
+  won: "won",
+  lost: "lost",
+};
+
 // "₩1.2M" / "₩900K" / "₩0" / "—" / 1200000 → number. Tolerates raw numbers and commas.
 export function parseMoneyLabel(value) {
   if (typeof value === "number") return Number.isFinite(value) ? Math.round(value) : 0;
@@ -92,7 +105,7 @@ export function buildDealWrite(payload = {}) {
     columns.title = payload.name.trim();
   }
   if (DEAL_STAGE_KEYS.has(String(payload.stage))) {
-    columns.stage = String(payload.stage);
+    columns.stage = STAGE_KEY_TO_DB[String(payload.stage)];
   }
   if (payload.value != null) {
     columns.amount = parseMoneyLabel(payload.value);
