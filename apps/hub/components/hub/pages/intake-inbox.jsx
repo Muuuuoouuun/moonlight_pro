@@ -8,7 +8,7 @@
 // normalized fields, and promote/reject/edit it individually.
 
 import React from "react";
-import { Badge, Button, Card, Dot, EmptyState, IconButton, Input, SectionTitle } from "../hub-primitives";
+import { Badge, Button, Card, Dot, EmptyState, IconButton, Input, SectionTitle, SyncBadge, SegmentedControl } from "../hub-primitives";
 
 const SOURCE_TONE = { business_card: "moon", google_sheets: "info" };
 const SOURCE_LABEL = { business_card: "명함", google_sheets: "시트" };
@@ -31,12 +31,6 @@ const SOURCE_FILTERS = [
 ];
 
 const ROW_GRID = "70px 1fr 150px 160px 90px 1fr 80px 160px";
-
-function SyncBadge({ state }) {
-  const label = state === "live" ? "live" : state === "loading" ? "loading" : "mock";
-  const color = state === "live" ? "var(--success)" : state === "loading" ? "var(--warning)" : "var(--fg-faint)";
-  return <span className="mono" style={{ marginLeft: 8, fontSize: 10.5, color }}>{label}</span>;
-}
 
 // Fetch helper mirroring saveRevenueRecord in revenue.jsx: returns { ok, status, row/result }.
 async function postIntakeOp(body) {
@@ -110,7 +104,7 @@ function EditRow({ row, onCancel, onSaved }) {
 }
 
 export function IntakeInbox({ onNavigate }) {
-  const [syncState, setSyncState] = React.useState("loading"); // loading | live | mock
+  const [syncState, setSyncState] = React.useState("loading"); // loading | live | preview — Supabase not configured means preview, not fixture "mock" data
   const [rows, setRows] = React.useState([]);
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [sourceFilter, setSourceFilter] = React.useState("all");
@@ -124,13 +118,13 @@ export function IntakeInbox({ onNavigate }) {
       const r = await fetch("/api/hub/intake", { cache: "no-store" });
       const d = await r.json().catch(() => null);
       if (!r.ok || !d) {
-        setSyncState("mock");
+        setSyncState("preview");
         return;
       }
-      setSyncState(d.status === "live" ? "live" : "mock");
+      setSyncState(d.status === "live" ? "live" : "preview");
       setRows(Array.isArray(d.rows) ? d.rows : []);
     } catch {
-      setSyncState("mock");
+      setSyncState("preview");
     }
   }, []);
 
@@ -211,28 +205,18 @@ export function IntakeInbox({ onNavigate }) {
       </div>
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <div className="hub-toolbar" style={{ display: "flex", gap: 2, background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", padding: 2 }}>
-          {STATUS_FILTERS.map((f) => (
-            <button key={f.key} onClick={() => setStatusFilter(f.key)} style={{
-              padding: "4px 10px", fontSize: 11.5, borderRadius: 4,
-              color: statusFilter === f.key ? "var(--fg)" : "var(--fg-faint)",
-              background: statusFilter === f.key ? "var(--surface-3)" : "transparent",
-            }}>
-              {f.label}
-            </button>
-          ))}
-        </div>
-        <div className="hub-toolbar" style={{ display: "flex", gap: 2, background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", padding: 2 }}>
-          {SOURCE_FILTERS.map((f) => (
-            <button key={f.key} onClick={() => setSourceFilter(f.key)} style={{
-              padding: "4px 10px", fontSize: 11.5, borderRadius: 4,
-              color: sourceFilter === f.key ? "var(--fg)" : "var(--fg-faint)",
-              background: sourceFilter === f.key ? "var(--surface-3)" : "transparent",
-            }}>
-              {f.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          className="hub-toolbar"
+          options={STATUS_FILTERS}
+          value={statusFilter}
+          onChange={setStatusFilter}
+        />
+        <SegmentedControl
+          className="hub-toolbar"
+          options={SOURCE_FILTERS}
+          value={sourceFilter}
+          onChange={setSourceFilter}
+        />
       </div>
 
       <SectionTitle>스테이징 레코드</SectionTitle>

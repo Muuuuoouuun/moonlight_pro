@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Card, Button, Badge, Dot, SectionTitle, EmptyState } from "../hub-primitives";
+import { Card, Button, Badge, Dot, SectionTitle, EmptyState, SyncBadge } from "../hub-primitives";
 
 const STAGING_LABELS = [
   { key: "pending", label: "대기", tone: "warning" },
@@ -101,9 +101,7 @@ export function SheetsSync() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>세일즈 시트 동기화</h2>
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             구글시트 ↔ 세일즈 DB · 리드 import → 정규화·중복제거 → 라이브 뷰 push
-            <span className="mono" style={{ marginLeft: 8, color: syncState === "live" ? "var(--success)" : syncState === "loading" ? "var(--warning)" : "var(--fg-faint)" }}>
-              {syncState === "live" ? "live" : syncState === "loading" ? "syncing" : syncState === "error" ? "error" : "preview"}
-            </span>
+            <SyncBadge state={syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />

@@ -3,7 +3,7 @@
 import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar, SyncBadge, SegmentedControl } from "../hub-primitives";
 import {
   CONTENT_QUEUE as FALLBACK_CONTENT_QUEUE,
   CAMPAIGNS as FALLBACK_CAMPAIGNS,
@@ -737,15 +737,11 @@ export function Studio({ workspace }) {
     <div className="hub-studio-shell" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', height: '100%', overflow: 'hidden' }}>
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-            {[{k:'blog',l:'Blog / Insight'},{k:'carousel',l:'Card News'}].map(m => (
-              <button key={m.k} onClick={() => { setMode(m.k); setDirty(true); }} style={{
-                padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-                color: mode === m.k ? 'var(--fg)' : 'var(--fg-faint)',
-                background: mode === m.k ? 'var(--surface-3)' : 'transparent',
-              }}>{m.l}</button>
-            ))}
-          </div>
+          <SegmentedControl
+            options={[{ key: 'blog', label: 'Blog / Insight' }, { key: 'carousel', label: 'Card News' }]}
+            value={mode}
+            onChange={(k) => { setMode(k); setDirty(true); }}
+          />
           <Badge tone="warning" size="xs">Draft</Badge>
           {ws && (
             <span
@@ -1350,9 +1346,7 @@ export function Queue({ workspace }) {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Publishing queue</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {visibleQueue.length}{tab !== 'all' ? ` of ${queue.length}` : ''} items in pipeline
-            <span className="mono" style={{ marginLeft: 8, color: ledger.syncState === 'live' ? 'var(--success)' : ledger.syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-              {ledger.syncState === 'live' ? 'live' : ledger.syncState === 'loading' ? 'syncing' : 'mock'}
-            </span>
+            <SyncBadge state={ledger.syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -2016,15 +2010,6 @@ const CAMPAIGN_STATUS_OPTIONS = [
   { value: 'completed', label: 'Done' },
 ];
 
-// Tiny local live/mock indicator — mirrors the Publishing queue badge (line
-// ~1119) but Campaigns doesn't import from revenue.jsx/EditDrawer per the
-// concurrent-refactor constraint, so it's redefined here.
-function CampaignSyncBadge({ syncState }) {
-  const color = syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)';
-  const label = syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock';
-  return <span className="mono" style={{ marginLeft: 8, color }}>{label}</span>;
-}
-
 export function Campaigns() {
   const router = useRouter();
   const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral', Done: 'success' };
@@ -2163,7 +2148,7 @@ export function Campaigns() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Campaigns</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             Content 안에서 Revenue, Automations, Decisions를 캠페인 기준으로 묶는 war room
-            <CampaignSyncBadge syncState={ledger.syncState} />
+            <SyncBadge state={ledger.syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />

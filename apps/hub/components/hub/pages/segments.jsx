@@ -10,7 +10,7 @@ import React from 'react';
 
 import { LEADS as FALLBACK_LEADS } from "../hub-data";
 import { Iconed } from "../hub-icons";
-import { Badge, Card, Dot, EmptyState, Input } from "../hub-primitives";
+import { Badge, Card, Dot, EmptyState, Input, SyncBadge, SegmentedControl } from "../hub-primitives";
 import { filterLeadsByWorkspace, getWorkspace } from "../workspace-map";
 
 // Same ledger endpoint the Revenue pages use; local copy so this page stays
@@ -87,12 +87,6 @@ function groupLeads(leads, dimension) {
     .sort((a, b) => b.count - a.count);
 }
 
-function SyncBadge({ state }) {
-  const tone = state === 'live' ? 'success' : state === 'loading' ? 'info' : 'neutral';
-  const label = state === 'live' ? 'live' : state === 'loading' ? 'syncing' : 'mock';
-  return <Badge tone={tone} size="xs" variant="outline" style={{ marginLeft: 8 }}>{label}</Badge>;
-}
-
 export function Segments({ workspace, onNavigate }) {
   const { syncState, source, leads: allLeads } = useLeadsLedger();
   const ws = getWorkspace(workspace);
@@ -126,21 +120,12 @@ export function Segments({ workspace, onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <div className="hub-toolbar" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-          {DIMENSIONS.map((d) => (
-            <button
-              key={d.key}
-              onClick={() => { setDimension(d.key); setExpanded(null); }}
-              style={{
-                padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-                color: dimension === d.key ? 'var(--fg)' : 'var(--fg-faint)',
-                background: dimension === d.key ? 'var(--surface-3)' : 'transparent',
-              }}
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          className="hub-toolbar"
+          options={DIMENSIONS.map((d) => ({ key: d.key, label: d.label }))}
+          value={dimension}
+          onChange={(key) => { setDimension(key); setExpanded(null); }}
+        />
         <Input className="hub-toolbar" placeholder="리드 이름 검색…" icon="search" value={search} onChange={setSearch} />
       </div>
 

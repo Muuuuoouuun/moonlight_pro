@@ -3,7 +3,7 @@
 import React from "react";
 import { useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Sparkline, EditDrawer } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Sparkline, EditDrawer, SyncBadge, SegmentedControl, Drawer } from "../hub-primitives";
 import {
   LEADS as FALLBACK_LEADS,
   DEAL_STAGES as FALLBACK_DEAL_STAGES,
@@ -182,12 +182,6 @@ function useRevenueLedger() {
   return { ledger, syncState, reload };
 }
 
-function SyncBadge({ state }) {
-  const label = state === 'live' ? 'live' : state === 'loading' ? 'syncing' : 'mock';
-  const color = state === 'live' ? 'var(--success)' : state === 'loading' ? 'var(--warning)' : 'var(--fg-faint)';
-  return <span className="mono" style={{ marginLeft: 8, fontSize: 10.5, color }}>{label}</span>;
-}
-
 function GuruCoachPanel({ onNavigate }) {
   const [state, setState] = React.useState('idle'); // idle | loading | done | preview | error
   const [text, setText] = React.useState('');
@@ -339,11 +333,12 @@ export function RevenueOverview({ onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <div className="hub-page-actions" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-          {['MTD','QTD','YTD'].map(p => (
-            <button key={p} onClick={() => setPeriod(p)} style={{ padding: '4px 10px', fontSize: 11.5, borderRadius: 4, color: p === period ? 'var(--fg)' : 'var(--fg-faint)', background: p === period ? 'var(--surface-3)' : 'transparent' }}>{p}</button>
-          ))}
-        </div>
+        <SegmentedControl
+          className="hub-page-actions"
+          options={['MTD','QTD','YTD'].map(p => ({ key: p, label: p }))}
+          value={period}
+          onChange={setPeriod}
+        />
       </div>
 
       <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--gap)' }}>
@@ -866,20 +861,13 @@ export function Leads({ workspace, onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <div className="hub-toolbar" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, marginRight: 8 }}>
-          {[{ k: 'all', l: 'All' },{ k: 'personal', l: 'Personal' },{ k: 'company', l: 'Company' }].map(t => (
-            <button key={t.k} onClick={() => setFilter(t.k)} style={{
-              padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-              color: filter === t.k ? 'var(--fg)' : 'var(--fg-faint)',
-              background: filter === t.k ? 'var(--surface-3)' : 'transparent',
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-            }}>
-              {t.k === 'personal' && <Dot tone="personal" />}
-              {t.k === 'company' && <Dot tone="company" />}
-              {t.l}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          className="hub-toolbar"
+          style={{ marginRight: 8 }}
+          options={[{ key: 'all', label: 'All' }, { key: 'personal', label: 'Personal', dot: 'personal' }, { key: 'company', label: 'Company', dot: 'company' }]}
+          value={filter}
+          onChange={setFilter}
+        />
         <Input className="hub-toolbar" placeholder="이름·소스·단계 검색…" icon="search" value={search} onChange={setSearch} />
         <button className="hub-toolbar" onClick={() => setSortByScore(v => !v)} style={{
           padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
@@ -1351,15 +1339,13 @@ export function Deals({ workspace, onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <div className="hub-toolbar" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, marginRight: 8 }}>
-          {[{k:'all',l:'All'},{k:'personal',l:'Personal'},{k:'company',l:'Company'}].map(t => (
-            <button key={t.k} onClick={() => setFilter(t.k)} style={{
-              padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-              color: filter === t.k ? 'var(--fg)' : 'var(--fg-faint)',
-              background: filter === t.k ? 'var(--surface-3)' : 'transparent',
-            }}>{t.l}</button>
-          ))}
-        </div>
+        <SegmentedControl
+          className="hub-toolbar"
+          style={{ marginRight: 8 }}
+          options={[{ key: 'all', label: 'All' }, { key: 'personal', label: 'Personal' }, { key: 'company', label: 'Company' }]}
+          value={filter}
+          onChange={setFilter}
+        />
         <Input className="hub-toolbar" placeholder="딜·담당 검색…" icon="search" value={search} onChange={setSearch} style={{ marginRight: 8 }} />
         {stalledCount > 0 && (
           <button
@@ -1476,47 +1462,15 @@ export function Deals({ workspace, onNavigate }) {
       )}
 
       {guruDeal && (
-        <>
-          <div className="hub-drawer-overlay" onClick={() => setGuruDeal(null)} style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / 0.4)', zIndex: 60 }} />
-          <aside className="hub-drawer" style={{
-            position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(440px, 92vw)', zIndex: 61,
-            background: 'var(--surface)', borderLeft: '1px solid var(--line-soft)',
-            display: 'flex', flexDirection: 'column',
-            boxShadow: '-8px 0 32px -12px oklch(0 0 0 / 0.5)',
-          }}>
-            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>Guru 딜 진단</div>
-                <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>{guruDeal.name} · {guruDeal.stage} · {fmt(guruDeal.value)}</div>
-              </div>
-              <IconButton icon="x" size={24} iconSize={13} tooltip="닫기" onClick={() => setGuruDeal(null)} />
-            </div>
-            <div className="scroll-y" style={{ flex: 1, padding: 16 }}>
-              {guru.phase === 'loading' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
-                  <div style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
-                  컨텍스트 조립 → Engine 진단 중…
-                </div>
-              )}
-              {guru.phase === 'done' && guru.state === 'done' && (
-                <div style={{ fontSize: 13, lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{guru.text}</div>
-              )}
-              {guru.phase === 'done' && guru.state === 'preview' && (
-                <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.55 }}>
-                  <Badge tone="neutral" size="xs">preview</Badge>
-                  <span style={{ marginLeft: 8 }}>Engine이 아직 연결되지 않아 코칭을 생성할 수 없습니다. (COM_MOON_ENGINE_URL 미설정)</span>
-                </div>
-              )}
-              {guru.phase === 'done' && guru.state === 'error' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
-                  <div style={{ fontSize: 12, color: 'var(--danger)', lineHeight: 1.55 }}>
-                    Guru 진단에 실패했습니다. 잠시 후 다시 시도하세요.
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => openGuruDiagnosis(guruDeal)}>다시 시도</Button>
-                </div>
-              )}
-            </div>
-            <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <Drawer
+          title="Guru 딜 진단"
+          subtitle={`${guruDeal.name} · ${guruDeal.stage} · ${fmt(guruDeal.value)}`}
+          onClose={() => setGuruDeal(null)}
+          width="min(440px, 92vw)"
+          borderLeft="var(--line-soft)"
+          footerStyle={{ flexWrap: 'wrap' }}
+          footer={
+            <>
               <Button variant="ghost" size="sm" onClick={() => openGuruDiagnosis(guruDeal)} disabled={guru.phase === 'loading'}>다시 진단</Button>
               {guru.phase === 'done' && guru.state === 'done' && (
                 <Button variant="outline" size="sm" icon="edit" onClick={saveGuruDiagnosis} disabled={guruSaved}>
@@ -1529,9 +1483,33 @@ export function Deals({ workspace, onNavigate }) {
               ) : (
                 <Button variant="primary" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.(guruChatPath({ mode: 'deal-review', ref: guruDeal.id }))}>Chat에서 이어가기</Button>
               )}
+            </>
+          }
+        >
+          {guru.phase === 'loading' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
+              <div style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
+              컨텍스트 조립 → Engine 진단 중…
             </div>
-          </aside>
-        </>
+          )}
+          {guru.phase === 'done' && guru.state === 'done' && (
+            <div style={{ fontSize: 13, lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{guru.text}</div>
+          )}
+          {guru.phase === 'done' && guru.state === 'preview' && (
+            <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.55 }}>
+              <Badge tone="neutral" size="xs">preview</Badge>
+              <span style={{ marginLeft: 8 }}>Engine이 아직 연결되지 않아 코칭을 생성할 수 없습니다. (COM_MOON_ENGINE_URL 미설정)</span>
+            </div>
+          )}
+          {guru.phase === 'done' && guru.state === 'error' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
+              <div style={{ fontSize: 12, color: 'var(--danger)', lineHeight: 1.55 }}>
+                Guru 진단에 실패했습니다. 잠시 후 다시 시도하세요.
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => openGuruDiagnosis(guruDeal)}>다시 시도</Button>
+            </div>
+          )}
+        </Drawer>
       )}
 
       {toast && (
@@ -1685,38 +1663,25 @@ export function Cases() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <div className="hub-toolbar" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, marginRight: 8 }}>
-          {[{ k: 'all', l: 'All' },{ k: 'personal', l: 'Personal' },{ k: 'company', l: 'Company' }].map(t => (
-            <button key={t.k} onClick={() => setTypeFilter(t.k)} style={{
-              padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-              color: typeFilter === t.k ? 'var(--fg)' : 'var(--fg-faint)',
-              background: typeFilter === t.k ? 'var(--surface-3)' : 'transparent',
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-            }}>
-              {t.k === 'personal' && <Dot tone="personal" />}
-              {t.k === 'company' && <Dot tone="company" />}
-              {t.l}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          className="hub-toolbar"
+          style={{ marginRight: 8 }}
+          options={[{ key: 'all', label: 'All' }, { key: 'personal', label: 'Personal', dot: 'personal' }, { key: 'company', label: 'Company', dot: 'company' }]}
+          value={typeFilter}
+          onChange={setTypeFilter}
+        />
         <Input className="hub-toolbar" placeholder="제목·계정 검색…" icon="search" value={search} onChange={setSearch} />
         <div style={{ width: 8 }} />
-        <div className="hub-toolbar" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, marginRight: 8 }}>
-          {[{ k: 'all', l: 'All' },{ k: 'Open', l: 'Open' },{ k: 'Waiting', l: 'Waiting' },{ k: 'Resolved', l: 'Resolved' }].map(t => {
-            const count = t.k === 'all' ? cases.length : cases.filter(c => c.status === t.k).length;
-            return (
-              <button key={t.k} onClick={() => setStatusFilter(t.k)} style={{
-                padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-                color: statusFilter === t.k ? 'var(--fg)' : 'var(--fg-faint)',
-                background: statusFilter === t.k ? 'var(--surface-3)' : 'transparent',
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-              }}>
-                {t.l}
-                <span className="mono" style={{ fontSize: 10 }}>{count}</span>
-              </button>
-            );
-          })}
-        </div>
+        <SegmentedControl
+          className="hub-toolbar"
+          style={{ marginRight: 8 }}
+          options={[{ key: 'all', label: 'All' },{ key: 'Open', label: 'Open' },{ key: 'Waiting', label: 'Waiting' },{ key: 'Resolved', label: 'Resolved' }].map(t => ({
+            ...t,
+            count: t.key === 'all' ? cases.length : cases.filter(c => c.status === t.key).length,
+          }))}
+          value={statusFilter}
+          onChange={setStatusFilter}
+        />
         <Button variant="primary" size="sm" icon="plus" onClick={createCase}>Case</Button>
       </div>
       <Card pad={false} className="hub-table-card">
@@ -2431,34 +2396,21 @@ export function Accounts({ onNavigate }) {
         <div style={{ flex: 1 }} />
 
         {/* View mode toggle */}
-        <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-          {[{ k: 'cards', l: 'Cards' },{ k: 'list', l: 'List' },{ k: 'detail', l: 'Detail' }].map(t => (
-            <button key={t.k} onClick={() => {
-              setView(t.k);
-              if (t.k === 'detail' && !selected) setSelected(filtered[0]?.name ?? null);
-            }} style={{
-              padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-              color: view === t.k ? 'var(--fg)' : 'var(--fg-faint)',
-              background: view === t.k ? 'var(--surface-3)' : 'transparent',
-            }}>{t.l}</button>
-          ))}
-        </div>
+        <SegmentedControl
+          options={[{ key: 'cards', label: 'Cards' }, { key: 'list', label: 'List' }, { key: 'detail', label: 'Detail' }]}
+          value={view}
+          onChange={(k) => {
+            setView(k);
+            if (k === 'detail' && !selected) setSelected(filtered[0]?.name ?? null);
+          }}
+        />
 
         {/* Type filter */}
-        <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-          {[{ k: 'all', l: 'All' },{ k: 'personal', l: 'Personal' },{ k: 'company', l: 'Company' }].map(t => (
-            <button key={t.k} onClick={() => setFilter(t.k)} style={{
-              padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-              color: filter === t.k ? 'var(--fg)' : 'var(--fg-faint)',
-              background: filter === t.k ? 'var(--surface-3)' : 'transparent',
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-            }}>
-              {t.k === 'personal' && <Dot tone="personal" />}
-              {t.k === 'company' && <Dot tone="company" />}
-              {t.l}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          options={[{ key: 'all', label: 'All' }, { key: 'personal', label: 'Personal', dot: 'personal' }, { key: 'company', label: 'Company', dot: 'company' }]}
+          value={filter}
+          onChange={setFilter}
+        />
 
         <Input className="hub-toolbar" placeholder="계정 검색…" icon="search" value={search} onChange={setSearch} />
         <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>
