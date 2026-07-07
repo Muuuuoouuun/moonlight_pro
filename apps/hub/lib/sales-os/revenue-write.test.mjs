@@ -93,6 +93,24 @@ test("buildAccountWrite reverses the health band to a representative score", () 
   assert.deepEqual(metaPatch, { account_kind: "company", note: "킥오프 예정" });
 });
 
+test("buildLeadWrite maps next_action to a column and snooze_until into meta", () => {
+  const { columns, metaPatch } = buildLeadWrite({ next_action: "전화 재시도", snooze_until: "2026-07-10" });
+  assert.equal(columns.next_action, "전화 재시도");
+  assert.equal(metaPatch.snooze_until, "2026-07-10");
+});
+
+test("buildLeadWrite: next_action/snooze empty string clears, undefined leaves untouched", () => {
+  assert.equal(buildLeadWrite({ next_action: "" }).columns.next_action, null);
+  assert.equal("next_action" in buildLeadWrite({ name: "x" }).columns, false);
+  assert.equal("snooze_until" in buildLeadWrite({ name: "x" }).metaPatch, false);
+});
+
+test("buildDealWrite maps next_action and snooze_until into meta (deals has no next_action column)", () => {
+  const { metaPatch } = buildDealWrite({ next_action: "견적 발송", snooze_until: "2026-07-11" });
+  assert.equal(metaPatch.next_action, "견적 발송");
+  assert.equal(metaPatch.snooze_until, "2026-07-11");
+});
+
 // ---- persistRevenueRecord with a mocked Supabase REST surface ----
 
 let calls;

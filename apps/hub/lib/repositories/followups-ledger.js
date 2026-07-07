@@ -16,6 +16,7 @@ import {
   isThreadsLead,
   isValidLeadFlag,
 } from "@/lib/sales-os/operator-context";
+import { isSnoozed } from "@/lib/sales-os/snooze";
 
 // Days since last touch before a stage is "overdue".
 const STALE_DAYS = { new: 2, qualified: 3, nurturing: 4, contact: 4, proposal: 3, negotiation: 2 };
@@ -109,6 +110,7 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
 
   // Leads (funnel entry follow-ups)
   (leads || []).forEach((lead) => {
+    if (isSnoozed(lead.meta)) return; // operator snoozed this lead until a future date
     const company = lead.company_id ? companyById.get(lead.company_id) : null;
     const stage = String(lead.status || "new").toLowerCase();
     const touch = lead.last_touch_at || lead.updated_at || lead.created_at;
@@ -146,6 +148,7 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
 
   // Open deals (stage-based follow-ups)
   (deals || []).forEach((deal) => {
+    if (isSnoozed(deal.meta)) return; // operator snoozed this deal until a future date
     const company = deal.company_id ? companyById.get(deal.company_id) : null;
     const stage = String(deal.stage || "prospect").toLowerCase();
     const touch = deal.last_activity_at || deal.updated_at || deal.created_at;

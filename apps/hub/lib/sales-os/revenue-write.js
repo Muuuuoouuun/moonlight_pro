@@ -81,6 +81,15 @@ export function buildLeadWrite(payload = {}) {
     metaPatch.units = Number.isFinite(n) && n > 0 ? Math.round(n) : null;
   }
 
+  // Follow-up fields — next_action is a real leads column; snooze_until lives in meta
+  // (no schema change) and getFollowups() honors it to suppress snoozed rows until due.
+  if (payload.next_action !== undefined) {
+    columns.next_action = String(payload.next_action).trim() || null;
+  }
+  if (payload.snooze_until !== undefined) {
+    metaPatch.snooze_until = String(payload.snooze_until).trim() || null;
+  }
+
   return { columns, metaPatch };
 }
 
@@ -101,6 +110,14 @@ export function buildDealWrite(payload = {}) {
   const type = normalizeType(payload.type);
   if (type) metaPatch.account_kind = type;
   if (payload.workspace) metaPatch.workspace = payload.workspace;
+
+  // Deals have no next_action column → keep both follow-up fields in meta.
+  if (payload.next_action !== undefined) {
+    metaPatch.next_action = String(payload.next_action).trim() || null;
+  }
+  if (payload.snooze_until !== undefined) {
+    metaPatch.snooze_until = String(payload.snooze_until).trim() || null;
+  }
 
   return { columns, metaPatch };
 }
