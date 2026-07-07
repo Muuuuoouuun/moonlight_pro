@@ -3,7 +3,7 @@
 import React from "react";
 import { useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Sparkline, EditDrawer, SyncBadge, SegmentedControl, Drawer } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Sparkline, EditDrawer, SyncBadge, SegmentedControl, Drawer, Checkbox } from "../hub-primitives";
 import {
   LEADS as FALLBACK_LEADS,
   DEAL_STAGES as FALLBACK_DEAL_STAGES,
@@ -15,6 +15,7 @@ import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace } from "../workspace-map";
 import { useCrmSelection, useCrmKeyboard } from "../use-crm-keyboard";
 import { ShortcutOverlay } from "../crm-shortcut-overlay";
+import { BulkBar, SavedViews } from "../crm-bulk-bar";
 
 const fmt = v => {
   const n = Number(v);
@@ -1023,8 +1024,33 @@ export function Leads({ workspace, onNavigate }) {
     onNew: createLead,
     onEditSelected: (id) => setEditLeadId(id),
     onSearchFocus: () => document.getElementById('leads-search')?.focus(),
+    onToggleSelect: selection.toggleSelected,
     onHelp: () => setShortcutsOpen(true),
   });
+  // Bulk actions over the multi-selected leads (Set). Optimistic local update + best-effort
+  // persist per row (same partial-patch path the kanban stage move uses).
+  const bulkSetStage = (stage) => {
+    selection.selectedIds.forEach((id) => {
+      setLeadEdits(prev => ({ ...prev, [id]: { ...prev[id], stage } }));
+      if (!String(id).startsWith('local-lead-')) saveRevenueRecord('lead', 'update', { id, stage });
+    });
+    selection.clearSelected();
+  };
+  const bulkSnooze = (days) => {
+    const until = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+    selection.selectedIds.forEach((id) => {
+      if (!String(id).startsWith('local-lead-')) saveRevenueRecord('lead', 'update', { id, snooze_until: until });
+    });
+    selection.clearSelected();
+  };
+  const bulkDelete = () => {
+    const ids = Array.from(selection.selectedIds);
+    if (typeof window !== 'undefined' && !window.confirm(`${ids.length}개 리드를 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    setDeletedLeadIds(prev => { const n = new Set(prev); ids.forEach(id => n.add(id)); return n; });
+    setLocalLeads(prev => prev.filter(l => !selection.selectedIds.has(l.id)));
+    ids.forEach((id) => { if (!String(id).startsWith('local-lead-')) saveRevenueRecord('lead', 'delete', { id }); });
+    selection.clearSelected();
+  };
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
@@ -1084,6 +1110,17 @@ export function Leads({ workspace, onNavigate }) {
               </button>
             );
           })}
+          <div style={{ flex: 1 }} />
+          <SavedViews
+            viewKey="leads"
+            current={{ filter, stageFilter, sortByScore, search }}
+            onApply={(v) => {
+              setFilter(v.filter ?? 'all');
+              setStageFilter(v.stageFilter ?? 'all');
+              setSortByScore(Boolean(v.sortByScore));
+              setSearch(v.search ?? '');
+            }}
+          />
         </div>
       )}
 
@@ -1182,8 +1219,14 @@ export function Leads({ workspace, onNavigate }) {
             onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
-            <span style={{ paddingRight: 4, display: 'flex' }}>
-              <Avatar name={l.name.replace(/^.*—\s*/, '')} size={22} tone={l.type === 'personal' ? 'personal' : 'company'} />
+            <span
+              onClick={(e) => { e.stopPropagation(); selection.toggleSelected(l.id); }}
+              style={{ paddingRight: 4, display: 'flex', cursor: 'pointer' }}
+              title="선택 토글"
+            >
+              {(selection.selectedIds.size > 0 || selection.selectedIds.has(l.id))
+                ? <Checkbox checked={selection.selectedIds.has(l.id)} onChange={() => {}} ariaLabel={`${l.name} 선택`} />
+                : <Avatar name={l.name.replace(/^.*—\s*/, '')} size={22} tone={l.type === 'personal' ? 'personal' : 'company'} />}
             </span>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</div>
@@ -1215,6 +1258,22 @@ export function Leads({ workspace, onNavigate }) {
       )}
 
       <ShortcutOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <BulkBar count={selection.selectedIds.size} onClear={selection.clearSelected}>
+        <select
+          aria-label="일괄 스테이지 변경"
+          defaultValue=""
+          onChange={(e) => { if (e.target.value) bulkSetStage(e.target.value); e.target.value = ''; }}
+          style={{ height: 26, padding: '0 8px', fontSize: 11.5, background: 'var(--surface-2)', color: 'var(--fg)', border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', outline: 'none' }}
+        >
+          <option value="" disabled>스테이지…</option>
+          <option value="New">New</option>
+          <option value="Contact">Contact</option>
+          <option value="Qualified">Qualified</option>
+          <option value="Lost">Lost</option>
+        </select>
+        <Button variant="ghost" size="xs" onClick={() => bulkSnooze(3)}>3일 스누즈</Button>
+        <Button variant="ghost" size="xs" onClick={bulkDelete} style={{ color: 'var(--danger)' }}>삭제</Button>
+      </BulkBar>
       <EditDrawer
         title={editingLead ? (editingLead.name || '리드 편집') : ''}
         subtitle="리드 정보 편집"
