@@ -300,6 +300,7 @@ export function Drawer({ title, subtitle, onClose, onSubmit, footer, footerStyle
         ref={panelRef}
         className="hub-drawer"
         role="dialog"
+        data-drawer-open="true"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={subtitle ? subtitleId : undefined}

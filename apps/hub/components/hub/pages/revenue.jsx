@@ -13,6 +13,8 @@ import {
 } from "../hub-data";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace } from "../workspace-map";
+import { useCrmSelection, useCrmKeyboard } from "../use-crm-keyboard";
+import { ShortcutOverlay } from "../crm-shortcut-overlay";
 
 const fmt = v => {
   const n = Number(v);
@@ -876,6 +878,16 @@ export function Leads({ workspace, onNavigate }) {
     }
   }
 
+  const selection = useCrmSelection(visibleLeads);
+  const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
+  useCrmKeyboard({
+    selection,
+    onNew: createLead,
+    onEditSelected: (id) => setEditLeadId(id),
+    onSearchFocus: () => document.getElementById('leads-search')?.focus(),
+    onHelp: () => setShortcutsOpen(true),
+  });
+
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
@@ -894,7 +906,7 @@ export function Leads({ workspace, onNavigate }) {
           value={filter}
           onChange={setFilter}
         />
-        <Input className="hub-toolbar" placeholder="이름·소스·단계 검색…" icon="search" value={search} onChange={setSearch} />
+        <Input id="leads-search" className="hub-toolbar" placeholder="이름·소스·단계 검색…" icon="search" value={search} onChange={setSearch} />
         <button className="hub-toolbar" onClick={() => setSortByScore(v => !v)} style={{
           display: 'inline-flex', alignItems: 'center', gap: 5,
           padding: '4px 10px', fontSize: 11.5, borderRadius: 999,
@@ -1019,6 +1031,8 @@ export function Leads({ workspace, onNavigate }) {
             display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12,
             padding: '12px 16px', alignItems: 'center', cursor: 'pointer',
             borderBottom: i < visibleLeads.length - 1 ? '1px solid var(--line-soft)' : 'none',
+            outline: selection.selectedId === l.id ? '1px solid var(--moon-300)' : 'none',
+            outlineOffset: -1,
           }}
             onClick={() => setEditLeadId(l.id)}
             onKeyDown={(event) => {
@@ -1062,6 +1076,7 @@ export function Leads({ workspace, onNavigate }) {
       </Card>
       )}
 
+      <ShortcutOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <EditDrawer
         title={editingLead ? (editingLead.name || '리드 편집') : ''}
         subtitle="리드 정보 편집"
@@ -1392,6 +1407,18 @@ export function Deals({ workspace, onNavigate }) {
     return saveRevenueRecord('deal', 'delete', { id: editDealId });
   };
 
+  const visibleDeals = scopedDeals.filter(matches);
+  const selection = useCrmSelection(visibleDeals);
+  const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
+  useCrmKeyboard({
+    selection,
+    onNew: createDeal,
+    onEditSelected: (id) => { const d = deals.find(x => x.id === id); if (d) openDealEditor(d); },
+    onSearchFocus: () => document.getElementById('deals-search')?.focus(),
+    onStageMove: (i) => { if (selection.selectedId != null && DEAL_STAGES[i]) move(selection.selectedId, DEAL_STAGES[i].key); },
+    onHelp: () => setShortcutsOpen(true),
+  });
+
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
@@ -1410,7 +1437,7 @@ export function Deals({ workspace, onNavigate }) {
           value={filter}
           onChange={setFilter}
         />
-        <Input className="hub-toolbar" placeholder="딜·담당 검색…" icon="search" value={search} onChange={setSearch} style={{ marginRight: 8 }} />
+        <Input id="deals-search" className="hub-toolbar" placeholder="딜·담당 검색…" icon="search" value={search} onChange={setSearch} style={{ marginRight: 8 }} />
         {stalledCount > 0 && (
           <button
             onClick={() => setStalledOnly(v => !v)}
@@ -1480,6 +1507,8 @@ export function Deals({ workspace, onNavigate }) {
                       borderRadius: 'var(--r-sm)',
                       padding: '10px 11px', cursor: 'grab',
                       opacity: drag === d.id ? 0.4 : 1,
+                      outline: selection.selectedId === d.id ? '1px solid var(--moon-300)' : 'none',
+                      outlineOffset: 2,
                     }}>
                     <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 6 }}>
                       <span className="mono" style={{ fontSize: 9.5, color: 'var(--fg-faint)' }}>{d.id}</span>
@@ -1618,6 +1647,7 @@ export function Deals({ workspace, onNavigate }) {
         </div>
       )}
 
+      <ShortcutOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <EditDrawer
         title={editingDeal ? (editingDeal.name || '딜 편집') : ''}
         subtitle={editingDeal ? `${editingDeal.id} · 딜 정보 편집` : ''}
