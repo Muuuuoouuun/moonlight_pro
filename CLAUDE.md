@@ -5,14 +5,14 @@
 - Supabase REST ledger 중심: Hub는 운영 판단 UI, Engine은 webhook/intake/실행 기록
 - Hub(`/dashboard/**`)와 Engine(`/api/**`)이 현역 실행 표면이며, public web은 active workspace에서 분리됨
 
-### 사이드바 3-Workspace 구조 (real_v1)
-Hub 사이드바는 `apps/hub/components/hub/workspace-map.js`(SSOT)에 정의된 3개 워크스페이스로 구성됨:
-- **클래스인** — 사용자 자신의 교육/클래스 비즈니스 (코호트, 수강생, 강의 결제). 브랜드: `classmoon`, `studyseagull`. ⚠️ Hub의 client 계정 `클래스인`(회사 딜)과 이름이 같으나 다른 개념
-- **회사** — 에이전시·제품 회사 운영. 브랜드: `bridgemaker`, `moonpm`, `politicofficer`
+### 사이드바 Workspace 구조 (real_v1)
+Hub 사이드바는 `apps/hub/components/hub/workspace-map.js`(SSOT)에 정의됨. **클래스인이 현재 라이브 매출 레인이며 구 `회사` 워크스페이스를 흡수했다** (workspace-map.js에서 회사는 "Legacy · 클래스인으로 흡수"):
+- **클래스인** — 현재 회사 영업·파이프라인·고객관리(라이브 매출 표면). 브랜드: `classmoon`, `studyseagull`, `bridgemaker`, `moonpm`; revenueType `company`. Guru의 operator KPI(월 계약·유닛·CNY)가 이 레인의 지표. ⚠️ Hub의 client 계정 `클래스인`(개별 회사 딜)과 이름이 같으나 다른 개념
+- **회사 (Legacy)** — 클래스인으로 흡수됨. 구 라우트 호환용 렌즈로만 유지 (`bridgemaker`, `moonpm`, `politicofficer`)
 - **브랜드 업무** — 브랜드/콘텐츠/퍼블리싱. 브랜드: `sinabro`, `gore`, `holyfuncollector`, `22nomad`
 
-IA 순서: Daily Brief (전역) → 클래스인 → 회사 → 브랜드 업무 → Agents → Work → System
-브랜드 재배치는 `workspace-map.js`의 `brands` 배열 하나만 수정하면 됨
+IA 순서: Daily Brief (전역) → 클래스인 → 브랜드 업무 → Agents → Work → System
+브랜드 재배치는 `workspace-map.js`의 `brands` 배열 하나만 수정하면 됨 (항상 이 파일을 먼저 읽고 판단할 것 — 배열은 이동함)
 
 ## 디자인 시스템
 @DESIGN.md

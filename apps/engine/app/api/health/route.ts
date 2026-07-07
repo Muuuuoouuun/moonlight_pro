@@ -39,7 +39,6 @@ export async function GET() {
       { method: "POST", path: "/api/email/send" },
       { method: "POST", path: "/api/integrations/github/sync" },
       { method: "POST", path: "/api/integrations/openclaw/sync" },
-      { method: "POST", path: "/api/ai/brief" },
       ...sharedRoutes,
       { method: "GET", path: "/api/health" },
     ],
