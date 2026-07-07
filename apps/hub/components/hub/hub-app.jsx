@@ -138,6 +138,27 @@ const PARENT_JUMP = {
   'dashboard/system': 'dashboard/revenue/overview',
 };
 
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? React.useEffect : React.useLayoutEffect;
+const THEME_VALUES = new Set(['dark', 'light']);
+const DENSITY_VALUES = new Set(['compact', 'default', 'relaxed']);
+
+function readStoredPreference(key, fallback, allowed) {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const value = window.localStorage.getItem(key);
+    return allowed.has(value) ? value : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStoredPreference(key, value) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, value);
+  } catch { /* ignore unavailable storage */ }
+}
+
 export function HubApp() {
   const router = useRouter();
   const pathname = usePathname() || '/dashboard';
@@ -149,23 +170,23 @@ export function HubApp() {
   const [navOpen, setNavOpen] = React.useState(false);
   const [density, setDensity] = React.useState('default');
   const [theme, setTheme] = React.useState('dark');
+  const [preferencesReady, setPreferencesReady] = React.useState(false);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [tweaksOpen, setTweaksOpen] = React.useState(false);
   const rootRef = React.useRef(null);
 
-  React.useEffect(() => {
-    const d = typeof window !== 'undefined' ? localStorage.getItem('mlp.density') : null;
-    const t = typeof window !== 'undefined' ? localStorage.getItem('mlp.theme') : null;
-    if (d) setDensity(d);
-    if (t) setTheme(t);
+  useIsomorphicLayoutEffect(() => {
+    setDensity(readStoredPreference('mlp.density', 'default', DENSITY_VALUES));
+    setTheme(readStoredPreference('mlp.theme', 'dark', THEME_VALUES));
+    setPreferencesReady(true);
   }, []);
 
   React.useEffect(() => {
-    if (typeof window !== 'undefined') localStorage.setItem('mlp.density', density);
-  }, [density]);
+    if (preferencesReady) writeStoredPreference('mlp.density', density);
+  }, [density, preferencesReady]);
   React.useEffect(() => {
-    if (typeof window !== 'undefined') localStorage.setItem('mlp.theme', theme);
-  }, [theme]);
+    if (preferencesReady) writeStoredPreference('mlp.theme', theme);
+  }, [theme, preferencesReady]);
 
   const navigate = React.useCallback((p) => {
     const [basePath, suffix = ''] = String(p || '').split(/(?=[?#])/, 2);
@@ -190,7 +211,7 @@ export function HubApp() {
   const sidebarCollapsed = collapsed && !navOpen;
 
   return (
-    <div ref={rootRef} className="hub-app" data-theme={theme} data-density={density}>
+    <div ref={rootRef} className="hub-app" data-theme={theme} data-density={density} suppressHydrationWarning>
       <div className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'}>
         <button
           type="button"

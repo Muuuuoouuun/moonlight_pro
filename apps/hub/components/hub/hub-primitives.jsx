@@ -233,9 +233,9 @@ export function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tool
 }
 
 const DRAWER_INPUT_STYLE = {
-  height: 32,
-  padding: '0 10px',
-  fontSize: 13,
+  height: 30,
+  padding: '0 9px',
+  fontSize: 12.5,
   background: 'var(--surface-2)',
   color: 'var(--fg)',
   border: '1px solid var(--line)',
@@ -311,18 +311,18 @@ export function Drawer({ title, subtitle, onClose, onSubmit, footer, footerStyle
         display: 'flex', flexDirection: 'column',
         boxShadow: '-8px 0 32px -12px oklch(0 0 0 / 0.5)',
       }}>
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ padding: '11px 12px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div id={titleId} style={{ fontSize: 14, fontWeight: 500 }}>{title}</div>
-            {subtitle && <div id={subtitleId} style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}
+            <div id={titleId} style={{ fontSize: 13.5, fontWeight: 500 }}>{title}</div>
+            {subtitle && <div id={subtitleId} style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 1 }}>{subtitle}</div>}
           </div>
           <IconButton icon="x" size={24} iconSize={13} tooltip="닫기" onClick={onClose} />
         </div>
-        <div className="scroll-y" style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="scroll-y" style={{ flex: 1, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {children}
         </div>
         {footer && (
-          <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, ...footerStyle }}>
+          <div style={{ padding: '8px 10px', borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8, ...footerStyle }}>
             {footer}
           </div>
         )}
@@ -384,25 +384,32 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
         </>
       }
     >
-      {fields.map(f => (
-        <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)' }}>{f.label}</span>
-          {f.type === 'select' ? (
-            <select value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
-              {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          ) : (
-            <input
-              type={f.inputType || 'text'}
-              value={record[f.key] ?? ''}
-              placeholder={f.placeholder || ''}
-              onChange={e => onChange(f.key, f.inputType === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value)}
-              style={DRAWER_INPUT_STYLE}
-            />
-          )}
-        </label>
-      ))}
-      {children}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 10px' }}>
+        {fields.map(f => (
+          <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 3, gridColumn: f.width === 'half' ? 'span 1' : 'span 2' }}>
+            <span style={{ fontSize: 10, lineHeight: 1.15, textTransform: 'uppercase', letterSpacing: 0, color: 'var(--fg-faint)' }}>{f.label}</span>
+            {f.type === 'select' ? (
+              <select value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
+                {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            ) : (
+              <input
+                type={f.inputType || 'text'}
+                value={record[f.key] ?? ''}
+                placeholder={f.placeholder || ''}
+                onChange={e => onChange(f.key, f.inputType === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value)}
+                style={DRAWER_INPUT_STYLE}
+              />
+            )}
+          </label>
+        ))}
+      </div>
+      {children && (
+        <>
+          <Divider style={{ margin: '2px 0' }} />
+          {children}
+        </>
+      )}
     </Drawer>
   );
 }

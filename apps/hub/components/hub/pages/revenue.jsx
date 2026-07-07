@@ -657,26 +657,26 @@ function QuickLogBar({ entityType, entityId }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)' }}>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)', minWidth: 58 }}>빠른 기록</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)' }}>
+      <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0, color: 'var(--fg-faint)', minWidth: 54 }}>빠른 기록</span>
         {QUICK_LOG_CHANNELS.map(ch => (
           <Button key={ch.key} variant="outline" size="xs" onClick={() => log(ch)} active={busy === ch.key} disabled={Boolean(busy)}>
             {busy === ch.key ? '…' : ch.label}
           </Button>
         ))}
-        {logged && <span style={{ fontSize: 11.5, color: 'var(--success)' }}>{logged} 기록됨</span>}
+        {logged && <span style={{ fontSize: 11, color: 'var(--success)' }}>{logged} 기록됨</span>}
       </div>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)', minWidth: 58 }}>다음 팔로업</span>
+      <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0, color: 'var(--fg-faint)', minWidth: 54 }}>다음 팔로업</span>
         {QUICK_SNOOZE.map(o => (
           <Button key={o.days} variant="ghost" size="xs" onClick={() => snooze(o.days)} active={busy === `s${o.days}`} disabled={Boolean(busy)}>
             {o.label}
           </Button>
         ))}
-        {snoozed && <span style={{ fontSize: 11.5, color: 'var(--moon-200)' }}>{snoozed}까지 스누즈</span>}
+        {snoozed && <span style={{ fontSize: 11, color: 'var(--moon-200)' }}>{snoozed}까지 스누즈</span>}
       </div>
-      {isLocal && <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>저장 후 기록·스누즈가 원장에 반영됩니다.</span>}
+      {isLocal && <span style={{ fontSize: 10, color: 'var(--fg-faint)' }}>저장 후 기록·스누즈가 원장에 반영됩니다.</span>}
     </div>
   );
 }
@@ -1280,15 +1280,15 @@ export function Leads({ workspace, onNavigate }) {
         record={editingLead}
         fields={[
           { key: 'name', label: '이름' },
-          { key: 'type', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
-          { key: 'source', label: '유입경로 (소스)', placeholder: 'Referral · Website · Meta · 설명회…' },
-          { key: 'region', label: '지역', placeholder: '서울 · 경기 · 부산…' },
-          { key: 'scale', label: '규모', placeholder: '학생수 · 직원수 · 매출 규모' },
+          { key: 'type', label: '타입', type: 'select', width: 'half', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
+          { key: 'source', label: '유입경로 (소스)', width: 'half', placeholder: 'Referral · Website · Meta · 설명회…' },
+          { key: 'region', label: '지역', width: 'half', placeholder: '서울 · 경기 · 부산…' },
+          { key: 'scale', label: '규모', width: 'half', placeholder: '학생수 · 직원수 · 매출 규모' },
           { key: 'situation', label: '현재 상황', placeholder: '검토중 · 경쟁사 사용 · 예산확보…' },
-          { key: 'units', label: '도입 댓수', inputType: 'number', placeholder: '0' },
-          { key: 'stage', label: '단계', type: 'select', options: [{ value: 'New', label: 'New' }, { value: 'Contact', label: 'Contact' }, { value: 'Qualified', label: 'Qualified' }, { value: 'Lost', label: 'Lost' }] },
-          { key: 'value', label: '금액', placeholder: '₩0' },
-          { key: 'owner', label: '담당' },
+          { key: 'units', label: '도입 댓수', inputType: 'number', width: 'half', placeholder: '0' },
+          { key: 'stage', label: '단계', type: 'select', width: 'half', options: [{ value: 'New', label: 'New' }, { value: 'Contact', label: 'Contact' }, { value: 'Qualified', label: 'Qualified' }, { value: 'Lost', label: 'Lost' }] },
+          { key: 'value', label: '금액', width: 'half', placeholder: '₩0' },
+          { key: 'owner', label: '담당', width: 'half' },
         ]}
         onChange={(key, val) => setLeadEdits(prev => ({ ...prev, [editLeadId]: { ...prev[editLeadId], [key]: val } }))}
         onSave={persistLead}
@@ -1306,24 +1306,25 @@ export function Leads({ workspace, onNavigate }) {
       {/* 리드 → 딜 전환 — anchored above the EditDrawer footer. Non-local leads only. */}
       {editingLead && !String(editLeadId).startsWith('local-lead-') && (
         <div style={{
-          position: 'fixed', right: 0, bottom: 60, zIndex: 62,
+          position: 'fixed', right: 0, bottom: 47, zIndex: 62,
           width: 'min(380px, 92vw)',
-          padding: '10px 16px',
+          padding: '8px 12px',
           borderTop: '1px solid var(--line-soft)',
           background: 'var(--surface)',
-          display: 'flex', flexDirection: 'column', gap: 8,
+          display: 'flex', flexDirection: 'column', gap: 6,
         }}>
           {convertNote && (
-            <div style={{ fontSize: 11, lineHeight: 1.4, color: convertNote.tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)' }}>
+            <div style={{ fontSize: 10.5, lineHeight: 1.35, color: convertNote.tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)' }}>
               {convertNote.text}
             </div>
           )}
           <Button
             variant={editingLead.stage === 'Qualified' ? 'primary' : 'secondary'}
-            size="sm"
+            size="xs"
             icon="deals"
             onClick={convertLeadToDeal}
             disabled={converting}
+            style={{ width: '100%' }}
           >
             {converting ? '전환 중…' : '딜로 전환'}
           </Button>
