@@ -118,6 +118,97 @@ function handoffTone(status) {
   return "info";
 }
 
+// 성과 기록 (Phase 2 ⓐ) — logs a published-content metric into content_outcomes so the
+// Council audience-analysis mode has real engagement numbers to reason from. metric is free
+// text (the operator hasn't fixed the key metric yet). Disabled in preview mode: no live
+// Supabase means a write would silently no-op, so we show an explicit preview badge instead.
+function ContentOutcomeRecorder({ variantId, contentId, brandKey, channel, isLive }) {
+  const [open, setOpen] = React.useState(false);
+  const [metric, setMetric] = React.useState("");
+  const [value, setValue] = React.useState("");
+  const [state, setState] = React.useState("idle"); // idle | saving | done | error
+  const [msg, setMsg] = React.useState("");
+
+  const record = async () => {
+    if (!metric.trim() || value === "") {
+      setState("error");
+      setMsg("지표명과 값을 입력하세요");
+      return;
+    }
+    setState("saving");
+    setMsg("");
+    try {
+      const res = await fetch("/api/hub/content/outcomes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          variantId: variantId || null,
+          contentId: contentId || null,
+          brandKey: brandKey || null,
+          channel: channel || null,
+          metric: metric.trim(),
+          value: Number(value) || 0,
+          source: "manual",
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.status === "ok") {
+        setState("done");
+        setMsg("기록됨");
+        setMetric("");
+        setValue("");
+      } else {
+        setState("error");
+        setMsg(data?.result?.reason || "기록 실패");
+      }
+    } catch (e) {
+      setState("error");
+      setMsg(e instanceof Error ? e.message : "기록 실패");
+    }
+  };
+
+  const inputStyle = {
+    minWidth: 0,
+    background: "var(--surface-2)",
+    border: "1px solid var(--line)",
+    borderRadius: "var(--r-sm)",
+    padding: "6px 8px",
+    color: "var(--fg)",
+    fontSize: 12,
+  };
+
+  if (!isLive) {
+    return (
+      <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
+        <Badge tone="neutral" size="xs">preview</Badge>
+        <span style={{ fontSize: 11, color: "var(--fg-faint)" }}>성과 기록은 라이브(Supabase) 연결 시 활성화됩니다</span>
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <div style={{ marginTop: 10 }}>
+        <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>성과 기록</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8, padding: 10, border: "1px solid var(--line)", borderRadius: "var(--r-sm)" }}>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input value={metric} onChange={(e) => setMetric(e.target.value)} placeholder="지표 (조회·저장·구독…)" style={{ ...inputStyle, flex: 2 }} />
+        <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="값" inputMode="numeric" style={{ ...inputStyle, flex: 1 }} />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Button variant="primary" size="sm" onClick={record} disabled={state === "saving"}>{state === "saving" ? "기록 중…" : "기록"}</Button>
+        <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>닫기</Button>
+        {msg && <span style={{ fontSize: 11, color: state === "error" ? "var(--danger)" : "var(--success)" }}>{msg}</span>}
+      </div>
+    </div>
+  );
+}
+
 function parseCouncilSuggestionItems(text) {
   const raw = String(text || "").trim();
   if (!raw) return [];
@@ -1258,6 +1349,13 @@ export function Studio({ workspace }) {
                 <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{log.when}</span>
               </div>
             ))}
+            <ContentOutcomeRecorder
+              variantId={variantId}
+              contentId={contentId}
+              brandKey={selectedBrand?.key}
+              channel={mode === 'blog' ? 'blog' : 'instagram'}
+              isLive={ledger.source === 'supabase'}
+            />
           </div>
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em', marginTop: 8 }}>Settings</div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>

@@ -101,6 +101,23 @@ function digestBrand(context: any): string {
     lines.push(`아이디어 큐 상위: ${ideas.slice(0, 4).map((i: any) => i.title ?? "?").join(" · ")}`);
   }
 
+  // Recorded engagement (Phase 2 ⓑ) — the numbers audience-analysis reasons from. Render as
+  // readable lines, not a raw blob, so the model actually attends to them.
+  const wl = context.content?.outcomes;
+  if (wl && wl.byMetric && Object.keys(wl.byMetric).length) {
+    const scope = wl.brandScoped ? "이 브랜드" : "전체(브랜드 태그 없음)";
+    lines.push(`최근 ${wl.windowDays ?? 28}일 콘텐츠 성과 (${scope} · ${wl.count}건 기록):`);
+    for (const [metric, agg] of Object.entries(wl.byMetric) as [string, any][]) {
+      const channels = Object.entries(agg.byChannel || {})
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
+        .map(([ch, v]) => `${ch} ${Math.round(Number(v)).toLocaleString()}`)
+        .join(" · ");
+      lines.push(`  · ${metric}: 합계 ${Math.round(Number(agg.total)).toLocaleString()}${channels ? ` (${channels})` : ""}`);
+    }
+  } else if (context.content && context.content.outcomes_source === "preview") {
+    lines.push("콘텐츠 성과: 기록 없음(추정 금지) — 성과 원장이 아직 비어 있음");
+  }
+
   const projects = context.projects;
   if (Array.isArray(projects) && projects.length) {
     const stalled = projects.filter((p: any) => p.status === "In progress" || p.status === "Review" || p.status === "Blocked");

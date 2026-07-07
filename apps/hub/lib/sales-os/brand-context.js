@@ -7,7 +7,7 @@
 // brand set (workspace-map is the SSOT) and degrades honestly: a source failure lands in
 // missing[] and the advice continues on whatever slices resolved.
 
-import { getContentLedger } from "@/lib/repositories/content-ledger";
+import { getContentLedger, getRecentContentOutcomes } from "@/lib/repositories/content-ledger";
 import { getProjectLedger } from "@/lib/repositories/operating-ledger";
 import { getRecentAgentRuns } from "@/lib/sales-os/agent-runs";
 import { cadenceStatusString } from "@/lib/sales-os/context-schema";
@@ -56,19 +56,54 @@ function selectFocusBrand(brands, ownKeys, ref) {
   return list.find((b) => ownKeys.includes(b.key)) || list[0];
 }
 
-export async function assembleBrandContext({ mode = "brand-strategy", ref = null, draft = null } = {}) {
+// 4-week rollup of recorded content outcomes — the engagement numbers the Council
+// audience-analysis mode was missing. Prefer the focus brand's outcomes; fall back to all
+// if none are tagged to it yet (mirrors the scopedProjects honest-fallback). Aggregates by
+// metric (metric is free text, so we just sum per name) with a per-channel breakdown. Returns
+// null when there's nothing in the window so digestBrand can omit the block entirely.
+function buildContentOutcomeRollup(outcomes, focusKey, windowDays = 28) {
+  const cutoff = Date.now() - windowDays * 24 * 60 * 60 * 1000;
+  const inWindow = (Array.isArray(outcomes) ? outcomes : []).filter((o) => {
+    const t = o?.measuredAt ? new Date(o.measuredAt).getTime() : NaN;
+    return Number.isFinite(t) && t >= cutoff;
+  });
+  if (!inWindow.length) return null;
+
+  const forBrand = focusKey ? inWindow.filter((o) => o.brandKey === focusKey) : [];
+  const scoped = forBrand.length ? forBrand : inWindow;
+
+  const byMetric = {};
+  for (const o of scoped) {
+    const metric = o.metric || "unknown";
+    const channel = o.channel || "unknown";
+    const value = Number(o.value) || 0;
+    byMetric[metric] = byMetric[metric] || { total: 0, byChannel: {} };
+    byMetric[metric].total += value;
+    byMetric[metric].byChannel[channel] = (byMetric[metric].byChannel[channel] || 0) + value;
+  }
+
+  return {
+    windowDays,
+    count: scoped.length,
+    brandScoped: forBrand.length > 0,
+    byMetric,
+  };
+}
+
+export async function assembleBrandContext({ mode = "brand-strategy", ref = null, draft = null, workspace = "brand" } = {}) {
   const missing = [];
-  const [content, projectLedger, runsRes] = await Promise.all([
+  const [content, projectLedger, runsRes, outcomesRes] = await Promise.all([
     settled(getContentLedger(), "content-ledger", missing),
     settled(getProjectLedger(), "operating-ledger", missing),
     settled(getRecentAgentRuns({ agent: COUNCIL_AGENT, ref, limit: 5 }), "agent_runs", missing),
+    settled(getRecentContentOutcomes({ limit: 200 }), "content-outcomes", missing),
   ]);
 
   if (!content && !projectLedger) {
     return { source: "preview", error: "brand ledgers unavailable", missing };
   }
 
-  const ownKeys = brandsForWorkspace("brand");
+  const ownKeys = brandsForWorkspace(workspace);
   const brands = content?.brands || [];
   const focusBrand = selectFocusBrand(brands, ownKeys, ref);
 
@@ -103,6 +138,8 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
           cadence: content.cadence || null,
           idea_queue_top: ideaQueue,
           queue_counts: content.summary || null,
+          outcomes: buildContentOutcomeRollup(outcomesRes?.outcomes, focusBrand?.key),
+          outcomes_source: outcomesRes?.source || "preview",
         }
       : null,
     projects: trim(projects, 30),
