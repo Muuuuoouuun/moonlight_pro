@@ -602,6 +602,7 @@ function DrawerTimeline({ entityType, entityId, title = '활동 타임라인' })
         borderRadius: 'var(--r-sm)', padding: 8, display: 'flex', flexDirection: 'column', gap: 8,
       }}>
         <textarea
+          aria-label="활동 기록"
           value={body}
           onChange={e => setBody(e.target.value)}
           placeholder="활동 기록… (통화·미팅·이메일 메모)"
@@ -612,8 +613,9 @@ function DrawerTimeline({ entityType, entityId, title = '활동 타임라인' })
           }}
         />
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <select
-            value={kind}
+        <select
+          aria-label="활동 유형"
+          value={kind}
             onChange={e => setKind(e.target.value)}
             style={{
               height: 26, padding: '0 8px', fontSize: 11.5,
@@ -972,12 +974,23 @@ export function Leads({ workspace, onNavigate }) {
           </div>
         )}
         {visibleLeads.map((l, i) => (
-          <div key={l.id} style={{
+          <div
+            key={l.id}
+            role="button"
+            tabIndex={0}
+            aria-label={`${l.name} 리드 편집`}
+            style={{
             display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12,
             padding: '12px 16px', alignItems: 'center', cursor: 'pointer',
             borderBottom: i < visibleLeads.length - 1 ? '1px solid var(--line-soft)' : 'none',
           }}
             onClick={() => setEditLeadId(l.id)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                setEditLeadId(l.id);
+              }
+            }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
@@ -1095,6 +1108,8 @@ export function Deals({ workspace, onNavigate }) {
   const [stalledOnly, setStalledOnly] = React.useState(false);
   const [search, setSearch] = React.useState('');
   const [editDealId, setEditDealId] = React.useState(null);
+  const [addStage, setAddStage] = React.useState(null); // kanban column with an open inline quick-add
+  const [addText, setAddText] = React.useState('');
   const [editDealPrevStage, setEditDealPrevStage] = React.useState(null);
   const [queuedDeals, setQueuedDeals] = React.useState(() => new Set()); // deals with a proposed follow-up (seeded from the queue on mount)
   const [guruDeal, setGuruDeal] = React.useState(null);
@@ -1284,13 +1299,15 @@ export function Deals({ workspace, onNavigate }) {
     }
     if (cur) fireStageTransition(cur, cur.stage, to);
   };
-  const createDeal = () => {
+  // Create a deal directly in `stageKey`. With a `title` (inline column quick-add) it persists
+  // immediately and stays put; without one (top button) it opens the editor to be filled in.
+  const createDealInStage = (stageKey = DEAL_STAGES[0]?.key || 'lead', title = '') => {
     const id = `LOCAL-${Date.now().toString().slice(-4)}`;
     const deal = {
       id,
-      name: '새 딜',
+      name: title || '새 딜',
       type: filter === 'personal' || filter === 'company' ? filter : 'company',
-      stage: DEAL_STAGES[0]?.key || 'lead',
+      stage: stageKey,
       value: 0,
       owner: 'Me',
       close: '미정',
@@ -1299,8 +1316,16 @@ export function Deals({ workspace, onNavigate }) {
       ...(ws ? { workspace } : {}),
     };
     setDeals(prev => [deal, ...prev]);
-    openDealEditor(deal); // open the editor immediately so the new deal can be filled in
+    if (title) {
+      saveRevenueRecord('deal', 'create', deal).then(r => {
+        if (r.ok && r.id) setDeals(ds => ds.map(d => (d.id === id ? { ...d, id: r.id } : d)));
+      });
+    } else {
+      openDealEditor(deal); // open the editor immediately so the new deal can be filled in
+    }
+    return id;
   };
+  const createDeal = () => createDealInStage();
 
   // Persist the drawer edit. New local rows (id `LOCAL-…`) insert; on success the returned
   // real id replaces the local one so a later edit takes the update path. `close` (free-text)
@@ -1457,6 +1482,30 @@ export function Deals({ workspace, onNavigate }) {
                     )}
                   </div>
                 ))}
+                {addStage === s.key ? (
+                  <Input
+                    autoFocus
+                    placeholder="딜 이름 + Enter"
+                    value={addText}
+                    onChange={setAddText}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && addText.trim()) { createDealInStage(s.key, addText.trim()); setAddText(''); }
+                      else if (e.key === 'Escape') { setAddStage(null); setAddText(''); }
+                    }}
+                    style={{ display: 'flex' }}
+                  />
+                ) : (
+                  <button
+                    onClick={() => { setAddStage(s.key); setAddText(''); }}
+                    style={{
+                      padding: '6px 10px', fontSize: 11.5, color: 'var(--fg-faint)',
+                      background: 'transparent', border: '1px dashed var(--line-soft)',
+                      borderRadius: 'var(--r-sm)', textAlign: 'left', cursor: 'pointer',
+                    }}
+                  >
+                    + 딜
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -1701,12 +1750,23 @@ export function Cases({ onNavigate }) {
           />
         )}
         {visibleCases.map((c, i) => (
-          <div key={c.id} style={{
+          <div
+            key={c.id}
+            role="button"
+            tabIndex={0}
+            aria-label={`${c.title} 케이스 편집`}
+            style={{
             display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12,
             padding: '12px 16px', alignItems: 'center', cursor: 'pointer',
             borderBottom: i < visibleCases.length - 1 ? '1px solid var(--line-soft)' : 'none',
           }}
             onClick={() => setEditCaseId(c.id)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                setEditCaseId(c.id);
+              }
+            }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
@@ -1874,6 +1934,7 @@ function LogComposer({ onLog }) {
       display: 'flex', flexDirection: 'column', gap: 8,
     }}>
       <textarea
+        aria-label="활동 기록"
         value={text}
         onChange={e => setText(e.target.value)}
         placeholder="활동 기록… (이메일 회신, 통화 메모, 결정 요약 등)"
@@ -1887,6 +1948,7 @@ function LogComposer({ onLog }) {
       />
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <select
+          aria-label="활동 유형"
           value={type}
           onChange={e => setType(e.target.value)}
           style={{
@@ -2097,6 +2159,7 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
               display: 'flex', flexDirection: 'column', gap: 8,
             }}>
               <textarea
+                aria-label="계정 노트 추가"
                 value={noteText}
                 onChange={e => setNoteText(e.target.value)}
                 placeholder="노트 추가… 키워드·결정·다음 액션 기록"
@@ -2533,8 +2596,18 @@ export function Accounts({ onNavigate }) {
             <span /><span>Name</span><span>Type</span><span>Health</span><span>Value</span><span>Deals</span><span>Last contact</span><span>Owner</span><span style={{ textAlign: 'right' }}>마지막 접점 시간</span>
           </div>
           {filtered.map((a, i) => (
-            <div key={a._key}
+            <div
+              key={a._key}
+              role="button"
+              tabIndex={0}
+              aria-label={`${a.name} 계정 상세 열기`}
               onClick={() => openDetail(a.name)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  openDetail(a.name);
+                }
+              }}
               style={{
                 display: 'grid',
                 gridTemplateColumns: '32px 1.6fr 110px 70px 110px 70px 120px 100px 100px',
@@ -2587,8 +2660,19 @@ export function Accounts({ onNavigate }) {
               {filtered.map(a => {
                 const isSel = a.name === selected;
                 return (
-                  <div key={a._key}
+                  <div
+                    key={a._key}
+                    role="button"
+                    tabIndex={0}
+                    aria-current={isSel ? 'true' : undefined}
+                    aria-label={`${a.name} 계정 선택`}
                     onClick={() => setSelected(a.name)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setSelected(a.name);
+                      }
+                    }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '10px 14px', cursor: 'pointer',
