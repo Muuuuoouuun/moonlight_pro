@@ -15,6 +15,9 @@ const LOG_ACTIONS = [
   { label: "노응답", action: "no_response", tone: "neutral" },
 ];
 
+// outreach_outcomes.action → crm_activities.kind, so a follow-up log also lands on the timeline.
+const OUTCOME_ACTIVITY_KIND = { sent: "call", replied: "note", meeting: "meeting", no_response: "note" };
+
 export function Followups() {
   const [state, setState] = React.useState({ syncState: "loading", items: [], summary: {} });
   const [logging, setLogging] = React.useState(null); // `${id}:${action}` in-flight
@@ -58,6 +61,20 @@ export function Followups() {
           note: `${item.name} · ${item.why}`,
         }),
       });
+      // Also record a durable timeline entry (crm_activities) — matches the drawer QuickLogBar's
+      // dual-write so a follow-up log shows on the lead/deal timeline too.
+      await fetch("/api/hub/revenue/activity", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          op: "create",
+          leadId: item.kind === "lead" ? item.id : null,
+          dealId: item.kind === "deal" ? item.id : null,
+          entityType: item.kind,
+          kind: OUTCOME_ACTIVITY_KIND[action] || "note",
+          body: `${label} · ${item.name}`,
+        }),
+      }).catch(() => {});
       setLogged((m) => ({ ...m, [item.id]: label }));
     } catch {
       /* non-fatal */

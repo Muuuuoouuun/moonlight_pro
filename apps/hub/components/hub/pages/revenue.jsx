@@ -256,6 +256,74 @@ function GuruCoachPanel({ onNavigate }) {
   );
 }
 
+// Compact "오늘 팔로업" strip — surfaces the top overdue items from getFollowups on the Overview
+// + Deals board so the operator sees who to contact without leaving the page. Silent in preview /
+// when empty (mock/live discipline). 기록 dual-writes (outcome + activity, same as QuickLogBar);
+// 스누즈 sets meta.snooze_until so getFollowups suppresses the row until due.
+function TodayFollowupStrip({ onNavigate, limit = 5 }) {
+  const [state, setState] = React.useState({ status: 'loading', items: [], summary: {} });
+  const [done, setDone] = React.useState({});
+
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const r = await fetch('/api/hub/followups', { cache: 'no-store' });
+        const d = await r.json().catch(() => null);
+        if (!alive) return;
+        if (!r.ok || !d) { setState(s => ({ ...s, status: 'error' })); return; }
+        setState({ status: d.status === 'live' ? 'live' : 'preview', items: Array.isArray(d.items) ? d.items.slice(0, limit) : [], summary: d.summary || {} });
+      } catch { if (alive) setState(s => ({ ...s, status: 'error' })); }
+    })();
+    return () => { alive = false; };
+  }, [limit]);
+
+  const idPayload = (item) => ({ leadId: item.kind === 'lead' ? item.id : null, dealId: item.kind === 'deal' ? item.id : null });
+  const logTouch = (item) => {
+    setDone(m => ({ ...m, [item.id]: '기록됨' }));
+    fetch('/api/integrations/outcomes/record', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...idPayload(item), channel: item.channel, action: 'sent', play: 'followup', note: `${item.name} · ${item.why}` }) }).catch(() => {});
+    fetch('/api/hub/revenue/activity', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op: 'create', ...idPayload(item), entityType: item.kind, kind: 'call', body: `${item.channel} 접촉 · ${item.name}` }) }).catch(() => {});
+  };
+  const snooze = (item, days) => {
+    const until = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+    setDone(m => ({ ...m, [item.id]: `${until}까지` }));
+    saveRevenueRecord(item.kind, 'update', { id: item.id, snooze_until: until });
+  };
+
+  const { status, items, summary } = state;
+  if (status !== 'live' || items.length === 0) return null;
+
+  return (
+    <Card>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <Iconed name="bell" size={14} style={{ color: 'var(--moon-300)' }} />
+        <span style={{ fontSize: 12.5, fontWeight: 600 }}>오늘 팔로업</span>
+        <Badge tone="danger" size="xs">{summary.overdue ?? items.length} overdue</Badge>
+        <div style={{ flex: 1 }} />
+        <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/revenue/followups')}>전체</Button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {items.map((item, i) => (
+          <div key={`${item.kind}-${item.id}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderTop: i > 0 ? '1px solid var(--line-soft)' : 'none', opacity: done[item.id] ? 0.55 : 1, minWidth: 0 }}>
+            <Badge tone="moon" size="xs">{item.channel}</Badge>
+            <span style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap' }}>{item.name}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--fg-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{item.why}</span>
+            <div style={{ flex: 1 }} />
+            {done[item.id] ? (
+              <span style={{ fontSize: 11, color: 'var(--success)', whiteSpace: 'nowrap' }}>{done[item.id]}</span>
+            ) : (
+              <>
+                <Button variant="outline" size="xs" onClick={() => logTouch(item)}>기록</Button>
+                <Button variant="ghost" size="xs" onClick={() => snooze(item, 3)}>3일</Button>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 export function RevenueOverview({ onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
   const [period, setPeriod] = React.useState('MTD');
@@ -343,6 +411,7 @@ export function RevenueOverview({ onNavigate }) {
         />
       </div>
 
+      <TodayFollowupStrip onNavigate={onNavigate} />
       <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--gap)' }}>
         {kpis.map((k) => (
           <Card key={k.l} interactive onClick={() => onNavigate?.(k.go)}>
@@ -538,6 +607,75 @@ function DealLeadMiniChips({ lead }) {
           {c.text}
         </span>
       ))}
+    </div>
+  );
+}
+
+const QUICK_LOG_CHANNELS = [
+  { key: 'call', label: '전화', channel: '전화', kind: 'call' },
+  { key: 'dm', label: 'DM', channel: 'DM', kind: 'note' },
+  { key: 'visit', label: '방문', channel: '방문', kind: 'visit' },
+  { key: 'kakao', label: '카톡', channel: '카톡', kind: 'note' },
+];
+const QUICK_SNOOZE = [{ label: '내일', days: 1 }, { label: '3일', days: 3 }, { label: '1주', days: 7 }];
+
+// One-click channel log for the Lead/Deal drawer. Dual-writes: crm_activities (durable timeline,
+// read by DrawerTimeline) + outreach_outcomes (feeds tomorrow's follow-up priority — same endpoint
+// followups.jsx uses). Snooze sets meta.snooze_until so getFollowups suppresses the row until due.
+// No-ops gracefully for unsaved local rows (no id to attach to yet).
+function QuickLogBar({ entityType, entityId }) {
+  const [busy, setBusy] = React.useState(null);
+  const [logged, setLogged] = React.useState(null);
+  const [snoozed, setSnoozed] = React.useState(null);
+  const isLocal = String(entityId ?? '').toLowerCase().startsWith('local-');
+  const idKey = entityType === 'lead' ? 'leadId' : 'dealId';
+
+  const log = async (ch) => {
+    setBusy(ch.key);
+    await saveActivity('create', { [idKey]: isLocal ? null : entityId, entityType, kind: ch.kind, body: `${ch.label} 접촉` });
+    try {
+      await fetch('/api/integrations/outcomes/record', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          leadId: entityType === 'lead' && !isLocal ? entityId : null,
+          dealId: entityType === 'deal' && !isLocal ? entityId : null,
+          channel: ch.channel, action: 'sent', play: 'followup', note: `${ch.label} 접촉 기록`,
+        }),
+      });
+    } catch { /* non-fatal — the timeline entry is already saved */ }
+    setLogged(ch.label);
+    setBusy(null);
+  };
+
+  const snooze = async (days) => {
+    setBusy(`s${days}`);
+    const until = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+    await saveRevenueRecord(entityType, 'update', { id: entityId, snooze_until: until });
+    setSnoozed(until);
+    setBusy(null);
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)' }}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)', minWidth: 58 }}>빠른 기록</span>
+        {QUICK_LOG_CHANNELS.map(ch => (
+          <Button key={ch.key} variant="outline" size="xs" onClick={() => log(ch)} active={busy === ch.key} disabled={Boolean(busy)}>
+            {busy === ch.key ? '…' : ch.label}
+          </Button>
+        ))}
+        {logged && <span style={{ fontSize: 11.5, color: 'var(--success)' }}>{logged} 기록됨</span>}
+      </div>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)', minWidth: 58 }}>다음 팔로업</span>
+        {QUICK_SNOOZE.map(o => (
+          <Button key={o.days} variant="ghost" size="xs" onClick={() => snooze(o.days)} active={busy === `s${o.days}`} disabled={Boolean(busy)}>
+            {o.label}
+          </Button>
+        ))}
+        {snoozed && <span style={{ fontSize: 11.5, color: 'var(--moon-200)' }}>{snoozed}까지 스누즈</span>}
+      </div>
+      {isLocal && <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>저장 후 기록·스누즈가 원장에 반영됩니다.</span>}
     </div>
   );
 }
@@ -1099,7 +1237,10 @@ export function Leads({ workspace, onNavigate }) {
         onClose={() => { setEditLeadId(null); setConvertNote(null); }}
       >
         {editingLead && (
-          <DrawerTimeline entityType="lead" entityId={editingLead.id} title="활동 타임라인" />
+          <>
+            <QuickLogBar entityType="lead" entityId={editingLead.id} />
+            <DrawerTimeline entityType="lead" entityId={editingLead.id} title="활동 타임라인" />
+          </>
         )}
       </EditDrawer>
 
@@ -1457,6 +1598,8 @@ export function Deals({ workspace, onNavigate }) {
         <Button variant="primary" size="sm" icon="plus" onClick={createDeal}>Deal</Button>
       </div>
 
+      <TodayFollowupStrip onNavigate={onNavigate} />
+
       {wsEmpty && (
         <Card>
           <EmptyState
@@ -1689,6 +1832,7 @@ export function Deals({ workspace, onNavigate }) {
                   <LeadTagChips lead={linkedLead} />
                 </div>
               )}
+              <QuickLogBar entityType="deal" entityId={editingDeal.id} />
               <DrawerTimeline entityType="deal" entityId={editingDeal.id} title="활동 타임라인" />
             </>
           );
