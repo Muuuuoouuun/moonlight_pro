@@ -80,9 +80,26 @@ export function Kbd({ children, style }) {
   );
 }
 
-export function Card({ children, style, pad = true, interactive = false, className, ...props }) {
+export function Card({ children, style, pad = true, interactive = false, className, onClick, onKeyDown, role, tabIndex, ...props }) {
+  const keyboardInteractive = interactive && typeof onClick === 'function';
+  const handleKeyDown = (event) => {
+    onKeyDown?.(event);
+    if (!keyboardInteractive || event.defaultPrevented || event.currentTarget !== event.target) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onClick(event);
+    }
+  };
+
   return (
-    <div {...props} className={className} style={{
+    <div
+      {...props}
+      className={className}
+      onClick={onClick}
+      onKeyDown={handleKeyDown}
+      role={role ?? (keyboardInteractive ? 'button' : undefined)}
+      tabIndex={tabIndex ?? (keyboardInteractive ? 0 : undefined)}
+      style={{
       background: 'var(--surface)',
       border: '1px solid var(--line-soft)',
       borderRadius: 'var(--r-lg)',
@@ -143,7 +160,7 @@ export function EmptyState({ icon = 'inbox', title, description, action, style }
   );
 }
 
-export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRight, style, onClick, active, type = 'button', className, disabled = false }) {
+export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRight, style, onClick, active, type = 'button', className, disabled = false, ...props }) {
   const sizes = {
     xs: { h: 24, px: 8, fs: 12, gap: 5 },
     sm: { h: 30, px: 11, fs: 12.5, gap: 6 },
@@ -180,7 +197,7 @@ export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRig
   };
   const v = variants[variant];
   return (
-    <button type={type} className={className} onClick={onClick} disabled={disabled} style={{
+    <button {...props} type={type} className={className} onClick={onClick} disabled={disabled} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: s.gap,
       height: s.h, padding: `0 ${s.px}px`, fontSize: s.fs, fontWeight: 500,
       borderRadius: 'var(--r-sm)', whiteSpace: 'nowrap', transition: 'all .12s ease',
@@ -195,9 +212,9 @@ export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRig
   );
 }
 
-export function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tooltip, style, className }) {
+export function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tooltip, style, className, ...props }) {
   return (
-    <button className={className} onClick={onClick} title={tooltip} aria-label={tooltip} style={{
+    <button {...props} className={className} onClick={onClick} title={tooltip} aria-label={props['aria-label'] || tooltip} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       width: size, height: size,
       color: tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)',
@@ -223,7 +240,6 @@ const DRAWER_INPUT_STYLE = {
   color: 'var(--fg)',
   border: '1px solid var(--line)',
   borderRadius: 'var(--r-sm)',
-  outline: 'none',
   width: '100%',
 };
 
@@ -231,17 +247,64 @@ const DRAWER_INPUT_STYLE = {
 // scrollable body + optional footer bar, with ESC-to-close. EditDrawer and the Guru
 // diagnosis drawer (revenue.jsx) both compose on top of this — it only owns the shell,
 // not field rendering or save/delete semantics.
-export function Drawer({ title, subtitle, onClose, footer, footerStyle, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', children }) {
+export function Drawer({ title, subtitle, onClose, onSubmit, footer, footerStyle, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', children }) {
+  const titleId = React.useId();
+  const subtitleId = React.useId();
+  const panelRef = React.useRef(null);
+  const previousFocusRef = React.useRef(null);
+
   React.useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setTimeout(() => panelRef.current?.focus(), 0);
+    const onKey = (e) => {
+      if (e.key === 'Escape') { onClose?.(); return; }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); onSubmit?.(); return; }
+      if (e.key !== 'Tab') return;
+
+      const focusable = Array.from(panelRef.current?.querySelectorAll([
+        'a[href]',
+        'button:not([disabled])',
+        'input:not([disabled])',
+        'select:not([disabled])',
+        'textarea:not([disabled])',
+        '[tabindex]:not([tabindex="-1"])',
+      ].join(',')) || []).filter(el => el instanceof HTMLElement && !el.hidden && el.getAttribute('aria-hidden') !== 'true');
+
+      if (!focusable.length) {
+        e.preventDefault();
+        panelRef.current?.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      previousFocusRef.current?.focus?.();
+    };
+  }, [onClose, onSubmit]);
 
   return (
     <>
       <div className="hub-drawer-overlay" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / 0.4)', zIndex: 60 }} />
-      <aside className="hub-drawer" style={{
+      <aside
+        ref={panelRef}
+        className="hub-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={subtitle ? subtitleId : undefined}
+        tabIndex={-1}
+        style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, width, zIndex: 61,
         background: 'var(--surface)', borderLeft: `1px solid ${borderLeft}`,
         display: 'flex', flexDirection: 'column',
@@ -249,8 +312,8 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, width = 
       }}>
         <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 500 }}>{title}</div>
-            {subtitle && <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}
+            <div id={titleId} style={{ fontSize: 14, fontWeight: 500 }}>{title}</div>
+            {subtitle && <div id={subtitleId} style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}
           </div>
           <IconButton icon="x" size={24} iconSize={13} tooltip="닫기" onClick={onClose} />
         </div>
@@ -274,6 +337,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
   React.useEffect(() => { setSaveState('idle'); }, [record?.id]);
 
   const handleDone = async () => {
+    if (saveState === 'saving') return;
     if (!onSave) { onClose(); return; }
     setSaveState('saving');
     const r = await onSave();
@@ -295,6 +359,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
       title={title}
       subtitle={subtitle}
       onClose={onClose}
+      onSubmit={handleDone}
       width={width}
       footer={
         <>
@@ -420,12 +485,37 @@ export function SegmentedControl({ options, value, onChange, className, style })
 }
 
 export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
+  const tablistRef = React.useRef(null);
+  const moveFocus = (currentKey, direction) => {
+    const currentIndex = tabs.findIndex(t => t.key === currentKey);
+    if (currentIndex < 0 || !tabs.length) return;
+    const next = tabs[(currentIndex + direction + tabs.length) % tabs.length];
+    onChange?.(next.key);
+    setTimeout(() => {
+      tablistRef.current
+        ?.querySelector(`[data-tab-key="${CSS.escape(String(next.key))}"]`)
+        ?.focus();
+    }, 0);
+  };
+
   return (
-    <div className={className} role="tablist" aria-label={ariaLabel} style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--line-soft)', ...style }}>
+    <div ref={tablistRef} className={className} role="tablist" aria-label={ariaLabel} style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--line-soft)', ...style }}>
       {tabs.map(t => {
         const isActive = t.key === active;
         return (
-          <button key={t.key} type="button" role="tab" aria-selected={isActive} onClick={() => onChange?.(t.key)} style={{
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            data-tab-key={String(t.key)}
+            aria-selected={isActive}
+            tabIndex={isActive ? 0 : -1}
+            onClick={() => onChange?.(t.key)}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowRight') { event.preventDefault(); moveFocus(t.key, 1); }
+              if (event.key === 'ArrowLeft') { event.preventDefault(); moveFocus(t.key, -1); }
+            }}
+            style={{
             padding: '8px 12px', fontSize: 12.5, fontWeight: 500,
             color: isActive ? 'var(--fg)' : 'var(--fg-dim)',
             borderBottom: `1px solid ${isActive ? 'var(--moon-200)' : 'transparent'}`,
@@ -448,25 +538,34 @@ export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
   );
 }
 
-export function Checkbox({ checked, onChange, size = 14 }) {
+export function Checkbox({ checked, onChange, size = 14, ariaLabel, label, disabled = false }) {
+  const hitSize = Math.max(28, size);
   return (
-    <button onClick={(e) => { e.stopPropagation(); onChange?.(!checked); }} style={{
-      width: size, height: size, borderRadius: 4,
-      border: `1px solid ${checked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
-      background: checked ? 'var(--moon-300)' : 'transparent',
+    <button type="button" role="checkbox" aria-checked={!!checked} aria-label={ariaLabel || label || 'Toggle item'} disabled={disabled} onClick={(e) => { e.stopPropagation(); if (!disabled) onChange?.(!checked); }} style={{
+      width: hitSize, height: hitSize, borderRadius: 'var(--r-sm)',
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       transition: 'all .12s ease', flexShrink: 0,
+      opacity: disabled ? 0.55 : 1,
+      cursor: disabled ? 'not-allowed' : 'pointer',
     }}>
-      {checked && <Iconed name="check" size={size - 4} style={{ color: 'var(--bg)', strokeWidth: 3 }} />}
+      <span aria-hidden="true" style={{
+        width: size, height: size, borderRadius: 4,
+        border: `1px solid ${checked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
+        background: checked ? 'var(--moon-300)' : 'transparent',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {checked && <Iconed name="check" size={size - 4} style={{ color: 'var(--bg)', strokeWidth: 3 }} />}
+      </span>
     </button>
   );
 }
 
-export function Input({ placeholder, icon, value, onChange, style, size = 'sm', className }) {
+export function Input({ placeholder, icon, value, onChange, style, size = 'sm', className, ariaLabel, id, name, type = 'text', autoComplete, onKeyDown, inputStyle, autoFocus }) {
   const sizes = { sm: { h: 30, fs: 12.5 }, md: { h: 34, fs: 13 } };
   const s = sizes[size];
+  const wrapperClassName = ['hub-input', className].filter(Boolean).join(' ');
   return (
-    <div className={className} style={{
+    <div className={wrapperClassName} style={{
       display: 'inline-flex', alignItems: 'center', gap: 8,
       height: s.h, padding: '0 10px',
       background: 'var(--surface-2)',
@@ -477,13 +576,21 @@ export function Input({ placeholder, icon, value, onChange, style, size = 'sm', 
     }}>
       {icon && <Iconed name={icon} size={13} style={{ color: 'var(--fg-faint)' }} />}
       <input
+        id={id}
+        name={name}
+        type={type}
+        aria-label={ariaLabel || placeholder}
+        autoComplete={autoComplete}
         value={value}
+        autoFocus={autoFocus}
         onChange={(e) => onChange?.(e.target.value)}
+        onKeyDown={onKeyDown}
         placeholder={placeholder}
         style={{
           flex: 1, minWidth: 0,
           background: 'transparent', border: 'none', outline: 'none',
           color: 'var(--fg)', fontSize: s.fs,
+          ...inputStyle,
         }}
       />
     </div>
