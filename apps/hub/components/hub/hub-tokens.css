@@ -152,6 +152,11 @@
 @keyframes mlFadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .hub-app .fade-up { animation: mlFadeUp 0.2s ease-out; }
 
+@keyframes mlDrawerIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@keyframes mlFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.hub-app .hub-drawer { animation: mlDrawerIn 0.18s ease-out; }
+.hub-app .hub-drawer-overlay { animation: mlFadeIn 0.16s ease-out; }
+
 .hub-app .scroll-y { overflow-y: auto; }
 
 .hub-shell {
@@ -551,6 +556,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .hub-app .fade-up,
+  .hub-app .hub-drawer,
+  .hub-app .hub-drawer-overlay,
   .campaign-war-room,
   .campaign-war-room__list,
   .campaign-war-room__detail,

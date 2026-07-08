@@ -5,6 +5,7 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd } from "../hub-primitives";
 import { CHAT_THREAD, COUNCIL, ORDERS } from "../hub-data";
 import { requestGuruCoaching, GURU_MODE_LABEL, GURU_PREVIEW_NOTE } from "../guru-client";
+import { requestCouncilAdvice, councilChatPath, COUNCIL_MODE_LABEL, COUNCIL_PREVIEW_NOTE } from "../council-client";
 
 const CHAT_PERSONAS = {
   writer: {
@@ -32,6 +33,21 @@ const CHAT_PERSONAS = {
       actionLabel: 'Revenue 열기',
       actionTo: 'dashboard/revenue/overview',
       altText: 'Keenan 4층: Layer 3(매출 영향)·Layer 4(개인 임팩트)를 아직 안 건드렸어요.\nVoss: "무엇이 결정을 어렵게 하나요?"로 저항을 먼저 열어보죠.',
+    },
+  },
+  council: {
+    name: 'Council',
+    role: 'Writer · Strategist · Analyst 자문단',
+    title: '브랜드 카운슬 세션',
+    model: 'Gemini',
+    intro: [
+      { role: 'agent', name: 'Council', text: '브랜드 카운슬입니다. 콘텐츠·브랜드·프로젝트 원장(발행 케이던스·아이디어 큐·진행 프로젝트)을 근거로 "지금 무엇을 놓치고 있고, 다음 한 수가 무엇인지"를 자문합니다.\n\n무엇을 볼까요?\n· 브랜드 전략 (이번 주 우선순위)\n· 오디언스 분석 (누가 무엇에 반응하나)\n· 회의록 정리 (붙여넣으면 결정·액션으로)\n· 플로우 점검 (아이디어→발행 병목)' },
+    ],
+    reply: {
+      text: '받았어요. 브랜드 원장에서 맥락을 읽고 진단 → 리스크 → 다음 액션으로 정리해 돌려줄게요.',
+      actionLabel: '브랜드 프로젝트 열기',
+      actionTo: 'dashboard/brand/projects',
+      altText: 'Writer 렌즈: 훅·구조·구체성·CTA를 먼저 봅니다.\nStrategist 렌즈: 가장 임팩트 큰 일 하나에 시간을 몰아주세요.',
     },
   },
 };
@@ -87,6 +103,41 @@ export function AgentsChat({ onNavigate }) {
     setBusy(false);
   }, []);
 
+  // Live Council advisory pass against the Engine (brand-mentor) — mirrors runGuru.
+  const runCouncil = React.useCallback(async (mode, { ref = null, draft = null, label } = {}) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    const userText = label || draft || COUNCIL_MODE_LABEL[mode] || '자문 요청';
+    setBusy(true);
+    setThread(prev => [
+      ...prev,
+      { role: 'user', text: userText },
+      { role: 'agent', name: 'Council', pending: true },
+    ]);
+    const r = await requestCouncilAdvice({ mode, ref, draft });
+    setThread(prev => {
+      const next = prev.slice();
+      for (let i = next.length - 1; i >= 0; i--) {
+        if (next[i].pending) {
+          next[i] = {
+            role: 'agent',
+            name: 'Council',
+            text:
+              r.state === 'done'
+                ? r.text
+                : r.state === 'preview'
+                ? COUNCIL_PREVIEW_NOTE
+                : `자문을 생성하지 못했어요: ${r.note || ''}`,
+          };
+          break;
+        }
+      }
+      return next;
+    });
+    busyRef.current = false;
+    setBusy(false);
+  }, []);
+
   // Persona is selected via ?agent=<key>; ?mode=&ref= auto-runs live coaching.
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -106,8 +157,12 @@ export function AgentsChat({ onNavigate }) {
         const label = ref ? `${GURU_MODE_LABEL[mode]}: ${ref}` : GURU_MODE_LABEL[mode];
         runGuru(mode, { ref, label });
       }
+      if (a === 'council' && mode && COUNCIL_MODE_LABEL[mode]) {
+        const label = ref ? `${COUNCIL_MODE_LABEL[mode]}: ${ref}` : COUNCIL_MODE_LABEL[mode];
+        runCouncil(mode, { ref, label });
+      }
     }
-  }, [runGuru]);
+  }, [runGuru, runCouncil]);
 
   const send = () => {
     const text = input.trim();
@@ -116,6 +171,12 @@ export function AgentsChat({ onNavigate }) {
       // A typed message to the mentor is treated as a draft to critique.
       setInput('');
       runGuru('proposal-critique', { draft: text, label: text });
+      return;
+    }
+    if (agentKey === 'council') {
+      // A typed message to the Council is treated as a draft to critique (Writer lens).
+      setInput('');
+      runCouncil('content-critique', { draft: text, label: text });
       return;
     }
     setThread(prev => [...prev, { role: 'user', text }, { role: 'agent', name: persona.name, text: persona.reply.text, hasAction: true }]);
@@ -208,6 +269,14 @@ export function AgentsChat({ onNavigate }) {
               <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', alignSelf: 'center' }}>· 메시지를 보내면 제안/이메일 초안으로 보고 검토합니다</span>
             </div>
           )}
+          {agentKey === 'council' && (
+            <div style={{ maxWidth: 720, margin: '0 auto 8px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[['brand-strategy', '브랜드 전략'], ['audience-analysis', '오디언스 분석'], ['flow-review', '플로우 점검'], ['meeting-synthesis', '회의록 정리']].map(([m, l]) => (
+                <Button key={m} variant="outline" size="xs" icon="sparkle" disabled={busy} onClick={() => runCouncil(m, {})}>{l}</Button>
+              ))}
+              <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', alignSelf: 'center' }}>· 메시지를 보내면 초안으로 보고 검토합니다</span>
+            </div>
+          )}
           <div style={{ maxWidth: 720, margin: '0 auto', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', padding: 10 }}>
             <textarea value={input} onChange={e => setInput(e.target.value)} placeholder={`Message ${persona.name}…`} style={{
               width: '100%', minHeight: 52, resize: 'none',
@@ -228,20 +297,32 @@ export function AgentsChat({ onNavigate }) {
   );
 }
 
+// Each roster card lands in a live session: brand advisors auto-run their Council mode,
+// Guru keeps its own sales-mentor thread, draft-dependent lenses (writer/coach) open the
+// Council session so the operator can paste the draft first.
+const COUNCIL_CARD_LINK = {
+  strategist: councilChatPath({ mode: 'brand-strategy' }),
+  analyst: councilChatPath({ mode: 'audience-analysis' }),
+  operator: councilChatPath({ mode: 'flow-review' }),
+  writer: councilChatPath(),
+  coach: councilChatPath(),
+  guru: 'dashboard/agents/chat?agent=guru',
+};
+
 export function AgentsCouncil({ onNavigate }) {
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Council</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch' }}>5명의 전문 에이전트가 함께 의논. 브리핑·결정에 근거 제공.</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch' }}>전문 에이전트가 함께 의논. 브리핑·결정에 근거 제공.</div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="sparkle" onClick={() => onNavigate?.('dashboard/agents/chat?prompt=council')}>Convene</Button>
+        <Button variant="primary" size="sm" icon="sparkle" onClick={() => onNavigate?.(councilChatPath({ mode: 'brand-strategy' }))}>Convene</Button>
       </div>
       <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--gap)' }}>
         {COUNCIL.map(a => (
-          <Card key={a.key} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.(`dashboard/agents/chat?agent=${a.key}`)}>
+          <Card key={a.key} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.(COUNCIL_CARD_LINK[a.key] || councilChatPath())}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
               <div style={{
                 width: 36, height: 36, borderRadius: 999,
@@ -264,7 +345,8 @@ export function AgentsCouncil({ onNavigate }) {
   );
 }
 
-const WO_STATUS_TONE = { proposed: 'warning', approved: 'info', executed: 'success', dismissed: 'neutral', done: 'success', review: 'warning', draft: 'neutral' };
+const WO_STATUS_TONE = { proposed: 'warning', approved: 'info', executing: 'warning', executed: 'success', dismissed: 'neutral', done: 'success', review: 'warning', draft: 'neutral' };
+const WO_EXECUTABLE_STATUSES = new Set(['approved']);
 
 function shortWhen(iso) {
   if (!iso) return '—';
@@ -322,6 +404,26 @@ export function AgentsOrders({ onNavigate }) {
     }
   }
 
+  async function execute(id) {
+    if (busyId) return;
+    setBusyId(id);
+    try {
+      const res = await fetch('/api/hub/work-orders', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, action: 'execute' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const completed = ['logged', 'sent', 'marked_executed'].includes(data.status) ||
+        data.workOrderExecution?.persisted ||
+        data.persistence?.workOrderExecution?.persisted;
+      if (completed) setOrders((prev) => prev.filter((o) => o.id !== id));
+      else if (res.ok) setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: 'approved' } : o)));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   // Live rows from work_orders, else the static sample (demo) so the page is never empty.
   const rows = live && Array.isArray(orders)
     ? orders.map((o) => ({ id: o.id, at: shortWhen(o.proposedAt), to: o.persona, what: o.title, status: o.status, live: true }))
@@ -372,8 +474,13 @@ export function AgentsOrders({ onNavigate }) {
             <div style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
               {o.live && o.status === 'proposed' ? (
                 <>
-                  <Button variant="primary" size="xs" onClick={() => decide(o.id, 'approved')}>승인</Button>
-                  <Button variant="ghost" size="xs" onClick={() => decide(o.id, 'dismissed')}>보류</Button>
+                  <Button variant="primary" size="xs" disabled={busyId === o.id} onClick={() => decide(o.id, 'approved')}>승인</Button>
+                  <Button variant="ghost" size="xs" disabled={busyId === o.id} onClick={() => decide(o.id, 'dismissed')}>보류</Button>
+                </>
+              ) : o.live && WO_EXECUTABLE_STATUSES.has(o.status) ? (
+                <>
+                  <Button variant="primary" size="xs" icon="play" disabled={busyId === o.id} onClick={() => execute(o.id)}>실행</Button>
+                  <Button variant="ghost" size="xs" disabled={busyId === o.id} onClick={() => decide(o.id, 'dismissed')}>보류</Button>
                 </>
               ) : (
                 <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(`dashboard/agents/chat?order=${o.id}`)}>Open</Button>

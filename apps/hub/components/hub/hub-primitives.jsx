@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { Iconed } from "./hub-icons";
 
 export function Badge({ children, tone = 'neutral', variant = 'soft', size = 'sm', style }) {
@@ -25,6 +26,28 @@ export function Badge({ children, tone = 'neutral', variant = 'soft', size = 'sm
     return <span style={{ ...base, color: t.fg, border: `1px solid ${t.bd}`, background: 'transparent', ...style }}>{children}</span>;
   }
   return <span style={{ ...base, color: t.fg, background: t.bg, border: `1px solid ${t.bd}`, ...style }}>{children}</span>;
+}
+
+// Canonical live/mock/preview status indicator for page headers. `state` accepts:
+// 'live' (success), 'syncing' | 'loading' (info), 'mock' (neutral), 'preview' (neutral,
+// label reads "preview" — for surfaces that mean "DB not configured" rather than "using
+// fixture data"), 'error' (danger). Visual matches the original revenue.jsx badge: mono
+// label, xs outline Badge, marginLeft 8.
+export function SyncBadge({ state, style }) {
+  const map = {
+    live:    { tone: 'success', label: 'live' },
+    syncing: { tone: 'info',    label: 'syncing' },
+    loading: { tone: 'info',    label: 'syncing' },
+    mock:    { tone: 'neutral', label: 'mock' },
+    preview: { tone: 'neutral', label: 'preview' },
+    error:   { tone: 'danger',  label: 'error' },
+  };
+  const m = map[state] || map.mock;
+  return (
+    <Badge tone={m.tone} size="xs" variant="outline" className="mono" style={{ marginLeft: 8, ...style }}>
+      {m.label}
+    </Badge>
+  );
 }
 
 export function Dot({ tone = 'neutral', size = 6, style }) {
@@ -86,7 +109,7 @@ export function SectionTitle({ children, right, style, subtitle }) {
 
 export function EmptyState({ icon = 'inbox', title, description, action, style }) {
   return (
-    <div style={{
+    <div data-empty="true" style={{
       minHeight: 180,
       padding: '32px 20px',
       display: 'flex',
@@ -120,7 +143,7 @@ export function EmptyState({ icon = 'inbox', title, description, action, style }
   );
 }
 
-export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRight, style, onClick, active, type = 'button', className }) {
+export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRight, style, onClick, active, type = 'button', className, disabled = false }) {
   const sizes = {
     xs: { h: 24, px: 8, fs: 12, gap: 5 },
     sm: { h: 30, px: 11, fs: 12.5, gap: 6 },
@@ -157,10 +180,12 @@ export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRig
   };
   const v = variants[variant];
   return (
-    <button type={type} className={className} onClick={onClick} style={{
+    <button type={type} className={className} onClick={onClick} disabled={disabled} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: s.gap,
       height: s.h, padding: `0 ${s.px}px`, fontSize: s.fs, fontWeight: 500,
       borderRadius: 'var(--r-sm)', whiteSpace: 'nowrap', transition: 'all .12s ease',
+      opacity: disabled ? 0.55 : 1,
+      cursor: disabled ? 'not-allowed' : 'pointer',
       ...v, ...style,
     }}>
       {icon && <Iconed name={icon} size={14} />}
@@ -187,6 +212,132 @@ export function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tool
     >
       <Iconed name={icon} size={iconSize} />
     </button>
+  );
+}
+
+const DRAWER_INPUT_STYLE = {
+  height: 32,
+  padding: '0 10px',
+  fontSize: 13,
+  background: 'var(--surface-2)',
+  color: 'var(--fg)',
+  border: '1px solid var(--line)',
+  borderRadius: 'var(--r-sm)',
+  outline: 'none',
+  width: '100%',
+};
+
+// Shared right-side drawer shell: overlay + aside + header (title/subtitle/close) +
+// scrollable body + optional footer bar, with ESC-to-close. EditDrawer and the Guru
+// diagnosis drawer (revenue.jsx) both compose on top of this — it only owns the shell,
+// not field rendering or save/delete semantics.
+export function Drawer({ title, subtitle, onClose, footer, footerStyle, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', children }) {
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <>
+      <div className="hub-drawer-overlay" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / 0.4)', zIndex: 60 }} />
+      <aside className="hub-drawer" style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0, width, zIndex: 61,
+        background: 'var(--surface)', borderLeft: `1px solid ${borderLeft}`,
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '-8px 0 32px -12px oklch(0 0 0 / 0.5)',
+      }}>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 500 }}>{title}</div>
+            {subtitle && <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}
+          </div>
+          <IconButton icon="x" size={24} iconSize={13} tooltip="닫기" onClick={onClose} />
+        </div>
+        <div className="scroll-y" style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {children}
+        </div>
+        {footer && (
+          <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, ...footerStyle }}>
+            {footer}
+          </div>
+        )}
+      </aside>
+    </>
+  );
+}
+
+// Shared field-driven edit drawer. Revenue behavior is canonical for save feedback,
+// ESC close, and optimistic delete confirmation. Composes on top of Drawer for the shell.
+export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)', children }) {
+  const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | error
+  React.useEffect(() => { setSaveState('idle'); }, [record?.id]);
+
+  const handleDone = async () => {
+    if (!onSave) { onClose(); return; }
+    setSaveState('saving');
+    const r = await onSave();
+    if (r?.ok) { setSaveState('idle'); onClose(); }
+    else { setSaveState(r?.status === 'preview' ? 'preview' : 'error'); }
+  };
+
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    if (typeof window !== 'undefined' && !window.confirm('이 항목을 삭제할까요? 되돌릴 수 없습니다.')) return;
+    setSaveState('saving');
+    await onDelete();
+    onClose();
+  };
+
+  if (!record) return null;
+  return (
+    <Drawer
+      title={title}
+      subtitle={subtitle}
+      onClose={onClose}
+      width={width}
+      footer={
+        <>
+          {onDelete && (
+            <Button variant="ghost" size="sm" onClick={handleDelete} disabled={saveState === 'saving'} style={{ color: 'var(--danger)' }}>삭제</Button>
+          )}
+          <div style={{ flex: 1, minWidth: 0, fontSize: 11, lineHeight: 1.4 }}>
+            {saveState === 'preview' && (
+              <span style={{ color: 'var(--fg-muted)' }}>저장 위치(Supabase)가 설정되지 않아 로컬에만 반영됩니다.</span>
+            )}
+            {saveState === 'error' && (
+              <span style={{ color: 'var(--danger)' }}>저장에 실패했습니다. 다시 시도하세요.</span>
+            )}
+          </div>
+          {(saveState === 'preview' || saveState === 'error') && (
+            <Button variant="ghost" size="sm" onClick={onClose}>닫기</Button>
+          )}
+          <Button variant="primary" size="sm" onClick={handleDone} disabled={saveState === 'saving'}>
+            {saveState === 'saving' ? '저장 중…' : '완료'}
+          </Button>
+        </>
+      }
+    >
+      {fields.map(f => (
+        <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)' }}>{f.label}</span>
+          {f.type === 'select' ? (
+            <select value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
+              {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          ) : (
+            <input
+              type={f.inputType || 'text'}
+              value={record[f.key] ?? ''}
+              placeholder={f.placeholder || ''}
+              onChange={e => onChange(f.key, f.inputType === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value)}
+              style={DRAWER_INPUT_STYLE}
+            />
+          )}
+        </label>
+      ))}
+      {children}
+    </Drawer>
   );
 }
 
@@ -239,6 +390,33 @@ export function Sparkline({ values, width = 60, height = 18, tone = 'moon' }) {
 
 export function Divider({ style }) {
   return <div style={{ height: 1, background: 'var(--line-soft)', ...style }} />;
+}
+
+// Canonical pill-group toolbar (type/status/view filters). `options`: [{ key, label,
+// dot?: tone string, count?: number }]. Container + button visuals match the
+// inline pattern duplicated across Revenue/Segments/Intake before this primitive existed.
+// Call sites keep any bespoke onChange side effects (e.g. Accounts view toggle
+// auto-selecting the first account) by handling that logic before/inside their onChange.
+export function SegmentedControl({ options, value, onChange, className, style }) {
+  return (
+    <div className={className} style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, ...style }}>
+      {options.map(o => {
+        const isActive = o.key === value;
+        return (
+          <button key={o.key} type="button" onClick={() => onChange?.(o.key)} style={{
+            padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
+            color: isActive ? 'var(--fg)' : 'var(--fg-faint)',
+            background: isActive ? 'var(--surface-3)' : 'transparent',
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+          }}>
+            {o.dot && <Dot tone={o.dot} />}
+            {o.label}
+            {o.count != null && <span className="mono" style={{ fontSize: 10 }}>{o.count}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {

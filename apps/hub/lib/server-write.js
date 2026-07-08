@@ -184,8 +184,12 @@ function buildProjectWebhookRequestBody(payload, target) {
   };
 }
 
-export async function insertSupabaseRecord(table, record) {
+export async function insertSupabaseRecord(table, record, options = {}) {
   const config = resolveSupabaseConfig();
+  const returnRepresentation = options.returnRepresentation === true;
+  const select = typeof options.select === "string" && options.select.trim()
+    ? options.select.trim()
+    : "";
 
   if (!config) {
     return {
@@ -195,11 +199,11 @@ export async function insertSupabaseRecord(table, record) {
   }
 
   try {
-    const response = await fetch(`${config.url}/rest/v1/${table}`, {
+    const response = await fetch(`${config.url}/rest/v1/${table}${returnRepresentation && select ? `?select=${encodeURIComponent(select)}` : ""}`, {
       method: "POST",
       headers: makeSupabaseHeaders(config.apiKey, {
         contentType: "application/json",
-        prefer: "return=minimal",
+        prefer: returnRepresentation ? "return=representation" : "return=minimal",
       }),
       body: JSON.stringify(record),
       cache: "no-store",
@@ -211,6 +215,17 @@ export async function insertSupabaseRecord(table, record) {
         persisted: false,
         reason: `http-${response.status}`,
         detail,
+      };
+    }
+
+    if (returnRepresentation) {
+      const rows = await response.json().catch(() => null);
+      const row = Array.isArray(rows) ? rows[0] || null : null;
+      return {
+        persisted: true,
+        reason: "ok",
+        record: row,
+        id: row?.id || null,
       };
     }
 
@@ -238,8 +253,12 @@ function buildFilterQuery(filters = []) {
   return query ? `?${query}` : "";
 }
 
-export async function updateSupabaseRecord(table, filters = [], record = {}) {
+export async function updateSupabaseRecord(table, filters = [], record = {}, options = {}) {
   const config = resolveSupabaseConfig();
+  const returnRepresentation = options.returnRepresentation === true;
+  const select = typeof options.select === "string" && options.select.trim()
+    ? options.select.trim()
+    : "";
 
   if (!config) {
     return {
@@ -249,13 +268,76 @@ export async function updateSupabaseRecord(table, filters = [], record = {}) {
   }
 
   try {
-    const response = await fetch(`${config.url}/rest/v1/${table}${buildFilterQuery(filters)}`, {
+    const queryFilters = [...filters];
+    if (returnRepresentation && select) {
+      queryFilters.unshift(["select", select]);
+    }
+
+    const response = await fetch(`${config.url}/rest/v1/${table}${buildFilterQuery(queryFilters)}`, {
       method: "PATCH",
       headers: makeSupabaseHeaders(config.apiKey, {
         contentType: "application/json",
-        prefer: "return=minimal",
+        prefer: returnRepresentation ? "return=representation" : "return=minimal",
       }),
       body: JSON.stringify(record),
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      return {
+        persisted: false,
+        reason: `http-${response.status}`,
+        detail,
+      };
+    }
+
+    if (returnRepresentation) {
+      const rows = await response.json().catch(() => null);
+      const row = Array.isArray(rows) ? rows[0] || null : null;
+      return {
+        persisted: Boolean(row),
+        reason: row ? "ok" : "no-matching-row",
+        record: row,
+        id: row?.id || null,
+      };
+    }
+
+    return {
+      persisted: true,
+      reason: "ok",
+    };
+  } catch (error) {
+    return {
+      persisted: false,
+      reason: "request-failed",
+      detail: String(error),
+    };
+  }
+}
+
+export async function deleteSupabaseRecord(table, filters = []) {
+  const config = resolveSupabaseConfig();
+
+  if (!config) {
+    return {
+      persisted: false,
+      reason: "missing-config",
+    };
+  }
+
+  if (!Array.isArray(filters) || filters.length === 0) {
+    // Refuse an unfiltered DELETE — that would wipe the whole table.
+    return {
+      persisted: false,
+      reason: "missing-filter",
+    };
+  }
+
+  try {
+    const response = await fetch(`${config.url}/rest/v1/${table}${buildFilterQuery(filters)}`, {
+      method: "DELETE",
+      headers: makeSupabaseHeaders(config.apiKey, { prefer: "return=minimal" }),
       cache: "no-store",
     });
 

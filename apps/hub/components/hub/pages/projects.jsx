@@ -1,15 +1,25 @@
 "use client";
 
 import React from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState } from "../hub-primitives";
+import { requestCouncilAdvice, councilChatPath, COUNCIL_MODE_LABEL, COUNCIL_PREVIEW_NOTE } from "../council-client";
 import {
   BRANDS as FALLBACK_BRANDS,
   BRAND_PROJECTS as FALLBACK_PROJECTS,
   BRAND_TODOS as FALLBACK_TODOS,
   KANBAN_COLUMNS as FALLBACK_COLUMNS,
 } from "../hub-data";
+import {
+  getWorkspace,
+  filterBrandsByWorkspace,
+  filterProjectsByWorkspace,
+  filterTodosByWorkspace,
+} from "../workspace-map";
+
+// PMS Board persistence key — localStorage v1 (see cols state + effect below).
+const PMS_BOARD_STORAGE_KEY = 'hub:pms-board:v1';
 
 const EMPTY_ALL_BRAND = {
   key: 'all',
@@ -60,8 +70,96 @@ function ActivityRow({ title, body, meta, badge, tone = 'neutral' }) {
   );
 }
 
-export function Projects() {
+const COUNCIL_MODES = [
+  { k: 'brand-strategy', l: '브랜드 전략' },
+  { k: 'audience-analysis', l: '오디언스 분석' },
+  { k: 'flow-review', l: '플로우 점검' },
+  { k: 'meeting-synthesis', l: '회의록 정리' },
+];
+
+// Council brand advisor — the brand-side counterpart of revenue.jsx's GuruCoachPanel.
+// Modes cover brand strategy, audience(고객) analysis, flow review, and meeting-note synthesis.
+// meeting-synthesis takes pasted notes as the draft; the others read the assembled brand context.
+function CouncilBrandPanel({ router, focusRef = null, focusLabel = null }) {
+  const [mode, setMode] = React.useState('brand-strategy');
+  const [notes, setNotes] = React.useState('');
+  const [res, setRes] = React.useState({ state: 'idle', text: '', note: '' });
+  const needsNotes = mode === 'meeting-synthesis';
+
+  const run = async () => {
+    setRes({ state: 'loading', text: '', note: '' });
+    const draft = needsNotes ? notes.trim() : null;
+    const r = await requestCouncilAdvice({ mode, ref: focusRef, draft });
+    if (r.state === 'done') setRes({ state: 'done', text: r.text, note: '' });
+    else setRes({ state: r.state, text: '', note: r.note || '' });
+  };
+
+  return (
+    <Card>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>Council 자문</div>
+            <Badge tone="moon" size="xs">브랜드 advisor</Badge>
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', marginTop: 2 }}>
+            {focusLabel ? `${focusLabel} · ` : ''}콘텐츠·브랜드·프로젝트 원장 기반 추천 조언
+          </div>
+        </div>
+        <div style={{ flex: 1 }} />
+        <Button variant="primary" size="sm" icon="sparkle" disabled={res.state === 'loading' || (needsNotes && !notes.trim())} onClick={run}>
+          {res.state === 'loading' ? '자문 중…' : COUNCIL_MODE_LABEL[mode]}
+        </Button>
+      </div>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: needsNotes || res.state !== 'idle' ? 12 : 0 }}>
+        {COUNCIL_MODES.map(m => (
+          <button key={m.k} onClick={() => setMode(m.k)} style={{
+            padding: '5px 11px', fontSize: 11.5, borderRadius: 999,
+            border: '1px solid ' + (mode === m.k ? 'var(--moon-500)' : 'var(--line-soft)'),
+            background: mode === m.k ? 'var(--surface-3)' : 'var(--surface-2)',
+            color: mode === m.k ? 'var(--fg)' : 'var(--fg-muted)',
+          }}>{m.l}</button>
+        ))}
+      </div>
+      {needsNotes && (
+        <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="회의록·메모를 붙여넣으면 결정·오너·기한이 분명한 액션으로 정리합니다."
+          rows={3} style={{
+            width: '100%', resize: 'vertical', marginBottom: res.state !== 'idle' ? 12 : 0,
+            background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
+            color: 'var(--fg)', fontSize: 12.5, lineHeight: 1.5, padding: 10, outline: 'none', fontFamily: 'inherit',
+          }} />
+      )}
+      {res.state === 'loading' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
+          <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
+          원장·브랜드 보이스를 읽고 자문을 정리하는 중…
+        </div>
+      )}
+      {res.state === 'done' && (
+        <div>
+          <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{res.text}</div>
+          <div style={{ marginTop: 12 }}>
+            <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => router.push('/' + councilChatPath({ mode, ref: focusRef }))}>Chat에서 이어가기</Button>
+          </div>
+        </div>
+      )}
+      {(res.state === 'preview' || res.state === 'error') && (
+        <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.55 }}>
+          <Badge tone={res.state === 'preview' ? 'neutral' : 'danger'} size="xs">{res.state === 'preview' ? 'preview' : 'error'}</Badge>
+          <span style={{ marginLeft: 8 }}>{res.state === 'preview' ? COUNCIL_PREVIEW_NOTE : res.note}</span>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+export function Projects({ workspace }) {
+  const ws = getWorkspace(workspace);
+  const router = useRouter();
   const searchParams = useSearchParams();
+  // Council advisor is brand-side; keep it off the ClassIn sales lane (that's Guru's domain).
+  // 회사(company) workspace was absorbed into classin — see workspace-map.js.
+  const councilEnabled = workspace !== 'classin';
   const [brand, setBrand] = React.useState('all');
   const [view, setView] = React.useState('tree');
   const [ledger, setLedger] = React.useState({
@@ -76,7 +174,17 @@ export function Projects() {
   });
   const [todos, setTodos] = React.useState(FALLBACK_TODOS);
   const [drag, setDrag] = React.useState(null);
-  const [cols, setCols] = React.useState(FALLBACK_COLUMNS);
+  // localStorage v1 — DB(tasks 테이블) 승격은 보드↔태스크 매핑 설계 후.
+  const [cols, setCols] = React.useState(() => {
+    if (typeof window === 'undefined') return FALLBACK_COLUMNS;
+    try {
+      const saved = window.localStorage.getItem(PMS_BOARD_STORAGE_KEY);
+      const parsed = saved ? JSON.parse(saved) : null;
+      return Array.isArray(parsed) && parsed.length ? parsed : FALLBACK_COLUMNS;
+    } catch {
+      return FALLBACK_COLUMNS;
+    }
+  });
   const [expanded, setExpanded] = React.useState(() => new Set(['pm-1', 'bm-1']));
   const [openDetail, setOpenDetail] = React.useState(null);
   const [brandMenuOpen, setBrandMenuOpen] = React.useState(false);
@@ -123,14 +231,23 @@ export function Projects() {
   }
 
   const isLiveLedger = ledger.source === 'supabase';
-  const brands = isLiveLedger
+  const rawBrands = isLiveLedger
     ? (ledger.brands?.length ? ledger.brands : [EMPTY_ALL_BRAND])
     : (ledger.brands?.length ? ledger.brands : FALLBACK_BRANDS);
-  const allProjects = isLiveLedger
+  const rawProjects = isLiveLedger
     ? (Array.isArray(ledger.projects) ? ledger.projects : [])
     : (ledger.projects?.length ? ledger.projects : FALLBACK_PROJECTS);
+  // Workspace scope: restrict to this workspace's brands/projects/todos.
+  // With no workspace, the filters return their input unchanged (global behavior).
+  const brands = ws ? filterBrandsByWorkspace(rawBrands, workspace) : rawBrands;
+  const allProjects = ws ? filterProjectsByWorkspace(rawProjects, workspace) : rawProjects;
+  const scopedTodos = ws ? filterTodosByWorkspace(todos, workspace) : todos;
+  // Scoped 'all' = first brand in this workspace, or its scoped 'all' index.
+  const wsDefaultBrand = ws
+    ? (brands.find(b => b.key !== 'all')?.key || brands[0]?.key || 'all')
+    : 'all';
   const projects = brand === 'all' ? allProjects : allProjects.filter(p => p.brand === brand);
-  const brandTodos = brand === 'all' ? todos : todos.filter(t => t.brand === brand);
+  const brandTodos = brand === 'all' ? scopedTodos : scopedTodos.filter(t => t.brand === brand);
   const currentBrand = brands.find(b => b.key === brand) || brands[0] || EMPTY_ALL_BRAND;
 
   React.useEffect(() => {
@@ -178,9 +295,9 @@ export function Projects() {
 
   React.useEffect(() => {
     if (!brands.some(b => b.key === brand)) {
-      setBrand('all');
+      setBrand(wsDefaultBrand);
     }
-  }, [brand, brands]);
+  }, [brand, brands, wsDefaultBrand]);
 
   const toggleTodo = (id) => setTodos(ts => ts.map(t => t.id === id ? { ...t, done: !t.done } : t));
   const toggleExpand = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -255,6 +372,23 @@ export function Projects() {
     )));
     setView('board');
   }, [currentBrand]);
+
+  // localStorage v1 — DB(tasks 테이블) 승격은 보드↔태스크 매핑 설계 후.
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(PMS_BOARD_STORAGE_KEY, JSON.stringify(cols));
+    } catch {
+      // quota or serialization errors — ignore, board still works in-memory.
+    }
+  }, [cols]);
+
+  const resetBoard = React.useCallback(() => {
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.removeItem(PMS_BOARD_STORAGE_KEY); } catch { /* ignore */ }
+    }
+    setCols(FALLBACK_COLUMNS);
+  }, []);
 
   const statusTone = { 'In progress': 'info', Review: 'warning', Planning: 'moon', Backlog: 'neutral', Blocked: 'danger', Done: 'success' };
   const prioTone = { critical: 'danger', high: 'danger', med: 'warning', medium: 'warning', low: 'neutral' };
@@ -392,7 +526,7 @@ export function Projects() {
                 {brands.map(b => {
                   const active = brand === b.key;
                   const count = b.key === 'all' ? allProjects.length : (b.projects || 0);
-                  const bTodos = todos.filter(t => b.key === 'all' || t.brand === b.key).filter(t => !t.done).length;
+                  const bTodos = scopedTodos.filter(t => b.key === 'all' || t.brand === b.key).filter(t => !t.done).length;
                   const changes = b.key === 'all'
                     ? brands.filter(x => x.key !== 'all').reduce((s, x) => s + (x.changes || 0), 0)
                     : (b.changes || 0);
@@ -467,6 +601,9 @@ export function Projects() {
               }}>{t.l}</button>
             ))}
           </div>
+          {view === 'board' && (
+            <Button variant="ghost" size="sm" onClick={resetBoard}>보드 초기화</Button>
+          )}
           <Button variant="primary" size="sm" icon="plus" onClick={() => view === 'todos' ? createTodo() : createProject()}>{view === 'todos' ? 'To-do' : 'Project'}</Button>
         </div>
 
@@ -474,7 +611,16 @@ export function Projects() {
           <div className="hub-projects-main-grid" style={{ display: 'grid', gridTemplateColumns: openDetail ? '1fr 360px' : '1fr', flex: 1, overflow: 'hidden' }}>
             <div className="scroll-y" style={{ padding: 'var(--section-gap)' }}>
               <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
-                {projects.length === 0 && (
+                {councilEnabled && <CouncilBrandPanel router={router} />}
+                {projects.length === 0 && ws && allProjects.length === 0 ? (
+                  <Card>
+                    <EmptyState
+                      icon="projects"
+                      title={`${ws.label} — 아직 연결된 프로젝트가 없습니다.`}
+                      description="브랜드를 이 워크스페이스에 연결하면 여기에 표시됩니다."
+                    />
+                  </Card>
+                ) : projects.length === 0 && (
                   <Card>
                     <EmptyState
                       icon="projects"
@@ -517,7 +663,7 @@ export function Projects() {
                         </div>
                         {groupProjects.map((p, pi) => {
                           const isOpen = expanded.has(p.id);
-                          const pTodos = todos.filter(t => t.project === p.id);
+                          const pTodos = scopedTodos.filter(t => t.project === p.id);
                           const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
                           const isSel = openDetail === p.id;
                           return (
@@ -625,7 +771,7 @@ export function Projects() {
               const p = allProjects.find(x => x.id === openDetail);
               if (!p) return null;
               const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
-              const pTodos = todos.filter(t => t.project === p.id);
+              const pTodos = scopedTodos.filter(t => t.project === p.id);
               const pUpdates = (ledger.updates || []).filter(u => u.projectId === p.id).slice(0, 5);
               const pDecisions = (ledger.decisions || []).filter(d => d.projectId === p.id).slice(0, 4);
               const pNotes = (ledger.notes || []).filter(n => n.projectId === p.id).slice(0, 4);
@@ -744,6 +890,16 @@ export function Projects() {
                       setExpanded(prev => new Set([...prev, p.id]));
                       setView('tree');
                     }}>열기</Button>
+                    {councilEnabled && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        icon="sparkle"
+                        onClick={() => router.push('/' + councilChatPath({ mode: 'brand-strategy', ref: p.id }))}
+                      >
+                        Council
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"

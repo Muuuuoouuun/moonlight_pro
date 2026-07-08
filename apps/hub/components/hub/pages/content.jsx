@@ -3,11 +3,13 @@
 import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar, SyncBadge, SegmentedControl } from "../hub-primitives";
 import {
   CONTENT_QUEUE as FALLBACK_CONTENT_QUEUE,
   CAMPAIGNS as FALLBACK_CAMPAIGNS,
 } from "../hub-data";
+import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
+import { requestCouncilAdvice, councilChatPath, COUNCIL_PREVIEW_NOTE } from "../council-client";
 
 const STUDIO_DRAFT_DB = "moonlight-content-studio";
 const STUDIO_DRAFT_STORE = "drafts";
@@ -116,6 +118,122 @@ function handoffTone(status) {
   return "info";
 }
 
+// 성과 기록 (Phase 2 ⓐ) — logs a published-content metric into content_outcomes so the
+// Council audience-analysis mode has real engagement numbers to reason from. metric is free
+// text (the operator hasn't fixed the key metric yet). Disabled in preview mode: no live
+// Supabase means a write would silently no-op, so we show an explicit preview badge instead.
+function ContentOutcomeRecorder({ variantId, contentId, brandKey, channel, isLive }) {
+  const [open, setOpen] = React.useState(false);
+  const [metric, setMetric] = React.useState("");
+  const [value, setValue] = React.useState("");
+  const [state, setState] = React.useState("idle"); // idle | saving | done | error
+  const [msg, setMsg] = React.useState("");
+
+  const record = async () => {
+    if (!metric.trim() || value === "") {
+      setState("error");
+      setMsg("지표명과 값을 입력하세요");
+      return;
+    }
+    setState("saving");
+    setMsg("");
+    try {
+      const res = await fetch("/api/hub/content/outcomes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          variantId: variantId || null,
+          contentId: contentId || null,
+          brandKey: brandKey || null,
+          channel: channel || null,
+          metric: metric.trim(),
+          value: Number(value) || 0,
+          source: "manual",
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.status === "ok") {
+        setState("done");
+        setMsg("기록됨");
+        setMetric("");
+        setValue("");
+      } else {
+        setState("error");
+        setMsg(data?.result?.reason || "기록 실패");
+      }
+    } catch (e) {
+      setState("error");
+      setMsg(e instanceof Error ? e.message : "기록 실패");
+    }
+  };
+
+  const inputStyle = {
+    minWidth: 0,
+    background: "var(--surface-2)",
+    border: "1px solid var(--line)",
+    borderRadius: "var(--r-sm)",
+    padding: "6px 8px",
+    color: "var(--fg)",
+    fontSize: 12,
+  };
+
+  if (!isLive) {
+    return (
+      <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
+        <Badge tone="neutral" size="xs">preview</Badge>
+        <span style={{ fontSize: 11, color: "var(--fg-faint)" }}>성과 기록은 라이브(Supabase) 연결 시 활성화됩니다</span>
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <div style={{ marginTop: 10 }}>
+        <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>성과 기록</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8, padding: 10, border: "1px solid var(--line)", borderRadius: "var(--r-sm)" }}>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input value={metric} onChange={(e) => setMetric(e.target.value)} placeholder="지표 (조회·저장·구독…)" style={{ ...inputStyle, flex: 2 }} />
+        <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="값" inputMode="numeric" style={{ ...inputStyle, flex: 1 }} />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Button variant="primary" size="sm" onClick={record} disabled={state === "saving"}>{state === "saving" ? "기록 중…" : "기록"}</Button>
+        <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>닫기</Button>
+        {msg && <span style={{ fontSize: 11, color: state === "error" ? "var(--danger)" : "var(--success)" }}>{msg}</span>}
+      </div>
+    </div>
+  );
+}
+
+function parseCouncilSuggestionItems(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return [];
+
+  const cleanItem = (item) => item
+    .replace(/^\s*(?:[-·]\s+|\d+[.)]\s+)/, "")
+    .trim();
+  const hasMeaning = (item) => item.replace(/[\s\-·*#.:;,'"()[\]{}]/g, "").length >= 4;
+  const bulletParts = raw
+    .split(/(?:^|\n)\s*(?:[-·]\s+|\d+[.)]\s+)/)
+    .map(cleanItem)
+    .filter((item) => item && hasMeaning(item));
+  const hasBulletMarkers = /(?:^|\n)\s*(?:[-·]\s+|\d+[.)]\s+)/.test(raw);
+  const normalizedBulletParts = hasBulletMarkers && !/^\s*(?:[-·]\s+|\d+[.)]\s+)/.test(raw)
+    ? bulletParts.slice(1)
+    : bulletParts;
+  const lineParts = raw
+    .split(/\n+/)
+    .map(cleanItem)
+    .filter((item) => item && hasMeaning(item));
+  const parts = normalizedBulletParts.length > 1 ? normalizedBulletParts : lineParts;
+
+  return parts.slice(0, 5);
+}
+
 function useContentLedger() {
   const [state, setState] = React.useState({
     source: "mock",
@@ -180,10 +298,96 @@ function useContentLedger() {
   return state;
 }
 
-export function Studio() {
+// Campaigns ledger — same fetch-on-mount / source contract as useContentLedger,
+// scoped to /api/hub/campaigns. syncState mirrors the Publishing queue badge
+// ('loading' | 'live' | 'mock') so Campaigns reads honestly when Supabase isn't
+// configured instead of silently mixing mock + live rows.
+function useCampaignLedger() {
+  const [state, setState] = React.useState({
+    source: "mock",
+    syncState: "mock",
+    campaigns: FALLBACK_CAMPAIGNS,
+  });
+
+  const reload = React.useCallback(async () => {
+    setState((s) => ({ ...s, syncState: "loading" }));
+    try {
+      const response = await fetch("/api/hub/campaigns", { cache: "no-store" });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || !data || data.status === "error") {
+        setState((s) => ({ ...s, syncState: "mock" }));
+        return;
+      }
+
+      if (data.source === "supabase") {
+        setState({
+          source: data.source,
+          syncState: "live",
+          campaigns: Array.isArray(data.campaigns) ? data.campaigns : [],
+        });
+      } else {
+        setState((s) => ({ ...s, syncState: "mock" }));
+      }
+    } catch {
+      setState((s) => ({ ...s, syncState: "mock" }));
+    }
+  }, []);
+
+  React.useEffect(() => {
+    let active = true;
+    (async () => {
+      if (!active) return;
+      await reload();
+    })();
+    return () => {
+      active = false;
+    };
+  }, [reload]);
+
+  return { ...state, reload, setState };
+}
+
+// Revenue leads for the Audience tab join — fetched once per Campaigns mount.
+// Mirrors the source contract above ('mock' | 'supabase') so the audience tab
+// can tell a real empty match from "Supabase isn't configured" and never mix
+// live leads into the illustrative rows.
+function useAudienceLeads() {
+  const [state, setState] = React.useState({ source: "mock", leads: [] });
+
+  React.useEffect(() => {
+    let active = true;
+
+    (async () => {
+      try {
+        const response = await fetch("/api/hub/revenue", { cache: "no-store" });
+        const data = await response.json().catch(() => null);
+        if (!active || !response.ok || !data || data.status === "error") return;
+
+        setState({
+          source: data.source === "supabase" ? "supabase" : "mock",
+          leads: Array.isArray(data.leads) ? data.leads : [],
+        });
+      } catch {
+        // Network failure — keep the mock/empty fallback, matches useCampaignLedger.
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return state;
+}
+
+export function Studio({ workspace }) {
+  const ws = getWorkspace(workspace);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const itemParam = searchParams.get("item");
   const brandParam = searchParams.get("brand");
+  const wantCouncil = searchParams.get("council") === "1"; // ?council=1 → auto-run Council 검토 (Queue ✨)
   const ledger = useContentLedger();
   const [mode, setMode] = React.useState('blog');
   const [selectedBrandId, setSelectedBrandId] = React.useState("");
@@ -218,7 +422,6 @@ export function Studio() {
   const [activeSlide, setActiveSlide] = React.useState(0);
   const [drag, setDrag] = React.useState(null);
   const [extraSuggestions, setExtraSuggestions] = React.useState([]);
-  const [dismissedSuggestionKeys, setDismissedSuggestionKeys] = React.useState(() => new Set());
   const [pendingSend, setPendingSend] = React.useState(null); // 'publish' | 'schedule' | null
   const [lastSentAt, setLastSentAt] = React.useState(null);
   const [localHandoffLogs, setLocalHandoffLogs] = React.useState([]);
@@ -228,6 +431,8 @@ export function Studio() {
   const [lastSavedAt, setLastSavedAt] = React.useState(null);
   const [localSavedAt, setLocalSavedAt] = React.useState(null);
   const [dirty, setDirty] = React.useState(false);
+  const [council, setCouncil] = React.useState({ state: 'idle', text: '', note: '' }); // Council content-critique (live AI)
+  const [councilSuggestions, setCouncilSuggestions] = React.useState({ state: 'idle', text: '', note: '', items: [], parsedItems: false });
   const loadedItemRef = React.useRef(null);
 
   const formatTime = (d) => {
@@ -238,7 +443,8 @@ export function Studio() {
     }
   };
 
-  const brands = ledger.brands || [];
+  // Scope the brand picker to this workspace's brands (브랜드 part shouldn't offer ClassIn/회사 brands).
+  const brands = ws ? filterBrandsByWorkspace(ledger.brands || [], workspace) : (ledger.brands || []);
   const selectedBrand = brands.find((brand) => brand.id === selectedBrandId) || chooseDefaultBrand(brands, brandParam);
   const variantType = mode === 'carousel' ? 'card_news' : 'blog';
   const currentBodyPayload = React.useMemo(() => (
@@ -449,6 +655,18 @@ export function Studio() {
       const elapsed = Date.now() - startedAt;
       if (elapsed < 100) await new Promise(r => setTimeout(r, 100 - elapsed));
 
+      if (data.status === 'approval_required') {
+        const workOrderId = data.workOrder?.id || data.workOrder?.record?.id || null;
+        const persisted = data.workOrder?.persisted;
+        setExtraSuggestions(s => [{
+          tone: persisted ? 'info' : 'warning',
+          text: persisted
+            ? `승인 큐에 올림 · ${String(workOrderId || 'approval').slice(0, 8)} · 외부 전달/업로드는 실행하지 않았습니다.`
+            : `승인 필요 · 큐 저장 실패 · 외부 전달/업로드는 실행하지 않았습니다.`,
+        }, ...s]);
+        return;
+      }
+
       if (!response.ok && data.status !== 'preview' && data.status !== 'logged') {
         const msg = data.error || data.message || `HTTP ${response.status}`;
         setExtraSuggestions(s => [{ tone: 'danger', text: `handoff 실패 — ${msg}` }, ...s]);
@@ -535,10 +753,53 @@ export function Studio() {
     setSlides(s => s.filter((_, j) => j !== i));
     setDirty(true);
   };
+  // Live Council content-critique (Writer lens) against the Engine brand-mentor.
+  const runCouncilCritique = React.useCallback(async () => {
+    setCouncil({ state: 'loading', text: '', note: '' });
+    const draft = mode === 'carousel'
+      ? `${title}\n\n${slides.map((s, i) => `${i + 1}. ${s.title} — ${s.sub}`).join('\n')}`
+      : `${title}\n\n${body}`;
+    const r = await requestCouncilAdvice({ mode: 'content-critique', draft });
+    if (r.state === 'done') {
+      setCouncil({ state: 'done', text: r.text, note: '' });
+    } else {
+      setCouncil({ state: r.state, text: '', note: r.note || '' });
+    }
+  }, [body, mode, slides, title]);
+
+  const runCouncilSuggestions = React.useCallback(async () => {
+    setCouncilSuggestions({ state: 'loading', text: '', note: '', items: [], parsedItems: false });
+    const draft = mode === 'carousel'
+      ? `${title}\n\n${slides.map((s, i) => `${i + 1}. ${s.title} — ${s.sub}`).join('\n')}`
+      : `${title}\n\n${body}`;
+    const r = await requestCouncilAdvice({ mode: 'content-critique', draft });
+    if (r.state === 'done') {
+      const items = parseCouncilSuggestionItems(r.text);
+      setCouncilSuggestions({
+        state: 'done',
+        text: r.text || '',
+        note: '',
+        items,
+        parsedItems: items.length > 0,
+      });
+    } else {
+      setCouncilSuggestions({ state: r.state, text: '', note: r.note || '', items: [], parsedItems: false });
+    }
+  }, [body, mode, slides, title]);
+
+  // Auto-run the critique once when arriving via the Queue ✨ (?council=1), after the item loads.
+  const councilAutoRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!wantCouncil || councilAutoRef.current) return;
+    if (itemParam && loadedItemRef.current !== itemParam) return; // wait for the item draft to load
+    councilAutoRef.current = true;
+    runCouncilCritique();
+  }, [wantCouncil, itemParam, contentId, runCouncilCritique]);
+
   const applyToolbarAction = (tool) => {
     if (!tool) return;
     if (tool === 'ai') {
-      setExtraSuggestions(s => [{ tone: 'moon', text: 'AI 제안 생성 — 도입부를 더 짧게 다듬어보세요.' }, ...s]);
+      runCouncilCritique();
       return;
     }
     const snippets = {
@@ -554,34 +815,46 @@ export function Studio() {
   };
 
   const cur = slides[activeSlide] || slides[0];
-  const baseSuggestions = mode === 'blog' ? [
-    { key: 'blog-title', tone: 'info', text: '제목 A/B: "결정 노트: 네 칸이면 충분하다"' },
-    { key: 'blog-question', tone: 'moon', text: '"네 칸" 섹션 끝에 독자 질문 한 줄 추가 추천' },
-    { key: 'blog-repeat', tone: 'warning', text: '중복 표현 감지: "기억에 남지 않는다" (2회)' },
-  ] : [
-    { key: 'card-hook', tone: 'info', text: '카드 1 훅 강화: 숫자를 앞에 — "4칸"' },
-    { key: 'card-color', tone: 'moon', text: '카드 2–5 배경색 톤을 한 계열로 통일 추천' },
-    { key: 'card-cta', tone: 'warning', text: '마지막 카드 CTA 누락 — 저장/공유 유도' },
-  ];
   const suggestions = [
     ...extraSuggestions.map((s, i) => ({ ...s, key: `extra-${i}`, extraIndex: i })),
-    ...baseSuggestions.filter(s => !dismissedSuggestionKeys.has(s.key)),
   ];
+  const councilSuggestionCards = councilSuggestions.items.map((text, i) => ({
+    key: `council-suggestion-${i}`,
+    tone: i === 0 ? 'moon' : 'info',
+    text,
+  }));
 
   return (
     <div className="hub-studio-shell" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', height: '100%', overflow: 'hidden' }}>
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-            {[{k:'blog',l:'Blog / Insight'},{k:'carousel',l:'Card News'}].map(m => (
-              <button key={m.k} onClick={() => { setMode(m.k); setDirty(true); }} style={{
-                padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-                color: mode === m.k ? 'var(--fg)' : 'var(--fg-faint)',
-                background: mode === m.k ? 'var(--surface-3)' : 'transparent',
-              }}>{m.l}</button>
-            ))}
-          </div>
+          <SegmentedControl
+            options={[{ key: 'blog', label: 'Blog / Insight' }, { key: 'carousel', label: 'Card News' }]}
+            value={mode}
+            onChange={(k) => { setMode(k); setDirty(true); }}
+          />
           <Badge tone="warning" size="xs">Draft</Badge>
+          {ws && (
+            <span
+              title={`${ws.label} 워크스페이스 스코프`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                height: 22,
+                padding: '0 9px',
+                borderRadius: 999,
+                border: '1px solid var(--line-soft)',
+                background: 'var(--surface-2)',
+                color: 'var(--fg-muted)',
+                fontSize: 11,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>스코프</span>
+              {ws.label}
+            </span>
+          )}
           <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
             {mode === 'blog' ? <>Web article · <span className="mono">{contentId ? contentId.slice(0, 8) : 'LOCAL'}</span></> : <>Card News · <span className="mono">{variantId ? variantId.slice(0, 8) : 'LOCAL'}</span> · {slides.length} slides</>}
           </span>
@@ -619,7 +892,7 @@ export function Studio() {
             size="sm"
             onClick={() => recordHandoff('schedule')}
           >
-            {pendingSend === 'schedule' ? 'Queuing…' : 'Schedule'}
+            {pendingSend === 'schedule' ? 'Queuing…' : 'Request schedule'}
           </Button>
           <Button
             variant="primary"
@@ -627,7 +900,7 @@ export function Studio() {
             icon="send"
             onClick={() => recordHandoff('publish')}
           >
-            {pendingSend === 'publish' ? 'Logging…' : 'Publish'}
+            {pendingSend === 'publish' ? 'Queuing…' : 'Request publish'}
           </Button>
         </div>
 
@@ -775,9 +1048,40 @@ export function Studio() {
       <aside style={{ borderLeft: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <Iconed name="sparkle" size={14} style={{ color: 'var(--moon-300)' }} />
-          <div style={{ fontSize: 12.5, fontWeight: 500, flex: 1 }}>Writer · Studio Agent</div>
+          <div style={{ fontSize: 12.5, fontWeight: 500, flex: 1 }}>Council · Writer 자문</div>
+          <Button variant="primary" size="xs" icon="sparkle" disabled={council.state === 'loading'} onClick={runCouncilCritique}>
+            {council.state === 'loading' ? '검토 중…' : council.state === 'done' ? '다시 검토' : 'Council 검토'}
+          </Button>
         </div>
         <div className="scroll-y" style={{ flex: 1, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {council.state !== 'idle' && (
+            <div style={{ padding: 11, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Badge tone="moon" size="xs">Council 검토</Badge>
+                <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>Writer 렌즈 · 초안 진단</span>
+                <div style={{ flex: 1 }} />
+                <IconButton icon="x" size={20} iconSize={11} tooltip="닫기" onClick={() => setCouncil({ state: 'idle', text: '', note: '' })} />
+              </div>
+              {council.state === 'loading' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-muted)' }}>
+                  <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
+                  원장·브랜드 보이스를 읽고 검토하는 중…
+                </div>
+              )}
+              {council.state === 'done' && (
+                <>
+                  <div style={{ fontSize: 12, color: 'var(--fg)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{council.text}</div>
+                  <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => router.push('/' + councilChatPath({ mode: 'content-critique' }))}>Chat에서 이어가기</Button>
+                </>
+              )}
+              {(council.state === 'preview' || council.state === 'error') && (
+                <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+                  <Badge tone={council.state === 'preview' ? 'neutral' : 'danger'} size="xs">{council.state === 'preview' ? 'preview' : 'error'}</Badge>
+                  <span style={{ marginLeft: 6 }}>{council.state === 'preview' ? COUNCIL_PREVIEW_NOTE : council.note}</span>
+                </div>
+              )}
+            </div>
+          )}
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em' }}>Brand</div>
           <div style={{
             padding: 10,
@@ -860,7 +1164,7 @@ export function Studio() {
 
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em' }}>Suggestions</div>
           {suggestions.map((s, i) => (
-            <div key={i} style={{
+            <div key={s.key || i} style={{
               padding: '10px 11px', background: 'var(--surface-2)',
               border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
               fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.5,
@@ -880,8 +1184,6 @@ export function Studio() {
                     setDirty(true);
                     if (typeof s.extraIndex === 'number') {
                       setExtraSuggestions(prev => prev.filter((_, idx) => idx !== s.extraIndex));
-                    } else {
-                      setDismissedSuggestionKeys(prev => new Set([...prev, s.key]));
                     }
                   }}
                 >
@@ -893,8 +1195,6 @@ export function Studio() {
                   onClick={() => {
                     if (typeof s.extraIndex === 'number') {
                       setExtraSuggestions(prev => prev.filter((_, idx) => idx !== s.extraIndex));
-                    } else {
-                      setDismissedSuggestionKeys(prev => new Set([...prev, s.key]));
                     }
                   }}
                 >
@@ -903,6 +1203,121 @@ export function Studio() {
               </div>
             </div>
           ))}
+          {councilSuggestions.state === 'idle' && (
+            <div style={{
+              padding: '10px 11px',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--line-soft)',
+              borderRadius: 'var(--r-sm)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}>
+              <div style={{ flex: 1, fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+                초안 기반 제안을 생성하려면 Council에 요청하세요.
+              </div>
+              <Button variant="secondary" size="xs" onClick={runCouncilSuggestions}>제안 생성</Button>
+            </div>
+          )}
+          {councilSuggestions.state === 'loading' && (
+            <div style={{
+              padding: '10px 11px',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--line-soft)',
+              borderRadius: 'var(--r-sm)',
+              fontSize: 12,
+              color: 'var(--fg-muted)',
+              lineHeight: 1.5,
+            }}>
+              브랜드 보이스 기준으로 검토 중…
+            </div>
+          )}
+          {councilSuggestions.state === 'done' && councilSuggestionCards.length > 0 && councilSuggestionCards.map((s) => (
+            <div key={s.key} style={{
+              padding: '10px 11px', background: 'var(--surface-2)',
+              border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
+              fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.5,
+            }}>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}><Dot tone={s.tone} /></div>
+              {s.text}
+              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => {
+                    if (mode === 'blog') {
+                      setBody(prev => `${prev}\n\n> 적용한 제안: ${s.text}`);
+                    } else {
+                      updateSlide(activeSlide, { sub: s.text.slice(0, 64) });
+                    }
+                    setDirty(true);
+                    setCouncilSuggestions(prev => ({
+                      ...prev,
+                      items: prev.items.filter((item) => item !== s.text),
+                    }));
+                  }}
+                >
+                  Apply
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => {
+                    setCouncilSuggestions(prev => ({
+                      ...prev,
+                      items: prev.items.filter((item) => item !== s.text),
+                    }));
+                  }}
+                >
+                  Skip
+                </Button>
+              </div>
+            </div>
+          ))}
+          {councilSuggestions.state === 'done' && !councilSuggestions.parsedItems && (
+            <div style={{
+              padding: '10px 11px',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--line-soft)',
+              borderRadius: 'var(--r-sm)',
+              fontSize: 12,
+              color: 'var(--fg-muted)',
+              lineHeight: 1.5,
+              whiteSpace: 'pre-wrap',
+            }}>
+              {councilSuggestions.text}
+            </div>
+          )}
+          {councilSuggestions.state === 'preview' && (
+            <div style={{
+              padding: '10px 11px',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--line-soft)',
+              borderRadius: 'var(--r-sm)',
+              fontSize: 11.5,
+              color: 'var(--fg-muted)',
+              lineHeight: 1.5,
+            }}>
+              <Badge tone="neutral" size="xs">preview</Badge>
+              <span style={{ marginLeft: 6 }}>{COUNCIL_PREVIEW_NOTE}</span>
+            </div>
+          )}
+          {councilSuggestions.state === 'error' && (
+            <div style={{
+              padding: '10px 11px',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--line-soft)',
+              borderRadius: 'var(--r-sm)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}>
+              <div style={{ flex: 1, fontSize: 12, color: 'var(--danger)', lineHeight: 1.5 }}>
+                제안을 생성하지 못했습니다.
+              </div>
+              <Button variant="ghost" size="xs" onClick={runCouncilSuggestions}>다시 시도</Button>
+            </div>
+          )}
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em', marginTop: 8 }}>Handoff history</div>
           <div style={{
             padding: 10,
@@ -915,7 +1330,7 @@ export function Studio() {
           }}>
             {handoffLogs.length === 0 && (
               <div style={{ fontSize: 12, color: 'var(--fg-faint)', lineHeight: 1.45 }}>
-                Schedule 또는 Publish를 누르면 Supabase publish_logs에 기록됩니다.
+                Request 버튼은 먼저 승인 큐에 올립니다. 승인 후 실행된 handoff/export만 여기에 기록됩니다.
               </div>
             )}
             {handoffLogs.map((log) => (
@@ -934,6 +1349,13 @@ export function Studio() {
                 <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{log.when}</span>
               </div>
             ))}
+            <ContentOutcomeRecorder
+              variantId={variantId}
+              contentId={contentId}
+              brandKey={selectedBrand?.key}
+              channel={mode === 'blog' ? 'blog' : 'instagram'}
+              isLive={ledger.source === 'supabase'}
+            />
           </div>
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em', marginTop: 8 }}>Settings</div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
@@ -963,15 +1385,17 @@ export function Studio() {
   );
 }
 
-export function Queue() {
+export function Queue({ workspace }) {
+  const ws = getWorkspace(workspace);
   const router = useRouter();
   const [tab, setTab] = React.useState('all');
   const [brandFilter, setBrandFilter] = React.useState('all');
   const ledger = useContentLedger();
-  const brands = ledger.brands || [];
-  const queue = ledger.source === "supabase"
+  const brands = ws ? filterBrandsByWorkspace(ledger.brands || [], workspace) : (ledger.brands || []);
+  const queueSource = ledger.source === "supabase"
     ? (Array.isArray(ledger.queue) ? ledger.queue : [])
     : (ledger.queue?.length ? ledger.queue : FALLBACK_CONTENT_QUEUE);
+  const queue = filterContentByWorkspace(queueSource, workspace);
   const statusTone = {
     Inbox: 'neutral',
     Drafting: 'warning',
@@ -1009,6 +1433,10 @@ export function Queue() {
     const brandParam = brandFilter !== 'all' ? `&brand=${encodeURIComponent(brandFilter)}` : '';
     router.push(`/dashboard/content/studio${id ? `?item=${encodeURIComponent(id)}` : '?new=draft'}${id ? '' : brandParam}`);
   }, [brandFilter, router]);
+  // Open the item in Studio and auto-run the Council 검토 (Writer lens) on the full draft.
+  const openCouncilCritique = React.useCallback((id) => {
+    router.push(`/dashboard/content/studio?item=${encodeURIComponent(id)}&council=1`);
+  }, [router]);
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1016,9 +1444,7 @@ export function Queue() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Publishing queue</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {visibleQueue.length}{tab !== 'all' ? ` of ${queue.length}` : ''} items in pipeline
-            <span className="mono" style={{ marginLeft: 8, color: ledger.syncState === 'live' ? 'var(--success)' : ledger.syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-              {ledger.syncState === 'live' ? 'live' : ledger.syncState === 'loading' ? 'syncing' : 'mock'}
-            </span>
+            <SyncBadge state={ledger.syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -1104,7 +1530,15 @@ export function Queue() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 110px 100px 120px 130px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>Title</span><span>Kind</span><span>Channel</span><span>Brand</span><span>Lane</span><span>When</span><span style={{ textAlign: 'right' }}>Author</span>
         </div>
-        {visibleQueue.length === 0 && (
+        {visibleQueue.length === 0 && ws && (
+          <EmptyState
+            icon="queue"
+            title={`${ws.label} — 아직 연결된 콘텐츠가 없습니다.`}
+            description="콘텐츠에 워크스페이스 태그가 붙으면 여기에 모입니다."
+            action={<Button variant="primary" size="sm" icon="plus" onClick={() => openStudio()}>Draft</Button>}
+          />
+        )}
+        {visibleQueue.length === 0 && !ws && (
           <EmptyState
             icon="queue"
             title={tab === 'all' ? '발행 큐가 비어 있습니다' : `${activeLabel} 항목이 없습니다`}
@@ -1147,7 +1581,16 @@ export function Queue() {
             </span>
             <span><Badge tone={statusTone[c.status] || 'neutral'} size="xs">{c.status}</Badge></span>
             <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{c.when}</span>
-            <span style={{ textAlign: 'right', fontSize: 12, color: 'var(--fg-muted)' }}>{c.author}</span>
+            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+              <IconButton
+                icon="sparkle"
+                size={20}
+                iconSize={11}
+                tooltip="Council 검토"
+                onClick={(e) => { e.stopPropagation(); openCouncilCritique(c.id); }}
+              />
+              <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{c.author}</span>
+            </span>
           </div>
         ))}
       </Card>
@@ -1344,6 +1787,15 @@ const CAMPAIGN_TABS = [
   { key: 'automation', label: 'Automation' },
 ];
 
+// Stage-appropriate next action for the live Audience join (keyed by leads.stage
+// label from revenue-ledger's LEAD_STAGE_LABEL: New / Contact / Qualified / Lost).
+const AUDIENCE_STAGE_NEXT = {
+  New: '첫 컨택',
+  Contact: '후속 미팅',
+  Qualified: '제안/견적',
+  Lost: '재접촉 검토',
+};
+
 function CampaignMetric({ item }) {
   return (
     <div style={{
@@ -1372,7 +1824,7 @@ function CampaignLine({ label, value, tone = 'moon' }) {
   );
 }
 
-function CampaignTabPanel({ tab, campaign, detail }) {
+function CampaignTabPanel({ tab, campaign, detail, audienceLeads }) {
   const router = useRouter();
   const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral', Live: 'success', Scheduled: 'info', Review: 'moon', Idea: 'neutral' };
 
@@ -1488,9 +1940,50 @@ function CampaignTabPanel({ tab, campaign, detail }) {
   }
 
   if (tab === 'audience') {
+    // Live join: leads.meta.campaign (free-text ad-set/campaign name from ad imports)
+    // matched case-insensitively against this campaign's name, either direction
+    // (imported ad-set names are rarely an exact match to the Hub campaign name).
+    const campaignName = String(campaign?.name || '').trim().toLowerCase();
+    const liveMatches = campaignName
+      ? (audienceLeads?.leads || []).filter((lead) => {
+          const leadCampaign = String(lead?.campaign || '').trim().toLowerCase();
+          if (!leadCampaign) return false;
+          return leadCampaign.includes(campaignName) || campaignName.includes(leadCampaign);
+        })
+      : [];
+    const isLive = audienceLeads?.source === 'supabase' && liveMatches.length > 0;
+
+    const liveRows = isLive
+      ? Object.values(
+          liveMatches.reduce((groups, lead) => {
+            const stageLabel = lead.stage || 'New';
+            const group = groups[stageLabel] || { segment: stageLabel, count: 0, scoreSum: 0, next: AUDIENCE_STAGE_NEXT[stageLabel] || '후속 미팅', source: 'Leads' };
+            group.count += 1;
+            group.scoreSum += Number(lead.score) || 0;
+            groups[stageLabel] = group;
+            return groups;
+          }, {}),
+        ).map((group) => ({
+          segment: group.segment,
+          count: group.count,
+          fit: Math.round(group.scoreSum / group.count),
+          next: group.next,
+          source: group.source,
+        }))
+      : [];
+
+    const rows = isLive ? liveRows : detail.audience;
+
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 'var(--gap)' }}>
-        {detail.audience.map((item) => (
+      <div>
+        <SectionTitle
+          subtitle={isLive ? 'leads 원장에서 이 캠페인과 매칭된 실제 오디언스입니다.' : '실제 leads/accounts 연동 전 일러스트레이션입니다.'}
+          right={isLive ? <Badge tone="success" size="xs">live</Badge> : <Badge tone="warning" size="xs">예시 데이터</Badge>}
+        >
+          Audience
+        </SectionTitle>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 'var(--gap)' }}>
+        {rows.map((item) => (
           <Card key={item.segment}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Avatar name={item.segment} size={30} tone={item.fit >= 75 ? 'personal' : 'company'} />
@@ -1512,6 +2005,7 @@ function CampaignTabPanel({ tab, campaign, detail }) {
             </div>
           </Card>
         ))}
+        </div>
       </div>
     );
   }
@@ -1604,20 +2098,41 @@ function CampaignTabPanel({ tab, campaign, detail }) {
   );
 }
 
+// Status select options for the inline status editor. Value is the DB-shaped
+// status key (matches campaigns.status check constraint); label is what the
+// war-room card already renders via sTone/Badge.
+const CAMPAIGN_STATUS_OPTIONS = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'active', label: 'Active' },
+  { value: 'paused', label: 'Planning' },
+  { value: 'completed', label: 'Done' },
+];
+
 export function Campaigns() {
   const router = useRouter();
-  const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral' };
-  const [campaigns, setCampaigns] = React.useState(FALLBACK_CAMPAIGNS);
+  const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral', Done: 'success' };
+  const ledger = useCampaignLedger();
+  const campaigns = ledger.campaigns;
+  const audienceLeads = useAudienceLeads();
   const [selectedId, setSelectedId] = React.useState(FALLBACK_CAMPAIGNS[0]?.id);
   const [tab, setTab] = React.useState('pulse');
   const [focusMode, setFocusMode] = React.useState(false);
   const selected = campaigns.find(c => c.id === selectedId) || campaigns[0];
-  const detail = CAMPAIGN_WAR_ROOMS[selected.id] || CAMPAIGN_WAR_ROOMS.cm1;
+  const detail = CAMPAIGN_WAR_ROOMS[selected?.id] || CAMPAIGN_WAR_ROOMS.cm1;
   const activeTabLabel = CAMPAIGN_TABS.find(t => t.key === tab)?.label || 'Pulse';
-  const createCampaign = () => {
-    const id = `local-campaign-${Date.now()}`;
-    const next = {
-      id,
+
+  // Keep the selection valid once live data replaces the fallback list.
+  React.useEffect(() => {
+    if (!campaigns.length) return;
+    if (!campaigns.some(c => c.id === selectedId)) {
+      setSelectedId(campaigns[0].id);
+    }
+  }, [campaigns, selectedId]);
+
+  const createCampaign = React.useCallback(async () => {
+    const localId = `local-campaign-${Date.now()}`;
+    const draft = {
+      id: localId,
       name: '새 캠페인',
       status: 'Draft',
       channels: ['Email'],
@@ -1626,11 +2141,80 @@ export function Campaigns() {
       goal: '목표 설정',
       current: 0,
     };
-    setCampaigns(prev => [next, ...prev]);
-    setSelectedId(id);
+    ledger.setState(s => ({ ...s, campaigns: [draft, ...s.campaigns] }));
+    setSelectedId(localId);
     setTab('pulse');
     setFocusMode(true);
-  };
+
+    try {
+      const response = await fetch('/api/hub/campaigns', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          op: 'create',
+          name: draft.name,
+          status: draft.status,
+          channels: draft.channels,
+          progress: draft.progress,
+          goal: draft.goal,
+          current: draft.current,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (data?.status === 'saved' && data.id) {
+        // Swap the optimistic local id for the real one so later PATCHes target it.
+        // If the operator edited status while the create was in flight, that edit only
+        // lives locally (updateCampaignStatus skips PATCH on local ids) — preserve it
+        // over the server row and persist it now that a real id exists.
+        let dirtyStatus = null;
+        ledger.setState(s => ({
+          ...s,
+          campaigns: s.campaigns.map(c => {
+            if (c.id !== localId) return c;
+            if (c.status !== draft.status) dirtyStatus = c.status;
+            return { ...c, ...(data.campaign || {}), id: data.id, ...(dirtyStatus ? { status: dirtyStatus } : {}) };
+          }),
+        }));
+        setSelectedId(prev => (prev === localId ? data.id : prev));
+        if (dirtyStatus) {
+          fetch('/api/hub/campaigns', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ op: 'update', id: data.id, status: dirtyStatus }),
+          }).catch(() => {});
+        }
+      }
+      // preview/error: keep the optimistic local row — same contract as the Revenue drawer.
+    } catch {
+      // Network failure — keep the optimistic local row, stay silent (matches Revenue drawer behavior).
+    }
+  }, [ledger]);
+
+  // Inline status edit — optimistic PATCH, mirrors createCampaign's fire-and-keep-local pattern.
+  const updateCampaignStatus = React.useCallback(async (id, nextLabel) => {
+    const prevCampaigns = campaigns;
+    ledger.setState(s => ({
+      ...s,
+      campaigns: s.campaigns.map(c => (c.id === id ? { ...c, status: nextLabel } : c)),
+    }));
+
+    if (String(id).startsWith('local-campaign-')) return; // not persisted yet, nothing to PATCH
+
+    try {
+      const response = await fetch('/api/hub/campaigns', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ op: 'update', id, status: nextLabel }),
+      });
+      const data = await response.json().catch(() => null);
+      if (data?.status === 'error') {
+        // Roll back on a hard error only — preview keeps the optimistic value.
+        ledger.setState(s => ({ ...s, campaigns: prevCampaigns }));
+      }
+    } catch {
+      // Network failure — keep the optimistic value, consistent with createCampaign.
+    }
+  }, [campaigns, ledger]);
 
   React.useEffect(() => {
     if (!focusMode) return;
@@ -1660,12 +2244,27 @@ export function Campaigns() {
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Campaigns</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Content 안에서 Revenue, Automations, Decisions를 캠페인 기준으로 묶는 war room</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+            Content 안에서 Revenue, Automations, Decisions를 캠페인 기준으로 묶는 war room
+            <SyncBadge state={ledger.syncState} />
+          </div>
         </div>
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="sm" icon="plus" onClick={createCampaign}>Campaign</Button>
       </div>
 
+      {campaigns.length === 0 && (
+        <EmptyState
+          icon="campaigns"
+          title="아직 캠페인이 없습니다"
+          description={ledger.syncState === 'live'
+            ? 'Supabase campaigns 원장에 표시할 캠페인이 없습니다.'
+            : '캠페인을 만들면 war room에 표시됩니다.'}
+          action={<Button variant="primary" size="sm" icon="plus" onClick={createCampaign}>Campaign</Button>}
+        />
+      )}
+
+      {selected && (
       <div
         className="campaign-war-room"
         data-focus={focusMode ? 'true' : 'false'}
@@ -1697,7 +2296,30 @@ export function Campaigns() {
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                        <Badge tone={sTone[c.status]} size="xs">{c.status}</Badge>
+                        <select
+                          aria-label={`${c.name} 상태 변경`}
+                          value={CAMPAIGN_STATUS_OPTIONS.find(opt => opt.label === c.status)?.value || 'draft'}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            const opt = CAMPAIGN_STATUS_OPTIONS.find(o => o.value === e.target.value);
+                            if (opt) updateCampaignStatus(c.id, opt.label);
+                          }}
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 500,
+                            minHeight: 32,
+                            padding: '5px 8px',
+                            borderRadius: 999,
+                            border: '1px solid var(--line-soft)',
+                            background: 'var(--surface-3)',
+                            color: `var(--${sTone[c.status] === 'success' ? 'success' : sTone[c.status] === 'warning' ? 'warning' : 'fg-muted'})`,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {CAMPAIGN_STATUS_OPTIONS.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
                         <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>ends {c.end}</span>
                       </div>
                       <div style={{ fontSize: 14.5, fontWeight: 500, letterSpacing: '-0.01em', color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
@@ -1808,10 +2430,11 @@ export function Campaigns() {
           </Card>
 
           <div className="campaign-tab-stage" data-focus={focusMode ? 'true' : 'false'} key={`${selected.id}-${tab}-${focusMode ? 'focus' : 'normal'}`}>
-            <CampaignTabPanel tab={tab} campaign={selected} detail={detail} />
+            <CampaignTabPanel tab={tab} campaign={selected} detail={detail} audienceLeads={audienceLeads} />
           </div>
         </section>
       </div>
+      )}
     </div>
   );
 }

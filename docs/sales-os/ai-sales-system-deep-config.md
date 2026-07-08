@@ -10,9 +10,9 @@
 
 - **SALES-OS (캡처→파이프라인)** — 가장 완성됨. 명함(`app/api/hub/cards/route.js` → `card-intake-core.js` → `google-vision.js`, Gemini Vision)과 시트(`sheets-sync.js`)가 `lead_intake_raw`로 들어와 `match_key`로 디듀프 후 `companies/contacts/leads`로 승격. `revenue-ledger.js`(읽기 전용 딜/리드/어카운트), `followups-ledger.js`(오늘 연락할 곳, 연체 우선), `outcomes-ledger.js`(아웃리치 결과 기록)까지 실제로 배선됨.
 - **WORK (업무)** — 수동 집계기. `app/api/hub/daily-brief`가 5개 ledger를 `Promise.allSettled`로 펼쳐 규칙 기반 신호(딜 정체 ≥10d, Draft/Review 콘텐츠, 실패한 run, 막힌 프로젝트)를 낸다. `daily-brief.jsx`의 `SIGNAL_TARGETS`가 각 신호를 목적지 라우트로 연결 → 사실상 단일 지휘 화면. 단, **결정이 아니라 신호만** 내고, 오퍼레이터가 행동했을 때 **피드백이 없다.**
-- **AGENTS (에이전트)** — AI가 실제로 사는 유일한 곳: **Sales Guru**. `revenue.jsx` `GuruCoachPanel` → `guru-client.js` `requestGuruCoaching()` → `app/api/hub/sales-mentor/route.js` `buildSalesContext()`(→ `getRevenueLedger()`, ~40건으로 트림) → Engine `/api/ai/sales-mentor`(12-guru/decision-styles 지식베이스). 나머지(Council·Orders·Office)는 **목 데이터.** 5-페르소나(Order→Sales→Content→Production→Review)는 `docs/sales-os/personas/00~04` + `registry.json`에 완전 명세, `migration 0010`이 agents 테이블에 시드까지 했지만 — **이를 읽는 커널이 없다.** `apps/hub/lib/sales-os/` 디렉터리 부재, `context-assembler.js`/`persona-registry.js` 없음, `/team`·`/inbox` 명령은 gitignore되어 end-to-end로 돈 적 없음. `work_order`는 시드 설정의 `emits` 문자열일 뿐 **물리 테이블이 아니다.**
+- **AGENTS (에이전트)** — AI가 실제로 사는 곳은 **Sales Guru + 승인 큐**다. `revenue.jsx` `GuruCoachPanel` → `guru-client.js` `requestGuruCoaching()` → `app/api/hub/sales-mentor/route.js` → `context-assembler.js`(Revenue/Outcomes/Content/Agent memory/ClassIn operator context) → Engine `/api/ai/sales-mentor`(12-guru/decision-styles 지식베이스). 성공 결과는 `agent_runs`에 기억되고 `work_orders(source='guru', status='proposed')`로 승인 큐에 올라간다. 나머지 Council·Office는 아직 제한적이지만 `work_orders`/`agent_runs` 물리 테이블은 `migration 0011`로 존재한다.
 
-**실제 루프:** 규칙 신호 → 사람이 브리프를 읽음 → 사람이 딜 1건을 Guru로 딥링크 → 사람이 행동 → 사람이 결과 로깅 → 결과는 followups의 'why' 표시 문자열과 last_touch 최신성으로만 흐르고 **재랭킹에 반영 안 됨**(priority = `since*10 + score/10 | amount/1e6`). **AI는 ledger에 볼트로 붙은 무상태 자문가이지, 오케스트레이터가 아니다.** 문서상 비전(자율 5-페르소나 일일 루프)과 가동 시스템(코칭 1개 + 휴리스틱 신호) 사이의 간극 = 제품 기회 전체.
+**실제 루프:** 규칙 신호 → Daily Brief가 follow-up/Guru/work_order를 노출 → 사람이 Guru 코칭 또는 승인 큐를 확인 → 사람이 실행 → outcome 로깅 → followups가 outcome + 리드 소스 우선순위를 반영해 재랭킹. 아직 완전 자율 오케스트레이터는 아니지만, AI는 더 이상 무상태 자문가만은 아니고 **기억하는 코치 + proposed action producer**가 되었다.
 
 ## 1. 타깃 — 하나의 루프 (One Loop)
 
@@ -28,7 +28,7 @@
 ### 가로지르는 3원칙 (cross-cutting)
 
 1. **Supabase = 단일 진실원천.** 모든 상태는 Supabase 테이블에 쓴다. eeoCRM(Xiaoshouyi)은 **읽기 전용 enrichment**(`migration 0006` 소유자명 테이블 활용), Google Sheets는 **캡처 전용**. 진실은 Supabase에만.
-2. **반자동 = 1클릭 승인 게이트.** 모든 페르소나/에이전트 산출물은 `work_orders` 행(`status='proposed'`)으로 큐잉 → 데일리 브리프 승인 큐에 노출 → 오퍼레이터 1클릭 `approve` → `status='approved'` → (이후) 실행. **승인 없는 외부 액션(카톡/DM 발송, 리드 승격, 딜 클로징)은 없다.**
+2. **반자동 = 1클릭 승인 게이트.** 모든 페르소나/에이전트 산출물은 `work_orders` 행(`status='proposed'`)으로 큐잉 → 데일리 브리프 승인 큐에 노출 → 오퍼레이터 1클릭 `approve` → `status='approved'` → 실행 직전 원자 claim(`status='executing'`) → 성공 후 `executed`. **승인 없는 외부 액션(카톡/DM 발송, 리드 승격, 딜 클로징)은 없다.**
 3. **360 메모리 = 공유 입력.** `context-spine.md`의 operating_context를 단일 모듈(`context-assembler.js`)이 조립 → Guru와 모든 페르소나가 **같은 풍부한 입력**을 받는다. 이게 "에이전트가 나를 기억한다"의 실체.
 
 ## 2. 빠진 커널 (the spine to build)
@@ -39,8 +39,8 @@
 | --- | --- | --- |
 | `work_orders` 테이블 | 신규 migration | 반자동 큐의 백본. 페르소나 산출물이 `proposed`로 쌓이는 곳 |
 | `agent_runs`(coaching_log) 테이블 | 신규 migration | 에피소드 메모리. Guru/페르소나가 "무엇을 추천했고 통했는지" |
-| `persona-registry.js` | 신규 모듈 | 시드된 agents 테이블 + `registry.json`을 런타임에서 로드 |
-| `context-assembler.js` | 신규 모듈 | 360 operating_context 조립(entity+ledger+outcomes+content+brand, `missing[]` degradation) |
+| `persona-registry.js` | 부분 완료 | 시드된 agents 테이블 + `registry.json`을 런타임에서 로드 |
+| `context-assembler.js` | 완료 | 360 operating_context 조립(entity+ledger+outcomes+content+brand+ClassIn operator context, `missing[]` degradation) |
 | `inbox-router.js` | 신규 모듈 | 한 줄 캡처 → 분류(LLM) → lead/outcome/content/note 라우팅 |
 
 ## 3. 단계별 빌드 — 4개 우선순위 축에 매핑
@@ -50,7 +50,7 @@
 
 ### Phase 0 — 토대 (foundation) · effort S~M
 반자동 큐와 에피소드 메모리가 앉을 자리부터.
-- `supabase/migrations`: `work_orders`(id, persona, kind/emits, ref_company, ref_deal, payload, status[proposed|approved|executed|dismissed], created_at), `agent_runs`(persona/guru, mode, ref, recommendation, outcome_id nullable)
+- `supabase/migrations`: `work_orders`(id, persona, kind/emits, ref_company, ref_deal, payload, status[proposed|approved|executing|executed|dismissed], created_at), `agent_runs`(persona/guru, mode, ref, recommendation, outcome_id nullable)
 - `apps/hub/lib/sales-os/persona-registry.js` — agents 테이블 + `docs/sales-os/personas/registry.json` 로더. `agents.jsx` Orders/Council의 하드코딩 배열을 이걸로 교체.
 
 ### Phase 1 — 에이전트 메모리·지식 (우선순위 #1) · effort L+S
@@ -67,7 +67,7 @@ Guru를 무상태 자문가 → 기억하는 코치로.
 ### Phase 3 — 데일리 브리프 = 단일 지휘 화면 (#3) · effort S
 브리프를 신호판 → 1클릭 승인 콕핏으로.
 - `daily-brief/route.js` + `operating-ledger.js` × `revenue-ledger.js` — **교차 리스크 신호**(같은 회사: 막힌 프로젝트 + 정체 딜 = "이 어카운트 두 전선에서 위험") 조인.
-- `daily-brief.jsx` — `work_orders(proposed)` 승인 큐를 브리프에 노출("승인 대기 N건"), `SIGNAL_TARGETS`에 1클릭 approve 액션 연결. ← 여기가 반자동 게이트의 물리적 위치.
+- `daily-brief.jsx` — `work_orders(proposed, approved)` 승인 큐를 브리프에 노출("승인 대기 N건" + "승인됨 N건"), 1클릭 approve와 approved order 실행을 연결. ← 여기가 반자동 게이트의 물리적 위치.
 
 ### Phase 4 — 성과 루프 / 학습 (#4) · effort M
 어제의 결과가 오늘의 콜 리스트를 바꾼다.
@@ -87,13 +87,13 @@ Guru를 무상태 자문가 → 기억하는 코치로.
 | from → to | 상태 | 메커니즘 |
 | --- | --- | --- |
 | DailyBrief 신호 → Guru | live | `SIGNAL_TARGETS` → `guruChatPath(?agent=guru&mode&ref)` |
-| Revenue ledger → Guru 코칭 | live | `buildSalesContext()` → Engine `/api/ai/sales-mentor` |
+| Revenue ledger → Guru 코칭 | live | `context-assembler.js` → Engine `/api/ai/sales-mentor` |
 | 시트+명함 → 파이프라인 | live | `card-intake`/`sheets-sync` → `lead_intake_raw` → `promoteStagedLeads()` |
-| 결과 → 팔로업 트리아지 | partial | `followups-ledger`가 outcome을 'why'로만 읽음, 우선순위 무반영 |
+| 결과 → 팔로업 트리아지 | partial+ | `followups-ledger`가 outcome boost + ClassIn source priority(설명회/Threads/Meta)를 반영 |
 | 결과 → 학습/lead score | **missing** | `leads.score` 정적, 재가중 없음 |
 | 인박스 → 5 페르소나 | **missing** | 분류기·라우터 부재 |
 | registry.json → 런타임 | **missing** | 시드만 있고 로더 없음 |
-| 360 스키마 → buildSalesContext | partial | flat 매출 슬라이스만, crm/content/social/brand 미조립 |
+| 360 스키마 → Guru context | live | revenue/outcomes/content/brand/memory/ClassIn operator context 조립 |
 | 플로우 → 에이전트 | **missing** | 이벤트가 페르소나/Guru run을 트리거 안 함 |
 | 콘텐츠 ledger → 360/Content 페르소나 | **missing** | `content-ledger` 미조인 |
 | 프로젝트 next_action → 브리프/Guru | partial | 신호 시드/코칭 입력에 미사용 |

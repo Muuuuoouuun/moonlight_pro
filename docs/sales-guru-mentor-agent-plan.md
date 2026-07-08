@@ -23,6 +23,12 @@
 Guru는 *왜 이 딜이 막혔고, 어떻게 다르게 접근해야 하는지를 가르친다*. 출력은
 지시(order)가 아니라 **코칭(coaching) + 다음 액션 제안**이다.
 
+2026-06 현실 업데이트: Guru의 1차 적용 대상은 Moonlight 전체가 아니라 **ClassIn 회사 영업 lane**이다.
+ClassIn은 운영자의 현재 회사 업무이며, 리드의 95%는 Meta 광고/마케팅팀 Google Sheet에서 온다.
+Guru는 월간 계약 수·하드웨어 유닛·CNY 매출 목표를 같이 보고, 회사 CRM은 read/get만 한다.
+고객 전달·콘텐츠 업로드는 `work_orders(status='proposed')` 승인 큐 이후 사람 실행이고,
+회사 CRM push/자동 입력은 승인으로도 허용하지 않는다. 필요하면 수동 체크리스트만 만든다.
+
 ## 3. 왜 지금 필요한가
 
 현재 Revenue 표면은 상태를 잘 **보여주지만**, 판단을 **돕지는** 않는다.
@@ -91,10 +97,13 @@ Guru는 **새 데이터 소스를 만들지 않고** 기존 원장을 읽고 쓴
 - `deals`, `leads`, `deal_stages` — `/api/hub/revenue` 가 노출하는 형태 그대로
 - `accounts` + `ACCOUNT_DETAIL`(activity/notes) — deal-review 모드의 근거
 - `cases` — 계정 건강도(health) 신호
+- `context.operator` — `apps/hub/lib/sales-os/operator-context.js`의 ClassIn 목표/소스 우선순위/CRM 경계
+- `lead_intake_raw.normalized`/`leads.meta` — Google Sheets transport와 Meta/Threads/설명회 attribution
 
 **쓰기 (판단 기록)**
 - Engine `brief` route가 `project_updates`에 쓰듯, Guru도
   `event_type: "ai.sales_mentor"`, `source: "guru"` 레코드로 코칭 결과를 적재한다.
+- Hub proxy는 성공한 Guru 결과를 `work_orders`에 `source:"guru"`, `gate:"human_approval"`로 제안해 Daily Brief 승인 큐에 올린다.
 - Supabase가 없는 환경은 CLAUDE.md 규칙대로 **mock과 섞지 않고** `preview`/empty 상태로 표기.
 
 ## 7. 아키텍처 적용
@@ -142,6 +151,9 @@ systemInstruction:
   "당신은 Moonlight 운영자의 영업 멘토입니다. 노련한 세일즈 코치처럼
    직설적이고 구체적으로, 한국어로 조언합니다. 칭찬·일반론은 금지하고
    항상 '다음 한 수'로 끝맺습니다. 데이터에 없는 사실은 단정하지 않습니다."
+  "ClassIn은 현재 회사 영업 lane입니다. Meta/Sheet 리드, 설명회 신청,
+   Threads 관심 리드, 월 계약/유닛/CNY 목표를 우선 판단합니다.
+   회사 CRM push와 고객 직접 발송은 금지하고 승인 큐 후보만 제안합니다."
 
 prompt(mode, context):
   - 모드별 질문 1줄
@@ -149,6 +161,7 @@ prompt(mode, context):
       1. 진단        (지금 무엇이 보이는가)
       2. 리스크      (놓치면 잃는 것)
       3. 다음 액션   (구체적 1~3개, 담당/기한 포함)
+      4. 승인 큐 후보 (work_order 제목 + human approval gate)
   - "Sales ledger snapshot:" + JSON.stringify(context)
 ```
 

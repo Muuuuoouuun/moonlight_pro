@@ -18,6 +18,9 @@ import { RevenueOverview, Leads, Deals, Cases, Accounts } from "./pages/revenue"
 import { Followups } from "./pages/followups";
 import { AutomationsIndex, EmailAutomation, Webhooks, Runs, Flows } from "./pages/automations";
 import { SheetsSync } from "./pages/sheets-sync";
+import { EeocrmSync } from "./pages/eeocrm-sync";
+import { IntakeInbox } from "./pages/intake-inbox";
+import { Segments } from "./pages/segments";
 import { AgentsChat, AgentsCouncil, AgentsOrders, AgentsOffice } from "./pages/agents";
 import { Evolution, Settings } from "./pages/evolution-settings";
 
@@ -71,6 +74,27 @@ function LegacyPlaceholder({ path, onNavigate }) {
 
 const PAGE_MAP = {
   'dashboard/daily-brief': (n) => <DailyBrief onNavigate={n} />,
+
+  // ── real_v1 workspaces → existing pages scoped by workspace ──
+  // 클래스인 (current company sales lane)
+  'dashboard/classin/pipeline': (n) => <Deals workspace="classin" onNavigate={n} />,
+  'dashboard/classin/projects': () => <Projects workspace="classin" />,
+  'dashboard/classin/revenue': (n) => <Leads workspace="classin" onNavigate={n} />,
+  'dashboard/classin/intake': (n) => <IntakeInbox onNavigate={n} />,
+  'dashboard/classin/segments': (n) => <Segments workspace="classin" onNavigate={n} />,
+  'dashboard/classin/accounts': (n) => <Accounts onNavigate={n} />,
+  'dashboard/classin/followups': () => <Followups />,
+  'dashboard/classin/automations': () => <SheetsSync />,
+  // Legacy ClassIn routes kept alive while old bookmarks exist.
+  'dashboard/classin/cohorts': () => <Projects workspace="classin" />,
+  'dashboard/classin/content': () => <Queue workspace="classin" />,
+  // 회사 (company) workspace routes retired — absorbed into 클래스인.
+  // See workspace-map.js header + LEGACY_REDIRECTS in hub-data.js.
+  // 브랜드 업무 (brand work)
+  'dashboard/brand/projects': () => <Projects workspace="brand" />,
+  'dashboard/brand/studio': () => <Studio workspace="brand" />,
+  'dashboard/brand/queue': () => <Queue workspace="brand" />,
+
   'dashboard/work/calendar': () => <Calendar />,
   'dashboard/work/projects': () => <Projects />,
   'dashboard/work/decisions': () => <Decisions />,
@@ -80,9 +104,11 @@ const PAGE_MAP = {
   'dashboard/content/queue': () => <Queue />,
   'dashboard/content/campaigns': () => <Campaigns />,
   'dashboard/revenue/overview': (n) => <RevenueOverview onNavigate={n} />,
-  'dashboard/revenue/leads': () => <Leads />,
+  'dashboard/revenue/leads': (n) => <Leads onNavigate={n} />,
+  'dashboard/revenue/intake': (n) => <IntakeInbox onNavigate={n} />,
+  'dashboard/revenue/segments': (n) => <Segments onNavigate={n} />,
   'dashboard/revenue/deals': (n) => <Deals onNavigate={n} />,
-  'dashboard/revenue/cases': () => <Cases />,
+  'dashboard/revenue/cases': (n) => <Cases onNavigate={n} />,
   'dashboard/revenue/accounts': (n) => <Accounts onNavigate={n} />,
   'dashboard/revenue/followups': () => <Followups />,
   'dashboard/automations': (n) => <AutomationsIndex onNavigate={n} />,
@@ -91,6 +117,7 @@ const PAGE_MAP = {
   'dashboard/automations/webhooks': (n) => <Webhooks onNavigate={n} />,
   'dashboard/automations/runs': () => <Runs />,
   'dashboard/automations/sheets': () => <SheetsSync />,
+  'dashboard/automations/eeocrm': () => <EeocrmSync />,
   'dashboard/agents/chat': (n) => <AgentsChat onNavigate={n} />,
   'dashboard/agents/council': (n) => <AgentsCouncil onNavigate={n} />,
   'dashboard/agents/orders': (n) => <AgentsOrders onNavigate={n} />,
@@ -101,10 +128,14 @@ const PAGE_MAP = {
 
 const PARENT_JUMP = {
   'dashboard': 'dashboard/daily-brief',
-  'dashboard/work': 'dashboard/work/projects',
+  'dashboard/classin': 'dashboard/classin/pipeline',
+  'dashboard/brand': 'dashboard/brand/projects',
+  'dashboard/work': 'dashboard/work/calendar',
   'dashboard/content': 'dashboard/content/queue',
   'dashboard/revenue': 'dashboard/revenue/overview',
+  'dashboard/automations': 'dashboard/automations/runs',
   'dashboard/agents': 'dashboard/agents/chat',
+  'dashboard/system': 'dashboard/revenue/overview',
 };
 
 export function HubApp() {

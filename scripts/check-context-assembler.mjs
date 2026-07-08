@@ -14,6 +14,10 @@ import {
   outcomesForEntity,
   selectBrand,
 } from "../apps/hub/lib/sales-os/context-schema.js";
+import {
+  buildLeadSourceMix,
+  getClassInOperatorContext,
+} from "../apps/hub/lib/sales-os/operator-context.js";
 
 const failures = [];
 
@@ -88,6 +92,42 @@ ok("focus missing notes eeoCRM + leads + contacts", focus.missing.length === 3 &
 const noDeal = buildFocusOperatingContext({ deal: null });
 eq("focus no deal -> found false", noDeal.found, false);
 eq("focus no deal -> missing deals", noDeal.missing[0].source, "deals");
+
+// --- buildFocusOperatingContext with a matched lead (score/next_action/contact filled) ---
+const focusWithLead = buildFocusOperatingContext({
+  deal: { id: "D1", leadId: "L1", name: "강남학원 도입", stage: "prop", value: 3000000 },
+  account: { name: "강남학원" },
+  lead: { id: "L1", score: 72, nextAction: "설명회 후 견적 발송", contactName: "김원장", contactEmail: "kim@academy.kr" },
+  entityOutcomes: [],
+  brand: { voice: "classmoon", rules: ["R"], forbidden: ["F"] },
+});
+eq("focus+lead score filled", focusWithLead.ledger.score, 72);
+eq("focus+lead next_action filled", focusWithLead.ledger.next_action_hint, "설명회 후 견적 발송");
+eq("focus+lead contact filled", focusWithLead.entity.contact, "김원장 <kim@academy.kr>");
+eq("focus+lead lead_id filled", focusWithLead.entity.lead_id, "L1");
+ok("focus+lead missing only eeoCRM", focusWithLead.missing.length === 1 && focusWithLead.missing[0].source === "eeoCRM");
+
+// Lead matched but no contact attached → contacts still reported missing.
+const focusNoContact = buildFocusOperatingContext({
+  deal: { id: "D1", name: "강남학원 도입", stage: "prop", value: 3000000 },
+  lead: { id: "L1", score: 0, nextAction: null, contactName: null, contactEmail: null },
+});
+eq("focus+lead zero score -> null (unscored)", focusNoContact.ledger.score, null);
+ok("focus+lead no contact -> contacts missing", focusNoContact.missing.some((m) => m.source === "contacts") && focusNoContact.missing.some((m) => m.source === "eeoCRM") && focusNoContact.missing.length === 2);
+
+// --- ClassIn operator context (Guru guardrails) ---
+const mix = buildLeadSourceMix([
+  { source: "meta_ads", meta: { campaign: "설명회" } },
+  { source: "threads", channel: "threads-dm" },
+  { source: "google_sheets" },
+]);
+eq("operator lead source mix total", mix.total, 3);
+eq("operator lead source mix meta", mix.metaAds, 1);
+eq("operator lead source mix threads", mix.threads, 1);
+const op = getClassInOperatorContext({ leadSourceMix: mix });
+eq("operator lane key", op.lane.key, "classin_sales");
+eq("operator crm no push", op.crm.companyCrmWrite, false);
+ok("operator target tracks contracts", op.targets.monthlyContractTarget >= 60);
 
 console.log("");
 if (failures.length) {

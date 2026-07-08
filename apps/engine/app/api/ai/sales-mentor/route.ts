@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 const MODES = {
   "pipeline-triage": {
     question:
-      "이번 주 가장 먼저 손대야 할 딜 3건과 그 이유를 우선순위로 제시하라. 정체·금액·접촉 공백을 근거로 삼아라.",
+      "ClassIn 월간 계약/유닛/매출 목표를 기준으로 이번 주 가장 먼저 손대야 할 딜·리드 3건과 그 이유를 우선순위로 제시하라. 설명회 신청, Threads 관심, 광고 리드의 접촉 공백을 특히 봐라.",
     frames: "Cardone 10X Contact(80%는 5번째 이후 접촉), Ross MEDDIC 자격, Tracy 시간 우선순위.",
   },
   "deal-review": {
@@ -34,7 +34,7 @@ const MODES = {
   },
   "weekly-retro": {
     question:
-      "지난 주 딜 이동과 won/lost에서 패턴을 찾고, 다음 주에 시도할 실험 1개를 제시하라.",
+      "지난 주 딜 이동, won/lost, 리드 소스, 콘텐츠 성과에서 패턴을 찾고, 다음 주에 시도할 매출 실험 1개를 제시하라.",
     frames:
       "Girard 팔로업·고객 파일, Lemkin churn·expansion, Hill 목표 재정렬.",
   },
@@ -48,6 +48,11 @@ const SYSTEM_INSTRUCTION = [
   "칭찬·일반론·마케팅 카피는 금지하고 항상 '다음 한 수'로 끝맺습니다.",
   "판단 프레임은 12인 세일즈 구루 플레이북에서 가져오되, 사실(딜 상태·금액·접촉 이력)은",
   "제공된 ledger snapshot에서만 인용하고, 데이터에 없는 사실은 단정하지 않습니다.",
+  "ClassIn은 Moonlight 전체가 아니라 운영자의 현재 회사 영업 lane입니다. 개인 사업/브랜드 확장과 섞어 판단하지 않습니다.",
+  "주요 리드 공급원은 Meta 광고/마케팅팀 Google Sheet이고, 보조 소스는 기존 고객 연락과 Threads입니다.",
+  "회사 CRM은 현재 read/get 중심입니다. 회사 CRM에 자동 push하거나 고객에게 직접 발송하라고 지시하지 말고, Moonlight work_orders 승인 큐에 올릴 액션으로 제안합니다.",
+  "문자·카카오톡·Threads DM·전화 중심으로 제안하고, 이메일을 기본 채널로 두지 않습니다.",
+  "고객 직접 전달과 콘텐츠 업로드는 human approval gate 이후의 실행으로 표기합니다. 회사 CRM push/자동 입력은 승인으로도 허용하지 말고 수동 체크리스트로만 제안합니다.",
   "근거가 된 프레임은 한 줄로 출처를 밝힙니다 (예: \"Keenan 4층 기준 Layer 3이 비어 있음\").",
   "context.brand(classmoon) 가드레일을 지키고, 금지 표현(과장·보장·단정, 혁신적·차세대·시너지 같은 default SaaS 톤)을 쓰지 않습니다.",
   "context.outcomes.recent는 실제 접촉 이력이니 다음 액션의 근거로 삼고, context.memory.recent_runs(이전 코칭)와 중복되지 않게 연속성을 유지합니다.",
@@ -95,6 +100,45 @@ function digest360(context: any): string {
     lines.push(`포커스 딜: ${focus.entity?.company ?? "?"} · ${focus.entity?.stage ?? "?"} · last_touch=${focus.ledger?.last_touch ?? "무접촉"}`);
   }
 
+  const wl = context.summary?.recentWonLost;
+  if (wl && (wl.won?.count || wl.lost?.count)) {
+    const money = (amount: Record<string, number> | undefined) => {
+      const parts = Object.entries(amount || {})
+        .filter(([, v]) => Number(v) > 0)
+        .map(([cur, v]) => `${cur} ${Math.round(Number(v)).toLocaleString()}`);
+      return parts.length ? parts.join(" · ") : "-";
+    };
+    const srcMix = (by: Record<string, number> | undefined) => {
+      const parts = Object.entries(by || {})
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
+        .map(([src, n]) => `${src} ${n}`);
+      return parts.length ? parts.join(" · ") : "-";
+    };
+    const approx = wl.approx ? " (일부 종료시점 근사치)" : "";
+    lines.push(
+      `최근 ${wl.windowDays ?? 28}일 성과${approx}: won ${wl.won?.count ?? 0}건 (${money(wl.won?.amount)}) · lost ${wl.lost?.count ?? 0}건 (${money(wl.lost?.amount)})`,
+    );
+    lines.push(
+      `승/패 소스 분해: won[${srcMix(wl.sources?.won)}] · lost[${srcMix(wl.sources?.lost)}]`,
+    );
+  }
+
+  const operator = context.operator;
+  if (operator && typeof operator === "object") {
+    const target = operator.targets || {};
+    const actual = operator.monthlyKpi?.actual || {};
+    lines.push(
+      `ClassIn 목표: 계약 ${target.monthlyContractTarget ?? "?"}건 · 유닛 ${target.monthlyUnitTarget ?? "?"}대 · 매출 ${target.monthlyRevenueTargetCny ?? "?"} CNY`,
+    );
+    lines.push(
+      `ClassIn 현재 월간: 계약 ${actual.contracts ?? 0}건 · 유닛 ${actual.units ?? 0}대 · 매출 ${actual.revenueCny ?? 0} CNY`,
+    );
+    if (Array.isArray(operator.sourcePriority)) {
+      lines.push(`리드 우선순위: ${operator.sourcePriority.join(" > ")}`);
+    }
+    lines.push("운영 경계: 회사 CRM 자동 push/입력 금지 · 고객 전달/콘텐츠 업로드는 승인 큐 이후 사람 실행");
+  }
+
   const missing = context.missing;
   if (Array.isArray(missing) && missing.length) {
     lines.push(`데이터 공백(추정 금지): ${missing.map((m: any) => m.source).join(", ")}`);
@@ -115,6 +159,7 @@ function buildPrompt(mode: Mode, context: unknown, draft?: string | null) {
     "1. 진단 (지금 무엇이 보이는가)",
     "2. 리스크 (놓치면 잃는 것)",
     "3. 다음 액션 (구체적 1~3개, 담당/기한 포함)",
+    "4. 승인 큐 후보 (work_order로 올릴 제목 1개와 gate/human approval 표기)",
   ].filter(Boolean);
 
   if (draft && draft.trim()) {
@@ -168,7 +213,7 @@ export async function POST(req: Request) {
   const result = await generateGeminiText({
     systemInstruction: SYSTEM_INSTRUCTION,
     prompt: buildPrompt(mode, context, draft),
-    maxOutputTokens: typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 768,
+    maxOutputTokens: typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 8192,
   });
   const finishedAt = new Date().toISOString();
 

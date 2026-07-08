@@ -62,7 +62,11 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
       },
     ],
     generationConfig: {
-      maxOutputTokens: input.maxOutputTokens || 768,
+      // gemini-3-* are thinking models: thinking tokens count against maxOutputTokens, so a
+      // low cap starves the visible answer and truncates it mid-sentence. Keep headroom for
+      // thinking + a full answer. maxOutputTokens is a cap, not a charge — billing is per
+      // actual token — so a generous default is safe.
+      maxOutputTokens: input.maxOutputTokens || 8192,
     },
   };
 

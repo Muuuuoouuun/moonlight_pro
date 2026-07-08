@@ -20,6 +20,7 @@ export interface EmailSendRequest {
   segmentId?: string | null;
   segmentLabel?: string | null;
   audience?: string | null;
+  approvedWorkOrderId?: string | null;
 }
 
 function normalizeString(value: string | null | undefined, fallback = "") {

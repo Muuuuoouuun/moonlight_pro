@@ -8,21 +8,46 @@
 export const DEFAULT_HEADER_MAP = {
   // name / institution
   상호: "name", 상호명: "name", 학원명: "name", 기관명: "name", 업체명: "name",
+  고객명: "name", 원명: "name", full_name: "name", fullname: "name",
   name: "name", company: "name", academy: "name", institution: "name",
   // phone
   전화: "phone", 전화번호: "phone", 연락처: "phone", 휴대폰: "phone", 핸드폰: "phone",
-  phone: "phone", tel: "phone", mobile: "phone", contact: "phone",
+  phone: "phone", phone_number: "phone", phonenumber: "phone", "phone number": "phone",
+  tel: "phone", mobile: "phone", contact: "phone",
   // address
   주소: "address", 소재지: "address", 지역: "address", address: "address", region: "address",
   // contact person
   담당자: "contact_name", 원장: "contact_name", 대표: "contact_name", 이름: "contact_name",
-  contact_name: "contact_name", owner: "contact_name", manager: "contact_name",
+  성명: "contact_name", contact_name: "contact_name", owner: "contact_name", manager: "contact_name",
   // email
   이메일: "email", 메일: "email", email: "email", "e-mail": "email",
+  // external lead identifiers (Meta Lead Ads, manual sheets)
+  리드id: "external_id", 메타리드id: "external_id", leadgen_id: "external_id",
+  leadgenid: "external_id", lead_id: "external_id", leadid: "external_id", meta_lead_id: "external_id",
   // status / stage
   상태: "status", 단계: "status", status: "status", stage: "status",
   // source / channel
   소스: "source", 출처: "source", source: "source", 채널: "channel", channel: "channel",
+  // Meta/marketing attribution
+  캠페인: "campaign_name", 캠페인명: "campaign_name", campaign: "campaign_name", campaign_name: "campaign_name",
+  광고: "ad_name", 광고명: "ad_name", 소재: "ad_name", ad: "ad_name", ad_name: "ad_name",
+  광고세트: "adset_name", adset: "adset_name", adset_name: "adset_name",
+  광고id: "ad_id", ad_id: "ad_id", adid: "ad_id",
+  폼: "form_name", 폼명: "form_name", form: "form_name", form_name: "form_name",
+  폼id: "form_id", form_id: "form_id", formid: "form_id",
+  생성일: "created_time", 신청일: "created_time", created_time: "created_time", createdtime: "created_time",
+  // ClassIn sales-specific intent / KPI fields
+  설명회: "intent", 설명회신청: "intent", 행사: "intent", 이벤트: "intent",
+  program: "intent", intent: "intent", event: "intent", briefing: "intent", session: "intent",
+  유효: "validity", 유효리드: "validity", validity: "validity", valid: "validity",
+  대수: "unit_count", 수량: "unit_count", unit: "unit_count", units: "unit_count", unit_count: "unit_count",
+  하드웨어: "unit_count", hardware: "unit_count",
+  매출: "revenue_cny", 금액: "revenue_cny", 위안: "revenue_cny", cny: "revenue_cny",
+  revenue: "revenue_cny", amount: "revenue_cny", revenue_cny: "revenue_cny",
+  통화: "currency", currency: "currency",
+  crm단계: "crm_stage", crm_stage: "crm_stage", kpi: "crm_stage",
+  고객상태: "customer_state", 만료: "customer_state", 소진: "customer_state", 충전: "customer_state",
+  customer_state: "customer_state",
   // free note
   메모: "note", 비고: "note", note: "note", memo: "note", notes: "note",
 };
@@ -41,14 +66,47 @@ function normKey(value) {
   return String(value ?? "").trim().toLowerCase().replace(/\s+/g, "");
 }
 
-export function normalizeName(raw) {
+function textOrNull(raw) {
   const value = String(raw ?? "").trim().replace(/\s+/g, " ");
   return value || null;
 }
 
+function numberOrNull(raw) {
+  const value = String(raw ?? "")
+    .replace(/[,，]/g, "")
+    .replace(/[^\d.\-]/g, "")
+    .trim();
+  if (!value) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function inferSource(out) {
+  const explicit = String(out.source || "").trim();
+  const hay = [
+    explicit,
+    out.channel,
+    out.campaign_name,
+    out.ad_name,
+    out.adset_name,
+    out.ad_id,
+    out.form_id,
+    out.created_time,
+    out.note,
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  if (/(meta|facebook|fb|leadgen|lead ads|광고|캠페인)/.test(hay)) return "meta_ads";
+  if (/(threads|thread|스레드)/.test(hay)) return "threads";
+  if (/(기존|고객|existing|customer)/.test(hay)) return "existing_customer";
+  return explicit || "google_sheets";
+}
+
+export function normalizeName(raw) {
+  return textOrNull(raw);
+}
+
 export function normalizeAddress(raw) {
-  const value = String(raw ?? "").trim().replace(/\s+/g, " ");
-  return value || null;
+  return textOrNull(raw);
 }
 
 // Korean-aware phone normalization: digits only, +82 -> leading 0.
@@ -112,7 +170,33 @@ export function rowsToObjects(values) {
 // under `extra` so nothing is silently dropped.
 export function mapRowToIntake(rowObject, headerMap = {}) {
   const map = { ...DEFAULT_HEADER_MAP, ...headerMap };
-  const out = { name: null, phone: null, address: null, contact_name: null, email: null, status: "new", source: "google_sheets", note: null, extra: {} };
+  const out = {
+    name: null,
+    phone: null,
+    address: null,
+    contact_name: null,
+    email: null,
+    external_id: null,
+    status: "new",
+    source: "google_sheets",
+    channel: null,
+    campaign_name: null,
+    ad_name: null,
+    adset_name: null,
+    ad_id: null,
+    form_name: null,
+    form_id: null,
+    created_time: null,
+    intent: null,
+    validity: null,
+    unit_count: null,
+    revenue_cny: null,
+    currency: null,
+    crm_stage: null,
+    customer_state: null,
+    note: null,
+    extra: {},
+  };
 
   for (const [header, value] of Object.entries(rowObject)) {
     if (header === "__row") continue;
@@ -130,11 +214,27 @@ export function mapRowToIntake(rowObject, headerMap = {}) {
     address: normalizeAddress(out.address),
     contact_name: normalizeName(out.contact_name),
     email: out.email ? String(out.email).trim() || null : null,
+    external_id: textOrNull(out.external_id),
     status: toLeadStatus(out.status),
-    source: out.source ? String(out.source).trim() : "google_sheets",
-    note: out.note ? String(out.note).trim() || null : null,
+    source: inferSource(out),
+    channel: textOrNull(out.channel),
+    campaign_name: textOrNull(out.campaign_name),
+    ad_name: textOrNull(out.ad_name),
+    adset_name: textOrNull(out.adset_name),
+    ad_id: textOrNull(out.ad_id),
+    form_name: textOrNull(out.form_name),
+    form_id: textOrNull(out.form_id),
+    created_time: textOrNull(out.created_time),
+    intent: textOrNull(out.intent),
+    validity: textOrNull(out.validity),
+    unit_count: numberOrNull(out.unit_count),
+    revenue_cny: numberOrNull(out.revenue_cny),
+    currency: textOrNull(out.currency),
+    crm_stage: textOrNull(out.crm_stage),
+    customer_state: textOrNull(out.customer_state),
+    note: textOrNull(out.note),
     extra: out.extra,
-    source_ref: rowObject.__row != null ? `row:${rowObject.__row}` : null,
+    source_ref: textOrNull(out.external_id) || (rowObject.__row != null ? `row:${rowObject.__row}` : null),
   };
   normalized.match_key = computeMatchKey(normalized);
   return normalized;

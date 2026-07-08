@@ -5,10 +5,62 @@ import { Iconed } from "./hub-icons";
 import { IconButton, Avatar, Kbd } from "./hub-primitives";
 import { NAV_TREE, LEGACY_TREE } from "./hub-data";
 
+// Best-effort nav count badges — fetched once on mount, never polled.
+// Keyed by nav child `key` (not path) so callers can look up via item.key.
+function useSidebarCounts() {
+  const [counts, setCounts] = React.useState({});
+
+  React.useEffect(() => {
+    let active = true;
+
+    fetch('/api/hub/intake', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        if (!active) return;
+        const rows = Array.isArray(d?.rows) ? d.rows : Array.isArray(d?.items) ? d.items : [];
+        const pending = rows.filter(row => row?.status === 'pending' || row?.status === 'review').length;
+        setCounts(c => ({ ...c, 'classin-intake': pending }));
+      })
+      .catch(() => {});
+
+    fetch('/api/hub/followups', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        if (!active) return;
+        const items = Array.isArray(d?.items) ? d.items : [];
+        // followups-ledger.js summary shape: { overdue, dueToday, total, shown }.
+        const due = Number.isFinite(d?.summary?.dueToday) ? d.summary.dueToday : items.length;
+        setCounts(c => ({ ...c, 'classin-followups': due }));
+      })
+      .catch(() => {});
+
+    return () => { active = false; };
+  }, []);
+
+  return counts;
+}
+
+function CountBadge({ n }) {
+  if (!n) return null;
+  return (
+    <span className="mono" style={{
+      fontSize: 10, lineHeight: 1, flexShrink: 0,
+      color: n > 0 ? 'var(--moon-300)' : 'var(--fg-faint)',
+      padding: '2px 5px', borderRadius: 999,
+      border: '1px solid var(--line-soft)',
+    }}>
+      {n}
+    </span>
+  );
+}
+
 export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openPalette, className }) {
+  const counts = useSidebarCounts();
   const [open, setOpen] = React.useState(() => {
     const o = {};
-    for (const n of NAV_TREE) if (n.children) o[n.key] = true;
+    // Lead with the three workspaces expanded; secondary groups (Agents / Work /
+    // System) start collapsed so the operating workstreams own the first scan.
+    for (const n of NAV_TREE) if (n.children) o[n.key] = Boolean(n.workspace) || n.children.some(c => c.path === active);
     o.__legacy = false;
     return o;
   });
@@ -18,6 +70,12 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
     if (item.children) return item.children.some(c => active === c.path);
     return false;
   };
+
+  React.useEffect(() => {
+    const activeGroup = NAV_TREE.find(item => item.children?.some(c => c.path === active));
+    if (!activeGroup) return;
+    setOpen(o => (o[activeGroup.key] ? o : { ...o, [activeGroup.key]: true }));
+  }, [active]);
 
   if (collapsed) {
     return (
@@ -41,14 +99,17 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
         </button>
         {NAV_TREE.map(item => {
           const flat = item.children ? item.children[0] : item;
+          const act = isActive(item);
           return (
             <button key={item.key} onClick={() => onNavigate(flat.path)} title={item.label} style={{
               width: 36, height: 36, borderRadius: 'var(--r-sm)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: isActive(item) ? 'var(--fg)' : 'var(--fg-faint)',
-              background: isActive(item) ? 'var(--surface-3)' : 'transparent',
+              color: act ? 'var(--fg)' : 'var(--fg-faint)',
+              background: act ? 'var(--surface-3)' : 'transparent',
             }}>
-              <Iconed name={item.icon} size={16} />
+              {/* Keep the workstream accent in the collapsed rail so the three
+                  workspaces still read as primary. */}
+              <Iconed name={item.icon} size={16} style={item.workspace && !act ? { color: 'var(--moon-300)' } : undefined} />
             </button>
           );
         })}
@@ -119,16 +180,17 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
           }
           const isOpen = open[item.key];
           const act = isActive(item);
+          const ws = Boolean(item.workspace);
           return (
-            <div key={item.key} style={{ marginBottom: 1 }}>
+            <div key={item.key} style={{ marginBottom: ws ? 2 : 1, marginTop: ws ? 2 : 0 }}>
               <button onClick={() => setOpen(o => ({ ...o, [item.key]: !o[item.key] }))} style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 9,
                 height: 30, padding: '0 8px',
-                fontSize: 12.5, fontWeight: 500,
-                color: act ? 'var(--fg)' : 'var(--fg-muted)',
+                fontSize: 12.5, fontWeight: ws ? 600 : 500,
+                color: ws || act ? 'var(--fg)' : 'var(--fg-muted)',
                 borderRadius: 'var(--r-sm)', textAlign: 'left',
               }}>
-                <Iconed name={item.icon} size={14} />
+                <Iconed name={item.icon} size={14} style={ws ? { color: 'var(--moon-300)' } : undefined} />
                 <span style={{ flex: 1 }}>{item.label}</span>
                 <Iconed name="chevronD" size={12} style={{
                   color: 'var(--fg-faint)',
@@ -154,7 +216,8 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
                         onMouseLeave={e => { if (!cAct) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fg-dim)'; } }}
                       >
                         <Iconed name={c.icon} size={12} style={{ color: 'var(--fg-faint)' }} />
-                        <span>{c.label}</span>
+                        <span style={{ flex: 1 }}>{c.label}</span>
+                        <CountBadge n={counts[c.key]} />
                       </button>
                     );
                   })}

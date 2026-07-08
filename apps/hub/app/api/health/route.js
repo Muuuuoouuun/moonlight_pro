@@ -85,7 +85,6 @@ export async function GET() {
     },
     routes: [
       { method: "GET", path: "/api/health" },
-      { method: "POST", path: "/api/ai/brief" },
       { method: "GET", path: "/api/calendar/google/connect" },
       { method: "GET", path: "/api/email/gmail/connect" },
       { method: "POST", path: "/api/email/send" },

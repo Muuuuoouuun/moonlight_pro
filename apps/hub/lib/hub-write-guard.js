@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "crypto";
 
 import { NextResponse } from "next/server.js";
+import { verifyOperatorSessionRequest } from "./operator-session.js";
 
 export const HUB_WRITE_SECRET_HEADER = "x-com-moon-hub-write-secret";
 const DEFAULT_MAX_JSON_BYTES = 64 * 1024;
@@ -89,10 +90,15 @@ export function assertHubWriteAllowed(req) {
     return null;
   }
 
-  if (!isProductionRuntime()) {
-    const requestOrigin = resolveRequestOrigin(req);
-    const expectedOrigins = resolveExpectedOrigins(req);
+  const requestOrigin = resolveRequestOrigin(req);
+  const expectedOrigins = resolveExpectedOrigins(req);
+  const operatorSession = verifyOperatorSessionRequest(req);
 
+  if (operatorSession.ok && requestOrigin && expectedOrigins.has(requestOrigin)) {
+    return null;
+  }
+
+  if (!isProductionRuntime()) {
     if (requestOrigin && expectedOrigins.has(requestOrigin)) {
       return null;
     }

@@ -60,6 +60,8 @@ const I = {
   edit:      (<><path d="M14 5l5 5L8 21H3v-5z"/></>),
   user:      (<><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>),
   building:  (<><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 8h.01M15 8h.01M9 12h.01M15 12h.01M9 16h6"/></>),
+  classin:   (<><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v4.5c0 1.1 2.7 2.5 6 2.5s6-1.4 6-2.5V12"/><path d="M22 10v5"/></>),
+  brand:     (<><path d="M12 3a9 9 0 1 0 0 18 1.9 1.9 0 0 0 1.9-1.9c0-.5-.2-.9-.5-1.2a1.8 1.8 0 0 1 1.3-3.1H17a4 4 0 0 0 4-4c0-4.3-4-7.8-9-7.8z"/><circle cx="7.5" cy="11.5" r="1"/><circle cx="12" cy="8" r="1"/><circle cx="16.5" cy="11.5" r="1"/></>),
   tag:       (<><path d="M20 12l-8 8-9-9V4h7z"/><circle cx="8" cy="8" r="1"/></>),
   folder:    (<><path d="M3 7h7l2 2h9v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z"/></>),
   flag:      (<><path d="M4 3v18M4 4h12l-2 4 2 4H4"/></>),

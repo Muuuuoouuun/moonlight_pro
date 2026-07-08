@@ -48,7 +48,7 @@ create table if not exists public.work_orders (
   asset_id text,
   channel text,                              -- phone | visit | kakao | email | dm | publish | other
   status text not null default 'proposed'
-    check (status in ('proposed', 'approved', 'executed', 'dismissed')),
+    check (status in ('proposed', 'approved', 'executing', 'executed', 'dismissed')),
   gate text,                                 -- 페르소나 gate: outbound->codex | internal->auto | orchestrates | n/a
   source text not null default 'team'
     check (source in ('team', 'inbox', 'guru', 'manual')),

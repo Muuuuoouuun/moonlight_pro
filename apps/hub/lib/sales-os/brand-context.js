@@ -1,0 +1,183 @@
+// Brand context assembler — the richer input for the Council brand-mentor (the brand-side
+// counterpart of context-assembler.js, which feeds the ClassIn sales Guru).
+//
+// Where the sales assembler pulls the revenue ledger, this one pulls the content + project
+// ledgers (brands with voice guardrails, publishing cadence, idea queue, brand projects) plus
+// episodic memory (agent_runs where agent='council'). It scopes projects to the 브랜드 workspace
+// brand set (workspace-map is the SSOT) and degrades honestly: a source failure lands in
+// missing[] and the advice continues on whatever slices resolved.
+
+import { getContentLedger, getRecentContentOutcomes } from "@/lib/repositories/content-ledger";
+import { getProjectLedger } from "@/lib/repositories/operating-ledger";
+import { getRecentAgentRuns } from "@/lib/sales-os/agent-runs";
+import { cadenceStatusString } from "@/lib/sales-os/context-schema";
+import { brandsForWorkspace } from "@/components/hub/workspace-map";
+
+const COUNCIL_AGENT = "council";
+const trim = (arr, n) => (Array.isArray(arr) ? arr.slice(0, n) : []);
+
+async function settled(promise, source, missing) {
+  try {
+    return await promise;
+  } catch (error) {
+    missing.push({ source, reason: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
+
+// Map a content-ledger brand (richest guardrail source) to the compact guardrail the prompt needs.
+function brandGuardrail(brand) {
+  if (!brand) return null;
+  return {
+    key: brand.key || null,
+    name: brand.name || brand.key || null,
+    voice: brand.voice || null,
+    philosophy: brand.philosophy || null,
+    direction: brand.direction || null,
+    keywords: trim(brand.keywords, 8),
+    rules: trim(brand.rules, 6),
+    forbidden: trim(brand.forbidden, 8),
+  };
+}
+
+// Pick the guardrail brand: prefer an explicit ref match, then an own-brand (브랜드 workspace),
+// then the first content brand. Keeps the Council anchored to the operator's own brand voice
+// instead of the ClassIn sales brand.
+function selectFocusBrand(brands, ownKeys, ref) {
+  const list = Array.isArray(brands) ? brands : [];
+  if (!list.length) return null;
+  const needle = ref ? String(ref).toLowerCase() : null;
+  if (needle) {
+    const byRef = list.find(
+      (b) => String(b.key).toLowerCase() === needle || (b.name || "").toLowerCase().includes(needle),
+    );
+    if (byRef) return byRef;
+  }
+  return list.find((b) => ownKeys.includes(b.key)) || list[0];
+}
+
+// 4-week rollup of recorded content outcomes — the engagement numbers the Council
+// audience-analysis mode was missing. Prefer the focus brand's outcomes; fall back to all
+// if none are tagged to it yet (mirrors the scopedProjects honest-fallback). Aggregates by
+// metric (metric is free text, so we just sum per name) with a per-channel breakdown. Returns
+// null when there's nothing in the window so digestBrand can omit the block entirely.
+function buildContentOutcomeRollup(outcomes, focusKey, windowDays = 28) {
+  const cutoff = Date.now() - windowDays * 24 * 60 * 60 * 1000;
+  const inWindow = (Array.isArray(outcomes) ? outcomes : []).filter((o) => {
+    const t = o?.measuredAt ? new Date(o.measuredAt).getTime() : NaN;
+    return Number.isFinite(t) && t >= cutoff;
+  });
+  if (!inWindow.length) return null;
+
+  const forBrand = focusKey ? inWindow.filter((o) => o.brandKey === focusKey) : [];
+  const scoped = forBrand.length ? forBrand : inWindow;
+
+  const byMetric = {};
+  for (const o of scoped) {
+    const metric = o.metric || "unknown";
+    const channel = o.channel || "unknown";
+    const value = Number(o.value) || 0;
+    byMetric[metric] = byMetric[metric] || { total: 0, byChannel: {} };
+    byMetric[metric].total += value;
+    byMetric[metric].byChannel[channel] = (byMetric[metric].byChannel[channel] || 0) + value;
+  }
+
+  return {
+    windowDays,
+    count: scoped.length,
+    brandScoped: forBrand.length > 0,
+    byMetric,
+  };
+}
+
+export async function assembleBrandContext({ mode = "brand-strategy", ref = null, draft = null, workspace = "brand" } = {}) {
+  const missing = [];
+  const [content, projectLedger, runsRes, outcomesRes] = await Promise.all([
+    settled(getContentLedger(), "content-ledger", missing),
+    settled(getProjectLedger(), "operating-ledger", missing),
+    settled(getRecentAgentRuns({ agent: COUNCIL_AGENT, ref, limit: 5 }), "agent_runs", missing),
+    settled(getRecentContentOutcomes({ limit: 200 }), "content-outcomes", missing),
+  ]);
+
+  if (!content && !projectLedger) {
+    return { source: "preview", error: "brand ledgers unavailable", missing };
+  }
+
+  const ownKeys = brandsForWorkspace(workspace);
+  const brands = content?.brands || [];
+  const focusBrand = selectFocusBrand(brands, ownKeys, ref);
+
+  // Scope projects to the 브랜드 workspace brands; if nothing matches yet, keep all so the
+  // advice is never silently empty (the prompt still ignores the ClassIn sales lane).
+  const allProjects = Array.isArray(projectLedger?.projects) ? projectLedger.projects : [];
+  const scopedProjects = allProjects.filter((p) => ownKeys.includes(p.brand));
+  const projects = (scopedProjects.length ? scopedProjects : allProjects).map((p) => ({
+    id: p.id,
+    brand: p.brand,
+    name: p.name,
+    status: p.status,
+    progress: p.progress,
+    due: p.due,
+    owner: p.owner,
+    tag: p.tag,
+    tasks: p.tasks,
+    done: p.done,
+    nextAction: p.nextAction || "",
+    summary: p.summary || "",
+  }));
+
+  const ideaQueue = trim(content?.ideaQueue, 8);
+
+  const context = {
+    source: content?.source || projectLedger?.source || "preview",
+    brand: brandGuardrail(focusBrand),
+    brands: brands.map((b) => ({ key: b.key, name: b.name, kind: b.kind, voice: b.voice })),
+    content: content
+      ? {
+          cadence_status: cadenceStatusString(content.cadence),
+          cadence: content.cadence || null,
+          idea_queue_top: ideaQueue,
+          queue_counts: content.summary || null,
+          outcomes: buildContentOutcomeRollup(outcomesRes?.outcomes, focusBrand?.key),
+          outcomes_source: outcomesRes?.source || "preview",
+        }
+      : null,
+    projects: trim(projects, 30),
+    memory: {
+      recent_runs: trim(runsRes?.runs, 5),
+    },
+    missing,
+  };
+
+  // Focus: when a ref is given (a project row or an idea), surface it so the advice is specific.
+  if (ref) {
+    const needle = String(ref).toLowerCase();
+    const project = projects.find(
+      (p) => String(p.id).toLowerCase() === needle || (p.name || "").toLowerCase().includes(needle),
+    );
+    const idea = ideaQueue.find((i) => (i.title || "").toLowerCase().includes(needle));
+    if (project) {
+      context.focus = {
+        found: true,
+        kind: "project",
+        entity: {
+          name: project.name,
+          status: project.status,
+          progress: project.progress,
+          nextAction: project.nextAction,
+          brand: project.brand,
+        },
+      };
+    } else if (idea) {
+      context.focus = {
+        found: true,
+        kind: "idea",
+        entity: { name: idea.title, status: "idea", nextAction: "" },
+      };
+    } else {
+      context.focus = { found: false, missing: [{ source: "projects/content", reason: "focus ref 매칭 안 됨" }] };
+    }
+  }
+
+  return context;
+}

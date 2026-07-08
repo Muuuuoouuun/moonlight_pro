@@ -78,6 +78,27 @@ eq("mapRowToIntake match_key", mapped.match_key, "phone:025551234");
 eq("mapRowToIntake source_ref", mapped.source_ref, "row:5");
 eq("mapRowToIntake unmapped -> extra", mapped.extra["특이사항"], "방문 예정");
 
+const metaMapped = mapRowToIntake({
+  __row: 7,
+  full_name: "ClassIn 설명회",
+  phone_number: "+82 10-9999-8888",
+  leadgen_id: "LG-123",
+  campaign_name: "Meta 설명회 캠페인",
+  ad_name: "실사용 3초 영상",
+  form_id: "FORM-9",
+  created_time: "2026-06-20T10:00:00+09:00",
+  대수: "3",
+  매출: "60,000 CNY",
+  유효: "유효",
+});
+eq("meta source inferred", metaMapped.source, "meta_ads");
+eq("meta source_ref external id", metaMapped.source_ref, "LG-123");
+eq("meta phone normalized", metaMapped.phone, "01099998888");
+eq("meta campaign kept", metaMapped.campaign_name, "Meta 설명회 캠페인");
+eq("meta unit count", metaMapped.unit_count, 3);
+eq("meta revenue cny", metaMapped.revenue_cny, 60000);
+eq("meta validity", metaMapped.validity, "유효");
+
 console.log("");
 if (failures.length) {
   console.log(`[FAIL] sheets-normalize: ${failures.length} check(s) failed`);

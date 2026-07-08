@@ -9,13 +9,20 @@ import { createHmac, timingSafeEqual } from "crypto";
 
 const GOOGLE_GMAIL_PROVIDER = "google_gmail";
 const GOOGLE_GMAIL_SYNC_SOURCE = "google_gmail";
+// gmail.readonly added for the Gmail -> lead_intake_raw scan pipeline
+// (apps/hub/lib/repositories/gmail-intake.js). Existing connections created
+// before this scope was added will need to reconnect (buildGoogleGmailAuthUrl
+// forces prompt=consent, so re-auth re-issues a refresh token with the wider
+// scope) — reading inbox messages is not possible with a send-only grant.
 const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.send",
+  "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
+const GOOGLE_GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 
 function resolveGoogleOAuthConfig() {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
@@ -352,4 +359,129 @@ export async function recordGoogleGmailSync({
     started_at: new Date().toISOString(),
     finished_at: new Date().toISOString(),
   });
+}
+
+// --- message reading (scan pipeline) ----------------------------------------
+// Mirrors google-sheets.js's resolveSheetsConnection / getValidAccessToken
+// shape so gmail-intake.js can follow the same connect -> refresh -> call flow.
+
+export async function resolveGmailConnection(workspaceId = resolveDefaultWorkspaceId()) {
+  const stored = await fetchLatestGoogleGmailConnection(workspaceId);
+  if (stored?.config?.refreshToken) {
+    return {
+      source: "connection",
+      connectionId: stored.id,
+      config: stored.config,
+      refreshToken: stored.config.refreshToken,
+      accessToken: stored.config.accessToken || null,
+      expiresAt: stored.config.expiresAt || null,
+      mailbox: stored.config.mailbox || "me",
+    };
+  }
+
+  // Fallback env refresh token (single-mailbox ops setup, no DB connection row).
+  const envRefresh =
+    process.env.GOOGLE_REFRESH_TOKEN_BOSS?.trim() ||
+    process.env.GOOGLE_REFRESH_TOKEN?.trim();
+  if (envRefresh) {
+    return {
+      source: "env",
+      connectionId: null,
+      config: null,
+      refreshToken: envRefresh,
+      accessToken: null,
+      expiresAt: null,
+      mailbox: "me",
+    };
+  }
+
+  return null;
+}
+
+function isAccessTokenFresh(connection) {
+  if (!connection?.accessToken || !connection?.expiresAt) return false;
+  return new Date(connection.expiresAt).getTime() - Date.now() > 60_000;
+}
+
+// Resolves a valid access token, refreshing if needed. Persists refreshed
+// tokens back to the connection row (env source is read-only, same as Sheets).
+export async function getValidGmailAccessToken(connection) {
+  if (!connection?.refreshToken) return null;
+  if (isAccessTokenFresh(connection)) return connection.accessToken;
+
+  const tokenData = await refreshGoogleGmailAccessToken(connection.refreshToken);
+  if (!tokenData?.access_token) return null;
+
+  const accessToken = tokenData.access_token;
+  const expiresAt = tokenData.expires_in
+    ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
+    : null;
+
+  if (connection.source === "connection" && connection.connectionId) {
+    const mergedConfig = {
+      ...(connection.config || {}),
+      accessToken,
+      expiresAt,
+      // Google omits refresh_token on refresh — keep the original.
+      refreshToken: tokenData.refresh_token || connection.refreshToken,
+    };
+    await updateSupabaseRecord(
+      "integration_connections",
+      [["id", `eq.${connection.connectionId}`]],
+      { config: mergedConfig, last_synced_at: new Date().toISOString() },
+    );
+  }
+
+  return accessToken;
+}
+
+async function gmailRequest(path, { accessToken, method = "GET" } = {}) {
+  const response = await fetch(`${GOOGLE_GMAIL_API_BASE}${path}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(detail || `Gmail API ${method} ${path} failed with ${response.status}`);
+  }
+
+  return response.json().catch(() => ({}));
+}
+
+function decodeHeaderValue(headers, name) {
+  const header = Array.isArray(headers)
+    ? headers.find((h) => String(h?.name || "").toLowerCase() === name.toLowerCase())
+    : null;
+  return header?.value || "";
+}
+
+// Lists recent INBOX message ids, then fetches metadata (from/subject/snippet)
+// for each — no body content is fetched, only what the classifier needs.
+export async function fetchRecentGmailMessages({ accessToken, maxMessages = 20 }) {
+  const listData = await gmailRequest(
+    `/messages?maxResults=${encodeURIComponent(maxMessages)}&labelIds=INBOX`,
+    { accessToken },
+  );
+  const ids = Array.isArray(listData.messages) ? listData.messages.map((m) => m.id) : [];
+
+  const messages = [];
+  for (const id of ids) {
+    const detail = await gmailRequest(
+      `/messages/${encodeURIComponent(id)}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`,
+      { accessToken },
+    );
+    messages.push({
+      id: detail.id || id,
+      threadId: detail.threadId || null,
+      from: decodeHeaderValue(detail.payload?.headers, "From"),
+      subject: decodeHeaderValue(detail.payload?.headers, "Subject"),
+      snippet: detail.snippet || "",
+    });
+  }
+
+  return messages;
 }

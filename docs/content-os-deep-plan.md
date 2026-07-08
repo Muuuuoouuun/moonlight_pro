@@ -438,7 +438,7 @@ YYYY-MM-DD-{brand-key}-{slug}-slide-01.png
 - 브랜드별 card template selector
 - 1080x1080 PNG export
 - ZIP export
-- Google Drive 업로드
+- Google Drive 업로드는 `work_orders(status='approved')`를 실행 직전 `executing`으로 claim한 뒤에만 실행
 - Google Drive file id/share URL을 `content_assets`에 기록
 - export history 표시
 
@@ -450,6 +450,7 @@ YYYY-MM-DD-{brand-key}-{slug}-slide-01.png
 
 - n8n automation recipe 설정
 - handoff dry-run
+- 실제 n8n handoff는 `work_orders(status='approved')`를 실행 직전 `executing`으로 claim한 뒤에만 실행
 - handoff request
 - `publish_logs` 기록
 - 실패/성공 status ledger 표시

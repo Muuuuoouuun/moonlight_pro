@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 
+import { assertHubWriteAllowed } from "@/lib/hub-write-guard";
 import { getAutomationsLedger } from "@/lib/repositories/automations-ledger";
 import { getContentLedger } from "@/lib/repositories/content-ledger";
+import { getFollowups } from "@/lib/repositories/followups-ledger";
 import { getProjectLedger } from "@/lib/repositories/operating-ledger";
+import { getRecentOutcomes } from "@/lib/repositories/outcomes-ledger";
 import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
 import { getWorkLedger } from "@/lib/repositories/work-ledger";
+import { getRecentAgentRuns } from "@/lib/sales-os/agent-runs";
+import { scanStalledDeals } from "@/lib/sales-os/stalled-scan";
 import { getWorkOrders } from "@/lib/sales-os/work-orders";
 
 export const runtime = "nodejs";
@@ -27,12 +32,19 @@ function formatMoney(amount) {
   return `₩${n}`;
 }
 
-function metric(label, value, delta, tone = "moon", spark = [3, 4, 3, 5, 4, 6, 5, 7]) {
-  return { label, value, delta, tone, spark };
+function formatShortDate(value) {
+  if (!value) return "미정";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "미정";
+  return new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric" }).format(date);
 }
 
-function action(label, actionKey, primary = false) {
-  return { label, action: actionKey, primary };
+function metric(label, value, delta, tone = "moon", spark = [3, 4, 3, 5, 4, 6, 5, 7], target = null) {
+  return target ? { label, value, delta, tone, spark, target } : { label, value, delta, tone, spark };
+}
+
+function action(label, actionKey, primary = false, target = null) {
+  return target ? { label, action: actionKey, primary, target } : { label, action: actionKey, primary };
 }
 
 // Cross-pillar risk: the strategist judgment a solo operator lacks bandwidth for.
@@ -125,9 +137,21 @@ function buildApprovalSignals(queue) {
   }];
 }
 
-function buildRevenueSignals(revenue) {
+// Latest outreach outcome per deal id — powers the rung-3 "왜 정체인가" evidence line
+// on stalled-deal signals. Outcomes arrive newest-first (occurred_at.desc), so the first
+// match per deal is the most recent contact.
+function lastContactByDeal(outcomes) {
+  const byDeal = new Map();
+  for (const o of Array.isArray(outcomes) ? outcomes : []) {
+    if (o?.dealId && !byDeal.has(o.dealId)) byDeal.set(o.dealId, o);
+  }
+  return byDeal;
+}
+
+function buildRevenueSignals(revenue, outcomes = []) {
   const deals = Array.isArray(revenue.deals) ? revenue.deals : [];
   const leads = Array.isArray(revenue.leads) ? revenue.leads : [];
+  const lastContact = lastContactByDeal(outcomes);
   const signals = [];
 
   deals
@@ -136,6 +160,11 @@ function buildRevenueSignals(revenue) {
     .slice(0, 2)
     .forEach((deal) => {
       const danger = Number(deal.age) >= 14 || Number(deal.value) >= 10000000;
+      const contact = lastContact.get(deal.id);
+      // Absence of contact is itself valid stall evidence — say so, don't drop the line.
+      const evidence = contact
+        ? `근거: 마지막 접촉 ${contact.action}${contact.occurredAt ? ` · ${formatShortDate(contact.occurredAt)}` : ""}`
+        : "근거: 최근 접촉 기록 없음";
       signals.push({
         id: `revenue-stale-${deal.id}`,
         tone: danger ? "danger" : "warning",
@@ -143,9 +172,10 @@ function buildRevenueSignals(revenue) {
         title: `${deal.name} — ${deal.age}일째 정체`,
         summary: `${deal.stage} 단계에서 마지막 활동이 오래됐습니다. 오늘 follow-up을 보내거나 다음 액션을 명확히 정해야 합니다.`,
         meta: `Deal · ${formatMoney(deal.value)} · close ${deal.close}`,
+        evidence,
         source: { from: "Deals", ref: deal.id },
         decisions: [
-          action("리마인드 초안", "followup", true),
+          action("팔로업 열기", "followup", true),
           action("딜 보드 열기", "deals"),
           action("오늘 보류", "wait"),
         ],
@@ -170,6 +200,48 @@ function buildRevenueSignals(revenue) {
   }
 
   return signals;
+}
+
+function buildFollowupSignals(followups) {
+  const items = Array.isArray(followups.items) ? followups.items : [];
+  if (!items.length) return [];
+
+  const top = items.slice(0, 3);
+  const urgent = top.some((item) => Number(item.priority || 0) >= 80);
+  return [{
+    id: "followups-today",
+    tone: urgent ? "danger" : "warning",
+    kind: "Revenue",
+    title: `오늘 연락 ${items.length}건`,
+    summary: top.map((item) => `${item.name}(${item.channel})`).join(" · "),
+    meta: "Follow-ups · ClassIn cadence",
+    source: { from: "Followups", ref: "TODAY" },
+    decisions: [
+      action("Follow-ups 열기", "followup", true),
+      action("리드 보기", "leads"),
+    ],
+  }];
+}
+
+function buildGuruSignals(runsLedger) {
+  const runs = Array.isArray(runsLedger.runs) ? runsLedger.runs : [];
+  if (!runs.length) return [];
+  const latest = runs[0];
+  const mode = encodeURIComponent(latest.mode || "sales");
+  const ref = encodeURIComponent(latest.ref || "pipeline");
+  return [{
+    id: `guru-memory-${latest.id}`,
+    tone: latest.result === "error" ? "warning" : "info",
+    kind: "Agent",
+    title: "최근 Guru 코칭 이어가기",
+    summary: `${latest.mode || "sales"} · ${latest.ref || "pipeline"} — 이전 조언과 중복되지 않게 다음 액션을 정리하세요.`,
+    meta: `Guru · ${latest.ranAt ? latest.ranAt.slice(0, 10) : "recent"}`,
+    source: { from: "Guru", ref: latest.id },
+    decisions: [
+      action("Guru 열기", "chat", true, `dashboard/agents/chat?agent=guru&mode=${mode}&ref=${ref}`),
+      action("승인 큐 확인", "queueApprovals"),
+    ],
+  }];
 }
 
 function buildContentSignals(content) {
@@ -332,6 +404,7 @@ function buildBlocks(projects, content) {
         kind: projectById.get(todo.project)?.name || "Task",
         tag: todo.priority === "high" ? "company" : null,
         done: false,
+        todoId: todo.id,
       });
     });
 
@@ -353,17 +426,31 @@ function buildMetrics(revenue, content, automations, projects) {
   const revenueSummary = revenue.summary || {};
   const contentSummary = content.summary || {};
   const automationSummary = automations.summary || {};
+  const classinKpi = revenueSummary.classinMonthlyKpi || null;
   const openProjects = Array.isArray(projects.projects)
     ? projects.projects.filter((project) => project.status !== "Done").length
     : 0;
 
-  return [
-    metric("MRR", formatMoney(revenueSummary.mrr || 0), revenueSummary.mrr ? "ledger" : "waiting", revenueSummary.mrr ? "success" : "neutral"),
-    metric("Pipeline", formatMoney(revenueSummary.pipeline || 0), `${revenueSummary.openDeals || 0} deals`, "moon"),
-    metric("Published", String(contentSummary.published || 0), `${contentSummary.drafts || 0} drafts`, "info"),
-    metric("Runs failed", String(automationSummary.failuresToday || 0), `${automationSummary.runsToday || 0} runs`, automationSummary.failuresToday ? "warning" : "success"),
+  const base = [
+    metric("MRR", formatMoney(revenueSummary.mrr || 0), revenueSummary.mrr ? "ledger" : "waiting", revenueSummary.mrr ? "success" : "neutral", undefined, "dashboard/revenue/overview"),
+    metric("Pipeline", formatMoney(revenueSummary.pipeline || 0), `${revenueSummary.openDeals || 0} deals`, "moon", undefined, "dashboard/classin/pipeline"),
+    metric("Published", String(contentSummary.published || 0), `${contentSummary.drafts || 0} drafts`, "info", undefined, "dashboard/content/queue"),
+    metric("Runs failed", String(automationSummary.failuresToday || 0), `${automationSummary.runsToday || 0} runs`, automationSummary.failuresToday ? "warning" : "success", undefined, "dashboard/automations/runs"),
     metric("Open work", String(openProjects), "active projects", "moon"),
-  ].slice(0, 4);
+  ];
+
+  if (classinKpi?.targets) {
+    base.unshift(metric(
+      "ClassIn",
+      `${classinKpi.actual?.contracts || 0}/${classinKpi.targets.monthlyContractTarget || 60}`,
+      `${classinKpi.actual?.units || 0}대 · ${classinKpi.actual?.revenueCny || 0} CNY`,
+      (classinKpi.actual?.contracts || 0) > 0 ? "success" : "moon",
+      undefined,
+      "dashboard/classin/pipeline",
+    ));
+  }
+
+  return base.slice(0, 4);
 }
 
 function buildSources(results) {
@@ -372,18 +459,25 @@ function buildSources(results) {
     { key: "work", label: "Work", state: ledgerState(results.work) },
     { key: "content", label: "Content", state: ledgerState(results.content) },
     { key: "revenue", label: "Revenue", state: ledgerState(results.revenue) },
+    { key: "followups", label: "Followups", state: ledgerState(results.followups) },
     { key: "automations", label: "Automations", state: ledgerState(results.automations) },
+    { key: "guru", label: "Guru", state: ledgerState(results.guruRuns) },
   ];
 }
 
-export async function GET() {
-  const [projectsResult, workResult, contentResult, revenueResult, automationsResult, ordersResult] = await Promise.allSettled([
+export async function GET(req) {
+  const [projectsResult, workResult, contentResult, revenueResult, automationsResult, followupsResult, guruRunsResult, ordersResult, outcomesResult] = await Promise.allSettled([
     getProjectLedger(),
     getWorkLedger(),
     getContentLedger(),
     getRevenueLedger(),
     getAutomationsLedger(),
+    getFollowups({ limit: 12 }),
+    getRecentAgentRuns({ agent: "guru", limit: 3 }),
     getWorkOrders({ status: "proposed", limit: 20 }),
+    // limit 100: the default 30 can push an older last-contact out of the window,
+    // mislabeling a stalled deal as "no contact" when there is one (rung 3 evidence).
+    getRecentOutcomes({ limit: 100 }),
   ]);
 
   const results = {
@@ -392,6 +486,8 @@ export async function GET() {
     content: contentResult,
     revenue: revenueResult,
     automations: automationsResult,
+    followups: followupsResult,
+    guruRuns: guruRunsResult,
   };
 
   const projects = readLedger(projectsResult);
@@ -399,19 +495,48 @@ export async function GET() {
   const content = readLedger(contentResult);
   const revenue = readLedger(revenueResult);
   const automations = readLedger(automationsResult);
+  const followups = readLedger(followupsResult);
+  const guruRuns = readLedger(guruRunsResult);
+  const outcomes = readLedger(outcomesResult, { source: "preview", outcomes: [] });
   const ordersLedger = readLedger(ordersResult, { source: "preview", orders: [] });
   const queue = {
     source: ordersLedger.source || "preview",
     pending: Array.isArray(ordersLedger.orders) ? ordersLedger.orders.length : 0,
     orders: Array.isArray(ordersLedger.orders) ? ordersLedger.orders.slice(0, 12) : [],
   };
+
+  // Opportunistic stalled-deal scan — idempotent (dedupes on open followup per deal,
+  // enforced by uq_work_orders_open_followup at the DB level), so piggybacking on the
+  // brief keeps the approval queue fresh without cron infra. Because this GET would
+  // otherwise become an unauthenticated write path, the scan only runs when the request
+  // passes the same write guard as the POST routes (operator session / secret / dev
+  // origin); anonymous or bot hits get a pure read-only brief. A scan failure never
+  // blocks the brief.
+  try {
+    const scan = assertHubWriteAllowed(req) === null
+      ? await scanStalledDeals({ ledger: revenue })
+      : null;
+    if (scan?.created > 0) {
+      const refreshed = await getWorkOrders({ status: "proposed", limit: 20 });
+      if (refreshed.source === "supabase") {
+        queue.source = refreshed.source;
+        queue.pending = refreshed.orders.length;
+        queue.orders = refreshed.orders.slice(0, 12);
+      }
+    }
+  } catch {
+    // brief must render even if the scan fails
+  }
+
   const sources = buildSources(results);
   const liveCount = sources.filter((source) => source.state === "live").length;
   const errorCount = sources.filter((source) => source.state === "error").length;
   const signals = [
     ...buildUnifiedRiskSignals(revenue, projects, automations),
     ...buildApprovalSignals(queue),
-    ...buildRevenueSignals(revenue),
+    ...buildFollowupSignals(followups),
+    ...buildGuruSignals(guruRuns),
+    ...buildRevenueSignals(revenue, outcomes.outcomes),
     ...buildContentSignals(content),
     ...buildAutomationSignals(automations),
     ...buildWorkSignals(projects, work),

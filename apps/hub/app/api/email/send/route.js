@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import {
+  claimApprovedWorkOrderForExecution,
+  createWorkOrder,
+  decideWorkOrder,
+  releaseWorkOrderExecution,
+} from "@/lib/sales-os/work-orders";
 
 export const runtime = "nodejs";
 
@@ -39,6 +45,85 @@ function buildEmailPayload(payload) {
     segmentId: normalizeString(payload.segmentId) || null,
     segmentLabel: normalizeString(payload.segmentLabel) || null,
     audience: normalizeString(payload.audience) || null,
+    approvedWorkOrderId:
+      normalizeString(payload.approvedWorkOrderId) ||
+      normalizeString(payload.workOrderId) ||
+      null,
+  };
+}
+
+function emailApprovalBody(payload) {
+  return {
+    recipientEmail: payload.recipientEmail,
+    subject: payload.subject,
+    body: payload.body,
+    channel: payload.channel,
+    templateId: payload.templateId,
+    audience: payload.audience,
+  };
+}
+
+async function requireEmailApproval(payload) {
+  if (payload.action !== "send") {
+    return { ok: true, approvedWorkOrderId: null };
+  }
+
+  if (payload.approvedWorkOrderId) {
+    const approved = await claimApprovedWorkOrderForExecution({
+      workspaceId: payload.workspaceId,
+      id: payload.approvedWorkOrderId,
+      kind: "email_send",
+      expectedBody: emailApprovalBody(payload),
+    });
+    if (!approved.ok) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            status: "approval_invalid",
+            error: `Approved matching workOrderId is required before email send (${approved.reason}).`,
+            approvedWorkOrderId: payload.approvedWorkOrderId,
+          },
+          { status: 403 },
+        ),
+      };
+    }
+    return { ok: true, approvedWorkOrderId: payload.approvedWorkOrderId };
+  }
+
+  const workOrder = await createWorkOrder({
+    workspaceId: payload.workspaceId,
+    persona: "production",
+    kind: "email_send",
+    title: `이메일 발송 승인 필요 · ${payload.recipientEmail}`,
+    body: {
+      gate: "human_approval",
+      workspaceId: payload.workspaceId,
+      ...emailApprovalBody(payload),
+      recipientName: payload.recipientName,
+      fromName: payload.fromName,
+      replyTo: payload.replyTo,
+      policy: {
+        noDirectCustomerSendWithoutApproval: true,
+      },
+    },
+    channel: "email",
+    gate: "human_approval",
+    source: "manual",
+  });
+
+  return {
+    ok: false,
+    response: NextResponse.json(
+      {
+        status: "approval_required",
+        message: workOrder.persisted
+          ? "Email send was queued for human approval. No customer email was sent."
+          : "Email send requires human approval, but the approval queue could not be persisted. No customer email was sent.",
+        workOrder,
+      },
+      { status: 202 },
+    ),
   };
 }
 
@@ -76,9 +161,20 @@ export async function POST(req) {
       );
     }
 
+    const approval = await requireEmailApproval(payload);
+    if (!approval.ok) {
+      return approval.response;
+    }
+
     const engineUrl = resolveEngineUrl();
 
     if (!engineUrl) {
+      if (approval.approvedWorkOrderId) {
+        await releaseWorkOrderExecution({
+          workspaceId: payload.workspaceId,
+          id: approval.approvedWorkOrderId,
+        }).catch(() => null);
+      }
       return NextResponse.json(
         {
           status: "preview",
@@ -97,7 +193,10 @@ export async function POST(req) {
           ? { "x-com-moon-shared-secret": resolveSharedWebhookSecret() }
           : {}),
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...payload,
+        approvedWorkOrderId: approval.approvedWorkOrderId,
+      }),
       cache: "no-store",
     });
 
@@ -105,6 +204,26 @@ export async function POST(req) {
       status: "error",
       error: `Engine email route returned ${response.status}.`,
     }));
+
+    if (response.ok && data?.status === "sent" && approval.approvedWorkOrderId) {
+      data.workOrderExecution = await decideWorkOrder({
+        id: approval.approvedWorkOrderId,
+        status: "executed",
+      }).catch((error) => ({
+        persisted: false,
+        reason: "work-order-execution-failed",
+        detail: error instanceof Error ? error.message : String(error),
+      }));
+    } else if (approval.approvedWorkOrderId) {
+      data.workOrderRelease = await releaseWorkOrderExecution({
+        workspaceId: payload.workspaceId,
+        id: approval.approvedWorkOrderId,
+      }).catch((error) => ({
+        persisted: false,
+        reason: "work-order-release-failed",
+        detail: error instanceof Error ? error.message : String(error),
+      }));
+    }
 
     return NextResponse.json(data, { status: response.status });
   } catch (error) {

@@ -5,6 +5,7 @@ import {
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { getClassInTargets, isValidLeadFlag } from "@/lib/sales-os/operator-context";
 
 const DEAL_STAGES = [
   { key: "lead", label: "Lead", color: "neutral" },
@@ -45,6 +46,60 @@ const CASE_PRIORITY = new Set(["low", "medium", "high", "critical"]);
 function toNumber(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function lowerText(...values) {
+  return values
+    .filter((v) => v != null)
+    .map((v) => String(v).toLowerCase())
+    .join(" ");
+}
+
+function metaNumber(meta, keys, fallback = 0) {
+  for (const key of keys) {
+    const value = meta?.[key];
+    if (value == null || String(value).trim() === "") continue;
+    const n = Number(String(value ?? "").replace(/,/g, ""));
+    if (Number.isFinite(n)) return n;
+  }
+  return fallback;
+}
+
+function isCurrentMonth(value) {
+  if (!value) return false;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  const now = new Date();
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+}
+
+function resolveWorkspace(row) {
+  const meta = row?.meta || {};
+  if (meta.workspace) return meta.workspace;
+  if (meta.lane === "classin_sales") return "classin";
+  return null;
+}
+
+function resolveBrand(row) {
+  const meta = row?.meta || {};
+  return meta.brand || meta.brand_key || meta.brandKey || null;
+}
+
+function isClassInRaw(row) {
+  const meta = row?.meta || {};
+  if (meta.lane === "classin_sales" || meta.workspace === "classin") return true;
+  const hay = lowerText(
+    row?.source,
+    row?.channel,
+    row?.title,
+    row?.name,
+    meta.source_family,
+    meta.campaign,
+    meta.form_name,
+    meta.intent,
+    meta.note,
+  );
+  return /(classin|class in|클래스인|설명회|전자칠판|meta_ads|광고|캠페인)/.test(hay);
 }
 
 function normalizeStage(value) {
@@ -121,15 +176,31 @@ function mapLead(row, companyById, contactById) {
     "Unnamed lead";
 
   const statusKey = String(row.status || "new").toLowerCase();
-  const value = toNumber(row?.meta?.value ?? row?.score * 100000, 0);
+  const meta = row?.meta || {};
+  const value = toNumber(meta.value ?? row?.score * 100000, 0);
+  const units = toNumber(meta.units ?? meta.unit_count, 0);
 
   return {
     id: row.id,
     name: displayName,
     type,
+    workspace: resolveWorkspace(row),
+    brand: resolveBrand(row),
     source: row.source || row.channel || "—",
     stage: LEAD_STAGE_LABEL[statusKey] || "New",
+    score: toNumber(row.score, 0),
+    // Guru deal-review focus context reads these (context-schema.js) — keep them on the
+    // projection so the 360 context no longer has to report them as missing[].
+    nextAction: row.next_action || null,
+    contactName: contact?.name || null,
+    contactEmail: contact?.email || null,
     value: value ? formatMoneyLabel(value) : "—",
+    // Lightweight tags (meta-backed). 유입경로 is `source` above; these four editable in the drawer.
+    region: meta.region || "",
+    scale: meta.scale || "",
+    situation: meta.situation || "",
+    campaign: meta.campaign || null,
+    units: units > 0 ? units : "",
     last: formatRelative(row.last_touch_at || row.updated_at || row.created_at),
     owner: row.owner_id ? "Me" : "Unassigned",
   };
@@ -143,8 +214,11 @@ function mapDeal(row, companyById) {
 
   return {
     id: row.id,
+    leadId: row.lead_id || null, // ties the deal back to its lead for Guru focus context
     name,
     type,
+    workspace: resolveWorkspace(row),
+    brand: resolveBrand(row),
     stage,
     value: toNumber(row.amount, 0),
     owner: row.owner_id ? "Me" : "Unassigned",
@@ -153,7 +227,7 @@ function mapDeal(row, companyById) {
   };
 }
 
-function mapAccount(row, dealStatsByCompany) {
+function mapAccount(row, dealStatsByCompany, contactsByCompany) {
   const type = resolveType(row);
   const stats = (row.company_id && dealStatsByCompany.get(row.company_id)) || {
     deals: 0,
@@ -161,8 +235,13 @@ function mapAccount(row, dealStatsByCompany) {
   };
   const health = resolveHealth(row.health_score, row.status);
   const lastAt = row.updated_at || row.started_at || row.created_at;
+  // Contacts attached from the company-grouped map. Only real `contacts` columns are mapped
+  // (name/title/email — no `phone` column in schema.sql), with '' fallbacks for the display shape.
+  const contacts = (row.company_id && contactsByCompany?.get(row.company_id)) || [];
 
   return {
+    id: row.id,
+    companyId: row.company_id || null,
     name: row.name,
     type,
     deals: stats.deals,
@@ -171,6 +250,7 @@ function mapAccount(row, dealStatsByCompany) {
     lastAt: formatRelativeShort(lastAt),
     health,
     owner: row.owner_id ? "Me" : "Unassigned",
+    contacts,
   };
 }
 
@@ -203,7 +283,91 @@ function mapCase(row, accountById) {
   };
 }
 
-function buildSummary(leads, deals) {
+function buildClassInMonthlyKpi(leadRows, dealRows) {
+  const targets = getClassInTargets();
+  const classinLeads = (leadRows || []).filter(isClassInRaw);
+  const classinDeals = (dealRows || []).filter(isClassInRaw);
+  const wonThisMonth = classinDeals.filter((row) => {
+    const stage = normalizeStage(row.stage);
+    return stage === "won" && isCurrentMonth(row.won_at || row.closed_at || row.last_activity_at || row.updated_at || row.created_at);
+  });
+
+  const contracts = wonThisMonth.length;
+  const units = wonThisMonth.reduce((sum, row) => sum + metaNumber(row.meta, ["unit_count", "units", "hardware_units"], 0), 0);
+  const revenueCny = wonThisMonth.reduce((sum, row) => {
+    const meta = row.meta || {};
+    const explicit = metaNumber(meta, ["revenue_cny", "amount_cny"], null);
+    if (explicit != null) return sum + explicit;
+    const currency = String(meta.currency || row.currency || "").toUpperCase();
+    return currency === "CNY" ? sum + toNumber(row.amount, 0) : sum;
+  }, 0);
+  const newLeads = classinLeads.filter((row) => isCurrentMonth(row.created_at || row.updated_at || row.last_touch_at)).length;
+  const validLeads = classinLeads.filter((row) => {
+    const status = String(row.status || "").toLowerCase();
+    return ["qualified", "nurturing", "won"].includes(status) || isValidLeadFlag(row);
+  }).length;
+
+  const pct = (value, target) => (target > 0 ? Math.round((value / target) * 1000) / 10 : 0);
+  return {
+    month: new Date().toISOString().slice(0, 7),
+    targets,
+    actual: { contracts, units, revenueCny, newLeads, validLeads },
+    progress: {
+      contractsPct: pct(contracts, targets.monthlyContractTarget),
+      unitsPct: pct(units, targets.monthlyUnitTarget),
+      revenuePct: pct(revenueCny, targets.monthlyRevenueTargetCny),
+    },
+    note: "ClassIn lane is inferred from meta.lane/workspace/source keywords until company CRM read adapters provide stronger facts.",
+  };
+}
+
+// Recent won/lost rollup — the "did it work?" slice the Guru weekly-retro prompt was
+// missing. Computed on raw dealRows (not the mapped/trimmed 40-row projection) so the
+// 4-week window sees every terminal deal. won/lost match the raw DB stage directly —
+// both are canonical DB values, so we skip normalizeStage (whose DEAL_STAGES list omits
+// 'lost'). won_at/lost_at are stamped by the DB trigger (migration 0018); deals closed
+// before that trigger fall back to updated_at and flag the window as approximate. Source
+// is joined from the deal's lead (deals has no source column); the 120-row leads window
+// or an unlinked deal yields 'unknown'. Amounts stay split by currency (KRW/CNY) — never
+// summed, since the operator tracks ClassIn revenue in CNY.
+function buildRecentWonLost(leadRows, dealRows, windowDays = 28) {
+  const cutoff = Date.now() - windowDays * 24 * 60 * 60 * 1000;
+  const leadSourceById = new Map(
+    (leadRows || []).map((l) => [l.id, String(l.source || "").trim() || null]),
+  );
+
+  const won = { count: 0, amount: {} };
+  const lost = { count: 0, amount: {} };
+  const sources = { won: {}, lost: {} };
+  let approx = false;
+
+  for (const row of dealRows || []) {
+    const stage = String(row.stage || "").toLowerCase();
+    if (stage !== "won" && stage !== "lost") continue;
+
+    const stampRaw = stage === "won" ? row.won_at : row.lost_at;
+    const stamp = stampRaw || row.updated_at || row.last_activity_at || row.created_at;
+    if (stampRaw == null) approx = true;
+    const t = stamp ? new Date(stamp).getTime() : NaN;
+    if (!Number.isFinite(t) || t < cutoff) continue;
+
+    const bucket = stage === "won" ? won : lost;
+    bucket.count += 1;
+
+    const currency = String(row.meta?.currency || row.currency || "KRW").toUpperCase();
+    bucket.amount[currency] = (bucket.amount[currency] || 0) + toNumber(row.amount, 0);
+
+    const source =
+      leadSourceById.get(row.lead_id) ||
+      (row.meta?.source ? String(row.meta.source).trim() : null) ||
+      "unknown";
+    sources[stage][source] = (sources[stage][source] || 0) + 1;
+  }
+
+  return { windowDays, won, lost, sources, approx };
+}
+
+function buildSummary(leads, deals, leadRows = [], dealRows = []) {
   const pipeline = deals.filter(d => d.stage !== "won" && d.stage !== "lost")
     .reduce((sum, d) => sum + d.value, 0);
   const wonMTD = deals.filter(d => d.stage === "won").reduce((sum, d) => sum + d.value, 0);
@@ -217,6 +381,8 @@ function buildSummary(leads, deals) {
     newThisMonth: leads.filter(l => l.stage === "New").length,
     openDeals: deals.filter(d => d.stage !== "won" && d.stage !== "lost").length,
     wonMTD,
+    classinMonthlyKpi: buildClassInMonthlyKpi(leadRows, dealRows),
+    recentWonLost: buildRecentWonLost(leadRows, dealRows),
   };
 }
 
@@ -238,6 +404,8 @@ function emptyLedger(configured, workspaceId) {
       newThisMonth: 0,
       openDeals: 0,
       wonMTD: 0,
+      classinMonthlyKpi: buildClassInMonthlyKpi([], []),
+      recentWonLost: buildRecentWonLost([], []),
     },
   };
 }
@@ -289,6 +457,21 @@ export async function getRevenueLedger() {
   const companyById = new Map((companyRows || []).map(c => [c.id, c]));
   const contactById = new Map((contactRows || []).map(c => [c.id, c]));
 
+  // Group contacts by company so each account projection can carry its own roster.
+  // Shape mirrors the DetailPanel contacts tab; `phone` has no column in schema.sql → ''.
+  const contactsByCompany = new Map();
+  (contactRows || []).forEach(row => {
+    if (!row.company_id) return;
+    const list = contactsByCompany.get(row.company_id) || [];
+    list.push({
+      name: row.name || "",
+      role: row.title || "",
+      email: row.email || "",
+      phone: "",
+    });
+    contactsByCompany.set(row.company_id, list);
+  });
+
   const deals = dealRows.map(row => mapDeal(row, companyById));
   const dealStatsByCompany = new Map();
   dealRows.forEach(row => {
@@ -300,10 +483,10 @@ export async function getRevenueLedger() {
   });
 
   const accountRaw = new Map(accountRows.map(a => [a.id, a]));
-  const accounts = accountRows.map(row => mapAccount(row, dealStatsByCompany));
+  const accounts = accountRows.map(row => mapAccount(row, dealStatsByCompany, contactsByCompany));
   const leads = leadRows.map(row => mapLead(row, companyById, contactById));
   const cases = caseRows.map(row => mapCase(row, accountRaw));
-  const summary = buildSummary(leads, deals);
+  const summary = buildSummary(leads, deals, leadRows, dealRows);
 
   return {
     source: "supabase",
