@@ -292,15 +292,16 @@ export const EVOLUTION_LOG = [
 
 export const BRANDS = [
   { key: 'all',             name: '전체 브랜드',       glyph: '◐',  tone: 'moon',     kind: 'index',    desc: '모든 프로젝트' },
-  { key: 'sinabro',         name: '시나브로',          glyph: '📖', tone: 'info',     kind: 'content',  desc: '출판·콘텐츠 레이블',        projects: 4, tasks: 9,  open: 3, changes: 2 },
-  { key: 'gore',            name: '고래(Go;Re)',       glyph: '🐋', tone: 'company',  kind: 'product',  desc: '회복·리커버리 프로덕트',    projects: 3, tasks: 7,  open: 4, changes: 5 },
-  { key: 'holyfuncollector',name: 'HolyFunCollector',  glyph: '✨', tone: 'warning',  kind: 'community',desc: '수집·굿즈 커뮤니티',        projects: 2, tasks: 5,  open: 2, changes: 0 },
-  { key: 'bridgemaker',     name: 'BridgeMaker',       glyph: '🌉', tone: 'moon',     kind: 'agency',   desc: '컨설팅·파트너 브릿지',      projects: 5, tasks: 14, open: 6, changes: 8 },
-  { key: 'moonpm',          name: 'MoonPM',            glyph: '📁', tone: 'warning',  kind: 'tool',     desc: 'PM 툴킷 (이 허브)',         projects: 3, tasks: 8,  open: 5, changes: 3 },
-  { key: 'classmoon',       name: 'Class.Moon',        glyph: '🎓', tone: 'info',     kind: 'education',desc: '교육·코호트',                projects: 2, tasks: 6,  open: 3, changes: 1 },
-  { key: 'studyseagull',    name: 'Study.Seagull',     glyph: '🎯', tone: 'danger',   kind: 'education',desc: '학습 공동체',                projects: 2, tasks: 4,  open: 1, changes: 0 },
-  { key: 'politicofficer',  name: 'Politic_Officer',   glyph: '🔎', tone: 'info',     kind: 'research', desc: '공공·시민 리서치',          projects: 1, tasks: 3,  open: 2, changes: 4 },
-  { key: '22nomad',         name: '22th.Nomad',        glyph: '📄', tone: 'personal', kind: 'personal', desc: '개인 블로그·메모',          projects: 1, tasks: 2,  open: 1, changes: 0 },
+  { key: 'sinabro',         name: '시나브로',          glyph: '📖', tone: 'info',     kind: 'content',  desc: '출판·콘텐츠 레이블',        orgScope: 'personal', projects: 4, tasks: 9,  open: 3, changes: 2 },
+  { key: 'gore',            name: '고래(Go;Re)',       glyph: '🐋', tone: 'company',  kind: 'product',  desc: '회복·리커버리 프로덕트',    orgScope: 'personal', projects: 3, tasks: 7,  open: 4, changes: 5 },
+  { key: 'holyfuncollector',name: 'HolyFunCollector',  glyph: '✨', tone: 'warning',  kind: 'community',desc: '수집·굿즈 커뮤니티',        orgScope: 'personal', projects: 2, tasks: 5,  open: 2, changes: 0 },
+  { key: 'bridgemaker',     name: 'BridgeMaker',       glyph: '🌉', tone: 'moon',     kind: 'agency',   desc: '컨설팅·파트너 브릿지',      orgScope: 'personal', projects: 5, tasks: 14, open: 6, changes: 8 },
+  { key: 'moonpm',          name: 'MoonPM',            glyph: '📁', tone: 'warning',  kind: 'tool',     desc: 'PM 툴킷 (이 허브)',         orgScope: 'personal', projects: 3, tasks: 8,  open: 5, changes: 3 },
+  { key: 'classmoon',       name: 'Class.Moon',        glyph: '🎓', tone: 'info',     kind: 'education',desc: '교육·코호트',                orgScope: 'classin',  projects: 2, tasks: 6,  open: 3, changes: 1 },
+  { key: 'classin_side',    name: 'ClassIn Side',      glyph: '🏫', tone: 'success',  kind: 'education',desc: '클래스인 세일즈 사이드 채널', orgScope: 'classin',  projects: 0, tasks: 0,  open: 0, changes: 0 },
+  { key: 'studyseagull',    name: 'Study.Seagull',     glyph: '🎯', tone: 'danger',   kind: 'education',desc: '학습 공동체',                orgScope: 'classin',  projects: 2, tasks: 4,  open: 1, changes: 0 },
+  { key: 'politicofficer',  name: 'Politic_Officer',   glyph: '🔎', tone: 'info',     kind: 'research', desc: '공공·시민 리서치',          orgScope: 'personal', projects: 1, tasks: 3,  open: 2, changes: 4 },
+  { key: '22nomad',         name: '22th.Nomad',        glyph: '📄', tone: 'personal', kind: 'personal', desc: '개인 블로그·메모',          orgScope: 'personal', projects: 1, tasks: 2,  open: 1, changes: 0 },
 ];
 
 export const BRAND_PROJECTS = [

@@ -273,6 +273,108 @@ export function Projects() {
     createdFromQueryRef.current = true;
   }, [createProject, searchParams]);
 
+  const brandGroups = React.useMemo(() => {
+    const real = brands.filter(b => b.key !== 'all');
+    return [
+      { key: 'classin', label: '업무 · 클래스인', items: real.filter(b => b.orgScope === 'classin') },
+      { key: 'personal', label: '개인', items: real.filter(b => b.orgScope !== 'classin') },
+    ];
+  }, [brands]);
+
+  const renderBrandSidebarRow = (b) => {
+    const active = brand === b.key;
+    const count = b.key === 'all' ? allProjects.length : (b.projects || 0);
+    const changes = b.key === 'all'
+      ? brands.filter(x => x.key !== 'all').reduce((s, x) => s + (x.changes || 0), 0)
+      : (b.changes || 0);
+    return (
+      <button key={b.key} onClick={() => setBrand(b.key)} style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+        padding: '8px 10px', marginBottom: 1,
+        background: active ? 'var(--surface-3)' : 'transparent',
+        border: active ? '1px solid var(--line)' : '1px solid transparent',
+        borderRadius: 'var(--r-sm)', textAlign: 'left',
+        color: active ? 'var(--fg)' : 'var(--fg-muted)',
+        position: 'relative',
+      }}>
+        <span style={{ fontSize: 15, width: 20, textAlign: 'center', position: 'relative' }}>
+          {b.glyph}
+          {changes > 0 && (
+            <span style={{
+              position: 'absolute', top: -3, right: -3,
+              width: 7, height: 7, borderRadius: 999,
+              background: 'var(--danger)',
+              boxShadow: '0 0 0 2px ' + (active ? 'var(--surface-3)' : 'var(--surface)'),
+            }} />
+          )}
+        </span>
+        <span style={{ flex: 1, fontSize: 12.5, fontWeight: active ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</span>
+        {changes > 0 && (
+          <span style={{
+            fontSize: 9.5, fontWeight: 600, fontFamily: 'var(--font-mono)',
+            minWidth: 16, height: 14, padding: '0 5px',
+            borderRadius: 999, background: 'var(--danger)', color: '#fff',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            letterSpacing: '-0.02em',
+          }}>{changes > 99 ? '99+' : changes}</span>
+        )}
+        <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)', background: active ? 'var(--surface)' : 'transparent', padding: '1px 5px', borderRadius: 4 }}>{count}</span>
+      </button>
+    );
+  };
+
+  const renderBrandMenuRow = (b) => {
+    const active = brand === b.key;
+    const count = b.key === 'all' ? allProjects.length : (b.projects || 0);
+    const bTodos = todos.filter(t => b.key === 'all' || t.brand === b.key).filter(t => !t.done).length;
+    const changes = b.key === 'all'
+      ? brands.filter(x => x.key !== 'all').reduce((s, x) => s + (x.changes || 0), 0)
+      : (b.changes || 0);
+    return (
+      <button key={b.key} onClick={() => { setBrand(b.key); setBrandMenuOpen(false); }} style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '8px 10px', borderRadius: 'var(--r-sm)',
+        background: active ? 'var(--surface-3)' : 'transparent',
+        textAlign: 'left', color: active ? 'var(--fg)' : 'var(--fg-muted)',
+        cursor: 'pointer', position: 'relative',
+      }}>
+        <span style={{ fontSize: 16, width: 22, textAlign: 'center', position: 'relative' }}>
+          {b.glyph}
+          {changes > 0 && (
+            <span style={{
+              position: 'absolute', top: -3, right: -2,
+              width: 8, height: 8, borderRadius: 999,
+              background: 'var(--danger)',
+              boxShadow: '0 0 0 2px var(--surface)',
+            }} />
+          )}
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 12.5, fontWeight: active ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</span>
+            {changes > 0 && (
+              <span style={{
+                fontSize: 9.5, fontWeight: 600, fontFamily: 'var(--font-mono)',
+                minWidth: 16, height: 14, padding: '0 5px',
+                borderRadius: 999, background: 'var(--danger)', color: '#fff',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                letterSpacing: '-0.02em',
+              }}>{changes > 99 ? '99+' : changes}</span>
+            )}
+          </div>
+          <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {changes > 0 ? `${changes}개 새 변동 · ${b.desc || '전체 브랜드 포맷'}` : (b.desc || '전체 브랜드 포맷')}
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+          <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)' }}>{count}p</span>
+          <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)' }}>{bTodos}t</span>
+        </div>
+        {active && <span style={{ fontSize: 11, color: 'var(--moon-300)' }}>✓</span>}
+      </button>
+    );
+  };
+
   return (
     <div className="hub-workspace-shell" style={{ display: 'grid', gridTemplateColumns: sidebarHidden ? '1fr' : '240px 1fr', height: '100%', overflow: 'hidden' }}>
       {!sidebarHidden && (
@@ -285,47 +387,15 @@ export function Projects() {
           <IconButton icon="chevronL" size={24} iconSize={13} onClick={() => setSidebarHidden(true)} tooltip="접기" />
         </div>
         <div className="scroll-y" style={{ flex: 1, padding: 6 }}>
-          {brands.map(b => {
-            const active = brand === b.key;
-            const count = b.key === 'all' ? allProjects.length : (b.projects || 0);
-            const changes = b.key === 'all'
-              ? brands.filter(x => x.key !== 'all').reduce((s, x) => s + (x.changes || 0), 0)
-              : (b.changes || 0);
-            return (
-              <button key={b.key} onClick={() => setBrand(b.key)} style={{
-                width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-                padding: '8px 10px', marginBottom: 1,
-                background: active ? 'var(--surface-3)' : 'transparent',
-                border: active ? '1px solid var(--line)' : '1px solid transparent',
-                borderRadius: 'var(--r-sm)', textAlign: 'left',
-                color: active ? 'var(--fg)' : 'var(--fg-muted)',
-                position: 'relative',
-              }}>
-                <span style={{ fontSize: 15, width: 20, textAlign: 'center', position: 'relative' }}>
-                  {b.glyph}
-                  {changes > 0 && (
-                    <span style={{
-                      position: 'absolute', top: -3, right: -3,
-                      width: 7, height: 7, borderRadius: 999,
-                      background: 'var(--danger)',
-                      boxShadow: '0 0 0 2px ' + (active ? 'var(--surface-3)' : 'var(--surface)'),
-                    }} />
-                  )}
-                </span>
-                <span style={{ flex: 1, fontSize: 12.5, fontWeight: active ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</span>
-                {changes > 0 && (
-                  <span style={{
-                    fontSize: 9.5, fontWeight: 600, fontFamily: 'var(--font-mono)',
-                    minWidth: 16, height: 14, padding: '0 5px',
-                    borderRadius: 999, background: 'var(--danger)', color: '#fff',
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    letterSpacing: '-0.02em',
-                  }}>{changes > 99 ? '99+' : changes}</span>
-                )}
-                <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)', background: active ? 'var(--surface)' : 'transparent', padding: '1px 5px', borderRadius: 4 }}>{count}</span>
-              </button>
-            );
-          })}
+          {brands.filter(b => b.key === 'all').map(renderBrandSidebarRow)}
+          {brandGroups.map(group => group.items.length === 0 ? null : (
+            <div key={group.key}>
+              <div style={{ padding: '10px 10px 4px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>
+                {group.label}
+              </div>
+              {group.items.map(renderBrandSidebarRow)}
+            </div>
+          ))}
         </div>
       </aside>
       )}
@@ -388,58 +458,15 @@ export function Projects() {
                 borderRadius: 'var(--r)', boxShadow: '0 12px 40px -12px oklch(0 0 0 / 0.5)',
                 padding: 4, display: 'flex', flexDirection: 'column',
               }}>
-                <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>브랜드 몰아보기</div>
-                {brands.map(b => {
-                  const active = brand === b.key;
-                  const count = b.key === 'all' ? allProjects.length : (b.projects || 0);
-                  const bTodos = todos.filter(t => b.key === 'all' || t.brand === b.key).filter(t => !t.done).length;
-                  const changes = b.key === 'all'
-                    ? brands.filter(x => x.key !== 'all').reduce((s, x) => s + (x.changes || 0), 0)
-                    : (b.changes || 0);
-                  return (
-                    <button key={b.key} onClick={() => { setBrand(b.key); setBrandMenuOpen(false); }} style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '8px 10px', borderRadius: 'var(--r-sm)',
-                      background: active ? 'var(--surface-3)' : 'transparent',
-                      textAlign: 'left', color: active ? 'var(--fg)' : 'var(--fg-muted)',
-                      cursor: 'pointer', position: 'relative',
-                    }}>
-                      <span style={{ fontSize: 16, width: 22, textAlign: 'center', position: 'relative' }}>
-                        {b.glyph}
-                        {changes > 0 && (
-                          <span style={{
-                            position: 'absolute', top: -3, right: -2,
-                            width: 8, height: 8, borderRadius: 999,
-                            background: 'var(--danger)',
-                            boxShadow: '0 0 0 2px var(--surface)',
-                          }} />
-                        )}
-                      </span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 12.5, fontWeight: active ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</span>
-                          {changes > 0 && (
-                            <span style={{
-                              fontSize: 9.5, fontWeight: 600, fontFamily: 'var(--font-mono)',
-                              minWidth: 16, height: 14, padding: '0 5px',
-                              borderRadius: 999, background: 'var(--danger)', color: '#fff',
-                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                              letterSpacing: '-0.02em',
-                            }}>{changes > 99 ? '99+' : changes}</span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {changes > 0 ? `${changes}개 새 변동 · ${b.desc || '전체 브랜드 포맷'}` : (b.desc || '전체 브랜드 포맷')}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-                        <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)' }}>{count}p</span>
-                        <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)' }}>{bTodos}t</span>
-                      </div>
-                      {active && <span style={{ fontSize: 11, color: 'var(--moon-300)' }}>✓</span>}
-                    </button>
-                  );
-                })}
+                {brands.filter(b => b.key === 'all').map(renderBrandMenuRow)}
+                {brandGroups.map(group => group.items.length === 0 ? null : (
+                  <div key={group.key}>
+                    <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>
+                      {group.label}
+                    </div>
+                    {group.items.map(renderBrandMenuRow)}
+                  </div>
+                ))}
                 <div style={{ borderTop: '1px solid var(--line-soft)', marginTop: 4, padding: '6px 10px', fontSize: 10.5, color: 'var(--fg-faint)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span>사이드바로 전환</span>
                   <div style={{ flex: 1 }} />

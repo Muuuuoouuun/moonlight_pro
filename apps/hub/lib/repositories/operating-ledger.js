@@ -40,6 +40,13 @@ const CANONICAL_BRAND_GLYPHS = {
   politicofficer: "◎",
   "22nomad": "◻",
 };
+// Which brands are ClassIn (company) work vs. personal brands. Defaults to
+// "personal" when a brand isn't listed here and has no meta.org_scope.
+const CANONICAL_BRAND_ORG_SCOPE = {
+  classmoon: "classin",
+  studyseagull: "classin",
+  classin_side: "classin",
+};
 
 function clampProgress(value) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
@@ -93,6 +100,11 @@ function resolveBrandTone(key, kind, meta) {
 function resolveBrandGlyph(key, meta, index) {
   if (typeof meta?.glyph === "string" && meta.glyph.trim()) return meta.glyph.trim();
   return CANONICAL_BRAND_GLYPHS[key] || BRAND_GLYPHS[index % BRAND_GLYPHS.length];
+}
+
+function resolveBrandOrgScope(key, meta) {
+  if (typeof meta?.org_scope === "string" && meta.org_scope.trim()) return meta.org_scope.trim();
+  return CANONICAL_BRAND_ORG_SCOPE[key] || "personal";
 }
 
 function formatShortDate(value) {
@@ -192,6 +204,7 @@ function mapBrands(rows, projects, todos, updates) {
       glyph: resolveBrandGlyph(key, meta, index),
       tone: resolveBrandTone(key, row.kind, meta),
       kind: row.kind || "brand",
+      orgScope: resolveBrandOrgScope(key, meta),
       desc: row.description || "운영 브랜드",
       philosophy: typeof meta.philosophy === "string" ? meta.philosophy : "",
       direction: typeof meta.direction === "string" ? meta.direction : "",
