@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import {
+  buildCampaignRecord,
   buildContentAssetRecord,
   buildContentDraftRecords,
   buildContentDraftUpdateRecords,
@@ -122,6 +123,45 @@ export async function POST(req) {
           log: logPersistence,
           asset: assetPersistence,
         },
+      });
+    }
+
+    if (action === "campaign") {
+      const campaign = buildCampaignRecord(parsed.data);
+
+      if (!campaign.workspaceId) {
+        return NextResponse.json(
+          {
+            status: "preview",
+            message: "Workspace ID is not configured yet. Campaign is preview only.",
+            campaignId: campaign.campaignId,
+            campaign: campaign.record,
+          },
+          { status: 202 },
+        );
+      }
+
+      const persistence = await insertSupabaseRecord("campaigns", campaign.record);
+
+      if (!persistence.persisted) {
+        return NextResponse.json(
+          {
+            status: "preview",
+            message: "Campaign payload is valid, but persistence is not configured or failed.",
+            campaignId: campaign.campaignId,
+            campaign: campaign.record,
+            persistence,
+          },
+          { status: 202 },
+        );
+      }
+
+      return NextResponse.json({
+        status: "saved",
+        message: "Campaign saved to Supabase.",
+        campaignId: campaign.campaignId,
+        campaign: campaign.record,
+        persistence,
       });
     }
 

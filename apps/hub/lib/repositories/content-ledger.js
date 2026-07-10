@@ -10,6 +10,14 @@ import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 const ITEM_STATUSES = ["idea", "draft", "review", "scheduled", "published", "archived"];
 const VARIANT_STATUSES = ["draft", "ready", "published", "archived"];
 const LOG_STATUSES = ["queued", "published", "failed"];
+const CAMPAIGN_STATUSES = ["draft", "planning", "active", "paused", "completed"];
+const CAMPAIGN_STATUS_LABEL = {
+  draft: "Draft",
+  planning: "Planning",
+  active: "Active",
+  paused: "Paused",
+  completed: "Completed",
+};
 const ASSET_TYPES = ["image", "html", "zip", "thumbnail", "source"];
 const VARIANT_TYPES = [
   "newsletter",
@@ -112,6 +120,11 @@ function normalizeVariantStatus(value, fallback = "draft") {
 function normalizeLogStatus(value, fallback = "queued") {
   const normalized = normalizeString(value, fallback).toLowerCase();
   return LOG_STATUSES.includes(normalized) ? normalized : fallback;
+}
+
+function normalizeCampaignStatus(value, fallback = "draft") {
+  const normalized = normalizeString(value, fallback).toLowerCase();
+  return CAMPAIGN_STATUSES.includes(normalized) ? normalized : fallback;
 }
 
 function normalizeAssetType(value, fallback = "source") {
@@ -430,6 +443,31 @@ function mapAssets(rows, variantById) {
       exportProfile: normalizeString(meta.export_profile),
       targetUrl: normalizeNullableString(meta.target_url),
       when: formatShortDate(row.updated_at || row.created_at),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at || row.created_at,
+    };
+  });
+}
+
+function mapCampaigns(rows, brandById) {
+  return rows.map((row) => {
+    const status = CAMPAIGN_STATUSES.includes(row.status) ? row.status : "draft";
+    const brand = row.brand_id ? brandById.get(row.brand_id) : null;
+
+    return {
+      id: row.id,
+      name: row.name || "제목 없음",
+      status: CAMPAIGN_STATUS_LABEL[status] || "Draft",
+      statusKey: status,
+      channels: normalizeArray(row.channels),
+      progress: Number.isFinite(row.progress) ? Math.max(0, Math.min(100, row.progress)) : 0,
+      end: row.ends_label || "미정",
+      goal: row.goal_label || "",
+      current: Number.isFinite(row.goal_current) ? row.goal_current : 0,
+      goalTarget: Number.isFinite(row.goal_target) ? row.goal_target : null,
+      brandId: row.brand_id || null,
+      brandKey: brand?.key || null,
+      brandName: brand?.name || null,
       createdAt: row.created_at,
       updatedAt: row.updated_at || row.created_at,
     };
@@ -799,6 +837,31 @@ export function buildContentAssetRecord(payload = {}) {
   };
 }
 
+export function buildCampaignRecord(payload = {}) {
+  const workspaceId = normalizeString(payload.workspaceId) || resolveDefaultWorkspaceId();
+  const timestamp = new Date().toISOString();
+  const campaignId = normalizeString(payload.campaignId) || randomUUID();
+
+  const record = {
+    id: campaignId,
+    workspace_id: workspaceId || null,
+    brand_id: normalizeNullableString(payload.brandId),
+    name: normalizeString(payload.name, "새 캠페인"),
+    status: normalizeCampaignStatus(payload.status),
+    channels: normalizeArray(payload.channels, ["Email"]),
+    progress: Number.isFinite(payload.progress) ? payload.progress : 0,
+    ends_label: normalizeNullableString(payload.endsLabel),
+    goal_label: normalizeNullableString(payload.goalLabel),
+    goal_current: Number.isFinite(payload.goalCurrent) ? payload.goalCurrent : 0,
+    goal_target: Number.isFinite(payload.goalTarget) ? payload.goalTarget : null,
+    meta: { origin: "hub-campaigns" },
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+
+  return { workspaceId, campaignId, record };
+}
+
 export async function getContentLedger() {
   const workspaceId = resolveDefaultWorkspaceId();
 
@@ -812,6 +875,7 @@ export async function getContentLedger() {
       variants: [],
       assets: [],
       publishLogs: [],
+      campaigns: [],
       queue: [],
       pipeline: buildPipeline([]),
       attention: [],
@@ -821,7 +885,7 @@ export async function getContentLedger() {
     };
   }
 
-  const [itemRows, variantRows, logRows, assetRows, brandRows] = await Promise.all([
+  const [itemRows, variantRows, logRows, assetRows, brandRows, campaignRows] = await Promise.all([
     fetchSupabaseRows("content_items", {
       limit: 80,
       order: "updated_at.desc",
@@ -851,6 +915,11 @@ export async function getContentLedger() {
         ["status", "eq.active"],
       ]),
     }),
+    fetchSupabaseRows("campaigns", {
+      limit: 40,
+      order: "updated_at.desc",
+      filters: withWorkspaceFilter(),
+    }),
   ]);
 
   if (!itemRows || !variantRows || !logRows) {
@@ -863,6 +932,7 @@ export async function getContentLedger() {
       variants: [],
       assets: [],
       publishLogs: [],
+      campaigns: [],
       queue: [],
       pipeline: buildPipeline([]),
       attention: [],
@@ -879,6 +949,7 @@ export async function getContentLedger() {
   const items = mapItems(itemRows, variantRows, brandById);
   const publishLogs = mapPublishLogs(logRows, variantById);
   const assets = Array.isArray(assetRows) ? mapAssets(assetRows, variantById) : [];
+  const campaigns = Array.isArray(campaignRows) ? mapCampaigns(campaignRows, brandById) : [];
 
   return {
     source: "supabase",
@@ -889,6 +960,7 @@ export async function getContentLedger() {
     variants,
     assets,
     publishLogs,
+    campaigns,
     queue: buildQueue(items),
     pipeline: buildPipeline(items),
     attention: buildAttention(items, publishLogs),

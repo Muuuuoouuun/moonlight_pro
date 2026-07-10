@@ -125,6 +125,7 @@ function useContentLedger() {
     variants: [],
     assets: [],
     publishLogs: [],
+    campaigns: FALLBACK_CAMPAIGNS,
     queue: FALLBACK_CONTENT_QUEUE,
     pipeline: [],
     attention: [],
@@ -156,6 +157,7 @@ function useContentLedger() {
             variants: Array.isArray(data.variants) ? data.variants : [],
             assets: Array.isArray(data.assets) ? data.assets : [],
             publishLogs: Array.isArray(data.publishLogs) ? data.publishLogs : [],
+            campaigns: Array.isArray(data.campaigns) ? data.campaigns : [],
             queue: Array.isArray(data.queue) ? data.queue : [],
             pipeline: Array.isArray(data.pipeline) ? data.pipeline : [],
             attention: Array.isArray(data.attention) ? data.attention : [],
@@ -1604,20 +1606,62 @@ function CampaignTabPanel({ tab, campaign, detail }) {
   );
 }
 
+// Live campaigns (real Supabase rows) don't have curated war-room content yet —
+// the deep strategy/surfaces/audience/attribution breakdown is a separate,
+// larger data-model decision (see docs/personal-os audit, 2026-07-10). Rather
+// than silently borrowing cm1's fabricated "Spring Cohort" narrative for a
+// real campaign, show an honest placeholder until that's built.
+function buildPreviewCampaignDetail(campaign) {
+  return {
+    pulse: {
+      positioning: '아직 전략이 작성되지 않았습니다.',
+      nextMove: 'Strategy 탭에서 ICP·promise·wedge를 정의하면 다음 행동이 표시됩니다.',
+      risk: '',
+      ai: [],
+      metrics: [
+        { label: 'Goal', value: `${campaign?.current ?? 0} / ${campaign?.goal || '—'}`, detail: campaign?.status || '', tone: 'neutral' },
+      ],
+    },
+    strategy: { icp: '', promise: '', wedge: '', enemy: '', proof: [], decisions: [] },
+    surfaces: [],
+    content: [],
+    audience: [],
+    attribution: [],
+    automations: [],
+    activity: [],
+  };
+}
+
 export function Campaigns() {
   const router = useRouter();
-  const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral' };
+  const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral', Paused: 'warning', Completed: 'info' };
+  const ledger = useContentLedger();
   const [campaigns, setCampaigns] = React.useState(FALLBACK_CAMPAIGNS);
-  const [selectedId, setSelectedId] = React.useState(FALLBACK_CAMPAIGNS[0]?.id);
+  const [selectedId, setSelectedId] = React.useState(FALLBACK_CAMPAIGNS[0]?.id || null);
   const [tab, setTab] = React.useState('pulse');
   const [focusMode, setFocusMode] = React.useState(false);
-  const selected = campaigns.find(c => c.id === selectedId) || campaigns[0];
-  const detail = CAMPAIGN_WAR_ROOMS[selected.id] || CAMPAIGN_WAR_ROOMS.cm1;
+  const [creating, setCreating] = React.useState(false);
+
+  React.useEffect(() => {
+    if (ledger.syncState !== 'live') return;
+    setCampaigns(ledger.campaigns);
+    setSelectedId((prev) => (ledger.campaigns.some((c) => c.id === prev) ? prev : ledger.campaigns[0]?.id || null));
+  }, [ledger.syncState, ledger.campaigns]);
+
+  const selected = campaigns.find(c => c.id === selectedId) || campaigns[0] || null;
+  // Any campaign without curated war-room content (a fresh draft or a live
+  // Supabase row) gets its own honest placeholder — never borrows cm1's
+  // "Spring Cohort" narrative just because it's the first demo entry.
+  const detail = selected
+    ? (CAMPAIGN_WAR_ROOMS[selected.id] || buildPreviewCampaignDetail(selected))
+    : null;
   const activeTabLabel = CAMPAIGN_TABS.find(t => t.key === tab)?.label || 'Pulse';
-  const createCampaign = () => {
-    const id = `local-campaign-${Date.now()}`;
+  const createCampaign = async () => {
+    if (creating) return;
+    setCreating(true);
+    const localId = `local-campaign-${Date.now()}`;
     const next = {
-      id,
+      id: localId,
       name: '새 캠페인',
       status: 'Draft',
       channels: ['Email'],
@@ -1627,9 +1671,24 @@ export function Campaigns() {
       current: 0,
     };
     setCampaigns(prev => [next, ...prev]);
-    setSelectedId(id);
+    setSelectedId(localId);
     setTab('pulse');
     setFocusMode(true);
+    try {
+      const res = await fetch('/api/hub/content', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'campaign', name: next.name }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.status === 'saved' && data?.campaign?.id) {
+        const savedId = data.campaign.id;
+        setCampaigns(prev => prev.map(c => (c.id === localId ? { ...c, id: savedId } : c)));
+        setSelectedId(savedId);
+      }
+    } finally {
+      setCreating(false);
+    }
   };
 
   React.useEffect(() => {
@@ -1660,12 +1719,27 @@ export function Campaigns() {
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Campaigns</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Content 안에서 Revenue, Automations, Decisions를 캠페인 기준으로 묶는 war room</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+            Content 안에서 Revenue, Automations, Decisions를 캠페인 기준으로 묶는 war room
+            <span className="mono" style={{ marginLeft: 8, color: ledger.syncState === 'live' ? 'var(--success)' : ledger.syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
+              {ledger.syncState === 'live' ? 'live' : ledger.syncState === 'loading' ? 'syncing' : 'mock'}
+            </span>
+          </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createCampaign}>Campaign</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating}>Campaign</Button>
       </div>
 
+      {!selected && (
+        <EmptyState
+          icon="campaigns"
+          title="캠페인이 없습니다"
+          description={ledger.syncState === 'live' ? 'Supabase campaigns 원장이 비어 있습니다.' : '캠페인을 만들면 war room에 표시됩니다.'}
+          action={<Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating}>Campaign</Button>}
+        />
+      )}
+
+      {selected && (
       <div
         className="campaign-war-room"
         data-focus={focusMode ? 'true' : 'false'}
@@ -1674,7 +1748,7 @@ export function Campaigns() {
         <aside className="campaign-war-room__list" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {campaigns.map(c => {
             const active = c.id === selected.id;
-            const cDetail = CAMPAIGN_WAR_ROOMS[c.id] || detail;
+            const cDetail = CAMPAIGN_WAR_ROOMS[c.id] || buildPreviewCampaignDetail(c);
             return (
               <div key={c.id} role="button" tabIndex={0} onClick={() => selectCampaign(c.id)} onDoubleClick={() => focusCampaign(c.id)} onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -1812,6 +1886,7 @@ export function Campaigns() {
           </div>
         </section>
       </div>
+      )}
     </div>
   );
 }
