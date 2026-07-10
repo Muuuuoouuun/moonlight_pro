@@ -47,6 +47,22 @@ CHAT_PERSONAS.guru = {
     },
 };
 
+// Pseudo-persona for "Convene" — not a 6th chat target with its own replies, just the
+// identity the header/composer show while the intro synthesizes real /api/hub/agents
+// data (roster status + last run per persona). No new AI generation involved.
+CHAT_PERSONAS.council = {
+  name: 'Council',
+  role: '5개 페르소나 현황 종합',
+  title: 'Council session',
+  model: 'Synthesis',
+  reply: {
+    text: '받았어요. 특정 페르소나로 좁혀서 보고 싶으면 이름을 알려주세요 — 왼쪽 목록이나 Council 카드에서 개별 대화로 바로 들어갈 수도 있어요.',
+    actionLabel: 'Council 열기',
+    actionTo: 'dashboard/agents/council',
+    altText: '개별 페르소나 실행 이력은 Orders에서 상태별로 확인할 수 있습니다.',
+  },
+};
+
 export function AgentsChat({ onNavigate }) {
   const [input, setInput] = React.useState('');
   const [agentKey, setAgentKey] = React.useState(DEFAULT_PERSONA_KEY);
@@ -61,7 +77,7 @@ export function AgentsChat({ onNavigate }) {
   const [pinned, setPinned] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const busyRef = React.useRef(false);
-  const persona = CHAT_PERSONAS[agentKey] || CHAT_PERSONAS.writer;
+  const persona = CHAT_PERSONAS[agentKey] || CHAT_PERSONAS[DEFAULT_PERSONA_KEY];
 
   // Run a real coaching pass against the Engine and stream it into the thread.
   const runGuru = React.useCallback(async (mode, { ref = null, draft = null, label } = {}) => {
@@ -99,10 +115,42 @@ export function AgentsChat({ onNavigate }) {
   }, []);
 
   // Persona is selected via ?agent=<key>; ?mode=&ref= auto-runs live coaching.
+  // ?prompt=council (the Council page's "Convene" button) synthesizes real roster
+  // status into an intro instead of just silently landing on the default persona.
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     const q = new URLSearchParams(window.location.search);
     const a = q.get('agent');
+    const prompt = q.get('prompt');
+
+    if (prompt === 'council') {
+      setAgentKey('council');
+      setThread([{ role: 'agent', name: 'Council', pending: true }]);
+      setConversations(prev => [
+        { name: 'Council session', agent: 'Council', time: '지금', active: true },
+        ...prev.map(c => ({ ...c, active: false })),
+      ]);
+      fetch('/api/hub/agents', { cache: 'no-store' })
+        .then((r) => r.json().catch(() => null))
+        .then((d) => {
+          const personas = Array.isArray(d?.personas) ? d.personas : [];
+          const lines = personas.map((p) => {
+            const last = p.lastRun
+              ? `${shortWhen(p.lastRun.ranAt)} · ${p.lastRun.summary || `${p.emits} 산출`}`
+              : '아직 실행 기록 없음';
+            return `· ${p.nameKo}(${p.nameEn}) — ${p.status === 'idle' ? '대기' : '활성'} · ${last}`;
+          }).join('\n');
+          const header = d?.status === 'live' ? '5개 페르소나 현황을 원장에서 모았습니다.' : '원장이 아직 연결되지 않아 예시 로스터를 보여드립니다.';
+          setThread([
+            { role: 'agent', name: 'Council', text: `${header}\n\n${lines || '로스터를 불러오지 못했습니다.'}\n\n무엇을 우선 볼까요?` },
+          ]);
+        })
+        .catch(() => {
+          setThread([{ role: 'agent', name: 'Council', text: '페르소나 현황을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.' }]);
+        });
+      return;
+    }
+
     if (a && CHAT_PERSONAS[a] && a !== DEFAULT_PERSONA_KEY) {
       const p = CHAT_PERSONAS[a];
       setAgentKey(a);

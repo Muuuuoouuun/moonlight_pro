@@ -109,18 +109,29 @@ function buildUnifiedRiskSignals(revenue, projects, automations) {
 }
 
 // Pending approvals nudge — the proposed work-order queue surfaced in the signal feed.
+// Groups by persona so this reads as "which agents are waiting on me" instead of just
+// a bare count — the same roster Council/Orders show, not a separately invented one.
 function buildApprovalSignals(queue) {
   const pending = queue?.pending || 0;
   if (!pending) return [];
-  const preview = (queue.orders || []).slice(0, 3).map((o) => o.title).join(" · ");
+  const orders = queue.orders || [];
+  const byPersona = new Map();
+  orders.forEach((o) => {
+    const key = o.persona || "미지정";
+    byPersona.set(key, (byPersona.get(key) || 0) + 1);
+  });
+  const personaBreakdown = Array.from(byPersona.entries())
+    .map(([persona, count]) => (count > 1 ? `${persona} ${count}` : persona))
+    .join(" · ");
+  const preview = orders.slice(0, 3).map((o) => o.title).join(" · ");
   return [{
     id: "queue-approvals",
     tone: "info",
     kind: "Queue",
-    title: `승인 대기 ${pending}건`,
+    title: `승인 대기 ${pending}건 — ${personaBreakdown}`,
     summary: preview || "페르소나·인박스가 제안한 액션이 승인을 기다립니다.",
     meta: "Work orders · proposed",
-    source: { from: "Queue", ref: "PROPOSED" },
+    source: { from: "Agents", ref: "PROPOSED" },
     decisions: [action("승인 큐 확인", "queueApprovals", true)],
   }];
 }
@@ -373,6 +384,7 @@ function buildSources(results) {
     { key: "content", label: "Content", state: ledgerState(results.content) },
     { key: "revenue", label: "Revenue", state: ledgerState(results.revenue) },
     { key: "automations", label: "Automations", state: ledgerState(results.automations) },
+    { key: "agents", label: "Agents", state: ledgerState(results.orders) },
   ];
 }
 
@@ -392,6 +404,7 @@ export async function GET() {
     content: contentResult,
     revenue: revenueResult,
     automations: automationsResult,
+    orders: ordersResult,
   };
 
   const projects = readLedger(projectsResult);

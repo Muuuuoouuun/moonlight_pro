@@ -128,7 +128,7 @@ function DataTrustStrip({ state }) {
   const liveCount = Number(state.summary?.liveCount || 0);
   const sourceCount = state.sources.length;
   const label = state.syncState === 'mixed'
-    ? `${liveCount}/${sourceCount || 5} live`
+    ? `${liveCount}/${sourceCount || 6} live`
     : sourceLabel(state.syncState);
   const detail = state.syncState === 'preview'
     ? 'preview data · Supabase 연결 후 live 전환'
