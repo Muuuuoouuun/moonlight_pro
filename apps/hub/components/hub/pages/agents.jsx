@@ -2,24 +2,36 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd } from "../hub-primitives";
-import { CHAT_THREAD, COUNCIL, ORDERS } from "../hub-data";
+import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd, EmptyState } from "../hub-primitives";
+import { CHAT_THREAD, ORDERS } from "../hub-data";
 import { requestGuruCoaching, GURU_MODE_LABEL, GURU_PREVIEW_NOTE } from "../guru-client";
+import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
+import { PERSONA_CONTRACT } from "@/lib/sales-os/persona-contract";
 
-const CHAT_PERSONAS = {
-  writer: {
-    name: 'Writer',
-    role: 'content·copy specialist',
-    title: '뉴스레터 #47 2번 섹션',
-    model: 'Haiku 4.5',
-    reply: {
-      text: '받았어요. 이 요청은 Studio 초안과 연결해 둘게요.',
-      actionLabel: 'Open in Studio',
-      actionTo: 'dashboard/content/studio?new=draft',
-      altText: '대안 1) 더 실용적인 체크리스트형\n대안 2) 사례 중심 서사형\n대안 3) 짧은 선언문형',
-    },
+const DEFAULT_PERSONA_KEY = PERSONA_CONTRACT[0]?.id || 'order';
+
+// Not yet live — persona-registry's 5 seeded personas (order/sales/content/production/
+// review) don't have a per-persona chat endpoint the way Guru does (dedicated
+// sales-mentor route + context-assembler). Sending a message here still gets a
+// clearly-labeled canned reply, same tier as before. What changed: the roster and
+// routing now match the real personas Council/Orders show, instead of a fictional
+// "Writer" persona that /dashboard/agents/chat?agent=<real-id> used to silently
+// fall through past (Council linked here with real persona ids after its own
+// live-wiring, and nothing matched).
+const CHAT_PERSONAS = Object.fromEntries(PERSONA_CONTRACT.map((p) => [p.id, {
+  name: p.nameKo,
+  role: p.role,
+  title: `${p.nameKo} · ${p.nameEn}`,
+  model: 'Haiku 4.5',
+  reply: {
+    text: `받았어요. 이 요청은 ${p.nameKo} 트랙(${p.emits})에 반영해 둘게요. (아직 캔드 응답 — 실제 실행 연결 전)`,
+    actionLabel: 'Orders에서 보기',
+    actionTo: 'dashboard/agents/orders',
+    altText: `역할: ${p.role}\n산출: ${p.emits}\n게이트: ${p.gate}`,
   },
-  guru: {
+}]));
+
+CHAT_PERSONAS.guru = {
     name: 'Guru',
     role: '영업 멘토 · 딜 코칭',
     title: '영업 멘토 세션',
@@ -33,12 +45,11 @@ const CHAT_PERSONAS = {
       actionTo: 'dashboard/revenue/overview',
       altText: 'Keenan 4층: Layer 3(매출 영향)·Layer 4(개인 임팩트)를 아직 안 건드렸어요.\nVoss: "무엇이 결정을 어렵게 하나요?"로 저항을 먼저 열어보죠.',
     },
-  },
 };
 
 export function AgentsChat({ onNavigate }) {
   const [input, setInput] = React.useState('');
-  const [agentKey, setAgentKey] = React.useState('writer');
+  const [agentKey, setAgentKey] = React.useState(DEFAULT_PERSONA_KEY);
   const [thread, setThread] = React.useState(CHAT_THREAD);
   const [conversations, setConversations] = React.useState([
     { name: '뉴스레터 #47 2번 섹션', agent: 'Writer', time: '지금', active: true },
@@ -92,7 +103,7 @@ export function AgentsChat({ onNavigate }) {
     if (typeof window === 'undefined') return;
     const q = new URLSearchParams(window.location.search);
     const a = q.get('agent');
-    if (a && CHAT_PERSONAS[a] && a !== 'writer') {
+    if (a && CHAT_PERSONAS[a] && a !== DEFAULT_PERSONA_KEY) {
       const p = CHAT_PERSONAS[a];
       setAgentKey(a);
       if (p.intro) setThread(p.intro);
@@ -228,34 +239,80 @@ export function AgentsChat({ onNavigate }) {
   );
 }
 
+// Real seeded persona roster (order/sales/content/production/review) + each one's
+// most recent agent_runs row. Was previously the static COUNCIL array — a fictional
+// 6-persona roster (strategist/analyst/writer/operator/coach/guru) with fabricated
+// "last output" quotes that had no backend at all.
+function useAgentRoster() {
+  const [state, setState] = React.useState({ status: 'loading', personas: [] });
+
+  React.useEffect(() => {
+    let active = true;
+    fetch('/api/hub/agents', { cache: 'no-store' })
+      .then((r) => r.json().catch(() => null))
+      .then((d) => {
+        if (!active) return;
+        setState({
+          status: d?.status === 'live' ? 'live' : 'preview',
+          personas: Array.isArray(d?.personas) ? d.personas : [],
+        });
+      })
+      .catch(() => active && setState({ status: 'preview', personas: [] }));
+    return () => { active = false; };
+  }, []);
+
+  return state;
+}
+
 export function AgentsCouncil({ onNavigate }) {
+  const roster = useAgentRoster();
+
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Council</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch' }}>5명의 전문 에이전트가 함께 의논. 브리핑·결정에 근거 제공.</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch' }}>
+            {roster.personas.length}명의 페르소나가 함께 의논. 브리핑·결정에 근거 제공.
+          </div>
         </div>
         <div style={{ flex: 1 }} />
+        <Badge tone={roster.status === 'live' ? 'success' : 'neutral'} size="xs">{roster.status === 'live' ? 'live' : 'preview'}</Badge>
         <Button variant="primary" size="sm" icon="sparkle" onClick={() => onNavigate?.('dashboard/agents/chat?prompt=council')}>Convene</Button>
       </div>
+      {roster.status === 'loading' && (
+        <div style={{ fontSize: 12.5, color: 'var(--fg-muted)' }}>페르소나 로스터 불러오는 중…</div>
+      )}
+      {roster.status !== 'loading' && roster.personas.length === 0 && (
+        <EmptyState
+          icon="agents"
+          title="페르소나 로스터가 비어 있습니다"
+          description="Supabase agents 원장이 준비되지 않았습니다."
+        />
+      )}
       <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--gap)' }}>
-        {COUNCIL.map(a => (
-          <Card key={a.key} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.(`dashboard/agents/chat?agent=${a.key}`)}>
+        {roster.personas.map(a => (
+          <Card key={a.id} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.(`dashboard/agents/chat?agent=${a.id}`)}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
               <div style={{
                 width: 36, height: 36, borderRadius: 999,
                 background: 'radial-gradient(circle at 35% 30%, var(--moon-200), var(--moon-500) 60%, var(--moon-700))',
                 boxShadow: '0 0 10px oklch(0.78 0.008 250 / 0.2)',
+                flexShrink: 0,
               }} />
-              <div>
-                <div style={{ fontSize: 13.5, fontWeight: 500 }}>{a.label}</div>
-                <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{a.role}</div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 500 }}>{a.nameKo || a.id}</span>
+                  <Dot tone={a.status === 'idle' ? 'neutral' : 'success'} size={6} />
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.role}</div>
               </div>
             </div>
             <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.5, paddingTop: 10, borderTop: '1px solid var(--line-soft)' }}>
               <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)', marginBottom: 5 }}>Recent</div>
-              {a.last}
+              {a.lastRun
+                ? <>{shortWhen(a.lastRun.ranAt)} · {a.lastRun.summary || `${a.emits} 산출`}</>
+                : (a.status === 'idle' ? '아직 실행 기록 없음' : '실행 대기')}
             </div>
           </Card>
         ))}
@@ -322,9 +379,42 @@ export function AgentsOrders({ onNavigate }) {
     }
   }
 
+  // Approved → executed with the realized outcome, closing the outcome-attribution loop.
+  async function execute(id, action) {
+    if (busyId) return;
+    setBusyId(id);
+    try {
+      const res = await fetch('/api/hub/work-orders', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, status: 'executed', outcome: { action } }),
+      });
+      if (res.ok) setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: 'executed' } : o)));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // Approved dm/lead capture → executed with no outcome payload, closing the lead-capture
+  // loop instead (work_orders.lead_id back-fill — see work-orders.js promoteCaptureToLead).
+  async function promote(id) {
+    if (busyId) return;
+    setBusyId(id);
+    try {
+      const res = await fetch('/api/hub/work-orders', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, status: 'executed' }),
+      });
+      if (res.ok) setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: 'executed' } : o)));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   // Live rows from work_orders, else the static sample (demo) so the page is never empty.
   const rows = live && Array.isArray(orders)
-    ? orders.map((o) => ({ id: o.id, at: shortWhen(o.proposedAt), to: o.persona, what: o.title, status: o.status, live: true }))
+    ? orders.map((o) => ({ id: o.id, at: shortWhen(o.proposedAt), to: o.persona, what: o.title, status: o.status, kind: o.kind, live: true }))
     : (orders === null ? [] : ORDERS.map((o) => ({ ...o, live: false })));
 
   return (
@@ -360,25 +450,45 @@ export function AgentsOrders({ onNavigate }) {
         )}
         {rows.map((o, i) => (
           <div key={o.id} style={{
-            display: 'grid', gridTemplateColumns: '100px 90px 1fr 90px 120px',
-            padding: '12px 16px', alignItems: 'center',
             opacity: busyId === o.id ? 0.5 : 1,
             borderBottom: i < rows.length - 1 ? '1px solid var(--line-soft)' : 'none',
           }}>
-            <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{o.at}</span>
-            <span style={{ fontSize: 12, color: 'var(--moon-300)' }}>{o.to}</span>
-            <span style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.what}</span>
-            <Badge tone={WO_STATUS_TONE[o.status] || 'neutral'} size="xs">{o.status}</Badge>
-            <div style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-              {o.live && o.status === 'proposed' ? (
-                <>
-                  <Button variant="primary" size="xs" onClick={() => decide(o.id, 'approved')}>승인</Button>
-                  <Button variant="ghost" size="xs" onClick={() => decide(o.id, 'dismissed')}>보류</Button>
-                </>
-              ) : (
-                <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(`dashboard/agents/chat?order=${o.id}`)}>Open</Button>
-              )}
+            <div style={{
+              display: 'grid', gridTemplateColumns: '100px 90px 1fr 90px 120px',
+              padding: '12px 16px', alignItems: 'center',
+            }}>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{o.at}</span>
+              <span style={{ fontSize: 12, color: 'var(--moon-300)' }}>{o.to}</span>
+              <span style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.what}</span>
+              <Badge tone={WO_STATUS_TONE[o.status] || 'neutral'} size="xs">{o.status}</Badge>
+              <div style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                {o.live && o.status === 'proposed' ? (
+                  <>
+                    <Button variant="primary" size="xs" onClick={() => decide(o.id, 'approved')}>승인</Button>
+                    <Button variant="ghost" size="xs" onClick={() => decide(o.id, 'dismissed')}>보류</Button>
+                  </>
+                ) : (
+                  <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(`dashboard/agents/chat?order=${o.id}`)}>Open</Button>
+                )}
+              </div>
             </div>
+            {o.live && o.status === 'approved' && (o.kind === 'dm' || o.kind === 'lead' ? (
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '0 16px 12px 116px' }}>
+                <span style={{ fontSize: 11, color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Dot tone="success" size={6} /> 신규 리드
+                </span>
+                <Button variant="outline" size="xs" onClick={() => promote(o.id)}>리드로 등록</Button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '0 16px 12px 116px' }}>
+                <span style={{ fontSize: 11, color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Dot tone="success" size={6} /> 실행 결과
+                </span>
+                {WO_EXECUTE_ACTIONS.map((a) => (
+                  <Button key={a.action} variant="outline" size="xs" onClick={() => execute(o.id, a.action)}>{a.label}</Button>
+                ))}
+              </div>
+            ))}
           </div>
         ))}
       </Card>
