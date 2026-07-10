@@ -3,17 +3,10 @@
 import React from "react";
 import { Iconed } from "../hub-icons";
 import { Card, Button, Badge, Dot, SectionTitle, EmptyState } from "../hub-primitives";
+import { QUICK_LOG_ACTIONS as LOG_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 
 const STAGE_TONE = { new: "neutral", qualified: "info", nurturing: "moon", proposal: "moon", negotiation: "warning", prospect: "neutral" };
 const CHANNEL_ICON = { "전화/문자": "chat", "방문": "building", "카톡": "chat" };
-
-// quick-log actions → outreach_outcomes.action
-const LOG_ACTIONS = [
-  { label: "전화함", action: "sent", tone: "moon" },
-  { label: "응답", action: "replied", tone: "info" },
-  { label: "미팅", action: "meeting", tone: "success" },
-  { label: "노응답", action: "no_response", tone: "neutral" },
-];
 
 export function Followups() {
   const [state, setState] = React.useState({ syncState: "loading", items: [], summary: {} });

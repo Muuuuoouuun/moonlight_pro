@@ -4,8 +4,23 @@
 // The Daily Brief surfaces the pending queue; one click approves; execution flips to 'executed'.
 // registry.json gates.no_auto_send=true — nothing leaves the queue without an operator decision.
 
+import { randomUUID } from "crypto";
+
 import { eqFilter, fetchSupabaseRows, inFilter, withWorkspaceFilter } from "@/lib/server-read";
-import { insertSupabaseRecord, resolveDefaultWorkspaceId, updateSupabaseRecord } from "@/lib/server-write";
+import {
+  insertSupabaseRecord,
+  resolveDefaultWorkspaceId,
+  updateSupabaseRecord,
+  updateSupabaseRecordReturning,
+} from "@/lib/server-write";
+
+import { recordOutreachOutcome } from "@/lib/repositories/outcomes-ledger";
+import { setAgentRunOutcome } from "@/lib/sales-os/agent-runs";
+import {
+  buildOutcomeFromWorkOrder,
+  isValidOutcomeAction,
+  isWorkOrderAttributed,
+} from "@/lib/sales-os/outcome-attribution";
 
 const STATUSES = new Set(["proposed", "approved", "executed", "dismissed"]);
 const SOURCES = new Set(["team", "inbox", "guru", "manual"]);
@@ -101,15 +116,137 @@ export async function getQueueSummary({ workspaceId = resolveDefaultWorkspaceId(
   return { source, counts, pending: counts.proposed };
 }
 
+// Read one work order by id (mapped shape) — used by the attribution back-fill.
+export async function getWorkOrderById({ workspaceId = resolveDefaultWorkspaceId(), id } = {}) {
+  if (!workspaceId || !id) return null;
+  const rows = await fetchSupabaseRows("work_orders", {
+    filters: [["workspace_id", eqFilter(workspaceId)], ["id", eqFilter(id)]],
+    limit: 1,
+  });
+  if (!rows || !rows.length) return null;
+  return mapWorkOrder(rows[0]);
+}
+
+// Close the loop: flip an approved order to 'executed', log the realized outreach outcome,
+// and back-fill work_orders.outcome_id (+ agent_runs.outcome_id when run_id is known).
+// Idempotent by construction: the status transition is the lock (only one caller flips
+// →executed), and both FK writes are guarded on `outcome_id is null`.
+async function attributeWorkOrderOutcome({ workspaceId, id, order, outcome }) {
+  const now = new Date().toISOString();
+
+  // (1) transition lock — only the caller that flips status to 'executed' proceeds.
+  const won = await updateSupabaseRecordReturning(
+    "work_orders",
+    [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)], ["status", "neq.executed"]],
+    { status: "executed", executed_at: now },
+  );
+  if (!Array.isArray(won)) return { persisted: false, reason: won?.error || "transition-failed" };
+  if (won.length === 0) return { persisted: false, reason: "already-executed" };
+
+  // (2) record the realized outcome (client-minted id, since inserts are return=minimal).
+  const rec = await recordOutreachOutcome({ workspaceId, ...buildOutcomeFromWorkOrder(order, outcome) });
+  if (!rec.persisted) {
+    // The order IS executed, but the outcome sink failed — surface it rather than hide it.
+    return { persisted: true, reason: "executed-unattributed", attributed: false, outcomeError: rec.reason };
+  }
+
+  // (3) back-fill the FK (guarded on `is null`, so a race can't double-write).
+  await updateSupabaseRecord(
+    "work_orders",
+    [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)], ["outcome_id", "is.null"]],
+    { outcome_id: rec.id },
+  );
+
+  // (4) attribute the originating agent run too — dormant until run_id is populated at emit time.
+  if (order.runId) {
+    await setAgentRunOutcome({ workspaceId, runId: order.runId, outcomeId: rec.id });
+  }
+
+  return { persisted: true, reason: "ok", attributed: true, outcomeId: rec.id, status: "executed" };
+}
+
+// Close the DM/lead capture loop (capture-spine.md §2 "DM 인입"/"새 리드"): an executed
+// dm/lead-kind work order becomes a real `leads` row. Deliberately skips the
+// lead_intake_raw -> companies match-key dance that business-card/sheet imports use — that
+// needs structured fields (name/phone) an inbox one-liner doesn't have, and guessing a
+// company match from free text risks silently merging into the wrong company. A bare lead
+// the operator fleshes out in Revenue > Leads is the safe default; richer entity extraction
+// is the local /team command's job, not the hub's (see inbox-classify.js header comment).
+async function promoteCaptureToLead({ workspaceId, id, order }) {
+  const now = new Date().toISOString();
+
+  // transition lock — only the caller that flips status to 'executed' proceeds.
+  const won = await updateSupabaseRecordReturning(
+    "work_orders",
+    [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)], ["status", "neq.executed"]],
+    { status: "executed", executed_at: now },
+  );
+  if (!Array.isArray(won)) return { persisted: false, reason: won?.error || "transition-failed" };
+  if (won.length === 0) return { persisted: false, reason: "already-executed" };
+
+  const raw = typeof order.body?.raw === "string" ? order.body.raw.trim() : "";
+  const leadId = randomUUID();
+  const insert = await insertSupabaseRecord("leads", {
+    id: leadId,
+    workspace_id: workspaceId,
+    company_id: null,
+    contact_id: null,
+    name: raw ? raw.slice(0, 80) : order.title,
+    source: "inbox",
+    channel: order.channel || order.body?.classification?.channel || null,
+    status: "new",
+    score: 0,
+    next_action: null,
+    last_touch_at: now,
+    updated_at: now,
+    // meta.type: 'company' — every inbox dm/lead capture is a prospective ClassIn academy
+    // lead (B2B), not a personal-brand contact; keeps the Revenue Personal/Company badge honest.
+    meta: { type: "company", captured_raw: raw || null, work_order_id: id },
+  });
+  if (!insert.persisted) {
+    // The order IS executed, but the lead insert failed — surface it rather than hide it.
+    return { persisted: true, reason: "executed-unpromoted", promoted: false, leadError: insert.reason };
+  }
+
+  await updateSupabaseRecord(
+    "work_orders",
+    [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)], ["lead_id", "is.null"]],
+    { lead_id: leadId },
+  );
+
+  return { persisted: true, reason: "ok", promoted: true, leadId, status: "executed" };
+}
+
 // Operator decision: approve / dismiss / mark executed. Never auto-called — this IS the 1-click gate.
+// When status='executed' carries an `outcome` payload, it closes the outcome-attribution loop;
+// with no payload on a dm/lead-kind order, it closes the lead-capture loop instead (see above).
 export async function decideWorkOrder({
   workspaceId = resolveDefaultWorkspaceId(),
   id,
   status,
+  outcome = null,
   outcomeId = null,
 } = {}) {
   if (!workspaceId) return { persisted: false, reason: "missing-workspace" };
   if (!id || !STATUSES.has(status)) return { persisted: false, reason: "invalid-decision" };
+
+  // Executed + realized result → validate up-front, then transition-lock + attribute.
+  if (status === "executed" && outcome && outcome.action != null) {
+    if (!isValidOutcomeAction(outcome.action)) return { persisted: false, reason: "invalid-action" };
+    const order = await getWorkOrderById({ workspaceId, id });
+    if (!order) return { persisted: false, reason: "not-found" };
+    if (isWorkOrderAttributed(order)) return { persisted: false, reason: "already-attributed" };
+    return attributeWorkOrderOutcome({ workspaceId, id, order, outcome });
+  }
+
+  // Executed, no outcome payload, dm/lead capture → promote to a real lead instead.
+  if (status === "executed" && !outcome) {
+    const order = await getWorkOrderById({ workspaceId, id });
+    if (order && (order.kind === "dm" || order.kind === "lead")) {
+      if (order.leadId) return { persisted: false, reason: "already-promoted" };
+      return promoteCaptureToLead({ workspaceId, id, order });
+    }
+  }
 
   const now = new Date().toISOString();
   const patch = { status };

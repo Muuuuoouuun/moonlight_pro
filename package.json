@@ -17,6 +17,7 @@
     "check:context": "node ./scripts/check-context-assembler.mjs",
     "check:inbox": "node ./scripts/check-inbox-router.mjs",
     "check:scoring": "node ./scripts/check-followup-scoring.mjs",
+    "check:attribution": "node --test ./scripts/check-outcome-attribution.test.mjs",
     "db:migrate": "node ./scripts/apply-migrations.mjs",
     "dev": "turbo run dev",
     "dev:hub": "npm --workspace @com-moon/hub run dev",

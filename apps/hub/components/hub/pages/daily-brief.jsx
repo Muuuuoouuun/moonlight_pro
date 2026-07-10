@@ -4,6 +4,7 @@ import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, Checkbox, Progress, Sparkline } from "../hub-primitives";
 import { BRIEF_SIGNALS, TODAY_BLOCKS, METRICS } from "../hub-data";
+import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 
 function formatBriefDate(date) {
   return new Intl.DateTimeFormat('en-US', {
@@ -248,6 +249,7 @@ function ApprovalQueueCard({ onNavigate }) {
   const [orders, setOrders] = React.useState([]);
   const [state, setState] = React.useState('loading');
   const [busyId, setBusyId] = React.useState(null);
+  const [approved, setApproved] = React.useState({}); // id → true once approved (reveals execute row)
 
   React.useEffect(() => {
     let active = true;
@@ -266,22 +268,31 @@ function ApprovalQueueCard({ onNavigate }) {
     return () => { active = false; };
   }, []);
 
-  async function decide(id, status) {
-    if (busyId) return;
+  async function post(id, body) {
+    if (busyId) return false;
     setBusyId(id);
     try {
       const res = await fetch('/api/hub/work-orders', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id, status }),
+        body: JSON.stringify({ id, ...body }),
       });
-      if (res.ok) setOrders((prev) => prev.filter((o) => o.id !== id));
+      return res.ok;
     } finally {
       setBusyId(null);
     }
   }
 
-  const pending = orders.length;
+  // proposed → approved reveals the execute row; execute logs the realized outcome and
+  // closes the outcome-attribution loop. dismiss drops it.
+  const approve = async (id) => { if (await post(id, { status: 'approved' })) setApproved((m) => ({ ...m, [id]: true })); };
+  const dismiss = async (id) => { if (await post(id, { status: 'dismissed' })) setOrders((prev) => prev.filter((o) => o.id !== id)); };
+  const execute = async (id, action) => { if (await post(id, { status: 'executed', outcome: { action } })) setOrders((prev) => prev.filter((o) => o.id !== id)); };
+  // dm/lead capture → executed with no outcome payload, closes the lead-capture loop instead
+  // (work_orders.lead_id back-fill — see work-orders.js promoteCaptureToLead).
+  const promote = async (id) => { if (await post(id, { status: 'executed' })) setOrders((prev) => prev.filter((o) => o.id !== id)); };
+
+  const pending = orders.filter((o) => !approved[o.id]).length;
 
   return (
     <div>
@@ -289,7 +300,7 @@ function ApprovalQueueCard({ onNavigate }) {
         승인 큐
       </SectionTitle>
       <Card pad={false}>
-        {pending === 0 ? (
+        {orders.length === 0 ? (
           <div style={{ padding: 14, fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
             {state === 'loading'
               ? '큐 확인 중…'
@@ -298,23 +309,43 @@ function ApprovalQueueCard({ onNavigate }) {
         ) : (
           orders.map((o, i) => (
             <div key={o.id} style={{
-              display: 'flex', alignItems: 'flex-start', gap: 10,
               padding: '11px 14px', opacity: busyId === o.id ? 0.5 : 1,
               borderBottom: i < orders.length - 1 ? '1px solid var(--line-soft)' : 'none',
             }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <Badge tone={WO_KIND_TONE[o.kind] || 'neutral'} size="xs">{o.kind}</Badge>
-                  <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)' }}>{o.persona}{o.channel ? ` · ${o.channel}` : ''}</span>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <Badge tone={WO_KIND_TONE[o.kind] || 'neutral'} size="xs">{o.kind}</Badge>
+                    <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)' }}>{o.persona}{o.channel ? ` · ${o.channel}` : ''}</span>
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {o.title}
+                  </div>
                 </div>
-                <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {o.title}
+                {!approved[o.id] && (
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <Button variant="primary" size="xs" onClick={() => approve(o.id)}>승인</Button>
+                    <Button variant="ghost" size="xs" onClick={() => dismiss(o.id)}>보류</Button>
+                  </div>
+                )}
+              </div>
+              {approved[o.id] && (o.kind === 'dm' || o.kind === 'lead' ? (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Dot tone="success" size={6} /> 승인됨 · 신규 리드
+                  </span>
+                  <Button variant="outline" size="xs" onClick={() => promote(o.id)}>리드로 등록</Button>
                 </div>
-              </div>
-              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                <Button variant="primary" size="xs" onClick={() => decide(o.id, 'approved')}>승인</Button>
-                <Button variant="ghost" size="xs" onClick={() => decide(o.id, 'dismissed')}>보류</Button>
-              </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Dot tone="success" size={6} /> 승인됨 · 실행 결과
+                  </span>
+                  {WO_EXECUTE_ACTIONS.map((a) => (
+                    <Button key={a.action} variant="outline" size="xs" onClick={() => execute(o.id, a.action)}>{a.label}</Button>
+                  ))}
+                </div>
+              ))}
             </div>
           ))
         )}

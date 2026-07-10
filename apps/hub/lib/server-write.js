@@ -281,6 +281,39 @@ export async function updateSupabaseRecord(table, filters = [], record = {}) {
   }
 }
 
+// PATCH variant that returns the affected rows (Prefer: return=representation).
+// Callers use the returned array to know whether a guarded transition actually won
+// (empty array = no row matched the filter). On success returns an array (possibly
+// empty); on failure returns { error, detail }.
+export async function updateSupabaseRecordReturning(table, filters = [], record = {}) {
+  const config = resolveSupabaseConfig();
+
+  if (!config) {
+    return { error: "missing-config" };
+  }
+
+  try {
+    const response = await fetch(`${config.url}/rest/v1/${table}${buildFilterQuery(filters)}`, {
+      method: "PATCH",
+      headers: makeSupabaseHeaders(config.apiKey, {
+        contentType: "application/json",
+        prefer: "return=representation",
+      }),
+      body: JSON.stringify(record),
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return { error: `http-${response.status}`, detail: await response.text().catch(() => "") };
+    }
+
+    const rows = await response.json().catch(() => []);
+    return Array.isArray(rows) ? rows : [];
+  } catch (error) {
+    return { error: "request-failed", detail: String(error) };
+  }
+}
+
 export function buildProjectUpdateRecord(payload) {
   const workspaceId = normalizeString(payload.workspaceId) || resolveDefaultWorkspaceId();
 

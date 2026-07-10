@@ -5,8 +5,12 @@
 //        getOutcomeStats (conversion funnel for the 5x measurement).
 // Backed by migration 0008 `outreach_outcomes`.
 
+import { randomUUID } from "crypto";
+
 import { eqFilter, fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-read";
 import { insertSupabaseRecord, resolveDefaultWorkspaceId } from "@/lib/server-write";
+
+import { isValidOutcomeAction } from "@/lib/sales-os/outcome-attribution";
 
 const ACTIONS = new Set(["sent", "replied", "meeting", "proposal", "won", "lost", "no_response"]);
 // Funnel order — each stage is a strict subset of the prior (won implies meeting implies replied).
@@ -30,8 +34,16 @@ export async function recordOutreachOutcome({
   occurredAt = null,
 } = {}) {
   if (!workspaceId) return { persisted: false, reason: "missing-workspace" };
+  // Write-boundary integrity: reject an unknown action instead of silently coercing it to
+  // 'sent' (which would corrupt the funnel). An absent action still defaults to 'sent'.
+  if (action != null && !isValidOutcomeAction(action)) {
+    return { persisted: false, reason: "invalid-action" };
+  }
 
-  return insertSupabaseRecord("outreach_outcomes", {
+  // Inserts are return=minimal, so mint the id here and hand it back to the attribution caller.
+  const id = randomUUID();
+  const result = await insertSupabaseRecord("outreach_outcomes", {
+    id,
     workspace_id: workspaceId,
     lead_id: leadId,
     deal_id: dealId,
@@ -43,6 +55,7 @@ export async function recordOutreachOutcome({
     note: note || null,
     occurred_at: occurredAt || new Date().toISOString(),
   });
+  return { ...result, id };
 }
 
 // Recent outcomes for triage. Optionally scope to a play.

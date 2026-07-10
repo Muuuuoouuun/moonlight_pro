@@ -6,7 +6,7 @@
 // This read/write pair is what turns Guru from a stateless advisor into a remembering coach.
 
 import { eqFilter, fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-read";
-import { insertSupabaseRecord, resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { insertSupabaseRecord, resolveDefaultWorkspaceId, updateSupabaseRecord } from "@/lib/server-write";
 
 const RESULTS = new Set(["ok", "needs_human", "error"]);
 
@@ -41,6 +41,23 @@ export async function recordAgentRun({
     outcome_id: outcomeId || null,
     ran_at: new Date().toISOString(),
   });
+}
+
+// Attribute a realized outcome back to the run that produced the recommendation (learning).
+// Guarded on `outcome_id is null` (idempotent) and a no-op without a runId — dormant until
+// the emit path populates work_orders.run_id, at which point attribution activates for free.
+export async function setAgentRunOutcome({
+  workspaceId = resolveDefaultWorkspaceId(),
+  runId,
+  outcomeId,
+} = {}) {
+  if (!workspaceId || !runId || !outcomeId) return { persisted: false, reason: "missing-fields" };
+
+  return updateSupabaseRecord(
+    "agent_runs",
+    [["id", eqFilter(runId)], ["workspace_id", eqFilter(workspaceId)], ["outcome_id", "is.null"]],
+    { outcome_id: outcomeId },
+  );
 }
 
 export async function getRecentAgentRuns({
