@@ -126,11 +126,16 @@ Zoom 대체재·전자칠판 스펙표로 설명하면 가치가 작아짐.
 | 단계 | 내용 | 상태 |
 | ---- | ---- | ---- |
 | v1.0 | 구글시트 동기화(import→staging→승격, DB→시트 push), sales_plays/lead_intake_raw DDL | ✅ 머지·라이브 적용됨 |
-| **v1.1** | **콘텐츠 아이디어 큐 + 발행 케이던스 엔진** (이번 첫 수) | ▶ §8 계획 |
-| v1.2 | 팔로업/다음행동 엔진(단계·정체 기반 "오늘 연락할 사람+채널+왜+자료") | 대기 |
-| v1.3 | 인바운드 DM→리드 포착(콘텐츠↔딜 루프, 반수작업) | 대기 |
-| v1.4 | classin_home CRM 읽어와 통합(내 ownerId 딜을 한 화면) | 대기 |
-| vNext | 네이버 공식 API 시드(법적) · 광고비/퍼널 연동(classin_home 재사용) · 5팀 오케스트레이션 + agents.jsx 토큰화 · 인스타/스레드 자동 발행 · 5배 계기판 | 보류 |
+| v1.1 | 콘텐츠 아이디어 큐 + 발행 케이던스 엔진 | ✅ 머지됨 (`content_items`/`content_variants` 확장 + Content 페이지 Queue 탭) |
+| v1.2 | 팔로업/다음행동 엔진 + `outreach_outcomes` 싱크 | ✅ 머지됨 (`followups.jsx`, `outcomes-ledger.js`) |
+| Guru P0–P2 | 세일즈 구루 멘토 에이전트(페르소나 → Engine 루프 → 딜 단위 코칭) | ✅ 머지됨 — `docs/sales-guru-mentor-agent-plan.md` |
+| Sales OS Phase 0–4 | work_orders/agent_runs 스파인 · 360 컨텍스트 어셈블러 · 인박스 라우터 · 크로스필러 리스크 · outcome-weighted triage + leads.score | ✅ 머지됨 |
+| 학습 루프 closing | work_order 실행 결과 → `outreach_outcomes` → `agent_runs.outcome_id` 귀속(멱등) | ✅ 머지됨 |
+| **v1.4 — CRM 통합** | classin_home 딜/퍼널을 읽어와 Guru의 `crm_facts` gap 해소 | P0a(코드 배관: `crmFacts` 파라미터, `crm-pipeline.js`)만 완료 · **이후 보류**(아래 결정 참고) |
+| v1.3 | 인바운드 DM→리드 포착(콘텐츠↔딜 루프, 반수작업) | ✅ 머지됨 — classify/stage(`inbox-classify.js`/`inbox-router.js`)는 이미 있었고, 이번에 승인된 `dm`/`lead` work order를 실제 `leads` row로 닫는 `promoteCaptureToLead`(`work-orders.js`)를 추가해 루프를 완성. `lead_intake_raw`→`companies` 매칭(구조화 필드 필요)은 의도적으로 생략 — 자유 텍스트에서 회사 매칭을 추측하지 않고, bare lead를 Revenue › Leads에서 사람이 채우게 함(§8 지식과 동일한 안전 원칙) |
+| vNext | 네이버 공식 API 시드(법적) · 광고비/퍼널 연동(classin_home 재사용) · agents.jsx 팔레트 토큰화 · 인스타/스레드 자동 발행 · 5배 계기판 | 보류 |
+
+> **2026-07-10 결정**: v1.4(classin_home CRM 통합)는 classin_home 레포 접근·별도 Supabase 프로젝트 여부 확인 등 moonlight 바깥의 의존이 커서 **후순위로 보류**한다. 당분간은 moonlight_pro 안에서 자체 완결되는 작업(v1.3 인바운드 캡처, 정리/부채 항목 등)을 우선한다. 상세 트레이드오프·재개 시 체크리스트는 `docs/sales-os-crm-integration-plan.md` 참고 — 그 문서의 P0a(라이브 DB 무영향)는 이미 머지됐고, P0b(마이그레이션) 이후부터가 보류 대상이다.
 
 ---
 
@@ -172,7 +177,7 @@ Zoom 대체재·전자칠판 스펙표로 설명하면 가치가 작아짐.
 
 ## 9. Open Questions
 
-1. **moonlight ↔ classin_home 결합 방식**(v1.4): 같은/연결 Supabase 직접 읽기 vs eeocrm MCP 라이브 vs push. (v1.1 비차단)
+1. **moonlight ↔ classin_home 결합 방식**(v1.4): 같은/연결 Supabase 직접 읽기 vs eeocrm MCP 라이브 vs push. `docs/sales-os-crm-integration-plan.md`가 push 스냅샷(C안)을 추천했으나, **실행 자체가 2026-07-10부로 보류**돼 이 질문의 최종 답은 재개 시점까지 미확정으로 남는다. (v1.1 비차단)
 2. ~~classinkr-web 접근~~ → **해소:** 이 머신엔 없음, classin_home 포지셔닝 파일을 SSOT로 사용.
 3. **케이던스 목표 수치** — 주 5건? 포맷 분배(카드뉴스/스레드/릴스)? (잠정 5, 빌드 중 조정)
 4. **랭킹 1순위 신호** — 앵글 vs 단계 vs 철학(content_rules) 중 무엇 우선? (The Assignment 데이터로 보정)

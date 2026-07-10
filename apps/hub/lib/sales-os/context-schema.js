@@ -67,7 +67,7 @@ export function selectBrand(brands) {
 // Assemble one deal's operating_context (spine §1, item_type "deal": entity·crm_facts·ledger filled,
 // content/social empty). `deal`/`account` are the revenue-ledger *projections* (which drop
 // score/next_action/contact) — those gaps are recorded honestly in missing[].
-export function buildFocusOperatingContext({ deal = null, account = null, entityOutcomes = [], brand = BRAND_FALLBACK } = {}) {
+export function buildFocusOperatingContext({ deal = null, account = null, entityOutcomes = [], brand = BRAND_FALLBACK, crmFacts = null } = {}) {
   if (!deal) {
     return {
       item_id: null,
@@ -82,6 +82,16 @@ export function buildFocusOperatingContext({ deal = null, account = null, entity
   );
   const lastTouch = sorted[0]?.at || null;
 
+  // eeoCRM gap only remains "missing" when no snapshot resolved it (Sales OS v1.4 —
+  // docs/sales-os-crm-integration-plan.md §4). Once crmFacts lands, the honest gap closes.
+  const missing = [
+    { source: "leads", reason: "score/next_action_hint는 revenue 레저 투영에 없음 (raw row 필요)" },
+    { source: "contacts", reason: "contact는 revenue 레저 투영에 없음" },
+  ];
+  if (!crmFacts) {
+    missing.push({ source: "eeoCRM", reason: "MCP 미연결 — crm_facts 보강 없음" });
+  }
+
   return {
     item_id: deal.id,
     item_type: "deal",
@@ -95,7 +105,7 @@ export function buildFocusOperatingContext({ deal = null, account = null, entity
       amount: Number.isFinite(deal.value) ? deal.value : null,
       owner_id: OWNER_ID,
     },
-    crm_facts: null,
+    crm_facts: crmFacts,
     ledger: {
       recent_outcomes: Array.isArray(entityOutcomes) ? entityOutcomes : [],
       last_touch: lastTouch,
@@ -105,10 +115,6 @@ export function buildFocusOperatingContext({ deal = null, account = null, entity
     content: { cadence_status: null, idea_queue_top: [], recent_published: [] },
     social_signals: { winners: [], losers: [] },
     brand,
-    missing: [
-      { source: "leads", reason: "score/next_action_hint는 revenue 레저 투영에 없음 (raw row 필요)" },
-      { source: "contacts", reason: "contact는 revenue 레저 투영에 없음" },
-      { source: "eeoCRM", reason: "MCP 미연결 — crm_facts 보강 없음" },
-    ],
+    missing,
   };
 }

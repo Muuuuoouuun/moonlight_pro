@@ -7,11 +7,13 @@
 // context shape (deals/leads/accounts/cases/focus kept) so the Engine prompt stays compatible.
 
 import { getContentLedger } from "@/lib/repositories/content-ledger";
+import { getCrmPipeline } from "@/lib/repositories/crm-pipeline";
 import { getRecentOutcomes } from "@/lib/repositories/outcomes-ledger";
 import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
 
 import { getRecentAgentRuns } from "@/lib/sales-os/agent-runs";
 import {
+  OWNER_ID,
   buildFocusOperatingContext,
   cadenceStatusString,
   normalizeOutcome,
@@ -81,7 +83,12 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
     const account =
       (ledger.accounts || []).find((a) => (a.name || "").toLowerCase().includes(needle)) || null;
     const entityOutcomes = deal ? outcomesForEntity(normalizedOutcomes, { dealId: deal.id }) : [];
-    context.focus = buildFocusOperatingContext({ deal, account, entityOutcomes, brand });
+    // v1.4 CRM gap fill — resolves to null until the classin_crm_snapshot push lands (P0b/P1);
+    // buildFocusOperatingContext degrades that to the existing "eeoCRM" missing[] entry.
+    const crmFacts = deal
+      ? await settled(getCrmPipeline({ ownerId: OWNER_ID, dealId: deal.id }), "crm-pipeline", missing)
+      : null;
+    context.focus = buildFocusOperatingContext({ deal, account, entityOutcomes, brand, crmFacts });
   }
 
   return context;
