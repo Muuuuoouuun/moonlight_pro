@@ -107,6 +107,72 @@ function useWorkLedger() {
   return state;
 }
 
+const FALLBACK_CALENDAR_EVENTS = [
+  { day: 0, start: 10, end: 11, title: 'Weekly kickoff', tone: 'moon' },
+  { day: 0, start: 14, end: 16, title: 'Moonlight Web v2 — deep work', tone: 'moon' },
+  { day: 1, start: 9, end: 10, title: '뉴스레터 outline', tone: 'moon' },
+  { day: 1, start: 15, end: 16.5, title: '클래스인 2차 미팅', tone: 'company' },
+  { day: 2, start: 11, end: 12, title: 'Council sync', tone: 'info' },
+  { day: 2, start: 16, end: 17, title: '자문 — 정하윤', tone: 'personal' },
+  { day: 3, start: 10, end: 11.5, title: 'Pricing workshop', tone: 'moon' },
+  { day: 4, start: 10, end: 11, title: '클래스인 Discovery', tone: 'company' },
+  { day: 4, start: 16, end: 17, title: '코칭 — Jihoon', tone: 'personal' },
+  { day: 4, start: 11.5, end: 13, title: '뉴스레터 마감', tone: 'warning' },
+];
+
+// Google's event.start is an ISO datetime (or an all-day date) — plot it onto the
+// currently viewed week's grid. Events outside `days` are dropped (paginated by week).
+function mapGoogleEventsToGrid(events, days) {
+  return events.map((e) => {
+    const start = new Date(e.start);
+    const end = new Date(e.end || e.start);
+    if (Number.isNaN(start.getTime())) return null;
+    const day = days.findIndex((d) => sameDate(d, start));
+    if (day === -1) return null;
+    const startHour = e.allDay ? 8 : start.getHours() + start.getMinutes() / 60;
+    const rawEndHour = e.allDay ? 9 : end.getHours() + end.getMinutes() / 60;
+    return {
+      id: e.id,
+      day,
+      start: startHour,
+      end: Math.max(startHour + 0.25, rawEndHour),
+      title: e.title,
+      tone: 'moon',
+    };
+  }).filter(Boolean);
+}
+
+// Real read/write path against Google Calendar (apps/hub/lib/google-calendar.js +
+// /api/calendar/google/event). Was previously 100% local React state with zero
+// persistence — every "새 일정" vanished on reload regardless of connection status.
+function useCalendarEvents(days) {
+  const [state, setState] = React.useState({ status: 'loading', events: [] });
+  const weekKey = days[0]?.toISOString().slice(0, 10) || '';
+  const [refreshToken, setRefreshToken] = React.useState(0);
+
+  React.useEffect(() => {
+    let active = true;
+    setState((s) => ({ ...s, status: 'loading' }));
+    const timeMin = new Date(days[0]);
+    const timeMax = new Date(days[6].getTime() + DAY_MS);
+    const params = new URLSearchParams({ timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString() });
+
+    fetch(`/api/calendar/google/event?${params.toString()}`, { cache: 'no-store' })
+      .then((r) => r.json().catch(() => null))
+      .then((d) => {
+        if (!active) return;
+        setState({ status: d?.status || 'preview', events: Array.isArray(d?.events) ? d.events : [] });
+      })
+      .catch(() => active && setState({ status: 'error', events: [] }));
+
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekKey, refreshToken]);
+
+  const refetch = React.useCallback(() => setRefreshToken((v) => v + 1), []);
+  return { ...state, refetch };
+}
+
 export function Calendar() {
   const searchParams = useSearchParams();
   const [now, setNow] = React.useState(() => new Date());
@@ -114,19 +180,39 @@ export function Calendar() {
   const [viewMode, setViewMode] = React.useState('Week');
   const [gcalStatus, setGcalStatus] = React.useState('idle');
   const [gcalMessage, setGcalMessage] = React.useState('');
+  const [creating, setCreating] = React.useState(false);
   const focusAppliedRef = React.useRef(false);
-  const [events, setEvents] = React.useState(() => [
-    { day: 0, start: 10, end: 11, title: 'Weekly kickoff', tone: 'moon' },
-    { day: 0, start: 14, end: 16, title: 'Moonlight Web v2 — deep work', tone: 'moon' },
-    { day: 1, start: 9, end: 10, title: '뉴스레터 outline', tone: 'moon' },
-    { day: 1, start: 15, end: 16.5, title: '클래스인 2차 미팅', tone: 'company' },
-    { day: 2, start: 11, end: 12, title: 'Council sync', tone: 'info' },
-    { day: 2, start: 16, end: 17, title: '자문 — 정하윤', tone: 'personal' },
-    { day: 3, start: 10, end: 11.5, title: 'Pricing workshop', tone: 'moon' },
-    { day: 4, start: 10, end: 11, title: '클래스인 Discovery', tone: 'company' },
-    { day: 4, start: 16, end: 17, title: '코칭 — Jihoon', tone: 'personal' },
-    { day: 4, start: 11.5, end: 13, title: '뉴스레터 마감', tone: 'warning' },
-  ]);
+  const [localEvents, setLocalEvents] = React.useState(FALLBACK_CALENDAR_EVENTS);
+  const viewedDateForFetch = addDays(now, weekOffset * 7);
+  const { days: fetchDays } = buildCalendarWeek(viewedDateForFetch);
+  const calendarData = useCalendarEvents(fetchDays);
+  const isLive = calendarData.status === 'live';
+
+  // Creates a real Google Calendar event when connected; otherwise falls back to a
+  // local-only demo row so the grid still shows something without pretending it's saved.
+  const createEvent = React.useCallback(async ({ day, startHour, endHour, title }) => {
+    const targetDay = fetchDays[day] || fetchDays[0];
+    if (!isLive) {
+      setLocalEvents((prev) => [...prev, { day, start: startHour, end: endHour, title, tone: 'moon' }]);
+      return;
+    }
+    const startAt = new Date(targetDay); startAt.setHours(Math.floor(startHour), (startHour % 1) * 60, 0, 0);
+    const endAt = new Date(targetDay); endAt.setHours(Math.floor(endHour), (endHour % 1) * 60, 0, 0);
+    setCreating(true);
+    try {
+      const res = await fetch('/api/calendar/google/event', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title, startAt: startAt.toISOString(), endAt: endAt.toISOString() }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.status === 'saved' || data?.status === 'updated') {
+        calendarData.refetch();
+      }
+    } finally {
+      setCreating(false);
+    }
+  }, [fetchDays, isLive, calendarData]);
 
   React.useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60000);
@@ -138,17 +224,14 @@ export function Calendar() {
     if (!minutes || focusAppliedRef.current) return;
     const week = buildCalendarWeek(now);
     setWeekOffset(0);
-    setEvents(prev => [
-      ...prev,
-      {
-        day: week.todayIndex >= 0 ? week.todayIndex : 0,
-        start: 13,
-        end: 13 + Math.max(15, minutes) / 60,
-        title: `${minutes}m focus block`,
-        tone: 'moon',
-      },
-    ]);
     focusAppliedRef.current = true;
+    createEvent({
+      day: week.todayIndex >= 0 ? week.todayIndex : 0,
+      startHour: 13,
+      endHour: 13 + Math.max(15, minutes) / 60,
+      title: `${minutes}m focus block`,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [now, searchParams]);
 
   async function connectGoogleCalendar() {
@@ -206,20 +289,20 @@ export function Calendar() {
     : 'var(--fg-faint)';
 
   const hours = Array.from({ length: 12 }, (_, i) => 8 + i);
-  const viewedDate = addDays(now, weekOffset * 7);
-  const { labels: days, weekLabel, todayIndex } = buildCalendarWeek(viewedDate);
+  const { labels: dayLabels, weekLabel, todayIndex } = buildCalendarWeek(viewedDateForFetch);
+  const gridEvents = isLive ? mapGoogleEventsToGrid(calendarData.events, fetchDays) : localEvents;
+  const calBadge = calendarData.status === 'live'
+    ? { label: 'live', color: 'var(--success)' }
+    : calendarData.status === 'loading'
+    ? { label: 'syncing', color: 'var(--warning)' }
+    : { label: 'mock', color: 'var(--fg-faint)' };
   const addEvent = () => {
-    const today = buildCalendarWeek(viewedDate).todayIndex;
-    setEvents(prev => [
-      ...prev,
-      {
-        day: today >= 0 ? today : 0,
-        start: 13,
-        end: 14,
-        title: '새 일정',
-        tone: 'moon',
-      },
-    ]);
+    createEvent({
+      day: todayIndex >= 0 ? todayIndex : 0,
+      startHour: 13,
+      endHour: 14,
+      title: '새 일정',
+    });
   };
   const toneBg = { moon: 'oklch(0.35 0.008 250 / 0.9)', company: 'var(--company-bg)', personal: 'var(--personal-bg)', info: 'var(--info-bg)', warning: 'var(--warning-bg)' };
   const toneFg = { moon: 'var(--moon-100)', company: 'var(--company)', personal: 'var(--personal)', info: 'var(--info)', warning: 'var(--warning)' };
@@ -233,9 +316,11 @@ export function Calendar() {
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <span>{weekLabel}</span>
             <span style={{ color: 'var(--fg-faint)' }}>·</span>
+            <span className="mono" style={{ color: calBadge.color }}>{calBadge.label}</span>
+            <span style={{ color: 'var(--fg-faint)' }}>·</span>
             <span style={{ color: gcalColor }}>{gcalLabel}</span>
             <Button variant="ghost" size="xs" onClick={connectGoogleCalendar}>
-              {gcalStatus === 'connecting' ? 'Connecting…' : gcalStatus === 'connected' ? 'Reconnect' : 'Connect Google Calendar'}
+              {gcalStatus === 'connecting' ? 'Connecting…' : isLive ? 'Reconnect' : 'Connect Google Calendar'}
             </Button>
           </div>
           {gcalMessage && (
@@ -253,13 +338,13 @@ export function Calendar() {
             <button key={v} onClick={() => setViewMode(v)} style={{ padding: '4px 10px', fontSize: 11.5, borderRadius: 4, color: v === viewMode ? 'var(--fg)' : 'var(--fg-faint)', background: v === viewMode ? 'var(--surface-3)' : 'transparent' }}>{v}</button>
           ))}
         </div>
-        <Button variant="primary" size="sm" icon="plus" onClick={addEvent}>Event</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={addEvent} disabled={creating}>Event</Button>
       </div>
 
       <Card pad={false} className="hub-table-card" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', borderBottom: '1px solid var(--line-soft)' }}>
           <div />
-          {days.map((d, i) => (
+          {dayLabels.map((d, i) => (
             <div key={d} style={{ padding: '10px 12px', borderLeft: '1px solid var(--line-soft)', fontSize: 11.5, color: i === todayIndex ? 'var(--fg)' : 'var(--fg-muted)' }}>
               {d}
               {i === todayIndex && <span style={{ marginLeft: 6, color: 'var(--moon-300)' }}>· Today</span>}
@@ -273,10 +358,10 @@ export function Calendar() {
                 <div key={h} className="mono" style={{ height: 52, padding: '4px 10px', fontSize: 10, color: 'var(--fg-faint)', textAlign: 'right' }}>{h}:00</div>
               ))}
             </div>
-            {days.map((_, di) => (
+            {dayLabels.map((_, di) => (
               <div key={di} style={{ borderLeft: '1px solid var(--line-soft)', position: 'relative' }}>
                 {hours.map(h => <div key={h} style={{ height: 52, borderBottom: '1px solid var(--line-soft)' }} />)}
-                {events.filter(e => e.day === di).map((e, ei) => {
+                {gridEvents.filter(e => e.day === di).map((e, ei) => {
                   const top = (e.start - 8) * 52;
                   const height = (e.end - e.start) * 52 - 2;
                   return (
