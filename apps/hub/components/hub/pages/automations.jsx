@@ -144,7 +144,44 @@ export function AutomationsIndex({ onNavigate }) {
   );
 }
 
+const EMPTY_EMAIL_STATUS = { status: 'loading', configured: false };
+
+function useEmailIntegrationStatus(url) {
+  const [state, setState] = React.useState(EMPTY_EMAIL_STATUS);
+
+  React.useEffect(() => {
+    let active = true;
+
+    fetch(url, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!active) return;
+        setState(data || { status: 'missing-config', configured: false });
+      })
+      .catch(() => {
+        if (active) setState({ status: 'degraded', configured: false });
+      });
+
+    return () => { active = false; };
+  }, [url]);
+
+  return state;
+}
+
+function emailStatusBadge(status) {
+  if (status === 'connected') return { tone: 'success', label: 'Connected' };
+  if (status === 'ready') return { tone: 'info', label: 'OAuth ready' };
+  if (status === 'degraded') return { tone: 'warning', label: 'Status unknown' };
+  if (status === 'loading') return { tone: 'neutral', label: 'Checking…' };
+  return { tone: 'neutral', label: 'Not connected' };
+}
+
 export function EmailAutomation({ onNavigate }) {
+  const gmail = useEmailIntegrationStatus('/api/email/gmail/status');
+  const resend = useEmailIntegrationStatus('/api/email/resend/status');
+  const gmailBadge = emailStatusBadge(gmail.status);
+  const resendBadge = emailStatusBadge(resend.status);
+
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', maxWidth: 1100 }}>
       <div>
@@ -159,15 +196,21 @@ export function EmailAutomation({ onNavigate }) {
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13.5, fontWeight: 500 }}>Gmail</div>
-              <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>hyeon@moonlight.pro · connected</div>
+              <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>
+                {gmail.connection?.email || gmail.connection?.mailbox || (gmail.configured ? 'OAuth 연결 대기' : '연동 미설정')}
+              </div>
             </div>
-            <Badge tone="success" size="xs">Active</Badge>
+            <Badge tone={gmailBadge.tone} size="xs">{gmailBadge.label}</Badge>
           </div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.6 }}>
             수신 메일을 Leads · Support · Personal로 자동 태깅. 신규 리드는 CRM에 자동 추가.
           </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
-            <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/automations/flows')}>Rules</Button>
+            {gmailBadge.label === 'Not connected' || gmailBadge.label === 'OAuth ready' ? (
+              <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/settings')}>Connect</Button>
+            ) : (
+              <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/automations/flows')}>Rules</Button>
+            )}
             <Button variant="ghost" size="xs" onClick={() => onNavigate?.('dashboard/automations/runs')}>Logs</Button>
           </div>
         </Card>
@@ -178,9 +221,11 @@ export function EmailAutomation({ onNavigate }) {
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13.5, fontWeight: 500 }}>Resend</div>
-              <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>newsletter@moonlight.pro</div>
+              <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>
+                {resend.fromEmail || (resend.configured ? '발신 주소 확인 중' : 'RESEND_API_KEY 미설정')}
+              </div>
             </div>
-            <Badge tone="success" size="xs">Active</Badge>
+            <Badge tone={resendBadge.tone} size="xs">{resendBadge.label}</Badge>
           </div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.6 }}>
             뉴스레터, 트랜잭션 메일, 리마인더 발송. 스케줄된 발송은 Queue에서 관리.

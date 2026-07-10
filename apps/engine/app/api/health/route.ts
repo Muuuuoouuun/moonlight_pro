@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getGeminiIntegrationStatus } from "../../../lib/gemini";
 import { getGitHubIntegrationStatus } from "../../../lib/github-sync";
 import { getOpenClawIntegrationStatus } from "../../../lib/openclaw-sync";
+import { getResendIntegrationStatus } from "../../../lib/email/resend";
 import { checkSupabaseRest } from "../../../lib/supabase-rest";
 import { listSharedProjectWebhookRoutes } from "../../../lib/shared-webhook";
 
@@ -26,6 +27,7 @@ export async function GET() {
       github: getGitHubIntegrationStatus(),
       openclaw: getOpenClawIntegrationStatus(),
       gemini: getGeminiIntegrationStatus(),
+      resend: getResendIntegrationStatus(),
     },
     auth: {
       sharedSecretConfigured: Boolean(process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim()),

@@ -400,7 +400,10 @@ export function Roadmap() {
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Roadmap</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Q2 outlook · 7 initiatives</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+            Q2 outlook · 7 initiatives
+            <span className="mono" style={{ marginLeft: 8, color: 'var(--fg-faint)' }}>mock</span>
+          </div>
         </div>
         <div style={{ flex: 1 }} />
         <Button variant="secondary" size="sm" icon="sparkle" onClick={draftQ3}>Let Council draft Q3</Button>

@@ -92,6 +92,14 @@ export function hasGoogleGmailOAuthStateSecret() {
   return Boolean(resolveOAuthStateSecret());
 }
 
+export function resolveGoogleGmailConfig() {
+  return {
+    configured: Boolean(resolveGoogleOAuthConfig()),
+    hasClientId: Boolean(process.env.GOOGLE_CLIENT_ID?.trim()),
+    hasClientSecret: Boolean(process.env.GOOGLE_CLIENT_SECRET?.trim()),
+  };
+}
+
 function signStatePayload(payload) {
   const secret = resolveOAuthStateSecret();
 
@@ -330,6 +338,19 @@ export async function saveGoogleGmailConnection({
     connectionId: latest?.id || null,
     persistence,
     config,
+  };
+}
+
+export function summarizeGoogleGmailConnection(connection) {
+  const config = connection?.config || {};
+
+  return {
+    id: connection?.id || null,
+    status: connection?.status || "pending",
+    lastSyncedAt: connection?.last_synced_at || null,
+    mailbox: config.mailbox || null,
+    email: config.email || null,
+    expiresAt: config.expiresAt || null,
   };
 }
 
