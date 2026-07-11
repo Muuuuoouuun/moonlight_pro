@@ -10,6 +10,12 @@ import {
   BRAND_TODOS as FALLBACK_TODOS,
   KANBAN_COLUMNS as FALLBACK_COLUMNS,
 } from "../hub-data";
+import {
+  getWorkspace,
+  filterBrandsByWorkspace,
+  filterProjectsByWorkspace,
+  filterTodosByWorkspace,
+} from "../workspace-map";
 
 const EMPTY_ALL_BRAND = {
   key: 'all',
@@ -60,8 +66,9 @@ function ActivityRow({ title, body, meta, badge, tone = 'neutral' }) {
   );
 }
 
-export function Projects() {
+export function Projects({ workspace }) {
   const searchParams = useSearchParams();
+  const ws = getWorkspace(workspace);
   const [brand, setBrand] = React.useState('all');
   const [view, setView] = React.useState('tree');
   const [ledger, setLedger] = React.useState({
@@ -123,14 +130,28 @@ export function Projects() {
   }
 
   const isLiveLedger = ledger.source === 'supabase';
-  const brands = isLiveLedger
+  const rawBrands = isLiveLedger
     ? (ledger.brands?.length ? ledger.brands : [EMPTY_ALL_BRAND])
     : (ledger.brands?.length ? ledger.brands : FALLBACK_BRANDS);
-  const allProjects = isLiveLedger
+  const rawProjects = isLiveLedger
     ? (Array.isArray(ledger.projects) ? ledger.projects : [])
     : (ledger.projects?.length ? ledger.projects : FALLBACK_PROJECTS);
+  // Workspace scope: restrict to this workspace's brands/projects/todos. With no
+  // workspace the filters return their input unchanged, so the unscoped page stays
+  // byte-identical in effect. filterBrandsByWorkspace keeps the 'all' index, so a
+  // scoped view reads as "전체(스코프 내)" — only in-scope brands ever appear.
+  // rawBrands (UNFILTERED) rides along so records whose brand slug is unknown to the
+  // static set still resolve membership through their live brand's orgScope.
+  const brands = ws ? filterBrandsByWorkspace(rawBrands, workspace) : rawBrands;
+  const allProjects = ws ? filterProjectsByWorkspace(rawProjects, workspace, rawBrands) : rawProjects;
+  const scopedTodos = ws ? filterTodosByWorkspace(todos, workspace, rawBrands) : todos;
+  // Scoped default = first non-'all' brand in this workspace (used only when the current
+  // brand selection falls out of scope, e.g. after switching workspaces).
+  const wsDefaultBrand = ws
+    ? (brands.find(b => b.key !== 'all')?.key || brands[0]?.key || 'all')
+    : 'all';
   const projects = brand === 'all' ? allProjects : allProjects.filter(p => p.brand === brand);
-  const brandTodos = brand === 'all' ? todos : todos.filter(t => t.brand === brand);
+  const brandTodos = brand === 'all' ? scopedTodos : scopedTodos.filter(t => t.brand === brand);
   const currentBrand = brands.find(b => b.key === brand) || brands[0] || EMPTY_ALL_BRAND;
 
   React.useEffect(() => {
@@ -178,15 +199,16 @@ export function Projects() {
 
   React.useEffect(() => {
     if (!brands.some(b => b.key === brand)) {
-      setBrand('all');
+      setBrand(wsDefaultBrand);
     }
-  }, [brand, brands]);
+  }, [brand, brands, wsDefaultBrand]);
 
   const toggleTodo = (id) => setTodos(ts => ts.map(t => t.id === id ? { ...t, done: !t.done } : t));
   const toggleExpand = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const createProject = React.useCallback((status = 'In progress') => {
     const id = `local-project-${Date.now()}`;
+    // `brands` is already scoped, so the picked brand is in-workspace when scoped.
     const projectBrand = brand === 'all' ? (brands.find(b => b.key !== 'all')?.key || 'moonpm') : brand;
     const project = {
       id,
@@ -199,16 +221,21 @@ export function Projects() {
       tag: null,
       tasks: 0,
       done: 0,
+      // Tag in-workspace creates so the scoped view doesn't silently drop them.
+      ...(ws ? { workspace } : {}),
     };
     setLedger(prev => ({ ...prev, projects: [project, ...(prev.projects || [])] }));
     setExpanded(prev => new Set([...prev, id]));
     setOpenDetail(id);
     setView('tree');
-  }, [brand, brands]);
+  }, [brand, brands, ws, workspace]);
 
   const createTodo = React.useCallback((projectId = openDetail) => {
     const project = allProjects.find(p => p.id === projectId) || projects[0] || allProjects[0];
-    const todoBrand = project?.brand || (brand === 'all' ? 'moonpm' : brand);
+    // Scoped fallback = this workspace's default brand — never the literal 'moonpm'
+    // (a personal-lane key that would render the todo invisible in classin scope).
+    const fallbackBrand = ws ? wsDefaultBrand : 'moonpm';
+    const todoBrand = project?.brand || (brand === 'all' ? fallbackBrand : brand);
     const todoProject = project?.id || 'inbox';
     const id = `local-todo-${Date.now()}`;
     setTodos(prev => [{
@@ -220,12 +247,14 @@ export function Projects() {
       done: false,
       priority: 'med',
       assignee: 'Me',
+      // Tag in-workspace creates so the scoped view doesn't silently drop them.
+      ...(ws ? { workspace } : {}),
     }, ...prev]);
     if (project?.id) {
       setExpanded(prev => new Set([...prev, project.id]));
       setOpenDetail(project.id);
     }
-  }, [allProjects, brand, openDetail, projects]);
+  }, [allProjects, brand, openDetail, projects, ws, workspace, wsDefaultBrand]);
 
   const moveCard = (cardId, toCol) => {
     setCols(cs => {
@@ -326,7 +355,7 @@ export function Projects() {
   const renderBrandMenuRow = (b) => {
     const active = brand === b.key;
     const count = b.key === 'all' ? allProjects.length : (b.projects || 0);
-    const bTodos = todos.filter(t => b.key === 'all' || t.brand === b.key).filter(t => !t.done).length;
+    const bTodos = scopedTodos.filter(t => b.key === 'all' || t.brand === b.key).filter(t => !t.done).length;
     const changes = b.key === 'all'
       ? brands.filter(x => x.key !== 'all').reduce((s, x) => s + (x.changes || 0), 0)
       : (b.changes || 0);
@@ -544,7 +573,7 @@ export function Projects() {
                         </div>
                         {groupProjects.map((p, pi) => {
                           const isOpen = expanded.has(p.id);
-                          const pTodos = todos.filter(t => t.project === p.id);
+                          const pTodos = scopedTodos.filter(t => t.project === p.id);
                           const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
                           const isSel = openDetail === p.id;
                           return (
@@ -652,7 +681,7 @@ export function Projects() {
               const p = allProjects.find(x => x.id === openDetail);
               if (!p) return null;
               const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
-              const pTodos = todos.filter(t => t.project === p.id);
+              const pTodos = scopedTodos.filter(t => t.project === p.id);
               const pUpdates = (ledger.updates || []).filter(u => u.projectId === p.id).slice(0, 5);
               const pDecisions = (ledger.decisions || []).filter(d => d.projectId === p.id).slice(0, 4);
               const pNotes = (ledger.notes || []).filter(n => n.projectId === p.id).slice(0, 4);

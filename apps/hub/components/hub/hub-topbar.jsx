@@ -7,9 +7,10 @@ import { IconButton, Button } from "./hub-primitives";
 const LABELS = {
   'dashboard': 'Moonlight',
   'daily-brief': 'Daily Brief',
+  'classin': '클래스인', 'brand': '브랜드', 'pipeline': '업무·파이프라인', 'segments': '세그먼트',
   'work': 'Work', 'calendar': 'Calendar', 'projects': 'Projects', 'decisions': 'Decisions', 'roadmap': 'Roadmap', 'rhythm': 'Rhythm',
   'content': 'Content', 'studio': 'Studio', 'queue': 'Queue', 'campaigns': 'Campaigns',
-  'revenue': 'Revenue', 'overview': 'Overview', 'leads': 'Leads', 'deals': 'Deals', 'cases': 'Cases', 'accounts': 'Accounts',
+  'revenue': 'Revenue', 'overview': 'Overview', 'leads': 'Leads', 'deals': 'Deals', 'cases': 'Cases', 'accounts': 'Accounts', 'followups': 'Follow-ups',
   'automations': 'Automations', 'flows': 'Flows', 'email': 'Email', 'webhooks': 'Webhooks', 'runs': 'Runs',
   'agents': 'Agents', 'chat': 'Chat', 'council': 'Council', 'orders': 'Orders', 'office': 'VR Office',
   'evolution': 'Evolution', 'settings': 'Settings',

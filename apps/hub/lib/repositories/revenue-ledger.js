@@ -129,6 +129,8 @@ function mapLead(row, companyById, contactById) {
     type,
     source: row.source || row.channel || "—",
     stage: LEAD_STAGE_LABEL[statusKey] || "New",
+    // Raw follow-up score (0–100) for the Segments score-band grouping; null = unscored.
+    score: row?.score == null ? null : toNumber(row.score, 0),
     value: value ? formatMoneyLabel(value) : "—",
     last: formatRelative(row.last_touch_at || row.updated_at || row.created_at),
     owner: row.owner_id ? "Me" : "Unassigned",

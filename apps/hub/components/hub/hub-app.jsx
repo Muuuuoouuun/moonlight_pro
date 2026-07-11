@@ -15,6 +15,7 @@ import { Calendar, Decisions, Roadmap, Rhythm } from "./pages/work";
 import { Projects } from "./pages/projects";
 import { Studio, Queue, Campaigns } from "./pages/content";
 import { RevenueOverview, Leads, Deals, Cases, Accounts } from "./pages/revenue";
+import { Segments } from "./pages/segments";
 import { Followups } from "./pages/followups";
 import { AutomationsIndex, EmailAutomation, Webhooks, Runs, Flows } from "./pages/automations";
 import { SheetsSync } from "./pages/sheets-sync";
@@ -97,6 +98,20 @@ const PAGE_MAP = {
   'dashboard/agents/office': (n) => <AgentsOffice onNavigate={n} />,
   'dashboard/evolution': (n) => <Evolution onNavigate={n} />,
   'dashboard/settings': (n) => <Settings onNavigate={n} />,
+
+  // ── real_v1.1 workspaces → existing pages scoped by org_scope ──
+  'dashboard/classin/pipeline': (n) => <Deals workspace="classin" onNavigate={n} />,
+  'dashboard/classin/revenue': () => <Leads workspace="classin" />,
+  'dashboard/classin/segments': (n) => <Segments workspace="classin" onNavigate={n} />,
+  'dashboard/classin/accounts': (n) => <Accounts workspace="classin" onNavigate={n} />,
+  'dashboard/classin/followups': () => <Followups />,
+  'dashboard/classin/projects': () => <Projects workspace="classin" />,
+  'dashboard/classin/automations': () => <SheetsSync />,
+  'dashboard/classin/cohorts': () => <Projects workspace="classin" />,   // legacy real_v1 bookmark alias
+  'dashboard/classin/content': () => <Queue />,                          // legacy real_v1 bookmark alias
+  'dashboard/brand/projects': () => <Projects workspace="brand" />,
+  'dashboard/brand/studio': () => <Studio />,   // Studio/Queue don't consume workspace yet — content.jsx is off-limits this pass
+  'dashboard/brand/queue': () => <Queue />,
 };
 
 const PARENT_JUMP = {
@@ -105,6 +120,8 @@ const PARENT_JUMP = {
   'dashboard/content': 'dashboard/content/queue',
   'dashboard/revenue': 'dashboard/revenue/overview',
   'dashboard/agents': 'dashboard/agents/chat',
+  'dashboard/classin': 'dashboard/classin/pipeline',
+  'dashboard/brand': 'dashboard/brand/projects',
 };
 
 export function HubApp() {

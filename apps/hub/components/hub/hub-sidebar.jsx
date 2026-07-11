@@ -5,10 +5,53 @@ import { Iconed } from "./hub-icons";
 import { IconButton, Avatar, Kbd } from "./hub-primitives";
 import { NAV_TREE, LEGACY_TREE } from "./hub-data";
 
+// Best-effort nav count badges — fetched once on mount, never polled.
+// Keyed by nav child `key` (not path) so callers can look up via item.key.
+function useSidebarCounts() {
+  const [counts, setCounts] = React.useState({});
+
+  React.useEffect(() => {
+    let active = true;
+
+    fetch('/api/hub/followups', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        if (!active) return;
+        const items = Array.isArray(d?.items) ? d.items : [];
+        // followups-ledger.js summary shape: { overdue, dueToday, total, shown }.
+        const due = Number.isFinite(d?.summary?.dueToday) ? d.summary.dueToday : items.length;
+        setCounts(c => ({ ...c, 'classin-followups': due }));
+      })
+      .catch(() => {});
+
+    return () => { active = false; };
+  }, []);
+
+  return counts;
+}
+
+function CountBadge({ n }) {
+  if (!n) return null;
+  return (
+    <span className="mono" style={{
+      fontSize: 10, lineHeight: 1, flexShrink: 0,
+      color: 'var(--moon-300)',
+      padding: '2px 5px', borderRadius: 999,
+      border: '1px solid var(--line-soft)',
+    }}>
+      {n}
+    </span>
+  );
+}
+
 export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openPalette, className }) {
+  const counts = useSidebarCounts();
   const [open, setOpen] = React.useState(() => {
     const o = {};
-    for (const n of NAV_TREE) if (n.children) o[n.key] = true;
+    // Lead with the workspaces expanded; secondary groups (Agents / Work / Revenue /
+    // Content / Automations / System) start collapsed unless they hold the active
+    // path, so the operating workstreams own the first scan.
+    for (const n of NAV_TREE) if (n.children) o[n.key] = Boolean(n.workspace) || n.children.some(c => c.path === active);
     o.__legacy = false;
     return o;
   });
@@ -18,6 +61,15 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
     if (item.children) return item.children.some(c => active === c.path);
     return false;
   };
+
+  React.useEffect(() => {
+    const activeGroup = NAV_TREE.find(item => item.children?.some(c => c.path === active));
+    if (!activeGroup) return;
+    setOpen(o => (o[activeGroup.key] ? o : { ...o, [activeGroup.key]: true }));
+  }, [active]);
+
+  // Boundary is drawn once, just above the first group flagged `secondary`.
+  const firstSecondaryKey = NAV_TREE.find(n => n.secondary)?.key;
 
   if (collapsed) {
     return (
@@ -41,14 +93,17 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
         </button>
         {NAV_TREE.map(item => {
           const flat = item.children ? item.children[0] : item;
+          const act = isActive(item);
           return (
             <button key={item.key} onClick={() => onNavigate(flat.path)} title={item.label} style={{
               width: 36, height: 36, borderRadius: 'var(--r-sm)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: isActive(item) ? 'var(--fg)' : 'var(--fg-faint)',
-              background: isActive(item) ? 'var(--surface-3)' : 'transparent',
+              color: act ? 'var(--fg)' : 'var(--fg-faint)',
+              background: act ? 'var(--surface-3)' : 'transparent',
             }}>
-              <Iconed name={item.icon} size={16} />
+              {/* Keep the workstream accent in the collapsed rail so the
+                  workspaces still read as primary. */}
+              <Iconed name={item.icon} size={16} style={item.workspace && !act ? { color: 'var(--moon-300)' } : undefined} />
             </button>
           );
         })}
@@ -119,16 +174,17 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
           }
           const isOpen = open[item.key];
           const act = isActive(item);
-          return (
-            <div key={item.key} style={{ marginBottom: 1 }}>
+          const ws = Boolean(item.workspace);
+          const group = (
+            <div key={item.key} style={{ marginBottom: ws ? 2 : 1, marginTop: ws ? 2 : 0 }}>
               <button onClick={() => setOpen(o => ({ ...o, [item.key]: !o[item.key] }))} style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 9,
                 height: 30, padding: '0 8px',
-                fontSize: 12.5, fontWeight: 500,
-                color: act ? 'var(--fg)' : 'var(--fg-muted)',
+                fontSize: 12.5, fontWeight: ws ? 600 : 500,
+                color: ws || act ? 'var(--fg)' : 'var(--fg-muted)',
                 borderRadius: 'var(--r-sm)', textAlign: 'left',
               }}>
-                <Iconed name={item.icon} size={14} />
+                <Iconed name={item.icon} size={14} style={ws ? { color: 'var(--moon-300)' } : undefined} />
                 <span style={{ flex: 1 }}>{item.label}</span>
                 <Iconed name="chevronD" size={12} style={{
                   color: 'var(--fg-faint)',
@@ -154,7 +210,8 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
                         onMouseLeave={e => { if (!cAct) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fg-dim)'; } }}
                       >
                         <Iconed name={c.icon} size={12} style={{ color: 'var(--fg-faint)' }} />
-                        <span>{c.label}</span>
+                        <span style={{ flex: 1 }}>{c.label}</span>
+                        <CountBadge n={counts[c.key]} />
                       </button>
                     );
                   })}
@@ -162,6 +219,20 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
               )}
             </div>
           );
+          // Secondary boundary — drawn once, right before the first `secondary`
+          // group. Separates the two live workspaces from the folded functional
+          // menus (기존 메뉴).
+          if (item.key === firstSecondaryKey) {
+            return (
+              <React.Fragment key={item.key}>
+                <div style={{ borderTop: '1px solid var(--line-soft)', marginTop: 8, paddingTop: 6 }}>
+                  <div style={{ fontSize: 11, letterSpacing: '0.1em', color: 'var(--fg-dim)', padding: '0 8px', marginBottom: 2 }}>기존 메뉴</div>
+                </div>
+                {group}
+              </React.Fragment>
+            );
+          }
+          return group;
         })}
 
         {/* 기타 — legacy archive (hidden when empty) */}

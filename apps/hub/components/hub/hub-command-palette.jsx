@@ -13,10 +13,10 @@ export function CommandPalette({ open, onClose, onNavigate }) {
   const items = React.useMemo(() => {
     const flat = [];
     for (const n of NAV_TREE) {
-      if (n.path) flat.push({ kind: 'Navigate', label: n.label, path: n.path, icon: n.icon });
-      if (n.children) for (const c of n.children) flat.push({ kind: 'Navigate', label: `${n.label} › ${c.label}`, path: c.path, icon: c.icon });
+      if (n.path) flat.push({ kind: 'Navigate', label: n.label, path: n.path, icon: n.icon, keywords: n.keywords });
+      if (n.children) for (const c of n.children) flat.push({ kind: 'Navigate', label: `${n.label} › ${c.label}`, path: c.path, icon: c.icon, keywords: c.keywords });
     }
-    for (const c of LEGACY_TREE) flat.push({ kind: 'Archive', label: `기타 › ${c.label}`, path: c.path, icon: c.icon });
+    for (const c of LEGACY_TREE) flat.push({ kind: 'Archive', label: `기타 › ${c.label}`, path: c.path, icon: c.icon, keywords: c.keywords });
     flat.push({ kind: 'Action', label: 'New Decision 기록', path: 'dashboard/work/decisions?new=decision', icon: 'decisions' });
     flat.push({ kind: 'Action', label: 'New Project', path: 'dashboard/work/projects?new=project', icon: 'projects' });
     flat.push({ kind: 'Action', label: 'New Content draft', path: 'dashboard/content/studio?new=draft', icon: 'studio' });
@@ -28,7 +28,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
   const filtered = React.useMemo(() => {
     if (!q) return items;
     const lc = q.toLowerCase();
-    return items.filter(i => i.label.toLowerCase().includes(lc));
+    return items.filter(i => (i.label + ' ' + (i.keywords || []).join(' ')).toLowerCase().includes(lc));
   }, [q, items]);
 
   React.useEffect(() => {

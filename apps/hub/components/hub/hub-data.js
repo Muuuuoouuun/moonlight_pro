@@ -1,12 +1,42 @@
 // Navigation + sample data for Moonlight Pro Hub.
-// The sidebar is ordered by admin operating cadence:
-// brief signal -> execution -> revenue -> publishing -> automation -> agents -> system.
-// Low-frequency or novelty surfaces stay reachable by URL, but do not compete in the nav.
+// real_v1.1 IA: Daily Brief first, then two live workspaces scoped by org_scope —
+// 클래스인 (현 직장 실수익 레인) and 브랜드 (개인 브랜드/창업 준비).
+// Functional menus (Agents · Work · Revenue · Content · Automations · System) fold
+// below as secondary (접힘) so the two workstreams own the first scan.
 
 export const NAV_TREE = [
   { key: 'daily-brief', label: 'Daily Brief', icon: 'brief', path: 'dashboard/daily-brief' },
   {
-    key: 'work', label: 'Work', icon: 'work',
+    key: 'classin', label: '클래스인', icon: 'classin', workspace: true,
+    children: [
+      { key: 'classin-pipeline',    label: '업무·파이프라인', icon: 'deals',       path: 'dashboard/classin/pipeline',    keywords: ['deals','딜','칸반','pipeline'] },
+      { key: 'classin-revenue',     label: '결제·리드',       icon: 'leads',       path: 'dashboard/classin/revenue',     keywords: ['leads','리드'] },
+      { key: 'classin-segments',    label: '세그먼트',        icon: 'filter',      path: 'dashboard/classin/segments',    keywords: ['segments','세그먼트'] },
+      { key: 'classin-accounts',    label: '고객·계정',       icon: 'accounts',    path: 'dashboard/classin/accounts',    keywords: ['accounts','계정','고객'] },
+      { key: 'classin-followups',   label: 'Follow-ups',      icon: 'bell',        path: 'dashboard/classin/followups',   keywords: ['followup','팔로업'] },
+      { key: 'classin-projects',    label: '프로젝트',        icon: 'projects',    path: 'dashboard/classin/projects' },
+      { key: 'classin-automations', label: '시트 동기화',     icon: 'automations', path: 'dashboard/classin/automations', keywords: ['sheets','시트','sync','자동화'] },
+    ],
+  },
+  {
+    key: 'brand', label: '브랜드', icon: 'brand', workspace: true,
+    children: [
+      { key: 'brand-projects', label: '브랜드·프로젝트', icon: 'projects', path: 'dashboard/brand/projects' },
+      { key: 'brand-studio',   label: '콘텐츠 스튜디오', icon: 'studio',   path: 'dashboard/brand/studio' },
+      { key: 'brand-queue',    label: '발행 큐',         icon: 'queue',    path: 'dashboard/brand/queue' },
+    ],
+  },
+  {
+    key: 'agents', label: 'Agents', icon: 'agents', secondary: true,
+    children: [
+      { key: 'chat',    label: 'Chat',      icon: 'chat',    path: 'dashboard/agents/chat' },
+      { key: 'orders',  label: 'Orders',    icon: 'orders',  path: 'dashboard/agents/orders' },
+      { key: 'council', label: 'Council',   icon: 'council', path: 'dashboard/agents/council' },
+      { key: 'office',  label: 'VR Office', icon: 'agents',  path: 'dashboard/agents/office' },
+    ],
+  },
+  {
+    key: 'work', label: 'Work', icon: 'work', secondary: true,
     children: [
       { key: 'projects',  label: 'Projects',  icon: 'projects',  path: 'dashboard/work/projects' },
       { key: 'calendar',  label: 'Calendar',  icon: 'calendar',  path: 'dashboard/work/calendar' },
@@ -16,7 +46,7 @@ export const NAV_TREE = [
     ],
   },
   {
-    key: 'revenue', label: 'Revenue', icon: 'revenue',
+    key: 'revenue', label: 'Revenue', icon: 'revenue', secondary: true,
     children: [
       { key: 'overview', label: 'Overview', icon: 'revenue',  path: 'dashboard/revenue/overview' },
       { key: 'deals',    label: 'Deals',    icon: 'deals',    path: 'dashboard/revenue/deals' },
@@ -27,7 +57,7 @@ export const NAV_TREE = [
     ],
   },
   {
-    key: 'content', label: 'Content', icon: 'content',
+    key: 'content', label: 'Content', icon: 'content', secondary: true,
     children: [
       { key: 'queue',     label: 'Queue',     icon: 'queue',     path: 'dashboard/content/queue' },
       { key: 'studio',    label: 'Studio',    icon: 'studio',    path: 'dashboard/content/studio' },
@@ -35,7 +65,7 @@ export const NAV_TREE = [
     ],
   },
   {
-    key: 'automations', label: 'Automations', icon: 'automations',
+    key: 'automations', label: 'Automations', icon: 'automations', secondary: true,
     children: [
       { key: 'runs',     label: 'Runs',     icon: 'runs',    path: 'dashboard/automations/runs' },
       { key: 'flows',    label: 'Flows',    icon: 'zap',     path: 'dashboard/automations/flows' },
@@ -45,16 +75,7 @@ export const NAV_TREE = [
     ],
   },
   {
-    key: 'agents', label: 'Agents', icon: 'agents',
-    children: [
-      { key: 'chat',    label: 'Chat',      icon: 'chat',    path: 'dashboard/agents/chat' },
-      { key: 'orders',  label: 'Orders',    icon: 'orders',  path: 'dashboard/agents/orders' },
-      { key: 'council', label: 'Council',   icon: 'council', path: 'dashboard/agents/council' },
-      { key: 'office',  label: 'VR Office', icon: 'agents',  path: 'dashboard/agents/office' },
-    ],
-  },
-  {
-    key: 'system', label: 'System', icon: 'settings',
+    key: 'system', label: 'System', icon: 'settings', secondary: true,
     children: [
       { key: 'evolution', label: 'Evolution', icon: 'evolution', path: 'dashboard/evolution' },
       { key: 'settings',  label: 'Settings',  icon: 'settings',  path: 'dashboard/settings' },
@@ -89,6 +110,7 @@ export const LEGACY_REDIRECTS = {
   'dashboard/evolution/issues':           { to: 'dashboard/evolution',     label: 'Evolution' },
   'dashboard/evolution/logs':             { to: 'dashboard/evolution',     label: 'Evolution · Log' },
   'dashboard/projects':                   { to: 'dashboard/work/projects', label: 'Projects' },
+  'dashboard/classin/intake':             { to: 'dashboard/classin/revenue', label: '결제·리드' },
 };
 
 export const BRIEF_SIGNALS = [
