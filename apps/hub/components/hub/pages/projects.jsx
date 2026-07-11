@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState } from "../hub-primitives";
 import {
@@ -36,7 +36,7 @@ function DetailSection({ title, count = 0, empty, children }) {
     <div>
       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 8, display: 'flex', alignItems: 'center' }}>
         <span style={{ flex: 1 }}>{title}</span>
-        <span className="mono" style={{ color: 'var(--fg-faint)' }}>{count}</span>
+        <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{count}</span>
       </div>
       {count > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{children}</div>
@@ -68,6 +68,8 @@ function ActivityRow({ title, body, meta, badge, tone = 'neutral' }) {
 
 export function Projects({ workspace }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const ws = getWorkspace(workspace);
   const [brand, setBrand] = React.useState('all');
   const [view, setView] = React.useState('tree');
@@ -300,7 +302,8 @@ export function Projects({ workspace }) {
     if (searchParams.get('new') !== 'project' || createdFromQueryRef.current) return;
     createProject();
     createdFromQueryRef.current = true;
-  }, [createProject, searchParams]);
+    router.replace(pathname);
+  }, [createProject, searchParams, router, pathname]);
 
   const brandGroups = React.useMemo(() => {
     const real = brands.filter(b => b.key !== 'all');
@@ -580,7 +583,7 @@ export function Projects({ workspace }) {
                             <React.Fragment key={p.id}>
                               <div style={{
                                 display: 'grid', gridTemplateColumns: '22px 18px 1fr 36px 100px 120px',
-                                padding: '10px 14px', alignItems: 'center', gap: 8,
+                                padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', gap: 8,
                                 borderBottom: (isOpen || pi < groupProjects.length - 1) ? '1px solid var(--line-soft)' : 'none',
                                 background: isSel ? 'var(--surface-3)' : 'transparent',
                                 cursor: 'pointer',
@@ -651,7 +654,7 @@ export function Projects({ workspace }) {
                                       <div style={{ display: 'flex', justifyContent: 'center' }}>
                                         <Avatar name={t.assignee} size={18} tone={t.assignee === 'Me' ? 'moon' : t.assignee === 'Council' ? 'info' : 'neutral'} />
                                       </div>
-                                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{t.due}</span>
+                                      <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{t.due}</span>
                                       <Badge tone={t.done ? 'success' : 'neutral'} size="xs">{t.done ? '완료' : '열림'}</Badge>
                                     </div>
                                   ))}
@@ -740,7 +743,7 @@ export function Projects({ workspace }) {
                               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                             }}>{t.done && <span style={{ fontSize: 9, color: 'var(--bg)' }}>✓</span>}</button>
                             <span style={{ flex: 1, fontSize: 12, textDecoration: t.done ? 'line-through' : 'none', color: t.done ? 'var(--fg-faint)' : 'var(--fg)' }}>{t.title}</span>
-                            <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)' }}>{t.due}</span>
+                            <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{t.due}</span>
                           </div>
                         ))}
                         <button onClick={() => createTodo(p.id)} style={{ padding: '6px 8px', textAlign: 'left', fontSize: 11.5, color: 'var(--fg-faint)' }}>＋ 항목 추가</button>
@@ -875,7 +878,7 @@ export function Projects({ workspace }) {
                             <span style={{ fontSize: 11.5, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                               <Dot tone={prioTone[t.priority]} />{t.priority}
                             </span>
-                            <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', textAlign: 'right' }}>{t.due}</span>
+                            <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', textAlign: 'right' }}>{t.due}</span>
                           </div>
                         );
                       })}
@@ -901,7 +904,7 @@ export function Projects({ workspace }) {
                 }}>
                 <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--line-soft)' }}>
                   <span style={{ fontSize: 12, fontWeight: 600 }}>{col.label}</span>
-                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', padding: '1px 6px', background: 'var(--surface-3)', borderRadius: 4 }}>{col.cards.length}</span>
+                  <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', padding: '1px 6px', background: 'var(--surface-3)', borderRadius: 4 }}>{col.cards.length}</span>
                   <div style={{ flex: 1 }} />
                   <IconButton icon="plus" size={22} iconSize={12} tooltip="Add card" onClick={() => createBoardCard(col.key)} />
                 </div>
@@ -913,7 +916,7 @@ export function Projects({ workspace }) {
                     <div key={c.id} draggable onDragStart={() => setDrag(c.id)} onDragEnd={() => setDrag(null)}
                       style={{
                         background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
-                        borderRadius: 'var(--r-sm)', padding: '10px 11px', cursor: 'grab',
+                        borderRadius: 'var(--r-sm)', padding: 'var(--pad-y) var(--pad-x)', cursor: 'grab',
                         opacity: drag === c.id ? 0.4 : 1,
                       }}>
                       <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 6 }}>

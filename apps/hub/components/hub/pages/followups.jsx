@@ -68,7 +68,7 @@ export function Followups() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>팔로업</h2>
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             오늘 연락할 사람 · 채널 · 왜 · 다음 행동
-            <span className="mono" style={{ marginLeft: 8, color: syncState === "live" ? "var(--success)" : syncState === "loading" ? "var(--warning)" : "var(--fg-faint)" }}>
+            <span className="mono" style={{ marginLeft: 8, color: syncState === "live" ? "var(--success)" : syncState === "loading" ? "var(--warning)" : "var(--fg-muted)" }}>
               {syncState === "live" ? `${summary.overdue ?? 0} overdue` : syncState === "loading" ? "loading" : syncState === "error" ? "error" : "preview"}
             </span>
           </div>

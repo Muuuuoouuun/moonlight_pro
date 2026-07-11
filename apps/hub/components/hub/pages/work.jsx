@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, IconButton, Button, Progress, EmptyState } from "../hub-primitives";
 import { DECISIONS as FALLBACK_DECISIONS, RITUALS as FALLBACK_RITUALS } from "../hub-data";
@@ -175,6 +175,8 @@ function useCalendarEvents(days) {
 
 export function Calendar() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const [now, setNow] = React.useState(() => new Date());
   const [weekOffset, setWeekOffset] = React.useState(0);
   const [viewMode, setViewMode] = React.useState('Week');
@@ -231,6 +233,7 @@ export function Calendar() {
       endHour: 13 + Math.max(15, minutes) / 60,
       title: `${minutes}m focus block`,
     });
+    router.replace(pathname);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [now, searchParams]);
 
@@ -389,6 +392,8 @@ export function Calendar() {
 
 export function Decisions() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const { decisions, syncState } = useWorkLedger();
   const [localDecisions, setLocalDecisions] = React.useState([]);
   const createdFromQueryRef = React.useRef(false);
@@ -409,7 +414,8 @@ export function Decisions() {
     if (searchParams.get('new') !== 'decision' || createdFromQueryRef.current) return;
     createDecision();
     createdFromQueryRef.current = true;
-  }, [createDecision, searchParams]);
+    router.replace(pathname);
+  }, [createDecision, searchParams, router, pathname]);
   const list = [...localDecisions, ...(Array.isArray(decisions) ? decisions : [])];
 
   return (

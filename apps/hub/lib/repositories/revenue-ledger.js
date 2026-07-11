@@ -108,6 +108,23 @@ function resolveType(row) {
   return row?.company_id ? "company" : "personal";
 }
 
+// Explicit workspace tag from meta (set by in-workspace creates via buildLeadWrite/
+// buildDealWrite) → the Revenue pages' workspace-map scoping matches on this first, so a
+// scoped create survives a live save + reload. `classin_sales` lane is an alias for classin.
+function resolveWorkspace(row) {
+  const meta = row?.meta || {};
+  if (meta.workspace) return meta.workspace;
+  if (meta.lane === "classin_sales") return "classin";
+  return null;
+}
+
+// Brand key from meta (various slugs across mock + live) — feeds brandInWorkspace() so a
+// record follows its brand's org scope when it carries no explicit workspace tag.
+function resolveBrand(row) {
+  const meta = row?.meta || {};
+  return meta.brand || meta.brand_key || meta.brandKey || null;
+}
+
 function mapLead(row, companyById, contactById) {
   const type = resolveType(row);
   const company = row.company_id ? companyById.get(row.company_id) : null;
@@ -121,17 +138,31 @@ function mapLead(row, companyById, contactById) {
     "Unnamed lead";
 
   const statusKey = String(row.status || "new").toLowerCase();
-  const value = toNumber(row?.meta?.value ?? row?.score * 100000, 0);
+  const meta = row?.meta || {};
+  const value = toNumber(meta.value ?? row?.score * 100000, 0);
+  const units = toNumber(meta.units ?? meta.unit_count, 0);
 
   return {
     id: row.id,
     name: displayName,
     type,
+    // Scoping tags — workspace-map matches on these; also the round-trip target for the
+    // Leads EditDrawer's workspace-tagged creates.
+    workspace: resolveWorkspace(row),
+    brand: resolveBrand(row),
     source: row.source || row.channel || "—",
     stage: LEAD_STAGE_LABEL[statusKey] || "New",
     // Raw follow-up score (0–100) for the Segments score-band grouping; null = unscored.
     score: row?.score == null ? null : toNumber(row.score, 0),
     value: value ? formatMoneyLabel(value) : "—",
+    // Lightweight meta-backed tags — editable in the Leads EditDrawer, reversed by
+    // buildLeadWrite. '' fallbacks keep the drawer inputs controlled.
+    region: meta.region || "",
+    scale: meta.scale || "",
+    situation: meta.situation || "",
+    units: units > 0 ? units : "",
+    contactName: contact?.name || null,
+    contactEmail: contact?.email || null,
     last: formatRelative(row.last_touch_at || row.updated_at || row.created_at),
     owner: row.owner_id ? "Me" : "Unassigned",
   };
@@ -145,8 +176,12 @@ function mapDeal(row, companyById) {
 
   return {
     id: row.id,
+    leadId: row.lead_id || null, // ties the deal back to its lead (deep-link + focus context)
     name,
     type,
+    // Scoping tags — workspace-map matches on these; round-trip target for scoped creates.
+    workspace: resolveWorkspace(row),
+    brand: resolveBrand(row),
     stage,
     value: toNumber(row.amount, 0),
     owner: row.owner_id ? "Me" : "Unassigned",

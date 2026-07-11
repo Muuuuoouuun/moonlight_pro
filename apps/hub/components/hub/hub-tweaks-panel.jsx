@@ -1,11 +1,40 @@
 "use client";
 
+import React from "react";
 import { IconButton } from "./hub-primitives";
 
 export function TweaksPanel({ open, onClose, density, onDensity }) {
+  const panelRef = React.useRef(null);
+
+  // ESC closes the panel.
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  // Click outside closes the panel. Arm on the next frame so the same click that
+  // opened the panel (mousedown on the topbar gear, fired before mount) can't leak
+  // into this handler and immediately close it.
+  React.useEffect(() => {
+    if (!open) return;
+    let armed = false;
+    const raf = requestAnimationFrame(() => { armed = true; });
+    const onDown = (e) => {
+      if (!armed) return;
+      if (panelRef.current && !panelRef.current.contains(e.target)) onClose?.();
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => {
+      cancelAnimationFrame(raf);
+      document.removeEventListener('mousedown', onDown);
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
   return (
-    <div style={{
+    <div ref={panelRef} style={{
       position: 'fixed', right: 16, bottom: 16, zIndex: 90,
       width: 260,
       background: 'var(--surface-2)',

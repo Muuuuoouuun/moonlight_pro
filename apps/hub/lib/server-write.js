@@ -184,8 +184,17 @@ function buildProjectWebhookRequestBody(payload, target) {
   };
 }
 
-export async function insertSupabaseRecord(table, record) {
+// Insert a row. Default behavior (no options) is unchanged: Prefer: return=minimal and a
+// bare { persisted, reason } envelope — 15+ callsites rely on this. Pass
+// { returnRepresentation: true, select } to switch to Prefer: return=representation, parse
+// the inserted row, and get { persisted, reason, id, record } back (used by the Revenue
+// write path so a create can adopt the DB-assigned id).
+export async function insertSupabaseRecord(table, record, options = {}) {
   const config = resolveSupabaseConfig();
+  const returnRepresentation = options.returnRepresentation === true;
+  const select = typeof options.select === "string" && options.select.trim()
+    ? options.select.trim()
+    : "";
 
   if (!config) {
     return {
@@ -195,11 +204,11 @@ export async function insertSupabaseRecord(table, record) {
   }
 
   try {
-    const response = await fetch(`${config.url}/rest/v1/${table}`, {
+    const response = await fetch(`${config.url}/rest/v1/${table}${returnRepresentation && select ? `?select=${encodeURIComponent(select)}` : ""}`, {
       method: "POST",
       headers: makeSupabaseHeaders(config.apiKey, {
         contentType: "application/json",
-        prefer: "return=minimal",
+        prefer: returnRepresentation ? "return=representation" : "return=minimal",
       }),
       body: JSON.stringify(record),
       cache: "no-store",
@@ -211,6 +220,17 @@ export async function insertSupabaseRecord(table, record) {
         persisted: false,
         reason: `http-${response.status}`,
         detail,
+      };
+    }
+
+    if (returnRepresentation) {
+      const rows = await response.json().catch(() => null);
+      const row = Array.isArray(rows) ? rows[0] || null : null;
+      return {
+        persisted: true,
+        reason: "ok",
+        record: row,
+        id: row?.id || null,
       };
     }
 
@@ -238,8 +258,19 @@ function buildFilterQuery(filters = []) {
   return query ? `?${query}` : "";
 }
 
-export async function updateSupabaseRecord(table, filters = [], record = {}) {
+// Update rows matching `filters`. Default behavior (no options) is unchanged: Prefer:
+// return=minimal and a bare { persisted, reason } envelope — existing callsites rely on it.
+// Pass { returnRepresentation: true, select } to switch to Prefer: return=representation:
+// the `select` is prepended as a query filter, the affected row is parsed, and
+// { persisted, reason, id, record } comes back (persisted:false + 'no-matching-row' when the
+// filter matched nothing). The separate updateSupabaseRecordReturning helper below is left
+// intact for the work-orders guarded-transition path.
+export async function updateSupabaseRecord(table, filters = [], record = {}, options = {}) {
   const config = resolveSupabaseConfig();
+  const returnRepresentation = options.returnRepresentation === true;
+  const select = typeof options.select === "string" && options.select.trim()
+    ? options.select.trim()
+    : "";
 
   if (!config) {
     return {
@@ -249,11 +280,16 @@ export async function updateSupabaseRecord(table, filters = [], record = {}) {
   }
 
   try {
-    const response = await fetch(`${config.url}/rest/v1/${table}${buildFilterQuery(filters)}`, {
+    const queryFilters = [...filters];
+    if (returnRepresentation && select) {
+      queryFilters.unshift(["select", select]);
+    }
+
+    const response = await fetch(`${config.url}/rest/v1/${table}${buildFilterQuery(queryFilters)}`, {
       method: "PATCH",
       headers: makeSupabaseHeaders(config.apiKey, {
         contentType: "application/json",
-        prefer: "return=minimal",
+        prefer: returnRepresentation ? "return=representation" : "return=minimal",
       }),
       body: JSON.stringify(record),
       cache: "no-store",
@@ -265,6 +301,17 @@ export async function updateSupabaseRecord(table, filters = [], record = {}) {
         persisted: false,
         reason: `http-${response.status}`,
         detail,
+      };
+    }
+
+    if (returnRepresentation) {
+      const rows = await response.json().catch(() => null);
+      const row = Array.isArray(rows) ? rows[0] || null : null;
+      return {
+        persisted: Boolean(row),
+        reason: row ? "ok" : "no-matching-row",
+        record: row,
+        id: row?.id || null,
       };
     }
 

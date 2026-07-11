@@ -36,6 +36,14 @@ export function CommandPalette({ open, onClose, onNavigate }) {
   }, [open]);
   React.useEffect(() => { setIdx(0); }, [q]);
 
+  // Global ESC — close even when focus has left the search input (list hover, etc.).
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const handleKey = (e) => {

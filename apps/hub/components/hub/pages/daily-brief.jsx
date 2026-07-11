@@ -354,6 +354,91 @@ function ApprovalQueueCard({ onNavigate }) {
   );
 }
 
+// 계약 퍼널 — the contracts half of the 5x dashboard (the content half is ContentCadenceCard
+// below). Renders the funnel every quick-log tap / executed work order writes into
+// outreach_outcomes — the measurement loop that makes logging worth the extra taps.
+const FUNNEL_LABEL = { sent: '접촉', replied: '응답', meeting: '미팅', proposal: '제안', won: '계약' };
+
+function SalesFunnelCard({ onNavigate }) {
+  const [stats, setStats] = React.useState(null);
+  const [state, setState] = React.useState('loading');
+
+  React.useEffect(() => {
+    let active = true;
+    fetch('/api/hub/outcomes?limit=1', { cache: 'no-store' })
+      .then((r) => r.json().catch(() => null))
+      .then((d) => {
+        if (!active) return;
+        if (d && d.stats?.source === 'supabase') {
+          setStats(d.stats);
+          setState('live');
+        } else {
+          setState('mock');
+        }
+      })
+      .catch(() => active && setState('mock'));
+    return () => { active = false; };
+  }, []);
+
+  const syncColor = state === 'live' ? 'var(--success)' : state === 'loading' ? 'var(--warning)' : 'var(--fg-faint)';
+  const syncLabel = state === 'live' ? 'live' : state === 'loading' ? 'syncing' : 'mock';
+  const funnel = stats?.funnel || [];
+  const sent = funnel.find((f) => f.stage === 'sent')?.count || 0;
+  const won = funnel.find((f) => f.stage === 'won')?.count || 0;
+
+  return (
+    <div>
+      <SectionTitle right={<span className="mono" style={{ fontSize: 10.5, color: syncColor }}>{syncLabel}</span>}>
+        계약 퍼널
+      </SectionTitle>
+      <Card>
+        {state === 'live' && stats ? (
+          stats.total > 0 ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <span className="mono" style={{ fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em' }}>
+                  {won}<span style={{ color: 'var(--fg-faint)', fontWeight: 400, fontSize: 14 }}> 계약</span>
+                </span>
+                <div style={{ flex: 1 }} />
+                <Badge tone={won > 0 ? 'success' : 'neutral'} size="xs">접촉→계약 {stats.ratios?.overall ?? 0}%</Badge>
+              </div>
+              <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
+                {funnel.map((f) => (
+                  <div key={f.stage} style={{ flex: 1, minWidth: 0 }}>
+                    <div className="mono" style={{ fontSize: 13, fontWeight: 600, textAlign: 'center' }}>{f.count}</div>
+                    <div style={{ marginTop: 4, height: 3, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', borderRadius: 999, background: 'var(--moon-500)', width: `${sent > 0 ? Math.round((f.count / sent) * 100) : 0}%` }} />
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--fg-faint)', textAlign: 'center', marginTop: 4 }}>{FUNNEL_LABEL[f.stage] || f.stage}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: 12, fontSize: 11, color: 'var(--fg-muted)', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <span>응답률 <span className="mono">{stats.ratios?.replyRate ?? 0}%</span></span>
+                <span>미팅 전환 <span className="mono">{stats.ratios?.meetingRate ?? 0}%</span></span>
+                <span>계약 전환 <span className="mono">{stats.ratios?.winRate ?? 0}%</span></span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+                아직 기록된 실행 결과가 없습니다. 승인 큐·Follow-ups의 결과 버튼(전화함/응답/미팅)이 이 퍼널을 채웁니다.
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <Button variant="outline" size="sm" icon="bell" onClick={() => onNavigate('dashboard/revenue/followups')}>Follow-ups 열기</Button>
+              </div>
+            </>
+          )
+        ) : (
+          <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+            Supabase 연결 후 접촉→응답→미팅→제안→계약 퍼널이 여기에 표시됩니다.
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 function ContentCadenceCard({ onNavigate }) {
   const [data, setData] = React.useState(null);
   const [state, setState] = React.useState("loading");
@@ -527,6 +612,8 @@ export function DailyBrief({ onNavigate }) {
               ))}
             </Card>
           </div>
+
+          <SalesFunnelCard onNavigate={onNavigate} />
 
           <ContentCadenceCard onNavigate={onNavigate} />
 

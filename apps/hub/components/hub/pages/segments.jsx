@@ -190,7 +190,7 @@ export function Segments({ workspace, onNavigate }) {
                         }}>
                         <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</span>
                         <Badge tone={STAGE_TONE[l.stage] || 'neutral'} size="xs" variant="outline">{l.stage}</Badge>
-                        {Number(l.score) > 0 && <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{l.score}</span>}
+                        {Number(l.score) > 0 && <span className="mono" style={{ fontSize: 12, color: 'var(--fg)' }}>{l.score}</span>}
                       </div>
                     ))}
                   </div>

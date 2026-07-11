@@ -1,8 +1,9 @@
 "use client";
 
+import React from "react";
 import { Iconed } from "./hub-icons";
 
-export function Badge({ children, tone = 'neutral', variant = 'soft', size = 'sm', style }) {
+export function Badge({ children, tone = 'neutral', variant = 'soft', size = 'sm', numeric = false, style }) {
   const tones = {
     neutral: { fg: 'var(--moon-200)', bg: 'oklch(0.30 0.008 250 / 0.5)', bd: 'var(--line)' },
     moon:    { fg: 'var(--moon-100)', bg: 'oklch(0.40 0.008 250 / 0.25)', bd: 'var(--moon-600)' },
@@ -20,6 +21,7 @@ export function Badge({ children, tone = 'neutral', variant = 'soft', size = 'sm
     display: 'inline-flex', alignItems: 'center', gap: 4,
     padding: pad, fontSize: fs, fontWeight: 500, letterSpacing: '0.02em',
     borderRadius: 999, lineHeight: 1, whiteSpace: 'nowrap',
+    ...(numeric && { fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', letterSpacing: 0 }),
   };
   if (variant === 'outline') {
     return <span style={{ ...base, color: t.fg, border: `1px solid ${t.bd}`, background: 'transparent', ...style }}>{children}</span>;
@@ -120,7 +122,7 @@ export function EmptyState({ icon = 'inbox', title, description, action, style }
   );
 }
 
-export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRight, style, onClick, active, type = 'button', className }) {
+export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRight, style, onClick, active, type = 'button', className, disabled = false }) {
   const sizes = {
     xs: { h: 24, px: 8, fs: 12, gap: 5 },
     sm: { h: 30, px: 11, fs: 12.5, gap: 6 },
@@ -157,11 +159,12 @@ export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRig
   };
   const v = variants[variant];
   return (
-    <button type={type} className={className} onClick={onClick} style={{
+    <button type={type} className={className} onClick={onClick} disabled={disabled} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: s.gap,
       height: s.h, padding: `0 ${s.px}px`, fontSize: s.fs, fontWeight: 500,
       borderRadius: 'var(--r-sm)', whiteSpace: 'nowrap', transition: 'all .12s ease',
       ...v, ...style,
+      ...(disabled && { opacity: 0.45, cursor: 'not-allowed', pointerEvents: 'none' }),
     }}>
       {icon && <Iconed name={icon} size={14} />}
       {children}
@@ -170,9 +173,9 @@ export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRig
   );
 }
 
-export function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tooltip, style, className }) {
+export function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tooltip, style, className, disabled = false }) {
   return (
-    <button className={className} onClick={onClick} title={tooltip} aria-label={tooltip} style={{
+    <button className={className} onClick={onClick} disabled={disabled} title={tooltip} aria-label={tooltip} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       width: size, height: size,
       color: tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)',
@@ -181,6 +184,7 @@ export function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tool
       borderRadius: 'var(--r-sm)',
       transition: 'all .12s ease',
       ...style,
+      ...(disabled && { opacity: 0.45, cursor: 'not-allowed', pointerEvents: 'none' }),
     }}
       onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-3)'; e.currentTarget.style.borderColor = 'var(--line-soft)'; e.currentTarget.style.color = 'var(--fg)'; }}
       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.color = tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)'; }}
@@ -378,5 +382,187 @@ export function SegmentedControl({ options, value, onChange, className, style })
         );
       })}
     </div>
+  );
+}
+
+const DRAWER_INPUT_STYLE = {
+  height: 32,
+  padding: '0 10px',
+  fontSize: 13,
+  background: 'var(--surface-2)',
+  color: 'var(--fg)',
+  border: '1px solid var(--line)',
+  borderRadius: 'var(--r-sm)',
+  outline: 'none',
+  width: '100%',
+  fontVariantNumeric: 'tabular-nums',
+};
+
+// Elements the drawer's focus manager treats as tab stops.
+const DRAWER_FOCUSABLE = 'input, select, textarea, button, a[href], [tabindex]:not([tabindex="-1"])';
+
+// Shared right-side drawer shell: overlay + aside + header (title/subtitle/close) +
+// scrollable body + optional footer bar. Owns ESC-to-close, focus-in-on-mount +
+// focus-restore-on-unmount, and a light Tab focus trap — not field rendering or
+// save/delete semantics. EditDrawer and the Guru diagnosis drawer compose on top.
+export function Drawer({ title, subtitle, onClose, footer, footerStyle, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', children }) {
+  const asideRef = React.useRef(null);
+  const bodyRef = React.useRef(null);
+
+  // ESC anywhere closes the drawer.
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  // Focus the first field on mount; restore focus to the opener on unmount.
+  React.useEffect(() => {
+    const previouslyFocused = typeof document !== 'undefined' ? document.activeElement : null;
+    const raf = requestAnimationFrame(() => {
+      const scope = bodyRef.current || asideRef.current;
+      const first = scope?.querySelector(DRAWER_FOCUSABLE);
+      if (first && typeof first.focus === 'function') first.focus();
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      if (previouslyFocused && typeof previouslyFocused.focus === 'function') previouslyFocused.focus();
+    };
+  }, []);
+
+  // Light focus trap: keep Tab inside the drawer, wrapping first↔last.
+  const handleKeyDown = (e) => {
+    if (e.key !== 'Tab') return;
+    const root = asideRef.current;
+    if (!root) return;
+    const nodes = Array.from(root.querySelectorAll(DRAWER_FOCUSABLE)).filter(el => !el.disabled && el.offsetParent !== null);
+    if (nodes.length === 0) return;
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+
+  return (
+    <>
+      <div className="hub-drawer-overlay" aria-hidden="true" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / 0.4)', zIndex: 60 }} />
+      <aside
+        ref={asideRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof title === 'string' ? title : undefined}
+        onKeyDown={handleKeyDown}
+        className="hub-drawer"
+        style={{
+          position: 'fixed', top: 0, right: 0, bottom: 0, width, zIndex: 61,
+          background: 'var(--surface)', borderLeft: `1px solid ${borderLeft}`,
+          display: 'flex', flexDirection: 'column',
+          boxShadow: '-8px 0 32px -12px oklch(0 0 0 / 0.5)',
+        }}
+      >
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 500 }}>{title}</div>
+            {subtitle && <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}
+          </div>
+          <IconButton icon="x" size={24} iconSize={13} tooltip="닫기" onClick={onClose} />
+        </div>
+        <div ref={bodyRef} className="scroll-y" style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {children}
+        </div>
+        {footer && (
+          <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, ...footerStyle }}>
+            {footer}
+          </div>
+        )}
+      </aside>
+    </>
+  );
+}
+
+// Shared field-driven edit drawer. Revenue behavior is canonical for save feedback,
+// ESC close, and optimistic delete confirmation. Composes on top of Drawer for the shell.
+// Cmd/Ctrl+Enter mirrors the footer 완료 (save) button.
+export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)', children }) {
+  const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | error
+  React.useEffect(() => { setSaveState('idle'); }, [record?.id]);
+
+  const handleDone = async () => {
+    if (!onSave) { onClose(); return; }
+    setSaveState('saving');
+    const r = await onSave();
+    if (r?.ok) { setSaveState('idle'); onClose(); }
+    else { setSaveState(r?.status === 'preview' ? 'preview' : 'error'); }
+  };
+
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    if (typeof window !== 'undefined' && !window.confirm('이 항목을 삭제할까요? 되돌릴 수 없습니다.')) return;
+    setSaveState('saving');
+    await onDelete();
+    onClose();
+  };
+
+  // Cmd/Ctrl+Enter saves. A ref keeps the window listener pointed at the latest
+  // handler without re-binding every render.
+  const handleDoneRef = React.useRef(handleDone);
+  handleDoneRef.current = handleDone;
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleDoneRef.current?.(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  if (!record) return null;
+  return (
+    <Drawer
+      title={title}
+      subtitle={subtitle}
+      onClose={onClose}
+      width={width}
+      footer={
+        <>
+          {onDelete && (
+            <Button variant="ghost" size="sm" onClick={handleDelete} disabled={saveState === 'saving'} style={{ color: 'var(--danger)' }}>삭제</Button>
+          )}
+          <div style={{ flex: 1, minWidth: 0, fontSize: 11, lineHeight: 1.4 }}>
+            {saveState === 'preview' && (
+              <span style={{ color: 'var(--fg-muted)' }}>저장 위치(Supabase)가 설정되지 않아 로컬에만 반영됩니다.</span>
+            )}
+            {saveState === 'error' && (
+              <span style={{ color: 'var(--danger)' }}>저장에 실패했습니다. 다시 시도하세요.</span>
+            )}
+          </div>
+          {(saveState === 'preview' || saveState === 'error') && (
+            <Button variant="ghost" size="sm" onClick={onClose}>닫기</Button>
+          )}
+          <Button variant="primary" size="sm" onClick={handleDone} disabled={saveState === 'saving'}>
+            {saveState === 'saving' ? '저장 중…' : '완료'}
+          </Button>
+        </>
+      }
+    >
+      {fields.map(f => (
+        <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>{f.label}</span>
+          {f.type === 'select' ? (
+            <select value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
+              {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          ) : (
+            <input
+              type={f.inputType || 'text'}
+              value={record[f.key] ?? ''}
+              placeholder={f.placeholder || ''}
+              onChange={e => onChange(f.key, f.inputType === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value)}
+              style={DRAWER_INPUT_STYLE}
+            />
+          )}
+        </label>
+      ))}
+      {children}
+    </Drawer>
   );
 }

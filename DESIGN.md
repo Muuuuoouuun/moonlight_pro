@@ -130,15 +130,17 @@ Defined in `apps/hub/components/hub/hub-tokens.css` and scoped under `.hub-app`.
 
 | Role     | Family                | Usage                                           |
 | -------- | --------------------- | ----------------------------------------------- |
-| UI Sans  | `Inter Tight`         | Everything except numbers and display headings. |
-| Data Mono| `JetBrains Mono`      | IDs, metrics, timestamps, keybindings, diffs.   |
-| Display  | `Inter Tight`         | Page-level moments only; avoid decorative display type in dense Hub surfaces. |
+| UI Sans  | `SUIT Variable`       | Everything except numbers and display headings. Loaded via `@font-face` in `app/globals.css` (Korean + Latin). `Inter Tight` is an optional future upgrade, not currently shipped. |
+| Data Mono| `JetBrains Mono`      | IDs, metrics, timestamps, keybindings, diffs. **Not yet bundled** — add its woff2 to `apps/hub/public/fonts` to activate; until then the chain lands on Cascadia Code/Mono → `ui-monospace`. |
+| Display  | `SUIT Variable`       | Page-level moments only; avoid decorative display type in dense Hub surfaces. |
 
-Fallbacks: `ui-sans-serif, system-ui, sans-serif` for sans, `ui-monospace, monospace` for mono.
+Fallbacks: `'Inter Tight', ui-sans-serif, system-ui, sans-serif` for sans, `'Cascadia Code', 'Cascadia Mono', ui-monospace, 'SF Mono', Consolas, monospace` for mono. Upgrade path: drop `JetBrains Mono` woff2 into `apps/hub/public/fonts` and it becomes the primary mono with zero token changes (already first in `--font-mono`).
 
 **Rules**
 - Hub defaults to sans at 14px / `font-feature-settings: 'cv11', 'ss01', 'ss03'`.
-- KPI numerals are `.mono`, heavy weight, compact letter spacing.
+- KPI numerals are `.mono`, heavy weight, `letter-spacing: 0` (never negative — it cramps fallback digits).
+- 모든 데이터 숫자는 `.mono` + `tabular-nums` (column-stable). 사인(sans)에 남는 카운트는 `.num` 유틸로 tabular figures 적용.
+- 데이터 값의 최소 크기 12px — 10–11px은 라벨 / eyebrow 전용.
 - Section eyebrow is 11px, uppercase, `letter-spacing: 0.1em`, `color: var(--fg-dim)`.
 - Never mix more than two families on one screen.
 
@@ -201,6 +203,7 @@ Deliberate, never playful.
 - Page reveal: `180–240ms`, via `.fade-up` (opacity + 4px translateY).
 - Card rise / fade stagger: `120ms`.
 - Dialog / sheet: `160–200ms`.
+- Drawer: 180ms slide-in (`hubDrawerIn`), overlay 160ms fade (`hubFadeIn`), reduced-motion respected.
 - Hover travel: no more than `4px`.
 - Live indicators: `mlMoonPulse` at 1.2–1.5s.
 

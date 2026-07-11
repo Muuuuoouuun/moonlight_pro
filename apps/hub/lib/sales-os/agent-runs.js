@@ -5,6 +5,8 @@
 //        360 context.memory so the next call "remembers" what was advised before).
 // This read/write pair is what turns Guru from a stateless advisor into a remembering coach.
 
+import { randomUUID } from "crypto";
+
 import { eqFilter, fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-read";
 import { insertSupabaseRecord, resolveDefaultWorkspaceId, updateSupabaseRecord } from "@/lib/server-write";
 
@@ -15,6 +17,8 @@ function normalizeResult(value) {
   return RESULTS.has(v) ? v : "ok";
 }
 
+// Client-mints the row id (inserts are return=minimal) and hands it back, so callers can
+// thread it into work_orders.run_id — that's what makes setAgentRunOutcome attribution live.
 export async function recordAgentRun({
   workspaceId = resolveDefaultWorkspaceId(),
   agent,
@@ -29,7 +33,9 @@ export async function recordAgentRun({
   if (!workspaceId) return { persisted: false, reason: "missing-workspace" };
   if (!agent) return { persisted: false, reason: "missing-agent" };
 
-  return insertSupabaseRecord("agent_runs", {
+  const id = randomUUID();
+  const inserted = await insertSupabaseRecord("agent_runs", {
+    id,
     workspace_id: workspaceId,
     agent: String(agent),
     mode: mode || null,
@@ -41,11 +47,13 @@ export async function recordAgentRun({
     outcome_id: outcomeId || null,
     ran_at: new Date().toISOString(),
   });
+  return { ...inserted, id: inserted.persisted ? id : null };
 }
 
 // Attribute a realized outcome back to the run that produced the recommendation (learning).
-// Guarded on `outcome_id is null` (idempotent) and a no-op without a runId — dormant until
-// the emit path populates work_orders.run_id, at which point attribution activates for free.
+// Guarded on `outcome_id is null` (idempotent) and a no-op without a runId. Activates when
+// the emit path populates work_orders.run_id — recordAgentRun returns the minted id for
+// exactly that (hub: sales-mentor route response; /team loop: team-command.md §4).
 export async function setAgentRunOutcome({
   workspaceId = resolveDefaultWorkspaceId(),
   runId,

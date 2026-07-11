@@ -298,6 +298,7 @@ export function Studio({ workspace }) {
     ));
     const nextMode = variant?.type === "card_news" ? "carousel" : "blog";
     const nextSlides = variant?.type === "card_news" ? parseVariantSlides(variant.body) : null;
+    const isUnsupportedType = Boolean(variant?.type) && !["blog", "blog_insight", "card_news"].includes(variant.type);
 
     setContentId(item.id);
     setVariantId(variant?.id || item.variantId || null);
@@ -312,6 +313,12 @@ export function Studio({ workspace }) {
     setLastSavedAt(variant?.updatedAt || item.updatedAt || null);
     setDirty(false);
     setSaveState("loaded");
+    if (isUnsupportedType) {
+      setExtraSuggestions(s => [{
+        tone: 'warning',
+        text: `Studio는 아직 "${variant.type}" 타입 편집을 지원하지 않습니다 — Blog 모드로 임시 표시 중입니다.`,
+      }, ...s]);
+    }
     loadedItemRef.current = itemParam;
   }, [itemParam, ledger]);
 
@@ -617,18 +624,24 @@ export function Studio({ workspace }) {
               ? `handoff · ${formatTime(lastSentAt)}`
               : saveLabel}
           </span>
-          <IconButton
-            icon="upload"
-            tooltip={autoSave ? "Supabase autosave on" : "Supabase autosave off"}
-            onClick={() => setAutoSave(v => !v)}
-            style={{ color: autoSave ? 'var(--moon-200)' : 'var(--fg-faint)' }}
-          />
-          <IconButton
-            icon="folder"
-            tooltip={localMirror ? "Browser mirror on" : "Browser mirror off"}
-            onClick={() => setLocalMirror(v => !v)}
-            style={{ color: localMirror ? 'var(--moon-200)' : 'var(--fg-faint)' }}
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <IconButton
+              icon="upload"
+              tooltip={autoSave ? "Supabase autosave on" : "Supabase autosave off — 클릭해서 켜기"}
+              onClick={() => setAutoSave(v => !v)}
+              style={{ color: autoSave ? 'var(--moon-200)' : 'var(--fg-faint)' }}
+            />
+            {!autoSave && <span className="mono" style={{ fontSize: 9.5, color: 'var(--warning)' }}>OFF</span>}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <IconButton
+              icon="folder"
+              tooltip={localMirror ? "Browser mirror on" : "Browser mirror off — 클릭해서 켜기"}
+              onClick={() => setLocalMirror(v => !v)}
+              style={{ color: localMirror ? 'var(--moon-200)' : 'var(--fg-faint)' }}
+            />
+            {!localMirror && <span className="mono" style={{ fontSize: 9.5, color: 'var(--warning)' }}>OFF</span>}
+          </div>
           <IconButton
             icon="check"
             tooltip="Save now"
@@ -1182,7 +1195,7 @@ export function Queue({ workspace }) {
             <span>
               <Badge tone={c.brandTone || 'neutral'} variant="outline" size="xs">{c.brandGlyph || '•'} {c.brandName || '—'}</Badge>
             </span>
-            <span><Badge tone={statusTone[c.status] || 'neutral'} size="xs">{c.status}</Badge></span>
+            <span><Badge tone={statusTone[c.statusLabel || c.status] || 'neutral'} size="xs">{c.statusLabel || c.status}</Badge></span>
             <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{c.when}</span>
             <span style={{ textAlign: 'right', fontSize: 12, color: 'var(--fg-muted)' }}>{c.author}</span>
           </div>

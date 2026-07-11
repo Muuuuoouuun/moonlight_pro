@@ -97,8 +97,9 @@ export async function POST(req) {
   const result = await callEngine({ mode, ref, draft, context });
 
   // Episodic memory: log what Guru recommended so the next call can remember it (best-effort).
+  let runId = null;
   try {
-    await recordAgentRun({
+    const run = await recordAgentRun({
       agent: "guru",
       mode,
       ref,
@@ -106,9 +107,16 @@ export async function POST(req) {
       recommendation: trimRecommendation(result.data),
       result: resultStateFromStatus(result.status),
     });
+    runId = run?.id || null;
   } catch {
     // logging is best-effort — never let it break the coaching response.
   }
 
-  return NextResponse.json(result.data, { status: result.status });
+  // runId rides along so whoever turns this coaching into a work order can set
+  // work_orders.run_id — the hook that makes outcome→run attribution live.
+  const payload =
+    result.data && typeof result.data === "object" && !Array.isArray(result.data)
+      ? { ...result.data, runId }
+      : result.data;
+  return NextResponse.json(payload, { status: result.status });
 }
