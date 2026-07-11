@@ -108,10 +108,10 @@ const PAGE_MAP = {
   'dashboard/classin/projects': () => <Projects workspace="classin" />,
   'dashboard/classin/automations': () => <SheetsSync />,
   'dashboard/classin/cohorts': () => <Projects workspace="classin" />,   // legacy real_v1 bookmark alias
-  'dashboard/classin/content': () => <Queue />,                          // legacy real_v1 bookmark alias
+  'dashboard/classin/content': () => <Queue workspace="classin" />,      // legacy real_v1 bookmark alias
   'dashboard/brand/projects': () => <Projects workspace="brand" />,
-  'dashboard/brand/studio': () => <Studio />,   // Studio/Queue don't consume workspace yet — content.jsx is off-limits this pass
-  'dashboard/brand/queue': () => <Queue />,
+  'dashboard/brand/studio': () => <Studio workspace="brand" />,
+  'dashboard/brand/queue': () => <Queue workspace="brand" />,
 };
 
 const PARENT_JUMP = {
