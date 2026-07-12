@@ -329,6 +329,14 @@
     min-width: 44px;
   }
 
+  /* Checkboxes keep their 14px face — the blanket 44px floors turned them into tall
+     pills on phones. Their rows carry the touch height; a padded hit-area wrapper is
+     the eventual fix if bare-checkbox taps prove fiddly. */
+  .hub-app button[role="checkbox"] {
+    min-width: 0;
+    min-height: 0;
+  }
+
   .hub-app input,
   .hub-app textarea,
   .hub-app select {

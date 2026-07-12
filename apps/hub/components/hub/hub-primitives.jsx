@@ -274,9 +274,16 @@ export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
   );
 }
 
-export function Checkbox({ checked, onChange, size = 14 }) {
+// `label` names the checkbox for screen readers (the visual label usually sits in a
+// sibling cell, so SRs would otherwise announce an unnamed 14px button). Always pass it
+// on new call sites — e.g. the row's title.
+export function Checkbox({ checked, onChange, size = 14, label }) {
   return (
-    <button onClick={(e) => { e.stopPropagation(); onChange?.(!checked); }} style={{
+    <button
+      role="checkbox"
+      aria-checked={Boolean(checked)}
+      aria-label={label || '선택'}
+      onClick={(e) => { e.stopPropagation(); onChange?.(!checked); }} style={{
       width: size, height: size, borderRadius: 4,
       border: `1px solid ${checked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
       background: checked ? 'var(--moon-300)' : 'transparent',
