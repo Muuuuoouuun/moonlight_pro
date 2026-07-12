@@ -155,7 +155,13 @@ export function Segments({ workspace, onNavigate }) {
           const isOpen = expanded === seg.label;
           return (
             <Card key={seg.label} interactive style={{ cursor: 'pointer' }} >
-              <div onClick={() => setExpanded(isOpen ? null : seg.label)}>
+              <div
+                role="button"
+                tabIndex={0}
+                aria-expanded={isOpen}
+                onClick={() => setExpanded(isOpen ? null : seg.label)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(isOpen ? null : seg.label); } }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 500, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {seg.label}

@@ -758,9 +758,9 @@ export function Flows({ onNavigate }) {
           <Kbd>⌘D</Kbd><span>복제</span>
           <div style={{ flex: 1 }} />
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-            <button onClick={() => setZoom(z => Math.max(60, z - 10))} style={{ width: 22, height: 20, color: 'var(--fg-muted)' }}>−</button>
+            <button aria-label="캔버스 축소" onClick={() => setZoom(z => Math.max(60, z - 10))} style={{ width: 22, height: 20, color: 'var(--fg-muted)' }}>−</button>
             <span className="mono" style={{ fontSize: 11, padding: '0 6px' }}>{zoom}%</span>
-            <button onClick={() => setZoom(z => Math.min(140, z + 10))} style={{ width: 22, height: 20, color: 'var(--fg-muted)' }}>+</button>
+            <button aria-label="캔버스 확대" onClick={() => setZoom(z => Math.min(140, z + 10))} style={{ width: 22, height: 20, color: 'var(--fg-muted)' }}>+</button>
           </div>
           <span className="mono">last run {flowMeta.status === 'Active' ? '2분 전' : 'paused'}</span>
         </div>
