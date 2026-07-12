@@ -3,7 +3,7 @@
 import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar, SyncBadge } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar, SyncBadge, SegmentedControl } from "../hub-primitives";
 import {
   CONTENT_QUEUE as FALLBACK_CONTENT_QUEUE,
   CAMPAIGNS as FALLBACK_CAMPAIGNS,
@@ -584,15 +584,11 @@ export function Studio({ workspace }) {
     <div className="hub-studio-shell" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', height: '100%', overflow: 'hidden' }}>
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-            {[{k:'blog',l:'Blog / Insight'},{k:'carousel',l:'Card News'}].map(m => (
-              <button key={m.k} onClick={() => { setMode(m.k); setDirty(true); }} style={{
-                padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-                color: mode === m.k ? 'var(--fg)' : 'var(--fg-faint)',
-                background: mode === m.k ? 'var(--surface-3)' : 'transparent',
-              }}>{m.l}</button>
-            ))}
-          </div>
+          <SegmentedControl
+            options={[{ key: 'blog', label: 'Blog / Insight' }, { key: 'carousel', label: 'Card News' }]}
+            value={mode}
+            onChange={(k) => { setMode(k); setDirty(true); }}
+          />
           <Badge tone="warning" size="xs">Draft</Badge>
           {ws && (
             <span

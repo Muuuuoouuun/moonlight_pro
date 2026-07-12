@@ -3,7 +3,7 @@
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState, SyncBadge } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState, SyncBadge, SegmentedControl } from "../hub-primitives";
 import {
   BRANDS as FALLBACK_BRANDS,
   BRAND_PROJECTS as FALLBACK_PROJECTS,
@@ -516,15 +516,11 @@ export function Projects({ workspace }) {
             </div>
           </div>
           <div style={{ flex: 1 }} />
-          <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-            {[{k:'tree',l:'List'},{k:'board',l:'Board'},{k:'todos',l:'To-dos'}].map(t => (
-              <button key={t.k} onClick={() => setView(t.k)} style={{
-                padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-                color: view === t.k ? 'var(--fg)' : 'var(--fg-faint)',
-                background: view === t.k ? 'var(--surface-3)' : 'transparent',
-              }}>{t.l}</button>
-            ))}
-          </div>
+          <SegmentedControl
+            options={[{ key: 'tree', label: 'List' }, { key: 'board', label: 'Board' }, { key: 'todos', label: 'To-dos' }]}
+            value={view}
+            onChange={setView}
+          />
           <Button variant="primary" size="sm" icon="plus" onClick={() => view === 'todos' ? createTodo() : createProject()}>{view === 'todos' ? 'To-do' : 'Project'}</Button>
         </div>
 

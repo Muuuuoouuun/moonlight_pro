@@ -377,7 +377,7 @@ export function SegmentedControl({ options, value, onChange, className, style })
         const isActive = o.key === value;
         return (
           <button key={o.key} type="button" onClick={() => onChange?.(o.key)} style={{
-            padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
+            padding: '4px 10px', fontSize: 11.5, borderRadius: 4, whiteSpace: 'nowrap',
             color: isActive ? 'var(--fg)' : 'var(--fg-faint)',
             background: isActive ? 'var(--surface-3)' : 'transparent',
             display: 'inline-flex', alignItems: 'center', gap: 5,

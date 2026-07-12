@@ -3,7 +3,7 @@
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Card, IconButton, Button, Progress, EmptyState } from "../hub-primitives";
+import { Badge, Card, IconButton, Button, Progress, EmptyState, SegmentedControl } from "../hub-primitives";
 import { DECISIONS as FALLBACK_DECISIONS, RITUALS as FALLBACK_RITUALS } from "../hub-data";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -336,11 +336,12 @@ export function Calendar() {
           <Button variant="secondary" size="sm" onClick={() => setWeekOffset(0)}>Today</Button>
           <IconButton icon="chevronR" tooltip="Next week" onClick={() => setWeekOffset(v => v + 1)} />
         </div>
-        <div className="hub-toolbar" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-          {['Day','Week','Month'].map(v => (
-            <button key={v} onClick={() => setViewMode(v)} style={{ padding: '4px 10px', fontSize: 11.5, borderRadius: 4, color: v === viewMode ? 'var(--fg)' : 'var(--fg-faint)', background: v === viewMode ? 'var(--surface-3)' : 'transparent' }}>{v}</button>
-          ))}
-        </div>
+        <SegmentedControl
+          className="hub-toolbar"
+          options={['Day', 'Week', 'Month'].map(v => ({ key: v, label: v }))}
+          value={viewMode}
+          onChange={setViewMode}
+        />
         <Button variant="primary" size="sm" icon="plus" onClick={addEvent} disabled={creating}>Event</Button>
       </div>
 
