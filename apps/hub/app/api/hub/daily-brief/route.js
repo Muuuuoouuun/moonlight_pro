@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAutomationsLedger } from "@/lib/repositories/automations-ledger";
+import { getMorningBrief } from "@/lib/repositories/brief-ledger";
 import { getContentLedger } from "@/lib/repositories/content-ledger";
 import { getProjectLedger } from "@/lib/repositories/operating-ledger";
 import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
@@ -389,13 +390,14 @@ function buildSources(results) {
 }
 
 export async function GET() {
-  const [projectsResult, workResult, contentResult, revenueResult, automationsResult, ordersResult] = await Promise.allSettled([
+  const [projectsResult, workResult, contentResult, revenueResult, automationsResult, ordersResult, briefResult] = await Promise.allSettled([
     getProjectLedger(),
     getWorkLedger(),
     getContentLedger(),
     getRevenueLedger(),
     getAutomationsLedger(),
     getWorkOrders({ status: "proposed", limit: 20 }),
+    getMorningBrief(),
   ]);
 
   const results = {
@@ -413,6 +415,8 @@ export async function GET() {
   const revenue = readLedger(revenueResult);
   const automations = readLedger(automationsResult);
   const ordersLedger = readLedger(ordersResult, { source: "preview", orders: [] });
+  // Chief of Staff composed brief (ai.morning_brief) — the cron's output finally has a reader.
+  const morning = readLedger(briefResult, { source: "preview", brief: null });
   const queue = {
     source: ordersLedger.source || "preview",
     pending: Array.isArray(ordersLedger.orders) ? ordersLedger.orders.length : 0,
@@ -447,5 +451,6 @@ export async function GET() {
     signals,
     blocks: buildBlocks(projects, content),
     queue,
+    morningBrief: morning.brief || null,
   });
 }

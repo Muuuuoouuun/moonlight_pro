@@ -52,6 +52,7 @@ export async function POST(req) {
     result.persisted ||
     result.reason === "already-attributed" ||
     result.reason === "already-executed" ||
-    result.reason === "already-promoted";
+    result.reason === "already-promoted" ||
+    result.reason === "already-decided";
   return NextResponse.json(result, { status: ok ? 200 : 400 });
 }

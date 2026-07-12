@@ -468,6 +468,19 @@ export function AgentsOrders({ onNavigate }) {
   const [personas, setPersonas] = React.useState([]);
   const [live, setLive] = React.useState(false);
   const [busyId, setBusyId] = React.useState(null);
+  const [copiedId, setCopiedId] = React.useState(null);
+
+  // 딜 채널이 카톡/전화 중심이라 "복사"가 실제 발송 경로 — 초안을 클립보드로 옮겨 보내는 흐름.
+  const copyDraft = async (o) => {
+    const subject = o.body?.subject || o.body?.title || '';
+    const text = [subject, o.body?.body || ''].filter(Boolean).join('\n\n');
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(o.id);
+      window.setTimeout(() => setCopiedId((v) => (v === o.id ? null : v)), 1600);
+    } catch { /* clipboard unavailable — silent */ }
+  };
 
   React.useEffect(() => {
     let active = true;
@@ -599,10 +612,16 @@ export function AgentsOrders({ onNavigate }) {
                 )}
               </div>
             </div>
-            {/* AI-drafted message preview — operator reads it before the 1-click approve. No auto-send. */}
+            {/* AI-drafted message preview — operator reads it before the 1-click approve. No auto-send.
+                복사 = 카톡/전화 채널의 실제 발송 경로 (클립보드로 옮겨 보낸다). */}
             {o.live && (o.kind === 'followup-draft' || o.kind === 'content-draft') && o.body?.body && (
-              <div style={{ padding: '0 16px 12px 116px', fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
-                {o.body.body}
+              <div style={{ padding: '0 16px 12px 116px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+                  {o.body.body}
+                </div>
+                <Button variant="ghost" size="xs" onClick={() => copyDraft(o)} style={{ flexShrink: 0 }}>
+                  {copiedId === o.id ? '복사됨' : '복사'}
+                </Button>
               </div>
             )}
             {o.live && o.status === 'approved' && (o.kind === 'dm' || o.kind === 'lead' ? (
@@ -611,6 +630,16 @@ export function AgentsOrders({ onNavigate }) {
                   <Dot tone="success" size={6} /> 신규 리드
                 </span>
                 <Button variant="outline" size="xs" onClick={() => promote(o.id)}>리드로 등록</Button>
+              </div>
+            ) : o.kind === 'content-draft' ? (
+              // 승인 = Studio 파이프라인으로 구체화(서버가 idea→draft 승격 + variant 생성).
+              // 콘텐츠 초안은 영업 퍼널 outcome을 절대 남기지 않는다 — 완료는 무-outcome executed.
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '0 16px 12px 116px' }}>
+                <span style={{ fontSize: 11, color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Dot tone="success" size={6} /> Studio 초안 생성
+                </span>
+                <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/content/studio')}>Studio 열기</Button>
+                <Button variant="ghost" size="xs" onClick={() => promote(o.id)}>완료</Button>
               </div>
             ) : (
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '0 16px 12px 116px' }}>

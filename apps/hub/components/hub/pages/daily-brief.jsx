@@ -118,6 +118,7 @@ function useDailyBriefLedger() {
     metrics: METRICS,
     signals: BRIEF_SIGNALS,
     blocks: TODAY_BLOCKS,
+    morningBrief: null,
   });
 
   React.useEffect(() => {
@@ -149,6 +150,7 @@ function useDailyBriefLedger() {
           metrics: liveCount > 0 && Array.isArray(data.metrics) && data.metrics.length ? data.metrics : METRICS,
           signals: Array.isArray(data.signals) && data.signals.length ? data.signals : BRIEF_SIGNALS,
           blocks: Array.isArray(data.blocks) && data.blocks.length ? data.blocks : TODAY_BLOCKS,
+          morningBrief: data.morningBrief || null,
         });
       } catch {
         if (active) setState((prev) => ({ ...prev, syncState: 'preview' }));
@@ -264,6 +266,76 @@ const WO_KIND_TONE = {
   'followup-draft': 'moon', 'content-draft': 'info',
 };
 
+// Chief of Staff 브리핑 — the /api/cron/chief-of-staff composed agenda, read back from
+// project_updates (ai.morning_brief) via /api/hub/daily-brief. Renders only when a fresh
+// (<24h) brief exists; lanes map to identity tones (sales=company, brand=personal).
+const BRIEF_LANE_META = {
+  approve: { label: '승인', tone: 'moon' },
+  sales: { label: '영업', tone: 'company' },
+  brand: { label: '브랜드', tone: 'personal' },
+};
+
+function MorningBriefCard({ brief, onNavigate }) {
+  if (!brief) return null;
+  const items = Array.isArray(brief.items) ? brief.items : [];
+  const when = brief.generatedAt
+    ? new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(new Date(brief.generatedAt))
+    : null;
+
+  // approve-lane rows resolve right below in the approval queue — no navigation needed.
+  const targetFor = (item) => {
+    if (item.lane === 'sales') {
+      return item.ref ? `dashboard/revenue/deals?deal=${encodeURIComponent(item.ref)}` : 'dashboard/revenue/deals';
+    }
+    if (item.lane === 'brand') return 'dashboard/content/queue';
+    return null;
+  };
+
+  return (
+    <div>
+      <SectionTitle right={<div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {when && <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{when}</span>}
+        <Badge tone="moon" size="xs">Chief of Staff</Badge>
+      </div>}>
+        오늘 이 3개만
+      </SectionTitle>
+      <Card pad={false}>
+        {items.length === 0 ? (
+          <div style={{ padding: 14, fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+            {brief.summary || '오늘 급한 항목 없음 — 큐가 비었습니다.'}
+          </div>
+        ) : (
+          items.map((item, i) => {
+            const lane = BRIEF_LANE_META[item.lane] || { label: item.lane || '기타', tone: 'neutral' };
+            const target = targetFor(item);
+            return (
+              <div
+                key={`${item.lane}-${i}`}
+                onClick={target ? () => onNavigate?.(target) : undefined}
+                style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 14px',
+                  cursor: target ? 'pointer' : 'default',
+                  borderBottom: i < items.length - 1 ? '1px solid var(--line-soft)' : 'none',
+                }}
+              >
+                <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--moon-300)', width: 14, flexShrink: 0, paddingTop: 1 }}>{i + 1}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45 }}>{item.title}</div>
+                  {item.detail && <div style={{ marginTop: 3, fontSize: 11, color: 'var(--fg-muted)', lineHeight: 1.5 }}>{item.detail}</div>}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, paddingTop: 1 }}>
+                  <Badge tone={lane.tone} size="xs">{lane.label}</Badge>
+                  {target && <Iconed name="chevronR" size={11} style={{ color: 'var(--fg-faint)' }} />}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </Card>
+    </div>
+  );
+}
+
 // The 1-click approval cockpit — proposed work orders (persona/inbox/guru) decided in place.
 // registry.json no_auto_send=true: nothing executes without this click.
 function ApprovalQueueCard({ onNavigate }) {
@@ -271,6 +343,19 @@ function ApprovalQueueCard({ onNavigate }) {
   const [state, setState] = React.useState('loading');
   const [busyId, setBusyId] = React.useState(null);
   const [approved, setApproved] = React.useState({}); // id → true once approved (reveals execute row)
+  const [copiedId, setCopiedId] = React.useState(null);
+
+  // 딜 채널이 카톡/전화 중심이라 "복사"가 실제 발송 경로 — 초안을 클립보드로 옮겨 보내는 흐름.
+  const copyDraft = async (o) => {
+    const subject = o.body?.subject || o.body?.title || '';
+    const text = [subject, o.body?.body || ''].filter(Boolean).join('\n\n');
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(o.id);
+      window.setTimeout(() => setCopiedId((v) => (v === o.id ? null : v)), 1600);
+    } catch { /* clipboard unavailable — silent */ }
+  };
 
   React.useEffect(() => {
     let active = true;
@@ -351,6 +436,9 @@ function ApprovalQueueCard({ onNavigate }) {
                 </div>
                 {!approved[o.id] && (
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    {(o.kind === 'followup-draft' || o.kind === 'content-draft') && o.body?.body && (
+                      <Button variant="ghost" size="xs" onClick={() => copyDraft(o)}>{copiedId === o.id ? '복사됨' : '복사'}</Button>
+                    )}
                     <Button variant="primary" size="xs" onClick={() => approve(o.id)}>승인</Button>
                     <Button variant="ghost" size="xs" onClick={() => dismiss(o.id)}>보류</Button>
                   </div>
@@ -363,11 +451,24 @@ function ApprovalQueueCard({ onNavigate }) {
                   </span>
                   <Button variant="outline" size="xs" onClick={() => promote(o.id)}>리드로 등록</Button>
                 </div>
+              ) : o.kind === 'content-draft' ? (
+                // 승인 = Studio 파이프라인으로 구체화(서버가 idea→draft 승격 + variant 생성).
+                // 콘텐츠 초안은 영업 퍼널 outcome을 절대 남기지 않는다 — 완료는 무-outcome executed.
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Dot tone="success" size={6} /> 승인됨 · Studio 초안 생성
+                  </span>
+                  <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/content/studio')}>Studio 열기</Button>
+                  <Button variant="ghost" size="xs" onClick={() => promote(o.id)}>완료</Button>
+                </div>
               ) : (
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 11, color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                     <Dot tone="success" size={6} /> 승인됨 · 실행 결과
                   </span>
+                  {o.kind === 'followup-draft' && o.body?.body && (
+                    <Button variant="ghost" size="xs" onClick={() => copyDraft(o)}>{copiedId === o.id ? '복사됨' : '복사'}</Button>
+                  )}
                   {WO_EXECUTE_ACTIONS.map((a) => (
                     <Button key={a.action} variant="outline" size="xs" onClick={() => execute(o.id, a.action)}>{a.label}</Button>
                   ))}
@@ -729,6 +830,7 @@ export function DailyBrief({ onNavigate }) {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+          <MorningBriefCard brief={ledger.morningBrief} onNavigate={onNavigate} />
           <ApprovalQueueCard onNavigate={onNavigate} />
 
           <div>

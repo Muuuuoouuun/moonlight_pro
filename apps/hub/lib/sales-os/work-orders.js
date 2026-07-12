@@ -217,6 +217,76 @@ async function promoteCaptureToLead({ workspaceId, id, order }) {
   return { persisted: true, reason: "ok", promoted: true, leadId, status: "executed" };
 }
 
+// Close the Content Flywheel loop (안2): an approved content-draft order materializes into
+// the Studio pipeline instead of dying in the queue. work_orders.asset_id IS the idea's
+// content_items id, so approval graduates the idea (status idea→draft) and lands the drafted
+// {title, body} as a content_variants row — Studio/Queue pick it up with zero re-typing.
+// Idempotent: the proposed→approved transition is the lock; only the winning caller writes.
+// Deliberately NOT an outreach outcome — content drafts must never pollute the sales funnel.
+async function approveContentDraft({ workspaceId, id, order }) {
+  const now = new Date().toISOString();
+
+  // transition lock — only the caller that flips proposed→approved materializes.
+  const won = await updateSupabaseRecordReturning(
+    "work_orders",
+    [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)], ["status", eqFilter("proposed")]],
+    { status: "approved", decided_at: now },
+  );
+  if (!Array.isArray(won)) return { persisted: false, reason: won?.error || "transition-failed" };
+  if (won.length === 0) return { persisted: false, reason: "already-decided" };
+
+  if (!order.assetId) {
+    // Manually-minted draft with no idea link — approved, nothing to materialize.
+    return { persisted: true, reason: "ok", status: "approved", materialized: false };
+  }
+
+  const title =
+    typeof order.body?.title === "string" && order.body.title.trim()
+      ? order.body.title.trim()
+      : order.title;
+  const bodyText = typeof order.body?.body === "string" ? order.body.body : "";
+  const variantId = randomUUID();
+
+  // Draft body → content_variants (shape mirrors content-ledger buildContentDraftRecords;
+  // variant_type 'blog' = the Council's Korean essay draft, channel Web).
+  const variant = await insertSupabaseRecord("content_variants", {
+    id: variantId,
+    workspace_id: workspaceId,
+    content_id: order.assetId,
+    variant_type: "blog",
+    title,
+    body: bodyText,
+    summary: null,
+    excerpt: bodyText ? bodyText.slice(0, 200) : null,
+    status: "draft",
+    slug: null,
+    scheduled_at: null,
+    visibility: "private",
+    meta: {
+      origin: "content-flywheel",
+      work_order_id: id,
+      run_id: order.runId || null,
+      brand_key: order.body?.brandKey || null,
+      model: order.body?.model || null,
+    },
+    created_at: now,
+    updated_at: now,
+  });
+  if (!variant.persisted) {
+    // The order IS approved, but the Studio write failed — surface it rather than hide it.
+    return { persisted: true, reason: "approved-unmaterialized", status: "approved", materialized: false, variantError: variant.reason };
+  }
+
+  // Graduate the idea so it leaves the idea queue and shows up as a Studio draft.
+  await updateSupabaseRecord(
+    "content_items",
+    [["id", eqFilter(order.assetId)], ["workspace_id", eqFilter(workspaceId)]],
+    { status: "draft", next_action: "Studio에서 초안 검토 후 발행 준비", updated_at: now },
+  );
+
+  return { persisted: true, reason: "ok", status: "approved", materialized: true, variantId };
+}
+
 // Operator decision: approve / dismiss / mark executed. Never auto-called — this IS the 1-click gate.
 // When status='executed' carries an `outcome` payload, it closes the outcome-attribution loop;
 // with no payload on a dm/lead-kind order, it closes the lead-capture loop instead (see above).
@@ -245,6 +315,14 @@ export async function decideWorkOrder({
     if (order && (order.kind === "dm" || order.kind === "lead")) {
       if (order.leadId) return { persisted: false, reason: "already-promoted" };
       return promoteCaptureToLead({ workspaceId, id, order });
+    }
+  }
+
+  // Approved content-draft → materialize into the Studio pipeline (see approveContentDraft).
+  if (status === "approved") {
+    const order = await getWorkOrderById({ workspaceId, id });
+    if (order && order.kind === "content-draft") {
+      return approveContentDraft({ workspaceId, id, order });
     }
   }
 
