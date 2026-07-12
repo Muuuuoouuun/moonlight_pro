@@ -226,7 +226,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
             return (
               <React.Fragment key={item.key}>
                 <div style={{ borderTop: '1px solid var(--line-soft)', marginTop: 8, paddingTop: 6 }}>
-                  <div style={{ fontSize: 11, letterSpacing: '0.1em', color: 'var(--fg-dim)', padding: '0 8px', marginBottom: 2 }}>기존 메뉴</div>
+                  <div style={{ fontSize: 11, letterSpacing: '0.1em', color: 'var(--fg-dim)', padding: '0 8px', marginBottom: 2 }}>도구</div>
                 </div>
                 {group}
               </React.Fragment>
