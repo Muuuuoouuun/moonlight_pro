@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Card, Button, Badge, Dot, SectionTitle, EmptyState } from "../hub-primitives";
+import { Card, Button, Badge, Dot, SectionTitle, EmptyState, SyncBadge } from "../hub-primitives";
 import { QUICK_LOG_ACTIONS as LOG_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 
 const STAGE_TONE = { new: "neutral", qualified: "info", nurturing: "moon", proposal: "moon", negotiation: "warning", prospect: "neutral" };
@@ -68,9 +68,10 @@ export function Followups() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>팔로업</h2>
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             오늘 연락할 사람 · 채널 · 왜 · 다음 행동
-            <span className="mono" style={{ marginLeft: 8, color: syncState === "live" ? "var(--success)" : syncState === "loading" ? "var(--warning)" : "var(--fg-muted)" }}>
-              {syncState === "live" ? `${summary.overdue ?? 0} overdue` : syncState === "loading" ? "loading" : syncState === "error" ? "error" : "preview"}
-            </span>
+            {syncState === "live" && (summary.overdue ?? 0) > 0 && (
+              <span className="num" style={{ marginLeft: 8, color: "var(--danger)" }}>{summary.overdue} overdue</span>
+            )}
+            <SyncBadge state={syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />

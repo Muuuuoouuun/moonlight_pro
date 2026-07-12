@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Progress, SectionTitle, Kbd, EmptyState } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Progress, SectionTitle, Kbd, EmptyState, SyncBadge } from "../hub-primitives";
 import { AUTOMATIONS as FALLBACK_AUTOMATIONS, RUN_LOG as FALLBACK_RUN_LOG } from "../hub-data";
 
 const EMPTY_AUTOMATION_SUMMARY = {
@@ -87,9 +87,7 @@ export function AutomationsIndex({ onNavigate }) {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Automations</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {activeCount} active flows · {runsTodayCount} runs in last 24h
-            <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-              {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
-            </span>
+            <SyncBadge state={syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -333,9 +331,7 @@ export function Webhooks({ onNavigate }) {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Webhooks</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {hooks.length} endpoints
-            <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-              {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
-            </span>
+            <SyncBadge state={syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -395,9 +391,7 @@ export function Runs() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Run log</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             Real-time automation execution log
-            <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-              {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
-            </span>
+            <SyncBadge state={syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />

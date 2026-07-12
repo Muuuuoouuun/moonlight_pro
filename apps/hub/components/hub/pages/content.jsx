@@ -3,7 +3,7 @@
 import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar, SyncBadge } from "../hub-primitives";
 import {
   CONTENT_QUEUE as FALLBACK_CONTENT_QUEUE,
   CAMPAIGNS as FALLBACK_CAMPAIGNS,
@@ -1058,9 +1058,7 @@ export function Queue({ workspace }) {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Publishing queue</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {visibleQueue.length}{tab !== 'all' ? ` of ${queue.length}` : ''} items in pipeline
-            <span className="mono" style={{ marginLeft: 8, color: ledger.syncState === 'live' ? 'var(--success)' : ledger.syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-              {ledger.syncState === 'live' ? 'live' : ledger.syncState === 'loading' ? 'syncing' : 'mock'}
-            </span>
+            <SyncBadge state={ledger.syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -1769,9 +1767,7 @@ export function Campaigns() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Campaigns</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             Content 안에서 Revenue, Automations, Decisions를 캠페인 기준으로 묶는 war room
-            <span className="mono" style={{ marginLeft: 8, color: ledger.syncState === 'live' ? 'var(--success)' : ledger.syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-              {ledger.syncState === 'live' ? 'live' : ledger.syncState === 'loading' ? 'syncing' : 'mock'}
-            </span>
+            <SyncBadge state={ledger.syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />

@@ -3,7 +3,7 @@
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState, SyncBadge } from "../hub-primitives";
 import {
   BRANDS as FALLBACK_BRANDS,
   BRAND_PROJECTS as FALLBACK_PROJECTS,
@@ -511,9 +511,7 @@ export function Projects({ workspace }) {
           <div>
             <div style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>
               {projects.length} projects · {brandTodos.filter(t => !t.done).length} open todos · {currentBrand.desc}
-              <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-                {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
-              </span>
+              <SyncBadge state={syncState} />
             </div>
           </div>
           <div style={{ flex: 1 }} />
