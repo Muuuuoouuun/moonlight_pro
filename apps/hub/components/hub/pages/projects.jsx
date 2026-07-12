@@ -345,7 +345,7 @@ export function Projects({ workspace }) {
           <span style={{
             fontSize: 10.5, fontWeight: 600, fontFamily: 'var(--font-mono)',
             minWidth: 16, height: 14, padding: '0 5px',
-            borderRadius: 999, background: 'var(--danger)', color: '#fff',
+            borderRadius: 999, background: 'var(--danger)', color: 'var(--bg)',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             letterSpacing: '-0.02em',
           }}>{changes > 99 ? '99+' : changes}</span>
@@ -388,7 +388,7 @@ export function Projects({ workspace }) {
               <span style={{
                 fontSize: 10.5, fontWeight: 600, fontFamily: 'var(--font-mono)',
                 minWidth: 16, height: 14, padding: '0 5px',
-                borderRadius: 999, background: 'var(--danger)', color: '#fff',
+                borderRadius: 999, background: 'var(--danger)', color: 'var(--bg)',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 letterSpacing: '-0.02em',
               }}>{changes > 99 ? '99+' : changes}</span>
@@ -454,7 +454,7 @@ export function Projects({ workspace }) {
                       <span style={{
                         position: 'absolute', top: -4, right: -6,
                         minWidth: 14, height: 14, padding: '0 4px',
-                        borderRadius: 999, background: 'var(--danger)', color: '#fff',
+                        borderRadius: 999, background: 'var(--danger)', color: 'var(--bg)',
                         fontSize: 9, fontWeight: 600, fontFamily: 'var(--font-mono)',
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                         boxShadow: '0 0 0 2px var(--surface-2)',
@@ -466,7 +466,7 @@ export function Projects({ workspace }) {
                       <span style={{
                         position: 'absolute', top: -4, right: -6,
                         minWidth: 14, height: 14, padding: '0 4px',
-                        borderRadius: 999, background: 'var(--danger)', color: '#fff',
+                        borderRadius: 999, background: 'var(--danger)', color: 'var(--bg)',
                         fontSize: 9, fontWeight: 600, fontFamily: 'var(--font-mono)',
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                         boxShadow: '0 0 0 2px var(--surface-2)',
@@ -509,7 +509,8 @@ export function Projects({ workspace }) {
             )}
           </div>
           <div>
-            <div style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Projects</h2>
+            <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
               {projects.length} projects · {brandTodos.filter(t => !t.done).length} open todos · {currentBrand.desc}
               <SyncBadge state={syncState} />
             </div>
