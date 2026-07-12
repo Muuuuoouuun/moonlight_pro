@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { generateCardNews } from "@com-moon/content-manager";
 import { logError, logEvent } from "@com-moon/hub-gateway";
 
+import { generateGeminiText } from "./gemini";
 import {
   countSupabaseRows,
   fetchSupabaseRows,
@@ -19,6 +20,19 @@ import {
 import { listSharedProjectWebhookRoutes } from "./shared-webhook";
 
 const DEFAULT_CARD_NEWS_TEMPLATE_ID = "classin_cardnews_math_v3";
+
+// Studio carousel deck colors (apps/hub/components/hub/pages/content.jsx default deck);
+// generated drafts cycle this ramp so they open already styled in Content > Studio.
+const CARD_NEWS_SLIDE_BG = [
+  "oklch(0.35 0.04 280)",
+  "oklch(0.35 0.05 220)",
+  "oklch(0.35 0.05 180)",
+  "oklch(0.35 0.05 150)",
+  "oklch(0.35 0.05 85)",
+  "oklch(0.35 0.06 30)",
+  "oklch(0.28 0.01 250)",
+];
+
 type SupabaseFilter = [string, string];
 
 function resolveWorkspaceId() {
@@ -445,10 +459,21 @@ export async function runTelegramUpdate(update: TelegramUpdate): Promise<EngineR
         message?.chat?.title?.trim() ||
         "Untitled Card News";
 
-      const result = await generateCardNews({
-        topic,
-        templateId: DEFAULT_CARD_NEWS_TEMPLATE_ID,
-      });
+      const result = await generateCardNews(
+        {
+          topic,
+          templateId: DEFAULT_CARD_NEWS_TEMPLATE_ID,
+        },
+        generateGeminiText,
+      );
+      // Persist the variant body in the Studio carousel shape ({slides: [{id, bg, title, sub}]})
+      // so the draft opens directly in Content > Studio for the human review/approval pass.
+      const studioSlides = result.slides.map((slide, index) => ({
+        id: `s${index + 1}`,
+        bg: CARD_NEWS_SLIDE_BG[index % CARD_NEWS_SLIDE_BG.length],
+        title: slide.title,
+        sub: slide.sub,
+      }));
       const workspaceId = resolveWorkspaceId();
       const contentItemId = randomUUID();
       const contentVariantId = randomUUID();
@@ -468,6 +493,7 @@ export async function runTelegramUpdate(update: TelegramUpdate): Promise<EngineR
               meta: {
                 generated_by: "telegram",
                 template_id: result.templateId,
+                model: result.model,
                 run_id: runId,
               },
               created_at: result.generatedAt,
@@ -479,7 +505,7 @@ export async function runTelegramUpdate(update: TelegramUpdate): Promise<EngineR
               content_id: contentItemId,
               variant_type: "card_news",
               title: result.title,
-              body: JSON.stringify(result),
+              body: JSON.stringify({ slides: studioSlides, format: "instagram-carousel" }),
               summary: result.summary,
               excerpt: result.summary,
               status: "draft",
@@ -487,6 +513,7 @@ export async function runTelegramUpdate(update: TelegramUpdate): Promise<EngineR
               meta: {
                 generated_by: "telegram",
                 template_id: result.templateId,
+                model: result.model,
                 slide_count: result.slideCount,
                 run_id: runId,
               },
