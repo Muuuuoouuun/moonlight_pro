@@ -16,10 +16,14 @@
 - Supabase 없는 환경은 명시적 `preview`/empty state로 표시하고 mock과 live 데이터를 섞지 않음
 
 ## UI 작업 시 필수 체크
-- 색상: DESIGN.md 팔레트만 사용 (warm gold/그린/보라 금지, 문스톤 `#5274a8` 액센트)
-- 보더: `1px solid rgba(12,16,24,0.08)` (light) / `rgba(255,255,255,0.07)` (dark) — 절대 두껍게 하지 않음
-- 허브 카드 배경: `rgba(255,255,255,0.04~0.07)` — 흰 배경 절대 금지
-- 반응형: 모바일 우선, `sm:` / `lg:` 브레이크포인트
+- 색상: DESIGN.md 팔레트(토큰)만 사용 — 페이지 안 하드코딩 hex/rgba/oklch 금지, warm gold/그린/보라 금지
+- 보더: 항상 `1px` + `--line*` 토큰 — 절대 두껍게 하지 않음. 상태 강조는 `--*-line` 좌측 inset 스트라이프
+- 숫자: 큰 지표(≥18px)는 `.stat`(sans tabular), 계기 데이터(ID·타임스탬프·인라인 값)는 `.mono`, sans 소형 카운트는 `.num`
+- 크기 플로어: 데이터 값 ≥12px, 보조 메타 ≥10.5px, 10px 미만 금지
+- Primitives first: `SegmentedControl`·`SyncBadge`·`EmptyState`·`Checkbox(label)`·`EditDrawer`를 인라인 재구현 금지
+- 행 hover는 `.hub-row` 클래스 (JS onMouseEnter/Leave 신규 작성 금지)
+- 인터랙션 계약(생성 N 단축키·ESC/오버레이 닫기·딥링크·정렬 3단 토글)은 DESIGN.md §8.1 준수
+- 반응형: 모바일 우선. 세그먼트 토글은 모바일에서도 가로 유지 (flex-basis:100% 자식 강제 금지)
 
 ## 디자인 레퍼런스 (awesome-design-md)
 > UI 컴포넌트 작업 시 아래 브랜드 DESIGN.md를 참고 레퍼런스로 활용할 것

@@ -196,6 +196,41 @@ truth. Do not recreate them ad-hoc inside pages.
 - Tables stay narrow — prefer fewer columns and clearer status chips over spreadsheet density.
 - Dashboards prioritize trend + urgency over raw counts alone.
 
+### 8.1 Interaction Conventions (표준 동작 — 새 서피스는 이 계약을 따른다)
+
+**Primitives first.** 페이지 안에서 pill 토글·sync 라벨·빈 상태·체크박스를 다시 만들지 않는다.
+`SegmentedControl`(필터/뷰 토글), `SyncBadge`(live·mock·preview·syncing·error),
+`EmptyState`(+ `action` CTA), `Checkbox`(`label` prop 필수), `EditDrawer`가 canonical.
+인라인 복제는 이미 두 번 드리프트 사고를 냈다(2026-07 design-review FINDING-002/003).
+
+**생성(Create).**
+- 모든 리스트 서피스는 헤더에 primary 생성 버튼 + `<Kbd>N</Kbd>` 힌트.
+- 페이지 레벨 `N` 단축키: 드로어 닫힘 + 포커스가 input/textarea/select/contentEditable 밖일 때만.
+- 빈 상태(워크스페이스 빈 화면·검색 0건)는 반드시 생성 CTA 또는 "검색 지우기"를 포함.
+- 칸반 컬럼 하단에 점선 "+ 추가" — 클릭하면 **그 컬럼의 stage로 시드**된 레코드가 생성되고 드로어가 즉시 열린다.
+
+**편집(Edit).**
+- 행/카드 클릭 → `EditDrawer`. `role="button" tabIndex={0}` + Enter/Space 핸들러 동반.
+- 닫기: ESC + 오버레이 클릭 + 닫기 버튼 3중 지원 (Drawer primitive가 처리).
+- 저장은 `{ ok, status }` 봉투 — `saved`(영속) / `preview`(백엔드 미설정, 낙관적 로컬 행 유지) / `error`.
+- 딥링크: `?lead=<id>` `?deal=<id>`는 원장 로드 후 해당 드로어를 1회만 열고 쿼리를 소거한다.
+
+**테이블 정렬.**
+- 헤더 클릭: asc → desc → 해제(원장 순서) 3단 토글, 방향 캐럿은 비활성일 때도 폭 예약.
+- 금액은 표시 문자열(`₩1.2M`/`₩900K`)을 숫자로 파싱해 정렬, 단계는 퍼널 순서로 정렬 (알파벳 금지).
+
+**상태 표시.**
+- 좌측 액센트 스트라이프는 `--*-line` 토큰 + `inset 2px 0 0` box-shadow — 배경 fill·두꺼운 보더 금지 (§5.2).
+- stalled 기준은 `STALLED_DAYS`(현재 14일) 상수 하나 — 페이지별 하드코딩 금지.
+
+**Hover.**
+- 인터랙티브 행은 `className="hub-row"` — `onMouseEnter/Leave` JS 핸들러를 새로 쓰지 않는다
+  (reduced-motion 무시 + 드리프트 원인). 기존 JS hover는 해당 파일을 만질 때 옮긴다.
+
+**텍스트 크기 플로어.**
+- 데이터 값 ≥ 12px · 보조 메타(ID·타임스탬프·마이크로 카운트·상태 플래그) ≥ 10.5px ·
+  10px 미만 금지 (예외: 미니어처 프리뷰 캔버스 — 슬라이드 썸네일 등).
+
 ## 9. Motion
 
 Deliberate, never playful.
@@ -218,11 +253,16 @@ Bad: `혁신적인 솔루션` · `최적화된 시너지` · `AI 기반 차세�
 
 ## 11. Accessibility And Quality Bar
 
-- Touch targets: minimum 44px.
+- Touch targets: minimum 44px (모바일 미디어쿼리가 button에 44px 플로어를 강제 — 예외는 `role="checkbox"`뿐).
 - Text contrast: WCAG AA minimum.
 - Keyboard navigation works for all core flows (⌘K palette is the fast path).
 - Focus uses `outline: 1px solid var(--moon-300)` with 2px offset — never relies on browser defaults.
 - Loading / empty / success / error states are part of the design, not afterthoughts.
+- 아이콘/글리프 전용 버튼은 `aria-label` 또는 `tooltip` 필수 (`IconButton`을 쓰면 자동).
+- 클릭 가능한 `<div>`는 `role="button"` + `tabIndex={0}` + Enter/Space 핸들러 3종 세트 없이는 금지.
+  펼침/접힘 토글에는 `aria-expanded`.
+- `Checkbox`는 `label` prop으로 스크린리더 이름을 전달한다 (행 제목 등).
+- 각 페이지는 정확히 하나의 `<h2>` 페이지 타이틀(20px/500)을 메인 페인에 가진다 — 브레드크럼만으로 대체 금지.
 
 ## 12. Public vs Hub Rules
 
