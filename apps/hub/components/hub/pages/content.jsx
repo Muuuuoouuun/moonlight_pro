@@ -14,6 +14,20 @@ const STUDIO_DRAFT_DB = "moonlight-content-studio";
 const STUDIO_DRAFT_STORE = "drafts";
 const ACTIVE_DRAFT_KEY = "active";
 
+// Card-news slide backgrounds — content colors baked into exported slides, so they are
+// deliberately theme-independent raw values (not --surface/--moon theme tokens).
+const SLIDE_PALETTE = {
+  plum:  'oklch(0.35 0.04 280)',
+  blue:  'oklch(0.35 0.05 220)',
+  teal:  'oklch(0.35 0.05 180)',
+  green: 'oklch(0.35 0.05 150)',
+  amber: 'oklch(0.35 0.05 85)',
+  rust:  'oklch(0.35 0.06 30)',
+  ink:   'oklch(0.28 0.01 250)',
+  paper: 'oklch(0.95 0 0)',
+};
+const SLIDE_SWATCHES = Object.values(SLIDE_PALETTE);
+
 function openStudioDraftDb() {
   if (typeof window === "undefined" || !window.indexedDB) {
     return Promise.resolve(null);
@@ -211,13 +225,13 @@ export function Studio({ workspace }) {
 단순화. 근거는 전환 분석과 '선택의 피로' 가설. 회고는 2주 후…`
   );
   const [slides, setSlides] = React.useState([
-    { id: 's1', bg: 'oklch(0.35 0.04 280)', title: '결정 노트: 네 칸이면 충분하다', sub: '1인 창업자를 위한 기록법' },
-    { id: 's2', bg: 'oklch(0.35 0.05 220)', title: '맥락', sub: '왜 지금 결정해야 하는가' },
-    { id: 's3', bg: 'oklch(0.35 0.05 180)', title: '선택', sub: '무엇을 선택했고 무엇을 버렸나' },
-    { id: 's4', bg: 'oklch(0.35 0.05 150)', title: '근거', sub: '데이터·직관·제약' },
-    { id: 's5', bg: 'oklch(0.35 0.05 85)', title: '회고', sub: '2주 후 되돌아보기' },
-    { id: 's6', bg: 'oklch(0.35 0.06 30)', title: '한 가지 예시', sub: '가격 티어 3→2' },
-    { id: 's7', bg: 'oklch(0.28 0.01 250)', title: '저장하세요', sub: '@moonlight.pro' },
+    { id: 's1', bg: SLIDE_PALETTE.plum, title: '결정 노트: 네 칸이면 충분하다', sub: '1인 창업자를 위한 기록법' },
+    { id: 's2', bg: SLIDE_PALETTE.blue, title: '맥락', sub: '왜 지금 결정해야 하는가' },
+    { id: 's3', bg: SLIDE_PALETTE.teal, title: '선택', sub: '무엇을 선택했고 무엇을 버렸나' },
+    { id: 's4', bg: SLIDE_PALETTE.green, title: '근거', sub: '데이터·직관·제약' },
+    { id: 's5', bg: SLIDE_PALETTE.amber, title: '회고', sub: '2주 후 되돌아보기' },
+    { id: 's6', bg: SLIDE_PALETTE.rust, title: '한 가지 예시', sub: '가격 티어 3→2' },
+    { id: 's7', bg: SLIDE_PALETTE.ink, title: '저장하세요', sub: '@moonlight.pro' },
   ]);
   const [activeSlide, setActiveSlide] = React.useState(0);
   const [drag, setDrag] = React.useState(null);
@@ -536,7 +550,7 @@ export function Studio({ workspace }) {
     setDirty(true);
   };
   const addSlide = () => {
-    setSlides(s => [...s, { id: 'new-' + Date.now(), bg: 'oklch(0.3 0.02 250)', title: 'New slide', sub: '' }]);
+    setSlides(s => [...s, { id: 'new-' + Date.now(), bg: SLIDE_PALETTE.ink, title: 'New slide', sub: '' }]);
     setDirty(true);
   };
   const updateSlide = (i, patch) => {
@@ -778,7 +792,7 @@ export function Studio({ workspace }) {
                   style={{ width: '100%', marginTop: 4, marginBottom: 12, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', fontSize: 13, outline: 'none' }} />
                 <label style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Background</label>
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-                  {['oklch(0.35 0.04 280)','oklch(0.35 0.05 220)','oklch(0.35 0.05 180)','oklch(0.35 0.05 150)','oklch(0.35 0.05 85)','oklch(0.35 0.06 30)','oklch(0.28 0.01 250)','oklch(0.95 0 0)'].map(c => (
+                  {SLIDE_SWATCHES.map(c => (
                     <button key={c} onClick={() => updateSlide(activeSlide, { bg: c })}
                       style={{ width: 26, height: 26, borderRadius: 6, background: c, border: cur.bg === c ? '2px solid var(--moon-200)' : '1px solid var(--line-soft)' }} />
                   ))}
