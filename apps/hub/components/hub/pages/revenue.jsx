@@ -20,6 +20,41 @@ const fmt = v => {
   return '₩' + (n / 1000000).toFixed(1) + 'M';
 };
 
+// A deal counts as "stalled" once it has aged this many days in an open stage. Two weeks
+// is the follow-up window — high enough that a deal mid-motion isn't flagged as neglected.
+const STALLED_DAYS = 14;
+
+// Parse a display amount ("₩1.2M", "₩900K", "₩0", or a raw number) to a comparable number,
+// so the Leads table can sort by value even though the display model stores a string.
+function parseAmount(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  const s = String(v || '').replace(/[₩,\s]/g, '');
+  const m = /([0-9.]+)\s*([MmKk]?)/.exec(s);
+  if (!m) return 0;
+  const n = parseFloat(m[1]) || 0;
+  const unit = (m[2] || '').toLowerCase();
+  return unit === 'm' ? n * 1e6 : unit === 'k' ? n * 1e3 : n;
+}
+
+// Funnel order so "Stage" sorts by pipeline position, not alphabetically.
+const LEAD_STAGE_ORDER = { New: 0, Contact: 1, Qualified: 2, Lost: 3 };
+
+// Sort a lead list by the active column. Value sorts numerically (parsed), Stage by funnel
+// position, everything else case-insensitively. Returns the input untouched when no key is set.
+function sortLeads(list, sort) {
+  if (!sort.key) return list;
+  const dir = sort.dir === 'asc' ? 1 : -1;
+  const keyOf = (l) => {
+    if (sort.key === 'value') return parseAmount(l.value);
+    if (sort.key === 'stage') return LEAD_STAGE_ORDER[l.stage] ?? 99;
+    return String(l[sort.key] || '').toLowerCase();
+  };
+  return [...list].sort((a, b) => {
+    const va = keyOf(a), vb = keyOf(b);
+    return va < vb ? -dir : va > vb ? dir : 0;
+  });
+}
+
 function formatPercentDelta(current, previous) {
   if (!Number.isFinite(current) || !Number.isFinite(previous)) return '—';
   if (previous === 0) return current === 0 ? '0%' : 'new';
@@ -30,7 +65,7 @@ function formatPercentDelta(current, previous) {
 function buildRevenueAttention(leads, deals) {
   const items = [];
   deals
-    .filter((deal) => deal.stage !== 'won' && deal.stage !== 'lost' && Number(deal.age) > 10)
+    .filter((deal) => deal.stage !== 'won' && deal.stage !== 'lost' && Number(deal.age) >= STALLED_DAYS)
     .slice(0, 3)
     .forEach((deal) => {
       items.push({
@@ -420,10 +455,31 @@ export function Leads({ workspace }) {
   const editingLead = editLeadId ? mergedLeads.find(l => l.id === editLeadId) : null;
   const [filter, setFilter] = React.useState('all');
   const [search, setSearch] = React.useState('');
+  const [sort, setSort] = React.useState({ key: null, dir: 'asc' });
   const term = search.trim().toLowerCase();
   const filtered = LEADS.filter(l =>
     (filter === 'all' || l.type === filter) &&
     (!term || l.name.toLowerCase().includes(term) || l.source.toLowerCase().includes(term) || l.stage.toLowerCase().includes(term))
+  );
+  const sortedLeads = sortLeads(filtered, sort);
+  // Toggle a column: first click sorts asc, second flips to desc, third clears back to ledger order.
+  const toggleSort = (key) => setSort(s =>
+    s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: null, dir: 'asc' }
+  );
+  // Clickable column header. Reserves the caret's width even when inactive so sorting never
+  // shifts the header layout; active column brightens and shows the direction.
+  const SortHead = ({ k, children, align }) => (
+    <button type="button" onClick={() => toggleSort(k)} title={`${children} 기준 정렬`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3, width: '100%',
+        justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
+        fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
+        color: sort.key === k ? 'var(--fg-muted)' : 'var(--fg-faint)',
+        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+      }}>
+      {children}
+      <span style={{ fontSize: 8, opacity: sort.key === k ? 1 : 0 }}>{sort.dir === 'desc' && sort.key === k ? '▼' : '▲'}</span>
+    </button>
   );
   const stageTone = { New: 'info', Contact: 'moon', Qualified: 'success', Lost: 'danger' };
   const createLead = () => {
@@ -614,9 +670,9 @@ export function Leads({ workspace }) {
       {!wsEmpty && (
       <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          <span /><span>Name</span><span>Type</span><span>Source</span><span>Stage</span><span>Value</span><span>Owner</span><span style={{ textAlign: 'right' }}>Last</span>
+          <span /><SortHead k="name">Name</SortHead><span>Type</span><SortHead k="source">Source</SortHead><SortHead k="stage">Stage</SortHead><SortHead k="value">Value</SortHead><SortHead k="owner">Owner</SortHead><span style={{ textAlign: 'right' }}>Last</span>
         </div>
-        {filtered.length === 0 && (
+        {sortedLeads.length === 0 && (
           <div style={{ padding: '36px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             <Iconed name="search" size={20} style={{ color: 'var(--fg-faint)' }} />
             <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>일치하는 리드가 없습니다.</div>
@@ -630,7 +686,7 @@ export function Leads({ workspace }) {
             </div>
           </div>
         )}
-        {filtered.map((l, i) => (
+        {sortedLeads.map((l, i) => (
           <div key={l.id}
             role="button" tabIndex={0}
             onClick={() => setEditLeadId(l.id)}
@@ -638,7 +694,7 @@ export function Leads({ workspace }) {
             style={{
               display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12,
               padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', cursor: 'pointer',
-              borderBottom: i < filtered.length - 1 ? '1px solid var(--line-soft)' : 'none',
+              borderBottom: i < sortedLeads.length - 1 ? '1px solid var(--line-soft)' : 'none',
             }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -863,7 +919,7 @@ export function Deals({ workspace, onNavigate }) {
                   // Stalled = open (not won/lost) and aged past the follow-up window. Surfaces
                   // in every open column, not just Negotiation, and marks the card with a
                   // danger inset stripe (§5.2 left-accent — never a full fill or a thick border).
-                  const stalled = Number(d.age) > 10 && s.key !== 'won' && s.key !== 'lost';
+                  const stalled = Number(d.age) >= STALLED_DAYS && s.key !== 'won' && s.key !== 'lost';
                   return (
                   <div key={d.id}
                     draggable
