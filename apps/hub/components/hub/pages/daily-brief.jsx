@@ -557,7 +557,7 @@ function StatusLine({ state }) {
   const sourceCount = state.sources.length;
   const label = state.syncState === 'mixed' ? `${liveCount}/${sourceCount || 6} live` : sourceLabel(state.syncState);
   const detail = state.syncState === 'preview'
-    ? 'preview · Supabase 연결 후 live 전환'
+    ? 'Supabase 연결 후 live 전환'
     : state.syncState === 'mixed'
     ? '일부 원장은 live, 일부는 preview'
     : state.syncState === 'syncing'
