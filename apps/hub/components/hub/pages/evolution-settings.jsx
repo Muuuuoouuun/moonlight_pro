@@ -246,19 +246,19 @@ export function Evolution({ onNavigate }) {
       <div className="hub-grid--three" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>System version</div>
-          <div className="mono" style={{ fontSize: 22, fontWeight: 500, marginTop: 8, color: 'var(--fg-faint)' }}>—</div>
+          <div className="stat" style={{ fontSize: 22, fontWeight: 500, marginTop: 8, color: 'var(--fg-faint)' }}>—</div>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>버전 원장 준비 중</div>
         </Card>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Open issues</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 8 }}>
-            <div className="mono" style={{ fontSize: 22, fontWeight: 500, color: 'var(--fg-faint)' }}>—</div>
+            <div className="stat" style={{ fontSize: 22, fontWeight: 500, color: 'var(--fg-faint)' }}>—</div>
             <Badge tone="neutral" size="xs">error_logs 미연결</Badge>
           </div>
         </Card>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Uptime · 30d</div>
-          <div className="mono" style={{ fontSize: 22, fontWeight: 500, marginTop: 8, color: 'var(--fg-faint)' }}>—</div>
+          <div className="stat" style={{ fontSize: 22, fontWeight: 500, marginTop: 8, color: 'var(--fg-faint)' }}>—</div>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>모니터링 연동 전</div>
         </Card>
       </div>

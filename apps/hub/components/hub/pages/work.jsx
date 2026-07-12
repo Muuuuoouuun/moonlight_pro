@@ -570,13 +570,13 @@ export function Rhythm() {
       <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>This week</div>
-          <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="mono">{completed} / {total}</div>
+          <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="stat">{completed} / {total}</div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>rituals completed</div>
           <div style={{ marginTop: 14 }}><Progress value={percent} /></div>
         </Card>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Longest streak</div>
-          <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="mono">{longestStreak} <span style={{ fontSize: 14, color: 'var(--fg-faint)' }}>days</span></div>
+          <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="stat">{longestStreak} <span style={{ fontSize: 14, color: 'var(--fg-faint)' }}>days</span></div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{longestStreakRitual || '루틴 체크인 기록 없음'}</div>
         </Card>
       </div>

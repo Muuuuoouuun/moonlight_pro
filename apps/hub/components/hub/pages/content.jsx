@@ -1076,7 +1076,7 @@ export function Queue({ workspace }) {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>이번 주 발행</span>
-            <span className="mono" style={{ fontSize: 20, fontWeight: 600, color: 'var(--fg)', letterSpacing: '-0.02em' }}>
+            <span className="stat" style={{ fontSize: 20, fontWeight: 600, color: 'var(--fg)' }}>
               {cadence.published}<span style={{ color: 'var(--fg-faint)', fontWeight: 400 }}>/{cadence.goal}</span>
             </span>
             <Badge tone={cadence.behind ? 'warning' : 'success'} size="xs">
@@ -1407,7 +1407,7 @@ function CampaignMetric({ item }) {
         <Dot tone={item.tone || 'moon'} size={6} />
         <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{item.label}</span>
       </div>
-      <div className="mono" style={{ fontSize: 18, color: 'var(--fg)', lineHeight: 1 }}>{item.value}</div>
+      <div className="stat" style={{ fontSize: 18, color: 'var(--fg)', lineHeight: 1 }}>{item.value}</div>
       <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', marginTop: 5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.detail}</div>
     </div>
   );
