@@ -361,6 +361,35 @@ export async function updateSupabaseRecordReturning(table, filters = [], record 
   }
 }
 
+// DELETE a row set matching `filters` (e.g. [["id", eqFilter(id)], ["workspace_id", …]]).
+// Mirrors updateSupabaseRecord's envelope: { persisted, reason, detail }. Uses
+// Prefer: return=minimal — we only need to know the request succeeded. A filter that
+// matches no rows still returns persisted:true (PostgREST 204), matching DELETE semantics.
+export async function deleteSupabaseRecord(table, filters = []) {
+  const config = resolveSupabaseConfig();
+
+  if (!config) {
+    return { persisted: false, reason: "missing-config" };
+  }
+
+  try {
+    const response = await fetch(`${config.url}/rest/v1/${table}${buildFilterQuery(filters)}`, {
+      method: "DELETE",
+      headers: makeSupabaseHeaders(config.apiKey, { prefer: "return=minimal" }),
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      return { persisted: false, reason: `http-${response.status}`, detail };
+    }
+
+    return { persisted: true, reason: "ok" };
+  } catch (error) {
+    return { persisted: false, reason: "request-failed", detail: String(error) };
+  }
+}
+
 export function buildProjectUpdateRecord(payload) {
   const workspaceId = normalizeString(payload.workspaceId) || resolveDefaultWorkspaceId();
 
