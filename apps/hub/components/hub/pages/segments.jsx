@@ -185,10 +185,8 @@ export function Segments({ workspace, onNavigate }) {
                 {isOpen && (
                   <div style={{ marginTop: 10, borderTop: '1px solid var(--line-soft)', paddingTop: 6 }}>
                     {seg.members.map((l, i) => (
-                      <div key={l.id || i}
+                      <div key={l.id || i} className="hub-row"
                         onClick={(e) => { e.stopPropagation(); openLead(l); }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px', margin: '0 -8px',
                           borderRadius: 'var(--r-sm)', cursor: l.id != null ? 'pointer' : 'default',

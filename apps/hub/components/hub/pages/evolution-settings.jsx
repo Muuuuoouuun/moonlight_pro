@@ -334,15 +334,12 @@ export function Evolution({ onNavigate }) {
         </SectionTitle>
         <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--gap)' }}>
           {QUICK_COMMANDS.map(c => (
-            <button key={c.slash} onClick={() => onNavigate?.(c.dest)} style={{
+            <button key={c.slash} className="hub-card-link" onClick={() => onNavigate?.(c.dest)} style={{
               textAlign: 'left', padding: 'var(--card-pad)',
-              background: 'var(--surface)', border: '1px solid var(--line-soft)',
+              background: 'var(--surface)',
               borderRadius: 'var(--r-lg)', boxShadow: 'var(--shadow-card)',
               display: 'flex', flexDirection: 'column', gap: 8, cursor: 'pointer',
-              transition: 'border-color .15s ease, transform .1s ease',
             }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--line)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--line-soft)'; }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Dot tone={c.tone} />

@@ -171,10 +171,15 @@
 
 /* Interactive row hover — use this class instead of onMouseEnter/Leave JS handlers.
    Themable, respects reduced-motion, and can't drift per call site. */
-.hub-app .hub-row { transition: background 120ms ease; }
+.hub-app .hub-row { background: transparent; transition: background 120ms ease; }
 .hub-app .hub-row:hover { background: var(--surface-2); }
+/* Clickable-card sibling of .hub-row — border emphasis instead of bg fill.
+   The class owns the border: an inline border would out-rank the :hover color. */
+.hub-app .hub-card-link { border: 1px solid var(--line-soft); transition: border-color 120ms ease; }
+.hub-app .hub-card-link:hover { border-color: var(--line); }
 @media (prefers-reduced-motion: reduce) {
-  .hub-app .hub-row { transition: none; }
+  .hub-app .hub-row,
+  .hub-app .hub-card-link { transition: none; }
 }
 
 .hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; border-radius: 2px; }

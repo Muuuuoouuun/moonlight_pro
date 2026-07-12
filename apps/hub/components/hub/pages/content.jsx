@@ -1159,7 +1159,7 @@ export function Queue({ workspace }) {
           />
         )}
         {visibleQueue.map((c, i) => (
-          <div key={c.id} style={{
+          <div key={c.id} className="hub-row" style={{
             display: 'grid', gridTemplateColumns: '1fr 110px 110px 100px 120px 130px 80px',
             padding: '12px 16px', alignItems: 'center',
             borderBottom: i < visibleQueue.length - 1 ? '1px solid var(--line-soft)' : 'none',
@@ -1174,8 +1174,6 @@ export function Queue({ workspace }) {
                 openStudio(c.id);
               }
             }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
               <Iconed name={c.kind === 'Newsletter' ? 'email' : c.kind === 'Blog' ? 'content' : c.kind === 'Reel' ? 'play' : 'send'} size={13} style={{ color: 'var(--fg-faint)' }} />
