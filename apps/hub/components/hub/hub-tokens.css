@@ -184,6 +184,16 @@
   .hub-app .hub-card-link { transition: none; }
 }
 
+/* Checkbox keeps its 14px face but taps land on a ≥32px invisible halo on touch —
+   the pseudo-element is absolutely positioned so row layout never shifts (§11). */
+@media (pointer: coarse) {
+  .hub-app .hub-checkbox::before {
+    content: '';
+    position: absolute;
+    inset: -9px;
+  }
+}
+
 .hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; border-radius: 2px; }
 /* Text-field wrappers that suppress the inner input's own ring surface the focus on the wrapper (§11) */
 .hub-app .hub-field:focus-within { border-color: var(--moon-300); }

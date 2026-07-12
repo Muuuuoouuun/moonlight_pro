@@ -283,7 +283,9 @@ export function Checkbox({ checked, onChange, size = 14, label }) {
       role="checkbox"
       aria-checked={Boolean(checked)}
       aria-label={label || '선택'}
+      className="hub-checkbox"
       onClick={(e) => { e.stopPropagation(); onChange?.(!checked); }} style={{
+      position: 'relative',
       width: size, height: size, borderRadius: 4,
       border: `1px solid ${checked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
       background: checked ? 'var(--moon-300)' : 'transparent',
