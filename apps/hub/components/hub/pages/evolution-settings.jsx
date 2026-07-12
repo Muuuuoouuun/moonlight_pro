@@ -443,7 +443,7 @@ function KeyRow({ item, last, kind }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{
           width: 26, height: 26, borderRadius: 6,
-          background: kind === 'key' ? 'oklch(0.40 0.008 250 / 0.25)' : kind === 'outgoing' ? 'oklch(0.30 0.05 155 / 0.25)' : 'var(--surface-3)',
+          background: kind === 'key' ? 'var(--elevated)' : kind === 'outgoing' ? 'var(--success-bg)' : 'var(--surface-3)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: kind === 'key' ? 'var(--moon-300)' : kind === 'outgoing' ? 'var(--success)' : 'var(--fg-muted)',
         }}>

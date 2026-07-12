@@ -400,7 +400,7 @@ export function Runs() {
           {liveLabel}
         </span>
       </div>
-      <Card pad={false} className="hub-table-card" style={{ background: 'oklch(0.17 0.005 250)' }}>
+      <Card pad={false} className="hub-table-card" style={{ background: 'var(--bg)' }}>
         <div className="mono" style={{ padding: '12px 14px', fontSize: 12 }}>
           {rows.length === 0 && (
             <EmptyState
@@ -811,7 +811,7 @@ export function Flows({ onNavigate }) {
             <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 6 }}>Sample output</div>
             <pre className="mono" style={{
               margin: 0, padding: 10,
-              background: 'oklch(0.17 0.005 250)', color: 'oklch(0.82 0.01 250)',
+              background: 'var(--bg)', color: 'var(--moon-200)',
               border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
               fontSize: 10.5, lineHeight: 1.55, overflow: 'auto', maxHeight: 180,
             }}>{`{\n  "node": "${selectedNode.id}",\n  "ok": true,\n  "ms": 140,\n  "output": {\n    "kind": "${selectedNode.kind}",\n    "summary": "${selectedNode.title}"\n  }\n}`}</pre>

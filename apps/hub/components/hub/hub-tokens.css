@@ -32,6 +32,7 @@
   --danger-bg:     oklch(0.32 0.08 25 / 0.25);
   --info:          oklch(0.72 0.08 230);
   --info-bg:       oklch(0.30 0.04 230 / 0.25);
+  --moon-bg:       oklch(0.35 0.008 250 / 0.9);
 
   --personal:      oklch(0.76 0.05 200);
   --personal-bg:   oklch(0.30 0.03 200 / 0.3);
@@ -106,6 +107,7 @@
   --danger-bg:     oklch(0.95 0.05 25 / 0.6);
   --info:          oklch(0.48 0.14 230);
   --info-bg:       oklch(0.94 0.05 230 / 0.6);
+  --moon-bg:       oklch(0.93 0.005 250 / 0.9);
 
   --personal:      oklch(0.42 0.1 200);
   --personal-bg:   oklch(0.94 0.04 200 / 0.7);
