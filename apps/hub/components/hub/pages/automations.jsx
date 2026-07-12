@@ -521,11 +521,13 @@ const FLOW_GRAPHS = {
   },
 };
 
+// Node-kind vocabulary is sanctioned (§8) but rendered as a muted accent dot on a dark
+// header — status color lives on dots, never as a saturated full fill (§5.2).
 const NODE_KIND = {
-  trigger: { bg: 'oklch(0.62 0.17 30)', label: 'Trigger' },
-  logic: { bg: 'oklch(0.58 0.12 250)', label: 'Logic' },
-  ai: { bg: 'oklch(0.55 0.14 290)', label: 'AI' },
-  action: { bg: 'oklch(0.58 0.14 200)', label: 'Action' },
+  trigger: { accent: 'var(--warning)', label: 'Trigger' },
+  logic:   { accent: 'var(--info)',    label: 'Logic' },
+  ai:      { accent: 'var(--company)', label: 'AI' },
+  action:  { accent: 'var(--success)', label: 'Action' },
 };
 
 const APP_GLYPH = {
@@ -723,20 +725,22 @@ export function Flows({ onNavigate }) {
                   position: 'absolute', left: p.x, top: p.y,
                   width: NODE_W, height: NODE_H, padding: 0,
                   background: 'var(--surface)',
-                  border: isSel ? '2px solid var(--moon-300)' : '1px solid var(--line)',
+                  border: isSel ? '1px solid var(--moon-300)' : '1px solid var(--line)',
                   borderRadius: 'var(--r)',
-                  boxShadow: isSel ? '0 8px 20px -8px oklch(0.78 0.04 280 / 0.35)' : '0 2px 6px -2px oklch(0 0 0 / 0.3)',
+                  boxShadow: isSel ? '0 0 0 1px var(--moon-300), 0 8px 20px -8px oklch(0.78 0.008 250 / 0.4)' : '0 2px 6px -2px oklch(0 0 0 / 0.3)',
                   cursor: 'pointer', overflow: 'hidden',
                   display: 'flex', flexDirection: 'column', textAlign: 'left',
                 }}>
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: 6,
                     padding: '4px 8px',
-                    background: kind.bg, color: '#fff',
+                    background: 'var(--surface-3)', color: 'var(--fg-muted)',
+                    borderBottom: '1px solid var(--line-soft)',
                     fontSize: 9.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase',
                   }}>
+                    <span style={{ width: 6, height: 6, borderRadius: 999, background: kind.accent, boxShadow: `0 0 5px ${kind.accent}`, flexShrink: 0 }} />
                     <span style={{ fontSize: 11, lineHeight: 1 }}>{APP_GLYPH[n.app] || '◇'}</span>
-                    <span>{kind.label}</span>
+                    <span style={{ color: 'var(--fg)' }}>{kind.label}</span>
                     <div style={{ flex: 1 }} />
                     <span style={{ opacity: 0.7, fontFamily: 'var(--font-mono)', textTransform: 'none', letterSpacing: 0 }}>{n.id}</span>
                   </div>
@@ -745,9 +749,9 @@ export function Flows({ onNavigate }) {
                     <div className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.sub}</div>
                   </div>
                   {n.kind !== 'trigger' && (
-                    <div style={{ position: 'absolute', left: -5, top: '50%', transform: 'translateY(-50%)', width: 9, height: 9, borderRadius: 999, background: 'var(--surface-3)', border: '1.5px solid var(--line-strong)' }} />
+                    <div style={{ position: 'absolute', left: -5, top: '50%', transform: 'translateY(-50%)', width: 9, height: 9, borderRadius: 999, background: 'var(--surface-3)', border: '1px solid var(--line-strong)' }} />
                   )}
-                  <div style={{ position: 'absolute', right: -5, top: '50%', transform: 'translateY(-50%)', width: 9, height: 9, borderRadius: 999, background: 'var(--moon-400)', border: '1.5px solid var(--bg)' }} />
+                  <div style={{ position: 'absolute', right: -5, top: '50%', transform: 'translateY(-50%)', width: 9, height: 9, borderRadius: 999, background: 'var(--moon-400)', border: '1px solid var(--bg)' }} />
                 </button>
               );
             })}
