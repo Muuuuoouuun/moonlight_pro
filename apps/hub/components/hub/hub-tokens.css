@@ -486,6 +486,17 @@
     flex: 1 1 auto;
   }
 
+  /* Quick-action pairs (Daily Brief 'Ask Council' + 'Start 15m focus') share one row
+     instead of stacking full-width above the command card — signal stays high (§3). */
+  .hub-page-actions--row {
+    flex-wrap: nowrap !important;
+  }
+
+  .hub-page-actions--row > * {
+    flex: 1 1 0 !important;
+    min-width: 0;
+  }
+
   .hub-grid--metrics,
   .hub-grid--four {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
