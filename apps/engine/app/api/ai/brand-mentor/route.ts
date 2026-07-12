@@ -52,6 +52,15 @@ const MODES = {
     frames:
       "Goldratt 제약 이론(병목이 처리량을 결정), Reinertsen 큐 길이·배치 축소, Kim 흐름의 원칙(작은 배치·빠른 피드백), Lean 핸드오프 낭비 제거.",
   },
+  // Content Flywheel 초안 모드 — 비평(prose)이 아니라 발행 가능한 완성 초안을 {title, body}
+  // JSON으로 반환한다. 발행은 하지 않는다(work_orders 승인 큐로만). context.target_idea를 씀.
+  "content-draft": {
+    lens: "Writer",
+    question:
+      "context.target_idea를 브랜드 보이스로 완성된 초안(제목 + 본문)으로 써라. 먼저 초안을 쓰고, Writer 렌즈(훅·구조·구체성·CTA)로 스스로 1회 점검·수정한 최종본만 반환하라.",
+    frames:
+      "Ogilvy 카피(헤드라인이 80%, 구체적 사실), Miller StoryBrand SB7(독자=영웅, 브랜드=가이드), Sutherland 관점 전환, 한국어 에세이 호흡(짧은 문장·구체 예시).",
+  },
 } as const;
 
 type Mode = keyof typeof MODES;
@@ -127,7 +136,60 @@ function digestBrand(context: any): string {
   return lines.length ? ["브랜드 컨텍스트 요약:", ...lines].join("\n") : "";
 }
 
+// content-draft: strict {title, body} JSON contract (a publishable draft, not a critique).
+// responseMimeType enforces JSON at the API layer; this states the shape + the guardrails.
+function buildContentDraftPrompt(context: any) {
+  const config = MODES["content-draft"];
+  const idea = context?.target_idea || context?.focus?.entity || null;
+  const lines = [
+    config.question,
+    "",
+    `자문 렌즈: ${config.lens}`,
+    `참고 프레임: ${config.frames}`,
+    "",
+    idea
+      ? `초안으로 쓸 아이디어: ${idea.title ?? idea.name ?? "?"}${idea.summary ? ` — ${idea.summary}` : ""}`
+      : "초안으로 쓸 아이디어: context.content.idea_queue_top 상위 1건을 골라 써라.",
+    "",
+    "출력은 아래 JSON 객체 하나만. 설명·머리말·코드펜스 없이 JSON만:",
+    '{"title": "제목 (한 줄, 40자 내외)", "body": "본문 (한국어, 문단 3~6개, 브랜드 보이스, 하드셀·과장 금지, 구체 예시 포함, 마지막에 독자 다음 행동 CTA)"}',
+    "규칙: SYSTEM_INSTRUCTION의 브랜드 가드레일/금지어(voice·rules·forbidden)를 지킨다. context.missing[] 슬라이스의 사실은 추정하지 않는다. 발행하지 말고 승인 큐에 올릴 초안만 만든다.",
+  ];
+
+  const digest = digestBrand(context);
+  if (digest) lines.push("", digest);
+
+  lines.push("", "Brand ledger snapshot:", JSON.stringify(context ?? {}, null, 2));
+  return lines.join("\n");
+}
+
+// Parse the content-draft JSON contract; tolerant of code fences. Null on any shape violation.
+function parseContentDraft(text: string): { title: string; body: string } | null {
+  if (!text) return null;
+  let raw = text.trim();
+  if (raw.startsWith("```")) {
+    raw = raw.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  }
+  try {
+    const obj = JSON.parse(raw);
+    if (
+      obj &&
+      typeof obj.title === "string" &&
+      typeof obj.body === "string" &&
+      obj.title.trim() &&
+      obj.body.trim()
+    ) {
+      return { title: obj.title.trim(), body: obj.body.trim() };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 function buildPrompt(mode: Mode, context: unknown, draft?: string | null) {
+  if (mode === "content-draft") return buildContentDraftPrompt(context);
+
   const config = MODES[mode];
   const lines = [
     config.question,
@@ -190,13 +252,29 @@ export async function POST(req: Request) {
   const context = payload.context ?? {};
   const workspaceId = resolveDefaultWorkspaceId();
 
+  const isDraftMode = mode === "content-draft";
+
   const startedAt = new Date().toISOString();
   const result = await generateGeminiText({
     systemInstruction: SYSTEM_INSTRUCTION,
     prompt: buildPrompt(mode, context, draft),
-    maxOutputTokens: typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 2048,
+    maxOutputTokens:
+      typeof payload.maxOutputTokens === "number"
+        ? payload.maxOutputTokens
+        : isDraftMode
+          ? 8192 // generous output room; thinking is separately bounded below
+          : 2048,
+    // Draft mode: JSON contract + bounded thinking so a runaway think can't truncate the JSON.
+    ...(isDraftMode ? { responseMimeType: "application/json", thinkingBudget: 512 } : {}),
   });
   const finishedAt = new Date().toISOString();
+
+  // content-draft returns a strict {title, body} JSON contract; parse + validate so the cron
+  // only queues a real draft (invalid JSON → 502 → the cron retries / skips this run).
+  const draftFields = isDraftMode && result.ok ? parseContentDraft(result.text) : null;
+  const draftOk = !isDraftMode || Boolean(draftFields);
+  const effectiveOk = result.ok && draftOk;
+  const failReason = !result.ok ? result.reason : draftOk ? "ok" : "invalid-json-draft";
 
   const connection = await upsertIntegrationConnection({
     provider: "council",
@@ -211,7 +289,7 @@ export async function POST(req: Request) {
   const syncRun = await insertIntegrationSyncRun({
     provider: "council",
     connectionId: connection.connection?.id || null,
-    status: result.ok ? "success" : "failure",
+    status: effectiveOk ? "success" : "failure",
     payload: {
       startedAt,
       finishedAt,
@@ -220,38 +298,47 @@ export async function POST(req: Request) {
       model: result.model,
       usageMetadata: result.ok ? result.usageMetadata : null,
     },
-    errorMessage: result.ok ? null : result.reason,
+    errorMessage: effectiveOk ? null : failReason,
   });
 
   let councilUpdate = null;
 
-  if (result.ok && workspaceId) {
+  if (effectiveOk && workspaceId) {
     councilUpdate = await insertSupabaseRecord("project_updates", {
       workspace_id: workspaceId,
       project_id: null,
       source: "council",
-      event_type: "ai.brand_mentor",
+      event_type: isDraftMode ? "ai.content_draft" : "ai.brand_mentor",
       status: "reported",
-      title: `Council ${mode}${ref ? ` · ${ref}` : ""}`,
-      summary: result.text.slice(0, 500),
+      title: isDraftMode
+        ? `Council content-draft${ref ? ` · ${ref}` : ""}`
+        : `Council ${mode}${ref ? ` · ${ref}` : ""}`,
+      summary: (isDraftMode && draftFields ? draftFields.body : result.text).slice(0, 500),
       progress: null,
       milestone: null,
-      next_action: "Council 자문의 다음 액션을 브랜드 프로젝트/콘텐츠에 반영하세요.",
-      payload: { mode, ref, model: result.model, text: result.text },
+      next_action: isDraftMode
+        ? "초안을 승인 큐에서 검토·승인 후 발행하세요 (자동 발행 아님)."
+        : "Council 자문의 다음 액션을 브랜드 프로젝트/콘텐츠에 반영하세요.",
+      payload: isDraftMode
+        ? { mode, ref, model: result.model, title: draftFields?.title, body: draftFields?.body }
+        : { mode, ref, model: result.model, text: result.text },
       happened_at: finishedAt,
     });
   }
 
   return NextResponse.json(
     {
-      status: result.ok ? "generated" : "error",
+      status: effectiveOk ? "generated" : "error",
       mode,
       ref,
       model: result.model,
+      ...(isDraftMode
+        ? { title: draftFields?.title ?? null, body: draftFields?.body ?? null }
+        : {}),
       text: result.text,
-      reason: result.reason,
+      reason: failReason,
       persistence: { connection, syncRun, councilUpdate },
     },
-    { status: result.ok ? 200 : 502 },
+    { status: effectiveOk ? 200 : 502 },
   );
 }
