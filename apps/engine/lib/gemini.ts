@@ -2,6 +2,16 @@ interface GeminiGenerateInput {
   prompt: string;
   systemInstruction?: string;
   maxOutputTokens?: number;
+  // Structured-output controls. When responseMimeType is "application/json" the model
+  // returns JSON as a text part (still read via extractGeminiText + JSON.parse). Precedent:
+  // apps/hub/lib/google-vision.js. Omitted → identical body to before (no regression).
+  responseMimeType?: string;
+  responseSchema?: Record<string, unknown>;
+  // Bound the thinking-model's reasoning tokens. On gemini-3-flash-preview thinking tokens
+  // share the output budget, so an unbounded think can truncate a short JSON draft mid-object.
+  // Capping thinking (e.g. 512) leaves room for the answer. Pass 0 to disable where supported.
+  // typeof-number guard means 0 is honored (not treated as "unset").
+  thinkingBudget?: number;
 }
 
 function resolveGeminiApiKey() {
@@ -63,6 +73,11 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
     ],
     generationConfig: {
       maxOutputTokens: input.maxOutputTokens || 768,
+      ...(input.responseMimeType ? { responseMimeType: input.responseMimeType } : {}),
+      ...(input.responseSchema ? { responseSchema: input.responseSchema } : {}),
+      ...(typeof input.thinkingBudget === "number"
+        ? { thinkingConfig: { thinkingBudget: input.thinkingBudget } }
+        : {}),
     },
   };
 

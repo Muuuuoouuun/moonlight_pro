@@ -261,6 +261,7 @@ const WO_KIND_TONE = {
   outcome: 'moon', lead: 'moon', dm: 'moon',
   idea: 'info', engagement: 'info',
   review: 'warning', note: 'neutral',
+  'followup-draft': 'moon', 'content-draft': 'info',
 };
 
 // The 1-click approval cockpit — proposed work orders (persona/inbox/guru) decided in place.
@@ -341,6 +342,12 @@ function ApprovalQueueCard({ onNavigate }) {
                   <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {o.title}
                   </div>
+                  {/* AI-drafted message (followup/content) — the operator reads this BEFORE approving. No auto-send. */}
+                  {(o.kind === 'followup-draft' || o.kind === 'content-draft') && o.body?.body && (
+                    <div style={{ marginTop: 5, fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+                      {o.body.body}
+                    </div>
+                  )}
                 </div>
                 {!approved[o.id] && (
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>

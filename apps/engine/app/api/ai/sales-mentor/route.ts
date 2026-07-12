@@ -38,9 +38,20 @@ const MODES = {
     frames:
       "Girard 팔로업·고객 파일, Lemkin churn·expansion, Hill 목표 재정렬.",
   },
+  // Autopilot 초안 모드 — 조언(prose)이 아니라 바로 보낼 수 있는 팔로업 메시지를
+  // {subject, body} JSON으로 반환한다. 발송은 하지 않는다(work_orders 승인 큐로만).
+  "followup-draft": {
+    question:
+      "포커스 딜에 보낼 다음 팔로업 메시지를 운영자 보이스로 직접 써라. GAP/MEDDIC 컨텍스트와 추정된 구매자 의사결정 스타일에 맞춰 톤을 번역하고, 정체를 푸는 단 하나의 다음 걸음을 CTA로 제시하라.",
+    frames:
+      "Keenan GAP 4층(표면→프로세스→매출 영향→개인 임팩트), Voss 보정된 질문, Cardone 후속 끈기(80%는 5번째 이후), 의사결정 7스타일(논리·관계·권위·직관·안정·체면·집단합의), 한국어 메시지 호흡(짧은 문장·구체).",
+  },
 } as const;
 
 type Mode = keyof typeof MODES;
+
+const MAX_FOLLOWUP_SUBJECT_CHARS = 200;
+const MAX_FOLLOWUP_BODY_CHARS = 4000;
 
 const SYSTEM_INSTRUCTION = [
   "당신은 Moonlight 운영자(파운더)의 영업 멘토입니다.",
@@ -103,7 +114,58 @@ function digest360(context: any): string {
   return lines.length ? ["360 컨텍스트 요약:", ...lines].join("\n") : "";
 }
 
+// followup-draft: strict {subject, body} JSON contract (no prose scaffold). responseMimeType
+// enforces JSON at the API layer; this just tells the model the shape + the guardrails to honor.
+function buildFollowupDraftPrompt(context: unknown) {
+  const config = MODES["followup-draft"];
+  const lines = [
+    config.question,
+    "",
+    `참고 프레임: ${config.frames}`,
+    "",
+    "출력은 아래 JSON 객체 하나만. 설명·머리말·코드펜스 없이 JSON만:",
+    '{"subject": "제목 한 줄 (25자 내외)", "body": "본문 (한국어 3~6문장, 운영자 보이스, 하드셀·과장 금지, 마지막 문장은 정체를 푸는 다음 한 걸음 CTA)"}',
+    "규칙: SYSTEM_INSTRUCTION의 브랜드 가드레일/금지어를 지킨다. context.focus의 딜 상태·구매자 스타일·최근 접촉을 근거로 톤을 맞추고, context.missing[] 슬라이스의 사실은 추정하지 않는다.",
+  ];
+
+  const digest = digest360(context);
+  if (digest) lines.push("", digest);
+
+  lines.push("", "Sales ledger snapshot:", JSON.stringify(context ?? {}, null, 2));
+  return lines.join("\n");
+}
+
+// Parse the followup-draft JSON contract. Tolerant of accidental code fences; returns null
+// on any shape violation so the caller can degrade to an error (502) and the cron skips the deal.
+function parseDraft(text: string): { subject: string; body: string } | null {
+  if (!text) return null;
+  let raw = text.trim();
+  if (raw.startsWith("```")) {
+    raw = raw.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  }
+  try {
+    const obj = JSON.parse(raw);
+    if (
+      obj &&
+      typeof obj.subject === "string" &&
+      typeof obj.body === "string" &&
+      obj.subject.trim() &&
+      obj.body.trim()
+    ) {
+      return {
+        subject: obj.subject.trim().slice(0, MAX_FOLLOWUP_SUBJECT_CHARS),
+        body: obj.body.trim().slice(0, MAX_FOLLOWUP_BODY_CHARS),
+      };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 function buildPrompt(mode: Mode, context: unknown, draft?: string | null) {
+  if (mode === "followup-draft") return buildFollowupDraftPrompt(context);
+
   const config = MODES[mode];
   const lines = [
     config.question,
@@ -164,13 +226,29 @@ export async function POST(req: Request) {
   const context = payload.context ?? {};
   const workspaceId = resolveDefaultWorkspaceId();
 
+  const isDraftMode = mode === "followup-draft";
+
   const startedAt = new Date().toISOString();
   const result = await generateGeminiText({
     systemInstruction: SYSTEM_INSTRUCTION,
     prompt: buildPrompt(mode, context, draft),
-    maxOutputTokens: typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 768,
+    maxOutputTokens:
+      typeof payload.maxOutputTokens === "number"
+        ? payload.maxOutputTokens
+        : isDraftMode
+          ? 8192 // generous output room; thinking is separately bounded below
+          : 768,
+    // Draft mode: JSON contract + bounded thinking so a runaway think can't truncate the JSON.
+    ...(isDraftMode ? { responseMimeType: "application/json", thinkingBudget: 512 } : {}),
   });
   const finishedAt = new Date().toISOString();
+
+  // followup-draft returns a strict {subject, body} JSON contract; parse + validate so the
+  // cron only queues a real draft (invalid JSON → 502 → the deal is skipped this run).
+  const draftFields = isDraftMode && result.ok ? parseDraft(result.text) : null;
+  const draftOk = !isDraftMode || Boolean(draftFields);
+  const effectiveOk = result.ok && draftOk;
+  const failReason = !result.ok ? result.reason : draftOk ? "ok" : "invalid-json-draft";
 
   const connection = await upsertIntegrationConnection({
     provider: "guru",
@@ -185,7 +263,7 @@ export async function POST(req: Request) {
   const syncRun = await insertIntegrationSyncRun({
     provider: "guru",
     connectionId: connection.connection?.id || null,
-    status: result.ok ? "success" : "failure",
+    status: effectiveOk ? "success" : "failure",
     payload: {
       startedAt,
       finishedAt,
@@ -194,38 +272,47 @@ export async function POST(req: Request) {
       model: result.model,
       usageMetadata: result.ok ? result.usageMetadata : null,
     },
-    errorMessage: result.ok ? null : result.reason,
+    errorMessage: effectiveOk ? null : failReason,
   });
 
   let mentorUpdate = null;
 
-  if (result.ok && workspaceId) {
+  if (effectiveOk && workspaceId) {
     mentorUpdate = await insertSupabaseRecord("project_updates", {
       workspace_id: workspaceId,
       project_id: null,
       source: "guru",
-      event_type: "ai.sales_mentor",
+      event_type: isDraftMode ? "ai.followup_draft" : "ai.sales_mentor",
       status: "reported",
-      title: `Guru ${mode}${ref ? ` · ${ref}` : ""}`,
-      summary: result.text.slice(0, 500),
+      title: isDraftMode
+        ? `Guru followup-draft${ref ? ` · ${ref}` : ""}`
+        : `Guru ${mode}${ref ? ` · ${ref}` : ""}`,
+      summary: (isDraftMode && draftFields ? draftFields.body : result.text).slice(0, 500),
       progress: null,
       milestone: null,
-      next_action: "Guru 코칭의 다음 액션을 deal/account에 반영하세요.",
-      payload: { mode, ref, model: result.model, text: result.text },
+      next_action: isDraftMode
+        ? "초안을 승인 큐에서 검토·승인 후 발송하세요 (자동 발송 아님)."
+        : "Guru 코칭의 다음 액션을 deal/account에 반영하세요.",
+      payload: isDraftMode
+        ? { mode, ref, model: result.model, subject: draftFields?.subject, body: draftFields?.body }
+        : { mode, ref, model: result.model, text: result.text },
       happened_at: finishedAt,
     });
   }
 
   return NextResponse.json(
     {
-      status: result.ok ? "generated" : "error",
+      status: effectiveOk ? "generated" : "error",
       mode,
       ref,
       model: result.model,
+      ...(isDraftMode
+        ? { subject: draftFields?.subject ?? null, body: draftFields?.body ?? null }
+        : {}),
       text: result.text,
-      reason: result.reason,
+      reason: failReason,
       persistence: { connection, syncRun, mentorUpdate },
     },
-    { status: result.ok ? 200 : 502 },
+    { status: effectiveOk ? 200 : 502 },
   );
 }

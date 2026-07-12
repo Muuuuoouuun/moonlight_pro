@@ -541,7 +541,7 @@ export function AgentsOrders({ onNavigate }) {
 
   // Live rows from work_orders, else the static sample (demo) so the page is never empty.
   const rows = live && Array.isArray(orders)
-    ? orders.map((o) => ({ id: o.id, at: shortWhen(o.proposedAt), to: o.persona, what: o.title, status: o.status, kind: o.kind, live: true }))
+    ? orders.map((o) => ({ id: o.id, at: shortWhen(o.proposedAt), to: o.persona, what: o.title, status: o.status, kind: o.kind, body: o.body, live: true }))
     : (orders === null ? [] : ORDERS.map((o) => ({ ...o, live: false })));
 
   return (
@@ -599,6 +599,12 @@ export function AgentsOrders({ onNavigate }) {
                 )}
               </div>
             </div>
+            {/* AI-drafted message preview — operator reads it before the 1-click approve. No auto-send. */}
+            {o.live && (o.kind === 'followup-draft' || o.kind === 'content-draft') && o.body?.body && (
+              <div style={{ padding: '0 16px 12px 116px', fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+                {o.body.body}
+              </div>
+            )}
             {o.live && o.status === 'approved' && (o.kind === 'dm' || o.kind === 'lead' ? (
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '0 16px 12px 116px' }}>
                 <span style={{ fontSize: 11, color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>

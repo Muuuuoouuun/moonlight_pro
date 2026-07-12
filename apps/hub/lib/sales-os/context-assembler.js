@@ -74,7 +74,9 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
     missing,
   };
 
-  if (ref && mode === "deal-review") {
+  // deal-review AND followup-draft both need the deal-scoped focus (buyer style, recent
+  // outcomes, next-action hint) — followup-draft writes the message off exactly this slice.
+  if (ref && (mode === "deal-review" || mode === "followup-draft")) {
     const needle = ref.toLowerCase();
     const deal =
       (ledger.deals || []).find(
