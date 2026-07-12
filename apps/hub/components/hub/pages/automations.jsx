@@ -730,7 +730,7 @@ export function Flows({ onNavigate }) {
                     padding: '4px 8px',
                     background: 'var(--surface-3)', color: 'var(--fg-muted)',
                     borderBottom: '1px solid var(--line-soft)',
-                    fontSize: 9.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase',
+                    fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase',
                   }}>
                     <span style={{ width: 6, height: 6, borderRadius: 999, background: kind.accent, boxShadow: `0 0 5px ${kind.accent}`, flexShrink: 0 }} />
                     <span style={{ fontSize: 11, lineHeight: 1 }}>{APP_GLYPH[n.app] || '◇'}</span>

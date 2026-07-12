@@ -928,7 +928,7 @@ export function Deals({ workspace, onNavigate }) {
                     onMouseEnter={e => { if (drag !== d.id) e.currentTarget.style.background = 'var(--surface-3)'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface-2)'; }}>
                     <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 6 }}>
-                      <span className="mono" style={{ fontSize: 9.5, color: 'var(--fg-faint)' }}>{d.id}</span>
+                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{d.id}</span>
                       <div style={{ flex: 1 }} />
                       <IconButton
                         icon="sparkle"

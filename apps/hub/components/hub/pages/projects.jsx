@@ -343,7 +343,7 @@ export function Projects({ workspace }) {
         <span style={{ flex: 1, fontSize: 12.5, fontWeight: active ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</span>
         {changes > 0 && (
           <span style={{
-            fontSize: 9.5, fontWeight: 600, fontFamily: 'var(--font-mono)',
+            fontSize: 10.5, fontWeight: 600, fontFamily: 'var(--font-mono)',
             minWidth: 16, height: 14, padding: '0 5px',
             borderRadius: 999, background: 'var(--danger)', color: '#fff',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -386,7 +386,7 @@ export function Projects({ workspace }) {
             <span style={{ fontSize: 12.5, fontWeight: active ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</span>
             {changes > 0 && (
               <span style={{
-                fontSize: 9.5, fontWeight: 600, fontFamily: 'var(--font-mono)',
+                fontSize: 10.5, fontWeight: 600, fontFamily: 'var(--font-mono)',
                 minWidth: 16, height: 14, padding: '0 5px',
                 borderRadius: 999, background: 'var(--danger)', color: '#fff',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',

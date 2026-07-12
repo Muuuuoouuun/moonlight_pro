@@ -631,7 +631,7 @@ export function Studio({ workspace }) {
               onClick={() => setAutoSave(v => !v)}
               style={{ color: autoSave ? 'var(--moon-200)' : 'var(--fg-faint)' }}
             />
-            {!autoSave && <span className="mono" style={{ fontSize: 9.5, color: 'var(--warning)' }}>OFF</span>}
+            {!autoSave && <span className="mono" style={{ fontSize: 10.5, color: 'var(--warning)' }}>OFF</span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
             <IconButton
@@ -640,7 +640,7 @@ export function Studio({ workspace }) {
               onClick={() => setLocalMirror(v => !v)}
               style={{ color: localMirror ? 'var(--moon-200)' : 'var(--fg-faint)' }}
             />
-            {!localMirror && <span className="mono" style={{ fontSize: 9.5, color: 'var(--warning)' }}>OFF</span>}
+            {!localMirror && <span className="mono" style={{ fontSize: 10.5, color: 'var(--warning)' }}>OFF</span>}
           </div>
           <IconButton
             icon="check"

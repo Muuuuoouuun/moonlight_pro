@@ -377,7 +377,7 @@ export function Calendar() {
                       fontSize: 11, fontWeight: 500, overflow: 'hidden',
                     }}>
                       {e.title}
-                      <div className="mono" style={{ fontSize: 9.5, opacity: 0.7, marginTop: 3 }}>{formatHour(e.start)} – {formatHour(e.end)}</div>
+                      <div className="mono" style={{ fontSize: 10.5, opacity: 0.7, marginTop: 3 }}>{formatHour(e.start)} – {formatHour(e.end)}</div>
                     </div>
                   );
                 })}
