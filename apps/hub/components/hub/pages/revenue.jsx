@@ -284,8 +284,8 @@ export function RevenueOverview({ onNavigate }) {
         ].map((k, i) => (
           <Card key={i}>
             <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>{k.l}</div>
-            <div className="mono" style={{ fontSize: 26, marginTop: 10, fontWeight: 500 }}>{k.v}</div>
-            <div style={{ fontSize: 11, color: k.tone === 'neutral' ? 'var(--fg-faint)' : `var(--${k.tone})`, marginTop: 4 }}>{k.d}</div>
+            <div className="stat" style={{ fontSize: 28, marginTop: 10, fontWeight: 600, lineHeight: 1.1 }}>{k.v}</div>
+            <div style={{ fontSize: 11, color: k.tone === 'neutral' ? 'var(--fg-faint)' : `var(--${k.tone})`, marginTop: 6 }}>{k.d}</div>
           </Card>
         ))}
       </div>
@@ -605,6 +605,7 @@ export function Leads({ workspace }) {
             icon="leads"
             title={`${ws.label} — 해당하는 리드가 없습니다`}
             description={`이 워크스페이스에 매칭되는 리드가 없습니다. 다른 워크스페이스로 태그된 리드는 여기에 표시되지 않습니다. 리드를 등록하거나 원장에 ${ws.label} 태그가 연결되면 나타납니다.`}
+            action={<Button variant="primary" size="sm" icon="plus" onClick={createLead}>{ws.label}에 리드 추가</Button>}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
@@ -621,6 +622,11 @@ export function Leads({ workspace }) {
             <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>일치하는 리드가 없습니다.</div>
             <div style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>
               {term ? <>"<span className="mono">{search}</span>" 검색 결과 0건 · 필터: {filter}</> : <>필터: {filter} · {LEADS.length}건 중 0건</>}
+            </div>
+            <div style={{ marginTop: 6 }}>
+              {term
+                ? <Button variant="ghost" size="xs" onClick={() => setSearch('')}>검색 지우기</Button>
+                : <Button variant="secondary" size="xs" icon="plus" onClick={createLead}>리드 추가</Button>}
             </div>
           </div>
         )}
@@ -723,13 +729,15 @@ export function Deals({ workspace, onNavigate }) {
       saveRevenueRecord('deal', 'update', { id, stage: to });
     }
   };
-  const createDeal = () => {
+  // `stage` lets a column's inline "+ 딜 추가" seed the deal directly in that stage, so
+  // creating where you're looking needs no follow-up drag. Falls back to the first stage.
+  const createDeal = (stage) => {
     const id = `LOCAL-${Date.now().toString().slice(-4)}`;
     setDeals(prev => [{
       id,
       name: '새 딜',
       type: filter === 'personal' || filter === 'company' ? filter : 'company',
-      stage: DEAL_STAGES[0]?.key || 'lead',
+      stage: (typeof stage === 'string' && stage) || DEAL_STAGES[0]?.key || 'lead',
       value: 0,
       owner: 'Me',
       close: '미정',
@@ -813,7 +821,7 @@ export function Deals({ workspace, onNavigate }) {
             }}>{t.l}</button>
           ))}
         </div>
-        <Button variant="primary" size="sm" icon="plus" onClick={createDeal}>Deal <Kbd>N</Kbd></Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>
       </div>
 
       {wsEmpty && (
@@ -851,7 +859,12 @@ export function Deals({ workspace, onNavigate }) {
                 <div className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{fmt(totals[s.key].sum)}</div>
               </div>
               <div className="scroll-y" style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 6, minHeight: 100 }}>
-                {items.map(d => (
+                {items.map(d => {
+                  // Stalled = open (not won/lost) and aged past the follow-up window. Surfaces
+                  // in every open column, not just Negotiation, and marks the card with a
+                  // danger inset stripe (§5.2 left-accent — never a full fill or a thick border).
+                  const stalled = Number(d.age) > 10 && s.key !== 'won' && s.key !== 'lost';
+                  return (
                   <div key={d.id}
                     draggable
                     role="button" tabIndex={0}
@@ -865,7 +878,11 @@ export function Deals({ workspace, onNavigate }) {
                       borderRadius: 'var(--r-sm)',
                       padding: '10px 11px', cursor: 'grab',
                       opacity: drag === d.id ? 0.4 : 1,
-                    }}>
+                      boxShadow: stalled ? 'inset 2px 0 0 var(--danger-line)' : undefined,
+                      transition: 'background 120ms ease, box-shadow 120ms ease',
+                    }}
+                    onMouseEnter={e => { if (drag !== d.id) e.currentTarget.style.background = 'var(--surface-3)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface-2)'; }}>
                     <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 6 }}>
                       <span className="mono" style={{ fontSize: 9.5, color: 'var(--fg-faint)' }}>{d.id}</span>
                       <div style={{ flex: 1 }} />
@@ -885,13 +902,29 @@ export function Deals({ workspace, onNavigate }) {
                       <span className="mono" style={{ fontSize: 12, color: 'var(--moon-200)' }}>{fmt(d.value)}</span>
                       <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{d.close}</span>
                     </div>
-                    {d.age > 10 && s.key === 'neg' && (
+                    {stalled && (
                       <div style={{ marginTop: 6, fontSize: 10, color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                         <Iconed name="clock" size={10} /> {d.age}d stalled
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
+                <button
+                  onClick={() => createDeal(s.key)}
+                  title={`${s.label}에 새 딜 추가`}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                    width: '100%', padding: '7px 8px', marginTop: items.length ? 2 : 0,
+                    fontSize: 11.5, color: 'var(--fg-faint)',
+                    border: '1px dashed var(--line-soft)', borderRadius: 'var(--r-sm)',
+                    background: 'transparent', cursor: 'pointer',
+                    transition: 'color 120ms ease, border-color 120ms ease, background 120ms ease',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--fg-muted)'; e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.background = 'var(--surface-2)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--fg-faint)'; e.currentTarget.style.borderColor = 'var(--line-soft)'; e.currentTarget.style.background = 'transparent'; }}>
+                  <Iconed name="plus" size={11} /> 딜 추가
+                </button>
               </div>
             </div>
           );
@@ -1023,6 +1056,7 @@ export function Cases() {
             icon="cases"
             title="운영 케이스가 없습니다"
             description={syncState === 'live' ? 'Supabase operation_cases 원장에 표시할 케이스가 없습니다.' : '지원/운영 이슈가 생기면 계정과 함께 표시됩니다.'}
+            action={<Button variant="primary" size="sm" icon="plus" onClick={createCase}>케이스 추가</Button>}
           />
         )}
         {cases.map((c, i) => (
@@ -1034,6 +1068,8 @@ export function Cases() {
               display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12,
               padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', cursor: 'pointer',
               borderBottom: i < cases.length - 1 ? '1px solid var(--line-soft)' : 'none',
+              // High-priority open cases carry a danger left-accent (§5.2) — resolved ones stay quiet.
+              boxShadow: c.priority === 'high' && c.status !== 'Resolved' ? 'inset 2px 0 0 var(--danger-line)' : undefined,
             }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}

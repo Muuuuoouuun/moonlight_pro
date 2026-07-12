@@ -9,6 +9,16 @@
   src: url('/fonts/SUIT-Variable.woff2') format('woff2-variations');
 }
 
+/* Data mono — the instrument face for IDs, timestamps, and inline metrics.
+   Latin/digits only (Hangul falls back to SUIT). Bundling this activates the
+   first entry in --font-mono with zero token changes (per DESIGN.md §6). */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('/fonts/JetBrainsMono-Variable.woff2') format('woff2-variations');
+}
+
 @font-face {
   font-family: 'MaruBuri';
   font-weight: 200;

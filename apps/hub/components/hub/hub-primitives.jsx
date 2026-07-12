@@ -88,7 +88,7 @@ export function SectionTitle({ children, right, style, subtitle }) {
 
 export function EmptyState({ icon = 'inbox', title, description, action, style }) {
   return (
-    <div style={{
+    <div data-empty="true" style={{
       minHeight: 180,
       padding: '32px 20px',
       display: 'flex',
@@ -292,7 +292,7 @@ export function Input({ placeholder, icon, value, onChange, style, size = 'sm', 
   const sizes = { sm: { h: 30, fs: 12.5 }, md: { h: 34, fs: 13 } };
   const s = sizes[size];
   return (
-    <div className={className} style={{
+    <div className={`hub-field${className ? ` ${className}` : ''}`} style={{
       display: 'inline-flex', alignItems: 'center', gap: 8,
       height: s.h, padding: '0 10px',
       background: 'var(--surface-2)',
@@ -353,7 +353,7 @@ export function SyncBadge({ state, style }) {
       tone={m.tone}
       size="xs"
       variant="outline"
-      style={{ marginLeft: 8, fontFamily: 'var(--font-mono)', fontFeatureSettings: "'ss02'", letterSpacing: '-0.02em', ...style }}
+      style={{ marginLeft: 8, fontFamily: 'var(--font-mono)', fontFeatureSettings: "'ss02'", letterSpacing: 0, ...style }}
     >
       {m.label}
     </Badge>
@@ -393,7 +393,6 @@ const DRAWER_INPUT_STYLE = {
   color: 'var(--fg)',
   border: '1px solid var(--line)',
   borderRadius: 'var(--r-sm)',
-  outline: 'none',
   width: '100%',
   fontVariantNumeric: 'tabular-nums',
 };

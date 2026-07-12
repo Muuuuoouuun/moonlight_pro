@@ -131,15 +131,15 @@ Defined in `apps/hub/components/hub/hub-tokens.css` and scoped under `.hub-app`.
 | Role     | Family                | Usage                                           |
 | -------- | --------------------- | ----------------------------------------------- |
 | UI Sans  | `SUIT Variable`       | Everything except numbers and display headings. Loaded via `@font-face` in `app/globals.css` (Korean + Latin). `Inter Tight` is an optional future upgrade, not currently shipped. |
-| Data Mono| `JetBrains Mono`      | IDs, metrics, timestamps, keybindings, diffs. **Not yet bundled** — add its woff2 to `apps/hub/public/fonts` to activate; until then the chain lands on Cascadia Code/Mono → `ui-monospace`. |
+| Data Mono| `JetBrains Mono`      | IDs, timestamps, keybindings, diffs, and inline/instrument metrics (< 18px). **Bundled** as `JetBrainsMono-Variable.woff2` (Latin + digits; Hangul falls back to SUIT) via `@font-face` in `app/globals.css`. |
 | Display  | `SUIT Variable`       | Page-level moments only; avoid decorative display type in dense Hub surfaces. |
 
-Fallbacks: `'Inter Tight', ui-sans-serif, system-ui, sans-serif` for sans, `'Cascadia Code', 'Cascadia Mono', ui-monospace, 'SF Mono', Consolas, monospace` for mono. Upgrade path: drop `JetBrains Mono` woff2 into `apps/hub/public/fonts` and it becomes the primary mono with zero token changes (already first in `--font-mono`).
+Fallbacks: `'Inter Tight', ui-sans-serif, system-ui, sans-serif` for sans, `'Cascadia Code', 'Cascadia Mono', ui-monospace, 'SF Mono', Consolas, monospace` for mono (JetBrains Mono is now bundled and first in `--font-mono`).
 
 **Rules**
 - Hub defaults to sans at 14px / `font-feature-settings: 'cv11', 'ss01', 'ss03'`.
-- KPI numerals are `.mono`, heavy weight, `letter-spacing: 0` (never negative — it cramps fallback digits).
-- 모든 데이터 숫자는 `.mono` + `tabular-nums` (column-stable). 사인(sans)에 남는 카운트는 `.num` 유틸로 tabular figures 적용.
+- **Hybrid number rule.** Hero / display figures (KPI values, big metrics ≥ 18px) use `.stat` — SUIT **sans** with `tabular-nums lining-nums` and a touch of display tracking (`-0.015em`), for a premium, non-code read. Instrument data (IDs, timestamps, inline values, counts < 18px) uses `.mono` — bundled JetBrains Mono, `letter-spacing: 0`. Don't set large display numbers in mono; don't set IDs/timestamps in sans.
+- 데이터 숫자는 크기로 나눔: 큰 지표는 `.stat`(sans tabular), 인라인/계기 데이터는 `.mono`(JetBrains Mono) + `tabular-nums` (column-stable). 사인에 남는 소형 카운트는 `.num` 유틸.
 - 데이터 값의 최소 크기 12px — 10–11px은 라벨 / eyebrow 전용.
 - Section eyebrow is 11px, uppercase, `letter-spacing: 0.1em`, `color: var(--fg-dim)`.
 - Never mix more than two families on one screen.

@@ -38,6 +38,14 @@
   --company:       oklch(0.78 0.04 290);
   --company-bg:    oklch(0.30 0.03 290 / 0.3);
 
+  /* Semantic hairlines — left-border accents / chip outlines only (never full fills, §5.2) */
+  --success-line:  oklch(0.5 0.08 155 / 0.5);
+  --warning-line:  oklch(0.5 0.09 85 / 0.5);
+  --danger-line:   oklch(0.5 0.1 25 / 0.5);
+  --info-line:     oklch(0.5 0.06 230 / 0.5);
+  --personal-line: oklch(0.5 0.05 200 / 0.5);
+  --company-line:  oklch(0.5 0.04 290 / 0.5);
+
   --shadow-soft: 0 1px 0 0 oklch(1 0 0 / 0.03) inset, 0 0 0 1px var(--line-soft);
   --shadow-card:
     0 1px 0 0 oklch(1 0 0 / 0.04) inset,
@@ -104,6 +112,14 @@
   --company:       oklch(0.42 0.1 290);
   --company-bg:    oklch(0.94 0.04 290 / 0.7);
 
+  /* Semantic hairlines — light theme */
+  --success-line:  oklch(0.55 0.12 155 / 0.5);
+  --warning-line:  oklch(0.6 0.13 65 / 0.5);
+  --danger-line:   oklch(0.6 0.16 25 / 0.5);
+  --info-line:     oklch(0.55 0.12 230 / 0.5);
+  --personal-line: oklch(0.5 0.09 200 / 0.5);
+  --company-line:  oklch(0.5 0.09 290 / 0.5);
+
   --shadow-soft: 0 1px 0 0 oklch(1 0 0 / 0.6) inset, 0 0 0 1px var(--line-soft);
   --shadow-card:
     0 1px 0 0 oklch(1 0 0 / 0.8) inset,
@@ -139,6 +155,11 @@
 .hub-app .mono { font-family: var(--font-mono); font-feature-settings: 'ss02'; letter-spacing: 0; font-variant-numeric: tabular-nums; }
 /* Sans numeric utility — column-stable lining figures for counts that stay in sans (e.g. Badge) */
 .hub-app .num { font-variant-numeric: tabular-nums lining-nums; }
+/* Display figures — hero KPI / big metric numbers stay in the SUIT sans for a premium,
+   non-code read, with column-stable lining figures and a touch of display tracking.
+   Rule of thumb: display numbers (≥18px) use .stat; instrument data (IDs, timestamps,
+   inline values) uses .mono. */
+.hub-app .stat { font-variant-numeric: tabular-nums lining-nums; letter-spacing: -0.015em; font-feature-settings: 'ss01'; }
 
 .hub-app ::-webkit-scrollbar { width: 10px; height: 10px; }
 .hub-app ::-webkit-scrollbar-track { background: transparent; }
@@ -149,6 +170,8 @@
 .hub-app .hairline-b { border-bottom: 1px solid var(--line-soft); }
 
 .hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; border-radius: 2px; }
+/* Text-field wrappers that suppress the inner input's own ring surface the focus on the wrapper (§11) */
+.hub-app .hub-field:focus-within { border-color: var(--moon-300); }
 
 @keyframes mlMoonPulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
 @keyframes mlFadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
