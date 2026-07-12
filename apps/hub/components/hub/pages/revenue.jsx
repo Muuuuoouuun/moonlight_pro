@@ -3,7 +3,7 @@
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl } from "../hub-primitives";
 import {
   LEADS as FALLBACK_LEADS,
   DEAL_STAGES as FALLBACK_DEAL_STAGES,
@@ -23,6 +23,14 @@ const fmt = v => {
 // A deal counts as "stalled" once it has aged this many days in an open stage. Two weeks
 // is the follow-up window — high enough that a deal mid-motion isn't flagged as neglected.
 const STALLED_DAYS = 14;
+
+// Shared All/Personal/Company scope filter for every Revenue surface (Leads, Deals,
+// Accounts). One source so the identity dots and labels can't drift between pages.
+const SCOPE_OPTIONS = [
+  { key: 'all', label: 'All' },
+  { key: 'personal', label: 'Personal', dot: 'personal' },
+  { key: 'company', label: 'Company', dot: 'company' },
+];
 
 // Parse a display amount ("₩1.2M", "₩900K", "₩0", or a raw number) to a comparable number,
 // so the Leads table can sort by value even though the display model stores a string.
@@ -303,11 +311,12 @@ export function RevenueOverview({ onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <div className="hub-page-actions" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-          {['MTD','QTD','YTD'].map(p => (
-            <button key={p} onClick={() => setPeriod(p)} style={{ padding: '4px 10px', fontSize: 11.5, borderRadius: 4, color: p === period ? 'var(--fg)' : 'var(--fg-faint)', background: p === period ? 'var(--surface-3)' : 'transparent' }}>{p}</button>
-          ))}
-        </div>
+        <SegmentedControl
+          className="hub-page-actions"
+          options={['MTD', 'QTD', 'YTD'].map(p => ({ key: p, label: p }))}
+          value={period}
+          onChange={setPeriod}
+        />
       </div>
 
       <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
@@ -601,20 +610,7 @@ export function Leads({ workspace }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <div className="hub-toolbar" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, marginRight: 8 }}>
-          {[{ k: 'all', l: 'All' },{ k: 'personal', l: 'Personal' },{ k: 'company', l: 'Company' }].map(t => (
-            <button key={t.k} onClick={() => setFilter(t.k)} style={{
-              padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-              color: filter === t.k ? 'var(--fg)' : 'var(--fg-faint)',
-              background: filter === t.k ? 'var(--surface-3)' : 'transparent',
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-            }}>
-              {t.k === 'personal' && <Dot tone="personal" />}
-              {t.k === 'company' && <Dot tone="company" />}
-              {t.l}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl className="hub-toolbar" style={{ marginRight: 8 }} options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
         <Input className="hub-toolbar" placeholder="이름·소스·단계 검색…" icon="search" value={search} onChange={setSearch} />
         <div style={{ width: 8 }} />
         <Button variant="secondary" size="sm" icon="plus" onClick={() => cardFileRef.current?.click()}>명함</Button>
@@ -868,15 +864,7 @@ export function Deals({ workspace, onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <div className="hub-toolbar" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, marginRight: 8 }}>
-          {[{k:'all',l:'All'},{k:'personal',l:'Personal'},{k:'company',l:'Company'}].map(t => (
-            <button key={t.k} onClick={() => setFilter(t.k)} style={{
-              padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-              color: filter === t.k ? 'var(--fg)' : 'var(--fg-faint)',
-              background: filter === t.k ? 'var(--surface-3)' : 'transparent',
-            }}>{t.l}</button>
-          ))}
-        </div>
+        <SegmentedControl className="hub-toolbar" style={{ marginRight: 8 }} options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
         <Button variant="primary" size="sm" icon="plus" onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>
       </div>
 
@@ -1633,34 +1621,18 @@ export function Accounts({ workspace, onNavigate }) {
         <div style={{ flex: 1 }} />
 
         {/* View mode toggle */}
-        <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-          {[{ k: 'cards', l: 'Cards' },{ k: 'list', l: 'List' },{ k: 'detail', l: 'Detail' }].map(t => (
-            <button key={t.k} onClick={() => {
-              setView(t.k);
-              if (t.k === 'detail' && !selected) setSelected(filtered[0]?.name ?? null);
-            }} style={{
-              padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-              color: view === t.k ? 'var(--fg)' : 'var(--fg-faint)',
-              background: view === t.k ? 'var(--surface-3)' : 'transparent',
-            }}>{t.l}</button>
-          ))}
-        </div>
+        <SegmentedControl
+          className="hub-toolbar"
+          options={[{ key: 'cards', label: 'Cards' }, { key: 'list', label: 'List' }, { key: 'detail', label: 'Detail' }]}
+          value={view}
+          onChange={(k) => {
+            setView(k);
+            if (k === 'detail' && !selected) setSelected(filtered[0]?.name ?? null);
+          }}
+        />
 
         {/* Type filter */}
-        <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-          {[{ k: 'all', l: 'All' },{ k: 'personal', l: 'Personal' },{ k: 'company', l: 'Company' }].map(t => (
-            <button key={t.k} onClick={() => setFilter(t.k)} style={{
-              padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-              color: filter === t.k ? 'var(--fg)' : 'var(--fg-faint)',
-              background: filter === t.k ? 'var(--surface-3)' : 'transparent',
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-            }}>
-              {t.k === 'personal' && <Dot tone="personal" />}
-              {t.k === 'company' && <Dot tone="company" />}
-              {t.l}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl className="hub-toolbar" options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
 
         <Input className="hub-toolbar" placeholder="계정 검색…" icon="search" value={search} onChange={setSearch} />
         <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>
