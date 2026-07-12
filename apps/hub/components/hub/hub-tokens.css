@@ -559,10 +559,10 @@
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
-  .hub-page-actions > *,
-  .hub-toolbar > * {
-    flex-basis: 100%;
-  }
+  /* Segmented controls stay horizontal on phones — the ≤900px rules already make each
+     toolbar unit full-width (flex: 1 1 auto on children shares one row). Forcing
+     flex-basis: 100% on the children stacked the 3 filter buttons into a ⅓-screen
+     vertical block (design-review F-001). */
 
   .hub-topbar__crumbs button {
     max-width: 42vw;
