@@ -169,6 +169,14 @@
 .hub-app .hairline-t { border-top: 1px solid var(--line-soft); }
 .hub-app .hairline-b { border-bottom: 1px solid var(--line-soft); }
 
+/* Interactive row hover — use this class instead of onMouseEnter/Leave JS handlers.
+   Themable, respects reduced-motion, and can't drift per call site. */
+.hub-app .hub-row { transition: background 120ms ease; }
+.hub-app .hub-row:hover { background: var(--surface-2); }
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-row { transition: none; }
+}
+
 .hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; border-radius: 2px; }
 /* Text-field wrappers that suppress the inner input's own ring surface the focus on the wrapper (§11) */
 .hub-app .hub-field:focus-within { border-color: var(--moon-300); }

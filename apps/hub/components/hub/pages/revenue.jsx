@@ -683,7 +683,7 @@ export function Leads({ workspace }) {
           </div>
         )}
         {sortedLeads.map((l, i) => (
-          <div key={l.id}
+          <div key={l.id} className="hub-row"
             role="button" tabIndex={0}
             onClick={() => setEditLeadId(l.id)}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditLeadId(l.id); } }}
@@ -692,8 +692,6 @@ export function Leads({ workspace }) {
               padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', cursor: 'pointer',
               borderBottom: i < sortedLeads.length - 1 ? '1px solid var(--line-soft)' : 'none',
             }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
             <span style={{ paddingRight: 4, display: 'flex' }}>
               <Avatar name={l.name.replace(/^.*—\s*/, '')} size={22} tone={l.type === 'personal' ? 'personal' : 'company'} />
@@ -1104,7 +1102,7 @@ export function Cases() {
           />
         )}
         {cases.map((c, i) => (
-          <div key={c.id}
+          <div key={c.id} className="hub-row"
             role="button" tabIndex={0}
             onClick={() => setEditCaseId(c.id)}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditCaseId(c.id); } }}
@@ -1115,8 +1113,6 @@ export function Cases() {
               // High-priority open cases carry a danger left-accent (§5.2) — resolved ones stay quiet.
               boxShadow: c.priority === 'high' && c.status !== 'Resolved' ? 'inset 2px 0 0 var(--danger-line)' : undefined,
             }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
             <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{c.id}</span>
             <span style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.title}</span>
