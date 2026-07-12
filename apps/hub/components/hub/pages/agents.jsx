@@ -5,6 +5,7 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd, EmptyState } from "../hub-primitives";
 import { CHAT_THREAD, ORDERS } from "../hub-data";
 import { requestGuruCoaching, GURU_MODE_LABEL, GURU_PREVIEW_NOTE } from "../guru-client";
+import { requestCouncilAdvice, councilChatPath } from "../council-client";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 import { PERSONA_CONTRACT } from "@/lib/sales-os/persona-contract";
 
@@ -312,6 +313,82 @@ function useAgentRoster() {
   return state;
 }
 
+// Council advisory panel — the brand-side counterpart of GuruCoachPanel (revenue.jsx). Calls
+// the Hub proxy (/api/hub/brand-mentor) which enriches the request with the content/project
+// ledger and forwards to the Engine; renders the idle/loading/done/preview/error states the
+// same way Guru does. Default mode is 브랜드 전략 (brand-strategy).
+function CouncilCoachPanel({ onNavigate }) {
+  const [state, setState] = React.useState('idle'); // idle | loading | done | preview | error
+  const [text, setText] = React.useState('');
+  const [note, setNote] = React.useState('');
+
+  const run = async () => {
+    setState('loading');
+    setText('');
+    setNote('');
+    const r = await requestCouncilAdvice({ mode: 'brand-strategy' });
+    if (r.state === 'done') {
+      setText(r.text);
+      setState('done');
+    } else {
+      setNote(r.note || '');
+      setState(r.state);
+    }
+  };
+
+  return (
+    <Card>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>Council 자문</div>
+            <Badge tone="moon" size="xs">브랜드 카운슬</Badge>
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', marginTop: 2 }}>이번 주 브랜드 전략 — 무엇부터 손댈지</div>
+        </div>
+        <div style={{ flex: 1 }} />
+        <Button variant="primary" size="sm" icon="sparkle" onClick={run} disabled={state === 'loading'}>
+          {state === 'loading' ? '분석 중…' : state === 'done' ? '다시 자문' : '브랜드 전략 자문'}
+        </Button>
+      </div>
+
+      {state === 'idle' && (
+        <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.6 }}>
+          Council에게 브랜드/프로젝트 원장 기준의 자문을 요청하세요. 정체된 프로젝트·발행 케이던스 공백·
+          다음 마일스톤을 근거로 먼저 손댈 액션 3건과 이유를 우선순위로 제시합니다.
+        </div>
+      )}
+
+      {state === 'loading' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
+          <Dot tone="moon" size={6} style={{ animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
+          브랜드 원장을 읽고 자문을 정리하는 중…
+        </div>
+      )}
+
+      {state === 'done' && (
+        <div>
+          <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{text}</div>
+          <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
+            <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(councilChatPath())}>Chat에서 이어가기</Button>
+          </div>
+        </div>
+      )}
+
+      {(state === 'preview' || state === 'error') && (
+        <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.55 }}>
+          <Badge tone={state === 'preview' ? 'neutral' : 'danger'} size="xs">{state === 'preview' ? 'preview' : 'error'}</Badge>
+          <span style={{ marginLeft: 8 }}>
+            {state === 'preview'
+              ? 'Engine이 아직 연결되지 않아 자문을 생성할 수 없습니다. (COM_MOON_ENGINE_URL 미설정)'
+              : note}
+          </span>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export function AgentsCouncil({ onNavigate }) {
   const roster = useAgentRoster();
 
@@ -328,6 +405,8 @@ export function AgentsCouncil({ onNavigate }) {
         <Badge tone={roster.status === 'live' ? 'success' : 'neutral'} size="xs">{roster.status === 'live' ? 'live' : 'preview'}</Badge>
         <Button variant="primary" size="sm" icon="sparkle" onClick={() => onNavigate?.('dashboard/agents/chat?prompt=council')}>Convene</Button>
       </div>
+
+      <CouncilCoachPanel onNavigate={onNavigate} />
       {roster.status === 'loading' && (
         <div style={{ fontSize: 12.5, color: 'var(--fg-muted)' }}>페르소나 로스터 불러오는 중…</div>
       )}
@@ -544,14 +623,16 @@ export function AgentsOrders({ onNavigate }) {
   );
 }
 
+// Identities stay within the one cool moonstone stack (§4) — distinguished by hue+lightness
+// across the muted accent/identity tokens, never warm gold/green/purple jewel tones.
 const OFFICE_AGENTS = [
-  { key: 'writer', label: 'Writer', role: 'Content · Copy', color: '#d4b5ff', x: 1, y: 1, task: '뉴스레터 #47 2번 섹션', status: 'typing', mood: '몰입' },
-  { key: 'analyst', label: 'Analyst', role: 'Data · 해석', color: '#8fd4ff', x: 2, y: 1, task: '리드 17건 태그 리뷰', status: 'thinking', mood: '집중' },
-  { key: 'strategist', label: 'Strategist', role: '장기·우선순위', color: '#ffd68f', x: 3, y: 1, task: '5월 플랜 초안', status: 'reading', mood: '관조' },
-  { key: 'operator', label: 'Operator', role: '자동화·실행', color: '#b4e8a8', x: 0, y: 3, task: 'Gmail 태그 규칙 튜닝', status: 'running', mood: '작업' },
-  { key: 'council', label: 'Council', role: '합의·결정', color: '#ffaebb', x: 2, y: 3, task: 'Thread 예약 발행 검토', status: 'meeting', mood: '논의' },
-  { key: 'guru', label: 'Guru', role: '영업 멘토·딜 코칭', color: '#a9c6e8', x: 4, y: 1, task: '클래스인 딜 진단', status: 'reading', mood: '코칭' },
-  { key: 'you', label: 'Hyeon (나)', role: 'Founder', color: '#f0e6d8', x: 4, y: 3, task: '브리핑 읽는 중', status: 'idle', mood: '휴식' },
+  { key: 'writer', label: 'Writer', role: 'Content · Copy', color: 'var(--info)', x: 1, y: 1, task: '뉴스레터 #47 2번 섹션', status: 'typing', mood: '몰입' },
+  { key: 'analyst', label: 'Analyst', role: 'Data · 해석', color: 'var(--personal)', x: 2, y: 1, task: '리드 17건 태그 리뷰', status: 'thinking', mood: '집중' },
+  { key: 'strategist', label: 'Strategist', role: '장기·우선순위', color: 'var(--moon-300)', x: 3, y: 1, task: '5월 플랜 초안', status: 'reading', mood: '관조' },
+  { key: 'operator', label: 'Operator', role: '자동화·실행', color: 'var(--success)', x: 0, y: 3, task: 'Gmail 태그 규칙 튜닝', status: 'running', mood: '작업' },
+  { key: 'council', label: 'Council', role: '합의·결정', color: 'var(--company)', x: 2, y: 3, task: 'Thread 예약 발행 검토', status: 'meeting', mood: '논의' },
+  { key: 'guru', label: 'Guru', role: '영업 멘토·딜 코칭', color: 'var(--moon-400)', x: 4, y: 1, task: '클래스인 딜 진단', status: 'reading', mood: '코칭' },
+  { key: 'you', label: 'Hyeon (나)', role: 'Founder', color: 'var(--moon-100)', x: 4, y: 3, task: '브리핑 읽는 중', status: 'idle', mood: '휴식' },
 ];
 
 const ROOM = [
@@ -562,7 +643,7 @@ const ROOM = [
   [1,4,0,0,5,1],
 ];
 
-const STATUS_DOT = { typing: '#8fd4ff', thinking: '#d4b5ff', reading: '#ffd68f', running: '#b4e8a8', meeting: '#ffaebb', idle: 'var(--fg-faint)' };
+const STATUS_DOT = { typing: 'var(--info)', thinking: 'var(--personal)', reading: 'var(--moon-300)', running: 'var(--success)', meeting: 'var(--company)', idle: 'var(--fg-faint)' };
 
 function PixelRoom({ selected, onSelect }) {
   const TILE = 56;
@@ -650,9 +731,9 @@ function PixelRoom({ selected, onSelect }) {
             )}
             {isSel && (
               <div style={{
-                position: 'absolute', inset: -2, border: '2px solid var(--moon-200)',
+                position: 'absolute', inset: -2, border: '1px solid var(--moon-200)',
                 borderRadius: 4, pointerEvents: 'none',
-                boxShadow: '0 0 16px oklch(0.78 0.04 280 / 0.4)',
+                boxShadow: '0 0 16px oklch(0.86 0.006 250 / 0.45)',
               }} />
             )}
             <div style={{
@@ -671,7 +752,7 @@ function PixelRoom({ selected, onSelect }) {
           left: 60 + (i * 23 + t * 3) % 200,
           top: 20 + ((i * 17 + t * 2) % 60),
           width: 2, height: 2, borderRadius: 999,
-          background: 'rgba(255,220,180,0.25)',
+          background: 'rgba(180,200,230,0.22)',
         }} />
       ))}
     </div>
