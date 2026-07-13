@@ -38,6 +38,8 @@ eq("new lead via 명함", classifyCapture("세미나에서 명함 받음, 분당
 eq("idea capture", classifyCapture("릴스 소재 아이디어: 학원 원장 인터뷰").kind, "idea");
 eq("engagement capture", classifyCapture("어제 카드뉴스 반응 좋았음, 저장 많이").kind, "engagement");
 eq("note capture", classifyCapture("메모: 다음달 신학기 프로모션 준비").kind, "note");
+eq("implicit todo stays note, never direct task", classifyCapture("todo 원장님께 다시 연락").kind, "note");
+eq("implicit todo has no task destination", classifyCapture("할 일: 견적 다시 보내기").destination, "notes");
 
 // --- ambiguous never drops ---
 const amb = classifyCapture("음 그거 있잖아");

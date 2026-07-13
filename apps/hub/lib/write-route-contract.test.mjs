@@ -11,9 +11,11 @@ async function readSource(relativePath) {
 }
 
 function mutationSource(source) {
-  const postIndex = source.indexOf("export async function POST");
-  assert.notEqual(postIndex, -1, "expected a POST mutation handler");
-  return source.slice(postIndex);
+  const mutationIndices = ["POST", "PATCH", "PUT", "DELETE"]
+    .map((method) => source.indexOf(`export async function ${method}`))
+    .filter((index) => index >= 0);
+  assert.ok(mutationIndices.length > 0, "expected a mutation handler");
+  return source.slice(Math.min(...mutationIndices));
 }
 
 test("write routes never acknowledge mutations with preview or HTTP 202", async () => {
@@ -23,6 +25,8 @@ test("write routes never acknowledge mutations with preview or HTTP 202", async 
     readSource("apps/hub/app/api/hub/inbox/route.js"),
     readSource("apps/hub/app/api/integrations/outcomes/record/route.js"),
     readSource("apps/hub/app/api/calendar/google/event/route.js"),
+    readSource("apps/hub/app/api/hub/tasks/route.js"),
+    readSource("apps/hub/app/api/hub/tasks/[id]/route.js"),
   ]);
 
   for (const route of routes) {
@@ -30,6 +34,52 @@ test("write routes never acknowledge mutations with preview or HTTP 202", async 
     assert.doesNotMatch(mutation, /status\s*:\s*["']preview["']/);
     assert.doesNotMatch(mutation, /\{\s*status\s*:\s*202\s*\}/);
   }
+});
+
+test("durable Task BFF routes guard, limit JSON, then proxy to the exact Engine path", async () => {
+  const [createRoute, updateRoute] = await Promise.all([
+    readSource("apps/hub/app/api/hub/tasks/route.js"),
+    readSource("apps/hub/app/api/hub/tasks/[id]/route.js"),
+  ]);
+
+  for (const source of [createRoute, updateRoute]) {
+    const guard = source.indexOf("assertHubWriteAllowed(req)");
+    const read = source.indexOf("readHubWriteJson(req)");
+    const send = source.indexOf("sendEngineWrite(");
+    assert.ok(guard >= 0 && guard < read && read < send, "route order must be auth -> bounded JSON -> Engine");
+    assert.match(source, /idempotency-key/i);
+    assert.match(source, /x-correlation-id/i);
+    assert.doesNotMatch(source, /SUPABASE_|insertSupabase|updateSupabase|callSupabaseRpc/);
+  }
+
+  assert.match(createRoute, /export async function POST/);
+  assert.match(createRoute, /sendEngineWrite\(["']\/api\/tasks["']/);
+  assert.match(updateRoute, /export async function PATCH/);
+  assert.match(updateRoute, /encodeURIComponent\(id\)/);
+  assert.doesNotMatch(updateRoute, /taskId\s*:\s*id\b/);
+  for (const forgedField of ["id", "taskId", "task_id"]) {
+    assert.match(
+      updateRoute,
+      new RegExp(`${forgedField}:\\s*_[A-Za-z]+`),
+      `PATCH body must discard forged ${forgedField}; the route param is canonical`,
+    );
+  }
+});
+
+test("Hub Inbox keeps pure classification but only proxies durable inbox work orders", async () => {
+  const inboxRoute = await readSource("apps/hub/app/api/hub/inbox/route.js");
+  const guard = inboxRoute.indexOf("assertHubWriteAllowed(req)");
+  const read = inboxRoute.indexOf("readHubWriteJson(req)");
+  const send = inboxRoute.indexOf("sendEngineWrite(");
+
+  assert.ok(guard >= 0 && guard < read && read < send, "inbox order must be auth -> bounded JSON -> Engine");
+  assert.match(inboxRoute, /classifyCapture\(/);
+  assert.match(inboxRoute, /destination:\s*["']inbox["']/);
+  for (const field of ["raw", "kind", "persona", "summary"]) {
+    assert.match(inboxRoute, new RegExp(`(?:${field}\\s*:|\\b${field},)`));
+  }
+  assert.match(inboxRoute, /sendEngineWrite\(["']\/api\/intake\/quick-capture["']/);
+  assert.doesNotMatch(inboxRoute, /routeCapture|createWorkOrder|insertSupabase|updateSupabase|callSupabaseRpc/);
 });
 
 test("compound insert routes explicitly mark partial persistence as non-retryable", async () => {
