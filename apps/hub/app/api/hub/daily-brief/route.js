@@ -7,6 +7,7 @@ import { getProjectLedger } from "@/lib/repositories/operating-ledger";
 import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
 import { getWorkLedger } from "@/lib/repositories/work-ledger";
 import { getWorkOrders } from "@/lib/sales-os/work-orders";
+import { buildTaskLanes } from "@/lib/task-attention";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -328,39 +329,6 @@ function buildWorkSignals(projects, work) {
   return signals;
 }
 
-function buildBlocks(projects, content) {
-  const todos = Array.isArray(projects.todos) ? projects.todos : [];
-  const projectById = new Map((Array.isArray(projects.projects) ? projects.projects : []).map((project) => [project.id, project]));
-  const contentQueue = Array.isArray(content.queue) ? content.queue : [];
-  const blocks = [];
-
-  todos
-    .filter((todo) => todo.bucket === "오늘" && !todo.done)
-    .slice(0, 4)
-    .forEach((todo, index) => {
-      blocks.push({
-        time: `${String(9 + index).padStart(2, "0")}:00`,
-        title: todo.title,
-        kind: projectById.get(todo.project)?.name || "Task",
-        tag: todo.priority === "high" ? "company" : null,
-        done: false,
-      });
-    });
-
-  const nextContent = contentQueue.find((item) => ["Draft", "Review", "Scheduled"].includes(item.status));
-  if (nextContent) {
-    blocks.push({
-      time: "14:00",
-      title: nextContent.title,
-      kind: `${nextContent.kind} · ${nextContent.status}`,
-      tag: null,
-      done: false,
-    });
-  }
-
-  return blocks.slice(0, 6);
-}
-
 function buildMetrics(revenue, content, automations, projects) {
   const revenueSummary = revenue.summary || {};
   const contentSummary = content.summary || {};
@@ -433,6 +401,12 @@ export async function GET() {
     ...buildAutomationSignals(automations),
     ...buildWorkSignals(projects, work),
   ].slice(0, 7);
+  const taskSource = projects.taskSource || "preview";
+  const taskLanes = buildTaskLanes(
+    Array.isArray(projects.tasks) ? projects.tasks : [],
+    new Date(),
+    projects.taskTimezone,
+  );
 
   return NextResponse.json({
     status: errorCount ? "partial" : liveCount ? "live" : "preview",
@@ -449,7 +423,9 @@ export async function GET() {
     },
     metrics: buildMetrics(revenue, content, automations, projects),
     signals,
-    blocks: buildBlocks(projects, content),
+    taskSource,
+    taskLanes,
+    blocks: [],
     queue,
     morningBrief: morning.brief || null,
   });

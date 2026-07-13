@@ -1,10 +1,12 @@
 import {
   eqFilter,
   fetchSupabaseRows,
+  fetchSupabaseRowsWithState,
   inFilter,
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { DEFAULT_TASK_TIMEZONE, resolveTaskTimezone } from "@/lib/task-attention";
 
 const BRAND_GLYPHS = ["◐", "◇", "✦", "◆", "●", "□", "△", "◎", "◌", "✧"];
 const CANONICAL_BRAND_ORDER = {
@@ -260,23 +262,127 @@ function mapProjects(rows, brandById, taskStats, updateStats) {
   });
 }
 
-function mapTodos(rows, projectById, brandById) {
-  return rows.map((row) => {
-    const project = row.project_id && projectById.get(row.project_id);
-    const brand = project?.brand_id && brandById.get(project.brand_id);
+export function mapCanonicalTodoForProjects(task, projectById, brandById) {
+  const project = task.projectId && projectById.get(task.projectId);
+  const brand = project?.brand_id && brandById.get(project.brand_id);
+  const priorityKey = task.priority || "medium";
 
+  return {
+    ...task,
+    brand: brand?.slug || "all",
+    project: task.projectId || "",
+    projectName: task.projectName || project?.name || null,
+    due: formatShortDate(task.dueAt),
+    bucket: resolveDueBucket(task.dueAt),
+    done: task.status === "done",
+    priority: normalizeTodoPriority(priorityKey),
+    priorityKey,
+    assignee: task.ownerId ? "Me" : "Unassigned",
+  };
+}
+
+function mapTodos(tasks, projectById, brandById) {
+  return tasks.map((task) => mapCanonicalTodoForProjects(task, projectById, brandById));
+}
+
+const CANONICAL_TASK_SELECT = [
+  "id",
+  "workspace_id",
+  "project_id",
+  "owner_id",
+  "title",
+  "status",
+  "priority",
+  "due_at",
+  "next_action",
+  "meta",
+  "created_at",
+  "updated_at",
+  "started_at",
+  "completed_at",
+  "project:projects(id,name)",
+].join(",");
+
+function mapCanonicalTask(row) {
+  const meta = row?.meta && typeof row.meta === "object" && !Array.isArray(row.meta)
+    ? row.meta
+    : {};
+  const project = Array.isArray(row?.project) ? row.project[0] : row?.project;
+  const metaPrecision = meta.due_precision;
+  const duePrecision = ["timed", "date", "none"].includes(metaPrecision)
+    ? metaPrecision
+    : row?.due_at
+      ? "timed"
+      : "none";
+
+  return {
+    id: row?.id || null,
+    title: row?.title || "",
+    status: row?.status || "inbox",
+    priority: row?.priority || "medium",
+    dueAt: row?.due_at || null,
+    duePrecision,
+    updatedAt: row?.updated_at || null,
+    createdAt: row?.created_at || null,
+    startedAt: row?.started_at || null,
+    completedAt: row?.completed_at || null,
+    nextAction: row?.next_action || null,
+    meta,
+    projectId: row?.project_id || project?.id || null,
+    projectName: project?.name || null,
+    ownerId: row?.owner_id || null,
+    workspaceId: row?.workspace_id || null,
+  };
+}
+
+export async function getCanonicalTaskRead({
+  workspaceId = resolveDefaultWorkspaceId(),
+  readRows = fetchSupabaseRowsWithState,
+} = {}) {
+  if (!workspaceId) {
+    return { source: "preview", timezone: DEFAULT_TASK_TIMEZONE, tasks: [] };
+  }
+
+  const [taskResult, workspaceResult] = await Promise.all([
+    readRows("tasks", {
+      select: CANONICAL_TASK_SELECT,
+      limit: 200,
+      order: "updated_at.desc",
+      filters: [
+        ["workspace_id", eqFilter(workspaceId)],
+        ["status", "neq.done"],
+      ],
+    }),
+    readRows("workspaces", {
+      select: "timezone",
+      limit: 1,
+      filters: [["id", eqFilter(workspaceId)]],
+    }),
+  ]);
+  const timezone = resolveTaskTimezone(workspaceResult.rows?.[0]?.timezone);
+
+  if (taskResult.state === "preview") {
+    return { source: "preview", timezone, tasks: [] };
+  }
+
+  if (taskResult.state === "error") {
     return {
-      id: row.id,
-      brand: brand?.slug || "all",
-      project: row.project_id || "",
-      title: row.title,
-      due: formatShortDate(row.due_at),
-      bucket: resolveDueBucket(row.due_at),
-      done: row.status === "done",
-      priority: normalizeTodoPriority(row.priority),
-      assignee: row.owner_id ? "Me" : "Unassigned",
+      source: "error",
+      timezone,
+      tasks: [],
+      errorCode: taskResult.errorCode || "read-failed",
     };
-  });
+  }
+
+  const tasks = taskResult.rows
+    .filter((row) => row?.status !== "done")
+    .map(mapCanonicalTask);
+
+  return {
+    source: tasks.length ? "live" : "empty",
+    timezone,
+    tasks,
+  };
 }
 
 function mapProjectUpdates(rows) {
@@ -414,7 +520,10 @@ export async function getProjectLedger() {
       workspaceId: null,
       brands: [],
       projects: [],
+      tasks: [],
       todos: [],
+      taskSource: "preview",
+      taskTimezone: DEFAULT_TASK_TIMEZONE,
       updates: [],
       decisions: [],
       notes: [],
@@ -423,7 +532,16 @@ export async function getProjectLedger() {
     };
   }
 
-  const [brandRows, projectRows, taskRows, updateRows, decisionRows, noteRows, routineRows] = await Promise.all([
+  const [
+    brandRows,
+    projectRows,
+    taskRows,
+    canonicalTaskRead,
+    updateRows,
+    decisionRows,
+    noteRows,
+    routineRows,
+  ] = await Promise.all([
     fetchSupabaseRows("brands", {
       order: "name.asc",
       filters: withWorkspaceFilter([["status", eqFilter("active")]]),
@@ -442,6 +560,7 @@ export async function getProjectLedger() {
         ["status", inFilter(["inbox", "todo", "doing", "blocked", "done"])],
       ]),
     }),
+    getCanonicalTaskRead({ workspaceId }),
     fetchSupabaseRows("project_updates", {
       limit: 120,
       order: "happened_at.desc",
@@ -471,7 +590,11 @@ export async function getProjectLedger() {
       workspaceId,
       brands: [],
       projects: [],
+      tasks: [],
       todos: [],
+      taskSource: canonicalTaskRead.source,
+      taskTimezone: canonicalTaskRead.timezone,
+      taskErrorCode: canonicalTaskRead.errorCode || null,
       updates: [],
       decisions: [],
       notes: [],
@@ -494,7 +617,8 @@ export async function getProjectLedger() {
 
   const updates = mapProjectUpdates(updateRows || []);
   const updateStats = buildUpdateStats(updates);
-  const todos = mapTodos(taskRows, projectById, brandById);
+  const tasks = canonicalTaskRead.tasks;
+  const todos = mapTodos(tasks, projectById, brandById);
   const projects = mapProjects(projectRows, brandById, taskStats, updateStats);
   const brands = mapBrands(brandRows, projects, todos, updates);
 
@@ -504,7 +628,11 @@ export async function getProjectLedger() {
     workspaceId,
     brands,
     projects,
+    tasks,
     todos,
+    taskSource: canonicalTaskRead.source,
+    taskTimezone: canonicalTaskRead.timezone,
+    taskErrorCode: canonicalTaskRead.errorCode || null,
     updates,
     decisions: mapDecisions(decisionRows || []),
     notes: mapNotes(noteRows || []),

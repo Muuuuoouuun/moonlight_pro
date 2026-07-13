@@ -67,6 +67,41 @@ export async function fetchSupabaseRows(table, options = {}) {
   }
 }
 
+export async function fetchSupabaseRowsWithState(
+  table,
+  options = {},
+  { fetchImpl = fetch } = {},
+) {
+  const config = resolveSupabaseConfig();
+
+  if (!config) {
+    return { state: "preview", rows: [] };
+  }
+
+  let response;
+  try {
+    response = await fetchImpl(buildRestUrl(config.url, table, options), {
+      headers: makeSupabaseHeaders(config.apiKey),
+      cache: "no-store",
+    });
+  } catch {
+    return { state: "error", rows: [], errorCode: "request-failed" };
+  }
+
+  if (!response.ok) {
+    return { state: "error", rows: [], errorCode: `http-${response.status}` };
+  }
+
+  try {
+    const rows = await response.json();
+    return Array.isArray(rows)
+      ? { state: "live", rows }
+      : { state: "error", rows: [], errorCode: "invalid-json" };
+  } catch {
+    return { state: "error", rows: [], errorCode: "invalid-json" };
+  }
+}
+
 export async function countSupabaseRows(table, filters = []) {
   const config = resolveSupabaseConfig();
 
