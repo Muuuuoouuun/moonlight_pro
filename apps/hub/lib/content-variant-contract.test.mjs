@@ -262,11 +262,26 @@ test("apply-pending describes and mirrors its included atomic approval migration
     new URL("../../../supabase/apply-pending.sql", import.meta.url),
     "utf8",
   );
-  const bundledMigration = applyPending
-    .slice(applyPending.indexOf("-- Materialize internal content-draft approvals atomically"))
-    .replace(/\n-- end of apply-pending\.sql[\s\S]*$/, "")
-    .trim();
+  const atomicApprovalStart = applyPending.indexOf(
+    "-- Materialize internal content-draft approvals atomically",
+  );
+  const durableTaskStart = applyPending.indexOf(
+    "-- Source: supabase/migrations/20260713_0015_durable_task_loop.sql",
+  );
 
-  assert.match(applyPending, /적용 대기 마이그레이션 묶음 \(0003~0011 \+ 0014, 시점순\)/);
+  assert.notEqual(atomicApprovalStart, -1, "apply-pending must include the 0014 migration body");
+  assert.notEqual(
+    durableTaskStart,
+    -1,
+    "apply-pending must include the explicit 0015 source marker that bounds 0014",
+  );
+  assert.ok(durableTaskStart > atomicApprovalStart, "0015 source marker must follow 0014");
+
+  const bundledMigration = applyPending.slice(atomicApprovalStart, durableTaskStart).trim();
+
+  assert.match(
+    applyPending,
+    /적용 대기 마이그레이션 묶음 \(0003~0011 \+ 0014 \+ 0015, 시점순\)/,
+  );
   assert.equal(bundledMigration, migration);
 });
