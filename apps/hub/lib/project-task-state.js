@@ -218,6 +218,10 @@ export function beginComposerOperation(composer, { operationId }) {
     operationId,
     projectId: composer.projectId,
     title: composer.title,
+    status: composer.status || 'todo',
+    priority: composer.priority ?? null,
+    dueDate: composer.dueDate ?? null,
+    nextAction: composer.nextAction ?? null,
   };
   return {
     operation,
@@ -240,6 +244,39 @@ export function isTaskOperationCurrent(task, identity) {
   return task.id === identity.taskId && taskUpdatedAt === identity.expectedUpdatedAt;
 }
 
+function stableSerialize(value) {
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function taskProjectId(task) {
+  const nestedProjectId = task?.project && typeof task.project === 'object'
+    ? task.project?.id
+    : null;
+  return task?.projectId
+    ?? task?.project_id
+    ?? nestedProjectId
+    ?? (typeof task?.project === 'string' ? task.project : null);
+}
+
+export function writableTaskFingerprint(task, kind) {
+  return stableSerialize({
+    kind,
+    operationId: task?.operationId ?? null,
+    taskId: task?.id ?? null,
+    expectedUpdatedAt: task?.updatedAt ?? task?.updated_at ?? null,
+    projectId: taskProjectId(task),
+    title: task?.title ?? '',
+    status: task?.status ?? (kind === 'composer' ? 'todo' : null),
+    priority: task?.priority ?? task?.priorityKey ?? null,
+    dueDate: task?.dueDate ?? task?.dueAt ?? task?.due_at ?? null,
+    nextAction: task?.nextAction ?? task?.next_action ?? null,
+  });
+}
+
 export function bindUnlockRetry({ kind, operation, task, retry }) {
   if (typeof retry !== 'function') return null;
   if (kind === 'composer' && operation) {
@@ -249,6 +286,7 @@ export function bindUnlockRetry({ kind, operation, task, retry }) {
         operationId: operation.operationId,
         projectId: operation.projectId,
       },
+      fingerprint: writableTaskFingerprint(operation, kind),
       retry,
     };
   }
@@ -259,6 +297,7 @@ export function bindUnlockRetry({ kind, operation, task, retry }) {
         taskId: task.id,
         expectedUpdatedAt: task.updatedAt ?? task.updated_at ?? null,
       },
+      fingerprint: writableTaskFingerprint(task, kind),
       retry,
     };
   }
@@ -268,15 +307,20 @@ export function bindUnlockRetry({ kind, operation, task, retry }) {
 export function isUnlockRetryCurrent(binding, context) {
   if (!binding) return false;
   if (binding.kind === 'composer') {
-    return isComposerOperationCurrent(context?.composer, binding.operation);
+    return isComposerOperationCurrent(context?.composer, binding.operation)
+      && writableTaskFingerprint(context?.composer, binding.kind) === binding.fingerprint;
   }
   if (binding.kind === 'editor') {
     return isTaskOperationCurrent(context?.editor, binding.identity)
+      && writableTaskFingerprint(context?.editor, binding.kind) === binding.fingerprint
       && context.editor?.status !== 'done';
   }
   if (binding.kind === 'complete') {
     const task = context?.todos?.find((candidate) => candidate.id === binding.identity.taskId);
-    return isTaskOperationCurrent(task, binding.identity) && !task?.done && task?.status !== 'done';
+    return isTaskOperationCurrent(task, binding.identity)
+      && writableTaskFingerprint(task, binding.kind) === binding.fingerprint
+      && !task?.done
+      && task?.status !== 'done';
   }
   return false;
 }
@@ -297,17 +341,28 @@ export function settleComposerOperation(current, operation, patch) {
 
 function normalizeTask(task) {
   if (!task || typeof task !== 'object') return null;
-  return {
+  const nestedProject = task.project && typeof task.project === 'object' ? task.project : null;
+  const projectId = taskProjectId(task);
+  const normalized = {
     ...task,
     id: task.id,
     status: task.status,
     priority: task.priority,
-    projectId: task.projectId ?? task.project_id ?? null,
     dueAt: task.dueAt ?? task.due_at ?? null,
     duePrecision: task.duePrecision ?? task.due_precision ?? null,
     nextAction: task.nextAction ?? task.next_action ?? null,
     updatedAt: task.updatedAt ?? task.updated_at ?? null,
   };
+  if (projectId !== null && projectId !== undefined) {
+    normalized.projectId = projectId;
+    normalized.project = typeof task.project === 'string' ? task.project : projectId;
+  } else {
+    delete normalized.projectId;
+    delete normalized.project;
+  }
+  const projectName = task.projectName ?? task.project_name ?? nestedProject?.name;
+  if (projectName !== null && projectName !== undefined) normalized.projectName = projectName;
+  return normalized;
 }
 
 export function resolveConflictTask(result) {
@@ -318,5 +373,5 @@ export function applyAuthoritativeTask(todos, currentTask) {
   const current = normalizeTask(currentTask);
   if (!current?.id) return todos;
   if (current.status === 'done') return todos.filter((task) => task.id !== current.id);
-  return todos.map((task) => task.id === current.id ? { ...task, ...current } : task);
+  return todos.map((task) => task.id === current.id ? normalizeTask({ ...task, ...current }) : task);
 }

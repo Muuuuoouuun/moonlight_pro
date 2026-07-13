@@ -17,6 +17,7 @@ import {
   resolveConflictTask,
   settleComposerOperation,
   taskToDraft,
+  writableTaskFingerprint,
 } from "@/lib/project-task-state";
 import {
   getWorkspace,
@@ -172,6 +173,7 @@ export function Projects({ workspace }) {
   const [requiresUnlock, setRequiresUnlock] = React.useState(false);
   const [unlockSecret, setUnlockSecret] = React.useState('');
   const [unlockPending, setUnlockPending] = React.useState(false);
+  const [editorRetryPending, setEditorRetryPending] = React.useState(false);
   const [unlockError, setUnlockError] = React.useState('');
   const pendingUnlockRetryRef = React.useRef(null);
   const [orderPendingId, setOrderPendingId] = React.useState(null);
@@ -421,7 +423,20 @@ export function Projects({ workspace }) {
       return;
     }
     setTaskAnnouncement('쓰기 잠금을 해제했습니다. 같은 작업을 다시 시도합니다.');
-    await guardedRetry.run();
+    const isEditorRetry = retryBinding?.kind === 'editor';
+    if (isEditorRetry) setEditorRetryPending(true);
+    try {
+      await guardedRetry.run();
+    } finally {
+      if (isEditorRetry) setEditorRetryPending(false);
+    }
+  };
+
+  const changeTaskComposerTitle = (title) => {
+    const nextComposer = { ...taskComposerRef.current, title, error: '' };
+    taskComposerRef.current = nextComposer;
+    setTaskComposer(nextComposer);
+    dismissStaleUnlock();
   };
 
   const openTaskComposer = (projectId) => {
@@ -588,6 +603,13 @@ export function Projects({ workspace }) {
     dismissStaleUnlock();
   };
 
+  const changeTaskDraft = (key, value) => {
+    const nextDraft = taskDraftRef.current ? { ...taskDraftRef.current, [key]: value } : null;
+    taskDraftRef.current = nextDraft;
+    setTaskDraft(nextDraft);
+    dismissStaleUnlock();
+  };
+
   const openTaskEditor = (t) => {
     setDrawerPersisted(false);
     replaceTaskDraft(taskToDraft(t, taskTimezone));
@@ -600,7 +622,11 @@ export function Projects({ workspace }) {
       taskId: draftSnapshot.id,
       expectedUpdatedAt: draftSnapshot.updatedAt,
     };
-    const editorIsCurrent = () => isTaskOperationCurrent(taskDraftRef.current, editorIdentity);
+    const editorFingerprint = writableTaskFingerprint(draftSnapshot, 'editor');
+    const editorIsCurrent = () => (
+      isTaskOperationCurrent(taskDraftRef.current, editorIdentity)
+      && writableTaskFingerprint(taskDraftRef.current, 'editor') === editorFingerprint
+    );
     if (drawerPersisted) {
       const refreshed = await loadLedger();
       if (!editorIsCurrent()) return { ok: false, status: 'stale', message: '다른 할 일 편집을 유지합니다.' };
@@ -678,7 +704,7 @@ export function Projects({ workspace }) {
       task: draftSnapshot,
       retry: async () => {
         const retried = await saveTaskDraft(draftSnapshot);
-        if (retried?.ok && isTaskOperationCurrent(taskDraftRef.current, editorIdentity)) {
+        if (retried?.ok && editorIsCurrent()) {
           replaceTaskDraft(null);
           setDrawerPersisted(false);
         }
@@ -1127,7 +1153,7 @@ export function Projects({ workspace }) {
                                       <input
                                         id={`project-task-${p.id}`}
                                         value={taskComposer.title}
-                                        onChange={(event) => setTaskComposer((current) => ({ ...current, title: event.target.value, error: '' }))}
+                                        onChange={(event) => changeTaskComposerTitle(event.target.value)}
                                         disabled={taskComposer.state === 'saving' || taskComposer.state === 'refreshing'}
                                         autoFocus
                                         placeholder="할 일 제목"
@@ -1418,11 +1444,8 @@ export function Projects({ workspace }) {
         subtitle={taskDraft?.projectName || '프로젝트 할 일'}
         record={taskDraft}
         fields={TASK_EDIT_FIELDS}
-        onChange={(key, value) => setTaskDraft((current) => {
-          const nextDraft = current ? { ...current, [key]: value } : current;
-          taskDraftRef.current = nextDraft;
-          return nextDraft;
-        })}
+        onChange={changeTaskDraft}
+        externalBusy={editorRetryPending}
         onClose={() => {
           replaceTaskDraft(null);
           setDrawerPersisted(false);

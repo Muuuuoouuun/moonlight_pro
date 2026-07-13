@@ -192,6 +192,69 @@ test('late unlock for composer A cannot retry after composer B replaces its cont
   assert.equal(isTaskOperationCurrent(liveTask, editorBinding.identity), true);
 });
 
+test('unlock retries reject same-identity writable snapshots that changed while locked', async () => {
+  const { state: savingComposer, operation } = beginComposerOperation(
+    { projectId: 'project-a', title: 'Original title', state: 'idle', error: '' },
+    { operationId: 'operation-a' },
+  );
+  const composerBinding = bindUnlockRetry({ kind: 'composer', operation, retry: async () => {} });
+  assert.equal(guardUnlockRetry(composerBinding, {
+    composer: { ...savingComposer, title: 'Changed title' },
+    editor: null,
+    todos: [],
+  }).status, 'stale');
+
+  const editorTask = {
+    ...liveTask,
+    project: 'project-a',
+    priorityKey: 'high',
+    dueDate: '2026-07-15',
+    nextAction: 'Send quote',
+  };
+  const editorBinding = bindUnlockRetry({ kind: 'editor', task: editorTask, retry: async () => {} });
+  for (const changedTask of [
+    { ...editorTask, title: 'Changed title' },
+    { ...editorTask, status: 'doing' },
+    { ...editorTask, priority: 'critical' },
+    { ...editorTask, dueDate: '2026-07-16' },
+    { ...editorTask, nextAction: 'Call again' },
+    { ...editorTask, project: 'project-b', projectId: 'project-b' },
+  ]) {
+    assert.equal(guardUnlockRetry(editorBinding, {
+      composer: savingComposer,
+      editor: changedTask,
+      todos: [editorTask],
+    }).status, 'stale');
+  }
+
+  let activeEditor = editorTask;
+  let releaseSave;
+  let closeCount = 0;
+  const pendingSave = new Promise((resolve) => { releaseSave = resolve; });
+  const deferredBinding = bindUnlockRetry({
+    kind: 'editor',
+    task: editorTask,
+    retry: async () => {
+      await pendingSave;
+      if (guardUnlockRetry(deferredBinding, { editor: activeEditor, todos: [editorTask] }).allowed) {
+        closeCount += 1;
+      }
+    },
+  });
+  const retry = guardUnlockRetry(deferredBinding, { editor: activeEditor, todos: [editorTask] }).run();
+  activeEditor = { ...editorTask, status: 'doing' };
+  releaseSave();
+  await retry;
+  assert.equal(closeCount, 0);
+
+  const completeBinding = bindUnlockRetry({ kind: 'complete', task: editorTask, retry: async () => {} });
+  assert.equal(guardUnlockRetry(completeBinding, {
+    composer: savingComposer,
+    editor: null,
+    todos: [{ ...editorTask, title: 'Changed title' }],
+  }).status, 'stale');
+});
+
 test('task transitions remain anchored to immutable persisted status', () => {
   const draft = taskToDraft(liveTask, 'Asia/Seoul');
   assert.equal(draft.baseStatus, 'todo');
@@ -268,7 +331,7 @@ test('Engine conflict task is normalized and applied before any refetch', () => 
       title: liveTask.title,
       status: 'doing',
       priority: 'critical',
-      project_id: 'project-a',
+      project: { id: 'project-a', name: 'Project A' },
       due_at: '2026-07-14T09:30:00.000Z',
       due_precision: 'timed',
       updated_at: '2026-07-13T01:00:00.000Z',
@@ -276,10 +339,21 @@ test('Engine conflict task is normalized and applied before any refetch', () => 
   });
   assert.equal(current.status, 'doing');
   assert.equal(current.projectId, 'project-a');
+  assert.equal(current.project, 'project-a');
+  assert.equal(current.projectName, 'Project A');
   assert.equal(current.dueAt, '2026-07-14T09:30:00.000Z');
   assert.equal(current.duePrecision, 'timed');
   assert.equal(current.updatedAt, '2026-07-13T01:00:00.000Z');
-  assert.equal(applyAuthoritativeTask([liveTask], current)[0].status, 'doing');
+  const applied = applyAuthoritativeTask([{ ...liveTask, project: 'project-a' }], current);
+  assert.equal(applied[0].status, 'doing');
+  assert.equal(applied[0].project, 'project-a');
+  assert.equal(applied.filter((task) => task.project === 'project-a').length, 1);
+
+  const withoutProject = applyAuthoritativeTask(
+    [{ ...liveTask, project: 'project-a' }],
+    { id: liveTask.id, title: 'Changed', status: 'doing', updated_at: 'new-version' },
+  );
+  assert.equal(withoutProject[0].project, 'project-a');
 
   const completed = resolveConflictTask({
     status: 'conflict',

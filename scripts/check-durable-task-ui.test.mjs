@@ -187,14 +187,15 @@ test("Projects preserves timed due values and never claims an unfetched conflict
   assert.match(projectsSource, /최신 값을 불러오지 못했습니다/);
 });
 
-test("EditDrawer keeps failed drafts open and disables all fields while saving", () => {
+test("EditDrawer keeps failed drafts open and disables all fields while saving or retrying", () => {
   assert.match(primitiveSource, /saveError,\s*setSaveError/);
   assert.match(primitiveSource, /try\s*\{[\s\S]*await onSave\(\)[\s\S]*catch/s);
-  assert.match(primitiveSource, /ariaBusy=\{saveState === ['"]saving['"]\}/);
-  assert.match(primitiveSource, /disabled=\{saveState === ['"]saving['"]\}/g);
+  assert.match(primitiveSource, /const busy = saveState === ['"]saving['"] \|\| externalBusy/);
+  assert.match(primitiveSource, /ariaBusy=\{busy\}/);
+  assert.match(primitiveSource, /disabled=\{busy\}/g);
   assert.match(primitiveSource, /role=['"]alert['"]/);
   assert.match(primitiveSource, /r\?\.message|r\?\.error/);
-  assert.match(primitiveSource, /if\s*\(saveState === ['"]saving['"]\) return/);
+  assert.match(primitiveSource, /if\s*\(busy\) return/);
 });
 
 test("Projects writable task controls meet mobile sizing without unlocking project writes", () => {
@@ -277,6 +278,23 @@ test("inline unlock guards composer, editor, and completion identity before retr
     /const guardedRetry = guardUnlockRetry[\s\S]*if \(!guardedRetry\.allowed\)[\s\S]*return;[\s\S]*await guardedRetry\.run\(\)/,
   );
   assert.match(projectsSource, /isTaskOperationCurrent\(taskDraftRef\.current,\s*editorIdentity\)/);
+});
+
+test("inline unlock retries are bound to exact writable snapshots", () => {
+  assert.match(projectTaskStateSource, /writableTaskFingerprint/);
+  assert.match(projectTaskStateSource, /binding\.fingerprint/);
+  assert.match(projectsSource, /changeTaskComposerTitle[\s\S]*dismissStaleUnlock\(\)/);
+  assert.match(projectsSource, /changeTaskDraft[\s\S]*dismissStaleUnlock\(\)/);
+  assert.match(projectsSource, /editorIsCurrent[\s\S]*writableTaskFingerprint/);
+  assert.match(projectsSource, /editorRetryPending/);
+  assert.match(projectsSource, /externalBusy=\{editorRetryPending\}/);
+  assert.match(primitiveSource, /externalBusy/);
+});
+
+test("Engine nested project conflicts retain the scalar Projects filter key", () => {
+  assert.match(projectTaskStateSource, /task\.project\?\.id/);
+  assert.match(projectTaskStateSource, /projectName/);
+  assert.match(projectsSource, /t\.project === p\.id/);
 });
 
 test("date-only saves retain date precision across nonexistent local midnight", () => {

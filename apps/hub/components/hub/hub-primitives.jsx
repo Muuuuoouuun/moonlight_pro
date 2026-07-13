@@ -496,16 +496,17 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, width = 
 // Shared field-driven edit drawer. Revenue behavior is canonical for save feedback,
 // ESC close, and optimistic delete confirmation. Composes on top of Drawer for the shell.
 // Cmd/Ctrl+Enter mirrors the footer 완료 (save) button.
-export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)', children }) {
+export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, externalBusy = false, width = 'min(380px, 92vw)', children }) {
   const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | error
   const [saveError, setSaveError] = React.useState('');
+  const busy = saveState === 'saving' || externalBusy;
   React.useEffect(() => {
     setSaveState('idle');
     setSaveError('');
   }, [record?.id]);
 
   const handleDone = async () => {
-    if (saveState === 'saving') return;
+    if (busy) return;
     if (!onSave) { onClose(); return; }
     setSaveState('saving');
     setSaveError('');
@@ -525,7 +526,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
   };
 
   const handleDelete = async () => {
-    if (!onDelete) return;
+    if (!onDelete || busy) return;
     if (typeof window !== 'undefined' && !window.confirm('이 항목을 삭제할까요? 되돌릴 수 없습니다.')) return;
     setSaveState('saving');
     setSaveError('');
@@ -562,11 +563,11 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
       subtitle={subtitle}
       onClose={onClose}
       width={width}
-      ariaBusy={saveState === 'saving'}
+      ariaBusy={busy}
       footer={
         <>
           {onDelete && (
-            <Button variant="ghost" size="sm" onClick={handleDelete} disabled={saveState === 'saving'} style={{ color: 'var(--danger)' }}>삭제</Button>
+            <Button variant="ghost" size="sm" onClick={handleDelete} disabled={busy} style={{ color: 'var(--danger)' }}>삭제</Button>
           )}
           <div style={{ flex: 1, minWidth: 0, fontSize: 11, lineHeight: 1.4 }}>
             {saveState === 'preview' && (
@@ -579,8 +580,8 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
           {(saveState === 'preview' || saveState === 'error') && (
             <Button variant="ghost" size="sm" onClick={onClose}>닫기</Button>
           )}
-          <Button variant="primary" size="sm" onClick={handleDone} disabled={saveState === 'saving'}>
-            {saveState === 'saving' ? '저장 중…' : '완료'}
+          <Button variant="primary" size="sm" onClick={handleDone} disabled={busy}>
+            {busy ? '저장 중…' : '완료'}
           </Button>
         </>
       }
@@ -589,13 +590,13 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
         <label key={f.key} className="hub-edit-drawer-field" style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>{f.label}</span>
           {f.type === 'select' ? (
-            <select disabled={saveState === 'saving'} value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
+            <select disabled={busy} value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
               {(typeof f.options === 'function' ? f.options(record) : f.options).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           ) : (
             <input
               type={f.inputType || 'text'}
-              disabled={saveState === 'saving'}
+              disabled={busy}
               value={record[f.key] ?? ''}
               placeholder={f.placeholder || ''}
               onChange={e => onChange(f.key, f.inputType === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value)}
