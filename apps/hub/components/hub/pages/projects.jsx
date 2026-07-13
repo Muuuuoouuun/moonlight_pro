@@ -2,7 +2,8 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState, SyncBadge } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Avatar, Checkbox, EditDrawer, EmptyState, SyncBadge } from "../hub-primitives";
+import { createDurableTaskClient } from "@/lib/durable-task-client";
 import {
   getWorkspace,
   filterBrandsByWorkspace,
@@ -31,6 +32,80 @@ const EMPTY_COLUMNS = [
   { key: 'review', label: 'Review', cards: [] },
   { key: 'done', label: 'Done', cards: [] },
 ];
+
+const TASK_TRANSITIONS = {
+  inbox: ['todo', 'done'],
+  todo: ['doing', 'blocked', 'done'],
+  doing: ['todo', 'blocked', 'done'],
+  blocked: ['todo', 'doing', 'done'],
+  done: ['todo'],
+};
+
+const TASK_STATUS_LABELS = {
+  inbox: '수신함',
+  todo: '할 일',
+  doing: '진행 중',
+  blocked: '막힘',
+  done: '완료',
+};
+
+function allowedTaskStatuses(status) {
+  const current = TASK_STATUS_LABELS[status] ? status : 'todo';
+  return [current, ...(TASK_TRANSITIONS[current] || [])].map((value) => ({
+    value,
+    label: TASK_STATUS_LABELS[value],
+  }));
+}
+
+const TASK_EDIT_FIELDS = [
+  { key: 'title', label: '제목' },
+  { key: 'status', label: '상태', type: 'select', options: (record) => allowedTaskStatuses(record.status) },
+  { key: 'priority', label: '우선순위', type: 'select', options: [
+    { value: 'critical', label: '매우 높음' },
+    { value: 'high', label: '높음' },
+    { value: 'medium', label: '보통' },
+    { value: 'low', label: '낮음' },
+  ] },
+  { key: 'dueDate', label: '기한', inputType: 'date' },
+  { key: 'nextAction', label: '다음 행동', placeholder: '다음으로 할 일을 적으세요' },
+];
+
+function taskDueDate(task) {
+  if (!task?.dueAt) return '';
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date(task.dueAt));
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+  } catch {
+    return String(task.dueAt).slice(0, 10);
+  }
+}
+
+function taskToDraft(task) {
+  return {
+    ...task,
+    title: task?.title || '',
+    status: task?.status || 'todo',
+    priority: task?.priorityKey || task?.priority || 'medium',
+    dueDate: taskDueDate(task),
+    nextAction: task?.nextAction || '',
+  };
+}
+
+function taskFailureMessage(result, fallback) {
+  if (result?.requiresUnlock || result?.httpStatus === 401) {
+    return '쓰기 잠금이 필요합니다. Quick Capture에서 운영자 잠금을 해제한 뒤 다시 시도하세요.';
+  }
+  return result?.error || result?.message || fallback;
+}
+
+function isDurableSuccess(result) {
+  return result?.httpStatus >= 200
+    && result.httpStatus < 300
+    && ['saved', 'duplicate'].includes(result.status);
+}
 
 function DetailSection({ title, count = 0, empty, children }) {
   return (
@@ -88,8 +163,19 @@ export function Projects({ workspace }) {
   const [sidebarHidden, setSidebarHidden] = React.useState(false);
   const [syncState, setSyncState] = React.useState('loading');
   const [ledgerError, setLedgerError] = React.useState(null);
+  const [taskSource, setTaskSource] = React.useState('loading');
+  const [taskError, setTaskError] = React.useState(null);
   const [refreshToken, setRefreshToken] = React.useState(0);
   const brandMenuRef = React.useRef(null);
+  const mountedRef = React.useRef(true);
+  const loadGenerationRef = React.useRef(0);
+  const client = React.useMemo(() => createDurableTaskClient(), []);
+  const [pendingTaskIds, setPendingTaskIds] = React.useState(() => new Set());
+  const [persistedTaskIds, setPersistedTaskIds] = React.useState(() => new Set());
+  const [taskResults, setTaskResults] = React.useState({});
+  const [taskComposer, setTaskComposer] = React.useState({ projectId: null, title: '', state: 'idle', error: '' });
+  const [taskDraft, setTaskDraft] = React.useState(null);
+  const [drawerPersisted, setDrawerPersisted] = React.useState(false);
   const [orderPendingId, setOrderPendingId] = React.useState(null);
   const [orderResults, setOrderResults] = React.useState({}); // projectId → { tone: 'ok'|'err', label }
 
@@ -150,94 +236,85 @@ export function Projects({ workspace }) {
   const cols = Array.isArray(ledger.columns) && ledger.columns.length ? ledger.columns : EMPTY_COLUMNS;
 
   React.useEffect(() => {
-    let active = true;
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
-    async function loadLedger() {
+  const loadLedger = React.useCallback(async ({ showLoading = false } = {}) => {
+    const generation = ++loadGenerationRef.current;
+    if (showLoading) {
       setSyncState('loading');
-      setLedgerError(null);
-      try {
-        const response = await fetch('/api/hub/projects', { cache: 'no-store' });
-        const data = await response.json().catch(() => null);
-
-        if (!active || !response.ok || !data || data.status === 'error') {
-          if (active) {
-            setLedger({
-              source: 'error',
-              brands: [EMPTY_ALL_BRAND],
-              projects: [],
-              updates: [],
-              decisions: [],
-              notes: [],
-              checks: [],
-              columns: EMPTY_COLUMNS,
-            });
-            setTodos([]);
-            setExpanded(new Set());
-            setOpenDetail(null);
-            setSyncState('error');
-            setLedgerError(data?.error || data?.message || `프로젝트 원장 요청 실패 (${response.status})`);
-          }
-          return;
-        }
-
-        if (data.source === 'supabase') {
-          const liveProjects = Array.isArray(data.projects) ? data.projects : [];
-          const liveColumns = Array.isArray(data.columns) && data.columns.length ? data.columns : EMPTY_COLUMNS;
-          setLedger({
-            source: data.source,
-            brands: data.brands?.length ? data.brands : [EMPTY_ALL_BRAND],
-            projects: liveProjects,
-            updates: Array.isArray(data.updates) ? data.updates : [],
-            decisions: Array.isArray(data.decisions) ? data.decisions : [],
-            notes: Array.isArray(data.notes) ? data.notes : [],
-            checks: Array.isArray(data.checks) ? data.checks : [],
-            columns: liveColumns,
-          });
-          setTodos(Array.isArray(data.todos) ? data.todos : []);
-          setExpanded(new Set(liveProjects.slice(0, 2).map(p => p.id)));
-          setSyncState('live');
-          setLedgerError(null);
-        } else {
-          setLedger({
-            source: 'preview',
-            brands: [EMPTY_ALL_BRAND],
-            projects: [],
-            updates: [],
-            decisions: [],
-            notes: [],
-            checks: [],
-            columns: EMPTY_COLUMNS,
-          });
-          setTodos([]);
-          setExpanded(new Set());
-          setOpenDetail(null);
-          setSyncState('preview');
-          setLedgerError(null);
-        }
-      } catch (error) {
-        if (active) {
-          setLedger({
-            source: 'error',
-            brands: [EMPTY_ALL_BRAND],
-            projects: [],
-            updates: [],
-            decisions: [],
-            notes: [],
-            checks: [],
-            columns: EMPTY_COLUMNS,
-          });
-          setTodos([]);
-          setExpanded(new Set());
-          setOpenDetail(null);
-          setSyncState('error');
-          setLedgerError(error instanceof Error ? error.message : String(error));
-        }
-      }
+      setTaskSource('loading');
     }
+    setLedgerError(null);
 
-    loadLedger();
-    return () => { active = false; };
-  }, [refreshToken]);
+    try {
+      const response = await fetch('/api/hub/projects', { cache: 'no-store' });
+      const data = await response.json().catch(() => null);
+      if (!mountedRef.current || generation !== loadGenerationRef.current) return { ok: false, reason: 'stale' };
+
+      if (!response.ok || !data || data.status === 'error') {
+        const message = data?.error || data?.message || `프로젝트 원장 요청 실패 (${response.status})`;
+        setSyncState('error');
+        setLedgerError(message);
+        setTaskSource('error');
+        setTaskError('할 일 원장을 다시 읽지 못했습니다. 기존에 불러온 할 일을 유지합니다.');
+        setTodos(previousTodos => previousTodos);
+        return { ok: false, reason: 'project-read', message };
+      }
+
+      const nextTaskSource = data.taskSource || 'preview';
+      setTaskSource(nextTaskSource);
+      if (nextTaskSource === 'error') {
+        setTaskError('할 일 원장을 다시 읽지 못했습니다. 기존에 불러온 할 일을 유지합니다.');
+        setTodos(previousTodos => previousTodos);
+      } else {
+        setTaskError(null);
+        setTodos(Array.isArray(data.todos) ? data.todos : []);
+      }
+
+      if (data.source === 'supabase') {
+        const liveProjects = Array.isArray(data.projects) ? data.projects : [];
+        setLedger({
+          source: data.source,
+          brands: data.brands?.length ? data.brands : [EMPTY_ALL_BRAND],
+          projects: liveProjects,
+          updates: Array.isArray(data.updates) ? data.updates : [],
+          decisions: Array.isArray(data.decisions) ? data.decisions : [],
+          notes: Array.isArray(data.notes) ? data.notes : [],
+          checks: Array.isArray(data.checks) ? data.checks : [],
+          columns: Array.isArray(data.columns) && data.columns.length ? data.columns : EMPTY_COLUMNS,
+        });
+        setExpanded((previous) => previous.size ? previous : new Set(liveProjects.slice(0, 2).map((project) => project.id)));
+        setSyncState('live');
+        setLedgerError(null);
+      } else {
+        setLedger({
+          source: 'preview', brands: [EMPTY_ALL_BRAND], projects: [], updates: [], decisions: [],
+          notes: [], checks: [], columns: EMPTY_COLUMNS,
+        });
+        setExpanded(new Set());
+        setOpenDetail(null);
+        setSyncState('preview');
+        setLedgerError(null);
+      }
+
+      return { ok: ['live', 'empty'].includes(nextTaskSource), data };
+    } catch (error) {
+      if (!mountedRef.current || generation !== loadGenerationRef.current) return { ok: false, reason: 'stale' };
+      const message = error instanceof Error ? error.message : String(error);
+      setSyncState('error');
+      setLedgerError(message);
+      setTaskSource('error');
+      setTaskError('할 일 원장을 다시 읽지 못했습니다. 기존에 불러온 할 일을 유지합니다.');
+      setTodos(previousTodos => previousTodos);
+      return { ok: false, reason: 'network', message };
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadLedger({ showLoading: true });
+  }, [loadLedger, refreshToken]);
 
   React.useEffect(() => {
     if (!brands.some(b => b.key === brand)) {
@@ -251,6 +328,173 @@ export function Projects({ workspace }) {
   const prioTone = { critical: 'danger', high: 'danger', med: 'warning', medium: 'warning', low: 'neutral' };
   const updateTone = { reported: 'neutral', active: 'info', blocked: 'danger', done: 'success' };
   const checkTone = { pending: 'neutral', done: 'success', skipped: 'warning', blocked: 'danger' };
+
+  const openTaskComposer = (projectId) => {
+    setExpanded((previous) => new Set([...previous, projectId]));
+    setTaskComposer({ projectId, title: '', state: 'idle', error: '' });
+  };
+
+  const refetchPersistedComposer = async () => {
+    setTaskComposer((current) => ({ ...current, state: 'refreshing', error: '' }));
+    const refreshed = await loadLedger();
+    if (refreshed.ok && ['live', 'empty'].includes(refreshed.data?.taskSource)) {
+      setTaskComposer({ projectId: null, title: '', state: 'idle', error: '' });
+      return;
+    }
+    setTaskComposer((current) => ({ ...current, state: 'persisted', error: '저장은 완료됐지만 목록을 확인하지 못했습니다. 다시 확인하세요.' }));
+  };
+
+  const createProjectTask = async (event) => {
+    event.preventDefault();
+    if (taskComposer.state === 'persisted') {
+      await refetchPersistedComposer();
+      return;
+    }
+    const title = taskComposer.title.trim();
+    if (!title) {
+      setTaskComposer((current) => ({ ...current, error: '할 일 제목을 입력하세요.' }));
+      return;
+    }
+
+    setTaskComposer((current) => ({ ...current, state: 'saving', error: '' }));
+    const result = await client.createTask({
+      title: taskComposer.title,
+      projectId: taskComposer.projectId,
+      status: 'todo',
+    });
+
+    if (isDurableSuccess(result)) {
+      setTaskComposer((current) => ({ ...current, state: 'persisted', error: '' }));
+      await refetchPersistedComposer();
+      return;
+    }
+
+    setTaskComposer((current) => ({
+      ...current,
+      state: 'error',
+      error: taskFailureMessage(result, '할 일을 저장하지 못했습니다. 입력을 유지했으니 다시 시도하세요.'),
+    }));
+  };
+
+  const completeTask = async (t) => {
+    if (!t?.id || !t.updatedAt || pendingTaskIds.has(t.id) || t.done) return;
+    setPendingTaskIds((previous) => new Set([...previous, t.id]));
+    setTaskResults((previous) => ({ ...previous, [t.id]: null }));
+    try {
+      if (persistedTaskIds.has(t.id)) {
+        const refreshed = await loadLedger();
+        if (refreshed.ok) {
+          setPersistedTaskIds((previous) => {
+            const next = new Set(previous);
+            next.delete(t.id);
+            return next;
+          });
+        } else {
+          setTaskResults((previous) => ({ ...previous, [t.id]: '완료는 저장됐지만 목록을 다시 읽지 못했습니다. 새로고침하세요.' }));
+        }
+        return;
+      }
+
+      const result = await client.updateTask({
+        id: t.id,
+        expectedUpdatedAt: t.updatedAt,
+        patch: { status: 'done' },
+      });
+
+      if (isDurableSuccess(result)) {
+        setPersistedTaskIds((previous) => new Set([...previous, t.id]));
+        const refreshed = await loadLedger();
+        if (refreshed.ok) {
+          setPersistedTaskIds((previous) => {
+            const next = new Set(previous);
+            next.delete(t.id);
+            return next;
+          });
+        } else {
+          setTaskResults((previous) => ({ ...previous, [t.id]: '완료는 저장됐지만 목록을 다시 읽지 못했습니다. 새로고침하세요.' }));
+        }
+      } else if (result.status === 'conflict') {
+        const refreshed = await loadLedger();
+        setTaskResults((previous) => ({
+          ...previous,
+          [t.id]: refreshed.ok
+            ? '다른 곳에서 변경됐습니다. 최신 값을 불러왔으니 다시 확인하세요.'
+            : '다른 곳에서 변경됐지만 최신 값을 다시 읽지 못했습니다. 목록을 다시 확인하세요.',
+        }));
+      } else {
+        setTaskResults((previous) => ({
+          ...previous,
+          [t.id]: taskFailureMessage(result, '완료 상태를 저장하지 못했습니다. 다시 시도하세요.'),
+        }));
+      }
+    } finally {
+      setPendingTaskIds((previous) => {
+        const next = new Set(previous);
+        next.delete(t.id);
+        return next;
+      });
+    }
+  };
+
+  const openTaskEditor = (t) => {
+    setDrawerPersisted(false);
+    setTaskDraft(taskToDraft(t));
+  };
+
+  const saveTaskDraft = async () => {
+    if (!taskDraft?.title?.trim()) return { ok: false, message: '제목을 입력하세요.' };
+    if (drawerPersisted) {
+      const refreshed = await loadLedger();
+      return refreshed.ok && ['live', 'empty'].includes(refreshed.data?.taskSource)
+        ? { ok: true, status: 'saved' }
+        : { ok: false, message: '저장은 완료됐지만 최신 목록을 확인하지 못했습니다. 다시 확인하세요.' };
+    }
+
+    const duePatch = !taskDraft.dueDate
+      ? { dueAt: null, duePrecision: 'none' }
+      : taskDraft.duePrecision === 'timed'
+        && taskDraft.dueAt
+        && taskDueDate(taskDraft) === taskDraft.dueDate
+        ? { dueAt: taskDraft.dueAt, duePrecision: 'timed' }
+        : { dueAt: `${taskDraft.dueDate}T00:00:00+09:00`, duePrecision: 'date' };
+    const result = await client.updateTask({
+      id: taskDraft.id,
+      expectedUpdatedAt: taskDraft.updatedAt,
+      patch: {
+        title: taskDraft.title.trim(),
+        status: taskDraft.status,
+        priority: taskDraft.priority,
+        nextAction: taskDraft.nextAction.trim() || null,
+        ...duePatch,
+      },
+    });
+
+    if (isDurableSuccess(result)) {
+      setDrawerPersisted(true);
+      const refreshed = await loadLedger();
+      if (refreshed.ok && ['live', 'empty'].includes(refreshed.data?.taskSource)) {
+        setDrawerPersisted(false);
+        return { ok: true, status: result.status };
+      }
+      return { ok: false, message: '저장은 완료됐지만 최신 목록을 확인하지 못했습니다. 다시 확인하세요.' };
+    }
+
+    if (result.status === 'conflict') {
+      const refreshed = await loadLedger();
+      const latest = refreshed.data?.todos?.find((todo) => todo.id === taskDraft.id);
+      if (latest) {
+        const latestDraft = taskToDraft(latest);
+        setTaskDraft(latestDraft);
+        return { ok: false, status: 'conflict', message: '다른 곳에서 변경됐습니다. 최신 값으로 교체했으니 다시 검토하세요.' };
+      }
+      return { ok: false, status: 'conflict', message: '다른 곳에서 변경됐지만 최신 값을 불러오지 못했습니다. 목록을 다시 확인하세요.' };
+    }
+
+    return {
+      ok: false,
+      message: taskFailureMessage(result, '할 일을 저장하지 못했습니다. 입력을 유지했으니 다시 시도하세요.'),
+    };
+  };
 
   React.useEffect(() => {
     const close = (e) => { if (brandMenuRef.current && !brandMenuRef.current.contains(e.target)) setBrandMenuOpen(false); };
@@ -478,8 +722,18 @@ export function Projects({ workspace }) {
               }}>{t.l}</button>
             ))}
           </div>
-          <Button variant="secondary" size="sm" icon="lock" disabled title="프로젝트·할 일 쓰기 API 연결 후 사용할 수 있습니다.">읽기 전용</Button>
+          <Button variant="secondary" size="sm" icon="lock" disabled title="프로젝트 생성·삭제는 읽기 전용입니다.">프로젝트 읽기 전용</Button>
         </div>
+
+        {syncState === 'live' && (taskSource === 'error' || taskSource === 'preview') && (
+          <div className="project-task-source-alert" role="alert">
+            <div>
+              <strong>{taskSource === 'error' ? '할 일 원장을 확인하지 못했습니다.' : '할 일 원장 연결이 필요합니다.'}</strong>
+              <span>{taskError || (todos.length ? '기존에 불러온 할 일을 유지합니다.' : '가짜 할 일 없이 빈 상태로 표시합니다.')}</span>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => loadLedger()}>다시 확인</Button>
+          </div>
+        )}
 
         {syncState !== 'live' && (
           <div className="scroll-y" style={{ flex: 1, padding: 'var(--section-gap)' }}>
@@ -527,7 +781,7 @@ export function Projects({ workspace }) {
                         <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4 }}>{groupProjects.length}</span>
                       </div>
                       <Card pad={false} className="hub-table-card">
-                        <div style={{
+                        <div className="hub-project-table-head" style={{
                           display: 'grid', gridTemplateColumns: '22px 18px 1fr 36px 100px 120px',
                           padding: '8px 14px', background: 'var(--surface-2)',
                           borderBottom: '1px solid var(--line-soft)',
@@ -548,6 +802,7 @@ export function Projects({ workspace }) {
                           return (
                             <React.Fragment key={p.id}>
                               <div
+                                className="hub-project-row"
                                 role="button"
                                 tabIndex={0}
                                 onKeyDown={(e) => {
@@ -595,8 +850,8 @@ export function Projects({ workspace }) {
                               </div>
 
                               {isOpen && (
-                                <div style={{ background: 'var(--surface-2)', borderBottom: pi < groupProjects.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
-                                  <div style={{
+                                <div className="hub-project-task-group" style={{ background: 'var(--surface-2)', borderBottom: pi < groupProjects.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+                                  <div className="hub-project-task-head" style={{
                                     display: 'grid', gridTemplateColumns: '22px 18px 1fr 36px 100px 120px',
                                     padding: '6px 14px 6px 44px', gap: 8, alignItems: 'center',
                                     fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em',
@@ -604,43 +859,67 @@ export function Projects({ workspace }) {
                                   }}>
                                     <span /><span /><span>하위 아이템</span><span style={{ textAlign: 'center' }}>Own</span><span>기한</span><span>상태</span>
                                   </div>
-                                  {pTodos.length === 0 && (
-                                    <div style={{ padding: '10px 14px 10px 66px', fontSize: 11.5, color: 'var(--fg-faint)' }}>하위 아이템이 없습니다.</div>
+                                  {pTodos.length === 0 && taskComposer.projectId !== p.id && (
+                                    <div className="project-task-empty">
+                                      <span>이 프로젝트에 연결된 할 일이 없습니다.</span>
+                                      <Button className="project-task-control" variant="outline" size="sm" onClick={() => openTaskComposer(p.id)}>+ Task</Button>
+                                    </div>
                                   )}
                                   {pTodos.map((t, ti) => (
-                                    <div key={t.id} style={{
+                                    <div key={t.id} className="hub-project-task-row hub-project-task-row--tree" aria-busy={pendingTaskIds.has(t.id)} style={{
                                       display: 'grid', gridTemplateColumns: '22px 18px 1fr 36px 100px 120px',
                                       padding: '8px 14px 8px 44px', alignItems: 'center', gap: 8,
                                       borderBottom: ti < pTodos.length - 1 ? '1px solid var(--line-soft)' : 'none',
                                       opacity: t.done ? 0.55 : 1,
                                     }}>
                                       <span />
-                                      <span aria-label={t.done ? '완료된 할 일' : '열린 할 일'} style={{
-                                        width: 14, height: 14, borderRadius: 3,
-                                        border: '1.5px solid ' + (t.done ? 'var(--success)' : 'var(--line-strong)'),
-                                        background: t.done ? 'var(--success)' : 'transparent',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                      }}>
-                                        {t.done && <span style={{ fontSize: 9, color: 'var(--bg)' }}>✓</span>}
-                                      </span>
+                                      <Checkbox
+                                        checked={t.done}
+                                        label={`${t.title} 완료`}
+                                        aria-busy={pendingTaskIds.has(t.id)}
+                                        disabled={pendingTaskIds.has(t.id) || taskSource === 'error' || t.done}
+                                        onChange={() => completeTask(t)}
+                                      />
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                         <Dot tone={prioTone[t.priority]} size={4} />
-                                        <span style={{ fontSize: 12.5, textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</span>
+                                        <button className="project-task-title" type="button" onClick={() => openTaskEditor(t)}>{t.title}</button>
                                       </div>
                                       <div style={{ display: 'flex', justifyContent: 'center' }}>
                                         <Avatar name={t.assignee} size={18} tone={t.assignee === 'Me' ? 'moon' : t.assignee === 'Council' ? 'info' : 'neutral'} />
                                       </div>
                                       <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{t.due}</span>
                                       <Badge tone={t.done ? 'success' : 'neutral'} size="xs">{t.done ? '완료' : '열림'}</Badge>
+                                      {taskResults[t.id] && <div className="project-task-row-error" role="alert">{taskResults[t.id]}</div>}
                                     </div>
                                   ))}
-                                  <div style={{ width: '100%', padding: '8px 14px 10px 66px', fontSize: 11.5, color: 'var(--fg-faint)', borderTop: pTodos.length ? '1px solid var(--line-soft)' : 'none' }}>읽기 전용 · 하위 아이템 쓰기 연결 대기</div>
+                                  {taskComposer.projectId === p.id ? (
+                                    <form className="project-task-composer" onSubmit={createProjectTask}>
+                                      <label htmlFor={`project-task-${p.id}`}>새 할 일</label>
+                                      <input
+                                        id={`project-task-${p.id}`}
+                                        value={taskComposer.title}
+                                        onChange={(event) => setTaskComposer((current) => ({ ...current, title: event.target.value, error: '' }))}
+                                        disabled={taskComposer.state === 'saving' || taskComposer.state === 'refreshing'}
+                                        autoFocus
+                                        placeholder="할 일 제목"
+                                      />
+                                      <Button className="project-task-control" type="submit" variant="primary" size="sm" disabled={taskComposer.state === 'saving' || taskComposer.state === 'refreshing'}>
+                                        {taskComposer.state === 'persisted' ? '목록 다시 확인' : taskComposer.state === 'saving' || taskComposer.state === 'refreshing' ? '확인 중…' : '추가'}
+                                      </Button>
+                                      <Button className="project-task-control" type="button" variant="ghost" size="sm" disabled={taskComposer.state === 'saving' || taskComposer.state === 'refreshing'} onClick={() => setTaskComposer({ projectId: null, title: '', state: 'idle', error: '' })}>취소</Button>
+                                      {taskComposer.error && <div className="project-task-composer__error" role="alert">{taskComposer.error}</div>}
+                                    </form>
+                                  ) : pTodos.length > 0 ? (
+                                    <div className="project-task-footer">
+                                      <Button className="project-task-control" variant="ghost" size="sm" onClick={() => openTaskComposer(p.id)}>+ Task</Button>
+                                    </div>
+                                  ) : null}
                                 </div>
                               )}
                             </React.Fragment>
                           );
                         })}
-                        <div style={{ width: '100%', padding: '10px 14px', fontSize: 11.5, color: 'var(--fg-faint)', borderTop: '1px solid var(--line-soft)' }}>읽기 전용 · {group.label} 프로젝트 쓰기 연결 대기</div>
+                        <div className="hub-project-readonly-footer" style={{ width: '100%', padding: '10px 14px', fontSize: 11.5, color: 'var(--fg-faint)', borderTop: '1px solid var(--line-soft)' }}>프로젝트 생성·삭제는 읽기 전용 · {group.label}</div>
                       </Card>
                     </div>
                   );
@@ -701,21 +980,24 @@ export function Projects({ workspace }) {
                     <div>
                       <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 8, display: 'flex', alignItems: 'center' }}>
                         <span style={{ flex: 1 }}>체크리스트 · {doneCount}/{pTodos.length}</span>
+                        <Button className="project-task-control" variant="ghost" size="sm" onClick={() => openTaskComposer(p.id)}>+ Task</Button>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {pTodos.map(t => (
-                          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: 'var(--surface-2)', borderRadius: 'var(--r-sm)', border: '1px solid var(--line-soft)' }}>
-                            <span aria-label={t.done ? '완료된 할 일' : '열린 할 일'} style={{
-                              width: 14, height: 14, borderRadius: 3,
-                              border: '1.5px solid ' + (t.done ? 'var(--success)' : 'var(--line-strong)'),
-                              background: t.done ? 'var(--success)' : 'transparent',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                            }}>{t.done && <span style={{ fontSize: 9, color: 'var(--bg)' }}>✓</span>}</span>
-                            <span style={{ flex: 1, fontSize: 12, textDecoration: t.done ? 'line-through' : 'none', color: t.done ? 'var(--fg-faint)' : 'var(--fg)' }}>{t.title}</span>
+                          <div key={t.id} className="hub-project-task-row hub-project-task-row--detail" aria-busy={pendingTaskIds.has(t.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: 'var(--surface-2)', borderRadius: 'var(--r-sm)', border: '1px solid var(--line-soft)' }}>
+                            <Checkbox
+                              checked={t.done}
+                              label={`${t.title} 완료`}
+                              aria-busy={pendingTaskIds.has(t.id)}
+                              disabled={pendingTaskIds.has(t.id) || taskSource === 'error' || t.done}
+                              onChange={() => completeTask(t)}
+                            />
+                            <button className="project-task-title" type="button" onClick={() => openTaskEditor(t)}>{t.title}</button>
                             <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{t.due}</span>
+                            {taskResults[t.id] && <span className="project-task-row-error" role="alert">{taskResults[t.id]}</span>}
                           </div>
                         ))}
-                        <div style={{ padding: '6px 8px', fontSize: 11.5, color: 'var(--fg-faint)' }}>읽기 전용 · 체크리스트 쓰기 연결 대기</div>
+                        {pTodos.length === 0 && <div style={{ padding: '6px 8px', fontSize: 11.5, color: 'var(--fg-faint)' }}>연결된 할 일이 없습니다. + Task로 첫 항목을 만드세요.</div>}
                       </div>
                     </div>
                     <DetailSection title="최근 업데이트" count={pUpdates.length} empty={syncState === 'live' ? '이 프로젝트에 연결된 update가 아직 없습니다.' : 'live 연결 후 project_updates가 여기에 표시됩니다.'}>
@@ -824,22 +1106,21 @@ export function Projects({ workspace }) {
                         const proj = allProjects.find(p => p.id === t.project);
                         const pBrand = brands.find(b => b.key === t.brand) || brands[0] || EMPTY_ALL_BRAND;
                         return (
-                          <div key={t.id} style={{
+                          <div key={t.id} className="hub-project-task-row hub-project-task-row--todo" aria-busy={pendingTaskIds.has(t.id)} style={{
                             display: 'grid', gridTemplateColumns: '22px 1fr 140px 100px 80px',
                             padding: '10px 14px', alignItems: 'center', gap: 10,
                             borderBottom: i < items.length - 1 ? '1px solid var(--line-soft)' : 'none',
                             opacity: t.done ? 0.5 : 1,
                           }}>
-                            <span aria-label={t.done ? '완료된 할 일' : '열린 할 일'} style={{
-                              width: 16, height: 16, borderRadius: 4,
-                              border: '1.5px solid ' + (t.done ? 'var(--success)' : 'var(--line-strong)'),
-                              background: t.done ? 'var(--success)' : 'transparent',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>
-                              {t.done && <span style={{ fontSize: 10, color: 'var(--bg)' }}>✓</span>}
-                            </span>
+                            <Checkbox
+                              checked={t.done}
+                              label={`${t.title} 완료`}
+                              aria-busy={pendingTaskIds.has(t.id)}
+                              disabled={pendingTaskIds.has(t.id) || taskSource === 'error' || t.done}
+                              onChange={() => completeTask(t)}
+                            />
                             <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: 13, textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</div>
+                              <button className="project-task-title" type="button" onClick={() => openTaskEditor(t)}>{t.title}</button>
                               <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3 }}>
                                 {pBrand.glyph} {pBrand.name} · {proj?.name}
                               </div>
@@ -849,6 +1130,7 @@ export function Projects({ workspace }) {
                               <Dot tone={prioTone[t.priority]} />{t.priority}
                             </span>
                             <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', textAlign: 'right' }}>{t.due}</span>
+                            {taskResults[t.id] && <div className="project-task-row-error" role="alert">{taskResults[t.id]}</div>}
                           </div>
                         );
                       })}
@@ -901,6 +1183,18 @@ export function Projects({ workspace }) {
           </div>
         )}
       </div>
+      <EditDrawer
+        title="할 일 편집"
+        subtitle={taskDraft?.projectName || '프로젝트 할 일'}
+        record={taskDraft}
+        fields={TASK_EDIT_FIELDS}
+        onChange={(key, value) => setTaskDraft((current) => current ? { ...current, [key]: value } : current)}
+        onClose={() => {
+          setTaskDraft(null);
+          setDrawerPersisted(false);
+        }}
+        onSave={saveTaskDraft}
+      />
     </div>
   );
 }

@@ -417,7 +417,7 @@ const DRAWER_FOCUSABLE = 'input, select, textarea, button, a[href], [tabindex]:n
 // scrollable body + optional footer bar. Owns ESC-to-close, focus-in-on-mount +
 // focus-restore-on-unmount, and a light Tab focus trap — not field rendering or
 // save/delete semantics. EditDrawer and the Guru diagnosis drawer compose on top.
-export function Drawer({ title, subtitle, onClose, footer, footerStyle, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', children }) {
+export function Drawer({ title, subtitle, onClose, footer, footerStyle, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', ariaBusy = false, children }) {
   const asideRef = React.useRef(null);
   const bodyRef = React.useRef(null);
 
@@ -462,6 +462,7 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, width = 
         ref={asideRef}
         role="dialog"
         aria-modal="true"
+        aria-busy={ariaBusy}
         aria-label={typeof title === 'string' ? title : undefined}
         onKeyDown={handleKeyDown}
         className="hub-drawer"
@@ -497,22 +498,49 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, width = 
 // Cmd/Ctrl+Enter mirrors the footer 완료 (save) button.
 export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)', children }) {
   const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | error
-  React.useEffect(() => { setSaveState('idle'); }, [record?.id]);
+  const [saveError, setSaveError] = React.useState('');
+  React.useEffect(() => {
+    setSaveState('idle');
+    setSaveError('');
+  }, [record?.id]);
 
   const handleDone = async () => {
+    if (saveState === 'saving') return;
     if (!onSave) { onClose(); return; }
     setSaveState('saving');
-    const r = await onSave();
-    if (r?.ok) { setSaveState('idle'); onClose(); }
-    else { setSaveState(r?.status === 'preview' ? 'preview' : 'error'); }
+    setSaveError('');
+    try {
+      const r = await onSave();
+      if (r?.ok) {
+        setSaveState('idle');
+        onClose();
+      } else {
+        setSaveState(r?.status === 'preview' ? 'preview' : 'error');
+        setSaveError(r?.message || r?.error || '저장에 실패했습니다. 입력을 유지했으니 다시 시도하세요.');
+      }
+    } catch (error) {
+      setSaveState('error');
+      setSaveError(error instanceof Error ? error.message : '저장에 실패했습니다. 입력을 유지했으니 다시 시도하세요.');
+    }
   };
 
   const handleDelete = async () => {
     if (!onDelete) return;
     if (typeof window !== 'undefined' && !window.confirm('이 항목을 삭제할까요? 되돌릴 수 없습니다.')) return;
     setSaveState('saving');
-    await onDelete();
-    onClose();
+    setSaveError('');
+    try {
+      const result = await onDelete();
+      if (result?.ok === false) {
+        setSaveState('error');
+        setSaveError(result?.message || result?.error || '삭제에 실패했습니다.');
+        return;
+      }
+      onClose();
+    } catch (error) {
+      setSaveState('error');
+      setSaveError(error instanceof Error ? error.message : '삭제에 실패했습니다.');
+    }
   };
 
   // Cmd/Ctrl+Enter saves. A ref keeps the window listener pointed at the latest
@@ -534,6 +562,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
       subtitle={subtitle}
       onClose={onClose}
       width={width}
+      ariaBusy={saveState === 'saving'}
       footer={
         <>
           {onDelete && (
@@ -544,7 +573,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
               <span style={{ color: 'var(--fg-muted)' }}>저장 위치(Supabase)가 설정되지 않아 로컬에만 반영됩니다.</span>
             )}
             {saveState === 'error' && (
-              <span style={{ color: 'var(--danger)' }}>저장에 실패했습니다. 다시 시도하세요.</span>
+              <span role="alert" style={{ color: 'var(--danger)' }}>{saveError || '저장에 실패했습니다. 다시 시도하세요.'}</span>
             )}
           </div>
           {(saveState === 'preview' || saveState === 'error') && (
@@ -560,12 +589,13 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
         <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>{f.label}</span>
           {f.type === 'select' ? (
-            <select value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
-              {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            <select disabled={saveState === 'saving'} value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
+              {(typeof f.options === 'function' ? f.options(record) : f.options).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           ) : (
             <input
               type={f.inputType || 'text'}
+              disabled={saveState === 'saving'}
               value={record[f.key] ?? ''}
               placeholder={f.placeholder || ''}
               onChange={e => onChange(f.key, f.inputType === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value)}

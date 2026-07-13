@@ -411,6 +411,121 @@
   text-align: right;
 }
 
+.project-task-source-alert {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 20px;
+  color: var(--danger);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--danger-line);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.project-task-source-alert > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.project-task-source-alert strong,
+.project-task-source-alert span {
+  display: block;
+}
+
+.project-task-source-alert span {
+  margin-top: 2px;
+  color: var(--fg-muted);
+}
+
+.project-task-empty,
+.project-task-footer {
+  min-height: 52px;
+  padding: 4px 14px 4px 66px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--fg-faint);
+  font-size: 11.5px;
+}
+
+.project-task-empty > span {
+  min-width: 0;
+  flex: 1;
+}
+
+.project-task-composer {
+  padding: 10px 14px 10px 66px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.project-task-composer label {
+  color: var(--fg-muted);
+  font-size: 11.5px;
+}
+
+.project-task-composer input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  outline: none;
+  font-size: 16px;
+}
+
+.project-task-composer input:focus {
+  border-color: var(--moon-300);
+}
+
+.project-task-control,
+.project-task-title {
+  min-height: 44px;
+}
+
+.project-task-title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--fg);
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-task-title:hover {
+  color: var(--moon-200);
+}
+
+.hub-project-task-row[aria-busy="true"] {
+  background: var(--surface-3) !important;
+}
+
+.project-task-row-error,
+.project-task-composer__error {
+  color: var(--danger);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.hub-project-task-row--tree .project-task-row-error,
+.hub-project-task-row--todo .project-task-row-error {
+  grid-column: 3 / -1;
+}
+
+.project-task-composer__error {
+  grid-column: 2 / -1;
+}
+
 /* Interactive row hover — use this class instead of onMouseEnter/Leave JS handlers.
    Themable, respects reduced-motion, and can't drift per call site. */
 .hub-app .hub-row { transition: background 120ms ease; }
@@ -849,6 +964,118 @@
 
   .hub-table-card .scroll-y > div:not([class]) {
     min-width: 640px;
+  }
+}
+
+@media (max-width: 640px) {
+  .project-task-source-alert {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 12px;
+  }
+
+  .project-task-source-alert > button,
+  .project-task-control {
+    min-height: 44px !important;
+  }
+
+  .project-task-empty,
+  .project-task-footer,
+  .project-task-composer {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .project-task-empty {
+    align-items: stretch;
+    flex-direction: column;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .project-task-composer {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .project-task-composer label,
+  .project-task-composer input,
+  .project-task-composer__error {
+    grid-column: 1 / -1;
+  }
+
+  .hub-project-task-row {
+    max-width: 100%;
+    min-width: 0 !important;
+  }
+
+  .hub-project-table-head,
+  .hub-project-task-head {
+    display: none !important;
+  }
+
+  .hub-project-task-group {
+    max-width: 100%;
+    min-width: 0 !important;
+  }
+
+  .hub-project-readonly-footer {
+    max-width: 100%;
+    min-width: 0 !important;
+  }
+
+  .hub-project-row {
+    grid-template-columns: 44px minmax(0, 1fr) auto !important;
+    max-width: 100%;
+    min-width: 0 !important;
+    padding: 4px 12px !important;
+  }
+
+  .hub-project-row > :nth-child(2),
+  .hub-project-row > :nth-child(4),
+  .hub-project-row > :nth-child(5) {
+    display: none !important;
+  }
+
+  .hub-project-task-row--tree {
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+    padding: 4px 12px !important;
+  }
+
+  .hub-project-task-row--tree > :first-child,
+  .hub-project-task-row--tree > :nth-child(4),
+  .hub-project-task-row--tree > :nth-child(5),
+  .hub-project-task-row--tree > :nth-child(6) {
+    display: none !important;
+  }
+
+  .hub-project-task-row--tree .project-task-row-error,
+  .hub-project-task-row--todo .project-task-row-error {
+    grid-column: 2 / -1;
+  }
+
+  .hub-project-task-row--todo {
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+    padding: 4px 12px !important;
+  }
+
+  .hub-project-task-row--todo > :nth-child(3),
+  .hub-project-task-row--todo > :nth-child(4),
+  .hub-project-task-row--todo > :nth-child(5) {
+    display: none !important;
+  }
+
+  .hub-project-task-row--detail {
+    min-height: 52px;
+    flex-wrap: wrap;
+  }
+
+  .hub-project-task-row--detail > .mono {
+    display: none;
+  }
+
+  .hub-project-task-row--detail .project-task-row-error {
+    flex-basis: 100%;
+    padding-left: 22px;
   }
 }
 

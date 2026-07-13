@@ -119,7 +119,9 @@ test("Projects never substitutes fallback business rows", () => {
 
   assert.doesNotMatch(source, /\bFALLBACK_(?:BRANDS|PROJECTS|TODOS|COLUMNS)\b/);
   assert.match(source, /projects:\s*\[\]/);
-  assert.match(source, /setTodos\(\[\]\)/);
+  assert.match(source, /setTodos\(Array\.isArray\(data\.todos\) \? data\.todos : \[\]\)/);
+  assert.match(source, /setTodos\(previousTodos => previousTodos\)/);
+  assert.match(source, /taskSource/);
   assert.match(source, /setSyncState\(["']error["']\)/);
   assert.match(source, /setSyncState\(["']preview["']\)/);
   assert.doesNotMatch(
