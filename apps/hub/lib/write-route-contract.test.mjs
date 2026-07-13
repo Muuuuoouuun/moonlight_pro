@@ -68,6 +68,22 @@ test("outcome recording delegates authorization and JSON limits to the shared Hu
   assert.doesNotMatch(outcomeRoute, /timingSafeEqual|function\s+authorize|function\s+isSameOrigin/);
 });
 
+test("operator session route delegates JSON limits and never exposes the raw secret", async () => {
+  const [sessionRoute, writeGuard] = await Promise.all([
+    readSource("apps/hub/app/api/hub/session/route.js"),
+    readSource("apps/hub/lib/hub-write-guard.js"),
+  ]);
+
+  assert.match(sessionRoute, /readHubWriteJson\(req/);
+  assert.match(sessionRoute, /httpOnly:\s*true/);
+  assert.match(sessionRoute, /sameSite:\s*["']strict["']/);
+  assert.match(sessionRoute, /path:\s*["']\/["']/);
+  assert.match(writeGuard, /webcrypto\.subtle/);
+  assert.match(writeGuard, /createHmac\(["']sha256["']/);
+  assert.match(writeGuard, /timingSafeEqual/);
+  assert.doesNotMatch(sessionRoute, /localStorage|sessionStorage|console\.(?:log|info|debug)/);
+});
+
 test("Google mutation errors carry upstream status into the route classifier", async () => {
   const [calendarHelper, calendarRoute] = await Promise.all([
     readSource("apps/hub/lib/google-calendar.js"),
