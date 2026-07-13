@@ -163,7 +163,7 @@ export async function createHubOperatorSession(
   if (
     !expectedSecret ||
     typeof candidateSecret !== "string" ||
-    !safeEquals(expectedSecret, candidateSecret.trim())
+    !safeEquals(expectedSecret, candidateSecret)
   ) {
     return null;
   }

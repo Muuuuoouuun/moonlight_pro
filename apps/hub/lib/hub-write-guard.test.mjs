@@ -117,6 +117,15 @@ test("Web Crypto sessions cross-verify with the synchronous write guard and expi
   assert.equal(verifyHubOperatorSessionToken(session.token, { now: now + 60_000 }), false);
 });
 
+test("operator session secrets require an exact whitespace-sensitive match", async () => {
+  process.env.NODE_ENV = "production";
+  process.env.COM_MOON_HUB_WRITE_SECRET = "expected-secret";
+
+  const session = await createHubOperatorSession(" expected-secret ");
+
+  assert.equal(session, null);
+});
+
 test("production hub writes allow a valid operator session cookie", async () => {
   process.env.NODE_ENV = "production";
   process.env.COM_MOON_HUB_WRITE_SECRET = "expected-secret";
