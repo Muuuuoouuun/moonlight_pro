@@ -358,6 +358,15 @@ export async function getCanonicalTaskRead({
     };
   }
 
+  if (!workspaceResult.rows?.[0]) {
+    return {
+      source: "error",
+      timezone: DEFAULT_TASK_TIMEZONE,
+      tasks: [],
+      errorCode: "timezone-workspace-not-found",
+    };
+  }
+
   const tasks = taskResult.rows
     .filter((row) => row?.status !== "done")
     .map((row) => mapCanonicalTask(row, timezone));

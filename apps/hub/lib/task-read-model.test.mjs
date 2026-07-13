@@ -269,6 +269,19 @@ test("canonical task read distinguishes live empty, preview, and error without m
     tasks: [],
     errorCode: "timezone-http-503",
   });
+
+  const workspaceMissing = await getCanonicalTaskRead({
+    workspaceId: WORKSPACE_ID,
+    readRows: async (table) => table === "tasks"
+      ? { state: "live", rows: [] }
+      : { state: "live", rows: [] },
+  });
+  assert.deepEqual(workspaceMissing, {
+    source: "error",
+    timezone: "Asia/Seoul",
+    tasks: [],
+    errorCode: "timezone-workspace-not-found",
+  });
 });
 
 test("legacy due precision uses workspace-local midnight and stays today until the next midnight", async () => {
