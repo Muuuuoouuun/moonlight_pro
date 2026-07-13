@@ -15,7 +15,7 @@ Hub should show what matters, what failed, and what action comes next. Engine ow
 
 The former public web surface has been detached from the active workspace so execution can stay focused on Hub and Engine.
 
-Phase 1A Durable Task Loop is implemented and verified in the codebase. Live activation still requires configured Hub/Engine/Supabase environments, the Phase 1A migration, and atomic persistence smoke tests; see [`docs/status/current-state.md`](docs/status/current-state.md).
+Phase 1A Durable Task Loop is implemented and has passed the code suite, production build, and targeted local production-build browser QA. Live activation still requires configured Hub/Engine/Supabase environments, the Phase 1A migration, and atomic persistence smoke tests; see [`docs/status/current-state.md`](docs/status/current-state.md).
 
 ## Documentation
 

@@ -9,9 +9,10 @@
 //
 //   SUPABASE_ACCESS_TOKEN=sbp_xxx
 //
-// Then run:  node scripts/apply-migrations.mjs
-// Optionally pass specific migration filenames as args; default = the two new
-// sales-OS migrations, which are idempotent (IF NOT EXISTS / ON CONFLICT).
+// Then pass the exact migration filename, for example:
+//   npm run db:migrate -- 20260713_0015_durable_task_loop.sql
+// Running without filenames keeps the legacy 0005/0006 default and does not
+// apply later migrations such as Phase 1A.
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";

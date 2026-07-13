@@ -392,9 +392,9 @@ npm run lint
 npm run build
 ```
 
-Expected: 모두 exit 0. 환경 변수가 없어 live DB가 없으면 명시적 preview/empty로 빌드되고 mock/live를 섞지 않는다.
+Expected: 코드·정적 명령은 exit 0. `check:connections`는 별도 활성화 진단이며, 환경 변수가 없으면 명시적으로 실패하고 live DB 검증을 실행하지 않는다.
 
-결과: test 172/172, contracts, Inbox, typecheck, build는 통과. lint는 exit 0이지만 실행 task 0개. `check:connections`는 Hub/Engine/Supabase URL 미설정으로 예상된 exit 1이며 활성화 게이트로 이관.
+결과: test 174/174, contracts, Inbox, typecheck, build는 통과. lint는 exit 0이지만 실행 task 0개. `check:connections`는 Hub/Engine/Supabase URL 미설정으로 예상된 exit 1이며 활성화 게이트로 이관.
 
 루트 `test` script는 신규 Engine behavioral test를 누락하지 않게 다음 glob을 포함한다.
 
@@ -404,7 +404,7 @@ Expected: 모두 exit 0. 환경 변수가 없어 live DB가 없으면 명시적 
 
 - [ ] **Step 2: DB 적용 가능한 환경에서 원자성 smoke**
 
-Run: `npm run db:migrate`
+Run: `npm run db:migrate -- 20260713_0015_durable_task_loop.sql`
 
 Verify: create→reload, same-key retry→한 행 duplicate, same-key/different-payload→409, stale updatedAt→409+current, complete→reload, destination 실패→receipt와 Task 모두 rollback.
 
@@ -414,7 +414,7 @@ Verify: create→reload, same-key retry→한 행 duplicate, same-key/different-
 
 390×844와 desktop에서 Daily Brief 첫 fold, 세션 잠금 해제, task/inbox capture, retry, Today complete, Projects create/edit/complete, keyboard focus, dark/light contrast를 확인한다. loading/empty/preview/error 상태를 각각 캡처하고 console error가 0인지 확인한다.
 
-결과: production Hub에서 10 screenshots PASS. desktop/mobile preview·live, create/editor/completion 401 unlock, delayed busy, 409 conflict, 503 retained state를 검증. `/favicon.ico` 404 1건만 Low로 남음.
+결과: local production build에서 targeted QA 21 final-run screenshots PASS. desktop/mobile preview·live·loading·empty·error, task/inbox saved·duplicate capture, create/editor/completion 401 unlock, delayed busy, 409 conflict, 503 retained state, keyboard navigation, breakpoint focus·44px target, saved-capture focus, dark/light theme descendant transitions를 검증했다. 확장 QA와 독립 리뷰에서 찾은 responsive navigation focus/semantics/target-size, theme transition contrast, capture focus 문제는 수정 후 강화된 matrix로 재검증했다. `/favicon.ico` 404 1건만 Low로 남음. 보존된 범위는 [`../../status/phase1a-browser-qa.md`](../../status/phase1a-browser-qa.md)를 따른다.
 
 - [x] **Step 4: 문서 상태 갱신**
 
@@ -424,7 +424,9 @@ deep design의 stale 문구인 “기존 local task create/complete 연결”을
 
 Run: `git diff --check && git status --short && git diff --stat`
 
-Expected: whitespace error 없음, 의도한 파일만 변경. 검증 증거를 확인한 뒤 `feat: add durable personal task loop`로 커밋하고 현재 branch를 push한다.
+Expected: whitespace error 없음, 의도한 파일만 변경. 검증 증거를 확인한 뒤 범위별 커밋으로 현재 branch를 push한다.
+
+상태: source commits는 완료됐고 documentation reconciliation과 최종 독립 리뷰를 진행 중이다. live migration/smoke는 Step 2의 환경 게이트로 의도적으로 열린 상태다.
 
 ## 실행 구조 리뷰
 

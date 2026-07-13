@@ -11,7 +11,7 @@
 - 문서의 `확정`, `권장`, `미정`을 구분하고, 권장안을 운영자의 확정 결정처럼 구현하지 않는다.
 - 추가 업무 인터뷰는 현재 중단 상태다. 운영자가 요청하거나 Phase 1 실사용 결과가 생기면 문서의 `Q116`부터 한 번에 정확하고 짧은 질문 5개씩 진행한다.
 - 최초 이관 뒤 Moonlight가 개인 업무 정본이고 ClassIn은 회사 공식 객체·공식 활동 요약의 정본이다. 개인 상세 메모를 ClassIn으로 복제하지 않는다.
-- 제작 기획과 Phase 1 작업 전 `docs/superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`를 읽는다. 전제 1~7과 접근안 B는 승인됐고 Phase 0와 Phase 1A 코드·정적·브라우저 검증은 완료됐다. Phase 1A live migration/smoke는 활성화 게이트다.
+- 제작 기획과 Phase 1 작업 전 `docs/superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`를 읽는다. 전제 1~7과 접근안 B는 승인됐고 Phase 0는 완료됐다. Phase 1A의 변동 상태와 live 활성화 게이트는 `docs/status/current-state.md`를 정본으로 따른다.
 
 ## 디자인 시스템
 @DESIGN.md
@@ -48,19 +48,19 @@
 
 ```bash
 # 스타일 검색 (어떤 UI 스타일이 맞는지)
-python3 .claude/skills/ui-ux-pro-max/scripts/search.py "dark dashboard minimal" --domain style
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "dark dashboard minimal" --domain style
 
 # 색상 팔레트 검색
-python3 .claude/skills/ui-ux-pro-max/scripts/search.py "SaaS operational dark" --domain color
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "SaaS operational dark" --domain color
 
 # 타이포그래피 추천
-python3 .claude/skills/ui-ux-pro-max/scripts/search.py "precision instrument mono" --domain typography
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "precision instrument mono" --domain typography
 
 # 랜딩 페이지 패턴
-python3 .claude/skills/ui-ux-pro-max/scripts/search.py "trust authority conversion" --domain landing
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "trust authority conversion" --domain landing
 
 # UX 가이드라인
-python3 .claude/skills/ui-ux-pro-max/scripts/search.py "data table status badge" --domain ux
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "data table status badge" --domain ux
 ```
 
 ## 브랜치 구조

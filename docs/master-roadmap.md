@@ -4,7 +4,7 @@ Status: active roadmap
 Updated: 2026-07-13
 
 > 현재 사실과 문서 우선순위: `docs/README.md`
-> 현재 단계: Phase 1A 코드·정적·브라우저 검증 완료, live migration/smoke 활성화 대기
+> 현재 단계: Phase 1A 구현·정적 검증·targeted local QA 완료, live migration/smoke 활성화 대기
 
 ## 1. North Star
 
@@ -43,10 +43,10 @@ Goal: Moonlight becomes the first-open surface.
 
 Must ship:
 
-- **1A Durable Task Loop:** quick text → durable task → task-only Today → complete → reload. 코드·정적·브라우저 검증은 완료했고 live DB migration/smoke는 환경 설정 뒤 남았다.
+- **1A Durable Task Loop:** quick text → durable task → task-only Today → complete → reload. 구현·정적 검증·targeted local production-build QA는 완료했고 live DB migration/smoke는 환경 설정 뒤 남았다.
 - **1B Action Desk:** real follow-up and Google Calendar sources, urgent KA 1, focus customers 3~5, deterministic ranking.
 - **1C Contact Outcome Loop:** summary, reaction, next action/date, activity, and task creation in one durable flow.
-- Work OS shows live projects, blockers, decisions, routine checks, and next actions.
+- Existing Work OS surfaces remain read-only/contextual in Phase 1; durable Project CRUD, checklist progress, delay, and bottleneck management begin in Phase 3.
 - Content and Revenue remain contextual lanes, not competing home dashboards.
 
 Exit gate:
@@ -54,56 +54,17 @@ Exit gate:
 - Hub can answer "what matters today?" in under 5 seconds.
 - At least 90% of active records have a next action or waiting reason.
 
-### Phase 2: Closed Execution
+### Phase 2+: Non-binding sequence
 
-Goal: actions taken in Hub or external channels produce durable execution history.
+The sequence below matches the active deep design. These phases are directional, not approved implementation contracts; each requires a separate design gate after Phase 1 usage.
 
-Must ship:
+- **Phase 2 — Person-first Customer Continuity:** Contact 중심 detail, Account/Opportunity/Activity/Task 연결, KA·집중 신호, verified owner scope.
+- **Phase 3 — PMS:** durable Project CRUD, checklist and relation editing, candidate inbox, progress, delay, bottleneck, monthly review.
+- **Phase 4 — ClassIn Bridge:** HMAC bootstrap, Account+Contact import, missing-only sync, conflict comparison, official-object and activity-summary outbox.
+- **Phase 5 — Content Intake:** single idea inbox, raw/link capture, Studio handoff, parent idea and channel variants.
+- **Phase 6 — Audio and Review Automation:** recording/transcript, 30-day raw-audio retention, reviewed AI analysis, cost ledger, quarterly review.
 
-- Hub-to-Engine intent endpoints for content handoff, run retry, and routine checks.
-- Telegram command results visible in ledger and user reply.
-- GitHub read sync into Work OS.
-- Gmail/Resend send paths with `sync_runs` and user-visible preview/sent/failure states.
-- Content handoff logs for publish/export/provider outcomes.
-- Idempotency and honest partial/failed responses across public write routes.
-
-Exit gate:
-
-- A real signal can enter Engine, appear in Hub, become an action, execute, and return a result to the ledger.
-
-### Phase 3: Decision Memory And Repair
-
-Goal: failures and decisions compound into operational learning.
-
-Must ship:
-
-- Decision capture with context/options/rationale/review point.
-- Failure grouping by cause and affected lane.
-- Repair proposal queue with owner, priority, and approval state.
-- Runbook links for repeated operational failures.
-- AI briefs that cite ledger context and become accepted tasks/decisions.
-
-Exit gate:
-
-- Failed automation has owner, cause, and retry/repair path within 24 hours.
-- One AI recommendation per week becomes an accepted task or decision.
-
-### Phase 4: Public Proof Engine, Later
-
-Goal: public output is generated from proven private execution, not from a separate public app.
-
-Candidate outputs:
-
-- case-study pages,
-- content artifact exports,
-- public changelog,
-- campaign proof,
-- operating essays generated from decision logs.
-
-Exit gate before starting:
-
-- private command loop is sticky for 30 days,
-- ledger has enough clean history to export proof without manual cleanup.
+Closed execution, decision memory, guided repair, and public proof remain outcome themes, not competing numbered phases. They enter only when the matching phase closes a real operator loop; public proof still waits for 30 days of sticky private use.
 
 ## 4. Current Priority Stack
 

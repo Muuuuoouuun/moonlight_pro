@@ -1,6 +1,6 @@
 # Moonlight 개인 운영 OS 심화 설계
 
-> 상태: ACTIVE — 전제 1~7·접근안 B 승인, Phase 0 완료, Phase 1A 코드·정적·브라우저 검증 완료, live 활성화 대기
+> 상태: ACTIVE — 전제 1~7·접근안 B 승인, Phase 0 완료, Phase 1A 구현·정적 검증·targeted local QA 완료, live 활성화 대기
 > 작성일: 2026-07-13
 > 최초 작성 브랜치: `real_v1.1`
 > 모드: Builder / 개인 전용 운영 시스템
@@ -8,7 +8,7 @@
 > 심화·대체: `bigmac_moon-real_v1.1-design-20260711-180548.md`의 Capture–Attention–Done 설계
 > 함께 유지: `bigmac_moon-real_v1.1-design-20260712-215411.md`의 승인 기반 자율화 로드맵
 
-제품 전제 1~7과 접근안 B, **Phase 0·1A·1B·1C 방향은 승인됐다.** Phase 0는 `5c9ccc2` (`codex/moonlight-phase0-trust`)에서 완료·푸시됐다. Phase 1A는 코드, 정적 검증, 프로덕션 빌드, 모의 실패·복구 브라우저 QA까지 완료했으며, live DB migration과 원자성 smoke는 환경 설정 뒤의 활성화 게이트다. Phase 2 이후, ClassIn Bridge, 음성, 콘텐츠 파생, 분기 리뷰는 전체 방향을 잃지 않기 위한 비구속적 로드맵이며 해당 Phase 착수 전에 별도 계약을 승인한다.
+제품 전제 1~7과 접근안 B는 승인됐다. **Phase 1A는 구현 승인·코드 완료 상태이고, Phase 1B·1C는 설계 방향만 승인되어 앞 단계 gate 뒤 착수한다.** Phase 0는 `5c9ccc2` (`codex/moonlight-phase0-trust`)에서 완료·푸시됐다. Phase 1A는 구현, 정적 검증, 프로덕션 빌드, local production build의 targeted 실패·복구 QA까지 완료했으며, live DB migration과 원자성 smoke는 환경 설정 뒤의 활성화 게이트다. Phase 2 이후, ClassIn Bridge, 음성, 콘텐츠 파생, 분기 리뷰는 전체 방향을 잃지 않기 위한 비구속적 로드맵이며 해당 Phase 착수 전에 별도 계약을 승인한다.
 
 ## 1. 한 줄 정의
 
@@ -47,7 +47,7 @@ CRM, PMS, 콘텐츠, 캘린더, AI는 이 루프의 서로 다른 입력·문맥
 - 고객: 사람을 중심으로 조직·거래·활동·다음 행동을 한 흐름에서 본다.
 - 프로젝트: 지연·병목·다음 행동·체크리스트를 우선하고, 활동량이 커진 일을 프로젝트 후보로 추천한다.
 - 콘텐츠: 복잡한 점수 없이 원문 아이디어를 한곳에 모으고, 제작할 때 채널별 결과물로 확장한다.
-- ClassIn: 최초 이관 뒤 Moonlight가 개인 운영 정본이 되며, ClassIn에는 공식 요약만 안전하게 보낸다.
+- ClassIn: 최초 이관 뒤 Moonlight가 개인 운영 정본이 되며, ClassIn에는 리드·견적·오더·최종 거래 같은 공식 객체와 활동 요약만 안전하게 보낸다.
 
 ## 3. 현재 상태에서 확인된 사실
 
@@ -100,11 +100,7 @@ CRM, PMS, 콘텐츠, 캘린더, AI는 이 루프의 서로 다른 입력·문맥
 
 ### Phase 1A 코드 완료 기준선
 
-- Root Node test 172/172, contracts, Inbox check, typecheck, Hub/Engine production build 통과.
-- Daily Brief·Projects의 preview/live/error, 401 unlock, 409 conflict, 503 retained-state를 production browser에서 검증.
-- Desktop와 390×844 mobile 스크린샷 10개를 확인.
-- lint 명령은 exit 0이지만 실행된 package task가 0개라 lint coverage로 간주하지 않는다.
-- `check:connections`는 Hub/Engine/Supabase 환경 미설정으로 실패했고, 따라서 live DB migration·원자성 smoke는 미실행 상태다.
+변동하는 테스트 수, QA 범위, 연결 상태는 [`../../status/current-state.md`](../../status/current-state.md)를 단일 정본으로 따른다. 이 설계 문서는 구현 범위와 live activation gate만 고정한다.
 
 ## 4. 제품 전제
 
@@ -1212,7 +1208,7 @@ type AttentionResponse = {
 5. [x] 사용자 identity를 `Junhyuk Mun`으로 바로잡고 founder/multi-user demo 문구를 제거한다.
 6. [x] Content draft 승인처럼 내부 Supabase sink를 가진 work order는 상태 전이와 destination insert를 RPC 한 transaction으로 묶는다. destination 저장 실패 뒤 `approved`/`executed`가 남는 경로를 허용하지 않는다.
 
-### Phase 1A — Durable Task Loop (코드·정적·브라우저 검증 완료, live 활성화 대기)
+### Phase 1A — Durable Task Loop (구현·정적 검증·targeted local QA 완료, live 활성화 대기)
 
 ```text
 Quick text(task hint)
@@ -1368,12 +1364,13 @@ Quick text(task hint)
 
 ## 22. 남은 질문과 하드 게이트
 
-Phase 1을 막지 않는 질문은 구현 중 다시 묻지 않는다. 실제 사용 데이터가 생긴 뒤 Q116부터 5개씩 재개한다. 현재 승인은 Phase 0·1A·1B·1C에만 적용한다.
+Phase 1을 막지 않는 질문은 구현 중 다시 묻지 않는다. 실제 사용 데이터가 생긴 뒤 Q116부터 5개씩 재개한다. Phase 1A는 구현 승인·완료 상태이고, Phase 1B·1C는 설계 방향만 승인되어 앞 단계 gate 뒤 착수한다.
 
 ### 해결된 결정
 
 - [x] 이 문서의 전제 1~7 승인.
 - [x] 접근안 B 승인.
+- [x] Phase 1A 구현 승인. Phase 1B·1C는 설계 방향 승인, 앞 단계 gate 뒤 착수.
 
 ### 이후 Phase 전 확인
 

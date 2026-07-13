@@ -9,12 +9,13 @@
 문서가 충돌하면 아래 순서가 우선한다.
 
 1. [`operator-workflow-profile.md`](operator-workflow-profile.md) — 운영자 인터뷰 Q1~Q115의 사실·권장·미정
-2. [`2026-07-13-moonlight-personal-operator-os-deep-design.md`](superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md) — 현재 제품 구조와 Phase 0~1C 설계
-3. [`../DESIGN.md`](../DESIGN.md) — UI 토큰·컴포넌트·인터랙션 계약
-4. [`master-directive.md`](master-directive.md) — 바뀌지 않는 제품 경계와 원칙
-5. [`master-roadmap.md`](master-roadmap.md) — 현재 단계와 다음 구현 순서
-6. 도메인별 문서 — 위 문서와 충돌하지 않는 범위에서 참고
-7. `HISTORICAL` 또는 `SUPERSEDED` 문서 — 결정 배경만 참고하고 새 구현의 근거로 사용하지 않음
+2. [`status/current-state.md`](status/current-state.md) — 현재 구현·검증·활성화 게이트의 변동 정본
+3. [`2026-07-13-moonlight-personal-operator-os-deep-design.md`](superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md) — 현재 제품 구조와 Phase 0~1C 설계
+4. [`../DESIGN.md`](../DESIGN.md) — UI 토큰·컴포넌트·인터랙션 계약
+5. [`master-directive.md`](master-directive.md) — 바뀌지 않는 제품 경계와 원칙
+6. [`master-roadmap.md`](master-roadmap.md) — 현재 단계와 다음 구현 순서
+7. 도메인별 문서 — 위 문서와 충돌하지 않는 범위에서 참고
+8. `HISTORICAL` 또는 `SUPERSEDED` 문서 — 결정 배경만 참고하고 새 구현의 근거로 사용하지 않음
 
 코드 작업 지침은 루트의 [`AGENTS.md`](../AGENTS.md)와 [`CLAUDE.md`](../CLAUDE.md)를 따른다. 브랜치명이나 특정 커밋은 제품 정본이 아니며, 작업 시점의 Git 상태를 직접 확인한다.
 
@@ -26,10 +27,10 @@
 - 성공 기준은 인지 에너지를 현재의 약 1/3로 줄이고, 고객 연락·프로젝트 후속 누락을 0건으로 만드는 것이다.
 - 첫 화면은 할 일, 매출, 메시지, 기획, 콘텐츠 순서의 판단을 돕고 긴급 KA 1건과 집중 고객 3~5건을 우선한다.
 - 고객은 사람을 기본 단위로 보고 조직·거래·활동·다음 행동을 연결한다. 새 문의·재문의는 원칙적으로 새 Opportunity다.
-- 초기 이관은 ClassIn/Neo CRM에서 가져오되, 이후 Moonlight가 개인 업무 정본이 된다. ClassIn에는 공식 요약만 승인 경계를 거쳐 보낸다.
+- 초기 이관은 ClassIn/Neo CRM에서 가져오되, 이후 Moonlight가 개인 업무 정본이 된다. ClassIn에는 리드·견적·오더·최종 거래 같은 공식 객체와 활동 요약만 승인 경계를 거쳐 보낸다.
 - 모든 상세 개인 메모를 ClassIn으로 옮기지 않는다. 공식 기록은 기록 여부·일자·유형·간략 요약 중심이다.
 - 캘린더는 첫 화면의 핵심 문맥이고 모바일은 후순위다. 이메일보다 메시지·전화가 우선이다.
-- 프로젝트는 활동량, 가격 논의, 방문/데모, 두 번째 미팅 같은 신호로 후보를 추천한다. 자동 생성은 후보 확인 UI를 거친다.
+- 프로젝트 후보는 Opportunity 생성, 구체적 가격·견적 대화, 같은 고객·주제의 미팅 2회 또는 14일 내 활동 3회 중 하나를 근거로 추천한다. 자동 생성은 후보 확인 UI를 거친다.
 - 콘텐츠는 떠오른 아이디어나 참고 콘텐츠에서 시작해 원본 하나를 스레드·인스타그램·유튜브 쇼츠 등으로 재가공한다. 복잡한 성과 분석은 후순위다.
 - 추가 인터뷰는 Q116부터 한 번에 5개씩 재개하되, Phase 1 실사용 데이터나 운영자의 요청 전에는 멈춘다.
 
@@ -42,7 +43,7 @@
 | 인터뷰 Q1~Q115 정리 | 완료 | [`operator-workflow-profile.md`](operator-workflow-profile.md) |
 | 전제 1~7 및 접근안 B | 승인됨 | 구현 지시와 Phase 0 착수 |
 | Phase 0 신뢰 기준선 | 완료·푸시 | `5c9ccc2`, `codex/moonlight-phase0-trust` |
-| Phase 1A Durable Task Loop | 코드·정적·브라우저 검증 완료, live 활성화 대기 | [`status/current-state.md`](status/current-state.md) |
+| Phase 1A Durable Task Loop | 구현·정적 검증·targeted local QA 완료, live 활성화 대기 | [`status/current-state.md`](status/current-state.md) |
 | Phase 1B Action Desk | Phase 1A live smoke·단기 실사용 뒤 | 심화 설계 §19 |
 | Phase 1C Contact Outcome Loop | Phase 1B 뒤 | 심화 설계 §19 |
 | ClassIn 전체 동기화·음성 AI·콘텐츠 직접 발행 | 보류 | 별도 하드 게이트 필요 |
@@ -53,7 +54,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 ### 제품·운영 정본
 
-- [`operator-workflow-profile.md`](operator-workflow-profile.md) — 운영자 업무 사실과 인터뷰 원본
+- [`operator-workflow-profile.md`](operator-workflow-profile.md) — Q1~Q115 운영자 답변의 구조화 정본
 - [`superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`](superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md) — 활성 제품 설계
 - [`master-directive.md`](master-directive.md) — 제품 불변식
 - [`master-roadmap.md`](master-roadmap.md) — 단계와 다음 순서
@@ -84,7 +85,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - ClassIn CRM 결합: [`sales-os-crm-integration-plan.md`](sales-os-crm-integration-plan.md) — 문서 자체가 보류 상태이며 새 정본 경계를 먼저 적용
 - AI Sales 팀 운영: [`sales-os/team-operating-layer.md`](sales-os/team-operating-layer.md), [`sales-os/personas/`](sales-os/personas/)
 
-이 문서들은 폐기된 것은 아니지만 현재 Phase 1A보다 먼저 구현하지 않는다.
+이 문서들은 폐기된 것은 아니지만 Phase 1A live 활성화와 짧은 실사용보다 먼저 구현하지 않는다.
 
 ### 지식·운영 참고
 

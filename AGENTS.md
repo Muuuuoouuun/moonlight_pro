@@ -11,7 +11,7 @@
 - 문서의 `확정`, `권장`, `미정`을 구분하고, 권장안을 운영자의 확정 결정처럼 구현하지 않는다.
 - 추가 업무 인터뷰는 현재 중단 상태다. 운영자가 요청하거나 Phase 1 실사용 결과가 생기면 문서의 `Q116`부터 한 번에 정확하고 짧은 질문 5개씩 진행한다.
 - 최초 이관 뒤 Moonlight가 개인 업무 정본이고 ClassIn은 회사 공식 객체·공식 활동 요약의 정본이다. 개인 상세 메모를 ClassIn으로 복제하지 않는다.
-- 제작 기획과 Phase 1 작업 전 `docs/superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`를 읽는다. 전제 1~7과 접근안 B는 승인됐고 Phase 0와 Phase 1A 코드·정적·브라우저 검증은 완료됐다. Phase 1A live migration/smoke는 활성화 게이트다.
+- 제작 기획과 Phase 1 작업 전 `docs/superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`를 읽는다. 전제 1~7과 접근안 B는 승인됐고 Phase 0는 완료됐다. Phase 1A의 변동 상태와 live 활성화 게이트는 `docs/status/current-state.md`를 정본으로 따른다.
 
 ## 디자인 시스템
 @DESIGN.md
@@ -24,10 +24,14 @@
 - Supabase 없는 환경은 명시적 `preview`/empty state로 표시하고 mock과 live 데이터를 섞지 않음
 
 ## UI 작업 시 필수 체크
-- 색상: DESIGN.md 팔레트만 사용 (warm gold/그린/보라 금지, 문스톤 `#5274a8` 액센트)
-- 보더: `1px solid rgba(12,16,24,0.08)` (light) / `rgba(255,255,255,0.07)` (dark) — 절대 두껍게 하지 않음
-- 허브 카드 배경: `rgba(255,255,255,0.04~0.07)` — 흰 배경 절대 금지
-- 반응형: 모바일 우선, `sm:` / `lg:` 브레이크포인트
+- 색상: DESIGN.md 팔레트(토큰)만 사용 — 페이지 안 하드코딩 hex/rgba/oklch 금지, warm gold/그린/보라 금지
+- 보더: 항상 `1px` + `--line*` 토큰 — 절대 두껍게 하지 않음. 상태 강조는 `--*-line` 좌측 inset 스트라이프
+- 숫자: 큰 지표(≥18px)는 `.stat`(sans tabular), 계기 데이터(ID·타임스탬프·인라인 값)는 `.mono`, sans 소형 카운트는 `.num`
+- 크기 플로어: 데이터 값 ≥12px, 보조 메타 ≥10.5px, 10px 미만 금지
+- Primitives first: `SegmentedControl`·`SyncBadge`·`EmptyState`·`Checkbox(label)`·`EditDrawer`를 인라인 재구현 금지
+- 행 hover는 `.hub-row` 클래스 (JS onMouseEnter/Leave 신규 작성 금지)
+- 인터랙션 계약(생성 N 단축키·ESC/오버레이 닫기·딥링크·정렬 3단 토글)은 DESIGN.md §8.1 준수
+- 반응형: 모바일 우선. 세그먼트 토글은 모바일에서도 가로 유지 (flex-basis:100% 자식 강제 금지)
 
 ## 디자인 레퍼런스 (awesome-design-md)
 > UI 컴포넌트 작업 시 아래 브랜드 DESIGN.md를 참고 레퍼런스로 활용할 것
@@ -44,19 +48,19 @@
 
 ```bash
 # 스타일 검색 (어떤 UI 스타일이 맞는지)
-python3 .Codex/skills/ui-ux-pro-max/scripts/search.py "dark dashboard minimal" --domain style
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "dark dashboard minimal" --domain style
 
 # 색상 팔레트 검색
-python3 .Codex/skills/ui-ux-pro-max/scripts/search.py "SaaS operational dark" --domain color
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "SaaS operational dark" --domain color
 
 # 타이포그래피 추천
-python3 .Codex/skills/ui-ux-pro-max/scripts/search.py "precision instrument mono" --domain typography
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "precision instrument mono" --domain typography
 
 # 랜딩 페이지 패턴
-python3 .Codex/skills/ui-ux-pro-max/scripts/search.py "trust authority conversion" --domain landing
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "trust authority conversion" --domain landing
 
 # UX 가이드라인
-python3 .Codex/skills/ui-ux-pro-max/scripts/search.py "data table status badge" --domain ux
+python3 .agents/skills/ui-ux-pro-max/scripts/search.py "data table status badge" --domain ux
 ```
 
 ## 브랜치 구조
