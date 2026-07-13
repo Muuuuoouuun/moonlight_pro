@@ -24,6 +24,21 @@ function defaultKeyFactory() {
   return `quick-capture:${crypto.randomUUID()}`;
 }
 
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (!value || typeof value !== "object") return value;
+
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, canonicalize(value[key])]),
+  );
+}
+
+function canonicalFingerprint(value) {
+  return JSON.stringify(canonicalize(value));
+}
+
 function clientFailure(reason, error) {
   return {
     status: "failed",
@@ -50,6 +65,7 @@ export function createDurableTaskClient({
   keyFactory = defaultKeyFactory,
 } = {}) {
   const attempts = new Map();
+  const mutationAttempts = new Map();
 
   function submit(input) {
     const capture = normalizeCapture(input);
@@ -126,5 +142,73 @@ export function createDurableTaskClient({
     })();
   }
 
-  return { submit, unlockSession };
+  function mutate({ url, method, body }) {
+    const fingerprint = canonicalFingerprint({ body, method, url });
+    let attempt = mutationAttempts.get(fingerprint);
+
+    if (attempt?.pending) return attempt.pending;
+    if (!attempt) {
+      attempt = { idempotencyKey: keyFactory(), pending: null };
+      mutationAttempts.set(fingerprint, attempt);
+    }
+
+    const pending = (async () => {
+      try {
+        const response = await fetchImpl(url, {
+          method,
+          headers: new Headers({
+            "content-type": "application/json",
+            "idempotency-key": attempt.idempotencyKey,
+          }),
+          body: JSON.stringify(body),
+        });
+        const responseBody = await response.json().catch(() => null);
+        const resultBody = responseBody
+          && typeof responseBody === "object"
+          && !Array.isArray(responseBody)
+          ? responseBody
+          : clientFailure("invalid-response", "저장 응답을 확인할 수 없습니다.");
+        const result = {
+          ...normalizeHttpResult(response, resultBody),
+          httpStatus: response.status,
+          ...(response.status === 401 ? { requiresUnlock: true } : {}),
+        };
+
+        if (TERMINAL_STATUSES.has(result.status)) {
+          mutationAttempts.delete(fingerprint);
+        } else {
+          attempt.pending = null;
+        }
+
+        return result;
+      } catch (error) {
+        attempt.pending = null;
+        return clientFailure(
+          "network",
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    })();
+
+    attempt.pending = pending;
+    return pending;
+  }
+
+  function createTask(input) {
+    return mutate({
+      url: "/api/hub/tasks",
+      method: "POST",
+      body: input,
+    });
+  }
+
+  function updateTask({ id, expectedUpdatedAt, patch }) {
+    return mutate({
+      url: `/api/hub/tasks/${encodeURIComponent(id)}`,
+      method: "PATCH",
+      body: { expectedUpdatedAt, patch },
+    });
+  }
+
+  return { submit, unlockSession, createTask, updateTask };
 }

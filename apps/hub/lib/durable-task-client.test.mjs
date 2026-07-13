@@ -301,3 +301,285 @@ test("401 requests inline unlock, consumes the secret immediately, and retries t
     .map((request) => request.options.headers.get("idempotency-key"));
   assert.deepEqual(taskKeys, ["capture-locked", "capture-locked"]);
 });
+
+test("createTask keeps one key for canonically equal payloads until a 2xx save", async () => {
+  const requests = [];
+  const responses = [
+    jsonResponse({
+      status: "failed",
+      retryable: true,
+      reason: "upstream",
+      error: "Engine write request failed.",
+      correlationId: "corr-create-failed",
+    }, 502),
+    jsonResponse({
+      status: "saved",
+      retryable: false,
+      reason: "created",
+      task: { id: "task-created" },
+      correlationId: "corr-create-saved",
+    }, 201),
+    jsonResponse({
+      status: "saved",
+      retryable: false,
+      reason: "created",
+      task: { id: "task-created-again" },
+      correlationId: "corr-create-saved-again",
+    }, 201),
+  ];
+  let keyNumber = 0;
+  const client = createDurableTaskClient({
+    keyFactory: () => `task-mutation-${++keyNumber}`,
+    fetchImpl: async (url, options) => {
+      requests.push({
+        url,
+        method: options.method,
+        key: options.headers.get("idempotency-key"),
+        body: JSON.parse(options.body),
+      });
+      return responses.shift();
+    },
+  });
+
+  assert.equal(typeof client.createTask, "function");
+  const failed = await client.createTask({
+    title: "견적 후속 연락",
+    status: "todo",
+    meta: { due_precision: "none", source: "daily" },
+  });
+  const saved = await client.createTask({
+    meta: { source: "daily", due_precision: "none" },
+    status: "todo",
+    title: "견적 후속 연락",
+  });
+  await client.createTask({
+    status: "todo",
+    title: "견적 후속 연락",
+    meta: { due_precision: "none", source: "daily" },
+  });
+
+  assert.equal(failed.status, "failed");
+  assert.equal(saved.status, "saved");
+  assert.deepEqual(requests, [
+    {
+      url: "/api/hub/tasks",
+      method: "POST",
+      key: "task-mutation-1",
+      body: {
+        title: "견적 후속 연락",
+        status: "todo",
+        meta: { due_precision: "none", source: "daily" },
+      },
+    },
+    {
+      url: "/api/hub/tasks",
+      method: "POST",
+      key: "task-mutation-1",
+      body: {
+        meta: { source: "daily", due_precision: "none" },
+        status: "todo",
+        title: "견적 후속 연락",
+      },
+    },
+    {
+      url: "/api/hub/tasks",
+      method: "POST",
+      key: "task-mutation-2",
+      body: {
+        status: "todo",
+        title: "견적 후속 연락",
+        meta: { due_precision: "none", source: "daily" },
+      },
+    },
+  ]);
+});
+
+test("canonically equal createTask calls share one pending request", async () => {
+  let release;
+  let requestCount = 0;
+  const response = new Promise((resolve) => {
+    release = () => resolve(jsonResponse({
+      status: "saved",
+      retryable: false,
+      reason: "created",
+      task: { id: "task-pending" },
+      correlationId: "corr-create-pending",
+    }, 201));
+  });
+  const client = createDurableTaskClient({
+    keyFactory: () => "task-pending-key",
+    fetchImpl: async () => {
+      requestCount += 1;
+      return response;
+    },
+  });
+
+  assert.equal(typeof client.createTask, "function");
+  const first = client.createTask({ title: "후속 연락", meta: { b: 2, a: 1 } });
+  const second = client.createTask({ meta: { a: 1, b: 2 }, title: "후속 연락" });
+
+  assert.equal(first, second);
+  assert.equal(requestCount, 1);
+  release();
+  await first;
+});
+
+test("updateTask sends the exact OCC body and rejects non-ok false success without changing its key", async () => {
+  const requests = [];
+  const responses = [
+    jsonResponse({
+      status: "duplicate",
+      retryable: false,
+      reason: "upstream-write-failed",
+      error: "The update was not committed.",
+      task: { id: "task/one", status: "done" },
+      correlationId: "corr-update-false-success",
+    }, 500),
+    jsonResponse({
+      status: "duplicate",
+      retryable: false,
+      reason: "idempotent-replay",
+      task: { id: "task/one", status: "done" },
+      correlationId: "corr-update-duplicate",
+    }),
+  ];
+  const client = createDurableTaskClient({
+    keyFactory: () => "task-update-key",
+    fetchImpl: async (url, options) => {
+      requests.push({
+        url,
+        method: options.method,
+        key: options.headers.get("idempotency-key"),
+        body: JSON.parse(options.body),
+      });
+      return responses.shift();
+    },
+  });
+
+  assert.equal(typeof client.updateTask, "function");
+  const failed = await client.updateTask({
+    id: "task/one",
+    expectedUpdatedAt: "2026-07-13T04:00:00.000Z",
+    patch: { status: "done", meta: { source: "today", rank: 1 } },
+  });
+  const duplicate = await client.updateTask({
+    patch: { meta: { rank: 1, source: "today" }, status: "done" },
+    expectedUpdatedAt: "2026-07-13T04:00:00.000Z",
+    id: "task/one",
+  });
+
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.httpStatus, 500);
+  assert.equal(failed.reason, "upstream-write-failed");
+  assert.equal(failed.error, "The update was not committed.");
+  assert.equal(duplicate.status, "duplicate");
+  assert.deepEqual(requests, [
+    {
+      url: "/api/hub/tasks/task%2Fone",
+      method: "PATCH",
+      key: "task-update-key",
+      body: {
+        expectedUpdatedAt: "2026-07-13T04:00:00.000Z",
+        patch: { status: "done", meta: { source: "today", rank: 1 } },
+      },
+    },
+    {
+      url: "/api/hub/tasks/task%2Fone",
+      method: "PATCH",
+      key: "task-update-key",
+      body: {
+        expectedUpdatedAt: "2026-07-13T04:00:00.000Z",
+        patch: { meta: { rank: 1, source: "today" }, status: "done" },
+      },
+    },
+  ]);
+});
+
+test("updateTask keeps a conflict key but changed OCC input gets a new key", async () => {
+  const requests = [];
+  let keyNumber = 0;
+  const client = createDurableTaskClient({
+    keyFactory: () => `task-update-${++keyNumber}`,
+    fetchImpl: async (url, options) => {
+      requests.push({
+        url,
+        key: options.headers.get("idempotency-key"),
+        body: JSON.parse(options.body),
+      });
+      return jsonResponse({
+        status: "conflict",
+        retryable: false,
+        reason: "stale-write",
+        error: "Task changed before this write.",
+        currentTask: {
+          id: "task-1",
+          updatedAt: "2026-07-13T05:00:00.000Z",
+        },
+        correlationId: `corr-update-${requests.length}`,
+      }, 409);
+    },
+  });
+
+  await client.updateTask({
+    id: "task-1",
+    expectedUpdatedAt: "2026-07-13T04:00:00.000Z",
+    patch: { status: "done", meta: { b: 2, a: 1 } },
+  });
+  await client.updateTask({
+    patch: { meta: { a: 1, b: 2 }, status: "done" },
+    expectedUpdatedAt: "2026-07-13T04:00:00.000Z",
+    id: "task-1",
+  });
+  await client.updateTask({
+    id: "task-1",
+    expectedUpdatedAt: "2026-07-13T05:00:00.000Z",
+    patch: { status: "done", meta: { a: 1, b: 2 } },
+  });
+  await client.updateTask({
+    id: "task-1",
+    expectedUpdatedAt: "2026-07-13T04:00:00.000Z",
+    patch: { status: "blocked", meta: { a: 1, b: 2 } },
+  });
+
+  assert.deepEqual(
+    requests.map((request) => request.key),
+    ["task-update-1", "task-update-1", "task-update-2", "task-update-3"],
+  );
+});
+
+test("canonically equal updateTask calls share one pending request", async () => {
+  let release;
+  let requestCount = 0;
+  const response = new Promise((resolve) => {
+    release = () => resolve(jsonResponse({
+      status: "saved",
+      retryable: false,
+      reason: "updated",
+      task: { id: "task-pending-update" },
+      correlationId: "corr-update-pending",
+    }));
+  });
+  const client = createDurableTaskClient({
+    keyFactory: () => "task-update-pending-key",
+    fetchImpl: async () => {
+      requestCount += 1;
+      return response;
+    },
+  });
+
+  const first = client.updateTask({
+    id: "task-pending-update",
+    expectedUpdatedAt: "2026-07-13T04:00:00.000Z",
+    patch: { status: "done", meta: { b: 2, a: 1 } },
+  });
+  const second = client.updateTask({
+    patch: { meta: { a: 1, b: 2 }, status: "done" },
+    expectedUpdatedAt: "2026-07-13T04:00:00.000Z",
+    id: "task-pending-update",
+  });
+
+  assert.equal(first, second);
+  assert.equal(requestCount, 1);
+  release();
+  await first;
+});
