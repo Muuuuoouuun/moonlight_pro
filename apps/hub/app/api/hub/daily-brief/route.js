@@ -401,7 +401,12 @@ export async function GET() {
     ...buildAutomationSignals(automations),
     ...buildWorkSignals(projects, work),
   ].slice(0, 7);
-  const taskSource = projects.taskSource || "preview";
+  const taskSource = projectsResult.status === "rejected"
+    ? "error"
+    : projects.taskSource || "preview";
+  const taskError = projectsResult.status === "rejected"
+    ? "프로젝트 할 일 원장을 불러오지 못했습니다. 이전에 불러온 할 일을 유지합니다."
+    : null;
   const taskLanes = buildTaskLanes(
     Array.isArray(projects.tasks) ? projects.tasks : [],
     new Date(),
@@ -424,6 +429,7 @@ export async function GET() {
     metrics: buildMetrics(revenue, content, automations, projects),
     signals,
     taskSource,
+    taskError,
     taskLanes,
     blocks: [],
     queue,

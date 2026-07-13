@@ -5,6 +5,7 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, Checkbox, Progress, Sparkline, SyncBadge, EmptyState } from "../hub-primitives";
 import { QuickCapture } from "../quick-capture";
 import { createDurableTaskClient } from "@/lib/durable-task-client";
+import { createRefreshGenerationCoordinator } from "@/lib/refresh-generation";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 
 function formatBriefDate(date) {
@@ -167,10 +168,14 @@ function useDailyBriefLedger() {
     error: null,
   });
   const [refreshToken, setRefreshToken] = React.useState(0);
-  const refreshWaitersRef = React.useRef([]);
+  const refreshCoordinatorRef = React.useRef(null);
+  if (!refreshCoordinatorRef.current) {
+    refreshCoordinatorRef.current = createRefreshGenerationCoordinator();
+  }
 
   React.useEffect(() => {
     let active = true;
+    const loadGeneration = refreshToken;
 
     async function load() {
       setState((current) => ({
@@ -242,8 +247,7 @@ function useDailyBriefLedger() {
         }));
       } finally {
         if (active) {
-          const waiters = refreshWaitersRef.current.splice(0);
-          waiters.forEach((resolve) => resolve());
+          refreshCoordinatorRef.current.settle(loadGeneration);
         }
       }
     }
@@ -253,14 +257,14 @@ function useDailyBriefLedger() {
   }, [refreshToken]);
 
   React.useEffect(() => () => {
-    const waiters = refreshWaitersRef.current.splice(0);
-    waiters.forEach((resolve) => resolve());
+    refreshCoordinatorRef.current.cancel();
   }, []);
 
-  const refetch = React.useCallback(() => new Promise((resolve) => {
-    refreshWaitersRef.current.push(resolve);
-    setRefreshToken((value) => value + 1);
-  }), []);
+  const refetch = React.useCallback(() => {
+    const request = refreshCoordinatorRef.current.request();
+    setRefreshToken(request.generation);
+    return request.promise;
+  }, []);
   return { ...state, refetch };
 }
 

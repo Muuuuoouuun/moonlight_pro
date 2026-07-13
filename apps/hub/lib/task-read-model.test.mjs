@@ -382,6 +382,11 @@ test("Daily Brief exposes honest task lanes and no fabricated clock blocks", asy
   assert.match(source, /projects\.tasks/);
   assert.match(source, /taskSource/);
   assert.match(source, /taskLanes/);
+  assert.match(
+    source,
+    /projectsResult\.status === ["']rejected["']\s*\?\s*["']error["']\s*:\s*projects\.taskSource \|\| ["']preview["']/,
+  );
+  assert.doesNotMatch(source, /const taskSource = projects\.taskSource \|\| ["']preview["']/);
   assert.match(source, /blocks:\s*\[\]/);
   assert.doesNotMatch(source, /time:\s*["']14:00["']/);
   assert.doesNotMatch(source, /9\s*\+\s*index/);

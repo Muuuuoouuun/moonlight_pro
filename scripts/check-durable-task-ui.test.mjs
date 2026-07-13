@@ -17,6 +17,10 @@ test("Daily ledger keeps the canonical task source and lanes independent from le
   assert.match(dailySource, /['"]error['"]/);
   assert.match(dailySource, /['"]live['"]/);
   assert.doesNotMatch(dailySource, /liveCount\s*>\s*0[^\n]*taskLanes/);
+  assert.match(
+    dailySource,
+    /if\s*\(taskSource === ['"]error['"]\)\s*\{[\s\S]*?taskLanes:\s*previousLanes/,
+  );
 });
 
 test("first fold puts durable attention between Quick Capture and the status line", () => {
@@ -56,7 +60,9 @@ test("task completion uses the durable OCC client and canonical refetches for su
     dailySource,
     /result\.(?:currentTask|task)\?\.(?:updatedAt|updated_at)/,
   );
-  assert.match(dailySource, /refreshWaitersRef/);
+  assert.match(dailySource, /createRefreshGenerationCoordinator/);
+  assert.match(dailySource, /\.settle\s*\(loadGeneration\)/);
+  assert.doesNotMatch(dailySource, /refreshWaitersRef/);
 });
 
 test("initial task loading uses a fixed-height two-row token skeleton without fake content", () => {
