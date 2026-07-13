@@ -603,14 +603,20 @@ export async function getProjectLedger() {
   ]);
 
   if (!brandRows || !projectRows || !taskRows) {
+    const availableBrands = Array.isArray(brandRows) ? brandRows : [];
+    const availableProjects = Array.isArray(projectRows) ? projectRows : [];
+    const brandById = new Map(availableBrands.map((brand) => [brand.id, brand]));
+    const projectById = new Map(availableProjects.map((project) => [project.id, project]));
+    const tasks = canonicalTaskRead.tasks;
+
     return {
       source: "preview",
       configured: true,
       workspaceId,
       brands: [],
       projects: [],
-      tasks: [],
-      todos: [],
+      tasks,
+      todos: mapTodos(tasks, projectById, brandById),
       taskSource: canonicalTaskRead.source,
       taskTimezone: canonicalTaskRead.timezone,
       taskErrorCode: canonicalTaskRead.errorCode || null,

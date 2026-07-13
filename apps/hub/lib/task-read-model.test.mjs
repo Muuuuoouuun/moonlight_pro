@@ -16,11 +16,13 @@ registerHooks({
 const { fetchSupabaseRowsWithState } = await import("./server-read.js");
 const {
   getCanonicalTaskRead,
+  getProjectLedger,
   mapCanonicalTodoForProjects,
 } = await import("./repositories/operating-ledger.js");
 const { resolveTaskLane } = await import("./task-attention.js");
 
 const ORIGINAL_ENV = { ...process.env };
+const ORIGINAL_FETCH = globalThis.fetch;
 const WORKSPACE_ID = "11111111-1111-4111-8111-111111111111";
 const TASK_ID = "22222222-2222-4222-8222-222222222222";
 const PROJECT_ID = "33333333-3333-4333-8333-333333333333";
@@ -49,10 +51,12 @@ function canonicalTaskRow(overrides = {}) {
 
 beforeEach(() => {
   process.env = { ...ORIGINAL_ENV };
+  globalThis.fetch = ORIGINAL_FETCH;
 });
 
 afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
+  globalThis.fetch = ORIGINAL_FETCH;
 });
 
 test("discriminated Supabase reads distinguish preview, live empty, HTTP, JSON, and network states", async () => {
@@ -257,6 +261,80 @@ test("legacy due inference falls back to Asia/Seoul while explicit precision sta
   assert.equal(byId.get("explicit-date-non-midnight").duePrecision, "date");
 });
 
+test("project ledger preserves canonical tasks when a supporting legacy task read fails", async () => {
+  process.env.SUPABASE_URL = "https://db.example.com";
+  process.env.SUPABASE_ANON_KEY = "anon-key";
+  process.env.COM_MOON_DEFAULT_WORKSPACE_ID = WORKSPACE_ID;
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input));
+    const table = url.pathname.split("/").at(-1);
+    const select = url.searchParams.get("select");
+
+    if (table === "tasks" && select === "*") {
+      return Response.json({ message: "legacy task stats unavailable" }, { status: 503 });
+    }
+    if (table === "tasks") {
+      return Response.json([canonicalTaskRow({
+        id: "canonical-survivor",
+        priority: "critical",
+        due_at: "2026-07-13T15:00:00.000Z",
+      })]);
+    }
+    if (table === "workspaces") {
+      return Response.json([{ timezone: "Asia/Seoul" }]);
+    }
+    if (table === "brands") {
+      return Response.json([{
+        id: "brand-one",
+        workspace_id: WORKSPACE_ID,
+        slug: "classmoon",
+        name: "ClassMoon",
+        description: null,
+        status: "active",
+        color: null,
+        icon: null,
+        meta: {},
+        created_at: "2026-07-10T00:00:00.000Z",
+        updated_at: "2026-07-10T00:00:00.000Z",
+      }]);
+    }
+    if (table === "projects") {
+      return Response.json([{
+        id: PROJECT_ID,
+        workspace_id: WORKSPACE_ID,
+        brand_id: "brand-one",
+        owner_id: OWNER_ID,
+        name: "ClassIn 영업",
+        status: "active",
+        priority: "high",
+        progress: 25,
+        due_at: null,
+        summary: "",
+        next_action: "견적 후속 연락",
+        meta: {},
+        last_activity_at: null,
+        created_at: "2026-07-10T00:00:00.000Z",
+        updated_at: "2026-07-13T04:00:00.000Z",
+      }]);
+    }
+
+    return Response.json([]);
+  };
+
+  const result = await getProjectLedger();
+
+  assert.equal(result.source, "preview");
+  assert.equal(result.taskSource, "live");
+  assert.deepEqual(result.tasks.map((task) => task.id), ["canonical-survivor"]);
+  assert.equal(result.todos.length, 1);
+  assert.equal(result.todos[0].id, "canonical-survivor");
+  assert.equal(result.todos[0].brand, "classmoon");
+  assert.equal(result.todos[0].project, PROJECT_ID);
+  assert.equal(result.todos[0].projectName, "ClassIn 영업");
+  assert.equal(result.todos[0].priorityKey, "critical");
+  assert.equal(result.todos[0].updatedAt, "2026-07-13T04:00:00.000Z");
+});
+
 test("Projects todo adapter keeps display compatibility and adds canonical OCC fields", () => {
   const task = {
     id: TASK_ID,
@@ -301,6 +379,7 @@ test("Daily Brief exposes honest task lanes and no fabricated clock blocks", asy
   );
 
   assert.match(source, /buildTaskLanes/);
+  assert.match(source, /projects\.tasks/);
   assert.match(source, /taskSource/);
   assert.match(source, /taskLanes/);
   assert.match(source, /blocks:\s*\[\]/);
