@@ -15,6 +15,16 @@ Hub should show what matters, what failed, and what action comes next. Engine ow
 
 The former public web surface has been detached from the active workspace so execution can stay focused on Hub and Engine.
 
+## Documentation
+
+Start with [`docs/README.md`](docs/README.md). It defines the documentation precedence, the 2026-07-13 operator decisions, the current implementation phase, and which older plans are historical references.
+
+The active product sources are:
+
+- [`docs/operator-workflow-profile.md`](docs/operator-workflow-profile.md): operator facts from Q1-Q115
+- [`docs/superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`](docs/superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md): current product design
+- [`DESIGN.md`](DESIGN.md): UI and interaction contract
+
 ## Development
 
 ```bash
@@ -56,4 +66,5 @@ CI currently blocks build/typecheck failures and high-or-higher production audit
 
 - `main`: production branch
 - `codex/*`: Codex implementation branches
-- Current hardening branch: `codex/moonlight-p0-hardening`
+
+Do not use a branch name as product truth. Check the current Git branch and [`docs/README.md`](docs/README.md) before starting work.
