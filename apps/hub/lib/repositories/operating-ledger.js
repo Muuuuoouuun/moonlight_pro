@@ -1,12 +1,14 @@
 import {
   eqFilter,
+  fetchAllSupabaseRows,
+  fetchAllSupabaseRowsWithState,
   fetchSupabaseRows,
-  fetchSupabaseRowsWithState,
   inFilter,
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 import { DEFAULT_TASK_TIMEZONE, resolveTaskTimezone } from "@/lib/task-attention";
+import { mapCanonicalTodoForProjects as mapCanonicalTodoPresentation } from "@/lib/project-task-state";
 
 const BRAND_GLYPHS = ["◐", "◇", "✦", "◆", "●", "□", "△", "◎", "◌", "✧"];
 const CANONICAL_BRAND_ORDER = {
@@ -67,16 +69,6 @@ function normalizeProjectStatus(status) {
   return "In progress";
 }
 
-function normalizeTodoPriority(priority) {
-  const normalized = String(priority || "medium").toLowerCase();
-
-  if (normalized === "critical") return "high";
-  if (normalized === "medium") return "med";
-  if (normalized === "high" || normalized === "low") return normalized;
-
-  return "med";
-}
-
 function normalizeBrandKind(kind) {
   const normalized = String(kind || "").toLowerCase();
 
@@ -134,27 +126,6 @@ function formatActivityTime(value) {
     minute: "2-digit",
     hour12: false,
   }).format(date);
-}
-
-function resolveDueBucket(value) {
-  if (!value) return "다음주";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "다음주";
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const target = new Date(date);
-  target.setHours(0, 0, 0, 0);
-
-  const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
-
-  if (diffDays <= 0) return "오늘";
-  if (diffDays === 1) return "내일";
-  if (diffDays <= 7) return "이번주";
-
-  return "다음주";
 }
 
 function buildAllBrand(projectCount, openTodoCount, changeCount) {
@@ -263,22 +234,7 @@ function mapProjects(rows, brandById, taskStats, updateStats) {
 }
 
 export function mapCanonicalTodoForProjects(task, projectById, brandById) {
-  const project = task.projectId && projectById.get(task.projectId);
-  const brand = project?.brand_id && brandById.get(project.brand_id);
-  const priorityKey = task.priority || "medium";
-
-  return {
-    ...task,
-    brand: brand?.slug || "all",
-    project: task.projectId || "",
-    projectName: task.projectName || project?.name || null,
-    due: formatShortDate(task.dueAt),
-    bucket: resolveDueBucket(task.dueAt),
-    done: task.status === "done",
-    priority: normalizeTodoPriority(priorityKey),
-    priorityKey,
-    assignee: task.ownerId ? "Me" : "Unassigned",
-  };
+  return mapCanonicalTodoPresentation(task, projectById, brandById);
 }
 
 function mapTodos(tasks, projectById, brandById) {
@@ -356,7 +312,7 @@ function mapCanonicalTask(row, timezone) {
 
 export async function getCanonicalTaskRead({
   workspaceId = resolveDefaultWorkspaceId(),
-  readRows = fetchSupabaseRowsWithState,
+  readRows = fetchAllSupabaseRowsWithState,
 } = {}) {
   if (!workspaceId) {
     return { source: "preview", timezone: DEFAULT_TASK_TIMEZONE, tasks: [] };
@@ -365,7 +321,6 @@ export async function getCanonicalTaskRead({
   const [taskResult, workspaceResult] = await Promise.all([
     readRows("tasks", {
       select: CANONICAL_TASK_SELECT,
-      limit: 200,
       order: "updated_at.desc",
       filters: [
         ["workspace_id", eqFilter(workspaceId)],
@@ -390,6 +345,15 @@ export async function getCanonicalTaskRead({
       timezone,
       tasks: [],
       errorCode: taskResult.errorCode || "read-failed",
+    };
+  }
+
+  if (workspaceResult.state !== "live") {
+    return {
+      source: "error",
+      timezone: DEFAULT_TASK_TIMEZONE,
+      tasks: [],
+      errorCode: `timezone-${workspaceResult.errorCode || workspaceResult.state || "read-failed"}`,
     };
   }
 
@@ -572,8 +536,7 @@ export async function getProjectLedger() {
         ["status", inFilter(["draft", "active", "blocked", "completed", "archived"])],
       ]),
     }),
-    fetchSupabaseRows("tasks", {
-      limit: 160,
+    fetchAllSupabaseRows("tasks", {
       order: "updated_at.desc",
       filters: withWorkspaceFilter([
         ["status", inFilter(["inbox", "todo", "doing", "blocked", "done"])],

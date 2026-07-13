@@ -252,14 +252,37 @@ function stableSerialize(value) {
   return JSON.stringify(value);
 }
 
+function hasOwn(task, key) {
+  return Boolean(task && Object.prototype.hasOwnProperty.call(task, key));
+}
+
+function taskProjectState(task) {
+  if (!task || typeof task !== 'object') return { specified: false, id: null, name: null };
+  if (hasOwn(task, 'project')) {
+    if (task.project && typeof task.project === 'object') {
+      return {
+        specified: true,
+        id: task.project.id ?? null,
+        name: task.project.name ?? task.projectName ?? task.project_name ?? null,
+      };
+    }
+    return {
+      specified: true,
+      id: typeof task.project === 'string' && task.project ? task.project : null,
+      name: task.projectName ?? task.project_name ?? null,
+    };
+  }
+  if (hasOwn(task, 'projectId')) {
+    return { specified: true, id: task.projectId ?? null, name: task.projectName ?? task.project_name ?? null };
+  }
+  if (hasOwn(task, 'project_id')) {
+    return { specified: true, id: task.project_id ?? null, name: task.projectName ?? task.project_name ?? null };
+  }
+  return { specified: false, id: null, name: task.projectName ?? task.project_name ?? null };
+}
+
 function taskProjectId(task) {
-  const nestedProjectId = task?.project && typeof task.project === 'object'
-    ? task.project?.id
-    : null;
-  return task?.projectId
-    ?? task?.project_id
-    ?? nestedProjectId
-    ?? (typeof task?.project === 'string' ? task.project : null);
+  return taskProjectState(task).id;
 }
 
 export function writableTaskFingerprint(task, kind) {
@@ -341,28 +364,67 @@ export function settleComposerOperation(current, operation, patch) {
 
 function normalizeTask(task) {
   if (!task || typeof task !== 'object') return null;
-  const nestedProject = task.project && typeof task.project === 'object' ? task.project : null;
-  const projectId = taskProjectId(task);
-  const normalized = {
-    ...task,
-    id: task.id,
-    status: task.status,
-    priority: task.priority,
-    dueAt: task.dueAt ?? task.due_at ?? null,
-    duePrecision: task.duePrecision ?? task.due_precision ?? null,
-    nextAction: task.nextAction ?? task.next_action ?? null,
-    updatedAt: task.updatedAt ?? task.updated_at ?? null,
-  };
-  if (projectId !== null && projectId !== undefined) {
-    normalized.projectId = projectId;
-    normalized.project = typeof task.project === 'string' ? task.project : projectId;
-  } else {
-    delete normalized.projectId;
-    delete normalized.project;
+  const projectState = taskProjectState(task);
+  const normalized = { ...task };
+  if (hasOwn(task, 'dueAt') || hasOwn(task, 'due_at')) normalized.dueAt = task.dueAt ?? task.due_at ?? null;
+  if (hasOwn(task, 'duePrecision') || hasOwn(task, 'due_precision')) normalized.duePrecision = task.duePrecision ?? task.due_precision ?? null;
+  if (hasOwn(task, 'nextAction') || hasOwn(task, 'next_action')) normalized.nextAction = task.nextAction ?? task.next_action ?? null;
+  if (hasOwn(task, 'updatedAt') || hasOwn(task, 'updated_at')) normalized.updatedAt = task.updatedAt ?? task.updated_at ?? null;
+  if (hasOwn(task, 'ownerId') || hasOwn(task, 'owner_id')) normalized.ownerId = task.ownerId ?? task.owner_id ?? null;
+  if (projectState.specified) {
+    normalized.projectId = projectState.id;
+    normalized.project = projectState.id || '';
+    normalized.projectName = projectState.id ? projectState.name : null;
   }
-  const projectName = task.projectName ?? task.project_name ?? nestedProject?.name;
-  if (projectName !== null && projectName !== undefined) normalized.projectName = projectName;
   return normalized;
+}
+
+function normalizeTodoPriority(priority) {
+  const normalized = String(priority || 'medium').toLowerCase();
+  if (normalized === 'critical') return 'high';
+  if (normalized === 'medium') return 'med';
+  if (normalized === 'high' || normalized === 'low') return normalized;
+  return 'med';
+}
+
+function formatShortDate(value) {
+  if (!value) return '미정';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '미정';
+  return new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric' }).format(date);
+}
+
+function resolveDueBucket(value) {
+  if (!value) return '다음주';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '다음주';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
+  if (diffDays <= 0) return '오늘';
+  if (diffDays === 1) return '내일';
+  if (diffDays <= 7) return '이번주';
+  return '다음주';
+}
+
+export function mapCanonicalTodoForProjects(task, projectById = new Map(), brandById = new Map(), options = {}) {
+  const project = task.projectId && projectById.get(task.projectId);
+  const brand = project?.brand_id && brandById.get(project.brand_id);
+  const priorityKey = task.priority || 'medium';
+  return {
+    ...task,
+    brand: brand?.slug || options.brandFallback || 'all',
+    project: task.projectId || '',
+    projectName: task.projectName || project?.name || options.projectNameFallback || null,
+    due: formatShortDate(task.dueAt),
+    bucket: resolveDueBucket(task.dueAt),
+    done: task.status === 'done',
+    priority: normalizeTodoPriority(priorityKey),
+    priorityKey,
+    assignee: task.ownerId ? 'Me' : 'Unassigned',
+  };
 }
 
 export function resolveConflictTask(result) {
@@ -373,5 +435,21 @@ export function applyAuthoritativeTask(todos, currentTask) {
   const current = normalizeTask(currentTask);
   if (!current?.id) return todos;
   if (current.status === 'done') return todos.filter((task) => task.id !== current.id);
-  return todos.map((task) => task.id === current.id ? normalizeTask({ ...task, ...current }) : task);
+  const currentProjectState = taskProjectState(currentTask);
+  return todos.map((task) => {
+    if (task.id !== current.id) return task;
+    const previousProjectId = taskProjectId(task);
+    const nextProjectId = currentProjectState.specified ? current.projectId : previousProjectId;
+    const projectChanged = currentProjectState.specified && nextProjectId !== previousProjectId;
+    const merged = normalizeTask({ ...task, ...current });
+    if (currentProjectState.specified) {
+      merged.projectId = nextProjectId;
+      merged.project = nextProjectId || '';
+      merged.projectName = nextProjectId ? current.projectName : null;
+    }
+    return mapCanonicalTodoForProjects(merged, new Map(), new Map(), {
+      brandFallback: projectChanged ? 'all' : task.brand,
+      projectNameFallback: projectChanged ? null : task.projectName,
+    });
+  });
 }

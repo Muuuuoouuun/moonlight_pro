@@ -7,6 +7,7 @@ import { QuickCapture } from "../quick-capture";
 import { createDurableTaskClient } from "@/lib/durable-task-client";
 import { createRefreshGenerationCoordinator } from "@/lib/refresh-generation";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
+import { DEFAULT_TASK_TIMEZONE, resolveTaskTimezone } from "@/lib/task-attention";
 
 function formatBriefDate(date) {
   return new Intl.DateTimeFormat('en-US', {
@@ -119,18 +120,20 @@ function emptyTaskLanes() {
   return Object.fromEntries(TASK_LANE_ORDER.map((lane) => [lane, []]));
 }
 
-function normalizeTaskRead(data, previousLanes) {
+function normalizeTaskRead(data, previousLanes, previousTimezone = DEFAULT_TASK_TIMEZONE) {
   const taskSource = TASK_SOURCE_STATES.has(data?.taskSource) ? data.taskSource : 'error';
+  const taskTimezone = resolveTaskTimezone(data?.taskTimezone || previousTimezone);
   if (taskSource === 'error') {
     return {
       taskSource,
+      taskTimezone,
       taskLanes: previousLanes,
       taskError: data?.taskError || '할 일 원장 응답을 확인할 수 없습니다.',
     };
   }
 
   if (taskSource === 'preview' || taskSource === 'empty') {
-    return { taskSource, taskLanes: emptyTaskLanes(), taskError: null };
+    return { taskSource, taskTimezone, taskLanes: emptyTaskLanes(), taskError: null };
   }
 
   const taskLanes = data?.taskLanes;
@@ -139,6 +142,7 @@ function normalizeTaskRead(data, previousLanes) {
   if (!hasCanonicalLanes) {
     return {
       taskSource: 'error',
+      taskTimezone,
       taskLanes: previousLanes,
       taskError: '할 일 원장 형식이 올바르지 않습니다.',
     };
@@ -146,6 +150,7 @@ function normalizeTaskRead(data, previousLanes) {
 
   return {
     taskSource,
+    taskTimezone,
     taskLanes: Object.fromEntries(
       TASK_LANE_ORDER.map((lane) => [lane, taskLanes[lane]]),
     ),
@@ -162,6 +167,7 @@ function useDailyBriefLedger() {
     metrics: [],
     signals: [],
     taskSource: 'loading',
+    taskTimezone: DEFAULT_TASK_TIMEZONE,
     taskLanes: emptyTaskLanes(),
     taskError: null,
     morningBrief: null,
@@ -186,6 +192,7 @@ function useDailyBriefLedger() {
         metrics: [],
         signals: [],
         taskSource: 'loading',
+        taskTimezone: current.taskTimezone,
         taskLanes: current.taskLanes,
         taskError: null,
         morningBrief: null,
@@ -204,6 +211,7 @@ function useDailyBriefLedger() {
             metrics: [],
             signals: [],
             taskSource: 'error',
+            taskTimezone: current.taskTimezone,
             taskLanes: current.taskLanes,
             taskError: data?.error || data?.message || `할 일 요청 실패 (${response.status})`,
             morningBrief: null,
@@ -227,7 +235,7 @@ function useDailyBriefLedger() {
           summary: data.summary || null,
           metrics: liveCount > 0 && Array.isArray(data.metrics) ? data.metrics : [],
           signals: liveCount > 0 && Array.isArray(data.signals) ? data.signals : [],
-          ...normalizeTaskRead(data, current.taskLanes),
+          ...normalizeTaskRead(data, current.taskLanes, current.taskTimezone),
           morningBrief: liveCount > 0 ? data.morningBrief || null : null,
           error: null,
         }));
@@ -240,6 +248,7 @@ function useDailyBriefLedger() {
           metrics: [],
           signals: [],
           taskSource: 'error',
+          taskTimezone: current.taskTimezone,
           taskLanes: current.taskLanes,
           taskError: error instanceof Error ? error.message : String(error),
           morningBrief: null,
@@ -869,14 +878,14 @@ const TASK_LANE_TONES = {
   inbox: 'neutral',
 };
 
-function formatTaskDue(task) {
+function formatTaskDue(task, timezone) {
   if (!task?.dueAt) return task?.status === 'inbox' ? '분류 필요' : '기한 없음';
 
   const due = new Date(task.dueAt);
   if (Number.isNaN(due.getTime())) return '기한 확인 필요';
   const options = task.duePrecision === 'timed'
-    ? { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }
-    : { month: 'numeric', day: 'numeric' };
+    ? { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: resolveTaskTimezone(timezone) }
+    : { month: 'numeric', day: 'numeric', timeZone: resolveTaskTimezone(timezone) };
   return new Intl.DateTimeFormat('ko-KR', options).format(due);
 }
 
@@ -1044,7 +1053,7 @@ function DurableTaskAttention({ ledger }) {
                       <div className="durable-task-attention__title">{task.title}</div>
                       <div className="durable-task-attention__meta">
                         <Badge tone={TASK_LANE_TONES[lane]} size="xs">{TASK_LANE_LABELS[lane]}</Badge>
-                        <span className="mono">{formatTaskDue(task)}</span>
+                        <span className="mono">{formatTaskDue(task, ledger.taskTimezone)}</span>
                         {task.nextAction && <span>{task.nextAction}</span>}
                       </div>
                     </div>

@@ -368,3 +368,70 @@ test('Engine conflict task is normalized and applied before any refetch', () => 
   assert.equal(resolveConflictTask({ currentTask: liveTask }).id, liveTask.id);
   assert.equal(resolveConflictTask({ current_task: liveTask }).id, liveTask.id);
 });
+
+test('authoritative conflict preserves an explicit project detachment', () => {
+  const current = resolveConflictTask({
+    status: 'conflict',
+    task: {
+      ...liveTask,
+      project: null,
+      project_id: null,
+      updated_at: '2026-07-13T02:00:00.000Z',
+    },
+  });
+  const [applied] = applyAuthoritativeTask([{
+    ...liveTask,
+    project: 'project-a',
+    projectName: 'Project A',
+    brand: 'classin',
+    priorityKey: 'high',
+    due: '7. 15.',
+    bucket: '이번주',
+  }], current);
+
+  assert.equal(current.projectId, null);
+  assert.equal(current.project, '');
+  assert.equal(current.projectName, null);
+  assert.equal(applied.projectId, null);
+  assert.equal(applied.project, '');
+  assert.equal(applied.projectName, null);
+  assert.equal(applied.brand, 'all');
+});
+
+test('authoritative conflict recomputes every Projects presentation field', () => {
+  const [applied] = applyAuthoritativeTask([{
+    ...liveTask,
+    ownerId: 'owner-a',
+    project: 'project-a',
+    projectName: 'Project A',
+    brand: 'classin',
+    priority: 'high',
+    priorityKey: 'high',
+    due: '7. 15.',
+    bucket: '이번주',
+    done: false,
+    assignee: 'Me',
+  }], {
+    id: liveTask.id,
+    title: 'Server title',
+    status: 'blocked',
+    priority: 'low',
+    project: { id: 'project-b', name: 'Project B' },
+    owner_id: null,
+    due_at: null,
+    due_precision: 'none',
+    updated_at: '2026-07-13T02:00:00.000Z',
+  });
+
+  assert.equal(applied.project, 'project-b');
+  assert.equal(applied.projectId, 'project-b');
+  assert.equal(applied.projectName, 'Project B');
+  assert.equal(applied.brand, 'all');
+  assert.equal(applied.priorityKey, 'low');
+  assert.equal(applied.priority, 'low');
+  assert.equal(applied.due, '미정');
+  assert.equal(applied.bucket, '다음주');
+  assert.equal(applied.done, false);
+  assert.equal(applied.assignee, 'Unassigned');
+  assert.equal(taskToDraft(applied, 'Asia/Seoul').priority, 'low');
+});

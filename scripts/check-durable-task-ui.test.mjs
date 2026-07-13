@@ -247,12 +247,31 @@ test("Projects unlocks write session inline without unmounting drafts", () => {
   assert.doesNotMatch(projectsSource, /Quick Capture에서/);
 });
 
+test("editor unlock form stays inside the modal drawer instead of behind its overlay", () => {
+  assert.match(projectsSource, /const unlockKind = requiresUnlock/);
+  assert.match(projectsSource, /requiresUnlock && unlockKind !== ['"]editor['"]/);
+  assert.match(projectsSource, /<EditDrawer[\s\S]*requiresUnlock && unlockKind === ['"]editor['"][\s\S]*project-session-unlock--drawer/);
+  assert.match(tokenSource, /\.project-session-unlock--drawer[\s\S]*order:\s*-1/);
+});
+
+test("Projects mobile layout hides only the workspace sidebar, not the edit drawer", () => {
+  assert.match(projectsSource, /className="hub-workspace-sidebar"/);
+  assert.match(tokenSource, /\.hub-workspace-shell > \.hub-workspace-sidebar\s*\{\s*display: none !important;/);
+  assert.doesNotMatch(tokenSource, /\.hub-workspace-shell > aside\s*\{\s*display: none !important;/);
+});
+
 test("task mutations announce success and EditDrawer avoids iOS input zoom", () => {
   assert.match(projectsSource, /aria-live=['"]polite['"]/);
   assert.match(projectsSource, /setTaskAnnouncement/);
   assert.match(tokenSource, /@media\s*\(max-width:\s*640px\)[\s\S]*\.hub-edit-drawer-field/);
   assert.match(tokenSource, /\.hub-edit-drawer-field\s+(?:input|input,\s*\n?\s*\.hub-edit-drawer-field\s+select)[\s\S]*font-size:\s*16px/);
   assert.match(primitiveSource, /className=['"]hub-edit-drawer-field['"]/);
+});
+
+test("Daily due labels use the same workspace timezone as lane assignment", () => {
+  assert.match(dailySource, /taskTimezone/);
+  assert.match(dailySource, /formatTaskDue\(task,\s*ledger\.taskTimezone\)/);
+  assert.match(dailySource, /timeZone:\s*resolveTaskTimezone\(timezone\)/);
 });
 
 test("Projects initial read has a fixed-height real-data skeleton", () => {
@@ -263,7 +282,7 @@ test("Projects initial read has a fixed-height real-data skeleton", () => {
 
 test("Engine conflict payload prefers task and preserves canonical timed fields", () => {
   assert.match(projectTaskStateSource, /result\?\.task\s*\|\|\s*result\?\.currentTask/);
-  assert.match(projectTaskStateSource, /duePrecision:\s*task\.duePrecision\s*\?\?\s*task\.due_precision/);
+  assert.match(projectTaskStateSource, /normalized\.duePrecision\s*=\s*task\.duePrecision\s*\?\?\s*task\.due_precision/);
   assert.match(projectsSource, /const currentTask = resolveConflictTask\(result\)/);
 });
 
@@ -292,7 +311,7 @@ test("inline unlock retries are bound to exact writable snapshots", () => {
 });
 
 test("Engine nested project conflicts retain the scalar Projects filter key", () => {
-  assert.match(projectTaskStateSource, /task\.project\?\.id/);
+  assert.match(projectTaskStateSource, /task\.project\.id/);
   assert.match(projectTaskStateSource, /projectName/);
   assert.match(projectsSource, /t\.project === p\.id/);
 });
@@ -309,4 +328,11 @@ test("Projects skeleton animation respects reduced motion", () => {
     tokenSource,
     /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.project-ledger-skeleton__row\s*\{[^}]*animation:\s*none/s,
   );
+});
+
+test("drawer slide motion keeps its opaque shell above global chrome", () => {
+  const drawerMotion = tokenSource.match(/@keyframes\s+hubDrawerIn[^\n]*/)?.[0] || "";
+  assert.match(drawerMotion, /transform:\s*translateX/);
+  assert.doesNotMatch(drawerMotion, /opacity:/);
+  assert.match(primitiveSource, /className="hub-drawer"[\s\S]*zIndex:\s*61/);
 });

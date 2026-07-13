@@ -85,6 +85,40 @@ function ProjectLedgerSkeleton() {
   );
 }
 
+function ProjectSessionUnlock({
+  className = '',
+  formId,
+  onSubmit,
+  pending,
+  secret,
+  onSecretChange,
+  error,
+}) {
+  const inputId = `${formId}-write-secret`;
+  return (
+    <form className={`project-session-unlock ${className}`.trim()} onSubmit={onSubmit} aria-busy={pending}>
+      <div>
+        <strong>쓰기 잠금 해제</strong>
+        <span>현재 화면과 입력을 유지한 채, 실패한 작업을 같은 재시도 키로 다시 실행합니다.</span>
+      </div>
+      <label className="visually-hidden" htmlFor={inputId}>Hub write secret</label>
+      <input
+        id={inputId}
+        type="password"
+        value={secret}
+        onChange={(event) => onSecretChange(event.target.value)}
+        disabled={pending}
+        autoComplete="current-password"
+        placeholder="Hub write secret"
+      />
+      <Button type="submit" variant="secondary" size="sm" disabled={pending || !secret}>
+        {pending ? '확인 중…' : '잠금 해제 후 재시도'}
+      </Button>
+      {error && <span className="project-session-unlock__error" role="alert">{error}</span>}
+    </form>
+  );
+}
+
 function isDurableSuccess(result) {
   return result?.httpStatus >= 200
     && result.httpStatus < 300
@@ -238,6 +272,7 @@ export function Projects({ workspace }) {
   const currentBrand = brands.find(b => b.key === brand) || brands[0] || EMPTY_ALL_BRAND;
   const cols = Array.isArray(ledger.columns) && ledger.columns.length ? ledger.columns : EMPTY_COLUMNS;
   const showLedgerSurface = syncState === 'live' || hasLedgerSnapshot;
+  const unlockKind = requiresUnlock ? pendingUnlockRetryRef.current?.kind : null;
 
   React.useEffect(() => {
     mountedRef.current = true;
@@ -827,7 +862,7 @@ export function Projects({ workspace }) {
   return (
     <div className="hub-workspace-shell" style={{ display: 'grid', gridTemplateColumns: sidebarHidden ? '1fr' : '240px 1fr', height: '100%', overflow: 'hidden' }}>
       {!sidebarHidden && (
-      <aside style={{ borderRight: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <aside className="hub-workspace-sidebar" style={{ borderRight: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center' }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-faint)' }}>Brands</div>
@@ -947,27 +982,15 @@ export function Projects({ workspace }) {
 
         <div className="visually-hidden" aria-live="polite" aria-atomic="true">{taskAnnouncement}</div>
 
-        {requiresUnlock && (
-          <form className="project-session-unlock" onSubmit={submitSessionUnlock} aria-busy={unlockPending}>
-            <div>
-              <strong>쓰기 잠금 해제</strong>
-              <span>현재 화면과 입력을 유지한 채, 실패한 작업을 같은 재시도 키로 다시 실행합니다.</span>
-            </div>
-            <label className="visually-hidden" htmlFor="project-write-secret">Hub write secret</label>
-            <input
-              id="project-write-secret"
-              type="password"
-              value={unlockSecret}
-              onChange={(event) => setUnlockSecret(event.target.value)}
-              disabled={unlockPending}
-              autoComplete="current-password"
-              placeholder="Hub write secret"
-            />
-            <Button type="submit" variant="secondary" size="sm" disabled={unlockPending || !unlockSecret}>
-              {unlockPending ? '확인 중…' : '잠금 해제 후 재시도'}
-            </Button>
-            {unlockError && <span className="project-session-unlock__error" role="alert">{unlockError}</span>}
-          </form>
+        {requiresUnlock && unlockKind !== 'editor' && (
+          <ProjectSessionUnlock
+            formId="project"
+            onSubmit={submitSessionUnlock}
+            pending={unlockPending}
+            secret={unlockSecret}
+            onSecretChange={setUnlockSecret}
+            error={unlockError}
+          />
         )}
 
         {showLedgerSurface && syncState !== 'live' && (
@@ -1451,7 +1474,19 @@ export function Projects({ workspace }) {
           setDrawerPersisted(false);
         }}
         onSave={saveTaskDraft}
-      />
+      >
+        {requiresUnlock && unlockKind === 'editor' && (
+          <ProjectSessionUnlock
+            className="project-session-unlock--drawer"
+            formId="project-drawer"
+            onSubmit={submitSessionUnlock}
+            pending={unlockPending}
+            secret={unlockSecret}
+            onSecretChange={setUnlockSecret}
+            error={unlockError}
+          />
+        )}
+      </EditDrawer>
     </div>
   );
 }

@@ -1,13 +1,17 @@
 import { makeSupabaseHeaders, resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
 
 function buildRestUrl(baseUrl, table, options = {}) {
-  const { select = "*", filters = [], limit, order } = options;
+  const { select = "*", filters = [], limit, offset, order } = options;
   const params = new URLSearchParams();
 
   params.set("select", select);
 
   if (typeof limit === "number") {
     params.set("limit", String(limit));
+  }
+
+  if (typeof offset === "number" && offset > 0) {
+    params.set("offset", String(offset));
   }
 
   if (order) {
@@ -44,7 +48,7 @@ export function withWorkspaceFilter(filters = []) {
   return workspaceId ? [["workspace_id", eqFilter(workspaceId)], ...filters] : filters;
 }
 
-export async function fetchSupabaseRows(table, options = {}) {
+export async function fetchSupabaseRows(table, options = {}, { fetchImpl = fetch } = {}) {
   const config = resolveSupabaseConfig();
 
   if (!config) {
@@ -52,7 +56,7 @@ export async function fetchSupabaseRows(table, options = {}) {
   }
 
   try {
-    const response = await fetch(buildRestUrl(config.url, table, options), {
+    const response = await fetchImpl(buildRestUrl(config.url, table, options), {
       headers: makeSupabaseHeaders(config.apiKey),
       cache: "no-store",
     });
@@ -64,6 +68,38 @@ export async function fetchSupabaseRows(table, options = {}) {
     return await response.json();
   } catch {
     return null;
+  }
+}
+
+function pageSignature(rows) {
+  if (!rows.length) return "empty";
+  return JSON.stringify(rows.map((row) => row?.id ?? row));
+}
+
+export async function fetchAllSupabaseRows(
+  table,
+  options = {},
+  { fetchImpl = fetch, pageSize = 500 } = {},
+) {
+  if (typeof options.limit === "number") {
+    return fetchSupabaseRows(table, options, { fetchImpl });
+  }
+
+  const size = Math.max(1, Math.floor(pageSize));
+  const rows = [];
+  const seenPages = new Set();
+  for (let offset = 0; ; offset += size) {
+    const page = await fetchSupabaseRows(table, {
+      ...options,
+      limit: size,
+      ...(offset > 0 ? { offset } : {}),
+    }, { fetchImpl });
+    if (!Array.isArray(page)) return null;
+    const signature = pageSignature(page);
+    if (page.length && seenPages.has(signature)) return null;
+    seenPages.add(signature);
+    rows.push(...page);
+    if (page.length < size) return rows;
   }
 }
 
@@ -99,6 +135,35 @@ export async function fetchSupabaseRowsWithState(
       : { state: "error", rows: [], errorCode: "invalid-json" };
   } catch {
     return { state: "error", rows: [], errorCode: "invalid-json" };
+  }
+}
+
+export async function fetchAllSupabaseRowsWithState(
+  table,
+  options = {},
+  { fetchImpl = fetch, pageSize = 500 } = {},
+) {
+  if (typeof options.limit === "number") {
+    return fetchSupabaseRowsWithState(table, options, { fetchImpl });
+  }
+
+  const size = Math.max(1, Math.floor(pageSize));
+  const rows = [];
+  const seenPages = new Set();
+  for (let offset = 0; ; offset += size) {
+    const page = await fetchSupabaseRowsWithState(table, {
+      ...options,
+      limit: size,
+      ...(offset > 0 ? { offset } : {}),
+    }, { fetchImpl });
+    if (page.state !== "live") return { ...page, rows: [] };
+    const signature = pageSignature(page.rows);
+    if (page.rows.length && seenPages.has(signature)) {
+      return { state: "error", rows: [], errorCode: "pagination-loop" };
+    }
+    seenPages.add(signature);
+    rows.push(...page.rows);
+    if (page.rows.length < size) return { state: "live", rows };
   }
 }
 

@@ -430,6 +430,7 @@ export async function GET() {
     signals,
     taskSource,
     taskError,
+    taskTimezone: projects.taskTimezone,
     taskLanes,
     blocks: [],
     queue,

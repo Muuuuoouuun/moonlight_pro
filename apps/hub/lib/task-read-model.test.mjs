@@ -13,7 +13,11 @@ registerHooks({
   },
 });
 
-const { fetchSupabaseRowsWithState } = await import("./server-read.js");
+const {
+  fetchAllSupabaseRows,
+  fetchAllSupabaseRowsWithState,
+  fetchSupabaseRowsWithState,
+} = await import("./server-read.js");
 const {
   getCanonicalTaskRead,
   getProjectLedger,
@@ -98,6 +102,36 @@ test("discriminated Supabase reads distinguish preview, live empty, HTTP, JSON, 
   assert.deepEqual(networkFailure, { state: "error", rows: [], errorCode: "request-failed" });
 });
 
+test("paginated Supabase readers do not silently truncate durable task ledgers", async () => {
+  process.env.SUPABASE_URL = "https://db.example.com/";
+  process.env.SUPABASE_ANON_KEY = "anon-key";
+  const requested = [];
+  const pages = [
+    [{ id: "1" }, { id: "2" }],
+    [{ id: "3" }, { id: "4" }],
+    [{ id: "5" }],
+  ];
+  const fetchImpl = async (url) => {
+    requested.push(String(url));
+    return Response.json(pages[requested.length - 1]);
+  };
+
+  const stateful = await fetchAllSupabaseRowsWithState("tasks", { order: "updated_at.desc" }, {
+    fetchImpl,
+    pageSize: 2,
+  });
+  assert.equal(stateful.state, "live");
+  assert.deepEqual(stateful.rows.map((row) => row.id), ["1", "2", "3", "4", "5"]);
+  assert.match(requested[0], /limit=2/);
+  assert.doesNotMatch(requested[0], /offset=/);
+  assert.match(requested[1], /offset=2/);
+  assert.match(requested[2], /offset=4/);
+
+  requested.length = 0;
+  const plain = await fetchAllSupabaseRows("tasks", {}, { fetchImpl, pageSize: 2 });
+  assert.deepEqual(plain.map((row) => row.id), ["1", "2", "3", "4", "5"]);
+});
+
 test("canonical task read is workspace-scoped, excludes done, and preserves OCC fields", async () => {
   const calls = [];
   const row = {
@@ -132,6 +166,7 @@ test("canonical task read is workspace-scoped, excludes done, and preserves OCC 
   });
 
   const taskCall = calls.find((call) => call.table === "tasks");
+  assert.equal(taskCall.options.limit, undefined);
   assert.ok(taskCall.options.filters.some(([field, value]) => field === "workspace_id" && value === `eq.${WORKSPACE_ID}`));
   assert.ok(taskCall.options.filters.some(([field, value]) => field === "status" && value === "neq.done"));
   assert.match(taskCall.options.select, /updated_at/);
@@ -186,6 +221,19 @@ test("canonical task read distinguishes live empty, preview, and error without m
     timezone: "Asia/Seoul",
     tasks: [],
     errorCode: "http-500",
+  });
+
+  const timezoneFailed = await getCanonicalTaskRead({
+    workspaceId: WORKSPACE_ID,
+    readRows: async (table) => table === "tasks"
+      ? { state: "live", rows: [canonicalTaskRow()] }
+      : { state: "error", rows: [], errorCode: "http-503" },
+  });
+  assert.deepEqual(timezoneFailed, {
+    source: "error",
+    timezone: "Asia/Seoul",
+    tasks: [],
+    errorCode: "timezone-http-503",
   });
 });
 
@@ -382,6 +430,7 @@ test("Daily Brief exposes honest task lanes and no fabricated clock blocks", asy
   assert.match(source, /projects\.tasks/);
   assert.match(source, /taskSource/);
   assert.match(source, /taskLanes/);
+  assert.match(source, /taskTimezone:\s*projects\.taskTimezone/);
   assert.match(
     source,
     /projectsResult\.status === ["']rejected["']\s*\?\s*["']error["']\s*:\s*projects\.taskSource \|\| ["']preview["']/,
