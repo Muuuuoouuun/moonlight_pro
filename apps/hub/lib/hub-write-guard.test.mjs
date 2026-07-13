@@ -126,7 +126,7 @@ test("operator session secrets require an exact whitespace-sensitive match", asy
   assert.equal(session, null);
 });
 
-test("production hub writes allow a valid operator session cookie", async () => {
+test("production hub writes allow a valid operator session cookie from an allowed Origin", async () => {
   process.env.NODE_ENV = "production";
   process.env.COM_MOON_HUB_WRITE_SECRET = "expected-secret";
   const now = Date.UTC(2026, 6, 13, 9, 0, 0);
@@ -147,6 +147,69 @@ test("production hub writes allow a valid operator session cookie", async () => 
   assert.equal(result, null);
 });
 
+test("production hub writes allow a valid operator session cookie from an allowed Referer", async () => {
+  process.env.NODE_ENV = "production";
+  process.env.COM_MOON_HUB_WRITE_SECRET = "expected-secret";
+  const now = Date.UTC(2026, 6, 13, 9, 0, 0);
+  const session = await createHubOperatorSession("expected-secret", {
+    now,
+    nonce: "fixed-test-nonce",
+    ttlMs: 60_000,
+  });
+
+  const result = assertHubWriteAllowed(
+    makeRequest({
+      cookie: `${HUB_OPERATOR_SESSION_COOKIE}=${session.token}`,
+      referer: "https://hub.example.com/dashboard/daily",
+    }),
+    { now: now + 1 },
+  );
+
+  assert.equal(result, null);
+});
+
+test("production hub writes reject a valid operator cookie from a mismatched Origin", async () => {
+  process.env.NODE_ENV = "production";
+  process.env.COM_MOON_HUB_WRITE_SECRET = "expected-secret";
+  const now = Date.UTC(2026, 6, 13, 9, 0, 0);
+  const session = await createHubOperatorSession("expected-secret", {
+    now,
+    nonce: "fixed-test-nonce",
+    ttlMs: 60_000,
+  });
+
+  const result = assertHubWriteAllowed(
+    makeRequest({
+      cookie: `${HUB_OPERATOR_SESSION_COOKIE}=${session.token}`,
+      origin: "https://evil.example.com",
+    }),
+    { now: now + 1 },
+  );
+
+  assert.ok(result instanceof Response);
+  assert.equal(result.status, 401);
+  assert.equal((await result.json()).reason, "unauthorized");
+});
+
+test("raw secret automation remains origin-exempt", () => {
+  process.env.NODE_ENV = "production";
+  process.env.COM_MOON_HUB_WRITE_SECRET = "expected-secret";
+
+  for (const credentials of [
+    { [HUB_WRITE_SECRET_HEADER]: "expected-secret" },
+    { authorization: "Bearer expected-secret" },
+  ]) {
+    const result = assertHubWriteAllowed(
+      makeRequest({
+        ...credentials,
+        origin: "https://evil.example.com",
+      }),
+    );
+
+    assert.equal(result, null);
+  }
+});
+
 test("expired and tampered operator session cookies do not relax production writes", async () => {
   process.env.NODE_ENV = "production";
   process.env.COM_MOON_HUB_WRITE_SECRET = "expected-secret";
@@ -164,7 +227,10 @@ test("expired and tampered operator session cookies do not relax production writ
 
   for (const { token, checkedAt } of credentials) {
     const result = assertHubWriteAllowed(
-      makeRequest({ cookie: `${HUB_OPERATOR_SESSION_COOKIE}=${token}` }),
+      makeRequest({
+        cookie: `${HUB_OPERATOR_SESSION_COOKIE}=${token}`,
+        origin: "https://hub.example.com",
+      }),
       { now: checkedAt },
     );
 
@@ -218,7 +284,21 @@ test("operator session route validates the secret and manages a secure HttpOnly 
   assert.equal(status.status, 200);
   assert.deepEqual(await status.json(), { unlocked: true });
 
-  const locked = await DELETE();
+  const crossOriginDelete = await DELETE(
+    new Request("https://hub.example.com/api/hub/session", {
+      method: "DELETE",
+      headers: { origin: "https://evil.example.com" },
+    }),
+  );
+  assert.equal(crossOriginDelete.status, 403);
+  assert.deepEqual(await crossOriginDelete.json(), { unlocked: false });
+
+  const locked = await DELETE(
+    new Request("https://hub.example.com/api/hub/session", {
+      method: "DELETE",
+      headers: { origin: "https://hub.example.com" },
+    }),
+  );
   assert.equal(locked.status, 200);
   assert.deepEqual(await locked.json(), { unlocked: false });
   assert.match(locked.headers.get("set-cookie") || "", /Max-Age=0/i);

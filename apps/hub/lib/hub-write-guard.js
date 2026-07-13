@@ -130,6 +130,11 @@ function resolveRequestOrigin(req) {
   return normalizeOrigin(req.headers.get("referer"));
 }
 
+export function isHubRequestOriginAllowed(req) {
+  const requestOrigin = resolveRequestOrigin(req);
+  return Boolean(requestOrigin) && resolveExpectedOrigins(req).has(requestOrigin);
+}
+
 function resolveHubWriteSecret() {
   return process.env.COM_MOON_HUB_WRITE_SECRET?.trim() || "";
 }
@@ -229,15 +234,12 @@ export function assertHubWriteAllowed(req, options) {
     return null;
   }
 
-  if (hasValidHubOperatorSession(req, options)) {
+  if (hasValidHubOperatorSession(req, options) && isHubRequestOriginAllowed(req)) {
     return null;
   }
 
   if (!isProductionRuntime()) {
-    const requestOrigin = resolveRequestOrigin(req);
-    const expectedOrigins = resolveExpectedOrigins(req);
-
-    if (requestOrigin && expectedOrigins.has(requestOrigin)) {
+    if (isHubRequestOriginAllowed(req)) {
       return null;
     }
   }

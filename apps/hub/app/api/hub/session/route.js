@@ -5,6 +5,7 @@ import {
   HUB_OPERATOR_SESSION_TTL_MS,
   createHubOperatorSession,
   hasValidHubOperatorSession,
+  isHubRequestOriginAllowed,
   readHubWriteJson,
 } from "../../../../lib/hub-write-guard.js";
 
@@ -53,7 +54,11 @@ export async function POST(req) {
   return response;
 }
 
-export async function DELETE() {
+export async function DELETE(req) {
+  if (!isHubRequestOriginAllowed(req)) {
+    return NextResponse.json({ unlocked: false }, { status: 403 });
+  }
+
   const response = NextResponse.json({ unlocked: false });
   response.cookies.set({
     name: HUB_OPERATOR_SESSION_COOKIE,
