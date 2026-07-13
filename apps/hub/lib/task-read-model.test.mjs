@@ -18,12 +18,34 @@ const {
   getCanonicalTaskRead,
   mapCanonicalTodoForProjects,
 } = await import("./repositories/operating-ledger.js");
+const { resolveTaskLane } = await import("./task-attention.js");
 
 const ORIGINAL_ENV = { ...process.env };
 const WORKSPACE_ID = "11111111-1111-4111-8111-111111111111";
 const TASK_ID = "22222222-2222-4222-8222-222222222222";
 const PROJECT_ID = "33333333-3333-4333-8333-333333333333";
 const OWNER_ID = "44444444-4444-4444-8444-444444444444";
+
+function canonicalTaskRow(overrides = {}) {
+  return {
+    id: TASK_ID,
+    workspace_id: WORKSPACE_ID,
+    project_id: PROJECT_ID,
+    owner_id: OWNER_ID,
+    title: "견적 후속 연락",
+    status: "todo",
+    priority: "medium",
+    due_at: null,
+    next_action: "카카오톡 발송",
+    meta: {},
+    created_at: "2026-07-10T00:00:00.000Z",
+    updated_at: "2026-07-13T04:00:00.000Z",
+    started_at: null,
+    completed_at: null,
+    project: { id: PROJECT_ID, name: "ClassIn 영업" },
+    ...overrides,
+  };
+}
 
 beforeEach(() => {
   process.env = { ...ORIGINAL_ENV };
@@ -161,6 +183,78 @@ test("canonical task read distinguishes live empty, preview, and error without m
     tasks: [],
     errorCode: "http-500",
   });
+});
+
+test("legacy due precision uses workspace-local midnight and stays today until the next midnight", async () => {
+  const midnightTask = canonicalTaskRow({
+    id: "legacy-midnight",
+    due_at: "2026-07-13T15:00:00.000Z",
+  });
+  const nonMidnightTask = canonicalTaskRow({
+    id: "legacy-non-midnight",
+    due_at: "2026-07-13T15:00:00.001Z",
+  });
+  const noDueTask = canonicalTaskRow({ id: "legacy-no-due" });
+  const result = await getCanonicalTaskRead({
+    workspaceId: WORKSPACE_ID,
+    readRows: async (table) => table === "tasks"
+      ? { state: "live", rows: [midnightTask, nonMidnightTask, noDueTask] }
+      : { state: "live", rows: [{ timezone: "Asia/Seoul" }] },
+  });
+
+  const byId = new Map(result.tasks.map((task) => [task.id, task]));
+  assert.equal(byId.get("legacy-midnight").duePrecision, "date");
+  assert.equal(byId.get("legacy-non-midnight").duePrecision, "timed");
+  assert.equal(byId.get("legacy-no-due").duePrecision, "none");
+  assert.equal(
+    resolveTaskLane(
+      byId.get("legacy-midnight"),
+      new Date("2026-07-14T14:59:59.999Z"),
+      result.timezone,
+    ),
+    "today",
+  );
+  assert.equal(
+    resolveTaskLane(
+      byId.get("legacy-midnight"),
+      new Date("2026-07-14T15:00:00.000Z"),
+      result.timezone,
+    ),
+    "missed",
+  );
+});
+
+test("legacy due inference falls back to Asia/Seoul while explicit precision stays authoritative", async () => {
+  const result = await getCanonicalTaskRead({
+    workspaceId: WORKSPACE_ID,
+    readRows: async (table) => table === "tasks"
+      ? {
+          state: "live",
+          rows: [
+            canonicalTaskRow({
+              id: "legacy-invalid-zone",
+              due_at: "2026-07-13T15:00:00.000Z",
+            }),
+            canonicalTaskRow({
+              id: "explicit-timed-midnight",
+              due_at: "2026-07-13T15:00:00.000Z",
+              meta: { due_precision: "timed" },
+            }),
+            canonicalTaskRow({
+              id: "explicit-date-non-midnight",
+              due_at: "2026-07-14T03:00:00.000Z",
+              meta: { due_precision: "date" },
+            }),
+          ],
+        }
+      : { state: "live", rows: [{ timezone: "Invalid/Zone" }] },
+  });
+
+  const byId = new Map(result.tasks.map((task) => [task.id, task]));
+  assert.equal(result.timezone, "Asia/Seoul");
+  assert.equal(byId.get("legacy-invalid-zone").duePrecision, "date");
+  assert.equal(byId.get("explicit-timed-midnight").duePrecision, "timed");
+  assert.equal(byId.get("explicit-date-non-midnight").duePrecision, "date");
 });
 
 test("Projects todo adapter keeps display compatibility and adds canonical OCC fields", () => {

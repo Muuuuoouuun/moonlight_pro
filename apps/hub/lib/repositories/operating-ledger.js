@@ -303,7 +303,26 @@ const CANONICAL_TASK_SELECT = [
   "project:projects(id,name)",
 ].join(",");
 
-function mapCanonicalTask(row) {
+function isWorkspaceLocalMidnight(value, timezone) {
+  const instant = new Date(value);
+  if (!Number.isFinite(instant.getTime())) return false;
+
+  const parts = new Intl.DateTimeFormat("en", {
+    timeZone: timezone,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(instant);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return Number(values.hour) === 0
+    && Number(values.minute) === 0
+    && Number(values.second) === 0
+    && instant.getUTCMilliseconds() === 0;
+}
+
+function mapCanonicalTask(row, timezone) {
   const meta = row?.meta && typeof row.meta === "object" && !Array.isArray(row.meta)
     ? row.meta
     : {};
@@ -312,7 +331,7 @@ function mapCanonicalTask(row) {
   const duePrecision = ["timed", "date", "none"].includes(metaPrecision)
     ? metaPrecision
     : row?.due_at
-      ? "timed"
+      ? isWorkspaceLocalMidnight(row.due_at, timezone) ? "date" : "timed"
       : "none";
 
   return {
@@ -376,7 +395,7 @@ export async function getCanonicalTaskRead({
 
   const tasks = taskResult.rows
     .filter((row) => row?.status !== "done")
-    .map(mapCanonicalTask);
+    .map((row) => mapCanonicalTask(row, timezone));
 
   return {
     source: tasks.length ? "live" : "empty",
