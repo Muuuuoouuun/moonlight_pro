@@ -67,6 +67,16 @@ test("task completion uses the durable OCC client and canonical refetches for su
   assert.doesNotMatch(dailySource, /refreshWaitersRef/);
 });
 
+test("Daily completion 401 exposes an inline exact-task unlock retry", () => {
+  assert.match(dailySource, /const \[unlockTask, setUnlockTask\]/);
+  assert.match(dailySource, /client\.unlockSession\s*\(/);
+  assert.match(dailySource, /unlockTask\?\.id === task\.id/);
+  assert.match(dailySource, /currentTask\.updatedAt !== unlockTask\.updatedAt/);
+  assert.match(dailySource, /await completeTask\(unlockTask/);
+  assert.match(dailySource, /className="durable-task-attention__unlock"/);
+  assert.match(dailySource, />\s*\uC4F0\uAE30 \uC7A0\uAE08 \uD574\uC81C\s*</);
+});
+
 test("initial task loading uses a fixed-height two-row token skeleton without fake content", () => {
   assert.match(dailySource, /function TaskAttentionSkeleton\s*\(/);
   assert.match(dailySource, /<TaskAttentionSkeleton\s*\/>/);
@@ -233,6 +243,11 @@ test("Projects task status and due dates use persisted status and API timezone",
   assert.doesNotMatch(projectsSource, /T00:00:00\+09:00|timeZone:\s*['"]Asia\/Seoul['"]/);
 });
 
+test("Projects blocks stale editors while the canonical task source is in error", () => {
+  assert.match(projectsSource, /const openTaskEditor = \(t\) => \{\s*if \(taskSource === ['"]error['"]\) return;/);
+  assert.match(projectsSource, /className="project-task-title"[\s\S]{0,180}disabled=\{taskSource === ['"]error['"]/);
+});
+
 test("Projects resolves OCC conflicts from mutation currentTask before refetch", () => {
   assert.match(projectsSource, /resolveConflictTask\(result\)/);
   assert.match(projectsSource, /applyAuthoritativeTask/);
@@ -272,6 +287,13 @@ test("Daily due labels use the same workspace timezone as lane assignment", () =
   assert.match(dailySource, /taskTimezone/);
   assert.match(dailySource, /formatTaskDue\(task,\s*ledger\.taskTimezone\)/);
   assert.match(dailySource, /timeZone:\s*resolveTaskTimezone\(timezone\)/);
+});
+
+test("Daily task read errors preserve the last verified workspace timezone", () => {
+  assert.match(
+    dailySource,
+    /if \(taskSource === ['"]error['"]\) \{[\s\S]*taskTimezone: resolveTaskTimezone\(previousTimezone\)/,
+  );
 });
 
 test("Projects initial read has a fixed-height real-data skeleton", () => {

@@ -76,6 +76,34 @@ function pageSignature(rows) {
   return JSON.stringify(rows.map((row) => row?.id ?? row));
 }
 
+function postgrestLiteral(value) {
+  const literal = String(value ?? "");
+  return /[(),"]/u.test(literal)
+    ? `"${literal.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`
+    : literal;
+}
+
+function buildKeysetFilter(lastRow, keyset) {
+  const field = keyset?.field;
+  const tieBreaker = keyset?.tieBreaker;
+  const direction = keyset?.direction === "asc" ? "asc" : "desc";
+  if (!/^[a-z_][a-z0-9_]*$/iu.test(field || "") || !/^[a-z_][a-z0-9_]*$/iu.test(tieBreaker || "")) {
+    return null;
+  }
+  const fieldValue = lastRow?.[field];
+  const tieValue = lastRow?.[tieBreaker];
+  if (fieldValue === undefined || fieldValue === null || tieValue === undefined || tieValue === null) {
+    return null;
+  }
+  const comparison = direction === "asc" ? "gt" : "lt";
+  const primary = postgrestLiteral(fieldValue);
+  const tie = postgrestLiteral(tieValue);
+  return [
+    "or",
+    `(${field}.${comparison}.${primary},and(${field}.eq.${primary},${tieBreaker}.${comparison}.${tie}))`,
+  ];
+}
+
 export async function fetchAllSupabaseRows(
   table,
   options = {},
@@ -88,18 +116,30 @@ export async function fetchAllSupabaseRows(
   const size = Math.max(1, Math.floor(pageSize));
   const rows = [];
   const seenPages = new Set();
-  for (let offset = 0; ; offset += size) {
+  const seenIds = new Set();
+  let offset = 0;
+  let keysetFilter = null;
+  for (;;) {
     const page = await fetchSupabaseRows(table, {
       ...options,
       limit: size,
-      ...(offset > 0 ? { offset } : {}),
+      filters: [...(options.filters || []), ...(keysetFilter ? [keysetFilter] : [])],
+      ...(!options.keyset && offset > 0 ? { offset } : {}),
     }, { fetchImpl });
     if (!Array.isArray(page)) return null;
     const signature = pageSignature(page);
     if (page.length && seenPages.has(signature)) return null;
     seenPages.add(signature);
+    if (options.keyset && page.some((row) => row?.id && seenIds.has(row.id))) return null;
+    page.forEach((row) => { if (row?.id) seenIds.add(row.id); });
     rows.push(...page);
     if (page.length < size) return rows;
+    if (options.keyset) {
+      keysetFilter = buildKeysetFilter(page.at(-1), options.keyset);
+      if (!keysetFilter) return null;
+    } else {
+      offset += size;
+    }
   }
 }
 
@@ -150,11 +190,15 @@ export async function fetchAllSupabaseRowsWithState(
   const size = Math.max(1, Math.floor(pageSize));
   const rows = [];
   const seenPages = new Set();
-  for (let offset = 0; ; offset += size) {
+  const seenIds = new Set();
+  let offset = 0;
+  let keysetFilter = null;
+  for (;;) {
     const page = await fetchSupabaseRowsWithState(table, {
       ...options,
       limit: size,
-      ...(offset > 0 ? { offset } : {}),
+      filters: [...(options.filters || []), ...(keysetFilter ? [keysetFilter] : [])],
+      ...(!options.keyset && offset > 0 ? { offset } : {}),
     }, { fetchImpl });
     if (page.state !== "live") return { ...page, rows: [] };
     const signature = pageSignature(page.rows);
@@ -162,8 +206,18 @@ export async function fetchAllSupabaseRowsWithState(
       return { state: "error", rows: [], errorCode: "pagination-loop" };
     }
     seenPages.add(signature);
+    if (options.keyset && page.rows.some((row) => row?.id && seenIds.has(row.id))) {
+      return { state: "error", rows: [], errorCode: "pagination-overlap" };
+    }
+    page.rows.forEach((row) => { if (row?.id) seenIds.add(row.id); });
     rows.push(...page.rows);
     if (page.rows.length < size) return { state: "live", rows };
+    if (options.keyset) {
+      keysetFilter = buildKeysetFilter(page.rows.at(-1), options.keyset);
+      if (!keysetFilter) return { state: "error", rows: [], errorCode: "pagination-cursor" };
+    } else {
+      offset += size;
+    }
   }
 }
 

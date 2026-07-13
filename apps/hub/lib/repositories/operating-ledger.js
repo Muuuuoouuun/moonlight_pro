@@ -233,12 +233,12 @@ function mapProjects(rows, brandById, taskStats, updateStats) {
   });
 }
 
-export function mapCanonicalTodoForProjects(task, projectById, brandById) {
-  return mapCanonicalTodoPresentation(task, projectById, brandById);
+export function mapCanonicalTodoForProjects(task, projectById, brandById, options = {}) {
+  return mapCanonicalTodoPresentation(task, projectById, brandById, options);
 }
 
-function mapTodos(tasks, projectById, brandById) {
-  return tasks.map((task) => mapCanonicalTodoForProjects(task, projectById, brandById));
+function mapTodos(tasks, projectById, brandById, timezone) {
+  return tasks.map((task) => mapCanonicalTodoForProjects(task, projectById, brandById, { timezone }));
 }
 
 const CANONICAL_TASK_SELECT = [
@@ -321,7 +321,8 @@ export async function getCanonicalTaskRead({
   const [taskResult, workspaceResult] = await Promise.all([
     readRows("tasks", {
       select: CANONICAL_TASK_SELECT,
-      order: "updated_at.desc",
+      order: "updated_at.desc,id.desc",
+      keyset: { field: "updated_at", tieBreaker: "id", direction: "desc" },
       filters: [
         ["workspace_id", eqFilter(workspaceId)],
         ["status", "neq.done"],
@@ -531,13 +532,14 @@ export async function getProjectLedger() {
     }),
     fetchSupabaseRows("projects", {
       limit: 80,
-      order: "updated_at.desc",
+      order: "updated_at.desc,id.desc",
       filters: withWorkspaceFilter([
         ["status", inFilter(["draft", "active", "blocked", "completed", "archived"])],
       ]),
     }),
     fetchAllSupabaseRows("tasks", {
-      order: "updated_at.desc",
+      order: "updated_at.desc,id.desc",
+      keyset: { field: "updated_at", tieBreaker: "id", direction: "desc" },
       filters: withWorkspaceFilter([
         ["status", inFilter(["inbox", "todo", "doing", "blocked", "done"])],
       ]),
@@ -579,7 +581,7 @@ export async function getProjectLedger() {
       brands: [],
       projects: [],
       tasks,
-      todos: mapTodos(tasks, projectById, brandById),
+      todos: mapTodos(tasks, projectById, brandById, canonicalTaskRead.timezone),
       taskSource: canonicalTaskRead.source,
       taskTimezone: canonicalTaskRead.timezone,
       taskErrorCode: canonicalTaskRead.errorCode || null,
@@ -606,7 +608,7 @@ export async function getProjectLedger() {
   const updates = mapProjectUpdates(updateRows || []);
   const updateStats = buildUpdateStats(updates);
   const tasks = canonicalTaskRead.tasks;
-  const todos = mapTodos(tasks, projectById, brandById);
+  const todos = mapTodos(tasks, projectById, brandById, canonicalTaskRead.timezone);
   const projects = mapProjects(projectRows, brandById, taskStats, updateStats);
   const brands = mapBrands(brandRows, projects, todos, updates);
 

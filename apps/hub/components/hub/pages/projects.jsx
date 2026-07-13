@@ -423,10 +423,10 @@ export function Projects({ workspace }) {
   };
 
   const applyCurrentTask = (currentTask) => {
-    const nextTodos = applyAuthoritativeTask(todosRef.current, currentTask);
+    const nextTodos = applyAuthoritativeTask(todosRef.current, currentTask, { timezone: taskTimezone });
     readStateRef.current = {
       ...readStateRef.current,
-      todos: applyAuthoritativeTask(readStateRef.current.todos, currentTask),
+      todos: applyAuthoritativeTask(readStateRef.current.todos, currentTask, { timezone: taskTimezone }),
       hasTaskSnapshot: true,
     };
     todosRef.current = nextTodos;
@@ -646,6 +646,7 @@ export function Projects({ workspace }) {
   };
 
   const openTaskEditor = (t) => {
+    if (taskSource === 'error') return;
     setDrawerPersisted(false);
     replaceTaskDraft(taskToDraft(t, taskTimezone));
   };
@@ -1160,7 +1161,7 @@ export function Projects({ workspace }) {
                                       />
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                         <Dot tone={prioTone[t.priority]} size={4} />
-                                        <button className="project-task-title" type="button" onClick={() => openTaskEditor(t)}>{t.title}</button>
+                                        <button className="project-task-title" type="button" disabled={taskSource === 'error'} onClick={() => openTaskEditor(t)}>{t.title}</button>
                                       </div>
                                       <div style={{ display: 'flex', justifyContent: 'center' }}>
                                         <Avatar name={t.assignee} size={18} tone={t.assignee === 'Me' ? 'moon' : t.assignee === 'Council' ? 'info' : 'neutral'} />
@@ -1270,7 +1271,7 @@ export function Projects({ workspace }) {
                               disabled={pendingTaskIds.has(t.id) || taskSource === 'error' || t.done}
                               onChange={() => completeTask(t)}
                             />
-                            <button className="project-task-title" type="button" onClick={() => openTaskEditor(t)}>{t.title}</button>
+                            <button className="project-task-title" type="button" disabled={taskSource === 'error'} onClick={() => openTaskEditor(t)}>{t.title}</button>
                             <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{t.due}</span>
                             {taskResults[t.id] && <span className="project-task-row-error" role="alert">{taskResults[t.id]}</span>}
                           </div>
@@ -1398,7 +1399,7 @@ export function Projects({ workspace }) {
                               onChange={() => completeTask(t)}
                             />
                             <div style={{ minWidth: 0 }}>
-                              <button className="project-task-title" type="button" onClick={() => openTaskEditor(t)}>{t.title}</button>
+                              <button className="project-task-title" type="button" disabled={taskSource === 'error'} onClick={() => openTaskEditor(t)}>{t.title}</button>
                               <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3 }}>
                                 {pBrand.glyph} {pBrand.name} · {proj?.name}
                               </div>

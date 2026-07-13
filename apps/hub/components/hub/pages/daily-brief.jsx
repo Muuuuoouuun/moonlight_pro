@@ -126,7 +126,7 @@ function normalizeTaskRead(data, previousLanes, previousTimezone = DEFAULT_TASK_
   if (taskSource === 'error') {
     return {
       taskSource,
-      taskTimezone,
+      taskTimezone: resolveTaskTimezone(previousTimezone),
       taskLanes: previousLanes,
       taskError: data?.taskError || '할 일 원장 응답을 확인할 수 없습니다.',
     };
@@ -890,7 +890,7 @@ function formatTaskDue(task, timezone) {
 }
 
 function taskMutationError(result) {
-  if (result?.requiresUnlock) return '쓰기 잠금이 필요합니다. 빠른 기록에서 잠금을 해제한 뒤 다시 시도하세요.';
+  if (result?.requiresUnlock) return '쓰기 잠금이 필요합니다. 아래에서 잠금을 해제하면 같은 완료 요청을 다시 시도합니다.';
   if (result?.status === 'conflict') return '다른 곳에서 이 할 일이 변경되었습니다. 현재 버전으로 다시 시도할 수 있습니다.';
   return result?.error || '완료를 저장하지 못했습니다. 할 일은 그대로 유지했습니다.';
 }
@@ -924,6 +924,10 @@ function DurableTaskAttention({ ledger }) {
   const client = React.useMemo(() => createDurableTaskClient(), []);
   const [pendingTaskIds, setPendingTaskIds] = React.useState(() => new Set());
   const [mutationErrors, setMutationErrors] = React.useState({});
+  const [unlockTask, setUnlockTask] = React.useState(null);
+  const [unlockSecret, setUnlockSecret] = React.useState('');
+  const [unlockPending, setUnlockPending] = React.useState(false);
+  const [unlockError, setUnlockError] = React.useState('');
   const visibleTasks = React.useMemo(() => TASK_LANE_ORDER
     .flatMap((lane) => (ledger.taskLanes?.[lane] || []).map((task) => ({ lane, task })))
     .slice(0, TASK_FOCUS_LIMIT), [ledger.taskLanes]);
@@ -954,12 +958,19 @@ function DurableTaskAttention({ ledger }) {
         && ['saved', 'duplicate'].includes(result.status);
 
       if (committed) {
+        setUnlockTask((current) => current?.id === task.id ? null : current);
+        setUnlockSecret('');
+        setUnlockError('');
         await ledger.refetch();
         return;
       }
 
       if (result.status === 'conflict') {
         await ledger.refetch();
+      }
+      if (result.requiresUnlock) {
+        setUnlockTask({ ...task });
+        setUnlockError('');
       }
       setMutationErrors((current) => ({
         ...current,
@@ -981,6 +992,35 @@ function DurableTaskAttention({ ledger }) {
         return next;
       });
     }
+  }
+
+  async function submitTaskUnlock(event) {
+    event.preventDefault();
+    if (!unlockTask || !unlockSecret || unlockPending) return;
+
+    const currentTask = visibleTasks
+      .find((candidate) => candidate.task.id === unlockTask.id)?.task;
+    if (!currentTask || currentTask.updatedAt !== unlockTask.updatedAt) {
+      setUnlockTask(null);
+      setUnlockSecret('');
+      setUnlockError('할 일이 바뀌어 이전 완료 요청은 재시도하지 않았습니다.');
+      return;
+    }
+
+    setUnlockPending(true);
+    setUnlockError('');
+    const result = await client.unlockSession({
+      secret: unlockSecret,
+      onSecretConsumed: () => setUnlockSecret(''),
+    });
+    setUnlockPending(false);
+    if (!result.unlocked) {
+      setUnlockError('잠금을 해제하지 못했습니다. secret을 확인해 주세요.');
+      return;
+    }
+
+    setUnlockTask(null);
+    await completeTask(unlockTask);
   }
 
   const sourceBadge = (
@@ -1072,6 +1112,24 @@ function DurableTaskAttention({ ledger }) {
                         다시 시도
                       </Button>
                     </div>
+                  )}
+                  {unlockTask?.id === task.id && (
+                    <form className="durable-task-attention__unlock" onSubmit={submitTaskUnlock} aria-busy={unlockPending}>
+                      <label htmlFor={`daily-task-unlock-${task.id}`}>쓰기 잠금 해제</label>
+                      <input
+                        id={`daily-task-unlock-${task.id}`}
+                        type="password"
+                        value={unlockSecret}
+                        onChange={(event) => setUnlockSecret(event.target.value)}
+                        disabled={unlockPending}
+                        autoComplete="current-password"
+                        placeholder="Hub write secret"
+                      />
+                      <Button type="submit" variant="secondary" size="sm" disabled={unlockPending || !unlockSecret}>
+                        {unlockPending ? '확인 중…' : '잠금 해제 후 완료 재시도'}
+                      </Button>
+                      {unlockError && <span role="alert">{unlockError}</span>}
+                    </form>
                   )}
                 </div>
               );

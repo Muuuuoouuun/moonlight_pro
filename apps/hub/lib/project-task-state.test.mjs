@@ -13,6 +13,7 @@ import {
   isComposerOperationCurrent,
   isTaskOperationCurrent,
   localDateMidnightIso,
+  mapCanonicalTodoForProjects,
   reconcileProjectReadState,
   resolveConflictTask,
   resolveTaskTimezone,
@@ -321,6 +322,58 @@ test('every non-null date-only instant round-trips to the chosen local calendar 
     assert.ok(dueAt, `${dateKey} must be representable in ${timezone}`);
     assert.equal(formatTaskDueDate({ dueAt }, timezone), dateKey);
   }
+});
+
+test('Projects presentation uses workspace timezone for due labels and buckets', () => {
+  const task = {
+    ...liveTask,
+    dueAt: '2026-07-14T15:00:00.000Z',
+    duePrecision: 'date',
+  };
+  const mapped = mapCanonicalTodoForProjects(task, new Map(), new Map(), {
+    timezone: 'Asia/Seoul',
+    now: new Date('2026-07-14T14:59:59.000Z'),
+  });
+  assert.equal(mapped.due, '7. 15.');
+  assert.equal(mapped.bucket, '내일');
+
+  const [conflict] = applyAuthoritativeTask([{
+    ...task,
+    due: '7. 14.',
+    bucket: '오늘',
+  }], {
+    id: task.id,
+    due_at: task.dueAt,
+    due_precision: 'date',
+    updated_at: '2026-07-13T02:00:00.000Z',
+  }, {
+    timezone: 'Asia/Seoul',
+    now: new Date('2026-07-14T14:59:59.000Z'),
+  });
+  assert.equal(conflict.due, '7. 15.');
+  assert.equal(conflict.bucket, '내일');
+});
+
+test('task read errors preserve the last verified workspace timezone', () => {
+  const previous = {
+    ...createProjectReadState(),
+    taskTimezone: 'America/New_York',
+    taskSource: 'live',
+    hasTaskSnapshot: true,
+    todos: [liveTask],
+  };
+  const next = reconcileProjectReadState(previous, {
+    type: 'success',
+    data: {
+      source: 'supabase',
+      taskSource: 'error',
+      taskTimezone: 'Asia/Seoul',
+      taskError: 'timezone-http-503',
+      todos: [],
+    },
+  });
+  assert.equal(next.taskTimezone, 'America/New_York');
+  assert.deepEqual(next.todos, [liveTask]);
 });
 
 test('Engine conflict task is normalized and applied before any refetch', () => {

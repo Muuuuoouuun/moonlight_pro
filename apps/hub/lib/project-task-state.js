@@ -207,7 +207,9 @@ export function reconcileProjectReadState(previous, event) {
     ledgerError: isLiveLedger ? '' : (data.error || 'Supabase 연결 전 미리보기 상태입니다.'),
     taskSource: nextTaskSource,
     taskError: isLiveTasks ? '' : (data.taskError || data.error || '할 일 원장을 불러오지 못했습니다.'),
-    taskTimezone: resolveTaskTimezone(data.taskTimezone || previous.taskTimezone),
+    taskTimezone: isLiveTasks
+      ? resolveTaskTimezone(data.taskTimezone || previous.taskTimezone)
+      : previous.taskTimezone,
     hasLedgerSnapshot: previous.hasLedgerSnapshot || isLiveLedger,
     hasTaskSnapshot: previous.hasTaskSnapshot || isLiveTasks,
   };
@@ -387,22 +389,29 @@ function normalizeTodoPriority(priority) {
   return 'med';
 }
 
-function formatShortDate(value) {
+function formatShortDate(value, timezone) {
   if (!value) return '미정';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '미정';
-  return new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric' }).format(date);
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: resolveTaskTimezone(timezone),
+    month: 'numeric',
+    day: 'numeric',
+  }).format(date);
 }
 
-function resolveDueBucket(value) {
+function zonedDayOrdinal(value, timezone) {
+  const parts = zonedParts(value, timezone);
+  return Math.floor(Date.UTC(parts.year, parts.month - 1, parts.day) / 86400000);
+}
+
+function resolveDueBucket(value, timezone, now = new Date()) {
   if (!value) return '다음주';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '다음주';
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(date);
-  target.setHours(0, 0, 0, 0);
-  const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
+  const current = now instanceof Date ? now : new Date(now);
+  if (Number.isNaN(current.getTime())) return '다음주';
+  const diffDays = zonedDayOrdinal(date, timezone) - zonedDayOrdinal(current, timezone);
   if (diffDays <= 0) return '오늘';
   if (diffDays === 1) return '내일';
   if (diffDays <= 7) return '이번주';
@@ -418,8 +427,8 @@ export function mapCanonicalTodoForProjects(task, projectById = new Map(), brand
     brand: brand?.slug || options.brandFallback || 'all',
     project: task.projectId || '',
     projectName: task.projectName || project?.name || options.projectNameFallback || null,
-    due: formatShortDate(task.dueAt),
-    bucket: resolveDueBucket(task.dueAt),
+    due: formatShortDate(task.dueAt, options.timezone),
+    bucket: resolveDueBucket(task.dueAt, options.timezone, options.now),
     done: task.status === 'done',
     priority: normalizeTodoPriority(priorityKey),
     priorityKey,
@@ -431,7 +440,7 @@ export function resolveConflictTask(result) {
   return normalizeTask(result?.task || result?.currentTask || result?.current_task);
 }
 
-export function applyAuthoritativeTask(todos, currentTask) {
+export function applyAuthoritativeTask(todos, currentTask, options = {}) {
   const current = normalizeTask(currentTask);
   if (!current?.id) return todos;
   if (current.status === 'done') return todos.filter((task) => task.id !== current.id);
@@ -448,6 +457,7 @@ export function applyAuthoritativeTask(todos, currentTask) {
       merged.projectName = nextProjectId ? current.projectName : null;
     }
     return mapCanonicalTodoForProjects(merged, new Map(), new Map(), {
+      ...options,
       brandFallback: projectChanged ? 'all' : task.brand,
       projectNameFallback: projectChanged ? null : task.projectName,
     });

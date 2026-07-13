@@ -132,6 +132,38 @@ test("paginated Supabase readers do not silently truncate durable task ledgers",
   assert.deepEqual(plain.map((row) => row.id), ["1", "2", "3", "4", "5"]);
 });
 
+test("canonical task pagination uses a deterministic keyset instead of offsets", async () => {
+  process.env.SUPABASE_URL = "https://db.example.com/";
+  process.env.SUPABASE_ANON_KEY = "anon-key";
+  const requested = [];
+  const pages = [
+    [
+      { id: "b", updated_at: "2026-07-13T04:00:00.000Z" },
+      { id: "a", updated_at: "2026-07-13T04:00:00.000Z" },
+    ],
+    [{ id: "z", updated_at: "2026-07-12T04:00:00.000Z" }],
+  ];
+  const result = await fetchAllSupabaseRowsWithState("tasks", {
+    order: "updated_at.desc,id.desc",
+    keyset: { field: "updated_at", tieBreaker: "id", direction: "desc" },
+  }, {
+    pageSize: 2,
+    fetchImpl: async (url) => {
+      requested.push(new URL(String(url)));
+      return Response.json(pages[requested.length - 1]);
+    },
+  });
+
+  assert.equal(result.state, "live");
+  assert.deepEqual(result.rows.map((row) => row.id), ["b", "a", "z"]);
+  assert.equal(requested[0].searchParams.get("order"), "updated_at.desc,id.desc");
+  assert.equal(requested[1].searchParams.has("offset"), false);
+  assert.equal(
+    requested[1].searchParams.get("or"),
+    "(updated_at.lt.2026-07-13T04:00:00.000Z,and(updated_at.eq.2026-07-13T04:00:00.000Z,id.lt.a))",
+  );
+});
+
 test("canonical task read is workspace-scoped, excludes done, and preserves OCC fields", async () => {
   const calls = [];
   const row = {
@@ -171,6 +203,8 @@ test("canonical task read is workspace-scoped, excludes done, and preserves OCC 
   assert.ok(taskCall.options.filters.some(([field, value]) => field === "status" && value === "neq.done"));
   assert.match(taskCall.options.select, /updated_at/);
   assert.match(taskCall.options.select, /project:projects/);
+  assert.equal(taskCall.options.order, "updated_at.desc,id.desc");
+  assert.deepEqual(taskCall.options.keyset, { field: "updated_at", tieBreaker: "id", direction: "desc" });
   assert.deepEqual(result, {
     source: "live",
     timezone: "Asia/Seoul",
