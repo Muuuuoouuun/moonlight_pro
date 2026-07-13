@@ -22,6 +22,16 @@ function greetingFor(date) {
   return 'Good evening';
 }
 
+// Matches the daily-brief API's money formatter so the KPI cards and the pipeline card
+// read in the same ₩M/₩K units — no drift between server-formatted and client-formatted money.
+function formatMoney(amount) {
+  const n = Number(amount);
+  if (!Number.isFinite(n) || n === 0) return '₩0';
+  if (n >= 1000000) return `₩${(n / 1000000).toFixed(1)}M`;
+  if (n >= 1000) return `₩${Math.round(n / 1000)}K`;
+  return `₩${n}`;
+}
+
 const SIGNAL_TARGETS = {
   draft: 'dashboard/content/studio?new=draft',
   escalate: 'dashboard/revenue/deals',
@@ -336,6 +346,10 @@ function MorningBriefCard({ brief, onNavigate }) {
   );
 }
 
+// The brief keeps the queue SHORT — the top 5 waiting decisions, not the full backlog. The
+// full queue lives on Agents Orders; the brief is the "what do I act on first" cockpit.
+const QUEUE_MAX_VISIBLE = 5;
+
 // The 1-click approval cockpit — proposed work orders (persona/inbox/guru) decided in place.
 // registry.json no_auto_send=true: nothing executes without this click.
 function ApprovalQueueCard({ onNavigate }) {
@@ -399,6 +413,12 @@ function ApprovalQueueCard({ onNavigate }) {
   const promote = async (id) => { if (await post(id, { status: 'executed' })) setOrders((prev) => prev.filter((o) => o.id !== id)); };
 
   const pending = orders.filter((o) => !approved[o.id]).length;
+  const visible = orders.slice(0, QUEUE_MAX_VISIBLE);
+  const overflow = Math.max(0, orders.length - QUEUE_MAX_VISIBLE);
+  // 페르소나별 대기 요약 — 큐를 5개로 줄여도 "누가 얼마나 기다리는지" 전체 모양은 유지한다.
+  const personaCounts = Object.entries(
+    orders.reduce((acc, o) => { const k = o.persona || '기타'; acc[k] = (acc[k] || 0) + 1; return acc; }, {}),
+  ).sort((a, b) => b[1] - a[1]).slice(0, 4);
 
   return (
     <div>
@@ -413,10 +433,19 @@ function ApprovalQueueCard({ onNavigate }) {
               : '승인 대기 중인 제안이 없습니다. /inbox·/team이 제안을 올리면 여기서 1클릭으로 처리합니다.'}
           </div>
         ) : (
-          orders.map((o, i) => (
+          <>
+          {personaCounts.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid var(--line-soft)', background: 'var(--surface-2)' }}>
+              <span style={{ fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>대기</span>
+              {personaCounts.map(([p, c]) => (
+                <Badge key={p} tone="neutral" variant="outline" size="xs">{p} {c}</Badge>
+              ))}
+            </div>
+          )}
+          {visible.map((o, i) => (
             <div key={o.id} style={{
               padding: '11px 14px', opacity: busyId === o.id ? 0.5 : 1,
-              borderBottom: i < orders.length - 1 ? '1px solid var(--line-soft)' : 'none',
+              borderBottom: (i < visible.length - 1 || overflow > 0) ? '1px solid var(--line-soft)' : 'none',
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -475,7 +504,136 @@ function ApprovalQueueCard({ onNavigate }) {
                 </div>
               ))}
             </div>
-          ))
+          ))}
+          {overflow > 0 && (
+            <button
+              onClick={() => onNavigate?.('dashboard/agents/orders')}
+              style={{
+                width: '100%', textAlign: 'left', padding: '10px 14px', display: 'flex', alignItems: 'center',
+                gap: 6, fontSize: 12, color: 'var(--fg-muted)', background: 'transparent', cursor: 'pointer',
+              }}
+            >
+              <span>+{overflow}건 더 · 전체 승인 큐 보기</span>
+              <Iconed name="arrowRight" size={12} style={{ marginLeft: 'auto', color: 'var(--fg-faint)' }} />
+            </button>
+          )}
+          </>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// 파이프라인 형태 — 열린 딜의 단계 분포를 한 줄 세그먼트 바로. 딜이 어디에 몰려 있고(병목)
+// 며칠째 정체된 게 몇 건인지 5초 안에 읽고 딜 보드로 넘어가게 한다. raw count가 아니라
+// 분포 + 정체(urgency)를 보여주는 게 DESIGN.md 대시보드 원칙.
+const PIPELINE_STAGES = [
+  { key: 'lead', label: 'Lead', color: 'var(--fg-faint)' },
+  { key: 'qual', label: 'Qual', color: 'var(--info)' },
+  { key: 'prop', label: 'Prop', color: 'var(--moon-400)' },
+  { key: 'neg', label: 'Neg', color: 'var(--warning)' },
+];
+
+function PipelineShapeCard({ onNavigate }) {
+  const [data, setData] = React.useState(null);
+  const [state, setState] = React.useState('loading');
+
+  React.useEffect(() => {
+    let active = true;
+    fetch('/api/hub/revenue', { cache: 'no-store' })
+      .then((r) => r.json().catch(() => null))
+      .then((d) => {
+        if (!active) return;
+        if (d && d.source === 'supabase' && Array.isArray(d.deals)) {
+          const open = d.deals.filter((x) => x.stage !== 'won' && x.stage !== 'lost');
+          const byStage = PIPELINE_STAGES.map((s) => ({
+            ...s,
+            count: open.filter((x) => x.stage === s.key).length,
+          }));
+          const stalled = open
+            .filter((x) => Number(x.age) >= 10)
+            .sort((a, b) => Number(b.age) - Number(a.age));
+          setData({
+            open: open.length,
+            value: open.reduce((sum, x) => sum + Number(x.value || 0), 0),
+            byStage,
+            stalled: stalled.length,
+            top: stalled[0] || null,
+          });
+          setState('live');
+        } else {
+          setState('mock');
+        }
+      })
+      .catch(() => active && setState('mock'));
+    return () => { active = false; };
+  }, []);
+
+  return (
+    <div>
+      <SectionTitle right={<SyncBadge state={state} />}>
+        파이프라인
+      </SectionTitle>
+      <Card>
+        {state === 'live' && data ? (
+          data.open > 0 ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <span className="stat" style={{ fontSize: 24, fontWeight: 600 }}>
+                  {data.open}<span style={{ color: 'var(--fg-faint)', fontWeight: 400, fontSize: 14 }}> 딜</span>
+                </span>
+                <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{formatMoney(data.value)}</span>
+                <div style={{ flex: 1 }} />
+                {data.stalled > 0 && <Badge tone="warning" size="xs">정체 {data.stalled}</Badge>}
+              </div>
+              {/* 단계 분포 세그먼트 바 — 폭 ∝ 딜 수, 빈 단계는 흐린 슬라이버로 남긴다. */}
+              <div style={{ marginTop: 12, display: 'flex', gap: 3, height: 8, borderRadius: 999, overflow: 'hidden' }}>
+                {data.byStage.map((s) => (
+                  <div key={s.key} title={`${s.label} ${s.count}`} style={{
+                    flex: s.count || 0.04, background: s.color, minWidth: s.count ? 6 : 2, opacity: s.count ? 1 : 0.25,
+                  }} />
+                ))}
+              </div>
+              <div style={{ marginTop: 10, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                {data.byStage.map((s) => (
+                  <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: 2, background: s.color, flexShrink: 0, opacity: s.count ? 1 : 0.35 }} />
+                    <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{s.label}</span>
+                    <span className="mono" style={{ fontSize: 11, color: s.count ? 'var(--fg)' : 'var(--fg-faint)' }}>{s.count}</span>
+                  </div>
+                ))}
+              </div>
+              {data.top && (
+                <button
+                  onClick={() => onNavigate(`dashboard/revenue/deals?deal=${encodeURIComponent(data.top.id)}`)}
+                  style={{
+                    marginTop: 12, width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
+                    borderRadius: 'var(--r-sm)', cursor: 'pointer',
+                  }}
+                >
+                  <Dot tone="warning" size={6} />
+                  <span style={{ fontSize: 12, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+                    가장 정체: {data.top.name}
+                  </span>
+                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--warning)', flexShrink: 0 }}>{data.top.age}일</span>
+                </button>
+              )}
+            </>
+          ) : (
+            <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+              열린 딜이 없습니다. 리드를 딜로 전환하면 파이프라인 형태가 여기 표시됩니다.
+            </div>
+          )
+        ) : (
+          <>
+            <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+              Supabase 매출 원장이 연결되면 열린 딜의 단계 분포와 정체 딜이 여기에 표시됩니다.
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <Button variant="outline" size="sm" icon="deals" onClick={() => onNavigate('dashboard/revenue/deals')}>딜 보드 열기</Button>
+            </div>
+          </>
         )}
       </Card>
     </div>
@@ -865,7 +1023,8 @@ export function DailyBrief({ onNavigate }) {
         </div>
       </div>
 
-      <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--section-gap)' }}>
+      <div className="hub-grid--three" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--section-gap)' }}>
+        <PipelineShapeCard onNavigate={onNavigate} />
         <SalesFunnelCard onNavigate={onNavigate} />
         <ContentCadenceCard onNavigate={onNavigate} />
       </div>
