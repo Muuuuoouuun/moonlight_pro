@@ -162,6 +162,41 @@ test("changed payload gets a new key and task versus inbox use their durable rou
   ]);
 });
 
+test("409 conflict preserves the same key until a saved retry", async () => {
+  const keys = [];
+  const responses = [
+    jsonResponse({
+      status: "conflict",
+      retryable: false,
+      reason: "stale-write",
+      error: "Task changed before this write.",
+      currentTask: { id: "task-stale", updatedAt: "2026-07-13T10:00:00.000Z" },
+      correlationId: "corr-conflict",
+    }, 409),
+    jsonResponse({
+      status: "saved",
+      retryable: false,
+      reason: "created",
+      task: { id: "task-stale", updatedAt: "2026-07-13T10:01:00.000Z" },
+      correlationId: "corr-saved",
+    }),
+  ];
+  const client = createDurableTaskClient({
+    keyFactory: () => "capture-conflict",
+    fetchImpl: async (_url, options) => {
+      keys.push(options.headers.get("idempotency-key"));
+      return responses.shift();
+    },
+  });
+
+  const conflict = await client.submit({ destination: "task", text: "후속 연락" });
+  const saved = await client.submit({ destination: "task", text: "후속 연락" });
+
+  assert.equal(conflict.httpStatus, 409);
+  assert.equal(saved.status, "saved");
+  assert.deepEqual(keys, ["capture-conflict", "capture-conflict"]);
+});
+
 test("401 requests inline unlock, consumes the secret immediately, and retries the same key", async () => {
   const requests = [];
   let releaseUnlock;

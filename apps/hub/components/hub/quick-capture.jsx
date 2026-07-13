@@ -13,6 +13,8 @@ function failureMessage(result) {
 export function QuickCapture({ onSaved }) {
   const client = React.useMemo(() => createDurableTaskClient(), []);
   const inputRef = React.useRef(null);
+  const submitPromiseRef = React.useRef(null);
+  const focusCaptureWhenReadyRef = React.useRef(false);
   const [text, setText] = React.useState("");
   const [destination, setDestination] = React.useState("task");
   const [pending, setPending] = React.useState(false);
@@ -20,6 +22,14 @@ export function QuickCapture({ onSaved }) {
   const [requiresUnlock, setRequiresUnlock] = React.useState(false);
   const [secret, setSecret] = React.useState("");
   const [unlockPending, setUnlockPending] = React.useState(false);
+  const busy = pending || unlockPending;
+
+  React.useEffect(() => {
+    if (!busy && focusCaptureWhenReadyRef.current) {
+      focusCaptureWhenReadyRef.current = false;
+      inputRef.current?.focus();
+    }
+  }, [busy]);
 
   React.useEffect(() => {
     function focusCapture(event) {
@@ -46,63 +56,81 @@ export function QuickCapture({ onSaved }) {
     return () => window.removeEventListener("keydown", focusCapture);
   }, []);
 
-  async function saveCapture() {
-    const raw = text.trim();
+  function saveCapture(input = { destination, text }) {
+    if (submitPromiseRef.current) return submitPromiseRef.current;
+
+    const capture = {
+      destination: input.destination === "inbox" ? "inbox" : "task",
+      text: typeof input.text === "string" ? input.text.trim() : "",
+    };
+    const raw = capture.text;
     if (!raw) {
       setFeedback({ tone: "error", message: "기록할 내용을 먼저 입력하세요." });
       inputRef.current?.focus();
-      return;
+      return Promise.resolve(null);
     }
 
     setPending(true);
     setFeedback({ tone: "pending", message: "원장에 저장하는 중…" });
-    const result = await client.submit({ destination, text: raw });
-    setPending(false);
+    let operation;
+    operation = Promise.resolve().then(async () => {
+      try {
+        const result = await client.submit(capture);
 
-    if (result.status === "saved" || result.status === "duplicate") {
-      setText("");
-      setRequiresUnlock(false);
-      setFeedback({
-        tone: "success",
-        message: result.status === "duplicate" ? "이미 저장된 기록을 확인했습니다." : "원장에 저장했습니다.",
-      });
-      onSaved?.(result);
-      return;
-    }
+        if (result.status === "saved" || result.status === "duplicate") {
+          setText("");
+          setRequiresUnlock(false);
+          setFeedback({
+            tone: "success",
+            message: result.status === "duplicate" ? "이미 저장된 기록을 확인했습니다." : "원장에 저장했습니다.",
+          });
+          onSaved?.(result);
+          return result;
+        }
 
-    if (result.requiresUnlock) setRequiresUnlock(true);
-    setFeedback({ tone: "error", message: failureMessage(result) });
+        if (result.requiresUnlock) setRequiresUnlock(true);
+        setFeedback({ tone: "error", message: failureMessage(result) });
+        return result;
+      } finally {
+        setPending(false);
+        if (submitPromiseRef.current === operation) submitPromiseRef.current = null;
+      }
+    });
+    submitPromiseRef.current = operation;
+    return operation;
   }
 
   function submitCapture(event) {
     event.preventDefault();
-    if (!pending) void saveCapture();
+    void saveCapture({ destination, text });
   }
 
   async function submitUnlock(event) {
     event.preventDefault();
     if (!secret || unlockPending) return;
 
+    const captureSnapshot = { destination, text };
     setUnlockPending(true);
     const result = await client.unlockSession({
       secret,
       onSecretConsumed: () => setSecret(""),
     });
-    setUnlockPending(false);
-
     if (!result.unlocked) {
+      setUnlockPending(false);
       setFeedback({ tone: "error", message: "잠금을 해제하지 못했습니다. secret을 확인해 주세요." });
       return;
     }
 
+    focusCaptureWhenReadyRef.current = true;
+    setUnlockPending(false);
     setRequiresUnlock(false);
     setFeedback({ tone: "pending", message: "잠금을 해제했습니다. 같은 기록을 다시 저장합니다…" });
-    await saveCapture();
+    await saveCapture(captureSnapshot);
   }
 
   return (
     <Card className="quick-capture" style={{ padding: 0, overflow: "hidden" }}>
-      <form onSubmit={submitCapture} className="quick-capture__form">
+      <form onSubmit={submitCapture} className="quick-capture__form" aria-busy={busy}>
         <div className="quick-capture__heading">
           <div>
             <label htmlFor="quick-capture-text" className="quick-capture__label">빠른 기록</label>
@@ -118,8 +146,8 @@ export function QuickCapture({ onSaved }) {
             aria-keyshortcuts="N"
             value={text}
             onChange={(event) => setText(event.target.value)}
-            disabled={pending}
-            maxLength={500}
+            disabled={busy}
+            maxLength={4000}
             autoComplete="off"
             placeholder="예: 원장님께 견적 후속 연락"
             style={{ minHeight: 44, fontSize: 16 }}
@@ -128,7 +156,7 @@ export function QuickCapture({ onSaved }) {
             type="submit"
             variant="primary"
             size="md"
-            disabled={pending || !text.trim()}
+            disabled={busy || !text.trim()}
             style={{ minHeight: 44 }}
           >
             {pending ? "저장 중…" : "저장"}
@@ -139,7 +167,7 @@ export function QuickCapture({ onSaved }) {
           <button
             type="button"
             aria-pressed={destination === "task"}
-            disabled={pending}
+            disabled={busy}
             onClick={() => setDestination("task")}
             style={{ minHeight: 44 }}
           >
@@ -148,7 +176,7 @@ export function QuickCapture({ onSaved }) {
           <button
             type="button"
             aria-pressed={destination === "inbox"}
-            disabled={pending}
+            disabled={busy}
             onClick={() => setDestination("inbox")}
             style={{ minHeight: 44 }}
           >
@@ -166,7 +194,7 @@ export function QuickCapture({ onSaved }) {
       </form>
 
       {requiresUnlock && (
-        <form className="quick-capture__unlock" onSubmit={submitUnlock}>
+        <form className="quick-capture__unlock" onSubmit={submitUnlock} aria-busy={unlockPending}>
           <label htmlFor="quick-capture-secret">쓰기 잠금 해제</label>
           <div className="quick-capture__unlock-row">
             <input
