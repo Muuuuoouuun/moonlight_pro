@@ -378,7 +378,7 @@ Expected: PASS.
 - Modify: `docs/README.md`
 - Modify: `package.json`
 
-- [ ] **Step 1: 정적/단위/계약 전체 검증**
+- [x] **Step 1: 정적/단위/계약 전체 검증**
 
 Run:
 
@@ -394,6 +394,8 @@ npm run build
 
 Expected: 모두 exit 0. 환경 변수가 없어 live DB가 없으면 명시적 preview/empty로 빌드되고 mock/live를 섞지 않는다.
 
+결과: test 172/172, contracts, Inbox, typecheck, build는 통과. lint는 exit 0이지만 실행 task 0개. `check:connections`는 Hub/Engine/Supabase URL 미설정으로 예상된 exit 1이며 활성화 게이트로 이관.
+
 루트 `test` script는 신규 Engine behavioral test를 누락하지 않게 다음 glob을 포함한다.
 
 ```json
@@ -406,11 +408,15 @@ Run: `npm run db:migrate`
 
 Verify: create→reload, same-key retry→한 행 duplicate, same-key/different-payload→409, stale updatedAt→409+current, complete→reload, destination 실패→receipt와 Task 모두 rollback.
 
-- [ ] **Step 3: 브라우저 QA**
+상태: 환경 미설정으로 미실행. 코드 완료와 live 활성화를 분리하기 위해 체크를 유지한다.
+
+- [x] **Step 3: 브라우저 QA**
 
 390×844와 desktop에서 Daily Brief 첫 fold, 세션 잠금 해제, task/inbox capture, retry, Today complete, Projects create/edit/complete, keyboard focus, dark/light contrast를 확인한다. loading/empty/preview/error 상태를 각각 캡처하고 console error가 0인지 확인한다.
 
-- [ ] **Step 4: 문서 상태 갱신**
+결과: production Hub에서 10 screenshots PASS. desktop/mobile preview·live, create/editor/completion 401 unlock, delayed busy, 409 conflict, 503 retained state를 검증. `/favicon.ico` 404 1건만 Low로 남음.
+
+- [x] **Step 4: 문서 상태 갱신**
 
 deep design의 stale 문구인 “기존 local task create/complete 연결”을 “Phase 0 read-only surface에 durable interaction 추가”로 고친다. current-state와 TODOS에 실제 완료/보류 범위, migration 적용 여부, Phase 1B(자동 attention/proposal)는 미구현임을 명시한다.
 

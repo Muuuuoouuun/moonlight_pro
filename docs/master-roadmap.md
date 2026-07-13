@@ -4,7 +4,7 @@ Status: active roadmap
 Updated: 2026-07-13
 
 > 현재 사실과 문서 우선순위: `docs/README.md`
-> 현재 단계: Phase 0 신뢰 기준선 완료, Phase 1A Durable Task Loop 다음
+> 현재 단계: Phase 1A 코드·정적·브라우저 검증 완료, live migration/smoke 활성화 대기
 
 ## 1. North Star
 
@@ -43,7 +43,7 @@ Goal: Moonlight becomes the first-open surface.
 
 Must ship:
 
-- **1A Durable Task Loop:** quick text → durable task → task-only Today → complete → reload.
+- **1A Durable Task Loop:** quick text → durable task → task-only Today → complete → reload. 코드·정적·브라우저 검증은 완료했고 live DB migration/smoke는 환경 설정 뒤 남았다.
 - **1B Action Desk:** real follow-up and Google Calendar sources, urgent KA 1, focus customers 3~5, deterministic ranking.
 - **1C Contact Outcome Loop:** summary, reaction, next action/date, activity, and task creation in one durable flow.
 - Work OS shows live projects, blockers, decisions, routine checks, and next actions.
@@ -107,13 +107,14 @@ Exit gate before starting:
 
 ## 4. Current Priority Stack
 
-1. Phase 1A durable task create/update/complete and reload contract.
-2. Quick Capture task/inbox routing and task-only Today.
-3. Phase 1B real follow-up and Google Calendar aggregation.
-4. Phase 1C contact outcome and next-action loop.
-5. Project candidate, delay, and bottleneck management.
-6. Content idea → variant → handoff/export history.
-7. Guided repair and broader integration readiness.
+1. Hub·Engine·Supabase live 환경 설정과 Phase 1A migration 적용.
+2. create→reload→complete→reload, duplicate, stale conflict, rollback live smoke.
+3. 짧은 실사용으로 누락·재시도·우선순위 행동 확인.
+4. Phase 1B real follow-up and Google Calendar aggregation.
+5. Phase 1C contact outcome and next-action loop.
+6. Project candidate, delay, and bottleneck management.
+7. Content idea → variant → handoff/export history.
+8. Guided repair and broader integration readiness.
 
 ## 5. Retired Premises
 

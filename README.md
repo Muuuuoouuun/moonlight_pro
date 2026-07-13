@@ -15,6 +15,8 @@ Hub should show what matters, what failed, and what action comes next. Engine ow
 
 The former public web surface has been detached from the active workspace so execution can stay focused on Hub and Engine.
 
+Phase 1A Durable Task Loop is implemented and verified in the codebase. Live activation still requires configured Hub/Engine/Supabase environments, the Phase 1A migration, and atomic persistence smoke tests; see [`docs/status/current-state.md`](docs/status/current-state.md).
+
 ## Documentation
 
 Start with [`docs/README.md`](docs/README.md). It defines the documentation precedence, the 2026-07-13 operator decisions, the current implementation phase, and which older plans are historical references.
@@ -29,6 +31,7 @@ The active product sources are:
 
 ```bash
 npm install
+npm test
 npm run check:contracts
 npm run typecheck
 npm run build

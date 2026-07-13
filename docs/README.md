@@ -42,12 +42,12 @@
 | 인터뷰 Q1~Q115 정리 | 완료 | [`operator-workflow-profile.md`](operator-workflow-profile.md) |
 | 전제 1~7 및 접근안 B | 승인됨 | 구현 지시와 Phase 0 착수 |
 | Phase 0 신뢰 기준선 | 완료·푸시 | `5c9ccc2`, `codex/moonlight-phase0-trust` |
-| Phase 1A Durable Task Loop | 다음 구현 | [`master-roadmap.md`](master-roadmap.md) |
-| Phase 1B Action Desk | Phase 1A 뒤 | 심화 설계 §19 |
+| Phase 1A Durable Task Loop | 코드·정적·브라우저 검증 완료, live 활성화 대기 | [`status/current-state.md`](status/current-state.md) |
+| Phase 1B Action Desk | Phase 1A live smoke·단기 실사용 뒤 | 심화 설계 §19 |
 | Phase 1C Contact Outcome Loop | Phase 1B 뒤 | 심화 설계 §19 |
 | ClassIn 전체 동기화·음성 AI·콘텐츠 직접 발행 | 보류 | 별도 하드 게이트 필요 |
 
-Phase 0는 Content canonical contract, write 응답 분류, honest empty/error UI, 사용자 identity, Content 승인 원자화를 포함한다. 검증 기준선은 Node test 50/50, contract check, typecheck, Hub/Engine build 통과다.
+Phase 0는 Content canonical contract, write 응답 분류, honest empty/error UI, 사용자 identity, Content 승인 원자화를 포함한다. Node test 50/50은 Phase 0 완료 당시의 스냅샷이며, 현재 검증 상태는 [`status/current-state.md`](status/current-state.md)를 따른다.
 
 ## 4. 현재 문서
 
@@ -96,6 +96,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 - `5c9ccc2` — Phase 0 신뢰 기준선 구현·검증·푸시
 - `docs/superpowers/plans/2026-07-13-phase0-trust-repair.md` — Phase 0 구현 체크리스트(`codex/moonlight-phase0-trust` 브랜치에 존재)
+- [`superpowers/plans/2026-07-13-phase1a-durable-task-loop.md`](superpowers/plans/2026-07-13-phase1a-durable-task-loop.md) — Durable Task Loop 구현·검증 기록
 - [`superpowers/plans/`](superpowers/plans/) — 특정 기능의 실행 기록
 - [`superpowers/specs/`](superpowers/specs/) — 승인 당시의 상세 설계와 결정 배경
 

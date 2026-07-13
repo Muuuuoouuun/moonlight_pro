@@ -1,6 +1,6 @@
 # Moonlight 개인 운영 OS 심화 설계
 
-> 상태: ACTIVE — 전제 1~7·접근안 B 승인, Phase 0 완료, Phase 1A 다음
+> 상태: ACTIVE — 전제 1~7·접근안 B 승인, Phase 0 완료, Phase 1A 코드·정적·브라우저 검증 완료, live 활성화 대기
 > 작성일: 2026-07-13
 > 최초 작성 브랜치: `real_v1.1`
 > 모드: Builder / 개인 전용 운영 시스템
@@ -8,7 +8,7 @@
 > 심화·대체: `bigmac_moon-real_v1.1-design-20260711-180548.md`의 Capture–Attention–Done 설계
 > 함께 유지: `bigmac_moon-real_v1.1-design-20260712-215411.md`의 승인 기반 자율화 로드맵
 
-제품 전제 1~7과 접근안 B, **Phase 0·1A·1B·1C 방향은 승인됐다.** Phase 0는 `5c9ccc2` (`codex/moonlight-phase0-trust`)에서 완료·푸시됐다. Phase 2 이후, ClassIn Bridge, 음성, 콘텐츠 파생, 분기 리뷰는 전체 방향을 잃지 않기 위한 비구속적 로드맵이며 해당 Phase 착수 전에 별도 계약을 승인한다.
+제품 전제 1~7과 접근안 B, **Phase 0·1A·1B·1C 방향은 승인됐다.** Phase 0는 `5c9ccc2` (`codex/moonlight-phase0-trust`)에서 완료·푸시됐다. Phase 1A는 코드, 정적 검증, 프로덕션 빌드, 모의 실패·복구 브라우저 QA까지 완료했으며, live DB migration과 원자성 smoke는 환경 설정 뒤의 활성화 게이트다. Phase 2 이후, ClassIn Bridge, 음성, 콘텐츠 파생, 분기 리뷰는 전체 방향을 잃지 않기 위한 비구속적 로드맵이며 해당 Phase 착수 전에 별도 계약을 승인한다.
 
 ## 1. 한 줄 정의
 
@@ -96,7 +96,15 @@ CRM, PMS, 콘텐츠, 캘린더, AI는 이 루프의 서로 다른 입력·문맥
 - Content draft 승인과 destination insert를 단일 RPC transaction으로 원자화.
 - 검증: Node test 50/50, contracts, typecheck, Hub build, Engine build 통과.
 
-위 결손 중 local-only task, 실제 Follow-up·Calendar 집계, owner scope, 연락 결과 강제, ClassIn bridge, 음성 기반은 Phase 1 이후 범위로 남아 있다.
+위 결손 중 local-only Task 상호작은 Phase 1A에서 durable create/update/complete·reload로 대체했다. 실제 Follow-up·Calendar 집계, owner scope, 연락 결과 강제, ClassIn bridge, 음성 기반은 후속 Phase로 남아 있다. Phase 1A 운영 선언 전에는 live migration·원자성 smoke가 필요하다.
+
+### Phase 1A 코드 완료 기준선
+
+- Root Node test 172/172, contracts, Inbox check, typecheck, Hub/Engine production build 통과.
+- Daily Brief·Projects의 preview/live/error, 401 unlock, 409 conflict, 503 retained-state를 production browser에서 검증.
+- Desktop와 390×844 mobile 스크린샷 10개를 확인.
+- lint 명령은 exit 0이지만 실행된 package task가 0개라 lint coverage로 간주하지 않는다.
+- `check:connections`는 Hub/Engine/Supabase 환경 미설정으로 실패했고, 따라서 live DB migration·원자성 smoke는 미실행 상태다.
 
 ## 4. 제품 전제
 
@@ -1204,7 +1212,7 @@ type AttentionResponse = {
 5. [x] 사용자 identity를 `Junhyuk Mun`으로 바로잡고 founder/multi-user demo 문구를 제거한다.
 6. [x] Content draft 승인처럼 내부 Supabase sink를 가진 work order는 상태 전이와 destination insert를 RPC 한 transaction으로 묶는다. destination 저장 실패 뒤 `approved`/`executed`가 남는 경로를 허용하지 않는다.
 
-### Phase 1A — Durable Task Loop
+### Phase 1A — Durable Task Loop (코드·정적·브라우저 검증 완료, live 활성화 대기)
 
 ```text
 Quick text(task hint)
@@ -1214,13 +1222,14 @@ Quick text(task hint)
   -> reload
 ```
 
-- Hub session BFF → Engine guarded task create/update/complete API → RPC와 idempotency.
-- Projects의 local-only task 생성·완료를 API에 연결.
-- Quick Capture의 task/inbox 두 destination.
-- task source만으로 missed/today/waiting/inbox를 계산.
-- persistence 실패 시 rollback이 아니라 서버 row 복구와 retry.
-- task 및 inbox의 loading/live-empty/preview/error에서 mock 제거.
-- 모바일·키보드·aria-live 완료.
+- [x] Hub session BFF → Engine guarded task create/update/complete API → RPC와 idempotency.
+- [x] Phase 0 read-only Projects/Today surface에 durable Task create/update/complete·reload interaction 추가.
+- [x] Quick Capture의 task/inbox 두 destination.
+- [x] Task source만으로 missed/today/waiting/inbox를 계산하고 workspace timezone으로 표시·비교.
+- [x] persistence 실패 시 입력을 유지하고 정확한 snapshot만 retry; conflict는 서버 row로 복구.
+- [x] Task 및 Inbox의 loading/live-empty/preview/error에서 mock 제거.
+- [x] 모바일·키보드·aria-live·modal unlock 검증.
+- [ ] live DB migration, duplicate/stale/rollback 원자성 smoke, create→reload→complete→reload 실데이터 확인.
 
 이 단계만으로 독립 배포·검증 가능해야 한다.
 
@@ -1415,17 +1424,18 @@ Phase 1 구현 계획에서 다음 파일을 우선 검토한다.
 
 ## 24. 실제 다음 행동
 
-다음 작업은 질문을 더 이어가는 것이 아니라 **Phase 1A Durable Task Loop** 구현 계획을 고정하는 것이다.
+다음 작업은 질문을 더 이어가는 것이 아니라 **Phase 1A Durable Task Loop를 live 활성화**하는 것이다.
 
 ```text
 Quick text(task hint)
-  -> durable task
-  -> task-only Today
+  -> live durable task
+  -> reload로 persistence 확인
   -> complete
-  -> reload 후 동일 상태 확인
+  -> reload 후 제거·상태 전이 확인
+  -> duplicate·stale·rollback smoke
 ```
 
-Phase 1A 완료 뒤 실제 사용 결과를 보고 Phase 1B Action Desk 집계를 진행한다. Q116 이후 질문은 운영자가 요청하거나 실사용 데이터가 생길 때까지 보류한다.
+live 활성화와 짧은 실사용 결과를 확인한 뒤 Phase 1B Action Desk 집계를 진행한다. Q116 이후 질문은 운영자가 요청하거나 실사용 데이터가 생길 때까지 보류한다.
 
 ## 25. 이번 정리에서 관찰한 것
 
@@ -1449,4 +1459,4 @@ Phase 1A 완료 뒤 실제 사용 결과를 보고 Phase 1B Action Desk 집계�
 - 1차: 7/10. Attention 계약, Quick Capture 목적지, 연락 완료 원자성, owner 검증, Phase 1 과대 범위를 발견.
 - 2차: 8/10. fallback slot, cross-destination idempotency, 실제 outcome ledger, reason code, due precision을 발견.
 - 3차: 9/10. `activity_at` 기준 시각 1건을 발견했고 최종 문서에 반영.
-- 잔여 승인 blocker: 없음. 다음 구현 범위는 Phase 1A이며, 이후 Phase의 하드 게이트는 §22에서 별도로 확인한다.
+- 잔여 승인 blocker: 없음. 다음 실행 범위는 Phase 1A live 활성화와 짧은 실사용이며, 이후 Phase의 하드 게이트는 §22에서 별도로 확인한다.
