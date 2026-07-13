@@ -290,9 +290,10 @@ test("closed mobile navigation leaves the tab order and theme changes do not cro
   assert.match(hubAppSource, /focusDesktopSidebarOnResizeRef/);
   assert.match(hubAppSource, /contains\(document\.activeElement\)/);
   assert.match(hubAppSource, /document\.hasFocus\(\)/);
-  assert.match(hubAppSource, /onPointerDownCapture=\{\(event\) => \{/);
-  assert.match(hubAppSource, /lastFocusWithinSidebarRef\.current = Boolean\(event\.target\?\.closest\?\.\('\.hub-sidebar-root'\)\)/);
-  assert.match(hubAppSource, /lastFocusWasMobileTriggerRef\.current = Boolean\(event\.target\?\.closest\?\.\('\.hub-mobile-nav-trigger'\)\)/);
+  assert.match(hubAppSource, /onPointerDownCapture=\{\(\) => \{/);
+  assert.match(hubAppSource, /lastFocusWithinSidebarRef\.current = false/);
+  assert.match(hubAppSource, /lastFocusWasMobileTriggerRef\.current = false/);
+  assert.match(hubAppSource, /mobileTrigger\?\.contains\(document\.activeElement\)/);
   assert.match(hubAppSource, /data-theme-switching=\{themeTransitionSuppressed/);
   assert.match(hubAppSource, /className="hub-mobile-backdrop"\s+aria-hidden="true"/);
   assert.match(sidebarSource, /aria-hidden=\{ariaHidden \|\| undefined\}/);

@@ -181,11 +181,12 @@ export function HubApp() {
     const media = window.matchMedia('(max-width: 900px)');
     const syncViewport = () => {
       const sidebar = rootRef.current?.querySelector('.hub-sidebar-root');
+      const mobileTrigger = rootRef.current?.querySelector('.hub-mobile-nav-trigger');
       const documentHasFocus = typeof document.hasFocus !== 'function' || document.hasFocus();
       if (documentHasFocus && media.matches && (lastFocusWithinSidebarRef.current || sidebar?.contains(document.activeElement))) {
         focusMobileTriggerOnResizeRef.current = true;
       }
-      if (documentHasFocus && !media.matches && lastFocusWasMobileTriggerRef.current) {
+      if (documentHasFocus && !media.matches && (lastFocusWasMobileTriggerRef.current || mobileTrigger?.contains(document.activeElement))) {
         focusDesktopSidebarOnResizeRef.current = true;
       }
       setIsMobileViewport(media.matches);
@@ -261,9 +262,9 @@ export function HubApp() {
         lastFocusWithinSidebarRef.current = Boolean(event.target?.closest?.('.hub-sidebar-root'));
         lastFocusWasMobileTriggerRef.current = Boolean(event.target?.closest?.('.hub-mobile-nav-trigger'));
       }}
-      onPointerDownCapture={(event) => {
-        lastFocusWithinSidebarRef.current = Boolean(event.target?.closest?.('.hub-sidebar-root'));
-        lastFocusWasMobileTriggerRef.current = Boolean(event.target?.closest?.('.hub-mobile-nav-trigger'));
+      onPointerDownCapture={() => {
+        lastFocusWithinSidebarRef.current = false;
+        lastFocusWasMobileTriggerRef.current = false;
       }}
       data-theme={theme}
       data-density={density}
