@@ -169,6 +169,105 @@
 .hub-app .hairline-t { border-top: 1px solid var(--line-soft); }
 .hub-app .hairline-b { border-bottom: 1px solid var(--line-soft); }
 
+.quick-capture__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: var(--card-pad);
+}
+
+.quick-capture__heading,
+.quick-capture__main,
+.quick-capture__unlock-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.quick-capture__heading {
+  justify-content: space-between;
+}
+
+.quick-capture__label,
+.quick-capture__unlock > label {
+  display: block;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.quick-capture__hint,
+.quick-capture__feedback {
+  color: var(--fg-faint);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.quick-capture__hint {
+  margin-top: 3px;
+}
+
+.quick-capture__main input,
+.quick-capture__unlock-row input {
+  min-width: 0;
+  flex: 1;
+  padding: 0 13px;
+  color: var(--fg);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  outline: none;
+}
+
+.quick-capture__main input:focus,
+.quick-capture__unlock-row input:focus {
+  border-color: var(--moon-300);
+}
+
+.quick-capture__main input::placeholder,
+.quick-capture__unlock-row input::placeholder {
+  color: var(--fg-faint);
+}
+
+.quick-capture__destinations {
+  display: flex;
+  gap: 8px;
+}
+
+.quick-capture__destinations button {
+  min-width: 84px;
+  padding: 0 14px;
+  color: var(--fg-muted);
+  background: transparent;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  transition: color 150ms ease, background 150ms ease, border-color 150ms ease;
+}
+
+.quick-capture__destinations button[aria-pressed="true"] {
+  color: var(--fg);
+  background: var(--surface-2);
+  border-color: var(--moon-500);
+}
+
+.quick-capture__feedback {
+  min-height: 18px;
+}
+
+.quick-capture__feedback [role="alert"] {
+  color: var(--danger);
+}
+
+.quick-capture__unlock {
+  padding: 14px var(--card-pad) var(--card-pad);
+  background: var(--surface-2);
+  border-top: 1px solid var(--line-soft);
+}
+
+.quick-capture__unlock-row {
+  margin-top: 9px;
+}
+
 /* Interactive row hover — use this class instead of onMouseEnter/Leave JS handlers.
    Themable, respects reduced-motion, and can't drift per call site. */
 .hub-app .hub-row { transition: background 120ms ease; }
@@ -573,6 +672,21 @@
   .hub-grid--metrics,
   .hub-grid--four {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .quick-capture__main,
+  .quick-capture__unlock-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .quick-capture__main > *,
+  .quick-capture__unlock-row > * {
+    width: 100%;
+  }
+
+  .quick-capture__destinations > * {
+    flex: 1;
   }
 
   /* Segmented controls stay horizontal on phones — the ≤900px rules already make each

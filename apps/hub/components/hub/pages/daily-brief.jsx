@@ -3,6 +3,7 @@
 import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, Checkbox, Progress, Sparkline, SyncBadge, EmptyState } from "../hub-primitives";
+import { QuickCapture } from "../quick-capture";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 
 function formatBriefDate(date) {
@@ -969,6 +970,8 @@ export function DailyBrief({ onNavigate }) {
           <Button variant="outline" size="md" icon="clock" onClick={() => onNavigate('dashboard/work/calendar?focus=15')}>Start 15m focus</Button>
         </div>
       </div>
+
+      <QuickCapture onSaved={ledger.refetch} />
 
       <StatusLine state={ledger} />
 

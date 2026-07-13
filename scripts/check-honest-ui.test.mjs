@@ -11,6 +11,7 @@ const ownedFiles = {
   dailyBrief: "apps/hub/components/hub/pages/daily-brief.jsx",
   followups: "apps/hub/components/hub/pages/followups.jsx",
   projects: "apps/hub/components/hub/pages/projects.jsx",
+  quickCapture: "apps/hub/components/hub/quick-capture.jsx",
   work: "apps/hub/components/hub/pages/work.jsx",
   sidebar: "apps/hub/components/hub/hub-sidebar.jsx",
 };
@@ -63,6 +64,38 @@ test("Daily Brief decisions do not claim local completion and clickable rows sup
   assert.doesNotMatch(source, /\bsetDecided\b|Decision ·/);
   assert.match(source, /role=["']button["'][^>]*tabIndex=\{0\}[^>]*onKeyDown/s);
   assert.match(source, /if \(e\.key === ["']Enter["'] \|\| e\.key === ["'] ["']\)/);
+});
+
+test("Daily Brief mounts an honest accessible quick capture in the first fold", () => {
+  const dailySource = readRepoFile(ownedFiles.dailyBrief);
+  const captureSource = readRepoFile(ownedFiles.quickCapture);
+  const capturePosition = dailySource.indexOf("<QuickCapture");
+  const statusPosition = dailySource.indexOf("<StatusLine");
+
+  assert.ok(capturePosition >= 0, "Daily Brief must render QuickCapture");
+  assert.ok(statusPosition > capturePosition, "QuickCapture must precede the brief stack");
+  assert.match(captureSource, /<label[^>]*htmlFor=["']quick-capture-text["']/);
+  assert.match(captureSource, /id=["']quick-capture-text["']/);
+  assert.match(captureSource, /aria-keyshortcuts=["']N["']/);
+  assert.match(captureSource, /aria-live=["']polite["']/);
+  assert.match(captureSource, /role=["']alert["']/);
+  assert.match(captureSource, /destination[^\n]+["']task["']/);
+  assert.match(captureSource, /destination[^\n]+["']inbox["']/);
+  assert.match(captureSource, /role=["']group["'][^>]*aria-label=["']저장 위치["']/);
+  assert.match(captureSource, /disabled=\{pending\}/);
+  assert.match(captureSource, /fontSize:\s*16/);
+  assert.match(captureSource, /minHeight:\s*44/);
+  assert.match(captureSource, /key\.toLowerCase\(\)\s*===\s*["']n["']/);
+  assert.match(captureSource, /target\.closest\?\.\(["']\[role=[\\"']dialog[\\"']\]["']\)/);
+  assert.match(captureSource, /onSubmit=\{submitCapture\}/);
+  assert.match(captureSource, /requiresUnlock/);
+  assert.match(captureSource, /type=["']password["']/);
+  assert.match(captureSource, /onSecretConsumed:\s*\(\)\s*=>\s*setSecret\(["']["']\)/);
+  assert.match(captureSource, /result\.status\s*===\s*["']saved["']/);
+  assert.match(captureSource, /result\.status\s*===\s*["']duplicate["']/);
+  assert.match(captureSource, /onSaved\?\.\(result\)/);
+  assert.equal((captureSource.match(/onSaved\?\.\(/g) || []).length, 1);
+  assert.doesNotMatch(captureSource, /status\s*===\s*["']preview["']/);
 });
 
 test("Projects never substitutes fallback business rows", () => {
