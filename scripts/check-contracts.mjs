@@ -228,7 +228,7 @@ assert(
   "present",
 );
 
-const contentLedger = readText("apps/hub/lib/repositories/content-ledger.js");
+const contentVariantContract = readText("apps/hub/lib/content-variant-contract.js");
 const schema = readText("supabase/schema.sql");
 const contentVariantMigrationPath =
   "supabase/migrations/20260602_0003_content_variant_type_contract.sql";
@@ -243,7 +243,10 @@ const liveSetupMigration = existsSync(
 )
   ? readText("supabase/migrations/20260602_0004_live_setup_contracts.sql")
   : "";
-const repositoryVariantTypes = extractJsStringArray(contentLedger, "VARIANT_TYPES");
+const repositoryVariantTypes = extractJsStringArray(
+  contentVariantContract,
+  "CANONICAL_CONTENT_VARIANT_TYPES",
+);
 const schemaVariantTypes = extractSchemaVariantTypes(schema);
 const contentVariantContractSources = [
   ["schema", schemaVariantTypes],
@@ -253,6 +256,15 @@ const contentVariantContractSources = [
 ];
 const variantContractMismatch = contentVariantContractSources.filter(
   ([, values]) => !valuesEqual(repositoryVariantTypes, values),
+);
+const supabaseFirstSeed = readText("supabase/seed.supabase_first.sql");
+const legacySeedVariantTypes = Array.from(
+  new Set(
+    Array.from(
+      supabaseFirstSeed.matchAll(/'(blog|social_post|landing_copy)'/g),
+      (match) => match[1],
+    ),
+  ),
 );
 
 assert(
@@ -264,7 +276,14 @@ assert(
     ? `${repositoryVariantTypes.length} variant types match repository, schema, and migration`
     : `repository=${repositoryVariantTypes.join(",") || "none"} mismatches=${variantContractMismatch
         .map(([label, values]) => `${label}:${values.join(",") || "none"}`)
-        .join(" ")}`,
+      .join(" ")}`,
+);
+assert(
+  legacySeedVariantTypes.length === 0,
+  "content variant seed contract",
+  legacySeedVariantTypes.length
+    ? `legacy variant types: ${legacySeedVariantTypes.join(",")}`
+    : "seed uses canonical variant types",
 );
 
 if (failures.length) {

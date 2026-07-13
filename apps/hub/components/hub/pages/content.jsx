@@ -4,10 +4,6 @@ import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar, SyncBadge } from "../hub-primitives";
-import {
-  CONTENT_QUEUE as FALLBACK_CONTENT_QUEUE,
-  CAMPAIGNS as FALLBACK_CAMPAIGNS,
-} from "../hub-data";
 import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
 
 const STUDIO_DRAFT_DB = "moonlight-content-studio";
@@ -119,58 +115,152 @@ function handoffTone(status) {
 
 function useContentLedger() {
   const [state, setState] = React.useState({
-    source: "mock",
-    syncState: "mock",
+    source: null,
+    syncState: "loading",
     brands: [],
     items: [],
     variants: [],
     assets: [],
     publishLogs: [],
-    campaigns: FALLBACK_CAMPAIGNS,
-    queue: FALLBACK_CONTENT_QUEUE,
+    campaigns: [],
+    queue: [],
     pipeline: [],
     attention: [],
     summary: null,
     ideaQueue: [],
     cadence: null,
+    error: null,
   });
+  const [refreshToken, setRefreshToken] = React.useState(0);
 
   React.useEffect(() => {
     let active = true;
 
     async function loadLedger() {
-      setState((s) => ({ ...s, syncState: "loading" }));
+      setState({
+        source: null,
+        syncState: "loading",
+        brands: [],
+        items: [],
+        variants: [],
+        assets: [],
+        publishLogs: [],
+        campaigns: [],
+        queue: [],
+        pipeline: [],
+        attention: [],
+        summary: null,
+        ideaQueue: [],
+        cadence: null,
+        error: null,
+      });
       try {
         const response = await fetch("/api/hub/content", { cache: "no-store" });
         const data = await response.json().catch(() => null);
 
-        if (!active || !response.ok || !data || data.status === "error") {
-          if (active) setState((s) => ({ ...s, syncState: "mock" }));
+        if (!active) return;
+        if (!response.ok || !data || data.status === "error") {
+          setState({
+            source: null,
+            syncState: "error",
+            brands: [],
+            items: [],
+            variants: [],
+            assets: [],
+            publishLogs: [],
+            campaigns: [],
+            queue: [],
+            pipeline: [],
+            attention: [],
+            summary: null,
+            ideaQueue: [],
+            cadence: null,
+            error: data?.error || data?.message || `콘텐츠 원장 요청 실패 (${response.status})`,
+          });
           return;
         }
 
         if (data.source === "supabase") {
-          setState({
+          const brands = Array.isArray(data.brands) ? data.brands : [];
+          const items = Array.isArray(data.items) ? data.items : [];
+          const variants = Array.isArray(data.variants) ? data.variants : [];
+          const assets = Array.isArray(data.assets) ? data.assets : [];
+          const publishLogs = Array.isArray(data.publishLogs) ? data.publishLogs : [];
+          const campaigns = Array.isArray(data.campaigns) ? data.campaigns : [];
+          const queue = Array.isArray(data.queue) ? data.queue : [];
+          const pipeline = Array.isArray(data.pipeline) ? data.pipeline : [];
+          const attention = Array.isArray(data.attention) ? data.attention : [];
+          const ideaQueue = Array.isArray(data.ideaQueue) ? data.ideaQueue : [];
+          const hasRows = [
+            brands,
+            items,
+            variants,
+            assets,
+            publishLogs,
+            campaigns,
+            queue,
+            pipeline,
+            attention,
+            ideaQueue,
+          ].some((rows) => rows.length > 0);
+          const liveState = {
             source: data.source,
-            syncState: "live",
-            brands: Array.isArray(data.brands) ? data.brands : [],
-            items: Array.isArray(data.items) ? data.items : [],
-            variants: Array.isArray(data.variants) ? data.variants : [],
-            assets: Array.isArray(data.assets) ? data.assets : [],
-            publishLogs: Array.isArray(data.publishLogs) ? data.publishLogs : [],
-            campaigns: Array.isArray(data.campaigns) ? data.campaigns : [],
-            queue: Array.isArray(data.queue) ? data.queue : [],
-            pipeline: Array.isArray(data.pipeline) ? data.pipeline : [],
-            attention: Array.isArray(data.attention) ? data.attention : [],
+            brands,
+            items,
+            variants,
+            assets,
+            publishLogs,
+            campaigns,
+            queue,
+            pipeline,
+            attention,
             summary: data.summary || null,
-            ideaQueue: Array.isArray(data.ideaQueue) ? data.ideaQueue : [],
+            ideaQueue,
             cadence: data.cadence || null,
-          });
+            error: null,
+          };
+          if (hasRows) {
+            setState({ ...liveState, syncState: "live" });
+          } else {
+            setState({ ...liveState, syncState: "live-empty" });
+          }
         } else {
-          setState((s) => ({ ...s, syncState: "mock" }));
+          setState({
+            source: data.source || "preview",
+            syncState: "preview",
+            brands: [],
+            items: [],
+            variants: [],
+            assets: [],
+            publishLogs: [],
+            campaigns: [],
+            queue: [],
+            pipeline: [],
+            attention: [],
+            summary: null,
+            ideaQueue: [],
+            cadence: null,
+            error: null,
+          });
         }
-      } catch {
-        if (active) setState((s) => ({ ...s, syncState: "mock" }));
+      } catch (error) {
+        if (active) setState({
+          source: null,
+          syncState: "error",
+          brands: [],
+          items: [],
+          variants: [],
+          assets: [],
+          publishLogs: [],
+          campaigns: [],
+          queue: [],
+          pipeline: [],
+          attention: [],
+          summary: null,
+          ideaQueue: [],
+          cadence: null,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
 
@@ -178,9 +268,10 @@ function useContentLedger() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshToken]);
 
-  return state;
+  const refetch = React.useCallback(() => setRefreshToken((value) => value + 1), []);
+  return { ...state, refetch };
 }
 
 export function Studio({ workspace }) {
@@ -690,7 +781,7 @@ export function Studio({ workspace }) {
                   width: '100%', background: 'transparent', border: 'none', outline: 'none',
                   color: 'var(--fg)', fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4,
                 }} />
-                <div style={{ fontSize: 13, color: 'var(--fg-faint)', marginBottom: 28 }}>By Hyeon Park · Web article preview 우선 · n8n handoff 대기</div>
+                <div style={{ fontSize: 13, color: 'var(--fg-faint)', marginBottom: 28 }}>By Junhyuk Mun · Web article preview 우선 · n8n handoff 대기</div>
                 <textarea value={body} onChange={e => { setBody(e.target.value); setDirty(true); }} style={{
                   width: '100%', minHeight: 420, background: 'transparent', border: 'none', outline: 'none', resize: 'none',
                   color: 'var(--fg)', fontSize: 15, lineHeight: 1.7, fontFamily: 'var(--font-sans)', letterSpacing: '-0.005em',
@@ -1008,11 +1099,10 @@ export function Queue({ workspace }) {
   const [tab, setTab] = React.useState('all');
   const [brandFilter, setBrandFilter] = React.useState('all');
   const ledger = useContentLedger();
+  const ledgerIsLive = ledger.syncState === 'live' || ledger.syncState === 'live-empty';
   // Scope the brand filter pills + queue items to this workspace (pass-through when unscoped).
   const brands = ws ? filterBrandsByWorkspace(ledger.brands || [], workspace) : (ledger.brands || []);
-  const queueSource = ledger.source === "supabase"
-    ? (Array.isArray(ledger.queue) ? ledger.queue : [])
-    : (ledger.queue?.length ? ledger.queue : FALLBACK_CONTENT_QUEUE);
+  const queueSource = Array.isArray(ledger.queue) ? ledger.queue : [];
   const queue = filterContentByWorkspace(queueSource, workspace);
   const statusTone = {
     Inbox: 'neutral',
@@ -1058,7 +1148,7 @@ export function Queue({ workspace }) {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Publishing queue</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {visibleQueue.length}{tab !== 'all' ? ` of ${queue.length}` : ''} items in pipeline
-            <SyncBadge state={ledger.syncState} />
+            <SyncBadge state={ledger.syncState === 'live-empty' ? 'live' : ledger.syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -1144,7 +1234,17 @@ export function Queue({ workspace }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 110px 100px 120px 130px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>Title</span><span>Kind</span><span>Channel</span><span>Brand</span><span>Lane</span><span>When</span><span style={{ textAlign: 'right' }}>Author</span>
         </div>
-        {visibleQueue.length === 0 && ws && (
+        {!ledgerIsLive && (
+          <div role={ledger.syncState === 'error' ? 'alert' : 'status'}>
+            <EmptyState
+              icon={ledger.syncState === 'error' ? 'signal' : 'queue'}
+              title={ledger.syncState === 'loading' ? '콘텐츠 원장 확인 중' : ledger.syncState === 'error' ? '콘텐츠 원장을 불러오지 못했습니다' : '콘텐츠 원장 연결 필요'}
+              description={ledger.syncState === 'loading' ? '실제 발행 큐를 확인하고 있습니다.' : ledger.syncState === 'error' ? ledger.error || '실패한 읽기를 샘플 큐로 대체하지 않았습니다.' : 'Supabase 콘텐츠 원장을 연결하면 실제 발행 큐가 표시됩니다.'}
+              action={ledger.syncState === 'error' ? <Button variant="outline" size="sm" onClick={ledger.refetch}>다시 시도</Button> : undefined}
+            />
+          </div>
+        )}
+        {ledgerIsLive && visibleQueue.length === 0 && ws && (
           <EmptyState
             icon="queue"
             title={`${ws.label} — 아직 연결된 콘텐츠가 없습니다.`}
@@ -1152,17 +1252,17 @@ export function Queue({ workspace }) {
             action={<Button variant="primary" size="sm" icon="plus" onClick={() => openStudio()}>Draft</Button>}
           />
         )}
-        {visibleQueue.length === 0 && !ws && (
+        {ledgerIsLive && visibleQueue.length === 0 && !ws && (
           <EmptyState
             icon="queue"
             title={tab === 'all' ? '발행 큐가 비어 있습니다' : `${activeLabel} 항목이 없습니다`}
             description={tab === 'all'
-              ? (ledger.syncState === 'live' ? 'Supabase content_items/content_variants 원장에 표시할 콘텐츠가 없습니다.' : '초안을 만들면 큐와 파이프라인에 표시됩니다.')
+              ? 'Supabase content_items/content_variants 원장에 표시할 콘텐츠가 없습니다.'
               : `${activeLabel} 상태의 콘텐츠가 생기면 이 필터에 표시됩니다.`}
             action={<Button variant="primary" size="sm" icon="plus" onClick={() => openStudio()}>Draft</Button>}
           />
         )}
-        {visibleQueue.map((c, i) => (
+        {ledgerIsLive && visibleQueue.map((c, i) => (
           <div key={c.id} style={{
             display: 'grid', gridTemplateColumns: '1fr 110px 110px 100px 120px 130px 80px',
             padding: '12px 16px', alignItems: 'center',
@@ -1682,17 +1782,24 @@ export function Campaigns() {
   const router = useRouter();
   const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral', Paused: 'warning', Completed: 'info' };
   const ledger = useContentLedger();
-  const [campaigns, setCampaigns] = React.useState(FALLBACK_CAMPAIGNS);
-  const [selectedId, setSelectedId] = React.useState(FALLBACK_CAMPAIGNS[0]?.id || null);
+  const ledgerIsLive = ledger.syncState === 'live' || ledger.syncState === 'live-empty';
+  const [campaigns, setCampaigns] = React.useState([]);
+  const [selectedId, setSelectedId] = React.useState(null);
   const [tab, setTab] = React.useState('pulse');
   const [focusMode, setFocusMode] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
+  const [campaignError, setCampaignError] = React.useState(null);
 
   React.useEffect(() => {
-    if (ledger.syncState !== 'live') return;
+    if (!ledgerIsLive) {
+      setCampaigns([]);
+      setSelectedId(null);
+      setFocusMode(false);
+      return;
+    }
     setCampaigns(ledger.campaigns);
     setSelectedId((prev) => (ledger.campaigns.some((c) => c.id === prev) ? prev : ledger.campaigns[0]?.id || null));
-  }, [ledger.syncState, ledger.campaigns]);
+  }, [ledgerIsLive, ledger.campaigns]);
 
   const selected = campaigns.find(c => c.id === selectedId) || campaigns[0] || null;
   // Any campaign without curated war-room content (a fresh draft or a live
@@ -1702,40 +1809,43 @@ export function Campaigns() {
     ? (CAMPAIGN_WAR_ROOMS[selected.id] || buildPreviewCampaignDetail(selected))
     : null;
   const activeTabLabel = CAMPAIGN_TABS.find(t => t.key === tab)?.label || 'Pulse';
-  const createCampaign = async () => {
-    if (creating) return;
+  async function createCampaign() {
+    if (creating || !ledgerIsLive) return;
     setCreating(true);
-    const localId = `local-campaign-${Date.now()}`;
-    const next = {
-      id: localId,
-      name: '새 캠페인',
-      status: 'Draft',
-      channels: ['Email'],
-      progress: 0,
-      end: '미정',
-      goal: '목표 설정',
-      current: 0,
-    };
-    setCampaigns(prev => [next, ...prev]);
-    setSelectedId(localId);
-    setTab('pulse');
-    setFocusMode(true);
+    setCampaignError(null);
     try {
-      const res = await fetch('/api/hub/content', {
+      const response = await fetch('/api/hub/content', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'campaign', name: next.name }),
+        body: JSON.stringify({ action: 'campaign', name: '새 캠페인' }),
       });
-      const data = await res.json().catch(() => null);
-      if (data?.status === 'saved' && data?.campaign?.id) {
-        const savedId = data.campaign.id;
-        setCampaigns(prev => prev.map(c => (c.id === localId ? { ...c, id: savedId } : c)));
-        setSelectedId(savedId);
+      const data = await response.json().catch(() => null);
+      if (response.ok && data?.status === 'saved' && data?.campaign?.id) {
+        const saved = data.campaign;
+        const next = {
+          id: saved.id,
+          name: saved.name || '새 캠페인',
+          status: saved.status || 'Draft',
+          channels: Array.isArray(saved.channels) ? saved.channels : [],
+          progress: Number(saved.progress || 0),
+          end: saved.ends_label || '미정',
+          goal: saved.goal_label || '목표 설정',
+          current: Number(saved.goal_current || 0),
+          goalTarget: saved.goal_target ?? null,
+        };
+        setCampaigns((previous) => [next, ...previous.filter((campaign) => campaign.id !== next.id)]);
+        setSelectedId(next.id);
+        setTab('pulse');
+        setFocusMode(true);
+        return;
       }
+      setCampaignError(data?.error || data?.message || data?.reason || `캠페인 저장 실패 (${response.status})`);
+    } catch (error) {
+      setCampaignError(error instanceof Error ? error.message : String(error));
     } finally {
       setCreating(false);
     }
-  };
+  }
 
   React.useEffect(() => {
     if (!focusMode) return;
@@ -1767,23 +1877,40 @@ export function Campaigns() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Campaigns</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             Content 안에서 Revenue, Automations, Decisions를 캠페인 기준으로 묶는 war room
-            <SyncBadge state={ledger.syncState} />
+            <SyncBadge state={ledger.syncState === 'live-empty' ? 'live' : ledger.syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating}>Campaign</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating || !ledgerIsLive} title={!ledgerIsLive ? '콘텐츠 원장 연결 후 만들 수 있습니다.' : undefined}>Campaign</Button>
       </div>
 
-      {!selected && (
+      {campaignError && (
+        <div role="alert" style={{ padding: '10px 12px', border: '1px solid var(--danger-line)', borderRadius: 'var(--r-sm)', background: 'var(--danger-bg)', color: 'var(--danger)', fontSize: 12 }}>
+          {campaignError}
+        </div>
+      )}
+
+      {!ledgerIsLive && (
+        <div role={ledger.syncState === 'error' ? 'alert' : 'status'}>
+          <EmptyState
+            icon={ledger.syncState === 'error' ? 'signal' : 'campaigns'}
+            title={ledger.syncState === 'loading' ? '캠페인 원장 확인 중' : ledger.syncState === 'error' ? '캠페인 원장을 불러오지 못했습니다' : '캠페인 원장 연결 필요'}
+            description={ledger.syncState === 'loading' ? '실제 캠페인 기록을 확인하고 있습니다.' : ledger.syncState === 'error' ? ledger.error || '실패한 읽기를 샘플 캠페인으로 대체하지 않았습니다.' : 'Supabase campaigns 원장을 연결하면 실제 캠페인이 표시됩니다.'}
+            action={ledger.syncState === 'error' ? <Button variant="outline" size="sm" onClick={ledger.refetch}>다시 시도</Button> : undefined}
+          />
+        </div>
+      )}
+
+      {ledgerIsLive && !selected && (
         <EmptyState
           icon="campaigns"
           title="캠페인이 없습니다"
-          description={ledger.syncState === 'live' ? 'Supabase campaigns 원장이 비어 있습니다.' : '캠페인을 만들면 war room에 표시됩니다.'}
+          description="Supabase campaigns 원장이 비어 있습니다."
           action={<Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating}>Campaign</Button>}
         />
       )}
 
-      {selected && (
+      {ledgerIsLive && selected && (
       <div
         className="campaign-war-room"
         data-focus={focusMode ? 'true' : 'false'}

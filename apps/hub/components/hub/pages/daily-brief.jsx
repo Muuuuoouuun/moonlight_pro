@@ -3,7 +3,6 @@
 import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, Checkbox, Progress, Sparkline, SyncBadge, EmptyState } from "../hub-primitives";
-import { BRIEF_SIGNALS, TODAY_BLOCKS, METRICS } from "../hub-data";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 
 function formatBriefDate(date) {
@@ -115,22 +114,45 @@ function useDailyBriefLedger() {
     generatedAt: null,
     sources: [],
     summary: null,
-    metrics: METRICS,
-    signals: BRIEF_SIGNALS,
-    blocks: TODAY_BLOCKS,
+    metrics: [],
+    signals: [],
+    blocks: [],
     morningBrief: null,
+    error: null,
   });
+  const [refreshToken, setRefreshToken] = React.useState(0);
 
   React.useEffect(() => {
     let active = true;
 
     async function load() {
-      setState((prev) => ({ ...prev, syncState: 'syncing' }));
+      setState({
+        syncState: 'syncing',
+        generatedAt: null,
+        sources: [],
+        summary: null,
+        metrics: [],
+        signals: [],
+        blocks: [],
+        morningBrief: null,
+        error: null,
+      });
       try {
         const response = await fetch('/api/hub/daily-brief', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
-        if (!active || !response.ok || !data) {
-          if (active) setState((prev) => ({ ...prev, syncState: 'preview' }));
+        if (!active) return;
+        if (!response.ok || !data) {
+          setState({
+            syncState: 'error',
+            generatedAt: null,
+            sources: [],
+            summary: null,
+            metrics: [],
+            signals: [],
+            blocks: [],
+            morningBrief: null,
+            error: data?.error || data?.message || `브리핑 요청 실패 (${response.status})`,
+          });
           return;
         }
 
@@ -147,29 +169,41 @@ function useDailyBriefLedger() {
           generatedAt: data.generatedAt || null,
           sources: Array.isArray(data.sources) ? data.sources : [],
           summary: data.summary || null,
-          metrics: liveCount > 0 && Array.isArray(data.metrics) && data.metrics.length ? data.metrics : METRICS,
-          signals: Array.isArray(data.signals) && data.signals.length ? data.signals : BRIEF_SIGNALS,
-          blocks: Array.isArray(data.blocks) && data.blocks.length ? data.blocks : TODAY_BLOCKS,
-          morningBrief: data.morningBrief || null,
+          metrics: liveCount > 0 && Array.isArray(data.metrics) ? data.metrics : [],
+          signals: liveCount > 0 && Array.isArray(data.signals) ? data.signals : [],
+          blocks: liveCount > 0 && Array.isArray(data.blocks) ? data.blocks : [],
+          morningBrief: liveCount > 0 ? data.morningBrief || null : null,
+          error: null,
         });
-      } catch {
-        if (active) setState((prev) => ({ ...prev, syncState: 'preview' }));
+      } catch (error) {
+        if (active) setState({
+          syncState: 'error',
+          generatedAt: null,
+          sources: [],
+          summary: null,
+          metrics: [],
+          signals: [],
+          blocks: [],
+          morningBrief: null,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
 
     load();
     return () => { active = false; };
-  }, []);
+  }, [refreshToken]);
 
-  return state;
+  const refetch = React.useCallback(() => setRefreshToken((value) => value + 1), []);
+  return { ...state, refetch };
 }
 
 function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
   // Surface the highest-priority signal first-open, regardless of live-vs-mock ids (§3.1: <5s).
   const [expanded, setExpanded] = React.useState(defaultExpanded != null ? defaultExpanded : (index === 0 || s.tone === 'danger'));
-  const [decided, setDecided] = React.useState(null);
   const borderTone = { danger: 'var(--danger-line)', warning: 'var(--warning-line)', success: 'var(--success-line)', info: 'var(--info-line)' }[s.tone] || 'var(--line)';
   const openContext = () => onNavigate?.(CONTEXT_TARGETS[s.kind] || 'dashboard/daily-brief');
+  const toggleExpanded = () => setExpanded((value) => !value);
 
   return (
     <div style={{
@@ -178,10 +212,22 @@ function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
       borderLeft: `1px solid ${borderTone}`,
       borderRadius: 'var(--r-lg)',
       overflow: 'hidden',
-      opacity: decided ? 0.55 : 1,
       transition: 'opacity .2s',
     }}>
-      <div className="hub-stackable-row" onClick={() => setExpanded(e => !e)} style={{ padding: 'var(--card-pad)', cursor: 'pointer', display: 'flex', gap: 14 }}>
+      <div
+        className="hub-stackable-row"
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onClick={toggleExpanded}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleExpanded();
+          }
+        }}
+        style={{ padding: 'var(--card-pad)', cursor: 'pointer', display: 'flex', gap: 14 }}
+      >
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 2 }}>
           <Dot tone={s.tone} size={8} />
         </div>
@@ -192,27 +238,20 @@ function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
             <div style={{ flex: 1 }} />
             <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>from {s.source.from} · <span className="mono">{s.source.ref}</span></span>
           </div>
-          <div style={{ fontSize: 15, fontWeight: 500, color: decided ? 'var(--fg-muted)' : 'var(--fg)', marginBottom: 4, letterSpacing: '-0.01em' }}>
+          <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--fg)', marginBottom: 4, letterSpacing: '-0.01em' }}>
             {s.title}
           </div>
           <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.55, maxWidth: '70ch' }}>{s.summary}</div>
-          {decided && (
-            <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--success)' }}>
-              <Iconed name="check" size={12} />
-              <span>Decision · {decided}</span>
-            </div>
-          )}
         </div>
         <Iconed name="chevronD" size={14} style={{ color: 'var(--fg-faint)', transform: expanded ? '' : 'rotate(-90deg)', transition: 'transform .15s' }} />
       </div>
-      {expanded && !decided && (
+      {expanded && (
         <div style={{ padding: '0 var(--card-pad) var(--card-pad)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {s.decisions.map((d, i) => (
             <Button key={i} variant={d.primary ? 'primary' : 'secondary'} size="sm" icon={d.primary ? 'bolt' : null}
               onClick={() => {
-                setDecided(d.label);
                 const target = SIGNAL_TARGETS[d.action];
-                if (target && target !== 'dashboard/daily-brief') onNavigate?.(withEntityRef(target, s.source));
+                if (target) onNavigate?.(withEntityRef(target, s.source));
               }}>
               {d.label}
             </Button>
@@ -311,7 +350,15 @@ function MorningBriefCard({ brief, onNavigate }) {
             return (
               <div
                 key={`${item.lane}-${i}`}
+                role={target ? 'button' : undefined}
+                tabIndex={target ? 0 : undefined}
                 onClick={target ? () => onNavigate?.(target) : undefined}
+                onKeyDown={target ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onNavigate?.(target);
+                  }
+                } : undefined}
                 style={{
                   display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 14px',
                   cursor: target ? 'pointer' : 'default',
@@ -341,6 +388,8 @@ function MorningBriefCard({ brief, onNavigate }) {
 function ApprovalQueueCard({ onNavigate }) {
   const [orders, setOrders] = React.useState([]);
   const [state, setState] = React.useState('loading');
+  const [error, setError] = React.useState(null);
+  const [refreshToken, setRefreshToken] = React.useState(0);
   const [busyId, setBusyId] = React.useState(null);
   const [approved, setApproved] = React.useState({}); // id → true once approved (reveals execute row)
   const [copiedId, setCopiedId] = React.useState(null);
@@ -359,20 +408,37 @@ function ApprovalQueueCard({ onNavigate }) {
 
   React.useEffect(() => {
     let active = true;
-    fetch('/api/hub/work-orders?status=proposed', { cache: 'no-store' })
-      .then((r) => r.json().catch(() => null))
-      .then((d) => {
+    setOrders([]);
+    setApproved({});
+    setError(null);
+    setState('loading');
+
+    async function loadOrders() {
+      try {
+        const response = await fetch('/api/hub/work-orders?status=proposed', { cache: 'no-store' });
+        const data = await response.json().catch(() => null);
         if (!active) return;
-        if (d && Array.isArray(d.orders)) {
-          setOrders(d.orders);
-          setState(d.source === 'supabase' ? 'live' : 'empty');
-        } else {
-          setState('empty');
+        if (!response.ok || !data || !Array.isArray(data.orders)) {
+          setState('error');
+          setError(data?.error || data?.message || `승인 큐 요청 실패 (${response.status})`);
+          return;
         }
-      })
-      .catch(() => active && setState('empty'));
+        if (data.source !== 'supabase') {
+          setState('preview');
+          return;
+        }
+        setOrders(data.orders);
+        setState(data.orders.length > 0 ? 'live' : 'live-empty');
+      } catch (loadError) {
+        if (!active) return;
+        setState('error');
+        setError(loadError instanceof Error ? loadError.message : String(loadError));
+      }
+    }
+
+    loadOrders();
     return () => { active = false; };
-  }, []);
+  }, [refreshToken]);
 
   async function post(id, body) {
     if (busyId) return false;
@@ -402,15 +468,28 @@ function ApprovalQueueCard({ onNavigate }) {
 
   return (
     <div>
-      <SectionTitle right={<Badge tone={pending ? 'moon' : 'success'} size="xs">{pending} 대기</Badge>}>
+      <SectionTitle right={state === 'live' || state === 'live-empty'
+        ? <Badge tone={pending ? 'moon' : 'success'} size="xs">{pending} 대기</Badge>
+        : <SyncBadge state={state === 'live-empty' ? 'live' : state} />}>
         승인 큐
       </SectionTitle>
       <Card pad={false}>
-        {orders.length === 0 ? (
+        {state === 'loading' ? (
           <div style={{ padding: 14, fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
-            {state === 'loading'
-              ? '큐 확인 중…'
-              : '승인 대기 중인 제안이 없습니다. /inbox·/team이 제안을 올리면 여기서 1클릭으로 처리합니다.'}
+            큐 확인 중…
+          </div>
+        ) : state === 'error' ? (
+          <div role="alert" style={{ padding: 14, fontSize: 12.5, color: 'var(--danger)', lineHeight: 1.5 }}>
+            <div>{error || '승인 큐를 불러오지 못했습니다.'}</div>
+            <div style={{ marginTop: 10 }}><Button variant="outline" size="sm" onClick={() => setRefreshToken((value) => value + 1)}>다시 시도</Button></div>
+          </div>
+        ) : state === 'preview' ? (
+          <div style={{ padding: 14, fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+            Supabase work_orders 원장을 연결하면 승인 대기 제안이 표시됩니다.
+          </div>
+        ) : state === 'live-empty' ? (
+          <div style={{ padding: 14, fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+            승인 대기 중인 제안이 없습니다. /inbox·/team이 제안을 올리면 여기서 처리합니다.
           </div>
         ) : (
           orders.map((o, i) => (
@@ -490,23 +569,41 @@ const FUNNEL_LABEL = { sent: '접촉', replied: '응답', meeting: '미팅', pro
 function SalesFunnelCard({ onNavigate }) {
   const [stats, setStats] = React.useState(null);
   const [state, setState] = React.useState('loading');
+  const [error, setError] = React.useState(null);
+  const [refreshToken, setRefreshToken] = React.useState(0);
 
   React.useEffect(() => {
     let active = true;
-    fetch('/api/hub/outcomes?limit=1', { cache: 'no-store' })
-      .then((r) => r.json().catch(() => null))
-      .then((d) => {
+    setStats(null);
+    setError(null);
+    setState('loading');
+
+    async function loadFunnel() {
+      try {
+        const response = await fetch('/api/hub/outcomes?limit=1', { cache: 'no-store' });
+        const data = await response.json().catch(() => null);
         if (!active) return;
-        if (d && d.stats?.source === 'supabase') {
-          setStats(d.stats);
-          setState('live');
-        } else {
-          setState('mock');
+        if (!response.ok || !data || data.status === 'error') {
+          setState('error');
+          setError(data?.error || data?.message || `계약 퍼널 요청 실패 (${response.status})`);
+          return;
         }
-      })
-      .catch(() => active && setState('mock'));
+        if (data.status !== 'live' || data.stats?.source !== 'supabase') {
+          setState('preview');
+          return;
+        }
+        setStats(data.stats);
+        setState(Number(data.stats.total || 0) > 0 ? 'live' : 'live-empty');
+      } catch (loadError) {
+        if (!active) return;
+        setState('error');
+        setError(loadError instanceof Error ? loadError.message : String(loadError));
+      }
+    }
+
+    loadFunnel();
     return () => { active = false; };
-  }, []);
+  }, [refreshToken]);
 
   const funnel = stats?.funnel || [];
   const sent = funnel.find((f) => f.stage === 'sent')?.count || 0;
@@ -514,13 +611,12 @@ function SalesFunnelCard({ onNavigate }) {
 
   return (
     <div>
-      <SectionTitle right={<SyncBadge state={state} />}>
+      <SectionTitle right={<SyncBadge state={state === 'live-empty' ? 'live' : state} />}>
         계약 퍼널
       </SectionTitle>
       <Card>
         {state === 'live' && stats ? (
-          stats.total > 0 ? (
-            <>
+          <>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                 <span className="stat" style={{ fontSize: 24, fontWeight: 600 }}>
                   {won}<span style={{ color: 'var(--fg-faint)', fontWeight: 400, fontSize: 14 }}> 계약</span>
@@ -544,17 +640,23 @@ function SalesFunnelCard({ onNavigate }) {
                 <span>미팅 전환 <span className="mono">{stats.ratios?.meetingRate ?? 0}%</span></span>
                 <span>계약 전환 <span className="mono">{stats.ratios?.winRate ?? 0}%</span></span>
               </div>
-            </>
-          ) : (
-            <>
-              <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
-                아직 기록된 실행 결과가 없습니다. 승인 큐·Follow-ups의 결과 버튼(전화함/응답/미팅)이 이 퍼널을 채웁니다.
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <Button variant="outline" size="sm" icon="bell" onClick={() => onNavigate('dashboard/revenue/followups')}>Follow-ups 열기</Button>
-              </div>
-            </>
-          )
+          </>
+        ) : state === 'live-empty' ? (
+          <>
+            <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+              아직 기록된 실행 결과가 없습니다. 승인 큐·Follow-ups의 결과 버튼이 이 퍼널을 채웁니다.
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <Button variant="outline" size="sm" icon="bell" onClick={() => onNavigate('dashboard/revenue/followups')}>Follow-ups 열기</Button>
+            </div>
+          </>
+        ) : state === 'error' ? (
+          <div role="alert" style={{ fontSize: 12.5, color: 'var(--danger)', lineHeight: 1.5 }}>
+            <div>{error || '계약 퍼널을 불러오지 못했습니다.'}</div>
+            <div style={{ marginTop: 10 }}><Button variant="outline" size="sm" onClick={() => setRefreshToken((value) => value + 1)}>다시 시도</Button></div>
+          </div>
+        ) : state === 'loading' ? (
+          <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>계약 퍼널 확인 중…</div>
         ) : (
           <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
             Supabase 연결 후 접촉→응답→미팅→제안→계약 퍼널이 여기에 표시됩니다.
@@ -568,23 +670,45 @@ function SalesFunnelCard({ onNavigate }) {
 function ContentCadenceCard({ onNavigate }) {
   const [data, setData] = React.useState(null);
   const [state, setState] = React.useState("loading");
+  const [error, setError] = React.useState(null);
+  const [refreshToken, setRefreshToken] = React.useState(0);
 
   React.useEffect(() => {
     let active = true;
-    fetch("/api/hub/content", { cache: "no-store" })
-      .then((r) => r.json().catch(() => null))
-      .then((d) => {
+    setData(null);
+    setError(null);
+    setState("loading");
+
+    async function loadCadence() {
+      try {
+        const response = await fetch("/api/hub/content", { cache: "no-store" });
+        const next = await response.json().catch(() => null);
         if (!active) return;
-        if (d && d.source === "supabase" && d.cadence) {
-          setData({ cadence: d.cadence, ideas: Array.isArray(d.ideaQueue) ? d.ideaQueue : [] });
-          setState("live");
-        } else {
-          setState("mock");
+        if (!response.ok || !next || next.status === "error") {
+          setState("error");
+          setError(next?.error || next?.message || `콘텐츠 발행 요청 실패 (${response.status})`);
+          return;
         }
-      })
-      .catch(() => active && setState("mock"));
+        if (next.source !== "supabase") {
+          setState("preview");
+          return;
+        }
+        if (!next.cadence) {
+          setState("live-empty");
+          return;
+        }
+        setData({ cadence: next.cadence, ideas: Array.isArray(next.ideaQueue) ? next.ideaQueue : [] });
+        setState("live");
+      } catch (loadError) {
+        if (!active) return;
+        setState("error");
+        setError(loadError instanceof Error ? loadError.message : String(loadError));
+      }
+    }
+
+    loadCadence();
     return () => { active = false; };
-  }, []);
+  }, [refreshToken]);
 
   const cadence = data?.cadence;
   const ideas = data?.ideas || [];
@@ -592,7 +716,7 @@ function ContentCadenceCard({ onNavigate }) {
 
   return (
     <div>
-      <SectionTitle right={<SyncBadge state={state} />}>
+      <SectionTitle right={<SyncBadge state={state === 'live-empty' ? 'live' : state} />}>
         콘텐츠 발행
       </SectionTitle>
       <Card>
@@ -635,6 +759,17 @@ function ContentCadenceCard({ onNavigate }) {
               )}
             </div>
           </>
+        ) : state === "error" ? (
+          <div role="alert" style={{ fontSize: 12.5, color: "var(--danger)", lineHeight: 1.5 }}>
+            <div>{error || "콘텐츠 발행 현황을 불러오지 못했습니다."}</div>
+            <div style={{ marginTop: 10 }}><Button variant="outline" size="sm" onClick={() => setRefreshToken((value) => value + 1)}>다시 시도</Button></div>
+          </div>
+        ) : state === "loading" ? (
+          <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.5 }}>콘텐츠 발행 현황 확인 중…</div>
+        ) : state === "live-empty" ? (
+          <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.5 }}>
+            연결된 콘텐츠 원장에 발행 주기 데이터가 아직 없습니다.
+          </div>
         ) : (
           <>
             <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.5 }}>
@@ -659,6 +794,8 @@ function StatusLine({ state }) {
   const label = state.syncState === 'mixed' ? `${liveCount}/${sourceCount || 6} live` : sourceLabel(state.syncState);
   const detail = state.syncState === 'preview'
     ? 'preview · Supabase 연결 후 live 전환'
+    : state.syncState === 'error'
+    ? '브리핑 원장을 불러오지 못했습니다'
     : state.syncState === 'mixed'
     ? '일부 원장은 live, 일부는 preview'
     : state.syncState === 'syncing'
@@ -690,7 +827,6 @@ function StatusLine({ state }) {
 // The command — the single highest-priority signal, rendered full-width with its decisions
 // already exposed. This is the "<5s, what's my next move?" surface (DESIGN.md §3.1).
 function CommandCard({ s, remaining, onNavigate }) {
-  const [decided, setDecided] = React.useState(null);
   const line = { danger: 'var(--danger-line)', warning: 'var(--warning-line)', success: 'var(--success-line)', info: 'var(--info-line)' }[s.tone] || 'var(--line)';
   const accent = { danger: 'var(--danger)', warning: 'var(--warning)', success: 'var(--success)', info: 'var(--info)' }[s.tone] || 'var(--moon-300)';
   const hasRecord = s.source?.ref && !SENTINEL_REFS.has(String(s.source.ref).trim().toUpperCase());
@@ -715,29 +851,20 @@ function CommandCard({ s, remaining, onNavigate }) {
       </div>
       <div style={{ fontSize: 21, fontWeight: 500, letterSpacing: '-0.015em', color: 'var(--fg)', marginBottom: 8, lineHeight: 1.25 }}>{s.title}</div>
       <div style={{ fontSize: 13.5, color: 'var(--fg-muted)', lineHeight: 1.6, maxWidth: '76ch' }}>{s.summary}</div>
-      {decided ? (
-        <div style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--success)' }}>
-          <Iconed name="check" size={14} />
-          <span>Decision · {decided}</span>
-          <Button variant="ghost" size="sm" onClick={() => setDecided(null)}>되돌리기</Button>
-        </div>
-      ) : (
-        <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          {s.decisions.map((d, i) => (
-            <Button key={i} variant={d.primary ? 'primary' : 'secondary'} size="md" icon={d.primary ? 'bolt' : null}
-              onClick={() => {
-                setDecided(d.label);
-                const target = SIGNAL_TARGETS[d.action];
-                if (target && target !== 'dashboard/daily-brief') onNavigate?.(withEntityRef(target, s.source));
-              }}>
-              {d.label}
-            </Button>
-          ))}
-          {hasRecord && <Button variant="outline" size="md" iconRight="arrowRight" onClick={openRecord}>레코드 열기</Button>}
-          <div style={{ flex: 1 }} />
-          {remaining > 0 && <span style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>대기 결정 {remaining}건 ↓</span>}
-        </div>
-      )}
+      <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        {s.decisions.map((d, i) => (
+          <Button key={i} variant={d.primary ? 'primary' : 'secondary'} size="md" icon={d.primary ? 'bolt' : null}
+            onClick={() => {
+              const target = SIGNAL_TARGETS[d.action];
+              if (target) onNavigate?.(withEntityRef(target, s.source));
+            }}>
+            {d.label}
+          </Button>
+        ))}
+        {hasRecord && <Button variant="outline" size="md" iconRight="arrowRight" onClick={openRecord}>레코드 열기</Button>}
+        <div style={{ flex: 1 }} />
+        {remaining > 0 && <span style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>대기 결정 {remaining}건 ↓</span>}
+      </div>
     </div>
   );
 }
@@ -762,10 +889,42 @@ function CommandClear({ signalCount }) {
   );
 }
 
+function BriefStateCard({ ledger, compact = false }) {
+  const isError = ledger.syncState === 'error';
+  const isMixed = ledger.syncState === 'mixed';
+  const title = ledger.syncState === 'syncing'
+    ? '브리핑 원장 확인 중'
+    : isError
+    ? '브리핑 원장을 불러오지 못했습니다'
+    : isMixed
+    ? '일부 원장만 반영되었습니다'
+    : '브리핑 원장 연결 필요';
+  const description = ledger.syncState === 'syncing'
+    ? '실제 신호와 오늘 일정을 확인하고 있습니다.'
+    : isError
+    ? ledger.error || '실패한 읽기를 0건 또는 샘플 데이터로 대체하지 않았습니다.'
+    : isMixed
+    ? '표시된 숫자는 연결된 원장 기준입니다. 미연결 원장의 0건은 정상 상태로 판단하지 않습니다.'
+    : '운영 원장을 연결하면 실제 신호, 일정, 지표가 표시됩니다.';
+
+  return (
+    <Card>
+      <div role={isError ? 'alert' : 'status'}>
+        <EmptyState
+          icon={isError ? 'signal' : 'work'}
+          title={title}
+          description={description}
+          action={(isError || isMixed) && !compact ? <Button variant="outline" size="sm" onClick={ledger.refetch}>다시 시도</Button> : undefined}
+        />
+      </div>
+    </Card>
+  );
+}
+
 export function DailyBrief({ onNavigate }) {
   const [now, setNow] = React.useState(() => new Date());
   const ledger = useDailyBriefLedger();
-  const [blocks, setBlocks] = React.useState(TODAY_BLOCKS);
+  const [blocks, setBlocks] = React.useState([]);
   const toggle = (i) => setBlocks(bs => bs.map((b, j) => j === i ? { ...b, done: !b.done } : b));
 
   React.useEffect(() => {
@@ -784,15 +943,25 @@ export function DailyBrief({ onNavigate }) {
   const command = ranked[0] || null;
   const queue = ranked.slice(1);
   const okCount = Math.max(0, signalCount - urgentCount - todayCount);
+  const hasUsableBrief = ledger.syncState === 'live' || ledger.syncState === 'mixed';
+  const headerSummary = ledger.syncState === 'live'
+    ? <>오늘 <span style={{ color: 'var(--fg)' }}>{signalCount}개 신호</span> · <span style={{ color: 'var(--danger)' }}>{urgentCount} 즉시</span> · <span style={{ color: 'var(--warning)' }}>{todayCount} 오늘</span> · {okCount} 여유</>
+    : ledger.syncState === 'mixed'
+    ? <>연결된 원장 기준 <span style={{ color: 'var(--fg)' }}>{signalCount}개 신호</span> · 미연결 원장은 집계에서 제외</>
+    : ledger.syncState === 'syncing'
+    ? '브리핑 원장 확인 중 · 확인 전 숫자를 0으로 표시하지 않습니다.'
+    : ledger.syncState === 'error'
+    ? '브리핑을 불러오지 못했습니다 · 아래에서 다시 시도해 주세요.'
+    : '운영 원장 연결 필요 · 연결 전에는 실제 브리핑 수치를 표시하지 않습니다.';
 
   return (
     <div className="hub-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', padding: 'var(--section-gap)', maxWidth: 1400, margin: '0 auto', width: '100%' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}>
         <div>
           <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>{formatBriefDate(now)}</div>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em' }}>{greetingFor(now)}, <span style={{ color: 'var(--moon-300)' }}>Hyeon</span></h1>
+          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em' }}>{greetingFor(now)}, <span style={{ color: 'var(--moon-300)' }}>Junhyuk Mun</span></h1>
           <div style={{ marginTop: 6, fontSize: 13.5, color: 'var(--fg-muted)', maxWidth: '60ch', lineHeight: 1.55 }}>
-            오늘 <span style={{ color: 'var(--fg)' }}>{signalCount}개 신호</span> · <span style={{ color: 'var(--danger)' }}>{urgentCount} 즉시</span> · <span style={{ color: 'var(--warning)' }}>{todayCount} 오늘</span> · {okCount} 여유
+            {headerSummary}
           </div>
         </div>
         <div className="hub-page-actions" style={{ display: 'flex', gap: 8 }}>
@@ -803,19 +972,23 @@ export function DailyBrief({ onNavigate }) {
 
       <StatusLine state={ledger} />
 
-      {command ? (
+      {ledger.syncState === 'mixed' && <BriefStateCard ledger={ledger} />}
+
+      {!hasUsableBrief ? (
+        <BriefStateCard ledger={ledger} />
+      ) : command ? (
         <CommandCard s={command} remaining={queue.length} onNavigate={onNavigate} />
-      ) : (
+      ) : ledger.syncState === 'live' ? (
         <CommandClear signalCount={signalCount} />
-      )}
+      ) : null}
 
       <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 'var(--section-gap)' }}>
         <div>
-          <SectionTitle right={<div style={{ display: 'flex', gap: 6 }}>
+          <SectionTitle right={hasUsableBrief ? <div style={{ display: 'flex', gap: 6 }}>
             <Badge tone="danger" size="xs">{urgentCount} urgent</Badge>
             <Badge tone="warning" size="xs">{todayCount} today</Badge>
             <Badge tone="success" size="xs">{okCount} ok</Badge>
-          </div>}>
+          </div> : <Badge tone="warning" size="xs">{sourceLabel(ledger.syncState)}</Badge>}>
             결정 큐
           </SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -823,7 +996,11 @@ export function DailyBrief({ onNavigate }) {
               queue.map((s) => <SignalCard key={s.id} s={s} defaultExpanded={s.tone === 'danger'} onNavigate={onNavigate} />)
             ) : (
               <Card>
-                <EmptyState icon="check" title={command ? '큐가 비었습니다' : '오늘 신호 없음'} description={command ? '가장 급한 하나만 위에 남았어요. 처리하면 브리핑이 정리됩니다.' : '새 신호가 들어오면 명령 카드로 가장 먼저 올라옵니다.'} />
+                <EmptyState
+                  icon={hasUsableBrief ? 'check' : 'signal'}
+                  title={!hasUsableBrief ? '결정 신호를 확인할 수 없습니다' : ledger.syncState === 'mixed' ? '연결된 원장에는 추가 신호가 없습니다' : command ? '큐가 비었습니다' : '오늘 신호 없음'}
+                  description={!hasUsableBrief ? '브리핑 원장 상태를 먼저 확인해 주세요.' : ledger.syncState === 'mixed' ? '미연결 원장이 있어 전체 신호가 0건이라고 판단하지 않습니다.' : command ? '가장 급한 하나만 위에 남았어요. 처리하면 브리핑이 정리됩니다.' : '새 신호가 들어오면 명령 카드로 가장 먼저 올라옵니다.'}
+                />
               </Card>
             )}
           </div>
@@ -834,24 +1011,30 @@ export function DailyBrief({ onNavigate }) {
           <ApprovalQueueCard onNavigate={onNavigate} />
 
           <div>
-            <SectionTitle right={<span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{blocks.filter(b => b.done).length}/{blocks.length}</span>}>Today</SectionTitle>
+            <SectionTitle right={<span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{hasUsableBrief ? `${blocks.filter(b => b.done).length}/${blocks.length}` : sourceLabel(ledger.syncState)}</span>}>Today</SectionTitle>
             <Card pad={false}>
-              {blocks.map((b, i) => (
-                <div key={i} onClick={() => toggle(i)} style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '10px 14px', cursor: 'pointer',
-                  borderBottom: i < blocks.length - 1 ? '1px solid var(--line-soft)' : 'none',
-                }}>
-                  <Checkbox checked={!!b.done} onChange={() => toggle(i)} />
-                  <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', width: 38 }}>{b.time}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5, color: b.done ? 'var(--fg-faint)' : 'var(--fg)', textDecoration: b.done ? 'line-through' : 'none' }}>{b.title}</div>
-                    <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 2 }}>{b.kind}</div>
+              {blocks.length > 0 ? blocks.map((b, i) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '10px 14px',
+                    borderBottom: i < blocks.length - 1 ? '1px solid var(--line-soft)' : 'none',
+                  }}>
+                    <Checkbox checked={!!b.done} onChange={() => toggle(i)} />
+                    <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', width: 38 }}>{b.time}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5, color: b.done ? 'var(--fg-faint)' : 'var(--fg)', textDecoration: b.done ? 'line-through' : 'none' }}>{b.title}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 2 }}>{b.kind}</div>
+                    </div>
+                    {b.tag === 'personal' && <Badge tone="personal" size="xs">Personal</Badge>}
+                    {b.tag === 'company' && <Badge tone="company" size="xs">Company</Badge>}
                   </div>
-                  {b.tag === 'personal' && <Badge tone="personal" size="xs">Personal</Badge>}
-                  {b.tag === 'company' && <Badge tone="company" size="xs">Company</Badge>}
-                </div>
-              ))}
+                )) : (
+                  <EmptyState
+                    icon="calendar"
+                    title={!hasUsableBrief ? '오늘 블록을 확인할 수 없습니다' : ledger.syncState === 'mixed' ? '연결된 원장에는 오늘 블록이 없습니다' : '오늘 블록이 없습니다'}
+                    description={!hasUsableBrief ? '브리핑 원장 상태를 먼저 확인해 주세요.' : ledger.syncState === 'mixed' ? '일부 원장이 미연결 상태라 전체 일정이 비었다고 판단하지 않습니다.' : '실제 프로젝트와 콘텐츠 일정이 연결되면 여기에 표시됩니다.'}
+                  />
+                )}
             </Card>
           </div>
 
@@ -860,9 +1043,19 @@ export function DailyBrief({ onNavigate }) {
 
       <div>
         <SectionTitle right={<span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>클릭하면 해당 서피스로 이동</span>}>지표</SectionTitle>
-        <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
-          {ledger.metrics.map((m) => <MetricCard key={m.label} m={m} onNavigate={onNavigate} compact />)}
-        </div>
+        {ledger.metrics.length > 0 ? (
+          <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
+            {ledger.metrics.map((m) => <MetricCard key={m.label} m={m} onNavigate={onNavigate} compact />)}
+          </div>
+        ) : (
+          <Card>
+            <EmptyState
+              icon="signal"
+              title={!hasUsableBrief ? '지표를 확인할 수 없습니다' : ledger.syncState === 'mixed' ? '연결된 원장에는 지표가 없습니다' : '표시할 지표가 없습니다'}
+              description={!hasUsableBrief ? '브리핑 원장 상태를 먼저 확인해 주세요.' : ledger.syncState === 'mixed' ? '미연결 원장이 있어 0을 실제 성과로 해석하지 않습니다.' : '실제 운영 원장이 연결되면 지표가 표시됩니다.'}
+            />
+          </Card>
+        )}
       </div>
 
       <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--section-gap)' }}>
@@ -873,27 +1066,12 @@ export function DailyBrief({ onNavigate }) {
       <div>
         <SectionTitle>This week rhythm</SectionTitle>
         <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>4/5 rituals done</div>
-            <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>80%</span>
-          </div>
-          <div style={{ marginTop: 10 }}><Progress value={80} /></div>
-          <div style={{ marginTop: 14, display: 'flex', gap: 6 }}>
-            {['월','화','수','목','금'].map((d, i) => (
-              <div key={d} style={{ flex: 1, textAlign: 'center' }}>
-                <div style={{
-                  height: 28, borderRadius: 6,
-                  background: i < 4 ? 'var(--moon-600)' : 'var(--surface-3)',
-                  border: i === 4 ? '1px dashed var(--warning)' : 'none',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  {i < 4 && <Iconed name="check" size={12} style={{ color: 'var(--moon-100)' }} />}
-                  {i === 4 && <Iconed name="clock" size={11} style={{ color: 'var(--warning)' }} />}
-                </div>
-                <div style={{ fontSize: 10, color: 'var(--fg-faint)', marginTop: 4 }}>{d}</div>
-              </div>
-            ))}
-          </div>
+          <EmptyState
+            icon="rhythm"
+            title="리듬 데이터는 별도 원장에서 확인합니다"
+            description="고정된 4/5·80% 샘플을 제거했습니다. 실제 routine_checks 기록은 Work의 Rhythm 화면에서 확인하세요."
+            action={<Button variant="outline" size="sm" onClick={() => onNavigate('dashboard/work/rhythm')}>Rhythm 열기</Button>}
+          />
         </Card>
       </div>
     </div>

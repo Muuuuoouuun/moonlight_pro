@@ -628,10 +628,10 @@ export function Settings({ onNavigate }) {
         <SectionTitle>Profile</SectionTitle>
         <Card>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <Avatar name="Hyeon Park" size={52} />
+            <Avatar name="Junhyuk Mun" size={52} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 500 }}>Hyeon Park</div>
-              <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>hyeon@moonlight.pro · Founder · KST</div>
+              <div style={{ fontSize: 15, fontWeight: 500 }}>Junhyuk Mun</div>
+              <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Personal Operator · KST</div>
             </div>
             <Button variant={profileEditing ? 'secondary' : 'outline'} size="sm" onClick={() => setProfileEditing(v => !v)}>
               {profileEditing ? 'Editing' : 'Edit'}

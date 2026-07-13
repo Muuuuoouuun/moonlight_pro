@@ -2,6 +2,8 @@ import { timingSafeEqual } from "crypto";
 
 import { NextResponse } from "next/server.js";
 
+import { classifyWritePersistence } from "./write-response.js";
+
 export const HUB_WRITE_SECRET_HEADER = "x-com-moon-hub-write-secret";
 const DEFAULT_MAX_JSON_BYTES = 64 * 1024;
 
@@ -98,13 +100,32 @@ export function assertHubWriteAllowed(req) {
     }
   }
 
+  if (!expectedSecret) {
+    const classification = classifyWritePersistence({
+      persisted: false,
+      reason: "write-secret-not-configured",
+    });
+
+    return NextResponse.json(
+      {
+        ...classification,
+        error: "Hub write secret is not configured.",
+      },
+      { status: classification.httpStatus },
+    );
+  }
+
+  const classification = classifyWritePersistence({
+    persisted: false,
+    reason: "unauthorized",
+  });
+
   return NextResponse.json(
     {
-      status: "forbidden",
-      error:
-        "Hub write routes require a valid Hub write secret in production.",
+      ...classification,
+      error: "Hub write routes require a valid Hub write secret.",
     },
-    { status: expectedSecret ? 401 : 403 },
+    { status: classification.httpStatus },
   );
 }
 

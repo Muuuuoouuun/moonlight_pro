@@ -9,37 +9,56 @@ const STAGE_TONE = { new: "neutral", qualified: "info", nurturing: "moon", propo
 const CHANNEL_ICON = { "전화/문자": "chat", "방문": "building", "카톡": "chat" };
 
 export function Followups() {
-  const [state, setState] = React.useState({ syncState: "loading", items: [], summary: {} });
+  const [state, setState] = React.useState({ syncState: "loading", items: [], summary: {}, error: null });
   const [logging, setLogging] = React.useState(null); // `${id}:${action}` in-flight
   const [logged, setLogged] = React.useState({}); // id → action label
+  const [logErrors, setLogErrors] = React.useState({}); // id → durable write error
+  const loadRequestRef = React.useRef(0);
 
   const load = React.useCallback(async () => {
-    setState((s) => ({ ...s, syncState: "loading" }));
+    const requestId = loadRequestRef.current + 1;
+    loadRequestRef.current = requestId;
+    setState({ syncState: "loading", items: [], summary: {}, error: null });
     try {
-      const r = await fetch("/api/hub/followups", { cache: "no-store" });
-      const d = await r.json().catch(() => null);
-      if (!r.ok || !d) {
-        setState((s) => ({ ...s, syncState: "error" }));
+      const response = await fetch("/api/hub/followups", { cache: "no-store" });
+      const data = await response.json().catch(() => null);
+      if (loadRequestRef.current !== requestId) return;
+      if (!response.ok || !data || data.status === "error") {
+        setState({
+          syncState: "error",
+          items: [],
+          summary: {},
+          error: data?.error || data?.message || `팔로업 요청 실패 (${response.status})`,
+        });
         return;
       }
       setState({
-        syncState: d.status === "live" ? "live" : "preview",
-        items: Array.isArray(d.items) ? d.items : [],
-        summary: d.summary || {},
+        syncState: data.status === "live" ? "live" : "preview",
+        items: data.status === "live" && Array.isArray(data.items) ? data.items : [],
+        summary: data.status === "live" ? data.summary || {} : {},
+        error: null,
       });
-    } catch {
-      setState((s) => ({ ...s, syncState: "error" }));
+    } catch (error) {
+      if (loadRequestRef.current !== requestId) return;
+      setState({
+        syncState: "error",
+        items: [],
+        summary: {},
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }, []);
 
   React.useEffect(() => {
     load();
+    return () => { loadRequestRef.current += 1; };
   }, [load]);
 
   const logOutcome = async (item, action, label) => {
     setLogging(`${item.id}:${action}`);
+    setLogErrors((errors) => ({ ...errors, [item.id]: null }));
     try {
-      await fetch("/api/integrations/outcomes/record", {
+      const response = await fetch("/api/integrations/outcomes/record", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -51,15 +70,26 @@ export function Followups() {
           note: `${item.name} · ${item.why}`,
         }),
       });
+      const data = await response.json().catch(() => null);
+      if (!(response.ok && data?.status === "saved")) {
+        setLogErrors((errors) => ({
+          ...errors,
+          [item.id]: data?.error || data?.message || data?.reason || `결과 기록 실패 (${response.status})`,
+        }));
+        return;
+      }
       setLogged((m) => ({ ...m, [item.id]: label }));
-    } catch {
-      /* non-fatal */
+    } catch (error) {
+      setLogErrors((errors) => ({
+        ...errors,
+        [item.id]: error instanceof Error ? error.message : String(error),
+      }));
     } finally {
       setLogging(null);
     }
   };
 
-  const { syncState, items, summary } = state;
+  const { syncState, items, summary, error } = state;
 
   return (
     <div className="hub-page" style={{ padding: "var(--section-gap)", display: "flex", flexDirection: "column", gap: "var(--gap)", maxWidth: 1100 }}>
@@ -75,15 +105,36 @@ export function Followups() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="ghost" size="sm" icon="runs" onClick={load}>새로고침</Button>
+        <Button variant="ghost" size="sm" icon="runs" onClick={load} disabled={syncState === "loading"}>새로고침</Button>
       </div>
 
       <Card pad={false} className="hub-table-card">
-        {items.length === 0 ? (
+        {syncState === "loading" ? (
           <EmptyState
             icon="rhythm"
-            title={syncState === "live" ? "오늘 챙길 팔로업이 없습니다" : "팔로업 데이터 없음"}
-            description={syncState === "live" ? "정체된 리드·딜이 생기면 여기에 우선순위로 뜹니다." : "리드·딜이 쌓이고 Supabase가 연결되면 표시됩니다."}
+            title="팔로업 원장 확인 중"
+            description="오늘 연락할 실제 리드와 딜을 확인하고 있습니다."
+          />
+        ) : syncState === "error" ? (
+          <div role="alert">
+            <EmptyState
+              icon="signal"
+              title="팔로업 원장을 불러오지 못했습니다"
+              description={error || "실패한 읽기에서는 이전 팔로업과 결과 버튼을 표시하지 않습니다."}
+              action={<Button variant="outline" size="sm" onClick={load}>다시 시도</Button>}
+            />
+          </div>
+        ) : syncState === "preview" ? (
+          <EmptyState
+            icon="rhythm"
+            title="팔로업 원장 연결 필요"
+            description="Supabase 리드·딜 원장을 연결하면 오늘의 팔로업이 표시됩니다."
+          />
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon="rhythm"
+            title="오늘 챙길 팔로업이 없습니다"
+            description="연결된 원장에 정체된 리드·딜이 생기면 여기에 우선순위로 뜹니다."
           />
         ) : (
           items.map((item, i) => (
@@ -124,10 +175,16 @@ export function Followups() {
                       size="xs"
                       onClick={() => logOutcome(item, a.action, a.label)}
                       active={logging === `${item.id}:${a.action}`}
+                      disabled={Boolean(logging)}
                     >
                       {logging === `${item.id}:${a.action}` ? "…" : a.label}
                     </Button>
                   ))
+                )}
+                {logErrors[item.id] && (
+                  <span role="alert" style={{ fontSize: 11.5, color: "var(--danger)", marginLeft: 4 }}>
+                    {logErrors[item.id]}
+                  </span>
                 )}
               </div>
             </div>

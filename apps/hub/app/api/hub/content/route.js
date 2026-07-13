@@ -11,9 +11,37 @@ import {
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { insertSupabaseRecord, updateSupabaseRecord } from "@/lib/server-write";
 import { eqFilter } from "@/lib/server-read";
+import { classifyWritePersistence } from "@/lib/write-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+function writeResponse(persistence, details = {}, options) {
+  const classification = classifyWritePersistence(persistence, options);
+
+  return NextResponse.json(
+    {
+      ...details,
+      ...classification,
+    },
+    { status: classification.httpStatus },
+  );
+}
+
+async function writeInputError(response) {
+  const details = await response.json().catch(() => ({}));
+  const reason = response.status === 413 ? "payload-too-large" : "invalid-json";
+
+  return writeResponse({ persisted: false, reason }, details);
+}
+
+function markPartialPersistence(persistence) {
+  return {
+    ...persistence,
+    persisted: false,
+    partialPersisted: true,
+  };
+}
 
 export async function GET() {
   try {
@@ -43,7 +71,14 @@ export async function POST(req) {
 
     const parsed = await readHubWriteJson(req, { maxBytes: 256 * 1024 });
     if (parsed.error) {
-      return parsed.error;
+      return writeInputError(parsed.error);
+    }
+
+    if (!parsed.data || typeof parsed.data !== "object" || Array.isArray(parsed.data)) {
+      return writeResponse(
+        { persisted: false, reason: "validation" },
+        { error: "Request body must be a JSON object." },
+      );
     }
 
     const action = typeof parsed.data?.action === "string"
@@ -54,26 +89,24 @@ export async function POST(req) {
       const handoff = buildContentHandoffRecord(parsed.data);
 
       if (!handoff.variantId) {
-        return NextResponse.json(
+        return writeResponse(
+          { persisted: false, reason: "validation" },
           {
-            status: "error",
             error: "variantId is required to record a content handoff.",
           },
-          { status: 400 },
         );
       }
 
       if (!handoff.workspaceId) {
-        return NextResponse.json(
+        return writeResponse(
+          { persisted: false, reason: "missing-workspace" },
           {
-            status: "preview",
-            message: "Workspace ID is not configured yet. Content handoff is preview only.",
+            message: "Workspace ID is required before a content handoff can be saved.",
             contentId: handoff.contentId,
             variantId: handoff.variantId,
             logId: handoff.logId,
             event: handoff.event,
           },
-          { status: 202 },
         );
       }
 
@@ -93,10 +126,17 @@ export async function POST(req) {
       const persisted = logPersistence.persisted && assetPersistence.persisted;
 
       if (!persisted) {
-        return NextResponse.json(
+        const failedPersistence = !logPersistence.persisted
+          ? logPersistence
+          : assetPersistence;
+        const partialPersisted = logPersistence.persisted && !assetPersistence.persisted;
+
+        return writeResponse(
+          partialPersisted
+            ? markPartialPersistence(failedPersistence)
+            : failedPersistence,
           {
-            status: "preview",
-            message: "Content handoff payload is valid, but persistence is not configured or failed.",
+            message: "Content handoff persistence failed.",
             contentId: handoff.contentId,
             variantId: handoff.variantId,
             logId: handoff.logId,
@@ -106,75 +146,83 @@ export async function POST(req) {
               log: logPersistence,
               asset: assetPersistence,
             },
+            ...(partialPersisted
+              ? {
+                  partialWrite: {
+                    persisted: ["publish_logs"],
+                    failed: "content_assets",
+                  },
+                }
+              : {}),
           },
-          { status: 202 },
         );
       }
 
-      return NextResponse.json({
-        status: "logged",
-        message: "Content handoff recorded in Supabase.",
-        contentId: handoff.contentId,
-        variantId: handoff.variantId,
-        logId: handoff.logId,
-        assetId: asset?.assetId || null,
-        event: handoff.event,
-        persistence: {
-          log: logPersistence,
-          asset: assetPersistence,
+      return writeResponse(
+        { persisted: true, reason: "ok" },
+        {
+          message: "Content handoff recorded in Supabase.",
+          contentId: handoff.contentId,
+          variantId: handoff.variantId,
+          logId: handoff.logId,
+          assetId: asset?.assetId || null,
+          event: handoff.event,
+          persistence: {
+            log: logPersistence,
+            asset: assetPersistence,
+          },
         },
-      });
+      );
     }
 
     if (action === "campaign") {
       const campaign = buildCampaignRecord(parsed.data);
 
       if (!campaign.workspaceId) {
-        return NextResponse.json(
+        return writeResponse(
+          { persisted: false, reason: "missing-workspace" },
           {
-            status: "preview",
-            message: "Workspace ID is not configured yet. Campaign is preview only.",
+            message: "Workspace ID is required before a campaign can be saved.",
             campaignId: campaign.campaignId,
             campaign: campaign.record,
           },
-          { status: 202 },
         );
       }
 
       const persistence = await insertSupabaseRecord("campaigns", campaign.record);
 
       if (!persistence.persisted) {
-        return NextResponse.json(
+        return writeResponse(
+          persistence,
           {
-            status: "preview",
-            message: "Campaign payload is valid, but persistence is not configured or failed.",
+            message: "Campaign persistence failed.",
             campaignId: campaign.campaignId,
             campaign: campaign.record,
             persistence,
           },
-          { status: 202 },
         );
       }
 
-      return NextResponse.json({
-        status: "saved",
-        message: "Campaign saved to Supabase.",
-        campaignId: campaign.campaignId,
-        campaign: campaign.record,
+      return writeResponse(
         persistence,
-      });
+        {
+          message: "Campaign saved to Supabase.",
+          campaignId: campaign.campaignId,
+          campaign: campaign.record,
+          persistence,
+        },
+      );
     }
 
     const draft = buildContentDraftRecords(parsed.data);
 
     if (!draft.workspaceId) {
-      return NextResponse.json(
+      return writeResponse(
+        { persisted: false, reason: "missing-workspace" },
         {
-          status: "preview",
-          message: "Workspace ID is not configured yet. Content draft is preview only.",
+          message: "Workspace ID is required before a content draft can be saved.",
           ...draft,
         },
-        { status: 202 },
       );
     }
 
@@ -186,36 +234,51 @@ export async function POST(req) {
     const persisted = itemPersistence.persisted && variantPersistence.persisted;
 
     if (!persisted) {
-      return NextResponse.json(
+      const failedPersistence = !itemPersistence.persisted
+        ? itemPersistence
+        : variantPersistence;
+      const partialPersisted = itemPersistence.persisted && !variantPersistence.persisted;
+
+      return writeResponse(
+        partialPersisted
+          ? markPartialPersistence(failedPersistence)
+          : failedPersistence,
         {
-          status: "preview",
-          message: "Content draft payload is valid, but persistence is not configured or failed.",
+          message: "Content draft persistence failed.",
           ...draft,
           persistence: {
             item: itemPersistence,
             variant: variantPersistence,
           },
+          ...(partialPersisted
+            ? {
+                partialWrite: {
+                  persisted: ["content_items"],
+                  failed: "content_variants",
+                },
+              }
+            : {}),
         },
-        { status: 202 },
       );
     }
 
-    return NextResponse.json({
-      status: "saved",
-      message: "Content draft saved to Supabase.",
-      ...draft,
-      persistence: {
-        item: itemPersistence,
-        variant: variantPersistence,
-      },
-    });
-  } catch (error) {
-    return NextResponse.json(
+    return writeResponse(
+      { persisted: true, reason: "ok" },
       {
-        status: "error",
+        message: "Content draft saved to Supabase.",
+        ...draft,
+        persistence: {
+          item: itemPersistence,
+          variant: variantPersistence,
+        },
+      },
+    );
+  } catch (error) {
+    return writeResponse(
+      { persisted: false, reason: "mutation-failed" },
+      {
         error: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 },
     );
   }
 }
@@ -229,29 +292,34 @@ export async function PATCH(req) {
 
     const parsed = await readHubWriteJson(req, { maxBytes: 256 * 1024 });
     if (parsed.error) {
-      return parsed.error;
+      return writeInputError(parsed.error);
+    }
+
+    if (!parsed.data || typeof parsed.data !== "object" || Array.isArray(parsed.data)) {
+      return writeResponse(
+        { persisted: false, reason: "validation" },
+        { error: "Request body must be a JSON object." },
+      );
     }
 
     const draft = buildContentDraftUpdateRecords(parsed.data);
 
     if (!draft.contentId || !draft.variantId) {
-      return NextResponse.json(
+      return writeResponse(
+        { persisted: false, reason: "validation" },
         {
-          status: "error",
           error: "contentId and variantId are required to update a content draft.",
         },
-        { status: 400 },
       );
     }
 
     if (!draft.workspaceId) {
-      return NextResponse.json(
+      return writeResponse(
+        { persisted: false, reason: "missing-workspace" },
         {
-          status: "preview",
-          message: "Workspace ID is not configured yet. Content draft update is preview only.",
+          message: "Workspace ID is required before a content draft can be updated.",
           ...draft,
         },
-        { status: 202 },
       );
     }
 
@@ -265,43 +333,74 @@ export async function PATCH(req) {
     ];
 
     const [itemPersistence, variantPersistence] = await Promise.all([
-      updateSupabaseRecord("content_items", itemFilters, draft.itemPatch),
-      updateSupabaseRecord("content_variants", variantFilters, draft.variantPatch),
+      updateSupabaseRecord(
+        "content_items",
+        itemFilters,
+        draft.itemPatch,
+        { returnRepresentation: true, select: "id" },
+      ),
+      updateSupabaseRecord(
+        "content_variants",
+        variantFilters,
+        draft.variantPatch,
+        { returnRepresentation: true, select: "id" },
+      ),
     ]);
 
     const persisted = itemPersistence.persisted && variantPersistence.persisted;
 
     if (!persisted) {
-      return NextResponse.json(
+      const failedPersistence = !itemPersistence.persisted
+        ? itemPersistence
+        : variantPersistence;
+      const partialPersisted = itemPersistence.persisted !== variantPersistence.persisted;
+      const persistedResource = itemPersistence.persisted
+        ? "content_items"
+        : "content_variants";
+      const failedResource = itemPersistence.persisted
+        ? "content_variants"
+        : "content_items";
+
+      return writeResponse(
+        partialPersisted
+          ? markPartialPersistence(failedPersistence)
+          : failedPersistence,
         {
-          status: "preview",
-          message: "Content draft update is valid, but persistence is not configured or failed.",
+          message: "Content draft update persistence failed.",
           ...draft,
           persistence: {
             item: itemPersistence,
             variant: variantPersistence,
           },
+          ...(partialPersisted
+            ? {
+                partialWrite: {
+                  persisted: [persistedResource],
+                  failed: failedResource,
+                },
+              }
+            : {}),
         },
-        { status: 202 },
       );
     }
 
-    return NextResponse.json({
-      status: "saved",
-      message: "Content draft updated in Supabase.",
-      ...draft,
-      persistence: {
-        item: itemPersistence,
-        variant: variantPersistence,
-      },
-    });
-  } catch (error) {
-    return NextResponse.json(
+    return writeResponse(
+      { persisted: true, reason: "ok" },
       {
-        status: "error",
+        message: "Content draft updated in Supabase.",
+        ...draft,
+        persistence: {
+          item: itemPersistence,
+          variant: variantPersistence,
+        },
+      },
+    );
+  } catch (error) {
+    return writeResponse(
+      { persisted: false, reason: "mutation-failed" },
+      {
         error: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 },
     );
   }
 }

@@ -1,55 +1,73 @@
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "crypto";
 
+import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { recordOutreachOutcome } from "@/lib/repositories/outcomes-ledger";
+import { classifyWritePersistence } from "@/lib/write-response";
 
 export const runtime = "nodejs";
 
-function safeEqual(a, b) {
-  const aB = Buffer.from(String(a || ""));
-  const bB = Buffer.from(String(b || ""));
-  return aB.length === bB.length && timingSafeEqual(aB, bB);
+function writeResponse(persistence, details = {}) {
+  const classification = classifyWritePersistence(persistence);
+
+  return NextResponse.json(
+    {
+      ...details,
+      ...classification,
+    },
+    { status: classification.httpStatus },
+  );
 }
 
-// Same-origin dashboard / loop calls are trusted; external/cron use the write-secret.
-// (Same posture as the sheets sync route — single-operator localhost tool.)
-function isSameOrigin(req) {
-  const origin = (req.headers.get("origin") || "").replace(/\/$/, "");
-  if (!origin) return false;
-  const allowed = [process.env.COM_MOON_HUB_URL, process.env.NEXT_PUBLIC_APP_URL]
-    .map((u) => (u || "").trim().replace(/\/$/, ""))
-    .filter(Boolean);
-  try { allowed.push(new URL(req.url).origin); } catch {}
-  return allowed.includes(origin);
-}
+async function writeInputError(response) {
+  const details = await response.json().catch(() => ({}));
+  const reason = response.status === 413 ? "payload-too-large" : "invalid-json";
 
-function authorize(req) {
-  if (isSameOrigin(req)) return { ok: true };
-  const secret = process.env.COM_MOON_HUB_WRITE_SECRET?.trim();
-  if (!secret) return { ok: false, status: 503, reason: "write-secret-not-configured" };
-  const provided = req.headers.get("x-com-moon-hub-write-secret") || "";
-  if (!safeEqual(provided, secret)) return { ok: false, status: 401, reason: "unauthorized" };
-  return { ok: true };
+  return writeResponse({ persisted: false, reason }, details);
 }
 
 export async function POST(req) {
-  const auth = authorize(req);
-  if (!auth.ok) {
-    return NextResponse.json({ status: "error", reason: auth.reason }, { status: auth.status });
+  try {
+    const guard = assertHubWriteAllowed(req);
+    if (guard) {
+      return guard;
+    }
+
+    const parsed = await readHubWriteJson(req);
+    if (parsed.error) {
+      return writeInputError(parsed.error);
+    }
+
+    const body = parsed.data;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return writeResponse(
+        { persisted: false, reason: "validation" },
+        { error: "Request body must be a JSON object." },
+      );
+    }
+
+    const result = await recordOutreachOutcome({
+      leadId: body.leadId || null,
+      dealId: body.dealId || null,
+      companyId: body.companyId || null,
+      play: body.play || null,
+      assetId: body.assetId || null,
+      channel: body.channel || null,
+      action: body.action || "sent",
+      note: body.note || null,
+      occurredAt: body.occurredAt || null,
+    });
+    return writeResponse(
+      result,
+      {
+        result,
+      },
+    );
+  } catch (error) {
+    return writeResponse(
+      { persisted: false, reason: "mutation-failed" },
+      {
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
   }
-
-  const body = await req.json().catch(() => ({}));
-  const result = await recordOutreachOutcome({
-    leadId: body.leadId || null,
-    dealId: body.dealId || null,
-    companyId: body.companyId || null,
-    play: body.play || null,
-    assetId: body.assetId || null,
-    channel: body.channel || null,
-    action: body.action || "sent",
-    note: body.note || null,
-    occurredAt: body.occurredAt || null,
-  });
-
-  return NextResponse.json({ status: result.persisted ? "ok" : "error", result });
 }

@@ -8,6 +8,7 @@ import { randomUUID } from "crypto";
 
 import { eqFilter, fetchSupabaseRows, inFilter, withWorkspaceFilter } from "@/lib/server-read";
 import {
+  callSupabaseRpc,
   insertSupabaseRecord,
   resolveDefaultWorkspaceId,
   updateSupabaseRecord,
@@ -221,70 +222,31 @@ async function promoteCaptureToLead({ workspaceId, id, order }) {
 // the Studio pipeline instead of dying in the queue. work_orders.asset_id IS the idea's
 // content_items id, so approval graduates the idea (status idea→draft) and lands the drafted
 // {title, body} as a content_variants row — Studio/Queue pick it up with zero re-typing.
-// Idempotent: the proposed→approved transition is the lock; only the winning caller writes.
+// Idempotent: the database function locks the work order and owns the whole transaction.
 // Deliberately NOT an outreach outcome — content drafts must never pollute the sales funnel.
-async function approveContentDraft({ workspaceId, id, order }) {
-  const now = new Date().toISOString();
-
-  // transition lock — only the caller that flips proposed→approved materializes.
-  const won = await updateSupabaseRecordReturning(
-    "work_orders",
-    [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)], ["status", eqFilter("proposed")]],
-    { status: "approved", decided_at: now },
-  );
-  if (!Array.isArray(won)) return { persisted: false, reason: won?.error || "transition-failed" };
-  if (won.length === 0) return { persisted: false, reason: "already-decided" };
-
-  if (!order.assetId) {
-    // Manually-minted draft with no idea link — approved, nothing to materialize.
-    return { persisted: true, reason: "ok", status: "approved", materialized: false };
-  }
-
-  const title =
-    typeof order.body?.title === "string" && order.body.title.trim()
-      ? order.body.title.trim()
-      : order.title;
-  const bodyText = typeof order.body?.body === "string" ? order.body.body : "";
-  const variantId = randomUUID();
-
-  // Draft body → content_variants (shape mirrors content-ledger buildContentDraftRecords;
-  // variant_type 'blog' = the Council's Korean essay draft, channel Web).
-  const variant = await insertSupabaseRecord("content_variants", {
-    id: variantId,
-    workspace_id: workspaceId,
-    content_id: order.assetId,
-    variant_type: "blog",
-    title,
-    body: bodyText,
-    summary: null,
-    excerpt: bodyText ? bodyText.slice(0, 200) : null,
-    status: "draft",
-    slug: null,
-    scheduled_at: null,
-    visibility: "private",
-    meta: {
-      origin: "content-flywheel",
-      work_order_id: id,
-      run_id: order.runId || null,
-      brand_key: order.body?.brandKey || null,
-      model: order.body?.model || null,
-    },
-    created_at: now,
-    updated_at: now,
+async function approveContentDraft({ workspaceId, id }) {
+  const result = await callSupabaseRpc("approve_content_draft_work_order", {
+    p_workspace_id: workspaceId,
+    p_work_order_id: id,
   });
-  if (!variant.persisted) {
-    // The order IS approved, but the Studio write failed — surface it rather than hide it.
-    return { persisted: true, reason: "approved-unmaterialized", status: "approved", materialized: false, variantError: variant.reason };
-  }
+  if (!result.persisted) return result;
 
-  // Graduate the idea so it leaves the idea queue and shows up as a Studio draft.
-  await updateSupabaseRecord(
-    "content_items",
-    [["id", eqFilter(order.assetId)], ["workspace_id", eqFilter(workspaceId)]],
-    { status: "draft", next_action: "Studio에서 초안 검토 후 발행 준비", updated_at: now },
-  );
+  const data = result.data && typeof result.data === "object" ? result.data : null;
+  if (!data) return { persisted: false, reason: "invalid-rpc-response" };
 
-  return { persisted: true, reason: "ok", status: "approved", materialized: true, variantId };
+  const materialized = data.materialized === true;
+  const status = typeof data.status === "string" ? data.status : null;
+  const persisted = materialized && status === "approved";
+
+  return {
+    persisted,
+    reason: persisted ? (data.reason || "ok") : (data.reason || "not-materialized"),
+    status,
+    materialized,
+    variantId: data.variant_id || null,
+    contentId: data.content_id || null,
+    idempotent: data.idempotent === true,
+  };
 }
 
 // Operator decision: approve / dismiss / mark executed. Never auto-called — this IS the 1-click gate.
@@ -321,8 +283,9 @@ export async function decideWorkOrder({
   // Approved content-draft → materialize into the Studio pipeline (see approveContentDraft).
   if (status === "approved") {
     const order = await getWorkOrderById({ workspaceId, id });
-    if (order && order.kind === "content-draft") {
-      return approveContentDraft({ workspaceId, id, order });
+    if (!order) return { persisted: false, reason: "not-found" };
+    if (order.kind === "content-draft") {
+      return approveContentDraft({ workspaceId, id });
     }
   }
 

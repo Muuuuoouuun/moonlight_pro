@@ -4,7 +4,6 @@ import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, IconButton, Button, Progress, EmptyState } from "../hub-primitives";
-import { DECISIONS as FALLBACK_DECISIONS, RITUALS as FALLBACK_RITUALS } from "../hub-data";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const EN_MONTH = new Intl.DateTimeFormat('en-US', { month: 'long' });
@@ -48,13 +47,6 @@ function buildCalendarWeek(now) {
   };
 }
 
-function buildRoadmapMonths(now) {
-  return Array.from({ length: 4 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    return EN_MONTH.format(d);
-  });
-}
-
 function formatHour(value) {
   const hour = Math.floor(value);
   const minutes = Math.round((value - hour) * 60);
@@ -63,24 +55,34 @@ function formatHour(value) {
 
 function useWorkLedger() {
   const [state, setState] = React.useState({
-    source: 'mock',
-    decisions: FALLBACK_DECISIONS,
-    rituals: FALLBACK_RITUALS,
+    source: null,
+    decisions: [],
+    rituals: [],
     summary: null,
-    syncState: 'mock',
+    syncState: 'loading',
+    error: null,
   });
+  const [refreshToken, setRefreshToken] = React.useState(0);
 
   React.useEffect(() => {
     let active = true;
 
     async function load() {
-      setState((prev) => ({ ...prev, syncState: 'loading' }));
+      setState({ source: null, decisions: [], rituals: [], summary: null, syncState: 'loading', error: null });
       try {
         const response = await fetch('/api/hub/work', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
 
-        if (!active || !response.ok || !data || data.status === 'error') {
-          if (active) setState((prev) => ({ ...prev, syncState: 'mock' }));
+        if (!active) return;
+        if (!response.ok || !data || data.status === 'error') {
+          setState({
+            source: null,
+            decisions: [],
+            rituals: [],
+            summary: null,
+            syncState: 'error',
+            error: data?.error || data?.message || `업무 원장 요청 실패 (${response.status})`,
+          });
           return;
         }
 
@@ -91,34 +93,37 @@ function useWorkLedger() {
             rituals: Array.isArray(data.rituals) ? data.rituals : [],
             summary: data.summary || null,
             syncState: 'live',
+            error: null,
           });
         } else {
-          setState((prev) => ({ ...prev, syncState: 'mock' }));
+          setState({
+            source: data.source || null,
+            decisions: [],
+            rituals: [],
+            summary: null,
+            syncState: 'preview',
+            error: null,
+          });
         }
-      } catch {
-        if (active) setState((prev) => ({ ...prev, syncState: 'mock' }));
+      } catch (error) {
+        if (active) setState({
+          source: null,
+          decisions: [],
+          rituals: [],
+          summary: null,
+          syncState: 'error',
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
 
     load();
     return () => { active = false; };
-  }, []);
+  }, [refreshToken]);
 
-  return state;
+  const refetch = React.useCallback(() => setRefreshToken((value) => value + 1), []);
+  return { ...state, refetch };
 }
-
-const FALLBACK_CALENDAR_EVENTS = [
-  { day: 0, start: 10, end: 11, title: 'Weekly kickoff', tone: 'moon' },
-  { day: 0, start: 14, end: 16, title: 'Moonlight Web v2 — deep work', tone: 'moon' },
-  { day: 1, start: 9, end: 10, title: '뉴스레터 outline', tone: 'moon' },
-  { day: 1, start: 15, end: 16.5, title: '클래스인 2차 미팅', tone: 'company' },
-  { day: 2, start: 11, end: 12, title: 'Council sync', tone: 'info' },
-  { day: 2, start: 16, end: 17, title: '자문 — 정하윤', tone: 'personal' },
-  { day: 3, start: 10, end: 11.5, title: 'Pricing workshop', tone: 'moon' },
-  { day: 4, start: 10, end: 11, title: '클래스인 Discovery', tone: 'company' },
-  { day: 4, start: 16, end: 17, title: '코칭 — Jihoon', tone: 'personal' },
-  { day: 4, start: 11.5, end: 13, title: '뉴스레터 마감', tone: 'warning' },
-];
 
 // Google's event.start is an ISO datetime (or an all-day date) — plot it onto the
 // currently viewed week's grid. Events outside `days` are dropped (paginated by week).
@@ -158,10 +163,14 @@ function useCalendarEvents(days) {
     const params = new URLSearchParams({ timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString() });
 
     fetch(`/api/calendar/google/event?${params.toString()}`, { cache: 'no-store' })
-      .then((r) => r.json().catch(() => null))
-      .then((d) => {
+      .then(async (response) => {
+        const data = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(data?.message || data?.error || `Calendar request failed (${response.status})`);
+        return data;
+      })
+      .then((data) => {
         if (!active) return;
-        setState({ status: d?.status || 'preview', events: Array.isArray(d?.events) ? d.events : [] });
+        setState({ status: data?.status || 'preview', events: Array.isArray(data?.events) ? data.events : [] });
       })
       .catch(() => active && setState({ status: 'error', events: [] }));
 
@@ -184,23 +193,28 @@ export function Calendar() {
   const [gcalMessage, setGcalMessage] = React.useState('');
   const [creating, setCreating] = React.useState(false);
   const focusAppliedRef = React.useRef(false);
-  const [localEvents, setLocalEvents] = React.useState(FALLBACK_CALENDAR_EVENTS);
+  const oauthPopupRef = React.useRef(null);
+  const oauthRefreshRequestedRef = React.useRef(false);
   const viewedDateForFetch = addDays(now, weekOffset * 7);
   const { days: fetchDays } = buildCalendarWeek(viewedDateForFetch);
   const calendarData = useCalendarEvents(fetchDays);
+  const refetchCalendar = calendarData.refetch;
   const isLive = calendarData.status === 'live';
 
-  // Creates a real Google Calendar event when connected; otherwise falls back to a
-  // local-only demo row so the grid still shows something without pretending it's saved.
+  // Create only against the connected Google ledger. A disconnected attempt stays
+  // visible as setup guidance and never mutates the calendar grid.
   const createEvent = React.useCallback(async ({ day, startHour, endHour, title }) => {
-    const targetDay = fetchDays[day] || fetchDays[0];
     if (!isLive) {
-      setLocalEvents((prev) => [...prev, { day, start: startHour, end: endHour, title, tone: 'moon' }]);
-      return;
+      setGcalStatus('preview');
+      setGcalMessage('Google Calendar 연결 후 일정을 추가할 수 있습니다.');
+      return false;
     }
+    const targetDay = fetchDays[day] || fetchDays[0];
     const startAt = new Date(targetDay); startAt.setHours(Math.floor(startHour), (startHour % 1) * 60, 0, 0);
     const endAt = new Date(targetDay); endAt.setHours(Math.floor(endHour), (endHour % 1) * 60, 0, 0);
     setCreating(true);
+    setGcalStatus('saving');
+    setGcalMessage('Google Calendar에 일정을 저장하고 있습니다.');
     try {
       const res = await fetch('/api/calendar/google/event', {
         method: 'POST',
@@ -208,13 +222,23 @@ export function Calendar() {
         body: JSON.stringify({ title, startAt: startAt.toISOString(), endAt: endAt.toISOString() }),
       });
       const data = await res.json().catch(() => null);
-      if (data?.status === 'saved' || data?.status === 'updated') {
-        calendarData.refetch();
+      if (res.ok && (data?.status === 'saved' || data?.status === 'updated')) {
+        setGcalStatus('connected');
+        setGcalMessage('Google Calendar에 저장했습니다.');
+        refetchCalendar();
+        return true;
       }
+      setGcalStatus('error');
+      setGcalMessage(data?.message || data?.error || data?.reason || `일정 저장 실패 (${res.status})`);
+      return false;
+    } catch (error) {
+      setGcalStatus('error');
+      setGcalMessage(error instanceof Error ? error.message : String(error));
+      return false;
     } finally {
       setCreating(false);
     }
-  }, [fetchDays, isLive, calendarData]);
+  }, [fetchDays, isLive, refetchCalendar]);
 
   React.useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60000);
@@ -223,19 +247,62 @@ export function Calendar() {
 
   React.useEffect(() => {
     const minutes = Number(searchParams.get('focus'));
-    if (!minutes || focusAppliedRef.current) return;
+    if (!minutes || focusAppliedRef.current || calendarData.status !== 'live') return;
     const week = buildCalendarWeek(now);
     setWeekOffset(0);
     focusAppliedRef.current = true;
-    createEvent({
+    void createEvent({
       day: week.todayIndex >= 0 ? week.todayIndex : 0,
       startHour: 13,
       endHour: 13 + Math.max(15, minutes) / 60,
       title: `${minutes}m focus block`,
+    }).then((saved) => {
+      if (saved) router.replace(pathname);
     });
-    router.replace(pathname);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [now, searchParams]);
+  }, [calendarData.status, createEvent, now, pathname, router, searchParams]);
+
+  const refreshAfterOAuth = React.useCallback(() => {
+    if (!oauthPopupRef.current || oauthRefreshRequestedRef.current) return;
+    oauthRefreshRequestedRef.current = true;
+    oauthPopupRef.current = null;
+    setGcalStatus('idle');
+    setGcalMessage('Google Calendar 연결 상태를 다시 확인하고 있습니다.');
+    refetchCalendar();
+  }, [refetchCalendar]);
+
+  React.useEffect(() => {
+    if (gcalStatus !== 'connecting') return undefined;
+
+    const onFocus = () => refreshAfterOAuth();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshAfterOAuth();
+    };
+    const popupCloseTimer = window.setInterval(() => {
+      if (oauthPopupRef.current?.closed) refreshAfterOAuth();
+    }, 750);
+
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.clearInterval(popupCloseTimer);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [gcalStatus, refreshAfterOAuth]);
+
+  const openOAuthPopup = React.useCallback((url) => {
+    const popup = window.open(url, '_blank');
+    if (!popup) {
+      setGcalStatus('error');
+      setGcalMessage('Google OAuth 팝업을 열지 못했습니다. 브라우저 팝업 허용 설정을 확인해 주세요.');
+      return false;
+    }
+    oauthPopupRef.current = popup;
+    oauthRefreshRequestedRef.current = false;
+    setGcalStatus('connecting');
+    setGcalMessage('Google OAuth 창을 열었습니다. 완료 후 이 창으로 돌아오세요.');
+    return true;
+  }, []);
 
   async function connectGoogleCalendar() {
     setGcalStatus('connecting');
@@ -246,9 +313,7 @@ export function Calendar() {
       try { data = await response.clone().json(); } catch { data = null; }
 
       if (data && data.url) {
-        window.open(data.url, '_blank');
-        setGcalStatus('connecting');
-        setGcalMessage('Google OAuth 창을 열었습니다.');
+        openOAuthPopup(data.url);
         return;
       }
 
@@ -260,9 +325,7 @@ export function Calendar() {
 
       // Fallback: route may redirect (3xx opaque) — treat as OAuth launch
       if (response.type === 'opaqueredirect' || response.redirected || response.status === 0) {
-        window.open('/api/calendar/google/connect', '_blank');
-        setGcalStatus('connecting');
-        setGcalMessage('Google OAuth 창을 열었습니다.');
+        openOAuthPopup('/api/calendar/google/connect');
         return;
       }
 
@@ -274,31 +337,40 @@ export function Calendar() {
     }
   }
 
-  const gcalLabel = gcalStatus === 'connected'
-    ? '● Google Calendar synced 2m ago'
-    : gcalStatus === 'connecting'
+  const effectiveGcalStatus = ['connecting', 'saving', 'error', 'preview'].includes(gcalStatus)
+    ? gcalStatus
+    : isLive
+    ? 'connected'
+    : gcalStatus;
+  const gcalLabel = effectiveGcalStatus === 'connected'
+    ? '● Google Calendar connected'
+    : effectiveGcalStatus === 'connecting'
     ? '● Connecting…'
-    : gcalStatus === 'preview'
-    ? '● Preview only (env missing)'
-    : gcalStatus === 'error'
+    : effectiveGcalStatus === 'saving'
+    ? '● Saving…'
+    : effectiveGcalStatus === 'preview'
+    ? '● Connection required'
+    : effectiveGcalStatus === 'error'
     ? '● Connect failed'
     : '● Not connected';
-  const gcalColor = gcalStatus === 'connected'
+  const gcalColor = effectiveGcalStatus === 'connected'
     ? 'var(--success)'
-    : gcalStatus === 'preview'
+    : effectiveGcalStatus === 'preview' || effectiveGcalStatus === 'saving' || effectiveGcalStatus === 'connecting'
     ? 'var(--warning)'
-    : gcalStatus === 'error'
+    : effectiveGcalStatus === 'error'
     ? 'var(--danger)'
     : 'var(--fg-faint)';
 
   const hours = Array.from({ length: 12 }, (_, i) => 8 + i);
   const { labels: dayLabels, weekLabel, todayIndex } = buildCalendarWeek(viewedDateForFetch);
-  const gridEvents = isLive ? mapGoogleEventsToGrid(calendarData.events, fetchDays) : localEvents;
+  const gridEvents = isLive ? mapGoogleEventsToGrid(calendarData.events, fetchDays) : [];
   const calBadge = calendarData.status === 'live'
     ? { label: 'live', color: 'var(--success)' }
     : calendarData.status === 'loading'
     ? { label: 'syncing', color: 'var(--warning)' }
-    : { label: 'mock', color: 'var(--fg-faint)' };
+    : calendarData.status === 'error'
+    ? { label: 'error', color: 'var(--danger)' }
+    : { label: 'setup', color: 'var(--warning)' };
   const addEvent = () => {
     createEvent({
       day: todayIndex >= 0 ? todayIndex : 0,
@@ -322,13 +394,15 @@ export function Calendar() {
             <span className="mono" style={{ color: calBadge.color }}>{calBadge.label}</span>
             <span style={{ color: 'var(--fg-faint)' }}>·</span>
             <span style={{ color: gcalColor }}>{gcalLabel}</span>
-            <Button variant="ghost" size="xs" onClick={connectGoogleCalendar}>
-              {gcalStatus === 'connecting' ? 'Connecting…' : isLive ? 'Reconnect' : 'Connect Google Calendar'}
+            <Button variant="ghost" size="xs" onClick={connectGoogleCalendar} disabled={effectiveGcalStatus === 'connecting' || effectiveGcalStatus === 'saving'}>
+              {effectiveGcalStatus === 'connecting' ? 'Connecting…' : effectiveGcalStatus === 'saving' ? 'Saving…' : isLive ? 'Reconnect' : 'Connect Google Calendar'}
             </Button>
           </div>
-          {gcalMessage && (
-            <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>{gcalMessage}</div>
-          )}
+          {gcalMessage && effectiveGcalStatus === 'error' ? (
+            <div role="alert" className="mono" style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{gcalMessage}</div>
+          ) : gcalMessage ? (
+            <div role="status" className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>{gcalMessage}</div>
+          ) : null}
         </div>
         <div style={{ flex: 1 }} />
         <div className="hub-toolbar" style={{ display: 'flex', gap: 6 }}>
@@ -341,82 +415,87 @@ export function Calendar() {
             <button key={v} onClick={() => setViewMode(v)} style={{ padding: '4px 10px', fontSize: 11.5, borderRadius: 4, color: v === viewMode ? 'var(--fg)' : 'var(--fg-faint)', background: v === viewMode ? 'var(--surface-3)' : 'transparent' }}>{v}</button>
           ))}
         </div>
-        <Button variant="primary" size="sm" icon="plus" onClick={addEvent} disabled={creating}>Event</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={addEvent} disabled={creating || !isLive} title={!isLive ? 'Google Calendar 연결 후 사용할 수 있습니다.' : undefined}>Event</Button>
       </div>
 
       <Card pad={false} className="hub-table-card" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', borderBottom: '1px solid var(--line-soft)' }}>
-          <div />
-          {dayLabels.map((d, i) => (
-            <div key={d} style={{ padding: '10px 12px', borderLeft: '1px solid var(--line-soft)', fontSize: 11.5, color: i === todayIndex ? 'var(--fg)' : 'var(--fg-muted)' }}>
-              {d}
-              {i === todayIndex && <span style={{ marginLeft: 6, color: 'var(--moon-300)' }}>· Today</span>}
-            </div>
-          ))}
-        </div>
-        <div className="scroll-y" style={{ flex: 1 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', position: 'relative' }}>
-            <div>
-              {hours.map(h => (
-                <div key={h} className="mono" style={{ height: 52, padding: '4px 10px', fontSize: 10, color: 'var(--fg-faint)', textAlign: 'right' }}>{h}:00</div>
+        {calendarData.status === 'loading' ? (
+          <EmptyState icon="calendar" title="Google Calendar 확인 중" description="연결 상태와 이번 주 일정을 불러오고 있습니다." />
+        ) : calendarData.status === 'error' ? (
+          <EmptyState
+            icon="signal"
+            title="Google Calendar를 불러오지 못했습니다"
+            description="실패한 읽기를 샘플 일정으로 대체하지 않았습니다. 연결 상태를 확인해 주세요."
+            action={<Button variant="outline" size="sm" onClick={calendarData.refetch}>다시 시도</Button>}
+          />
+        ) : !isLive ? (
+          <EmptyState
+            icon="calendar"
+            title="Google Calendar 연결 필요"
+            description="연결 전에는 일정을 표시하거나 로컬 일정으로 대신 저장하지 않습니다."
+            action={<Button variant="primary" size="sm" onClick={connectGoogleCalendar}>Connect Google Calendar</Button>}
+          />
+        ) : gridEvents.length === 0 ? (
+          <EmptyState
+            icon="calendar"
+            title="이번 주 일정이 없습니다"
+            description="Google Calendar는 연결되어 있으며, 이 주간 범위에 표시할 일정이 없습니다."
+            action={<Button variant="primary" size="sm" icon="plus" onClick={addEvent} disabled={creating}>Event</Button>}
+          />
+        ) : (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', borderBottom: '1px solid var(--line-soft)' }}>
+              <div />
+              {dayLabels.map((d, i) => (
+                <div key={d} style={{ padding: '10px 12px', borderLeft: '1px solid var(--line-soft)', fontSize: 11.5, color: i === todayIndex ? 'var(--fg)' : 'var(--fg-muted)' }}>
+                  {d}
+                  {i === todayIndex && <span style={{ marginLeft: 6, color: 'var(--moon-300)' }}>· Today</span>}
+                </div>
               ))}
             </div>
-            {dayLabels.map((_, di) => (
-              <div key={di} style={{ borderLeft: '1px solid var(--line-soft)', position: 'relative' }}>
-                {hours.map(h => <div key={h} style={{ height: 52, borderBottom: '1px solid var(--line-soft)' }} />)}
-                {gridEvents.filter(e => e.day === di).map((e, ei) => {
-                  const top = (e.start - 8) * 52;
-                  const height = (e.end - e.start) * 52 - 2;
-                  return (
-                    <div key={ei} style={{
-                      position: 'absolute', top, left: 4, right: 4, height,
-                      background: toneBg[e.tone], color: toneFg[e.tone],
-                      border: `1px solid ${toneBd[e.tone]}`,
-                      borderLeft: `2px solid ${toneFg[e.tone]}`,
-                      borderRadius: 6, padding: '6px 8px',
-                      fontSize: 11, fontWeight: 500, overflow: 'hidden',
-                    }}>
-                      {e.title}
-                      <div className="mono" style={{ fontSize: 10.5, opacity: 0.7, marginTop: 3 }}>{formatHour(e.start)} – {formatHour(e.end)}</div>
-                    </div>
-                  );
-                })}
+            <div className="scroll-y" style={{ flex: 1 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', position: 'relative' }}>
+                <div>
+                  {hours.map(h => (
+                    <div key={h} className="mono" style={{ height: 52, padding: '4px 10px', fontSize: 10, color: 'var(--fg-faint)', textAlign: 'right' }}>{h}:00</div>
+                  ))}
+                </div>
+                {dayLabels.map((_, di) => (
+                  <div key={di} style={{ borderLeft: '1px solid var(--line-soft)', position: 'relative' }}>
+                    {hours.map(h => <div key={h} style={{ height: 52, borderBottom: '1px solid var(--line-soft)' }} />)}
+                    {gridEvents.filter(e => e.day === di).map((e, eventIndex) => {
+                      const top = (e.start - 8) * 52;
+                      const height = (e.end - e.start) * 52 - 2;
+                      return (
+                        <div key={e.id || `${di}-${eventIndex}-${e.start}`} style={{
+                          position: 'absolute', top, left: 4, right: 4, height,
+                          background: toneBg[e.tone], color: toneFg[e.tone],
+                          border: `1px solid ${toneBd[e.tone]}`,
+                          borderLeft: `2px solid ${toneFg[e.tone]}`,
+                          borderRadius: 6, padding: '6px 8px',
+                          fontSize: 11, fontWeight: 500, overflow: 'hidden',
+                        }}>
+                          {e.title}
+                          <div className="mono" style={{ fontSize: 10.5, opacity: 0.7, marginTop: 3 }}>{formatHour(e.start)} – {formatHour(e.end)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          </>
+        )}
       </Card>
     </div>
   );
 }
 
 export function Decisions() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
-  const { decisions, syncState } = useWorkLedger();
-  const [localDecisions, setLocalDecisions] = React.useState([]);
-  const createdFromQueryRef = React.useRef(false);
-  const createDecision = React.useCallback(() => {
-    const id = `local-decision-${Date.now()}`;
-    const createdAt = new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(new Date());
-    setLocalDecisions(prev => [{
-      id,
-      title: '새 결정 기록',
-      date: createdAt,
-      status: 'Draft',
-      by: 'Me',
-      reason: '맥락, 선택지, 근거를 이어서 적어주세요.',
-      links: 0,
-    }, ...prev]);
-  }, []);
-  React.useEffect(() => {
-    if (searchParams.get('new') !== 'decision' || createdFromQueryRef.current) return;
-    createDecision();
-    createdFromQueryRef.current = true;
-    router.replace(pathname);
-  }, [createDecision, searchParams, router, pathname]);
-  const list = [...localDecisions, ...(Array.isArray(decisions) ? decisions : [])];
+  const { decisions, syncState, error, refetch } = useWorkLedger();
+  const list = syncState === 'live' && Array.isArray(decisions) ? decisions : [];
+  const statusLabel = syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : syncState;
+  const statusColor = syncState === 'live' ? 'var(--success)' : syncState === 'error' ? 'var(--danger)' : 'var(--warning)';
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', maxWidth: 1000, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
@@ -425,23 +504,23 @@ export function Decisions() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Decisions</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch', lineHeight: 1.5 }}>
             실행의 근거가 되는 결정들의 타임라인. 각 결정에는 맥락·선택·근거를 남깁니다.
-            <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-              {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
+            <span className="mono" style={{ marginLeft: 8, color: statusColor }}>
+              {statusLabel}
             </span>
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision</Button>
+        <Button variant="secondary" size="sm" icon="plus" disabled title="결정 쓰기 API가 연결되지 않았습니다.">쓰기 연결 대기</Button>
       </div>
       <div style={{ position: 'relative', paddingLeft: 28 }}>
         <div style={{ position: 'absolute', left: 11, top: 6, bottom: 6, width: 1, background: 'var(--line-soft)' }} />
         {list.length === 0 && (
           <Card>
             <EmptyState
-              icon="decisions"
-              title="결정 기록이 없습니다"
-              description={syncState === 'live' ? 'Supabase decisions 원장에 아직 기록된 결정이 없습니다.' : '중요한 판단을 남기면 타임라인에 쌓입니다.'}
-              action={<Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision</Button>}
+              icon={syncState === 'error' ? 'signal' : 'decisions'}
+              title={syncState === 'loading' ? '결정 원장 확인 중' : syncState === 'error' ? '결정 원장을 불러오지 못했습니다' : syncState === 'preview' ? '결정 원장 연결 필요' : '결정 기록이 없습니다'}
+              description={syncState === 'loading' ? '실제 결정 기록을 확인하고 있습니다.' : syncState === 'error' ? error || '실패한 읽기를 샘플 결정으로 대체하지 않았습니다.' : syncState === 'preview' ? 'Supabase decisions 원장을 연결하면 실제 결정이 표시됩니다.' : '연결된 decisions 원장에 아직 기록된 결정이 없습니다.'}
+              action={syncState === 'error' ? <Button variant="outline" size="sm" onClick={refetch}>다시 시도</Button> : undefined}
             />
           </Card>
         )}
@@ -469,75 +548,33 @@ export function Decisions() {
 }
 
 export function Roadmap() {
-  const months = React.useMemo(() => buildRoadmapMonths(new Date()), []);
-  const [items, setItems] = React.useState(() => [
-    { name: 'Moonlight Web v2 launch', start: 0, len: 1, tone: 'moon', tag: null },
-    { name: '클래스인 Spring Cohort', start: 0.5, len: 1.2, tone: 'company', tag: 'company' },
-    { name: 'Pricing experiment Q2', start: 1, len: 2, tone: 'moon', tag: null },
-    { name: 'Newsletter auto v2', start: 0, len: 0.5, tone: 'moon', tag: null },
-    { name: '개인 브랜드 사이트', start: 1.2, len: 1.5, tone: 'personal', tag: 'personal' },
-    { name: 'Partner referral program', start: 1.5, len: 1.5, tone: 'moon', tag: null },
-    { name: 'Agents Orders v3', start: 2, len: 1, tone: 'moon', tag: null },
-  ]);
-  const draftQ3 = () => {
-    setItems(prev => prev.some(it => it.name === 'Council Q3 draft')
-      ? prev
-      : [...prev, { name: 'Council Q3 draft', start: 3, len: 0.8, tone: 'moon', tag: null }]);
-  };
-  const toneMap = { moon: 'var(--moon-400)', company: 'var(--company)', personal: 'var(--personal)' };
-
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Roadmap</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            Q2 outlook · 7 initiatives
-            <span className="mono" style={{ marginLeft: 8, color: 'var(--fg-faint)' }}>mock</span>
+            프로젝트 마감과 이니셔티브를 시간축으로 보는 운영 화면
+            <span className="mono" style={{ marginLeft: 8, color: 'var(--warning)' }}>setup</span>
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="secondary" size="sm" icon="sparkle" onClick={draftQ3}>Let Council draft Q3</Button>
+        <Button variant="secondary" size="sm" icon="sparkle" disabled title="Roadmap 원장 연결 후 사용할 수 있습니다.">Council 제안 연결 대기</Button>
       </div>
 
-      <Card pad={false} className="hub-table-card">
-        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', borderBottom: '1px solid var(--line-soft)' }}>
-          <div style={{ padding: '10px 14px', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Initiative</div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
-            {months.map(m => (
-              <div key={m} style={{ padding: '10px 14px', fontSize: 11, color: 'var(--fg-faint)', borderLeft: '1px solid var(--line-soft)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{m}</div>
-            ))}
-          </div>
-        </div>
-        {items.map((it, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '220px 1fr', borderBottom: i < items.length - 1 ? '1px solid var(--line-soft)' : 'none', alignItems: 'center' }}>
-            <div style={{ padding: '14px', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12.5 }}>{it.name}</span>
-              {it.tag === 'personal' && <Badge tone="personal" size="xs">P</Badge>}
-              {it.tag === 'company' && <Badge tone="company" size="xs">C</Badge>}
-            </div>
-            <div style={{ position: 'relative', height: 44, display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
-              {months.map((_, mi) => <div key={mi} style={{ borderLeft: '1px solid var(--line-soft)' }} />)}
-              <div style={{
-                position: 'absolute', top: 12, height: 20,
-                left: `calc(${(it.start / months.length) * 100}% + 4px)`,
-                width: `calc(${(it.len / months.length) * 100}% - 8px)`,
-                background: toneMap[it.tone],
-                opacity: 0.85,
-                borderRadius: 6,
-                boxShadow: '0 1px 0 oklch(1 0 0 / 0.1) inset',
-              }} />
-            </div>
-          </div>
-        ))}
+      <Card className="hub-table-card">
+        <EmptyState
+          icon="roadmap"
+          title="Roadmap 원장 연결 필요"
+          description="고정된 샘플 이니셔티브를 제거했습니다. 프로젝트 마감일과 로드맵 원장의 정본 관계가 정해지면 실제 일정만 표시합니다."
+        />
       </Card>
     </div>
   );
 }
 
 export function Rhythm() {
-  const { rituals: liveRituals, summary, syncState } = useWorkLedger();
-  const [checkedRituals, setCheckedRituals] = React.useState(() => new Set());
+  const { rituals: liveRituals, summary, syncState, error, refetch } = useWorkLedger();
   const rituals = Array.isArray(liveRituals) ? liveRituals : [];
 
   const completed = summary?.ritualsCompletedThisWeek ?? rituals.filter(r => r.weeks?.some(v => v === 1)).length;
@@ -561,12 +598,23 @@ export function Rhythm() {
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Rhythm</h2>
         <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
           루틴은 실행의 인프라
-          <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-            {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
+          <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'error' ? 'var(--danger)' : 'var(--warning)' }}>
+            {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : syncState}
           </span>
         </div>
       </div>
 
+      {syncState !== 'live' ? (
+        <Card>
+          <EmptyState
+            icon={syncState === 'error' ? 'signal' : 'rhythm'}
+            title={syncState === 'loading' ? '리듬 원장 확인 중' : syncState === 'error' ? '리듬 원장을 불러오지 못했습니다' : '리듬 원장 연결 필요'}
+            description={syncState === 'loading' ? '실제 루틴과 체크 기록을 확인하고 있습니다.' : syncState === 'error' ? error || '실패한 읽기를 샘플 루틴으로 대체하지 않았습니다.' : 'Supabase routine_checks 원장을 연결하면 실제 주간 리듬이 표시됩니다.'}
+            action={syncState === 'error' ? <Button variant="outline" size="sm" onClick={refetch}>다시 시도</Button> : undefined}
+          />
+        </Card>
+      ) : (
+        <>
       <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>This week</div>
@@ -583,20 +631,18 @@ export function Rhythm() {
 
       <Card pad={false} className="hub-table-card">
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'grid', gridTemplateColumns: '1fr 160px 90px 100px' }}>
-          <span>Ritual</span><span>Last 7 days</span><span>Streak</span><span style={{ textAlign: 'right' }}>Action</span>
+          <span>Ritual</span><span>Last 7 days</span><span>Streak</span><span style={{ textAlign: 'right' }}>Mode</span>
         </div>
         {rituals.length === 0 && (
           <EmptyState
             icon="rhythm"
             title="루틴 체크 기록이 없습니다"
-            description={syncState === 'live' ? 'Supabase routine_checks 원장이 비어 있습니다.' : '체크인을 기록하면 주간 리듬과 streak가 계산됩니다.'}
+            description="Supabase routine_checks 원장이 비어 있습니다."
             style={{ minHeight: 220 }}
           />
         )}
         {rituals.map((r, i) => {
-          const isChecked = checkedRituals.has(r.id || r.name || i);
           const weeks = Array.isArray(r.weeks) ? [...r.weeks] : [0,0,0,0,0,0,0];
-          if (isChecked) weeks[weeks.length - 1] = 1;
           return (
             <div key={r.id || r.name || i} style={{ padding: '14px 16px', borderBottom: i < rituals.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'grid', gridTemplateColumns: '1fr 160px 90px 100px', alignItems: 'center' }}>
               <span style={{ fontSize: 13 }}>{r.name}</span>
@@ -611,25 +657,14 @@ export function Rhythm() {
               </div>
               <span className="mono" style={{ fontSize: 12, color: (r.streak || 0) > 10 ? 'var(--success)' : 'var(--fg-muted)' }}>{r.streak || 0}d</span>
               <div style={{ textAlign: 'right' }}>
-                <Button
-                  variant={isChecked ? 'secondary' : 'ghost'}
-                  size="xs"
-                  onClick={() => {
-                    const key = r.id || r.name || i;
-                    setCheckedRituals(prev => {
-                      const next = new Set(prev);
-                      next.has(key) ? next.delete(key) : next.add(key);
-                      return next;
-                    });
-                  }}
-                >
-                  {isChecked ? 'Checked' : 'Check in'}
-                </Button>
+                <Badge tone="neutral" size="xs">읽기 전용</Badge>
               </div>
             </div>
           );
         })}
       </Card>
+        </>
+      )}
     </div>
   );
 }

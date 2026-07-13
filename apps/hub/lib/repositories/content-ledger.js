@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 
+import { normalizeContentVariantType } from "@/lib/content-variant-contract";
 import {
   fetchSupabaseRows,
   inFilter,
@@ -19,16 +20,6 @@ const CAMPAIGN_STATUS_LABEL = {
   completed: "Completed",
 };
 const ASSET_TYPES = ["image", "html", "zip", "thumbnail", "source"];
-const VARIANT_TYPES = [
-  "newsletter",
-  "blog",
-  "blog_insight",
-  "card_news",
-  "social_post",
-  "x_thread",
-  "reels_script",
-  "landing_copy",
-];
 
 const ITEM_STATUS_LABEL = {
   idea: "Inbox",
@@ -41,24 +32,18 @@ const ITEM_STATUS_LABEL = {
 
 const VARIANT_KIND_LABEL = {
   card_news: "Carousel",
-  blog: "Blog",
   blog_insight: "Insight",
   newsletter: "Newsletter",
-  social_post: "Thread",
   x_thread: "Thread",
   reels_script: "Reels",
-  landing_copy: "Blog",
 };
 
 const VARIANT_CHANNEL_LABEL = {
   card_news: "Instagram",
-  blog: "Web",
   blog_insight: "Web",
   newsletter: "Email",
-  social_post: "X",
   x_thread: "X",
   reels_script: "Reels",
-  landing_copy: "Web",
 };
 const CANONICAL_BRAND_ORDER = {
   sinabro: 10,
@@ -130,22 +115,6 @@ function normalizeCampaignStatus(value, fallback = "draft") {
 function normalizeAssetType(value, fallback = "source") {
   const normalized = normalizeString(value, fallback).toLowerCase();
   return ASSET_TYPES.includes(normalized) ? normalized : fallback;
-}
-
-function normalizeVariantType(value, fallback = "blog_insight") {
-  const normalized = normalizeString(value, fallback).toLowerCase();
-  const aliases = {
-    insight: "blog",
-    blog_insight: "blog",
-    carousel: "card_news",
-    thread: "social_post",
-    x_thread: "social_post",
-    reels: "reels_script",
-    reel: "reels_script",
-    video_script: "reels_script",
-  };
-  const candidate = aliases[normalized] || normalized;
-  return VARIANT_TYPES.includes(candidate) ? candidate : fallback;
 }
 
 function normalizeVisibility(value) {
@@ -652,7 +621,7 @@ export function buildContentDraftRecords(payload = {}) {
   const timestamp = new Date().toISOString();
   const contentId = normalizeString(payload.contentId) || randomUUID();
   const variantId = normalizeString(payload.variantId) || randomUUID();
-  const variantType = normalizeVariantType(payload.variantType);
+  const variantType = normalizeContentVariantType(payload.variantType);
   const title = normalizeString(payload.title, "Untitled content draft");
   const summary = normalizeNullableString(payload.summary);
   const sourceIdea = normalizeString(payload.sourceIdea) || title;
@@ -712,7 +681,7 @@ export function buildContentDraftUpdateRecords(payload = {}) {
   const timestamp = new Date().toISOString();
   const contentId = normalizeString(payload.contentId);
   const variantId = normalizeString(payload.variantId);
-  const variantType = normalizeVariantType(payload.variantType);
+  const variantType = normalizeContentVariantType(payload.variantType);
   const title = normalizeString(payload.title, "Untitled content draft");
   const summary = normalizeNullableString(payload.summary);
   const visibility = normalizeVisibility(payload.visibility);
@@ -771,7 +740,7 @@ export function buildContentHandoffRecord(payload = {}) {
   );
   const channel = normalizeString(
     payload.channel || payload.targetChannel,
-    VARIANT_CHANNEL_LABEL[normalizeVariantType(payload.variantType)] || "Web",
+    VARIANT_CHANNEL_LABEL[normalizeContentVariantType(payload.variantType)] || "Web",
   );
 
   const logRecord = {

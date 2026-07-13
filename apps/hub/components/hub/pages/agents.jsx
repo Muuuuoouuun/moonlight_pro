@@ -667,7 +667,7 @@ const OFFICE_AGENTS = [
   { key: 'operator', label: 'Operator', role: '자동화·실행', color: 'var(--success)', x: 0, y: 3, task: 'Gmail 태그 규칙 튜닝', status: 'running', mood: '작업' },
   { key: 'council', label: 'Council', role: '합의·결정', color: 'var(--company)', x: 2, y: 3, task: 'Thread 예약 발행 검토', status: 'meeting', mood: '논의' },
   { key: 'guru', label: 'Guru', role: '영업 멘토·딜 코칭', color: 'var(--moon-400)', x: 4, y: 1, task: '클래스인 딜 진단', status: 'reading', mood: '코칭' },
-  { key: 'you', label: 'Hyeon (나)', role: 'Founder', color: 'var(--moon-100)', x: 4, y: 3, task: '브리핑 읽는 중', status: 'idle', mood: '휴식' },
+  { key: 'you', label: 'Junhyuk Mun (나)', role: 'Operator', color: 'var(--moon-100)', x: 4, y: 3, task: '브리핑 읽는 중', status: 'idle', mood: '휴식' },
 ];
 
 const ROOM = [

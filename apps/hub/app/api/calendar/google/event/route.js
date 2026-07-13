@@ -7,9 +7,29 @@ import {
 } from "@/lib/google-calendar";
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { classifyWritePersistence } from "@/lib/write-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+function writeResponse(persistence, details = {}) {
+  const classification = classifyWritePersistence(persistence);
+
+  return NextResponse.json(
+    {
+      ...details,
+      ...classification,
+    },
+    { status: classification.httpStatus },
+  );
+}
+
+async function writeInputError(response) {
+  const details = await response.json().catch(() => ({}));
+  const reason = response.status === 413 ? "payload-too-large" : "invalid-json";
+
+  return writeResponse({ persisted: false, reason }, details);
+}
 
 function normalizeBoolean(value) {
   return value === true || value === "true" || value === "on";
@@ -104,19 +124,35 @@ export async function POST(req) {
 
     const parsed = await readHubWriteJson(req);
     if (parsed.error) {
-      return parsed.error;
+      return writeInputError(parsed.error);
+    }
+
+    if (!parsed.data || typeof parsed.data !== "object" || Array.isArray(parsed.data)) {
+      return writeResponse(
+        { persisted: false, reason: "validation" },
+        { error: "Request body must be a JSON object." },
+      );
     }
 
     const payload = buildPreview(parsed.data);
 
     if (!payload.workspaceId) {
-      return NextResponse.json(
+      return writeResponse(
+        { persisted: false, reason: "missing-workspace" },
         {
-          status: "preview",
-          message: "Workspace ID is not configured yet. Preview only.",
+          message: "Workspace ID is required before a Google Calendar event can be saved.",
           preview: payload,
         },
-        { status: 202 },
+      );
+    }
+
+    if (!payload.startAt) {
+      return writeResponse(
+        { persisted: false, reason: "validation" },
+        {
+          error: "startAt is required to save a Google Calendar event.",
+          preview: payload,
+        },
       );
     }
 
@@ -129,14 +165,13 @@ export async function POST(req) {
 
     if (!mutation.ok) {
       if (mutation.reason === "missing-connection" || mutation.reason === "missing-access-token") {
-        return NextResponse.json(
+        return writeResponse(
+          { persisted: false, reason: mutation.reason },
           {
-            status: "preview",
-            message: "Google Calendar is not connected yet. Preview only.",
+            message: "Google Calendar must be connected before an event can be saved.",
             preview: payload,
             mutation,
           },
-          { status: 202 },
         );
       }
 
@@ -152,26 +187,34 @@ export async function POST(req) {
         errorMessage: mutation.reason,
       });
 
-      return NextResponse.json(
+      return writeResponse(
+        { persisted: false, reason: mutation.reason || "upstream-failed" },
         {
-          status: "error",
           error: mutation.reason || "Google Calendar mutation failed.",
           preview: payload,
+          mutation,
         },
-        { status: 500 },
       );
     }
 
-    return NextResponse.json({
-      status: payload.eventId ? "updated" : "saved",
-      message: payload.eventId
-        ? "Google Calendar event updated."
-        : "Google Calendar event created.",
-      preview: payload,
-      event: mutation.event,
-    });
+    return writeResponse(
+      { persisted: true, reason: mutation.reason || "ok" },
+      {
+        message: payload.eventId
+          ? "Google Calendar event updated."
+          : "Google Calendar event created.",
+        action: payload.eventId ? "updated" : "created",
+        preview: payload,
+        event: mutation.event,
+      },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const upstreamStatus = Number.isInteger(error?.httpStatus) &&
+      error.httpStatus >= 400 &&
+      error.httpStatus <= 599
+      ? error.httpStatus
+      : null;
 
     await recordGoogleCalendarSync({
       workspaceId: resolveDefaultWorkspaceId(),
@@ -183,12 +226,19 @@ export async function POST(req) {
       errorMessage: message,
     }).catch(() => null);
 
-    return NextResponse.json(
+    return writeResponse(
       {
-        status: "error",
-        error: message,
+        persisted: false,
+        reason: upstreamStatus
+          ? `http-${upstreamStatus}`
+          : /timeout/i.test(message)
+          ? "timeout"
+          : "upstream-failed",
       },
-      { status: 500 },
+      {
+        error: message,
+        ...(upstreamStatus ? { upstreamStatus } : {}),
+      },
     );
   }
 }

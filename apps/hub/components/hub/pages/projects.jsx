@@ -1,15 +1,8 @@
 "use client";
 
 import React from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState, SyncBadge } from "../hub-primitives";
-import {
-  BRANDS as FALLBACK_BRANDS,
-  BRAND_PROJECTS as FALLBACK_PROJECTS,
-  BRAND_TODOS as FALLBACK_TODOS,
-  KANBAN_COLUMNS as FALLBACK_COLUMNS,
-} from "../hub-data";
 import {
   getWorkspace,
   filterBrandsByWorkspace,
@@ -30,6 +23,14 @@ const EMPTY_ALL_BRAND = {
   open: 0,
   changes: 0,
 };
+
+const EMPTY_COLUMNS = [
+  { key: 'backlog', label: 'Backlog', cards: [] },
+  { key: 'today', label: 'Today', cards: [] },
+  { key: 'doing', label: 'In Progress', cards: [] },
+  { key: 'review', label: 'Review', cards: [] },
+  { key: 'done', label: 'Done', cards: [] },
+];
 
 function DetailSection({ title, count = 0, empty, children }) {
   return (
@@ -67,34 +68,30 @@ function ActivityRow({ title, body, meta, badge, tone = 'neutral' }) {
 }
 
 export function Projects({ workspace }) {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
   const ws = getWorkspace(workspace);
   const [brand, setBrand] = React.useState('all');
   const [view, setView] = React.useState('tree');
   const [ledger, setLedger] = React.useState({
-    source: 'mock',
-    brands: FALLBACK_BRANDS,
-    projects: FALLBACK_PROJECTS,
+    source: 'preview',
+    brands: [EMPTY_ALL_BRAND],
+    projects: [],
     updates: [],
     decisions: [],
     notes: [],
     checks: [],
-    columns: FALLBACK_COLUMNS,
+    columns: EMPTY_COLUMNS,
   });
-  const [todos, setTodos] = React.useState(FALLBACK_TODOS);
-  const [drag, setDrag] = React.useState(null);
-  const [cols, setCols] = React.useState(FALLBACK_COLUMNS);
-  const [expanded, setExpanded] = React.useState(() => new Set(['pm-1', 'bm-1']));
+  const [todos, setTodos] = React.useState([]);
+  const [expanded, setExpanded] = React.useState(() => new Set());
   const [openDetail, setOpenDetail] = React.useState(null);
   const [brandMenuOpen, setBrandMenuOpen] = React.useState(false);
   const [sidebarHidden, setSidebarHidden] = React.useState(false);
-  const [syncState, setSyncState] = React.useState('mock');
+  const [syncState, setSyncState] = React.useState('loading');
+  const [ledgerError, setLedgerError] = React.useState(null);
+  const [refreshToken, setRefreshToken] = React.useState(0);
   const brandMenuRef = React.useRef(null);
-  const createdFromQueryRef = React.useRef(false);
-  const [orderPending, setOrderPending] = React.useState(false);
-  const [orderResult, setOrderResult] = React.useState(null); // { tone: 'ok'|'err', label }
+  const [orderPendingId, setOrderPendingId] = React.useState(null);
+  const [orderResults, setOrderResults] = React.useState({}); // projectId → { tone: 'ok'|'err', label }
 
   const formatTime = (d) => {
     try {
@@ -105,9 +102,9 @@ export function Projects({ workspace }) {
   };
 
   async function sendProjectOrder(project) {
-    if (!project || orderPending) return;
-    setOrderPending(true);
-    setOrderResult(null);
+    if (!project || orderPendingId) return;
+    setOrderPendingId(project.id);
+    setOrderResults((results) => ({ ...results, [project.id]: null }));
     const startedAt = Date.now();
     try {
       const response = await fetch('/api/projects/update', {
@@ -119,25 +116,20 @@ export function Projects({ workspace }) {
       const elapsed = Date.now() - startedAt;
       if (elapsed < 100) await new Promise(r => setTimeout(r, 100 - elapsed));
 
-      if (response.ok || data.status === 'saved' || data.status === 'preview') {
-        setOrderResult({ tone: 'ok', label: `↗ ${formatTime(new Date())}` });
+      if (response.ok && data?.status === 'saved') {
+        setOrderResults((results) => ({ ...results, [project.id]: { tone: 'ok', label: `↗ ${formatTime(new Date())}` } }));
       } else {
-        setOrderResult({ tone: 'err', label: data.error || data.message || `실패 ${response.status}` });
+        setOrderResults((results) => ({ ...results, [project.id]: { tone: 'err', label: data.error || data.message || data.reason || `실패 ${response.status}` } }));
       }
     } catch (error) {
-      setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+      setOrderResults((results) => ({ ...results, [project.id]: { tone: 'err', label: error instanceof Error ? error.message : String(error) } }));
     } finally {
-      setOrderPending(false);
+      setOrderPendingId((pendingId) => (pendingId === project.id ? null : pendingId));
     }
   }
 
-  const isLiveLedger = ledger.source === 'supabase';
-  const rawBrands = isLiveLedger
-    ? (ledger.brands?.length ? ledger.brands : [EMPTY_ALL_BRAND])
-    : (ledger.brands?.length ? ledger.brands : FALLBACK_BRANDS);
-  const rawProjects = isLiveLedger
-    ? (Array.isArray(ledger.projects) ? ledger.projects : [])
-    : (ledger.projects?.length ? ledger.projects : FALLBACK_PROJECTS);
+  const rawBrands = ledger.brands?.length ? ledger.brands : [EMPTY_ALL_BRAND];
+  const rawProjects = Array.isArray(ledger.projects) ? ledger.projects : [];
   // Workspace scope: restrict to this workspace's brands/projects/todos. With no
   // workspace the filters return their input unchanged, so the unscoped page stays
   // byte-identical in effect. filterBrandsByWorkspace keeps the 'all' index, so a
@@ -155,24 +147,42 @@ export function Projects({ workspace }) {
   const projects = brand === 'all' ? allProjects : allProjects.filter(p => p.brand === brand);
   const brandTodos = brand === 'all' ? scopedTodos : scopedTodos.filter(t => t.brand === brand);
   const currentBrand = brands.find(b => b.key === brand) || brands[0] || EMPTY_ALL_BRAND;
+  const cols = Array.isArray(ledger.columns) && ledger.columns.length ? ledger.columns : EMPTY_COLUMNS;
 
   React.useEffect(() => {
     let active = true;
 
     async function loadLedger() {
       setSyncState('loading');
+      setLedgerError(null);
       try {
         const response = await fetch('/api/hub/projects', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
 
         if (!active || !response.ok || !data || data.status === 'error') {
-          if (active) setSyncState('mock');
+          if (active) {
+            setLedger({
+              source: 'error',
+              brands: [EMPTY_ALL_BRAND],
+              projects: [],
+              updates: [],
+              decisions: [],
+              notes: [],
+              checks: [],
+              columns: EMPTY_COLUMNS,
+            });
+            setTodos([]);
+            setExpanded(new Set());
+            setOpenDetail(null);
+            setSyncState('error');
+            setLedgerError(data?.error || data?.message || `프로젝트 원장 요청 실패 (${response.status})`);
+          }
           return;
         }
 
         if (data.source === 'supabase') {
           const liveProjects = Array.isArray(data.projects) ? data.projects : [];
-          const liveColumns = Array.isArray(data.columns) ? data.columns : [];
+          const liveColumns = Array.isArray(data.columns) && data.columns.length ? data.columns : EMPTY_COLUMNS;
           setLedger({
             source: data.source,
             brands: data.brands?.length ? data.brands : [EMPTY_ALL_BRAND],
@@ -184,20 +194,50 @@ export function Projects({ workspace }) {
             columns: liveColumns,
           });
           setTodos(Array.isArray(data.todos) ? data.todos : []);
-          setCols(liveColumns);
           setExpanded(new Set(liveProjects.slice(0, 2).map(p => p.id)));
           setSyncState('live');
+          setLedgerError(null);
         } else {
-          setSyncState('mock');
+          setLedger({
+            source: 'preview',
+            brands: [EMPTY_ALL_BRAND],
+            projects: [],
+            updates: [],
+            decisions: [],
+            notes: [],
+            checks: [],
+            columns: EMPTY_COLUMNS,
+          });
+          setTodos([]);
+          setExpanded(new Set());
+          setOpenDetail(null);
+          setSyncState('preview');
+          setLedgerError(null);
         }
-      } catch {
-        if (active) setSyncState('mock');
+      } catch (error) {
+        if (active) {
+          setLedger({
+            source: 'error',
+            brands: [EMPTY_ALL_BRAND],
+            projects: [],
+            updates: [],
+            decisions: [],
+            notes: [],
+            checks: [],
+            columns: EMPTY_COLUMNS,
+          });
+          setTodos([]);
+          setExpanded(new Set());
+          setOpenDetail(null);
+          setSyncState('error');
+          setLedgerError(error instanceof Error ? error.message : String(error));
+        }
       }
     }
 
     loadLedger();
     return () => { active = false; };
-  }, []);
+  }, [refreshToken]);
 
   React.useEffect(() => {
     if (!brands.some(b => b.key === brand)) {
@@ -205,87 +245,7 @@ export function Projects({ workspace }) {
     }
   }, [brand, brands, wsDefaultBrand]);
 
-  const toggleTodo = (id) => setTodos(ts => ts.map(t => t.id === id ? { ...t, done: !t.done } : t));
   const toggleExpand = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-
-  const createProject = React.useCallback((status = 'In progress') => {
-    const id = `local-project-${Date.now()}`;
-    // `brands` is already scoped, so the picked brand is in-workspace when scoped.
-    const projectBrand = brand === 'all' ? (brands.find(b => b.key !== 'all')?.key || 'moonpm') : brand;
-    const project = {
-      id,
-      brand: projectBrand,
-      name: '새 프로젝트',
-      status,
-      progress: 0,
-      due: '이번주',
-      owner: 'Me',
-      tag: null,
-      tasks: 0,
-      done: 0,
-      // Tag in-workspace creates so the scoped view doesn't silently drop them.
-      ...(ws ? { workspace } : {}),
-    };
-    setLedger(prev => ({ ...prev, projects: [project, ...(prev.projects || [])] }));
-    setExpanded(prev => new Set([...prev, id]));
-    setOpenDetail(id);
-    setView('tree');
-  }, [brand, brands, ws, workspace]);
-
-  const createTodo = React.useCallback((projectId = openDetail) => {
-    const project = allProjects.find(p => p.id === projectId) || projects[0] || allProjects[0];
-    // Scoped fallback = this workspace's default brand — never the literal 'moonpm'
-    // (a personal-lane key that would render the todo invisible in classin scope).
-    const fallbackBrand = ws ? wsDefaultBrand : 'moonpm';
-    const todoBrand = project?.brand || (brand === 'all' ? fallbackBrand : brand);
-    const todoProject = project?.id || 'inbox';
-    const id = `local-todo-${Date.now()}`;
-    setTodos(prev => [{
-      id,
-      brand: todoBrand,
-      project: todoProject,
-      title: '새 할 일',
-      due: '오늘',
-      done: false,
-      priority: 'med',
-      assignee: 'Me',
-      // Tag in-workspace creates so the scoped view doesn't silently drop them.
-      ...(ws ? { workspace } : {}),
-    }, ...prev]);
-    if (project?.id) {
-      setExpanded(prev => new Set([...prev, project.id]));
-      setOpenDetail(project.id);
-    }
-  }, [allProjects, brand, openDetail, projects, ws, workspace, wsDefaultBrand]);
-
-  const moveCard = (cardId, toCol) => {
-    setCols(cs => {
-      let card;
-      const next = cs.map(c => ({ ...c, cards: c.cards.filter(x => { if (x.id === cardId) { card = x; return false; } return true; }) }));
-      if (card) { const t = next.find(c => c.key === toCol); if (t) t.cards = [card, ...t.cards]; }
-      return next;
-    });
-  };
-
-  const createBoardCard = React.useCallback((colKey) => {
-    const id = `local-card-${Date.now()}`;
-    setCols(prev => prev.map(col => (
-      col.key === colKey
-        ? {
-          ...col,
-          cards: [{
-            id,
-            title: '새 카드',
-            tag: null,
-            priority: 'med',
-            project: currentBrand?.name || 'Moonlight',
-            due: 'Today',
-          }, ...col.cards],
-        }
-        : col
-    )));
-    setView('board');
-  }, [currentBrand]);
 
   const statusTone = { 'In progress': 'info', Review: 'warning', Planning: 'moon', Backlog: 'neutral', Blocked: 'danger', Done: 'success' };
   const prioTone = { critical: 'danger', high: 'danger', med: 'warning', medium: 'warning', low: 'neutral' };
@@ -297,13 +257,6 @@ export function Projects({ workspace }) {
     if (brandMenuOpen) document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, [brandMenuOpen]);
-
-  React.useEffect(() => {
-    if (searchParams.get('new') !== 'project' || createdFromQueryRef.current) return;
-    createProject();
-    createdFromQueryRef.current = true;
-    router.replace(pathname);
-  }, [createProject, searchParams, router, pathname]);
 
   const brandGroups = React.useMemo(() => {
     const real = brands.filter(b => b.key !== 'all');
@@ -511,7 +464,7 @@ export function Projects({ workspace }) {
           <div>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Projects</h2>
             <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-              {projects.length} projects · {brandTodos.filter(t => !t.done).length} open todos · {currentBrand.desc}
+              {syncState === 'live' ? `${projects.length} projects · ${brandTodos.filter(t => !t.done).length} open todos · ${currentBrand.desc}` : '실제 프로젝트 원장 상태를 확인합니다.'}
               <SyncBadge state={syncState} />
             </div>
           </div>
@@ -525,10 +478,25 @@ export function Projects({ workspace }) {
               }}>{t.l}</button>
             ))}
           </div>
-          <Button variant="primary" size="sm" icon="plus" onClick={() => view === 'todos' ? createTodo() : createProject()}>{view === 'todos' ? 'To-do' : 'Project'}</Button>
+          <Button variant="secondary" size="sm" icon="lock" disabled title="프로젝트·할 일 쓰기 API 연결 후 사용할 수 있습니다.">읽기 전용</Button>
         </div>
 
-        {view === 'tree' && (
+        {syncState !== 'live' && (
+          <div className="scroll-y" style={{ flex: 1, padding: 'var(--section-gap)' }}>
+            <div style={{ maxWidth: 720, margin: '0 auto' }}>
+              <Card>
+                <EmptyState
+                  icon={syncState === 'error' ? 'signal' : syncState === 'loading' ? 'work' : 'projects'}
+                  title={syncState === 'error' ? '프로젝트 원장을 불러오지 못했습니다' : syncState === 'loading' ? '프로젝트 원장 확인 중' : '프로젝트 원장 연결 필요'}
+                  description={syncState === 'error' ? ledgerError || '실패한 읽기를 샘플 프로젝트로 대체하지 않았습니다.' : syncState === 'loading' ? '실제 프로젝트와 할 일을 확인하고 있습니다.' : 'Supabase 프로젝트 원장을 연결하면 실제 프로젝트와 할 일이 표시됩니다.'}
+                  action={syncState === 'error' ? <Button variant="outline" size="sm" onClick={() => setRefreshToken((value) => value + 1)}>다시 시도</Button> : undefined}
+                />
+              </Card>
+            </div>
+          </div>
+        )}
+
+        {syncState === 'live' && view === 'tree' && (
           <div className="hub-projects-main-grid" style={{ display: 'grid', gridTemplateColumns: openDetail ? '1fr 360px' : '1fr', flex: 1, overflow: 'hidden' }}>
             <div className="scroll-y" style={{ padding: 'var(--section-gap)' }}>
               <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
@@ -537,8 +505,7 @@ export function Projects({ workspace }) {
                     <EmptyState
                       icon="projects"
                       title="프로젝트 원장이 비어 있습니다"
-                      description="Supabase 연결은 live 상태입니다. 첫 프로젝트를 만들거나 외부 project webhook을 보내면 이 목록에 바로 표시됩니다."
-                      action={<Button variant="primary" size="sm" icon="plus" onClick={() => createProject()}>Project</Button>}
+                      description="Supabase 연결은 live 상태입니다. 쓰기 API 또는 외부 project webhook으로 저장된 프로젝트만 이 목록에 표시됩니다."
                     />
                   </Card>
                 )}
@@ -580,7 +547,17 @@ export function Projects({ workspace }) {
                           const isSel = openDetail === p.id;
                           return (
                             <React.Fragment key={p.id}>
-                              <div style={{
+                              <div
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                  if (e.target !== e.currentTarget) return;
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    setOpenDetail(p.id === openDetail ? null : p.id);
+                                  }
+                                }}
+                                style={{
                                 display: 'grid', gridTemplateColumns: '22px 18px 1fr 36px 100px 120px',
                                 padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', gap: 8,
                                 borderBottom: (isOpen || pi < groupProjects.length - 1) ? '1px solid var(--line-soft)' : 'none',
@@ -595,7 +572,7 @@ export function Projects({ workspace }) {
                                 }}>
                                   <span style={{ display: 'inline-block', transition: 'transform .15s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', fontSize: 10 }}>▶</span>
                                 </button>
-                                <input type="checkbox" style={{ margin: 0, accentColor: 'var(--moon-400)' }} onClick={e => e.stopPropagation()} />
+                                <span aria-hidden="true" style={{ width: 14, height: 14, borderRadius: 3, border: '1px solid var(--line-soft)', background: 'var(--surface-2)' }} />
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                                   <span style={{ fontSize: 14 }}>{pBrand.glyph}</span>
                                   <div style={{ minWidth: 0, flex: 1 }}>
@@ -638,14 +615,14 @@ export function Projects({ workspace }) {
                                       opacity: t.done ? 0.55 : 1,
                                     }}>
                                       <span />
-                                      <button onClick={() => toggleTodo(t.id)} style={{
+                                      <span aria-label={t.done ? '완료된 할 일' : '열린 할 일'} style={{
                                         width: 14, height: 14, borderRadius: 3,
                                         border: '1.5px solid ' + (t.done ? 'var(--success)' : 'var(--line-strong)'),
                                         background: t.done ? 'var(--success)' : 'transparent',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                       }}>
                                         {t.done && <span style={{ fontSize: 9, color: 'var(--bg)' }}>✓</span>}
-                                      </button>
+                                      </span>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                         <Dot tone={prioTone[t.priority]} size={4} />
                                         <span style={{ fontSize: 12.5, textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</span>
@@ -657,21 +634,13 @@ export function Projects({ workspace }) {
                                       <Badge tone={t.done ? 'success' : 'neutral'} size="xs">{t.done ? '완료' : '열림'}</Badge>
                                     </div>
                                   ))}
-                                  <button onClick={() => createTodo(p.id)} style={{
-                                    width: '100%', padding: '8px 14px 10px 66px', textAlign: 'left',
-                                    fontSize: 11.5, color: 'var(--fg-faint)',
-                                    borderTop: pTodos.length ? '1px solid var(--line-soft)' : 'none',
-                                  }}>＋ 하위 아이템 추가</button>
+                                  <div style={{ width: '100%', padding: '8px 14px 10px 66px', fontSize: 11.5, color: 'var(--fg-faint)', borderTop: pTodos.length ? '1px solid var(--line-soft)' : 'none' }}>읽기 전용 · 하위 아이템 쓰기 연결 대기</div>
                                 </div>
                               )}
                             </React.Fragment>
                           );
                         })}
-                        <button onClick={() => createProject(group.key)} style={{
-                          width: '100%', padding: '10px 14px', textAlign: 'left',
-                          fontSize: 11.5, color: 'var(--fg-faint)',
-                          borderTop: '1px solid var(--line-soft)',
-                        }}>＋ {group.label} 프로젝트 추가</button>
+                        <div style={{ width: '100%', padding: '10px 14px', fontSize: 11.5, color: 'var(--fg-faint)', borderTop: '1px solid var(--line-soft)' }}>읽기 전용 · {group.label} 프로젝트 쓰기 연결 대기</div>
                       </Card>
                     </div>
                   );
@@ -689,6 +658,7 @@ export function Projects({ workspace }) {
               const pNotes = (ledger.notes || []).filter(n => n.projectId === p.id).slice(0, 4);
               const pChecks = (ledger.checks || []).filter(c => c.projectId === p.id).slice(0, 4);
               const doneCount = pTodos.filter(t => t.done).length;
+              const projectOrderResult = orderResults[p.id] || null;
               return (
                 <aside style={{ borderLeft: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                   <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -735,17 +705,17 @@ export function Projects({ workspace }) {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {pTodos.map(t => (
                           <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: 'var(--surface-2)', borderRadius: 'var(--r-sm)', border: '1px solid var(--line-soft)' }}>
-                            <button onClick={() => toggleTodo(t.id)} style={{
+                            <span aria-label={t.done ? '완료된 할 일' : '열린 할 일'} style={{
                               width: 14, height: 14, borderRadius: 3,
                               border: '1.5px solid ' + (t.done ? 'var(--success)' : 'var(--line-strong)'),
                               background: t.done ? 'var(--success)' : 'transparent',
                               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                            }}>{t.done && <span style={{ fontSize: 9, color: 'var(--bg)' }}>✓</span>}</button>
+                            }}>{t.done && <span style={{ fontSize: 9, color: 'var(--bg)' }}>✓</span>}</span>
                             <span style={{ flex: 1, fontSize: 12, textDecoration: t.done ? 'line-through' : 'none', color: t.done ? 'var(--fg-faint)' : 'var(--fg)' }}>{t.title}</span>
                             <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{t.due}</span>
                           </div>
                         ))}
-                        <button onClick={() => createTodo(p.id)} style={{ padding: '6px 8px', textAlign: 'left', fontSize: 11.5, color: 'var(--fg-faint)' }}>＋ 항목 추가</button>
+                        <div style={{ padding: '6px 8px', fontSize: 11.5, color: 'var(--fg-faint)' }}>읽기 전용 · 체크리스트 쓰기 연결 대기</div>
                       </div>
                     </div>
                     <DetailSection title="최근 업데이트" count={pUpdates.length} empty={syncState === 'live' ? '이 프로젝트에 연결된 update가 아직 없습니다.' : 'live 연결 후 project_updates가 여기에 표시됩니다.'}>
@@ -807,19 +777,21 @@ export function Projects({ workspace }) {
                       size="sm"
                       icon="orders"
                       onClick={() => sendProjectOrder(p)}
+                      disabled={Boolean(orderPendingId)}
                     >
-                      {orderPending ? 'Sending…' : '주문 보내기'}
+                      {orderPendingId === p.id ? 'Sending…' : '주문 보내기'}
                     </Button>
-                    {orderResult && !orderPending && (
+                    {projectOrderResult && orderPendingId !== p.id && (
                       <span
+                        role={projectOrderResult.tone === 'err' ? 'alert' : 'status'}
                         className="mono"
                         style={{
                           fontSize: 10.5,
-                          color: orderResult.tone === 'ok' ? 'var(--success)' : 'var(--danger)',
+                          color: projectOrderResult.tone === 'ok' ? 'var(--success)' : 'var(--danger)',
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        {orderResult.label}
+                        {projectOrderResult.label}
                       </span>
                     )}
                   </div>
@@ -829,7 +801,7 @@ export function Projects({ workspace }) {
           </div>
         )}
 
-        {view === 'todos' && (
+        {syncState === 'live' && view === 'todos' && (
           <div className="scroll-y" style={{ flex: 1, padding: 'var(--section-gap)' }}>
             <div style={{ maxWidth: 880, margin: '0 auto' }}>
               {brandTodos.length === 0 && (
@@ -837,8 +809,7 @@ export function Projects({ workspace }) {
                   <EmptyState
                     icon="orders"
                     title="열린 할 일이 없습니다"
-                    description={syncState === 'live' ? 'Supabase tasks 원장에 표시할 항목이 없습니다.' : '할 일이 생기면 날짜 버킷별로 정리됩니다.'}
-                    action={<Button variant="primary" size="sm" icon="plus" onClick={() => createTodo()}>To-do</Button>}
+                    description="Supabase tasks 원장에 표시할 항목이 없습니다. 쓰기 연결 전에는 로컬 할 일을 만들지 않습니다."
                   />
                 </Card>
               )}
@@ -859,14 +830,14 @@ export function Projects({ workspace }) {
                             borderBottom: i < items.length - 1 ? '1px solid var(--line-soft)' : 'none',
                             opacity: t.done ? 0.5 : 1,
                           }}>
-                            <button onClick={() => toggleTodo(t.id)} style={{
+                            <span aria-label={t.done ? '완료된 할 일' : '열린 할 일'} style={{
                               width: 16, height: 16, borderRadius: 4,
                               border: '1.5px solid ' + (t.done ? 'var(--success)' : 'var(--line-strong)'),
                               background: t.done ? 'var(--success)' : 'transparent',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}>
                               {t.done && <span style={{ fontSize: 10, color: 'var(--bg)' }}>✓</span>}
-                            </button>
+                            </span>
                             <div style={{ minWidth: 0 }}>
                               <div style={{ fontSize: 13, textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</div>
                               <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3 }}>
@@ -889,13 +860,10 @@ export function Projects({ workspace }) {
           </div>
         )}
 
-        {view === 'board' && (
+        {syncState === 'live' && view === 'board' && (
             <div className="hub-scroll-x" style={{ display: 'flex', gap: 'var(--gap)', overflowX: 'auto', flex: 1, padding: 'var(--section-gap)' }}>
             {cols.map(col => (
-              <div key={col.key}
-                onDragOver={e => e.preventDefault()}
-                onDrop={() => drag && moveCard(drag, col.key)}
-                style={{
+              <div key={col.key} style={{
                   width: 280, flexShrink: 0,
                   background: 'var(--surface)', border: '1px solid var(--line-soft)',
                   borderRadius: 'var(--r-lg)',
@@ -905,18 +873,16 @@ export function Projects({ workspace }) {
                   <span style={{ fontSize: 12, fontWeight: 600 }}>{col.label}</span>
                   <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', padding: '1px 6px', background: 'var(--surface-3)', borderRadius: 4 }}>{col.cards.length}</span>
                   <div style={{ flex: 1 }} />
-                  <IconButton icon="plus" size={22} iconSize={12} tooltip="Add card" onClick={() => createBoardCard(col.key)} />
+                  <Badge tone="neutral" size="xs">읽기 전용</Badge>
                 </div>
                 <div className="scroll-y" style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {col.cards.length === 0 && (
                     <div style={{ padding: '18px 8px', fontSize: 11.5, color: 'var(--fg-faint)', textAlign: 'center' }}>카드 없음</div>
                   )}
                   {col.cards.map(c => (
-                    <div key={c.id} draggable onDragStart={() => setDrag(c.id)} onDragEnd={() => setDrag(null)}
-                      style={{
+                    <div key={c.id} style={{
                         background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
-                        borderRadius: 'var(--r-sm)', padding: 'var(--pad-y) var(--pad-x)', cursor: 'grab',
-                        opacity: drag === c.id ? 0.4 : 1,
+                        borderRadius: 'var(--r-sm)', padding: 'var(--pad-y) var(--pad-x)',
                       }}>
                       <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 6 }}>
                         <Dot tone={prioTone[c.priority]} size={5} />

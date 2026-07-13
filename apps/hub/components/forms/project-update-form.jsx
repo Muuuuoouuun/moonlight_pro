@@ -7,7 +7,7 @@ function normalizeResponseTone(status) {
     return "green";
   }
 
-  if (status === "preview") {
+  if (status === "degraded") {
     return "warning";
   }
 
@@ -109,13 +109,21 @@ export function ProjectUpdateForm({ defaultWorkspaceId = "" }) {
           {pending ? "Saving..." : "Save Project Update"}
         </button>
         <p className="form-note">
-          Workspace env가 없으면 preview 모드로 응답하고, 있으면 Supabase에 바로 적재합니다.
+          Workspace ID 또는 저장 설정이 없으면 Setup required로 표시되며 Supabase에는 저장되지 않습니다.
         </p>
       </div>
 
       {result ? (
         <div className="status-note" data-tone={normalizeResponseTone(result.status)}>
-          <strong>{result.status === "saved" ? "Saved" : result.status === "preview" ? "Preview" : "Error"}</strong>
+          <strong>
+            {result.status === "saved"
+              ? "Saved"
+              : result.status === "degraded"
+              ? "Setup required"
+              : result.partialPersisted
+              ? "Partially saved"
+              : "Error"}
+          </strong>
           <p>{result.message || result.error || "Unknown response"}</p>
         </div>
       ) : null}

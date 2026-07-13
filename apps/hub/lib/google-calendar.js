@@ -14,6 +14,15 @@ const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
 
+export class GoogleCalendarHttpError extends Error {
+  constructor(httpStatus, message) {
+    super(message);
+    this.name = "GoogleCalendarHttpError";
+    this.httpStatus = httpStatus;
+    this.reason = `http-${httpStatus}`;
+  }
+}
+
 function resolveGoogleOAuthConfig() {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
@@ -212,7 +221,10 @@ async function exchangeGoogleToken(params) {
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(detail || `Google token exchange failed with ${response.status}`);
+    throw new GoogleCalendarHttpError(
+      response.status,
+      detail || `Google token exchange failed with ${response.status}`,
+    );
   }
 
   return await response.json();
@@ -412,7 +424,10 @@ async function fetchGoogleCalendarJson(url, accessToken, options = {}) {
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(detail || `Google Calendar request failed with ${response.status}`);
+    throw new GoogleCalendarHttpError(
+      response.status,
+      detail || `Google Calendar request failed with ${response.status}`,
+    );
   }
 
   return await response.json();
@@ -465,9 +480,17 @@ export async function listGoogleCalendarEvents({
       calendarId: access.calendarId,
     };
   } catch (error) {
+    const httpStatus = error?.httpStatus || null;
+
     return {
       ok: false,
-      reason: error instanceof Error ? error.message : String(error),
+      reason: httpStatus
+        ? `http-${httpStatus}`
+        : error instanceof Error
+        ? error.message
+        : String(error),
+      httpStatus,
+      detail: error instanceof Error ? error.message : String(error),
       items: [],
       connection: null,
       calendarId: calendarId || process.env.GOOGLE_CALENDAR_ID?.trim() || "primary",

@@ -2,8 +2,28 @@ import { NextResponse } from "next/server";
 
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { buildProjectUpdateRecord, insertSupabaseRecord, updateSupabaseRecord } from "@/lib/server-write";
+import { classifyWritePersistence } from "@/lib/write-response";
 
 export const runtime = "nodejs";
+
+function writeResponse(persistence, details = {}) {
+  const classification = classifyWritePersistence(persistence);
+
+  return NextResponse.json(
+    {
+      ...details,
+      ...classification,
+    },
+    { status: classification.httpStatus },
+  );
+}
+
+async function writeInputError(response) {
+  const details = await response.json().catch(() => ({}));
+  const reason = response.status === 413 ? "payload-too-large" : "invalid-json";
+
+  return writeResponse({ persisted: false, reason }, details);
+}
 
 function toProjectStatus(status) {
   if (status === "done") return "completed";
@@ -35,27 +55,36 @@ export async function POST(req) {
 
     const parsed = await readHubWriteJson(req);
     if (parsed.error) {
-      return parsed.error;
+      return writeInputError(parsed.error);
+    }
+
+    if (!parsed.data || typeof parsed.data !== "object" || Array.isArray(parsed.data)) {
+      return writeResponse(
+        { persisted: false, reason: "validation" },
+        { error: "Request body must be a JSON object." },
+      );
     }
 
     const payload = parsed.data;
     const record = buildProjectUpdateRecord(payload);
 
     if (!record.workspace_id) {
-      return NextResponse.json(
+      return writeResponse(
+        { persisted: false, reason: "missing-workspace" },
         {
-          status: "preview",
-          message: "Workspace ID is not configured yet. Preview only.",
+          message: "Workspace ID is required before a project update can be saved.",
           preview: record,
         },
-        { status: 202 },
       );
     }
 
     const persistence = await insertSupabaseRecord("project_updates", record);
     const projectPatch = buildProjectPatch(record);
+    const shouldPatchProject = Boolean(
+      persistence.persisted && record.project_id && Object.keys(projectPatch).length,
+    );
     const projectPersistence =
-      persistence.persisted && record.project_id && Object.keys(projectPatch).length
+      shouldPatchProject
         ? await updateSupabaseRecord(
             "projects",
             [
@@ -63,36 +92,58 @@ export async function POST(req) {
               ["workspace_id", `eq.${record.workspace_id}`],
             ],
             projectPatch,
+            { returnRepresentation: true, select: "id" },
           )
         : { persisted: false, reason: "not-patched" };
 
     if (!persistence.persisted) {
-      return NextResponse.json(
+      return writeResponse(
+        persistence,
         {
-          status: "preview",
-          message: "Project update payload is valid, but persistence is not configured or failed.",
+          message: "Project update persistence failed.",
           preview: record,
           persistence,
           projectPersistence,
         },
-        { status: 202 },
       );
     }
 
-    return NextResponse.json({
-      status: "saved",
-      message: "Project update saved to Supabase.",
-      preview: record,
+    if (shouldPatchProject && !projectPersistence.persisted) {
+      return writeResponse(
+        {
+          ...projectPersistence,
+          persisted: false,
+          partialPersisted: true,
+        },
+        {
+          message: "Project update was recorded, but the project patch failed.",
+          projectId: record.project_id,
+          preview: record,
+          persistence,
+          projectPersistence,
+          partialWrite: {
+            persisted: ["project_updates"],
+            failed: "projects",
+          },
+        },
+      );
+    }
+
+    return writeResponse(
       persistence,
-      projectPersistence,
-    });
-  } catch (error) {
-    return NextResponse.json(
       {
-        status: "error",
+        message: "Project update saved to Supabase.",
+        preview: record,
+        persistence,
+        projectPersistence,
+      },
+    );
+  } catch (error) {
+    return writeResponse(
+      { persisted: false, reason: "mutation-failed" },
+      {
         error: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 },
     );
   }
 }

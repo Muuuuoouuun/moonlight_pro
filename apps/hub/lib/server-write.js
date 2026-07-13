@@ -247,6 +247,48 @@ export async function insertSupabaseRecord(table, record, options = {}) {
   }
 }
 
+export async function callSupabaseRpc(functionName, parameters = {}) {
+  const config = resolveSupabaseConfig();
+
+  if (!config) {
+    return { persisted: false, reason: "missing-config" };
+  }
+
+  const normalizedFunctionName = normalizeString(functionName);
+  if (!normalizedFunctionName) {
+    return { persisted: false, reason: "missing-function" };
+  }
+
+  const body = parameters && typeof parameters === "object" && !Array.isArray(parameters)
+    ? parameters
+    : {};
+
+  try {
+    const response = await fetch(
+      `${config.url}/rest/v1/rpc/${encodeURIComponent(normalizedFunctionName)}`,
+      {
+        method: "POST",
+        headers: makeSupabaseHeaders(config.apiKey, { contentType: "application/json" }),
+        body: JSON.stringify(body),
+        cache: "no-store",
+      },
+    );
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      return { persisted: false, reason: `http-${response.status}`, detail };
+    }
+
+    return {
+      persisted: true,
+      reason: "ok",
+      data: await response.json().catch(() => null),
+    };
+  } catch (error) {
+    return { persisted: false, reason: "request-failed", detail: String(error) };
+  }
+}
+
 function buildFilterQuery(filters = []) {
   const params = new URLSearchParams();
 
