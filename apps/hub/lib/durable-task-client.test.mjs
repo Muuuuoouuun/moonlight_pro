@@ -197,6 +197,64 @@ test("409 conflict preserves the same key until a saved retry", async () => {
   assert.deepEqual(keys, ["capture-conflict", "capture-conflict"]);
 });
 
+test("non-2xx terminal-looking responses stay failed and retry the same raw capture key", async () => {
+  const requests = [];
+  const responses = [
+    jsonResponse({
+      status: "saved",
+      retryable: false,
+      reason: "upstream-write-failed",
+      error: "The upstream write did not commit.",
+      task: { id: "task-false-positive" },
+      correlationId: "corr-false-positive",
+    }, 500),
+    jsonResponse({
+      status: "saved",
+      retryable: false,
+      reason: "created",
+      task: { id: "task-committed" },
+      correlationId: "corr-committed",
+    }),
+  ];
+  const client = createDurableTaskClient({
+    keyFactory: () => "capture-non-2xx",
+    fetchImpl: async (url, options) => {
+      requests.push({
+        url,
+        key: options.headers.get("idempotency-key"),
+        body: JSON.parse(options.body),
+      });
+      return responses.shift();
+    },
+  });
+
+  const failed = await client.submit({ destination: "task", text: "  견적 후속 연락  " });
+  const saved = await client.submit({ destination: "task", text: "견적 후속 연락" });
+
+  assert.deepEqual(failed, {
+    status: "failed",
+    retryable: true,
+    reason: "upstream-write-failed",
+    error: "The upstream write did not commit.",
+    task: { id: "task-false-positive" },
+    correlationId: "corr-false-positive",
+    httpStatus: 500,
+  });
+  assert.equal(saved.status, "saved");
+  assert.deepEqual(requests, [
+    {
+      url: "/api/hub/tasks",
+      key: "capture-non-2xx",
+      body: { title: "견적 후속 연락" },
+    },
+    {
+      url: "/api/hub/tasks",
+      key: "capture-non-2xx",
+      body: { title: "견적 후속 연락" },
+    },
+  ]);
+});
+
 test("401 requests inline unlock, consumes the secret immediately, and retries the same key", async () => {
   const requests = [];
   let releaseUnlock;

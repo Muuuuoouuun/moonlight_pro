@@ -98,6 +98,10 @@ test("Daily Brief mounts an honest accessible quick capture in the first fold", 
   assert.match(captureSource, /submitPromiseRef\.current\s*=\s*operation/);
   assert.match(captureSource, /focusCaptureWhenReadyRef/);
   assert.match(captureSource, /if \(!busy && focusCaptureWhenReadyRef\.current\)/);
+  assert.match(
+    captureSource,
+    /result\.httpStatus\s*>=\s*200\s*&&\s*result\.httpStatus\s*<\s*300[\s\S]*result\.status\s*===\s*["']saved["'][\s\S]*result\.status\s*===\s*["']duplicate["']/,
+  );
   assert.match(captureSource, /requiresUnlock/);
   assert.match(captureSource, /type=["']password["']/);
   assert.match(captureSource, /onSecretConsumed:\s*\(\)\s*=>\s*setSecret\(["']["']\)/);

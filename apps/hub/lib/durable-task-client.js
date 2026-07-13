@@ -33,6 +33,18 @@ function clientFailure(reason, error) {
   };
 }
 
+function normalizeHttpResult(response, resultBody) {
+  if (response.ok || !TERMINAL_STATUSES.has(resultBody.status)) return resultBody;
+
+  return {
+    ...resultBody,
+    status: "failed",
+    retryable: response.status >= 500 || response.status === 408 || response.status === 429,
+    reason: resultBody.reason || "non-ok-terminal-response",
+    error: resultBody.error || `저장 요청이 HTTP ${response.status}로 실패했습니다.`,
+  };
+}
+
 export function createDurableTaskClient({
   fetchImpl = fetch,
   keyFactory = defaultKeyFactory,
@@ -66,7 +78,7 @@ export function createDurableTaskClient({
           ? body
           : clientFailure("invalid-response", "저장 응답을 확인할 수 없습니다.");
         const result = {
-          ...resultBody,
+          ...normalizeHttpResult(response, resultBody),
           httpStatus: response.status,
           ...(response.status === 401 ? { requiresUnlock: true } : {}),
         };

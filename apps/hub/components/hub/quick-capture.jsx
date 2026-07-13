@@ -76,8 +76,11 @@ export function QuickCapture({ onSaved }) {
     operation = Promise.resolve().then(async () => {
       try {
         const result = await client.submit(capture);
+        const persisted = result.httpStatus >= 200
+          && result.httpStatus < 300
+          && (result.status === "saved" || result.status === "duplicate");
 
-        if (result.status === "saved" || result.status === "duplicate") {
+        if (persisted) {
           setText("");
           setRequiresUnlock(false);
           setFeedback({
