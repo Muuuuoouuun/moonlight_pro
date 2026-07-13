@@ -8,9 +8,11 @@ import {
   allowedTaskStatuses,
   applyAuthoritativeTask,
   beginComposerOperation,
+  bindUnlockRetry,
+  buildTaskDuePatch,
   createProjectReadState,
-  formatTaskDueDate,
-  localDateMidnightIso,
+  guardUnlockRetry,
+  isTaskOperationCurrent,
   reconcileProjectReadState,
   resolveConflictTask,
   settleComposerOperation,
@@ -138,6 +140,7 @@ export function Projects({ workspace }) {
     columns: EMPTY_COLUMNS,
   });
   const [todos, setTodos] = React.useState([]);
+  const todosRef = React.useRef(todos);
   const [expanded, setExpanded] = React.useState(() => new Set());
   const [openDetail, setOpenDetail] = React.useState(null);
   const [brandMenuOpen, setBrandMenuOpen] = React.useState(false);
@@ -160,8 +163,10 @@ export function Projects({ workspace }) {
   const [persistedTaskIds, setPersistedTaskIds] = React.useState(() => new Set());
   const [taskResults, setTaskResults] = React.useState({});
   const [taskComposer, setTaskComposer] = React.useState({ projectId: null, title: '', state: 'idle', error: '' });
+  const taskComposerRef = React.useRef(taskComposer);
   const composerOperationRef = React.useRef(null);
   const [taskDraft, setTaskDraft] = React.useState(null);
+  const taskDraftRef = React.useRef(taskDraft);
   const [drawerPersisted, setDrawerPersisted] = React.useState(false);
   const [taskAnnouncement, setTaskAnnouncement] = React.useState('');
   const [requiresUnlock, setRequiresUnlock] = React.useState(false);
@@ -171,6 +176,9 @@ export function Projects({ workspace }) {
   const pendingUnlockRetryRef = React.useRef(null);
   const [orderPendingId, setOrderPendingId] = React.useState(null);
   const [orderResults, setOrderResults] = React.useState({}); // projectId → { tone: 'ok'|'err', label }
+  todosRef.current = todos;
+  taskComposerRef.current = taskComposer;
+  taskDraftRef.current = taskDraft;
 
   const formatTime = (d) => {
     try {
@@ -352,21 +360,40 @@ export function Projects({ workspace }) {
   const updateTone = { reported: 'neutral', active: 'info', blocked: 'danger', done: 'success' };
   const checkTone = { pending: 'neutral', done: 'success', skipped: 'warning', blocked: 'danger' };
 
-  const offerSessionUnlock = (result, retry) => {
+  const currentUnlockContext = () => ({
+    composer: taskComposerRef.current,
+    editor: taskDraftRef.current,
+    todos: todosRef.current,
+  });
+
+  const dismissStaleUnlock = () => {
+    const binding = pendingUnlockRetryRef.current;
+    if (!binding || guardUnlockRetry(binding, currentUnlockContext()).allowed) return;
+    pendingUnlockRetryRef.current = null;
+    setRequiresUnlock(false);
+    setUnlockSecret('');
+    setUnlockError('');
+  };
+
+  const offerSessionUnlock = (result, retryInput) => {
     if (!result?.requiresUnlock && result?.httpStatus !== 401) return false;
-    pendingUnlockRetryRef.current = retry;
+    const binding = bindUnlockRetry(retryInput);
+    if (!guardUnlockRetry(binding, currentUnlockContext()).allowed) return false;
+    pendingUnlockRetryRef.current = binding;
     setRequiresUnlock(true);
     setUnlockError('');
     return true;
   };
 
   const applyCurrentTask = (currentTask) => {
+    const nextTodos = applyAuthoritativeTask(todosRef.current, currentTask);
     readStateRef.current = {
       ...readStateRef.current,
       todos: applyAuthoritativeTask(readStateRef.current.todos, currentTask),
       hasTaskSnapshot: true,
     };
-    setTodos((previous) => applyAuthoritativeTask(previous, currentTask));
+    todosRef.current = nextTodos;
+    setTodos(nextTodos);
   };
 
   const submitSessionUnlock = async (event) => {
@@ -374,7 +401,7 @@ export function Projects({ workspace }) {
     if (!unlockSecret || unlockPending) return;
     setUnlockPending(true);
     setUnlockError('');
-    const retry = pendingUnlockRetryRef.current;
+    const retryBinding = pendingUnlockRetryRef.current;
     const result = await client.unlockSession({
       secret: unlockSecret,
       onSecretConsumed: () => setUnlockSecret(''),
@@ -384,15 +411,32 @@ export function Projects({ workspace }) {
       setUnlockError('잠금을 해제하지 못했습니다. secret을 확인해 주세요.');
       return;
     }
-    pendingUnlockRetryRef.current = null;
-    setRequiresUnlock(false);
+    const guardedRetry = guardUnlockRetry(retryBinding, currentUnlockContext());
+    if (pendingUnlockRetryRef.current === retryBinding) {
+      pendingUnlockRetryRef.current = null;
+      setRequiresUnlock(false);
+    }
+    if (!guardedRetry.allowed) {
+      setTaskAnnouncement('쓰기 잠금은 해제했지만 다른 입력으로 전환되어 이전 작업은 자동 재시도하지 않았습니다.');
+      return;
+    }
     setTaskAnnouncement('쓰기 잠금을 해제했습니다. 같은 작업을 다시 시도합니다.');
-    await retry?.();
+    await guardedRetry.run();
   };
 
   const openTaskComposer = (projectId) => {
     setExpanded((previous) => new Set([...previous, projectId]));
-    setTaskComposer({ projectId, title: '', state: 'idle', error: '' });
+    const nextComposer = { projectId, title: '', state: 'idle', error: '' };
+    taskComposerRef.current = nextComposer;
+    setTaskComposer(nextComposer);
+    dismissStaleUnlock();
+  };
+
+  const closeTaskComposer = () => {
+    const nextComposer = { projectId: null, title: '', state: 'idle', error: '' };
+    taskComposerRef.current = nextComposer;
+    setTaskComposer(nextComposer);
+    dismissStaleUnlock();
   };
 
   const refetchPersistedComposer = async (operation) => {
@@ -421,6 +465,7 @@ export function Projects({ workspace }) {
       operationId: globalThis.crypto?.randomUUID?.() || `task-${Date.now()}`,
     });
     composerOperationRef.current = operation;
+    taskComposerRef.current = savingComposer;
     setTaskComposer(savingComposer);
     const result = await client.createTask({
       title: operation.title,
@@ -436,7 +481,11 @@ export function Projects({ workspace }) {
     }
 
     const retryComposer = { ...composerInput, title: operation.title, projectId: operation.projectId, state: 'error' };
-    offerSessionUnlock(result, () => persistProjectTask(retryComposer));
+    offerSessionUnlock(result, {
+      kind: 'composer',
+      operation,
+      retry: () => persistProjectTask(retryComposer),
+    });
     setTaskComposer((current) => settleComposerOperation(current, operation, {
       state: 'error',
       error: taskFailureMessage(result, '할 일을 저장하지 못했습니다. 입력을 유지했으니 다시 시도하세요.'),
@@ -514,7 +563,11 @@ export function Projects({ workspace }) {
           }));
         }
       } else {
-        offerSessionUnlock(result, () => completeTask(t));
+        offerSessionUnlock(result, {
+          kind: 'complete',
+          task: t,
+          retry: () => completeTask(t),
+        });
         setTaskResults((previous) => ({
           ...previous,
           [t.id]: taskFailureMessage(result, '완료 상태를 저장하지 못했습니다. 다시 시도하세요.'),
@@ -529,43 +582,56 @@ export function Projects({ workspace }) {
     }
   };
 
-  const openTaskEditor = (t) => {
-    setDrawerPersisted(false);
-    setTaskDraft(taskToDraft(t, taskTimezone));
+  const replaceTaskDraft = (nextDraft) => {
+    taskDraftRef.current = nextDraft;
+    setTaskDraft(nextDraft);
+    dismissStaleUnlock();
   };
 
-  const saveTaskDraft = async () => {
-    if (!taskDraft?.title?.trim()) return { ok: false, message: '제목을 입력하세요.' };
+  const openTaskEditor = (t) => {
+    setDrawerPersisted(false);
+    replaceTaskDraft(taskToDraft(t, taskTimezone));
+  };
+
+  const saveTaskDraft = async (draftInput = taskDraft) => {
+    const draftSnapshot = draftInput;
+    if (!draftSnapshot?.title?.trim()) return { ok: false, message: '제목을 입력하세요.' };
+    const editorIdentity = {
+      taskId: draftSnapshot.id,
+      expectedUpdatedAt: draftSnapshot.updatedAt,
+    };
+    const editorIsCurrent = () => isTaskOperationCurrent(taskDraftRef.current, editorIdentity);
     if (drawerPersisted) {
       const refreshed = await loadLedger();
+      if (!editorIsCurrent()) return { ok: false, status: 'stale', message: '다른 할 일 편집을 유지합니다.' };
       return refreshed.ok && ['live', 'empty'].includes(refreshed.data?.taskSource)
         ? { ok: true, status: 'saved' }
         : { ok: false, message: '저장은 완료됐지만 최신 목록을 확인하지 못했습니다. 다시 확인하세요.' };
     }
 
-    const duePatch = !taskDraft.dueDate
-      ? { dueAt: null, duePrecision: 'none' }
-      : taskDraft.duePrecision === 'timed'
-        && taskDraft.dueAt
-        && formatTaskDueDate(taskDraft, taskTimezone) === taskDraft.dueDate
-        ? { dueAt: taskDraft.dueAt, duePrecision: 'timed' }
-        : { dueAt: localDateMidnightIso(taskDraft.dueDate, taskTimezone), duePrecision: 'date' };
+    const duePatch = buildTaskDuePatch(draftSnapshot, taskTimezone);
+    if (!duePatch) {
+      return { ok: false, message: '유효한 기한 날짜를 입력하세요.' };
+    }
     const result = await client.updateTask({
-      id: taskDraft.id,
-      expectedUpdatedAt: taskDraft.updatedAt,
+      id: draftSnapshot.id,
+      expectedUpdatedAt: draftSnapshot.updatedAt,
       patch: {
-        title: taskDraft.title.trim(),
-        status: taskDraft.status,
-        priority: taskDraft.priority,
-        nextAction: taskDraft.nextAction.trim() || null,
+        title: draftSnapshot.title.trim(),
+        status: draftSnapshot.status,
+        priority: draftSnapshot.priority,
+        nextAction: draftSnapshot.nextAction.trim() || null,
         ...duePatch,
       },
     });
 
     if (isDurableSuccess(result)) {
-      setTaskAnnouncement(`${taskDraft.title.trim()} 할 일 변경사항을 저장했습니다.`);
-      setDrawerPersisted(true);
+      setTaskAnnouncement(`${draftSnapshot.title.trim()} 할 일 변경사항을 저장했습니다.`);
+      if (editorIsCurrent()) setDrawerPersisted(true);
       const refreshed = await loadLedger();
+      if (!editorIsCurrent()) {
+        return { ok: false, status: 'stale', message: '저장은 완료됐고 현재 열어 둔 다른 할 일 편집은 유지합니다.' };
+      }
       if (refreshed.ok && ['live', 'empty'].includes(refreshed.data?.taskSource)) {
         setDrawerPersisted(false);
         return { ok: true, status: result.status };
@@ -577,32 +643,46 @@ export function Projects({ workspace }) {
       const currentTask = resolveConflictTask(result);
       if (currentTask) {
         applyCurrentTask(currentTask);
+        const wasCurrentEditor = editorIsCurrent();
         if (currentTask.status === 'done') {
-          setTaskDraft(null);
-          setTaskAnnouncement(`${taskDraft.title} 할 일은 다른 곳에서 이미 완료되어 편집기를 닫았습니다.`);
+          if (wasCurrentEditor) {
+            replaceTaskDraft(null);
+            setTaskAnnouncement(`${draftSnapshot.title} 할 일은 다른 곳에서 이미 완료되어 편집기를 닫았습니다.`);
+          }
           await loadLedger();
-          return { ok: true, status: 'conflict-resolved' };
+          return wasCurrentEditor
+            ? { ok: true, status: 'conflict-resolved' }
+            : { ok: false, status: 'stale', message: '다른 할 일 편집을 유지합니다.' };
         }
-        setTaskDraft(taskToDraft(currentTask, taskTimezone));
+        if (wasCurrentEditor) replaceTaskDraft(taskToDraft(currentTask, taskTimezone));
         await loadLedger();
-        return { ok: false, status: 'conflict', message: '다른 곳에서 변경됐습니다. 최신 값으로 교체했으니 다시 검토하세요.' };
+        return wasCurrentEditor
+          ? { ok: false, status: 'conflict', message: '다른 곳에서 변경됐습니다. 최신 값으로 교체했으니 다시 검토하세요.' }
+          : { ok: false, status: 'stale', message: '다른 할 일 편집을 유지합니다.' };
       }
       const refreshed = await loadLedger();
-      const latest = refreshed.data?.todos?.find((todo) => todo.id === taskDraft.id);
+      const latest = refreshed.data?.todos?.find((todo) => todo.id === draftSnapshot.id);
       if (latest) {
         const latestDraft = taskToDraft(latest, taskTimezone);
-        setTaskDraft(latestDraft);
-        return { ok: false, status: 'conflict', message: '다른 곳에서 변경됐습니다. 최신 값으로 교체했으니 다시 검토하세요.' };
+        const wasCurrentEditor = editorIsCurrent();
+        if (wasCurrentEditor) replaceTaskDraft(latestDraft);
+        return wasCurrentEditor
+          ? { ok: false, status: 'conflict', message: '다른 곳에서 변경됐습니다. 최신 값으로 교체했으니 다시 검토하세요.' }
+          : { ok: false, status: 'stale', message: '다른 할 일 편집을 유지합니다.' };
       }
       return { ok: false, status: 'conflict', message: '다른 곳에서 변경됐지만 최신 값을 불러오지 못했습니다. 목록을 다시 확인하세요.' };
     }
 
-    offerSessionUnlock(result, async () => {
-      const retried = await saveTaskDraft();
-      if (retried?.ok) {
-        setTaskDraft(null);
-        setDrawerPersisted(false);
-      }
+    offerSessionUnlock(result, {
+      kind: 'editor',
+      task: draftSnapshot,
+      retry: async () => {
+        const retried = await saveTaskDraft(draftSnapshot);
+        if (retried?.ok && isTaskOperationCurrent(taskDraftRef.current, editorIdentity)) {
+          replaceTaskDraft(null);
+          setDrawerPersisted(false);
+        }
+      },
     });
     return {
       ok: false,
@@ -1055,7 +1135,7 @@ export function Projects({ workspace }) {
                                       <Button className="project-task-control" type="submit" variant="primary" size="sm" disabled={taskComposer.state === 'saving' || taskComposer.state === 'refreshing'}>
                                         {taskComposer.state === 'persisted' ? '목록 다시 확인' : taskComposer.state === 'saving' || taskComposer.state === 'refreshing' ? '확인 중…' : '추가'}
                                       </Button>
-                                      <Button className="project-task-control" type="button" variant="ghost" size="sm" disabled={taskComposer.state === 'saving' || taskComposer.state === 'refreshing'} onClick={() => setTaskComposer({ projectId: null, title: '', state: 'idle', error: '' })}>취소</Button>
+                                      <Button className="project-task-control" type="button" variant="ghost" size="sm" disabled={taskComposer.state === 'saving' || taskComposer.state === 'refreshing'} onClick={closeTaskComposer}>취소</Button>
                                       {taskComposer.error && <div className="project-task-composer__error" role="alert">{taskComposer.error}</div>}
                                     </form>
                                   ) : pTodos.length > 0 ? (
@@ -1333,13 +1413,18 @@ export function Projects({ workspace }) {
         )}
       </div>
       <EditDrawer
+        key={taskDraft ? `${taskDraft.id}:${taskDraft.updatedAt || 'unknown'}` : 'closed-task-editor'}
         title="할 일 편집"
         subtitle={taskDraft?.projectName || '프로젝트 할 일'}
         record={taskDraft}
         fields={TASK_EDIT_FIELDS}
-        onChange={(key, value) => setTaskDraft((current) => current ? { ...current, [key]: value } : current)}
+        onChange={(key, value) => setTaskDraft((current) => {
+          const nextDraft = current ? { ...current, [key]: value } : current;
+          taskDraftRef.current = nextDraft;
+          return nextDraft;
+        })}
         onClose={() => {
-          setTaskDraft(null);
+          replaceTaskDraft(null);
           setDrawerPersisted(false);
         }}
         onSave={saveTaskDraft}

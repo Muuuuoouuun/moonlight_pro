@@ -51,6 +51,11 @@ function zonedParts(value, timezone) {
   };
 }
 
+function zonedDateKey(value, timezone) {
+  const parts = zonedParts(value, timezone);
+  return `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+}
+
 export function localDateMidnightIso(dateKey, timezone) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateKey || ''));
   if (!match) return null;
@@ -82,15 +87,45 @@ export function localDateMidnightIso(dateKey, timezone) {
 
   const finalParts = zonedParts(new Date(candidate), resolvedTimezone);
   if (
-    finalParts.year !== Number(match[1])
-    || finalParts.month !== Number(match[2])
-    || finalParts.day !== Number(match[3])
-    || finalParts.hour !== 0
-    || finalParts.minute !== 0
-    || finalParts.second !== 0
-  ) return null;
+    finalParts.year === Number(match[1])
+    && finalParts.month === Number(match[2])
+    && finalParts.day === Number(match[3])
+    && finalParts.hour === 0
+    && finalParts.minute === 0
+    && finalParts.second === 0
+  ) {
+    return new Date(candidate).toISOString();
+  }
 
-  return new Date(candidate).toISOString();
+  // Some zones advance their clocks at local midnight, so 00:00 never exists.
+  // Find the earliest real instant that still belongs to the requested local date.
+  const targetDateKey = `${match[1]}-${match[2]}-${match[3]}`;
+  const step = 15 * 60 * 1000;
+  const scanStart = intended - (18 * 60 * 60 * 1000);
+  const scanEnd = intended + (36 * 60 * 60 * 1000);
+  for (let cursor = scanStart; cursor <= scanEnd; cursor += step) {
+    const cursorDateKey = zonedDateKey(new Date(cursor), resolvedTimezone);
+    const matchesRequestedDate = cursorDateKey === targetDateKey;
+    const isFirstSafeDateAfterSkip = cursorDateKey > targetDateKey;
+    if (!matchesRequestedDate && !isFirstSafeDateAfterSkip) continue;
+
+    let lower = cursor - step;
+    let upper = cursor;
+    while (upper - lower > 1) {
+      const midpoint = Math.floor((lower + upper) / 2);
+      const midpointDateKey = zonedDateKey(new Date(midpoint), resolvedTimezone);
+      const reachedBoundary = matchesRequestedDate
+        ? midpointDateKey === targetDateKey
+        : midpointDateKey > targetDateKey;
+      if (reachedBoundary) upper = midpoint;
+      else lower = midpoint;
+    }
+    return new Date(upper).toISOString();
+  }
+
+  // All current IANA offsets fit the scan window. Keep null reserved for malformed
+  // Gregorian dates if a runtime cannot represent the supplied timezone data.
+  return null;
 }
 
 export function formatTaskDueDate(task, timezone) {
@@ -100,6 +135,19 @@ export function formatTaskDueDate(task, timezone) {
   if (Number.isNaN(date.getTime())) return '';
   const parts = zonedParts(date, timezone);
   return `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+}
+
+export function buildTaskDuePatch(task, timezone) {
+  if (!task?.dueDate) return { dueAt: null, duePrecision: 'none' };
+  if (
+    task.duePrecision === 'timed'
+    && task.dueAt
+    && formatTaskDueDate(task, timezone) === task.dueDate
+  ) {
+    return { dueAt: task.dueAt, duePrecision: 'timed' };
+  }
+  const dueAt = localDateMidnightIso(task.dueDate, timezone);
+  return dueAt ? { dueAt, duePrecision: 'date' } : null;
 }
 
 export function allowedTaskStatuses(status) {
@@ -182,12 +230,73 @@ export function beginComposerOperation(composer, { operationId }) {
   };
 }
 
+export function isComposerOperationCurrent(composer, operation) {
+  return Boolean(
+    composer
+    && operation
+    && composer.operationId === operation.operationId
+    && composer.projectId === operation.projectId,
+  );
+}
+
+export function isTaskOperationCurrent(task, identity) {
+  if (!task || !identity) return false;
+  const taskUpdatedAt = task.updatedAt ?? task.updated_at ?? null;
+  return task.id === identity.taskId && taskUpdatedAt === identity.expectedUpdatedAt;
+}
+
+export function bindUnlockRetry({ kind, operation, task, retry }) {
+  if (typeof retry !== 'function') return null;
+  if (kind === 'composer' && operation) {
+    return {
+      kind,
+      operation: {
+        operationId: operation.operationId,
+        projectId: operation.projectId,
+      },
+      retry,
+    };
+  }
+  if ((kind === 'editor' || kind === 'complete') && task?.id) {
+    return {
+      kind,
+      identity: {
+        taskId: task.id,
+        expectedUpdatedAt: task.updatedAt ?? task.updated_at ?? null,
+      },
+      retry,
+    };
+  }
+  return null;
+}
+
+export function isUnlockRetryCurrent(binding, context) {
+  if (!binding) return false;
+  if (binding.kind === 'composer') {
+    return isComposerOperationCurrent(context?.composer, binding.operation);
+  }
+  if (binding.kind === 'editor') {
+    return isTaskOperationCurrent(context?.editor, binding.identity)
+      && context.editor?.status !== 'done';
+  }
+  if (binding.kind === 'complete') {
+    const task = context?.todos?.find((candidate) => candidate.id === binding.identity.taskId);
+    return isTaskOperationCurrent(task, binding.identity) && !task?.done && task?.status !== 'done';
+  }
+  return false;
+}
+
+export function guardUnlockRetry(binding, context) {
+  const allowed = isUnlockRetryCurrent(binding, context);
+  return {
+    allowed,
+    status: allowed ? 'ready' : 'stale',
+    run: allowed ? binding.retry : async () => undefined,
+  };
+}
+
 export function settleComposerOperation(current, operation, patch) {
-  if (
-    !operation
-    || current.operationId !== operation.operationId
-    || current.projectId !== operation.projectId
-  ) return current;
+  if (!isComposerOperationCurrent(current, operation)) return current;
   return { ...current, ...patch };
 }
 
@@ -196,15 +305,18 @@ function normalizeTask(task) {
   return {
     ...task,
     id: task.id,
+    status: task.status,
+    priority: task.priority,
     projectId: task.projectId ?? task.project_id ?? null,
     dueAt: task.dueAt ?? task.due_at ?? null,
+    duePrecision: task.duePrecision ?? task.due_precision ?? null,
     nextAction: task.nextAction ?? task.next_action ?? null,
     updatedAt: task.updatedAt ?? task.updated_at ?? null,
   };
 }
 
 export function resolveConflictTask(result) {
-  return normalizeTask(result?.currentTask || result?.current_task);
+  return normalizeTask(result?.task || result?.currentTask || result?.current_task);
 }
 
 export function applyAuthoritativeTask(todos, currentTask) {

@@ -3,11 +3,12 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 const root = process.cwd();
-const [dailySource, projectsSource, primitiveSource, tokenSource] = await Promise.all([
+const [dailySource, projectsSource, primitiveSource, tokenSource, projectTaskStateSource] = await Promise.all([
   readFile(`${root}/apps/hub/components/hub/pages/daily-brief.jsx`, "utf8"),
   readFile(`${root}/apps/hub/components/hub/pages/projects.jsx`, "utf8"),
   readFile(`${root}/apps/hub/components/hub/hub-primitives.jsx`, "utf8"),
   readFile(`${root}/apps/hub/components/hub/hub-tokens.css`, "utf8"),
+  readFile(`${root}/apps/hub/lib/project-task-state.js`, "utf8"),
 ]);
 
 test("Daily ledger keeps the canonical task source and lanes independent from legacy brief state", () => {
@@ -172,15 +173,16 @@ test("Projects task titles open the canonical durable EditDrawer", () => {
   assert.match(projectsSource, /fields=\{TASK_EDIT_FIELDS/);
   assert.match(projectsSource, /title.*status.*priority.*dueDate.*nextAction/s);
   assert.match(projectsSource, /allowedTaskStatuses/);
-  assert.match(projectsSource, /dueAt:\s*null,\s*duePrecision:\s*['"]none['"]/);
-  assert.match(projectsSource, /dueAt:.*duePrecision:\s*['"]date['"]/s);
+  assert.match(projectTaskStateSource, /dueAt:\s*null,\s*duePrecision:\s*['"]none['"]/);
+  assert.match(projectTaskStateSource, /dueAt.*duePrecision:\s*['"]date['"]/s);
   assert.match(projectsSource, /result\.status\s*===\s*['"]conflict['"][\s\S]*await loadLedger/);
-  assert.match(projectsSource, /setTaskDraft\([^)]*latest/s);
+  assert.match(projectsSource, /replaceTaskDraft\(latestDraft\)/);
 });
 
 test("Projects preserves timed due values and never claims an unfetched conflict refresh", () => {
-  assert.match(projectsSource, /taskDraft\.duePrecision\s*===\s*['"]timed['"]/);
-  assert.match(projectsSource, /dueAt:\s*taskDraft\.dueAt,\s*duePrecision:\s*['"]timed['"]/);
+  assert.match(projectsSource, /buildTaskDuePatch\(draftSnapshot,\s*taskTimezone\)/);
+  assert.match(projectTaskStateSource, /task\.duePrecision\s*===\s*['"]timed['"]/);
+  assert.match(projectTaskStateSource, /dueAt:\s*task\.dueAt,\s*duePrecision:\s*['"]timed['"]/);
   assert.match(projectsSource, /if\s*\(latest\)[\s\S]*최신 값으로 교체/);
   assert.match(projectsSource, /최신 값을 불러오지 못했습니다/);
 });
@@ -226,7 +228,7 @@ test("Projects binds composer async settlement to the originating operation", ()
 test("Projects task status and due dates use persisted status and API timezone", () => {
   assert.match(projectsSource, /record\.baseStatus/);
   assert.match(projectsSource, /taskTimezone/);
-  assert.match(projectsSource, /localDateMidnightIso\(taskDraft\.dueDate,\s*taskTimezone\)/);
+  assert.match(projectsSource, /buildTaskDuePatch\(draftSnapshot,\s*taskTimezone\)/);
   assert.doesNotMatch(projectsSource, /T00:00:00\+09:00|timeZone:\s*['"]Asia\/Seoul['"]/);
 });
 
@@ -256,4 +258,37 @@ test("Projects initial read has a fixed-height real-data skeleton", () => {
   assert.match(projectsSource, /ProjectLedgerSkeleton/);
   assert.match(projectsSource, /role=['"]status['"]/);
   assert.match(tokenSource, /\.project-ledger-skeleton[\s\S]*min-height:/);
+});
+
+test("Engine conflict payload prefers task and preserves canonical timed fields", () => {
+  assert.match(projectTaskStateSource, /result\?\.task\s*\|\|\s*result\?\.currentTask/);
+  assert.match(projectTaskStateSource, /duePrecision:\s*task\.duePrecision\s*\?\?\s*task\.due_precision/);
+  assert.match(projectsSource, /const currentTask = resolveConflictTask\(result\)/);
+});
+
+test("inline unlock guards composer, editor, and completion identity before retry", () => {
+  assert.match(projectsSource, /bindUnlockRetry/);
+  assert.match(projectsSource, /guardUnlockRetry/);
+  assert.match(projectsSource, /kind:\s*['"]composer['"]/);
+  assert.match(projectsSource, /kind:\s*['"]editor['"]/);
+  assert.match(projectsSource, /kind:\s*['"]complete['"]/);
+  assert.match(
+    projectsSource,
+    /const guardedRetry = guardUnlockRetry[\s\S]*if \(!guardedRetry\.allowed\)[\s\S]*return;[\s\S]*await guardedRetry\.run\(\)/,
+  );
+  assert.match(projectsSource, /isTaskOperationCurrent\(taskDraftRef\.current,\s*editorIdentity\)/);
+});
+
+test("date-only saves retain date precision across nonexistent local midnight", () => {
+  assert.match(projectsSource, /buildTaskDuePatch\(draftSnapshot,\s*taskTimezone\)/);
+  assert.match(projectTaskStateSource, /dueAt,\s*duePrecision:\s*['"]date['"]/);
+  assert.match(projectTaskStateSource, /earliest real instant/);
+  assert.match(projectTaskStateSource, /scanStart/);
+});
+
+test("Projects skeleton animation respects reduced motion", () => {
+  assert.match(
+    tokenSource,
+    /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.project-ledger-skeleton__row\s*\{[^}]*animation:\s*none/s,
+  );
 });

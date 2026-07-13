@@ -587,6 +587,7 @@
 .hub-app .hub-row:hover { background: var(--surface-2); }
 @media (prefers-reduced-motion: reduce) {
   .hub-app .hub-row { transition: none; }
+  .project-ledger-skeleton__row { animation: none; }
 }
 
 .hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; border-radius: 2px; }
