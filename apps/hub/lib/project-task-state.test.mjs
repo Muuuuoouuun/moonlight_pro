@@ -223,7 +223,7 @@ test('timezone helpers create exact timezone-local midnight and fall back safely
   );
   assert.equal(
     localDateMidnightIso('2011-12-30', 'Pacific/Apia'),
-    '2011-12-30T10:00:00.000Z',
+    null,
   );
   assert.deepEqual(
     buildTaskDuePatch({ dueDate: '2026-09-06', duePrecision: 'date' }, 'America/Santiago'),
@@ -237,8 +237,27 @@ test('timezone helpers create exact timezone-local midnight and fall back safely
     }, 'America/New_York'),
     { dueAt: '2026-07-14T09:30:00.000Z', duePrecision: 'timed' },
   );
+  assert.equal(
+    buildTaskDuePatch({ dueDate: '2011-12-30', duePrecision: 'date' }, 'Pacific/Apia'),
+    null,
+  );
   assert.equal(localDateMidnightIso('2026-02-30', 'Asia/Seoul'), null);
   assert.equal(formatTaskDueDate(liveTask, 'America/New_York'), '2026-07-14');
+});
+
+test('every non-null date-only instant round-trips to the chosen local calendar date', () => {
+  const cases = [
+    ['2026-07-14', 'America/New_York'],
+    ['2026-07-14', 'Asia/Seoul'],
+    ['2026-09-06', 'America/Santiago'],
+    ['2026-03-08', 'America/Havana'],
+  ];
+
+  for (const [dateKey, timezone] of cases) {
+    const dueAt = localDateMidnightIso(dateKey, timezone);
+    assert.ok(dueAt, `${dateKey} must be representable in ${timezone}`);
+    assert.equal(formatTaskDueDate({ dueAt }, timezone), dateKey);
+  }
 });
 
 test('Engine conflict task is normalized and applied before any refetch', () => {

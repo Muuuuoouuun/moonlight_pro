@@ -105,26 +105,21 @@ export function localDateMidnightIso(dateKey, timezone) {
   const scanEnd = intended + (36 * 60 * 60 * 1000);
   for (let cursor = scanStart; cursor <= scanEnd; cursor += step) {
     const cursorDateKey = zonedDateKey(new Date(cursor), resolvedTimezone);
-    const matchesRequestedDate = cursorDateKey === targetDateKey;
-    const isFirstSafeDateAfterSkip = cursorDateKey > targetDateKey;
-    if (!matchesRequestedDate && !isFirstSafeDateAfterSkip) continue;
+    if (cursorDateKey !== targetDateKey) continue;
 
     let lower = cursor - step;
     let upper = cursor;
     while (upper - lower > 1) {
       const midpoint = Math.floor((lower + upper) / 2);
       const midpointDateKey = zonedDateKey(new Date(midpoint), resolvedTimezone);
-      const reachedBoundary = matchesRequestedDate
-        ? midpointDateKey === targetDateKey
-        : midpointDateKey > targetDateKey;
-      if (reachedBoundary) upper = midpoint;
+      if (midpointDateKey === targetDateKey) upper = midpoint;
       else lower = midpoint;
     }
     return new Date(upper).toISOString();
   }
 
-  // All current IANA offsets fit the scan window. Keep null reserved for malformed
-  // Gregorian dates if a runtime cannot represent the supplied timezone data.
+  // A Gregorian date can be valid yet absent from an IANA timezone after a date-line
+  // jump. Returning a neighboring date would violate the date-only round-trip contract.
   return null;
 }
 
