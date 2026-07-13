@@ -123,7 +123,7 @@ test("Projects keeps canonical task health separate from project sync health", (
   assert.match(projectsSource, /taskSource,\s*setTaskSource/);
   assert.match(projectsSource, /taskError,\s*setTaskError/);
   assert.match(projectsSource, /const nextTaskSource = data\.taskSource/);
-  assert.match(projectsSource, /setTaskSource\(nextTaskSource\)/);
+  assert.match(projectsSource, /setTaskSource\(nextRead\.taskSource\)/);
   assert.match(projectsSource, /nextTaskSource\s*===\s*['"]error['"]/);
   assert.match(projectsSource, /setTodos\(previousTodos\s*=>\s*previousTodos\)/);
   assert.match(projectsSource, /role=['"]alert['"]/);
@@ -141,8 +141,8 @@ test("Projects read lifecycle survives React Strict Mode effect replay", () => {
 test("expanded Projects rows create project-linked durable tasks and refetch canonically", () => {
   assert.match(projectsSource, /createDurableTaskClient/);
   assert.match(projectsSource, /client\.createTask\s*\(/);
-  assert.match(projectsSource, /title:\s*taskComposer\.title/);
-  assert.match(projectsSource, /projectId:\s*taskComposer\.projectId/);
+  assert.match(projectsSource, /title:\s*operation\.title/);
+  assert.match(projectsSource, /projectId:\s*operation\.projectId/);
   assert.match(projectsSource, /status:\s*['"]todo['"]/);
   assert.match(projectsSource, /['"]saved['"].*['"]duplicate['"]|['"]duplicate['"].*['"]saved['"]/s);
   assert.match(projectsSource, /await loadLedger\s*\(/);
@@ -206,4 +206,54 @@ test("Projects writable task controls meet mobile sizing without unlocking proje
   assert.match(projectsSource, /className=['"]hub-project-readonly-footer['"]/);
   assert.match(tokenSource, /@media\s*\(max-width:\s*640px\)[\s\S]*\.hub-project-row[\s\S]*grid-template-columns:\s*44px minmax\(0,\s*1fr\) auto/s);
   assert.match(tokenSource, /\.hub-project-readonly-footer[\s\S]*min-width:\s*0/);
+});
+
+test("Projects keeps last-known-live surfaces mounted through read failures and preview", () => {
+  assert.match(projectsSource, /hasLedgerSnapshot/);
+  assert.match(projectsSource, /showLedgerSurface/);
+  assert.match(projectsSource, /showLedgerSurface\s*&&\s*view === ['"]tree['"]/);
+  assert.match(projectsSource, /showLedgerSurface\s*&&\s*syncState !== ['"]live['"]/);
+  assert.match(projectsSource, /role=['"]alert['"][\s\S]*다시 시도/);
+});
+
+test("Projects binds composer async settlement to the originating operation", () => {
+  assert.match(projectsSource, /beginComposerOperation/);
+  assert.match(projectsSource, /settleComposerOperation/);
+  assert.match(projectsSource, /operation\.projectId/);
+  assert.match(projectsSource, /operation\.title/);
+});
+
+test("Projects task status and due dates use persisted status and API timezone", () => {
+  assert.match(projectsSource, /record\.baseStatus/);
+  assert.match(projectsSource, /taskTimezone/);
+  assert.match(projectsSource, /localDateMidnightIso\(taskDraft\.dueDate,\s*taskTimezone\)/);
+  assert.doesNotMatch(projectsSource, /T00:00:00\+09:00|timeZone:\s*['"]Asia\/Seoul['"]/);
+});
+
+test("Projects resolves OCC conflicts from mutation currentTask before refetch", () => {
+  assert.match(projectsSource, /resolveConflictTask\(result\)/);
+  assert.match(projectsSource, /applyAuthoritativeTask/);
+  assert.match(projectsSource, /currentTask[\s\S]*await loadLedger\(\)/);
+});
+
+test("Projects unlocks write session inline without unmounting drafts", () => {
+  assert.match(projectsSource, /client\.unlockSession/);
+  assert.match(projectsSource, /type=['"]password['"]/);
+  assert.match(projectsSource, /onSecretConsumed:\s*\(\)\s*=>\s*setUnlockSecret\(['"]['"]\)/);
+  assert.match(projectsSource, /pendingUnlockRetryRef/);
+  assert.doesNotMatch(projectsSource, /Quick Capture에서/);
+});
+
+test("task mutations announce success and EditDrawer avoids iOS input zoom", () => {
+  assert.match(projectsSource, /aria-live=['"]polite['"]/);
+  assert.match(projectsSource, /setTaskAnnouncement/);
+  assert.match(tokenSource, /@media\s*\(max-width:\s*640px\)[\s\S]*\.hub-edit-drawer-field/);
+  assert.match(tokenSource, /\.hub-edit-drawer-field\s+(?:input|input,\s*\n?\s*\.hub-edit-drawer-field\s+select)[\s\S]*font-size:\s*16px/);
+  assert.match(primitiveSource, /className=['"]hub-edit-drawer-field['"]/);
+});
+
+test("Projects initial read has a fixed-height real-data skeleton", () => {
+  assert.match(projectsSource, /ProjectLedgerSkeleton/);
+  assert.match(projectsSource, /role=['"]status['"]/);
+  assert.match(tokenSource, /\.project-ledger-skeleton[\s\S]*min-height:/);
 });

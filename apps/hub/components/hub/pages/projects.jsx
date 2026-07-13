@@ -5,6 +5,18 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, Checkbox, EditDrawer, EmptyState, SyncBadge } from "../hub-primitives";
 import { createDurableTaskClient } from "@/lib/durable-task-client";
 import {
+  allowedTaskStatuses,
+  applyAuthoritativeTask,
+  beginComposerOperation,
+  createProjectReadState,
+  formatTaskDueDate,
+  localDateMidnightIso,
+  reconcileProjectReadState,
+  resolveConflictTask,
+  settleComposerOperation,
+  taskToDraft,
+} from "@/lib/project-task-state";
+import {
   getWorkspace,
   filterBrandsByWorkspace,
   filterProjectsByWorkspace,
@@ -33,14 +45,6 @@ const EMPTY_COLUMNS = [
   { key: 'done', label: 'Done', cards: [] },
 ];
 
-const TASK_TRANSITIONS = {
-  inbox: ['todo', 'done'],
-  todo: ['doing', 'blocked', 'done'],
-  doing: ['todo', 'blocked', 'done'],
-  blocked: ['todo', 'doing', 'done'],
-  done: ['todo'],
-};
-
 const TASK_STATUS_LABELS = {
   inbox: '수신함',
   todo: '할 일',
@@ -49,17 +53,9 @@ const TASK_STATUS_LABELS = {
   done: '완료',
 };
 
-function allowedTaskStatuses(status) {
-  const current = TASK_STATUS_LABELS[status] ? status : 'todo';
-  return [current, ...(TASK_TRANSITIONS[current] || [])].map((value) => ({
-    value,
-    label: TASK_STATUS_LABELS[value],
-  }));
-}
-
 const TASK_EDIT_FIELDS = [
   { key: 'title', label: '제목' },
-  { key: 'status', label: '상태', type: 'select', options: (record) => allowedTaskStatuses(record.status) },
+  { key: 'status', label: '상태', type: 'select', options: (record) => allowedTaskStatuses(record.baseStatus).map((value) => ({ value, label: TASK_STATUS_LABELS[value] })) },
   { key: 'priority', label: '우선순위', type: 'select', options: [
     { value: 'critical', label: '매우 높음' },
     { value: 'high', label: '높음' },
@@ -70,35 +66,20 @@ const TASK_EDIT_FIELDS = [
   { key: 'nextAction', label: '다음 행동', placeholder: '다음으로 할 일을 적으세요' },
 ];
 
-function taskDueDate(task) {
-  if (!task?.dueAt) return '';
-  try {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
-    }).formatToParts(new Date(task.dueAt));
-    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-    return `${values.year}-${values.month}-${values.day}`;
-  } catch {
-    return String(task.dueAt).slice(0, 10);
-  }
-}
-
-function taskToDraft(task) {
-  return {
-    ...task,
-    title: task?.title || '',
-    status: task?.status || 'todo',
-    priority: task?.priorityKey || task?.priority || 'medium',
-    dueDate: taskDueDate(task),
-    nextAction: task?.nextAction || '',
-  };
-}
-
 function taskFailureMessage(result, fallback) {
   if (result?.requiresUnlock || result?.httpStatus === 401) {
-    return '쓰기 잠금이 필요합니다. Quick Capture에서 운영자 잠금을 해제한 뒤 다시 시도하세요.';
+    return '쓰기 잠금이 필요합니다. 이 화면에서 잠금을 해제하면 같은 작업을 다시 시도합니다.';
   }
   return result?.error || result?.message || fallback;
+}
+
+function ProjectLedgerSkeleton() {
+  return (
+    <div className="project-ledger-skeleton" role="status" aria-label="프로젝트와 할 일 원장을 불러오는 중">
+      <div className="project-ledger-skeleton__row" />
+      <div className="project-ledger-skeleton__row" />
+    </div>
+  );
 }
 
 function isDurableSuccess(result) {
@@ -165,17 +146,29 @@ export function Projects({ workspace }) {
   const [ledgerError, setLedgerError] = React.useState(null);
   const [taskSource, setTaskSource] = React.useState('loading');
   const [taskError, setTaskError] = React.useState(null);
+  const [taskTimezone, setTaskTimezone] = React.useState('Asia/Seoul');
+  const [hasLedgerSnapshot, setHasLedgerSnapshot] = React.useState(false);
   const [refreshToken, setRefreshToken] = React.useState(0);
   const brandMenuRef = React.useRef(null);
   const mountedRef = React.useRef(true);
   const loadGenerationRef = React.useRef(0);
+  const hasLedgerSnapshotRef = React.useRef(false);
+  const hasTaskSnapshotRef = React.useRef(false);
+  const readStateRef = React.useRef(createProjectReadState());
   const client = React.useMemo(() => createDurableTaskClient(), []);
   const [pendingTaskIds, setPendingTaskIds] = React.useState(() => new Set());
   const [persistedTaskIds, setPersistedTaskIds] = React.useState(() => new Set());
   const [taskResults, setTaskResults] = React.useState({});
   const [taskComposer, setTaskComposer] = React.useState({ projectId: null, title: '', state: 'idle', error: '' });
+  const composerOperationRef = React.useRef(null);
   const [taskDraft, setTaskDraft] = React.useState(null);
   const [drawerPersisted, setDrawerPersisted] = React.useState(false);
+  const [taskAnnouncement, setTaskAnnouncement] = React.useState('');
+  const [requiresUnlock, setRequiresUnlock] = React.useState(false);
+  const [unlockSecret, setUnlockSecret] = React.useState('');
+  const [unlockPending, setUnlockPending] = React.useState(false);
+  const [unlockError, setUnlockError] = React.useState('');
+  const pendingUnlockRetryRef = React.useRef(null);
   const [orderPendingId, setOrderPendingId] = React.useState(null);
   const [orderResults, setOrderResults] = React.useState({}); // projectId → { tone: 'ok'|'err', label }
 
@@ -234,6 +227,7 @@ export function Projects({ workspace }) {
   const brandTodos = brand === 'all' ? scopedTodos : scopedTodos.filter(t => t.brand === brand);
   const currentBrand = brands.find(b => b.key === brand) || brands[0] || EMPTY_ALL_BRAND;
   const cols = Array.isArray(ledger.columns) && ledger.columns.length ? ledger.columns : EMPTY_COLUMNS;
+  const showLedgerSurface = syncState === 'live' || hasLedgerSnapshot;
 
   React.useEffect(() => {
     mountedRef.current = true;
@@ -242,8 +236,10 @@ export function Projects({ workspace }) {
 
   const loadLedger = React.useCallback(async ({ showLoading = false } = {}) => {
     const generation = ++loadGenerationRef.current;
-    if (showLoading) {
+    if (showLoading && !hasLedgerSnapshotRef.current) {
       setSyncState('loading');
+    }
+    if (showLoading && !hasTaskSnapshotRef.current) {
       setTaskSource('loading');
     }
     setLedgerError(null);
@@ -255,22 +251,41 @@ export function Projects({ workspace }) {
 
       if (!response.ok || !data || data.status === 'error') {
         const message = data?.error || data?.message || `프로젝트 원장 요청 실패 (${response.status})`;
-        setSyncState('error');
-        setLedgerError(message);
-        setTaskSource('error');
+        const failedRead = reconcileProjectReadState(readStateRef.current, { type: 'failure', message });
+        readStateRef.current = failedRead;
+        setSyncState(failedRead.syncState);
+        setLedgerError(failedRead.ledgerError);
+        setTaskSource(failedRead.taskSource);
         setTaskError('할 일 원장을 다시 읽지 못했습니다. 기존에 불러온 할 일을 유지합니다.');
         setTodos(previousTodos => previousTodos);
         return { ok: false, reason: 'project-read', message };
       }
 
+      const previousRead = readStateRef.current;
+      const nextRead = reconcileProjectReadState(previousRead, {
+        type: 'success',
+        data: { ...data, ledger: data },
+      });
+      readStateRef.current = nextRead;
       const nextTaskSource = data.taskSource || 'preview';
-      setTaskSource(nextTaskSource);
-      if (nextTaskSource === 'error') {
-        setTaskError('할 일 원장을 다시 읽지 못했습니다. 기존에 불러온 할 일을 유지합니다.');
+      const preservePreviewTasks = data.source !== 'supabase' && previousRead.hasTaskSnapshot;
+      setTaskSource(nextRead.taskSource);
+      setTaskTimezone(nextRead.taskTimezone);
+      if (nextTaskSource === 'error' || preservePreviewTasks) {
+        setTaskError(preservePreviewTasks
+          ? '할 일 원장이 미리보기로 응답해 기존에 불러온 할 일을 유지합니다.'
+          : '할 일 원장을 다시 읽지 못했습니다. 기존에 불러온 할 일을 유지합니다.');
         setTodos(previousTodos => previousTodos);
-      } else {
+      } else if (['live', 'empty'].includes(nextTaskSource)) {
         setTaskError(null);
         setTodos(Array.isArray(data.todos) ? data.todos : []);
+        hasTaskSnapshotRef.current = true;
+      } else if (!hasTaskSnapshotRef.current) {
+        setTaskError(null);
+        setTodos(Array.isArray(data.todos) ? data.todos : []);
+      } else {
+        setTaskError('할 일 원장이 미리보기로 응답해 기존에 불러온 할 일을 유지합니다.');
+        setTodos(previousTodos => previousTodos);
       }
 
       if (data.source === 'supabase') {
@@ -286,26 +301,34 @@ export function Projects({ workspace }) {
           columns: Array.isArray(data.columns) && data.columns.length ? data.columns : EMPTY_COLUMNS,
         });
         setExpanded((previous) => previous.size ? previous : new Set(liveProjects.slice(0, 2).map((project) => project.id)));
+        setHasLedgerSnapshot(true);
         setSyncState('live');
         setLedgerError(null);
       } else {
-        setLedger({
-          source: 'preview', brands: [EMPTY_ALL_BRAND], projects: [], updates: [], decisions: [],
-          notes: [], checks: [], columns: EMPTY_COLUMNS,
-        });
-        setExpanded(new Set());
-        setOpenDetail(null);
+        if (!hasLedgerSnapshotRef.current) {
+          setLedger({
+            source: 'preview', brands: [EMPTY_ALL_BRAND], projects: [], updates: [], decisions: [],
+            notes: [], checks: [], columns: EMPTY_COLUMNS,
+          });
+          setExpanded(new Set());
+          setOpenDetail(null);
+        }
         setSyncState('preview');
-        setLedgerError(null);
+        setLedgerError(hasLedgerSnapshotRef.current ? '미리보기 응답 대신 마지막으로 확인한 프로젝트를 유지합니다.' : null);
       }
 
-      return { ok: ['live', 'empty'].includes(nextTaskSource), data };
+      hasLedgerSnapshotRef.current = nextRead.hasLedgerSnapshot;
+      hasTaskSnapshotRef.current = nextRead.hasTaskSnapshot;
+
+      return { ok: data.source === 'supabase' && ['live', 'empty'].includes(nextTaskSource), data };
     } catch (error) {
       if (!mountedRef.current || generation !== loadGenerationRef.current) return { ok: false, reason: 'stale' };
       const message = error instanceof Error ? error.message : String(error);
-      setSyncState('error');
-      setLedgerError(message);
-      setTaskSource('error');
+      const failedRead = reconcileProjectReadState(readStateRef.current, { type: 'failure', message });
+      readStateRef.current = failedRead;
+      setSyncState(failedRead.syncState);
+      setLedgerError(failedRead.ledgerError);
+      setTaskSource(failedRead.taskSource);
       setTaskError('할 일 원장을 다시 읽지 못했습니다. 기존에 불러온 할 일을 유지합니다.');
       setTodos(previousTodos => previousTodos);
       return { ok: false, reason: 'network', message };
@@ -329,51 +352,104 @@ export function Projects({ workspace }) {
   const updateTone = { reported: 'neutral', active: 'info', blocked: 'danger', done: 'success' };
   const checkTone = { pending: 'neutral', done: 'success', skipped: 'warning', blocked: 'danger' };
 
+  const offerSessionUnlock = (result, retry) => {
+    if (!result?.requiresUnlock && result?.httpStatus !== 401) return false;
+    pendingUnlockRetryRef.current = retry;
+    setRequiresUnlock(true);
+    setUnlockError('');
+    return true;
+  };
+
+  const applyCurrentTask = (currentTask) => {
+    readStateRef.current = {
+      ...readStateRef.current,
+      todos: applyAuthoritativeTask(readStateRef.current.todos, currentTask),
+      hasTaskSnapshot: true,
+    };
+    setTodos((previous) => applyAuthoritativeTask(previous, currentTask));
+  };
+
+  const submitSessionUnlock = async (event) => {
+    event.preventDefault();
+    if (!unlockSecret || unlockPending) return;
+    setUnlockPending(true);
+    setUnlockError('');
+    const retry = pendingUnlockRetryRef.current;
+    const result = await client.unlockSession({
+      secret: unlockSecret,
+      onSecretConsumed: () => setUnlockSecret(''),
+    });
+    setUnlockPending(false);
+    if (!result.unlocked) {
+      setUnlockError('잠금을 해제하지 못했습니다. secret을 확인해 주세요.');
+      return;
+    }
+    pendingUnlockRetryRef.current = null;
+    setRequiresUnlock(false);
+    setTaskAnnouncement('쓰기 잠금을 해제했습니다. 같은 작업을 다시 시도합니다.');
+    await retry?.();
+  };
+
   const openTaskComposer = (projectId) => {
     setExpanded((previous) => new Set([...previous, projectId]));
     setTaskComposer({ projectId, title: '', state: 'idle', error: '' });
   };
 
-  const refetchPersistedComposer = async () => {
-    setTaskComposer((current) => ({ ...current, state: 'refreshing', error: '' }));
+  const refetchPersistedComposer = async (operation) => {
+    setTaskComposer((current) => settleComposerOperation(current, operation, { state: 'refreshing', error: '' }));
     const refreshed = await loadLedger();
     if (refreshed.ok && ['live', 'empty'].includes(refreshed.data?.taskSource)) {
-      setTaskComposer({ projectId: null, title: '', state: 'idle', error: '' });
+      setTaskComposer((current) => settleComposerOperation(current, operation, {
+        projectId: null, title: '', state: 'idle', error: '', operationId: null,
+      }));
+      if (composerOperationRef.current?.operationId === operation.operationId) composerOperationRef.current = null;
       return;
     }
-    setTaskComposer((current) => ({ ...current, state: 'persisted', error: '저장은 완료됐지만 목록을 확인하지 못했습니다. 다시 확인하세요.' }));
+    setTaskComposer((current) => settleComposerOperation(current, operation, {
+      state: 'persisted', error: '저장은 완료됐지만 목록을 확인하지 못했습니다. 다시 확인하세요.',
+    }));
   };
 
-  const createProjectTask = async (event) => {
-    event.preventDefault();
-    if (taskComposer.state === 'persisted') {
-      await refetchPersistedComposer();
-      return;
-    }
-    const title = taskComposer.title.trim();
+  const persistProjectTask = async (composerInput) => {
+    const title = composerInput.title.trim();
     if (!title) {
       setTaskComposer((current) => ({ ...current, error: '할 일 제목을 입력하세요.' }));
       return;
     }
 
-    setTaskComposer((current) => ({ ...current, state: 'saving', error: '' }));
+    const { state: savingComposer, operation } = beginComposerOperation(composerInput, {
+      operationId: globalThis.crypto?.randomUUID?.() || `task-${Date.now()}`,
+    });
+    composerOperationRef.current = operation;
+    setTaskComposer(savingComposer);
     const result = await client.createTask({
-      title: taskComposer.title,
-      projectId: taskComposer.projectId,
+      title: operation.title,
+      projectId: operation.projectId,
       status: 'todo',
     });
 
     if (isDurableSuccess(result)) {
-      setTaskComposer((current) => ({ ...current, state: 'persisted', error: '' }));
-      await refetchPersistedComposer();
+      setTaskAnnouncement(`${operation.title} 할 일을 저장했습니다.`);
+      setTaskComposer((current) => settleComposerOperation(current, operation, { state: 'persisted', error: '' }));
+      await refetchPersistedComposer(operation);
       return;
     }
 
-    setTaskComposer((current) => ({
-      ...current,
+    const retryComposer = { ...composerInput, title: operation.title, projectId: operation.projectId, state: 'error' };
+    offerSessionUnlock(result, () => persistProjectTask(retryComposer));
+    setTaskComposer((current) => settleComposerOperation(current, operation, {
       state: 'error',
       error: taskFailureMessage(result, '할 일을 저장하지 못했습니다. 입력을 유지했으니 다시 시도하세요.'),
     }));
+  };
+
+  const createProjectTask = async (event) => {
+    event?.preventDefault?.();
+    if (taskComposer.state === 'persisted' && composerOperationRef.current) {
+      await refetchPersistedComposer(composerOperationRef.current);
+      return;
+    }
+    await persistProjectTask(taskComposer);
   };
 
   const completeTask = async (t) => {
@@ -402,6 +478,7 @@ export function Projects({ workspace }) {
       });
 
       if (isDurableSuccess(result)) {
+        setTaskAnnouncement(`${t.title} 할 일을 완료했습니다.`);
         setPersistedTaskIds((previous) => new Set([...previous, t.id]));
         const refreshed = await loadLedger();
         if (refreshed.ok) {
@@ -414,14 +491,30 @@ export function Projects({ workspace }) {
           setTaskResults((previous) => ({ ...previous, [t.id]: '완료는 저장됐지만 목록을 다시 읽지 못했습니다. 새로고침하세요.' }));
         }
       } else if (result.status === 'conflict') {
-        const refreshed = await loadLedger();
-        setTaskResults((previous) => ({
-          ...previous,
-          [t.id]: refreshed.ok
-            ? '다른 곳에서 변경됐습니다. 최신 값을 불러왔으니 다시 확인하세요.'
-            : '다른 곳에서 변경됐지만 최신 값을 다시 읽지 못했습니다. 목록을 다시 확인하세요.',
-        }));
+        const currentTask = resolveConflictTask(result);
+        if (currentTask) {
+          applyCurrentTask(currentTask);
+          if (currentTask.status === 'done') {
+            setTaskAnnouncement(`${t.title} 할 일은 다른 곳에서 이미 완료됐습니다.`);
+          }
+          setTaskResults((previous) => ({
+            ...previous,
+            [t.id]: currentTask.status === 'done'
+              ? '다른 곳에서 이미 완료된 최신 상태를 반영했습니다.'
+              : '다른 곳에서 변경된 최신 상태를 반영했습니다. 다시 확인하세요.',
+          }));
+          await loadLedger();
+        } else {
+          const refreshed = await loadLedger();
+          setTaskResults((previous) => ({
+            ...previous,
+            [t.id]: refreshed.ok
+              ? '다른 곳에서 변경됐습니다. 최신 값을 불러왔으니 다시 확인하세요.'
+              : '다른 곳에서 변경됐지만 최신 값을 다시 읽지 못했습니다. 목록을 다시 확인하세요.',
+          }));
+        }
       } else {
+        offerSessionUnlock(result, () => completeTask(t));
         setTaskResults((previous) => ({
           ...previous,
           [t.id]: taskFailureMessage(result, '완료 상태를 저장하지 못했습니다. 다시 시도하세요.'),
@@ -438,7 +531,7 @@ export function Projects({ workspace }) {
 
   const openTaskEditor = (t) => {
     setDrawerPersisted(false);
-    setTaskDraft(taskToDraft(t));
+    setTaskDraft(taskToDraft(t, taskTimezone));
   };
 
   const saveTaskDraft = async () => {
@@ -454,9 +547,9 @@ export function Projects({ workspace }) {
       ? { dueAt: null, duePrecision: 'none' }
       : taskDraft.duePrecision === 'timed'
         && taskDraft.dueAt
-        && taskDueDate(taskDraft) === taskDraft.dueDate
+        && formatTaskDueDate(taskDraft, taskTimezone) === taskDraft.dueDate
         ? { dueAt: taskDraft.dueAt, duePrecision: 'timed' }
-        : { dueAt: `${taskDraft.dueDate}T00:00:00+09:00`, duePrecision: 'date' };
+        : { dueAt: localDateMidnightIso(taskDraft.dueDate, taskTimezone), duePrecision: 'date' };
     const result = await client.updateTask({
       id: taskDraft.id,
       expectedUpdatedAt: taskDraft.updatedAt,
@@ -470,6 +563,7 @@ export function Projects({ workspace }) {
     });
 
     if (isDurableSuccess(result)) {
+      setTaskAnnouncement(`${taskDraft.title.trim()} 할 일 변경사항을 저장했습니다.`);
       setDrawerPersisted(true);
       const refreshed = await loadLedger();
       if (refreshed.ok && ['live', 'empty'].includes(refreshed.data?.taskSource)) {
@@ -480,16 +574,36 @@ export function Projects({ workspace }) {
     }
 
     if (result.status === 'conflict') {
+      const currentTask = resolveConflictTask(result);
+      if (currentTask) {
+        applyCurrentTask(currentTask);
+        if (currentTask.status === 'done') {
+          setTaskDraft(null);
+          setTaskAnnouncement(`${taskDraft.title} 할 일은 다른 곳에서 이미 완료되어 편집기를 닫았습니다.`);
+          await loadLedger();
+          return { ok: true, status: 'conflict-resolved' };
+        }
+        setTaskDraft(taskToDraft(currentTask, taskTimezone));
+        await loadLedger();
+        return { ok: false, status: 'conflict', message: '다른 곳에서 변경됐습니다. 최신 값으로 교체했으니 다시 검토하세요.' };
+      }
       const refreshed = await loadLedger();
       const latest = refreshed.data?.todos?.find((todo) => todo.id === taskDraft.id);
       if (latest) {
-        const latestDraft = taskToDraft(latest);
+        const latestDraft = taskToDraft(latest, taskTimezone);
         setTaskDraft(latestDraft);
         return { ok: false, status: 'conflict', message: '다른 곳에서 변경됐습니다. 최신 값으로 교체했으니 다시 검토하세요.' };
       }
       return { ok: false, status: 'conflict', message: '다른 곳에서 변경됐지만 최신 값을 불러오지 못했습니다. 목록을 다시 확인하세요.' };
     }
 
+    offerSessionUnlock(result, async () => {
+      const retried = await saveTaskDraft();
+      if (retried?.ok) {
+        setTaskDraft(null);
+        setDrawerPersisted(false);
+      }
+    });
     return {
       ok: false,
       message: taskFailureMessage(result, '할 일을 저장하지 못했습니다. 입력을 유지했으니 다시 시도하세요.'),
@@ -708,7 +822,7 @@ export function Projects({ workspace }) {
           <div>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Projects</h2>
             <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-              {syncState === 'live' ? `${projects.length} projects · ${brandTodos.filter(t => !t.done).length} open todos · ${currentBrand.desc}` : '실제 프로젝트 원장 상태를 확인합니다.'}
+              {showLedgerSurface ? `${projects.length} projects · ${brandTodos.filter(t => !t.done).length} open todos · ${currentBrand.desc}` : '실제 프로젝트 원장 상태를 확인합니다.'}
               <SyncBadge state={syncState} />
             </div>
           </div>
@@ -725,7 +839,42 @@ export function Projects({ workspace }) {
           <Button variant="secondary" size="sm" icon="lock" disabled title="프로젝트 생성·삭제는 읽기 전용입니다.">프로젝트 읽기 전용</Button>
         </div>
 
-        {syncState === 'live' && (taskSource === 'error' || taskSource === 'preview') && (
+        <div className="visually-hidden" aria-live="polite" aria-atomic="true">{taskAnnouncement}</div>
+
+        {requiresUnlock && (
+          <form className="project-session-unlock" onSubmit={submitSessionUnlock} aria-busy={unlockPending}>
+            <div>
+              <strong>쓰기 잠금 해제</strong>
+              <span>현재 화면과 입력을 유지한 채, 실패한 작업을 같은 재시도 키로 다시 실행합니다.</span>
+            </div>
+            <label className="visually-hidden" htmlFor="project-write-secret">Hub write secret</label>
+            <input
+              id="project-write-secret"
+              type="password"
+              value={unlockSecret}
+              onChange={(event) => setUnlockSecret(event.target.value)}
+              disabled={unlockPending}
+              autoComplete="current-password"
+              placeholder="Hub write secret"
+            />
+            <Button type="submit" variant="secondary" size="sm" disabled={unlockPending || !unlockSecret}>
+              {unlockPending ? '확인 중…' : '잠금 해제 후 재시도'}
+            </Button>
+            {unlockError && <span className="project-session-unlock__error" role="alert">{unlockError}</span>}
+          </form>
+        )}
+
+        {showLedgerSurface && syncState !== 'live' && (
+          <div className="project-task-source-alert" role="alert">
+            <div>
+              <strong>{syncState === 'error' ? '프로젝트 원장을 다시 읽지 못했습니다.' : '프로젝트 원장이 미리보기로 응답했습니다.'}</strong>
+              <span>{ledgerError || '마지막으로 확인한 프로젝트와 할 일을 그대로 유지합니다.'}</span>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => loadLedger()}>다시 시도</Button>
+          </div>
+        )}
+
+        {showLedgerSurface && (taskSource === 'error' || taskSource === 'preview') && (
           <div className="project-task-source-alert" role="alert">
             <div>
               <strong>{taskSource === 'error' ? '할 일 원장을 확인하지 못했습니다.' : '할 일 원장 연결이 필요합니다.'}</strong>
@@ -735,22 +884,22 @@ export function Projects({ workspace }) {
           </div>
         )}
 
-        {syncState !== 'live' && (
+        {!showLedgerSurface && (
           <div className="scroll-y" style={{ flex: 1, padding: 'var(--section-gap)' }}>
             <div style={{ maxWidth: 720, margin: '0 auto' }}>
-              <Card>
+              {syncState === 'loading' ? <ProjectLedgerSkeleton /> : <Card>
                 <EmptyState
                   icon={syncState === 'error' ? 'signal' : syncState === 'loading' ? 'work' : 'projects'}
                   title={syncState === 'error' ? '프로젝트 원장을 불러오지 못했습니다' : syncState === 'loading' ? '프로젝트 원장 확인 중' : '프로젝트 원장 연결 필요'}
                   description={syncState === 'error' ? ledgerError || '실패한 읽기를 샘플 프로젝트로 대체하지 않았습니다.' : syncState === 'loading' ? '실제 프로젝트와 할 일을 확인하고 있습니다.' : 'Supabase 프로젝트 원장을 연결하면 실제 프로젝트와 할 일이 표시됩니다.'}
                   action={syncState === 'error' ? <Button variant="outline" size="sm" onClick={() => setRefreshToken((value) => value + 1)}>다시 시도</Button> : undefined}
                 />
-              </Card>
+              </Card>}
             </div>
           </div>
         )}
 
-        {syncState === 'live' && view === 'tree' && (
+        {showLedgerSurface && view === 'tree' && (
           <div className="hub-projects-main-grid" style={{ display: 'grid', gridTemplateColumns: openDetail ? '1fr 360px' : '1fr', flex: 1, overflow: 'hidden' }}>
             <div className="scroll-y" style={{ padding: 'var(--section-gap)' }}>
               <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
@@ -1083,7 +1232,7 @@ export function Projects({ workspace }) {
           </div>
         )}
 
-        {syncState === 'live' && view === 'todos' && (
+        {showLedgerSurface && view === 'todos' && (
           <div className="scroll-y" style={{ flex: 1, padding: 'var(--section-gap)' }}>
             <div style={{ maxWidth: 880, margin: '0 auto' }}>
               {brandTodos.length === 0 && (
@@ -1142,7 +1291,7 @@ export function Projects({ workspace }) {
           </div>
         )}
 
-        {syncState === 'live' && view === 'board' && (
+        {showLedgerSurface && view === 'board' && (
             <div className="hub-scroll-x" style={{ display: 'flex', gap: 'var(--gap)', overflowX: 'auto', flex: 1, padding: 'var(--section-gap)' }}>
             {cols.map(col => (
               <div key={col.key} style={{

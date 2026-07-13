@@ -122,7 +122,8 @@ test("Projects never substitutes fallback business rows", () => {
   assert.match(source, /setTodos\(Array\.isArray\(data\.todos\) \? data\.todos : \[\]\)/);
   assert.match(source, /setTodos\(previousTodos => previousTodos\)/);
   assert.match(source, /taskSource/);
-  assert.match(source, /setSyncState\(["']error["']\)/);
+  assert.match(source, /reconcileProjectReadState\([^)]*type:\s*["']failure["']/);
+  assert.match(source, /setSyncState\(failedRead\.syncState\)/);
   assert.match(source, /setSyncState\(["']preview["']\)/);
   assert.doesNotMatch(
     source,

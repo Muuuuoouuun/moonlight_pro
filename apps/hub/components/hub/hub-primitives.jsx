@@ -586,7 +586,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
       }
     >
       {fields.map(f => (
-        <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <label key={f.key} className="hub-edit-drawer-field" style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>{f.label}</span>
           {f.type === 'select' ? (
             <select disabled={saveState === 'saving'} value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
