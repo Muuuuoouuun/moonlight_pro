@@ -296,11 +296,25 @@ function mappedError(error: unknown, correlationId?: string): CommandResult {
     "missing-config": { httpStatus: 503, status: "degraded", retryable: false },
     timeout: { httpStatus: 504, status: "failed", retryable: true },
     "not-found": { httpStatus: 404, status: "failed", retryable: false },
+    forbidden: { httpStatus: 403, status: "failed", retryable: false },
     invalid: { httpStatus: 400, status: "failed", retryable: false },
     "invalid-transition": { httpStatus: 409, status: "conflict", retryable: false },
     upstream: { httpStatus: 502, status: "failed", retryable: true },
   };
   const mapped = mapping[rpcError.reason];
+
+  if (rpcError.reason === "forbidden") {
+    return {
+      httpStatus: mapped.httpStatus,
+      body: {
+        status: mapped.status,
+        reason: rpcError.reason,
+        error: "Task write is not authorized.",
+        retryable: mapped.retryable,
+        correlationId: correlationId || crypto.randomUUID(),
+      },
+    };
+  }
 
   return {
     httpStatus: mapped.httpStatus,

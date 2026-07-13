@@ -343,6 +343,35 @@ test("RPC transport sends service-role RPC requests and preserves JSON error met
   );
 });
 
+test("PostgREST owner-membership authorization failures are forbidden and do not leak details", async () => {
+  process.env.SUPABASE_URL = "https://db.example.com";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-jwt";
+
+  const result = await executeCreateTaskCommand({
+    workspaceId: WORKSPACE_ID,
+    idempotencyKey: "task:forbidden",
+    correlationId: "corr-forbidden",
+    input: { title: "견적 후속 연락" },
+    callRpc: (name, args) => callSupabaseRpc(name, args, {
+      fetchImpl: async () => new Response(JSON.stringify({
+        code: "42501",
+        details: "owner 55555555-5555-4555-8555-555555555555 is inactive",
+        hint: "inspect workspace_memberships",
+        message: "active workspace owner membership not found",
+      }), { status: 403, headers: { "content-type": "application/json" } }),
+    }),
+  });
+
+  assert.equal(result.httpStatus, 403);
+  assert.deepEqual(result.body, {
+    status: "failed",
+    reason: "forbidden",
+    error: "Task write is not authorized.",
+    retryable: false,
+    correlationId: "corr-forbidden",
+  });
+});
+
 test("RPC transport aborts timed-out requests", async () => {
   process.env.SUPABASE_URL = "https://db.example.com";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-jwt";

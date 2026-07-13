@@ -14,6 +14,7 @@ export type SupabaseRpcFailureReason =
   | "missing-config"
   | "timeout"
   | "not-found"
+  | "forbidden"
   | "invalid"
   | "invalid-transition"
   | "upstream";
@@ -178,6 +179,10 @@ function classifyRpcFailure(httpStatus: number, metadata: unknown): SupabaseRpcF
 
   if (httpStatus === 404 || code === "P0002") {
     return "not-found";
+  }
+
+  if (httpStatus === 403 || code === "42501") {
+    return "forbidden";
   }
 
   if (message.includes("transition")) {
