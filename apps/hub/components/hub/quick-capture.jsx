@@ -81,6 +81,7 @@ export function QuickCapture({ onSaved }) {
           && (result.status === "saved" || result.status === "duplicate");
 
         if (persisted) {
+          focusCaptureWhenReadyRef.current = true;
           setText("");
           setRequiresUnlock(false);
           setFeedback({

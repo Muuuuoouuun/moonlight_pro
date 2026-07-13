@@ -124,6 +124,8 @@ const PARENT_JUMP = {
   'dashboard/brand': 'dashboard/brand/projects',
 };
 
+const MOBILE_NAV_FOCUS_DELAY_MS = 200;
+
 export function HubApp() {
   const router = useRouter();
   const pathname = usePathname() || '/dashboard';
@@ -137,7 +139,9 @@ export function HubApp() {
   const [theme, setTheme] = React.useState('dark');
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [tweaksOpen, setTweaksOpen] = React.useState(false);
+  const [isMobileViewport, setIsMobileViewport] = React.useState(false);
   const rootRef = React.useRef(null);
+  const previousMobileNavOpenRef = React.useRef(false);
 
   React.useEffect(() => {
     const d = typeof window !== 'undefined' ? localStorage.getItem('mlp.density') : null;
@@ -152,6 +156,17 @@ export function HubApp() {
   React.useEffect(() => {
     if (typeof window !== 'undefined') localStorage.setItem('mlp.theme', theme);
   }, [theme]);
+
+  React.useEffect(() => {
+    const media = window.matchMedia('(max-width: 900px)');
+    const syncViewport = () => {
+      setIsMobileViewport(media.matches);
+      if (!media.matches) setNavOpen(false);
+    };
+    syncViewport();
+    media.addEventListener?.('change', syncViewport);
+    return () => media.removeEventListener?.('change', syncViewport);
+  }, []);
 
   const navigate = React.useCallback((p) => {
     const [basePath, suffix = ''] = String(p || '').split(/(?=[?#])/, 2);
@@ -171,9 +186,41 @@ export function HubApp() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  React.useEffect(() => {
+    if (!isMobileViewport || !navOpen) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setNavOpen(false);
+      }
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [isMobileViewport, navOpen]);
+
+  React.useEffect(() => {
+    if (!isMobileViewport) {
+      previousMobileNavOpenRef.current = false;
+      return undefined;
+    }
+
+    const wasOpen = previousMobileNavOpenRef.current;
+    previousMobileNavOpenRef.current = navOpen;
+    const timeout = window.setTimeout(() => {
+      if (navOpen) {
+        rootRef.current?.querySelector('.hub-sidebar-root button')?.focus();
+      } else if (wasOpen) {
+        rootRef.current?.querySelector('.hub-mobile-only')?.focus();
+      }
+    }, navOpen ? MOBILE_NAV_FOCUS_DELAY_MS : 0);
+    return () => window.clearTimeout(timeout);
+  }, [isMobileViewport, navOpen]);
+
   const render = PAGE_MAP[path];
   const page = render ? render(navigate) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
   const sidebarCollapsed = collapsed && !navOpen;
+  const mobileNavClosed = isMobileViewport && !navOpen;
+  const mobileNavOpen = isMobileViewport && navOpen;
 
   return (
     <div ref={rootRef} className="hub-app" data-theme={theme} data-density={density}>
@@ -182,6 +229,7 @@ export function HubApp() {
           type="button"
           className="hub-mobile-backdrop"
           aria-label="Close navigation"
+          tabIndex={-1}
           onClick={() => setNavOpen(false)}
         />
         <Sidebar
@@ -189,10 +237,16 @@ export function HubApp() {
           active={path}
           onNavigate={navigate}
           collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setCollapsed(c => !c)}
+          onToggleCollapse={() => {
+            if (isMobileViewport) setNavOpen(false);
+            else setCollapsed(c => !c);
+          }}
           openPalette={() => setPaletteOpen(true)}
+          inert={mobileNavClosed}
+          ariaHidden={mobileNavClosed}
+          toggleTooltip={isMobileViewport ? 'Close navigation' : 'Collapse'}
         />
-        <main className="hub-main">
+        <main className="hub-main" inert={mobileNavOpen || undefined} aria-hidden={mobileNavOpen || undefined}>
           <TopBar
             path={path}
             onNavigate={navigate}

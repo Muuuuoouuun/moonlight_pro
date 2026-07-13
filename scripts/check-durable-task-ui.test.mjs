@@ -3,12 +3,15 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 const root = process.cwd();
-const [dailySource, projectsSource, primitiveSource, tokenSource, projectTaskStateSource] = await Promise.all([
+const [dailySource, projectsSource, primitiveSource, tokenSource, projectTaskStateSource, hubAppSource, sidebarSource, quickCaptureSource] = await Promise.all([
   readFile(`${root}/apps/hub/components/hub/pages/daily-brief.jsx`, "utf8"),
   readFile(`${root}/apps/hub/components/hub/pages/projects.jsx`, "utf8"),
   readFile(`${root}/apps/hub/components/hub/hub-primitives.jsx`, "utf8"),
   readFile(`${root}/apps/hub/components/hub/hub-tokens.css`, "utf8"),
   readFile(`${root}/apps/hub/lib/project-task-state.js`, "utf8"),
+  readFile(`${root}/apps/hub/components/hub/hub-app.jsx`, "utf8"),
+  readFile(`${root}/apps/hub/components/hub/hub-sidebar.jsx`, "utf8"),
+  readFile(`${root}/apps/hub/components/hub/quick-capture.jsx`, "utf8"),
 ]);
 
 test("Daily ledger keeps the canonical task source and lanes independent from legacy brief state", () => {
@@ -273,6 +276,26 @@ test("Projects mobile layout hides only the workspace sidebar, not the edit draw
   assert.match(projectsSource, /className="hub-workspace-sidebar"/);
   assert.match(tokenSource, /\.hub-workspace-shell > \.hub-workspace-sidebar\s*\{\s*display: none !important;/);
   assert.doesNotMatch(tokenSource, /\.hub-workspace-shell > aside\s*\{\s*display: none !important;/);
+});
+
+test("closed mobile navigation leaves the tab order and theme changes do not cross-fade contrast", () => {
+  assert.match(hubAppSource, /matchMedia\(["']\(max-width: 900px\)["']\)/);
+  assert.match(hubAppSource, /inert=\{mobileNavClosed\}/);
+  assert.match(hubAppSource, /ariaHidden=\{mobileNavClosed\}/);
+  assert.match(hubAppSource, /event\.key === ["']Escape["']/);
+  assert.match(hubAppSource, /\.hub-sidebar-root button/);
+  assert.match(hubAppSource, /\.hub-mobile-only/);
+  assert.match(sidebarSource, /aria-hidden=\{ariaHidden \|\| undefined\}/);
+  assert.doesNotMatch(tokenSource, /transition:\s*background\s+0\.2s,\s*color\s+0\.2s/);
+});
+
+test("Quick Capture restores focus after every durable saved or duplicate response", () => {
+  const persistedBranch = quickCaptureSource.slice(
+    quickCaptureSource.indexOf("if (persisted)"),
+    quickCaptureSource.indexOf("if (result.requiresUnlock)"),
+  );
+  assert.match(persistedBranch, /focusCaptureWhenReadyRef\.current\s*=\s*true/);
+  assert.match(quickCaptureSource, /if \(!busy && focusCaptureWhenReadyRef\.current\)/);
 });
 
 test("task mutations announce success and EditDrawer avoids iOS input zoom", () => {

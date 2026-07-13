@@ -44,7 +44,7 @@ function CountBadge({ n }) {
   );
 }
 
-export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openPalette, className }) {
+export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openPalette, className, inert, ariaHidden = false, toggleTooltip = "Collapse" }) {
   const counts = useSidebarCounts();
   const [open, setOpen] = React.useState(() => {
     const o = {};
@@ -73,7 +73,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
 
   if (collapsed) {
     return (
-      <aside className={`${className || ''} hub-sidebar-root--collapsed`} style={{
+      <aside inert={inert || undefined} aria-hidden={ariaHidden || undefined} className={`${className || ''} hub-sidebar-root--collapsed`} style={{
         width: 56, flexShrink: 0,
         background: 'var(--surface)',
         borderRight: '1px solid var(--line-soft)',
@@ -112,7 +112,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
   }
 
   return (
-    <aside className={className} style={{
+    <aside inert={inert || undefined} aria-hidden={ariaHidden || undefined} className={className} style={{
       width: 232, flexShrink: 0,
       background: 'var(--surface)',
       borderRight: '1px solid var(--line-soft)',
@@ -131,7 +131,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
             <div className="mono" style={{ fontSize: 9.5, color: 'var(--fg-faint)', letterSpacing: '0.05em', marginTop: -1 }}>HUB · PRO</div>
           </div>
         </div>
-        <IconButton icon="chevronL" onClick={onToggleCollapse} size={24} iconSize={13} tooltip="Collapse" />
+        <IconButton icon="chevronL" onClick={onToggleCollapse} size={24} iconSize={13} tooltip={toggleTooltip} />
       </div>
 
       <div style={{ padding: '4px 12px 10px' }}>
