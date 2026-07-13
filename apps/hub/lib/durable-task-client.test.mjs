@@ -583,3 +583,127 @@ test("canonically equal updateTask calls share one pending request", async () =>
   release();
   await first;
 });
+
+test("serialized Date payloads produce distinct mutation keys and exact JSON bodies", async () => {
+  const requests = [];
+  let keyNumber = 0;
+  const client = createDurableTaskClient({
+    keyFactory: () => `date-mutation-${++keyNumber}`,
+    fetchImpl: async (_url, options) => {
+      requests.push({
+        key: options.headers.get("idempotency-key"),
+        body: options.body,
+      });
+      return jsonResponse({
+        status: "failed",
+        retryable: true,
+        reason: "upstream",
+        error: "Engine write request failed.",
+      }, 502);
+    },
+  });
+
+  await client.createTask({
+    title: "첫 번째",
+    dueAt: new Date("2026-07-13T04:00:00.000Z"),
+  });
+  await client.createTask({
+    title: "첫 번째",
+    dueAt: new Date("2026-07-14T04:00:00.000Z"),
+  });
+
+  assert.deepEqual(requests, [
+    {
+      key: "date-mutation-1",
+      body: JSON.stringify({
+        title: "첫 번째",
+        dueAt: "2026-07-13T04:00:00.000Z",
+      }),
+    },
+    {
+      key: "date-mutation-2",
+      body: JSON.stringify({
+        title: "첫 번째",
+        dueAt: "2026-07-14T04:00:00.000Z",
+      }),
+    },
+  ]);
+});
+
+test("custom toJSON output drives the mutation fingerprint and sent body", async () => {
+  const requests = [];
+  let keyNumber = 0;
+  let toJSONCalls = 0;
+  const client = createDurableTaskClient({
+    keyFactory: () => `to-json-mutation-${++keyNumber}`,
+    fetchImpl: async (_url, options) => {
+      requests.push({
+        key: options.headers.get("idempotency-key"),
+        body: options.body,
+      });
+      return jsonResponse({
+        status: "conflict",
+        retryable: false,
+        reason: "stale-write",
+        error: "Task changed before this write.",
+      }, 409);
+    },
+  });
+
+  await client.createTask({
+    title: "변환 값",
+    meta: {
+      toJSON: () => {
+        toJSONCalls += 1;
+        return { token: "one" };
+      },
+    },
+  });
+  await client.createTask({
+    title: "변환 값",
+    meta: {
+      toJSON: () => {
+        toJSONCalls += 1;
+        return { token: "two" };
+      },
+    },
+  });
+
+  assert.deepEqual(requests, [
+    {
+      key: "to-json-mutation-1",
+      body: JSON.stringify({ title: "변환 값", meta: { token: "one" } }),
+    },
+    {
+      key: "to-json-mutation-2",
+      body: JSON.stringify({ title: "변환 값", meta: { token: "two" } }),
+    },
+  ]);
+  assert.equal(toJSONCalls, 2);
+});
+
+test("cyclic mutation input fails validation without fetch or key allocation", async () => {
+  let fetchCount = 0;
+  let keyCount = 0;
+  const client = createDurableTaskClient({
+    keyFactory: () => {
+      keyCount += 1;
+      return `unused-${keyCount}`;
+    },
+    fetchImpl: async () => {
+      fetchCount += 1;
+      return jsonResponse({ status: "saved" });
+    },
+  });
+  const cyclic = { title: "순환 입력" };
+  cyclic.self = cyclic;
+
+  const result = await client.createTask(cyclic);
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.retryable, false);
+  assert.equal(result.reason, "validation");
+  assert.equal(typeof result.error, "string");
+  assert.equal(fetchCount, 0);
+  assert.equal(keyCount, 0);
+});

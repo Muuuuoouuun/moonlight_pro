@@ -39,6 +39,29 @@ function canonicalFingerprint(value) {
   return JSON.stringify(canonicalize(value));
 }
 
+function serializeMutationBody(body) {
+  try {
+    const serialized = JSON.stringify(body);
+    if (typeof serialized !== "string") return null;
+
+    return {
+      serialized,
+      value: JSON.parse(serialized),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function mutationValidationFailure() {
+  return {
+    status: "failed",
+    retryable: false,
+    reason: "validation",
+    error: "저장할 데이터를 JSON으로 변환할 수 없습니다.",
+  };
+}
+
 function clientFailure(reason, error) {
   return {
     status: "failed",
@@ -143,7 +166,14 @@ export function createDurableTaskClient({
   }
 
   function mutate({ url, method, body }) {
-    const fingerprint = canonicalFingerprint({ body, method, url });
+    const serializedBody = serializeMutationBody(body);
+    if (!serializedBody) return Promise.resolve(mutationValidationFailure());
+
+    const fingerprint = canonicalFingerprint({
+      body: serializedBody.value,
+      method,
+      url,
+    });
     let attempt = mutationAttempts.get(fingerprint);
 
     if (attempt?.pending) return attempt.pending;
@@ -160,7 +190,7 @@ export function createDurableTaskClient({
             "content-type": "application/json",
             "idempotency-key": attempt.idempotencyKey,
           }),
-          body: JSON.stringify(body),
+          body: serializedBody.serialized,
         });
         const responseBody = await response.json().catch(() => null);
         const resultBody = responseBody
