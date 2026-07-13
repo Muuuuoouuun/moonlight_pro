@@ -45,7 +45,9 @@ test("Daily Brief never initializes or substitutes business fixtures", () => {
   assert.doesNotMatch(source, /\b(?:BRIEF_SIGNALS|TODAY_BLOCKS|METRICS)\b/);
   assert.match(source, /metrics:\s*\[\]/);
   assert.match(source, /signals:\s*\[\]/);
-  assert.match(source, /blocks:\s*\[\]/);
+  assert.match(source, /taskSource:\s*["']loading["']/);
+  assert.match(source, /taskLanes:\s*emptyTaskLanes\(\)/);
+  assert.doesNotMatch(source, /\bblocks\b|\bsetBlocks\b/);
   assert.match(source, /syncState:\s*["']error["']/);
   assert.doesNotMatch(source, /4\/5 rituals done|Progress value=\{80\}/);
   assert.doesNotMatch(source, /\[\s*["']월["']\s*,\s*["']화["']\s*,\s*["']수["']/);

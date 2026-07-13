@@ -4,6 +4,7 @@ import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, Checkbox, Progress, Sparkline, SyncBadge, EmptyState } from "../hub-primitives";
 import { QuickCapture } from "../quick-capture";
+import { createDurableTaskClient } from "@/lib/durable-task-client";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 
 function formatBriefDate(date) {
@@ -109,6 +110,48 @@ function sourceLabel(state) {
   return 'preview';
 }
 
+const TASK_LANE_ORDER = ['missed', 'today', 'waiting', 'inbox'];
+const TASK_FOCUS_LIMIT = 5;
+const TASK_SOURCE_STATES = new Set(['live', 'empty', 'preview', 'error']);
+
+function emptyTaskLanes() {
+  return Object.fromEntries(TASK_LANE_ORDER.map((lane) => [lane, []]));
+}
+
+function normalizeTaskRead(data, previousLanes) {
+  const taskSource = TASK_SOURCE_STATES.has(data?.taskSource) ? data.taskSource : 'error';
+  if (taskSource === 'error') {
+    return {
+      taskSource,
+      taskLanes: previousLanes,
+      taskError: data?.taskError || '할 일 원장 응답을 확인할 수 없습니다.',
+    };
+  }
+
+  if (taskSource === 'preview' || taskSource === 'empty') {
+    return { taskSource, taskLanes: emptyTaskLanes(), taskError: null };
+  }
+
+  const taskLanes = data?.taskLanes;
+  const hasCanonicalLanes = taskLanes
+    && TASK_LANE_ORDER.every((lane) => Array.isArray(taskLanes[lane]));
+  if (!hasCanonicalLanes) {
+    return {
+      taskSource: 'error',
+      taskLanes: previousLanes,
+      taskError: '할 일 원장 형식이 올바르지 않습니다.',
+    };
+  }
+
+  return {
+    taskSource,
+    taskLanes: Object.fromEntries(
+      TASK_LANE_ORDER.map((lane) => [lane, taskLanes[lane]]),
+    ),
+    taskError: null,
+  };
+}
+
 function useDailyBriefLedger() {
   const [state, setState] = React.useState({
     syncState: 'syncing',
@@ -117,43 +160,50 @@ function useDailyBriefLedger() {
     summary: null,
     metrics: [],
     signals: [],
-    blocks: [],
+    taskSource: 'loading',
+    taskLanes: emptyTaskLanes(),
+    taskError: null,
     morningBrief: null,
     error: null,
   });
   const [refreshToken, setRefreshToken] = React.useState(0);
+  const refreshWaitersRef = React.useRef([]);
 
   React.useEffect(() => {
     let active = true;
 
     async function load() {
-      setState({
+      setState((current) => ({
         syncState: 'syncing',
         generatedAt: null,
         sources: [],
         summary: null,
         metrics: [],
         signals: [],
-        blocks: [],
+        taskSource: 'loading',
+        taskLanes: current.taskLanes,
+        taskError: null,
         morningBrief: null,
         error: null,
-      });
+      }));
       try {
         const response = await fetch('/api/hub/daily-brief', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
         if (!active) return;
         if (!response.ok || !data) {
-          setState({
+          setState((current) => ({
             syncState: 'error',
             generatedAt: null,
             sources: [],
             summary: null,
             metrics: [],
             signals: [],
-            blocks: [],
+            taskSource: 'error',
+            taskLanes: current.taskLanes,
+            taskError: data?.error || data?.message || `할 일 요청 실패 (${response.status})`,
             morningBrief: null,
             error: data?.error || data?.message || `브리핑 요청 실패 (${response.status})`,
-          });
+          }));
           return;
         }
 
@@ -165,29 +215,36 @@ function useDailyBriefLedger() {
           ? 'mixed'
           : 'preview';
 
-        setState({
+        setState((current) => ({
           syncState: nextSyncState,
           generatedAt: data.generatedAt || null,
           sources: Array.isArray(data.sources) ? data.sources : [],
           summary: data.summary || null,
           metrics: liveCount > 0 && Array.isArray(data.metrics) ? data.metrics : [],
           signals: liveCount > 0 && Array.isArray(data.signals) ? data.signals : [],
-          blocks: liveCount > 0 && Array.isArray(data.blocks) ? data.blocks : [],
+          ...normalizeTaskRead(data, current.taskLanes),
           morningBrief: liveCount > 0 ? data.morningBrief || null : null,
           error: null,
-        });
+        }));
       } catch (error) {
-        if (active) setState({
+        if (active) setState((current) => ({
           syncState: 'error',
           generatedAt: null,
           sources: [],
           summary: null,
           metrics: [],
           signals: [],
-          blocks: [],
+          taskSource: 'error',
+          taskLanes: current.taskLanes,
+          taskError: error instanceof Error ? error.message : String(error),
           morningBrief: null,
           error: error instanceof Error ? error.message : String(error),
-        });
+        }));
+      } finally {
+        if (active) {
+          const waiters = refreshWaitersRef.current.splice(0);
+          waiters.forEach((resolve) => resolve());
+        }
       }
     }
 
@@ -195,7 +252,15 @@ function useDailyBriefLedger() {
     return () => { active = false; };
   }, [refreshToken]);
 
-  const refetch = React.useCallback(() => setRefreshToken((value) => value + 1), []);
+  React.useEffect(() => () => {
+    const waiters = refreshWaitersRef.current.splice(0);
+    waiters.forEach((resolve) => resolve());
+  }, []);
+
+  const refetch = React.useCallback(() => new Promise((resolve) => {
+    refreshWaitersRef.current.push(resolve);
+    setRefreshToken((value) => value + 1);
+  }), []);
   return { ...state, refetch };
 }
 
@@ -786,6 +851,208 @@ function ContentCadenceCard({ onNavigate }) {
   );
 }
 
+const TASK_LANE_LABELS = {
+  missed: '놓침',
+  today: '오늘',
+  waiting: '대기',
+  inbox: '정리 전',
+};
+
+const TASK_LANE_TONES = {
+  missed: 'danger',
+  today: 'warning',
+  waiting: 'info',
+  inbox: 'neutral',
+};
+
+function formatTaskDue(task) {
+  if (!task?.dueAt) return task?.status === 'inbox' ? '분류 필요' : '기한 없음';
+
+  const due = new Date(task.dueAt);
+  if (Number.isNaN(due.getTime())) return '기한 확인 필요';
+  const options = task.duePrecision === 'timed'
+    ? { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }
+    : { month: 'numeric', day: 'numeric' };
+  return new Intl.DateTimeFormat('ko-KR', options).format(due);
+}
+
+function taskMutationError(result) {
+  if (result?.requiresUnlock) return '쓰기 잠금이 필요합니다. 빠른 기록에서 잠금을 해제한 뒤 다시 시도하세요.';
+  if (result?.status === 'conflict') return '다른 곳에서 이 할 일이 변경되었습니다. 현재 버전으로 다시 시도할 수 있습니다.';
+  return result?.error || '완료를 저장하지 못했습니다. 할 일은 그대로 유지했습니다.';
+}
+
+function DurableTaskAttention({ ledger }) {
+  const client = React.useMemo(() => createDurableTaskClient(), []);
+  const [pendingTaskIds, setPendingTaskIds] = React.useState(() => new Set());
+  const [mutationErrors, setMutationErrors] = React.useState({});
+  const visibleTasks = React.useMemo(() => TASK_LANE_ORDER
+    .flatMap((lane) => (ledger.taskLanes?.[lane] || []).map((task) => ({ lane, task })))
+    .slice(0, TASK_FOCUS_LIMIT), [ledger.taskLanes]);
+  const taskCount = TASK_LANE_ORDER.reduce(
+    (count, lane) => count + (ledger.taskLanes?.[lane]?.length || 0),
+    0,
+  );
+
+  async function completeTask(task) {
+    if (!task?.id || pendingTaskIds.has(task.id)) return;
+
+    setPendingTaskIds((current) => new Set(current).add(task.id));
+    setMutationErrors((current) => {
+      const next = { ...current };
+      delete next[task.id];
+      return next;
+    });
+
+    try {
+      const previousError = mutationErrors[task.id];
+      const result = await client.updateTask({
+        id: task.id,
+        expectedUpdatedAt: previousError?.retryUpdatedAt || task.updatedAt,
+        patch: { status: 'done' },
+      });
+      const committed = result.httpStatus >= 200
+        && result.httpStatus < 300
+        && ['saved', 'duplicate'].includes(result.status);
+
+      if (committed) {
+        await ledger.refetch();
+        return;
+      }
+
+      const retryUpdatedAt = result.currentTask?.updatedAt
+        || result.task?.updatedAt
+        || result.task?.updated_at
+        || previousError?.retryUpdatedAt
+        || null;
+      setMutationErrors((current) => ({
+        ...current,
+        [task.id]: {
+          message: taskMutationError(result),
+          retryUpdatedAt,
+        },
+      }));
+    } catch (error) {
+      setMutationErrors((current) => ({
+        ...current,
+        [task.id]: {
+          message: error instanceof Error ? error.message : '완료 요청에 실패했습니다.',
+          retryUpdatedAt: current[task.id]?.retryUpdatedAt || null,
+        },
+      }));
+    } finally {
+      setPendingTaskIds((current) => {
+        const next = new Set(current);
+        next.delete(task.id);
+        return next;
+      });
+    }
+  }
+
+  const sourceBadge = (
+    <Badge
+      tone={ledger.taskSource === 'live' || ledger.taskSource === 'empty' ? 'success' : ledger.taskSource === 'error' ? 'danger' : 'warning'}
+      variant="outline"
+      size="xs"
+    >
+      Task · {ledger.taskSource}
+    </Badge>
+  );
+
+  return (
+    <section className="durable-task-attention" aria-labelledby="durable-task-attention-title">
+      <SectionTitle right={sourceBadge}>
+        <span id="durable-task-attention-title">지금 할 일</span>
+      </SectionTitle>
+      <Card pad={false}>
+        {ledger.taskSource === 'loading' ? (
+          <div className="durable-task-attention__state" role="status">실제 할 일 원장을 확인하고 있습니다…</div>
+        ) : ledger.taskSource === 'preview' ? (
+          <EmptyState
+            icon="work"
+            title="할 일 원장 연결 필요"
+            description="Supabase가 연결되기 전에는 샘플 할 일을 표시하지 않습니다."
+          />
+        ) : ledger.taskSource === 'error' && visibleTasks.length === 0 ? (
+          <div className="durable-task-attention__state" role="alert">
+            <div>{ledger.taskError || '할 일 원장을 불러오지 못했습니다. 기존 행을 빈 목록으로 대체하지 않았습니다.'}</div>
+            <Button variant="outline" size="sm" onClick={ledger.refetch}>다시 시도</Button>
+          </div>
+        ) : ledger.taskSource === 'empty' ? (
+          <EmptyState
+            icon="check"
+            title="저장된 할 일이 없습니다"
+            description="위 빠른 기록에서 첫 할 일을 저장하면 여기에 나타납니다."
+          />
+        ) : visibleTasks.length === 0 ? (
+          <EmptyState
+            icon="check"
+            title="지금 주의할 할 일이 없습니다"
+            description="원장은 연결되어 있으며 놓침·오늘·대기·정리 전 항목만 이곳에 표시합니다."
+          />
+        ) : (
+          <div>
+            {ledger.taskSource === 'error' && (
+              <div className="durable-task-attention__state durable-task-attention__state--retained" role="alert">
+                <div>{ledger.taskError || '할 일 원장을 다시 불러오지 못했습니다.'} 이전에 불러온 할 일은 그대로 유지했습니다.</div>
+                <Button variant="outline" size="sm" onClick={ledger.refetch}>원장 다시 시도</Button>
+              </div>
+            )}
+            {visibleTasks.map(({ lane, task }, index) => {
+              const pending = pendingTaskIds.has(task.id);
+              const mutationError = mutationErrors[task.id];
+              return (
+                <div
+                  key={task.id}
+                  className="durable-task-attention__item"
+                  style={{ borderBottom: index < visibleTasks.length - 1 ? '1px solid var(--line-soft)' : 'none' }}
+                >
+                  <div className="hub-row durable-task-attention__row" aria-busy={pending || undefined}>
+                    <Checkbox
+                      checked={false}
+                      onChange={() => completeTask(task)}
+                      label={`${task.title} 완료`}
+                      disabled={pending || ledger.taskSource === 'error'}
+                      aria-busy={pending}
+                    />
+                    <div className="durable-task-attention__copy">
+                      <div className="durable-task-attention__title">{task.title}</div>
+                      <div className="durable-task-attention__meta">
+                        <Badge tone={TASK_LANE_TONES[lane]} size="xs">{TASK_LANE_LABELS[lane]}</Badge>
+                        <span className="mono">{formatTaskDue(task)}</span>
+                        {task.nextAction && <span>{task.nextAction}</span>}
+                      </div>
+                    </div>
+                    {pending && <span className="durable-task-attention__pending" role="status">저장 중…</span>}
+                  </div>
+                  {mutationError && (
+                    <div className="durable-task-attention__error" role="alert">
+                      <span>{mutationError.message}</span>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        aria-label={`${task.title} 완료 다시 시도`}
+                        onClick={() => completeTask(task)}
+                      >
+                        다시 시도
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {taskCount > TASK_FOCUS_LIMIT && (
+              <div className="durable-task-attention__more">
+                우선순위 상위 {TASK_FOCUS_LIMIT}개 표시 · 나머지 {taskCount - TASK_FOCUS_LIMIT}개
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+    </section>
+  );
+}
+
 // Slim replacement for the old full-card DataTrustStrip — one quiet status line, with the
 // per-ledger source badges tucked behind a toggle so telemetry stops competing with signal.
 function StatusLine({ state }) {
@@ -925,17 +1192,11 @@ function BriefStateCard({ ledger, compact = false }) {
 export function DailyBrief({ onNavigate }) {
   const [now, setNow] = React.useState(() => new Date());
   const ledger = useDailyBriefLedger();
-  const [blocks, setBlocks] = React.useState([]);
-  const toggle = (i) => setBlocks(bs => bs.map((b, j) => j === i ? { ...b, done: !b.done } : b));
 
   React.useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60000);
     return () => window.clearInterval(id);
   }, []);
-
-  React.useEffect(() => {
-    setBlocks(ledger.blocks);
-  }, [ledger.blocks]);
 
   const urgentCount = ledger.summary?.urgentCount ?? ledger.signals.filter(s => s.tone === 'danger').length;
   const todayCount = ledger.summary?.todayCount ?? ledger.signals.filter(s => s.tone === 'warning').length;
@@ -972,6 +1233,8 @@ export function DailyBrief({ onNavigate }) {
       </div>
 
       <QuickCapture onSaved={ledger.refetch} />
+
+      <DurableTaskAttention ledger={ledger} />
 
       <StatusLine state={ledger} />
 
@@ -1012,35 +1275,6 @@ export function DailyBrief({ onNavigate }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
           <MorningBriefCard brief={ledger.morningBrief} onNavigate={onNavigate} />
           <ApprovalQueueCard onNavigate={onNavigate} />
-
-          <div>
-            <SectionTitle right={<span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{hasUsableBrief ? `${blocks.filter(b => b.done).length}/${blocks.length}` : sourceLabel(ledger.syncState)}</span>}>Today</SectionTitle>
-            <Card pad={false}>
-              {blocks.length > 0 ? blocks.map((b, i) => (
-                  <div key={i} style={{
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '10px 14px',
-                    borderBottom: i < blocks.length - 1 ? '1px solid var(--line-soft)' : 'none',
-                  }}>
-                    <Checkbox checked={!!b.done} onChange={() => toggle(i)} />
-                    <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', width: 38 }}>{b.time}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12.5, color: b.done ? 'var(--fg-faint)' : 'var(--fg)', textDecoration: b.done ? 'line-through' : 'none' }}>{b.title}</div>
-                      <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 2 }}>{b.kind}</div>
-                    </div>
-                    {b.tag === 'personal' && <Badge tone="personal" size="xs">Personal</Badge>}
-                    {b.tag === 'company' && <Badge tone="company" size="xs">Company</Badge>}
-                  </div>
-                )) : (
-                  <EmptyState
-                    icon="calendar"
-                    title={!hasUsableBrief ? '오늘 블록을 확인할 수 없습니다' : ledger.syncState === 'mixed' ? '연결된 원장에는 오늘 블록이 없습니다' : '오늘 블록이 없습니다'}
-                    description={!hasUsableBrief ? '브리핑 원장 상태를 먼저 확인해 주세요.' : ledger.syncState === 'mixed' ? '일부 원장이 미연결 상태라 전체 일정이 비었다고 판단하지 않습니다.' : '실제 프로젝트와 콘텐츠 일정이 연결되면 여기에 표시됩니다.'}
-                  />
-                )}
-            </Card>
-          </div>
-
         </div>
       </div>
 
