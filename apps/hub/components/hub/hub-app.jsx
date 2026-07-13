@@ -142,7 +142,9 @@ export function HubApp() {
   const rootRef = React.useRef(null);
   const previousMobileNavOpenRef = React.useRef(false);
   const focusMobileTriggerOnResizeRef = React.useRef(false);
+  const focusDesktopSidebarOnResizeRef = React.useRef(false);
   const lastFocusWithinSidebarRef = React.useRef(false);
+  const lastFocusWasMobileTriggerRef = React.useRef(false);
 
   const applyTheme = React.useCallback((nextTheme) => {
     setThemeTransitionSuppressed(true);
@@ -181,6 +183,9 @@ export function HubApp() {
       const sidebar = rootRef.current?.querySelector('.hub-sidebar-root');
       if (media.matches && (lastFocusWithinSidebarRef.current || sidebar?.contains(document.activeElement))) {
         focusMobileTriggerOnResizeRef.current = true;
+      }
+      if (!media.matches && lastFocusWasMobileTriggerRef.current) {
+        focusDesktopSidebarOnResizeRef.current = true;
       }
       setIsMobileViewport(media.matches);
       if (!media.matches) setNavOpen(false);
@@ -223,6 +228,10 @@ export function HubApp() {
   React.useLayoutEffect(() => {
     if (!isMobileViewport) {
       previousMobileNavOpenRef.current = false;
+      if (focusDesktopSidebarOnResizeRef.current) {
+        focusDesktopSidebarOnResizeRef.current = false;
+        rootRef.current?.querySelector('.hub-sidebar-root button')?.focus();
+      }
       return undefined;
     }
 
@@ -249,6 +258,7 @@ export function HubApp() {
       className="hub-app"
       onFocusCapture={(event) => {
         lastFocusWithinSidebarRef.current = Boolean(event.target?.closest?.('.hub-sidebar-root'));
+        lastFocusWasMobileTriggerRef.current = Boolean(event.target?.closest?.('.hub-mobile-nav-trigger'));
       }}
       data-theme={theme}
       data-density={density}
