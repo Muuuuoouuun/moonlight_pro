@@ -882,6 +882,31 @@ function taskMutationError(result) {
   return result?.error || '완료를 저장하지 못했습니다. 할 일은 그대로 유지했습니다.';
 }
 
+function TaskAttentionSkeleton() {
+  return (
+    <div
+      className="durable-task-attention__skeleton"
+      role="status"
+      aria-label="실제 할 일 원장을 불러오는 중"
+    >
+      <div className="durable-task-attention__skeleton-row" aria-hidden="true">
+        <span className="durable-task-attention__skeleton-face" />
+        <span className="durable-task-attention__skeleton-copy">
+          <span className="durable-task-attention__skeleton-line durable-task-attention__skeleton-line--title" />
+          <span className="durable-task-attention__skeleton-line durable-task-attention__skeleton-line--meta" />
+        </span>
+      </div>
+      <div className="durable-task-attention__skeleton-row" aria-hidden="true">
+        <span className="durable-task-attention__skeleton-face" />
+        <span className="durable-task-attention__skeleton-copy">
+          <span className="durable-task-attention__skeleton-line durable-task-attention__skeleton-line--title" />
+          <span className="durable-task-attention__skeleton-line durable-task-attention__skeleton-line--meta" />
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function DurableTaskAttention({ ledger }) {
   const client = React.useMemo(() => createDurableTaskClient(), []);
   const [pendingTaskIds, setPendingTaskIds] = React.useState(() => new Set());
@@ -895,6 +920,7 @@ function DurableTaskAttention({ ledger }) {
   );
 
   async function completeTask(task) {
+    if (ledger.taskSource === 'error') return;
     if (!task?.id || pendingTaskIds.has(task.id)) return;
 
     setPendingTaskIds((current) => new Set(current).add(task.id));
@@ -905,10 +931,9 @@ function DurableTaskAttention({ ledger }) {
     });
 
     try {
-      const previousError = mutationErrors[task.id];
       const result = await client.updateTask({
         id: task.id,
-        expectedUpdatedAt: previousError?.retryUpdatedAt || task.updatedAt,
+        expectedUpdatedAt: task.updatedAt,
         patch: { status: 'done' },
       });
       const committed = result.httpStatus >= 200
@@ -920,16 +945,13 @@ function DurableTaskAttention({ ledger }) {
         return;
       }
 
-      const retryUpdatedAt = result.currentTask?.updatedAt
-        || result.task?.updatedAt
-        || result.task?.updated_at
-        || previousError?.retryUpdatedAt
-        || null;
+      if (result.status === 'conflict') {
+        await ledger.refetch();
+      }
       setMutationErrors((current) => ({
         ...current,
         [task.id]: {
           message: taskMutationError(result),
-          retryUpdatedAt,
         },
       }));
     } catch (error) {
@@ -937,7 +959,6 @@ function DurableTaskAttention({ ledger }) {
         ...current,
         [task.id]: {
           message: error instanceof Error ? error.message : '완료 요청에 실패했습니다.',
-          retryUpdatedAt: current[task.id]?.retryUpdatedAt || null,
         },
       }));
     } finally {
@@ -966,7 +987,7 @@ function DurableTaskAttention({ ledger }) {
       </SectionTitle>
       <Card pad={false}>
         {ledger.taskSource === 'loading' ? (
-          <div className="durable-task-attention__state" role="status">실제 할 일 원장을 확인하고 있습니다…</div>
+          <TaskAttentionSkeleton />
         ) : ledger.taskSource === 'preview' ? (
           <EmptyState
             icon="work"
@@ -1032,6 +1053,7 @@ function DurableTaskAttention({ ledger }) {
                         variant="ghost"
                         size="xs"
                         aria-label={`${task.title} 완료 다시 시도`}
+                        disabled={ledger.taskSource === 'error'}
                         onClick={() => completeTask(task)}
                       >
                         다시 시도

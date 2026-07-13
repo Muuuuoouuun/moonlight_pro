@@ -39,17 +39,42 @@ test("Daily durable attention uses the approved lane order and five-item focus c
   assert.doesNotMatch(dailySource, /09:00|14:00/);
 });
 
-test("task completion uses the durable OCC client and only refetches after committed success", () => {
+test("task completion uses the durable OCC client and canonical refetches for success or conflict", () => {
   assert.match(dailySource, /createDurableTaskClient/);
   assert.match(dailySource, /client\.updateTask\s*\(/);
   assert.match(dailySource, /id:\s*task\.id/);
-  assert.match(dailySource, /expectedUpdatedAt:/);
+  assert.match(dailySource, /expectedUpdatedAt:\s*task\.updatedAt/);
   assert.match(dailySource, /patch:\s*\{\s*status:\s*['"]done['"]\s*\}/);
   assert.match(dailySource, /result\.httpStatus\s*>=\s*200/);
   assert.match(dailySource, /['"]saved['"].*['"]duplicate['"]|['"]duplicate['"].*['"]saved['"]/s);
-  assert.match(dailySource, /result\.task\?\.updated_at|result\.task\?\.updatedAt/);
   assert.match(dailySource, /await ledger\.refetch\s*\(/);
+  assert.match(
+    dailySource,
+    /result\.status\s*===\s*['"]conflict['"]\s*\)\s*\{\s*await ledger\.refetch\s*\(/,
+  );
+  assert.doesNotMatch(
+    dailySource,
+    /result\.(?:currentTask|task)\?\.(?:updatedAt|updated_at)/,
+  );
   assert.match(dailySource, /refreshWaitersRef/);
+});
+
+test("initial task loading uses a fixed-height two-row token skeleton without fake content", () => {
+  assert.match(dailySource, /function TaskAttentionSkeleton\s*\(/);
+  assert.match(dailySource, /<TaskAttentionSkeleton\s*\/>/);
+  assert.match(
+    dailySource,
+    /className=['"]durable-task-attention__skeleton['"][^>]*role=['"]status['"][^>]*aria-label=/,
+  );
+  assert.equal(
+    [...dailySource.matchAll(/className=['"]durable-task-attention__skeleton-row['"]/g)].length,
+    2,
+  );
+  assert.match(tokenSource, /\.durable-task-attention__skeleton\s*\{[^}]*height:\s*104px/s);
+  assert.match(
+    tokenSource,
+    /\.durable-task-attention__skeleton-row\s*\{[^}]*background:\s*var\(--surface-2\)[^}]*border-bottom:\s*1px solid var\(--line-soft\)/s,
+  );
 });
 
 test("task rows expose row-only pending and an announced retry without optimistic removal", () => {
@@ -65,6 +90,11 @@ test("task read errors keep previously loaded rows visible beside the retry aler
   assert.match(dailySource, /ledger\.taskSource === ['"]error['"] && visibleTasks\.length === 0/);
   assert.match(dailySource, /ledger\.taskSource === ['"]error['"] && \(/);
   assert.match(dailySource, /기존[^<\n]*행|불러온[^<\n]*할 일/);
+  assert.match(dailySource, /if\s*\([^)]*ledger\.taskSource === ['"]error['"][^)]*\)\s*return/);
+  assert.match(
+    dailySource,
+    /aria-label=\{`\$\{task\.title\} 완료 다시 시도`\}[\s\S]{0,220}disabled=\{ledger\.taskSource === ['"]error['"]\}/,
+  );
 });
 
 test("Button forwards DOM props and Checkbox supports busy disabled state", () => {
