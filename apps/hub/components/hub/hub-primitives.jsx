@@ -162,7 +162,7 @@ export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRig
     <button {...rest} type={type} className={className} onClick={onClick} disabled={disabled} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: s.gap,
       height: s.h, padding: `0 ${s.px}px`, fontSize: s.fs, fontWeight: 500,
-      borderRadius: 'var(--r-sm)', whiteSpace: 'nowrap', transition: 'all .12s ease',
+      borderRadius: 'var(--r-sm)', whiteSpace: 'nowrap', transition: 'background .12s ease, border-color .12s ease, color .12s ease, opacity .12s ease',
       ...v, ...style,
       ...(disabled && { opacity: 0.45, cursor: 'not-allowed', pointerEvents: 'none' }),
     }}>
@@ -173,16 +173,16 @@ export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRig
   );
 }
 
-export function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tooltip, style, className, disabled = false }) {
+export function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tooltip, style, className, disabled = false, ...props }) {
   return (
-    <button className={className} onClick={onClick} disabled={disabled} title={tooltip} aria-label={tooltip} style={{
+    <button {...props} className={className} onClick={onClick} disabled={disabled} title={tooltip} aria-label={tooltip} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       width: size, height: size,
       color: tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)',
       background: 'transparent',
       border: '1px solid transparent',
       borderRadius: 'var(--r-sm)',
-      transition: 'all .12s ease',
+      transition: 'background .12s ease, border-color .12s ease, color .12s ease',
       ...style,
       ...(disabled && { opacity: 0.45, cursor: 'not-allowed', pointerEvents: 'none' }),
     }}
@@ -293,7 +293,7 @@ export function Checkbox({ checked, onChange, size = 14, label, disabled = false
       border: `1px solid ${checked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
       background: checked ? 'var(--moon-300)' : 'transparent',
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      transition: 'all .12s ease', flexShrink: 0,
+      transition: 'background .12s ease, border-color .12s ease, opacity .12s ease', flexShrink: 0,
       ...(disabled && { opacity: 0.45, cursor: 'wait' }),
     }}>
       {checked && <Iconed name="check" size={size - 4} style={{ color: 'var(--bg)', strokeWidth: 3 }} />}

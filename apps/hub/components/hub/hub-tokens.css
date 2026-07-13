@@ -150,6 +150,11 @@
 }
 .hub-app button { font-family: inherit; color: inherit; background: none; border: none; cursor: pointer; padding: 0; }
 .hub-app input, .hub-app textarea { font-family: inherit; color: inherit; }
+
+.hub-app[data-theme-switching="true"],
+.hub-app[data-theme-switching="true"] * {
+  transition: none !important;
+}
 .hub-app a { color: inherit; text-decoration: none; }
 .hub-app .mono { font-family: var(--font-mono); font-feature-settings: 'ss02'; letter-spacing: 0; font-variant-numeric: tabular-nums; }
 /* Sans numeric utility — column-stable lining figures for counts that stay in sans (e.g. Badge) */
@@ -824,6 +829,12 @@
 
   .hub-mobile-only {
     display: inline-flex !important;
+  }
+
+  .hub-mobile-nav-trigger,
+  .hub-sidebar-toggle {
+    min-width: 44px !important;
+    min-height: 44px !important;
   }
 
   .hub-mobile-hidden,

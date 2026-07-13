@@ -124,8 +124,6 @@ const PARENT_JUMP = {
   'dashboard/brand': 'dashboard/brand/projects',
 };
 
-const MOBILE_NAV_FOCUS_DELAY_MS = 200;
-
 export function HubApp() {
   const router = useRouter();
   const pathname = usePathname() || '/dashboard';
@@ -137,18 +135,26 @@ export function HubApp() {
   const [navOpen, setNavOpen] = React.useState(false);
   const [density, setDensity] = React.useState('default');
   const [theme, setTheme] = React.useState('dark');
+  const [themeTransitionSuppressed, setThemeTransitionSuppressed] = React.useState(false);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [tweaksOpen, setTweaksOpen] = React.useState(false);
   const [isMobileViewport, setIsMobileViewport] = React.useState(false);
   const rootRef = React.useRef(null);
   const previousMobileNavOpenRef = React.useRef(false);
+  const focusMobileTriggerOnResizeRef = React.useRef(false);
+  const lastFocusWithinSidebarRef = React.useRef(false);
+
+  const applyTheme = React.useCallback((nextTheme) => {
+    setThemeTransitionSuppressed(true);
+    setTheme(nextTheme);
+  }, []);
 
   React.useEffect(() => {
     const d = typeof window !== 'undefined' ? localStorage.getItem('mlp.density') : null;
     const t = typeof window !== 'undefined' ? localStorage.getItem('mlp.theme') : null;
     if (d) setDensity(d);
-    if (t) setTheme(t);
-  }, []);
+    if (t) applyTheme(t);
+  }, [applyTheme]);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') localStorage.setItem('mlp.density', density);
@@ -157,9 +163,25 @@ export function HubApp() {
     if (typeof window !== 'undefined') localStorage.setItem('mlp.theme', theme);
   }, [theme]);
 
+  React.useLayoutEffect(() => {
+    if (!themeTransitionSuppressed) return undefined;
+    let secondFrame;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => setThemeTransitionSuppressed(false));
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [theme, themeTransitionSuppressed]);
+
   React.useEffect(() => {
     const media = window.matchMedia('(max-width: 900px)');
     const syncViewport = () => {
+      const sidebar = rootRef.current?.querySelector('.hub-sidebar-root');
+      if (media.matches && (lastFocusWithinSidebarRef.current || sidebar?.contains(document.activeElement))) {
+        focusMobileTriggerOnResizeRef.current = true;
+      }
       setIsMobileViewport(media.matches);
       if (!media.matches) setNavOpen(false);
     };
@@ -198,7 +220,7 @@ export function HubApp() {
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [isMobileViewport, navOpen]);
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     if (!isMobileViewport) {
       previousMobileNavOpenRef.current = false;
       return undefined;
@@ -206,14 +228,13 @@ export function HubApp() {
 
     const wasOpen = previousMobileNavOpenRef.current;
     previousMobileNavOpenRef.current = navOpen;
-    const timeout = window.setTimeout(() => {
-      if (navOpen) {
-        rootRef.current?.querySelector('.hub-sidebar-root button')?.focus();
-      } else if (wasOpen) {
-        rootRef.current?.querySelector('.hub-mobile-only')?.focus();
-      }
-    }, navOpen ? MOBILE_NAV_FOCUS_DELAY_MS : 0);
-    return () => window.clearTimeout(timeout);
+    if (navOpen) {
+      rootRef.current?.querySelector('.hub-sidebar-root button')?.focus();
+    } else if (wasOpen || focusMobileTriggerOnResizeRef.current) {
+      focusMobileTriggerOnResizeRef.current = false;
+      rootRef.current?.querySelector('.hub-mobile-only')?.focus();
+    }
+    return undefined;
   }, [isMobileViewport, navOpen]);
 
   const render = PAGE_MAP[path];
@@ -223,13 +244,20 @@ export function HubApp() {
   const mobileNavOpen = isMobileViewport && navOpen;
 
   return (
-    <div ref={rootRef} className="hub-app" data-theme={theme} data-density={density}>
+    <div
+      ref={rootRef}
+      className="hub-app"
+      onFocusCapture={(event) => {
+        lastFocusWithinSidebarRef.current = Boolean(event.target?.closest?.('.hub-sidebar-root'));
+      }}
+      data-theme={theme}
+      data-density={density}
+      data-theme-switching={themeTransitionSuppressed ? 'true' : 'false'}
+    >
       <div className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'}>
-        <button
-          type="button"
+        <div
           className="hub-mobile-backdrop"
-          aria-label="Close navigation"
-          tabIndex={-1}
+          aria-hidden="true"
           onClick={() => setNavOpen(false)}
         />
         <Sidebar
@@ -252,11 +280,12 @@ export function HubApp() {
             onNavigate={navigate}
             onNew={() => setPaletteOpen(true)}
             onSidebarOpen={() => setNavOpen(true)}
+            navOpen={navOpen}
             onTweaksToggle={() => setTweaksOpen(o => !o)}
             density={density}
             onDensity={setDensity}
             theme={theme}
-            onTheme={setTheme}
+            onTheme={applyTheme}
           />
           <div key={path} className="hub-content scroll-y fade-up">
             {page}

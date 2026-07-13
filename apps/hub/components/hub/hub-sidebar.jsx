@@ -73,7 +73,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
 
   if (collapsed) {
     return (
-      <aside inert={inert || undefined} aria-hidden={ariaHidden || undefined} className={`${className || ''} hub-sidebar-root--collapsed`} style={{
+      <aside id="hub-primary-navigation" aria-label="Primary navigation" inert={inert || undefined} aria-hidden={ariaHidden || undefined} className={`${className || ''} hub-sidebar-root--collapsed`} style={{
         width: 56, flexShrink: 0,
         background: 'var(--surface)',
         borderRight: '1px solid var(--line-soft)',
@@ -112,7 +112,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
   }
 
   return (
-    <aside inert={inert || undefined} aria-hidden={ariaHidden || undefined} className={className} style={{
+    <aside id="hub-primary-navigation" aria-label="Primary navigation" inert={inert || undefined} aria-hidden={ariaHidden || undefined} className={className} style={{
       width: 232, flexShrink: 0,
       background: 'var(--surface)',
       borderRight: '1px solid var(--line-soft)',
@@ -131,7 +131,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
             <div className="mono" style={{ fontSize: 9.5, color: 'var(--fg-faint)', letterSpacing: '0.05em', marginTop: -1 }}>HUB · PRO</div>
           </div>
         </div>
-        <IconButton icon="chevronL" onClick={onToggleCollapse} size={24} iconSize={13} tooltip={toggleTooltip} />
+        <IconButton className="hub-sidebar-toggle" icon="chevronL" onClick={onToggleCollapse} size={24} iconSize={13} tooltip={toggleTooltip} />
       </div>
 
       <div style={{ padding: '4px 12px 10px' }}>

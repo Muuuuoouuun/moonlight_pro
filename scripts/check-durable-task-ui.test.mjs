@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 const root = process.cwd();
-const [dailySource, projectsSource, primitiveSource, tokenSource, projectTaskStateSource, hubAppSource, sidebarSource, quickCaptureSource] = await Promise.all([
+const [dailySource, projectsSource, primitiveSource, tokenSource, projectTaskStateSource, hubAppSource, sidebarSource, topBarSource, quickCaptureSource] = await Promise.all([
   readFile(`${root}/apps/hub/components/hub/pages/daily-brief.jsx`, "utf8"),
   readFile(`${root}/apps/hub/components/hub/pages/projects.jsx`, "utf8"),
   readFile(`${root}/apps/hub/components/hub/hub-primitives.jsx`, "utf8"),
@@ -11,6 +11,7 @@ const [dailySource, projectsSource, primitiveSource, tokenSource, projectTaskSta
   readFile(`${root}/apps/hub/lib/project-task-state.js`, "utf8"),
   readFile(`${root}/apps/hub/components/hub/hub-app.jsx`, "utf8"),
   readFile(`${root}/apps/hub/components/hub/hub-sidebar.jsx`, "utf8"),
+  readFile(`${root}/apps/hub/components/hub/hub-topbar.jsx`, "utf8"),
   readFile(`${root}/apps/hub/components/hub/quick-capture.jsx`, "utf8"),
 ]);
 
@@ -285,7 +286,17 @@ test("closed mobile navigation leaves the tab order and theme changes do not cro
   assert.match(hubAppSource, /event\.key === ["']Escape["']/);
   assert.match(hubAppSource, /\.hub-sidebar-root button/);
   assert.match(hubAppSource, /\.hub-mobile-only/);
+  assert.match(hubAppSource, /focusMobileTriggerOnResizeRef/);
+  assert.match(hubAppSource, /contains\(document\.activeElement\)/);
+  assert.match(hubAppSource, /data-theme-switching=\{themeTransitionSuppressed/);
+  assert.match(hubAppSource, /className="hub-mobile-backdrop"\s+aria-hidden="true"/);
   assert.match(sidebarSource, /aria-hidden=\{ariaHidden \|\| undefined\}/);
+  assert.match(sidebarSource, /id="hub-primary-navigation"/);
+  assert.match(topBarSource, /aria-expanded=\{navOpen\}/);
+  assert.match(topBarSource, /aria-controls="hub-primary-navigation"/);
+  assert.doesNotMatch(primitiveSource, /transition:\s*["']all\s/);
+  assert.match(tokenSource, /data-theme-switching="true"\][\s\S]*transition:\s*none !important/);
+  assert.match(tokenSource, /\.hub-mobile-nav-trigger,[\s\S]*\.hub-sidebar-toggle[\s\S]*min-width:\s*44px !important;[\s\S]*min-height:\s*44px !important/);
   assert.doesNotMatch(tokenSource, /transition:\s*background\s+0\.2s,\s*color\s+0\.2s/);
 });
 
