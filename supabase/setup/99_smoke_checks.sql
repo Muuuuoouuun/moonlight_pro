@@ -99,3 +99,36 @@ join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'public'
   and p.proname in ('create_task_v1', 'update_task_v1', 'capture_quick_input_v1')
 order by p.proname;
+
+do $durable_rpc_privilege_check$
+declare
+  v_routine_count integer;
+  v_privileges_valid boolean;
+begin
+  with required_routines(signature) as (
+    values
+      ('create_task_v1(uuid,text,jsonb)'),
+      ('update_task_v1(uuid,uuid,text,timestamptz,jsonb)'),
+      ('capture_quick_input_v1(uuid,text,jsonb)')
+  ),
+  resolved_routines as (
+    select to_regprocedure('public.' || signature)::oid as routine_oid
+    from required_routines
+  )
+  select
+    count(routine_oid),
+    bool_and(
+      has_function_privilege('service_role', routine_oid, 'EXECUTE')
+      and not has_function_privilege('anon', routine_oid, 'EXECUTE')
+      and not has_function_privilege('authenticated', routine_oid, 'EXECUTE')
+    )
+  into v_routine_count, v_privileges_valid
+  from resolved_routines
+  where routine_oid is not null;
+
+  if v_routine_count <> 3 or v_privileges_valid is not true then
+    raise exception 'durable task RPC privilege contract failed'
+      using errcode = '42501';
+  end if;
+end;
+$durable_rpc_privilege_check$;

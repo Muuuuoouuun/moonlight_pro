@@ -113,24 +113,51 @@ test("create_task_v1 validates related rows and returns the complete canonical t
 
 test("update_task_v1 locks the row, enforces OCC and the complete transition graph", () => {
   const sql = functionSql(migration, "update_task_v1");
+  assert.match(sql, /declare[\s\S]*v_current_project jsonb;/i);
   assert.match(sql, /from public\.tasks[\s\S]*for update/i);
   assert.match(sql, /updated_at is distinct from p_expected_updated_at/i);
   assert.match(sql, /'reason', 'stale-write'/i);
 
-  for (const transition of [
-    ["inbox", "todo", "done"],
-    ["todo", "doing", "blocked", "done"],
-    ["doing", "todo", "blocked", "done"],
-    ["blocked", "todo", "doing", "done"],
-    ["done", "todo"],
-  ]) {
-    for (const value of transition) assert.ok(sql.includes(`'${value}'`));
-  }
+  const lockedTaskEnd = sql.indexOf("if v_task.updated_at is distinct from p_expected_updated_at");
+  const lockedTaskSetup = sql.slice(sql.indexOf("select t.*"), lockedTaskEnd);
+  assert.match(
+    lockedTaskSetup,
+    /v_task\.project_id is not null[\s\S]*jsonb_build_object\('id', p\.id, 'name', p\.name\)[\s\S]*into v_current_project[\s\S]*from public\.projects p[\s\S]*p\.id = v_task\.project_id[\s\S]*p\.workspace_id = p_workspace_id/i,
+  );
+  const staleBlock = sql.slice(lockedTaskEnd, sql.indexOf("v_title :=", lockedTaskEnd));
+  assert.match(staleBlock, /'project', v_current_project/i);
+  const savedCanonical = sql.slice(sql.lastIndexOf("v_task_json := jsonb_build_object"));
+  assert.match(savedCanonical, /'project', v_project/i);
+  assert.doesNotMatch(savedCanonical, /v_current_project/i);
 
   assert.match(sql, /v_status = 'done'[\s\S]*completed_at/i);
   assert.match(sql, /v_task\.status = 'done'[\s\S]*v_status = 'todo'[\s\S]*null/i);
   assert.match(sql, /v_status = 'doing'[\s\S]*coalesce\(v_task\.started_at, v_now\)/i);
   assert.ok(sql.indexOf("stale-write") < sql.indexOf("update public.tasks"), "stale OCC returns before mutation");
+});
+
+test("current-project state is declared only by update_task_v1", () => {
+  assert.doesNotMatch(functionSql(migration, "create_task_v1"), /v_current_project jsonb;/i);
+  assert.match(functionSql(migration, "update_task_v1"), /v_current_project jsonb;/i);
+});
+
+test("update_task_v1 exposes exactly the approved transition pairs", () => {
+  const sql = functionSql(migration, "update_task_v1");
+  const transitionValues = sql.match(
+    /from\s*\(\s*values([\s\S]*?)\)\s*as\s+allowed_transitions\s*\(\s*from_status\s*,\s*to_status\s*\)/i,
+  );
+  assert.ok(transitionValues, "update_task_v1 must expose the allowed graph as explicit transition pairs");
+  const actualTransitions = [...transitionValues[1].matchAll(/\(\s*'([^']+)'\s*,\s*'([^']+)'\s*\)/g)]
+    .map(([, from, to]) => `${from}->${to}`)
+    .sort();
+  const expectedTransitions = [
+    "inbox->todo", "inbox->done",
+    "todo->doing", "todo->blocked", "todo->done",
+    "doing->todo", "doing->blocked", "doing->done",
+    "blocked->todo", "blocked->doing", "blocked->done",
+    "done->todo",
+  ].sort();
+  assert.deepEqual(actualTransitions, expectedTransitions);
 });
 
 test("capture_quick_input_v1 creates an Approval Queue compatible proposed inbox order", () => {
@@ -165,7 +192,6 @@ test("durable RPC execution is service-role only and smoke checks inspect table,
     assert.match(smoke, new RegExp(name, "i"));
   }
   assert.match(smoke, /has_function_privilege/i);
-  assert.match(smoke, /service_role/i);
-  assert.match(smoke, /anon/i);
-  assert.match(smoke, /authenticated/i);
+  assert.match(smoke, /bool_and\s*\([\s\S]*has_function_privilege\('service_role'[\s\S]*not\s+has_function_privilege\('anon'[\s\S]*not\s+has_function_privilege\('authenticated'/i);
+  assert.match(smoke, /v_routine_count\s*<>\s*3[\s\S]*v_privileges_valid\s+is\s+not\s+true[\s\S]*raise exception/i);
 });

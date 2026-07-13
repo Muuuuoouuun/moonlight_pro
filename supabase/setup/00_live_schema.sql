@@ -1422,6 +1422,7 @@ declare
   v_response jsonb;
   v_project_id uuid;
   v_project jsonb;
+  v_current_project jsonb;
   v_entity_ref jsonb;
   v_entity_id uuid;
   v_entity_type text;
@@ -1527,6 +1528,19 @@ begin
       using errcode = 'P0002';
   end if;
 
+  if v_task.project_id is not null then
+    select jsonb_build_object('id', p.id, 'name', p.name)
+    into v_current_project
+    from public.projects p
+    where p.id = v_task.project_id
+      and p.workspace_id = p_workspace_id;
+
+    if not found then
+      raise exception 'task project not found in workspace'
+        using errcode = '23514';
+    end if;
+  end if;
+
   if v_task.updated_at is distinct from p_expected_updated_at then
     v_task_json := jsonb_build_object(
       'id', v_task.id,
@@ -1536,7 +1550,7 @@ begin
       'due_at', v_task.due_at,
       'due_precision', coalesce(v_task.meta ->> 'due_precision', case when v_task.due_at is null then 'none' else 'timed' end),
       'meta', v_task.meta,
-      'project', case when v_task.project_id is null then null else jsonb_build_object('id', v_task.project_id) end,
+      'project', v_current_project,
       'owner', jsonb_build_object('id', v_task.owner_id),
       'next_action', v_task.next_action,
       'created_at', v_task.created_at,
@@ -1574,12 +1588,25 @@ begin
       using errcode = '22023';
   end if;
 
-  if v_status is distinct from v_task.status and not (
-    (v_task.status = 'inbox' and v_status in ('todo', 'done'))
-    or (v_task.status = 'todo' and v_status in ('doing', 'blocked', 'done'))
-    or (v_task.status = 'doing' and v_status in ('todo', 'blocked', 'done'))
-    or (v_task.status = 'blocked' and v_status in ('todo', 'doing', 'done'))
-    or (v_task.status = 'done' and v_status = 'todo')
+  if v_status is distinct from v_task.status and not exists (
+    select 1
+    from (
+      values
+        ('inbox', 'todo'),
+        ('inbox', 'done'),
+        ('todo', 'doing'),
+        ('todo', 'blocked'),
+        ('todo', 'done'),
+        ('doing', 'todo'),
+        ('doing', 'blocked'),
+        ('doing', 'done'),
+        ('blocked', 'todo'),
+        ('blocked', 'doing'),
+        ('blocked', 'done'),
+        ('done', 'todo')
+    ) as allowed_transitions(from_status, to_status)
+    where allowed_transitions.from_status = v_task.status
+      and allowed_transitions.to_status = v_status
   ) then
     raise exception 'invalid task status transition'
       using errcode = '22023';
