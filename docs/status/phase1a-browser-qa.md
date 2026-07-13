@@ -1,7 +1,7 @@
 # Phase 1A Browser QA Snapshot
 
 > Date: 2026-07-13 (Asia/Seoul)
-> Tested source: `606392b`
+> Tested source: `5df2a2a`
 > Target: local production build at `http://127.0.0.1:3101`
 > Viewports: 1440×1000 desktop, 390×844 mobile
 > Breakpoint probes: 720, 721, 768, 900, and 901px
@@ -24,7 +24,7 @@ This is the repository-owned summary of the Phase 1A browser run. It does not cl
 - Daily and Projects loading, empty, and initial-error states at 390×844.
 - Inbox saved and duplicate capture with exact requests, idempotency keys, cleared input, announcements, and restored input focus.
 - Closed mobile navigation excluded from Tab order; immediate open focus, one accessible close control, Escape close, disclosure state, and trigger focus restoration.
-- Responsive focus and 44px navigation targets at 720, 721, 768, 900, and 901px breakpoint transitions, including no forced restoration after deliberately defocusing into content.
+- Responsive focus and 44px navigation targets at 720, 721, 768, 900, and 901px breakpoint transitions, including no forced restoration after deliberately defocusing into content or non-focusable sidebar space.
 - Daily desktop and Projects mobile light-theme swaps with theme-sensitive descendant transitions suppressed during the palette change.
 
 ## Evidence inventory
@@ -59,6 +59,6 @@ The final passing run contains 21 screenshots:
 - Unexpected application API errors: 0.
 - Asserted final-run findings: 0.
 - Known Low finding: `/favicon.ico` returns 404; no functional impact on the Task loop.
-- The expanded run and independent review exposed closed-navigation Tab leakage, delayed or lost focus while opening and resizing in both directions, stale focus intent after deliberately leaving navigation, duplicate close semantics, undersized 721–900px navigation targets, descendant theme cross-fades, and lost post-capture focus. Source `606392b` closes these findings, and the strengthened complete matrix passed again afterward.
+- The expanded run and independent review exposed closed-navigation Tab leakage, delayed or lost focus while opening and resizing in both directions, stale focus intent after deliberately leaving navigation or clicking sidebar whitespace, duplicate close semantics, undersized 721–900px navigation targets, descendant theme cross-fades, and lost post-capture focus. Source `5df2a2a` closes these findings, and the strengthened complete matrix passed again afterward.
 - The screenshots remain in the local QA artifact rather than Git. This file preserves the tested matrix and source commit without adding generated binaries to the repository.
 - This run does not replace live migration, duplicate/conflict/rollback smoke, or short real-use verification.
