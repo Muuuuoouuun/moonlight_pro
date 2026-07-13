@@ -274,9 +274,11 @@ function checkOpenClawIntegration(label, env) {
   printResult("PASS", `${label} OpenClaw transport`, configuredTransports.join(", "));
 }
 
-async function checkSupabase(label, env, failures) {
+async function checkSupabase(label, env, failures, options = {}) {
   const url = (env.SUPABASE_URL || "").replace(/\/$/, "");
-  const apiKey = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY || "";
+  const apiKey = options.requireServiceRole
+    ? env.SUPABASE_SERVICE_ROLE_KEY || ""
+    : env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY || "";
   const workspaceId = resolveWorkspaceId(env);
 
   if (!url) {
@@ -286,7 +288,13 @@ async function checkSupabase(label, env, failures) {
   }
 
   if (!apiKey) {
-    printResult("FAIL", `${label} Supabase key`, "missing SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY");
+    printResult(
+      "FAIL",
+      `${label} Supabase key`,
+      options.requireServiceRole
+        ? "missing SUPABASE_SERVICE_ROLE_KEY (required for durable RPC writes)"
+        : "missing SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY",
+    );
     failures.push(`${label}:SUPABASE_KEY`);
     return;
   }
@@ -389,7 +397,7 @@ async function main() {
   await checkEngine("Hub", hubEnv, failures);
 
   printSection("Engine");
-  await checkSupabase("Engine", engineEnv, failures);
+  await checkSupabase("Engine", engineEnv, failures, { requireServiceRole: true });
 
   printSection("Integrations");
   await checkGitHubIntegration("Hub", hubEnv, failures);

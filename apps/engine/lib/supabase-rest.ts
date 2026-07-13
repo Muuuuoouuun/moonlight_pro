@@ -10,11 +10,62 @@ interface SupabaseQueryOptions {
   order?: string;
 }
 
+export type SupabaseRpcFailureReason =
+  | "missing-config"
+  | "timeout"
+  | "not-found"
+  | "invalid"
+  | "invalid-transition"
+  | "upstream";
+
+type SupabaseRpcErrorOptions = {
+  httpStatus?: number;
+  metadata?: unknown;
+  cause?: unknown;
+};
+
+type SupabaseRpcOptions = {
+  timeoutMs?: number;
+  fetchImpl?: typeof fetch;
+};
+
+export class SupabaseRpcError extends Error {
+  readonly reason: SupabaseRpcFailureReason;
+  readonly httpStatus?: number;
+  readonly metadata?: unknown;
+
+  constructor(
+    reason: SupabaseRpcFailureReason,
+    message: string,
+    options: SupabaseRpcErrorOptions = {},
+  ) {
+    super(message, options.cause === undefined ? undefined : { cause: options.cause });
+    this.name = "SupabaseRpcError";
+    this.reason = reason;
+    this.httpStatus = options.httpStatus;
+    this.metadata = options.metadata;
+  }
+}
+
 function resolveSupabaseRestConfig(): SupabaseRestConfig | null {
   const url = process.env.SUPABASE_URL?.trim();
   const apiKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
     process.env.SUPABASE_ANON_KEY?.trim();
+
+  if (!url || !apiKey) {
+    return null;
+  }
+
+  return {
+    url: url.replace(/\/$/, ""),
+    apiKey,
+  };
+}
+
+function resolveSupabaseRpcConfig(): SupabaseRestConfig | null {
+  const url = process.env.SUPABASE_URL?.trim();
+  const apiKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 
   if (!url || !apiKey) {
     return null;
@@ -90,6 +141,129 @@ function extractCount(contentRange: string | null) {
   const [, count] = contentRange.split("/");
   const parsed = Number.parseInt(count || "", 10);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseRpcResponseBody(text: string): unknown {
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { body: text };
+  }
+}
+
+function rpcErrorMessage(metadata: unknown, fallback: string) {
+  if (
+    metadata &&
+    typeof metadata === "object" &&
+    !Array.isArray(metadata) &&
+    typeof (metadata as Record<string, unknown>).message === "string"
+  ) {
+    return (metadata as Record<string, string>).message;
+  }
+
+  return fallback;
+}
+
+function classifyRpcFailure(httpStatus: number, metadata: unknown): SupabaseRpcFailureReason {
+  const record =
+    metadata && typeof metadata === "object" && !Array.isArray(metadata)
+      ? (metadata as Record<string, unknown>)
+      : null;
+  const code = typeof record?.code === "string" ? record.code : "";
+  const message = typeof record?.message === "string" ? record.message.toLowerCase() : "";
+
+  if (httpStatus === 404 || code === "P0002") {
+    return "not-found";
+  }
+
+  if (message.includes("transition")) {
+    return "invalid-transition";
+  }
+
+  if (httpStatus === 400 || httpStatus === 422 || code.startsWith("22")) {
+    return "invalid";
+  }
+
+  return "upstream";
+}
+
+export async function callSupabaseRpc<T>(
+  name: string,
+  args: Record<string, unknown>,
+  options: SupabaseRpcOptions = {},
+): Promise<T> {
+  const config = resolveSupabaseRpcConfig();
+
+  if (!config) {
+    throw new SupabaseRpcError(
+      "missing-config",
+      "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for RPC writes.",
+    );
+  }
+
+  const timeoutMs = options.timeoutMs ?? 10_000;
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetchImpl(
+      `${config.url}/rest/v1/rpc/${encodeURIComponent(name)}`,
+      {
+        method: "POST",
+        headers: makeHeaders(config.apiKey, {
+          contentType: "application/json",
+          prefer: "return=representation",
+        }),
+        body: JSON.stringify(args),
+        signal: controller.signal,
+      },
+    );
+    const text = await response.text();
+    const body = parseRpcResponseBody(text);
+
+    if (!response.ok) {
+      const reason = classifyRpcFailure(response.status, body);
+      throw new SupabaseRpcError(
+        reason,
+        rpcErrorMessage(body, `Supabase RPC failed with HTTP ${response.status}.`),
+        { httpStatus: response.status, metadata: body },
+      );
+    }
+
+    if (text && body && typeof body === "object" && "body" in body) {
+      throw new SupabaseRpcError("upstream", "Supabase RPC returned invalid JSON.", {
+        httpStatus: response.status,
+        metadata: body,
+      });
+    }
+
+    return body as T;
+  } catch (error) {
+    if (error instanceof SupabaseRpcError) {
+      throw error;
+    }
+
+    if (
+      controller.signal.aborted ||
+      (error instanceof DOMException && error.name === "AbortError") ||
+      (error instanceof Error && error.name === "AbortError")
+    ) {
+      throw new SupabaseRpcError("timeout", `Supabase RPC timed out after ${timeoutMs}ms.`, {
+        cause: error,
+      });
+    }
+
+    throw new SupabaseRpcError("upstream", "Supabase RPC request failed.", {
+      cause: error,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export function inFilter(values: string[]) {
