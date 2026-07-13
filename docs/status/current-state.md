@@ -37,10 +37,10 @@ Before calling Phase 1A live:
 
 1. Configure the complete activation contract:
    - Hub runtime: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `COM_MOON_DEFAULT_WORKSPACE_ID`, `COM_MOON_ENGINE_URL`, `COM_MOON_HUB_URL` or `NEXT_PUBLIC_APP_URL`, `COM_MOON_SHARED_WEBHOOK_SECRET`, and `COM_MOON_HUB_WRITE_SECRET`.
-   - Engine runtime: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `COM_MOON_DEFAULT_WORKSPACE_ID` or `DEFAULT_WORKSPACE_ID`, and the same `COM_MOON_SHARED_WEBHOOK_SECRET`.
-   - Migration access: `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF`, or a Supabase URL from which the project ref can be derived.
-   - Data prerequisite: the selected workspace has a non-null `owner_id` and an active `workspace_memberships` row for that owner.
-2. Apply the exact migration with `npm run db:migrate -- 20260713_0015_durable_task_loop.sql`; the bare migration command defaults to older files.
+   - Engine runtime: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `COM_MOON_DEFAULT_WORKSPACE_ID`, and the same `COM_MOON_SHARED_WEBHOOK_SECRET`. Phase 1A routes do not use the legacy `DEFAULT_WORKSPACE_ID` alias.
+   - Migration access: `SUPABASE_ACCESS_TOKEN` plus either `SUPABASE_PROJECT_REF` or a Supabase URL from which the project ref can be derived.
+   - Schema/data prerequisites: the foundation ledger and `20260619_0011_work_orders_agent_runs.sql` are already applied; the selected workspace has a non-null `owner_id` and an active `workspace_memberships` row for that owner.
+2. With those prerequisites present, apply the exact migration with `npm run db:migrate -- 20260713_0015_durable_task_loop.sql`. If they are absent, use the documented prerequisite/bundle path first. The bare migration command defaults to older files.
 3. Prove create→reload→complete→reload against live persistence.
 4. Prove same-key duplicate, changed-payload conflict, stale `updated_at`, and transaction rollback cases.
 5. Use the loop briefly and record any missed follow-up, confusing retry, or incorrect timezone behavior.

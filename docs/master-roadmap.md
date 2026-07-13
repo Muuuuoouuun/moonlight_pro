@@ -73,9 +73,12 @@ Closed execution, decision memory, guided repair, and public proof remain outcom
 3. 짧은 실사용으로 누락·재시도·우선순위 행동 확인.
 4. Phase 1B real follow-up and Google Calendar aggregation.
 5. Phase 1C contact outcome and next-action loop.
-6. Project candidate, delay, and bottleneck management.
-7. Content idea → variant → handoff/export history.
-8. Guided repair and broader integration readiness.
+6. Phase 2 person-first customer continuity and verified owner scope.
+7. Phase 3 Project candidate, checklist, delay, and bottleneck management.
+8. Phase 4 ClassIn bootstrap, missing-only sync, conflict comparison, and official outbox.
+9. Phase 5 Content idea → variant → handoff/export history.
+10. Phase 6 audio, reviewed analysis, cost ledger, and quarterly review.
+11. Guided repair and broader integration readiness as a cross-phase outcome theme.
 
 ## 5. Retired Premises
 

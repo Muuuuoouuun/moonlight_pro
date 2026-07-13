@@ -420,13 +420,13 @@ Verify: create→reload, same-key retry→한 행 duplicate, same-key/different-
 
 deep design의 stale 문구인 “기존 local task create/complete 연결”을 “Phase 0 read-only surface에 durable interaction 추가”로 고친다. current-state와 TODOS에 실제 완료/보류 범위, migration 적용 여부, Phase 1B(자동 attention/proposal)는 미구현임을 명시한다.
 
-- [ ] **Step 5: 최종 diff 감사와 커밋**
+- [x] **Step 5: 최종 diff 감사와 커밋**
 
 Run: `git diff --check && git status --short && git diff --stat`
 
 Expected: whitespace error 없음, 의도한 파일만 변경. 검증 증거를 확인한 뒤 범위별 커밋으로 현재 branch를 push한다.
 
-상태: source commits는 완료됐고 documentation reconciliation과 최종 독립 리뷰를 진행 중이다. live migration/smoke는 Step 2의 환경 게이트로 의도적으로 열린 상태다.
+결과: source, migration, route, UI, recovery, accessibility, documentation을 범위별 커밋으로 분리했다. `git diff --check origin/main`과 전체 로컬 검증, 강화 브라우저 QA, 독립 리뷰를 완료했다. live migration/smoke는 Step 2의 환경 게이트로 의도적으로 열린 상태다.
 
 ## 실행 구조 리뷰
 

@@ -44,8 +44,8 @@ Com_Moon Hub OS의 현재 로컬 스키마와 시드 데이터를 정리한 안�
 
 1. `migrations/20260602_0004_live_setup_contracts.sql` 실행
 2. `setup/01_storage.sql` 실행
-3. `setup/99_smoke_checks.sql` 실행
-4. 기존 대기 migration 전체가 필요하면 `apply-pending.sql`을 SQL Editor에서 실행한다. Phase 1A만 활성화할 때는 PAT와 project ref를 설정하고 `npm run db:migrate -- 20260713_0015_durable_task_loop.sql`로 정확한 파일을 적용한다. bare `npm run db:migrate`는 legacy 0005/0006만 적용하므로 Phase 1A 명령으로 사용하지 않는다.
+3. 기존 대기 migration 전체가 필요하거나 `20260619_0011_work_orders_agent_runs.sql`이 아직 없다면 `apply-pending.sql`을 SQL Editor에서 실행한다. foundation ledger와 0011이 이미 적용된 DB에서 Phase 1A만 활성화할 때는 PAT와 project ref를 설정하고 `npm run db:migrate -- 20260713_0015_durable_task_loop.sql`로 정확한 파일을 적용한다. bare `npm run db:migrate`는 legacy 0005/0006만 적용하므로 Phase 1A 명령으로 사용하지 않는다.
+4. durable task migration까지 적용된 뒤 `setup/99_smoke_checks.sql` 실행
 5. 앱 환경 변수를 실제 project URL/key/workspace ID로 맞춘 뒤 `npm run check:connections` 실행
 
 > 번호 메모: `0003`·`0004`는 `20260427`·`20260602` 두 벌이 있습니다(브랜치 병합 흔적). 적용은 날짜 접두사 순서대로 — `apply-pending.sql`이 그 순서를 이미 반영합니다.
