@@ -1,5 +1,7 @@
 # Com_Moon Agent 탭 MVP UI / 제품 스펙
 
+> 상태: DEFERRED FEATURE SPEC — 현재 Phase 1A보다 먼저 구현하지 않는다. Agent/Council 자산은 보존하되 현재 제품 우선순위는 `docs/README.md`와 Personal Operator OS 심화 설계를 따른다.
+
 ## 1. 문서 목적
 
 이 문서는 Com_Moon Hub 안에 `Agent` 탭을 신설하거나, 현재의 `/dashboard/ai` 콘솔을 `Agent` 탭으로 재정의하는 방향을 실제 제품 설계 수준으로 구체화한다.

@@ -1,7 +1,7 @@
 # Sales OS — 방향성 & 설계 지침 (SSOT)
 
-> moonlight Sales OS의 단일 진실 원천. 흩어진 결정(office-hours v2/v3 설계 문서, 메모리, 인터뷰)을
-> 한 곳에 정리. 구현·리뷰 전 여기를 먼저 읽는다.
+> 상태: ACTIVE DOMAIN REFERENCE — 2026-07-13 이후 운영자 사실과 데이터 소유권은 `docs/operator-workflow-profile.md`와 Personal Operator OS 심화 설계가 우선한다.
+> Sales OS 내부 결정의 참조 문서다. 구현·리뷰 전 `docs/README.md`의 문서 우선순위를 먼저 확인한다.
 > 최종 갱신: 2026-06-17 · 설계 문서: `~/.gstack/projects/Muuuuoouuun-moonlight_pro/clmagi-codex-moonlight-p0-hardening-design-20260617-230521.md` (APPROVED, supersedes 155433)
 
 ---
@@ -25,7 +25,8 @@ Hub/Engine/Supabase 위에 얹는다(신규 구축 아님).
 | **classinkr-web** | 회사 홈페이지(사용자 구축) | ClassIn 로직·팀 지향 시스템 참고 | ⚠️ **이 머신(clmagi)엔 없음** — 사용자 다른 머신(`bigmac_moon`)에 있음 |
 
 **경계 규칙**
-- moonlight는 classin_home의 CRM·딜·퍼널을 **재구축하지 않는다 → 읽는다**(v1.4). 이미 classin_home에
+- **2026-07-13 우선 결정:** 처음에는 ClassIn/Neo CRM의 운영자 담당 고객을 가져오고, 이후 Moonlight를 개인 업무 정본으로 사용한다. ClassIn은 회사 공식 객체·공식 활동 요약의 정본으로 남으며, Moonlight의 개인 상세 메모는 보내지 않는다. 동기화는 우선 수동 버튼으로 없는 기록만 가져오고 공식 write는 outbox/승인 경계를 거친다.
+- 아래 “재구축하지 않고 읽는다”는 문장은 초기 v1.4 결합 방향의 역사적 제약이다. 새 결정을 막는 제품 원칙으로 사용하지 않는다. 기존 자산 파악에는 계속 참고한다. 이미 classin_home에
   있는 것: `external_crm_records`(Xiaoshouyi 스냅샷), `crm_xiaoshouyi_owner_names`(문준혁=
   3935704427463307), `deals`(contact→quote→contract→confirmed→installation→payment→closed) + 금액/
   결제 상태, 퍼널 이코노믹스(노출→리드→…→고객, CPL/CPA/CPD/ROI), **채널별 광고비**(구글·메타·네이버·

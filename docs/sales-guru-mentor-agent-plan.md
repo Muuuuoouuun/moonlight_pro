@@ -1,5 +1,7 @@
 # 세일즈 구루 멘토 에이전트 — 적용 기획
 
+> 상태: DEFERRED FEATURE SPEC — 기존 Guru 자산은 유지하지만 현재 Phase 1A보다 먼저 확장하지 않는다.
+
 ## 1. 문서 목적
 
 이 문서는 Moonlight에 **세일즈 구루 멘토 에이전트(Sales Guru)** 를 도입하는 방법을

@@ -1,5 +1,7 @@
 # Detail Tab UI Overhaul Prep
 
+> 상태: HISTORICAL UI PREP — 현재 UI 계약은 루트 `DESIGN.md`, 화면 우선순위는 Personal Operator OS 심화 설계를 따른다.
+
 ## Goal
 
 `apps/hub` 상세 탭 전반을 랜딩페이지형 화면에서 운영형 화면으로 재정렬한다.

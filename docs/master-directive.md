@@ -1,7 +1,9 @@
 # Moonlight Master Directive
 
 Status: active directive
-Updated: 2026-05-02
+Updated: 2026-07-13
+
+> 운영자 사실과 현재 구현 단계는 `docs/README.md`의 우선순위를 따른다. 이 문서는 바뀌지 않는 제품 경계만 정의한다.
 
 ## Directive
 
@@ -54,17 +56,16 @@ The public web app is not active in this workspace. Public proof can return late
 
 Replacement:
 
-- Moonlight is a founder command loop for all active work and business information.
+- Moonlight is a personal operator command loop for all active work and business information.
 - Public proof waits until private execution has gravity.
 - AI proposes repair, a human approves, the ledger remembers.
 - Design follows `DESIGN.md` and Moonlight Pro moonstone tokens.
 
 ## Build Priority
 
-1. Close daily action loops.
-2. Harden Engine intake and idempotency.
-3. Make Hub states honest: live, preview, degraded, partial, failed.
+1. Complete the durable task loop: capture, save, surface, complete, reload.
+2. Aggregate real follow-up and calendar signals into the Action Desk.
+3. Close contact outcomes and next-action creation atomically.
 4. Convert content ideas into variant/handoff history.
-5. Convert revenue signals into follow-up actions.
-6. Convert failures into repair queues.
-7. Only then expand public proof or broader automation.
+5. Convert failures into repair queues.
+6. Only then expand ClassIn sync, voice AI, public proof, or broader automation.

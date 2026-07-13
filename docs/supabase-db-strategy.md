@@ -1,5 +1,7 @@
 # Com_Moon Supabase DB 설계 작전
 
+> 상태: ACTIVE DATA REFERENCE — 현재 개인 전용 제품에서는 다중 사용자 SaaS 권한·과금을 구현하지 않는다. 원장·RLS 설계가 Personal Operator OS 심화 설계와 충돌하면 후자를 우선한다.
+
 ## 1. 목적
 
 이 문서는 `Com_Moon Hub OS`의 Supabase DB를 "한 번에 다 만들기"가 아니라,

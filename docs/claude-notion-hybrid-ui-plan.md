@@ -1,6 +1,6 @@
 # Claude x Notion Hybrid UI Plan
 
-> Status: historical design reference. The public web app has been detached from the active workspace; use this document only for taste notes that still apply to Hub and content workspace work.
+> Status: HISTORICAL DESIGN REFERENCE. The public web app has been detached, and the warm/green visual premises in this document are superseded by root `DESIGN.md`. Use it only for non-conflicting editorial taste notes.
 
 ## Goal
 

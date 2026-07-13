@@ -1,5 +1,7 @@
 # Com_Moon Engine Priority Todo
 
+> 상태: DOMAIN BACKLOG — 현재 실행 순서는 `docs/master-roadmap.md`가 우선한다. 이 문서는 Engine 상세 작업 후보를 보존한다.
+
 이 문서는 `apps/engine`(실행/intake 레이어)이 "받는 → 정규화 → 실행 → 원장 기록" 역할을
 완결성 있게 수행하도록 다듬기 위한 실행용 체크리스트다.
 

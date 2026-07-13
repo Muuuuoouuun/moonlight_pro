@@ -5,6 +5,14 @@
 - Supabase REST ledger 중심: Hub는 운영 판단 UI, Engine은 webhook/intake/실행 기록
 - Hub(`/dashboard/**`)와 Engine(`/api/**`)이 현역 실행 표면이며, public web은 active workspace에서 분리됨
 
+## 운영자 업무 기준
+- 문서가 충돌하면 `docs/README.md`의 우선순위와 상태 지도를 먼저 따른다.
+- 제품 기획, CRM, 우선순위, 캘린더, PMS, 자동화 작업 전에 `docs/operator-workflow-profile.md`를 읽는다.
+- 문서의 `확정`, `권장`, `미정`을 구분하고, 권장안을 운영자의 확정 결정처럼 구현하지 않는다.
+- 추가 업무 인터뷰는 현재 중단 상태다. 운영자가 요청하거나 Phase 1 실사용 결과가 생기면 문서의 `Q116`부터 한 번에 정확하고 짧은 질문 5개씩 진행한다.
+- 최초 이관 뒤 Moonlight가 개인 업무 정본이고 ClassIn은 회사 공식 객체·공식 활동 요약의 정본이다. 개인 상세 메모를 ClassIn으로 복제하지 않는다.
+- 제작 기획과 Phase 1 작업 전 `docs/superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`를 읽는다. 전제 1~7과 접근안 B는 승인됐고 Phase 0는 완료됐다.
+
 ## 디자인 시스템
 @DESIGN.md
 
@@ -54,7 +62,7 @@ python3 .Codex/skills/ui-ux-pro-max/scripts/search.py "data table status badge" 
 ## 브랜치 구조
 - `main`: 프로덕션
 - `codex/*`: Codex 작업 브랜치
-- 현재 P0 hardening 작업 브랜치: `codex/moonlight-p0-hardening`
+- 고정된 "현재 작업 브랜치"를 문서에 적지 않는다. 작업 시작 시 Git 상태를 직접 확인한다.
 
 ## Skill routing
 

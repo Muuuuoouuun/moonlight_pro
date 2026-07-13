@@ -1,5 +1,7 @@
 # Moonlight Content OS 심화 기획
 
+> 상태: ACTIVE DOMAIN REFERENCE — 현재 구현 순서는 Phase 1A 이후이며, 상태·권한·우선순위가 충돌하면 `docs/README.md`와 Personal Operator OS 심화 설계를 따른다.
+
 ## 1. 본질
 
 Content 탭은 일반 CMS나 글쓰기 도구가 아니다.

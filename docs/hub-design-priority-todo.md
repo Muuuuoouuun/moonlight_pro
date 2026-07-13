@@ -1,5 +1,7 @@
 # Com_Moon Hub Design Priority Todo
 
+> 상태: DOMAIN BACKLOG — 현재 화면 우선순위는 `docs/master-roadmap.md`와 Personal Operator OS 심화 설계가 우선한다.
+
 이 문서는 허브 설계를 실제 구현 순서로 내리기 위한 실행용 체크리스트다.
 
 원칙:
