@@ -30,6 +30,8 @@ function summarize(action, results) {
 export function SheetsSync() {
   const [state, setState] = React.useState({
     syncState: "loading",
+    enabled: false,
+    reason: null,
     connected: false,
     spreadsheetId: null,
     lastSyncAt: null,
@@ -49,7 +51,9 @@ export function SheetsSync() {
         return;
       }
       setState({
-        syncState: d.status === "live" ? "live" : "preview",
+        syncState: d.status === "connected" ? "live" : d.status || "preview",
+        enabled: Boolean(d.enabled),
+        reason: d.reason || null,
         connected: Boolean(d.connected),
         spreadsheetId: d.spreadsheetId || null,
         lastSyncAt: d.lastSyncAt || null,
@@ -92,7 +96,16 @@ export function SheetsSync() {
     window.location.href = "/api/integrations/sheets/connect";
   };
 
-  const { syncState, connected, spreadsheetId, lastSyncAt, staging, recentRuns } = state;
+  const { syncState, enabled, reason, connected, spreadsheetId, lastSyncAt, staging, recentRuns } = state;
+  const syncLabel = syncState === "live"
+    ? "live"
+    : syncState === "loading"
+      ? "syncing"
+      : syncState === "error"
+        ? "error"
+        : syncState === "disabled"
+          ? "disabled"
+          : syncState;
 
   return (
     <div className="hub-page" style={{ padding: "var(--section-gap)", display: "flex", flexDirection: "column", gap: "var(--gap)", maxWidth: 1100 }}>
@@ -102,7 +115,7 @@ export function SheetsSync() {
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             구글시트 ↔ 세일즈 DB · 리드 import → 정규화·중복제거 → 라이브 뷰 push
             <span className="mono" style={{ marginLeft: 8, color: syncState === "live" ? "var(--success)" : syncState === "loading" ? "var(--warning)" : "var(--fg-faint)" }}>
-              {syncState === "live" ? "live" : syncState === "loading" ? "syncing" : syncState === "error" ? "error" : "preview"}
+              {syncLabel}
             </span>
           </div>
         </div>
@@ -128,9 +141,13 @@ export function SheetsSync() {
 
         {!connected && (
           <div style={{ marginTop: 12, fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.6 }}>
-            구글 계정으로 연결하면 시트의 리드를 DB로 가져오고, 라이브 뷰를 시트로 되돌립니다.
+            {enabled
+              ? "구글 계정으로 연결하면 시트의 리드를 DB로 가져오고, 라이브 뷰를 시트로 되돌립니다."
+              : `Google Sheets OAuth는 아직 비활성입니다 (${reason || "provider-not-enabled"}). callback·scope 검증 후 별도로 켭니다.`}
             <div style={{ marginTop: 12 }}>
-              <Button variant="primary" size="sm" icon="link" onClick={connect}>Google Sheets 연결</Button>
+              <Button variant="primary" size="sm" icon="link" onClick={connect} disabled={!enabled}>
+                {enabled ? "Google Sheets 연결" : "OAuth 비활성"}
+              </Button>
             </div>
           </div>
         )}

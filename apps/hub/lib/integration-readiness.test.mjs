@@ -61,6 +61,53 @@ test("exposes the same explicit provider gate to OAuth connect builders", () => 
   assert.equal(readiness.isGoogleOAuthProviderEnabled("sheets", env), true);
 });
 
+test("builds provider status from the allowlist instead of generic client or ledger presence", () => {
+  const env = {
+    GOOGLE_CLIENT_ID: "client-id",
+    GOOGLE_CLIENT_SECRET: "client-secret",
+    GOOGLE_OAUTH_ENABLED_PROVIDERS: "calendar",
+    COM_MOON_OAUTH_STATE_SECRET: "oauth-state",
+  };
+
+  assert.deepEqual(
+    readiness.buildGoogleProviderStatus("gmail", { connected: false, ledgerConfigured: true }, env),
+    {
+      status: "disabled",
+      configured: false,
+      enabled: false,
+      connected: false,
+      ledgerConfigured: true,
+      reason: "provider-not-enabled",
+      callbackPath: "/api/email/gmail/callback",
+      scopes: [
+        "https://www.googleapis.com/auth/gmail.send",
+        "https://www.googleapis.com/auth/userinfo.email",
+      ],
+    },
+  );
+});
+
+test("marks an enabled provider ready only when its OAuth client and state secret exist", () => {
+  const base = {
+    GOOGLE_CLIENT_ID: "client-id",
+    GOOGLE_CLIENT_SECRET: "client-secret",
+    GOOGLE_OAUTH_ENABLED_PROVIDERS: "sheets",
+  };
+
+  assert.equal(
+    readiness.buildGoogleProviderStatus("sheets", { connected: false }, base).status,
+    "missing-config",
+  );
+  assert.equal(
+    readiness.buildGoogleProviderStatus(
+      "sheets",
+      { connected: false },
+      { ...base, COM_MOON_OAUTH_STATE_SECRET: "oauth-state" },
+    ).status,
+    "ready",
+  );
+});
+
 test("does not treat a shared webhook secret as an OAuth state secret", () => {
   const result = readiness.resolveSecretReadiness({
     COM_MOON_SHARED_WEBHOOK_SECRET: "shared-only",

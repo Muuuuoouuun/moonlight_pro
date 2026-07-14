@@ -1,6 +1,6 @@
 # 문준혁 소유 eeoCRM 리드 보강·스코어링 실행 기준
 
-상태: 실행 중  
+상태: ACTIVE — 16건 적용·재실행 검증 완료
 범위: `문준혁 / Junhyuk Mun / EEO04186` 소유가 공식 스냅샷에서 확인되고, Moonlight 회사명과 정확 일치하는 레코드만
 
 ## 확정
@@ -22,6 +22,8 @@
 5. 공개 웹 근거는 별도 JSON 입력으로 받아 `confidence=high`인 태그만 자동 적용한다.
 6. `leads.status`는 보존하고 `score`, `next_action`, `meta.enrichment`만 patch한다.
 7. 적용 후 `sync_runs`에 correlation ID와 대상/변경 건수만 기록한다.
+
+2026-07-15 재감사에서 ClassIn `crm_customer_events`, `crm_tasks`, `crm_capture_rows`는 각각 전체 0건이었다. 따라서 캘린더·구매 근거가 없는 10건은 누락을 0점으로 바꾸지 않고 `engagement:unknown`을 유지한다. 공개 설명회 2건은 `activity:info-session-public`으로 구분하며 직접 영업 접점으로 점수화하지 않는다.
 
 ## 점수 해석
 
@@ -60,9 +62,11 @@ node \
 - ClassIn 정기 sync는 2026-06-24 이후 `Missing Xiaoshouyi base URL`로 skipped 상태다. 최신성 표시는 스냅샷 시각과 분리한다.
 - 공개 근거가 모호하거나 동명이면 `low`로 남기고 자동 태그에 쓰지 않는다.
 - 재실행은 의미 내용이 같으면 unchanged로 판단하며, 변경분만 patch한다.
+- Hub 리드 상세의 `분류 · 증거` 패널은 과목·지역·직접 접점·접점 소스·공개 신호·프로그램·채널을 분리해서 표시한다. 공개 활동을 실제 콜·미팅처럼 합치지 않는다.
+- 집계 증거는 `deliverables/junhyuk-eeocrm-activity-audit.json`, 계정별 공개 근거는 `deliverables/junhyuk-eeocrm-public-evidence.json`을 따른다.
 
 ## 미정/외부 블로커
 
 - Xiaoshouyi `saleStageId` 숫자→라벨 사전은 현재 스냅샷에 없다.
 - Mac에서 호출 가능한 eeoCRM MCP/서비스 credential이 없다. 쓰기 연결은 read-only 인증이 먼저 복구된 뒤 별도 승인한다.
-- 콜·미팅·설명회 활동 원장은 ClassIn `crm_customer_events`가 현재 0건이다. 캘린더 exact match는 보조 근거일 뿐 완전한 활동 원장이 아니다.
+- 콜·미팅·설명회 활동 원장은 ClassIn `crm_customer_events`가 현재 0건이다. 캘린더 exact match는 보조 근거일 뿐 완전한 활동 원장이 아니다. 향후 row가 생기면 owner/account target을 확인한 뒤 enrichment source에 추가한다.

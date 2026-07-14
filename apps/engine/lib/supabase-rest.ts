@@ -289,3 +289,31 @@ export async function updateSupabaseRecord(
     };
   }
 }
+
+export async function deleteSupabaseRecord(
+  table: string,
+  filters: Array<[string, string]>,
+) {
+  const config = resolveSupabaseRestConfig();
+
+  if (!config) {
+    return { persisted: false, reason: "missing-config" };
+  }
+  if (!filters.length) {
+    return { persisted: false, reason: "missing-filters" };
+  }
+
+  try {
+    const response = await fetch(buildMutationUrl(config.url, table, filters), {
+      method: "DELETE",
+      headers: makeHeaders(config.apiKey, { prefer: "return=minimal" }),
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      return { persisted: false, reason: `http-${response.status}`, detail };
+    }
+    return { persisted: true, reason: "ok" };
+  } catch (error) {
+    return { persisted: false, reason: "request-failed", detail: String(error) };
+  }
+}

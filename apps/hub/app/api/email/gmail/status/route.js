@@ -2,33 +2,32 @@ import { NextResponse } from "next/server";
 
 import {
   fetchLatestGoogleGmailConnection,
-  hasGoogleGmailOAuthStateSecret,
-  resolveGoogleGmailConfig,
   summarizeGoogleGmailConnection,
 } from "@/lib/google-gmail";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import {
+  buildGoogleProviderStatus,
+  resolveGoogleOAuthProviderReadiness,
+} from "@/lib/integration-readiness";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const workspaceId = resolveDefaultWorkspaceId();
-  const config = resolveGoogleGmailConfig();
-  const connection = workspaceId
+  const readiness = resolveGoogleOAuthProviderReadiness().gmail;
+  const connection = readiness.enabled && workspaceId
     ? await fetchLatestGoogleGmailConnection(workspaceId)
     : null;
-  const connected = connection?.status === "connected";
+  const providerStatus = buildGoogleProviderStatus("gmail", {
+    connected: connection?.status === "connected",
+    ledgerConfigured: Boolean(workspaceId),
+  });
 
   return NextResponse.json({
-    status: connected
-      ? "connected"
-      : config.configured && hasGoogleGmailOAuthStateSecret()
-        ? "ready"
-        : "missing-config",
     provider: "google_gmail",
     workspaceId: workspaceId || null,
-    configured: config.configured,
-    hasOAuthStateSecret: hasGoogleGmailOAuthStateSecret(),
+    ...providerStatus,
     connection: connection ? summarizeGoogleGmailConnection(connection) : null,
   });
 }

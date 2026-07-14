@@ -162,6 +162,9 @@ content variant
 - `brandKey`만 meta에 남기고 `content_items.brand_id`를 비우는 것을 정상 연결로 취급하지 않는다.
 - 세 lane 모두 Hub chrome은 Moonstone 디자인을 상속한다. lane별 full-card 색, 별도 테마, 두꺼운 border를 만들지 않는다.
 - 회사/개인 구분은 `company`/`personal` identity badge로 표현하고 status color와 섞지 않는다.
+- 콘텐츠 mutation은 `Browser → Hub BFF /api/hub/content → Engine /api/content/command → Supabase → Hub content repository` 경계를 쓴다. Hub route에서 `server-write`로 직접 insert/update하지 않는다.
+- create는 client-generated content/variant UUID를 그대로 사용하며 동일 ID 재시도는 `duplicate`로 정상 종료한다. variant 저장 실패 시 해당 command가 새로 만든 item을 롤백한다.
+- 2026-07-15 live smoke는 ClassIn Side 임시 draft 생성, duplicate retry, PATCH, Hub read-back을 통과했고 item/variant를 삭제해 lane count를 원복했다.
 
 `buildContentBrandCatalog(contentLedger)`는 다음을 제공한다.
 

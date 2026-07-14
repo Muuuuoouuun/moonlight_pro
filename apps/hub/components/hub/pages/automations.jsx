@@ -162,6 +162,7 @@ function useEmailIntegrationStatus(url) {
 function emailStatusBadge(status) {
   if (status === 'connected') return { tone: 'success', label: 'Connected' };
   if (status === 'ready') return { tone: 'info', label: 'OAuth ready' };
+  if (status === 'disabled') return { tone: 'neutral', label: 'Disabled' };
   if (status === 'degraded') return { tone: 'warning', label: 'Status unknown' };
   if (status === 'loading') return { tone: 'neutral', label: 'Checking…' };
   return { tone: 'neutral', label: 'Not connected' };
@@ -177,7 +178,7 @@ export function EmailAutomation({ onNavigate }) {
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', maxWidth: 1100 }}>
       <div>
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Email automations</h2>
-        <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Gmail 수신 · Resend 발송</div>
+        <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Gmail OAuth · Resend 발송</div>
       </div>
       <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
@@ -188,13 +189,13 @@ export function EmailAutomation({ onNavigate }) {
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13.5, fontWeight: 500 }}>Gmail</div>
               <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>
-                {gmail.connection?.email || gmail.connection?.mailbox || (gmail.configured ? 'OAuth 연결 대기' : '연동 미설정')}
+                {gmail.connection?.email || gmail.connection?.mailbox || (gmail.status === 'disabled' ? 'OAuth provider 비활성' : gmail.configured ? 'OAuth 연결 대기' : '연동 미설정')}
               </div>
             </div>
             <Badge tone={gmailBadge.tone} size="xs">{gmailBadge.label}</Badge>
           </div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.6 }}>
-            수신 메일을 Leads · Support · Personal로 자동 태깅. 신규 리드는 CRM에 자동 추가.
+            현재 범위는 Gmail 발송 OAuth 준비 단계입니다. Inbox 읽기·자동 태깅은 별도 scope 검증 전까지 비활성입니다.
           </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
             {gmailBadge.label === 'Not connected' || gmailBadge.label === 'OAuth ready' ? (

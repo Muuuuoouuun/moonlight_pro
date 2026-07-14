@@ -68,6 +68,51 @@ export function resolveGoogleOAuthProviderReadiness(env = process.env) {
   );
 }
 
+export function buildGoogleProviderStatus(provider, runtime = {}, env = process.env) {
+  const readiness = resolveGoogleOAuthProviderReadiness(env)[provider];
+  if (!readiness) {
+    return {
+      status: "disabled",
+      configured: false,
+      enabled: false,
+      connected: false,
+      ledgerConfigured: Boolean(runtime.ledgerConfigured),
+      reason: "unknown-provider",
+      callbackPath: null,
+      scopes: [],
+    };
+  }
+
+  const hasStateSecret = Boolean(resolveOAuthStateSecret(env));
+  const configured = readiness.configured && hasStateSecret;
+  const connected = readiness.enabled && configured && runtime.connected === true;
+  const status = !readiness.enabled
+    ? "disabled"
+    : connected
+      ? "connected"
+      : configured
+        ? "ready"
+        : "missing-config";
+  const reason = !readiness.enabled
+    ? readiness.reason
+    : !readiness.configured
+      ? readiness.reason
+      : !hasStateSecret
+        ? "missing-oauth-state-secret"
+        : "ok";
+
+  return {
+    status,
+    configured,
+    enabled: readiness.enabled,
+    connected,
+    ledgerConfigured: Boolean(runtime.ledgerConfigured),
+    reason,
+    callbackPath: readiness.callbackPath,
+    scopes: readiness.scopes,
+  };
+}
+
 export function resolveSecretReadiness(env = process.env) {
   const values = {
     oauthState: String(env.COM_MOON_OAUTH_STATE_SECRET || "").trim(),

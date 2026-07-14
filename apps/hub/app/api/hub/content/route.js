@@ -9,9 +9,8 @@ import {
   getContentLedger,
 } from "@/lib/repositories/content-ledger";
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
-import { insertSupabaseRecord, updateSupabaseRecord } from "@/lib/server-write";
-import { eqFilter } from "@/lib/server-read";
 import { buildContentBrandCatalog } from "@/lib/content-brand-catalog";
+import { forwardContentCommand } from "@/lib/content-engine-client";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -79,7 +78,6 @@ export async function POST(req) {
         );
       }
 
-      const logPersistence = await insertSupabaseRecord("publish_logs", handoff.logRecord);
       const shouldRecordAsset = action === "export" || parsed.data?.recordAsset === true;
       const asset = shouldRecordAsset
         ? buildContentAssetRecord({
@@ -87,45 +85,15 @@ export async function POST(req) {
             event: parsed.data.event || handoff.event,
           })
         : null;
-      const assetPersistence = logPersistence.persisted && asset
-        ? await insertSupabaseRecord("content_assets", asset.assetRecord)
-        : asset
-        ? { persisted: false, reason: "publish-log-not-persisted" }
-        : { persisted: true, reason: "not-requested" };
-      const persisted = logPersistence.persisted && assetPersistence.persisted;
-
-      if (!persisted) {
-        return NextResponse.json(
-          {
-            status: "preview",
-            message: "Content handoff payload is valid, but persistence is not configured or failed.",
-            contentId: handoff.contentId,
-            variantId: handoff.variantId,
-            logId: handoff.logId,
-            assetId: asset?.assetId || null,
-            event: handoff.event,
-            persistence: {
-              log: logPersistence,
-              asset: assetPersistence,
-            },
-          },
-          { status: 202 },
-        );
-      }
-
-      return NextResponse.json({
-        status: "logged",
-        message: "Content handoff recorded in Supabase.",
+      const result = await forwardContentCommand({
+        action: "handoff",
+        workspaceId: handoff.workspaceId,
         contentId: handoff.contentId,
-        variantId: handoff.variantId,
-        logId: handoff.logId,
-        assetId: asset?.assetId || null,
         event: handoff.event,
-        persistence: {
-          log: logPersistence,
-          asset: assetPersistence,
-        },
+        logRecord: handoff.logRecord,
+        assetRecord: asset?.assetRecord || null,
       });
+      return NextResponse.json(result.data, { status: result.httpStatus });
     }
 
     if (action === "campaign") {
@@ -143,28 +111,12 @@ export async function POST(req) {
         );
       }
 
-      const persistence = await insertSupabaseRecord("campaigns", campaign.record);
-
-      if (!persistence.persisted) {
-        return NextResponse.json(
-          {
-            status: "preview",
-            message: "Campaign payload is valid, but persistence is not configured or failed.",
-            campaignId: campaign.campaignId,
-            campaign: campaign.record,
-            persistence,
-          },
-          { status: 202 },
-        );
-      }
-
-      return NextResponse.json({
-        status: "saved",
-        message: "Campaign saved to Supabase.",
-        campaignId: campaign.campaignId,
-        campaign: campaign.record,
-        persistence,
+      const result = await forwardContentCommand({
+        action: "create_campaign",
+        workspaceId: campaign.workspaceId,
+        campaignRecord: campaign.record,
       });
+      return NextResponse.json(result.data, { status: result.httpStatus });
     }
 
     const draft = buildContentDraftRecords(parsed.data);
@@ -180,37 +132,11 @@ export async function POST(req) {
       );
     }
 
-    const itemPersistence = await insertSupabaseRecord("content_items", draft.itemRecord);
-    const variantPersistence = itemPersistence.persisted
-      ? await insertSupabaseRecord("content_variants", draft.variantRecord)
-      : { persisted: false, reason: "content-item-not-persisted" };
-
-    const persisted = itemPersistence.persisted && variantPersistence.persisted;
-
-    if (!persisted) {
-      return NextResponse.json(
-        {
-          status: "preview",
-          message: "Content draft payload is valid, but persistence is not configured or failed.",
-          ...draft,
-          persistence: {
-            item: itemPersistence,
-            variant: variantPersistence,
-          },
-        },
-        { status: 202 },
-      );
-    }
-
-    return NextResponse.json({
-      status: "saved",
-      message: "Content draft saved to Supabase.",
+    const result = await forwardContentCommand({
+      action: "create_draft",
       ...draft,
-      persistence: {
-        item: itemPersistence,
-        variant: variantPersistence,
-      },
     });
+    return NextResponse.json(result.data, { status: result.httpStatus });
   } catch (error) {
     return NextResponse.json(
       {
@@ -257,46 +183,11 @@ export async function PATCH(req) {
       );
     }
 
-    const itemFilters = [
-      ["id", eqFilter(draft.contentId)],
-      ["workspace_id", eqFilter(draft.workspaceId)],
-    ];
-    const variantFilters = [
-      ["id", eqFilter(draft.variantId)],
-      ["workspace_id", eqFilter(draft.workspaceId)],
-    ];
-
-    const [itemPersistence, variantPersistence] = await Promise.all([
-      updateSupabaseRecord("content_items", itemFilters, draft.itemPatch),
-      updateSupabaseRecord("content_variants", variantFilters, draft.variantPatch),
-    ]);
-
-    const persisted = itemPersistence.persisted && variantPersistence.persisted;
-
-    if (!persisted) {
-      return NextResponse.json(
-        {
-          status: "preview",
-          message: "Content draft update is valid, but persistence is not configured or failed.",
-          ...draft,
-          persistence: {
-            item: itemPersistence,
-            variant: variantPersistence,
-          },
-        },
-        { status: 202 },
-      );
-    }
-
-    return NextResponse.json({
-      status: "saved",
-      message: "Content draft updated in Supabase.",
+    const result = await forwardContentCommand({
+      action: "update_draft",
       ...draft,
-      persistence: {
-        item: itemPersistence,
-        variant: variantPersistence,
-      },
     });
+    return NextResponse.json(result.data, { status: result.httpStatus });
   } catch (error) {
     return NextResponse.json(
       {

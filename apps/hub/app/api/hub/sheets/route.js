@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getSheetsSyncStatus } from "@/lib/repositories/sheets-sync";
+import { buildGoogleProviderStatus } from "@/lib/integration-readiness";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,10 +9,15 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const status = await getSheetsSyncStatus();
+    const providerStatus = buildGoogleProviderStatus("sheets", {
+      connected: status.connected,
+      ledgerConfigured: status.configured,
+    });
 
     return NextResponse.json({
-      status: status.source === "supabase" ? "live" : "preview",
       ...status,
+      provider: "google_sheets",
+      ...providerStatus,
     });
   } catch (error) {
     return NextResponse.json(

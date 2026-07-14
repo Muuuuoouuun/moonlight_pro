@@ -6,6 +6,7 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl } from "../hub-primitives";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
+import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
 
 const fmt = v => {
   const n = Number(v);
@@ -400,6 +401,48 @@ export function RevenueOverview({ onNavigate }) {
 // Shared grid template for Leads rows — gap between columns so badges never butt the next cell
 const LEADS_GRID = '26px 1fr 112px 112px 124px 100px 90px 92px';
 
+function LeadEnrichmentPanel({ lead }) {
+  if (!lead?.enrichmentTags?.length) return null;
+  const summary = buildLeadTagSummary(lead.enrichmentTags);
+  const calendar = lead.activityEvidence?.calendar || {};
+  const directTouchCount = ['meeting', 'call', 'infoSession', 'other']
+    .reduce((sum, key) => sum + (Number(calendar[key]) || 0), 0);
+  const rows = [
+    ['과목', summary.subjects],
+    ['지역', summary.regions],
+    ['직접 접점', summary.directActivities],
+    ['접점 소스', summary.activitySources],
+    ['공개 신호', summary.publicSignals],
+    ['프로그램', summary.programs],
+    ['공개 채널', summary.channels],
+  ].filter(([, values]) => values.length > 0);
+
+  return (
+    <div style={{ padding: 12, border: '1px solid var(--line-soft)', borderRadius: 'var(--r)', background: 'var(--surface-2)', display: 'flex', flexDirection: 'column', gap: 9 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ flex: 1, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>분류 · 증거</span>
+        <Badge tone={lead.engagementState === 'present' ? 'info' : 'neutral'} size="xs">
+          {lead.engagementState === 'present' ? `접점 ${directTouchCount || '확인'}` : '접점 미확인'}
+        </Badge>
+        {lead.publicEvidenceCount > 0 && <Badge tone="neutral" size="xs">공개 근거 {lead.publicEvidenceCount}</Badge>}
+      </div>
+      {rows.map(([label, values]) => (
+        <div key={label} style={{ display: 'grid', gridTemplateColumns: '68px 1fr', gap: 8, alignItems: 'start' }}>
+          <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{label}</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            {values.map(value => <Badge key={value} tone="neutral" size="xs" variant="outline">{value}</Badge>)}
+          </div>
+        </div>
+      ))}
+      {lead.engagementState !== 'present' && (
+        <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', lineHeight: 1.45 }}>
+          확인된 콜·미팅 로그가 없습니다. 공개 설명회·채널 신호는 직접 접점 점수와 분리합니다.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Leads({ workspace }) {
   const { ledger, syncState } = useRevenueLedger();
   const searchParams = useSearchParams();
@@ -423,10 +466,13 @@ export function Leads({ workspace }) {
   const [search, setSearch] = React.useState('');
   const [sort, setSort] = React.useState({ key: null, dir: 'asc' });
   const term = search.trim().toLowerCase();
-  const filtered = LEADS.filter(l =>
-    (filter === 'all' || l.type === filter) &&
-    (!term || l.name.toLowerCase().includes(term) || l.source.toLowerCase().includes(term) || l.stage.toLowerCase().includes(term))
-  );
+  const filtered = LEADS.filter(l => {
+    const searchText = [l.name, l.source, l.stage, l.region, ...(l.enrichmentTags || [])]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return (filter === 'all' || l.type === filter) && (!term || searchText.includes(term));
+  });
   const sortedLeads = sortLeads(filtered, sort);
   // Toggle a column: first click sorts asc, second flips to desc, third clears back to ledger order.
   const toggleSort = (key) => setSort(s =>
@@ -698,7 +744,9 @@ export function Leads({ workspace }) {
         onSave={persistLead}
         onDelete={deleteLead}
         onClose={() => setEditLeadId(null)}
-      />
+      >
+        <LeadEnrichmentPanel lead={editingLead} />
+      </EditDrawer>
     </div>
   );
 }

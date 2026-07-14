@@ -31,7 +31,7 @@ flowchart LR
 ```
 
 - **Hub**는 운영자 read surface와 승인된 로컬 write surface다. 외부 실행을 직접 가장하지 않고 Engine에 전달하며, 미연결 상태에서는 `preview` 또는 명시적 오류를 반환한다.
-- **Engine**은 외부 webhook intake, OpenClaw outbound sync, PMS command validation·persistence, 실행·수신 이력을 맡는다. `webhook_events`, `project_updates`, `sync_runs`와 재조회된 durable project/task가 실행 증거다.
+- **Engine**은 외부 webhook intake, OpenClaw outbound sync, PMS/content command validation·persistence, 실행·수신 이력을 맡는다. `webhook_events`, `project_updates`, `sync_runs`와 재조회된 durable project/task/content가 실행 증거다.
 - **OpenClaw relay**는 로컬 transport adapter다. Engine snapshot을 OpenClaw CLI로 넘길 뿐 원장이 아니며, 독자적으로 프로젝트 상태를 확정하지 않는다.
 - **Supabase**가 공유 운영 원장이다. OpenClaw가 만든 진행 정보도 Engine webhook을 거쳐 원장에 기록된 뒤 Hub가 읽는다.
 - OpenClaw의 반환 경로는 `POST /api/webhook/project/openclaw`이다. Hub나 relay에 별도 반환 원장을 만들지 않는다.
@@ -81,6 +81,7 @@ flowchart LR
 - DB는 `(workspace_id, source, provider_event_id)` unique index를 유지한다. 중복 이벤트는 새 `project_updates`를 만들지 않고 `status=duplicate`로 응답한다.
 - 결과 상태 `accepted`, `partial`, `duplicate`, `failed`를 하나의 성공 상태로 뭉개지 않는다.
 - 내부 PMS command는 `POST /api/pms/command`에서 shared secret을 검증한다. create는 client-generated UUID 재시도 시 기존 entity를 반환하고, update는 항상 `id + workspace_id` filter를 사용한다.
+- 콘텐츠 create/update/handoff/campaign도 Hub에서 Supabase로 직접 쓰지 않는다. Hub가 record를 조립하고 Engine의 `POST /api/content/command`가 shared secret, workspace·관계 ID, 중복 재시도를 검증한 뒤 저장한다. item 이후 variant 저장이 실패하면 새 item을 롤백하고, publish log 이후 asset 저장 실패도 새 log를 롤백한다.
 
 ### 6. Codex/Claude 로컬 MCP
 
@@ -89,6 +90,8 @@ flowchart LR
 - 두 등록 모두 환경변수 값을 config에 직접 embed하지 않는다. `.mcp.json`은 local-only이며 Git에 포함하지 않는다.
 - read tool은 Hub route의 `live`/`preview`/`error` 의미를 그대로 전달한다. write tool은 `COM_MOON_HUB_WRITE_SECRET`가 없으면 요청 전에 거부한다.
 - 현재 등록 surface에는 projects, tasks, task creation, revenue, content queue, calendar, work orders, agents, daily brief가 포함된다.
+- 2026-07-15 Claude Code에서 project MCP를 승인했고 `moonlight`가 `Connected`로 전환됐다. Claude의 `list_tasks` live read는 6건을 반환했다. SDK `create_task` smoke도 저장→Hub 재조회→임시 row 삭제까지 성공했다.
+- Claude Desktop config에도 같은 process가 등록되어 있지만 Desktop 앱 lifecycle의 재시작/도구 발견은 Claude Code 검증과 별개다.
 
 ### 7. 상태 언어
 
@@ -116,11 +119,12 @@ flowchart LR
 | Google gate | Calendar enabled/configured, Gmail·Sheets disabled |
 | Calendar auth | 2026-07-15~07-31 bounded OAuth read 성공, 11 events, writable source, redacted primary identity 저장 |
 | iCal | configured, 현재 OAuth 성공 때문에 fallback 미사용 |
-| MCP | Codex live read 성공, Claude project/Desktop config에 process-based stdio 등록. Claude Desktop은 앱 재시작 후 로딩 확인 필요 |
+| MCP | Codex enabled, Claude Code Connected. Claude live task 6건 read와 MCP create/read-back 성공; 임시 row 0건. Desktop config는 등록됐으나 앱 재시작 확인은 별도 |
 | PMS write | Hub BFF→Engine command→Supabase create/update/read-back 성공. 임시 project/task 삭제 후 기존 4 project·6 task 복구 |
+| Content write | Hub BFF→Engine content command→Supabase create/duplicate retry/update/read-back 성공. 임시 item/variant 삭제 후 기존 3 items 복구 |
 | eeoCRM-derived ledger | Supabase 총 119 leads 중 117 eeoCRM snapshot, 문준혁 exact-owner 16건; live eeoCRM 연결 증거는 아님 |
-| Credential hygiene | 동일 해시 Downloads 복사본 2개 격리, retained client files `0600` |
-| OpenClaw cron | Telegram announce 경로와 실패 알림 설정 완료, 수정 후 첫 scheduled delivery는 아직 미실행 |
+| Credential hygiene | 동일 해시 복사본 2개를 `0600` 격리하고 OpenClaw inbound 원본 제거. inbound credential 0개, 별도 retained client `0600` |
+| OpenClaw cron | 평일 09:30 KST announce·실패 알림 설정. Telegram credential probe 성공, 대상 supergroup 조회 성공, bot administrator. 수정 후 첫 scheduled delivery는 아직 미실행 |
 | 계약 테스트 | readiness, Hub write guard, PMS command/idempotency, iCal fallback, MCP, webhook contract 전체 통과 |
 
 ## 주의
@@ -133,6 +137,7 @@ flowchart LR
 - MCP write는 로컬 프로세스라는 이유만으로 무인 승인하지 않는다. Hub write guard와 tool-level write-secret check를 모두 유지한다.
 - eeoCRM 숫자는 변할 수 있는 ledger snapshot이다. 문서의 row count는 검증 날짜와 함께 쓰고, Mac에서 provider 인증이 확인되기 전까지 “sync”나 “MCP live”라고 부르지 않는다.
 - OpenClaw/Telegram/Slack처럼 여러 outbound channel이 가능한 경우 channel이 생략된 요청을 임의 채널로 보내지 않는다. 명시적 routing policy가 없으면 disabled 또는 preview가 맞다.
+- OpenClaw job의 agent summary가 “전송 완료”라고 써도 `delivered=false`이면 전달 성공이 아니다. cron result의 `deliveryStatus`를 최종 증거로 사용한다.
 
 ## 미정 및 외부 blocker
 
@@ -142,6 +147,7 @@ flowchart LR
 | Gmail/Sheets OAuth | provider별 callback URI, scope, consent가 end-to-end 검증되지 않음 | 각 provider를 allowlist에 따로 켜고 authenticated probe 성공 |
 | eeoCRM Mac live connection | Mac-compatible MCP binary 또는 service OAuth credential이 없음 | read-only 인증 성공, source identity와 sync timestamp 확인 후에만 write 검토 |
 | OpenClaw broad channel policy | multi-channel 환경의 기본 채널, 허용 대상, 실패 fallback 정책이 확정되지 않음 | channel allowlist와 명시적 routing/failure policy 승인 |
+| OpenClaw post-fix delivery | delivery 설정은 2026-07-15 00:40 KST에 수정됐고 마지막 09:30 run보다 늦음 | 2026-07-15 09:30 이후 `lastDeliveryStatus=delivered` 확인 |
 | Google Cloud IAM | 이전 감사의 두 Owner, 미사용 Editor/service account, broad API key 상태를 이번 세션에서 live 재확인하지 못함 (`gcloud`와 로그인된 Console 부재) | 로그인된 audit-log·runtime reference 검토와 명시적 owner/role 결정 |
 | Public Engine exposure | 외부 provider가 호출할 production Engine URL과 배포 경계가 확정되지 않음 | 공개 health, shared-secret webhook, 중복 event smoke를 production에서 확인 |
 

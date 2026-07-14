@@ -170,6 +170,9 @@ function mapLead(row, companyById, contactById) {
     priorityLane: enrichmentView.priorityLane,
     nextAction: enrichmentView.nextAction,
     enrichmentTags: enrichmentView.enrichmentTags,
+    engagementState: enrichmentView.engagementState,
+    publicEvidenceCount: enrichmentView.publicEvidenceCount,
+    activityEvidence: enrichmentView.activityEvidence,
   };
 }
 

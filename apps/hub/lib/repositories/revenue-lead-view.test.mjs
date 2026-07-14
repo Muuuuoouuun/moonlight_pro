@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { resolveLeadEnrichmentView } from "../sales-os/lead-view.js";
+import {
+  buildLeadTagSummary,
+  resolveLeadEnrichmentView,
+} from "../sales-os/lead-view.js";
 
 test("keeps lead score separate from monetary value and exposes enrichment", () => {
   const lead = resolveLeadEnrichmentView({
@@ -15,7 +18,14 @@ test("keeps lead score separate from monetary value and exposes enrichment", () 
         owner_scope: "junhyuk",
         enrichment: {
           pipeline: { lane: "customer_success" },
-          tags: ["owner:junhyuk", "region:서울", "subject:math"],
+          tags: ["activity:meeting", "activity:calendar", "activity:info-session-public", "owner:junhyuk", "region:서울", "subject:math"],
+          evidenceState: { engagement: "present", public: "present" },
+          evidence: {
+            activity: {
+              calendar: { meeting: 2, call: 0, infoSession: 0, other: 1, latestAt: "2026-07-01T00:00:00.000Z" },
+            },
+            public: [{ url: "https://example.com", confidence: "high" }],
+          },
         },
       },
   });
@@ -26,7 +36,10 @@ test("keeps lead score separate from monetary value and exposes enrichment", () 
   assert.equal(lead.priorityLane, "customer_success");
   assert.equal(lead.nextAction, "활용 상태와 갱신·업셀 기회 정리");
   assert.equal(lead.region, "서울");
-  assert.deepEqual(lead.enrichmentTags, ["owner:junhyuk", "region:서울", "subject:math"]);
+  assert.deepEqual(lead.enrichmentTags, ["activity:meeting", "activity:calendar", "activity:info-session-public", "owner:junhyuk", "region:서울", "subject:math"]);
+  assert.equal(lead.engagementState, "present");
+  assert.equal(lead.publicEvidenceCount, 1);
+  assert.equal(lead.activityEvidence.calendar.meeting, 2);
 });
 
 test("uses explicit monetary meta value without deriving money from score", () => {
@@ -40,4 +53,25 @@ test("uses explicit monetary meta value without deriving money from score", () =
 
   assert.equal(lead.valueAmount, 2500000);
   assert.equal(lead.score, 50);
+});
+
+test("groups subject, region, direct activity, and public signals without conflating them", () => {
+  assert.deepEqual(buildLeadTagSummary([
+    "subject:math",
+    "subject:english",
+    "region:경기-안양",
+    "activity:meeting",
+    "activity:calendar",
+    "activity:info-session-public",
+    "program:exam-prep",
+    "channel:youtube",
+  ]), {
+    subjects: ["수학", "영어"],
+    regions: ["경기-안양"],
+    directActivities: ["미팅"],
+    activitySources: ["캘린더"],
+    publicSignals: ["공개 설명회"],
+    programs: ["시험 대비"],
+    channels: ["YouTube"],
+  });
 });

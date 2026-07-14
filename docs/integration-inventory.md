@@ -280,13 +280,13 @@ Google Calendar는 이제 직접 연결 가능한 1차 일정 provider다.
 | 경계 | 상태 | 확인 증거 |
 | --- | --- | --- |
 | Hub / Engine / relay | live | 각 health 200, `npm run check:connections` 전체 PASS, launchd 두 job running |
-| OpenClaw cron | configured, delivery 검증 대기 | 평일 09:30 KST, Telegram announce 대상 명시. 마지막 run은 수정 전 `not-delivered`, 다음 예정 run에서 실제 전송 확인 필요 |
-| Moonlight MCP | Codex live, Claude configured | stdio 도구 13개, `list_tasks` live 6건. Claude project config와 Desktop config 등록, Desktop 앱 재시작 전까지는 설정 상태 |
+| OpenClaw cron | configured, target authenticated, delivery 검증 대기 | 평일 09:30 KST, Telegram announce 대상 명시. token probe와 대상 supergroup 조회 성공, bot administrator. 마지막 run은 00:40 수정 전 `not-delivered` |
+| Moonlight MCP | Codex enabled, Claude Code connected | stdio 도구 13개, Claude `list_tasks` live 6건, SDK `create_task` 저장·재조회 성공. Desktop config는 별도 앱 재시작 확인 필요 |
 | Google Calendar | live / writable | OAuth source, account identity 저장, 07-15~07-31 11건 read |
 | iCal | fallback-only | OAuth 연결이 없을 때만 사용하는 read-only 경로, 현재 응답에 혼합되지 않음 |
-| Gmail / Sheets OAuth | disabled | provider allowlist에서 제외, callback·scope end-to-end 검증 전에는 configured로 표시하지 않음 |
+| Gmail / Sheets OAuth | disabled | health와 개별 status API가 모두 `provider-not-enabled`; Supabase ledger 존재를 OAuth `live`로 표시하지 않음 |
 | eeoCRM | snapshot | Moonlight 총 119 leads 중 117건이 eeoCRM snapshot. 문준혁 exact-owner bridge는 16건만 `Me`로 분리 |
-| credential copies | quarantined | 동일 해시 Downloads 복사본 2개를 `~/.moonlight/credential-quarantine/2026-07-15`로 이동하고 `0600` 적용 |
+| credential copies | quarantined + inbound cleaned | 동일 해시 2개는 `~/.moonlight/credential-quarantine/2026-07-15`에 `0600` 보존, OpenClaw inbound 원본은 참조 0건 확인 후 제거. 별도 retained client도 `0600` |
 | Google Cloud IAM | previous audit only | 두 Owner, 미사용 Editor service account, broad API key가 기록됨. 이번 재검증은 로컬 `gcloud` 부재와 Cloud Console 로그인 부재로 미완료 |
 
 권장 1차 범위:

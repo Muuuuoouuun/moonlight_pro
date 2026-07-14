@@ -1,0 +1,83 @@
+{
+  "auditedAt": "2026-07-15T01:52:00+09:00",
+  "scope": "Moonlight operator OS, exact-owner eeoCRM enrichment, PMS/content writes, MCP, OAuth/IAM, OpenClaw",
+  "crm": {
+    "moonlightLeadCount": 119,
+    "eeocrmSnapshotCount": 117,
+    "exactOwnerLeadCount": 16,
+    "taggedLeadCount": 16,
+    "engagementPresent": 6,
+    "engagementUnknown": 10,
+    "directMeetingTags": 3,
+    "directCallTags": 0,
+    "directInfoSessionTags": 0,
+    "publicInfoSessionSignals": 2,
+    "scoreDistribution": { "50": 2, "55": 7, "60": 1, "81": 1, "83": 3, "93": 2 },
+    "officialActivityTables": { "customerEvents": 0, "tasks": 0, "captureRows": 0 },
+    "policy": "Public signals remain separate from direct contact; missing activity is unknown, not zero intent."
+  },
+  "pms": {
+    "source": "supabase",
+    "projects": 4,
+    "tasks": 6,
+    "writePath": "Hub BFF -> Engine /api/pms/command -> Supabase -> Hub repository",
+    "liveRoundTrip": "passed",
+    "temporaryRowsRemaining": 0
+  },
+  "content": {
+    "source": "supabase",
+    "lanes": {
+      "classmoon": { "connection": "live", "items": 1 },
+      "classin_side": { "connection": "live", "items": 0 },
+      "studyseagull": { "connection": "live", "items": 0 }
+    },
+    "outsideLaneItems": 2,
+    "writePath": "Hub BFF -> Engine /api/content/command -> Supabase -> Hub repository",
+    "createRetryUpdateReadBack": "passed",
+    "temporaryRowsRemaining": 0
+  },
+  "mcp": {
+    "transport": "local stdio",
+    "toolCount": 13,
+    "codex": "enabled",
+    "claudeCode": "connected",
+    "claudeLiveTaskReadCount": 6,
+    "createTaskReadBack": "passed",
+    "temporaryRowsRemaining": 0,
+    "claudeDesktop": "configured-not-restart-verified"
+  },
+  "googleOAuth": {
+    "calendar": { "status": "live", "source": "oauth", "readOnly": false, "boundedEventCount": 11 },
+    "ical": { "status": "fallback-only", "mergedWithOAuth": false },
+    "gmail": { "status": "disabled", "reason": "provider-not-enabled" },
+    "sheets": { "status": "disabled", "reason": "provider-not-enabled", "ledgerConfigured": true },
+    "credentialFiles": { "openClawInbound": 0, "quarantine": 2, "retainedDistinct": 1, "mode": "0600" }
+  },
+  "openclaw": {
+    "gateway": "reachable",
+    "relay": "reachable",
+    "cron": "enabled",
+    "schedule": "30 9 * * 1-5 Asia/Seoul",
+    "telegramCredentialProbe": "passed",
+    "targetChatProbe": "passed",
+    "botMembership": "administrator",
+    "lastRunAt": "2026-07-14T09:30:00+09:00",
+    "deliveryConfigUpdatedAt": "2026-07-15T00:40:22+09:00",
+    "lastDeliveryStatus": "not-delivered",
+    "nextVerification": "First scheduled run after config update; require delivered=true."
+  },
+  "iam": {
+    "liveAudit": "blocked",
+    "reason": "gcloud not installed and no authenticated Cloud Console session",
+    "previousSnapshot": "two Owners, unused Editor service account without keys, broad API key",
+    "mutationPolicy": "Do not remove roles or restrict/delete keys until authenticated usage and recovery-path audit."
+  },
+  "verification": {
+    "repositoryTests": { "passed": 94, "failed": 0 },
+    "monorepoTypecheck": "passed",
+    "hubAndEngineBuild": "passed",
+    "connectionCheck": "all-critical-passed",
+    "liveTemporaryRowsRemaining": 0
+  },
+  "selfEvaluation": 89
+}
