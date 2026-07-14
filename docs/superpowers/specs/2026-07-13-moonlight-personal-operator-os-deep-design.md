@@ -1,6 +1,6 @@
 # Moonlight 개인 운영 OS 심화 설계
 
-> 상태: ACTIVE — 전제 1~7·접근안 B 승인, Phase 0 완료, Phase 1A 다음
+> 상태: ACTIVE — 전제 1~7·접근안 B 승인, Phase 0 완료, Phase 1A 진행 중
 > 작성일: 2026-07-13
 > 최초 작성 브랜치: `real_v1.1`
 > 모드: Builder / 개인 전용 운영 시스템
@@ -1206,6 +1206,8 @@ type AttentionResponse = {
 
 ### Phase 1A — Durable Task Loop
 
+2026-07-15 구현 스냅샷: Projects의 project/task create·update·상태 변경은 Hub BFF → Engine `pms/command` → Supabase 경계에서 live round-trip과 reload를 통과했다. 그러나 홈 Quick Capture의 task/inbox 양방향 routing, 공통 receipt 기반 idempotency, task-only Today가 없으므로 Phase 1A 완료로 표시하지 않는다.
+
 ```text
 Quick text(task hint)
   -> durable task
@@ -1225,6 +1227,8 @@ Quick text(task hint)
 이 단계만으로 독립 배포·검증 가능해야 한다.
 
 ### Phase 1B — Action Desk Aggregation
+
+2026-07-15 구현 스냅샷: Daily Brief는 6개 live ledger와 PMS/content pulse를 읽고, 전체 Revenue 원장 119건을 유지하면서 exact-owner `Me` 16건 중 deterministic 상위 3건만 집중 고객 신호로 올린다. `Unassigned` 고객 신호는 0건이다. 정식 `AttentionItem` adapter, Calendar agenda source, source별 timeout/partial 응답은 아직 남아 있다.
 
 - Phase 1 `AttentionItem` adapter와 결정론적 ranking helper.
 - `getFollowups()`와 실제 Google Calendar agenda를 병렬 source로 추가.
@@ -1415,7 +1419,7 @@ Phase 1 구현 계획에서 다음 파일을 우선 검토한다.
 
 ## 24. 실제 다음 행동
 
-다음 작업은 질문을 더 이어가는 것이 아니라 **Phase 1A Durable Task Loop** 구현 계획을 고정하는 것이다.
+다음 작업은 질문을 더 이어가는 것이 아니라 **Phase 1A Durable Task Loop의 미완료 구간**을 닫는 것이다. project/task durable write는 재사용하고 Quick Capture, 공통 idempotency receipt, task-only Today를 추가한다.
 
 ```text
 Quick text(task hint)
@@ -1425,7 +1429,7 @@ Quick text(task hint)
   -> reload 후 동일 상태 확인
 ```
 
-Phase 1A 완료 뒤 실제 사용 결과를 보고 Phase 1B Action Desk 집계를 진행한다. Q116 이후 질문은 운영자가 요청하거나 실사용 데이터가 생길 때까지 보류한다.
+Phase 1A 완료 뒤 현재 부분 작동 중인 Phase 1B를 정식 Attention adapter와 Calendar agenda 계약으로 완성한다. Q116 이후 질문은 운영자가 요청하거나 실사용 데이터가 생길 때까지 보류한다.
 
 ## 25. 이번 정리에서 관찰한 것
 

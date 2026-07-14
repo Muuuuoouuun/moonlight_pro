@@ -1,10 +1,10 @@
 # Moonlight Personal Operator Loop: Master Roadmap
 
 Status: active roadmap
-Updated: 2026-07-13
+Updated: 2026-07-15
 
 > 현재 사실과 문서 우선순위: `docs/README.md`
-> 현재 단계: Phase 0 신뢰 기준선 완료, Phase 1A Durable Task Loop 다음
+> 현재 단계: Phase 0 완료, Phase 1A 진행 중. durable project/task write는 live지만 Quick Capture와 task-only Today가 남아 있음
 
 ## 1. North Star
 
@@ -107,10 +107,10 @@ Exit gate before starting:
 
 ## 4. Current Priority Stack
 
-1. Phase 1A durable task create/update/complete and reload contract.
-2. Quick Capture task/inbox routing and task-only Today.
-3. Phase 1B real follow-up and Google Calendar aggregation.
-4. Phase 1C contact outcome and next-action loop.
+1. Finish Phase 1A Quick Capture task/inbox routing, cross-destination idempotency, and task-only Today. Durable project/task create/update/status/reload is already live.
+2. Finish Phase 1B Attention adapter, real Google Calendar agenda, source timeout/partial contract, and stable slotting. Daily Brief already reads six live ledgers and exposes three verified-owner focus customers without unassigned CRM records.
+3. Build Phase 1C atomic contact outcome and next-action loop. Existing outcome logging is not the required one-transaction completion flow.
+4. Keep the live PMS and three ClassIn content lanes on their existing Hub→Engine→Supabase write boundaries while Phase 1 closes.
 5. Project candidate, delay, and bottleneck management.
 6. Content idea → variant → handoff/export history.
 7. Guided repair and broader integration readiness.
