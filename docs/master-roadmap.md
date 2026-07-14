@@ -4,7 +4,7 @@ Status: active roadmap
 Updated: 2026-07-15
 
 > 현재 사실과 문서 우선순위: `docs/README.md`
-> 현재 단계: Phase 0 완료, Phase 1A 진행 중. durable project/task write는 live지만 Quick Capture와 task-only Today가 남아 있음
+> 현재 단계: Phase 0 완료, Phase 1A 진행 중. durable project/task write와 홈 Quick Capture→task는 live지만 범용 inbox destination, task-only Today, 공통 receipt가 남아 있음
 
 ## 1. North Star
 
@@ -107,7 +107,7 @@ Exit gate before starting:
 
 ## 4. Current Priority Stack
 
-1. Finish Phase 1A Quick Capture task/inbox routing, cross-destination idempotency, and task-only Today. Durable project/task create/update/status/reload is already live.
+1. Finish Phase 1A general inbox routing, cross-destination receipt idempotency, and task-only Today. Durable project/task create/update/status/reload and the home one-line task capture are already live.
 2. Finish Phase 1B Attention adapter, real Google Calendar agenda, source timeout/partial contract, and stable slotting. Daily Brief already reads six live ledgers and exposes three verified-owner focus customers without unassigned CRM records.
 3. Build Phase 1C atomic contact outcome and next-action loop. Existing outcome logging is not the required one-transaction completion flow.
 4. Keep the live PMS and three ClassIn content lanes on their existing Hub→Engine→Supabase write boundaries while Phase 1 closes.

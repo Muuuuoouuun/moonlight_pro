@@ -64,7 +64,7 @@ read 실패                              -> error + retry
 - 홈은 별도 CRM/PMS/Content 대시보드의 합이 아니라 Action Desk다.
 - 홈의 주인공은 Quick Capture, 긴급 KA 최대 1건, 집중 고객 3~5건, 오늘 일정과 필수 할 일이다.
 - 매출·프로젝트·콘텐츠 숫자는 위 행동을 밀어내지 않는 보조 pulse다.
-- 전제 1~7과 기존 원장 기반 접근안 B가 승인됐다. Phase 1A의 read foundation과 핵심 PMS write path가 연결됐고, dependency·milestone·custom workflow 같은 고급 PMS는 후속 Phase 3 범위다.
+- 전제 1~7과 기존 원장 기반 접근안 B가 승인됐다. Phase 1A의 read foundation, 핵심 PMS write path, 홈 Quick Capture의 durable task destination이 연결됐고, dependency·milestone·custom workflow 같은 고급 PMS는 후속 Phase 3 범위다.
 
 ### 2.2 PMS
 
@@ -241,6 +241,7 @@ return NextResponse.json({
 | 같은 파일 `mapProjects` | DB status를 `Planning / In progress / Blocked / Done / Backlog`로 투영 | 최종 공통 상태 migration 전에는 `waiting/paused/cancelled`를 추측하지 않는다. |
 | 같은 파일 `mapTodos` | task를 project/brand, due bucket, raw status, done, priority에 연결 | 같은 durable task ID를 My Tasks, project detail, Board에서 재사용한다. |
 | `apps/hub/lib/pms-ui.js` | draft, client UUID fallback, board/status projection | Browser crypto가 없는 표면에서도 유효 UUID를 만들고, Board를 task-only 5열로 고정한다. |
+| `apps/hub/lib/quick-task-capture.js` / `DailyBrief.QuickTaskCapture` | 한 줄 task payload와 홈 capture UI | `tasks.status=inbox`로 저장하고 `saved/duplicate`에서만 입력을 비운다. 실패 시 원문과 client UUID를 유지한다. |
 | `apps/hub/app/api/hub/projects/route.js` | project ledger GET + guarded POST/PATCH BFF | shared secret은 서버에서만 Engine에 전달한다. 원격 production은 Hub write secret, 로컬 production은 loopback same-origin만 허용한다. |
 | `apps/hub/app/api/hub/tasks/route.js` | task GET + guarded POST/PATCH BFF | create와 status update를 Engine command로 전달한다. |
 | `apps/engine/app/api/pms/command/route.ts` | authenticated PMS command endpoint | workspace owner를 해석하고 normalized command를 Supabase에 저장한다. |
@@ -249,7 +250,7 @@ return NextResponse.json({
 | `apps/hub/app/api/projects/update/route.js` | project update event와 일부 patch | create/edit/checklist CRUD로 확장하지 않는다. persistence 실패를 durable 성공으로 해석하지 않는다. |
 | `apps/hub/components/hub/hub-nav.js` | 할 일과 프로젝트·기획이 같은 Projects surface 공유 | `?view=todos` 계약을 유지한다. 새로운 top-level PMS menu를 만들지 않는다. |
 
-2026-07-15 live smoke는 임시 project/task를 생성하고 task를 `doing`, project를 `active / 25%`로 변경한 뒤 같은 ID와 값을 재조회했다. 검증 row는 즉시 삭제했고 기존 live count는 project 4, task 6으로 복구됐다.
+2026-07-15 live smoke는 임시 project/task를 생성하고 task를 `doing`, project를 `active / 25%`로 변경한 뒤 같은 ID와 값을 재조회했다. 홈 Quick Capture도 별도 임시 task를 저장하고 같은 ID를 재시도해 `duplicate`와 row 1건을 확인했다. 검증 row는 즉시 삭제했고 기존 live count는 project 4, task 6으로 복구됐다. 390×844에서 입력과 저장 버튼은 첫 fold 안에 있고 document overflow는 0이다.
 
 ### 5.3 세 콘텐츠 브랜드
 

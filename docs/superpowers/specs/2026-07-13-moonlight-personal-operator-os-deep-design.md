@@ -1206,7 +1206,7 @@ type AttentionResponse = {
 
 ### Phase 1A — Durable Task Loop
 
-2026-07-15 구현 스냅샷: Projects의 project/task create·update·상태 변경은 Hub BFF → Engine `pms/command` → Supabase 경계에서 live round-trip과 reload를 통과했다. 그러나 홈 Quick Capture의 task/inbox 양방향 routing, 공통 receipt 기반 idempotency, task-only Today가 없으므로 Phase 1A 완료로 표시하지 않는다.
+2026-07-15 구현 스냅샷: Projects의 project/task create·update·상태 변경과 홈의 한 줄 Quick Capture→`tasks.status=inbox`는 Hub BFF → Engine `pms/command` → Supabase 경계에서 live round-trip, same-ID duplicate, reload를 통과했다. 저장 실패 시 입력과 client UUID를 유지한다. 범용 inbox/work-order destination, task/inbox 공통 receipt, task-only Today가 없으므로 Phase 1A 완료로 표시하지 않는다.
 
 ```text
 Quick text(task hint)
@@ -1419,7 +1419,7 @@ Phase 1 구현 계획에서 다음 파일을 우선 검토한다.
 
 ## 24. 실제 다음 행동
 
-다음 작업은 질문을 더 이어가는 것이 아니라 **Phase 1A Durable Task Loop의 미완료 구간**을 닫는 것이다. project/task durable write는 재사용하고 Quick Capture, 공통 idempotency receipt, task-only Today를 추가한다.
+다음 작업은 질문을 더 이어가는 것이 아니라 **Phase 1A Durable Task Loop의 미완료 구간**을 닫는 것이다. 현재 Quick Capture task path를 재사용하고 범용 inbox destination, 공통 idempotency receipt, task-only Today를 추가한다.
 
 ```text
 Quick text(task hint)

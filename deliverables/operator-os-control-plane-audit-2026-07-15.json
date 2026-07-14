@@ -1,5 +1,5 @@
 {
-  "auditedAt": "2026-07-15T03:18:58+09:00",
+  "auditedAt": "2026-07-15T03:24:25+09:00",
   "scope": "Moonlight operator OS, exact-owner eeoCRM enrichment, PMS/content writes, MCP, OAuth/IAM, OpenClaw",
   "crm": {
     "moonlightLeadCount": 119,
@@ -44,6 +44,15 @@
     "writePath": "Hub BFF -> Engine /api/pms/command -> Supabase -> Hub repository",
     "liveRoundTrip": "passed",
     "hydratedUi": "localhost:3000 verified: 4 projects, 6 open tasks, 2 due today, 1 blocked project",
+    "quickTaskCapture": {
+      "status": "live-task-destination",
+      "path": "Daily Brief -> Hub /api/hub/tasks -> Engine /api/pms/command -> Supabase tasks",
+      "savedReadBack": true,
+      "sameIdRetry": "duplicate with one durable row",
+      "failurePolicy": "clear only on saved or duplicate; preserve raw input and client UUID otherwise",
+      "mobile390x844": "input and submit button inside first fold; document overflow 0",
+      "remainingPhase1A": "general inbox/work-order destination, cross-destination receipt, and task-only Today"
+    },
     "temporaryRowsRemaining": 0
   },
   "content": {
@@ -242,7 +251,7 @@
     }
   },
   "verification": {
-    "repositoryTests": { "passed": 94, "failed": 0, "latestFocusedSuitePassed": 70, "latestFocusedSuiteFailed": 0 },
+    "repositoryTests": { "passed": 94, "failed": 0, "latestFocusedSuitePassed": 74, "latestFocusedSuiteFailed": 0 },
     "monorepoTypecheck": "passed",
     "hubAndEngineBuild": "passed",
     "connectionCheck": "all-critical-passed; Calendar PASS enabled/configured; Gmail and Sheets INFO disabled; OpenClaw Google MCP INFO process-ok/provider-auth-required",
@@ -268,7 +277,7 @@
     "latestLiveRecheck": {
       "at": "2026-07-15T03:18:58+09:00",
       "revenue": "supabase live; 119-row searchable ledger preserved; evidence-backed dry-run over 117 eeoCRM rows targeted 16 exact-owner leads with changed 0; Daily Brief now exposes three verified customer-success follow-ups and zero unverified Revenue signals",
-      "pms": "supabase live; 4 projects; 6 tasks; 1 blocked",
+      "pms": "supabase live; 4 projects; 6 tasks; 1 blocked; Quick Capture task save/read-back and same-ID duplicate passed; temporary row residue 0",
       "content": "three canonical ClassIn lanes live with counts 1/0/0 and two outside-lane items",
       "dailyBrief": "six of six sources live; seven signals"
     },

@@ -153,7 +153,7 @@ flowchart LR
 | Credential hygiene | OpenClaw inbound·credential quarantine 파일 0개. 잘못 연결됐던 web client는 제거하고 공식 server 요구에 맞는 installed/localhost client를 보존 감사 기록의 이중 해시로 복구해 Keychain-backed wrapper로 이동. Hub Calendar의 서로 다른 OAuth client는 유지. OpenClaw core static secret은 Keychain SecretRef 6개, plaintext/unresolved 0개 |
 | OpenClaw runtime | Homebrew Node 24.18.0 고정 경로, gateway supervisor audit 통과, Telegram/Slack probe 통과, security critical 0, main session 0/200k, session store 50 entries |
 | OpenClaw cron | 평일 09:30 KST announce·실패 알림 설정. Telegram credential probe 성공, 대상 supergroup 조회 성공, bot administrator. 수정 후 첫 scheduled delivery는 아직 미실행 |
-| 계약 테스트 | 70/70 통과. readiness, Hub write guard, PMS command/idempotency, iCal fallback, MCP, webhook contract, CRM evidence apply guard, Daily Brief owner gate에 더해 `check:connections`가 Calendar enabled/configured, Gmail·Sheets disabled, OpenClaw Google MCP process-ok/provider-auth-required를 서로 다른 상태로 출력. Hub·Engine production build 2/2 통과 |
+| 계약 테스트 | 74/74 통과. readiness, Hub write guard, PMS command/idempotency, Quick Capture durable-result/접근성, iCal fallback, MCP, webhook contract, CRM evidence apply guard, Daily Brief owner gate에 더해 `check:connections`가 Calendar enabled/configured, Gmail·Sheets disabled, OpenClaw Google MCP process-ok/provider-auth-required를 서로 다른 상태로 출력. Hub·Engine production build 2/2 통과 |
 | Local residue cleanup | 종료되지 않은 감사 전용 headless Chrome 2그룹과 home credential 검색 1개를 종료·임시 디렉터리 제거. 사용자 Chrome·Claude 세션은 건드리지 않았고 Hub/Engine/relay는 모두 200 유지 |
 
 ## 주의
