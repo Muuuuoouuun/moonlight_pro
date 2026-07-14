@@ -23,3 +23,11 @@ test("mobile leads keeps identity and stage visible without horizontal overflow"
   assert.match(css, /\.hub-leads-grid\s*>\s*:nth-child\(3\)[\s\S]*?\.hub-lead-next-action\s*\{[\s\S]*?display:\s*none !important/);
   assert.match(css, /\.hub-lead-mobile-meta\s*\{[\s\S]*?display:\s*block/);
 });
+
+test("mobile topbar breadcrumbs meet the 44px touch-target floor", () => {
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*900px\)[\s\S]*?\.hub-topbar__crumbs button\s*\{[\s\S]*?min-width:\s*44px;[\s\S]*?min-height:\s*44px !important/,
+  );
+  assert.doesNotMatch(css, /\.hub-topbar__crumbs button\s*\{[\s\S]*?min-height:\s*34px !important/);
+});

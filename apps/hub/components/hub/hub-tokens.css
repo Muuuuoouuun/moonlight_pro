@@ -479,7 +479,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    min-height: 34px !important;
+    min-width: 44px;
+    min-height: 44px !important;
   }
 
   .hub-topbar__primary-action {
