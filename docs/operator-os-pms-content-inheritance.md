@@ -64,7 +64,7 @@ read 실패                              -> error + retry
 - 홈은 별도 CRM/PMS/Content 대시보드의 합이 아니라 Action Desk다.
 - 홈의 주인공은 Quick Capture, 긴급 KA 최대 1건, 집중 고객 3~5건, 오늘 일정과 필수 할 일이다.
 - 매출·프로젝트·콘텐츠 숫자는 위 행동을 밀어내지 않는 보조 pulse다.
-- 전제 1~7과 기존 원장 기반 접근안 B가 승인됐다. Phase 1A의 read foundation, 핵심 PMS write path, 홈 Quick Capture의 durable task destination, task-only Today 완료 loop가 연결됐고, dependency·milestone·custom workflow 같은 고급 PMS는 후속 Phase 3 범위다.
+- 전제 1~7과 기존 원장 기반 접근안 B가 승인됐다. Phase 1A의 read foundation, 핵심 PMS write path, 홈 Quick Capture의 task/work-order 두 destination과 공통 receipt, task-only Today 완료 loop가 live 연결됐고, dependency·milestone·custom workflow 같은 고급 PMS는 후속 Phase 3 범위다.
 
 ### 2.2 PMS
 
@@ -241,7 +241,10 @@ return NextResponse.json({
 | 같은 파일 `mapProjects` | DB status를 `Planning / In progress / Blocked / Done / Backlog`로 투영 | 최종 공통 상태 migration 전에는 `waiting/paused/cancelled`를 추측하지 않는다. |
 | 같은 파일 `mapTodos` | task를 project/brand, due bucket, raw status, done, priority에 연결 | 같은 durable task ID를 My Tasks, project detail, Board에서 재사용한다. |
 | `apps/hub/lib/pms-ui.js` | draft, client UUID fallback, board/status projection | Browser crypto가 없는 표면에서도 유효 UUID를 만들고, Board를 task-only 5열로 고정한다. |
-| `apps/hub/lib/quick-task-capture.js` / `DailyBrief.QuickTaskCapture` | 한 줄 task payload와 홈 capture UI | `tasks.status=inbox`로 저장하고 `saved/duplicate`에서만 입력을 비운다. 실패 시 원문과 client UUID를 유지한다. |
+| `apps/hub/lib/quick-task-capture.js` / `DailyBrief.QuickTaskCapture` | 공통 receipt envelope과 task/work-order 목적지 선택 UI | 기본은 `tasks.status=inbox`, `정리 전`은 `work_orders.status=proposed`로 저장한다. `saved/duplicate`에서만 입력을 비우고 실패 시 원문과 idempotency key를 유지한다. |
+| `apps/hub/app/api/hub/inbox/route.js` / `apps/hub/lib/capture-engine-client.js` | Quick Capture server BFF | 브라우저에 secret을 노출하지 않고 같은 envelope을 Engine capture command로 전달한다. Hub에서 Supabase로 직접 쓰지 않는다. |
+| `apps/engine/app/api/capture/command/route.ts` / `apps/engine/lib/capture-command.ts` | 인증된 cross-destination capture command | task/work-order 힌트를 정규화하고 payload hash를 계산해 RPC에 전달한다. 같은 key의 다른 payload는 409 non-retryable conflict다. |
+| `supabase/migrations/20260715_0014_quick_capture_receipts.sql` `capture_quick_input_v1` | atomic destination insert + receipt | `(workspace_id, idempotency_key)`를 유일하게 잡고 task 또는 work-order insert와 completed receipt를 한 transaction에서 닫는다. |
 | `apps/hub/lib/task-today.js` / `DailyBrief.TaskToday` | task-only `missed/today/waiting/inbox` read model과 완료 UI | 완료 task와 미래 backlog를 제외하고 최대 5건을 결정적으로 정렬한다. 완료는 같은 Hub→Engine task update 경계를 통과한 뒤 재조회한다. |
 | `apps/hub/app/api/hub/projects/route.js` | project ledger GET + guarded POST/PATCH BFF | shared secret은 서버에서만 Engine에 전달한다. 원격 production은 Hub write secret, 로컬 production은 loopback same-origin만 허용한다. |
 | `apps/hub/app/api/hub/tasks/route.js` | task GET + guarded POST/PATCH BFF | create와 status update를 Engine command로 전달한다. |
@@ -251,7 +254,7 @@ return NextResponse.json({
 | `apps/hub/app/api/projects/update/route.js` | project update event와 일부 patch | create/edit/checklist CRUD로 확장하지 않는다. persistence 실패를 durable 성공으로 해석하지 않는다. |
 | `apps/hub/components/hub/hub-nav.js` | 할 일과 프로젝트·기획이 같은 Projects surface 공유 | `?view=todos` 계약을 유지한다. 새로운 top-level PMS menu를 만들지 않는다. |
 
-2026-07-15 live smoke는 임시 project/task를 생성하고 task를 `doing`, project를 `active / 25%`로 변경한 뒤 같은 ID와 값을 재조회했다. 홈 Quick Capture도 별도 임시 task를 저장하고 같은 ID를 재시도해 `duplicate`와 row 1건을 확인했다. 이어 새 capture가 같은 화면의 `정리 전` lane에 올라오고 완료 버튼을 누르면 `done` 저장 뒤 Today에서 제외되는 것을 재조회했다. 검증 row는 즉시 삭제했고 기존 live count는 project 4, task 6으로 복구됐다. 현재 task-only Today는 놓침 2, 오늘 1, 대기 1, 정리 전 0이고 완료 노출은 0이다. 390×844에서 입력과 저장 버튼은 첫 fold 안에 있으며 Today 행과 44px 완료 버튼에 document overflow는 0이다.
+2026-07-15 live smoke는 임시 project/task를 생성하고 task를 `doing`, project를 `active / 25%`로 변경한 뒤 같은 ID와 값을 재조회했다. 홈 Quick Capture task는 201 saved 뒤 같은 envelope 재시도에서 200 duplicate와 같은 destination ID를 유지했고, 같은 key를 work-order로 바꾸면 409 conflict였다. 별도 work-order capture도 201 saved와 200 same-ID duplicate를 통과했으며 raw 입력을 보존했다. 이어 새 task capture가 같은 화면의 `정리 전` lane에 올라오고 완료 버튼을 누르면 `done` 저장 뒤 Today에서 제외되는 것을 재조회했다. 검증 task·work-order·receipt row는 즉시 삭제했고 기존 live count는 project 4, task 6으로 복구됐으며 임시 row는 0건이다. 현재 task-only Today는 놓침 2, 오늘 1, 대기 1, 정리 전 0이고 완료 노출은 0이다. 390×844에서 task/정리 전 toggle과 저장 버튼은 첫 fold 안에 있으며 Today 행과 44px 완료 버튼에 document overflow는 0이다.
 
 ### 5.3 세 콘텐츠 브랜드
 

@@ -1,5 +1,5 @@
 {
-  "auditedAt": "2026-07-15T03:32:46+09:00",
+  "auditedAt": "2026-07-15T03:45:49+09:00",
   "scope": "Moonlight operator OS, exact-owner eeoCRM enrichment, PMS/content writes, MCP, OAuth/IAM, OpenClaw",
   "crm": {
     "moonlightLeadCount": 119,
@@ -45,13 +45,26 @@
     "liveRoundTrip": "passed",
     "hydratedUi": "localhost:3000 verified: 4 projects, 6 open tasks, 2 due-or-overdue tasks, 1 blocked project",
     "quickTaskCapture": {
-      "status": "live-task-destination",
-      "path": "Daily Brief -> Hub /api/hub/tasks -> Engine /api/pms/command -> Supabase tasks",
-      "savedReadBack": true,
-      "sameIdRetry": "duplicate with one durable row",
-      "failurePolicy": "clear only on saved or duplicate; preserve raw input and client UUID otherwise",
-      "mobile390x844": "input and submit button inside first fold; document overflow 0",
-      "remainingPhase1A": "general inbox/work-order destination and cross-destination receipt"
+      "status": "live-task-and-work-order-destinations",
+      "path": "Daily Brief -> Hub /api/hub/inbox -> Engine /api/capture/command -> capture_quick_input_v1 -> tasks|work_orders + mutation_receipts",
+      "taskSavedReadBack": true,
+      "inboxSavedReadBack": true,
+      "taskSameIdRetry": "HTTP 200 duplicate with the original task destination ID",
+      "inboxSameIdRetry": "HTTP 200 duplicate with the original work-order destination ID",
+      "crossDestinationConflict": "same key reused for another destination returns HTTP 409 idempotency-key-reused and retryable=false",
+      "rawInputPreserved": true,
+      "failurePolicy": "clear only on saved or duplicate; preserve raw input and receipt key on failure; editing after failure starts a new key",
+      "mobile390x844": "task/inbox toggle, input, and submit button inside first fold; document overflow 0",
+      "remainingPhase1A": null
+    },
+    "captureReceipt": {
+      "migration": "20260715_0014_quick_capture_receipts.sql applied live",
+      "table": "mutation_receipts",
+      "uniqueKey": ["workspace_id", "idempotency_key"],
+      "rpc": "capture_quick_input_v1",
+      "atomicDestinations": ["task", "work_order"],
+      "completedReceiptsObservedDuringSmoke": 3,
+      "temporaryRowsRemaining": 0
     },
     "taskToday": {
       "status": "live-task-only-loop",
@@ -233,15 +246,15 @@
       "remaining": "A Mac-compatible authenticated eeoCRM provider connection is not available, so this is not labeled live sync."
     },
     "personalOperatorOs": {
-      "status": "complete-phase1",
-      "evidence": "Daily Brief reads six live ledgers, renders seven ranked signals, and exposes PMS and ClassIn content summaries without mock/live mixing."
+      "status": "phase1a-complete-phase1b-partial",
+      "evidence": "Daily Brief reads six live ledgers, renders seven ranked signals, exposes PMS and ClassIn summaries without mock/live mixing, and closes the Quick Capture receipt-to-task-to-Today loop. The formal Attention adapter, Calendar agenda, named partials, and stable slotting remain Phase 1B."
     },
     "pms": {
-      "status": "complete-phase1",
-      "evidence": "Four projects and six tasks are live; durable project/task create-update-complete and five-state task board paths passed Hub-to-Engine-to-Supabase read-back."
+      "status": "phase1a-complete",
+      "evidence": "Four projects and six tasks are live; durable project/task create-update-complete, task/work-order Quick Capture with an atomic receipt, duplicate/conflict handling, and task-only Today completion passed Hub-to-Engine-to-Supabase read-back."
     },
     "content": {
-      "status": "complete-phase1",
+      "status": "complete-current-scope",
       "evidence": "Class.Moon, ClassIn Side, and Study.Seagull are canonical live lanes with counts 1/0/0; content create-idempotency-update-read-back and rollback passed; empty-lane Draft stays in the mobile viewport and preserves the requested Studio brand."
     },
     "webhookAndMcp": {
@@ -260,13 +273,13 @@
     }
   },
   "verification": {
-    "repositoryTests": { "passed": 94, "failed": 0, "latestFocusedSuitePassed": 79, "latestFocusedSuiteFailed": 0 },
+    "repositoryTests": { "passed": 102, "failed": 0, "latestFocusedSuitePassed": 102, "latestFocusedSuiteFailed": 0 },
     "monorepoTypecheck": "passed",
     "hubAndEngineBuild": "passed",
-    "connectionCheck": "all-critical-passed; Calendar PASS enabled/configured; Gmail and Sheets INFO disabled; OpenClaw Google MCP INFO process-ok/provider-auth-required",
+    "connectionCheck": "all-critical-passed; Hub and Engine each report 11 routes; Calendar PASS enabled/configured; Gmail and Sheets INFO disabled; OpenClaw Google MCP INFO process-ok/provider-auth-required",
     "hydratedBrowser": {
       "origin": "http://localhost:3000",
-      "dailyBrief": "6/6 ledgers live; 7 signals; task-only Today rendered with 4 task rows and durable completion; PMS and ClassIn content pulse rendered; 390x844 document overflow 0 and visible interactive targets >=44x44",
+      "dailyBrief": "6/6 ledgers live; 7 signals; task/inbox Quick Capture toggle and task-only Today rendered with 4 task rows and durable completion; PMS and ClassIn content pulse rendered; 390x844 document overflow 0 and visible interactive targets >=44x44",
       "projects": "4 projects; 6 open todos; List, Board, To-dos controls rendered",
       "content": "3 items; canonical Class.Moon, ClassIn Side, Study.Seagull lanes rendered; at 390x844 the empty lane stays within its 340px card and the requested brand survives new-draft Studio initialization",
       "revenueLeads": "119 total; 16 exact-owner rows resolve to Me; 390x844 identity column 188px with no document/card overflow; 768x1024 and 1440x1000 regressions passed",
@@ -282,11 +295,24 @@
       "projectUpdateReadBack": 1,
       "temporaryRowsRemaining": 0
     },
+    "captureCommandSmoke": {
+      "unauthenticatedEngineHttpStatus": 401,
+      "taskSaveHttpStatus": 201,
+      "taskDuplicateHttpStatus": 200,
+      "inboxSaveHttpStatus": 201,
+      "inboxDuplicateHttpStatus": 200,
+      "crossDestinationConflictHttpStatus": 409,
+      "sameDestinationIdsOnDuplicate": true,
+      "rawInputPreserved": true,
+      "temporaryTaskRowsRemaining": 0,
+      "temporaryWorkOrderRowsRemaining": 0,
+      "temporaryReceiptRowsRemaining": 0
+    },
     "liveTemporaryRowsRemaining": 0,
     "latestLiveRecheck": {
-      "at": "2026-07-15T03:32:46+09:00",
+      "at": "2026-07-15T03:45:49+09:00",
       "revenue": "supabase live; 119-row searchable ledger preserved; evidence-backed dry-run over 117 eeoCRM rows targeted 16 exact-owner leads with changed 0; Daily Brief now exposes three verified customer-success follow-ups and zero unverified Revenue signals",
-      "pms": "supabase live; 4 projects; 6 tasks; 1 blocked; Quick Capture task save/read-back and same-ID duplicate passed; task-only Today save-refresh-complete-re-read passed; temporary row residue 0",
+      "pms": "supabase live; 4 projects; 6 tasks; 1 blocked; Quick Capture task/work-order save/read-back and same-ID duplicates passed; cross-destination key reuse returned 409; task-only Today save-refresh-complete-re-read passed; task/work-order/receipt residue 0",
       "content": "three canonical ClassIn lanes live with counts 1/0/0 and two outside-lane items",
       "dailyBrief": "six of six sources live; seven signals"
     },

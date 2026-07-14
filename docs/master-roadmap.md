@@ -4,7 +4,7 @@ Status: active roadmap
 Updated: 2026-07-15
 
 > 현재 사실과 문서 우선순위: `docs/README.md`
-> 현재 단계: Phase 0 완료, Phase 1A 진행 중. durable project/task write, 홈 Quick Capture→task, task-only Today 완료·재조회는 live지만 범용 inbox destination과 공통 receipt가 남아 있음
+> 현재 단계: Phase 0·Phase 1A 완료, Phase 1B 부분 작동. Quick Capture의 task/work-order 두 destination과 공통 receipt, task-only Today 완료·재조회는 live이며 정식 Attention adapter와 Calendar agenda 계약이 다음 범위
 
 ## 1. North Star
 
@@ -107,13 +107,12 @@ Exit gate before starting:
 
 ## 4. Current Priority Stack
 
-1. Finish Phase 1A general inbox routing and cross-destination receipt idempotency. Durable project/task create/update/status/reload, the home one-line task capture, and task-only Today completion loop are already live.
-2. Finish Phase 1B Attention adapter, real Google Calendar agenda, source timeout/partial contract, and stable slotting. Daily Brief already reads six live ledgers and exposes three verified-owner focus customers without unassigned CRM records.
-3. Build Phase 1C atomic contact outcome and next-action loop. Existing outcome logging is not the required one-transaction completion flow.
-4. Keep the live PMS and three ClassIn content lanes on their existing Hub→Engine→Supabase write boundaries while Phase 1 closes.
-5. Project candidate, delay, and bottleneck management.
-6. Content idea → variant → handoff/export history.
-7. Guided repair and broader integration readiness.
+1. Finish Phase 1B Attention adapter, real Google Calendar agenda, source timeout/partial contract, and stable slotting. Daily Brief already reads six live ledgers and exposes three verified-owner focus customers without unassigned CRM records.
+2. Build Phase 1C atomic contact outcome and next-action loop. Existing outcome logging is not the required one-transaction completion flow.
+3. Keep the completed Phase 1A task/inbox receipt spine, live PMS, and three ClassIn content lanes on their existing Hub→Engine→Supabase write boundaries while Phase 1 closes.
+4. Project candidate, delay, and bottleneck management.
+5. Content idea → variant → handoff/export history.
+6. Guided repair and broader integration readiness.
 
 ## 5. Retired Premises
 

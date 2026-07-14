@@ -1,6 +1,6 @@
 # Com_Moon Agent 탭 MVP UI / 제품 스펙
 
-> 상태: DEFERRED FEATURE SPEC — 현재 Phase 1A보다 먼저 구현하지 않는다. Agent/Council 자산은 보존하되 현재 제품 우선순위는 `docs/README.md`와 Personal Operator OS 심화 설계를 따른다.
+> 상태: DEFERRED FEATURE SPEC — 현재 Phase 1B·1C보다 먼저 구현하지 않는다. Agent/Council 자산은 보존하되 현재 제품 우선순위는 `docs/README.md`와 Personal Operator OS 심화 설계를 따른다.
 
 ## 1. 문서 목적
 

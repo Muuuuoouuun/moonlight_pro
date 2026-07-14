@@ -41,7 +41,7 @@
 | `agent_runs`(coaching_log) 테이블 | 신규 migration | 에피소드 메모리. Guru/페르소나가 "무엇을 추천했고 통했는지" |
 | `persona-registry.js` | 신규 모듈 | 시드된 agents 테이블 + `registry.json`을 런타임에서 로드 |
 | `context-assembler.js` | 신규 모듈 | 360 operating_context 조립(entity+ledger+outcomes+content+brand, `missing[]` degradation) |
-| `inbox-router.js` | 신규 모듈 | 한 줄 캡처 → 분류(LLM) → lead/outcome/content/note 라우팅 |
+| `inbox-classify.js` + Engine capture command | 분류 helper + 실행 경계 | 한 줄 캡처 분류는 pure helper로 유지하고, 실제 task/work-order 저장은 Hub BFF→Engine→atomic receipt 경계를 사용 |
 
 ## 3. 단계별 빌드 — 4개 우선순위 축에 매핑
 
@@ -61,7 +61,7 @@ Guru를 무상태 자문가 → 기억하는 코치로.
 
 ### Phase 2 — 캡처→인박스→액션 스파인 (#2) · effort M
 입력 한 줄이 세 기둥을 먹인다 + 페르소나가 제안을 큐잉.
-- `apps/hub/lib/sales-os/inbox-router.js` (신규) — `sheets-sync.js` 읽기 경로 재사용, `capture-spine.md`/`inbox-command.md` 라우팅 표대로 분류 → `outcomes-ledger`/`card-intake` 쓰기 경로 재사용.
+- `apps/hub/lib/sales-os/inbox-classify.js`의 pure 분류를 유지한다. 실제 저장은 `apps/hub/app/api/hub/inbox/route.js` → Engine `/api/capture/command` → `capture_quick_input_v1`로 연결하며, 삭제된 direct `inbox-router.js` write 경계를 복원하지 않는다.
 - 페르소나 산출물 → `work_orders(status='proposed')`. `agents.jsx` Orders/Office가 `persona-registry` + `work_orders` 실데이터를 렌더(목 데이터 제거).
 
 ### Phase 3 — 데일리 브리프 = 단일 지휘 화면 (#3) · effort S

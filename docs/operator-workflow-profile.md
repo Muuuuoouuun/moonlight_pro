@@ -604,15 +604,15 @@ ClassIn/Neo CRM
 
 ## 16. 다음 제작 방향
 
-승인된 심화 설계는 **기존 원장 기반 Personal Operating Spine(접근안 B)** 이다. Phase 0 신뢰 기준선은 `5c9ccc2`에서 완료됐고 다음 구현은 Phase 1A Durable Task Loop다.
+승인된 심화 설계는 **기존 원장 기반 Personal Operating Spine(접근안 B)** 이다. Phase 0 신뢰 기준선은 `5c9ccc2`에서 완료됐고 Phase 1A Durable Task Loop도 2026-07-15에 live 검증을 마쳤다. 다음 구현은 Phase 1B Action Desk Aggregation이다.
 
 첫 구현은 다음 순서를 따른다.
 
 1. 완료: Content variant 저장 계약과 테스트 기준선 복구
 2. 완료: 실패·empty 상태에서 mock 업무를 섞지 않는 honest state
-3. 다음: 실제 저장되는 task create/update/complete
-4. 다음: Quick Capture와 task-only Today 연결
-5. 후속: 실제 follow-up과 Calendar agenda 편입
-6. 후속: 긴급 KA 1건과 집중 고객 3~5건의 설명 가능한 우선순위
+3. 완료: 실제 저장되는 task create/update/complete
+4. 완료: Quick Capture의 task/work-order 두 목적지, 공통 receipt, task-only Today 연결
+5. 다음: 실제 follow-up과 Calendar agenda 편입
+6. 다음: 긴급 KA 1건과 집중 고객 3~5건의 설명 가능한 우선순위
 
 ClassIn 전체 동기화, PMS 자동 점수, 음성 AI, 직접 소셜 발행은 이 신뢰 루프 뒤에 별도 단계로 진행한다.

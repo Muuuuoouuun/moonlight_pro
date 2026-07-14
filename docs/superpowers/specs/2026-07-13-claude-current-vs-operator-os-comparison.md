@@ -128,7 +128,7 @@ Phase 1C 고객 연락 결과와 다음 행동을 원자 기록
 | Content Flywheel | 아이디어 → AI draft → 승인 → Studio | cron/materialize는 있으나 DB variant 계약 위반 | **Phase 0 즉시 수리** |
 | Chief of Staff | 두 lane의 오늘 3개를 아침에 준비 | followups/orders/cadence는 읽지만 실제 Calendar·email·push 미포함 | **Attention adapter로 보완** |
 | Daily Brief | first-open cockpit, Morning Brief/Approval Queue | mock fallback, 임의 시간, `Hyeon`, KPI 과다 | **같은 route를 Action Desk로 전환** |
-| Quick Capture | classifier와 `/api/hub/inbox` 존재 | UI 없음, task 목적지 없음, idempotency 없음 | **재사용 + Phase 1A 보강** |
+| Quick Capture | 2026-07-15 현재 `/api/hub/inbox` BFF, task/work-order toggle, Engine command, atomic receipt가 live | Phase 1A 당시 gap은 해소됨 | **Phase 1A 완료, spine 유지** |
 | Projects/PMS | 실제 read ledger와 풍부한 UI | create/toggle/drag가 local-only | **UI 유지, write 교체** |
 | Follow-up | overdue-first, 채널·이유·다음 행동 | Daily Brief 미연결, POST 실패도 `기록됨` 표시 가능 | **계산기 유지, 완료 loop 교체** |
 | Calendar | OAuth/read/write 실제 배선 | 미연결 시 예시 event와 local create | **배관 유지, fake state 제거** |
@@ -297,10 +297,10 @@ Task
   └── reload persistence                          [GAP -> E2E]
 
 Quick Capture
-  ├── task destination                            [GAP -> integration + E2E]
-  ├── inbox destination                           [★ route exists, behavior gap]
-  ├── cross-destination duplicate                 [GAP -> integration]
-  └── failed input preserve + retry               [GAP -> E2E]
+  ├── task destination                            [★★★ TESTED + LIVE]
+  ├── inbox destination                           [★★★ TESTED + LIVE]
+  ├── cross-destination duplicate/conflict        [★★★ TESTED + LIVE]
+  └── failed input preserve + retry               [★★★ TESTED]
 
 Attention
   ├── deterministic lane/rank/slot                [GAP -> unit]
@@ -342,7 +342,7 @@ Target plan has 16 grouped gaps. Phase별 구현 PR은 해당 범위의 gap을 �
 | 다른 담당 고객 row | owner non-null이면 `Me` | 없음 | 잘못된 고객에 연락 가능 | critical |
 | outcome sink 실패 | order는 `executed` 유지 | helper 일부만 | 다음 날 학습/후속 누락 | critical |
 | Calendar 미연결 create | local event 추가 | 없음 | 저장됐다고 착각 가능 | high |
-| capture double submit | 공통 idempotency 없음 | 없음 | task/work_order 중복 | high |
+| capture double submit | 2026-07-15 atomic receipt로 해소 | duplicate/conflict + live smoke | 같은 key는 같은 destination ID, 다른 payload는 409 | resolved |
 | one source hangs | source timeout 없음 | 없음 | 첫 화면이 늦거나 전체 실패 | high |
 
 현재 critical gap은 6개다. 모두 Phase 0 또는 1C의 명시적 fix/test에 배정했다.

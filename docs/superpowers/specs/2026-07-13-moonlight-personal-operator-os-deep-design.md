@@ -1,6 +1,6 @@
 # Moonlight 개인 운영 OS 심화 설계
 
-> 상태: ACTIVE — 전제 1~7·접근안 B 승인, Phase 0 완료, Phase 1A 진행 중
+> 상태: ACTIVE — 전제 1~7·접근안 B 승인, Phase 0·Phase 1A 완료, Phase 1B 부분 작동
 > 작성일: 2026-07-13
 > 최초 작성 브랜치: `real_v1.1`
 > 모드: Builder / 개인 전용 운영 시스템
@@ -1206,14 +1206,13 @@ type AttentionResponse = {
 
 ### Phase 1A — Durable Task Loop
 
-2026-07-15 구현 스냅샷: Projects의 project/task create·update·상태 변경, 홈의 한 줄 Quick Capture→`tasks.status=inbox`, task-only Today의 `missed/today/waiting/inbox` 분류와 완료·재조회는 Hub BFF → Engine `pms/command` → Supabase 경계에서 live round-trip을 통과했다. Quick Capture same-ID duplicate가 1 row를 유지하고 저장 실패 시 입력과 client UUID를 보존한다. 범용 inbox/work-order destination과 task/inbox 공통 receipt가 없으므로 Phase 1A 완료로 표시하지 않는다.
+2026-07-15 구현 스냅샷: Projects의 project/task create·update·상태 변경과 task-only Today의 `missed/today/waiting/inbox` 분류·완료·재조회가 live round-trip을 통과했다. 홈 Quick Capture는 같은 request envelope을 Hub `/api/hub/inbox` → Engine `/api/capture/command` → Supabase `capture_quick_input_v1`로 보내 `task` 또는 `work_order`에 저장한다. `(workspace_id, idempotency_key)` receipt는 같은 payload 재시도를 같은 destination ID의 duplicate로 돌려주고, 같은 key를 다른 destination이나 payload로 재사용하면 409 conflict로 거부한다. task와 work-order 모두 저장·재조회했고 원문 보존, 실패 시 입력·receipt key 유지, 완료 뒤 Today 제외, 임시 row 0건을 확인했으므로 Phase 1A는 완료다.
 
 ```text
-Quick text(task hint)
-  -> durable task
-  -> task-only Today
-  -> complete
-  -> reload
+Quick text + destination hint
+  -> one receipt envelope
+  -> durable task -> task-only Today -> complete -> reload
+  -> durable work_order -> general inbox
 ```
 
 - Hub session BFF → Engine guarded task create/update/complete API → RPC와 idempotency.
@@ -1419,17 +1418,16 @@ Phase 1 구현 계획에서 다음 파일을 우선 검토한다.
 
 ## 24. 실제 다음 행동
 
-다음 작업은 질문을 더 이어가는 것이 아니라 **Phase 1A Durable Task Loop의 미완료 구간**을 닫는 것이다. 현재 Quick Capture task path와 task-only Today를 재사용하고 범용 inbox destination과 공통 idempotency receipt를 추가한다.
+다음 작업은 질문을 더 이어가는 것이 아니라 **Phase 1B Action Desk Aggregation**을 닫는 것이다. 완료된 Quick Capture receipt spine과 task-only Today를 유지하면서 정식 Attention adapter, 실제 Google Calendar agenda, source별 timeout/partial 계약, stable slotting을 추가한다.
 
 ```text
-Quick text(task hint)
-  -> durable task
-  -> task-only Today
-  -> complete
-  -> reload 후 동일 상태 확인
+Follow-up + Google Calendar + live ledgers
+  -> source별 timeout / named partial
+  -> AttentionItem adapter + deterministic rank
+  -> urgent KA 1 + focus customers 3~5 + agenda
 ```
 
-Phase 1A 완료 뒤 현재 부분 작동 중인 Phase 1B를 정식 Attention adapter와 Calendar agenda 계약으로 완성한다. Q116 이후 질문은 운영자가 요청하거나 실사용 데이터가 생길 때까지 보류한다.
+Phase 1B를 완성한 뒤 Phase 1C의 contact outcome 원자성으로 이동한다. Q116 이후 질문은 운영자가 요청하거나 실사용 데이터가 생길 때까지 보류한다.
 
 ## 25. 이번 정리에서 관찰한 것
 
@@ -1453,4 +1451,4 @@ Phase 1A 완료 뒤 현재 부분 작동 중인 Phase 1B를 정식 Attention ada
 - 1차: 7/10. Attention 계약, Quick Capture 목적지, 연락 완료 원자성, owner 검증, Phase 1 과대 범위를 발견.
 - 2차: 8/10. fallback slot, cross-destination idempotency, 실제 outcome ledger, reason code, due precision을 발견.
 - 3차: 9/10. `activity_at` 기준 시각 1건을 발견했고 최종 문서에 반영.
-- 잔여 승인 blocker: 없음. 다음 구현 범위는 Phase 1A이며, 이후 Phase의 하드 게이트는 §22에서 별도로 확인한다.
+- 잔여 승인 blocker: 없음. 다음 구현 범위는 Phase 1B이며, 이후 Phase의 하드 게이트는 §22에서 별도로 확인한다.

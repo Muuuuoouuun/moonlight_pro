@@ -133,7 +133,7 @@ Zoom 대체재·전자칠판 스펙표로 설명하면 가치가 작아짐.
 | Sales OS Phase 0–4 | work_orders/agent_runs 스파인 · 360 컨텍스트 어셈블러 · 인박스 라우터 · 크로스필러 리스크 · outcome-weighted triage + leads.score | ✅ 머지됨 |
 | 학습 루프 closing | work_order 실행 결과 → `outreach_outcomes` → `agent_runs.outcome_id` 귀속(멱등) | ✅ 머지됨 |
 | **v1.4 — CRM 통합** | classin_home 딜/퍼널을 읽어와 Guru의 `crm_facts` gap 해소 | P0a(코드 배관: `crmFacts` 파라미터, `crm-pipeline.js`)만 완료 · **이후 보류**(아래 결정 참고) |
-| v1.3 | 인바운드 DM→리드 포착(콘텐츠↔딜 루프, 반수작업) | ✅ 머지됨 — classify/stage(`inbox-classify.js`/`inbox-router.js`)는 이미 있었고, 이번에 승인된 `dm`/`lead` work order를 실제 `leads` row로 닫는 `promoteCaptureToLead`(`work-orders.js`)를 추가해 루프를 완성. `lead_intake_raw`→`companies` 매칭(구조화 필드 필요)은 의도적으로 생략 — 자유 텍스트에서 회사 매칭을 추측하지 않고, bare lead를 Revenue › Leads에서 사람이 채우게 함(§8 지식과 동일한 안전 원칙) |
+| v1.3 | 인바운드 DM→리드 포착(콘텐츠↔딜 루프, 반수작업) | ✅ 머지됨 — legacy 분류기는 `inbox-classify.js`에 유지하고, 삭제된 direct `inbox-router.js` write 대신 Quick Capture는 Hub BFF→Engine capture command→atomic receipt로 `work_orders`에 저장한다. 승인된 `dm`/`lead` work order를 실제 `leads` row로 닫는 `promoteCaptureToLead`(`work-orders.js`)가 루프를 완성한다. `lead_intake_raw`→`companies` 매칭(구조화 필드 필요)은 의도적으로 생략 — 자유 텍스트에서 회사 매칭을 추측하지 않고, bare lead를 Revenue › Leads에서 사람이 채우게 함(§8 지식과 동일한 안전 원칙) |
 | vNext | 네이버 공식 API 시드(법적) · 광고비/퍼널 연동(classin_home 재사용) · agents.jsx 팔레트 토큰화 · 인스타/스레드 자동 발행 · 5배 계기판 | 보류 |
 
 > **2026-07-10 결정**: v1.4(classin_home CRM 통합)는 classin_home 레포 접근·별도 Supabase 프로젝트 여부 확인 등 moonlight 바깥의 의존이 커서 **후순위로 보류**한다. 당분간은 moonlight_pro 안에서 자체 완결되는 작업(v1.3 인바운드 캡처, 정리/부채 항목 등)을 우선한다. 상세 트레이드오프·재개 시 체크리스트는 `docs/sales-os-crm-integration-plan.md` 참고 — 그 문서의 P0a(라이브 DB 무영향)는 이미 머지됐고, P0b(마이그레이션) 이후부터가 보류 대상이다.
