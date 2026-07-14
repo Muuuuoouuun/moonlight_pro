@@ -10,6 +10,10 @@ const revenueSource = await readFile(
   new URL("../components/hub/pages/revenue.jsx", import.meta.url),
   "utf8",
 );
+const dailyBriefSource = await readFile(
+  new URL("../components/hub/pages/daily-brief.jsx", import.meta.url),
+  "utf8",
+);
 
 test("mobile workspace sidebar hiding does not hide edit drawers", () => {
   assert.match(css, /\.hub-workspace-shell\s*>\s*aside:not\(\.hub-drawer\)/);
@@ -30,4 +34,11 @@ test("mobile topbar breadcrumbs meet the 44px touch-target floor", () => {
     /@media\s*\(max-width:\s*900px\)[\s\S]*?\.hub-topbar__crumbs button\s*\{[\s\S]*?min-width:\s*44px;[\s\S]*?min-height:\s*44px !important/,
   );
   assert.doesNotMatch(css, /\.hub-topbar__crumbs button\s*\{[\s\S]*?min-height:\s*34px !important/);
+});
+
+test("Daily Brief ledger toggle exposes an accessible 44px mobile target", () => {
+  assert.match(dailyBriefSource, /aria-label=\{open \? ['"]원장 상태 숨기기['"] : ['"]원장 상태 펼치기['"]\}/);
+  assert.match(dailyBriefSource, /aria-expanded=\{open\}/);
+  assert.match(dailyBriefSource, /aria-controls="daily-brief-ledger-statuses"/);
+  assert.match(dailyBriefSource, /id="daily-brief-ledger-statuses"/);
 });

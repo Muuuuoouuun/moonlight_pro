@@ -932,12 +932,19 @@ function StatusLine({ state }) {
       <span className="mono" style={{ color: 'var(--fg-dim)', letterSpacing: 0 }}>{label}</span>
       <span style={{ color: 'var(--fg-faint)' }}>· {detail}</span>
       {sourceCount > 0 && (
-        <button onClick={() => setOpen((o) => !o)} style={{ color: 'var(--fg-faint)', fontSize: 11, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}>
+        <button
+          type="button"
+          aria-label={open ? '원장 상태 숨기기' : '원장 상태 펼치기'}
+          aria-expanded={open}
+          aria-controls="daily-brief-ledger-statuses"
+          onClick={() => setOpen((o) => !o)}
+          style={{ color: 'var(--fg-faint)', fontSize: 11, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
+        >
           {open ? '원장 숨기기' : `원장 ${sourceCount}`}
         </button>
       )}
       {open && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', width: '100%', marginTop: 6 }}>
+        <div id="daily-brief-ledger-statuses" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', width: '100%', marginTop: 6 }}>
           {state.sources.map((source) => (
             <Badge key={source.key} tone={syncTone(source.state)} variant="outline" size="xs">
               {source.label} · {sourceLabel(source.state)}
