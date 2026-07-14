@@ -30,7 +30,7 @@
 - Responsibility-specific secrets are separated. Gmail and Sheets remain explicitly disabled.
 - Moonlight MCP exposes 13 tools. Codex read smoke is live; project and Claude Desktop config are registered, with Desktop restart still required.
 - The Moonlight ledger has 119 leads total: 117 eeoCRM snapshot, 2 other sources. Only 16 exact-owner records are tagged `Me` and enriched; their values are no longer derived from score.
-- OAuth client artifacts were first moved out of Downloads into a `0600` quarantine, then removed after the active OpenClaw `mcporter` web client was migrated to two Keychain entries and the unused installed client was confirmed unreferenced by active config. The stale Notion MCP registration was also removed after a 401 invalid-token probe. IAM deletion and API-key restriction remain blocked pending a fresh authenticated audit.
+- OAuth client artifacts were first moved out of Downloads into a `0600` quarantine, then removed after values were migrated to two Keychain entries. The configured web client did not meet `mcp-google`'s Desktop app requirement, so the installed/localhost client was recovered from two preserved audit records with matching hashes and installed into the same Keychain slots without recreating a plaintext file. The stale Notion MCP registration was also removed after a 401 invalid-token probe. IAM deletion and API-key restriction remain blocked pending a fresh authenticated audit.
 
 ## Task 1: Make readiness truthful
 

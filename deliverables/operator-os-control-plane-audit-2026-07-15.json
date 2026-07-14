@@ -1,5 +1,5 @@
 {
-  "auditedAt": "2026-07-15T02:55:28+09:00",
+  "auditedAt": "2026-07-15T02:58:57+09:00",
   "scope": "Moonlight operator OS, exact-owner eeoCRM enrichment, PMS/content writes, MCP, OAuth/IAM, OpenClaw",
   "crm": {
     "moonlightLeadCount": 119,
@@ -84,7 +84,10 @@
       "retainedPlaintextFiles": 0,
       "mcporterKeychainEntries": 2,
       "wrapperMode": "0700",
-      "cleanup": "Unused installed client removed; mcporter web client moved from plaintext config/file to Keychain; Hub Calendar keeps its different active client."
+      "mcporterClientType": "installed",
+      "mcporterRedirect": "localhost",
+      "recoveredFromPreservedAuditWithMatchingHashes": true,
+      "cleanup": "Misconfigured web client and plaintext files removed; package-compatible installed client restored to Keychain; Hub Calendar keeps its different active client."
     }
   },
   "otherProviderStatus": {

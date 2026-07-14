@@ -298,7 +298,7 @@ Google Calendar는 이제 직접 연결 가능한 1차 일정 provider다.
 | iCal | fallback-only | OAuth 연결이 없을 때만 사용하는 read-only 경로, 현재 응답에 혼합되지 않음 |
 | Gmail / Sheets OAuth | disabled | health와 개별 status API가 모두 `provider-not-enabled`; Supabase ledger 존재를 OAuth `live`로 표시하지 않음 |
 | eeoCRM | snapshot | Moonlight 총 119 leads 중 117건이 eeoCRM snapshot. 문준혁 exact-owner bridge는 16건만 `Me`로 분리 |
-| credential copies | plaintext files removed | OpenClaw inbound와 격리 credential 파일은 0개. `mcporter.json`의 Google client ID/secret은 Keychain 항목 2개 + mode `0700` wrapper로 이동했고 config에는 command만 남음. Hub Calendar는 서로 다른 활성 OAuth client를 유지 |
+| credential copies | plaintext files removed | OpenClaw inbound와 격리 credential 파일은 0개. `mcporter.json`의 Google client ID/secret은 Keychain 항목 2개 + mode `0700` wrapper로 이동했고 config에는 command만 남음. 공식 `mcp-google` 요구에 맞는 installed/localhost client를 보존된 감사 기록의 이중 해시로 복구했으며, Hub Calendar는 서로 다른 활성 OAuth client를 유지 |
 | Google Cloud IAM | previous audit only | 두 Owner, 미사용 Editor service account, broad API key가 기록됨. 이번 재검증은 로컬 `gcloud` 부재와 Cloud Console 로그인 부재로 미완료 |
 
 권장 1차 범위:
