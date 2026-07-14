@@ -134,15 +134,16 @@ flowchart LR
 | Google gate | Calendar enabled/configured, Gmail·Sheets disabled |
 | Calendar auth | 2026-07-15~07-31 bounded OAuth read 성공, 11 events, writable source, redacted primary identity 저장 |
 | iCal | configured, 현재 OAuth 성공 때문에 fallback 미사용 |
-| MCP | Codex enabled, Claude Code Connected. 새 SDK 세션에서 13 tools discovery, live task 6건 read, create/read-back/delete 성공; 임시 row 0건. Desktop config는 등록됐으나 앱 재시작 확인은 별도 |
+| MCP | Codex enabled, Claude Code Connected. 새 SDK 세션에서 13 tools discovery, live task 6건 read, create/read-back/delete 성공; 임시 row 0건. Claude Desktop 앱은 22:04에 시작됐고 config는 01:03에 기록되어 Moonlight child가 아직 없다. 활성 세션을 끊지 않기 위해 승인 전 재시작하지 않음 |
 | Signed webhook | 무인증 401, shared-secret 요청 202/accepted, 같은 idempotency key 재시도 200/duplicate, `webhook_events`·`project_updates` read-back 후 삭제 residue 0 |
 | PMS write | Hub BFF→Engine command→Supabase create/update/read-back 성공. 임시 project/task 삭제 후 기존 4 project·6 task 복구 |
 | Content write | Hub BFF→Engine content command→Supabase create/duplicate retry/update/read-back 성공. 임시 item/variant 삭제 후 기존 3 items 복구 |
 | eeoCRM-derived ledger | Supabase 총 119 leads 중 117 eeoCRM snapshot, 문준혁 exact-owner 16건; live eeoCRM 연결 증거는 아님 |
-| Credential hygiene | 동일 해시 OAuth client 복사본 2개를 `0600` 격리하고 OpenClaw inbound 원본 제거. inbound credential 0개, 별도 retained client `0600`. OpenClaw static secret은 Keychain SecretRef 6개, plaintext/unresolved 0개 |
+| Credential hygiene | 동일 해시 OAuth client 복사본 2개를 `0600` 격리하고 OpenClaw inbound 원본 제거. inbound credential 0개, 별도 retained client `0600`. 격리본 중 legacy installed-app client는 localhost loopback redirect만 가지므로 Hub web callback credential로 재사용하지 않는다. OpenClaw static secret은 Keychain SecretRef 6개, plaintext/unresolved 0개 |
 | OpenClaw runtime | Homebrew Node 24.18.0 고정 경로, gateway supervisor audit 통과, Telegram/Slack probe 통과, security critical 0, main session 0/200k, session store 50 entries |
 | OpenClaw cron | 평일 09:30 KST announce·실패 알림 설정. Telegram credential probe 성공, 대상 supergroup 조회 성공, bot administrator. 수정 후 첫 scheduled delivery는 아직 미실행 |
 | 계약 테스트 | readiness, Hub write guard, PMS command/idempotency, iCal fallback, MCP, webhook contract 전체 통과. fresh SSR에서 발견한 Revenue `isLiveLedger` 미정의 오류를 수정하고 source regression test·HTTP 200·production build로 재검증 |
+| Local residue cleanup | 종료되지 않은 감사 전용 headless Chrome 2그룹과 home credential 검색 1개를 종료·임시 디렉터리 제거. 사용자 Chrome·Claude 세션은 건드리지 않았고 Hub/Engine/relay는 모두 200 유지 |
 
 ## 주의
 
@@ -152,6 +153,7 @@ flowchart LR
 - Hub health는 현재 configured/reachable를 잘 분리하지만 모든 provider에 `authenticated`, redacted `account`, `lastSuccessfulSyncAt`를 일관되게 제공하지는 않는다. 후속 작업은 configured만 보고 “연결 완료”라고 쓰지 않는다.
 - Calendar의 회사/개인 구분은 연결 경계다. 일정 제목·참석자·개인 계정 이메일을 readiness나 공용 로그에 넣지 않는다.
 - MCP write는 로컬 프로세스라는 이유만으로 무인 승인하지 않는다. Hub write guard와 tool-level write-secret check를 모두 유지한다.
+- Claude Desktop의 `claude_desktop_config.json` 존재만으로 연결 완료라고 쓰지 않는다. 앱 시작 뒤 config가 바뀌었다면 재시작 후 Moonlight child process와 tool discovery를 둘 다 확인한다.
 - eeoCRM 숫자는 변할 수 있는 ledger snapshot이다. 문서의 row count는 검증 날짜와 함께 쓰고, Mac에서 provider 인증이 확인되기 전까지 “sync”나 “MCP live”라고 부르지 않는다.
 - OpenClaw/Telegram/Slack처럼 여러 outbound channel이 가능한 경우 channel이 생략된 요청을 임의 채널로 보내지 않는다. 현재 뉴스 cron은 Telegram supergroup을 명시하지만, 다른 자동화는 명시적 routing policy가 없으면 disabled 또는 preview가 맞다.
 - OpenClaw job의 agent summary가 “전송 완료”라고 써도 `delivered=false`이면 전달 성공이 아니다. cron result의 `deliveryStatus`를 최종 증거로 사용한다.
@@ -164,6 +166,7 @@ flowchart LR
 |---|---|---|
 | Production Google callback | 공개 Hub host와 HTTPS callback 등록·배포 secret 주입이 아직 외부 설정에 의존 | production callback에서 OAuth code exchange 후 provider API read 성공 |
 | Gmail/Sheets OAuth | provider별 callback URI, scope, consent가 end-to-end 검증되지 않음 | 각 provider를 allowlist에 따로 켜고 authenticated probe 성공 |
+| Claude Desktop MCP lifecycle | 앱 시작 뒤 config가 기록됐고 활성 Claude 세션이 있어 승인 없이 재시작하지 않음 | 재시작 후 Moonlight child process와 13-tool discovery/read 확인 |
 | eeoCRM Mac live connection | Mac-compatible MCP binary 또는 service OAuth credential이 없음 | read-only 인증 성공, source identity와 sync timestamp 확인 후에만 write 검토 |
 | OpenClaw post-fix delivery | delivery 설정은 2026-07-15 00:40 KST에 수정됐고 마지막 09:30 run보다 늦음 | 2026-07-15 09:30 이후 `lastDeliveryStatus=delivered` 확인 |
 | Google Cloud IAM | 이전 감사의 두 Owner, 미사용 Editor/service account, broad API key 상태를 이번 세션에서 live 재확인하지 못함 (`gcloud`와 로그인된 Console 부재) | 로그인된 audit-log·runtime reference 검토와 명시적 owner/role 결정 |

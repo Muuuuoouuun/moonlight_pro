@@ -1,5 +1,5 @@
 {
-  "auditedAt": "2026-07-15T02:28:00+09:00",
+  "auditedAt": "2026-07-15T02:35:35+09:00",
   "scope": "Moonlight operator OS, exact-owner eeoCRM enrichment, PMS/content writes, MCP, OAuth/IAM, OpenClaw",
   "crm": {
     "moonlightLeadCount": 119,
@@ -57,14 +57,26 @@
       "taskCountAfterCleanup": 6
     },
     "temporaryRowsRemaining": 0,
-    "claudeDesktop": "configured-not-restart-verified"
+    "claudeDesktop": "configured-not-restart-verified",
+    "claudeDesktopEvidence": {
+      "appStartedAt": "2026-07-14T22:04:59+09:00",
+      "configModifiedAt": "2026-07-15T01:03:04+09:00",
+      "moonlightChildProcess": false,
+      "restartPolicy": "Do not restart while active Claude sessions exist without explicit user approval."
+    }
   },
   "googleOAuth": {
     "calendar": { "status": "live", "source": "oauth", "readOnly": false, "boundedEventCount": 11 },
     "ical": { "status": "fallback-only", "mergedWithOAuth": false },
     "gmail": { "status": "disabled", "reason": "provider-not-enabled" },
     "sheets": { "status": "disabled", "reason": "provider-not-enabled", "ledgerConfigured": true },
-    "credentialFiles": { "openClawInbound": 0, "quarantine": 2, "retainedDistinct": 1, "mode": "0600" }
+    "credentialFiles": {
+      "openClawInbound": 0,
+      "quarantine": 2,
+      "retainedDistinct": 1,
+      "mode": "0600",
+      "quarantineMetadata": "A quarantined legacy installed-app client advertises only the localhost loopback redirect; do not promote it to a Hub web callback credential."
+    }
   },
   "openclaw": {
     "installedVersion": "2026.3.28",
@@ -129,9 +141,47 @@
     "liveAudit": "blocked",
     "reason": "gcloud not installed and no authenticated Cloud Console session",
     "localCredentialPath": "none",
-    "chromeFallback": "not-invoked-without-explicit-user-approval",
+    "chromeFallback": "unavailable-without-explicit-user-approval; no normal authenticated Chrome process detected",
     "previousSnapshot": "two Owners, unused Editor service account without keys, broad API key",
     "mutationPolicy": "Do not remove roles or restrict/delete keys until authenticated usage and recovery-path audit."
+  },
+  "completionMatrix": {
+    "registrationCleanup": {
+      "status": "complete-local",
+      "evidence": "Four responsibility-specific Moonlight secrets are separated; duplicate OAuth credential copies are quarantined 0600; OpenClaw static secrets resolve 6/6 with plaintext and unresolved counts 0.",
+      "remaining": "Google Cloud IAM live role/key audit requires an authenticated admin surface and explicit mutation decisions."
+    },
+    "exactOwnerCrm": {
+      "status": "complete-snapshot",
+      "evidence": "119 total leads, 117 eeoCRM snapshot rows, 16 exact Junhyuk-owned rows, 16/16 tagged, 13 exact matched companies and 17 public evidence sources; direct and public signals remain separate.",
+      "remaining": "A Mac-compatible authenticated eeoCRM provider connection is not available, so this is not labeled live sync."
+    },
+    "personalOperatorOs": {
+      "status": "complete-phase1",
+      "evidence": "Daily Brief reads six live ledgers, renders seven ranked signals, and exposes PMS and ClassIn content summaries without mock/live mixing."
+    },
+    "pms": {
+      "status": "complete-phase1",
+      "evidence": "Four projects and six tasks are live; durable project/task create-update-complete and five-state task board paths passed Hub-to-Engine-to-Supabase read-back."
+    },
+    "content": {
+      "status": "complete-phase1",
+      "evidence": "Class.Moon, ClassIn Side, and Study.Seagull are canonical live lanes with counts 1/0/0; content create-idempotency-update-read-back and rollback passed."
+    },
+    "webhookAndMcp": {
+      "status": "complete-local-with-desktop-lifecycle-pending",
+      "evidence": "Signed/shared-secret webhook acceptance and duplicate suppression passed; MCP exposes 13 tools and passed fresh create-read-delete; Codex and Claude Code are connected.",
+      "remaining": "Claude Desktop loaded before its config was written and needs an approved restart to verify tool discovery."
+    },
+    "inheritance": {
+      "status": "complete",
+      "evidence": "Integration boundaries, source-of-truth rules, provider gates, secret responsibilities, warnings, and completion evidence are documented."
+    },
+    "usabilityScore": {
+      "status": "complete",
+      "score": 89,
+      "evidence": "Operator usability rubric remains exactly 89/100 after desktop and mobile runtime audits."
+    }
   },
   "verification": {
     "repositoryTests": { "passed": 94, "failed": 0, "latestFocusedSuitePassed": 61, "latestFocusedSuiteFailed": 0 },
@@ -156,7 +206,20 @@
       "projectUpdateReadBack": 1,
       "temporaryRowsRemaining": 0
     },
-    "liveTemporaryRowsRemaining": 0
+    "liveTemporaryRowsRemaining": 0,
+    "latestLiveRecheck": {
+      "at": "2026-07-15T02:33:00+09:00",
+      "revenue": "supabase live; 119 leads; 16 owner=Me; 16/16 tagged; score distribution unchanged",
+      "pms": "supabase live; 4 projects; 6 tasks; 1 blocked",
+      "content": "three canonical ClassIn lanes live with counts 1/0/0 and two outside-lane items",
+      "dailyBrief": "six of six sources live; seven signals"
+    },
+    "localProcessCleanup": {
+      "staleHeadlessAuditGroupsRemoved": 2,
+      "staleHomeCredentialSearchRemoved": 1,
+      "userChromeOrClaudeSessionsTouched": false,
+      "servicesAfterCleanup": "Hub 200; Engine 200; relay 200"
+    }
   },
   "selfEvaluation": 89
 }
