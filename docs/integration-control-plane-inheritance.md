@@ -109,7 +109,20 @@ flowchart LR
 - live, degraded, disabled, preview, snapshot을 구분한다. stale snapshot을 live connection처럼 표시하지 않는다.
 - 가능하면 `account`는 redacted label로, 성공 이력은 `lastSuccessfulSyncAt`로 노출한다. 값이 없으면 추정하지 않고 `unknown` 또는 `null`로 둔다.
 
-### 8. 2026-07-15 로컬 증거 스냅샷
+### 8. OpenClaw 로컬 보안·보존 경계
+
+- Telegram inbound는 `groupPolicy=allowlist`다. 2026-07-15 확인 기준 활성·도달 가능한 그룹 4개만 등록하고 모든 그룹에 mention을 요구하며, `groupAllowFrom`은 운영자 Telegram ID 1개만 허용한다. 이미 탈퇴한 그룹은 목록에서 제거했다.
+- Telegram native command menu는 148개가 플랫폼 한도 100개를 넘어 임의로 잘리고 있었으므로 `channels.telegram.commands.native=false`로 비활성화했다. `/new`, `/reset` 같은 text command 처리는 별개이며 유지한다.
+- OpenClaw 정적 credential 6개(Telegram 1, Slack 2, gateway 1, Brave 1, Google model key 1)는 macOS Keychain-backed exec SecretRef로 이동했다. `openclaw secrets audit --allow-exec`에서 6/6 해석, plaintext 0, unresolved 0, shadowed 0을 확인했다.
+- OpenAI Codex OAuth profile은 회전형 OAuth 자격증명이므로 OpenClaw SecretRef 명세의 static-secret migration 대상이 아니다. 이를 plaintext static secret과 같은 방식으로 이동하거나 삭제하지 않는다.
+- 평문 credential이 남아 있던 `openclaw.json.bak*` 5개는 SecretRef 전환·reload·채널 probe 뒤 제거했다. 현재 남은 `cron/jobs.json.bak`은 credential backup이 아니다.
+- 메인 session은 1,030,410 tokens/200,000 context로 과적재되어 공식 `sessions.reset`으로 새 session ID를 발급했다. 원문 105MB는 `.reset.*` archive로 보존되고 활성 session은 0 tokens다.
+- session maintenance는 `enforce`, `pruneAfter=180d`, `maxEntries=500`, `maxDiskBytes=500mb`, `highWaterBytes=400mb`다. 원문이 이미 없던 session index 1개만 제거했고, 현재 50 entries와 오래된 채널 원문은 보존했다.
+- Gateway LaunchAgent는 Homebrew Node 24.18.0의 고정 경로를 사용한다. NVM version path 의존을 제거한 뒤 supervisor config audit, RPC, Telegram, Slack, cron probe가 모두 성공했다.
+- `security audit --deep`의 critical은 2건에서 0건으로 줄었다. 남은 warning 2건은 loopback gateway의 trusted proxy 미설정과 personal-assistant trust model의 multi-user heuristic이다. gateway를 reverse proxy에 공개하지 않는 동안 첫 경고는 적용 대상이 아니며, 두 번째는 단일 운영자 sender allowlist를 유지하는 조건으로 관찰한다.
+- `.agents/skills/superpowers`가 `.codex/superpowers/skills`를 가리키는 cross-root symlink는 Codex 전용 분리다. OpenClaw는 이를 경고와 함께 건너뛰며, OpenClaw runtime skill로 복제하거나 symlink를 제거하지 않는다.
+
+### 9. 2026-07-15 로컬 증거 스냅샷
 
 | 항목 | 확인 결과 |
 |---|---|
@@ -123,7 +136,8 @@ flowchart LR
 | PMS write | Hub BFF→Engine command→Supabase create/update/read-back 성공. 임시 project/task 삭제 후 기존 4 project·6 task 복구 |
 | Content write | Hub BFF→Engine content command→Supabase create/duplicate retry/update/read-back 성공. 임시 item/variant 삭제 후 기존 3 items 복구 |
 | eeoCRM-derived ledger | Supabase 총 119 leads 중 117 eeoCRM snapshot, 문준혁 exact-owner 16건; live eeoCRM 연결 증거는 아님 |
-| Credential hygiene | 동일 해시 복사본 2개를 `0600` 격리하고 OpenClaw inbound 원본 제거. inbound credential 0개, 별도 retained client `0600` |
+| Credential hygiene | 동일 해시 OAuth client 복사본 2개를 `0600` 격리하고 OpenClaw inbound 원본 제거. inbound credential 0개, 별도 retained client `0600`. OpenClaw static secret은 Keychain SecretRef 6개, plaintext/unresolved 0개 |
+| OpenClaw runtime | Homebrew Node 24.18.0 고정 경로, gateway supervisor audit 통과, Telegram/Slack probe 통과, security critical 0, main session 0/200k, session store 50 entries |
 | OpenClaw cron | 평일 09:30 KST announce·실패 알림 설정. Telegram credential probe 성공, 대상 supergroup 조회 성공, bot administrator. 수정 후 첫 scheduled delivery는 아직 미실행 |
 | 계약 테스트 | readiness, Hub write guard, PMS command/idempotency, iCal fallback, MCP, webhook contract 전체 통과 |
 
@@ -136,8 +150,9 @@ flowchart LR
 - Calendar의 회사/개인 구분은 연결 경계다. 일정 제목·참석자·개인 계정 이메일을 readiness나 공용 로그에 넣지 않는다.
 - MCP write는 로컬 프로세스라는 이유만으로 무인 승인하지 않는다. Hub write guard와 tool-level write-secret check를 모두 유지한다.
 - eeoCRM 숫자는 변할 수 있는 ledger snapshot이다. 문서의 row count는 검증 날짜와 함께 쓰고, Mac에서 provider 인증이 확인되기 전까지 “sync”나 “MCP live”라고 부르지 않는다.
-- OpenClaw/Telegram/Slack처럼 여러 outbound channel이 가능한 경우 channel이 생략된 요청을 임의 채널로 보내지 않는다. 명시적 routing policy가 없으면 disabled 또는 preview가 맞다.
+- OpenClaw/Telegram/Slack처럼 여러 outbound channel이 가능한 경우 channel이 생략된 요청을 임의 채널로 보내지 않는다. 현재 뉴스 cron은 Telegram supergroup을 명시하지만, 다른 자동화는 명시적 routing policy가 없으면 disabled 또는 preview가 맞다.
 - OpenClaw job의 agent summary가 “전송 완료”라고 써도 `delivered=false`이면 전달 성공이 아니다. cron result의 `deliveryStatus`를 최종 증거로 사용한다.
+- `openclaw update --dry-run`은 2026.3.28→2026.7.1, plugin sync, gateway restart를 예고했다. 첫 post-fix 09:30 delivery 증거 전에 runtime 변수를 추가하지 않기 위해 실제 update는 보류한다.
 
 ## 미정 및 외부 blocker
 
@@ -146,7 +161,6 @@ flowchart LR
 | Production Google callback | 공개 Hub host와 HTTPS callback 등록·배포 secret 주입이 아직 외부 설정에 의존 | production callback에서 OAuth code exchange 후 provider API read 성공 |
 | Gmail/Sheets OAuth | provider별 callback URI, scope, consent가 end-to-end 검증되지 않음 | 각 provider를 allowlist에 따로 켜고 authenticated probe 성공 |
 | eeoCRM Mac live connection | Mac-compatible MCP binary 또는 service OAuth credential이 없음 | read-only 인증 성공, source identity와 sync timestamp 확인 후에만 write 검토 |
-| OpenClaw broad channel policy | multi-channel 환경의 기본 채널, 허용 대상, 실패 fallback 정책이 확정되지 않음 | channel allowlist와 명시적 routing/failure policy 승인 |
 | OpenClaw post-fix delivery | delivery 설정은 2026-07-15 00:40 KST에 수정됐고 마지막 09:30 run보다 늦음 | 2026-07-15 09:30 이후 `lastDeliveryStatus=delivered` 확인 |
 | Google Cloud IAM | 이전 감사의 두 Owner, 미사용 Editor/service account, broad API key 상태를 이번 세션에서 live 재확인하지 못함 (`gcloud`와 로그인된 Console 부재) | 로그인된 audit-log·runtime reference 검토와 명시적 owner/role 결정 |
 | Public Engine exposure | 외부 provider가 호출할 production Engine URL과 배포 경계가 확정되지 않음 | 공개 health, shared-secret webhook, 중복 event smoke를 production에서 확인 |

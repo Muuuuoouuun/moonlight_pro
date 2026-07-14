@@ -1,5 +1,5 @@
 {
-  "auditedAt": "2026-07-15T01:52:00+09:00",
+  "auditedAt": "2026-07-15T02:07:00+09:00",
   "scope": "Moonlight operator OS, exact-owner eeoCRM enrichment, PMS/content writes, MCP, OAuth/IAM, OpenClaw",
   "crm": {
     "moonlightLeadCount": 119,
@@ -54,8 +54,54 @@
     "credentialFiles": { "openClawInbound": 0, "quarantine": 2, "retainedDistinct": 1, "mode": "0600" }
   },
   "openclaw": {
+    "installedVersion": "2026.3.28",
+    "availableStableVersion": "2026.7.1",
+    "updateDryRun": "passed",
+    "updatePolicy": "Deferred until the first post-fix 09:30 delivery is verified, to keep the delivery test single-variable.",
     "gateway": "reachable",
     "relay": "reachable",
+    "gatewayRuntime": {
+      "node": "Homebrew node@24 24.18.0",
+      "program": "/opt/homebrew/opt/node@24/bin/node",
+      "supervisorConfigAudit": "passed",
+      "rpc": "passed"
+    },
+    "security": {
+      "criticalBefore": 2,
+      "criticalAfter": 0,
+      "warnings": 2,
+      "telegramGroupPolicy": "allowlist",
+      "allowedReachableGroups": 4,
+      "requireMentionForAllGroups": true,
+      "allowedGroupSenders": 1,
+      "nativeCommandMenu": "disabled-after-148-exceeded-platform-limit-100"
+    },
+    "staticSecrets": {
+      "provider": "macOS Keychain exec SecretRef",
+      "references": 6,
+      "resolved": 6,
+      "plaintext": 0,
+      "unresolved": 0,
+      "shadowed": 0,
+      "plaintextBackupsRemoved": 5,
+      "oauthLegacyResidue": 1,
+      "oauthLegacyResiduePolicy": "Retain: rotating OpenAI Codex OAuth is outside static SecretRef migration scope."
+    },
+    "sessions": {
+      "entries": 50,
+      "mainTokensBeforeReset": 1030410,
+      "mainContextTokens": 200000,
+      "mainTokensAfterReset": 0,
+      "mainTranscriptArchiveBytes": 104788519,
+      "missingIndexesRemoved": 1,
+      "maintenance": {
+        "mode": "enforce",
+        "pruneAfter": "180d",
+        "maxEntries": 500,
+        "maxDiskBytes": "500mb",
+        "highWaterBytes": "400mb"
+      }
+    },
     "cron": "enabled",
     "schedule": "30 9 * * 1-5 Asia/Seoul",
     "telegramCredentialProbe": "passed",
@@ -69,6 +115,8 @@
   "iam": {
     "liveAudit": "blocked",
     "reason": "gcloud not installed and no authenticated Cloud Console session",
+    "localCredentialPath": "none",
+    "chromeFallback": "not-invoked-without-explicit-user-approval",
     "previousSnapshot": "two Owners, unused Editor service account without keys, broad API key",
     "mutationPolicy": "Do not remove roles or restrict/delete keys until authenticated usage and recovery-path audit."
   },

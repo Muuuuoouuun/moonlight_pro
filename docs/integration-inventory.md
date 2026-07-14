@@ -93,7 +93,7 @@ Supabase는 이제 Hub/Engine의 1차 원장으로 본다. 다음 연결들은 �
 | Moonlight PMS | 프로젝트·task 생성, project 편집, task 상태 이동 | Hub BFF + authenticated Engine command | Connected (local) | `/api/hub/projects`, `/api/hub/tasks`, `/api/pms/command`, `projects`, `tasks` | Hub/Engine shared secret, Hub write guard, live workspace | dependency·milestone·delete는 별도 Phase 3 계약 전까지 추가하지 않음 |
 | Telegram | 인바운드 명령, 빠른 운영 입력 | Webhook intake | Ready | `/api/webhook/telegram`, `automation_runs`, `webhook_events` | 공개 Engine URL, Telegram bot webhook 등록 | 봇 webhook를 engine URL에 연결하고 smoke test 실행 |
 | Project tools | 외부 PM/진행률 도구에서 progress/PMS 이벤트 수집 | Generic webhook | Ready | `/api/webhook/project`, `project_updates`, `routine_checks`, `projects` | 공개 Engine URL, 공급자 payload mapping | 먼저 하나의 PM 도구 payload를 webhook contract에 맞춤 |
-| OpenClaw | 외부 agent workflow에서 프로젝트/운영 이벤트 전달 + Moonlight 상태 outbound sync | Shared webhook alias + local/Telegram/Slack relay | Ready | `/api/webhook/project/openclaw`, `/api/integrations/openclaw/sync`, `project_updates`, `sync_runs`, `webhook_events` | 공개 Engine URL, `COM_MOON_SHARED_WEBHOOK_SECRET`, local URL 또는 Telegram/Slack relay 설정 | 로컬 OpenClaw면 `OPENCLAW_LOCAL_URL`, 채팅 기반이면 `OPENCLAW_TELEGRAM_CHAT_ID` 또는 `OPENCLAW_SLACK_WEBHOOK_URL`를 채우고 sync smoke test 실행 |
+| OpenClaw | 외부 agent workflow에서 프로젝트/운영 이벤트 전달 + Moonlight 상태 outbound sync | Shared webhook alias + local/Telegram/Slack relay | Connected (local) | `/api/webhook/project/openclaw`, `/api/integrations/openclaw/sync`, `project_updates`, `sync_runs`, `webhook_events` | 로컬 Engine·relay·gateway와 분리된 shared/sync secret | 로컬 sync와 inbound는 검증됨. 공개 Engine 배포 전까지 external provider route는 Ready로만 취급하고, 수정 후 첫 09:30 Telegram delivery를 확인 |
 | Moltbot | bot/operator workflow에서 PMS 또는 project 이벤트 전달 | Shared webhook alias | Ready | `/api/webhook/project/moltbot`, `project_updates`, `routine_checks`, `webhook_events` | 공개 Engine URL, `COM_MOON_SHARED_WEBHOOK_SECRET` 권장, payload field mapping | Moltbot payload를 alias route에 보내고 routine or progress event를 확인 |
 | GitHub | 작업 히스토리, PR 리뷰 상태, 이슈 압력, milestone 기반 로드맵 | API read / sync | Ready | `Work OS > PMS`, `Work OS > Roadmap`, `integration_connections`, `sync_runs` | `GITHUB_TOKEN`, `GITHUB_REPOSITORIES` | 메인 repo부터 연결해서 PR/issue/milestone이 PMS와 로드맵에 보이게 만들기 |
 | Notion | 프로젝트, task, 의사결정, 노트, 문서 허브화 | API sync | Planned | `integration_connections`, `field_mappings`, `sync_runs` | `NOTION_TOKEN`, database IDs | projects/tasks 2개 DB부터 매핑 설계 |
@@ -204,6 +204,15 @@ Moonlight에서 OpenClaw로 상태를 밀어주는 outbound lane은 아래 route
 OpenClaw가 Moonlight로 응답할 때는 기존 inbound lane을 그대로 쓴다.
 
 - `POST /api/webhook/project/openclaw`
+
+2026-07-15 로컬 runtime 상태:
+
+- Gateway는 Homebrew Node 24.18.0 고정 경로로 launchd에서 실행되며 supervisor config audit와 RPC가 통과했다.
+- Telegram/Slack channel은 둘 다 configured/running/probe success다. 이는 Moonlight Engine의 Telegram webhook 또는 Slack failure-alert 구현 상태와는 별도 연결이다.
+- Telegram group inbound는 운영자 1명 allowlist + 4개 reachable group + mention-required다. native command 148개가 Telegram 한도 100개를 넘겨 native menu는 껐고 text command는 유지한다.
+- OpenClaw static secret 6개는 macOS Keychain SecretRef로 이동했고 plaintext/unresolved/shadowed가 0이다. OpenAI Codex OAuth는 회전형 OAuth profile이라 static-secret migration 대상이 아니다.
+- Main session은 1,030,410/200,000 tokens에서 공식 reset 후 0/200,000으로 정리했고 원문은 archive했다. session retention은 180일, disk budget은 500MB다.
+- 평일 09:30 뉴스 cron은 Telegram target과 failure alert가 설정됐으나, 수정 뒤 첫 scheduled run의 `delivered=true`는 아직 미래 검증이다.
 
 ### Projects folder bridge
 
