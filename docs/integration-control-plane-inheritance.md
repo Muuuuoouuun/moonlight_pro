@@ -93,6 +93,8 @@ flowchart LR
 - 2026-07-15 Claude Code에서 project MCP를 승인했고 `moonlight`가 `Connected`로 전환됐다. Claude의 `list_tasks` live read는 6건을 반환했다. SDK `create_task` smoke도 저장→Hub 재조회→임시 row 삭제까지 성공했다.
 - 같은 날 02:15 KST 새 stdio SDK 세션에서도 13개 도구 discovery, `list_tasks`의 `live/supabase` 6건, `create_task`의 `saved`, 재조회, 직접 정리 후 6건 복구와 residue 0을 다시 확인했다.
 - Claude Desktop config에도 같은 process가 등록되어 있지만 Desktop 앱 lifecycle의 재시작/도구 발견은 Claude Code 검증과 별개다.
+- Claude Code account-level connector에서 Notion, Figma, Google Drive, Gmail, Google Calendar, Vercel은 모두 `Needs authentication`이다. 이름이 보인다는 이유로 connected로 쓰지 않는다. 현재 실제 Connected는 local Moonlight MCP뿐이다.
+- Claude Desktop config는 mode `0600`, Moonlight server 1개, inline env 0이다. project `.mcp.json`도 Moonlight 1개·inline env 0이며 `.gitignore` 대상이다. Desktop app은 config 기록 전부터 실행 중이므로 lifecycle 검증 전까지 configured-only다.
 - Codex의 bundled Computer Use plugin이 실제 등록 정본이다. 2026-07-15 `enabled=false` + 상대경로로 남아 `mcporter`에만 offline을 만들던 중복 `[mcp_servers.computer-use]` 블록은 제거했다. 이후 Codex plugin 등록은 유지되고, 외부 `mcporter` import는 `node_repl`·`moonlight` 2/2 ok, offline 0이다.
 - OpenClaw workspace의 `mcporter`는 Moonlight MCP와 별도다. 현재 `google-workspace` process는 26개 도구를 발견하지만 provider read는 `Authentication required`이므로 connected로 승격하지 않는다. `mcp-google` 2.3.0의 [공식 setup](https://github.com/199-mcp/mcp-google#setup)은 Desktop app OAuth와 Calendar·Contacts·Gmail 통합 동의를 요구한다.
 - `mcporter` Google client ID/secret은 `mcporter.json`에 직접 쓰지 않는다. `~/.moonlight/bin/mcporter-google-workspace`가 macOS Keychain service `com.moonlight.mcporter.google-client-id`와 `com.moonlight.mcporter.google-client-secret`을 읽어 process env로만 주입한다.

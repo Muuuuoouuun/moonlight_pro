@@ -1,5 +1,5 @@
 {
-  "auditedAt": "2026-07-15T03:04:33+09:00",
+  "auditedAt": "2026-07-15T03:05:27+09:00",
   "scope": "Moonlight operator OS, exact-owner eeoCRM enrichment, PMS/content writes, MCP, OAuth/IAM, OpenClaw",
   "crm": {
     "moonlightLeadCount": 119,
@@ -73,6 +73,12 @@
       "duplicateDisabledManualComputerUseBlock": "removed",
       "mcporterImportedServers": { "ok": 2, "offline": 0, "names": ["node_repl", "moonlight"] },
       "remoteConnectors": { "github": "enabled-bearer", "figma": "not-logged-in", "notion": "not-logged-in" }
+    },
+    "claudeCodeConnectors": {
+      "moonlight": "connected",
+      "needsAuthentication": ["notion", "figma", "google-drive", "gmail", "google-calendar", "vercel"],
+      "desktopConfig": { "mode": "0600", "serverCount": 1, "inlineEnvCount": 0, "lifecycle": "configured-not-restart-verified" },
+      "projectConfig": { "serverCount": 1, "inlineEnvCount": 0, "gitIgnored": true }
     },
     "temporaryRowsRemaining": 0,
     "claudeDesktop": "configured-not-restart-verified",

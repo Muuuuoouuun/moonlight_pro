@@ -293,6 +293,7 @@ Google Calendar는 이제 직접 연결 가능한 1차 일정 provider다.
 | Hub / Engine / relay | live | 각 health 200, `npm run check:connections` 전체 PASS, launchd 두 job running |
 | OpenClaw cron | configured, target authenticated, delivery 검증 대기 | 평일 09:30 KST, Telegram announce 대상 명시. token probe와 대상 supergroup 조회 성공, bot administrator. 마지막 run은 00:40 수정 전 `not-delivered` |
 | Moonlight MCP | Codex enabled, Claude Code connected | stdio 도구 13개, Claude `list_tasks` live 6건, SDK `create_task` 저장·재조회 성공. Desktop 앱보다 config 기록이 늦고 Moonlight child가 없어, 활성 세션 종료 후 승인된 재시작·tool discovery 확인 필요 |
+| Claude account connectors | registered, not authenticated | Notion·Figma·Google Drive·Gmail·Google Calendar·Vercel은 모두 `Needs authentication`. local Moonlight MCP만 Connected. Desktop config와 ignored project `.mcp.json`은 Moonlight 1개·inline env 0 |
 | Codex connector layer | local MCP healthy; optional remote auth split | bundled Computer Use plugin은 유지하고 중복 disabled 수동 block을 제거. Codex import 기준 node_repl·Moonlight 2/2 ok/offline 0. GitHub bearer connector는 enabled, Figma·Notion은 not logged in이며 연결로 표기하지 않음 |
 | OpenClaw workspace MCP | Google process registered, provider auth required | `mcporter`가 Keychain wrapper와 exact `mcp-google@2.3.0` lockfile을 통해 `google-workspace` 26개 도구를 발견하지만 실제 Calendar/Gmail/Contacts 호출은 `Authentication required`. Hub Calendar OAuth와 별도 연결이며 합치지 않음. 401 invalid였던 Notion server 등록과 평문 token은 제거. dependency audit은 critical/high 0, fix 없는 moderate 5 |
 | Google Calendar | live / writable | OAuth source, account identity 저장, 07-15~07-31 11건 read |
