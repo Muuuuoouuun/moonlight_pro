@@ -668,8 +668,8 @@ export function Leads({ workspace }) {
       )}
 
       {!wsEmpty && (
-      <Card pad={false} className="hub-table-card">
-        <div style={{ display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+      <Card pad={false} className="hub-table-card hub-leads-table">
+        <div className="hub-leads-grid" style={{ display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span /><SortHead k="name">Name</SortHead><span>Type</span><SortHead k="source">Source</SortHead><SortHead k="stage">Stage</SortHead><SortHead k="score">Score</SortHead><SortHead k="owner">Owner</SortHead><span style={{ textAlign: 'right' }}>Last</span>
         </div>
         {sortedLeads.length === 0 && (
@@ -687,7 +687,7 @@ export function Leads({ workspace }) {
           </div>
         )}
         {sortedLeads.map((l, i) => (
-          <div key={l.id} className="hub-row"
+          <div key={l.id} className="hub-row hub-leads-grid"
             role="button" tabIndex={0}
             onClick={() => setEditLeadId(l.id)}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditLeadId(l.id); } }}
@@ -702,7 +702,10 @@ export function Leads({ workspace }) {
             </span>
             <span style={{ minWidth: 0 }}>
               <span style={{ display: 'block', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</span>
-              {l.nextAction && <span style={{ display: 'block', marginTop: 2, fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.nextAction}</span>}
+              {l.nextAction && <span className="hub-lead-next-action" style={{ display: 'block', marginTop: 2, fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.nextAction}</span>}
+              <span className="hub-lead-mobile-meta">
+                {l.type === 'personal' ? 'Personal' : 'Company'} · {l.owner || 'Unassigned'} · score {l.score ?? '—'}{l.priorityLane === 'customer_success' ? ' · CS' : ''}
+              </span>
             </span>
             <span style={{ paddingRight: 8, minWidth: 0 }}>
               <Badge tone={l.type === 'personal' ? 'personal' : 'company'} size="xs">

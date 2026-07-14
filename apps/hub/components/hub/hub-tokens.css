@@ -302,6 +302,10 @@
   min-width: 0;
 }
 
+.hub-lead-mobile-meta {
+  display: none;
+}
+
 .hub-scroll-x {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -603,6 +607,41 @@
     width: 100% !important;
     min-width: 0 !important;
     border-right: 0 !important;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Leads is a decision list on narrow screens, not a shrunken spreadsheet. Keep the
+     identity and stage in the first viewport; the drawer owns the remaining fields. */
+  .hub-leads-table {
+    overflow-x: hidden !important;
+  }
+
+  .hub-leads-grid {
+    min-width: 0 !important;
+    grid-template-columns: 26px minmax(0, 1fr) 78px !important;
+    gap: 10px !important;
+  }
+
+  .hub-leads-grid > :nth-child(3),
+  .hub-leads-grid > :nth-child(4),
+  .hub-leads-grid > :nth-child(6),
+  .hub-leads-grid > :nth-child(7),
+  .hub-leads-grid > :nth-child(8),
+  .hub-lead-next-action {
+    display: none !important;
+  }
+
+  .hub-lead-mobile-meta {
+    display: block;
+    margin-top: 2px;
+    overflow: hidden;
+    color: var(--fg-faint);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
