@@ -2,8 +2,7 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, SectionTitle, Button, Checkbox, Progress, Sparkline, SyncBadge, EmptyState } from "../hub-primitives";
-import { BRIEF_SIGNALS, TODAY_BLOCKS, METRICS } from "../hub-data";
+import { Badge, Dot, Card, SectionTitle, Button, Progress, Sparkline, SyncBadge, EmptyState } from "../hub-primitives";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 
 function formatBriefDate(date) {
@@ -125,9 +124,8 @@ function useDailyBriefLedger() {
     generatedAt: null,
     sources: [],
     summary: null,
-    metrics: METRICS,
-    signals: BRIEF_SIGNALS,
-    blocks: TODAY_BLOCKS,
+    metrics: [],
+    signals: [],
     morningBrief: null,
   });
 
@@ -157,9 +155,8 @@ function useDailyBriefLedger() {
           generatedAt: data.generatedAt || null,
           sources: Array.isArray(data.sources) ? data.sources : [],
           summary: data.summary || null,
-          metrics: liveCount > 0 && Array.isArray(data.metrics) && data.metrics.length ? data.metrics : METRICS,
-          signals: Array.isArray(data.signals) && data.signals.length ? data.signals : BRIEF_SIGNALS,
-          blocks: Array.isArray(data.blocks) && data.blocks.length ? data.blocks : TODAY_BLOCKS,
+          metrics: Array.isArray(data.metrics) ? data.metrics : [],
+          signals: Array.isArray(data.signals) ? data.signals : [],
           morningBrief: data.morningBrief || null,
         });
       } catch {
@@ -175,7 +172,7 @@ function useDailyBriefLedger() {
 }
 
 function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
-  // Surface the highest-priority signal first-open, regardless of live-vs-mock ids (§3.1: <5s).
+  // Surface the highest-priority signal first-open (§3.1: <5s).
   const [expanded, setExpanded] = React.useState(defaultExpanded != null ? defaultExpanded : (index === 0 || s.tone === 'danger'));
   const [decided, setDecided] = React.useState(null);
   const borderTone = { danger: 'var(--danger-line)', warning: 'var(--warning-line)', success: 'var(--success-line)', info: 'var(--info-line)' }[s.tone] || 'var(--line)';
@@ -244,8 +241,7 @@ function MetricCard({ m, onNavigate, compact }) {
       tabIndex={clickable ? 0 : undefined}
       onClick={clickable ? () => onNavigate(target) : undefined}
       onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(target); } } : undefined}
-      onMouseEnter={clickable ? (e) => { e.currentTarget.style.borderColor = 'var(--line-strong)'; } : undefined}
-      onMouseLeave={clickable ? (e) => { e.currentTarget.style.borderColor = 'var(--line-soft)'; } : undefined}
+      className="hub-metric-card"
       style={{
         background: 'var(--surface)',
         border: '1px solid var(--line-soft)',
@@ -253,14 +249,14 @@ function MetricCard({ m, onNavigate, compact }) {
         padding: compact ? '10px 13px' : 'var(--card-pad)',
         boxShadow: compact ? 'none' : 'var(--shadow-soft)',
         cursor: clickable ? 'pointer' : 'default',
-        transition: 'border-color .12s ease',
       }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <div style={{ fontSize: compact ? 10.5 : 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 500 }}>{m.label}</div>
         {clickable && <Iconed name="chevronR" size={compact ? 11 : 12} style={{ color: 'var(--fg-faint)', marginLeft: 'auto' }} />}
       </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: compact ? 4 : 8 }}>
-        <div style={{ fontSize: compact ? 18 : 26, fontWeight: 600, letterSpacing: 0 }} className="mono">{m.value}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: compact ? 4 : 10 }}>
+        {/* ≥18px → .stat (sans tabular), never mono — DESIGN.md §6 hybrid number rule. */}
+        <div className="stat" style={{ fontSize: compact ? 18 : 30, fontWeight: 600 }}>{m.value}</div>
         <div style={{ flex: 1 }} />
         <Sparkline values={m.spark} tone={m.tone === 'warning' ? 'warning' : m.tone === 'success' ? 'success' : 'moon'} width={compact ? 48 : 70} height={compact ? 16 : 22} />
       </div>
@@ -562,10 +558,10 @@ function PipelineShapeCard({ onNavigate }) {
           });
           setState('live');
         } else {
-          setState('mock');
+          setState('preview');
         }
       })
-      .catch(() => active && setState('mock'));
+      .catch(() => active && setState('preview'));
     return () => { active = false; };
   }, []);
 
@@ -659,10 +655,10 @@ function SalesFunnelCard({ onNavigate }) {
           setStats(d.stats);
           setState('live');
         } else {
-          setState('mock');
+          setState('preview');
         }
       })
-      .catch(() => active && setState('mock'));
+      .catch(() => active && setState('preview'));
     return () => { active = false; };
   }, []);
 
@@ -737,10 +733,10 @@ function ContentCadenceCard({ onNavigate }) {
           setData({ cadence: d.cadence, ideas: Array.isArray(d.ideaQueue) ? d.ideaQueue : [] });
           setState("live");
         } else {
-          setState("mock");
+          setState("preview");
         }
       })
-      .catch(() => active && setState("mock"));
+      .catch(() => active && setState("preview"));
     return () => { active = false; };
   }, []);
 
@@ -920,31 +916,66 @@ function CommandClear({ signalCount }) {
   );
 }
 
+// The brief shows three things: the one command, the decisions waiting, the four
+// numbers. Everything else is real but not first-scan material, so it sits behind
+// this disclosure rather than competing for the top of the page.
+function MoreDetail({ title, children }) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        className="hub-row"
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+          padding: '11px 14px',
+          background: 'var(--surface)',
+          border: '1px solid var(--line-soft)',
+          borderRadius: 'var(--r-lg)',
+          color: 'var(--fg-muted)', fontSize: 12.5, textAlign: 'left',
+        }}
+      >
+        <Iconed name="chevronD" size={13} style={{ color: 'var(--fg-faint)', transform: open ? 'rotate(0)' : 'rotate(-90deg)', transition: 'transform .15s' }} />
+        <span style={{ flex: 1 }}>{title}</span>
+        <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{open ? '접기' : '펼치기'}</span>
+      </button>
+      {open && (
+        <div className="fade-up" style={{ marginTop: 'var(--gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The queue is a decision list, not an inbox — past five, the operator is
+// triaging instead of deciding. The rest stay one click away.
+const QUEUE_LIMIT = 5;
+
 export function DailyBrief({ onNavigate }) {
   const [now, setNow] = React.useState(() => new Date());
   const ledger = useDailyBriefLedger();
-  const [blocks, setBlocks] = React.useState(TODAY_BLOCKS);
-  const toggle = (i) => setBlocks(bs => bs.map((b, j) => j === i ? { ...b, done: !b.done } : b));
+  const [queueExpanded, setQueueExpanded] = React.useState(false);
 
   React.useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60000);
     return () => window.clearInterval(id);
   }, []);
 
-  React.useEffect(() => {
-    setBlocks(ledger.blocks);
-  }, [ledger.blocks]);
-
   const urgentCount = ledger.summary?.urgentCount ?? ledger.signals.filter(s => s.tone === 'danger').length;
   const todayCount = ledger.summary?.todayCount ?? ledger.signals.filter(s => s.tone === 'warning').length;
   const signalCount = ledger.signals.length;
   const ranked = React.useMemo(() => rankSignals(ledger.signals), [ledger.signals]);
   const command = ranked[0] || null;
-  const queue = ranked.slice(1);
+  const waiting = ranked.slice(1);
+  const queue = queueExpanded ? waiting : waiting.slice(0, QUEUE_LIMIT);
+  const queueOverflow = waiting.length - queue.length;
   const okCount = Math.max(0, signalCount - urgentCount - todayCount);
 
   return (
-    <div className="hub-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', padding: 'var(--section-gap)', maxWidth: 1400, margin: '0 auto', width: '100%' }}>
+    <div className="hub-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', padding: 'var(--section-gap)', maxWidth: 1120, margin: '0 auto', width: '100%' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}>
         <div>
           <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>{formatBriefDate(now)}</div>
@@ -961,100 +992,57 @@ export function DailyBrief({ onNavigate }) {
 
       <StatusLine state={ledger} />
 
+      {/* ① 지금 할 일 — the one command */}
       {command ? (
-        <CommandCard s={command} remaining={queue.length} onNavigate={onNavigate} />
+        <CommandCard s={command} remaining={waiting.length} onNavigate={onNavigate} />
       ) : (
         <CommandClear signalCount={signalCount} />
       )}
 
-      <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 'var(--section-gap)' }}>
-        <div>
-          <SectionTitle right={<div style={{ display: 'flex', gap: 6 }}>
-            <Badge tone="danger" size="xs">{urgentCount} urgent</Badge>
-            <Badge tone="warning" size="xs">{todayCount} today</Badge>
-            <Badge tone="success" size="xs">{okCount} ok</Badge>
-          </div>}>
-            결정 큐
-          </SectionTitle>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {queue.length ? (
-              queue.map((s) => <SignalCard key={s.id} s={s} defaultExpanded={s.tone === 'danger'} onNavigate={onNavigate} />)
-            ) : (
-              <Card>
-                <EmptyState icon="check" title={command ? '큐가 비었습니다' : '오늘 신호 없음'} description={command ? '가장 급한 하나만 위에 남았어요. 처리하면 브리핑이 정리됩니다.' : '새 신호가 들어오면 명령 카드로 가장 먼저 올라옵니다.'} />
-              </Card>
-            )}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
-          <MorningBriefCard brief={ledger.morningBrief} onNavigate={onNavigate} />
-          <ApprovalQueueCard onNavigate={onNavigate} />
-
-          <div>
-            <SectionTitle right={<span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{blocks.filter(b => b.done).length}/{blocks.length}</span>}>Today</SectionTitle>
-            <Card pad={false}>
-              {blocks.map((b, i) => (
-                <div key={i} onClick={() => toggle(i)} style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '10px 14px', cursor: 'pointer',
-                  borderBottom: i < blocks.length - 1 ? '1px solid var(--line-soft)' : 'none',
-                }}>
-                  <Checkbox checked={!!b.done} onChange={() => toggle(i)} />
-                  <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', width: 38 }}>{b.time}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5, color: b.done ? 'var(--fg-faint)' : 'var(--fg)', textDecoration: b.done ? 'line-through' : 'none' }}>{b.title}</div>
-                    <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 2 }}>{b.kind}</div>
-                  </div>
-                  {b.tag === 'personal' && <Badge tone="personal" size="xs">Personal</Badge>}
-                  {b.tag === 'company' && <Badge tone="company" size="xs">Company</Badge>}
-                </div>
-              ))}
+      {/* ② 결정 큐 — five at most; the rest expand on demand */}
+      <div>
+        <SectionTitle right={<div style={{ display: 'flex', gap: 6 }}>
+          <Badge tone="danger" size="xs">{urgentCount} urgent</Badge>
+          <Badge tone="warning" size="xs">{todayCount} today</Badge>
+          <Badge tone="success" size="xs">{okCount} ok</Badge>
+        </div>}>
+          결정 큐
+        </SectionTitle>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {queue.length ? (
+            queue.map((s) => <SignalCard key={s.id} s={s} defaultExpanded={s.tone === 'danger'} onNavigate={onNavigate} />)
+          ) : (
+            <Card>
+              <EmptyState icon="check" title={command ? '큐가 비었습니다' : '오늘 신호 없음'} description={command ? '가장 급한 하나만 위에 남았어요. 처리하면 브리핑이 정리됩니다.' : '새 신호가 들어오면 명령 카드로 가장 먼저 올라옵니다.'} />
             </Card>
-          </div>
-
+          )}
+          {queueOverflow > 0 && (
+            <Button variant="ghost" size="sm" icon="chevronD" onClick={() => setQueueExpanded(true)}>
+              대기 결정 {queueOverflow}건 더 보기
+            </Button>
+          )}
         </div>
       </div>
 
+      {/* ③ 지표 — four numbers, full size */}
       <div>
         <SectionTitle right={<span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>클릭하면 해당 서피스로 이동</span>}>지표</SectionTitle>
         <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
-          {ledger.metrics.map((m) => <MetricCard key={m.label} m={m} onNavigate={onNavigate} compact />)}
+          {ledger.metrics.map((m) => <MetricCard key={m.label} m={m} onNavigate={onNavigate} />)}
         </div>
       </div>
 
-      <div className="hub-grid--three" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--section-gap)' }}>
-        <PipelineShapeCard onNavigate={onNavigate} />
-        <SalesFunnelCard onNavigate={onNavigate} />
-        <ContentCadenceCard onNavigate={onNavigate} />
-      </div>
+      <MoreDetail title="오늘 상세 · 모닝 브리프 · 승인 대기 · 파이프라인">
+        <MorningBriefCard brief={ledger.morningBrief} onNavigate={onNavigate} />
+        <ApprovalQueueCard onNavigate={onNavigate} />
 
-      <div>
-        <SectionTitle>This week rhythm</SectionTitle>
-        <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>4/5 rituals done</div>
-            <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>80%</span>
-          </div>
-          <div style={{ marginTop: 10 }}><Progress value={80} /></div>
-          <div style={{ marginTop: 14, display: 'flex', gap: 6 }}>
-            {['월','화','수','목','금'].map((d, i) => (
-              <div key={d} style={{ flex: 1, textAlign: 'center' }}>
-                <div style={{
-                  height: 28, borderRadius: 6,
-                  background: i < 4 ? 'var(--moon-600)' : 'var(--surface-3)',
-                  border: i === 4 ? '1px dashed var(--warning)' : 'none',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  {i < 4 && <Iconed name="check" size={12} style={{ color: 'var(--moon-100)' }} />}
-                  {i === 4 && <Iconed name="clock" size={11} style={{ color: 'var(--warning)' }} />}
-                </div>
-                <div style={{ fontSize: 10, color: 'var(--fg-faint)', marginTop: 4 }}>{d}</div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
+        <div className="hub-grid--three" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--section-gap)' }}>
+          <PipelineShapeCard onNavigate={onNavigate} />
+          <SalesFunnelCard onNavigate={onNavigate} />
+          <ContentCadenceCard onNavigate={onNavigate} />
+        </div>
+
+      </MoreDetail>
     </div>
   );
 }

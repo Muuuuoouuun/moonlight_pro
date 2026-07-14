@@ -3,13 +3,7 @@
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState, SyncBadge } from "../hub-primitives";
-import {
-  BRANDS as FALLBACK_BRANDS,
-  BRAND_PROJECTS as FALLBACK_PROJECTS,
-  BRAND_TODOS as FALLBACK_TODOS,
-  KANBAN_COLUMNS as FALLBACK_COLUMNS,
-} from "../hub-data";
+import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState, SyncBadge, SegmentedControl } from "../hub-primitives";
 import {
   getWorkspace,
   filterBrandsByWorkspace,
@@ -66,31 +60,60 @@ function ActivityRow({ title, body, meta, badge, tone = 'neutral' }) {
   );
 }
 
+const PROJECT_VIEW_OPTIONS = [
+  { key: 'tree', label: 'List' },
+  { key: 'board', label: 'Board' },
+  { key: 'todos', label: 'To-dos' },
+];
+const PROJECT_VIEWS = new Set(PROJECT_VIEW_OPTIONS.map(v => v.key));
+
+// `?view=tasks` is the sidebar spec's wording for the same view the page calls
+// 'todos' — accept both so old and new links resolve.
+function normalizeProjectView(raw) {
+  const v = String(raw || '');
+  if (v === 'tasks') return 'todos';
+  return PROJECT_VIEWS.has(v) ? v : 'tree';
+}
+
 export function Projects({ workspace }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const ws = getWorkspace(workspace);
   const [brand, setBrand] = React.useState('all');
-  const [view, setView] = React.useState('tree');
+
+  // The open view lives in the URL, not in state: the sidebar tells 할 일 from
+  // 프로젝트·기획 by `?view`, and it makes the view bookmarkable. The ref keeps
+  // setView's identity stable so the existing createProject/createTodo callbacks
+  // don't need it in their dependency lists.
+  const view = normalizeProjectView(searchParams.get('view'));
+  const searchParamsRef = React.useRef(searchParams);
+  searchParamsRef.current = searchParams;
+  const setView = React.useCallback((next) => {
+    const params = new URLSearchParams(searchParamsRef.current.toString());
+    if (next === 'tree') params.delete('view');
+    else params.set('view', next);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [pathname, router]);
   const [ledger, setLedger] = React.useState({
-    source: 'mock',
-    brands: FALLBACK_BRANDS,
-    projects: FALLBACK_PROJECTS,
+    source: 'preview',
+    brands: [EMPTY_ALL_BRAND],
+    projects: [],
     updates: [],
     decisions: [],
     notes: [],
     checks: [],
-    columns: FALLBACK_COLUMNS,
+    columns: [],
   });
-  const [todos, setTodos] = React.useState(FALLBACK_TODOS);
+  const [todos, setTodos] = React.useState([]);
   const [drag, setDrag] = React.useState(null);
-  const [cols, setCols] = React.useState(FALLBACK_COLUMNS);
-  const [expanded, setExpanded] = React.useState(() => new Set(['pm-1', 'bm-1']));
+  const [cols, setCols] = React.useState([]);
+  const [expanded, setExpanded] = React.useState(() => new Set());
   const [openDetail, setOpenDetail] = React.useState(null);
   const [brandMenuOpen, setBrandMenuOpen] = React.useState(false);
   const [sidebarHidden, setSidebarHidden] = React.useState(false);
-  const [syncState, setSyncState] = React.useState('mock');
+  const [syncState, setSyncState] = React.useState('preview');
   const brandMenuRef = React.useRef(null);
   const createdFromQueryRef = React.useRef(false);
   const [orderPending, setOrderPending] = React.useState(false);
@@ -131,13 +154,8 @@ export function Projects({ workspace }) {
     }
   }
 
-  const isLiveLedger = ledger.source === 'supabase';
-  const rawBrands = isLiveLedger
-    ? (ledger.brands?.length ? ledger.brands : [EMPTY_ALL_BRAND])
-    : (ledger.brands?.length ? ledger.brands : FALLBACK_BRANDS);
-  const rawProjects = isLiveLedger
-    ? (Array.isArray(ledger.projects) ? ledger.projects : [])
-    : (ledger.projects?.length ? ledger.projects : FALLBACK_PROJECTS);
+  const rawBrands = ledger.brands?.length ? ledger.brands : [EMPTY_ALL_BRAND];
+  const rawProjects = Array.isArray(ledger.projects) ? ledger.projects : [];
   // Workspace scope: restrict to this workspace's brands/projects/todos. With no
   // workspace the filters return their input unchanged, so the unscoped page stays
   // byte-identical in effect. filterBrandsByWorkspace keeps the 'all' index, so a
@@ -166,7 +184,7 @@ export function Projects({ workspace }) {
         const data = await response.json().catch(() => null);
 
         if (!active || !response.ok || !data || data.status === 'error') {
-          if (active) setSyncState('mock');
+          if (active) setSyncState('preview');
           return;
         }
 
@@ -188,10 +206,22 @@ export function Projects({ workspace }) {
           setExpanded(new Set(liveProjects.slice(0, 2).map(p => p.id)));
           setSyncState('live');
         } else {
-          setSyncState('mock');
+          setLedger({
+            source: 'preview',
+            brands: [EMPTY_ALL_BRAND],
+            projects: [],
+            updates: [],
+            decisions: [],
+            notes: [],
+            checks: [],
+            columns: [],
+          });
+          setTodos([]);
+          setCols([]);
+          setSyncState('preview');
         }
       } catch {
-        if (active) setSyncState('mock');
+        if (active) setSyncState('preview');
       }
     }
 
@@ -205,87 +235,15 @@ export function Projects({ workspace }) {
     }
   }, [brand, brands, wsDefaultBrand]);
 
-  const toggleTodo = (id) => setTodos(ts => ts.map(t => t.id === id ? { ...t, done: !t.done } : t));
   const toggleExpand = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-
-  const createProject = React.useCallback((status = 'In progress') => {
-    const id = `local-project-${Date.now()}`;
-    // `brands` is already scoped, so the picked brand is in-workspace when scoped.
-    const projectBrand = brand === 'all' ? (brands.find(b => b.key !== 'all')?.key || 'moonpm') : brand;
-    const project = {
-      id,
-      brand: projectBrand,
-      name: '새 프로젝트',
-      status,
-      progress: 0,
-      due: '이번주',
-      owner: 'Me',
-      tag: null,
-      tasks: 0,
-      done: 0,
-      // Tag in-workspace creates so the scoped view doesn't silently drop them.
-      ...(ws ? { workspace } : {}),
-    };
-    setLedger(prev => ({ ...prev, projects: [project, ...(prev.projects || [])] }));
-    setExpanded(prev => new Set([...prev, id]));
-    setOpenDetail(id);
-    setView('tree');
-  }, [brand, brands, ws, workspace]);
-
-  const createTodo = React.useCallback((projectId = openDetail) => {
-    const project = allProjects.find(p => p.id === projectId) || projects[0] || allProjects[0];
-    // Scoped fallback = this workspace's default brand — never the literal 'moonpm'
-    // (a personal-lane key that would render the todo invisible in classin scope).
-    const fallbackBrand = ws ? wsDefaultBrand : 'moonpm';
-    const todoBrand = project?.brand || (brand === 'all' ? fallbackBrand : brand);
-    const todoProject = project?.id || 'inbox';
-    const id = `local-todo-${Date.now()}`;
-    setTodos(prev => [{
-      id,
-      brand: todoBrand,
-      project: todoProject,
-      title: '새 할 일',
-      due: '오늘',
-      done: false,
-      priority: 'med',
-      assignee: 'Me',
-      // Tag in-workspace creates so the scoped view doesn't silently drop them.
-      ...(ws ? { workspace } : {}),
-    }, ...prev]);
-    if (project?.id) {
-      setExpanded(prev => new Set([...prev, project.id]));
-      setOpenDetail(project.id);
-    }
-  }, [allProjects, brand, openDetail, projects, ws, workspace, wsDefaultBrand]);
-
-  const moveCard = (cardId, toCol) => {
-    setCols(cs => {
-      let card;
-      const next = cs.map(c => ({ ...c, cards: c.cards.filter(x => { if (x.id === cardId) { card = x; return false; } return true; }) }));
-      if (card) { const t = next.find(c => c.key === toCol); if (t) t.cards = [card, ...t.cards]; }
-      return next;
-    });
-  };
-
-  const createBoardCard = React.useCallback((colKey) => {
-    const id = `local-card-${Date.now()}`;
-    setCols(prev => prev.map(col => (
-      col.key === colKey
-        ? {
-          ...col,
-          cards: [{
-            id,
-            title: '새 카드',
-            tag: null,
-            priority: 'med',
-            project: currentBrand?.name || 'Moonlight',
-            due: 'Today',
-          }, ...col.cards],
-        }
-        : col
-    )));
-    setView('board');
-  }, [currentBrand]);
+  const unavailableWrite = React.useCallback(() => {
+    setOrderResult({ tone: 'err', label: '읽기 전용 · 저장 API 연결 필요' });
+  }, []);
+  const toggleTodo = unavailableWrite;
+  const createProject = unavailableWrite;
+  const createTodo = unavailableWrite;
+  const moveCard = unavailableWrite;
+  const createBoardCard = unavailableWrite;
 
   const statusTone = { 'In progress': 'info', Review: 'warning', Planning: 'moon', Backlog: 'neutral', Blocked: 'danger', Done: 'success' };
   const prioTone = { critical: 'danger', high: 'danger', med: 'warning', medium: 'warning', low: 'neutral' };
@@ -516,15 +474,12 @@ export function Projects({ workspace }) {
             </div>
           </div>
           <div style={{ flex: 1 }} />
-          <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-            {[{k:'tree',l:'List'},{k:'board',l:'Board'},{k:'todos',l:'To-dos'}].map(t => (
-              <button key={t.k} onClick={() => setView(t.k)} style={{
-                padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-                color: view === t.k ? 'var(--fg)' : 'var(--fg-faint)',
-                background: view === t.k ? 'var(--surface-3)' : 'transparent',
-              }}>{t.l}</button>
-            ))}
-          </div>
+          <SegmentedControl
+            label="보기"
+            options={PROJECT_VIEW_OPTIONS}
+            value={view}
+            onChange={setView}
+          />
           <Button variant="primary" size="sm" icon="plus" onClick={() => view === 'todos' ? createTodo() : createProject()}>{view === 'todos' ? 'To-do' : 'Project'}</Button>
         </div>
 

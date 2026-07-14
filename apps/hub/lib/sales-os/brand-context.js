@@ -11,7 +11,6 @@ import { getContentLedger } from "@/lib/repositories/content-ledger";
 import { getProjectLedger } from "@/lib/repositories/operating-ledger";
 import { getRecentAgentRuns } from "@/lib/sales-os/agent-runs";
 import { cadenceStatusString } from "@/lib/sales-os/context-schema";
-import { BRANDS } from "@/components/hub/hub-data";
 import { filterBrandsByWorkspace } from "@/components/hub/workspace-map";
 
 const COUNCIL_AGENT = "council";
@@ -22,8 +21,8 @@ const trim = (arr, n) => (Array.isArray(arr) ? arr.slice(0, n) : []);
 // `brands` array; membership is now derived from each brand's orgScope (the SSOT). We filter
 // the BRANDS registry through that resolver and drop the 'all' pseudo-brand, preserving the
 // original return shape (an array of brand key strings).
-function brandKeysForWorkspace(workspace) {
-  return filterBrandsByWorkspace(BRANDS, workspace)
+function brandKeysForWorkspace(brands, workspace) {
+  return filterBrandsByWorkspace(brands, workspace)
     .filter((b) => b && b.key && b.key !== "all")
     .map((b) => b.key);
 }
@@ -80,8 +79,8 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
     return { source: "preview", error: "brand ledgers unavailable", missing };
   }
 
-  const ownKeys = brandKeysForWorkspace(workspace);
   const brands = content?.brands || [];
+  const ownKeys = brandKeysForWorkspace(brands, workspace);
   const focusBrand = selectFocusBrand(brands, ownKeys, ref);
 
   // Scope projects to the 브랜드 workspace brands; if nothing matches yet, keep all so the

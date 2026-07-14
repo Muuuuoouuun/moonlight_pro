@@ -94,7 +94,7 @@ Supabase는 이제 Hub/Engine의 1차 원장으로 본다. 다음 연결들은 �
 | Moltbot | bot/operator workflow에서 PMS 또는 project 이벤트 전달 | Shared webhook alias | Ready | `/api/webhook/project/moltbot`, `project_updates`, `routine_checks`, `webhook_events` | 공개 Engine URL, `COM_MOON_SHARED_WEBHOOK_SECRET` 권장, payload field mapping | Moltbot payload를 alias route에 보내고 routine or progress event를 확인 |
 | GitHub | 작업 히스토리, PR 리뷰 상태, 이슈 압력, milestone 기반 로드맵 | API read / sync | Ready | `Work OS > PMS`, `Work OS > Roadmap`, `integration_connections`, `sync_runs` | `GITHUB_TOKEN`, `GITHUB_REPOSITORIES` | 메인 repo부터 연결해서 PR/issue/milestone이 PMS와 로드맵에 보이게 만들기 |
 | Notion | 프로젝트, task, 의사결정, 노트, 문서 허브화 | API sync | Planned | `integration_connections`, `field_mappings`, `sync_runs` | `NOTION_TOKEN`, database IDs | projects/tasks 2개 DB부터 매핑 설계 |
-| Google Calendar | 일정, 마감일, cadence 블록 연결 | OAuth + sync + event write | Ready | `Work OS > Calendar`, `routine_checks`, `projects.due_at`, `tasks.due_at`, `sync_runs` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALENDAR_ID` | Google OAuth env를 채우고 Work OS > Calendar에서 연결 후 실제 캘린더를 하나 붙이기 |
+| Google Calendar | 일정, 마감일, cadence 블록 연결 | OAuth + live read + event write, iCal read-only fallback | Connected (local) | `Work OS > Calendar`, `integration_connections`, `sync_runs` | 로컬 env 설정 완료. 배포 시 production callback URI와 동일한 OAuth env 필요 | 공개 Hub URL 확정 후 `https://<hub-host>/api/calendar/google/callback` 등록 및 배포 환경 연결 검증 |
 | Samsung Calendar | Galaxy 기기 일정 가시성 | Google account sync on device | Supported via Google sync | `Work OS > Calendar` | Google Calendar 연결, Samsung Calendar 앱에서 같은 Google 계정 sync | 허브에서는 Google Calendar를 source로 연결하고, Galaxy 기기에서는 그 캘린더를 표시 |
 | Email | 리드 follow-up, 인바운드 메일, 캠페인/알림 발송 | Inbox sync + send provider | Planned | `leads`, `campaigns`, `campaign_runs`, `sync_runs` | Gmail API 또는 IMAP 선택, SMTP/Resend/Postmark 등 발송 provider 선택 | inbox sync와 outbound send 중 1차 범위를 먼저 결정 |
 | Instagram API | `moon.classin`/Classmooni Instagram content lane | Instagram Login OAuth + token ledger | Ready | `/api/social/instagram/connect`, `/api/social/instagram/callback`, `integration_connections`, `sync_runs`, Settings > Integrations | `COM_MOON_INSTAGRAM_APP_ID`, `COM_MOON_INSTAGRAM_APP_SECRET`, `COM_MOON_INSTAGRAM_BRAND_HANDLE`, `COM_MOON_OAUTH_STATE_SECRET`, 공개 Hub URL | Meta Dashboard의 Instagram OAuth redirect에 `/api/social/instagram/callback`를 등록하고 Settings에서 연결 |
@@ -245,6 +245,24 @@ npm run inventory:project-connections -- --output docs/projects-connection-inven
 ### Google Calendar
 
 Google Calendar는 이제 직접 연결 가능한 1차 일정 provider다.
+
+#### 2026-07-14 연결 상태 — 확정
+
+- Google Cloud의 기존 `classinproject-moon` 프로젝트를 사용한다.
+- Hub 전용 웹 OAuth 클라이언트 이름은 `moonlight-hub-calendar`다.
+- OAuth audience는 조직 내부용이며, 범위는 `https://www.googleapis.com/auth/calendar.events`다.
+- 로컬 callback은 `http://localhost:3000/api/calendar/google/callback`으로 등록됐다.
+- `integration_connections`의 `google_calendar` connection은 `connected`이며 access token과 refresh token이 저장됐다.
+- Hub API smoke check는 `source: oauth`, `readOnly: false`로 성공했고, 30일 범위에서 실제 일정 19건을 읽었다.
+- 실제 일정 생성·수정 smoke test는 사용자 캘린더에 불필요한 이벤트를 만들지 않기 위해 실행하지 않았다.
+- `GOOGLE_CALENDAR_ICAL_URL`은 OAuth connection이 없을 때만 쓰는 읽기 전용 fallback으로 유지한다. 저장소 문서에는 실제 공개/비공개 URL을 기록하지 않는다.
+
+상시 연결의 의미:
+
+- Hub Calendar를 열거나 조회 주간을 바꿀 때 Google `primary` calendar를 live read한다.
+- access token이 만료되면 저장된 refresh token으로 자동 갱신한다.
+- 이벤트를 별도 Moonlight task로 전량 복제하는 background mirror는 두지 않는다.
+- production 배포 전에는 실제 HTTPS Hub callback URI를 OAuth 클라이언트에 추가하고 같은 자격증명을 배포 환경의 secret으로 설정해야 한다.
 
 현재 구현 범위:
 

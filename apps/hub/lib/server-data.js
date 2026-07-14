@@ -1,5 +1,4 @@
 import { countSupabaseRows, fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-read";
-import { CONTENT_QUEUE } from "@/components/hub/hub-data";
 
 export async function fetchRows(table, options = {}) {
   return (await fetchSupabaseRows(table, {
@@ -37,25 +36,12 @@ function normalizeStage(status) {
   return "review";
 }
 
-function fallbackQueueRoster() {
-  return CONTENT_QUEUE.map((item) => ({
-    id: item.id,
-    title: item.title,
-    owner: item.author || "Me",
-    due: item.when || "미정",
-    stage: normalizeStage(item.status),
-    brand: "all",
-    nextAction: item.status === "Draft" ? "Complete the draft" : "Review and route to publish",
-  }));
-}
-
 export async function getContentQueuePageData() {
   const rows = await fetchRows("content_items", {
     limit: 40,
     order: "updated_at.desc",
   });
-  const queueRoster = rows.length
-    ? rows.map((item) => ({
+  const queueRoster = rows.map((item) => ({
         id: item.id,
         title: item.title || "Untitled content",
         owner: item.owner_id ? "Me" : "Team",
@@ -63,8 +49,7 @@ export async function getContentQueuePageData() {
         stage: normalizeStage(item.status),
         brand: item.brand_id || "all",
         nextAction: item.next_action || item.summary || "Define the next content action.",
-      }))
-    : fallbackQueueRoster();
+      }));
   const stages = [
     { key: "idea", title: "Idea", note: "Inputs worth shaping" },
     { key: "draft", title: "Draft", note: "Copy in progress" },

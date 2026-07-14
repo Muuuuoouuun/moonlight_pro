@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
 
 import { Sidebar } from "./hub-sidebar";
@@ -19,7 +19,7 @@ import { Segments } from "./pages/segments";
 import { Followups } from "./pages/followups";
 import { AutomationsIndex, EmailAutomation, Webhooks, Runs, Flows } from "./pages/automations";
 import { SheetsSync } from "./pages/sheets-sync";
-import { AgentsChat, AgentsCouncil, AgentsOrders, AgentsOffice } from "./pages/agents";
+import { AgentsChat, AgentsCouncil, AgentsOrders } from "./pages/agents";
 import { Evolution, Settings } from "./pages/evolution-settings";
 
 function LegacyPlaceholder({ path, onNavigate }) {
@@ -95,7 +95,6 @@ const PAGE_MAP = {
   'dashboard/agents/chat': (n) => <AgentsChat onNavigate={n} />,
   'dashboard/agents/council': (n) => <AgentsCouncil onNavigate={n} />,
   'dashboard/agents/orders': (n) => <AgentsOrders onNavigate={n} />,
-  'dashboard/agents/office': (n) => <AgentsOffice onNavigate={n} />,
   'dashboard/evolution': (n) => <Evolution onNavigate={n} />,
   'dashboard/settings': (n) => <Settings onNavigate={n} />,
 
@@ -127,9 +126,14 @@ const PARENT_JUMP = {
 export function HubApp() {
   const router = useRouter();
   const pathname = usePathname() || '/dashboard';
+  const searchParams = useSearchParams();
   const stripped = pathname.replace(/^\/+/, '').replace(/\/$/, '');
   let path = stripped || 'dashboard';
   if (PARENT_JUMP[path]) path = PARENT_JUMP[path];
+
+  // The Projects surface is shared by two sidebar anchors (할 일 · 프로젝트·기획);
+  // `view` is what tells them apart, so the shell has to hand it to the sidebar.
+  const view = searchParams.get('view');
 
   const [collapsed, setCollapsed] = React.useState(false);
   const [navOpen, setNavOpen] = React.useState(false);
@@ -187,6 +191,7 @@ export function HubApp() {
         <Sidebar
           className="hub-sidebar-root"
           active={path}
+          view={view}
           onNavigate={navigate}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setCollapsed(c => !c)}

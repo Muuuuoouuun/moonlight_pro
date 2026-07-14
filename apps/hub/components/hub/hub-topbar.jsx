@@ -12,7 +12,7 @@ const LABELS = {
   'content': 'Content', 'studio': 'Studio', 'queue': 'Queue', 'campaigns': 'Campaigns',
   'revenue': 'Revenue', 'overview': 'Overview', 'leads': 'Leads', 'deals': 'Deals', 'cases': 'Cases', 'accounts': 'Accounts', 'followups': 'Follow-ups',
   'automations': 'Automations', 'flows': 'Flows', 'email': 'Email', 'webhooks': 'Webhooks', 'runs': 'Runs',
-  'agents': 'Agents', 'chat': 'Chat', 'council': 'Council', 'orders': 'Orders', 'office': 'VR Office',
+  'agents': 'Agents', 'chat': 'Chat', 'council': 'Council', 'orders': 'Orders',
   'evolution': 'Evolution', 'settings': 'Settings',
   'operations': 'Operations', 'pms': 'PMS', 'playbooks': 'Playbooks', 'command-center': 'Command Center',
   'card-news': 'Card News', 'logs': 'Logs', 'routine': 'Routine',

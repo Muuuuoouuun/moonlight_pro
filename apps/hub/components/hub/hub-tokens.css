@@ -177,6 +177,48 @@
   .hub-app .hub-row { transition: none; }
 }
 
+/* Sidebar anchor row — same contract as .hub-row (CSS hover, no JS handlers),
+   sized for the consolidated eight-anchor nav: one tap target, no accordion. */
+.hub-app .hub-nav-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 10px;
+  margin-bottom: 2px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--fg-muted);
+  background: transparent;
+  border-radius: var(--r-sm);
+  border-left: 2px solid transparent;
+  text-align: left;
+  transition: background 120ms ease, color 120ms ease;
+}
+/* Clickable KPI card — border lifts on hover. CSS, not onMouseEnter handlers. */
+.hub-app .hub-metric-card { transition: border-color 120ms ease; }
+.hub-app .hub-metric-card[role="button"]:hover { border-color: var(--line-strong); }
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-metric-card { transition: none; }
+}
+
+/* Pinned utilities (AI·자동화 · 설정) — same anchor, quieter weight. */
+.hub-app .hub-nav-item--sm {
+  height: 34px;
+  font-size: 12.5px;
+  color: var(--fg-dim);
+}
+.hub-app .hub-nav-item:hover { background: var(--surface-2); color: var(--fg); }
+.hub-app .hub-nav-item[aria-current="page"] {
+  color: var(--fg);
+  background: var(--surface-3);
+  border-left-color: var(--moon-200);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-nav-item { transition: none; }
+}
+
 .hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; border-radius: 2px; }
 /* Text-field wrappers that suppress the inner input's own ring surface the focus on the wrapper (§11) */
 .hub-app .hub-field:focus-within { border-color: var(--moon-300); }

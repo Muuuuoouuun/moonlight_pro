@@ -21,13 +21,10 @@ const CAMPAIGN_STATUS_LABEL = {
 const ASSET_TYPES = ["image", "html", "zip", "thumbnail", "source"];
 const VARIANT_TYPES = [
   "newsletter",
-  "blog",
   "blog_insight",
   "card_news",
-  "social_post",
   "x_thread",
   "reels_script",
-  "landing_copy",
 ];
 
 const ITEM_STATUS_LABEL = {
@@ -135,14 +132,15 @@ function normalizeAssetType(value, fallback = "source") {
 function normalizeVariantType(value, fallback = "blog_insight") {
   const normalized = normalizeString(value, fallback).toLowerCase();
   const aliases = {
-    insight: "blog",
-    blog_insight: "blog",
+    insight: "blog_insight",
+    blog: "blog_insight",
     carousel: "card_news",
-    thread: "social_post",
-    x_thread: "social_post",
+    thread: "x_thread",
+    social_post: "x_thread",
     reels: "reels_script",
     reel: "reels_script",
     video_script: "reels_script",
+    landing_copy: "blog_insight",
   };
   const candidate = aliases[normalized] || normalized;
   return VARIANT_TYPES.includes(candidate) ? candidate : fallback;

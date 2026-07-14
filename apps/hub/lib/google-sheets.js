@@ -24,6 +24,7 @@ import {
   refreshGoogleAccessToken,
   sanitizeReturnPath,
 } from "@/lib/google-oauth";
+import { isGoogleOAuthProviderEnabled } from "@/lib/integration-readiness";
 
 const GOOGLE_SHEETS_PROVIDER = "google_sheets";
 const SHEETS_API_BASE = "https://sheets.googleapis.com/v4/spreadsheets";
@@ -87,6 +88,10 @@ export function buildGoogleSheetsAuthUrl({
   spreadsheetId = "",
   returnPath = DEFAULT_RETURN_PATH,
 }) {
+  if (!isGoogleOAuthProviderEnabled("sheets")) {
+    return null;
+  }
+
   return buildGoogleAuthUrl({
     scopes: SHEETS_SCOPES,
     redirectUri: resolveGoogleSheetsRedirectUri(origin),

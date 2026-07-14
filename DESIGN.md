@@ -187,7 +187,6 @@ truth. Do not recreate them ad-hoc inside pages.
 - Brand-organized project tree (PMS)
 - Deal kanban
 - Flow canvas (drag-pan, node kinds: trigger · logic · ai · action)
-- VR Office pixel room
 - Key / webhook copy rows (masked, reveal, copy button)
 
 **Behavior rules**

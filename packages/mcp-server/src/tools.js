@@ -72,6 +72,80 @@ export function registerMoonlightTools(server) {
   );
 
   server.registerTool(
+    "list_projects",
+    {
+      title: "List Projects",
+      description:
+        "Read Moonlight projects, task counts, progress, next actions, and recent updates from the shared Supabase ledger. Read-only.",
+      inputSchema: {},
+    },
+    async () => {
+      const { data } = await hubGet("/api/hub/projects");
+      return jsonResult(data);
+    },
+  );
+
+  server.registerTool(
+    "list_tasks",
+    {
+      title: "List Tasks",
+      description:
+        "Read Moonlight tasks across projects from the same ledger used by Work OS and Projects. Read-only.",
+      inputSchema: {},
+    },
+    async () => {
+      const { data } = await hubGet("/api/hub/tasks");
+      return jsonResult(data);
+    },
+  );
+
+  server.registerTool(
+    "create_task",
+    {
+      title: "Create Task",
+      description:
+        "Create a task in the Moonlight ledger. WRITE: requires COM_MOON_HUB_WRITE_SECRET. Use projectId when the task belongs to an existing project.",
+      inputSchema: {
+        title: z.string().min(1).max(300),
+        projectId: z.string().optional(),
+        areaId: z.string().optional(),
+        status: z.enum(["inbox", "todo", "doing", "blocked", "done"]).optional(),
+        priority: z.enum(["low", "medium", "high", "critical"]).optional(),
+        nextAction: z.string().max(1000).optional(),
+        dueAt: z.string().optional().describe("ISO datetime."),
+      },
+    },
+    async ({ title, projectId, areaId, status, priority, nextAction, dueAt }) => {
+      requireWriteSecret();
+      const { data } = await hubPost("/api/hub/tasks", {
+        title,
+        projectId,
+        areaId,
+        status,
+        priority,
+        nextAction,
+        dueAt,
+        source: "mcp",
+      });
+      return jsonResult(data);
+    },
+  );
+
+  server.registerTool(
+    "get_revenue",
+    {
+      title: "Get Revenue Ledger",
+      description:
+        "Read the Moonlight revenue ledger: leads, deals, accounts, operation cases, stages, and summary. Read-only.",
+      inputSchema: {},
+    },
+    async () => {
+      const { data } = await hubGet("/api/hub/revenue");
+      return jsonResult(data);
+    },
+  );
+
+  server.registerTool(
     "decide_work_order",
     {
       title: "Decide Work Order",
@@ -144,6 +218,20 @@ export function registerMoonlightTools(server) {
         location,
         allDay,
       });
+      return jsonResult(data);
+    },
+  );
+
+  server.registerTool(
+    "get_content_queue",
+    {
+      title: "Get Content Queue",
+      description:
+        "Read the Content OS publishing queue, pipeline, attention items, summary, idea queue, and cadence. Read-only.",
+      inputSchema: {},
+    },
+    async () => {
+      const { data } = await hubGet("/api/hub/content");
       return jsonResult(data);
     },
   );

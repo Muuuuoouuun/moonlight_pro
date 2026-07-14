@@ -3,24 +3,11 @@
 import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, Button, Avatar, Tabs, SectionTitle, Kbd, EmptyState } from "../hub-primitives";
-import { EVOLUTION_LOG } from "../hub-data";
 
-const PLAYBOOK_FAMILIES = [
-  { key: 'delivery', label: 'Delivery',  tone: 'info',     count: 2, detail: 'GitHub PR · 이슈 압력 · 빠른 담당 지정' },
-  { key: 'planning', label: 'Planning',  tone: 'moon',     count: 1, detail: '리듬 · 로드맵 · 주간 리셋 루프' },
-  { key: 'content',  label: 'Content',   tone: 'success',  count: 1, detail: '브랜드 발행 루프 · 큐 분류 · Studio 핸드오프' },
-  { key: 'revenue',  label: 'Revenue',   tone: 'warning',  count: 1, detail: '리드 후속 · 계정 관리 · 딜 이동 점검' },
-  { key: 'recovery', label: 'Recovery',  tone: 'danger',   count: 1, detail: '로그 · 실패 · 사람의 빠른 개입' },
-];
+const EVOLUTION_EVENTS = [];
 
-const PLAYBOOK_CATALOG = [
-  { name: 'Daily Delivery Sweep',   family: 'delivery', cadence: 'Daily',    trigger: '09:00 · 열린 PR / stale review',  owner: 'Me' },
-  { name: 'Incident Escalation',    family: 'recovery', cadence: 'On alert', trigger: 'Run log err · uptime drop',        owner: 'Operator' },
-  { name: 'Weekly Planning Reset',  family: 'planning', cadence: 'Weekly',   trigger: '금 16:00 · Rhythm 4/5 미달 시',     owner: 'Me' },
-  { name: 'Publish Review Loop',    family: 'content',  cadence: 'Daily',    trigger: 'Queue draft ≥ 2 · 발행 4h 전',      owner: 'Writer' },
-  { name: 'Deal Movement Check',    family: 'revenue',  cadence: 'Weekly',   trigger: 'Neg 단계 ≥ 10일 정체',              owner: 'Me' },
-  { name: 'Referral Follow-up',     family: 'revenue',  cadence: 'Daily',    trigger: 'Referral lead 무응답 ≥ 2일',         owner: 'Me' },
-];
+const PLAYBOOK_FAMILIES = [];
+const PLAYBOOK_CATALOG = [];
 
 const QUICK_COMMANDS = [
   { slash: '/brief',     label: '아침 브리프 열기',    dest: 'dashboard/daily-brief',        tone: 'moon' },
@@ -32,28 +19,6 @@ const QUICK_COMMANDS = [
   { slash: '/flows',     label: 'Flow 캔버스 열기',    dest: 'dashboard/automations/flows',  tone: 'moon' },
   { slash: '/orders',    label: '에이전트 작업 큐',    dest: 'dashboard/agents/orders',      tone: 'info' },
   { slash: '/council',   label: 'Council 소집',        dest: 'dashboard/agents/council',     tone: 'info' },
-];
-
-const SAFE_INCOMING_BASE_URL = 'https://hooks.moonlight.pro/v1/in/{workspace}';
-
-const SETTINGS_API_KEYS = [
-  { name: 'Default (personal)', ref: 'key_personal_default', fingerprint: 'A28B', scopes: 'read · write', created: 'Vault managed', lastUsed: '3분 전' },
-  { name: 'Gmail automation', ref: 'key_gmail_automation', fingerprint: 'E3D4', scopes: 'automations', created: 'Vault managed', lastUsed: '12분 전' },
-  { name: 'Newsletter pipeline', ref: 'key_newsletter_pipeline', fingerprint: '6F8', scopes: 'content · automations', created: 'Vault managed', lastUsed: '어제' },
-  { name: 'Claude Code (local)', ref: 'key_claude_local', fingerprint: '6C3', scopes: 'read-only', created: 'Local vault', lastUsed: '5일 전' },
-];
-
-const INCOMING_WEBHOOKS = [
-  { slug: 'stripe-payments', source: 'Stripe', events: 'payment_succeeded · refunded', hits24: 4, last: '1시간 전', active: true },
-  { slug: 'calendly-invites', source: 'Calendly', events: 'invitee.created · canceled', hits24: 2, last: '3시간 전', active: true },
-  { slug: 'github-deploys', source: 'GitHub', events: 'deployment_status', hits24: 11, last: '14분 전', active: true },
-  { slug: 'ghost-newsletter', source: 'Ghost', events: 'post.published', hits24: 0, last: '3일 전', active: false },
-];
-
-const OUTGOING_WEBHOOKS = [
-  { slug: 'zapier-leads', source: 'Zapier', events: 'lead.created', hits24: 7, last: '22분 전', active: true, fingerprint: 'B2K9' },
-  { slug: 'slack-revenue', source: 'Slack', events: 'payment.succeeded', hits24: 4, last: '1시간 전', active: true, fingerprint: 'Q1' },
-  { slug: 'make-content', source: 'Make', events: 'content.published', hits24: 1, last: '어제', active: true, fingerprint: 'E1D' },
 ];
 
 const EMPTY_META_THREADS_STATUS = {
@@ -213,12 +178,12 @@ export function Evolution({ onNavigate }) {
     revenue: 'dashboard/revenue/deals',
   }[family] || 'dashboard/evolution');
   const tabs = [
-    { key: 'all', label: 'All', count: EVOLUTION_LOG.length },
-    { key: 'up', label: 'Upgrades', count: EVOLUTION_LOG.filter(e => e.tag === 'upgrade').length },
-    { key: 'issue', label: 'Issues', count: EVOLUTION_LOG.filter(e => e.type === 'issue' || e.tag === 'bug').length },
-    { key: 'insight', label: 'Insights', count: EVOLUTION_LOG.filter(e => e.tag === 'insight').length },
+    { key: 'all', label: 'All', count: EVOLUTION_EVENTS.length },
+    { key: 'up', label: 'Upgrades', count: EVOLUTION_EVENTS.filter(e => e.tag === 'upgrade').length },
+    { key: 'issue', label: 'Issues', count: EVOLUTION_EVENTS.filter(e => e.type === 'issue' || e.tag === 'bug').length },
+    { key: 'insight', label: 'Insights', count: EVOLUTION_EVENTS.filter(e => e.tag === 'insight').length },
   ];
-  const filteredLog = EVOLUTION_LOG.filter(e => {
+  const filteredLog = EVOLUTION_EVENTS.filter(e => {
     if (tab === 'up') return e.tag === 'upgrade';
     if (tab === 'issue') return e.type === 'issue' || e.tag === 'bug';
     if (tab === 'insight') return e.tag === 'insight';
@@ -240,7 +205,7 @@ export function Evolution({ onNavigate }) {
       </div>
 
       <div style={{ fontSize: 11.5, color: 'var(--fg-dim)' }}>
-        아래 지표와 로그는 아직 실시간 원장에 연결되지 않았습니다 — automation_runs/error_logs 집계가 붙기 전까지는 예시 값입니다.
+        아래 지표와 로그는 아직 실시간 원장에 연결되지 않았습니다. 연결 전에는 빈 상태로 표시됩니다.
       </div>
 
       <div className="hub-grid--three" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--gap)' }}>
@@ -289,6 +254,9 @@ export function Evolution({ onNavigate }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 110px 1fr 100px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
             <span>Playbook</span><span>Family</span><span>Cadence</span><span>Trigger</span><span>Owner</span><span style={{ textAlign: 'right' }} />
           </div>
+          {PLAYBOOK_CATALOG.length === 0 && (
+            <EmptyState icon="folder" title="플레이북이 없습니다" description="플레이북 원장이 연결되면 운영 절차가 여기에 표시됩니다." />
+          )}
           {PLAYBOOK_CATALOG.map((p, i) => {
             const fam = PLAYBOOK_FAMILIES.find(f => f.key === p.family);
             return (
@@ -360,7 +328,7 @@ export function Evolution({ onNavigate }) {
       {/* Log — what's actually changing */}
       <div>
         <SectionTitle
-          right={<span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{filteredLog.length} / {EVOLUTION_LOG.length}</span>}
+          right={<span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{filteredLog.length} / {EVOLUTION_EVENTS.length}</span>}
         >
           {activeLabel} Log
         </SectionTitle>
@@ -510,20 +478,10 @@ function KeyRow({ item, last, kind }) {
 }
 
 export function Settings({ onNavigate }) {
-  const [integrations, setIntegrations] = React.useState([
-    { n: 'Google Calendar', s: 'Connected', t: 'success', i: 'calendar', dest: 'dashboard/work/calendar' },
-    { n: 'Gmail', s: 'Connected', t: 'success', i: 'inbox', dest: 'dashboard/automations/email' },
-    { n: 'Resend', s: 'Connected', t: 'success', i: 'send', dest: 'dashboard/automations/email' },
-    { n: 'Stripe', s: 'Connected', t: 'success', i: 'revenue', dest: 'dashboard/revenue/overview' },
-    { n: 'Notion', s: 'Read-only', t: 'warning', i: 'content', dest: 'dashboard/content/queue' },
-    { n: 'Slack', s: 'Not connected', t: 'neutral', i: 'chat', dest: 'dashboard/agents/chat' },
-  ]);
-  const [apiKeys, setApiKeys] = React.useState(SETTINGS_API_KEYS);
-  const [incomingWebhooks, setIncomingWebhooks] = React.useState(INCOMING_WEBHOOKS);
+  const apiKeys = [];
+  const incomingWebhooks = [];
   const [metaThreadsStatus, setMetaThreadsStatus] = React.useState(EMPTY_META_THREADS_STATUS);
   const [instagramStatus, setInstagramStatus] = React.useState(EMPTY_INSTAGRAM_STATUS);
-  const [exportedAt, setExportedAt] = React.useState(null);
-  const [profileEditing, setProfileEditing] = React.useState(false);
   React.useEffect(() => {
     let active = true;
 
@@ -550,41 +508,8 @@ export function Settings({ onNavigate }) {
   const integrationRows = React.useMemo(() => {
     const metaRow = buildMetaThreadsIntegration(metaThreadsStatus);
     const instagramRow = buildInstagramIntegration(instagramStatus);
-    return [
-      ...integrations.slice(0, 3),
-      instagramRow,
-      metaRow,
-      ...integrations.slice(3),
-    ];
-  }, [integrations, instagramStatus, metaThreadsStatus]);
-  const connectIntegration = (name) => {
-    setIntegrations(prev => prev.map(it => (
-      it.n === name && it.s === 'Not connected'
-        ? { ...it, s: 'Connected', t: 'success' }
-        : it
-    )));
-  };
-  const createKey = () => {
-    const suffix = String(Math.floor(Math.random() * 900 + 100));
-    setApiKeys(prev => [{
-      name: 'New workspace key',
-      ref: `key_local_${Date.now()}`,
-      fingerprint: suffix,
-      scopes: 'read · write',
-      created: 'Just now',
-      lastUsed: 'never',
-    }, ...prev]);
-  };
-  const addEndpoint = () => {
-    setIncomingWebhooks(prev => [{
-      slug: `custom-${prev.length + 1}`,
-      source: 'Custom',
-      events: 'event.created',
-      hits24: 0,
-      last: 'never',
-      active: false,
-    }, ...prev]);
-  };
+    return [instagramRow, metaRow];
+  }, [instagramStatus, metaThreadsStatus]);
   const connectMetaThreads = () => {
     if (metaThreadsStatus.status !== 'ready' && metaThreadsStatus.status !== 'connected') return;
     const brand = encodeURIComponent(metaThreadsStatus.brandHandle || 'moon.classin');
@@ -633,15 +558,8 @@ export function Settings({ onNavigate }) {
               <div style={{ fontSize: 15, fontWeight: 500 }}>Hyeon Park</div>
               <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>hyeon@moonlight.pro · Founder · KST</div>
             </div>
-            <Button variant={profileEditing ? 'secondary' : 'outline'} size="sm" onClick={() => setProfileEditing(v => !v)}>
-              {profileEditing ? 'Editing' : 'Edit'}
-            </Button>
+            <Badge tone="neutral" size="xs">local profile</Badge>
           </div>
-          {profileEditing && (
-            <div className="mono" style={{ marginTop: 10, fontSize: 11, color: 'var(--fg-faint)' }}>
-              profile edit mode · local preview
-            </div>
-          )}
         </Card>
       </div>
 
@@ -672,8 +590,7 @@ export function Settings({ onNavigate }) {
                     connectInstagram();
                     return;
                   }
-                  if (it.s === 'Not connected') connectIntegration(it.n);
-                  else onNavigate?.(it.dest);
+                  onNavigate?.(it.dest);
                 }}
               >
                 {it.action || (it.s === 'Not connected' ? 'Connect' : 'Manage')}
@@ -698,6 +615,9 @@ export function Settings({ onNavigate }) {
       <div>
         <SectionTitle>API keys</SectionTitle>
         <Card pad={false}>
+          {apiKeys.length === 0 && (
+            <EmptyState icon="key" title="API 키 원장이 연결되지 않았습니다" description="실제 키 메타데이터를 읽는 API가 준비되면 이 목록이 표시됩니다." />
+          )}
           {apiKeys.map((k, i, arr) => (
             <KeyRow key={k.ref} item={k} last={i === arr.length - 1} kind="key" />
           ))}
@@ -705,7 +625,7 @@ export function Settings({ onNavigate }) {
             <Iconed name="plus" size={12} style={{ color: 'var(--fg-faint)' }} />
             <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>새 API 키 발급</span>
             <div style={{ flex: 1 }} />
-            <Button variant="outline" size="sm" icon="plus" onClick={createKey}>Create key</Button>
+            <Button variant="outline" size="sm" icon="plus" disabled>Create key</Button>
           </div>
         </Card>
         <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -716,17 +636,9 @@ export function Settings({ onNavigate }) {
       <div>
         <SectionTitle>Webhooks</SectionTitle>
         <Card pad={false}>
-          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--line-soft)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)' }}>Incoming base URL</div>
-              <div style={{ flex: 1 }} />
-              <Badge tone="success" size="xs">live</Badge>
-            </div>
-            <CopyRow value={SAFE_INCOMING_BASE_URL} mono />
-            <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>
-              외부 서비스에서 이 기본 URL에 <code className="mono" style={{ fontSize: 10.5, padding: '1px 5px', background: 'var(--surface-3)', borderRadius: 4 }}>/{'<slug>'}</code>를 붙여 POST 요청을 보냅니다.
-            </div>
-          </div>
+          {incomingWebhooks.length === 0 && (
+            <EmptyState icon="webhook" title="등록된 incoming webhook이 없습니다" description="실제 endpoint 원장이 연결되면 URL과 최근 수신 이력이 표시됩니다." />
+          )}
           {incomingWebhooks.map((w, i, arr) => (
             <KeyRow key={w.slug} item={w} last={i === arr.length - 1} kind="webhook" />
           ))}
@@ -734,7 +646,7 @@ export function Settings({ onNavigate }) {
             <Iconed name="webhook" size={12} style={{ color: 'var(--fg-faint)' }} />
             <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>Outgoing webhooks · 발생 이벤트를 외부로 푸시</span>
             <div style={{ flex: 1 }} />
-            <Button variant="outline" size="sm" icon="plus" onClick={addEndpoint}>Add endpoint</Button>
+            <Button variant="outline" size="sm" icon="plus" disabled>Add endpoint</Button>
           </div>
         </Card>
       </div>
@@ -742,9 +654,7 @@ export function Settings({ onNavigate }) {
       <div>
         <SectionTitle>Outgoing webhooks</SectionTitle>
         <Card pad={false}>
-          {OUTGOING_WEBHOOKS.map((w, i, arr) => (
-            <KeyRow key={w.slug} item={w} last={i === arr.length - 1} kind="outgoing" />
-          ))}
+          <EmptyState icon="webhook" title="등록된 outgoing webhook이 없습니다" description="실제 endpoint 원장이 연결되면 전송 대상과 최근 실행 이력이 표시됩니다." />
         </Card>
       </div>
 
@@ -761,23 +671,6 @@ export function Settings({ onNavigate }) {
         </Card>
       </div>
 
-      <div>
-        <SectionTitle>Danger zone</SectionTitle>
-        <Card>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>Export workspace</div>
-              <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', marginTop: 3 }}>모든 데이터를 JSON + Markdown으로 내보내기</div>
-            </div>
-            <Button variant="outline" size="sm" icon="download" onClick={() => setExportedAt(new Date())}>Export</Button>
-          </div>
-          {exportedAt && (
-            <div className="mono" style={{ marginTop: 10, fontSize: 11, color: 'var(--success)' }}>
-              export prepared · {exportedAt.toLocaleTimeString('ko-KR', { hour12: false })}
-            </div>
-          )}
-        </Card>
-      </div>
     </div>
   );
 }

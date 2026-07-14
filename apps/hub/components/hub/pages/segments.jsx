@@ -3,13 +3,11 @@
 // Lead Segments — group the live lead ledger by an operator-picked dimension
 // (유입경로 · 단계 · 유형 · 스코어밴드). This is the browsing surface the Sales OS audit
 // flagged as missing. Read-only v1: click a segment to expand its member leads inline.
-// `score` ships on the live projection (revenue-ledger mapLead); mock fixture leads carry
-// no score and group under 미채점 — acceptable preview behavior. region/scale dimensions
-// were dropped: no data source exists for them anywhere in this branch.
+// `score` ships on the live projection (revenue-ledger mapLead). region/scale dimensions
+// were dropped because no data source exists for them.
 
 import React from 'react';
 
-import { LEADS as FALLBACK_LEADS } from "../hub-data";
 import { Iconed } from "../hub-icons";
 import { Badge, Button, Card, Dot, EmptyState, Input, SyncBadge, SegmentedControl } from "../hub-primitives";
 import { filterLeadsByWorkspace, getWorkspace } from "../workspace-map";
@@ -26,15 +24,13 @@ function useLeadsLedger() {
         if (cancelled) return;
         const live = data?.source === 'supabase';
         setState({
-          syncState: live ? 'live' : 'mock',
+          syncState: live ? 'live' : 'preview',
           source: live ? 'supabase' : 'preview',
-          // Sibling pages (Leads 등) show the mock fixtures under a 'mock' badge when the
-          // ledger is preview — mirror that instead of an empty board.
-          leads: live && Array.isArray(data?.leads) ? data.leads : FALLBACK_LEADS,
+          leads: Array.isArray(data?.leads) ? data.leads : [],
         });
       })
       .catch(() => {
-        if (!cancelled) setState({ syncState: 'mock', source: 'preview', leads: FALLBACK_LEADS });
+        if (!cancelled) setState({ syncState: 'preview', source: 'preview', leads: [] });
       });
     return () => { cancelled = true; };
   }, []);

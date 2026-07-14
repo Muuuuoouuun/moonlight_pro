@@ -1,29 +1,19 @@
 // Workspace map — org_scope-driven membership for the Moonlight Pro Hub.
 //
-// Two live workspaces scope the pages by the *real* org_scope split that brands
-// already carry (hub-data.js BRANDS + live /api/hub/projects brands, commit 0245aec):
+// Two live workspaces scope the pages by the *real* org_scope split that live brands carry:
 //   1. classin (클래스인)  — company sales / pipeline / CRM lane
 //   2. brand   (브랜드)     — brand / content / publishing work
 //
 // Membership resolution mirrors the backend's resolveBrandOrgScope
-// (lib/repositories/operating-ledger.js): a live brand object's `orgScope` wins,
-// else the static classin key set from hub-data BRANDS, else default 'personal'.
+// (lib/repositories/operating-ledger.js): a live brand object's `orgScope` wins;
+// unresolved records default to the personal lane.
 // The 'personal' default routes untagged/unknown-brand records into the 브랜드 lane
 // instead of dropping them from both workspaces — same default as the backend.
 // This is the SINGLE SOURCE OF TRUTH and SUPERSEDES real_v1's hardcoded per-workspace
 // `brands` arrays — re-home a brand by flipping its orgScope, not by editing lists here.
 //
-// Pages read these membership filters to scope their live OR fallback data (and fall
-// back to an explicit preview/empty state when a workspace has no data yet — never
-// a mock+live mix).
-
-import { BRANDS } from './hub-data';
-
-// Static classin key set — fallback when no live brand object is available for a key.
-// Everything not resolved to 'classin' defaults to the 브랜드 lane.
-const CLASSIN_BRAND_KEYS = new Set(
-  BRANDS.filter((b) => b.key !== 'all' && b.orgScope === 'classin').map((b) => b.key),
-);
+// Pages read these filters against live records and render explicit preview/empty
+// states when the source is unavailable.
 
 export const WORKSPACES = {
   classin: {
@@ -78,7 +68,7 @@ function resolveOrgScopeForKey(key, brandObjects) {
     const hit = brandObjects.find((b) => b && b.key === key);
     if (hit && typeof hit.orgScope === 'string') return hit.orgScope;
   }
-  return key && CLASSIN_BRAND_KEYS.has(key) ? 'classin' : 'personal';
+  return 'personal';
 }
 
 // classin ⇔ orgScope 'classin'; brand ⇔ anything else.
@@ -126,8 +116,8 @@ export function filterBrandsByWorkspace(brands, ws) {
   return brands.filter((b) => b.key === 'all' || brandInWorkspace(b, ws));
 }
 
-// `brands` = the UNFILTERED brand objects array the page already holds (live or mock —
-// both carry orgScope). It lets records whose brand slug is unknown to the static set
+// `brands` = the unfiltered live brand objects array the page already holds. It lets
+// records whose brand slug is unknown to local routing configuration
 // follow their live brand's resolved orgScope instead of being dropped.
 export function filterProjectsByWorkspace(projects, ws, brands) {
   const w = getWorkspace(ws);
@@ -189,7 +179,7 @@ export function filterAccountsByWorkspace(accounts, ws) {
 }
 
 // Content items rarely carry a brand field yet; scope on whatever brand/program tag
-// exists (field names vary across mock + live: brand / brandKey / brandId / program),
+// exists (field names vary across live sources: brand / brandKey / brandId / program),
 // plus an explicit `workspace` tag. Untagged items are dropped so the page shows an
 // honest preview/empty state for that workspace.
 export function filterContentByWorkspace(items, ws) {

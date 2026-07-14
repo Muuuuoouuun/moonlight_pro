@@ -12,6 +12,7 @@
     "@com-moon/ui": "*",
     "next": "^16.2.4",
     "next-intl": "^4.9.1",
+    "node-ical": "^0.26.1",
     "react": "^18",
     "react-dom": "^18"
   }

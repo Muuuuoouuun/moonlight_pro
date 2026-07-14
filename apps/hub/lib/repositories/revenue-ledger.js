@@ -118,7 +118,7 @@ function resolveWorkspace(row) {
   return null;
 }
 
-// Brand key from meta (various slugs across mock + live) — feeds brandInWorkspace() so a
+// Brand key from meta (various live-source slugs) — feeds brandInWorkspace() so a
 // record follows its brand's org scope when it carries no explicit workspace tag.
 function resolveBrand(row) {
   const meta = row?.meta || {};

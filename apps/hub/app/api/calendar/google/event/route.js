@@ -72,6 +72,8 @@ export async function GET(req) {
   return NextResponse.json({
     status: "live",
     calendarId: result.calendarId,
+    source: result.source || "oauth",
+    readOnly: Boolean(result.readOnly),
     events: result.items.map(mapGoogleEvent).filter(Boolean),
   });
 }

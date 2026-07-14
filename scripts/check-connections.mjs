@@ -5,6 +5,8 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
+import { resolveControlPlaneReadiness } from "../apps/hub/lib/integration-readiness.js";
+
 const root = process.cwd();
 
 function parseEnvFile(filepath) {
@@ -243,7 +245,7 @@ async function checkGeminiIntegration(label, env, failures) {
   failures.push(`${label}:GEMINI_INTEGRATION`);
 }
 
-function checkOpenClawIntegration(label, env) {
+async function checkOpenClawIntegration(label, env, failures) {
   const localUrl = env.OPENCLAW_LOCAL_URL?.trim();
   const remoteUrl = env.OPENCLAW_REMOTE_URL?.trim();
   const telegramReady = Boolean(env.TELEGRAM_BOT_TOKEN?.trim() && env.OPENCLAW_TELEGRAM_CHAT_ID?.trim());
@@ -271,7 +273,26 @@ function checkOpenClawIntegration(label, env) {
     return;
   }
 
-  printResult("PASS", `${label} OpenClaw transport`, configuredTransports.join(", "));
+  if (localUrl) {
+    const { openclawRelay } = await resolveControlPlaneReadiness(env);
+
+    if (openclawRelay.reachable) {
+      printResult("PASS", `${label} OpenClaw relay`, `${localUrl} reachable`);
+    } else {
+      const fallbackReady = Boolean(remoteUrl || telegramReady || slackReady);
+      printResult(
+        fallbackReady ? "WARN" : "FAIL",
+        `${label} OpenClaw relay`,
+        `${localUrl} ${openclawRelay.status} (${openclawRelay.reason})`,
+      );
+
+      if (!fallbackReady) {
+        failures.push(`${label}:OPENCLAW_RELAY`);
+      }
+    }
+  }
+
+  printResult("PASS", `${label} OpenClaw configured transports`, configuredTransports.join(", "));
 }
 
 async function checkSupabase(label, env, failures) {
@@ -394,8 +415,8 @@ async function main() {
   printSection("Integrations");
   await checkGitHubIntegration("Hub", hubEnv, failures);
   await checkGitHubIntegration("Engine", engineEnv, failures);
-  checkOpenClawIntegration("Hub", hubEnv);
-  checkOpenClawIntegration("Engine", engineEnv);
+  await checkOpenClawIntegration("Hub", hubEnv, failures);
+  await checkOpenClawIntegration("Engine", engineEnv, failures);
   await checkGeminiIntegration("Hub", hubEnv, failures);
   await checkGeminiIntegration("Engine", engineEnv, failures);
 

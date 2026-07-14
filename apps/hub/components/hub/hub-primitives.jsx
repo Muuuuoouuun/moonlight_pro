@@ -339,20 +339,19 @@ export function Placeholder({ label = 'image', w, h, style }) {
   );
 }
 
-// Canonical live/mock/preview status indicator for page headers. `state` accepts:
-// 'live' (success), 'syncing' | 'loading' (info), 'mock' (neutral), 'preview' (neutral,
-// "DB not configured" rather than "fixture data"), 'error' (danger). mono label, xs
+// Canonical live/preview status indicator for page headers. `state` accepts:
+// 'live' (success), 'syncing' | 'loading' (info), 'preview' (neutral),
+// and 'error' (danger). mono label, xs
 // outline Badge, marginLeft 8.
 export function SyncBadge({ state, style }) {
   const map = {
     live:    { tone: 'success', label: 'live' },
     syncing: { tone: 'info',    label: 'syncing' },
     loading: { tone: 'info',    label: 'syncing' },
-    mock:    { tone: 'neutral', label: 'mock' },
     preview: { tone: 'neutral', label: 'preview' },
     error:   { tone: 'danger',  label: 'error' },
   };
-  const m = map[state] || map.mock;
+  const m = map[state] || map.preview;
   // NOTE: this branch's Badge forwards `style` but not `className`, so the full `.mono`
   // treatment (font + 'ss02' feature + tightened tracking) is applied inline.
   return (
@@ -370,17 +369,25 @@ export function SyncBadge({ state, style }) {
 // Canonical pill-group toolbar (type / status / view filters). `options`: [{ key, label,
 // dot?: tone string, count?: number }]. Call sites keep any bespoke onChange side effects
 // by handling that logic inside their onChange.
-export function SegmentedControl({ options, value, onChange, className, style }) {
+// `label` names the group for screen readers; `fill` spreads the segments across the
+// available width (segments stay side-by-side on mobile — never stacked).
+export function SegmentedControl({ options, value, onChange, className, style, label, fill }) {
   return (
-    <div className={className} style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, ...style }}>
+    <div
+      className={className}
+      role="group"
+      aria-label={label}
+      style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, ...style }}
+    >
       {options.map(o => {
         const isActive = o.key === value;
         return (
-          <button key={o.key} type="button" onClick={() => onChange?.(o.key)} style={{
+          <button key={o.key} type="button" onClick={() => onChange?.(o.key)} aria-pressed={isActive} style={{
             padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
             color: isActive ? 'var(--fg)' : 'var(--fg-faint)',
             background: isActive ? 'var(--surface-3)' : 'transparent',
-            display: 'inline-flex', alignItems: 'center', gap: 5,
+            display: 'inline-flex', alignItems: 'center', justifyContent: fill ? 'center' : undefined, gap: 5,
+            flex: fill ? '1 1 0' : undefined, minWidth: fill ? 0 : undefined,
           }}>
             {o.dot && <Dot tone={o.dot} />}
             {o.label}

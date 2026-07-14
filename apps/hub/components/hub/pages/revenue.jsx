@@ -4,13 +4,6 @@ import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl } from "../hub-primitives";
-import {
-  LEADS as FALLBACK_LEADS,
-  DEAL_STAGES as FALLBACK_DEAL_STAGES,
-  DEALS as FALLBACK_DEALS,
-  BRANDS,
-  ACCOUNT_DETAIL,
-} from "../hub-data";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 
@@ -105,36 +98,17 @@ function buildRevenueAttention(leads, deals) {
   return items.slice(0, 4);
 }
 
-const FALLBACK_ACCOUNTS = [
-  { name: '클래스인',        type: 'company',  deals: 2, value: 18000000, last: '오늘',    lastAt: '11:02', health: 'warning', owner: 'Me' },
-  { name: 'Studio Park',     type: 'company',  deals: 1, value: 6000000,  last: '3일 전',  lastAt: '3d',    health: 'ok',      owner: 'Me' },
-  { name: 'Beanly Coffee',   type: 'company',  deals: 1, value: 4200000,  last: '오늘',    lastAt: '14:15', health: 'ok',      owner: 'Council' },
-  { name: 'Han 스튜디오',    type: 'company',  deals: 1, value: 3500000,  last: '5일 전',  lastAt: '5d',    health: 'warning', owner: 'Me' },
-  { name: '베어브릭',         type: 'company',  deals: 1, value: 7800000,  last: '2주 전',  lastAt: '14d',   health: 'ok',      owner: 'Me' },
-  { name: '이재민',           type: 'personal', deals: 1, value: 1200000,  last: '오늘',    lastAt: '08:45', health: 'ok',      owner: 'Me' },
-  { name: '정하윤',           type: 'personal', deals: 1, value: 900000,   last: '어제',    lastAt: '1d',    health: 'ok',      owner: 'Me' },
-  { name: 'Jihoon (코칭)',    type: 'personal', deals: 1, value: 600000,   last: '오늘',    lastAt: '16:00', health: 'ok',      owner: 'Me' },
-];
-
-const FALLBACK_CASES = [
-  { id: 'CS-104', title: 'Spring Cohort 계약 검토', account: '클래스인', type: 'company', status: 'Open', priority: 'high', opened: '3일 전', owner: 'Me' },
-  { id: 'CS-103', title: '결제 영수증 재발행', account: '이재민', type: 'personal', status: 'Waiting', priority: 'low', opened: '어제', owner: 'Automation' },
-  { id: 'CS-102', title: '뉴스레터 구독 취소 이슈', account: 'Studio Park', type: 'company', status: 'Open', priority: 'med', opened: '2일 전', owner: 'Me' },
-  { id: 'CS-101', title: '도메인 인증 재설정', account: 'Moonlight', type: 'company', status: 'Resolved', priority: 'med', opened: '5일 전', owner: 'Me' },
-  { id: 'CS-099', title: '코칭 일정 재조정', account: 'Jihoon', type: 'personal', status: 'Resolved', priority: 'low', opened: '지난 주', owner: 'Me' },
-];
-
 function useRevenueLedger() {
   const [ledger, setLedger] = React.useState({
-    source: 'mock',
-    leads: FALLBACK_LEADS,
-    deals: FALLBACK_DEALS,
-    stages: FALLBACK_DEAL_STAGES,
-    accounts: FALLBACK_ACCOUNTS,
-    cases: FALLBACK_CASES,
+    source: 'preview',
+    leads: [],
+    deals: [],
+    stages: [],
+    accounts: [],
+    cases: [],
     summary: null,
   });
-  const [syncState, setSyncState] = React.useState('mock');
+  const [syncState, setSyncState] = React.useState('preview');
 
   React.useEffect(() => {
     let active = true;
@@ -144,25 +118,21 @@ function useRevenueLedger() {
         const response = await fetch('/api/hub/revenue', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
         if (!active || !response.ok || !data || data.status === 'error') {
-          if (active) setSyncState('mock');
+          if (active) setSyncState('preview');
           return;
         }
-        if (data.source === 'supabase') {
-          setLedger({
-            source: 'supabase',
-            leads: Array.isArray(data.leads) ? data.leads : [],
-            deals: Array.isArray(data.deals) ? data.deals : [],
-            stages: Array.isArray(data.stages) && data.stages.length ? data.stages : FALLBACK_DEAL_STAGES,
-            accounts: Array.isArray(data.accounts) ? data.accounts : [],
-            cases: Array.isArray(data.cases) ? data.cases : [],
-            summary: data.summary || null,
-          });
-          setSyncState('live');
-        } else {
-          setSyncState('mock');
-        }
+        setLedger({
+          source: data.source === 'supabase' ? 'supabase' : 'preview',
+          leads: Array.isArray(data.leads) ? data.leads : [],
+          deals: Array.isArray(data.deals) ? data.deals : [],
+          stages: Array.isArray(data.stages) ? data.stages : [],
+          accounts: Array.isArray(data.accounts) ? data.accounts : [],
+          cases: Array.isArray(data.cases) ? data.cases : [],
+          summary: data.summary || null,
+        });
+        setSyncState(data.source === 'supabase' ? 'live' : 'preview');
       } catch {
-        if (active) setSyncState('mock');
+        if (active) setSyncState('preview');
       }
     }
     load();
@@ -269,10 +239,8 @@ export function RevenueOverview({ onNavigate }) {
   const DEALS = ledger.deals;
   const DEAL_STAGES = ledger.stages;
   const summary = ledger.summary;
-  const isLiveLedger = ledger.source === 'supabase';
-
-  const mrr = summary?.mrr ?? (isLiveLedger ? 0 : 8400000);
-  const mrrPrev = summary?.mrrPrev ?? (isLiveLedger ? 0 : 7500000);
+  const mrr = summary?.mrr ?? 0;
+  const mrrPrev = summary?.mrrPrev ?? 0;
   const pipelineByStage = DEAL_STAGES.map(s => ({
     ...s,
     sum: DEALS.filter(d => d.stage === s.key).reduce((a, b) => a + b.value, 0),
@@ -283,23 +251,11 @@ export function RevenueOverview({ onNavigate }) {
   const openLeads = summary?.leadsCount ?? LEADS.length;
   const openDeals = summary?.openDeals ?? DEALS.filter(d => d.stage !== 'won').length;
   const wonMTD = summary?.wonMTD ?? DEALS.filter(d => d.stage === 'won').reduce((a, b) => a + b.value, 0);
-  const newThisMonth = summary?.newThisMonth ?? (isLiveLedger ? 0 : 12);
+  const newThisMonth = summary?.newThisMonth ?? 0;
   const wonDealsCount = DEALS.filter(d => d.stage === 'won').length;
-  const byBrand = isLiveLedger
-    ? []
-    : BRANDS.filter(b => b.key !== 'all').slice(0, 6).map((b, i) => ({
-      ...b,
-      mrr: [2.4, 1.8, 0.6, 2.0, 0.9, 0.7][i] * 1000000,
-    }));
+  const byBrand = [];
   const totalBrandMRR = byBrand.reduce((a, b) => a + b.mrr, 0);
-  const attentionItems = isLiveLedger
-    ? buildRevenueAttention(LEADS, DEALS)
-    : [
-      { tone: 'danger', t: '클래스인 — 계약서 응답 2일째', s: '리마인드 메일 추천' },
-      { tone: 'warning', t: 'Studio Park — 제안서 14일 정체', s: 'follow-up 필요' },
-      { tone: 'info', t: '이번 주 신규 리드 +12', s: '분류·할당 필요' },
-      { tone: 'success', t: 'Won: 베어브릭 콜라보 ₩7.8M', s: '온보딩 킥오프' },
-    ];
+  const attentionItems = buildRevenueAttention(LEADS, DEALS);
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
@@ -307,7 +263,7 @@ export function RevenueOverview({ onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Revenue overview</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            4월 · 이번 달 요약<SyncBadge state={syncState} />
+            {new Intl.DateTimeFormat('ko-KR', { month: 'long' }).format(new Date())} · 이번 달 요약<SyncBadge state={syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -453,7 +409,7 @@ export function Leads({ workspace }) {
   const [deletedLeadIds, setDeletedLeadIds] = React.useState(() => new Set()); // hide removed ledger rows
   const [editLeadId, setEditLeadId] = React.useState(null);
   // Scope the merged ledger to the active workspace (pass-through when unscoped). The
-  // ledger hook already picks live OR mock — scoping never mixes the two sources. Drawer
+  // The ledger hook only exposes API-backed rows — scoping never mixes sources. Drawer
   // edits overlay onto whichever row (local or ledger) they key to; deletes drop the row.
   const ws = getWorkspace(workspace);
   const mergedLeads = [...localLeads, ...ledger.leads]
@@ -1007,9 +963,7 @@ export function Cases() {
   const [caseEdits, setCaseEdits] = React.useState({}); // { [id]: patch } — overlays any case
   const [deletedCaseIds, setDeletedCaseIds] = React.useState(() => new Set());
   const [editCaseId, setEditCaseId] = React.useState(null);
-  const ledgerCases = ledger.source === 'supabase'
-    ? (Array.isArray(ledger.cases) ? ledger.cases : [])
-    : (Array.isArray(ledger.cases) ? ledger.cases : FALLBACK_CASES);
+  const ledgerCases = Array.isArray(ledger.cases) ? ledger.cases : [];
   const cases = [...localCases, ...ledgerCases]
     .filter(c => !deletedCaseIds.has(c.id))
     .map(c => (caseEdits[c.id] ? { ...c, ...caseEdits[c.id] } : c));
@@ -1500,11 +1454,9 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
 export function Accounts({ workspace, onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
   const [localAccounts, setLocalAccounts] = React.useState([]);
-  const ledgerAccounts = ledger.source === 'supabase'
-    ? (Array.isArray(ledger.accounts) ? ledger.accounts : [])
-    : (Array.isArray(ledger.accounts) ? ledger.accounts : FALLBACK_ACCOUNTS);
+  const ledgerAccounts = Array.isArray(ledger.accounts) ? ledger.accounts : [];
   // Scope the merged ledger to the active workspace (pass-through when unscoped). The
-  // ledger hook already picks live OR mock — scoping never mixes the two sources.
+  // The ledger hook only exposes API-backed records; scoping never mixes sources.
   const ws = getWorkspace(workspace);
   const ACCOUNTS = filterAccountsByWorkspace([...localAccounts, ...ledgerAccounts], workspace);
   const wsEmpty = Boolean(ws) && ACCOUNTS.length === 0;
@@ -1527,7 +1479,7 @@ export function Accounts({ workspace, onNavigate }) {
     }
   }, [view, filtered, selected]);
 
-  const getDetail = (name) => details[name] || (ledger.source === 'supabase' ? null : ACCOUNT_DETAIL[name]) || emptyDetail();
+  const getDetail = (name) => details[name] || emptyDetail();
 
   const pushActivity = (name, entry) => {
     setDetails(prev => {

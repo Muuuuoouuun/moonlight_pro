@@ -4,7 +4,7 @@ import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, IconButton, Button, Progress, EmptyState } from "../hub-primitives";
-import { DECISIONS as FALLBACK_DECISIONS, RITUALS as FALLBACK_RITUALS } from "../hub-data";
+import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const EN_MONTH = new Intl.DateTimeFormat('en-US', { month: 'long' });
@@ -63,11 +63,11 @@ function formatHour(value) {
 
 function useWorkLedger() {
   const [state, setState] = React.useState({
-    source: 'mock',
-    decisions: FALLBACK_DECISIONS,
-    rituals: FALLBACK_RITUALS,
+    source: 'preview',
+    decisions: [],
+    rituals: [],
     summary: null,
-    syncState: 'mock',
+    syncState: 'preview',
   });
 
   React.useEffect(() => {
@@ -80,7 +80,7 @@ function useWorkLedger() {
         const data = await response.json().catch(() => null);
 
         if (!active || !response.ok || !data || data.status === 'error') {
-          if (active) setState((prev) => ({ ...prev, syncState: 'mock' }));
+          if (active) setState((prev) => ({ ...prev, syncState: 'preview' }));
           return;
         }
 
@@ -93,10 +93,10 @@ function useWorkLedger() {
             syncState: 'live',
           });
         } else {
-          setState((prev) => ({ ...prev, syncState: 'mock' }));
+          setState((prev) => ({ ...prev, source: 'preview', decisions: [], rituals: [], summary: null, syncState: 'preview' }));
         }
       } catch {
-        if (active) setState((prev) => ({ ...prev, syncState: 'mock' }));
+        if (active) setState((prev) => ({ ...prev, source: 'preview', decisions: [], rituals: [], summary: null, syncState: 'preview' }));
       }
     }
 
@@ -106,19 +106,6 @@ function useWorkLedger() {
 
   return state;
 }
-
-const FALLBACK_CALENDAR_EVENTS = [
-  { day: 0, start: 10, end: 11, title: 'Weekly kickoff', tone: 'moon' },
-  { day: 0, start: 14, end: 16, title: 'Moonlight Web v2 — deep work', tone: 'moon' },
-  { day: 1, start: 9, end: 10, title: '뉴스레터 outline', tone: 'moon' },
-  { day: 1, start: 15, end: 16.5, title: '클래스인 2차 미팅', tone: 'company' },
-  { day: 2, start: 11, end: 12, title: 'Council sync', tone: 'info' },
-  { day: 2, start: 16, end: 17, title: '자문 — 정하윤', tone: 'personal' },
-  { day: 3, start: 10, end: 11.5, title: 'Pricing workshop', tone: 'moon' },
-  { day: 4, start: 10, end: 11, title: '클래스인 Discovery', tone: 'company' },
-  { day: 4, start: 16, end: 17, title: '코칭 — Jihoon', tone: 'personal' },
-  { day: 4, start: 11.5, end: 13, title: '뉴스레터 마감', tone: 'warning' },
-];
 
 // Google's event.start is an ISO datetime (or an all-day date) — plot it onto the
 // currently viewed week's grid. Events outside `days` are dropped (paginated by week).
@@ -146,7 +133,13 @@ function mapGoogleEventsToGrid(events, days) {
 // /api/calendar/google/event). Was previously 100% local React state with zero
 // persistence — every "새 일정" vanished on reload regardless of connection status.
 function useCalendarEvents(days) {
-  const [state, setState] = React.useState({ status: 'loading', events: [] });
+  const [state, setState] = React.useState({
+    status: 'loading',
+    source: null,
+    readOnly: false,
+    message: '',
+    events: [],
+  });
   const weekKey = days[0]?.toISOString().slice(0, 10) || '';
   const [refreshToken, setRefreshToken] = React.useState(0);
 
@@ -161,9 +154,21 @@ function useCalendarEvents(days) {
       .then((r) => r.json().catch(() => null))
       .then((d) => {
         if (!active) return;
-        setState({ status: d?.status || 'preview', events: Array.isArray(d?.events) ? d.events : [] });
+        setState({
+          status: d?.status || 'preview',
+          source: d?.source || null,
+          readOnly: Boolean(d?.readOnly),
+          message: d?.message || '',
+          events: Array.isArray(d?.events) ? d.events : [],
+        });
       })
-      .catch(() => active && setState({ status: 'error', events: [] }));
+      .catch(() => active && setState({
+        status: 'error',
+        source: null,
+        readOnly: false,
+        message: 'Calendar 일정을 불러오지 못했습니다.',
+        events: [],
+      }));
 
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -184,18 +189,23 @@ export function Calendar() {
   const [gcalMessage, setGcalMessage] = React.useState('');
   const [creating, setCreating] = React.useState(false);
   const focusAppliedRef = React.useRef(false);
-  const [localEvents, setLocalEvents] = React.useState(FALLBACK_CALENDAR_EVENTS);
   const viewedDateForFetch = addDays(now, weekOffset * 7);
   const { days: fetchDays } = buildCalendarWeek(viewedDateForFetch);
   const calendarData = useCalendarEvents(fetchDays);
-  const isLive = calendarData.status === 'live';
+  const calendarCapabilities = resolveCalendarCapabilities(calendarData);
+  const isLive = calendarCapabilities.isLive;
+  const isReadOnly = isLive && calendarData.readOnly;
 
   // Creates a real Google Calendar event when connected; otherwise falls back to a
-  // local-only demo row so the grid still shows something without pretending it's saved.
+  // clear read-only/disconnected message without fabricating a local event.
   const createEvent = React.useCallback(async ({ day, startHour, endHour, title }) => {
     const targetDay = fetchDays[day] || fetchDays[0];
-    if (!isLive) {
-      setLocalEvents((prev) => [...prev, { day, start: startHour, end: endHour, title, tone: 'moon' }]);
+    if (!calendarCapabilities.canCreate) {
+      setGcalMessage(
+        isReadOnly
+          ? 'iCal 연결은 읽기 전용입니다. 일정 생성·수정에는 Google OAuth 연결이 필요합니다.'
+          : 'Google Calendar 연결 후 일정을 만들 수 있습니다.',
+      );
       return;
     }
     const startAt = new Date(targetDay); startAt.setHours(Math.floor(startHour), (startHour % 1) * 60, 0, 0);
@@ -214,7 +224,7 @@ export function Calendar() {
     } finally {
       setCreating(false);
     }
-  }, [fetchDays, isLive, calendarData]);
+  }, [fetchDays, calendarCapabilities.canCreate, isReadOnly, calendarData]);
 
   React.useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60000);
@@ -274,7 +284,11 @@ export function Calendar() {
     }
   }
 
-  const gcalLabel = gcalStatus === 'connected'
+  const gcalLabel = calendarData.source === 'ical' && isLive
+    ? '● iCal live · read only'
+    : isLive
+    ? '● Google Calendar live'
+    : gcalStatus === 'connected'
     ? '● Google Calendar synced 2m ago'
     : gcalStatus === 'connecting'
     ? '● Connecting…'
@@ -283,7 +297,7 @@ export function Calendar() {
     : gcalStatus === 'error'
     ? '● Connect failed'
     : '● Not connected';
-  const gcalColor = gcalStatus === 'connected'
+  const gcalColor = isLive || gcalStatus === 'connected'
     ? 'var(--success)'
     : gcalStatus === 'preview'
     ? 'var(--warning)'
@@ -293,12 +307,14 @@ export function Calendar() {
 
   const hours = Array.from({ length: 12 }, (_, i) => 8 + i);
   const { labels: dayLabels, weekLabel, todayIndex } = buildCalendarWeek(viewedDateForFetch);
-  const gridEvents = isLive ? mapGoogleEventsToGrid(calendarData.events, fetchDays) : localEvents;
+  const gridEvents = calendarCapabilities.shouldShowEvents
+    ? mapGoogleEventsToGrid(calendarData.events, fetchDays)
+    : [];
   const calBadge = calendarData.status === 'live'
-    ? { label: 'live', color: 'var(--success)' }
+    ? { label: calendarCapabilities.badge, color: 'var(--success)' }
     : calendarData.status === 'loading'
     ? { label: 'syncing', color: 'var(--warning)' }
-    : { label: 'mock', color: 'var(--fg-faint)' };
+    : { label: calendarCapabilities.badge, color: 'var(--fg-faint)' };
   const addEvent = () => {
     createEvent({
       day: todayIndex >= 0 ? todayIndex : 0,
@@ -323,11 +339,17 @@ export function Calendar() {
             <span style={{ color: 'var(--fg-faint)' }}>·</span>
             <span style={{ color: gcalColor }}>{gcalLabel}</span>
             <Button variant="ghost" size="xs" onClick={connectGoogleCalendar}>
-              {gcalStatus === 'connecting' ? 'Connecting…' : isLive ? 'Reconnect' : 'Connect Google Calendar'}
+              {gcalStatus === 'connecting'
+                ? 'Connecting…'
+                : isReadOnly
+                ? 'Enable editing'
+                : isLive
+                ? 'Reconnect'
+                : 'Connect Google Calendar'}
             </Button>
           </div>
-          {gcalMessage && (
-            <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>{gcalMessage}</div>
+          {(gcalMessage || calendarData.message) && (
+            <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>{gcalMessage || calendarData.message}</div>
           )}
         </div>
         <div style={{ flex: 1 }} />
@@ -341,7 +363,7 @@ export function Calendar() {
             <button key={v} onClick={() => setViewMode(v)} style={{ padding: '4px 10px', fontSize: 11.5, borderRadius: 4, color: v === viewMode ? 'var(--fg)' : 'var(--fg-faint)', background: v === viewMode ? 'var(--surface-3)' : 'transparent' }}>{v}</button>
           ))}
         </div>
-        <Button variant="primary" size="sm" icon="plus" onClick={addEvent} disabled={creating}>Event</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={addEvent} disabled={creating || !calendarCapabilities.canCreate}>Event</Button>
       </div>
 
       <Card pad={false} className="hub-table-card" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -426,7 +448,7 @@ export function Decisions() {
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch', lineHeight: 1.5 }}>
             실행의 근거가 되는 결정들의 타임라인. 각 결정에는 맥락·선택·근거를 남깁니다.
             <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-              {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
+              {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'preview'}
             </span>
           </div>
         </div>
@@ -470,20 +492,7 @@ export function Decisions() {
 
 export function Roadmap() {
   const months = React.useMemo(() => buildRoadmapMonths(new Date()), []);
-  const [items, setItems] = React.useState(() => [
-    { name: 'Moonlight Web v2 launch', start: 0, len: 1, tone: 'moon', tag: null },
-    { name: '클래스인 Spring Cohort', start: 0.5, len: 1.2, tone: 'company', tag: 'company' },
-    { name: 'Pricing experiment Q2', start: 1, len: 2, tone: 'moon', tag: null },
-    { name: 'Newsletter auto v2', start: 0, len: 0.5, tone: 'moon', tag: null },
-    { name: '개인 브랜드 사이트', start: 1.2, len: 1.5, tone: 'personal', tag: 'personal' },
-    { name: 'Partner referral program', start: 1.5, len: 1.5, tone: 'moon', tag: null },
-    { name: 'Agents Orders v3', start: 2, len: 1, tone: 'moon', tag: null },
-  ]);
-  const draftQ3 = () => {
-    setItems(prev => prev.some(it => it.name === 'Council Q3 draft')
-      ? prev
-      : [...prev, { name: 'Council Q3 draft', start: 3, len: 0.8, tone: 'moon', tag: null }]);
-  };
+  const items = [];
   const toneMap = { moon: 'var(--moon-400)', company: 'var(--company)', personal: 'var(--personal)' };
 
   return (
@@ -492,12 +501,11 @@ export function Roadmap() {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Roadmap</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            Q2 outlook · 7 initiatives
-            <span className="mono" style={{ marginLeft: 8, color: 'var(--fg-faint)' }}>mock</span>
+            로드맵 원장 연결 전
+            <span className="mono" style={{ marginLeft: 8, color: 'var(--fg-faint)' }}>preview</span>
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="secondary" size="sm" icon="sparkle" onClick={draftQ3}>Let Council draft Q3</Button>
       </div>
 
       <Card pad={false} className="hub-table-card">
@@ -509,6 +517,14 @@ export function Roadmap() {
             ))}
           </div>
         </div>
+        {items.length === 0 && (
+          <EmptyState
+            icon="roadmap"
+            title="로드맵 데이터가 없습니다"
+            description="프로젝트 원장과 로드맵 일정이 연결되면 이 타임라인이 채워집니다."
+            style={{ minHeight: 220 }}
+          />
+        )}
         {items.map((it, i) => (
           <div key={i} style={{ display: 'grid', gridTemplateColumns: '220px 1fr', borderBottom: i < items.length - 1 ? '1px solid var(--line-soft)' : 'none', alignItems: 'center' }}>
             <div style={{ padding: '14px', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -562,7 +578,7 @@ export function Rhythm() {
         <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
           루틴은 실행의 인프라
           <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-            {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
+            {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'preview'}
           </span>
         </div>
       </div>

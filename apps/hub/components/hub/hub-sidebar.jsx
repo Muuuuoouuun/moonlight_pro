@@ -2,12 +2,53 @@
 
 import React from "react";
 import { Iconed } from "./hub-icons";
-import { IconButton, Avatar, Kbd } from "./hub-primitives";
-import { NAV_TREE, LEGACY_TREE } from "./hub-data";
+import { IconButton, Avatar, Kbd, SegmentedControl } from "./hub-primitives";
+import {
+  SIDEBAR_PRIMARY,
+  SIDEBAR_SCOPES,
+  SIDEBAR_UTILITIES,
+  DEFAULT_SCOPE,
+  deriveSidebarScope,
+  isSidebarAnchorActive,
+  normalizeScope,
+  ownerAnchorKey,
+  resolveSidebarPath,
+} from "./hub-nav";
 
-// Best-effort nav count badges — fetched once on mount, never polled.
-// Keyed by nav child `key` (not path) so callers can look up via item.key.
-function useSidebarCounts() {
+const SCOPE_STORAGE_KEY = 'mlp.scope';
+
+// Scope lives in localStorage only — no server preference, no fetch (Phase A).
+// If storage is unavailable we simply keep it in React state for the session.
+function useScope(active) {
+  const [scope, setScope] = React.useState(DEFAULT_SCOPE);
+
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SCOPE_STORAGE_KEY);
+      if (stored) setScope(normalizeScope(stored));
+    } catch { /* storage blocked — session-only scope */ }
+  }, []);
+
+  // Landing on a scoped route directly (bookmark, ⌘K, deep link) moves the
+  // control to match what's on screen. Global routes leave it alone.
+  React.useEffect(() => {
+    const derived = deriveSidebarScope(active);
+    if (derived) setScope((s) => (s === derived ? s : derived));
+  }, [active]);
+
+  const persist = React.useCallback((next) => {
+    const value = normalizeScope(next);
+    setScope(value);
+    try { localStorage.setItem(SCOPE_STORAGE_KEY, value); } catch { /* ignore */ }
+    return value;
+  }, []);
+
+  return [scope, persist];
+}
+
+// Best-effort count badges — fetched once on mount, never polled. Keyed by
+// anchor key. Only data already served today; scope selection adds no request.
+function useAnchorCounts() {
   const [counts, setCounts] = React.useState({});
 
   React.useEffect(() => {
@@ -20,7 +61,7 @@ function useSidebarCounts() {
         const items = Array.isArray(d?.items) ? d.items : [];
         // followups-ledger.js summary shape: { overdue, dueToday, total, shown }.
         const due = Number.isFinite(d?.summary?.dueToday) ? d.summary.dueToday : items.length;
-        setCounts(c => ({ ...c, 'classin-followups': due }));
+        setCounts(c => ({ ...c, followups: due }));
       })
       .catch(() => {});
 
@@ -34,7 +75,7 @@ function CountBadge({ n }) {
   if (!n) return null;
   return (
     <span className="mono" style={{
-      fontSize: 10, lineHeight: 1, flexShrink: 0,
+      fontSize: 10.5, lineHeight: 1, flexShrink: 0,
       color: 'var(--moon-300)',
       padding: '2px 5px', borderRadius: 999,
       border: '1px solid var(--line-soft)',
@@ -44,43 +85,47 @@ function CountBadge({ n }) {
   );
 }
 
-export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openPalette, className }) {
-  const counts = useSidebarCounts();
-  const [open, setOpen] = React.useState(() => {
-    const o = {};
-    // Lead with the workspaces expanded; secondary groups (Agents / Work / Revenue /
-    // Content / Automations / System) start collapsed unless they hold the active
-    // path, so the operating workstreams own the first scan.
-    for (const n of NAV_TREE) if (n.children) o[n.key] = Boolean(n.workspace) || n.children.some(c => c.path === active);
-    o.__legacy = false;
-    return o;
+export function Sidebar({ active, view, onNavigate, collapsed, onToggleCollapse, openPalette, className }) {
+  const counts = useAnchorCounts();
+  const [scope, setScope] = useScope(active);
+
+  const go = React.useCallback((anchorKey) => {
+    const path = resolveSidebarPath(anchorKey, scope);
+    if (path) onNavigate(path);
+  }, [onNavigate, scope]);
+
+  // Switching scope while standing on a scope-aware anchor re-enters the same
+  // anchor in the new scope. On a global anchor (오늘 · AI · 설정) it only arms
+  // the next scope-aware navigation.
+  const changeScope = React.useCallback((next) => {
+    const value = setScope(next);
+    const owner = ownerAnchorKey(active);
+    const anchor = [...SIDEBAR_PRIMARY, ...SIDEBAR_UTILITIES].find(a => a.key === owner);
+    if (!anchor?.scopeAware) return;
+    const target = resolveSidebarPath(owner, value);
+    if (target) onNavigate(target);
+  }, [active, onNavigate, setScope]);
+
+  const anchorProps = (a) => ({
+    type: 'button',
+    onClick: () => go(a.key),
+    'aria-current': isSidebarAnchorActive(a.key, active, view) ? 'page' : undefined,
   });
-
-  const isActive = (item) => {
-    if (item.path) return active === item.path;
-    if (item.children) return item.children.some(c => active === c.path);
-    return false;
-  };
-
-  React.useEffect(() => {
-    const activeGroup = NAV_TREE.find(item => item.children?.some(c => c.path === active));
-    if (!activeGroup) return;
-    setOpen(o => (o[activeGroup.key] ? o : { ...o, [activeGroup.key]: true }));
-  }, [active]);
-
-  // Boundary is drawn once, just above the first group flagged `secondary`.
-  const firstSecondaryKey = NAV_TREE.find(n => n.secondary)?.key;
 
   if (collapsed) {
     return (
-      <aside className={`${className || ''} hub-sidebar-root--collapsed`} style={{
-        width: 56, flexShrink: 0,
-        background: 'var(--surface)',
-        borderRight: '1px solid var(--line-soft)',
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
-        padding: '14px 0', gap: 4,
-      }}>
-        <button onClick={onToggleCollapse} title="Expand" style={{
+      <aside
+        className={`${className || ''} hub-sidebar-root--collapsed`}
+        aria-label="주요 메뉴"
+        style={{
+          width: 56, flexShrink: 0,
+          background: 'var(--surface)',
+          borderRight: '1px solid var(--line-soft)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          padding: '14px 0', gap: 4,
+        }}
+      >
+        <button onClick={onToggleCollapse} title="Expand" aria-label="사이드바 펼치기" style={{
           width: 36, height: 36, borderRadius: 'var(--r-sm)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: 'var(--moon-200)', marginBottom: 8,
@@ -91,19 +136,30 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
             boxShadow: '0 0 12px oklch(0.78 0.008 250 / 0.3)',
           }} />
         </button>
-        {NAV_TREE.map(item => {
-          const flat = item.children ? item.children[0] : item;
-          const act = isActive(item);
+        {SIDEBAR_PRIMARY.map(a => {
+          const act = isSidebarAnchorActive(a.key, active, view);
           return (
-            <button key={item.key} onClick={() => onNavigate(flat.path)} title={item.label} style={{
+            <button key={a.key} {...anchorProps(a)} title={a.label} aria-label={a.label} style={{
               width: 36, height: 36, borderRadius: 'var(--r-sm)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: act ? 'var(--fg)' : 'var(--fg-faint)',
               background: act ? 'var(--surface-3)' : 'transparent',
             }}>
-              {/* Keep the workstream accent in the collapsed rail so the
-                  workspaces still read as primary. */}
-              <Iconed name={item.icon} size={16} style={item.workspace && !act ? { color: 'var(--moon-300)' } : undefined} />
+              <Iconed name={a.icon} size={16} />
+            </button>
+          );
+        })}
+        <div style={{ flex: 1 }} />
+        {SIDEBAR_UTILITIES.map(a => {
+          const act = isSidebarAnchorActive(a.key, active, view);
+          return (
+            <button key={a.key} {...anchorProps(a)} title={a.label} aria-label={a.label} style={{
+              width: 36, height: 36, borderRadius: 'var(--r-sm)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: act ? 'var(--fg)' : 'var(--fg-faint)',
+              background: act ? 'var(--surface-3)' : 'transparent',
+            }}>
+              <Iconed name={a.icon} size={16} />
             </button>
           );
         })}
@@ -112,7 +168,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
   }
 
   return (
-    <aside className={className} style={{
+    <aside className={className} aria-label="주요 메뉴" style={{
       width: 232, flexShrink: 0,
       background: 'var(--surface)',
       borderRight: '1px solid var(--line-soft)',
@@ -134,7 +190,7 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
         <IconButton icon="chevronL" onClick={onToggleCollapse} size={24} iconSize={13} tooltip="Collapse" />
       </div>
 
-      <div style={{ padding: '4px 12px 10px' }}>
+      <div style={{ padding: '4px 12px 8px' }}>
         <button onClick={openPalette} style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 8,
           height: 30, padding: '0 10px',
@@ -149,135 +205,35 @@ export function Sidebar({ active, onNavigate, collapsed, onToggleCollapse, openP
         </button>
       </div>
 
-      <div className="scroll-y" style={{ flex: 1, padding: '4px 8px 10px' }}>
-        {NAV_TREE.map(item => {
-          if (!item.children) {
-            const act = isActive(item);
-            return (
-              <button key={item.key} onClick={() => onNavigate(item.path)} style={{
-                width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-                height: 30, padding: '0 8px', marginBottom: 1,
-                fontSize: 12.5, fontWeight: 500,
-                color: act ? 'var(--fg)' : 'var(--fg-muted)',
-                background: act ? 'var(--surface-3)' : 'transparent',
-                borderRadius: 'var(--r-sm)',
-                borderLeft: act ? '2px solid var(--moon-200)' : '2px solid transparent',
-                textAlign: 'left', transition: 'all .12s',
-              }}
-                onMouseEnter={e => { if (!act) e.currentTarget.style.background = 'var(--surface-2)'; }}
-                onMouseLeave={e => { if (!act) e.currentTarget.style.background = 'transparent'; }}
-              >
-                <Iconed name={item.icon} size={14} />
-                <span>{item.label}</span>
-              </button>
-            );
-          }
-          const isOpen = open[item.key];
-          const act = isActive(item);
-          const ws = Boolean(item.workspace);
-          const group = (
-            <div key={item.key} style={{ marginBottom: ws ? 2 : 1, marginTop: ws ? 2 : 0 }}>
-              <button onClick={() => setOpen(o => ({ ...o, [item.key]: !o[item.key] }))} style={{
-                width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-                height: 30, padding: '0 8px',
-                fontSize: 12.5, fontWeight: ws ? 600 : 500,
-                color: ws || act ? 'var(--fg)' : 'var(--fg-muted)',
-                borderRadius: 'var(--r-sm)', textAlign: 'left',
-              }}>
-                <Iconed name={item.icon} size={14} style={ws ? { color: 'var(--moon-300)' } : undefined} />
-                <span style={{ flex: 1 }}>{item.label}</span>
-                <Iconed name="chevronD" size={12} style={{
-                  color: 'var(--fg-faint)',
-                  transform: isOpen ? 'rotate(0)' : 'rotate(-90deg)',
-                  transition: 'transform .15s',
-                }} />
-              </button>
-              {isOpen && (
-                <div style={{ paddingLeft: 12, marginTop: 1, marginBottom: 4, borderLeft: '1px solid var(--line-soft)', marginLeft: 15 }}>
-                  {item.children.map(c => {
-                    const cAct = active === c.path;
-                    return (
-                      <button key={c.key} onClick={() => onNavigate(c.path)} style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                        height: 27, padding: '0 8px', marginBottom: 1,
-                        fontSize: 12, fontWeight: cAct ? 500 : 400,
-                        color: cAct ? 'var(--fg)' : 'var(--fg-dim)',
-                        background: cAct ? 'var(--surface-3)' : 'transparent',
-                        borderRadius: 'var(--r-sm)',
-                        textAlign: 'left', transition: 'all .12s',
-                      }}
-                        onMouseEnter={e => { if (!cAct) { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.color = 'var(--fg)'; } }}
-                        onMouseLeave={e => { if (!cAct) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fg-dim)'; } }}
-                      >
-                        <Iconed name={c.icon} size={12} style={{ color: 'var(--fg-faint)' }} />
-                        <span style={{ flex: 1 }}>{c.label}</span>
-                        <CountBadge n={counts[c.key]} />
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-          // Secondary boundary — drawn once, right before the first `secondary`
-          // group. Separates the two live workspaces from the folded functional
-          // menus (기존 메뉴).
-          if (item.key === firstSecondaryKey) {
-            return (
-              <React.Fragment key={item.key}>
-                <div style={{ borderTop: '1px solid var(--line-soft)', marginTop: 8, paddingTop: 6 }}>
-                  <div style={{ fontSize: 11, letterSpacing: '0.1em', color: 'var(--fg-dim)', padding: '0 8px', marginBottom: 2 }}>도구</div>
-                </div>
-                {group}
-              </React.Fragment>
-            );
-          }
-          return group;
-        })}
+      {/* Scope replaces the old workspace trees: 소속은 여기서 한 번만 고른다. */}
+      <div style={{ padding: '0 12px 10px' }}>
+        <SegmentedControl
+          label="작업 범위"
+          fill
+          options={SIDEBAR_SCOPES}
+          value={scope}
+          onChange={changeScope}
+          style={{ width: '100%' }}
+        />
+      </div>
 
-        {/* 기타 — legacy archive (hidden when empty) */}
-        {LEGACY_TREE.length > 0 && (
-        <div style={{ marginTop: 8, borderTop: '1px solid var(--line-soft)', paddingTop: 6 }}>
-          <button onClick={() => setOpen(o => ({ ...o, __legacy: !o.__legacy }))} style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-            height: 28, padding: '0 8px',
-            fontSize: 11, fontWeight: 500,
-            color: 'var(--fg-faint)',
-            textTransform: 'uppercase', letterSpacing: '0.1em',
-            borderRadius: 'var(--r-sm)', textAlign: 'left',
-          }}>
-            <Iconed name="archive" size={12} />
-            <span style={{ flex: 1 }}>기타</span>
-            <Iconed name="chevronD" size={11} style={{
-              transform: open.__legacy ? 'rotate(0)' : 'rotate(-90deg)',
-              transition: 'transform .15s',
-            }} />
+      <nav className="scroll-y" style={{ flex: 1, padding: '2px 8px 10px' }}>
+        {SIDEBAR_PRIMARY.map(a => (
+          <button key={a.key} {...anchorProps(a)} className="hub-nav-item">
+            <Iconed name={a.icon} size={15} />
+            <span style={{ flex: 1 }}>{a.label}</span>
+            <CountBadge n={counts[a.key]} />
           </button>
-          {open.__legacy && (
-            <div style={{ paddingLeft: 12, marginLeft: 15, marginTop: 1, marginBottom: 4, borderLeft: '1px solid var(--line-soft)' }}>
-              {LEGACY_TREE.map(c => {
-                const cAct = active === c.path;
-                return (
-                  <button key={c.key} onClick={() => onNavigate(c.path)} style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                    height: 26, padding: '0 8px', marginBottom: 1,
-                    fontSize: 11.5, fontWeight: cAct ? 500 : 400,
-                    color: cAct ? 'var(--fg)' : 'var(--fg-faint)',
-                    background: cAct ? 'var(--surface-3)' : 'transparent',
-                    borderRadius: 'var(--r-sm)', textAlign: 'left', transition: 'all .12s',
-                  }}
-                    onMouseEnter={e => { if (!cAct) { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.color = 'var(--fg-muted)'; } }}
-                    onMouseLeave={e => { if (!cAct) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fg-faint)'; } }}
-                  >
-                    <Iconed name={c.icon} size={11} style={{ color: 'var(--fg-faint)' }} />
-                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        )}
+        ))}
+      </nav>
+
+      <div style={{ padding: '6px 8px', borderTop: '1px solid var(--line-soft)' }}>
+        {SIDEBAR_UTILITIES.map(a => (
+          <button key={a.key} {...anchorProps(a)} className="hub-nav-item hub-nav-item--sm">
+            <Iconed name={a.icon} size={14} />
+            <span style={{ flex: 1 }}>{a.label}</span>
+          </button>
+        ))}
       </div>
 
       <div style={{

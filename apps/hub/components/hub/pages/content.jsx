@@ -4,10 +4,6 @@ import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar, SyncBadge } from "../hub-primitives";
-import {
-  CONTENT_QUEUE as FALLBACK_CONTENT_QUEUE,
-  CAMPAIGNS as FALLBACK_CAMPAIGNS,
-} from "../hub-data";
 import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
 
 const STUDIO_DRAFT_DB = "moonlight-content-studio";
@@ -119,15 +115,15 @@ function handoffTone(status) {
 
 function useContentLedger() {
   const [state, setState] = React.useState({
-    source: "mock",
-    syncState: "mock",
+    source: "preview",
+    syncState: "preview",
     brands: [],
     items: [],
     variants: [],
     assets: [],
     publishLogs: [],
-    campaigns: FALLBACK_CAMPAIGNS,
-    queue: FALLBACK_CONTENT_QUEUE,
+    campaigns: [],
+    queue: [],
     pipeline: [],
     attention: [],
     summary: null,
@@ -145,7 +141,7 @@ function useContentLedger() {
         const data = await response.json().catch(() => null);
 
         if (!active || !response.ok || !data || data.status === "error") {
-          if (active) setState((s) => ({ ...s, syncState: "mock" }));
+          if (active) setState((s) => ({ ...s, syncState: "preview" }));
           return;
         }
 
@@ -167,10 +163,10 @@ function useContentLedger() {
             cadence: data.cadence || null,
           });
         } else {
-          setState((s) => ({ ...s, syncState: "mock" }));
+          setState((s) => ({ ...s, source: "preview", syncState: "preview", campaigns: [], queue: [] }));
         }
       } catch {
-        if (active) setState((s) => ({ ...s, syncState: "mock" }));
+        if (active) setState((s) => ({ ...s, source: "preview", syncState: "preview", campaigns: [], queue: [] }));
       }
     }
 
@@ -193,31 +189,10 @@ export function Studio({ workspace }) {
   const [selectedBrandId, setSelectedBrandId] = React.useState("");
   const [contentId, setContentId] = React.useState(null);
   const [variantId, setVariantId] = React.useState(null);
-  const [title, setTitle] = React.useState('결정을 기록하는 노트의 구조');
-  const [body, setBody] = React.useState(
-`1인 창업자에게 결정은 공기처럼 흐른다. 매일 수십 개. 그런데도 대부분 기억에
-남지 않는다. 이 글에서 내가 쓰는 결정 노트의 네 칸 구조를 공유한다.
-
-## 네 칸
-
-1. 맥락 — 왜 지금 결정해야 하는가
-2. 선택 — 무엇을 선택했는가 (그리고 무엇을 선택하지 않았는가)
-3. 근거 — 어떤 데이터·직관·제약이 작용했는가
-4. 회고 — 2주 후 이 결정은 어떻게 보이는가
-
-## 한 가지 예시
-
-지난달 가격 티어를 3개에서 2개로 줄였다. 맥락은 중간 티어 이탈률 38%. 선택은
-단순화. 근거는 전환 분석과 '선택의 피로' 가설. 회고는 2주 후…`
-  );
+  const [title, setTitle] = React.useState('');
+  const [body, setBody] = React.useState('');
   const [slides, setSlides] = React.useState([
-    { id: 's1', bg: 'oklch(0.35 0.04 280)', title: '결정 노트: 네 칸이면 충분하다', sub: '1인 창업자를 위한 기록법' },
-    { id: 's2', bg: 'oklch(0.35 0.05 220)', title: '맥락', sub: '왜 지금 결정해야 하는가' },
-    { id: 's3', bg: 'oklch(0.35 0.05 180)', title: '선택', sub: '무엇을 선택했고 무엇을 버렸나' },
-    { id: 's4', bg: 'oklch(0.35 0.05 150)', title: '근거', sub: '데이터·직관·제약' },
-    { id: 's5', bg: 'oklch(0.35 0.05 85)', title: '회고', sub: '2주 후 되돌아보기' },
-    { id: 's6', bg: 'oklch(0.35 0.06 30)', title: '한 가지 예시', sub: '가격 티어 3→2' },
-    { id: 's7', bg: 'oklch(0.28 0.01 250)', title: '저장하세요', sub: '@moonlight.pro' },
+    { id: 'draft-1', bg: 'oklch(0.3 0.02 250)', title: '', sub: '' },
   ]);
   const [activeSlide, setActiveSlide] = React.useState(0);
   const [drag, setDrag] = React.useState(null);
@@ -467,6 +442,11 @@ export function Studio({ workspace }) {
         return;
       }
 
+      if (data.status === 'preview') {
+        setExtraSuggestions(s => [{ tone: 'warning', text: '원장이 연결되지 않아 handoff 기록을 만들지 않았습니다.' }, ...s]);
+        return;
+      }
+
       const now = new Date();
       setLastSentAt(now);
       setLocalHandoffLogs(s => [{
@@ -550,7 +530,7 @@ export function Studio({ workspace }) {
   const applyToolbarAction = (tool) => {
     if (!tool) return;
     if (tool === 'ai') {
-      setExtraSuggestions(s => [{ tone: 'moon', text: 'AI 제안 생성 — 도입부를 더 짧게 다듬어보세요.' }, ...s]);
+      setExtraSuggestions(s => [{ tone: 'warning', text: 'AI 제안 생성은 아직 실행 경로에 연결되지 않았습니다.' }, ...s]);
       return;
     }
     const snippets = {
@@ -566,15 +546,7 @@ export function Studio({ workspace }) {
   };
 
   const cur = slides[activeSlide] || slides[0];
-  const baseSuggestions = mode === 'blog' ? [
-    { key: 'blog-title', tone: 'info', text: '제목 A/B: "결정 노트: 네 칸이면 충분하다"' },
-    { key: 'blog-question', tone: 'moon', text: '"네 칸" 섹션 끝에 독자 질문 한 줄 추가 추천' },
-    { key: 'blog-repeat', tone: 'warning', text: '중복 표현 감지: "기억에 남지 않는다" (2회)' },
-  ] : [
-    { key: 'card-hook', tone: 'info', text: '카드 1 훅 강화: 숫자를 앞에 — "4칸"' },
-    { key: 'card-color', tone: 'moon', text: '카드 2–5 배경색 톤을 한 계열로 통일 추천' },
-    { key: 'card-cta', tone: 'warning', text: '마지막 카드 CTA 누락 — 저장/공유 유도' },
-  ];
+  const baseSuggestions = [];
   const suggestions = [
     ...extraSuggestions.map((s, i) => ({ ...s, key: `extra-${i}`, extraIndex: i })),
     ...baseSuggestions.filter(s => !dismissedSuggestionKeys.has(s.key)),
@@ -1010,9 +982,7 @@ export function Queue({ workspace }) {
   const ledger = useContentLedger();
   // Scope the brand filter pills + queue items to this workspace (pass-through when unscoped).
   const brands = ws ? filterBrandsByWorkspace(ledger.brands || [], workspace) : (ledger.brands || []);
-  const queueSource = ledger.source === "supabase"
-    ? (Array.isArray(ledger.queue) ? ledger.queue : [])
-    : (ledger.queue?.length ? ledger.queue : FALLBACK_CONTENT_QUEUE);
+  const queueSource = Array.isArray(ledger.queue) ? ledger.queue : [];
   const queue = filterContentByWorkspace(queueSource, workspace);
   const statusTone = {
     Inbox: 'neutral',
@@ -1203,184 +1173,7 @@ export function Queue({ workspace }) {
   );
 }
 
-const CAMPAIGN_WAR_ROOMS = {
-  cm1: {
-    pulse: {
-      positioning: '1인 창업자가 봄 시즌 운영 리듬을 2주 안에 되찾게 만드는 cohort launch.',
-      nextMove: 'Landing hero proof를 보강하고, 24시간 내 warm lead 8명에게 founder-note follow-up을 보냅니다.',
-      risk: '신청 수는 좋지만 회사 리드와 개인 리드가 한 offer 안에서 섞여 메시지가 흐려질 수 있습니다.',
-      ai: [
-        { label: 'Push', detail: '개인 창업자용 pain copy를 첫 화면에 고정', tone: 'moon' },
-        { label: 'Pause', detail: 'X thread 3번 소재는 proof 부족. 케이스 인용 전까지 보류', tone: 'warning' },
-        { label: 'Ask', detail: '신청자 5명에게 "왜 지금인가" 한 문장 회수', tone: 'info' },
-      ],
-      metrics: [
-        { label: 'Goal', value: '24 / 40', detail: '신청 60%', tone: 'moon' },
-        { label: 'Pipeline', value: '₩18.0M', detail: '2 company deals', tone: 'success' },
-        { label: 'Lead fit', value: '72%', detail: 'ICP match', tone: 'info' },
-        { label: 'Risk', value: '2', detail: 'message split', tone: 'warning' },
-      ],
-    },
-    strategy: {
-      icp: '운영은 직접 하지만 콘텐츠, 리드, 루틴이 흩어진 1인 창업자와 boutique operator.',
-      promise: '매일 아침 무엇을 해야 하는지 보이고, 발행과 follow-up이 끊기지 않는 운영 리듬.',
-      wedge: 'Daily Brief + Content Queue + Revenue follow-up을 하나의 cohort ritual로 묶습니다.',
-      enemy: '좋은 생각은 많은데, 실행 표면이 Notion, Gmail, 캘린더, Slack으로 흩어지는 상태.',
-      proof: ['뉴스레터 #47 draft to send loop', 'Gmail to CRM 태깅 17건', '클래스인 deal follow-up 지연 감지'],
-      decisions: [
-        { label: '개인/회사 offer를 같은 랜딩에서 분기', status: 'Trial', owner: 'Me' },
-        { label: '가격표보다 운영 리듬 proof를 먼저 노출', status: 'Committed', owner: 'Council' },
-        { label: '신청 CTA는 "상담" 대신 "운영 리듬 점검"', status: 'Watch', owner: 'Me' },
-      ],
-    },
-    surfaces: [
-      { type: 'Landing', name: 'Spring Cohort landing', role: 'Primary conversion', status: 'Live', cta: '운영 리듬 점검 신청', signal: '24 signups', url: '/spring-cohort?utm_campaign=cm1' },
-      { type: 'Insight', name: '1인 창업자의 운영 OS 만들기', role: 'Trust asset', status: 'Scheduled', cta: 'Daily Brief 보기', signal: 'Queue c2', url: '/insights/operating-os' },
-      { type: 'Newsletter', name: '뉴스레터 #47', role: 'Warm audience push', status: 'Draft', cta: 'Cohort waitlist', signal: '2,143 subs', url: 'Email' },
-      { type: 'X Thread', name: '결정 기록하기', role: 'Top-of-funnel hook', status: 'Scheduled', cta: 'Read the full note', signal: 'Queue c6', url: 'x.com' },
-      { type: 'Referral', name: 'Founder intro link', role: 'Warm referral', status: 'Review', cta: '소개 코드로 신청', signal: '3 intros', url: '/spring-cohort/ref' },
-    ],
-    content: [
-      { title: '뉴스레터 #47 · 4월 둘째 주', stage: 'Draft', channel: 'Email', action: '2번 섹션 proof 보강' },
-      { title: '1인 창업자의 운영 OS 만들기', stage: 'Scheduled', channel: 'Web', action: '랜딩 CTA 연결 확인' },
-      { title: 'Thread · 결정 기록하기', stage: 'Scheduled', channel: 'X', action: '첫 문장 A/B 준비' },
-      { title: 'Cohort landing hero proof', stage: 'Review', channel: 'Web', action: '클래스인 신호 익명화' },
-    ],
-    audience: [
-      { segment: 'Warm founders', count: 2143, fit: 78, next: 'Founder-note email', source: 'Newsletter' },
-      { segment: 'Company operators', count: 47, fit: 63, next: 'Case-study CTA', source: 'LinkedIn/referral' },
-      { segment: 'Personal coaching leads', count: 18, fit: 84, next: 'DM follow-up', source: 'X' },
-    ],
-    attribution: [
-      { channel: 'Newsletter', spend: '₩0', leads: 14, pipeline: '₩4.2M', note: 'highest intent' },
-      { channel: 'Referral', spend: '₩0', leads: 6, pipeline: '₩9.8M', note: 'best deal quality' },
-      { channel: 'X', spend: '₩0', leads: 4, pipeline: '₩0.9M', note: 'top funnel only' },
-      { channel: 'Landing direct', spend: '₩0', leads: 8, pipeline: '₩3.1M', note: 'CTA copy test needed' },
-    ],
-    automations: [
-      { name: '뉴스레터 발행 → Resend', status: 'Active', ai: 'AI 교정', last: '어제', health: '1/1 ok' },
-      { name: 'Gmail → CRM 리드 태깅', status: 'Active', ai: 'AI 분류', last: '3분 전', health: '15/17 ok' },
-      { name: '리드 무응답 3일 → 리마인더', status: 'Active', ai: 'Follow-up draft', last: '오늘', health: '2/2 ok' },
-      { name: 'Landing form → campaign_id 기록', status: 'Draft', ai: 'None', last: 'not live', health: 'needs webhook' },
-    ],
-    activity: [
-      '오늘 11:02 · 클래스인 follow-up email 기록, campaign source 연결',
-      '어제 18:00 · Resend dry-run 성공, newsletter CTA 대기',
-      '어제 11:08 · Council이 referral conversion을 강한 신호로 표시',
-    ],
-  },
-  cm2: {
-    pulse: {
-      positioning: '개인 브랜드 사이트를 신뢰 자산과 리드 캡처 표면으로 전환하는 launch system.',
-      nextMove: 'About hero보다 proof strip을 먼저 다듬고, insight 2개를 landing CTA에 연결합니다.',
-      risk: '브랜드 무드는 좋아졌지만 offer가 아직 "무엇을 맡길 수 있는가"까지 닿지 않습니다.',
-      ai: [
-        { label: 'Push', detail: 'Case link가 없는 주장에는 proof slot을 붙이기', tone: 'moon' },
-        { label: 'Rewrite', detail: 'Hero headline을 역할 설명이 아니라 literal offer로 전환', tone: 'warning' },
-        { label: 'Connect', detail: 'Contact form source를 campaign_id로 기록', tone: 'info' },
-      ],
-      metrics: [
-        { label: 'Goal', value: '12 / 200', detail: '구독자 +6%', tone: 'warning' },
-        { label: 'Surfaces', value: '4', detail: '2 draft', tone: 'moon' },
-        { label: 'Lead fit', value: '58%', detail: 'too broad', tone: 'warning' },
-        { label: 'Proof', value: '3', detail: 'case assets', tone: 'info' },
-      ],
-    },
-    strategy: {
-      icp: '운영형 창업자, 브랜드/콘텐츠/자동화가 한 번에 필요한 boutique client.',
-      promise: '생각과 실행을 한 화면에서 움직이는 private operating system.',
-      wedge: '공개 사이트는 미디어가 아니라 proof router가 됩니다.',
-      enemy: '예쁜 포트폴리오인데 다음 행동과 신뢰 증거가 없는 상태.',
-      proof: ['Hub screenshot reel', 'Revenue follow-up 기록', 'Automation flow canvas'],
-      decisions: [
-        { label: '랜딩 H1은 브랜드명이 아니라 literal offer 우선', status: 'Committed', owner: 'Me' },
-        { label: 'Newsletter opt-in은 footer가 아니라 proof 뒤에 배치', status: 'Trial', owner: 'Writer' },
-        { label: '광고는 아직 집행하지 않고 organic proof 먼저', status: 'Watch', owner: 'Council' },
-      ],
-    },
-    surfaces: [
-      { type: 'Landing', name: 'Personal brand home', role: 'Primary proof router', status: 'Draft', cta: '운영 상담 신청', signal: 'copy review', url: '/' },
-      { type: 'Case', name: 'Moonlight Hub operating case', role: 'Proof asset', status: 'Draft', cta: 'View system', signal: 'screenshots ready', url: '/cases/moonlight-hub' },
-      { type: 'Insight', name: '결정을 기록하는 노트의 구조', role: 'Trust asset', status: 'Review', cta: 'Subscribe', signal: 'Studio draft', url: '/insights/decision-note' },
-      { type: 'Newsletter', name: 'Launch letter', role: 'Warm launch', status: 'Idea', cta: 'Forward to a founder', signal: 'outline only', url: 'Email' },
-    ],
-    content: [
-      { title: 'Moonlight 대시보드 스크린샷 릴', stage: 'Review', channel: 'Instagram', action: '제품 맥락 캡션 추가' },
-      { title: '결정을 기록하는 노트의 구조', stage: 'Draft', channel: 'Newsletter', action: 'case CTA 삽입' },
-      { title: 'Personal site proof strip', stage: 'Idea', channel: 'Web', action: '3 proof cards 선별' },
-    ],
-    audience: [
-      { segment: 'Founder operators', count: 86, fit: 72, next: 'Proof-led launch email', source: 'Newsletter' },
-      { segment: 'Brand consulting leads', count: 24, fit: 55, next: 'Case study retarget', source: 'Referral' },
-    ],
-    attribution: [
-      { channel: 'Newsletter', spend: '₩0', leads: 5, pipeline: '₩1.2M', note: 'small but warm' },
-      { channel: 'Organic X', spend: '₩0', leads: 4, pipeline: '₩0.6M', note: 'needs offer clarity' },
-      { channel: 'Direct', spend: '₩0', leads: 3, pipeline: '₩0', note: 'tracking incomplete' },
-    ],
-    automations: [
-      { name: 'Contact form → lead 생성', status: 'Draft', ai: 'Lead summary', last: 'not live', health: 'needs form' },
-      { name: 'Newsletter signup → welcome email', status: 'Planning', ai: 'Segment label', last: 'not live', health: 'provider pending' },
-    ],
-    activity: [
-      '오늘 09:30 · proof strip copy review 필요',
-      '어제 16:20 · case outline이 Studio draft로 이동',
-      '2일 전 · Council이 광고 집행 보류 추천',
-    ],
-  },
-  cm3: {
-    pulse: {
-      positioning: '연말 회고를 콘텐츠 자산으로 바꿔 다음 해 상담과 구독으로 이어지게 만드는 long-tail campaign.',
-      nextMove: '첫 회고의 관찰 프레임을 정하고, 4편의 반복 구조를 고정합니다.',
-      risk: '아직 시즌성이 멀어서 지금은 production rhythm보다 archive strategy가 더 중요합니다.',
-      ai: [
-        { label: 'Frame', detail: '회고 4편을 decision, revenue, rhythm, automation으로 분리', tone: 'moon' },
-        { label: 'Hold', detail: '발행 스케줄은 11월 전까지 확정하지 않기', tone: 'neutral' },
-        { label: 'Collect', detail: '매주 activity log에서 회고 후보 자동 수집', tone: 'info' },
-      ],
-      metrics: [
-        { label: 'Goal', value: '0 / 4', detail: '회고 4편', tone: 'neutral' },
-        { label: 'Assets', value: '6', detail: 'raw notes', tone: 'info' },
-        { label: 'Readiness', value: '18%', detail: 'early', tone: 'warning' },
-        { label: 'Runs', value: '0', detail: 'not active', tone: 'neutral' },
-      ],
-    },
-    strategy: {
-      icp: '한 해를 돌아보며 다음 해 운영 체계를 재설계하려는 creator-founder.',
-      promise: '회고가 감상이 아니라 다음 운영 시스템의 입력이 됩니다.',
-      wedge: 'Daily Brief, Decisions, Automations 로그를 회고의 raw material로 씁니다.',
-      enemy: '좋은 일기처럼 읽히지만 아무 행동도 바꾸지 않는 연말 콘텐츠.',
-      proof: ['Decision log', 'Automation runs', 'Revenue movement'],
-      decisions: [
-        { label: '시즌 전까지 archive만 수집', status: 'Committed', owner: 'Coach' },
-        { label: '발행은 4편 series format으로 고정', status: 'Draft', owner: 'Writer' },
-      ],
-    },
-    surfaces: [
-      { type: 'Series', name: 'Year-end operating review', role: 'Editorial series', status: 'Draft', cta: 'Subscribe for review kit', signal: 'outline', url: '/insights/year-end' },
-      { type: 'Template', name: 'Decision review kit', role: 'Lead magnet', status: 'Idea', cta: 'Download', signal: 'not scoped', url: '/resources/review-kit' },
-    ],
-    content: [
-      { title: '가격 실험 회고', stage: 'Idea', channel: 'Blog', action: '결정 d3 연결' },
-      { title: 'Weekly review template update', stage: 'Idea', channel: 'Newsletter', action: 'routine proof 수집' },
-    ],
-    audience: [
-      { segment: 'Existing subscribers', count: 2143, fit: 61, next: 'Waitlist prompt', source: 'Newsletter' },
-      { segment: 'Coaching alumni', count: 32, fit: 82, next: 'Personal note', source: 'CRM' },
-    ],
-    attribution: [
-      { channel: 'Newsletter', spend: '₩0', leads: 0, pipeline: '₩0', note: 'not launched' },
-      { channel: 'Search', spend: '₩0', leads: 0, pipeline: '₩0', note: 'future long-tail' },
-    ],
-    automations: [
-      { name: 'Activity log → 회고 후보 수집', status: 'Planning', ai: 'Theme clustering', last: 'not live', health: 'needs rule' },
-    ],
-    activity: [
-      '이번 주 · 회고 후보 6개 수집됨',
-      '2일 전 · 가격 실험 회고가 Content Queue idea로 이동',
-    ],
-  },
-};
+const CAMPAIGN_WAR_ROOMS = {};
 
 const CAMPAIGN_TABS = [
   { key: 'pulse', label: 'Pulse' },
@@ -1655,8 +1448,7 @@ function CampaignTabPanel({ tab, campaign, detail }) {
 // Live campaigns (real Supabase rows) don't have curated war-room content yet —
 // the deep strategy/surfaces/audience/attribution breakdown is a separate,
 // larger data-model decision (see docs/personal-os audit, 2026-07-10). Rather
-// than silently borrowing cm1's fabricated "Spring Cohort" narrative for a
-// real campaign, show an honest placeholder until that's built.
+// so a real campaign gets an honest placeholder until that model is built.
 function buildPreviewCampaignDetail(campaign) {
   return {
     pulse: {
@@ -1682,22 +1474,20 @@ export function Campaigns() {
   const router = useRouter();
   const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral', Paused: 'warning', Completed: 'info' };
   const ledger = useContentLedger();
-  const [campaigns, setCampaigns] = React.useState(FALLBACK_CAMPAIGNS);
-  const [selectedId, setSelectedId] = React.useState(FALLBACK_CAMPAIGNS[0]?.id || null);
+  const [campaigns, setCampaigns] = React.useState([]);
+  const [selectedId, setSelectedId] = React.useState(null);
   const [tab, setTab] = React.useState('pulse');
   const [focusMode, setFocusMode] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
 
   React.useEffect(() => {
-    if (ledger.syncState !== 'live') return;
-    setCampaigns(ledger.campaigns);
-    setSelectedId((prev) => (ledger.campaigns.some((c) => c.id === prev) ? prev : ledger.campaigns[0]?.id || null));
+    const nextCampaigns = Array.isArray(ledger.campaigns) ? ledger.campaigns : [];
+    setCampaigns(nextCampaigns);
+    setSelectedId((prev) => (nextCampaigns.some((c) => c.id === prev) ? prev : nextCampaigns[0]?.id || null));
   }, [ledger.syncState, ledger.campaigns]);
 
   const selected = campaigns.find(c => c.id === selectedId) || campaigns[0] || null;
-  // Any campaign without curated war-room content (a fresh draft or a live
-  // Supabase row) gets its own honest placeholder — never borrows cm1's
-  // "Spring Cohort" narrative just because it's the first demo entry.
+  // Campaign rows without an attached war-room ledger use an honest empty detail.
   const detail = selected
     ? (CAMPAIGN_WAR_ROOMS[selected.id] || buildPreviewCampaignDetail(selected))
     : null;
@@ -1731,7 +1521,15 @@ export function Campaigns() {
         const savedId = data.campaign.id;
         setCampaigns(prev => prev.map(c => (c.id === localId ? { ...c, id: savedId } : c)));
         setSelectedId(savedId);
+      } else {
+        setCampaigns(prev => prev.filter(c => c.id !== localId));
+        setSelectedId(null);
+        setFocusMode(false);
       }
+    } catch {
+      setCampaigns(prev => prev.filter(c => c.id !== localId));
+      setSelectedId(null);
+      setFocusMode(false);
     } finally {
       setCreating(false);
     }

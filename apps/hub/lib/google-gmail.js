@@ -5,6 +5,10 @@ import {
   resolveSupabaseConfig,
   updateSupabaseRecord,
 } from "@/lib/server-write";
+import {
+  isGoogleOAuthProviderEnabled,
+  resolveOAuthStateSecret,
+} from "@/lib/integration-readiness";
 import { createHmac, timingSafeEqual } from "crypto";
 
 const GOOGLE_GMAIL_PROVIDER = "google_gmail";
@@ -78,14 +82,6 @@ async function fetchSupabaseRows(table, options = {}) {
   } catch {
     return null;
   }
-}
-
-function resolveOAuthStateSecret() {
-  return (
-    process.env.COM_MOON_OAUTH_STATE_SECRET?.trim() ||
-    process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim() ||
-    ""
-  );
 }
 
 export function hasGoogleGmailOAuthStateSecret() {
@@ -178,7 +174,11 @@ export function buildGoogleGmailAuthUrl({
 }) {
   const oauth = resolveGoogleOAuthConfig();
 
-  if (!oauth || !hasGoogleGmailOAuthStateSecret()) {
+  if (
+    !oauth ||
+    !hasGoogleGmailOAuthStateSecret() ||
+    !isGoogleOAuthProviderEnabled("gmail")
+  ) {
     return null;
   }
 
