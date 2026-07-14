@@ -1,5 +1,5 @@
 {
-  "auditedAt": "2026-07-15T02:35:35+09:00",
+  "auditedAt": "2026-07-15T02:44:40+09:00",
   "scope": "Moonlight operator OS, exact-owner eeoCRM enrichment, PMS/content writes, MCP, OAuth/IAM, OpenClaw",
   "crm": {
     "moonlightLeadCount": 119,
@@ -38,6 +38,7 @@
     "writePath": "Hub BFF -> Engine /api/content/command -> Supabase -> Hub repository",
     "createRetryUpdateReadBack": "passed",
     "hydratedUi": "localhost:3000 verified: Class.Moon 1, ClassIn Side 0, Study.Seagull 0, outside lanes 2",
+    "emptyLaneOnboarding": "passed at 390x844: empty state fits its 340px card and new-draft brand survives Studio local-mirror initialization",
     "temporaryRowsRemaining": 0
   },
   "mcp": {
@@ -166,7 +167,7 @@
     },
     "content": {
       "status": "complete-phase1",
-      "evidence": "Class.Moon, ClassIn Side, and Study.Seagull are canonical live lanes with counts 1/0/0; content create-idempotency-update-read-back and rollback passed."
+      "evidence": "Class.Moon, ClassIn Side, and Study.Seagull are canonical live lanes with counts 1/0/0; content create-idempotency-update-read-back and rollback passed; empty-lane Draft stays in the mobile viewport and preserves the requested Studio brand."
     },
     "webhookAndMcp": {
       "status": "complete-local-with-desktop-lifecycle-pending",

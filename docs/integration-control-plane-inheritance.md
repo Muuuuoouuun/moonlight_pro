@@ -137,7 +137,7 @@ flowchart LR
 | MCP | Codex enabled, Claude Code Connected. 새 SDK 세션에서 13 tools discovery, live task 6건 read, create/read-back/delete 성공; 임시 row 0건. Claude Desktop 앱은 22:04에 시작됐고 config는 01:03에 기록되어 Moonlight child가 아직 없다. 활성 세션을 끊지 않기 위해 승인 전 재시작하지 않음 |
 | Signed webhook | 무인증 401, shared-secret 요청 202/accepted, 같은 idempotency key 재시도 200/duplicate, `webhook_events`·`project_updates` read-back 후 삭제 residue 0 |
 | PMS write | Hub BFF→Engine command→Supabase create/update/read-back 성공. 임시 project/task 삭제 후 기존 4 project·6 task 복구 |
-| Content write | Hub BFF→Engine content command→Supabase create/duplicate retry/update/read-back 성공. 임시 item/variant 삭제 후 기존 3 items 복구 |
+| Content write | Hub BFF→Engine content command→Supabase create/duplicate retry/update/read-back 성공. 임시 item/variant 삭제 후 기존 3 items 복구. 빈 ClassIn lane의 Draft CTA는 390×844에서 카드 안에 유지되고 `new=draft&brand=…`를 Studio의 실제 선택 브랜드로 보존 |
 | eeoCRM-derived ledger | Supabase 총 119 leads 중 117 eeoCRM snapshot, 문준혁 exact-owner 16건; live eeoCRM 연결 증거는 아님 |
 | Credential hygiene | 동일 해시 OAuth client 복사본 2개를 `0600` 격리하고 OpenClaw inbound 원본 제거. inbound credential 0개, 별도 retained client `0600`. 격리본 중 legacy installed-app client는 localhost loopback redirect만 가지므로 Hub web callback credential로 재사용하지 않는다. OpenClaw static secret은 Keychain SecretRef 6개, plaintext/unresolved 0개 |
 | OpenClaw runtime | Homebrew Node 24.18.0 고정 경로, gateway supervisor audit 통과, Telegram/Slack probe 통과, security critical 0, main session 0/200k, session store 50 entries |
