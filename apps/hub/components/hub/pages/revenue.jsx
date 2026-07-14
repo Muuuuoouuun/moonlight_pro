@@ -241,6 +241,7 @@ export function RevenueOverview({ onNavigate }) {
   const DEALS = ledger.deals;
   const DEAL_STAGES = ledger.stages;
   const summary = ledger.summary;
+  const isLiveLedger = ledger.source === 'supabase';
   const mrr = summary?.mrr ?? 0;
   const mrrPrev = summary?.mrrPrev ?? 0;
   const pipelineByStage = DEAL_STAGES.map(s => ({
