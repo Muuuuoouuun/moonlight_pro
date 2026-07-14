@@ -128,7 +128,7 @@ flowchart LR
 | 항목 | 확인 결과 |
 |---|---|
 | Hub/Supabase | Hub 200/ok, Supabase reachable |
-| Hydrated Hub UI | 표준 local origin `http://localhost:3000`에서 Daily Brief 6/6 ledger live·7 signals, PMS 4 project/6 task/오늘 2/blocked 1, 세 ClassIn lane, Projects·Revenue Leads 화면을 확인 |
+| Hydrated Hub UI | 표준 local origin `http://localhost:3000`에서 Daily Brief 6/6 ledger live·7 signals, PMS 4 project/6 task/오늘 2/blocked 1, 세 ClassIn lane, Projects·Revenue Leads 화면을 확인. 390×844에서 Daily Brief·Revenue Leads document overflow 0, Leads 이름 188px, visible touch target 44×44px 이상; Revenue 768·1440 회귀 확인 |
 | Engine/OpenClaw | Engine, relay, gateway reachable; relay는 sync mode |
 | Secret topology | 4/4 configured, separated; Hub↔Engine shared secret match |
 | Google gate | Calendar enabled/configured, Gmail·Sheets disabled |
@@ -142,7 +142,7 @@ flowchart LR
 | Credential hygiene | 동일 해시 OAuth client 복사본 2개를 `0600` 격리하고 OpenClaw inbound 원본 제거. inbound credential 0개, 별도 retained client `0600`. OpenClaw static secret은 Keychain SecretRef 6개, plaintext/unresolved 0개 |
 | OpenClaw runtime | Homebrew Node 24.18.0 고정 경로, gateway supervisor audit 통과, Telegram/Slack probe 통과, security critical 0, main session 0/200k, session store 50 entries |
 | OpenClaw cron | 평일 09:30 KST announce·실패 알림 설정. Telegram credential probe 성공, 대상 supergroup 조회 성공, bot administrator. 수정 후 첫 scheduled delivery는 아직 미실행 |
-| 계약 테스트 | readiness, Hub write guard, PMS command/idempotency, iCal fallback, MCP, webhook contract 전체 통과 |
+| 계약 테스트 | readiness, Hub write guard, PMS command/idempotency, iCal fallback, MCP, webhook contract 전체 통과. fresh SSR에서 발견한 Revenue `isLiveLedger` 미정의 오류를 수정하고 source regression test·HTTP 200·production build로 재검증 |
 
 ## 주의
 

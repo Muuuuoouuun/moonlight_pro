@@ -1,5 +1,5 @@
 {
-  "auditedAt": "2026-07-15T02:17:00+09:00",
+  "auditedAt": "2026-07-15T02:28:00+09:00",
   "scope": "Moonlight operator OS, exact-owner eeoCRM enrichment, PMS/content writes, MCP, OAuth/IAM, OpenClaw",
   "crm": {
     "moonlightLeadCount": 119,
@@ -134,16 +134,17 @@
     "mutationPolicy": "Do not remove roles or restrict/delete keys until authenticated usage and recovery-path audit."
   },
   "verification": {
-    "repositoryTests": { "passed": 94, "failed": 0 },
+    "repositoryTests": { "passed": 94, "failed": 0, "latestFocusedSuitePassed": 61, "latestFocusedSuiteFailed": 0 },
     "monorepoTypecheck": "passed",
     "hubAndEngineBuild": "passed",
     "connectionCheck": "all-critical-passed",
     "hydratedBrowser": {
       "origin": "http://localhost:3000",
-      "dailyBrief": "6/6 ledgers live; 7 signals; PMS and ClassIn content pulse rendered",
+      "dailyBrief": "6/6 ledgers live; 7 signals; PMS and ClassIn content pulse rendered; 390x844 document overflow 0 and visible interactive targets >=44x44",
       "projects": "4 projects; 6 open todos; List, Board, To-dos controls rendered",
       "content": "3 items; canonical Class.Moon, ClassIn Side, Study.Seagull lanes rendered",
-      "revenueLeads": "119 total; 16 exact-owner rows resolve to Me with enriched scores and customer-success lane"
+      "revenueLeads": "119 total; 16 exact-owner rows resolve to Me; 390x844 identity column 188px with no document/card overflow; 768x1024 and 1440x1000 regressions passed",
+      "runtimeRegression": "Fresh SSR exposed legacy isLiveLedger ReferenceError; fixed with source regression test, HTTP 200, console-clean browser recheck, and production build"
     },
     "signedWebhookSmoke": {
       "unauthenticatedHttpStatus": 401,
