@@ -6,6 +6,10 @@ import path from "node:path";
 import process from "node:process";
 
 import { resolveControlPlaneReadiness } from "../apps/hub/lib/integration-readiness.js";
+import {
+  classifyWorkspaceGoogleMcp,
+  summarizeGoogleOAuthProviders,
+} from "./connection-status.mjs";
 
 const root = process.cwd();
 
@@ -366,10 +370,59 @@ async function checkHubHealth(label, env, failures) {
     const routes = Array.isArray(result.data?.routes) ? result.data.routes.length : 0;
     const oauthState = result.data?.config?.oauthStateSecretConfigured ? "configured" : "missing";
     printResult("PASS", `${label} Hub`, `/api/health reachable with ${routes} routes; OAuth state secret ${oauthState}`);
+    for (const provider of summarizeGoogleOAuthProviders(result.data)) {
+      printResult(provider.level, `${label} Google OAuth ${provider.provider}`, provider.detail);
+    }
   } else {
     const reason = result.data?.database?.supabase?.reason || result.data?.status || result.data;
     printResult("FAIL", `${label} Hub`, `health check failed (${result.status || "no-status"}; ${JSON.stringify(reason)})`);
     failures.push(`${label}:HUB_HEALTH`);
+  }
+}
+
+async function checkLocalWorkspaceMcp() {
+  const home = process.env.HOME || "";
+  const configPath = path.join(home, ".openclaw", "workspace", "config", "mcporter.json");
+
+  if (!home || !existsSync(configPath)) {
+    printResult("INFO", "OpenClaw workspace Google MCP", "local mcporter config not present");
+    return;
+  }
+
+  try {
+    const server = JSON.parse(runCommand("mcporter", [
+      "--config",
+      configPath,
+      "list",
+      "google-workspace",
+      "--schema",
+      "--json",
+    ]));
+    let probeResult = null;
+
+    if (server?.status === "ok") {
+      probeResult = JSON.parse(runCommand("mcporter", [
+        "--config",
+        configPath,
+        "call",
+        "google-workspace.list-calendars",
+        "--output",
+        "json",
+      ]));
+    }
+
+    const result = classifyWorkspaceGoogleMcp({
+      serverStatus: server?.status,
+      toolCount: Array.isArray(server?.tools) ? server.tools.length : 0,
+      probeResult,
+    });
+    printResult(result.level, "OpenClaw workspace Google MCP", result.detail);
+  } catch (error) {
+    printResult(
+      "WARN",
+      "OpenClaw workspace Google MCP",
+      error instanceof Error ? error.message.split("\n")[0] : String(error),
+    );
   }
 }
 
@@ -417,6 +470,7 @@ async function main() {
   await checkGitHubIntegration("Engine", engineEnv, failures);
   await checkOpenClawIntegration("Hub", hubEnv, failures);
   await checkOpenClawIntegration("Engine", engineEnv, failures);
+  await checkLocalWorkspaceMcp();
   await checkGeminiIntegration("Hub", hubEnv, failures);
   await checkGeminiIntegration("Engine", engineEnv, failures);
 
