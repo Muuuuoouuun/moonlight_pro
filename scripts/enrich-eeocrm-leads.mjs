@@ -7,6 +7,7 @@ import {
   buildJunhyukLeadEnrichment,
   normalizeEntityName,
 } from "../apps/hub/lib/sales-os/lead-enrichment.js";
+import { assertEnrichmentApplyPolicy } from "./enrich-eeocrm-policy.mjs";
 
 const DEFAULT_OWNER = {
   externalId: "3935704427463307",
@@ -182,6 +183,7 @@ function summarize(results, context) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  assertEnrichmentApplyPolicy(args);
   const moonUrl = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
   const moonKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
   const classinUrl = requiredEnv("NEXT_PUBLIC_SUPABASE_URL").replace(/\/$/, "");
