@@ -71,11 +71,13 @@ export function resolveLeadEnrichmentView(row = {}) {
   const enrichment = meta.enrichment && typeof meta.enrichment === "object" ? meta.enrichment : {};
   const tags = Array.isArray(enrichment.tags) ? enrichment.tags.map(String) : [];
   const ownedByJunhyuk = meta.owner_scope === "junhyuk" || tags.includes("owner:junhyuk");
+  const isExternalCrmLead = String(row.source || "").toLowerCase() === "eeocrm";
+  const ownedByOperator = ownedByJunhyuk || (!isExternalCrmLead && Boolean(row.owner_id));
 
   return {
     score: finiteNumber(row.score),
     valueAmount: finiteNumber(meta.value),
-    owner: row.owner_id || ownedByJunhyuk ? "Me" : "Unassigned",
+    owner: ownedByOperator ? "Me" : "Unassigned",
     priorityLane: enrichment.pipeline?.lane || null,
     nextAction: row.next_action || "",
     enrichmentTags: tags,

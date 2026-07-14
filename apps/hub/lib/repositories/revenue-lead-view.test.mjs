@@ -55,6 +55,24 @@ test("uses explicit monetary meta value without deriving money from score", () =
   assert.equal(lead.score, 50);
 });
 
+test("does not label an arbitrary external owner id as the operator", () => {
+  const externalLead = resolveLeadEnrichmentView({
+    id: "lead-other-owner",
+    owner_id: "someone-else",
+    source: "eeocrm",
+    meta: {},
+  });
+  const localLead = resolveLeadEnrichmentView({
+    id: "lead-local-owner",
+    owner_id: "local-user-id",
+    source: "manual",
+    meta: {},
+  });
+
+  assert.equal(externalLead.owner, "Unassigned");
+  assert.equal(localLead.owner, "Me");
+});
+
 test("groups subject, region, direct activity, and public signals without conflating them", () => {
   assert.deepEqual(buildLeadTagSummary([
     "subject:math",

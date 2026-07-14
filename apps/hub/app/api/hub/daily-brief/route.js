@@ -12,6 +12,10 @@ import {
   filterContentLedgerToBrandLanes,
 } from "@/lib/content-brand-catalog";
 import { buildOperatorHomeSummary } from "@/lib/operator-home-summary";
+import {
+  filterOperatorOwnedRevenue,
+  selectOperatorFocusLeads,
+} from "@/lib/operator-revenue-scope";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -146,6 +150,22 @@ function buildRevenueSignals(revenue) {
   const deals = Array.isArray(revenue.deals) ? revenue.deals : [];
   const leads = Array.isArray(revenue.leads) ? revenue.leads : [];
   const signals = [];
+
+  selectOperatorFocusLeads(revenue).forEach((lead) => {
+    signals.push({
+      id: `revenue-focus-${lead.id}`,
+      tone: "info",
+      kind: "Revenue",
+      title: `${lead.name} — 고객 성공 후속`,
+      summary: lead.nextAction,
+      meta: "Focus customer · verified owner",
+      source: { from: "Leads", ref: lead.id },
+      decisions: [
+        action("리드 열기", "leads", true),
+        action("오늘 보류", "wait"),
+      ],
+    });
+  });
 
   deals
     .filter((deal) => deal.stage !== "won" && deal.stage !== "lost" && Number(deal.age) >= 10)
@@ -385,6 +405,7 @@ export async function GET() {
   const work = readLedger(workResult);
   const content = readLedger(contentResult);
   const revenue = readLedger(revenueResult);
+  const operatorRevenue = filterOperatorOwnedRevenue(revenue);
   const automations = readLedger(automationsResult);
   const ordersLedger = readLedger(ordersResult, { source: "preview", orders: [] });
   // Chief of Staff composed brief (ai.morning_brief) — the cron's output finally has a reader.
@@ -398,9 +419,9 @@ export async function GET() {
   const liveCount = sources.filter((source) => source.state === "live").length;
   const errorCount = sources.filter((source) => source.state === "error").length;
   const signals = [
-    ...buildUnifiedRiskSignals(revenue, projects, automations),
+    ...buildUnifiedRiskSignals(operatorRevenue, projects, automations),
     ...buildApprovalSignals(queue),
-    ...buildRevenueSignals(revenue),
+    ...buildRevenueSignals(operatorRevenue),
     ...buildContentSignals(content),
     ...buildAutomationSignals(automations),
     ...buildWorkSignals(projects, work),
