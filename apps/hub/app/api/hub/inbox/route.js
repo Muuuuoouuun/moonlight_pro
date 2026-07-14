@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 
+import { forwardCaptureCommand } from "@/lib/capture-engine-client";
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
-import { routeCapture } from "@/lib/sales-os/inbox-router";
+import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// POST { raw, hint? } — capture one field line, classify, stage as a proposed work order.
+// POST { raw, hint, idempotencyKey } — BFF only; Engine owns receipt + destination transaction.
 export async function POST(req) {
   const guard = assertHubWriteAllowed(req);
   if (guard) return guard;
@@ -15,9 +17,13 @@ export async function POST(req) {
   if (parsed.error) return parsed.error;
 
   const input = parsed.data || {};
-  const raw = typeof input.raw === "string" ? input.raw : "";
-  const hint = typeof input.hint === "string" ? input.hint : null;
+  const result = await forwardCaptureCommand({
+    raw: input.raw,
+    hint: input.hint || "inbox",
+    idempotencyKey: input.idempotencyKey || input.idempotency_key || randomUUID(),
+    entityRef: input.entityRef || input.entity_ref || null,
+    workspaceId: input.workspaceId || resolveDefaultWorkspaceId(),
+  });
 
-  const result = await routeCapture({ raw, hint });
-  return NextResponse.json(result, { status: result.routed ? 201 : 200 });
+  return NextResponse.json(result.data, { status: result.httpStatus });
 }

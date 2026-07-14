@@ -156,6 +156,47 @@ export async function fetchSupabaseRows(table: string, options: SupabaseQueryOpt
   }
 }
 
+export async function invokeSupabaseRpc(name: string, params: Record<string, unknown>) {
+  const config = resolveSupabaseRestConfig();
+
+  if (!config) {
+    return { ok: false, status: null, error: "missing-config" };
+  }
+
+  try {
+    const response = await fetch(
+      `${config.url}/rest/v1/rpc/${encodeURIComponent(name)}`,
+      {
+        method: "POST",
+        headers: makeHeaders(config.apiKey, { contentType: "application/json" }),
+        body: JSON.stringify(params),
+        cache: "no-store",
+      },
+    );
+    const data = await response.json().catch(async () => ({
+      error: await response.text().catch(() => ""),
+    }));
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        error: `http-${response.status}`,
+        detail: typeof data?.message === "string" ? data.message : null,
+      };
+    }
+
+    return { ok: true, status: response.status, data };
+  } catch (error) {
+    return {
+      ok: false,
+      status: null,
+      error: "request-failed",
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 export async function countSupabaseRows(table: string, filters: Array<[string, string]> = []) {
   const config = resolveSupabaseRestConfig();
 

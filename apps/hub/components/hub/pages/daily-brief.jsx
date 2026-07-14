@@ -4,7 +4,7 @@ import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, Progress, Sparkline, SyncBadge, EmptyState } from "../hub-primitives";
 import { createClientId } from "@/lib/pms-ui";
-import { buildQuickTaskCapture, isDurableQuickTaskResult } from "@/lib/quick-task-capture";
+import { buildQuickCapture, isDurableQuickCaptureResult } from "@/lib/quick-task-capture";
 import { isDurableTaskUpdateResult } from "@/lib/task-today";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 
@@ -123,14 +123,15 @@ function sourceLabel(state) {
 
 function QuickTaskCapture({ onNavigate, onSaved }) {
   const [raw, setRaw] = React.useState('');
-  const [state, setState] = React.useState({ status: 'idle', message: 'Enter로 수집함에 저장' });
+  const [hint, setHint] = React.useState('task');
+  const [state, setState] = React.useState({ status: 'idle', message: 'Enter로 할 일 저장' });
   const requestIdRef = React.useRef(null);
 
   if (!requestIdRef.current) requestIdRef.current = createClientId();
 
   async function submit(event) {
     event.preventDefault();
-    const capture = buildQuickTaskCapture({ id: requestIdRef.current, raw });
+    const capture = buildQuickCapture({ id: requestIdRef.current, raw, hint });
 
     if (!capture.ok) {
       setState({ status: 'error', message: '할 일을 한 줄로 입력하세요.' });
@@ -139,17 +140,22 @@ function QuickTaskCapture({ onNavigate, onSaved }) {
 
     setState({ status: 'saving', message: '저장 중…' });
     try {
-      const response = await fetch('/api/hub/tasks', {
+      const response = await fetch('/api/hub/inbox', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(capture.payload),
       });
       const data = await response.json().catch(() => ({}));
 
-      if (response.ok && isDurableQuickTaskResult(data)) {
+      if (response.ok && isDurableQuickCaptureResult(data)) {
         setRaw('');
         requestIdRef.current = createClientId();
-        setState({ status: 'saved', message: data.status === 'duplicate' ? '이미 저장된 할 일입니다.' : '수집함에 저장했습니다.' });
+        const message = data.status === 'duplicate'
+          ? '이미 저장된 입력입니다.'
+          : data.destinationType === 'work_order'
+            ? '정리 전에 보관했습니다.'
+            : '할 일로 저장했습니다.';
+        setState({ status: 'saved', message, destinationType: data.destinationType });
         onSaved?.();
         return;
       }
@@ -173,20 +179,35 @@ function QuickTaskCapture({ onNavigate, onSaved }) {
       ? 'var(--success)'
       : 'var(--fg-faint)';
 
+  function changeHint(nextHint) {
+    if (saving || nextHint === hint) return;
+    if (state.status === 'error') requestIdRef.current = createClientId();
+    setHint(nextHint);
+    setState({ status: 'idle', message: nextHint === 'task' ? 'Enter로 할 일 저장' : 'Enter로 정리 전에 보관' });
+  }
+
   return (
     <Card>
-      <form aria-label="빠른 할 일 입력" onSubmit={submit} className="hub-stackable-row" style={{ display: 'flex', alignItems: 'end', gap: 10 }}>
-        <label htmlFor="daily-brief-quick-task" style={{ display: 'flex', flex: '1 1 360px', minWidth: 0, flexDirection: 'column', gap: 7 }}>
-          <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Quick Capture · Task</span>
+      <form aria-label="빠른 입력" onSubmit={submit} className="hub-stackable-row" style={{ display: 'flex', alignItems: 'end', gap: 10 }}>
+        <div style={{ display: 'flex', flex: '1 1 360px', minWidth: 0, flexDirection: 'column', gap: 7 }}>
+          <div className="hub-stackable-row" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label htmlFor="daily-brief-quick-task" className="mono" style={{ flex: 1, fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Quick Capture</label>
+            <div role="group" aria-label="저장 위치" style={{ display: 'flex', gap: 4 }}>
+              <Button type="button" variant={hint === 'task' ? 'secondary' : 'ghost'} size="xs" aria-pressed={hint === 'task'} disabled={saving} onClick={() => changeHint('task')} style={{ minHeight: 44 }}>할 일</Button>
+              <Button type="button" variant={hint === 'inbox' ? 'secondary' : 'ghost'} size="xs" aria-pressed={hint === 'inbox'} disabled={saving} onClick={() => changeHint('inbox')} style={{ minHeight: 44 }}>정리 전</Button>
+            </div>
+          </div>
           <input
             id="daily-brief-quick-task"
             value={raw}
             onChange={(event) => {
               setRaw(event.target.value);
-              if (state.status !== 'idle') setState({ status: 'idle', message: 'Enter로 수집함에 저장' });
+              if (state.status === 'error') requestIdRef.current = createClientId();
+              if (state.status !== 'idle') setState({ status: 'idle', message: hint === 'task' ? 'Enter로 할 일 저장' : 'Enter로 정리 전에 보관' });
             }}
-            placeholder="지금 놓치면 안 되는 할 일을 한 줄로 입력"
+            placeholder={hint === 'task' ? '지금 놓치면 안 되는 할 일을 한 줄로 입력' : '아직 분류하지 않을 메모·아이디어를 한 줄로 입력'}
             autoComplete="off"
+            maxLength={4000}
             disabled={saving}
             style={{
               width: '100%', minHeight: 44, padding: '10px 12px', fontSize: 16, lineHeight: 1.45,
@@ -195,16 +216,16 @@ function QuickTaskCapture({ onNavigate, onSaved }) {
               borderRadius: 'var(--r-sm)', outline: 'none',
             }}
           />
-        </label>
+        </div>
         <Button type="submit" variant="primary" size="md" icon="plus" disabled={saving || !raw.trim()} style={{ minHeight: 44 }}>
-          {saving ? '저장 중' : '할 일 저장'}
+          {saving ? '저장 중' : hint === 'task' ? '할 일 저장' : '정리 전 저장'}
         </Button>
       </form>
       <div style={{ marginTop: 8, minHeight: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
         <span role={state.status === 'error' ? 'alert' : 'status'} aria-live="polite" style={{ flex: 1, fontSize: 11.5, color: stateColor }}>
           {state.message}
         </span>
-        {state.status === 'saved' && (
+        {state.status === 'saved' && state.destinationType === 'task' && (
           <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/projects?view=todos')}>할 일 보기</Button>
         )}
       </div>

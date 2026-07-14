@@ -9,39 +9,40 @@ try {
   // Red phase: the home has no durable one-line task capture contract yet.
 }
 
-test("builds a durable inbox task from one trimmed line", () => {
+test("builds task and inbox requests with one reusable idempotency key", () => {
   assert.ok(quickCapture, "quick-task-capture.js must exist");
 
   assert.deepEqual(
-    quickCapture.buildQuickTaskCapture({
+    quickCapture.buildQuickCapture({
       id: "99999999-9999-4999-8999-999999999999",
       raw: "  고객 후속 일정 확인  ",
+      hint: "task",
     }),
     {
       ok: true,
       payload: {
-        id: "99999999-9999-4999-8999-999999999999",
-        title: "고객 후속 일정 확인",
-        status: "inbox",
-        priority: "medium",
-        source: "quick-capture",
+        raw: "고객 후속 일정 확인",
+        hint: "task",
+        idempotencyKey: "99999999-9999-4999-8999-999999999999",
       },
     },
   );
+  assert.equal(quickCapture.buildQuickCapture({ id: "id", raw: "메모", hint: "inbox" }).payload.hint, "inbox");
 });
 
 test("rejects empty capture without changing durable state", () => {
   assert.ok(quickCapture, "quick-task-capture.js must exist");
-  assert.deepEqual(quickCapture.buildQuickTaskCapture({ id: "id", raw: "   " }), {
+  assert.deepEqual(quickCapture.buildQuickCapture({ id: "id", raw: "   ", hint: "task" }), {
     ok: false,
     reason: "empty-capture",
   });
 });
 
-test("clears input only after a durable saved or duplicate response", () => {
+test("clears input only after a durable saved or duplicate receipt response", () => {
   assert.ok(quickCapture, "quick-task-capture.js must exist");
-  assert.equal(quickCapture.isDurableQuickTaskResult({ status: "saved" }), true);
-  assert.equal(quickCapture.isDurableQuickTaskResult({ status: "duplicate" }), true);
-  assert.equal(quickCapture.isDurableQuickTaskResult({ status: "preview" }), false);
-  assert.equal(quickCapture.isDurableQuickTaskResult({ status: "error" }), false);
+  assert.equal(quickCapture.isDurableQuickCaptureResult({ status: "saved" }), true);
+  assert.equal(quickCapture.isDurableQuickCaptureResult({ status: "duplicate" }), true);
+  assert.equal(quickCapture.isDurableQuickCaptureResult({ status: "conflict" }), false);
+  assert.equal(quickCapture.isDurableQuickCaptureResult({ status: "preview" }), false);
+  assert.equal(quickCapture.isDurableQuickCaptureResult({ status: "error" }), false);
 });

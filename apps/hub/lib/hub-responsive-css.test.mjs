@@ -48,10 +48,13 @@ test("Daily Brief ledger toggle exposes an accessible 44px mobile target", () =>
 });
 
 test("Daily Brief quick capture has a real label and announced save state", () => {
-  assert.match(dailyBriefSource, /<form[^>]+aria-label="빠른 할 일 입력"/);
+  assert.match(dailyBriefSource, /<form[^>]+aria-label="빠른 입력"/);
   assert.match(dailyBriefSource, /<label[^>]+htmlFor="daily-brief-quick-task"/);
   assert.match(dailyBriefSource, /<input[^>]+id="daily-brief-quick-task"/);
   assert.match(dailyBriefSource, /aria-live="polite"/);
+  assert.match(dailyBriefSource, /aria-pressed=\{hint === 'task'\}/);
+  assert.match(dailyBriefSource, /aria-pressed=\{hint === 'inbox'\}/);
+  assert.match(dailyBriefSource, /fetch\('\/api\/hub\/inbox'/);
 });
 
 test("Daily Brief task-only Today exposes durable completion controls", () => {
