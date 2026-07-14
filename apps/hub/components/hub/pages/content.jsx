@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar, SyncBadge } from "../hub-primitives";
 import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
+import { shouldRestoreActiveStudioDraft } from "@/lib/content-studio-routing";
 
 const STUDIO_DRAFT_DB = "moonlight-content-studio";
 const STUDIO_DRAFT_STORE = "drafts";
@@ -183,6 +184,7 @@ export function Studio({ workspace }) {
   const ws = getWorkspace(workspace);
   const searchParams = useSearchParams();
   const itemParam = searchParams.get("item");
+  const newParam = searchParams.get("new");
   const brandParam = searchParams.get("brand");
   const ledger = useContentLedger();
   const [mode, setMode] = React.useState('blog');
@@ -243,7 +245,7 @@ export function Studio({ workspace }) {
 
   React.useEffect(() => {
     let active = true;
-    if (itemParam) return undefined;
+    if (!shouldRestoreActiveStudioDraft({ itemParam, newParam })) return undefined;
 
     readStudioDraft(ACTIVE_DRAFT_KEY).then((draft) => {
       if (!active || !draft) return;
@@ -253,7 +255,7 @@ export function Studio({ workspace }) {
     return () => {
       active = false;
     };
-  }, [applyDraft, itemParam]);
+  }, [applyDraft, itemParam, newParam]);
 
   React.useEffect(() => {
     const nextBrand = chooseDefaultBrand(brands, brandParam);

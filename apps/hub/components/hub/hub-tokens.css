@@ -285,7 +285,7 @@
   -webkit-overflow-scrolling: touch;
 }
 
-.hub-table-card > div:not([class]) {
+.hub-table-card > div:not([class]):not([data-empty="true"]) {
   min-width: 720px;
 }
 
@@ -666,7 +666,7 @@
     max-width: 42vw;
   }
 
-  .hub-table-card > div:not([class]) {
+  .hub-table-card > div:not([class]):not([data-empty="true"]) {
     min-width: 640px;
   }
 
