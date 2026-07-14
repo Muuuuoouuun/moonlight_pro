@@ -125,6 +125,8 @@ function useDailyBriefLedger() {
     sources: [],
     summary: null,
     metrics: [],
+    operatorHome: null,
+    contentBrands: null,
     signals: [],
     morningBrief: null,
   });
@@ -156,6 +158,8 @@ function useDailyBriefLedger() {
           sources: Array.isArray(data.sources) ? data.sources : [],
           summary: data.summary || null,
           metrics: Array.isArray(data.metrics) ? data.metrics : [],
+          operatorHome: data.operatorHome || null,
+          contentBrands: data.contentBrands || null,
           signals: Array.isArray(data.signals) ? data.signals : [],
           morningBrief: data.morningBrief || null,
         });
@@ -261,6 +265,110 @@ function MetricCard({ m, onNavigate, compact }) {
         <Sparkline values={m.spark} tone={m.tone === 'warning' ? 'warning' : m.tone === 'success' ? 'success' : 'moon'} width={compact ? 48 : 70} height={compact ? 16 : 22} />
       </div>
       <div style={{ marginTop: compact ? 3 : 6, fontSize: compact ? 10.5 : 11.5, color: m.tone === 'success' ? 'var(--success)' : m.tone === 'warning' ? 'var(--warning)' : 'var(--fg-faint)' }}>{m.delta}</div>
+    </div>
+  );
+}
+
+function DistributionRows({ series = [], label }) {
+  const max = Math.max(1, ...series.map((item) => Number(item.value) || 0));
+  return (
+    <div role="img" aria-label={label} style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      {series.map((item) => {
+        const value = Number(item.value) || 0;
+        return (
+          <div key={item.key} style={{ display: 'grid', gridTemplateColumns: '48px minmax(0, 1fr) 24px', gap: 8, alignItems: 'center' }}>
+            <span style={{ fontSize: 10.5, color: 'var(--fg-muted)' }}>{item.label}</span>
+            <span style={{ height: 5, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }}>
+              <span style={{ display: 'block', height: '100%', width: `${Math.max(value ? 8 : 0, Math.round((value / max) * 100))}%`, borderRadius: 999, background: item.key === 'blocked' ? 'var(--warning)' : 'var(--moon-500)' }} />
+            </span>
+            <span className="mono" style={{ fontSize: 10.5, color: value ? 'var(--fg)' : 'var(--fg-faint)', textAlign: 'right' }}>{value}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function OperatorPulse({ operatorHome, contentBrands, onNavigate }) {
+  const pms = operatorHome?.pms || null;
+  const content = operatorHome?.content || null;
+  const lanes = Array.isArray(contentBrands?.lanes) ? contentBrands.lanes : [];
+
+  return (
+    <div>
+      <SectionTitle right={<span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>현재 원장의 상태 분포 · 추세 아님</span>}>운영 pulse</SectionTitle>
+      <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>PMS</div>
+            <SyncBadge state={operatorHome?.sources?.projects || 'preview'} />
+            <div style={{ flex: 1 }} />
+            <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate('dashboard/work/projects?view=todos')}>My Tasks</Button>
+          </div>
+          {pms ? (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8, marginTop: 14, marginBottom: 16 }}>
+                {[
+                  ['열린 일', pms.openTasks],
+                  ['오늘', pms.dueTodayTasks],
+                  ['막힌 P', pms.blockedProjects],
+                  ['완료율', `${pms.taskCompletionRate}%`],
+                ].map(([label, value]) => (
+                  <div key={label} style={{ padding: '8px 9px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', minWidth: 0 }}>
+                    <div className="stat" style={{ fontSize: 18, fontWeight: 600 }}>{value}</div>
+                    <div style={{ marginTop: 2, fontSize: 10, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+              <DistributionRows series={pms.projectStatusSeries} label="프로젝트 상태 분포" />
+            </>
+          ) : (
+            <div style={{ marginTop: 14, fontSize: 12.5, color: 'var(--fg-muted)' }}>프로젝트 원장이 live가 되면 상태 요약을 표시합니다.</div>
+          )}
+        </Card>
+
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>ClassIn content</div>
+            <SyncBadge state={operatorHome?.sources?.content || 'preview'} />
+            <div style={{ flex: 1 }} />
+            <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate('dashboard/classin/content')}>Queue</Button>
+          </div>
+          {content ? (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8, marginTop: 14, marginBottom: 14 }}>
+                {[
+                  ['아이디어', content.ideas],
+                  ['제작 중', content.inProduction],
+                  ['발행 대기', content.scheduled],
+                  ['발행', content.published],
+                ].map(([label, value]) => (
+                  <div key={label} style={{ padding: '8px 9px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', minWidth: 0 }}>
+                    <div className="stat" style={{ fontSize: 18, fontWeight: 600 }}>{value}</div>
+                    <div style={{ marginTop: 2, fontSize: 10, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {lanes.map((lane) => (
+                  <button
+                    key={lane.key}
+                    type="button"
+                    onClick={() => onNavigate(`dashboard/classin/content?brand=${encodeURIComponent(lane.key)}`)}
+                    style={{ minHeight: 44, display: 'grid', gridTemplateColumns: '1fr auto auto', alignItems: 'center', gap: 10, padding: '7px 9px', textAlign: 'left', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', color: 'var(--fg)' }}
+                  >
+                    <span style={{ fontSize: 11.5 }}>{lane.label}</span>
+                    <span style={{ fontSize: 10.5, color: 'var(--fg-muted)' }}>{lane.connection === 'live' ? 'live' : lane.connection}</span>
+                    <span className="mono" style={{ fontSize: 11 }}>{lane.counts?.total ?? '—'}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div style={{ marginTop: 14, fontSize: 12.5, color: 'var(--fg-muted)' }}>콘텐츠 원장이 live가 되면 세 브랜드 lane을 표시합니다.</div>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }
@@ -979,7 +1087,7 @@ export function DailyBrief({ onNavigate }) {
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}>
         <div>
           <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>{formatBriefDate(now)}</div>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em' }}>{greetingFor(now)}, <span style={{ color: 'var(--moon-300)' }}>Hyeon</span></h1>
+          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em' }}>{greetingFor(now)}, <span style={{ color: 'var(--moon-300)' }}>Junhyuk</span></h1>
           <div style={{ marginTop: 6, fontSize: 13.5, color: 'var(--fg-muted)', maxWidth: '60ch', lineHeight: 1.55 }}>
             오늘 <span style={{ color: 'var(--fg)' }}>{signalCount}개 신호</span> · <span style={{ color: 'var(--danger)' }}>{urgentCount} 즉시</span> · <span style={{ color: 'var(--warning)' }}>{todayCount} 오늘</span> · {okCount} 여유
           </div>
@@ -1031,6 +1139,8 @@ export function DailyBrief({ onNavigate }) {
           {ledger.metrics.map((m) => <MetricCard key={m.label} m={m} onNavigate={onNavigate} />)}
         </div>
       </div>
+
+      <OperatorPulse operatorHome={ledger.operatorHome} contentBrands={ledger.contentBrands} onNavigate={onNavigate} />
 
       <MoreDetail title="오늘 상세 · 모닝 브리프 · 승인 대기 · 파이프라인">
         <MorningBriefCard brief={ledger.morningBrief} onNavigate={onNavigate} />

@@ -5,6 +5,7 @@ import {
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { resolveLeadEnrichmentView } from "../sales-os/lead-view.js";
 
 const DEAL_STAGES = [
   { key: "lead", label: "Lead", color: "neutral" },
@@ -29,7 +30,7 @@ const LEAD_STAGE_LABEL = {
   new: "New",
   qualified: "Qualified",
   nurturing: "Contact",
-  won: "Qualified",
+  won: "Customer",
   lost: "Lost",
 };
 
@@ -139,7 +140,8 @@ function mapLead(row, companyById, contactById) {
 
   const statusKey = String(row.status || "new").toLowerCase();
   const meta = row?.meta || {};
-  const value = toNumber(meta.value ?? row?.score * 100000, 0);
+  const enrichmentView = resolveLeadEnrichmentView(row);
+  const value = enrichmentView.valueAmount || 0;
   const units = toNumber(meta.units ?? meta.unit_count, 0);
 
   return {
@@ -153,18 +155,21 @@ function mapLead(row, companyById, contactById) {
     source: row.source || row.channel || "—",
     stage: LEAD_STAGE_LABEL[statusKey] || "New",
     // Raw follow-up score (0–100) for the Segments score-band grouping; null = unscored.
-    score: row?.score == null ? null : toNumber(row.score, 0),
+    score: enrichmentView.score,
     value: value ? formatMoneyLabel(value) : "—",
     // Lightweight meta-backed tags — editable in the Leads EditDrawer, reversed by
     // buildLeadWrite. '' fallbacks keep the drawer inputs controlled.
-    region: meta.region || "",
+    region: enrichmentView.region,
     scale: meta.scale || "",
     situation: meta.situation || "",
     units: units > 0 ? units : "",
     contactName: contact?.name || null,
     contactEmail: contact?.email || null,
     last: formatRelative(row.last_touch_at || row.updated_at || row.created_at),
-    owner: row.owner_id ? "Me" : "Unassigned",
+    owner: enrichmentView.owner,
+    priorityLane: enrichmentView.priorityLane,
+    nextAction: enrichmentView.nextAction,
+    enrichmentTags: enrichmentView.enrichmentTags,
   };
 }
 

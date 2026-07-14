@@ -38,7 +38,7 @@ function parseAmount(v) {
 }
 
 // Funnel order so "Stage" sorts by pipeline position, not alphabetically.
-const LEAD_STAGE_ORDER = { New: 0, Contact: 1, Qualified: 2, Lost: 3 };
+const LEAD_STAGE_ORDER = { New: 0, Contact: 1, Qualified: 2, Customer: 3, Lost: 4 };
 
 // Sort a lead list by the active column. Value sorts numerically (parsed), Stage by funnel
 // position, everything else case-insensitively. Returns the input untouched when no key is set.
@@ -47,6 +47,7 @@ function sortLeads(list, sort) {
   const dir = sort.dir === 'asc' ? 1 : -1;
   const keyOf = (l) => {
     if (sort.key === 'value') return parseAmount(l.value);
+    if (sort.key === 'score') return Number(l.score) || 0;
     if (sort.key === 'stage') return LEAD_STAGE_ORDER[l.stage] ?? 99;
     return String(l[sort.key] || '').toLowerCase();
   };
@@ -446,7 +447,7 @@ export function Leads({ workspace }) {
       <span style={{ fontSize: 8, opacity: sort.key === k ? 1 : 0 }}>{sort.dir === 'desc' && sort.key === k ? '▼' : '▲'}</span>
     </button>
   );
-  const stageTone = { New: 'info', Contact: 'moon', Qualified: 'success', Lost: 'danger' };
+  const stageTone = { New: 'info', Contact: 'moon', Qualified: 'moon', Customer: 'company', Lost: 'danger' };
   const createLead = () => {
     const id = `local-lead-${Date.now()}`;
     setLocalLeads(prev => [{
@@ -622,7 +623,7 @@ export function Leads({ workspace }) {
       {!wsEmpty && (
       <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          <span /><SortHead k="name">Name</SortHead><span>Type</span><SortHead k="source">Source</SortHead><SortHead k="stage">Stage</SortHead><SortHead k="value">Value</SortHead><SortHead k="owner">Owner</SortHead><span style={{ textAlign: 'right' }}>Last</span>
+          <span /><SortHead k="name">Name</SortHead><span>Type</span><SortHead k="source">Source</SortHead><SortHead k="stage">Stage</SortHead><SortHead k="score">Score</SortHead><SortHead k="owner">Owner</SortHead><span style={{ textAlign: 'right' }}>Last</span>
         </div>
         {sortedLeads.length === 0 && (
           <div style={{ padding: '36px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -652,7 +653,10 @@ export function Leads({ workspace }) {
             <span style={{ paddingRight: 4, display: 'flex' }}>
               <Avatar name={l.name.replace(/^.*—\s*/, '')} size={22} tone={l.type === 'personal' ? 'personal' : 'company'} />
             </span>
-            <span style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</span>
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: 'block', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</span>
+              {l.nextAction && <span style={{ display: 'block', marginTop: 2, fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.nextAction}</span>}
+            </span>
             <span style={{ paddingRight: 8, minWidth: 0 }}>
               <Badge tone={l.type === 'personal' ? 'personal' : 'company'} size="xs">
                 <Iconed name={l.type === 'personal' ? 'user' : 'building'} size={9} />
@@ -663,7 +667,10 @@ export function Leads({ workspace }) {
             <span style={{ paddingRight: 8, minWidth: 0 }}>
               <Badge tone={stageTone[l.stage]} size="xs" variant="outline">{l.stage}</Badge>
             </span>
-            <span className="mono" style={{ fontSize: 12 }}>{l.value}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span className="mono" style={{ fontSize: 12, color: l.score >= 70 ? 'var(--moon-200)' : 'var(--fg-muted)' }}>{l.score ?? '—'}</span>
+              {l.priorityLane === 'customer_success' && <Badge tone="company" size="xs">CS</Badge>}
+            </span>
             <span style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.owner}</span>
             <span className="mono" style={{ textAlign: 'right', fontSize: 11.5, color: 'var(--fg-faint)' }}>{l.last}</span>
           </div>
@@ -683,7 +690,7 @@ export function Leads({ workspace }) {
           { key: 'scale', label: '규모', placeholder: '학생수 · 직원수 · 매출 규모' },
           { key: 'units', label: '도입 댓수', inputType: 'number', placeholder: '0' },
           { key: 'situation', label: '현재 상황', placeholder: '검토중 · 경쟁사 사용 · 예산확보…' },
-          { key: 'stage', label: '단계', type: 'select', options: [{ value: 'New', label: 'New' }, { value: 'Contact', label: 'Contact' }, { value: 'Qualified', label: 'Qualified' }, { value: 'Lost', label: 'Lost' }] },
+          { key: 'stage', label: '단계', type: 'select', options: [{ value: 'New', label: 'New' }, { value: 'Contact', label: 'Contact' }, { value: 'Qualified', label: 'Qualified' }, { value: 'Customer', label: 'Customer' }, { value: 'Lost', label: 'Lost' }] },
           { key: 'value', label: '금액', placeholder: '₩0' },
           { key: 'owner', label: '담당' },
         ]}

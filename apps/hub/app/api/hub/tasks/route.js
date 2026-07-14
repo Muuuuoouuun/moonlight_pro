@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
+import { forwardPmsCommand } from "@/lib/pms-engine-client";
 import { getProjectLedger } from "@/lib/repositories/operating-ledger";
-import {
-  insertSupabaseRecord,
-  resolveDefaultWorkspaceId,
-} from "@/lib/server-write";
-import { normalizeTaskInput } from "@/lib/task-input";
+import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,40 +44,32 @@ export async function POST(req) {
     return parsed.error;
   }
 
-  const normalized = normalizeTaskInput(parsed.data, resolveDefaultWorkspaceId());
-
-  if (!normalized.ok) {
-    const preview = normalized.reason === "missing-workspace";
-
-    return NextResponse.json(
-      {
-        status: preview ? "preview" : "invalid-input",
-        error: normalized.reason,
-      },
-      { status: preview ? 202 : 400 },
-    );
-  }
-
-  const persistence = await insertSupabaseRecord("tasks", normalized.record, {
-    returnRepresentation: true,
-    select: "id,workspace_id,project_id,area_id,title,status,priority,next_action,due_at,meta,created_at",
+  const result = await forwardPmsCommand({
+    ...parsed.data,
+    action: "create_task",
+    id: parsed.data.id || randomUUID(),
+    workspaceId: parsed.data.workspaceId || resolveDefaultWorkspaceId(),
   });
+  return NextResponse.json(
+    { ...result.data, task: result.data?.entity || null },
+    { status: result.httpStatus },
+  );
+}
 
-  if (!persistence.persisted) {
-    const preview = persistence.reason === "missing-config";
+export async function PATCH(req) {
+  const guard = assertHubWriteAllowed(req);
+  if (guard) return guard;
 
-    return NextResponse.json(
-      {
-        status: preview ? "preview" : "error",
-        error: persistence.reason,
-        detail: persistence.detail || null,
-      },
-      { status: preview ? 202 : 502 },
-    );
-  }
+  const parsed = await readHubWriteJson(req);
+  if (parsed.error) return parsed.error;
 
-  return NextResponse.json({
-    status: "saved",
-    task: persistence.record,
+  const result = await forwardPmsCommand({
+    ...parsed.data,
+    action: "update_task",
+    workspaceId: parsed.data.workspaceId || resolveDefaultWorkspaceId(),
   });
+  return NextResponse.json(
+    { ...result.data, task: result.data?.entity || null },
+    { status: result.httpStatus },
+  );
 }

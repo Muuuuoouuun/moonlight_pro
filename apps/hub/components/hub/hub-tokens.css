@@ -579,7 +579,7 @@
   }
 
   .hub-chat-shell > aside,
-  .hub-workspace-shell > aside {
+  .hub-workspace-shell > aside:not(.hub-drawer) {
     display: none !important;
   }
 

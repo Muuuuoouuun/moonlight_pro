@@ -5,6 +5,7 @@ import {
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { buildTaskBoardColumns } from "@/lib/pms-ui";
 
 const BRAND_GLYPHS = ["◐", "◇", "✦", "◆", "●", "□", "△", "◎", "◌", "✧"];
 const CANONICAL_BRAND_ORDER = {
@@ -240,11 +241,15 @@ function mapProjects(rows, brandById, taskStats, updateStats) {
 
     return {
       id: row.id,
+      brandId: row.brand_id || null,
       brand: brand?.slug || "all",
       name: row.name,
       status: normalizeProjectStatus(row.status),
+      statusKey: row.status || "active",
+      priority: row.priority || "medium",
       progress,
       due: formatShortDate(row.due_at),
+      dueAt: row.due_at || "",
       owner: row.owner_id ? "Me" : "Unassigned",
       tag: row.meta?.tag || null,
       tasks: stats.total,
@@ -270,7 +275,9 @@ function mapTodos(rows, projectById, brandById) {
       brand: brand?.slug || "all",
       project: row.project_id || "",
       title: row.title,
+      status: row.status || "inbox",
       due: formatShortDate(row.due_at),
+      dueAt: row.due_at || "",
       bucket: resolveDueBucket(row.due_at),
       done: row.status === "done",
       priority: normalizeTodoPriority(row.priority),
@@ -352,56 +359,6 @@ function mapRoutineChecks(rows) {
     checkedAt: row.checked_at || row.created_at,
     checkedAtLabel: formatActivityTime(row.checked_at || row.created_at),
   }));
-}
-
-function buildBoardColumns(projects, todos) {
-  const columns = [
-    { key: "backlog", label: "Backlog", cards: [] },
-    { key: "today", label: "Today", cards: [] },
-    { key: "doing", label: "In Progress", cards: [] },
-    { key: "review", label: "Review", cards: [] },
-    { key: "done", label: "Done", cards: [] },
-  ];
-
-  const byKey = new Map(columns.map((column) => [column.key, column]));
-  const projectById = new Map(projects.map((project) => [project.id, project]));
-
-  todos
-    .filter((todo) => !todo.done)
-    .slice(0, 24)
-    .forEach((todo) => {
-      const project = projectById.get(todo.project);
-      const key = todo.bucket === "오늘" ? "today" : "backlog";
-      const column = byKey.get(key) || columns[0];
-
-      column.cards.push({
-        id: todo.id,
-        title: todo.title,
-        tag: project?.tag || null,
-        priority: todo.priority,
-        project: project?.name || "Unassigned",
-        due: todo.due,
-      });
-    });
-
-  projects
-    .filter((project) => project.status === "In progress" || project.status === "Review")
-    .slice(0, 12)
-    .forEach((project) => {
-      const key = project.status === "Review" ? "review" : "doing";
-      const column = byKey.get(key);
-
-      column.cards.push({
-        id: `project-${project.id}`,
-        title: project.nextAction || project.name,
-        tag: project.tag,
-        priority: "med",
-        project: project.name,
-        due: project.due,
-      });
-    });
-
-  return columns;
 }
 
 export async function getProjectLedger() {
@@ -509,6 +466,6 @@ export async function getProjectLedger() {
     decisions: mapDecisions(decisionRows || []),
     notes: mapNotes(noteRows || []),
     checks: mapRoutineChecks(routineRows || []),
-    columns: buildBoardColumns(projects, todos),
+    columns: buildTaskBoardColumns(todos, projects),
   };
 }

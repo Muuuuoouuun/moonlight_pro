@@ -17,6 +17,32 @@ function normalizeOrigin(value) {
   }
 }
 
+function isLoopbackOrigin(value) {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  } catch {
+    return false;
+  }
+}
+
+function areEquivalentLoopbackOrigins(left, right) {
+  try {
+    const leftUrl = new URL(left);
+    const rightUrl = new URL(right);
+    const resolvePort = (url) => url.port || (url.protocol === "https:" ? "443" : "80");
+
+    return (
+      isLoopbackOrigin(leftUrl.origin) &&
+      isLoopbackOrigin(rightUrl.origin) &&
+      leftUrl.protocol === rightUrl.protocol &&
+      resolvePort(leftUrl) === resolvePort(rightUrl)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function resolveBearerToken(req) {
   const header = req.headers.get("authorization")?.trim() || "";
 
@@ -89,13 +115,18 @@ export function assertHubWriteAllowed(req) {
     return null;
   }
 
-  if (!isProductionRuntime()) {
-    const requestOrigin = resolveRequestOrigin(req);
-    const expectedOrigins = resolveExpectedOrigins(req);
+  const requestOrigin = resolveRequestOrigin(req);
+  const expectedOrigins = resolveExpectedOrigins(req);
+  const sameOrigin = Boolean(requestOrigin && expectedOrigins.has(requestOrigin));
+  const equivalentLoopback = Boolean(
+    requestOrigin && areEquivalentLoopbackOrigins(requestOrigin, req.url),
+  );
 
-    if (requestOrigin && expectedOrigins.has(requestOrigin)) {
-      return null;
-    }
+  if (
+    (sameOrigin && (!isProductionRuntime() || isLoopbackOrigin(requestOrigin))) ||
+    equivalentLoopback
+  ) {
+    return null;
   }
 
   return NextResponse.json(

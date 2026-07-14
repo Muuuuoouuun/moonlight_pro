@@ -24,6 +24,11 @@ test("infers conservative subject, organization, and explicit region tags", () =
     "subject:english",
     "subject:math",
   ]);
+
+  assert.deepEqual(inferLeadTags({ companyName: "한밝국어학원" }), [
+    "org:academy",
+    "subject:korean",
+  ]);
 });
 
 test("builds an owner-scoped customer-success score without changing the official stage", () => {
@@ -112,4 +117,24 @@ test("rejects records that are not proven to belong to Junhyuk", () => {
       }),
     /owner mismatch/i,
   );
+});
+
+test("keeps a stable evidence fingerprint across run timestamps", () => {
+  const input = {
+    owner: { externalId: "3935704427463307", name: "문준혁" },
+    lead: { id: "lead-4", name: "완재수학 평촌", status: "won", meta: {} },
+    company: { id: "company-4", name: "완재수학 평촌" },
+    officialAccount: {
+      externalId: "4305055608947497",
+      name: "완재수학 평촌",
+      ownerId: "3935704427463307",
+      matchType: "exact_name",
+    },
+    publicEvidence: [{ url: "https://example.com", confidence: "high", tags: ["region:경기-안양"] }],
+  };
+  const first = buildJunhyukLeadEnrichment({ ...input, now: "2026-07-15T00:00:00.000Z" });
+  const second = buildJunhyukLeadEnrichment({ ...input, now: "2026-07-16T00:00:00.000Z" });
+
+  assert.ok(first.enrichment.evidenceFingerprint);
+  assert.equal(first.enrichment.evidenceFingerprint, second.enrichment.evidenceFingerprint);
 });

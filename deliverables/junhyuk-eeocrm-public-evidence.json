@@ -1,0 +1,177 @@
+{
+  "generated_at": "2026-07-15T00:00:00+09:00",
+  "scope": {
+    "owner": "문준혁",
+    "owner_external_id": "3935704427463307",
+    "rule": "공식 owner exact match + Moonlight company exact match만; 개인 연락처 수집 금지"
+  },
+  "accounts": [
+    {
+      "company": "Studysync",
+      "evidence": [
+        {
+          "url": "https://lnk.bio/STUDYSYNC",
+          "confidence": "medium",
+          "tags": ["org:education-business", "subject:literacy", "channel:public-link-hub"],
+          "facts": ["한국어 공개 링크 허브에서 문해력 교육 브랜드와 교육 프로그램을 확인", "해외 동명 StudySync와의 관계 및 지역은 미확인"]
+        }
+      ]
+    },
+    {
+      "company": "윤유경플러스학원",
+      "evidence": [
+        {
+          "url": "https://yykplus.com/",
+          "confidence": "high",
+          "tags": ["org:academy", "region:경기-평택", "area:비전동", "subject:korean", "subject:english", "subject:math", "subject:science", "subject:coding", "channel:official-site", "channel:naver-blog", "channel:youtube", "signal:active-2026"],
+          "facts": ["평택 비전동 중·고등 입시 종합학원", "국어·영어·수학·과학·코딩·논술·입시컨설팅 운영", "공식 사이트가 블로그와 YouTube를 연결"]
+        },
+        {
+          "url": "https://academy.prompie.com/academies/detail/5jfzhwk/%EC%9C%A4%EC%9C%A0%EA%B2%BD%ED%94%8C%EB%9F%AC%EC%8A%A4%ED%95%99%EC%9B%90/",
+          "confidence": "high",
+          "tags": ["signal:active-2026"],
+          "facts": ["2026년 6~7월 공개 운영 업데이트 확인"]
+        }
+      ]
+    },
+    {
+      "company": "오쌤국어",
+      "evidence": [
+        {
+          "url": "https://academy.prompie.com/academies/detail/3fne413/%EC%98%A4%EC%8C%A4%EA%B5%AD%EC%96%B4%EA%B5%90%EC%8A%B5%EC%86%8C/",
+          "confidence": "medium",
+          "tags": ["org:academy", "region:서울-서초", "area:양재동", "subject:korean", "subject:essay", "channel:naver-blog", "signal:active-2026"],
+          "facts": ["양재동 동명 교습소는 중·고등 국어·논술을 운영", "강북구에도 동명이 있어 CRM 계정과 지역을 자동 확정하지 않음"]
+        }
+      ]
+    },
+    {
+      "company": "세이지프렙 어학원",
+      "evidence": [
+        {
+          "url": "https://www.sageprep.co.kr/",
+          "confidence": "high",
+          "tags": ["org:academy", "region:서울-강남", "area:신사동", "subject:english", "subject:math", "program:ib", "program:igcse", "program:dsat", "program:ap", "channel:official-site", "channel:instagram", "channel:naver-blog", "signal:active-2026"],
+          "facts": ["강남 신사동·압구정권 국제학교·아카데믹 교육 학원", "IB DP·IGCSE/MYP·Academic English·Math·College Prep 운영"]
+        }
+      ]
+    },
+    {
+      "company": "행복한 성적표 수학학원",
+      "evidence": [
+        {
+          "url": "https://learns.academy/academies/cd48930e-e771-4429-98a6-29b63997eee9",
+          "confidence": "high",
+          "tags": ["org:academy", "region:경기-성남", "area:성남동", "subject:math", "channel:instagram"],
+          "facts": ["성남 중원구 성남동 초·중·고 수학 전문 학원", "교과수학·입시수학 운영과 Instagram 채널 확인"]
+        }
+      ]
+    },
+    {
+      "company": "메티우스 수학",
+      "evidence": [
+        {
+          "url": "https://academy.prompie.com/academies/detail/v7lweu4/%EB%A9%94%ED%8B%B0%EC%9A%B0%EC%8A%A4%EC%88%98%ED%95%99%ED%95%99%EC%9B%90/",
+          "confidence": "high",
+          "tags": ["org:academy", "region:경기-시흥", "area:은행동", "subject:math", "channel:naver-blog", "activity:info-session-public", "signal:active-2026"],
+          "facts": ["시흥 은행동·은계지구 중·고등 수학·입시 전문 학원", "2026-07 입시설명회 공개 게시물 확인"]
+        },
+        {
+          "url": "https://blog.naver.com/matiusmath",
+          "confidence": "high",
+          "tags": ["channel:naver-blog"],
+          "facts": ["공식 네이버 블로그"]
+        }
+      ]
+    },
+    {
+      "company": "갈무리국어",
+      "evidence": [
+        {
+          "url": "https://galmuri.kr/view/service/about",
+          "confidence": "high",
+          "tags": ["org:academy", "region:서울", "area:목동", "subject:korean", "org:multi-branch", "channel:official-site", "channel:instagram", "channel:youtube", "activity:info-session-public", "signal:active-2026"],
+          "facts": ["서울 여러 권역에 8개 직영관을 둔 중·고등 국어 전문 조직", "공식 사이트가 Instagram과 중·고등부 YouTube를 연결"]
+        },
+        {
+          "url": "https://galmuri.kr/ot/70",
+          "confidence": "high",
+          "tags": ["activity:info-session-public", "signal:active-2026"],
+          "facts": ["2026년 5월 설명회 일정 확인"]
+        }
+      ]
+    },
+    {
+      "company": "한밝국어학원",
+      "evidence": [
+        {
+          "url": "https://academy.prompie.com/academies/detail/jn4syay/%ED%95%9C%EB%B0%9D%EA%B5%AD%EC%96%B4%ED%95%99%EC%9B%90/",
+          "confidence": "high",
+          "tags": ["org:academy", "region:경기-안양", "area:평촌", "subject:korean", "subject:essay", "channel:naver-blog", "signal:active-2026"],
+          "facts": ["안양 평촌 국어·논술 전문 학원", "2026-07 학교별 국어·정규반 공개 게시물 확인", "동탄관으로 자동 확장 매칭하지 않음"]
+        }
+      ]
+    },
+    {
+      "company": "반민정의 연기아카데미",
+      "evidence": [
+        {
+          "url": "https://academy.prompie.com/academies/detail/uo1aplp/%EB%B9%84%EC%97%A0%EC%A0%9C%EC%9D%B4%28BMJ%29%EC%97%B0%EA%B8%B0%ED%95%99%EC%9B%90/",
+          "confidence": "high",
+          "tags": ["org:academy", "region:서울-금천", "area:독산동", "subject:performing-arts", "program:musical", "program:audition", "channel:naver-blog", "signal:active-2026"],
+          "facts": ["현재 공개명 BMJ연기학원", "연기·뮤지컬·카메라연기·오디션·입시·성인 프로그램 운영", "2026-06 공개 게시물 확인"]
+        }
+      ]
+    },
+    {
+      "company": "완재수학 평촌",
+      "evidence": [
+        {
+          "url": "https://moneypin.biz/bizno/detail/2639601049/",
+          "confidence": "high",
+          "tags": ["org:academy", "region:경기-안양", "area:평촌", "subject:math", "program:exam-prep", "signal:active-2026"],
+          "facts": ["안양 평촌 소재 계속사업 상태 확인", "중·고등 내신·수능 수학 중심"]
+        },
+        {
+          "url": "https://www.gangmom.kr/tuition/69969321d0a1213f586b6531",
+          "confidence": "medium",
+          "tags": ["subject:english", "subject:science", "subject:coding"],
+          "facts": ["2025-12 교육청 기반 등록 과목에는 영어·과학·코딩도 표시되나 보조 정보로만 유지"]
+        }
+      ]
+    },
+    {
+      "company": "최강영어 물금",
+      "evidence": [
+        {
+          "url": null,
+          "confidence": "low",
+          "tags": [],
+          "facts": ["정확한 상호+물금 조합의 신뢰 가능한 공개 결과 미확인", "CRM 이름에서 직접 확인되는 물금·영어 외에는 외부 태그를 추가하지 않음"]
+        }
+      ]
+    },
+    {
+      "company": "NK인피니트 영수학원",
+      "evidence": [
+        {
+          "url": "https://academy.prompie.com/academies/detail/sujz9v6/NK%EC%9D%B8%ED%94%BC%EB%8B%88%ED%8A%B8%EC%98%81%EC%88%98%EC%A0%84%EB%AC%B8%ED%95%99%EC%9B%90/",
+          "confidence": "high",
+          "tags": ["org:academy", "region:경기-안산", "area:고잔동", "subject:english", "subject:math", "program:exam-prep", "channel:instagram", "channel:naver-blog", "signal:active-2026"],
+          "facts": ["안산 단원구 고잔동 중·고등 영어·수학·입시컨설팅 학원", "2026-07 학교별 기말고사 분석 공개 게시물 확인"]
+        }
+      ]
+    },
+    {
+      "company": "경기과학기술대학교",
+      "evidence": [
+        {
+          "url": "https://www.gtec.ac.kr/ipsi/index.do",
+          "confidence": "high",
+          "tags": ["org:university", "region:경기-시흥", "area:정왕동", "program:professional-degree", "program:industry-partnership", "subject:ict", "subject:engineering", "channel:official-site", "channel:youtube", "channel:instagram", "channel:naver-blog", "signal:active-2026"],
+          "facts": ["시흥 정왕동 고등교육기관", "전문학사·학사학위 전공심화·계약학과·산업체위탁 운영", "2026-07-14 모집 공지 확인"]
+        }
+      ]
+    }
+  ]
+}

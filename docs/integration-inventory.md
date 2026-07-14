@@ -69,12 +69,14 @@ Supabase는 이제 Hub/Engine의 1차 원장으로 본다. 다음 연결들은 �
 - `POST /api/webhook/project`
 - `POST /api/webhook/project/openclaw`
 - `POST /api/webhook/project/moltbot`
+- `POST /api/pms/command`
 
 관련 코드:
 
 - `apps/engine/app/api/health/route.ts`
 - `apps/engine/app/api/webhook/telegram/route.ts`
 - `apps/engine/app/api/webhook/project/route.ts`
+- `apps/engine/app/api/pms/command/route.ts`
 
 ### 현재 허브에서 이미 볼 수 있는 운영 화면
 
@@ -88,6 +90,7 @@ Supabase는 이제 Hub/Engine의 1차 원장으로 본다. 다음 연결들은 �
 | Provider | 역할 | 연결 방식 | 현재 상태 | 내부 연결 지점 | 필요한 것 | 다음 액션 |
 | --- | --- | --- | --- | --- | --- | --- |
 | Supabase | 시스템 원장, 로그, 프로젝트, task, sync 상태 저장 | REST + DB | Implemented | Hub, Engine, `packages/hub-gateway` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` 또는 `SUPABASE_ANON_KEY`, `COM_MOON_DEFAULT_WORKSPACE_ID` | 실제 workspace 기준으로 env 채우고 live 데이터 연결 |
+| Moonlight PMS | 프로젝트·task 생성, project 편집, task 상태 이동 | Hub BFF + authenticated Engine command | Connected (local) | `/api/hub/projects`, `/api/hub/tasks`, `/api/pms/command`, `projects`, `tasks` | Hub/Engine shared secret, Hub write guard, live workspace | dependency·milestone·delete는 별도 Phase 3 계약 전까지 추가하지 않음 |
 | Telegram | 인바운드 명령, 빠른 운영 입력 | Webhook intake | Ready | `/api/webhook/telegram`, `automation_runs`, `webhook_events` | 공개 Engine URL, Telegram bot webhook 등록 | 봇 webhook를 engine URL에 연결하고 smoke test 실행 |
 | Project tools | 외부 PM/진행률 도구에서 progress/PMS 이벤트 수집 | Generic webhook | Ready | `/api/webhook/project`, `project_updates`, `routine_checks`, `projects` | 공개 Engine URL, 공급자 payload mapping | 먼저 하나의 PM 도구 payload를 webhook contract에 맞춤 |
 | OpenClaw | 외부 agent workflow에서 프로젝트/운영 이벤트 전달 + Moonlight 상태 outbound sync | Shared webhook alias + local/Telegram/Slack relay | Ready | `/api/webhook/project/openclaw`, `/api/integrations/openclaw/sync`, `project_updates`, `sync_runs`, `webhook_events` | 공개 Engine URL, `COM_MOON_SHARED_WEBHOOK_SECRET`, local URL 또는 Telegram/Slack relay 설정 | 로컬 OpenClaw면 `OPENCLAW_LOCAL_URL`, 채팅 기반이면 `OPENCLAW_TELEGRAM_CHAT_ID` 또는 `OPENCLAW_SLACK_WEBHOOK_URL`를 채우고 sync smoke test 실행 |
@@ -246,14 +249,15 @@ npm run inventory:project-connections -- --output docs/projects-connection-inven
 
 Google Calendar는 이제 직접 연결 가능한 1차 일정 provider다.
 
-#### 2026-07-14 연결 상태 — 확정
+#### 2026-07-15 연결 상태 — 확정
 
 - Google Cloud의 기존 `classinproject-moon` 프로젝트를 사용한다.
 - Hub 전용 웹 OAuth 클라이언트 이름은 `moonlight-hub-calendar`다.
 - OAuth audience는 조직 내부용이며, 범위는 `https://www.googleapis.com/auth/calendar.events`다.
 - 로컬 callback은 `http://localhost:3000/api/calendar/google/callback`으로 등록됐다.
 - `integration_connections`의 `google_calendar` connection은 `connected`이며 access token과 refresh token이 저장됐다.
-- Hub API smoke check는 `source: oauth`, `readOnly: false`로 성공했고, 30일 범위에서 실제 일정 19건을 읽었다.
+- Google Calendar API가 반환한 primary identity를 원장의 `external_account_id`에 보정했고, 다음 OAuth callback도 이를 자동 저장한다. 문서에는 `j***@classin.com`으로만 표기한다.
+- Hub API smoke check는 `source: oauth`, `readOnly: false`로 성공했고, 2026-07-15~07-31 범위에서 실제 일정 11건을 읽었다.
 - 실제 일정 생성·수정 smoke test는 사용자 캘린더에 불필요한 이벤트를 만들지 않기 위해 실행하지 않았다.
 - `GOOGLE_CALENDAR_ICAL_URL`은 OAuth connection이 없을 때만 쓰는 읽기 전용 fallback으로 유지한다. 저장소 문서에는 실제 공개/비공개 URL을 기록하지 않는다.
 
@@ -270,6 +274,20 @@ Google Calendar는 이제 직접 연결 가능한 1차 일정 provider다.
 - `Work OS > Calendar` 안에서 외부 Google 일정 읽기
 - 허브에서 Google 일정 생성 / 수정
 - sync 이력 `integration_connections`, `sync_runs` 기록
+
+#### 2026-07-15 control-plane 실행 상태 — 확정
+
+| 경계 | 상태 | 확인 증거 |
+| --- | --- | --- |
+| Hub / Engine / relay | live | 각 health 200, `npm run check:connections` 전체 PASS, launchd 두 job running |
+| OpenClaw cron | configured, delivery 검증 대기 | 평일 09:30 KST, Telegram announce 대상 명시. 마지막 run은 수정 전 `not-delivered`, 다음 예정 run에서 실제 전송 확인 필요 |
+| Moonlight MCP | Codex live, Claude configured | stdio 도구 13개, `list_tasks` live 6건. Claude project config와 Desktop config 등록, Desktop 앱 재시작 전까지는 설정 상태 |
+| Google Calendar | live / writable | OAuth source, account identity 저장, 07-15~07-31 11건 read |
+| iCal | fallback-only | OAuth 연결이 없을 때만 사용하는 read-only 경로, 현재 응답에 혼합되지 않음 |
+| Gmail / Sheets OAuth | disabled | provider allowlist에서 제외, callback·scope end-to-end 검증 전에는 configured로 표시하지 않음 |
+| eeoCRM | snapshot | Moonlight 총 119 leads 중 117건이 eeoCRM snapshot. 문준혁 exact-owner bridge는 16건만 `Me`로 분리 |
+| credential copies | quarantined | 동일 해시 Downloads 복사본 2개를 `~/.moonlight/credential-quarantine/2026-07-15`로 이동하고 `0600` 적용 |
+| Google Cloud IAM | previous audit only | 두 Owner, 미사용 Editor service account, broad API key가 기록됨. 이번 재검증은 로컬 `gcloud` 부재와 Cloud Console 로그인 부재로 미완료 |
 
 권장 1차 범위:
 

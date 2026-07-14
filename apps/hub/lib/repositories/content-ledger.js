@@ -258,6 +258,7 @@ function mapBrands(rows) {
       tone: resolveBrandTone(slug, kind, meta),
       colorHex: row.color_hex || "#5274a8",
       description: row.description || "",
+      orgScope: normalizeString(meta.org_scope, "personal"),
       philosophy: normalizeString(meta.philosophy),
       direction: normalizeString(meta.direction),
       cadence: normalizeString(meta.cadence),

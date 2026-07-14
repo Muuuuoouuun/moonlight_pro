@@ -13,8 +13,8 @@ afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
 });
 
-function makeRequest(headers = {}) {
-  return new Request("https://hub.example.com/api/projects/update", {
+function makeRequest(headers = {}, url = "https://hub.example.com/api/projects/update") {
+  return new Request(url, {
     method: "POST",
     headers,
   });
@@ -53,4 +53,36 @@ test("local hub writes keep the same-origin fallback for smoke testing", () => {
   const result = assertHubWriteAllowed(makeRequest({ origin: "https://hub.example.com" }));
 
   assert.equal(result, null);
+});
+
+test("production localhost allows same-origin browser writes without exposing a secret", () => {
+  process.env.NODE_ENV = "production";
+  process.env.COM_MOON_HUB_URL = "http://127.0.0.1:3000";
+  process.env.COM_MOON_HUB_WRITE_SECRET = "server-only-secret";
+
+  const result = assertHubWriteAllowed(makeRequest(
+    { origin: "http://127.0.0.1:3000" },
+    "http://127.0.0.1:3000/api/hub/projects",
+  ));
+
+  assert.equal(result, null);
+});
+
+test("production loopback accepts localhost and 127 aliases only on the same port", async () => {
+  process.env.NODE_ENV = "production";
+  process.env.COM_MOON_HUB_URL = "http://localhost:3000";
+  process.env.COM_MOON_HUB_WRITE_SECRET = "server-only-secret";
+
+  const aliasResult = assertHubWriteAllowed(makeRequest(
+    { origin: "http://127.0.0.1:3000" },
+    "http://localhost:3000/api/hub/projects",
+  ));
+  const wrongPortResult = assertHubWriteAllowed(makeRequest(
+    { origin: "http://127.0.0.1:3001" },
+    "http://localhost:3000/api/hub/projects",
+  ));
+
+  assert.equal(aliasResult, null);
+  assert.ok(wrongPortResult instanceof Response);
+  assert.equal(wrongPortResult.status, 401);
 });

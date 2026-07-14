@@ -11,6 +11,7 @@ import {
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { insertSupabaseRecord, updateSupabaseRecord } from "@/lib/server-write";
 import { eqFilter } from "@/lib/server-read";
+import { buildContentBrandCatalog } from "@/lib/content-brand-catalog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export async function GET() {
     return NextResponse.json({
       status: ledger.source === "supabase" ? "live" : "preview",
       ...ledger,
+      brandCatalog: buildContentBrandCatalog(ledger),
     });
   } catch (error) {
     return NextResponse.json(

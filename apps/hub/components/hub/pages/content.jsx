@@ -977,8 +977,9 @@ export function Studio({ workspace }) {
 export function Queue({ workspace }) {
   const ws = getWorkspace(workspace);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [tab, setTab] = React.useState('all');
-  const [brandFilter, setBrandFilter] = React.useState('all');
+  const [brandFilter, setBrandFilter] = React.useState(() => searchParams.get('brand') || 'all');
   const ledger = useContentLedger();
   // Scope the brand filter pills + queue items to this workspace (pass-through when unscoped).
   const brands = ws ? filterBrandsByWorkspace(ledger.brands || [], workspace) : (ledger.brands || []);

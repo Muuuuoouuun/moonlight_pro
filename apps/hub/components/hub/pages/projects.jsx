@@ -3,7 +3,8 @@
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState, SyncBadge, SegmentedControl } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState, SyncBadge, SegmentedControl, EditDrawer } from "../hub-primitives";
+import { buildProjectDraft, buildTaskBoardColumns, buildTaskDraft, createClientId, taskStatusForBoardColumn } from "@/lib/pms-ui";
 import {
   getWorkspace,
   filterBrandsByWorkspace,
@@ -108,7 +109,6 @@ export function Projects({ workspace }) {
   });
   const [todos, setTodos] = React.useState([]);
   const [drag, setDrag] = React.useState(null);
-  const [cols, setCols] = React.useState([]);
   const [expanded, setExpanded] = React.useState(() => new Set());
   const [openDetail, setOpenDetail] = React.useState(null);
   const [brandMenuOpen, setBrandMenuOpen] = React.useState(false);
@@ -118,6 +118,8 @@ export function Projects({ workspace }) {
   const createdFromQueryRef = React.useRef(false);
   const [orderPending, setOrderPending] = React.useState(false);
   const [orderResult, setOrderResult] = React.useState(null); // { tone: 'ok'|'err', label }
+  const [projectDraft, setProjectDraft] = React.useState(null);
+  const [taskDraft, setTaskDraft] = React.useState(null);
 
   const formatTime = (d) => {
     try {
@@ -173,61 +175,59 @@ export function Projects({ workspace }) {
   const projects = brand === 'all' ? allProjects : allProjects.filter(p => p.brand === brand);
   const brandTodos = brand === 'all' ? scopedTodos : scopedTodos.filter(t => t.brand === brand);
   const currentBrand = brands.find(b => b.key === brand) || brands[0] || EMPTY_ALL_BRAND;
+  const visibleColumns = buildTaskBoardColumns(brandTodos, allProjects);
+
+  const loadLedger = React.useCallback(async ({ initial = false } = {}) => {
+    setSyncState('loading');
+    try {
+      const response = await fetch('/api/hub/projects', { cache: 'no-store' });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || !data || data.status === 'error') {
+        setSyncState('preview');
+        return false;
+      }
+
+      if (data.source === 'supabase') {
+        const liveProjects = Array.isArray(data.projects) ? data.projects : [];
+        setLedger({
+          source: data.source,
+          brands: data.brands?.length ? data.brands : [EMPTY_ALL_BRAND],
+          projects: liveProjects,
+          updates: Array.isArray(data.updates) ? data.updates : [],
+          decisions: Array.isArray(data.decisions) ? data.decisions : [],
+          notes: Array.isArray(data.notes) ? data.notes : [],
+          checks: Array.isArray(data.checks) ? data.checks : [],
+          columns: Array.isArray(data.columns) ? data.columns : [],
+        });
+        setTodos(Array.isArray(data.todos) ? data.todos : []);
+        if (initial) setExpanded(new Set(liveProjects.slice(0, 2).map(p => p.id)));
+        setSyncState('live');
+        return true;
+      }
+
+      setLedger({
+        source: 'preview',
+        brands: [EMPTY_ALL_BRAND],
+        projects: [],
+        updates: [],
+        decisions: [],
+        notes: [],
+        checks: [],
+        columns: [],
+      });
+      setTodos([]);
+      setSyncState('preview');
+      return false;
+    } catch {
+      setSyncState('preview');
+      return false;
+    }
+  }, []);
 
   React.useEffect(() => {
-    let active = true;
-
-    async function loadLedger() {
-      setSyncState('loading');
-      try {
-        const response = await fetch('/api/hub/projects', { cache: 'no-store' });
-        const data = await response.json().catch(() => null);
-
-        if (!active || !response.ok || !data || data.status === 'error') {
-          if (active) setSyncState('preview');
-          return;
-        }
-
-        if (data.source === 'supabase') {
-          const liveProjects = Array.isArray(data.projects) ? data.projects : [];
-          const liveColumns = Array.isArray(data.columns) ? data.columns : [];
-          setLedger({
-            source: data.source,
-            brands: data.brands?.length ? data.brands : [EMPTY_ALL_BRAND],
-            projects: liveProjects,
-            updates: Array.isArray(data.updates) ? data.updates : [],
-            decisions: Array.isArray(data.decisions) ? data.decisions : [],
-            notes: Array.isArray(data.notes) ? data.notes : [],
-            checks: Array.isArray(data.checks) ? data.checks : [],
-            columns: liveColumns,
-          });
-          setTodos(Array.isArray(data.todos) ? data.todos : []);
-          setCols(liveColumns);
-          setExpanded(new Set(liveProjects.slice(0, 2).map(p => p.id)));
-          setSyncState('live');
-        } else {
-          setLedger({
-            source: 'preview',
-            brands: [EMPTY_ALL_BRAND],
-            projects: [],
-            updates: [],
-            decisions: [],
-            notes: [],
-            checks: [],
-            columns: [],
-          });
-          setTodos([]);
-          setCols([]);
-          setSyncState('preview');
-        }
-      } catch {
-        if (active) setSyncState('preview');
-      }
-    }
-
-    loadLedger();
-    return () => { active = false; };
-  }, []);
+    loadLedger({ initial: true });
+  }, [loadLedger]);
 
   React.useEffect(() => {
     if (!brands.some(b => b.key === brand)) {
@@ -236,14 +236,149 @@ export function Projects({ workspace }) {
   }, [brand, brands, wsDefaultBrand]);
 
   const toggleExpand = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const unavailableWrite = React.useCallback(() => {
-    setOrderResult({ tone: 'err', label: '읽기 전용 · 저장 API 연결 필요' });
+  const createProject = React.useCallback((initialStatus = 'Planning') => {
+    const selectedBrand = brand === 'all'
+      ? brands.find(item => item.key !== 'all')
+      : currentBrand;
+    if (!selectedBrand || selectedBrand.id === 'all') {
+      setOrderResult({ tone: 'err', label: '프로젝트를 연결할 브랜드가 없습니다' });
+      return;
+    }
+    setProjectDraft({
+      ...buildProjectDraft({
+        brandId: selectedBrand.id,
+        brandKey: selectedBrand.key,
+        initialStatus,
+      }),
+      id: createClientId(),
+    });
+  }, [brand, brands, currentBrand]);
+
+  const editProject = React.useCallback((project) => {
+    setProjectDraft({
+      kind: 'project',
+      isNew: false,
+      id: project.id,
+      title: project.name,
+      brandId: project.brandId,
+      brandKey: project.brand,
+      summary: project.summary || '',
+      status: project.statusKey || 'active',
+      priority: project.priority || 'medium',
+      progress: project.progress || 0,
+      nextAction: project.nextAction || '',
+      dueAt: project.dueAt ? String(project.dueAt).slice(0, 10) : '',
+    });
   }, []);
-  const toggleTodo = unavailableWrite;
-  const createProject = unavailableWrite;
-  const createTodo = unavailableWrite;
-  const moveCard = unavailableWrite;
-  const createBoardCard = unavailableWrite;
+
+  const createTodo = React.useCallback((projectId = null, initialStatus = 'todo') => {
+    setTaskDraft({
+      ...buildTaskDraft({ projectId, initialStatus }),
+      id: createClientId(),
+    });
+  }, []);
+
+  const persistProject = React.useCallback(async () => {
+    if (!projectDraft?.title?.trim()) return { ok: false, status: 'invalid-input' };
+    try {
+      const response = await fetch('/api/hub/projects', {
+        method: projectDraft.isNew ? 'POST' : 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: projectDraft.id,
+          title: projectDraft.title,
+          brandId: projectDraft.brandId,
+          summary: projectDraft.summary,
+          status: projectDraft.status,
+          priority: projectDraft.priority,
+          progress: Number(projectDraft.progress || 0),
+          nextAction: projectDraft.nextAction,
+          dueAt: projectDraft.dueAt,
+          source: 'hub-projects',
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !['saved', 'duplicate'].includes(data.status)) {
+        setOrderResult({ tone: 'err', label: data.error || `저장 실패 ${response.status}` });
+        return { ok: false, status: data.status || 'error' };
+      }
+      await loadLedger();
+      setOrderResult({ tone: 'ok', label: projectDraft.isNew ? '프로젝트 저장됨' : '프로젝트 업데이트됨' });
+      return { ok: true, status: data.status };
+    } catch (error) {
+      setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+      return { ok: false, status: 'error' };
+    }
+  }, [loadLedger, projectDraft]);
+
+  const persistTask = React.useCallback(async () => {
+    if (!taskDraft?.title?.trim()) return { ok: false, status: 'invalid-input' };
+    try {
+      const response = await fetch('/api/hub/tasks', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: taskDraft.id,
+          title: taskDraft.title,
+          projectId: taskDraft.projectId || null,
+          status: taskDraft.status,
+          priority: taskDraft.priority,
+          dueAt: taskDraft.dueAt,
+          source: 'hub-projects',
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !['saved', 'duplicate'].includes(data.status)) {
+        setOrderResult({ tone: 'err', label: data.error || `저장 실패 ${response.status}` });
+        return { ok: false, status: data.status || 'error' };
+      }
+      await loadLedger();
+      setOrderResult({ tone: 'ok', label: '할 일 저장됨' });
+      return { ok: true, status: data.status };
+    } catch (error) {
+      setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+      return { ok: false, status: 'error' };
+    }
+  }, [loadLedger, taskDraft]);
+
+  const updateTaskStatus = React.useCallback(async (id, status) => {
+    const response = await fetch('/api/hub/tasks', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id, status }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.status !== 'saved') {
+      throw new Error(data.error || `상태 저장 실패 ${response.status}`);
+    }
+    await loadLedger();
+  }, [loadLedger]);
+
+  const toggleTodo = React.useCallback(async (id) => {
+    const todo = todos.find(item => item.id === id);
+    if (!todo) return;
+    try {
+      await updateTaskStatus(id, todo.status === 'done' ? 'todo' : 'done');
+      setOrderResult({ tone: 'ok', label: todo.status === 'done' ? '할 일 다시 열림' : '할 일 완료됨' });
+    } catch (error) {
+      setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+    }
+  }, [todos, updateTaskStatus]);
+
+  const moveCard = React.useCallback(async (id, column) => {
+    const status = taskStatusForBoardColumn(column);
+    if (!status) return;
+    try {
+      await updateTaskStatus(id, status);
+      setOrderResult({ tone: 'ok', label: '보드 상태 저장됨' });
+    } catch (error) {
+      setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+    }
+  }, [updateTaskStatus]);
+
+  const createBoardCard = React.useCallback((column) => {
+    createTodo(null, taskStatusForBoardColumn(column) || 'todo');
+  }, [createTodo]);
 
   const statusTone = { 'In progress': 'info', Review: 'warning', Planning: 'moon', Backlog: 'neutral', Blocked: 'danger', Done: 'success' };
   const prioTone = { critical: 'danger', high: 'danger', med: 'warning', medium: 'warning', low: 'neutral' };
@@ -480,6 +615,11 @@ export function Projects({ workspace }) {
             value={view}
             onChange={setView}
           />
+          {orderResult && (
+            <span className="mono" style={{ fontSize: 10.5, color: orderResult.tone === 'ok' ? 'var(--success)' : 'var(--danger)', whiteSpace: 'nowrap' }}>
+              {orderResult.label}
+            </span>
+          )}
           <Button variant="primary" size="sm" icon="plus" onClick={() => view === 'todos' ? createTodo() : createProject()}>{view === 'todos' ? 'To-do' : 'Project'}</Button>
         </div>
 
@@ -753,6 +893,7 @@ export function Projects({ workspace }) {
                     </DetailSection>
                   </div>
                   <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Button variant="outline" size="sm" onClick={() => editProject(p)}>편집</Button>
                     <Button variant="primary" size="sm" icon="chat" style={{ flex: 1 }} onClick={() => {
                       setExpanded(prev => new Set([...prev, p.id]));
                       setView('tree');
@@ -846,7 +987,7 @@ export function Projects({ workspace }) {
 
         {view === 'board' && (
             <div className="hub-scroll-x" style={{ display: 'flex', gap: 'var(--gap)', overflowX: 'auto', flex: 1, padding: 'var(--section-gap)' }}>
-            {cols.map(col => (
+            {visibleColumns.map(col => (
               <div key={col.key}
                 onDragOver={e => e.preventDefault()}
                 onDrop={() => drag && moveCard(drag, col.key)}
@@ -890,6 +1031,99 @@ export function Projects({ workspace }) {
           </div>
         )}
       </div>
+
+      <EditDrawer
+        title={projectDraft?.isNew ? '프로젝트 만들기' : '프로젝트 편집'}
+        subtitle="브랜드별 프로젝트 원장"
+        record={projectDraft}
+        fields={[
+          { key: 'title', label: '프로젝트명', placeholder: '프로젝트 이름' },
+          {
+            key: 'brandId',
+            label: '브랜드',
+            type: 'select',
+            options: [
+              { value: '', label: '브랜드 선택' },
+              ...brands.filter(item => item.key !== 'all').map(item => ({ value: item.id, label: item.name })),
+            ],
+          },
+          { key: 'summary', label: '설명', placeholder: '프로젝트 목적과 범위' },
+          {
+            key: 'status',
+            label: '상태',
+            type: 'select',
+            options: [
+              { value: 'draft', label: '계획' },
+              { value: 'active', label: '진행' },
+              { value: 'blocked', label: '막힘' },
+              { value: 'completed', label: '완료' },
+              { value: 'archived', label: '보관' },
+            ],
+          },
+          {
+            key: 'priority',
+            label: '우선순위',
+            type: 'select',
+            options: [
+              { value: 'low', label: '낮음' },
+              { value: 'medium', label: '보통' },
+              { value: 'high', label: '높음' },
+              { value: 'critical', label: '긴급' },
+            ],
+          },
+          { key: 'progress', label: '진행률 (%)', inputType: 'number', placeholder: '0' },
+          { key: 'nextAction', label: '다음 액션', placeholder: '다음에 할 한 가지' },
+          { key: 'dueAt', label: '기한', inputType: 'date' },
+        ]}
+        onChange={(key, value) => setProjectDraft(current => ({ ...current, [key]: value }))}
+        onSave={persistProject}
+        onClose={() => setProjectDraft(null)}
+      />
+
+      <EditDrawer
+        title="할 일 만들기"
+        subtitle="프로젝트 실행 항목"
+        record={taskDraft}
+        fields={[
+          { key: 'title', label: '할 일', placeholder: '실행할 작업' },
+          {
+            key: 'projectId',
+            label: '프로젝트',
+            type: 'select',
+            options: [
+              { value: '', label: '미지정' },
+              ...allProjects.map(item => ({ value: item.id, label: item.name })),
+            ],
+          },
+          {
+            key: 'status',
+            label: '상태',
+            type: 'select',
+            options: [
+              { value: 'inbox', label: '수집' },
+              { value: 'todo', label: '계획' },
+              { value: 'doing', label: '진행' },
+              { value: 'blocked', label: '대기' },
+              { value: 'done', label: '완료' },
+            ],
+          },
+          {
+            key: 'priority',
+            label: '우선순위',
+            type: 'select',
+            options: [
+              { value: 'low', label: '낮음' },
+              { value: 'medium', label: '보통' },
+              { value: 'high', label: '높음' },
+              { value: 'critical', label: '긴급' },
+            ],
+          },
+          { key: 'dueAt', label: '기한', inputType: 'date' },
+        ]}
+        onChange={(key, value) => setTaskDraft(current => ({ ...current, [key]: value }))}
+        onSave={persistTask}
+        onClose={() => setTaskDraft(null)}
+      />
     </div>
   );
 }

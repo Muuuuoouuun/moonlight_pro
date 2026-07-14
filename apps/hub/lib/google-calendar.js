@@ -13,6 +13,7 @@ import {
   isGoogleOAuthProviderEnabled,
   resolveOAuthStateSecret,
 } from "@/lib/integration-readiness";
+import { extractGoogleCalendarAccountIdentity } from "@/lib/google-calendar-identity";
 import { createHmac, timingSafeEqual } from "crypto";
 
 const GOOGLE_CALENDAR_PROVIDER = "google_calendar";
@@ -230,6 +231,23 @@ export async function exchangeGoogleCalendarCode({ code, redirectUri }) {
   });
 }
 
+export async function fetchGoogleCalendarAccountIdentity({ accessToken, calendarId = "primary" }) {
+  if (!accessToken) return null;
+
+  const url = new URL(`${GOOGLE_CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events`);
+  url.searchParams.set("maxResults", "1");
+  url.searchParams.set("singleEvents", "true");
+  url.searchParams.set("timeMin", new Date().toISOString());
+
+  const response = await fetch(url, {
+    headers: { authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  if (!response.ok) return null;
+
+  return extractGoogleCalendarAccountIdentity(await response.json());
+}
+
 export async function refreshGoogleCalendarAccessToken(refreshToken) {
   return exchangeGoogleToken({
     refresh_token: refreshToken,
@@ -254,6 +272,7 @@ export async function saveGoogleCalendarConnection({
   workspaceId = resolveDefaultWorkspaceId(),
   calendarId,
   tokenData,
+  externalAccountId = null,
 }) {
   const existing = await fetchLatestGoogleCalendarConnection(workspaceId);
   const now = new Date().toISOString();
@@ -270,6 +289,7 @@ export async function saveGoogleCalendarConnection({
     workspace_id: workspaceId || null,
     provider: GOOGLE_CALENDAR_PROVIDER,
     status: "connected",
+    external_account_id: externalAccountId || existing?.external_account_id || null,
     config,
     last_synced_at: now,
   };

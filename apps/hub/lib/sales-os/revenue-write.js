@@ -20,6 +20,7 @@ const LEAD_STATUS_BY_STAGE = {
   New: "new",
   Contact: "nurturing",
   Qualified: "qualified",
+  Customer: "won",
   Lost: "lost",
 };
 

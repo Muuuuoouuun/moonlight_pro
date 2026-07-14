@@ -10,7 +10,7 @@
 
 ---
 
-## Confirmed baseline (2026-07-15 KST)
+## Confirmed baseline before cleanup (2026-07-15 KST)
 
 - Hub is live on `127.0.0.1:3000`; Engine is configured for `localhost:3001` but is not running.
 - OpenClaw gateway is live on `127.0.0.1:18789`; Moonlight points to relay `127.0.0.1:4317/webhook/moonlight`, but that relay is not running.
@@ -22,6 +22,15 @@
 - eeoCRM import/hydration succeeded on 2026-07-07 and produced 117 promoted leads plus 23 deals. There is no callable eeoCRM MCP server on this Mac. The retained script defaults to a Windows directory and `127.0.0.1:3000/sse`, which now collides with Hub.
 - Two raw Google OAuth credential files in OpenClaw inbound media and one in Downloads are mode `0644`. The OpenClaw Google Workspace MCP configuration points at the web client with zero redirect URIs.
 - Google Cloud IAM includes two project Owners and an unused Editor service account with no keys. Keep it disabled from runtime until a least-privilege role is explicitly defined.
+
+## Execution snapshot (2026-07-15 KST)
+
+- Hub, Engine, relay, and OpenClaw gateway health probes pass; Engine and relay are running under launchd.
+- Calendar is the only enabled Google OAuth provider. It reads 11 events for 2026-07-15~07-31 from the writable OAuth source, stores the redacted primary identity in the connection ledger, and leaves iCal as fallback-only.
+- Responsibility-specific secrets are separated. Gmail and Sheets remain explicitly disabled.
+- Moonlight MCP exposes 13 tools. Codex read smoke is live; project and Claude Desktop config are registered, with Desktop restart still required.
+- The Moonlight ledger has 119 leads total: 117 eeoCRM snapshot, 2 other sources. Only 16 exact-owner records are tagged `Me` and enriched; their values are no longer derived from score.
+- Exact duplicate OAuth client files were moved out of Downloads into a `0600` quarantine. IAM deletion and API-key restriction remain blocked pending a fresh authenticated audit.
 
 ## Task 1: Make readiness truthful
 

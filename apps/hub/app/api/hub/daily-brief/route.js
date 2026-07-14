@@ -7,6 +7,11 @@ import { getProjectLedger } from "@/lib/repositories/operating-ledger";
 import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
 import { getWorkLedger } from "@/lib/repositories/work-ledger";
 import { getWorkOrders } from "@/lib/sales-os/work-orders";
+import {
+  buildContentBrandCatalog,
+  filterContentLedgerToBrandLanes,
+} from "@/lib/content-brand-catalog";
+import { buildOperatorHomeSummary } from "@/lib/operator-home-summary";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -400,6 +405,11 @@ export async function GET() {
     ...buildAutomationSignals(automations),
     ...buildWorkSignals(projects, work),
   ].slice(0, 7);
+  const operatorHome = buildOperatorHomeSummary({
+    projects,
+    content: filterContentLedgerToBrandLanes(content),
+  });
+  const contentBrands = buildContentBrandCatalog(content);
 
   return NextResponse.json({
     status: errorCount ? "partial" : liveCount ? "live" : "preview",
@@ -415,6 +425,8 @@ export async function GET() {
       todayCount: signals.filter((signal) => signal.tone === "warning").length,
     },
     metrics: buildMetrics(revenue, content, automations, projects),
+    operatorHome,
+    contentBrands,
     signals,
     queue,
     morningBrief: morning.brief || null,

@@ -27,7 +27,7 @@ select
   '#5274a8',
   '클래스인 세일즈 사이드 채널 (설명 추후 보완)',
   jsonb_build_object(
-    'glyph', '◈', 'tone', 'success', 'order', 65,
+    'glyph', '◈', 'tone', 'moon', 'order', 65,
     'org_scope', 'classin'
   )
 from target_workspace w
