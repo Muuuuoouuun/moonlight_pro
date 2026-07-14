@@ -42,12 +42,12 @@
 | 인터뷰 Q1~Q115 정리 | 완료 | [`operator-workflow-profile.md`](operator-workflow-profile.md) |
 | 전제 1~7 및 접근안 B | 승인됨 | 구현 지시와 Phase 0 착수 |
 | Phase 0 신뢰 기준선 | 완료·푸시 | `5c9ccc2`, `codex/moonlight-phase0-trust` |
-| Phase 1A Durable Task Loop | 진행 중 | project/task durable create·update·status·reload와 홈 Quick Capture→task는 live 검증. 범용 inbox destination, task-only Today, cross-destination receipt는 남음 |
+| Phase 1A Durable Task Loop | 진행 중 | project/task durable create·update·status·reload, 홈 Quick Capture→task, task-only Today 완료·재조회는 live 검증. 범용 inbox destination과 cross-destination receipt는 남음 |
 | Phase 1B Action Desk | 부분 작동 | Daily Brief 6개 ledger와 owner-verified 집중 고객 3건은 live. 정식 Attention adapter, Calendar agenda, source timeout/partial 계약은 남음 |
 | Phase 1C Contact Outcome Loop | 미완료 | 기존 `outreach_outcomes` 기록은 있으나 요약·반응·다음 task를 묶는 원자적 `record_contact_outcome_v1`은 없음 |
 | ClassIn 전체 동기화·음성 AI·콘텐츠 직접 발행 | 보류 | 별도 하드 게이트 필요 |
 
-Phase 0는 Content canonical contract, write 응답 분류, honest empty/error UI, 사용자 identity, Content 승인 원자화를 포함한다. 당시 검증 기준선은 Node test 50/50, contract check, typecheck, Hub/Engine build 통과다. 2026-07-15 현재 저장소 검증은 74/74이며 Phase 1 전체 완료를 뜻하지 않는다.
+Phase 0는 Content canonical contract, write 응답 분류, honest empty/error UI, 사용자 identity, Content 승인 원자화를 포함한다. 당시 검증 기준선은 Node test 50/50, contract check, typecheck, Hub/Engine build 통과다. 2026-07-15 현재 저장소 검증은 79/79이며 Phase 1 전체 완료를 뜻하지 않는다.
 
 ## 4. 현재 문서
 

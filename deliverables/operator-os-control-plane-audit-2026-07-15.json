@@ -1,5 +1,5 @@
 {
-  "auditedAt": "2026-07-15T03:24:25+09:00",
+  "auditedAt": "2026-07-15T03:32:46+09:00",
   "scope": "Moonlight operator OS, exact-owner eeoCRM enrichment, PMS/content writes, MCP, OAuth/IAM, OpenClaw",
   "crm": {
     "moonlightLeadCount": 119,
@@ -43,7 +43,7 @@
     "tasks": 6,
     "writePath": "Hub BFF -> Engine /api/pms/command -> Supabase -> Hub repository",
     "liveRoundTrip": "passed",
-    "hydratedUi": "localhost:3000 verified: 4 projects, 6 open tasks, 2 due today, 1 blocked project",
+    "hydratedUi": "localhost:3000 verified: 4 projects, 6 open tasks, 2 due-or-overdue tasks, 1 blocked project",
     "quickTaskCapture": {
       "status": "live-task-destination",
       "path": "Daily Brief -> Hub /api/hub/tasks -> Engine /api/pms/command -> Supabase tasks",
@@ -51,7 +51,16 @@
       "sameIdRetry": "duplicate with one durable row",
       "failurePolicy": "clear only on saved or duplicate; preserve raw input and client UUID otherwise",
       "mobile390x844": "input and submit button inside first fold; document overflow 0",
-      "remainingPhase1A": "general inbox/work-order destination, cross-destination receipt, and task-only Today"
+      "remainingPhase1A": "general inbox/work-order destination and cross-destination receipt"
+    },
+    "taskToday": {
+      "status": "live-task-only-loop",
+      "lanes": { "missed": 2, "today": 1, "waiting": 1, "inbox": 0, "shown": 4 },
+      "quickCaptureRefresh": "saved inbox task appeared in the same page after durable read-back",
+      "completionRoundTrip": "PATCH through Hub BFF and Engine saved done; re-read removed the task from Today",
+      "completedTasksVisible": 0,
+      "mobile390x844": "rows fit without horizontal overflow; completion controls are 44px and have task-specific aria labels",
+      "temporaryRowsRemaining": 0
     },
     "temporaryRowsRemaining": 0
   },
@@ -251,13 +260,13 @@
     }
   },
   "verification": {
-    "repositoryTests": { "passed": 94, "failed": 0, "latestFocusedSuitePassed": 74, "latestFocusedSuiteFailed": 0 },
+    "repositoryTests": { "passed": 94, "failed": 0, "latestFocusedSuitePassed": 79, "latestFocusedSuiteFailed": 0 },
     "monorepoTypecheck": "passed",
     "hubAndEngineBuild": "passed",
     "connectionCheck": "all-critical-passed; Calendar PASS enabled/configured; Gmail and Sheets INFO disabled; OpenClaw Google MCP INFO process-ok/provider-auth-required",
     "hydratedBrowser": {
       "origin": "http://localhost:3000",
-      "dailyBrief": "6/6 ledgers live; 7 signals; PMS and ClassIn content pulse rendered; 390x844 document overflow 0 and visible interactive targets >=44x44",
+      "dailyBrief": "6/6 ledgers live; 7 signals; task-only Today rendered with 4 task rows and durable completion; PMS and ClassIn content pulse rendered; 390x844 document overflow 0 and visible interactive targets >=44x44",
       "projects": "4 projects; 6 open todos; List, Board, To-dos controls rendered",
       "content": "3 items; canonical Class.Moon, ClassIn Side, Study.Seagull lanes rendered; at 390x844 the empty lane stays within its 340px card and the requested brand survives new-draft Studio initialization",
       "revenueLeads": "119 total; 16 exact-owner rows resolve to Me; 390x844 identity column 188px with no document/card overflow; 768x1024 and 1440x1000 regressions passed",
@@ -275,9 +284,9 @@
     },
     "liveTemporaryRowsRemaining": 0,
     "latestLiveRecheck": {
-      "at": "2026-07-15T03:18:58+09:00",
+      "at": "2026-07-15T03:32:46+09:00",
       "revenue": "supabase live; 119-row searchable ledger preserved; evidence-backed dry-run over 117 eeoCRM rows targeted 16 exact-owner leads with changed 0; Daily Brief now exposes three verified customer-success follow-ups and zero unverified Revenue signals",
-      "pms": "supabase live; 4 projects; 6 tasks; 1 blocked; Quick Capture task save/read-back and same-ID duplicate passed; temporary row residue 0",
+      "pms": "supabase live; 4 projects; 6 tasks; 1 blocked; Quick Capture task save/read-back and same-ID duplicate passed; task-only Today save-refresh-complete-re-read passed; temporary row residue 0",
       "content": "three canonical ClassIn lanes live with counts 1/0/0 and two outside-lane items",
       "dailyBrief": "six of six sources live; seven signals"
     },
