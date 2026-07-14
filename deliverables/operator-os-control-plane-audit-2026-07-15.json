@@ -1,5 +1,5 @@
 {
-  "auditedAt": "2026-07-15T03:00:29+09:00",
+  "auditedAt": "2026-07-15T03:02:22+09:00",
   "scope": "Moonlight operator OS, exact-owner eeoCRM enrichment, PMS/content writes, MCP, OAuth/IAM, OpenClaw",
   "crm": {
     "moonlightLeadCount": 119,
@@ -62,6 +62,10 @@
       "discoveredToolCount": 26,
       "providerReadProbe": "authentication-required",
       "credentialStorage": "Keychain-backed wrapper; mcporter config plaintext env count 0",
+      "package": "mcp-google@2.3.0",
+      "exactLockfile": true,
+      "authLauncher": "~/.moonlight/bin/mcporter-google-workspace auth",
+      "productionDependencyAudit": { "critical": 0, "high": 0, "moderate": 5, "low": 0, "directPackageFixAvailable": false },
       "notionServer": "removed-after-401-invalid-token"
     },
     "temporaryRowsRemaining": 0,
