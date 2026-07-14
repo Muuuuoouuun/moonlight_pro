@@ -3,6 +3,8 @@
 import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, Progress, Sparkline, SyncBadge, EmptyState } from "../hub-primitives";
+import { createClientId } from "@/lib/pms-ui";
+import { buildQuickTaskCapture, isDurableQuickTaskResult } from "@/lib/quick-task-capture";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 
 function formatBriefDate(date) {
@@ -116,6 +118,96 @@ function sourceLabel(state) {
   if (state === 'syncing') return 'syncing';
   if (state === 'mixed') return 'mixed';
   return 'preview';
+}
+
+function QuickTaskCapture({ onNavigate }) {
+  const [raw, setRaw] = React.useState('');
+  const [state, setState] = React.useState({ status: 'idle', message: 'Enter로 수집함에 저장' });
+  const requestIdRef = React.useRef(null);
+
+  if (!requestIdRef.current) requestIdRef.current = createClientId();
+
+  async function submit(event) {
+    event.preventDefault();
+    const capture = buildQuickTaskCapture({ id: requestIdRef.current, raw });
+
+    if (!capture.ok) {
+      setState({ status: 'error', message: '할 일을 한 줄로 입력하세요.' });
+      return;
+    }
+
+    setState({ status: 'saving', message: '저장 중…' });
+    try {
+      const response = await fetch('/api/hub/tasks', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(capture.payload),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok && isDurableQuickTaskResult(data)) {
+        setRaw('');
+        requestIdRef.current = createClientId();
+        setState({ status: 'saved', message: data.status === 'duplicate' ? '이미 저장된 할 일입니다.' : '수집함에 저장했습니다.' });
+        return;
+      }
+
+      setState({
+        status: 'error',
+        message: data.error || data.status || `저장 실패 (${response.status})`,
+      });
+    } catch (error) {
+      setState({
+        status: 'error',
+        message: error instanceof Error ? error.message : '저장에 실패했습니다. 같은 입력으로 다시 시도하세요.',
+      });
+    }
+  }
+
+  const saving = state.status === 'saving';
+  const stateColor = state.status === 'error'
+    ? 'var(--danger)'
+    : state.status === 'saved'
+      ? 'var(--success)'
+      : 'var(--fg-faint)';
+
+  return (
+    <Card>
+      <form aria-label="빠른 할 일 입력" onSubmit={submit} className="hub-stackable-row" style={{ display: 'flex', alignItems: 'end', gap: 10 }}>
+        <label htmlFor="daily-brief-quick-task" style={{ display: 'flex', flex: '1 1 360px', minWidth: 0, flexDirection: 'column', gap: 7 }}>
+          <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Quick Capture · Task</span>
+          <input
+            id="daily-brief-quick-task"
+            value={raw}
+            onChange={(event) => {
+              setRaw(event.target.value);
+              if (state.status !== 'idle') setState({ status: 'idle', message: 'Enter로 수집함에 저장' });
+            }}
+            placeholder="지금 놓치면 안 되는 할 일을 한 줄로 입력"
+            autoComplete="off"
+            disabled={saving}
+            style={{
+              width: '100%', minHeight: 44, padding: '10px 12px', fontSize: 16, lineHeight: 1.45,
+              color: 'var(--fg)', background: 'var(--surface-2)',
+              border: `1px solid ${state.status === 'error' ? 'var(--danger-line)' : 'var(--line-soft)'}`,
+              borderRadius: 'var(--r-sm)', outline: 'none',
+            }}
+          />
+        </label>
+        <Button type="submit" variant="primary" size="md" icon="plus" disabled={saving || !raw.trim()} style={{ minHeight: 44 }}>
+          {saving ? '저장 중' : '할 일 저장'}
+        </Button>
+      </form>
+      <div style={{ marginTop: 8, minHeight: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span role={state.status === 'error' ? 'alert' : 'status'} aria-live="polite" style={{ flex: 1, fontSize: 11.5, color: stateColor }}>
+          {state.message}
+        </span>
+        {state.status === 'saved' && (
+          <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/projects?view=todos')}>할 일 보기</Button>
+        )}
+      </div>
+    </Card>
+  );
 }
 
 function useDailyBriefLedger() {
@@ -1104,6 +1196,8 @@ export function DailyBrief({ onNavigate }) {
           <Button variant="outline" size="md" icon="clock" onClick={() => onNavigate('dashboard/work/calendar?focus=15')}>Start 15m focus</Button>
         </div>
       </div>
+
+      <QuickTaskCapture onNavigate={onNavigate} />
 
       <StatusLine state={ledger} />
 
