@@ -1,5 +1,5 @@
 {
-  "auditedAt": "2026-07-15T03:07:59+09:00",
+  "auditedAt": "2026-07-15T03:12:34+09:00",
   "scope": "Moonlight operator OS, exact-owner eeoCRM enrichment, PMS/content writes, MCP, OAuth/IAM, OpenClaw",
   "crm": {
     "moonlightLeadCount": 119,
@@ -16,6 +16,18 @@
     "publicInfoSessionSignals": 2,
     "scoreDistribution": { "50": 2, "55": 7, "60": 1, "81": 1, "83": 3, "93": 2 },
     "officialActivityTables": { "customerEvents": 0, "tasks": 0, "captureRows": 0 },
+    "evidenceBackedDryRun": {
+      "officialOwnerAccounts": 22,
+      "moonlightEeoCrmLeads": 117,
+      "exactMatchedCompanies": 13,
+      "targetedLeads": 16,
+      "changedLeads": 0,
+      "unchangedLeads": 16,
+      "calendarEventsScanned": 248,
+      "taggedLeads": 16,
+      "customerSuccessLaneLeads": 16
+    },
+    "applyGuard": "--apply is rejected unless --evidence is supplied, preventing evidence omission from erasing existing public enrichment signals.",
     "policy": "Public signals remain separate from direct contact; missing activity is unknown, not zero intent."
   },
   "pms": {
@@ -223,7 +235,7 @@
     }
   },
   "verification": {
-    "repositoryTests": { "passed": 94, "failed": 0, "latestFocusedSuitePassed": 65, "latestFocusedSuiteFailed": 0 },
+    "repositoryTests": { "passed": 94, "failed": 0, "latestFocusedSuitePassed": 67, "latestFocusedSuiteFailed": 0 },
     "monorepoTypecheck": "passed",
     "hubAndEngineBuild": "passed",
     "connectionCheck": "all-critical-passed; Calendar PASS enabled/configured; Gmail and Sheets INFO disabled; OpenClaw Google MCP INFO process-ok/provider-auth-required",
@@ -247,8 +259,8 @@
     },
     "liveTemporaryRowsRemaining": 0,
     "latestLiveRecheck": {
-      "at": "2026-07-15T02:33:00+09:00",
-      "revenue": "supabase live; 119 leads; 16 owner=Me; 16/16 tagged; score distribution unchanged",
+      "at": "2026-07-15T03:12:34+09:00",
+      "revenue": "supabase live; evidence-backed dry-run over 117 eeoCRM rows targeted 16 exact-owner leads; changed 0, unchanged 16; 16/16 tagged and customer_success; score distribution unchanged",
       "pms": "supabase live; 4 projects; 6 tasks; 1 blocked",
       "content": "three canonical ClassIn lanes live with counts 1/0/0 and two outside-lane items",
       "dailyBrief": "six of six sources live; seven signals"

@@ -52,7 +52,9 @@ node \
   --evidence deliverables/junhyuk-eeocrm-public-evidence.json
 ```
 
-검토 후 실제 적용은 마지막에 `--apply`를 추가한다.
+검토 후 실제 적용은 마지막에 `--apply`를 추가한다. `--apply`는 `--evidence` 없이 실행할 수 없으며, 공개 근거가 없는 비교는 dry-run으로만 허용한다.
+
+2026-07-15 03:12 KST 증거 포함 재검증 결과는 공식 owner 계정 22건, eeoCRM snapshot 117건, exact 회사 13곳, 대상 16건, 변경 0건, unchanged 16건, 캘린더 248건 scan이었다. 대상 16건의 태그와 `customer_success` lane은 모두 유지됐고 점수 분포도 기존 값과 같았다.
 
 ## 주의·계승 지침
 
@@ -62,6 +64,7 @@ node \
 - ClassIn 정기 sync는 2026-06-24 이후 `Missing Xiaoshouyi base URL`로 skipped 상태다. 최신성 표시는 스냅샷 시각과 분리한다.
 - 공개 근거가 모호하거나 동명이면 `low`로 남기고 자동 태그에 쓰지 않는다.
 - 재실행은 의미 내용이 같으면 unchanged로 판단하며, 변경분만 patch한다.
+- 공개 근거 입력 없이 `--apply`하지 않는다. 스크립트의 apply guard를 제거하거나 우회하지 않는다.
 - Hub 리드 상세의 `분류 · 증거` 패널은 과목·지역·직접 접점·접점 소스·공개 신호·프로그램·채널을 분리해서 표시한다. 공개 활동을 실제 콜·미팅처럼 합치지 않는다.
 - 집계 증거는 `deliverables/junhyuk-eeocrm-activity-audit.json`, 계정별 공개 근거는 `deliverables/junhyuk-eeocrm-public-evidence.json`을 따른다.
 

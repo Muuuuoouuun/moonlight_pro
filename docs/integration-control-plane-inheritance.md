@@ -149,11 +149,11 @@ flowchart LR
 | Signed webhook | 무인증 401, shared-secret 요청 202/accepted, 같은 idempotency key 재시도 200/duplicate, `webhook_events`·`project_updates` read-back 후 삭제 residue 0 |
 | PMS write | Hub BFF→Engine command→Supabase create/update/read-back 성공. 임시 project/task 삭제 후 기존 4 project·6 task 복구 |
 | Content write | Hub BFF→Engine content command→Supabase create/duplicate retry/update/read-back 성공. 임시 item/variant 삭제 후 기존 3 items 복구. 빈 ClassIn lane의 Draft CTA는 390×844에서 카드 안에 유지되고 `new=draft&brand=…`를 Studio의 실제 선택 브랜드로 보존 |
-| eeoCRM-derived ledger | Supabase 총 119 leads 중 117 eeoCRM snapshot, 문준혁 exact-owner 16건; live eeoCRM 연결 증거는 아님 |
+| eeoCRM-derived ledger | Supabase 총 119 leads 중 117 eeoCRM snapshot, 문준혁 exact-owner 16건; 증거 포함 dry-run은 16건 모두 unchanged, 태그·customer_success lane 16/16, 점수 분포 동일. live eeoCRM 연결 증거는 아님 |
 | Credential hygiene | OpenClaw inbound·credential quarantine 파일 0개. 잘못 연결됐던 web client는 제거하고 공식 server 요구에 맞는 installed/localhost client를 보존 감사 기록의 이중 해시로 복구해 Keychain-backed wrapper로 이동. Hub Calendar의 서로 다른 OAuth client는 유지. OpenClaw core static secret은 Keychain SecretRef 6개, plaintext/unresolved 0개 |
 | OpenClaw runtime | Homebrew Node 24.18.0 고정 경로, gateway supervisor audit 통과, Telegram/Slack probe 통과, security critical 0, main session 0/200k, session store 50 entries |
 | OpenClaw cron | 평일 09:30 KST announce·실패 알림 설정. Telegram credential probe 성공, 대상 supergroup 조회 성공, bot administrator. 수정 후 첫 scheduled delivery는 아직 미실행 |
-| 계약 테스트 | 65/65 통과. readiness, Hub write guard, PMS command/idempotency, iCal fallback, MCP, webhook contract에 더해 `check:connections`가 Calendar enabled/configured, Gmail·Sheets disabled, OpenClaw Google MCP process-ok/provider-auth-required를 서로 다른 상태로 출력. Hub·Engine production build 2/2 통과 |
+| 계약 테스트 | 67/67 통과. readiness, Hub write guard, PMS command/idempotency, iCal fallback, MCP, webhook contract, CRM evidence apply guard에 더해 `check:connections`가 Calendar enabled/configured, Gmail·Sheets disabled, OpenClaw Google MCP process-ok/provider-auth-required를 서로 다른 상태로 출력. Hub·Engine production build 2/2 통과 |
 | Local residue cleanup | 종료되지 않은 감사 전용 headless Chrome 2그룹과 home credential 검색 1개를 종료·임시 디렉터리 제거. 사용자 Chrome·Claude 세션은 건드리지 않았고 Hub/Engine/relay는 모두 200 유지 |
 
 ## 주의
@@ -166,6 +166,7 @@ flowchart LR
 - MCP write는 로컬 프로세스라는 이유만으로 무인 승인하지 않는다. Hub write guard와 tool-level write-secret check를 모두 유지한다.
 - Claude Desktop의 `claude_desktop_config.json` 존재만으로 연결 완료라고 쓰지 않는다. 앱 시작 뒤 config가 바뀌었다면 재시작 후 Moonlight child process와 tool discovery를 둘 다 확인한다.
 - eeoCRM 숫자는 변할 수 있는 ledger snapshot이다. 문서의 row count는 검증 날짜와 함께 쓰고, Mac에서 provider 인증이 확인되기 전까지 “sync”나 “MCP live”라고 부르지 않는다.
+- eeoCRM enrichment의 evidence-free 실행은 비교용 dry-run으로만 허용한다. `--apply`는 반드시 `--evidence`와 함께 실행하며, 증거를 생략한 적용은 기존 공개 근거를 지울 수 있으므로 스크립트가 선제 거부한다.
 - OpenClaw/Telegram/Slack처럼 여러 outbound channel이 가능한 경우 channel이 생략된 요청을 임의 채널로 보내지 않는다. 현재 뉴스 cron은 Telegram supergroup을 명시하지만, 다른 자동화는 명시적 routing policy가 없으면 disabled 또는 preview가 맞다.
 - OpenClaw job의 agent summary가 “전송 완료”라고 써도 `delivered=false`이면 전달 성공이 아니다. cron result의 `deliveryStatus`를 최종 증거로 사용한다.
 - `openclaw update --dry-run`은 2026.3.28→2026.7.1, plugin sync, gateway restart를 예고했다. 첫 post-fix 09:30 delivery 증거 전에 runtime 변수를 추가하지 않기 위해 실제 update는 보류한다.
