@@ -1,10 +1,12 @@
 {
-  "auditedAt": "2026-07-15T02:07:00+09:00",
+  "auditedAt": "2026-07-15T02:17:00+09:00",
   "scope": "Moonlight operator OS, exact-owner eeoCRM enrichment, PMS/content writes, MCP, OAuth/IAM, OpenClaw",
   "crm": {
     "moonlightLeadCount": 119,
     "eeocrmSnapshotCount": 117,
     "exactOwnerLeadCount": 16,
+    "exactMatchedCompanyCount": 13,
+    "publicEvidenceSourceCount": 17,
     "taggedLeadCount": 16,
     "engagementPresent": 6,
     "engagementUnknown": 10,
@@ -22,6 +24,7 @@
     "tasks": 6,
     "writePath": "Hub BFF -> Engine /api/pms/command -> Supabase -> Hub repository",
     "liveRoundTrip": "passed",
+    "hydratedUi": "localhost:3000 verified: 4 projects, 6 open tasks, 2 due today, 1 blocked project",
     "temporaryRowsRemaining": 0
   },
   "content": {
@@ -34,6 +37,7 @@
     "outsideLaneItems": 2,
     "writePath": "Hub BFF -> Engine /api/content/command -> Supabase -> Hub repository",
     "createRetryUpdateReadBack": "passed",
+    "hydratedUi": "localhost:3000 verified: Class.Moon 1, ClassIn Side 0, Study.Seagull 0, outside lanes 2",
     "temporaryRowsRemaining": 0
   },
   "mcp": {
@@ -43,6 +47,15 @@
     "claudeCode": "connected",
     "claudeLiveTaskReadCount": 6,
     "createTaskReadBack": "passed",
+    "freshSdkSmoke": {
+      "toolCount": 13,
+      "taskReadSource": "supabase",
+      "taskReadStatus": "live",
+      "taskCountBefore": 6,
+      "createStatus": "saved",
+      "readBack": true,
+      "taskCountAfterCleanup": 6
+    },
     "temporaryRowsRemaining": 0,
     "claudeDesktop": "configured-not-restart-verified"
   },
@@ -125,6 +138,23 @@
     "monorepoTypecheck": "passed",
     "hubAndEngineBuild": "passed",
     "connectionCheck": "all-critical-passed",
+    "hydratedBrowser": {
+      "origin": "http://localhost:3000",
+      "dailyBrief": "6/6 ledgers live; 7 signals; PMS and ClassIn content pulse rendered",
+      "projects": "4 projects; 6 open todos; List, Board, To-dos controls rendered",
+      "content": "3 items; canonical Class.Moon, ClassIn Side, Study.Seagull lanes rendered",
+      "revenueLeads": "119 total; 16 exact-owner rows resolve to Me with enriched scores and customer-success lane"
+    },
+    "signedWebhookSmoke": {
+      "unauthenticatedHttpStatus": 401,
+      "authenticatedHttpStatus": 202,
+      "acceptedStatus": "accepted",
+      "duplicateHttpStatus": 200,
+      "duplicateStatus": "duplicate",
+      "webhookEventReadBack": 1,
+      "projectUpdateReadBack": 1,
+      "temporaryRowsRemaining": 0
+    },
     "liveTemporaryRowsRemaining": 0
   },
   "selfEvaluation": 89

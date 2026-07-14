@@ -91,6 +91,7 @@ flowchart LR
 - read tool은 Hub route의 `live`/`preview`/`error` 의미를 그대로 전달한다. write tool은 `COM_MOON_HUB_WRITE_SECRET`가 없으면 요청 전에 거부한다.
 - 현재 등록 surface에는 projects, tasks, task creation, revenue, content queue, calendar, work orders, agents, daily brief가 포함된다.
 - 2026-07-15 Claude Code에서 project MCP를 승인했고 `moonlight`가 `Connected`로 전환됐다. Claude의 `list_tasks` live read는 6건을 반환했다. SDK `create_task` smoke도 저장→Hub 재조회→임시 row 삭제까지 성공했다.
+- 같은 날 02:15 KST 새 stdio SDK 세션에서도 13개 도구 discovery, `list_tasks`의 `live/supabase` 6건, `create_task`의 `saved`, 재조회, 직접 정리 후 6건 복구와 residue 0을 다시 확인했다.
 - Claude Desktop config에도 같은 process가 등록되어 있지만 Desktop 앱 lifecycle의 재시작/도구 발견은 Claude Code 검증과 별개다.
 
 ### 7. 상태 언어
@@ -127,12 +128,14 @@ flowchart LR
 | 항목 | 확인 결과 |
 |---|---|
 | Hub/Supabase | Hub 200/ok, Supabase reachable |
+| Hydrated Hub UI | 표준 local origin `http://localhost:3000`에서 Daily Brief 6/6 ledger live·7 signals, PMS 4 project/6 task/오늘 2/blocked 1, 세 ClassIn lane, Projects·Revenue Leads 화면을 확인 |
 | Engine/OpenClaw | Engine, relay, gateway reachable; relay는 sync mode |
 | Secret topology | 4/4 configured, separated; Hub↔Engine shared secret match |
 | Google gate | Calendar enabled/configured, Gmail·Sheets disabled |
 | Calendar auth | 2026-07-15~07-31 bounded OAuth read 성공, 11 events, writable source, redacted primary identity 저장 |
 | iCal | configured, 현재 OAuth 성공 때문에 fallback 미사용 |
-| MCP | Codex enabled, Claude Code Connected. Claude live task 6건 read와 MCP create/read-back 성공; 임시 row 0건. Desktop config는 등록됐으나 앱 재시작 확인은 별도 |
+| MCP | Codex enabled, Claude Code Connected. 새 SDK 세션에서 13 tools discovery, live task 6건 read, create/read-back/delete 성공; 임시 row 0건. Desktop config는 등록됐으나 앱 재시작 확인은 별도 |
+| Signed webhook | 무인증 401, shared-secret 요청 202/accepted, 같은 idempotency key 재시도 200/duplicate, `webhook_events`·`project_updates` read-back 후 삭제 residue 0 |
 | PMS write | Hub BFF→Engine command→Supabase create/update/read-back 성공. 임시 project/task 삭제 후 기존 4 project·6 task 복구 |
 | Content write | Hub BFF→Engine content command→Supabase create/duplicate retry/update/read-back 성공. 임시 item/variant 삭제 후 기존 3 items 복구 |
 | eeoCRM-derived ledger | Supabase 총 119 leads 중 117 eeoCRM snapshot, 문준혁 exact-owner 16건; live eeoCRM 연결 증거는 아님 |
@@ -153,6 +156,7 @@ flowchart LR
 - OpenClaw/Telegram/Slack처럼 여러 outbound channel이 가능한 경우 channel이 생략된 요청을 임의 채널로 보내지 않는다. 현재 뉴스 cron은 Telegram supergroup을 명시하지만, 다른 자동화는 명시적 routing policy가 없으면 disabled 또는 preview가 맞다.
 - OpenClaw job의 agent summary가 “전송 완료”라고 써도 `delivered=false`이면 전달 성공이 아니다. cron result의 `deliveryStatus`를 최종 증거로 사용한다.
 - `openclaw update --dry-run`은 2026.3.28→2026.7.1, plugin sync, gateway restart를 예고했다. 첫 post-fix 09:30 delivery 증거 전에 runtime 변수를 추가하지 않기 위해 실제 update는 보류한다.
+- 로컬 Hub의 정본 origin은 env에 적힌 `http://localhost:3000`이다. Next dev의 HMR origin 보호 때문에 `http://127.0.0.1:3000`으로 브라우저 검증하면 API는 200이어도 hydration 전 `syncing/preview` 화면에 머물 수 있으므로, 이를 ledger 장애로 오판하지 않는다.
 
 ## 미정 및 외부 blocker
 
