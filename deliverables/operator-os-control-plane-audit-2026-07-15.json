@@ -1,5 +1,5 @@
 {
-  "auditedAt": "2026-07-15T02:44:40+09:00",
+  "auditedAt": "2026-07-15T02:48:36+09:00",
   "scope": "Moonlight operator OS, exact-owner eeoCRM enrichment, PMS/content writes, MCP, OAuth/IAM, OpenClaw",
   "crm": {
     "moonlightLeadCount": 119,
@@ -79,6 +79,14 @@
       "quarantineMetadata": "A quarantined legacy installed-app client advertises only the localhost loopback redirect; do not promote it to a Hub web callback credential."
     }
   },
+  "otherProviderStatus": {
+    "resend": { "status": "missing-config", "configured": false },
+    "instagram": { "status": "missing-config", "configured": false, "oauthCallbackImplemented": true },
+    "threads": { "status": "missing-config", "configured": false, "oauthAndRemovalCallbacksImplemented": true },
+    "github": { "status": "reachable-public-read", "configuredRepositoryCount": 1, "ledgerSyncVerified": false },
+    "telegramDirectEngine": { "status": "ready-external-registration-pending", "separateFromOpenClawChannel": true },
+    "slackDirectMoonlight": { "status": "planned", "openClawChannelConnectedSeparately": true }
+  },
   "openclaw": {
     "installedVersion": "2026.3.28",
     "availableStableVersion": "2026.7.1",
@@ -142,7 +150,7 @@
     "liveAudit": "blocked",
     "reason": "gcloud not installed and no authenticated Cloud Console session",
     "localCredentialPath": "none",
-    "chromeFallback": "unavailable-without-explicit-user-approval; no normal authenticated Chrome process detected",
+    "chromeFallback": "requires explicit user approval; no Chrome process, gcloud binary, or local gcloud config detected",
     "previousSnapshot": "two Owners, unused Editor service account without keys, broad API key",
     "mutationPolicy": "Do not remove roles or restrict/delete keys until authenticated usage and recovery-path audit."
   },
@@ -185,7 +193,7 @@
     }
   },
   "verification": {
-    "repositoryTests": { "passed": 94, "failed": 0, "latestFocusedSuitePassed": 61, "latestFocusedSuiteFailed": 0 },
+    "repositoryTests": { "passed": 94, "failed": 0, "latestFocusedSuitePassed": 63, "latestFocusedSuiteFailed": 0 },
     "monorepoTypecheck": "passed",
     "hubAndEngineBuild": "passed",
     "connectionCheck": "all-critical-passed",
@@ -193,7 +201,7 @@
       "origin": "http://localhost:3000",
       "dailyBrief": "6/6 ledgers live; 7 signals; PMS and ClassIn content pulse rendered; 390x844 document overflow 0 and visible interactive targets >=44x44",
       "projects": "4 projects; 6 open todos; List, Board, To-dos controls rendered",
-      "content": "3 items; canonical Class.Moon, ClassIn Side, Study.Seagull lanes rendered",
+      "content": "3 items; canonical Class.Moon, ClassIn Side, Study.Seagull lanes rendered; at 390x844 the empty lane stays within its 340px card and the requested brand survives new-draft Studio initialization",
       "revenueLeads": "119 total; 16 exact-owner rows resolve to Me; 390x844 identity column 188px with no document/card overflow; 768x1024 and 1440x1000 regressions passed",
       "runtimeRegression": "Fresh SSR exposed legacy isLiveLedger ReferenceError; fixed with source regression test, HTTP 200, console-clean browser recheck, and production build"
     },
