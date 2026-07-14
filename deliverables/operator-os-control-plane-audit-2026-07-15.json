@@ -1,5 +1,5 @@
 {
-  "auditedAt": "2026-07-15T02:48:36+09:00",
+  "auditedAt": "2026-07-15T02:55:28+09:00",
   "scope": "Moonlight operator OS, exact-owner eeoCRM enrichment, PMS/content writes, MCP, OAuth/IAM, OpenClaw",
   "crm": {
     "moonlightLeadCount": 119,
@@ -57,6 +57,13 @@
       "readBack": true,
       "taskCountAfterCleanup": 6
     },
+    "openClawWorkspace": {
+      "mcporterGoogleWorkspace": "registered-provider-auth-required",
+      "discoveredToolCount": 26,
+      "providerReadProbe": "authentication-required",
+      "credentialStorage": "Keychain-backed wrapper; mcporter config plaintext env count 0",
+      "notionServer": "removed-after-401-invalid-token"
+    },
     "temporaryRowsRemaining": 0,
     "claudeDesktop": "configured-not-restart-verified",
     "claudeDesktopEvidence": {
@@ -73,10 +80,11 @@
     "sheets": { "status": "disabled", "reason": "provider-not-enabled", "ledgerConfigured": true },
     "credentialFiles": {
       "openClawInbound": 0,
-      "quarantine": 2,
-      "retainedDistinct": 1,
-      "mode": "0600",
-      "quarantineMetadata": "A quarantined legacy installed-app client advertises only the localhost loopback redirect; do not promote it to a Hub web callback credential."
+      "quarantine": 0,
+      "retainedPlaintextFiles": 0,
+      "mcporterKeychainEntries": 2,
+      "wrapperMode": "0700",
+      "cleanup": "Unused installed client removed; mcporter web client moved from plaintext config/file to Keychain; Hub Calendar keeps its different active client."
     }
   },
   "otherProviderStatus": {
@@ -157,7 +165,7 @@
   "completionMatrix": {
     "registrationCleanup": {
       "status": "complete-local",
-      "evidence": "Four responsibility-specific Moonlight secrets are separated; duplicate OAuth credential copies are quarantined 0600; OpenClaw static secrets resolve 6/6 with plaintext and unresolved counts 0.",
+      "evidence": "Four responsibility-specific Moonlight secrets are separated; OpenClaw inbound and credential quarantine files are 0; mcporter Google client values use two Keychain entries with no plaintext config env; invalid Notion MCP registration was removed; OpenClaw core static secrets resolve 6/6 with plaintext and unresolved counts 0.",
       "remaining": "Google Cloud IAM live role/key audit requires an authenticated admin surface and explicit mutation decisions."
     },
     "exactOwnerCrm": {

@@ -93,6 +93,10 @@ flowchart LR
 - 2026-07-15 Claude Code에서 project MCP를 승인했고 `moonlight`가 `Connected`로 전환됐다. Claude의 `list_tasks` live read는 6건을 반환했다. SDK `create_task` smoke도 저장→Hub 재조회→임시 row 삭제까지 성공했다.
 - 같은 날 02:15 KST 새 stdio SDK 세션에서도 13개 도구 discovery, `list_tasks`의 `live/supabase` 6건, `create_task`의 `saved`, 재조회, 직접 정리 후 6건 복구와 residue 0을 다시 확인했다.
 - Claude Desktop config에도 같은 process가 등록되어 있지만 Desktop 앱 lifecycle의 재시작/도구 발견은 Claude Code 검증과 별개다.
+- OpenClaw workspace의 `mcporter`는 Moonlight MCP와 별도다. 현재 `google-workspace` process는 26개 도구를 발견하지만 provider read는 `Authentication required`이므로 connected로 승격하지 않는다.
+- `mcporter` Google client ID/secret은 `mcporter.json`에 직접 쓰지 않는다. `~/.moonlight/bin/mcporter-google-workspace`가 macOS Keychain service `com.moonlight.mcporter.google-client-id`와 `com.moonlight.mcporter.google-client-secret`을 읽어 process env로만 주입한다.
+- `mcporter list`의 process `ok`는 provider 인증 증거가 아니다. Calendar는 `list-calendars`, Gmail은 `list-labels`, Contacts는 bounded `list-contacts` 같은 내용 최소화 probe가 실제 성공해야 authenticated다.
+- 2026-07-15 실제 API에서 401 invalid였던 OpenClaw workspace Notion server는 설정과 평문 token을 제거했다. Moonlight 제품의 향후 Notion integration 계획과 이를 같은 연결로 간주하지 않는다.
 
 ### 7. 상태 언어
 
@@ -135,11 +139,12 @@ flowchart LR
 | Calendar auth | 2026-07-15~07-31 bounded OAuth read 성공, 11 events, writable source, redacted primary identity 저장 |
 | iCal | configured, 현재 OAuth 성공 때문에 fallback 미사용 |
 | MCP | Codex enabled, Claude Code Connected. 새 SDK 세션에서 13 tools discovery, live task 6건 read, create/read-back/delete 성공; 임시 row 0건. Claude Desktop 앱은 22:04에 시작됐고 config는 01:03에 기록되어 Moonlight child가 아직 없다. 활성 세션을 끊지 않기 위해 승인 전 재시작하지 않음 |
+| OpenClaw workspace MCP | `mcporter` Google Workspace server는 26 tools discovery까지 성공하지만 provider 호출은 `Authentication required`이므로 connected가 아니다. Google client ID/secret은 `mcporter.json` 평문 env에서 Keychain 2개 + `~/.moonlight/bin/mcporter-google-workspace` wrapper로 이동. 401 invalid Notion server는 제거 |
 | Signed webhook | 무인증 401, shared-secret 요청 202/accepted, 같은 idempotency key 재시도 200/duplicate, `webhook_events`·`project_updates` read-back 후 삭제 residue 0 |
 | PMS write | Hub BFF→Engine command→Supabase create/update/read-back 성공. 임시 project/task 삭제 후 기존 4 project·6 task 복구 |
 | Content write | Hub BFF→Engine content command→Supabase create/duplicate retry/update/read-back 성공. 임시 item/variant 삭제 후 기존 3 items 복구. 빈 ClassIn lane의 Draft CTA는 390×844에서 카드 안에 유지되고 `new=draft&brand=…`를 Studio의 실제 선택 브랜드로 보존 |
 | eeoCRM-derived ledger | Supabase 총 119 leads 중 117 eeoCRM snapshot, 문준혁 exact-owner 16건; live eeoCRM 연결 증거는 아님 |
-| Credential hygiene | 동일 해시 OAuth client 복사본 2개를 `0600` 격리하고 OpenClaw inbound 원본 제거. inbound credential 0개, 별도 retained client `0600`. 격리본 중 legacy installed-app client는 localhost loopback redirect만 가지므로 Hub web callback credential로 재사용하지 않는다. OpenClaw static secret은 Keychain SecretRef 6개, plaintext/unresolved 0개 |
+| Credential hygiene | OpenClaw inbound·credential quarantine 파일 0개. 미사용 installed client는 제거했고, `mcporter` web client는 Keychain-backed wrapper로 이동한 뒤 평문 파일을 제거. Hub Calendar의 서로 다른 OAuth client는 유지. OpenClaw core static secret은 Keychain SecretRef 6개, plaintext/unresolved 0개 |
 | OpenClaw runtime | Homebrew Node 24.18.0 고정 경로, gateway supervisor audit 통과, Telegram/Slack probe 통과, security critical 0, main session 0/200k, session store 50 entries |
 | OpenClaw cron | 평일 09:30 KST announce·실패 알림 설정. Telegram credential probe 성공, 대상 supergroup 조회 성공, bot administrator. 수정 후 첫 scheduled delivery는 아직 미실행 |
 | 계약 테스트 | readiness, Hub write guard, PMS command/idempotency, iCal fallback, MCP, webhook contract 전체 통과. fresh SSR에서 발견한 Revenue `isLiveLedger` 미정의 오류를 수정하고 source regression test·HTTP 200·production build로 재검증 |
