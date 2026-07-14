@@ -93,6 +93,7 @@ flowchart LR
 - 2026-07-15 Claude Code에서 project MCP를 승인했고 `moonlight`가 `Connected`로 전환됐다. Claude의 `list_tasks` live read는 6건을 반환했다. SDK `create_task` smoke도 저장→Hub 재조회→임시 row 삭제까지 성공했다.
 - 같은 날 02:15 KST 새 stdio SDK 세션에서도 13개 도구 discovery, `list_tasks`의 `live/supabase` 6건, `create_task`의 `saved`, 재조회, 직접 정리 후 6건 복구와 residue 0을 다시 확인했다.
 - Claude Desktop config에도 같은 process가 등록되어 있지만 Desktop 앱 lifecycle의 재시작/도구 발견은 Claude Code 검증과 별개다.
+- Codex의 bundled Computer Use plugin이 실제 등록 정본이다. 2026-07-15 `enabled=false` + 상대경로로 남아 `mcporter`에만 offline을 만들던 중복 `[mcp_servers.computer-use]` 블록은 제거했다. 이후 Codex plugin 등록은 유지되고, 외부 `mcporter` import는 `node_repl`·`moonlight` 2/2 ok, offline 0이다.
 - OpenClaw workspace의 `mcporter`는 Moonlight MCP와 별도다. 현재 `google-workspace` process는 26개 도구를 발견하지만 provider read는 `Authentication required`이므로 connected로 승격하지 않는다. `mcp-google` 2.3.0의 [공식 setup](https://github.com/199-mcp/mcp-google#setup)은 Desktop app OAuth와 Calendar·Contacts·Gmail 통합 동의를 요구한다.
 - `mcporter` Google client ID/secret은 `mcporter.json`에 직접 쓰지 않는다. `~/.moonlight/bin/mcporter-google-workspace`가 macOS Keychain service `com.moonlight.mcporter.google-client-id`와 `com.moonlight.mcporter.google-client-secret`을 읽어 process env로만 주입한다.
 - `mcp-google`은 refresh token을 Keychain에 직접 저장하지 못한다. wrapper가 `GOOGLE_CALENDAR_MCP_TOKEN_PATH=~/.moonlight/tokens/google-workspace.json`으로 격리하고 parent directory는 `0700`, server가 생성할 token file은 `0600`을 유지한다. 인증 전에는 빈 token 파일을 만들지 않는다.
@@ -141,6 +142,7 @@ flowchart LR
 | Calendar auth | 2026-07-15~07-31 bounded OAuth read 성공, 11 events, writable source, redacted primary identity 저장 |
 | iCal | configured, 현재 OAuth 성공 때문에 fallback 미사용 |
 | MCP | Codex enabled, Claude Code Connected. 새 SDK 세션에서 13 tools discovery, live task 6건 read, create/read-back/delete 성공; 임시 row 0건. Claude Desktop 앱은 22:04에 시작됐고 config는 01:03에 기록되어 Moonlight child가 아직 없다. 활성 세션을 끊지 않기 위해 승인 전 재시작하지 않음 |
+| Codex connector hygiene | bundled Computer Use plugin 유지, 중복 disabled 수동 MCP 제거. `mcporter` Codex import는 node_repl·Moonlight 2/2 ok, offline 0. GitHub connector는 bearer enabled, Figma·Notion connector는 not logged in으로 확인 |
 | OpenClaw workspace MCP | `mcporter` Google Workspace server는 26 tools discovery까지 성공하지만 provider 호출은 `Authentication required`이므로 connected가 아니다. Google client ID/secret은 `mcporter.json` 평문 env에서 Keychain 2개 + `~/.moonlight/bin/mcporter-google-workspace` wrapper로 이동. 401 invalid Notion server는 제거 |
 | Signed webhook | 무인증 401, shared-secret 요청 202/accepted, 같은 idempotency key 재시도 200/duplicate, `webhook_events`·`project_updates` read-back 후 삭제 residue 0 |
 | PMS write | Hub BFF→Engine command→Supabase create/update/read-back 성공. 임시 project/task 삭제 후 기존 4 project·6 task 복구 |
