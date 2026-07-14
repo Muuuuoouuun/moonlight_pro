@@ -32,7 +32,7 @@ function buildPmsSummary(ledger) {
     activeProjects: countBy(projects, (project) => !["Done", "Backlog"].includes(project?.status)),
     blockedProjects: countBy(projects, (project) => project?.status === "Blocked"),
     openTasks,
-    dueTodayTasks: countBy(todos, (todo) => todo?.done !== true && todo?.bucket === "오늘"),
+    dueOrOverdueTasks: countBy(todos, (todo) => todo?.done !== true && todo?.bucket === "오늘"),
     completedTasks,
     taskCompletionRate: todos.length ? Math.round((completedTasks / todos.length) * 100) : 0,
     projectStatusSeries: PROJECT_SERIES.map(({ key, label, statuses }) => ({

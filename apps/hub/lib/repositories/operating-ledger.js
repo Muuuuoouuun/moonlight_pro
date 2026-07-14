@@ -282,6 +282,7 @@ function mapTodos(rows, projectById, brandById) {
       done: row.status === "done",
       priority: normalizeTodoPriority(row.priority),
       assignee: row.owner_id ? "Me" : "Unassigned",
+      updatedAt: row.updated_at || row.created_at || "",
     };
   });
 }

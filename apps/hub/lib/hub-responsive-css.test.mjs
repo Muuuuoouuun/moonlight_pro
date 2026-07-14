@@ -14,6 +14,10 @@ const dailyBriefSource = await readFile(
   new URL("../components/hub/pages/daily-brief.jsx", import.meta.url),
   "utf8",
 );
+const primitivesSource = await readFile(
+  new URL("../components/hub/hub-primitives.jsx", import.meta.url),
+  "utf8",
+);
 
 test("mobile workspace sidebar hiding does not hide edit drawers", () => {
   assert.match(css, /\.hub-workspace-shell\s*>\s*aside:not\(\.hub-drawer\)/);
@@ -48,4 +52,18 @@ test("Daily Brief quick capture has a real label and announced save state", () =
   assert.match(dailyBriefSource, /<label[^>]+htmlFor="daily-brief-quick-task"/);
   assert.match(dailyBriefSource, /<input[^>]+id="daily-brief-quick-task"/);
   assert.match(dailyBriefSource, /aria-live="polite"/);
+});
+
+test("Daily Brief task-only Today exposes durable completion controls", () => {
+  assert.match(dailyBriefSource, /aria-label="오늘 할 일"/);
+  assert.match(dailyBriefSource, /aria-label=\{`완료: \$\{task\.title\}`\}/);
+  assert.match(dailyBriefSource, /method:\s*['"]PATCH['"]/);
+  assert.match(dailyBriefSource, /body:\s*JSON\.stringify\(\{ id:\s*task\.id, status:\s*['"]done['"] \}\)/);
+  assert.match(dailyBriefSource, /minHeight:\s*44/);
+  assert.match(dailyBriefSource, /\['기한 도래', pms\.dueOrOverdueTasks\]/);
+});
+
+test("shared Button forwards native accessibility attributes", () => {
+  assert.match(primitivesSource, /export function Button\(\{[\s\S]*?\.\.\.props[\s\S]*?\}\) \{/);
+  assert.match(primitivesSource, /<button\s+\{\.\.\.props\}\s+type=\{type\}/);
 });

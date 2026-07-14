@@ -12,6 +12,7 @@ import {
   filterContentLedgerToBrandLanes,
 } from "@/lib/content-brand-catalog";
 import { buildOperatorHomeSummary } from "@/lib/operator-home-summary";
+import { buildTaskToday } from "@/lib/task-today";
 import {
   filterOperatorOwnedRevenue,
   selectOperatorFocusLeads,
@@ -296,7 +297,6 @@ function buildAutomationSignals(automations) {
 
 function buildWorkSignals(projects, work) {
   const projectRows = Array.isArray(projects.projects) ? projects.projects : [];
-  const todos = Array.isArray(projects.todos) ? projects.todos : [];
   const decisions = Array.isArray(work.decisions) ? work.decisions : [];
   const signals = [];
 
@@ -313,23 +313,6 @@ function buildWorkSignals(projects, work) {
       decisions: [
         action("프로젝트 열기", "projects", true),
         action("결정 기록", "decision"),
-      ],
-    });
-  }
-
-  const todayHigh = todos.find((todo) => todo.bucket === "오늘" && todo.priority === "high" && !todo.done);
-  if (todayHigh) {
-    signals.push({
-      id: `work-today-${todayHigh.id}`,
-      tone: "warning",
-      kind: "Work",
-      title: `${todayHigh.title} — 오늘`,
-      summary: `${todayHigh.assignee} 담당. 집중 블록으로 바로 전환할 수 있습니다.`,
-      meta: `Task · ${todayHigh.due}`,
-      source: { from: "Tasks", ref: todayHigh.id },
-      decisions: [
-        action("15분 집중", "focus", true),
-        action("Projects 보기", "projects"),
       ],
     });
   }
@@ -430,6 +413,10 @@ export async function GET() {
     projects,
     content: filterContentLedgerToBrandLanes(content),
   });
+  const taskToday = {
+    ...buildTaskToday(projects.todos),
+    state: ledgerState(projectsResult),
+  };
   const contentBrands = buildContentBrandCatalog(content);
 
   return NextResponse.json({
@@ -447,6 +434,7 @@ export async function GET() {
     },
     metrics: buildMetrics(revenue, content, automations, projects),
     operatorHome,
+    taskToday,
     contentBrands,
     signals,
     queue,

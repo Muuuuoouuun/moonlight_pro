@@ -50,7 +50,7 @@ test("builds deterministic PMS and content summaries from live ledgers", () => {
         activeProjects: 3,
         blockedProjects: 1,
         openTasks: 2,
-        dueTodayTasks: 1,
+        dueOrOverdueTasks: 1,
         completedTasks: 1,
         taskCompletionRate: 33,
         projectStatusSeries: [

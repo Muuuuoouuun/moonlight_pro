@@ -5,6 +5,7 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, Progress, Sparkline, SyncBadge, EmptyState } from "../hub-primitives";
 import { createClientId } from "@/lib/pms-ui";
 import { buildQuickTaskCapture, isDurableQuickTaskResult } from "@/lib/quick-task-capture";
+import { isDurableTaskUpdateResult } from "@/lib/task-today";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 
 function formatBriefDate(date) {
@@ -120,7 +121,7 @@ function sourceLabel(state) {
   return 'preview';
 }
 
-function QuickTaskCapture({ onNavigate }) {
+function QuickTaskCapture({ onNavigate, onSaved }) {
   const [raw, setRaw] = React.useState('');
   const [state, setState] = React.useState({ status: 'idle', message: 'Enter로 수집함에 저장' });
   const requestIdRef = React.useRef(null);
@@ -149,6 +150,7 @@ function QuickTaskCapture({ onNavigate }) {
         setRaw('');
         requestIdRef.current = createClientId();
         setState({ status: 'saved', message: data.status === 'duplicate' ? '이미 저장된 할 일입니다.' : '수집함에 저장했습니다.' });
+        onSaved?.();
         return;
       }
 
@@ -210,7 +212,123 @@ function QuickTaskCapture({ onNavigate }) {
   );
 }
 
-function useDailyBriefLedger() {
+function TaskToday({ taskToday, onNavigate, onChanged }) {
+  const items = Array.isArray(taskToday?.items) ? taskToday.items : [];
+  const counts = taskToday?.counts || {};
+  const [pendingId, setPendingId] = React.useState(null);
+  const [feedback, setFeedback] = React.useState({ status: 'idle', message: '' });
+
+  async function complete(task) {
+    setPendingId(task.id);
+    setFeedback({ status: 'saving', message: `${task.title} 완료 처리 중…` });
+
+    try {
+      const response = await fetch('/api/hub/tasks', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: task.id, status: 'done' }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !isDurableTaskUpdateResult(data)) {
+        throw new Error(data.error || data.status || `완료 저장 실패 (${response.status})`);
+      }
+
+      setFeedback({ status: 'saved', message: `${task.title} 완료. Today를 다시 불러왔습니다.` });
+      onChanged?.();
+    } catch (error) {
+      setFeedback({
+        status: 'error',
+        message: error instanceof Error ? error.message : '완료 상태를 저장하지 못했습니다.',
+      });
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  const laneTone = {
+    missed: 'danger',
+    today: 'warning',
+    waiting: 'neutral',
+    inbox: 'info',
+  };
+
+  return (
+    <div aria-label="오늘 할 일">
+      <SectionTitle right={(
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Badge tone="danger" size="xs">놓침 {counts.missed || 0}</Badge>
+          <Badge tone="warning" size="xs">오늘 {counts.today || 0}</Badge>
+          <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/projects?view=todos')}>모두 보기</Button>
+        </div>
+      )}>오늘 할 일</SectionTitle>
+      <Card pad={false}>
+        {items.length ? (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {items.map((task, index) => (
+              <div
+                key={task.id}
+                className="hub-stackable-row"
+                style={{
+                  minHeight: 56,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '6px 10px 6px 14px',
+                  borderBottom: index < items.length - 1 ? '1px solid var(--line-soft)' : 'none',
+                }}
+              >
+                <Badge tone={laneTone[task.lane] || 'neutral'} size="xs">{task.laneLabel}</Badge>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</div>
+                  <div className="mono" style={{ marginTop: 3, fontSize: 10.5, color: 'var(--fg-faint)' }}>
+                    {task.due && task.due !== '미정' ? `due ${task.due} · ` : ''}{task.priority || 'med'}
+                  </div>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon="check"
+                  aria-label={`완료: ${task.title}`}
+                  disabled={pendingId === task.id}
+                  onClick={() => complete(task)}
+                  style={{ minHeight: 44 }}
+                >
+                  {pendingId === task.id ? '저장 중' : '완료'}
+                </Button>
+              </div>
+            ))}
+            {taskToday?.hiddenCount > 0 && (
+              <button
+                type="button"
+                onClick={() => onNavigate?.('dashboard/work/projects?view=todos')}
+                style={{ minHeight: 44, border: 0, borderTop: '1px solid var(--line-soft)', background: 'var(--surface-2)', color: 'var(--fg-muted)', fontSize: 11.5 }}
+              >
+                할 일 {taskToday.hiddenCount}건 더 보기
+              </button>
+            )}
+          </div>
+        ) : (
+          <EmptyState
+            icon="check"
+            title={taskToday?.state === 'live' ? '오늘 할 일이 비었습니다' : '할 일 원장 확인 대기'}
+            description={taskToday?.state === 'live' ? '놓침·오늘·대기·정리 전 task가 없습니다.' : 'tasks 원장이 live가 되면 실제 항목만 표시합니다.'}
+            style={{ minHeight: 150 }}
+          />
+        )}
+      </Card>
+      <div
+        role={feedback.status === 'error' ? 'alert' : 'status'}
+        aria-live="polite"
+        style={{ minHeight: 18, marginTop: 6, fontSize: 11.5, color: feedback.status === 'error' ? 'var(--danger)' : 'var(--success)' }}
+      >
+        {feedback.message}
+      </div>
+    </div>
+  );
+}
+
+function useDailyBriefLedger(refreshKey) {
   const [state, setState] = React.useState({
     syncState: 'syncing',
     generatedAt: null,
@@ -218,6 +336,7 @@ function useDailyBriefLedger() {
     summary: null,
     metrics: [],
     operatorHome: null,
+    taskToday: { state: 'preview', items: [], counts: {}, hiddenCount: 0 },
     contentBrands: null,
     signals: [],
     morningBrief: null,
@@ -251,6 +370,7 @@ function useDailyBriefLedger() {
           summary: data.summary || null,
           metrics: Array.isArray(data.metrics) ? data.metrics : [],
           operatorHome: data.operatorHome || null,
+          taskToday: data.taskToday || { state: 'preview', items: [], counts: {}, hiddenCount: 0 },
           contentBrands: data.contentBrands || null,
           signals: Array.isArray(data.signals) ? data.signals : [],
           morningBrief: data.morningBrief || null,
@@ -262,7 +382,7 @@ function useDailyBriefLedger() {
 
     load();
     return () => { active = false; };
-  }, []);
+  }, [refreshKey]);
 
   return state;
 }
@@ -402,7 +522,7 @@ function OperatorPulse({ operatorHome, contentBrands, onNavigate }) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8, marginTop: 14, marginBottom: 16 }}>
                 {[
                   ['열린 일', pms.openTasks],
-                  ['오늘', pms.dueTodayTasks],
+                  ['기한 도래', pms.dueOrOverdueTasks],
                   ['막힌 P', pms.blockedProjects],
                   ['완료율', `${pms.taskCompletionRate}%`],
                 ].map(([label, value]) => (
@@ -1163,8 +1283,10 @@ const QUEUE_LIMIT = 5;
 
 export function DailyBrief({ onNavigate }) {
   const [now, setNow] = React.useState(() => new Date());
-  const ledger = useDailyBriefLedger();
+  const [refreshKey, setRefreshKey] = React.useState(0);
+  const ledger = useDailyBriefLedger(refreshKey);
   const [queueExpanded, setQueueExpanded] = React.useState(false);
+  const refreshLedger = React.useCallback(() => setRefreshKey((key) => key + 1), []);
 
   React.useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60000);
@@ -1197,7 +1319,7 @@ export function DailyBrief({ onNavigate }) {
         </div>
       </div>
 
-      <QuickTaskCapture onNavigate={onNavigate} />
+      <QuickTaskCapture onNavigate={onNavigate} onSaved={refreshLedger} />
 
       <StatusLine state={ledger} />
 
@@ -1232,6 +1354,8 @@ export function DailyBrief({ onNavigate }) {
           )}
         </div>
       </div>
+
+      <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={refreshLedger} />
 
       {/* ③ 지표 — four numbers, full size */}
       <div>
