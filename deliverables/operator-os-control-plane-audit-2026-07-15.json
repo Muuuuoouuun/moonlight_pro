@@ -1,5 +1,5 @@
 {
-  "auditedAt": "2026-07-15T02:58:57+09:00",
+  "auditedAt": "2026-07-15T03:00:29+09:00",
   "scope": "Moonlight operator OS, exact-owner eeoCRM enrichment, PMS/content writes, MCP, OAuth/IAM, OpenClaw",
   "crm": {
     "moonlightLeadCount": 119,
@@ -87,6 +87,9 @@
       "mcporterClientType": "installed",
       "mcporterRedirect": "localhost",
       "recoveredFromPreservedAuditWithMatchingHashes": true,
+      "futureTokenPath": "~/.moonlight/tokens/google-workspace.json",
+      "tokenDirectoryMode": "0700",
+      "tokenFileBeforeAuthentication": "absent",
       "cleanup": "Misconfigured web client and plaintext files removed; package-compatible installed client restored to Keychain; Hub Calendar keeps its different active client."
     }
   },

@@ -95,6 +95,7 @@ flowchart LR
 - Claude Desktop config에도 같은 process가 등록되어 있지만 Desktop 앱 lifecycle의 재시작/도구 발견은 Claude Code 검증과 별개다.
 - OpenClaw workspace의 `mcporter`는 Moonlight MCP와 별도다. 현재 `google-workspace` process는 26개 도구를 발견하지만 provider read는 `Authentication required`이므로 connected로 승격하지 않는다. `mcp-google` 2.3.0의 [공식 setup](https://github.com/199-mcp/mcp-google#setup)은 Desktop app OAuth와 Calendar·Contacts·Gmail 통합 동의를 요구한다.
 - `mcporter` Google client ID/secret은 `mcporter.json`에 직접 쓰지 않는다. `~/.moonlight/bin/mcporter-google-workspace`가 macOS Keychain service `com.moonlight.mcporter.google-client-id`와 `com.moonlight.mcporter.google-client-secret`을 읽어 process env로만 주입한다.
+- `mcp-google`은 refresh token을 Keychain에 직접 저장하지 못한다. wrapper가 `GOOGLE_CALENDAR_MCP_TOKEN_PATH=~/.moonlight/tokens/google-workspace.json`으로 격리하고 parent directory는 `0700`, server가 생성할 token file은 `0600`을 유지한다. 인증 전에는 빈 token 파일을 만들지 않는다.
 - `mcporter list`의 process `ok`는 provider 인증 증거가 아니다. Calendar는 `list-calendars`, Gmail은 `list-labels`, Contacts는 bounded `list-contacts` 같은 내용 최소화 probe가 실제 성공해야 authenticated다.
 - 2026-07-15 실제 API에서 401 invalid였던 OpenClaw workspace Notion server는 설정과 평문 token을 제거했다. Moonlight 제품의 향후 Notion integration 계획과 이를 같은 연결로 간주하지 않는다.
 
