@@ -49,6 +49,30 @@ const CANONICAL_BRAND_ORG_SCOPE = {
   classin_side: "classin",
 };
 
+// PMS container category (2026-07-15 spec §4.1): 'sns-channel' | 'ka-deal' |
+// 'general'. meta.category overrides; unknown values read as "general" — the
+// code never guesses. The canonical list below is the operator-confirmed
+// 2026-07-15 assignment (every existing container is an SNS channel), same
+// idiom as CANONICAL_BRAND_ORG_SCOPE above.
+const BRAND_CATEGORIES = new Set(["sns-channel", "ka-deal", "general"]);
+const CANONICAL_BRAND_CATEGORY = {
+  sinabro: "sns-channel",
+  gore: "sns-channel",
+  holyfuncollector: "sns-channel",
+  bridgemaker: "sns-channel",
+  moonpm: "sns-channel",
+  classmoon: "sns-channel",
+  studyseagull: "sns-channel",
+  politicofficer: "sns-channel",
+  "22nomad": "sns-channel",
+};
+
+function resolveBrandCategory(key, meta) {
+  const raw = typeof meta?.category === "string" ? meta.category.trim() : "";
+  if (BRAND_CATEGORIES.has(raw)) return raw;
+  return CANONICAL_BRAND_CATEGORY[key] || "general";
+}
+
 function clampProgress(value) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   if (!Number.isFinite(parsed)) return 0;
@@ -206,6 +230,7 @@ function mapBrands(rows, projects, todos, updates) {
       tone: resolveBrandTone(key, row.kind, meta),
       kind: row.kind || "brand",
       orgScope: resolveBrandOrgScope(key, meta),
+      category: resolveBrandCategory(key, meta),
       desc: row.description || "운영 브랜드",
       philosophy: typeof meta.philosophy === "string" ? meta.philosophy : "",
       direction: typeof meta.direction === "string" ? meta.direction : "",

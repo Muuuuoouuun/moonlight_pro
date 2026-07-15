@@ -68,6 +68,16 @@ const PROJECT_VIEW_OPTIONS = [
 ];
 const PROJECT_VIEWS = new Set(PROJECT_VIEW_OPTIONS.map(v => v.key));
 
+// Container category folders (2026-07-15 spec §4.2). The ledger resolves
+// `category` (meta.category → canonical map → 'general'); empty folders are
+// never rendered. Collapse state is UI-only.
+const PROJECT_CATEGORIES = [
+  { key: 'sns-channel', label: 'SNS 채널' },
+  { key: 'ka-deal', label: 'KA·딜' },
+  { key: 'general', label: '일반' },
+];
+const FOLDER_STORAGE_KEY = 'mlp.pms.folders';
+
 // `?view=tasks` is the sidebar spec's wording for the same view the page calls
 // 'todos' — accept both so old and new links resolve.
 function normalizeProjectView(raw) {
@@ -400,11 +410,37 @@ export function Projects({ workspace }) {
 
   const brandGroups = React.useMemo(() => {
     const real = brands.filter(b => b.key !== 'all');
-    return [
+    const scopes = [
       { key: 'classin', label: '업무 · 클래스인', items: real.filter(b => b.orgScope === 'classin') },
       { key: 'personal', label: '개인', items: real.filter(b => b.orgScope !== 'classin') },
     ];
+    return scopes.map(g => ({
+      ...g,
+      folders: PROJECT_CATEGORIES
+        .map(cat => ({
+          ...cat,
+          id: `${g.key}:${cat.key}`,
+          items: g.items.filter(b => (b.category || 'general') === cat.key),
+        }))
+        .filter(f => f.items.length > 0),
+    }));
   }, [brands]);
+
+  // Folder collapse — default expanded; persisted per folder id.
+  const [foldersCollapsed, setFoldersCollapsed] = React.useState({});
+  React.useEffect(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(FOLDER_STORAGE_KEY) || 'null');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) setFoldersCollapsed(parsed);
+    } catch { /* defaults apply */ }
+  }, []);
+  const toggleFolder = React.useCallback((id) => {
+    setFoldersCollapsed(prev => {
+      const map = { ...prev, [id]: !prev[id] };
+      try { localStorage.setItem(FOLDER_STORAGE_KEY, JSON.stringify(map)); } catch { /* ignore */ }
+      return map;
+    });
+  }, []);
 
   const renderBrandSidebarRow = (b) => {
     const active = brand === b.key;
@@ -422,7 +458,8 @@ export function Projects({ workspace }) {
         color: active ? 'var(--fg)' : 'var(--fg-muted)',
         position: 'relative',
       }}>
-        <span style={{ fontSize: 15, width: 20, textAlign: 'center', position: 'relative' }}>
+        {/* 글리프 단색·축소 (2026-07-15 spec §5) — 톤은 Badge/Dot에만. */}
+        <span style={{ fontSize: 12, width: 18, textAlign: 'center', position: 'relative', color: active ? 'var(--fg-muted)' : 'var(--fg-faint)' }}>
           {b.glyph}
           {changes > 0 && (
             <span style={{
@@ -463,7 +500,7 @@ export function Projects({ workspace }) {
         textAlign: 'left', color: active ? 'var(--fg)' : 'var(--fg-muted)',
         cursor: 'pointer', position: 'relative',
       }}>
-        <span style={{ fontSize: 16, width: 22, textAlign: 'center', position: 'relative' }}>
+        <span style={{ fontSize: 12, width: 18, textAlign: 'center', position: 'relative', color: active ? 'var(--fg-muted)' : 'var(--fg-faint)' }}>
           {b.glyph}
           {changes > 0 && (
             <span style={{
@@ -506,8 +543,8 @@ export function Projects({ workspace }) {
       <aside style={{ borderRight: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center' }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-faint)' }}>Brands</div>
-            <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>브랜드 포맷 · {Math.max(0, brands.length - 1)}개</div>
+            <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-faint)' }}>분류</div>
+            <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>프로젝트 컨테이너 · {Math.max(0, brands.length - 1)}개</div>
           </div>
           <IconButton icon="chevronL" size={24} iconSize={13} onClick={() => setSidebarHidden(true)} tooltip="접기" />
         </div>
@@ -518,7 +555,29 @@ export function Projects({ workspace }) {
               <div style={{ padding: '10px 10px 4px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>
                 {group.label}
               </div>
-              {group.items.map(renderBrandSidebarRow)}
+              {group.folders.map(folder => {
+                const closed = Boolean(foldersCollapsed[folder.id]);
+                return (
+                  <div key={folder.id}>
+                    <button
+                      type="button"
+                      className="hub-row"
+                      aria-expanded={!closed}
+                      onClick={() => toggleFolder(folder.id)}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '5px 10px', borderRadius: 'var(--r-sm)',
+                        color: 'var(--fg-dim)', fontSize: 11, textAlign: 'left',
+                      }}
+                    >
+                      <Iconed name="chevronD" size={11} style={{ transform: closed ? 'rotate(-90deg)' : 'none' }} />
+                      <span style={{ flex: 1 }}>{folder.label}</span>
+                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{folder.items.length}</span>
+                    </button>
+                    {!closed && folder.items.map(renderBrandSidebarRow)}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
@@ -538,7 +597,7 @@ export function Projects({ workspace }) {
               border: '1px solid var(--line)', borderRadius: 'var(--r-sm)',
               color: 'var(--fg)', cursor: 'pointer', position: 'relative',
             }}>
-              <span style={{ fontSize: 16, position: 'relative' }}>
+              <span style={{ fontSize: 14, position: 'relative', color: 'var(--fg-muted)' }}>
                 {currentBrand.glyph}
                 {(() => {
                   const totalChanges = brands.filter(b => b.key !== 'all').reduce((s, b) => s + (b.changes || 0), 0);
@@ -589,7 +648,12 @@ export function Projects({ workspace }) {
                     <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>
                       {group.label}
                     </div>
-                    {group.items.map(renderBrandMenuRow)}
+                    {group.folders.map(folder => (
+                      <div key={folder.id}>
+                        <div style={{ padding: '4px 10px 2px', fontSize: 10.5, color: 'var(--fg-faint)' }}>{folder.label}</div>
+                        {folder.items.map(renderBrandMenuRow)}
+                      </div>
+                    ))}
                   </div>
                 ))}
                 <div style={{ borderTop: '1px solid var(--line-soft)', marginTop: 4, padding: '6px 10px', fontSize: 10.5, color: 'var(--fg-faint)', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -692,7 +756,7 @@ export function Projects({ workspace }) {
                                 </button>
                                 <input type="checkbox" style={{ margin: 0, accentColor: 'var(--moon-400)' }} onClick={e => e.stopPropagation()} />
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                                  <span style={{ fontSize: 14 }}>{pBrand.glyph}</span>
+                                  <span style={{ fontSize: 14, color: 'var(--fg-muted)' }}>{pBrand.glyph}</span>
                                   <div style={{ minWidth: 0, flex: 1 }}>
                                     <div style={{ fontSize: 13, fontWeight: 500, letterSpacing: '-0.005em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
                                   </div>
@@ -787,7 +851,7 @@ export function Projects({ workspace }) {
               return (
                 <aside style={{ borderLeft: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                   <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 16 }}>{pBrand.glyph}</span>
+                    <span style={{ fontSize: 16, color: 'var(--fg-muted)' }}>{pBrand.glyph}</span>
                     <div style={{ fontSize: 11, color: 'var(--fg-faint)', flex: 1 }}>{pBrand.name}</div>
                     <IconButton icon="x" size={22} iconSize={12} onClick={() => setOpenDetail(null)} />
                   </div>

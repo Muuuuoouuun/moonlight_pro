@@ -8,7 +8,10 @@
 // in both, so the operator had to answer "where does this live?" before
 // "what am I doing?".
 //
-// Eight stable anchors. Organizational context moves into one scope control.
+// Nine stable anchors — Overview added 2026-07-15 per direct operator
+// instruction; the prior "eight anchors, fixed" reading of the 2026-07-15
+// sidebar spec is not final and may still change. Organizational context
+// moves into one scope control.
 
 export const DEFAULT_SCOPE = 'all';
 
@@ -32,6 +35,75 @@ export function normalizeScope(scope) {
 // 할 일 and 프로젝트·기획 share the Projects surface: the same route is split by
 // the `view` query (`todos` → 할 일, anything else → 프로젝트·기획), which is why
 // 할 일 owns no prefix of its own.
+//
+// `children` is the second navigation level (2026-07-15 spec): a manual
+// accordion under each anchor, keyed by scope because the *composition* can
+// differ per scope (e.g. 세그먼트 exists only in the ClassIn CRM). Every child
+// path must be owned by its parent anchor so navigating a child never moves
+// the highlight elsewhere. Scope lists with fewer than two entries render no
+// sub-list — the anchor itself is the destination.
+
+// Second-level destinations, defined once so the per-scope tables stay readable.
+function personalScoped(children) {
+  return children.map((c) => ({ ...c, path: `${c.path}?scope=personal` }));
+}
+
+const REVENUE_CHILDREN = [
+  // '개요', not 'Overview' — the global Overview anchor (dashboard/overview)
+  // owns that name; the revenue child keeps a distinct label to avoid two
+  // identical rows in one sidebar.
+  { key: 'rev-overview', label: '개요', path: 'dashboard/revenue/overview' },
+  { key: 'rev-leads', label: 'Leads', path: 'dashboard/revenue/leads' },
+  { key: 'rev-deals', label: 'Deals', path: 'dashboard/revenue/deals' },
+  { key: 'rev-accounts', label: 'Accounts', path: 'dashboard/revenue/accounts' },
+  { key: 'rev-cases', label: 'Cases', path: 'dashboard/revenue/cases' },
+];
+// Same components as the global CRM (Deals/Leads/Accounts with
+// workspace="classin") — so they carry the SAME names. The old scope-specific
+// labels (파이프라인·결제·리드·고객·계정) renamed identical surfaces and were the
+// operator's top naming confusion (2026-07-15 naming decision).
+const REVENUE_CLASSIN_CHILDREN = [
+  { key: 'rev-ci-pipeline', label: 'Deals', path: 'dashboard/classin/pipeline' },
+  { key: 'rev-ci-revenue', label: 'Leads', path: 'dashboard/classin/revenue' },
+  { key: 'rev-ci-segments', label: '세그먼트', path: 'dashboard/classin/segments' },
+  { key: 'rev-ci-accounts', label: 'Accounts', path: 'dashboard/classin/accounts' },
+];
+
+// Calendar · Roadmap · Decisions · Rhythm are global routes today — scope only
+// swaps the Projects entry. Scope filtering of these surfaces is Phase 2.
+const PLANNING_TAIL = [
+  { key: 'prj-calendar', label: 'Calendar', path: 'dashboard/work/calendar' },
+  { key: 'prj-roadmap', label: 'Roadmap', path: 'dashboard/work/roadmap' },
+  { key: 'prj-decisions', label: 'Decisions', path: 'dashboard/work/decisions' },
+  { key: 'prj-rhythm', label: 'Rhythm', path: 'dashboard/work/rhythm' },
+];
+
+const CONTENT_CHILDREN = [
+  { key: 'ct-queue', label: 'Queue', path: 'dashboard/content/queue' },
+  { key: 'ct-studio', label: 'Studio', path: 'dashboard/content/studio' },
+  { key: 'ct-campaigns', label: 'Campaigns', path: 'dashboard/content/campaigns' },
+];
+
+// AI·자동화 renders its eight children under two eyebrow group labels.
+// Sheets is the one scope-dependent entry (ClassIn owns 시트 동기화).
+function aiChildren(sheetsPath) {
+  return [
+    { key: 'ai-chat', label: 'Chat', path: 'dashboard/agents/chat', group: 'Agents' },
+    { key: 'ai-orders', label: 'Orders', path: 'dashboard/agents/orders', group: 'Agents' },
+    { key: 'ai-council', label: 'Council', path: 'dashboard/agents/council', group: 'Agents' },
+    { key: 'ai-runs', label: 'Runs', path: 'dashboard/automations/runs', group: 'Automations' },
+    { key: 'ai-flows', label: 'Flows', path: 'dashboard/automations/flows', group: 'Automations' },
+    { key: 'ai-email', label: 'Email', path: 'dashboard/automations/email', group: 'Automations' },
+    { key: 'ai-webhooks', label: 'Webhooks', path: 'dashboard/automations/webhooks', group: 'Automations' },
+    { key: 'ai-sheets', label: 'Sheets', path: sheetsPath, group: 'Automations' },
+  ];
+}
+
+const SETTINGS_CHILDREN = [
+  { key: 'sys-settings', label: 'Settings', path: 'dashboard/settings' },
+  { key: 'sys-evolution', label: 'Evolution', path: 'dashboard/evolution' },
+];
+
 export const SIDEBAR_PRIMARY = [
   {
     key: 'today',
@@ -46,20 +118,35 @@ export const SIDEBAR_PRIMARY = [
     },
   },
   {
-    key: 'tasks',
-    label: '할 일',
-    icon: 'check',
-    scopeAware: true,
-    owns: [],
+    key: 'overview',
+    label: 'Overview',
+    icon: 'signal',
+    scopeAware: false,
+    owns: ['dashboard/overview'],
     paths: {
-      all: 'dashboard/work/projects?view=todos',
-      classin: 'dashboard/classin/projects?view=todos',
-      personal: 'dashboard/brand/projects?view=todos',
+      all: 'dashboard/overview',
+      classin: 'dashboard/overview',
+      personal: 'dashboard/overview',
+    },
+  },
+  {
+    // 내 작업 — cross-lane operating surface (tasks + deals + calendar lenses). Owns its
+    // own route now; the old Projects ?view=todos split below stays only as bookmark
+    // back-compat in isSidebarAnchorActive.
+    key: 'tasks',
+    label: '내 작업',
+    icon: 'check',
+    scopeAware: false,
+    owns: ['dashboard/work/my'],
+    paths: {
+      all: 'dashboard/work/my',
+      classin: 'dashboard/work/my',
+      personal: 'dashboard/work/my',
     },
   },
   {
     key: 'revenue',
-    label: '매출·고객',
+    label: '영업·매출',
     icon: 'revenue',
     scopeAware: true,
     owns: [
@@ -74,10 +161,15 @@ export const SIDEBAR_PRIMARY = [
       classin: 'dashboard/classin/pipeline',
       personal: 'dashboard/revenue/overview?scope=personal',
     },
+    children: {
+      all: REVENUE_CHILDREN,
+      classin: REVENUE_CLASSIN_CHILDREN,
+      personal: personalScoped(REVENUE_CHILDREN),
+    },
   },
   {
     key: 'followups',
-    label: '연락·후속',
+    label: '고객 연락',
     icon: 'bell',
     scopeAware: true,
     owns: ['dashboard/revenue/followups', 'dashboard/classin/followups'],
@@ -89,7 +181,7 @@ export const SIDEBAR_PRIMARY = [
   },
   {
     key: 'projects',
-    label: '프로젝트·기획',
+    label: '프로젝트',
     icon: 'projects',
     scopeAware: true,
     owns: [
@@ -103,6 +195,11 @@ export const SIDEBAR_PRIMARY = [
       all: 'dashboard/work/projects',
       classin: 'dashboard/classin/projects',
       personal: 'dashboard/brand/projects',
+    },
+    children: {
+      all: [{ key: 'prj-projects', label: 'Projects', path: 'dashboard/work/projects' }, ...PLANNING_TAIL],
+      classin: [{ key: 'prj-projects', label: 'Projects', path: 'dashboard/classin/projects' }, ...PLANNING_TAIL],
+      personal: [{ key: 'prj-projects', label: 'Projects', path: 'dashboard/brand/projects' }, ...PLANNING_TAIL],
     },
   },
   {
@@ -121,6 +218,15 @@ export const SIDEBAR_PRIMARY = [
       classin: 'dashboard/classin/content',
       personal: 'dashboard/brand/queue',
     },
+    children: {
+      all: CONTENT_CHILDREN,
+      // ClassIn 콘텐츠 is a single surface — the anchor is the destination.
+      classin: [],
+      personal: [
+        { key: 'ct-queue', label: 'Queue', path: 'dashboard/brand/queue' },
+        { key: 'ct-studio', label: 'Studio', path: 'dashboard/brand/studio' },
+      ],
+    },
   },
 ];
 
@@ -136,6 +242,11 @@ export const SIDEBAR_UTILITIES = [
       classin: 'dashboard/agents/chat',
       personal: 'dashboard/agents/chat',
     },
+    children: {
+      all: aiChildren('dashboard/automations/sheets'),
+      classin: aiChildren('dashboard/classin/automations'),
+      personal: aiChildren('dashboard/automations/sheets'),
+    },
   },
   {
     key: 'settings',
@@ -147,6 +258,11 @@ export const SIDEBAR_UTILITIES = [
       all: 'dashboard/settings',
       classin: 'dashboard/settings',
       personal: 'dashboard/settings',
+    },
+    children: {
+      all: SETTINGS_CHILDREN,
+      classin: SETTINGS_CHILDREN,
+      personal: SETTINGS_CHILDREN,
     },
   },
 ];
@@ -165,6 +281,30 @@ export function resolveSidebarPath(anchorKey, scope) {
   const anchor = SIDEBAR_ANCHORS.find((a) => a.key === anchorKey);
   if (!anchor) return null;
   return anchor.paths[normalizeScope(scope)] || anchor.paths[DEFAULT_SCOPE];
+}
+
+// Anchors expanded when no stored preference exists — the operator's daily
+// loop (2026-07-15 spec §3.1). Everything else starts collapsed.
+export const DEFAULT_EXPANDED_ANCHORS = ['revenue', 'content'];
+
+// Sub-list for an anchor in a scope. Lists with fewer than two entries return
+// empty — the anchor itself is the destination, no accordion is rendered.
+export function sidebarChildren(anchorKey, scope) {
+  const anchor = SIDEBAR_ANCHORS.find((a) => a.key === anchorKey);
+  const list = anchor?.children?.[normalizeScope(scope)] || [];
+  return list.length > 1 ? list : [];
+}
+
+function pathnameOf(path) {
+  return String(path || '').split(/[?#]/)[0].replace(/^\/+|\/+$/g, '');
+}
+
+// A child is active only when its parent anchor is (so the shared Projects
+// surface never lights a 프로젝트·기획 child while 할 일 owns the view) and its
+// pathname matches exactly. Queries (?scope=personal) don't affect matching.
+export function isSidebarChildActive(anchorKey, childPath, activePath, view) {
+  if (!isSidebarAnchorActive(anchorKey, activePath, view)) return false;
+  return pathnameOf(childPath) === pathnameOf(activePath);
 }
 
 function matchLength(prefix, path) {

@@ -177,6 +177,14 @@
   .hub-app .hub-row { transition: none; }
 }
 
+/* Kanban card hover (rests at --surface-2, one step lighter than .hub-row's --surface/--bg
+   rest state) — same "no JS hover handler" contract, different resting surface. */
+.hub-app .hub-kanban-card { transition: background 120ms ease, box-shadow 120ms ease; }
+.hub-app .hub-kanban-card:hover { background: var(--surface-3); }
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-kanban-card { transition: none; }
+}
+
 /* Sidebar anchor row — same contract as .hub-row (CSS hover, no JS handlers),
    sized for the consolidated eight-anchor nav: one tap target, no accordion. */
 .hub-app .hub-nav-item {
@@ -217,6 +225,57 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .hub-app .hub-nav-item { transition: none; }
+}
+
+/* Second-level nav (2026-07-15 spec) — manual accordion under each anchor.
+   The label button navigates; the caret is a separate toggle target so
+   "expand" never accidentally becomes "navigate". */
+.hub-app .hub-nav-group { display: flex; align-items: center; gap: 2px; }
+.hub-app .hub-nav-group > .hub-nav-item { flex: 1; min-width: 0; }
+.hub-app .hub-nav-caret {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  color: var(--fg-faint);
+  background: transparent;
+}
+.hub-app .hub-nav-caret:hover { background: var(--surface-2); color: var(--fg); }
+.hub-app .hub-nav-caret svg { transition: transform 160ms ease; }
+.hub-app .hub-nav-caret[aria-expanded="false"] svg { transform: rotate(-90deg); }
+.hub-app .hub-nav-sublist { margin: -1px 0 4px; animation: mlFadeUp 180ms ease both; }
+.hub-app .hub-nav-sub {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 10px 0 35px;
+  margin-bottom: 1px;
+  font-size: 12px;
+  color: var(--fg-dim);
+  background: transparent;
+  border-radius: var(--r-sm);
+  text-align: left;
+  transition: background 120ms ease, color 120ms ease;
+}
+.hub-app .hub-nav-sub:hover { background: var(--surface-2); color: var(--fg); }
+.hub-app .hub-nav-sub[aria-current="page"] { color: var(--fg); background: var(--surface-3); }
+.hub-app .hub-nav-subgroup {
+  padding: 8px 10px 3px 35px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--fg-faint);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-nav-caret svg { transition: none; }
+  .hub-app .hub-nav-sublist { animation: none; }
+  .hub-app .hub-nav-sub { transition: none; }
 }
 
 .hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; border-radius: 2px; }
@@ -309,6 +368,34 @@
 .hub-scroll-x {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Scroll-edge cue for multi-column kanban strips (ScrollShadowX primitive) — a fade + chevron
+   so hidden columns (e.g. a 6-stage pipeline past the 4th visible column) aren't mistaken for
+   "that's all of them". Pointer-events none: it's a read-only affordance, not a click target. */
+.hub-app .hub-scroll-edge {
+  position: absolute;
+  top: 0;
+  bottom: 4px;
+  width: 40px;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  color: var(--fg-faint);
+  transition: opacity 150ms ease;
+}
+.hub-app .hub-scroll-edge--left {
+  left: 0;
+  justify-content: flex-start;
+  background: linear-gradient(to right, var(--bg) 0%, transparent 100%);
+}
+.hub-app .hub-scroll-edge--right {
+  right: 0;
+  justify-content: flex-end;
+  background: linear-gradient(to left, var(--bg) 0%, transparent 100%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-scroll-edge { transition: none; }
 }
 
 .campaign-war-room,

@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { NAV_TREE } from "./hub-data.js";
 import {
+  DEFAULT_EXPANDED_ANCHORS,
   DEFAULT_SCOPE,
   SIDEBAR_ANCHORS,
   SIDEBAR_PRIMARY,
@@ -10,9 +11,11 @@ import {
   SIDEBAR_UTILITIES,
   deriveSidebarScope,
   isSidebarAnchorActive,
+  isSidebarChildActive,
   normalizeScope,
   ownerAnchorKey,
   resolveSidebarPath,
+  sidebarChildren,
 } from "./hub-nav.js";
 
 function navTreePaths() {
@@ -24,12 +27,14 @@ function navTreePaths() {
   return paths;
 }
 
-test("sidebar exposes exactly six primary and two utility anchors", () => {
-  assert.equal(SIDEBAR_PRIMARY.length, 6);
+// Overview joined 2026-07-15 by direct operator instruction (see hub-nav.js
+// header) — seven primary + two utility anchors.
+test("sidebar exposes exactly seven primary and two utility anchors", () => {
+  assert.equal(SIDEBAR_PRIMARY.length, 7);
   assert.equal(SIDEBAR_UTILITIES.length, 2);
   assert.deepEqual(
     SIDEBAR_PRIMARY.map((a) => a.key),
-    ["today", "tasks", "revenue", "followups", "projects", "content"],
+    ["today", "overview", "tasks", "revenue", "followups", "projects", "content"],
   );
 });
 
@@ -94,4 +99,84 @@ test("entering a scoped route derives its scope; global routes keep the current 
 test("active state survives query strings and leading slashes", () => {
   assert.equal(ownerAnchorKey("/dashboard/revenue/deals?deal=D-1"), "revenue");
   assert.equal(ownerAnchorKey("dashboard/content/queue#top"), "content");
+});
+
+// ── Second level (2026-07-15 spec) ────────────────────────────────────────
+
+test("every child resolves and is owned by its parent anchor in every scope", () => {
+  for (const anchor of SIDEBAR_ANCHORS) {
+    for (const scope of SIDEBAR_SCOPES) {
+      for (const child of sidebarChildren(anchor.key, scope.key)) {
+        assert.match(child.path, /^dashboard\//, `${anchor.key}/${child.key} path`);
+        assert.equal(
+          ownerAnchorKey(child.path),
+          anchor.key,
+          `${child.path} must stay under ${anchor.key}`,
+        );
+      }
+    }
+  }
+});
+
+test("single-destination anchors render no sub-list", () => {
+  for (const scope of SIDEBAR_SCOPES) {
+    for (const key of ["today", "tasks", "followups"]) {
+      assert.deepEqual(sidebarChildren(key, scope.key), [], `${key} in ${scope.key}`);
+    }
+  }
+  // ClassIn 콘텐츠 is one surface — the anchor is the destination.
+  assert.deepEqual(sidebarChildren("content", "classin"), []);
+  assert.ok(sidebarChildren("content", "all").length > 1);
+});
+
+test("at most one child lights up for any route in any scope", () => {
+  for (const scope of SIDEBAR_SCOPES) {
+    for (const path of navTreePaths()) {
+      const active = [];
+      for (const anchor of SIDEBAR_ANCHORS) {
+        for (const child of sidebarChildren(anchor.key, scope.key)) {
+          if (isSidebarChildActive(anchor.key, child.path, path)) {
+            active.push(`${anchor.key}/${child.key}`);
+          }
+        }
+      }
+      assert.ok(active.length <= 1, `${path} in ${scope.key} lit ${active.join(", ")}`);
+    }
+  }
+});
+
+test("child active matching ignores queries but respects the tasks/projects view split", () => {
+  // ?scope=personal children still match their pathname.
+  assert.equal(
+    isSidebarChildActive("revenue", "dashboard/revenue/overview?scope=personal", "dashboard/revenue/overview"),
+    true,
+  );
+  // 할 일 owns the todos view, so the Projects child must stay dark.
+  assert.equal(
+    isSidebarChildActive("projects", "dashboard/work/projects", "dashboard/work/projects", "todos"),
+    false,
+  );
+  assert.equal(
+    isSidebarChildActive("projects", "dashboard/work/projects", "dashboard/work/projects", undefined),
+    true,
+  );
+});
+
+test("default-expanded anchors actually have children to show", () => {
+  for (const key of DEFAULT_EXPANDED_ANCHORS) {
+    assert.ok(
+      sidebarChildren(key, DEFAULT_SCOPE).length > 1,
+      `${key} is default-expanded but has no sub-list`,
+    );
+  }
+});
+
+test("AI·자동화 children all carry a group label for the two-eyebrow layout", () => {
+  for (const scope of SIDEBAR_SCOPES) {
+    const children = sidebarChildren("ai", scope.key);
+    assert.ok(children.length >= 8);
+    for (const child of children) {
+      assert.ok(["Agents", "Automations"].includes(child.group), `${child.key} group`);
+    }
+  }
 });

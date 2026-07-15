@@ -4,18 +4,22 @@ import React from "react";
 import { Iconed } from "./hub-icons";
 import { IconButton, Avatar, Kbd, SegmentedControl } from "./hub-primitives";
 import {
+  DEFAULT_EXPANDED_ANCHORS,
   SIDEBAR_PRIMARY,
   SIDEBAR_SCOPES,
   SIDEBAR_UTILITIES,
   DEFAULT_SCOPE,
   deriveSidebarScope,
   isSidebarAnchorActive,
+  isSidebarChildActive,
   normalizeScope,
   ownerAnchorKey,
   resolveSidebarPath,
+  sidebarChildren,
 } from "./hub-nav";
 
 const SCOPE_STORAGE_KEY = 'mlp.scope';
+const EXPANDED_STORAGE_KEY = 'mlp.nav.expanded';
 
 // Scope lives in localStorage only — no server preference, no fetch (Phase A).
 // If storage is unavailable we simply keep it in React state for the session.
@@ -44,6 +48,46 @@ function useScope(active) {
   }, []);
 
   return [scope, persist];
+}
+
+// Manual accordion state (2026-07-15 spec §3.1). Stored prefs live in
+// localStorage; the anchor owning the active route is force-opened on top of
+// them without overwriting — leave the anchor and the stored state returns.
+function useExpandedAnchors(ownerKey) {
+  const [stored, setStored] = React.useState(null);
+  const [autoOpened, setAutoOpened] = React.useState(ownerKey || null);
+
+  React.useEffect(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(EXPANDED_STORAGE_KEY) || 'null');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) setStored(parsed);
+    } catch { /* corrupt or blocked storage — defaults apply */ }
+  }, []);
+
+  React.useEffect(() => { setAutoOpened(ownerKey || null); }, [ownerKey]);
+
+  const isExpanded = React.useCallback((key) => {
+    const saved = stored?.[key];
+    const base = typeof saved === 'boolean' ? saved : DEFAULT_EXPANDED_ANCHORS.includes(key);
+    return base || key === autoOpened;
+  }, [stored, autoOpened]);
+
+  const toggle = React.useCallback((key) => {
+    const next = !isExpanded(key);
+    // Collapsing the auto-opened anchor must win immediately — the operator's
+    // explicit action overrides the route-derived open.
+    if (!next && key === autoOpened) setAutoOpened(null);
+    setStored((prev) => {
+      const map = { ...(prev || {}), [key]: next };
+      try { localStorage.setItem(EXPANDED_STORAGE_KEY, JSON.stringify(map)); } catch { /* ignore */ }
+      return map;
+    });
+  }, [isExpanded, autoOpened]);
+
+  // Label click re-opens a manually collapsed anchor without touching prefs.
+  const armAutoOpen = React.useCallback((key) => setAutoOpened(key), []);
+
+  return { isExpanded, toggle, armAutoOpen };
 }
 
 // Best-effort count badges — fetched once on mount, never polled. Keyed by
@@ -88,6 +132,7 @@ function CountBadge({ n }) {
 export function Sidebar({ active, view, onNavigate, collapsed, onToggleCollapse, openPalette, className }) {
   const counts = useAnchorCounts();
   const [scope, setScope] = useScope(active);
+  const { isExpanded, toggle, armAutoOpen } = useExpandedAnchors(ownerAnchorKey(active));
 
   const go = React.useCallback((anchorKey) => {
     const path = resolveSidebarPath(anchorKey, scope);
@@ -111,6 +156,61 @@ export function Sidebar({ active, view, onNavigate, collapsed, onToggleCollapse,
     onClick: () => go(a.key),
     'aria-current': isSidebarAnchorActive(a.key, active, view) ? 'page' : undefined,
   });
+
+  // One anchor + its optional accordion. Label navigates (and re-opens a
+  // manually collapsed anchor); the caret only toggles — never navigates.
+  const renderAnchorGroup = (a, small) => {
+    const children = sidebarChildren(a.key, scope);
+    const hasSub = children.length > 0;
+    const open = hasSub && isExpanded(a.key);
+    return (
+      <div key={a.key}>
+        <div className="hub-nav-group">
+          <button
+            type="button"
+            className={small ? 'hub-nav-item hub-nav-item--sm' : 'hub-nav-item'}
+            aria-current={isSidebarAnchorActive(a.key, active, view) ? 'page' : undefined}
+            onClick={() => { armAutoOpen(a.key); go(a.key); }}
+          >
+            <Iconed name={a.icon} size={small ? 14 : 15} />
+            <span style={{ flex: 1 }}>{a.label}</span>
+            <CountBadge n={counts[a.key]} />
+          </button>
+          {hasSub && (
+            <button
+              type="button"
+              className="hub-nav-caret"
+              aria-expanded={open}
+              aria-label={`${a.label} 하위 메뉴 ${open ? '접기' : '펼치기'}`}
+              onClick={() => toggle(a.key)}
+            >
+              <Iconed name="chevronD" size={12} />
+            </button>
+          )}
+        </div>
+        {open && (
+          <div className="hub-nav-sublist">
+            {children.map((c, i) => {
+              const showGroup = c.group && (i === 0 || children[i - 1].group !== c.group);
+              return (
+                <React.Fragment key={c.key}>
+                  {showGroup && <div className="hub-nav-subgroup">{c.group}</div>}
+                  <button
+                    type="button"
+                    className="hub-nav-sub"
+                    aria-current={isSidebarChildActive(a.key, c.path, active, view) ? 'page' : undefined}
+                    onClick={() => onNavigate(c.path)}
+                  >
+                    {c.label}
+                  </button>
+                </React.Fragment>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   if (collapsed) {
     return (
@@ -218,22 +318,11 @@ export function Sidebar({ active, view, onNavigate, collapsed, onToggleCollapse,
       </div>
 
       <nav className="scroll-y" style={{ flex: 1, padding: '2px 8px 10px' }}>
-        {SIDEBAR_PRIMARY.map(a => (
-          <button key={a.key} {...anchorProps(a)} className="hub-nav-item">
-            <Iconed name={a.icon} size={15} />
-            <span style={{ flex: 1 }}>{a.label}</span>
-            <CountBadge n={counts[a.key]} />
-          </button>
-        ))}
+        {SIDEBAR_PRIMARY.map(a => renderAnchorGroup(a, false))}
       </nav>
 
       <div style={{ padding: '6px 8px', borderTop: '1px solid var(--line-soft)' }}>
-        {SIDEBAR_UTILITIES.map(a => (
-          <button key={a.key} {...anchorProps(a)} className="hub-nav-item hub-nav-item--sm">
-            <Iconed name={a.icon} size={14} />
-            <span style={{ flex: 1 }}>{a.label}</span>
-          </button>
-        ))}
+        {SIDEBAR_UTILITIES.map(a => renderAnchorGroup(a, true))}
       </div>
 
       <div style={{
