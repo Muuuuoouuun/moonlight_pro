@@ -201,11 +201,19 @@ function mapTodos(rows, projectById, brandById) {
       brand: brand?.slug || "all",
       project: row.project_id || "",
       title: row.title,
+      status: row.status || "inbox",
       due: formatShortDate(row.due_at),
+      dueAt: row.due_at || "",
       bucket: resolveDueBucket(row.due_at),
       done: row.status === "done",
       priority: normalizeTodoPriority(row.priority),
+      // Unlossy priority (low/medium/high/critical, matching the engine's PRIORITIES enum) —
+      // `priority` above collapses critical->high and medium->med for the compact board dot,
+      // which round-trips badly through an edit-and-save (attention-ledger.js needs this raw
+      // form so a re-save doesn't silently downgrade critical or send an invalid "med").
+      priorityRaw: String(row.priority || "medium").toLowerCase(),
       assignee: row.owner_id ? "Me" : "Unassigned",
+      updatedAt: row.updated_at || row.created_at || "",
     };
   });
 }
