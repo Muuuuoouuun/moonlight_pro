@@ -24,27 +24,23 @@ const LEAD_STATUS_BY_STAGE = {
   Lost: "lost",
 };
 
-// Canonical deal stage keys (mapDeal normalizes DB aliases down to these).
-const DEAL_STAGE_KEYS = new Set(["lead", "qual", "prop", "neg", "won", "lost"]);
+// Canonical deal stage keys (must stay in lockstep with lib/deal-stages.js DEAL_STAGES).
+const DEAL_STAGE_KEYS = new Set(["potential", "contact", "consult", "quote", "final", "closing", "lost"]);
 
-// Reverse of mapDeal's normalization: display key → DB `deals.stage` value. Writing the raw
-// display key (lead/qual/prop/neg) would fail the CHECK constraint and silently downgrade to
-// preview, so we map to canonical DB stage values that round-trip back through the read-side
-// STAGE_ALIASES.
-//
-// NOTE (schema fork): this branch's `deals.stage` CHECK allows only
-// prospect/proposal/negotiation/won/lost — it does NOT yet include 'qualified' (the CHECK
-// widening lives in a later migration that has not landed here). So the `qual` display stage
-// maps to 'qualified' but will be *rejected* by the live CHECK and surface as `preview` (the
-// optimistic local card stands, the drawer footer says preview). Every other stage persists.
-// Keeping the forward-compatible value here means qual round-trips automatically once the
-// stage-CHECK migration is applied — no code change needed then.
+// Display key → coarse DB `deals.stage` column value. The live CHECK only allows
+// prospect/proposal/negotiation/won/lost, so the fine-grained display stage persists in
+// `meta.stage_detail` (buildDealWrite below) and the column keeps a proven-coarse bucket:
+// the three pre-quote stages all collapse to 'prospect'. Read side prefers meta.stage_detail
+// (resolveDealStage in revenue-ledger.js), so granularity survives the round-trip today and
+// the column stays valid for any external consumer. Widening the CHECK (and a dedicated
+// "데모" stage) still needs a migration against the real constraint.
 const STAGE_KEY_TO_DB = {
-  lead: "prospect",
-  qual: "qualified",
-  prop: "proposal",
-  neg: "negotiation",
-  won: "won",
+  potential: "prospect",
+  contact: "prospect",
+  consult: "prospect",
+  quote: "proposal",
+  final: "negotiation",
+  closing: "won",
   lost: "lost",
 };
 
@@ -116,6 +112,8 @@ export function buildDealWrite(payload = {}) {
   }
   if (DEAL_STAGE_KEYS.has(String(payload.stage))) {
     columns.stage = STAGE_KEY_TO_DB[String(payload.stage)];
+    // Fine-grained stage — the CHECK-constrained column above only keeps a coarse bucket.
+    metaPatch.stage_detail = String(payload.stage);
   }
   if (payload.value != null) {
     columns.amount = parseMoneyLabel(payload.value);
@@ -124,6 +122,33 @@ export function buildDealWrite(payload = {}) {
   const type = normalizeType(payload.type);
   if (type) metaPatch.account_kind = type;
   if (payload.workspace) metaPatch.workspace = payload.workspace;
+
+  return { columns, metaPatch };
+}
+
+// Reverse of the followups quick-log mini-form → a leads/deals patch. Both tables already
+// have a `next_action` text column and a `meta jsonb` column, so one build function serves
+// either table (the caller picks `table`). `dormant: true` (기약 없음) clears any scheduled
+// date and stamps when it went dormant; `dormant: false` with `at` sets the next contact date
+// and clears a prior dormant stamp. Omitting both leaves meta untouched (defensive — the UI
+// requires picking one, per operator-workflow-profile.md §7 권장: 다음 행동과 날짜를 비워두지 않는다).
+export function buildFollowupWrite(payload = {}) {
+  const columns = {};
+  const metaPatch = {};
+
+  if (typeof payload.text === "string") {
+    columns.next_action = payload.text.trim() || null;
+  }
+
+  if (payload.dormant === true) {
+    metaPatch.dormant = true;
+    metaPatch.dormant_since = new Date().toISOString();
+    metaPatch.next_action_at = null;
+  } else if (payload.at != null) {
+    metaPatch.dormant = false;
+    metaPatch.dormant_since = null;
+    metaPatch.next_action_at = String(payload.at);
+  }
 
   return { columns, metaPatch };
 }

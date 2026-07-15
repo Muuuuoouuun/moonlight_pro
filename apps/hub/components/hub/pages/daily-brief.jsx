@@ -7,6 +7,7 @@ import { createClientId } from "@/lib/pms-ui";
 import { buildQuickCapture, isDurableQuickCaptureResult } from "@/lib/quick-task-capture";
 import { isDurableTaskUpdateResult } from "@/lib/task-today";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
+import { DEAL_STAGES } from "@/lib/deal-stages";
 
 function formatBriefDate(date) {
   return new Intl.DateTimeFormat('en-US', {
@@ -864,12 +865,21 @@ function ApprovalQueueCard({ onNavigate }) {
 // 파이프라인 형태 — 열린 딜의 단계 분포를 한 줄 세그먼트 바로. 딜이 어디에 몰려 있고(병목)
 // 며칠째 정체된 게 몇 건인지 5초 안에 읽고 딜 보드로 넘어가게 한다. raw count가 아니라
 // 분포 + 정체(urgency)를 보여주는 게 DESIGN.md 대시보드 원칙.
-const PIPELINE_STAGES = [
-  { key: 'lead', label: 'Lead', color: 'var(--fg-faint)' },
-  { key: 'qual', label: 'Qual', color: 'var(--info)' },
-  { key: 'prop', label: 'Prop', color: 'var(--moon-400)' },
-  { key: 'neg', label: 'Neg', color: 'var(--warning)' },
-];
+//
+// Derived from the shared lib/deal-stages.js taxonomy (not redeclared here) so this widget
+// can't drift from the Deals kanban — "closing" is dropped since PipelineShapeCard only ever
+// shows open (not closing/lost) deals, matching its own `open` filter below.
+const STAGE_TONE_COLOR = {
+  neutral: 'var(--fg-faint)',
+  info: 'var(--info)',
+  moon: 'var(--moon-400)',
+  warning: 'var(--warning)',
+  danger: 'var(--danger)',
+  success: 'var(--success)',
+};
+const PIPELINE_STAGES = DEAL_STAGES
+  .filter((s) => s.key !== 'closing')
+  .map((s) => ({ key: s.key, label: s.label, color: STAGE_TONE_COLOR[s.color] || 'var(--fg-faint)' }));
 
 function PipelineShapeCard({ onNavigate }) {
   const [data, setData] = React.useState(null);
@@ -882,7 +892,7 @@ function PipelineShapeCard({ onNavigate }) {
       .then((d) => {
         if (!active) return;
         if (d && d.source === 'supabase' && Array.isArray(d.deals)) {
-          const open = d.deals.filter((x) => x.stage !== 'won' && x.stage !== 'lost');
+          const open = d.deals.filter((x) => x.stage !== 'closing' && x.stage !== 'lost');
           const byStage = PIPELINE_STAGES.map((s) => ({
             ...s,
             count: open.filter((x) => x.stage === s.key).length,

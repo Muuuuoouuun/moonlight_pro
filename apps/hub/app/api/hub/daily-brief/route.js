@@ -62,7 +62,7 @@ function nameTokens(name) {
 
 function buildUnifiedRiskSignals(revenue, projects, automations) {
   const staleDeals = (Array.isArray(revenue.deals) ? revenue.deals : []).filter(
-    (d) => d.stage !== "won" && d.stage !== "lost" && Number(d.age) >= 10,
+    (d) => d.stage !== "closing" && d.stage !== "lost" && Number(d.age) >= 10,
   );
   const blocked = (Array.isArray(projects.projects) ? projects.projects : []).filter(
     (p) => p.status === "Blocked",
@@ -169,7 +169,7 @@ function buildRevenueSignals(revenue) {
   });
 
   deals
-    .filter((deal) => deal.stage !== "won" && deal.stage !== "lost" && Number(deal.age) >= 10)
+    .filter((deal) => deal.stage !== "closing" && deal.stage !== "lost" && Number(deal.age) >= 10)
     .sort((a, b) => Number(b.value || 0) - Number(a.value || 0))
     .slice(0, 2)
     .forEach((deal) => {

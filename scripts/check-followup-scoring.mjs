@@ -7,9 +7,11 @@ import process from "node:process";
 
 import {
   ACTION_MOMENTUM,
+  DORMANT_RESURFACE_DAYS,
   momentumScore,
   outcomeBoost,
   priorityFor,
+  shouldResurfaceDormant,
 } from "../apps/hub/lib/sales-os/followup-scoring.js";
 
 const failures = [];
@@ -50,6 +52,12 @@ ok("recent meeting raises score", momentumScore({ lastAction: "meeting", ageDays
 ok("repeated no_response lowers score", momentumScore({ lastAction: "no_response", ageDays: 1, noResponses: 3 }) < 25);
 ok("meetings compound", momentumScore({ lastAction: "replied", ageDays: 2, replies: 2, meetings: 2 }) > momentumScore({ lastAction: "replied", ageDays: 2 }));
 ok("clamped to 0..100", momentumScore({ lastAction: "meeting", ageDays: 0, meetings: 20 }) <= 100 && momentumScore({ lastAction: "lost", ageDays: 0, noResponses: 20 }) >= 0);
+
+// --- shouldResurfaceDormant (기약없음 30일 재확인 gate) ---
+eq("null since dormant never resurfaces", shouldResurfaceDormant(null), false);
+eq("just under threshold stays hidden", shouldResurfaceDormant(DORMANT_RESURFACE_DAYS - 1), false);
+eq("at threshold resurfaces", shouldResurfaceDormant(DORMANT_RESURFACE_DAYS), true);
+eq("past threshold resurfaces", shouldResurfaceDormant(DORMANT_RESURFACE_DAYS + 10), true);
 
 console.log("");
 if (failures.length) {

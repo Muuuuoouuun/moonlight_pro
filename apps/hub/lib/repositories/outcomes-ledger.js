@@ -31,6 +31,7 @@ export async function recordOutreachOutcome({
   channel = null,
   action = "sent",
   note = null,
+  meta = null,
   occurredAt = null,
 } = {}) {
   if (!workspaceId) return { persisted: false, reason: "missing-workspace" };
@@ -53,6 +54,7 @@ export async function recordOutreachOutcome({
     channel: channel || null,
     action: normalizeAction(action),
     note: note || null,
+    meta: meta && typeof meta === "object" ? meta : {},
     occurred_at: occurredAt || new Date().toISOString(),
   });
   return { ...result, id };
@@ -85,6 +87,7 @@ export async function getRecentOutcomes({
       channel: r.channel,
       action: r.action,
       note: r.note,
+      meta: r.meta || {},
       occurredAt: r.occurred_at,
     })),
   };

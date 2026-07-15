@@ -5,73 +5,8 @@ import {
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
-import { buildTaskBoardColumns } from "@/lib/pms-ui";
 
 const BRAND_GLYPHS = ["◐", "◇", "✦", "◆", "●", "□", "△", "◎", "◌", "✧"];
-const CANONICAL_BRAND_ORDER = {
-  sinabro: 10,
-  gore: 20,
-  holyfuncollector: 30,
-  bridgemaker: 40,
-  moonpm: 50,
-  classmoon: 60,
-  studyseagull: 70,
-  politicofficer: 80,
-  "22nomad": 90,
-};
-const CANONICAL_BRAND_TONES = {
-  sinabro: "info",
-  gore: "company",
-  holyfuncollector: "warning",
-  bridgemaker: "moon",
-  moonpm: "warning",
-  classmoon: "info",
-  studyseagull: "danger",
-  politicofficer: "info",
-  "22nomad": "personal",
-};
-const CANONICAL_BRAND_GLYPHS = {
-  sinabro: "✦",
-  gore: "◌",
-  holyfuncollector: "✧",
-  bridgemaker: "◇",
-  moonpm: "◐",
-  classmoon: "□",
-  studyseagull: "△",
-  politicofficer: "◎",
-  "22nomad": "◻",
-};
-// Which brands are ClassIn (company) work vs. personal brands. Defaults to
-// "personal" when a brand isn't listed here and has no meta.org_scope.
-const CANONICAL_BRAND_ORG_SCOPE = {
-  classmoon: "classin",
-  studyseagull: "classin",
-  classin_side: "classin",
-};
-
-// PMS container category (2026-07-15 spec §4.1): 'sns-channel' | 'ka-deal' |
-// 'general'. meta.category overrides; unknown values read as "general" — the
-// code never guesses. The canonical list below is the operator-confirmed
-// 2026-07-15 assignment (every existing container is an SNS channel), same
-// idiom as CANONICAL_BRAND_ORG_SCOPE above.
-const BRAND_CATEGORIES = new Set(["sns-channel", "ka-deal", "general"]);
-const CANONICAL_BRAND_CATEGORY = {
-  sinabro: "sns-channel",
-  gore: "sns-channel",
-  holyfuncollector: "sns-channel",
-  bridgemaker: "sns-channel",
-  moonpm: "sns-channel",
-  classmoon: "sns-channel",
-  studyseagull: "sns-channel",
-  politicofficer: "sns-channel",
-  "22nomad": "sns-channel",
-};
-
-function resolveBrandCategory(key, meta) {
-  const raw = typeof meta?.category === "string" ? meta.category.trim() : "";
-  if (BRAND_CATEGORIES.has(raw)) return raw;
-  return CANONICAL_BRAND_CATEGORY[key] || "general";
-}
 
 function clampProgress(value) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
@@ -109,27 +44,6 @@ function normalizeBrandKind(kind) {
   if (["community", "content"].includes(normalized)) return "warning";
 
   return "moon";
-}
-
-function resolveBrandOrder(key, meta, index) {
-  const parsed = Number.parseInt(String(meta?.order ?? ""), 10);
-  if (Number.isFinite(parsed)) return parsed;
-  return CANONICAL_BRAND_ORDER[key] ?? 1000 + index;
-}
-
-function resolveBrandTone(key, kind, meta) {
-  if (typeof meta?.tone === "string" && meta.tone.trim()) return meta.tone.trim();
-  return CANONICAL_BRAND_TONES[key] || normalizeBrandKind(kind);
-}
-
-function resolveBrandGlyph(key, meta, index) {
-  if (typeof meta?.glyph === "string" && meta.glyph.trim()) return meta.glyph.trim();
-  return CANONICAL_BRAND_GLYPHS[key] || BRAND_GLYPHS[index % BRAND_GLYPHS.length];
-}
-
-function resolveBrandOrgScope(key, meta) {
-  if (typeof meta?.org_scope === "string" && meta.org_scope.trim()) return meta.org_scope.trim();
-  return CANONICAL_BRAND_ORG_SCOPE[key] || "personal";
 }
 
 function formatShortDate(value) {
@@ -226,25 +140,16 @@ function mapBrands(rows, projects, todos, updates) {
       key,
       id: row.id,
       name: row.name,
-      glyph: resolveBrandGlyph(key, meta, index),
-      tone: resolveBrandTone(key, row.kind, meta),
+      glyph: meta.glyph || BRAND_GLYPHS[index % BRAND_GLYPHS.length],
+      tone: meta.tone || normalizeBrandKind(row.kind),
       kind: row.kind || "brand",
-      orgScope: resolveBrandOrgScope(key, meta),
-      category: resolveBrandCategory(key, meta),
       desc: row.description || "운영 브랜드",
-      philosophy: typeof meta.philosophy === "string" ? meta.philosophy : "",
-      direction: typeof meta.direction === "string" ? meta.direction : "",
-      cadence: typeof meta.cadence === "string" ? meta.cadence : "",
       projects: projectCounts.get(key) || 0,
       tasks: todoCounts.get(key) || 0,
       open: todoCounts.get(key) || 0,
       changes: changeCounts.get(key) || 0,
-      sortOrder: resolveBrandOrder(key, meta, index),
     };
-  }).sort((a, b) => (
-    a.sortOrder - b.sortOrder ||
-    a.name.localeCompare(b.name, "ko")
-  )).map(({ sortOrder, ...brand }) => brand);
+  });
 
   const openTodoCount = todos.filter((todo) => !todo.done).length;
 
@@ -266,15 +171,11 @@ function mapProjects(rows, brandById, taskStats, updateStats) {
 
     return {
       id: row.id,
-      brandId: row.brand_id || null,
       brand: brand?.slug || "all",
       name: row.name,
       status: normalizeProjectStatus(row.status),
-      statusKey: row.status || "active",
-      priority: row.priority || "medium",
       progress,
       due: formatShortDate(row.due_at),
-      dueAt: row.due_at || "",
       owner: row.owner_id ? "Me" : "Unassigned",
       tag: row.meta?.tag || null,
       tasks: stats.total,
@@ -300,14 +201,11 @@ function mapTodos(rows, projectById, brandById) {
       brand: brand?.slug || "all",
       project: row.project_id || "",
       title: row.title,
-      status: row.status || "inbox",
       due: formatShortDate(row.due_at),
-      dueAt: row.due_at || "",
       bucket: resolveDueBucket(row.due_at),
       done: row.status === "done",
       priority: normalizeTodoPriority(row.priority),
       assignee: row.owner_id ? "Me" : "Unassigned",
-      updatedAt: row.updated_at || row.created_at || "",
     };
   });
 }
@@ -385,6 +283,56 @@ function mapRoutineChecks(rows) {
     checkedAt: row.checked_at || row.created_at,
     checkedAtLabel: formatActivityTime(row.checked_at || row.created_at),
   }));
+}
+
+function buildBoardColumns(projects, todos) {
+  const columns = [
+    { key: "backlog", label: "Backlog", cards: [] },
+    { key: "today", label: "Today", cards: [] },
+    { key: "doing", label: "In Progress", cards: [] },
+    { key: "review", label: "Review", cards: [] },
+    { key: "done", label: "Done", cards: [] },
+  ];
+
+  const byKey = new Map(columns.map((column) => [column.key, column]));
+  const projectById = new Map(projects.map((project) => [project.id, project]));
+
+  todos
+    .filter((todo) => !todo.done)
+    .slice(0, 24)
+    .forEach((todo) => {
+      const project = projectById.get(todo.project);
+      const key = todo.bucket === "오늘" ? "today" : "backlog";
+      const column = byKey.get(key) || columns[0];
+
+      column.cards.push({
+        id: todo.id,
+        title: todo.title,
+        tag: project?.tag || null,
+        priority: todo.priority,
+        project: project?.name || "Unassigned",
+        due: todo.due,
+      });
+    });
+
+  projects
+    .filter((project) => project.status === "In progress" || project.status === "Review")
+    .slice(0, 12)
+    .forEach((project) => {
+      const key = project.status === "Review" ? "review" : "doing";
+      const column = byKey.get(key);
+
+      column.cards.push({
+        id: `project-${project.id}`,
+        title: project.nextAction || project.name,
+        tag: project.tag,
+        priority: "med",
+        project: project.name,
+        due: project.due,
+      });
+    });
+
+  return columns;
 }
 
 export async function getProjectLedger() {
@@ -492,6 +440,6 @@ export async function getProjectLedger() {
     decisions: mapDecisions(decisionRows || []),
     notes: mapNotes(noteRows || []),
     checks: mapRoutineChecks(routineRows || []),
-    columns: buildTaskBoardColumns(todos, projects),
+    columns: buildBoardColumns(projects, todos),
   };
 }

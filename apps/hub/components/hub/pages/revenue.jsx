@@ -3,15 +3,19 @@
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX } from "../hub-primitives";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
 
+// HW/SW 딜은 100만원 미만 건도 흔해서 M 고정 포맷은 "₩0.1M" 같은 값을 만든다.
+// revenue-ledger.js의 formatMoneyLabel과 같은 K/M 임계값으로 맞춘다.
 const fmt = v => {
   const n = Number(v);
   if (!Number.isFinite(n) || n === 0) return '₩0';
-  return '₩' + (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000000) return '₩' + (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return '₩' + Math.round(n / 1000) + 'K';
+  return '₩' + n;
 };
 
 // A deal counts as "stalled" once it has aged this many days in an open stage. Two weeks
@@ -68,7 +72,7 @@ function formatPercentDelta(current, previous) {
 function buildRevenueAttention(leads, deals) {
   const items = [];
   deals
-    .filter((deal) => deal.stage !== 'won' && deal.stage !== 'lost' && Number(deal.age) >= STALLED_DAYS)
+    .filter((deal) => deal.stage !== 'closing' && deal.stage !== 'lost' && Number(deal.age) >= STALLED_DAYS)
     .slice(0, 3)
     .forEach((deal) => {
       items.push({
@@ -87,7 +91,7 @@ function buildRevenueAttention(leads, deals) {
     });
   }
 
-  const wonDeals = deals.filter((deal) => deal.stage === 'won');
+  const wonDeals = deals.filter((deal) => deal.stage === 'closing');
   if (wonDeals.length > 0) {
     const wonTotal = wonDeals.reduce((sum, deal) => sum + deal.value, 0);
     items.push({
@@ -252,10 +256,10 @@ export function RevenueOverview({ onNavigate }) {
   const hasPipelineValue = pipelineByStage.some(s => s.sum > 0);
   const pipeline = summary?.pipeline ?? pipelineByStage.reduce((a, b) => a + b.sum, 0);
   const openLeads = summary?.leadsCount ?? LEADS.length;
-  const openDeals = summary?.openDeals ?? DEALS.filter(d => d.stage !== 'won').length;
-  const wonMTD = summary?.wonMTD ?? DEALS.filter(d => d.stage === 'won').reduce((a, b) => a + b.value, 0);
+  const openDeals = summary?.openDeals ?? DEALS.filter(d => d.stage !== 'closing').length;
+  const wonMTD = summary?.wonMTD ?? DEALS.filter(d => d.stage === 'closing').reduce((a, b) => a + b.value, 0);
   const newThisMonth = summary?.newThisMonth ?? 0;
-  const wonDealsCount = DEALS.filter(d => d.stage === 'won').length;
+  const wonDealsCount = DEALS.filter(d => d.stage === 'closing').length;
   const byBrand = [];
   const totalBrandMRR = byBrand.reduce((a, b) => a + b.mrr, 0);
   const attentionItems = buildRevenueAttention(LEADS, DEALS);
@@ -802,7 +806,7 @@ export function Deals({ workspace, onNavigate }) {
       id,
       name: '새 딜',
       type: filter === 'personal' || filter === 'company' ? filter : 'company',
-      stage: (typeof stage === 'string' && stage) || DEAL_STAGES[0]?.key || 'lead',
+      stage: (typeof stage === 'string' && stage) || DEAL_STAGES[0]?.key || 'consult',
       value: 0,
       owner: 'Me',
       close: '미정',
@@ -893,7 +897,7 @@ export function Deals({ workspace, onNavigate }) {
       )}
 
       {!wsEmpty && (
-      <div className="hub-scroll-x" style={{ display: 'flex', gap: 'var(--gap)', overflowX: 'auto', flex: 1, paddingBottom: 4 }}>
+      <ScrollShadowX>
         {DEAL_STAGES.map(s => {
           const items = scopedDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
           return (
@@ -920,9 +924,10 @@ export function Deals({ workspace, onNavigate }) {
                   // Stalled = open (not won/lost) and aged past the follow-up window. Surfaces
                   // in every open column, not just Negotiation, and marks the card with a
                   // danger inset stripe (§5.2 left-accent — never a full fill or a thick border).
-                  const stalled = Number(d.age) >= STALLED_DAYS && s.key !== 'won' && s.key !== 'lost';
+                  const stalled = Number(d.age) >= STALLED_DAYS && s.key !== 'closing' && s.key !== 'lost';
                   return (
                   <div key={d.id}
+                    className="hub-kanban-card"
                     draggable
                     role="button" tabIndex={0}
                     onClick={() => { if (dragMovedRef.current) return; setEditDealId(d.id); }}
@@ -936,10 +941,7 @@ export function Deals({ workspace, onNavigate }) {
                       padding: '10px 11px', cursor: 'grab',
                       opacity: drag === d.id ? 0.4 : 1,
                       boxShadow: stalled ? 'inset 2px 0 0 var(--danger-line)' : undefined,
-                      transition: 'background 120ms ease, box-shadow 120ms ease',
-                    }}
-                    onMouseEnter={e => { if (drag !== d.id) e.currentTarget.style.background = 'var(--surface-3)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface-2)'; }}>
+                    }}>
                     <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 6 }}>
                       <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{d.id}</span>
                       <div style={{ flex: 1 }} />
@@ -986,7 +988,7 @@ export function Deals({ workspace, onNavigate }) {
             </div>
           );
         })}
-      </div>
+      </ScrollShadowX>
       )}
 
       <EditDrawer

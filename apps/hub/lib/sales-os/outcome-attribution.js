@@ -38,6 +38,23 @@ export const QUICK_LOG_ACTIONS = [
   { label: "노응답", action: "no_response", tone: "neutral" },
 ];
 
+// Customer reaction vocabulary for the followups quick-log mini-form (operator-workflow-profile
+// §7 확정: "고객 반응" is one of the three fields a contact-completion record must capture).
+// Stored in outreach_outcomes.meta.reaction (migration 0015) — kept separate from the free-text
+// note so reaction can be aggregated later without parsing prose.
+export const REACTION_OPTIONS = [
+  { key: "interested", label: "관심" },
+  { key: "considering", label: "고민중" },
+  { key: "hold", label: "보류" },
+  { key: "declined", label: "거절" },
+];
+
+const REACTION_KEYS = new Set(REACTION_OPTIONS.map((r) => r.key));
+
+export function isValidReaction(value) {
+  return typeof value === "string" && REACTION_KEYS.has(value);
+}
+
 // The idempotency gate for attribution: a work order is "attributed" once it points at
 // a realized outcome. Never attribute twice.
 export function isWorkOrderAttributed(order) {

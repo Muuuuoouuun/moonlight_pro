@@ -6,25 +6,7 @@ import {
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 import { resolveLeadEnrichmentView } from "../sales-os/lead-view.js";
-
-const DEAL_STAGES = [
-  { key: "lead", label: "Lead", color: "neutral" },
-  { key: "qual", label: "Qualified", color: "info" },
-  { key: "prop", label: "Proposal", color: "moon" },
-  { key: "neg", label: "Negotiation", color: "warning" },
-  { key: "won", label: "Won", color: "success" },
-];
-
-const STAGE_ALIASES = {
-  prospect: "lead",
-  new: "lead",
-  qualified: "qual",
-  nurturing: "qual",
-  proposal: "prop",
-  negotiation: "neg",
-  won: "won",
-  lost: "lost",
-};
+import { DEAL_STAGES, STAGE_ALIASES, LEGACY_DB_STAGE_VALUES } from "../deal-stages.js";
 
 const LEAD_STAGE_LABEL = {
   new: "New",
@@ -50,7 +32,15 @@ function toNumber(value, fallback = 0) {
 
 function normalizeStage(value) {
   const key = String(value || "").toLowerCase();
-  return STAGE_ALIASES[key] || (DEAL_STAGES.some(s => s.key === key) ? key : "lead");
+  return STAGE_ALIASES[key] || (DEAL_STAGES.some(s => s.key === key) ? key : "potential");
+}
+
+// Display stage: meta.stage_detail (fine-grained, written by buildDealWrite) wins over the
+// coarse CHECK-constrained column — legacy rows without it fall back to the column aliases.
+function resolveDealStage(row) {
+  const detail = String(row?.meta?.stage_detail || "").toLowerCase();
+  if (detail === "lost" || DEAL_STAGES.some(s => s.key === detail)) return detail;
+  return normalizeStage(row?.stage);
 }
 
 function formatShortDate(value) {
@@ -179,7 +169,7 @@ function mapLead(row, companyById, contactById) {
 function mapDeal(row, companyById) {
   const type = resolveType(row);
   const company = row.company_id ? companyById.get(row.company_id) : null;
-  const stage = normalizeStage(row.stage);
+  const stage = resolveDealStage(row);
   const name = row.title || row.name || company?.name || "Untitled deal";
 
   return {
@@ -194,6 +184,10 @@ function mapDeal(row, companyById) {
     value: toNumber(row.amount, 0),
     owner: row.owner_id ? "Me" : "Unassigned",
     close: formatShortDate(row.expected_close_at),
+    // Raw ISO timestamps for cross-lane consumers (attention-ledger buckets by closeAt and
+    // sorts recency by activityAt) — the display fields above stay label-only.
+    closeAt: row.expected_close_at || "",
+    activityAt: row.last_activity_at || row.updated_at || row.created_at || "",
     age: ageDays(row.last_activity_at || row.updated_at || row.created_at),
   };
 }
@@ -249,9 +243,9 @@ function mapCase(row, accountById) {
 }
 
 function buildSummary(leads, deals) {
-  const pipeline = deals.filter(d => d.stage !== "won" && d.stage !== "lost")
+  const pipeline = deals.filter(d => d.stage !== "closing" && d.stage !== "lost")
     .reduce((sum, d) => sum + d.value, 0);
-  const wonMTD = deals.filter(d => d.stage === "won").reduce((sum, d) => sum + d.value, 0);
+  const wonMTD = deals.filter(d => d.stage === "closing").reduce((sum, d) => sum + d.value, 0);
   const mrr = Math.round(wonMTD * 0.12);
 
   return {
@@ -260,7 +254,7 @@ function buildSummary(leads, deals) {
     pipeline,
     leadsCount: leads.length,
     newThisMonth: leads.filter(l => l.stage === "New").length,
-    openDeals: deals.filter(d => d.stage !== "won" && d.stage !== "lost").length,
+    openDeals: deals.filter(d => d.stage !== "closing" && d.stage !== "lost").length,
     wonMTD,
   };
 }
@@ -304,7 +298,7 @@ export async function getRevenueLedger() {
       limit: 120,
       order: "updated_at.desc.nullslast",
       filters: withWorkspaceFilter([
-        ["stage", inFilter(["prospect", "lead", "qualified", "qual", "proposal", "prop", "negotiation", "neg", "won", "lost"])],
+        ["stage", inFilter(LEGACY_DB_STAGE_VALUES)],
       ]),
     }),
     fetchSupabaseRows("customer_accounts", {

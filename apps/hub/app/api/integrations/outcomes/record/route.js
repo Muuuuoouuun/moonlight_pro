@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 
 import { recordOutreachOutcome } from "@/lib/repositories/outcomes-ledger";
+import { isValidReaction } from "@/lib/sales-os/outcome-attribution";
+import { buildFollowupWrite, persistRevenueRecord } from "@/lib/sales-os/revenue-write";
 
 export const runtime = "nodejs";
 
@@ -32,6 +34,9 @@ function authorize(req) {
   return { ok: true };
 }
 
+// Minimum contact record (operator-workflow-profile.md §7 확정): 대화 요약 (note) + 고객 반응
+// (reaction) + 다음 행동과 날짜 (nextAction.text/at, or nextAction.dormant for 기약 없음).
+// nextAction is optional so the plain quick-log buttons (no mini-form) keep working unchanged.
 export async function POST(req) {
   const auth = authorize(req);
   if (!auth.ok) {
@@ -39,6 +44,11 @@ export async function POST(req) {
   }
 
   const body = await req.json().catch(() => ({}));
+
+  if (body.reaction != null && !isValidReaction(body.reaction)) {
+    return NextResponse.json({ status: "error", reason: "invalid-reaction" }, { status: 400 });
+  }
+
   const result = await recordOutreachOutcome({
     leadId: body.leadId || null,
     dealId: body.dealId || null,
@@ -48,8 +58,25 @@ export async function POST(req) {
     channel: body.channel || null,
     action: body.action || "sent",
     note: body.note || null,
+    meta: body.reaction ? { reaction: body.reaction } : null,
     occurredAt: body.occurredAt || null,
   });
 
-  return NextResponse.json({ status: result.persisted ? "ok" : "error", result });
+  let followup = null;
+  const nextAction = body.nextAction;
+  if (nextAction && (body.leadId || body.dealId)) {
+    followup = await persistRevenueRecord({
+      table: body.leadId ? "leads" : "deals",
+      op: "update",
+      id: body.leadId || body.dealId,
+      payload: {
+        text: nextAction.text ?? null,
+        at: nextAction.dormant === true ? null : nextAction.at ?? null,
+        dormant: nextAction.dormant === true,
+      },
+      build: buildFollowupWrite,
+    });
+  }
+
+  return NextResponse.json({ status: result.persisted ? "ok" : "error", result, followup });
 }

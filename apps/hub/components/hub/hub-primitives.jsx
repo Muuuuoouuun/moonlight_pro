@@ -579,3 +579,48 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
     </Drawer>
   );
 }
+
+// Horizontal-scroll wrapper for multi-column kanban strips (Deals, task board, 내 작업).
+// Renders an edge fade + chevron on whichever side still has hidden columns, so a 6-stage
+// pipeline doesn't read as "only 4 stages" when the rest is off-screen with no visual cue.
+// Recomputes on scroll and on resize (column count can change with the workspace filter).
+export function ScrollShadowX({ children, className, style }) {
+  const ref = React.useRef(null);
+  const [edges, setEdges] = React.useState({ left: false, right: false });
+
+  const measure = React.useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    setEdges({
+      left: el.scrollLeft > 4,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+    });
+  }, []);
+
+  React.useEffect(() => {
+    measure();
+    const el = ref.current;
+    if (!el) return undefined;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [measure, children]);
+
+  return (
+    <div style={{ position: 'relative', flex: 1, minHeight: 0, ...style }}>
+      <div ref={ref} className={`hub-scroll-x${className ? ` ${className}` : ''}`} onScroll={measure} style={{ display: 'flex', gap: 'var(--gap)', overflowX: 'auto', height: '100%', paddingBottom: 4 }}>
+        {children}
+      </div>
+      {edges.left && (
+        <div className="hub-scroll-edge hub-scroll-edge--left" aria-hidden="true">
+          <Iconed name="chevronL" size={12} />
+        </div>
+      )}
+      {edges.right && (
+        <div className="hub-scroll-edge hub-scroll-edge--right" aria-hidden="true">
+          <Iconed name="chevronR" size={12} />
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,7 +1,7 @@
 # Moonlight 문서 지도
 
 > 상태: ACTIVE DOCUMENTATION INDEX
-> 마지막 정리: 2026-07-15
+> 마지막 정리: 2026-07-16
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -10,11 +10,12 @@
 
 1. [`operator-workflow-profile.md`](operator-workflow-profile.md) — 운영자 인터뷰 Q1~Q115의 사실·권장·미정
 2. [`2026-07-13-moonlight-personal-operator-os-deep-design.md`](superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md) — 현재 제품 구조와 Phase 0~1C 설계
-3. [`../DESIGN.md`](../DESIGN.md) — UI 토큰·컴포넌트·인터랙션 계약
-4. [`master-directive.md`](master-directive.md) — 바뀌지 않는 제품 경계와 원칙
-5. [`master-roadmap.md`](master-roadmap.md) — 현재 단계와 다음 구현 순서
-6. 도메인별 문서 — 위 문서와 충돌하지 않는 범위에서 참고
-7. `HISTORICAL` 또는 `SUPERSEDED` 문서 — 결정 배경만 참고하고 새 구현의 근거로 사용하지 않음
+3. **주제별 최신 확정 스펙** — §4 "제품·운영 정본"의 스펙 목록에서 해당 주제의 가장 최근 문서를 확인한다(예: 사이드바·PMS는 `2026-07-15-sidebar-second-level-and-pms-taxonomy.md`). 스펙 상단의 "상위 정본"·"관계" 헤더가 이전 스펙 중 어떤 절이 대체됐는지 명시하므로 함께 읽는다.
+4. [`../DESIGN.md`](../DESIGN.md) — UI 토큰·컴포넌트·인터랙션 계약
+5. [`master-directive.md`](master-directive.md) — 바뀌지 않는 제품 경계와 원칙
+6. [`master-roadmap.md`](master-roadmap.md) — 현재 단계와 다음 구현 순서
+7. 도메인별 문서 — 위 문서와 충돌하지 않는 범위에서 참고
+8. `HISTORICAL` 또는 `SUPERSEDED` 문서 — 결정 배경만 참고하고 새 구현의 근거로 사용하지 않음
 
 코드 작업 지침은 루트의 [`AGENTS.md`](../AGENTS.md)와 [`CLAUDE.md`](../CLAUDE.md)를 따른다. 브랜치명이나 특정 커밋은 제품 정본이 아니며, 작업 시점의 Git 상태를 직접 확인한다.
 
@@ -58,6 +59,12 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - [`master-directive.md`](master-directive.md) — 제품 불변식
 - [`master-roadmap.md`](master-roadmap.md) — 단계와 다음 순서
 - [`../TODOS.md`](../TODOS.md) — 아직 하지 않을 일과 남은 기술 부채
+
+**사이드바 IA · PMS 분류 (최신순, 확정 스펙만 정본)**
+
+- [`superpowers/specs/2026-07-15-sidebar-second-level-and-pms-taxonomy.md`](superpowers/specs/2026-07-15-sidebar-second-level-and-pms-taxonomy.md) — **확정(2026-07-15)**. 사이드바 2레벨 아코디언 + PMS 분류 체계 정본. `2026-07-14` 8앵커 IA는 유지하되 하위 레벨 노출 방식을 이 문서가 규정한다.
+- [`superpowers/specs/2026-07-15-personal-os-surface-restoration-design.md`](superpowers/specs/2026-07-15-personal-os-surface-restoration-design.md) — §3~4(5앵커+More 내비게이션 안)은 위 문서로 대체되어 **채택하지 않음**. §5(Personal 스코프 데이터 계약)·§6(구조적 화면 복구)는 별도로 유효.
+- [`superpowers/specs/2026-07-14-sidebar-consolidation-design.md`](superpowers/specs/2026-07-14-sidebar-consolidation-design.md) — 8앵커 압축 + 스코프 셸. 하위 레벨이 통째로 사라진 부분은 위 07-15 분류 스펙 문서가 보완.
 
 ### 아키텍처·데이터 정본
 

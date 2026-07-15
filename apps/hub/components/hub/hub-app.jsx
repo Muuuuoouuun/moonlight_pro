@@ -11,7 +11,9 @@ import { TweaksPanel } from "./hub-tweaks-panel";
 import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
 
 import { DailyBrief } from "./pages/daily-brief";
+import { Overview } from "./pages/overview";
 import { Calendar, Decisions, Roadmap, Rhythm } from "./pages/work";
+import { MyWork } from "./pages/my-work";
 import { Projects } from "./pages/projects";
 import { Studio, Queue, Campaigns } from "./pages/content";
 import { RevenueOverview, Leads, Deals, Cases, Accounts } from "./pages/revenue";
@@ -72,6 +74,8 @@ function LegacyPlaceholder({ path, onNavigate }) {
 
 const PAGE_MAP = {
   'dashboard/daily-brief': (n) => <DailyBrief onNavigate={n} />,
+  'dashboard/overview': (n) => <Overview onNavigate={n} />,
+  'dashboard/work/my': (n) => <MyWork onNavigate={n} />,
   'dashboard/work/calendar': () => <Calendar />,
   'dashboard/work/projects': () => <Projects />,
   'dashboard/work/decisions': () => <Decisions />,
@@ -85,7 +89,7 @@ const PAGE_MAP = {
   'dashboard/revenue/deals': (n) => <Deals onNavigate={n} />,
   'dashboard/revenue/cases': () => <Cases />,
   'dashboard/revenue/accounts': (n) => <Accounts onNavigate={n} />,
-  'dashboard/revenue/followups': () => <Followups />,
+  'dashboard/revenue/followups': (n) => <Followups onNavigate={n} />,
   'dashboard/automations': (n) => <AutomationsIndex onNavigate={n} />,
   'dashboard/automations/flows': (n) => <Flows onNavigate={n} />,
   'dashboard/automations/email': (n) => <EmailAutomation onNavigate={n} />,
@@ -103,7 +107,7 @@ const PAGE_MAP = {
   'dashboard/classin/revenue': () => <Leads workspace="classin" />,
   'dashboard/classin/segments': (n) => <Segments workspace="classin" onNavigate={n} />,
   'dashboard/classin/accounts': (n) => <Accounts workspace="classin" onNavigate={n} />,
-  'dashboard/classin/followups': () => <Followups />,
+  'dashboard/classin/followups': (n) => <Followups onNavigate={n} />,
   'dashboard/classin/projects': () => <Projects workspace="classin" />,
   'dashboard/classin/automations': () => <SheetsSync />,
   'dashboard/classin/cohorts': () => <Projects workspace="classin" />,   // legacy real_v1 bookmark alias

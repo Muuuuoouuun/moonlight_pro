@@ -30,6 +30,15 @@ export function priorityFor({ sinceDays = null, threshold = 3, valueTerm = 0, bo
   return Math.round((staleTerm + valueTerm + boost) * 100) / 100;
 }
 
+// A "기약 없음" (no fixed next-action date) contact stays out of the active follow-up list
+// until this many days have passed since it was marked dormant — then it resurfaces for a
+// recheck (docs/operator-workflow-profile.md §7 권장: 한 달 뒤 다시 확인 대상).
+export const DORMANT_RESURFACE_DAYS = 30;
+
+export function shouldResurfaceDormant(dormantSinceDays) {
+  return dormantSinceDays != null && dormantSinceDays >= DORMANT_RESURFACE_DAYS;
+}
+
 // Derived 0-100 lead score from outreach history — the periodic leads.score recompute input.
 // Starts neutral (40), recent last action moves it, repeated engagement compounds.
 export function momentumScore({ lastAction = null, ageDays = null, replies = 0, meetings = 0, noResponses = 0 } = {}) {

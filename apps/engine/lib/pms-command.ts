@@ -139,10 +139,40 @@ export function normalizePmsCommand(
 
   if (action === "update_task") {
     const id = uuid(input.id);
-    const status = text(input.status, 30).toLowerCase();
-
     if (!id) return { ok: false, reason: "invalid-id" };
-    if (!TASK_STATUSES.has(status)) return { ok: false, reason: "invalid-status" };
+
+    // Partial patch (same has()-gated shape as update_project below) — the existing
+    // status-only completion path (Today board, checkbox toggle) keeps sending just
+    // {id, status} and gets exactly the same {status, completed_at, updated_at} patch as
+    // before. Title/priority/project/due are additive, for the 내 작업 detail drawer.
+    const patch: Record<string, unknown> = {};
+    if (has(input, "status")) {
+      const status = text(input.status, 30).toLowerCase();
+      if (!TASK_STATUSES.has(status)) return { ok: false, reason: "invalid-status" };
+      patch.status = status;
+      patch.completed_at = status === "done" ? now.value : null;
+    }
+    if (has(input, "title")) {
+      const title = text(input.title, 300);
+      if (!title) return { ok: false, reason: "missing-title" };
+      patch.title = title;
+    }
+    if (has(input, "priority")) {
+      const priority = text(input.priority, 30).toLowerCase();
+      if (!PRIORITIES.has(priority)) return { ok: false, reason: "invalid-priority" };
+      patch.priority = priority;
+    }
+    if (has(input, "projectId") || has(input, "project_id")) {
+      patch.project_id = uuid(input.projectId || input.project_id);
+    }
+    if (has(input, "dueAt") || has(input, "due_at")) {
+      const dueAt = dateTime(input.dueAt || input.due_at);
+      if (!dueAt.ok) return { ok: false, reason: "invalid-due-at" };
+      patch.due_at = dueAt.value;
+    }
+
+    if (Object.keys(patch).length === 0) return { ok: false, reason: "empty-patch" };
+    patch.updated_at = now.value;
 
     return {
       ok: true,
@@ -152,11 +182,7 @@ export function normalizePmsCommand(
         ["id", `eq.${id}`],
         ["workspace_id", `eq.${workspaceId}`],
       ],
-      patch: {
-        status,
-        completed_at: status === "done" ? now.value : null,
-        updated_at: now.value,
-      },
+      patch,
     };
   }
 

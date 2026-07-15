@@ -3,6 +3,7 @@
 
 export const NAV_TREE = [
   { key: 'daily-brief', label: 'Daily Brief', icon: 'brief', path: 'dashboard/daily-brief' },
+  { key: 'overview', label: 'Overview', icon: 'signal', path: 'dashboard/overview', keywords: ['차트', '시각', '통계', 'chart', 'stats', '정리'] },
   {
     key: 'classin', label: '클래스인', icon: 'classin', workspace: true,
     children: [
