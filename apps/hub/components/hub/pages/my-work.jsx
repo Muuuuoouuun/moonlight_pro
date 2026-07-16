@@ -26,6 +26,9 @@ const LANE_OPTIONS = [
 const SORT_OPTIONS = [
   { key: 'recent', label: '최신' },
   { key: 'due', label: '기한' },
+  // 서버가 매긴 오늘-우선순위 (profile §4 임시 규칙: 기한 지남 → 오늘 → 클로징 임박(리드
+  // 스코어) → 연락 시점 지남 → 일반). 정렬 근거는 행의 meta 자리에 reason으로 표시된다.
+  { key: 'priority', label: '우선순위' },
 ];
 
 const LANE_TONE = { task: 'moon', deal: 'company', event: 'info' };
@@ -75,6 +78,10 @@ function dueValue(item) {
   return rank * 1e15 + (Number.isNaN(t) ? Number.MAX_SAFE_INTEGER : t);
 }
 
+function priorityValue(item) {
+  return Number.isFinite(item.priorityScore) ? item.priorityScore : 0;
+}
+
 function useAttentionLedger() {
   const [data, setData] = React.useState({ items: [], sources: {}, calendarReason: '' });
   const [state, setState] = React.useState('loading');
@@ -103,8 +110,11 @@ function useAttentionLedger() {
 // (events) — onOpen resolves all three. `completing` is the brief strikethrough flash before
 // a task leaves the list (undo window handled by the caller). `expanded` shows an event's
 // time/location detail line underneath.
-function ItemRow({ item, onComplete, onOpen, completing, expanded, rowRef }) {
+function ItemRow({ item, onComplete, onOpen, completing, expanded, rowRef, showReason }) {
   const clickable = Boolean(item.href) || item.lane === 'task' || item.lane === 'event';
+  // 우선순위 정렬일 때는 meta 자리에 정렬 근거(reason)를 보여준다 — 첫 화면 요구사항
+  // "지금 해야 하는 이유"(profile §4)를 행 높이 증가 없이 전달.
+  const metaText = showReason && item.priorityReason ? item.priorityReason : item.meta;
   return (
     <div>
       <div
@@ -137,13 +147,13 @@ function ItemRow({ item, onComplete, onOpen, completing, expanded, rowRef }) {
         }}>
           {item.title}
         </span>
-        {item.meta && (
+        {metaText && (
           // 폭 상한 + 말줄임 — 좁은 화면에서 meta가 제목(identity)을 짓누르지 않게 한다
           // (2026-07 design-review FINDING-001의 모바일 identity-first 원칙).
           <span className="mono" style={{
             fontSize: 11, color: 'var(--fg-muted)', flexShrink: 1, maxWidth: '38%',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>{item.meta}</span>
+          }}>{metaText}</span>
         )}
         <span className="mono" style={{
           fontSize: 11, flexShrink: 0, minWidth: 64, textAlign: 'right',
@@ -188,13 +198,23 @@ export function MyWork({ onNavigate }) {
   };
 
   // Lane/bucket/sort survive a refresh (localStorage) — re-picking the same filter every visit
-  // was the top friction point. Falls back to 'all'/'recent' for unknown or first-run values.
-  const [lane, setLane] = React.useState(() => readStoredOption('mlp.mywork.lane', LANE_OPTIONS, 'all'));
-  const [bucketFilter, setBucketFilter] = React.useState(() => readStoredOption('mlp.mywork.bucket', BUCKET_OPTIONS, 'all'));
-  const [sort, setSort] = React.useState(() => readStoredOption('mlp.mywork.sort', SORT_OPTIONS, 'recent'));
-  React.useEffect(() => { writeStoredOption('mlp.mywork.lane', lane); }, [lane]);
-  React.useEffect(() => { writeStoredOption('mlp.mywork.bucket', bucketFilter); }, [bucketFilter]);
-  React.useEffect(() => { writeStoredOption('mlp.mywork.sort', sort); }, [sort]);
+  // was the top friction point. Restored in an effect AFTER mount (same pattern as hub-app's
+  // density/theme): reading localStorage inside the useState initializer made the first client
+  // render differ from SSR HTML and threw hydration mismatches whenever a stored value differed
+  // from the default. Writes happen inside the change handlers, not effects — an effect-based
+  // write fires on mount with the default values and clobbers storage before/between the
+  // restore passes (StrictMode runs mount effects twice, making the clobber deterministic).
+  const [lane, setLaneState] = React.useState('all');
+  const [bucketFilter, setBucketFilterState] = React.useState('all');
+  const [sort, setSortState] = React.useState('recent');
+  React.useEffect(() => {
+    setLaneState(readStoredOption('mlp.mywork.lane', LANE_OPTIONS, 'all'));
+    setBucketFilterState(readStoredOption('mlp.mywork.bucket', BUCKET_OPTIONS, 'all'));
+    setSortState(readStoredOption('mlp.mywork.sort', SORT_OPTIONS, 'recent'));
+  }, []);
+  const setLane = (v) => { setLaneState(v); writeStoredOption('mlp.mywork.lane', v); };
+  const setBucketFilter = (v) => { setBucketFilterState(v); writeStoredOption('mlp.mywork.bucket', v); };
+  const setSort = (v) => { setSortState(v); writeStoredOption('mlp.mywork.sort', v); };
 
   const [search, setSearch] = React.useState('');
   const [quickTitle, setQuickTitle] = React.useState('');
@@ -233,6 +253,7 @@ export function MyWork({ onNavigate }) {
     if (q) filtered = filtered.filter((i) => i.title.toLowerCase().includes(q));
     const sorted = [...filtered];
     if (sort === 'recent') sorted.sort((a, b) => recencyValue(b) - recencyValue(a));
+    else if (sort === 'priority') sorted.sort((a, b) => (priorityValue(b) - priorityValue(a)) || (recencyValue(b) - recencyValue(a)));
     else sorted.sort((a, b) => dueValue(a) - dueValue(b));
     return sorted;
   }, [items, lane, bucketFilter, search, sort, hiddenIds, lens]);
@@ -577,6 +598,7 @@ export function MyWork({ onNavigate }) {
                 onOpen={openItem}
                 completing={completingIds.has(item.id)}
                 expanded={expandedEventId === item.id}
+                showReason={sort === 'priority'}
                 rowRef={(el) => { rowRefs.current[idx] = el; }}
               />
             ))

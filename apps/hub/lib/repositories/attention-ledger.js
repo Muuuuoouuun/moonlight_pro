@@ -148,6 +148,48 @@ function mapEventItems(events, todayKey, weekEndKey) {
   });
 }
 
+// Deterministic today-priority, implementing operator-workflow-profile.md §4's 임시 우선순위
+// (권장안 — this is the v1 ranking, expected to be tuned with real usage, not a 확정 formula):
+//   1. 기한 지난 고객 약속   2. 오늘 확정된 일정/기한   3. 거래 종료에 가까운 고객
+//   4. 다음 연락 시점 지난 고객(정체)   5. 일반 프로젝트·콘텐츠
+// Items are classified top-down into score bands; inside the deal bands the pipeline stage
+// rank and the linked lead's 0–100 follow-up score (momentumScore recompute output) break
+// ties — this is where the deal pipeline and lead scoring feed today's ordering.
+const STAGE_PRIORITY_RANK = { final: 5, quote: 4, consult: 3, contact: 2, potential: 1 };
+
+function assignPriority(item, leadScoreByDealEntityId) {
+  const leadScore = item.lane === "deal" ? leadScoreByDealEntityId.get(item.entityId) || 0 : 0;
+  const stageRank = item.lane === "deal" ? STAGE_PRIORITY_RANK[item.status] || 0 : 0;
+
+  // 1. 기한 지난 약속 — older overdue first (larger daysPast → higher).
+  if (item.bucket === "overdue") {
+    const daysPast = Math.min(90, Math.round((Date.now() - new Date(item.whenAt).getTime()) / DAY_MS) || 0);
+    return { priorityScore: 5000 + daysPast * 10 + leadScore, priorityReason: "기한 지남" };
+  }
+  // 2. 오늘 확정 일정/기한 — earlier in the day first.
+  if (item.bucket === "today") {
+    const d = new Date(item.whenAt);
+    const minutes = Number.isNaN(d.getTime()) ? 0 : d.getHours() * 60 + d.getMinutes();
+    return { priorityScore: 4000 + (1440 - minutes), priorityReason: "오늘" };
+  }
+  // 3. 거래 종료에 가까운 고객 — 견적/최종미팅 딜, 리드 스코어로 동순위 분해.
+  if (item.lane === "deal" && stageRank >= 4) {
+    return {
+      priorityScore: 3000 + stageRank * 100 + leadScore,
+      priorityReason: `클로징 임박${leadScore ? ` · 스코어 ${leadScore}` : ""}`,
+    };
+  }
+  // 4. 다음 연락 시점 지난 고객 — 초기 단계인데 정체된 딜.
+  if (item.lane === "deal" && item.stalled) {
+    return { priorityScore: 2000 + stageRank * 100 + leadScore, priorityReason: "연락 시점 지남" };
+  }
+  // 5. 일반 — 남은 딜은 단계·스코어 순, 할 일·일정은 그 아래에서 최근 활동순.
+  if (item.lane === "deal") {
+    return { priorityScore: 1500 + stageRank * 100 + leadScore, priorityReason: "일반 딜" };
+  }
+  return { priorityScore: 1000, priorityReason: "일반" };
+}
+
 export async function getAttentionLedger() {
   const now = new Date();
   const todayKey = dateKey(now);
@@ -169,11 +211,24 @@ export async function getAttentionLedger() {
     calendar: calendar?.ok ? "live" : "preview",
   };
 
+  // Deal entityId → linked lead's follow-up score (0–100). Deals carry lead_id; leads carry
+  // the recomputed momentum score — this join is the pipeline↔lead-score bridge.
+  const leadScoreById = new Map(
+    (revenueLedger?.leads || [])
+      .filter((l) => Number.isFinite(l.score))
+      .map((l) => [l.id, Math.round(l.score)]),
+  );
+  const leadScoreByDealEntityId = new Map(
+    (revenueLedger?.deals || [])
+      .filter((d) => d.leadId && leadScoreById.has(d.leadId))
+      .map((d) => [d.id, leadScoreById.get(d.leadId)]),
+  );
+
   const items = [
     ...mapTaskItems(projectLedger?.todos, todayKey, weekEndKey),
     ...mapDealItems(revenueLedger?.deals, revenueLedger?.stages, todayKey, weekEndKey),
     ...mapEventItems(calendar?.items, todayKey, weekEndKey),
-  ];
+  ].map((item) => ({ ...item, ...assignPriority(item, leadScoreByDealEntityId) }));
 
   return {
     todayKey,
