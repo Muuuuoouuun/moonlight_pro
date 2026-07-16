@@ -2,15 +2,16 @@
 // ledger is unavailable the Hub renders an explicit preview/empty state.
 
 export const NAV_TREE = [
-  { key: 'daily-brief', label: 'Daily Brief', icon: 'brief', path: 'dashboard/daily-brief' },
+  { key: 'daily-brief', label: '오늘', icon: 'brief', path: 'dashboard/daily-brief', keywords: ['오늘', 'today', 'daily brief', '브리핑', '브리프'] },
   { key: 'overview', label: '현황', icon: 'signal', path: 'dashboard/overview', keywords: ['overview', '현황', '차트', '시각', '통계', 'chart', 'stats', '정리'] },
+  { key: 'my-work', label: '내 작업', icon: 'inbox', path: 'dashboard/work/my', keywords: ['내 작업', 'my work', '내작업', 'tasks', '할 일', '할일', 'todo', 'deals', 'calendar', '일정', '실행'] },
   {
     key: 'classin', label: '클래스인', icon: 'classin', workspace: true,
     children: [
-      { key: 'classin-pipeline', label: '업무·파이프라인', icon: 'deals', path: 'dashboard/classin/pipeline', keywords: ['deals', '딜', '칸반', 'pipeline'] },
-      { key: 'classin-revenue', label: '결제·리드', icon: 'leads', path: 'dashboard/classin/revenue', keywords: ['leads', '리드'] },
+      { key: 'classin-pipeline', label: 'Deals', icon: 'deals', path: 'dashboard/classin/pipeline', keywords: ['deals', '딜', '칸반', 'pipeline', '파이프라인', '업무'] },
+      { key: 'classin-revenue', label: 'Leads', icon: 'leads', path: 'dashboard/classin/revenue', keywords: ['leads', '리드', '결제'] },
       { key: 'classin-segments', label: '세그먼트', icon: 'filter', path: 'dashboard/classin/segments', keywords: ['segments', '세그먼트'] },
-      { key: 'classin-accounts', label: '고객·계정', icon: 'accounts', path: 'dashboard/classin/accounts', keywords: ['accounts', '계정', '고객'] },
+      { key: 'classin-accounts', label: 'Accounts', icon: 'accounts', path: 'dashboard/classin/accounts', keywords: ['accounts', '계정', '고객'] },
       { key: 'classin-followups', label: 'Follow-ups', icon: 'bell', path: 'dashboard/classin/followups', keywords: ['followup', '팔로업'] },
       { key: 'classin-projects', label: '프로젝트', icon: 'projects', path: 'dashboard/classin/projects' },
       { key: 'classin-automations', label: '시트 동기화', icon: 'automations', path: 'dashboard/classin/automations', keywords: ['sheets', '시트', 'sync', '자동화'] },
