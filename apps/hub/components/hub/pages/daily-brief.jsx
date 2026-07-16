@@ -1398,16 +1398,14 @@ export function DailyBrief({ onNavigate }) {
 
       <OperatorPulse operatorHome={ledger.operatorHome} contentBrands={ledger.contentBrands} onNavigate={onNavigate} />
 
-      <MoreDetail title="오늘 상세 · 모닝 브리프 · 승인 대기 · 파이프라인">
+      <MoreDetail title="오늘 상세 · 모닝 브리프 · 승인 대기">
         <MorningBriefCard brief={ledger.morningBrief} onNavigate={onNavigate} />
         <ApprovalQueueCard onNavigate={onNavigate} />
 
-        <div className="hub-grid--three" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--section-gap)' }}>
-          <PipelineShapeCard onNavigate={onNavigate} />
-          <SalesFunnelCard onNavigate={onNavigate} />
-          <ContentCadenceCard onNavigate={onNavigate} />
-        </div>
-
+        {/* 집계(파이프라인·퍼널·콘텐츠 추세)는 현황이 정본 — 오늘은 판단에 집중 (§2.2 경계 계약). */}
+        <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate('dashboard/overview')}>
+          파이프라인 · 퍼널 · 콘텐츠 추세는 현황에서
+        </Button>
       </MoreDetail>
     </div>
   );
