@@ -50,6 +50,71 @@ test("normalizes a durable project create command", () => {
   });
 });
 
+test("normalizes a durable brand (container) create command", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "create_brand",
+    id: "66666666-6666-4666-8666-666666666666",
+    name: "우리 학원 KA",
+    slug: "our-ka-2026",
+    category: "ka-deal",
+    orgScope: "classin",
+    source: "hub-projects",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    ownerId: "44444444-4444-4444-8444-444444444444",
+    now: "2026-07-16T00:00:00.000Z",
+  });
+
+  assert.deepEqual(result, {
+    ok: true,
+    action: "create_brand",
+    table: "brands",
+    record: {
+      id: "66666666-6666-4666-8666-666666666666",
+      workspace_id: "33333333-3333-4333-8333-333333333333",
+      slug: "our-ka-2026",
+      name: "우리 학원 KA",
+      kind: "brand",
+      meta: { category: "ka-deal", org_scope: "classin", source: "hub-projects" },
+    },
+  });
+});
+
+test("brand create keeps a glyph only when one is supplied", () => {
+  const withGlyph = pmsCommand.normalizePmsCommand({
+    action: "create_brand", id: "66666666-6666-4666-8666-666666666666",
+    name: "채널", slug: "chan", category: "sns-channel", orgScope: "personal", glyph: "✦",
+  }, { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-07-16T00:00:00.000Z" });
+  assert.equal(withGlyph.record.meta.glyph, "✦");
+
+  const withoutGlyph = pmsCommand.normalizePmsCommand({
+    action: "create_brand", id: "66666666-6666-4666-8666-666666666666",
+    name: "채널", slug: "chan", category: "sns-channel", orgScope: "personal",
+  }, { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-07-16T00:00:00.000Z" });
+  assert.ok(!("glyph" in withoutGlyph.record.meta), "glyph must be omitted, not null");
+});
+
+test("brand create rejects unknown category and org scope", () => {
+  const ctx = { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-07-16T00:00:00.000Z" };
+  const base = { action: "create_brand", id: "66666666-6666-4666-8666-666666666666", name: "X", slug: "x" };
+  assert.deepEqual(
+    pmsCommand.normalizePmsCommand({ ...base, category: "bogus", orgScope: "classin" }, ctx),
+    { ok: false, reason: "invalid-category" },
+  );
+  assert.deepEqual(
+    pmsCommand.normalizePmsCommand({ ...base, category: "general", orgScope: "bogus" }, ctx),
+    { ok: false, reason: "invalid-org-scope" },
+  );
+  assert.deepEqual(
+    pmsCommand.normalizePmsCommand({ ...base, category: "general" }, ctx),
+    { ok: false, reason: "invalid-org-scope" },
+  );
+  assert.deepEqual(
+    pmsCommand.normalizePmsCommand({ action: "create_brand", id: "66666666-6666-4666-8666-666666666666", name: "X", category: "general", orgScope: "personal" }, ctx),
+    { ok: false, reason: "missing-slug" },
+  );
+});
+
 test("accepts PostgreSQL UUID values used by the live seeded workspace", () => {
   const result = pmsCommand.normalizePmsCommand(
     {

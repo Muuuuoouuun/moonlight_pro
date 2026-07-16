@@ -8,7 +8,7 @@ type NormalizedCommand =
   | {
       ok: true;
       action: string;
-      table: "projects" | "tasks";
+      table: "projects" | "tasks" | "brands";
       record?: Record<string, unknown>;
       filters?: Array<[string, string]>;
       patch?: Record<string, unknown>;
@@ -18,6 +18,9 @@ type NormalizedCommand =
 const PROJECT_STATUSES = new Set(["draft", "active", "blocked", "completed", "archived"]);
 const TASK_STATUSES = new Set(["inbox", "todo", "doing", "blocked", "done"]);
 const PRIORITIES = new Set(["low", "medium", "high", "critical"]);
+// PMS container (brand) taxonomy — mirrors the Hub 2026-07-15 spec §4.1.
+const BRAND_CATEGORIES = new Set(["sns-channel", "ka-deal", "general"]);
+const BRAND_ORG_SCOPES = new Set(["classin", "personal"]);
 // PostgreSQL's uuid type accepts the full 8-4-4-4-12 hexadecimal form. The live
 // workspace and brand seeds intentionally use readable non-RFC variant values.
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -240,6 +243,42 @@ export function normalizePmsCommand(
         ["workspace_id", `eq.${workspaceId}`],
       ],
       patch,
+    };
+  }
+
+  if (action === "create_brand") {
+    const id = uuid(input.id);
+    const name = text(input.name || input.title, 200);
+    const slug = text(input.slug, 120).toLowerCase();
+    const category = text(input.category, 30).toLowerCase();
+    const orgScope = text(input.orgScope || input.org_scope, 30).toLowerCase();
+    const glyph = text(input.glyph, 8);
+
+    if (!id) return { ok: false, reason: "invalid-id" };
+    if (!name) return { ok: false, reason: "missing-name" };
+    if (!slug) return { ok: false, reason: "missing-slug" };
+    if (!BRAND_CATEGORIES.has(category)) return { ok: false, reason: "invalid-category" };
+    if (!BRAND_ORG_SCOPES.has(orgScope)) return { ok: false, reason: "invalid-org-scope" };
+
+    return {
+      ok: true,
+      action,
+      table: "brands",
+      record: {
+        id,
+        workspace_id: workspaceId,
+        slug,
+        name,
+        kind: "brand",
+        // resolveBrandCategory / resolveBrandOrgScope in the Hub's operating-ledger
+        // read these meta keys back; glyph is optional (falls back to canonical/index).
+        meta: {
+          category,
+          org_scope: orgScope,
+          source: text(input.source || "hub-projects", 80),
+          ...(glyph ? { glyph } : {}),
+        },
+      },
     };
   }
 

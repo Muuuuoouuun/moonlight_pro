@@ -78,6 +78,35 @@ const PROJECT_CATEGORIES = [
 ];
 const FOLDER_STORAGE_KEY = 'mlp.pms.folders';
 
+// Container (brand) create helpers. brands.slug must be unique per workspace and
+// is required by the table; Korean names collapse to an id-based fallback.
+function slugifyContainer(name, id) {
+  const base = String(name || '').toLowerCase().normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return base || `c-${String(id || '').slice(0, 8)}`;
+}
+
+// Optimistic row for preview mode (Engine not configured) — shaped like a ledger
+// brand so brandGroups places it in the right category folder immediately.
+function buildLocalContainer(draft, slug) {
+  return {
+    key: slug,
+    id: draft.id,
+    name: String(draft.name || '').trim(),
+    glyph: '○',
+    tone: 'moon',
+    kind: 'brand',
+    orgScope: draft.orgScope,
+    category: draft.category,
+    desc: '새 컨테이너 · 저장 대기',
+    preview: true,
+    projects: 0,
+    tasks: 0,
+    open: 0,
+    changes: 0,
+  };
+}
+
 // `?view=tasks` is the sidebar spec's wording for the same view the page calls
 // 'todos' — accept both so old and new links resolve.
 function normalizeProjectView(raw) {
@@ -130,6 +159,8 @@ export function Projects({ workspace }) {
   const [orderResult, setOrderResult] = React.useState(null); // { tone: 'ok'|'err', label }
   const [projectDraft, setProjectDraft] = React.useState(null);
   const [taskDraft, setTaskDraft] = React.useState(null);
+  const [containerDraft, setContainerDraft] = React.useState(null);
+  const [localContainers, setLocalContainers] = React.useState([]);
 
   const formatTime = (d) => {
     try {
@@ -166,7 +197,12 @@ export function Projects({ workspace }) {
     }
   }
 
-  const rawBrands = ledger.brands?.length ? ledger.brands : [EMPTY_ALL_BRAND];
+  const ledgerBrands = ledger.brands?.length ? ledger.brands : [EMPTY_ALL_BRAND];
+  // Optimistic containers (preview mode) ride alongside the ledger until a live
+  // reload carries the same slug and supersedes them.
+  const rawBrands = localContainers.length
+    ? [...ledgerBrands, ...localContainers.filter(lc => !ledgerBrands.some(b => b.key === lc.key))]
+    : ledgerBrands;
   const rawProjects = Array.isArray(ledger.projects) ? ledger.projects : [];
   // Workspace scope: restrict to this workspace's brands/projects/todos. With no
   // workspace the filters return their input unchanged, so the unscoped page stays
@@ -320,6 +356,61 @@ export function Projects({ workspace }) {
       return { ok: false, status: 'error' };
     }
   }, [loadLedger, projectDraft]);
+
+  const createContainer = React.useCallback(() => {
+    // Seed the drawer with the current scope's org so a container made under the
+    // 개인 view lands in 개인, and under ClassIn lands in 업무·클래스인.
+    setContainerDraft({
+      kind: 'container',
+      isNew: true,
+      id: createClientId(),
+      name: '',
+      category: 'general',
+      orgScope: workspace === 'classin' ? 'classin' : 'personal',
+    });
+  }, [workspace]);
+
+  // Create a container (brand row). saved/duplicate → reload; preview (Engine not
+  // configured) → keep an optimistic local row so the folder fills immediately.
+  const persistContainer = React.useCallback(async () => {
+    const name = containerDraft?.name?.trim();
+    if (!name) return { ok: false, status: 'invalid-input' };
+    const slug = slugifyContainer(name, containerDraft.id);
+    try {
+      const response = await fetch('/api/hub/brands', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: containerDraft.id,
+          name,
+          slug,
+          category: containerDraft.category,
+          orgScope: containerDraft.orgScope,
+          source: 'hub-projects',
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok && ['saved', 'duplicate'].includes(data.status)) {
+        setLocalContainers(prev => prev.filter(c => c.id !== containerDraft.id));
+        await loadLedger();
+        setBrand(slug);
+        setOrderResult({ tone: 'ok', label: '컨테이너 저장됨' });
+        return { ok: true, status: data.status };
+      }
+      if (data.status === 'preview') {
+        setLocalContainers(prev => [...prev.filter(c => c.id !== containerDraft.id), buildLocalContainer(containerDraft, slug)]);
+        setBrand(slug);
+        setOrderResult({ tone: 'ok', label: '컨테이너 생성 · 저장 대기(preview)' });
+        return { ok: true, status: 'preview' };
+      }
+      setOrderResult({ tone: 'err', label: data.error || `저장 실패 ${response.status}` });
+      return { ok: false, status: data.status || 'error' };
+    } catch (error) {
+      setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+      return { ok: false, status: 'error' };
+    }
+  }, [containerDraft, loadLedger]);
 
   const persistTask = React.useCallback(async () => {
     if (!taskDraft?.title?.trim()) return { ok: false, status: 'invalid-input' };
@@ -546,6 +637,7 @@ export function Projects({ workspace }) {
             <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-faint)' }}>분류</div>
             <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>프로젝트 컨테이너 · {Math.max(0, brands.length - 1)}개</div>
           </div>
+          <IconButton icon="plus" size={24} iconSize={13} onClick={createContainer} tooltip="새 컨테이너 (KA·딜·일반)" />
           <IconButton icon="chevronL" size={24} iconSize={13} onClick={() => setSidebarHidden(true)} tooltip="접기" />
         </div>
         <div className="scroll-y" style={{ flex: 1, padding: 6 }}>
@@ -1142,6 +1234,37 @@ export function Projects({ workspace }) {
         onChange={(key, value) => setProjectDraft(current => ({ ...current, [key]: value }))}
         onSave={persistProject}
         onClose={() => setProjectDraft(null)}
+      />
+
+      <EditDrawer
+        title="새 컨테이너"
+        subtitle="브랜드·KA·딜·일반을 분류와 함께 만든다"
+        record={containerDraft}
+        fields={[
+          { key: 'name', label: '이름', placeholder: '예: 우리학원 KA · 신규 브랜드' },
+          {
+            key: 'category',
+            label: '분류',
+            type: 'select',
+            options: [
+              { value: 'sns-channel', label: 'SNS 채널' },
+              { value: 'ka-deal', label: 'KA·딜' },
+              { value: 'general', label: '일반' },
+            ],
+          },
+          {
+            key: 'orgScope',
+            label: '소속',
+            type: 'select',
+            options: [
+              { value: 'personal', label: '개인' },
+              { value: 'classin', label: '업무 · 클래스인' },
+            ],
+          },
+        ]}
+        onChange={(key, value) => setContainerDraft(current => ({ ...current, [key]: value }))}
+        onSave={persistContainer}
+        onClose={() => setContainerDraft(null)}
       />
 
       <EditDrawer
