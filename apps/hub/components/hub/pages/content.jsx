@@ -445,7 +445,7 @@ export function Studio({ workspace }) {
       }
 
       if (data.status === 'preview') {
-        setExtraSuggestions(s => [{ tone: 'warning', text: '원장이 연결되지 않아 handoff 기록을 만들지 않았습니다.' }, ...s]);
+        setExtraSuggestions(s => [{ tone: 'warning', text: '기록이 연결되지 않아 handoff 기록을 만들지 않았습니다.' }, ...s]);
         return;
       }
 
@@ -1130,7 +1130,7 @@ export function Queue({ workspace }) {
             icon="queue"
             title={tab === 'all' ? '발행 큐가 비어 있습니다' : `${activeLabel} 항목이 없습니다`}
             description={tab === 'all'
-              ? (ledger.syncState === 'live' ? 'Supabase content_items/content_variants 원장에 표시할 콘텐츠가 없습니다.' : '초안을 만들면 큐와 파이프라인에 표시됩니다.')
+              ? (ledger.syncState === 'live' ? 'Supabase content_items/content_variants 기록에 표시할 콘텐츠가 없습니다.' : '초안을 만들면 큐와 파이프라인에 표시됩니다.')
               : `${activeLabel} 상태의 콘텐츠가 생기면 이 필터에 표시됩니다.`}
             action={<Button variant="primary" size="sm" icon="plus" onClick={() => openStudio()}>Draft</Button>}
           />
@@ -1579,7 +1579,7 @@ export function Campaigns() {
         <EmptyState
           icon="campaigns"
           title="캠페인이 없습니다"
-          description={ledger.syncState === 'live' ? 'Supabase campaigns 원장이 비어 있습니다.' : '캠페인을 만들면 war room에 표시됩니다.'}
+          description={ledger.syncState === 'live' ? 'Supabase campaigns 기록이 비어 있습니다.' : '캠페인을 만들면 war room에 표시됩니다.'}
           action={<Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating}>Campaign</Button>}
         />
       )}

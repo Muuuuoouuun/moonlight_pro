@@ -462,7 +462,7 @@ export function Decisions() {
             <EmptyState
               icon="decisions"
               title="결정 기록이 없습니다"
-              description={syncState === 'live' ? 'Supabase decisions 원장에 아직 기록된 결정이 없습니다.' : '중요한 판단을 남기면 타임라인에 쌓입니다.'}
+              description={syncState === 'live' ? 'Supabase decisions 기록에 아직 기록된 결정이 없습니다.' : '중요한 판단을 남기면 타임라인에 쌓입니다.'}
               action={<Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision</Button>}
             />
           </Card>
@@ -501,7 +501,7 @@ export function Roadmap() {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Roadmap</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            로드맵 원장 연결 전
+            로드맵 기록 연결 전
             <span className="mono" style={{ marginLeft: 8, color: 'var(--fg-faint)' }}>preview</span>
           </div>
         </div>
@@ -521,7 +521,7 @@ export function Roadmap() {
           <EmptyState
             icon="roadmap"
             title="로드맵 데이터가 없습니다"
-            description="프로젝트 원장과 로드맵 일정이 연결되면 이 타임라인이 채워집니다."
+            description="프로젝트 기록과 로드맵 일정이 연결되면 이 타임라인이 채워집니다."
             style={{ minHeight: 220 }}
           />
         )}
@@ -605,7 +605,7 @@ export function Rhythm() {
           <EmptyState
             icon="rhythm"
             title="루틴 체크 기록이 없습니다"
-            description={syncState === 'live' ? 'Supabase routine_checks 원장이 비어 있습니다.' : '체크인을 기록하면 주간 리듬과 streak가 계산됩니다.'}
+            description={syncState === 'live' ? 'Supabase routine_checks 기록이 비어 있습니다.' : '체크인을 기록하면 주간 리듬과 streak가 계산됩니다.'}
             style={{ minHeight: 220 }}
           />
         )}

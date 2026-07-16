@@ -96,7 +96,7 @@ export function AutomationsIndex({ onNavigate }) {
         {automations.length === 0 && (
           <EmptyState
             icon="automations"
-            title="자동화 원장이 비어 있습니다"
+            title="자동화 기록이 비어 있습니다"
             description={syncState === 'live' ? 'Supabase automations 테이블에 표시할 flow가 없습니다.' : 'flow를 만들면 실행 상태와 성공률이 여기에 표시됩니다.'}
             action={<Button variant="primary" size="sm" icon="plus" onClick={() => onNavigate('dashboard/automations/flows?new=flow')}>Flow</Button>}
           />
@@ -422,7 +422,7 @@ export function Flows({ onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Flows</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            자동화 정의 원장
+            자동화 정의 기록
             <SyncBadge state={syncState} />
           </div>
         </div>
@@ -433,7 +433,7 @@ export function Flows({ onNavigate }) {
         <EmptyState
           icon="zap"
           title="등록된 Flow가 없습니다"
-          description="실제 자동화 정의를 읽는 원장이 연결되면 이 화면에 표시됩니다."
+          description="실제 자동화 정의를 읽는 기록이 연결되면 이 화면에 표시됩니다."
         />
       </Card>
     </div>

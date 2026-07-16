@@ -196,7 +196,7 @@ export function Evolution({ onNavigate }) {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Evolution</h2>
-            <Badge tone="neutral" size="xs">Preview · 원장 미연결</Badge>
+            <Badge tone="neutral" size="xs">Preview · 기록 미연결</Badge>
           </div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch', lineHeight: 1.5 }}>시스템이 어떻게 변하고 있는지 · 바꾸는 법(Playbooks) · 실행하는 법(Commands) · 기록(Log)</div>
         </div>
@@ -205,14 +205,14 @@ export function Evolution({ onNavigate }) {
       </div>
 
       <div style={{ fontSize: 11.5, color: 'var(--fg-dim)' }}>
-        아래 지표와 로그는 아직 실시간 원장에 연결되지 않았습니다. 연결 전에는 빈 상태로 표시됩니다.
+        아래 지표와 로그는 아직 실시간 기록에 연결되지 않았습니다. 연결 전에는 빈 상태로 표시됩니다.
       </div>
 
       <div className="hub-grid--three" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>System version</div>
           <div className="stat" style={{ fontSize: 22, fontWeight: 500, marginTop: 8, color: 'var(--fg-faint)' }}>—</div>
-          <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>버전 원장 준비 중</div>
+          <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>버전 기록 준비 중</div>
         </Card>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Open issues</div>
@@ -255,7 +255,7 @@ export function Evolution({ onNavigate }) {
             <span>Playbook</span><span>Family</span><span>Cadence</span><span>Trigger</span><span>Owner</span><span style={{ textAlign: 'right' }} />
           </div>
           {PLAYBOOK_CATALOG.length === 0 && (
-            <EmptyState icon="folder" title="플레이북이 없습니다" description="플레이북 원장이 연결되면 운영 절차가 여기에 표시됩니다." />
+            <EmptyState icon="folder" title="플레이북이 없습니다" description="플레이북 기록이 연결되면 운영 절차가 여기에 표시됩니다." />
           )}
           {PLAYBOOK_CATALOG.map((p, i) => {
             const fam = PLAYBOOK_FAMILIES.find(f => f.key === p.family);
@@ -616,7 +616,7 @@ export function Settings({ onNavigate }) {
         <SectionTitle>API keys</SectionTitle>
         <Card pad={false}>
           {apiKeys.length === 0 && (
-            <EmptyState icon="key" title="API 키 원장이 연결되지 않았습니다" description="실제 키 메타데이터를 읽는 API가 준비되면 이 목록이 표시됩니다." />
+            <EmptyState icon="key" title="API 키 기록이 연결되지 않았습니다" description="실제 키 메타데이터를 읽는 API가 준비되면 이 목록이 표시됩니다." />
           )}
           {apiKeys.map((k, i, arr) => (
             <KeyRow key={k.ref} item={k} last={i === arr.length - 1} kind="key" />
@@ -637,7 +637,7 @@ export function Settings({ onNavigate }) {
         <SectionTitle>Webhooks</SectionTitle>
         <Card pad={false}>
           {incomingWebhooks.length === 0 && (
-            <EmptyState icon="webhook" title="등록된 incoming webhook이 없습니다" description="실제 endpoint 원장이 연결되면 URL과 최근 수신 이력이 표시됩니다." />
+            <EmptyState icon="webhook" title="등록된 incoming webhook이 없습니다" description="실제 endpoint 기록이 연결되면 URL과 최근 수신 이력이 표시됩니다." />
           )}
           {incomingWebhooks.map((w, i, arr) => (
             <KeyRow key={w.slug} item={w} last={i === arr.length - 1} kind="webhook" />
@@ -654,7 +654,7 @@ export function Settings({ onNavigate }) {
       <div>
         <SectionTitle>Outgoing webhooks</SectionTitle>
         <Card pad={false}>
-          <EmptyState icon="webhook" title="등록된 outgoing webhook이 없습니다" description="실제 endpoint 원장이 연결되면 전송 대상과 최근 실행 이력이 표시됩니다." />
+          <EmptyState icon="webhook" title="등록된 outgoing webhook이 없습니다" description="실제 endpoint 기록이 연결되면 전송 대상과 최근 실행 이력이 표시됩니다." />
         </Card>
       </div>
 

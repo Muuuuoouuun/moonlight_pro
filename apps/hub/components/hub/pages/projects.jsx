@@ -695,7 +695,7 @@ export function Projects({ workspace }) {
                   <Card>
                     <EmptyState
                       icon="projects"
-                      title="프로젝트 원장이 비어 있습니다"
+                      title="프로젝트 기록이 비어 있습니다"
                       description="Supabase 연결은 live 상태입니다. 첫 프로젝트를 만들거나 외부 project webhook을 보내면 이 목록에 바로 표시됩니다."
                       action={<Button variant="primary" size="sm" icon="plus" onClick={() => createProject()}>Project</Button>}
                     />
@@ -997,7 +997,7 @@ export function Projects({ workspace }) {
                   <EmptyState
                     icon="orders"
                     title="열린 할 일이 없습니다"
-                    description={syncState === 'live' ? 'Supabase tasks 원장에 표시할 항목이 없습니다.' : '할 일이 생기면 날짜 버킷별로 정리됩니다.'}
+                    description={syncState === 'live' ? 'Supabase tasks 기록에 표시할 항목이 없습니다.' : '할 일이 생기면 날짜 버킷별로 정리됩니다.'}
                     action={<Button variant="primary" size="sm" icon="plus" onClick={() => createTodo()}>To-do</Button>}
                   />
                 </Card>
@@ -1098,7 +1098,7 @@ export function Projects({ workspace }) {
 
       <EditDrawer
         title={projectDraft?.isNew ? '프로젝트 만들기' : '프로젝트 편집'}
-        subtitle="브랜드별 프로젝트 원장"
+        subtitle="브랜드별 프로젝트 기록"
         record={projectDraft}
         fields={[
           { key: 'title', label: '프로젝트명', placeholder: '프로젝트 이름' },

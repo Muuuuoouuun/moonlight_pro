@@ -333,8 +333,8 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
         ) : (
           <EmptyState
             icon="check"
-            title={taskToday?.state === 'live' ? '오늘 할 일이 비었습니다' : '할 일 원장 확인 대기'}
-            description={taskToday?.state === 'live' ? '놓침·오늘·대기·정리 전 task가 없습니다.' : 'tasks 원장이 live가 되면 실제 항목만 표시합니다.'}
+            title={taskToday?.state === 'live' ? '오늘 할 일이 비었습니다' : '할 일 기록 확인 대기'}
+            description={taskToday?.state === 'live' ? '놓침·오늘·대기·정리 전 task가 없습니다.' : 'tasks 기록이 live가 되면 실제 항목만 표시합니다.'}
             style={{ minHeight: 150 }}
           />
         )}
@@ -530,7 +530,7 @@ function OperatorPulse({ operatorHome, contentBrands, onNavigate }) {
 
   return (
     <div>
-      <SectionTitle right={<span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>현재 원장의 상태 분포 · 추세 아님</span>}>운영 pulse</SectionTitle>
+      <SectionTitle right={<span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>현재 기록의 상태 분포 · 추세 아님</span>}>운영 pulse</SectionTitle>
       <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -557,7 +557,7 @@ function OperatorPulse({ operatorHome, contentBrands, onNavigate }) {
               <DistributionRows series={pms.projectStatusSeries} label="프로젝트 상태 분포" />
             </>
           ) : (
-            <div style={{ marginTop: 14, fontSize: 12.5, color: 'var(--fg-muted)' }}>프로젝트 원장이 live가 되면 상태 요약을 표시합니다.</div>
+            <div style={{ marginTop: 14, fontSize: 12.5, color: 'var(--fg-muted)' }}>프로젝트 기록이 live가 되면 상태 요약을 표시합니다.</div>
           )}
         </Card>
 
@@ -599,7 +599,7 @@ function OperatorPulse({ operatorHome, contentBrands, onNavigate }) {
               </div>
             </>
           ) : (
-            <div style={{ marginTop: 14, fontSize: 12.5, color: 'var(--fg-muted)' }}>콘텐츠 원장이 live가 되면 세 브랜드 lane을 표시합니다.</div>
+            <div style={{ marginTop: 14, fontSize: 12.5, color: 'var(--fg-muted)' }}>콘텐츠 기록이 live가 되면 세 브랜드 lane을 표시합니다.</div>
           )}
         </Card>
       </div>
@@ -975,7 +975,7 @@ function PipelineShapeCard({ onNavigate }) {
         ) : (
           <>
             <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
-              Supabase 매출 원장이 연결되면 열린 딜의 단계 분포와 정체 딜이 여기에 표시됩니다.
+              Supabase 매출 기록이 연결되면 열린 딜의 단계 분포와 정체 딜이 여기에 표시됩니다.
             </div>
             <div style={{ marginTop: 12 }}>
               <Button variant="outline" size="sm" icon="deals" onClick={() => onNavigate('dashboard/revenue/deals')}>딜 보드 열기</Button>
@@ -1143,7 +1143,7 @@ function ContentCadenceCard({ onNavigate }) {
         ) : (
           <>
             <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.5 }}>
-              Supabase 콘텐츠 원장이 연결되면 이번 주 발행 진척과 아이디어 큐가 여기에 표시됩니다.
+              Supabase 콘텐츠 기록이 연결되면 이번 주 발행 진척과 아이디어 큐가 여기에 표시됩니다.
             </div>
             <div style={{ marginTop: 12 }}>
               <Button variant="outline" size="sm" icon="queue" onClick={() => onNavigate("dashboard/content/queue")}>Queue 열기</Button>
@@ -1165,10 +1165,10 @@ function StatusLine({ state }) {
   const detail = state.syncState === 'preview'
     ? 'preview · Supabase 연결 후 live 전환'
     : state.syncState === 'mixed'
-    ? '일부 원장은 live, 일부는 preview'
+    ? '일부 기록은 live, 일부는 preview'
     : state.syncState === 'syncing'
-    ? '원장 상태 확인 중'
-    : '모든 운영 원장 live';
+    ? '기록 상태 확인 중'
+    : '모든 운영 기록 live';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--fg-faint)', padding: '0 2px' }}>
       <Dot tone={syncTone(state.syncState)} size={6} />
@@ -1177,13 +1177,13 @@ function StatusLine({ state }) {
       {sourceCount > 0 && (
         <button
           type="button"
-          aria-label={open ? '원장 상태 숨기기' : '원장 상태 펼치기'}
+          aria-label={open ? '기록 상태 숨기기' : '기록 상태 펼치기'}
           aria-expanded={open}
           aria-controls="daily-brief-ledger-statuses"
           onClick={() => setOpen((o) => !o)}
           style={{ color: 'var(--fg-faint)', fontSize: 11, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
         >
-          {open ? '원장 숨기기' : `원장 ${sourceCount}`}
+          {open ? '기록 숨기기' : `기록 ${sourceCount}`}
         </button>
       )}
       {open && (

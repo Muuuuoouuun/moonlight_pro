@@ -26,7 +26,7 @@ CHAT_PERSONAS.guru = {
     title: '영업 멘토 세션',
     model: 'Opus 4.8',
     intro: [
-      { role: 'agent', name: 'Guru', text: '영업 멘토입니다. Revenue 원장(딜·리드·계정)을 근거로 "지금 무엇을 놓치고 있고, 다음 한 수가 무엇인지"를 코칭합니다.\n\n무엇을 볼까요?\n· 이번 주 파이프라인 분류\n· 특정 딜 진단 (어느 단계에서 막혔는지)\n· 제안서/이메일/반론 대응 다듬기' },
+      { role: 'agent', name: 'Guru', text: '영업 멘토입니다. Revenue 기록(딜·리드·계정)을 근거로 "지금 무엇을 놓치고 있고, 다음 한 수가 무엇인지"를 코칭합니다.\n\n무엇을 볼까요?\n· 이번 주 파이프라인 분류\n· 특정 딜 진단 (어느 단계에서 막혔는지)\n· 제안서/이메일/반론 대응 다듬기' },
     ],
 };
 
@@ -111,7 +111,7 @@ export function AgentsChat({ onNavigate }) {
               : '아직 실행 기록 없음';
             return `· ${p.nameKo}(${p.nameEn}) — ${p.status === 'idle' ? '대기' : '활성'} · ${last}`;
           }).join('\n');
-          const header = d?.status === 'live' ? '5개 페르소나 현황을 원장에서 모았습니다.' : '원장이 아직 연결되지 않았습니다. 실행 기록 없는 페르소나 정의만 표시합니다.';
+          const header = d?.status === 'live' ? '5개 페르소나 현황을 기록에서 모았습니다.' : '기록이 아직 연결되지 않았습니다. 실행 기록 없는 페르소나 정의만 표시합니다.';
           setThread([
             { role: 'agent', name: 'Council', text: `${header}\n\n${lines || '로스터를 불러오지 못했습니다.'}\n\n무엇을 우선 볼까요?` },
           ]);
@@ -217,7 +217,7 @@ export function AgentsChat({ onNavigate }) {
                     {m.pending ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--fg-muted)' }}>
                         <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
-                        원장을 읽고 코칭을 정리하는 중…
+                        기록을 읽고 코칭을 정리하는 중…
                       </span>
                     ) : m.text}
                   </div>
@@ -322,7 +322,7 @@ function CouncilCoachPanel({ onNavigate }) {
 
       {state === 'idle' && (
         <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.6 }}>
-          Council에게 브랜드/프로젝트 원장 기준의 자문을 요청하세요. 정체된 프로젝트·발행 케이던스 공백·
+          Council에게 브랜드/프로젝트 기록 기준의 자문을 요청하세요. 정체된 프로젝트·발행 케이던스 공백·
           다음 마일스톤을 근거로 먼저 손댈 액션 3건과 이유를 우선순위로 제시합니다.
         </div>
       )}
@@ -330,7 +330,7 @@ function CouncilCoachPanel({ onNavigate }) {
       {state === 'loading' && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
           <Dot tone="moon" size={6} style={{ animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
-          브랜드 원장을 읽고 자문을 정리하는 중…
+          브랜드 기록을 읽고 자문을 정리하는 중…
         </div>
       )}
 
@@ -382,7 +382,7 @@ export function AgentsCouncil({ onNavigate }) {
         <EmptyState
           icon="agents"
           title="페르소나 로스터가 비어 있습니다"
-          description="Supabase agents 원장이 준비되지 않았습니다."
+          description="Supabase agents 기록이 준비되지 않았습니다."
         />
       )}
       <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--gap)' }}>

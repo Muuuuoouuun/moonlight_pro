@@ -211,7 +211,7 @@ function GuruCoachPanel({ onNavigate }) {
       {state === 'loading' && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
           <div style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
-          원장을 읽고 코칭을 정리하는 중…
+          기록을 읽고 코칭을 정리하는 중…
         </div>
       )}
 
@@ -333,7 +333,7 @@ export function RevenueOverview({ onNavigate }) {
               <EmptyState
                 icon="revenue"
                 title="브랜드별 매출 집계 없음"
-                description="Supabase revenue 원장은 live입니다. 브랜드별 매출 join이 준비되면 이 패널이 자동으로 채워집니다."
+                description="Supabase revenue 기록은 live입니다. 브랜드별 매출 join이 준비되면 이 패널이 자동으로 채워집니다."
                 style={{ minHeight: 170, padding: '22px 12px' }}
               />
             )}
@@ -360,7 +360,7 @@ export function RevenueOverview({ onNavigate }) {
             <EmptyState
               icon="deals"
               title="딜이 없습니다"
-              description={isLiveLedger ? 'Supabase deals 원장에 표시할 딜이 없습니다.' : '딜이 생기면 금액순으로 표시됩니다.'}
+              description={isLiveLedger ? 'Supabase deals 기록에 표시할 딜이 없습니다.' : '딜이 생기면 금액순으로 표시됩니다.'}
               style={{ minHeight: 170, padding: '22px 12px' }}
             />
           )}
@@ -664,7 +664,7 @@ export function Leads({ workspace }) {
           <EmptyState
             icon="leads"
             title={`${ws.label} — 해당하는 리드가 없습니다`}
-            description={`이 워크스페이스에 매칭되는 리드가 없습니다. 다른 워크스페이스로 태그된 리드는 여기에 표시되지 않습니다. 리드를 등록하거나 원장에 ${ws.label} 태그가 연결되면 나타납니다.`}
+            description={`이 워크스페이스에 매칭되는 리드가 없습니다. 다른 워크스페이스로 태그된 리드는 여기에 표시되지 않습니다. 리드를 등록하거나 기록에 ${ws.label} 태그가 연결되면 나타납니다.`}
             action={<Button variant="primary" size="sm" icon="plus" onClick={createLead}>{ws.label}에 리드 추가</Button>}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
@@ -890,7 +890,7 @@ export function Deals({ workspace, onNavigate }) {
           <EmptyState
             icon="deals"
             title={`${ws.label} — 해당하는 딜이 없습니다`}
-            description={`이 워크스페이스에 매칭되는 딜이 없습니다. 다른 워크스페이스로 태그된 딜은 여기에 표시되지 않습니다. 딜을 등록하거나 원장에 ${ws.label} 태그가 연결되면 파이프라인이 채워집니다.`}
+            description={`이 워크스페이스에 매칭되는 딜이 없습니다. 다른 워크스페이스로 태그된 딜은 여기에 표시되지 않습니다. 딜을 등록하거나 기록에 ${ws.label} 태그가 연결되면 파이프라인이 채워집니다.`}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
@@ -1112,7 +1112,7 @@ export function Cases() {
           <EmptyState
             icon="cases"
             title="운영 케이스가 없습니다"
-            description={syncState === 'live' ? 'Supabase operation_cases 원장에 표시할 케이스가 없습니다.' : '지원/운영 이슈가 생기면 계정과 함께 표시됩니다.'}
+            description={syncState === 'live' ? 'Supabase operation_cases 기록에 표시할 케이스가 없습니다.' : '지원/운영 이슈가 생기면 계정과 함께 표시됩니다.'}
             action={<Button variant="primary" size="sm" icon="plus" onClick={createCase}>케이스 추가</Button>}
           />
         )}
@@ -1652,7 +1652,7 @@ export function Accounts({ workspace, onNavigate }) {
           <EmptyState
             icon="accounts"
             title={`${ws.label} — 해당하는 계정이 없습니다`}
-            description={`이 워크스페이스에 매칭되는 계정이 없습니다. 다른 워크스페이스로 태그된 계정은 여기에 표시되지 않습니다. 계정을 등록하거나 원장에 ${ws.label} 태그가 연결되면 나타납니다.`}
+            description={`이 워크스페이스에 매칭되는 계정이 없습니다. 다른 워크스페이스로 태그된 계정은 여기에 표시되지 않습니다. 계정을 등록하거나 기록에 ${ws.label} 태그가 연결되면 나타납니다.`}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
@@ -1694,7 +1694,7 @@ export function Accounts({ workspace, onNavigate }) {
               <EmptyState
                 icon="accounts"
                 title="계정이 없습니다"
-                description={syncState === 'live' ? 'Supabase customer_accounts 원장에 표시할 계정이 없습니다.' : '필터나 검색어를 조정하면 계정을 다시 찾을 수 있습니다.'}
+                description={syncState === 'live' ? 'Supabase customer_accounts 기록에 표시할 계정이 없습니다.' : '필터나 검색어를 조정하면 계정을 다시 찾을 수 있습니다.'}
                 action={<Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>}
               />
             </Card>
@@ -1753,7 +1753,7 @@ export function Accounts({ workspace, onNavigate }) {
             <EmptyState
               icon="accounts"
               title="계정이 없습니다"
-              description={syncState === 'live' ? 'Supabase customer_accounts 원장이 비어 있습니다.' : '필터나 검색어를 조정하면 계정을 다시 찾을 수 있습니다.'}
+              description={syncState === 'live' ? 'Supabase customer_accounts 기록이 비어 있습니다.' : '필터나 검색어를 조정하면 계정을 다시 찾을 수 있습니다.'}
             />
           )}
         </Card>
