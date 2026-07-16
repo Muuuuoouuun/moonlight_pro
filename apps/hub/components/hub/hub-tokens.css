@@ -173,6 +173,9 @@
    Themable, respects reduced-motion, and can't drift per call site. */
 .hub-app .hub-row { transition: background 120ms ease; }
 .hub-app .hub-row:hover { background: var(--surface-2); }
+/* Keyboard-only focus ring (§11: never rely on browser defaults) — :focus-visible so a mouse
+   click doesn't leave a ring, only Tab/roving-arrow-key navigation does. */
+.hub-app .hub-row:focus-visible { outline: 1px solid var(--moon-300); outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) {
   .hub-app .hub-row { transition: none; }
 }

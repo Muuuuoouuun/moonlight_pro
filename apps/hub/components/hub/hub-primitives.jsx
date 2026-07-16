@@ -295,7 +295,7 @@ export function Checkbox({ checked, onChange, size = 14, label }) {
   );
 }
 
-export function Input({ placeholder, icon, value, onChange, style, size = 'sm', className }) {
+export const Input = React.forwardRef(function Input({ placeholder, icon, value, onChange, style, size = 'sm', className }, ref) {
   const sizes = { sm: { h: 30, fs: 12.5 }, md: { h: 34, fs: 13 } };
   const s = sizes[size];
   return (
@@ -310,6 +310,7 @@ export function Input({ placeholder, icon, value, onChange, style, size = 'sm', 
     }}>
       {icon && <Iconed name={icon} size={13} style={{ color: 'var(--fg-faint)' }} />}
       <input
+        ref={ref}
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
         placeholder={placeholder}
@@ -321,7 +322,7 @@ export function Input({ placeholder, icon, value, onChange, style, size = 'sm', 
       />
     </div>
   );
-}
+});
 
 export function Placeholder({ label = 'image', w, h, style }) {
   return (

@@ -139,6 +139,9 @@ function mapEventItems(events, todayKey, weekEndKey) {
       recencyAt: start,
       meta: e.location || "",
       href: null,
+      // Google Calendar's own event page — surfaced by the 내 작업 event popover as an
+      // "열기" link. null when absent (ical fallback rows don't carry it).
+      calendarLink: e.htmlLink || null,
       status: "scheduled",
       done: false,
     };
