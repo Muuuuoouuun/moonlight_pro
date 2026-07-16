@@ -7,6 +7,7 @@ import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, Emp
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
+import { STAGE_FILL, STAGE_LINE } from "@/lib/deal-stages";
 
 // HW/SW 딜은 100만원 미만 건도 흔해서 M 고정 포맷은 "₩0.1M" 같은 값을 만든다.
 // revenue-ledger.js의 formatMoneyLabel과 같은 K/M 임계값으로 맞춘다.
@@ -21,6 +22,7 @@ const fmt = v => {
 // A deal counts as "stalled" once it has aged this many days in an open stage. Two weeks
 // is the follow-up window — high enough that a deal mid-motion isn't flagged as neglected.
 const STALLED_DAYS = 14;
+
 
 // Shared All/Personal/Company scope filter for every Revenue surface (Leads, Deals,
 // Accounts). One source so the identity dots and labels can't drift between pages.
@@ -788,7 +790,12 @@ export function Deals({ workspace, onNavigate }) {
     acc[s.key] = { count: items.length, sum: items.reduce((a, b) => a + b.value, 0) };
     return acc;
   }, {});
-  const grandTotal = scopedDeals.filter(d => filter === 'all' || d.type === filter).reduce((a, b) => a + b.value, 0);
+  // Command-deck readout split: money in motion (open stages) vs money landed (closing).
+  // The old single grandTotal blended won deals into "pipeline", overstating what's open.
+  const openStages = DEAL_STAGES.filter(s => s.key !== 'closing' && s.key !== 'lost');
+  const openTotal = openStages.reduce((a, s) => a + (totals[s.key]?.sum || 0), 0);
+  const openCount = openStages.reduce((a, s) => a + (totals[s.key]?.count || 0), 0);
+  const closingTotal = totals.closing?.sum || 0;
   // Drag-to-move: optimistic local move, then persist the stage in the background for
   // ledger-backed deals (local cards persist once saved through the drawer). Fire-and-forget —
   // the optimistic move stands regardless of the write result.
@@ -876,7 +883,8 @@ export function Deals({ workspace, onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Deals</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            Pipeline <span className="mono" style={{ color: 'var(--fg)' }}>{fmt(grandTotal)}</span> across {DEAL_STAGES.length} stages
+            열린 파이프라인 <span className="mono" style={{ color: 'var(--fg)' }}>{fmt(openTotal)}</span> · <span className="mono">{openCount}</span>건
+            {closingTotal > 0 && <> · 클로징 <span className="mono" style={{ color: 'var(--success)' }}>{fmt(closingTotal)}</span></>}
             <SyncBadge state={syncState} />
           </div>
         </div>
@@ -884,6 +892,29 @@ export function Deals({ workspace, onNavigate }) {
         <SegmentedControl className="hub-toolbar" style={{ marginRight: 8 }} options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
         <Button variant="primary" size="sm" icon="plus" onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>
       </div>
+
+      {/* 게이지 마스트헤드 — 열린 딜 금액의 단계 분포를 한 줄 세그먼트로. 아래 컬럼들의
+          top 스트라이프와 같은 heat 토큰을 써서 게이지와 보드가 하나의 계기로 읽힌다.
+          (읽기 전용 — 모바일 44px 버튼 플로어와 충돌하는 클릭 타깃을 만들지 않는다.) */}
+      {!wsEmpty && openTotal > 0 && (
+        <div style={{ display: 'flex', gap: 2, height: 6, borderRadius: 999, overflow: 'hidden' }} aria-hidden="true">
+          {openStages.map(s => {
+            const sum = totals[s.key]?.sum || 0;
+            return (
+              <div
+                key={s.key}
+                title={`${s.label} · ${fmt(sum)} · ${totals[s.key]?.count || 0}건`}
+                style={{
+                  flex: sum || 0.02,
+                  minWidth: sum ? 6 : 2,
+                  background: STAGE_FILL[s.color] || 'var(--fg-faint)',
+                  opacity: sum ? 0.9 : 0.25,
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
 
       {wsEmpty && (
         <Card>
@@ -910,14 +941,17 @@ export function Deals({ workspace, onNavigate }) {
                 border: '1px solid var(--line-soft)',
                 borderRadius: 'var(--r-lg)',
                 display: 'flex', flexDirection: 'column',
+                // Stage heat as a 2px top stripe (§5.2 inset-stripe idiom, rotated to the
+                // column top) — replaces the 6px Dot so the funnel's cold→hot gradient reads
+                // across the whole board and ties each column to its masthead gauge segment.
+                boxShadow: `inset 0 2px 0 0 ${STAGE_LINE[s.color] || 'var(--line-strong)'}`,
               }}>
               <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Dot tone={s.color} />
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 600 }}>{s.label}</span>
                   <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', marginLeft: 'auto' }}>{totals[s.key].count}</span>
                 </div>
-                <div className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{fmt(totals[s.key].sum)}</div>
+                <div className="mono" style={{ fontSize: 12, color: totals[s.key].sum ? 'var(--fg-muted)' : 'var(--fg-faint)', marginTop: 4 }}>{fmt(totals[s.key].sum)}</div>
               </div>
               <div className="scroll-y" style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 6, minHeight: 100 }}>
                 {items.map(d => {
@@ -942,9 +976,13 @@ export function Deals({ workspace, onNavigate }) {
                       opacity: drag === d.id ? 0.4 : 1,
                       boxShadow: stalled ? 'inset 2px 0 0 var(--danger-line)' : undefined,
                     }}>
-                    <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 6 }}>
-                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{d.id}</span>
-                      <div style={{ flex: 1 }} />
+                    {/* 이름이 첫 줄 — UUID는 판단 데이터가 아니라 드로어 부제로 충분한 계기
+                        소음이었다. 카드에서 가장 좋은 자리는 고객이 갖는다. */}
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                      <div style={{
+                        flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--fg)', lineHeight: 1.35,
+                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                      }}>{d.name}</div>
                       <IconButton
                         icon="sparkle"
                         size={20}
@@ -956,14 +994,14 @@ export function Deals({ workspace, onNavigate }) {
                         {d.type === 'personal' ? 'P' : 'C'}
                       </Badge>
                     </div>
-                    <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.4, marginBottom: 8 }}>{d.name}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                      <span className="mono" style={{ fontSize: 12, color: 'var(--moon-200)' }}>{fmt(d.value)}</span>
-                      <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{d.close}</span>
+                    {/* 금액이 카드에서 가장 밝은 데이터 — 영업 보드의 두 번째 읽기 대상. */}
+                    <div style={{ marginTop: 8, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                      <span className="mono" style={{ fontSize: 12.5, color: d.value ? 'var(--moon-100)' : 'var(--fg-faint)' }}>{fmt(d.value)}</span>
+                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{d.close}</span>
                     </div>
                     {stalled && (
-                      <div style={{ marginTop: 6, fontSize: 10, color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <Iconed name="clock" size={10} /> {d.age}d stalled
+                      <div style={{ marginTop: 6, fontSize: 10.5, color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <Iconed name="clock" size={10} /> {d.age}일 정체
                       </div>
                     )}
                   </div>

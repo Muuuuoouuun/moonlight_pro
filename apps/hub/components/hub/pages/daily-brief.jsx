@@ -7,7 +7,7 @@ import { createClientId } from "@/lib/pms-ui";
 import { buildQuickCapture, isDurableQuickCaptureResult } from "@/lib/quick-task-capture";
 import { isDurableTaskUpdateResult } from "@/lib/task-today";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
-import { DEAL_STAGES } from "@/lib/deal-stages";
+import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
 
 function formatBriefDate(date) {
   return new Intl.DateTimeFormat('en-US', {
@@ -866,20 +866,13 @@ function ApprovalQueueCard({ onNavigate }) {
 // 며칠째 정체된 게 몇 건인지 5초 안에 읽고 딜 보드로 넘어가게 한다. raw count가 아니라
 // 분포 + 정체(urgency)를 보여주는 게 DESIGN.md 대시보드 원칙.
 //
-// Derived from the shared lib/deal-stages.js taxonomy (not redeclared here) so this widget
-// can't drift from the Deals kanban — "closing" is dropped since PipelineShapeCard only ever
-// shows open (not closing/lost) deals, matching its own `open` filter below.
-const STAGE_TONE_COLOR = {
-  neutral: 'var(--fg-faint)',
-  info: 'var(--info)',
-  moon: 'var(--moon-400)',
-  warning: 'var(--warning)',
-  danger: 'var(--danger)',
-  success: 'var(--success)',
-};
+// Derived from the shared lib/deal-stages.js taxonomy and STAGE_FILL tokens (not redeclared
+// here) so this widget can't drift from the Deals kanban's masthead gauge — "closing" is
+// dropped since PipelineShapeCard only ever shows open (not closing/lost) deals, matching
+// its own `open` filter below.
 const PIPELINE_STAGES = DEAL_STAGES
   .filter((s) => s.key !== 'closing')
-  .map((s) => ({ key: s.key, label: s.label, color: STAGE_TONE_COLOR[s.color] || 'var(--fg-faint)' }));
+  .map((s) => ({ key: s.key, label: s.label, color: STAGE_FILL[s.color] || 'var(--fg-faint)' }));
 
 function PipelineShapeCard({ onNavigate }) {
   const [data, setData] = React.useState(null);

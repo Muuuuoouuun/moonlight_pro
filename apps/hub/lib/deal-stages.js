@@ -47,3 +47,25 @@ export const LEGACY_DB_STAGE_VALUES = [
   "prospect", "lead", "new", "qualified", "nurturing", "qual",
   "proposal", "prop", "negotiation", "neg", "won", "lost",
 ];
+
+// Stage tone key -> solid CSS token, for gauge/segment fills (Deals masthead, Daily Brief
+// PipelineShapeCard). One map so the two instruments can't drift apart.
+export const STAGE_FILL = {
+  neutral: "var(--fg-faint)",
+  info: "var(--info)",
+  moon: "var(--moon-400)",
+  warning: "var(--warning)",
+  danger: "var(--danger)",
+  success: "var(--success)",
+};
+
+// Stage tone key -> hairline token for the §5.2 inset-stripe idiom (kanban column top
+// stripes). Kept separate from STAGE_FILL because stripes read at lower alpha.
+export const STAGE_LINE = {
+  neutral: "var(--line-strong)",
+  info: "var(--info-line)",
+  moon: "var(--moon-600)",
+  warning: "var(--warning-line)",
+  danger: "var(--danger-line)",
+  success: "var(--success-line)",
+};
