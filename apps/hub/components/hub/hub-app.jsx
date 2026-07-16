@@ -141,18 +141,20 @@ export function HubApp() {
 
   const [collapsed, setCollapsed] = React.useState(false);
   const [navOpen, setNavOpen] = React.useState(false);
-  const [density, setDensity] = React.useState('default');
-  const [theme, setTheme] = React.useState('dark');
+  // Read persisted prefs synchronously at mount. A read-effect + write-effect
+  // pair raced under StrictMode: the write-effect fired with the initial
+  // 'dark'/'default' before the read-effect restored the stored value, so
+  // every remount (App Router re-mounts this client shell on navigation)
+  // clobbered mlp.theme back to dark. Lazy init removes the window entirely.
+  const [density, setDensity] = React.useState(
+    () => (typeof window !== 'undefined' && localStorage.getItem('mlp.density')) || 'default'
+  );
+  const [theme, setTheme] = React.useState(
+    () => (typeof window !== 'undefined' && localStorage.getItem('mlp.theme')) || 'dark'
+  );
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [tweaksOpen, setTweaksOpen] = React.useState(false);
   const rootRef = React.useRef(null);
-
-  React.useEffect(() => {
-    const d = typeof window !== 'undefined' ? localStorage.getItem('mlp.density') : null;
-    const t = typeof window !== 'undefined' ? localStorage.getItem('mlp.theme') : null;
-    if (d) setDensity(d);
-    if (t) setTheme(t);
-  }, []);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') localStorage.setItem('mlp.density', density);
@@ -184,7 +186,7 @@ export function HubApp() {
   const sidebarCollapsed = collapsed && !navOpen;
 
   return (
-    <div ref={rootRef} className="hub-app" data-theme={theme} data-density={density}>
+    <div ref={rootRef} className="hub-app" data-theme={theme} data-density={density} suppressHydrationWarning>
       <div className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'}>
         <button
           type="button"

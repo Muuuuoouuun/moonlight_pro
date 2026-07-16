@@ -8,6 +8,29 @@ import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
 const BRAND_GLYPHS = ["◐", "◇", "✦", "◆", "●", "□", "△", "◎", "◌", "✧"];
 
+// PMS container category (2026-07-15 spec §4.1): 'sns-channel' | 'ka-deal' |
+// 'general'. meta.category overrides; unknown values read as "general" — the
+// code never guesses. The canonical list is the operator-confirmed 2026-07-15
+// assignment (every existing container is an SNS channel).
+const BRAND_CATEGORIES = new Set(["sns-channel", "ka-deal", "general"]);
+const CANONICAL_BRAND_CATEGORY = {
+  sinabro: "sns-channel",
+  gore: "sns-channel",
+  holyfuncollector: "sns-channel",
+  bridgemaker: "sns-channel",
+  moonpm: "sns-channel",
+  classmoon: "sns-channel",
+  studyseagull: "sns-channel",
+  politicofficer: "sns-channel",
+  "22nomad": "sns-channel",
+};
+
+function resolveBrandCategory(key, meta) {
+  const raw = typeof meta?.category === "string" ? meta.category.trim() : "";
+  if (BRAND_CATEGORIES.has(raw)) return raw;
+  return CANONICAL_BRAND_CATEGORY[key] || "general";
+}
+
 function clampProgress(value) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   if (!Number.isFinite(parsed)) return 0;
@@ -142,6 +165,7 @@ function mapBrands(rows, projects, todos, updates) {
       name: row.name,
       glyph: meta.glyph || BRAND_GLYPHS[index % BRAND_GLYPHS.length],
       tone: meta.tone || normalizeBrandKind(row.kind),
+      category: resolveBrandCategory(key, meta),
       kind: row.kind || "brand",
       desc: row.description || "운영 브랜드",
       projects: projectCounts.get(key) || 0,
