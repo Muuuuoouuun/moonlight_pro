@@ -119,7 +119,7 @@ export const SIDEBAR_PRIMARY = [
   },
   {
     key: 'overview',
-    label: 'Overview',
+    label: '현황',
     icon: 'signal',
     scopeAware: false,
     owns: ['dashboard/overview'],
@@ -135,7 +135,7 @@ export const SIDEBAR_PRIMARY = [
     // back-compat in isSidebarAnchorActive.
     key: 'tasks',
     label: '내 작업',
-    icon: 'check',
+    icon: 'inbox',
     scopeAware: false,
     owns: ['dashboard/work/my'],
     paths: {

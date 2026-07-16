@@ -3,7 +3,7 @@
 
 export const NAV_TREE = [
   { key: 'daily-brief', label: 'Daily Brief', icon: 'brief', path: 'dashboard/daily-brief' },
-  { key: 'overview', label: 'Overview', icon: 'signal', path: 'dashboard/overview', keywords: ['차트', '시각', '통계', 'chart', 'stats', '정리'] },
+  { key: 'overview', label: '현황', icon: 'signal', path: 'dashboard/overview', keywords: ['overview', '현황', '차트', '시각', '통계', 'chart', 'stats', '정리'] },
   {
     key: 'classin', label: '클래스인', icon: 'classin', workspace: true,
     children: [
@@ -45,7 +45,7 @@ export const NAV_TREE = [
   {
     key: 'revenue', label: 'Revenue', icon: 'revenue', secondary: true,
     children: [
-      { key: 'overview', label: 'Overview', icon: 'revenue', path: 'dashboard/revenue/overview' },
+      { key: 'overview', label: '개요', icon: 'revenue', path: 'dashboard/revenue/overview', keywords: ['revenue overview', '매출 개요'] },
       { key: 'deals', label: 'Deals', icon: 'deals', path: 'dashboard/revenue/deals' },
       { key: 'leads', label: 'Leads', icon: 'leads', path: 'dashboard/revenue/leads' },
       { key: 'accounts', label: 'Accounts', icon: 'accounts', path: 'dashboard/revenue/accounts' },
