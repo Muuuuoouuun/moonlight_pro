@@ -136,6 +136,14 @@ function mapLead(row, companyById, contactById) {
 
   return {
     id: row.id,
+    companyId: row.company_id || null,
+    contactId: row.contact_id || null,
+    // 운영자 수동 포커스 3단 조정 (raise/default/lower) — 숫자 점수와 별개 축
+    focusOverride: meta.focus_override === "raise" || meta.focus_override === "lower" ? meta.focus_override : "default",
+    // 기약 없음 휴면 상태 (buildFollowupWrite가 meta에 기록) — 고객 DB 뷰의 휴면 세그먼트 소스
+    dormant: Boolean(meta.dormant),
+    dormantSince: meta.dormant_since || null,
+    nextActionAt: meta.next_action_at || null,
     name: displayName,
     type,
     // Scoping tags — workspace-map matches on these; also the round-trip target for the
@@ -175,6 +183,7 @@ function mapDeal(row, companyById) {
   return {
     id: row.id,
     leadId: row.lead_id || null, // ties the deal back to its lead (deep-link + focus context)
+    companyId: row.company_id || null, // account 행에서 딜 파이프라인을 붙이는 조인 키
     name,
     type,
     // Scoping tags — workspace-map matches on these; round-trip target for scoped creates.
@@ -202,6 +211,8 @@ function mapAccount(row, dealStatsByCompany) {
   const lastAt = row.updated_at || row.started_at || row.created_at;
 
   return {
+    id: row.id, // crm_activities 링크 대상 — 로컬 생성 행(id 없음)은 활동이 preview로만 남는다
+    companyId: row.company_id || null,
     name: row.name,
     type,
     deals: stats.deals,
@@ -209,7 +220,24 @@ function mapAccount(row, dealStatsByCompany) {
     last: formatRelative(lastAt),
     lastAt: formatRelativeShort(lastAt),
     health,
+    nextAction: row.next_action || "",
+    focusOverride: row.meta?.focus_override === "raise" || row.meta?.focus_override === "lower"
+      ? row.meta.focus_override
+      : "default",
     owner: row.owner_id ? "Me" : "Unassigned",
+  };
+}
+
+// contacts 행 → 고객 DB·Customer 360이 쓰는 사람 모델 (spec §9 Contact 중심)
+function mapContact(row) {
+  return {
+    id: row.id,
+    companyId: row.company_id || null,
+    name: row.name || "이름 없음",
+    email: row.email || null,
+    phone: row.phone || null,
+    title: row.title || null,
+    labels: Array.isArray(row.meta?.labels) ? row.meta.labels : [],
   };
 }
 
@@ -268,6 +296,8 @@ function emptyLedger(configured, workspaceId) {
     deals: [],
     accounts: [],
     cases: [],
+    contacts: [],
+    companies: [],
     stages: DEAL_STAGES,
     summary: {
       mrr: 0,
@@ -279,6 +309,52 @@ function emptyLedger(configured, workspaceId) {
       wonMTD: 0,
     },
   };
+}
+
+// crm_activities 행 → DetailPanel 표시 모델. live 테이블은 kind 컬럼을 쓴다.
+// notes 탭은 type='note'만 분리해 쓴다.
+function mapActivity(row) {
+  return {
+    id: row.id,
+    type: row.kind || row.type || "note",
+    msg: row.body || "",
+    at: formatRelative(row.occurred_at || row.created_at),
+    occurredAt: row.occurred_at || row.created_at || "",
+    who: "Me",
+    pinned: Boolean(row.pinned),
+    reaction: row.reaction || null,
+    leadId: row.lead_id || null,
+    dealId: row.deal_id || null,
+    contactId: row.contact_id || null,
+  };
+}
+
+// 활동·노트 lazy load — 계정 또는 리드 기준 (고객 DB 통합 뷰는 두 종류 행을 모두 연다).
+// 미설정 환경은 configured:false로 정직하게 표시하고 빈 배열을 준다 — mock을 섞지 않는다.
+export async function getCrmActivities({ accountId, leadId } = {}) {
+  const workspaceId = resolveDefaultWorkspaceId();
+  const filterCol = accountId ? "account_id" : leadId ? "lead_id" : null;
+  const filterVal = accountId || leadId;
+  if (!workspaceId || !filterCol) {
+    return { configured: Boolean(workspaceId), activities: [] };
+  }
+
+  const rows = await fetchSupabaseRows("crm_activities", {
+    limit: 200,
+    order: "occurred_at.desc",
+    filters: withWorkspaceFilter([[filterCol, eqFilter(filterVal)]]),
+  });
+
+  if (!rows) {
+    return { configured: true, activities: null }; // fetch 실패 — 호출측이 preview로 강등
+  }
+
+  return { configured: true, activities: rows.map(mapActivity) };
+}
+
+// 하위호환 별칭 (Accounts DetailPanel)
+export async function getAccountActivities(accountId) {
+  return getCrmActivities({ accountId });
 }
 
 export async function getRevenueLedger() {
@@ -352,6 +428,8 @@ export async function getRevenueLedger() {
     deals,
     accounts,
     cases,
+    contacts: (contactRows || []).map(mapContact),
+    companies: (companyRows || []).map(c => ({ id: c.id, name: c.name || "" })),
     stages: DEAL_STAGES,
     summary,
   };

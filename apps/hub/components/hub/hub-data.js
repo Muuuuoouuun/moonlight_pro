@@ -47,6 +47,7 @@ export const NAV_TREE = [
     key: 'revenue', label: 'Revenue', icon: 'revenue', secondary: true,
     children: [
       { key: 'overview', label: '개요', icon: 'revenue', path: 'dashboard/revenue/overview', keywords: ['revenue overview', '매출 개요'] },
+      { key: 'customers', label: '고객 DB', icon: 'accounts', path: 'dashboard/revenue/customers', keywords: ['customers', '고객', 'crm', '통합'] },
       { key: 'deals', label: 'Deals', icon: 'deals', path: 'dashboard/revenue/deals' },
       { key: 'leads', label: 'Leads', icon: 'leads', path: 'dashboard/revenue/leads' },
       { key: 'accounts', label: 'Accounts', icon: 'accounts', path: 'dashboard/revenue/accounts' },

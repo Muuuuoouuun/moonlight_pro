@@ -106,7 +106,7 @@ function buildRevenueAttention(leads, deals) {
   return items.slice(0, 4);
 }
 
-function useRevenueLedger() {
+export function useRevenueLedger() {
   const [ledger, setLedger] = React.useState({
     source: 'preview',
     leads: [],
@@ -114,6 +114,8 @@ function useRevenueLedger() {
     stages: [],
     accounts: [],
     cases: [],
+    contacts: [],
+    companies: [],
     summary: null,
   });
   const [syncState, setSyncState] = React.useState('preview');
@@ -136,6 +138,8 @@ function useRevenueLedger() {
           stages: Array.isArray(data.stages) ? data.stages : [],
           accounts: Array.isArray(data.accounts) ? data.accounts : [],
           cases: Array.isArray(data.cases) ? data.cases : [],
+          contacts: Array.isArray(data.contacts) ? data.contacts : [],
+          companies: Array.isArray(data.companies) ? data.companies : [],
           summary: data.summary || null,
         });
         setSyncState(data.source === 'supabase' ? 'live' : 'preview');
@@ -154,7 +158,7 @@ function useRevenueLedger() {
 // 'lead' | 'deal' | 'case', `op` is 'create' | 'update' | 'delete'. Returns
 // { ok, status, id } — `ok` is true only when the row actually saved; 'preview' means the
 // backend isn't configured (or the DB refused the write) and the optimistic local row stands.
-async function saveRevenueRecord(kind, op, record) {
+export async function saveRevenueRecord(kind, op, record) {
   try {
     const resp = await fetch(`/api/hub/revenue/${kind}`, {
       method: 'POST',
@@ -408,7 +412,7 @@ export function RevenueOverview({ onNavigate }) {
 // Shared grid template for Leads rows — gap between columns so badges never butt the next cell
 const LEADS_GRID = '26px 1fr 112px 112px 124px 100px 90px 92px';
 
-function LeadEnrichmentPanel({ lead }) {
+export function LeadEnrichmentPanel({ lead }) {
   if (!lead?.enrichmentTags?.length) return null;
   const summary = buildLeadTagSummary(lead.enrichmentTags);
   const calendar = lead.activityEvidence?.calendar || {};
@@ -1211,9 +1215,9 @@ export function Cases() {
 
 const H_TONE = { ok: 'success', warning: 'warning', risk: 'danger' };
 
-const ACT_ICON = { email: 'email', meeting: 'calendar', call: 'signal', note: 'edit', deal: 'deals' };
-const ACT_TONE = { email: 'info', meeting: 'moon', call: 'warning', note: 'neutral', deal: 'success' };
-const ACT_LABEL = { email: 'Email', meeting: 'Meeting', call: 'Call', note: 'Note', deal: 'Deal' };
+const ACT_ICON = { email: 'email', meeting: 'calendar', call: 'signal', note: 'edit', deal: 'deals', kakao: 'chat', quote: 'orders', ai: 'sparkle', info_session: 'brief', demo: 'play', visit: 'building', update: 'rhythm' };
+const ACT_TONE = { email: 'info', meeting: 'moon', call: 'warning', note: 'neutral', deal: 'success', kakao: 'warning', quote: 'neutral', ai: 'moon', info_session: 'info', demo: 'moon', visit: 'success', update: 'neutral' };
+const ACT_LABEL = { email: 'Email', meeting: 'Meeting', call: 'Call', note: 'Note', deal: 'Deal', kakao: '카카오', quote: '견적', ai: 'AI', info_session: '설명회', demo: '데모', visit: '방문', update: 'Update' };
 
 function emptyDetail() {
   return { mrr: 0, contacts: [], activity: [], notes: [] };
@@ -1580,15 +1584,45 @@ export function Accounts({ workspace, onNavigate }) {
 
   const getDetail = (name) => details[name] || emptyDetail();
 
-  const pushActivity = (name, entry) => {
+  // 활동·노트는 crm_activities 원장으로 영속화한다. 계정에 id가 없으면(로컬 생성 직후)
+  // 낙관적 로컬 행만 유지 — preview 상태로 정직하게 남긴다.
+  const persistActivity = (name, entry, { alsoNote = false } = {}) => {
+    const acc = ACCOUNTS.find(a => a.name === name);
+    const tempId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const localRow = { id: tempId, at: '방금', who: 'Me', pinned: false, ...entry };
+
     setDetails(prev => {
       const cur = prev[name] || emptyDetail();
       return {
         ...prev,
-        [name]: { ...cur, activity: [{ at: '방금', who: 'Me', ...entry }, ...cur.activity] },
+        [name]: {
+          ...cur,
+          activity: [localRow, ...cur.activity],
+          ...(alsoNote
+            ? { notes: [{ id: tempId, at: '방금', pinned: false, body: entry.msg }, ...cur.notes] }
+            : {}),
+        },
       };
     });
+
+    if (!acc?.id) return;
+    saveRevenueRecord('activity', 'create', {
+      accountId: acc.id,
+      type: entry.type,
+      body: entry.msg,
+    }).then(r => {
+      if (!r.ok || !r.id) return;
+      // 임시 id → 실제 id 치환 (pinned 토글이 서버 행을 가리키도록)
+      setDetails(prev => {
+        const cur = prev[name];
+        if (!cur) return prev;
+        const swap = row => (row.id === tempId ? { ...row, id: r.id } : row);
+        return { ...prev, [name]: { ...cur, activity: cur.activity.map(swap), notes: cur.notes.map(swap) } };
+      });
+    });
   };
+
+  const pushActivity = (name, entry) => persistActivity(name, entry);
 
   const handleAction = (name) => (kind, contactName) => {
     const labels = {
@@ -1608,29 +1642,56 @@ export function Accounts({ workspace, onNavigate }) {
   };
 
   const handlePinNote = (name) => (note) => {
+    const nextPinned = !note.pinned;
     setDetails(prev => {
       const cur = prev[name] || emptyDetail();
+      const flip = n => ((note.id ? n.id === note.id : n === note) ? { ...n, pinned: nextPinned } : n);
       return {
         ...prev,
-        [name]: {
-          ...cur,
-          notes: cur.notes.map(n => n === note ? { ...n, pinned: !n.pinned } : n),
-        },
+        [name]: { ...cur, notes: cur.notes.map(flip), activity: cur.activity.map(flip) },
       };
     });
+    if (note.id && !String(note.id).startsWith('local-')) {
+      saveRevenueRecord('activity', 'update', { id: note.id, pinned: nextPinned });
+    }
   };
 
   const handleAddNote = (name) => (body) => {
-    setDetails(prev => {
-      const cur = prev[name] || emptyDetail();
-      return {
-        ...prev,
-        [name]: { ...cur, notes: [{ at: '방금', pinned: false, body }, ...cur.notes] },
-      };
-    });
+    persistActivity(name, { type: 'note', msg: body }, { alsoNote: true });
   };
 
   const selectedAcc = filtered.find(a => a.name === selected) || null;
+
+  // Detail 뷰 진입/계정 전환 시 crm_activities에서 활동·노트를 로드한다.
+  React.useEffect(() => {
+    if (view !== 'detail' || !selectedAcc?.id) return;
+    const acc = selectedAcc;
+    let alive = true;
+    fetch(`/api/hub/revenue/activity?accountId=${encodeURIComponent(acc.id)}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        if (!alive) return;
+        const rows = Array.isArray(data.activities) ? data.activities : [];
+        setDetails(prev => {
+          const cur = prev[acc.name] || emptyDetail();
+          // 서버 행 + 아직 저장 안 된 로컬 행(local- 접두)만 병합 — 중복 없이 원장이 정본
+          const localOnly = cur.activity.filter(a => String(a.id).startsWith('local-'));
+          const activity = [...localOnly, ...rows];
+          return {
+            ...prev,
+            [acc.name]: {
+              ...cur,
+              activity,
+              notes: activity
+                .filter(a => a.type === 'note')
+                .map(a => ({ id: a.id, at: a.at, pinned: a.pinned, body: a.msg })),
+            },
+          };
+        });
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [view, selectedAcc?.id]);
 
   const openDetail = (name) => {
     setSelected(name);

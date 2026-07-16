@@ -89,6 +89,14 @@ export function buildLeadWrite(payload = {}) {
   if (payload.value != null) metaPatch.value = parseMoneyLabel(payload.value);
   if (payload.workspace) metaPatch.workspace = payload.workspace;
 
+  // 운영자 포커스 3단 조정 — 'default'는 meta에서 오버라이드를 걷어낸다 (기본 상태로 복귀).
+  if (payload.focusOverride !== undefined) {
+    metaPatch.focus_override =
+      payload.focusOverride === "raise" || payload.focusOverride === "lower"
+        ? payload.focusOverride
+        : null;
+  }
+
   // Lightweight lead tags — 지역·규모·현재 상황·도입 댓수. Live in meta so no schema churn;
   // 유입경로 stays on the `source` column above. `undefined` means "untouched" (skip); an
   // explicit "" clears the tag. units is a positive integer or null.
@@ -208,6 +216,54 @@ export function buildAccountWrite(payload = {}) {
   if (type) metaPatch.account_kind = type;
   if (payload.note != null) metaPatch.note = String(payload.note).trim() || null;
   if (payload.workspace) metaPatch.workspace = payload.workspace;
+  // 운영자 포커스 3단 조정 (leads와 같은 계약)
+  if (payload.focusOverride !== undefined) {
+    metaPatch.focus_override =
+      payload.focusOverride === "raise" || payload.focusOverride === "lower"
+        ? payload.focusOverride
+        : null;
+  }
+
+  return { columns, metaPatch };
+}
+
+// crm_activities insert/patch. live 테이블은 kind/entity_type 스키마를 쓴다 (0016에서 확장).
+// create는 body+type(→kind)이 필수, update는 pinned 토글이 주 용도다.
+// occurred_at을 클라이언트가 보내지 않으면 DB default(now())에 맡긴다.
+const ACTIVITY_KINDS = new Set([
+  "call", "meeting", "info_session", "demo", "visit", "email", "update",
+  "note", "deal", "kakao", "quote", "ai",
+]);
+const ACTIVITY_REACTIONS = new Set(["positive", "neutral", "concern", "rejected", "no_response"]);
+
+export function buildActivityWrite(payload = {}) {
+  const columns = {};
+  const metaPatch = {};
+
+  if (typeof payload.body === "string" && payload.body.trim()) {
+    columns.body = payload.body.trim();
+  }
+  if (ACTIVITY_KINDS.has(String(payload.type))) {
+    columns.kind = String(payload.type);
+  }
+  if (payload.pinned !== undefined) {
+    columns.pinned = Boolean(payload.pinned);
+  }
+  if (payload.reaction !== undefined) {
+    columns.reaction = ACTIVITY_REACTIONS.has(String(payload.reaction)) ? String(payload.reaction) : null;
+  }
+  // 링크 대상 — create 시에만 의미 있다. undefined는 건너뛰고 null은 명시적 해제.
+  for (const key of ["account_id", "lead_id", "deal_id", "contact_id"]) {
+    const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    if (payload[camel] !== undefined) columns[key] = payload[camel] || null;
+  }
+  // entity_type은 NOT NULL(default 'account') — 링크 우선순위로 명시해 정확히 남긴다.
+  if (columns.account_id) columns.entity_type = "account";
+  else if (columns.deal_id) columns.entity_type = "deal";
+  else if (columns.lead_id) columns.entity_type = "lead";
+  if (payload.occurredAt) {
+    columns.occurred_at = String(payload.occurredAt);
+  }
 
   return { columns, metaPatch };
 }

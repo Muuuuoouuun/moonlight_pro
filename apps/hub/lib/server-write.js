@@ -184,6 +184,47 @@ function buildProjectWebhookRequestBody(payload, target) {
   };
 }
 
+// PostgREST RPC 호출 (security definer 함수). Engine의 invokeSupabaseRpc와 같은 계약:
+// { ok, status, data | error, detail }. 함수 자체가 jsonb status 봉투를 반환하는 경우
+// (record_contact_outcome_v1 등) data가 그 봉투다.
+export async function invokeSupabaseRpc(name, params = {}) {
+  const config = resolveSupabaseConfig();
+
+  if (!config) {
+    return { ok: false, status: null, error: "missing-config" };
+  }
+
+  try {
+    const response = await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(name)}`, {
+      method: "POST",
+      headers: makeSupabaseHeaders(config.apiKey, { contentType: "application/json" }),
+      body: JSON.stringify(params),
+      cache: "no-store",
+    });
+    const data = await response.json().catch(async () => ({
+      error: await response.text().catch(() => ""),
+    }));
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        error: `http-${response.status}`,
+        detail: typeof data?.message === "string" ? data.message : null,
+      };
+    }
+
+    return { ok: true, status: response.status, data };
+  } catch (error) {
+    return {
+      ok: false,
+      status: null,
+      error: "request-failed",
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 // Insert a row. Default behavior (no options) is unchanged: Prefer: return=minimal and a
 // bare { persisted, reason } envelope — 15+ callsites rely on this. Pass
 // { returnRepresentation: true, select } to switch to Prefer: return=representation, parse

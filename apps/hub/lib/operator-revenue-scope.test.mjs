@@ -55,3 +55,19 @@ test("selects at most three verified customer-success follow-ups deterministical
 
   assert.deepEqual(selected.map((item) => item.id), ["lead-a", "lead-b", "lead-c"]);
 });
+
+test("focus override: lower excludes and raise outranks higher raw scores without editing them", () => {
+  assert.ok(revenueScope, "operator-revenue-scope.js must exist");
+
+  const selected = revenueScope.selectOperatorFocusLeads({
+    leads: [
+      { id: "lead-lowered", owner: "Me", priorityLane: "customer_success", score: 99, nextAction: "제외되어야 함", focusOverride: "lower" },
+      { id: "lead-raised", owner: "Me", priorityLane: "customer_success", score: 60, nextAction: "올림", focusOverride: "raise" },
+      { id: "lead-high", owner: "Me", priorityLane: "customer_success", score: 95, nextAction: "고점" },
+      { id: "lead-mid", owner: "Me", priorityLane: "customer_success", score: 90, nextAction: "중간" },
+      { id: "lead-low", owner: "Me", priorityLane: "customer_success", score: 70, nextAction: "저점" },
+    ],
+  });
+
+  assert.deepEqual(selected.map((item) => item.id), ["lead-raised", "lead-high", "lead-mid"]);
+});
