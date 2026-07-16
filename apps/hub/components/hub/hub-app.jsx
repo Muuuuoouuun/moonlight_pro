@@ -58,6 +58,40 @@ const AgentsOrders = lazyPage(() => import("./pages/agents").then(m => m.AgentsO
 const Evolution = lazyPage(() => import("./pages/evolution-settings").then(m => m.Evolution));
 const Settings = lazyPage(() => import("./pages/evolution-settings").then(m => m.Settings));
 
+// Idle prefetch — the flip side of code splitting is a chunk fetch (and the
+// "불러오는 중…" flash) on first navigation to a page. After the current page
+// settles, warm the daily-loop pages during browser idle time so those
+// navigations render instantly. Everything else (agents, automations,
+// settings, …) stays strictly on-demand to keep the prefetch budget small.
+// import() dedupes against dynamic()'s loader, so this fills the same module
+// cache the router reads from; failures are harmless (navigation just
+// re-fetches).
+const PREFETCH_PAGES = [
+  () => import("./pages/daily-brief"),
+  () => import("./pages/my-work"),
+  () => import("./pages/revenue"),
+  () => import("./pages/projects"),
+  () => import("./pages/overview"),
+];
+
+function useIdlePagePrefetch() {
+  React.useEffect(() => {
+    let cancelled = false;
+    const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1500));
+    const cancelIdle = window.cancelIdleCallback || clearTimeout;
+    // One module per idle slot — never compete with user-initiated work.
+    let queue = [...PREFETCH_PAGES];
+    let handle;
+    const pump = () => {
+      if (cancelled || !queue.length) return;
+      const load = queue.shift();
+      load().catch(() => {}).finally(() => { if (!cancelled) handle = idle(pump); });
+    };
+    handle = idle(pump);
+    return () => { cancelled = true; cancelIdle(handle); };
+  }, []);
+}
+
 function LegacyPlaceholder({ path, onNavigate }) {
   const hit = LEGACY_TREE.find(x => x.path === path);
   const redirect = LEGACY_REDIRECTS[path];
@@ -162,6 +196,7 @@ const PARENT_JUMP = {
 };
 
 export function HubApp() {
+  useIdlePagePrefetch();
   const router = useRouter();
   const pathname = usePathname() || '/dashboard';
   const searchParams = useSearchParams();
