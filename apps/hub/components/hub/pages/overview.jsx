@@ -485,7 +485,7 @@ export function Overview({ onNavigate }) {
     <div className="hub-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', padding: 'var(--section-gap)', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Overview</h2>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>현황</h2>
           <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--fg-muted)' }}>
             최근 작업과 기획 흐름을 정리합니다<SyncBadge state={syncState} />
           </div>
