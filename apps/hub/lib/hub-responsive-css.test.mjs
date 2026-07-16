@@ -41,7 +41,7 @@ test("mobile topbar breadcrumbs meet the 44px touch-target floor", () => {
 });
 
 test("Daily Brief ledger toggle exposes an accessible 44px mobile target", () => {
-  assert.match(dailyBriefSource, /aria-label=\{open \? ['"]원장 상태 숨기기['"] : ['"]원장 상태 펼치기['"]\}/);
+  assert.match(dailyBriefSource, /aria-label=\{open \? ['"]기록 상태 숨기기['"] : ['"]기록 상태 펼치기['"]\}/);
   assert.match(dailyBriefSource, /aria-expanded=\{open\}/);
   assert.match(dailyBriefSource, /aria-controls="daily-brief-ledger-statuses"/);
   assert.match(dailyBriefSource, /id="daily-brief-ledger-statuses"/);

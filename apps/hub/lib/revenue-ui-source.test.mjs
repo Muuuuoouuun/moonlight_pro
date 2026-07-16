@@ -14,6 +14,6 @@ test("RevenueOverview defines the live-ledger flag used by its empty state", () 
   );
   assert.match(
     revenueSource,
-    /description=\{isLiveLedger\s*\?\s*['"]Supabase deals 원장에 표시할 딜이 없습니다\./,
+    /description=\{isLiveLedger\s*\?\s*['"]Supabase deals 기록에 표시할 딜이 없습니다\./,
   );
 });
