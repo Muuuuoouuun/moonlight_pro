@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
 
@@ -10,19 +11,52 @@ import { CommandPalette } from "./hub-command-palette";
 import { TweaksPanel } from "./hub-tweaks-panel";
 import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
 
-import { DailyBrief } from "./pages/daily-brief";
-import { Overview } from "./pages/overview";
-import { Calendar, Decisions, Roadmap, Rhythm } from "./pages/work";
-import { MyWork } from "./pages/my-work";
-import { Projects } from "./pages/projects";
-import { Studio, Queue, Campaigns } from "./pages/content";
-import { RevenueOverview, Leads, Deals, Cases, Accounts } from "./pages/revenue";
-import { Segments } from "./pages/segments";
-import { Followups } from "./pages/followups";
-import { AutomationsIndex, EmailAutomation, Webhooks, Runs, Flows } from "./pages/automations";
-import { SheetsSync } from "./pages/sheets-sync";
-import { AgentsChat, AgentsCouncil, AgentsOrders } from "./pages/agents";
-import { Evolution, Settings } from "./pages/evolution-settings";
+// Chunk-load placeholder — pages carry their own data loading states, so this
+// only covers the (brief) JS fetch. Keep it calm: no spinner, dim mono text.
+function PageChunkFallback() {
+  return (
+    <div style={{ padding: 'var(--section-gap)', display: 'flex', justifyContent: 'center' }}>
+      <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>불러오는 중…</span>
+    </div>
+  );
+}
+
+// Every page is code-split into its own chunk (route-level lazy load). The
+// static imports used to pull all ~20 pages into one client bundle, so first
+// paint downloaded revenue+content+daily-brief+… regardless of route.
+// Named exports sharing one module (e.g. pages/work) still produce one chunk
+// per module — dynamic() just resolves the same import promise.
+const lazyPage = (loader) => dynamic(loader, { loading: PageChunkFallback });
+
+const DailyBrief = lazyPage(() => import("./pages/daily-brief").then(m => m.DailyBrief));
+const Overview = lazyPage(() => import("./pages/overview").then(m => m.Overview));
+const Calendar = lazyPage(() => import("./pages/work").then(m => m.Calendar));
+const Decisions = lazyPage(() => import("./pages/work").then(m => m.Decisions));
+const Roadmap = lazyPage(() => import("./pages/work").then(m => m.Roadmap));
+const Rhythm = lazyPage(() => import("./pages/work").then(m => m.Rhythm));
+const MyWork = lazyPage(() => import("./pages/my-work").then(m => m.MyWork));
+const Projects = lazyPage(() => import("./pages/projects").then(m => m.Projects));
+const Studio = lazyPage(() => import("./pages/content").then(m => m.Studio));
+const Queue = lazyPage(() => import("./pages/content").then(m => m.Queue));
+const Campaigns = lazyPage(() => import("./pages/content").then(m => m.Campaigns));
+const RevenueOverview = lazyPage(() => import("./pages/revenue").then(m => m.RevenueOverview));
+const Leads = lazyPage(() => import("./pages/revenue").then(m => m.Leads));
+const Deals = lazyPage(() => import("./pages/revenue").then(m => m.Deals));
+const Cases = lazyPage(() => import("./pages/revenue").then(m => m.Cases));
+const Accounts = lazyPage(() => import("./pages/revenue").then(m => m.Accounts));
+const Segments = lazyPage(() => import("./pages/segments").then(m => m.Segments));
+const Followups = lazyPage(() => import("./pages/followups").then(m => m.Followups));
+const AutomationsIndex = lazyPage(() => import("./pages/automations").then(m => m.AutomationsIndex));
+const EmailAutomation = lazyPage(() => import("./pages/automations").then(m => m.EmailAutomation));
+const Webhooks = lazyPage(() => import("./pages/automations").then(m => m.Webhooks));
+const Runs = lazyPage(() => import("./pages/automations").then(m => m.Runs));
+const Flows = lazyPage(() => import("./pages/automations").then(m => m.Flows));
+const SheetsSync = lazyPage(() => import("./pages/sheets-sync").then(m => m.SheetsSync));
+const AgentsChat = lazyPage(() => import("./pages/agents").then(m => m.AgentsChat));
+const AgentsCouncil = lazyPage(() => import("./pages/agents").then(m => m.AgentsCouncil));
+const AgentsOrders = lazyPage(() => import("./pages/agents").then(m => m.AgentsOrders));
+const Evolution = lazyPage(() => import("./pages/evolution-settings").then(m => m.Evolution));
+const Settings = lazyPage(() => import("./pages/evolution-settings").then(m => m.Settings));
 
 function LegacyPlaceholder({ path, onNavigate }) {
   const hit = LEGACY_TREE.find(x => x.path === path);
