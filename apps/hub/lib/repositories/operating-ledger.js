@@ -31,6 +31,19 @@ function resolveBrandCategory(key, meta) {
   return CANONICAL_BRAND_CATEGORY[key] || "general";
 }
 
+// Which brands are ClassIn (company) work vs. personal brands. Defaults to
+// "personal" when a brand isn't listed here and has no meta.org_scope.
+const CANONICAL_BRAND_ORG_SCOPE = {
+  classmoon: "classin",
+  studyseagull: "classin",
+  classin_side: "classin",
+};
+
+function resolveBrandOrgScope(key, meta) {
+  if (typeof meta?.org_scope === "string" && meta.org_scope.trim()) return meta.org_scope.trim();
+  return CANONICAL_BRAND_ORG_SCOPE[key] || "personal";
+}
+
 function clampProgress(value) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   if (!Number.isFinite(parsed)) return 0;
@@ -166,6 +179,7 @@ function mapBrands(rows, projects, todos, updates) {
       glyph: meta.glyph || BRAND_GLYPHS[index % BRAND_GLYPHS.length],
       tone: meta.tone || normalizeBrandKind(row.kind),
       category: resolveBrandCategory(key, meta),
+      orgScope: resolveBrandOrgScope(key, meta),
       kind: row.kind || "brand",
       desc: row.description || "운영 브랜드",
       projects: projectCounts.get(key) || 0,
