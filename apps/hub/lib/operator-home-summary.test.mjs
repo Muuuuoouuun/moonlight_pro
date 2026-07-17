@@ -123,6 +123,36 @@ test("keeps core PMS counts from a partial project ledger while naming the parti
   assert.equal(summary.pms.openTasks, 1);
 });
 
+test("withholds definitive task counts and rates when task aggregation is partial", () => {
+  const summary = homeSummary.buildOperatorHomeSummary({
+    projects: {
+      source: "supabase",
+      partial: true,
+      partialSources: ["tasks"],
+      failedSources: [],
+      taskAggregation: { loaded: 2, total: 3, partial: true },
+      projects: [{ id: "project-1", status: "In progress" }],
+      todos: [
+        { id: "task-1", done: false, bucket: "오늘" },
+        { id: "task-2", done: true, bucket: "오늘" },
+      ],
+    },
+    content: { source: "supabase", items: [], publishLogs: [] },
+  });
+
+  assert.equal(summary.sources.projects, "partial");
+  assert.equal(summary.pms.totalProjects, 1);
+  assert.equal(summary.pms.activeProjects, 1);
+  assert.equal(summary.pms.openTasks, null);
+  assert.equal(summary.pms.dueOrOverdueTasks, null);
+  assert.equal(summary.pms.completedTasks, null);
+  assert.equal(summary.pms.taskCompletionRate, null);
+  assert.deepEqual(summary.pms.taskStatusSeries, [
+    { key: "open", label: "열림", value: null },
+    { key: "done", label: "완료", value: null },
+  ]);
+});
+
 test("keeps the combined home state partial when the other ledger is only preview", () => {
   const summary = homeSummary.buildOperatorHomeSummary({
     projects: {

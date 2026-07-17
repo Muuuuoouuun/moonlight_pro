@@ -205,19 +205,24 @@ test("project detail distinguishes failed optional ledgers from successful empty
   assert.match(detailPanelSource, /업데이트 기록 미확인/);
 });
 
-test("project header shows numeric counts only for a live ledger", () => {
+test("project header marks an incomplete open-todo count as a lower bound", () => {
   const headerStart = projectsSource.indexOf("const projectHeaderSummary");
   const headerEnd = projectsSource.indexOf("const loadLedger", headerStart);
   const headerSummaryBlock = projectsSource.slice(headerStart, headerEnd);
 
   assert.ok(headerStart >= 0 && headerEnd > headerStart);
-  assert.match(headerSummaryBlock, /syncState === ["']live["']/);
+  assert.match(headerSummaryBlock, /taskReadPartial/);
+  assert.match(headerSummaryBlock, /partialSources/);
+  assert.match(headerSummaryBlock, /taskAggregation/);
   assert.match(headerSummaryBlock, /projects\.length/);
-  assert.match(headerSummaryBlock, /brandTodos\.filter\(t => !t\.done\)\.length/);
+  assert.match(headerSummaryBlock, /openTodoCount/);
+  assert.match(headerSummaryBlock, /\$\{openTodoCount\}\+ open todos/);
   assert.match(headerSummaryBlock, /loading[\s\S]*원장 확인 중/);
   assert.match(headerSummaryBlock, /error[\s\S]*원장 읽기 실패/);
   assert.match(headerSummaryBlock, /preview/);
   assert.match(projectsSource, /\{projectHeaderSummary\}/);
+  assert.match(projectsSource, /partialSources:\s*Array\.isArray\(data\.partialSources\)/);
+  assert.match(projectsSource, /taskAggregation:\s*data\.taskAggregation/);
 });
 
 test("new PMS borders use theme-aware line tokens", () => {

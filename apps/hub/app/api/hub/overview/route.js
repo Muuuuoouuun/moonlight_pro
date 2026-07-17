@@ -198,6 +198,7 @@ function buildSources(results) {
       label,
       state: ledgerState(result),
       failedSources: Array.isArray(value?.failedSources) ? value.failedSources : [],
+      partialSources: Array.isArray(value?.partialSources) ? value.partialSources : [],
       error: value?.source === "error" ? value.error || `${key}-ledger-read-failed` : null,
       retryable: value?.source === "error" ? value.retryable !== false : false,
     };
@@ -253,7 +254,7 @@ export async function GET() {
 
   return NextResponse.json({
     status: degradedSources.length ? "partial" : liveCount ? "live" : "preview",
-    source: liveCount ? "supabase" : "preview",
+    source: degradedSources.length ? "partial" : liveCount ? "supabase" : "preview",
     generatedAt: new Date().toISOString(),
     sources,
     failedSources,

@@ -118,16 +118,18 @@ const ACTIVITY_SEGMENTS = [
 
 const Y_AXIS_W = 24;
 
-function ActivityChart({ series, days }) {
+function ActivityChart({ series, days, sources, status }) {
   const [hoverIndex, setHoverIndex] = React.useState(null);
   const data = series.slice(-days);
-  const availability = activitySeriesAvailability(data);
+  const availability = activitySeriesAvailability(data, { sources, status });
   if (!availability.available) {
     return (
       <EmptyState
         icon="signal"
-        title="활동 원장 일부를 읽지 못했습니다"
-        description={`${availability.failedSegments.join(', ')} 기록을 다시 읽은 뒤 추이를 표시합니다.`}
+        title={availability.state === 'preview' ? '활동 원장 미연결' : '활동 원장 일부를 읽지 못했습니다'}
+        description={availability.state === 'preview'
+          ? '프로젝트·콘텐츠 원장을 연결하면 활동 추이가 표시됩니다.'
+          : `${availability.failedSegments.join(', ')} 기록을 다시 읽은 뒤 추이를 표시합니다.`}
         style={{ minHeight: 160 }}
       />
     );
@@ -443,7 +445,7 @@ function KpiCard({ k, onNavigate }) {
           <Sparkline values={k.spark} tone={k.tone === 'warning' ? 'warning' : k.tone === 'success' ? 'success' : 'moon'} width={56} height={20} />
         )}
       </div>
-      <div style={{ marginTop: 6, fontSize: 11, color: k.tone === 'moon' ? 'var(--fg-faint)' : `var(--${k.tone})` }}>{k.hint}</div>
+      <div style={{ marginTop: 6, fontSize: 11, color: k.tone === 'moon' || k.tone === 'neutral' ? 'var(--fg-faint)' : `var(--${k.tone})` }}>{k.hint}</div>
     </div>
   );
 }
@@ -489,11 +491,16 @@ export function Overview({ onNavigate }) {
   const visibleActivity = activityExpanded ? activity : activity.slice(0, 8);
   const hasPipelineValue = stageSeries.some((s) => s.count > 0);
   const sourceState = (key) => ledger.sources?.find((s) => s.key === key)?.state || 'preview';
-  const projectActivity = projectActivityAvailability(ledger.sources || []);
+  const projectActivity = projectActivityAvailability(ledger.sources || [], ledger.status || syncState);
 
   // Last 7 buckets of the same daily series feed each KPI's sparkline — no
   // separate fetch, just a different slice of activitySeries per pillar.
-  const kpiCards = buildOverviewKpiCards({ kpis, activitySeries: ledger.activitySeries || [] });
+  const kpiCards = buildOverviewKpiCards({
+    kpis,
+    activitySeries: ledger.activitySeries || [],
+    sources: ledger.sources || [],
+    status: ledger.status || syncState,
+  });
 
   return (
     <div className="hub-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', padding: 'var(--section-gap)', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
@@ -527,9 +534,20 @@ export function Overview({ onNavigate }) {
           </div>
         </div>
         {ledger.activitySeries?.length ? (
-          <ActivityChart series={ledger.activitySeries} days={Number(period)} />
+          <ActivityChart
+            series={ledger.activitySeries}
+            days={Number(period)}
+            sources={ledger.sources || []}
+            status={ledger.status || syncState}
+          />
         ) : (
-          <EmptyState icon="signal" title="활동 기록이 없습니다" description="프로젝트 업데이트와 결정이 기록되면 추이가 표시됩니다." style={{ minHeight: 160 }} />
+          syncState === 'preview' ? (
+            <EmptyState icon="signal" title="활동 원장 미연결" description="프로젝트·콘텐츠 원장을 연결하면 활동 추이가 표시됩니다." style={{ minHeight: 160 }} />
+          ) : syncState === 'error' || syncState === 'partial' ? (
+            <EmptyState icon="signal" title="활동 원장 일부를 읽지 못했습니다" description="활동 원장을 다시 읽은 뒤 추이를 표시합니다." style={{ minHeight: 160 }} />
+          ) : (
+            <EmptyState icon="signal" title="활동 기록이 없습니다" description="프로젝트 업데이트와 결정이 기록되면 추이가 표시됩니다." style={{ minHeight: 160 }} />
+          )
         )}
       </Card>
 
@@ -568,7 +586,11 @@ export function Overview({ onNavigate }) {
             <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/projects')}>열기</Button>
           </div>
           {!projectActivity.brandActivity ? (
-            <EmptyState icon="brand" title="브랜드 활동 원장을 읽지 못했습니다" description="프로젝트 업데이트와 결정 원장을 다시 읽은 뒤 표시합니다." style={{ minHeight: 140 }} />
+            projectActivity.reason === 'preview' ? (
+              <EmptyState icon="brand" title="브랜드 활동 원장 미연결" description="프로젝트 원장을 연결하면 브랜드별 활동이 표시됩니다." style={{ minHeight: 140 }} />
+            ) : (
+              <EmptyState icon="brand" title="브랜드 활동 원장을 읽지 못했습니다" description="프로젝트 업데이트와 결정 원장을 다시 읽은 뒤 표시합니다." style={{ minHeight: 140 }} />
+            )
           ) : brandActivity.length ? (
             <BrandActivityBars brands={brandActivity} />
           ) : (
@@ -645,7 +667,9 @@ export function Overview({ onNavigate }) {
         <Card>
           {!projectActivity.recentProjectActivity && (
             <div role="status" style={{ padding: '10px 12px', marginBottom: activity.length ? 8 : 0, border: '1px solid var(--warning-line)', borderRadius: 'var(--r-sm)', color: 'var(--warning)', fontSize: 11.5 }}>
-              최근 활동 원장 일부를 읽지 못했습니다 · 업데이트·결정 기록을 다시 확인하세요.
+              {projectActivity.reason === 'preview'
+                ? '최근 활동 원장 미연결 · 프로젝트 원장을 연결하면 활동 기록이 표시됩니다.'
+                : '최근 활동 원장 일부를 읽지 못했습니다 · 업데이트·결정 기록을 다시 확인하세요.'}
             </div>
           )}
           {activity.length === 0 ? (

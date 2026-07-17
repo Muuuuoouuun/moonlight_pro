@@ -439,6 +439,7 @@ export async function getProjectLedger() {
       taskAggregation: null,
       partial: false,
       failedSources: [],
+      partialSources: [],
     };
   }
 
@@ -520,6 +521,7 @@ export async function getProjectLedger() {
       columns: [],
       taskAggregation: null,
       partial: false,
+      partialSources: [],
     };
   }
 
@@ -533,6 +535,7 @@ export async function getProjectLedger() {
     .filter(([, rows]) => !Array.isArray(rows))
     .map(([source]) => source);
   const taskStatsPartial = !Number.isFinite(taskRowCount) || taskRowCount !== taskRows.length;
+  const partialSources = taskStatsPartial ? ["tasks"] : [];
   const updateStatsPartial = !Array.isArray(updateRows);
 
   const brandById = new Map(brandRows.map((brand) => [brand.id, brand]));
@@ -573,7 +576,8 @@ export async function getProjectLedger() {
       total: Number.isFinite(taskRowCount) ? taskRowCount : null,
       partial: taskStatsPartial,
     },
-    partial: optionalFailedSources.length > 0,
+    partial: optionalFailedSources.length > 0 || taskStatsPartial,
     failedSources: optionalFailedSources,
+    partialSources,
   };
 }

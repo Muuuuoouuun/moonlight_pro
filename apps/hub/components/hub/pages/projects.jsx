@@ -187,6 +187,8 @@ export function Projects({ workspace }) {
     columns: [],
     partial: false,
     failedSources: [],
+    partialSources: [],
+    taskAggregation: null,
   });
   const [todos, setTodos] = React.useState([]);
   const [drag, setDrag] = React.useState(null);
@@ -272,15 +274,17 @@ export function Projects({ workspace }) {
   const brandTodos = brand === 'all' ? scopedTodos : scopedTodos.filter(t => t.brand === brand);
   const currentBrand = brands.find(b => b.key === brand) || brands[0] || EMPTY_ALL_BRAND;
   const visibleColumns = buildTaskBoardColumns(brandTodos, allProjects);
-  const projectHeaderSummary = syncState === 'live'
-    ? `${projects.length} projects · ${brandTodos.filter(t => !t.done).length} open todos`
-    : syncState === 'loading'
-      ? '프로젝트 원장 확인 중'
-      : syncState === 'error'
-        ? '프로젝트 원장 읽기 실패'
-        : syncState === 'partial'
-          ? '프로젝트 일부 원장 읽기 실패'
-        : 'preview · 실제 원장 미연결';
+  const openTodoCount = brandTodos.filter(t => !t.done).length;
+  const projectHeaderSummary = (() => {
+    const taskReadPartial = ledger.taskAggregation?.partial === true || ledger.partialSources?.includes('tasks');
+    return ['live', 'partial'].includes(syncState)
+      ? `${projects.length} projects · ${taskReadPartial ? `${openTodoCount}+ open todos` : `${openTodoCount} open todos`}`
+      : syncState === 'loading'
+        ? '프로젝트 원장 확인 중'
+        : syncState === 'error'
+          ? '프로젝트 원장 읽기 실패'
+          : 'preview · 실제 원장 미연결';
+  })();
 
   const loadLedger = React.useCallback(async ({ initial = false } = {}) => {
     setSyncState('loading');
@@ -309,6 +313,8 @@ export function Projects({ workspace }) {
           columns: Array.isArray(data.columns) ? data.columns : [],
           partial: Boolean(data.partial),
           failedSources: Array.isArray(data.failedSources) ? data.failedSources : [],
+          partialSources: Array.isArray(data.partialSources) ? data.partialSources : [],
+          taskAggregation: data.taskAggregation || null,
         });
         setTodos(liveTodos);
         if (initial) setExpanded(new Set(liveProjects.slice(0, 2).map(p => p.id)));
@@ -328,6 +334,8 @@ export function Projects({ workspace }) {
         columns: [],
         partial: false,
         failedSources: [],
+        partialSources: [],
+        taskAggregation: null,
       });
       setTodos([]);
       setSyncState('preview');
@@ -1229,7 +1237,7 @@ export function Projects({ workspace }) {
                     <EmptyState
                       icon="projects"
                       title="프로젝트 일부 원장을 읽지 못했습니다"
-                      description={`${(ledger.failedSources || []).join(', ')} 기록을 확인할 수 없습니다. 프로젝트와 할 일의 읽힌 데이터는 유지합니다.`}
+                      description={`${[...(ledger.failedSources || []), ...(ledger.partialSources || [])].join(', ')} 기록 일부를 확인할 수 없습니다. 읽힌 프로젝트와 할 일 데이터는 유지합니다.`}
                       action={<Button variant="outline" size="sm" onClick={() => loadLedger({ initial: true })}>다시 시도</Button>}
                     />
                   </Card>

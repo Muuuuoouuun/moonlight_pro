@@ -104,10 +104,12 @@ function liveProjectLedger(overrides = {}) {
     configured: true,
     partial: false,
     failedSources: [],
+    partialSources: [],
     projects: [{ id: "project-1", name: "Live", status: "In progress" }],
     todos: [{ id: "task-1", title: "Live task", done: false, status: "todo" }],
     updates: [],
     decisions: [],
+    taskAggregation: { loaded: 1, total: 1, partial: false },
     ...overrides,
   };
 }
@@ -162,6 +164,8 @@ test("tasks API stays live when only notes and routine checks are partial", asyn
 
 test("tasks API marks an incomplete task aggregation partial", async () => {
   state.projects = liveProjectLedger({
+    partial: true,
+    partialSources: ["tasks"],
     taskAggregation: { loaded: 160, total: 161, partial: true },
   });
 
@@ -234,6 +238,7 @@ test("overview preserves core project KPIs while naming optional-source partials
   const projectsSource = body.sources.find((source) => source.key === "projects");
 
   assert.equal(body.status, "partial");
+  assert.equal(body.source, "partial");
   assert.equal(projectsSource.state, "partial");
   assert.deepEqual(projectsSource.failedSources, ["project_updates"]);
   assert.equal(body.kpis.updatesThisWeek, null);
@@ -274,6 +279,7 @@ test("daily brief keeps task Today live while naming unrelated optional partials
   const body = await (await dailyBriefRoute.GET()).json();
   const projectsSource = body.sources.find((source) => source.key === "projects");
   assert.equal(body.status, "partial");
+  assert.equal(body.source, "partial");
   assert.equal(projectsSource.state, "partial");
   assert.deepEqual(projectsSource.failedSources, ["notes"]);
   assert.equal(body.taskToday.state, "live");
@@ -282,13 +288,40 @@ test("daily brief keeps task Today live while naming unrelated optional partials
 
 test("daily brief marks only task Today partial for an incomplete task aggregation", async () => {
   state.projects = liveProjectLedger({
+    partial: true,
+    partialSources: ["tasks"],
     taskAggregation: { loaded: 160, total: 161, partial: true },
   });
 
   const body = await (await dailyBriefRoute.GET()).json();
   const projectsSource = body.sources.find((source) => source.key === "projects");
 
-  assert.equal(projectsSource.state, "live");
+  assert.equal(body.status, "partial");
+  assert.equal(body.source, "partial");
+  assert.equal(projectsSource.state, "partial");
+  assert.deepEqual(projectsSource.partialSources, ["tasks"]);
   assert.equal(body.taskToday.state, "partial");
   assert.equal(body.taskToday.counts.total, 1);
+});
+
+test("overview and daily brief never call a partial-only aggregate preview", async () => {
+  state.projects = liveProjectLedger({
+    partial: true,
+    failedSources: ["notes"],
+  });
+  state.content = { source: "preview", items: [], publishLogs: [], brands: [], summary: {} };
+  state.revenue = { source: "preview", deals: [], leads: [], stages: [], summary: {} };
+  state.automations = { source: "preview", runs: [], automations: [], summary: {} };
+  state.work = { source: "preview", decisions: [], rituals: [], summary: {} };
+  state.orders = { source: "preview", orders: [] };
+
+  const overview = await (await overviewRoute.GET()).json();
+  const daily = await (await dailyBriefRoute.GET()).json();
+
+  assert.equal(overview.status, "partial");
+  assert.equal(overview.source, "partial");
+  assert.equal(daily.status, "partial");
+  assert.equal(daily.source, "partial");
+  assert.equal(overview.sources.filter((source) => source.state === "live").length, 0);
+  assert.equal(daily.sources.filter((source) => source.state === "live").length, 0);
 });

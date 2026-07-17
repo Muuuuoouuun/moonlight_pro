@@ -89,7 +89,9 @@ test("Daily Brief task-only Today exposes durable completion controls", () => {
   assert.match(dailyBriefSource, /method:\s*['"]PATCH['"]/);
   assert.match(dailyBriefSource, /body:\s*JSON\.stringify\(\{ id:\s*task\.id, status:\s*['"]done['"] \}\)/);
   assert.match(dailyBriefSource, /minHeight:\s*44/);
-  assert.match(dailyBriefSource, /\['기한 도래', pms\.dueOrOverdueTasks\]/);
+  assert.match(dailyBriefSource, /\['열린 일', pms\.openTasks \?\? '—'\]/);
+  assert.match(dailyBriefSource, /\['기한 도래', pms\.dueOrOverdueTasks \?\? '—'\]/);
+  assert.match(dailyBriefSource, /pms\.taskCompletionRate == null \? '—'/);
 });
 
 test("shared Button forwards native accessibility attributes", () => {

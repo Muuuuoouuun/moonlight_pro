@@ -143,6 +143,10 @@ test("marks project progress partial when the capped task read is smaller than t
     total: 161,
     partial: true,
   });
+  assert.equal(ledger.source, "supabase");
+  assert.equal(ledger.partial, true);
+  assert.deepEqual(ledger.failedSources, []);
+  assert.deepEqual(ledger.partialSources, ["tasks"]);
   assert.deepEqual(project.displayProgress, {
     value: null,
     source: "tasks",
@@ -177,6 +181,7 @@ test("configured core ledger read failures are errors instead of preview", async
   assert.equal(ledger.error, "project-ledger-core-read-failed");
   assert.equal(ledger.partial, false);
   assert.deepEqual(ledger.failedSources, ["brands"]);
+  assert.deepEqual(ledger.partialSources, []);
   assert.deepEqual(ledger.projects, []);
   assert.deepEqual(ledger.todos, []);
 });
@@ -192,6 +197,7 @@ test("missing workspace or Supabase config remains an honest preview without rea
   assert.equal(missingWorkspace.configured, false);
   assert.equal(missingWorkspace.partial, false);
   assert.deepEqual(missingWorkspace.failedSources, []);
+  assert.deepEqual(missingWorkspace.partialSources, []);
   assert.equal(state.calls.length, 0);
 
   state.workspaceId = "workspace-1";
@@ -201,6 +207,7 @@ test("missing workspace or Supabase config remains an honest preview without rea
   assert.equal(missingConfig.configured, false);
   assert.equal(missingConfig.partial, false);
   assert.deepEqual(missingConfig.failedSources, []);
+  assert.deepEqual(missingConfig.partialSources, []);
   assert.equal(state.calls.length, 0);
 });
 
@@ -230,6 +237,7 @@ test("optional ledger read failures preserve core rows but mark the ledger parti
     "notes",
     "routine_checks",
   ]);
+  assert.deepEqual(ledger.partialSources, []);
   assert.deepEqual(ledger.updates, []);
   assert.deepEqual(ledger.decisions, []);
   assert.deepEqual(ledger.notes, []);
@@ -257,6 +265,7 @@ test("successful empty optional reads are live-empty rather than partial failure
   assert.equal(ledger.source, "supabase");
   assert.equal(ledger.partial, false);
   assert.deepEqual(ledger.failedSources, []);
+  assert.deepEqual(ledger.partialSources, []);
 });
 
 test("failed update evidence stays explicit while complete task evidence remains usable", async () => {

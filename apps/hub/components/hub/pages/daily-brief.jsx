@@ -547,10 +547,10 @@ function OperatorPulse({ operatorHome, contentBrands, onNavigate }) {
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8, marginTop: 14, marginBottom: 16 }}>
                 {[
-                  ['열린 일', pms.openTasks],
-                  ['기한 도래', pms.dueOrOverdueTasks],
+                  ['열린 일', pms.openTasks ?? '—'],
+                  ['기한 도래', pms.dueOrOverdueTasks ?? '—'],
                   ['막힌 P', pms.blockedProjects],
-                  ['완료율', `${pms.taskCompletionRate}%`],
+                  ['완료율', pms.taskCompletionRate == null ? '—' : `${pms.taskCompletionRate}` + '%'],
                 ].map(([label, value]) => (
                   <div key={label} style={{ padding: '8px 9px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', minWidth: 0 }}>
                     <div className="stat" style={{ fontSize: 18, fontWeight: 600 }}>{value}</div>
