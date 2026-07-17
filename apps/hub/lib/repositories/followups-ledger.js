@@ -210,6 +210,10 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
       id: lead.id,
       name: lead.name || company?.name || "이름미상",
       company: company?.name || null,
+      // The activity panel joins history on this, NOT on the lead/deal id: crm_activities
+      // carries company_id on 109 of its 110 live rows but lead_id on 1 and deal_id on 0 —
+      // the history was written against the company/account, so it's the only usable key.
+      companyId: lead.company_id || null,
       phone: company?.phone || meta.phone || null,
       stage,
       channel: channelFor(stage),
@@ -274,6 +278,7 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
       id: deal.id,
       name: deal.title || company?.name || "딜",
       company: company?.name || null,
+      companyId: deal.company_id || null,
       phone: company?.phone || null,
       stage,
       channel: channelFor(stage),

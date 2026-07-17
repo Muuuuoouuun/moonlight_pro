@@ -329,12 +329,15 @@ function mapActivity(row) {
   };
 }
 
-// 활동·노트 lazy load — 계정 또는 리드 기준 (고객 DB 통합 뷰는 두 종류 행을 모두 연다).
+// 활동·노트 lazy load — 계정·리드·딜·회사 기준.
+// `companyId`는 팔로업 탭의 활동 패널이 쓴다: 라이브 crm_activities 110행 중 company_id는
+// 109행에 있지만 lead_id는 1행, deal_id는 0행뿐이라 (기록이 회사/계정 기준으로 쌓여 왔다)
+// 리드·딜 id로 조인하면 사실상 전부 "기록 없음"이 된다.
 // 미설정 환경은 configured:false로 정직하게 표시하고 빈 배열을 준다 — mock을 섞지 않는다.
-export async function getCrmActivities({ accountId, leadId } = {}) {
+export async function getCrmActivities({ accountId, leadId, dealId, companyId } = {}) {
   const workspaceId = resolveDefaultWorkspaceId();
-  const filterCol = accountId ? "account_id" : leadId ? "lead_id" : null;
-  const filterVal = accountId || leadId;
+  const filterCol = accountId ? "account_id" : leadId ? "lead_id" : dealId ? "deal_id" : companyId ? "company_id" : null;
+  const filterVal = accountId || leadId || dealId || companyId;
   if (!workspaceId || !filterCol) {
     return { configured: Boolean(workspaceId), activities: [] };
   }

@@ -7,13 +7,15 @@ import { buildActivityWrite, persistRevenueRecord } from "@/lib/sales-os/revenue
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET ?accountId=<uuid> | ?leadId=<uuid> — 상세 패널의 활동·노트 lazy load.
+// GET ?accountId= | ?leadId= | ?dealId= | ?companyId= — 상세 패널·팔로업 탭의 활동·노트 lazy load.
 export async function GET(req) {
   try {
     const params = new URL(req.url).searchParams;
     const result = await getCrmActivities({
       accountId: params.get("accountId") || "",
       leadId: params.get("leadId") || "",
+      dealId: params.get("dealId") || "",
+      companyId: params.get("companyId") || "",
     });
 
     if (!result.configured) {

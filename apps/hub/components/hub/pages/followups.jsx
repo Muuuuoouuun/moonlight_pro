@@ -1,10 +1,25 @@
 "use client";
 
 import React from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Button, Card, Checkbox, Dot, EmptyState, SegmentedControl, SyncBadge } from "../hub-primitives";
+import { Badge, Button, Card, Checkbox, Divider, Drawer, Dot, EmptyState, SegmentedControl, SyncBadge } from "../hub-primitives";
 import { QUICK_LOG_ACTIONS as LOG_ACTIONS, REACTION_OPTIONS } from "@/lib/sales-os/outcome-attribution";
 import { DEAL_STAGES, STAGE_ALIASES } from "@/lib/deal-stages";
+
+// crm_activities.reaction vocabulary (Phase 1C canonical, deep-design spec §10) — distinct from
+// this page's own REACTION_OPTIONS (outreach_outcomes.meta.reaction), which predates and doesn't
+// match it. The activity panel below reads crm_activities, so it labels with THIS vocabulary.
+const CRM_REACTION_LABEL = { positive: "긍정", neutral: "중립", concern: "우려", rejected: "거절", no_response: "무응답" };
+
+// Small, duplicated on purpose (not imported from ./revenue): that page is its own lazy-loaded
+// route chunk, and a static cross-import here pulled its entire ~1400-line module (Leads/Deals/
+// Accounts/DetailPanel/…) into this chunk too, which broke Turbopack's dev chunk graph outright
+// (page hung on the loading fallback, no console error). Three small object literals are cheaper
+// than that.
+const ACT_ICON = { email: "email", meeting: "calendar", call: "signal", note: "edit", deal: "deals", kakao: "chat", quote: "orders", ai: "sparkle", info_session: "brief", demo: "play", visit: "building", update: "rhythm" };
+const ACT_TONE = { email: "info", meeting: "moon", call: "warning", note: "neutral", deal: "success", kakao: "warning", quote: "neutral", ai: "moon", info_session: "info", demo: "moon", visit: "success", update: "neutral" };
+const ACT_LABEL = { email: "Email", meeting: "Meeting", call: "Call", note: "Note", deal: "Deal", kakao: "카카오", quote: "견적", ai: "AI", info_session: "설명회", demo: "데모", visit: "방문", update: "Update" };
 
 const STAGE_BY_KEY = Object.fromEntries(DEAL_STAGES.map((s) => [s.key, s]));
 function stageMeta(rawStage) {
@@ -122,7 +137,83 @@ function LogForm({ item, action, label, onCancel, onSubmit, submitting }) {
   );
 }
 
-function FollowupRow({ item, onNavigate, logDraft, onOpenLog, onCloseLog, onSubmitLog, submitting, logged }) {
+// Read-only recent-activity panel — clicking a row used to navigate away to the full Leads/
+// Deals drawer just to see what happened last; this shows crm_activities in place instead
+// (the same activity ledger Accounts/Customer 360 already read).
+//
+// Joins on companyId when the row has one, falling back to the lead/deal id only when it
+// doesn't: live crm_activities carries company_id on 109 of 110 rows, but lead_id on 1 and
+// deal_id on 0 — history has always been written against the company/account. Joining on the
+// row's own id would render "기록 없음" for effectively every row.
+function ActivityPanel({ item, onClose, onNavigate }) {
+  const [state, setState] = React.useState({ syncState: "loading", activities: [] });
+
+  React.useEffect(() => {
+    if (!item) return;
+    let active = true;
+    setState({ syncState: "loading", activities: [] });
+    const qs = item.companyId
+      ? `companyId=${encodeURIComponent(item.companyId)}`
+      : item.kind === "deal"
+        ? `dealId=${encodeURIComponent(item.id)}`
+        : `leadId=${encodeURIComponent(item.id)}`;
+    fetch(`/api/hub/revenue/activity?${qs}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!active) return;
+        setState({
+          syncState: d.status === "live" ? "live" : "preview",
+          activities: Array.isArray(d.activities) ? d.activities : [],
+        });
+      })
+      .catch(() => { if (active) setState({ syncState: "error", activities: [] }); });
+    return () => { active = false; };
+  }, [item?.kind, item?.id, item?.companyId]);
+
+  if (!item) return null;
+  const stage = stageMeta(item.stage);
+
+  return (
+    <Drawer
+      title={item.name}
+      subtitle={item.company && item.company !== item.name ? item.company : stage?.label || null}
+      onClose={onClose}
+      footer={item.href ? <Button variant="outline" size="sm" onClick={() => onNavigate?.(item.href)}>정식 편집 열기</Button> : undefined}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--fg-faint)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+        최근 기록<SyncBadge state={state.syncState === "error" ? "preview" : state.syncState} />
+      </div>
+      {state.syncState === "loading" ? (
+        <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>불러오는 중…</div>
+      ) : state.activities.length === 0 ? (
+        <EmptyState icon="clock" title="활동 기록이 없습니다" description="연락 기록이 쌓이면 여기에 표시됩니다." style={{ minHeight: 140 }} />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {state.activities.map((a, i) => (
+            <React.Fragment key={a.id}>
+              <div style={{ display: "grid", gridTemplateColumns: "18px 1fr auto", gap: 10, padding: "10px 0", alignItems: "flex-start" }}>
+                <span style={{ color: `var(--${ACT_TONE[a.type] === "neutral" ? "fg-muted" : ACT_TONE[a.type] || "fg-muted"})`, marginTop: 1 }}>
+                  <Iconed name={ACT_ICON[a.type] || "edit"} size={13} />
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, color: "var(--fg)", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{a.msg}</div>
+                  <div style={{ fontSize: 10.5, color: "var(--fg-faint)", marginTop: 3, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                    <Badge tone={ACT_TONE[a.type] || "neutral"} size="xs" variant="outline">{ACT_LABEL[a.type] || a.type}</Badge>
+                    {a.reaction && <Badge tone="neutral" size="xs" variant="outline">{CRM_REACTION_LABEL[a.reaction] || a.reaction}</Badge>}
+                  </div>
+                </div>
+                <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-faint)", whiteSpace: "nowrap" }}>{a.at}</span>
+              </div>
+              {i < state.activities.length - 1 && <Divider />}
+            </React.Fragment>
+          ))}
+        </div>
+      )}
+    </Drawer>
+  );
+}
+
+function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onCloseLog, onSubmitLog, submitting, logged }) {
   const stage = stageMeta(item.stage);
   const clickable = Boolean(item.href);
   const isLogging = logDraft?.itemId === item.id;
@@ -143,8 +234,8 @@ function FollowupRow({ item, onNavigate, logDraft, onOpenLog, onCloseLog, onSubm
         <span
           role={clickable ? "button" : undefined}
           tabIndex={clickable ? 0 : undefined}
-          onClick={clickable ? () => onNavigate?.(item.href) : undefined}
-          onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNavigate?.(item.href); } } : undefined}
+          onClick={clickable ? () => onOpenPanel?.(item) : undefined}
+          onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenPanel?.(item); } } : undefined}
           style={{ fontSize: 13.5, fontWeight: 500, cursor: clickable ? "pointer" : "default" }}
         >
           {item.name}
@@ -203,11 +294,15 @@ function FollowupRow({ item, onNavigate, logDraft, onOpenLog, onCloseLog, onSubm
 
 export function Followups({ onNavigate }) {
   const { syncState, items, summary, calendarReason, reload } = useFollowups();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const [lane, setLane] = React.useState("all");
   const [bucket, setBucket] = React.useState("all");
   const [logDraft, setLogDraft] = React.useState(null); // { itemId, action, label }
   const [submitting, setSubmitting] = React.useState(false);
   const [logged, setLogged] = React.useState({}); // id → action label
+  const [panelItem, setPanelItem] = React.useState(null); // row whose activity panel is open
 
   const laneCounts = React.useMemo(() => {
     const counts = { all: items.length, lead: 0, deal: 0, event: 0 };
@@ -224,6 +319,22 @@ export function Followups({ onNavigate }) {
   const visible = React.useMemo(() => {
     return items.filter((i) => (lane === "all" || i.kind === lane) && (bucket === "all" || i.bucket === bucket));
   }, [items, lane, bucket]);
+
+  // Deep-link: ?focus=<id> opens that row's activity panel once the ledger has loaded, then
+  // strips the query so a refresh doesn't replay it (DESIGN.md §8.1 deep-link contract, same
+  // one-shot shape as revenue.jsx's ?lead=/?deal=). This is the middle hop of 할 일 → 연락 →
+  // 리드 상세: My Work links here with ?focus=, the panel's 정식 편집 열기 goes on to the lead.
+  const focusParam = searchParams?.get("focus") || null;
+  const consumedFocusRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!focusParam || syncState === "loading") return;
+    if (consumedFocusRef.current === focusParam) return;
+    const hit = items.find((i) => String(i.id) === String(focusParam));
+    if (!hit) return;
+    consumedFocusRef.current = focusParam;
+    setPanelItem(hit);
+    if (pathname) router.replace(pathname);
+  }, [focusParam, syncState, items, pathname, router]);
 
   const openLog = (item, action, label) => setLogDraft({ itemId: item.id, action, label });
   const closeLog = () => setLogDraft(null);
@@ -319,6 +430,7 @@ export function Followups({ onNavigate }) {
               key={`${item.kind}-${item.id}`}
               item={item}
               onNavigate={onNavigate}
+              onOpenPanel={setPanelItem}
               logDraft={logDraft}
               onOpenLog={openLog}
               onCloseLog={closeLog}
@@ -332,6 +444,8 @@ export function Followups({ onNavigate }) {
       <div style={{ fontSize: 11, color: "var(--fg-faint)" }}>
         기록한 결과는 outreach_outcomes에 쌓여 내일 우선순위·전환 퍼널에 반영됩니다.
       </div>
+
+      {panelItem && <ActivityPanel item={panelItem} onClose={() => setPanelItem(null)} onNavigate={onNavigate} />}
     </div>
   );
 }
