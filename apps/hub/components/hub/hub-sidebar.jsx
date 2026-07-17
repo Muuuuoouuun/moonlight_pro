@@ -15,6 +15,7 @@ import {
   normalizeScope,
   ownerAnchorKey,
   resolveSidebarPath,
+  setElementInert,
   sidebarChildren,
   getMobileNavigationTabTarget,
 } from "./hub-nav";
@@ -133,15 +134,24 @@ function CountBadge({ n }) {
 
 export const Sidebar = React.forwardRef(function Sidebar({ active, view, onNavigate, collapsed, onToggleCollapse, openPalette, className, mobileHidden = false, mobileOpen = false, onMobileClose, mobileCloseButtonRef }, ref) {
   const counts = useAnchorCounts();
+  const sidebarRef = React.useRef(null);
+  const setSidebarRef = React.useCallback((node) => {
+    sidebarRef.current = node;
+    if (typeof ref === 'function') ref(node);
+    else if (ref) ref.current = node;
+  }, [ref]);
   const [scope, setScope] = useScope(active);
   const { isExpanded, toggle, armAutoOpen } = useExpandedAnchors(ownerAnchorKey(active));
   const sidebarA11yProps = {
     id: 'hub-mobile-navigation',
     'aria-hidden': mobileHidden ? true : undefined,
-    inert: mobileHidden ? '' : undefined,
     role: mobileOpen ? 'dialog' : undefined,
     'aria-modal': mobileOpen ? 'true' : undefined,
   };
+
+  React.useLayoutEffect(() => {
+    setElementInert(sidebarRef.current, mobileHidden);
+  }, [collapsed, mobileHidden]);
 
   const handleMobileKeyDown = (event) => {
     if (!mobileOpen || event.key !== 'Tab') return;
@@ -239,7 +249,7 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, onNavig
     return (
       <aside
         {...sidebarA11yProps}
-        ref={ref}
+        ref={setSidebarRef}
         onKeyDown={handleMobileKeyDown}
         className={`${className || ''} hub-sidebar-root--collapsed`}
         aria-label="주요 메뉴"
@@ -294,7 +304,7 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, onNavig
   }
 
   return (
-    <aside {...sidebarA11yProps} ref={ref} onKeyDown={handleMobileKeyDown} className={className} aria-label="주요 메뉴" style={{
+    <aside {...sidebarA11yProps} ref={setSidebarRef} onKeyDown={handleMobileKeyDown} className={className} aria-label="주요 메뉴" style={{
       width: 232, flexShrink: 0,
       background: 'var(--surface)',
       borderRight: '1px solid var(--line-soft)',

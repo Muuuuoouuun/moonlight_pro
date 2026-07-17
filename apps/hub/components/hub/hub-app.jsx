@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
@@ -12,8 +13,14 @@ import { TweaksPanel } from "./hub-tweaks-panel";
 import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
 import {
   beginMobileNavigationRoute,
+  clearMobileNavigationRouteFocus,
+  completeMobileNavigationDesktopHandoff,
   dismissMobileNavigation,
   getMobileNavigationState,
+  readMobileNavigationRouteFocus,
+  rememberMobileNavigationRouteFocus,
+  setElementInert,
+  shouldFocusMainAfterMobileNavigation,
   shouldMobileNavigationHandleEscape,
 } from "./hub-nav";
 import {
@@ -253,7 +260,7 @@ export function HubApp() {
   const menuButtonRef = React.useRef(null);
   const mobileCloseButtonRef = React.useRef(null);
   const mainRef = React.useRef(null);
-  const focusMainAfterNavigationRef = React.useRef(false);
+  const pendingRouteFocusRef = React.useRef(readMobileNavigationRouteFocus());
   const mobileNavState = getMobileNavigationState({ isMobileViewport, navOpen });
 
   React.useEffect(() => {
@@ -297,22 +304,44 @@ export function HubApp() {
     const target = PARENT_JUMP[basePath] || basePath;
     beginMobileNavigationRoute({
       active: mobileNavState.open,
-      markMainFocus: () => { focusMainAfterNavigationRef.current = true; },
+      markMainFocus: () => {
+        pendingRouteFocusRef.current = rememberMobileNavigationRouteFocus({
+          fromPath: path,
+          targetPath: target,
+        });
+      },
       focusTarget: menuButtonRef.current,
       close: () => setNavOpen(false),
     });
     router.push('/' + target + suffix);
-  }, [mobileNavState.open, router]);
+  }, [mobileNavState.open, path, router]);
 
-  React.useLayoutEffect(() => {
-    if (mobileNavState.open) mobileCloseButtonRef.current?.focus();
+  React.useEffect(() => {
+    if (!mobileNavState.open) return;
+    let focusFrame = null;
+    const visibilityFrame = window.requestAnimationFrame(() => {
+      focusFrame = window.requestAnimationFrame(() => mobileCloseButtonRef.current?.focus());
+    });
+    return () => {
+      window.cancelAnimationFrame(visibilityFrame);
+      if (focusFrame !== null) window.cancelAnimationFrame(focusFrame);
+    };
   }, [mobileNavState.open]);
 
   React.useLayoutEffect(() => {
-    if (!mobileNavState.open && focusMainAfterNavigationRef.current) {
-      focusMainAfterNavigationRef.current = false;
-      mainRef.current?.focus();
-    }
+    setElementInert(mainRef.current, mobileNavState.mainHidden);
+  }, [mobileNavState.mainHidden]);
+
+  React.useLayoutEffect(() => {
+    const shouldFocus = shouldFocusMainAfterMobileNavigation({
+      pending: pendingRouteFocusRef.current || readMobileNavigationRouteFocus(),
+      currentPath: path,
+      navOpen: mobileNavState.open,
+    });
+    if (!shouldFocus) return;
+    pendingRouteFocusRef.current = null;
+    clearMobileNavigationRouteFocus();
+    mainRef.current?.focus();
   }, [mobileNavState.open, path]);
 
   React.useEffect(() => {
@@ -333,8 +362,22 @@ export function HubApp() {
   }, [closeMobileNavigation, mobileNavState.open, paletteOpen, tweaksOpen]);
 
   React.useEffect(() => {
-    if (!isMobileViewport && navOpen) setNavOpen(false);
-  }, [isMobileViewport, navOpen]);
+    const media = window.matchMedia(MOBILE_NAV_QUERY);
+    const onBreakpointChange = (event) => {
+      if (event.matches) return;
+      completeMobileNavigationDesktopHandoff({
+        active: navOpen,
+        close: () => {
+          pendingRouteFocusRef.current = null;
+          clearMobileNavigationRouteFocus();
+          flushSync(() => setNavOpen(false));
+        },
+        focusTarget: mainRef.current,
+      });
+    };
+    media.addEventListener?.('change', onBreakpointChange);
+    return () => media.removeEventListener?.('change', onBreakpointChange);
+  }, [navOpen]);
 
   const openCommandPalette = React.useCallback(() => {
     closeMobileNavigation();
@@ -412,7 +455,6 @@ export function HubApp() {
             ref={mainRef}
             tabIndex={-1}
             aria-hidden={mobileNavState.mainHidden ? 'true' : undefined}
-            inert={mobileNavState.mainHidden ? '' : undefined}
             className="hub-content scroll-y"
           >
             <div key={path} className="fade-up">{page}</div>

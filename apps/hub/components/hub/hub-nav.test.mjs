@@ -195,13 +195,15 @@ test("only the closed mobile sidebar is removed from focus and the accessibility
   assert.match(appSource, /mobileHidden=\{mobileNavState\.navHidden\}/);
   assert.match(
     appSource,
-    /<main[\s\S]*?aria-hidden=\{mobileNavState\.mainHidden \? ['"]true['"] : undefined\}[\s\S]*?inert=\{mobileNavState\.mainHidden \? ['"]{2} : undefined\}/,
+    /setElementInert\(mainRef\.current, mobileNavState\.mainHidden\)/,
   );
+  assert.doesNotMatch(appSource, /<main[\s\S]*?inert=/);
 
   assert.match(
     sidebarSource,
-    /const sidebarA11yProps = \{[\s\S]*?["']aria-hidden["']:\s*mobileHidden \? true : undefined,[\s\S]*?inert:\s*mobileHidden \? ["']{2} : undefined/,
+    /setElementInert\(sidebarRef\.current, mobileHidden\)/,
   );
+  assert.doesNotMatch(sidebarSource, /const sidebarA11yProps = \{[\s\S]*?inert:/);
   assert.equal(
     sidebarSource.match(/<aside\s+\{\.\.\.sidebarA11yProps\}/g)?.length,
     2,
@@ -214,7 +216,7 @@ test("mobile navigation opens as a focused modal with a trapped Tab order", () =
   assert.match(appSource, /const mobileCloseButtonRef = React\.useRef\(null\)/);
   assert.match(
     appSource,
-    /React\.useLayoutEffect\(\(\) => \{[\s\S]*?mobileNavState\.open[\s\S]*?mobileCloseButtonRef\.current\?\.focus\(\)/,
+    /React\.useEffect\(\(\) => \{[\s\S]*?if \(!mobileNavState\.open\) return[\s\S]*?visibilityFrame = window\.requestAnimationFrame[\s\S]*?focusFrame = window\.requestAnimationFrame\([\s\S]*?mobileCloseButtonRef\.current\?\.focus\(\)[\s\S]*?cancelAnimationFrame\(visibilityFrame\)[\s\S]*?cancelAnimationFrame\(focusFrame\)/,
   );
   assert.match(sidebarSource, /role:\s*mobileOpen \? ['"]dialog['"] : undefined/);
   assert.match(sidebarSource, /['"]aria-modal['"]:\s*mobileOpen \? ['"]true['"] : undefined/);
@@ -244,15 +246,15 @@ test("Escape and backdrop focus the opener before synchronously closing mobile n
 });
 
 test("sidebar navigation closes with a distinct final-focus policy for the new page", () => {
-  assert.match(appSource, /const focusMainAfterNavigationRef = React\.useRef\(false\)/);
+  assert.match(appSource, /const pendingRouteFocusRef = React\.useRef\(readMobileNavigationRouteFocus\(\)\)/);
   assert.match(appSource, /const navigateFromSidebar = React\.useCallback/);
   assert.match(
     appSource,
-    /beginMobileNavigationRoute\(\{[\s\S]*?markMainFocus:[\s\S]*?focusMainAfterNavigationRef\.current = true[\s\S]*?focusTarget:\s*menuButtonRef\.current[\s\S]*?close:\s*\(\) => setNavOpen\(false\)/,
+    /beginMobileNavigationRoute\(\{[\s\S]*?markMainFocus:[\s\S]*?pendingRouteFocusRef\.current = rememberMobileNavigationRouteFocus\(\{[\s\S]*?fromPath: path,[\s\S]*?targetPath: target[\s\S]*?focusTarget:\s*menuButtonRef\.current[\s\S]*?close:\s*\(\) => setNavOpen\(false\)/,
   );
   assert.match(
     appSource,
-    /React\.useLayoutEffect\(\(\) => \{[\s\S]*?!mobileNavState\.open[\s\S]*?focusMainAfterNavigationRef\.current[\s\S]*?mainRef\.current\?\.focus\(\)/,
+    /shouldFocusMainAfterMobileNavigation\(\{[\s\S]*?pending:\s*pendingRouteFocusRef\.current \|\| readMobileNavigationRouteFocus\(\),[\s\S]*?currentPath:\s*path,[\s\S]*?navOpen:\s*mobileNavState\.open[\s\S]*?pendingRouteFocusRef\.current = null[\s\S]*?clearMobileNavigationRouteFocus\(\)[\s\S]*?mainRef\.current\?\.focus\(\)/,
   );
   assert.match(appSource, /<main[\s\S]*?ref=\{mainRef\}[\s\S]*?tabIndex=\{-1\}/);
   assert.match(appSource, /<Sidebar[\s\S]*?onNavigate=\{navigateFromSidebar\}/);
@@ -271,6 +273,14 @@ test("opening a top overlay closes mobile navigation and keeps Escape on the top
   );
   assert.match(appSource, /openPalette=\{openCommandPalette\}/);
   assert.match(appSource, /if \(paletteOpen\)[\s\S]*?setPaletteOpen\(false\)[\s\S]*?openCommandPalette\(\)/);
+});
+
+test("leaving the mobile breakpoint commits close before handing focus to desktop main", () => {
+  assert.match(appSource, /import \{ flushSync \} from ["']react-dom["']/);
+  assert.match(
+    appSource,
+    /completeMobileNavigationDesktopHandoff\(\{[\s\S]*?active:\s*navOpen,[\s\S]*?close:[\s\S]*?flushSync\(\(\) => setNavOpen\(false\)\)[\s\S]*?focusTarget:\s*mainRef\.current/,
+  );
 });
 
 test("mobile menu opener exposes state and IconButton forwards its stable ref", () => {
@@ -307,6 +317,24 @@ test("mobile navigation visibility never hides the desktop sidebar or desktop ma
     navHidden: false,
     mainHidden: true,
   });
+});
+
+test("inert is toggled through the DOM boolean-attribute API without a React prop", () => {
+  const setInert = mobileNavRuntime.setElementInert;
+  assert.equal(typeof setInert, "function");
+  const attributes = new Set();
+  const element = {
+    toggleAttribute(name, force) {
+      if (force) attributes.add(name);
+      else attributes.delete(name);
+    },
+    hasAttribute(name) { return attributes.has(name); },
+  };
+
+  assert.equal(setInert(element, true), true);
+  assert.equal(element.hasAttribute("inert"), true);
+  assert.equal(setInert(element, false), false);
+  assert.equal(element.hasAttribute("inert"), false);
 });
 
 test("dismiss focuses the opener before closing, while route close also marks final main focus", () => {
@@ -354,4 +382,55 @@ test("mobile Escape belongs to nav only when no higher overlay is active", () =>
   assert.equal(fn({ open: true, paletteOpen: true, tweaksOpen: false }), false);
   assert.equal(fn({ open: true, paletteOpen: false, tweaksOpen: true }), false);
   assert.equal(fn({ open: false, paletteOpen: false, tweaksOpen: false }), false);
+});
+
+test("route focus waits for the target commit and accepts an eventual redirect", () => {
+  const fn = mobileNavRuntime.shouldFocusMainAfterMobileNavigation;
+  assert.equal(typeof fn, "function");
+  const pending = { fromPath: "dashboard/work/projects", targetPath: "dashboard/work/roadmap" };
+
+  assert.equal(fn({ pending, currentPath: pending.fromPath, navOpen: false }), false);
+  assert.equal(fn({ pending, currentPath: pending.targetPath, navOpen: true }), false);
+  assert.equal(fn({ pending, currentPath: pending.targetPath, navOpen: false }), true);
+  assert.equal(fn({ pending, currentPath: "dashboard/daily-brief", navOpen: false }), true);
+  assert.equal(fn({ pending: null, currentPath: pending.targetPath, navOpen: false }), false);
+  assert.equal(fn({
+    pending: { fromPath: pending.fromPath, targetPath: pending.fromPath },
+    currentPath: pending.fromPath,
+    navOpen: false,
+  }), true);
+});
+
+test("route focus handoff survives a HubApp remount until the new path consumes it", () => {
+  const remember = mobileNavRuntime.rememberMobileNavigationRouteFocus;
+  const read = mobileNavRuntime.readMobileNavigationRouteFocus;
+  const clear = mobileNavRuntime.clearMobileNavigationRouteFocus;
+  assert.equal(typeof remember, "function");
+  assert.equal(typeof read, "function");
+  assert.equal(typeof clear, "function");
+
+  clear();
+  const pending = remember({
+    fromPath: "dashboard/work/roadmap",
+    targetPath: "dashboard/work/calendar",
+  });
+  assert.deepEqual(read(), pending);
+  assert.deepEqual(read(), {
+    fromPath: "dashboard/work/roadmap",
+    targetPath: "dashboard/work/calendar",
+  });
+  clear();
+  assert.equal(read(), null);
+});
+
+test("desktop handoff closes before focusing main so BODY is never the final target", () => {
+  const fn = mobileNavRuntime.completeMobileNavigationDesktopHandoff;
+  assert.equal(typeof fn, "function");
+  const order = [];
+  fn({
+    active: true,
+    close: () => order.push("close-commit"),
+    focusTarget: { focus: () => order.push("focus-main") },
+  });
+  assert.deepEqual(order, ["close-commit", "focus-main"]);
 });
