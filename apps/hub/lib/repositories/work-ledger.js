@@ -342,7 +342,10 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
     }),
   ]);
 
-  const timeZone = resolveRhythmTimeZone(workspaceRows?.[0]?.timezone);
+  const workspaceTimeZoneAvailable = Array.isArray(workspaceRows) && workspaceRows.length === 1;
+  const timeZone = resolveRhythmTimeZone(
+    workspaceTimeZoneAvailable ? workspaceRows[0].timezone : null,
+  );
   const roadmap = buildRoadmapState(projectRows, milestoneRows);
   const profileById = new Map((profileRows || []).map((p) => [p.id, p]));
   const decisions = Array.isArray(decisionRows) ? mapDecisions(decisionRows, profileById) : [];
@@ -350,10 +353,11 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
   const visibleRoutineRows = Array.isArray(routineRows)
     ? routineRows.slice(0, RHYTHM_ROW_LIMIT)
     : [];
-  const rituals = Array.isArray(routineRows)
+  const rhythmAvailable = Array.isArray(routineRows) && workspaceTimeZoneAvailable;
+  const rituals = rhythmAvailable
     ? mapRituals(visibleRoutineRows, projectRows, { timeZone, now })
     : [];
-  const rhythm = Array.isArray(routineRows)
+  const rhythm = rhythmAvailable
     ? {
         source: "supabase",
         state: routineRowsTruncated
@@ -371,13 +375,15 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
         partial: false,
         truncatedSources: [],
         error: {
-          message: "routine_checks 원장을 읽지 못했습니다.",
+          message: Array.isArray(routineRows)
+            ? "workspace timezone 원장을 읽지 못했습니다."
+            : "routine_checks 원장을 읽지 못했습니다.",
           retryable: true,
         },
       };
 
   return {
-    source: Array.isArray(decisionRows) && Array.isArray(routineRows) ? "supabase" : "preview",
+    source: Array.isArray(decisionRows) && rhythmAvailable ? "supabase" : "preview",
     configured: true,
     workspaceId,
     timeZone,

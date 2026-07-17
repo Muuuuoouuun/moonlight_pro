@@ -419,6 +419,50 @@ test("a configured routine ledger read failure is error rather than preview", as
   assert.deepEqual(ledger.rituals, []);
 });
 
+test("workspace timezone read failure makes Rhythm error instead of live", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.rows.routine_checks = [{
+    id: "check-1",
+    project_id: null,
+    check_type: "morning",
+    status: "done",
+    checked_at: "2026-07-16T15:30:00.000Z",
+    meta: { ritual_key: "daily-focus", name: "Daily focus" },
+  }];
+
+  state.rows.workspaces = null;
+  const failedRead = await workLedger.getWorkLedger();
+  assert.equal(failedRead.source, "preview");
+  assert.equal(failedRead.rhythm.state, "error");
+  assert.match(failedRead.rhythm.error.message, /workspace|timezone/i);
+  assert.deepEqual(failedRead.rituals, []);
+
+  state.rows.workspaces = [];
+  const missingWorkspace = await workLedger.getWorkLedger();
+  assert.equal(missingWorkspace.source, "preview");
+  assert.equal(missingWorkspace.rhythm.state, "error");
+  assert.deepEqual(missingWorkspace.rituals, []);
+});
+
+test("null workspace timezone uses the explicit Seoul fallback", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.rows.workspaces = [{ id: WORKSPACE_ID, timezone: null }];
+  state.rows.routine_checks = [{
+    id: "check-boundary",
+    project_id: null,
+    check_type: "morning",
+    status: "done",
+    checked_at: "2026-07-16T15:05:00.000Z",
+    meta: { ritual_key: "daily-focus", name: "Daily focus" },
+  }];
+
+  const ledger = await workLedger.getWorkLedger({ now: new Date("2026-07-16T15:30:00.000Z") });
+
+  assert.equal(ledger.timeZone, "Asia/Seoul");
+  assert.equal(ledger.rhythm.state, "live");
+  assert.equal(ledger.rituals[0].weeks.at(-1), 1);
+});
+
 test("rituals remain readable when the independent decisions source fails", async () => {
   const state = globalThis.__workLedgerTestState;
   state.rows.decisions = null;

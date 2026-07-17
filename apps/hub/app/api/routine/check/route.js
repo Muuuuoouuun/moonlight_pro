@@ -5,11 +5,11 @@ import { NextResponse } from "next/server";
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { eqFilter, fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-read";
 import {
-  isCalendarDateKey,
   legacyCandidateWindow,
   resolveRhythmTimeZone,
   routineLocalDateKey,
   routineSemanticKey,
+  toZonedDateKey,
 } from "../../../../lib/rhythm-calendar.js";
 import { isCanonicalUuid } from "../../../../lib/uuid.js";
 import {
@@ -22,14 +22,11 @@ import {
 export const runtime = "nodejs";
 
 const CHECK_TYPES = new Set(["morning", "midday", "evening", "weekly"]);
+const LEGACY_CANDIDATE_LIMIT = 100;
 const ROUTINE_CHECK_SELECT = "id,workspace_id,project_id,check_type,status,note,meta,checked_at,created_at,updated_at,idempotency_key";
 
 function cleanString(value) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function isLocalDateKey(value) {
-  return isCalendarDateKey(value);
 }
 
 function invalidInput(error, message) {
@@ -50,12 +47,14 @@ function readFailure(source) {
   );
 }
 
-function previewResponse(message, record) {
+function previewResponse(message, record, dateKey) {
   return NextResponse.json(
     {
       status: "preview",
       message,
       saved: false,
+      dateKey,
+      localDate: dateKey,
       preview: record,
     },
     { status: 202 },
@@ -89,36 +88,82 @@ async function resolveWorkspaceTimeZone(workspaceId) {
     limit: 1,
     filters: [["id", eqFilter(workspaceId)]],
   });
-  return resolveRhythmTimeZone(rows?.[0]?.timezone);
+  if (!Array.isArray(rows) || rows.length !== 1) {
+    return { ok: false, timeZone: null };
+  }
+  return { ok: true, timeZone: resolveRhythmTimeZone(rows[0].timezone) };
 }
 
-async function findLegacyRoutineCheck({ projectId, ritualKey, dateKey }, timeZone) {
+async function findLegacyRoutineCheck({ projectId, ritualKey, checkType, dateKey }, timeZone) {
   const window = legacyCandidateWindow(dateKey);
   const candidates = await fetchSupabaseRows("routine_checks", {
     select: ROUTINE_CHECK_SELECT,
-    limit: 100,
+    limit: LEGACY_CANDIDATE_LIMIT + 1,
     order: "checked_at.desc",
     filters: withWorkspaceFilter([
       ["project_id", projectId ? eqFilter(projectId) : "is.null"],
+      ["check_type", eqFilter(checkType)],
       ["status", eqFilter("done")],
       ["idempotency_key", "is.null"],
       ["checked_at", `gte.${window.start}`],
       ["checked_at", `lt.${window.end}`],
     ]),
   });
-  if (!Array.isArray(candidates)) return null;
-  return candidates.filter((row) => (
-    routineSemanticKey(row) === ritualKey
-    && routineLocalDateKey(row, timeZone) === dateKey
-  ));
+  if (!Array.isArray(candidates)) return { state: "read-failure", rows: [] };
+  if (candidates.length > LEGACY_CANDIDATE_LIMIT) return { state: "overflow", rows: [] };
+  return {
+    state: "ok",
+    rows: candidates.filter((row) => (
+      routineSemanticKey(row) === ritualKey
+      && routineLocalDateKey(row, timeZone) === dateKey
+    )),
+  };
 }
 
-function duplicateResponse(check) {
+function duplicateResponse(check, dateKey) {
   return NextResponse.json({
     status: "duplicate",
     message: "This ritual is already checked in for the selected local date.",
+    dateKey,
+    localDate: dateKey,
     check,
   });
+}
+
+function legacyOverflowResponse() {
+  return NextResponse.json(
+    {
+      status: "error",
+      error: "legacy-candidate-overflow",
+      message: "Legacy routine check candidates exceeded the safe duplicate-check limit.",
+      retryable: true,
+    },
+    { status: 502 },
+  );
+}
+
+function buildAuthoritativeRecord(payload, workspaceId, timeZone) {
+  const baseRecord = buildRoutineCheckRecord(payload);
+  const dateKey = toZonedDateKey(baseRecord.checked_at, timeZone);
+  const authoritativePayload = { ...payload, dateKey };
+  return {
+    dateKey,
+    payload: authoritativePayload,
+    record: {
+      ...baseRecord,
+      workspace_id: workspaceId || null,
+      project_id: payload.projectId,
+      check_type: payload.checkType,
+      status: "done",
+      note: payload.note,
+      idempotency_key: routineCheckIdempotencyKey(authoritativePayload),
+      meta: {
+        ritual_key: payload.ritualKey,
+        name: payload.name,
+        local_date: dateKey,
+      },
+    },
+  };
 }
 
 function normalizePayload(payload) {
@@ -129,7 +174,6 @@ function normalizePayload(payload) {
   const projectId = cleanString(payload.projectId) || null;
   const ritualKey = cleanString(payload.ritualKey);
   const checkType = cleanString(payload.checkType).toLowerCase();
-  const dateKey = cleanString(payload.dateKey);
   const name = cleanString(payload.name);
   const note = cleanString(payload.note) || null;
   const status = cleanString(payload.status).toLowerCase();
@@ -143,9 +187,6 @@ function normalizePayload(payload) {
   if (!CHECK_TYPES.has(checkType)) {
     return { error: invalidInput("invalid-check-type", "checkType must be morning, midday, evening, or weekly.") };
   }
-  if (!isLocalDateKey(dateKey)) {
-    return { error: invalidInput("invalid-date-key", "dateKey must be a real local date in YYYY-MM-DD form.") };
-  }
   if (status !== "done") {
     return { error: invalidInput("invalid-status", "Rhythm check-in status must be done.") };
   }
@@ -158,7 +199,6 @@ function normalizePayload(payload) {
       projectId,
       ritualKey,
       checkType,
-      dateKey,
       name: name || ritualKey,
       note,
       status: "done",
@@ -183,26 +223,17 @@ export async function POST(req) {
 
     const payload = normalized.value;
     const workspaceId = resolveDefaultWorkspaceId();
-    const idempotencyKey = routineCheckIdempotencyKey(payload);
-    const record = {
-      ...buildRoutineCheckRecord(payload),
-      workspace_id: workspaceId || null,
-      project_id: payload.projectId,
-      check_type: payload.checkType,
-      status: "done",
-      note: payload.note,
-      idempotency_key: idempotencyKey,
-      meta: {
-        ritual_key: payload.ritualKey,
-        name: payload.name,
-        local_date: payload.dateKey,
-      },
-    };
 
     if (!workspaceId || !resolveSupabaseConfig()) {
+      const preview = buildAuthoritativeRecord(
+        payload,
+        workspaceId,
+        resolveRhythmTimeZone(null),
+      );
       return previewResponse(
         "Workspace or Supabase is not configured. This check-in was not saved.",
-        record,
+        preview.record,
+        preview.dateKey,
       );
     }
 
@@ -222,18 +253,32 @@ export async function POST(req) {
       }
     }
 
+    const workspaceTimeZone = await resolveWorkspaceTimeZone(workspaceId);
+    if (!workspaceTimeZone.ok) return readFailure("workspaces timezone");
+
+    const authoritative = buildAuthoritativeRecord(
+      payload,
+      workspaceId,
+      workspaceTimeZone.timeZone,
+    );
+    const { dateKey, record } = authoritative;
+    const idempotencyKey = record.idempotency_key;
+
     const duplicateRows = await findRoutineCheckByIdempotencyKey(idempotencyKey);
 
     if (!Array.isArray(duplicateRows)) return readFailure("routine_checks");
     if (duplicateRows.length > 0) {
-      return duplicateResponse(duplicateRows[0]);
+      return duplicateResponse(duplicateRows[0], dateKey);
     }
 
-    const timeZone = await resolveWorkspaceTimeZone(workspaceId);
-    const legacyDuplicateRows = await findLegacyRoutineCheck(payload, timeZone);
-    if (!Array.isArray(legacyDuplicateRows)) return readFailure("routine_checks");
-    if (legacyDuplicateRows.length > 0) {
-      return duplicateResponse(legacyDuplicateRows[0]);
+    const legacyDuplicate = await findLegacyRoutineCheck(
+      authoritative.payload,
+      workspaceTimeZone.timeZone,
+    );
+    if (legacyDuplicate.state === "read-failure") return readFailure("routine_checks");
+    if (legacyDuplicate.state === "overflow") return legacyOverflowResponse();
+    if (legacyDuplicate.rows.length > 0) {
+      return duplicateResponse(legacyDuplicate.rows[0], dateKey);
     }
 
     const persistence = await insertSupabaseRecord("routine_checks", record, {
@@ -246,13 +291,14 @@ export async function POST(req) {
         return previewResponse(
           "Supabase is not configured. This check-in was not saved.",
           record,
+          dateKey,
         );
       }
 
       if (isIdempotencyConflict(persistence)) {
         const winnerRows = await findRoutineCheckByIdempotencyKey(idempotencyKey);
         if (!Array.isArray(winnerRows)) return readFailure("routine_checks");
-        if (winnerRows.length > 0) return duplicateResponse(winnerRows[0]);
+        if (winnerRows.length > 0) return duplicateResponse(winnerRows[0], dateKey);
 
         return NextResponse.json(
           {
@@ -280,6 +326,8 @@ export async function POST(req) {
       {
         status: "saved",
         message: "Routine check saved to Supabase.",
+        dateKey,
+        localDate: dateKey,
         check: persistence.record || record,
       },
       { status: 201 },

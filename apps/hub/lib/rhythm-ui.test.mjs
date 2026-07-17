@@ -59,7 +59,7 @@ test("partial Rhythm progress is observational and never exposed as a determinat
   );
 });
 
-test("durable check payload preserves ritual and project identity with a local date key", () => {
+test("durable check payload preserves identity without trusting the browser date", () => {
   assert.equal(typeof rhythmUi.toLocalDateKey, "function");
   assert.equal(typeof rhythmUi.buildRhythmCheckPayload, "function");
   const local = new Date(2026, 6, 17, 23, 45, 0);
@@ -76,7 +76,6 @@ test("durable check payload preserves ritual and project identity with a local d
       projectId: "project-1",
       ritualKey: "daily-focus",
       checkType: "morning",
-      dateKey: "2026-07-17",
       name: "Daily focus",
       note: "오늘의 핵심 완료",
       status: "done",

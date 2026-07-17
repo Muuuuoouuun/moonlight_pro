@@ -67,7 +67,7 @@ export function buildRoutineCheckRecord(payload) {
     check_type: payload.checkType,
     status: payload.status,
     note: payload.note || null,
-    checked_at: "2026-07-17T03:00:00.000Z",
+    checked_at: globalThis.__routineRouteTestState.checkedAt,
   };
 }
 export async function insertSupabaseRecord(table, record, options = {}) {
@@ -108,6 +108,7 @@ beforeEach(() => {
     workspaces: [{ id: WORKSPACE_ID, timezone: "Asia/Seoul" }],
     checks: [],
     checksSequence: null,
+    checkedAt: "2026-07-17T03:00:00.000Z",
     persistence: null,
     readCalls: [],
     insertCalls: [],
@@ -127,7 +128,6 @@ function validPayload(overrides = {}) {
     projectId: PROJECT_ID,
     ritualKey: "daily-focus",
     checkType: "morning",
-    dateKey: "2026-07-17",
     name: "Daily focus",
     note: "오늘의 핵심 완료",
     status: "done",
@@ -226,6 +226,8 @@ test("saved check persists normalized identity metadata and returns the durable 
 
   assert.equal(response.status, 201);
   assert.equal(body.status, "saved");
+  assert.equal(body.dateKey, "2026-07-17");
+  assert.equal(body.localDate, "2026-07-17");
   assert.equal(body.check.id, "check-new");
   assert.equal(state.insertCalls.length, 1);
   const insert = state.insertCalls[0];
@@ -253,7 +255,8 @@ test("idempotency identity is deterministic for the tuple and changes with the l
 
   const first = await POST(request(validPayload()));
   const retry = await POST(request(validPayload()));
-  const nextDate = await POST(request(validPayload({ dateKey: "2026-07-18" })));
+  state.checkedAt = "2026-07-18T03:00:00.000Z";
+  const nextDate = await POST(request(validPayload()));
   const unscoped = await POST(request(validPayload({ projectId: null })));
 
   assert.equal(first.status, 201);
@@ -263,6 +266,52 @@ test("idempotency identity is deterministic for the tuple and changes with the l
   assert.equal(state.insertCalls[0].record.idempotency_key, state.insertCalls[1].record.idempotency_key);
   assert.notEqual(state.insertCalls[1].record.idempotency_key, state.insertCalls[2].record.idempotency_key);
   assert.notEqual(state.insertCalls[1].record.idempotency_key, state.insertCalls[3].record.idempotency_key);
+});
+
+test("workspace-local date is server-authoritative when the browser date disagrees", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.checkedAt = "2026-07-16T15:30:00.000Z";
+
+  const first = await POST(request(validPayload({ dateKey: "2026-07-16" })));
+  const retry = await POST(request(validPayload({ dateKey: "not-a-date" })));
+  const firstBody = await first.json();
+  const retryBody = await retry.json();
+
+  assert.equal(first.status, 201);
+  assert.equal(retry.status, 201);
+  assert.equal(firstBody.dateKey, "2026-07-17");
+  assert.equal(firstBody.localDate, "2026-07-17");
+  assert.equal(retryBody.dateKey, "2026-07-17");
+  assert.equal(state.insertCalls[0].record.meta.local_date, "2026-07-17");
+  assert.equal(state.insertCalls[0].record.idempotency_key, state.insertCalls[1].record.idempotency_key);
+});
+
+test("workspace timezone lookup failures stop the configured write", async () => {
+  const state = globalThis.__routineRouteTestState;
+
+  state.workspaces = null;
+  const failedRead = await POST(request(validPayload()));
+  assert.equal(failedRead.status, 502);
+  assert.equal((await failedRead.json()).status, "error");
+
+  state.workspaces = [];
+  const missingWorkspace = await POST(request(validPayload()));
+  assert.equal(missingWorkspace.status, 502);
+  assert.equal((await missingWorkspace.json()).status, "error");
+  assert.equal(state.insertCalls.length, 0);
+});
+
+test("null workspace timezone falls back to Seoul only after the workspace row is read", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.workspaces = [{ id: WORKSPACE_ID, timezone: null }];
+  state.checkedAt = "2026-07-16T15:30:00.000Z";
+
+  const response = await POST(request(validPayload()));
+  const body = await response.json();
+
+  assert.equal(response.status, 201);
+  assert.equal(body.dateKey, "2026-07-17");
+  assert.equal(state.insertCalls.length, 1);
 });
 
 test("same workspace ritual and local date returns duplicate without a second insert", async () => {
@@ -282,6 +331,8 @@ test("same workspace ritual and local date returns duplicate without a second in
 
   assert.equal(response.status, 200);
   assert.equal(body.status, "duplicate");
+  assert.equal(body.dateKey, "2026-07-17");
+  assert.equal(body.localDate, "2026-07-17");
   assert.equal(body.check.id, "check-existing");
   assert.equal(state.insertCalls.length, 0);
   const call = state.readCalls.find((entry) => entry.table === "routine_checks");
@@ -347,6 +398,7 @@ test("project-bound legacy NULL-key check is returned as duplicate before insert
   assert.deepEqual(routineReads[1].options.filters, [
     ["workspace_id", `eq.${WORKSPACE_ID}`],
     ["project_id", `eq.${PROJECT_ID}`],
+    ["check_type", "eq.morning"],
     ["status", "eq.done"],
     ["idempotency_key", "is.null"],
     ["checked_at", "gte.2026-07-16T00:00:00.000Z"],
@@ -397,7 +449,12 @@ test("seed-style legacy check without meta dedupes by check_type and workspace-l
   const workspaceRead = state.readCalls.find((entry) => entry.table === "workspaces");
   assert.deepEqual(workspaceRead.options.filters, [["id", `eq.${WORKSPACE_ID}`]]);
   const legacyRead = state.readCalls.filter((entry) => entry.table === "routine_checks")[1];
-  assert.equal(legacyRead.options.limit, 100);
+  assert.equal(legacyRead.options.limit, 101);
+  assert.deepEqual(legacyRead.options.filters.slice(0, 3), [
+    ["workspace_id", `eq.${WORKSPACE_ID}`],
+    ["project_id", `eq.${LIVE_SEED_PROJECT_ID}`],
+    ["check_type", "eq.morning"],
+  ]);
 });
 
 test("unscoped legacy NULL-key check uses null project semantics before insert", async () => {
@@ -431,11 +488,50 @@ test("unscoped legacy NULL-key check uses null project semantics before insert",
   assert.deepEqual(routineReads[1].options.filters, [
     ["workspace_id", `eq.${WORKSPACE_ID}`],
     ["project_id", "is.null"],
+    ["check_type", "eq.weekly"],
     ["status", "eq.done"],
     ["idempotency_key", "is.null"],
     ["checked_at", "gte.2026-07-16T00:00:00.000Z"],
     ["checked_at", "lt.2026-07-19T00:00:00.000Z"],
   ]);
+});
+
+test("legacy candidate overflow never inserts when a duplicate could be the 101st row", async () => {
+  const state = globalThis.__routineRouteTestState;
+  const unrelated = Array.from({ length: 100 }, (_, index) => ({
+    id: `legacy-unrelated-${index}`,
+    workspace_id: WORKSPACE_ID,
+    project_id: PROJECT_ID,
+    check_type: "morning",
+    status: "done",
+    idempotency_key: null,
+    checked_at: "2026-07-17T02:00:00.000Z",
+    meta: { ritual_key: `other-${index}`, local_date: "2026-07-17" },
+  }));
+  state.checksSequence = [
+    [],
+    [...unrelated, {
+      id: "legacy-duplicate-101",
+      workspace_id: WORKSPACE_ID,
+      project_id: PROJECT_ID,
+      check_type: "morning",
+      status: "done",
+      idempotency_key: null,
+      checked_at: "2026-07-17T01:00:00.000Z",
+      meta: { ritual_key: "daily-focus", local_date: "2026-07-17" },
+    }],
+  ];
+
+  const response = await POST(request(validPayload()));
+  const body = await response.json();
+
+  assert.equal(response.status, 502);
+  assert.equal(body.status, "error");
+  assert.equal(body.error, "legacy-candidate-overflow");
+  assert.equal(body.retryable, true);
+  assert.equal(state.insertCalls.length, 0);
+  const legacyRead = state.readCalls.filter((entry) => entry.table === "routine_checks")[1];
+  assert.equal(legacyRead.options.limit, 101);
 });
 
 test("legacy fallback lookup failure is an honest error and never inserts", async () => {
@@ -485,6 +581,7 @@ test("unique idempotency race re-reads the winning check as duplicate", async ()
   assert.deepEqual(routineReads[1].options.filters, [
     ["workspace_id", `eq.${WORKSPACE_ID}`],
     ["project_id", `eq.${PROJECT_ID}`],
+    ["check_type", "eq.morning"],
     ["status", "eq.done"],
     ["idempotency_key", "is.null"],
     ["checked_at", "gte.2026-07-16T00:00:00.000Z"],

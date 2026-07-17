@@ -70,12 +70,11 @@ export function toLocalDateKey(value = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-export function buildRhythmCheckPayload(ritual, { now = new Date(), note = "" } = {}) {
+export function buildRhythmCheckPayload(ritual, { note = "" } = {}) {
   return {
     projectId: cleanString(ritual?.projectId) || null,
     ritualKey: cleanString(ritual?.ritualKey),
     checkType: cleanString(ritual?.checkType).toLowerCase(),
-    dateKey: toLocalDateKey(now),
     name: cleanString(ritual?.name),
     note: cleanString(note) || null,
     status: "done",

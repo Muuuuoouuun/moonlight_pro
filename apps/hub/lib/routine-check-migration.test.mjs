@@ -43,6 +43,8 @@ test("routine check idempotency migration is included in both supported delivery
   ]);
 
   assert.match(applyPending, /20260717_0019_routine_check_idempotency\.sql/);
+  assert.match(applyPending, /적용 대기 마이그레이션 묶음 \(0003 → 0019, 시점순\)/);
+  assert.doesNotMatch(applyPending, /적용 대기 마이그레이션 묶음 \(0003 → 0011, 시점순\)/);
   assert.match(
     applyPending,
     /add column if not exists idempotency_key text[\s\S]*create unique index if not exists routine_checks_workspace_idempotency_key_uidx/i,
