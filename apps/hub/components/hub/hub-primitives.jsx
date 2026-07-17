@@ -516,10 +516,12 @@ function groupFieldRows(fields) {
 // Cmd/Ctrl+Enter mirrors the footer 완료 (save) button.
 export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)', children }) {
   const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | conflict | error
+  const [saveFeedback, setSaveFeedback] = React.useState('');
   const savingRef = React.useRef(false);
   React.useEffect(() => {
     savingRef.current = false;
     setSaveState('idle');
+    setSaveFeedback('');
   }, [record?.id]);
 
   const handleDone = async () => {
@@ -527,11 +529,15 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
     if (!onSave) { onClose(); return; }
     savingRef.current = true;
     setSaveState('saving');
+    setSaveFeedback('');
     try {
       const r = await onSave();
       if (r?.ok) { setSaveState('idle'); onClose(); }
       else if (r?.status === 'preview') setSaveState('preview');
-      else if (r?.status === 'conflict') setSaveState('conflict');
+      else if (r?.status === 'conflict') {
+        setSaveFeedback(r?.message || '다른 변경이 먼저 저장되었습니다. 입력을 유지했으니 원장을 확인한 뒤 다시 시도하세요.');
+        setSaveState('conflict');
+      }
       else setSaveState('error');
     } finally {
       savingRef.current = false;
@@ -581,7 +587,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
               <span style={{ color: 'var(--fg-muted)' }}>저장 위치(Supabase)가 설정되지 않아 로컬에만 반영됩니다.</span>
             )}
             {saveState === 'conflict' && (
-              <span style={{ color: 'var(--danger)' }}>다른 변경이 먼저 저장되었습니다. 입력을 유지했으니 원장을 확인한 뒤 다시 시도하세요.</span>
+              <span style={{ color: 'var(--danger)' }}>{saveFeedback || '다른 변경이 먼저 저장되었습니다. 입력을 유지했으니 원장을 확인한 뒤 다시 시도하세요.'}</span>
             )}
             {saveState === 'error' && (
               <span style={{ color: 'var(--danger)' }}>저장에 실패했습니다. 다시 시도하세요.</span>

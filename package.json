@@ -25,7 +25,7 @@
     "inventory:project-connections": "node ./scripts/inventory-project-connections.mjs",
     "openclaw:relay": "node ./scripts/openclaw-local-relay.mjs",
     "sync:rev-ledger": "node ./scripts/sync-rev-ledger.mjs",
-    "test": "node --test scripts/*.test.mjs apps/hub/lib/*.test.mjs apps/hub/lib/repositories/*.test.mjs apps/engine/lib/*.test.mjs apps/engine/app/api/*/command/*.test.mjs",
+    "test": "node --test scripts/*.test.mjs \"apps/hub/components/**/*.test.mjs\" apps/hub/lib/*.test.mjs apps/hub/lib/repositories/*.test.mjs apps/engine/lib/*.test.mjs apps/engine/app/api/*/command/*.test.mjs",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck"
   },

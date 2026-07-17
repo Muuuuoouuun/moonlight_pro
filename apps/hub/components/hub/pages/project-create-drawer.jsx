@@ -27,6 +27,12 @@ const LABEL_STYLE = {
 };
 
 function feedbackFor(result) {
+  if (result?.status === "pipeline-error") {
+    return {
+      state: "error",
+      message: "프로젝트 입력은 유지했습니다. 콘텐츠 4단계를 원장에서 확인할 때까지 같은 요청으로 다시 시도하세요.",
+    };
+  }
   if (result?.status === "reload-error") {
     return {
       state: "error",

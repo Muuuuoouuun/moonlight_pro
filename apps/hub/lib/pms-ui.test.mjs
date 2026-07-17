@@ -187,6 +187,111 @@ test("only confirms create after the reloaded ledger contains the durable projec
   );
 });
 
+test("builds four stable valid task ids for a content pipeline", () => {
+  const projectId = "11111111-1111-4111-8111-111111111111";
+  const seeds = pmsUi.buildContentPipelineTaskSeeds(projectId);
+  const repeated = pmsUi.buildContentPipelineTaskSeeds(projectId);
+  const anotherProject = pmsUi.buildContentPipelineTaskSeeds(
+    "22222222-2222-4222-8222-222222222222",
+  );
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  assert.deepEqual(seeds.map((seed) => seed.title), ["기획", "초안", "검토", "업로드"]);
+  assert.equal(new Set(seeds.map((seed) => seed.id)).size, 4);
+  assert.ok(seeds.every((seed) => uuidPattern.test(seed.id)));
+  assert.deepEqual(repeated, seeds, "a project retry must reuse the same four task ids");
+  assert.notDeepEqual(
+    anotherProject.map((seed) => seed.id),
+    seeds.map((seed) => seed.id),
+  );
+});
+
+test("confirms a content pipeline only when every deterministic task is reloaded", () => {
+  const ids = pmsUi.buildContentPipelineTaskSeeds(
+    "11111111-1111-4111-8111-111111111111",
+  ).map((seed) => seed.id);
+
+  assert.equal(
+    pmsUi.contentPipelineReloadContains(
+      { ok: true, todos: ids.map((id) => ({ id })) },
+      ids,
+    ),
+    true,
+  );
+  assert.equal(
+    pmsUi.contentPipelineReloadContains(
+      { ok: true, todos: ids.slice(0, 3).map((id) => ({ id })) },
+      ids,
+    ),
+    false,
+  );
+  assert.equal(
+    pmsUi.contentPipelineReloadContains(
+      { ok: false, todos: ids.map((id) => ({ id })) },
+      ids,
+    ),
+    false,
+  );
+});
+
+test("rebases a stale edit source on the returned current project row", () => {
+  const source = {
+    id: "project-1",
+    name: "Old server title",
+    brand: "classmoon",
+    brandId: "brand-old",
+    statusKey: "active",
+    priority: "medium",
+    projectSummary: "Old server goal",
+    projectNextAction: "Old server action",
+    dueAt: "2026-07-20T00:00:00.000Z",
+    updatedAt: "2026-07-17T01:00:00.000Z",
+    displaySummary: "Keep display context",
+  };
+  const currentRow = {
+    id: "project-1",
+    name: "Current server title",
+    brand_id: "brand-current",
+    summary: "Current server goal",
+    status: "blocked",
+    priority: "high",
+    next_action: "Current server action",
+    due_at: "2026-07-31T00:00:00.000Z",
+    updated_at: "2026-07-17T02:00:00.000Z",
+  };
+  const operatorDraft = {
+    ...pmsUi.buildProjectEditDraft(source),
+    title: "Operator title",
+    summary: "Operator goal",
+    nextAction: "Operator action",
+  };
+
+  const rebased = pmsUi.rebaseProjectEditSource(source, currentRow);
+
+  assert.deepEqual(rebased, {
+    ...source,
+    name: "Current server title",
+    brandId: "brand-current",
+    projectSummary: "Current server goal",
+    statusKey: "blocked",
+    priority: "high",
+    projectNextAction: "Current server action",
+    dueAt: "2026-07-31T00:00:00.000Z",
+    updatedAt: "2026-07-17T02:00:00.000Z",
+  });
+  assert.deepEqual(pmsUi.buildProjectPatch(rebased, operatorDraft), {
+    id: "project-1",
+    expectedUpdatedAt: "2026-07-17T02:00:00.000Z",
+    title: "Operator title",
+    brandId: "brand-old",
+    summary: "Operator goal",
+    status: "active",
+    priority: "medium",
+    nextAction: "Operator action",
+    dueAt: "2026-07-20",
+  });
+});
+
 test("rotates only the project client id for conflict recovery", () => {
   const draft = pmsUi.buildProjectDraft({
     clientId: "11111111-1111-4111-8111-111111111111",

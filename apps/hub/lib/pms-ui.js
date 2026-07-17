@@ -28,6 +28,7 @@ const TASK_BOARD_COLUMNS = [
   { key: "blocked", label: "대기" },
   { key: "done", label: "완료" },
 ];
+const CONTENT_PIPELINE_STAGES = ["기획", "초안", "검토", "업로드"];
 
 export function taskStatusForBoardColumn(column) {
   return TASK_STATUS_BY_COLUMN[column] || null;
@@ -80,6 +81,43 @@ export function projectReloadContains(result, durableProjectId) {
   return result.projects.some((project) => project?.id === durableProjectId);
 }
 
+function stableHashWord(value, seed) {
+  let hash = (0x811c9dc5 ^ seed) >>> 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = Math.imul(hash ^ value.charCodeAt(index), 0x01000193) >>> 0;
+  }
+  hash ^= hash >>> 16;
+  hash = Math.imul(hash, 0x85ebca6b) >>> 0;
+  hash ^= hash >>> 13;
+  hash = Math.imul(hash, 0xc2b2ae35) >>> 0;
+  return (hash ^ (hash >>> 16)) >>> 0;
+}
+
+function deterministicTaskUuid(value) {
+  const seeds = [0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344];
+  const chars = seeds
+    .map((seed) => stableHashWord(value, seed).toString(16).padStart(8, "0"))
+    .join("")
+    .split("");
+  chars[12] = "8"; // UUIDv8 custom payload: deterministic, browser-safe task identity.
+  chars[16] = ((Number.parseInt(chars[16], 16) & 0x3) | 0x8).toString(16);
+  const hex = chars.join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+export function buildContentPipelineTaskSeeds(projectId) {
+  return CONTENT_PIPELINE_STAGES.map((title) => ({
+    id: deterministicTaskUuid(`${projectId}:content-pipeline:${title}`),
+    title,
+  }));
+}
+
+export function contentPipelineReloadContains(result, taskIds = []) {
+  if (!result?.ok || !Array.isArray(result.todos) || taskIds.length === 0) return false;
+  const loadedIds = new Set(result.todos.map((todo) => todo?.id).filter(Boolean));
+  return taskIds.every((taskId) => loadedIds.has(taskId));
+}
+
 export function shouldOpenGlobalProjectCreate(event = {}, { drawerOpen = false } = {}) {
   if (drawerOpen || event.defaultPrevented || event.isComposing || event.repeat) return false;
   if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false;
@@ -120,6 +158,37 @@ export function buildProjectEditDraft(project = {}) {
     nextAction: project.projectNextAction ?? "",
     dueAt: dateInputValue(project.dueAt),
     updatedAt: project.updatedAt || null,
+  };
+}
+
+function currentProjectValue(current, keys, fallback) {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(current, key)) return current[key];
+  }
+  return fallback;
+}
+
+export function rebaseProjectEditSource(source = {}, current = {}) {
+  return {
+    ...source,
+    id: currentProjectValue(current, ["id"], source.id),
+    name: currentProjectValue(current, ["name", "title"], source.name),
+    brand: currentProjectValue(current, ["brand"], source.brand),
+    brandId: currentProjectValue(current, ["brandId", "brand_id"], source.brandId),
+    projectSummary: currentProjectValue(
+      current,
+      ["projectSummary", "summary"],
+      source.projectSummary,
+    ),
+    statusKey: currentProjectValue(current, ["statusKey", "status"], source.statusKey),
+    priority: currentProjectValue(current, ["priority"], source.priority),
+    projectNextAction: currentProjectValue(
+      current,
+      ["projectNextAction", "nextAction", "next_action"],
+      source.projectNextAction,
+    ),
+    dueAt: currentProjectValue(current, ["dueAt", "due_at"], source.dueAt),
+    updatedAt: currentProjectValue(current, ["updatedAt", "updated_at"], source.updatedAt),
   };
 }
 

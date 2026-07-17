@@ -9,11 +9,14 @@ import {
   buildProjectEditDraft,
   buildProjectPatch,
   buildProjectTimeline,
+  buildContentPipelineTaskSeeds,
   buildTaskBoardColumns,
   buildTaskDraft,
+  contentPipelineReloadContains,
   createClientId,
   mergeProjectDetailQuery,
   projectReloadContains,
+  rebaseProjectEditSource,
   rotateProjectClientId,
   shouldOpenGlobalProjectCreate,
   taskStatusForBoardColumn,
@@ -80,10 +83,6 @@ const PROJECT_CATEGORIES = [
 const FOLDER_STORAGE_KEY = 'mlp.pms.folders';
 // List 뷰의 브랜드 섹션 접기 상태 (전체 브랜드 볼 때만). UI 전용, 브랜드 slug로 영속.
 const BRAND_SECTION_KEY = 'mlp.pms.brand-sections';
-// 콘텐츠 프로젝트 파이프라인 — "＋ 콘텐츠"로 생성 시 이 4단계가 하위 아이템으로 순차 시드된다.
-// (예: "7월3주차 Class.moon 콘텐츠" 프로젝트 안의 기획→초안→검토→업로드)
-const CONTENT_STAGES = ['기획', '초안', '검토', '업로드'];
-
 // 사이드바 드래그 정렬 — 분류(폴더)와 컨테이너(브랜드) 순서. UI 전용, localStorage 영속.
 const FOLDER_ORDER_KEY = 'mlp.pms.folder-order';
 const BRAND_ORDER_KEY = 'mlp.pms.brand-order';
@@ -266,11 +265,12 @@ export function Projects({ workspace }) {
 
       if (!response.ok || !data || data.status === 'error') {
         setSyncState('preview');
-        return { ok: false, projects: [] };
+        return { ok: false, projects: [], todos: [] };
       }
 
       if (data.source === 'supabase') {
         const liveProjects = Array.isArray(data.projects) ? data.projects : [];
+        const liveTodos = Array.isArray(data.todos) ? data.todos : [];
         setLedger({
           source: data.source,
           brands: data.brands?.length ? data.brands : [EMPTY_ALL_BRAND],
@@ -281,10 +281,10 @@ export function Projects({ workspace }) {
           checks: Array.isArray(data.checks) ? data.checks : [],
           columns: Array.isArray(data.columns) ? data.columns : [],
         });
-        setTodos(Array.isArray(data.todos) ? data.todos : []);
+        setTodos(liveTodos);
         if (initial) setExpanded(new Set(liveProjects.slice(0, 2).map(p => p.id)));
         setSyncState('live');
-        return { ok: true, projects: liveProjects };
+        return { ok: true, projects: liveProjects, todos: liveTodos };
       }
 
       setLedger({
@@ -299,10 +299,10 @@ export function Projects({ workspace }) {
       });
       setTodos([]);
       setSyncState('preview');
-      return { ok: false, projects: [] };
+      return { ok: false, projects: [], todos: [] };
     } catch {
       setSyncState('preview');
-      return { ok: false, projects: [] };
+      return { ok: false, projects: [], todos: [] };
     }
   }, []);
 
@@ -412,30 +412,61 @@ export function Projects({ workspace }) {
         setOrderResult({ tone: 'err', label: '저장 응답에 프로젝트 ID가 없습니다' });
         return { ok: false, status: 'error', error: 'missing-durable-project-id', project: data.project || null };
       }
-      // 콘텐츠 파이프라인 프로젝트: 기획→초안→검토→업로드를 하위 아이템으로 순차 시드.
-      let seeded = false;
-      if (draft.contentPipeline && data.status === 'saved') {
+      // 콘텐츠 파이프라인 프로젝트: deterministic IDs make every stage retryable.
+      const pipelineSeeds = draft.contentPipeline
+        ? buildContentPipelineTaskSeeds(durableProjectId)
+        : [];
+      if (draft.contentPipeline) {
         // 원장은 tasks를 updated_at.desc로 정렬한다(operating-ledger). 체크리스트가
         // 기획→초안→검토→업로드로 위에서 아래로 읽히게 하려면 기획을 '마지막'에 생성해
         // 가장 최신이 되게 한다 → 역순 시드.
-        for (const stage of [...CONTENT_STAGES].reverse()) {
-          const stageRes = await fetch('/api/hub/tasks', {
+        for (const stage of [...pipelineSeeds].reverse()) {
+          const stageResponse = await fetch('/api/hub/tasks', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
-              id: createClientId(),
-              title: stage,
+              id: stage.id,
+              title: stage.title,
               projectId: durableProjectId,
               status: 'todo',
               priority: 'medium',
               source: 'hub-projects',
             }),
           }).catch(() => null);
-          if (stageRes && stageRes.ok) seeded = true;
+          const stageData = stageResponse
+            ? await stageResponse.json().catch(() => ({}))
+            : {};
+          if (!stageResponse?.ok || !['saved', 'duplicate'].includes(stageData.status)) {
+            const error = stageData.error || `content-pipeline-stage-failed:${stage.title}`;
+            setOrderResult({ tone: 'err', label: `콘텐츠 단계 저장 실패 · ${stage.title}` });
+            return {
+              ok: false,
+              status: 'pipeline-error',
+              error,
+              durableProjectId,
+              project: data.project,
+              failedStage: stage.title,
+            };
+          }
         }
       }
       const reloadResult = await loadLedger();
-      if (!projectReloadContains(reloadResult, durableProjectId)) {
+      const projectReloaded = projectReloadContains(reloadResult, durableProjectId);
+      const pipelineTaskIds = pipelineSeeds.map((stage) => stage.id);
+      if (
+        draft.contentPipeline
+        && (!projectReloaded || !contentPipelineReloadContains(reloadResult, pipelineTaskIds))
+      ) {
+        setOrderResult({ tone: 'err', label: '콘텐츠 4단계를 새 원장에서 확인하지 못했습니다' });
+        return {
+          ok: false,
+          status: 'pipeline-error',
+          error: 'content-pipeline-not-visible-after-reload',
+          durableProjectId,
+          project: data.project,
+        };
+      }
+      if (!projectReloaded) {
         setOrderResult({ tone: 'err', label: '저장 후 원장에서 프로젝트를 확인하지 못했습니다' });
         return {
           ok: false,
@@ -451,7 +482,7 @@ export function Projects({ workspace }) {
       setOpenDetail(durableProjectId);
       setOrderResult({
         tone: 'ok',
-        label: seeded ? '콘텐츠 프로젝트 저장됨 · 4단계 시드' : '프로젝트 저장됨',
+        label: draft.contentPipeline ? '콘텐츠 프로젝트 저장됨 · 4단계 시드' : '프로젝트 저장됨',
       });
       return { ok: true, status: data.status, durableProjectId, project: data.project };
     } catch (error) {
@@ -498,8 +529,27 @@ export function Projects({ workspace }) {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.status !== 'saved') {
+        if (data.status === 'conflict' && data.project) {
+          const message = '최신 원장 기준을 불러왔습니다. 입력을 유지했으니 다시 저장하면 새 기준으로 재시도합니다.';
+          setProjectEditSource(current => rebaseProjectEditSource(current || projectEditSource, data.project));
+          setOrderResult({ tone: 'err', label: message });
+          return {
+            ok: false,
+            status: 'conflict',
+            error: data.error,
+            detail: data.detail,
+            project: data.project,
+            message,
+          };
+        }
         setOrderResult({ tone: 'err', label: data.error || `업데이트 실패 ${response.status}` });
-        return { ok: false, status: data.status || 'error', error: data.error, detail: data.detail };
+        return {
+          ok: false,
+          status: data.status || 'error',
+          error: data.error,
+          detail: data.detail,
+          project: data.project || null,
+        };
       }
       await loadLedger();
       setOpenDetail(data.project?.id || projectEditSource.id);

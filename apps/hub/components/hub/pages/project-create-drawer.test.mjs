@@ -12,6 +12,10 @@ const detailPanelSource = await readFile(
 ).catch(() => "");
 const projectsSource = await readFile(new URL("./projects.jsx", import.meta.url), "utf8");
 const primitivesSource = await readFile(new URL("../hub-primitives.jsx", import.meta.url), "utf8");
+const rootPackage = JSON.parse(await readFile(
+  new URL("../../../../../package.json", import.meta.url),
+  "utf8",
+));
 
 test("quick create is a dedicated canonical Drawer with the approved primary fields", () => {
   assert.match(createDrawerSource, /export function ProjectCreateDrawer/);
@@ -58,6 +62,22 @@ test("create success waits for a fresh ledger containing the exact durable id", 
   assert.match(projectsSource, /projectReloadContains\(reloadResult, durableProjectId\)/);
   assert.match(projectsSource, /status: ['"]reload-error['"]/);
   assert.match(createDrawerSource, /reload-error/);
+});
+
+test("content pipeline retries seed and verify all four deterministic tasks", () => {
+  assert.match(projectsSource, /buildContentPipelineTaskSeeds/);
+  assert.match(projectsSource, /contentPipelineReloadContains/);
+  assert.match(projectsSource, /return \{ ok: true, projects: liveProjects, todos: liveTodos \}/);
+  assert.match(projectsSource, /\[\s*['"]saved['"],\s*['"]duplicate['"]\s*\]\.includes\(stageData\.status\)/);
+  assert.match(projectsSource, /status: ['"]pipeline-error['"]/);
+  assert.match(createDrawerSource, /pipeline-error/);
+
+  const seedStart = projectsSource.indexOf("if (draft.contentPipeline");
+  const seedEnd = projectsSource.indexOf("const reloadResult", seedStart);
+  const seedBlock = projectsSource.slice(seedStart, seedEnd);
+  assert.ok(seedStart >= 0 && seedEnd > seedStart, "pipeline seed block must exist");
+  assert.doesNotMatch(seedBlock, /data\.status === ['"]saved['"]/);
+  assert.doesNotMatch(seedBlock, /createClientId\(\)/);
 });
 
 test("idempotency conflict preserves the entity and offers both recovery paths", () => {
@@ -114,6 +134,22 @@ test("projects use durable create identity, raw edit drafts, dirty patches, and 
   assert.match(projectsSource, /data\.project\?\.id/);
   assert.match(projectsSource, /expectedUpdatedAt/);
   assert.doesNotMatch(projectsSource, /key: 'progress', label: '진행률 \(%\)'/);
+});
+
+test("stale project edit rebases its source and exposes the loaded-ledger message", () => {
+  assert.match(projectsSource, /rebaseProjectEditSource/);
+  assert.match(projectsSource, /data\.status === ['"]conflict['"][\s\S]{0,240}data\.project/);
+  assert.match(projectsSource, /setProjectEditSource\([\s\S]{0,160}rebaseProjectEditSource/);
+  assert.match(projectsSource, /최신 원장 기준을 불러왔습니다/);
+  assert.match(primitivesSource, /r\?\.message/);
+  assert.match(primitivesSource, /saveFeedback/);
+});
+
+test("root test command includes nested Hub component contracts", () => {
+  assert.match(
+    rootPackage.scripts.test,
+    /["']apps\/hub\/components\/\*\*\/\*\.test\.mjs["']/,
+  );
 });
 
 test("project detail keeps useful display context while editing goal detail as multiline text", () => {
