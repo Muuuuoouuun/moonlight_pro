@@ -538,8 +538,10 @@ test("rejects malformed project and brand relationship ids instead of clearing t
   assert.deepEqual(pmsCommand.normalizePmsCommand({
     action: "create_project",
     id: "11111111-1111-4111-8111-111111111111",
+    areaId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     title: "Project",
     brandId: "not-a-brand-id",
+    orgScope: "personal",
   }, context), { ok: false, reason: "invalid-brand-id" });
   assert.deepEqual(pmsCommand.normalizePmsCommand({
     action: "create_task",

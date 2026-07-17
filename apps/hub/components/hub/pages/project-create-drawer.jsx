@@ -3,6 +3,7 @@
 import React from "react";
 import { validateProjectDraft } from "@/lib/pms-ui";
 import { Button, Drawer, Kbd } from "../hub-primitives";
+import { Iconed } from "../hub-icons";
 
 const CONTROL_STYLE = {
   width: "100%",
@@ -45,8 +46,8 @@ function feedbackFor(result) {
       : "같은 요청 ID에 다른 내용이 감지되었습니다. 입력과 요청 ID를 유지했습니다.";
     return { state: "conflict", message: detail };
   }
-  if (result?.status === "preview") {
-    return { state: "preview", message: "저장 위치가 연결되지 않아 저장되지 않았습니다. 입력은 유지했습니다." };
+  if (["preview", "degraded"].includes(result?.status) || result?.error === "engine-not-configured") {
+    return { state: result?.status === "degraded" ? "degraded" : "preview", message: "저장 위치가 연결되지 않았습니다. 입력은 유지했습니다." };
   }
   const suffix = result?.error ? ` (${result.error})` : "";
   return { state: "error", message: `프로젝트 저장에 실패했습니다. 다시 시도하세요.${suffix}` };
@@ -220,7 +221,7 @@ export function ProjectCreateDrawer({
             name="title"
             value={draft.title}
             onChange={(event) => update("title", event.target.value)}
-            placeholder="예: 8월 콘텐츠 운영"
+            placeholder="예: 갈무리 첫결제 SW"
             aria-invalid={Boolean(errors.title)}
             aria-describedby={errors.title ? "project-title-error" : undefined}
             style={CONTROL_STYLE}
@@ -272,15 +273,16 @@ export function ProjectCreateDrawer({
           <button
             type="button"
             aria-expanded={advancedOpen}
+            aria-controls="project-create-advanced"
             onClick={() => setAdvancedOpen((open) => !open)}
             style={{ width: "100%", minHeight: 44, display: "flex", alignItems: "center", gap: 8, color: "var(--fg-muted)", fontSize: 12.5, textAlign: "left" }}
           >
-            <span aria-hidden="true" style={{ transform: advancedOpen ? "rotate(90deg)" : "none", transition: "transform 160ms ease" }}>›</span>
+            <Iconed name="chevronR" size={14} style={{ transform: advancedOpen ? "rotate(90deg)" : "none", transition: "transform 160ms ease" }} />
             <span style={{ flex: 1 }}>상세 설정</span>
             <span style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>브랜드 · 고객 · 상태</span>
           </button>
           {advancedOpen && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, paddingTop: 10 }}>
+            <div id="project-create-advanced" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, paddingTop: 10 }}>
               <label style={{ ...LABEL_STYLE, gridColumn: "1 / -1" }}>
                 <span>브랜드</span>
                 <select value={draft.brandId || ""} onChange={(event) => update("brandId", event.target.value || null)} style={CONTROL_STYLE}>

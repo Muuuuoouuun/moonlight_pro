@@ -205,8 +205,13 @@ export function buildProjectEditDraft(project = {}) {
     isNew: false,
     id: project.id,
     title: project.name || "",
+    areaId: project.areaId || null,
     brandId: project.brandId || "",
     brandKey: project.brand || "all",
+    entityKey: project.entityRef
+      ? `${project.entityRef.type}:${project.entityRef.id}`
+      : "",
+    orgScope: project.orgScope || "personal",
     summary: project.projectSummary ?? "",
     status: project.statusKey || "active",
     priority: project.priority || "medium",

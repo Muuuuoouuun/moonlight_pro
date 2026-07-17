@@ -644,6 +644,7 @@ export function Projects({ workspace }) {
       const params = mergeProjectDetailQuery(searchParamsRef.current, durableProjectId);
       const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      setExpanded((current) => new Set([...current, durableProjectId]));
       setOpenDetail(durableProjectId);
       setOrderResult({
         tone: 'ok',
@@ -874,20 +875,22 @@ export function Projects({ workspace }) {
       createdFromQueryRef.current = false;
       return;
     }
+    if (drawerOpen || !initialLoadDoneRef.current || syncState === 'loading') return;
     if (createdFromQueryRef.current) return;
+    const opened = openGlobalProjectCreate();
+    if (!opened) return;
     createdFromQueryRef.current = true;
-    openGlobalProjectCreate();
     const params = new URLSearchParams(searchParams.toString());
     params.delete('new');
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  }, [openGlobalProjectCreate, searchParams, router, pathname]);
+  }, [drawerOpen, openGlobalProjectCreate, pathname, router, searchParams, syncState]);
 
   React.useEffect(() => {
     const onKey = (event) => {
       if (!shouldOpenGlobalProjectCreate(event, { drawerOpen })) return;
-      event.preventDefault();
-      openGlobalProjectCreate();
+      const opened = openGlobalProjectCreate();
+      if (opened) event.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
