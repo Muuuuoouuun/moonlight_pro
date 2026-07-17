@@ -196,6 +196,7 @@ export function Projects({ workspace }) {
   const brandMenuRef = React.useRef(null);
   const detailSheetRef = React.useRef(null);
   const detailReturnFocusRef = React.useRef(null);
+  const detailAutofocusPresentationRef = React.useRef(null);
   const createdFromQueryRef = React.useRef(false);
   const [orderPending, setOrderPending] = React.useState(false);
   const [orderResult, setOrderResult] = React.useState(null); // { tone: 'ok'|'err', label }
@@ -385,13 +386,20 @@ export function Projects({ workspace }) {
   }, [pathname, router]);
 
   React.useEffect(() => {
-    if (!openDetail || !mobileDetail) return undefined;
+    if (!openDetail || !mobileDetail) {
+      detailAutofocusPresentationRef.current = null;
+      return undefined;
+    }
+    const detailPresentationKey = `mobile:${openDetail}`;
+    if (detailAutofocusPresentationRef.current === detailPresentationKey) return undefined;
+    detailAutofocusPresentationRef.current = detailPresentationKey;
+    if (drawerOpen) return undefined;
     const sheet = detailSheetRef.current;
     const detailAutofocusRaf = requestAnimationFrame(() => {
       sheet?.querySelector('[aria-label="상세 닫기"]')?.focus();
     });
     return () => cancelAnimationFrame(detailAutofocusRaf);
-  }, [mobileDetail, openDetail]);
+  }, [drawerOpen, mobileDetail, openDetail]);
 
   React.useEffect(() => {
     if (!openDetail || drawerOpen) return undefined;

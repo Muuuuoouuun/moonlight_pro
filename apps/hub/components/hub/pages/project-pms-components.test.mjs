@@ -234,13 +234,32 @@ test("drawer close focus restoration is not overridden by detail autofocus", () 
 
   assert.ok(autofocusStart >= 0 && nextEffect > autofocusStart);
   assert.match(autofocusBlock, /querySelector\(['"]\[aria-label=[^\n]+상세 닫기/);
-  assert.match(autofocusBlock, /\[mobileDetail, openDetail\]/);
-  assert.doesNotMatch(autofocusBlock, /drawerOpen/);
 
   const listenerStart = projectsSource.indexOf("if (!openDetail || drawerOpen)", nextEffect);
   const listenerEnd = projectsSource.indexOf("const toggleExpand", listenerStart);
   const listenerBlock = projectsSource.slice(listenerStart, listenerEnd);
   assert.doesNotMatch(listenerBlock, /detailAutofocusRaf|상세 닫기[^\n]+focus\(\)/);
+});
+
+test("mobile detail autofocus handles each presentation once without crossing an open drawer", () => {
+  const autofocusRef = projectsSource.indexOf("const detailAutofocusPresentationRef");
+  const autofocusRaf = projectsSource.indexOf("const detailAutofocusRaf");
+  const effectStart = projectsSource.lastIndexOf("React.useEffect", autofocusRaf);
+  const effectEnd = projectsSource.indexOf("React.useEffect", autofocusRaf);
+  const effectBlock = projectsSource.slice(effectStart, effectEnd);
+
+  assert.ok(autofocusRef >= 0 && autofocusRef < effectStart, "the one-shot presentation ref must outlive effect reruns");
+  assert.match(effectBlock, /if \(!openDetail \|\| !mobileDetail\) \{[\s\S]{0,160}detailAutofocusPresentationRef\.current = null;[\s\S]{0,80}return undefined;/);
+  assert.match(effectBlock, /const detailPresentationKey = [`'"][^`'"\n]*\$\{openDetail\}[^`'"\n]*[`'"]/);
+
+  const handledCheck = effectBlock.indexOf("detailAutofocusPresentationRef.current === detailPresentationKey");
+  const markHandled = effectBlock.indexOf("detailAutofocusPresentationRef.current = detailPresentationKey");
+  const drawerGuard = effectBlock.indexOf("if (drawerOpen) return undefined");
+  const focusUnderlyingDetail = effectBlock.indexOf("const detailAutofocusRaf");
+  assert.ok(handledCheck >= 0 && handledCheck < markHandled, "an already handled presentation must not autofocus twice");
+  assert.ok(markHandled < drawerGuard, "a drawer-covered presentation must be marked handled before returning");
+  assert.ok(drawerGuard < focusUnderlyingDetail, "the topmost drawer must block underlying detail autofocus");
+  assert.match(effectBlock, /\[drawerOpen, mobileDetail, openDetail\]/);
 });
 
 test("desktop detail-open rows fit the standard sidebar-constrained width without clipping", () => {
