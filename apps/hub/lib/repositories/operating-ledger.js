@@ -645,7 +645,15 @@ export async function getProjectLedger({ projectId = null } = {}) {
     ["notes", noteRows],
     ["routine_checks", routineRows],
   ];
+  const catalogSources = [
+    ["areas", areaRows],
+    ["leads", leadRows],
+    ["customer_accounts", accountRows],
+  ];
   const optionalFailedSources = optionalSources
+    .filter(([, rows]) => !Array.isArray(rows))
+    .map(([source]) => source);
+  const catalogFailedSources = catalogSources
     .filter(([, rows]) => !Array.isArray(rows))
     .map(([source]) => source);
   const selectionOptionalSources = selectedProjectId
@@ -818,15 +826,20 @@ export async function getProjectLedger({ projectId = null } = {}) {
       partial: taskStatsPartial,
     },
     partial: optionalFailedSources.length > 0
+      || catalogFailedSources.length > 0
       || selectionFailedSources.length > 0
       || partialSources.length > 0,
-    failedSources: uniqueSources([...optionalFailedSources, ...selectionFailedSources]),
+    failedSources: uniqueSources([
+      ...optionalFailedSources,
+      ...catalogFailedSources,
+      ...selectionFailedSources,
+    ]),
     partialSources,
     selection: selectedProjectId
       ? {
           projectId: selectedProjectId,
           found: selectedProjectFound,
-          failedSources: uniqueSources(selectionFailedSources),
+          failedSources: uniqueSources([...catalogFailedSources, ...selectionFailedSources]),
           partialSources: uniqueSources(selectionTruncatedSources),
         }
       : null,

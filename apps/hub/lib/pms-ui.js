@@ -195,6 +195,37 @@ export function validateProjectDraft(draft = {}) {
   return errors;
 }
 
+export function projectCreateFeedback(result = {}) {
+  if (result.status === "pipeline-error") {
+    return {
+      state: "error",
+      message: "프로젝트 입력은 유지했습니다. 콘텐츠 4단계를 원장에서 확인할 때까지 같은 요청으로 다시 시도하세요.",
+    };
+  }
+  if (result.status === "reload-error") {
+    return {
+      state: "error",
+      message: "저장은 접수됐지만 새 원장에서 확인하지 못했습니다. 입력과 요청 ID를 유지했으니 다시 시도하세요.",
+    };
+  }
+  if (result.status === "conflict") {
+    const message = result.error === "stale-update"
+      ? "다른 변경이 먼저 저장되었습니다. 입력은 유지했습니다. 원장을 다시 확인한 뒤 재시도하세요."
+      : "같은 요청 ID에 다른 내용이 감지되었습니다. 입력과 요청 ID를 유지했습니다.";
+    return { state: "conflict", message };
+  }
+  if (["preview", "degraded"].includes(result.status) || result.error === "engine-not-configured") {
+    return {
+      state: result.status === "degraded" ? "degraded" : "preview",
+      message: "저장 위치가 연결되지 않았습니다. 입력은 유지했습니다.",
+    };
+  }
+  if (result.error === "invalid-reference") {
+    return { state: "error", message: "연결 항목을 다시 선택하세요." };
+  }
+  return { state: "error", message: "프로젝트를 만들지 못했습니다. 다시 시도하세요." };
+}
+
 function dateInputValue(value) {
   return value ? String(value).slice(0, 10) : "";
 }

@@ -62,7 +62,7 @@ test("create success waits for a fresh ledger containing the exact durable id", 
   assert.match(projectsSource, /const reloadResult = await loadLedger\(\)/);
   assert.match(projectsSource, /projectReloadContains\(reloadResult, durableProjectId\)/);
   assert.match(projectsSource, /status: ['"]reload-error['"]/);
-  assert.match(createDrawerSource, /reload-error/);
+  assert.match(createDrawerSource, /projectCreateFeedback/);
 });
 
 test("content pipeline retries seed and verify all four deterministic tasks", () => {
@@ -71,7 +71,7 @@ test("content pipeline retries seed and verify all four deterministic tasks", ()
   assert.match(projectsSource, /return \{ ok: true, projects: liveProjects, todos: liveTodos \}/);
   assert.match(projectsSource, /\[\s*['"]saved['"],\s*['"]duplicate['"]\s*\]\.includes\(stageData\.status\)/);
   assert.match(projectsSource, /status: ['"]pipeline-error['"]/);
-  assert.match(createDrawerSource, /pipeline-error/);
+  assert.match(createDrawerSource, /projectCreateFeedback/);
 
   const seedStart = projectsSource.indexOf("if (draft.contentPipeline");
   const seedEnd = projectsSource.indexOf("const reloadResult", seedStart);

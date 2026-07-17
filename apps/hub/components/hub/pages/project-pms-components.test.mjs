@@ -231,7 +231,8 @@ test("canonical project selection is forwarded to the Projects API before the bo
   const loadBlock = projectsSource.slice(loadStart, effectStart);
 
   assert.match(projectsSource.slice(0, loadStart), /const selectedProjectId = searchParams\.get\(['"]project['"]\)/);
-  assert.match(loadBlock, /\/api\/hub\/projects\?project=\$\{encodeURIComponent\(selectedProjectId\)\}/);
+  assert.match(loadBlock, /projectId\s*=\s*selectedProjectId/);
+  assert.match(loadBlock, /\/api\/hub\/projects\?project=\$\{encodeURIComponent\(exactProjectId\)\}/);
   assert.match(loadBlock, /fetch\(endpoint, \{ cache: ['"]no-store['"] \}\)/);
   assert.match(loadBlock, /\[selectedProjectId\]/);
   assert.match(projectsSource, /ledger\.selection\?\.projectId === p\.id/);

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { validateProjectDraft } from "@/lib/pms-ui";
+import { projectCreateFeedback, validateProjectDraft } from "@/lib/pms-ui";
 import { Button, Drawer, Kbd } from "../hub-primitives";
 import { Iconed } from "../hub-icons";
 
@@ -27,37 +27,12 @@ const LABEL_STYLE = {
   letterSpacing: "0.04em",
 };
 
-function feedbackFor(result) {
-  if (result?.status === "pipeline-error") {
-    return {
-      state: "error",
-      message: "프로젝트 입력은 유지했습니다. 콘텐츠 4단계를 원장에서 확인할 때까지 같은 요청으로 다시 시도하세요.",
-    };
-  }
-  if (result?.status === "reload-error") {
-    return {
-      state: "error",
-      message: "저장은 접수됐지만 새 원장에서 확인하지 못했습니다. 입력과 요청 ID를 유지했으니 다시 시도하세요.",
-    };
-  }
-  if (result?.status === "conflict") {
-    const detail = result.error === "stale-update"
-      ? "다른 변경이 먼저 저장되었습니다. 입력은 유지했습니다. 원장을 다시 확인한 뒤 재시도하세요."
-      : "같은 요청 ID에 다른 내용이 감지되었습니다. 입력과 요청 ID를 유지했습니다.";
-    return { state: "conflict", message: detail };
-  }
-  if (["preview", "degraded"].includes(result?.status) || result?.error === "engine-not-configured") {
-    return { state: result?.status === "degraded" ? "degraded" : "preview", message: "저장 위치가 연결되지 않았습니다. 입력은 유지했습니다." };
-  }
-  const suffix = result?.error ? ` (${result.error})` : "";
-  return { state: "error", message: `프로젝트 저장에 실패했습니다. 다시 시도하세요.${suffix}` };
-}
-
 export function ProjectCreateDrawer({
   draft,
   areas = [],
   brands = [],
   entities = [],
+  failedSources = [],
   onChange,
   onClose,
   onSave,
@@ -74,6 +49,9 @@ export function ProjectCreateDrawer({
   const titleRef = React.useRef(null);
   const areaRef = React.useRef(null);
   const formId = React.useId();
+  const areaUnavailable = failedSources.includes("areas");
+  const entityCatalogUnavailable = failedSources.includes("leads")
+    || failedSources.includes("customer_accounts");
 
   React.useEffect(() => {
     if (retryingClientIdRef.current === draft?.clientId) {
@@ -99,6 +77,11 @@ export function ProjectCreateDrawer({
   }, [onChange]);
 
   const validateDraft = React.useCallback((candidate) => {
+    if (areaUnavailable) {
+      setSaveState("degraded");
+      setFeedback("업무 분야 목록을 불러오지 못했습니다. 새 프로젝트 만들기를 잠시 사용할 수 없습니다.");
+      return false;
+    }
     const nextErrors = validateProjectDraft(candidate);
     setErrors(nextErrors);
     if (!nextErrors.title && !nextErrors.areaId) return true;
@@ -110,7 +93,7 @@ export function ProjectCreateDrawer({
       else areaRef.current?.focus();
     });
     return false;
-  }, []);
+  }, [areaUnavailable]);
 
   const saveDraft = React.useCallback(async (candidate) => {
     if (savingRef.current) return;
@@ -125,13 +108,14 @@ export function ProjectCreateDrawer({
         onClose?.();
         return;
       }
-      const next = feedbackFor(result);
+      const next = projectCreateFeedback(result);
       setConflictProject(result?.status === "conflict" ? result.project || null : null);
       setSaveState(next.state);
       setFeedback(next.message);
-    } catch (error) {
-      setSaveState("error");
-      setFeedback(`프로젝트 저장에 실패했습니다. 다시 시도하세요. (${error instanceof Error ? error.message : String(error)})`);
+    } catch {
+      const next = projectCreateFeedback({ status: "error" });
+      setSaveState(next.state);
+      setFeedback(next.message);
     } finally {
       savingRef.current = false;
     }
@@ -166,9 +150,9 @@ export function ProjectCreateDrawer({
       }
       setSaveState("conflict");
       setFeedback("기존 프로젝트를 새 원장에서 확인하지 못했습니다. 입력은 유지했습니다. 다시 시도하세요.");
-    } catch (error) {
+    } catch {
       setSaveState("conflict");
-      setFeedback(`기존 프로젝트를 열지 못했습니다. 입력은 유지했습니다. (${error instanceof Error ? error.message : String(error)})`);
+      setFeedback("기존 프로젝트를 열지 못했습니다. 입력은 유지했습니다. 다시 시도하세요.");
     } finally {
       savingRef.current = false;
     }
@@ -193,21 +177,21 @@ export function ProjectCreateDrawer({
       subtitle="큰 결과와 첫 행동부터 기록하세요."
       onClose={() => { if (!savingRef.current) onClose?.(); }}
       initialFocusRef={titleRef}
-      width="min(440px, 100vw)"
+      width="min(420px, 100vw)"
       footerStyle={{ flexWrap: "wrap" }}
       footer={(
         <>
           {saveState === "conflict" && (
             <div style={{ width: "100%", display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <Button variant="outline" size="sm" onClick={handleRetryWithNewClientId} disabled={saving}>새 요청으로 다시 시도</Button>
-              <Button variant="ghost" size="sm" onClick={handleOpenConflictProject} disabled={saving || !conflictProject}>기존 프로젝트 열기</Button>
+              <Button variant="outline" size="sm" onClick={handleRetryWithNewClientId} disabled={saving} style={{ minHeight: 44 }}>새 요청으로 다시 시도</Button>
+              <Button variant="ghost" size="sm" onClick={handleOpenConflictProject} disabled={saving || !conflictProject} style={{ minHeight: 44 }}>기존 프로젝트 열기</Button>
             </div>
           )}
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>취소</Button>
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={saving} style={{ minHeight: 44 }}>취소</Button>
           <div aria-live="polite" style={{ flex: 1, minWidth: 0, fontSize: 11, lineHeight: 1.4, color: saveState === "error" || saveState === "conflict" ? "var(--danger)" : "var(--fg-muted)" }}>
             {feedback || <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Kbd>⌘↵</Kbd></span>}
           </div>
-          <Button variant="primary" size="sm" type="submit" form={formId} disabled={saving}>
+          <Button variant="primary" size="sm" type="submit" form={formId} disabled={saving || areaUnavailable} style={{ minHeight: 44 }}>
             {saving ? "만드는 중…" : "프로젝트 만들기"}
           </Button>
         </>
@@ -260,13 +244,21 @@ export function ProjectCreateDrawer({
             value={draft.areaId || ""}
             onChange={(event) => update("areaId", event.target.value)}
             aria-invalid={Boolean(errors.areaId)}
-            aria-describedby={errors.areaId ? "project-area-error" : undefined}
+            aria-describedby={[
+              errors.areaId ? "project-area-error" : null,
+              areaUnavailable ? "project-area-unavailable" : null,
+            ].filter(Boolean).join(" ") || undefined}
             style={CONTROL_STYLE}
           >
             <option value="">업무 분야 선택</option>
             {areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
           </select>
           {errors.areaId && <span id="project-area-error" role="alert" style={{ color: "var(--danger)", letterSpacing: 0 }}>{errors.areaId}</span>}
+          {areaUnavailable && (
+            <span id="project-area-unavailable" role="status" style={{ color: "var(--danger)", letterSpacing: 0 }}>
+              업무 분야 목록을 불러오지 못했습니다. 새 프로젝트 만들기를 잠시 사용할 수 없습니다.
+            </span>
+          )}
         </label>
 
         <div style={{ borderTop: "1px solid var(--line-soft)", paddingTop: 10 }}>
@@ -282,7 +274,7 @@ export function ProjectCreateDrawer({
             <span style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>브랜드 · 고객 · 상태</span>
           </button>
           {advancedOpen && (
-            <div id="project-create-advanced" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, paddingTop: 10 }}>
+            <div id="project-create-advanced" className="project-create-advanced-grid">
               <label style={{ ...LABEL_STYLE, gridColumn: "1 / -1" }}>
                 <span>브랜드</span>
                 <select value={draft.brandId || ""} onChange={(event) => update("brandId", event.target.value || null)} style={CONTROL_STYLE}>
@@ -294,12 +286,22 @@ export function ProjectCreateDrawer({
               </label>
               <label style={{ ...LABEL_STYLE, gridColumn: "1 / -1" }}>
                 <span>관련 리드/고객</span>
-                <select value={draft.entityKey || ""} onChange={(event) => update("entityKey", event.target.value)} style={CONTROL_STYLE}>
+                <select
+                  value={draft.entityKey || ""}
+                  onChange={(event) => update("entityKey", event.target.value)}
+                  aria-describedby={entityCatalogUnavailable ? "project-entity-catalog-unavailable" : undefined}
+                  style={CONTROL_STYLE}
+                >
                   <option value="">연결 없음</option>
                   {entities.map((entity) => (
                     <option key={entity.key} value={entity.key}>{entity.label}</option>
                   ))}
                 </select>
+                {entityCatalogUnavailable && (
+                  <span id="project-entity-catalog-unavailable" role="status" style={{ color: "var(--danger)", letterSpacing: 0 }}>
+                    리드·고객 목록 일부를 불러오지 못했습니다.
+                  </span>
+                )}
               </label>
               <label style={LABEL_STYLE}>
                 <span>상태</span>
@@ -328,6 +330,19 @@ export function ProjectCreateDrawer({
           )}
         </div>
       </form>
+      <style jsx>{`
+        .project-create-advanced-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 10px;
+          padding-top: 10px;
+        }
+        @media (min-width: 640px) {
+          .project-create-advanced-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+      `}</style>
     </Drawer>
   );
 }

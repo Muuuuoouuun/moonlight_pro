@@ -406,6 +406,23 @@ test("plain N opens global project create only outside editable targets and draw
   );
 });
 
+test("project create feedback translates invalid references and hides unknown internal codes", () => {
+  assert.deepEqual(pmsUi.projectCreateFeedback({
+    status: "invalid-input",
+    error: "invalid-reference",
+  }), {
+    state: "error",
+    message: "연결 항목을 다시 선택하세요.",
+  });
+  assert.deepEqual(pmsUi.projectCreateFeedback({
+    status: "error",
+    error: "internal-ledger-code-947",
+  }), {
+    state: "error",
+    message: "프로젝트를 만들지 못했습니다. 다시 시도하세요.",
+  });
+});
+
 test("builds a minimal task draft from the current project context", () => {
   assert.deepEqual(
     pmsUi.buildTaskDraft({ projectId: "project-1", initialStatus: "doing" }),

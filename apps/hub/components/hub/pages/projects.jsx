@@ -294,12 +294,16 @@ export function Projects({ workspace }) {
           : 'preview · 실제 원장 미연결';
   })();
 
-  const loadLedger = React.useCallback(async ({ initial = false } = {}) => {
+  const loadLedger = React.useCallback(async ({
+    initial = false,
+    projectId = selectedProjectId,
+  } = {}) => {
     setSyncState('loading');
     setReadError(null);
     try {
-      const endpoint = selectedProjectId
-        ? `/api/hub/projects?project=${encodeURIComponent(selectedProjectId)}`
+      const exactProjectId = typeof projectId === 'string' ? projectId.trim() : '';
+      const endpoint = exactProjectId
+        ? `/api/hub/projects?project=${encodeURIComponent(exactProjectId)}`
         : '/api/hub/projects';
       const response = await fetch(endpoint, { cache: 'no-store' });
       const data = await response.json().catch(() => null);
@@ -385,6 +389,9 @@ export function Projects({ workspace }) {
     }
     if (allProjects.some(project => project.id === selectedProjectId)) {
       setOpenDetail(selectedProjectId);
+      setExpanded((current) => current.has(selectedProjectId)
+        ? current
+        : new Set([...current, selectedProjectId]));
       return;
     }
     setOpenDetail(null);
@@ -641,6 +648,7 @@ export function Projects({ workspace }) {
           project: data.project,
         };
       }
+      setBrand('all');
       const params = mergeProjectDetailQuery(searchParamsRef.current, durableProjectId);
       const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
@@ -668,10 +676,11 @@ export function Projects({ workspace }) {
     if (!durableProjectId) {
       return { ok: false, status: 'error', error: 'missing-conflict-project-id' };
     }
-    const reloadResult = await loadLedger();
+    const reloadResult = await loadLedger({ projectId: durableProjectId });
     if (!projectReloadContains(reloadResult, durableProjectId)) {
       return { ok: false, status: 'reload-error', error: 'conflict-project-not-visible-after-reload' };
     }
+    setBrand('all');
     const params = mergeProjectDetailQuery(searchParamsRef.current, durableProjectId);
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
@@ -896,26 +905,15 @@ export function Projects({ workspace }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [drawerOpen, openGlobalProjectCreate]);
 
-  // ?project=<id> 딥링크 (§8.1) — 원장 로드 후 해당 프로젝트의 우측 상세 패널을 1회 열고
-  // 쿼리를 소거한다. 내 작업 상세 패널의 "프로젝트에서 열기"가 이 경로로 들어온다.
-  // 상세 패널은 tree 뷰에만 있으므로 view 쿼리도 함께 지워 tree(기본)로 되돌린다.
-  const projectQueryRef = React.useRef(false);
+  // ?project=<id> is the canonical detail selection. Normalize only the view;
+  // the project id stays in the URL so reloads and exact bounded reads remain open.
   React.useEffect(() => {
-    if (projectQueryRef.current || !initialLoadDoneRef.current) return;
-    const target = searchParams.get('project');
-    if (!target) return;
-    projectQueryRef.current = true;
-    const match = allProjects.find((p) => p.id === target);
-    if (match) {
-      setOpenDetail(match.id);
-      setExpanded((prev) => new Set([...prev, match.id]));
-    }
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete('project');
-    if (match) params.delete('view');
+    if (!initialLoadDoneRef.current || syncState === 'loading') return;
+    if (!selectedProjectId || view === 'tree') return;
+    const params = mergeProjectDetailQuery(searchParams, selectedProjectId);
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [searchParams, syncState, allProjects, router, pathname]);
+  }, [pathname, router, searchParams, selectedProjectId, syncState, view]);
 
   // 사이드바 드래그 정렬 상태 (UI 전용, localStorage). brandGroups가 이 순서를 적용하므로
   // 반드시 memo보다 먼저 선언한다.
@@ -1838,6 +1836,7 @@ export function Projects({ workspace }) {
           areas={ledger.areas}
           brands={brands}
           entities={ledger.projectEntities}
+          failedSources={ledger.failedSources}
           onChange={(key, value) => setProjectDraft(current => ({ ...current, [key]: value }))}
           onSave={persistProjectCreate}
           onRetryWithNewClientId={retryProjectCreateWithNewId}

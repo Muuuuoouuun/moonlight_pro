@@ -42,6 +42,24 @@ test("project create drawer keeps optional context in an accessible collapsed se
   assert.match(drawerSource, /entities\.map/);
 });
 
+test("project create drawer keeps the approved responsive width and touch targets", () => {
+  assert.match(drawerSource, /width=["']min\(420px,\s*100vw\)["']/);
+  assert.match(drawerSource, /className=["']project-create-advanced-grid["']/);
+  assert.match(drawerSource, /@media\s*\(min-width:\s*640px\)[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.ok(
+    (drawerSource.match(/<Button[\s\S]{0,220}style=\{\{\s*minHeight:\s*44\s*\}\}/g) || []).length >= 4,
+    "every create footer and conflict action must keep a 44px touch target",
+  );
+});
+
+test("project create drawer discloses unavailable Area and entity catalogs", () => {
+  assert.match(drawerSource, /failedSources\s*=\s*\[\]/);
+  assert.match(drawerSource, /failedSources\.includes\(["']areas["']\)/);
+  assert.match(drawerSource, /업무 분야 목록을 불러오지 못했습니다\. 새 프로젝트 만들기를 잠시 사용할 수 없습니다\./);
+  assert.match(drawerSource, /리드·고객 목록 일부를 불러오지 못했습니다\./);
+  assert.match(projectsSource, /failedSources=\{ledger\.failedSources\}/);
+});
+
 test("project create drawer validates inline, announces state, and gates duplicate saves", () => {
   assert.match(drawerSource, /validateProjectDraft/);
   assert.match(drawerSource, /aria-describedby/);
@@ -50,7 +68,7 @@ test("project create drawer validates inline, announces state, and gates duplica
   assert.match(drawerSource, /\(event\.metaKey \|\| event\.ctrlKey\)[\s\S]*event\.key === ["']Enter["']/);
   assert.match(drawerSource, /만드는 중…/);
   assert.match(drawerSource, /프로젝트 만들기/);
-  assert.match(drawerSource, /저장 위치가 연결되지 않았습니다\./);
+  assert.match(drawerSource, /projectCreateFeedback/);
   assert.match(drawerSource, /["']degraded["']/);
   assert.match(drawerSource, /<Iconed\s+name=["']chevronR["']/);
   assert.doesNotMatch(drawerSource, />›</);
@@ -68,6 +86,31 @@ test("projects page separates create and edit drawers and hands durable success 
   assert.match(projectsSource, /setExpanded\([\s\S]*durableProjectId/);
   assert.match(projectsSource, /setOpenDetail\(durableProjectId\)/);
   assert.match(projectsSource, /mergeProjectDetailQuery\(searchParamsRef\.current,\s*durableProjectId\)/);
+
+  const createStart = projectsSource.indexOf("const persistProjectCreate");
+  const createEnd = projectsSource.indexOf("const retryProjectCreateWithNewId", createStart);
+  const createBlock = projectsSource.slice(createStart, createEnd);
+  const brandReset = createBlock.indexOf("setBrand('all')");
+  const expand = createBlock.indexOf("setExpanded(");
+  const detail = createBlock.indexOf("setOpenDetail(durableProjectId)");
+  assert.ok(brandReset >= 0, "successful create must reset the visible brand lane");
+  assert.ok(brandReset < expand && brandReset < detail, "brand reset must happen before expand/detail handoff");
+});
+
+test("project detail query remains canonical selection and conflict open exact-reads it", () => {
+  assert.doesNotMatch(projectsSource, /projectQueryRef/);
+  const queryStart = projectsSource.indexOf("// ?project=<id>");
+  const queryEnd = projectsSource.indexOf("// 사이드바 드래그", queryStart);
+  const queryBlock = projectsSource.slice(queryStart, queryEnd);
+  assert.ok(queryStart >= 0 && queryEnd > queryStart, "canonical project query effect must exist");
+  assert.match(queryBlock, /mergeProjectDetailQuery\(searchParams,\s*selectedProjectId\)/);
+  assert.doesNotMatch(queryBlock, /delete\(['"]project['"]\)/);
+
+  const conflictStart = projectsSource.indexOf("const openConflictProject");
+  const conflictEnd = projectsSource.indexOf("const persistProjectEdit", conflictStart);
+  const conflictBlock = projectsSource.slice(conflictStart, conflictEnd);
+  assert.match(conflictBlock, /loadLedger\(\{\s*projectId:\s*durableProjectId\s*\}\)/);
+  assert.match(conflictBlock, /projectReloadContains\(reloadResult,\s*durableProjectId\)/);
 });
 
 test("only the visible create drawer owns the create shortcut submit path", () => {
