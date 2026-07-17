@@ -13,9 +13,17 @@ export const dynamic = "force-dynamic";
 const ACTIVITY_DAYS = 30;
 const DAY_MS = 86400000;
 
-function ledgerState(result) {
+function ledgerState(result, key) {
   if (result.status === "rejected") return "error";
-  return result.value?.source === "supabase" ? "live" : "preview";
+  const value = result.value;
+  if (value?.source === "error") return "error";
+  if (key === "work" && ["error", "partial", "preview"].includes(value?.rhythm?.state)) {
+    return value.rhythm.state;
+  }
+  if (value?.source === "supabase") return value.partial ? "partial" : "live";
+  if (value?.source === "partial") return "partial";
+  if (value?.source === "preview" && value?.configured === true) return "error";
+  return "preview";
 }
 
 function readLedger(result, fallback = {}) {
@@ -43,12 +51,22 @@ function withinDays(value, days) {
 // Daily histogram of real event timestamps — project_updates (work),
 // decisions (planning), and publishes (content). No synthetic fallback
 // series: an empty ledger renders as a flat zero line, not a fabricated trend.
-function buildActivitySeries(updates, decisions, publishLogs) {
+function buildActivitySeries(
+  updates,
+  decisions,
+  publishLogs,
+  { updatesAvailable = true, decisionsAvailable = true, contentAvailable = true } = {},
+) {
   const since = startOfDaysAgo(ACTIVITY_DAYS - 1);
   const buckets = new Map();
   for (let i = 0; i < ACTIVITY_DAYS; i += 1) {
     const key = dayKey(new Date(since.getTime() + i * DAY_MS));
-    buckets.set(key, { date: key, work: 0, decisions: 0, content: 0 });
+    buckets.set(key, {
+      date: key,
+      work: updatesAvailable ? 0 : null,
+      decisions: decisionsAvailable ? 0 : null,
+      content: contentAvailable ? 0 : null,
+    });
   }
   updates.forEach((update) => {
     const key = dayKey(update.happenedAt);
@@ -173,12 +191,37 @@ function buildRevenueStageSeries(revenue) {
 
 function buildSources(results) {
   return [
-    { key: "projects", label: "Projects", state: ledgerState(results.projects) },
-    { key: "content", label: "Content", state: ledgerState(results.content) },
-    { key: "revenue", label: "Revenue", state: ledgerState(results.revenue) },
-    { key: "automations", label: "Automations", state: ledgerState(results.automations) },
-    { key: "work", label: "Work", state: ledgerState(results.work) },
-  ];
+    ["projects", "Projects"],
+    ["content", "Content"],
+    ["revenue", "Revenue"],
+    ["automations", "Automations"],
+    ["work", "Work"],
+  ].map(([key, label]) => {
+    const result = results[key];
+    const value = result.status === "fulfilled" ? result.value : null;
+    const state = ledgerState(result, key);
+    const failedSources = Array.isArray(value?.failedSources) ? [...value.failedSources] : [];
+    const rhythmPartialSources = key === "work" && value?.rhythm?.state === "partial"
+      ? (Array.isArray(value.rhythm.truncatedSources) && value.rhythm.truncatedSources.length > 0
+          ? value.rhythm.truncatedSources
+          : ["rhythm"])
+      : [];
+    const rawPartialSources = Array.isArray(value?.partialSources) ? value.partialSources : [];
+    const partialSources = Array.from(new Set([...rawPartialSources, ...rhythmPartialSources]));
+    if (state === "error" && failedSources.length === 0) failedSources.push(key);
+    if (state === "partial" && failedSources.length === 0 && partialSources.length === 0) {
+      partialSources.push(key);
+    }
+    return {
+      key,
+      label,
+      state,
+      failedSources,
+      partialSources,
+      error: state === "error" ? value?.error || value?.rhythm?.error || `${key}-ledger-read-failed` : null,
+      retryable: state === "error" ? value?.retryable !== false : false,
+    };
+  });
 }
 
 export async function GET() {
@@ -206,37 +249,76 @@ export async function GET() {
 
   const sources = buildSources(results);
   const liveCount = sources.filter((source) => source.state === "live").length;
-  const errorCount = sources.filter((source) => source.state === "error").length;
+  const degradedSources = sources.filter((source) => ["error", "partial"].includes(source.state));
+  const failedSources = Array.from(new Set(sources.flatMap((source) => source.failedSources)));
+  const partialSources = Array.from(new Set(sources.flatMap((source) => source.partialSources)));
 
   const operatorHome = buildOperatorHomeSummary({ projects, content });
 
-  const updatesThisWeek = (projects.updates || []).filter((update) => withinDays(update.happenedAt, 7)).length;
-  const decisionsThisWeek = (projects.decisions || []).filter((decision) => withinDays(decision.decidedAt, 7)).length;
-  const publishedThisWeek = (content.publishLogs || []).filter(
-    (log) => log.status === "published" && withinDays(log.publishedAt || log.createdAt, 7),
-  ).length;
+  const projectReadable = projects?.source === "supabase";
+  const projectFailures = new Set(projects?.failedSources || []);
+  const projectPartials = new Set(projects?.partialSources || []);
+  const contentFailures = new Set(content?.failedSources || []);
+  const contentPartials = new Set(content?.partialSources || []);
+  const projectCoreAvailable = projectReadable
+    && !projectFailures.has("projects")
+    && !projectPartials.has("projects");
+  const updatesAvailable = projectReadable
+    && !projectFailures.has("project_updates")
+    && !projectPartials.has("project_updates");
+  const decisionsAvailable = projectReadable
+    && !projectFailures.has("decisions")
+    && !projectPartials.has("decisions");
+  const contentAvailable = content?.source === "supabase"
+    && !contentFailures.has("publish_logs")
+    && !contentFailures.has("publishLogs")
+    && !contentPartials.has("publish_logs")
+    && !contentPartials.has("publishLogs");
+  const updatesThisWeek = updatesAvailable
+    ? (projects.updates || []).filter((update) => withinDays(update.happenedAt, 7)).length
+    : null;
+  const decisionsThisWeek = decisionsAvailable
+    ? (projects.decisions || []).filter((decision) => withinDays(decision.decidedAt, 7)).length
+    : null;
+  const publishedThisWeek = contentAvailable
+    ? (content.publishLogs || []).filter(
+        (log) => log.status === "published" && withinDays(log.publishedAt || log.createdAt, 7),
+      ).length
+    : null;
 
   return NextResponse.json({
-    status: errorCount ? "partial" : liveCount ? "live" : "preview",
-    source: liveCount ? "supabase" : "preview",
+    status: degradedSources.length ? "partial" : liveCount ? "live" : "preview",
+    source: degradedSources.length ? "partial" : liveCount ? "supabase" : "preview",
     generatedAt: new Date().toISOString(),
     sources,
+    failedSources,
+    partialSources,
     kpis: {
       updatesThisWeek,
       decisionsThisWeek,
       publishedThisWeek,
-      activeProjects: operatorHome.pms?.activeProjects ?? 0,
-      blockedProjects: operatorHome.pms?.blockedProjects ?? 0,
+      activeProjects: projectCoreAvailable ? operatorHome.pms?.activeProjects ?? null : null,
+      blockedProjects: projectCoreAvailable ? operatorHome.pms?.blockedProjects ?? null : null,
     },
-    activitySeries: buildActivitySeries(projects.updates || [], projects.decisions || [], content.publishLogs || []),
+    activitySeries: buildActivitySeries(
+      projects.updates || [],
+      projects.decisions || [],
+      content.publishLogs || [],
+      { updatesAvailable, decisionsAvailable, contentAvailable },
+    ),
     operatorHome,
     revenue: {
       summary: revenue.summary || {},
       stageSeries: buildRevenueStageSeries(revenue),
     },
     automationsSummary: automations.summary || {},
-    brandActivity: buildBrandActivity(projects),
+    brandActivity: projectCoreAvailable && updatesAvailable && decisionsAvailable
+      ? buildBrandActivity(projects)
+      : null,
     rhythm: {
+      state: ["live", "live-empty", "partial", "preview", "error"].includes(work?.rhythm?.state)
+        ? work.rhythm.state
+        : sources.find((source) => source.key === "work")?.state || "error",
       summary: work.summary || {},
       rituals: (work.rituals || []).slice().sort((a, b) => (b.streak || 0) - (a.streak || 0)).slice(0, 3),
     },

@@ -10,6 +10,10 @@ interface SupabaseQueryOptions {
   order?: string;
 }
 
+interface SupabaseMutationOptions {
+  returnRepresentation?: boolean;
+}
+
 function resolveSupabaseRestConfig(): SupabaseRestConfig | null {
   const url = process.env.SUPABASE_URL?.trim();
   const apiKey =
@@ -133,11 +137,14 @@ export async function checkSupabaseRest(table = "projects") {
   }
 }
 
-export async function fetchSupabaseRows(table: string, options: SupabaseQueryOptions = {}) {
+export async function fetchSupabaseRowsDetailed(
+  table: string,
+  options: SupabaseQueryOptions = {},
+) {
   const config = resolveSupabaseRestConfig();
 
   if (!config) {
-    return null;
+    return { ok: false as const, reason: "missing-config" };
   }
 
   try {
@@ -147,13 +154,29 @@ export async function fetchSupabaseRows(table: string, options: SupabaseQueryOpt
     });
 
     if (!response.ok) {
-      return null;
+      return {
+        ok: false as const,
+        reason: `http-${response.status}`,
+        detail: await response.text().catch(() => ""),
+      };
     }
 
-    return await response.json();
-  } catch {
-    return null;
+    const rows = await response.json().catch(() => null);
+    return Array.isArray(rows)
+      ? { ok: true as const, rows }
+      : { ok: false as const, reason: "invalid-response" };
+  } catch (error) {
+    return {
+      ok: false as const,
+      reason: "request-failed",
+      detail: error instanceof Error ? error.message : String(error),
+    };
   }
+}
+
+export async function fetchSupabaseRows(table: string, options: SupabaseQueryOptions = {}) {
+  const result = await fetchSupabaseRowsDetailed(table, options);
+  return result.ok ? result.rows : null;
 }
 
 export async function invokeSupabaseRpc(name: string, params: Record<string, unknown>) {
@@ -282,6 +305,7 @@ export async function updateSupabaseRecord(
   table: string,
   filters: Array<[string, string]>,
   record: Record<string, unknown>,
+  options: SupabaseMutationOptions = {},
 ) {
   const config = resolveSupabaseRestConfig();
 
@@ -304,7 +328,7 @@ export async function updateSupabaseRecord(
       method: "PATCH",
       headers: makeHeaders(config.apiKey, {
         contentType: "application/json",
-        prefer: "return=minimal",
+        prefer: options.returnRepresentation ? "return=representation" : "return=minimal",
       }),
       body: JSON.stringify(record),
     });
@@ -318,10 +342,22 @@ export async function updateSupabaseRecord(
       };
     }
 
-    return {
-      persisted: true,
-      reason: "ok",
-    };
+    if (options.returnRepresentation) {
+      const rows = await response.json().catch(() => null);
+      if (!Array.isArray(rows)) {
+        return {
+          persisted: false,
+          reason: "invalid-response",
+        };
+      }
+      return {
+        persisted: true,
+        reason: "ok",
+        rows,
+      };
+    }
+
+    return { persisted: true, reason: "ok" };
   } catch (error) {
     return {
       persisted: false,

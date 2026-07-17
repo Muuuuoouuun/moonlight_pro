@@ -109,6 +109,7 @@ function rankSignals(signals) {
 
 function syncTone(state) {
   if (state === 'live') return 'success';
+  if (state === 'partial') return 'warning';
   if (state === 'error') return 'danger';
   if (state === 'mixed' || state === 'preview' || state === 'syncing') return 'warning';
   return 'neutral';
@@ -116,6 +117,7 @@ function syncTone(state) {
 
 function sourceLabel(state) {
   if (state === 'live') return 'live';
+  if (state === 'partial') return 'partial';
   if (state === 'error') return 'error';
   if (state === 'syncing') return 'syncing';
   if (state === 'mixed') return 'mixed';
@@ -379,11 +381,13 @@ function useDailyBriefLedger(refreshKey) {
 
         const liveCount = Number(data.summary?.liveCount || 0);
         const sourceCount = Array.isArray(data.sources) ? data.sources.length : 0;
-        const nextSyncState = liveCount > 0 && liveCount === sourceCount
-          ? 'live'
-          : liveCount > 0
-          ? 'mixed'
-          : 'preview';
+        const nextSyncState = data.status === 'partial'
+          ? 'partial'
+          : data.status === 'live'
+            ? 'live'
+            : liveCount > 0 && liveCount < sourceCount
+              ? 'mixed'
+              : 'preview';
 
         setState({
           syncState: nextSyncState,
@@ -543,10 +547,10 @@ function OperatorPulse({ operatorHome, contentBrands, onNavigate }) {
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8, marginTop: 14, marginBottom: 16 }}>
                 {[
-                  ['열린 일', pms.openTasks],
-                  ['기한 도래', pms.dueOrOverdueTasks],
+                  ['열린 일', pms.openTasks ?? '—'],
+                  ['기한 도래', pms.dueOrOverdueTasks ?? '—'],
                   ['막힌 P', pms.blockedProjects],
-                  ['완료율', `${pms.taskCompletionRate}%`],
+                  ['완료율', pms.taskCompletionRate == null ? '—' : `${pms.taskCompletionRate}` + '%'],
                 ].map(([label, value]) => (
                   <div key={label} style={{ padding: '8px 9px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', minWidth: 0 }}>
                     <div className="stat" style={{ fontSize: 18, fontWeight: 600 }}>{value}</div>
@@ -1157,6 +1161,8 @@ function StatusLine({ state }) {
   const label = state.syncState === 'mixed' ? `${liveCount}/${sourceCount || 6} live` : sourceLabel(state.syncState);
   const detail = state.syncState === 'preview'
     ? 'preview · Supabase 연결 후 live 전환'
+    : state.syncState === 'partial'
+    ? '일부 운영 기록을 읽지 못했습니다'
     : state.syncState === 'mixed'
     ? '일부 기록은 live, 일부는 preview'
     : state.syncState === 'syncing'

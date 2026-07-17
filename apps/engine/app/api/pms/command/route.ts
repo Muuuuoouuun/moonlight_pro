@@ -5,6 +5,7 @@ import { executePmsCommand } from "../../../../lib/pms-command-service.ts";
 import { validateSharedWebhookRequest } from "../../../../lib/shared-webhook.ts";
 import {
   fetchSupabaseRows,
+  fetchSupabaseRowsDetailed,
   insertSupabaseRecord,
   updateSupabaseRecord,
 } from "../../../../lib/supabase-rest.ts";
@@ -51,18 +52,31 @@ export async function POST(req: Request) {
   const ownerId = typeof ownerRows?.[0]?.owner_id === "string" ? ownerRows[0].owner_id : null;
   const result = await executePmsCommand(body, { workspaceId, ownerId }, {
     insert: insertSupabaseRecord,
-    update: updateSupabaseRecord,
+    update: (table, filters, patch) => updateSupabaseRecord(
+      table,
+      filters,
+      patch,
+      { returnRepresentation: true },
+    ),
     fetchRows: async (table, options = {}) => fetchSupabaseRows(
       table,
       options as Parameters<typeof fetchSupabaseRows>[1],
+    ),
+    fetchRowsDetailed: async (table, options = {}) => fetchSupabaseRowsDetailed(
+      table,
+      options as Parameters<typeof fetchSupabaseRowsDetailed>[1],
     ),
   });
   const statusCode = result.status === "saved"
     ? (String(body.action).startsWith("create_") ? 201 : 200)
     : result.status === "duplicate"
       ? 200
+      : result.status === "conflict"
+        ? 409
       : result.status === "invalid-input"
         ? 400
+        : result.error === "not-found"
+          ? 404
         : result.error === "missing-config"
           ? 202
           : 502;

@@ -111,6 +111,7 @@ create table routine_checks (
   check_type text not null check (check_type in ('morning', 'midday', 'evening', 'weekly')),
   status text not null default 'pending' check (status in ('pending', 'done', 'skipped', 'blocked')),
   note text,
+  idempotency_key text,
   checked_at timestamptz,
   created_at timestamptz not null default now()
 );
@@ -488,6 +489,9 @@ create table export_logs (
 
 create index idx_projects_workspace_status on projects (workspace_id, status);
 create index idx_project_updates_workspace_happened on project_updates (workspace_id, happened_at desc);
+create unique index routine_checks_workspace_idempotency_key_uidx
+  on routine_checks (workspace_id, idempotency_key)
+  where idempotency_key is not null;
 create index idx_tasks_workspace_status on tasks (workspace_id, status);
 create index idx_content_items_workspace_status on content_items (workspace_id, status);
 create index idx_content_variants_content on content_variants (content_id, variant_type);

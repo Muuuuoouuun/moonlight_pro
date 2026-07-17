@@ -208,15 +208,42 @@ export async function getAttentionLedger() {
   const weekEndIso = new Date(now.getTime() + 7 * DAY_MS).toISOString();
 
   const [projectLedger, revenueLedger, calendar] = await Promise.all([
-    getProjectLedger().catch(() => null),
+    getProjectLedger().catch(() => ({
+      source: "error",
+      error: "project-ledger-request-failed",
+      failedSources: ["tasks"],
+      todos: [],
+    })),
     getRevenueLedger().catch(() => null),
     listGoogleCalendarEvents({ timeMin: startOfTodayIso, timeMax: weekEndIso, maxResults: 50 }).catch(
       () => ({ ok: false, reason: "calendar-read-failed", items: [] }),
     ),
   ]);
 
+  const taskAggregationPartial = projectLedger?.source === "supabase"
+    && projectLedger?.taskAggregation?.partial === true;
+  const taskSourceState = projectLedger?.source === "error"
+    ? "error"
+    : projectLedger?.source === "supabase"
+      ? taskAggregationPartial ? "partial" : "live"
+      : "preview";
+  const taskLedgerReadable = projectLedger?.source === "supabase";
+  const taskFailedSources = projectLedger?.source === "error"
+    ? Array.isArray(projectLedger?.failedSources) ? projectLedger.failedSources : ["tasks"]
+    : taskAggregationPartial
+      ? ["tasks"]
+      : [];
+  const sourceFailures = ["error", "partial"].includes(taskSourceState)
+    ? [{
+        source: "tasks",
+        error: projectLedger?.source === "error"
+          ? projectLedger.error || "project-ledger-core-read-failed"
+          : "task-ledger-partial-read",
+        failedSources: taskFailedSources,
+      }]
+    : [];
   const sources = {
-    tasks: projectLedger?.source === "supabase" ? "live" : "preview",
+    tasks: taskSourceState,
     deals: revenueLedger?.source === "supabase" ? "live" : "preview",
     calendar: calendar?.ok ? "live" : "preview",
   };
@@ -235,7 +262,12 @@ export async function getAttentionLedger() {
   );
 
   const items = [
-    ...mapTaskItems(projectLedger?.todos, projectLedger?.projects, todayKey, weekEndKey),
+    ...mapTaskItems(
+      taskLedgerReadable ? projectLedger?.todos : [],
+      projectLedger?.projects,
+      todayKey,
+      weekEndKey,
+    ),
     ...mapDealItems(revenueLedger?.deals, revenueLedger?.stages, todayKey, weekEndKey),
     ...mapEventItems(calendar?.items, todayKey, weekEndKey),
   ].map((item) => ({ ...item, ...assignPriority(item, leadScoreByDealEntityId) }));
@@ -243,6 +275,8 @@ export async function getAttentionLedger() {
   return {
     todayKey,
     sources,
+    failedSources: sourceFailures.map((failure) => failure.source),
+    sourceFailures,
     calendarReason: calendar?.ok ? "" : calendar?.reason || "",
     items,
   };

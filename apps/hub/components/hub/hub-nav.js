@@ -353,3 +353,96 @@ export function deriveSidebarScope(activePath) {
   if (path.startsWith('dashboard/brand/')) return 'personal';
   return null;
 }
+
+// Mobile navigation is a modal drawer only below the shell breakpoint. Keep
+// this state derivation executable outside React so desktop accessibility and
+// mobile inert ownership cannot drift independently in JSX.
+export function getMobileNavigationState({ isMobileViewport, navOpen }) {
+  const open = Boolean(isMobileViewport && navOpen);
+  return {
+    open,
+    navHidden: Boolean(isMobileViewport && !navOpen),
+    mainHidden: open,
+  };
+}
+
+export function setElementInert(element, inert) {
+  if (!element?.toggleAttribute) return false;
+  element.toggleAttribute('inert', Boolean(inert));
+  return element.hasAttribute?.('inert') ?? Boolean(inert);
+}
+
+// Dismissal focus must move before React makes the drawer inert. The opener is
+// deliberately outside the inert <main>, so this synchronous order is safe.
+export function dismissMobileNavigation({ active, focusTarget, close }) {
+  if (!active) return false;
+  focusTarget?.focus?.();
+  close?.();
+  return true;
+}
+
+// Route navigation has a different final-focus policy. Leave the soon-to-be
+// hidden drawer synchronously, then let the shell focus the refreshed <main>
+// after the close commit.
+export function beginMobileNavigationRoute({ active, markMainFocus, focusTarget, close }) {
+  if (!active) return false;
+  markMainFocus?.();
+  focusTarget?.focus?.();
+  close?.();
+  return true;
+}
+
+export function getMobileNavigationTabTarget({ focusables, activeElement, shiftKey }) {
+  if (!Array.isArray(focusables) || focusables.length === 0) return null;
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  if (shiftKey && activeElement === first) return last;
+  if (!shiftKey && activeElement === last) return first;
+  return null;
+}
+
+export function shouldMobileNavigationHandleEscape({ open, paletteOpen, tweaksOpen }) {
+  return Boolean(open && !paletteOpen && !tweaksOpen);
+}
+
+export function shouldFocusMainAfterMobileNavigation({ pending, currentPath, navOpen }) {
+  if (!pending || navOpen) return false;
+  const fromPath = String(pending.fromPath || '');
+  const targetPath = String(pending.targetPath || '');
+  const visiblePath = String(currentPath || '');
+  if (!fromPath || !targetPath || !visiblePath) return false;
+  if (targetPath === fromPath) return visiblePath === fromPath;
+  // A different committed path is either the requested target or its eventual
+  // redirect. The old path must never consume the pending focus handoff.
+  return visiblePath !== fromPath;
+}
+
+// Dashboard paths share the same HubApp implementation but Next.js remounts
+// the page component when a catch-all segment changes. Keep this short-lived
+// handoff at module scope so the destination mount can consume it. It is only
+// written by browser event handlers and is cleared as soon as focus lands.
+let pendingMobileNavigationRouteFocus = null;
+
+export function rememberMobileNavigationRouteFocus({ fromPath, targetPath } = {}) {
+  const from = String(fromPath || '');
+  const target = String(targetPath || '');
+  pendingMobileNavigationRouteFocus = from && target
+    ? { fromPath: from, targetPath: target }
+    : null;
+  return pendingMobileNavigationRouteFocus;
+}
+
+export function readMobileNavigationRouteFocus() {
+  return pendingMobileNavigationRouteFocus;
+}
+
+export function clearMobileNavigationRouteFocus() {
+  pendingMobileNavigationRouteFocus = null;
+}
+
+export function completeMobileNavigationDesktopHandoff({ active, close, focusTarget }) {
+  if (!active) return false;
+  close?.();
+  focusTarget?.focus?.();
+  return true;
+}

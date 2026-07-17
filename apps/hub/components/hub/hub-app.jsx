@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
@@ -10,6 +11,18 @@ import { TopBar } from "./hub-topbar";
 import { CommandPalette } from "./hub-command-palette";
 import { TweaksPanel } from "./hub-tweaks-panel";
 import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
+import {
+  beginMobileNavigationRoute,
+  clearMobileNavigationRouteFocus,
+  completeMobileNavigationDesktopHandoff,
+  dismissMobileNavigation,
+  getMobileNavigationState,
+  readMobileNavigationRouteFocus,
+  rememberMobileNavigationRouteFocus,
+  setElementInert,
+  shouldFocusMainAfterMobileNavigation,
+  shouldMobileNavigationHandleEscape,
+} from "./hub-nav";
 import {
   DEFAULT_HUB_PREFERENCES,
   persistHubPreference,
@@ -80,6 +93,22 @@ const PREFETCH_PAGES = [
   () => import("./pages/projects"),
   () => import("./pages/overview"),
 ];
+
+const MOBILE_NAV_QUERY = '(max-width: 900px)';
+
+function useMobileViewport() {
+  const [isMobileViewport, setIsMobileViewport] = React.useState(false);
+
+  React.useEffect(() => {
+    const media = window.matchMedia(MOBILE_NAV_QUERY);
+    const update = () => setIsMobileViewport(media.matches);
+    update();
+    media.addEventListener?.('change', update);
+    return () => media.removeEventListener?.('change', update);
+  }, []);
+
+  return isMobileViewport;
+}
 
 function useIdlePagePrefetch() {
   React.useEffect(() => {
@@ -206,6 +235,7 @@ const PARENT_JUMP = {
 
 export function HubApp() {
   useIdlePagePrefetch();
+  const isMobileViewport = useMobileViewport();
   const router = useRouter();
   const pathname = usePathname() || '/dashboard';
   const searchParams = useSearchParams();
@@ -227,6 +257,11 @@ export function HubApp() {
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [tweaksOpen, setTweaksOpen] = React.useState(false);
   const rootRef = React.useRef(null);
+  const menuButtonRef = React.useRef(null);
+  const mobileCloseButtonRef = React.useRef(null);
+  const mainRef = React.useRef(null);
+  const pendingRouteFocusRef = React.useRef(readMobileNavigationRouteFocus());
+  const mobileNavState = getMobileNavigationState({ isMobileViewport, navOpen });
 
   React.useEffect(() => {
     let storage = null;
@@ -250,23 +285,132 @@ export function HubApp() {
     persistHubPreference(storage, 'theme', nextTheme);
   }, []);
 
+  const closeMobileNavigation = React.useCallback(() => {
+    dismissMobileNavigation({
+      active: mobileNavState.open,
+      focusTarget: menuButtonRef.current,
+      close: () => setNavOpen(false),
+    });
+  }, [mobileNavState.open]);
+
   const navigate = React.useCallback((p) => {
     const [basePath, suffix = ''] = String(p || '').split(/(?=[?#])/, 2);
     const target = PARENT_JUMP[basePath] || basePath;
     router.push('/' + target + suffix);
-    setNavOpen(false);
   }, [router]);
+
+  const navigateFromSidebar = React.useCallback((p) => {
+    const [basePath, suffix = ''] = String(p || '').split(/(?=[?#])/, 2);
+    const target = PARENT_JUMP[basePath] || basePath;
+    beginMobileNavigationRoute({
+      active: mobileNavState.open,
+      markMainFocus: () => {
+        pendingRouteFocusRef.current = rememberMobileNavigationRouteFocus({
+          fromPath: path,
+          targetPath: target,
+        });
+      },
+      focusTarget: menuButtonRef.current,
+      close: () => setNavOpen(false),
+    });
+    router.push('/' + target + suffix);
+  }, [mobileNavState.open, path, router]);
+
+  React.useEffect(() => {
+    if (!mobileNavState.open) return;
+    let focusFrame = null;
+    const visibilityFrame = window.requestAnimationFrame(() => {
+      focusFrame = window.requestAnimationFrame(() => mobileCloseButtonRef.current?.focus());
+    });
+    return () => {
+      window.cancelAnimationFrame(visibilityFrame);
+      if (focusFrame !== null) window.cancelAnimationFrame(focusFrame);
+    };
+  }, [mobileNavState.open]);
+
+  React.useLayoutEffect(() => {
+    setElementInert(mainRef.current, mobileNavState.mainHidden);
+  }, [mobileNavState.mainHidden]);
+
+  React.useLayoutEffect(() => {
+    const shouldFocus = shouldFocusMainAfterMobileNavigation({
+      pending: pendingRouteFocusRef.current || readMobileNavigationRouteFocus(),
+      currentPath: path,
+      navOpen: mobileNavState.open,
+    });
+    if (!shouldFocus) return;
+    pendingRouteFocusRef.current = null;
+    clearMobileNavigationRouteFocus();
+    mainRef.current?.focus();
+  }, [mobileNavState.open, path]);
+
+  React.useEffect(() => {
+    const ownsEscape = shouldMobileNavigationHandleEscape({
+      open: mobileNavState.open,
+      paletteOpen,
+      tweaksOpen,
+    });
+    if (!ownsEscape) return;
+    const onKey = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeMobileNavigation();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [closeMobileNavigation, mobileNavState.open, paletteOpen, tweaksOpen]);
+
+  React.useEffect(() => {
+    const media = window.matchMedia(MOBILE_NAV_QUERY);
+    const onBreakpointChange = (event) => {
+      if (event.matches) return;
+      completeMobileNavigationDesktopHandoff({
+        active: navOpen,
+        close: () => {
+          pendingRouteFocusRef.current = null;
+          clearMobileNavigationRouteFocus();
+          flushSync(() => setNavOpen(false));
+        },
+        focusTarget: mainRef.current,
+      });
+    };
+    media.addEventListener?.('change', onBreakpointChange);
+    return () => media.removeEventListener?.('change', onBreakpointChange);
+  }, [navOpen]);
+
+  const openCommandPalette = React.useCallback(() => {
+    closeMobileNavigation();
+    setTweaksOpen(false);
+    setPaletteOpen(true);
+  }, [closeMobileNavigation]);
+
+  const toggleTweaksPanel = React.useCallback(() => {
+    if (tweaksOpen) {
+      setTweaksOpen(false);
+      return;
+    }
+    closeMobileNavigation();
+    setPaletteOpen(false);
+    setTweaksOpen(true);
+  }, [closeMobileNavigation, tweaksOpen]);
+
+  const openMobileNavigation = React.useCallback(() => {
+    if (!isMobileViewport || paletteOpen || tweaksOpen) return;
+    setNavOpen(true);
+  }, [isMobileViewport, paletteOpen, tweaksOpen]);
 
   React.useEffect(() => {
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        setPaletteOpen(o => !o);
+        if (paletteOpen) setPaletteOpen(false);
+        else openCommandPalette();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [openCommandPalette, paletteOpen]);
 
   const render = PAGE_MAP[path];
   const page = render ? render(navigate) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
@@ -275,37 +419,47 @@ export function HubApp() {
   return (
     <div ref={rootRef} className="hub-app" data-theme={theme} data-density={density}>
       <div className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'}>
-        <button
-          type="button"
+        <div
           className="hub-mobile-backdrop"
-          aria-label="Close navigation"
-          onClick={() => setNavOpen(false)}
+          aria-hidden="true"
+          onClick={closeMobileNavigation}
         />
         <Sidebar
           className="hub-sidebar-root"
           active={path}
           view={view}
-          onNavigate={navigate}
+          onNavigate={navigateFromSidebar}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setCollapsed(c => !c)}
-          openPalette={() => setPaletteOpen(true)}
+          openPalette={openCommandPalette}
+          mobileHidden={mobileNavState.navHidden}
+          mobileOpen={mobileNavState.open}
+          onMobileClose={closeMobileNavigation}
+          mobileCloseButtonRef={mobileCloseButtonRef}
         />
-        <main className="hub-main">
+        <div className="hub-main">
           <TopBar
             path={path}
             onNavigate={navigate}
-            onNew={() => setPaletteOpen(true)}
-            onSidebarOpen={() => setNavOpen(true)}
-            onTweaksToggle={() => setTweaksOpen(o => !o)}
+            onNew={openCommandPalette}
+            onSidebarOpen={openMobileNavigation}
+            navOpen={mobileNavState.open}
+            menuButtonRef={menuButtonRef}
+            onTweaksToggle={toggleTweaksPanel}
             density={density}
             onDensity={updateDensity}
             theme={theme}
             onTheme={updateTheme}
           />
-          <div key={path} className="hub-content scroll-y fade-up">
-            {page}
-          </div>
-        </main>
+          <main
+            ref={mainRef}
+            tabIndex={-1}
+            aria-hidden={mobileNavState.mainHidden ? 'true' : undefined}
+            className="hub-content scroll-y"
+          >
+            <div key={path} className="fade-up">{page}</div>
+          </main>
+        </div>
       </div>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={navigate} />
       <TweaksPanel open={tweaksOpen} onClose={() => setTweaksOpen(false)} density={density} onDensity={updateDensity} />

@@ -4,7 +4,7 @@ import {
   inFilter,
   withWorkspaceFilter,
 } from "@/lib/server-read";
-import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
 import { resolveLeadEnrichmentView } from "../sales-os/lead-view.js";
 import { DEAL_STAGES, STAGE_ALIASES, LEGACY_DB_STAGE_VALUES } from "../deal-stages.js";
 
@@ -359,9 +359,10 @@ export async function getAccountActivities(accountId) {
 
 export async function getRevenueLedger() {
   const workspaceId = resolveDefaultWorkspaceId();
+  const supabaseConfig = resolveSupabaseConfig();
 
-  if (!workspaceId) {
-    return emptyLedger(false, null);
+  if (!workspaceId || !supabaseConfig) {
+    return emptyLedger(false, workspaceId || null);
   }
 
   const [leadRows, dealRows, accountRows, caseRows, companyRows, contactRows] = await Promise.all([

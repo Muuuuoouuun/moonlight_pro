@@ -20,6 +20,11 @@
   --moon-700:      oklch(0.38 0.008 250);
   --moon-bg:       oklch(0.35 0.008 250 / 0.9);
   --moon-line:     var(--moon-600);
+  --pms-moonstone: #5274a8;
+
+  --z-project-detail: 61;
+  --z-drawer-overlay: 70;
+  --z-drawer: 71;
 
   --fg:            var(--moon-100);
   --fg-muted:      var(--moon-400);
@@ -96,6 +101,7 @@
   --moon-700:      oklch(0.88 0.005 250);
   --moon-bg:       var(--surface-3);
   --moon-line:     var(--moon-300);
+  --pms-moonstone: #5274a8;
 
   --fg:            oklch(0.20 0.008 250);
   --fg-muted:      oklch(0.42 0.008 250);
@@ -325,7 +331,8 @@
 }
 
 .hub-mobile-backdrop,
-.hub-mobile-only {
+.hub-mobile-only,
+.hub-mobile-nav-close {
   display: none !important;
 }
 
@@ -514,6 +521,21 @@
     display: inline-flex !important;
   }
 
+  .hub-mobile-nav-opener {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .hub-mobile-nav-close {
+    display: inline-flex !important;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .hub-desktop-sidebar-collapse {
+    display: none !important;
+  }
+
   .hub-mobile-hidden,
   .hub-topbar__meta,
   .hub-topbar__density,
@@ -544,12 +566,17 @@
     max-width: 304px !important;
     height: 100dvh !important;
     transform: translateX(-104%);
-    transition: transform 0.18s ease;
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform 0.18s ease, visibility 0s linear 0.18s;
     box-shadow: var(--shadow-pop);
   }
 
   .hub-shell[data-nav-open="true"] .hub-sidebar-root {
     transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
   }
 
   .hub-main {
@@ -696,6 +723,150 @@
     position: static !important;
     /* 클릭한 항목의 상세가 첫 화면에 바로 보이도록 목록 위로 끌어올린다. */
     order: -1;
+  }
+
+  .hub-project-table {
+    overflow-x: hidden !important;
+  }
+
+  .hub-project-list-head {
+    display: none !important;
+  }
+
+  .hub-project-row {
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+    grid-template-rows: auto !important;
+    gap: 0 !important;
+    padding: 0 !important;
+  }
+
+  .hub-project-row__controls {
+    grid-column: 1 !important;
+    grid-row: 1 / span 3 !important;
+    align-items: flex-start !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+    padding: 8px 0 8px 8px !important;
+  }
+
+  .hub-project-row__open {
+    grid-column: 2 !important;
+    grid-row: auto !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 9px !important;
+    min-height: 0 !important;
+    padding: 12px !important;
+  }
+
+  .hub-project-row > .hub-pms-progress {
+    grid-column: 2 !important;
+    grid-row: auto !important;
+    padding: 0 12px 12px;
+  }
+
+  .hub-project-next-action {
+    padding: 8px 10px;
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r-sm);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .hub-project-due-risk,
+  .hub-project-secondary-state {
+    flex-direction: row !important;
+    align-items: center !important;
+    flex-wrap: wrap;
+  }
+
+  .hub-project-due-risk {
+    gap: 6px 10px !important;
+  }
+
+  .hub-project-secondary-state {
+    grid-column: 2 !important;
+    grid-row: auto !important;
+    gap: 8px !important;
+    padding: 0 12px 12px;
+  }
+
+  .hub-project-subtasks {
+    padding-left: 44px !important;
+  }
+
+  .hub-project-subtask {
+    grid-template-columns: 18px minmax(0, 1fr) !important;
+    min-height: 44px !important;
+  }
+
+  .hub-project-subtask__assignee,
+  .hub-project-subtask__due {
+    display: none;
+  }
+
+  .hub-project-primary-control,
+  .hub-project-planning-links a,
+  .hub-project-board-status {
+    min-height: 44px !important;
+  }
+
+  .hub-pms-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .hub-pms-summary__cell:nth-child(2) {
+    border-right: 0 !important;
+  }
+
+  .hub-pms-summary__cell:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .hub-project-detail-sheet {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: var(--z-project-detail) !important;
+    display: flex !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    min-height: 0 !important;
+    padding-top: max(52px, 8dvh);
+    overflow: hidden !important;
+    background: transparent !important;
+  }
+
+  .hub-project-detail-sheet__backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: block !important;
+    width: 100%;
+    min-height: 100% !important;
+    border-radius: 0;
+    background: oklch(0.10 0.006 250 / 0.72) !important;
+    backdrop-filter: blur(6px);
+  }
+
+  .hub-project-detail-sheet__links {
+    width: 100%;
+    border: 1px solid var(--line-soft) !important;
+    border-bottom: 0 !important;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    background: var(--surface) !important;
+  }
+
+  .hub-project-detail-sheet > aside {
+    position: relative;
+    z-index: 1;
+    width: 100% !important;
+    min-width: 0 !important;
+    border-top: 1px solid var(--line-soft);
+    border-left: 0 !important;
+    background: var(--surface) !important;
+  }
+
+  .hub-project-detail-sheet > aside > div:first-child,
+  .hub-project-detail-sheet > aside > div:last-child {
+    min-height: 52px;
   }
 
   .campaign-war-room {

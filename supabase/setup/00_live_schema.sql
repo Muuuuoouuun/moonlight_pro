@@ -99,7 +99,7 @@ create table if not exists public.projects (
   summary text,
   status text not null default 'active' check (status in ('draft', 'active', 'blocked', 'completed', 'archived')),
   priority text not null default 'medium' check (priority in ('low', 'medium', 'high', 'critical')),
-  progress integer not null default 0 check (progress between 0 and 100),
+  progress integer check (progress between 0 and 100),
   next_action text,
   started_at timestamptz,
   due_at timestamptz,
@@ -193,6 +193,7 @@ create table if not exists public.routine_checks (
   check_type text not null check (check_type in ('morning', 'midday', 'evening', 'weekly')),
   status text not null default 'pending' check (status in ('pending', 'done', 'skipped', 'blocked')),
   note text,
+  idempotency_key text,
   meta jsonb not null default '{}'::jsonb,
   checked_at timestamptz,
   created_at timestamptz not null default now(),
@@ -618,11 +619,15 @@ alter table if exists public.projects
   add column if not exists owner_id uuid references public.profiles(id) on delete set null,
   add column if not exists slug text,
   add column if not exists summary text,
-  add column if not exists progress integer not null default 0,
+  add column if not exists progress integer,
   add column if not exists last_activity_at timestamptz,
   add column if not exists completed_at timestamptz,
   add column if not exists meta jsonb not null default '{}'::jsonb,
   add column if not exists updated_at timestamptz not null default now();
+
+alter table if exists public.projects
+  alter column progress drop default,
+  alter column progress drop not null;
 
 alter table if exists public.milestones
   add column if not exists workspace_id uuid references public.workspaces(id) on delete cascade;
@@ -649,6 +654,7 @@ alter table if exists public.project_updates
 
 alter table if exists public.routine_checks
   add column if not exists actor_id uuid references public.profiles(id) on delete set null,
+  add column if not exists idempotency_key text,
   add column if not exists meta jsonb not null default '{}'::jsonb,
   add column if not exists updated_at timestamptz not null default now();
 
@@ -892,6 +898,7 @@ create unique index if not exists idx_projects_workspace_slug on public.projects
 create index if not exists idx_project_updates_workspace_happened on public.project_updates (workspace_id, happened_at desc);
 create index if not exists idx_project_updates_project_happened on public.project_updates (workspace_id, project_id, happened_at desc);
 create index if not exists idx_project_updates_correlation on public.project_updates (workspace_id, correlation_id) where correlation_id is not null;
+create unique index if not exists routine_checks_workspace_idempotency_key_uidx on public.routine_checks (workspace_id, idempotency_key) where idempotency_key is not null;
 create index if not exists idx_tasks_workspace_status on public.tasks (workspace_id, status);
 create index if not exists idx_tasks_workspace_owner_status_due on public.tasks (workspace_id, owner_id, status, due_at);
 create index if not exists idx_tasks_workspace_project_status on public.tasks (workspace_id, project_id, status);

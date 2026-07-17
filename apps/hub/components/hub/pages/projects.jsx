@@ -3,8 +3,34 @@
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState, SyncBadge, SegmentedControl, EditDrawer } from "../hub-primitives";
-import { buildProjectDraft, buildProjectTimeline, buildTaskBoardColumns, buildTaskDraft, createClientId, taskStatusForBoardColumn } from "@/lib/pms-ui";
+import { Badge, Dot, Card, IconButton, Button, Checkbox, EmptyState, SyncBadge, SegmentedControl, EditDrawer, Kbd } from "../hub-primitives";
+import {
+  buildProjectDraft,
+  buildProjectEditDraft,
+  buildProjectPatch,
+  buildProjectTimeline,
+  buildTimelineItemAriaLabel,
+  buildContentPipelineTaskSeeds,
+  buildTaskBoardColumns,
+  buildTaskDraft,
+  contentPipelineReloadContains,
+  createClientId,
+  mergeProjectDetailQuery,
+  mergeTimelineProjectQuery,
+  projectReloadContains,
+  rebaseProjectEditState,
+  rotateProjectClientId,
+  shouldOpenGlobalProjectCreate,
+  taskStatusForBoardColumn,
+  validateProjectDraft,
+} from "@/lib/pms-ui";
+import { ProjectCreateDrawer } from "./project-create-drawer";
+import { ProjectDetailPanel } from "./project-detail-panel";
+import {
+  ProjectPlanningLinks,
+  ProjectPortfolioSummary,
+  ProjectProgressGauge,
+} from "./project-pms-components";
 import {
   getWorkspace,
   filterBrandsByWorkspace,
@@ -26,41 +52,6 @@ const EMPTY_ALL_BRAND = {
   changes: 0,
 };
 
-function DetailSection({ title, count = 0, empty, children }) {
-  return (
-    <div>
-      <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 8, display: 'flex', alignItems: 'center' }}>
-        <span style={{ flex: 1 }}>{title}</span>
-        <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{count}</span>
-      </div>
-      {count > 0 ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{children}</div>
-      ) : (
-        <div style={{ padding: '10px 11px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg-faint)', fontSize: 11.5 }}>
-          {empty}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ActivityRow({ title, body, meta, badge, tone = 'neutral' }) {
-  return (
-    <div style={{ padding: '9px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-        {badge && <Badge tone={tone} size="xs">{badge}</Badge>}
-        <div style={{ flex: 1, minWidth: 0, fontSize: 12.2, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
-        {meta && <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{meta}</span>}
-      </div>
-      {body && (
-        <div style={{ marginTop: 5, color: 'var(--fg-muted)', fontSize: 11.5, lineHeight: 1.45 }}>
-          {body}
-        </div>
-      )}
-    </div>
-  );
-}
-
 const PROJECT_VIEW_OPTIONS = [
   { key: 'tree', label: 'List' },
   { key: 'board', label: 'Board' },
@@ -72,12 +63,12 @@ const PROJECT_VIEWS = new Set(PROJECT_VIEW_OPTIONS.map(v => v.key));
 // Timeline view: status → left-stripe token (§5.2 — status color lives on stripes/chips,
 // never as a full bar fill) and the same Korean status labels the List view row uses.
 const STATUS_LINE_TOKEN = {
-  'In progress': 'var(--info-line)',
-  Review: 'var(--warning-line)',
+  'In progress': 'var(--pms-moonstone)',
+  Review: 'var(--line-strong)',
   Planning: 'var(--line-strong)',
   Backlog: 'var(--line-soft)',
   Blocked: 'var(--danger-line)',
-  Done: 'var(--success-line)',
+  Done: 'var(--line-strong)',
 };
 const STATUS_LABEL_KO = {
   'In progress': '작업 중',
@@ -99,13 +90,10 @@ const PROJECT_CATEGORIES = [
 const FOLDER_STORAGE_KEY = 'mlp.pms.folders';
 // List 뷰의 브랜드 섹션 접기 상태 (전체 브랜드 볼 때만). UI 전용, 브랜드 slug로 영속.
 const BRAND_SECTION_KEY = 'mlp.pms.brand-sections';
-// 콘텐츠 프로젝트 파이프라인 — "＋ 콘텐츠"로 생성 시 이 4단계가 하위 아이템으로 순차 시드된다.
-// (예: "7월3주차 Class.moon 콘텐츠" 프로젝트 안의 기획→초안→검토→업로드)
-const CONTENT_STAGES = ['기획', '초안', '검토', '업로드'];
-
 // 사이드바 드래그 정렬 — 분류(폴더)와 컨테이너(브랜드) 순서. UI 전용, localStorage 영속.
 const FOLDER_ORDER_KEY = 'mlp.pms.folder-order';
 const BRAND_ORDER_KEY = 'mlp.pms.brand-order';
+const DETAIL_FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 // order(키 배열)에 없는 항목은 원래 순서를 유지하며 맨 뒤로 (stable sort).
 function applyCustomOrder(items, order, keyOf) {
@@ -179,6 +167,7 @@ export function Projects({ workspace }) {
   // setView's identity stable so the existing createProject/createTodo callbacks
   // don't need it in their dependency lists.
   const view = normalizeProjectView(searchParams.get('view'));
+  const selectedProjectId = searchParams.get('project');
   const searchParamsRef = React.useRef(searchParams);
   searchParamsRef.current = searchParams;
   const setView = React.useCallback((next) => {
@@ -197,22 +186,34 @@ export function Projects({ workspace }) {
     notes: [],
     checks: [],
     columns: [],
+    partial: false,
+    failedSources: [],
+    partialSources: [],
+    taskAggregation: null,
   });
   const [todos, setTodos] = React.useState([]);
   const [drag, setDrag] = React.useState(null);
   const [expanded, setExpanded] = React.useState(() => new Set());
   const [openDetail, setOpenDetail] = React.useState(null);
+  const [mobileDetail, setMobileDetail] = React.useState(false);
   const [brandMenuOpen, setBrandMenuOpen] = React.useState(false);
   const [sidebarHidden, setSidebarHidden] = React.useState(false);
   const [syncState, setSyncState] = React.useState('preview');
+  const [readError, setReadError] = React.useState(null);
   const brandMenuRef = React.useRef(null);
+  const detailSheetRef = React.useRef(null);
+  const detailReturnFocusRef = React.useRef(null);
+  const detailAutofocusPresentationRef = React.useRef(null);
   const createdFromQueryRef = React.useRef(false);
   const [orderPending, setOrderPending] = React.useState(false);
   const [orderResult, setOrderResult] = React.useState(null); // { tone: 'ok'|'err', label }
   const [projectDraft, setProjectDraft] = React.useState(null);
+  const [projectCreateContext, setProjectCreateContext] = React.useState(null);
+  const [projectEditSource, setProjectEditSource] = React.useState(null);
   const [taskDraft, setTaskDraft] = React.useState(null);
   const [containerDraft, setContainerDraft] = React.useState(null);
   const [localContainers, setLocalContainers] = React.useState([]);
+  const drawerOpen = Boolean(projectDraft || taskDraft || containerDraft);
 
   const formatTime = (d) => {
     try {
@@ -274,20 +275,39 @@ export function Projects({ workspace }) {
   const brandTodos = brand === 'all' ? scopedTodos : scopedTodos.filter(t => t.brand === brand);
   const currentBrand = brands.find(b => b.key === brand) || brands[0] || EMPTY_ALL_BRAND;
   const visibleColumns = buildTaskBoardColumns(brandTodos, allProjects);
+  const openTodoCount = brandTodos.filter(t => !t.done).length;
+  const projectReadPartial = ledger.partialSources?.includes('projects') === true;
+  const projectHeaderSummary = (() => {
+    const taskReadPartial = ledger.taskAggregation?.partial === true || ledger.partialSources?.includes('tasks');
+    const projectCountLabel = projectReadPartial ? `${projects.length}+` : projects.length;
+    return ['live', 'partial'].includes(syncState)
+      ? `${projectCountLabel} projects · ${taskReadPartial ? `${openTodoCount}+ open todos` : `${openTodoCount} open todos`}`
+      : syncState === 'loading'
+        ? '프로젝트 원장 확인 중'
+        : syncState === 'error'
+          ? '프로젝트 원장 읽기 실패'
+          : 'preview · 실제 원장 미연결';
+  })();
 
   const loadLedger = React.useCallback(async ({ initial = false } = {}) => {
     setSyncState('loading');
+    setReadError(null);
     try {
-      const response = await fetch('/api/hub/projects', { cache: 'no-store' });
+      const endpoint = selectedProjectId
+        ? `/api/hub/projects?project=${encodeURIComponent(selectedProjectId)}`
+        : '/api/hub/projects';
+      const response = await fetch(endpoint, { cache: 'no-store' });
       const data = await response.json().catch(() => null);
 
-      if (!response.ok || !data || data.status === 'error') {
-        setSyncState('preview');
-        return false;
+      if (!response.ok || !data || data.status === 'error' || data.source === 'error') {
+        setSyncState('error');
+        setReadError(data?.error || data?.message || `프로젝트 원장 응답 실패 (${response.status})`);
+        return { ok: false, projects: [], todos: [] };
       }
 
       if (data.source === 'supabase') {
         const liveProjects = Array.isArray(data.projects) ? data.projects : [];
+        const liveTodos = Array.isArray(data.todos) ? data.todos : [];
         setLedger({
           source: data.source,
           brands: data.brands?.length ? data.brands : [EMPTY_ALL_BRAND],
@@ -297,11 +317,17 @@ export function Projects({ workspace }) {
           notes: Array.isArray(data.notes) ? data.notes : [],
           checks: Array.isArray(data.checks) ? data.checks : [],
           columns: Array.isArray(data.columns) ? data.columns : [],
+          partial: Boolean(data.partial),
+          failedSources: Array.isArray(data.failedSources) ? data.failedSources : [],
+          partialSources: Array.isArray(data.partialSources) ? data.partialSources : [],
+          taskAggregation: data.taskAggregation || null,
+          selection: data.selection || null,
         });
-        setTodos(Array.isArray(data.todos) ? data.todos : []);
+        setTodos(liveTodos);
         if (initial) setExpanded(new Set(liveProjects.slice(0, 2).map(p => p.id)));
-        setSyncState('live');
-        return true;
+        setSyncState(data.partial ? 'partial' : 'live');
+        setReadError(null);
+        return { ok: true, projects: liveProjects, todos: liveTodos };
       }
 
       setLedger({
@@ -313,15 +339,22 @@ export function Projects({ workspace }) {
         notes: [],
         checks: [],
         columns: [],
+        partial: false,
+        failedSources: [],
+        partialSources: [],
+        taskAggregation: null,
+        selection: null,
       });
       setTodos([]);
       setSyncState('preview');
-      return false;
-    } catch {
-      setSyncState('preview');
-      return false;
+      setReadError(null);
+      return { ok: false, projects: [], todos: [] };
+    } catch (error) {
+      setSyncState('error');
+      setReadError(error instanceof Error ? error.message : String(error));
+      return { ok: false, projects: [], todos: [] };
     }
-  }, []);
+  }, [selectedProjectId]);
 
   // ?project= 딥링크가 "원장 로드 후 1회" 계약(§8.1)을 지킬 수 있도록 최초 로드 완료를
   // 기록한다 — syncState 초기값이 'preview'라서 상태만으로는 로드 전/후를 구분 못 한다.
@@ -336,65 +369,130 @@ export function Projects({ workspace }) {
     }
   }, [brand, brands, wsDefaultBrand]);
 
-  const toggleExpand = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const createProject = React.useCallback((initialStatus = 'Planning', brandKeyOverride = null) => {
-    // brandKeyOverride: 전체 뷰의 브랜드 섹션 하단 "추가"가 그 섹션의 브랜드로 시드한다.
-    const selectedBrand = brandKeyOverride
-      ? (brands.find(item => item.key === brandKeyOverride) || null)
-      : (brand === 'all'
-        ? brands.find(item => item.key !== 'all')
-        : currentBrand);
-    if (!selectedBrand || selectedBrand.id === 'all') {
-      setOrderResult({ tone: 'err', label: '프로젝트를 연결할 브랜드가 없습니다' });
+  React.useEffect(() => {
+    if (view !== 'tree' || !selectedProjectId) {
+      setOpenDetail(null);
       return;
     }
-    setProjectDraft({
-      ...buildProjectDraft({
-        brandId: selectedBrand.id,
-        brandKey: selectedBrand.key,
-        initialStatus,
-      }),
-      id: createClientId(),
+    if (allProjects.some(project => project.id === selectedProjectId)) {
+      setOpenDetail(selectedProjectId);
+      return;
+    }
+    setOpenDetail(null);
+  }, [allProjects, selectedProjectId, view]);
+
+  React.useEffect(() => {
+    const query = window.matchMedia('(max-width: 900px)');
+    const update = () => setMobileDetail(query.matches);
+    update();
+    if (query.addEventListener) query.addEventListener('change', update);
+    else query.addListener?.(update);
+    return () => {
+      if (query.removeEventListener) query.removeEventListener('change', update);
+      else query.removeListener?.(update);
+    };
+  }, []);
+
+  const openProjectDetail = React.useCallback((projectId) => {
+    detailReturnFocusRef.current = typeof document !== 'undefined' ? document.activeElement : null;
+    const params = mergeProjectDetailQuery(searchParamsRef.current, projectId);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    setOpenDetail(projectId);
+  }, [pathname, router]);
+
+  const closeProjectDetail = React.useCallback(() => {
+    const returnFocus = detailReturnFocusRef.current;
+    setOpenDetail(null);
+    const params = new URLSearchParams(searchParamsRef.current.toString());
+    params.delete('project');
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    requestAnimationFrame(() => {
+      if (returnFocus?.isConnected && typeof returnFocus.focus === 'function') returnFocus.focus();
     });
+  }, [pathname, router]);
+
+  React.useEffect(() => {
+    if (!openDetail || !mobileDetail) {
+      detailAutofocusPresentationRef.current = null;
+      return undefined;
+    }
+    const detailPresentationKey = `mobile:${openDetail}`;
+    if (detailAutofocusPresentationRef.current === detailPresentationKey) return undefined;
+    detailAutofocusPresentationRef.current = detailPresentationKey;
+    if (drawerOpen) return undefined;
+    const sheet = detailSheetRef.current;
+    const detailAutofocusRaf = requestAnimationFrame(() => {
+      sheet?.querySelector('[aria-label="상세 닫기"]')?.focus();
+    });
+    return () => cancelAnimationFrame(detailAutofocusRaf);
+  }, [drawerOpen, mobileDetail, openDetail]);
+
+  React.useEffect(() => {
+    if (!openDetail || drawerOpen) return undefined;
+    const sheet = detailSheetRef.current;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeProjectDetail();
+        return;
+      }
+      if (!mobileDetail || event.key !== 'Tab' || !sheet) return;
+      const focusable = Array.from(sheet.querySelectorAll(DETAIL_FOCUSABLE))
+        .filter(node => !node.disabled && node.tabIndex >= 0 && node.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [closeProjectDetail, drawerOpen, mobileDetail, openDetail]);
+
+  const toggleExpand = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const createProject = React.useCallback((initialStatus = 'Planning', brandKeyOverride = null) => {
+    // Contextual entry points (brand sections and status lanes) may seed location.
+    const contextBrand = brandKeyOverride
+      ? (brands.find(item => item.key === brandKeyOverride) || null)
+      : (brand === 'all' ? null : currentBrand);
+    setProjectCreateContext(contextBrand?.id === 'all' ? null : contextBrand);
+    setProjectEditSource(null);
+    setProjectDraft(buildProjectDraft({ contextBrand, initialStatus }));
   }, [brand, brands, currentBrand]);
+
+  const openGlobalProjectCreate = React.useCallback(() => {
+    setProjectCreateContext(null);
+    setProjectEditSource(null);
+    setProjectDraft(buildProjectDraft());
+  }, []);
 
   // 콘텐츠 프로젝트: 브랜드 시드 + contentPipeline 플래그. 저장이 성공하면 persistProject가
   // CONTENT_STAGES(기획→초안→검토→업로드)를 하위 아이템으로 시드한다.
   const createContentProject = React.useCallback((brandKeyOverride = null) => {
-    const selectedBrand = brandKeyOverride
+    const contextBrand = brandKeyOverride
       ? (brands.find(item => item.key === brandKeyOverride) || null)
-      : (brand === 'all' ? brands.find(item => item.key !== 'all') : currentBrand);
-    if (!selectedBrand || selectedBrand.id === 'all') {
-      setOrderResult({ tone: 'err', label: '콘텐츠를 연결할 브랜드가 없습니다' });
-      return;
-    }
+      : (brand === 'all' ? null : currentBrand);
+    setProjectCreateContext(contextBrand?.id === 'all' ? null : contextBrand);
+    setProjectEditSource(null);
     setProjectDraft({
-      ...buildProjectDraft({
-        brandId: selectedBrand.id,
-        brandKey: selectedBrand.key,
-        initialStatus: 'Planning',
-      }),
-      id: createClientId(),
-      title: `${selectedBrand.name} 콘텐츠`,
+      ...buildProjectDraft({ contextBrand, initialStatus: 'Planning' }),
       contentPipeline: true,
     });
   }, [brand, brands, currentBrand]);
 
   const editProject = React.useCallback((project) => {
-    setProjectDraft({
-      kind: 'project',
-      isNew: false,
-      id: project.id,
-      title: project.name,
-      brandId: project.brandId,
-      brandKey: project.brand,
-      summary: project.summary || '',
-      status: project.statusKey || 'active',
-      priority: project.priority || 'medium',
-      progress: project.progress || 0,
-      nextAction: project.nextAction || '',
-      dueAt: project.dueAt ? String(project.dueAt).slice(0, 10) : '',
-    });
+    setProjectCreateContext(null);
+    setProjectEditSource(project);
+    setProjectDraft(buildProjectEditDraft(project));
   }, []);
 
   const createTodo = React.useCallback((projectId = null, initialStatus = 'todo') => {
@@ -404,67 +502,192 @@ export function Projects({ workspace }) {
     });
   }, []);
 
-  const persistProject = React.useCallback(async () => {
-    if (!projectDraft?.title?.trim()) return { ok: false, status: 'invalid-input' };
+  const persistProjectCreate = React.useCallback(async (draft = projectDraft) => {
+    if (Object.keys(validateProjectDraft(draft)).length > 0) {
+      return { ok: false, status: 'invalid-input', error: 'missing-required-project-fields' };
+    }
     try {
       const response = await fetch('/api/hub/projects', {
-        method: projectDraft.isNew ? 'POST' : 'PATCH',
+        method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          id: projectDraft.id,
-          title: projectDraft.title,
-          brandId: projectDraft.brandId,
-          summary: projectDraft.summary,
-          status: projectDraft.status,
-          priority: projectDraft.priority,
-          progress: Number(projectDraft.progress || 0),
-          nextAction: projectDraft.nextAction,
-          dueAt: projectDraft.dueAt,
+          id: draft.clientId,
+          title: draft.title,
+          brandId: draft.brandId,
+          summary: draft.summary,
+          status: draft.status,
+          priority: draft.priority,
+          nextAction: draft.nextAction,
+          dueAt: draft.dueAt,
           source: 'hub-projects',
         }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !['saved', 'duplicate'].includes(data.status)) {
         setOrderResult({ tone: 'err', label: data.error || `저장 실패 ${response.status}` });
-        return { ok: false, status: data.status || 'error' };
+        return {
+          ok: false,
+          status: data.status || 'error',
+          error: data.error,
+          detail: data.detail,
+          project: data.project || null,
+        };
       }
-      // 콘텐츠 파이프라인 프로젝트: 기획→초안→검토→업로드를 하위 아이템으로 순차 시드.
-      // 프로젝트 API가 클라이언트 id를 그대로 row id로 쓰므로 projectDraft.id로 연결 가능.
-      let seeded = false;
-      if (projectDraft.isNew && projectDraft.contentPipeline && data.status === 'saved') {
-        const newProjectId = data.project?.id || projectDraft.id;
+      const durableProjectId = data.project?.id;
+      if (!durableProjectId) {
+        setOrderResult({ tone: 'err', label: '저장 응답에 프로젝트 ID가 없습니다' });
+        return { ok: false, status: 'error', error: 'missing-durable-project-id', project: data.project || null };
+      }
+      // 콘텐츠 파이프라인 프로젝트: deterministic IDs make every stage retryable.
+      const pipelineSeeds = draft.contentPipeline
+        ? buildContentPipelineTaskSeeds(durableProjectId)
+        : [];
+      if (draft.contentPipeline) {
         // 원장은 tasks를 updated_at.desc로 정렬한다(operating-ledger). 체크리스트가
         // 기획→초안→검토→업로드로 위에서 아래로 읽히게 하려면 기획을 '마지막'에 생성해
         // 가장 최신이 되게 한다 → 역순 시드.
-        for (const stage of [...CONTENT_STAGES].reverse()) {
-          const stageRes = await fetch('/api/hub/tasks', {
+        for (const stage of [...pipelineSeeds].reverse()) {
+          const stageResponse = await fetch('/api/hub/tasks', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
-              id: createClientId(),
-              title: stage,
-              projectId: newProjectId,
+              id: stage.id,
+              title: stage.title,
+              projectId: durableProjectId,
               status: 'todo',
               priority: 'medium',
               source: 'hub-projects',
             }),
           }).catch(() => null);
-          if (stageRes && stageRes.ok) seeded = true;
+          const stageData = stageResponse
+            ? await stageResponse.json().catch(() => ({}))
+            : {};
+          if (!stageResponse?.ok || !['saved', 'duplicate'].includes(stageData.status)) {
+            const error = stageData.error || `content-pipeline-stage-failed:${stage.title}`;
+            setOrderResult({ tone: 'err', label: `콘텐츠 단계 저장 실패 · ${stage.title}` });
+            return {
+              ok: false,
+              status: 'pipeline-error',
+              error,
+              durableProjectId,
+              project: data.project,
+              failedStage: stage.title,
+            };
+          }
         }
       }
-      await loadLedger();
+      const reloadResult = await loadLedger();
+      const projectReloaded = projectReloadContains(reloadResult, durableProjectId);
+      const pipelineTaskIds = pipelineSeeds.map((stage) => stage.id);
+      if (
+        draft.contentPipeline
+        && (!projectReloaded || !contentPipelineReloadContains(reloadResult, pipelineTaskIds))
+      ) {
+        setOrderResult({ tone: 'err', label: '콘텐츠 4단계를 새 원장에서 확인하지 못했습니다' });
+        return {
+          ok: false,
+          status: 'pipeline-error',
+          error: 'content-pipeline-not-visible-after-reload',
+          durableProjectId,
+          project: data.project,
+        };
+      }
+      if (!projectReloaded) {
+        setOrderResult({ tone: 'err', label: '저장 후 원장에서 프로젝트를 확인하지 못했습니다' });
+        return {
+          ok: false,
+          status: 'reload-error',
+          error: 'created-project-not-visible-after-reload',
+          durableProjectId,
+          project: data.project,
+        };
+      }
+      const params = mergeProjectDetailQuery(searchParamsRef.current, durableProjectId);
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      setOpenDetail(durableProjectId);
       setOrderResult({
         tone: 'ok',
-        label: projectDraft.isNew
-          ? (seeded ? '콘텐츠 프로젝트 저장됨 · 4단계 시드' : '프로젝트 저장됨')
-          : '프로젝트 업데이트됨',
+        label: draft.contentPipeline ? '콘텐츠 프로젝트 저장됨 · 4단계 시드' : '프로젝트 저장됨',
       });
-      return { ok: true, status: data.status };
+      return { ok: true, status: data.status, durableProjectId, project: data.project };
     } catch (error) {
       setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
-      return { ok: false, status: 'error' };
+      return { ok: false, status: 'error', error: error instanceof Error ? error.message : String(error) };
     }
-  }, [loadLedger, projectDraft]);
+  }, [loadLedger, pathname, projectDraft, router]);
+
+  const retryProjectCreateWithNewId = React.useCallback((draft) => {
+    const nextDraft = rotateProjectClientId(draft);
+    setProjectDraft(nextDraft);
+    return nextDraft;
+  }, []);
+
+  const openConflictProject = React.useCallback(async (project) => {
+    const durableProjectId = project?.id;
+    if (!durableProjectId) {
+      return { ok: false, status: 'error', error: 'missing-conflict-project-id' };
+    }
+    const reloadResult = await loadLedger();
+    if (!projectReloadContains(reloadResult, durableProjectId)) {
+      return { ok: false, status: 'reload-error', error: 'conflict-project-not-visible-after-reload' };
+    }
+    const params = mergeProjectDetailQuery(searchParamsRef.current, durableProjectId);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    setOpenDetail(durableProjectId);
+    return { ok: true, status: 'opened', durableProjectId };
+  }, [loadLedger, pathname, router]);
+
+  const persistProjectEdit = React.useCallback(async () => {
+    if (!projectDraft?.title?.trim() || !projectEditSource) {
+      return { ok: false, status: 'invalid-input', error: 'missing-project-edit-source' };
+    }
+    const patch = buildProjectPatch(projectEditSource, projectDraft);
+    const dirtyKeys = Object.keys(patch).filter((key) => !['id', 'expectedUpdatedAt'].includes(key));
+    if (dirtyKeys.length === 0) return { ok: true, status: 'saved' };
+
+    try {
+      const response = await fetch('/api/hub/projects', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.status !== 'saved') {
+        if (data.status === 'conflict' && data.project) {
+          const message = '최신 원장 기준을 불러왔습니다. 입력을 유지했으니 다시 저장하면 새 기준으로 재시도합니다.';
+          const rebasedEdit = rebaseProjectEditState(projectEditSource, projectDraft, data.project);
+          setProjectEditSource(rebasedEdit.source);
+          setProjectDraft(rebasedEdit.draft);
+          setOrderResult({ tone: 'err', label: message });
+          return {
+            ok: false,
+            status: 'conflict',
+            error: data.error,
+            detail: data.detail,
+            project: data.project,
+            message,
+          };
+        }
+        setOrderResult({ tone: 'err', label: data.error || `업데이트 실패 ${response.status}` });
+        return {
+          ok: false,
+          status: data.status || 'error',
+          error: data.error,
+          detail: data.detail,
+          project: data.project || null,
+        };
+      }
+      await loadLedger();
+      setOpenDetail(data.project?.id || projectEditSource.id);
+      setOrderResult({ tone: 'ok', label: '프로젝트 업데이트됨' });
+      return { ok: true, status: 'saved' };
+    } catch (error) {
+      setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+      return { ok: false, status: 'error', error: error instanceof Error ? error.message : String(error) };
+    }
+  }, [loadLedger, projectDraft, projectEditSource]);
 
   const createContainer = React.useCallback(() => {
     // Seed the drawer with the current scope's org so a container made under the
@@ -501,9 +724,15 @@ export function Projects({ workspace }) {
       const data = await response.json().catch(() => ({}));
 
       if (response.ok && ['saved', 'duplicate'].includes(data.status)) {
+        const durableContainerId = data.brand?.id;
         setLocalContainers(prev => prev.filter(c => c.id !== containerDraft.id));
         await loadLedger();
         setBrand(slug);
+        if (durableContainerId) {
+          setProjectDraft(current => current?.isNew && !current.brandId
+            ? { ...current, brandId: durableContainerId, brandKey: slug }
+            : current);
+        }
         setOrderResult({ tone: 'ok', label: '컨테이너 저장됨' });
         return { ok: true, status: data.status };
       }
@@ -590,10 +819,10 @@ export function Projects({ workspace }) {
     createTodo(null, taskStatusForBoardColumn(column) || 'todo');
   }, [createTodo]);
 
-  const statusTone = { 'In progress': 'info', Review: 'warning', Planning: 'moon', Backlog: 'neutral', Blocked: 'danger', Done: 'success' };
-  const prioTone = { critical: 'danger', high: 'danger', med: 'warning', medium: 'warning', low: 'neutral' };
-  const updateTone = { reported: 'neutral', active: 'info', blocked: 'danger', done: 'success' };
-  const checkTone = { pending: 'neutral', done: 'success', skipped: 'warning', blocked: 'danger' };
+  const statusTone = { 'In progress': 'moon', Review: 'neutral', Planning: 'neutral', Backlog: 'neutral', Blocked: 'danger', Done: 'neutral' };
+  const prioTone = { critical: 'danger', high: 'danger', med: 'neutral', medium: 'neutral', low: 'neutral' };
+  const updateTone = { reported: 'neutral', active: 'moon', blocked: 'danger', done: 'neutral' };
+  const checkTone = { pending: 'neutral', done: 'neutral', skipped: 'neutral', blocked: 'danger' };
 
   React.useEffect(() => {
     const close = (e) => { if (brandMenuRef.current && !brandMenuRef.current.contains(e.target)) setBrandMenuOpen(false); };
@@ -602,11 +831,28 @@ export function Projects({ workspace }) {
   }, [brandMenuOpen]);
 
   React.useEffect(() => {
-    if (searchParams.get('new') !== 'project' || createdFromQueryRef.current) return;
-    createProject();
+    if (searchParams.get('new') !== 'project') {
+      createdFromQueryRef.current = false;
+      return;
+    }
+    if (createdFromQueryRef.current) return;
     createdFromQueryRef.current = true;
-    router.replace(pathname);
-  }, [createProject, searchParams, router, pathname]);
+    openGlobalProjectCreate();
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('new');
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [openGlobalProjectCreate, searchParams, router, pathname]);
+
+  React.useEffect(() => {
+    const onKey = (event) => {
+      if (!shouldOpenGlobalProjectCreate(event, { drawerOpen })) return;
+      event.preventDefault();
+      openGlobalProjectCreate();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawerOpen, openGlobalProjectCreate]);
 
   // ?project=<id> 딥링크 (§8.1) — 원장 로드 후 해당 프로젝트의 우측 상세 패널을 1회 열고
   // 쿼리를 소거한다. 내 작업 상세 패널의 "프로젝트에서 열기"가 이 경로로 들어온다.
@@ -974,7 +1220,7 @@ export function Projects({ workspace }) {
           <div>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Projects</h2>
             <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-              {projects.length} projects · {brandTodos.filter(t => !t.done).length} open todos · {currentBrand.desc}
+              {projectHeaderSummary} · {currentBrand.desc}
               <SyncBadge state={syncState} />
             </div>
           </div>
@@ -990,30 +1236,62 @@ export function Projects({ workspace }) {
               {orderResult.label}
             </span>
           )}
-          <Button variant="primary" size="sm" icon="plus" onClick={() => view === 'todos' ? createTodo() : createProject()}>{view === 'todos' ? 'To-do' : 'Project'}</Button>
+          {view === 'todos' && (
+            <Button variant="primary" size="sm" icon="plus" onClick={() => createTodo()}>To-do</Button>
+          )}
+          <Button className="hub-project-primary-control" variant={view === 'todos' ? 'outline' : 'primary'} size="sm" icon="plus" onClick={openGlobalProjectCreate}>
+            Project <Kbd>N</Kbd>
+          </Button>
         </div>
 
         {view === 'tree' && (
-          <div className="hub-projects-main-grid" style={{ display: 'grid', gridTemplateColumns: openDetail ? '1fr 360px' : '1fr', flex: 1, overflow: 'hidden' }}>
+          <div
+            className="hub-projects-main-grid"
+            data-detail-open={openDetail ? 'true' : 'false'}
+            style={{ display: 'grid', gridTemplateColumns: openDetail ? 'minmax(0, 1fr) 360px' : 'minmax(0, 1fr)', flex: 1, overflow: 'hidden' }}
+          >
             <div className="scroll-y" style={{ padding: 'var(--section-gap)' }}>
               <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
-                {projects.length === 0 && (
+                <ProjectPortfolioSummary projects={projects} sourceState={syncState} projectCorePartial={projectReadPartial} />
+                {syncState === 'error' && (
                   <Card>
                     <EmptyState
                       icon="projects"
-                      title="프로젝트 기록이 비어 있습니다"
-                      description="Supabase 연결은 live 상태입니다. 첫 프로젝트를 만들거나 외부 project webhook을 보내면 이 목록에 바로 표시됩니다."
+                      title="프로젝트 원장을 읽지 못했습니다"
+                      description={readError || "연결 상태를 확인한 뒤 다시 시도하세요. 실패한 읽기는 live로 표시하지 않습니다."}
+                      action={<Button variant="outline" size="sm" onClick={() => loadLedger({ initial: true })}>다시 시도</Button>}
+                    />
+                  </Card>
+                )}
+                {syncState === 'partial' && (
+                  <Card>
+                    <EmptyState
+                      icon="projects"
+                      title="프로젝트 일부 원장을 읽지 못했습니다"
+                      description={`${[...(ledger.failedSources || []), ...(ledger.partialSources || [])].join(', ')} 기록 일부를 확인할 수 없습니다. 읽힌 프로젝트와 할 일 데이터는 유지합니다.`}
+                      action={<Button variant="outline" size="sm" onClick={() => loadLedger({ initial: true })}>다시 시도</Button>}
+                    />
+                  </Card>
+                )}
+                {!['error', 'loading'].includes(syncState) && projects.length === 0 && (
+                  <Card>
+                    <EmptyState
+                      icon="projects"
+                      title={syncState === 'preview' ? "preview · 실제 프로젝트 없음" : "프로젝트 기록이 비어 있습니다"}
+                      description={syncState === 'preview'
+                        ? "Supabase가 연결되지 않았습니다. 예시 데이터를 섞지 않으며, 연결 후 실제 프로젝트만 표시합니다."
+                        : "Supabase 연결은 live 상태입니다. 첫 프로젝트를 만들거나 외부 project webhook을 보내면 이 목록에 바로 표시됩니다."}
                       action={<Button variant="primary" size="sm" icon="plus" onClick={() => createProject()}>Project</Button>}
                     />
                   </Card>
                 )}
                 {(() => {
                   const STATUS_GROUPS = [
-                    { key: 'In progress', label: '진행중', tone: 'var(--info)' },
+                    { key: 'In progress', label: '진행중', tone: 'var(--pms-moonstone)' },
                     { key: 'Blocked',     label: '막힘',   tone: 'var(--danger)' },
-                    { key: 'Review',      label: '검토',   tone: 'var(--warning)' },
-                    { key: 'Planning',    label: '계획',   tone: 'var(--moon-400)' },
-                    { key: 'Done',        label: '완료',   tone: 'var(--success)' },
+                    { key: 'Review',      label: '검토',   tone: 'var(--line-strong)' },
+                    { key: 'Planning',    label: '계획',   tone: 'var(--pms-moonstone)' },
+                    { key: 'Done',        label: '완료',   tone: 'var(--fg-dim)' },
                     { key: 'Backlog',     label: '백로그', tone: 'var(--fg-faint)' },
                   ];
                   // 전체 브랜드 뷰는 브랜드별 아코디언(목록 전체 접기), 특정 브랜드 뷰는 기존 상태별 그룹.
@@ -1054,109 +1332,102 @@ export function Projects({ workspace }) {
                       </div>
                       )}
                       {!collapsed && (
-                      <Card pad={false} className="hub-table-card">
-                        <div style={{
-                          display: 'grid', gridTemplateColumns: '22px 18px 1fr 36px 100px 120px',
-                          padding: '8px 14px', background: 'var(--surface-2)',
-                          borderBottom: '1px solid var(--line-soft)',
-                          fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em',
-                          alignItems: 'center', gap: 8,
-                        }}>
-                          <span /><span />
-                          <span>프로젝트 / 하위 아이템</span>
-                          <span style={{ textAlign: 'center' }}>Own</span>
-                          <span>기한</span>
-                          <span>작업 상태</span>
+                      <Card pad={false} className="hub-table-card hub-project-table">
+                        <div className="hub-project-list-head">
+                          <span aria-hidden="true" />
+                          <span>프로젝트 · 컨테이너</span>
+                          <span>다음 행동</span>
+                          <span>기한 · 위험</span>
+                          <span>근거 진척</span>
+                          <span>상태 · 우선순위</span>
                         </div>
                         {items.map((p, pi) => {
                           const isOpen = expanded.has(p.id);
                           const pTodos = scopedTodos.filter(t => t.project === p.id);
                           const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
                           const isSel = openDetail === p.id;
+                          const dueTime = p.dueAt ? new Date(p.dueAt).getTime() : Number.NaN;
+                          const terminal = ['completed', 'archived', 'cancelled'].includes(String(p.statusKey || '').toLowerCase());
+                          const overdue = !terminal && Number.isFinite(dueTime) && dueTime < new Date().setHours(0, 0, 0, 0);
+                          const blocked = String(p.statusKey || '').toLowerCase() === 'blocked' || p.status === 'Blocked';
+                          const nextAction = p.displayNextAction || p.projectNextAction || (p.updateEvidencePartial ? '업데이트 기록 미확인' : '다음 행동 미정');
                           return (
                             <React.Fragment key={p.id}>
-                              <div style={{
-                                display: 'grid', gridTemplateColumns: '22px 18px 1fr 36px 100px 120px',
-                                padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', gap: 8,
-                                borderBottom: (isOpen || pi < items.length - 1) ? '1px solid var(--line-soft)' : 'none',
-                                background: isSel ? 'var(--surface-3)' : 'transparent',
-                                cursor: 'pointer',
-                              }}
-                                onClick={() => setOpenDetail(p.id === openDetail ? null : p.id)}
-                              >
-                                <button onClick={(e) => { e.stopPropagation(); toggleExpand(p.id); }} style={{
-                                  width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  color: 'var(--fg-muted)', borderRadius: 4,
-                                }}>
+                              <div className="hub-project-row" data-selected={isSel ? 'true' : 'false'}>
+                                <div className="hub-project-row__controls">
+                                  <button
+                                    type="button"
+                                    className="hub-project-expand"
+                                    aria-label={`${p.name} 하위 항목 ${isOpen ? '접기' : '펼치기'}`}
+                                    aria-expanded={isOpen}
+                                    onClick={() => toggleExpand(p.id)}
+                                  >
                                   <span style={{ display: 'inline-block', transition: 'transform .15s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', fontSize: 10 }}>▶</span>
+                                  </button>
+                                  <Checkbox
+                                    checked={isSel}
+                                    onChange={(checked) => checked ? openProjectDetail(p.id) : closeProjectDetail()}
+                                    size={16}
+                                    label={`프로젝트 선택: ${p.name}`}
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  className="hub-project-row__open"
+                                  aria-label={`${p.name} 상세 열기`}
+                                  onClick={() => openProjectDetail(p.id)}
+                                >
+                                  <div className="hub-project-identity">
+                                    <span className="hub-project-identity__glyph" aria-hidden="true">{pBrand.glyph}</span>
+                                    <div className="hub-project-identity__copy">
+                                      <strong>{p.name}</strong>
+                                      <span>{pBrand.name} · 할 일 {pTodos.length}</span>
+                                    </div>
+                                  </div>
+                                  <div className="hub-project-next-action">
+                                    <span>다음 행동</span>
+                                    <strong>{nextAction}</strong>
+                                  </div>
+                                  <div className="hub-project-due-risk">
+                                    <span className="mono">{p.due || '기한 없음'}</span>
+                                    {(blocked || overdue) && <span className="hub-project-risk-label">{blocked ? '막힘' : '기한 지남'}</span>}
+                                    {!blocked && !overdue && <span>위험 신호 없음</span>}
+                                  </div>
                                 </button>
-                                <input type="checkbox" style={{ margin: 0, accentColor: 'var(--moon-400)' }} onClick={e => e.stopPropagation()} />
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                                  <span style={{ fontSize: 14, color: 'var(--fg-muted)' }}>{pBrand.glyph}</span>
-                                  <div style={{ minWidth: 0, flex: 1 }}>
-                                    <div style={{ fontSize: 13, fontWeight: 500, letterSpacing: '-0.005em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
-                                  </div>
-                                  <span className="mono" style={{
-                                    fontSize: 10, color: 'var(--fg-faint)',
-                                    background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4,
-                                    border: '1px solid var(--line-soft)',
-                                  }}>{pTodos.length}</span>
-                                  <div style={{ width: 60, height: 4, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }}>
-                                    <div style={{ width: p.progress + '%', height: '100%', background: statusTone[p.status] === 'warning' ? 'var(--warning)' : 'var(--moon-400)' }} />
-                                  </div>
+                                <ProjectProgressGauge
+                                  progress={p.displayProgress}
+                                  compact
+                                  ariaLabel={`${p.name} 진척`}
+                                />
+                                <div className="hub-project-secondary-state">
+                                  <Badge tone={statusTone[p.status]} size="xs">{STATUS_LABEL_KO[p.status] || p.status}</Badge>
+                                  <span><Dot tone={prioTone[p.priority]} size={5} />{p.priority || 'medium'}</span>
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                                  <Avatar name={p.owner} size={22} tone={p.owner === 'Me' ? 'moon' : p.owner === 'Council' ? 'info' : 'neutral'} />
-                                </div>
-                                <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{p.due}</span>
-                                <div><Badge tone={statusTone[p.status]} size="xs">{p.status === 'In progress' ? '작업 중' : p.status === 'Review' ? '검토' : p.status === 'Planning' ? '계획' : p.status === 'Blocked' ? '막힘' : p.status === 'Done' ? '완료' : p.status}</Badge></div>
                               </div>
 
                               {isOpen && (
-                                <div style={{ background: 'var(--surface-2)', borderBottom: pi < items.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
-                                  <div style={{
-                                    display: 'grid', gridTemplateColumns: '22px 18px 1fr 36px 100px 120px',
-                                    padding: '6px 14px 6px 44px', gap: 8, alignItems: 'center',
-                                    fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em',
-                                    borderBottom: '1px solid var(--line-soft)',
-                                  }}>
-                                    <span /><span /><span>하위 아이템</span><span style={{ textAlign: 'center' }}>Own</span><span>기한</span><span>상태</span>
-                                  </div>
+                                <div className="hub-project-subtasks" style={{ borderBottom: pi < items.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+                                  <div className="hub-project-subtasks__head">하위 아이템 · {pTodos.filter(t => t.done).length}/{pTodos.length} 완료</div>
                                   {pTodos.length === 0 && (
-                                    <div style={{ padding: '10px 14px 10px 66px', fontSize: 11.5, color: 'var(--fg-faint)' }}>하위 아이템이 없습니다.</div>
+                                    <div className="hub-project-subtasks__empty">하위 아이템이 없습니다.</div>
                                   )}
                                   {pTodos.map((t, ti) => (
-                                    <div key={t.id} style={{
-                                      display: 'grid', gridTemplateColumns: '22px 18px 1fr 36px 100px 120px',
-                                      padding: '8px 14px 8px 44px', alignItems: 'center', gap: 8,
-                                      borderBottom: ti < pTodos.length - 1 ? '1px solid var(--line-soft)' : 'none',
-                                      opacity: t.done ? 0.55 : 1,
-                                    }}>
-                                      <span />
-                                      <button onClick={() => toggleTodo(t.id)} style={{
-                                        width: 14, height: 14, borderRadius: 3,
-                                        border: '1.5px solid ' + (t.done ? 'var(--success)' : 'var(--line-strong)'),
-                                        background: t.done ? 'var(--success)' : 'transparent',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                      }}>
-                                        {t.done && <span style={{ fontSize: 9, color: 'var(--bg)' }}>✓</span>}
-                                      </button>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <div key={t.id} className="hub-project-subtask" data-done={t.done ? 'true' : 'false'} style={{ borderBottom: ti < pTodos.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+                                      <Checkbox
+                                        checked={t.done}
+                                        onChange={() => toggleTodo(t.id)}
+                                        size={16}
+                                        label={`${t.done ? '다시 열기' : '완료'}: ${t.title}`}
+                                      />
+                                      <div className="hub-project-subtask__title">
                                         <Dot tone={prioTone[t.priority]} size={4} />
-                                        <span style={{ fontSize: 12.5, textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</span>
+                                        <span>{t.title}</span>
                                       </div>
-                                      <div style={{ display: 'flex', justifyContent: 'center' }}>
-                                        <Avatar name={t.assignee} size={18} tone={t.assignee === 'Me' ? 'moon' : t.assignee === 'Council' ? 'info' : 'neutral'} />
-                                      </div>
-                                      <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{t.due}</span>
-                                      <Badge tone={t.done ? 'success' : 'neutral'} size="xs">{t.done ? '완료' : '열림'}</Badge>
+                                      <span className="hub-project-subtask__assignee">{t.assignee}</span>
+                                      <span className="mono hub-project-subtask__due">{t.due || '기한 없음'}</span>
                                     </div>
                                   ))}
-                                  <button onClick={() => createTodo(p.id)} style={{
-                                    width: '100%', padding: '8px 14px 10px 66px', textAlign: 'left',
-                                    fontSize: 11.5, color: 'var(--fg-faint)',
-                                    borderTop: pTodos.length ? '1px solid var(--line-soft)' : 'none',
-                                  }}>＋ 하위 아이템 추가</button>
+                                  <button className="hub-project-subtasks__add" onClick={() => createTodo(p.id)}>＋ 하위 아이템 추가</button>
                                 </div>
                               )}
                             </React.Fragment>
@@ -1199,143 +1470,47 @@ export function Projects({ workspace }) {
               const pDecisions = (ledger.decisions || []).filter(d => d.projectId === p.id).slice(0, 4);
               const pNotes = (ledger.notes || []).filter(n => n.projectId === p.id).slice(0, 4);
               const pChecks = (ledger.checks || []).filter(c => c.projectId === p.id).slice(0, 4);
-              const doneCount = pTodos.filter(t => t.done).length;
+              const detailFailedSources = ledger.selection?.projectId === p.id
+                ? ledger.selection.failedSources
+                : ledger.failedSources;
               return (
-                <aside style={{ borderLeft: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                  <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 16, color: 'var(--fg-muted)' }}>{pBrand.glyph}</span>
-                    <div style={{ fontSize: 11, color: 'var(--fg-faint)', flex: 1 }}>{pBrand.name}</div>
-                    <IconButton icon="x" size={22} iconSize={12} onClick={() => setOpenDetail(null)} />
+                <div
+                  ref={detailSheetRef}
+                  className="hub-project-detail-sheet"
+                  role={mobileDetail ? 'dialog' : 'region'}
+                  aria-modal={mobileDetail ? 'true' : undefined}
+                  aria-label={`${p.name} 프로젝트 상세`}
+                >
+                  <button type="button" tabIndex={-1} className="hub-project-detail-sheet__backdrop" aria-label="프로젝트 상세 닫기" onClick={closeProjectDetail} />
+                  <div className="hub-project-detail-sheet__links">
+                    <ProjectPlanningLinks projectId={p.id} projectName={p.name} />
                   </div>
-                  <div className="scroll-y" style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
-                    <div>
-                      <div style={{ fontSize: 16, fontWeight: 500, letterSpacing: '-0.01em' }}>{p.name}</div>
-                      <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                        <Badge tone={statusTone[p.status]} size="xs">{p.status}</Badge>
-                        {p.tag === 'company' && <Badge tone="company" size="xs">Company</Badge>}
-                        {p.tag === 'personal' && <Badge tone="personal" size="xs">Personal</Badge>}
-                      </div>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', rowGap: 9, fontSize: 12 }}>
-                      <span style={{ color: 'var(--fg-faint)' }}>Owner</span>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <Avatar name={p.owner} size={18} tone={p.owner === 'Me' ? 'moon' : 'neutral'} />
-                        {p.owner}
-                      </span>
-                      <span style={{ color: 'var(--fg-faint)' }}>기한</span>
-                      <span className="mono" style={{ color: 'var(--fg)' }}>{p.due}</span>
-                      <span style={{ color: 'var(--fg-faint)' }}>진행률</span>
-                      <span className="mono">{p.progress}% · {p.done}/{p.tasks}</span>
-                      <span style={{ color: 'var(--fg-faint)' }}>최근 활동</span>
-                      <span className="mono" style={{ color: 'var(--fg-muted)' }}>{p.lastActivityLabel || '미정'}</span>
-                      <span style={{ color: 'var(--fg-faint)' }}>다음 액션</span>
-                      <span style={{ color: 'var(--fg-muted)' }}>{p.nextAction || '아직 지정되지 않음'}</span>
-                      <span style={{ color: 'var(--fg-faint)' }}>생성</span>
-                      <span className="mono" style={{ color: 'var(--fg-muted)' }}>{p.createdAtLabel || '미정'}</span>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 6 }}>설명</div>
-                      <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.55 }}>
-                        {p.summary || `${pBrand.desc}. 이 프로젝트는 ${p.status === 'In progress' ? '활발히 진행 중' : p.status === 'Review' ? '최종 검토 단계' : '초기 계획 단계'}이며, ${pTodos.length}개의 하위 아이템으로 구성됩니다.`}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 8, display: 'flex', alignItems: 'center' }}>
-                        <span style={{ flex: 1 }}>체크리스트 · {doneCount}/{pTodos.length}</span>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {pTodos.map(t => (
-                          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: 'var(--surface-2)', borderRadius: 'var(--r-sm)', border: '1px solid var(--line-soft)' }}>
-                            <button onClick={() => toggleTodo(t.id)} style={{
-                              width: 14, height: 14, borderRadius: 3,
-                              border: '1.5px solid ' + (t.done ? 'var(--success)' : 'var(--line-strong)'),
-                              background: t.done ? 'var(--success)' : 'transparent',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                            }}>{t.done && <span style={{ fontSize: 9, color: 'var(--bg)' }}>✓</span>}</button>
-                            <span style={{ flex: 1, fontSize: 12, textDecoration: t.done ? 'line-through' : 'none', color: t.done ? 'var(--fg-faint)' : 'var(--fg)' }}>{t.title}</span>
-                            <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{t.due}</span>
-                          </div>
-                        ))}
-                        <button onClick={() => createTodo(p.id)} style={{ padding: '6px 8px', textAlign: 'left', fontSize: 11.5, color: 'var(--fg-faint)' }}>＋ 항목 추가</button>
-                      </div>
-                    </div>
-                    <DetailSection title="최근 업데이트" count={pUpdates.length} empty={syncState === 'live' ? '이 프로젝트에 연결된 update가 아직 없습니다.' : 'live 연결 후 project_updates가 여기에 표시됩니다.'}>
-                      {pUpdates.map(update => (
-                        <ActivityRow
-                          key={update.id}
-                          title={update.title}
-                          body={update.summary || update.nextAction}
-                          meta={update.progress !== null && update.progress !== undefined ? `${update.progress}%` : update.happenedAtLabel}
-                          badge={update.source}
-                          tone={updateTone[update.status] || 'neutral'}
-                        />
-                      ))}
-                    </DetailSection>
-                    <DetailSection title="결정" count={pDecisions.length} empty="이 프로젝트에 연결된 결정 기록이 없습니다.">
-                      {pDecisions.map(decision => (
-                        <ActivityRow
-                          key={decision.id}
-                          title={decision.title}
-                          body={decision.summary}
-                          meta={decision.decidedAtLabel}
-                          badge="decision"
-                          tone="moon"
-                        />
-                      ))}
-                    </DetailSection>
-                    <DetailSection title="노트" count={pNotes.length} empty="이 프로젝트에 연결된 노트가 없습니다.">
-                      {pNotes.map(note => (
-                        <ActivityRow
-                          key={note.id}
-                          title={note.title}
-                          body={note.body}
-                          meta={note.createdAtLabel}
-                          badge="note"
-                          tone="neutral"
-                        />
-                      ))}
-                    </DetailSection>
-                    <DetailSection title="루틴 체크" count={pChecks.length} empty="이 프로젝트에 연결된 routine check가 없습니다.">
-                      {pChecks.map(check => (
-                        <ActivityRow
-                          key={check.id}
-                          title={check.checkType}
-                          body={check.note}
-                          meta={check.checkedAtLabel}
-                          badge={check.status}
-                          tone={checkTone[check.status] || 'neutral'}
-                        />
-                      ))}
-                    </DetailSection>
-                  </div>
-                  <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Button variant="outline" size="sm" onClick={() => editProject(p)}>편집</Button>
-                    <Button variant="primary" size="sm" icon="chat" style={{ flex: 1 }} onClick={() => {
-                      setExpanded(prev => new Set([...prev, p.id]));
+                  <ProjectDetailPanel
+                    project={p}
+                    container={pBrand}
+                    todos={pTodos}
+                    updates={pUpdates}
+                    decisions={pDecisions}
+                    notes={pNotes}
+                    checks={pChecks}
+                    syncState={syncState}
+                    failedSources={detailFailedSources}
+                    statusTone={statusTone}
+                    updateTone={updateTone}
+                    checkTone={checkTone}
+                    orderPending={orderPending}
+                    orderResult={orderResult}
+                    onClose={closeProjectDetail}
+                    onEdit={editProject}
+                    onToggleTodo={toggleTodo}
+                    onCreateTodo={createTodo}
+                    onOpen={(project) => {
+                      setExpanded(prev => new Set([...prev, project.id]));
                       setView('tree');
-                    }}>열기</Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      icon="orders"
-                      onClick={() => sendProjectOrder(p)}
-                    >
-                      {orderPending ? 'Sending…' : '주문 보내기'}
-                    </Button>
-                    {orderResult && !orderPending && (
-                      <span
-                        className="mono"
-                        style={{
-                          fontSize: 10.5,
-                          color: orderResult.tone === 'ok' ? 'var(--success)' : 'var(--danger)',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {orderResult.label}
-                      </span>
-                    )}
-                  </div>
-                </aside>
+                    }}
+                    onSendOrder={sendProjectOrder}
+                  />
+                </div>
               );
             })()}
           </div>
@@ -1371,14 +1546,12 @@ export function Projects({ workspace }) {
                             borderBottom: i < items.length - 1 ? '1px solid var(--line-soft)' : 'none',
                             opacity: t.done ? 0.5 : 1,
                           }}>
-                            <button onClick={() => toggleTodo(t.id)} style={{
-                              width: 16, height: 16, borderRadius: 4,
-                              border: '1.5px solid ' + (t.done ? 'var(--success)' : 'var(--line-strong)'),
-                              background: t.done ? 'var(--success)' : 'transparent',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>
-                              {t.done && <span style={{ fontSize: 10, color: 'var(--bg)' }}>✓</span>}
-                            </button>
+                            <Checkbox
+                              checked={t.done}
+                              onChange={() => toggleTodo(t.id)}
+                              size={16}
+                              label={`${t.done ? '다시 열기' : '완료'}: ${t.title}`}
+                            />
                             <div style={{ minWidth: 0 }}>
                               <div style={{ fontSize: 13, textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</div>
                               <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3 }}>
@@ -1438,7 +1611,19 @@ export function Projects({ workspace }) {
                         {c.tag === 'company' && <Badge tone="company" size="xs">C</Badge>}
                       </div>
                       <div style={{ fontSize: 12.5, lineHeight: 1.4 }}>{c.title}</div>
-                      {c.due && <div className="mono" style={{ fontSize: 10, color: 'var(--warning)', marginTop: 6 }}>⏱ {c.due}</div>}
+                      {c.due && <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-muted)', marginTop: 6 }}>기한 · {c.due}</div>}
+                      <select
+                        className="hub-project-board-status"
+                        aria-label={`${c.title} 상태 변경`}
+                        value={col.key}
+                        onClick={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onChange={(event) => moveCard(c.id, event.target.value)}
+                      >
+                        {visibleColumns.map(option => (
+                          <option key={option.key} value={option.key}>{option.label}</option>
+                        ))}
+                      </select>
                     </div>
                   ))}
                 </div>
@@ -1456,7 +1641,7 @@ export function Projects({ workspace }) {
                     <EmptyState
                       icon="projects"
                       title="타임라인에 표시할 프로젝트가 없습니다"
-                      description="기한이 있는 프로젝트는 축 위에 막대로, 기한 미정 프로젝트는 아래 목록으로 표시됩니다."
+                      description="실제 시작일이 있는 프로젝트는 기간으로, 마감일만 있으면 마감 지점으로 표시됩니다."
                       action={<Button variant="primary" size="sm" icon="plus" onClick={() => createProject()}>Project</Button>}
                     />
                   </Card>
@@ -1465,8 +1650,13 @@ export function Projects({ workspace }) {
             );
           }
           const timeline = buildProjectTimeline(projects);
+          const timelineProjectHref = (projectId) => {
+            const params = mergeTimelineProjectQuery(searchParams, projectId);
+            const query = params.toString();
+            return query ? `${pathname}?${query}` : pathname;
+          };
           const weekTicks = [];
-          for (let d = 0; d <= timeline.totalDays; d += 7) {
+          for (let d = 0; timeline.totalDays > 0 && d <= timeline.totalDays; d += 7) {
             const tickDate = new Date(timeline.windowStart.getTime() + d * 86_400_000);
             weekTicks.push({
               offsetPct: (d / timeline.totalDays) * 100,
@@ -1476,6 +1666,19 @@ export function Projects({ workspace }) {
           return (
             <div className="scroll-y" style={{ flex: 1, padding: 'var(--section-gap)' }}>
               <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+                {selectedProjectId && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44 }}>
+                    <a
+                      href={`/dashboard/work/projects?project=${encodeURIComponent(selectedProjectId)}`}
+                      style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', color: 'var(--moon-300)', fontSize: 12.5, textUnderlineOffset: 3 }}
+                    >
+                      프로젝트 상세로 돌아가기
+                    </a>
+                    <span className="mono" style={{ color: 'var(--fg-faint)', fontSize: 10.5 }}>
+                      {projects.find(project => project.id === selectedProjectId)?.name || '선택한 프로젝트'}
+                    </span>
+                  </div>
+                )}
                 <Card pad={false} className="hub-table-card">
                   {timeline.items.length === 0 ? (
                     <div style={{ padding: '18px 14px', fontSize: 11.5, color: 'var(--fg-faint)' }}>기한이 지정된 프로젝트가 없습니다. 프로젝트를 편집해 기한을 지정하면 여기 축 위에 표시됩니다.</div>
@@ -1485,7 +1688,7 @@ export function Projects({ workspace }) {
                     // on narrow viewports — the label column alone would eat a phone's width.
                     <div className="hub-scroll-x" style={{ overflowX: 'auto' }}>
                       <div style={{ minWidth: 640 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', borderBottom: '1px solid var(--line-soft)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', borderBottom: '1px solid var(--line-soft)' }}>
                           <div style={{ padding: '8px 14px', fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>프로젝트</div>
                           <div style={{ position: 'relative', padding: '8px 0', background: 'var(--surface-2)' }}>
                             {weekTicks.map((tick, i) => (
@@ -1499,32 +1702,52 @@ export function Projects({ workspace }) {
                           const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
                           const lineToken = item.overdue ? 'var(--danger-line)' : (STATUS_LINE_TOKEN[p.status] || 'var(--line-strong)');
                           return (
-                            <div key={p.id} className="hub-row" role="button" tabIndex={0}
-                              onClick={() => editProject(p)}
-                              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); editProject(p); } }}
+                            <div key={p.id} className="hub-row"
+                              data-selected={selectedProjectId === p.id ? 'true' : 'false'}
+                              data-kind={item.kind}
                               style={{
-                                display: 'grid', gridTemplateColumns: '200px 1fr', alignItems: 'center',
+                                display: 'grid', gridTemplateColumns: '260px 1fr', alignItems: 'center', minHeight: 44,
                                 borderBottom: i < timeline.items.length - 1 ? '1px solid var(--line-soft)' : 'none',
-                                cursor: 'pointer',
+                                background: selectedProjectId === p.id ? 'var(--surface-2)' : 'transparent',
                               }}
                             >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 14px', minWidth: 0 }}>
                                 <span style={{ fontSize: 13, color: 'var(--fg-muted)' }}>{pBrand.glyph}</span>
                                 <div style={{ minWidth: 0, flex: 1 }}>
-                                  <div style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
-                                  <div className="mono" style={{ fontSize: 10.5, color: item.overdue ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 2 }}>{p.due}{item.overdue ? ' · 지남' : ''}</div>
+                                  <a
+                                    href={timelineProjectHref(p.id)}
+                                    aria-current={selectedProjectId === p.id ? 'page' : undefined}
+                                    aria-label={buildTimelineItemAriaLabel(item)}
+                                    style={{ minHeight: 44, display: 'flex', flexDirection: 'column', justifyContent: 'center', color: 'inherit', textDecoration: 'none' }}
+                                  >
+                                    <span style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                                    <span className="mono" style={{ fontSize: 10.5, color: item.overdue ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 2 }}>{p.due}{item.overdue ? ' · 지남' : ''}</span>
+                                  </a>
+                                  <div style={{ marginTop: 7 }}>
+                                    <ProjectProgressGauge progress={p.displayProgress} compact ariaLabel={`${p.name} 진척`} />
+                                  </div>
                                 </div>
                               </div>
-                              <div style={{ position: 'relative', height: 34 }}>
-                                <div style={{
-                                  position: 'absolute', left: `${item.startPct}%`, width: `${Math.max(item.widthPct, 1.2)}%`,
-                                  top: 8, height: 18, borderRadius: 999,
-                                  background: 'var(--surface-3)', border: '1px solid var(--line)',
-                                  boxShadow: `inset 2px 0 0 ${lineToken}`,
-                                  overflow: 'hidden',
-                                }}>
-                                  <div style={{ height: '100%', width: `${Math.max(0, Math.min(100, p.progress || 0))}%`, background: 'var(--moon-400)', opacity: 0.55 }} />
-                                </div>
+                              <div style={{ position: 'relative', minHeight: 54 }}>
+                                {item.kind === 'range' ? (
+                                  <div style={{
+                                    position: 'absolute', left: `${item.startPct}%`, width: `${item.widthPct}%`,
+                                    top: 18, height: 18, borderRadius: 999,
+                                    background: 'var(--surface-3)', border: '1px solid var(--line)',
+                                    boxShadow: `inset 2px 0 0 ${lineToken}`,
+                                  }} />
+                                ) : (
+                                  <span
+                                    aria-hidden="true"
+                                    style={{
+                                      position: 'absolute', left: `${item.markerPct}%`, top: 18,
+                                      width: 16, height: 16, borderRadius: 999,
+                                      background: 'var(--surface-3)', border: `1px solid ${lineToken}`,
+                                      boxShadow: `inset 0 0 0 3px var(--surface-3), inset 0 0 0 8px ${lineToken}`,
+                                      transform: 'translateX(-50%)',
+                                    }}
+                                  />
+                                )}
                               </div>
                             </div>
                           );
@@ -1541,19 +1764,21 @@ export function Projects({ workspace }) {
                       {timeline.undated.map((p, i) => {
                         const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
                         return (
-                          <div key={p.id} className="hub-row" role="button" tabIndex={0}
-                            onClick={() => editProject(p)}
-                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); editProject(p); } }}
+                          <a key={p.id} className="hub-row"
+                            href={timelineProjectHref(p.id)}
+                            aria-current={selectedProjectId === p.id ? 'page' : undefined}
+                            data-selected={selectedProjectId === p.id ? 'true' : 'false'}
                             style={{
-                              display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                              display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', minHeight: 44,
                               borderBottom: i < timeline.undated.length - 1 ? '1px solid var(--line-soft)' : 'none',
-                              cursor: 'pointer',
+                              color: 'inherit', textDecoration: 'none',
+                              background: selectedProjectId === p.id ? 'var(--surface-2)' : 'transparent',
                             }}
                           >
                             <span style={{ fontSize: 13, color: 'var(--fg-muted)' }}>{pBrand.glyph}</span>
                             <span style={{ flex: 1, fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
                             <Badge tone={statusTone[p.status]} size="xs">{STATUS_LABEL_KO[p.status] || p.status}</Badge>
-                          </div>
+                          </a>
                         );
                       })}
                     </Card>
@@ -1565,53 +1790,76 @@ export function Projects({ workspace }) {
         })()}
       </div>
 
-      <EditDrawer
-        title={projectDraft?.isNew ? '프로젝트 만들기' : '프로젝트 편집'}
-        subtitle="브랜드별 프로젝트 기록"
-        record={projectDraft}
-        fields={[
-          { key: 'title', label: '프로젝트명', placeholder: '프로젝트 이름' },
-          {
-            key: 'brandId',
-            label: '브랜드',
-            type: 'select',
-            options: [
-              { value: '', label: '브랜드 선택' },
-              ...brands.filter(item => item.key !== 'all').map(item => ({ value: item.id, label: item.name })),
-            ],
-          },
-          { key: 'summary', label: '설명', placeholder: '프로젝트 목적과 범위' },
-          {
-            key: 'status',
-            label: '상태',
-            type: 'select',
-            options: [
-              { value: 'draft', label: '계획' },
-              { value: 'active', label: '진행' },
-              { value: 'blocked', label: '막힘' },
-              { value: 'completed', label: '완료' },
-              { value: 'archived', label: '보관' },
-            ],
-          },
-          {
-            key: 'priority',
-            label: '우선순위',
-            type: 'select',
-            options: [
-              { value: 'low', label: '낮음' },
-              { value: 'medium', label: '보통' },
-              { value: 'high', label: '높음' },
-              { value: 'critical', label: '긴급' },
-            ],
-          },
-          { key: 'progress', label: '진행률 (%)', inputType: 'number', placeholder: '0' },
-          { key: 'nextAction', label: '다음 액션', placeholder: '다음에 할 한 가지' },
-          { key: 'dueAt', label: '기한', inputType: 'date' },
-        ]}
-        onChange={(key, value) => setProjectDraft(current => ({ ...current, [key]: value }))}
-        onSave={persistProject}
-        onClose={() => setProjectDraft(null)}
-      />
+      {projectDraft?.isNew && !containerDraft && (
+        <ProjectCreateDrawer
+          draft={projectDraft}
+          containers={brands.filter(item => item.key !== 'all')}
+          contextContainer={projectCreateContext}
+          onChange={(key, value) => setProjectDraft(current => ({ ...current, [key]: value }))}
+          onSave={persistProjectCreate}
+          onRetryWithNewClientId={retryProjectCreateWithNewId}
+          onOpenConflictProject={openConflictProject}
+          onCreateContainer={createContainer}
+          onClose={() => {
+            setProjectDraft(null);
+            setProjectCreateContext(null);
+          }}
+        />
+      )}
+
+      {projectDraft && !projectDraft.isNew && (
+        <EditDrawer
+          title="프로젝트 편집"
+          subtitle="원본 프로젝트 필드만 변경합니다"
+          record={projectDraft}
+          fields={[
+            { key: 'title', label: '프로젝트명', placeholder: '프로젝트 이름' },
+            {
+              key: 'brandId',
+              label: '저장 위치',
+              type: 'select',
+              options: [
+                { value: '', label: '컨테이너 선택' },
+                ...brands.filter(item => item.key !== 'all').map(item => ({ value: item.id, label: item.name })),
+              ],
+            },
+            { key: 'summary', label: '목표 결과', type: 'textarea', placeholder: '완료됐을 때 어떤 상태가 되어야 하나요?' },
+            {
+              key: 'status',
+              label: '상태',
+              type: 'select',
+              row: 'project-state',
+              options: [
+                { value: 'draft', label: '계획' },
+                { value: 'active', label: '진행' },
+                { value: 'blocked', label: '막힘' },
+                { value: 'completed', label: '완료' },
+                { value: 'archived', label: '보관' },
+              ],
+            },
+            {
+              key: 'priority',
+              label: '우선순위',
+              type: 'select',
+              row: 'project-state',
+              options: [
+                { value: 'low', label: '낮음' },
+                { value: 'medium', label: '보통' },
+                { value: 'high', label: '높음' },
+                { value: 'critical', label: '긴급' },
+              ],
+            },
+            { key: 'nextAction', label: '다음 행동', placeholder: '다음에 할 한 가지' },
+            { key: 'dueAt', label: '기한', inputType: 'date' },
+          ]}
+          onChange={(key, value) => setProjectDraft(current => ({ ...current, [key]: value }))}
+          onSave={persistProjectEdit}
+          onClose={() => {
+            setProjectDraft(null);
+            setProjectEditSource(null);
+          }}
+        />
+      )}
 
       <EditDrawer
         title="새 컨테이너"

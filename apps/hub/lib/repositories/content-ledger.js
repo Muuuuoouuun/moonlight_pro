@@ -5,7 +5,7 @@ import {
   inFilter,
   withWorkspaceFilter,
 } from "@/lib/server-read";
-import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
 
 const ITEM_STATUSES = ["idea", "draft", "review", "scheduled", "published", "archived"];
 const VARIANT_STATUSES = ["draft", "ready", "published", "archived"];
@@ -863,12 +863,13 @@ export function buildCampaignRecord(payload = {}) {
 
 export async function getContentLedger() {
   const workspaceId = resolveDefaultWorkspaceId();
+  const supabaseConfig = resolveSupabaseConfig();
 
-  if (!workspaceId) {
+  if (!workspaceId || !supabaseConfig) {
     return {
       source: "preview",
       configured: false,
-      workspaceId: null,
+      workspaceId: workspaceId || null,
       brands: [],
       items: [],
       variants: [],

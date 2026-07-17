@@ -5,6 +5,20 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, IconButton, Button, Progress, EmptyState } from "../hub-primitives";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
+import {
+  buildRoadmapItemAriaLabel,
+  buildRoadmapProjection,
+} from "@/lib/pms-ui";
+import {
+  beginRhythmCheck,
+  buildRhythmCheckPayload,
+  createRhythmCheckState,
+  filterRhythmRows,
+  finishRhythmCheck,
+  getRhythmProgressProps,
+  resolveRhythmCheckResult,
+  summarizeRhythmRows,
+} from "@/lib/rhythm-ui";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const EN_MONTH = new Intl.DateTimeFormat('en-US', { month: 'long' });
@@ -48,63 +62,178 @@ function buildCalendarWeek(now) {
   };
 }
 
-function buildRoadmapMonths(now) {
-  return Array.from({ length: 4 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    return EN_MONTH.format(d);
-  });
-}
-
 function formatHour(value) {
   const hour = Math.floor(value);
   const minutes = Math.round((value - hour) * 60);
   return `${hour}:${String(minutes).padStart(2, '0')}`;
 }
 
-function useWorkLedger() {
+function useWorkLedger(projectId = null) {
   const [state, setState] = React.useState({
     source: 'preview',
     decisions: [],
+    decisionsState: { state: 'preview', partial: false, error: null },
     rituals: [],
     summary: null,
     syncState: 'preview',
+    rhythmState: 'preview',
+    rhythmPartial: false,
+    rhythmTruncatedSources: [],
+    rhythmError: null,
+    roadmap: {
+      source: 'preview',
+      state: 'loading',
+      partial: false,
+      error: null,
+      failedSources: [],
+      truncatedSources: [],
+      projects: [],
+      milestones: [],
+    },
   });
+  const requestRef = React.useRef(0);
+  const projectQuery = typeof projectId === 'string' ? projectId.trim() : '';
+
+  const load = React.useCallback(async () => {
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
+    setState((prev) => ({
+      ...prev,
+      syncState: 'loading',
+      decisionsState: { ...prev.decisionsState, state: 'loading' },
+      rhythmState: 'loading',
+      rhythmPartial: false,
+      rhythmTruncatedSources: [],
+      roadmap: { ...prev.roadmap, state: 'loading' },
+    }));
+    try {
+      const endpoint = projectQuery
+        ? `/api/hub/work?project=${encodeURIComponent(projectQuery)}`
+        : '/api/hub/work';
+      const response = await fetch(endpoint, { cache: 'no-store' });
+      const data = await response.json().catch(() => null);
+      if (requestId !== requestRef.current) return false;
+
+      if (!response.ok || !data || data.status === 'error') {
+        const message = data?.error || data?.message || `업무 원장 응답 실패 (${response.status})`;
+        setState((prev) => ({
+          ...prev,
+          syncState: 'error',
+          decisionsState: {
+            state: 'error',
+            partial: false,
+            error: { message, retryable: true },
+          },
+          rhythmState: 'error',
+          rhythmPartial: false,
+          rhythmTruncatedSources: [],
+          rhythmError: message,
+          rituals: [],
+          summary: null,
+          roadmap: {
+            ...prev.roadmap,
+            source: 'supabase',
+            state: 'error',
+            partial: false,
+            error: { message, retryable: true },
+            failedSources: ['projects', 'milestones'],
+            truncatedSources: [],
+            projects: [],
+            milestones: [],
+          },
+        }));
+        return false;
+      }
+
+      const roadmap = data.roadmap && typeof data.roadmap === 'object'
+        ? data.roadmap
+        : {
+            source: data.source === 'supabase' ? 'supabase' : 'preview',
+            state: data.source === 'supabase' ? 'error' : 'preview',
+            partial: false,
+            error: data.source === 'supabase'
+              ? { message: '로드맵 응답이 없습니다.', retryable: true }
+              : null,
+            failedSources: data.source === 'supabase' ? ['projects', 'milestones'] : [],
+            truncatedSources: [],
+            projects: [],
+            milestones: [],
+          };
+      const rhythm = data.rhythm && typeof data.rhythm === 'object'
+        ? data.rhythm
+        : {
+            state: data.source === 'supabase'
+              ? (Array.isArray(data.rituals) && data.rituals.length > 0 ? 'live' : 'live-empty')
+              : 'preview',
+            partial: false,
+            truncatedSources: [],
+            error: null,
+          };
+      const decisionsState = data.decisionsState && typeof data.decisionsState === 'object'
+        ? data.decisionsState
+        : {
+            state: data.source === 'supabase'
+              ? (Array.isArray(data.decisions) && data.decisions.length > 0 ? 'live' : 'live-empty')
+              : 'preview',
+            partial: false,
+            error: null,
+          };
+
+      setState({
+        source: data.source === 'supabase' ? 'supabase' : 'preview',
+        decisions: Array.isArray(data.decisions) ? data.decisions : [],
+        decisionsState,
+        rituals: Array.isArray(data.rituals) ? data.rituals : [],
+        summary: data.summary || null,
+        syncState: data.source === 'supabase' ? 'live' : 'preview',
+        rhythmState: rhythm.state || 'error',
+        rhythmPartial: Boolean(rhythm.partial),
+        rhythmTruncatedSources: Array.isArray(rhythm.truncatedSources)
+          ? rhythm.truncatedSources
+          : [],
+        rhythmError: rhythm.error?.message || null,
+        roadmap,
+      });
+      return rhythm.state === 'live' || rhythm.state === 'live-empty' || rhythm.state === 'partial';
+    } catch (error) {
+      if (requestId !== requestRef.current) return false;
+      const message = error instanceof Error ? error.message : String(error);
+      setState((prev) => ({
+        ...prev,
+        syncState: 'error',
+        decisionsState: {
+          state: 'error',
+          partial: false,
+          error: { message, retryable: true },
+        },
+        rhythmState: 'error',
+        rhythmPartial: false,
+        rhythmTruncatedSources: [],
+        rhythmError: message,
+        rituals: [],
+        summary: null,
+        roadmap: {
+          ...prev.roadmap,
+          source: 'supabase',
+          state: 'error',
+          partial: false,
+          error: { message, retryable: true },
+          failedSources: ['projects', 'milestones'],
+          truncatedSources: [],
+          projects: [],
+          milestones: [],
+        },
+      }));
+      return false;
+    }
+  }, [projectQuery]);
 
   React.useEffect(() => {
-    let active = true;
-
-    async function load() {
-      setState((prev) => ({ ...prev, syncState: 'loading' }));
-      try {
-        const response = await fetch('/api/hub/work', { cache: 'no-store' });
-        const data = await response.json().catch(() => null);
-
-        if (!active || !response.ok || !data || data.status === 'error') {
-          if (active) setState((prev) => ({ ...prev, syncState: 'preview' }));
-          return;
-        }
-
-        if (data.source === 'supabase') {
-          setState({
-            source: data.source,
-            decisions: Array.isArray(data.decisions) ? data.decisions : [],
-            rituals: Array.isArray(data.rituals) ? data.rituals : [],
-            summary: data.summary || null,
-            syncState: 'live',
-          });
-        } else {
-          setState((prev) => ({ ...prev, source: 'preview', decisions: [], rituals: [], summary: null, syncState: 'preview' }));
-        }
-      } catch {
-        if (active) setState((prev) => ({ ...prev, source: 'preview', decisions: [], rituals: [], summary: null, syncState: 'preview' }));
-      }
-    }
-
     load();
-    return () => { active = false; };
-  }, []);
+    return () => { requestRef.current += 1; };
+  }, [load]);
 
-  return state;
+  return { ...state, retry: load };
 }
 
 // Google's event.start is an ISO datetime (or an all-day date) — plot it onto the
@@ -416,7 +545,7 @@ export function Decisions() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const { decisions, syncState } = useWorkLedger();
+  const { decisions, decisionsState, retry } = useWorkLedger();
   const [localDecisions, setLocalDecisions] = React.useState([]);
   const createdFromQueryRef = React.useRef(false);
   const createDecision = React.useCallback(() => {
@@ -439,6 +568,20 @@ export function Decisions() {
     router.replace(pathname);
   }, [createDecision, searchParams, router, pathname]);
   const list = [...localDecisions, ...(Array.isArray(decisions) ? decisions : [])];
+  const decisionSyncState = decisionsState?.state || 'error';
+  const decisionComplete = decisionSyncState === 'live' || decisionSyncState === 'live-empty';
+  const decisionLabel = decisionSyncState === 'live' || decisionSyncState === 'live-empty'
+    ? 'live'
+    : decisionSyncState === 'loading'
+      ? 'syncing'
+      : decisionSyncState;
+  const decisionColor = decisionComplete
+    ? 'var(--success)'
+    : decisionSyncState === 'loading' || decisionSyncState === 'partial'
+      ? 'var(--warning)'
+      : decisionSyncState === 'error'
+        ? 'var(--danger)'
+        : 'var(--fg-faint)';
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', maxWidth: 1000, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
@@ -447,22 +590,42 @@ export function Decisions() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Decisions</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch', lineHeight: 1.5 }}>
             실행의 근거가 되는 결정들의 타임라인. 각 결정에는 맥락·선택·근거를 남깁니다.
-            <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-              {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'preview'}
+            <span className="mono" style={{ marginLeft: 8, color: decisionColor }}>
+              {decisionLabel}
             </span>
           </div>
         </div>
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision</Button>
       </div>
+      {!decisionComplete && decisionSyncState !== 'loading' && (
+        <Card>
+          <EmptyState
+            icon="decisions"
+            title={decisionSyncState === 'error'
+              ? '결정 원장 읽기 실패'
+              : decisionSyncState === 'partial'
+                ? '결정 원장 부분 데이터'
+                : '결정 원장 미연결'}
+            description={decisionSyncState === 'error'
+              ? decisionsState?.error?.message || '결정 기록을 다시 읽은 뒤 빈 상태를 확인합니다.'
+              : decisionSyncState === 'partial'
+                ? '읽힌 결정만 표시하며, 기록이 없다고 확정하지 않습니다.'
+                : 'Supabase decisions 원장을 연결하면 결정 타임라인이 표시됩니다.'}
+            action={(decisionSyncState === 'error' || decisionSyncState === 'partial')
+              ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
+              : undefined}
+          />
+        </Card>
+      )}
       <div style={{ position: 'relative', paddingLeft: 28 }}>
         <div style={{ position: 'absolute', left: 11, top: 6, bottom: 6, width: 1, background: 'var(--line-soft)' }} />
-        {list.length === 0 && (
+        {list.length === 0 && decisionComplete && (
           <Card>
             <EmptyState
               icon="decisions"
               title="결정 기록이 없습니다"
-              description={syncState === 'live' ? 'Supabase decisions 기록에 아직 기록된 결정이 없습니다.' : '중요한 판단을 남기면 타임라인에 쌓입니다.'}
+              description="Supabase decisions 기록에 아직 기록된 결정이 없습니다."
               action={<Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision</Button>}
             />
           </Card>
@@ -491,9 +654,34 @@ export function Decisions() {
 }
 
 export function Roadmap() {
-  const months = React.useMemo(() => buildRoadmapMonths(new Date()), []);
-  const items = [];
-  const toneMap = { moon: 'var(--moon-400)', company: 'var(--company)', personal: 'var(--personal)' };
+  const searchParams = useSearchParams();
+  const selectedProjectId = searchParams.get('project');
+  const { roadmap, retry } = useWorkLedger(selectedProjectId);
+  const roadmapProjection = React.useMemo(
+    () => buildRoadmapProjection(roadmap, { selectedProjectId }),
+    [roadmap, selectedProjectId],
+  );
+  const months = React.useMemo(
+    () => roadmapProjection.months.map(month => ({ ...month, label: EN_MONTH.format(month.start) })),
+    [roadmapProjection.months],
+  );
+  const items = roadmapProjection.items;
+  const statusLabel = roadmap.state === 'loading'
+    ? 'syncing'
+    : roadmap.state === 'preview'
+      ? 'preview'
+      : roadmap.state === 'partial'
+        ? 'partial'
+        : roadmap.state === 'error'
+          ? 'error'
+          : 'live';
+  const statusColor = roadmap.state === 'error'
+    ? 'var(--danger)'
+    : roadmap.state === 'partial'
+      ? 'var(--warning)'
+      : roadmap.state === 'live' || roadmap.state === 'live-empty'
+        ? 'var(--success)'
+        : 'var(--fg-faint)';
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
@@ -501,75 +689,215 @@ export function Roadmap() {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Roadmap</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            로드맵 기록 연결 전
-            <span className="mono" style={{ marginLeft: 8, color: 'var(--fg-faint)' }}>preview</span>
+            프로젝트와 마일스톤의 4개월 계획 축
+            <span className="mono" style={{ marginLeft: 8, color: statusColor }}>{statusLabel}</span>
           </div>
         </div>
         <div style={{ flex: 1 }} />
+        {selectedProjectId && (
+          <a
+            href={`/dashboard/work/projects?project=${encodeURIComponent(selectedProjectId)}`}
+            style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', color: 'var(--moon-300)', fontSize: 12.5, textUnderlineOffset: 3 }}
+          >
+            프로젝트로 돌아가기
+          </a>
+        )}
       </div>
 
-      <Card pad={false} className="hub-table-card">
-        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', borderBottom: '1px solid var(--line-soft)' }}>
-          <div style={{ padding: '10px 14px', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Initiative</div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
-            {months.map(m => (
-              <div key={m} style={{ padding: '10px 14px', fontSize: 11, color: 'var(--fg-faint)', borderLeft: '1px solid var(--line-soft)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{m}</div>
-            ))}
+      {roadmap.partial && (
+        <div role="status" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12, color: 'var(--warning)' }}>
+            {roadmap.failedSources.length > 0 && (
+              <span>일부 원장을 읽지 못했습니다 · {roadmap.failedSources.join(', ')}</span>
+            )}
+            {roadmap.truncatedSources.length > 0 && (
+              <span>표시 한도를 넘어 일부만 표시합니다 · {roadmap.truncatedSources.join(', ')}</span>
+            )}
           </div>
+          <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
         </div>
-        {items.length === 0 && (
+      )}
+
+      <Card pad={false} className="hub-table-card">
+        {roadmap.state === 'loading' && (
+          <EmptyState icon="roadmap" title="로드맵을 읽는 중입니다" description="프로젝트와 마일스톤 원장을 확인하고 있습니다." style={{ minHeight: 220 }} />
+        )}
+        {roadmap.state === 'preview' && (
+          <EmptyState icon="roadmap" title="로드맵 원장이 연결되지 않았습니다" description="Supabase 연결 후 실제 프로젝트 일정만 표시됩니다." style={{ minHeight: 220 }} />
+        )}
+        {roadmap.state === 'error' && (
           <EmptyState
             icon="roadmap"
-            title="로드맵 데이터가 없습니다"
-            description="프로젝트 기록과 로드맵 일정이 연결되면 이 타임라인이 채워집니다."
+            title="로드맵을 읽지 못했습니다"
+            description={roadmap.error?.message || '프로젝트와 마일스톤 원장을 다시 확인해 주세요.'}
+            action={<Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>}
             style={{ minHeight: 220 }}
           />
         )}
-        {items.map((it, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '220px 1fr', borderBottom: i < items.length - 1 ? '1px solid var(--line-soft)' : 'none', alignItems: 'center' }}>
-            <div style={{ padding: '14px', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12.5 }}>{it.name}</span>
-              {it.tag === 'personal' && <Badge tone="personal" size="xs">P</Badge>}
-              {it.tag === 'company' && <Badge tone="company" size="xs">C</Badge>}
-            </div>
-            <div style={{ position: 'relative', height: 44, display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
-              {months.map((_, mi) => <div key={mi} style={{ borderLeft: '1px solid var(--line-soft)' }} />)}
-              <div style={{
-                position: 'absolute', top: 12, height: 20,
-                left: `calc(${(it.start / months.length) * 100}% + 4px)`,
-                width: `calc(${(it.len / months.length) * 100}% - 8px)`,
-                background: toneMap[it.tone],
-                opacity: 0.85,
-                borderRadius: 6,
-                boxShadow: '0 1px 0 oklch(1 0 0 / 0.1) inset',
-              }} />
+        {roadmap.state === 'live-empty' && (
+          <EmptyState icon="roadmap" title="로드맵 일정이 없습니다" description="기한이 있는 프로젝트나 목표일이 있는 마일스톤을 만들면 4개월 축에 표시됩니다." style={{ minHeight: 220 }} />
+        )}
+        {(roadmap.state === 'live' || roadmap.state === 'partial') && items.length === 0 && (
+          <EmptyState
+            icon="roadmap"
+            title={selectedProjectId ? '선택한 프로젝트의 4개월 일정이 없습니다' : '4개월 안에 표시할 일정이 없습니다'}
+            description="프로젝트 시작일·마감일 또는 마일스톤 목표일을 확인해 주세요."
+            style={{ minHeight: 220 }}
+          />
+        )}
+        {(roadmap.state === 'live' || roadmap.state === 'partial') && items.length > 0 && (
+          <div className="hub-scroll-x" style={{ overflowX: 'auto' }}>
+            <div style={{ minWidth: 760 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', borderBottom: '1px solid var(--line-soft)' }}>
+                <div style={{ padding: '10px 14px', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>프로젝트 · 마일스톤</div>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
+                  {months.map(month => (
+                    <div key={month.key} style={{ padding: '10px 14px', fontSize: 11, color: 'var(--fg-faint)', borderLeft: '1px solid var(--line-soft)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{month.label}</div>
+                  ))}
+                </div>
+              </div>
+              {items.map((item, index) => (
+                <div
+                  key={item.id}
+                  data-kind={item.kind}
+                  data-selected={selectedProjectId === item.projectId ? 'true' : 'false'}
+                  style={{
+                    display: 'grid', gridTemplateColumns: '240px 1fr', alignItems: 'center',
+                    borderBottom: index < items.length - 1 ? '1px solid var(--line-soft)' : 'none',
+                    background: selectedProjectId === item.projectId ? 'var(--surface-2)' : 'transparent',
+                  }}
+                >
+                  <a
+                    href={`/dashboard/work/projects?project=${encodeURIComponent(item.projectId)}`}
+                    aria-current={selectedProjectId === item.projectId ? 'page' : undefined}
+                    aria-label={buildRoadmapItemAriaLabel(item)}
+                    style={{ minHeight: 52, padding: '8px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', color: 'inherit', textDecoration: 'none' }}
+                  >
+                    <span style={{ fontSize: 12.5, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                    <span style={{ marginTop: 3, fontSize: 10.5, color: 'var(--fg-faint)' }}>{item.meta}</span>
+                  </a>
+                  <div style={{ position: 'relative', minHeight: 52, display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
+                    {months.map(month => <div key={month.key} style={{ borderLeft: '1px solid var(--line-soft)' }} />)}
+                    {item.kind === 'range' ? (
+                      <span aria-hidden="true" style={{ position: 'absolute', top: 17, left: `${item.startPct}%`, width: `${item.widthPct}%`, height: 18, borderRadius: 999, background: 'var(--surface-3)', border: '1px solid var(--line)', boxShadow: 'inset 2px 0 0 var(--moon-300)' }} />
+                    ) : (
+                      <span aria-hidden="true" style={{ position: 'absolute', top: 17, left: `${item.markerPct}%`, width: 16, height: 16, borderRadius: item.kind === 'milestone' ? 3 : 999, background: 'var(--surface-3)', border: '1px solid var(--moon-300)', boxShadow: 'inset 0 0 0 3px var(--surface-3), inset 0 0 0 8px var(--moon-300)', transform: item.kind === 'milestone' ? 'translateX(-50%) rotate(45deg)' : 'translateX(-50%)' }} />
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
+        )}
       </Card>
     </div>
   );
 }
 
 export function Rhythm() {
-  const { rituals: liveRituals, summary, syncState } = useWorkLedger();
-  const [checkedRituals, setCheckedRituals] = React.useState(() => new Set());
-  const rituals = Array.isArray(liveRituals) ? liveRituals : [];
+  const searchParams = useSearchParams();
+  const selectedProjectId = searchParams.get('project')?.trim() || null;
+  const {
+    rituals: liveRituals,
+    rhythmState,
+    rhythmPartial,
+    rhythmTruncatedSources,
+    rhythmError,
+    retry,
+  } = useWorkLedger(selectedProjectId);
+  const [mutationState, setMutationState] = React.useState(() => createRhythmCheckState());
+  const attemptSequenceRef = React.useRef(0);
+  const latestAttemptRef = React.useRef(new Map());
+  const rituals = React.useMemo(
+    () => filterRhythmRows(liveRituals, selectedProjectId),
+    [liveRituals, selectedProjectId],
+  );
+  const summary = React.useMemo(() => summarizeRhythmRows(rituals), [rituals]);
 
-  const completed = summary?.ritualsCompletedThisWeek ?? rituals.filter(r => r.weeks?.some(v => v === 1)).length;
-  const total = summary?.ritualsTotalThisWeek ?? rituals.length;
+  React.useEffect(() => {
+    latestAttemptRef.current.clear();
+    setMutationState(createRhythmCheckState());
+  }, [selectedProjectId]);
+
+  const completed = summary.ritualsCompletedThisWeek;
+  const total = summary.ritualsTotalThisWeek;
   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const rhythmProgressProps = getRhythmProgressProps({
+    partial: rhythmPartial,
+    completed,
+    total,
+  });
+  const longestStreak = summary.longestStreak;
+  const longestStreakRitual = summary.longestStreakRitual;
+  const selectedProjectName = rituals.find((ritual) => ritual.projectName)?.projectName || '';
+  const syncLabel = rhythmState === 'live' || rhythmState === 'live-empty'
+    ? 'live'
+    : rhythmState === 'partial'
+      ? 'partial · observed'
+    : rhythmState === 'loading'
+      ? 'syncing'
+      : rhythmState === 'error'
+        ? 'error'
+        : 'preview · unsaved';
+  const syncColor = rhythmState === 'live' || rhythmState === 'live-empty'
+    ? 'var(--moon-300)'
+    : rhythmState === 'partial'
+      ? 'var(--warning)'
+    : rhythmState === 'loading'
+      ? 'var(--warning)'
+      : rhythmState === 'error'
+        ? 'var(--danger)'
+        : 'var(--fg-faint)';
 
-  let longestStreak = summary?.longestStreak ?? 0;
-  let longestStreakRitual = summary?.longestStreakRitual ?? '';
-  if (!summary) {
-    rituals.forEach(r => {
-      if ((r.streak || 0) > longestStreak) {
-        longestStreak = r.streak;
-        longestStreakRitual = r.name;
+  const checkIn = React.useCallback(async (ritual) => {
+    const ritualId = ritual.id;
+    const attemptId = `${Date.now()}-${attemptSequenceRef.current + 1}`;
+    attemptSequenceRef.current += 1;
+    latestAttemptRef.current.set(ritualId, attemptId);
+    setMutationState((state) => beginRhythmCheck(state, ritualId, attemptId));
+
+    try {
+      const response = await fetch('/api/routine/check', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(buildRhythmCheckPayload(ritual)),
+      });
+      const data = await response.json().catch(() => null);
+      let result = resolveRhythmCheckResult({
+        responseOk: response.ok,
+        httpStatus: response.status,
+        data,
+      });
+
+      if (latestAttemptRef.current.get(ritualId) !== attemptId) return;
+      if (result.shouldRefetch) {
+        const refreshed = await retry();
+        if (latestAttemptRef.current.get(ritualId) !== attemptId) return;
+        if (!refreshed) {
+          result = {
+            ...result,
+            message: `${result.message} 저장은 확인됐지만 주간 현황을 다시 읽지 못했습니다. 다시 읽어 주세요.`,
+          };
+        }
       }
-    });
-  }
+
+      setMutationState((state) => finishRhythmCheck(
+        state,
+        ritualId,
+        attemptId,
+        result,
+      ));
+    } catch (error) {
+      if (latestAttemptRef.current.get(ritualId) !== attemptId) return;
+      const result = resolveRhythmCheckResult({ error });
+      setMutationState((state) => finishRhythmCheck(
+        state,
+        ritualId,
+        attemptId,
+        result,
+      ));
+    }
+  }, [retry]);
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
@@ -577,74 +905,119 @@ export function Rhythm() {
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Rhythm</h2>
         <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
           루틴은 실행의 인프라
-          <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-            {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'preview'}
+          <span className="mono" style={{ marginLeft: 8, color: syncColor }}>
+            {syncLabel}
           </span>
         </div>
+        {selectedProjectId && (
+          <a
+            href={`/dashboard/work/projects?project=${encodeURIComponent(selectedProjectId)}`}
+            style={{ minHeight: 44, marginTop: 6, display: 'inline-flex', alignItems: 'center', color: 'var(--moon-300)', fontSize: 12.5, textUnderlineOffset: 3 }}
+          >
+            프로젝트로 돌아가기{selectedProjectName ? ` · ${selectedProjectName}` : ''}
+          </a>
+        )}
       </div>
+
+      {rhythmState === 'error' && (
+        <div role="alert" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
+          <span style={{ flex: 1, fontSize: 12, color: 'var(--danger)' }}>{rhythmError || '리듬 원장을 읽지 못했습니다. 체크인 상태를 확인하려면 다시 읽어 주세요.'}</span>
+          <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
+        </div>
+      )}
+
+      {rhythmState === 'partial' && (
+        <div role="alert" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
+          <span style={{ flex: 1, fontSize: 12, color: 'var(--warning)' }}>
+            일부 기록만 표시합니다. {rhythmTruncatedSources.includes('routine_checks') ? 'routine_checks가 조회 한도를 초과해 최근 240건을 관측했습니다.' : '리듬 원장의 일부만 관측했습니다.'}
+          </span>
+          <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
+        </div>
+      )}
 
       <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>This week</div>
           <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="stat">{completed} / {total}</div>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>rituals completed</div>
-          <div style={{ marginTop: 14 }}><Progress value={percent} /></div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{rhythmPartial ? '관측된 완료 · 일부 기록' : 'rituals completed'}</div>
+          {rhythmPartial ? (
+            <div {...rhythmProgressProps} style={{ marginTop: 14, fontSize: 11, color: 'var(--fg-faint)' }}>
+              관측 {completed} / {total} · 일부 기록
+            </div>
+          ) : (
+            <div {...rhythmProgressProps} style={{ marginTop: 14 }}><Progress value={percent} /></div>
+          )}
         </Card>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Longest streak</div>
           <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="stat">{longestStreak} <span style={{ fontSize: 14, color: 'var(--fg-faint)' }}>days</span></div>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{longestStreakRitual || '루틴 체크인 기록 없음'}</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{longestStreakRitual || '루틴 체크인 기록 없음'}{rhythmPartial ? ' · 관측값' : ''}</div>
         </Card>
       </div>
 
       <Card pad={false} className="hub-table-card">
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'grid', gridTemplateColumns: '1fr 160px 90px 100px' }}>
-          <span>Ritual</span><span>Last 7 days</span><span>Streak</span><span style={{ textAlign: 'right' }}>Action</span>
-        </div>
         {rituals.length === 0 && (
           <EmptyState
             icon="rhythm"
-            title="루틴 체크 기록이 없습니다"
-            description={syncState === 'live' ? 'Supabase routine_checks 기록이 비어 있습니다.' : '체크인을 기록하면 주간 리듬과 streak가 계산됩니다.'}
+            title={selectedProjectId ? '선택한 프로젝트의 리듬이 없습니다' : '루틴 체크 기록이 없습니다'}
+            description={rhythmState === 'live-empty' ? 'Supabase routine_checks 기록이 비어 있습니다.' : rhythmState === 'error' ? '원장을 다시 읽은 뒤 체크인 상태를 확인해 주세요.' : rhythmState === 'partial' ? '일부 기록만 관측되어 전체 리듬 상태를 확정할 수 없습니다.' : '연결 전에는 체크인이 저장되지 않습니다.'}
+            action={rhythmState === 'error' || rhythmState === 'partial' ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button> : undefined}
             style={{ minHeight: 220 }}
           />
         )}
-        {rituals.map((r, i) => {
-          const isChecked = checkedRituals.has(r.id || r.name || i);
-          const weeks = Array.isArray(r.weeks) ? [...r.weeks] : [0,0,0,0,0,0,0];
-          if (isChecked) weeks[weeks.length - 1] = 1;
-          return (
-            <div key={r.id || r.name || i} style={{ padding: '14px 16px', borderBottom: i < rituals.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'grid', gridTemplateColumns: '1fr 160px 90px 100px', alignItems: 'center' }}>
-              <span style={{ fontSize: 13 }}>{r.name}</span>
-              <div style={{ display: 'flex', gap: 4 }}>
-                {weeks.map((v, j) => (
-                  <div key={j} style={{
-                    width: 18, height: 18, borderRadius: 4,
-                    background: v ? 'var(--moon-500)' : 'var(--surface-3)',
-                    border: v ? 'none' : '1px solid var(--line-soft)',
-                  }} />
-                ))}
+        {rituals.length > 0 && (
+          <div className="hub-rhythm-scroll" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ minWidth: 720 }}>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 180px 90px 128px' }}>
+                <span>Ritual</span><span>Last 7 days</span><span>Streak</span><span style={{ textAlign: 'right' }}>Action</span>
               </div>
-              <span className="mono" style={{ fontSize: 12, color: (r.streak || 0) > 10 ? 'var(--success)' : 'var(--fg-muted)' }}>{r.streak || 0}d</span>
-              <div style={{ textAlign: 'right' }}>
-                <Button
-                  variant={isChecked ? 'secondary' : 'ghost'}
-                  size="xs"
-                  onClick={() => {
-                    const key = r.id || r.name || i;
-                    setCheckedRituals(prev => {
-                      const next = new Set(prev);
-                      next.has(key) ? next.delete(key) : next.add(key);
-                      return next;
-                    });
-                  }}
-                >
-                  {isChecked ? 'Checked' : 'Check in'}
-                </Button>
-              </div>
+              {rituals.map((r, i) => {
+                const weeks = Array.isArray(r.weeks) ? r.weeks : [0,0,0,0,0,0,0];
+                const pending = Boolean(mutationState.pendingByRitual[r.id]);
+                const feedback = mutationState.feedbackByRitual[r.id];
+                const bitmapText = weeks.map((value, index) => `${index === 6 ? '오늘' : `${6 - index}일 전`} ${value ? '완료' : '미완료'}`).join(', ');
+                return (
+                  <div key={r.id} style={{ padding: '12px 16px', minHeight: 68, borderBottom: i < rituals.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 180px 90px 128px', alignItems: 'center' }}>
+                    <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <span style={{ fontSize: 13 }}>{r.name}</span>
+                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{r.checkType} · {r.ritualKey}</span>
+                      {r.projectHref && (
+                        <a href={r.projectHref} style={{ width: 'fit-content', color: 'var(--moon-300)', fontSize: 11.5, textUnderlineOffset: 3 }}>{r.projectName || '연결 프로젝트'}</a>
+                      )}
+                      {feedback && (
+                        <span aria-live="polite" style={{ fontSize: 11, color: feedback.kind === 'error' ? 'var(--danger)' : feedback.kind === 'preview' ? 'var(--warning)' : 'var(--fg-muted)' }}>
+                          {feedback.message}
+                        </span>
+                      )}
+                    </div>
+                    <div role="img" aria-label={`최근 7일 체크 기록: ${bitmapText}`} style={{ display: 'flex', gap: 4 }}>
+                      {weeks.map((value, index) => (
+                        <span key={index} aria-hidden="true" style={{
+                          width: 18, height: 18, borderRadius: 4,
+                          background: value ? 'var(--moon-500)' : 'var(--surface-3)',
+                          border: '1px solid var(--line-soft)',
+                        }} />
+                      ))}
+                    </div>
+                    <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{r.streak || 0}d</span>
+                    <div style={{ textAlign: 'right' }}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={pending}
+                        aria-label={`${r.projectName ? `${r.projectName} · ` : ''}${r.name} 체크인 저장`}
+                        style={{ minHeight: 44 }}
+                        onClick={() => checkIn(r)}
+                      >
+                        {pending ? '저장 중…' : '체크인 저장'}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        )}
       </Card>
     </div>
   );

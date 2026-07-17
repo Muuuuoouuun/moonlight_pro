@@ -13,18 +13,41 @@ export async function GET() {
   try {
     const ledger = await getProjectLedger();
 
+    if (ledger.source === "error") {
+      return NextResponse.json(
+        {
+          status: "error",
+          source: "error",
+          configured: ledger.configured,
+          workspaceId: ledger.workspaceId,
+          error: ledger.error || "project-ledger-core-read-failed",
+          failedSources: ledger.failedSources || ["tasks"],
+          retryable: ledger.retryable !== false,
+          tasks: [],
+        },
+        { status: 502 },
+      );
+    }
+
+    const taskPartial = ledger.source === "supabase" && ledger.taskAggregation?.partial === true;
+
     return NextResponse.json({
-      status: ledger.source === "supabase" ? "live" : "preview",
+      status: ledger.source === "supabase"
+        ? taskPartial ? "partial" : "live"
+        : "preview",
       source: ledger.source,
       configured: ledger.configured,
       workspaceId: ledger.workspaceId,
+      partial: taskPartial,
+      failedSources: taskPartial ? ["tasks"] : [],
       tasks: ledger.todos,
     });
   } catch (error) {
+    console.error("[hub/tasks] task ledger read failed", error);
     return NextResponse.json(
       {
         status: "error",
-        error: error instanceof Error ? error.message : String(error),
+        error: "task-ledger-unexpected-error",
       },
       { status: 500 },
     );
@@ -48,7 +71,7 @@ export async function POST(req) {
     ...parsed.data,
     action: "create_task",
     id: parsed.data.id || randomUUID(),
-    workspaceId: parsed.data.workspaceId || resolveDefaultWorkspaceId(),
+    workspaceId: resolveDefaultWorkspaceId(),
   });
   return NextResponse.json(
     { ...result.data, task: result.data?.entity || null },
@@ -66,7 +89,7 @@ export async function PATCH(req) {
   const result = await forwardPmsCommand({
     ...parsed.data,
     action: "update_task",
-    workspaceId: parsed.data.workspaceId || resolveDefaultWorkspaceId(),
+    workspaceId: resolveDefaultWorkspaceId(),
   });
   return NextResponse.json(
     { ...result.data, task: result.data?.entity || null },

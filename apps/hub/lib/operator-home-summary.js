@@ -24,25 +24,39 @@ function countBy(values, predicate) {
 function buildPmsSummary(ledger) {
   const projects = Array.isArray(ledger.projects) ? ledger.projects : [];
   const todos = Array.isArray(ledger.todos) ? ledger.todos : [];
+  const taskStatsPartial = ledger?.taskAggregation?.partial === true
+    || (Array.isArray(ledger?.partialSources) && ledger.partialSources.includes("tasks"));
+  const projectStatsPartial = Array.isArray(ledger?.partialSources)
+    && ledger.partialSources.includes("projects");
   const completedTasks = countBy(todos, (todo) => todo?.done === true);
   const openTasks = todos.length - completedTasks;
 
   return {
-    totalProjects: projects.length,
-    activeProjects: countBy(projects, (project) => !["Done", "Backlog"].includes(project?.status)),
-    blockedProjects: countBy(projects, (project) => project?.status === "Blocked"),
-    openTasks,
-    dueOrOverdueTasks: countBy(todos, (todo) => todo?.done !== true && todo?.bucket === "오늘"),
-    completedTasks,
-    taskCompletionRate: todos.length ? Math.round((completedTasks / todos.length) * 100) : 0,
+    totalProjects: projectStatsPartial ? null : projects.length,
+    activeProjects: projectStatsPartial
+      ? null
+      : countBy(projects, (project) => !["Done", "Backlog"].includes(project?.status)),
+    blockedProjects: projectStatsPartial
+      ? null
+      : countBy(projects, (project) => project?.status === "Blocked"),
+    openTasks: taskStatsPartial ? null : openTasks,
+    dueOrOverdueTasks: taskStatsPartial
+      ? null
+      : countBy(todos, (todo) => todo?.done !== true && todo?.bucket === "오늘"),
+    completedTasks: taskStatsPartial ? null : completedTasks,
+    taskCompletionRate: taskStatsPartial
+      ? null
+      : todos.length ? Math.round((completedTasks / todos.length) * 100) : 0,
     projectStatusSeries: PROJECT_SERIES.map(({ key, label, statuses }) => ({
       key,
       label,
-      value: countBy(projects, (project) => statuses.has(project?.status)),
+      value: projectStatsPartial
+        ? null
+        : countBy(projects, (project) => statuses.has(project?.status)),
     })),
     taskStatusSeries: [
-      { key: "open", label: "열림", value: openTasks },
-      { key: "done", label: "완료", value: completedTasks },
+      { key: "open", label: "열림", value: taskStatsPartial ? null : openTasks },
+      { key: "done", label: "완료", value: taskStatsPartial ? null : completedTasks },
     ],
   };
 }
@@ -51,24 +65,29 @@ function buildContentSummary(ledger) {
   const items = Array.isArray(ledger.items) ? ledger.items : [];
   const publishLogs = Array.isArray(ledger.publishLogs) ? ledger.publishLogs : [];
   const statusOf = (item) => item?.statusKey || item?.status;
+  const failedSources = new Set(Array.isArray(ledger.failedSources) ? ledger.failedSources : []);
+  const itemsAvailable = !failedSources.has("items") && !failedSources.has("content_items");
+  const publishLogsAvailable = !failedSources.has("publish_logs") && !failedSources.has("publishLogs");
 
   return {
-    totalItems: items.length,
-    ideas: countBy(items, (item) => statusOf(item) === "idea"),
-    inProduction: countBy(items, (item) => ["draft", "review"].includes(statusOf(item))),
-    scheduled: countBy(items, (item) => statusOf(item) === "scheduled"),
-    published: countBy(items, (item) => statusOf(item) === "published"),
-    failed: countBy(publishLogs, (log) => log?.status === "failed"),
+    totalItems: itemsAvailable ? items.length : null,
+    ideas: itemsAvailable ? countBy(items, (item) => statusOf(item) === "idea") : null,
+    inProduction: itemsAvailable
+      ? countBy(items, (item) => ["draft", "review"].includes(statusOf(item)))
+      : null,
+    scheduled: itemsAvailable ? countBy(items, (item) => statusOf(item) === "scheduled") : null,
+    published: itemsAvailable ? countBy(items, (item) => statusOf(item) === "published") : null,
+    failed: publishLogsAvailable ? countBy(publishLogs, (log) => log?.status === "failed") : null,
     pipelineSeries: CONTENT_SERIES.map(({ key, label }) => ({
       key,
       label,
-      value: countBy(items, (item) => statusOf(item) === key),
+      value: itemsAvailable ? countBy(items, (item) => statusOf(item) === key) : null,
     })),
   };
 }
 
 function ledgerState(ledger) {
-  if (ledger?.source === "supabase") return "live";
+  if (ledger?.source === "supabase") return ledger?.partial ? "partial" : "live";
   if (ledger?.source === "error" || ledger?.status === "error") return "error";
   return "preview";
 }
@@ -76,6 +95,7 @@ function ledgerState(ledger) {
 function combinedState(states) {
   const liveCount = states.filter((state) => state === "live").length;
   if (liveCount === states.length) return "live";
+  if (states.includes("partial")) return "partial";
   if (liveCount > 0) return "partial";
   return states.includes("error") ? "error" : "preview";
 }
@@ -89,7 +109,7 @@ export function buildOperatorHomeSummary({ projects = {}, content = {} } = {}) {
   return {
     state: combinedState(Object.values(sources)),
     sources,
-    pms: sources.projects === "live" ? buildPmsSummary(projects) : null,
-    content: sources.content === "live" ? buildContentSummary(content) : null,
+    pms: ["live", "partial"].includes(sources.projects) ? buildPmsSummary(projects) : null,
+    content: ["live", "partial"].includes(sources.content) ? buildContentSummary(content) : null,
   };
 }

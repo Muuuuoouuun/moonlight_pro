@@ -45,3 +45,69 @@ test("forwards a PMS command to Engine with only the shared server secret", asyn
     data: { status: "saved", entity: { id: "task-id" } },
   });
 });
+
+test("preserves conflict taxonomy when Engine returns HTTP 409 without a JSON envelope", async () => {
+  const result = await pmsClient.forwardPmsCommand(
+    { action: "create_project", id: "project-id", title: "Conflicting retry" },
+    {
+      env: {
+        COM_MOON_ENGINE_URL: "http://127.0.0.1:3001",
+        COM_MOON_SHARED_WEBHOOK_SECRET: "shared-secret",
+      },
+      fetchImpl: async () => new Response("upstream proxy response", { status: 409 }),
+    },
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    httpStatus: 409,
+    data: { status: "conflict", error: "engine-http-409" },
+  });
+});
+
+test("drops private persistence detail from Engine error envelopes", async () => {
+  const result = await pmsClient.forwardPmsCommand(
+    { action: "create_task", id: "task-id", title: "Scoped" },
+    {
+      env: {
+        COM_MOON_ENGINE_URL: "http://127.0.0.1:3001",
+        COM_MOON_SHARED_WEBHOOK_SECRET: "shared-secret",
+      },
+      fetchImpl: async () => new Response(JSON.stringify({
+        status: "error",
+        error: "insert-failed",
+        detail: "private-service-key=do-not-leak",
+      }), {
+        status: 502,
+        headers: { "content-type": "application/json" },
+      }),
+    },
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    httpStatus: 502,
+    data: { status: "error", error: "insert-failed" },
+  });
+});
+
+test("uses a stable public code for Engine transport failures", async () => {
+  const result = await pmsClient.forwardPmsCommand(
+    { action: "create_task", id: "task-id", title: "Scoped" },
+    {
+      env: {
+        COM_MOON_ENGINE_URL: "http://127.0.0.1:3001",
+        COM_MOON_SHARED_WEBHOOK_SECRET: "shared-secret",
+      },
+      fetchImpl: async () => {
+        throw new Error("private-host-token=do-not-leak");
+      },
+    },
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    httpStatus: 502,
+    data: { status: "error", error: "engine-unreachable", retryable: true },
+  });
+});

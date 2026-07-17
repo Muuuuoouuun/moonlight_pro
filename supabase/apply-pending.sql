@@ -1,5 +1,5 @@
 -- ============================================================================
--- apply-pending.sql — 적용 대기 마이그레이션 묶음 (0003 → 0011, 시점순)
+-- apply-pending.sql — 적용 대기 마이그레이션 묶음 (0003 → 0011 + 0019~0020, 시점순)
 --
 -- 생성물(편의용 번들). 정본은 supabase/migrations/<each>.sql 개별 파일.
 -- 전부 멱등(if not exists / 제약 재생성 / on conflict / not-exists 시드 가드)이라
@@ -881,6 +881,27 @@ create index if not exists idx_work_orders_company
   on public.work_orders (workspace_id, company_id);
 create index if not exists idx_work_orders_run
   on public.work_orders (run_id);
+
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- 20260717_0019_routine_check_idempotency.sql
+-- Apply before deploying the Hub routine check route that writes idempotency_key.
+-- ─────────────────────────────────────────────────────────────────────────
+alter table if exists public.routine_checks
+  add column if not exists idempotency_key text;
+
+create unique index if not exists routine_checks_workspace_idempotency_key_uidx
+  on public.routine_checks (workspace_id, idempotency_key)
+  where idempotency_key is not null;
+
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- 20260717_0020_nullable_project_progress.sql
+-- Preserve the difference between "no progress evidence" and a reported 0%.
+-- ─────────────────────────────────────────────────────────────────────────
+alter table if exists public.projects
+  alter column progress drop default,
+  alter column progress drop not null;
 
 
 -- end of apply-pending.sql
