@@ -226,3 +226,45 @@ test("canonical drawers suspend the underlying project detail Escape handler", (
   assert.match(projectsSource, /\{openDetail && \(\(\) => \{/);
   assert.doesNotMatch(projectsSource, /stopImmediatePropagation/);
 });
+
+test("drawer close focus restoration is not overridden by detail autofocus", () => {
+  const autofocusStart = projectsSource.indexOf("const detailAutofocusRaf");
+  const nextEffect = projectsSource.indexOf("React.useEffect", autofocusStart);
+  const autofocusBlock = projectsSource.slice(autofocusStart, nextEffect);
+
+  assert.ok(autofocusStart >= 0 && nextEffect > autofocusStart);
+  assert.match(autofocusBlock, /querySelector\(['"]\[aria-label=[^\n]+상세 닫기/);
+  assert.match(autofocusBlock, /\[mobileDetail, openDetail\]/);
+  assert.doesNotMatch(autofocusBlock, /drawerOpen/);
+
+  const listenerStart = projectsSource.indexOf("if (!openDetail || drawerOpen)", nextEffect);
+  const listenerEnd = projectsSource.indexOf("const toggleExpand", listenerStart);
+  const listenerBlock = projectsSource.slice(listenerStart, listenerEnd);
+  assert.doesNotMatch(listenerBlock, /detailAutofocusRaf|상세 닫기[^\n]+focus\(\)/);
+});
+
+test("desktop detail-open rows fit the standard sidebar-constrained width without clipping", () => {
+  const rule = (selector) => {
+    const start = globalCss.indexOf(selector);
+    const end = globalCss.indexOf("}", start);
+    return globalCss.slice(start, end);
+  };
+  const minimumWidth = (block) => {
+    const template = block.match(/grid-template-columns:\s*([^;]+)/)?.[1] || "";
+    const tracks = [...template.matchAll(/(?:^|\(|\s)(\d+)px/g)].map((match) => Number(match[1]));
+    const gap = Number(block.match(/gap:\s*(\d+)px/)?.[1] || 0);
+    const inlinePadding = Number(block.match(/padding:\s*\d+px\s+(\d+)px/)?.[1] || 0);
+    return tracks.reduce((sum, value) => sum + value, 0) + gap * Math.max(0, tracks.length - 1) + inlinePadding * 2;
+  };
+
+  const defaultRow = rule(".hub-app .hub-project-row {");
+  const detailHead = rule('.hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-list-head {');
+  const detailRow = rule('.hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-row {');
+
+  assert.ok(minimumWidth(defaultRow) <= 880, `default row minimum is ${minimumWidth(defaultRow)}px`);
+  assert.ok(minimumWidth(detailHead) <= 540, `detail header minimum is ${minimumWidth(detailHead)}px`);
+  assert.ok(minimumWidth(detailRow) <= 540, `detail row minimum is ${minimumWidth(detailRow)}px`);
+  assert.match(detailRow, /gap:\s*\d+px/);
+  assert.match(detailRow, /padding:\s*0\s+\d+px/);
+  assert.doesNotMatch(detailRow, /overflow:\s*hidden/);
+});

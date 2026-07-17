@@ -385,13 +385,17 @@ export function Projects({ workspace }) {
   }, [pathname, router]);
 
   React.useEffect(() => {
+    if (!openDetail || !mobileDetail) return undefined;
+    const sheet = detailSheetRef.current;
+    const detailAutofocusRaf = requestAnimationFrame(() => {
+      sheet?.querySelector('[aria-label="상세 닫기"]')?.focus();
+    });
+    return () => cancelAnimationFrame(detailAutofocusRaf);
+  }, [mobileDetail, openDetail]);
+
+  React.useEffect(() => {
     if (!openDetail || drawerOpen) return undefined;
     const sheet = detailSheetRef.current;
-    const raf = mobileDetail
-      ? requestAnimationFrame(() => {
-          sheet?.querySelector('[aria-label="상세 닫기"]')?.focus();
-        })
-      : null;
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -414,7 +418,6 @@ export function Projects({ workspace }) {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => {
-      if (raf !== null) cancelAnimationFrame(raf);
       window.removeEventListener('keydown', onKeyDown);
     };
   }, [closeProjectDetail, drawerOpen, mobileDetail, openDetail]);
