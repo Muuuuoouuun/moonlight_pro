@@ -323,9 +323,9 @@ export function Calendar() {
       title: '새 일정',
     });
   };
-  const toneBg = { moon: 'oklch(0.35 0.008 250 / 0.9)', company: 'var(--company-bg)', personal: 'var(--personal-bg)', info: 'var(--info-bg)', warning: 'var(--warning-bg)' };
+  const toneBg = { moon: 'var(--moon-bg)', company: 'var(--company-bg)', personal: 'var(--personal-bg)', info: 'var(--info-bg)', warning: 'var(--warning-bg)' };
   const toneFg = { moon: 'var(--moon-100)', company: 'var(--company)', personal: 'var(--personal)', info: 'var(--info)', warning: 'var(--warning)' };
-  const toneBd = { moon: 'var(--moon-600)', company: 'oklch(0.5 0.04 290 / 0.5)', personal: 'oklch(0.5 0.04 200 / 0.5)', info: 'oklch(0.5 0.06 230 / 0.5)', warning: 'oklch(0.5 0.09 85 / 0.5)' };
+  const toneBd = { moon: 'var(--moon-line)', company: 'var(--company-line)', personal: 'var(--personal-line)', info: 'var(--info-line)', warning: 'var(--warning-line)' };
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%' }}>
@@ -394,7 +394,7 @@ export function Calendar() {
                       position: 'absolute', top, left: 4, right: 4, height,
                       background: toneBg[e.tone], color: toneFg[e.tone],
                       border: `1px solid ${toneBd[e.tone]}`,
-                      borderLeft: `2px solid ${toneFg[e.tone]}`,
+                      borderLeft: `2px solid ${toneBd[e.tone]}`,
                       borderRadius: 6, padding: '6px 8px',
                       fontSize: 11, fontWeight: 500, overflow: 'hidden',
                     }}>

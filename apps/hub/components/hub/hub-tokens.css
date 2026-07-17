@@ -18,6 +18,8 @@
   --moon-500:      oklch(0.58 0.010 250);
   --moon-600:      oklch(0.48 0.009 250);
   --moon-700:      oklch(0.38 0.008 250);
+  --moon-bg:       oklch(0.35 0.008 250 / 0.9);
+  --moon-line:     var(--moon-600);
 
   --fg:            var(--moon-100);
   --fg-muted:      var(--moon-400);
@@ -92,6 +94,8 @@
   --moon-500:      oklch(0.66 0.008 250);
   --moon-600:      oklch(0.76 0.006 250);
   --moon-700:      oklch(0.88 0.005 250);
+  --moon-bg:       var(--surface-3);
+  --moon-line:     var(--moon-300);
 
   --fg:            oklch(0.20 0.008 250);
   --fg-muted:      oklch(0.42 0.008 250);
