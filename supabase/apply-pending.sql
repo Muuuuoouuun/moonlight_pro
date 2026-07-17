@@ -1,5 +1,5 @@
 -- ============================================================================
--- apply-pending.sql — 적용 대기 마이그레이션 묶음 (0003 → 0011 + 0019, 시점순)
+-- apply-pending.sql — 적용 대기 마이그레이션 묶음 (0003 → 0011 + 0019~0020, 시점순)
 --
 -- 생성물(편의용 번들). 정본은 supabase/migrations/<each>.sql 개별 파일.
 -- 전부 멱등(if not exists / 제약 재생성 / on conflict / not-exists 시드 가드)이라
@@ -893,6 +893,15 @@ alter table if exists public.routine_checks
 create unique index if not exists routine_checks_workspace_idempotency_key_uidx
   on public.routine_checks (workspace_id, idempotency_key)
   where idempotency_key is not null;
+
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- 20260717_0020_nullable_project_progress.sql
+-- Preserve the difference between "no progress evidence" and a reported 0%.
+-- ─────────────────────────────────────────────────────────────────────────
+alter table if exists public.projects
+  alter column progress drop default,
+  alter column progress drop not null;
 
 
 -- end of apply-pending.sql

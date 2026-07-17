@@ -19,6 +19,7 @@ const RITUAL_FALLBACK_NAMES = {
   weekly: "Weekly Review",
 };
 const ROUTINE_CHECK_TYPES = new Set(["morning", "midday", "evening", "weekly"]);
+const DECISION_ROW_LIMIT = 40;
 const ROADMAP_ROW_LIMIT = 500;
 const RHYTHM_ROW_LIMIT = 240;
 
@@ -82,6 +83,36 @@ function mapDecisions(rows, profileById) {
     title: row.title || "(untitled decision)",
     reason: row.rationale || row.summary || "",
   }));
+}
+
+function buildDecisionsState(decisionRows, profileRows) {
+  if (!Array.isArray(decisionRows)) {
+    return {
+      source: "supabase",
+      state: "error",
+      partial: false,
+      failedSources: ["decisions"],
+      truncatedSources: [],
+      error: { message: "decisions 원장을 읽지 못했습니다.", retryable: true },
+    };
+  }
+
+  const truncated = decisionRows.length > DECISION_ROW_LIMIT;
+  const profilesFailed = !Array.isArray(profileRows);
+  return {
+    source: "supabase",
+    state: profilesFailed || truncated
+      ? "partial"
+      : decisionRows.length === 0
+        ? "live-empty"
+        : "live",
+    partial: profilesFailed || truncated,
+    failedSources: profilesFailed ? ["profiles"] : [],
+    truncatedSources: truncated ? ["decisions"] : [],
+    error: profilesFailed
+      ? { message: "profiles 원장을 읽지 못해 결정 작성자 일부를 확인할 수 없습니다.", retryable: true }
+      : null,
+  };
 }
 
 // WHY: schema has no separate "rituals" table; routine_checks rows are instances.
@@ -289,6 +320,14 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
       workspaceId: workspaceId || null,
       timeZone: resolveRhythmTimeZone(null),
       decisions: [],
+      decisionsState: {
+        source: "preview",
+        state: "preview",
+        partial: false,
+        failedSources: [],
+        truncatedSources: [],
+        error: null,
+      },
       rituals: [],
       rhythm: {
         source: "preview",
@@ -304,12 +343,15 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
         longestStreak: 0,
         longestStreakRitual: "",
       },
+      partial: false,
+      failedSources: [],
+      partialSources: [],
     };
   }
 
   const [decisionRows, routineRows, profileRows, projectRows, milestoneRows, workspaceRows] = await Promise.all([
     fetchSupabaseRows("decisions", {
-      limit: 40,
+      limit: DECISION_ROW_LIMIT + 1,
       order: "decided_at.desc",
       filters: withWorkspaceFilter(),
     }),
@@ -326,15 +368,19 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
     }),
     fetchSupabaseRows("projects", {
       select: "id,name,status,priority,started_at,due_at",
-      limit: ROADMAP_ROW_LIMIT + 1,
+      limit: selectedProjectId ? 2 : ROADMAP_ROW_LIMIT + 1,
       order: "due_at.asc",
-      filters: withWorkspaceFilter(),
+      filters: withWorkspaceFilter(
+        selectedProjectId ? [["id", eqFilter(selectedProjectId)]] : [],
+      ),
     }),
     fetchSupabaseRows("milestones", {
       select: "id,project_id,title,status,target_date",
       limit: ROADMAP_ROW_LIMIT + 1,
       order: "target_date.asc",
-      filters: withWorkspaceFilter(),
+      filters: withWorkspaceFilter(
+        selectedProjectId ? [["project_id", eqFilter(selectedProjectId)]] : [],
+      ),
     }),
     fetchSupabaseRows("workspaces", {
       select: "id,timezone",
@@ -349,7 +395,10 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
   );
   const roadmap = buildRoadmapState(projectRows, milestoneRows);
   const profileById = new Map((profileRows || []).map((p) => [p.id, p]));
-  const decisions = Array.isArray(decisionRows) ? mapDecisions(decisionRows, profileById) : [];
+  const decisionsState = buildDecisionsState(decisionRows, profileRows);
+  const decisions = Array.isArray(decisionRows)
+    ? mapDecisions(decisionRows.slice(0, DECISION_ROW_LIMIT), profileById)
+    : [];
   const routineRowsTruncated = Array.isArray(routineRows) && routineRows.length > RHYTHM_ROW_LIMIT;
   const visibleRoutineRows = Array.isArray(routineRows)
     ? routineRows.slice(0, RHYTHM_ROW_LIMIT)
@@ -383,15 +432,32 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
         },
       };
 
+  const failedSources = [
+    ...decisionsState.failedSources,
+    ...(!rhythmAvailable
+      ? [Array.isArray(routineRows) ? "workspaces" : "routine_checks"]
+      : []),
+    ...roadmap.failedSources,
+  ];
+  const partialSources = [
+    ...decisionsState.truncatedSources,
+    ...rhythm.truncatedSources,
+    ...roadmap.truncatedSources,
+  ];
+
   return {
-    source: Array.isArray(decisionRows) && rhythmAvailable ? "supabase" : "preview",
+    source: "supabase",
     configured: true,
     workspaceId,
     timeZone,
     decisions,
+    decisionsState,
     rituals,
     rhythm,
     roadmap,
     summary: summarizeRituals(rituals),
+    partial: failedSources.length > 0 || partialSources.length > 0,
+    failedSources,
+    partialSources,
   };
 }

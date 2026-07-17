@@ -45,7 +45,7 @@ test("routine check idempotency migration is included in both supported delivery
   ]);
 
   assert.match(applyPending, /20260717_0019_routine_check_idempotency\.sql/);
-  assert.match(applyPending, /적용 대기 마이그레이션 묶음 \(0003 → 0011 \+ 0019, 시점순\)/);
+  assert.match(applyPending, /적용 대기 마이그레이션 묶음 \(0003 → 0011 \+ 0019~0020, 시점순\)/);
   assert.match(supabaseReadme, /`apply-pending\.sql`: \*\*편의 번들\*\* — 0003→0011 \+ 0019/);
   assert.match(supabaseReadme, /Sales OS 마이그레이션 적용 \(0003→0011 \+ 0019\)/);
   assert.match(

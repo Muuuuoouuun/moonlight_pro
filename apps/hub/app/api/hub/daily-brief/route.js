@@ -300,6 +300,12 @@ function buildAutomationSignals(automations) {
 function buildWorkSignals(projects, work) {
   const projectRows = Array.isArray(projects.projects) ? projects.projects : [];
   const decisions = Array.isArray(work.decisions) ? work.decisions : [];
+  const decisionState = work?.decisionsState?.state;
+  const decisionComplete = decisionState
+    ? decisionState === "live" || decisionState === "live-empty"
+    : work?.source === "supabase"
+      && !(work.failedSources || []).includes("decisions")
+      && !(work.partialSources || []).includes("decisions");
   const signals = [];
 
   const blocked = projectRows.find((project) => project.status === "Blocked");
@@ -319,7 +325,7 @@ function buildWorkSignals(projects, work) {
     });
   }
 
-  if (!decisions.length && signals.length < 2) {
+  if (decisionComplete && !decisions.length && signals.length < 2) {
     signals.push({
       id: "work-decision-missing",
       tone: "info",

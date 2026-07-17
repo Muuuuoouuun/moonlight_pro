@@ -20,9 +20,14 @@ export async function GET(req) {
       );
     }
     const ledger = await getWorkLedger({ projectId });
+    const status = ledger.source === "error"
+      ? "error"
+      : ledger.source === "supabase"
+        ? ledger.partial ? "partial" : "live"
+        : "preview";
 
     return NextResponse.json({
-      status: ledger.source === "supabase" ? "live" : "preview",
+      status,
       ...ledger,
     });
   } catch (error) {

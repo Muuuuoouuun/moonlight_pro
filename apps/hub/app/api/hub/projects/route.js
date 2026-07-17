@@ -53,7 +53,7 @@ async function forwardProjectWrite(req, action) {
     ...parsed.data,
     action,
     ...(action === "create_project" ? { id: parsed.data.id || randomUUID() } : {}),
-    workspaceId: parsed.data.workspaceId || resolveDefaultWorkspaceId(),
+    workspaceId: resolveDefaultWorkspaceId(),
   });
   return NextResponse.json(
     { ...result.data, project: result.data?.entity || null },

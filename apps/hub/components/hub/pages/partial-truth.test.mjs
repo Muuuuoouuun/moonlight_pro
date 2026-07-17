@@ -5,6 +5,7 @@ import { test } from "node:test";
 const primitivesSource = await readFile(new URL("../hub-primitives.jsx", import.meta.url), "utf8");
 const overviewSource = await readFile(new URL("./overview.jsx", import.meta.url), "utf8");
 const dailyBriefSource = await readFile(new URL("./daily-brief.jsx", import.meta.url), "utf8");
+const workSource = await readFile(new URL("./work.jsx", import.meta.url), "utf8");
 const overviewTruth = await import("./overview-truth.js").catch(() => null);
 
 test("shared SyncBadge maps partial explicitly instead of falling back to preview", () => {
@@ -448,4 +449,13 @@ test("daily brief names partial state and does not collapse it into mixed or pre
   assert.match(dailyBriefSource, /if \(state === ["']partial["']\) return ["']partial["']/);
   assert.match(dailyBriefSource, /data\.status === ["']partial["']/);
   assert.match(dailyBriefSource, /일부 운영 기록을 읽지 못했습니다/);
+});
+
+test("Decisions withholds the empty state when its configured ledger is incomplete", () => {
+  assert.match(workSource, /decisionsState/);
+  assert.match(workSource, /결정 원장 읽기 실패/);
+  assert.match(workSource, /결정 원장 부분 데이터/);
+  assert.match(workSource, /결정 원장 미연결/);
+  assert.match(workSource, /decisionComplete/);
+  assert.match(workSource, /retry/);
 });

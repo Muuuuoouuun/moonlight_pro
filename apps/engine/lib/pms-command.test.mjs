@@ -9,7 +9,7 @@ try {
   // Red phase: the durable PMS command contract does not exist yet.
 }
 
-test("normalizes a durable project create command", () => {
+test("normalizes a durable project create without inventing progress evidence", () => {
   assert.ok(pmsCommand, "pms-command.ts must exist");
 
   const result = pmsCommand.normalizePmsCommand({
@@ -41,7 +41,6 @@ test("normalizes a durable project create command", () => {
       summary: null,
       status: "active",
       priority: "high",
-      progress: 0,
       next_action: "Run the first weekly review",
       due_at: "2026-07-31T00:00:00.000Z",
       last_activity_at: "2026-07-15T00:00:00.000Z",

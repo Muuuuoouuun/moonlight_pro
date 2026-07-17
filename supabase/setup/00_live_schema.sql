@@ -99,7 +99,7 @@ create table if not exists public.projects (
   summary text,
   status text not null default 'active' check (status in ('draft', 'active', 'blocked', 'completed', 'archived')),
   priority text not null default 'medium' check (priority in ('low', 'medium', 'high', 'critical')),
-  progress integer not null default 0 check (progress between 0 and 100),
+  progress integer check (progress between 0 and 100),
   next_action text,
   started_at timestamptz,
   due_at timestamptz,
@@ -619,11 +619,15 @@ alter table if exists public.projects
   add column if not exists owner_id uuid references public.profiles(id) on delete set null,
   add column if not exists slug text,
   add column if not exists summary text,
-  add column if not exists progress integer not null default 0,
+  add column if not exists progress integer,
   add column if not exists last_activity_at timestamptz,
   add column if not exists completed_at timestamptz,
   add column if not exists meta jsonb not null default '{}'::jsonb,
   add column if not exists updated_at timestamptz not null default now();
+
+alter table if exists public.projects
+  alter column progress drop default,
+  alter column progress drop not null;
 
 alter table if exists public.milestones
   add column if not exists workspace_id uuid references public.workspaces(id) on delete cascade;

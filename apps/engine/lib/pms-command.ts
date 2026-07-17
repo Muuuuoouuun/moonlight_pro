@@ -86,7 +86,8 @@ export function normalizePmsCommand(
     const status = text(input.status || "active", 30).toLowerCase();
     const priority = text(input.priority || "medium", 30).toLowerCase();
     const dueAt = dateTime(input.dueAt || input.due_at);
-    const initialProgress = has(input, "progress") ? progress(input.progress) : 0;
+    const hasInitialProgress = has(input, "progress");
+    const initialProgress = hasInitialProgress ? progress(input.progress) : null;
 
     if (!id) return { ok: false, reason: "invalid-id" };
     if (!title) return { ok: false, reason: "missing-title" };
@@ -94,7 +95,9 @@ export function normalizePmsCommand(
     if (!PROJECT_STATUSES.has(status)) return { ok: false, reason: "invalid-status" };
     if (!PRIORITIES.has(priority)) return { ok: false, reason: "invalid-priority" };
     if (!dueAt.ok) return { ok: false, reason: "invalid-due-at" };
-    if (initialProgress === null) return { ok: false, reason: "invalid-progress" };
+    if (hasInitialProgress && initialProgress === null) {
+      return { ok: false, reason: "invalid-progress" };
+    }
 
     return {
       ok: true,
@@ -109,7 +112,7 @@ export function normalizePmsCommand(
         summary: nullableText(input.summary, 2000),
         status,
         priority,
-        progress: initialProgress,
+        ...(hasInitialProgress ? { progress: initialProgress } : {}),
         next_action: nullableText(input.nextAction || input.next_action, 1000),
         due_at: dueAt.value,
         last_activity_at: now.value,

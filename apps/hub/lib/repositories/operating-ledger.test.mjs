@@ -162,6 +162,82 @@ test("marks project progress partial when the capped task read is smaller than t
   );
 });
 
+test("marks every bounded project slice partial when one extra row proves truncation", async () => {
+  const state = globalThis.__operatingLedgerTestState;
+  state.calls = [];
+  state.workspaceId = "workspace-1";
+  state.config = { url: "https://supabase.example.com", apiKey: "test-key" };
+  state.counts = { tasks: 0 };
+  state.rows = {
+    brands: [],
+    projects: Array.from({ length: 81 }, (_, index) => ({
+      id: `project-${index + 1}`,
+      name: `Project ${index + 1}`,
+      status: "active",
+      priority: "medium",
+      created_at: "2026-07-01T00:00:00.000Z",
+      updated_at: `2026-07-17T00:${String(index % 60).padStart(2, "0")}:00.000Z`,
+    })),
+    tasks: [],
+    project_updates: Array.from({ length: 121 }, (_, index) => ({
+      id: `update-${index + 1}`,
+      project_id: "project-1",
+      title: `Update ${index + 1}`,
+      happened_at: "2026-07-17T00:00:00.000Z",
+    })),
+    decisions: Array.from({ length: 81 }, (_, index) => ({
+      id: `decision-${index + 1}`,
+      title: `Decision ${index + 1}`,
+      decided_at: "2026-07-17T00:00:00.000Z",
+    })),
+    notes: Array.from({ length: 81 }, (_, index) => ({
+      id: `note-${index + 1}`,
+      title: `Note ${index + 1}`,
+      created_at: "2026-07-17T00:00:00.000Z",
+    })),
+    routine_checks: Array.from({ length: 81 }, (_, index) => ({
+      id: `check-${index + 1}`,
+      check_type: "morning",
+      created_at: "2026-07-17T00:00:00.000Z",
+    })),
+  };
+
+  const ledger = await operatingLedger.getProjectLedger();
+
+  assert.equal(ledger.source, "supabase");
+  assert.equal(ledger.partial, true);
+  assert.deepEqual(ledger.failedSources, []);
+  assert.deepEqual(ledger.partialSources, [
+    "projects",
+    "project_updates",
+    "decisions",
+    "notes",
+    "routine_checks",
+  ]);
+  assert.equal(ledger.projects.length, 80);
+  assert.equal(ledger.updates.length, 120);
+  assert.equal(ledger.decisions.length, 80);
+  assert.equal(ledger.notes.length, 80);
+  assert.equal(ledger.checks.length, 80);
+  assert.equal(ledger.projects[0].updateEvidencePartial, true);
+  assert.deepEqual(
+    Object.fromEntries(
+      state.calls
+        .filter((call) => call.kind === "fetch")
+        .map((call) => [call.table, call.options.limit]),
+    ),
+    {
+      brands: undefined,
+      projects: 81,
+      tasks: 160,
+      project_updates: 121,
+      decisions: 81,
+      notes: 81,
+      routine_checks: 81,
+    },
+  );
+});
+
 test("configured core ledger read failures are errors instead of preview", async () => {
   const state = globalThis.__operatingLedgerTestState;
   state.calls = [];

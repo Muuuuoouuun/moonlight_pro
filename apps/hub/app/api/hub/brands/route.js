@@ -25,7 +25,7 @@ async function forwardBrandWrite(req) {
     ...parsed.data,
     action: "create_brand",
     id: parsed.data.id || randomUUID(),
-    workspaceId: parsed.data.workspaceId || resolveDefaultWorkspaceId(),
+    workspaceId: resolveDefaultWorkspaceId(),
   });
   return NextResponse.json(
     { ...result.data, brand: result.data?.entity || null },

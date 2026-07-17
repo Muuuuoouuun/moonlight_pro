@@ -72,6 +72,7 @@ function useWorkLedger(projectId = null) {
   const [state, setState] = React.useState({
     source: 'preview',
     decisions: [],
+    decisionsState: { state: 'preview', partial: false, error: null },
     rituals: [],
     summary: null,
     syncState: 'preview',
@@ -99,6 +100,7 @@ function useWorkLedger(projectId = null) {
     setState((prev) => ({
       ...prev,
       syncState: 'loading',
+      decisionsState: { ...prev.decisionsState, state: 'loading' },
       rhythmState: 'loading',
       rhythmPartial: false,
       rhythmTruncatedSources: [],
@@ -117,6 +119,11 @@ function useWorkLedger(projectId = null) {
         setState((prev) => ({
           ...prev,
           syncState: 'error',
+          decisionsState: {
+            state: 'error',
+            partial: false,
+            error: { message, retryable: true },
+          },
           rhythmState: 'error',
           rhythmPartial: false,
           rhythmTruncatedSources: [],
@@ -162,10 +169,20 @@ function useWorkLedger(projectId = null) {
             truncatedSources: [],
             error: null,
           };
+      const decisionsState = data.decisionsState && typeof data.decisionsState === 'object'
+        ? data.decisionsState
+        : {
+            state: data.source === 'supabase'
+              ? (Array.isArray(data.decisions) && data.decisions.length > 0 ? 'live' : 'live-empty')
+              : 'preview',
+            partial: false,
+            error: null,
+          };
 
       setState({
         source: data.source === 'supabase' ? 'supabase' : 'preview',
         decisions: Array.isArray(data.decisions) ? data.decisions : [],
+        decisionsState,
         rituals: Array.isArray(data.rituals) ? data.rituals : [],
         summary: data.summary || null,
         syncState: data.source === 'supabase' ? 'live' : 'preview',
@@ -184,6 +201,11 @@ function useWorkLedger(projectId = null) {
       setState((prev) => ({
         ...prev,
         syncState: 'error',
+        decisionsState: {
+          state: 'error',
+          partial: false,
+          error: { message, retryable: true },
+        },
         rhythmState: 'error',
         rhythmPartial: false,
         rhythmTruncatedSources: [],
@@ -523,7 +545,7 @@ export function Decisions() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const { decisions, syncState } = useWorkLedger();
+  const { decisions, decisionsState, retry } = useWorkLedger();
   const [localDecisions, setLocalDecisions] = React.useState([]);
   const createdFromQueryRef = React.useRef(false);
   const createDecision = React.useCallback(() => {
@@ -546,6 +568,20 @@ export function Decisions() {
     router.replace(pathname);
   }, [createDecision, searchParams, router, pathname]);
   const list = [...localDecisions, ...(Array.isArray(decisions) ? decisions : [])];
+  const decisionSyncState = decisionsState?.state || 'error';
+  const decisionComplete = decisionSyncState === 'live' || decisionSyncState === 'live-empty';
+  const decisionLabel = decisionSyncState === 'live' || decisionSyncState === 'live-empty'
+    ? 'live'
+    : decisionSyncState === 'loading'
+      ? 'syncing'
+      : decisionSyncState;
+  const decisionColor = decisionComplete
+    ? 'var(--success)'
+    : decisionSyncState === 'loading' || decisionSyncState === 'partial'
+      ? 'var(--warning)'
+      : decisionSyncState === 'error'
+        ? 'var(--danger)'
+        : 'var(--fg-faint)';
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', maxWidth: 1000, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
@@ -554,22 +590,42 @@ export function Decisions() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Decisions</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch', lineHeight: 1.5 }}>
             실행의 근거가 되는 결정들의 타임라인. 각 결정에는 맥락·선택·근거를 남깁니다.
-            <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-              {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'preview'}
+            <span className="mono" style={{ marginLeft: 8, color: decisionColor }}>
+              {decisionLabel}
             </span>
           </div>
         </div>
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision</Button>
       </div>
+      {!decisionComplete && decisionSyncState !== 'loading' && (
+        <Card>
+          <EmptyState
+            icon="decisions"
+            title={decisionSyncState === 'error'
+              ? '결정 원장 읽기 실패'
+              : decisionSyncState === 'partial'
+                ? '결정 원장 부분 데이터'
+                : '결정 원장 미연결'}
+            description={decisionSyncState === 'error'
+              ? decisionsState?.error?.message || '결정 기록을 다시 읽은 뒤 빈 상태를 확인합니다.'
+              : decisionSyncState === 'partial'
+                ? '읽힌 결정만 표시하며, 기록이 없다고 확정하지 않습니다.'
+                : 'Supabase decisions 원장을 연결하면 결정 타임라인이 표시됩니다.'}
+            action={(decisionSyncState === 'error' || decisionSyncState === 'partial')
+              ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
+              : undefined}
+          />
+        </Card>
+      )}
       <div style={{ position: 'relative', paddingLeft: 28 }}>
         <div style={{ position: 'absolute', left: 11, top: 6, bottom: 6, width: 1, background: 'var(--line-soft)' }} />
-        {list.length === 0 && (
+        {list.length === 0 && decisionComplete && (
           <Card>
             <EmptyState
               icon="decisions"
               title="결정 기록이 없습니다"
-              description={syncState === 'live' ? 'Supabase decisions 기록에 아직 기록된 결정이 없습니다.' : '중요한 판단을 남기면 타임라인에 쌓입니다.'}
+              description="Supabase decisions 기록에 아직 기록된 결정이 없습니다."
               action={<Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision</Button>}
             />
           </Card>

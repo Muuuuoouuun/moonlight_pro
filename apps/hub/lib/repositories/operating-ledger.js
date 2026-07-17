@@ -9,6 +9,9 @@ import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-w
 import { buildProjectProgress } from "../pms-ui.js";
 
 const BRAND_GLYPHS = ["◐", "◇", "✦", "◆", "●", "□", "△", "◎", "◌", "✧"];
+const PROJECT_READ_LIMIT = 80;
+const PROJECT_UPDATE_READ_LIMIT = 120;
+const OPTIONAL_READ_LIMIT = 80;
 
 // PMS container category (2026-07-15 spec §4.1): 'sns-channel' | 'ka-deal' |
 // 'general'. meta.category overrides; unknown values read as "general" — the
@@ -461,7 +464,7 @@ export async function getProjectLedger() {
       filters: withWorkspaceFilter([["status", eqFilter("active")]]),
     }),
     fetchSupabaseRows("projects", {
-      limit: 80,
+      limit: PROJECT_READ_LIMIT + 1,
       order: "updated_at.desc",
       filters: withWorkspaceFilter([
         ["status", inFilter(["draft", "active", "blocked", "completed", "archived"])],
@@ -474,22 +477,22 @@ export async function getProjectLedger() {
     }),
     countSupabaseRows("tasks", taskFilters),
     fetchSupabaseRows("project_updates", {
-      limit: 120,
+      limit: PROJECT_UPDATE_READ_LIMIT + 1,
       order: "happened_at.desc",
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("decisions", {
-      limit: 80,
+      limit: OPTIONAL_READ_LIMIT + 1,
       order: "decided_at.desc",
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("notes", {
-      limit: 80,
+      limit: OPTIONAL_READ_LIMIT + 1,
       order: "created_at.desc",
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("routine_checks", {
-      limit: 80,
+      limit: OPTIONAL_READ_LIMIT + 1,
       order: "created_at.desc",
       filters: withWorkspaceFilter(),
     }),
@@ -535,11 +538,28 @@ export async function getProjectLedger() {
     .filter(([, rows]) => !Array.isArray(rows))
     .map(([source]) => source);
   const taskStatsPartial = !Number.isFinite(taskRowCount) || taskRowCount !== taskRows.length;
-  const partialSources = taskStatsPartial ? ["tasks"] : [];
-  const updateStatsPartial = !Array.isArray(updateRows);
+  const truncatedSources = [
+    ["projects", projectRows, PROJECT_READ_LIMIT],
+    ["project_updates", updateRows, PROJECT_UPDATE_READ_LIMIT],
+    ["decisions", decisionRows, OPTIONAL_READ_LIMIT],
+    ["notes", noteRows, OPTIONAL_READ_LIMIT],
+    ["routine_checks", routineRows, OPTIONAL_READ_LIMIT],
+  ]
+    .filter(([, rows, limit]) => Array.isArray(rows) && rows.length > limit)
+    .map(([source]) => source);
+  const partialSources = [
+    ...(taskStatsPartial ? ["tasks"] : []),
+    ...truncatedSources,
+  ];
+  const updateStatsPartial = !Array.isArray(updateRows)
+    || truncatedSources.includes("project_updates");
+  const visibleProjectRows = projectRows.slice(0, PROJECT_READ_LIMIT);
+  const visibleUpdateRows = Array.isArray(updateRows)
+    ? updateRows.slice(0, PROJECT_UPDATE_READ_LIMIT)
+    : [];
 
   const brandById = new Map(brandRows.map((brand) => [brand.id, brand]));
-  const projectById = new Map(projectRows.map((project) => [project.id, project]));
+  const projectById = new Map(visibleProjectRows.map((project) => [project.id, project]));
   const taskStats = new Map();
 
   taskRows.forEach((task) => {
@@ -550,10 +570,10 @@ export async function getProjectLedger() {
     taskStats.set(task.project_id, stats);
   });
 
-  const updates = mapProjectUpdates(Array.isArray(updateRows) ? updateRows : []);
+  const updates = mapProjectUpdates(visibleUpdateRows);
   const updateStats = buildUpdateStats(updates);
   const todos = mapTodos(taskRows, projectById, brandById);
-  const projects = mapProjects(projectRows, brandById, taskStats, updateStats, {
+  const projects = mapProjects(visibleProjectRows, brandById, taskStats, updateStats, {
     taskStatsPartial,
     updateStatsPartial,
   });
@@ -567,16 +587,16 @@ export async function getProjectLedger() {
     projects,
     todos,
     updates,
-    decisions: mapDecisions(Array.isArray(decisionRows) ? decisionRows : []),
-    notes: mapNotes(Array.isArray(noteRows) ? noteRows : []),
-    checks: mapRoutineChecks(Array.isArray(routineRows) ? routineRows : []),
+    decisions: mapDecisions(Array.isArray(decisionRows) ? decisionRows.slice(0, OPTIONAL_READ_LIMIT) : []),
+    notes: mapNotes(Array.isArray(noteRows) ? noteRows.slice(0, OPTIONAL_READ_LIMIT) : []),
+    checks: mapRoutineChecks(Array.isArray(routineRows) ? routineRows.slice(0, OPTIONAL_READ_LIMIT) : []),
     columns: buildBoardColumns(projects, todos),
     taskAggregation: {
       loaded: taskRows.length,
       total: Number.isFinite(taskRowCount) ? taskRowCount : null,
       partial: taskStatsPartial,
     },
-    partial: optionalFailedSources.length > 0 || taskStatsPartial,
+    partial: optionalFailedSources.length > 0 || partialSources.length > 0,
     failedSources: optionalFailedSources,
     partialSources,
   };

@@ -177,6 +177,42 @@ test("treats a project retry as duplicate when canonical durable fields match", 
   });
 });
 
+test("treats an evidence-free project retry as duplicate after a legacy zero default", async () => {
+  const existing = {
+    id: "11111111-1111-4111-8111-111111111111",
+    workspace_id: "33333333-3333-4333-8333-333333333333",
+    brand_id: null,
+    owner_id: null,
+    name: "Evidence-free project",
+    summary: null,
+    status: "active",
+    priority: "medium",
+    progress: 0,
+    next_action: null,
+    due_at: null,
+    meta: { source: "manual" },
+  };
+
+  const result = await pmsService.executePmsCommand({
+    action: "create_project",
+    id: existing.id,
+    title: existing.name,
+  }, {
+    workspaceId: existing.workspace_id,
+    now: "2026-07-17T00:00:00.000Z",
+  }, {
+    insert: async () => ({ persisted: false, reason: "duplicate" }),
+    update: async () => ({ persisted: false, reason: "unexpected-update" }),
+    fetchRows: async () => [existing],
+  });
+
+  assert.deepEqual(result, {
+    status: "duplicate",
+    action: "create_project",
+    entity: existing,
+  });
+});
+
 test("reports conflict when a project create id is reused for a different payload", async () => {
   const existing = {
     id: "11111111-1111-4111-8111-111111111111",

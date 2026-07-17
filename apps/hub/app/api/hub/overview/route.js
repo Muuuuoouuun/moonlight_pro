@@ -257,12 +257,23 @@ export async function GET() {
 
   const projectReadable = projects?.source === "supabase";
   const projectFailures = new Set(projects?.failedSources || []);
+  const projectPartials = new Set(projects?.partialSources || []);
   const contentFailures = new Set(content?.failedSources || []);
-  const updatesAvailable = projectReadable && !projectFailures.has("project_updates");
-  const decisionsAvailable = projectReadable && !projectFailures.has("decisions");
+  const contentPartials = new Set(content?.partialSources || []);
+  const projectCoreAvailable = projectReadable
+    && !projectFailures.has("projects")
+    && !projectPartials.has("projects");
+  const updatesAvailable = projectReadable
+    && !projectFailures.has("project_updates")
+    && !projectPartials.has("project_updates");
+  const decisionsAvailable = projectReadable
+    && !projectFailures.has("decisions")
+    && !projectPartials.has("decisions");
   const contentAvailable = content?.source === "supabase"
     && !contentFailures.has("publish_logs")
-    && !contentFailures.has("publishLogs");
+    && !contentFailures.has("publishLogs")
+    && !contentPartials.has("publish_logs")
+    && !contentPartials.has("publishLogs");
   const updatesThisWeek = updatesAvailable
     ? (projects.updates || []).filter((update) => withinDays(update.happenedAt, 7)).length
     : null;
@@ -286,8 +297,8 @@ export async function GET() {
       updatesThisWeek,
       decisionsThisWeek,
       publishedThisWeek,
-      activeProjects: operatorHome.pms?.activeProjects ?? null,
-      blockedProjects: operatorHome.pms?.blockedProjects ?? null,
+      activeProjects: projectCoreAvailable ? operatorHome.pms?.activeProjects ?? null : null,
+      blockedProjects: projectCoreAvailable ? operatorHome.pms?.blockedProjects ?? null : null,
     },
     activitySeries: buildActivitySeries(
       projects.updates || [],
@@ -301,7 +312,9 @@ export async function GET() {
       stageSeries: buildRevenueStageSeries(revenue),
     },
     automationsSummary: automations.summary || {},
-    brandActivity: projectReadable ? buildBrandActivity(projects) : null,
+    brandActivity: projectCoreAvailable && updatesAvailable && decisionsAvailable
+      ? buildBrandActivity(projects)
+      : null,
     rhythm: {
       state: ["live", "live-empty", "partial", "preview", "error"].includes(work?.rhythm?.state)
         ? work.rhythm.state

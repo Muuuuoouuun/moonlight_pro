@@ -152,7 +152,12 @@ export function buildOverviewKpiCards({
     };
   });
 
-  const projectContext = metricContext({ sources, status, sourceKey: "projects" });
+  const projectContext = metricContext({
+    sources,
+    status,
+    sourceKey: "projects",
+    dependency: "projects",
+  });
   const activeAvailable = projectContext.available && isAvailableValue(kpis.activeProjects);
   if (!activeAvailable) {
     cards.push(unavailableCard({
@@ -212,7 +217,9 @@ export function activitySeriesAvailability(series = [], { sources = [], status }
 export function projectActivityAvailability(sources = [], status) {
   const context = sourceContext(sources, "projects", status);
   const state = context.state;
-  const coreAvailable = state === "live" || state === "partial";
+  const coreAvailable = (state === "live" || state === "partial")
+    && !context.failed.has("projects")
+    && !context.partial.has("projects");
   const updates = coreAvailable
     && !context.failed.has("project_updates")
     && !context.partial.has("project_updates");

@@ -37,19 +37,23 @@ export async function forwardPmsCommand(
       status: response.status === 409 ? "conflict" : "error",
       error: `engine-http-${response.status}`,
     }));
+    const publicData = data && typeof data === "object"
+      ? Object.fromEntries(Object.entries(data).filter(([key]) => key !== "detail"))
+      : { status: "error", error: `engine-http-${response.status}` };
 
     return {
       ok: response.ok,
       httpStatus: response.status,
-      data,
+      data: publicData,
     };
-  } catch (error) {
+  } catch {
     return {
       ok: false,
       httpStatus: 502,
       data: {
         status: "error",
-        error: error instanceof Error ? error.message : String(error),
+        error: "engine-unreachable",
+        retryable: true,
       },
     };
   }

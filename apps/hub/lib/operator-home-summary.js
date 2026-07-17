@@ -26,13 +26,19 @@ function buildPmsSummary(ledger) {
   const todos = Array.isArray(ledger.todos) ? ledger.todos : [];
   const taskStatsPartial = ledger?.taskAggregation?.partial === true
     || (Array.isArray(ledger?.partialSources) && ledger.partialSources.includes("tasks"));
+  const projectStatsPartial = Array.isArray(ledger?.partialSources)
+    && ledger.partialSources.includes("projects");
   const completedTasks = countBy(todos, (todo) => todo?.done === true);
   const openTasks = todos.length - completedTasks;
 
   return {
-    totalProjects: projects.length,
-    activeProjects: countBy(projects, (project) => !["Done", "Backlog"].includes(project?.status)),
-    blockedProjects: countBy(projects, (project) => project?.status === "Blocked"),
+    totalProjects: projectStatsPartial ? null : projects.length,
+    activeProjects: projectStatsPartial
+      ? null
+      : countBy(projects, (project) => !["Done", "Backlog"].includes(project?.status)),
+    blockedProjects: projectStatsPartial
+      ? null
+      : countBy(projects, (project) => project?.status === "Blocked"),
     openTasks: taskStatsPartial ? null : openTasks,
     dueOrOverdueTasks: taskStatsPartial
       ? null
@@ -44,7 +50,9 @@ function buildPmsSummary(ledger) {
     projectStatusSeries: PROJECT_SERIES.map(({ key, label, statuses }) => ({
       key,
       label,
-      value: countBy(projects, (project) => statuses.has(project?.status)),
+      value: projectStatsPartial
+        ? null
+        : countBy(projects, (project) => statuses.has(project?.status)),
     })),
     taskStatusSeries: [
       { key: "open", label: "열림", value: taskStatsPartial ? null : openTasks },

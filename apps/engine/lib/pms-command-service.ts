@@ -54,7 +54,7 @@ function canonicalCreatePayload(action: string, row: Record<string, unknown>) {
       summary: row.summary ?? null,
       status: row.status,
       priority: row.priority,
-      progress: row.progress,
+      progress: row.progress ?? 0,
       next_action: row.next_action ?? null,
       due_at: comparableTimestamp(row.due_at),
       source: meta.source ?? null,

@@ -268,6 +268,30 @@ test("overview keeps capped task aggregation partial separate from failed projec
   assert.deepEqual(body.partialSources, ["tasks"]);
 });
 
+test("overview withholds project KPIs and update history when bounded slices are truncated", async () => {
+  state.projects = liveProjectLedger({
+    partial: true,
+    partialSources: ["projects", "project_updates"],
+    projects: [{ id: "project-1", status: "In progress" }],
+    updates: [{
+      id: "update-1",
+      projectId: "project-1",
+      happenedAt: new Date().toISOString(),
+    }],
+  });
+
+  const body = await (await overviewRoute.GET()).json();
+  const projectsSource = body.sources.find((source) => source.key === "projects");
+
+  assert.equal(projectsSource.state, "partial");
+  assert.deepEqual(projectsSource.partialSources, ["projects", "project_updates"]);
+  assert.equal(body.kpis.activeProjects, null);
+  assert.equal(body.kpis.blockedProjects, null);
+  assert.equal(body.kpis.updatesThisWeek, null);
+  assert.equal(body.activitySeries.every((bucket) => bucket.work === null), true);
+  assert.equal(body.brandActivity, null);
+});
+
 test("overview withholds published count when only publish logs failed", async () => {
   state.content = {
     source: "supabase",
@@ -391,6 +415,34 @@ test("daily brief marks only task Today partial for an incomplete task aggregati
   assert.deepEqual(projectsSource.partialSources, ["tasks"]);
   assert.equal(body.taskToday.state, "partial");
   assert.equal(body.taskToday.counts.total, 1);
+});
+
+test("daily brief does not infer a missing decision from a failed decisions ledger", async () => {
+  state.work = {
+    source: "supabase",
+    partial: true,
+    failedSources: ["decisions"],
+    partialSources: [],
+    decisions: [],
+    decisionsState: {
+      source: "supabase",
+      state: "error",
+      partial: false,
+      failedSources: ["decisions"],
+      truncatedSources: [],
+      error: { message: "decisions read failed", retryable: true },
+    },
+    rituals: [],
+    summary: {},
+  };
+
+  const body = await (await dailyBriefRoute.GET()).json();
+  const workSource = body.sources.find((source) => source.key === "work");
+
+  assert.equal(body.status, "partial");
+  assert.equal(workSource.state, "partial");
+  assert.deepEqual(workSource.failedSources, ["decisions"]);
+  assert.equal(body.signals.some((signal) => signal.id === "work-decision-missing"), false);
 });
 
 test("overview and daily brief never call a partial-only aggregate preview", async () => {

@@ -178,6 +178,28 @@ test("withholds definitive task counts and rates when task aggregation is partia
   ]);
 });
 
+test("withholds definitive project counts when the bounded project slice is partial", () => {
+  const summary = homeSummary.buildOperatorHomeSummary({
+    projects: {
+      source: "supabase",
+      partial: true,
+      partialSources: ["projects"],
+      failedSources: [],
+      taskAggregation: { loaded: 0, total: 0, partial: false },
+      projects: [{ id: "project-1", status: "In progress" }],
+      todos: [],
+    },
+    content: { source: "supabase", items: [], publishLogs: [] },
+  });
+
+  assert.equal(summary.sources.projects, "partial");
+  assert.equal(summary.pms.totalProjects, null);
+  assert.equal(summary.pms.activeProjects, null);
+  assert.equal(summary.pms.blockedProjects, null);
+  assert.equal(summary.pms.projectStatusSeries.every((item) => item.value === null), true);
+  assert.equal(summary.pms.openTasks, 0);
+});
+
 test("keeps the combined home state partial when the other ledger is only preview", () => {
   const summary = homeSummary.buildOperatorHomeSummary({
     projects: {

@@ -23,11 +23,14 @@ export async function getProjectLedger() {
 
 const writeGuardStub = `
 export function assertHubWriteAllowed() { return null; }
-export async function readHubWriteJson() { return { data: {} }; }
+export async function readHubWriteJson() {
+  return { data: globalThis.__projectsRouteTestState.payload || {} };
+}
 `;
 
 const engineClientStub = `
-export async function forwardPmsCommand() {
+export async function forwardPmsCommand(command) {
+  globalThis.__projectsRouteTestState.forwarded.push(command);
   return { data: {}, httpStatus: 200 };
 }
 `;
@@ -57,11 +60,21 @@ registerHooks({
   },
 });
 
-globalThis.__projectsRouteTestState = { ledger: null, throwError: null };
-const { GET } = await import("../app/api/hub/projects/route.js?project-read-truth-route-test");
+globalThis.__projectsRouteTestState = {
+  ledger: null,
+  throwError: null,
+  payload: {},
+  forwarded: [],
+};
+const projectRoute = await import("../app/api/hub/projects/route.js?project-read-truth-route-test");
+const taskRoute = await import("../app/api/hub/tasks/route.js?task-write-workspace-route-test");
+const brandRoute = await import("../app/api/hub/brands/route.js?brand-write-workspace-route-test");
+const { GET } = projectRoute;
 
 beforeEach(() => {
   globalThis.__projectsRouteTestState.throwError = null;
+  globalThis.__projectsRouteTestState.payload = {};
+  globalThis.__projectsRouteTestState.forwarded = [];
   globalThis.__projectsRouteTestState.ledger = {
     source: "preview",
     configured: false,
@@ -155,5 +168,28 @@ test("projects API never leaks internal exception details", async () => {
   } finally {
     console.error = originalError;
     globalThis.__projectsRouteTestState.throwError = null;
+  }
+});
+
+test("guarded PMS writes discard client workspace ids before forwarding to Engine", async () => {
+  const state = globalThis.__projectsRouteTestState;
+  const writes = [
+    [projectRoute.POST, "create_project"],
+    [projectRoute.PATCH, "update_project"],
+    [taskRoute.POST, "create_task"],
+    [taskRoute.PATCH, "update_task"],
+    [brandRoute.POST, "create_brand"],
+  ];
+
+  for (const [write, action] of writes) {
+    state.payload = {
+      id: "11111111-1111-4111-8111-111111111111",
+      title: "Scoped write",
+      workspaceId: "99999999-9999-4999-8999-999999999999",
+    };
+    await write(new Request("https://hub.example.com/api/hub/write", { method: "POST" }));
+    const forwarded = state.forwarded.at(-1);
+    assert.equal(forwarded.action, action);
+    assert.equal(forwarded.workspaceId, "workspace-1");
   }
 });

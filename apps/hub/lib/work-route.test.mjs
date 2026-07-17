@@ -29,6 +29,7 @@ export async function getWorkLedger(options) {
     rhythm: { source: "supabase", state: "live", partial: false, truncatedSources: [], error: null },
     roadmap: { source: "supabase", state: "live-empty", partial: false, error: null, failedSources: [], truncatedSources: [], projects: [], milestones: [] },
     summary: { ritualsCompletedThisWeek: 0, ritualsTotalThisWeek: 1, longestStreak: 0, longestStreakRitual: "" },
+    ...(state.ledger || {}),
   };
 }
 `;
@@ -49,7 +50,7 @@ globalThis.__workRouteTestState = { calls: [] };
 const { GET } = await import("../app/api/hub/work/route.js?project-filter-route-test");
 
 beforeEach(() => {
-  globalThis.__workRouteTestState = { calls: [] };
+  globalThis.__workRouteTestState = { calls: [], ledger: null };
 });
 
 test("work API passes the selected project to the ledger before rows are limited", async () => {
@@ -88,4 +89,32 @@ test("work API accepts the canonical PostgreSQL UUID shape used by live seed dat
 
   assert.equal(response.status, 200);
   assert.deepEqual(globalThis.__workRouteTestState.calls, [{ projectId: LIVE_SEED_PROJECT_ID }]);
+});
+
+test("work API preserves configured component failures as partial truth", async () => {
+  globalThis.__workRouteTestState.ledger = {
+    source: "supabase",
+    partial: true,
+    failedSources: ["decisions"],
+    partialSources: [],
+    decisions: [],
+    decisionsState: {
+      source: "supabase",
+      state: "error",
+      partial: false,
+      failedSources: ["decisions"],
+      truncatedSources: [],
+      error: { message: "decisions read failed", retryable: true },
+    },
+  };
+
+  const response = await GET(new Request("https://hub.example.com/api/hub/work"));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "partial");
+  assert.equal(body.source, "supabase");
+  assert.equal(body.partial, true);
+  assert.deepEqual(body.failedSources, ["decisions"]);
+  assert.equal(body.decisionsState.state, "error");
 });

@@ -16,11 +16,17 @@ export async function fetchSupabaseRows(table, options = {}) {
   const state = globalThis.__workLedgerTestState;
   state.calls.push({ table, options });
   const rows = Object.prototype.hasOwnProperty.call(state.rows, table) ? state.rows[table] : [];
-  if (table !== "routine_checks" || !state.applyRoutineQuery || !Array.isArray(rows)) return rows;
+  if (!Array.isArray(rows)) return rows;
   const projectFilter = options.filters?.find(([key]) => key === "project_id")?.[1] || null;
-  const filtered = projectFilter?.startsWith("eq.")
+  const idFilter = options.filters?.find(([key]) => key === "id")?.[1] || null;
+  const shouldApplyFilters = table === "routine_checks"
+    ? state.applyRoutineQuery
+    : state.applyRoadmapQuery && ["projects", "milestones"].includes(table);
+  const filtered = shouldApplyFilters && projectFilter?.startsWith("eq.")
     ? rows.filter((row) => row.project_id === projectFilter.slice(3))
-    : rows;
+    : shouldApplyFilters && idFilter?.startsWith("eq.")
+      ? rows.filter((row) => row.id === idFilter.slice(3))
+      : rows;
   const ordered = options.order === "checked_at.desc.nullslast,created_at.desc.nullslast,id.desc"
     ? [...filtered].sort((left, right) => {
         if (Boolean(left.checked_at) !== Boolean(right.checked_at)) return left.checked_at ? -1 : 1;
@@ -75,6 +81,7 @@ beforeEach(() => {
     workspaceId: WORKSPACE_ID,
     calls: [],
     applyRoutineQuery: false,
+    applyRoadmapQuery: false,
     rows: {
       decisions: [],
       routine_checks: [],
@@ -235,6 +242,48 @@ test("marks rows beyond the Roadmap display limit as named partial data", async 
     const call = state.calls.find((entry) => entry.table === table);
     assert.equal(call.options.limit, 501);
   }
+});
+
+test("selected Roadmap project is queried exactly even when outside the global cap", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.applyRoadmapQuery = true;
+  state.rows.projects = [
+    ...Array.from({ length: 501 }, (_, index) => ({
+      id: `project-${index}`,
+      name: `Project ${index}`,
+      status: "active",
+      priority: "medium",
+    })),
+    {
+      id: PROJECT_TARGET_ID,
+      name: "Selected outside cap",
+      status: "active",
+      priority: "high",
+    },
+  ];
+  state.rows.milestones = [{
+    id: "selected-milestone",
+    project_id: PROJECT_TARGET_ID,
+    title: "Exact milestone",
+    status: "active",
+    target_date: "2026-08-01",
+  }];
+
+  const ledger = await workLedger.getWorkLedger({ projectId: PROJECT_TARGET_ID });
+
+  assert.equal(ledger.roadmap.state, "live");
+  assert.deepEqual(ledger.roadmap.projects.map((project) => project.id), [PROJECT_TARGET_ID]);
+  assert.deepEqual(ledger.roadmap.milestones.map((milestone) => milestone.id), ["selected-milestone"]);
+  const projectCall = state.calls.find((entry) => entry.table === "projects");
+  const milestoneCall = state.calls.find((entry) => entry.table === "milestones");
+  assert.deepEqual(projectCall.options.filters, [
+    ["workspace_id", `eq.${WORKSPACE_ID}`],
+    ["id", `eq.${PROJECT_TARGET_ID}`],
+  ]);
+  assert.deepEqual(milestoneCall.options.filters, [
+    ["workspace_id", `eq.${WORKSPACE_ID}`],
+    ["project_id", `eq.${PROJECT_TARGET_ID}`],
+  ]);
 });
 
 test("rituals keep project identity when two projects share the same ritual key", async () => {
@@ -408,7 +457,9 @@ test("a configured routine ledger read failure is error rather than preview", as
 
   const ledger = await workLedger.getWorkLedger();
 
-  assert.equal(ledger.source, "preview");
+  assert.equal(ledger.source, "supabase");
+  assert.equal(ledger.partial, true);
+  assert.deepEqual(ledger.failedSources, ["routine_checks"]);
   assert.deepEqual(ledger.rhythm, {
     source: "supabase",
     state: "error",
@@ -435,14 +486,18 @@ test("workspace timezone read failure makes Rhythm error instead of live", async
 
   state.rows.workspaces = null;
   const failedRead = await workLedger.getWorkLedger();
-  assert.equal(failedRead.source, "preview");
+  assert.equal(failedRead.source, "supabase");
+  assert.equal(failedRead.partial, true);
+  assert.deepEqual(failedRead.failedSources, ["workspaces"]);
   assert.equal(failedRead.rhythm.state, "error");
   assert.match(failedRead.rhythm.error.message, /workspace|timezone/i);
   assert.deepEqual(failedRead.rituals, []);
 
   state.rows.workspaces = [];
   const missingWorkspace = await workLedger.getWorkLedger();
-  assert.equal(missingWorkspace.source, "preview");
+  assert.equal(missingWorkspace.source, "supabase");
+  assert.equal(missingWorkspace.partial, true);
+  assert.deepEqual(missingWorkspace.failedSources, ["workspaces"]);
   assert.equal(missingWorkspace.rhythm.state, "error");
   assert.deepEqual(missingWorkspace.rituals, []);
 });
@@ -480,10 +535,51 @@ test("rituals remain readable when the independent decisions source fails", asyn
 
   const ledger = await workLedger.getWorkLedger();
 
-  assert.equal(ledger.source, "preview");
+  assert.equal(ledger.source, "supabase");
+  assert.equal(ledger.partial, true);
+  assert.deepEqual(ledger.failedSources, ["decisions"]);
+  assert.deepEqual(ledger.partialSources, []);
+  assert.deepEqual(ledger.decisionsState, {
+    source: "supabase",
+    state: "error",
+    partial: false,
+    failedSources: ["decisions"],
+    truncatedSources: [],
+    error: {
+      message: "decisions 원장을 읽지 못했습니다.",
+      retryable: true,
+    },
+  });
   assert.equal(ledger.rhythm.state, "live");
   assert.equal(ledger.rituals.length, 1);
   assert.equal(ledger.rituals[0].ritualKey, "weekly-review");
+});
+
+test("decision row cap is explicit partial data instead of a complete timeline", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.rows.decisions = Array.from({ length: 41 }, (_, index) => ({
+    id: `decision-${index}`,
+    title: `Decision ${index}`,
+    decided_at: "2026-07-17T00:00:00.000Z",
+  }));
+
+  const ledger = await workLedger.getWorkLedger();
+
+  assert.equal(ledger.source, "supabase");
+  assert.equal(ledger.partial, true);
+  assert.deepEqual(ledger.failedSources, []);
+  assert.deepEqual(ledger.partialSources, ["decisions"]);
+  assert.equal(ledger.decisions.length, 40);
+  assert.deepEqual(ledger.decisionsState, {
+    source: "supabase",
+    state: "partial",
+    partial: true,
+    failedSources: [],
+    truncatedSources: ["decisions"],
+    error: null,
+  });
+  const call = state.calls.find((entry) => entry.table === "decisions");
+  assert.equal(call.options.limit, 41);
 });
 
 test("selected project is filtered by Supabase before the rhythm row limit", async () => {

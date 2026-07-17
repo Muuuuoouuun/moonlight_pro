@@ -180,6 +180,25 @@ assert(
   "Supabase milestone workspace contract",
   "RLS target tables have workspace scope",
 );
+const nullableProjectProgressMigration =
+  "supabase/migrations/20260717_0020_nullable_project_progress.sql";
+const nullableProjectProgressSql = existsSync(path.join(root, nullableProjectProgressMigration))
+  ? readText(nullableProjectProgressMigration)
+  : "";
+const liveSchemaSql = readText("supabase/setup/00_live_schema.sql");
+const pendingMigrationSql = readText("supabase/apply-pending.sql");
+const pmsCommandSql = readText("apps/engine/lib/pms-command.ts");
+assert(
+  nullableProjectProgressSql.includes("alter column progress drop default") &&
+    nullableProjectProgressSql.includes("alter column progress drop not null") &&
+    liveSchemaSql.includes("progress integer check (progress between 0 and 100)") &&
+    liveSchemaSql.includes("alter column progress drop default") &&
+    liveSchemaSql.includes("alter column progress drop not null") &&
+    pendingMigrationSql.includes("20260717_0020_nullable_project_progress.sql") &&
+    pmsCommandSql.includes("hasInitialProgress ? { progress: initialProgress } : {}"),
+  "project progress evidence contract",
+  "new projects may keep progress null until evidence is explicitly reported",
+);
 assert(
   readText("apps/engine/lib/shared-webhook.ts").includes("COM_MOON_ALLOW_OPEN_WEBHOOKS"),
   "shared webhook open mode",

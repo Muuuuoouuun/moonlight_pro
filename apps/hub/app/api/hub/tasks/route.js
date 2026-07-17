@@ -71,7 +71,7 @@ export async function POST(req) {
     ...parsed.data,
     action: "create_task",
     id: parsed.data.id || randomUUID(),
-    workspaceId: parsed.data.workspaceId || resolveDefaultWorkspaceId(),
+    workspaceId: resolveDefaultWorkspaceId(),
   });
   return NextResponse.json(
     { ...result.data, task: result.data?.entity || null },
@@ -89,7 +89,7 @@ export async function PATCH(req) {
   const result = await forwardPmsCommand({
     ...parsed.data,
     action: "update_task",
-    workspaceId: parsed.data.workspaceId || resolveDefaultWorkspaceId(),
+    workspaceId: resolveDefaultWorkspaceId(),
   });
   return NextResponse.json(
     { ...result.data, task: result.data?.entity || null },
