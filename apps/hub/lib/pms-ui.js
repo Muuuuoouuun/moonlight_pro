@@ -48,24 +48,80 @@ export function createClientId({
 }
 
 export function buildProjectDraft({
-  brandId = null,
-  brandKey = "all",
+  contextBrand = null,
   clientId = createClientId(),
   initialStatus = "Planning",
 } = {}) {
+  const hasContainerContext = contextBrand?.id && contextBrand.id !== "all";
   return {
     kind: "project",
     isNew: true,
     clientId,
     title: "",
-    brandId,
-    brandKey,
+    brandId: hasContainerContext ? contextBrand.id : null,
+    brandKey: hasContainerContext ? contextBrand.key : "all",
     summary: "",
     status: PROJECT_STATUS_BY_LABEL[initialStatus] || "draft",
     priority: "medium",
     nextAction: "",
     dueAt: "",
   };
+}
+
+export function validateProjectDraft(draft = {}) {
+  const errors = {};
+  if (!String(draft.title || "").trim()) {
+    errors.title = "프로젝트명을 입력하세요.";
+  }
+  if (!draft.brandId || draft.brandId === "all") {
+    errors.brandId = "프로젝트를 둘 위치를 선택하세요.";
+  }
+  return errors;
+}
+
+function dateInputValue(value) {
+  return value ? String(value).slice(0, 10) : "";
+}
+
+export function buildProjectEditDraft(project = {}) {
+  return {
+    kind: "project",
+    isNew: false,
+    id: project.id,
+    title: project.name || "",
+    brandId: project.brandId || "",
+    brandKey: project.brand || "all",
+    summary: project.projectSummary ?? "",
+    status: project.statusKey || "active",
+    priority: project.priority || "medium",
+    nextAction: project.projectNextAction ?? "",
+    dueAt: dateInputValue(project.dueAt),
+    updatedAt: project.updatedAt || null,
+  };
+}
+
+export function buildProjectPatch(source = {}, draft = {}) {
+  const original = buildProjectEditDraft(source);
+  const patch = { id: source.id };
+  if (source.updatedAt) patch.expectedUpdatedAt = source.updatedAt;
+
+  const fields = ["title", "brandId", "summary", "status", "priority", "nextAction", "dueAt"];
+  fields.forEach((field) => {
+    const next = field === "dueAt" ? dateInputValue(draft[field]) : (draft[field] ?? "");
+    if (next !== original[field]) patch[field] = next;
+  });
+  return patch;
+}
+
+export function mergeProjectDetailQuery(current, projectId) {
+  const params = new URLSearchParams(
+    typeof current === "string" ? current : current?.toString?.() || "",
+  );
+  params.delete("view");
+  params.delete("new");
+  params.delete("task");
+  params.set("project", projectId);
+  return params;
 }
 
 export function buildProjectProgress({
