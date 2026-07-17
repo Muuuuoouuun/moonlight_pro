@@ -176,6 +176,74 @@ function summarizeRituals(rituals) {
   };
 }
 
+function emptyRoadmap(source = "preview", state = "preview") {
+  return {
+    source,
+    state,
+    partial: false,
+    error: null,
+    failedSources: [],
+    projects: [],
+    milestones: [],
+  };
+}
+
+function mapRoadmapProjects(rows) {
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    status: row.status,
+    priority: row.priority,
+    startedAt: row.started_at ?? null,
+    dueAt: row.due_at ?? null,
+  }));
+}
+
+function mapRoadmapMilestones(rows) {
+  return rows.map((row) => ({
+    id: row.id,
+    projectId: row.project_id,
+    title: row.title,
+    status: row.status,
+    targetAt: row.target_date ?? null,
+  }));
+}
+
+function buildRoadmapState(projectRows, milestoneRows) {
+  const projectsAvailable = Array.isArray(projectRows);
+  const milestonesAvailable = Array.isArray(milestoneRows);
+  const failedSources = [];
+  if (!projectsAvailable) failedSources.push("projects");
+  if (!milestonesAvailable) failedSources.push("milestones");
+
+  const projects = mapRoadmapProjects(projectsAvailable ? projectRows : []);
+  const milestones = mapRoadmapMilestones(milestonesAvailable ? milestoneRows : []);
+  const allFailed = failedSources.length === 2;
+  const partial = failedSources.length === 1;
+  const state = allFailed
+    ? "error"
+    : partial
+      ? "partial"
+      : projects.length === 0 && milestones.length === 0
+        ? "live-empty"
+        : "live";
+
+  return {
+    source: "supabase",
+    state,
+    partial,
+    error: failedSources.length > 0
+      ? {
+          message: `${failedSources.join(", ")} 원장을 읽지 못했습니다.`,
+          retryable: true,
+        }
+      : null,
+    failedSources,
+    projects,
+    milestones,
+  };
+}
+
 export async function getWorkLedger() {
   const workspaceId = resolveDefaultWorkspaceId();
 
@@ -186,6 +254,7 @@ export async function getWorkLedger() {
       workspaceId: null,
       decisions: [],
       rituals: [],
+      roadmap: emptyRoadmap(),
       summary: {
         ritualsCompletedThisWeek: 0,
         ritualsTotalThisWeek: 0,
@@ -195,7 +264,7 @@ export async function getWorkLedger() {
     };
   }
 
-  const [decisionRows, routineRows, profileRows] = await Promise.all([
+  const [decisionRows, routineRows, profileRows, projectRows, milestoneRows] = await Promise.all([
     fetchSupabaseRows("decisions", {
       limit: 40,
       order: "decided_at.desc",
@@ -210,7 +279,21 @@ export async function getWorkLedger() {
       select: "id,display_name,email",
       limit: 40,
     }),
+    fetchSupabaseRows("projects", {
+      select: "id,name,status,priority,started_at,due_at",
+      limit: 500,
+      order: "due_at.asc",
+      filters: withWorkspaceFilter(),
+    }),
+    fetchSupabaseRows("milestones", {
+      select: "id,project_id,title,status,target_date",
+      limit: 500,
+      order: "target_date.asc",
+      filters: withWorkspaceFilter(),
+    }),
   ]);
+
+  const roadmap = buildRoadmapState(projectRows, milestoneRows);
 
   if (!decisionRows || !routineRows) {
     return {
@@ -219,6 +302,7 @@ export async function getWorkLedger() {
       workspaceId,
       decisions: [],
       rituals: [],
+      roadmap,
       summary: {
         ritualsCompletedThisWeek: 0,
         ritualsTotalThisWeek: 0,
@@ -238,6 +322,7 @@ export async function getWorkLedger() {
     workspaceId,
     decisions,
     rituals,
+    roadmap,
     summary: summarizeRituals(rituals),
   };
 }

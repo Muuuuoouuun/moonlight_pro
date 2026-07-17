@@ -454,10 +454,16 @@ test("creates a valid client id even when browser crypto is unavailable", () => 
   );
 });
 
-test("splits projects into a dated timeline axis and an undated tail", () => {
+test("uses a real project start and due date as a timeline range", () => {
   const today = new Date("2026-07-17T00:00:00Z");
   const projects = [
-    { id: "p-dated", name: "마감 있음", createdAt: "2026-07-10T00:00:00Z", dueAt: "2026-07-20T00:00:00Z" },
+    {
+      id: "p-dated",
+      name: "마감 있음",
+      createdAt: "2025-01-01T00:00:00Z",
+      startedAt: "2026-07-10T00:00:00Z",
+      dueAt: "2026-07-20T00:00:00Z",
+    },
     { id: "p-undated", name: "마감 없음", createdAt: "2026-07-01T00:00:00Z", dueAt: "" },
   ];
 
@@ -465,6 +471,7 @@ test("splits projects into a dated timeline axis and an undated tail", () => {
 
   assert.equal(timeline.items.length, 1);
   assert.equal(timeline.items[0].project.id, "p-dated");
+  assert.equal(timeline.items[0].kind, "range");
   assert.equal(timeline.items[0].overdue, false);
   assert.deepEqual(timeline.undated.map((p) => p.id), ["p-undated"]);
   assert.ok(timeline.items[0].startPct >= 0 && timeline.items[0].startPct <= 100);
@@ -472,20 +479,54 @@ test("splits projects into a dated timeline axis and an undated tail", () => {
   assert.ok(timeline.todayPct >= 0 && timeline.todayPct <= 100);
 });
 
-test("flags a due date before today as overdue and clips a start far outside the lookback window", () => {
+test("renders due-only and invalid-start projects as honest deadline markers", () => {
   const today = new Date("2026-07-17T00:00:00Z");
   const projects = [
-    { id: "p-overdue", name: "지남", createdAt: "2026-07-01T00:00:00Z", dueAt: "2026-07-10T00:00:00Z" },
-    { id: "p-old", name: "오래된 프로젝트", createdAt: "2025-01-01T00:00:00Z", dueAt: "2026-07-25T00:00:00Z" },
+    {
+      id: "p-overdue",
+      name: "지남",
+      createdAt: "2026-01-01T00:00:00Z",
+      dueAt: "2026-07-10T00:00:00Z",
+    },
+    {
+      id: "p-invalid",
+      name: "시작이 마감 뒤",
+      createdAt: "2025-01-01T00:00:00Z",
+      startedAt: "2026-08-01T00:00:00Z",
+      dueAt: "2026-07-25T00:00:00Z",
+    },
   ];
 
   const timeline = pmsUi.buildProjectTimeline(projects, { today, lookbackDays: 30 });
 
   const overdue = timeline.items.find((item) => item.project.id === "p-overdue");
-  const old = timeline.items.find((item) => item.project.id === "p-old");
+  const invalid = timeline.items.find((item) => item.project.id === "p-invalid");
   assert.equal(overdue.overdue, true);
-  assert.equal(old.clippedStart, true);
-  assert.ok(old.startPct === 0, "clipped bar starts at the window's left edge");
+  assert.equal(overdue.kind, "marker");
+  assert.equal(invalid.kind, "marker");
+  assert.equal("widthPct" in overdue, false, "a deadline marker must not masquerade as a bar");
+  assert.ok(Number.isFinite(overdue.markerPct));
+  assert.ok(Number.isFinite(invalid.markerPct));
+});
+
+test("never accepts createdAt as planned timeline evidence", () => {
+  const today = new Date("2026-07-17T00:00:00Z");
+  const timeline = pmsUi.buildProjectTimeline([
+    {
+      id: "p-created-only",
+      name: "생성일만 있는 프로젝트",
+      createdAt: "2020-01-01T00:00:00Z",
+      dueAt: "2026-07-25T00:00:00Z",
+    },
+  ], { today, lookbackDays: 30 });
+
+  assert.equal(timeline.items[0].kind, "marker");
+  assert.equal(timeline.items[0].clippedStart, false);
+  assert.equal(
+    timeline.windowStart.getTime(),
+    timeline.today.getTime(),
+    "the ancient createdAt must not pull the evidence window backward",
+  );
 });
 
 test("returns an empty axis with all projects in the undated tail when no project has a due date", () => {
@@ -496,4 +537,18 @@ test("returns an empty axis with all projects in the undated tail when no projec
   assert.deepEqual(timeline.items, []);
   assert.equal(timeline.totalDays, 0);
   assert.equal(timeline.undated.length, 1);
+});
+
+test("merges timeline selection into the exact query without dropping foreign keys", () => {
+  const params = pmsUi.mergeTimelineProjectQuery(
+    "scope=personal&keep=yes&view=board&project=old&task=task-1&new=project",
+    "project-2",
+  );
+
+  assert.equal(params.get("scope"), "personal");
+  assert.equal(params.get("keep"), "yes");
+  assert.equal(params.get("view"), "timeline");
+  assert.equal(params.get("project"), "project-2");
+  assert.equal(params.has("task"), false);
+  assert.equal(params.has("new"), false);
 });

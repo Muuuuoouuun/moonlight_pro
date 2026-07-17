@@ -15,6 +15,7 @@ import {
   contentPipelineReloadContains,
   createClientId,
   mergeProjectDetailQuery,
+  mergeTimelineProjectQuery,
   projectReloadContains,
   rebaseProjectEditState,
   rotateProjectClientId,
@@ -1578,7 +1579,7 @@ export function Projects({ workspace }) {
                     <EmptyState
                       icon="projects"
                       title="타임라인에 표시할 프로젝트가 없습니다"
-                      description="기한이 있는 프로젝트는 축 위에 막대로, 기한 미정 프로젝트는 아래 목록으로 표시됩니다."
+                      description="실제 시작일이 있는 프로젝트는 기간으로, 마감일만 있으면 마감 지점으로 표시됩니다."
                       action={<Button variant="primary" size="sm" icon="plus" onClick={() => createProject()}>Project</Button>}
                     />
                   </Card>
@@ -1587,8 +1588,13 @@ export function Projects({ workspace }) {
             );
           }
           const timeline = buildProjectTimeline(projects);
+          const timelineProjectHref = (projectId) => {
+            const params = mergeTimelineProjectQuery(searchParams, projectId);
+            const query = params.toString();
+            return query ? `${pathname}?${query}` : pathname;
+          };
           const weekTicks = [];
-          for (let d = 0; d <= timeline.totalDays; d += 7) {
+          for (let d = 0; timeline.totalDays > 0 && d <= timeline.totalDays; d += 7) {
             const tickDate = new Date(timeline.windowStart.getTime() + d * 86_400_000);
             weekTicks.push({
               offsetPct: (d / timeline.totalDays) * 100,
@@ -1598,6 +1604,19 @@ export function Projects({ workspace }) {
           return (
             <div className="scroll-y" style={{ flex: 1, padding: 'var(--section-gap)' }}>
               <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+                {selectedProjectId && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44 }}>
+                    <a
+                      href={`/dashboard/work/projects?project=${encodeURIComponent(selectedProjectId)}`}
+                      style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', color: 'var(--moon-300)', fontSize: 12.5, textUnderlineOffset: 3 }}
+                    >
+                      프로젝트 상세로 돌아가기
+                    </a>
+                    <span className="mono" style={{ color: 'var(--fg-faint)', fontSize: 10.5 }}>
+                      {projects.find(project => project.id === selectedProjectId)?.name || '선택한 프로젝트'}
+                    </span>
+                  </div>
+                )}
                 <Card pad={false} className="hub-table-card">
                   {timeline.items.length === 0 ? (
                     <div style={{ padding: '18px 14px', fontSize: 11.5, color: 'var(--fg-faint)' }}>기한이 지정된 프로젝트가 없습니다. 프로젝트를 편집해 기한을 지정하면 여기 축 위에 표시됩니다.</div>
@@ -1607,7 +1626,7 @@ export function Projects({ workspace }) {
                     // on narrow viewports — the label column alone would eat a phone's width.
                     <div className="hub-scroll-x" style={{ overflowX: 'auto' }}>
                       <div style={{ minWidth: 640 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', borderBottom: '1px solid var(--line-soft)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', borderBottom: '1px solid var(--line-soft)' }}>
                           <div style={{ padding: '8px 14px', fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>프로젝트</div>
                           <div style={{ position: 'relative', padding: '8px 0', background: 'var(--surface-2)' }}>
                             {weekTicks.map((tick, i) => (
@@ -1621,32 +1640,52 @@ export function Projects({ workspace }) {
                           const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
                           const lineToken = item.overdue ? 'var(--danger-line)' : (STATUS_LINE_TOKEN[p.status] || 'var(--line-strong)');
                           return (
-                            <div key={p.id} className="hub-row" role="button" tabIndex={0}
-                              onClick={() => editProject(p)}
-                              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); editProject(p); } }}
+                            <div key={p.id} className="hub-row"
+                              data-selected={selectedProjectId === p.id ? 'true' : 'false'}
+                              data-kind={item.kind}
                               style={{
-                                display: 'grid', gridTemplateColumns: '200px 1fr', alignItems: 'center',
+                                display: 'grid', gridTemplateColumns: '260px 1fr', alignItems: 'center', minHeight: 44,
                                 borderBottom: i < timeline.items.length - 1 ? '1px solid var(--line-soft)' : 'none',
-                                cursor: 'pointer',
+                                background: selectedProjectId === p.id ? 'var(--surface-2)' : 'transparent',
                               }}
                             >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 14px', minWidth: 0 }}>
                                 <span style={{ fontSize: 13, color: 'var(--fg-muted)' }}>{pBrand.glyph}</span>
                                 <div style={{ minWidth: 0, flex: 1 }}>
-                                  <div style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
-                                  <div className="mono" style={{ fontSize: 10.5, color: item.overdue ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 2 }}>{p.due}{item.overdue ? ' · 지남' : ''}</div>
+                                  <a
+                                    href={timelineProjectHref(p.id)}
+                                    aria-current={selectedProjectId === p.id ? 'page' : undefined}
+                                    aria-label={`${p.name} · ${item.kind === 'range' ? '계획 기간' : '마감일 지점'} · ${p.due || '기한 미정'}`}
+                                    style={{ minHeight: 44, display: 'flex', flexDirection: 'column', justifyContent: 'center', color: 'inherit', textDecoration: 'none' }}
+                                  >
+                                    <span style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                                    <span className="mono" style={{ fontSize: 10.5, color: item.overdue ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 2 }}>{p.due}{item.overdue ? ' · 지남' : ''}</span>
+                                  </a>
+                                  <div style={{ marginTop: 7 }}>
+                                    <ProjectProgressGauge progress={p.displayProgress} compact ariaLabel={`${p.name} 진척`} />
+                                  </div>
                                 </div>
                               </div>
-                              <div style={{ position: 'relative', height: 34 }}>
-                                <div style={{
-                                  position: 'absolute', left: `${item.startPct}%`, width: `${Math.max(item.widthPct, 1.2)}%`,
-                                  top: 8, height: 18, borderRadius: 999,
-                                  background: 'var(--surface-3)', border: '1px solid var(--line)',
-                                  boxShadow: `inset 2px 0 0 ${lineToken}`,
-                                  overflow: 'hidden',
-                                }}>
-                                  <div style={{ height: '100%', width: `${Math.max(0, Math.min(100, p.progress || 0))}%`, background: 'var(--moon-400)', opacity: 0.55 }} />
-                                </div>
+                              <div style={{ position: 'relative', minHeight: 54 }}>
+                                {item.kind === 'range' ? (
+                                  <div style={{
+                                    position: 'absolute', left: `${item.startPct}%`, width: `${Math.max(item.widthPct, 1.2)}%`,
+                                    top: 18, height: 18, borderRadius: 999,
+                                    background: 'var(--surface-3)', border: '1px solid var(--line)',
+                                    boxShadow: `inset 2px 0 0 ${lineToken}`,
+                                  }} />
+                                ) : (
+                                  <span
+                                    aria-hidden="true"
+                                    style={{
+                                      position: 'absolute', left: `${item.markerPct}%`, top: 18,
+                                      width: 16, height: 16, borderRadius: 999,
+                                      background: 'var(--surface-3)', border: `1px solid ${lineToken}`,
+                                      boxShadow: `inset 0 0 0 3px var(--surface-3), inset 0 0 0 8px ${lineToken}`,
+                                      transform: 'translateX(-50%)',
+                                    }}
+                                  />
+                                )}
                               </div>
                             </div>
                           );
@@ -1663,19 +1702,21 @@ export function Projects({ workspace }) {
                       {timeline.undated.map((p, i) => {
                         const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
                         return (
-                          <div key={p.id} className="hub-row" role="button" tabIndex={0}
-                            onClick={() => editProject(p)}
-                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); editProject(p); } }}
+                          <a key={p.id} className="hub-row"
+                            href={timelineProjectHref(p.id)}
+                            aria-current={selectedProjectId === p.id ? 'page' : undefined}
+                            data-selected={selectedProjectId === p.id ? 'true' : 'false'}
                             style={{
-                              display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                              display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', minHeight: 44,
                               borderBottom: i < timeline.undated.length - 1 ? '1px solid var(--line-soft)' : 'none',
-                              cursor: 'pointer',
+                              color: 'inherit', textDecoration: 'none',
+                              background: selectedProjectId === p.id ? 'var(--surface-2)' : 'transparent',
                             }}
                           >
                             <span style={{ fontSize: 13, color: 'var(--fg-muted)' }}>{pBrand.glyph}</span>
                             <span style={{ flex: 1, fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
                             <Badge tone={statusTone[p.status]} size="xs">{STATUS_LABEL_KO[p.status] || p.status}</Badge>
-                          </div>
+                          </a>
                         );
                       })}
                     </Card>

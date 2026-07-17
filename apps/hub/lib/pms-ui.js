@@ -231,6 +231,17 @@ export function mergeProjectDetailQuery(current, projectId) {
   return params;
 }
 
+export function mergeTimelineProjectQuery(current, projectId) {
+  const params = new URLSearchParams(
+    typeof current === "string" ? current : current?.toString?.() || "",
+  );
+  params.delete("new");
+  params.delete("task");
+  params.set("view", "timeline");
+  params.set("project", projectId);
+  return params;
+}
+
 export function buildProjectProgress({
   tasks = { done: 0, total: 0 },
   reportedProgress = null,
@@ -297,11 +308,9 @@ function toDayStart(value) {
   return date;
 }
 
-// Timeline (Gantt-lite) layout for the Projects timeline view. Only projects with a
-// due date are placed on the axis — a project's `created_at` isn't an operator-set
-// start date, so it's used only as the bar's left edge, never fabricated when missing.
-// Projects without `dueAt` are returned separately (`undated`) for a plain list below
-// the axis rather than guessing a position for them.
+// Timeline layout for the Projects deadline view. A period exists only when the
+// operator supplied a valid startedAt <= dueAt pair. A deadline without that evidence
+// is a point, never a period fabricated from createdAt.
 export function buildProjectTimeline(projects = [], {
   today = new Date(),
   minWindowDays = 14,
@@ -318,16 +327,23 @@ export function buildProjectTimeline(projects = [], {
       undated.push(project);
       return;
     }
-    const created = toDayStart(project.createdAt);
-    const start = created && created.getTime() <= due.getTime() ? created : due;
-    dated.push({ project, start, end: due });
+    const started = toDayStart(project.startedAt);
+    const hasRange = Boolean(started && started.getTime() <= due.getTime());
+    dated.push({
+      project,
+      kind: hasRange ? "range" : "marker",
+      start: hasRange ? started : null,
+      end: due,
+    });
   });
 
   if (dated.length === 0) {
     return { windowStart: todayStart, windowEnd: todayStart, totalDays: 0, today: todayStart, todayPct: 0, items: [], undated };
   }
 
-  const earliestStart = new Date(Math.min(...dated.map((d) => d.start.getTime())));
+  const earliestStart = new Date(Math.min(
+    ...dated.map((item) => (item.start || item.end).getTime()),
+  ));
   const latestEnd = new Date(Math.max(...dated.map((d) => d.end.getTime())));
 
   // Clamp so one very old or very distant due date can't stretch the axis into
@@ -346,21 +362,36 @@ export function buildProjectTimeline(projects = [], {
   const totalDays = Math.max(1, Math.round((windowEndMs - windowStartMs) / MS_PER_DAY));
 
   const items = dated
-    .map(({ project, start, end }) => {
+    .map(({ project, kind, start, end }) => {
+      const overdue = end.getTime() < todayStart.getTime();
+      if (kind === "marker") {
+        const markerMs = Math.max(windowStartMs, Math.min(windowEndMs, end.getTime()));
+        return {
+          project,
+          kind,
+          markerPct: ((markerMs - windowStartMs) / MS_PER_DAY / totalDays) * 100,
+          overdue,
+          clippedStart: false,
+          clippedEnd: end.getTime() > windowEndMs,
+          clippedDeadline: end.getTime() < windowStartMs || end.getTime() > windowEndMs,
+        };
+      }
+
       const visStartMs = Math.max(start.getTime(), windowStartMs);
       const visEndMs = Math.min(end.getTime(), windowEndMs);
       const startOffsetDays = (visStartMs - windowStartMs) / MS_PER_DAY;
       const spanDays = Math.max(0.4, (visEndMs - visStartMs) / MS_PER_DAY);
       return {
         project,
+        kind,
         startPct: (startOffsetDays / totalDays) * 100,
         widthPct: (spanDays / totalDays) * 100,
-        overdue: end.getTime() < todayStart.getTime(),
+        overdue,
         clippedStart: start.getTime() < windowStartMs,
         clippedEnd: end.getTime() > windowEndMs,
       };
     })
-    .sort((a, b) => a.startPct - b.startPct);
+    .sort((a, b) => (a.startPct ?? a.markerPct) - (b.startPct ?? b.markerPct));
 
   const todayPct = Math.max(0, Math.min(100, ((todayStart.getTime() - windowStartMs) / MS_PER_DAY / totalDays) * 100));
 

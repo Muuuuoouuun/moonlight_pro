@@ -49,10 +49,85 @@ function buildCalendarWeek(now) {
 }
 
 function buildRoadmapMonths(now) {
-  return Array.from({ length: 4 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    return EN_MONTH.format(d);
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 4, 1);
+  return {
+    start,
+    end,
+    months: Array.from({ length: 4 }, (_, i) => {
+      const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      return { key: `${date.getFullYear()}-${date.getMonth()}`, label: EN_MONTH.format(date) };
+    }),
+  };
+}
+
+function roadmapDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function roadmapPosition(date, window) {
+  const span = window.end.getTime() - window.start.getTime();
+  if (span <= 0) return 0;
+  return Math.max(0, Math.min(100, ((date.getTime() - window.start.getTime()) / span) * 100));
+}
+
+function buildRoadmapItems(roadmap, window, selectedProjectId) {
+  const projects = Array.isArray(roadmap?.projects) ? roadmap.projects : [];
+  const milestones = Array.isArray(roadmap?.milestones) ? roadmap.milestones : [];
+  const projectById = new Map(projects.map(project => [project.id, project]));
+  const projectItems = projects.flatMap((project) => {
+    if (selectedProjectId && project.id !== selectedProjectId) return [];
+    const due = roadmapDate(project.dueAt);
+    if (!due) return [];
+    const started = roadmapDate(project.startedAt);
+    const hasRange = Boolean(started && started.getTime() <= due.getTime());
+
+    if (!hasRange) {
+      if (due < window.start || due >= window.end) return [];
+      return [{
+        id: `project:${project.id}`,
+        projectId: project.id,
+        name: project.name,
+        meta: '프로젝트 마감',
+        kind: 'marker',
+        markerPct: roadmapPosition(due, window),
+      }];
+    }
+
+    if (due < window.start || started >= window.end) return [];
+    const startPct = roadmapPosition(started, window);
+    const endPct = roadmapPosition(due, window);
+    return [{
+      id: `project:${project.id}`,
+      projectId: project.id,
+      name: project.name,
+      meta: '프로젝트 기간',
+      kind: 'range',
+      startPct,
+      widthPct: Math.max(0.8, endPct - startPct),
+    }];
   });
+
+  const milestoneItems = milestones.flatMap((milestone) => {
+    if (selectedProjectId && milestone.projectId !== selectedProjectId) return [];
+    const target = roadmapDate(milestone.targetAt);
+    if (!target || target < window.start || target >= window.end) return [];
+    const project = projectById.get(milestone.projectId);
+    return [{
+      id: `milestone:${milestone.id}`,
+      projectId: milestone.projectId,
+      name: milestone.title,
+      meta: project?.name ? `${project.name} · 마일스톤` : '마일스톤',
+      kind: 'milestone',
+      markerPct: roadmapPosition(target, window),
+    }];
+  });
+
+  return [...projectItems, ...milestoneItems].sort(
+    (a, b) => (a.startPct ?? a.markerPct) - (b.startPct ?? b.markerPct),
+  );
 }
 
 function formatHour(value) {
@@ -68,43 +143,109 @@ function useWorkLedger() {
     rituals: [],
     summary: null,
     syncState: 'preview',
+    roadmap: {
+      source: 'preview',
+      state: 'loading',
+      partial: false,
+      error: null,
+      failedSources: [],
+      projects: [],
+      milestones: [],
+    },
   });
+  const requestRef = React.useRef(0);
 
-  React.useEffect(() => {
-    let active = true;
+  const load = React.useCallback(async () => {
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
+    setState((prev) => ({
+      ...prev,
+      syncState: 'loading',
+      roadmap: { ...prev.roadmap, state: 'loading' },
+    }));
+    try {
+      const response = await fetch('/api/hub/work', { cache: 'no-store' });
+      const data = await response.json().catch(() => null);
+      if (requestId !== requestRef.current) return;
 
-    async function load() {
-      setState((prev) => ({ ...prev, syncState: 'loading' }));
-      try {
-        const response = await fetch('/api/hub/work', { cache: 'no-store' });
-        const data = await response.json().catch(() => null);
-
-        if (!active || !response.ok || !data || data.status === 'error') {
-          if (active) setState((prev) => ({ ...prev, syncState: 'preview' }));
-          return;
-        }
-
-        if (data.source === 'supabase') {
-          setState({
-            source: data.source,
-            decisions: Array.isArray(data.decisions) ? data.decisions : [],
-            rituals: Array.isArray(data.rituals) ? data.rituals : [],
-            summary: data.summary || null,
-            syncState: 'live',
-          });
-        } else {
-          setState((prev) => ({ ...prev, source: 'preview', decisions: [], rituals: [], summary: null, syncState: 'preview' }));
-        }
-      } catch {
-        if (active) setState((prev) => ({ ...prev, source: 'preview', decisions: [], rituals: [], summary: null, syncState: 'preview' }));
+      if (!response.ok || !data || data.status === 'error') {
+        const message = data?.error || data?.message || `업무 원장 응답 실패 (${response.status})`;
+        setState((prev) => ({
+          ...prev,
+          syncState: 'error',
+          roadmap: {
+            ...prev.roadmap,
+            source: 'supabase',
+            state: 'error',
+            partial: false,
+            error: { message, retryable: true },
+            failedSources: ['projects', 'milestones'],
+            projects: [],
+            milestones: [],
+          },
+        }));
+        return;
       }
-    }
 
-    load();
-    return () => { active = false; };
+      const roadmap = data.roadmap && typeof data.roadmap === 'object'
+        ? data.roadmap
+        : {
+            source: data.source === 'supabase' ? 'supabase' : 'preview',
+            state: data.source === 'supabase' ? 'error' : 'preview',
+            partial: false,
+            error: data.source === 'supabase'
+              ? { message: '로드맵 응답이 없습니다.', retryable: true }
+              : null,
+            failedSources: data.source === 'supabase' ? ['projects', 'milestones'] : [],
+            projects: [],
+            milestones: [],
+          };
+
+      if (data.source === 'supabase') {
+        setState({
+          source: data.source,
+          decisions: Array.isArray(data.decisions) ? data.decisions : [],
+          rituals: Array.isArray(data.rituals) ? data.rituals : [],
+          summary: data.summary || null,
+          syncState: 'live',
+          roadmap,
+        });
+      } else {
+        setState({
+          source: 'preview',
+          decisions: [],
+          rituals: [],
+          summary: null,
+          syncState: 'preview',
+          roadmap,
+        });
+      }
+    } catch (error) {
+      if (requestId !== requestRef.current) return;
+      const message = error instanceof Error ? error.message : String(error);
+      setState((prev) => ({
+        ...prev,
+        syncState: 'error',
+        roadmap: {
+          ...prev.roadmap,
+          source: 'supabase',
+          state: 'error',
+          partial: false,
+          error: { message, retryable: true },
+          failedSources: ['projects', 'milestones'],
+          projects: [],
+          milestones: [],
+        },
+      }));
+    }
   }, []);
 
-  return state;
+  React.useEffect(() => {
+    load();
+    return () => { requestRef.current += 1; };
+  }, [load]);
+
+  return { ...state, retry: load };
 }
 
 // Google's event.start is an ISO datetime (or an all-day date) — plot it onto the
@@ -491,9 +632,31 @@ export function Decisions() {
 }
 
 export function Roadmap() {
-  const months = React.useMemo(() => buildRoadmapMonths(new Date()), []);
-  const items = [];
-  const toneMap = { moon: 'var(--moon-400)', company: 'var(--company)', personal: 'var(--personal)' };
+  const searchParams = useSearchParams();
+  const selectedProjectId = searchParams.get('project');
+  const { roadmap, retry } = useWorkLedger();
+  const roadmapWindow = React.useMemo(() => buildRoadmapMonths(new Date()), []);
+  const months = roadmapWindow.months;
+  const items = React.useMemo(
+    () => buildRoadmapItems(roadmap, roadmapWindow, selectedProjectId),
+    [roadmap, roadmapWindow, selectedProjectId],
+  );
+  const statusLabel = roadmap.state === 'loading'
+    ? 'syncing'
+    : roadmap.state === 'preview'
+      ? 'preview'
+      : roadmap.state === 'partial'
+        ? 'partial'
+        : roadmap.state === 'error'
+          ? 'error'
+          : 'live';
+  const statusColor = roadmap.state === 'error'
+    ? 'var(--danger)'
+    : roadmap.state === 'partial'
+      ? 'var(--warning)'
+      : roadmap.state === 'live' || roadmap.state === 'live-empty'
+        ? 'var(--success)'
+        : 'var(--fg-faint)';
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
@@ -501,51 +664,100 @@ export function Roadmap() {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Roadmap</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            로드맵 기록 연결 전
-            <span className="mono" style={{ marginLeft: 8, color: 'var(--fg-faint)' }}>preview</span>
+            프로젝트와 마일스톤의 4개월 계획 축
+            <span className="mono" style={{ marginLeft: 8, color: statusColor }}>{statusLabel}</span>
           </div>
         </div>
         <div style={{ flex: 1 }} />
+        {selectedProjectId && (
+          <a
+            href={`/dashboard/work/projects?project=${encodeURIComponent(selectedProjectId)}`}
+            style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', color: 'var(--moon-300)', fontSize: 12.5, textUnderlineOffset: 3 }}
+          >
+            프로젝트로 돌아가기
+          </a>
+        )}
       </div>
 
-      <Card pad={false} className="hub-table-card">
-        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', borderBottom: '1px solid var(--line-soft)' }}>
-          <div style={{ padding: '10px 14px', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Initiative</div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
-            {months.map(m => (
-              <div key={m} style={{ padding: '10px 14px', fontSize: 11, color: 'var(--fg-faint)', borderLeft: '1px solid var(--line-soft)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{m}</div>
-            ))}
-          </div>
+      {roadmap.partial && (
+        <div role="status" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
+          <span style={{ flex: 1, fontSize: 12, color: 'var(--warning)' }}>
+            일부 원장을 읽지 못했습니다 · {roadmap.failedSources.join(', ')}
+          </span>
+          <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
         </div>
-        {items.length === 0 && (
+      )}
+
+      <Card pad={false} className="hub-table-card">
+        {roadmap.state === 'loading' && (
+          <EmptyState icon="roadmap" title="로드맵을 읽는 중입니다" description="프로젝트와 마일스톤 원장을 확인하고 있습니다." style={{ minHeight: 220 }} />
+        )}
+        {roadmap.state === 'preview' && (
+          <EmptyState icon="roadmap" title="로드맵 원장이 연결되지 않았습니다" description="Supabase 연결 후 실제 프로젝트 일정만 표시됩니다." style={{ minHeight: 220 }} />
+        )}
+        {roadmap.state === 'error' && (
           <EmptyState
             icon="roadmap"
-            title="로드맵 데이터가 없습니다"
-            description="프로젝트 기록과 로드맵 일정이 연결되면 이 타임라인이 채워집니다."
+            title="로드맵을 읽지 못했습니다"
+            description={roadmap.error?.message || '프로젝트와 마일스톤 원장을 다시 확인해 주세요.'}
+            action={<Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>}
             style={{ minHeight: 220 }}
           />
         )}
-        {items.map((it, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '220px 1fr', borderBottom: i < items.length - 1 ? '1px solid var(--line-soft)' : 'none', alignItems: 'center' }}>
-            <div style={{ padding: '14px', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12.5 }}>{it.name}</span>
-              {it.tag === 'personal' && <Badge tone="personal" size="xs">P</Badge>}
-              {it.tag === 'company' && <Badge tone="company" size="xs">C</Badge>}
-            </div>
-            <div style={{ position: 'relative', height: 44, display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
-              {months.map((_, mi) => <div key={mi} style={{ borderLeft: '1px solid var(--line-soft)' }} />)}
-              <div style={{
-                position: 'absolute', top: 12, height: 20,
-                left: `calc(${(it.start / months.length) * 100}% + 4px)`,
-                width: `calc(${(it.len / months.length) * 100}% - 8px)`,
-                background: toneMap[it.tone],
-                opacity: 0.85,
-                borderRadius: 6,
-                boxShadow: '0 1px 0 oklch(1 0 0 / 0.1) inset',
-              }} />
+        {roadmap.state === 'live-empty' && (
+          <EmptyState icon="roadmap" title="로드맵 일정이 없습니다" description="기한이 있는 프로젝트나 목표일이 있는 마일스톤을 만들면 4개월 축에 표시됩니다." style={{ minHeight: 220 }} />
+        )}
+        {(roadmap.state === 'live' || roadmap.state === 'partial') && items.length === 0 && (
+          <EmptyState
+            icon="roadmap"
+            title={selectedProjectId ? '선택한 프로젝트의 4개월 일정이 없습니다' : '4개월 안에 표시할 일정이 없습니다'}
+            description="프로젝트 시작일·마감일 또는 마일스톤 목표일을 확인해 주세요."
+            style={{ minHeight: 220 }}
+          />
+        )}
+        {(roadmap.state === 'live' || roadmap.state === 'partial') && items.length > 0 && (
+          <div className="hub-scroll-x" style={{ overflowX: 'auto' }}>
+            <div style={{ minWidth: 760 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', borderBottom: '1px solid var(--line-soft)' }}>
+                <div style={{ padding: '10px 14px', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>프로젝트 · 마일스톤</div>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
+                  {months.map(month => (
+                    <div key={month.key} style={{ padding: '10px 14px', fontSize: 11, color: 'var(--fg-faint)', borderLeft: '1px solid var(--line-soft)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{month.label}</div>
+                  ))}
+                </div>
+              </div>
+              {items.map((item, index) => (
+                <div
+                  key={item.id}
+                  data-kind={item.kind}
+                  data-selected={selectedProjectId === item.projectId ? 'true' : 'false'}
+                  style={{
+                    display: 'grid', gridTemplateColumns: '240px 1fr', alignItems: 'center',
+                    borderBottom: index < items.length - 1 ? '1px solid var(--line-soft)' : 'none',
+                    background: selectedProjectId === item.projectId ? 'var(--surface-2)' : 'transparent',
+                  }}
+                >
+                  <a
+                    href={`/dashboard/work/projects?project=${encodeURIComponent(item.projectId)}`}
+                    aria-current={selectedProjectId === item.projectId ? 'page' : undefined}
+                    style={{ minHeight: 52, padding: '8px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', color: 'inherit', textDecoration: 'none' }}
+                  >
+                    <span style={{ fontSize: 12.5, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                    <span style={{ marginTop: 3, fontSize: 10.5, color: 'var(--fg-faint)' }}>{item.meta}</span>
+                  </a>
+                  <div style={{ position: 'relative', minHeight: 52, display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
+                    {months.map(month => <div key={month.key} style={{ borderLeft: '1px solid var(--line-soft)' }} />)}
+                    {item.kind === 'range' ? (
+                      <span aria-hidden="true" style={{ position: 'absolute', top: 17, left: `${item.startPct}%`, width: `${item.widthPct}%`, height: 18, borderRadius: 999, background: 'var(--surface-3)', border: '1px solid var(--line)', boxShadow: 'inset 2px 0 0 var(--moon-300)' }} />
+                    ) : (
+                      <span aria-hidden="true" style={{ position: 'absolute', top: 17, left: `${item.markerPct}%`, width: 16, height: 16, borderRadius: item.kind === 'milestone' ? 3 : 999, background: 'var(--surface-3)', border: '1px solid var(--moon-300)', boxShadow: 'inset 0 0 0 3px var(--surface-3), inset 0 0 0 8px var(--moon-300)', transform: item.kind === 'milestone' ? 'translateX(-50%) rotate(45deg)' : 'translateX(-50%)' }} />
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
+        )}
       </Card>
     </div>
   );
