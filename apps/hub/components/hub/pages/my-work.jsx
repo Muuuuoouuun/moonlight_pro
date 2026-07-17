@@ -299,17 +299,21 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
             <Button variant="primary" size="sm" icon="check" onClick={onComplete} disabled={completing}>완료</Button>
             {/* 오늘 못하면 미루기 — 기본 다음날, 주말이면 월요일. */}
             <Button variant="secondary" size="sm" icon="clock" onClick={onDefer}>{deferTarget.label}로 미루기</Button>
-            <Button variant="outline" size="sm" icon="edit" onClick={onEdit}>상세 편집</Button>
-            {item.projectId && (
-              <Button
-                variant="outline"
-                size="sm"
-                icon="projects"
-                onClick={() => onNavigate?.(`dashboard/work/projects?project=${encodeURIComponent(item.projectId)}`)}
-              >
-                프로젝트에서 열기
-              </Button>
-            )}
+            {/* 2차 액션(outline)은 한 줄로 — 세로 4단 스택보다 위계가 읽히고 패널이 짧아진다. */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              <Button variant="outline" size="sm" icon="edit" onClick={onEdit} style={{ flex: 1 }}>상세 편집</Button>
+              {item.projectId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon="projects"
+                  style={{ flex: 1 }}
+                  onClick={() => onNavigate?.(`dashboard/work/projects?project=${encodeURIComponent(item.projectId)}`)}
+                >
+                  프로젝트에서 열기
+                </Button>
+              )}
+            </div>
           </>
         )}
         {item.lane === 'deal' && (
