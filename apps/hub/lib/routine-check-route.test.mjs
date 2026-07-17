@@ -42,10 +42,27 @@ export async function fetchSupabaseRows(table, options = {}) {
   if (table === "projects") return state.projects;
   if (table === "workspaces") return state.workspaces;
   if (table === "routine_checks") {
+    let rows;
     if (Array.isArray(state.checksSequence) && state.checksSequence.length > 0) {
-      return state.checksSequence.shift();
+      rows = state.checksSequence.shift();
+    } else {
+      rows = state.checks;
     }
-    return state.checks;
+    if (!state.applyRoutineFilters || !Array.isArray(rows)) return rows;
+    return rows.filter((row) => (options.filters || []).every(([key, value]) => {
+      const raw = String(value || "");
+      const expected = raw.startsWith("eq.") ? raw.slice(3) : null;
+      if (key.startsWith("meta->>")) {
+        const metaKey = key.slice("meta->>".length);
+        if (raw === "is.null") return row.meta?.[metaKey] == null;
+        return String(row.meta?.[metaKey] || "") === expected;
+      }
+      if (["project_id", "check_type", "status", "idempotency_key"].includes(key)) {
+        if (raw === "is.null") return row[key] == null;
+        return String(row[key] ?? "") === expected;
+      }
+      return true;
+    }));
   }
   return [];
 }
@@ -108,6 +125,7 @@ beforeEach(() => {
     workspaces: [{ id: WORKSPACE_ID, timezone: "Asia/Seoul" }],
     checks: [],
     checksSequence: null,
+    applyRoutineFilters: false,
     checkedAt: "2026-07-17T03:00:00.000Z",
     persistence: null,
     readCalls: [],
@@ -398,7 +416,7 @@ test("project-bound legacy NULL-key check is returned as duplicate before insert
   assert.deepEqual(routineReads[1].options.filters, [
     ["workspace_id", `eq.${WORKSPACE_ID}`],
     ["project_id", `eq.${PROJECT_ID}`],
-    ["check_type", "eq.morning"],
+    ["meta->>ritual_key", "eq.daily-focus"],
     ["status", "eq.done"],
     ["idempotency_key", "is.null"],
     ["checked_at", "gte.2026-07-16T00:00:00.000Z"],
@@ -406,12 +424,87 @@ test("project-bound legacy NULL-key check is returned as duplicate before insert
   ]);
 });
 
+for (const [metaField, ritualKey] of [
+  ["ritual_key", "daily-focus"],
+  ["key", "daily-focus"],
+  ["name", "Daily Focus"],
+]) {
+  test(`explicit legacy meta.${metaField} dedupes even when check_type changes`, async () => {
+    const state = globalThis.__routineRouteTestState;
+    state.applyRoutineFilters = true;
+    state.checks = [{
+      id: `check-explicit-${metaField}`,
+      workspace_id: WORKSPACE_ID,
+      project_id: PROJECT_ID,
+      check_type: "midday",
+      status: "done",
+      idempotency_key: null,
+      checked_at: "2026-07-16T15:05:00.000Z",
+      meta: { [metaField]: ritualKey },
+    }];
+
+    const response = await POST(request(validPayload({
+      ritualKey,
+      checkType: "morning",
+      name: ritualKey,
+    })));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.status, "duplicate");
+    assert.equal(body.check.id, `check-explicit-${metaField}`);
+    assert.equal(state.insertCalls.length, 0);
+    const semanticRead = state.readCalls.find((entry) => (
+      entry.table === "routine_checks"
+      && entry.options.filters.some(([key]) => key === `meta->>${metaField}`)
+    ));
+    assert.ok(semanticRead);
+    assert.equal(semanticRead.options.limit, 101);
+    assert.equal(
+      semanticRead.options.filters.some(([key]) => key === "check_type"),
+      false,
+    );
+  });
+}
+
+test("meta-less legacy rows never dedupe through an unrelated check_type", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.applyRoutineFilters = true;
+  state.checks = [{
+    id: "check-meta-less-midday",
+    workspace_id: WORKSPACE_ID,
+    project_id: PROJECT_ID,
+    check_type: "midday",
+    status: "done",
+    idempotency_key: null,
+    checked_at: "2026-07-17T03:00:00.000Z",
+    meta: {},
+  }];
+
+  const response = await POST(request(validPayload({
+    ritualKey: "midday",
+    checkType: "morning",
+  })));
+
+  assert.equal(response.status, 201);
+  assert.equal(state.insertCalls.length, 1);
+  const legacyReads = state.readCalls.filter((entry) => (
+    entry.table === "routine_checks"
+    && entry.options.filters.some(([key]) => key === "idempotency_key")
+    && entry.options.filters.some(([, value]) => value === "is.null")
+  ));
+  assert.equal(legacyReads.at(-1).options.limit, 101);
+  assert.deepEqual(
+    legacyReads.at(-1).options.filters.find(([key]) => key === "check_type"),
+    ["check_type", "eq.morning"],
+  );
+});
+
 test("seed-style legacy check without meta dedupes by check_type and workspace-local date", async () => {
   const state = globalThis.__routineRouteTestState;
   state.projects = [{ id: LIVE_SEED_PROJECT_ID, name: "Seed project" }];
-  state.checksSequence = [
-    [],
-    [
+  state.applyRoutineFilters = true;
+  state.checks = [
       {
         id: "check-unrelated-evening",
         workspace_id: WORKSPACE_ID,
@@ -432,7 +525,6 @@ test("seed-style legacy check without meta dedupes by check_type and workspace-l
         checked_at: "2026-07-16T15:05:00.000Z",
         meta: {},
       },
-    ],
   ];
 
   const response = await POST(request(validPayload({
@@ -448,7 +540,10 @@ test("seed-style legacy check without meta dedupes by check_type and workspace-l
   assert.equal(state.insertCalls.length, 0);
   const workspaceRead = state.readCalls.find((entry) => entry.table === "workspaces");
   assert.deepEqual(workspaceRead.options.filters, [["id", `eq.${WORKSPACE_ID}`]]);
-  const legacyRead = state.readCalls.filter((entry) => entry.table === "routine_checks")[1];
+  const legacyRead = state.readCalls.find((entry) => (
+    entry.table === "routine_checks"
+    && entry.options.filters.some(([key]) => key === "check_type")
+  ));
   assert.equal(legacyRead.options.limit, 101);
   assert.deepEqual(legacyRead.options.filters.slice(0, 3), [
     ["workspace_id", `eq.${WORKSPACE_ID}`],
@@ -488,7 +583,7 @@ test("unscoped legacy NULL-key check uses null project semantics before insert",
   assert.deepEqual(routineReads[1].options.filters, [
     ["workspace_id", `eq.${WORKSPACE_ID}`],
     ["project_id", "is.null"],
-    ["check_type", "eq.weekly"],
+    ["meta->>ritual_key", "eq.weekly-review"],
     ["status", "eq.done"],
     ["idempotency_key", "is.null"],
     ["checked_at", "gte.2026-07-16T00:00:00.000Z"],
@@ -534,6 +629,28 @@ test("legacy candidate overflow never inserts when a duplicate could be the 101s
   assert.equal(legacyRead.options.limit, 101);
 });
 
+test("meta-less seed candidate overflow also fails closed without insert", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.applyRoutineFilters = true;
+  state.checks = Array.from({ length: 101 }, (_, index) => ({
+    id: `seed-overflow-${index}`,
+    workspace_id: WORKSPACE_ID,
+    project_id: PROJECT_ID,
+    check_type: "morning",
+    status: "done",
+    idempotency_key: null,
+    checked_at: "2026-07-17T02:00:00.000Z",
+    meta: {},
+  }));
+
+  const response = await POST(request(validPayload({ ritualKey: "morning" })));
+  const body = await response.json();
+
+  assert.equal(response.status, 502);
+  assert.equal(body.error, "legacy-candidate-overflow");
+  assert.equal(state.insertCalls.length, 0);
+});
+
 test("legacy fallback lookup failure is an honest error and never inserts", async () => {
   const state = globalThis.__routineRouteTestState;
   state.checksSequence = [[], null];
@@ -551,6 +668,9 @@ test("legacy fallback lookup failure is an honest error and never inserts", asyn
 test("unique idempotency race re-reads the winning check as duplicate", async () => {
   const state = globalThis.__routineRouteTestState;
   state.checksSequence = [
+    [],
+    [],
+    [],
     [],
     [],
     [{
@@ -577,17 +697,17 @@ test("unique idempotency race re-reads the winning check as duplicate", async ()
   assert.equal(body.check.id, "check-winner");
   assert.equal(state.insertCalls.length, 1);
   const routineReads = state.readCalls.filter((entry) => entry.table === "routine_checks");
-  assert.equal(routineReads.length, 3);
+  assert.equal(routineReads.length, 6);
   assert.deepEqual(routineReads[1].options.filters, [
     ["workspace_id", `eq.${WORKSPACE_ID}`],
     ["project_id", `eq.${PROJECT_ID}`],
-    ["check_type", "eq.morning"],
+    ["meta->>ritual_key", "eq.daily-focus"],
     ["status", "eq.done"],
     ["idempotency_key", "is.null"],
     ["checked_at", "gte.2026-07-16T00:00:00.000Z"],
     ["checked_at", "lt.2026-07-19T00:00:00.000Z"],
   ]);
-  for (const read of [routineReads[0], routineReads[2]]) {
+  for (const read of [routineReads[0], routineReads[5]]) {
     assert.deepEqual(read.options.filters, [
       ["workspace_id", `eq.${WORKSPACE_ID}`],
       ["idempotency_key", `eq.${state.insertCalls[0].record.idempotency_key}`],
@@ -610,7 +730,7 @@ test("an unrelated HTTP 409 never triggers idempotency winner reread", async () 
   assert.equal(response.status, 502);
   assert.equal(body.status, "error");
   assert.match(body.error, /a_different_unique_index/);
-  assert.equal(state.readCalls.filter((entry) => entry.table === "routine_checks").length, 2);
+  assert.equal(state.readCalls.filter((entry) => entry.table === "routine_checks").length, 5);
 });
 
 test("configured ledger read failures are explicit errors, never preview", async () => {

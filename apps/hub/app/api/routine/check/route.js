@@ -23,6 +23,7 @@ export const runtime = "nodejs";
 
 const CHECK_TYPES = new Set(["morning", "midday", "evening", "weekly"]);
 const LEGACY_CANDIDATE_LIMIT = 100;
+const LEGACY_SEMANTIC_META_FIELDS = ["ritual_key", "key", "name"];
 const ROUTINE_CHECK_SELECT = "id,workspace_id,project_id,check_type,status,note,meta,checked_at,created_at,updated_at,idempotency_key";
 
 function cleanString(value) {
@@ -94,28 +95,62 @@ async function resolveWorkspaceTimeZone(workspaceId) {
   return { ok: true, timeZone: resolveRhythmTimeZone(rows[0].timezone) };
 }
 
-async function findLegacyRoutineCheck({ projectId, ritualKey, checkType, dateKey }, timeZone) {
-  const window = legacyCandidateWindow(dateKey);
+function hasExplicitRoutineSemanticMetadata(row) {
+  const meta = row?.meta && typeof row.meta === "object" ? row.meta : {};
+  return LEGACY_SEMANTIC_META_FIELDS.some((field) => cleanString(meta[field]));
+}
+
+async function readLegacyCandidates(filters) {
   const candidates = await fetchSupabaseRows("routine_checks", {
     select: ROUTINE_CHECK_SELECT,
     limit: LEGACY_CANDIDATE_LIMIT + 1,
     order: "checked_at.desc",
-    filters: withWorkspaceFilter([
-      ["project_id", projectId ? eqFilter(projectId) : "is.null"],
-      ["check_type", eqFilter(checkType)],
-      ["status", eqFilter("done")],
-      ["idempotency_key", "is.null"],
-      ["checked_at", `gte.${window.start}`],
-      ["checked_at", `lt.${window.end}`],
-    ]),
+    filters: withWorkspaceFilter(filters),
   });
   if (!Array.isArray(candidates)) return { state: "read-failure", rows: [] };
   if (candidates.length > LEGACY_CANDIDATE_LIMIT) return { state: "overflow", rows: [] };
+  return { state: "ok", rows: candidates };
+}
+
+function legacyCandidateFilters({ projectId, dateKey }, semanticFilters) {
+  const window = legacyCandidateWindow(dateKey);
+  return [
+    ["project_id", projectId ? eqFilter(projectId) : "is.null"],
+    ...semanticFilters,
+    ["status", eqFilter("done")],
+    ["idempotency_key", "is.null"],
+    ["checked_at", `gte.${window.start}`],
+    ["checked_at", `lt.${window.end}`],
+  ];
+}
+
+async function findLegacyRoutineCheck(payload, timeZone) {
+  const { ritualKey, checkType, dateKey } = payload;
+  const matchesIdentity = (row) => (
+    routineSemanticKey(row) === ritualKey
+    && routineLocalDateKey(row, timeZone) === dateKey
+  );
+
+  for (const metaField of LEGACY_SEMANTIC_META_FIELDS) {
+    const explicit = await readLegacyCandidates(legacyCandidateFilters(payload, [
+      [`meta->>${metaField}`, eqFilter(ritualKey)],
+    ]));
+    if (explicit.state !== "ok") return explicit;
+    const duplicate = explicit.rows.find((row) => (
+      hasExplicitRoutineSemanticMetadata(row) && matchesIdentity(row)
+    ));
+    if (duplicate) return { state: "ok", rows: [duplicate] };
+  }
+
+  const seedFallback = await readLegacyCandidates(legacyCandidateFilters(payload, [
+    ["check_type", eqFilter(checkType)],
+    ...LEGACY_SEMANTIC_META_FIELDS.map((field) => [`meta->>${field}`, "is.null"]),
+  ]));
+  if (seedFallback.state !== "ok") return seedFallback;
   return {
     state: "ok",
-    rows: candidates.filter((row) => (
-      routineSemanticKey(row) === ritualKey
-      && routineLocalDateKey(row, timeZone) === dateKey
+    rows: seedFallback.rows.filter((row) => (
+      !hasExplicitRoutineSemanticMetadata(row) && matchesIdentity(row)
     )),
   };
 }
