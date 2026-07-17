@@ -221,7 +221,9 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
         // (2026-07 design-review FINDING-001의 모바일 identity-first 원칙). ≤560px에서는
         // hub-tokens.css가 통째로 숨긴다: "견적 · ₩10K…"처럼 잘린 meta는 정보가치가 없고
         // 정체 신호는 stripe, 긴급도는 날짜 색이 이미 전달한다.
-        <span className="mono hub-mywork-meta" style={{
+        // .num(sans tabular) — meta에 프로젝트명·정렬 근거 같은 단어가 섞이므로 mono로 두면
+        // 이름이 ID처럼 읽힌다(§6). 금액·일수는 tabular-nums로 열 안정성 유지.
+        <span className="num hub-mywork-meta" style={{
           fontSize: 11, color: 'var(--fg-muted)', flexShrink: 1, maxWidth: '38%',
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>{metaText}</span>
