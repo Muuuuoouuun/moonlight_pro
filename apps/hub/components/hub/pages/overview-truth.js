@@ -61,7 +61,29 @@ function sourceContext(sources, key, status) {
   return {
     state,
     failed: new Set(Array.isArray(source?.failedSources) ? source.failedSources : []),
+    partial: new Set(Array.isArray(source?.partialSources) ? source.partialSources : []),
   };
+}
+
+function scopedSourceState(context, dependencies = []) {
+  if (context.state !== "partial") return context.state;
+
+  const scopedDependencies = Array.isArray(dependencies)
+    ? dependencies.filter(Boolean)
+    : [];
+  if (scopedDependencies.length === 0) return "partial";
+  if (scopedDependencies.some((dependency) => context.failed.has(dependency))) {
+    return "error";
+  }
+  if (scopedDependencies.some((dependency) => context.partial.has(dependency))) {
+    return "partial";
+  }
+
+  // A partial source without slice details cannot prove that this panel's
+  // dependencies are complete. Named failures outside the dependency scope,
+  // however, do not make an otherwise complete panel partial.
+  if (context.failed.size === 0 && context.partial.size === 0) return "partial";
+  return "live";
 }
 
 function normalizePanelState(state) {
@@ -71,11 +93,12 @@ function normalizePanelState(state) {
 
 function metricContext({ sources, status, sourceKey, dependency }) {
   const context = sourceContext(sources, sourceKey, status);
-  if (context.state === "preview") return { available: false, reason: "preview" };
-  if (context.state === "error") return { available: false, reason: "error" };
-  if (dependency && context.failed.has(dependency)) {
-    return { available: false, reason: "error" };
-  }
+  const state = dependency
+    ? scopedSourceState(context, [dependency])
+    : context.state;
+  if (state === "preview") return { available: false, reason: "preview" };
+  if (state === "error") return { available: false, reason: "error" };
+  if (state === "partial" && dependency) return { available: false, reason: "partial" };
   return { available: true, reason: null };
 }
 
@@ -187,18 +210,15 @@ export function activitySeriesAvailability(series = [], { sources = [], status }
 }
 
 export function projectActivityAvailability(sources = [], status) {
-  const projectSource = Array.isArray(sources)
-    ? sources.find((source) => source?.key === "projects")
-    : null;
-  const state = projectSource && KNOWN_STATES.has(projectSource.state)
-    ? projectSource.state
-    : fallbackState(status);
-  const failed = new Set(
-    Array.isArray(projectSource?.failedSources) ? projectSource.failedSources : [],
-  );
+  const context = sourceContext(sources, "projects", status);
+  const state = context.state;
   const coreAvailable = state === "live" || state === "partial";
-  const updates = coreAvailable && !failed.has("project_updates");
-  const decisions = coreAvailable && !failed.has("decisions");
+  const updates = coreAvailable
+    && !context.failed.has("project_updates")
+    && !context.partial.has("project_updates");
+  const decisions = coreAvailable
+    && !context.failed.has("decisions")
+    && !context.partial.has("decisions");
   const optionalFailure = coreAvailable && (!updates || !decisions);
 
   return {
@@ -217,10 +237,11 @@ export function overviewPanelAvailability({
   status,
   sourceKey,
   state,
+  dependencies = [],
   hasData = false,
 } = {}) {
   const resolvedState = state === undefined
-    ? sourceContext(sources, sourceKey, status).state
+    ? scopedSourceState(sourceContext(sources, sourceKey, status), dependencies)
     : normalizePanelState(state);
   const showData = ["live", "partial"].includes(resolvedState) && Boolean(hasData);
   const empty = resolvedState === "live" && !hasData;
@@ -235,6 +256,34 @@ export function overviewPanelAvailability({
           : null;
 
   return { state: resolvedState, showData, empty, reason };
+}
+
+export function recentActivityAvailability(sources = [], status) {
+  const sourceDependencies = [
+    { key: "projects", dependencies: ["project_updates", "decisions"] },
+    { key: "content", dependencies: ["publish_logs"] },
+    { key: "automations", dependencies: ["automation_runs", "runs"] },
+  ];
+  const availability = sourceDependencies.map(({ key, dependencies }) => ({
+    key,
+    state: scopedSourceState(sourceContext(sources, key, status), dependencies),
+  }));
+  const unavailable = availability.filter(({ state }) => state !== "live");
+  if (unavailable.length === 0) {
+    return { complete: true, reason: null, unavailableSources: [] };
+  }
+
+  const unavailableStates = new Set(unavailable.map(({ state }) => state));
+  const reason = unavailableStates.has("error")
+    ? "error"
+    : unavailableStates.has("partial")
+      ? "partial"
+      : "preview";
+  return {
+    complete: false,
+    reason,
+    unavailableSources: unavailable.map(({ key }) => key),
+  };
 }
 
 export function buildAutomationMetricRows(summary = {}, state = "error") {

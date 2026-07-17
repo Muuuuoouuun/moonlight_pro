@@ -105,6 +105,27 @@ test("overview does not publish a fake zero when the publish-log slice failed", 
   assert.notEqual(cards[2].tone, "success");
 });
 
+test("overview keeps core project KPIs when only an optional project slice is partial", () => {
+  const cards = overviewTruth.buildOverviewKpiCards({
+    kpis: {
+      updatesThisWeek: 2,
+      decisionsThisWeek: 1,
+      publishedThisWeek: 0,
+      activeProjects: 3,
+      blockedProjects: 0,
+    },
+    status: "partial",
+    sources: [
+      { key: "projects", state: "partial", partialSources: ["tasks"] },
+      { key: "content", state: "live", failedSources: [] },
+    ],
+  });
+
+  assert.equal(cards[0].value, 2);
+  assert.equal(cards[1].value, 1);
+  assert.equal(cards[3].value, 3);
+});
+
 test("overview activity treats null segments as unavailable instead of zero", () => {
   assert.ok(overviewTruth, "overview-truth.js must expose executable presentation rules");
   assert.deepEqual(
@@ -229,6 +250,107 @@ test("overview panel availability distinguishes disconnected, failed, partial, a
   );
 });
 
+test("overview panels scope partial state to the values they actually consume", () => {
+  assert.equal(typeof overviewTruth.overviewPanelAvailability, "function");
+
+  assert.deepEqual(
+    overviewTruth.overviewPanelAvailability({
+      sourceKey: "projects",
+      status: "partial",
+      sources: [{
+        key: "projects",
+        state: "partial",
+        failedSources: ["project_updates"],
+        partialSources: ["tasks"],
+      }],
+      dependencies: ["projects"],
+      hasData: true,
+    }),
+    { state: "live", showData: true, empty: false, reason: null },
+  );
+  assert.deepEqual(
+    overviewTruth.overviewPanelAvailability({
+      sourceKey: "content",
+      status: "partial",
+      sources: [{ key: "content", state: "partial", failedSources: ["publish_logs"] }],
+      dependencies: ["content_items", "items"],
+      hasData: false,
+    }),
+    { state: "live", showData: false, empty: true, reason: "empty" },
+  );
+  assert.deepEqual(
+    overviewTruth.overviewPanelAvailability({
+      sourceKey: "content",
+      status: "partial",
+      sources: [{ key: "content", state: "partial", failedSources: ["content_items"] }],
+      dependencies: ["content_items", "items"],
+      hasData: false,
+    }),
+    { state: "error", showData: false, empty: false, reason: "error" },
+  );
+  assert.deepEqual(
+    overviewTruth.overviewPanelAvailability({
+      sourceKey: "content",
+      status: "partial",
+      sources: [{ key: "content", state: "partial", partialSources: ["content_items"] }],
+      dependencies: ["content_items", "items"],
+      hasData: true,
+    }),
+    { state: "partial", showData: true, empty: false, reason: "partial" },
+  );
+});
+
+test("recent activity requires project, content, and automation slices before proving empty", () => {
+  assert.equal(typeof overviewTruth.recentActivityAvailability, "function");
+  const liveSources = [
+    { key: "projects", state: "live", failedSources: [], partialSources: [] },
+    { key: "content", state: "live", failedSources: [], partialSources: [] },
+    { key: "automations", state: "live", failedSources: [], partialSources: [] },
+  ];
+
+  assert.deepEqual(overviewTruth.recentActivityAvailability(liveSources, "live"), {
+    complete: true,
+    reason: null,
+    unavailableSources: [],
+  });
+  assert.deepEqual(overviewTruth.recentActivityAvailability([
+    liveSources[0],
+    { key: "content", state: "preview" },
+    liveSources[2],
+  ], "partial"), {
+    complete: false,
+    reason: "preview",
+    unavailableSources: ["content"],
+  });
+  assert.deepEqual(overviewTruth.recentActivityAvailability([
+    liveSources[0],
+    liveSources[1],
+    { key: "automations", state: "error" },
+  ], "partial"), {
+    complete: false,
+    reason: "error",
+    unavailableSources: ["automations"],
+  });
+  assert.deepEqual(overviewTruth.recentActivityAvailability([
+    { key: "projects", state: "partial", failedSources: ["notes"] },
+    liveSources[1],
+    liveSources[2],
+  ], "partial"), {
+    complete: true,
+    reason: null,
+    unavailableSources: [],
+  });
+  assert.deepEqual(overviewTruth.recentActivityAvailability([
+    liveSources[0],
+    { key: "content", state: "partial", partialSources: ["publish_logs"] },
+    liveSources[2],
+  ], "partial"), {
+    complete: false,
+    reason: "partial",
+    unavailableSources: ["content"],
+  });
+});
+
 test("overview direct-state panels keep rhythm empty exclusive to proven live data", () => {
   assert.equal(typeof overviewTruth.overviewPanelAvailability, "function");
   assert.deepEqual(
@@ -298,6 +420,7 @@ test("overview consumes API status and failed sources for partial disclosures", 
   assert.match(overviewSource, /overviewPanelAvailability/);
   assert.match(overviewSource, /buildAutomationMetricRows/);
   assert.match(overviewSource, /overviewDisclosureMessages/);
+  assert.match(overviewSource, /recentActivityAvailability/);
   assert.match(overviewSource, /프로젝트 원장 미연결/);
   assert.match(overviewSource, /프로젝트 원장 읽기 실패/);
   assert.match(overviewSource, /프로젝트 부분 데이터/);

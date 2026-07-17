@@ -3,7 +3,7 @@ import {
   fetchSupabaseRows,
   withWorkspaceFilter,
 } from "@/lib/server-read";
-import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
 import {
   resolveRhythmTimeZone,
   routineLocalDateKey,
@@ -279,13 +279,14 @@ function buildRoadmapState(projectRows, milestoneRows) {
 
 export async function getWorkLedger({ projectId = null, now = new Date() } = {}) {
   const workspaceId = resolveDefaultWorkspaceId();
+  const supabaseConfig = resolveSupabaseConfig();
   const selectedProjectId = typeof projectId === "string" ? projectId.trim() : "";
 
-  if (!workspaceId) {
+  if (!workspaceId || !supabaseConfig) {
     return {
       source: "preview",
       configured: false,
-      workspaceId: null,
+      workspaceId: workspaceId || null,
       timeZone: resolveRhythmTimeZone(null),
       decisions: [],
       rituals: [],

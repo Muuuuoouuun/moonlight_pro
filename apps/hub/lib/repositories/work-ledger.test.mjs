@@ -39,6 +39,9 @@ const serverWriteStub = `
 export function resolveDefaultWorkspaceId() {
   return globalThis.__workLedgerTestState.workspaceId;
 }
+export function resolveSupabaseConfig() {
+  return { url: "https://supabase.example.com", apiKey: "test-key" };
+}
 `;
 
 registerHooks({

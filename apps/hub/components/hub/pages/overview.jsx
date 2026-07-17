@@ -11,6 +11,7 @@ import {
   overviewPanelAvailability,
   overviewSyncState,
   projectActivityAvailability,
+  recentActivityAvailability,
 } from "./overview-truth";
 
 const fmtMoney = (v) => {
@@ -515,19 +516,22 @@ export function Overview({ onNavigate }) {
   const visibleActivity = activityExpanded ? activity : activity.slice(0, 8);
   const hasPipelineValue = stageSeries.some((s) => s.count > 0);
   const overviewStatus = ledger.status || syncState;
-  const panelAvailability = (sourceKey, hasData) => overviewPanelAvailability({
+  const panelAvailability = (sourceKey, hasData, dependencies) => overviewPanelAvailability({
     sources: ledger.sources || [],
     status: overviewStatus,
     sourceKey,
+    dependencies,
     hasData,
   });
   const projectPanel = panelAvailability(
     'projects',
     pms?.projectStatusSeries?.some((item) => Number(item.value) > 0),
+    ['projects'],
   );
   const contentPanel = panelAvailability(
     'content',
     contentSummary?.pipelineSeries?.some((item) => Number(item.value) > 0),
+    ['content_items', 'items'],
   );
   const revenuePanel = panelAvailability('revenue', hasPipelineValue);
   const automationSourceState = panelAvailability('automations', false).state;
@@ -542,6 +546,7 @@ export function Overview({ onNavigate }) {
     partialSources: ledger.partialSources,
   });
   const projectActivity = projectActivityAvailability(ledger.sources || [], ledger.status || syncState);
+  const recentActivityTruth = recentActivityAvailability(ledger.sources || [], ledger.status || syncState);
 
   // Last 7 buckets of the same daily series feed each KPI's sparkline — no
   // separate fetch, just a different slice of activitySeries per pillar.
@@ -758,15 +763,17 @@ export function Overview({ onNavigate }) {
       <div>
         <SectionTitle right={<span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>클릭하면 해당 서피스로 이동</span>}>최근 활동</SectionTitle>
         <Card>
-          {!projectActivity.recentProjectActivity && (
+          {!recentActivityTruth.complete && (
             <div role="status" style={{ padding: '10px 12px', marginBottom: activity.length ? 8 : 0, border: '1px solid var(--warning-line)', borderRadius: 'var(--r-sm)', color: 'var(--warning)', fontSize: 11.5 }}>
-              {projectActivity.reason === 'preview'
-                ? '최근 활동 원장 미연결 · 프로젝트 원장을 연결하면 활동 기록이 표시됩니다.'
-                : '최근 활동 원장 일부를 읽지 못했습니다 · 업데이트·결정 기록을 다시 확인하세요.'}
+              {recentActivityTruth.reason === 'preview'
+                ? `최근 활동 원장 미연결 · ${recentActivityTruth.unavailableSources.join(', ')} 원장을 연결하면 빈 상태를 확인할 수 있습니다.`
+                : recentActivityTruth.reason === 'partial'
+                  ? `최근 활동 원장 부분 데이터 · ${recentActivityTruth.unavailableSources.join(', ')} 기록이 일부만 읽혔습니다.`
+                  : `최근 활동 원장 일부를 읽지 못했습니다 · ${recentActivityTruth.unavailableSources.join(', ')} 기록을 다시 확인하세요.`}
             </div>
           )}
           {activity.length === 0 ? (
-            projectActivity.recentProjectActivity ? (
+            recentActivityTruth.complete ? (
               <EmptyState icon="clock" title="최근 활동이 없습니다" description="작업 업데이트, 결정, 발행, 자동화 실행이 기록되면 여기에 모입니다." style={{ minHeight: 160 }} />
             ) : null
           ) : (
