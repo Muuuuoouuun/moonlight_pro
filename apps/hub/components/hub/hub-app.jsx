@@ -10,6 +10,11 @@ import { TopBar } from "./hub-topbar";
 import { CommandPalette } from "./hub-command-palette";
 import { TweaksPanel } from "./hub-tweaks-panel";
 import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
+import {
+  DEFAULT_HUB_PREFERENCES,
+  persistHubPreference,
+  readHubPreferences,
+} from "@/lib/hub-preferences";
 
 // Chunk-load placeholder — pages carry their own data loading states, so this
 // only covers the (brief) JS fetch. Keep it calm: no spinner, dim mono text.
@@ -214,27 +219,36 @@ export function HubApp() {
 
   const [collapsed, setCollapsed] = React.useState(false);
   const [navOpen, setNavOpen] = React.useState(false);
-  // Read persisted prefs synchronously at mount. A read-effect + write-effect
-  // pair raced under StrictMode: the write-effect fired with the initial
-  // 'dark'/'default' before the read-effect restored the stored value, so
-  // every remount (App Router re-mounts this client shell on navigation)
-  // clobbered mlp.theme back to dark. Lazy init removes the window entirely.
-  const [density, setDensity] = React.useState(
-    () => (typeof window !== 'undefined' && localStorage.getItem('mlp.density')) || 'default'
-  );
-  const [theme, setTheme] = React.useState(
-    () => (typeof window !== 'undefined' && localStorage.getItem('mlp.theme')) || 'dark'
-  );
+  // SSR and the first client render must use the same values. Persisted browser
+  // preferences are restored only after hydration, then written synchronously
+  // from user actions so StrictMode cannot clobber them with the defaults.
+  const [density, setDensity] = React.useState(DEFAULT_HUB_PREFERENCES.density);
+  const [theme, setTheme] = React.useState(DEFAULT_HUB_PREFERENCES.theme);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [tweaksOpen, setTweaksOpen] = React.useState(false);
   const rootRef = React.useRef(null);
 
   React.useEffect(() => {
-    if (typeof window !== 'undefined') localStorage.setItem('mlp.density', density);
-  }, [density]);
-  React.useEffect(() => {
-    if (typeof window !== 'undefined') localStorage.setItem('mlp.theme', theme);
-  }, [theme]);
+    let storage = null;
+    try { storage = window.localStorage; } catch { /* storage can be blocked */ }
+    const stored = readHubPreferences(storage);
+    setDensity(stored.density);
+    setTheme(stored.theme);
+  }, []);
+
+  const updateDensity = React.useCallback((nextDensity) => {
+    setDensity(nextDensity);
+    let storage = null;
+    try { storage = window.localStorage; } catch { /* storage can be blocked */ }
+    persistHubPreference(storage, 'density', nextDensity);
+  }, []);
+
+  const updateTheme = React.useCallback((nextTheme) => {
+    setTheme(nextTheme);
+    let storage = null;
+    try { storage = window.localStorage; } catch { /* storage can be blocked */ }
+    persistHubPreference(storage, 'theme', nextTheme);
+  }, []);
 
   const navigate = React.useCallback((p) => {
     const [basePath, suffix = ''] = String(p || '').split(/(?=[?#])/, 2);
@@ -259,7 +273,7 @@ export function HubApp() {
   const sidebarCollapsed = collapsed && !navOpen;
 
   return (
-    <div ref={rootRef} className="hub-app" data-theme={theme} data-density={density} suppressHydrationWarning>
+    <div ref={rootRef} className="hub-app" data-theme={theme} data-density={density}>
       <div className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'}>
         <button
           type="button"
@@ -284,9 +298,9 @@ export function HubApp() {
             onSidebarOpen={() => setNavOpen(true)}
             onTweaksToggle={() => setTweaksOpen(o => !o)}
             density={density}
-            onDensity={setDensity}
+            onDensity={updateDensity}
             theme={theme}
-            onTheme={setTheme}
+            onTheme={updateTheme}
           />
           <div key={path} className="hub-content scroll-y fade-up">
             {page}
@@ -294,7 +308,7 @@ export function HubApp() {
         </main>
       </div>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={navigate} />
-      <TweaksPanel open={tweaksOpen} onClose={() => setTweaksOpen(false)} density={density} onDensity={setDensity} />
+      <TweaksPanel open={tweaksOpen} onClose={() => setTweaksOpen(false)} density={density} onDensity={updateDensity} />
     </div>
   );
 }
