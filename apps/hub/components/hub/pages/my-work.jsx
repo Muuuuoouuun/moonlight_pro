@@ -716,7 +716,9 @@ export function MyWork({ onNavigate }) {
               }}
             >
               <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-dim)' }}>{t.label}</div>
-              <div className="stat" style={{ fontSize: 22, fontWeight: 500, marginTop: 4, color: count > 0 ? t.color : 'var(--fg-faint)' }}>{count}</div>
+              {/* 시그널 스트립은 이 페이지의 hero 지표 — Rhythm 카드(30px)와 같은 급의
+                  .stat 크기로 "signal first"를 시각적으로도 주장한다. */}
+              <div className="stat" style={{ fontSize: 26, fontWeight: 500, marginTop: 4, color: count > 0 ? t.color : 'var(--fg-faint)' }}>{count}</div>
             </button>
           );
         })}
