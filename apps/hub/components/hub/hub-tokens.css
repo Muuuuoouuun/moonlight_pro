@@ -96,7 +96,7 @@
   --fg:            oklch(0.20 0.008 250);
   --fg-muted:      oklch(0.42 0.008 250);
   --fg-dim:        oklch(0.54 0.008 250);
-  --fg-faint:      oklch(0.66 0.007 250);
+  --fg-faint:      oklch(0.52 0.007 250);
 
   --success:       oklch(0.48 0.14 155);
   --success-bg:    oklch(0.94 0.04 155 / 0.6);
