@@ -20,7 +20,7 @@ const LABELS = {
   'integrations': 'Integrations', 'activity': 'Activity', 'issues': 'Issues',
 };
 
-export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, onTweaksToggle, onSidebarOpen, onNew }) {
+export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, onTweaksToggle, onSidebarOpen, onNew, navOpen, menuButtonRef }) {
   const segments = path.split('/').filter(Boolean);
   const now = new Date();
   const weekday = ['일','월','화','수','목','금','토'][now.getDay()];
@@ -37,7 +37,15 @@ export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, o
       padding: '0 16px',
       gap: 14,
     }}>
-      <IconButton className="hub-mobile-only" icon="menu" tooltip="Open navigation" onClick={onSidebarOpen} />
+      <IconButton
+        className="hub-mobile-only hub-mobile-nav-opener"
+        ref={menuButtonRef}
+        aria-expanded={navOpen}
+        aria-controls="hub-mobile-navigation"
+        icon="menu"
+        tooltip="내비게이션 열기"
+        onClick={onSidebarOpen}
+      />
 
       <div className="hub-topbar__crumbs" style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
         {segments.map((s, i) => {

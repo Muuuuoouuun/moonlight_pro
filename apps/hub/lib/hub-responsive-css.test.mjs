@@ -44,6 +44,28 @@ test("mobile topbar breadcrumbs meet the 44px touch-target floor", () => {
   assert.doesNotMatch(css, /\.hub-topbar__crumbs button\s*\{[\s\S]*?min-height:\s*34px !important/);
 });
 
+test("closed mobile navigation cannot leave off-screen links in the Tab order", () => {
+  const mobileStart = css.indexOf("@media (max-width: 900px)");
+  const mobileBlock = css.slice(mobileStart);
+
+  assert.ok(mobileStart >= 0);
+  assert.match(
+    mobileBlock,
+    /\.hub-sidebar-root\s*\{[\s\S]*?visibility:\s*hidden;[\s\S]*?pointer-events:\s*none;/,
+  );
+  assert.match(
+    mobileBlock,
+    /\.hub-shell\[data-nav-open="true"\] \.hub-sidebar-root\s*\{[\s\S]*?visibility:\s*visible;[\s\S]*?pointer-events:\s*auto;/,
+  );
+});
+
+test("mobile navigation opener keeps a 44px target through the full drawer breakpoint", () => {
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*900px\)[\s\S]*?\.hub-mobile-nav-opener\s*\{[\s\S]*?min-width:\s*44px;[\s\S]*?min-height:\s*44px;/,
+  );
+});
+
 test("Daily Brief ledger toggle exposes an accessible 44px mobile target", () => {
   assert.match(dailyBriefSource, /aria-label=\{open \? ['"]기록 상태 숨기기['"] : ['"]기록 상태 펼치기['"]\}/);
   assert.match(dailyBriefSource, /aria-expanded=\{open\}/);

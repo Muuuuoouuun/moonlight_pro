@@ -173,9 +173,9 @@ export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRig
   );
 }
 
-export function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tooltip, style, className, disabled = false }) {
+export const IconButton = React.forwardRef(function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tooltip, style, className, disabled = false, ...props }, ref) {
   return (
-    <button className={className} onClick={onClick} disabled={disabled} title={tooltip} aria-label={tooltip} style={{
+    <button {...props} ref={ref} type="button" className={className} onClick={onClick} disabled={disabled} title={tooltip} aria-label={props['aria-label'] || tooltip} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       width: size, height: size,
       color: tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)',
@@ -192,7 +192,7 @@ export function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tool
       <Iconed name={icon} size={iconSize} />
     </button>
   );
-}
+});
 
 export function Avatar({ name, size = 24, tone = 'moon' }) {
   const initials = (name || '?').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase();

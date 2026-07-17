@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 import { NAV_TREE } from "./hub-data.js";
@@ -17,6 +18,11 @@ import {
   resolveSidebarPath,
   sidebarChildren,
 } from "./hub-nav.js";
+
+const appSource = await readFile(new URL("./hub-app.jsx", import.meta.url), "utf8");
+const sidebarSource = await readFile(new URL("./hub-sidebar.jsx", import.meta.url), "utf8");
+const topbarSource = await readFile(new URL("./hub-topbar.jsx", import.meta.url), "utf8");
+const primitivesSource = await readFile(new URL("./hub-primitives.jsx", import.meta.url), "utf8");
 
 function navTreePaths() {
   const paths = [];
@@ -179,4 +185,49 @@ test("AI·자동화 children all carry a group label for the two-eyebrow layout"
       assert.ok(["Agents", "Automations"].includes(child.group), `${child.key} group`);
     }
   }
+});
+
+// ── Mobile navigation accessibility contract ─────────────────────────────
+
+test("only the closed mobile sidebar is removed from focus and the accessibility tree", () => {
+  assert.match(appSource, /const mobileNavHidden = isMobileViewport && !navOpen/);
+  assert.match(appSource, /mobileHidden=\{mobileNavHidden\}/);
+
+  assert.match(
+    sidebarSource,
+    /const sidebarA11yProps = \{[\s\S]*?["']aria-hidden["']:\s*mobileHidden \? true : undefined,[\s\S]*?inert:\s*mobileHidden \? ["']{2} : undefined/,
+  );
+  assert.equal(
+    sidebarSource.match(/<aside\s+\{\.\.\.sidebarA11yProps\}/g)?.length,
+    2,
+    "both expanded and collapsed sidebar variants must share the mobile-only inert contract",
+  );
+  assert.doesNotMatch(appSource, /aria-hidden=\{!navOpen\}/);
+});
+
+test("mobile navigation closes on Escape, backdrop, and navigation then restores opener focus", () => {
+  assert.match(appSource, /const menuButtonRef = React\.useRef\(null\)/);
+  assert.match(
+    appSource,
+    /const closeMobileNavigation = React\.useCallback\([\s\S]*?setNavOpen\(false\)[\s\S]*?requestAnimationFrame\([\s\S]*?menuButtonRef\.current\?\.focus\(\)/,
+  );
+  assert.match(
+    appSource,
+    /React\.useEffect\(\(\) => \{[\s\S]*?if \(!navOpen \|\| !isMobileViewport\) return[\s\S]*?event\.key === ["']Escape["'][\s\S]*?closeMobileNavigation\(\)/,
+  );
+  assert.match(appSource, /const navigate = React\.useCallback\([\s\S]*?closeMobileNavigation\(\)/);
+  assert.match(
+    appSource,
+    /<div[\s\S]*?className="hub-mobile-backdrop"[\s\S]*?aria-hidden="true"[\s\S]*?onClick=\{closeMobileNavigation\}/,
+  );
+  assert.doesNotMatch(appSource, /<button[^>]*className="hub-mobile-backdrop"/);
+});
+
+test("mobile menu opener exposes state and IconButton forwards its stable ref", () => {
+  assert.match(
+    topbarSource,
+    /<IconButton[\s\S]*?className="hub-mobile-only hub-mobile-nav-opener"[\s\S]*?ref=\{menuButtonRef\}[\s\S]*?aria-expanded=\{navOpen\}[\s\S]*?aria-controls="hub-mobile-navigation"/,
+  );
+  assert.match(primitivesSource, /export const IconButton = React\.forwardRef\(function IconButton/);
+  assert.match(primitivesSource, /<button\s+\{\.\.\.props\}[\s\S]*?ref=\{ref\}/);
 });

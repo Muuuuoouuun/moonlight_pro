@@ -520,6 +520,11 @@
     display: inline-flex !important;
   }
 
+  .hub-mobile-nav-opener {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
   .hub-mobile-hidden,
   .hub-topbar__meta,
   .hub-topbar__density,
@@ -550,12 +555,17 @@
     max-width: 304px !important;
     height: 100dvh !important;
     transform: translateX(-104%);
-    transition: transform 0.18s ease;
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform 0.18s ease, visibility 0s linear 0.18s;
     box-shadow: var(--shadow-pop);
   }
 
   .hub-shell[data-nav-open="true"] .hub-sidebar-root {
     transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
   }
 
   .hub-main {

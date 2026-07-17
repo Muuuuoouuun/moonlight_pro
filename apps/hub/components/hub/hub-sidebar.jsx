@@ -129,10 +129,15 @@ function CountBadge({ n }) {
   );
 }
 
-export function Sidebar({ active, view, onNavigate, collapsed, onToggleCollapse, openPalette, className }) {
+export function Sidebar({ active, view, onNavigate, collapsed, onToggleCollapse, openPalette, className, mobileHidden = false }) {
   const counts = useAnchorCounts();
   const [scope, setScope] = useScope(active);
   const { isExpanded, toggle, armAutoOpen } = useExpandedAnchors(ownerAnchorKey(active));
+  const sidebarA11yProps = {
+    id: 'hub-mobile-navigation',
+    'aria-hidden': mobileHidden ? true : undefined,
+    inert: mobileHidden ? '' : undefined,
+  };
 
   const go = React.useCallback((anchorKey) => {
     const path = resolveSidebarPath(anchorKey, scope);
@@ -215,6 +220,7 @@ export function Sidebar({ active, view, onNavigate, collapsed, onToggleCollapse,
   if (collapsed) {
     return (
       <aside
+        {...sidebarA11yProps}
         className={`${className || ''} hub-sidebar-root--collapsed`}
         aria-label="주요 메뉴"
         style={{
@@ -268,7 +274,7 @@ export function Sidebar({ active, view, onNavigate, collapsed, onToggleCollapse,
   }
 
   return (
-    <aside className={className} aria-label="주요 메뉴" style={{
+    <aside {...sidebarA11yProps} className={className} aria-label="주요 메뉴" style={{
       width: 232, flexShrink: 0,
       background: 'var(--surface)',
       borderRight: '1px solid var(--line-soft)',

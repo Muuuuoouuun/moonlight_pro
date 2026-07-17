@@ -81,6 +81,22 @@ const PREFETCH_PAGES = [
   () => import("./pages/overview"),
 ];
 
+const MOBILE_NAV_QUERY = '(max-width: 900px)';
+
+function useMobileViewport() {
+  const [isMobileViewport, setIsMobileViewport] = React.useState(false);
+
+  React.useEffect(() => {
+    const media = window.matchMedia(MOBILE_NAV_QUERY);
+    const update = () => setIsMobileViewport(media.matches);
+    update();
+    media.addEventListener?.('change', update);
+    return () => media.removeEventListener?.('change', update);
+  }, []);
+
+  return isMobileViewport;
+}
+
 function useIdlePagePrefetch() {
   React.useEffect(() => {
     let cancelled = false;
@@ -206,6 +222,7 @@ const PARENT_JUMP = {
 
 export function HubApp() {
   useIdlePagePrefetch();
+  const isMobileViewport = useMobileViewport();
   const router = useRouter();
   const pathname = usePathname() || '/dashboard';
   const searchParams = useSearchParams();
@@ -227,6 +244,7 @@ export function HubApp() {
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [tweaksOpen, setTweaksOpen] = React.useState(false);
   const rootRef = React.useRef(null);
+  const menuButtonRef = React.useRef(null);
 
   React.useEffect(() => {
     let storage = null;
@@ -250,12 +268,36 @@ export function HubApp() {
     persistHubPreference(storage, 'theme', nextTheme);
   }, []);
 
+  const closeMobileNavigation = React.useCallback(() => {
+    if (!navOpen) return;
+    setNavOpen(false);
+    if (isMobileViewport) {
+      window.requestAnimationFrame(() => menuButtonRef.current?.focus());
+    }
+  }, [isMobileViewport, navOpen]);
+
   const navigate = React.useCallback((p) => {
     const [basePath, suffix = ''] = String(p || '').split(/(?=[?#])/, 2);
     const target = PARENT_JUMP[basePath] || basePath;
     router.push('/' + target + suffix);
-    setNavOpen(false);
-  }, [router]);
+    closeMobileNavigation();
+  }, [closeMobileNavigation, router]);
+
+  React.useEffect(() => {
+    if (!navOpen || !isMobileViewport) return;
+    const onKey = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeMobileNavigation();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [closeMobileNavigation, isMobileViewport, navOpen]);
+
+  React.useEffect(() => {
+    if (!isMobileViewport && navOpen) setNavOpen(false);
+  }, [isMobileViewport, navOpen]);
 
   React.useEffect(() => {
     const onKey = (e) => {
@@ -271,15 +313,15 @@ export function HubApp() {
   const render = PAGE_MAP[path];
   const page = render ? render(navigate) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
   const sidebarCollapsed = collapsed && !navOpen;
+  const mobileNavHidden = isMobileViewport && !navOpen;
 
   return (
     <div ref={rootRef} className="hub-app" data-theme={theme} data-density={density}>
       <div className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'}>
-        <button
-          type="button"
+        <div
           className="hub-mobile-backdrop"
-          aria-label="Close navigation"
-          onClick={() => setNavOpen(false)}
+          aria-hidden="true"
+          onClick={closeMobileNavigation}
         />
         <Sidebar
           className="hub-sidebar-root"
@@ -289,6 +331,7 @@ export function HubApp() {
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setCollapsed(c => !c)}
           openPalette={() => setPaletteOpen(true)}
+          mobileHidden={mobileNavHidden}
         />
         <main className="hub-main">
           <TopBar
@@ -296,6 +339,8 @@ export function HubApp() {
             onNavigate={navigate}
             onNew={() => setPaletteOpen(true)}
             onSidebarOpen={() => setNavOpen(true)}
+            navOpen={navOpen}
+            menuButtonRef={menuButtonRef}
             onTweaksToggle={() => setTweaksOpen(o => !o)}
             density={density}
             onDensity={updateDensity}
