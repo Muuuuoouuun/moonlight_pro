@@ -37,13 +37,18 @@ create table projects (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   area_id uuid references areas(id) on delete set null,
+  lead_id uuid,
+  customer_account_id uuid,
   name text not null,
   status text not null default 'active' check (status in ('draft', 'active', 'blocked', 'completed', 'archived')),
   priority text not null default 'medium' check (priority in ('low', 'medium', 'high', 'critical')),
   next_action text,
   started_at timestamptz,
   due_at timestamptz,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint projects_single_customer_context
+    check (num_nonnulls(lead_id, customer_account_id) <= 1)
 );
 
 create table milestones (
@@ -277,6 +282,14 @@ create table customer_accounts (
   created_at timestamptz not null default now()
 );
 
+alter table projects
+  add constraint projects_lead_id_fkey
+  foreign key (lead_id) references leads(id) on delete set null;
+
+alter table projects
+  add constraint projects_customer_account_id_fkey
+  foreign key (customer_account_id) references customer_accounts(id) on delete set null;
+
 create table operation_cases (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
@@ -488,6 +501,8 @@ create table export_logs (
 -- ============================================================================
 
 create index idx_projects_workspace_status on projects (workspace_id, status);
+create index idx_projects_workspace_lead_updated on projects (workspace_id, lead_id, updated_at desc) where lead_id is not null;
+create index idx_projects_workspace_customer_account_updated on projects (workspace_id, customer_account_id, updated_at desc) where customer_account_id is not null;
 create index idx_project_updates_workspace_happened on project_updates (workspace_id, happened_at desc);
 create unique index routine_checks_workspace_idempotency_key_uidx
   on routine_checks (workspace_id, idempotency_key)

@@ -93,6 +93,8 @@ create table if not exists public.projects (
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
   area_id uuid references public.areas(id) on delete set null,
   brand_id uuid references public.brands(id) on delete set null,
+  lead_id uuid,
+  customer_account_id uuid,
   owner_id uuid references public.profiles(id) on delete set null,
   slug text,
   name text not null,
@@ -616,6 +618,8 @@ alter table if exists public.areas
 
 alter table if exists public.projects
   add column if not exists brand_id uuid references public.brands(id) on delete set null,
+  add column if not exists lead_id uuid,
+  add column if not exists customer_account_id uuid,
   add column if not exists owner_id uuid references public.profiles(id) on delete set null,
   add column if not exists slug text,
   add column if not exists summary text,
@@ -628,6 +632,35 @@ alter table if exists public.projects
 alter table if exists public.projects
   alter column progress drop default,
   alter column progress drop not null;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'projects_lead_id_fkey'
+      and conrelid = 'public.projects'::regclass
+  ) then
+    alter table public.projects
+      add constraint projects_lead_id_fkey
+      foreign key (lead_id) references public.leads(id) on delete set null;
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'projects_customer_account_id_fkey'
+      and conrelid = 'public.projects'::regclass
+  ) then
+    alter table public.projects
+      add constraint projects_customer_account_id_fkey
+      foreign key (customer_account_id) references public.customer_accounts(id) on delete set null;
+  end if;
+end $$;
+
+alter table public.projects
+  drop constraint if exists projects_single_customer_context;
+alter table public.projects
+  add constraint projects_single_customer_context
+  check (num_nonnulls(lead_id, customer_account_id) <= 1);
 
 alter table if exists public.milestones
   add column if not exists workspace_id uuid references public.workspaces(id) on delete cascade;
@@ -895,6 +928,8 @@ create index if not exists idx_projects_workspace_status on public.projects (wor
 create index if not exists idx_projects_workspace_brand_status on public.projects (workspace_id, brand_id, status);
 create index if not exists idx_projects_workspace_updated on public.projects (workspace_id, updated_at desc);
 create unique index if not exists idx_projects_workspace_slug on public.projects (workspace_id, slug) where slug is not null;
+create index if not exists idx_projects_workspace_lead_updated on public.projects (workspace_id, lead_id, updated_at desc) where lead_id is not null;
+create index if not exists idx_projects_workspace_customer_account_updated on public.projects (workspace_id, customer_account_id, updated_at desc) where customer_account_id is not null;
 create index if not exists idx_project_updates_workspace_happened on public.project_updates (workspace_id, happened_at desc);
 create index if not exists idx_project_updates_project_happened on public.project_updates (workspace_id, project_id, happened_at desc);
 create index if not exists idx_project_updates_correlation on public.project_updates (workspace_id, correlation_id) where correlation_id is not null;
