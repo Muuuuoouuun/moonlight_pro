@@ -275,10 +275,12 @@ export function Projects({ workspace }) {
   const currentBrand = brands.find(b => b.key === brand) || brands[0] || EMPTY_ALL_BRAND;
   const visibleColumns = buildTaskBoardColumns(brandTodos, allProjects);
   const openTodoCount = brandTodos.filter(t => !t.done).length;
+  const projectReadPartial = ledger.partialSources?.includes('projects') === true;
   const projectHeaderSummary = (() => {
     const taskReadPartial = ledger.taskAggregation?.partial === true || ledger.partialSources?.includes('tasks');
+    const projectCountLabel = projectReadPartial ? `${projects.length}+` : projects.length;
     return ['live', 'partial'].includes(syncState)
-      ? `${projects.length} projects · ${taskReadPartial ? `${openTodoCount}+ open todos` : `${openTodoCount} open todos`}`
+      ? `${projectCountLabel} projects · ${taskReadPartial ? `${openTodoCount}+ open todos` : `${openTodoCount} open todos`}`
       : syncState === 'loading'
         ? '프로젝트 원장 확인 중'
         : syncState === 'error'
@@ -1221,7 +1223,7 @@ export function Projects({ workspace }) {
           >
             <div className="scroll-y" style={{ padding: 'var(--section-gap)' }}>
               <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
-                <ProjectPortfolioSummary projects={projects} sourceState={syncState} />
+                <ProjectPortfolioSummary projects={projects} sourceState={syncState} projectCorePartial={projectReadPartial} />
                 {syncState === 'error' && (
                   <Card>
                     <EmptyState

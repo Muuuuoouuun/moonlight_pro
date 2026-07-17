@@ -82,8 +82,8 @@ const PORTFOLIO_CELLS = [
   { key: "unmeasured", label: "진척 미측정", description: "관찰 가능한 근거 없음" },
 ];
 
-export function ProjectPortfolioSummary({ projects = [], sourceState = "live" }) {
-  const metrics = buildProjectPortfolioMetrics(projects, { sourceState });
+export function ProjectPortfolioSummary({ projects = [], sourceState = "live", projectCorePartial = false }) {
+  const metrics = buildProjectPortfolioMetrics(projects, { sourceState, projectCorePartial });
   const unavailableLabel = sourceState === "error"
     ? "프로젝트 원장을 읽지 못해 요약을 계산하지 않았습니다."
     : sourceState === "loading"
@@ -103,8 +103,12 @@ export function ProjectPortfolioSummary({ projects = [], sourceState = "live" })
       {PORTFOLIO_CELLS.map((cell) => (
         <div className="hub-pms-summary__cell" key={cell.key}>
           <span className="hub-pms-summary__label">{cell.label}</span>
-          <strong className="hub-pms-summary__value stat">{metrics[cell.key]}</strong>
-          <span className="hub-pms-summary__description">{cell.description}</span>
+          <strong className="hub-pms-summary__value stat">
+            {metrics.lowerBound ? `${metrics[cell.key]}+` : metrics[cell.key]}
+          </strong>
+          <span className="hub-pms-summary__description">
+            {cell.description}{metrics.lowerBound ? " · 일부 범위" : ""}
+          </span>
         </div>
       ))}
     </section>

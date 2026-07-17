@@ -20,9 +20,20 @@ function normalizedStatus(project) {
 export function buildProjectPortfolioMetrics(projects = [], {
   today = new Date(),
   sourceState = "live",
+  projectCorePartial = false,
 } = {}) {
   if (!["live", "partial"].includes(sourceState)) return null;
   if (!Array.isArray(projects) || projects.length === 0) {
+    if (projectCorePartial) {
+      return {
+        empty: false,
+        active: 0,
+        blockedOrOverdue: 0,
+        dueSoon: 0,
+        unmeasured: 0,
+        lowerBound: true,
+      };
+    }
     return { empty: true, active: null, blockedOrOverdue: null, dueSoon: null, unmeasured: null };
   }
 
@@ -50,5 +61,12 @@ export function buildProjectPortfolioMetrics(projects = [], {
     if (!Number.isFinite(progress?.value) || progress?.partial) unmeasured += 1;
   });
 
-  return { empty: false, active, blockedOrOverdue, dueSoon, unmeasured };
+  return {
+    empty: false,
+    active,
+    blockedOrOverdue,
+    dueSoon,
+    unmeasured,
+    ...(projectCorePartial ? { lowerBound: true } : {}),
+  };
 }

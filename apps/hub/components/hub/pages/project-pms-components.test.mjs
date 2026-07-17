@@ -134,11 +134,49 @@ test("partial portfolios preserve metrics from the readable project core", () =>
   });
 });
 
+test("project-capped portfolios mark every visible metric as a lower bound", () => {
+  assert.ok(pmsMetrics, "project-pms-metrics.js must expose executable calculations");
+  const projects = [
+    { statusKey: "active", displayProgress: { value: 50, partial: false } },
+    { statusKey: "blocked", displayProgress: { value: null, partial: true } },
+  ];
+
+  assert.deepEqual(pmsMetrics.buildProjectPortfolioMetrics(projects, {
+    sourceState: "partial",
+    projectCorePartial: true,
+  }), {
+    empty: false,
+    active: 1,
+    blockedOrOverdue: 1,
+    dueSoon: 0,
+    unmeasured: 1,
+    lowerBound: true,
+  });
+});
+
+test("project-capped empty visible slices stay lower bounds instead of proven empty", () => {
+  assert.ok(pmsMetrics, "project-pms-metrics.js must expose executable calculations");
+  assert.deepEqual(pmsMetrics.buildProjectPortfolioMetrics([], {
+    sourceState: "partial",
+    projectCorePartial: true,
+  }), {
+    empty: false,
+    active: 0,
+    blockedOrOverdue: 0,
+    dueSoon: 0,
+    unmeasured: 0,
+    lowerBound: true,
+  });
+});
+
 test("portfolio presentation consumes the executable metric helper without synthetic scoring", () => {
   assert.match(pmsComponentsSource, /import \{ buildProjectPortfolioMetrics \} from ["']\.\/project-pms-metrics["']/);
   assert.match(pmsMetricsSource, /displayProgress/);
   assert.match(pmsMetricsSource, /dueAt/);
   assert.match(pmsMetricsSource, /\[["']live["'],\s*["']partial["']\]\.includes\(sourceState\)/);
+  assert.match(pmsComponentsSource, /projectCorePartial/);
+  assert.match(pmsComponentsSource, /metrics\.lowerBound[\s\S]*\+`/);
+  assert.match(pmsComponentsSource, /일부 범위/);
   assert.match(pmsComponentsSource, /표시할 원장 없음/);
   assert.doesNotMatch(pmsComponentsSource, /preview에서는/);
   assert.doesNotMatch(`${pmsComponentsSource}\n${pmsMetricsSource}`, /AI.*(?:score|점수)|70\s*\/\s*30/i);
@@ -212,17 +250,21 @@ test("project header marks an incomplete open-todo count as a lower bound", () =
 
   assert.ok(headerStart >= 0 && headerEnd > headerStart);
   assert.match(headerSummaryBlock, /taskReadPartial/);
+  assert.match(headerSummaryBlock, /projectReadPartial/);
+  assert.match(headerSummaryBlock, /projectCountLabel/);
   assert.match(headerSummaryBlock, /partialSources/);
   assert.match(headerSummaryBlock, /taskAggregation/);
   assert.match(headerSummaryBlock, /projects\.length/);
   assert.match(headerSummaryBlock, /openTodoCount/);
   assert.match(headerSummaryBlock, /\$\{openTodoCount\}\+ open todos/);
+  assert.match(headerSummaryBlock, /\$\{projectCountLabel\} projects/);
   assert.match(headerSummaryBlock, /loading[\s\S]*원장 확인 중/);
   assert.match(headerSummaryBlock, /error[\s\S]*원장 읽기 실패/);
   assert.match(headerSummaryBlock, /preview/);
   assert.match(projectsSource, /\{projectHeaderSummary\}/);
   assert.match(projectsSource, /partialSources:\s*Array\.isArray\(data\.partialSources\)/);
   assert.match(projectsSource, /taskAggregation:\s*data\.taskAggregation/);
+  assert.match(projectsSource, /projectCorePartial=\{projectReadPartial\}/);
 });
 
 test("new PMS borders use theme-aware line tokens", () => {

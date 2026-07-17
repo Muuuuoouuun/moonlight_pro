@@ -656,7 +656,7 @@ export function Decisions() {
 export function Roadmap() {
   const searchParams = useSearchParams();
   const selectedProjectId = searchParams.get('project');
-  const { roadmap, retry } = useWorkLedger();
+  const { roadmap, retry } = useWorkLedger(selectedProjectId);
   const roadmapProjection = React.useMemo(
     () => buildRoadmapProjection(roadmap, { selectedProjectId }),
     [roadmap, selectedProjectId],

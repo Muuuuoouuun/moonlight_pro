@@ -39,7 +39,8 @@ test("Roadmap consumes the shared ledger with truthful states and retry", () => 
   const end = workSource.indexOf("export function Rhythm", start);
   const block = workSource.slice(start, end);
 
-  assert.match(block, /useWorkLedger\(\)/);
+  assert.match(block, /useWorkLedger\(selectedProjectId\)/);
+  assert.doesNotMatch(block, /useWorkLedger\(\)/);
   assert.match(block, /roadmap\.state === ['"]loading['"]/);
   assert.match(block, /roadmap\.state === ['"]preview['"]/);
   assert.match(block, /roadmap\.state === ['"]error['"]/);
