@@ -91,6 +91,20 @@ export function ProjectCreateDrawer({
     });
   }, [onChange]);
 
+  const validateDraft = React.useCallback((candidate) => {
+    const nextErrors = validateProjectDraft(candidate);
+    setErrors(nextErrors);
+    if (!nextErrors.title && !nextErrors.brandId) return true;
+
+    setSaveState("invalid");
+    setFeedback("필수 입력을 확인하세요.");
+    requestAnimationFrame(() => {
+      if (nextErrors.title) titleRef.current?.focus();
+      else locationRef.current?.focus();
+    });
+    return false;
+  }, []);
+
   const saveDraft = React.useCallback(async (candidate) => {
     if (savingRef.current) return;
     savingRef.current = true;
@@ -119,28 +133,18 @@ export function ProjectCreateDrawer({
   const handleSubmit = React.useCallback(async (event) => {
     event?.preventDefault?.();
     if (savingRef.current) return;
-
-    const nextErrors = validateProjectDraft(draft);
-    setErrors(nextErrors);
-    if (nextErrors.title || nextErrors.brandId) {
-      setSaveState("invalid");
-      setFeedback("필수 입력을 확인하세요.");
-      requestAnimationFrame(() => {
-        if (nextErrors.title) titleRef.current?.focus();
-        else locationRef.current?.focus();
-      });
-      return;
-    }
+    if (!validateDraft(draft)) return;
 
     await saveDraft(draft);
-  }, [draft, saveDraft]);
+  }, [draft, saveDraft, validateDraft]);
 
   const handleRetryWithNewClientId = React.useCallback(async () => {
+    if (!validateDraft(draft)) return;
     const nextDraft = onRetryWithNewClientId?.(draft);
     if (!nextDraft) return;
     retryingClientIdRef.current = nextDraft.clientId;
     await saveDraft(nextDraft);
-  }, [draft, onRetryWithNewClientId, saveDraft]);
+  }, [draft, onRetryWithNewClientId, saveDraft, validateDraft]);
 
   const handleOpenConflictProject = React.useCallback(async () => {
     if (savingRef.current || !conflictProject) return;

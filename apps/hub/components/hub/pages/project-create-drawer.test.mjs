@@ -68,6 +68,34 @@ test("idempotency conflict preserves the entity and offers both recovery paths",
   assert.match(createDrawerSource, /기존 프로젝트 열기/);
 });
 
+test("invalid conflict retry stops before rotating the client id or saving", () => {
+  const retryStart = createDrawerSource.indexOf("const handleRetryWithNewClientId");
+  const retryEnd = createDrawerSource.indexOf("const handleOpenConflictProject", retryStart);
+  const retryBlock = createDrawerSource.slice(retryStart, retryEnd);
+  const validationIndex = retryBlock.indexOf("if (!validateDraft(draft)) return;");
+  const rotationIndex = retryBlock.indexOf("onRetryWithNewClientId?.(draft)");
+  const saveIndex = retryBlock.indexOf("saveDraft(nextDraft)");
+
+  assert.ok(retryStart >= 0 && retryEnd > retryStart, "retry handler must exist");
+  assert.ok(validationIndex >= 0, "retry must run required-field validation first");
+  assert.ok(rotationIndex > validationIndex, "invalid retry must not rotate its client id");
+  assert.ok(saveIndex > rotationIndex, "only a valid rotated draft may be submitted");
+});
+
+test("retry shares inline required errors, feedback, and first-invalid focus", () => {
+  const validationStart = createDrawerSource.indexOf("const validateDraft");
+  const validationEnd = createDrawerSource.indexOf("const saveDraft", validationStart);
+  const validationBlock = createDrawerSource.slice(validationStart, validationEnd);
+
+  assert.ok(validationStart >= 0 && validationEnd > validationStart, "shared validation gate must exist");
+  assert.match(validationBlock, /validateProjectDraft\(candidate\)/);
+  assert.match(validationBlock, /setErrors\(nextErrors\)/);
+  assert.match(validationBlock, /setSaveState\(["']invalid["']\)/);
+  assert.match(validationBlock, /setFeedback\(["']필수 입력을 확인하세요\.["']\)/);
+  assert.match(validationBlock, /requestAnimationFrame/);
+  assert.match(validationBlock, /nextErrors\.title[\s\S]*titleRef\.current\?\.focus\(\)[\s\S]*locationRef\.current\?\.focus\(\)/);
+});
+
 test("query and keyboard entry always open an unseeded global project draft", () => {
   assert.match(projectsSource, /const openGlobalProjectCreate = React\.useCallback/);
   assert.match(projectsSource, /searchParams\.get\(['"]new['"]\) !== ['"]project['"][\s\S]{0,160}createdFromQueryRef\.current = false/);
