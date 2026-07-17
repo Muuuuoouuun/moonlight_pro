@@ -53,6 +53,30 @@ test("create feedback is live and failed saves keep the mounted draft", () => {
   assert.doesNotMatch(createDrawerSource, /finally\s*\{[^}]*onClose/);
 });
 
+test("create success waits for a fresh ledger containing the exact durable id", () => {
+  assert.match(projectsSource, /const reloadResult = await loadLedger\(\)/);
+  assert.match(projectsSource, /projectReloadContains\(reloadResult, durableProjectId\)/);
+  assert.match(projectsSource, /status: ['"]reload-error['"]/);
+  assert.match(createDrawerSource, /reload-error/);
+});
+
+test("idempotency conflict preserves the entity and offers both recovery paths", () => {
+  assert.match(projectsSource, /project: data\.project/);
+  assert.match(createDrawerSource, /onRetryWithNewClientId/);
+  assert.match(createDrawerSource, /새 요청으로 다시 시도/);
+  assert.match(createDrawerSource, /onOpenConflictProject/);
+  assert.match(createDrawerSource, /기존 프로젝트 열기/);
+});
+
+test("query and keyboard entry always open an unseeded global project draft", () => {
+  assert.match(projectsSource, /const openGlobalProjectCreate = React\.useCallback/);
+  assert.match(projectsSource, /searchParams\.get\(['"]new['"]\) !== ['"]project['"][\s\S]{0,160}createdFromQueryRef\.current = false/);
+  assert.match(projectsSource, /openGlobalProjectCreate\(\)/);
+  assert.match(projectsSource, /shouldOpenGlobalProjectCreate/);
+  assert.match(projectsSource, /addEventListener\(['"]keydown['"]/);
+  assert.match(projectsSource, /<Kbd>N<\/Kbd>/);
+});
+
 test("projects use durable create identity, raw edit drafts, dirty patches, and merged detail queries", () => {
   assert.match(projectsSource, /ProjectCreateDrawer/);
   assert.match(projectsSource, /ProjectDetailPanel/);

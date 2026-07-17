@@ -68,6 +68,29 @@ export function buildProjectDraft({
   };
 }
 
+export function rotateProjectClientId(draft, {
+  clientId = createClientId(),
+} = {}) {
+  if (!draft) return draft;
+  return { ...draft, clientId };
+}
+
+export function projectReloadContains(result, durableProjectId) {
+  if (!result?.ok || !durableProjectId || !Array.isArray(result.projects)) return false;
+  return result.projects.some((project) => project?.id === durableProjectId);
+}
+
+export function shouldOpenGlobalProjectCreate(event = {}, { drawerOpen = false } = {}) {
+  if (drawerOpen || event.defaultPrevented || event.isComposing || event.repeat) return false;
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false;
+  if (String(event.key || "").toLowerCase() !== "n") return false;
+
+  const target = event.target;
+  const tagName = String(target?.tagName || "").toLowerCase();
+  if (["input", "textarea", "select"].includes(tagName)) return false;
+  return !target?.isContentEditable;
+}
+
 export function validateProjectDraft(draft = {}) {
   const errors = {};
   if (!String(draft.title || "").trim()) {

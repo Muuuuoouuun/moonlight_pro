@@ -159,6 +159,83 @@ test("merges the durable project selection into the canonical list query", () =>
   assert.equal(params.has("new"), false);
 });
 
+test("only confirms create after the reloaded ledger contains the durable project id", () => {
+  const durableId = "project-durable";
+
+  assert.equal(
+    pmsUi.projectReloadContains(
+      { ok: true, projects: [{ id: durableId }] },
+      durableId,
+    ),
+    true,
+  );
+  assert.equal(
+    pmsUi.projectReloadContains(
+      { ok: false, projects: [{ id: durableId }] },
+      durableId,
+    ),
+    false,
+    "a failed reload must never close the draft",
+  );
+  assert.equal(
+    pmsUi.projectReloadContains(
+      { ok: true, projects: [{ id: "another-project" }] },
+      durableId,
+    ),
+    false,
+    "stale React state or an unrelated row cannot confirm persistence",
+  );
+});
+
+test("rotates only the project client id for conflict recovery", () => {
+  const draft = pmsUi.buildProjectDraft({
+    clientId: "11111111-1111-4111-8111-111111111111",
+    contextBrand: { id: "brand-1", key: "classmoon" },
+  });
+  const filled = {
+    ...draft,
+    title: "운영 OS",
+    summary: "정본을 만든다",
+    nextAction: "첫 원장 확인",
+    status: "active",
+    priority: "high",
+    dueAt: "2026-07-31",
+  };
+
+  assert.deepEqual(
+    pmsUi.rotateProjectClientId(filled, {
+      clientId: "22222222-2222-4222-8222-222222222222",
+    }),
+    {
+      ...filled,
+      clientId: "22222222-2222-4222-8222-222222222222",
+    },
+  );
+});
+
+test("plain N opens global project create only outside editable targets and drawers", () => {
+  const plainN = { key: "n", target: { tagName: "DIV" } };
+
+  assert.equal(pmsUi.shouldOpenGlobalProjectCreate(plainN), true);
+  assert.equal(
+    pmsUi.shouldOpenGlobalProjectCreate({ ...plainN, target: { tagName: "INPUT" } }),
+    false,
+  );
+  assert.equal(
+    pmsUi.shouldOpenGlobalProjectCreate({ ...plainN, target: { tagName: "TEXTAREA" } }),
+    false,
+  );
+  assert.equal(
+    pmsUi.shouldOpenGlobalProjectCreate({ ...plainN, target: { isContentEditable: true } }),
+    false,
+  );
+  assert.equal(pmsUi.shouldOpenGlobalProjectCreate({ ...plainN, metaKey: true }), false);
+  assert.equal(
+    pmsUi.shouldOpenGlobalProjectCreate(plainN, { drawerOpen: true }),
+    false,
+  );
+});
+
 test("builds a minimal task draft from the current project context", () => {
   assert.deepEqual(
     pmsUi.buildTaskDraft({ projectId: "project-1", initialStatus: "doing" }),

@@ -3,7 +3,7 @@
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState, SyncBadge, SegmentedControl, EditDrawer } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState, SyncBadge, SegmentedControl, EditDrawer, Kbd } from "../hub-primitives";
 import {
   buildProjectDraft,
   buildProjectEditDraft,
@@ -13,6 +13,9 @@ import {
   buildTaskDraft,
   createClientId,
   mergeProjectDetailQuery,
+  projectReloadContains,
+  rotateProjectClientId,
+  shouldOpenGlobalProjectCreate,
   taskStatusForBoardColumn,
   validateProjectDraft,
 } from "@/lib/pms-ui";
@@ -263,7 +266,7 @@ export function Projects({ workspace }) {
 
       if (!response.ok || !data || data.status === 'error') {
         setSyncState('preview');
-        return false;
+        return { ok: false, projects: [] };
       }
 
       if (data.source === 'supabase') {
@@ -281,7 +284,7 @@ export function Projects({ workspace }) {
         setTodos(Array.isArray(data.todos) ? data.todos : []);
         if (initial) setExpanded(new Set(liveProjects.slice(0, 2).map(p => p.id)));
         setSyncState('live');
-        return true;
+        return { ok: true, projects: liveProjects };
       }
 
       setLedger({
@@ -296,10 +299,10 @@ export function Projects({ workspace }) {
       });
       setTodos([]);
       setSyncState('preview');
-      return false;
+      return { ok: false, projects: [] };
     } catch {
       setSyncState('preview');
-      return false;
+      return { ok: false, projects: [] };
     }
   }, []);
 
@@ -331,8 +334,7 @@ export function Projects({ workspace }) {
 
   const toggleExpand = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const createProject = React.useCallback((initialStatus = 'Planning', brandKeyOverride = null) => {
-    // Only an explicit container/brand context may seed location. Global header,
-    // keyboard, and ?new=project entry stay honest with an empty selector.
+    // Contextual entry points (brand sections and status lanes) may seed location.
     const contextBrand = brandKeyOverride
       ? (brands.find(item => item.key === brandKeyOverride) || null)
       : (brand === 'all' ? null : currentBrand);
@@ -340,6 +342,12 @@ export function Projects({ workspace }) {
     setProjectEditSource(null);
     setProjectDraft(buildProjectDraft({ contextBrand, initialStatus }));
   }, [brand, brands, currentBrand]);
+
+  const openGlobalProjectCreate = React.useCallback(() => {
+    setProjectCreateContext(null);
+    setProjectEditSource(null);
+    setProjectDraft(buildProjectDraft());
+  }, []);
 
   // 콘텐츠 프로젝트: 브랜드 시드 + contentPipeline 플래그. 저장이 성공하면 persistProject가
   // CONTENT_STAGES(기획→초안→검토→업로드)를 하위 아이템으로 시드한다.
@@ -391,12 +399,18 @@ export function Projects({ workspace }) {
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !['saved', 'duplicate'].includes(data.status)) {
         setOrderResult({ tone: 'err', label: data.error || `저장 실패 ${response.status}` });
-        return { ok: false, status: data.status || 'error', error: data.error, detail: data.detail };
+        return {
+          ok: false,
+          status: data.status || 'error',
+          error: data.error,
+          detail: data.detail,
+          project: data.project || null,
+        };
       }
       const durableProjectId = data.project?.id;
       if (!durableProjectId) {
         setOrderResult({ tone: 'err', label: '저장 응답에 프로젝트 ID가 없습니다' });
-        return { ok: false, status: 'error', error: 'missing-durable-project-id' };
+        return { ok: false, status: 'error', error: 'missing-durable-project-id', project: data.project || null };
       }
       // 콘텐츠 파이프라인 프로젝트: 기획→초안→검토→업로드를 하위 아이템으로 순차 시드.
       let seeded = false;
@@ -420,7 +434,17 @@ export function Projects({ workspace }) {
           if (stageRes && stageRes.ok) seeded = true;
         }
       }
-      await loadLedger();
+      const reloadResult = await loadLedger();
+      if (!projectReloadContains(reloadResult, durableProjectId)) {
+        setOrderResult({ tone: 'err', label: '저장 후 원장에서 프로젝트를 확인하지 못했습니다' });
+        return {
+          ok: false,
+          status: 'reload-error',
+          error: 'created-project-not-visible-after-reload',
+          durableProjectId,
+          project: data.project,
+        };
+      }
       const params = mergeProjectDetailQuery(searchParamsRef.current, durableProjectId);
       const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
@@ -429,12 +453,34 @@ export function Projects({ workspace }) {
         tone: 'ok',
         label: seeded ? '콘텐츠 프로젝트 저장됨 · 4단계 시드' : '프로젝트 저장됨',
       });
-      return { ok: true, status: data.status, durableProjectId };
+      return { ok: true, status: data.status, durableProjectId, project: data.project };
     } catch (error) {
       setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
       return { ok: false, status: 'error', error: error instanceof Error ? error.message : String(error) };
     }
   }, [loadLedger, pathname, projectDraft, router]);
+
+  const retryProjectCreateWithNewId = React.useCallback((draft) => {
+    const nextDraft = rotateProjectClientId(draft);
+    setProjectDraft(nextDraft);
+    return nextDraft;
+  }, []);
+
+  const openConflictProject = React.useCallback(async (project) => {
+    const durableProjectId = project?.id;
+    if (!durableProjectId) {
+      return { ok: false, status: 'error', error: 'missing-conflict-project-id' };
+    }
+    const reloadResult = await loadLedger();
+    if (!projectReloadContains(reloadResult, durableProjectId)) {
+      return { ok: false, status: 'reload-error', error: 'conflict-project-not-visible-after-reload' };
+    }
+    const params = mergeProjectDetailQuery(searchParamsRef.current, durableProjectId);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    setOpenDetail(durableProjectId);
+    return { ok: true, status: 'opened', durableProjectId };
+  }, [loadLedger, pathname, router]);
 
   const persistProjectEdit = React.useCallback(async () => {
     if (!projectDraft?.title?.trim() || !projectEditSource) {
@@ -607,14 +653,29 @@ export function Projects({ workspace }) {
   }, [brandMenuOpen]);
 
   React.useEffect(() => {
-    if (searchParams.get('new') !== 'project' || createdFromQueryRef.current) return;
-    createProject();
+    if (searchParams.get('new') !== 'project') {
+      createdFromQueryRef.current = false;
+      return;
+    }
+    if (createdFromQueryRef.current) return;
     createdFromQueryRef.current = true;
+    openGlobalProjectCreate();
     const params = new URLSearchParams(searchParams.toString());
     params.delete('new');
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  }, [createProject, searchParams, router, pathname]);
+  }, [openGlobalProjectCreate, searchParams, router, pathname]);
+
+  const drawerOpen = Boolean(projectDraft || taskDraft || containerDraft);
+  React.useEffect(() => {
+    const onKey = (event) => {
+      if (!shouldOpenGlobalProjectCreate(event, { drawerOpen })) return;
+      event.preventDefault();
+      openGlobalProjectCreate();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawerOpen, openGlobalProjectCreate]);
 
   // 사이드바 드래그 정렬 상태 (UI 전용, localStorage). brandGroups가 이 순서를 적용하므로
   // 반드시 memo보다 먼저 선언한다.
@@ -977,7 +1038,12 @@ export function Projects({ workspace }) {
               {orderResult.label}
             </span>
           )}
-          <Button variant="primary" size="sm" icon="plus" onClick={() => view === 'todos' ? createTodo() : createProject()}>{view === 'todos' ? 'To-do' : 'Project'}</Button>
+          {view === 'todos' && (
+            <Button variant="primary" size="sm" icon="plus" onClick={() => createTodo()}>To-do</Button>
+          )}
+          <Button variant={view === 'todos' ? 'outline' : 'primary'} size="sm" icon="plus" onClick={openGlobalProjectCreate}>
+            Project <Kbd>N</Kbd>
+          </Button>
         </div>
 
         {view === 'tree' && (
@@ -1447,6 +1513,8 @@ export function Projects({ workspace }) {
           contextContainer={projectCreateContext}
           onChange={(key, value) => setProjectDraft(current => ({ ...current, [key]: value }))}
           onSave={persistProjectCreate}
+          onRetryWithNewClientId={retryProjectCreateWithNewId}
+          onOpenConflictProject={openConflictProject}
           onCreateContainer={createContainer}
           onClose={() => {
             setProjectDraft(null);

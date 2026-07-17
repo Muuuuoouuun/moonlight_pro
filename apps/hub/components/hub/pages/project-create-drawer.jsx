@@ -27,6 +27,12 @@ const LABEL_STYLE = {
 };
 
 function feedbackFor(result) {
+  if (result?.status === "reload-error") {
+    return {
+      state: "error",
+      message: "저장은 접수됐지만 새 원장에서 확인하지 못했습니다. 입력과 요청 ID를 유지했으니 다시 시도하세요.",
+    };
+  }
   if (result?.status === "conflict") {
     const detail = result.error === "stale-update"
       ? "다른 변경이 먼저 저장되었습니다. 입력은 유지했습니다. 원장을 다시 확인한 뒤 재시도하세요."
@@ -47,22 +53,31 @@ export function ProjectCreateDrawer({
   onChange,
   onClose,
   onSave,
+  onRetryWithNewClientId,
+  onOpenConflictProject,
   onCreateContainer,
 }) {
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [errors, setErrors] = React.useState({});
   const [saveState, setSaveState] = React.useState("idle");
   const [feedback, setFeedback] = React.useState("");
+  const [conflictProject, setConflictProject] = React.useState(null);
   const savingRef = React.useRef(false);
+  const retryingClientIdRef = React.useRef(null);
   const titleRef = React.useRef(null);
   const locationRef = React.useRef(null);
   const formId = React.useId();
 
   React.useEffect(() => {
+    if (retryingClientIdRef.current === draft?.clientId) {
+      retryingClientIdRef.current = null;
+      return;
+    }
     setAdvancedOpen(false);
     setErrors({});
     setSaveState("idle");
     setFeedback("");
+    setConflictProject(null);
     savingRef.current = false;
   }, [draft?.clientId]);
 
@@ -75,6 +90,31 @@ export function ProjectCreateDrawer({
       return next;
     });
   }, [onChange]);
+
+  const saveDraft = React.useCallback(async (candidate) => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaveState("saving");
+    setFeedback("프로젝트를 저장하는 중입니다.");
+    try {
+      const result = await onSave?.(candidate);
+      if (result?.ok && ["saved", "duplicate"].includes(result.status)) {
+        setSaveState(result.status);
+        setFeedback(result.status === "duplicate" ? "이미 저장된 프로젝트를 열었습니다." : "프로젝트를 만들었습니다.");
+        onClose?.();
+        return;
+      }
+      const next = feedbackFor(result);
+      setConflictProject(result?.status === "conflict" ? result.project || null : null);
+      setSaveState(next.state);
+      setFeedback(next.message);
+    } catch (error) {
+      setSaveState("error");
+      setFeedback(`프로젝트 저장에 실패했습니다. 다시 시도하세요. (${error instanceof Error ? error.message : String(error)})`);
+    } finally {
+      savingRef.current = false;
+    }
+  }, [onClose, onSave]);
 
   const handleSubmit = React.useCallback(async (event) => {
     event?.preventDefault?.();
@@ -92,27 +132,36 @@ export function ProjectCreateDrawer({
       return;
     }
 
+    await saveDraft(draft);
+  }, [draft, saveDraft]);
+
+  const handleRetryWithNewClientId = React.useCallback(async () => {
+    const nextDraft = onRetryWithNewClientId?.(draft);
+    if (!nextDraft) return;
+    retryingClientIdRef.current = nextDraft.clientId;
+    await saveDraft(nextDraft);
+  }, [draft, onRetryWithNewClientId, saveDraft]);
+
+  const handleOpenConflictProject = React.useCallback(async () => {
+    if (savingRef.current || !conflictProject) return;
     savingRef.current = true;
     setSaveState("saving");
-    setFeedback("프로젝트를 저장하는 중입니다.");
+    setFeedback("기존 프로젝트를 원장에서 확인하는 중입니다.");
     try {
-      const result = await onSave?.(draft);
-      if (result?.ok && ["saved", "duplicate"].includes(result.status)) {
-        setSaveState(result.status);
-        setFeedback(result.status === "duplicate" ? "이미 저장된 프로젝트를 열었습니다." : "프로젝트를 만들었습니다.");
+      const result = await onOpenConflictProject?.(conflictProject);
+      if (result?.ok) {
         onClose?.();
         return;
       }
-      const next = feedbackFor(result);
-      setSaveState(next.state);
-      setFeedback(next.message);
+      setSaveState("conflict");
+      setFeedback("기존 프로젝트를 새 원장에서 확인하지 못했습니다. 입력은 유지했습니다. 다시 시도하세요.");
     } catch (error) {
-      setSaveState("error");
-      setFeedback(`프로젝트 저장에 실패했습니다. 다시 시도하세요. (${error instanceof Error ? error.message : String(error)})`);
+      setSaveState("conflict");
+      setFeedback(`기존 프로젝트를 열지 못했습니다. 입력은 유지했습니다. (${error instanceof Error ? error.message : String(error)})`);
     } finally {
       savingRef.current = false;
     }
-  }, [draft, onClose, onSave]);
+  }, [conflictProject, onClose, onOpenConflictProject]);
 
   React.useEffect(() => {
     const onKey = (event) => {
@@ -136,8 +185,15 @@ export function ProjectCreateDrawer({
       onClose={() => { if (!savingRef.current) onClose?.(); }}
       initialFocusRef={titleRef}
       width="min(440px, 100vw)"
+      footerStyle={{ flexWrap: "wrap" }}
       footer={(
         <>
+          {saveState === "conflict" && (
+            <div style={{ width: "100%", display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <Button variant="outline" size="sm" onClick={handleRetryWithNewClientId} disabled={saving}>새 요청으로 다시 시도</Button>
+              <Button variant="ghost" size="sm" onClick={handleOpenConflictProject} disabled={saving || !conflictProject}>기존 프로젝트 열기</Button>
+            </div>
+          )}
           <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>취소</Button>
           <div aria-live="polite" style={{ flex: 1, minWidth: 0, fontSize: 11, lineHeight: 1.4, color: saveState === "error" || saveState === "conflict" ? "var(--danger)" : "var(--fg-muted)" }}>
             {feedback || <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Kbd>⌘↵</Kbd></span>}
