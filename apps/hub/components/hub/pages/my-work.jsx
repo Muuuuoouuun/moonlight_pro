@@ -906,7 +906,8 @@ export function MyWork({ onNavigate }) {
                         <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {row.projectName}
                         </span>
-                        <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{row.items.length}</span>
+                        {/* 카운트 pill — projects 페이지 아코디언 헤더와 같은 처리 (드리프트 방지). */}
+                        <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4 }}>{row.items.length}</span>
                       </div>
                       {!isCollapsed && (
                         <div style={{ marginLeft: 10, borderLeft: '1px solid var(--line-soft)' }}>
