@@ -14,8 +14,9 @@ export class NextResponse extends Response {
 `;
 
 const ledgerStub = `
-export async function getProjectLedger() {
+export async function getProjectLedger(options) {
   const state = globalThis.__projectsRouteTestState;
+  state.ledgerArgs.push(options);
   if (state.throwError) throw state.throwError;
   return state.ledger;
 }
@@ -65,6 +66,7 @@ globalThis.__projectsRouteTestState = {
   throwError: null,
   payload: {},
   forwarded: [],
+  ledgerArgs: [],
 };
 const projectRoute = await import("../app/api/hub/projects/route.js?project-read-truth-route-test");
 const taskRoute = await import("../app/api/hub/tasks/route.js?task-write-workspace-route-test");
@@ -75,6 +77,7 @@ beforeEach(() => {
   globalThis.__projectsRouteTestState.throwError = null;
   globalThis.__projectsRouteTestState.payload = {};
   globalThis.__projectsRouteTestState.forwarded = [];
+  globalThis.__projectsRouteTestState.ledgerArgs = [];
   globalThis.__projectsRouteTestState.ledger = {
     source: "preview",
     configured: false,
@@ -149,6 +152,24 @@ test("projects API preserves optional ledger failures as named partial data", as
   assert.equal(body.partial, true);
   assert.deepEqual(body.failedSources, ["project_updates", "notes"]);
   assert.deepEqual(body.projects, [{ id: "project-1" }]);
+});
+
+test("projects API forwards a canonical selected project to the repository", async () => {
+  const projectId = "99999999-9999-4999-8999-999999999999";
+  const response = await GET(new Request(`https://hub.example.com/api/hub/projects?project=${projectId}`));
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(globalThis.__projectsRouteTestState.ledgerArgs, [{ projectId }]);
+});
+
+test("projects API rejects a non-canonical selected project before reading the ledger", async () => {
+  const response = await GET(new Request("https://hub.example.com/api/hub/projects?project=outside-cap"));
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(body.status, "invalid-input");
+  assert.equal(body.error, "invalid-project-id");
+  assert.equal(globalThis.__projectsRouteTestState.ledgerArgs.length, 0);
 });
 
 test("projects API never leaks internal exception details", async () => {

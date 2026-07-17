@@ -1,14 +1,20 @@
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
-import { test } from "node:test";
+import { beforeEach, test } from "node:test";
 
 const serverReadStub = `
 export function eqFilter(value) { return \`eq.\${value}\`; }
 export function inFilter(values) { return \`in.(\${values.join(",")})\`; }
-export function withWorkspaceFilter(filters = []) { return filters; }
+export function withWorkspaceFilter(filters = []) {
+  const workspaceId = globalThis.__operatingLedgerTestState.workspaceId;
+  return workspaceId ? [["workspace_id", eqFilter(workspaceId)], ...filters] : filters;
+}
 export async function fetchSupabaseRows(table, options = {}) {
   const state = globalThis.__operatingLedgerTestState;
   state.calls.push({ kind: "fetch", table, options });
+  if (Array.isArray(state.rowQueues?.[table]) && state.rowQueues[table].length > 0) {
+    return state.rowQueues[table].shift();
+  }
   return Object.hasOwn(state.rows, table) ? state.rows[table] : [];
 }
 export async function countSupabaseRows(table, filters = []) {
@@ -49,11 +55,16 @@ globalThis.__operatingLedgerTestState = {
   calls: [],
   config: { url: "https://supabase.example.com", apiKey: "test-key" },
   counts: {},
+  rowQueues: {},
   rows: {},
   workspaceId: "workspace-1",
 };
 
 const operatingLedger = await import("./operating-ledger.js?operating-ledger-test");
+
+beforeEach(() => {
+  globalThis.__operatingLedgerTestState.rowQueues = {};
+});
 
 test("keeps raw project source fields separate from latest-update display data", () => {
   const latestUpdate = {
@@ -391,4 +402,187 @@ test("failed update evidence stays explicit while complete task evidence remains
   assert.equal(taskEvidence.displayProgress.value, 50);
   assert.equal(taskEvidence.displayProgress.partial, false);
   assert.equal(taskEvidence.displayProgress.evidencePartial, true);
+});
+
+test("merges an exact workspace-scoped selected project and its detail rows beyond global caps", async () => {
+  const state = globalThis.__operatingLedgerTestState;
+  const selectedProjectId = "99999999-9999-4999-8999-999999999999";
+  state.calls = [];
+  state.workspaceId = "workspace-1";
+  state.config = { url: "https://supabase.example.com", apiKey: "test-key" };
+  state.counts = { tasks: 200 };
+  state.rows = {
+    brands: [{ id: "brand-1", slug: "classmoon", name: "Class.Moon", status: "active", meta: {} }],
+  };
+  state.rowQueues = {
+    projects: [
+      Array.from({ length: 81 }, (_, index) => ({
+        id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+        brand_id: "brand-1",
+        name: `Bounded ${index + 1}`,
+        status: "active",
+        created_at: "2026-07-01T00:00:00.000Z",
+        updated_at: "2026-07-17T00:00:00.000Z",
+      })),
+      [{
+        id: selectedProjectId,
+        brand_id: "brand-1",
+        name: "Exact selected",
+        status: "blocked",
+        created_at: "2026-06-01T00:00:00.000Z",
+        updated_at: "2026-06-02T00:00:00.000Z",
+      }],
+    ],
+    tasks: [[], [{ id: "task-selected", project_id: selectedProjectId, title: "Selected task", status: "todo", priority: "high" }]],
+    project_updates: [
+      Array.from({ length: 121 }, (_, index) => ({
+        id: `update-global-${index + 1}`,
+        project_id: "00000000-0000-4000-8000-000000000001",
+        title: `Global update ${index + 1}`,
+        happened_at: "2026-07-17T00:00:00.000Z",
+      })),
+      [{ id: "update-selected", project_id: selectedProjectId, title: "Selected update", happened_at: "2026-07-17T00:00:00.000Z" }],
+    ],
+    decisions: [[], [{ id: "decision-selected", project_id: selectedProjectId, title: "Selected decision", decided_at: "2026-07-17T00:00:00.000Z" }]],
+    notes: [[], [{ id: "note-selected", project_id: selectedProjectId, title: "Selected note", created_at: "2026-07-17T00:00:00.000Z" }]],
+    routine_checks: [[], [{ id: "check-selected", project_id: selectedProjectId, check_type: "morning", created_at: "2026-07-17T00:00:00.000Z" }]],
+  };
+
+  const ledger = await operatingLedger.getProjectLedger({ projectId: selectedProjectId });
+
+  assert.equal(ledger.projects.length, 81, "the exact project is appended without making the bounded slice complete");
+  assert.equal(ledger.projects.some((project) => project.id === selectedProjectId), true);
+  assert.equal(ledger.todos.some((todo) => todo.project === selectedProjectId), true);
+  assert.equal(ledger.updates.some((update) => update.projectId === selectedProjectId), true);
+  assert.equal(ledger.decisions.some((decision) => decision.projectId === selectedProjectId), true);
+  assert.equal(ledger.notes.some((note) => note.projectId === selectedProjectId), true);
+  assert.equal(ledger.checks.some((check) => check.projectId === selectedProjectId), true);
+  const selectedProject = ledger.projects.find((project) => project.id === selectedProjectId);
+  assert.equal(selectedProject.tasksPartial, false, "the exact selected task slice is complete even when the global task slice is partial");
+  assert.equal(selectedProject.updateEvidencePartial, false, "the exact selected update slice is complete even when global updates are capped");
+  assert.deepEqual(ledger.selection, {
+    projectId: selectedProjectId,
+    found: true,
+    failedSources: [],
+    partialSources: [],
+  });
+  assert.equal(ledger.partial, true);
+  assert.equal(ledger.partialSources.includes("projects"), true);
+  assert.equal(ledger.partialSources.includes("tasks"), true);
+  assert.equal(ledger.partialSources.includes("project_updates"), true);
+
+  const exactCalls = state.calls.filter((call) =>
+    call.kind === "fetch"
+    && call.options.filters?.some(([key, value]) => key === "project_id" || (key === "id" && value === `eq.${selectedProjectId}`)),
+  );
+  assert.equal(exactCalls.length, 6);
+  for (const call of exactCalls) {
+    assert.deepEqual(call.options.filters[0], ["workspace_id", "eq.workspace-1"]);
+  }
+});
+
+test("deduplicates exact selected rows already present in the bounded reads", async () => {
+  const state = globalThis.__operatingLedgerTestState;
+  const selectedProjectId = "88888888-8888-4888-8888-888888888888";
+  const projectRow = {
+    id: selectedProjectId,
+    name: "Already visible",
+    status: "active",
+    created_at: "2026-07-01T00:00:00.000Z",
+    updated_at: "2026-07-17T00:00:00.000Z",
+  };
+  const taskRow = { id: "task-visible", project_id: selectedProjectId, title: "Visible task", status: "todo", priority: "medium" };
+  state.calls = [];
+  state.workspaceId = "workspace-1";
+  state.config = { url: "https://supabase.example.com", apiKey: "test-key" };
+  state.counts = { tasks: 1 };
+  state.rows = { brands: [] };
+  state.rowQueues = {
+    projects: [[projectRow], [projectRow]],
+    tasks: [[taskRow], [taskRow]],
+    project_updates: [[], []],
+    decisions: [[], []],
+    notes: [[], []],
+    routine_checks: [[], []],
+  };
+
+  const ledger = await operatingLedger.getProjectLedger({ projectId: selectedProjectId });
+
+  assert.equal(ledger.projects.filter((project) => project.id === selectedProjectId).length, 1);
+  assert.equal(ledger.todos.filter((todo) => todo.id === taskRow.id).length, 1);
+  assert.equal(
+    state.calls.filter((call) => call.kind === "fetch" && call.options.filters?.some(([, value]) => value === `eq.${selectedProjectId}`)).length,
+    6,
+    "the selected project and each detail source must still be queried exactly before deduplication",
+  );
+});
+
+test("keeps an exact selected optional-source failure distinct from a proven empty detail", async () => {
+  const state = globalThis.__operatingLedgerTestState;
+  const selectedProjectId = "77777777-7777-4777-8777-777777777777";
+  const projectRow = {
+    id: selectedProjectId,
+    name: "Selected with failed notes",
+    status: "active",
+    created_at: "2026-07-01T00:00:00.000Z",
+    updated_at: "2026-07-17T00:00:00.000Z",
+  };
+  state.calls = [];
+  state.workspaceId = "workspace-1";
+  state.config = { url: "https://supabase.example.com", apiKey: "test-key" };
+  state.counts = { tasks: 0 };
+  state.rows = { brands: [] };
+  state.rowQueues = {
+    projects: [[projectRow], [projectRow]],
+    tasks: [[], []],
+    project_updates: [[], []],
+    decisions: [[], []],
+    notes: [[], null],
+    routine_checks: [[], []],
+  };
+
+  const ledger = await operatingLedger.getProjectLedger({ projectId: selectedProjectId });
+
+  assert.equal(ledger.source, "supabase");
+  assert.equal(ledger.partial, true);
+  assert.deepEqual(ledger.selection.failedSources, ["notes"]);
+  assert.equal(ledger.failedSources.includes("notes"), true);
+  assert.deepEqual(ledger.notes, []);
+});
+
+test("marks a capped exact selected detail source partial instead of complete", async () => {
+  const state = globalThis.__operatingLedgerTestState;
+  const selectedProjectId = "66666666-6666-4666-8666-666666666666";
+  const projectRow = {
+    id: selectedProjectId,
+    name: "Selected with capped notes",
+    status: "active",
+    created_at: "2026-07-01T00:00:00.000Z",
+    updated_at: "2026-07-17T00:00:00.000Z",
+  };
+  state.calls = [];
+  state.workspaceId = "workspace-1";
+  state.config = { url: "https://supabase.example.com", apiKey: "test-key" };
+  state.counts = { tasks: 0 };
+  state.rows = { brands: [] };
+  state.rowQueues = {
+    projects: [[projectRow], [projectRow]],
+    tasks: [[], []],
+    project_updates: [[], []],
+    decisions: [[], []],
+    notes: [[], Array.from({ length: 81 }, (_, index) => ({
+      id: `selected-note-${index + 1}`,
+      project_id: selectedProjectId,
+      title: `Selected note ${index + 1}`,
+      created_at: "2026-07-17T00:00:00.000Z",
+    }))],
+    routine_checks: [[], []],
+  };
+
+  const ledger = await operatingLedger.getProjectLedger({ projectId: selectedProjectId });
+
+  assert.equal(ledger.partial, true);
+  assert.deepEqual(ledger.selection.partialSources, ["notes"]);
+  assert.equal(ledger.partialSources.includes("notes"), true);
+  assert.equal(ledger.notes.filter((note) => note.projectId === selectedProjectId).length, 80);
 });

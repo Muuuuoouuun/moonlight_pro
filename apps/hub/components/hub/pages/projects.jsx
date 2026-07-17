@@ -167,6 +167,7 @@ export function Projects({ workspace }) {
   // setView's identity stable so the existing createProject/createTodo callbacks
   // don't need it in their dependency lists.
   const view = normalizeProjectView(searchParams.get('view'));
+  const selectedProjectId = searchParams.get('project');
   const searchParamsRef = React.useRef(searchParams);
   searchParamsRef.current = searchParams;
   const setView = React.useCallback((next) => {
@@ -292,7 +293,10 @@ export function Projects({ workspace }) {
     setSyncState('loading');
     setReadError(null);
     try {
-      const response = await fetch('/api/hub/projects', { cache: 'no-store' });
+      const endpoint = selectedProjectId
+        ? `/api/hub/projects?project=${encodeURIComponent(selectedProjectId)}`
+        : '/api/hub/projects';
+      const response = await fetch(endpoint, { cache: 'no-store' });
       const data = await response.json().catch(() => null);
 
       if (!response.ok || !data || data.status === 'error' || data.source === 'error') {
@@ -317,6 +321,7 @@ export function Projects({ workspace }) {
           failedSources: Array.isArray(data.failedSources) ? data.failedSources : [],
           partialSources: Array.isArray(data.partialSources) ? data.partialSources : [],
           taskAggregation: data.taskAggregation || null,
+          selection: data.selection || null,
         });
         setTodos(liveTodos);
         if (initial) setExpanded(new Set(liveProjects.slice(0, 2).map(p => p.id)));
@@ -338,6 +343,7 @@ export function Projects({ workspace }) {
         failedSources: [],
         partialSources: [],
         taskAggregation: null,
+        selection: null,
       });
       setTodos([]);
       setSyncState('preview');
@@ -348,7 +354,7 @@ export function Projects({ workspace }) {
       setReadError(error instanceof Error ? error.message : String(error));
       return { ok: false, projects: [], todos: [] };
     }
-  }, []);
+  }, [selectedProjectId]);
 
   React.useEffect(() => {
     loadLedger({ initial: true });
@@ -360,7 +366,6 @@ export function Projects({ workspace }) {
     }
   }, [brand, brands, wsDefaultBrand]);
 
-  const selectedProjectId = searchParams.get('project');
   React.useEffect(() => {
     if (view !== 'tree' || !selectedProjectId) {
       setOpenDetail(null);
@@ -1441,6 +1446,9 @@ export function Projects({ workspace }) {
               const pDecisions = (ledger.decisions || []).filter(d => d.projectId === p.id).slice(0, 4);
               const pNotes = (ledger.notes || []).filter(n => n.projectId === p.id).slice(0, 4);
               const pChecks = (ledger.checks || []).filter(c => c.projectId === p.id).slice(0, 4);
+              const detailFailedSources = ledger.selection?.projectId === p.id
+                ? ledger.selection.failedSources
+                : ledger.failedSources;
               return (
                 <div
                   ref={detailSheetRef}
@@ -1462,7 +1470,7 @@ export function Projects({ workspace }) {
                     notes={pNotes}
                     checks={pChecks}
                     syncState={syncState}
-                    failedSources={ledger.failedSources}
+                    failedSources={detailFailedSources}
                     statusTone={statusTone}
                     updateTone={updateTone}
                     checkTone={checkTone}

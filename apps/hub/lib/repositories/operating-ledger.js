@@ -10,6 +10,7 @@ import { buildProjectProgress } from "../pms-ui.js";
 
 const BRAND_GLYPHS = ["◐", "◇", "✦", "◆", "●", "□", "△", "◎", "◌", "✧"];
 const PROJECT_READ_LIMIT = 80;
+const TASK_READ_LIMIT = 160;
 const PROJECT_UPDATE_READ_LIMIT = 120;
 const OPTIONAL_READ_LIMIT = 80;
 
@@ -201,7 +202,12 @@ export function mapProjects(
   brandById,
   taskStats,
   updateStats,
-  { taskStatsPartial = false, updateStatsPartial = false } = {},
+  {
+    taskStatsPartial = false,
+    updateStatsPartial = false,
+    taskCompleteProjectIds = new Set(),
+    updateCompleteProjectIds = new Set(),
+  } = {},
 ) {
   return rows.map((row) => {
     const brand = row.brand_id && brandById.get(row.brand_id);
@@ -211,13 +217,15 @@ export function mapProjects(
       ? updates.latest.progress
       : null;
     const reportedProgress = latestProgress ?? (Number.isFinite(row.progress) ? row.progress : null);
+    const projectTaskStatsPartial = taskStatsPartial && !taskCompleteProjectIds.has(row.id);
+    const projectUpdateStatsPartial = updateStatsPartial && !updateCompleteProjectIds.has(row.id);
     const baseDisplayProgress = buildProjectProgress({
       tasks: stats,
       reportedProgress,
-      partial: taskStatsPartial,
+      partial: projectTaskStatsPartial,
     });
-    const taskEvidenceComplete = stats.total > 0 && !taskStatsPartial;
-    const displayProgress = updateStatsPartial
+    const taskEvidenceComplete = stats.total > 0 && !projectTaskStatsPartial;
+    const displayProgress = projectUpdateStatsPartial
       ? taskEvidenceComplete
         ? { ...baseDisplayProgress, evidencePartial: true }
         : {
@@ -248,7 +256,7 @@ export function mapProjects(
       displayNextAction,
       displayProgress,
       latestUpdate: updates.latest,
-      updateEvidencePartial: updateStatsPartial,
+      updateEvidencePartial: projectUpdateStatsPartial,
       progress: displayProgress?.value ?? null,
       due: formatShortDate(row.due_at),
       startedAt: row.started_at ?? null,
@@ -258,7 +266,7 @@ export function mapProjects(
       tag: row.meta?.tag || null,
       tasks: stats.total,
       done: stats.done,
-      tasksPartial: taskStatsPartial,
+      tasksPartial: projectTaskStatsPartial,
       changes: updates.count,
       summary: displaySummary,
       nextAction: displayNextAction,
@@ -422,9 +430,23 @@ function buildBoardColumns(projects, todos) {
   return columns;
 }
 
-export async function getProjectLedger() {
+function mergeRowsById(primaryRows, supplementalRows) {
+  const rowsById = new Map();
+  [...primaryRows, ...supplementalRows].forEach((row) => {
+    if (!row?.id) return;
+    rowsById.set(row.id, row);
+  });
+  return Array.from(rowsById.values());
+}
+
+function uniqueSources(sources) {
+  return Array.from(new Set(sources));
+}
+
+export async function getProjectLedger({ projectId = null } = {}) {
   const workspaceId = resolveDefaultWorkspaceId();
   const supabaseConfig = resolveSupabaseConfig();
+  const selectedProjectId = typeof projectId === "string" ? projectId.trim() : "";
 
   if (!workspaceId || !supabaseConfig) {
     return {
@@ -443,11 +465,15 @@ export async function getProjectLedger() {
       partial: false,
       failedSources: [],
       partialSources: [],
+      selection: selectedProjectId
+        ? { projectId: selectedProjectId, found: false, failedSources: [], partialSources: [] }
+        : null,
     };
   }
 
+  const taskStatuses = ["inbox", "todo", "doing", "blocked", "done"];
   const taskFilters = withWorkspaceFilter([
-    ["status", inFilter(["inbox", "todo", "doing", "blocked", "done"])],
+    ["status", inFilter(taskStatuses)],
   ]);
   const [
     brandRows,
@@ -458,6 +484,12 @@ export async function getProjectLedger() {
     decisionRows,
     noteRows,
     routineRows,
+    selectedProjectRows,
+    selectedTaskRows,
+    selectedUpdateRows,
+    selectedDecisionRows,
+    selectedNoteRows,
+    selectedRoutineRows,
   ] = await Promise.all([
     fetchSupabaseRows("brands", {
       order: "name.asc",
@@ -471,7 +503,7 @@ export async function getProjectLedger() {
       ]),
     }),
     fetchSupabaseRows("tasks", {
-      limit: 160,
+      limit: TASK_READ_LIMIT,
       order: "updated_at.desc",
       filters: taskFilters,
     }),
@@ -496,15 +528,63 @@ export async function getProjectLedger() {
       order: "created_at.desc",
       filters: withWorkspaceFilter(),
     }),
+    selectedProjectId
+      ? fetchSupabaseRows("projects", {
+          limit: 2,
+          filters: withWorkspaceFilter([["id", eqFilter(selectedProjectId)]]),
+        })
+      : Promise.resolve([]),
+    selectedProjectId
+      ? fetchSupabaseRows("tasks", {
+          limit: TASK_READ_LIMIT + 1,
+          order: "updated_at.desc",
+          filters: withWorkspaceFilter([
+            ["project_id", eqFilter(selectedProjectId)],
+            ["status", inFilter(taskStatuses)],
+          ]),
+        })
+      : Promise.resolve([]),
+    selectedProjectId
+      ? fetchSupabaseRows("project_updates", {
+          limit: PROJECT_UPDATE_READ_LIMIT + 1,
+          order: "happened_at.desc",
+          filters: withWorkspaceFilter([["project_id", eqFilter(selectedProjectId)]]),
+        })
+      : Promise.resolve([]),
+    selectedProjectId
+      ? fetchSupabaseRows("decisions", {
+          limit: OPTIONAL_READ_LIMIT + 1,
+          order: "decided_at.desc",
+          filters: withWorkspaceFilter([["project_id", eqFilter(selectedProjectId)]]),
+        })
+      : Promise.resolve([]),
+    selectedProjectId
+      ? fetchSupabaseRows("notes", {
+          limit: OPTIONAL_READ_LIMIT + 1,
+          order: "created_at.desc",
+          filters: withWorkspaceFilter([["project_id", eqFilter(selectedProjectId)]]),
+        })
+      : Promise.resolve([]),
+    selectedProjectId
+      ? fetchSupabaseRows("routine_checks", {
+          limit: OPTIONAL_READ_LIMIT + 1,
+          order: "created_at.desc",
+          filters: withWorkspaceFilter([["project_id", eqFilter(selectedProjectId)]]),
+        })
+      : Promise.resolve([]),
   ]);
 
-  const failedSources = [
+  const failedSources = uniqueSources([
     ["brands", brandRows],
     ["projects", projectRows],
     ["tasks", taskRows],
+    ...(selectedProjectId ? [
+      ["projects", selectedProjectRows],
+      ["tasks", selectedTaskRows],
+    ] : []),
   ]
     .filter(([, rows]) => !Array.isArray(rows))
-    .map(([source]) => source);
+    .map(([source]) => source));
 
   if (failedSources.length > 0) {
     return {
@@ -525,6 +605,9 @@ export async function getProjectLedger() {
       taskAggregation: null,
       partial: false,
       partialSources: [],
+      selection: selectedProjectId
+        ? { projectId: selectedProjectId, found: false, failedSources, partialSources: [] }
+        : null,
     };
   }
 
@@ -537,7 +620,17 @@ export async function getProjectLedger() {
   const optionalFailedSources = optionalSources
     .filter(([, rows]) => !Array.isArray(rows))
     .map(([source]) => source);
-  const taskStatsPartial = !Number.isFinite(taskRowCount) || taskRowCount !== taskRows.length;
+  const selectionOptionalSources = selectedProjectId
+    ? [
+        ["project_updates", selectedUpdateRows],
+        ["decisions", selectedDecisionRows],
+        ["notes", selectedNoteRows],
+        ["routine_checks", selectedRoutineRows],
+      ]
+    : [];
+  const selectionFailedSources = selectionOptionalSources
+    .filter(([, rows]) => !Array.isArray(rows))
+    .map(([source]) => source);
   const truncatedSources = [
     ["projects", projectRows, PROJECT_READ_LIMIT],
     ["project_updates", updateRows, PROJECT_UPDATE_READ_LIMIT],
@@ -547,22 +640,58 @@ export async function getProjectLedger() {
   ]
     .filter(([, rows, limit]) => Array.isArray(rows) && rows.length > limit)
     .map(([source]) => source);
-  const partialSources = [
-    ...(taskStatsPartial ? ["tasks"] : []),
-    ...truncatedSources,
-  ];
+  const selectionTruncatedSources = selectedProjectId
+    ? [
+        ["projects", selectedProjectRows, 1],
+        ["tasks", selectedTaskRows, TASK_READ_LIMIT],
+        ["project_updates", selectedUpdateRows, PROJECT_UPDATE_READ_LIMIT],
+        ["decisions", selectedDecisionRows, OPTIONAL_READ_LIMIT],
+        ["notes", selectedNoteRows, OPTIONAL_READ_LIMIT],
+        ["routine_checks", selectedRoutineRows, OPTIONAL_READ_LIMIT],
+      ]
+        .filter(([, rows, limit]) => Array.isArray(rows) && rows.length > limit)
+        .map(([source]) => source)
+    : [];
   const updateStatsPartial = !Array.isArray(updateRows)
     || truncatedSources.includes("project_updates");
-  const visibleProjectRows = projectRows.slice(0, PROJECT_READ_LIMIT);
-  const visibleUpdateRows = Array.isArray(updateRows)
-    ? updateRows.slice(0, PROJECT_UPDATE_READ_LIMIT)
-    : [];
+  const visibleProjectRows = mergeRowsById(
+    projectRows.slice(0, PROJECT_READ_LIMIT),
+    Array.isArray(selectedProjectRows) ? selectedProjectRows.slice(0, 1) : [],
+  );
+  const visibleTaskRows = mergeRowsById(
+    taskRows,
+    Array.isArray(selectedTaskRows) ? selectedTaskRows.slice(0, TASK_READ_LIMIT) : [],
+  );
+  const visibleUpdateRows = mergeRowsById(
+    Array.isArray(updateRows) ? updateRows.slice(0, PROJECT_UPDATE_READ_LIMIT) : [],
+    Array.isArray(selectedUpdateRows) ? selectedUpdateRows.slice(0, PROJECT_UPDATE_READ_LIMIT) : [],
+  );
+  const visibleDecisionRows = mergeRowsById(
+    Array.isArray(decisionRows) ? decisionRows.slice(0, OPTIONAL_READ_LIMIT) : [],
+    Array.isArray(selectedDecisionRows) ? selectedDecisionRows.slice(0, OPTIONAL_READ_LIMIT) : [],
+  );
+  const visibleNoteRows = mergeRowsById(
+    Array.isArray(noteRows) ? noteRows.slice(0, OPTIONAL_READ_LIMIT) : [],
+    Array.isArray(selectedNoteRows) ? selectedNoteRows.slice(0, OPTIONAL_READ_LIMIT) : [],
+  );
+  const visibleRoutineRows = mergeRowsById(
+    Array.isArray(routineRows) ? routineRows.slice(0, OPTIONAL_READ_LIMIT) : [],
+    Array.isArray(selectedRoutineRows) ? selectedRoutineRows.slice(0, OPTIONAL_READ_LIMIT) : [],
+  );
+  const taskStatsPartial = !Number.isFinite(taskRowCount)
+    || taskRowCount !== visibleTaskRows.length
+    || selectionTruncatedSources.includes("tasks");
+  const partialSources = uniqueSources([
+    ...(taskStatsPartial ? ["tasks"] : []),
+    ...truncatedSources,
+    ...selectionTruncatedSources,
+  ]);
 
   const brandById = new Map(brandRows.map((brand) => [brand.id, brand]));
   const projectById = new Map(visibleProjectRows.map((project) => [project.id, project]));
   const taskStats = new Map();
 
-  taskRows.forEach((task) => {
+  visibleTaskRows.forEach((task) => {
     if (!task.project_id) return;
     const stats = taskStats.get(task.project_id) || { total: 0, done: 0 };
     stats.total += 1;
@@ -572,10 +701,25 @@ export async function getProjectLedger() {
 
   const updates = mapProjectUpdates(visibleUpdateRows);
   const updateStats = buildUpdateStats(updates);
-  const todos = mapTodos(taskRows, projectById, brandById);
+  const todos = mapTodos(visibleTaskRows, projectById, brandById);
+  const selectedProjectFound = selectedProjectId
+    ? visibleProjectRows.some((project) => project.id === selectedProjectId)
+    : false;
+  const taskCompleteProjectIds = selectedProjectFound
+    && Array.isArray(selectedTaskRows)
+    && !selectionTruncatedSources.includes("tasks")
+      ? new Set([selectedProjectId])
+      : new Set();
+  const updateCompleteProjectIds = selectedProjectFound
+    && Array.isArray(selectedUpdateRows)
+    && !selectionTruncatedSources.includes("project_updates")
+      ? new Set([selectedProjectId])
+      : new Set();
   const projects = mapProjects(visibleProjectRows, brandById, taskStats, updateStats, {
     taskStatsPartial,
     updateStatsPartial,
+    taskCompleteProjectIds,
+    updateCompleteProjectIds,
   });
   const brands = mapBrands(brandRows, projects, todos, updates);
 
@@ -587,17 +731,27 @@ export async function getProjectLedger() {
     projects,
     todos,
     updates,
-    decisions: mapDecisions(Array.isArray(decisionRows) ? decisionRows.slice(0, OPTIONAL_READ_LIMIT) : []),
-    notes: mapNotes(Array.isArray(noteRows) ? noteRows.slice(0, OPTIONAL_READ_LIMIT) : []),
-    checks: mapRoutineChecks(Array.isArray(routineRows) ? routineRows.slice(0, OPTIONAL_READ_LIMIT) : []),
+    decisions: mapDecisions(visibleDecisionRows),
+    notes: mapNotes(visibleNoteRows),
+    checks: mapRoutineChecks(visibleRoutineRows),
     columns: buildBoardColumns(projects, todos),
     taskAggregation: {
-      loaded: taskRows.length,
+      loaded: visibleTaskRows.length,
       total: Number.isFinite(taskRowCount) ? taskRowCount : null,
       partial: taskStatsPartial,
     },
-    partial: optionalFailedSources.length > 0 || partialSources.length > 0,
-    failedSources: optionalFailedSources,
+    partial: optionalFailedSources.length > 0
+      || selectionFailedSources.length > 0
+      || partialSources.length > 0,
+    failedSources: uniqueSources([...optionalFailedSources, ...selectionFailedSources]),
     partialSources,
+    selection: selectedProjectId
+      ? {
+          projectId: selectedProjectId,
+          found: selectedProjectFound,
+          failedSources: uniqueSources(selectionFailedSources),
+          partialSources: uniqueSources(selectionTruncatedSources),
+        }
+      : null,
   };
 }

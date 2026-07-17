@@ -225,12 +225,25 @@ test("project reads keep error distinct from preview and offer retry", () => {
   assert.doesNotMatch(loadBlock, /catch[\s\S]{0,120}setSyncState\(['"]preview['"]\)/);
 });
 
+test("canonical project selection is forwarded to the Projects API before the bounded read", () => {
+  const loadStart = projectsSource.indexOf("const loadLedger");
+  const effectStart = projectsSource.indexOf("React.useEffect", loadStart);
+  const loadBlock = projectsSource.slice(loadStart, effectStart);
+
+  assert.match(projectsSource.slice(0, loadStart), /const selectedProjectId = searchParams\.get\(['"]project['"]\)/);
+  assert.match(loadBlock, /\/api\/hub\/projects\?project=\$\{encodeURIComponent\(selectedProjectId\)\}/);
+  assert.match(loadBlock, /fetch\(endpoint, \{ cache: ['"]no-store['"] \}\)/);
+  assert.match(loadBlock, /\[selectedProjectId\]/);
+  assert.match(projectsSource, /ledger\.selection\?\.projectId === p\.id/);
+  assert.match(projectsSource, /failedSources=\{detailFailedSources\}/);
+});
+
 test("partial project reads preserve core rows and offer a named retry state", () => {
   assert.match(projectsSource, /data\.partial \? ['"]partial['"] : ['"]live['"]/);
   assert.match(projectsSource, /프로젝트 일부 원장을 읽지 못했습니다/);
   assert.match(projectsSource, /ledger\.failedSources/);
   assert.match(projectsSource, /onClick=\{\(\) => loadLedger\(\{ initial: true \}\)\}/);
-  assert.match(projectsSource, /failedSources=\{ledger\.failedSources\}/);
+  assert.match(projectsSource, /failedSources=\{detailFailedSources\}/);
 });
 
 test("project detail distinguishes failed optional ledgers from successful empty history", () => {
