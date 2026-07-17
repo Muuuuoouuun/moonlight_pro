@@ -679,3 +679,34 @@ test("builds accessible Roadmap labels for ranges, due points, and milestones", 
   assert.match(pmsUi.buildRoadmapItemAriaLabel(byId.get("project:due")), /2028-03-04/);
   assert.match(pmsUi.buildRoadmapItemAriaLabel(byId.get("milestone:ms")), /2028-04-05/);
 });
+
+test("Roadmap milestone labels distinguish identical titles and dates by project", () => {
+  const projection = pmsUi.buildRoadmapProjection({
+    projects: [
+      { id: "alpha", name: "알파 프로젝트", dueAt: "2028-04-30" },
+      { id: "beta", name: "베타 프로젝트", dueAt: "2028-04-30" },
+    ],
+    milestones: [
+      { id: "alpha-launch", projectId: "alpha", title: "출시", targetAt: "2028-04-05" },
+      { id: "beta-launch", projectId: "beta", title: "출시", targetAt: "2028-04-05" },
+    ],
+  }, { now: new Date(2028, 0, 15) });
+  const byId = new Map(projection.items.map((item) => [item.id, item]));
+  const alpha = byId.get("milestone:alpha-launch");
+  const beta = byId.get("milestone:beta-launch");
+
+  assert.equal(alpha.projectName, "알파 프로젝트");
+  assert.equal(beta.projectName, "베타 프로젝트");
+  assert.equal(
+    pmsUi.buildRoadmapItemAriaLabel(alpha),
+    "출시 · 알파 프로젝트 · 마일스톤 목표일 · 2028-04-05",
+  );
+  assert.equal(
+    pmsUi.buildRoadmapItemAriaLabel(beta),
+    "출시 · 베타 프로젝트 · 마일스톤 목표일 · 2028-04-05",
+  );
+  assert.notEqual(
+    pmsUi.buildRoadmapItemAriaLabel(alpha),
+    pmsUi.buildRoadmapItemAriaLabel(beta),
+  );
+});

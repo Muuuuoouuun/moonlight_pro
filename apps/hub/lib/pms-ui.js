@@ -527,6 +527,7 @@ export function buildRoadmapProjection(roadmap = {}, {
     return [{
       id: `milestone:${milestone.id}`,
       projectId: milestone.projectId,
+      projectName: project?.name || null,
       name: milestone.title,
       meta: project?.name ? `${project.name} · 마일스톤` : "마일스톤",
       kind: "milestone",
@@ -556,7 +557,8 @@ export function buildRoadmapItemAriaLabel(item = {}) {
     return `${item.name || "프로젝트"} · 프로젝트 기간 · ${planningDateLabel(item.startedAt)}부터 ${planningDateLabel(item.dueAt)}까지`;
   }
   if (item.kind === "milestone") {
-    return `${item.name || "마일스톤"} · 마일스톤 목표일 · ${planningDateLabel(item.targetAt)}`;
+    const projectLabel = item.projectName ? ` · ${item.projectName}` : "";
+    return `${item.name || "마일스톤"}${projectLabel} · 마일스톤 목표일 · ${planningDateLabel(item.targetAt)}`;
   }
   return `${item.name || "프로젝트"} · 프로젝트 마감 · ${planningDateLabel(item.dueAt)}`;
 }
