@@ -126,6 +126,18 @@ export function buildDealWrite(payload = {}) {
   if (payload.value != null) {
     columns.amount = parseMoneyLabel(payload.value);
   }
+  // closeAt (the drawer's <input type=date>) → expected_close_at. Previously the drawer edited
+  // `close`, a formatted display label ("6월 21일") that was never reversed here — editing it
+  // looked like it saved but silently did nothing. closeAt carries the raw value instead.
+  if (payload.closeAt !== undefined) {
+    const raw = String(payload.closeAt || "").trim();
+    if (!raw) {
+      columns.expected_close_at = null;
+    } else {
+      const parsed = new Date(raw);
+      if (!Number.isNaN(parsed.getTime())) columns.expected_close_at = parsed.toISOString();
+    }
+  }
 
   const type = normalizeType(payload.type);
   if (type) metaPatch.account_kind = type;

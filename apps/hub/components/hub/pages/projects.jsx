@@ -4,7 +4,7 @@ import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState, SyncBadge, SegmentedControl, EditDrawer } from "../hub-primitives";
-import { buildProjectDraft, buildTaskBoardColumns, buildTaskDraft, createClientId, taskStatusForBoardColumn } from "@/lib/pms-ui";
+import { buildProjectDraft, buildProjectTimeline, buildTaskBoardColumns, buildTaskDraft, createClientId, taskStatusForBoardColumn } from "@/lib/pms-ui";
 import {
   getWorkspace,
   filterBrandsByWorkspace,
@@ -64,9 +64,29 @@ function ActivityRow({ title, body, meta, badge, tone = 'neutral' }) {
 const PROJECT_VIEW_OPTIONS = [
   { key: 'tree', label: 'List' },
   { key: 'board', label: 'Board' },
+  { key: 'timeline', label: 'Timeline' },
   { key: 'todos', label: 'To-dos' },
 ];
 const PROJECT_VIEWS = new Set(PROJECT_VIEW_OPTIONS.map(v => v.key));
+
+// Timeline view: status → left-stripe token (§5.2 — status color lives on stripes/chips,
+// never as a full bar fill) and the same Korean status labels the List view row uses.
+const STATUS_LINE_TOKEN = {
+  'In progress': 'var(--info-line)',
+  Review: 'var(--warning-line)',
+  Planning: 'var(--line-strong)',
+  Backlog: 'var(--line-soft)',
+  Blocked: 'var(--danger-line)',
+  Done: 'var(--success-line)',
+};
+const STATUS_LABEL_KO = {
+  'In progress': '작업 중',
+  Review: '검토',
+  Planning: '계획',
+  Blocked: '막힘',
+  Done: '완료',
+  Backlog: '백로그',
+};
 
 // Container category folders (2026-07-15 spec §4.2). The ledger resolves
 // `category` (meta.category → canonical map → 'general'); empty folders are
@@ -77,6 +97,38 @@ const PROJECT_CATEGORIES = [
   { key: 'general', label: '일반' },
 ];
 const FOLDER_STORAGE_KEY = 'mlp.pms.folders';
+// List 뷰의 브랜드 섹션 접기 상태 (전체 브랜드 볼 때만). UI 전용, 브랜드 slug로 영속.
+const BRAND_SECTION_KEY = 'mlp.pms.brand-sections';
+// 콘텐츠 프로젝트 파이프라인 — "＋ 콘텐츠"로 생성 시 이 4단계가 하위 아이템으로 순차 시드된다.
+// (예: "7월3주차 Class.moon 콘텐츠" 프로젝트 안의 기획→초안→검토→업로드)
+const CONTENT_STAGES = ['기획', '초안', '검토', '업로드'];
+
+// 사이드바 드래그 정렬 — 분류(폴더)와 컨테이너(브랜드) 순서. UI 전용, localStorage 영속.
+const FOLDER_ORDER_KEY = 'mlp.pms.folder-order';
+const BRAND_ORDER_KEY = 'mlp.pms.brand-order';
+
+// order(키 배열)에 없는 항목은 원래 순서를 유지하며 맨 뒤로 (stable sort).
+function applyCustomOrder(items, order, keyOf) {
+  if (!order || !order.length) return items;
+  const idx = new Map(order.map((k, i) => [k, i]));
+  const rank = (it) => (idx.has(keyOf(it)) ? idx.get(keyOf(it)) : Number.POSITIVE_INFINITY);
+  return [...items].sort((a, b) => rank(a) - rank(b));
+}
+
+// prevOrder를 현재 존재하는 키로 정규화한 뒤, movingKey를 targetKey '앞'으로 이동한 새 순서 배열.
+function computeMovedOrder(prevOrder, currentKeys, movingKey, targetKey) {
+  const present = new Set(currentKeys);
+  const base = prevOrder.filter((k) => present.has(k));
+  for (const k of currentKeys) if (!base.includes(k)) base.push(k);
+  if (movingKey === targetKey) return base; // 자기 자신에 드롭 → 정규화만
+  const from = base.indexOf(movingKey);
+  if (from === -1) return base;
+  base.splice(from, 1);
+  const to = base.indexOf(targetKey);
+  if (to === -1) base.push(movingKey);
+  else base.splice(to, 0, movingKey);
+  return base;
+}
 
 // Container (brand) create helpers. brands.slug must be unique per workspace and
 // is required by the table; Korean names collapse to an id-based fallback.
@@ -282,10 +334,13 @@ export function Projects({ workspace }) {
   }, [brand, brands, wsDefaultBrand]);
 
   const toggleExpand = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const createProject = React.useCallback((initialStatus = 'Planning') => {
-    const selectedBrand = brand === 'all'
-      ? brands.find(item => item.key !== 'all')
-      : currentBrand;
+  const createProject = React.useCallback((initialStatus = 'Planning', brandKeyOverride = null) => {
+    // brandKeyOverride: 전체 뷰의 브랜드 섹션 하단 "추가"가 그 섹션의 브랜드로 시드한다.
+    const selectedBrand = brandKeyOverride
+      ? (brands.find(item => item.key === brandKeyOverride) || null)
+      : (brand === 'all'
+        ? brands.find(item => item.key !== 'all')
+        : currentBrand);
     if (!selectedBrand || selectedBrand.id === 'all') {
       setOrderResult({ tone: 'err', label: '프로젝트를 연결할 브랜드가 없습니다' });
       return;
@@ -297,6 +352,28 @@ export function Projects({ workspace }) {
         initialStatus,
       }),
       id: createClientId(),
+    });
+  }, [brand, brands, currentBrand]);
+
+  // 콘텐츠 프로젝트: 브랜드 시드 + contentPipeline 플래그. 저장이 성공하면 persistProject가
+  // CONTENT_STAGES(기획→초안→검토→업로드)를 하위 아이템으로 시드한다.
+  const createContentProject = React.useCallback((brandKeyOverride = null) => {
+    const selectedBrand = brandKeyOverride
+      ? (brands.find(item => item.key === brandKeyOverride) || null)
+      : (brand === 'all' ? brands.find(item => item.key !== 'all') : currentBrand);
+    if (!selectedBrand || selectedBrand.id === 'all') {
+      setOrderResult({ tone: 'err', label: '콘텐츠를 연결할 브랜드가 없습니다' });
+      return;
+    }
+    setProjectDraft({
+      ...buildProjectDraft({
+        brandId: selectedBrand.id,
+        brandKey: selectedBrand.key,
+        initialStatus: 'Planning',
+      }),
+      id: createClientId(),
+      title: `${selectedBrand.name} 콘텐츠`,
+      contentPipeline: true,
     });
   }, [brand, brands, currentBrand]);
 
@@ -348,8 +425,37 @@ export function Projects({ workspace }) {
         setOrderResult({ tone: 'err', label: data.error || `저장 실패 ${response.status}` });
         return { ok: false, status: data.status || 'error' };
       }
+      // 콘텐츠 파이프라인 프로젝트: 기획→초안→검토→업로드를 하위 아이템으로 순차 시드.
+      // 프로젝트 API가 클라이언트 id를 그대로 row id로 쓰므로 projectDraft.id로 연결 가능.
+      let seeded = false;
+      if (projectDraft.isNew && projectDraft.contentPipeline && data.status === 'saved') {
+        const newProjectId = data.project?.id || projectDraft.id;
+        // 원장은 tasks를 updated_at.desc로 정렬한다(operating-ledger). 체크리스트가
+        // 기획→초안→검토→업로드로 위에서 아래로 읽히게 하려면 기획을 '마지막'에 생성해
+        // 가장 최신이 되게 한다 → 역순 시드.
+        for (const stage of [...CONTENT_STAGES].reverse()) {
+          const stageRes = await fetch('/api/hub/tasks', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              id: createClientId(),
+              title: stage,
+              projectId: newProjectId,
+              status: 'todo',
+              priority: 'medium',
+              source: 'hub-projects',
+            }),
+          }).catch(() => null);
+          if (stageRes && stageRes.ok) seeded = true;
+        }
+      }
       await loadLedger();
-      setOrderResult({ tone: 'ok', label: projectDraft.isNew ? '프로젝트 저장됨' : '프로젝트 업데이트됨' });
+      setOrderResult({
+        tone: 'ok',
+        label: projectDraft.isNew
+          ? (seeded ? '콘텐츠 프로젝트 저장됨 · 4단계 시드' : '프로젝트 저장됨')
+          : '프로젝트 업데이트됨',
+      });
       return { ok: true, status: data.status };
     } catch (error) {
       setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
@@ -499,23 +605,39 @@ export function Projects({ workspace }) {
     router.replace(pathname);
   }, [createProject, searchParams, router, pathname]);
 
+  // 사이드바 드래그 정렬 상태 (UI 전용, localStorage). brandGroups가 이 순서를 적용하므로
+  // 반드시 memo보다 먼저 선언한다.
+  const [folderOrder, setFolderOrder] = React.useState([]);
+  const [brandOrder, setBrandOrder] = React.useState([]);
+  const [sidebarDrag, setSidebarDrag] = React.useState(null); // { type: 'folder'|'brand', key, folderId? }
+  const [dragOverKey, setDragOverKey] = React.useState(null);
+  React.useEffect(() => {
+    try {
+      const fo = JSON.parse(localStorage.getItem(FOLDER_ORDER_KEY) || 'null');
+      if (Array.isArray(fo)) setFolderOrder(fo);
+      const bo = JSON.parse(localStorage.getItem(BRAND_ORDER_KEY) || 'null');
+      if (Array.isArray(bo)) setBrandOrder(bo);
+    } catch { /* defaults apply */ }
+  }, []);
+
   const brandGroups = React.useMemo(() => {
     const real = brands.filter(b => b.key !== 'all');
     const scopes = [
       { key: 'classin', label: '업무 · 클래스인', items: real.filter(b => b.orgScope === 'classin') },
       { key: 'personal', label: '개인', items: real.filter(b => b.orgScope !== 'classin') },
     ];
+    const orderedCategories = applyCustomOrder(PROJECT_CATEGORIES, folderOrder, c => c.key);
     return scopes.map(g => ({
       ...g,
-      folders: PROJECT_CATEGORIES
+      folders: orderedCategories
         .map(cat => ({
           ...cat,
           id: `${g.key}:${cat.key}`,
-          items: g.items.filter(b => (b.category || 'general') === cat.key),
+          items: applyCustomOrder(g.items.filter(b => (b.category || 'general') === cat.key), brandOrder, b => b.key),
         }))
         .filter(f => f.items.length > 0),
     }));
-  }, [brands]);
+  }, [brands, folderOrder, brandOrder]);
 
   // Folder collapse — default expanded; persisted per folder id.
   const [foldersCollapsed, setFoldersCollapsed] = React.useState({});
@@ -533,14 +655,67 @@ export function Projects({ workspace }) {
     });
   }, []);
 
+  // List 뷰에서 전체 브랜드를 볼 때 각 브랜드의 프로젝트 목록 전체를 접는 아코디언 상태.
+  const [brandSectionsCollapsed, setBrandSectionsCollapsed] = React.useState({});
+  React.useEffect(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(BRAND_SECTION_KEY) || 'null');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) setBrandSectionsCollapsed(parsed);
+    } catch { /* defaults apply */ }
+  }, []);
+  const toggleBrandSection = React.useCallback((key) => {
+    setBrandSectionsCollapsed(prev => {
+      const map = { ...prev, [key]: !prev[key] };
+      try { localStorage.setItem(BRAND_SECTION_KEY, JSON.stringify(map)); } catch { /* ignore */ }
+      return map;
+    });
+  }, []);
+
+  // 브랜드가 속한 폴더 id (scope:category) — 브랜드 드롭은 같은 폴더 안에서만 재정렬한다.
+  const folderIdOf = (b) => `${b.orgScope === 'classin' ? 'classin' : 'personal'}:${b.category || 'general'}`;
+
+  // 분류(폴더) 드롭 → 전역 카테고리 순서를 재정렬하고 localStorage에 영속.
+  const handleFolderDrop = (targetCatKey) => {
+    if (!sidebarDrag || sidebarDrag.type !== 'folder' || sidebarDrag.key === targetCatKey) {
+      setSidebarDrag(null); setDragOverKey(null); return;
+    }
+    const next = computeMovedOrder(folderOrder, PROJECT_CATEGORIES.map(c => c.key), sidebarDrag.key, targetCatKey);
+    setFolderOrder(next);
+    try { localStorage.setItem(FOLDER_ORDER_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+    setSidebarDrag(null); setDragOverKey(null);
+  };
+
+  // 컨테이너(브랜드) 드롭 → 같은 폴더 안에서만 순서 재정렬하고 영속. 다른 폴더로의 드롭은 무시.
+  const handleBrandDrop = (targetBrand) => {
+    if (!sidebarDrag || sidebarDrag.type !== 'brand' || sidebarDrag.key === targetBrand.key
+        || sidebarDrag.folderId !== folderIdOf(targetBrand)) {
+      setSidebarDrag(null); setDragOverKey(null); return;
+    }
+    const currentKeys = brands.filter(b => b.key !== 'all').map(b => b.key);
+    const next = computeMovedOrder(brandOrder, currentKeys, sidebarDrag.key, targetBrand.key);
+    setBrandOrder(next);
+    try { localStorage.setItem(BRAND_ORDER_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+    setSidebarDrag(null); setDragOverKey(null);
+  };
+
   const renderBrandSidebarRow = (b) => {
     const active = brand === b.key;
     const count = b.key === 'all' ? allProjects.length : (b.projects || 0);
     const changes = b.key === 'all'
       ? brands.filter(x => x.key !== 'all').reduce((s, x) => s + (x.changes || 0), 0)
       : (b.changes || 0);
+    const draggable = b.key !== 'all';
+    const dragging = draggable && sidebarDrag?.type === 'brand' && sidebarDrag.key === b.key;
+    const dropTarget = draggable && sidebarDrag?.type === 'brand' && dragOverKey === b.key
+      && sidebarDrag.key !== b.key && sidebarDrag.folderId === folderIdOf(b);
     return (
-      <button key={b.key} onClick={() => setBrand(b.key)} style={{
+      <button key={b.key} onClick={() => setBrand(b.key)}
+        draggable={draggable}
+        onDragStart={draggable ? () => setSidebarDrag({ type: 'brand', key: b.key, folderId: folderIdOf(b) }) : undefined}
+        onDragEnd={() => { setSidebarDrag(null); setDragOverKey(null); }}
+        onDragOver={draggable ? (e) => { e.preventDefault(); if (sidebarDrag?.type === 'brand') setDragOverKey(b.key); } : undefined}
+        onDrop={draggable ? (e) => { e.preventDefault(); handleBrandDrop(b); } : undefined}
+        style={{
         width: '100%', display: 'flex', alignItems: 'center', gap: 9,
         padding: '8px 10px', marginBottom: 1,
         background: active ? 'var(--surface-3)' : 'transparent',
@@ -548,7 +723,11 @@ export function Projects({ workspace }) {
         borderRadius: 'var(--r-sm)', textAlign: 'left',
         color: active ? 'var(--fg)' : 'var(--fg-muted)',
         position: 'relative',
+        cursor: draggable ? 'grab' : 'pointer',
+        opacity: dragging ? 0.4 : 1,
+        boxShadow: dropTarget ? 'inset 0 2px 0 0 var(--moon-300)' : undefined,
       }}>
+        {draggable && <Iconed name="drag" size={10} style={{ color: 'var(--fg-faint)', flexShrink: 0, marginRight: -4 }} />}
         {/* 글리프 단색·축소 (2026-07-15 spec §5) — 톤은 Badge/Dot에만. */}
         <span style={{ fontSize: 12, width: 18, textAlign: 'center', position: 'relative', color: active ? 'var(--fg-muted)' : 'var(--fg-faint)' }}>
           {b.glyph}
@@ -649,6 +828,8 @@ export function Projects({ workspace }) {
               </div>
               {group.folders.map(folder => {
                 const closed = Boolean(foldersCollapsed[folder.id]);
+                const fDragging = sidebarDrag?.type === 'folder' && sidebarDrag.key === folder.key;
+                const fDropTarget = sidebarDrag?.type === 'folder' && dragOverKey === folder.id && sidebarDrag.key !== folder.key;
                 return (
                   <div key={folder.id}>
                     <button
@@ -656,12 +837,21 @@ export function Projects({ workspace }) {
                       className="hub-row"
                       aria-expanded={!closed}
                       onClick={() => toggleFolder(folder.id)}
+                      draggable
+                      onDragStart={() => setSidebarDrag({ type: 'folder', key: folder.key })}
+                      onDragEnd={() => { setSidebarDrag(null); setDragOverKey(null); }}
+                      onDragOver={(e) => { e.preventDefault(); if (sidebarDrag?.type === 'folder') setDragOverKey(folder.id); }}
+                      onDrop={(e) => { e.preventDefault(); handleFolderDrop(folder.key); }}
                       style={{
                         width: '100%', display: 'flex', alignItems: 'center', gap: 6,
                         padding: '5px 10px', borderRadius: 'var(--r-sm)',
                         color: 'var(--fg-dim)', fontSize: 11, textAlign: 'left',
+                        cursor: 'grab',
+                        opacity: fDragging ? 0.4 : 1,
+                        boxShadow: fDropTarget ? 'inset 0 2px 0 0 var(--moon-300)' : undefined,
                       }}
                     >
+                      <Iconed name="drag" size={10} style={{ color: 'var(--fg-faint)', flexShrink: 0 }} />
                       <Iconed name="chevronD" size={11} style={{ transform: closed ? 'rotate(-90deg)' : 'none' }} />
                       <span style={{ flex: 1 }}>{folder.label}</span>
                       <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{folder.items.length}</span>
@@ -793,23 +983,53 @@ export function Projects({ workspace }) {
                     />
                   </Card>
                 )}
-                {[
-                  { key: 'In progress', label: '진행중', tone: 'var(--info)' },
-                  { key: 'Blocked',     label: '막힘',   tone: 'var(--danger)' },
-                  { key: 'Review',      label: '검토',   tone: 'var(--warning)' },
-                  { key: 'Planning',    label: '계획',   tone: 'var(--moon-400)' },
-                  { key: 'Done',        label: '완료',   tone: 'var(--success)' },
-                  { key: 'Backlog',     label: '백로그', tone: 'var(--fg-faint)' },
-                ].map(group => {
-                  const groupProjects = projects.filter(p => p.status === group.key);
-                  if (!groupProjects.length) return null;
-                  return (
-                    <div key={group.key}>
+                {(() => {
+                  const STATUS_GROUPS = [
+                    { key: 'In progress', label: '진행중', tone: 'var(--info)' },
+                    { key: 'Blocked',     label: '막힘',   tone: 'var(--danger)' },
+                    { key: 'Review',      label: '검토',   tone: 'var(--warning)' },
+                    { key: 'Planning',    label: '계획',   tone: 'var(--moon-400)' },
+                    { key: 'Done',        label: '완료',   tone: 'var(--success)' },
+                    { key: 'Backlog',     label: '백로그', tone: 'var(--fg-faint)' },
+                  ];
+                  // 전체 브랜드 뷰는 브랜드별 아코디언(목록 전체 접기), 특정 브랜드 뷰는 기존 상태별 그룹.
+                  const sections = brand === 'all'
+                    ? brands.filter(b => b.key !== 'all')
+                        .map(b => ({ kind: 'brand', id: b.key, brand: b, items: projects.filter(p => p.brand === b.key) }))
+                        .filter(s => s.items.length > 0)
+                    : STATUS_GROUPS
+                        .map(g => ({ kind: 'status', id: g.key, statusKey: g.key, label: g.label, tone: g.tone, items: projects.filter(p => p.status === g.key) }))
+                        .filter(s => s.items.length > 0);
+                  return sections.map(section => {
+                    const items = section.items;
+                    const collapsed = section.kind === 'brand' && Boolean(brandSectionsCollapsed[section.id]);
+                    return (
+                    <div key={section.id}>
+                      {section.kind === 'brand' ? (
+                      <button
+                        type="button"
+                        className="hub-row"
+                        aria-expanded={!collapsed}
+                        onClick={() => toggleBrandSection(section.id)}
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '6px 8px', marginBottom: 10, borderRadius: 'var(--r-sm)',
+                          textAlign: 'left', color: 'var(--fg)',
+                        }}
+                      >
+                        <Iconed name="chevronD" size={12} style={{ transform: collapsed ? 'rotate(-90deg)' : 'none', color: 'var(--fg-faint)' }} />
+                        <span style={{ fontSize: 13, color: 'var(--fg-muted)' }}>{section.brand.glyph}</span>
+                        <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{section.brand.name}</span>
+                        <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4 }}>{items.length}</span>
+                      </button>
+                      ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                        <div style={{ width: 3, height: 14, background: group.tone, borderRadius: 2 }} />
-                        <div style={{ fontSize: 12.5, fontWeight: 600 }}>{group.label}</div>
-                        <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4 }}>{groupProjects.length}</span>
+                        <div style={{ width: 3, height: 14, background: section.tone, borderRadius: 2 }} />
+                        <div style={{ fontSize: 12.5, fontWeight: 600 }}>{section.label}</div>
+                        <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4 }}>{items.length}</span>
                       </div>
+                      )}
+                      {!collapsed && (
                       <Card pad={false} className="hub-table-card">
                         <div style={{
                           display: 'grid', gridTemplateColumns: '22px 18px 1fr 36px 100px 120px',
@@ -824,7 +1044,7 @@ export function Projects({ workspace }) {
                           <span>기한</span>
                           <span>작업 상태</span>
                         </div>
-                        {groupProjects.map((p, pi) => {
+                        {items.map((p, pi) => {
                           const isOpen = expanded.has(p.id);
                           const pTodos = scopedTodos.filter(t => t.project === p.id);
                           const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
@@ -834,7 +1054,7 @@ export function Projects({ workspace }) {
                               <div style={{
                                 display: 'grid', gridTemplateColumns: '22px 18px 1fr 36px 100px 120px',
                                 padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', gap: 8,
-                                borderBottom: (isOpen || pi < groupProjects.length - 1) ? '1px solid var(--line-soft)' : 'none',
+                                borderBottom: (isOpen || pi < items.length - 1) ? '1px solid var(--line-soft)' : 'none',
                                 background: isSel ? 'var(--surface-3)' : 'transparent',
                                 cursor: 'pointer',
                               }}
@@ -869,7 +1089,7 @@ export function Projects({ workspace }) {
                               </div>
 
                               {isOpen && (
-                                <div style={{ background: 'var(--surface-2)', borderBottom: pi < groupProjects.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+                                <div style={{ background: 'var(--surface-2)', borderBottom: pi < items.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
                                   <div style={{
                                     display: 'grid', gridTemplateColumns: '22px 18px 1fr 36px 100px 120px',
                                     padding: '6px 14px 6px 44px', gap: 8, alignItems: 'center',
@@ -918,15 +1138,31 @@ export function Projects({ workspace }) {
                             </React.Fragment>
                           );
                         })}
-                        <button onClick={() => createProject(group.key)} style={{
+                        {section.kind === 'brand' ? (
+                        <div style={{ display: 'flex', borderTop: '1px solid var(--line-soft)' }}>
+                          <button onClick={() => createContentProject(section.id)} style={{
+                            flex: 1, padding: '10px 14px', textAlign: 'left',
+                            fontSize: 11.5, color: 'var(--fg-muted)',
+                          }}>＋ 콘텐츠 <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)' }}>기획·초안·검토·업로드</span></button>
+                          <button onClick={() => createProject('Planning', section.id)} style={{
+                            flex: '0 0 auto', padding: '10px 14px',
+                            fontSize: 11.5, color: 'var(--fg-faint)',
+                            borderLeft: '1px solid var(--line-soft)',
+                          }}>＋ 프로젝트</button>
+                        </div>
+                        ) : (
+                        <button onClick={() => createProject(section.statusKey)} style={{
                           width: '100%', padding: '10px 14px', textAlign: 'left',
                           fontSize: 11.5, color: 'var(--fg-faint)',
                           borderTop: '1px solid var(--line-soft)',
-                        }}>＋ {group.label} 프로젝트 추가</button>
+                        }}>＋ {section.label} 프로젝트 추가</button>
+                        )}
                       </Card>
+                      )}
                     </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </div>
             </div>
 
@@ -1186,6 +1422,123 @@ export function Projects({ workspace }) {
             ))}
           </div>
         )}
+
+        {view === 'timeline' && (() => {
+          if (projects.length === 0) {
+            return (
+              <div className="scroll-y" style={{ flex: 1, padding: 'var(--section-gap)' }}>
+                <div style={{ maxWidth: 880, margin: '0 auto' }}>
+                  <Card>
+                    <EmptyState
+                      icon="projects"
+                      title="타임라인에 표시할 프로젝트가 없습니다"
+                      description="기한이 있는 프로젝트는 축 위에 막대로, 기한 미정 프로젝트는 아래 목록으로 표시됩니다."
+                      action={<Button variant="primary" size="sm" icon="plus" onClick={() => createProject()}>Project</Button>}
+                    />
+                  </Card>
+                </div>
+              </div>
+            );
+          }
+          const timeline = buildProjectTimeline(projects);
+          const weekTicks = [];
+          for (let d = 0; d <= timeline.totalDays; d += 7) {
+            const tickDate = new Date(timeline.windowStart.getTime() + d * 86_400_000);
+            weekTicks.push({
+              offsetPct: (d / timeline.totalDays) * 100,
+              label: new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric' }).format(tickDate),
+            });
+          }
+          return (
+            <div className="scroll-y" style={{ flex: 1, padding: 'var(--section-gap)' }}>
+              <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+                <Card pad={false} className="hub-table-card">
+                  {timeline.items.length === 0 ? (
+                    <div style={{ padding: '18px 14px', fontSize: 11.5, color: 'var(--fg-faint)' }}>기한이 지정된 프로젝트가 없습니다. 프로젝트를 편집해 기한을 지정하면 여기 축 위에 표시됩니다.</div>
+                  ) : (
+                    // Fixed inner min-width + horizontal scroll (same pattern as the board
+                    // view's hub-scroll-x) so the ruler and bars never get squeezed unreadable
+                    // on narrow viewports — the label column alone would eat a phone's width.
+                    <div className="hub-scroll-x" style={{ overflowX: 'auto' }}>
+                      <div style={{ minWidth: 640 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', borderBottom: '1px solid var(--line-soft)' }}>
+                          <div style={{ padding: '8px 14px', fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>프로젝트</div>
+                          <div style={{ position: 'relative', padding: '8px 0', background: 'var(--surface-2)' }}>
+                            {weekTicks.map((tick, i) => (
+                              <span key={i} className="mono" style={{ position: 'absolute', left: `${tick.offsetPct}%`, fontSize: 10, color: 'var(--fg-faint)', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>{tick.label}</span>
+                            ))}
+                            <span className="mono" style={{ position: 'absolute', left: `${timeline.todayPct}%`, top: 0, fontSize: 10, color: 'var(--moon-300)', transform: 'translateX(-50%)', fontWeight: 600, whiteSpace: 'nowrap' }}>오늘</span>
+                          </div>
+                        </div>
+                        {timeline.items.map((item, i) => {
+                          const p = item.project;
+                          const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
+                          const lineToken = item.overdue ? 'var(--danger-line)' : (STATUS_LINE_TOKEN[p.status] || 'var(--line-strong)');
+                          return (
+                            <div key={p.id} className="hub-row" role="button" tabIndex={0}
+                              onClick={() => editProject(p)}
+                              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); editProject(p); } }}
+                              style={{
+                                display: 'grid', gridTemplateColumns: '200px 1fr', alignItems: 'center',
+                                borderBottom: i < timeline.items.length - 1 ? '1px solid var(--line-soft)' : 'none',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', minWidth: 0 }}>
+                                <span style={{ fontSize: 13, color: 'var(--fg-muted)' }}>{pBrand.glyph}</span>
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                  <div style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
+                                  <div className="mono" style={{ fontSize: 10.5, color: item.overdue ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 2 }}>{p.due}{item.overdue ? ' · 지남' : ''}</div>
+                                </div>
+                              </div>
+                              <div style={{ position: 'relative', height: 34 }}>
+                                <div style={{
+                                  position: 'absolute', left: `${item.startPct}%`, width: `${Math.max(item.widthPct, 1.2)}%`,
+                                  top: 8, height: 18, borderRadius: 999,
+                                  background: 'var(--surface-3)', border: '1px solid var(--line)',
+                                  boxShadow: `inset 2px 0 0 ${lineToken}`,
+                                  overflow: 'hidden',
+                                }}>
+                                  <div style={{ height: '100%', width: `${Math.max(0, Math.min(100, p.progress || 0))}%`, background: 'var(--moon-400)', opacity: 0.55 }} />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </Card>
+
+                {timeline.undated.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 8 }}>기한 미정 · {timeline.undated.length}</div>
+                    <Card pad={false}>
+                      {timeline.undated.map((p, i) => {
+                        const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
+                        return (
+                          <div key={p.id} className="hub-row" role="button" tabIndex={0}
+                            onClick={() => editProject(p)}
+                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); editProject(p); } }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                              borderBottom: i < timeline.undated.length - 1 ? '1px solid var(--line-soft)' : 'none',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <span style={{ fontSize: 13, color: 'var(--fg-muted)' }}>{pBrand.glyph}</span>
+                            <span style={{ flex: 1, fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                            <Badge tone={statusTone[p.status]} size="xs">{STATUS_LABEL_KO[p.status] || p.status}</Badge>
+                          </div>
+                        );
+                      })}
+                    </Card>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       <EditDrawer

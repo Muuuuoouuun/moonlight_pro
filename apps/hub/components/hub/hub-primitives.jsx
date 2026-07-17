@@ -494,6 +494,20 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, width = 
   );
 }
 
+// Groups consecutive fields sharing a `row` key into one flex row (compact, side-by-side
+// inputs for related fields — 단계+금액, 타입+지역, etc.) instead of every field getting its
+// own full-width block regardless of how little content it holds. Fields without `row` (the
+// default — every existing EditDrawer call site) render exactly as before, one per row.
+function groupFieldRows(fields) {
+  const rows = [];
+  fields.forEach((f) => {
+    const last = rows[rows.length - 1];
+    if (f.row && last && last.row === f.row) last.fields.push(f);
+    else rows.push({ row: f.row || null, fields: [f] });
+  });
+  return rows;
+}
+
 // Shared field-driven edit drawer. Revenue behavior is canonical for save feedback,
 // ESC close, and optimistic delete confirmation. Composes on top of Drawer for the shell.
 // Cmd/Ctrl+Enter mirrors the footer 완료 (save) button.
@@ -558,23 +572,31 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
         </>
       }
     >
-      {fields.map(f => (
-        <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>{f.label}</span>
-          {f.type === 'select' ? (
-            <select value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
-              {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          ) : (
-            <input
-              type={f.inputType || 'text'}
-              value={record[f.key] ?? ''}
-              placeholder={f.placeholder || ''}
-              onChange={e => onChange(f.key, f.inputType === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value)}
-              style={DRAWER_INPUT_STYLE}
-            />
-          )}
-        </label>
+      {groupFieldRows(fields).map((group, i) => (
+        <div key={group.row || `solo-${i}`} style={group.fields.length > 1 ? { display: 'flex', gap: 10 } : undefined}>
+          {group.fields.map(f => (
+            <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5, ...(group.fields.length > 1 ? { flex: 1, minWidth: 0 } : null) }}>
+              <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>{f.label}</span>
+              {f.type === 'select' ? (
+                <select value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
+                  {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              ) : (
+                <input
+                  type={f.inputType || 'text'}
+                  // <input type="date"> requires an exact YYYY-MM-DD value — a full ISO
+                  // timestamp ("2026-07-20T00:00:00+00:00", what every dueAt/closeAt read
+                  // path returns) fails the native format check and the browser silently
+                  // renders it blank instead of erroring, so this slice is load-bearing.
+                  value={f.inputType === 'date' ? String(record[f.key] ?? '').slice(0, 10) : (record[f.key] ?? '')}
+                  placeholder={f.placeholder || ''}
+                  onChange={e => onChange(f.key, f.inputType === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value)}
+                  style={DRAWER_INPUT_STYLE}
+                />
+              )}
+            </label>
+          ))}
+        </div>
       ))}
       {children}
     </Drawer>

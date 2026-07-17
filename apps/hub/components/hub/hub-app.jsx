@@ -45,6 +45,7 @@ const Deals = lazyPage(() => import("./pages/revenue").then(m => m.Deals));
 const Cases = lazyPage(() => import("./pages/revenue").then(m => m.Cases));
 const Accounts = lazyPage(() => import("./pages/revenue").then(m => m.Accounts));
 const Customers = lazyPage(() => import("./pages/customers").then(m => m.Customers));
+const RevenueHeatmap = lazyPage(() => import("./pages/revenue-heatmap").then(m => m.RevenueHeatmap));
 const Segments = lazyPage(() => import("./pages/segments").then(m => m.Segments));
 const Followups = lazyPage(() => import("./pages/followups").then(m => m.Followups));
 const AutomationsIndex = lazyPage(() => import("./pages/automations").then(m => m.AutomationsIndex));
@@ -155,6 +156,7 @@ const PAGE_MAP = {
   'dashboard/content/campaigns': () => <Campaigns />,
   'dashboard/revenue/overview': (n) => <RevenueOverview onNavigate={n} />,
   'dashboard/revenue/customers': (n) => <Customers onNavigate={n} />,
+  'dashboard/revenue/heatmap': (n) => <RevenueHeatmap onNavigate={n} />,
   'dashboard/revenue/leads': () => <Leads />,
   'dashboard/revenue/deals': (n) => <Deals onNavigate={n} />,
   'dashboard/revenue/cases': () => <Cases />,

@@ -429,7 +429,15 @@ export async function getRevenueLedger() {
     accounts,
     cases,
     contacts: (contactRows || []).map(mapContact),
-    companies: (companyRows || []).map(c => ({ id: c.id, name: c.name || "" })),
+    companies: (companyRows || []).map(c => ({
+      id: c.id,
+      name: c.name || "",
+      // Sales Ledger 시트 싱크(scripts/sync-rev-ledger.mjs)가 채우는 지역·규모 —
+      // 히트맵의 회사 단위 지역 폴백과 KA 표시가 이 값을 읽는다
+      region: c.meta?.region || null,
+      scale: c.meta?.scale || null,
+      ka: Boolean(c.meta?.ka),
+    })),
     stages: DEAL_STAGES,
     summary,
   };

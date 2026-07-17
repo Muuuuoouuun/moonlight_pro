@@ -214,6 +214,7 @@ function mapProjects(rows, brandById, taskStats, updateStats) {
       status: normalizeProjectStatus(row.status),
       progress,
       due: formatShortDate(row.due_at),
+      dueAt: row.due_at || "",
       owner: row.owner_id ? "Me" : "Unassigned",
       tag: row.meta?.tag || null,
       tasks: stats.total,

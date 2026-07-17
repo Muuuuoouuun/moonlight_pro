@@ -75,6 +75,86 @@ export function buildTaskDraft({ projectId = null, initialStatus = "todo" } = {}
   };
 }
 
+const MS_PER_DAY = 86_400_000;
+
+function toDayStart(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+// Timeline (Gantt-lite) layout for the Projects timeline view. Only projects with a
+// due date are placed on the axis — a project's `created_at` isn't an operator-set
+// start date, so it's used only as the bar's left edge, never fabricated when missing.
+// Projects without `dueAt` are returned separately (`undated`) for a plain list below
+// the axis rather than guessing a position for them.
+export function buildProjectTimeline(projects = [], {
+  today = new Date(),
+  minWindowDays = 14,
+  lookbackDays = 30,
+  lookaheadDays = 60,
+} = {}) {
+  const todayStart = toDayStart(today) || new Date(0);
+  const dated = [];
+  const undated = [];
+
+  projects.forEach((project) => {
+    const due = toDayStart(project.dueAt);
+    if (!due) {
+      undated.push(project);
+      return;
+    }
+    const created = toDayStart(project.createdAt);
+    const start = created && created.getTime() <= due.getTime() ? created : due;
+    dated.push({ project, start, end: due });
+  });
+
+  if (dated.length === 0) {
+    return { windowStart: todayStart, windowEnd: todayStart, totalDays: 0, today: todayStart, todayPct: 0, items: [], undated };
+  }
+
+  const earliestStart = new Date(Math.min(...dated.map((d) => d.start.getTime())));
+  const latestEnd = new Date(Math.max(...dated.map((d) => d.end.getTime())));
+
+  // Clamp so one very old or very distant due date can't stretch the axis into
+  // unreadable territory — bars outside the window are clipped at its edges.
+  const clampedStartMs = Math.max(earliestStart.getTime(), todayStart.getTime() - lookbackDays * MS_PER_DAY);
+  const clampedEndMs = Math.min(Math.max(latestEnd.getTime(), todayStart.getTime()), todayStart.getTime() + lookaheadDays * MS_PER_DAY);
+
+  let windowStartMs = Math.min(clampedStartMs, todayStart.getTime());
+  let windowEndMs = Math.max(clampedEndMs, todayStart.getTime());
+  if (windowEndMs - windowStartMs < minWindowDays * MS_PER_DAY) {
+    windowEndMs = windowStartMs + minWindowDays * MS_PER_DAY;
+  }
+
+  const windowStart = new Date(windowStartMs);
+  const windowEnd = new Date(windowEndMs);
+  const totalDays = Math.max(1, Math.round((windowEndMs - windowStartMs) / MS_PER_DAY));
+
+  const items = dated
+    .map(({ project, start, end }) => {
+      const visStartMs = Math.max(start.getTime(), windowStartMs);
+      const visEndMs = Math.min(end.getTime(), windowEndMs);
+      const startOffsetDays = (visStartMs - windowStartMs) / MS_PER_DAY;
+      const spanDays = Math.max(0.4, (visEndMs - visStartMs) / MS_PER_DAY);
+      return {
+        project,
+        startPct: (startOffsetDays / totalDays) * 100,
+        widthPct: (spanDays / totalDays) * 100,
+        overdue: end.getTime() < todayStart.getTime(),
+        clippedStart: start.getTime() < windowStartMs,
+        clippedEnd: end.getTime() > windowEndMs,
+      };
+    })
+    .sort((a, b) => a.startPct - b.startPct);
+
+  const todayPct = Math.max(0, Math.min(100, ((todayStart.getTime() - windowStartMs) / MS_PER_DAY / totalDays) * 100));
+
+  return { windowStart, windowEnd, totalDays, today: todayStart, todayPct, items, undated };
+}
+
 export function buildTaskBoardColumns(todos = [], projects = []) {
   const columns = TASK_BOARD_COLUMNS.map((column) => ({ ...column, cards: [] }));
   const columnByKey = new Map(columns.map((column) => [column.key, column]));

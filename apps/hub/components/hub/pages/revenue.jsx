@@ -744,15 +744,16 @@ export function Leads({ workspace }) {
         record={editingLead}
         fields={[
           { key: 'name', label: '이름' },
-          { key: 'type', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
-          { key: 'source', label: '유입경로 (소스)', placeholder: 'Referral · Website · Meta · 설명회…' },
-          { key: 'region', label: '지역', placeholder: '서울 · 경기 · 부산…' },
-          { key: 'scale', label: '규모', placeholder: '학생수 · 직원수 · 매출 규모' },
-          { key: 'units', label: '도입 댓수', inputType: 'number', placeholder: '0' },
+          // 타입+단계 — 이 리드를 어떻게 다룰지 정하는 두 값. 담당은 뺐다: 1인 운영
+          // 시스템에서 항상 Me뿐이고 buildLeadWrite가 애초에 owner를 저장한 적이 없다.
+          { key: 'type', row: 'r1', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
+          { key: 'stage', row: 'r1', label: '단계', type: 'select', options: [{ value: 'New', label: 'New' }, { value: 'Contact', label: 'Contact' }, { value: 'Qualified', label: 'Qualified' }, { value: 'Customer', label: 'Customer' }, { value: 'Lost', label: 'Lost' }] },
+          { key: 'source', row: 'r2', label: '유입경로', placeholder: 'Referral · Website · Meta…' },
+          { key: 'region', row: 'r2', label: '지역', placeholder: '서울 · 경기 · 부산…' },
+          { key: 'scale', row: 'r3', label: '규모', placeholder: '학생수 · 직원수' },
+          { key: 'units', row: 'r3', label: '도입 댓수', inputType: 'number', placeholder: '0' },
           { key: 'situation', label: '현재 상황', placeholder: '검토중 · 경쟁사 사용 · 예산확보…' },
-          { key: 'stage', label: '단계', type: 'select', options: [{ value: 'New', label: 'New' }, { value: 'Contact', label: 'Contact' }, { value: 'Qualified', label: 'Qualified' }, { value: 'Customer', label: 'Customer' }, { value: 'Lost', label: 'Lost' }] },
           { key: 'value', label: '금액', placeholder: '₩0' },
-          { key: 'owner', label: '담당' },
         ]}
         onChange={(key, val) => setLeadEdits(prev => ({ ...prev, [editLeadId]: { ...prev[editLeadId], [key]: val } }))}
         onSave={persistLead}
@@ -819,8 +820,8 @@ export function Deals({ workspace, onNavigate }) {
       type: filter === 'personal' || filter === 'company' ? filter : 'company',
       stage: (typeof stage === 'string' && stage) || DEAL_STAGES[0]?.key || 'consult',
       value: 0,
-      owner: 'Me',
-      close: '미정',
+      close: '미정', // card footer display — stays a formatted label until the next reload
+      closeAt: '', // the drawer's real, writable date field (see buildDealWrite)
       age: 0,
       // Tag in-workspace creates so the scoped pipeline doesn't silently drop them.
       ...(ws ? { workspace } : {}),
@@ -1039,14 +1040,16 @@ export function Deals({ workspace, onNavigate }) {
         record={editingDeal}
         fields={[
           { key: 'name', label: '딜 이름' },
-          { key: 'type', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
-          { key: 'stage', label: '단계', type: 'select', options: [
+          // 단계+금액 한 줄 — 결정에 실제로 쓰이는 두 값. 타입+마감은 그다음 줄, 부차적.
+          // 담당은 뺐다: 1인 운영 시스템이라 항상 Me뿐이고, buildDealWrite가 애초에
+          // owner를 저장한 적이 없어 편집 가능한 척만 하던 필드였다.
+          { key: 'stage', row: 'primary', label: '단계', type: 'select', options: [
             ...DEAL_STAGES.map(s => ({ value: s.key, label: s.label })),
             ...(DEAL_STAGES.some(s => s.key === 'lost') ? [] : [{ value: 'lost', label: 'Lost' }]),
           ] },
-          { key: 'value', label: '금액 (₩)', inputType: 'number', placeholder: '0' },
-          { key: 'close', label: '예상 마감', placeholder: '5월 12일' },
-          { key: 'owner', label: '담당' },
+          { key: 'value', row: 'primary', label: '금액 (₩)', inputType: 'number', placeholder: '0' },
+          { key: 'closeAt', row: 'meta', label: '예상 마감', inputType: 'date' },
+          { key: 'type', row: 'meta', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
         ]}
         onChange={(key, val) => setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, [key]: val } : d)))}
         onSave={persistDeal}
