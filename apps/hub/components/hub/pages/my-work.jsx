@@ -86,14 +86,22 @@ function nextDeferTarget() {
 // 버킷 그룹 안에서 같은 프로젝트 할 일이 2개 이상이면 첫 항목 위치에 아코디언 그룹으로
 // 묶는다 (1개짜리는 행의 프로젝트 라벨로 충분 — 단독 아코디언은 소음). 그 외 항목은
 // 정렬 순서를 그대로 유지한다.
-function buildSectionRows(sectionItems) {
+//
+// groupEvents(2026-07-17 운영자 피드백 "모든 일정이 다 나와서 체크하기 힘듦"): 일정은
+// 읽기 전용 컨텍스트라 체크 대상(할 일·딜)과 같은 행으로 섞이면 스캔을 망친다. 실행
+// 항목을 먼저 두고, 일정은 섹션 맨 뒤 "일정 N" 아코디언 하나로 묶는다(시간순 정렬).
+// 레인 필터가 '일정'이거나 검색 중일 때는 호출부가 groupEvents를 끈다 — 그때는 일정
+// 자체가 찾는 대상이므로 접으면 안 된다.
+function buildSectionRows(sectionItems, groupEvents = false) {
+  const listItems = groupEvents ? sectionItems.filter((i) => i.lane !== 'event') : sectionItems;
+  const events = groupEvents ? sectionItems.filter((i) => i.lane === 'event') : [];
   const counts = new Map();
-  sectionItems.forEach((i) => {
+  listItems.forEach((i) => {
     if (i.lane === 'task' && i.projectId) counts.set(i.projectId, (counts.get(i.projectId) || 0) + 1);
   });
   const rows = [];
   const grouped = new Set();
-  sectionItems.forEach((item) => {
+  listItems.forEach((item) => {
     const pid = item.lane === 'task' ? item.projectId : null;
     if (pid && (counts.get(pid) || 0) >= 2) {
       if (grouped.has(pid)) return;
@@ -102,12 +110,18 @@ function buildSectionRows(sectionItems) {
         type: 'project',
         projectId: pid,
         projectName: item.projectName || '프로젝트',
-        items: sectionItems.filter((x) => x.lane === 'task' && x.projectId === pid),
+        items: listItems.filter((x) => x.lane === 'task' && x.projectId === pid),
       });
       return;
     }
     rows.push({ type: 'item', item });
   });
+  if (events.length) {
+    rows.push({
+      type: 'events',
+      items: [...events].sort((a, b) => new Date(a.whenAt || 0) - new Date(b.whenAt || 0)),
+    });
+  }
   return rows;
 }
 
@@ -392,6 +406,9 @@ export function MyWork({ onNavigate }) {
   const [detailId, setDetailId] = React.useState(null);
   // 접힌 프로젝트 아코디언 (projectId 기준, 세션 한정).
   const [collapsedProjects, setCollapsedProjects] = React.useState(() => new Set());
+  // 일정 아코디언 펼침 상태 (버킷 키 기준) — 오늘 일정은 하루의 컨텍스트라 기본 펼침,
+  // 이번 주·나중은 실행 항목을 밀어내는 주범이라 기본 접힘.
+  const [expandedEventBuckets, setExpandedEventBuckets] = React.useState(() => new Set(['today']));
   const [dragItemId, setDragItemId] = React.useState(null);
   // completingIds: brief strikethrough flash. hiddenIds: optimistically removed from view
   // while the undo window (pendingTimers) is still open — completeTask only actually fires
@@ -565,6 +582,14 @@ export function MyWork({ onNavigate }) {
     });
   };
 
+  const toggleEventBucket = (bucketKey) => {
+    setExpandedEventBuckets((prev) => {
+      const next = new Set(prev);
+      next.has(bucketKey) ? next.delete(bucketKey) : next.add(bucketKey);
+      return next;
+    });
+  };
+
   // ESC는 상세 패널을 접는다 — EditDrawer가 열려 있으면 드로어의 자체 ESC가 우선이고
   // 패널은 유지한다 (taskDraft 가드).
   React.useEffect(() => {
@@ -671,18 +696,21 @@ export function MyWork({ onNavigate }) {
     return counts;
   }, [items, hiddenIds, lane]);
 
-  // 리스트 렌즈 그룹 섹션 — 전체 기한 보기일 때만. rows는 프로젝트 아코디언까지 반영된
-  // 렌더 구조 (item 행 + project 그룹 행).
+  // 리스트 렌즈 그룹 섹션 — 전체 기한 보기일 때만. rows는 프로젝트·일정 아코디언까지
+  // 반영된 렌더 구조 (item 행 + project 그룹 행 + events 그룹 행).
+  // 일정 묶기는 전체/할 일/딜 레인 + 비검색 상태에서만 — '일정' 레인이나 검색 결과에서는
+  // 일정이 곧 찾는 대상이므로 평평하게 둔다.
+  const groupEvents = lane !== 'event' && !search.trim();
   const listSections = React.useMemo(() => {
     if (bucketFilter !== 'all') return null;
     const sections = [];
     BUCKETS.forEach((b) => {
       const bucketItems = visible.filter((i) => normalizeBucket(i) === b.key);
       if (!bucketItems.length) return;
-      sections.push({ key: b.key, count: bucketItems.length, rows: buildSectionRows(bucketItems) });
+      sections.push({ key: b.key, count: bucketItems.length, rows: buildSectionRows(bucketItems, groupEvents) });
     });
     return sections;
-  }, [bucketFilter, visible]);
+  }, [bucketFilter, visible, groupEvents]);
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%', maxWidth: 1080, margin: '0 auto', width: '100%' }}>
@@ -888,6 +916,56 @@ export function MyWork({ onNavigate }) {
                         showReason={sort === 'priority'}
                         rowRef={nextRowRef()}
                       />
+                    );
+                  }
+                  if (row.type === 'events') {
+                    // 일정 아코디언 — 읽기 전용 컨텍스트를 실행 항목 뒤로 분리 (오늘만 기본
+                    // 펼침). 접힌 상태에서는 첫 일정 시간을 미리보기로 남긴다.
+                    const eventsOpen = expandedEventBuckets.has(section.key);
+                    return (
+                      <React.Fragment key={`events-${section.key}`}>
+                        <div
+                          ref={nextRowRef()}
+                          className="hub-row"
+                          role="button"
+                          tabIndex={0}
+                          aria-expanded={eventsOpen}
+                          onClick={() => toggleEventBucket(section.key)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleEventBucket(section.key); } }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            padding: 'var(--pad-y) var(--pad-x)', minHeight: 'var(--row-h)',
+                            borderBottom: '1px solid var(--line-soft)', cursor: 'pointer',
+                          }}
+                        >
+                          <Iconed name="chevronD" size={12} style={{ transform: eventsOpen ? 'none' : 'rotate(-90deg)', transition: 'transform 120ms ease', color: 'var(--fg-faint)' }} />
+                          <Iconed name="calendar" size={13} style={{ color: 'var(--fg-dim)' }} />
+                          <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--fg-muted)' }}>일정</span>
+                          <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4 }}>{row.items.length}</span>
+                          <div style={{ flex: 1 }} />
+                          {!eventsOpen && (
+                            <span className="mono hub-mywork-meta" style={{ fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              첫 일정 {row.items[0]?.whenLabel}
+                            </span>
+                          )}
+                        </div>
+                        {eventsOpen && (
+                          <div style={{ marginLeft: 10, borderLeft: '1px solid var(--line-soft)' }}>
+                            {row.items.map((item) => (
+                              <ItemRow
+                                key={item.id}
+                                item={item}
+                                onComplete={scheduleComplete}
+                                onOpen={openItem}
+                                completing={completingIds.has(item.id)}
+                                selected={detailId === item.id}
+                                showReason={sort === 'priority'}
+                                rowRef={nextRowRef()}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </React.Fragment>
                     );
                   }
                   // 프로젝트 아코디언 — 같은 프로젝트 할 일 2개 이상을 접기/펴기.
