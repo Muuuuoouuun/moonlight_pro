@@ -137,11 +137,14 @@ export async function checkSupabaseRest(table = "projects") {
   }
 }
 
-export async function fetchSupabaseRows(table: string, options: SupabaseQueryOptions = {}) {
+export async function fetchSupabaseRowsDetailed(
+  table: string,
+  options: SupabaseQueryOptions = {},
+) {
   const config = resolveSupabaseRestConfig();
 
   if (!config) {
-    return null;
+    return { ok: false as const, reason: "missing-config" };
   }
 
   try {
@@ -151,13 +154,29 @@ export async function fetchSupabaseRows(table: string, options: SupabaseQueryOpt
     });
 
     if (!response.ok) {
-      return null;
+      return {
+        ok: false as const,
+        reason: `http-${response.status}`,
+        detail: await response.text().catch(() => ""),
+      };
     }
 
-    return await response.json();
-  } catch {
-    return null;
+    const rows = await response.json().catch(() => null);
+    return Array.isArray(rows)
+      ? { ok: true as const, rows }
+      : { ok: false as const, reason: "invalid-response" };
+  } catch (error) {
+    return {
+      ok: false as const,
+      reason: "request-failed",
+      detail: error instanceof Error ? error.message : String(error),
+    };
   }
+}
+
+export async function fetchSupabaseRows(table: string, options: SupabaseQueryOptions = {}) {
+  const result = await fetchSupabaseRowsDetailed(table, options);
+  return result.ok ? result.rows : null;
 }
 
 export async function invokeSupabaseRpc(name: string, params: Record<string, unknown>) {

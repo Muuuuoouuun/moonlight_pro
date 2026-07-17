@@ -5,6 +5,7 @@ import { executePmsCommand } from "../../../../lib/pms-command-service.ts";
 import { validateSharedWebhookRequest } from "../../../../lib/shared-webhook.ts";
 import {
   fetchSupabaseRows,
+  fetchSupabaseRowsDetailed,
   insertSupabaseRecord,
   updateSupabaseRecord,
 } from "../../../../lib/supabase-rest.ts";
@@ -60,6 +61,10 @@ export async function POST(req: Request) {
     fetchRows: async (table, options = {}) => fetchSupabaseRows(
       table,
       options as Parameters<typeof fetchSupabaseRows>[1],
+    ),
+    fetchRowsDetailed: async (table, options = {}) => fetchSupabaseRowsDetailed(
+      table,
+      options as Parameters<typeof fetchSupabaseRowsDetailed>[1],
     ),
   });
   const statusCode = result.status === "saved"

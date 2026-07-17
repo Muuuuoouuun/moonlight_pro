@@ -193,3 +193,48 @@ test("PATCH requests a representation and returns the persisted project row", as
     globalThis.fetch = previous.fetch;
   }
 });
+
+test("keeps missing Supabase configuration in the existing HTTP 202 taxonomy during relationship validation", async () => {
+  const previous = {
+    secret: process.env.COM_MOON_SHARED_WEBHOOK_SECRET,
+    workspace: process.env.COM_MOON_DEFAULT_WORKSPACE_ID,
+    url: process.env.SUPABASE_URL,
+    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    anonKey: process.env.SUPABASE_ANON_KEY,
+  };
+  process.env.COM_MOON_SHARED_WEBHOOK_SECRET = "pms-test-shared-secret";
+  process.env.COM_MOON_DEFAULT_WORKSPACE_ID = "33333333-3333-4333-8333-333333333333";
+  delete process.env.SUPABASE_URL;
+  delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  delete process.env.SUPABASE_ANON_KEY;
+
+  try {
+    const response = await pmsRoute.POST(new Request("http://engine.local/api/pms/command", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-com-moon-shared-secret": "pms-test-shared-secret",
+      },
+      body: JSON.stringify({
+        action: "create_project",
+        id: "11111111-1111-4111-8111-111111111111",
+        brandId: "22222222-2222-4222-8222-222222222222",
+        title: "Project",
+      }),
+    }));
+
+    assert.equal(response.status, 202);
+    assert.deepEqual(await response.json(), { status: "error", error: "missing-config" });
+  } finally {
+    if (previous.secret === undefined) delete process.env.COM_MOON_SHARED_WEBHOOK_SECRET;
+    else process.env.COM_MOON_SHARED_WEBHOOK_SECRET = previous.secret;
+    if (previous.workspace === undefined) delete process.env.COM_MOON_DEFAULT_WORKSPACE_ID;
+    else process.env.COM_MOON_DEFAULT_WORKSPACE_ID = previous.workspace;
+    if (previous.url === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = previous.url;
+    if (previous.serviceKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = previous.serviceKey;
+    if (previous.anonKey === undefined) delete process.env.SUPABASE_ANON_KEY;
+    else process.env.SUPABASE_ANON_KEY = previous.anonKey;
+  }
+});

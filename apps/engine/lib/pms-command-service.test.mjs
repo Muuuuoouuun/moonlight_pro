@@ -254,6 +254,46 @@ test("returns the persisted project representation from a concurrency-guarded up
 });
 
 test("reports a stale project update as conflict when no row matches the concurrency token", async () => {
+  const current = {
+    id: "11111111-1111-4111-8111-111111111111",
+    workspace_id: "33333333-3333-4333-8333-333333333333",
+    name: "Current persisted title",
+    updated_at: "2026-07-16T02:00:00.000Z",
+  };
+  const result = await pmsService.executePmsCommand({
+    action: "update_project",
+    id: current.id,
+    title: "Requested title",
+    expectedUpdatedAt: "2026-07-16T01:00:00.000Z",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-17T01:00:00.000Z",
+  }, {
+    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
+    update: async () => ({ persisted: true, reason: "ok", rows: [] }),
+    fetchRows: async (table, options) => {
+      assert.equal(table, "projects");
+      assert.deepEqual(options, {
+        filters: [
+          ["id", "eq.11111111-1111-4111-8111-111111111111"],
+          ["workspace_id", "eq.33333333-3333-4333-8333-333333333333"],
+        ],
+        limit: 1,
+      });
+      return [current];
+    },
+  });
+
+  assert.deepEqual(result, {
+    status: "conflict",
+    action: "update_project",
+    error: "stale-update",
+    retryable: false,
+    entity: current,
+  });
+});
+
+test("reports a missing concurrency-guarded project update target as not found", async () => {
   const result = await pmsService.executePmsCommand({
     action: "update_project",
     id: "11111111-1111-4111-8111-111111111111",
@@ -269,10 +309,31 @@ test("reports a stale project update as conflict when no row matches the concurr
   });
 
   assert.deepEqual(result, {
-    status: "conflict",
+    status: "error",
     action: "update_project",
-    error: "stale-or-not-found",
-    retryable: false,
+    error: "not-found",
+  });
+});
+
+test("reports a guarded project current-row lookup failure as an error", async () => {
+  const result = await pmsService.executePmsCommand({
+    action: "update_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    title: "Requested title",
+    expectedUpdatedAt: "2026-07-16T01:00:00.000Z",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-17T01:00:00.000Z",
+  }, {
+    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
+    update: async () => ({ persisted: true, reason: "ok", rows: [] }),
+    fetchRows: async () => null,
+  });
+
+  assert.deepEqual(result, {
+    status: "error",
+    action: "update_project",
+    error: "current-entity-read-failed",
   });
 });
 
@@ -287,7 +348,9 @@ test("reports a missing project update target when no row matches without a conc
   }, {
     insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
     update: async () => ({ persisted: true, reason: "ok", rows: [] }),
-    fetchRows: async () => [],
+    fetchRows: async () => {
+      throw new Error("unguarded zero-row updates must not perform a follow-up read");
+    },
   });
 
   assert.deepEqual(result, {
@@ -379,4 +442,69 @@ test("rejects task project relationships outside the workspace on create and upd
   assert.deepEqual(created, { status: "invalid-input", error: "invalid-project-reference" });
   assert.deepEqual(updated, { status: "invalid-input", error: "invalid-project-reference" });
   assert.equal(writes.length, 0);
+});
+
+test("preserves missing Supabase configuration from a detailed relationship lookup", async () => {
+  const result = await pmsService.executePmsCommand({
+    action: "create_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    brandId: "22222222-2222-4222-8222-222222222222",
+    title: "Project",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-17T01:00:00.000Z",
+  }, {
+    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
+    update: async () => ({ persisted: false, reason: "unexpected-update" }),
+    fetchRows: async () => null,
+    fetchRowsDetailed: async () => ({ ok: false, reason: "missing-config" }),
+  });
+
+  assert.deepEqual(result, { status: "error", error: "missing-config" });
+});
+
+test("keeps an HTTP relationship lookup failure distinct from missing configuration", async () => {
+  const result = await pmsService.executePmsCommand({
+    action: "create_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    projectId: "11111111-1111-4111-8111-111111111111",
+    title: "Task",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-17T01:00:00.000Z",
+  }, {
+    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
+    update: async () => ({ persisted: false, reason: "unexpected-update" }),
+    fetchRows: async () => null,
+    fetchRowsDetailed: async () => ({ ok: false, reason: "http-503" }),
+  });
+
+  assert.deepEqual(result, {
+    status: "error",
+    error: "relationship-check-failed",
+    detail: "http-503",
+  });
+});
+
+test("keeps a network relationship lookup failure in the 502 error taxonomy", async () => {
+  const result = await pmsService.executePmsCommand({
+    action: "create_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    projectId: "11111111-1111-4111-8111-111111111111",
+    title: "Task",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-17T01:00:00.000Z",
+  }, {
+    insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
+    update: async () => ({ persisted: false, reason: "unexpected-update" }),
+    fetchRows: async () => null,
+    fetchRowsDetailed: async () => ({ ok: false, reason: "request-failed" }),
+  });
+
+  assert.deepEqual(result, {
+    status: "error",
+    error: "relationship-check-failed",
+    detail: "request-failed",
+  });
 });

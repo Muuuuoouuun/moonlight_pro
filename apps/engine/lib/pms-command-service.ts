@@ -7,6 +7,10 @@ type PersistenceResult = {
   rows?: Array<Record<string, unknown>>;
 };
 
+type RowReadResult =
+  | { ok: true; rows: Array<Record<string, unknown>> }
+  | { ok: false; reason: string; detail?: string };
+
 type Dependencies = {
   insert: (table: string, record: Record<string, unknown>) => Promise<PersistenceResult>;
   update: (
@@ -18,6 +22,10 @@ type Dependencies = {
     table: string,
     options?: Record<string, unknown>,
   ) => Promise<Array<Record<string, unknown>> | null>;
+  fetchRowsDetailed?: (
+    table: string,
+    options?: Record<string, unknown>,
+  ) => Promise<RowReadResult>;
 };
 
 type CommandContext = {
@@ -116,14 +124,30 @@ async function validateRelationship(
 
   if (!relationship || !workspaceId) return null;
 
-  const rows = await dependencies.fetchRows(relationship.table, {
+  const options = {
     select: "id",
     filters: [
       ["id", `eq.${relationship.id}`],
       ["workspace_id", `eq.${workspaceId}`],
-    ],
+    ] as Array<[string, string]>,
     limit: 1,
-  });
+  };
+  const detailed = dependencies.fetchRowsDetailed
+    ? await dependencies.fetchRowsDetailed(relationship.table, options)
+    : null;
+  if (detailed && !detailed.ok) {
+    if (detailed.reason === "missing-config") {
+      return { status: "error", error: "missing-config" };
+    }
+    return {
+      status: "error",
+      error: "relationship-check-failed",
+      detail: detailed.reason,
+    };
+  }
+  const rows = detailed?.ok
+    ? detailed.rows
+    : await dependencies.fetchRows(relationship.table, options);
   if (rows === null) return { status: "error", error: "relationship-check-failed" };
   if (!rows[0]) return { status: "invalid-input", error: relationship.error };
   return null;
@@ -197,11 +221,33 @@ export async function executePmsCommand(
     if (Array.isArray(persistence.rows)) {
       if (!persistence.rows[0]) {
         if (filterValue(command.filters, "updated_at")) {
+          const identityFilters = command.filters.filter(
+            ([key]) => key === "id" || key === "workspace_id",
+          );
+          const current = await dependencies.fetchRows(command.table, {
+            filters: identityFilters,
+            limit: 1,
+          });
+          if (current === null) {
+            return {
+              status: "error",
+              action: command.action,
+              error: "current-entity-read-failed",
+            };
+          }
+          if (!current[0]) {
+            return {
+              status: "error",
+              action: command.action,
+              error: "not-found",
+            };
+          }
           return {
             status: "conflict",
             action: command.action,
-            error: "stale-or-not-found",
+            error: "stale-update",
             retryable: false,
+            entity: current[0],
           };
         }
         return {
