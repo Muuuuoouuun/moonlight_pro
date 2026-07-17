@@ -241,9 +241,98 @@ test("overview preserves core project KPIs while naming optional-source partials
   assert.equal(body.source, "partial");
   assert.equal(projectsSource.state, "partial");
   assert.deepEqual(projectsSource.failedSources, ["project_updates"]);
+  assert.deepEqual(projectsSource.partialSources, []);
+  assert.deepEqual(body.failedSources, ["project_updates"]);
+  assert.deepEqual(body.partialSources, []);
   assert.equal(body.kpis.updatesThisWeek, null);
   assert.equal(body.kpis.activeProjects, 2);
   assert.equal(body.kpis.blockedProjects, 1);
+});
+
+test("overview keeps capped task aggregation partial separate from failed project reads", async () => {
+  state.projects = liveProjectLedger({
+    partial: true,
+    partialSources: ["tasks"],
+    taskAggregation: { loaded: 160, total: 161, partial: true },
+  });
+
+  const body = await (await overviewRoute.GET()).json();
+  const projectsSource = body.sources.find((source) => source.key === "projects");
+
+  assert.equal(body.status, "partial");
+  assert.equal(body.source, "partial");
+  assert.equal(projectsSource.state, "partial");
+  assert.deepEqual(projectsSource.failedSources, []);
+  assert.deepEqual(projectsSource.partialSources, ["tasks"]);
+  assert.deepEqual(body.failedSources, []);
+  assert.deepEqual(body.partialSources, ["tasks"]);
+});
+
+test("overview withholds published count when only publish logs failed", async () => {
+  state.content = {
+    source: "supabase",
+    partial: true,
+    failedSources: ["publish_logs"],
+    partialSources: [],
+    items: [{ id: "content-1", status: "draft" }],
+    publishLogs: [],
+    summary: {},
+  };
+
+  const body = await (await overviewRoute.GET()).json();
+  const contentSource = body.sources.find((source) => source.key === "content");
+
+  assert.equal(body.status, "partial");
+  assert.equal(contentSource.state, "partial");
+  assert.deepEqual(body.failedSources, ["publish_logs"]);
+  assert.deepEqual(body.partialSources, []);
+  assert.equal(body.kpis.publishedThisWeek, null);
+});
+
+test("overview turns configured preview fallbacks into failed card sources", async () => {
+  state.revenue = { source: "preview", configured: true, deals: [], stages: [], summary: {} };
+  state.automations = { source: "preview", configured: true, runs: [], summary: {} };
+  state.work = {
+    source: "preview",
+    configured: true,
+    rhythm: { state: "error", error: { message: "routine read failed" } },
+    rituals: [],
+    summary: {},
+  };
+
+  const body = await (await overviewRoute.GET()).json();
+  const byKey = new Map(body.sources.map((source) => [source.key, source]));
+
+  assert.equal(body.status, "partial");
+  assert.equal(byKey.get("revenue").state, "error");
+  assert.equal(byKey.get("automations").state, "error");
+  assert.equal(byKey.get("work").state, "error");
+  assert.deepEqual(body.failedSources, ["revenue", "automations", "work"]);
+  assert.equal(body.rhythm.state, "error");
+});
+
+test("overview propagates a truncated rhythm read as partial rather than live", async () => {
+  state.work = {
+    source: "supabase",
+    configured: true,
+    rhythm: {
+      state: "partial",
+      partial: true,
+      truncatedSources: ["routine_checks"],
+    },
+    rituals: [{ id: "ritual-1", name: "Morning" }],
+    summary: { ritualsTotalThisWeek: 1, ritualsCompletedThisWeek: 1 },
+  };
+
+  const body = await (await overviewRoute.GET()).json();
+  const workSource = body.sources.find((source) => source.key === "work");
+
+  assert.equal(body.status, "partial");
+  assert.equal(workSource.state, "partial");
+  assert.deepEqual(workSource.failedSources, []);
+  assert.deepEqual(workSource.partialSources, ["routine_checks"]);
+  assert.deepEqual(body.partialSources, ["routine_checks"]);
+  assert.equal(body.rhythm.state, "partial");
 });
 
 test("daily brief exposes the project error without manufacturing open-work zero", async () => {

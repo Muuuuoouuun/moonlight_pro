@@ -5,7 +5,10 @@ import { Iconed } from "../hub-icons";
 import { Badge, Card, SectionTitle, Button, Dot, Divider, EmptyState, SyncBadge, SegmentedControl, Sparkline, Progress } from "../hub-primitives";
 import {
   activitySeriesAvailability,
+  buildAutomationMetricRows,
   buildOverviewKpiCards,
+  overviewDisclosureMessages,
+  overviewPanelAvailability,
   overviewSyncState,
   projectActivityAvailability,
 } from "./overview-truth";
@@ -61,6 +64,7 @@ const EMPTY_LEDGER = {
   status: 'preview',
   source: 'preview',
   failedSources: [],
+  partialSources: [],
   sources: [],
   kpis: { updatesThisWeek: null, decisionsThisWeek: null, publishedThisWeek: null, activeProjects: null, blockedProjects: null },
   activitySeries: [],
@@ -68,7 +72,7 @@ const EMPTY_LEDGER = {
   revenue: { summary: {}, stageSeries: [] },
   automationsSummary: {},
   brandActivity: [],
-  rhythm: { summary: {}, rituals: [] },
+  rhythm: { state: 'preview', summary: {}, rituals: [] },
   recentActivity: [],
 };
 
@@ -350,28 +354,41 @@ function BrandActivityBars({ brands = [] }) {
 function RhythmCard({ rhythm, state, onNavigate }) {
   const summary = rhythm?.summary || {};
   const rituals = Array.isArray(rhythm?.rituals) ? rhythm.rituals : [];
-  const total = summary.ritualsTotalThisWeek ?? 0;
-  const completed = summary.ritualsCompletedThisWeek ?? 0;
-  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const totalAvailable = summary.ritualsTotalThisWeek !== null
+    && summary.ritualsTotalThisWeek !== undefined
+    && Number.isFinite(Number(summary.ritualsTotalThisWeek));
+  const completedAvailable = summary.ritualsCompletedThisWeek !== null
+    && summary.ritualsCompletedThisWeek !== undefined
+    && Number.isFinite(Number(summary.ritualsCompletedThisWeek));
+  const total = totalAvailable ? Number(summary.ritualsTotalThisWeek) : null;
+  const completed = completedAvailable ? Number(summary.ritualsCompletedThisWeek) : null;
+  const percent = total > 0 && completedAvailable ? Math.round((completed / total) * 100) : null;
+  const availability = overviewPanelAvailability({ state, hasData: total > 0 });
+  const longestStreakAvailable = summary.longestStreak !== null
+    && summary.longestStreak !== undefined
+    && Number.isFinite(Number(summary.longestStreak));
 
   return (
     <Card>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
         <div style={{ fontSize: 13, fontWeight: 500 }}>리듬</div>
-        <SyncBadge state={state || 'preview'} />
+        <SyncBadge state={availability.state} />
         <div style={{ flex: 1 }} />
         <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/rhythm')}>열기</Button>
       </div>
-      {total > 0 ? (
+      {availability.showData ? (
         <>
+          {availability.reason === 'partial' && (
+            <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--warning)' }}>리듬 원장 부분 데이터 · 읽힌 체크인만 표시합니다.</div>
+          )}
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-            <span className="stat" style={{ fontSize: 24, fontWeight: 600 }}>{completed}/{total}</span>
+            <span className="stat" style={{ fontSize: 24, fontWeight: 600 }}>{completedAvailable ? completed : '—'}/{total}</span>
             <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>이번 주 완료</span>
           </div>
-          <div style={{ marginTop: 10 }}><Progress value={percent} /></div>
+          {percent !== null && <div style={{ marginTop: 10 }}><Progress value={percent} /></div>}
           <div style={{ marginTop: 10, fontSize: 11, color: 'var(--fg-muted)' }}>
             최장 streak{' '}
-            <span className="mono" style={{ color: summary.longestStreak > 0 ? 'var(--success)' : 'var(--fg-faint)' }}>{summary.longestStreak ?? 0}일</span>
+            <span className="mono" style={{ color: longestStreakAvailable && summary.longestStreak > 0 ? 'var(--success)' : 'var(--fg-faint)' }}>{longestStreakAvailable ? `${summary.longestStreak}일` : '—'}</span>
             {summary.longestStreakRitual ? <span style={{ color: 'var(--fg-faint)' }}> · {summary.longestStreakRitual}</span> : null}
           </div>
           {rituals.length > 0 && (
@@ -389,6 +406,12 @@ function RhythmCard({ rhythm, state, onNavigate }) {
             </div>
           )}
         </>
+      ) : availability.reason === 'preview' ? (
+        <EmptyState icon="rhythm" title="리듬 원장 미연결" description="리듬 원장을 연결하면 이번 주 체크인이 표시됩니다." style={{ minHeight: 140 }} />
+      ) : availability.reason === 'error' ? (
+        <EmptyState icon="rhythm" title="리듬 원장 읽기 실패" description="리듬 원장을 다시 읽은 뒤 체크인을 표시합니다." style={{ minHeight: 140 }} />
+      ) : availability.reason === 'partial' ? (
+        <EmptyState icon="rhythm" title="리듬 원장 부분 데이터" description="원장의 일부만 읽혀 빈 상태로 확정할 수 없습니다." style={{ minHeight: 140 }} />
       ) : (
         <EmptyState icon="rhythm" title="루틴 기록 없음" description="체크인이 기록되면 이번 주 리듬이 표시됩니다." style={{ minHeight: 140 }} />
       )}
@@ -401,14 +424,15 @@ function SeriesRows({ series = [], label }) {
   return (
     <div role="img" aria-label={label} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {series.map((item) => {
-        const value = Number(item.value) || 0;
+        const available = item.value !== null && item.value !== undefined && Number.isFinite(Number(item.value));
+        const value = available ? Number(item.value) : null;
         return (
           <div key={item.key} style={{ display: 'grid', gridTemplateColumns: '56px minmax(0, 1fr) 26px', gap: 8, alignItems: 'center' }}>
             <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{item.label}</span>
             <span style={{ height: 6, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }}>
-              <span style={{ display: 'block', height: '100%', width: `${Math.max(value ? 6 : 0, Math.round((value / max) * 100))}%`, borderRadius: 999, background: item.key === 'blocked' ? 'var(--warning)' : 'var(--moon-500)', transition: 'width 260ms ease' }} />
+              <span style={{ display: 'block', height: '100%', width: `${Math.max(value ? 6 : 0, Math.round(((value || 0) / max) * 100))}%`, borderRadius: 999, background: item.key === 'blocked' ? 'var(--warning)' : 'var(--moon-500)', transition: 'width 260ms ease' }} />
             </span>
-            <span className="mono" style={{ fontSize: 11, color: value ? 'var(--fg)' : 'var(--fg-faint)', textAlign: 'right' }}>{value}</span>
+            <span className="mono" style={{ fontSize: 11, color: value ? 'var(--fg)' : 'var(--fg-faint)', textAlign: 'right' }}>{available ? value : '—'}</span>
           </div>
         );
       })}
@@ -490,7 +514,33 @@ export function Overview({ onNavigate }) {
   const activity = Array.isArray(ledger.recentActivity) ? ledger.recentActivity : [];
   const visibleActivity = activityExpanded ? activity : activity.slice(0, 8);
   const hasPipelineValue = stageSeries.some((s) => s.count > 0);
-  const sourceState = (key) => ledger.sources?.find((s) => s.key === key)?.state || 'preview';
+  const overviewStatus = ledger.status || syncState;
+  const panelAvailability = (sourceKey, hasData) => overviewPanelAvailability({
+    sources: ledger.sources || [],
+    status: overviewStatus,
+    sourceKey,
+    hasData,
+  });
+  const projectPanel = panelAvailability(
+    'projects',
+    pms?.projectStatusSeries?.some((item) => Number(item.value) > 0),
+  );
+  const contentPanel = panelAvailability(
+    'content',
+    contentSummary?.pipelineSeries?.some((item) => Number(item.value) > 0),
+  );
+  const revenuePanel = panelAvailability('revenue', hasPipelineValue);
+  const automationSourceState = panelAvailability('automations', false).state;
+  const automationMetrics = buildAutomationMetricRows(automationsSummary, automationSourceState);
+  const automationPanel = panelAvailability(
+    'automations',
+    automationMetrics.some((metric) => metric.value !== '—'),
+  );
+  const sourceState = (key) => panelAvailability(key, false).state;
+  const disclosureMessages = overviewDisclosureMessages({
+    failedSources: ledger.failedSources,
+    partialSources: ledger.partialSources,
+  });
   const projectActivity = projectActivityAvailability(ledger.sources || [], ledger.status || syncState);
 
   // Last 7 buckets of the same daily series feed each KPI's sparkline — no
@@ -510,11 +560,11 @@ export function Overview({ onNavigate }) {
           <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--fg-muted)' }}>
             최근 작업과 기획 흐름을 정리합니다<SyncBadge state={syncState} />
           </div>
-          {syncState === 'partial' && Array.isArray(ledger.failedSources) && ledger.failedSources.length > 0 && (
-            <div role="status" style={{ marginTop: 5, fontSize: 11.5, color: 'var(--warning)' }}>
-              일부 원장 읽기 실패 · {ledger.failedSources.join(', ')}
+          {disclosureMessages.map((message) => (
+            <div key={message.kind} role="status" style={{ marginTop: 5, fontSize: 11.5, color: 'var(--warning)' }}>
+              {message.text}
             </div>
-          )}
+          ))}
         </div>
         <SegmentedControl className="hub-page-actions" label="기간" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
       </div>
@@ -555,12 +605,23 @@ export function Overview({ onNavigate }) {
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>프로젝트 상태</div>
-            <SyncBadge state={sourceState('projects')} />
+            <SyncBadge state={projectPanel.state} />
             <div style={{ flex: 1 }} />
             <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/projects')}>열기</Button>
           </div>
-          {pms?.projectStatusSeries?.length ? (
-            <DonutChart series={pms.projectStatusSeries} centerLabel="프로젝트" />
+          {projectPanel.showData ? (
+            <>
+              {projectPanel.reason === 'partial' && (
+                <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--warning)' }}>프로젝트 부분 데이터 · 읽힌 프로젝트만 표시합니다.</div>
+              )}
+              <DonutChart series={pms.projectStatusSeries} centerLabel="프로젝트" />
+            </>
+          ) : projectPanel.reason === 'preview' ? (
+            <EmptyState icon="projects" title="프로젝트 원장 미연결" description="프로젝트 원장을 연결하면 상태 분포가 표시됩니다." style={{ minHeight: 140 }} />
+          ) : projectPanel.reason === 'error' ? (
+            <EmptyState icon="projects" title="프로젝트 원장 읽기 실패" description="프로젝트 원장을 다시 읽은 뒤 상태 분포를 표시합니다." style={{ minHeight: 140 }} />
+          ) : projectPanel.reason === 'partial' ? (
+            <EmptyState icon="projects" title="프로젝트 부분 데이터" description="원장의 일부만 읽혀 빈 상태로 확정할 수 없습니다." style={{ minHeight: 140 }} />
           ) : (
             <EmptyState icon="projects" title="프로젝트 데이터 없음" description="프로젝트가 생기면 상태 분포가 표시됩니다." style={{ minHeight: 140 }} />
           )}
@@ -568,12 +629,23 @@ export function Overview({ onNavigate }) {
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>콘텐츠 파이프라인</div>
-            <SyncBadge state={sourceState('content')} />
+            <SyncBadge state={contentPanel.state} />
             <div style={{ flex: 1 }} />
             <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/content/queue')}>열기</Button>
           </div>
-          {contentSummary?.pipelineSeries?.length ? (
-            <SeriesRows series={contentSummary.pipelineSeries} label="콘텐츠 파이프라인 분포" />
+          {contentPanel.showData ? (
+            <>
+              {contentPanel.reason === 'partial' && (
+                <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--warning)' }}>콘텐츠 부분 데이터 · 읽힌 항목만 표시합니다.</div>
+              )}
+              <SeriesRows series={contentSummary.pipelineSeries} label="콘텐츠 파이프라인 분포" />
+            </>
+          ) : contentPanel.reason === 'preview' ? (
+            <EmptyState icon="content" title="콘텐츠 원장 미연결" description="콘텐츠 원장을 연결하면 파이프라인이 표시됩니다." style={{ minHeight: 140 }} />
+          ) : contentPanel.reason === 'error' ? (
+            <EmptyState icon="content" title="콘텐츠 원장 읽기 실패" description="콘텐츠 원장을 다시 읽은 뒤 파이프라인을 표시합니다." style={{ minHeight: 140 }} />
+          ) : contentPanel.reason === 'partial' ? (
+            <EmptyState icon="content" title="콘텐츠 부분 데이터" description="원장의 일부만 읽혀 빈 상태로 확정할 수 없습니다." style={{ minHeight: 140 }} />
           ) : (
             <EmptyState icon="content" title="콘텐츠 데이터 없음" description="콘텐츠 아이템이 생기면 파이프라인이 표시됩니다." style={{ minHeight: 140 }} />
           )}
@@ -603,11 +675,15 @@ export function Overview({ onNavigate }) {
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>파이프라인 단계</div>
+            <SyncBadge state={revenuePanel.state} />
             <div style={{ flex: 1 }} />
             <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/revenue/overview')}>Revenue 열기</Button>
           </div>
-          {hasPipelineValue ? (
+          {revenuePanel.showData ? (
             <>
+              {revenuePanel.reason === 'partial' && (
+                <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--warning)' }}>매출 원장 부분 데이터 · 읽힌 딜만 표시합니다.</div>
+              )}
               <div style={{ display: 'flex', gap: 2, height: 24, borderRadius: 'var(--r-sm)', overflow: 'hidden', background: 'var(--surface-3)', padding: 2 }}>
                 {stageSeries.map((s) => (
                   <div
@@ -633,6 +709,12 @@ export function Overview({ onNavigate }) {
                 ))}
               </div>
             </>
+          ) : revenuePanel.reason === 'preview' ? (
+            <EmptyState icon="deals" title="매출 원장 미연결" description="매출 원장을 연결하면 파이프라인 단계가 표시됩니다." style={{ minHeight: 140 }} />
+          ) : revenuePanel.reason === 'error' ? (
+            <EmptyState icon="deals" title="매출 원장 읽기 실패" description="매출 원장을 다시 읽은 뒤 파이프라인을 표시합니다." style={{ minHeight: 140 }} />
+          ) : revenuePanel.reason === 'partial' ? (
+            <EmptyState icon="deals" title="매출 원장 부분 데이터" description="원장의 일부만 읽혀 딜이 없다고 확정할 수 없습니다." style={{ minHeight: 140 }} />
           ) : (
             <EmptyState icon="deals" title="딜이 없습니다" description="파이프라인에 딜이 생기면 단계별 분포가 표시됩니다." style={{ minHeight: 140 }} />
           )}
@@ -641,25 +723,36 @@ export function Overview({ onNavigate }) {
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>자동화 현황</div>
+            <SyncBadge state={automationPanel.state} />
             <div style={{ flex: 1 }} />
             <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/automations/runs')}>Runs 열기</Button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {[
-              { l: '오늘 실행', v: automationsSummary.runsToday ?? 0, tone: 'fg' },
-              { l: '실패', v: automationsSummary.failuresToday ?? 0, tone: automationsSummary.failuresToday ? 'danger' : 'success' },
-              { l: '활성 자동화', v: automationsSummary.activeAutomations ?? 0, tone: 'fg' },
-              { l: '연동됨', v: automationsSummary.integrationsConnected ?? 0, tone: 'info' },
-            ].map((x) => (
-              <div key={x.l} style={{ padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 'var(--r-sm)', border: '1px solid var(--line-soft)' }}>
-                <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{x.l}</div>
-                <div className="stat" style={{ fontSize: 18, fontWeight: 600, marginTop: 4, color: `var(--${x.tone})` }}>{x.v}</div>
+          {automationPanel.showData ? (
+            <>
+              {automationPanel.reason === 'partial' && (
+                <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--warning)' }}>자동화 원장 부분 데이터 · 읽힌 지표만 표시합니다.</div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {automationMetrics.map((metric) => (
+                  <div key={metric.key} style={{ padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 'var(--r-sm)', border: '1px solid var(--line-soft)' }}>
+                    <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{metric.label}</div>
+                    <div className="stat" style={{ fontSize: 18, fontWeight: 600, marginTop: 4, color: metric.tone === 'neutral' ? 'var(--fg-faint)' : `var(--${metric.tone})` }}>{metric.value}</div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          ) : automationPanel.reason === 'preview' ? (
+            <EmptyState icon="automations" title="자동화 원장 미연결" description="자동화 원장을 연결하면 실행 현황이 표시됩니다." style={{ minHeight: 140 }} />
+          ) : automationPanel.reason === 'error' ? (
+            <EmptyState icon="automations" title="자동화 원장 읽기 실패" description="자동화 원장을 다시 읽은 뒤 실행 현황을 표시합니다." style={{ minHeight: 140 }} />
+          ) : automationPanel.reason === 'partial' ? (
+            <EmptyState icon="automations" title="자동화 원장 부분 데이터" description="원장의 일부만 읽혀 실행 수를 확정할 수 없습니다." style={{ minHeight: 140 }} />
+          ) : (
+            <EmptyState icon="automations" title="자동화 데이터 없음" description="자동화가 생기면 실행 현황이 표시됩니다." style={{ minHeight: 140 }} />
+          )}
         </Card>
 
-        <RhythmCard rhythm={ledger.rhythm} state={sourceState('work')} onNavigate={onNavigate} />
+        <RhythmCard rhythm={ledger.rhythm} state={ledger.rhythm?.state || sourceState('work')} onNavigate={onNavigate} />
       </div>
 
       <div>

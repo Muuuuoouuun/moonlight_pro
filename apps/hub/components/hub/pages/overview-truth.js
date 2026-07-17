@@ -33,6 +33,7 @@ const KPI_DEFINITIONS = [
     nav: "dashboard/content/queue",
     sparkKey: "content",
     sourceKey: "content",
+    dependency: "publish_logs",
   },
 ];
 
@@ -61,6 +62,11 @@ function sourceContext(sources, key, status) {
     state,
     failed: new Set(Array.isArray(source?.failedSources) ? source.failedSources : []),
   };
+}
+
+function normalizePanelState(state) {
+  if (state === "live-empty") return "live";
+  return KNOWN_STATES.has(state) ? state : "error";
 }
 
 function metricContext({ sources, status, sourceKey, dependency }) {
@@ -204,4 +210,68 @@ export function projectActivityAvailability(sources = [], status) {
     brandActivity: updates && decisions,
     recentProjectActivity: updates && decisions,
   };
+}
+
+export function overviewPanelAvailability({
+  sources = [],
+  status,
+  sourceKey,
+  state,
+  hasData = false,
+} = {}) {
+  const resolvedState = state === undefined
+    ? sourceContext(sources, sourceKey, status).state
+    : normalizePanelState(state);
+  const showData = ["live", "partial"].includes(resolvedState) && Boolean(hasData);
+  const empty = resolvedState === "live" && !hasData;
+  const reason = resolvedState === "preview"
+    ? "preview"
+    : resolvedState === "error"
+      ? "error"
+      : resolvedState === "partial"
+        ? "partial"
+        : empty
+          ? "empty"
+          : null;
+
+  return { state: resolvedState, showData, empty, reason };
+}
+
+export function buildAutomationMetricRows(summary = {}, state = "error") {
+  const metric = (key) => isAvailableValue(summary?.[key]) ? Number(summary[key]) : "—";
+  const failures = metric("failuresToday");
+  const resolvedState = normalizePanelState(state);
+  return [
+    { key: "runs", label: "오늘 실행", value: metric("runsToday"), tone: "fg" },
+    {
+      key: "failures",
+      label: "실패",
+      value: failures,
+      tone: failures === "—"
+        ? "neutral"
+        : failures > 0
+          ? "danger"
+          : resolvedState === "live"
+            ? "success"
+            : "neutral",
+    },
+    { key: "active", label: "활성 자동화", value: metric("activeAutomations"), tone: "fg" },
+    { key: "integrations", label: "연동됨", value: metric("integrationsConnected"), tone: "info" },
+  ].map((item) => item.value === "—" ? { ...item, tone: "neutral" } : item);
+}
+
+export function overviewDisclosureMessages({ failedSources = [], partialSources = [] } = {}) {
+  const unique = (values) => Array.from(new Set(
+    (Array.isArray(values) ? values : []).filter((value) => typeof value === "string" && value),
+  ));
+  const failed = unique(failedSources);
+  const partial = unique(partialSources);
+  return [
+    ...(failed.length > 0
+      ? [{ kind: "failure", text: `일부 원장 읽기 실패 · ${failed.join(", ")}` }]
+      : []),
+    ...(partial.length > 0
+      ? [{ kind: "partial", text: `일부 원장 부분 집계 · ${partial.join(", ")}` }]
+      : []),
+  ];
 }

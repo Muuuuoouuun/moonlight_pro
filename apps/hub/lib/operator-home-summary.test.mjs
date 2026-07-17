@@ -123,6 +123,31 @@ test("keeps core PMS counts from a partial project ledger while naming the parti
   assert.equal(summary.pms.openTasks, 1);
 });
 
+test("keeps readable content counts from a partial content ledger", () => {
+  const summary = homeSummary.buildOperatorHomeSummary({
+    projects: { source: "supabase", projects: [], todos: [] },
+    content: {
+      source: "supabase",
+      partial: true,
+      failedSources: ["publish_logs"],
+      items: [{ id: "content-1", status: "draft" }],
+      publishLogs: [],
+    },
+  });
+
+  assert.equal(summary.state, "partial");
+  assert.equal(summary.sources.content, "partial");
+  assert.notEqual(summary.content, null);
+  assert.equal(summary.content.totalItems, 1);
+  assert.equal(summary.content.inProduction, 1);
+  assert.equal(summary.content.failed, null);
+  assert.deepEqual(summary.content.pipelineSeries.find((item) => item.key === "draft"), {
+    key: "draft",
+    label: "제작",
+    value: 1,
+  });
+});
+
 test("withholds definitive task counts and rates when task aggregation is partial", () => {
   const summary = homeSummary.buildOperatorHomeSummary({
     projects: {

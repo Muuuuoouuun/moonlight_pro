@@ -84,6 +84,27 @@ test("overview distinguishes preview nulls, error nulls, and live zeroes", () =>
   assert.equal(overviewTruth.overviewSyncState({ status: "mystery", source: "mystery" }), "error");
 });
 
+test("overview does not publish a fake zero when the publish-log slice failed", () => {
+  const cards = overviewTruth.buildOverviewKpiCards({
+    kpis: {
+      updatesThisWeek: 0,
+      decisionsThisWeek: 0,
+      publishedThisWeek: 0,
+      activeProjects: 0,
+      blockedProjects: 0,
+    },
+    status: "partial",
+    sources: [
+      { key: "projects", state: "live", failedSources: [] },
+      { key: "content", state: "partial", failedSources: ["publish_logs"] },
+    ],
+  });
+
+  assert.equal(cards[2].value, "—");
+  assert.match(cards[2].hint, /읽기 실패/);
+  assert.notEqual(cards[2].tone, "success");
+});
+
 test("overview activity treats null segments as unavailable instead of zero", () => {
   assert.ok(overviewTruth, "overview-truth.js must expose executable presentation rules");
   assert.deepEqual(
@@ -154,6 +175,116 @@ test("overview activity treats null segments as unavailable instead of zero", ()
   assert.equal(overviewTruth.projectActivityAvailability([], "mystery").state, "error");
 });
 
+test("overview panel availability distinguishes disconnected, failed, partial, and live-empty", () => {
+  assert.equal(typeof overviewTruth.overviewPanelAvailability, "function");
+
+  assert.deepEqual(
+    overviewTruth.overviewPanelAvailability({
+      sourceKey: "projects",
+      status: "preview",
+      sources: [{ key: "projects", state: "preview" }],
+      hasData: false,
+    }),
+    { state: "preview", showData: false, empty: false, reason: "preview" },
+  );
+  assert.deepEqual(
+    overviewTruth.overviewPanelAvailability({
+      sourceKey: "content",
+      status: "partial",
+      sources: [{ key: "content", state: "error" }],
+      hasData: false,
+    }),
+    { state: "error", showData: false, empty: false, reason: "error" },
+  );
+  assert.deepEqual(
+    overviewTruth.overviewPanelAvailability({
+      sourceKey: "revenue",
+      status: "partial",
+      sources: [{ key: "revenue", state: "partial" }],
+      hasData: true,
+    }),
+    { state: "partial", showData: true, empty: false, reason: "partial" },
+  );
+  assert.deepEqual(
+    overviewTruth.overviewPanelAvailability({
+      sourceKey: "revenue",
+      status: "partial",
+      sources: [{ key: "revenue", state: "partial" }],
+      hasData: false,
+    }),
+    { state: "partial", showData: false, empty: false, reason: "partial" },
+  );
+  assert.deepEqual(
+    overviewTruth.overviewPanelAvailability({
+      sourceKey: "revenue",
+      status: "live",
+      sources: [{ key: "revenue", state: "live" }],
+      hasData: false,
+    }),
+    { state: "live", showData: false, empty: true, reason: "empty" },
+  );
+  assert.equal(
+    overviewTruth.overviewPanelAvailability({ sourceKey: "projects", status: "mystery" }).state,
+    "error",
+  );
+});
+
+test("overview direct-state panels keep rhythm empty exclusive to proven live data", () => {
+  assert.equal(typeof overviewTruth.overviewPanelAvailability, "function");
+  assert.deepEqual(
+    overviewTruth.overviewPanelAvailability({ state: "partial", hasData: true }),
+    { state: "partial", showData: true, empty: false, reason: "partial" },
+  );
+  assert.deepEqual(
+    overviewTruth.overviewPanelAvailability({ state: "partial", hasData: false }),
+    { state: "partial", showData: false, empty: false, reason: "partial" },
+  );
+  assert.deepEqual(
+    overviewTruth.overviewPanelAvailability({ state: "live-empty", hasData: false }),
+    { state: "live", showData: false, empty: true, reason: "empty" },
+  );
+  assert.equal(overviewTruth.overviewPanelAvailability({ state: "unknown" }).state, "error");
+});
+
+test("overview automation metrics never manufacture zero or success from unavailable values", () => {
+  assert.equal(typeof overviewTruth.buildAutomationMetricRows, "function");
+
+  const preview = overviewTruth.buildAutomationMetricRows({}, "preview");
+  assert.equal(preview.every((metric) => metric.value === "—"), true);
+  assert.equal(preview.some((metric) => metric.tone === "success"), false);
+
+  const partial = overviewTruth.buildAutomationMetricRows({ failuresToday: 0 }, "partial");
+  assert.deepEqual(partial.map((metric) => metric.value), ["—", 0, "—", "—"]);
+  assert.notEqual(partial[1].tone, "success");
+
+  const live = overviewTruth.buildAutomationMetricRows({
+    runsToday: 0,
+    failuresToday: 0,
+    activeAutomations: 0,
+    integrationsConnected: 0,
+  }, "live");
+  assert.deepEqual(live.map((metric) => metric.value), [0, 0, 0, 0]);
+  assert.equal(live[1].tone, "success");
+});
+
+test("overview header keeps failed and partial source disclosures distinct", () => {
+  assert.equal(typeof overviewTruth.overviewDisclosureMessages, "function");
+  assert.deepEqual(
+    overviewTruth.overviewDisclosureMessages({
+      failedSources: ["project_updates"],
+      partialSources: ["tasks"],
+    }),
+    [
+      { kind: "failure", text: "일부 원장 읽기 실패 · project_updates" },
+      { kind: "partial", text: "일부 원장 부분 집계 · tasks" },
+    ],
+  );
+  assert.deepEqual(
+    overviewTruth.overviewDisclosureMessages({ failedSources: [], partialSources: ["tasks", "tasks"] }),
+    [{ kind: "partial", text: "일부 원장 부분 집계 · tasks" }],
+  );
+});
+
 test("overview consumes API status and failed sources for partial disclosures", () => {
   assert.match(overviewSource, /overviewSyncState\(data\)/);
   assert.match(overviewSource, /ledger\.failedSources/);
@@ -164,7 +295,28 @@ test("overview consumes API status and failed sources for partial disclosures", 
   assert.match(overviewSource, /브랜드 활동 원장 미연결/);
   assert.match(overviewSource, /최근 활동 원장 일부를 읽지 못했습니다/);
   assert.match(overviewSource, /최근 활동 원장 미연결/);
+  assert.match(overviewSource, /overviewPanelAvailability/);
+  assert.match(overviewSource, /buildAutomationMetricRows/);
+  assert.match(overviewSource, /overviewDisclosureMessages/);
+  assert.match(overviewSource, /프로젝트 원장 미연결/);
+  assert.match(overviewSource, /프로젝트 원장 읽기 실패/);
+  assert.match(overviewSource, /프로젝트 부분 데이터/);
+  assert.match(overviewSource, /프로젝트 데이터 없음/);
+  assert.match(overviewSource, /콘텐츠 원장 미연결/);
+  assert.match(overviewSource, /콘텐츠 원장 읽기 실패/);
+  assert.match(overviewSource, /콘텐츠 부분 데이터/);
+  assert.match(overviewSource, /콘텐츠 데이터 없음/);
+  assert.match(overviewSource, /매출 원장 미연결/);
+  assert.match(overviewSource, /매출 원장 읽기 실패/);
+  assert.match(overviewSource, /매출 원장 부분 데이터/);
+  assert.match(overviewSource, /자동화 원장 미연결/);
+  assert.match(overviewSource, /자동화 원장 읽기 실패/);
+  assert.match(overviewSource, /자동화 원장 부분 데이터/);
+  assert.match(overviewSource, /리듬 원장 미연결/);
+  assert.match(overviewSource, /리듬 원장 읽기 실패/);
+  assert.match(overviewSource, /리듬 원장 부분 데이터/);
   assert.doesNotMatch(overviewSource, /kpis\.(?:updatesThisWeek|decisionsThisWeek|activeProjects)\s*\?\?\s*0/);
+  assert.doesNotMatch(overviewSource, /automationsSummary\.(?:runsToday|failuresToday|activeAutomations|integrationsConnected)\s*\?\?\s*0/);
   assert.doesNotMatch(dailyBriefSource, /`\$\{pms\.taskCompletionRate\}%`/);
 });
 

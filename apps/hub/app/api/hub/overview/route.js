@@ -13,10 +13,16 @@ export const dynamic = "force-dynamic";
 const ACTIVITY_DAYS = 30;
 const DAY_MS = 86400000;
 
-function ledgerState(result) {
+function ledgerState(result, key) {
   if (result.status === "rejected") return "error";
-  if (result.value?.source === "error") return "error";
-  if (result.value?.source === "supabase") return result.value.partial ? "partial" : "live";
+  const value = result.value;
+  if (value?.source === "error") return "error";
+  if (key === "work" && ["error", "partial", "preview"].includes(value?.rhythm?.state)) {
+    return value.rhythm.state;
+  }
+  if (value?.source === "supabase") return value.partial ? "partial" : "live";
+  if (value?.source === "partial") return "partial";
+  if (value?.source === "preview" && value?.configured === true) return "error";
   return "preview";
 }
 
@@ -193,14 +199,27 @@ function buildSources(results) {
   ].map(([key, label]) => {
     const result = results[key];
     const value = result.status === "fulfilled" ? result.value : null;
+    const state = ledgerState(result, key);
+    const failedSources = Array.isArray(value?.failedSources) ? [...value.failedSources] : [];
+    const rhythmPartialSources = key === "work" && value?.rhythm?.state === "partial"
+      ? (Array.isArray(value.rhythm.truncatedSources) && value.rhythm.truncatedSources.length > 0
+          ? value.rhythm.truncatedSources
+          : ["rhythm"])
+      : [];
+    const rawPartialSources = Array.isArray(value?.partialSources) ? value.partialSources : [];
+    const partialSources = Array.from(new Set([...rawPartialSources, ...rhythmPartialSources]));
+    if (state === "error" && failedSources.length === 0) failedSources.push(key);
+    if (state === "partial" && failedSources.length === 0 && partialSources.length === 0) {
+      partialSources.push(key);
+    }
     return {
       key,
       label,
-      state: ledgerState(result),
-      failedSources: Array.isArray(value?.failedSources) ? value.failedSources : [],
-      partialSources: Array.isArray(value?.partialSources) ? value.partialSources : [],
-      error: value?.source === "error" ? value.error || `${key}-ledger-read-failed` : null,
-      retryable: value?.source === "error" ? value.retryable !== false : false,
+      state,
+      failedSources,
+      partialSources,
+      error: state === "error" ? value?.error || value?.rhythm?.error || `${key}-ledger-read-failed` : null,
+      retryable: state === "error" ? value?.retryable !== false : false,
     };
   });
 }
@@ -231,15 +250,19 @@ export async function GET() {
   const sources = buildSources(results);
   const liveCount = sources.filter((source) => source.state === "live").length;
   const degradedSources = sources.filter((source) => ["error", "partial"].includes(source.state));
-  const failedSources = degradedSources.map((source) => source.key);
+  const failedSources = Array.from(new Set(sources.flatMap((source) => source.failedSources)));
+  const partialSources = Array.from(new Set(sources.flatMap((source) => source.partialSources)));
 
   const operatorHome = buildOperatorHomeSummary({ projects, content });
 
   const projectReadable = projects?.source === "supabase";
   const projectFailures = new Set(projects?.failedSources || []);
+  const contentFailures = new Set(content?.failedSources || []);
   const updatesAvailable = projectReadable && !projectFailures.has("project_updates");
   const decisionsAvailable = projectReadable && !projectFailures.has("decisions");
-  const contentAvailable = content?.source === "supabase";
+  const contentAvailable = content?.source === "supabase"
+    && !contentFailures.has("publish_logs")
+    && !contentFailures.has("publishLogs");
   const updatesThisWeek = updatesAvailable
     ? (projects.updates || []).filter((update) => withinDays(update.happenedAt, 7)).length
     : null;
@@ -258,6 +281,7 @@ export async function GET() {
     generatedAt: new Date().toISOString(),
     sources,
     failedSources,
+    partialSources,
     kpis: {
       updatesThisWeek,
       decisionsThisWeek,
@@ -279,6 +303,9 @@ export async function GET() {
     automationsSummary: automations.summary || {},
     brandActivity: projectReadable ? buildBrandActivity(projects) : null,
     rhythm: {
+      state: ["live", "live-empty", "partial", "preview", "error"].includes(work?.rhythm?.state)
+        ? work.rhythm.state
+        : sources.find((source) => source.key === "work")?.state || "error",
       summary: work.summary || {},
       rituals: (work.rituals || []).slice().sort((a, b) => (b.streak || 0) - (a.streak || 0)).slice(0, 3),
     },

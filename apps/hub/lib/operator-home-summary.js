@@ -57,18 +57,23 @@ function buildContentSummary(ledger) {
   const items = Array.isArray(ledger.items) ? ledger.items : [];
   const publishLogs = Array.isArray(ledger.publishLogs) ? ledger.publishLogs : [];
   const statusOf = (item) => item?.statusKey || item?.status;
+  const failedSources = new Set(Array.isArray(ledger.failedSources) ? ledger.failedSources : []);
+  const itemsAvailable = !failedSources.has("items") && !failedSources.has("content_items");
+  const publishLogsAvailable = !failedSources.has("publish_logs") && !failedSources.has("publishLogs");
 
   return {
-    totalItems: items.length,
-    ideas: countBy(items, (item) => statusOf(item) === "idea"),
-    inProduction: countBy(items, (item) => ["draft", "review"].includes(statusOf(item))),
-    scheduled: countBy(items, (item) => statusOf(item) === "scheduled"),
-    published: countBy(items, (item) => statusOf(item) === "published"),
-    failed: countBy(publishLogs, (log) => log?.status === "failed"),
+    totalItems: itemsAvailable ? items.length : null,
+    ideas: itemsAvailable ? countBy(items, (item) => statusOf(item) === "idea") : null,
+    inProduction: itemsAvailable
+      ? countBy(items, (item) => ["draft", "review"].includes(statusOf(item)))
+      : null,
+    scheduled: itemsAvailable ? countBy(items, (item) => statusOf(item) === "scheduled") : null,
+    published: itemsAvailable ? countBy(items, (item) => statusOf(item) === "published") : null,
+    failed: publishLogsAvailable ? countBy(publishLogs, (log) => log?.status === "failed") : null,
     pipelineSeries: CONTENT_SERIES.map(({ key, label }) => ({
       key,
       label,
-      value: countBy(items, (item) => statusOf(item) === key),
+      value: itemsAvailable ? countBy(items, (item) => statusOf(item) === key) : null,
     })),
   };
 }
@@ -97,6 +102,6 @@ export function buildOperatorHomeSummary({ projects = {}, content = {} } = {}) {
     state: combinedState(Object.values(sources)),
     sources,
     pms: ["live", "partial"].includes(sources.projects) ? buildPmsSummary(projects) : null,
-    content: sources.content === "live" ? buildContentSummary(content) : null,
+    content: ["live", "partial"].includes(sources.content) ? buildContentSummary(content) : null,
   };
 }
