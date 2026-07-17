@@ -1293,9 +1293,23 @@ function ContactMenu({ onAction }) {
   );
 }
 
-function LogComposer({ onLog }) {
+// `preset` is set by a quick-action click (ContactMenu/QuickActions — "Schedule meeting" etc.):
+// it seeds the type + a starting draft instead of the old behavior of silently writing a
+// canned message with no way to enter real details. `preset.seq` is a bump counter so clicking
+// the same quick action twice in a row (e.g. "Schedule meeting" again before saving) still
+// re-applies the preset and re-focuses, even though type/text otherwise look unchanged.
+function LogComposer({ onLog, preset }) {
   const [type, setType] = React.useState('note');
   const [text, setText] = React.useState('');
+  const textRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!preset) return;
+    setType(preset.type || 'note');
+    setText(preset.text || '');
+    textRef.current?.focus();
+  }, [preset?.seq]);
+
   const save = () => {
     const body = text.trim();
     if (!body) return;
@@ -1312,6 +1326,7 @@ function LogComposer({ onLog }) {
       display: 'flex', flexDirection: 'column', gap: 8,
     }}>
       <textarea
+        ref={textRef}
         value={text}
         onChange={e => setText(e.target.value)}
         placeholder="활동 기록… (이메일 회신, 통화 메모, 결정 요약 등)"
@@ -1360,9 +1375,29 @@ function QuickActions({ onAction }) {
   );
 }
 
-function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, onNavigate }) {
+function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAddNote, onNavigate }) {
   const [tab, setTab] = React.useState('activity');
   const [noteText, setNoteText] = React.useState('');
+  // Quick actions (ContactMenu/QuickActions — "Schedule meeting" etc.) used to write a
+  // canned message straight to crm_activities with no way to enter real details. Now they
+  // switch to Activity and seed LogComposer instead — the click chooses the type + a starter
+  // draft, the operator still has to type and hit Save. `seq` forces LogComposer to re-apply
+  // the preset even if type/text look unchanged from the last click.
+  const [composerPreset, setComposerPreset] = React.useState({ type: 'note', text: '', seq: 0 });
+  const handleQuickAction = (kind, contactName) => {
+    const type = kind === 'chat' ? 'note' : kind;
+    const starters = {
+      email: '이메일: ',
+      meeting: '미팅: ',
+      chat: '',
+      call: '통화: ',
+      deal: '',
+      note: '',
+    };
+    const text = contactName ? `${contactName} — ${starters[kind] || ''}` : (starters[kind] || '');
+    setTab('activity');
+    setComposerPreset((p) => ({ type, text, seq: p.seq + 1 }));
+  };
   if (!account) {
     return (
       <div style={{
@@ -1422,7 +1457,7 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
           </div>
         </div>
         <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <QuickActions onAction={onAction} />
+          <QuickActions onAction={handleQuickAction} />
           <Button
             variant="secondary"
             size="xs"
@@ -1441,14 +1476,14 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
       <div className="scroll-y" style={{ flex: 1, minHeight: 0, padding: 'var(--card-pad)', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {tab === 'activity' && (
           <>
-            <LogComposer onLog={onLog} />
+            <LogComposer onLog={onLog} preset={composerPreset} />
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {d.activity.length === 0 && (
                 <div style={{ fontSize: 12, color: 'var(--fg-faint)', padding: '12px 0' }}>아직 기록이 없습니다.</div>
               )}
               {d.activity.map((a, i) => (
                 <div key={i} style={{
-                  display: 'grid', gridTemplateColumns: '18px 1fr auto',
+                  display: 'grid', gridTemplateColumns: '18px 1fr auto auto',
                   gap: 10, padding: '10px 0',
                   borderBottom: i < d.activity.length - 1 ? '1px solid var(--line-soft)' : 'none',
                   alignItems: 'flex-start',
@@ -1463,7 +1498,8 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
                       <span>{a.who}</span>
                     </div>
                   </div>
-                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{a.at}</span>
+                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', marginTop: 1 }}>{a.at}</span>
+                  <IconButton icon="x" size={20} iconSize={11} tooltip="기록 삭제" onClick={() => onDeleteActivity(a)} />
                 </div>
               ))}
             </div>
@@ -1495,7 +1531,7 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
                   </div>
                   <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3 }}>Last: {c.lastContact}</div>
                 </div>
-                <ContactMenu onAction={(kind) => onAction(kind, c.name)} />
+                <ContactMenu onAction={(kind) => handleQuickAction(kind, c.name)} />
               </div>
             ))}
           </div>
@@ -1627,21 +1663,27 @@ export function Accounts({ workspace, onNavigate }) {
 
   const pushActivity = (name, entry) => persistActivity(name, entry);
 
-  const handleAction = (name) => (kind, contactName) => {
-    const labels = {
-      email:   contactName ? `${contactName}에게 이메일 발송 기록` : '이메일 발송 기록',
-      meeting: contactName ? `${contactName}와 미팅 일정 등록` : '미팅 일정 등록',
-      chat:    contactName ? `${contactName} 채팅 스레드 오픈` : '채팅 스레드 오픈',
-      call:    contactName ? `${contactName} 통화 기록` : '통화 기록',
-      deal:    '새 딜 초안 생성',
-      note:    '노트 추가 (간단)',
-    };
-    const type = kind === 'chat' ? 'note' : kind;
-    pushActivity(name, { type, msg: labels[kind] || `${kind} 액션` });
-  };
-
   const handleLog = (name) => ({ type, msg }) => {
     pushActivity(name, { type, msg });
+  };
+
+  // Delete/undo for an activity row — the backend (/api/hub/revenue/activity, op:'delete')
+  // already supported this; nothing in the UI called it. A row still optimistic-local (never
+  // persisted, id starts with 'local-') just gets dropped client-side, same as handlePinNote's
+  // existing local-vs-persisted split below.
+  const handleDeleteActivity = (name) => (activity) => {
+    setDetails(prev => {
+      const cur = prev[name];
+      if (!cur) return prev;
+      const match = row => (activity.id ? row.id === activity.id : row === activity);
+      return {
+        ...prev,
+        [name]: { ...cur, activity: cur.activity.filter(row => !match(row)), notes: cur.notes.filter(row => !match(row)) },
+      };
+    });
+    if (activity.id && !String(activity.id).startsWith('local-')) {
+      saveRevenueRecord('activity', 'delete', { id: activity.id });
+    }
   };
 
   const handlePinNote = (name) => (note) => {
@@ -1910,8 +1952,8 @@ export function Accounts({ workspace, onNavigate }) {
             <DetailPanel
               account={selectedAcc}
               detail={selectedAcc ? getDetail(selectedAcc.name) : null}
-              onAction={selectedAcc ? handleAction(selectedAcc.name) : () => {}}
               onLog={selectedAcc ? handleLog(selectedAcc.name) : () => {}}
+              onDeleteActivity={selectedAcc ? handleDeleteActivity(selectedAcc.name) : () => {}}
               onPinNote={selectedAcc ? handlePinNote(selectedAcc.name) : () => {}}
               onAddNote={selectedAcc ? handleAddNote(selectedAcc.name) : () => {}}
               onNavigate={onNavigate}
