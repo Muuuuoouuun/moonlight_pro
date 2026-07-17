@@ -1,10 +1,12 @@
 import {
+  countSupabaseRows,
   eqFilter,
   fetchSupabaseRows,
   inFilter,
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { buildProjectProgress } from "../pms-ui.js";
 
 const BRAND_GLYPHS = ["◐", "◇", "✦", "◆", "●", "□", "△", "◎", "◌", "✧"];
 
@@ -42,12 +44,6 @@ const CANONICAL_BRAND_ORG_SCOPE = {
 function resolveBrandOrgScope(key, meta) {
   if (typeof meta?.org_scope === "string" && meta.org_scope.trim()) return meta.org_scope.trim();
   return CANONICAL_BRAND_ORG_SCOPE[key] || "personal";
-}
-
-function clampProgress(value) {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.max(0, Math.min(100, parsed));
 }
 
 function normalizeProjectStatus(status) {
@@ -197,7 +193,13 @@ function mapBrands(rows, projects, todos, updates) {
   ];
 }
 
-function mapProjects(rows, brandById, taskStats, updateStats) {
+export function mapProjects(
+  rows,
+  brandById,
+  taskStats,
+  updateStats,
+  { taskStatsPartial = false } = {},
+) {
   return rows.map((row) => {
     const brand = row.brand_id && brandById.get(row.brand_id);
     const stats = taskStats.get(row.id) || { total: 0, done: 0 };
@@ -205,23 +207,43 @@ function mapProjects(rows, brandById, taskStats, updateStats) {
     const latestProgress = Number.isFinite(updates.latest?.progress)
       ? updates.latest.progress
       : null;
-    const progress = latestProgress ?? clampProgress(row.progress);
+    const reportedProgress = latestProgress ?? (Number.isFinite(row.progress) ? row.progress : null);
+    const displayProgress = buildProjectProgress({
+      tasks: stats,
+      reportedProgress,
+      partial: taskStatsPartial,
+    });
+    const displaySummary = row.summary || updates.latest?.summary || row.next_action || "";
+    const displayNextAction = row.next_action || updates.latest?.nextAction || "";
 
     return {
       id: row.id,
       brand: brand?.slug || "all",
+      brandId: row.brand_id ?? null,
       name: row.name,
+      statusKey: row.status ?? null,
       status: normalizeProjectStatus(row.status),
-      progress,
+      priority: row.priority ?? null,
+      projectSummary: row.summary ?? null,
+      projectProgress: row.progress ?? null,
+      projectNextAction: row.next_action ?? null,
+      displaySummary,
+      displayNextAction,
+      displayProgress,
+      latestUpdate: updates.latest,
+      progress: displayProgress?.value ?? null,
       due: formatShortDate(row.due_at),
-      dueAt: row.due_at || "",
+      startedAt: row.started_at ?? null,
+      dueAt: row.due_at ?? null,
+      updatedAt: row.updated_at ?? null,
       owner: row.owner_id ? "Me" : "Unassigned",
       tag: row.meta?.tag || null,
       tasks: stats.total,
       done: stats.done,
+      tasksPartial: taskStatsPartial,
       changes: updates.count,
-      summary: row.summary || updates.latest?.summary || row.next_action || "",
-      nextAction: row.next_action || updates.latest?.nextAction || "",
+      summary: displaySummary,
+      nextAction: displayNextAction,
       createdAt: row.created_at,
       createdAtLabel: formatShortDate(row.created_at),
       lastActivityAt: updates.latest?.happenedAt || row.last_activity_at || row.updated_at || row.created_at,
@@ -398,10 +420,23 @@ export async function getProjectLedger() {
       notes: [],
       checks: [],
       columns: [],
+      taskAggregation: null,
     };
   }
 
-  const [brandRows, projectRows, taskRows, updateRows, decisionRows, noteRows, routineRows] = await Promise.all([
+  const taskFilters = withWorkspaceFilter([
+    ["status", inFilter(["inbox", "todo", "doing", "blocked", "done"])],
+  ]);
+  const [
+    brandRows,
+    projectRows,
+    taskRows,
+    taskRowCount,
+    updateRows,
+    decisionRows,
+    noteRows,
+    routineRows,
+  ] = await Promise.all([
     fetchSupabaseRows("brands", {
       order: "name.asc",
       filters: withWorkspaceFilter([["status", eqFilter("active")]]),
@@ -416,10 +451,9 @@ export async function getProjectLedger() {
     fetchSupabaseRows("tasks", {
       limit: 160,
       order: "updated_at.desc",
-      filters: withWorkspaceFilter([
-        ["status", inFilter(["inbox", "todo", "doing", "blocked", "done"])],
-      ]),
+      filters: taskFilters,
     }),
+    countSupabaseRows("tasks", taskFilters),
     fetchSupabaseRows("project_updates", {
       limit: 120,
       order: "happened_at.desc",
@@ -455,8 +489,11 @@ export async function getProjectLedger() {
       notes: [],
       checks: [],
       columns: [],
+      taskAggregation: null,
     };
   }
+
+  const taskStatsPartial = !Number.isFinite(taskRowCount) || taskRowCount !== taskRows.length;
 
   const brandById = new Map(brandRows.map((brand) => [brand.id, brand]));
   const projectById = new Map(projectRows.map((project) => [project.id, project]));
@@ -473,7 +510,9 @@ export async function getProjectLedger() {
   const updates = mapProjectUpdates(updateRows || []);
   const updateStats = buildUpdateStats(updates);
   const todos = mapTodos(taskRows, projectById, brandById);
-  const projects = mapProjects(projectRows, brandById, taskStats, updateStats);
+  const projects = mapProjects(projectRows, brandById, taskStats, updateStats, {
+    taskStatsPartial,
+  });
   const brands = mapBrands(brandRows, projects, todos, updates);
 
   return {
@@ -488,5 +527,10 @@ export async function getProjectLedger() {
     notes: mapNotes(noteRows || []),
     checks: mapRoutineChecks(routineRows || []),
     columns: buildBoardColumns(projects, todos),
+    taskAggregation: {
+      loaded: taskRows.length,
+      total: Number.isFinite(taskRowCount) ? taskRowCount : null,
+      partial: taskStatsPartial,
+    },
   };
 }

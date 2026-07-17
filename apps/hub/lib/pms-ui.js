@@ -47,19 +47,68 @@ export function createClientId({
   });
 }
 
-export function buildProjectDraft({ brandId = null, brandKey = "all", initialStatus = "Planning" } = {}) {
+export function buildProjectDraft({
+  brandId = null,
+  brandKey = "all",
+  clientId = createClientId(),
+  initialStatus = "Planning",
+} = {}) {
   return {
     kind: "project",
     isNew: true,
-    title: "새 프로젝트",
+    clientId,
+    title: "",
     brandId,
     brandKey,
     summary: "",
-    status: PROJECT_STATUS_BY_LABEL[initialStatus] || "active",
+    status: PROJECT_STATUS_BY_LABEL[initialStatus] || "draft",
     priority: "medium",
-    progress: 0,
     nextAction: "",
     dueAt: "",
+  };
+}
+
+export function buildProjectProgress({
+  tasks = { done: 0, total: 0 },
+  reportedProgress = null,
+  partial = false,
+} = {}) {
+  const total = Number.isFinite(tasks?.total) ? Math.max(0, Math.trunc(tasks.total)) : 0;
+  const done = Number.isFinite(tasks?.done)
+    ? Math.max(0, Math.min(total, Math.trunc(tasks.done)))
+    : 0;
+
+  if (partial) {
+    return {
+      value: null,
+      source: "tasks",
+      label: "작업 집계 일부",
+      done,
+      total,
+      partial: true,
+    };
+  }
+
+  if (total > 0) {
+    return {
+      value: Math.round((done / total) * 100),
+      source: "tasks",
+      label: "체크리스트 진척",
+      done,
+      total,
+      partial: false,
+    };
+  }
+
+  if (!Number.isFinite(reportedProgress)) return null;
+
+  return {
+    value: Math.max(0, Math.min(100, reportedProgress)),
+    source: "reported",
+    label: "보고된 진척",
+    done: null,
+    total: null,
+    partial: false,
   };
 }
 

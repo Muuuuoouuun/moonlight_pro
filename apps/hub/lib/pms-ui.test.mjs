@@ -18,27 +18,31 @@ test("maps the five task board columns to durable task statuses", () => {
   assert.equal(pmsUi.taskStatusForBoardColumn("unknown"), null);
 });
 
-test("builds minimal project and task drafts from the current workspace context", () => {
-  assert.deepEqual(
-    pmsUi.buildProjectDraft({
-      brandId: "brand-1",
-      brandKey: "classmoon",
-      initialStatus: "Blocked",
-    }),
-    {
-      kind: "project",
-      isNew: true,
-      title: "새 프로젝트",
-      brandId: "brand-1",
-      brandKey: "classmoon",
-      summary: "",
-      status: "blocked",
-      priority: "medium",
-      progress: 0,
-      nextAction: "",
-      dueAt: "",
-    },
-  );
+test("builds a project draft with an empty title and a stable client id", () => {
+  const clientId = "11111111-1111-4111-8111-111111111111";
+  const draft = pmsUi.buildProjectDraft({
+    brandId: "brand-1",
+    brandKey: "classmoon",
+    clientId,
+  });
+
+  assert.deepEqual(draft, {
+    kind: "project",
+    isNew: true,
+    clientId,
+    title: "",
+    brandId: "brand-1",
+    brandKey: "classmoon",
+    summary: "",
+    status: "draft",
+    priority: "medium",
+    nextAction: "",
+    dueAt: "",
+  });
+  assert.equal("progress" in draft, false, "create drafts must not invent manual progress");
+});
+
+test("builds a minimal task draft from the current project context", () => {
   assert.deepEqual(
     pmsUi.buildTaskDraft({ projectId: "project-1", initialStatus: "doing" }),
     {
@@ -50,6 +54,50 @@ test("builds minimal project and task drafts from the current workspace context"
       priority: "medium",
       dueAt: "",
     },
+  );
+});
+
+test("derives project progress from task checklist evidence before reported values", () => {
+  assert.deepEqual(
+    pmsUi.buildProjectProgress({
+      tasks: { done: 3, total: 4 },
+      reportedProgress: 92,
+    }),
+    {
+      value: 75,
+      source: "tasks",
+      label: "체크리스트 진척",
+      done: 3,
+      total: 4,
+      partial: false,
+    },
+  );
+});
+
+test("labels reported project progress when no task evidence exists", () => {
+  assert.deepEqual(
+    pmsUi.buildProjectProgress({
+      tasks: { done: 0, total: 0 },
+      reportedProgress: 42,
+    }),
+    {
+      value: 42,
+      source: "reported",
+      label: "보고된 진척",
+      done: null,
+      total: null,
+      partial: false,
+    },
+  );
+});
+
+test("returns null when a project has no progress evidence", () => {
+  assert.equal(
+    pmsUi.buildProjectProgress({
+      tasks: { done: 0, total: 0 },
+      reportedProgress: null,
+    }),
+    null,
   );
 });
 
