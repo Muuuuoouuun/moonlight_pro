@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
@@ -19,11 +21,35 @@ function memoryStorage(entries = {}) {
   };
 }
 
+function readHubAppSource() {
+  const ref = process.env.HUB_APP_SOURCE_REF;
+  if (ref) {
+    return execFileSync(
+      "git",
+      ["show", `${ref}:apps/hub/components/hub/hub-app.jsx`],
+      { encoding: "utf8" },
+    );
+  }
+  return readFileSync(new URL("../components/hub/hub-app.jsx", import.meta.url), "utf8");
+}
+
 test("keeps the server and first client render deterministic before restoring saved preferences", () => {
   const storage = memoryStorage({ "mlp.theme": "light", "mlp.density": "compact" });
 
   assert.deepEqual(DEFAULT_HUB_PREFERENCES, { density: "default", theme: "dark" });
   assert.deepEqual(readHubPreferences(storage), { density: "compact", theme: "light" });
+});
+
+test("restores browser preferences after hydration instead of inside state initializers", () => {
+  const source = readHubAppSource();
+
+  assert.match(source, /useState\(DEFAULT_HUB_PREFERENCES\.theme\)/);
+  assert.match(source, /useState\(DEFAULT_HUB_PREFERENCES\.density\)/);
+  assert.doesNotMatch(
+    source,
+    /useState\(\s*\(\)\s*=>[\s\S]{0,180}localStorage/,
+    "reading localStorage in a state initializer makes SSR and hydration render different trees",
+  );
 });
 
 test("falls back safely when stored preferences are invalid or unavailable", () => {
