@@ -82,7 +82,7 @@ test("mobile PMS controls keep 44px targets while project cards avoid horizontal
   );
   assert.match(
     css,
-    /@media\s*\(max-width:\s*768px\)[\s\S]*?\.hub-project-table\s*\{[\s\S]*?overflow-x:\s*hidden !important/,
+    /@media\s*\(max-width:\s*900px\)[\s\S]*?\.hub-project-table\s*\{[\s\S]*?overflow-x:\s*hidden !important/,
   );
   assert.match(
     css,
@@ -90,4 +90,31 @@ test("mobile PMS controls keep 44px targets while project cards avoid horizontal
   );
   assert.match(projectsSource, /className=["']hub-project-primary-control["']/);
   assert.match(projectsSource, /className=["'][^"']*hub-project-table[^"']*["']/);
+});
+
+test("project cards transform before the 769 to 900px sheet breakpoint can clip them", () => {
+  const mediumStart = css.indexOf("@media (max-width: 900px)");
+  const narrowStart = css.indexOf("@media (max-width: 768px)", mediumStart);
+  const mediumBlock = css.slice(mediumStart, narrowStart);
+
+  assert.ok(mediumStart >= 0 && narrowStart > mediumStart);
+  assert.match(mediumBlock, /\.hub-project-table\s*\{[\s\S]*?overflow-x:\s*hidden !important/);
+  assert.match(mediumBlock, /\.hub-project-list-head\s*\{[\s\S]*?display:\s*none !important/);
+  assert.match(mediumBlock, /\.hub-project-row\s*\{[\s\S]*?grid-template-columns:\s*44px minmax\(0,\s*1fr\) !important/);
+  assert.match(mediumBlock, /\.hub-project-row__open\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\) !important/);
+  assert.match(mediumBlock, /\.hub-project-row\s*>\s*\.hub-pms-progress\s*\{[\s\S]*?grid-column:\s*2 !important/);
+});
+
+test("canonical drawer layers stay above the mobile project detail sheet", () => {
+  const token = (name) => Number(css.match(new RegExp(`--${name}:\\s*(\\d+)`))?.[1]);
+  const detailLayer = token("z-project-detail");
+  const drawerOverlayLayer = token("z-drawer-overlay");
+  const drawerLayer = token("z-drawer");
+
+  assert.ok(Number.isFinite(detailLayer));
+  assert.ok(drawerOverlayLayer > detailLayer);
+  assert.ok(drawerLayer > drawerOverlayLayer);
+  assert.match(css, /\.hub-project-detail-sheet\s*\{[\s\S]*?z-index:\s*var\(--z-project-detail\) !important/);
+  assert.match(primitivesSource, /className="hub-drawer-overlay"[\s\S]*?zIndex:\s*["']var\(--z-drawer-overlay\)["']/);
+  assert.match(primitivesSource, /className="hub-drawer"[\s\S]*?zIndex:\s*["']var\(--z-drawer\)["']/);
 });

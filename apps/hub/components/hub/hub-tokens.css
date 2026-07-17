@@ -22,6 +22,10 @@
   --moon-line:     var(--moon-600);
   --pms-moonstone: #5274a8;
 
+  --z-project-detail: 61;
+  --z-drawer-overlay: 70;
+  --z-drawer: 71;
+
   --fg:            var(--moon-100);
   --fg-muted:      var(--moon-400);
   --fg-dim:        var(--moon-500);
@@ -688,92 +692,6 @@
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
-  .hub-project-primary-control,
-  .hub-project-planning-links a,
-  .hub-project-board-status {
-    min-height: 44px !important;
-  }
-
-  .hub-pms-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
-  .hub-pms-summary__cell:nth-child(2) {
-    border-right: 0 !important;
-  }
-
-  .hub-pms-summary__cell:nth-child(-n + 2) {
-    border-bottom: 1px solid var(--line-soft);
-  }
-
-  .hub-project-detail-sheet {
-    position: fixed !important;
-    inset: 0 !important;
-    z-index: 61 !important;
-    display: flex !important;
-    width: 100vw !important;
-    height: 100dvh !important;
-    min-height: 0 !important;
-    padding-top: max(52px, 8dvh);
-    overflow: hidden !important;
-    background: transparent !important;
-  }
-
-  .hub-project-detail-sheet__backdrop {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    display: block !important;
-    width: 100%;
-    min-height: 100% !important;
-    border-radius: 0;
-    background: oklch(0.10 0.006 250 / 0.72) !important;
-    backdrop-filter: blur(6px);
-  }
-
-  .hub-project-detail-sheet__links {
-    width: 100%;
-    border: 1px solid var(--line-soft) !important;
-    border-bottom: 0 !important;
-    border-radius: var(--r-lg) var(--r-lg) 0 0;
-    background: var(--surface) !important;
-  }
-
-  .hub-project-detail-sheet > aside {
-    position: relative;
-    z-index: 1;
-    width: 100% !important;
-    min-width: 0 !important;
-    border-top: 1px solid var(--line-soft);
-    border-left: 0 !important;
-    background: var(--surface) !important;
-  }
-
-  .hub-project-detail-sheet > aside > div:first-child,
-  .hub-project-detail-sheet > aside > div:last-child {
-    min-height: 52px;
-  }
-
-  .campaign-war-room {
-    grid-template-columns: minmax(0, 1fr) !important;
-  }
-
-  .campaign-war-room[data-focus="true"] .campaign-war-room__list {
-    display: none !important;
-  }
-
-  .hub-detail-card {
-    flex-direction: column !important;
-  }
-
-  .hub-detail-card > * {
-    width: 100% !important;
-    min-width: 0 !important;
-    border-right: 0 !important;
-  }
-}
-
-@media (max-width: 768px) {
   .hub-project-table {
     overflow-x: hidden !important;
   }
@@ -852,6 +770,92 @@
     display: none;
   }
 
+  .hub-project-primary-control,
+  .hub-project-planning-links a,
+  .hub-project-board-status {
+    min-height: 44px !important;
+  }
+
+  .hub-pms-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .hub-pms-summary__cell:nth-child(2) {
+    border-right: 0 !important;
+  }
+
+  .hub-pms-summary__cell:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .hub-project-detail-sheet {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: var(--z-project-detail) !important;
+    display: flex !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    min-height: 0 !important;
+    padding-top: max(52px, 8dvh);
+    overflow: hidden !important;
+    background: transparent !important;
+  }
+
+  .hub-project-detail-sheet__backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: block !important;
+    width: 100%;
+    min-height: 100% !important;
+    border-radius: 0;
+    background: oklch(0.10 0.006 250 / 0.72) !important;
+    backdrop-filter: blur(6px);
+  }
+
+  .hub-project-detail-sheet__links {
+    width: 100%;
+    border: 1px solid var(--line-soft) !important;
+    border-bottom: 0 !important;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    background: var(--surface) !important;
+  }
+
+  .hub-project-detail-sheet > aside {
+    position: relative;
+    z-index: 1;
+    width: 100% !important;
+    min-width: 0 !important;
+    border-top: 1px solid var(--line-soft);
+    border-left: 0 !important;
+    background: var(--surface) !important;
+  }
+
+  .hub-project-detail-sheet > aside > div:first-child,
+  .hub-project-detail-sheet > aside > div:last-child {
+    min-height: 52px;
+  }
+
+  .campaign-war-room {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .campaign-war-room[data-focus="true"] .campaign-war-room__list {
+    display: none !important;
+  }
+
+  .hub-detail-card {
+    flex-direction: column !important;
+  }
+
+  .hub-detail-card > * {
+    width: 100% !important;
+    min-width: 0 !important;
+    border-right: 0 !important;
+  }
+}
+
+@media (max-width: 768px) {
   /* Leads is a decision list on narrow screens, not a shrunken spreadsheet. Keep the
      identity and stage in the first viewport; the drawer owns the remaining fields. */
   .hub-leads-table {

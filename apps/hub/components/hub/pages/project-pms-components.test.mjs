@@ -207,8 +207,22 @@ test("desktop detail remains a split inspector instead of trapping the full work
   assert.match(projectsSource, /data-detail-open=\{openDetail \? ["']true["'] : ["']false["']\}/);
   assert.match(projectsSource, /role=\{mobileDetail \? ["']dialog["'] : ["']region["']\}/);
   assert.match(projectsSource, /aria-modal=\{mobileDetail \? ["']true["'] : undefined\}/);
-  assert.match(projectsSource, /if \(!openDetail\) return undefined;/);
+  assert.match(projectsSource, /if \(!openDetail \|\| drawerOpen\) return undefined;/);
   assert.match(projectsSource, /if \(event\.key === ["']Escape["']\)[\s\S]{0,180}closeProjectDetail\(\)/);
   assert.match(projectsSource, /if \(!mobileDetail \|\| event\.key !== ["']Tab["']/);
   assert.match(globalCss, /\.hub-projects-main-grid\[data-detail-open=["']true["']\][\s\S]*?\.hub-project-row__open/);
+});
+
+test("canonical drawers suspend the underlying project detail Escape handler", () => {
+  const drawerOpenIndex = projectsSource.indexOf("const drawerOpen");
+  const detailEffectStart = projectsSource.indexOf("if (!openDetail");
+  const detailEffectEnd = projectsSource.indexOf("const toggleExpand", detailEffectStart);
+  const detailEffect = projectsSource.slice(detailEffectStart, detailEffectEnd);
+
+  assert.ok(drawerOpenIndex >= 0 && drawerOpenIndex < detailEffectStart, "drawerOpen must be computed before the detail effect");
+  assert.match(detailEffect, /if \(!openDetail \|\| drawerOpen\) return undefined;/);
+  assert.match(detailEffect, /if \(event\.key === ["']Escape["']\)[\s\S]{0,180}closeProjectDetail\(\)/);
+  assert.match(detailEffect, /\[closeProjectDetail, drawerOpen, mobileDetail, openDetail\]/);
+  assert.match(projectsSource, /\{openDetail && \(\(\) => \{/);
+  assert.doesNotMatch(projectsSource, /stopImmediatePropagation/);
 });

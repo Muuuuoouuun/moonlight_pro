@@ -205,6 +205,7 @@ export function Projects({ workspace }) {
   const [taskDraft, setTaskDraft] = React.useState(null);
   const [containerDraft, setContainerDraft] = React.useState(null);
   const [localContainers, setLocalContainers] = React.useState([]);
+  const drawerOpen = Boolean(projectDraft || taskDraft || containerDraft);
 
   const formatTime = (d) => {
     try {
@@ -384,7 +385,7 @@ export function Projects({ workspace }) {
   }, [pathname, router]);
 
   React.useEffect(() => {
-    if (!openDetail) return undefined;
+    if (!openDetail || drawerOpen) return undefined;
     const sheet = detailSheetRef.current;
     const raf = mobileDetail
       ? requestAnimationFrame(() => {
@@ -416,7 +417,7 @@ export function Projects({ workspace }) {
       if (raf !== null) cancelAnimationFrame(raf);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [closeProjectDetail, mobileDetail, openDetail]);
+  }, [closeProjectDetail, drawerOpen, mobileDetail, openDetail]);
 
   const toggleExpand = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const createProject = React.useCallback((initialStatus = 'Planning', brandKeyOverride = null) => {
@@ -804,7 +805,6 @@ export function Projects({ workspace }) {
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }, [openGlobalProjectCreate, searchParams, router, pathname]);
 
-  const drawerOpen = Boolean(projectDraft || taskDraft || containerDraft);
   React.useEffect(() => {
     const onKey = (event) => {
       if (!shouldOpenGlobalProjectCreate(event, { drawerOpen })) return;

@@ -462,7 +462,7 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, initialF
 
   return (
     <>
-      <div className="hub-drawer-overlay" aria-hidden="true" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / 0.4)', zIndex: 60 }} />
+      <div className="hub-drawer-overlay" aria-hidden="true" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / 0.4)', zIndex: 'var(--z-drawer-overlay)' }} />
       <aside
         ref={asideRef}
         role="dialog"
@@ -471,7 +471,7 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, initialF
         onKeyDown={handleKeyDown}
         className="hub-drawer"
         style={{
-          position: 'fixed', top: 0, right: 0, bottom: 0, width, zIndex: 61,
+          position: 'fixed', top: 0, right: 0, bottom: 0, width, zIndex: 'var(--z-drawer)',
           background: 'var(--surface)', borderLeft: `1px solid ${borderLeft}`,
           display: 'flex', flexDirection: 'column',
           boxShadow: '-8px 0 32px -12px oklch(0 0 0 / 0.5)',
