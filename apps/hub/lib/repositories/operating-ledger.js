@@ -5,7 +5,7 @@ import {
   inFilter,
   withWorkspaceFilter,
 } from "@/lib/server-read";
-import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
 import { buildProjectProgress } from "../pms-ui.js";
 
 const BRAND_GLYPHS = ["◐", "◇", "✦", "◆", "●", "□", "△", "◎", "◌", "✧"];
@@ -406,12 +406,13 @@ function buildBoardColumns(projects, todos) {
 
 export async function getProjectLedger() {
   const workspaceId = resolveDefaultWorkspaceId();
+  const supabaseConfig = resolveSupabaseConfig();
 
-  if (!workspaceId) {
+  if (!workspaceId || !supabaseConfig) {
     return {
       source: "preview",
       configured: false,
-      workspaceId: null,
+      workspaceId: workspaceId || null,
       brands: [],
       projects: [],
       todos: [],
@@ -476,11 +477,22 @@ export async function getProjectLedger() {
     }),
   ]);
 
-  if (!brandRows || !projectRows || !taskRows) {
+  const failedSources = [
+    ["brands", brandRows],
+    ["projects", projectRows],
+    ["tasks", taskRows],
+  ]
+    .filter(([, rows]) => !Array.isArray(rows))
+    .map(([source]) => source);
+
+  if (failedSources.length > 0) {
     return {
-      source: "preview",
+      source: "error",
       configured: true,
       workspaceId,
+      error: "project-ledger-core-read-failed",
+      failedSources,
+      retryable: true,
       brands: [],
       projects: [],
       todos: [],

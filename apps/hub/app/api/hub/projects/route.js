@@ -13,6 +13,16 @@ export async function GET() {
   try {
     const ledger = await getProjectLedger();
 
+    if (ledger.source === "error") {
+      return NextResponse.json(
+        {
+          status: "error",
+          ...ledger,
+        },
+        { status: 502 },
+      );
+    }
+
     return NextResponse.json({
       status: ledger.source === "supabase" ? "live" : "preview",
       ...ledger,

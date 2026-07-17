@@ -285,7 +285,7 @@ export function Projects({ workspace }) {
       const response = await fetch('/api/hub/projects', { cache: 'no-store' });
       const data = await response.json().catch(() => null);
 
-      if (!response.ok || !data || data.status === 'error') {
+      if (!response.ok || !data || data.status === 'error' || data.source === 'error') {
         setSyncState('error');
         setReadError(data?.error || data?.message || `프로젝트 원장 응답 실패 (${response.status})`);
         return { ok: false, projects: [], todos: [] };

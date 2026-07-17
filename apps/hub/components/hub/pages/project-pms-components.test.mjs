@@ -164,6 +164,7 @@ test("project reads keep error distinct from preview and offer retry", () => {
   const loadBlock = projectsSource.slice(loadStart, effectStart);
 
   assert.match(loadBlock, /setSyncState\(['"]error['"]\)/);
+  assert.match(loadBlock, /data\.source === ['"]error['"]/);
   assert.match(projectsSource, /프로젝트 원장을 읽지 못했습니다/);
   assert.match(projectsSource, /onClick=\{\(\) => loadLedger\(\{ initial: true \}\)\}/);
   assert.doesNotMatch(loadBlock, /catch[\s\S]{0,120}setSyncState\(['"]preview['"]\)/);

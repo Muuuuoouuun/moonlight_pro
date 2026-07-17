@@ -9,7 +9,7 @@ export function withWorkspaceFilter(filters = []) { return filters; }
 export async function fetchSupabaseRows(table, options = {}) {
   const state = globalThis.__operatingLedgerTestState;
   state.calls.push({ kind: "fetch", table, options });
-  return state.rows[table] ?? [];
+  return Object.hasOwn(state.rows, table) ? state.rows[table] : [];
 }
 export async function countSupabaseRows(table, filters = []) {
   const state = globalThis.__operatingLedgerTestState;
@@ -19,7 +19,12 @@ export async function countSupabaseRows(table, filters = []) {
 `;
 
 const serverWriteStub = `
-export function resolveDefaultWorkspaceId() { return "workspace-1"; }
+export function resolveDefaultWorkspaceId() {
+  return globalThis.__operatingLedgerTestState.workspaceId;
+}
+export function resolveSupabaseConfig() {
+  return globalThis.__operatingLedgerTestState.config;
+}
 `;
 
 registerHooks({
@@ -42,8 +47,10 @@ registerHooks({
 
 globalThis.__operatingLedgerTestState = {
   calls: [],
+  config: { url: "https://supabase.example.com", apiKey: "test-key" },
   counts: {},
   rows: {},
+  workspaceId: "workspace-1",
 };
 
 const operatingLedger = await import("./operating-ledger.js?operating-ledger-test");
@@ -149,4 +156,70 @@ test("marks project progress partial when the capped task read is smaller than t
     state.calls.some((call) => call.kind === "count" && call.table === "tasks"),
     "the repository must request an exact task count to prove aggregate completeness",
   );
+});
+
+test("configured core ledger read failures are errors instead of preview", async () => {
+  const state = globalThis.__operatingLedgerTestState;
+  state.calls = [];
+  state.workspaceId = "workspace-1";
+  state.config = { url: "https://supabase.example.com", apiKey: "test-key" };
+  state.counts = { tasks: 0 };
+  state.rows = {
+    brands: null,
+    projects: [],
+    tasks: [],
+  };
+
+  const ledger = await operatingLedger.getProjectLedger();
+
+  assert.equal(ledger.source, "error");
+  assert.equal(ledger.configured, true);
+  assert.equal(ledger.error, "project-ledger-core-read-failed");
+  assert.deepEqual(ledger.failedSources, ["brands"]);
+  assert.deepEqual(ledger.projects, []);
+  assert.deepEqual(ledger.todos, []);
+});
+
+test("missing workspace or Supabase config remains an honest preview without reads", async () => {
+  const state = globalThis.__operatingLedgerTestState;
+  state.calls = [];
+  state.workspaceId = "";
+  state.config = { url: "https://supabase.example.com", apiKey: "test-key" };
+
+  const missingWorkspace = await operatingLedger.getProjectLedger();
+  assert.equal(missingWorkspace.source, "preview");
+  assert.equal(missingWorkspace.configured, false);
+  assert.equal(state.calls.length, 0);
+
+  state.workspaceId = "workspace-1";
+  state.config = null;
+  const missingConfig = await operatingLedger.getProjectLedger();
+  assert.equal(missingConfig.source, "preview");
+  assert.equal(missingConfig.configured, false);
+  assert.equal(state.calls.length, 0);
+});
+
+test("optional ledger read failures preserve the live core project ledger", async () => {
+  const state = globalThis.__operatingLedgerTestState;
+  state.calls = [];
+  state.workspaceId = "workspace-1";
+  state.config = { url: "https://supabase.example.com", apiKey: "test-key" };
+  state.counts = { tasks: 0 };
+  state.rows = {
+    brands: [],
+    projects: [],
+    tasks: [],
+    project_updates: null,
+    decisions: null,
+    notes: null,
+    routine_checks: null,
+  };
+
+  const ledger = await operatingLedger.getProjectLedger();
+
+  assert.equal(ledger.source, "supabase");
+  assert.deepEqual(ledger.updates, []);
+  assert.deepEqual(ledger.decisions, []);
+  assert.deepEqual(ledger.notes, []);
+  assert.deepEqual(ledger.checks, []);
 });
