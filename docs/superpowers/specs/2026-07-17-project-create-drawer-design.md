@@ -20,6 +20,7 @@
 6. 상태·우선순위·기한·브랜드·고객 연결은 접힌 상세 설정에 둔다.
 7. 저장 성공 뒤 durable project ID의 상세 패널이 자동으로 열린다.
 8. 저장 실패·preview·conflict에서는 드로어와 입력값을 유지한다.
+9. Hub lane의 `orgScope`는 생성 시 한 번 기록하며 1-1 범위에서는 변경하지 않는다.
 
 ## 2. 제품·관계 원칙
 
@@ -187,7 +188,7 @@ check (num_nonnulls(lead_id, customer_account_id) <= 1)
 | 상태 | `status` | `projects.status` |
 | 우선순위 | `priority` | `projects.priority` |
 | 기한 | `dueAt` | `projects.due_at` |
-| Hub lane | `orgScope` | `projects.meta.org_scope` |
+| Hub lane (생성 시) | `orgScope` | `projects.meta.org_scope` |
 
 `entityRef.type`은 이번 범위에서 `lead | customer_account`만 허용한다. 빈 선택은 `null`이고 두 FK를 모두 null로 저장한다.
 
@@ -195,8 +196,10 @@ check (num_nonnulls(lead_id, customer_account_id) <= 1)
 
 - Engine은 area, brand, lead, customer_account가 project와 동일한 `workspace_id`인지 insert/update 전에 확인한다.
 - 존재하지 않거나 다른 workspace의 stable ID는 `invalid-reference`로 거절한다.
+- reference 조회 자체가 불가능하면 사용자 입력 오류로 추정하지 않고 retryable error로 반환한다.
 - FK가 있다는 이유만으로 cross-workspace 참조를 허용하지 않는다.
 - 브랜드가 없어도 `meta.org_scope`로 Hub의 ClassIn/개인 lane을 보존한다.
+- `orgScope`는 생성 문맥으로 1-1에서 불변이다. `update_project`의 orgScope 변경은 명시적으로 거절하며, 프로젝트의 Hub lane 이동은 이번 범위 밖이다.
 
 ### 7.4 Read model
 
@@ -262,9 +265,11 @@ ProjectCreateDrawer
 3. invalid entity type과 두 entity 동시 저장을 거절한다.
 4. area/brand/entity가 다른 workspace면 insert 전에 거절한다.
 5. brand 없이 저장해도 orgScope가 read model과 workspace filter까지 왕복한다.
-6. raw project fields와 entityRef가 edit draft까지 손실 없이 전달된다.
-7. 저장 중 중복 submit이 한 번으로 제한된다.
-8. saved/duplicate만 상세 panel handoff를 실행한다.
+6. update command의 orgScope 변경은 `unsupported-org-scope-update`로 거절된다.
+7. reference 조회의 empty와 unavailable을 각각 invalid input과 retryable error로 구분한다.
+8. raw project fields와 entityRef가 edit draft까지 손실 없이 전달된다.
+9. 저장 중 중복 submit이 한 번으로 제한된다.
+10. saved/duplicate만 상세 panel handoff를 실행한다.
 
 ### 브라우저
 
@@ -288,6 +293,7 @@ ProjectCreateDrawer
 - 첫 Task 자동 생성
 - 수동 진행률 UI
 - 다중 고객 연결
+- 기존 프로젝트의 ClassIn/개인 lane 이동 (`orgScope` 변경)
 
 ## 12. 구현 완료 기준
 

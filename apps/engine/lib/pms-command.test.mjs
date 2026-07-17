@@ -375,12 +375,11 @@ test("clears project brand and typed entity context without changing other field
   });
 });
 
-test("normalizes partial project area and org scope updates", () => {
+test("normalizes a partial project area update", () => {
   const result = pmsCommand.normalizePmsCommand({
     action: "update_project",
     id: "11111111-1111-4111-8111-111111111111",
     areaId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-    orgScope: "classin",
   }, {
     workspaceId: "33333333-3333-4333-8333-333333333333",
     now: "2026-07-17T02:30:00.000Z",
@@ -388,10 +387,26 @@ test("normalizes partial project area and org scope updates", () => {
 
   assert.equal(result.ok, true);
   assert.equal(result.patch.area_id, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
-  assert.deepEqual(result.patch.meta, { org_scope: "classin" });
+  assert.ok(!("meta" in result.patch));
   assert.ok(!("brand_id" in result.patch));
   assert.ok(!("lead_id" in result.patch));
   assert.ok(!("customer_account_id" in result.patch));
+});
+
+test("rejects project org scope updates because creation context is immutable", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    orgScope: "personal",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-17T02:30:00.000Z",
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    reason: "unsupported-org-scope-update",
+  });
 });
 
 test("normalizes a durable decision create command linked to a project", () => {

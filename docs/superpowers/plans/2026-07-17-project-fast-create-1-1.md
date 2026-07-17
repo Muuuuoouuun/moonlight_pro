@@ -15,7 +15,7 @@
 - `supabase/migrations/20260717_0019_project_context_links.sql`: typed Project→Lead/Customer links, indexes, canonical Area seeds.
 - `supabase/setup/00_live_schema.sql`: fresh-environment schema parity for the relation columns and indexes.
 - `supabase/schema.sql`: compact schema parity.
-- `apps/engine/lib/pms-command.ts`: normalize Area, nullable Brand, entityRef, and orgScope.
+- `apps/engine/lib/pms-command.ts`: normalize Area, nullable Brand, entityRef, and create-time immutable orgScope.
 - `apps/engine/lib/pms-command.test.mjs`: command red/green contract.
 - `apps/engine/lib/pms-command-service.ts`: same-workspace reference validation before persistence.
 - `apps/engine/lib/pms-command-service.test.mjs`: negative and positive relation integrity tests.
@@ -74,6 +74,15 @@ test("rejects unsupported project entity references", () => {
   }, { workspaceId: "33333333-3333-4333-8333-333333333333" });
   assert.deepEqual(result, { ok: false, reason: "invalid-entity-ref" });
 });
+
+test("rejects project org scope updates because creation context is immutable", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    orgScope: "personal",
+  }, { workspaceId: "33333333-3333-4333-8333-333333333333" });
+  assert.deepEqual(result, { ok: false, reason: "unsupported-org-scope-update" });
+});
 ```
 
 - [ ] **Step 2: Run the Engine tests and verify RED**
@@ -105,7 +114,7 @@ create index if not exists idx_projects_workspace_customer_updated
   on public.projects (workspace_id, customer_account_id, updated_at desc) where customer_account_id is not null;
 ```
 
-Implement an Engine helper that accepts only `lead` and `customer_account`, emits mutually exclusive columns, allows `entityRef: null` on update, accepts nullable brand, requires a valid Area on create, and writes only `classin | personal` to `meta.org_scope`.
+Implement an Engine helper that accepts only `lead` and `customer_account`, emits mutually exclusive columns, allows `entityRef: null` on update, accepts nullable brand, requires a valid Area on create, and writes only `classin | personal` to `meta.org_scope` during creation. In 1-1, orgScope is immutable creation context: `update_project` must reject either orgScope alias explicitly and must not read/merge/write project metadata. Moving an existing project between Hub lanes is out of scope.
 
 - [ ] **Step 4: Run the command tests and verify GREEN**
 
@@ -119,7 +128,7 @@ Expected: all command tests pass.
 
 - [ ] **Step 5: Write failing same-workspace service tests**
 
-Add one positive test and one negative test. The negative case must prove `insert` is never called when the selected Lead belongs to another workspace.
+Add positive and negative tests. An empty reference result must prove `insert` is never called when the selected Lead is missing or belongs to another workspace. A `null` lookup result must be classified as `{status:"error", error:"reference-lookup-unavailable"}` with no mutation rather than as invalid user input.
 
 ```js
 test("rejects a cross-workspace project lead before insert", async () => {
@@ -156,7 +165,7 @@ Expected: the cross-workspace test fails because persistence currently runs with
 
 - [ ] **Step 7: Implement same-workspace reference validation**
 
-Before insert/update, inspect normalized `area_id`, `brand_id`, `lead_id`, and `customer_account_id`. For each non-null value, fetch exactly one row using both `id` and `workspace_id`. Return `{status:"invalid-input", error:"invalid-reference"}` before mutation when any lookup is empty. Do not validate null references and do not infer a replacement.
+Before insert/update, inspect normalized `area_id`, `brand_id`, `lead_id`, and `customer_account_id`. For each non-null value, fetch exactly one row using both `id` and `workspace_id`. Use a discriminated validation outcome: an empty row set returns `{status:"invalid-input", error:"invalid-reference"}`, while an unavailable/null lookup returns `{status:"error", error:"reference-lookup-unavailable"}` before mutation. Do not validate null references and do not infer a replacement.
 
 - [ ] **Step 8: Run focused and full tests**
 
