@@ -43,6 +43,24 @@ export function summarizeRhythmRows(rows) {
   };
 }
 
+export function getRhythmProgressProps({ partial = false, completed = 0, total = 0 } = {}) {
+  if (partial) {
+    return {
+      role: "status",
+      "aria-label": `일부 기록에서 관측된 이번 주 리추얼 완료 ${completed} / ${total}`,
+    };
+  }
+
+  return {
+    role: "progressbar",
+    "aria-label": "이번 주 완료한 리추얼",
+    "aria-valuemin": 0,
+    "aria-valuemax": total,
+    "aria-valuenow": completed,
+    "aria-valuetext": `${completed} / ${total}`,
+  };
+}
+
 export function toLocalDateKey(value = new Date()) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";

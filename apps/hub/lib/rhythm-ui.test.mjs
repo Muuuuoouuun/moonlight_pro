@@ -36,6 +36,29 @@ test("Rhythm summary is recalculated only from the filtered rows", () => {
   });
 });
 
+test("partial Rhythm progress is observational and never exposed as a determinate progressbar", () => {
+  assert.equal(typeof rhythmUi.getRhythmProgressProps, "function");
+
+  assert.deepEqual(
+    rhythmUi.getRhythmProgressProps({ partial: false, completed: 3, total: 5 }),
+    {
+      role: "progressbar",
+      "aria-label": "이번 주 완료한 리추얼",
+      "aria-valuemin": 0,
+      "aria-valuemax": 5,
+      "aria-valuenow": 3,
+      "aria-valuetext": "3 / 5",
+    },
+  );
+  assert.deepEqual(
+    rhythmUi.getRhythmProgressProps({ partial: true, completed: 3, total: 5 }),
+    {
+      role: "status",
+      "aria-label": "일부 기록에서 관측된 이번 주 리추얼 완료 3 / 5",
+    },
+  );
+});
+
 test("durable check payload preserves ritual and project identity with a local date key", () => {
   assert.equal(typeof rhythmUi.toLocalDateKey, "function");
   assert.equal(typeof rhythmUi.buildRhythmCheckPayload, "function");
@@ -146,6 +169,13 @@ test("Rhythm source keeps project context, durable feedback, and mobile scroll s
   assert.match(workSource, /searchParams\.get\(['"]project['"]\)/);
   assert.match(workSource, /filterRhythmRows\(/);
   assert.match(workSource, /rhythmState/);
+  assert.match(workSource, /rhythmPartial/);
+  assert.match(workSource, /rhythmTruncatedSources/);
+  assert.match(workSource, /rhythmState === ['"]partial['"]/);
+  assert.match(workSource, /getRhythmProgressProps\(/);
+  assert.match(workSource, /rhythmPartial\s*\?\s*\([\s\S]*관측 \{completed\} \/ \{total\}[\s\S]*:\s*\([\s\S]*<Progress value=\{percent\}/);
+  assert.match(workSource, /일부 기록/);
+  assert.match(workSource, /routine_checks/);
   assert.match(workSource, /fetch\(['"]\/api\/routine\/check['"]/);
   assert.match(workSource, /method:\s*['"]POST['"]/);
   assert.match(workSource, /await\s+retry\(\)/);

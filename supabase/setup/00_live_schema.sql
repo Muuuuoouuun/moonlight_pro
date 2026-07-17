@@ -193,6 +193,7 @@ create table if not exists public.routine_checks (
   check_type text not null check (check_type in ('morning', 'midday', 'evening', 'weekly')),
   status text not null default 'pending' check (status in ('pending', 'done', 'skipped', 'blocked')),
   note text,
+  idempotency_key text,
   meta jsonb not null default '{}'::jsonb,
   checked_at timestamptz,
   created_at timestamptz not null default now(),
@@ -649,6 +650,7 @@ alter table if exists public.project_updates
 
 alter table if exists public.routine_checks
   add column if not exists actor_id uuid references public.profiles(id) on delete set null,
+  add column if not exists idempotency_key text,
   add column if not exists meta jsonb not null default '{}'::jsonb,
   add column if not exists updated_at timestamptz not null default now();
 
@@ -892,6 +894,7 @@ create unique index if not exists idx_projects_workspace_slug on public.projects
 create index if not exists idx_project_updates_workspace_happened on public.project_updates (workspace_id, happened_at desc);
 create index if not exists idx_project_updates_project_happened on public.project_updates (workspace_id, project_id, happened_at desc);
 create index if not exists idx_project_updates_correlation on public.project_updates (workspace_id, correlation_id) where correlation_id is not null;
+create unique index if not exists routine_checks_workspace_idempotency_key_uidx on public.routine_checks (workspace_id, idempotency_key) where idempotency_key is not null;
 create index if not exists idx_tasks_workspace_status on public.tasks (workspace_id, status);
 create index if not exists idx_tasks_workspace_owner_status_due on public.tasks (workspace_id, owner_id, status, due_at);
 create index if not exists idx_tasks_workspace_project_status on public.tasks (workspace_id, project_id, status);

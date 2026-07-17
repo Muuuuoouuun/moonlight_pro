@@ -5,9 +5,10 @@ import { getWorkLedger } from "@/lib/repositories/work-ledger";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req) {
   try {
-    const ledger = await getWorkLedger();
+    const projectId = new URL(req.url).searchParams.get("project")?.trim() || null;
+    const ledger = await getWorkLedger({ projectId });
 
     return NextResponse.json({
       status: ledger.source === "supabase" ? "live" : "preview",

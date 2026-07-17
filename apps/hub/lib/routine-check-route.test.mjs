@@ -36,7 +36,12 @@ export async function fetchSupabaseRows(table, options = {}) {
   const state = globalThis.__routineRouteTestState;
   state.readCalls.push({ table, options });
   if (table === "projects") return state.projects;
-  if (table === "routine_checks") return state.checks;
+  if (table === "routine_checks") {
+    if (Array.isArray(state.checksSequence) && state.checksSequence.length > 0) {
+      return state.checksSequence.shift();
+    }
+    return state.checks;
+  }
   return [];
 }
 `;
@@ -96,6 +101,7 @@ beforeEach(() => {
     guardResponse: null,
     projects: [{ id: "project-1", name: "운영 OS" }],
     checks: [],
+    checksSequence: null,
     persistence: null,
     readCalls: [],
     insertCalls: [],
@@ -193,23 +199,41 @@ test("saved check persists normalized identity metadata and returns the durable 
   assert.equal(body.status, "saved");
   assert.equal(body.check.id, "check-new");
   assert.equal(state.insertCalls.length, 1);
-  assert.deepEqual(state.insertCalls[0], {
-    table: "routine_checks",
-    record: {
-      workspace_id: "workspace-1",
-      project_id: "project-1",
-      check_type: "morning",
-      status: "done",
-      note: "오늘의 핵심 완료",
-      checked_at: "2026-07-17T03:00:00.000Z",
-      meta: {
-        ritual_key: "daily-focus",
-        name: "Daily focus",
-        local_date: "2026-07-17",
-      },
+  const insert = state.insertCalls[0];
+  assert.equal(insert.table, "routine_checks");
+  assert.match(insert.record.idempotency_key, /^routine-check:v1:[a-f0-9]{64}$/);
+  assert.deepEqual(insert.record, {
+    workspace_id: "workspace-1",
+    project_id: "project-1",
+    check_type: "morning",
+    status: "done",
+    note: "오늘의 핵심 완료",
+    checked_at: "2026-07-17T03:00:00.000Z",
+    idempotency_key: insert.record.idempotency_key,
+    meta: {
+      ritual_key: "daily-focus",
+      name: "Daily focus",
+      local_date: "2026-07-17",
     },
-    options: { returnRepresentation: true, select: "*" },
   });
+  assert.deepEqual(insert.options, { returnRepresentation: true, select: "*" });
+});
+
+test("idempotency identity is deterministic for the tuple and changes with the local date", async () => {
+  const state = globalThis.__routineRouteTestState;
+
+  const first = await POST(request(validPayload()));
+  const retry = await POST(request(validPayload()));
+  const nextDate = await POST(request(validPayload({ dateKey: "2026-07-18" })));
+  const unscoped = await POST(request(validPayload({ projectId: null })));
+
+  assert.equal(first.status, 201);
+  assert.equal(retry.status, 201);
+  assert.equal(nextDate.status, 201);
+  assert.equal(unscoped.status, 201);
+  assert.equal(state.insertCalls[0].record.idempotency_key, state.insertCalls[1].record.idempotency_key);
+  assert.notEqual(state.insertCalls[1].record.idempotency_key, state.insertCalls[2].record.idempotency_key);
+  assert.notEqual(state.insertCalls[1].record.idempotency_key, state.insertCalls[3].record.idempotency_key);
 });
 
 test("same workspace ritual and local date returns duplicate without a second insert", async () => {
@@ -220,6 +244,7 @@ test("same workspace ritual and local date returns duplicate without a second in
     project_id: "project-1",
     check_type: "morning",
     status: "done",
+    idempotency_key: "routine-check:v1:existing",
     meta: { ritual_key: "daily-focus", local_date: "2026-07-17" },
   }];
 
@@ -231,13 +256,9 @@ test("same workspace ritual and local date returns duplicate without a second in
   assert.equal(body.check.id, "check-existing");
   assert.equal(state.insertCalls.length, 0);
   const call = state.readCalls.find((entry) => entry.table === "routine_checks");
-  assert.deepEqual(call.options.filters, [
-    ["workspace_id", "eq.workspace-1"],
-    ["project_id", "eq.project-1"],
-    ["meta->>ritual_key", "eq.daily-focus"],
-    ["meta->>local_date", "eq.2026-07-17"],
-    ["status", "eq.done"],
-  ]);
+  assert.deepEqual(call.options.filters[0], ["workspace_id", "eq.workspace-1"]);
+  assert.equal(call.options.filters[1][0], "idempotency_key");
+  assert.match(call.options.filters[1][1], /^eq\.routine-check:v1:[a-f0-9]{64}$/);
 });
 
 test("unscoped ritual duplicate stays separate with an explicit null project filter", async () => {
@@ -248,6 +269,7 @@ test("unscoped ritual duplicate stays separate with an explicit null project fil
     project_id: null,
     check_type: "weekly",
     status: "done",
+    idempotency_key: "routine-check:v1:unscoped",
     meta: { ritual_key: "weekly-review", local_date: "2026-07-17" },
   }];
 
@@ -264,8 +286,46 @@ test("unscoped ritual duplicate stays separate with an explicit null project fil
   assert.equal(body.check.id, "check-unscoped");
   assert.equal(state.readCalls.some((entry) => entry.table === "projects"), false);
   const call = state.readCalls.find((entry) => entry.table === "routine_checks");
-  assert.deepEqual(call.options.filters[1], ["project_id", "is.null"]);
+  assert.equal(call.options.filters[1][0], "idempotency_key");
+  assert.match(call.options.filters[1][1], /^eq\.routine-check:v1:[a-f0-9]{64}$/);
   assert.equal(state.insertCalls.length, 0);
+});
+
+test("unique idempotency race re-reads the winning check as duplicate", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.checksSequence = [
+    [],
+    [{
+      id: "check-winner",
+      workspace_id: "workspace-1",
+      project_id: "project-1",
+      check_type: "morning",
+      status: "done",
+      idempotency_key: "routine-check:v1:winner",
+      meta: { ritual_key: "daily-focus", local_date: "2026-07-17" },
+    }],
+  ];
+  state.persistence = {
+    persisted: false,
+    reason: "http-409",
+    detail: "duplicate key value violates unique constraint routine_checks_workspace_idempotency_key_uidx (23505)",
+  };
+
+  const response = await POST(request(validPayload()));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "duplicate");
+  assert.equal(body.check.id, "check-winner");
+  assert.equal(state.insertCalls.length, 1);
+  const routineReads = state.readCalls.filter((entry) => entry.table === "routine_checks");
+  assert.equal(routineReads.length, 2);
+  for (const read of routineReads) {
+    assert.deepEqual(read.options.filters, [
+      ["workspace_id", "eq.workspace-1"],
+      ["idempotency_key", `eq.${state.insertCalls[0].record.idempotency_key}`],
+    ]);
+  }
 });
 
 test("configured ledger read failures are explicit errors, never preview", async () => {

@@ -15,6 +15,7 @@ import {
   createRhythmCheckState,
   filterRhythmRows,
   finishRhythmCheck,
+  getRhythmProgressProps,
   resolveRhythmCheckResult,
   summarizeRhythmRows,
 } from "@/lib/rhythm-ui";
@@ -75,6 +76,8 @@ function useWorkLedger(projectId = null) {
     summary: null,
     syncState: 'preview',
     rhythmState: 'preview',
+    rhythmPartial: false,
+    rhythmTruncatedSources: [],
     rhythmError: null,
     roadmap: {
       source: 'preview',
@@ -97,6 +100,8 @@ function useWorkLedger(projectId = null) {
       ...prev,
       syncState: 'loading',
       rhythmState: 'loading',
+      rhythmPartial: false,
+      rhythmTruncatedSources: [],
       roadmap: { ...prev.roadmap, state: 'loading' },
     }));
     try {
@@ -113,6 +118,8 @@ function useWorkLedger(projectId = null) {
           ...prev,
           syncState: 'error',
           rhythmState: 'error',
+          rhythmPartial: false,
+          rhythmTruncatedSources: [],
           rhythmError: message,
           rituals: [],
           summary: null,
@@ -151,6 +158,8 @@ function useWorkLedger(projectId = null) {
             state: data.source === 'supabase'
               ? (Array.isArray(data.rituals) && data.rituals.length > 0 ? 'live' : 'live-empty')
               : 'preview',
+            partial: false,
+            truncatedSources: [],
             error: null,
           };
 
@@ -161,10 +170,14 @@ function useWorkLedger(projectId = null) {
         summary: data.summary || null,
         syncState: data.source === 'supabase' ? 'live' : 'preview',
         rhythmState: rhythm.state || 'error',
+        rhythmPartial: Boolean(rhythm.partial),
+        rhythmTruncatedSources: Array.isArray(rhythm.truncatedSources)
+          ? rhythm.truncatedSources
+          : [],
         rhythmError: rhythm.error?.message || null,
         roadmap,
       });
-      return rhythm.state === 'live' || rhythm.state === 'live-empty';
+      return rhythm.state === 'live' || rhythm.state === 'live-empty' || rhythm.state === 'partial';
     } catch (error) {
       if (requestId !== requestRef.current) return false;
       const message = error instanceof Error ? error.message : String(error);
@@ -172,6 +185,8 @@ function useWorkLedger(projectId = null) {
         ...prev,
         syncState: 'error',
         rhythmState: 'error',
+        rhythmPartial: false,
+        rhythmTruncatedSources: [],
         rhythmError: message,
         rituals: [],
         summary: null,
@@ -726,7 +741,14 @@ export function Roadmap() {
 export function Rhythm() {
   const searchParams = useSearchParams();
   const selectedProjectId = searchParams.get('project')?.trim() || null;
-  const { rituals: liveRituals, rhythmState, rhythmError, retry } = useWorkLedger(selectedProjectId);
+  const {
+    rituals: liveRituals,
+    rhythmState,
+    rhythmPartial,
+    rhythmTruncatedSources,
+    rhythmError,
+    retry,
+  } = useWorkLedger(selectedProjectId);
   const [mutationState, setMutationState] = React.useState(() => createRhythmCheckState());
   const attemptSequenceRef = React.useRef(0);
   const latestAttemptRef = React.useRef(new Map());
@@ -744,11 +766,18 @@ export function Rhythm() {
   const completed = summary.ritualsCompletedThisWeek;
   const total = summary.ritualsTotalThisWeek;
   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const rhythmProgressProps = getRhythmProgressProps({
+    partial: rhythmPartial,
+    completed,
+    total,
+  });
   const longestStreak = summary.longestStreak;
   const longestStreakRitual = summary.longestStreakRitual;
   const selectedProjectName = rituals.find((ritual) => ritual.projectName)?.projectName || '';
   const syncLabel = rhythmState === 'live' || rhythmState === 'live-empty'
     ? 'live'
+    : rhythmState === 'partial'
+      ? 'partial · observed'
     : rhythmState === 'loading'
       ? 'syncing'
       : rhythmState === 'error'
@@ -756,6 +785,8 @@ export function Rhythm() {
         : 'preview · unsaved';
   const syncColor = rhythmState === 'live' || rhythmState === 'live-empty'
     ? 'var(--moon-300)'
+    : rhythmState === 'partial'
+      ? 'var(--warning)'
     : rhythmState === 'loading'
       ? 'var(--warning)'
       : rhythmState === 'error'
@@ -839,17 +870,32 @@ export function Rhythm() {
         </div>
       )}
 
+      {rhythmState === 'partial' && (
+        <div role="alert" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
+          <span style={{ flex: 1, fontSize: 12, color: 'var(--warning)' }}>
+            일부 기록만 표시합니다. {rhythmTruncatedSources.includes('routine_checks') ? 'routine_checks가 조회 한도를 초과해 최근 240건을 관측했습니다.' : '리듬 원장의 일부만 관측했습니다.'}
+          </span>
+          <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
+        </div>
+      )}
+
       <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>This week</div>
           <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="stat">{completed} / {total}</div>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>rituals completed</div>
-          <div role="progressbar" aria-label="이번 주 완료한 리추얼" aria-valuemin={0} aria-valuemax={total} aria-valuenow={completed} aria-valuetext={`${completed} / ${total}`} style={{ marginTop: 14 }}><Progress value={percent} /></div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{rhythmPartial ? '관측된 완료 · 일부 기록' : 'rituals completed'}</div>
+          {rhythmPartial ? (
+            <div {...rhythmProgressProps} style={{ marginTop: 14, fontSize: 11, color: 'var(--fg-faint)' }}>
+              관측 {completed} / {total} · 일부 기록
+            </div>
+          ) : (
+            <div {...rhythmProgressProps} style={{ marginTop: 14 }}><Progress value={percent} /></div>
+          )}
         </Card>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Longest streak</div>
           <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="stat">{longestStreak} <span style={{ fontSize: 14, color: 'var(--fg-faint)' }}>days</span></div>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{longestStreakRitual || '루틴 체크인 기록 없음'}</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{longestStreakRitual || '루틴 체크인 기록 없음'}{rhythmPartial ? ' · 관측값' : ''}</div>
         </Card>
       </div>
 
@@ -858,8 +904,8 @@ export function Rhythm() {
           <EmptyState
             icon="rhythm"
             title={selectedProjectId ? '선택한 프로젝트의 리듬이 없습니다' : '루틴 체크 기록이 없습니다'}
-            description={rhythmState === 'live-empty' ? 'Supabase routine_checks 기록이 비어 있습니다.' : rhythmState === 'error' ? '원장을 다시 읽은 뒤 체크인 상태를 확인해 주세요.' : '연결 전에는 체크인이 저장되지 않습니다.'}
-            action={rhythmState === 'error' ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button> : undefined}
+            description={rhythmState === 'live-empty' ? 'Supabase routine_checks 기록이 비어 있습니다.' : rhythmState === 'error' ? '원장을 다시 읽은 뒤 체크인 상태를 확인해 주세요.' : rhythmState === 'partial' ? '일부 기록만 관측되어 전체 리듬 상태를 확정할 수 없습니다.' : '연결 전에는 체크인이 저장되지 않습니다.'}
+            action={rhythmState === 'error' || rhythmState === 'partial' ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button> : undefined}
             style={{ minHeight: 220 }}
           />
         )}

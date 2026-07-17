@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { NextResponse } from "next/server";
 
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
@@ -12,6 +14,7 @@ import {
 export const runtime = "nodejs";
 
 const CHECK_TYPES = new Set(["morning", "midday", "evening", "weekly"]);
+const ROUTINE_CHECK_SELECT = "id,workspace_id,project_id,check_type,status,note,meta,checked_at,created_at,updated_at,idempotency_key";
 
 function cleanString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -51,6 +54,37 @@ function previewResponse(message, record) {
     },
     { status: 202 },
   );
+}
+
+function routineCheckIdempotencyKey({ projectId, ritualKey, dateKey }) {
+  const identity = JSON.stringify([projectId || null, ritualKey, dateKey]);
+  return `routine-check:v1:${createHash("sha256").update(identity).digest("hex")}`;
+}
+
+function isIdempotencyConflict(persistence) {
+  const reason = cleanString(persistence?.reason).toLowerCase();
+  const detail = cleanString(persistence?.detail).toLowerCase();
+  return reason === "http-409"
+    || detail.includes("23505")
+    || detail.includes("routine_checks_workspace_idempotency_key_uidx");
+}
+
+async function findRoutineCheckByIdempotencyKey(idempotencyKey) {
+  return fetchSupabaseRows("routine_checks", {
+    select: ROUTINE_CHECK_SELECT,
+    limit: 1,
+    filters: withWorkspaceFilter([
+      ["idempotency_key", eqFilter(idempotencyKey)],
+    ]),
+  });
+}
+
+function duplicateResponse(check) {
+  return NextResponse.json({
+    status: "duplicate",
+    message: "This ritual is already checked in for the selected local date.",
+    check,
+  });
 }
 
 function normalizePayload(payload) {
@@ -112,6 +146,7 @@ export async function POST(req) {
 
     const payload = normalized.value;
     const workspaceId = resolveDefaultWorkspaceId();
+    const idempotencyKey = routineCheckIdempotencyKey(payload);
     const record = {
       ...buildRoutineCheckRecord(payload),
       workspace_id: workspaceId || null,
@@ -119,6 +154,7 @@ export async function POST(req) {
       check_type: payload.checkType,
       status: "done",
       note: payload.note,
+      idempotency_key: idempotencyKey,
       meta: {
         ritual_key: payload.ritualKey,
         name: payload.name,
@@ -149,25 +185,11 @@ export async function POST(req) {
       }
     }
 
-    const duplicateRows = await fetchSupabaseRows("routine_checks", {
-      select: "id,workspace_id,project_id,check_type,status,note,meta,checked_at,created_at,updated_at",
-      limit: 2,
-      order: "checked_at.desc",
-      filters: withWorkspaceFilter([
-        ["project_id", payload.projectId ? eqFilter(payload.projectId) : "is.null"],
-        ["meta->>ritual_key", eqFilter(payload.ritualKey)],
-        ["meta->>local_date", eqFilter(payload.dateKey)],
-        ["status", eqFilter("done")],
-      ]),
-    });
+    const duplicateRows = await findRoutineCheckByIdempotencyKey(idempotencyKey);
 
     if (!Array.isArray(duplicateRows)) return readFailure("routine_checks");
     if (duplicateRows.length > 0) {
-      return NextResponse.json({
-        status: "duplicate",
-        message: "This ritual is already checked in for the selected local date.",
-        check: duplicateRows[0],
-      });
+      return duplicateResponse(duplicateRows[0]);
     }
 
     const persistence = await insertSupabaseRecord("routine_checks", record, {
@@ -180,6 +202,22 @@ export async function POST(req) {
         return previewResponse(
           "Supabase is not configured. This check-in was not saved.",
           record,
+        );
+      }
+
+      if (isIdempotencyConflict(persistence)) {
+        const winnerRows = await findRoutineCheckByIdempotencyKey(idempotencyKey);
+        if (!Array.isArray(winnerRows)) return readFailure("routine_checks");
+        if (winnerRows.length > 0) return duplicateResponse(winnerRows[0]);
+
+        return NextResponse.json(
+          {
+            status: "error",
+            error: "Routine check conflict occurred but the winning row could not be read.",
+            retryable: true,
+            persistence,
+          },
+          { status: 409 },
         );
       }
 

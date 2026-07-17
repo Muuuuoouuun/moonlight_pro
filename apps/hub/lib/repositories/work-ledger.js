@@ -1,4 +1,5 @@
 import {
+  eqFilter,
   fetchSupabaseRows,
   withWorkspaceFilter,
 } from "@/lib/server-read";
@@ -12,6 +13,7 @@ const RITUAL_FALLBACK_NAMES = {
 };
 const ROUTINE_CHECK_TYPES = new Set(["morning", "midday", "evening", "weekly"]);
 const ROADMAP_ROW_LIMIT = 500;
+const RHYTHM_ROW_LIMIT = 240;
 
 function formatDecisionDate(value) {
   if (!value) return "";
@@ -297,8 +299,9 @@ function buildRoadmapState(projectRows, milestoneRows) {
   };
 }
 
-export async function getWorkLedger() {
+export async function getWorkLedger({ projectId = null } = {}) {
   const workspaceId = resolveDefaultWorkspaceId();
+  const selectedProjectId = typeof projectId === "string" ? projectId.trim() : "";
 
   if (!workspaceId) {
     return {
@@ -310,6 +313,8 @@ export async function getWorkLedger() {
       rhythm: {
         source: "preview",
         state: "preview",
+        partial: false,
+        truncatedSources: [],
         error: null,
       },
       roadmap: emptyRoadmap(),
@@ -329,9 +334,11 @@ export async function getWorkLedger() {
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("routine_checks", {
-      limit: 240,
+      limit: RHYTHM_ROW_LIMIT + 1,
       order: "checked_at.desc",
-      filters: withWorkspaceFilter(),
+      filters: withWorkspaceFilter(
+        selectedProjectId ? [["project_id", eqFilter(selectedProjectId)]] : [],
+      ),
     }),
     fetchSupabaseRows("profiles", {
       select: "id,display_name,email",
@@ -354,16 +361,28 @@ export async function getWorkLedger() {
   const roadmap = buildRoadmapState(projectRows, milestoneRows);
   const profileById = new Map((profileRows || []).map((p) => [p.id, p]));
   const decisions = Array.isArray(decisionRows) ? mapDecisions(decisionRows, profileById) : [];
-  const rituals = Array.isArray(routineRows) ? mapRituals(routineRows, projectRows) : [];
+  const routineRowsTruncated = Array.isArray(routineRows) && routineRows.length > RHYTHM_ROW_LIMIT;
+  const visibleRoutineRows = Array.isArray(routineRows)
+    ? routineRows.slice(0, RHYTHM_ROW_LIMIT)
+    : [];
+  const rituals = Array.isArray(routineRows) ? mapRituals(visibleRoutineRows, projectRows) : [];
   const rhythm = Array.isArray(routineRows)
     ? {
         source: "supabase",
-        state: rituals.length > 0 ? "live" : "live-empty",
+        state: routineRowsTruncated
+          ? "partial"
+          : rituals.length > 0
+            ? "live"
+            : "live-empty",
+        partial: routineRowsTruncated,
+        truncatedSources: routineRowsTruncated ? ["routine_checks"] : [],
         error: null,
       }
     : {
         source: "supabase",
         state: "error",
+        partial: false,
+        truncatedSources: [],
         error: {
           message: "routine_checks 원장을 읽지 못했습니다.",
           retryable: true,

@@ -11,7 +11,13 @@ export function withWorkspaceFilter(filters = []) {
 export async function fetchSupabaseRows(table, options = {}) {
   const state = globalThis.__workLedgerTestState;
   state.calls.push({ table, options });
-  return Object.prototype.hasOwnProperty.call(state.rows, table) ? state.rows[table] : [];
+  const rows = Object.prototype.hasOwnProperty.call(state.rows, table) ? state.rows[table] : [];
+  if (table !== "routine_checks" || !state.applyRoutineQuery || !Array.isArray(rows)) return rows;
+  const projectFilter = options.filters?.find(([key]) => key === "project_id")?.[1] || null;
+  const filtered = projectFilter?.startsWith("eq.")
+    ? rows.filter((row) => row.project_id === projectFilter.slice(3))
+    : rows;
+  return typeof options.limit === "number" ? filtered.slice(0, options.limit) : filtered;
 }
 `;
 
@@ -51,6 +57,7 @@ beforeEach(() => {
   globalThis.__workLedgerTestState = {
     workspaceId: "workspace-1",
     calls: [],
+    applyRoutineQuery: false,
     rows: {
       decisions: [],
       routine_checks: [],
@@ -364,6 +371,8 @@ test("a configured routine ledger read failure is error rather than preview", as
   assert.deepEqual(ledger.rhythm, {
     source: "supabase",
     state: "error",
+    partial: false,
+    truncatedSources: [],
     error: {
       message: "routine_checks 원장을 읽지 못했습니다.",
       retryable: true,
@@ -390,4 +399,77 @@ test("rituals remain readable when the independent decisions source fails", asyn
   assert.equal(ledger.rhythm.state, "live");
   assert.equal(ledger.rituals.length, 1);
   assert.equal(ledger.rituals[0].ritualKey, "weekly-review");
+});
+
+test("selected project is filtered by Supabase before the rhythm row limit", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.applyRoutineQuery = true;
+  state.rows.routine_checks = [
+    ...Array.from({ length: 241 }, (_, index) => ({
+      id: `other-${index}`,
+      project_id: "project-other",
+      check_type: "morning",
+      status: "done",
+      checked_at: new Date().toISOString(),
+      meta: { ritual_key: `other-${index}`, name: `Other ${index}` },
+    })),
+    {
+      id: "target-check",
+      project_id: "project-target",
+      check_type: "weekly",
+      status: "done",
+      checked_at: new Date().toISOString(),
+      meta: { ritual_key: "target-review", name: "Target review" },
+    },
+  ];
+
+  const ledger = await workLedger.getWorkLedger({ projectId: "project-target" });
+
+  assert.equal(ledger.rituals.length, 1);
+  assert.equal(ledger.rituals[0].projectId, "project-target");
+  assert.equal(ledger.rituals[0].ritualKey, "target-review");
+  const call = state.calls.find((entry) => entry.table === "routine_checks");
+  assert.equal(call.options.limit, 241);
+  assert.deepEqual(call.options.filters, [
+    ["workspace_id", "eq.workspace-1"],
+    ["project_id", "eq.project-target"],
+  ]);
+});
+
+test("rhythm row limit boundary is complete at 240 and explicitly partial at 241", async () => {
+  const state = globalThis.__workLedgerTestState;
+  const makeRows = (count) => Array.from({ length: count }, (_, index) => ({
+    id: `check-${index}`,
+    project_id: null,
+    check_type: "morning",
+    status: "pending",
+    checked_at: null,
+    meta: { ritual_key: `ritual-${index}`, name: `Ritual ${index}` },
+  }));
+
+  state.rows.routine_checks = makeRows(240);
+  const complete = await workLedger.getWorkLedger();
+  assert.deepEqual(complete.rhythm, {
+    source: "supabase",
+    state: "live",
+    partial: false,
+    truncatedSources: [],
+    error: null,
+  });
+  assert.equal(complete.rituals.length, 240);
+
+  state.calls = [];
+  state.rows.routine_checks = makeRows(241);
+  const partial = await workLedger.getWorkLedger();
+  assert.deepEqual(partial.rhythm, {
+    source: "supabase",
+    state: "partial",
+    partial: true,
+    truncatedSources: ["routine_checks"],
+    error: null,
+  });
+  assert.equal(partial.rituals.length, 240);
+  assert.equal(partial.summary.ritualsTotalThisWeek, 240);
+  const call = state.calls.find((entry) => entry.table === "routine_checks");
+  assert.equal(call.options.limit, 241);
 });
