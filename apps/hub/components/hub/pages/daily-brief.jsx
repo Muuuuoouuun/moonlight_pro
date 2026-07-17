@@ -109,6 +109,7 @@ function rankSignals(signals) {
 
 function syncTone(state) {
   if (state === 'live') return 'success';
+  if (state === 'partial') return 'warning';
   if (state === 'error') return 'danger';
   if (state === 'mixed' || state === 'preview' || state === 'syncing') return 'warning';
   return 'neutral';
@@ -116,6 +117,7 @@ function syncTone(state) {
 
 function sourceLabel(state) {
   if (state === 'live') return 'live';
+  if (state === 'partial') return 'partial';
   if (state === 'error') return 'error';
   if (state === 'syncing') return 'syncing';
   if (state === 'mixed') return 'mixed';
@@ -379,11 +381,13 @@ function useDailyBriefLedger(refreshKey) {
 
         const liveCount = Number(data.summary?.liveCount || 0);
         const sourceCount = Array.isArray(data.sources) ? data.sources.length : 0;
-        const nextSyncState = liveCount > 0 && liveCount === sourceCount
-          ? 'live'
-          : liveCount > 0
-          ? 'mixed'
-          : 'preview';
+        const nextSyncState = data.status === 'partial'
+          ? 'partial'
+          : data.status === 'live'
+            ? 'live'
+            : liveCount > 0 && liveCount < sourceCount
+              ? 'mixed'
+              : 'preview';
 
         setState({
           syncState: nextSyncState,
@@ -1157,6 +1161,8 @@ function StatusLine({ state }) {
   const label = state.syncState === 'mixed' ? `${liveCount}/${sourceCount || 6} live` : sourceLabel(state.syncState);
   const detail = state.syncState === 'preview'
     ? 'preview · Supabase 연결 후 live 전환'
+    : state.syncState === 'partial'
+    ? '일부 운영 기록을 읽지 못했습니다'
     : state.syncState === 'mixed'
     ? '일부 기록은 live, 일부는 preview'
     : state.syncState === 'syncing'

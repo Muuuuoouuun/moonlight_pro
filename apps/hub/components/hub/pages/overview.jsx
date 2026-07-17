@@ -3,6 +3,12 @@
 import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, SectionTitle, Button, Dot, Divider, EmptyState, SyncBadge, SegmentedControl, Sparkline, Progress } from "../hub-primitives";
+import {
+  activitySeriesAvailability,
+  buildOverviewKpiCards,
+  overviewSyncState,
+  projectActivityAvailability,
+} from "./overview-truth";
 
 const fmtMoney = (v) => {
   const n = Number(v);
@@ -52,9 +58,11 @@ function dayLabel(dateKey) {
 }
 
 const EMPTY_LEDGER = {
+  status: 'preview',
   source: 'preview',
+  failedSources: [],
   sources: [],
-  kpis: { updatesThisWeek: 0, decisionsThisWeek: 0, publishedThisWeek: 0, activeProjects: 0, blockedProjects: 0 },
+  kpis: { updatesThisWeek: null, decisionsThisWeek: null, publishedThisWeek: null, activeProjects: null, blockedProjects: null },
   activitySeries: [],
   operatorHome: null,
   revenue: { summary: {}, stageSeries: [] },
@@ -76,13 +84,13 @@ function useOverviewLedger() {
         const response = await fetch('/api/hub/overview', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
         if (!active || !response.ok || !data) {
-          if (active) setSyncState('preview');
+          if (active) setSyncState('error');
           return;
         }
         setLedger(data);
-        setSyncState(data.source === 'supabase' ? 'live' : 'preview');
+        setSyncState(overviewSyncState(data));
       } catch {
-        if (active) setSyncState('preview');
+        if (active) setSyncState('error');
       }
     }
     load();
@@ -113,6 +121,17 @@ const Y_AXIS_W = 24;
 function ActivityChart({ series, days }) {
   const [hoverIndex, setHoverIndex] = React.useState(null);
   const data = series.slice(-days);
+  const availability = activitySeriesAvailability(data);
+  if (!availability.available) {
+    return (
+      <EmptyState
+        icon="signal"
+        title="활동 원장 일부를 읽지 못했습니다"
+        description={`${availability.failedSegments.join(', ')} 기록을 다시 읽은 뒤 추이를 표시합니다.`}
+        style={{ minHeight: 160 }}
+      />
+    );
+  }
   const max = Math.max(1, ...data.map((d) => d.work + d.decisions + d.content));
   const mid = Math.round(max / 2);
   const tickEvery = days <= 7 ? 1 : days <= 14 ? 2 : 5;
@@ -465,21 +484,16 @@ export function Overview({ onNavigate }) {
   const contentSummary = ledger.operatorHome?.content || null;
   const stageSeries = ledger.revenue?.stageSeries || [];
   const automationsSummary = ledger.automationsSummary || {};
-  const brandActivity = ledger.brandActivity || [];
-  const activity = ledger.recentActivity || [];
+  const brandActivity = Array.isArray(ledger.brandActivity) ? ledger.brandActivity : [];
+  const activity = Array.isArray(ledger.recentActivity) ? ledger.recentActivity : [];
   const visibleActivity = activityExpanded ? activity : activity.slice(0, 8);
   const hasPipelineValue = stageSeries.some((s) => s.count > 0);
   const sourceState = (key) => ledger.sources?.find((s) => s.key === key)?.state || 'preview';
+  const projectActivity = projectActivityAvailability(ledger.sources || []);
 
   // Last 7 buckets of the same daily series feed each KPI's sparkline — no
   // separate fetch, just a different slice of activitySeries per pillar.
-  const last7 = (ledger.activitySeries || []).slice(-7);
-  const kpiCards = [
-    { label: '최근 7일 작업 업데이트', value: kpis.updatesThisWeek ?? 0, hint: '프로젝트 진행 기록', tone: 'moon', nav: 'dashboard/work/projects', spark: last7.map((d) => d.work) },
-    { label: '최근 7일 결정 기록', value: kpis.decisionsThisWeek ?? 0, hint: '기획·판단 로그', tone: 'info', nav: 'dashboard/work/decisions', spark: last7.map((d) => d.decisions) },
-    { label: '최근 7일 발행', value: kpis.publishedThisWeek ?? 0, hint: '콘텐츠 발행 완료', tone: 'success', nav: 'dashboard/content/queue', spark: last7.map((d) => d.content) },
-    { label: '진행 중 프로젝트', value: kpis.activeProjects ?? 0, hint: kpis.blockedProjects ? `${kpis.blockedProjects}건 막힘` : '막힌 프로젝트 없음', tone: kpis.blockedProjects ? 'warning' : 'moon', nav: 'dashboard/work/projects' },
-  ];
+  const kpiCards = buildOverviewKpiCards({ kpis, activitySeries: ledger.activitySeries || [] });
 
   return (
     <div className="hub-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', padding: 'var(--section-gap)', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
@@ -489,6 +503,11 @@ export function Overview({ onNavigate }) {
           <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--fg-muted)' }}>
             최근 작업과 기획 흐름을 정리합니다<SyncBadge state={syncState} />
           </div>
+          {syncState === 'partial' && Array.isArray(ledger.failedSources) && ledger.failedSources.length > 0 && (
+            <div role="status" style={{ marginTop: 5, fontSize: 11.5, color: 'var(--warning)' }}>
+              일부 원장 읽기 실패 · {ledger.failedSources.join(', ')}
+            </div>
+          )}
         </div>
         <SegmentedControl className="hub-page-actions" label="기간" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
       </div>
@@ -548,7 +567,9 @@ export function Overview({ onNavigate }) {
             <div style={{ flex: 1 }} />
             <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/projects')}>열기</Button>
           </div>
-          {brandActivity.length ? (
+          {!projectActivity.brandActivity ? (
+            <EmptyState icon="brand" title="브랜드 활동 원장을 읽지 못했습니다" description="프로젝트 업데이트와 결정 원장을 다시 읽은 뒤 표시합니다." style={{ minHeight: 140 }} />
+          ) : brandActivity.length ? (
             <BrandActivityBars brands={brandActivity} />
           ) : (
             <EmptyState icon="brand" title="브랜드 활동 없음" description="프로젝트 업데이트·결정이 쌓이면 브랜드별 비중이 표시됩니다." style={{ minHeight: 140 }} />
@@ -622,8 +643,15 @@ export function Overview({ onNavigate }) {
       <div>
         <SectionTitle right={<span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>클릭하면 해당 서피스로 이동</span>}>최근 활동</SectionTitle>
         <Card>
+          {!projectActivity.recentProjectActivity && (
+            <div role="status" style={{ padding: '10px 12px', marginBottom: activity.length ? 8 : 0, border: '1px solid var(--warning-line)', borderRadius: 'var(--r-sm)', color: 'var(--warning)', fontSize: 11.5 }}>
+              최근 활동 원장 일부를 읽지 못했습니다 · 업데이트·결정 기록을 다시 확인하세요.
+            </div>
+          )}
           {activity.length === 0 ? (
-            <EmptyState icon="clock" title="최근 활동이 없습니다" description="작업 업데이트, 결정, 발행, 자동화 실행이 기록되면 여기에 모입니다." style={{ minHeight: 160 }} />
+            projectActivity.recentProjectActivity ? (
+              <EmptyState icon="clock" title="최근 활동이 없습니다" description="작업 업데이트, 결정, 발행, 자동화 실행이 기록되면 여기에 모입니다." style={{ minHeight: 160 }} />
+            ) : null
           ) : (
             <>
               <div style={{ display: 'flex', flexDirection: 'column' }}>

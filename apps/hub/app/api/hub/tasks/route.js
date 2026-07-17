@@ -29,22 +29,25 @@ export async function GET() {
       );
     }
 
+    const taskPartial = ledger.source === "supabase" && ledger.taskAggregation?.partial === true;
+
     return NextResponse.json({
       status: ledger.source === "supabase"
-        ? ledger.partial ? "partial" : "live"
+        ? taskPartial ? "partial" : "live"
         : "preview",
       source: ledger.source,
       configured: ledger.configured,
       workspaceId: ledger.workspaceId,
-      partial: ledger.partial || false,
-      failedSources: ledger.failedSources || [],
+      partial: taskPartial,
+      failedSources: taskPartial ? ["tasks"] : [],
       tasks: ledger.todos,
     });
   } catch (error) {
+    console.error("[hub/tasks] task ledger read failed", error);
     return NextResponse.json(
       {
         status: "error",
-        error: error instanceof Error ? error.message : String(error),
+        error: "task-ledger-unexpected-error",
       },
       { status: 500 },
     );

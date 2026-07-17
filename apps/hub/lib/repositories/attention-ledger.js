@@ -210,19 +210,26 @@ export async function getAttentionLedger() {
     ),
   ]);
 
+  const taskAggregationPartial = projectLedger?.source === "supabase"
+    && projectLedger?.taskAggregation?.partial === true;
   const taskSourceState = projectLedger?.source === "error"
     ? "error"
     : projectLedger?.source === "supabase"
-      ? projectLedger.partial ? "partial" : "live"
+      ? taskAggregationPartial ? "partial" : "live"
       : "preview";
   const taskLedgerReadable = projectLedger?.source === "supabase";
+  const taskFailedSources = projectLedger?.source === "error"
+    ? Array.isArray(projectLedger?.failedSources) ? projectLedger.failedSources : ["tasks"]
+    : taskAggregationPartial
+      ? ["tasks"]
+      : [];
   const sourceFailures = ["error", "partial"].includes(taskSourceState)
     ? [{
         source: "tasks",
         error: projectLedger?.source === "error"
           ? projectLedger.error || "project-ledger-core-read-failed"
-          : "project-ledger-partial-read",
-        failedSources: Array.isArray(projectLedger?.failedSources) ? projectLedger.failedSources : [],
+          : "task-ledger-partial-read",
+        failedSources: taskFailedSources,
       }]
     : [];
   const sources = {

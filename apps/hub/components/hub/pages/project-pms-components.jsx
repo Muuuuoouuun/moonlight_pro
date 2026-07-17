@@ -88,7 +88,7 @@ export function ProjectPortfolioSummary({ projects = [], sourceState = "live" })
     ? "프로젝트 원장을 읽지 못해 요약을 계산하지 않았습니다."
     : sourceState === "loading"
       ? "프로젝트 원장을 확인하는 중입니다."
-      : "preview에서는 실제 원장 요약을 표시하지 않습니다.";
+      : "실제 프로젝트 원장이 연결되면 요약을 표시합니다.";
 
   if (!metrics || metrics.empty) {
     return (

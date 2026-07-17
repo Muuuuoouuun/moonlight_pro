@@ -341,18 +341,19 @@ export function Placeholder({ label = 'image', w, h, style }) {
 }
 
 // Canonical live/preview status indicator for page headers. `state` accepts:
-// 'live' (success), 'syncing' | 'loading' (info), 'preview' (neutral),
-// and 'error' (danger). mono label, xs
+// 'live' (success), 'partial' (warning), 'syncing' | 'loading' (info),
+// 'preview' (neutral), and 'error' (danger). mono label, xs
 // outline Badge, marginLeft 8.
 export function SyncBadge({ state, style }) {
   const map = {
     live:    { tone: 'success', label: 'live' },
+    partial: { tone: 'warning', label: 'partial' },
     syncing: { tone: 'info',    label: 'syncing' },
     loading: { tone: 'info',    label: 'syncing' },
     preview: { tone: 'neutral', label: 'preview' },
     error:   { tone: 'danger',  label: 'error' },
   };
-  const m = map[state] || map.preview;
+  const m = map[state] || map.error;
   // NOTE: this branch's Badge forwards `style` but not `className`, so the full `.mono`
   // treatment (font + 'ss02' feature + tightened tracking) is applied inline.
   return (

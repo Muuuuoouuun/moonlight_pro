@@ -435,7 +435,7 @@ export async function GET() {
   const taskToday = projects?.source === "supabase"
     ? {
         ...buildTaskToday(projects.todos),
-        state: projectState,
+        state: projects.taskAggregation?.partial === true ? "partial" : "live",
       }
     : {
         state: projectState,

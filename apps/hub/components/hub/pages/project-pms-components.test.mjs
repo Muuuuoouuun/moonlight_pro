@@ -118,12 +118,29 @@ test("preview and error portfolios never calculate operational metrics", () => {
   assert.equal(pmsMetrics.buildProjectPortfolioMetrics(projects, { sourceState: "error" }), null);
 });
 
+test("partial portfolios preserve metrics from the readable project core", () => {
+  assert.ok(pmsMetrics, "project-pms-metrics.js must expose executable calculations");
+  const projects = [
+    { statusKey: "active", displayProgress: { value: 50, partial: false } },
+    { statusKey: "blocked", displayProgress: { value: null, partial: true } },
+  ];
+
+  assert.deepEqual(pmsMetrics.buildProjectPortfolioMetrics(projects, { sourceState: "partial" }), {
+    empty: false,
+    active: 1,
+    blockedOrOverdue: 1,
+    dueSoon: 0,
+    unmeasured: 1,
+  });
+});
+
 test("portfolio presentation consumes the executable metric helper without synthetic scoring", () => {
   assert.match(pmsComponentsSource, /import \{ buildProjectPortfolioMetrics \} from ["']\.\/project-pms-metrics["']/);
   assert.match(pmsMetricsSource, /displayProgress/);
   assert.match(pmsMetricsSource, /dueAt/);
-  assert.match(pmsMetricsSource, /sourceState !== ["']live["']/);
+  assert.match(pmsMetricsSource, /\[["']live["'],\s*["']partial["']\]\.includes\(sourceState\)/);
   assert.match(pmsComponentsSource, /표시할 원장 없음/);
+  assert.doesNotMatch(pmsComponentsSource, /preview에서는/);
   assert.doesNotMatch(`${pmsComponentsSource}\n${pmsMetricsSource}`, /AI.*(?:score|점수)|70\s*\/\s*30/i);
 });
 

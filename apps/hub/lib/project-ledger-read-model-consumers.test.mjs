@@ -84,11 +84,29 @@ test("attention names an operating-ledger error and omits only the failed task l
   assert.equal(ledger.sources.calendar, "live");
 });
 
-test("attention keeps task rows but marks their operating ledger partial", async () => {
+test("attention keeps task rows live when only unrelated optional ledgers failed", async () => {
   state.projects = {
     source: "supabase",
     partial: true,
-    failedSources: ["project_updates"],
+    failedSources: ["notes", "routine_checks"],
+    projects: [],
+    todos: [{ id: "task-1", title: "Task", done: false, status: "doing", priorityRaw: "medium" }],
+  };
+
+  const ledger = await getAttentionLedger();
+
+  assert.equal(ledger.sources.tasks, "live");
+  assert.deepEqual(ledger.failedSources, []);
+  assert.deepEqual(ledger.sourceFailures, []);
+  assert.equal(ledger.items.some((item) => item.lane === "task" && item.entityId === "task-1"), true);
+});
+
+test("attention marks tasks partial when the task aggregation itself is incomplete", async () => {
+  state.projects = {
+    source: "supabase",
+    partial: false,
+    failedSources: [],
+    taskAggregation: { loaded: 160, total: 161, partial: true },
     projects: [],
     todos: [{ id: "task-1", title: "Task", done: false, status: "doing", priorityRaw: "medium" }],
   };
@@ -97,7 +115,12 @@ test("attention keeps task rows but marks their operating ledger partial", async
 
   assert.equal(ledger.sources.tasks, "partial");
   assert.deepEqual(ledger.failedSources, ["tasks"]);
-  assert.equal(ledger.items.some((item) => item.lane === "task" && item.entityId === "task-1"), true);
+  assert.deepEqual(ledger.sourceFailures, [{
+    source: "tasks",
+    error: "task-ledger-partial-read",
+    failedSources: ["tasks"],
+  }]);
+  assert.equal(ledger.items.some((item) => item.entityId === "task-1"), true);
 });
 
 test("brand context records a fulfilled operating-ledger error as a missing partial source", async () => {

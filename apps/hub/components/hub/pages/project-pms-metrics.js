@@ -21,7 +21,7 @@ export function buildProjectPortfolioMetrics(projects = [], {
   today = new Date(),
   sourceState = "live",
 } = {}) {
-  if (sourceState !== "live") return null;
+  if (!["live", "partial"].includes(sourceState)) return null;
   if (!Array.isArray(projects) || projects.length === 0) {
     return { empty: true, active: null, blockedOrOverdue: null, dueSoon: null, unmeasured: null };
   }

@@ -15,6 +15,9 @@ export class NextResponse extends Response {
 
 const repositoryStub = (key, exportName) => `
 export async function ${exportName}() {
+  if (globalThis.__projectAggregateRouteState.${key}Error) {
+    throw globalThis.__projectAggregateRouteState.${key}Error;
+  }
   return globalThis.__projectAggregateRouteState.${key};
 }
 `;
@@ -110,6 +113,7 @@ function liveProjectLedger(overrides = {}) {
 }
 
 function resetState() {
+  state.projectsError = null;
   state.projects = liveProjectLedger();
   state.content = { source: "supabase", items: [], publishLogs: [], brands: [], queue: [], attention: [], summary: {}, ideaQueue: [] };
   state.revenue = { source: "supabase", deals: [], leads: [], stages: [], summary: {} };
@@ -138,6 +142,55 @@ test("tasks API returns 502 instead of flattening a configured project read erro
   assert.equal(body.source, "error");
   assert.equal(body.error, "project-ledger-core-read-failed");
   assert.deepEqual(body.failedSources, ["tasks"]);
+});
+
+test("tasks API stays live when only notes and routine checks are partial", async () => {
+  state.projects = liveProjectLedger({
+    partial: true,
+    failedSources: ["notes", "routine_checks"],
+  });
+
+  const response = await tasksRoute.GET();
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "live");
+  assert.equal(body.partial, false);
+  assert.deepEqual(body.failedSources, []);
+  assert.equal(body.tasks.length, 1);
+});
+
+test("tasks API marks an incomplete task aggregation partial", async () => {
+  state.projects = liveProjectLedger({
+    taskAggregation: { loaded: 160, total: 161, partial: true },
+  });
+
+  const body = await (await tasksRoute.GET()).json();
+
+  assert.equal(body.status, "partial");
+  assert.equal(body.partial, true);
+  assert.deepEqual(body.failedSources, ["tasks"]);
+  assert.equal(body.tasks.length, 1);
+});
+
+test("tasks API catch logs server-side and returns a fixed safe error", async () => {
+  state.projectsError = new Error("private-service-key=do-not-leak");
+  const originalError = console.error;
+  const logged = [];
+  console.error = (...args) => logged.push(args);
+
+  try {
+    const response = await tasksRoute.GET();
+    const body = await response.json();
+
+    assert.equal(response.status, 500);
+    assert.equal(body.status, "error");
+    assert.equal(body.error, "task-ledger-unexpected-error");
+    assert.equal(JSON.stringify(body).includes("private-service-key"), false);
+    assert.equal(logged.length, 1);
+  } finally {
+    console.error = originalError;
+  }
 });
 
 test("overview names a fulfilled project error and withholds fake project KPI zeroes", async () => {
@@ -211,10 +264,11 @@ test("daily brief exposes the project error without manufacturing open-work zero
   assert.equal(body.operatorHome.sources.projects, "error");
 });
 
-test("daily brief keeps core task/project evidence while naming optional partials", async () => {
+test("daily brief keeps task Today live while naming unrelated optional partials", async () => {
   state.projects = liveProjectLedger({
     partial: true,
     failedSources: ["notes"],
+    todos: [],
   });
 
   const body = await (await dailyBriefRoute.GET()).json();
@@ -222,6 +276,19 @@ test("daily brief keeps core task/project evidence while naming optional partial
   assert.equal(body.status, "partial");
   assert.equal(projectsSource.state, "partial");
   assert.deepEqual(projectsSource.failedSources, ["notes"]);
+  assert.equal(body.taskToday.state, "live");
+  assert.equal(body.taskToday.counts.total, 0);
+});
+
+test("daily brief marks only task Today partial for an incomplete task aggregation", async () => {
+  state.projects = liveProjectLedger({
+    taskAggregation: { loaded: 160, total: 161, partial: true },
+  });
+
+  const body = await (await dailyBriefRoute.GET()).json();
+  const projectsSource = body.sources.find((source) => source.key === "projects");
+
+  assert.equal(projectsSource.state, "live");
   assert.equal(body.taskToday.state, "partial");
   assert.equal(body.taskToday.counts.total, 1);
 });
