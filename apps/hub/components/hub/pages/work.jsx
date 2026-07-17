@@ -5,6 +5,10 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, IconButton, Button, Progress, EmptyState } from "../hub-primitives";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
+import {
+  buildRoadmapItemAriaLabel,
+  buildRoadmapProjection,
+} from "@/lib/pms-ui";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const EN_MONTH = new Intl.DateTimeFormat('en-US', { month: 'long' });
@@ -48,88 +52,6 @@ function buildCalendarWeek(now) {
   };
 }
 
-function buildRoadmapMonths(now) {
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 4, 1);
-  return {
-    start,
-    end,
-    months: Array.from({ length: 4 }, (_, i) => {
-      const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
-      return { key: `${date.getFullYear()}-${date.getMonth()}`, label: EN_MONTH.format(date) };
-    }),
-  };
-}
-
-function roadmapDate(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function roadmapPosition(date, window) {
-  const span = window.end.getTime() - window.start.getTime();
-  if (span <= 0) return 0;
-  return Math.max(0, Math.min(100, ((date.getTime() - window.start.getTime()) / span) * 100));
-}
-
-function buildRoadmapItems(roadmap, window, selectedProjectId) {
-  const projects = Array.isArray(roadmap?.projects) ? roadmap.projects : [];
-  const milestones = Array.isArray(roadmap?.milestones) ? roadmap.milestones : [];
-  const projectById = new Map(projects.map(project => [project.id, project]));
-  const projectItems = projects.flatMap((project) => {
-    if (selectedProjectId && project.id !== selectedProjectId) return [];
-    const due = roadmapDate(project.dueAt);
-    if (!due) return [];
-    const started = roadmapDate(project.startedAt);
-    const hasRange = Boolean(started && started.getTime() <= due.getTime());
-
-    if (!hasRange) {
-      if (due < window.start || due >= window.end) return [];
-      return [{
-        id: `project:${project.id}`,
-        projectId: project.id,
-        name: project.name,
-        meta: '프로젝트 마감',
-        kind: 'marker',
-        markerPct: roadmapPosition(due, window),
-      }];
-    }
-
-    if (due < window.start || started >= window.end) return [];
-    const startPct = roadmapPosition(started, window);
-    const endPct = roadmapPosition(due, window);
-    return [{
-      id: `project:${project.id}`,
-      projectId: project.id,
-      name: project.name,
-      meta: '프로젝트 기간',
-      kind: 'range',
-      startPct,
-      widthPct: Math.max(0.8, endPct - startPct),
-    }];
-  });
-
-  const milestoneItems = milestones.flatMap((milestone) => {
-    if (selectedProjectId && milestone.projectId !== selectedProjectId) return [];
-    const target = roadmapDate(milestone.targetAt);
-    if (!target || target < window.start || target >= window.end) return [];
-    const project = projectById.get(milestone.projectId);
-    return [{
-      id: `milestone:${milestone.id}`,
-      projectId: milestone.projectId,
-      name: milestone.title,
-      meta: project?.name ? `${project.name} · 마일스톤` : '마일스톤',
-      kind: 'milestone',
-      markerPct: roadmapPosition(target, window),
-    }];
-  });
-
-  return [...projectItems, ...milestoneItems].sort(
-    (a, b) => (a.startPct ?? a.markerPct) - (b.startPct ?? b.markerPct),
-  );
-}
-
 function formatHour(value) {
   const hour = Math.floor(value);
   const minutes = Math.round((value - hour) * 60);
@@ -149,6 +71,7 @@ function useWorkLedger() {
       partial: false,
       error: null,
       failedSources: [],
+      truncatedSources: [],
       projects: [],
       milestones: [],
     },
@@ -180,6 +103,7 @@ function useWorkLedger() {
             partial: false,
             error: { message, retryable: true },
             failedSources: ['projects', 'milestones'],
+            truncatedSources: [],
             projects: [],
             milestones: [],
           },
@@ -197,6 +121,7 @@ function useWorkLedger() {
               ? { message: '로드맵 응답이 없습니다.', retryable: true }
               : null,
             failedSources: data.source === 'supabase' ? ['projects', 'milestones'] : [],
+            truncatedSources: [],
             projects: [],
             milestones: [],
           };
@@ -233,6 +158,7 @@ function useWorkLedger() {
           partial: false,
           error: { message, retryable: true },
           failedSources: ['projects', 'milestones'],
+          truncatedSources: [],
           projects: [],
           milestones: [],
         },
@@ -635,12 +561,15 @@ export function Roadmap() {
   const searchParams = useSearchParams();
   const selectedProjectId = searchParams.get('project');
   const { roadmap, retry } = useWorkLedger();
-  const roadmapWindow = React.useMemo(() => buildRoadmapMonths(new Date()), []);
-  const months = roadmapWindow.months;
-  const items = React.useMemo(
-    () => buildRoadmapItems(roadmap, roadmapWindow, selectedProjectId),
-    [roadmap, roadmapWindow, selectedProjectId],
+  const roadmapProjection = React.useMemo(
+    () => buildRoadmapProjection(roadmap, { selectedProjectId }),
+    [roadmap, selectedProjectId],
   );
+  const months = React.useMemo(
+    () => roadmapProjection.months.map(month => ({ ...month, label: EN_MONTH.format(month.start) })),
+    [roadmapProjection.months],
+  );
+  const items = roadmapProjection.items;
   const statusLabel = roadmap.state === 'loading'
     ? 'syncing'
     : roadmap.state === 'preview'
@@ -681,9 +610,14 @@ export function Roadmap() {
 
       {roadmap.partial && (
         <div role="status" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
-          <span style={{ flex: 1, fontSize: 12, color: 'var(--warning)' }}>
-            일부 원장을 읽지 못했습니다 · {roadmap.failedSources.join(', ')}
-          </span>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12, color: 'var(--warning)' }}>
+            {roadmap.failedSources.length > 0 && (
+              <span>일부 원장을 읽지 못했습니다 · {roadmap.failedSources.join(', ')}</span>
+            )}
+            {roadmap.truncatedSources.length > 0 && (
+              <span>표시 한도를 넘어 일부만 표시합니다 · {roadmap.truncatedSources.join(', ')}</span>
+            )}
+          </div>
           <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
         </div>
       )}
@@ -740,6 +674,7 @@ export function Roadmap() {
                   <a
                     href={`/dashboard/work/projects?project=${encodeURIComponent(item.projectId)}`}
                     aria-current={selectedProjectId === item.projectId ? 'page' : undefined}
+                    aria-label={buildRoadmapItemAriaLabel(item)}
                     style={{ minHeight: 52, padding: '8px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', color: 'inherit', textDecoration: 'none' }}
                   >
                     <span style={{ fontSize: 12.5, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>

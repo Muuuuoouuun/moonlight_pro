@@ -552,3 +552,130 @@ test("merges timeline selection into the exact query without dropping foreign ke
   assert.equal(params.has("task"), false);
   assert.equal(params.has("new"), false);
 });
+
+test("clamps fully future and fully past ranges to coherent timeline geometry", () => {
+  const timeline = pmsUi.buildProjectTimeline([
+    {
+      id: "future",
+      name: "축 이후",
+      startedAt: "2026-10-01T00:00:00Z",
+      dueAt: "2026-10-10T00:00:00Z",
+    },
+    {
+      id: "past",
+      name: "축 이전",
+      startedAt: "2026-01-01T00:00:00Z",
+      dueAt: "2026-02-01T00:00:00Z",
+    },
+  ], {
+    today: new Date("2026-07-17T00:00:00Z"),
+    lookbackDays: 30,
+    lookaheadDays: 60,
+  });
+
+  const future = timeline.items.find((item) => item.project.id === "future");
+  const past = timeline.items.find((item) => item.project.id === "past");
+  for (const item of [future, past]) {
+    assert.ok(item.startPct >= 0 && item.startPct <= 100);
+    assert.ok(item.widthPct >= 0 && item.widthPct <= 100);
+    assert.ok(item.startPct + item.widthPct <= 100);
+    assert.equal(item.clippedStart, true);
+    assert.equal(item.clippedEnd, true);
+  }
+  assert.equal(future.startPct, 100);
+  assert.equal(future.widthPct, 0);
+  assert.equal(past.startPct, 0);
+  assert.equal(past.widthPct, 0);
+});
+
+test("builds accessible Timeline labels from real start and due evidence", () => {
+  const timeline = pmsUi.buildProjectTimeline([
+    {
+      id: "range",
+      name: "기간 프로젝트",
+      startedAt: "2026-07-10T00:00:00Z",
+      dueAt: "2026-07-20T00:00:00Z",
+    },
+    {
+      id: "marker",
+      name: "마감 프로젝트",
+      createdAt: "2020-01-01T00:00:00Z",
+      dueAt: "2026-07-25T00:00:00Z",
+    },
+  ], { today: new Date("2026-07-17T00:00:00Z") });
+
+  const range = timeline.items.find((item) => item.project.id === "range");
+  const marker = timeline.items.find((item) => item.project.id === "marker");
+  assert.match(pmsUi.buildTimelineItemAriaLabel(range), /기간 프로젝트.*2026-07-10.*2026-07-20/);
+  assert.match(pmsUi.buildTimelineItemAriaLabel(marker), /마감 프로젝트.*2026-07-25/);
+  assert.doesNotMatch(pmsUi.buildTimelineItemAriaLabel(marker), /2020-01-01/);
+});
+
+test("projects Roadmap date-only points align to equal month segments", () => {
+  const projection = pmsUi.buildRoadmapProjection({
+    projects: [
+      { id: "jan-end", name: "1월 말", dueAt: "2028-01-31" },
+      { id: "feb-start", name: "2월 시작", dueAt: "2028-02-01" },
+      { id: "mar-start", name: "3월 시작", dueAt: "2028-03-01" },
+    ],
+    milestones: [
+      { id: "milestone-mar", projectId: "mar-start", title: "3월 기준점", targetAt: "2028-03-01" },
+    ],
+  }, { now: new Date(2028, 0, 15) });
+
+  const byId = new Map(projection.items.map((item) => [item.id, item]));
+  assert.equal(projection.months.length, 4);
+  assert.ok(Math.abs(byId.get("project:jan-end").markerPct - ((30 / 31) * 25)) < 0.0001);
+  assert.equal(byId.get("project:feb-start").markerPct, 25);
+  assert.equal(byId.get("project:mar-start").markerPct, 50);
+  assert.equal(byId.get("milestone:milestone-mar").markerPct, 50);
+});
+
+test("Roadmap projection filters by durable project and clips ranges to four equal months", () => {
+  const projection = pmsUi.buildRoadmapProjection({
+    projects: [
+      {
+        id: "selected",
+        name: "선택 프로젝트",
+        startedAt: "2027-12-01",
+        dueAt: "2028-06-01",
+      },
+      { id: "other", name: "다른 프로젝트", dueAt: "2028-02-01" },
+    ],
+    milestones: [
+      { id: "selected-ms", projectId: "selected", title: "선택 목표", targetAt: "2028-03-01" },
+      { id: "other-ms", projectId: "other", title: "다른 목표", targetAt: "2028-03-01" },
+    ],
+  }, {
+    now: new Date(2028, 0, 15),
+    selectedProjectId: "selected",
+  });
+
+  assert.deepEqual(projection.items.map((item) => item.id), [
+    "project:selected",
+    "milestone:selected-ms",
+  ]);
+  const range = projection.items[0];
+  assert.equal(range.kind, "range");
+  assert.equal(range.startPct, 0);
+  assert.equal(range.widthPct, 100);
+  assert.equal(range.clippedStart, true);
+  assert.equal(range.clippedEnd, true);
+});
+
+test("builds accessible Roadmap labels for ranges, due points, and milestones", () => {
+  const projection = pmsUi.buildRoadmapProjection({
+    projects: [
+      { id: "range", name: "기간", startedAt: "2028-01-02", dueAt: "2028-02-03" },
+      { id: "due", name: "마감", dueAt: "2028-03-04" },
+    ],
+    milestones: [
+      { id: "ms", projectId: "range", title: "목표", targetAt: "2028-04-05" },
+    ],
+  }, { now: new Date(2028, 0, 15) });
+  const byId = new Map(projection.items.map((item) => [item.id, item]));
+
+  assert.match(pmsUi.buildRoadmapItemAriaLabel(byId.get("project:range")), /2028-01-02.*2028-02-03/);
+  assert.match(pmsUi.buildRoadmapItemAriaLabel(byId.get("project:due")), /2028-03-04/);
+  assert.match(pmsUi.buildRoadmapItemAriaLabel(byId.get("milestone:ms")), /2028-04-05/);
+});

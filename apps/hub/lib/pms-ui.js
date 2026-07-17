@@ -377,18 +377,23 @@ export function buildProjectTimeline(projects = [], {
         };
       }
 
-      const visStartMs = Math.max(start.getTime(), windowStartMs);
-      const visEndMs = Math.min(end.getTime(), windowEndMs);
+      const visStartMs = Math.max(windowStartMs, Math.min(windowEndMs, start.getTime()));
+      const visEndMs = Math.max(windowStartMs, Math.min(windowEndMs, end.getTime()));
       const startOffsetDays = (visStartMs - windowStartMs) / MS_PER_DAY;
-      const spanDays = Math.max(0.4, (visEndMs - visStartMs) / MS_PER_DAY);
+      const spanDays = Math.max(0, (visEndMs - visStartMs) / MS_PER_DAY);
+      const startPct = Math.max(0, Math.min(100, (startOffsetDays / totalDays) * 100));
+      const widthPct = Math.max(
+        0,
+        Math.min(100 - startPct, (spanDays / totalDays) * 100),
+      );
       return {
         project,
         kind,
-        startPct: (startOffsetDays / totalDays) * 100,
-        widthPct: (spanDays / totalDays) * 100,
+        startPct,
+        widthPct,
         overdue,
-        clippedStart: start.getTime() < windowStartMs,
-        clippedEnd: end.getTime() > windowEndMs,
+        clippedStart: start.getTime() < windowStartMs || start.getTime() > windowEndMs,
+        clippedEnd: end.getTime() < windowStartMs || end.getTime() > windowEndMs,
       };
     })
     .sort((a, b) => (a.startPct ?? a.markerPct) - (b.startPct ?? b.markerPct));
@@ -396,6 +401,164 @@ export function buildProjectTimeline(projects = [], {
   const todayPct = Math.max(0, Math.min(100, ((todayStart.getTime() - windowStartMs) / MS_PER_DAY / totalDays) * 100));
 
   return { windowStart, windowEnd, totalDays, today: todayStart, todayPct, items, undated };
+}
+
+const ROADMAP_MONTH_COUNT = 4;
+const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+function toPlanningDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : new Date(value);
+  }
+
+  const raw = String(value);
+  const dateOnly = raw.match(DATE_ONLY_PATTERN);
+  if (dateOnly) {
+    const [, year, month, day] = dateOnly;
+    const date = new Date(Number(year), Number(month) - 1, Number(day));
+    if (
+      date.getFullYear() !== Number(year)
+      || date.getMonth() !== Number(month) - 1
+      || date.getDate() !== Number(day)
+    ) return null;
+    return date;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function planningDateLabel(value) {
+  const date = toPlanningDate(value);
+  if (!date) return "날짜 미정";
+  return [
+    String(date.getFullYear()).padStart(4, "0"),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function buildRoadmapWindow(now) {
+  const anchor = toPlanningDate(now) || new Date();
+  const start = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  const end = new Date(anchor.getFullYear(), anchor.getMonth() + ROADMAP_MONTH_COUNT, 1);
+  const months = Array.from({ length: ROADMAP_MONTH_COUNT }, (_, index) => {
+    const monthStart = new Date(start.getFullYear(), start.getMonth() + index, 1);
+    return {
+      key: `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, "0")}`,
+      start: monthStart,
+      end: new Date(start.getFullYear(), start.getMonth() + index + 1, 1),
+    };
+  });
+  return { start, end, months };
+}
+
+function roadmapPosition(date, window) {
+  if (date <= window.start) return 0;
+  if (date >= window.end) return 100;
+
+  const monthIndex = (
+    (date.getFullYear() - window.start.getFullYear()) * 12
+    + date.getMonth()
+    - window.start.getMonth()
+  );
+  const month = window.months[monthIndex];
+  if (!month) return monthIndex < 0 ? 0 : 100;
+  const monthFraction = (
+    (date.getTime() - month.start.getTime())
+    / (month.end.getTime() - month.start.getTime())
+  );
+  return ((monthIndex + monthFraction) / ROADMAP_MONTH_COUNT) * 100;
+}
+
+export function buildRoadmapProjection(roadmap = {}, {
+  now = new Date(),
+  selectedProjectId = null,
+} = {}) {
+  const window = buildRoadmapWindow(now);
+  const projects = Array.isArray(roadmap.projects) ? roadmap.projects : [];
+  const milestones = Array.isArray(roadmap.milestones) ? roadmap.milestones : [];
+  const projectById = new Map(projects.map((project) => [project.id, project]));
+
+  const projectItems = projects.flatMap((project) => {
+    if (selectedProjectId && project.id !== selectedProjectId) return [];
+    const due = toPlanningDate(project.dueAt);
+    if (!due) return [];
+    const started = toPlanningDate(project.startedAt);
+    const hasRange = Boolean(started && started.getTime() <= due.getTime());
+
+    if (!hasRange) {
+      if (due < window.start || due >= window.end) return [];
+      return [{
+        id: `project:${project.id}`,
+        projectId: project.id,
+        name: project.name,
+        meta: "프로젝트 마감",
+        kind: "marker",
+        dueAt: project.dueAt,
+        markerPct: roadmapPosition(due, window),
+      }];
+    }
+
+    if (due < window.start || started >= window.end) return [];
+    const startPct = roadmapPosition(started, window);
+    const endPct = roadmapPosition(due, window);
+    return [{
+      id: `project:${project.id}`,
+      projectId: project.id,
+      name: project.name,
+      meta: "프로젝트 기간",
+      kind: "range",
+      startedAt: project.startedAt,
+      dueAt: project.dueAt,
+      startPct,
+      widthPct: Math.max(0, Math.min(100 - startPct, endPct - startPct)),
+      clippedStart: started < window.start || started > window.end,
+      clippedEnd: due < window.start || due > window.end,
+    }];
+  });
+
+  const milestoneItems = milestones.flatMap((milestone) => {
+    if (selectedProjectId && milestone.projectId !== selectedProjectId) return [];
+    const target = toPlanningDate(milestone.targetAt);
+    if (!target || target < window.start || target >= window.end) return [];
+    const project = projectById.get(milestone.projectId);
+    return [{
+      id: `milestone:${milestone.id}`,
+      projectId: milestone.projectId,
+      name: milestone.title,
+      meta: project?.name ? `${project.name} · 마일스톤` : "마일스톤",
+      kind: "milestone",
+      targetAt: milestone.targetAt,
+      markerPct: roadmapPosition(target, window),
+    }];
+  });
+
+  return {
+    ...window,
+    items: [...projectItems, ...milestoneItems].sort(
+      (a, b) => (a.startPct ?? a.markerPct) - (b.startPct ?? b.markerPct),
+    ),
+  };
+}
+
+export function buildTimelineItemAriaLabel(item = {}) {
+  const project = item.project || {};
+  if (item.kind === "range") {
+    return `${project.name || "프로젝트"} · 계획 기간 · ${planningDateLabel(project.startedAt)}부터 ${planningDateLabel(project.dueAt)}까지`;
+  }
+  return `${project.name || "프로젝트"} · 마감일 지점 · ${planningDateLabel(project.dueAt)}`;
+}
+
+export function buildRoadmapItemAriaLabel(item = {}) {
+  if (item.kind === "range") {
+    return `${item.name || "프로젝트"} · 프로젝트 기간 · ${planningDateLabel(item.startedAt)}부터 ${planningDateLabel(item.dueAt)}까지`;
+  }
+  if (item.kind === "milestone") {
+    return `${item.name || "마일스톤"} · 마일스톤 목표일 · ${planningDateLabel(item.targetAt)}`;
+  }
+  return `${item.name || "프로젝트"} · 프로젝트 마감 · ${planningDateLabel(item.dueAt)}`;
 }
 
 export function buildTaskBoardColumns(todos = [], projects = []) {

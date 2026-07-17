@@ -87,6 +87,7 @@ test("projects roadmap rows and milestone points preserve their durable relation
     partial: false,
     error: null,
     failedSources: [],
+    truncatedSources: [],
     projects: [{
       id: "project-1",
       name: "운영 OS",
@@ -117,6 +118,7 @@ test("a connected but empty project and milestone ledger is explicitly live-empt
   assert.equal(ledger.roadmap.source, "supabase");
   assert.equal(ledger.roadmap.partial, false);
   assert.equal(ledger.roadmap.error, null);
+  assert.deepEqual(ledger.roadmap.truncatedSources, []);
   assert.deepEqual(ledger.roadmap.projects, []);
   assert.deepEqual(ledger.roadmap.milestones, []);
 });
@@ -138,6 +140,7 @@ test("one failed roadmap table remains a named partial result instead of fake li
   assert.equal(ledger.roadmap.source, "supabase");
   assert.equal(ledger.roadmap.partial, true);
   assert.deepEqual(ledger.roadmap.failedSources, ["projects"]);
+  assert.deepEqual(ledger.roadmap.truncatedSources, []);
   assert.match(ledger.roadmap.error.message, /projects/);
   assert.equal(ledger.roadmap.error.retryable, true);
   assert.deepEqual(ledger.roadmap.projects, []);
@@ -155,6 +158,7 @@ test("both failed roadmap tables report error rather than preview or live-empty"
   assert.equal(ledger.roadmap.source, "supabase");
   assert.equal(ledger.roadmap.partial, false);
   assert.deepEqual(ledger.roadmap.failedSources, ["projects", "milestones"]);
+  assert.deepEqual(ledger.roadmap.truncatedSources, []);
   assert.equal(ledger.roadmap.error.retryable, true);
 });
 
@@ -169,7 +173,41 @@ test("an unconfigured workspace keeps roadmap in explicit preview", async () => 
     partial: false,
     error: null,
     failedSources: [],
+    truncatedSources: [],
     projects: [],
     milestones: [],
   });
+});
+
+test("marks rows beyond the Roadmap display limit as named partial data", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.rows.projects = Array.from({ length: 501 }, (_, index) => ({
+    id: `project-${index}`,
+    name: `프로젝트 ${index}`,
+    status: "active",
+    priority: "medium",
+    started_at: null,
+    due_at: null,
+  }));
+  state.rows.milestones = Array.from({ length: 501 }, (_, index) => ({
+    id: `milestone-${index}`,
+    project_id: `project-${index}`,
+    title: `마일스톤 ${index}`,
+    status: "planned",
+    target_date: null,
+  }));
+
+  const ledger = await workLedger.getWorkLedger();
+
+  assert.equal(ledger.roadmap.state, "partial");
+  assert.equal(ledger.roadmap.partial, true);
+  assert.equal(ledger.roadmap.error, null);
+  assert.deepEqual(ledger.roadmap.failedSources, []);
+  assert.deepEqual(ledger.roadmap.truncatedSources, ["projects", "milestones"]);
+  assert.equal(ledger.roadmap.projects.length, 500);
+  assert.equal(ledger.roadmap.milestones.length, 500);
+  for (const table of ["projects", "milestones"]) {
+    const call = state.calls.find((entry) => entry.table === table);
+    assert.equal(call.options.limit, 501);
+  }
 });

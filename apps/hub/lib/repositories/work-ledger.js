@@ -10,6 +10,7 @@ const RITUAL_FALLBACK_NAMES = {
   evening: "Evening shutdown · 22:00",
   weekly: "Weekly Review",
 };
+const ROADMAP_ROW_LIMIT = 500;
 
 function formatDecisionDate(value) {
   if (!value) return "";
@@ -183,6 +184,7 @@ function emptyRoadmap(source = "preview", state = "preview") {
     partial: false,
     error: null,
     failedSources: [],
+    truncatedSources: [],
     projects: [],
     milestones: [],
   };
@@ -216,10 +218,18 @@ function buildRoadmapState(projectRows, milestoneRows) {
   if (!projectsAvailable) failedSources.push("projects");
   if (!milestonesAvailable) failedSources.push("milestones");
 
-  const projects = mapRoadmapProjects(projectsAvailable ? projectRows : []);
-  const milestones = mapRoadmapMilestones(milestonesAvailable ? milestoneRows : []);
+  const truncatedSources = [];
+  if (projectsAvailable && projectRows.length > ROADMAP_ROW_LIMIT) truncatedSources.push("projects");
+  if (milestonesAvailable && milestoneRows.length > ROADMAP_ROW_LIMIT) truncatedSources.push("milestones");
+
+  const projects = mapRoadmapProjects(
+    projectsAvailable ? projectRows.slice(0, ROADMAP_ROW_LIMIT) : [],
+  );
+  const milestones = mapRoadmapMilestones(
+    milestonesAvailable ? milestoneRows.slice(0, ROADMAP_ROW_LIMIT) : [],
+  );
   const allFailed = failedSources.length === 2;
-  const partial = failedSources.length === 1;
+  const partial = failedSources.length === 1 || truncatedSources.length > 0;
   const state = allFailed
     ? "error"
     : partial
@@ -239,6 +249,7 @@ function buildRoadmapState(projectRows, milestoneRows) {
         }
       : null,
     failedSources,
+    truncatedSources,
     projects,
     milestones,
   };
@@ -281,13 +292,13 @@ export async function getWorkLedger() {
     }),
     fetchSupabaseRows("projects", {
       select: "id,name,status,priority,started_at,due_at",
-      limit: 500,
+      limit: ROADMAP_ROW_LIMIT + 1,
       order: "due_at.asc",
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("milestones", {
       select: "id,project_id,title,status,target_date",
-      limit: 500,
+      limit: ROADMAP_ROW_LIMIT + 1,
       order: "target_date.asc",
       filters: withWorkspaceFilter(),
     }),

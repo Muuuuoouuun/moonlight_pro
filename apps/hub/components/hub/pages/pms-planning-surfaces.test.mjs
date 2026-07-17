@@ -4,6 +4,7 @@ import { test } from "node:test";
 
 const projectsSource = await readFile(new URL("./projects.jsx", import.meta.url), "utf8");
 const workSource = await readFile(new URL("./work.jsx", import.meta.url), "utf8");
+const pmsUiSource = await readFile(new URL("../../../lib/pms-ui.js", import.meta.url), "utf8");
 
 test("Timeline uses exact native project links and never opens the edit drawer", () => {
   const start = projectsSource.indexOf("{view === 'timeline'");
@@ -16,8 +17,8 @@ test("Timeline uses exact native project links and never opens the edit drawer",
   assert.match(block, /aria-current=\{selectedProjectId === p\.id \? ['"]page['"] : undefined\}/);
   assert.match(block, /data-kind=\{item\.kind\}/);
   assert.match(block, /item\.kind === ['"]range['"]/);
-  assert.match(block, /aria-label=\{`\$\{p\.name\} · \$\{item\.kind/);
-  assert.match(block, /마감일 지점/);
+  assert.match(projectsSource, /buildTimelineItemAriaLabel/);
+  assert.match(block, /aria-label=\{buildTimelineItemAriaLabel\(item\)\}/);
   assert.match(block, /minHeight:\s*44/);
   assert.match(block, /ProjectProgressGauge/);
   assert.match(block, /프로젝트 상세로 돌아가기/);
@@ -44,6 +45,9 @@ test("Roadmap consumes the shared ledger with truthful states and retry", () => 
   assert.match(block, /roadmap\.state === ['"]error['"]/);
   assert.match(block, /roadmap\.state === ['"]live-empty['"]/);
   assert.match(block, /roadmap\.partial/);
+  assert.match(block, /roadmap\.truncatedSources/);
+  assert.match(block, /표시 한도를 넘어 일부만 표시합니다/);
+  assert.match(block, /일부 원장을 읽지 못했습니다/);
   assert.match(block, /onClick=\{retry\}/);
   assert.match(block, /프로젝트로 돌아가기/);
 });
@@ -55,10 +59,12 @@ test("Roadmap projects and milestones use accessible canonical project links", (
 
   assert.match(block, /\/dashboard\/work\/projects\?project=/);
   assert.match(block, /<a[\s\S]*?aria-current=/);
+  assert.match(workSource, /buildRoadmapItemAriaLabel/);
+  assert.match(block, /aria-label=\{buildRoadmapItemAriaLabel\(item\)\}/);
   assert.match(block, /data-kind=\{item\.kind\}/);
-  assert.match(workSource, /kind:\s*['"]milestone['"]/);
-  assert.match(workSource, /kind:\s*['"]range['"]/);
-  assert.match(workSource, /kind:\s*['"]marker['"]/);
+  assert.match(pmsUiSource, /kind:\s*['"]milestone['"]/);
+  assert.match(pmsUiSource, /kind:\s*['"]range['"]/);
+  assert.match(pmsUiSource, /kind:\s*['"]marker['"]/);
   assert.match(block, /className=["']hub-scroll-x["']/);
   assert.match(block, /minWidth:\s*760/);
 });

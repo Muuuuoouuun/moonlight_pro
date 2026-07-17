@@ -9,6 +9,7 @@ import {
   buildProjectEditDraft,
   buildProjectPatch,
   buildProjectTimeline,
+  buildTimelineItemAriaLabel,
   buildContentPipelineTaskSeeds,
   buildTaskBoardColumns,
   buildTaskDraft,
@@ -1655,7 +1656,7 @@ export function Projects({ workspace }) {
                                   <a
                                     href={timelineProjectHref(p.id)}
                                     aria-current={selectedProjectId === p.id ? 'page' : undefined}
-                                    aria-label={`${p.name} · ${item.kind === 'range' ? '계획 기간' : '마감일 지점'} · ${p.due || '기한 미정'}`}
+                                    aria-label={buildTimelineItemAriaLabel(item)}
                                     style={{ minHeight: 44, display: 'flex', flexDirection: 'column', justifyContent: 'center', color: 'inherit', textDecoration: 'none' }}
                                   >
                                     <span style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
@@ -1669,7 +1670,7 @@ export function Projects({ workspace }) {
                               <div style={{ position: 'relative', minHeight: 54 }}>
                                 {item.kind === 'range' ? (
                                   <div style={{
-                                    position: 'absolute', left: `${item.startPct}%`, width: `${Math.max(item.widthPct, 1.2)}%`,
+                                    position: 'absolute', left: `${item.startPct}%`, width: `${item.widthPct}%`,
                                     top: 18, height: 18, borderRadius: 999,
                                     background: 'var(--surface-3)', border: '1px solid var(--line)',
                                     boxShadow: `inset 2px 0 0 ${lineToken}`,
