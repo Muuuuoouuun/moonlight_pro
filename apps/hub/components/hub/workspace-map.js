@@ -106,9 +106,9 @@ function keywordRescue(record, w) {
 
 // ── Pure filters — pages call these against their live OR fallback arrays ─────
 // Each returns a NEW array; an unknown/absent workspace returns the input unchanged
-// so non-scoped (global) pages keep working. Matching precedence mirrors real_v1:
-//   explicit record.workspace tag → revenueTypes (deals/leads/accounts) → brand org
-//   scope → classin accountKeyword substring (name/title, case-insensitive).
+// so non-scoped (global) pages keep working. A valid project workspace is authoritative;
+// legacy projects fall back to brand org scope and classin keywords. Revenue records keep
+// their existing workspace/type/brand/keyword matching behavior.
 
 export function filterBrandsByWorkspace(brands, ws) {
   const w = getWorkspace(ws);
@@ -118,16 +118,15 @@ export function filterBrandsByWorkspace(brands, ws) {
 
 // `brands` = the unfiltered live brand objects array the page already holds. It lets
 // records whose brand slug is unknown to local routing configuration
-// follow their live brand's resolved orgScope instead of being dropped.
+// follow their live brand's resolved orgScope when no valid explicit workspace exists.
 export function filterProjectsByWorkspace(projects, ws, brands) {
   const w = getWorkspace(ws);
   if (!w || !Array.isArray(projects)) return projects || [];
-  return projects.filter(
-    (p) =>
-      p.workspace === ws ||
-      scopeMatchesWorkspace(resolveOrgScopeForKey(p.brand, brands), ws) ||
-      matchAccountKeyword(p.name || p.title, w.accountKeywords),
-  );
+  return projects.filter((p) => {
+    if (isWorkspace(p.workspace)) return p.workspace === ws;
+    return scopeMatchesWorkspace(resolveOrgScopeForKey(p.brand, brands), ws)
+      || matchAccountKeyword(p.name || p.title, w.accountKeywords);
+  });
 }
 
 export function filterTodosByWorkspace(todos, ws, brands) {

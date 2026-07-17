@@ -22,7 +22,9 @@ test("builds a project draft with an empty title and a stable client id", () => 
   const clientId = "11111111-1111-4111-8111-111111111111";
   const draft = pmsUi.buildProjectDraft({
     clientId,
+    areaId: "area-1",
     contextBrand: { id: "brand-1", key: "classmoon" },
+    orgScope: "classin",
   });
 
   assert.deepEqual(draft, {
@@ -30,13 +32,16 @@ test("builds a project draft with an empty title and a stable client id", () => 
     isNew: true,
     clientId,
     title: "",
+    areaId: "area-1",
     brandId: "brand-1",
     brandKey: "classmoon",
+    entityKey: "",
     summary: "",
     status: "draft",
     priority: "medium",
     nextAction: "",
     dueAt: "",
+    orgScope: "classin",
   });
   assert.equal("progress" in draft, false, "create drafts must not invent manual progress");
 });
@@ -56,18 +61,56 @@ test("seeds a project container only from an explicit container context", () => 
   assert.equal(contextualDraft.brandKey, "sinabro");
 });
 
-test("validates the required project title and save location", () => {
+test("validates the required project title and flat area while brand stays optional", () => {
   assert.deepEqual(
-    pmsUi.validateProjectDraft({ title: "  ", brandId: null }),
+    pmsUi.validateProjectDraft({ title: "  ", areaId: null, brandId: null }),
     {
       title: "프로젝트명을 입력하세요.",
-      brandId: "프로젝트를 둘 위치를 선택하세요.",
+      areaId: "업무 분야를 선택하세요.",
     },
   );
   assert.deepEqual(
-    pmsUi.validateProjectDraft({ title: "운영 OS", brandId: "brand-1" }),
+    pmsUi.validateProjectDraft({ title: "운영 OS", areaId: "area-1", brandId: null }),
     {},
   );
+});
+
+test("builds a typed project create payload without inventing progress", () => {
+  const payload = pmsUi.buildProjectCreatePayload({
+    clientId: "11111111-1111-4111-8111-111111111111",
+    title: "갈무리 첫결제 SW",
+    areaId: "area-1",
+    brandId: "",
+    entityKey: "lead:lead-1",
+    summary: "첫 결제 완료",
+    status: "draft",
+    priority: "medium",
+    nextAction: "결제 링크 발송",
+    dueAt: "",
+    orgScope: "classin",
+  });
+
+  assert.deepEqual(payload.entityRef, { type: "lead", id: "lead-1" });
+  assert.equal(payload.id, "11111111-1111-4111-8111-111111111111");
+  assert.equal(payload.brandId, null);
+  assert.equal("progress" in payload, false);
+});
+
+test("selects only canonical project areas and resolves the immutable creation scope", () => {
+  const areas = [
+    { id: "legacy", slug: "legacy", canonical: false },
+    { id: "sales", slug: "sales", canonical: true },
+    { id: "content", slug: "content", canonical: true },
+  ];
+
+  assert.equal(pmsUi.selectProjectAreaId(areas), "sales");
+  assert.equal(pmsUi.selectProjectAreaId(areas, "content"), "content");
+  assert.equal(pmsUi.resolveProjectDraftOrgScope({ workspace: "classin" }), "classin");
+  assert.equal(pmsUi.resolveProjectDraftOrgScope({
+    workspace: "brand",
+    brandOrgScope: "classin",
+    preferBrandScope: true,
+  }), "classin");
 });
 
 test("builds an edit draft from raw project fields and preserves its concurrency token", () => {

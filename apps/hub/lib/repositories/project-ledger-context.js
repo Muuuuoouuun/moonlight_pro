@@ -9,8 +9,10 @@ const CANONICAL_AREA_SLUGS = [
 const CANONICAL_AREA_INDEX = new Map(
   CANONICAL_AREA_SLUGS.map((slug, index) => [slug, index]),
 );
-const LEAD_STATUSES = new Set(["new", "qualified", "nurturing", "won"]);
-const CUSTOMER_ACCOUNT_STATUSES = new Set(["active", "paused"]);
+const LEAD_STATUS_VALUES = ["new", "qualified", "nurturing", "won"];
+const CUSTOMER_ACCOUNT_STATUS_VALUES = ["active", "paused"];
+const LEAD_STATUSES = new Set(LEAD_STATUS_VALUES);
+const CUSTOMER_ACCOUNT_STATUSES = new Set(CUSTOMER_ACCOUNT_STATUS_VALUES);
 const PROJECT_ORG_SCOPES = new Set(["classin", "personal"]);
 const ENTITY_TYPE_ORDER = new Map([
   ["lead", 0],
@@ -97,6 +99,115 @@ export function buildProjectEntities(leadRows = [], accountRows = []) {
     const typeOrder = ENTITY_TYPE_ORDER.get(left.type) - ENTITY_TYPE_ORDER.get(right.type);
     return typeOrder || left.label.localeCompare(right.label, "ko");
   });
+}
+
+export function mergeProjectRelationRows(selectorRows = [], referencedRows = []) {
+  const byId = new Map();
+  [...selectorRows, ...referencedRows].forEach((row) => {
+    if (row?.id) byId.set(row.id, row);
+  });
+  return [...byId.values()];
+}
+
+export function collectProjectReferenceIds(rows = []) {
+  const areaIds = new Set();
+  const leadIds = new Set();
+  const accountIds = new Set();
+
+  rows.forEach((row) => {
+    if (row?.area_id) areaIds.add(row.area_id);
+    if (row?.lead_id) leadIds.add(row.lead_id);
+    if (row?.customer_account_id) accountIds.add(row.customer_account_id);
+  });
+
+  return {
+    areaIds: [...areaIds].sort(),
+    leadIds: [...leadIds].sort(),
+    accountIds: [...accountIds].sort(),
+  };
+}
+
+export function buildProjectCatalogFetchPlan() {
+  return {
+    areas: {
+      table: "areas",
+      options: {
+        order: "name.asc",
+        filters: [["status", "eq.active"]],
+      },
+    },
+    leads: {
+      table: "leads",
+      options: {
+        limit: 160,
+        order: "name.asc",
+        filters: [["status", `in.(${LEAD_STATUS_VALUES.join(",")})`]],
+      },
+    },
+    accounts: {
+      table: "customer_accounts",
+      options: {
+        limit: 80,
+        order: "name.asc",
+        filters: [["status", `in.(${CUSTOMER_ACCOUNT_STATUS_VALUES.join(",")})`]],
+      },
+    },
+  };
+}
+
+function referenceFetch(table, ids) {
+  if (ids.length === 0) return null;
+  return {
+    table,
+    options: {
+      limit: ids.length,
+      filters: [["id", `in.(${ids.join(",")})`]],
+    },
+  };
+}
+
+export function buildProjectReferenceFetchPlan(rows = []) {
+  const { areaIds, leadIds, accountIds } = collectProjectReferenceIds(rows);
+  const plan = {
+    areas: referenceFetch("areas", areaIds),
+    leads: referenceFetch("leads", leadIds),
+    accounts: referenceFetch("customer_accounts", accountIds),
+  };
+
+  return Object.fromEntries(
+    Object.entries(plan).filter(([, request]) => request),
+  );
+}
+
+export async function fetchProjectReferenceRows(rows = [], {
+  fetchRows,
+  withWorkspaceFilters = (filters) => filters,
+} = {}) {
+  const result = { areaRows: [], leadRows: [], accountRows: [] };
+  if (typeof fetchRows !== "function") return result;
+
+  const outputKey = {
+    areas: "areaRows",
+    leads: "leadRows",
+    accounts: "accountRows",
+  };
+  const entries = Object.entries(buildProjectReferenceFetchPlan(rows));
+  const fetched = await Promise.all(entries.map(async ([key, request]) => {
+    try {
+      const relationRows = await fetchRows(request.table, {
+        ...request.options,
+        filters: withWorkspaceFilters(request.options.filters),
+      });
+      return [outputKey[key], Array.isArray(relationRows) ? relationRows : []];
+    } catch {
+      return [outputKey[key], []];
+    }
+  }));
+
+  fetched.forEach(([key, relationRows]) => {
+    result[key] = relationRows;
+  });
+  return result;
 }
 
 function resolveOrgScope(row, brand) {

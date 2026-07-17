@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 let context = null;
@@ -155,19 +154,212 @@ test("routes brand-null projects by validated org scope and uses only matched en
   assert.equal(project.entityLabel, null);
 });
 
-test("operating ledger fetches optional creation catalogs without making them the live gate", async () => {
-  const source = await readFile(new URL("./operating-ledger.js", import.meta.url), "utf8");
+test("keeps inactive referenced relations out of selectors while retaining project labels", () => {
+  assert.ok(context, "project-ledger-context.js must exist");
+  const activeAreas = [
+    { id: "area-active", slug: "sales", name: "영업", status: "active" },
+  ];
+  const referencedAreas = [
+    { id: "area-inactive", slug: "legacy-sales", name: "이전 영업", status: "archived" },
+  ];
+  const activeLeads = [
+    { id: "lead-active", name: "활성 리드", status: "new" },
+  ];
+  const referencedLeads = [
+    { id: "lead-lost", name: "종료 리드", status: "lost" },
+  ];
+  const activeAccounts = [
+    { id: "account-active", name: "활성 고객", status: "active" },
+  ];
+  const referencedAccounts = [
+    { id: "account-closed", name: "종료 고객", status: "closed" },
+  ];
 
-  for (const table of ["areas", "leads", "customer_accounts"]) {
-    assert.match(source, new RegExp(`fetchSupabaseRows\\(\\"${table}\\"`));
-  }
-  assert.match(source, /if \(!brandRows \|\| !projectRows \|\| !taskRows\)/);
-  assert.doesNotMatch(
-    source,
-    /if \([^)]*(?:areaRows|leadRows|accountRows)[^)]*\)\s*\{\s*return/,
+  assert.deepEqual(context.mapProjectAreas([...activeAreas, ...referencedAreas]), [
+    { id: "area-active", name: "영업", slug: "sales", canonical: true },
+  ]);
+  assert.deepEqual(
+    context.buildProjectEntities(
+      [...activeLeads, ...referencedLeads],
+      [...activeAccounts, ...referencedAccounts],
+    ).map(({ key }) => key),
+    ["lead:lead-active", "customer_account:account-active"],
   );
-  assert.ok((source.match(/areas: \[\]/g) || []).length >= 2);
-  assert.ok((source.match(/projectEntities: \[\]/g) || []).length >= 2);
-  assert.match(source, /areas,/);
-  assert.match(source, /projectEntities,/);
+
+  const areaById = new Map(
+    context.mergeProjectRelationRows(activeAreas, referencedAreas).map((row) => [row.id, row]),
+  );
+  const leadById = new Map(
+    context.mergeProjectRelationRows(activeLeads, referencedLeads).map((row) => [row.id, row]),
+  );
+  const accountById = new Map(
+    context.mergeProjectRelationRows(activeAccounts, referencedAccounts).map((row) => [row.id, row]),
+  );
+  const projects = context.mapProjectRows([
+    {
+      id: "project-lost-lead",
+      area_id: "area-inactive",
+      lead_id: "lead-lost",
+      name: "종료 리드 프로젝트",
+      status: "active",
+      created_at: "2026-07-01T00:00:00.000Z",
+    },
+    {
+      id: "project-closed-account",
+      area_id: "area-inactive",
+      customer_account_id: "account-closed",
+      name: "종료 고객 프로젝트",
+      status: "active",
+      created_at: "2026-07-01T00:00:00.000Z",
+    },
+  ], { areaById, leadById, accountById });
+
+  assert.deepEqual(
+    projects.map(({ areaName, entityLabel }) => ({ areaName, entityLabel })),
+    [
+      { areaName: "이전 영업", entityLabel: "리드 · 종료 리드" },
+      { areaName: "이전 영업", entityLabel: "고객 · 종료 고객" },
+    ],
+  );
+});
+
+test("collects unique sorted relation ids from the bounded project rows", () => {
+  assert.ok(context, "project-ledger-context.js must exist");
+  assert.deepEqual(context.collectProjectReferenceIds([
+    { area_id: "area-b", lead_id: "lead-a", customer_account_id: null },
+    { area_id: "area-a", lead_id: "lead-a", customer_account_id: null },
+    { area_id: "area-b", lead_id: null, customer_account_id: "account-b" },
+    { area_id: null, lead_id: null, customer_account_id: "account-a" },
+  ]), {
+    areaIds: ["area-a", "area-b"],
+    leadIds: ["lead-a"],
+    accountIds: ["account-a", "account-b"],
+  });
+});
+
+test("builds exact selector and optional referenced-relation fetch plans", () => {
+  assert.ok(context, "project-ledger-context.js must exist");
+  assert.deepEqual(context.buildProjectCatalogFetchPlan(), {
+    areas: {
+      table: "areas",
+      options: {
+        order: "name.asc",
+        filters: [["status", "eq.active"]],
+      },
+    },
+    leads: {
+      table: "leads",
+      options: {
+        limit: 160,
+        order: "name.asc",
+        filters: [["status", "in.(new,qualified,nurturing,won)"]],
+      },
+    },
+    accounts: {
+      table: "customer_accounts",
+      options: {
+        limit: 80,
+        order: "name.asc",
+        filters: [["status", "in.(active,paused)"]],
+      },
+    },
+  });
+
+  assert.deepEqual(context.buildProjectReferenceFetchPlan([
+    { area_id: "area-b", lead_id: "lead-a" },
+    { area_id: "area-a", customer_account_id: "account-a" },
+    { area_id: "area-b", lead_id: "lead-a" },
+  ]), {
+    areas: {
+      table: "areas",
+      options: {
+        limit: 2,
+        filters: [["id", "in.(area-a,area-b)"]],
+      },
+    },
+    leads: {
+      table: "leads",
+      options: {
+        limit: 1,
+        filters: [["id", "in.(lead-a)"]],
+      },
+    },
+    accounts: {
+      table: "customer_accounts",
+      options: {
+        limit: 1,
+        filters: [["id", "in.(account-a)"]],
+      },
+    },
+  });
+  assert.deepEqual(context.buildProjectReferenceFetchPlan([
+    { area_id: "area-only" },
+  ]), {
+    areas: {
+      table: "areas",
+      options: {
+        limit: 1,
+        filters: [["id", "in.(area-only)"]],
+      },
+    },
+  });
+});
+
+test("fetches referenced relations in parallel scope and degrades unavailable lookups to empty", async () => {
+  assert.ok(context, "project-ledger-context.js must exist");
+  const calls = [];
+  const rowsByTable = {
+    areas: [{ id: "area-inactive", name: "이전 영업", status: "archived" }],
+    leads: null,
+    customer_accounts: [{ id: "account-closed", name: "종료 고객", status: "closed" }],
+  };
+
+  const result = await context.fetchProjectReferenceRows([
+    { area_id: "area-inactive", lead_id: "lead-lost" },
+    { customer_account_id: "account-closed" },
+  ], {
+    fetchRows: async (table, options) => {
+      calls.push({ table, options });
+      return rowsByTable[table];
+    },
+    withWorkspaceFilters: (filters) => [["workspace_id", "eq.workspace-1"], ...filters],
+  });
+
+  assert.deepEqual(calls, [
+    {
+      table: "areas",
+      options: {
+        limit: 1,
+        filters: [
+          ["workspace_id", "eq.workspace-1"],
+          ["id", "in.(area-inactive)"],
+        ],
+      },
+    },
+    {
+      table: "leads",
+      options: {
+        limit: 1,
+        filters: [
+          ["workspace_id", "eq.workspace-1"],
+          ["id", "in.(lead-lost)"],
+        ],
+      },
+    },
+    {
+      table: "customer_accounts",
+      options: {
+        limit: 1,
+        filters: [
+          ["workspace_id", "eq.workspace-1"],
+          ["id", "in.(account-closed)"],
+        ],
+      },
+    },
+  ]);
+  assert.deepEqual(result, {
+    areaRows: rowsByTable.areas,
+    leadRows: [],
+    accountRows: rowsByTable.customer_accounts,
+  });
 });

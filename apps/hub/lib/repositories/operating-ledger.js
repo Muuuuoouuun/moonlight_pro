@@ -14,7 +14,7 @@ import {
   mapProjectAreas,
   mapProjectRows,
   mergeProjectRelationRows,
-} from "./project-ledger-context";
+} from "./project-ledger-context.js";
 
 const BRAND_GLYPHS = ["◐", "◇", "✦", "◆", "●", "□", "△", "◎", "◌", "✧"];
 const PROJECT_READ_LIMIT = 80;

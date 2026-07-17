@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Checkbox, EmptyState, SyncBadge, SegmentedControl, EditDrawer, Kbd } from "../hub-primitives";
 import {
+  buildProjectCreatePayload,
   buildProjectDraft,
   buildProjectEditDraft,
   buildProjectPatch,
@@ -20,6 +21,8 @@ import {
   projectReloadContains,
   rebaseProjectEditState,
   rotateProjectClientId,
+  resolveProjectDraftOrgScope,
+  selectProjectAreaId,
   shouldOpenGlobalProjectCreate,
   taskStatusForBoardColumn,
   validateProjectDraft,
@@ -179,6 +182,8 @@ export function Projects({ workspace }) {
   }, [pathname, router]);
   const [ledger, setLedger] = React.useState({
     source: 'preview',
+    areas: [],
+    projectEntities: [],
     brands: [EMPTY_ALL_BRAND],
     projects: [],
     updates: [],
@@ -310,6 +315,8 @@ export function Projects({ workspace }) {
         const liveTodos = Array.isArray(data.todos) ? data.todos : [];
         setLedger({
           source: data.source,
+          areas: Array.isArray(data.areas) ? data.areas : [],
+          projectEntities: Array.isArray(data.projectEntities) ? data.projectEntities : [],
           brands: data.brands?.length ? data.brands : [EMPTY_ALL_BRAND],
           projects: liveProjects,
           updates: Array.isArray(data.updates) ? data.updates : [],
@@ -332,6 +339,8 @@ export function Projects({ workspace }) {
 
       setLedger({
         source: 'preview',
+        areas: [],
+        projectEntities: [],
         brands: [EMPTY_ALL_BRAND],
         projects: [],
         updates: [],
@@ -464,30 +473,70 @@ export function Projects({ workspace }) {
     const contextBrand = brandKeyOverride
       ? (brands.find(item => item.key === brandKeyOverride) || null)
       : (brand === 'all' ? null : currentBrand);
+    const areaId = selectProjectAreaId(ledger.areas);
+    if (!areaId) {
+      setOrderResult({ tone: 'err', label: '프로젝트를 연결할 업무 분야가 없습니다' });
+      return false;
+    }
     setProjectCreateContext(contextBrand?.id === 'all' ? null : contextBrand);
     setProjectEditSource(null);
-    setProjectDraft(buildProjectDraft({ contextBrand, initialStatus }));
-  }, [brand, brands, currentBrand]);
+    setProjectDraft(buildProjectDraft({
+      contextBrand,
+      areaId,
+      initialStatus,
+      orgScope: resolveProjectDraftOrgScope({ workspace }),
+    }));
+    return true;
+  }, [brand, brands, currentBrand, ledger.areas, workspace]);
 
   const openGlobalProjectCreate = React.useCallback(() => {
+    const areaId = selectProjectAreaId(ledger.areas);
+    if (!areaId) {
+      setOrderResult({ tone: 'err', label: '프로젝트를 연결할 업무 분야가 없습니다' });
+      return false;
+    }
     setProjectCreateContext(null);
     setProjectEditSource(null);
-    setProjectDraft(buildProjectDraft());
-  }, []);
+    setProjectDraft(buildProjectDraft({
+      areaId,
+      orgScope: resolveProjectDraftOrgScope({ workspace }),
+    }));
+    return true;
+  }, [ledger.areas, workspace]);
 
   // 콘텐츠 프로젝트: 브랜드 시드 + contentPipeline 플래그. 저장이 성공하면 persistProject가
   // CONTENT_STAGES(기획→초안→검토→업로드)를 하위 아이템으로 시드한다.
   const createContentProject = React.useCallback((brandKeyOverride = null) => {
     const contextBrand = brandKeyOverride
       ? (brands.find(item => item.key === brandKeyOverride) || null)
-      : (brand === 'all' ? null : currentBrand);
+      : (brand === 'all' ? brands.find(item => item.key !== 'all') : currentBrand);
+    if (!contextBrand || contextBrand.id === 'all') {
+      setOrderResult({ tone: 'err', label: '콘텐츠를 연결할 브랜드가 없습니다' });
+      return false;
+    }
+    const areaId = selectProjectAreaId(ledger.areas, 'content');
+    if (!areaId) {
+      setOrderResult({ tone: 'err', label: '콘텐츠 프로젝트를 연결할 업무 분야가 없습니다' });
+      return false;
+    }
     setProjectCreateContext(contextBrand?.id === 'all' ? null : contextBrand);
     setProjectEditSource(null);
     setProjectDraft({
-      ...buildProjectDraft({ contextBrand, initialStatus: 'Planning' }),
+      ...buildProjectDraft({
+        contextBrand,
+        areaId,
+        initialStatus: 'Planning',
+        orgScope: resolveProjectDraftOrgScope({
+          workspace,
+          brandOrgScope: contextBrand.orgScope,
+          preferBrandScope: true,
+        }),
+      }),
+      title: `${contextBrand.name} 콘텐츠`,
       contentPipeline: true,
     });
-  }, [brand, brands, currentBrand]);
+    return true;
+  }, [brand, brands, currentBrand, ledger.areas, workspace]);
 
   const editProject = React.useCallback((project) => {
     setProjectCreateContext(null);
@@ -510,17 +559,7 @@ export function Projects({ workspace }) {
       const response = await fetch('/api/hub/projects', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          id: draft.clientId,
-          title: draft.title,
-          brandId: draft.brandId,
-          summary: draft.summary,
-          status: draft.status,
-          priority: draft.priority,
-          nextAction: draft.nextAction,
-          dueAt: draft.dueAt,
-          source: 'hub-projects',
-        }),
+        body: JSON.stringify(buildProjectCreatePayload(draft)),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !['saved', 'duplicate'].includes(data.status)) {

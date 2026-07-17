@@ -245,6 +245,9 @@ test("marks every bounded project slice partial when one extra row proves trunca
       decisions: 81,
       notes: 81,
       routine_checks: 81,
+      areas: undefined,
+      leads: 160,
+      customer_accounts: 80,
     },
   );
 });
