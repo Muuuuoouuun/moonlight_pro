@@ -251,3 +251,109 @@ test("normalizes an editable project patch without changing workspace ownership"
     },
   });
 });
+
+test("normalizes a durable decision create command linked to a project", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "create_decision",
+    id: "77777777-7777-4777-8777-777777777777",
+    title: "월 구독 요금제 유지",
+    projectId: "11111111-1111-4111-8111-111111111111",
+    rationale: "이탈률 낮고 신규 유입 채널이 아직 검증 안 됨",
+    decidedAt: "2026-07-16T09:00:00+09:00",
+    source: "hub",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    ownerId: "44444444-4444-4444-8444-444444444444",
+    now: "2026-07-16T00:00:00.000Z",
+  });
+
+  assert.deepEqual(result, {
+    ok: true,
+    action: "create_decision",
+    table: "decisions",
+    record: {
+      id: "77777777-7777-4777-8777-777777777777",
+      workspace_id: "33333333-3333-4333-8333-333333333333",
+      project_id: "11111111-1111-4111-8111-111111111111",
+      actor_id: "44444444-4444-4444-8444-444444444444",
+      title: "월 구독 요금제 유지",
+      summary: "이탈률 낮고 신규 유입 채널이 아직 검증 안 됨",
+      rationale: "이탈률 낮고 신규 유입 채널이 아직 검증 안 됨",
+      decided_at: "2026-07-16T00:00:00.000Z",
+      meta: { source: "hub" },
+    },
+  });
+});
+
+test("decision create derives a non-null summary from rationale, then falls back to title", () => {
+  const ctx = { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-07-16T00:00:00.000Z" };
+
+  const withRationale = pmsCommand.normalizePmsCommand({
+    action: "create_decision",
+    id: "77777777-7777-4777-8777-777777777777",
+    title: "월 구독 요금제 유지",
+    rationale: "이탈률 낮고 신규 유입 채널이 아직 검증 안 됨",
+  }, ctx);
+  assert.equal(withRationale.record.summary, "이탈률 낮고 신규 유입 채널이 아직 검증 안 됨");
+
+  // Bare "Record decision" quick-create: no rationale yet, no project link — decided_at stays
+  // null so the Decisions timeline reads it as Draft (work-ledger.js resolveDecisionStatus).
+  const titleOnly = pmsCommand.normalizePmsCommand({
+    action: "create_decision",
+    id: "77777777-7777-4777-8777-777777777777",
+    title: "월 구독 요금제 유지",
+  }, ctx);
+  assert.equal(titleOnly.record.summary, "월 구독 요금제 유지");
+  assert.equal(titleOnly.record.rationale, null);
+  assert.equal(titleOnly.record.decided_at, null);
+  assert.equal(titleOnly.record.project_id, null);
+});
+
+test("decision create requires a title and a valid decided-at timestamp", () => {
+  const ctx = { workspaceId: "33333333-3333-4333-8333-333333333333", now: "2026-07-16T00:00:00.000Z" };
+
+  assert.deepEqual(
+    pmsCommand.normalizePmsCommand({ action: "create_decision", id: "77777777-7777-4777-8777-777777777777" }, ctx),
+    { ok: false, reason: "missing-title" },
+  );
+  assert.deepEqual(
+    pmsCommand.normalizePmsCommand({
+      action: "create_decision",
+      id: "77777777-7777-4777-8777-777777777777",
+      title: "X",
+      decidedAt: "not-a-date",
+    }, ctx),
+    { ok: false, reason: "invalid-decided-at" },
+  );
+});
+
+test("normalizes a decision update patch, allowing the project link and decided-at to be cleared", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_decision",
+    id: "77777777-7777-4777-8777-777777777777",
+    title: "월 구독 요금제 유지 (재확인)",
+    projectId: "",
+    rationale: "",
+    decidedAt: "",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-17T03:00:00.000Z",
+  });
+
+  assert.deepEqual(result, {
+    ok: true,
+    action: "update_decision",
+    table: "decisions",
+    filters: [
+      ["id", "eq.77777777-7777-4777-8777-777777777777"],
+      ["workspace_id", "eq.33333333-3333-4333-8333-333333333333"],
+    ],
+    patch: {
+      title: "월 구독 요금제 유지 (재확인)",
+      project_id: null,
+      rationale: null,
+      decided_at: null,
+      updated_at: "2026-07-17T03:00:00.000Z",
+    },
+  });
+});

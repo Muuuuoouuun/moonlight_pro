@@ -8,7 +8,7 @@ type NormalizedCommand =
   | {
       ok: true;
       action: string;
-      table: "projects" | "tasks" | "brands";
+      table: "projects" | "tasks" | "brands" | "decisions";
       record?: Record<string, unknown>;
       filters?: Array<[string, string]>;
       patch?: Record<string, unknown>;
@@ -238,6 +238,73 @@ export function normalizePmsCommand(
       ok: true,
       action,
       table: "projects",
+      filters: [
+        ["id", `eq.${id}`],
+        ["workspace_id", `eq.${workspaceId}`],
+      ],
+      patch,
+    };
+  }
+
+  if (action === "create_decision") {
+    const id = uuid(input.id);
+    const title = text(input.title, 300);
+    const projectId = uuid(input.projectId || input.project_id);
+    const rationale = nullableText(input.rationale, 4000);
+    const decidedAt = dateTime(input.decidedAt || input.decided_at);
+    const summary = text(input.summary, 2000) || text(input.rationale, 2000) || title;
+
+    if (!id) return { ok: false, reason: "invalid-id" };
+    if (!title) return { ok: false, reason: "missing-title" };
+    if (!decidedAt.ok) return { ok: false, reason: "invalid-decided-at" };
+
+    return {
+      ok: true,
+      action,
+      table: "decisions",
+      record: {
+        id,
+        workspace_id: workspaceId,
+        project_id: projectId,
+        actor_id: ownerId,
+        title,
+        summary,
+        rationale,
+        decided_at: decidedAt.value,
+        meta: { source: text(input.source || "manual", 80) },
+      },
+    };
+  }
+
+  if (action === "update_decision") {
+    const id = uuid(input.id);
+    if (!id) return { ok: false, reason: "invalid-id" };
+
+    const patch: Record<string, unknown> = {};
+    if (has(input, "title")) {
+      const title = text(input.title, 300);
+      if (!title) return { ok: false, reason: "missing-title" };
+      patch.title = title;
+    }
+    if (has(input, "projectId") || has(input, "project_id")) {
+      patch.project_id = uuid(input.projectId ?? input.project_id);
+    }
+    if (has(input, "rationale")) {
+      patch.rationale = nullableText(input.rationale, 4000);
+    }
+    if (has(input, "decidedAt") || has(input, "decided_at")) {
+      const decidedAt = dateTime(input.decidedAt ?? input.decided_at);
+      if (!decidedAt.ok) return { ok: false, reason: "invalid-decided-at" };
+      patch.decided_at = decidedAt.value;
+    }
+
+    if (Object.keys(patch).length === 0) return { ok: false, reason: "empty-patch" };
+    patch.updated_at = now.value;
+
+    return {
+      ok: true,
+      action,
+      table: "decisions",
       filters: [
         ["id", `eq.${id}`],
         ["workspace_id", `eq.${workspaceId}`],
