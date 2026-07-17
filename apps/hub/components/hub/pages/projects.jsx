@@ -1832,13 +1832,13 @@ export function Projects({ workspace }) {
       {projectDraft?.isNew && !containerDraft && (
         <ProjectCreateDrawer
           draft={projectDraft}
-          containers={brands.filter(item => item.key !== 'all')}
-          contextContainer={projectCreateContext}
+          areas={ledger.areas}
+          brands={brands}
+          entities={ledger.projectEntities}
           onChange={(key, value) => setProjectDraft(current => ({ ...current, [key]: value }))}
           onSave={persistProjectCreate}
           onRetryWithNewClientId={retryProjectCreateWithNewId}
           onOpenConflictProject={openConflictProject}
-          onCreateContainer={createContainer}
           onClose={() => {
             setProjectDraft(null);
             setProjectCreateContext(null);

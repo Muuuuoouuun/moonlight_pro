@@ -54,14 +54,14 @@ function feedbackFor(result) {
 
 export function ProjectCreateDrawer({
   draft,
-  containers = [],
-  contextContainer = null,
+  areas = [],
+  brands = [],
+  entities = [],
   onChange,
   onClose,
   onSave,
   onRetryWithNewClientId,
   onOpenConflictProject,
-  onCreateContainer,
 }) {
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [errors, setErrors] = React.useState({});
@@ -71,7 +71,7 @@ export function ProjectCreateDrawer({
   const savingRef = React.useRef(false);
   const retryingClientIdRef = React.useRef(null);
   const titleRef = React.useRef(null);
-  const locationRef = React.useRef(null);
+  const areaRef = React.useRef(null);
   const formId = React.useId();
 
   React.useEffect(() => {
@@ -100,13 +100,13 @@ export function ProjectCreateDrawer({
   const validateDraft = React.useCallback((candidate) => {
     const nextErrors = validateProjectDraft(candidate);
     setErrors(nextErrors);
-    if (!nextErrors.title && !nextErrors.brandId) return true;
+    if (!nextErrors.title && !nextErrors.areaId) return true;
 
     setSaveState("invalid");
     setFeedback("필수 입력을 확인하세요.");
     requestAnimationFrame(() => {
       if (nextErrors.title) titleRef.current?.focus();
-      else locationRef.current?.focus();
+      else areaRef.current?.focus();
     });
     return false;
   }, []);
@@ -186,12 +186,10 @@ export function ProjectCreateDrawer({
 
   if (!draft) return null;
   const saving = saveState === "saving";
-  const hasContainers = containers.length > 0;
-
   return (
     <Drawer
       title="프로젝트 만들기"
-      subtitle="목표와 다음 행동만 정하면 됩니다."
+      subtitle="큰 결과와 첫 행동부터 기록하세요."
       onClose={() => { if (!savingRef.current) onClose?.(); }}
       initialFocusRef={titleRef}
       width="min(440px, 100vw)"
@@ -215,36 +213,6 @@ export function ProjectCreateDrawer({
       )}
     >
       <form id={formId} onSubmit={handleSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: 15 }}>
-        {contextContainer ? (
-          <div style={{ padding: "10px 11px", display: "flex", alignItems: "center", gap: 8, background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)" }}>
-            <span style={{ fontSize: 11, color: "var(--fg-faint)" }}>저장 위치</span>
-            <span style={{ flex: 1, fontSize: 12.5, color: "var(--fg)" }}>{contextContainer.name}</span>
-          </div>
-        ) : (
-          <label style={LABEL_STYLE}>
-            <span>저장 위치 *</span>
-            <select
-              ref={locationRef}
-              name="brandId"
-              value={draft.brandId || ""}
-              onChange={(event) => update("brandId", event.target.value)}
-              aria-invalid={Boolean(errors.brandId)}
-              aria-describedby={errors.brandId ? "project-location-error" : undefined}
-              style={CONTROL_STYLE}
-            >
-              <option value="">컨테이너 선택</option>
-              {containers.map((container) => <option key={container.id} value={container.id}>{container.name}</option>)}
-            </select>
-            {errors.brandId && <span id="project-location-error" role="alert" style={{ color: "var(--danger)", letterSpacing: 0 }}>{errors.brandId}</span>}
-            {!hasContainers && (
-              <div style={{ padding: "10px 11px", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8, background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", letterSpacing: 0 }}>
-                <span style={{ color: "var(--fg-muted)", lineHeight: 1.5 }}>프로젝트를 둘 컨테이너가 없습니다. 먼저 저장 위치를 만드세요.</span>
-                <Button variant="outline" size="sm" icon="plus" onClick={onCreateContainer}>컨테이너 만들기</Button>
-              </div>
-            )}
-          </label>
-        )}
-
         <label style={LABEL_STYLE}>
           <span>프로젝트명 *</span>
           <input
@@ -283,6 +251,23 @@ export function ProjectCreateDrawer({
           />
         </label>
 
+        <label style={LABEL_STYLE}>
+          <span>업무 분야 *</span>
+          <select
+            ref={areaRef}
+            name="areaId"
+            value={draft.areaId || ""}
+            onChange={(event) => update("areaId", event.target.value)}
+            aria-invalid={Boolean(errors.areaId)}
+            aria-describedby={errors.areaId ? "project-area-error" : undefined}
+            style={CONTROL_STYLE}
+          >
+            <option value="">업무 분야 선택</option>
+            {areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
+          </select>
+          {errors.areaId && <span id="project-area-error" role="alert" style={{ color: "var(--danger)", letterSpacing: 0 }}>{errors.areaId}</span>}
+        </label>
+
         <div style={{ borderTop: "1px solid var(--line-soft)", paddingTop: 10 }}>
           <button
             type="button"
@@ -292,10 +277,28 @@ export function ProjectCreateDrawer({
           >
             <span aria-hidden="true" style={{ transform: advancedOpen ? "rotate(90deg)" : "none", transition: "transform 160ms ease" }}>›</span>
             <span style={{ flex: 1 }}>상세 설정</span>
-            <span style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>상태 · 우선순위 · 기한</span>
+            <span style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>브랜드 · 고객 · 상태</span>
           </button>
           {advancedOpen && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, paddingTop: 10 }}>
+              <label style={{ ...LABEL_STYLE, gridColumn: "1 / -1" }}>
+                <span>브랜드</span>
+                <select value={draft.brandId || ""} onChange={(event) => update("brandId", event.target.value || null)} style={CONTROL_STYLE}>
+                  <option value="">브랜드 없음</option>
+                  {brands.filter((brand) => brand.id !== "all").map((brand) => (
+                    <option key={brand.id} value={brand.id}>{brand.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ ...LABEL_STYLE, gridColumn: "1 / -1" }}>
+                <span>관련 리드/고객</span>
+                <select value={draft.entityKey || ""} onChange={(event) => update("entityKey", event.target.value)} style={CONTROL_STYLE}>
+                  <option value="">연결 없음</option>
+                  {entities.map((entity) => (
+                    <option key={entity.key} value={entity.key}>{entity.label}</option>
+                  ))}
+                </select>
+              </label>
               <label style={LABEL_STYLE}>
                 <span>상태</span>
                 <select value={draft.status} onChange={(event) => update("status", event.target.value)} style={CONTROL_STYLE}>
