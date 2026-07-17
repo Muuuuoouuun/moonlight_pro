@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { Iconed } from "../hub-icons";
 import { Badge, Card, Button, Checkbox, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer } from "../hub-primitives";
 
 // 내 작업 — one personal operating surface, three lenses over the cross-lane attention
@@ -9,6 +10,13 @@ import { Badge, Card, Button, Checkbox, EmptyState, SyncBadge, Kbd, SegmentedCon
 // 핵심 정보만 (one line per item), 최신 기준 default sort, and fast lens/lane/sort toggles.
 // Native surfaces (Deals kanban, Projects board) stay the deep-work views — every item
 // here deep-links back to its home drawer.
+// 가시성 계층 (2026-07-17): 시그널 스트립(지남·오늘·이번 주 타일)이 첫 화면 5초 답을 맡고,
+// 리스트 렌즈는 기한 버킷 그룹 헤더로 스캔 축을 제공한다. 정렬(최신/기한/우선순위)은
+// 그룹 안에서만 적용 — 매크로 순서는 항상 긴급도(지남→오늘→이번 주→나중)다.
+// 상세 계층 (2026-07-17 2차): 행 클릭은 모든 레인에서 우측 상세 패널(접기)을 연다 —
+// 간단 요약 + 원본 서피스로 넘어가는 버튼(Deals 드로어 / 프로젝트 ?project= 딥링크 /
+// Google Calendar). 할 일은 패널에서 완료·미루기(내일, 주말이면 월요일)·상세 편집.
+// 같은 프로젝트 할 일이 한 버킷에 2개 이상이면 프로젝트 아코디언으로 접힌다.
 
 const LENSES = [
   { key: 'list', label: '리스트' },
@@ -42,6 +50,66 @@ const BUCKETS = [
 ];
 const BUCKET_RANK = { overdue: 0, today: 1, week: 2, later: 3 };
 const BUCKET_OPTIONS = [{ key: 'all', label: '전체 기한' }, ...BUCKETS];
+// 서버 bucket 키가 넷 밖이면(방어) '나중'으로 흡수 — 그룹/카운트가 항목을 잃지 않게.
+const normalizeBucket = (item) => (BUCKET_RANK[item.bucket] != null ? item.bucket : 'later');
+
+// 시그널 스트립 타일 — 클릭하면 리스트 렌즈 + 해당 기한 필터 토글. '나중'은 신호가
+// 아니므로 타일에서 제외 (기한 세그먼트 토글에는 그대로 있다).
+const SIGNAL_TILES = [
+  { key: 'overdue', label: '기한 지남', color: 'var(--danger)', stripe: 'var(--danger-line)' },
+  { key: 'today', label: '오늘', color: 'var(--warning)', stripe: 'var(--warning-line)' },
+  { key: 'week', label: '이번 주', color: 'var(--info)' },
+];
+
+// 리스트 그룹 헤더 텍스트 톤 — 긴급 버킷만 semantic 색, 나머지는 중립 (§5.2 절제).
+const BUCKET_HEADER = {
+  overdue: { label: '기한 지남', color: 'var(--danger)' },
+  today: { label: '오늘', color: 'var(--warning)' },
+  week: { label: '이번 주', color: 'var(--fg-dim)' },
+  later: { label: '나중', color: 'var(--fg-faint)' },
+};
+
+// 미루기 목적지 — 서울 기준 다음날, 그날이 토/일이면 다음 월요일 (운영자 규칙).
+function nextDeferTarget() {
+  const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' });
+  const dowFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', weekday: 'short' });
+  for (let i = 1; i <= 3; i += 1) {
+    const d = new Date(Date.now() + i * 86400000);
+    const dow = dowFmt.format(d);
+    if (dow !== 'Sat' && dow !== 'Sun') {
+      return { dueAt: dayFmt.format(d), label: i === 1 ? '내일' : '월요일' };
+    }
+  }
+  return { dueAt: dayFmt.format(new Date(Date.now() + 86400000)), label: '내일' };
+}
+
+// 버킷 그룹 안에서 같은 프로젝트 할 일이 2개 이상이면 첫 항목 위치에 아코디언 그룹으로
+// 묶는다 (1개짜리는 행의 프로젝트 라벨로 충분 — 단독 아코디언은 소음). 그 외 항목은
+// 정렬 순서를 그대로 유지한다.
+function buildSectionRows(sectionItems) {
+  const counts = new Map();
+  sectionItems.forEach((i) => {
+    if (i.lane === 'task' && i.projectId) counts.set(i.projectId, (counts.get(i.projectId) || 0) + 1);
+  });
+  const rows = [];
+  const grouped = new Set();
+  sectionItems.forEach((item) => {
+    const pid = item.lane === 'task' ? item.projectId : null;
+    if (pid && (counts.get(pid) || 0) >= 2) {
+      if (grouped.has(pid)) return;
+      grouped.add(pid);
+      rows.push({
+        type: 'project',
+        projectId: pid,
+        projectName: item.projectName || '프로젝트',
+        items: sectionItems.filter((x) => x.lane === 'task' && x.projectId === pid),
+      });
+      return;
+    }
+    rows.push({ type: 'item', item });
+  });
+  return rows;
+}
 
 const TASK_STATUS_OPTIONS = [
   { value: 'inbox', label: '수집' },
@@ -105,80 +173,164 @@ function useAttentionLedger() {
   return { ...data, state, reload: load };
 }
 
-// One minimal row: [checkbox|dot] title …… meta · when. Everything else lives in the
-// record's native drawer (deals), the inline task drawer (tasks), or an inline expansion
-// (events) — onOpen resolves all three. `completing` is the brief strikethrough flash before
-// a task leaves the list (undo window handled by the caller). `expanded` shows an event's
-// time/location detail line underneath.
-function ItemRow({ item, onComplete, onOpen, completing, expanded, rowRef, showReason }) {
-  const clickable = Boolean(item.href) || item.lane === 'task' || item.lane === 'event';
+// One minimal row: [checkbox|dot] title …… meta · when. 모든 레인이 클릭 시 우측 상세
+// 패널을 연다 (원본 이동·미루기·편집은 패널의 액션). `completing` is the brief
+// strikethrough flash before a task leaves the list (undo window handled by the caller).
+// `selected` marks the row whose detail panel is open. `hideProject` suppresses the
+// project label inside a project accordion (the header already names it).
+function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showReason, hideProject }) {
   // 우선순위 정렬일 때는 meta 자리에 정렬 근거(reason)를 보여준다 — 첫 화면 요구사항
   // "지금 해야 하는 이유"(profile §4)를 행 높이 증가 없이 전달.
-  const metaText = showReason && item.priorityReason ? item.priorityReason : item.meta;
+  const projectLabel = !hideProject && item.lane === 'task' ? item.projectName || '' : '';
+  const metaText = showReason && item.priorityReason
+    ? item.priorityReason
+    : [projectLabel, item.meta].filter(Boolean).join(' · ');
   return (
-    <div>
-      <div
-        ref={rowRef}
-        className="hub-row"
-        role={clickable ? 'button' : undefined}
-        tabIndex={clickable ? 0 : undefined}
-        aria-expanded={item.lane === 'event' ? expanded : undefined}
-        onClick={clickable ? () => onOpen(item) : undefined}
-        onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(item); } } : undefined}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          padding: 'var(--pad-y) var(--pad-x)', minHeight: 'var(--row-h)',
-          borderBottom: '1px solid var(--line-soft)',
-          cursor: clickable ? 'pointer' : 'default',
-          boxShadow: item.bucket === 'overdue' ? 'inset 2px 0 0 var(--danger-line)'
-            : item.stalled ? 'inset 2px 0 0 var(--warning-line)' : undefined,
-        }}
-      >
-        {item.lane === 'task' ? (
-          <Checkbox checked={completing} onChange={() => onComplete(item)} label={`${item.title} 완료`} />
-        ) : (
-          <Badge tone={LANE_TONE[item.lane]} size="xs" variant="outline">{LANE_LABEL[item.lane]}</Badge>
-        )}
-        <span style={{
-          fontSize: 13, color: completing ? 'var(--fg-faint)' : 'var(--fg)', flex: 1, minWidth: '35%',
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          textDecoration: completing ? 'line-through' : 'none',
-          transition: 'color 180ms ease',
-        }}>
-          {item.title}
-        </span>
-        {metaText && (
-          // 폭 상한 + 말줄임 — 좁은 화면에서 meta가 제목(identity)을 짓누르지 않게 한다
-          // (2026-07 design-review FINDING-001의 모바일 identity-first 원칙).
-          <span className="mono" style={{
-            fontSize: 11, color: 'var(--fg-muted)', flexShrink: 1, maxWidth: '38%',
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>{metaText}</span>
-        )}
-        <span className="mono" style={{
-          fontSize: 11, flexShrink: 0, minWidth: 64, textAlign: 'right',
-          color: item.bucket === 'overdue' ? 'var(--danger)' : item.bucket === 'today' ? 'var(--warning)' : 'var(--fg-faint)',
-        }}>
-          {item.whenLabel}
-        </span>
-      </div>
-      {expanded && item.lane === 'event' && (
-        <div style={{
-          padding: '6px var(--pad-x) 10px 34px', fontSize: 11.5, color: 'var(--fg-muted)',
-          borderBottom: '1px solid var(--line-soft)', lineHeight: 1.6,
-        }}>
-          {item.whenLabel}{item.meta ? ` · ${item.meta}` : ''}
-          {item.calendarLink && (
-            <>
-              {' · '}
-              <a href={item.calendarLink} target="_blank" rel="noreferrer" style={{ color: 'var(--moon-200)' }}>
-                Google Calendar에서 열기 ↗
-              </a>
-            </>
-          )}
-        </div>
+    <div
+      ref={rowRef}
+      className="hub-row"
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(item)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(item); } }}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: 'var(--pad-y) var(--pad-x)', minHeight: 'var(--row-h)',
+        borderBottom: '1px solid var(--line-soft)',
+        cursor: 'pointer',
+        background: selected ? 'var(--surface-2)' : undefined,
+        boxShadow: item.bucket === 'overdue' ? 'inset 2px 0 0 var(--danger-line)'
+          : item.stalled ? 'inset 2px 0 0 var(--warning-line)' : undefined,
+      }}
+    >
+      {item.lane === 'task' ? (
+        <Checkbox checked={completing} onChange={() => onComplete(item)} label={`${item.title} 완료`} />
+      ) : (
+        <Badge tone={LANE_TONE[item.lane]} size="xs" variant="outline">{LANE_LABEL[item.lane]}</Badge>
       )}
+      <span style={{
+        fontSize: 13, color: completing ? 'var(--fg-faint)' : 'var(--fg)', flex: 1, minWidth: '35%',
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        textDecoration: completing ? 'line-through' : 'none',
+        transition: 'color 180ms ease',
+      }}>
+        {item.title}
+      </span>
+      {metaText && (
+        // 폭 상한 + 말줄임 — 좁은 화면에서 meta가 제목(identity)을 짓누르지 않게 한다
+        // (2026-07 design-review FINDING-001의 모바일 identity-first 원칙).
+        <span className="mono" style={{
+          fontSize: 11, color: 'var(--fg-muted)', flexShrink: 1, maxWidth: '38%',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>{metaText}</span>
+      )}
+      <span className="mono" style={{
+        fontSize: 11, flexShrink: 0, minWidth: 64, textAlign: 'right',
+        color: item.bucket === 'overdue' ? 'var(--danger)' : item.bucket === 'today' ? 'var(--warning)' : 'var(--fg-faint)',
+      }}>
+        {item.whenLabel}
+      </span>
     </div>
+  );
+}
+
+// 우측 상세 패널 — 행 클릭 시 열리는 간단 요약 + 다음 행동. 딥워크는 각 레인의 네이티브
+// 서피스(할 일 EditDrawer · Deals 드로어 · 프로젝트 · Google Calendar)로 넘긴다.
+// ESC/닫기 버튼으로 접힌다 (§8.1 닫기 계약의 패널 버전).
+function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDefer, onEdit, onNavigate }) {
+  const bucketMeta = BUCKET_HEADER[normalizeBucket(item)];
+  const rows = [
+    {
+      label: '기한',
+      value: item.whenLabel,
+      tone: item.bucket === 'overdue' ? 'var(--danger)' : item.bucket === 'today' ? 'var(--warning)' : undefined,
+    },
+    item.lane === 'task' && {
+      label: '상태',
+      value: TASK_STATUS_OPTIONS.find((o) => o.value === item.status)?.label || item.status,
+    },
+    item.lane === 'task' && {
+      label: '우선순위',
+      value: TASK_PRIORITY_OPTIONS.find((o) => o.value === item.priority)?.label || item.priority,
+    },
+    item.lane === 'task' && item.projectName && { label: '프로젝트', value: item.projectName },
+    item.lane === 'deal' && item.meta && { label: '단계·금액', value: item.meta },
+    item.lane === 'event' && item.meta && { label: '장소', value: item.meta },
+    item.priorityReason && { label: '근거', value: item.priorityReason },
+  ].filter(Boolean);
+
+  return (
+    <Card
+      pad={false}
+      className="hub-mywork-detail"
+      role="complementary"
+      aria-label="선택 항목 상세"
+      style={{ position: 'sticky', top: 12, overflow: 'hidden' }}
+    >
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Badge tone={LANE_TONE[item.lane]} size="xs" variant="outline">{LANE_LABEL[item.lane]}</Badge>
+        <span style={{ fontSize: 11, color: bucketMeta.color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          {bucketMeta.label}
+        </span>
+        <div style={{ flex: 1 }} />
+        <IconButton icon="x" tooltip="패널 닫기 (ESC)" onClick={onClose} />
+      </div>
+      <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.45, textDecoration: completing ? 'line-through' : 'none' }}>
+          {item.title}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {rows.map((r) => (
+            <div key={r.label} style={{ display: 'flex', gap: 8, fontSize: 12, alignItems: 'baseline' }}>
+              <span style={{ width: 64, flexShrink: 0, color: 'var(--fg-dim)' }}>{r.label}</span>
+              <span className="mono" style={{ color: r.tone || 'var(--fg-muted)', minWidth: 0, overflowWrap: 'anywhere' }}>{r.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ padding: '10px 14px', borderTop: '1px solid var(--line-soft)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {item.lane === 'task' && (
+          <>
+            <Button variant="primary" size="sm" icon="check" onClick={onComplete} disabled={completing}>완료</Button>
+            {/* 오늘 못하면 미루기 — 기본 다음날, 주말이면 월요일. */}
+            <Button variant="secondary" size="sm" icon="clock" onClick={onDefer}>{deferTarget.label}로 미루기</Button>
+            <Button variant="outline" size="sm" icon="edit" onClick={onEdit}>상세 편집</Button>
+            {item.projectId && (
+              <Button
+                variant="outline"
+                size="sm"
+                icon="projects"
+                onClick={() => onNavigate?.(`dashboard/work/projects?project=${encodeURIComponent(item.projectId)}`)}
+              >
+                프로젝트에서 열기
+              </Button>
+            )}
+          </>
+        )}
+        {item.lane === 'deal' && (
+          <Button variant="primary" size="sm" icon="arrowRight" onClick={() => item.href && onNavigate?.(item.href)}>
+            Deals에서 열기
+          </Button>
+        )}
+        {item.lane === 'event' && (
+          <>
+            {item.calendarLink && (
+              <Button
+                variant="primary"
+                size="sm"
+                icon="calendar"
+                onClick={() => window.open(item.calendarLink, '_blank', 'noopener')}
+              >
+                Google Calendar에서 열기
+              </Button>
+            )}
+            <Button variant="outline" size="sm" icon="arrowRight" onClick={() => onNavigate?.('dashboard/work/calendar')}>
+              Calendar 탭 열기
+            </Button>
+          </>
+        )}
+      </div>
+    </Card>
   );
 }
 
@@ -224,7 +376,11 @@ export function MyWork({ onNavigate }) {
   const [saving, setSaving] = React.useState(false);
   const [notice, setNotice] = React.useState(null); // { tone, label, action?: { label, onClick } }
   const [taskDraft, setTaskDraft] = React.useState(null);
-  const [expandedEventId, setExpandedEventId] = React.useState(null);
+  // 우측 상세 패널이 보고 있는 item.id — 파생 조회라서 reload 후 항목이 사라지면
+  // (완료·삭제) 패널도 같이 닫힌다.
+  const [detailId, setDetailId] = React.useState(null);
+  // 접힌 프로젝트 아코디언 (projectId 기준, 세션 한정).
+  const [collapsedProjects, setCollapsedProjects] = React.useState(() => new Set());
   const [dragItemId, setDragItemId] = React.useState(null);
   // completingIds: brief strikethrough flash. hiddenIds: optimistically removed from view
   // while the undo window (pendingTimers) is still open — completeTask only actually fires
@@ -346,9 +502,10 @@ export function MyWork({ onNavigate }) {
     setNotice({ tone: 'ok', label: '완료 취소됨' });
   };
 
-  // Board-lens drag-to-reschedule (tasks only — deals/events have no working due-date write
-  // path here). Dropping on 지남 is a no-op (there's no sensible date for "make this overdue").
-  const rescheduleTask = async (item, dueAt) => {
+  // Board-lens drag-to-reschedule + 패널 미루기 (tasks only — deals/events have no working
+  // due-date write path here). Dropping on 지남 is a no-op (there's no sensible date for
+  // "make this overdue").
+  const rescheduleTask = async (item, dueAt, noticeLabel = '기한 변경됨') => {
     try {
       const res = await fetch('/api/hub/tasks', {
         method: 'PATCH',
@@ -357,7 +514,7 @@ export function MyWork({ onNavigate }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.status !== 'saved') throw new Error(data.error || `기한 변경 실패 ${res.status}`);
-      setNotice({ tone: 'ok', label: '기한 변경됨' });
+      setNotice({ tone: 'ok', label: noticeLabel });
       await reload();
     } catch (error) {
       setNotice({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
@@ -373,21 +530,38 @@ export function MyWork({ onNavigate }) {
     rescheduleTask(item, dueAt);
   };
 
-  // Task detail drawer — opens on row click, edits title/status/priority/due through the
-  // extended PATCH /api/hub/tasks contract (update_task now accepts a partial patch, not
-  // just status). Deals deep-link to their native Deals drawer via href; events toggle an
-  // inline expansion (no editable detail — that lives in Google Calendar).
-  const openItem = (item) => {
-    if (item.lane === 'task') {
-      setTaskDraft({ id: item.entityId, title: item.title, status: item.status, priority: item.priority || 'medium', dueAt: item.whenAt || '' });
-      return;
-    }
-    if (item.lane === 'event') {
-      setExpandedEventId((cur) => (cur === item.id ? null : item.id));
-      return;
-    }
-    if (item.href) onNavigate?.(item.href);
+  // 행 클릭 → 우측 상세 패널 토글 (모든 레인). 할 일 편집(EditDrawer)·Deals 이동·
+  // 프로젝트 이동·Calendar 열기는 패널 안의 액션 버튼이 담당한다.
+  const openItem = (item) => setDetailId((cur) => (cur === item.id ? null : item.id));
+
+  // Task edit drawer — 패널의 "상세 편집" 버튼에서 연다. Edits title/status/priority/due
+  // through the extended PATCH /api/hub/tasks contract (update_task accepts a partial patch).
+  const openTaskDraft = (item) => {
+    setTaskDraft({ id: item.entityId, title: item.title, status: item.status, priority: item.priority || 'medium', dueAt: item.whenAt || '' });
   };
+
+  const detailItem = React.useMemo(
+    () => (detailId ? items.find((i) => i.id === detailId && !hiddenIds.has(i.id)) || null : null),
+    [detailId, items, hiddenIds],
+  );
+  const deferTarget = nextDeferTarget();
+
+  const toggleProject = (projectId) => {
+    setCollapsedProjects((prev) => {
+      const next = new Set(prev);
+      next.has(projectId) ? next.delete(projectId) : next.add(projectId);
+      return next;
+    });
+  };
+
+  // ESC는 상세 패널을 접는다 — EditDrawer가 열려 있으면 드로어의 자체 ESC가 우선이고
+  // 패널은 유지한다 (taskDraft 가드).
+  React.useEffect(() => {
+    if (!detailId) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape' && !taskDraft) setDetailId(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [detailId, taskDraft]);
 
   const persistTaskDetail = async () => {
     if (!taskDraft?.title?.trim()) return { ok: false, status: 'invalid-input' };
@@ -458,13 +632,46 @@ export function MyWork({ onNavigate }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [lens, visible.length]);
 
-  React.useEffect(() => { rowRefs.current = rowRefs.current.slice(0, visible.length); }, [visible]);
+  // rowRefs 인덱스는 렌더 순서 카운터로 배정한다 — 아코디언 접힘/그룹핑 때문에 visible
+  // 인덱스와 렌더 순서가 달라질 수 있다. 언마운트된 행은 React가 ref(null)로 비우고,
+  // 화살표 핸들러가 Boolean 필터로 걸러낸다.
+  let rowRenderIndex = 0;
+  const nextRowRef = () => {
+    const i = rowRenderIndex;
+    rowRenderIndex += 1;
+    return (el) => { rowRefs.current[i] = el; };
+  };
 
   const laneCounts = React.useMemo(() => {
     const counts = { all: items.length, task: 0, deal: 0, event: 0 };
     items.forEach((i) => { counts[i.lane] += 1; });
     return counts;
   }, [items]);
+
+  // 현재 레인 기준 기한 버킷 카운트 — 시그널 스트립과 기한 세그먼트가 같은 숫자를 쓴다
+  // (타일 클릭 결과로 보이는 행 수와 일치해야 신뢰할 수 있는 계기가 된다).
+  const bucketCounts = React.useMemo(() => {
+    const counts = { overdue: 0, today: 0, week: 0, later: 0 };
+    items.forEach((i) => {
+      if (hiddenIds.has(i.id)) return;
+      if (lane !== 'all' && i.lane !== lane) return;
+      counts[normalizeBucket(i)] += 1;
+    });
+    return counts;
+  }, [items, hiddenIds, lane]);
+
+  // 리스트 렌즈 그룹 섹션 — 전체 기한 보기일 때만. rows는 프로젝트 아코디언까지 반영된
+  // 렌더 구조 (item 행 + project 그룹 행).
+  const listSections = React.useMemo(() => {
+    if (bucketFilter !== 'all') return null;
+    const sections = [];
+    BUCKETS.forEach((b) => {
+      const bucketItems = visible.filter((i) => normalizeBucket(i) === b.key);
+      if (!bucketItems.length) return;
+      sections.push({ key: b.key, count: bucketItems.length, rows: buildSectionRows(bucketItems) });
+    });
+    return sections;
+  }, [bucketFilter, visible]);
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%', maxWidth: 1080, margin: '0 auto', width: '100%' }}>
@@ -478,7 +685,38 @@ export function MyWork({ onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <SegmentedControl className="hub-page-actions" options={LENSES} value={lens} onChange={setLens} />
+        <SegmentedControl className="hub-page-actions" label="보기 렌즈" options={LENSES} value={lens} onChange={setLens} />
+      </div>
+
+      {/* 시그널 스트립 — "지금 뭐가 급한가"를 숫자로 먼저 답한다 (DESIGN.md 경험 원칙 1).
+          타일 클릭 = 리스트 렌즈 + 해당 기한 필터, 다시 클릭하면 전체로 복귀. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--gap)' }}>
+        {SIGNAL_TILES.map((t) => {
+          const count = bucketCounts[t.key] || 0;
+          const active = lens === 'list' && bucketFilter === t.key;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              aria-pressed={active}
+              onClick={() => {
+                if (lens !== 'list') setLens('list');
+                setBucketFilter(active ? 'all' : t.key);
+              }}
+              style={{
+                textAlign: 'left', padding: '10px 14px', cursor: 'pointer',
+                background: active ? 'var(--surface-2)' : 'var(--surface)',
+                border: `1px solid ${active ? 'var(--line-strong)' : 'var(--line-soft)'}`,
+                borderRadius: 'var(--r-lg)',
+                boxShadow: count > 0 && t.stripe ? `inset 2px 0 0 ${t.stripe}` : undefined,
+                transition: 'background 120ms ease, border-color 120ms ease',
+              }}
+            >
+              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-dim)' }}>{t.label}</div>
+              <div className="stat" style={{ fontSize: 22, fontWeight: 500, marginTop: 4, color: count > 0 ? t.color : 'var(--fg-faint)' }}>{count}</div>
+            </button>
+          );
+        })}
       </div>
 
       {/* Quick capture — Enter saves a durable task; N focuses. 상세 토글로 기한·우선순위 추가. */}
@@ -537,12 +775,20 @@ export function MyWork({ onNavigate }) {
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <Input ref={searchRef} icon="search" placeholder="제목 검색 (/)" value={search} onChange={setSearch} style={{ width: 180 }} />
         <SegmentedControl
-          options={LANE_OPTIONS.map((o) => ({ ...o, label: `${o.label} ${laneCounts[o.key] || 0}` }))}
+          label="레인 필터"
+          options={LANE_OPTIONS.map((o) => ({ ...o, count: laneCounts[o.key] || 0 }))}
           value={lane}
           onChange={setLane}
         />
-        {lens === 'list' && <SegmentedControl options={BUCKET_OPTIONS} value={bucketFilter} onChange={setBucketFilter} />}
-        {lens !== 'week' && <SegmentedControl options={SORT_OPTIONS} value={sort} onChange={setSort} />}
+        {lens === 'list' && (
+          <SegmentedControl
+            label="기한 필터"
+            options={BUCKET_OPTIONS.map((o) => (o.key === 'all' ? o : { ...o, count: bucketCounts[o.key] || 0 }))}
+            value={bucketFilter}
+            onChange={setBucketFilter}
+          />
+        )}
+        {lens !== 'week' && <SegmentedControl label="정렬" options={SORT_OPTIONS} value={sort} onChange={setSort} />}
         {notice && (
           <span style={{ fontSize: 11.5, color: notice.tone === 'ok' ? 'var(--success)' : 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             {notice.label}
@@ -557,6 +803,19 @@ export function MyWork({ onNavigate }) {
           </span>
         )}
       </div>
+
+      {/* 본문 그리드 — 상세 패널이 열리면 우측 300px 칼럼이 생긴다 (모바일은 세로 스택,
+          hub-tokens.css .hub-mywork-grid). */}
+      <div
+        className="hub-mywork-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: detailItem ? 'minmax(0, 1fr) 300px' : 'minmax(0, 1fr)',
+          gap: 'var(--gap)',
+          alignItems: 'start',
+        }}
+      >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)', minWidth: 0 }}>
 
       {state === 'loading' && (
         <Card><div style={{ fontSize: 12.5, color: 'var(--fg-muted)', padding: 8 }}>기록을 읽는 중…</div></Card>
@@ -589,17 +848,92 @@ export function MyWork({ onNavigate }) {
               }
               style={{ minHeight: 180, padding: '28px 12px' }}
             />
+          ) : listSections ? (
+            // 전체 기한 보기: 긴급도 그룹 헤더가 스캔 축 — 빈 그룹은 그리지 않는다.
+            listSections.map((section) => (
+              <React.Fragment key={section.key}>
+                <div style={{
+                  padding: '6px var(--pad-x)', display: 'flex', alignItems: 'center', gap: 6,
+                  fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
+                  color: BUCKET_HEADER[section.key].color,
+                  background: 'var(--surface-2)', borderBottom: '1px solid var(--line-soft)',
+                }}>
+                  {BUCKET_HEADER[section.key].label}
+                  <span className="mono" style={{ fontSize: 11 }}>{section.count}</span>
+                </div>
+                {section.rows.map((row) => {
+                  if (row.type === 'item') {
+                    return (
+                      <ItemRow
+                        key={row.item.id}
+                        item={row.item}
+                        onComplete={scheduleComplete}
+                        onOpen={openItem}
+                        completing={completingIds.has(row.item.id)}
+                        selected={detailId === row.item.id}
+                        showReason={sort === 'priority'}
+                        rowRef={nextRowRef()}
+                      />
+                    );
+                  }
+                  // 프로젝트 아코디언 — 같은 프로젝트 할 일 2개 이상을 접기/펴기.
+                  const isCollapsed = collapsedProjects.has(row.projectId);
+                  return (
+                    <React.Fragment key={`project-${section.key}-${row.projectId}`}>
+                      <div
+                        ref={nextRowRef()}
+                        className="hub-row"
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={!isCollapsed}
+                        onClick={() => toggleProject(row.projectId)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleProject(row.projectId); } }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          padding: 'var(--pad-y) var(--pad-x)', minHeight: 'var(--row-h)',
+                          borderBottom: '1px solid var(--line-soft)', cursor: 'pointer',
+                        }}
+                      >
+                        <Iconed name="chevronD" size={12} style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 120ms ease', color: 'var(--fg-faint)' }} />
+                        <Iconed name="projects" size={13} style={{ color: 'var(--fg-dim)' }} />
+                        <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {row.projectName}
+                        </span>
+                        <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{row.items.length}</span>
+                      </div>
+                      {!isCollapsed && (
+                        <div style={{ marginLeft: 10, borderLeft: '1px solid var(--line-soft)' }}>
+                          {row.items.map((item) => (
+                            <ItemRow
+                              key={item.id}
+                              item={item}
+                              onComplete={scheduleComplete}
+                              onOpen={openItem}
+                              completing={completingIds.has(item.id)}
+                              selected={detailId === item.id}
+                              showReason={sort === 'priority'}
+                              hideProject
+                              rowRef={nextRowRef()}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </React.Fragment>
+            ))
           ) : (
-            visible.map((item, idx) => (
+            visible.map((item) => (
               <ItemRow
                 key={item.id}
                 item={item}
                 onComplete={scheduleComplete}
                 onOpen={openItem}
                 completing={completingIds.has(item.id)}
-                expanded={expandedEventId === item.id}
+                selected={detailId === item.id}
                 showReason={sort === 'priority'}
-                rowRef={(el) => { rowRefs.current[idx] = el; }}
+                rowRef={nextRowRef()}
               />
             ))
           )}
@@ -689,10 +1023,26 @@ export function MyWork({ onNavigate }) {
             onOpen={openItem}
             onNavigate={onNavigate}
             completingIds={completingIds}
-            expandedEventId={expandedEventId}
+            selectedId={detailId}
           />
         )
       )}
+
+      </div>
+
+      {detailItem && (
+        <DetailPanel
+          item={detailItem}
+          completing={completingIds.has(detailItem.id)}
+          deferTarget={deferTarget}
+          onClose={() => setDetailId(null)}
+          onComplete={() => scheduleComplete(detailItem)}
+          onDefer={() => rescheduleTask(detailItem, deferTarget.dueAt, `${deferTarget.label}로 미룸`)}
+          onEdit={() => openTaskDraft(detailItem)}
+          onNavigate={onNavigate}
+        />
+      )}
+      </div>
 
       <EditDrawer
         title={taskDraft ? (taskDraft.title || '할 일 편집') : ''}
@@ -714,7 +1064,7 @@ export function MyWork({ onNavigate }) {
 
 // 주간 렌즈 — 7-day agenda (grid가 아니라 목록: 모바일 우선, 미니멀). Each day lists its
 // items; undated items stay out (they live in 리스트/보드 '나중').
-function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, completingIds, expandedEventId }) {
+function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, completingIds, selectedId }) {
   const days = React.useMemo(() => {
     const out = [];
     const now = new Date();
@@ -755,7 +1105,7 @@ function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, co
             기한 지남 {overdue.length}
           </div>
           {overdue.map((item) => (
-            <ItemRow key={item.id} item={item} onComplete={onComplete} onOpen={onOpen} completing={completingIds.has(item.id)} expanded={expandedEventId === item.id} />
+            <ItemRow key={item.id} item={item} onComplete={onComplete} onOpen={onOpen} completing={completingIds.has(item.id)} selected={selectedId === item.id} />
           ))}
         </Card>
       )}
@@ -773,7 +1123,7 @@ function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, co
               <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 'auto' }}>{dayItems.length || ''}</span>
             </div>
             {dayItems.map((item) => (
-              <ItemRow key={item.id} item={item} onComplete={onComplete} onOpen={onOpen} completing={completingIds.has(item.id)} expanded={expandedEventId === item.id} />
+              <ItemRow key={item.id} item={item} onComplete={onComplete} onOpen={onOpen} completing={completingIds.has(item.id)} selected={selectedId === item.id} />
             ))}
           </Card>
         );

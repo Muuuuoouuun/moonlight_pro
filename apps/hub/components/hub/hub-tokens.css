@@ -686,6 +686,18 @@
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
+  /* 내 작업 상세 패널 — 좁은 화면에서는 우측 칼럼 대신 목록 아래로 스택. sticky를 풀어
+     본문 스크롤을 막지 않는다. */
+  .hub-mywork-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .hub-mywork-detail {
+    position: static !important;
+    /* 클릭한 항목의 상세가 첫 화면에 바로 보이도록 목록 위로 끌어올린다. */
+    order: -1;
+  }
+
   .campaign-war-room {
     grid-template-columns: minmax(0, 1fr) !important;
   }

@@ -72,27 +72,37 @@ function moneyLabel(amount) {
   return n > 0 ? `₩${n}` : "";
 }
 
-function mapTaskItems(todos, todayKey, weekEndKey) {
+function mapTaskItems(todos, projects, todayKey, weekEndKey) {
+  const projectById = new Map(
+    (Array.isArray(projects) ? projects : []).map((p) => [p.id, p]),
+  );
   return (Array.isArray(todos) ? todos : [])
     .filter((t) => !t.done)
-    .map((t) => ({
-      id: `task-${t.id}`,
-      entityId: t.id,
-      lane: "task",
-      title: t.title || "제목 없음",
-      bucket: bucketFor(t.dueAt, todayKey, weekEndKey),
-      whenAt: t.dueAt || "",
-      whenLabel: t.dueAt ? shortDate(t.dueAt) : "기한 없음",
-      recencyAt: t.updatedAt || "",
-      meta: t.priority === "high" ? t.priority : "",
-      href: null,
-      status: t.status || "todo",
-      // priorityRaw (low/medium/high/critical) — the engine's actual enum. Using the lossy
-      // display `priority` (med/high/low) here would round-trip badly: a re-save without
-      // touching priority would send "med", which fails update_task's PRIORITIES check.
-      priority: t.priorityRaw || "medium",
-      done: false,
-    }));
+    .map((t) => {
+      const project = t.project ? projectById.get(t.project) : null;
+      return {
+        id: `task-${t.id}`,
+        entityId: t.id,
+        lane: "task",
+        title: t.title || "제목 없음",
+        bucket: bucketFor(t.dueAt, todayKey, weekEndKey),
+        whenAt: t.dueAt || "",
+        whenLabel: t.dueAt ? shortDate(t.dueAt) : "기한 없음",
+        recencyAt: t.updatedAt || "",
+        meta: t.priority === "high" ? t.priority : "",
+        href: null,
+        status: t.status || "todo",
+        // priorityRaw (low/medium/high/critical) — the engine's actual enum. Using the lossy
+        // display `priority` (med/high/low) here would round-trip badly: a re-save without
+        // touching priority would send "med", which fails update_task's PRIORITIES check.
+        priority: t.priorityRaw || "medium",
+        // tasks.project_id → 내 작업의 프로젝트 아코디언 그룹 + 상세 패널의 "프로젝트에서
+        // 열기" 딥링크. 프로젝트 row가 ledger에 없으면 id만 남기고 이름은 비운다.
+        projectId: t.project || null,
+        projectName: project?.name || "",
+        done: false,
+      };
+    });
 }
 
 function mapDealItems(deals, stages, todayKey, weekEndKey) {
@@ -225,7 +235,7 @@ export async function getAttentionLedger() {
   );
 
   const items = [
-    ...mapTaskItems(projectLedger?.todos, todayKey, weekEndKey),
+    ...mapTaskItems(projectLedger?.todos, projectLedger?.projects, todayKey, weekEndKey),
     ...mapDealItems(revenueLedger?.deals, revenueLedger?.stages, todayKey, weekEndKey),
     ...mapEventItems(calendar?.items, todayKey, weekEndKey),
   ].map((item) => ({ ...item, ...assignPriority(item, leadScoreByDealEntityId) }));

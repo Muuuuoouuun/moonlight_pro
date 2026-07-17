@@ -323,8 +323,11 @@ export function Projects({ workspace }) {
     }
   }, []);
 
+  // ?project= 딥링크가 "원장 로드 후 1회" 계약(§8.1)을 지킬 수 있도록 최초 로드 완료를
+  // 기록한다 — syncState 초기값이 'preview'라서 상태만으로는 로드 전/후를 구분 못 한다.
+  const initialLoadDoneRef = React.useRef(false);
   React.useEffect(() => {
-    loadLedger({ initial: true });
+    loadLedger({ initial: true }).finally(() => { initialLoadDoneRef.current = true; });
   }, [loadLedger]);
 
   React.useEffect(() => {
@@ -604,6 +607,27 @@ export function Projects({ workspace }) {
     createdFromQueryRef.current = true;
     router.replace(pathname);
   }, [createProject, searchParams, router, pathname]);
+
+  // ?project=<id> 딥링크 (§8.1) — 원장 로드 후 해당 프로젝트의 우측 상세 패널을 1회 열고
+  // 쿼리를 소거한다. 내 작업 상세 패널의 "프로젝트에서 열기"가 이 경로로 들어온다.
+  // 상세 패널은 tree 뷰에만 있으므로 view 쿼리도 함께 지워 tree(기본)로 되돌린다.
+  const projectQueryRef = React.useRef(false);
+  React.useEffect(() => {
+    if (projectQueryRef.current || !initialLoadDoneRef.current) return;
+    const target = searchParams.get('project');
+    if (!target) return;
+    projectQueryRef.current = true;
+    const match = allProjects.find((p) => p.id === target);
+    if (match) {
+      setOpenDetail(match.id);
+      setExpanded((prev) => new Set([...prev, match.id]));
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('project');
+    if (match) params.delete('view');
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [searchParams, syncState, allProjects, router, pathname]);
 
   // 사이드바 드래그 정렬 상태 (UI 전용, localStorage). brandGroups가 이 순서를 적용하므로
   // 반드시 memo보다 먼저 선언한다.
