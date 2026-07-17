@@ -9,6 +9,15 @@ import {
   buildRoadmapItemAriaLabel,
   buildRoadmapProjection,
 } from "@/lib/pms-ui";
+import {
+  beginRhythmCheck,
+  buildRhythmCheckPayload,
+  createRhythmCheckState,
+  filterRhythmRows,
+  finishRhythmCheck,
+  resolveRhythmCheckResult,
+  summarizeRhythmRows,
+} from "@/lib/rhythm-ui";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const EN_MONTH = new Intl.DateTimeFormat('en-US', { month: 'long' });
@@ -58,13 +67,15 @@ function formatHour(value) {
   return `${hour}:${String(minutes).padStart(2, '0')}`;
 }
 
-function useWorkLedger() {
+function useWorkLedger(projectId = null) {
   const [state, setState] = React.useState({
     source: 'preview',
     decisions: [],
     rituals: [],
     summary: null,
     syncState: 'preview',
+    rhythmState: 'preview',
+    rhythmError: null,
     roadmap: {
       source: 'preview',
       state: 'loading',
@@ -77,6 +88,7 @@ function useWorkLedger() {
     },
   });
   const requestRef = React.useRef(0);
+  const projectQuery = typeof projectId === 'string' ? projectId.trim() : '';
 
   const load = React.useCallback(async () => {
     const requestId = requestRef.current + 1;
@@ -84,18 +96,26 @@ function useWorkLedger() {
     setState((prev) => ({
       ...prev,
       syncState: 'loading',
+      rhythmState: 'loading',
       roadmap: { ...prev.roadmap, state: 'loading' },
     }));
     try {
-      const response = await fetch('/api/hub/work', { cache: 'no-store' });
+      const endpoint = projectQuery
+        ? `/api/hub/work?project=${encodeURIComponent(projectQuery)}`
+        : '/api/hub/work';
+      const response = await fetch(endpoint, { cache: 'no-store' });
       const data = await response.json().catch(() => null);
-      if (requestId !== requestRef.current) return;
+      if (requestId !== requestRef.current) return false;
 
       if (!response.ok || !data || data.status === 'error') {
         const message = data?.error || data?.message || `업무 원장 응답 실패 (${response.status})`;
         setState((prev) => ({
           ...prev,
           syncState: 'error',
+          rhythmState: 'error',
+          rhythmError: message,
+          rituals: [],
+          summary: null,
           roadmap: {
             ...prev.roadmap,
             source: 'supabase',
@@ -108,7 +128,7 @@ function useWorkLedger() {
             milestones: [],
           },
         }));
-        return;
+        return false;
       }
 
       const roadmap = data.roadmap && typeof data.roadmap === 'object'
@@ -125,32 +145,36 @@ function useWorkLedger() {
             projects: [],
             milestones: [],
           };
+      const rhythm = data.rhythm && typeof data.rhythm === 'object'
+        ? data.rhythm
+        : {
+            state: data.source === 'supabase'
+              ? (Array.isArray(data.rituals) && data.rituals.length > 0 ? 'live' : 'live-empty')
+              : 'preview',
+            error: null,
+          };
 
-      if (data.source === 'supabase') {
-        setState({
-          source: data.source,
-          decisions: Array.isArray(data.decisions) ? data.decisions : [],
-          rituals: Array.isArray(data.rituals) ? data.rituals : [],
-          summary: data.summary || null,
-          syncState: 'live',
-          roadmap,
-        });
-      } else {
-        setState({
-          source: 'preview',
-          decisions: [],
-          rituals: [],
-          summary: null,
-          syncState: 'preview',
-          roadmap,
-        });
-      }
+      setState({
+        source: data.source === 'supabase' ? 'supabase' : 'preview',
+        decisions: Array.isArray(data.decisions) ? data.decisions : [],
+        rituals: Array.isArray(data.rituals) ? data.rituals : [],
+        summary: data.summary || null,
+        syncState: data.source === 'supabase' ? 'live' : 'preview',
+        rhythmState: rhythm.state || 'error',
+        rhythmError: rhythm.error?.message || null,
+        roadmap,
+      });
+      return rhythm.state === 'live' || rhythm.state === 'live-empty';
     } catch (error) {
-      if (requestId !== requestRef.current) return;
+      if (requestId !== requestRef.current) return false;
       const message = error instanceof Error ? error.message : String(error);
       setState((prev) => ({
         ...prev,
         syncState: 'error',
+        rhythmState: 'error',
+        rhythmError: message,
+        rituals: [],
+        summary: null,
         roadmap: {
           ...prev.roadmap,
           source: 'supabase',
@@ -163,8 +187,9 @@ function useWorkLedger() {
           milestones: [],
         },
       }));
+      return false;
     }
-  }, []);
+  }, [projectQuery]);
 
   React.useEffect(() => {
     load();
@@ -699,24 +724,93 @@ export function Roadmap() {
 }
 
 export function Rhythm() {
-  const { rituals: liveRituals, summary, syncState } = useWorkLedger();
-  const [checkedRituals, setCheckedRituals] = React.useState(() => new Set());
-  const rituals = Array.isArray(liveRituals) ? liveRituals : [];
+  const searchParams = useSearchParams();
+  const selectedProjectId = searchParams.get('project')?.trim() || null;
+  const { rituals: liveRituals, rhythmState, rhythmError, retry } = useWorkLedger(selectedProjectId);
+  const [mutationState, setMutationState] = React.useState(() => createRhythmCheckState());
+  const attemptSequenceRef = React.useRef(0);
+  const latestAttemptRef = React.useRef(new Map());
+  const rituals = React.useMemo(
+    () => filterRhythmRows(liveRituals, selectedProjectId),
+    [liveRituals, selectedProjectId],
+  );
+  const summary = React.useMemo(() => summarizeRhythmRows(rituals), [rituals]);
 
-  const completed = summary?.ritualsCompletedThisWeek ?? rituals.filter(r => r.weeks?.some(v => v === 1)).length;
-  const total = summary?.ritualsTotalThisWeek ?? rituals.length;
+  React.useEffect(() => {
+    latestAttemptRef.current.clear();
+    setMutationState(createRhythmCheckState());
+  }, [selectedProjectId]);
+
+  const completed = summary.ritualsCompletedThisWeek;
+  const total = summary.ritualsTotalThisWeek;
   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const longestStreak = summary.longestStreak;
+  const longestStreakRitual = summary.longestStreakRitual;
+  const selectedProjectName = rituals.find((ritual) => ritual.projectName)?.projectName || '';
+  const syncLabel = rhythmState === 'live' || rhythmState === 'live-empty'
+    ? 'live'
+    : rhythmState === 'loading'
+      ? 'syncing'
+      : rhythmState === 'error'
+        ? 'error'
+        : 'preview · unsaved';
+  const syncColor = rhythmState === 'live' || rhythmState === 'live-empty'
+    ? 'var(--moon-300)'
+    : rhythmState === 'loading'
+      ? 'var(--warning)'
+      : rhythmState === 'error'
+        ? 'var(--danger)'
+        : 'var(--fg-faint)';
 
-  let longestStreak = summary?.longestStreak ?? 0;
-  let longestStreakRitual = summary?.longestStreakRitual ?? '';
-  if (!summary) {
-    rituals.forEach(r => {
-      if ((r.streak || 0) > longestStreak) {
-        longestStreak = r.streak;
-        longestStreakRitual = r.name;
+  const checkIn = React.useCallback(async (ritual) => {
+    const ritualId = ritual.id;
+    const attemptId = `${Date.now()}-${attemptSequenceRef.current + 1}`;
+    attemptSequenceRef.current += 1;
+    latestAttemptRef.current.set(ritualId, attemptId);
+    setMutationState((state) => beginRhythmCheck(state, ritualId, attemptId));
+
+    try {
+      const response = await fetch('/api/routine/check', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(buildRhythmCheckPayload(ritual)),
+      });
+      const data = await response.json().catch(() => null);
+      let result = resolveRhythmCheckResult({
+        responseOk: response.ok,
+        httpStatus: response.status,
+        data,
+      });
+
+      if (latestAttemptRef.current.get(ritualId) !== attemptId) return;
+      if (result.shouldRefetch) {
+        const refreshed = await retry();
+        if (latestAttemptRef.current.get(ritualId) !== attemptId) return;
+        if (!refreshed) {
+          result = {
+            ...result,
+            message: `${result.message} 저장은 확인됐지만 주간 현황을 다시 읽지 못했습니다. 다시 읽어 주세요.`,
+          };
+        }
       }
-    });
-  }
+
+      setMutationState((state) => finishRhythmCheck(
+        state,
+        ritualId,
+        attemptId,
+        result,
+      ));
+    } catch (error) {
+      if (latestAttemptRef.current.get(ritualId) !== attemptId) return;
+      const result = resolveRhythmCheckResult({ error });
+      setMutationState((state) => finishRhythmCheck(
+        state,
+        ritualId,
+        attemptId,
+        result,
+      ));
+    }
+  }, [retry]);
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
@@ -724,18 +818,33 @@ export function Rhythm() {
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Rhythm</h2>
         <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
           루틴은 실행의 인프라
-          <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-            {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'preview'}
+          <span className="mono" style={{ marginLeft: 8, color: syncColor }}>
+            {syncLabel}
           </span>
         </div>
+        {selectedProjectId && (
+          <a
+            href={`/dashboard/work/projects?project=${encodeURIComponent(selectedProjectId)}`}
+            style={{ minHeight: 44, marginTop: 6, display: 'inline-flex', alignItems: 'center', color: 'var(--moon-300)', fontSize: 12.5, textUnderlineOffset: 3 }}
+          >
+            프로젝트로 돌아가기{selectedProjectName ? ` · ${selectedProjectName}` : ''}
+          </a>
+        )}
       </div>
+
+      {rhythmState === 'error' && (
+        <div role="alert" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
+          <span style={{ flex: 1, fontSize: 12, color: 'var(--danger)' }}>{rhythmError || '리듬 원장을 읽지 못했습니다. 체크인 상태를 확인하려면 다시 읽어 주세요.'}</span>
+          <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
+        </div>
+      )}
 
       <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>This week</div>
           <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="stat">{completed} / {total}</div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>rituals completed</div>
-          <div style={{ marginTop: 14 }}><Progress value={percent} /></div>
+          <div role="progressbar" aria-label="이번 주 완료한 리추얼" aria-valuemin={0} aria-valuemax={total} aria-valuenow={completed} aria-valuetext={`${completed} / ${total}`} style={{ marginTop: 14 }}><Progress value={percent} /></div>
         </Card>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Longest streak</div>
@@ -745,53 +854,68 @@ export function Rhythm() {
       </div>
 
       <Card pad={false} className="hub-table-card">
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'grid', gridTemplateColumns: '1fr 160px 90px 100px' }}>
-          <span>Ritual</span><span>Last 7 days</span><span>Streak</span><span style={{ textAlign: 'right' }}>Action</span>
-        </div>
         {rituals.length === 0 && (
           <EmptyState
             icon="rhythm"
-            title="루틴 체크 기록이 없습니다"
-            description={syncState === 'live' ? 'Supabase routine_checks 기록이 비어 있습니다.' : '체크인을 기록하면 주간 리듬과 streak가 계산됩니다.'}
+            title={selectedProjectId ? '선택한 프로젝트의 리듬이 없습니다' : '루틴 체크 기록이 없습니다'}
+            description={rhythmState === 'live-empty' ? 'Supabase routine_checks 기록이 비어 있습니다.' : rhythmState === 'error' ? '원장을 다시 읽은 뒤 체크인 상태를 확인해 주세요.' : '연결 전에는 체크인이 저장되지 않습니다.'}
+            action={rhythmState === 'error' ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button> : undefined}
             style={{ minHeight: 220 }}
           />
         )}
-        {rituals.map((r, i) => {
-          const isChecked = checkedRituals.has(r.id || r.name || i);
-          const weeks = Array.isArray(r.weeks) ? [...r.weeks] : [0,0,0,0,0,0,0];
-          if (isChecked) weeks[weeks.length - 1] = 1;
-          return (
-            <div key={r.id || r.name || i} style={{ padding: '14px 16px', borderBottom: i < rituals.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'grid', gridTemplateColumns: '1fr 160px 90px 100px', alignItems: 'center' }}>
-              <span style={{ fontSize: 13 }}>{r.name}</span>
-              <div style={{ display: 'flex', gap: 4 }}>
-                {weeks.map((v, j) => (
-                  <div key={j} style={{
-                    width: 18, height: 18, borderRadius: 4,
-                    background: v ? 'var(--moon-500)' : 'var(--surface-3)',
-                    border: v ? 'none' : '1px solid var(--line-soft)',
-                  }} />
-                ))}
+        {rituals.length > 0 && (
+          <div className="hub-rhythm-scroll" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ minWidth: 720 }}>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 180px 90px 128px' }}>
+                <span>Ritual</span><span>Last 7 days</span><span>Streak</span><span style={{ textAlign: 'right' }}>Action</span>
               </div>
-              <span className="mono" style={{ fontSize: 12, color: (r.streak || 0) > 10 ? 'var(--success)' : 'var(--fg-muted)' }}>{r.streak || 0}d</span>
-              <div style={{ textAlign: 'right' }}>
-                <Button
-                  variant={isChecked ? 'secondary' : 'ghost'}
-                  size="xs"
-                  onClick={() => {
-                    const key = r.id || r.name || i;
-                    setCheckedRituals(prev => {
-                      const next = new Set(prev);
-                      next.has(key) ? next.delete(key) : next.add(key);
-                      return next;
-                    });
-                  }}
-                >
-                  {isChecked ? 'Checked' : 'Check in'}
-                </Button>
-              </div>
+              {rituals.map((r, i) => {
+                const weeks = Array.isArray(r.weeks) ? r.weeks : [0,0,0,0,0,0,0];
+                const pending = Boolean(mutationState.pendingByRitual[r.id]);
+                const feedback = mutationState.feedbackByRitual[r.id];
+                const bitmapText = weeks.map((value, index) => `${index === 6 ? '오늘' : `${6 - index}일 전`} ${value ? '완료' : '미완료'}`).join(', ');
+                return (
+                  <div key={r.id} style={{ padding: '12px 16px', minHeight: 68, borderBottom: i < rituals.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 180px 90px 128px', alignItems: 'center' }}>
+                    <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <span style={{ fontSize: 13 }}>{r.name}</span>
+                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{r.checkType} · {r.ritualKey}</span>
+                      {r.projectHref && (
+                        <a href={r.projectHref} style={{ width: 'fit-content', color: 'var(--moon-300)', fontSize: 11.5, textUnderlineOffset: 3 }}>{r.projectName || '연결 프로젝트'}</a>
+                      )}
+                      {feedback && (
+                        <span aria-live="polite" style={{ fontSize: 11, color: feedback.kind === 'error' ? 'var(--danger)' : feedback.kind === 'preview' ? 'var(--warning)' : 'var(--fg-muted)' }}>
+                          {feedback.message}
+                        </span>
+                      )}
+                    </div>
+                    <div role="img" aria-label={`최근 7일 체크 기록: ${bitmapText}`} style={{ display: 'flex', gap: 4 }}>
+                      {weeks.map((value, index) => (
+                        <span key={index} aria-hidden="true" style={{
+                          width: 18, height: 18, borderRadius: 4,
+                          background: value ? 'var(--moon-500)' : 'var(--surface-3)',
+                          border: '1px solid var(--line-soft)',
+                        }} />
+                      ))}
+                    </div>
+                    <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{r.streak || 0}d</span>
+                    <div style={{ textAlign: 'right' }}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={pending}
+                        aria-label={`${r.name} 체크인 저장`}
+                        style={{ minHeight: 44 }}
+                        onClick={() => checkIn(r)}
+                      >
+                        {pending ? '저장 중…' : '체크인 저장'}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        )}
       </Card>
     </div>
   );

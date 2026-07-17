@@ -10,6 +10,7 @@ const RITUAL_FALLBACK_NAMES = {
   evening: "Evening shutdown · 22:00",
   weekly: "Weekly Review",
 };
+const ROUTINE_CHECK_TYPES = new Set(["morning", "midday", "evening", "weekly"]);
 const ROADMAP_ROW_LIMIT = 500;
 
 function formatDecisionDate(value) {
@@ -79,9 +80,7 @@ function mapDecisions(rows, profileById) {
 // completion bitmap + current streak from checked_at timestamps.
 function ritualKeyFor(row) {
   const meta = row.meta && typeof row.meta === "object" ? row.meta : {};
-  return (
-    String(meta.ritual_key || meta.key || meta.name || row.check_type || "ritual")
-  );
+  return String(meta.ritual_key || meta.key || meta.name || row.check_type || "ritual").trim() || "ritual";
 }
 
 function ritualDisplayName(row) {
@@ -91,10 +90,34 @@ function ritualDisplayName(row) {
   return RITUAL_FALLBACK_NAMES[row.check_type] || "Ritual";
 }
 
+function normalizeCheckType(value) {
+  const normalized = String(value || "midday").trim().toLowerCase();
+  return ROUTINE_CHECK_TYPES.has(normalized) ? normalized : "midday";
+}
+
+function ritualCompositeId(projectId, ritualKey) {
+  return `ritual:${projectId ? encodeURIComponent(projectId) : "unscoped"}:${encodeURIComponent(ritualKey)}`;
+}
+
 function startOfLocalDay(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function startOfLocalDateKey(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+  if (!match) return null;
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const date = new Date(year, monthIndex, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== monthIndex ||
+    date.getDate() !== day
+  ) return null;
   return date.getTime();
 }
 
@@ -117,28 +140,41 @@ function computeStreak(doneDays, todayStart) {
   return streak;
 }
 
-function mapRituals(rows) {
+function mapRituals(rows, projectRows) {
   const groups = new Map();
+  const projectNameById = new Map(
+    (Array.isArray(projectRows) ? projectRows : []).map((project) => [project.id, project.name || null]),
+  );
 
   rows.forEach((row) => {
-    const key = ritualKeyFor(row);
-    if (!groups.has(key)) {
-      groups.set(key, {
-        key,
+    const ritualKey = ritualKeyFor(row);
+    const projectId = row.project_id || null;
+    const compositeKey = JSON.stringify([projectId, ritualKey]);
+    if (!groups.has(compositeKey)) {
+      groups.set(compositeKey, {
+        id: ritualCompositeId(projectId, ritualKey),
+        projectId,
+        projectName: projectId ? projectNameById.get(projectId) || null : null,
+        projectHref: projectId
+          ? `/dashboard/work/projects?project=${encodeURIComponent(projectId)}`
+          : null,
+        ritualKey,
+        checkType: normalizeCheckType(row.check_type),
         name: ritualDisplayName(row),
         doneDays: new Set(),
         lastCheckedAt: null,
       });
     }
 
-    const group = groups.get(key);
+    const group = groups.get(compositeKey);
 
     if (row.status === "done" && row.checked_at) {
-      const dayStart = startOfLocalDay(row.checked_at);
-      if (dayStart) group.doneDays.add(dayStart);
+      const meta = row.meta && typeof row.meta === "object" ? row.meta : {};
+      const dayStart = startOfLocalDateKey(meta.local_date) ?? startOfLocalDay(row.checked_at);
+      if (dayStart !== null) group.doneDays.add(dayStart);
 
       const ts = new Date(row.checked_at).getTime();
-      if (!group.lastCheckedAt || ts > group.lastCheckedAt) {
+      if (Number.isFinite(ts) && (!group.lastCheckedAt || ts > group.lastCheckedAt)) {
         group.lastCheckedAt = ts;
       }
     }
@@ -149,10 +185,16 @@ function mapRituals(rows) {
   const todayStart = today.getTime();
 
   return Array.from(groups.values()).map((group) => ({
-    id: group.key,
+    id: group.id,
+    projectId: group.projectId,
+    projectName: group.projectName,
+    projectHref: group.projectHref,
+    ritualKey: group.ritualKey,
+    checkType: group.checkType,
     name: group.name,
     streak: computeStreak(group.doneDays, todayStart),
     weeks: buildWeeksBitmap(group.doneDays, todayStart),
+    lastCheckedAt: group.lastCheckedAt ? new Date(group.lastCheckedAt).toISOString() : null,
   }));
 }
 
@@ -265,6 +307,11 @@ export async function getWorkLedger() {
       workspaceId: null,
       decisions: [],
       rituals: [],
+      rhythm: {
+        source: "preview",
+        state: "preview",
+        error: null,
+      },
       roadmap: emptyRoadmap(),
       summary: {
         ritualsCompletedThisWeek: 0,
@@ -305,34 +352,31 @@ export async function getWorkLedger() {
   ]);
 
   const roadmap = buildRoadmapState(projectRows, milestoneRows);
-
-  if (!decisionRows || !routineRows) {
-    return {
-      source: "preview",
-      configured: true,
-      workspaceId,
-      decisions: [],
-      rituals: [],
-      roadmap,
-      summary: {
-        ritualsCompletedThisWeek: 0,
-        ritualsTotalThisWeek: 0,
-        longestStreak: 0,
-        longestStreakRitual: "",
-      },
-    };
-  }
-
   const profileById = new Map((profileRows || []).map((p) => [p.id, p]));
-  const decisions = mapDecisions(decisionRows, profileById);
-  const rituals = mapRituals(routineRows);
+  const decisions = Array.isArray(decisionRows) ? mapDecisions(decisionRows, profileById) : [];
+  const rituals = Array.isArray(routineRows) ? mapRituals(routineRows, projectRows) : [];
+  const rhythm = Array.isArray(routineRows)
+    ? {
+        source: "supabase",
+        state: rituals.length > 0 ? "live" : "live-empty",
+        error: null,
+      }
+    : {
+        source: "supabase",
+        state: "error",
+        error: {
+          message: "routine_checks 원장을 읽지 못했습니다.",
+          retryable: true,
+        },
+      };
 
   return {
-    source: "supabase",
+    source: Array.isArray(decisionRows) && Array.isArray(routineRows) ? "supabase" : "preview",
     configured: true,
     workspaceId,
     decisions,
     rituals,
+    rhythm,
     roadmap,
     summary: summarizeRituals(rituals),
   };

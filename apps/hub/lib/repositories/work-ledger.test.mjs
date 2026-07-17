@@ -211,3 +211,183 @@ test("marks rows beyond the Roadmap display limit as named partial data", async 
     assert.equal(call.options.limit, 501);
   }
 });
+
+test("rituals keep project identity when two projects share the same ritual key", async () => {
+  const state = globalThis.__workLedgerTestState;
+  const today = new Date();
+  today.setHours(9, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  state.rows.projects = [
+    {
+      id: "project-1",
+      name: "운영 OS",
+      status: "active",
+      priority: "critical",
+      started_at: null,
+      due_at: null,
+    },
+    {
+      id: "project-2",
+      name: "콘텐츠 시스템",
+      status: "active",
+      priority: "medium",
+      started_at: null,
+      due_at: null,
+    },
+  ];
+  state.rows.routine_checks = [
+    {
+      id: "check-1",
+      project_id: "project-1",
+      check_type: "morning",
+      status: "done",
+      checked_at: today.toISOString(),
+      meta: { ritual_key: "daily-focus", name: "Daily focus" },
+    },
+    {
+      id: "check-2",
+      project_id: "project-2",
+      check_type: "morning",
+      status: "done",
+      checked_at: yesterday.toISOString(),
+      meta: { ritual_key: "daily-focus", name: "Daily focus" },
+    },
+    {
+      id: "check-3",
+      project_id: null,
+      check_type: "morning",
+      status: "pending",
+      checked_at: null,
+      meta: { ritual_key: "daily-focus", name: "Daily focus" },
+    },
+  ];
+
+  const ledger = await workLedger.getWorkLedger();
+
+  assert.equal(ledger.rituals.length, 3);
+  assert.equal(new Set(ledger.rituals.map((ritual) => ritual.id)).size, 3);
+  assert.deepEqual(
+    ledger.rituals.map((ritual) => ({
+      projectId: ritual.projectId,
+      projectName: ritual.projectName,
+      ritualKey: ritual.ritualKey,
+      checkType: ritual.checkType,
+      projectHref: ritual.projectHref,
+    })),
+    [
+      {
+        projectId: "project-1",
+        projectName: "운영 OS",
+        ritualKey: "daily-focus",
+        checkType: "morning",
+        projectHref: "/dashboard/work/projects?project=project-1",
+      },
+      {
+        projectId: "project-2",
+        projectName: "콘텐츠 시스템",
+        ritualKey: "daily-focus",
+        checkType: "morning",
+        projectHref: "/dashboard/work/projects?project=project-2",
+      },
+      {
+        projectId: null,
+        projectName: null,
+        ritualKey: "daily-focus",
+        checkType: "morning",
+        projectHref: null,
+      },
+    ],
+  );
+  assert.equal(ledger.rituals[0].weeks.at(-1), 1);
+  assert.equal(ledger.rituals[1].weeks.at(-2), 1);
+  assert.equal(ledger.rituals[2].weeks.every((value) => value === 0), true);
+});
+
+test("ritual reading survives a failed project-name lookup without losing project ids", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.rows.projects = null;
+  state.rows.routine_checks = [{
+    id: "check-1",
+    project_id: "project-1",
+    check_type: "weekly",
+    status: "pending",
+    checked_at: null,
+    meta: { ritual_key: "weekly-review", name: "Weekly Review" },
+  }];
+
+  const ledger = await workLedger.getWorkLedger();
+
+  assert.equal(ledger.rituals.length, 1);
+  assert.equal(ledger.rituals[0].projectId, "project-1");
+  assert.equal(ledger.rituals[0].projectName, null);
+  assert.equal(ledger.rituals[0].ritualKey, "weekly-review");
+  assert.equal(ledger.rituals[0].checkType, "weekly");
+});
+
+test("weekly bitmap honors persisted local_date before the server timestamp date", async () => {
+  const state = globalThis.__workLedgerTestState;
+  const today = new Date();
+  const localDate = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, "0"),
+    String(today.getDate()).padStart(2, "0"),
+  ].join("-");
+  const previousUtcDate = new Date(`${localDate}T00:30:00.000Z`);
+  previousUtcDate.setUTCDate(previousUtcDate.getUTCDate() - 1);
+  state.rows.routine_checks = [{
+    id: "check-local-date",
+    project_id: null,
+    check_type: "morning",
+    status: "done",
+    checked_at: previousUtcDate.toISOString(),
+    meta: {
+      ritual_key: "daily-focus",
+      name: "Daily focus",
+      local_date: localDate,
+    },
+  }];
+
+  const ledger = await workLedger.getWorkLedger();
+
+  assert.equal(ledger.rituals[0].weeks.at(-1), 1);
+});
+
+test("a configured routine ledger read failure is error rather than preview", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.rows.routine_checks = null;
+
+  const ledger = await workLedger.getWorkLedger();
+
+  assert.equal(ledger.source, "preview");
+  assert.deepEqual(ledger.rhythm, {
+    source: "supabase",
+    state: "error",
+    error: {
+      message: "routine_checks 원장을 읽지 못했습니다.",
+      retryable: true,
+    },
+  });
+  assert.deepEqual(ledger.rituals, []);
+});
+
+test("rituals remain readable when the independent decisions source fails", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.rows.decisions = null;
+  state.rows.routine_checks = [{
+    id: "check-1",
+    project_id: null,
+    check_type: "weekly",
+    status: "pending",
+    checked_at: null,
+    meta: { ritual_key: "weekly-review", name: "Weekly Review" },
+  }];
+
+  const ledger = await workLedger.getWorkLedger();
+
+  assert.equal(ledger.source, "preview");
+  assert.equal(ledger.rhythm.state, "live");
+  assert.equal(ledger.rituals.length, 1);
+  assert.equal(ledger.rituals[0].ritualKey, "weekly-review");
+});
