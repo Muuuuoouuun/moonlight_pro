@@ -1,32 +1,14 @@
 "use client";
 
 import React from "react";
-
-const DAY_MS = 86_400_000;
-const TERMINAL_PROJECT_STATUSES = new Set([
-  "done",
-  "completed",
-  "archived",
-  "cancelled",
-  "canceled",
-]);
-
-function validDate(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function normalizedStatus(project) {
-  return String(project?.statusKey || project?.status || "").trim().toLowerCase();
-}
+import { buildProjectPortfolioMetrics } from "./project-pms-metrics";
 
 function evidenceCount(progress) {
   if (!Number.isFinite(progress?.done) || !Number.isFinite(progress?.total)) return "";
   return `${progress.done}/${progress.total}`;
 }
 
-export function ProjectProgressGauge({ progress, compact = false }) {
+export function ProjectProgressGauge({ progress, compact = false, ariaLabel = "프로젝트 진척" }) {
   const determinate = Number.isFinite(progress?.value) && !progress?.partial;
   const sourceLabel = progress?.label || "진척 근거 없음";
   const countLabel = evidenceCount(progress);
@@ -36,6 +18,8 @@ export function ProjectProgressGauge({ progress, compact = false }) {
       <div
         className={`hub-pms-progress hub-pms-progress--empty${compact ? " hub-pms-progress--compact" : ""}`}
         data-progress-source={progress?.source || "none"}
+        role="group"
+        aria-label={ariaLabel}
       >
         <span className="hub-pms-progress__empty">진척 데이터 없음</span>
         {progress && (
@@ -55,6 +39,7 @@ export function ProjectProgressGauge({ progress, compact = false }) {
       className={`hub-pms-progress${compact ? " hub-pms-progress--compact" : ""}`}
       data-progress-source={progress.source || "reported"}
       role="progressbar"
+      aria-label={ariaLabel}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={value}
@@ -88,41 +73,6 @@ export function ProjectPlanningLinks({ projectId, projectName = "프로젝트" }
       {links.map((link) => <a key={link.label} href={link.href}>{link.label}</a>)}
     </nav>
   );
-}
-
-export function buildProjectPortfolioMetrics(projects = [], {
-  today = new Date(),
-  sourceState = "live",
-} = {}) {
-  if (sourceState !== "live") return null;
-  if (!Array.isArray(projects) || projects.length === 0) {
-    return { empty: true, active: null, blockedOrOverdue: null, dueSoon: null, unmeasured: null };
-  }
-
-  const todayStart = new Date(today);
-  todayStart.setHours(0, 0, 0, 0);
-  const dueSoonEnd = new Date(todayStart.getTime() + (7 * DAY_MS));
-  const now = todayStart.getTime();
-  const soon = dueSoonEnd.getTime();
-
-  let active = 0;
-  let blockedOrOverdue = 0;
-  let dueSoon = 0;
-  let unmeasured = 0;
-
-  projects.forEach((project) => {
-    const status = normalizedStatus(project);
-    const terminal = TERMINAL_PROJECT_STATUSES.has(status);
-    const due = validDate(project.dueAt);
-    const overdue = !terminal && due && due.getTime() < now;
-
-    if (status === "active" || status === "in progress") active += 1;
-    if (!terminal && (status === "blocked" || overdue)) blockedOrOverdue += 1;
-    if (!terminal && due && due.getTime() >= now && due.getTime() < soon) dueSoon += 1;
-    if (!Number.isFinite(project.displayProgress?.value)) unmeasured += 1;
-  });
-
-  return { empty: false, active, blockedOrOverdue, dueSoon, unmeasured };
 }
 
 const PORTFOLIO_CELLS = [

@@ -6,6 +6,11 @@ const pmsComponentsSource = await readFile(
   new URL("./project-pms-components.jsx", import.meta.url),
   "utf8",
 ).catch(() => "");
+const pmsMetricsSource = await readFile(
+  new URL("./project-pms-metrics.js", import.meta.url),
+  "utf8",
+).catch(() => "");
+const pmsMetrics = await import("./project-pms-metrics.js").catch(() => null);
 const projectsSource = await readFile(new URL("./projects.jsx", import.meta.url), "utf8");
 const detailPanelSource = await readFile(new URL("./project-detail-panel.jsx", import.meta.url), "utf8");
 const responsiveCss = await readFile(new URL("../hub-tokens.css", import.meta.url), "utf8");
@@ -18,6 +23,7 @@ test("project progress exposes evidence and only uses progressbar metadata when 
   assert.match(pmsComponentsSource, /aria-valuemax=\{100\}/);
   assert.match(pmsComponentsSource, /aria-valuenow=\{value\}/);
   assert.match(pmsComponentsSource, /aria-valuetext=\{valueText\}/);
+  assert.match(pmsComponentsSource, /aria-label=\{ariaLabel\}/);
   assert.match(pmsComponentsSource, /progress\.label/);
   assert.match(pmsComponentsSource, /progress\.done/);
   assert.match(pmsComponentsSource, /progress\.total/);
@@ -29,6 +35,20 @@ test("project progress exposes evidence and only uses progressbar metadata when 
   assert.ok(indeterminateStart >= 0 && determinateStart > indeterminateStart);
   assert.doesNotMatch(indeterminateBlock, /role=["']progressbar["']/);
   assert.doesNotMatch(indeterminateBlock, /hub-pms-progress__fill/);
+});
+
+test("project progress semantics remain outside the native row-open button", () => {
+  const openButtonStart = projectsSource.indexOf('className="hub-project-row__open"');
+  const openButtonEnd = projectsSource.indexOf("</button>", openButtonStart);
+  const openButtonBlock = projectsSource.slice(openButtonStart, openButtonEnd);
+
+  assert.ok(openButtonStart >= 0 && openButtonEnd > openButtonStart);
+  assert.doesNotMatch(openButtonBlock, /ProjectProgressGauge/);
+  assert.match(
+    projectsSource.slice(openButtonEnd),
+    /<ProjectProgressGauge[\s\S]{0,180}ariaLabel=\{`\$\{p\.name\} 진척`\}/,
+  );
+  assert.match(globalCss, /\.hub-project-row\s*>\s*\.hub-pms-progress/);
 });
 
 test("planning links preserve one canonical project identity across every PMS surface", () => {
@@ -43,17 +63,68 @@ test("planning links preserve one canonical project identity across every PMS su
   assert.match(pmsComponentsSource, /label: ["']Rhythm["']/);
 });
 
-test("portfolio summary derives active, blocked or overdue, due-soon, and unmeasured counts", () => {
-  assert.match(pmsComponentsSource, /export function buildProjectPortfolioMetrics/);
-  assert.match(pmsComponentsSource, /active/);
-  assert.match(pmsComponentsSource, /blockedOrOverdue/);
-  assert.match(pmsComponentsSource, /dueSoon/);
-  assert.match(pmsComponentsSource, /unmeasured/);
-  assert.match(pmsComponentsSource, /displayProgress/);
-  assert.match(pmsComponentsSource, /dueAt/);
-  assert.match(pmsComponentsSource, /sourceState !== ["']live["']/);
+test("portfolio metrics execute active, blocked, overdue, and evidence calculations", () => {
+  assert.ok(pmsMetrics, "project-pms-metrics.js must expose executable calculations");
+  const today = new Date(2026, 6, 17, 12);
+  const projects = [
+    { statusKey: "active", displayProgress: { value: 40, partial: false } },
+    { statusKey: "blocked", dueAt: new Date(2026, 6, 16, 12).toISOString(), displayProgress: { value: 25, partial: false } },
+    { statusKey: "draft", dueAt: new Date(2026, 6, 15, 12).toISOString(), displayProgress: null },
+    { statusKey: "active", displayProgress: { value: 80, partial: true } },
+    { statusKey: "completed", dueAt: new Date(2026, 6, 14, 12).toISOString(), displayProgress: { value: 100, partial: false } },
+  ];
+
+  assert.deepEqual(pmsMetrics.buildProjectPortfolioMetrics(projects, { today, sourceState: "live" }), {
+    empty: false,
+    active: 2,
+    blockedOrOverdue: 2,
+    dueSoon: 0,
+    unmeasured: 2,
+  });
+});
+
+test("portfolio due-soon metric uses today through the next six calendar days", () => {
+  assert.ok(pmsMetrics, "project-pms-metrics.js must expose executable calculations");
+  const today = new Date(2026, 6, 17, 12);
+  const dueAt = (offset) => new Date(2026, 6, 17 + offset, 12).toISOString();
+  const projects = [
+    { statusKey: "draft", dueAt: dueAt(0), displayProgress: { value: 0, partial: false } },
+    { statusKey: "draft", dueAt: dueAt(6), displayProgress: { value: 0, partial: false } },
+    { statusKey: "draft", dueAt: dueAt(7), displayProgress: { value: 0, partial: false } },
+    { statusKey: "completed", dueAt: dueAt(1), displayProgress: { value: 100, partial: false } },
+  ];
+
+  assert.equal(
+    pmsMetrics.buildProjectPortfolioMetrics(projects, { today, sourceState: "live" }).dueSoon,
+    2,
+  );
+});
+
+test("empty live portfolio returns unavailable cells instead of fake zeroes", () => {
+  assert.ok(pmsMetrics, "project-pms-metrics.js must expose executable calculations");
+  assert.deepEqual(pmsMetrics.buildProjectPortfolioMetrics([], { sourceState: "live" }), {
+    empty: true,
+    active: null,
+    blockedOrOverdue: null,
+    dueSoon: null,
+    unmeasured: null,
+  });
+});
+
+test("preview and error portfolios never calculate operational metrics", () => {
+  assert.ok(pmsMetrics, "project-pms-metrics.js must expose executable calculations");
+  const projects = [{ statusKey: "active", displayProgress: { value: 50, partial: false } }];
+  assert.equal(pmsMetrics.buildProjectPortfolioMetrics(projects, { sourceState: "preview" }), null);
+  assert.equal(pmsMetrics.buildProjectPortfolioMetrics(projects, { sourceState: "error" }), null);
+});
+
+test("portfolio presentation consumes the executable metric helper without synthetic scoring", () => {
+  assert.match(pmsComponentsSource, /import \{ buildProjectPortfolioMetrics \} from ["']\.\/project-pms-metrics["']/);
+  assert.match(pmsMetricsSource, /displayProgress/);
+  assert.match(pmsMetricsSource, /dueAt/);
+  assert.match(pmsMetricsSource, /sourceState !== ["']live["']/);
   assert.match(pmsComponentsSource, /표시할 원장 없음/);
-  assert.doesNotMatch(pmsComponentsSource, /AI.*(?:score|점수)|70\s*\/\s*30/i);
+  assert.doesNotMatch(`${pmsComponentsSource}\n${pmsMetricsSource}`, /AI.*(?:score|점수)|70\s*\/\s*30/i);
 });
 
 test("project list selection opens the exact query, preserves foreign keys, and closes by deleting only project", () => {
@@ -96,6 +167,31 @@ test("project reads keep error distinct from preview and offer retry", () => {
   assert.match(projectsSource, /프로젝트 원장을 읽지 못했습니다/);
   assert.match(projectsSource, /onClick=\{\(\) => loadLedger\(\{ initial: true \}\)\}/);
   assert.doesNotMatch(loadBlock, /catch[\s\S]{0,120}setSyncState\(['"]preview['"]\)/);
+});
+
+test("project header shows numeric counts only for a live ledger", () => {
+  const headerStart = projectsSource.indexOf("const projectHeaderSummary");
+  const headerEnd = projectsSource.indexOf("const loadLedger", headerStart);
+  const headerSummaryBlock = projectsSource.slice(headerStart, headerEnd);
+
+  assert.ok(headerStart >= 0 && headerEnd > headerStart);
+  assert.match(headerSummaryBlock, /syncState === ["']live["']/);
+  assert.match(headerSummaryBlock, /projects\.length/);
+  assert.match(headerSummaryBlock, /brandTodos\.filter\(t => !t\.done\)\.length/);
+  assert.match(headerSummaryBlock, /loading[\s\S]*원장 확인 중/);
+  assert.match(headerSummaryBlock, /error[\s\S]*원장 읽기 실패/);
+  assert.match(headerSummaryBlock, /preview/);
+  assert.match(projectsSource, /\{projectHeaderSummary\}/);
+});
+
+test("new PMS borders use theme-aware line tokens", () => {
+  const pmsCss = globalCss.slice(globalCss.indexOf("Projects · Moonstone PMS command center"));
+  const hardCodedDarkBorder = /border(?:-(?:top|right|bottom|left)|-color)?:\s*[^;]*rgba\(255,\s*255,\s*255,\s*0\.07\)/;
+
+  assert.doesNotMatch(pmsCss, hardCodedDarkBorder);
+  assert.doesNotMatch(responsiveCss, hardCodedDarkBorder);
+  assert.match(pmsCss, /border:\s*1px solid var\(--line-soft\)/);
+  assert.match(responsiveCss, /border-bottom:\s*1px solid var\(--line-soft\)/);
 });
 
 test("selected mobile project is presented as a full-width modal sheet", () => {

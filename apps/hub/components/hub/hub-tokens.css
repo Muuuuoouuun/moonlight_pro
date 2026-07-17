@@ -703,7 +703,7 @@
   }
 
   .hub-pms-summary__cell:nth-child(-n + 2) {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    border-bottom: 1px solid var(--line-soft);
   }
 
   .hub-project-detail-sheet {
@@ -733,7 +733,7 @@
 
   .hub-project-detail-sheet__links {
     width: 100%;
-    border: 1px solid rgba(255, 255, 255, 0.07) !important;
+    border: 1px solid var(--line-soft) !important;
     border-bottom: 0 !important;
     border-radius: var(--r-lg) var(--r-lg) 0 0;
     background: var(--surface) !important;
@@ -744,7 +744,7 @@
     z-index: 1;
     width: 100% !important;
     min-width: 0 !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    border-top: 1px solid var(--line-soft);
     border-left: 0 !important;
     background: var(--surface) !important;
   }
@@ -784,9 +784,14 @@
 
   .hub-project-row {
     grid-template-columns: 44px minmax(0, 1fr) !important;
+    grid-template-rows: auto !important;
+    gap: 0 !important;
+    padding: 0 !important;
   }
 
   .hub-project-row__controls {
+    grid-column: 1 !important;
+    grid-row: 1 / span 3 !important;
     align-items: flex-start !important;
     flex-direction: column !important;
     gap: 0 !important;
@@ -794,15 +799,23 @@
   }
 
   .hub-project-row__open {
+    grid-column: 2 !important;
+    grid-row: auto !important;
     grid-template-columns: minmax(0, 1fr) !important;
     gap: 9px !important;
     min-height: 0 !important;
     padding: 12px !important;
   }
 
+  .hub-project-row > .hub-pms-progress {
+    grid-column: 2 !important;
+    grid-row: auto !important;
+    padding: 0 12px 12px;
+  }
+
   .hub-project-next-action {
     padding: 8px 10px;
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    border: 1px solid var(--line-soft);
     border-radius: var(--r-sm);
     background: rgba(255, 255, 255, 0.035);
   }
@@ -819,7 +832,10 @@
   }
 
   .hub-project-secondary-state {
+    grid-column: 2 !important;
+    grid-row: auto !important;
     gap: 8px !important;
+    padding: 0 12px 12px;
   }
 
   .hub-project-subtasks {

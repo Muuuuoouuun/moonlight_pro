@@ -5460,7 +5460,7 @@ button {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
   min-height: 82px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--line-soft);
   border-radius: var(--r-lg);
   background: rgba(255, 255, 255, 0.045);
   box-shadow: var(--shadow-card);
@@ -5484,7 +5484,7 @@ button {
   gap: 3px 10px;
   min-width: 0;
   padding: 13px 16px;
-  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  border-right: 1px solid var(--line-soft);
 }
 
 .hub-app .hub-pms-summary__cell:last-child {
@@ -5518,7 +5518,7 @@ button {
 .hub-app .hub-project-table {
   overflow-x: hidden !important;
   background: rgba(255, 255, 255, 0.04) !important;
-  border: 1px solid rgba(255, 255, 255, 0.07) !important;
+  border: 1px solid var(--line-soft) !important;
 }
 
 .hub-app .hub-project-list-head {
@@ -5528,7 +5528,7 @@ button {
   align-items: center;
   min-width: 0 !important;
   padding: 8px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--line-soft);
   background: rgba(255, 255, 255, 0.035);
   color: var(--fg-faint);
   font-size: 10.5px;
@@ -5538,10 +5538,13 @@ button {
 
 .hub-app .hub-project-row {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr);
-  align-items: stretch;
+  grid-template-columns: 52px minmax(210px, 1.3fr) minmax(160px, 1fr) 112px 174px 132px;
+  grid-template-rows: minmax(68px, auto);
+  gap: 12px;
+  align-items: center;
   min-width: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line-soft);
   background: transparent;
   transition: background 150ms ease, box-shadow 150ms ease;
 }
@@ -5553,11 +5556,12 @@ button {
 }
 
 .hub-app .hub-project-row__controls {
+  grid-column: 1;
+  grid-row: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding-left: 6px;
 }
 
 .hub-app .hub-project-expand {
@@ -5568,13 +5572,14 @@ button {
 }
 
 .hub-app .hub-project-row__open {
+  grid-column: 2 / 5;
+  grid-row: 1;
   display: grid;
-  grid-template-columns: minmax(210px, 1.3fr) minmax(160px, 1fr) 112px 174px 132px;
-  gap: 12px;
+  grid-template-columns: subgrid;
   align-items: center;
   min-width: 0;
   min-height: 68px;
-  padding: 9px 14px 9px 0;
+  padding: 9px 0;
   color: var(--fg);
   text-align: left;
 }
@@ -5588,13 +5593,17 @@ button {
   grid-template-columns: 52px minmax(150px, 1fr) minmax(120px, 0.8fr) 90px 130px;
 }
 
+.hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-row {
+  grid-template-columns: 52px minmax(150px, 1fr) minmax(120px, 0.8fr) 90px 130px;
+}
+
 .hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-list-head > :last-child,
 .hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-secondary-state {
   display: none;
 }
 
 .hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-row__open {
-  grid-template-columns: minmax(150px, 1fr) minmax(120px, 0.8fr) 90px 130px;
+  grid-template-columns: subgrid;
 }
 
 .hub-app .hub-project-identity {
@@ -5655,6 +5664,8 @@ button {
 }
 
 .hub-app .hub-project-secondary-state {
+  grid-column: 6;
+  grid-row: 1;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -5677,6 +5688,11 @@ button {
   flex-direction: column;
   gap: 5px;
   min-width: 0;
+}
+
+.hub-app .hub-project-row > .hub-pms-progress {
+  grid-column: 5;
+  grid-row: 1;
 }
 
 .hub-app .hub-pms-progress__reading {
@@ -5777,7 +5793,7 @@ button {
   width: 100%;
   min-height: 36px;
   padding: 8px 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 1px solid var(--line-soft);
   color: var(--fg-faint);
   font-size: 11.5px;
   text-align: left;
@@ -5801,8 +5817,8 @@ button {
   z-index: 2;
   flex: 0 0 auto;
   padding: 8px 10px;
-  border-left: 1px solid rgba(255, 255, 255, 0.07);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-left: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
   background: rgba(255, 255, 255, 0.04);
 }
 
@@ -5834,7 +5850,7 @@ button {
 
 .hub-app .hub-project-planning-links a:hover,
 .hub-app .hub-project-planning-links a:focus-visible {
-  border-color: rgba(255, 255, 255, 0.07);
+  border-color: var(--line-soft);
   background: rgba(82, 116, 168, 0.12);
   color: var(--fg);
 }
@@ -5844,7 +5860,7 @@ button {
   min-height: 30px;
   margin-top: 9px;
   padding: 0 8px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--line-soft);
   border-radius: var(--r-sm);
   color: var(--fg-muted);
   background: rgba(255, 255, 255, 0.04);

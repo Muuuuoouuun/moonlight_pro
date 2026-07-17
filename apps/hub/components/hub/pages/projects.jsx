@@ -266,6 +266,13 @@ export function Projects({ workspace }) {
   const brandTodos = brand === 'all' ? scopedTodos : scopedTodos.filter(t => t.brand === brand);
   const currentBrand = brands.find(b => b.key === brand) || brands[0] || EMPTY_ALL_BRAND;
   const visibleColumns = buildTaskBoardColumns(brandTodos, allProjects);
+  const projectHeaderSummary = syncState === 'live'
+    ? `${projects.length} projects · ${brandTodos.filter(t => !t.done).length} open todos`
+    : syncState === 'loading'
+      ? '프로젝트 원장 확인 중'
+      : syncState === 'error'
+        ? '프로젝트 원장 읽기 실패'
+        : 'preview · 실제 원장 미연결';
 
   const loadLedger = React.useCallback(async ({ initial = false } = {}) => {
     setSyncState('loading');
@@ -1153,7 +1160,7 @@ export function Projects({ workspace }) {
           <div>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Projects</h2>
             <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-              {projects.length} projects · {brandTodos.filter(t => !t.done).length} open todos · {currentBrand.desc}
+              {projectHeaderSummary} · {currentBrand.desc}
               <SyncBadge state={syncState} />
             </div>
           </div>
@@ -1316,12 +1323,16 @@ export function Projects({ workspace }) {
                                     {(blocked || overdue) && <span className="hub-project-risk-label">{blocked ? '막힘' : '기한 지남'}</span>}
                                     {!blocked && !overdue && <span>위험 신호 없음</span>}
                                   </div>
-                                  <ProjectProgressGauge progress={p.displayProgress} compact />
-                                  <div className="hub-project-secondary-state">
-                                    <Badge tone={statusTone[p.status]} size="xs">{STATUS_LABEL_KO[p.status] || p.status}</Badge>
-                                    <span><Dot tone={prioTone[p.priority]} size={5} />{p.priority || 'medium'}</span>
-                                  </div>
                                 </button>
+                                <ProjectProgressGauge
+                                  progress={p.displayProgress}
+                                  compact
+                                  ariaLabel={`${p.name} 진척`}
+                                />
+                                <div className="hub-project-secondary-state">
+                                  <Badge tone={statusTone[p.status]} size="xs">{STATUS_LABEL_KO[p.status] || p.status}</Badge>
+                                  <span><Dot tone={prioTone[p.priority]} size={5} />{p.priority || 'medium'}</span>
+                                </div>
                               </div>
 
                               {isOpen && (
