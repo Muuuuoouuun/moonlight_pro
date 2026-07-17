@@ -44,7 +44,15 @@ function PageChunkFallback() {
 // paint downloaded revenue+content+daily-brief+… regardless of route.
 // Named exports sharing one module (e.g. pages/work) still produce one chunk
 // per module — dynamic() just resolves the same import promise.
-const lazyPage = (loader) => dynamic(loader, { loading: PageChunkFallback });
+//
+// `ssr: false` is load-bearing, not an optimization. With the default `ssr: true`
+// EVERY dashboard page hung on PageChunkFallback forever: the server rendered the
+// real page into a streaming Suspense boundary (curl showed the full markup parked
+// in the <div id="S:0"> template) but the client never swapped it in — the boundary
+// stayed on its fallback even though the loader ran and resolved to a valid component.
+// The hub is a private, client-fetched dashboard behind auth, so it gains nothing
+// from SSRing these pages, and every page carries its own loading/empty state.
+const lazyPage = (loader) => dynamic(loader, { loading: PageChunkFallback, ssr: false });
 
 const DailyBrief = lazyPage(() => import("./pages/daily-brief").then(m => m.DailyBrief));
 const Overview = lazyPage(() => import("./pages/overview").then(m => m.Overview));
