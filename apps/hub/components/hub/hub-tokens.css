@@ -331,7 +331,8 @@
 }
 
 .hub-mobile-backdrop,
-.hub-mobile-only {
+.hub-mobile-only,
+.hub-mobile-nav-close {
   display: none !important;
 }
 
@@ -523,6 +524,16 @@
   .hub-mobile-nav-opener {
     min-width: 44px;
     min-height: 44px;
+  }
+
+  .hub-mobile-nav-close {
+    display: inline-flex !important;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .hub-desktop-sidebar-collapse {
+    display: none !important;
   }
 
   .hub-mobile-hidden,

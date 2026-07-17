@@ -353,3 +353,48 @@ export function deriveSidebarScope(activePath) {
   if (path.startsWith('dashboard/brand/')) return 'personal';
   return null;
 }
+
+// Mobile navigation is a modal drawer only below the shell breakpoint. Keep
+// this state derivation executable outside React so desktop accessibility and
+// mobile inert ownership cannot drift independently in JSX.
+export function getMobileNavigationState({ isMobileViewport, navOpen }) {
+  const open = Boolean(isMobileViewport && navOpen);
+  return {
+    open,
+    navHidden: Boolean(isMobileViewport && !navOpen),
+    mainHidden: open,
+  };
+}
+
+// Dismissal focus must move before React makes the drawer inert. The opener is
+// deliberately outside the inert <main>, so this synchronous order is safe.
+export function dismissMobileNavigation({ active, focusTarget, close }) {
+  if (!active) return false;
+  focusTarget?.focus?.();
+  close?.();
+  return true;
+}
+
+// Route navigation has a different final-focus policy. Leave the soon-to-be
+// hidden drawer synchronously, then let the shell focus the refreshed <main>
+// after the close commit.
+export function beginMobileNavigationRoute({ active, markMainFocus, focusTarget, close }) {
+  if (!active) return false;
+  markMainFocus?.();
+  focusTarget?.focus?.();
+  close?.();
+  return true;
+}
+
+export function getMobileNavigationTabTarget({ focusables, activeElement, shiftKey }) {
+  if (!Array.isArray(focusables) || focusables.length === 0) return null;
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  if (shiftKey && activeElement === first) return last;
+  if (!shiftKey && activeElement === last) return first;
+  return null;
+}
+
+export function shouldMobileNavigationHandleEscape({ open, paletteOpen, tweaksOpen }) {
+  return Boolean(open && !paletteOpen && !tweaksOpen);
+}

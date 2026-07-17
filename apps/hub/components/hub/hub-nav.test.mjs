@@ -18,6 +18,7 @@ import {
   resolveSidebarPath,
   sidebarChildren,
 } from "./hub-nav.js";
+import * as mobileNavRuntime from "./hub-nav.js";
 
 const appSource = await readFile(new URL("./hub-app.jsx", import.meta.url), "utf8");
 const sidebarSource = await readFile(new URL("./hub-sidebar.jsx", import.meta.url), "utf8");
@@ -190,8 +191,12 @@ test("AI·자동화 children all carry a group label for the two-eyebrow layout"
 // ── Mobile navigation accessibility contract ─────────────────────────────
 
 test("only the closed mobile sidebar is removed from focus and the accessibility tree", () => {
-  assert.match(appSource, /const mobileNavHidden = isMobileViewport && !navOpen/);
-  assert.match(appSource, /mobileHidden=\{mobileNavHidden\}/);
+  assert.match(appSource, /getMobileNavigationState\(\{ isMobileViewport, navOpen \}\)/);
+  assert.match(appSource, /mobileHidden=\{mobileNavState\.navHidden\}/);
+  assert.match(
+    appSource,
+    /<main[\s\S]*?aria-hidden=\{mobileNavState\.mainHidden \? ['"]true['"] : undefined\}[\s\S]*?inert=\{mobileNavState\.mainHidden \? ['"]{2} : undefined\}/,
+  );
 
   assert.match(
     sidebarSource,
@@ -205,22 +210,67 @@ test("only the closed mobile sidebar is removed from focus and the accessibility
   assert.doesNotMatch(appSource, /aria-hidden=\{!navOpen\}/);
 });
 
-test("mobile navigation closes on Escape, backdrop, and navigation then restores opener focus", () => {
+test("mobile navigation opens as a focused modal with a trapped Tab order", () => {
+  assert.match(appSource, /const mobileCloseButtonRef = React\.useRef\(null\)/);
+  assert.match(
+    appSource,
+    /React\.useLayoutEffect\(\(\) => \{[\s\S]*?mobileNavState\.open[\s\S]*?mobileCloseButtonRef\.current\?\.focus\(\)/,
+  );
+  assert.match(sidebarSource, /role:\s*mobileOpen \? ['"]dialog['"] : undefined/);
+  assert.match(sidebarSource, /['"]aria-modal['"]:\s*mobileOpen \? ['"]true['"] : undefined/);
+  assert.match(sidebarSource, /onKeyDown=\{handleMobileKeyDown\}/);
+  assert.match(
+    sidebarSource,
+    /className="hub-mobile-nav-close"[\s\S]*?ref=\{mobileCloseButtonRef\}[\s\S]*?tooltip="내비게이션 닫기"[\s\S]*?onClick=\{onMobileClose\}/,
+  );
+});
+
+test("Escape and backdrop focus the opener before synchronously closing mobile navigation", () => {
   assert.match(appSource, /const menuButtonRef = React\.useRef\(null\)/);
   assert.match(
     appSource,
-    /const closeMobileNavigation = React\.useCallback\([\s\S]*?setNavOpen\(false\)[\s\S]*?requestAnimationFrame\([\s\S]*?menuButtonRef\.current\?\.focus\(\)/,
+    /dismissMobileNavigation\(\{[\s\S]*?focusTarget:\s*menuButtonRef\.current,[\s\S]*?close:\s*\(\) => setNavOpen\(false\)/,
   );
+  assert.doesNotMatch(appSource, /closeMobileNavigation[\s\S]{0,500}requestAnimationFrame/);
   assert.match(
     appSource,
-    /React\.useEffect\(\(\) => \{[\s\S]*?if \(!navOpen \|\| !isMobileViewport\) return[\s\S]*?event\.key === ["']Escape["'][\s\S]*?closeMobileNavigation\(\)/,
+    /shouldMobileNavigationHandleEscape\([\s\S]*?paletteOpen[\s\S]*?tweaksOpen[\s\S]*?event\.key === ["']Escape["'][\s\S]*?closeMobileNavigation\(\)/,
   );
-  assert.match(appSource, /const navigate = React\.useCallback\([\s\S]*?closeMobileNavigation\(\)/);
   assert.match(
     appSource,
     /<div[\s\S]*?className="hub-mobile-backdrop"[\s\S]*?aria-hidden="true"[\s\S]*?onClick=\{closeMobileNavigation\}/,
   );
   assert.doesNotMatch(appSource, /<button[^>]*className="hub-mobile-backdrop"/);
+});
+
+test("sidebar navigation closes with a distinct final-focus policy for the new page", () => {
+  assert.match(appSource, /const focusMainAfterNavigationRef = React\.useRef\(false\)/);
+  assert.match(appSource, /const navigateFromSidebar = React\.useCallback/);
+  assert.match(
+    appSource,
+    /beginMobileNavigationRoute\(\{[\s\S]*?markMainFocus:[\s\S]*?focusMainAfterNavigationRef\.current = true[\s\S]*?focusTarget:\s*menuButtonRef\.current[\s\S]*?close:\s*\(\) => setNavOpen\(false\)/,
+  );
+  assert.match(
+    appSource,
+    /React\.useLayoutEffect\(\(\) => \{[\s\S]*?!mobileNavState\.open[\s\S]*?focusMainAfterNavigationRef\.current[\s\S]*?mainRef\.current\?\.focus\(\)/,
+  );
+  assert.match(appSource, /<main[\s\S]*?ref=\{mainRef\}[\s\S]*?tabIndex=\{-1\}/);
+  assert.match(appSource, /<Sidebar[\s\S]*?onNavigate=\{navigateFromSidebar\}/);
+});
+
+test("the programmatically focused main landmark survives the SPA page swap", () => {
+  const mainTag = appSource.match(/<main[\s\S]*?>/)?.[0] || "";
+  assert.doesNotMatch(mainTag, /key=\{path\}/);
+  assert.match(appSource, /<main[\s\S]*?>[\s\S]*?<div key=\{path\} className="fade-up">/);
+});
+
+test("opening a top overlay closes mobile navigation and keeps Escape on the topmost layer", () => {
+  assert.match(
+    appSource,
+    /const openCommandPalette = React\.useCallback\([\s\S]*?closeMobileNavigation\(\)[\s\S]*?setTweaksOpen\(false\)[\s\S]*?setPaletteOpen\(true\)/,
+  );
+  assert.match(appSource, /openPalette=\{openCommandPalette\}/);
+  assert.match(appSource, /if \(paletteOpen\)[\s\S]*?setPaletteOpen\(false\)[\s\S]*?openCommandPalette\(\)/);
 });
 
 test("mobile menu opener exposes state and IconButton forwards its stable ref", () => {
@@ -230,4 +280,78 @@ test("mobile menu opener exposes state and IconButton forwards its stable ref", 
   );
   assert.match(primitivesSource, /export const IconButton = React\.forwardRef\(function IconButton/);
   assert.match(primitivesSource, /<button\s+\{\.\.\.props\}[\s\S]*?ref=\{ref\}/);
+});
+
+// The focus/layer policy below executes as plain JavaScript. Source assertions above
+// only guard the React wiring; these tests own the transition behavior itself.
+test("mobile navigation visibility never hides the desktop sidebar or desktop main", () => {
+  const fn = mobileNavRuntime.getMobileNavigationState;
+  assert.equal(typeof fn, "function");
+  assert.deepEqual(fn({ isMobileViewport: false, navOpen: false }), {
+    open: false,
+    navHidden: false,
+    mainHidden: false,
+  });
+  assert.deepEqual(fn({ isMobileViewport: false, navOpen: true }), {
+    open: false,
+    navHidden: false,
+    mainHidden: false,
+  });
+  assert.deepEqual(fn({ isMobileViewport: true, navOpen: false }), {
+    open: false,
+    navHidden: true,
+    mainHidden: false,
+  });
+  assert.deepEqual(fn({ isMobileViewport: true, navOpen: true }), {
+    open: true,
+    navHidden: false,
+    mainHidden: true,
+  });
+});
+
+test("dismiss focuses the opener before closing, while route close also marks final main focus", () => {
+  const dismiss = mobileNavRuntime.dismissMobileNavigation;
+  const route = mobileNavRuntime.beginMobileNavigationRoute;
+  assert.equal(typeof dismiss, "function");
+  assert.equal(typeof route, "function");
+
+  const dismissOrder = [];
+  dismiss({
+    active: true,
+    focusTarget: { focus: () => dismissOrder.push("focus-opener") },
+    close: () => dismissOrder.push("close"),
+  });
+  assert.deepEqual(dismissOrder, ["focus-opener", "close"]);
+
+  const routeOrder = [];
+  route({
+    active: true,
+    markMainFocus: () => routeOrder.push("mark-main"),
+    focusTarget: { focus: () => routeOrder.push("leave-nav") },
+    close: () => routeOrder.push("close"),
+  });
+  assert.deepEqual(routeOrder, ["mark-main", "leave-nav", "close"]);
+});
+
+test("mobile Tab policy wraps in both directions and leaves middle controls alone", () => {
+  const fn = mobileNavRuntime.getMobileNavigationTabTarget;
+  assert.equal(typeof fn, "function");
+  const first = { id: "first" };
+  const middle = { id: "middle" };
+  const last = { id: "last" };
+  const focusables = [first, middle, last];
+
+  assert.equal(fn({ focusables, activeElement: last, shiftKey: false }), first);
+  assert.equal(fn({ focusables, activeElement: first, shiftKey: true }), last);
+  assert.equal(fn({ focusables, activeElement: middle, shiftKey: false }), null);
+  assert.equal(fn({ focusables: [], activeElement: null, shiftKey: false }), null);
+});
+
+test("mobile Escape belongs to nav only when no higher overlay is active", () => {
+  const fn = mobileNavRuntime.shouldMobileNavigationHandleEscape;
+  assert.equal(typeof fn, "function");
+  assert.equal(fn({ open: true, paletteOpen: false, tweaksOpen: false }), true);
+  assert.equal(fn({ open: true, paletteOpen: true, tweaksOpen: false }), false);
+  assert.equal(fn({ open: true, paletteOpen: false, tweaksOpen: true }), false);
+  assert.equal(fn({ open: false, paletteOpen: false, tweaksOpen: false }), false);
 });

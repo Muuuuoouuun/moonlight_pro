@@ -16,10 +16,12 @@ import {
   ownerAnchorKey,
   resolveSidebarPath,
   sidebarChildren,
+  getMobileNavigationTabTarget,
 } from "./hub-nav";
 
 const SCOPE_STORAGE_KEY = 'mlp.scope';
 const EXPANDED_STORAGE_KEY = 'mlp.nav.expanded';
+const MOBILE_NAV_FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 // Scope lives in localStorage only — no server preference, no fetch (Phase A).
 // If storage is unavailable we simply keep it in React state for the session.
@@ -129,7 +131,7 @@ function CountBadge({ n }) {
   );
 }
 
-export function Sidebar({ active, view, onNavigate, collapsed, onToggleCollapse, openPalette, className, mobileHidden = false }) {
+export const Sidebar = React.forwardRef(function Sidebar({ active, view, onNavigate, collapsed, onToggleCollapse, openPalette, className, mobileHidden = false, mobileOpen = false, onMobileClose, mobileCloseButtonRef }, ref) {
   const counts = useAnchorCounts();
   const [scope, setScope] = useScope(active);
   const { isExpanded, toggle, armAutoOpen } = useExpandedAnchors(ownerAnchorKey(active));
@@ -137,6 +139,22 @@ export function Sidebar({ active, view, onNavigate, collapsed, onToggleCollapse,
     id: 'hub-mobile-navigation',
     'aria-hidden': mobileHidden ? true : undefined,
     inert: mobileHidden ? '' : undefined,
+    role: mobileOpen ? 'dialog' : undefined,
+    'aria-modal': mobileOpen ? 'true' : undefined,
+  };
+
+  const handleMobileKeyDown = (event) => {
+    if (!mobileOpen || event.key !== 'Tab') return;
+    const focusables = Array.from(event.currentTarget.querySelectorAll(MOBILE_NAV_FOCUSABLE))
+      .filter((element) => element.offsetParent !== null && element.getAttribute('aria-hidden') !== 'true');
+    const target = getMobileNavigationTabTarget({
+      focusables,
+      activeElement: document.activeElement,
+      shiftKey: event.shiftKey,
+    });
+    if (!target) return;
+    event.preventDefault();
+    target.focus();
   };
 
   const go = React.useCallback((anchorKey) => {
@@ -221,6 +239,8 @@ export function Sidebar({ active, view, onNavigate, collapsed, onToggleCollapse,
     return (
       <aside
         {...sidebarA11yProps}
+        ref={ref}
+        onKeyDown={handleMobileKeyDown}
         className={`${className || ''} hub-sidebar-root--collapsed`}
         aria-label="주요 메뉴"
         style={{
@@ -274,7 +294,7 @@ export function Sidebar({ active, view, onNavigate, collapsed, onToggleCollapse,
   }
 
   return (
-    <aside {...sidebarA11yProps} className={className} aria-label="주요 메뉴" style={{
+    <aside {...sidebarA11yProps} ref={ref} onKeyDown={handleMobileKeyDown} className={className} aria-label="주요 메뉴" style={{
       width: 232, flexShrink: 0,
       background: 'var(--surface)',
       borderRight: '1px solid var(--line-soft)',
@@ -293,7 +313,16 @@ export function Sidebar({ active, view, onNavigate, collapsed, onToggleCollapse,
             <div className="mono" style={{ fontSize: 9.5, color: 'var(--fg-faint)', letterSpacing: '0.05em', marginTop: -1 }}>HUB · PRO</div>
           </div>
         </div>
-        <IconButton icon="chevronL" onClick={onToggleCollapse} size={24} iconSize={13} tooltip="Collapse" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <IconButton
+            className="hub-mobile-nav-close"
+            ref={mobileCloseButtonRef}
+            icon="x"
+            tooltip="내비게이션 닫기"
+            onClick={onMobileClose}
+          />
+          <IconButton className="hub-desktop-sidebar-collapse" icon="chevronL" onClick={onToggleCollapse} size={24} iconSize={13} tooltip="Collapse" />
+        </div>
       </div>
 
       <div style={{ padding: '4px 12px 8px' }}>
@@ -344,4 +373,4 @@ export function Sidebar({ active, view, onNavigate, collapsed, onToggleCollapse,
       </div>
     </aside>
   );
-}
+});
