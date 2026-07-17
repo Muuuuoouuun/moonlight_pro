@@ -79,6 +79,21 @@ async function findRoutineCheckByIdempotencyKey(idempotencyKey) {
   });
 }
 
+async function findLegacyRoutineCheck({ projectId, ritualKey, dateKey }) {
+  return fetchSupabaseRows("routine_checks", {
+    select: ROUTINE_CHECK_SELECT,
+    limit: 1,
+    order: "checked_at.desc",
+    filters: withWorkspaceFilter([
+      ["project_id", projectId ? eqFilter(projectId) : "is.null"],
+      ["meta->>ritual_key", eqFilter(ritualKey)],
+      ["meta->>local_date", eqFilter(dateKey)],
+      ["status", eqFilter("done")],
+      ["idempotency_key", "is.null"],
+    ]),
+  });
+}
+
 function duplicateResponse(check) {
   return NextResponse.json({
     status: "duplicate",
@@ -190,6 +205,12 @@ export async function POST(req) {
     if (!Array.isArray(duplicateRows)) return readFailure("routine_checks");
     if (duplicateRows.length > 0) {
       return duplicateResponse(duplicateRows[0]);
+    }
+
+    const legacyDuplicateRows = await findLegacyRoutineCheck(payload);
+    if (!Array.isArray(legacyDuplicateRows)) return readFailure("routine_checks");
+    if (legacyDuplicateRows.length > 0) {
+      return duplicateResponse(legacyDuplicateRows[0]);
     }
 
     const persistence = await insertSupabaseRecord("routine_checks", record, {

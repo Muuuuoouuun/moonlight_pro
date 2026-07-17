@@ -291,9 +291,96 @@ test("unscoped ritual duplicate stays separate with an explicit null project fil
   assert.equal(state.insertCalls.length, 0);
 });
 
+test("project-bound legacy NULL-key check is returned as duplicate before insert", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.checksSequence = [
+    [],
+    [{
+      id: "check-legacy-project",
+      workspace_id: "workspace-1",
+      project_id: "project-1",
+      check_type: "morning",
+      status: "done",
+      idempotency_key: null,
+      meta: { ritual_key: "daily-focus", local_date: "2026-07-17" },
+    }],
+  ];
+
+  const response = await POST(request(validPayload()));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "duplicate");
+  assert.equal(body.check.id, "check-legacy-project");
+  assert.equal(state.insertCalls.length, 0);
+  const routineReads = state.readCalls.filter((entry) => entry.table === "routine_checks");
+  assert.equal(routineReads.length, 2);
+  assert.deepEqual(routineReads[1].options.filters, [
+    ["workspace_id", "eq.workspace-1"],
+    ["project_id", "eq.project-1"],
+    ["meta->>ritual_key", "eq.daily-focus"],
+    ["meta->>local_date", "eq.2026-07-17"],
+    ["status", "eq.done"],
+    ["idempotency_key", "is.null"],
+  ]);
+});
+
+test("unscoped legacy NULL-key check uses null project semantics before insert", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.checksSequence = [
+    [],
+    [{
+      id: "check-legacy-unscoped",
+      workspace_id: "workspace-1",
+      project_id: null,
+      check_type: "weekly",
+      status: "done",
+      idempotency_key: null,
+      meta: { ritual_key: "weekly-review", local_date: "2026-07-17" },
+    }],
+  ];
+
+  const response = await POST(request(validPayload({
+    projectId: null,
+    ritualKey: "weekly-review",
+    checkType: "weekly",
+    name: "Weekly Review",
+  })));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "duplicate");
+  assert.equal(body.check.id, "check-legacy-unscoped");
+  assert.equal(state.insertCalls.length, 0);
+  const routineReads = state.readCalls.filter((entry) => entry.table === "routine_checks");
+  assert.deepEqual(routineReads[1].options.filters, [
+    ["workspace_id", "eq.workspace-1"],
+    ["project_id", "is.null"],
+    ["meta->>ritual_key", "eq.weekly-review"],
+    ["meta->>local_date", "eq.2026-07-17"],
+    ["status", "eq.done"],
+    ["idempotency_key", "is.null"],
+  ]);
+});
+
+test("legacy fallback lookup failure is an honest error and never inserts", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.checksSequence = [[], null];
+
+  const response = await POST(request(validPayload()));
+  const body = await response.json();
+
+  assert.equal(response.status, 502);
+  assert.equal(body.status, "error");
+  assert.match(body.error, /routine_checks ledger read failed/);
+  assert.equal(state.insertCalls.length, 0);
+  assert.equal(state.readCalls.filter((entry) => entry.table === "routine_checks").length, 2);
+});
+
 test("unique idempotency race re-reads the winning check as duplicate", async () => {
   const state = globalThis.__routineRouteTestState;
   state.checksSequence = [
+    [],
     [],
     [{
       id: "check-winner",
@@ -319,8 +406,16 @@ test("unique idempotency race re-reads the winning check as duplicate", async ()
   assert.equal(body.check.id, "check-winner");
   assert.equal(state.insertCalls.length, 1);
   const routineReads = state.readCalls.filter((entry) => entry.table === "routine_checks");
-  assert.equal(routineReads.length, 2);
-  for (const read of routineReads) {
+  assert.equal(routineReads.length, 3);
+  assert.deepEqual(routineReads[1].options.filters, [
+    ["workspace_id", "eq.workspace-1"],
+    ["project_id", "eq.project-1"],
+    ["meta->>ritual_key", "eq.daily-focus"],
+    ["meta->>local_date", "eq.2026-07-17"],
+    ["status", "eq.done"],
+    ["idempotency_key", "is.null"],
+  ]);
+  for (const read of [routineReads[0], routineReads[2]]) {
     assert.deepEqual(read.options.filters, [
       ["workspace_id", "eq.workspace-1"],
       ["idempotency_key", `eq.${state.insertCalls[0].record.idempotency_key}`],
