@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { beforeEach, test } from "node:test";
 
+const WORKSPACE_ID = "11111111-1111-4111-8111-111111111111";
+const PROJECT_TARGET_ID = "22222222-2222-4222-8222-222222222222";
+const PROJECT_OTHER_ID = "33333333-3333-4333-8333-333333333333";
+
 const serverReadStub = `
 export function eqFilter(value) { return \`eq.\${value}\`; }
 export function withWorkspaceFilter(filters = []) {
@@ -17,7 +21,17 @@ export async function fetchSupabaseRows(table, options = {}) {
   const filtered = projectFilter?.startsWith("eq.")
     ? rows.filter((row) => row.project_id === projectFilter.slice(3))
     : rows;
-  return typeof options.limit === "number" ? filtered.slice(0, options.limit) : filtered;
+  const ordered = options.order === "checked_at.desc.nullslast,created_at.desc.nullslast,id.desc"
+    ? [...filtered].sort((left, right) => {
+        if (Boolean(left.checked_at) !== Boolean(right.checked_at)) return left.checked_at ? -1 : 1;
+        const checked = String(right.checked_at || "").localeCompare(String(left.checked_at || ""));
+        if (checked !== 0) return checked;
+        const created = String(right.created_at || "").localeCompare(String(left.created_at || ""));
+        if (created !== 0) return created;
+        return String(right.id || "").localeCompare(String(left.id || ""));
+      })
+    : filtered;
+  return typeof options.limit === "number" ? ordered.slice(0, options.limit) : ordered;
 }
 `;
 
@@ -46,7 +60,7 @@ registerHooks({
 });
 
 globalThis.__workLedgerTestState = {
-  workspaceId: "workspace-1",
+  workspaceId: WORKSPACE_ID,
   calls: [],
   rows: {},
 };
@@ -55,12 +69,13 @@ const workLedger = await import("./work-ledger.js?roadmap-ledger-test");
 
 beforeEach(() => {
   globalThis.__workLedgerTestState = {
-    workspaceId: "workspace-1",
+    workspaceId: WORKSPACE_ID,
     calls: [],
     applyRoutineQuery: false,
     rows: {
       decisions: [],
       routine_checks: [],
+      workspaces: [{ id: WORKSPACE_ID, timezone: "Asia/Seoul" }],
       profiles: [],
       projects: [],
       milestones: [],
@@ -114,7 +129,7 @@ test("projects roadmap rows and milestone points preserve their durable relation
   for (const table of ["projects", "milestones"]) {
     const call = state.calls.find((entry) => entry.table === table);
     assert.ok(call, `${table} must be read from the shared work ledger`);
-    assert.deepEqual(call.options.filters[0], ["workspace_id", "eq.workspace-1"]);
+    assert.deepEqual(call.options.filters[0], ["workspace_id", `eq.${WORKSPACE_ID}`]);
   }
 });
 
@@ -361,6 +376,29 @@ test("weekly bitmap honors persisted local_date before the server timestamp date
   assert.equal(ledger.rituals[0].weeks.at(-1), 1);
 });
 
+test("weekly bitmap uses the workspace timezone at the UTC to KST date boundary", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.rows.routine_checks = [{
+    id: "check-boundary",
+    project_id: null,
+    check_type: "morning",
+    status: "done",
+    checked_at: "2026-07-16T14:50:00.000Z",
+    meta: { ritual_key: "daily-focus", name: "Daily focus" },
+  }];
+
+  const ledger = await workLedger.getWorkLedger({
+    now: new Date("2026-07-16T15:30:00.000Z"),
+  });
+
+  assert.equal(ledger.timeZone, "Asia/Seoul");
+  assert.equal(ledger.rituals[0].weeks.at(-2), 1);
+  assert.equal(ledger.rituals[0].weeks.at(-1), 0);
+  assert.equal(ledger.rituals[0].streak, 0);
+  const workspaceCall = state.calls.find((entry) => entry.table === "workspaces");
+  assert.deepEqual(workspaceCall.options.filters, [["id", `eq.${WORKSPACE_ID}`]]);
+});
+
 test("a configured routine ledger read failure is error rather than preview", async () => {
   const state = globalThis.__workLedgerTestState;
   state.rows.routine_checks = null;
@@ -407,7 +445,7 @@ test("selected project is filtered by Supabase before the rhythm row limit", asy
   state.rows.routine_checks = [
     ...Array.from({ length: 241 }, (_, index) => ({
       id: `other-${index}`,
-      project_id: "project-other",
+      project_id: PROJECT_OTHER_ID,
       check_type: "morning",
       status: "done",
       checked_at: new Date().toISOString(),
@@ -415,7 +453,7 @@ test("selected project is filtered by Supabase before the rhythm row limit", asy
     })),
     {
       id: "target-check",
-      project_id: "project-target",
+      project_id: PROJECT_TARGET_ID,
       check_type: "weekly",
       status: "done",
       checked_at: new Date().toISOString(),
@@ -423,17 +461,50 @@ test("selected project is filtered by Supabase before the rhythm row limit", asy
     },
   ];
 
-  const ledger = await workLedger.getWorkLedger({ projectId: "project-target" });
+  const ledger = await workLedger.getWorkLedger({ projectId: PROJECT_TARGET_ID });
 
   assert.equal(ledger.rituals.length, 1);
-  assert.equal(ledger.rituals[0].projectId, "project-target");
+  assert.equal(ledger.rituals[0].projectId, PROJECT_TARGET_ID);
   assert.equal(ledger.rituals[0].ritualKey, "target-review");
   const call = state.calls.find((entry) => entry.table === "routine_checks");
   assert.equal(call.options.limit, 241);
   assert.deepEqual(call.options.filters, [
-    ["workspace_id", "eq.workspace-1"],
-    ["project_id", "eq.project-target"],
+    ["workspace_id", `eq.${WORKSPACE_ID}`],
+    ["project_id", `eq.${PROJECT_TARGET_ID}`],
   ]);
+});
+
+test("deterministic nulls-last ordering keeps completed checks inside the rhythm cap", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.applyRoutineQuery = true;
+  state.rows.routine_checks = [
+    ...Array.from({ length: 241 }, (_, index) => ({
+      id: `pending-${index}`,
+      project_id: null,
+      check_type: "morning",
+      status: "pending",
+      checked_at: null,
+      created_at: `2026-07-16T${String(index % 24).padStart(2, "0")}:00:00.000Z`,
+      meta: { ritual_key: `pending-${index}`, name: `Pending ${index}` },
+    })),
+    {
+      id: "completed-target",
+      project_id: null,
+      check_type: "weekly",
+      status: "done",
+      checked_at: "2026-07-17T01:00:00.000Z",
+      created_at: "2026-07-17T01:00:00.000Z",
+      meta: { ritual_key: "completed-target", local_date: "2026-07-17" },
+    },
+  ];
+
+  const ledger = await workLedger.getWorkLedger({
+    now: new Date("2026-07-17T02:00:00.000Z"),
+  });
+
+  assert.equal(ledger.rituals.some((ritual) => ritual.ritualKey === "completed-target"), true);
+  const call = state.calls.find((entry) => entry.table === "routine_checks");
+  assert.equal(call.options.order, "checked_at.desc.nullslast,created_at.desc.nullslast,id.desc");
 });
 
 test("rhythm row limit boundary is complete at 240 and explicitly partial at 241", async () => {

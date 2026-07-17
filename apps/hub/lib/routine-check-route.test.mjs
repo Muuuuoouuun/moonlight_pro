@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { beforeEach, test } from "node:test";
 
+const WORKSPACE_ID = "11111111-1111-4111-8111-111111111111";
+const PROJECT_ID = "22222222-2222-4222-8222-222222222222";
+const LIVE_SEED_PROJECT_ID = "33333333-3333-3333-3333-333333333331";
+
 const nextServerStub = `
 export class NextResponse extends Response {
   static json(value, init = {}) {
@@ -36,6 +40,7 @@ export async function fetchSupabaseRows(table, options = {}) {
   const state = globalThis.__routineRouteTestState;
   state.readCalls.push({ table, options });
   if (table === "projects") return state.projects;
+  if (table === "workspaces") return state.workspaces;
   if (table === "routine_checks") {
     if (Array.isArray(state.checksSequence) && state.checksSequence.length > 0) {
       return state.checksSequence.shift();
@@ -96,10 +101,11 @@ const { POST } = await import("../app/api/routine/check/route.js?durable-rhythm-
 
 beforeEach(() => {
   globalThis.__routineRouteTestState = {
-    workspaceId: "workspace-1",
+    workspaceId: WORKSPACE_ID,
     configured: true,
     guardResponse: null,
-    projects: [{ id: "project-1", name: "운영 OS" }],
+    projects: [{ id: PROJECT_ID, name: "운영 OS" }],
+    workspaces: [{ id: WORKSPACE_ID, timezone: "Asia/Seoul" }],
     checks: [],
     checksSequence: null,
     persistence: null,
@@ -118,7 +124,7 @@ function request(body = {}) {
 
 function validPayload(overrides = {}) {
   return {
-    projectId: "project-1",
+    projectId: PROJECT_ID,
     ritualKey: "daily-focus",
     checkType: "morning",
     dateKey: "2026-07-17",
@@ -140,6 +146,29 @@ test("routine check route retains the Hub write guard", async () => {
   assert.equal(state.insertCalls.length, 0);
 });
 
+test("routine check rejects a non-UUID project before any Supabase read", async () => {
+  const state = globalThis.__routineRouteTestState;
+
+  const response = await POST(request(validPayload({ projectId: "project-1" })));
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(body.status, "invalid-input");
+  assert.equal(body.error, "invalid-project-id");
+  assert.equal(state.readCalls.length, 0);
+  assert.equal(state.insertCalls.length, 0);
+});
+
+test("routine check accepts the PostgreSQL UUID shape used by live seed projects", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.projects = [{ id: LIVE_SEED_PROJECT_ID, name: "Seed project" }];
+
+  const response = await POST(request(validPayload({ projectId: LIVE_SEED_PROJECT_ID })));
+
+  assert.equal(response.status, 201);
+  assert.equal(state.insertCalls.length, 1);
+});
+
 test("unconfigured workspace or Supabase returns honest preview without persistence", async () => {
   const state = globalThis.__routineRouteTestState;
   state.workspaceId = null;
@@ -147,7 +176,7 @@ test("unconfigured workspace or Supabase returns honest preview without persiste
   assert.equal(missingWorkspace.status, 202);
   assert.equal((await missingWorkspace.json()).status, "preview");
 
-  state.workspaceId = "workspace-1";
+  state.workspaceId = WORKSPACE_ID;
   state.configured = false;
   const missingSupabase = await POST(request(validPayload({ projectId: null })));
   assert.equal(missingSupabase.status, 202);
@@ -168,8 +197,8 @@ test("project relationship must resolve inside the configured workspace", async 
   assert.equal(state.insertCalls.length, 0);
   const call = state.readCalls.find((entry) => entry.table === "projects");
   assert.deepEqual(call.options.filters, [
-    ["workspace_id", "eq.workspace-1"],
-    ["id", "eq.project-1"],
+    ["workspace_id", `eq.${WORKSPACE_ID}`],
+    ["id", `eq.${PROJECT_ID}`],
   ]);
 });
 
@@ -180,8 +209,8 @@ test("saved check persists normalized identity metadata and returns the durable 
     reason: "ok",
     record: {
       id: "check-new",
-      workspace_id: "workspace-1",
-      project_id: "project-1",
+      workspace_id: WORKSPACE_ID,
+      project_id: PROJECT_ID,
       check_type: "morning",
       status: "done",
       meta: {
@@ -203,8 +232,8 @@ test("saved check persists normalized identity metadata and returns the durable 
   assert.equal(insert.table, "routine_checks");
   assert.match(insert.record.idempotency_key, /^routine-check:v1:[a-f0-9]{64}$/);
   assert.deepEqual(insert.record, {
-    workspace_id: "workspace-1",
-    project_id: "project-1",
+    workspace_id: WORKSPACE_ID,
+    project_id: PROJECT_ID,
     check_type: "morning",
     status: "done",
     note: "오늘의 핵심 완료",
@@ -240,8 +269,8 @@ test("same workspace ritual and local date returns duplicate without a second in
   const state = globalThis.__routineRouteTestState;
   state.checks = [{
     id: "check-existing",
-    workspace_id: "workspace-1",
-    project_id: "project-1",
+    workspace_id: WORKSPACE_ID,
+    project_id: PROJECT_ID,
     check_type: "morning",
     status: "done",
     idempotency_key: "routine-check:v1:existing",
@@ -256,7 +285,7 @@ test("same workspace ritual and local date returns duplicate without a second in
   assert.equal(body.check.id, "check-existing");
   assert.equal(state.insertCalls.length, 0);
   const call = state.readCalls.find((entry) => entry.table === "routine_checks");
-  assert.deepEqual(call.options.filters[0], ["workspace_id", "eq.workspace-1"]);
+  assert.deepEqual(call.options.filters[0], ["workspace_id", `eq.${WORKSPACE_ID}`]);
   assert.equal(call.options.filters[1][0], "idempotency_key");
   assert.match(call.options.filters[1][1], /^eq\.routine-check:v1:[a-f0-9]{64}$/);
 });
@@ -265,7 +294,7 @@ test("unscoped ritual duplicate stays separate with an explicit null project fil
   const state = globalThis.__routineRouteTestState;
   state.checks = [{
     id: "check-unscoped",
-    workspace_id: "workspace-1",
+    workspace_id: WORKSPACE_ID,
     project_id: null,
     check_type: "weekly",
     status: "done",
@@ -297,8 +326,8 @@ test("project-bound legacy NULL-key check is returned as duplicate before insert
     [],
     [{
       id: "check-legacy-project",
-      workspace_id: "workspace-1",
-      project_id: "project-1",
+      workspace_id: WORKSPACE_ID,
+      project_id: PROJECT_ID,
       check_type: "morning",
       status: "done",
       idempotency_key: null,
@@ -316,13 +345,59 @@ test("project-bound legacy NULL-key check is returned as duplicate before insert
   const routineReads = state.readCalls.filter((entry) => entry.table === "routine_checks");
   assert.equal(routineReads.length, 2);
   assert.deepEqual(routineReads[1].options.filters, [
-    ["workspace_id", "eq.workspace-1"],
-    ["project_id", "eq.project-1"],
-    ["meta->>ritual_key", "eq.daily-focus"],
-    ["meta->>local_date", "eq.2026-07-17"],
+    ["workspace_id", `eq.${WORKSPACE_ID}`],
+    ["project_id", `eq.${PROJECT_ID}`],
     ["status", "eq.done"],
     ["idempotency_key", "is.null"],
+    ["checked_at", "gte.2026-07-16T00:00:00.000Z"],
+    ["checked_at", "lt.2026-07-19T00:00:00.000Z"],
   ]);
+});
+
+test("seed-style legacy check without meta dedupes by check_type and workspace-local date", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.projects = [{ id: LIVE_SEED_PROJECT_ID, name: "Seed project" }];
+  state.checksSequence = [
+    [],
+    [
+      {
+        id: "check-unrelated-evening",
+        workspace_id: WORKSPACE_ID,
+        project_id: LIVE_SEED_PROJECT_ID,
+        check_type: "evening",
+        status: "done",
+        idempotency_key: null,
+        checked_at: "2026-07-16T15:03:00.000Z",
+        meta: {},
+      },
+      {
+        id: "check-seed-morning",
+        workspace_id: WORKSPACE_ID,
+        project_id: LIVE_SEED_PROJECT_ID,
+        check_type: "morning",
+        status: "done",
+        idempotency_key: null,
+        checked_at: "2026-07-16T15:05:00.000Z",
+        meta: {},
+      },
+    ],
+  ];
+
+  const response = await POST(request(validPayload({
+    projectId: LIVE_SEED_PROJECT_ID,
+    ritualKey: "morning",
+    name: "Morning check · 07:00",
+  })));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "duplicate");
+  assert.equal(body.check.id, "check-seed-morning");
+  assert.equal(state.insertCalls.length, 0);
+  const workspaceRead = state.readCalls.find((entry) => entry.table === "workspaces");
+  assert.deepEqual(workspaceRead.options.filters, [["id", `eq.${WORKSPACE_ID}`]]);
+  const legacyRead = state.readCalls.filter((entry) => entry.table === "routine_checks")[1];
+  assert.equal(legacyRead.options.limit, 100);
 });
 
 test("unscoped legacy NULL-key check uses null project semantics before insert", async () => {
@@ -331,7 +406,7 @@ test("unscoped legacy NULL-key check uses null project semantics before insert",
     [],
     [{
       id: "check-legacy-unscoped",
-      workspace_id: "workspace-1",
+      workspace_id: WORKSPACE_ID,
       project_id: null,
       check_type: "weekly",
       status: "done",
@@ -354,12 +429,12 @@ test("unscoped legacy NULL-key check uses null project semantics before insert",
   assert.equal(state.insertCalls.length, 0);
   const routineReads = state.readCalls.filter((entry) => entry.table === "routine_checks");
   assert.deepEqual(routineReads[1].options.filters, [
-    ["workspace_id", "eq.workspace-1"],
+    ["workspace_id", `eq.${WORKSPACE_ID}`],
     ["project_id", "is.null"],
-    ["meta->>ritual_key", "eq.weekly-review"],
-    ["meta->>local_date", "eq.2026-07-17"],
     ["status", "eq.done"],
     ["idempotency_key", "is.null"],
+    ["checked_at", "gte.2026-07-16T00:00:00.000Z"],
+    ["checked_at", "lt.2026-07-19T00:00:00.000Z"],
   ]);
 });
 
@@ -384,8 +459,8 @@ test("unique idempotency race re-reads the winning check as duplicate", async ()
     [],
     [{
       id: "check-winner",
-      workspace_id: "workspace-1",
-      project_id: "project-1",
+      workspace_id: WORKSPACE_ID,
+      project_id: PROJECT_ID,
       check_type: "morning",
       status: "done",
       idempotency_key: "routine-check:v1:winner",
@@ -408,19 +483,37 @@ test("unique idempotency race re-reads the winning check as duplicate", async ()
   const routineReads = state.readCalls.filter((entry) => entry.table === "routine_checks");
   assert.equal(routineReads.length, 3);
   assert.deepEqual(routineReads[1].options.filters, [
-    ["workspace_id", "eq.workspace-1"],
-    ["project_id", "eq.project-1"],
-    ["meta->>ritual_key", "eq.daily-focus"],
-    ["meta->>local_date", "eq.2026-07-17"],
+    ["workspace_id", `eq.${WORKSPACE_ID}`],
+    ["project_id", `eq.${PROJECT_ID}`],
     ["status", "eq.done"],
     ["idempotency_key", "is.null"],
+    ["checked_at", "gte.2026-07-16T00:00:00.000Z"],
+    ["checked_at", "lt.2026-07-19T00:00:00.000Z"],
   ]);
   for (const read of [routineReads[0], routineReads[2]]) {
     assert.deepEqual(read.options.filters, [
-      ["workspace_id", "eq.workspace-1"],
+      ["workspace_id", `eq.${WORKSPACE_ID}`],
       ["idempotency_key", `eq.${state.insertCalls[0].record.idempotency_key}`],
     ]);
   }
+});
+
+test("an unrelated HTTP 409 never triggers idempotency winner reread", async () => {
+  const state = globalThis.__routineRouteTestState;
+  state.checksSequence = [[], []];
+  state.persistence = {
+    persisted: false,
+    reason: "http-409",
+    detail: "23505 duplicate key on a_different_unique_index",
+  };
+
+  const response = await POST(request(validPayload()));
+  const body = await response.json();
+
+  assert.equal(response.status, 502);
+  assert.equal(body.status, "error");
+  assert.match(body.error, /a_different_unique_index/);
+  assert.equal(state.readCalls.filter((entry) => entry.table === "routine_checks").length, 2);
 });
 
 test("configured ledger read failures are explicit errors, never preview", async () => {
@@ -431,7 +524,7 @@ test("configured ledger read failures are explicit errors, never preview", async
   assert.equal(projectReadFailure.status, 502);
   assert.equal((await projectReadFailure.json()).status, "error");
 
-  state.projects = [{ id: "project-1", name: "운영 OS" }];
+  state.projects = [{ id: PROJECT_ID, name: "운영 OS" }];
   state.checks = null;
   const duplicateReadFailure = await POST(request(validPayload()));
   const duplicateReadBody = await duplicateReadFailure.json();

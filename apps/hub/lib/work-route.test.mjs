@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { beforeEach, test } from "node:test";
 
+const PROJECT_ID = "22222222-2222-4222-8222-222222222222";
+const LIVE_SEED_PROJECT_ID = "33333333-3333-3333-3333-333333333331";
+
 const nextServerStub = `
 export class NextResponse extends Response {
   static json(value, init = {}) {
@@ -51,17 +54,38 @@ beforeEach(() => {
 
 test("work API passes the selected project to the ledger before rows are limited", async () => {
   const response = await GET(new Request(
-    "https://hub.example.com/api/hub/work?project=project-target",
+    `https://hub.example.com/api/hub/work?project=${PROJECT_ID}`,
   ));
   const body = await response.json();
 
   assert.equal(response.status, 200);
-  assert.deepEqual(globalThis.__workRouteTestState.calls, [{ projectId: "project-target" }]);
-  assert.equal(body.rituals[0].projectId, "project-target");
+  assert.deepEqual(globalThis.__workRouteTestState.calls, [{ projectId: PROJECT_ID }]);
+  assert.equal(body.rituals[0].projectId, PROJECT_ID);
 });
 
 test("work API keeps the unscoped ledger query explicit", async () => {
   await GET(new Request("https://hub.example.com/api/hub/work"));
 
   assert.deepEqual(globalThis.__workRouteTestState.calls, [{ projectId: null }]);
+});
+
+test("work API rejects a non-UUID project before reading Supabase", async () => {
+  const response = await GET(new Request(
+    "https://hub.example.com/api/hub/work?project=project-target",
+  ));
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(body.status, "invalid-input");
+  assert.equal(body.error, "invalid-project-id");
+  assert.deepEqual(globalThis.__workRouteTestState.calls, []);
+});
+
+test("work API accepts the canonical PostgreSQL UUID shape used by live seed data", async () => {
+  const response = await GET(new Request(
+    `https://hub.example.com/api/hub/work?project=${LIVE_SEED_PROJECT_ID}`,
+  ));
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(globalThis.__workRouteTestState.calls, [{ projectId: LIVE_SEED_PROJECT_ID }]);
 });

@@ -5,6 +5,14 @@ import { NextResponse } from "next/server";
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { eqFilter, fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-read";
 import {
+  isCalendarDateKey,
+  legacyCandidateWindow,
+  resolveRhythmTimeZone,
+  routineLocalDateKey,
+  routineSemanticKey,
+} from "../../../../lib/rhythm-calendar.js";
+import { isCanonicalUuid } from "../../../../lib/uuid.js";
+import {
   buildRoutineCheckRecord,
   insertSupabaseRecord,
   resolveDefaultWorkspaceId,
@@ -21,9 +29,7 @@ function cleanString(value) {
 }
 
 function isLocalDateKey(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const parsed = new Date(`${value}T00:00:00.000Z`);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  return isCalendarDateKey(value);
 }
 
 function invalidInput(error, message) {
@@ -62,11 +68,9 @@ function routineCheckIdempotencyKey({ projectId, ritualKey, dateKey }) {
 }
 
 function isIdempotencyConflict(persistence) {
-  const reason = cleanString(persistence?.reason).toLowerCase();
   const detail = cleanString(persistence?.detail).toLowerCase();
-  return reason === "http-409"
-    || detail.includes("23505")
-    || detail.includes("routine_checks_workspace_idempotency_key_uidx");
+  return detail.includes("23505")
+    && detail.includes("routine_checks_workspace_idempotency_key_uidx");
 }
 
 async function findRoutineCheckByIdempotencyKey(idempotencyKey) {
@@ -79,19 +83,34 @@ async function findRoutineCheckByIdempotencyKey(idempotencyKey) {
   });
 }
 
-async function findLegacyRoutineCheck({ projectId, ritualKey, dateKey }) {
-  return fetchSupabaseRows("routine_checks", {
-    select: ROUTINE_CHECK_SELECT,
+async function resolveWorkspaceTimeZone(workspaceId) {
+  const rows = await fetchSupabaseRows("workspaces", {
+    select: "id,timezone",
     limit: 1,
+    filters: [["id", eqFilter(workspaceId)]],
+  });
+  return resolveRhythmTimeZone(rows?.[0]?.timezone);
+}
+
+async function findLegacyRoutineCheck({ projectId, ritualKey, dateKey }, timeZone) {
+  const window = legacyCandidateWindow(dateKey);
+  const candidates = await fetchSupabaseRows("routine_checks", {
+    select: ROUTINE_CHECK_SELECT,
+    limit: 100,
     order: "checked_at.desc",
     filters: withWorkspaceFilter([
       ["project_id", projectId ? eqFilter(projectId) : "is.null"],
-      ["meta->>ritual_key", eqFilter(ritualKey)],
-      ["meta->>local_date", eqFilter(dateKey)],
       ["status", eqFilter("done")],
       ["idempotency_key", "is.null"],
+      ["checked_at", `gte.${window.start}`],
+      ["checked_at", `lt.${window.end}`],
     ]),
   });
+  if (!Array.isArray(candidates)) return null;
+  return candidates.filter((row) => (
+    routineSemanticKey(row) === ritualKey
+    && routineLocalDateKey(row, timeZone) === dateKey
+  ));
 }
 
 function duplicateResponse(check) {
@@ -117,6 +136,9 @@ function normalizePayload(payload) {
 
   if (!ritualKey || ritualKey.length > 160) {
     return { error: invalidInput("invalid-ritual-key", "ritualKey is required and must be at most 160 characters.") };
+  }
+  if (projectId && !isCanonicalUuid(projectId)) {
+    return { error: invalidInput("invalid-project-id", "projectId must be a canonical UUID.") };
   }
   if (!CHECK_TYPES.has(checkType)) {
     return { error: invalidInput("invalid-check-type", "checkType must be morning, midday, evening, or weekly.") };
@@ -207,7 +229,8 @@ export async function POST(req) {
       return duplicateResponse(duplicateRows[0]);
     }
 
-    const legacyDuplicateRows = await findLegacyRoutineCheck(payload);
+    const timeZone = await resolveWorkspaceTimeZone(workspaceId);
+    const legacyDuplicateRows = await findLegacyRoutineCheck(payload, timeZone);
     if (!Array.isArray(legacyDuplicateRows)) return readFailure("routine_checks");
     if (legacyDuplicateRows.length > 0) {
       return duplicateResponse(legacyDuplicateRows[0]);

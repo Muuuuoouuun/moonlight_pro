@@ -183,6 +183,7 @@ test("Rhythm source keeps project context, durable feedback, and mobile scroll s
   assert.match(workSource, /disabled=\{[^}]*pending/);
   assert.match(workSource, /프로젝트로 돌아가기/);
   assert.match(workSource, /projectHref/);
+  assert.match(workSource, /aria-label=\{`\$\{r\.projectName\s*\?\s*`\$\{r\.projectName\}\s*·\s*`\s*:\s*['"]['"]\}\$\{r\.name\} 체크인 저장`\}/);
   assert.match(workSource, /className=["']hub-rhythm-scroll["']/);
   assert.match(workSource, /aria-label=\{`최근 7일 체크 기록:/);
   assert.doesNotMatch(workSource, /checkedRituals/);

@@ -949,7 +949,7 @@ export function Rhythm() {
                         variant="secondary"
                         size="sm"
                         disabled={pending}
-                        aria-label={`${r.name} 체크인 저장`}
+                        aria-label={`${r.projectName ? `${r.projectName} · ` : ''}${r.name} 체크인 저장`}
                         style={{ minHeight: 44 }}
                         onClick={() => checkIn(r)}
                       >

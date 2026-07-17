@@ -8,6 +8,8 @@ const migrationUrl = new URL(
 );
 const setupUrl = new URL("../../../supabase/setup/00_live_schema.sql", import.meta.url);
 const schemaUrl = new URL("../../../supabase/schema.sql", import.meta.url);
+const applyPendingUrl = new URL("../../../supabase/apply-pending.sql", import.meta.url);
+const migrationScriptUrl = new URL("../../../scripts/apply-migrations.mjs", import.meta.url);
 
 test("routine check idempotency is canonical in migration, live setup, and base schema", async () => {
   const [migration, setup, schema] = await Promise.all([
@@ -32,4 +34,19 @@ test("routine check idempotency is canonical in migration, live setup, and base 
       /routine_checks_workspace_idempotency_key_uidx[\s\S]*\(\s*workspace_id\s*,\s*idempotency_key\s*\)[\s\S]*where idempotency_key is not null/i,
     );
   }
+});
+
+test("routine check idempotency migration is included in both supported delivery paths", async () => {
+  const [applyPending, migrationScript] = await Promise.all([
+    readFile(applyPendingUrl, "utf8"),
+    readFile(migrationScriptUrl, "utf8"),
+  ]);
+
+  assert.match(applyPending, /20260717_0019_routine_check_idempotency\.sql/);
+  assert.match(
+    applyPending,
+    /add column if not exists idempotency_key text[\s\S]*create unique index if not exists routine_checks_workspace_idempotency_key_uidx/i,
+  );
+  assert.match(migrationScript, /const DEFAULT_MIGRATIONS = \[[\s\S]*20260717_0019_routine_check_idempotency\.sql[\s\S]*\]/);
+  assert.match(migrationScript, /before deploying the Hub routine check route/i);
 });

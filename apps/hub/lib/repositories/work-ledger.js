@@ -4,6 +4,13 @@ import {
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import {
+  resolveRhythmTimeZone,
+  routineLocalDateKey,
+  routineSemanticKey,
+  shiftDateKey,
+  toZonedDateKey,
+} from "../rhythm-calendar.js";
 
 const RITUAL_FALLBACK_NAMES = {
   morning: "Morning check · 07:00",
@@ -78,11 +85,10 @@ function mapDecisions(rows, profileById) {
 }
 
 // WHY: schema has no separate "rituals" table; routine_checks rows are instances.
-// We aggregate by (meta.ritual_key || meta.name || check_type) and compute a 7-day
-// completion bitmap + current streak from checked_at timestamps.
+// We aggregate by the shared semantic key and compute a 7-day completion bitmap
+// from date-only keys in the configured workspace timezone.
 function ritualKeyFor(row) {
-  const meta = row.meta && typeof row.meta === "object" ? row.meta : {};
-  return String(meta.ritual_key || meta.key || meta.name || row.check_type || "ritual").trim() || "ritual";
+  return routineSemanticKey(row);
 }
 
 function ritualDisplayName(row) {
@@ -101,48 +107,23 @@ function ritualCompositeId(projectId, ritualKey) {
   return `ritual:${projectId ? encodeURIComponent(projectId) : "unscoped"}:${encodeURIComponent(ritualKey)}`;
 }
 
-function startOfLocalDay(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  date.setHours(0, 0, 0, 0);
-  return date.getTime();
+function buildWeeksBitmap(doneDateKeys, todayKey) {
+  return Array.from({ length: 7 }, (_, index) => (
+    doneDateKeys.has(shiftDateKey(todayKey, index - 6)) ? 1 : 0
+  ));
 }
 
-function startOfLocalDateKey(value) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
-  if (!match) return null;
-  const year = Number(match[1]);
-  const monthIndex = Number(match[2]) - 1;
-  const day = Number(match[3]);
-  const date = new Date(year, monthIndex, day);
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== monthIndex ||
-    date.getDate() !== day
-  ) return null;
-  return date.getTime();
-}
-
-function buildWeeksBitmap(doneDays, todayStart) {
-  const bitmap = [];
-  for (let offset = 6; offset >= 0; offset -= 1) {
-    const day = todayStart - offset * 86400000;
-    bitmap.push(doneDays.has(day) ? 1 : 0);
-  }
-  return bitmap;
-}
-
-function computeStreak(doneDays, todayStart) {
+function computeStreak(doneDateKeys, todayKey) {
   let streak = 0;
-  let cursor = todayStart;
-  while (doneDays.has(cursor)) {
+  let cursor = todayKey;
+  while (doneDateKeys.has(cursor)) {
     streak += 1;
-    cursor -= 86400000;
+    cursor = shiftDateKey(cursor, -1);
   }
   return streak;
 }
 
-function mapRituals(rows, projectRows) {
+function mapRituals(rows, projectRows, { timeZone, now }) {
   const groups = new Map();
   const projectNameById = new Map(
     (Array.isArray(projectRows) ? projectRows : []).map((project) => [project.id, project.name || null]),
@@ -163,28 +144,25 @@ function mapRituals(rows, projectRows) {
         ritualKey,
         checkType: normalizeCheckType(row.check_type),
         name: ritualDisplayName(row),
-        doneDays: new Set(),
+        doneDateKeys: new Set(),
         lastCheckedAt: null,
       });
     }
 
     const group = groups.get(compositeKey);
 
-    if (row.status === "done" && row.checked_at) {
-      const meta = row.meta && typeof row.meta === "object" ? row.meta : {};
-      const dayStart = startOfLocalDateKey(meta.local_date) ?? startOfLocalDay(row.checked_at);
-      if (dayStart !== null) group.doneDays.add(dayStart);
+    if (row.status === "done") {
+      const dateKey = routineLocalDateKey(row, timeZone);
+      if (dateKey) group.doneDateKeys.add(dateKey);
 
-      const ts = new Date(row.checked_at).getTime();
+      const ts = row.checked_at ? new Date(row.checked_at).getTime() : Number.NaN;
       if (Number.isFinite(ts) && (!group.lastCheckedAt || ts > group.lastCheckedAt)) {
         group.lastCheckedAt = ts;
       }
     }
   });
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayStart = today.getTime();
+  const todayKey = toZonedDateKey(now, timeZone);
 
   return Array.from(groups.values()).map((group) => ({
     id: group.id,
@@ -194,8 +172,8 @@ function mapRituals(rows, projectRows) {
     ritualKey: group.ritualKey,
     checkType: group.checkType,
     name: group.name,
-    streak: computeStreak(group.doneDays, todayStart),
-    weeks: buildWeeksBitmap(group.doneDays, todayStart),
+    streak: computeStreak(group.doneDateKeys, todayKey),
+    weeks: buildWeeksBitmap(group.doneDateKeys, todayKey),
     lastCheckedAt: group.lastCheckedAt ? new Date(group.lastCheckedAt).toISOString() : null,
   }));
 }
@@ -299,7 +277,7 @@ function buildRoadmapState(projectRows, milestoneRows) {
   };
 }
 
-export async function getWorkLedger({ projectId = null } = {}) {
+export async function getWorkLedger({ projectId = null, now = new Date() } = {}) {
   const workspaceId = resolveDefaultWorkspaceId();
   const selectedProjectId = typeof projectId === "string" ? projectId.trim() : "";
 
@@ -308,6 +286,7 @@ export async function getWorkLedger({ projectId = null } = {}) {
       source: "preview",
       configured: false,
       workspaceId: null,
+      timeZone: resolveRhythmTimeZone(null),
       decisions: [],
       rituals: [],
       rhythm: {
@@ -327,7 +306,7 @@ export async function getWorkLedger({ projectId = null } = {}) {
     };
   }
 
-  const [decisionRows, routineRows, profileRows, projectRows, milestoneRows] = await Promise.all([
+  const [decisionRows, routineRows, profileRows, projectRows, milestoneRows, workspaceRows] = await Promise.all([
     fetchSupabaseRows("decisions", {
       limit: 40,
       order: "decided_at.desc",
@@ -335,7 +314,7 @@ export async function getWorkLedger({ projectId = null } = {}) {
     }),
     fetchSupabaseRows("routine_checks", {
       limit: RHYTHM_ROW_LIMIT + 1,
-      order: "checked_at.desc",
+      order: "checked_at.desc.nullslast,created_at.desc.nullslast,id.desc",
       filters: withWorkspaceFilter(
         selectedProjectId ? [["project_id", eqFilter(selectedProjectId)]] : [],
       ),
@@ -356,8 +335,14 @@ export async function getWorkLedger({ projectId = null } = {}) {
       order: "target_date.asc",
       filters: withWorkspaceFilter(),
     }),
+    fetchSupabaseRows("workspaces", {
+      select: "id,timezone",
+      limit: 1,
+      filters: [["id", eqFilter(workspaceId)]],
+    }),
   ]);
 
+  const timeZone = resolveRhythmTimeZone(workspaceRows?.[0]?.timezone);
   const roadmap = buildRoadmapState(projectRows, milestoneRows);
   const profileById = new Map((profileRows || []).map((p) => [p.id, p]));
   const decisions = Array.isArray(decisionRows) ? mapDecisions(decisionRows, profileById) : [];
@@ -365,7 +350,9 @@ export async function getWorkLedger({ projectId = null } = {}) {
   const visibleRoutineRows = Array.isArray(routineRows)
     ? routineRows.slice(0, RHYTHM_ROW_LIMIT)
     : [];
-  const rituals = Array.isArray(routineRows) ? mapRituals(visibleRoutineRows, projectRows) : [];
+  const rituals = Array.isArray(routineRows)
+    ? mapRituals(visibleRoutineRows, projectRows, { timeZone, now })
+    : [];
   const rhythm = Array.isArray(routineRows)
     ? {
         source: "supabase",
@@ -393,6 +380,7 @@ export async function getWorkLedger({ projectId = null } = {}) {
     source: Array.isArray(decisionRows) && Array.isArray(routineRows) ? "supabase" : "preview",
     configured: true,
     workspaceId,
+    timeZone,
     decisions,
     rituals,
     rhythm,

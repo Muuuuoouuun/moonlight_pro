@@ -10,8 +10,8 @@
 //   SUPABASE_ACCESS_TOKEN=sbp_xxx
 //
 // Then run:  node scripts/apply-migrations.mjs
-// Optionally pass specific migration filenames as args; default = the two new
-// sales-OS migrations, which are idempotent (IF NOT EXISTS / ON CONFLICT).
+// Optionally pass specific migration filenames as args. Defaults are applied in
+// array order. Apply schema migrations before deploying the Hub routine check route.
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -22,6 +22,7 @@ const root = process.cwd();
 const DEFAULT_MIGRATIONS = [
   "20260617_0005_sales_os_sheets_sync.sql",
   "20260617_0006_crm_xiaoshouyi_owner_names.sql",
+  "20260717_0019_routine_check_idempotency.sql",
 ];
 
 function parseEnvFile(filepath) {
