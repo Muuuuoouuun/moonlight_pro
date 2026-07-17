@@ -18,6 +18,7 @@ const PROJECT_STATUS_BY_LABEL = {
   archived: "archived",
 };
 const TASK_STATUSES = new Set(Object.values(TASK_STATUS_BY_COLUMN));
+const PROJECT_ORG_SCOPES = new Set(["classin", "personal"]);
 const BOARD_COLUMN_BY_STATUS = Object.fromEntries(
   Object.entries(TASK_STATUS_BY_COLUMN).map(([column, status]) => [status, column]),
 );
@@ -51,22 +52,76 @@ export function createClientId({
 export function buildProjectDraft({
   contextBrand = null,
   clientId = createClientId(),
+  areaId = null,
+  brandId = null,
+  brandKey = "all",
   initialStatus = "Planning",
+  orgScope = "personal",
 } = {}) {
   const hasContainerContext = contextBrand?.id && contextBrand.id !== "all";
+  const selectedBrandId = brandId || (hasContainerContext ? contextBrand.id : null);
+  const selectedBrandKey = brandId
+    ? brandKey
+    : (hasContainerContext ? contextBrand.key : brandKey);
   return {
     kind: "project",
     isNew: true,
     clientId,
     title: "",
-    brandId: hasContainerContext ? contextBrand.id : null,
-    brandKey: hasContainerContext ? contextBrand.key : "all",
+    areaId,
+    brandId: selectedBrandId,
+    brandKey: selectedBrandKey || "all",
+    entityKey: "",
     summary: "",
     status: PROJECT_STATUS_BY_LABEL[initialStatus] || "draft",
     priority: "medium",
     nextAction: "",
     dueAt: "",
+    orgScope,
   };
+}
+
+export function parseProjectEntityKey(value) {
+  if (typeof value !== "string") return null;
+  const match = /^(lead|customer_account):([^:\s]+)$/.exec(value);
+  return match ? { type: match[1], id: match[2] } : null;
+}
+
+export function buildProjectCreatePayload(draft = {}) {
+  return {
+    id: draft.clientId || draft.id,
+    title: draft.title,
+    areaId: draft.areaId,
+    brandId: draft.brandId || null,
+    entityRef: parseProjectEntityKey(draft.entityKey),
+    summary: draft.summary,
+    status: draft.status,
+    priority: draft.priority,
+    nextAction: draft.nextAction,
+    dueAt: draft.dueAt,
+    orgScope: draft.orgScope,
+    source: "hub-projects",
+  };
+}
+
+export function selectProjectAreaId(areas = [], preferredSlug = null) {
+  const canonicalAreas = areas.filter((area) => area?.canonical && area?.id);
+  if (preferredSlug) {
+    const preferred = canonicalAreas.find((area) => area.slug === preferredSlug);
+    if (preferred) return preferred.id;
+  }
+  return canonicalAreas[0]?.id || null;
+}
+
+export function resolveProjectDraftOrgScope({
+  workspace,
+  brandOrgScope = null,
+  preferBrandScope = false,
+} = {}) {
+  if (preferBrandScope && PROJECT_ORG_SCOPES.has(brandOrgScope)) {
+    return brandOrgScope;
+  }
+  return workspace === "classin" ? "classin" : "personal";
 }
 
 export function rotateProjectClientId(draft, {
@@ -134,8 +189,8 @@ export function validateProjectDraft(draft = {}) {
   if (!String(draft.title || "").trim()) {
     errors.title = "프로젝트명을 입력하세요.";
   }
-  if (!draft.brandId || draft.brandId === "all") {
-    errors.brandId = "프로젝트를 둘 위치를 선택하세요.";
+  if (!draft.areaId) {
+    errors.areaId = "업무 분야를 선택하세요.";
   }
   return errors;
 }
