@@ -3,11 +3,12 @@
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Card, IconButton, Button, Progress, EmptyState } from "../hub-primitives";
+import { Badge, Card, IconButton, Button, Progress, EmptyState, EditDrawer, Kbd } from "../hub-primitives";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 import {
   buildRoadmapItemAriaLabel,
   buildRoadmapProjection,
+  createClientId,
 } from "@/lib/pms-ui";
 import {
   beginRhythmCheck,
@@ -74,6 +75,7 @@ function useWorkLedger(projectId = null) {
     decisions: [],
     decisionsState: { state: 'preview', partial: false, error: null },
     rituals: [],
+    projects: [],
     summary: null,
     syncState: 'preview',
     rhythmState: 'preview',
@@ -184,6 +186,7 @@ function useWorkLedger(projectId = null) {
         decisions: Array.isArray(data.decisions) ? data.decisions : [],
         decisionsState,
         rituals: Array.isArray(data.rituals) ? data.rituals : [],
+        projects: Array.isArray(data.projects) ? data.projects : [],
         summary: data.summary || null,
         syncState: data.source === 'supabase' ? 'live' : 'preview',
         rhythmState: rhythm.state || 'error',
@@ -541,33 +544,54 @@ export function Calendar() {
   );
 }
 
+function buildDecisionDraft() {
+  return {
+    kind: 'decision',
+    isNew: true,
+    id: createClientId(),
+    title: '새 결정 기록',
+    date: '',
+    status: 'Draft',
+    by: 'Me',
+    links: 0,
+    reason: '',
+    projectId: '',
+    rationale: '',
+    decidedAt: '',
+  };
+}
+
 export function Decisions() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const { decisions, decisionsState, retry } = useWorkLedger();
+  const {
+    decisions: liveDecisions,
+    decisionsState,
+    projects: linkableProjects,
+    retry,
+  } = useWorkLedger();
   const [localDecisions, setLocalDecisions] = React.useState([]);
+  const [decisionEdits, setDecisionEdits] = React.useState({}); // { [id]: patch } overlay onto local or live rows
+  const [editDecisionId, setEditDecisionId] = React.useState(null);
   const createdFromQueryRef = React.useRef(false);
+
+  const mergedDecisions = [...localDecisions, ...(Array.isArray(liveDecisions) ? liveDecisions : [])]
+    .map(d => (decisionEdits[d.id] ? { ...d, ...decisionEdits[d.id] } : d));
+  const editingDecision = editDecisionId ? mergedDecisions.find(d => d.id === editDecisionId) : null;
+
   const createDecision = React.useCallback(() => {
-    const id = `local-decision-${Date.now()}`;
-    const createdAt = new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(new Date());
-    setLocalDecisions(prev => [{
-      id,
-      title: '새 결정 기록',
-      date: createdAt,
-      status: 'Draft',
-      by: 'Me',
-      reason: '맥락, 선택지, 근거를 이어서 적어주세요.',
-      links: 0,
-    }, ...prev]);
+    const draft = buildDecisionDraft();
+    setLocalDecisions(prev => [draft, ...prev]);
+    setEditDecisionId(draft.id);
   }, []);
+
   React.useEffect(() => {
     if (searchParams.get('new') !== 'decision' || createdFromQueryRef.current) return;
     createDecision();
     createdFromQueryRef.current = true;
     router.replace(pathname);
   }, [createDecision, searchParams, router, pathname]);
-  const list = [...localDecisions, ...(Array.isArray(decisions) ? decisions : [])];
   const decisionSyncState = decisionsState?.state || 'error';
   const decisionComplete = decisionSyncState === 'live' || decisionSyncState === 'live-empty';
   const decisionLabel = decisionSyncState === 'live' || decisionSyncState === 'live-empty'
@@ -583,6 +607,85 @@ export function Decisions() {
         ? 'var(--danger)'
         : 'var(--fg-faint)';
 
+  // Page-level `n` — quick-record a decision when no drawer is open and focus isn't in a field.
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if ((e.key !== 'n' && e.key !== 'N') || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (editDecisionId) return;
+      const t = e.target;
+      const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+      e.preventDefault();
+      createDecision();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editDecisionId, createDecision]);
+
+  // Keeps the timeline card's Draft/Committed badge and reason preview in sync with the
+  // drawer while it's open (and after save) — those are precomputed display fields on the
+  // base record, not derived from decidedAt/rationale at render time, so they'd otherwise
+  // stay stale until the next full ledger reload.
+  const updateDraft = (key, value) => {
+    setDecisionEdits(prev => {
+      const patch = { ...prev[editDecisionId], [key]: value };
+      if (key === 'decidedAt') {
+        patch.status = value ? 'Committed' : 'Draft';
+        patch.date = value ? new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(new Date(value)) : '';
+      }
+      if (key === 'rationale') patch.reason = value;
+      return { ...prev, [editDecisionId]: patch };
+    });
+  };
+
+  // Persist the drawer edit. New local rows (client-generated id) POST; existing rows PATCH.
+  // `decided_at` left blank keeps the decision as Draft (work-ledger.js resolveDecisionStatus) —
+  // there is no separate manual status field.
+  const persistDecision = React.useCallback(async () => {
+    if (!editingDecision?.title?.trim()) return { ok: false, status: 'invalid-input' };
+    try {
+      const response = await fetch('/api/hub/decisions', {
+        method: editingDecision.isNew ? 'POST' : 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: editingDecision.id,
+          title: editingDecision.title,
+          projectId: editingDecision.projectId || '',
+          rationale: editingDecision.rationale || '',
+          decidedAt: editingDecision.decidedAt || '',
+          source: 'hub-work',
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !['saved', 'duplicate'].includes(data.status)) {
+        return { ok: false, status: data.status || 'error' };
+      }
+      if (editingDecision.isNew) {
+        const realId = data.decision?.id || editingDecision.id;
+        setLocalDecisions(prev => prev.map(d => (d.id === editDecisionId ? { ...d, id: realId, isNew: false } : d)));
+        // Guard the re-key: id is client-generated up front, so realId === editDecisionId in
+        // the common case, and setting+deleting the same overlay key would silently drop the
+        // just-saved edits (title/rationale/decidedAt/status/reason) back to their stale
+        // pre-edit values. Only remap when the server actually assigned a different id.
+        if (realId !== editDecisionId) {
+          setDecisionEdits(prev => {
+            if (!prev[editDecisionId]) return prev;
+            const next = { ...prev, [realId]: prev[editDecisionId] };
+            delete next[editDecisionId];
+            return next;
+          });
+          setEditDecisionId(realId);
+        }
+      }
+      return { ok: true, status: data.status };
+    } catch (error) {
+      return { ok: false, status: 'error', error: error instanceof Error ? error.message : String(error) };
+    }
+  }, [editingDecision, editDecisionId]);
+
+  const list = mergedDecisions;
+  const projectOptions = [{ value: '', label: '연결 안 함' }, ...(Array.isArray(linkableProjects) ? linkableProjects : []).map(p => ({ value: p.id, label: p.name }))];
+
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', maxWidth: 1000, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
@@ -596,7 +699,7 @@ export function Decisions() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision <Kbd>N</Kbd></Button>
       </div>
       {!decisionComplete && decisionSyncState !== 'loading' && (
         <Card>
@@ -633,7 +736,13 @@ export function Decisions() {
         {list.map(d => (
           <div key={d.id} style={{ position: 'relative', marginBottom: 18 }}>
             <div style={{ position: 'absolute', left: -21, top: 14, width: 10, height: 10, borderRadius: 999, background: 'var(--bg)', border: '2px solid var(--moon-400)' }} />
-            <Card>
+            <Card
+              interactive
+              role="button"
+              tabIndex={0}
+              onClick={() => setEditDecisionId(d.id)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditDecisionId(d.id); } }}
+            >
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
                 <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{d.date}</span>
                 <Badge tone={d.status === 'Committed' ? 'success' : 'warning'} size="xs">{d.status}</Badge>
@@ -644,11 +753,42 @@ export function Decisions() {
                 </span>
               </div>
               <div style={{ fontSize: 14.5, fontWeight: 500, marginBottom: 6, letterSpacing: '-0.01em' }}>{d.title}</div>
-              <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.55 }}>{d.reason}</div>
+              <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.55 }}>{d.reason || '근거가 아직 없습니다.'}</div>
             </Card>
           </div>
         ))}
       </div>
+
+      {editingDecision && (
+        <EditDrawer
+          title={editingDecision.isNew ? '결정 기록하기' : '결정 편집'}
+          subtitle={editingDecision.decidedAt ? 'Committed' : 'Draft · 결정일을 정하면 Committed로 바뀝니다'}
+          record={editingDecision}
+          fields={[
+            { key: 'title', label: '제목', placeholder: '어떤 결정인가요?' },
+            { key: 'decidedAt', label: '결정일', inputType: 'date', row: 'meta' },
+            { key: 'projectId', label: '연결된 프로젝트', type: 'select', row: 'meta', options: projectOptions },
+          ]}
+          onChange={updateDraft}
+          onClose={() => setEditDecisionId(null)}
+          onSave={persistDecision}
+        >
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>근거</span>
+            <textarea
+              value={editingDecision.rationale || ''}
+              onChange={(e) => updateDraft('rationale', e.target.value)}
+              placeholder="맥락, 선택지, 근거를 적어주세요."
+              rows={5}
+              style={{
+                width: '100%', resize: 'vertical',
+                background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
+                padding: 10, color: 'var(--fg)', fontSize: 12.5, fontFamily: 'inherit', lineHeight: 1.55,
+              }}
+            />
+          </label>
+        </EditDrawer>
+      )}
     </div>
   );
 }
@@ -680,7 +820,7 @@ export function Roadmap() {
     : roadmap.state === 'partial'
       ? 'var(--warning)'
       : roadmap.state === 'live' || roadmap.state === 'live-empty'
-        ? 'var(--success)'
+      ? 'var(--success)'
         : 'var(--fg-faint)';
 
   return (

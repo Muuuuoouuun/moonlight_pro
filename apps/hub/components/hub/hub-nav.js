@@ -53,6 +53,12 @@ const REVENUE_CHILDREN = [
   // owns that name; the revenue child keeps a distinct label to avoid two
   // identical rows in one sidebar.
   { key: 'rev-overview', label: '개요', path: 'dashboard/revenue/overview' },
+  // 고객 DB · 매출 히트맵 — implemented pages (PAGE_MAP + NAV_TREE search) that
+  // had no sidebar row until 2026-07-17. Both are global aggregate views
+  // (Customers/RevenueHeatmap take no workspace prop), so they live only here,
+  // not in REVENUE_CLASSIN_CHILDREN.
+  { key: 'rev-customers', label: '고객 DB', path: 'dashboard/revenue/customers' },
+  { key: 'rev-heatmap', label: '매출 히트맵', path: 'dashboard/revenue/heatmap' },
   { key: 'rev-leads', label: 'Leads', path: 'dashboard/revenue/leads' },
   { key: 'rev-deals', label: 'Deals', path: 'dashboard/revenue/deals' },
   { key: 'rev-accounts', label: 'Accounts', path: 'dashboard/revenue/accounts' },
@@ -84,13 +90,16 @@ const CONTENT_CHILDREN = [
   { key: 'ct-campaigns', label: 'Campaigns', path: 'dashboard/content/campaigns' },
 ];
 
-// AI·자동화 renders its eight children under two eyebrow group labels.
+// AI·자동화 renders its nine children under two eyebrow group labels.
 // Sheets is the one scope-dependent entry (ClassIn owns 시트 동기화).
 function aiChildren(sheetsPath) {
   return [
     { key: 'ai-chat', label: 'Chat', path: 'dashboard/agents/chat', group: 'Agents' },
     { key: 'ai-orders', label: 'Orders', path: 'dashboard/agents/orders', group: 'Agents' },
     { key: 'ai-council', label: 'Council', path: 'dashboard/agents/council', group: 'Agents' },
+    // AutomationsIndex — implemented page (PAGE_MAP) with no sidebar/search row until
+    // 2026-07-17. Global (unscoped), so it appears identically in every scope.
+    { key: 'ai-automations-overview', label: '자동화 개요', path: 'dashboard/automations', group: 'Automations' },
     { key: 'ai-runs', label: 'Runs', path: 'dashboard/automations/runs', group: 'Automations' },
     { key: 'ai-flows', label: 'Flows', path: 'dashboard/automations/flows', group: 'Automations' },
     { key: 'ai-email', label: 'Email', path: 'dashboard/automations/email', group: 'Automations' },

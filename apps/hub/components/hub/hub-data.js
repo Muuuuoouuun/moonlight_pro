@@ -67,6 +67,7 @@ export const NAV_TREE = [
   {
     key: 'automations', label: 'Automations', icon: 'automations', secondary: true,
     children: [
+      { key: 'automations-overview', label: '자동화 개요', icon: 'automations', path: 'dashboard/automations', keywords: ['automations overview', '자동화 개요', '자동화 목록', 'flows summary'] },
       { key: 'runs', label: 'Runs', icon: 'runs', path: 'dashboard/automations/runs' },
       { key: 'flows', label: 'Flows', icon: 'zap', path: 'dashboard/automations/flows' },
       { key: 'email', label: 'Email', icon: 'email', path: 'dashboard/automations/email' },
