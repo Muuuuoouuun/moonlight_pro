@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Avatar, Badge, Button, IconButton } from "../hub-primitives";
+import { Avatar, Badge, Button, Checkbox, IconButton } from "../hub-primitives";
 
 function DetailSection({ title, count = 0, empty, children }) {
   return (
@@ -115,9 +115,12 @@ export function ProjectDetailPanel({
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {todos.map((todo) => (
               <div key={todo.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
-                <button onClick={() => onToggleTodo?.(todo.id)} style={{ width: 14, height: 14, borderRadius: 3, border: `1px solid ${todo.done ? "var(--success)" : "var(--line-strong)"}`, background: todo.done ? "var(--success)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  {todo.done && <span style={{ fontSize: 9, color: "var(--bg)" }}>✓</span>}
-                </button>
+                <Checkbox
+                  checked={todo.done}
+                  onChange={() => onToggleTodo?.(todo.id)}
+                  size={16}
+                  label={`${todo.done ? "다시 열기" : "완료"}: ${todo.title}`}
+                />
                 <span style={{ flex: 1, fontSize: 12, textDecoration: todo.done ? "line-through" : "none", color: todo.done ? "var(--fg-faint)" : "var(--fg)" }}>{todo.title}</span>
                 <span className="mono" style={{ fontSize: 12, color: "var(--fg-muted)" }}>{todo.due}</span>
               </div>

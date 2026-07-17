@@ -18,6 +18,10 @@ const primitivesSource = await readFile(
   new URL("../components/hub/hub-primitives.jsx", import.meta.url),
   "utf8",
 );
+const projectsSource = await readFile(
+  new URL("../components/hub/pages/projects.jsx", import.meta.url),
+  "utf8",
+);
 
 test("mobile workspace sidebar hiding does not hide edit drawers", () => {
   assert.match(css, /\.hub-workspace-shell\s*>\s*aside:not\(\.hub-drawer\)/);
@@ -69,4 +73,21 @@ test("Daily Brief task-only Today exposes durable completion controls", () => {
 test("shared Button forwards native accessibility attributes", () => {
   assert.match(primitivesSource, /export function Button\(\{[\s\S]*?\.\.\.props[\s\S]*?\}\) \{/);
   assert.match(primitivesSource, /<button\s+\{\.\.\.props\}\s+type=\{type\}/);
+});
+
+test("mobile PMS controls keep 44px targets while project cards avoid horizontal overflow", () => {
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*900px\)[\s\S]*?\.hub-project-primary-control[\s\S]*?min-height:\s*44px/,
+  );
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*768px\)[\s\S]*?\.hub-project-table\s*\{[\s\S]*?overflow-x:\s*hidden !important/,
+  );
+  assert.match(
+    css,
+    /\.hub-project-row__open\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\) !important/,
+  );
+  assert.match(projectsSource, /className=["']hub-project-primary-control["']/);
+  assert.match(projectsSource, /className=["'][^"']*hub-project-table[^"']*["']/);
 });

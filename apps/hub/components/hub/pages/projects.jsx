@@ -3,7 +3,7 @@
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Avatar, EmptyState, SyncBadge, SegmentedControl, EditDrawer, Kbd } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Checkbox, EmptyState, SyncBadge, SegmentedControl, EditDrawer, Kbd } from "../hub-primitives";
 import {
   buildProjectDraft,
   buildProjectEditDraft,
@@ -24,6 +24,11 @@ import {
 } from "@/lib/pms-ui";
 import { ProjectCreateDrawer } from "./project-create-drawer";
 import { ProjectDetailPanel } from "./project-detail-panel";
+import {
+  ProjectPlanningLinks,
+  ProjectPortfolioSummary,
+  ProjectProgressGauge,
+} from "./project-pms-components";
 import {
   getWorkspace,
   filterBrandsByWorkspace,
@@ -56,12 +61,12 @@ const PROJECT_VIEWS = new Set(PROJECT_VIEW_OPTIONS.map(v => v.key));
 // Timeline view: status → left-stripe token (§5.2 — status color lives on stripes/chips,
 // never as a full bar fill) and the same Korean status labels the List view row uses.
 const STATUS_LINE_TOKEN = {
-  'In progress': 'var(--info-line)',
-  Review: 'var(--warning-line)',
+  'In progress': 'var(--pms-moonstone)',
+  Review: 'var(--line-strong)',
   Planning: 'var(--line-strong)',
   Backlog: 'var(--line-soft)',
   Blocked: 'var(--danger-line)',
-  Done: 'var(--success-line)',
+  Done: 'var(--line-strong)',
 };
 const STATUS_LABEL_KO = {
   'In progress': '작업 중',
@@ -86,6 +91,7 @@ const BRAND_SECTION_KEY = 'mlp.pms.brand-sections';
 // 사이드바 드래그 정렬 — 분류(폴더)와 컨테이너(브랜드) 순서. UI 전용, localStorage 영속.
 const FOLDER_ORDER_KEY = 'mlp.pms.folder-order';
 const BRAND_ORDER_KEY = 'mlp.pms.brand-order';
+const DETAIL_FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 // order(키 배열)에 없는 항목은 원래 순서를 유지하며 맨 뒤로 (stable sort).
 function applyCustomOrder(items, order, keyOf) {
@@ -182,10 +188,14 @@ export function Projects({ workspace }) {
   const [drag, setDrag] = React.useState(null);
   const [expanded, setExpanded] = React.useState(() => new Set());
   const [openDetail, setOpenDetail] = React.useState(null);
+  const [mobileDetail, setMobileDetail] = React.useState(false);
   const [brandMenuOpen, setBrandMenuOpen] = React.useState(false);
   const [sidebarHidden, setSidebarHidden] = React.useState(false);
   const [syncState, setSyncState] = React.useState('preview');
+  const [readError, setReadError] = React.useState(null);
   const brandMenuRef = React.useRef(null);
+  const detailSheetRef = React.useRef(null);
+  const detailReturnFocusRef = React.useRef(null);
   const createdFromQueryRef = React.useRef(false);
   const [orderPending, setOrderPending] = React.useState(false);
   const [orderResult, setOrderResult] = React.useState(null); // { tone: 'ok'|'err', label }
@@ -259,12 +269,14 @@ export function Projects({ workspace }) {
 
   const loadLedger = React.useCallback(async ({ initial = false } = {}) => {
     setSyncState('loading');
+    setReadError(null);
     try {
       const response = await fetch('/api/hub/projects', { cache: 'no-store' });
       const data = await response.json().catch(() => null);
 
       if (!response.ok || !data || data.status === 'error') {
-        setSyncState('preview');
+        setSyncState('error');
+        setReadError(data?.error || data?.message || `프로젝트 원장 응답 실패 (${response.status})`);
         return { ok: false, projects: [], todos: [] };
       }
 
@@ -284,6 +296,7 @@ export function Projects({ workspace }) {
         setTodos(liveTodos);
         if (initial) setExpanded(new Set(liveProjects.slice(0, 2).map(p => p.id)));
         setSyncState('live');
+        setReadError(null);
         return { ok: true, projects: liveProjects, todos: liveTodos };
       }
 
@@ -299,9 +312,11 @@ export function Projects({ workspace }) {
       });
       setTodos([]);
       setSyncState('preview');
+      setReadError(null);
       return { ok: false, projects: [], todos: [] };
-    } catch {
-      setSyncState('preview');
+    } catch (error) {
+      setSyncState('error');
+      setReadError(error instanceof Error ? error.message : String(error));
       return { ok: false, projects: [], todos: [] };
     }
   }, []);
@@ -318,19 +333,83 @@ export function Projects({ workspace }) {
 
   const selectedProjectId = searchParams.get('project');
   React.useEffect(() => {
-    if (view !== 'tree' || !selectedProjectId) return;
+    if (view !== 'tree' || !selectedProjectId) {
+      setOpenDetail(null);
+      return;
+    }
     if (allProjects.some(project => project.id === selectedProjectId)) {
       setOpenDetail(selectedProjectId);
+      return;
     }
+    setOpenDetail(null);
   }, [allProjects, selectedProjectId, view]);
 
+  React.useEffect(() => {
+    const query = window.matchMedia('(max-width: 900px)');
+    const update = () => setMobileDetail(query.matches);
+    update();
+    if (query.addEventListener) query.addEventListener('change', update);
+    else query.addListener?.(update);
+    return () => {
+      if (query.removeEventListener) query.removeEventListener('change', update);
+      else query.removeListener?.(update);
+    };
+  }, []);
+
+  const openProjectDetail = React.useCallback((projectId) => {
+    detailReturnFocusRef.current = typeof document !== 'undefined' ? document.activeElement : null;
+    const params = mergeProjectDetailQuery(searchParamsRef.current, projectId);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    setOpenDetail(projectId);
+  }, [pathname, router]);
+
   const closeProjectDetail = React.useCallback(() => {
+    const returnFocus = detailReturnFocusRef.current;
     setOpenDetail(null);
     const params = new URLSearchParams(searchParamsRef.current.toString());
     params.delete('project');
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    requestAnimationFrame(() => {
+      if (returnFocus?.isConnected && typeof returnFocus.focus === 'function') returnFocus.focus();
+    });
   }, [pathname, router]);
+
+  React.useEffect(() => {
+    if (!openDetail) return undefined;
+    const sheet = detailSheetRef.current;
+    const raf = mobileDetail
+      ? requestAnimationFrame(() => {
+          sheet?.querySelector('[aria-label="상세 닫기"]')?.focus();
+        })
+      : null;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeProjectDetail();
+        return;
+      }
+      if (!mobileDetail || event.key !== 'Tab' || !sheet) return;
+      const focusable = Array.from(sheet.querySelectorAll(DETAIL_FOCUSABLE))
+        .filter(node => !node.disabled && node.tabIndex >= 0 && node.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      if (raf !== null) cancelAnimationFrame(raf);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [closeProjectDetail, mobileDetail, openDetail]);
 
   const toggleExpand = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const createProject = React.useCallback((initialStatus = 'Planning', brandKeyOverride = null) => {
@@ -693,10 +772,10 @@ export function Projects({ workspace }) {
     createTodo(null, taskStatusForBoardColumn(column) || 'todo');
   }, [createTodo]);
 
-  const statusTone = { 'In progress': 'info', Review: 'warning', Planning: 'moon', Backlog: 'neutral', Blocked: 'danger', Done: 'success' };
-  const prioTone = { critical: 'danger', high: 'danger', med: 'warning', medium: 'warning', low: 'neutral' };
-  const updateTone = { reported: 'neutral', active: 'info', blocked: 'danger', done: 'success' };
-  const checkTone = { pending: 'neutral', done: 'success', skipped: 'warning', blocked: 'danger' };
+  const statusTone = { 'In progress': 'moon', Review: 'neutral', Planning: 'neutral', Backlog: 'neutral', Blocked: 'danger', Done: 'neutral' };
+  const prioTone = { critical: 'danger', high: 'danger', med: 'neutral', medium: 'neutral', low: 'neutral' };
+  const updateTone = { reported: 'neutral', active: 'moon', blocked: 'danger', done: 'neutral' };
+  const checkTone = { pending: 'neutral', done: 'neutral', skipped: 'neutral', blocked: 'danger' };
 
   React.useEffect(() => {
     const close = (e) => { if (brandMenuRef.current && !brandMenuRef.current.contains(e.target)) setBrandMenuOpen(false); };
@@ -1093,32 +1172,49 @@ export function Projects({ workspace }) {
           {view === 'todos' && (
             <Button variant="primary" size="sm" icon="plus" onClick={() => createTodo()}>To-do</Button>
           )}
-          <Button variant={view === 'todos' ? 'outline' : 'primary'} size="sm" icon="plus" onClick={openGlobalProjectCreate}>
+          <Button className="hub-project-primary-control" variant={view === 'todos' ? 'outline' : 'primary'} size="sm" icon="plus" onClick={openGlobalProjectCreate}>
             Project <Kbd>N</Kbd>
           </Button>
         </div>
 
         {view === 'tree' && (
-          <div className="hub-projects-main-grid" style={{ display: 'grid', gridTemplateColumns: openDetail ? '1fr 360px' : '1fr', flex: 1, overflow: 'hidden' }}>
+          <div
+            className="hub-projects-main-grid"
+            data-detail-open={openDetail ? 'true' : 'false'}
+            style={{ display: 'grid', gridTemplateColumns: openDetail ? 'minmax(0, 1fr) 360px' : 'minmax(0, 1fr)', flex: 1, overflow: 'hidden' }}
+          >
             <div className="scroll-y" style={{ padding: 'var(--section-gap)' }}>
               <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
-                {projects.length === 0 && (
+                <ProjectPortfolioSummary projects={projects} sourceState={syncState} />
+                {syncState === 'error' && (
                   <Card>
                     <EmptyState
                       icon="projects"
-                      title="프로젝트 기록이 비어 있습니다"
-                      description="Supabase 연결은 live 상태입니다. 첫 프로젝트를 만들거나 외부 project webhook을 보내면 이 목록에 바로 표시됩니다."
+                      title="프로젝트 원장을 읽지 못했습니다"
+                      description={readError || "연결 상태를 확인한 뒤 다시 시도하세요. 실패한 읽기는 live로 표시하지 않습니다."}
+                      action={<Button variant="outline" size="sm" onClick={() => loadLedger({ initial: true })}>다시 시도</Button>}
+                    />
+                  </Card>
+                )}
+                {!['error', 'loading'].includes(syncState) && projects.length === 0 && (
+                  <Card>
+                    <EmptyState
+                      icon="projects"
+                      title={syncState === 'preview' ? "preview · 실제 프로젝트 없음" : "프로젝트 기록이 비어 있습니다"}
+                      description={syncState === 'preview'
+                        ? "Supabase가 연결되지 않았습니다. 예시 데이터를 섞지 않으며, 연결 후 실제 프로젝트만 표시합니다."
+                        : "Supabase 연결은 live 상태입니다. 첫 프로젝트를 만들거나 외부 project webhook을 보내면 이 목록에 바로 표시됩니다."}
                       action={<Button variant="primary" size="sm" icon="plus" onClick={() => createProject()}>Project</Button>}
                     />
                   </Card>
                 )}
                 {(() => {
                   const STATUS_GROUPS = [
-                    { key: 'In progress', label: '진행중', tone: 'var(--info)' },
+                    { key: 'In progress', label: '진행중', tone: 'var(--pms-moonstone)' },
                     { key: 'Blocked',     label: '막힘',   tone: 'var(--danger)' },
-                    { key: 'Review',      label: '검토',   tone: 'var(--warning)' },
-                    { key: 'Planning',    label: '계획',   tone: 'var(--moon-400)' },
-                    { key: 'Done',        label: '완료',   tone: 'var(--success)' },
+                    { key: 'Review',      label: '검토',   tone: 'var(--line-strong)' },
+                    { key: 'Planning',    label: '계획',   tone: 'var(--pms-moonstone)' },
+                    { key: 'Done',        label: '완료',   tone: 'var(--fg-dim)' },
                     { key: 'Backlog',     label: '백로그', tone: 'var(--fg-faint)' },
                   ];
                   // 전체 브랜드 뷰는 브랜드별 아코디언(목록 전체 접기), 특정 브랜드 뷰는 기존 상태별 그룹.
@@ -1159,109 +1255,98 @@ export function Projects({ workspace }) {
                       </div>
                       )}
                       {!collapsed && (
-                      <Card pad={false} className="hub-table-card">
-                        <div style={{
-                          display: 'grid', gridTemplateColumns: '22px 18px 1fr 36px 100px 120px',
-                          padding: '8px 14px', background: 'var(--surface-2)',
-                          borderBottom: '1px solid var(--line-soft)',
-                          fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em',
-                          alignItems: 'center', gap: 8,
-                        }}>
-                          <span /><span />
-                          <span>프로젝트 / 하위 아이템</span>
-                          <span style={{ textAlign: 'center' }}>Own</span>
-                          <span>기한</span>
-                          <span>작업 상태</span>
+                      <Card pad={false} className="hub-table-card hub-project-table">
+                        <div className="hub-project-list-head">
+                          <span aria-hidden="true" />
+                          <span>프로젝트 · 컨테이너</span>
+                          <span>다음 행동</span>
+                          <span>기한 · 위험</span>
+                          <span>근거 진척</span>
+                          <span>상태 · 우선순위</span>
                         </div>
                         {items.map((p, pi) => {
                           const isOpen = expanded.has(p.id);
                           const pTodos = scopedTodos.filter(t => t.project === p.id);
                           const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
                           const isSel = openDetail === p.id;
+                          const dueTime = p.dueAt ? new Date(p.dueAt).getTime() : Number.NaN;
+                          const terminal = ['completed', 'archived', 'cancelled'].includes(String(p.statusKey || '').toLowerCase());
+                          const overdue = !terminal && Number.isFinite(dueTime) && dueTime < new Date().setHours(0, 0, 0, 0);
+                          const blocked = String(p.statusKey || '').toLowerCase() === 'blocked' || p.status === 'Blocked';
+                          const nextAction = p.displayNextAction || p.projectNextAction || '다음 행동 미정';
                           return (
                             <React.Fragment key={p.id}>
-                              <div style={{
-                                display: 'grid', gridTemplateColumns: '22px 18px 1fr 36px 100px 120px',
-                                padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', gap: 8,
-                                borderBottom: (isOpen || pi < items.length - 1) ? '1px solid var(--line-soft)' : 'none',
-                                background: isSel ? 'var(--surface-3)' : 'transparent',
-                                cursor: 'pointer',
-                              }}
-                                onClick={() => setOpenDetail(p.id === openDetail ? null : p.id)}
-                              >
-                                <button onClick={(e) => { e.stopPropagation(); toggleExpand(p.id); }} style={{
-                                  width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  color: 'var(--fg-muted)', borderRadius: 4,
-                                }}>
+                              <div className="hub-project-row" data-selected={isSel ? 'true' : 'false'}>
+                                <div className="hub-project-row__controls">
+                                  <button
+                                    type="button"
+                                    className="hub-project-expand"
+                                    aria-label={`${p.name} 하위 항목 ${isOpen ? '접기' : '펼치기'}`}
+                                    aria-expanded={isOpen}
+                                    onClick={() => toggleExpand(p.id)}
+                                  >
                                   <span style={{ display: 'inline-block', transition: 'transform .15s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', fontSize: 10 }}>▶</span>
+                                  </button>
+                                  <Checkbox
+                                    checked={isSel}
+                                    onChange={(checked) => checked ? openProjectDetail(p.id) : closeProjectDetail()}
+                                    size={16}
+                                    label={`프로젝트 선택: ${p.name}`}
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  className="hub-project-row__open"
+                                  aria-label={`${p.name} 상세 열기`}
+                                  onClick={() => openProjectDetail(p.id)}
+                                >
+                                  <div className="hub-project-identity">
+                                    <span className="hub-project-identity__glyph" aria-hidden="true">{pBrand.glyph}</span>
+                                    <div className="hub-project-identity__copy">
+                                      <strong>{p.name}</strong>
+                                      <span>{pBrand.name} · 할 일 {pTodos.length}</span>
+                                    </div>
+                                  </div>
+                                  <div className="hub-project-next-action">
+                                    <span>다음 행동</span>
+                                    <strong>{nextAction}</strong>
+                                  </div>
+                                  <div className="hub-project-due-risk">
+                                    <span className="mono">{p.due || '기한 없음'}</span>
+                                    {(blocked || overdue) && <span className="hub-project-risk-label">{blocked ? '막힘' : '기한 지남'}</span>}
+                                    {!blocked && !overdue && <span>위험 신호 없음</span>}
+                                  </div>
+                                  <ProjectProgressGauge progress={p.displayProgress} compact />
+                                  <div className="hub-project-secondary-state">
+                                    <Badge tone={statusTone[p.status]} size="xs">{STATUS_LABEL_KO[p.status] || p.status}</Badge>
+                                    <span><Dot tone={prioTone[p.priority]} size={5} />{p.priority || 'medium'}</span>
+                                  </div>
                                 </button>
-                                <input type="checkbox" style={{ margin: 0, accentColor: 'var(--moon-400)' }} onClick={e => e.stopPropagation()} />
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                                  <span style={{ fontSize: 14, color: 'var(--fg-muted)' }}>{pBrand.glyph}</span>
-                                  <div style={{ minWidth: 0, flex: 1 }}>
-                                    <div style={{ fontSize: 13, fontWeight: 500, letterSpacing: '-0.005em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
-                                  </div>
-                                  <span className="mono" style={{
-                                    fontSize: 10, color: 'var(--fg-faint)',
-                                    background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4,
-                                    border: '1px solid var(--line-soft)',
-                                  }}>{pTodos.length}</span>
-                                  <div style={{ width: 60, height: 4, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }}>
-                                    <div style={{ width: p.progress + '%', height: '100%', background: statusTone[p.status] === 'warning' ? 'var(--warning)' : 'var(--moon-400)' }} />
-                                  </div>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                                  <Avatar name={p.owner} size={22} tone={p.owner === 'Me' ? 'moon' : p.owner === 'Council' ? 'info' : 'neutral'} />
-                                </div>
-                                <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{p.due}</span>
-                                <div><Badge tone={statusTone[p.status]} size="xs">{p.status === 'In progress' ? '작업 중' : p.status === 'Review' ? '검토' : p.status === 'Planning' ? '계획' : p.status === 'Blocked' ? '막힘' : p.status === 'Done' ? '완료' : p.status}</Badge></div>
                               </div>
 
                               {isOpen && (
-                                <div style={{ background: 'var(--surface-2)', borderBottom: pi < items.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
-                                  <div style={{
-                                    display: 'grid', gridTemplateColumns: '22px 18px 1fr 36px 100px 120px',
-                                    padding: '6px 14px 6px 44px', gap: 8, alignItems: 'center',
-                                    fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em',
-                                    borderBottom: '1px solid var(--line-soft)',
-                                  }}>
-                                    <span /><span /><span>하위 아이템</span><span style={{ textAlign: 'center' }}>Own</span><span>기한</span><span>상태</span>
-                                  </div>
+                                <div className="hub-project-subtasks" style={{ borderBottom: pi < items.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+                                  <div className="hub-project-subtasks__head">하위 아이템 · {pTodos.filter(t => t.done).length}/{pTodos.length} 완료</div>
                                   {pTodos.length === 0 && (
-                                    <div style={{ padding: '10px 14px 10px 66px', fontSize: 11.5, color: 'var(--fg-faint)' }}>하위 아이템이 없습니다.</div>
+                                    <div className="hub-project-subtasks__empty">하위 아이템이 없습니다.</div>
                                   )}
                                   {pTodos.map((t, ti) => (
-                                    <div key={t.id} style={{
-                                      display: 'grid', gridTemplateColumns: '22px 18px 1fr 36px 100px 120px',
-                                      padding: '8px 14px 8px 44px', alignItems: 'center', gap: 8,
-                                      borderBottom: ti < pTodos.length - 1 ? '1px solid var(--line-soft)' : 'none',
-                                      opacity: t.done ? 0.55 : 1,
-                                    }}>
-                                      <span />
-                                      <button onClick={() => toggleTodo(t.id)} style={{
-                                        width: 14, height: 14, borderRadius: 3,
-                                        border: '1.5px solid ' + (t.done ? 'var(--success)' : 'var(--line-strong)'),
-                                        background: t.done ? 'var(--success)' : 'transparent',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                      }}>
-                                        {t.done && <span style={{ fontSize: 9, color: 'var(--bg)' }}>✓</span>}
-                                      </button>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <div key={t.id} className="hub-project-subtask" data-done={t.done ? 'true' : 'false'} style={{ borderBottom: ti < pTodos.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+                                      <Checkbox
+                                        checked={t.done}
+                                        onChange={() => toggleTodo(t.id)}
+                                        size={16}
+                                        label={`${t.done ? '다시 열기' : '완료'}: ${t.title}`}
+                                      />
+                                      <div className="hub-project-subtask__title">
                                         <Dot tone={prioTone[t.priority]} size={4} />
-                                        <span style={{ fontSize: 12.5, textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</span>
+                                        <span>{t.title}</span>
                                       </div>
-                                      <div style={{ display: 'flex', justifyContent: 'center' }}>
-                                        <Avatar name={t.assignee} size={18} tone={t.assignee === 'Me' ? 'moon' : t.assignee === 'Council' ? 'info' : 'neutral'} />
-                                      </div>
-                                      <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{t.due}</span>
-                                      <Badge tone={t.done ? 'success' : 'neutral'} size="xs">{t.done ? '완료' : '열림'}</Badge>
+                                      <span className="hub-project-subtask__assignee">{t.assignee}</span>
+                                      <span className="mono hub-project-subtask__due">{t.due || '기한 없음'}</span>
                                     </div>
                                   ))}
-                                  <button onClick={() => createTodo(p.id)} style={{
-                                    width: '100%', padding: '8px 14px 10px 66px', textAlign: 'left',
-                                    fontSize: 11.5, color: 'var(--fg-faint)',
-                                    borderTop: pTodos.length ? '1px solid var(--line-soft)' : 'none',
-                                  }}>＋ 하위 아이템 추가</button>
+                                  <button className="hub-project-subtasks__add" onClick={() => createTodo(p.id)}>＋ 하위 아이템 추가</button>
                                 </div>
                               )}
                             </React.Fragment>
@@ -1305,30 +1390,42 @@ export function Projects({ workspace }) {
               const pNotes = (ledger.notes || []).filter(n => n.projectId === p.id).slice(0, 4);
               const pChecks = (ledger.checks || []).filter(c => c.projectId === p.id).slice(0, 4);
               return (
-                <ProjectDetailPanel
-                  project={p}
-                  container={pBrand}
-                  todos={pTodos}
-                  updates={pUpdates}
-                  decisions={pDecisions}
-                  notes={pNotes}
-                  checks={pChecks}
-                  syncState={syncState}
-                  statusTone={statusTone}
-                  updateTone={updateTone}
-                  checkTone={checkTone}
-                  orderPending={orderPending}
-                  orderResult={orderResult}
-                  onClose={closeProjectDetail}
-                  onEdit={editProject}
-                  onToggleTodo={toggleTodo}
-                  onCreateTodo={createTodo}
-                  onOpen={(project) => {
-                    setExpanded(prev => new Set([...prev, project.id]));
-                    setView('tree');
-                  }}
-                  onSendOrder={sendProjectOrder}
-                />
+                <div
+                  ref={detailSheetRef}
+                  className="hub-project-detail-sheet"
+                  role={mobileDetail ? 'dialog' : 'region'}
+                  aria-modal={mobileDetail ? 'true' : undefined}
+                  aria-label={`${p.name} 프로젝트 상세`}
+                >
+                  <button type="button" tabIndex={-1} className="hub-project-detail-sheet__backdrop" aria-label="프로젝트 상세 닫기" onClick={closeProjectDetail} />
+                  <div className="hub-project-detail-sheet__links">
+                    <ProjectPlanningLinks projectId={p.id} projectName={p.name} />
+                  </div>
+                  <ProjectDetailPanel
+                    project={p}
+                    container={pBrand}
+                    todos={pTodos}
+                    updates={pUpdates}
+                    decisions={pDecisions}
+                    notes={pNotes}
+                    checks={pChecks}
+                    syncState={syncState}
+                    statusTone={statusTone}
+                    updateTone={updateTone}
+                    checkTone={checkTone}
+                    orderPending={orderPending}
+                    orderResult={orderResult}
+                    onClose={closeProjectDetail}
+                    onEdit={editProject}
+                    onToggleTodo={toggleTodo}
+                    onCreateTodo={createTodo}
+                    onOpen={(project) => {
+                      setExpanded(prev => new Set([...prev, project.id]));
+                      setView('tree');
+                    }}
+                    onSendOrder={sendProjectOrder}
+                  />
+                </div>
               );
             })()}
           </div>
@@ -1364,14 +1461,12 @@ export function Projects({ workspace }) {
                             borderBottom: i < items.length - 1 ? '1px solid var(--line-soft)' : 'none',
                             opacity: t.done ? 0.5 : 1,
                           }}>
-                            <button onClick={() => toggleTodo(t.id)} style={{
-                              width: 16, height: 16, borderRadius: 4,
-                              border: '1.5px solid ' + (t.done ? 'var(--success)' : 'var(--line-strong)'),
-                              background: t.done ? 'var(--success)' : 'transparent',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>
-                              {t.done && <span style={{ fontSize: 10, color: 'var(--bg)' }}>✓</span>}
-                            </button>
+                            <Checkbox
+                              checked={t.done}
+                              onChange={() => toggleTodo(t.id)}
+                              size={16}
+                              label={`${t.done ? '다시 열기' : '완료'}: ${t.title}`}
+                            />
                             <div style={{ minWidth: 0 }}>
                               <div style={{ fontSize: 13, textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</div>
                               <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3 }}>
@@ -1431,7 +1526,19 @@ export function Projects({ workspace }) {
                         {c.tag === 'company' && <Badge tone="company" size="xs">C</Badge>}
                       </div>
                       <div style={{ fontSize: 12.5, lineHeight: 1.4 }}>{c.title}</div>
-                      {c.due && <div className="mono" style={{ fontSize: 10, color: 'var(--warning)', marginTop: 6 }}>⏱ {c.due}</div>}
+                      {c.due && <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-muted)', marginTop: 6 }}>기한 · {c.due}</div>}
+                      <select
+                        className="hub-project-board-status"
+                        aria-label={`${c.title} 상태 변경`}
+                        value={col.key}
+                        onClick={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onChange={(event) => moveCard(c.id, event.target.value)}
+                      >
+                        {visibleColumns.map(option => (
+                          <option key={option.key} value={option.key}>{option.label}</option>
+                        ))}
+                      </select>
                     </div>
                   ))}
                 </div>
