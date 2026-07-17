@@ -198,7 +198,7 @@ export function mapProjects(
   brandById,
   taskStats,
   updateStats,
-  { taskStatsPartial = false } = {},
+  { taskStatsPartial = false, updateStatsPartial = false } = {},
 ) {
   return rows.map((row) => {
     const brand = row.brand_id && brandById.get(row.brand_id);
@@ -208,11 +208,25 @@ export function mapProjects(
       ? updates.latest.progress
       : null;
     const reportedProgress = latestProgress ?? (Number.isFinite(row.progress) ? row.progress : null);
-    const displayProgress = buildProjectProgress({
+    const baseDisplayProgress = buildProjectProgress({
       tasks: stats,
       reportedProgress,
       partial: taskStatsPartial,
     });
+    const taskEvidenceComplete = stats.total > 0 && !taskStatsPartial;
+    const displayProgress = updateStatsPartial
+      ? taskEvidenceComplete
+        ? { ...baseDisplayProgress, evidencePartial: true }
+        : {
+            value: null,
+            source: baseDisplayProgress?.source || "reported",
+            label: "업데이트 진척 읽기 실패",
+            done: baseDisplayProgress?.done ?? null,
+            total: baseDisplayProgress?.total ?? null,
+            partial: true,
+            evidencePartial: true,
+          }
+      : baseDisplayProgress;
     const displaySummary = row.summary || updates.latest?.summary || row.next_action || "";
     const displayNextAction = row.next_action || updates.latest?.nextAction || "";
 
@@ -231,6 +245,7 @@ export function mapProjects(
       displayNextAction,
       displayProgress,
       latestUpdate: updates.latest,
+      updateEvidencePartial: updateStatsPartial,
       progress: displayProgress?.value ?? null,
       due: formatShortDate(row.due_at),
       startedAt: row.started_at ?? null,
@@ -422,6 +437,8 @@ export async function getProjectLedger() {
       checks: [],
       columns: [],
       taskAggregation: null,
+      partial: false,
+      failedSources: [],
     };
   }
 
@@ -502,10 +519,21 @@ export async function getProjectLedger() {
       checks: [],
       columns: [],
       taskAggregation: null,
+      partial: false,
     };
   }
 
+  const optionalSources = [
+    ["project_updates", updateRows],
+    ["decisions", decisionRows],
+    ["notes", noteRows],
+    ["routine_checks", routineRows],
+  ];
+  const optionalFailedSources = optionalSources
+    .filter(([, rows]) => !Array.isArray(rows))
+    .map(([source]) => source);
   const taskStatsPartial = !Number.isFinite(taskRowCount) || taskRowCount !== taskRows.length;
+  const updateStatsPartial = !Array.isArray(updateRows);
 
   const brandById = new Map(brandRows.map((brand) => [brand.id, brand]));
   const projectById = new Map(projectRows.map((project) => [project.id, project]));
@@ -519,11 +547,12 @@ export async function getProjectLedger() {
     taskStats.set(task.project_id, stats);
   });
 
-  const updates = mapProjectUpdates(updateRows || []);
+  const updates = mapProjectUpdates(Array.isArray(updateRows) ? updateRows : []);
   const updateStats = buildUpdateStats(updates);
   const todos = mapTodos(taskRows, projectById, brandById);
   const projects = mapProjects(projectRows, brandById, taskStats, updateStats, {
     taskStatsPartial,
+    updateStatsPartial,
   });
   const brands = mapBrands(brandRows, projects, todos, updates);
 
@@ -535,14 +564,16 @@ export async function getProjectLedger() {
     projects,
     todos,
     updates,
-    decisions: mapDecisions(decisionRows || []),
-    notes: mapNotes(noteRows || []),
-    checks: mapRoutineChecks(routineRows || []),
+    decisions: mapDecisions(Array.isArray(decisionRows) ? decisionRows : []),
+    notes: mapNotes(Array.isArray(noteRows) ? noteRows : []),
+    checks: mapRoutineChecks(Array.isArray(routineRows) ? routineRows : []),
     columns: buildBoardColumns(projects, todos),
     taskAggregation: {
       loaded: taskRows.length,
       total: Number.isFinite(taskRowCount) ? taskRowCount : null,
       partial: taskStatsPartial,
     },
+    partial: optionalFailedSources.length > 0,
+    failedSources: optionalFailedSources,
   };
 }

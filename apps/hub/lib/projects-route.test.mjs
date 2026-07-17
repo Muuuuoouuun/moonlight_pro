@@ -15,7 +15,9 @@ export class NextResponse extends Response {
 
 const ledgerStub = `
 export async function getProjectLedger() {
-  return globalThis.__projectsRouteTestState.ledger;
+  const state = globalThis.__projectsRouteTestState;
+  if (state.throwError) throw state.throwError;
+  return state.ledger;
 }
 `;
 
@@ -55,10 +57,11 @@ registerHooks({
   },
 });
 
-globalThis.__projectsRouteTestState = { ledger: null };
+globalThis.__projectsRouteTestState = { ledger: null, throwError: null };
 const { GET } = await import("../app/api/hub/projects/route.js?project-read-truth-route-test");
 
 beforeEach(() => {
+  globalThis.__projectsRouteTestState.throwError = null;
   globalThis.__projectsRouteTestState.ledger = {
     source: "preview",
     configured: false,
@@ -112,4 +115,45 @@ test("projects API reports a successful Supabase ledger as live", async () => {
   assert.equal(response.status, 200);
   assert.equal(body.status, "live");
   assert.equal(body.source, "supabase");
+});
+
+test("projects API preserves optional ledger failures as named partial data", async () => {
+  globalThis.__projectsRouteTestState.ledger = {
+    source: "supabase",
+    configured: true,
+    partial: true,
+    failedSources: ["project_updates", "notes"],
+    projects: [{ id: "project-1" }],
+    todos: [],
+  };
+
+  const response = await GET();
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "partial");
+  assert.equal(body.source, "supabase");
+  assert.equal(body.partial, true);
+  assert.deepEqual(body.failedSources, ["project_updates", "notes"]);
+  assert.deepEqual(body.projects, [{ id: "project-1" }]);
+});
+
+test("projects API never leaks internal exception details", async () => {
+  globalThis.__projectsRouteTestState.throwError = new Error("column private_customer_secret does not exist");
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const response = await GET();
+    const body = await response.json();
+    const serialized = JSON.stringify(body);
+
+    assert.equal(response.status, 500);
+    assert.equal(body.status, "error");
+    assert.equal(body.error, "project-ledger-request-failed");
+    assert.equal(body.retryable, true);
+    assert.doesNotMatch(serialized, /private_customer_secret|column/i);
+  } finally {
+    console.error = originalError;
+    globalThis.__projectsRouteTestState.throwError = null;
+  }
 });

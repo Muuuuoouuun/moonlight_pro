@@ -175,6 +175,7 @@ test("configured core ledger read failures are errors instead of preview", async
   assert.equal(ledger.source, "error");
   assert.equal(ledger.configured, true);
   assert.equal(ledger.error, "project-ledger-core-read-failed");
+  assert.equal(ledger.partial, false);
   assert.deepEqual(ledger.failedSources, ["brands"]);
   assert.deepEqual(ledger.projects, []);
   assert.deepEqual(ledger.todos, []);
@@ -189,6 +190,8 @@ test("missing workspace or Supabase config remains an honest preview without rea
   const missingWorkspace = await operatingLedger.getProjectLedger();
   assert.equal(missingWorkspace.source, "preview");
   assert.equal(missingWorkspace.configured, false);
+  assert.equal(missingWorkspace.partial, false);
+  assert.deepEqual(missingWorkspace.failedSources, []);
   assert.equal(state.calls.length, 0);
 
   state.workspaceId = "workspace-1";
@@ -196,10 +199,12 @@ test("missing workspace or Supabase config remains an honest preview without rea
   const missingConfig = await operatingLedger.getProjectLedger();
   assert.equal(missingConfig.source, "preview");
   assert.equal(missingConfig.configured, false);
+  assert.equal(missingConfig.partial, false);
+  assert.deepEqual(missingConfig.failedSources, []);
   assert.equal(state.calls.length, 0);
 });
 
-test("optional ledger read failures preserve the live core project ledger", async () => {
+test("optional ledger read failures preserve core rows but mark the ledger partial", async () => {
   const state = globalThis.__operatingLedgerTestState;
   state.calls = [];
   state.workspaceId = "workspace-1";
@@ -218,8 +223,87 @@ test("optional ledger read failures preserve the live core project ledger", asyn
   const ledger = await operatingLedger.getProjectLedger();
 
   assert.equal(ledger.source, "supabase");
+  assert.equal(ledger.partial, true);
+  assert.deepEqual(ledger.failedSources, [
+    "project_updates",
+    "decisions",
+    "notes",
+    "routine_checks",
+  ]);
   assert.deepEqual(ledger.updates, []);
   assert.deepEqual(ledger.decisions, []);
   assert.deepEqual(ledger.notes, []);
   assert.deepEqual(ledger.checks, []);
+});
+
+test("successful empty optional reads are live-empty rather than partial failures", async () => {
+  const state = globalThis.__operatingLedgerTestState;
+  state.calls = [];
+  state.workspaceId = "workspace-1";
+  state.config = { url: "https://supabase.example.com", apiKey: "test-key" };
+  state.counts = { tasks: 0 };
+  state.rows = {
+    brands: [],
+    projects: [],
+    tasks: [],
+    project_updates: [],
+    decisions: [],
+    notes: [],
+    routine_checks: [],
+  };
+
+  const ledger = await operatingLedger.getProjectLedger();
+
+  assert.equal(ledger.source, "supabase");
+  assert.equal(ledger.partial, false);
+  assert.deepEqual(ledger.failedSources, []);
+});
+
+test("failed update evidence stays explicit while complete task evidence remains usable", async () => {
+  const state = globalThis.__operatingLedgerTestState;
+  state.calls = [];
+  state.workspaceId = "workspace-1";
+  state.config = { url: "https://supabase.example.com", apiKey: "test-key" };
+  state.counts = { tasks: 2 };
+  state.rows = {
+    brands: [],
+    projects: [
+      {
+        id: "project-reported-only",
+        name: "보고 진척만 있는 프로젝트",
+        status: "active",
+        progress: 80,
+        created_at: "2026-07-01T00:00:00.000Z",
+        updated_at: "2026-07-17T00:00:00.000Z",
+      },
+      {
+        id: "project-task-evidence",
+        name: "체크리스트 프로젝트",
+        status: "active",
+        progress: 90,
+        created_at: "2026-07-01T00:00:00.000Z",
+        updated_at: "2026-07-17T00:00:00.000Z",
+      },
+    ],
+    tasks: [
+      { id: "task-1", project_id: "project-task-evidence", title: "완료", status: "done", priority: "medium" },
+      { id: "task-2", project_id: "project-task-evidence", title: "남음", status: "todo", priority: "medium" },
+    ],
+    project_updates: null,
+    decisions: [],
+    notes: [],
+    routine_checks: [],
+  };
+
+  const ledger = await operatingLedger.getProjectLedger();
+  const reportedOnly = ledger.projects.find((project) => project.id === "project-reported-only");
+  const taskEvidence = ledger.projects.find((project) => project.id === "project-task-evidence");
+
+  assert.equal(reportedOnly.updateEvidencePartial, true);
+  assert.equal(reportedOnly.displayProgress.value, null);
+  assert.equal(reportedOnly.displayProgress.partial, true);
+  assert.equal(taskEvidence.updateEvidencePartial, true);
+  assert.equal(taskEvidence.displayProgress.value, 50);
+  assert.equal(taskEvidence.displayProgress.partial, false);
+  assert.equal(taskEvidence.displayProgress.evidencePartial, true);
 });

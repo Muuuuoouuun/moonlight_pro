@@ -40,7 +40,8 @@ function progressLabel(project) {
   const count = progress.done !== null && progress.total !== null
     ? ` · ${progress.done}/${progress.total}`
     : "";
-  return `${progress.value === null ? "" : `${progress.value}% · `}${progress.label}${count}`;
+  const evidenceNote = project.updateEvidencePartial ? " · 업데이트 기록 미확인" : "";
+  return `${progress.value === null ? "" : `${progress.value}% · `}${progress.label}${count}${evidenceNote}`;
 }
 
 export function ProjectDetailPanel({
@@ -52,6 +53,7 @@ export function ProjectDetailPanel({
   notes = [],
   checks = [],
   syncState,
+  failedSources = [],
   statusTone = {},
   updateTone = {},
   checkTone = {},
@@ -66,8 +68,12 @@ export function ProjectDetailPanel({
 }) {
   if (!project) return null;
   const doneCount = todos.filter((todo) => todo.done).length;
+  const failed = new Set(failedSources);
   const displaySummary = project.displaySummary || project.summary || "";
   const displayNextAction = project.displayNextAction || project.nextAction || "";
+  const failedEmpty = (source, empty) => failed.has(source)
+    ? `${source} 원장을 읽지 못했습니다. 다시 시도하세요.`
+    : empty;
 
   return (
     <aside aria-label={`${project.name} 상세`} style={{ borderLeft: "1px solid var(--line-soft)", background: "var(--surface)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -85,6 +91,11 @@ export function ProjectDetailPanel({
             {project.tag === "personal" && <Badge tone="personal" size="xs">Personal</Badge>}
           </div>
         </div>
+        {failedSources.length > 0 && (
+          <div role="status" style={{ padding: "9px 10px", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", color: "var(--fg-muted)", fontSize: 11.5 }}>
+            일부 기록을 읽지 못했습니다 · {failedSources.join(", ")}
+          </div>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: "80px 1fr", rowGap: 9, fontSize: 12 }}>
           <span style={{ color: "var(--fg-faint)" }}>Owner</span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -96,16 +107,18 @@ export function ProjectDetailPanel({
           <span style={{ color: "var(--fg-faint)" }}>진행률</span>
           <span style={{ color: "var(--fg-muted)" }}>{progressLabel(project)}</span>
           <span style={{ color: "var(--fg-faint)" }}>최근 활동</span>
-          <span className="mono" style={{ color: "var(--fg-muted)" }}>{project.lastActivityLabel || "미정"}</span>
+          <span className="mono" style={{ color: "var(--fg-muted)" }}>{project.lastActivityLabel || "미정"}{project.updateEvidencePartial ? " · 업데이트 기록 미확인" : ""}</span>
           <span style={{ color: "var(--fg-faint)" }}>다음 행동</span>
-          <span style={{ color: "var(--fg-muted)", whiteSpace: "pre-wrap" }}>{displayNextAction || "아직 지정되지 않음"}</span>
+          <span style={{ color: "var(--fg-muted)", whiteSpace: "pre-wrap" }}>{displayNextAction || (project.updateEvidencePartial ? "project_updates를 읽지 못해 확인할 수 없습니다." : "아직 지정되지 않음")}</span>
           <span style={{ color: "var(--fg-faint)" }}>생성</span>
           <span className="mono" style={{ color: "var(--fg-muted)" }}>{project.createdAtLabel || "미정"}</span>
         </div>
         <div>
           <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)", marginBottom: 6 }}>목표 결과</div>
           <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
-            {displaySummary || `${container?.desc || "프로젝트"}. 아직 목표 결과가 기록되지 않았습니다.`}
+            {displaySummary || (project.updateEvidencePartial
+              ? "project_updates를 읽지 못해 업데이트 기반 목표 요약을 확인할 수 없습니다."
+              : `${container?.desc || "프로젝트"}. 아직 목표 결과가 기록되지 않았습니다.`)}
           </div>
         </div>
         <div>
@@ -128,16 +141,16 @@ export function ProjectDetailPanel({
             <button onClick={() => onCreateTodo?.(project.id)} style={{ padding: "6px 8px", textAlign: "left", fontSize: 11.5, color: "var(--fg-faint)" }}>＋ 항목 추가</button>
           </div>
         </div>
-        <DetailSection title="최근 업데이트" count={updates.length} empty={syncState === "live" ? "이 프로젝트에 연결된 update가 아직 없습니다." : "live 연결 후 project_updates가 여기에 표시됩니다."}>
+        <DetailSection title="최근 업데이트" count={updates.length} empty={failedEmpty("project_updates", syncState === "preview" ? "live 연결 후 project_updates가 여기에 표시됩니다." : "이 프로젝트에 연결된 update가 아직 없습니다.")}>
           {updates.map((update) => <ActivityRow key={update.id} title={update.title} body={update.summary || update.nextAction} meta={update.progress !== null && update.progress !== undefined ? `${update.progress}%` : update.happenedAtLabel} badge={update.source} tone={updateTone[update.status] || "neutral"} />)}
         </DetailSection>
-        <DetailSection title="결정" count={decisions.length} empty="이 프로젝트에 연결된 결정 기록이 없습니다.">
+        <DetailSection title="결정" count={decisions.length} empty={failedEmpty("decisions", "이 프로젝트에 연결된 결정 기록이 없습니다.")}>
           {decisions.map((decision) => <ActivityRow key={decision.id} title={decision.title} body={decision.summary} meta={decision.decidedAtLabel} badge="decision" tone="moon" />)}
         </DetailSection>
-        <DetailSection title="노트" count={notes.length} empty="이 프로젝트에 연결된 노트가 없습니다.">
+        <DetailSection title="노트" count={notes.length} empty={failedEmpty("notes", "이 프로젝트에 연결된 노트가 없습니다.")}>
           {notes.map((note) => <ActivityRow key={note.id} title={note.title} body={note.body} meta={note.createdAtLabel} badge="note" />)}
         </DetailSection>
-        <DetailSection title="루틴 체크" count={checks.length} empty="이 프로젝트에 연결된 routine check가 없습니다.">
+        <DetailSection title="루틴 체크" count={checks.length} empty={failedEmpty("routine_checks", "이 프로젝트에 연결된 routine check가 없습니다.")}>
           {checks.map((check) => <ActivityRow key={check.id} title={check.checkType} body={check.note} meta={check.checkedAtLabel} badge={check.status} tone={checkTone[check.status] || "neutral"} />)}
         </DetailSection>
       </div>

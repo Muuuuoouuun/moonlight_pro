@@ -23,7 +23,9 @@ export const dynamic = "force-dynamic";
 
 function ledgerState(result) {
   if (result.status === "rejected") return "error";
-  return result.value?.source === "supabase" ? "live" : "preview";
+  if (result.value?.source === "error") return "error";
+  if (result.value?.source === "supabase") return result.value.partial ? "partial" : "live";
+  return "preview";
 }
 
 function readLedger(result, fallback = {}) {
@@ -340,28 +342,40 @@ function buildMetrics(revenue, content, automations, projects) {
   const revenueSummary = revenue.summary || {};
   const contentSummary = content.summary || {};
   const automationSummary = automations.summary || {};
-  const openProjects = Array.isArray(projects.projects)
+  const projectsReadable = projects?.source === "supabase";
+  const openProjects = projectsReadable && Array.isArray(projects.projects)
     ? projects.projects.filter((project) => project.status !== "Done").length
-    : 0;
+    : null;
 
   return [
     metric("MRR", formatMoney(revenueSummary.mrr || 0), revenueSummary.mrr ? "ledger" : "waiting", revenueSummary.mrr ? "success" : "neutral"),
     metric("Pipeline", formatMoney(revenueSummary.pipeline || 0), `${revenueSummary.openDeals || 0} deals`, "moon"),
     metric("Published", String(contentSummary.published || 0), `${contentSummary.drafts || 0} drafts`, "info"),
     metric("Runs failed", String(automationSummary.failuresToday || 0), `${automationSummary.runsToday || 0} runs`, automationSummary.failuresToday ? "warning" : "success"),
-    metric("Open work", String(openProjects), "active projects", "moon"),
+    metric("Open work", openProjects === null ? "—" : String(openProjects), projectsReadable ? "active projects" : "project ledger unavailable", "moon"),
   ].slice(0, 4);
 }
 
 function buildSources(results) {
   return [
-    { key: "projects", label: "Projects", state: ledgerState(results.projects) },
-    { key: "work", label: "Work", state: ledgerState(results.work) },
-    { key: "content", label: "Content", state: ledgerState(results.content) },
-    { key: "revenue", label: "Revenue", state: ledgerState(results.revenue) },
-    { key: "automations", label: "Automations", state: ledgerState(results.automations) },
-    { key: "agents", label: "Agents", state: ledgerState(results.orders) },
-  ];
+    ["projects", "Projects"],
+    ["work", "Work"],
+    ["content", "Content"],
+    ["revenue", "Revenue"],
+    ["automations", "Automations"],
+    ["orders", "Agents"],
+  ].map(([resultKey, label]) => {
+    const result = results[resultKey];
+    const value = result.status === "fulfilled" ? result.value : null;
+    return {
+      key: resultKey === "orders" ? "agents" : resultKey,
+      label,
+      state: ledgerState(result),
+      failedSources: Array.isArray(value?.failedSources) ? value.failedSources : [],
+      error: value?.source === "error" ? value.error || `${resultKey}-ledger-read-failed` : null,
+      retryable: value?.source === "error" ? value.retryable !== false : false,
+    };
+  });
 }
 
 export async function GET() {
@@ -401,6 +415,10 @@ export async function GET() {
   const sources = buildSources(results);
   const liveCount = sources.filter((source) => source.state === "live").length;
   const errorCount = sources.filter((source) => source.state === "error").length;
+  const partialCount = sources.filter((source) => source.state === "partial").length;
+  const failedSources = sources
+    .filter((source) => ["error", "partial"].includes(source.state))
+    .map((source) => source.key);
   const signals = [
     ...buildUnifiedRiskSignals(operatorRevenue, projects, automations),
     ...buildApprovalSignals(queue),
@@ -413,21 +431,32 @@ export async function GET() {
     projects,
     content: filterContentLedgerToBrandLanes(content),
   });
-  const taskToday = {
-    ...buildTaskToday(projects.todos),
-    state: ledgerState(projectsResult),
-  };
+  const projectState = ledgerState(projectsResult);
+  const taskToday = projects?.source === "supabase"
+    ? {
+        ...buildTaskToday(projects.todos),
+        state: projectState,
+      }
+    : {
+        state: projectState,
+        items: [],
+        counts: null,
+        hiddenCount: null,
+        error: projects?.source === "error" ? projects.error || "project-ledger-core-read-failed" : null,
+      };
   const contentBrands = buildContentBrandCatalog(content);
 
   return NextResponse.json({
-    status: errorCount ? "partial" : liveCount ? "live" : "preview",
+    status: errorCount || partialCount ? "partial" : liveCount ? "live" : "preview",
     source: liveCount ? "supabase" : "preview",
     generatedAt: new Date().toISOString(),
     sources,
+    failedSources,
     summary: {
       liveCount,
       previewCount: sources.filter((source) => source.state === "preview").length,
       errorCount,
+      partialCount,
       signalCount: signals.length,
       urgentCount: signals.filter((signal) => signal.tone === "danger").length,
       todayCount: signals.filter((signal) => signal.tone === "warning").length,

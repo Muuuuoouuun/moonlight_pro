@@ -185,6 +185,8 @@ export function Projects({ workspace }) {
     notes: [],
     checks: [],
     columns: [],
+    partial: false,
+    failedSources: [],
   });
   const [todos, setTodos] = React.useState([]);
   const [drag, setDrag] = React.useState(null);
@@ -276,6 +278,8 @@ export function Projects({ workspace }) {
       ? '프로젝트 원장 확인 중'
       : syncState === 'error'
         ? '프로젝트 원장 읽기 실패'
+        : syncState === 'partial'
+          ? '프로젝트 일부 원장 읽기 실패'
         : 'preview · 실제 원장 미연결';
 
   const loadLedger = React.useCallback(async ({ initial = false } = {}) => {
@@ -303,10 +307,12 @@ export function Projects({ workspace }) {
           notes: Array.isArray(data.notes) ? data.notes : [],
           checks: Array.isArray(data.checks) ? data.checks : [],
           columns: Array.isArray(data.columns) ? data.columns : [],
+          partial: Boolean(data.partial),
+          failedSources: Array.isArray(data.failedSources) ? data.failedSources : [],
         });
         setTodos(liveTodos);
         if (initial) setExpanded(new Set(liveProjects.slice(0, 2).map(p => p.id)));
-        setSyncState('live');
+        setSyncState(data.partial ? 'partial' : 'live');
         setReadError(null);
         return { ok: true, projects: liveProjects, todos: liveTodos };
       }
@@ -320,6 +326,8 @@ export function Projects({ workspace }) {
         notes: [],
         checks: [],
         columns: [],
+        partial: false,
+        failedSources: [],
       });
       setTodos([]);
       setSyncState('preview');
@@ -1216,6 +1224,16 @@ export function Projects({ workspace }) {
                     />
                   </Card>
                 )}
+                {syncState === 'partial' && (
+                  <Card>
+                    <EmptyState
+                      icon="projects"
+                      title="프로젝트 일부 원장을 읽지 못했습니다"
+                      description={`${(ledger.failedSources || []).join(', ')} 기록을 확인할 수 없습니다. 프로젝트와 할 일의 읽힌 데이터는 유지합니다.`}
+                      action={<Button variant="outline" size="sm" onClick={() => loadLedger({ initial: true })}>다시 시도</Button>}
+                    />
+                  </Card>
+                )}
                 {!['error', 'loading'].includes(syncState) && projects.length === 0 && (
                   <Card>
                     <EmptyState
@@ -1293,7 +1311,7 @@ export function Projects({ workspace }) {
                           const terminal = ['completed', 'archived', 'cancelled'].includes(String(p.statusKey || '').toLowerCase());
                           const overdue = !terminal && Number.isFinite(dueTime) && dueTime < new Date().setHours(0, 0, 0, 0);
                           const blocked = String(p.statusKey || '').toLowerCase() === 'blocked' || p.status === 'Blocked';
-                          const nextAction = p.displayNextAction || p.projectNextAction || '다음 행동 미정';
+                          const nextAction = p.displayNextAction || p.projectNextAction || (p.updateEvidencePartial ? '업데이트 기록 미확인' : '다음 행동 미정');
                           return (
                             <React.Fragment key={p.id}>
                               <div className="hub-project-row" data-selected={isSel ? 'true' : 'false'}>
@@ -1434,6 +1452,7 @@ export function Projects({ workspace }) {
                     notes={pNotes}
                     checks={pChecks}
                     syncState={syncState}
+                    failedSources={ledger.failedSources}
                     statusTone={statusTone}
                     updateTone={updateTone}
                     checkTone={checkTone}

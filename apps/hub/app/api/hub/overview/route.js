@@ -15,7 +15,9 @@ const DAY_MS = 86400000;
 
 function ledgerState(result) {
   if (result.status === "rejected") return "error";
-  return result.value?.source === "supabase" ? "live" : "preview";
+  if (result.value?.source === "error") return "error";
+  if (result.value?.source === "supabase") return result.value.partial ? "partial" : "live";
+  return "preview";
 }
 
 function readLedger(result, fallback = {}) {
@@ -43,12 +45,22 @@ function withinDays(value, days) {
 // Daily histogram of real event timestamps — project_updates (work),
 // decisions (planning), and publishes (content). No synthetic fallback
 // series: an empty ledger renders as a flat zero line, not a fabricated trend.
-function buildActivitySeries(updates, decisions, publishLogs) {
+function buildActivitySeries(
+  updates,
+  decisions,
+  publishLogs,
+  { updatesAvailable = true, decisionsAvailable = true, contentAvailable = true } = {},
+) {
   const since = startOfDaysAgo(ACTIVITY_DAYS - 1);
   const buckets = new Map();
   for (let i = 0; i < ACTIVITY_DAYS; i += 1) {
     const key = dayKey(new Date(since.getTime() + i * DAY_MS));
-    buckets.set(key, { date: key, work: 0, decisions: 0, content: 0 });
+    buckets.set(key, {
+      date: key,
+      work: updatesAvailable ? 0 : null,
+      decisions: decisionsAvailable ? 0 : null,
+      content: contentAvailable ? 0 : null,
+    });
   }
   updates.forEach((update) => {
     const key = dayKey(update.happenedAt);
@@ -173,12 +185,23 @@ function buildRevenueStageSeries(revenue) {
 
 function buildSources(results) {
   return [
-    { key: "projects", label: "Projects", state: ledgerState(results.projects) },
-    { key: "content", label: "Content", state: ledgerState(results.content) },
-    { key: "revenue", label: "Revenue", state: ledgerState(results.revenue) },
-    { key: "automations", label: "Automations", state: ledgerState(results.automations) },
-    { key: "work", label: "Work", state: ledgerState(results.work) },
-  ];
+    ["projects", "Projects"],
+    ["content", "Content"],
+    ["revenue", "Revenue"],
+    ["automations", "Automations"],
+    ["work", "Work"],
+  ].map(([key, label]) => {
+    const result = results[key];
+    const value = result.status === "fulfilled" ? result.value : null;
+    return {
+      key,
+      label,
+      state: ledgerState(result),
+      failedSources: Array.isArray(value?.failedSources) ? value.failedSources : [],
+      error: value?.source === "error" ? value.error || `${key}-ledger-read-failed` : null,
+      retryable: value?.source === "error" ? value.retryable !== false : false,
+    };
+  });
 }
 
 export async function GET() {
@@ -206,36 +229,54 @@ export async function GET() {
 
   const sources = buildSources(results);
   const liveCount = sources.filter((source) => source.state === "live").length;
-  const errorCount = sources.filter((source) => source.state === "error").length;
+  const degradedSources = sources.filter((source) => ["error", "partial"].includes(source.state));
+  const failedSources = degradedSources.map((source) => source.key);
 
   const operatorHome = buildOperatorHomeSummary({ projects, content });
 
-  const updatesThisWeek = (projects.updates || []).filter((update) => withinDays(update.happenedAt, 7)).length;
-  const decisionsThisWeek = (projects.decisions || []).filter((decision) => withinDays(decision.decidedAt, 7)).length;
-  const publishedThisWeek = (content.publishLogs || []).filter(
-    (log) => log.status === "published" && withinDays(log.publishedAt || log.createdAt, 7),
-  ).length;
+  const projectReadable = projects?.source === "supabase";
+  const projectFailures = new Set(projects?.failedSources || []);
+  const updatesAvailable = projectReadable && !projectFailures.has("project_updates");
+  const decisionsAvailable = projectReadable && !projectFailures.has("decisions");
+  const contentAvailable = content?.source === "supabase";
+  const updatesThisWeek = updatesAvailable
+    ? (projects.updates || []).filter((update) => withinDays(update.happenedAt, 7)).length
+    : null;
+  const decisionsThisWeek = decisionsAvailable
+    ? (projects.decisions || []).filter((decision) => withinDays(decision.decidedAt, 7)).length
+    : null;
+  const publishedThisWeek = contentAvailable
+    ? (content.publishLogs || []).filter(
+        (log) => log.status === "published" && withinDays(log.publishedAt || log.createdAt, 7),
+      ).length
+    : null;
 
   return NextResponse.json({
-    status: errorCount ? "partial" : liveCount ? "live" : "preview",
+    status: degradedSources.length ? "partial" : liveCount ? "live" : "preview",
     source: liveCount ? "supabase" : "preview",
     generatedAt: new Date().toISOString(),
     sources,
+    failedSources,
     kpis: {
       updatesThisWeek,
       decisionsThisWeek,
       publishedThisWeek,
-      activeProjects: operatorHome.pms?.activeProjects ?? 0,
-      blockedProjects: operatorHome.pms?.blockedProjects ?? 0,
+      activeProjects: operatorHome.pms?.activeProjects ?? null,
+      blockedProjects: operatorHome.pms?.blockedProjects ?? null,
     },
-    activitySeries: buildActivitySeries(projects.updates || [], projects.decisions || [], content.publishLogs || []),
+    activitySeries: buildActivitySeries(
+      projects.updates || [],
+      projects.decisions || [],
+      content.publishLogs || [],
+      { updatesAvailable, decisionsAvailable, contentAvailable },
+    ),
     operatorHome,
     revenue: {
       summary: revenue.summary || {},
       stageSeries: buildRevenueStageSeries(revenue),
     },
     automationsSummary: automations.summary || {},
-    brandActivity: buildBrandActivity(projects),
+    brandActivity: projectReadable ? buildBrandActivity(projects) : null,
     rhythm: {
       summary: work.summary || {},
       rituals: (work.rituals || []).slice().sort((a, b) => (b.streak || 0) - (a.streak || 0)).slice(0, 3),

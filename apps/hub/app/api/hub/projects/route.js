@@ -24,14 +24,18 @@ export async function GET() {
     }
 
     return NextResponse.json({
-      status: ledger.source === "supabase" ? "live" : "preview",
+      status: ledger.source === "supabase"
+        ? ledger.partial ? "partial" : "live"
+        : "preview",
       ...ledger,
     });
   } catch (error) {
+    console.error("[hub/projects] project ledger read failed", error);
     return NextResponse.json(
       {
         status: "error",
-        error: error instanceof Error ? error.message : String(error),
+        error: "project-ledger-request-failed",
+        retryable: true,
       },
       { status: 500 },
     );

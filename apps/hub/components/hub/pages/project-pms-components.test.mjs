@@ -170,6 +170,24 @@ test("project reads keep error distinct from preview and offer retry", () => {
   assert.doesNotMatch(loadBlock, /catch[\s\S]{0,120}setSyncState\(['"]preview['"]\)/);
 });
 
+test("partial project reads preserve core rows and offer a named retry state", () => {
+  assert.match(projectsSource, /data\.partial \? ['"]partial['"] : ['"]live['"]/);
+  assert.match(projectsSource, /프로젝트 일부 원장을 읽지 못했습니다/);
+  assert.match(projectsSource, /ledger\.failedSources/);
+  assert.match(projectsSource, /onClick=\{\(\) => loadLedger\(\{ initial: true \}\)\}/);
+  assert.match(projectsSource, /failedSources=\{ledger\.failedSources\}/);
+});
+
+test("project detail distinguishes failed optional ledgers from successful empty history", () => {
+  assert.match(detailPanelSource, /failedSources = \[\]/);
+  assert.match(detailPanelSource, /failedEmpty\("project_updates"/);
+  assert.match(detailPanelSource, /failedEmpty\("decisions"/);
+  assert.match(detailPanelSource, /failedEmpty\("notes"/);
+  assert.match(detailPanelSource, /failedEmpty\("routine_checks"/);
+  assert.match(detailPanelSource, /\$\{source\} 원장을 읽지 못했습니다/);
+  assert.match(detailPanelSource, /업데이트 기록 미확인/);
+});
+
 test("project header shows numeric counts only for a live ledger", () => {
   const headerStart = projectsSource.indexOf("const projectHeaderSummary");
   const headerEnd = projectsSource.indexOf("const loadLedger", headerStart);

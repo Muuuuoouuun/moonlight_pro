@@ -13,11 +13,31 @@ export async function GET() {
   try {
     const ledger = await getProjectLedger();
 
+    if (ledger.source === "error") {
+      return NextResponse.json(
+        {
+          status: "error",
+          source: "error",
+          configured: ledger.configured,
+          workspaceId: ledger.workspaceId,
+          error: ledger.error || "project-ledger-core-read-failed",
+          failedSources: ledger.failedSources || ["tasks"],
+          retryable: ledger.retryable !== false,
+          tasks: [],
+        },
+        { status: 502 },
+      );
+    }
+
     return NextResponse.json({
-      status: ledger.source === "supabase" ? "live" : "preview",
+      status: ledger.source === "supabase"
+        ? ledger.partial ? "partial" : "live"
+        : "preview",
       source: ledger.source,
       configured: ledger.configured,
       workspaceId: ledger.workspaceId,
+      partial: ledger.partial || false,
+      failedSources: ledger.failedSources || [],
       tasks: ledger.todos,
     });
   } catch (error) {

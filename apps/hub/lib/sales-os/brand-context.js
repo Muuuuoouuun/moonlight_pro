@@ -69,14 +69,41 @@ function selectFocusBrand(brands, ownKeys, ref) {
 
 export async function assembleBrandContext({ mode = "brand-strategy", ref = null, draft = null, workspace = "brand" } = {}) {
   const missing = [];
-  const [content, projectLedger, runsRes] = await Promise.all([
+  let [content, projectLedger, runsRes] = await Promise.all([
     settled(getContentLedger(), "content-ledger", missing),
     settled(getProjectLedger(), "operating-ledger", missing),
     settled(getRecentAgentRuns({ agent: COUNCIL_AGENT, ref, limit: 5 }), "agent_runs", missing),
   ]);
 
+  if (content?.source === "error") {
+    missing.push({
+      source: "content-ledger",
+      reason: content.error || "content-ledger-read-failed",
+      failedSources: Array.isArray(content.failedSources) ? content.failedSources : [],
+    });
+    content = null;
+  }
+  if (projectLedger?.source === "error") {
+    missing.push({
+      source: "operating-ledger",
+      reason: projectLedger.error || "project-ledger-core-read-failed",
+      failedSources: Array.isArray(projectLedger.failedSources) ? projectLedger.failedSources : [],
+    });
+    projectLedger = null;
+  } else if (projectLedger?.source === "supabase" && projectLedger.partial) {
+    missing.push({
+      source: "operating-ledger",
+      reason: "project-ledger-partial-read",
+      failedSources: Array.isArray(projectLedger.failedSources) ? projectLedger.failedSources : [],
+    });
+  }
+
   if (!content && !projectLedger) {
-    return { source: "preview", error: "brand ledgers unavailable", missing };
+    return {
+      source: missing.length ? "error" : "preview",
+      error: "brand ledgers unavailable",
+      missing,
+    };
   }
 
   const brands = content?.brands || [];
@@ -105,7 +132,7 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
   const ideaQueue = trim(content?.ideaQueue, 8);
 
   const context = {
-    source: content?.source || projectLedger?.source || "preview",
+    source: missing.length ? "partial" : content?.source || projectLedger?.source || "preview",
     brand: brandGuardrail(focusBrand),
     brands: brands.map((b) => ({ key: b.key, name: b.name, kind: b.kind, voice: b.voice })),
     content: content

@@ -68,7 +68,7 @@ function buildContentSummary(ledger) {
 }
 
 function ledgerState(ledger) {
-  if (ledger?.source === "supabase") return "live";
+  if (ledger?.source === "supabase") return ledger?.partial ? "partial" : "live";
   if (ledger?.source === "error" || ledger?.status === "error") return "error";
   return "preview";
 }
@@ -76,6 +76,7 @@ function ledgerState(ledger) {
 function combinedState(states) {
   const liveCount = states.filter((state) => state === "live").length;
   if (liveCount === states.length) return "live";
+  if (states.includes("partial")) return "partial";
   if (liveCount > 0) return "partial";
   return states.includes("error") ? "error" : "preview";
 }
@@ -89,7 +90,7 @@ export function buildOperatorHomeSummary({ projects = {}, content = {} } = {}) {
   return {
     state: combinedState(Object.values(sources)),
     sources,
-    pms: sources.projects === "live" ? buildPmsSummary(projects) : null,
+    pms: ["live", "partial"].includes(sources.projects) ? buildPmsSummary(projects) : null,
     content: sources.content === "live" ? buildContentSummary(content) : null,
   };
 }

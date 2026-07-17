@@ -104,3 +104,56 @@ test("does not mix preview records into a partially live home summary", () => {
   assert.equal(summary.pms, null);
   assert.equal(summary.content.ideas, 1);
 });
+
+test("keeps core PMS counts from a partial project ledger while naming the partial source", () => {
+  const summary = homeSummary.buildOperatorHomeSummary({
+    projects: {
+      source: "supabase",
+      partial: true,
+      failedSources: ["project_updates"],
+      projects: [{ id: "project-1", status: "In progress" }],
+      todos: [{ id: "task-1", done: false, bucket: "오늘" }],
+    },
+    content: { source: "supabase", items: [], publishLogs: [] },
+  });
+
+  assert.equal(summary.state, "partial");
+  assert.equal(summary.sources.projects, "partial");
+  assert.equal(summary.pms.activeProjects, 1);
+  assert.equal(summary.pms.openTasks, 1);
+});
+
+test("keeps the combined home state partial when the other ledger is only preview", () => {
+  const summary = homeSummary.buildOperatorHomeSummary({
+    projects: {
+      source: "supabase",
+      partial: true,
+      failedSources: ["notes"],
+      projects: [{ id: "project-1", status: "Planning" }],
+      todos: [],
+    },
+    content: { source: "preview", items: [], publishLogs: [] },
+  });
+
+  assert.equal(summary.state, "partial");
+  assert.deepEqual(summary.sources, { projects: "partial", content: "preview" });
+  assert.equal(summary.pms.totalProjects, 1);
+  assert.equal(summary.content, null);
+});
+
+test("withholds PMS KPIs when the configured project ledger failed", () => {
+  const summary = homeSummary.buildOperatorHomeSummary({
+    projects: {
+      source: "error",
+      configured: true,
+      error: "project-ledger-core-read-failed",
+      projects: [],
+      todos: [],
+    },
+    content: { source: "supabase", items: [], publishLogs: [] },
+  });
+
+  assert.equal(summary.state, "partial");
+  assert.equal(summary.sources.projects, "error");
+  assert.equal(summary.pms, null);
+});
