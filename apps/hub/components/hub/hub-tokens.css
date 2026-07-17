@@ -772,6 +772,12 @@
     max-width: 42vw;
   }
 
+  /* 내 작업 행 meta — 폰에서는 잘린 "견적 · ₩10K…"가 제목만 압축하고 정보는 못 준다.
+     identity(제목)와 날짜만 남긴다; 정체는 stripe, 긴급도는 날짜 색이 이미 전달. */
+  .hub-mywork-meta {
+    display: none;
+  }
+
   .hub-table-card > div:not([class]):not([data-empty="true"]) {
     min-width: 640px;
   }

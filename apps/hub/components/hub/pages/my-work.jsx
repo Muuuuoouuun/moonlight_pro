@@ -218,8 +218,10 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
       </span>
       {metaText && (
         // 폭 상한 + 말줄임 — 좁은 화면에서 meta가 제목(identity)을 짓누르지 않게 한다
-        // (2026-07 design-review FINDING-001의 모바일 identity-first 원칙).
-        <span className="mono" style={{
+        // (2026-07 design-review FINDING-001의 모바일 identity-first 원칙). ≤560px에서는
+        // hub-tokens.css가 통째로 숨긴다: "견적 · ₩10K…"처럼 잘린 meta는 정보가치가 없고
+        // 정체 신호는 stripe, 긴급도는 날짜 색이 이미 전달한다.
+        <span className="mono hub-mywork-meta" style={{
           fontSize: 11, color: 'var(--fg-muted)', flexShrink: 1, maxWidth: '38%',
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>{metaText}</span>
