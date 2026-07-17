@@ -274,7 +274,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
       aria-label="선택 항목 상세"
       style={{ position: 'sticky', top: 12, overflow: 'hidden' }}
     >
-      <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ padding: 'var(--pad-y) var(--pad-x)', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
         <Badge tone={LANE_TONE[item.lane]} size="xs" variant="outline">{LANE_LABEL[item.lane]}</Badge>
         <span style={{ fontSize: 11, color: bucketMeta.color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           {bucketMeta.label}
@@ -282,7 +282,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
         <div style={{ flex: 1 }} />
         <IconButton icon="x" tooltip="패널 닫기 (ESC)" onClick={onClose} />
       </div>
-      <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ padding: 'var(--pad-y) var(--pad-x)', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.45, textDecoration: completing ? 'line-through' : 'none' }}>
           {item.title}
         </div>
@@ -295,7 +295,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
           ))}
         </div>
       </div>
-      <div style={{ padding: '10px 14px', borderTop: '1px solid var(--line-soft)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ padding: 'var(--pad-y) var(--pad-x)', borderTop: '1px solid var(--line-soft)', display: 'flex', flexDirection: 'column', gap: 6 }}>
         {item.lane === 'task' && (
           <>
             <Button variant="primary" size="sm" icon="check" onClick={onComplete} disabled={completing}>완료</Button>
@@ -715,7 +715,7 @@ export function MyWork({ onNavigate }) {
                 setBucketFilter(active ? 'all' : t.key);
               }}
               style={{
-                textAlign: 'left', padding: '10px 14px', cursor: 'pointer',
+                textAlign: 'left', padding: 'var(--pad-y) var(--pad-x)', cursor: 'pointer',
                 background: active ? 'var(--surface-2)' : 'var(--surface)',
                 border: `1px solid ${active ? 'var(--line-strong)' : 'var(--line-soft)'}`,
                 borderRadius: 'var(--r-lg)',
