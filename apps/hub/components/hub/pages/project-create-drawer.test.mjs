@@ -137,9 +137,10 @@ test("projects use durable create identity, raw edit drafts, dirty patches, and 
 });
 
 test("stale project edit rebases its source and exposes the loaded-ledger message", () => {
-  assert.match(projectsSource, /rebaseProjectEditSource/);
+  assert.match(projectsSource, /rebaseProjectEditState/);
   assert.match(projectsSource, /data\.status === ['"]conflict['"][\s\S]{0,240}data\.project/);
-  assert.match(projectsSource, /setProjectEditSource\([\s\S]{0,160}rebaseProjectEditSource/);
+  assert.match(projectsSource, /setProjectEditSource\([\s\S]{0,120}\.source/);
+  assert.match(projectsSource, /setProjectDraft\([\s\S]{0,120}\.draft/);
   assert.match(projectsSource, /최신 원장 기준을 불러왔습니다/);
   assert.match(primitivesSource, /r\?\.message/);
   assert.match(primitivesSource, /saveFeedback/);

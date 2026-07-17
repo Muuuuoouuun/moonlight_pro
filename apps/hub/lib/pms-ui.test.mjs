@@ -234,7 +234,7 @@ test("confirms a content pipeline only when every deterministic task is reloaded
   );
 });
 
-test("rebases a stale edit source on the returned current project row", () => {
+test("rebases stale edit state while preserving only user-dirty fields", () => {
   const source = {
     id: "project-1",
     name: "Old server title",
@@ -266,9 +266,9 @@ test("rebases a stale edit source on the returned current project row", () => {
     nextAction: "Operator action",
   };
 
-  const rebased = pmsUi.rebaseProjectEditSource(source, currentRow);
+  const rebased = pmsUi.rebaseProjectEditState(source, operatorDraft, currentRow);
 
-  assert.deepEqual(rebased, {
+  assert.deepEqual(rebased.source, {
     ...source,
     name: "Current server title",
     brandId: "brand-current",
@@ -279,16 +279,26 @@ test("rebases a stale edit source on the returned current project row", () => {
     dueAt: "2026-07-31T00:00:00.000Z",
     updatedAt: "2026-07-17T02:00:00.000Z",
   });
-  assert.deepEqual(pmsUi.buildProjectPatch(rebased, operatorDraft), {
+  assert.deepEqual(rebased.draft, {
+    kind: "project",
+    isNew: false,
+    id: "project-1",
+    title: "Operator title",
+    brandId: "brand-current",
+    brandKey: "classmoon",
+    summary: "Operator goal",
+    status: "blocked",
+    priority: "high",
+    nextAction: "Operator action",
+    dueAt: "2026-07-31",
+    updatedAt: "2026-07-17T02:00:00.000Z",
+  });
+  assert.deepEqual(pmsUi.buildProjectPatch(rebased.source, rebased.draft), {
     id: "project-1",
     expectedUpdatedAt: "2026-07-17T02:00:00.000Z",
     title: "Operator title",
-    brandId: "brand-old",
     summary: "Operator goal",
-    status: "active",
-    priority: "medium",
     nextAction: "Operator action",
-    dueAt: "2026-07-20",
   });
 });
 

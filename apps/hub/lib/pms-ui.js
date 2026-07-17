@@ -205,6 +205,21 @@ export function buildProjectPatch(source = {}, draft = {}) {
   return patch;
 }
 
+export function rebaseProjectEditState(source = {}, draft = {}, current = {}) {
+  const originalPatch = buildProjectPatch(source, draft);
+  const dirtyKeys = Object.keys(originalPatch).filter(
+    (key) => !["id", "expectedUpdatedAt"].includes(key),
+  );
+  const nextSource = rebaseProjectEditSource(source, current);
+  const nextDraft = buildProjectEditDraft(nextSource);
+
+  dirtyKeys.forEach((key) => {
+    nextDraft[key] = draft[key];
+  });
+
+  return { source: nextSource, draft: nextDraft };
+}
+
 export function mergeProjectDetailQuery(current, projectId) {
   const params = new URLSearchParams(
     typeof current === "string" ? current : current?.toString?.() || "",

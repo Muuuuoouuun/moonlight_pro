@@ -16,7 +16,7 @@ import {
   createClientId,
   mergeProjectDetailQuery,
   projectReloadContains,
-  rebaseProjectEditSource,
+  rebaseProjectEditState,
   rotateProjectClientId,
   shouldOpenGlobalProjectCreate,
   taskStatusForBoardColumn,
@@ -531,7 +531,9 @@ export function Projects({ workspace }) {
       if (!response.ok || data.status !== 'saved') {
         if (data.status === 'conflict' && data.project) {
           const message = '최신 원장 기준을 불러왔습니다. 입력을 유지했으니 다시 저장하면 새 기준으로 재시도합니다.';
-          setProjectEditSource(current => rebaseProjectEditSource(current || projectEditSource, data.project));
+          const rebasedEdit = rebaseProjectEditState(projectEditSource, projectDraft, data.project);
+          setProjectEditSource(rebasedEdit.source);
+          setProjectDraft(rebasedEdit.draft);
           setOrderResult({ tone: 'err', label: message });
           return {
             ok: false,
