@@ -9,6 +9,7 @@ const migrationUrl = new URL(
 const setupUrl = new URL("../../../supabase/setup/00_live_schema.sql", import.meta.url);
 const schemaUrl = new URL("../../../supabase/schema.sql", import.meta.url);
 const applyPendingUrl = new URL("../../../supabase/apply-pending.sql", import.meta.url);
+const supabaseReadmeUrl = new URL("../../../supabase/README.md", import.meta.url);
 const migrationScriptUrl = new URL("../../../scripts/apply-migrations.mjs", import.meta.url);
 
 test("routine check idempotency is canonical in migration, live setup, and base schema", async () => {
@@ -37,14 +38,16 @@ test("routine check idempotency is canonical in migration, live setup, and base 
 });
 
 test("routine check idempotency migration is included in both supported delivery paths", async () => {
-  const [applyPending, migrationScript] = await Promise.all([
+  const [applyPending, supabaseReadme, migrationScript] = await Promise.all([
     readFile(applyPendingUrl, "utf8"),
+    readFile(supabaseReadmeUrl, "utf8"),
     readFile(migrationScriptUrl, "utf8"),
   ]);
 
   assert.match(applyPending, /20260717_0019_routine_check_idempotency\.sql/);
-  assert.match(applyPending, /적용 대기 마이그레이션 묶음 \(0003 → 0019, 시점순\)/);
-  assert.doesNotMatch(applyPending, /적용 대기 마이그레이션 묶음 \(0003 → 0011, 시점순\)/);
+  assert.match(applyPending, /적용 대기 마이그레이션 묶음 \(0003 → 0011 \+ 0019, 시점순\)/);
+  assert.match(supabaseReadme, /`apply-pending\.sql`: \*\*편의 번들\*\* — 0003→0011 \+ 0019/);
+  assert.match(supabaseReadme, /Sales OS 마이그레이션 적용 \(0003→0011 \+ 0019\)/);
   assert.match(
     applyPending,
     /add column if not exists idempotency_key text[\s\S]*create unique index if not exists routine_checks_workspace_idempotency_key_uidx/i,
