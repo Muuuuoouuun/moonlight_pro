@@ -239,10 +239,13 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
 // ESC/닫기 버튼으로 접힌다 (§8.1 닫기 계약의 패널 버전).
 function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDefer, onEdit, onNavigate }) {
   const bucketMeta = BUCKET_HEADER[normalizeBucket(item)];
+  // mono는 계기 데이터(기한·단계·금액)만 — 상태/프로젝트명/근거 같은 '단어' 값을 mono로
+  // 두면 이름이 ID처럼 읽힌다 (DESIGN §6 하이브리드 숫자 규칙).
   const rows = [
     {
       label: '기한',
       value: item.whenLabel,
+      mono: true,
       tone: item.bucket === 'overdue' ? 'var(--danger)' : item.bucket === 'today' ? 'var(--warning)' : undefined,
     },
     item.lane === 'task' && {
@@ -254,7 +257,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
       value: TASK_PRIORITY_OPTIONS.find((o) => o.value === item.priority)?.label || item.priority,
     },
     item.lane === 'task' && item.projectName && { label: '프로젝트', value: item.projectName },
-    item.lane === 'deal' && item.meta && { label: '단계·금액', value: item.meta },
+    item.lane === 'deal' && item.meta && { label: '단계·금액', value: item.meta, mono: true },
     item.lane === 'event' && item.meta && { label: '장소', value: item.meta },
     item.priorityReason && { label: '근거', value: item.priorityReason },
   ].filter(Boolean);
@@ -283,7 +286,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
           {rows.map((r) => (
             <div key={r.label} style={{ display: 'flex', gap: 8, fontSize: 12, alignItems: 'baseline' }}>
               <span style={{ width: 64, flexShrink: 0, color: 'var(--fg-dim)' }}>{r.label}</span>
-              <span className="mono" style={{ color: r.tone || 'var(--fg-muted)', minWidth: 0, overflowWrap: 'anywhere' }}>{r.value}</span>
+              <span className={r.mono ? 'mono' : undefined} style={{ color: r.tone || 'var(--fg-muted)', minWidth: 0, overflowWrap: 'anywhere' }}>{r.value}</span>
             </div>
           ))}
         </div>
