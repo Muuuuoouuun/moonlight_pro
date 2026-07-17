@@ -51,7 +51,12 @@ export async function POST(req: Request) {
   const ownerId = typeof ownerRows?.[0]?.owner_id === "string" ? ownerRows[0].owner_id : null;
   const result = await executePmsCommand(body, { workspaceId, ownerId }, {
     insert: insertSupabaseRecord,
-    update: updateSupabaseRecord,
+    update: (table, filters, patch) => updateSupabaseRecord(
+      table,
+      filters,
+      patch,
+      { returnRepresentation: true },
+    ),
     fetchRows: async (table, options = {}) => fetchSupabaseRows(
       table,
       options as Parameters<typeof fetchSupabaseRows>[1],
@@ -61,8 +66,12 @@ export async function POST(req: Request) {
     ? (String(body.action).startsWith("create_") ? 201 : 200)
     : result.status === "duplicate"
       ? 200
+      : result.status === "conflict"
+        ? 409
       : result.status === "invalid-input"
         ? 400
+        : result.error === "not-found"
+          ? 404
         : result.error === "missing-config"
           ? 202
           : 502;

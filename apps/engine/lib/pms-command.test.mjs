@@ -223,6 +223,7 @@ test("normalizes an editable project patch without changing workspace ownership"
     nextAction: "Resolve production callback",
     dueAt: "2026-08-01",
     brandId: "22222222-2222-4222-8222-222222222222",
+    expectedUpdatedAt: "2026-07-14T12:34:56+09:00",
   }, {
     workspaceId: "33333333-3333-4333-8333-333333333333",
     now: "2026-07-15T02:00:00.000Z",
@@ -235,6 +236,7 @@ test("normalizes an editable project patch without changing workspace ownership"
     filters: [
       ["id", "eq.11111111-1111-4111-8111-111111111111"],
       ["workspace_id", "eq.33333333-3333-4333-8333-333333333333"],
+      ["updated_at", "eq.2026-07-14T03:34:56.000Z"],
     ],
     patch: {
       brand_id: "22222222-2222-4222-8222-222222222222",
@@ -250,4 +252,43 @@ test("normalizes an editable project patch without changing workspace ownership"
       updated_at: "2026-07-15T02:00:00.000Z",
     },
   });
+});
+
+test("rejects an invalid expected project update timestamp", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    title: "Phase 1 rollout",
+    expectedUpdatedAt: "not-a-timestamp",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-15T02:00:00.000Z",
+  });
+
+  assert.deepEqual(result, { ok: false, reason: "invalid-expected-updated-at" });
+});
+
+test("rejects malformed project and brand relationship ids instead of clearing them", () => {
+  const context = {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-15T02:00:00.000Z",
+  };
+
+  assert.deepEqual(pmsCommand.normalizePmsCommand({
+    action: "create_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    title: "Project",
+    brandId: "not-a-brand-id",
+  }, context), { ok: false, reason: "invalid-brand-id" });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({
+    action: "create_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    title: "Task",
+    projectId: "not-a-project-id",
+  }, context), { ok: false, reason: "invalid-project-id" });
+  assert.deepEqual(pmsCommand.normalizePmsCommand({
+    action: "update_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    projectId: "not-a-project-id",
+  }, context), { ok: false, reason: "invalid-project-id" });
 });

@@ -10,6 +10,10 @@ interface SupabaseQueryOptions {
   order?: string;
 }
 
+interface SupabaseMutationOptions {
+  returnRepresentation?: boolean;
+}
+
 function resolveSupabaseRestConfig(): SupabaseRestConfig | null {
   const url = process.env.SUPABASE_URL?.trim();
   const apiKey =
@@ -282,6 +286,7 @@ export async function updateSupabaseRecord(
   table: string,
   filters: Array<[string, string]>,
   record: Record<string, unknown>,
+  options: SupabaseMutationOptions = {},
 ) {
   const config = resolveSupabaseRestConfig();
 
@@ -304,7 +309,7 @@ export async function updateSupabaseRecord(
       method: "PATCH",
       headers: makeHeaders(config.apiKey, {
         contentType: "application/json",
-        prefer: "return=minimal",
+        prefer: options.returnRepresentation ? "return=representation" : "return=minimal",
       }),
       body: JSON.stringify(record),
     });
@@ -318,10 +323,22 @@ export async function updateSupabaseRecord(
       };
     }
 
-    return {
-      persisted: true,
-      reason: "ok",
-    };
+    if (options.returnRepresentation) {
+      const rows = await response.json().catch(() => null);
+      if (!Array.isArray(rows)) {
+        return {
+          persisted: false,
+          reason: "invalid-response",
+        };
+      }
+      return {
+        persisted: true,
+        reason: "ok",
+        rows,
+      };
+    }
+
+    return { persisted: true, reason: "ok" };
   } catch (error) {
     return {
       persisted: false,

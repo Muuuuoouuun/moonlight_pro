@@ -61,3 +61,135 @@ test("validates an authenticated PMS command before touching the ledger", async 
     else process.env.COM_MOON_DEFAULT_WORKSPACE_ID = previousWorkspace;
   }
 });
+
+test("maps create payload conflicts to HTTP 409", async () => {
+  const previous = {
+    secret: process.env.COM_MOON_SHARED_WEBHOOK_SECRET,
+    workspace: process.env.COM_MOON_DEFAULT_WORKSPACE_ID,
+    url: process.env.SUPABASE_URL,
+    key: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    fetch: globalThis.fetch,
+  };
+  process.env.COM_MOON_SHARED_WEBHOOK_SECRET = "pms-test-shared-secret";
+  process.env.COM_MOON_DEFAULT_WORKSPACE_ID = "33333333-3333-4333-8333-333333333333";
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-test-key";
+  globalThis.fetch = async (url, init = {}) => {
+    const target = String(url);
+    if (target.includes("/rest/v1/workspaces")) {
+      return new Response(JSON.stringify([{ owner_id: null }]), { status: 200 });
+    }
+    if (target.includes("/rest/v1/projects") && init.method === "POST") {
+      return new Response("duplicate key value violates unique constraint (23505)", { status: 409 });
+    }
+    if (target.includes("/rest/v1/projects")) {
+      return new Response(JSON.stringify([{
+        id: "11111111-1111-4111-8111-111111111111",
+        workspace_id: "33333333-3333-4333-8333-333333333333",
+        brand_id: null,
+        name: "Existing project",
+        summary: null,
+        status: "active",
+        priority: "medium",
+        progress: 0,
+        next_action: null,
+        due_at: null,
+        meta: { source: "manual" },
+      }]), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    throw new Error(`Unexpected fetch: ${target}`);
+  };
+
+  try {
+    const response = await pmsRoute.POST(new Request("http://engine.local/api/pms/command", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-com-moon-shared-secret": "pms-test-shared-secret",
+      },
+      body: JSON.stringify({
+        action: "create_project",
+        id: "11111111-1111-4111-8111-111111111111",
+        title: "Different project",
+      }),
+    }));
+
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).status, "conflict");
+  } finally {
+    if (previous.secret === undefined) delete process.env.COM_MOON_SHARED_WEBHOOK_SECRET;
+    else process.env.COM_MOON_SHARED_WEBHOOK_SECRET = previous.secret;
+    if (previous.workspace === undefined) delete process.env.COM_MOON_DEFAULT_WORKSPACE_ID;
+    else process.env.COM_MOON_DEFAULT_WORKSPACE_ID = previous.workspace;
+    if (previous.url === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = previous.url;
+    if (previous.key === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = previous.key;
+    globalThis.fetch = previous.fetch;
+  }
+});
+
+test("PATCH requests a representation and returns the persisted project row", async () => {
+  const previous = {
+    secret: process.env.COM_MOON_SHARED_WEBHOOK_SECRET,
+    workspace: process.env.COM_MOON_DEFAULT_WORKSPACE_ID,
+    url: process.env.SUPABASE_URL,
+    key: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    fetch: globalThis.fetch,
+  };
+  process.env.COM_MOON_SHARED_WEBHOOK_SECRET = "pms-test-shared-secret";
+  process.env.COM_MOON_DEFAULT_WORKSPACE_ID = "33333333-3333-4333-8333-333333333333";
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-test-key";
+  const persisted = {
+    id: "11111111-1111-4111-8111-111111111111",
+    workspace_id: "33333333-3333-4333-8333-333333333333",
+    name: "Persisted server title",
+    updated_at: "2026-07-17T01:00:00.000Z",
+  };
+  globalThis.fetch = async (url, init = {}) => {
+    const target = String(url);
+    if (target.includes("/rest/v1/workspaces")) {
+      return new Response(JSON.stringify([{ owner_id: null }]), { status: 200 });
+    }
+    if (target.includes("/rest/v1/projects") && init.method === "PATCH") {
+      assert.equal(init.headers.prefer, "return=representation");
+      assert.match(target, /workspace_id=eq\.33333333-3333-4333-8333-333333333333/);
+      assert.match(target, /updated_at=eq\.2026-07-16T01%3A00%3A00\.000Z/);
+      return new Response(JSON.stringify([persisted]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    throw new Error(`Unexpected fetch: ${target}`);
+  };
+
+  try {
+    const response = await pmsRoute.POST(new Request("http://engine.local/api/pms/command", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-com-moon-shared-secret": "pms-test-shared-secret",
+      },
+      body: JSON.stringify({
+        action: "update_project",
+        id: persisted.id,
+        title: "Requested title",
+        expectedUpdatedAt: "2026-07-16T01:00:00.000Z",
+      }),
+    }));
+
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).entity, persisted);
+  } finally {
+    if (previous.secret === undefined) delete process.env.COM_MOON_SHARED_WEBHOOK_SECRET;
+    else process.env.COM_MOON_SHARED_WEBHOOK_SECRET = previous.secret;
+    if (previous.workspace === undefined) delete process.env.COM_MOON_DEFAULT_WORKSPACE_ID;
+    else process.env.COM_MOON_DEFAULT_WORKSPACE_ID = previous.workspace;
+    if (previous.url === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = previous.url;
+    if (previous.key === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = previous.key;
+    globalThis.fetch = previous.fetch;
+  }
+});

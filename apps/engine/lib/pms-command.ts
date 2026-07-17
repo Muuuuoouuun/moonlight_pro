@@ -38,6 +38,17 @@ function uuid(value: unknown) {
   return UUID_PATTERN.test(normalized) ? normalized : null;
 }
 
+function nullableUuidField(input: Record<string, unknown>, primary: string, fallback: string) {
+  const value = has(input, primary) ? input[primary] : input[fallback];
+  if (value === null || value === undefined || (typeof value === "string" && !value.trim())) {
+    return { ok: true, value: null };
+  }
+  const normalized = uuid(value);
+  return normalized
+    ? { ok: true, value: normalized }
+    : { ok: false, value: null };
+}
+
 function dateTime(value: unknown) {
   const normalized = text(value, 100);
   if (!normalized) return { ok: true, value: null };
@@ -71,7 +82,7 @@ export function normalizePmsCommand(
   if (action === "create_project") {
     const id = uuid(input.id);
     const title = text(input.title || input.name, 300);
-    const brandId = uuid(input.brandId || input.brand_id);
+    const brandId = nullableUuidField(input, "brandId", "brand_id");
     const status = text(input.status || "active", 30).toLowerCase();
     const priority = text(input.priority || "medium", 30).toLowerCase();
     const dueAt = dateTime(input.dueAt || input.due_at);
@@ -79,6 +90,7 @@ export function normalizePmsCommand(
 
     if (!id) return { ok: false, reason: "invalid-id" };
     if (!title) return { ok: false, reason: "missing-title" };
+    if (!brandId.ok) return { ok: false, reason: "invalid-brand-id" };
     if (!PROJECT_STATUSES.has(status)) return { ok: false, reason: "invalid-status" };
     if (!PRIORITIES.has(priority)) return { ok: false, reason: "invalid-priority" };
     if (!dueAt.ok) return { ok: false, reason: "invalid-due-at" };
@@ -91,7 +103,7 @@ export function normalizePmsCommand(
       record: {
         id,
         workspace_id: workspaceId,
-        brand_id: brandId,
+        brand_id: brandId.value,
         owner_id: ownerId,
         name: title,
         summary: nullableText(input.summary, 2000),
@@ -108,7 +120,7 @@ export function normalizePmsCommand(
 
   if (action === "create_task") {
     const id = uuid(input.id);
-    const projectId = uuid(input.projectId || input.project_id);
+    const projectId = nullableUuidField(input, "projectId", "project_id");
     const title = text(input.title, 300);
     const status = text(input.status || "todo", 30).toLowerCase();
     const priority = text(input.priority || "medium", 30).toLowerCase();
@@ -116,6 +128,7 @@ export function normalizePmsCommand(
 
     if (!id) return { ok: false, reason: "invalid-id" };
     if (!title) return { ok: false, reason: "missing-title" };
+    if (!projectId.ok) return { ok: false, reason: "invalid-project-id" };
     if (!TASK_STATUSES.has(status)) return { ok: false, reason: "invalid-status" };
     if (!PRIORITIES.has(priority)) return { ok: false, reason: "invalid-priority" };
     if (!dueAt.ok) return { ok: false, reason: "invalid-due-at" };
@@ -127,7 +140,7 @@ export function normalizePmsCommand(
       record: {
         id,
         workspace_id: workspaceId,
-        project_id: projectId,
+        project_id: projectId.value,
         owner_id: ownerId,
         title,
         status,
@@ -166,7 +179,9 @@ export function normalizePmsCommand(
       patch.priority = priority;
     }
     if (has(input, "projectId") || has(input, "project_id")) {
-      patch.project_id = uuid(input.projectId || input.project_id);
+      const projectId = nullableUuidField(input, "projectId", "project_id");
+      if (!projectId.ok) return { ok: false, reason: "invalid-project-id" };
+      patch.project_id = projectId.value;
     }
     if (has(input, "dueAt") || has(input, "due_at")) {
       const dueAt = dateTime(input.dueAt || input.due_at);
@@ -192,6 +207,18 @@ export function normalizePmsCommand(
   if (action === "update_project") {
     const id = uuid(input.id);
     if (!id) return { ok: false, reason: "invalid-id" };
+
+    const filters: Array<[string, string]> = [
+      ["id", `eq.${id}`],
+      ["workspace_id", `eq.${workspaceId}`],
+    ];
+    if (has(input, "expectedUpdatedAt") || has(input, "expected_updated_at")) {
+      const expectedUpdatedAt = dateTime(input.expectedUpdatedAt ?? input.expected_updated_at);
+      if (!expectedUpdatedAt.ok || !expectedUpdatedAt.value) {
+        return { ok: false, reason: "invalid-expected-updated-at" };
+      }
+      filters.push(["updated_at", `eq.${expectedUpdatedAt.value}`]);
+    }
 
     const patch: Record<string, unknown> = {};
     if (has(input, "brandId") || has(input, "brand_id")) {
@@ -238,10 +265,7 @@ export function normalizePmsCommand(
       ok: true,
       action,
       table: "projects",
-      filters: [
-        ["id", `eq.${id}`],
-        ["workspace_id", `eq.${workspaceId}`],
-      ],
+      filters,
       patch,
     };
   }

@@ -34,7 +34,7 @@ export async function forwardPmsCommand(
       signal: AbortSignal.timeout(5000),
     });
     const data = await response.json().catch(() => ({
-      status: "error",
+      status: response.status === 409 ? "conflict" : "error",
       error: `engine-http-${response.status}`,
     }));
 
