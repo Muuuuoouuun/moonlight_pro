@@ -1,5 +1,6 @@
 import {
   fetchSupabaseRows,
+  inFilter,
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
@@ -70,7 +71,17 @@ function mapDecisions(rows, profileById) {
     links: resolveDecisionLinks(row),
     title: row.title || "(untitled decision)",
     reason: row.rationale || row.summary || "",
+    // Raw edit-draft fields, kept separate from the `reason` display fallback above so an
+    // edit round-trip never writes a merged/derived value back as if it were the operator's
+    // own rationale (same discipline as the project edit draft in operating-ledger.js).
+    projectId: row.project_id || "",
+    rationale: row.rationale || "",
+    decidedAt: row.decided_at || "",
   }));
+}
+
+function mapDecisionProjectOptions(rows) {
+  return rows.map((row) => ({ id: row.id, name: row.name || "(제목 없음)" }));
 }
 
 // WHY: schema has no separate "rituals" table; routine_checks rows are instances.
@@ -186,6 +197,7 @@ export async function getWorkLedger() {
       workspaceId: null,
       decisions: [],
       rituals: [],
+      projects: [],
       summary: {
         ritualsCompletedThisWeek: 0,
         ritualsTotalThisWeek: 0,
@@ -195,7 +207,7 @@ export async function getWorkLedger() {
     };
   }
 
-  const [decisionRows, routineRows, profileRows] = await Promise.all([
+  const [decisionRows, routineRows, profileRows, projectRows] = await Promise.all([
     fetchSupabaseRows("decisions", {
       limit: 40,
       order: "decided_at.desc",
@@ -210,6 +222,14 @@ export async function getWorkLedger() {
       select: "id,display_name,email",
       limit: 40,
     }),
+    // Light id+name projection for the decision drawer's "연결된 프로젝트" picker — the full
+    // project ledger (operating-ledger.js) is heavier than this page needs.
+    fetchSupabaseRows("projects", {
+      select: "id,name",
+      limit: 80,
+      order: "name.asc",
+      filters: withWorkspaceFilter([["status", inFilter(["draft", "active", "blocked", "completed"])]]),
+    }),
   ]);
 
   if (!decisionRows || !routineRows) {
@@ -219,6 +239,7 @@ export async function getWorkLedger() {
       workspaceId,
       decisions: [],
       rituals: [],
+      projects: [],
       summary: {
         ritualsCompletedThisWeek: 0,
         ritualsTotalThisWeek: 0,
@@ -238,6 +259,7 @@ export async function getWorkLedger() {
     workspaceId,
     decisions,
     rituals,
+    projects: mapDecisionProjectOptions(projectRows || []),
     summary: summarizeRituals(rituals),
   };
 }
