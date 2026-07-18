@@ -13,6 +13,8 @@ import {
 import {
   beginRhythmCheck,
   buildRhythmCheckPayload,
+  buildRhythmDefinePayload,
+  buildRhythmEditPayload,
   createRhythmCheckState,
   filterRhythmRows,
   finishRhythmCheck,
@@ -561,6 +563,20 @@ function buildDecisionDraft() {
   };
 }
 
+// ritualKey는 저장 시점(persistRitual)에 이름으로부터 생성한다 — 드로어에서 이름을
+// 정하기 전까지는 비워 둔다 (buildRhythmDefinePayload가 slugifyRitualName + id로 채운다).
+function buildRhythmDraft(defaultProjectId) {
+  return {
+    kind: 'ritual',
+    isNew: true,
+    id: createClientId(),
+    ritualKey: '',
+    name: '새 루틴',
+    checkType: 'morning',
+    projectId: defaultProjectId || '',
+  };
+}
+
 export function Decisions() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -936,6 +952,8 @@ export function Roadmap() {
 
 export function Rhythm() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const selectedProjectId = searchParams.get('project')?.trim() || null;
   const {
     rituals: liveRituals,
@@ -943,6 +961,7 @@ export function Rhythm() {
     rhythmPartial,
     rhythmTruncatedSources,
     rhythmError,
+    projects: linkableProjects,
     retry,
   } = useWorkLedger(selectedProjectId);
   const [mutationState, setMutationState] = React.useState(() => createRhythmCheckState());
@@ -952,6 +971,129 @@ export function Rhythm() {
     () => filterRhythmRows(liveRituals, selectedProjectId),
     [liveRituals, selectedProjectId],
   );
+
+  // 루틴 생성·수정. 스키마에 별도 rituals 테이블이 없어(work-ledger.js WHY 주석), 생성은
+  // status:'pending' 씨앗 행을 심는 것이고, 수정은 같은 (project_id, ritual_key) 그룹의
+  // 모든 행을 배치로 patch하는 것이다 — 둘 다 /api/routine이 처리한다(체크인 이벤트는
+  // 계속 /api/routine/check).
+  const [localRituals, setLocalRituals] = React.useState([]);
+  const [ritualEdits, setRitualEdits] = React.useState({});
+  const [editRitualId, setEditRitualId] = React.useState(null);
+  const createdRitualFromQueryRef = React.useRef(false);
+
+  // 라이브 목록에 같은 (projectId, ritualKey)가 이미 나타나면 로컬 초안을 숨긴다 —
+  // retry() 이후 자동으로 실제 행으로 대체되어, 수동으로 정리할 필요가 없다. dedup은
+  // overlay(ritualEdits)가 적용된 값으로 비교해야 한다 — 원본 localRituals는 저장 시점에
+  // ritualKey만 채워지고 projectId/checkType 등은 계속 overlay에만 있으므로, overlay 없이
+  // 비교하면 정체성이 어긋나 라이브 행과 중복 표시된다.
+  const liveRitualIdentities = React.useMemo(
+    () => new Set(rituals.map((r) => `${r.projectId || ''}::${r.ritualKey}`)),
+    [rituals],
+  );
+  const overlaidLocalRituals = localRituals.map((r) => (ritualEdits[r.id] ? { ...r, ...ritualEdits[r.id] } : r));
+  const visibleLocalRituals = overlaidLocalRituals.filter(
+    (r) => !r.ritualKey || !liveRitualIdentities.has(`${r.projectId || ''}::${r.ritualKey}`),
+  );
+  // baseRituals는 원본(overlay 미적용) — persistRitual이 "수정 전 원래 값"을 찾을 때만 쓴다.
+  const baseRituals = [...localRituals, ...rituals];
+  const mergedRituals = [...visibleLocalRituals, ...rituals.map((r) => (ritualEdits[r.id] ? { ...r, ...ritualEdits[r.id] } : r))];
+  const editingRitual = editRitualId ? mergedRituals.find((r) => r.id === editRitualId) : null;
+  const projectOptions = [
+    { value: '', label: '연결 안 함' },
+    ...(Array.isArray(linkableProjects) ? linkableProjects : []).map((p) => ({ value: p.id, label: p.name })),
+  ];
+  const checkTypeOptions = [
+    { value: 'morning', label: '아침' },
+    { value: 'midday', label: '낮' },
+    { value: 'evening', label: '저녁' },
+    { value: 'weekly', label: '주간' },
+  ];
+
+  const createRitual = React.useCallback(() => {
+    const draft = buildRhythmDraft(selectedProjectId);
+    setLocalRituals((prev) => [draft, ...prev]);
+    setEditRitualId(draft.id);
+  }, [selectedProjectId]);
+
+  React.useEffect(() => {
+    if (searchParams.get('new') !== 'rhythm' || createdRitualFromQueryRef.current) return;
+    createRitual();
+    createdRitualFromQueryRef.current = true;
+    router.replace(pathname);
+  }, [createRitual, searchParams, router, pathname]);
+
+  // 페이지 레벨 `n` — 드로어가 닫혀 있고 포커스가 입력 필드 밖일 때만 새 루틴을 만든다
+  // (DESIGN.md §8.1).
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if ((e.key !== 'n' && e.key !== 'N') || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (editRitualId) return;
+      const t = e.target;
+      const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+      e.preventDefault();
+      createRitual();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editRitualId, createRitual]);
+
+  const updateRitualDraft = (key, value) => {
+    setRitualEdits((prev) => ({ ...prev, [editRitualId]: { ...prev[editRitualId], [key]: value } }));
+  };
+
+  // 새 루틴: /api/routine에 status:'pending' 씨앗 행 생성 → retry()로 원장을 다시 읽어
+  // mapRituals가 이 행을 리추얼로 집계하게 한다.
+  // 기존 루틴 수정: 원래(overlay 적용 전) 값과 비교해 바뀐 필드만 /api/routine PATCH로
+  // 보낸다 — 서버가 같은 ritualKey·matchProjectId를 가진 모든 행을 배치로 patch한다.
+  const persistRitual = React.useCallback(async () => {
+    if (!editingRitual?.name?.trim()) return { ok: false, status: 'invalid-input' };
+    try {
+      if (editingRitual.isNew) {
+        const payload = buildRhythmDefinePayload(editingRitual);
+        setLocalRituals((prev) => prev.map((r) => (r.id === editingRitual.id ? { ...r, ritualKey: payload.ritualKey } : r)));
+        const response = await fetch('/api/routine', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ...payload, source: 'hub-work' }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.status !== 'saved') {
+          return { ok: false, status: data.status || 'error' };
+        }
+        await retry();
+        // 라이브 원장이 이 루틴을 반영했으니 로컬 초안은 완전히 제거한다. render-time
+        // dedup(identity 비교)만으로는 불충분하다 — 이후 이 루틴을 다시 편집해 연결
+        // 프로젝트(=grouping key)가 바뀌면, identity가 더 이상 일치하지 않아 낡은 초안이
+        // "안 보이는 상태"에서 벗어나 유령처럼 재등장한다.
+        setLocalRituals((prev) => prev.filter((r) => r.id !== editingRitual.id));
+        setRitualEdits((prev) => {
+          if (!prev[editingRitual.id]) return prev;
+          const next = { ...prev };
+          delete next[editingRitual.id];
+          return next;
+        });
+        return { ok: true, status: data.status };
+      }
+
+      const original = baseRituals.find((r) => r.id === editRitualId);
+      const payload = buildRhythmEditPayload(original, editingRitual);
+      const response = await fetch('/api/routine', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...payload, source: 'hub-work' }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.status !== 'saved') {
+        return { ok: false, status: data.status || 'error' };
+      }
+      await retry();
+      return { ok: true, status: data.status };
+    } catch (error) {
+      return { ok: false, status: 'error', error: error instanceof Error ? error.message : String(error) };
+    }
+  }, [editingRitual, editRitualId, baseRituals, retry]);
+
   const summary = React.useMemo(() => summarizeRhythmRows(rituals), [rituals]);
 
   React.useEffect(() => {
@@ -1041,22 +1183,26 @@ export function Rhythm() {
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
-      <div>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Rhythm</h2>
-        <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-          루틴은 실행의 인프라
-          <span className="mono" style={{ marginLeft: 8, color: syncColor }}>
-            {syncLabel}
-          </span>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Rhythm</h2>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+            루틴은 실행의 인프라
+            <span className="mono" style={{ marginLeft: 8, color: syncColor }}>
+              {syncLabel}
+            </span>
+          </div>
+          {selectedProjectId && (
+            <a
+              href={`/dashboard/work/projects?project=${encodeURIComponent(selectedProjectId)}`}
+              style={{ minHeight: 44, marginTop: 6, display: 'inline-flex', alignItems: 'center', color: 'var(--moon-300)', fontSize: 12.5, textUnderlineOffset: 3 }}
+            >
+              프로젝트로 돌아가기{selectedProjectName ? ` · ${selectedProjectName}` : ''}
+            </a>
+          )}
         </div>
-        {selectedProjectId && (
-          <a
-            href={`/dashboard/work/projects?project=${encodeURIComponent(selectedProjectId)}`}
-            style={{ minHeight: 44, marginTop: 6, display: 'inline-flex', alignItems: 'center', color: 'var(--moon-300)', fontSize: 12.5, textUnderlineOffset: 3 }}
-          >
-            프로젝트로 돌아가기{selectedProjectName ? ` · ${selectedProjectName}` : ''}
-          </a>
-        )}
+        <div style={{ flex: 1 }} />
+        <Button variant="primary" size="sm" icon="plus" onClick={createRitual}>새 루틴 <Kbd>N</Kbd></Button>
       </div>
 
       {rhythmState === 'error' && (
@@ -1096,33 +1242,43 @@ export function Rhythm() {
       </div>
 
       <Card pad={false} className="hub-table-card">
-        {rituals.length === 0 && (
+        {mergedRituals.length === 0 && (
           <EmptyState
             icon="rhythm"
             title={selectedProjectId ? '선택한 프로젝트의 리듬이 없습니다' : '루틴 체크 기록이 없습니다'}
-            description={rhythmState === 'live-empty' ? 'Supabase routine_checks 기록이 비어 있습니다.' : rhythmState === 'error' ? '원장을 다시 읽은 뒤 체크인 상태를 확인해 주세요.' : rhythmState === 'partial' ? '일부 기록만 관측되어 전체 리듬 상태를 확정할 수 없습니다.' : '연결 전에는 체크인이 저장되지 않습니다.'}
-            action={rhythmState === 'error' || rhythmState === 'partial' ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button> : undefined}
+            description={rhythmState === 'live-empty' ? 'Supabase routine_checks 기록이 비어 있습니다.' : rhythmState === 'error' ? '원장을 다시 읽은 뒤 체크인 상태를 확인해 주세요.' : rhythmState === 'partial' ? '일부 기록만 관측되어 전체 리듬 상태를 확정할 수 없습니다.' : '루틴을 만들면 매일 체크인할 항목이 여기에 표시됩니다.'}
+            action={rhythmState === 'error' || rhythmState === 'partial'
+              ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
+              : <Button variant="primary" size="sm" icon="plus" onClick={createRitual}>새 루틴</Button>}
             style={{ minHeight: 220 }}
           />
         )}
-        {rituals.length > 0 && (
+        {mergedRituals.length > 0 && (
           <div className="hub-rhythm-scroll" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
             <div style={{ minWidth: 720 }}>
               <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 180px 90px 128px' }}>
                 <span>Ritual</span><span>Last 7 days</span><span>Streak</span><span style={{ textAlign: 'right' }}>Action</span>
               </div>
-              {rituals.map((r, i) => {
+              {mergedRituals.map((r, i) => {
                 const weeks = Array.isArray(r.weeks) ? r.weeks : [0,0,0,0,0,0,0];
                 const pending = Boolean(mutationState.pendingByRitual[r.id]);
                 const feedback = mutationState.feedbackByRitual[r.id];
                 const bitmapText = weeks.map((value, index) => `${index === 6 ? '오늘' : `${6 - index}일 전`} ${value ? '완료' : '미완료'}`).join(', ');
                 return (
-                  <div key={r.id} style={{ padding: '12px 16px', minHeight: 68, borderBottom: i < rituals.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 180px 90px 128px', alignItems: 'center' }}>
+                  <div
+                    key={r.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setEditRitualId(r.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditRitualId(r.id); } }}
+                    className="hub-row"
+                    style={{ padding: '12px 16px', minHeight: 68, borderBottom: i < mergedRituals.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 180px 90px 128px', alignItems: 'center', cursor: 'pointer' }}
+                  >
                     <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                       <span style={{ fontSize: 13 }}>{r.name}</span>
                       <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{r.checkType} · {r.ritualKey}</span>
                       {r.projectHref && (
-                        <a href={r.projectHref} style={{ width: 'fit-content', color: 'var(--moon-300)', fontSize: 11.5, textUnderlineOffset: 3 }}>{r.projectName || '연결 프로젝트'}</a>
+                        <a href={r.projectHref} onClick={(e) => e.stopPropagation()} style={{ width: 'fit-content', color: 'var(--moon-300)', fontSize: 11.5, textUnderlineOffset: 3 }}>{r.projectName || '연결 프로젝트'}</a>
                       )}
                       {feedback && (
                         <span aria-live="polite" style={{ fontSize: 11, color: feedback.kind === 'error' ? 'var(--danger)' : feedback.kind === 'preview' ? 'var(--warning)' : 'var(--fg-muted)' }}>
@@ -1147,7 +1303,7 @@ export function Rhythm() {
                         disabled={pending}
                         aria-label={`${r.projectName ? `${r.projectName} · ` : ''}${r.name} 체크인 저장`}
                         style={{ minHeight: 44 }}
-                        onClick={() => checkIn(r)}
+                        onClick={(e) => { e.stopPropagation(); checkIn(r); }}
                       >
                         {pending ? '저장 중…' : '체크인 저장'}
                       </Button>
@@ -1159,6 +1315,22 @@ export function Rhythm() {
           </div>
         )}
       </Card>
+
+      {editingRitual && (
+        <EditDrawer
+          title={editingRitual.isNew ? '새 루틴 만들기' : '루틴 편집'}
+          subtitle={editingRitual.isNew ? undefined : `${editingRitual.streak || 0}일 연속 · 이번 주 ${(editingRitual.weeks || []).filter(Boolean).length}/7`}
+          record={editingRitual}
+          fields={[
+            { key: 'name', label: '이름', placeholder: '예: 아침 스트레칭' },
+            { key: 'checkType', label: '체크 타입', type: 'select', row: 'meta', options: checkTypeOptions },
+            { key: 'projectId', label: '연결 프로젝트', type: 'select', row: 'meta', options: projectOptions },
+          ]}
+          onChange={updateRitualDraft}
+          onClose={() => setEditRitualId(null)}
+          onSave={persistRitual}
+        />
+      )}
     </div>
   );
 }

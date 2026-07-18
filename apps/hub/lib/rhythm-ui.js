@@ -129,6 +129,52 @@ export function resolveRhythmCheckResult({ responseOk = false, httpStatus = 0, d
   };
 }
 
+// 루틴 정의(생성/수정)는 별도 테이블 없이 routine_checks에 status:'pending' 씨앗 행으로
+// 표현한다(work-ledger.js WHY 주석: "no separate rituals table"). ritualKey는 표시용 슬러그 +
+// 클라이언트 id 접두 8자로 만들어 사람이 읽을 수 있으면서도 충돌 없이 고유하다.
+export function slugifyRitualName(name) {
+  const base = String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return base || "ritual";
+}
+
+export function buildRhythmDefinePayload(draft) {
+  const name = cleanString(draft?.name);
+  const idSuffix = cleanString(draft?.id).replace(/-/g, "").slice(0, 8) || "seed";
+  return {
+    ritualKey: `${slugifyRitualName(name)}-${idSuffix}`,
+    name,
+    checkType: cleanString(draft?.checkType).toLowerCase() || "morning",
+    projectId: cleanString(draft?.projectId) || null,
+  };
+}
+
+// original: 저장된(라이브) 리추얼, edited: 드로어의 현재 값. 변경된 필드만 담아 보낸다 —
+// 서버가 ritualKey·matchProjectId로 대상 행을 찾고, 포함된 필드만 patch한다.
+export function buildRhythmEditPayload(original, edited) {
+  const payload = {
+    ritualKey: cleanString(original?.ritualKey),
+    matchProjectId: cleanString(original?.projectId) || null,
+  };
+
+  const name = cleanString(edited?.name);
+  if (name && name !== cleanString(original?.name)) payload.name = name;
+
+  const checkType = cleanString(edited?.checkType).toLowerCase();
+  if (checkType && checkType !== cleanString(original?.checkType).toLowerCase()) {
+    payload.checkType = checkType;
+  }
+
+  const nextProjectId = cleanString(edited?.projectId) || null;
+  const prevProjectId = cleanString(original?.projectId) || null;
+  if (nextProjectId !== prevProjectId) payload.projectId = nextProjectId;
+
+  return payload;
+}
+
 export function createRhythmCheckState() {
   return {
     latestAttemptByRitual: {},

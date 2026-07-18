@@ -164,6 +164,74 @@ test("mutation state clears pending on failure, preserves bitmap, and ignores st
   assert.deepEqual(failed.confirmedWeeks["ritual-1"], [0, 0, 0, 0, 0, 0, 0]);
 });
 
+test("slugifyRitualName lowercases, keeps Hangul, and never returns empty", () => {
+  assert.equal(typeof rhythmUi.slugifyRitualName, "function");
+  assert.equal(rhythmUi.slugifyRitualName("Morning Stretch!"), "morning-stretch");
+  assert.equal(rhythmUi.slugifyRitualName("아침 스트레칭"), "아침-스트레칭");
+  assert.equal(rhythmUi.slugifyRitualName("  --  "), "ritual");
+  assert.equal(rhythmUi.slugifyRitualName(""), "ritual");
+  assert.equal(rhythmUi.slugifyRitualName(null), "ritual");
+});
+
+test("buildRhythmDefinePayload derives a readable-but-unique ritualKey and normalizes fields", () => {
+  assert.equal(typeof rhythmUi.buildRhythmDefinePayload, "function");
+  const payload = rhythmUi.buildRhythmDefinePayload({
+    id: "11112222-3333-4444-5555-666677778888",
+    name: "  Morning Stretch  ",
+    checkType: "MORNING",
+    projectId: "  proj-1  ",
+  });
+  assert.equal(payload.ritualKey, "morning-stretch-11112222");
+  assert.equal(payload.name, "Morning Stretch");
+  assert.equal(payload.checkType, "morning");
+  assert.equal(payload.projectId, "proj-1");
+
+  const unscoped = rhythmUi.buildRhythmDefinePayload({ id: "id-1", name: "Focus", checkType: "" });
+  assert.equal(unscoped.checkType, "morning");
+  assert.equal(unscoped.projectId, null);
+});
+
+test("buildRhythmEditPayload only includes fields that actually changed, and always carries identity", () => {
+  assert.equal(typeof rhythmUi.buildRhythmEditPayload, "function");
+  const original = { ritualKey: "morning-stretch-abc", name: "Morning Stretch", checkType: "morning", projectId: "proj-1" };
+
+  const noChange = rhythmUi.buildRhythmEditPayload(original, { ...original });
+  assert.deepEqual(noChange, { ritualKey: "morning-stretch-abc", matchProjectId: "proj-1" });
+
+  const renamed = rhythmUi.buildRhythmEditPayload(original, { ...original, name: "Sunrise Stretch" });
+  assert.deepEqual(renamed, {
+    ritualKey: "morning-stretch-abc",
+    matchProjectId: "proj-1",
+    name: "Sunrise Stretch",
+  });
+
+  const relinked = rhythmUi.buildRhythmEditPayload(original, { ...original, projectId: "" });
+  assert.deepEqual(relinked, {
+    ritualKey: "morning-stretch-abc",
+    matchProjectId: "proj-1",
+    projectId: null,
+  });
+
+  const retyped = rhythmUi.buildRhythmEditPayload(original, { ...original, checkType: "weekly" });
+  assert.deepEqual(retyped, {
+    ritualKey: "morning-stretch-abc",
+    matchProjectId: "proj-1",
+    checkType: "weekly",
+  });
+});
+
+test("Rhythm source wires create/edit through /api/routine with a shared EditDrawer", () => {
+  assert.match(workSource, /fetch\(['"]\/api\/routine['"]/);
+  assert.match(workSource, /method:\s*['"]PATCH['"]/);
+  assert.match(workSource, /buildRhythmDefinePayload\(/);
+  assert.match(workSource, /buildRhythmEditPayload\(/);
+  assert.match(workSource, /createRitual/);
+  assert.match(workSource, /새 루틴/);
+  assert.match(workSource, /연결 프로젝트/);
+  assert.match(workSource, /setEditRitualId/);
+  assert.match(workSource, /role="button"/);
+});
+
 test("Rhythm source keeps project context, durable feedback, and mobile scroll semantics", () => {
   assert.match(workSource, /searchParams\.get\(['"]project['"]\)/);
   assert.match(workSource, /filterRhythmRows\(/);
