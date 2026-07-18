@@ -122,13 +122,21 @@ export function useRevenueLedger() {
 
   React.useEffect(() => {
     let active = true;
-    async function load() {
+    let retryTimer = null;
+    // dev 리컴파일·순간 네트워크 실패로 첫 fetch가 죽으면 preview에 고착됐다 —
+    // 실패 1회는 1.2초 뒤 재시도하고, 그래도 실패하면 정직하게 preview로 남긴다.
+    async function load(attempt = 0) {
       setSyncState('loading');
       try {
         const response = await fetch('/api/hub/revenue', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
-        if (!active || !response.ok || !data || data.status === 'error') {
-          if (active) setSyncState('preview');
+        if (!active) return;
+        if (!response.ok || !data || data.status === 'error') {
+          if (attempt === 0) {
+            retryTimer = setTimeout(() => { if (active) load(1); }, 1200);
+          } else {
+            setSyncState('preview');
+          }
           return;
         }
         setLedger({
@@ -144,11 +152,16 @@ export function useRevenueLedger() {
         });
         setSyncState(data.source === 'supabase' ? 'live' : 'preview');
       } catch {
-        if (active) setSyncState('preview');
+        if (!active) return;
+        if (attempt === 0) {
+          retryTimer = setTimeout(() => { if (active) load(1); }, 1200);
+        } else {
+          setSyncState('preview');
+        }
       }
     }
     load();
-    return () => { active = false; };
+    return () => { active = false; clearTimeout(retryTimer); };
   }, []);
 
   return { ledger, syncState };

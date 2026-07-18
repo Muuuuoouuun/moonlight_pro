@@ -8,7 +8,8 @@
 // 기간은 전체 · 최근(90/30일) · 월별 · 분기별 — 월/분기 후보는 원장 딜에서 동적으로 뽑는다.
 
 import React from "react";
-import { Card, Button, SyncBadge, SegmentedControl, EmptyState, IconButton, ScrollShadowX } from "../hub-primitives";
+import { Badge, Card, Button, SyncBadge, SegmentedControl, EmptyState, IconButton, ScrollShadowX } from "../hub-primitives";
+import { Iconed } from "../hub-icons";
 import { KoreaHeatmap, fmtMoney, heatFill } from "../heatmap-map";
 import { useRevenueLedger } from "./revenue";
 import {
@@ -50,7 +51,7 @@ function canonicalRegion(region) {
 
 // ── 우측 레일 ────────────────────────────────────────────────────────────────
 
-function RegionDetail({ row }) {
+function RegionDetail({ row, offMap = false, onJump }) {
   if (!row) {
     return <div style={{ fontSize: 12, color: "var(--fg-faint)", padding: "6px 2px" }}>지역을 선택하거나 호버하면 상세가 표시됩니다.</div>;
   }
@@ -58,7 +59,10 @@ function RegionDetail({ row }) {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", paddingBottom: 10, borderBottom: "1px solid var(--line-soft)" }}>
         <div>
-          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em" }}>{row.label}</div>
+          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em", display: "flex", alignItems: "center", gap: 7 }}>
+            {row.label}
+            {offMap && <Badge tone="neutral" size="xs" variant="outline">지도 외</Badge>}
+          </div>
           {row.regions.length > 1 && (
             <div style={{ fontSize: 10.5, color: "var(--fg-faint)", marginTop: 2 }}>{row.regions.join(", ")}</div>
           )}
@@ -97,12 +101,35 @@ function RegionDetail({ row }) {
       {row.customers.length > 0 && (
         <div style={{ marginTop: 12, borderTop: "1px solid var(--line-soft)", paddingTop: 10 }}>
           <div className="eyebrow" style={{ fontSize: 10.5, letterSpacing: "0.06em", color: "var(--fg-dim)", textTransform: "uppercase", marginBottom: 6 }}>주요 고객</div>
-          {row.customers.slice(0, 5).map(c => (
-            <div key={c.name} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 10, alignItems: "baseline", padding: "3px 0" }}>
-              <span style={{ fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
-              <span className="num" style={{ fontSize: 11, fontWeight: 600, color: "var(--moon-200)" }}>{fmtMoney(c.expected)}</span>
-            </div>
-          ))}
+          {row.customers.slice(0, 5).map(c => {
+            const jumpable = Boolean(c.jumpKey && onJump);
+            return (
+              <div
+                key={c.name}
+                className={jumpable ? "hub-row" : undefined}
+                role={jumpable ? "button" : undefined}
+                tabIndex={jumpable ? 0 : undefined}
+                onClick={jumpable ? () => onJump(c.jumpKey) : undefined}
+                onKeyDown={jumpable ? e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onJump(c.jumpKey); } } : undefined}
+                style={{
+                  display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto", gap: 8,
+                  alignItems: "baseline", padding: "4px 4px", borderRadius: 4,
+                  cursor: jumpable ? "pointer" : "default",
+                }}
+              >
+                <span style={{ fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
+                <span className="num" style={{ fontSize: 11, fontWeight: 600, color: "var(--moon-200)" }}>{fmtMoney(c.expected)}</span>
+                {jumpable
+                  ? <Iconed name="chevronR" size={11} style={{ color: "var(--fg-faint)", alignSelf: "center" }} />
+                  : <span style={{ width: 11 }} />}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {offMap && (
+        <div style={{ marginTop: 10, fontSize: 10.5, color: "var(--fg-faint)", lineHeight: 1.5 }}>
+          지도에 없는 지역입니다. 고객을 열어 지역 태그를 채우면 다음 로드부터 지도에 올라갑니다.
         </div>
       )}
     </div>
@@ -278,6 +305,9 @@ function aggregate(ledger, { item, cutoff = null, range = null }) {
     const customer = (d.companyId && companyName.get(d.companyId)) || lead?.name || d.name;
     const won = d.stage === "closing";
     const amount = Number(d.value) || 0;
+    // 고객 DB 딥링크 — 지역 상세의 주요 고객과 전역 고객 순위가 같은 키를 쓴다
+    const accountId = d.companyId ? accountIdByCompany.get(d.companyId) : null;
+    const jumpKey = accountId ? `account:${accountId}` : d.leadId ? `lead:${d.leadId}` : null;
 
     const r = regionAgg.get(regionKey) || {
       region: regionKey, canonical, confirmed: 0, pipeline: 0, expected: 0,
@@ -286,9 +316,10 @@ function aggregate(ledger, { item, cutoff = null, range = null }) {
     r.dealsCount += 1;
     if (won) { r.confirmed += amount; r.wonCount += 1; } else { r.pipeline += amount; }
     r.expected = r.confirmed + r.pipeline;
-    const rc = r.customers.get(customer) || { name: customer, confirmed: 0, pipeline: 0, expected: 0 };
+    const rc = r.customers.get(customer) || { name: customer, confirmed: 0, pipeline: 0, expected: 0, jumpKey: null };
     if (won) rc.confirmed += amount; else rc.pipeline += amount;
     rc.expected = rc.confirmed + rc.pipeline;
+    if (!rc.jumpKey) rc.jumpKey = jumpKey;
     r.customers.set(customer, rc);
     regionAgg.set(regionKey, r);
 
@@ -299,10 +330,7 @@ function aggregate(ledger, { item, cutoff = null, range = null }) {
     c.dealsCount += 1;
     if (won) c.confirmed += amount; else c.pipeline += amount;
     c.expected = c.confirmed + c.pipeline;
-    if (!c.jumpKey) {
-      const accountId = d.companyId ? accountIdByCompany.get(d.companyId) : null;
-      c.jumpKey = accountId ? `account:${accountId}` : d.leadId ? `lead:${d.leadId}` : null;
-    }
+    if (!c.jumpKey) c.jumpKey = jumpKey;
     customerAgg.set(customer, c);
   });
 
@@ -317,7 +345,8 @@ function aggregate(ledger, { item, cutoff = null, range = null }) {
     if (shape) {
       mapRows.push({ ...finished, label: shape.label, path: shape.path, x: shape.x, y: shape.y, regions: [r.region] });
     } else {
-      otherRows.push(finished);
+      // 지도 밖 행도 RegionDetail이 그대로 렌더할 수 있게 같은 계약(label/regions)으로 맞춘다
+      otherRows.push({ ...finished, label: r.region, regions: [r.region] });
     }
   }
   // 같은 canonical에 여러 raw 지역이 접히는 경우 병합
@@ -393,9 +422,17 @@ export function RevenueHeatmap({ onNavigate }) {
     [customers, metricKey],
   );
   const maxCustomer = Math.max(1, ...sortedCustomers.map(c => c[metricKey] || 0));
-  const selected = mapRows.find(r => r.label === selectedLabel) || mapRows[0] || null;
+  // 지도 외(지역 미상 포함) 행도 선택해 상세를 볼 수 있다 — 지도 하이라이트만 없을 뿐.
+  const selected =
+    mapRows.find(r => r.label === selectedLabel) ||
+    otherRows.find(r => r.label === selectedLabel) ||
+    mapRows[0] || otherRows[0] || null;
+  const selectedOffMap = Boolean(selected && !selected.path);
   const totalValue = mapRows.reduce((s, r) => s + (r[metricKey] || 0), 0) +
     otherRows.reduce((s, r) => s + (r[metricKey] || 0), 0);
+  const jumpToCustomer = onNavigate
+    ? (key) => onNavigate(`dashboard/revenue/customers?customer=${encodeURIComponent(key)}`)
+    : null;
 
   return (
     <div className="hub-page" style={{ padding: "var(--section-gap)", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
@@ -459,7 +496,7 @@ export function RevenueHeatmap({ onNavigate }) {
             />
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
-              <RegionDetail row={selected} />
+              <RegionDetail row={selected} offMap={selectedOffMap} onJump={jumpToCustomer} />
 
               <div>
                 <div className="eyebrow" style={{ fontSize: 10.5, letterSpacing: "0.06em", color: "var(--fg-dim)", textTransform: "uppercase", margin: "4px 2px 6px" }}>
@@ -476,8 +513,8 @@ export function RevenueHeatmap({ onNavigate }) {
                       rank={i + 1}
                       max={maxCustomer}
                       metricKey={metricKey}
-                      onSelect={() => { if (c.canonical) setSelectedLabel(c.canonical); }}
-                      onJump={onNavigate ? (key) => onNavigate(`dashboard/revenue/customers?customer=${encodeURIComponent(key)}`) : null}
+                      onSelect={() => setSelectedLabel(c.canonical || c.region || "지역 미상")}
+                      onJump={jumpToCustomer}
                     />
                   ))}
                 </div>
@@ -489,15 +526,27 @@ export function RevenueHeatmap({ onNavigate }) {
                     지도 외 · 지역 미상
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                    {otherRows.map(r => (
-                      <span key={r.region} className="mono" style={{
-                        fontSize: 10.5, color: "var(--fg-muted)",
-                        background: "var(--surface-2)", border: "1px solid var(--line-soft)",
-                        borderRadius: 999, padding: "3px 9px",
-                      }}>
-                        {r.region} {fmtMoney(r[metricKey])}
-                      </span>
-                    ))}
+                    {otherRows.map(r => {
+                      const isSelected = selected?.label === r.label;
+                      return (
+                        <button
+                          key={r.region}
+                          type="button"
+                          className="mono"
+                          onClick={() => setSelectedLabel(r.label)}
+                          aria-pressed={isSelected}
+                          style={{
+                            fontSize: 10.5, cursor: "pointer",
+                            color: isSelected ? "var(--fg)" : "var(--fg-muted)",
+                            background: isSelected ? "var(--surface-3)" : "var(--surface-2)",
+                            border: `1px solid ${isSelected ? "var(--moon-600)" : "var(--line-soft)"}`,
+                            borderRadius: 999, padding: "3px 9px",
+                          }}
+                        >
+                          {r.region} {fmtMoney(r[metricKey])}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
