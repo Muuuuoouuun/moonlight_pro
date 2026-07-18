@@ -70,10 +70,18 @@ function toRows(ledger) {
     const contact = l.contactId
       ? (ledger.contacts || []).find(c => c.id === l.contactId)
       : (l.companyId ? contactsByCompany.get(l.companyId) : null);
+    // crm_activities/deals는 대부분 company_id로만 연결된다 (lead_id는 극소수) — lead 자신의
+    // id로만 조인하면 Customer 360 드로어의 활동·딜이 항상 비어 보인다. leadId 매칭에
+    // companyId 매칭을 더해 합친다 (둘 다 걸리는 딜은 id로 중복 제거).
+    const leadDeals = dealsByLead.get(l.id) || [];
+    const companyDeals = l.companyId ? (dealsByCompany.get(l.companyId) || []) : [];
+    const seenDealIds = new Set(leadDeals.map(d => d.id));
+    const mergedDeals = [...leadDeals, ...companyDeals.filter(d => !seenDealIds.has(d.id))];
     return {
       key: `lead:${l.id}`,
       kind: "lead",
       id: l.id,
+      companyId: l.companyId || null,
       name: l.name,
       person: contact?.name || l.contactName || null,
       personTitle: contact?.title || null,
@@ -94,7 +102,7 @@ function toRows(ledger) {
       workspace: l.workspace,
       brand: l.brand,
       type: l.type,
-      deals: dealsByLead.get(l.id) || [],
+      deals: mergedDeals,
       raw: l, // 스코어 요약(LeadEnrichmentPanel)이 원본 enrichment 필드를 쓴다
     };
   });
@@ -105,6 +113,7 @@ function toRows(ledger) {
       key: `account:${a.id || a.name}`,
       kind: "account",
       id: a.id || null,
+      companyId: a.companyId || null,
       name: a.name,
       person: contact?.name || null,
       personTitle: contact?.title || null,
@@ -437,11 +446,22 @@ function Customer360Drawer({ row, onClose }) {
   const [nextActionOverride, setNextActionOverride] = React.useState(null);
   const [focusOverride, setFocusOverride] = React.useState(row.focusOverride || "default");
 
-  const linkParam = row.kind === "account" ? { accountId: row.id } : { leadId: row.id };
+  // company_id를 함께 실어 쓴다 — 활동을 새로 남길 때도 이후 회사 단위 조회에 걸리도록.
+  const linkParam = {
+    ...(row.kind === "account" ? { accountId: row.id } : { leadId: row.id }),
+    ...(row.companyId ? { companyId: row.companyId } : {}),
+  };
 
+  // companyId 우선 조회 — live crm_activities는 대부분 company_id로만 연결되고 lead_id/
+  // account_id는 극소수만 채워져 있다 (followups.jsx ActivityPanel과 동일한 조인 규칙).
+  // 자신의 id로만 걸면 이 드로어의 활동 타임라인이 사실상 항상 비어 보인다.
   const reload = React.useCallback(() => {
     if (!row.id) { setActSync("preview"); return; }
-    const qs = row.kind === "account" ? `accountId=${row.id}` : `leadId=${row.id}`;
+    const qs = row.companyId
+      ? `companyId=${encodeURIComponent(row.companyId)}`
+      : row.kind === "account"
+        ? `accountId=${encodeURIComponent(row.id)}`
+        : `leadId=${encodeURIComponent(row.id)}`;
     fetch(`/api/hub/revenue/activity?${qs}`, { cache: "no-store" })
       .then(r => r.json())
       .then(d => {
@@ -449,7 +469,7 @@ function Customer360Drawer({ row, onClose }) {
         setActSync(d.status === "live" ? "live" : "preview");
       })
       .catch(() => setActSync("preview"));
-  }, [row.id, row.kind]);
+  }, [row.id, row.kind, row.companyId]);
 
   React.useEffect(() => { reload(); }, [reload]);
 
