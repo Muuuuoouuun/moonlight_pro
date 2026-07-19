@@ -79,6 +79,9 @@ test("maps create payload conflicts to HTTP 409", async () => {
     if (target.includes("/rest/v1/workspaces")) {
       return new Response(JSON.stringify([{ owner_id: null }]), { status: 200 });
     }
+    if (target.includes("/rest/v1/areas")) {
+      return new Response(JSON.stringify([{ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }]), { status: 200 });
+    }
     if (target.includes("/rest/v1/projects") && init.method === "POST") {
       return new Response("duplicate key value violates unique constraint (23505)", { status: 409 });
     }
@@ -86,7 +89,10 @@ test("maps create payload conflicts to HTTP 409", async () => {
       return new Response(JSON.stringify([{
         id: "11111111-1111-4111-8111-111111111111",
         workspace_id: "33333333-3333-4333-8333-333333333333",
+        area_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         brand_id: null,
+        lead_id: null,
+        customer_account_id: null,
         name: "Existing project",
         summary: null,
         status: "active",
@@ -94,7 +100,7 @@ test("maps create payload conflicts to HTTP 409", async () => {
         progress: 0,
         next_action: null,
         due_at: null,
-        meta: { source: "manual" },
+        meta: { source: "manual", org_scope: "personal" },
       }]), { status: 200, headers: { "content-type": "application/json" } });
     }
     throw new Error(`Unexpected fetch: ${target}`);
@@ -110,6 +116,8 @@ test("maps create payload conflicts to HTTP 409", async () => {
       body: JSON.stringify({
         action: "create_project",
         id: "11111111-1111-4111-8111-111111111111",
+        areaId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        orgScope: "personal",
         title: "Different project",
       }),
     }));
@@ -218,7 +226,9 @@ test("keeps missing Supabase configuration in the existing HTTP 202 taxonomy dur
       body: JSON.stringify({
         action: "create_project",
         id: "11111111-1111-4111-8111-111111111111",
+        areaId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         brandId: "22222222-2222-4222-8222-222222222222",
+        orgScope: "personal",
         title: "Project",
       }),
     }));

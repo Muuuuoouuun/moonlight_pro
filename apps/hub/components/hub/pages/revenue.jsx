@@ -9,6 +9,7 @@ import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAcc
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
 import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
 import { DEAL_STAGES, STAGE_FILL, STAGE_LINE } from "@/lib/deal-stages";
+import { selectProjectAreaId } from "@/lib/pms-ui";
 
 // HW/SW 딜은 100만원 미만 건도 흔해서 M 고정 포맷은 "₩0.1M" 같은 값을 만든다.
 // revenue-ledger.js의 formatMoneyLabel과 같은 K/M 임계값으로 맞춘다.
@@ -868,6 +869,12 @@ function DealTaskPanel({ deal, onSaved }) {
     if (asState === 'saving' || isLocal) return;
     setAsState('saving');
     try {
+      // areaId·orgScope는 create_project 필수 계약(2026-07-17 create-drawer spec).
+      // A/S는 영업(sales) 분야, 매출 레인 딜은 클래스인 소속으로 귀속한다.
+      const ledgerRes = await fetch('/api/hub/projects');
+      const ledger = await ledgerRes.json().catch(() => ({}));
+      const areaId = selectProjectAreaId(ledger.areas || [], 'sales');
+      if (!areaId) { setAsState('error'); return; }
       const res = await fetch('/api/hub/projects', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -876,6 +883,8 @@ function DealTaskPanel({ deal, onSaved }) {
           summary: '클로징 딜의 판매 후 실행 (설치·교육·운영)',
           priority: 'low',
           dealId,
+          areaId,
+          orgScope: 'classin',
           source: 'deal-followup',
         }),
       });

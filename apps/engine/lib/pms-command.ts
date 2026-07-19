@@ -49,6 +49,28 @@ function nullableUuidField(input: Record<string, unknown>, primary: string, fall
     : { ok: false, value: null };
 }
 
+function projectEntityRef(value: unknown) {
+  if (value === null || value === undefined) {
+    return { ok: true, leadId: null, customerAccountId: null };
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    return { ok: false, leadId: null, customerAccountId: null };
+  }
+
+  const ref = value as Record<string, unknown>;
+  const type = text(ref.type, 30).toLowerCase();
+  const id = uuid(ref.id);
+  if (!id || (type !== "lead" && type !== "customer_account")) {
+    return { ok: false, leadId: null, customerAccountId: null };
+  }
+
+  return {
+    ok: true,
+    leadId: type === "lead" ? id : null,
+    customerAccountId: type === "customer_account" ? id : null,
+  };
+}
+
 function dateTime(value: unknown) {
   const normalized = text(value, 100);
   if (!normalized) return { ok: true, value: null };
@@ -81,11 +103,14 @@ export function normalizePmsCommand(
 
   if (action === "create_project") {
     const id = uuid(input.id);
+    const areaId = uuid(input.areaId ?? input.area_id);
     const title = text(input.title || input.name, 300);
     const brandId = nullableUuidField(input, "brandId", "brand_id");
     // A/S graduation: a closed deal can spawn its 판매 후 실행 follow-up project. The origin
     // deal id lives in meta so the project can point back at the sale that created it.
     const dealId = nullableUuidField(input, "dealId", "deal_id");
+    const entityRef = projectEntityRef(input.entityRef ?? input.entity_ref);
+    const orgScope = text(input.orgScope ?? input.org_scope, 30).toLowerCase();
     const status = text(input.status || "active", 30).toLowerCase();
     const priority = text(input.priority || "medium", 30).toLowerCase();
     const dueAt = dateTime(input.dueAt || input.due_at);
@@ -93,9 +118,12 @@ export function normalizePmsCommand(
     const initialProgress = hasInitialProgress ? progress(input.progress) : null;
 
     if (!id) return { ok: false, reason: "invalid-id" };
+    if (!areaId) return { ok: false, reason: "invalid-area-id" };
     if (!title) return { ok: false, reason: "missing-title" };
     if (!brandId.ok) return { ok: false, reason: "invalid-brand-id" };
     if (!dealId.ok) return { ok: false, reason: "invalid-deal-id" };
+    if (!entityRef.ok) return { ok: false, reason: "invalid-entity-ref" };
+    if (!BRAND_ORG_SCOPES.has(orgScope)) return { ok: false, reason: "invalid-org-scope" };
     if (!PROJECT_STATUSES.has(status)) return { ok: false, reason: "invalid-status" };
     if (!PRIORITIES.has(priority)) return { ok: false, reason: "invalid-priority" };
     if (!dueAt.ok) return { ok: false, reason: "invalid-due-at" };
@@ -110,7 +138,10 @@ export function normalizePmsCommand(
       record: {
         id,
         workspace_id: workspaceId,
+        area_id: areaId,
         brand_id: brandId.value,
+        lead_id: entityRef.leadId,
+        customer_account_id: entityRef.customerAccountId,
         owner_id: ownerId,
         name: title,
         summary: nullableText(input.summary, 2000),
@@ -122,6 +153,7 @@ export function normalizePmsCommand(
         last_activity_at: now.value,
         meta: {
           source: text(input.source || "manual", 80),
+          org_scope: orgScope,
           ...(dealId.value ? { origin_deal_id: dealId.value } : {}),
         },
       },
@@ -229,6 +261,9 @@ export function normalizePmsCommand(
   if (action === "update_project") {
     const id = uuid(input.id);
     if (!id) return { ok: false, reason: "invalid-id" };
+    if (has(input, "orgScope") || has(input, "org_scope")) {
+      return { ok: false, reason: "unsupported-org-scope-update" };
+    }
 
     const filters: Array<[string, string]> = [
       ["id", `eq.${id}`],
@@ -243,10 +278,21 @@ export function normalizePmsCommand(
     }
 
     const patch: Record<string, unknown> = {};
+    if (has(input, "areaId") || has(input, "area_id")) {
+      const areaId = uuid(input.areaId ?? input.area_id);
+      if (!areaId) return { ok: false, reason: "invalid-area-id" };
+      patch.area_id = areaId;
+    }
     if (has(input, "brandId") || has(input, "brand_id")) {
-      const brandId = uuid(input.brandId || input.brand_id);
-      if (!brandId) return { ok: false, reason: "invalid-brand-id" };
-      patch.brand_id = brandId;
+      const brandId = nullableUuidField(input, "brandId", "brand_id");
+      if (!brandId.ok) return { ok: false, reason: "invalid-brand-id" };
+      patch.brand_id = brandId.value;
+    }
+    if (has(input, "entityRef") || has(input, "entity_ref")) {
+      const entityRef = projectEntityRef(input.entityRef ?? input.entity_ref);
+      if (!entityRef.ok) return { ok: false, reason: "invalid-entity-ref" };
+      patch.lead_id = entityRef.leadId;
+      patch.customer_account_id = entityRef.customerAccountId;
     }
     if (has(input, "title") || has(input, "name")) {
       const title = text(input.title || input.name, 300);

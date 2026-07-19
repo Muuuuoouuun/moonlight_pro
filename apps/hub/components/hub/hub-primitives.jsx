@@ -483,7 +483,7 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, initialF
             <div style={{ fontSize: 14, fontWeight: 500 }}>{title}</div>
             {subtitle && <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}
           </div>
-          <IconButton icon="x" size={24} iconSize={13} tooltip="닫기" onClick={onClose} />
+          <IconButton icon="x" size={44} iconSize={13} tooltip="닫기" onClick={onClose} style={{ margin: -10 }} />
         </div>
         <div ref={bodyRef} className="scroll-y" style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
           {children}

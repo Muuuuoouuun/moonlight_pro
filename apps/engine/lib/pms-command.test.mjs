@@ -15,8 +15,11 @@ test("normalizes a durable project create without inventing progress evidence", 
   const result = pmsCommand.normalizePmsCommand({
     action: "create_project",
     id: "11111111-1111-4111-8111-111111111111",
+    areaId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     title: "Phase 1 operator rollout",
-    brandId: "22222222-2222-4222-8222-222222222222",
+    brandId: "",
+    entityRef: { type: "lead", id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+    orgScope: "classin",
     status: "active",
     priority: "high",
     nextAction: "Run the first weekly review",
@@ -35,7 +38,10 @@ test("normalizes a durable project create without inventing progress evidence", 
     record: {
       id: "11111111-1111-4111-8111-111111111111",
       workspace_id: "33333333-3333-4333-8333-333333333333",
-      brand_id: "22222222-2222-4222-8222-222222222222",
+      area_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      brand_id: null,
+      lead_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      customer_account_id: null,
       owner_id: "44444444-4444-4444-8444-444444444444",
       name: "Phase 1 operator rollout",
       summary: null,
@@ -44,9 +50,136 @@ test("normalizes a durable project create without inventing progress evidence", 
       next_action: "Run the first weekly review",
       due_at: "2026-07-31T00:00:00.000Z",
       last_activity_at: "2026-07-15T00:00:00.000Z",
-      meta: { source: "hub" },
+      meta: { source: "hub", org_scope: "classin" },
     },
   });
+});
+
+test("maps a customer account project context without setting a lead", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "create_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    areaId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    title: "Account rollout",
+    entityRef: { type: "customer_account", id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" },
+    orgScope: "personal",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-15T00:00:00.000Z",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.record.lead_id, null);
+  assert.equal(result.record.customer_account_id, "cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+  assert.deepEqual(result.record.meta, { source: "manual", org_scope: "personal" });
+});
+
+test("keeps the A/S origin deal in meta alongside the required area and org scope", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "create_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    areaId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    title: "성수 A반 · A/S",
+    dealId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+    orgScope: "classin",
+    priority: "low",
+    source: "deal-followup",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-19T00:00:00.000Z",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.record.area_id, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+  assert.equal(result.record.lead_id, null);
+  assert.equal(result.record.customer_account_id, null);
+  assert.deepEqual(result.record.meta, {
+    source: "deal-followup",
+    org_scope: "classin",
+    origin_deal_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+  });
+});
+
+test("rejects a malformed A/S origin deal id instead of dropping it", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "create_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    areaId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    title: "성수 A반 · A/S",
+    dealId: "not-a-uuid",
+    orgScope: "classin",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-19T00:00:00.000Z",
+  });
+
+  assert.deepEqual(result, { ok: false, reason: "invalid-deal-id" });
+});
+
+test("rejects unsupported project entity references", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "create_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    areaId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    title: "Deal-linked project",
+    entityRef: { type: "deal", id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" },
+    orgScope: "classin",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-15T00:00:00.000Z",
+  });
+
+  assert.deepEqual(result, { ok: false, reason: "invalid-entity-ref" });
+});
+
+test("requires a valid area for project creation", () => {
+  const context = {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-15T00:00:00.000Z",
+  };
+  const input = {
+    action: "create_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    title: "Area required",
+    orgScope: "personal",
+  };
+
+  assert.deepEqual(
+    pmsCommand.normalizePmsCommand(input, context),
+    { ok: false, reason: "invalid-area-id" },
+  );
+  assert.deepEqual(
+    pmsCommand.normalizePmsCommand({ ...input, areaId: "not-a-uuid" }, context),
+    { ok: false, reason: "invalid-area-id" },
+  );
+});
+
+test("rejects invalid optional project brand ids and requires an org scope on create", () => {
+  const context = {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-15T00:00:00.000Z",
+  };
+  const input = {
+    action: "create_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    areaId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    title: "Validated project",
+    orgScope: "personal",
+  };
+
+  assert.deepEqual(
+    pmsCommand.normalizePmsCommand({ ...input, brandId: "not-a-uuid" }, context),
+    { ok: false, reason: "invalid-brand-id" },
+  );
+  assert.deepEqual(
+    pmsCommand.normalizePmsCommand({ ...input, orgScope: "external" }, context),
+    { ok: false, reason: "invalid-org-scope" },
+  );
+  const { orgScope: _orgScope, ...missingScope } = input;
+  assert.deepEqual(
+    pmsCommand.normalizePmsCommand(missingScope, context),
+    { ok: false, reason: "invalid-org-scope" },
+  );
 });
 
 test("normalizes a durable brand (container) create command", () => {
@@ -137,7 +270,9 @@ test("preserves an explicit initial project progress from the create drawer", ()
   const result = pmsCommand.normalizePmsCommand({
     action: "create_project",
     id: "11111111-1111-4111-8111-111111111111",
+    areaId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     title: "In-flight project",
+    orgScope: "personal",
     progress: 35,
   }, {
     workspaceId: "33333333-3333-4333-8333-333333333333",
@@ -295,6 +430,69 @@ test("normalizes an editable project patch without changing workspace ownership"
   });
 });
 
+test("clears project brand and typed entity context without changing other fields", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    brandId: "",
+    entityRef: null,
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-17T02:00:00.000Z",
+  });
+
+  assert.deepEqual(result, {
+    ok: true,
+    action: "update_project",
+    table: "projects",
+    filters: [
+      ["id", "eq.11111111-1111-4111-8111-111111111111"],
+      ["workspace_id", "eq.33333333-3333-4333-8333-333333333333"],
+    ],
+    patch: {
+      brand_id: null,
+      lead_id: null,
+      customer_account_id: null,
+      last_activity_at: "2026-07-17T02:00:00.000Z",
+      updated_at: "2026-07-17T02:00:00.000Z",
+    },
+  });
+});
+
+test("normalizes a partial project area update", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    areaId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-17T02:30:00.000Z",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.patch.area_id, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+  assert.ok(!("meta" in result.patch));
+  assert.ok(!("brand_id" in result.patch));
+  assert.ok(!("lead_id" in result.patch));
+  assert.ok(!("customer_account_id" in result.patch));
+});
+
+test("rejects project org scope updates because creation context is immutable", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    orgScope: "personal",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-17T02:30:00.000Z",
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    reason: "unsupported-org-scope-update",
+  });
+});
+
 test("normalizes a durable decision create command linked to a project", () => {
   const result = pmsCommand.normalizePmsCommand({
     action: "create_decision",
@@ -424,8 +622,10 @@ test("rejects malformed project and brand relationship ids instead of clearing t
   assert.deepEqual(pmsCommand.normalizePmsCommand({
     action: "create_project",
     id: "11111111-1111-4111-8111-111111111111",
+    areaId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     title: "Project",
     brandId: "not-a-brand-id",
+    orgScope: "personal",
   }, context), { ok: false, reason: "invalid-brand-id" });
   assert.deepEqual(pmsCommand.normalizePmsCommand({
     action: "create_task",

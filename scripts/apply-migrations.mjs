@@ -25,6 +25,7 @@ const DEFAULT_MIGRATIONS = [
   "20260717_0019_routine_check_idempotency.sql",
   "20260717_0020_nullable_project_progress.sql",
   "20260718_0021_task_description.sql",
+  "20260719_0022_project_context_links.sql",
 ];
 
 function parseEnvFile(filepath) {

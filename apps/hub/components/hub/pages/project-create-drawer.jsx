@@ -1,8 +1,9 @@
 "use client";
 
 import React from "react";
-import { validateProjectDraft } from "@/lib/pms-ui";
+import { projectCreateFeedback, validateProjectDraft } from "@/lib/pms-ui";
 import { Button, Drawer, Kbd } from "../hub-primitives";
+import { Iconed } from "../hub-icons";
 
 const CONTROL_STYLE = {
   width: "100%",
@@ -26,42 +27,17 @@ const LABEL_STYLE = {
   letterSpacing: "0.04em",
 };
 
-function feedbackFor(result) {
-  if (result?.status === "pipeline-error") {
-    return {
-      state: "error",
-      message: "프로젝트 입력은 유지했습니다. 콘텐츠 4단계를 원장에서 확인할 때까지 같은 요청으로 다시 시도하세요.",
-    };
-  }
-  if (result?.status === "reload-error") {
-    return {
-      state: "error",
-      message: "저장은 접수됐지만 새 원장에서 확인하지 못했습니다. 입력과 요청 ID를 유지했으니 다시 시도하세요.",
-    };
-  }
-  if (result?.status === "conflict") {
-    const detail = result.error === "stale-update"
-      ? "다른 변경이 먼저 저장되었습니다. 입력은 유지했습니다. 원장을 다시 확인한 뒤 재시도하세요."
-      : "같은 요청 ID에 다른 내용이 감지되었습니다. 입력과 요청 ID를 유지했습니다.";
-    return { state: "conflict", message: detail };
-  }
-  if (result?.status === "preview") {
-    return { state: "preview", message: "저장 위치가 연결되지 않아 저장되지 않았습니다. 입력은 유지했습니다." };
-  }
-  const suffix = result?.error ? ` (${result.error})` : "";
-  return { state: "error", message: `프로젝트 저장에 실패했습니다. 다시 시도하세요.${suffix}` };
-}
-
 export function ProjectCreateDrawer({
   draft,
-  containers = [],
-  contextContainer = null,
+  areas = [],
+  brands = [],
+  entities = [],
+  failedSources = [],
   onChange,
   onClose,
   onSave,
   onRetryWithNewClientId,
   onOpenConflictProject,
-  onCreateContainer,
 }) {
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [errors, setErrors] = React.useState({});
@@ -71,8 +47,11 @@ export function ProjectCreateDrawer({
   const savingRef = React.useRef(false);
   const retryingClientIdRef = React.useRef(null);
   const titleRef = React.useRef(null);
-  const locationRef = React.useRef(null);
+  const areaRef = React.useRef(null);
   const formId = React.useId();
+  const areaUnavailable = failedSources.includes("areas");
+  const entityCatalogUnavailable = failedSources.includes("leads")
+    || failedSources.includes("customer_accounts");
 
   React.useEffect(() => {
     if (retryingClientIdRef.current === draft?.clientId) {
@@ -98,18 +77,23 @@ export function ProjectCreateDrawer({
   }, [onChange]);
 
   const validateDraft = React.useCallback((candidate) => {
+    if (areaUnavailable) {
+      setSaveState("degraded");
+      setFeedback("업무 분야 목록을 불러오지 못했습니다. 새 프로젝트 만들기를 잠시 사용할 수 없습니다.");
+      return false;
+    }
     const nextErrors = validateProjectDraft(candidate);
     setErrors(nextErrors);
-    if (!nextErrors.title && !nextErrors.brandId) return true;
+    if (!nextErrors.title && !nextErrors.areaId) return true;
 
     setSaveState("invalid");
     setFeedback("필수 입력을 확인하세요.");
     requestAnimationFrame(() => {
       if (nextErrors.title) titleRef.current?.focus();
-      else locationRef.current?.focus();
+      else areaRef.current?.focus();
     });
     return false;
-  }, []);
+  }, [areaUnavailable]);
 
   const saveDraft = React.useCallback(async (candidate) => {
     if (savingRef.current) return;
@@ -124,13 +108,14 @@ export function ProjectCreateDrawer({
         onClose?.();
         return;
       }
-      const next = feedbackFor(result);
+      const next = projectCreateFeedback(result);
       setConflictProject(result?.status === "conflict" ? result.project || null : null);
       setSaveState(next.state);
       setFeedback(next.message);
-    } catch (error) {
-      setSaveState("error");
-      setFeedback(`프로젝트 저장에 실패했습니다. 다시 시도하세요. (${error instanceof Error ? error.message : String(error)})`);
+    } catch {
+      const next = projectCreateFeedback({ status: "error" });
+      setSaveState(next.state);
+      setFeedback(next.message);
     } finally {
       savingRef.current = false;
     }
@@ -165,9 +150,9 @@ export function ProjectCreateDrawer({
       }
       setSaveState("conflict");
       setFeedback("기존 프로젝트를 새 원장에서 확인하지 못했습니다. 입력은 유지했습니다. 다시 시도하세요.");
-    } catch (error) {
+    } catch {
       setSaveState("conflict");
-      setFeedback(`기존 프로젝트를 열지 못했습니다. 입력은 유지했습니다. (${error instanceof Error ? error.message : String(error)})`);
+      setFeedback("기존 프로젝트를 열지 못했습니다. 입력은 유지했습니다. 다시 시도하세요.");
     } finally {
       savingRef.current = false;
     }
@@ -186,65 +171,33 @@ export function ProjectCreateDrawer({
 
   if (!draft) return null;
   const saving = saveState === "saving";
-  const hasContainers = containers.length > 0;
-
   return (
     <Drawer
       title="프로젝트 만들기"
-      subtitle="목표와 다음 행동만 정하면 됩니다."
+      subtitle="큰 결과와 첫 행동부터 기록하세요."
       onClose={() => { if (!savingRef.current) onClose?.(); }}
       initialFocusRef={titleRef}
-      width="min(440px, 100vw)"
+      width="min(420px, 100vw)"
       footerStyle={{ flexWrap: "wrap" }}
       footer={(
         <>
           {saveState === "conflict" && (
             <div style={{ width: "100%", display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <Button variant="outline" size="sm" onClick={handleRetryWithNewClientId} disabled={saving}>새 요청으로 다시 시도</Button>
-              <Button variant="ghost" size="sm" onClick={handleOpenConflictProject} disabled={saving || !conflictProject}>기존 프로젝트 열기</Button>
+              <Button variant="outline" size="sm" onClick={handleRetryWithNewClientId} disabled={saving} style={{ minHeight: 44 }}>새 요청으로 다시 시도</Button>
+              <Button variant="ghost" size="sm" onClick={handleOpenConflictProject} disabled={saving || !conflictProject} style={{ minHeight: 44 }}>기존 프로젝트 열기</Button>
             </div>
           )}
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>취소</Button>
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={saving} style={{ minHeight: 44 }}>취소</Button>
           <div aria-live="polite" style={{ flex: 1, minWidth: 0, fontSize: 11, lineHeight: 1.4, color: saveState === "error" || saveState === "conflict" ? "var(--danger)" : "var(--fg-muted)" }}>
             {feedback || <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Kbd>⌘↵</Kbd></span>}
           </div>
-          <Button variant="primary" size="sm" type="submit" form={formId} disabled={saving}>
+          <Button variant="primary" size="sm" type="submit" form={formId} disabled={saving || areaUnavailable} style={{ minHeight: 44 }}>
             {saving ? "만드는 중…" : "프로젝트 만들기"}
           </Button>
         </>
       )}
     >
       <form id={formId} onSubmit={handleSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: 15 }}>
-        {contextContainer ? (
-          <div style={{ padding: "10px 11px", display: "flex", alignItems: "center", gap: 8, background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)" }}>
-            <span style={{ fontSize: 11, color: "var(--fg-faint)" }}>저장 위치</span>
-            <span style={{ flex: 1, fontSize: 12.5, color: "var(--fg)" }}>{contextContainer.name}</span>
-          </div>
-        ) : (
-          <label style={LABEL_STYLE}>
-            <span>저장 위치 *</span>
-            <select
-              ref={locationRef}
-              name="brandId"
-              value={draft.brandId || ""}
-              onChange={(event) => update("brandId", event.target.value)}
-              aria-invalid={Boolean(errors.brandId)}
-              aria-describedby={errors.brandId ? "project-location-error" : undefined}
-              style={CONTROL_STYLE}
-            >
-              <option value="">컨테이너 선택</option>
-              {containers.map((container) => <option key={container.id} value={container.id}>{container.name}</option>)}
-            </select>
-            {errors.brandId && <span id="project-location-error" role="alert" style={{ color: "var(--danger)", letterSpacing: 0 }}>{errors.brandId}</span>}
-            {!hasContainers && (
-              <div style={{ padding: "10px 11px", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8, background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", letterSpacing: 0 }}>
-                <span style={{ color: "var(--fg-muted)", lineHeight: 1.5 }}>프로젝트를 둘 컨테이너가 없습니다. 먼저 저장 위치를 만드세요.</span>
-                <Button variant="outline" size="sm" icon="plus" onClick={onCreateContainer}>컨테이너 만들기</Button>
-              </div>
-            )}
-          </label>
-        )}
-
         <label style={LABEL_STYLE}>
           <span>프로젝트명 *</span>
           <input
@@ -252,7 +205,7 @@ export function ProjectCreateDrawer({
             name="title"
             value={draft.title}
             onChange={(event) => update("title", event.target.value)}
-            placeholder="예: 8월 콘텐츠 운영"
+            placeholder="예: 갈무리 첫결제 SW"
             aria-invalid={Boolean(errors.title)}
             aria-describedby={errors.title ? "project-title-error" : undefined}
             style={CONTROL_STYLE}
@@ -283,19 +236,73 @@ export function ProjectCreateDrawer({
           />
         </label>
 
+        <label style={LABEL_STYLE}>
+          <span>업무 분야 *</span>
+          <select
+            ref={areaRef}
+            name="areaId"
+            value={draft.areaId || ""}
+            onChange={(event) => update("areaId", event.target.value)}
+            aria-invalid={Boolean(errors.areaId)}
+            aria-describedby={[
+              errors.areaId ? "project-area-error" : null,
+              areaUnavailable ? "project-area-unavailable" : null,
+            ].filter(Boolean).join(" ") || undefined}
+            style={CONTROL_STYLE}
+          >
+            <option value="">업무 분야 선택</option>
+            {areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
+          </select>
+          {errors.areaId && <span id="project-area-error" role="alert" style={{ color: "var(--danger)", letterSpacing: 0 }}>{errors.areaId}</span>}
+          {areaUnavailable && (
+            <span id="project-area-unavailable" role="status" style={{ color: "var(--danger)", letterSpacing: 0 }}>
+              업무 분야 목록을 불러오지 못했습니다. 새 프로젝트 만들기를 잠시 사용할 수 없습니다.
+            </span>
+          )}
+        </label>
+
         <div style={{ borderTop: "1px solid var(--line-soft)", paddingTop: 10 }}>
           <button
             type="button"
             aria-expanded={advancedOpen}
+            aria-controls="project-create-advanced"
             onClick={() => setAdvancedOpen((open) => !open)}
             style={{ width: "100%", minHeight: 44, display: "flex", alignItems: "center", gap: 8, color: "var(--fg-muted)", fontSize: 12.5, textAlign: "left" }}
           >
-            <span aria-hidden="true" style={{ transform: advancedOpen ? "rotate(90deg)" : "none", transition: "transform 160ms ease" }}>›</span>
+            <Iconed name="chevronR" size={14} style={{ transform: advancedOpen ? "rotate(90deg)" : "none", transition: "transform 160ms ease" }} />
             <span style={{ flex: 1 }}>상세 설정</span>
-            <span style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>상태 · 우선순위 · 기한</span>
+            <span style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>브랜드 · 고객 · 상태</span>
           </button>
           {advancedOpen && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, paddingTop: 10 }}>
+            <div id="project-create-advanced" className="project-create-advanced-grid">
+              <label style={{ ...LABEL_STYLE, gridColumn: "1 / -1" }}>
+                <span>브랜드</span>
+                <select value={draft.brandId || ""} onChange={(event) => update("brandId", event.target.value || null)} style={CONTROL_STYLE}>
+                  <option value="">브랜드 없음</option>
+                  {brands.filter((brand) => brand.id !== "all").map((brand) => (
+                    <option key={brand.id} value={brand.id}>{brand.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ ...LABEL_STYLE, gridColumn: "1 / -1" }}>
+                <span>관련 리드/고객</span>
+                <select
+                  value={draft.entityKey || ""}
+                  onChange={(event) => update("entityKey", event.target.value)}
+                  aria-describedby={entityCatalogUnavailable ? "project-entity-catalog-unavailable" : undefined}
+                  style={CONTROL_STYLE}
+                >
+                  <option value="">연결 없음</option>
+                  {entities.map((entity) => (
+                    <option key={entity.key} value={entity.key}>{entity.label}</option>
+                  ))}
+                </select>
+                {entityCatalogUnavailable && (
+                  <span id="project-entity-catalog-unavailable" role="status" style={{ color: "var(--danger)", letterSpacing: 0 }}>
+                    리드·고객 목록 일부를 불러오지 못했습니다.
+                  </span>
+                )}
+              </label>
               <label style={LABEL_STYLE}>
                 <span>상태</span>
                 <select value={draft.status} onChange={(event) => update("status", event.target.value)} style={CONTROL_STYLE}>
@@ -323,6 +330,19 @@ export function ProjectCreateDrawer({
           )}
         </div>
       </form>
+      <style jsx>{`
+        .project-create-advanced-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 10px;
+          padding-top: 10px;
+        }
+        @media (min-width: 640px) {
+          .project-create-advanced-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+      `}</style>
     </Drawer>
   );
 }

@@ -41,11 +41,12 @@ test("advanced project settings start collapsed and expose their state accessibl
   assert.match(createDrawerSource, /기한/);
 });
 
-test("global project entry has an explicit recoverable save-location rule", () => {
-  assert.match(createDrawerSource, /저장 위치 \*/);
-  assert.match(createDrawerSource, /컨테이너 선택/);
-  assert.match(createDrawerSource, /onCreateContainer/);
-  assert.match(createDrawerSource, /컨테이너 만들기/);
+test("global project entry requires a flat Area while keeping Brand optional", () => {
+  assert.match(createDrawerSource, /업무 분야 \*/);
+  assert.match(createDrawerSource, /업무 분야 선택/);
+  assert.match(createDrawerSource, /name=["']areaId["']/);
+  assert.match(createDrawerSource, /<span>브랜드<\/span>/);
+  assert.doesNotMatch(createDrawerSource, /onCreateContainer/);
   assert.match(createDrawerSource, /aria-describedby/);
 });
 
@@ -61,7 +62,7 @@ test("create success waits for a fresh ledger containing the exact durable id", 
   assert.match(projectsSource, /const reloadResult = await loadLedger\(\)/);
   assert.match(projectsSource, /projectReloadContains\(reloadResult, durableProjectId\)/);
   assert.match(projectsSource, /status: ['"]reload-error['"]/);
-  assert.match(createDrawerSource, /reload-error/);
+  assert.match(createDrawerSource, /projectCreateFeedback/);
 });
 
 test("content pipeline retries seed and verify all four deterministic tasks", () => {
@@ -70,7 +71,7 @@ test("content pipeline retries seed and verify all four deterministic tasks", ()
   assert.match(projectsSource, /return \{ ok: true, projects: liveProjects, todos: liveTodos \}/);
   assert.match(projectsSource, /\[\s*['"]saved['"],\s*['"]duplicate['"]\s*\]\.includes\(stageData\.status\)/);
   assert.match(projectsSource, /status: ['"]pipeline-error['"]/);
-  assert.match(createDrawerSource, /pipeline-error/);
+  assert.match(createDrawerSource, /projectCreateFeedback/);
 
   const seedStart = projectsSource.indexOf("if (draft.contentPipeline");
   const seedEnd = projectsSource.indexOf("const reloadResult", seedStart);
@@ -113,7 +114,7 @@ test("retry shares inline required errors, feedback, and first-invalid focus", (
   assert.match(validationBlock, /setSaveState\(["']invalid["']\)/);
   assert.match(validationBlock, /setFeedback\(["']필수 입력을 확인하세요\.["']\)/);
   assert.match(validationBlock, /requestAnimationFrame/);
-  assert.match(validationBlock, /nextErrors\.title[\s\S]*titleRef\.current\?\.focus\(\)[\s\S]*locationRef\.current\?\.focus\(\)/);
+  assert.match(validationBlock, /nextErrors\.title[\s\S]*titleRef\.current\?\.focus\(\)[\s\S]*areaRef\.current\?\.focus\(\)/);
 });
 
 test("query and keyboard entry always open an unseeded global project draft", () => {

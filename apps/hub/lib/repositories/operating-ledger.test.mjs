@@ -245,6 +245,9 @@ test("marks every bounded project slice partial when one extra row proves trunca
       decisions: 81,
       notes: 81,
       routine_checks: 81,
+      areas: undefined,
+      leads: 160,
+      customer_accounts: 80,
     },
   );
 });
@@ -353,6 +356,69 @@ test("successful empty optional reads are live-empty rather than partial failure
   assert.equal(ledger.partial, false);
   assert.deepEqual(ledger.failedSources, []);
   assert.deepEqual(ledger.partialSources, []);
+});
+
+test("an unavailable Area catalog degrades create capability without erasing core projects", async () => {
+  const state = globalThis.__operatingLedgerTestState;
+  state.calls = [];
+  state.workspaceId = "workspace-1";
+  state.config = { url: "https://supabase.example.com", apiKey: "test-key" };
+  state.counts = { tasks: 0 };
+  state.rows = {
+    brands: [],
+    projects: [{
+      id: "project-1",
+      name: "Readable project",
+      status: "active",
+      priority: "medium",
+      created_at: "2026-07-01T00:00:00.000Z",
+      updated_at: "2026-07-17T00:00:00.000Z",
+    }],
+    tasks: [],
+    project_updates: [],
+    decisions: [],
+    notes: [],
+    routine_checks: [],
+    areas: null,
+    leads: [],
+    customer_accounts: [],
+  };
+
+  const ledger = await operatingLedger.getProjectLedger();
+
+  assert.equal(ledger.source, "supabase");
+  assert.equal(ledger.partial, true);
+  assert.deepEqual(ledger.failedSources, ["areas"]);
+  assert.equal(ledger.projects.length, 1);
+  assert.deepEqual(ledger.areas, []);
+});
+
+test("unavailable Lead and Account catalogs stay named instead of becoming live-empty selectors", async () => {
+  const state = globalThis.__operatingLedgerTestState;
+  state.calls = [];
+  state.workspaceId = "workspace-1";
+  state.config = { url: "https://supabase.example.com", apiKey: "test-key" };
+  state.counts = { tasks: 0 };
+  state.rows = {
+    brands: [],
+    projects: [],
+    tasks: [],
+    project_updates: [],
+    decisions: [],
+    notes: [],
+    routine_checks: [],
+    areas: [{ id: "area-1", name: "영업", slug: "sales", status: "active" }],
+    leads: null,
+    customer_accounts: null,
+  };
+
+  const ledger = await operatingLedger.getProjectLedger();
+
+  assert.equal(ledger.source, "supabase");
+  assert.equal(ledger.partial, true);
+  assert.deepEqual(ledger.failedSources, ["leads", "customer_accounts"]);
+  assert.equal(ledger.areas.length, 1);
+  assert.deepEqual(ledger.projectEntities, []);
 });
 
 test("failed update evidence stays explicit while complete task evidence remains usable", async () => {

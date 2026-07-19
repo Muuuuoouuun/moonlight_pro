@@ -22,7 +22,9 @@ test("builds a project draft with an empty title and a stable client id", () => 
   const clientId = "11111111-1111-4111-8111-111111111111";
   const draft = pmsUi.buildProjectDraft({
     clientId,
+    areaId: "area-1",
     contextBrand: { id: "brand-1", key: "classmoon" },
+    orgScope: "classin",
   });
 
   assert.deepEqual(draft, {
@@ -30,13 +32,16 @@ test("builds a project draft with an empty title and a stable client id", () => 
     isNew: true,
     clientId,
     title: "",
+    areaId: "area-1",
     brandId: "brand-1",
     brandKey: "classmoon",
+    entityKey: "",
     summary: "",
     status: "draft",
     priority: "medium",
     nextAction: "",
     dueAt: "",
+    orgScope: "classin",
   });
   assert.equal("progress" in draft, false, "create drafts must not invent manual progress");
 });
@@ -56,18 +61,56 @@ test("seeds a project container only from an explicit container context", () => 
   assert.equal(contextualDraft.brandKey, "sinabro");
 });
 
-test("validates the required project title and save location", () => {
+test("validates the required project title and flat area while brand stays optional", () => {
   assert.deepEqual(
-    pmsUi.validateProjectDraft({ title: "  ", brandId: null }),
+    pmsUi.validateProjectDraft({ title: "  ", areaId: null, brandId: null }),
     {
       title: "프로젝트명을 입력하세요.",
-      brandId: "프로젝트를 둘 위치를 선택하세요.",
+      areaId: "업무 분야를 선택하세요.",
     },
   );
   assert.deepEqual(
-    pmsUi.validateProjectDraft({ title: "운영 OS", brandId: "brand-1" }),
+    pmsUi.validateProjectDraft({ title: "운영 OS", areaId: "area-1", brandId: null }),
     {},
   );
+});
+
+test("builds a typed project create payload without inventing progress", () => {
+  const payload = pmsUi.buildProjectCreatePayload({
+    clientId: "11111111-1111-4111-8111-111111111111",
+    title: "갈무리 첫결제 SW",
+    areaId: "area-1",
+    brandId: "",
+    entityKey: "lead:lead-1",
+    summary: "첫 결제 완료",
+    status: "draft",
+    priority: "medium",
+    nextAction: "결제 링크 발송",
+    dueAt: "",
+    orgScope: "classin",
+  });
+
+  assert.deepEqual(payload.entityRef, { type: "lead", id: "lead-1" });
+  assert.equal(payload.id, "11111111-1111-4111-8111-111111111111");
+  assert.equal(payload.brandId, null);
+  assert.equal("progress" in payload, false);
+});
+
+test("selects only canonical project areas and resolves the immutable creation scope", () => {
+  const areas = [
+    { id: "legacy", slug: "legacy", canonical: false },
+    { id: "sales", slug: "sales", canonical: true },
+    { id: "content", slug: "content", canonical: true },
+  ];
+
+  assert.equal(pmsUi.selectProjectAreaId(areas), "sales");
+  assert.equal(pmsUi.selectProjectAreaId(areas, "content"), "content");
+  assert.equal(pmsUi.resolveProjectDraftOrgScope({ workspace: "classin" }), "classin");
+  assert.equal(pmsUi.resolveProjectDraftOrgScope({
+    workspace: "brand",
+    brandOrgScope: "classin",
+    preferBrandScope: true,
+  }), "classin");
 });
 
 test("builds an edit draft from raw project fields and preserves its concurrency token", () => {
@@ -76,6 +119,9 @@ test("builds an edit draft from raw project fields and preserves its concurrency
     name: "원본 프로젝트",
     brand: "classmoon",
     brandId: "brand-1",
+    areaId: "area-1",
+    entityRef: { type: "lead", id: "lead-1" },
+    orgScope: "classin",
     statusKey: "blocked",
     priority: "high",
     projectSummary: null,
@@ -94,8 +140,11 @@ test("builds an edit draft from raw project fields and preserves its concurrency
     isNew: false,
     id: "project-1",
     title: "원본 프로젝트",
+    areaId: "area-1",
     brandId: "brand-1",
     brandKey: "classmoon",
+    entityKey: "lead:lead-1",
+    orgScope: "classin",
     summary: "",
     status: "blocked",
     priority: "high",
@@ -240,6 +289,9 @@ test("rebases stale edit state while preserving only user-dirty fields", () => {
     name: "Old server title",
     brand: "classmoon",
     brandId: "brand-old",
+    areaId: "area-1",
+    entityRef: { type: "customer_account", id: "account-1" },
+    orgScope: "classin",
     statusKey: "active",
     priority: "medium",
     projectSummary: "Old server goal",
@@ -284,8 +336,11 @@ test("rebases stale edit state while preserving only user-dirty fields", () => {
     isNew: false,
     id: "project-1",
     title: "Operator title",
+    areaId: "area-1",
     brandId: "brand-current",
     brandKey: "classmoon",
+    entityKey: "customer_account:account-1",
+    orgScope: "classin",
     summary: "Operator goal",
     status: "blocked",
     priority: "high",
@@ -349,6 +404,23 @@ test("plain N opens global project create only outside editable targets and draw
     pmsUi.shouldOpenGlobalProjectCreate(plainN, { drawerOpen: true }),
     false,
   );
+});
+
+test("project create feedback translates invalid references and hides unknown internal codes", () => {
+  assert.deepEqual(pmsUi.projectCreateFeedback({
+    status: "invalid-input",
+    error: "invalid-reference",
+  }), {
+    state: "error",
+    message: "연결 항목을 다시 선택하세요.",
+  });
+  assert.deepEqual(pmsUi.projectCreateFeedback({
+    status: "error",
+    error: "internal-ledger-code-947",
+  }), {
+    state: "error",
+    message: "프로젝트를 만들지 못했습니다. 다시 시도하세요.",
+  });
 });
 
 test("builds a minimal task draft from the current project context", () => {

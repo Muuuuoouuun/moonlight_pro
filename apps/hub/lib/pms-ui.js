@@ -18,6 +18,7 @@ const PROJECT_STATUS_BY_LABEL = {
   archived: "archived",
 };
 const TASK_STATUSES = new Set(Object.values(TASK_STATUS_BY_COLUMN));
+const PROJECT_ORG_SCOPES = new Set(["classin", "personal"]);
 const BOARD_COLUMN_BY_STATUS = Object.fromEntries(
   Object.entries(TASK_STATUS_BY_COLUMN).map(([column, status]) => [status, column]),
 );
@@ -51,22 +52,76 @@ export function createClientId({
 export function buildProjectDraft({
   contextBrand = null,
   clientId = createClientId(),
+  areaId = null,
+  brandId = null,
+  brandKey = "all",
   initialStatus = "Planning",
+  orgScope = "personal",
 } = {}) {
   const hasContainerContext = contextBrand?.id && contextBrand.id !== "all";
+  const selectedBrandId = brandId || (hasContainerContext ? contextBrand.id : null);
+  const selectedBrandKey = brandId
+    ? brandKey
+    : (hasContainerContext ? contextBrand.key : brandKey);
   return {
     kind: "project",
     isNew: true,
     clientId,
     title: "",
-    brandId: hasContainerContext ? contextBrand.id : null,
-    brandKey: hasContainerContext ? contextBrand.key : "all",
+    areaId,
+    brandId: selectedBrandId,
+    brandKey: selectedBrandKey || "all",
+    entityKey: "",
     summary: "",
     status: PROJECT_STATUS_BY_LABEL[initialStatus] || "draft",
     priority: "medium",
     nextAction: "",
     dueAt: "",
+    orgScope,
   };
+}
+
+export function parseProjectEntityKey(value) {
+  if (typeof value !== "string") return null;
+  const match = /^(lead|customer_account):([^:\s]+)$/.exec(value);
+  return match ? { type: match[1], id: match[2] } : null;
+}
+
+export function buildProjectCreatePayload(draft = {}) {
+  return {
+    id: draft.clientId || draft.id,
+    title: draft.title,
+    areaId: draft.areaId,
+    brandId: draft.brandId || null,
+    entityRef: parseProjectEntityKey(draft.entityKey),
+    summary: draft.summary,
+    status: draft.status,
+    priority: draft.priority,
+    nextAction: draft.nextAction,
+    dueAt: draft.dueAt,
+    orgScope: draft.orgScope,
+    source: "hub-projects",
+  };
+}
+
+export function selectProjectAreaId(areas = [], preferredSlug = null) {
+  const canonicalAreas = areas.filter((area) => area?.canonical && area?.id);
+  if (preferredSlug) {
+    const preferred = canonicalAreas.find((area) => area.slug === preferredSlug);
+    if (preferred) return preferred.id;
+  }
+  return canonicalAreas[0]?.id || null;
+}
+
+export function resolveProjectDraftOrgScope({
+  workspace,
+  brandOrgScope = null,
+  preferBrandScope = false,
+} = {}) {
+  if (preferBrandScope && PROJECT_ORG_SCOPES.has(brandOrgScope)) {
+    return brandOrgScope;
+  }
+  return workspace === "classin" ? "classin" : "personal";
 }
 
 export function rotateProjectClientId(draft, {
@@ -134,10 +189,41 @@ export function validateProjectDraft(draft = {}) {
   if (!String(draft.title || "").trim()) {
     errors.title = "프로젝트명을 입력하세요.";
   }
-  if (!draft.brandId || draft.brandId === "all") {
-    errors.brandId = "프로젝트를 둘 위치를 선택하세요.";
+  if (!draft.areaId) {
+    errors.areaId = "업무 분야를 선택하세요.";
   }
   return errors;
+}
+
+export function projectCreateFeedback(result = {}) {
+  if (result.status === "pipeline-error") {
+    return {
+      state: "error",
+      message: "프로젝트 입력은 유지했습니다. 콘텐츠 4단계를 원장에서 확인할 때까지 같은 요청으로 다시 시도하세요.",
+    };
+  }
+  if (result.status === "reload-error") {
+    return {
+      state: "error",
+      message: "저장은 접수됐지만 새 원장에서 확인하지 못했습니다. 입력과 요청 ID를 유지했으니 다시 시도하세요.",
+    };
+  }
+  if (result.status === "conflict") {
+    const message = result.error === "stale-update"
+      ? "다른 변경이 먼저 저장되었습니다. 입력은 유지했습니다. 원장을 다시 확인한 뒤 재시도하세요."
+      : "같은 요청 ID에 다른 내용이 감지되었습니다. 입력과 요청 ID를 유지했습니다.";
+    return { state: "conflict", message };
+  }
+  if (["preview", "degraded"].includes(result.status) || result.error === "engine-not-configured") {
+    return {
+      state: result.status === "degraded" ? "degraded" : "preview",
+      message: "저장 위치가 연결되지 않았습니다. 입력은 유지했습니다.",
+    };
+  }
+  if (result.error === "invalid-reference") {
+    return { state: "error", message: "연결 항목을 다시 선택하세요." };
+  }
+  return { state: "error", message: "프로젝트를 만들지 못했습니다. 다시 시도하세요." };
 }
 
 function dateInputValue(value) {
@@ -150,8 +236,13 @@ export function buildProjectEditDraft(project = {}) {
     isNew: false,
     id: project.id,
     title: project.name || "",
+    areaId: project.areaId || null,
     brandId: project.brandId || "",
     brandKey: project.brand || "all",
+    entityKey: project.entityRef
+      ? `${project.entityRef.type}:${project.entityRef.id}`
+      : "",
+    orgScope: project.orgScope || "personal",
     summary: project.projectSummary ?? "",
     status: project.statusKey || "active",
     priority: project.priority || "medium",

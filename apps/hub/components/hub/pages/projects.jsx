@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Checkbox, EmptyState, SyncBadge, SegmentedControl, EditDrawer, Kbd } from "../hub-primitives";
 import {
+  buildProjectCreatePayload,
   buildProjectDraft,
   buildProjectEditDraft,
   buildProjectPatch,
@@ -22,6 +23,8 @@ import {
   projectReloadContains,
   rebaseProjectEditState,
   rotateProjectClientId,
+  resolveProjectDraftOrgScope,
+  selectProjectAreaId,
   shouldOpenGlobalProjectCreate,
   taskStatusForBoardColumn,
   validateProjectDraft,
@@ -180,6 +183,8 @@ export function Projects({ workspace }) {
   }, [pathname, router]);
   const [ledger, setLedger] = React.useState({
     source: 'preview',
+    areas: [],
+    projectEntities: [],
     brands: [EMPTY_ALL_BRAND],
     projects: [],
     updates: [],
@@ -292,12 +297,16 @@ export function Projects({ workspace }) {
           : 'preview · 실제 원장 미연결';
   })();
 
-  const loadLedger = React.useCallback(async ({ initial = false } = {}) => {
+  const loadLedger = React.useCallback(async ({
+    initial = false,
+    projectId = selectedProjectId,
+  } = {}) => {
     setSyncState('loading');
     setReadError(null);
     try {
-      const endpoint = selectedProjectId
-        ? `/api/hub/projects?project=${encodeURIComponent(selectedProjectId)}`
+      const exactProjectId = typeof projectId === 'string' ? projectId.trim() : '';
+      const endpoint = exactProjectId
+        ? `/api/hub/projects?project=${encodeURIComponent(exactProjectId)}`
         : '/api/hub/projects';
       const response = await fetch(endpoint, { cache: 'no-store' });
       const data = await response.json().catch(() => null);
@@ -313,6 +322,8 @@ export function Projects({ workspace }) {
         const liveTodos = Array.isArray(data.todos) ? data.todos : [];
         setLedger({
           source: data.source,
+          areas: Array.isArray(data.areas) ? data.areas : [],
+          projectEntities: Array.isArray(data.projectEntities) ? data.projectEntities : [],
           brands: data.brands?.length ? data.brands : [EMPTY_ALL_BRAND],
           projects: liveProjects,
           updates: Array.isArray(data.updates) ? data.updates : [],
@@ -335,6 +346,8 @@ export function Projects({ workspace }) {
 
       setLedger({
         source: 'preview',
+        areas: [],
+        projectEntities: [],
         brands: [EMPTY_ALL_BRAND],
         projects: [],
         updates: [],
@@ -397,6 +410,9 @@ export function Projects({ workspace }) {
     }
     if (allProjects.some(project => project.id === selectedProjectId)) {
       setOpenDetail(selectedProjectId);
+      setExpanded((current) => current.has(selectedProjectId)
+        ? current
+        : new Set([...current, selectedProjectId]));
       return;
     }
     setOpenDetail(null);
@@ -485,30 +501,70 @@ export function Projects({ workspace }) {
     const contextBrand = brandKeyOverride
       ? (brands.find(item => item.key === brandKeyOverride) || null)
       : (brand === 'all' ? null : currentBrand);
+    const areaId = selectProjectAreaId(ledger.areas);
+    if (!areaId) {
+      setOrderResult({ tone: 'err', label: '프로젝트를 연결할 업무 분야가 없습니다' });
+      return false;
+    }
     setProjectCreateContext(contextBrand?.id === 'all' ? null : contextBrand);
     setProjectEditSource(null);
-    setProjectDraft(buildProjectDraft({ contextBrand, initialStatus }));
-  }, [brand, brands, currentBrand]);
+    setProjectDraft(buildProjectDraft({
+      contextBrand,
+      areaId,
+      initialStatus,
+      orgScope: resolveProjectDraftOrgScope({ workspace }),
+    }));
+    return true;
+  }, [brand, brands, currentBrand, ledger.areas, workspace]);
 
   const openGlobalProjectCreate = React.useCallback(() => {
+    const areaId = selectProjectAreaId(ledger.areas);
+    if (!areaId) {
+      setOrderResult({ tone: 'err', label: '프로젝트를 연결할 업무 분야가 없습니다' });
+      return false;
+    }
     setProjectCreateContext(null);
     setProjectEditSource(null);
-    setProjectDraft(buildProjectDraft());
-  }, []);
+    setProjectDraft(buildProjectDraft({
+      areaId,
+      orgScope: resolveProjectDraftOrgScope({ workspace }),
+    }));
+    return true;
+  }, [ledger.areas, workspace]);
 
   // 콘텐츠 프로젝트: 브랜드 시드 + contentPipeline 플래그. 저장이 성공하면 persistProject가
   // CONTENT_STAGES(기획→초안→검토→업로드)를 하위 아이템으로 시드한다.
   const createContentProject = React.useCallback((brandKeyOverride = null) => {
     const contextBrand = brandKeyOverride
       ? (brands.find(item => item.key === brandKeyOverride) || null)
-      : (brand === 'all' ? null : currentBrand);
+      : (brand === 'all' ? brands.find(item => item.key !== 'all') : currentBrand);
+    if (!contextBrand || contextBrand.id === 'all') {
+      setOrderResult({ tone: 'err', label: '콘텐츠를 연결할 브랜드가 없습니다' });
+      return false;
+    }
+    const areaId = selectProjectAreaId(ledger.areas, 'content');
+    if (!areaId) {
+      setOrderResult({ tone: 'err', label: '콘텐츠 프로젝트를 연결할 업무 분야가 없습니다' });
+      return false;
+    }
     setProjectCreateContext(contextBrand?.id === 'all' ? null : contextBrand);
     setProjectEditSource(null);
     setProjectDraft({
-      ...buildProjectDraft({ contextBrand, initialStatus: 'Planning' }),
+      ...buildProjectDraft({
+        contextBrand,
+        areaId,
+        initialStatus: 'Planning',
+        orgScope: resolveProjectDraftOrgScope({
+          workspace,
+          brandOrgScope: contextBrand.orgScope,
+          preferBrandScope: true,
+        }),
+      }),
+      title: `${contextBrand.name} 콘텐츠`,
       contentPipeline: true,
     });
-  }, [brand, brands, currentBrand]);
+    return true;
+  }, [brand, brands, currentBrand, ledger.areas, workspace]);
 
   const editProject = React.useCallback((project) => {
     setProjectCreateContext(null);
@@ -537,17 +593,7 @@ export function Projects({ workspace }) {
       const response = await fetch('/api/hub/projects', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          id: draft.clientId,
-          title: draft.title,
-          brandId: draft.brandId,
-          summary: draft.summary,
-          status: draft.status,
-          priority: draft.priority,
-          nextAction: draft.nextAction,
-          dueAt: draft.dueAt,
-          source: 'hub-projects',
-        }),
+        body: JSON.stringify(buildProjectCreatePayload(draft)),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !['saved', 'duplicate'].includes(data.status)) {
@@ -629,9 +675,11 @@ export function Projects({ workspace }) {
           project: data.project,
         };
       }
+      setBrand('all');
       const params = mergeProjectDetailQuery(searchParamsRef.current, durableProjectId);
       const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      setExpanded((current) => new Set([...current, durableProjectId]));
       setOpenDetail(durableProjectId);
       setOrderResult({
         tone: 'ok',
@@ -655,10 +703,11 @@ export function Projects({ workspace }) {
     if (!durableProjectId) {
       return { ok: false, status: 'error', error: 'missing-conflict-project-id' };
     }
-    const reloadResult = await loadLedger();
+    const reloadResult = await loadLedger({ projectId: durableProjectId });
     if (!projectReloadContains(reloadResult, durableProjectId)) {
       return { ok: false, status: 'reload-error', error: 'conflict-project-not-visible-after-reload' };
     }
+    setBrand('all');
     const params = mergeProjectDetailQuery(searchParamsRef.current, durableProjectId);
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
@@ -892,45 +941,36 @@ export function Projects({ workspace }) {
       createdFromQueryRef.current = false;
       return;
     }
+    if (drawerOpen || !initialLoadDoneRef.current || syncState === 'loading') return;
     if (createdFromQueryRef.current) return;
+    const opened = openGlobalProjectCreate();
+    if (!opened) return;
     createdFromQueryRef.current = true;
-    openGlobalProjectCreate();
     const params = new URLSearchParams(searchParams.toString());
     params.delete('new');
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  }, [openGlobalProjectCreate, searchParams, router, pathname]);
+  }, [drawerOpen, openGlobalProjectCreate, pathname, router, searchParams, syncState]);
 
   React.useEffect(() => {
     const onKey = (event) => {
       if (!shouldOpenGlobalProjectCreate(event, { drawerOpen })) return;
-      event.preventDefault();
-      openGlobalProjectCreate();
+      const opened = openGlobalProjectCreate();
+      if (opened) event.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [drawerOpen, openGlobalProjectCreate]);
 
-  // ?project=<id> 딥링크 (§8.1) — 원장 로드 후 해당 프로젝트의 우측 상세 패널을 1회 열고
-  // 쿼리를 소거한다. 내 작업 상세 패널의 "프로젝트에서 열기"가 이 경로로 들어온다.
-  // 상세 패널은 tree 뷰에만 있으므로 view 쿼리도 함께 지워 tree(기본)로 되돌린다.
-  const projectQueryRef = React.useRef(false);
+  // ?project=<id> is the canonical detail selection. Normalize only the view;
+  // the project id stays in the URL so reloads and exact bounded reads remain open.
   React.useEffect(() => {
-    if (projectQueryRef.current || !initialLoadDoneRef.current) return;
-    const target = searchParams.get('project');
-    if (!target) return;
-    projectQueryRef.current = true;
-    const match = allProjects.find((p) => p.id === target);
-    if (match) {
-      setOpenDetail(match.id);
-      setExpanded((prev) => new Set([...prev, match.id]));
-    }
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete('project');
-    if (match) params.delete('view');
+    if (!initialLoadDoneRef.current || syncState === 'loading') return;
+    if (!selectedProjectId || view === 'tree') return;
+    const params = mergeProjectDetailQuery(searchParams, selectedProjectId);
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [searchParams, syncState, allProjects, router, pathname]);
+  }, [pathname, router, searchParams, selectedProjectId, syncState, view]);
 
   // 사이드바 드래그 정렬 상태 (UI 전용, localStorage). brandGroups가 이 순서를 적용하므로
   // 반드시 memo보다 먼저 선언한다.
@@ -1866,13 +1906,14 @@ export function Projects({ workspace }) {
       {projectDraft?.isNew && !containerDraft && (
         <ProjectCreateDrawer
           draft={projectDraft}
-          containers={brands.filter(item => item.key !== 'all')}
-          contextContainer={projectCreateContext}
+          areas={ledger.areas}
+          brands={brands}
+          entities={ledger.projectEntities}
+          failedSources={ledger.failedSources}
           onChange={(key, value) => setProjectDraft(current => ({ ...current, [key]: value }))}
           onSave={persistProjectCreate}
           onRetryWithNewClientId={retryProjectCreateWithNewId}
           onOpenConflictProject={openConflictProject}
-          onCreateContainer={createContainer}
           onClose={() => {
             setProjectDraft(null);
             setProjectCreateContext(null);

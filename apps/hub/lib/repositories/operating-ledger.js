@@ -7,6 +7,14 @@ import {
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
 import { buildProjectProgress } from "../pms-ui.js";
+import {
+  buildProjectCatalogFetchPlan,
+  buildProjectEntities,
+  fetchProjectReferenceRows,
+  mapProjectAreas,
+  mapProjectRows,
+  mergeProjectRelationRows,
+} from "./project-ledger-context.js";
 
 const BRAND_GLYPHS = ["◐", "◇", "✦", "◆", "●", "□", "△", "◎", "◌", "✧"];
 const PROJECT_READ_LIMIT = 80;
@@ -457,6 +465,8 @@ export async function getProjectLedger({ projectId = null } = {}) {
       source: "preview",
       configured: false,
       workspaceId: workspaceId || null,
+      areas: [],
+      projectEntities: [],
       brands: [],
       projects: [],
       todos: [],
@@ -479,6 +489,7 @@ export async function getProjectLedger({ projectId = null } = {}) {
   const taskFilters = withWorkspaceFilter([
     ["status", inFilter(taskStatuses)],
   ]);
+  const catalogPlan = buildProjectCatalogFetchPlan();
   const [
     brandRows,
     projectRows,
@@ -494,6 +505,9 @@ export async function getProjectLedger({ projectId = null } = {}) {
     selectedDecisionRows,
     selectedNoteRows,
     selectedRoutineRows,
+    areaRows,
+    leadRows,
+    accountRows,
   ] = await Promise.all([
     fetchSupabaseRows("brands", {
       order: "name.asc",
@@ -576,6 +590,18 @@ export async function getProjectLedger({ projectId = null } = {}) {
           filters: withWorkspaceFilter([["project_id", eqFilter(selectedProjectId)]]),
         })
       : Promise.resolve([]),
+    fetchSupabaseRows(catalogPlan.areas.table, {
+      ...catalogPlan.areas.options,
+      filters: withWorkspaceFilter(catalogPlan.areas.options.filters),
+    }),
+    fetchSupabaseRows(catalogPlan.leads.table, {
+      ...catalogPlan.leads.options,
+      filters: withWorkspaceFilter(catalogPlan.leads.options.filters),
+    }),
+    fetchSupabaseRows(catalogPlan.accounts.table, {
+      ...catalogPlan.accounts.options,
+      filters: withWorkspaceFilter(catalogPlan.accounts.options.filters),
+    }),
   ]);
 
   const failedSources = uniqueSources([
@@ -598,6 +624,8 @@ export async function getProjectLedger({ projectId = null } = {}) {
       error: "project-ledger-core-read-failed",
       failedSources,
       retryable: true,
+      areas: [],
+      projectEntities: [],
       brands: [],
       projects: [],
       todos: [],
@@ -621,7 +649,15 @@ export async function getProjectLedger({ projectId = null } = {}) {
     ["notes", noteRows],
     ["routine_checks", routineRows],
   ];
+  const catalogSources = [
+    ["areas", areaRows],
+    ["leads", leadRows],
+    ["customer_accounts", accountRows],
+  ];
   const optionalFailedSources = optionalSources
+    .filter(([, rows]) => !Array.isArray(rows))
+    .map(([source]) => source);
+  const catalogFailedSources = catalogSources
     .filter(([, rows]) => !Array.isArray(rows))
     .map(([source]) => source);
   const selectionOptionalSources = selectedProjectId
@@ -691,7 +727,31 @@ export async function getProjectLedger({ projectId = null } = {}) {
     ...selectionTruncatedSources,
   ]);
 
-  const brandById = new Map(brandRows.map((brand) => [brand.id, brand]));
+  const referencedRows = await fetchProjectReferenceRows(visibleProjectRows, {
+    fetchRows: fetchSupabaseRows,
+    withWorkspaceFilters: withWorkspaceFilter,
+  });
+
+  const brandById = new Map(brandRows.map((brand) => {
+    const key = brand.slug || brand.id;
+    const meta = brand.meta && typeof brand.meta === "object" ? brand.meta : {};
+    return [brand.id, {
+      ...brand,
+      orgScope: resolveBrandOrgScope(key, meta),
+    }];
+  }));
+  const areaById = new Map(
+    mergeProjectRelationRows(areaRows || [], referencedRows.areaRows)
+      .map((area) => [area.id, area]),
+  );
+  const leadById = new Map(
+    mergeProjectRelationRows(leadRows || [], referencedRows.leadRows)
+      .map((lead) => [lead.id, lead]),
+  );
+  const accountById = new Map(
+    mergeProjectRelationRows(accountRows || [], referencedRows.accountRows)
+      .map((account) => [account.id, account]),
+  );
   const projectById = new Map(visibleProjectRows.map((project) => [project.id, project]));
   const taskStats = new Map();
 
@@ -719,18 +779,43 @@ export async function getProjectLedger({ projectId = null } = {}) {
     && !selectionTruncatedSources.includes("project_updates")
       ? new Set([selectedProjectId])
       : new Set();
-  const projects = mapProjects(visibleProjectRows, brandById, taskStats, updateStats, {
+  const baseProjects = mapProjects(visibleProjectRows, brandById, taskStats, updateStats, {
     taskStatsPartial,
     updateStatsPartial,
     taskCompleteProjectIds,
     updateCompleteProjectIds,
   });
+  const contextById = new Map(mapProjectRows(visibleProjectRows, {
+    brandById,
+    areaById,
+    leadById,
+    accountById,
+  }).map((project) => [project.id, project]));
+  const projects = baseProjects.map((project) => {
+    const contextProject = contextById.get(project.id);
+    if (!contextProject) return project;
+    return {
+      ...project,
+      areaId: contextProject.areaId,
+      areaName: contextProject.areaName,
+      brandId: contextProject.brandId,
+      brand: contextProject.brand,
+      entityRef: contextProject.entityRef,
+      entityLabel: contextProject.entityLabel,
+      orgScope: contextProject.orgScope,
+      workspace: contextProject.workspace,
+    };
+  });
   const brands = mapBrands(brandRows, projects, todos, updates);
+  const areas = mapProjectAreas(areaRows || []);
+  const projectEntities = buildProjectEntities(leadRows || [], accountRows || []);
 
   return {
     source: "supabase",
     configured: true,
     workspaceId,
+    areas,
+    projectEntities,
     brands,
     projects,
     todos,
@@ -745,15 +830,20 @@ export async function getProjectLedger({ projectId = null } = {}) {
       partial: taskStatsPartial,
     },
     partial: optionalFailedSources.length > 0
+      || catalogFailedSources.length > 0
       || selectionFailedSources.length > 0
       || partialSources.length > 0,
-    failedSources: uniqueSources([...optionalFailedSources, ...selectionFailedSources]),
+    failedSources: uniqueSources([
+      ...optionalFailedSources,
+      ...catalogFailedSources,
+      ...selectionFailedSources,
+    ]),
     partialSources,
     selection: selectedProjectId
       ? {
           projectId: selectedProjectId,
           found: selectedProjectFound,
-          failedSources: uniqueSources(selectionFailedSources),
+          failedSources: uniqueSources([...catalogFailedSources, ...selectionFailedSources]),
           partialSources: uniqueSources(selectionTruncatedSources),
         }
       : null,

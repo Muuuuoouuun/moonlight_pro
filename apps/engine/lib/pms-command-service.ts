@@ -49,7 +49,10 @@ function canonicalCreatePayload(action: string, row: Record<string, unknown>) {
     return {
       id: row.id,
       workspace_id: row.workspace_id,
+      area_id: row.area_id ?? null,
       brand_id: row.brand_id ?? null,
+      lead_id: row.lead_id ?? null,
+      customer_account_id: row.customer_account_id ?? null,
       name: row.name,
       summary: row.summary ?? null,
       status: row.status,
@@ -57,6 +60,8 @@ function canonicalCreatePayload(action: string, row: Record<string, unknown>) {
       progress: row.progress ?? 0,
       next_action: row.next_action ?? null,
       due_at: comparableTimestamp(row.due_at),
+      org_scope: meta.org_scope ?? null,
+      origin_deal_id: meta.origin_deal_id ?? null,
       source: meta.source ?? null,
     };
   }
@@ -66,9 +71,11 @@ function canonicalCreatePayload(action: string, row: Record<string, unknown>) {
       id: row.id,
       workspace_id: row.workspace_id,
       project_id: row.project_id ?? null,
+      deal_id: meta.deal_id ?? null,
       title: row.title,
       status: row.status,
       priority: row.priority,
+      description: row.description ?? null,
       next_action: row.next_action ?? null,
       due_at: comparableTimestamp(row.due_at),
       source: meta.source ?? null,
@@ -116,40 +123,55 @@ async function validateRelationship(
   const workspaceId = typeof command.record?.workspace_id === "string"
     ? command.record.workspace_id
     : filterValue(command.filters, "workspace_id");
-  const relationship = command.table === "projects" && typeof values.brand_id === "string"
-    ? { table: "brands", id: values.brand_id, error: "invalid-brand-reference" }
+  const relationships = command.table === "projects"
+    ? [
+        ["area_id", "areas", "invalid-reference"],
+        ["brand_id", "brands", "invalid-brand-reference"],
+        ["lead_id", "leads", "invalid-reference"],
+        ["customer_account_id", "customer_accounts", "invalid-reference"],
+      ].flatMap(([column, table, error]) => (
+        typeof values[column] === "string"
+          ? [{ table, id: values[column] as string, error }]
+          : []
+      ))
     : command.table === "tasks" && typeof values.project_id === "string"
-      ? { table: "projects", id: values.project_id, error: "invalid-project-reference" }
-      : null;
+      ? [{ table: "projects", id: values.project_id, error: "invalid-project-reference" }]
+      : [];
 
-  if (!relationship || !workspaceId) return null;
+  if (!relationships.length || !workspaceId) return null;
 
-  const options = {
-    select: "id",
-    filters: [
-      ["id", `eq.${relationship.id}`],
-      ["workspace_id", `eq.${workspaceId}`],
-    ] as Array<[string, string]>,
-    limit: 1,
-  };
-  const detailed = dependencies.fetchRowsDetailed
-    ? await dependencies.fetchRowsDetailed(relationship.table, options)
-    : null;
-  if (detailed && !detailed.ok) {
-    if (detailed.reason === "missing-config") {
-      return { status: "error", error: "missing-config" };
-    }
-    return {
-      status: "error",
-      error: "relationship-check-failed",
-      detail: detailed.reason,
+  for (const relationship of relationships) {
+    const options = {
+      select: "id",
+      filters: [
+        ["id", `eq.${relationship.id}`],
+        ["workspace_id", `eq.${workspaceId}`],
+      ] as Array<[string, string]>,
+      limit: 1,
     };
+    const detailed = dependencies.fetchRowsDetailed
+      ? await dependencies.fetchRowsDetailed(relationship.table, options)
+      : null;
+    if (detailed && !detailed.ok) {
+      if (detailed.reason === "missing-config") {
+        return { status: "error", error: "missing-config" };
+      }
+      return {
+        status: "error",
+        error: "relationship-check-failed",
+        detail: detailed.reason,
+      };
+    }
+    const rows = detailed?.ok
+      ? detailed.rows
+      : await dependencies.fetchRows(relationship.table, options);
+    if (rows === null) {
+      return command.table === "projects"
+        ? { status: "error", error: "reference-lookup-unavailable" }
+        : { status: "error", error: "relationship-check-failed" };
+    }
+    if (!rows[0]) return { status: "invalid-input", error: relationship.error };
   }
-  const rows = detailed?.ok
-    ? detailed.rows
-    : await dependencies.fetchRows(relationship.table, options);
-  if (rows === null) return { status: "error", error: "relationship-check-failed" };
-  if (!rows[0]) return { status: "invalid-input", error: relationship.error };
   return null;
 }
 
