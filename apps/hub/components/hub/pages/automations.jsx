@@ -385,7 +385,7 @@ export function Runs() {
           {liveLabel}
         </span>
       </div>
-      <Card pad={false} className="hub-table-card" style={{ background: 'oklch(0.17 0.005 250)' }}>
+      <Card pad={false} className="hub-table-card" style={{ background: 'var(--bg)' }}>
         <div className="mono" style={{ padding: '12px 14px', fontSize: 12 }}>
           {rows.length === 0 && (
             <EmptyState

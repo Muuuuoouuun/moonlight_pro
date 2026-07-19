@@ -3,13 +3,38 @@
 import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar, SyncBadge } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar, SyncBadge, SegmentedControl } from "../hub-primitives";
 import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
 import { shouldRestoreActiveStudioDraft } from "@/lib/content-studio-routing";
 
 const STUDIO_DRAFT_DB = "moonlight-content-studio";
 const STUDIO_DRAFT_STORE = "drafts";
 const ACTIVE_DRAFT_KEY = "active";
+
+// Card-news slide backgrounds — content colors baked into exported slides, so they are
+// deliberately theme-independent raw values (not --surface/--moon theme tokens).
+// `seed` is addSlide's default background, kept distinct from the 8 swatch-picker tones.
+const SLIDE_PALETTE = {
+  plum:  'oklch(0.35 0.04 280)',
+  blue:  'oklch(0.35 0.05 220)',
+  teal:  'oklch(0.35 0.05 180)',
+  green: 'oklch(0.35 0.05 150)',
+  amber: 'oklch(0.35 0.05 85)',
+  rust:  'oklch(0.35 0.06 30)',
+  ink:   'oklch(0.28 0.01 250)',
+  paper: 'oklch(0.95 0 0)',
+  seed:  'oklch(0.3 0.02 250)',
+};
+const SLIDE_SWATCHES = [
+  SLIDE_PALETTE.plum,
+  SLIDE_PALETTE.blue,
+  SLIDE_PALETTE.teal,
+  SLIDE_PALETTE.green,
+  SLIDE_PALETTE.amber,
+  SLIDE_PALETTE.rust,
+  SLIDE_PALETTE.ink,
+  SLIDE_PALETTE.paper,
+];
 
 function openStudioDraftDb() {
   if (typeof window === "undefined" || !window.indexedDB) {
@@ -518,7 +543,7 @@ export function Studio({ workspace }) {
     setDirty(true);
   };
   const addSlide = () => {
-    setSlides(s => [...s, { id: 'new-' + Date.now(), bg: 'oklch(0.3 0.02 250)', title: 'New slide', sub: '' }]);
+    setSlides(s => [...s, { id: 'new-' + Date.now(), bg: SLIDE_PALETTE.seed, title: 'New slide', sub: '' }]);
     setDirty(true);
   };
   const updateSlide = (i, patch) => {
@@ -558,15 +583,11 @@ export function Studio({ workspace }) {
     <div className="hub-studio-shell" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', height: '100%', overflow: 'hidden' }}>
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-            {[{k:'blog',l:'Blog / Insight'},{k:'carousel',l:'Card News'}].map(m => (
-              <button key={m.k} onClick={() => { setMode(m.k); setDirty(true); }} style={{
-                padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-                color: mode === m.k ? 'var(--fg)' : 'var(--fg-faint)',
-                background: mode === m.k ? 'var(--surface-3)' : 'transparent',
-              }}>{m.l}</button>
-            ))}
-          </div>
+          <SegmentedControl
+            options={[{ key: 'blog', label: 'Blog / Insight' }, { key: 'carousel', label: 'Card News' }]}
+            value={mode}
+            onChange={(k) => { setMode(k); setDirty(true); }}
+          />
           <Badge tone="warning" size="xs">Draft</Badge>
           {ws && (
             <span
@@ -756,7 +777,7 @@ export function Studio({ workspace }) {
                   style={{ width: '100%', marginTop: 4, marginBottom: 12, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', fontSize: 13, outline: 'none' }} />
                 <label style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Background</label>
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-                  {['oklch(0.35 0.04 280)','oklch(0.35 0.05 220)','oklch(0.35 0.05 180)','oklch(0.35 0.05 150)','oklch(0.35 0.05 85)','oklch(0.35 0.06 30)','oklch(0.28 0.01 250)','oklch(0.95 0 0)'].map(c => (
+                  {SLIDE_SWATCHES.map(c => (
                     <button key={c} onClick={() => updateSlide(activeSlide, { bg: c })}
                       style={{ width: 26, height: 26, borderRadius: 6, background: c, border: cur.bg === c ? '2px solid var(--moon-200)' : '1px solid var(--line-soft)' }} />
                   ))}
@@ -1136,7 +1157,7 @@ export function Queue({ workspace }) {
           />
         )}
         {visibleQueue.map((c, i) => (
-          <div key={c.id} style={{
+          <div key={c.id} className="hub-row" style={{
             display: 'grid', gridTemplateColumns: '1fr 110px 110px 100px 120px 130px 80px',
             padding: '12px 16px', alignItems: 'center',
             borderBottom: i < visibleQueue.length - 1 ? '1px solid var(--line-soft)' : 'none',
@@ -1151,8 +1172,6 @@ export function Queue({ workspace }) {
                 openStudio(c.id);
               }
             }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
               <Iconed name={c.kind === 'Newsletter' ? 'email' : c.kind === 'Blog' ? 'content' : c.kind === 'Reel' ? 'play' : 'send'} size={13} style={{ color: 'var(--fg-faint)' }} />

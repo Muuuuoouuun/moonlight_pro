@@ -181,13 +181,24 @@
 
 /* Interactive row hover — use this class instead of onMouseEnter/Leave JS handlers.
    Themable, respects reduced-motion, and can't drift per call site. */
-.hub-app .hub-row { transition: background 120ms ease; }
+.hub-app .hub-row { background: transparent; transition: background 120ms ease; }
 .hub-app .hub-row:hover { background: var(--surface-2); }
 /* Keyboard-only focus ring (§11: never rely on browser defaults) — :focus-visible so a mouse
    click doesn't leave a ring, only Tab/roving-arrow-key navigation does. */
 .hub-app .hub-row:focus-visible { outline: 1px solid var(--moon-300); outline-offset: -2px; }
+/* Interactive card (border emphasis instead of bg fill) — same no-JS-hover contract as .hub-row
+   for card-shaped click targets like quick-command tiles. */
+.hub-app .hub-card-link { border: 1px solid var(--line-soft); transition: border-color 120ms ease; }
+.hub-app .hub-card-link:hover { border-color: var(--line); }
 @media (prefers-reduced-motion: reduce) {
-  .hub-app .hub-row { transition: none; }
+  .hub-app .hub-row,
+  .hub-app .hub-card-link { transition: none; }
+}
+
+/* Checkbox tap halo — visual box stays 14px, touch target grows to ≥32px on coarse
+   pointers only (§11 touch-target floor without inflating desktop density). */
+@media (pointer: coarse) {
+  .hub-app .hub-checkbox::before { content: ''; position: absolute; inset: -9px; }
 }
 
 /* Kanban card hover (rests at --surface-2, one step lighter than .hub-row's --surface/--bg
@@ -652,6 +663,17 @@
   .hub-page-actions > *,
   .hub-toolbar > * {
     flex: 1 1 auto;
+  }
+
+  /* Opt-out: quick actions that must stay on one row at phone widths
+     (e.g. Daily Brief 할 일/정리 전 pair) instead of wrap-stacking. */
+  .hub-page-actions--row {
+    flex-wrap: nowrap !important;
+  }
+
+  .hub-page-actions--row > * {
+    flex: 1 1 0 !important;
+    min-width: 0;
   }
 
   .hub-grid--metrics,

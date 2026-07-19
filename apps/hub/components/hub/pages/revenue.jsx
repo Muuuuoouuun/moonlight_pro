@@ -1495,16 +1495,14 @@ function ContactMenu({ onAction }) {
           padding: 4,
         }}>
           {items.map(it => (
-            <button key={it.key}
+            <button key={it.key} className="hub-row"
               onClick={() => { onAction(it.key); setOpen(false); }}
               style={{
                 display: 'flex', alignItems: 'center', width: '100%',
                 padding: '7px 10px', fontSize: 12, color: 'var(--fg)',
-                background: 'transparent', border: 'none', borderRadius: 4,
+                border: 'none', borderRadius: 4,
                 cursor: 'pointer', textAlign: 'left',
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
               <Iconed name={it.icon} size={12} style={{ marginRight: 8, color: 'var(--fg-muted)' }} />
               {it.label}
@@ -2162,7 +2160,7 @@ export function Accounts({ workspace, onNavigate }) {
             <span /><span>Name</span><span>Type</span><span>Health</span><span>Value</span><span>Deals</span><span>Last contact</span><span>Owner</span><span style={{ textAlign: 'right' }}>마지막 접점 시간</span>
           </div>
           {filtered.map((a, i) => (
-            <div key={a.name}
+            <div key={a.name} className="hub-row"
               onClick={() => openDetail(a.name)}
               style={{
                 display: 'grid',
@@ -2172,8 +2170,6 @@ export function Accounts({ workspace, onNavigate }) {
                 borderBottom: i < filtered.length - 1 ? '1px solid var(--line-soft)' : 'none',
                 cursor: 'pointer',
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
               <span style={{ paddingRight: 4, display: 'flex' }}>
                 <Avatar name={a.name} size={24} tone={a.type === 'personal' ? 'personal' : 'company'} />
@@ -2219,17 +2215,17 @@ export function Accounts({ workspace, onNavigate }) {
               {filtered.map(a => {
                 const isSel = a.name === selected;
                 return (
-                  <div key={a.name}
+                  <div key={a.name} className="hub-row"
                     onClick={() => setSelected(a.name)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '10px 14px', cursor: 'pointer',
                       borderLeft: `2px solid ${isSel ? 'var(--moon-300)' : 'transparent'}`,
-                      background: isSel ? 'var(--surface-2)' : 'transparent',
+                      // Selected row pins its fill inline; unselected rows leave background
+                      // to .hub-row:hover (an inline 'transparent' would out-rank the class).
+                      background: isSel ? 'var(--surface-2)' : undefined,
                       borderBottom: '1px solid var(--line-soft)',
                     }}
-                    onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = 'var(--surface-2)'; }}
-                    onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = 'transparent'; }}
                   >
                     <Avatar name={a.name} size={28} tone={a.type === 'personal' ? 'personal' : 'company'} />
                     <div style={{ flex: 1, minWidth: 0 }}>

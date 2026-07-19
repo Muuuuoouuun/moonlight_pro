@@ -1160,7 +1160,7 @@ function StatusLine({ state }) {
   const sourceCount = state.sources.length;
   const label = state.syncState === 'mixed' ? `${liveCount}/${sourceCount || 6} live` : sourceLabel(state.syncState);
   const detail = state.syncState === 'preview'
-    ? 'preview · Supabase 연결 후 live 전환'
+    ? 'Supabase 연결 후 live 전환'
     : state.syncState === 'partial'
     ? '일부 운영 기록을 읽지 못했습니다'
     : state.syncState === 'mixed'
@@ -1343,7 +1343,7 @@ export function DailyBrief({ onNavigate }) {
             오늘 <span style={{ color: 'var(--fg)' }}>{signalCount}개 신호</span> · <span style={{ color: 'var(--danger)' }}>{urgentCount} 즉시</span> · <span style={{ color: 'var(--warning)' }}>{todayCount} 오늘</span> · {okCount} 여유
           </div>
         </div>
-        <div className="hub-page-actions" style={{ display: 'flex', gap: 8 }}>
+        <div className="hub-page-actions hub-page-actions--row" style={{ display: 'flex', gap: 8 }}>
           <Button variant="secondary" size="md" icon="sparkle" onClick={() => onNavigate('dashboard/agents/chat')}>Ask Council</Button>
           <Button variant="outline" size="md" icon="clock" onClick={() => onNavigate('dashboard/work/calendar?focus=15')}>Start 15m focus</Button>
         </div>

@@ -78,7 +78,7 @@ export function SectionTitle({ children, right, style, subtitle }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 'var(--gap)', ...style }}>
       <div>
-        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-dim)', fontWeight: 500 }}>{children}</div>
+        <h3 style={{ margin: 0, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-dim)', fontWeight: 500 }}>{children}</h3>
         {subtitle && <div style={{ fontSize: 12, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}
       </div>
       {right}
@@ -283,7 +283,9 @@ export function Checkbox({ checked, onChange, size = 14, label }) {
       role="checkbox"
       aria-checked={Boolean(checked)}
       aria-label={label || '선택'}
+      className="hub-checkbox"
       onClick={(e) => { e.stopPropagation(); onChange?.(!checked); }} style={{
+      position: 'relative',
       width: size, height: size, borderRadius: 4,
       border: `1px solid ${checked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
       background: checked ? 'var(--moon-300)' : 'transparent',
@@ -385,7 +387,7 @@ export function SegmentedControl({ options, value, onChange, className, style, l
         const isActive = o.key === value;
         return (
           <button key={o.key} type="button" onClick={() => onChange?.(o.key)} aria-pressed={isActive} style={{
-            padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
+            padding: '4px 10px', fontSize: 11.5, borderRadius: 4, whiteSpace: 'nowrap',
             color: isActive ? 'var(--fg)' : 'var(--fg-faint)',
             background: isActive ? 'var(--surface-3)' : 'transparent',
             display: 'inline-flex', alignItems: 'center', justifyContent: fill ? 'center' : undefined, gap: 5,
