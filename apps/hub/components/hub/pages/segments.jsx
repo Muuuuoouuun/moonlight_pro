@@ -11,6 +11,7 @@ import React from 'react';
 import { Iconed } from "../hub-icons";
 import { Badge, Button, Card, Dot, EmptyState, Input, SyncBadge, SegmentedControl } from "../hub-primitives";
 import { filterLeadsByWorkspace, getWorkspace } from "../workspace-map";
+import { clearExpandedSegments, toggleExpandedSegment } from "./segments-state.mjs";
 
 // Same ledger endpoint the Revenue pages use; local copy so this page stays
 // independent of revenue.jsx internals.
@@ -100,7 +101,8 @@ export function Segments({ workspace, onNavigate }) {
   const leads = filterLeadsByWorkspace(allLeads, workspace);
   const [dimension, setDimension] = React.useState('source');
   const [search, setSearch] = React.useState('');
-  const [expanded, setExpanded] = React.useState(null); // segment label
+  const [expanded, setExpanded] = React.useState(() => clearExpandedSegments());
+  const toggleSegment = (label) => setExpanded((current) => toggleExpandedSegment(current, label));
 
   const term = search.trim().toLowerCase();
   const searched = term
@@ -124,7 +126,7 @@ export function Segments({ workspace, onNavigate }) {
           className="hub-toolbar"
           options={DIMENSIONS.map((d) => ({ key: d.key, label: d.label }))}
           value={dimension}
-          onChange={(key) => { setDimension(key); setExpanded(null); }}
+          onChange={(key) => { setDimension(key); setExpanded(clearExpandedSegments()); }}
         />
         <Input className="hub-toolbar" placeholder="리드 이름 검색…" icon="search" value={search} onChange={setSearch} />
       </div>
@@ -146,17 +148,17 @@ export function Segments({ workspace, onNavigate }) {
         </Card>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--gap)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', alignItems: 'start', gap: 'var(--gap)' }}>
         {segments.map((seg) => {
-          const isOpen = expanded === seg.label;
+          const isOpen = expanded.has(seg.label);
           return (
             <Card key={seg.label} interactive style={{ cursor: 'pointer' }} >
               <div
                 role="button"
                 tabIndex={0}
                 aria-expanded={isOpen}
-                onClick={() => setExpanded(isOpen ? null : seg.label)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(isOpen ? null : seg.label); } }}
+                onClick={() => toggleSegment(seg.label)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSegment(seg.label); } }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 500, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -179,7 +181,7 @@ export function Segments({ workspace, onNavigate }) {
                   </div>
                 </div>
                 {isOpen && (
-                  <div style={{ marginTop: 10, borderTop: '1px solid var(--line-soft)', paddingTop: 6 }}>
+                  <div style={{ marginTop: 10, borderTop: '1px solid var(--line-soft)', paddingTop: 6, maxHeight: 'min(520px, calc(100vh - 220px))', overflowY: 'auto', overscrollBehavior: 'contain' }}>
                     {seg.members.map((l, i) => (
                       <div key={l.id || i} className="hub-row"
                         onClick={(e) => { e.stopPropagation(); openLead(l); }}
