@@ -5,6 +5,7 @@ import { eqFilter, fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-r
 import { isCanonicalUuid } from "@/lib/uuid.js";
 import {
   buildRoutineCheckRecord,
+  deleteSupabaseRecord,
   insertSupabaseRecord,
   resolveDefaultWorkspaceId,
   resolveSupabaseConfig,
@@ -284,6 +285,85 @@ export async function PATCH(req) {
 
     return NextResponse.json(
       { status: "saved", message: "Routine updated.", updated: rows.length },
+      { status: 200 },
+    );
+  } catch (error) {
+    return NextResponse.json(
+      { status: "error", error: error instanceof Error ? error.message : String(error) },
+      { status: 500 },
+    );
+  }
+}
+
+function normalizeDeletePayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return { error: invalidInput("invalid-payload", "Routine delete payload must be an object.") };
+  }
+
+  const ritualKey = cleanString(payload.ritualKey);
+  if (!ritualKey) {
+    return { error: invalidInput("invalid-ritual-key", "ritualKey is required to identify the routine.") };
+  }
+
+  const matchProjectId = cleanString(payload.matchProjectId) || null;
+  if (matchProjectId && !isCanonicalUuid(matchProjectId)) {
+    return { error: invalidInput("invalid-match-project-id", "matchProjectId must be a canonical UUID.") };
+  }
+
+  return { value: { ritualKey, matchProjectId } };
+}
+
+// 루틴 삭제 = 같은 (project_id, ritual_key) 그룹의 모든 routine_checks 행을 지운다 —
+// 정의(씨앗) 행과 그 루틴의 모든 체크인 이력이 함께 사라진다. 부분 삭제는 없다: 필터가
+// 매치하는 모든 행을 PostgREST가 단일 요청으로 지운다(PATCH처럼 행별 루프가 아님).
+export async function DELETE(req) {
+  try {
+    const guard = assertHubWriteAllowed(req);
+    if (guard) return guard;
+
+    const parsed = await readHubWriteJson(req);
+    if (parsed.error) return parsed.error;
+
+    const normalized = normalizeDeletePayload(parsed.data);
+    if (normalized.error) return normalized.error;
+
+    const { ritualKey, matchProjectId } = normalized.value;
+
+    if (!resolveSupabaseConfig()) {
+      return NextResponse.json(
+        { status: "preview", message: "Supabase is not configured. This delete was not saved." },
+        { status: 202 },
+      );
+    }
+
+    const filters = withWorkspaceFilter([
+      ["project_id", matchProjectId ? eqFilter(matchProjectId) : "is.null"],
+      [`meta->>ritual_key`, eqFilter(ritualKey)],
+    ]);
+
+    const rows = await fetchSupabaseRows("routine_checks", { select: "id", limit: EDIT_ROW_LIMIT + 1, filters });
+    if (!Array.isArray(rows)) return readFailure("routine_checks");
+    if (rows.length === 0) {
+      return NextResponse.json(
+        { status: "not-found", error: "no-matching-routine", message: "No routine rows matched ritualKey/matchProjectId." },
+        { status: 404 },
+      );
+    }
+
+    const persistence = await deleteSupabaseRecord("routine_checks", filters);
+    if (!persistence.persisted) {
+      return NextResponse.json(
+        {
+          status: "error",
+          error: persistence.detail || persistence.reason || "Routine delete persistence failed.",
+          retryable: true,
+        },
+        { status: 502 },
+      );
+    }
+
+    return NextResponse.json(
+      { status: "saved", message: "Routine deleted.", deleted: rows.length },
       { status: 200 },
     );
   } catch (error) {

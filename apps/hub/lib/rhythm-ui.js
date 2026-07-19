@@ -175,6 +175,16 @@ export function buildRhythmEditPayload(original, edited) {
   return payload;
 }
 
+// 삭제 = 같은 (project_id, ritual_key) 그룹의 모든 routine_checks 행 제거 — 정의 행과
+// 그 루틴의 모든 체크인 이력이 함께 사라진다. 식별 필드만 있으면 되므로 buildRhythmEditPayload
+// 와 동일한 identity 필드를 공유한다.
+export function buildRhythmDeletePayload(ritual) {
+  return {
+    ritualKey: cleanString(ritual?.ritualKey),
+    matchProjectId: cleanString(ritual?.projectId) || null,
+  };
+}
+
 export function createRhythmCheckState() {
   return {
     latestAttemptByRitual: {},

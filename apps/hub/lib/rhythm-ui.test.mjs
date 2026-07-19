@@ -220,11 +220,31 @@ test("buildRhythmEditPayload only includes fields that actually changed, and alw
   });
 });
 
-test("Rhythm source wires create/edit through /api/routine with a shared EditDrawer", () => {
+test("buildRhythmDeletePayload carries only the identity fields needed to find the routine's rows", () => {
+  assert.equal(typeof rhythmUi.buildRhythmDeletePayload, "function");
+  assert.deepEqual(
+    rhythmUi.buildRhythmDeletePayload({ ritualKey: "morning-stretch-abc", projectId: "proj-1" }),
+    { ritualKey: "morning-stretch-abc", matchProjectId: "proj-1" },
+  );
+  assert.deepEqual(
+    rhythmUi.buildRhythmDeletePayload({ ritualKey: "evening-review-xyz", projectId: "" }),
+    { ritualKey: "evening-review-xyz", matchProjectId: null },
+  );
+  assert.deepEqual(
+    rhythmUi.buildRhythmDeletePayload({ ritualKey: "  morning  ", projectId: null }),
+    { ritualKey: "morning", matchProjectId: null },
+  );
+});
+
+test("Rhythm source wires create/edit/delete through /api/routine with a shared EditDrawer", () => {
   assert.match(workSource, /fetch\(['"]\/api\/routine['"]/);
   assert.match(workSource, /method:\s*['"]PATCH['"]/);
+  assert.match(workSource, /method:\s*['"]DELETE['"]/);
   assert.match(workSource, /buildRhythmDefinePayload\(/);
   assert.match(workSource, /buildRhythmEditPayload\(/);
+  assert.match(workSource, /buildRhythmDeletePayload\(/);
+  assert.match(workSource, /onDelete=\{deleteRitual\}/);
+  assert.match(workSource, /deletedRitualIdentities/);
   assert.match(workSource, /createRitual/);
   assert.match(workSource, /새 루틴/);
   assert.match(workSource, /연결 프로젝트/);

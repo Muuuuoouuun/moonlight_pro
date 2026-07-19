@@ -14,6 +14,7 @@ import {
   beginRhythmCheck,
   buildRhythmCheckPayload,
   buildRhythmDefinePayload,
+  buildRhythmDeletePayload,
   buildRhythmEditPayload,
   createRhythmCheckState,
   filterRhythmRows,
@@ -982,6 +983,9 @@ export function Rhythm() {
   const [ritualEdits, setRitualEdits] = React.useState({});
   const [editRitualId, setEditRitualId] = React.useState(null);
   const createdRitualFromQueryRef = React.useRef(false);
+  // 삭제된 (projectId, ritualKey) tombstone — revenue.jsx의 deleteLead와 동일한 낙관적
+  // 삭제 패턴: 클릭 즉시 목록에서 숨기고, 실패하면 tombstone을 지워 되돌린다.
+  const [deletedRitualIdentities, setDeletedRitualIdentities] = React.useState(() => new Set());
 
   // 라이브 목록에 같은 (projectId, ritualKey)가 이미 나타나면 로컬 초안을 숨긴다 —
   // retry() 이후 자동으로 실제 행으로 대체되어, 수동으로 정리할 필요가 없다. dedup은
@@ -996,9 +1000,10 @@ export function Rhythm() {
   const visibleLocalRituals = overlaidLocalRituals.filter(
     (r) => !r.ritualKey || !liveRitualIdentities.has(`${r.projectId || ''}::${r.ritualKey}`),
   );
-  // baseRituals는 원본(overlay 미적용) — persistRitual이 "수정 전 원래 값"을 찾을 때만 쓴다.
+  // baseRituals는 원본(overlay 미적용) — persistRitual/deleteRitual이 "원래 값"을 찾을 때만 쓴다.
   const baseRituals = [...localRituals, ...rituals];
-  const mergedRituals = [...visibleLocalRituals, ...rituals.map((r) => (ritualEdits[r.id] ? { ...r, ...ritualEdits[r.id] } : r))];
+  const mergedRituals = [...visibleLocalRituals, ...rituals.map((r) => (ritualEdits[r.id] ? { ...r, ...ritualEdits[r.id] } : r))]
+    .filter((r) => !deletedRitualIdentities.has(`${r.projectId || ''}::${r.ritualKey}`));
   const editingRitual = editRitualId ? mergedRituals.find((r) => r.id === editRitualId) : null;
   const projectOptions = [
     { value: '', label: '연결 안 함' },
@@ -1093,6 +1098,53 @@ export function Rhythm() {
       return { ok: true, status: data.status };
     } catch (error) {
       return { ok: false, status: 'error', error: error instanceof Error ? error.message : String(error) };
+    }
+  }, [editingRitual, editRitualId, baseRituals, retry]);
+
+  // 삭제 = 그 루틴의 정의(씨앗) 행 + 모든 체크인 이력을 함께 지운다. EditDrawer가 삭제
+  // 전에 window.confirm으로 확인을 받으므로 여기서 다시 묻지 않는다. 로컬(아직 저장 안 된)
+  // 초안은 API 호출 없이 그냥 상태에서 제거한다.
+  const deleteRitual = React.useCallback(async () => {
+    if (!editingRitual) return;
+    if (editingRitual.isNew) {
+      setLocalRituals((prev) => prev.filter((r) => r.id !== editingRitual.id));
+      setRitualEdits((prev) => {
+        if (!prev[editingRitual.id]) return prev;
+        const next = { ...prev };
+        delete next[editingRitual.id];
+        return next;
+      });
+      return;
+    }
+
+    const original = baseRituals.find((r) => r.id === editRitualId) || editingRitual;
+    const identity = `${original.projectId || ''}::${original.ritualKey}`;
+    setDeletedRitualIdentities((prev) => new Set(prev).add(identity));
+
+    try {
+      const payload = buildRhythmDeletePayload(original);
+      const response = await fetch('/api/routine', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...payload, source: 'hub-work' }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.status === 'saved') {
+        await retry();
+        return;
+      }
+      // 삭제 실패 — tombstone을 지워 되돌린다(행이 다시 보인다).
+      setDeletedRitualIdentities((prev) => {
+        const next = new Set(prev);
+        next.delete(identity);
+        return next;
+      });
+    } catch {
+      setDeletedRitualIdentities((prev) => {
+        const next = new Set(prev);
+        next.delete(identity);
+        return next;
+      });
     }
   }, [editingRitual, editRitualId, baseRituals, retry]);
 
@@ -1331,6 +1383,7 @@ export function Rhythm() {
           onChange={updateRitualDraft}
           onClose={() => setEditRitualId(null)}
           onSave={persistRitual}
+          onDelete={deleteRitual}
         />
       )}
     </div>
