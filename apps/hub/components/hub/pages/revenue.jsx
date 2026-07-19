@@ -3,11 +3,12 @@
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, Progress } from "../hub-primitives";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
-import { STAGE_FILL, STAGE_LINE } from "@/lib/deal-stages";
+import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
+import { DEAL_STAGES, STAGE_FILL, STAGE_LINE } from "@/lib/deal-stages";
 
 // HW/SW 딜은 100만원 미만 건도 흔해서 M 고정 포맷은 "₩0.1M" 같은 값을 만든다.
 // revenue-ledger.js의 formatMoneyLabel과 같은 K/M 임계값으로 맞춘다.
@@ -426,8 +427,8 @@ export function RevenueOverview({ onNavigate }) {
 const LEADS_GRID = '26px 1fr 112px 112px 124px 100px 90px 92px';
 
 export function LeadEnrichmentPanel({ lead }) {
-  if (!lead?.enrichmentTags?.length) return null;
-  const summary = buildLeadTagSummary(lead.enrichmentTags);
+  if (!lead) return null;
+  const summary = buildLeadTagSummary(lead.enrichmentTags || []);
   const calendar = lead.activityEvidence?.calendar || {};
   const directTouchCount = ['meeting', 'call', 'infoSession', 'other']
     .reduce((sum, key) => sum + (Number(calendar[key]) || 0), 0);
@@ -440,28 +441,62 @@ export function LeadEnrichmentPanel({ lead }) {
     ['프로그램', summary.programs],
     ['공개 채널', summary.channels],
   ].filter(([, values]) => values.length > 0);
+  const hasRelationship = Boolean(lead.companyName || lead.contactName || lead.contactEmail || lead.contactPhone);
+  const hasEnrichment = rows.length > 0 || lead.engagementState === 'present' || lead.publicEvidenceCount > 0;
+
+  if (!hasRelationship && !hasEnrichment && !lead.nextAction) return null;
 
   return (
     <div style={{ padding: 12, border: '1px solid var(--line-soft)', borderRadius: 'var(--r)', background: 'var(--surface-2)', display: 'flex', flexDirection: 'column', gap: 9 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ flex: 1, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>분류 · 증거</span>
-        <Badge tone={lead.engagementState === 'present' ? 'info' : 'neutral'} size="xs">
-          {lead.engagementState === 'present' ? `접점 ${directTouchCount || '확인'}` : '접점 미확인'}
-        </Badge>
-        {lead.publicEvidenceCount > 0 && <Badge tone="neutral" size="xs">공개 근거 {lead.publicEvidenceCount}</Badge>}
-      </div>
-      {rows.map(([label, values]) => (
-        <div key={label} style={{ display: 'grid', gridTemplateColumns: '68px 1fr', gap: 8, alignItems: 'start' }}>
-          <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{label}</span>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-            {values.map(value => <Badge key={value} tone="neutral" size="xs" variant="outline">{value}</Badge>)}
+      {hasRelationship && (
+        <div style={{ display: 'grid', gridTemplateColumns: '68px 1fr', gap: 8, alignItems: 'start' }}>
+          <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>고객 문맥</span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12, color: 'var(--fg)' }}>
+              {[lead.companyName, lead.contactName, lead.contactTitle].filter(Boolean).join(' · ')}
+            </div>
+            {(lead.contactPhone || lead.contactEmail) && (
+              <div className="mono" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 3, fontSize: 10.5, color: 'var(--fg-muted)' }}>
+                {lead.contactPhone && <span>{lead.contactPhone}</span>}
+                {lead.contactEmail && <span>{lead.contactEmail}</span>}
+              </div>
+            )}
           </div>
         </div>
-      ))}
-      {lead.engagementState !== 'present' && (
-        <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', lineHeight: 1.45 }}>
-          확인된 콜·미팅 로그가 없습니다. 공개 설명회·채널 신호는 직접 접점 점수와 분리합니다.
+      )}
+      {lead.nextAction && (
+        <div style={{ display: 'grid', gridTemplateColumns: '68px 1fr', gap: 8, alignItems: 'start' }}>
+          <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>다음 행동</span>
+          <div style={{ fontSize: 12, color: 'var(--moon-200)', lineHeight: 1.45 }}>
+            {lead.nextAction}
+            {lead.nextActionAt && <span className="mono" style={{ marginLeft: 7, fontSize: 10.5, color: 'var(--fg-muted)' }}>{String(lead.nextActionAt).slice(0, 10)}</span>}
+          </div>
         </div>
+      )}
+      {hasEnrichment && (
+        <>
+          <Divider />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ flex: 1, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>분류 · 증거</span>
+            <Badge tone={lead.engagementState === 'present' ? 'info' : 'neutral'} size="xs">
+              {lead.engagementState === 'present' ? `접점 ${directTouchCount || '확인'}` : '접점 미확인'}
+            </Badge>
+            {lead.publicEvidenceCount > 0 && <Badge tone="neutral" size="xs">공개 근거 {lead.publicEvidenceCount}</Badge>}
+          </div>
+          {rows.map(([label, values]) => (
+            <div key={label} style={{ display: 'grid', gridTemplateColumns: '68px 1fr', gap: 8, alignItems: 'start' }}>
+              <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{label}</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                {values.map(value => <Badge key={value} tone="neutral" size="xs" variant="outline">{value}</Badge>)}
+              </div>
+            </div>
+          ))}
+          {lead.engagementState !== 'present' && (
+            <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', lineHeight: 1.45 }}>
+              확인된 콜·미팅 로그가 없습니다. 공개 설명회·채널 신호는 직접 접점 점수와 분리합니다.
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -491,7 +526,7 @@ export function Leads({ workspace }) {
   const [sort, setSort] = React.useState({ key: null, dir: 'asc' });
   const term = search.trim().toLowerCase();
   const filtered = LEADS.filter(l => {
-    const searchText = [l.name, l.source, l.stage, l.region, ...(l.enrichmentTags || [])]
+    const searchText = [l.name, l.companyName, l.contactName, l.contactPhone, l.contactEmail, l.source, l.stage, l.region, l.nextAction, ...(l.enrichmentTags || [])]
       .filter(Boolean)
       .join(' ')
       .toLowerCase();
@@ -779,6 +814,136 @@ export function Leads({ workspace }) {
   );
 }
 
+// 딜 체크리스트 — 공유 실행 척추의 딜 쪽 절반. 판매 과정의 하위 항목(견적서 발송·데모
+// 준비·재미팅 잡기)이 딜 안에 산다. 저장은 tasks 원장(meta.deal_id)이라 '내 작업'의
+// 할 일 레인에도 그대로 흐른다. 클로징 딜에는 판매 후 실행(A/S)을 낮은 우선순위 후속
+// 프로젝트로 분리하는 버튼이 붙는다 — 딜은 돈을 추적하고 닫히는 레코드, 실행은 계속되는
+// 프로젝트의 몫이라는 경계.
+function DealTaskPanel({ deal, onSaved }) {
+  const dealId = deal?.id || null;
+  const isLocal = String(dealId || '').toLowerCase().startsWith('local-');
+  const [tasks, setTasks] = React.useState(null); // null = loading
+  const [title, setTitle] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [asState, setAsState] = React.useState('idle'); // idle | saving | done | error
+
+  const load = React.useCallback(async () => {
+    if (!dealId || isLocal) { setTasks([]); return; }
+    try {
+      const res = await fetch('/api/hub/tasks', { cache: 'no-store' });
+      const data = await res.json().catch(() => null);
+      const all = Array.isArray(data?.tasks) ? data.tasks : [];
+      setTasks(all.filter(t => t.dealId === dealId));
+    } catch { setTasks([]); }
+  }, [dealId, isLocal]);
+  React.useEffect(() => { setAsState('idle'); setTitle(''); load(); }, [load]);
+
+  const addTask = async () => {
+    const t = title.trim();
+    if (!t || busy || isLocal) return;
+    setBusy(true);
+    try {
+      const res = await fetch('/api/hub/tasks', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: t, dealId, source: 'hub-deal-checklist' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.status === 'saved') { setTitle(''); await load(); onSaved?.(); }
+    } finally { setBusy(false); }
+  };
+
+  const toggleTask = async (task) => {
+    await fetch('/api/hub/tasks', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: task.id, status: task.done ? 'todo' : 'done' }),
+    }).catch(() => {});
+    await load();
+    onSaved?.();
+  };
+
+  // A/S 후속 프로젝트 — 자동 생성이 아니라 운영자 버튼(후보 확인 UI 원칙). 우선순위 low.
+  const createFollowupProject = async () => {
+    if (asState === 'saving' || isLocal) return;
+    setAsState('saving');
+    try {
+      const res = await fetch('/api/hub/projects', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: `${deal.name} · A/S`,
+          summary: '클로징 딜의 판매 후 실행 (설치·교육·운영)',
+          priority: 'low',
+          dealId,
+          source: 'deal-followup',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setAsState(res.ok && ['saved', 'duplicate'].includes(data.status) ? 'done' : 'error');
+    } catch { setAsState('error'); }
+  };
+
+  const open = (tasks || []).filter(t => !t.done);
+  const done = (tasks || []).filter(t => t.done);
+  const total = (tasks || []).length;
+
+  return (
+    <div style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>체크리스트</span>
+        {total > 0 && <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', marginLeft: 'auto' }}>{done.length}/{total}</span>}
+      </div>
+      {total > 0 && <Progress value={Math.round((done.length / total) * 100)} tone={done.length === total ? 'success' : 'moon'} />}
+
+      {isLocal ? (
+        <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', lineHeight: 1.5 }}>딜을 먼저 저장하면 하위 항목을 추가할 수 있습니다.</div>
+      ) : (
+        <>
+          {tasks === null && <div style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>불러오는 중…</div>}
+          {[...open, ...done].map((t) => (
+            <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 24 }}>
+              <Checkbox checked={t.done} onChange={() => toggleTask(t)} label={`${t.title} 완료`} />
+              <span style={{
+                fontSize: 12.5, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                color: t.done ? 'var(--fg-faint)' : 'var(--fg)',
+                textDecoration: t.done ? 'line-through' : 'none',
+              }}>{t.title}</span>
+              {t.dueAt && <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', flexShrink: 0 }}>{t.due}</span>}
+            </div>
+          ))}
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); addTask(); } }}
+            placeholder="하위 항목 추가 — Enter로 저장"
+            style={{
+              height: 30, padding: '0 10px', fontSize: 12,
+              background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
+              borderRadius: 'var(--r-sm)', outline: 'none', color: 'var(--fg)',
+            }}
+          />
+        </>
+      )}
+
+      {deal?.stage === 'closing' && !isLocal && (
+        <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {asState === 'done' ? (
+            <span style={{ fontSize: 11.5, color: 'var(--success)' }}>A/S 프로젝트 생성됨 — 프로젝트·기획에서 확인</span>
+          ) : (
+            <>
+              <Button variant="outline" size="xs" icon="projects" onClick={createFollowupProject} disabled={asState === 'saving'}>
+                {asState === 'saving' ? '생성 중…' : 'A/S 프로젝트 만들기'}
+              </Button>
+              {asState === 'error' && <span style={{ fontSize: 11, color: 'var(--danger)' }}>생성 실패 — 다시 시도</span>}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Deals({ workspace, onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
   const searchParams = useSearchParams();
@@ -823,6 +988,28 @@ export function Deals({ workspace, onNavigate }) {
       saveRevenueRecord('deal', 'update', { id, stage: to });
     }
   };
+  // 딜별 체크리스트 카운트 (공유 실행 척추의 보드 표면) — tasks 원장에서 meta.deal_id로
+  // 연결된 하위 항목을 집계해 카드에 ✓n/m으로 얹는다. 드로어가 닫힐 때 재집계해서
+  // 방금 추가·완료한 항목이 보드에 바로 반영되게 한다.
+  const [dealTaskStats, setDealTaskStats] = React.useState(new Map());
+  const loadDealTaskStats = React.useCallback(async () => {
+    try {
+      const res = await fetch('/api/hub/tasks', { cache: 'no-store' });
+      const data = await res.json().catch(() => null);
+      const stats = new Map();
+      (Array.isArray(data?.tasks) ? data.tasks : []).forEach((t) => {
+        if (!t.dealId) return;
+        const s = stats.get(t.dealId) || { done: 0, total: 0 };
+        s.total += 1;
+        if (t.done) s.done += 1;
+        stats.set(t.dealId, s);
+      });
+      setDealTaskStats(stats);
+    } catch { /* board count is decorative — the drawer keeps its own live list */ }
+  }, []);
+  React.useEffect(() => { loadDealTaskStats(); }, [loadDealTaskStats]);
+  React.useEffect(() => { if (!editDealId) loadDealTaskStats(); }, [editDealId, loadDealTaskStats]);
+
   // `stage` lets a column's inline "+ 딜 추가" seed the deal directly in that stage, so
   // creating where you're looking needs no follow-up drag. Falls back to the first stage.
   const createDeal = (stage) => {
@@ -1013,8 +1200,17 @@ export function Deals({ workspace, onNavigate }) {
                       </Badge>
                     </div>
                     {/* 금액이 카드에서 가장 밝은 데이터 — 영업 보드의 두 번째 읽기 대상. */}
-                    <div style={{ marginTop: 8, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                    <div style={{ marginTop: 8, display: 'flex', alignItems: 'baseline', gap: 8 }}>
                       <span className="mono" style={{ fontSize: 12.5, color: d.value ? 'var(--moon-100)' : 'var(--fg-faint)' }}>{fmt(d.value)}</span>
+                      <div style={{ flex: 1 }} />
+                      {(() => {
+                        const stat = dealTaskStats.get(d.id);
+                        return stat?.total ? (
+                          <span className="mono" style={{ fontSize: 10.5, color: stat.done === stat.total ? 'var(--success)' : 'var(--fg-faint)' }}>
+                            ✓{stat.done}/{stat.total}
+                          </span>
+                        ) : null;
+                      })()}
                       <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{d.close}</span>
                     </div>
                     {stalled && (
@@ -1068,7 +1264,9 @@ export function Deals({ workspace, onNavigate }) {
         onSave={persistDeal}
         onDelete={deleteDeal}
         onClose={() => setEditDealId(null)}
-      />
+      >
+        <DealTaskPanel deal={editingDeal} onSaved={loadDealTaskStats} />
+      </EditDrawer>
     </div>
   );
 }
@@ -1234,9 +1432,11 @@ const H_TONE = { ok: 'success', warning: 'warning', risk: 'danger' };
 const ACT_ICON = { email: 'email', meeting: 'calendar', call: 'signal', note: 'edit', deal: 'deals', kakao: 'chat', quote: 'orders', ai: 'sparkle', info_session: 'brief', demo: 'play', visit: 'building', update: 'rhythm' };
 const ACT_TONE = { email: 'info', meeting: 'moon', call: 'warning', note: 'neutral', deal: 'success', kakao: 'warning', quote: 'neutral', ai: 'moon', info_session: 'info', demo: 'moon', visit: 'success', update: 'neutral' };
 const ACT_LABEL = { email: 'Email', meeting: 'Meeting', call: 'Call', note: 'Note', deal: 'Deal', kakao: '카카오', quote: '견적', ai: 'AI', info_session: '설명회', demo: '데모', visit: '방문', update: 'Update' };
+const REACTION_LABEL = { positive: '긍정', neutral: '중립', concern: '우려', rejected: '거절', no_response: '무응답' };
+const REACTION_TONE = { positive: 'success', neutral: 'neutral', concern: 'warning', rejected: 'danger', no_response: 'neutral' };
 
 function emptyDetail() {
-  return { mrr: 0, contacts: [], activity: [], notes: [] };
+  return { mrr: 0, contacts: [], deals: [], activity: [], notes: [] };
 }
 
 function HealthDot({ health }) {
@@ -1266,10 +1466,10 @@ function ContactMenu({ onAction }) {
   }, [open]);
 
   const items = [
-    { key: 'email',   icon: 'email',    label: '📧 Send email' },
-    { key: 'meeting', icon: 'calendar', label: '📅 Schedule meeting' },
-    { key: 'chat',    icon: 'chat',     label: '💬 Open chat thread' },
-    { key: 'call',    icon: 'signal',   label: '📞 Log call' },
+    { key: 'call',    icon: 'signal',   label: '통화 기록' },
+    { key: 'kakao',   icon: 'chat',     label: '카카오·문자 기록' },
+    { key: 'meeting', icon: 'calendar', label: '일정 잡기' },
+    { key: 'note',    icon: 'edit',     label: '메모 추가' },
   ];
 
   return (
@@ -1297,6 +1497,7 @@ function ContactMenu({ onAction }) {
               onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
+              <Iconed name={it.icon} size={12} style={{ marginRight: 8, color: 'var(--fg-muted)' }} />
               {it.label}
             </button>
           ))}
@@ -1342,7 +1543,7 @@ function LogComposer({ onLog, preset }) {
         ref={textRef}
         value={text}
         onChange={e => setText(e.target.value)}
-        placeholder="활동 기록… (이메일 회신, 통화 메모, 결정 요약 등)"
+        placeholder="활동 기록… (통화, 카카오·문자, 미팅, 결정 요약 등)"
         rows={2}
         style={{
           width: '100%', resize: 'vertical',
@@ -1373,11 +1574,11 @@ function LogComposer({ onLog, preset }) {
 
 function QuickActions({ onAction }) {
   const acts = [
-    { k: 'email',   label: 'Send email',       variant: 'primary',  icon: 'email' },
-    { k: 'meeting', label: 'Schedule meeting', variant: 'outline',  icon: 'calendar' },
-    { k: 'deal',    label: 'New deal',         variant: 'outline',  icon: 'deals' },
-    { k: 'call',    label: 'Log call',         variant: 'outline',  icon: 'signal' },
-    { k: 'note',    label: 'Add note',         variant: 'outline',  icon: 'edit' },
+    { k: 'call',    label: '통화 기록',        variant: 'primary',  icon: 'signal' },
+    { k: 'kakao',   label: '메시지 기록',      variant: 'outline',  icon: 'chat' },
+    { k: 'meeting', label: '일정 잡기',        variant: 'outline',  icon: 'calendar' },
+    { k: 'deal',    label: '딜 메모',           variant: 'outline',  icon: 'deals' },
+    { k: 'note',    label: '메모',              variant: 'outline',  icon: 'edit' },
   ];
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -1398,11 +1599,11 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
   // the preset even if type/text look unchanged from the last click.
   const [composerPreset, setComposerPreset] = React.useState({ type: 'note', text: '', seq: 0 });
   const handleQuickAction = (kind, contactName) => {
-    const type = kind === 'chat' ? 'note' : kind;
+    const type = kind;
     const starters = {
       email: '이메일: ',
       meeting: '미팅: ',
-      chat: '',
+      kakao: '카카오·문자: ',
       call: '통화: ',
       deal: '',
       note: '',
@@ -1428,6 +1629,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
   const tabs = [
     { key: 'activity', label: 'Activity', count: d.activity.length },
     { key: 'contacts', label: 'Contacts', count: d.contacts.length },
+    { key: 'deals',    label: 'Deals',    count: d.deals.length },
     { key: 'notes',    label: 'Notes',    count: d.notes.length },
   ];
 
@@ -1480,6 +1682,18 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
             Ask Guru
           </Button>
         </div>
+        {(account.nextAction || account.dormant) && (
+          <div style={{ marginTop: 12, padding: '9px 11px', display: 'flex', alignItems: 'flex-start', gap: 8, border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)' }}>
+            <Iconed name="arrowRight" size={12} style={{ marginTop: 2, color: 'var(--moon-300)' }} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)' }}>다음 행동</div>
+              <div style={{ marginTop: 2, fontSize: 12.5, lineHeight: 1.45, color: 'var(--moon-200)' }}>
+                {account.dormant ? '기약 없음' : account.nextAction}
+                {account.nextActionAt && <span className="mono" style={{ marginLeft: 7, fontSize: 10.5, color: 'var(--fg-muted)' }}>{String(account.nextActionAt).slice(0, 10)}</span>}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -1508,6 +1722,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
                     <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{a.msg}</div>
                     <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3, display: 'flex', gap: 6, alignItems: 'center' }}>
                       <Badge tone={ACT_TONE[a.type]} size="xs" variant="outline">{ACT_LABEL[a.type]}</Badge>
+                      {a.reaction && <Badge tone={REACTION_TONE[a.reaction] || 'neutral'} size="xs" variant="outline">{REACTION_LABEL[a.reaction] || a.reaction}</Badge>}
                       <span>{a.who}</span>
                     </div>
                   </div>
@@ -1539,14 +1754,53 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
                     <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>· {c.role}</span>
                   </div>
                   <div className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    <span>{c.email}</span>
-                    <span>{c.phone}</span>
+                    {c.phone && <span>{c.phone}</span>}
+                    {c.email && <span>{c.email}</span>}
+                    {!c.phone && !c.email && <span>연락처 미등록</span>}
                   </div>
+                  {c.labels.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 5 }}>
+                      {c.labels.map((label) => <Badge key={label} tone="neutral" size="xs" variant="outline">{label}</Badge>)}
+                    </div>
+                  )}
                   <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3 }}>Last: {c.lastContact}</div>
                 </div>
                 <ContactMenu onAction={(kind) => handleQuickAction(kind, c.name)} />
               </div>
             ))}
+          </div>
+        )}
+
+        {tab === 'deals' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {d.deals.length === 0 && (
+              <div style={{ fontSize: 12, color: 'var(--fg-faint)' }}>이 계정에 연결된 딜이 없습니다.</div>
+            )}
+            {d.deals.map((deal) => {
+              const stage = DEAL_STAGES.find((item) => item.key === deal.stage);
+              return (
+                <button
+                  key={deal.id}
+                  type="button"
+                  onClick={() => onNavigate?.(`dashboard/revenue/deals?deal=${encodeURIComponent(deal.id)}`)}
+                  style={{
+                    display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'center',
+                    width: '100%', padding: 12, textAlign: 'left', cursor: 'pointer',
+                    color: 'var(--fg)', background: 'var(--surface-2)',
+                    border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
+                  }}
+                >
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{deal.name}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>
+                      <Badge tone={stage?.color || 'neutral'} size="xs" variant="outline">{stage?.label || deal.stage}</Badge>
+                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>마감 {deal.close || '미정'}</span>
+                    </span>
+                  </span>
+                  <span className="mono" style={{ fontSize: 12, color: 'var(--moon-200)' }}>{fmt(deal.value)}</span>
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -1622,10 +1876,17 @@ export function Accounts({ workspace, onNavigate }) {
   const [details, setDetails] = React.useState({});
 
   const term = search.trim().toLowerCase();
-  const filtered = ACCOUNTS.filter(a =>
-    (filter === 'all' || a.type === filter) &&
-    (!term || a.name.toLowerCase().includes(term))
-  );
+  const filtered = ACCOUNTS.filter(a => {
+    const relationship = buildAccountRelationshipDetail(a, ledger);
+    const searchText = [
+      a.name,
+      a.nextAction,
+      a.dormant ? '기약 없음 휴면' : null,
+      ...relationship.contacts.flatMap((contact) => [contact.name, contact.role, contact.phone, contact.email, ...contact.labels]),
+      ...relationship.deals.map((deal) => deal.name),
+    ].filter(Boolean).join(' ').toLowerCase();
+    return (filter === 'all' || a.type === filter) && (!term || searchText.includes(term));
+  });
 
   // Keep selection valid across filter changes
   React.useEffect(() => {
@@ -1634,7 +1895,12 @@ export function Accounts({ workspace, onNavigate }) {
     }
   }, [view, filtered, selected]);
 
-  const getDetail = (name) => details[name] || emptyDetail();
+  const getDetail = (account) => {
+    if (!account) return emptyDetail();
+    const linked = buildAccountRelationshipDetail(account, ledger);
+    const stored = details[account.name] || emptyDetail();
+    return { ...stored, contacts: linked.contacts, deals: linked.deals };
+  };
 
   // 활동·노트는 crm_activities 원장으로 영속화한다. 계정에 id가 없으면(로컬 생성 직후)
   // 낙관적 로컬 행만 유지 — preview 상태로 정직하게 남긴다.
@@ -1660,6 +1926,7 @@ export function Accounts({ workspace, onNavigate }) {
     if (!acc?.id) return;
     saveRevenueRecord('activity', 'create', {
       accountId: acc.id,
+      companyId: acc.companyId,
       type: entry.type,
       body: entry.msg,
     }).then(r => {
@@ -1725,7 +1992,10 @@ export function Accounts({ workspace, onNavigate }) {
     if (view !== 'detail' || !selectedAcc?.id) return;
     const acc = selectedAcc;
     let alive = true;
-    fetch(`/api/hub/revenue/activity?accountId=${encodeURIComponent(acc.id)}`, { cache: 'no-store' })
+    const query = acc.companyId
+      ? `companyId=${encodeURIComponent(acc.companyId)}`
+      : `accountId=${encodeURIComponent(acc.id)}`;
+    fetch(`/api/hub/revenue/activity?${query}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(data => {
         if (!alive) return;
@@ -1749,7 +2019,7 @@ export function Accounts({ workspace, onNavigate }) {
       })
       .catch(() => {});
     return () => { alive = false; };
-  }, [view, selectedAcc?.id]);
+  }, [view, selectedAcc?.id, selectedAcc?.companyId]);
 
   const openDetail = (name) => {
     setSelected(name);
@@ -1800,7 +2070,7 @@ export function Accounts({ workspace, onNavigate }) {
         {/* Type filter */}
         <SegmentedControl className="hub-toolbar" options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
 
-        <Input className="hub-toolbar" placeholder="계정 검색…" icon="search" value={search} onChange={setSearch} />
+        <Input className="hub-toolbar" placeholder="계정·담당자·전화·딜 검색…" icon="search" value={search} onChange={setSearch} />
         <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>
       </div>
 
@@ -1828,6 +2098,9 @@ export function Accounts({ workspace, onNavigate }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
                       <Badge tone={a.type === 'personal' ? 'personal' : 'company'} size="xs">{a.type === 'personal' ? 'Personal' : 'Company'}</Badge>
                       <HealthDot health={a.health} />
+                      {buildAccountRelationshipDetail(a, ledger).contacts.length > 0 && (
+                        <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{buildAccountRelationshipDetail(a, ledger).contacts.length}명</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1843,6 +2116,14 @@ export function Accounts({ workspace, onNavigate }) {
                     </div>
                   </div>
                 </div>
+                {(a.nextAction || a.dormant) && (
+                  <div style={{ marginTop: 10, paddingTop: 9, borderTop: '1px solid var(--line-soft)', display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                    <Iconed name="arrowRight" size={11} style={{ marginTop: 2, color: 'var(--moon-300)' }} />
+                    <span style={{ minWidth: 0, fontSize: 11.5, lineHeight: 1.4, color: 'var(--fg-muted)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {a.dormant ? '기약 없음' : a.nextAction}{a.nextActionAt ? ` · ${String(a.nextActionAt).slice(0, 10)}` : ''}
+                    </span>
+                  </div>
+                )}
               </div>
             </Card>
           ))}
@@ -1888,7 +2169,10 @@ export function Accounts({ workspace, onNavigate }) {
               <span style={{ paddingRight: 4, display: 'flex' }}>
                 <Avatar name={a.name} size={24} tone={a.type === 'personal' ? 'personal' : 'company'} />
               </span>
-              <span style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name}</span>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name}</span>
+                {(a.nextAction || a.dormant) && <span style={{ display: 'block', marginTop: 2, fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.dormant ? '기약 없음' : a.nextAction}</span>}
+              </span>
               <span style={{ paddingRight: 8 }}>
                 <Badge tone={a.type === 'personal' ? 'personal' : 'company'} size="xs">
                   <Iconed name={a.type === 'personal' ? 'user' : 'building'} size={9} />
@@ -1964,7 +2248,7 @@ export function Accounts({ workspace, onNavigate }) {
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <DetailPanel
               account={selectedAcc}
-              detail={selectedAcc ? getDetail(selectedAcc.name) : null}
+              detail={selectedAcc ? getDetail(selectedAcc) : null}
               onLog={selectedAcc ? handleLog(selectedAcc.name) : () => {}}
               onDeleteActivity={selectedAcc ? handleDeleteActivity(selectedAcc.name) : () => {}}
               onPinNote={selectedAcc ? handlePinNote(selectedAcc.name) : () => {}}

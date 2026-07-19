@@ -288,6 +288,7 @@ function mapTodos(rows, projectById, brandById) {
       brand: brand?.slug || "all",
       project: row.project_id || "",
       title: row.title,
+      description: row.description || "",
       status: row.status || "inbox",
       due: formatShortDate(row.due_at),
       dueAt: row.due_at || "",
@@ -299,6 +300,9 @@ function mapTodos(rows, projectById, brandById) {
       // which round-trips badly through an edit-and-save (attention-ledger.js needs this raw
       // form so a re-save doesn't silently downgrade critical or send an invalid "med").
       priorityRaw: String(row.priority || "medium").toLowerCase(),
+      // Deal-linked sub-task (meta.deal_id, written by create_task's dealId) — the Deals
+      // drawer checklist filters on this; null for ordinary project/standalone tasks.
+      dealId: row.meta?.deal_id || null,
       assignee: row.owner_id ? "Me" : "Unassigned",
       updatedAt: row.updated_at || row.created_at || "",
     };

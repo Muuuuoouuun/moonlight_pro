@@ -177,11 +177,28 @@ test("normalizes a task create command with project ownership and explicit statu
       status: "doing",
       priority: "critical",
       next_action: null,
+      description: null,
       due_at: "2026-07-16T00:00:00.000Z",
       completed_at: null,
       meta: { source: "mcp" },
     },
   });
+});
+
+test("normalizes a task create command with a description", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "create_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    title: "Prepare weekly review",
+    description: "Pull last week's numbers from the revenue heatmap first.",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    ownerId: "44444444-4444-4444-8444-444444444444",
+    now: "2026-07-15T00:00:00.000Z",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.record.description, "Pull last week's numbers from the revenue heatmap first.");
 });
 
 test("marks a task complete with a workspace-scoped update", () => {
@@ -205,6 +222,31 @@ test("marks a task complete with a workspace-scoped update", () => {
     patch: {
       status: "done",
       completed_at: "2026-07-15T01:30:00.000Z",
+      updated_at: "2026-07-15T01:30:00.000Z",
+    },
+  });
+});
+
+test("patches a task description without touching other fields", () => {
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_task",
+    id: "55555555-5555-4555-8555-555555555555",
+    description: "Waiting on the Class.Moon brief before drafting.",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-15T01:30:00.000Z",
+  });
+
+  assert.deepEqual(result, {
+    ok: true,
+    action: "update_task",
+    table: "tasks",
+    filters: [
+      ["id", "eq.55555555-5555-4555-8555-555555555555"],
+      ["workspace_id", "eq.33333333-3333-4333-8333-333333333333"],
+    ],
+    patch: {
+      description: "Waiting on the Class.Moon brief before drafting.",
       updated_at: "2026-07-15T01:30:00.000Z",
     },
   });

@@ -83,6 +83,9 @@ export function normalizePmsCommand(
     const id = uuid(input.id);
     const title = text(input.title || input.name, 300);
     const brandId = nullableUuidField(input, "brandId", "brand_id");
+    // A/S graduation: a closed deal can spawn its 판매 후 실행 follow-up project. The origin
+    // deal id lives in meta so the project can point back at the sale that created it.
+    const dealId = nullableUuidField(input, "dealId", "deal_id");
     const status = text(input.status || "active", 30).toLowerCase();
     const priority = text(input.priority || "medium", 30).toLowerCase();
     const dueAt = dateTime(input.dueAt || input.due_at);
@@ -92,6 +95,7 @@ export function normalizePmsCommand(
     if (!id) return { ok: false, reason: "invalid-id" };
     if (!title) return { ok: false, reason: "missing-title" };
     if (!brandId.ok) return { ok: false, reason: "invalid-brand-id" };
+    if (!dealId.ok) return { ok: false, reason: "invalid-deal-id" };
     if (!PROJECT_STATUSES.has(status)) return { ok: false, reason: "invalid-status" };
     if (!PRIORITIES.has(priority)) return { ok: false, reason: "invalid-priority" };
     if (!dueAt.ok) return { ok: false, reason: "invalid-due-at" };
@@ -116,7 +120,10 @@ export function normalizePmsCommand(
         next_action: nullableText(input.nextAction || input.next_action, 1000),
         due_at: dueAt.value,
         last_activity_at: now.value,
-        meta: { source: text(input.source || "manual", 80) },
+        meta: {
+          source: text(input.source || "manual", 80),
+          ...(dealId.value ? { origin_deal_id: dealId.value } : {}),
+        },
       },
     };
   }
@@ -124,6 +131,10 @@ export function normalizePmsCommand(
   if (action === "create_task") {
     const id = uuid(input.id);
     const projectId = nullableUuidField(input, "projectId", "project_id");
+    // Deal-linked sub-task (공유 실행 척추): tasks can hang off a deal's sales checklist the
+    // same way they hang off a project. Lives in meta (deals ↔ tasks has no FK column) — the
+    // proven stage_detail pattern; operating-ledger reads it back as todo.dealId.
+    const dealId = nullableUuidField(input, "dealId", "deal_id");
     const title = text(input.title, 300);
     const status = text(input.status || "todo", 30).toLowerCase();
     const priority = text(input.priority || "medium", 30).toLowerCase();
@@ -132,6 +143,7 @@ export function normalizePmsCommand(
     if (!id) return { ok: false, reason: "invalid-id" };
     if (!title) return { ok: false, reason: "missing-title" };
     if (!projectId.ok) return { ok: false, reason: "invalid-project-id" };
+    if (!dealId.ok) return { ok: false, reason: "invalid-deal-id" };
     if (!TASK_STATUSES.has(status)) return { ok: false, reason: "invalid-status" };
     if (!PRIORITIES.has(priority)) return { ok: false, reason: "invalid-priority" };
     if (!dueAt.ok) return { ok: false, reason: "invalid-due-at" };
@@ -149,9 +161,13 @@ export function normalizePmsCommand(
         status,
         priority,
         next_action: nullableText(input.nextAction || input.next_action, 1000),
+        description: nullableText(input.description, 4000),
         due_at: dueAt.value,
         completed_at: status === "done" ? now.value : null,
-        meta: { source: text(input.source || "manual", 80) },
+        meta: {
+          source: text(input.source || "manual", 80),
+          ...(dealId.value ? { deal_id: dealId.value } : {}),
+        },
       },
     };
   }
@@ -190,6 +206,9 @@ export function normalizePmsCommand(
       const dueAt = dateTime(input.dueAt || input.due_at);
       if (!dueAt.ok) return { ok: false, reason: "invalid-due-at" };
       patch.due_at = dueAt.value;
+    }
+    if (has(input, "description")) {
+      patch.description = nullableText(input.description, 4000);
     }
 
     if (Object.keys(patch).length === 0) return { ok: false, reason: "empty-patch" };

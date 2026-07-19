@@ -174,12 +174,14 @@ function useAttentionLedger() {
       const json = await res.json().catch(() => null);
       if (!res.ok || !json || json.status === 'error') {
         setState('error');
-        return;
+        return null;
       }
       setData({ items: json.items || [], sources: json.sources || {}, calendarReason: json.calendarReason || '' });
       setState('ready');
+      return json;
     } catch {
       setState('error');
+      return null;
     }
   }, []);
 
@@ -192,7 +194,7 @@ function useAttentionLedger() {
 // strikethrough flash before a task leaves the list (undo window handled by the caller).
 // `selected` marks the row whose detail panel is open. `hideProject` suppresses the
 // project label inside a project accordion (the header already names it).
-function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showReason, hideProject }) {
+function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showReason, hideProject, justAdded }) {
   // 우선순위 정렬일 때는 meta 자리에 정렬 근거(reason)를 보여준다 — 첫 화면 요구사항
   // "지금 해야 하는 이유"(profile §4)를 행 높이 증가 없이 전달.
   const projectLabel = !hideProject && item.lane === 'task' ? item.projectName || '' : '';
@@ -202,6 +204,7 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
   return (
     <div
       ref={rowRef}
+      id={`mywork-row-${item.id}`}
       className="hub-row"
       role="button"
       tabIndex={0}
@@ -212,9 +215,13 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
         padding: 'var(--pad-y) var(--pad-x)', minHeight: 'var(--row-h)',
         borderBottom: '1px solid var(--line-soft)',
         cursor: 'pointer',
-        background: selected ? 'var(--surface-2)' : undefined,
+        // 방금 추가 하이라이트는 selected보다 우선; overdue/stalled의 semantic 좌측 스트라이프는
+        // 유지하고 그 외엔 moon 스트라이프로 표시. justAdded 해제 시 600ms로 fade.
+        background: justAdded ? 'var(--surface-3)' : selected ? 'var(--surface-2)' : undefined,
         boxShadow: item.bucket === 'overdue' ? 'inset 2px 0 0 var(--danger-line)'
-          : item.stalled ? 'inset 2px 0 0 var(--warning-line)' : undefined,
+          : item.stalled ? 'inset 2px 0 0 var(--warning-line)'
+            : justAdded ? 'inset 2px 0 0 var(--moon-400)' : undefined,
+        transition: 'background 600ms ease, box-shadow 600ms ease',
       }}
     >
       {item.lane === 'task' ? (
@@ -401,6 +408,9 @@ export function MyWork({ onNavigate }) {
   const [saving, setSaving] = React.useState(false);
   const [notice, setNotice] = React.useState(null); // { tone, label, action?: { label, onClick } }
   const [taskDraft, setTaskDraft] = React.useState(null);
+  // 방금 추가한 할 일의 attention item.id — 저장 직후 그 행으로 스크롤 + 잠깐 하이라이트해서
+  // "나중"(기한 없음) 버킷 맨 아래로 들어가도 추가된 걸 바로 확인하게 한다. 몇 초 뒤 해제.
+  const [justAddedId, setJustAddedId] = React.useState(null);
   // 우측 상세 패널이 보고 있는 item.id — 파생 조회라서 reload 후 항목이 사라지면
   // (완료·삭제) 패널도 같이 닫힌다.
   const [detailId, setDetailId] = React.useState(null);
@@ -461,11 +471,34 @@ export function MyWork({ onNavigate }) {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.status === 'saved') {
+        const createdId = data.task?.id || data.id || null;
         setQuickTitle('');
         setQuickDue('');
         setQuickPriority('medium');
-        setNotice({ tone: 'ok', label: '할 일 저장됨' });
-        await reload();
+        // 새 할 일이 무조건 화면에 보이도록: 리스트 렌즈로, 그리고 방금 만든 (대개 기한 없는)
+        // 항목을 가릴 수 있는 레인·기한 필터를 해제한다. board/week나 'today' 필터 상태에서
+        // 추가하면 새 항목이 안 보여 "추가가 안 된다"고 느끼던 문제(2026-07-18)를 막는다.
+        if (lens !== 'list') setLens('list');
+        if (lane !== 'all' && lane !== 'task') setLane('all');
+        if (bucketFilter !== 'all') setBucketFilter('all');
+        const fresh = await reload();
+        const freshTasks = (fresh?.items || []).filter((i) => i.lane === 'task');
+        const created = (createdId && freshTasks.find((i) => i.entityId === createdId))
+          || freshTasks
+            .filter((i) => i.title === title)
+            .sort((a, b) => new Date(b.recencyAt || 0) - new Date(a.recencyAt || 0))[0]
+          || null;
+        if (created) {
+          setJustAddedId(created.id);
+          scrollToRow(created.id);
+        }
+        setNotice({
+          tone: 'ok',
+          label: created?.bucket === 'later' ? '할 일 저장됨 · "나중"에 추가' : '할 일 저장됨',
+          action: created
+            ? { label: '보기', onClick: () => { setJustAddedId(created.id); scrollToRow(created.id); } }
+            : undefined,
+        });
       } else {
         setNotice({ tone: 'err', label: data.error || `저장 실패 (${data.status || res.status})` });
       }
@@ -573,6 +606,24 @@ export function MyWork({ onNavigate }) {
     [detailId, items, hiddenIds],
   );
   const deferTarget = nextDeferTarget();
+
+  // 방금 추가한 할 일 하이라이트를 2.6초 뒤 해제(ItemRow가 fade 처리). 스크롤은 여기서
+  // 하지 않는다 — reload의 setData와 setJustAddedId가 서로 다른 렌더로 커밋돼서, 패시브
+  // 이펙트/rAF 시점엔 행 레이아웃이 아직 안 끝나 scrollIntoView가 빗나갔다(2026-07-18 검증).
+  // 스크롤은 createTask에서 짧은 지연 뒤 직접 호출한다(‘보기’ 버튼과 동일 경로).
+  React.useEffect(() => {
+    if (!justAddedId) return undefined;
+    const timer = setTimeout(() => setJustAddedId(null), 2600);
+    return () => clearTimeout(timer);
+  }, [justAddedId]);
+
+  // 방금 추가/‘보기’가 가리키는 행으로 스크롤 — 커밋·레이아웃이 끝난 뒤 실행되도록 짧게 미룬다.
+  const scrollToRow = React.useCallback((attentionId) => {
+    if (!attentionId) return;
+    window.setTimeout(() => {
+      document.getElementById(`mywork-row-${attentionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+  }, []);
 
   const toggleProject = (projectId) => {
     setCollapsedProjects((prev) => {
@@ -913,6 +964,7 @@ export function MyWork({ onNavigate }) {
                         onOpen={openItem}
                         completing={completingIds.has(row.item.id)}
                         selected={detailId === row.item.id}
+                        justAdded={justAddedId === row.item.id}
                         showReason={sort === 'priority'}
                         rowRef={nextRowRef()}
                       />
@@ -1004,6 +1056,7 @@ export function MyWork({ onNavigate }) {
                               onOpen={openItem}
                               completing={completingIds.has(item.id)}
                               selected={detailId === item.id}
+                              justAdded={justAddedId === item.id}
                               showReason={sort === 'priority'}
                               hideProject
                               rowRef={nextRowRef()}
@@ -1025,6 +1078,7 @@ export function MyWork({ onNavigate }) {
                 onOpen={openItem}
                 completing={completingIds.has(item.id)}
                 selected={detailId === item.id}
+                justAdded={justAddedId === item.id}
                 showReason={sort === 'priority'}
                 rowRef={nextRowRef()}
               />

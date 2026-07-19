@@ -265,7 +265,7 @@ export function buildActivityWrite(payload = {}) {
     columns.reaction = ACTIVITY_REACTIONS.has(String(payload.reaction)) ? String(payload.reaction) : null;
   }
   // 링크 대상 — create 시에만 의미 있다. undefined는 건너뛰고 null은 명시적 해제.
-  for (const key of ["account_id", "lead_id", "deal_id", "contact_id"]) {
+  for (const key of ["account_id", "company_id", "lead_id", "deal_id", "contact_id"]) {
     const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
     if (payload[camel] !== undefined) columns[key] = payload[camel] || null;
   }

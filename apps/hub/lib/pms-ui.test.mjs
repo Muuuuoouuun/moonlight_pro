@@ -362,8 +362,53 @@ test("builds a minimal task draft from the current project context", () => {
       status: "doing",
       priority: "medium",
       dueAt: "",
+      description: "",
     },
   );
+});
+
+test("builds a task edit draft from an existing todo, preferring the unlossy priority", () => {
+  assert.deepEqual(
+    pmsUi.buildTaskEditDraft({
+      id: "task-1",
+      title: "Draft the newsletter",
+      project: "project-1",
+      status: "doing",
+      priority: "high", // lossy board-dot value — collapsed from "critical"
+      priorityRaw: "critical",
+      dueAt: "2026-07-20T00:00:00.000Z",
+      description: "Pull last week's numbers first.",
+    }),
+    {
+      kind: "task",
+      isNew: false,
+      id: "task-1",
+      title: "Draft the newsletter",
+      projectId: "project-1",
+      status: "doing",
+      priority: "critical",
+      dueAt: "2026-07-20",
+      description: "Pull last week's numbers first.",
+    },
+  );
+});
+
+test("task patch only carries fields that changed from the edit source", () => {
+  const source = {
+    id: "task-1",
+    title: "Draft the newsletter",
+    project: "project-1",
+    status: "doing",
+    priorityRaw: "high",
+    dueAt: "2026-07-20T00:00:00.000Z",
+    description: "",
+  };
+  const draft = { ...pmsUi.buildTaskEditDraft(source), description: "Add a link to the deck." };
+
+  assert.deepEqual(pmsUi.buildTaskPatch(source, draft), {
+    id: "task-1",
+    description: "Add a link to the deck.",
+  });
 });
 
 test("derives project progress from task checklist evidence before reported values", () => {

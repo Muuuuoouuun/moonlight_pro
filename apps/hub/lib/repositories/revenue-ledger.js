@@ -161,8 +161,11 @@ function mapLead(row, companyById, contactById) {
     scale: meta.scale || "",
     situation: meta.situation || "",
     units: units > 0 ? units : "",
+    companyName: company?.name || null,
     contactName: contact?.name || null,
     contactEmail: contact?.email || null,
+    contactPhone: contact?.phone || null,
+    contactTitle: contact?.title || null,
     last: formatRelative(row.last_touch_at || row.updated_at || row.created_at),
     owner: enrichmentView.owner,
     priorityLane: enrichmentView.priorityLane,
@@ -221,6 +224,8 @@ function mapAccount(row, dealStatsByCompany) {
     lastAt: formatRelativeShort(lastAt),
     health,
     nextAction: row.next_action || "",
+    nextActionAt: row.meta?.next_action_at || null,
+    dormant: Boolean(row.meta?.dormant),
     focusOverride: row.meta?.focus_override === "raise" || row.meta?.focus_override === "lower"
       ? row.meta.focus_override
       : "default",
@@ -230,6 +235,7 @@ function mapAccount(row, dealStatsByCompany) {
 
 // contacts 행 → 고객 DB·Customer 360이 쓰는 사람 모델 (spec §9 Contact 중심)
 function mapContact(row) {
+  const lastAt = row.updated_at || row.created_at;
   return {
     id: row.id,
     companyId: row.company_id || null,
@@ -238,6 +244,7 @@ function mapContact(row) {
     phone: row.phone || null,
     title: row.title || null,
     labels: Array.isArray(row.meta?.labels) ? row.meta.labels : [],
+    last: formatRelative(lastAt),
   };
 }
 

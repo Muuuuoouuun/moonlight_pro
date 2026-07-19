@@ -1,5 +1,5 @@
 -- ============================================================================
--- apply-pending.sql — 적용 대기 마이그레이션 묶음 (0003 → 0011 + 0019~0020, 시점순)
+-- apply-pending.sql — 적용 대기 마이그레이션 묶음 (0003 → 0011 + 0019~0021, 시점순)
 --
 -- 생성물(편의용 번들). 정본은 supabase/migrations/<each>.sql 개별 파일.
 -- 전부 멱등(if not exists / 제약 재생성 / on conflict / not-exists 시드 가드)이라
@@ -902,6 +902,14 @@ create unique index if not exists routine_checks_workspace_idempotency_key_uidx
 alter table if exists public.projects
   alter column progress drop default,
   alter column progress drop not null;
+
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- 20260718_0021_task_description.sql
+-- Free-text detail field for tasks (하위 항목 상세 · 참고 자료).
+-- ─────────────────────────────────────────────────────────────────────────
+alter table if exists public.tasks
+  add column if not exists description text;
 
 
 -- end of apply-pending.sql

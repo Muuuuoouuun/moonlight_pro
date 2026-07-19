@@ -5816,47 +5816,9 @@ button {
   display: none;
 }
 
-.hub-app .hub-project-detail-sheet__links {
-  position: relative;
-  z-index: 2;
-  flex: 0 0 auto;
-  padding: 8px 10px;
-  border-left: 1px solid var(--line-soft);
-  border-bottom: 1px solid var(--line-soft);
-  background: rgba(255, 255, 255, 0.04);
-}
-
 .hub-app .hub-project-detail-sheet > aside {
   flex: 1 1 auto;
   min-height: 0;
-}
-
-.hub-app .hub-project-planning-links {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px;
-}
-
-.hub-app .hub-project-planning-links a {
-  display: inline-flex;
-  min-height: 30px;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  color: var(--fg-faint);
-  font-size: 10.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition: color 150ms ease, background 150ms ease, border-color 150ms ease;
-}
-
-.hub-app .hub-project-planning-links a:hover,
-.hub-app .hub-project-planning-links a:focus-visible {
-  border-color: var(--line-soft);
-  background: rgba(82, 116, 168, 0.12);
-  color: var(--fg);
 }
 
 .hub-app .hub-project-board-status {
@@ -5874,8 +5836,7 @@ button {
 
 @media (prefers-reduced-motion: reduce) {
   .hub-app .hub-project-row,
-  .hub-app .hub-pms-progress__fill,
-  .hub-app .hub-project-planning-links a {
+  .hub-app .hub-pms-progress__fill {
     transition: none;
   }
 }

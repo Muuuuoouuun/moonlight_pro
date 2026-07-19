@@ -51,18 +51,6 @@ test("project progress semantics remain outside the native row-open button", () 
   assert.match(globalCss, /\.hub-project-row\s*>\s*\.hub-pms-progress/);
 });
 
-test("planning links preserve one canonical project identity across every PMS surface", () => {
-  assert.match(pmsComponentsSource, /export function ProjectPlanningLinks/);
-  assert.match(pmsComponentsSource, /\/dashboard\/work\/projects\?project=/);
-  assert.match(pmsComponentsSource, /\/dashboard\/work\/projects\?view=timeline&project=/);
-  assert.match(pmsComponentsSource, /\/dashboard\/work\/roadmap\?project=/);
-  assert.match(pmsComponentsSource, /\/dashboard\/work\/rhythm\?project=/);
-  assert.match(pmsComponentsSource, /label: ["']상세 · 목록["']/);
-  assert.match(pmsComponentsSource, /label: ["']Timeline["']/);
-  assert.match(pmsComponentsSource, /label: ["']Roadmap["']/);
-  assert.match(pmsComponentsSource, /label: ["']Rhythm["']/);
-});
-
 test("portfolio metrics execute active, blocked, overdue, and evidence calculations", () => {
   assert.ok(pmsMetrics, "project-pms-metrics.js must expose executable calculations");
   const today = new Date(2026, 6, 17, 12);
@@ -294,7 +282,6 @@ test("selected mobile project is presented as a full-width modal sheet", () => {
   assert.match(projectsSource, /className=["']hub-project-detail-sheet["']/);
   assert.match(projectsSource, /role=\{mobileDetail \? ["']dialog["'] : ["']region["']\}/);
   assert.match(projectsSource, /aria-modal=\{mobileDetail \? ["']true["'] : undefined\}/);
-  assert.match(projectsSource, /ProjectPlanningLinks/);
   assert.match(responsiveCss, /@media\s*\(max-width:\s*900px\)[\s\S]*?\.hub-project-detail-sheet\s*\{[\s\S]*?position:\s*fixed/);
   assert.match(responsiveCss, /\.hub-project-detail-sheet\s*>\s*aside\s*\{[\s\S]*?width:\s*100%/);
 });

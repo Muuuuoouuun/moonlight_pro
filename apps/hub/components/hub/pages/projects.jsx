@@ -13,6 +13,8 @@ import {
   buildContentPipelineTaskSeeds,
   buildTaskBoardColumns,
   buildTaskDraft,
+  buildTaskEditDraft,
+  buildTaskPatch,
   contentPipelineReloadContains,
   createClientId,
   mergeProjectDetailQuery,
@@ -27,7 +29,6 @@ import {
 import { ProjectCreateDrawer } from "./project-create-drawer";
 import { ProjectDetailPanel } from "./project-detail-panel";
 import {
-  ProjectPlanningLinks,
   ProjectPortfolioSummary,
   ProjectProgressGauge,
 } from "./project-pms-components";
@@ -192,6 +193,7 @@ export function Projects({ workspace }) {
     taskAggregation: null,
   });
   const [todos, setTodos] = React.useState([]);
+  const [contentItems, setContentItems] = React.useState([]);
   const [drag, setDrag] = React.useState(null);
   const [expanded, setExpanded] = React.useState(() => new Set());
   const [openDetail, setOpenDetail] = React.useState(null);
@@ -211,6 +213,7 @@ export function Projects({ workspace }) {
   const [projectCreateContext, setProjectCreateContext] = React.useState(null);
   const [projectEditSource, setProjectEditSource] = React.useState(null);
   const [taskDraft, setTaskDraft] = React.useState(null);
+  const [taskEditSource, setTaskEditSource] = React.useState(null);
   const [containerDraft, setContainerDraft] = React.useState(null);
   const [localContainers, setLocalContainers] = React.useState([]);
   const drawerOpen = Boolean(projectDraft || taskDraft || containerDraft);
@@ -363,6 +366,24 @@ export function Projects({ workspace }) {
     loadLedger({ initial: true }).finally(() => { initialLoadDoneRef.current = true; });
   }, [loadLedger]);
 
+  // 프로젝트 상세의 "연관 콘텐츠" 섹션용 — 콘텐츠 원장을 한 번 읽어 브랜드로 매칭한다.
+  // 보조 데이터이므로 실패해도 프로젝트 원장 로드를 막지 않고 조용히 빈 상태로 둔다.
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/hub/content', { cache: 'no-store' });
+        const data = await res.json().catch(() => null);
+        if (!cancelled && data?.source === 'supabase' && Array.isArray(data.items)) {
+          setContentItems(data.items);
+        }
+      } catch {
+        // 콘텐츠 원장 읽기 실패는 무시 — 상세 패널의 보조 섹션이다.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   React.useEffect(() => {
     if (!brands.some(b => b.key === brand)) {
       setBrand(wsDefaultBrand);
@@ -496,10 +517,16 @@ export function Projects({ workspace }) {
   }, []);
 
   const createTodo = React.useCallback((projectId = null, initialStatus = 'todo') => {
+    setTaskEditSource(null);
     setTaskDraft({
       ...buildTaskDraft({ projectId, initialStatus }),
       id: createClientId(),
     });
+  }, []);
+
+  const editTodo = React.useCallback((todo) => {
+    setTaskEditSource(todo);
+    setTaskDraft(buildTaskEditDraft(todo));
   }, []);
 
   const persistProjectCreate = React.useCallback(async (draft = projectDraft) => {
@@ -752,6 +779,34 @@ export function Projects({ workspace }) {
 
   const persistTask = React.useCallback(async () => {
     if (!taskDraft?.title?.trim()) return { ok: false, status: 'invalid-input' };
+
+    if (taskEditSource) {
+      const patch = buildTaskPatch(taskEditSource, taskDraft);
+      if (Object.keys(patch).length <= 1) {
+        // Nothing changed — treat the save as a no-op success instead of an empty-patch error.
+        return { ok: true, status: 'saved' };
+      }
+      try {
+        const response = await fetch('/api/hub/tasks', {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(patch),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.status !== 'saved') {
+          setOrderResult({ tone: 'err', label: data.error || `저장 실패 ${response.status}` });
+          return { ok: false, status: data.status || 'error' };
+        }
+        await loadLedger();
+        setTaskEditSource(null);
+        setOrderResult({ tone: 'ok', label: '할 일 저장됨' });
+        return { ok: true, status: data.status };
+      } catch (error) {
+        setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+        return { ok: false, status: 'error' };
+      }
+    }
+
     try {
       const response = await fetch('/api/hub/tasks', {
         method: 'POST',
@@ -763,6 +818,7 @@ export function Projects({ workspace }) {
           status: taskDraft.status,
           priority: taskDraft.priority,
           dueAt: taskDraft.dueAt,
+          description: taskDraft.description || '',
           source: 'hub-projects',
         }),
       });
@@ -778,7 +834,7 @@ export function Projects({ workspace }) {
       setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
       return { ok: false, status: 'error' };
     }
-  }, [loadLedger, taskDraft]);
+  }, [loadLedger, taskDraft, taskEditSource]);
 
   const updateTaskStatus = React.useCallback(async (id, status) => {
     const response = await fetch('/api/hub/tasks', {
@@ -823,6 +879,7 @@ export function Projects({ workspace }) {
   const prioTone = { critical: 'danger', high: 'danger', med: 'neutral', medium: 'neutral', low: 'neutral' };
   const updateTone = { reported: 'neutral', active: 'moon', blocked: 'danger', done: 'neutral' };
   const checkTone = { pending: 'neutral', done: 'neutral', skipped: 'neutral', blocked: 'danger' };
+  const contentTone = { idea: 'neutral', draft: 'neutral', review: 'moon', scheduled: 'info', published: 'success', archived: 'neutral' };
 
   React.useEffect(() => {
     const close = (e) => { if (brandMenuRef.current && !brandMenuRef.current.contains(e.target)) setBrandMenuOpen(false); };
@@ -1419,7 +1476,15 @@ export function Projects({ workspace }) {
                                         size={16}
                                         label={`${t.done ? '다시 열기' : '완료'}: ${t.title}`}
                                       />
-                                      <div className="hub-project-subtask__title">
+                                      <div
+                                        className="hub-project-subtask__title hub-row"
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={`${t.title} 편집`}
+                                        onClick={() => editTodo(t)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); editTodo(t); } }}
+                                        style={{ borderRadius: 'var(--r-sm)', padding: '4px 6px', margin: '-4px -6px' }}
+                                      >
                                         <Dot tone={prioTone[t.priority]} size={4} />
                                         <span>{t.title}</span>
                                       </div>
@@ -1470,6 +1535,7 @@ export function Projects({ workspace }) {
               const pDecisions = (ledger.decisions || []).filter(d => d.projectId === p.id).slice(0, 4);
               const pNotes = (ledger.notes || []).filter(n => n.projectId === p.id).slice(0, 4);
               const pChecks = (ledger.checks || []).filter(c => c.projectId === p.id).slice(0, 4);
+              const pContent = p.brandId ? contentItems.filter(c => c.brandId === p.brandId).slice(0, 5) : [];
               const detailFailedSources = ledger.selection?.projectId === p.id
                 ? ledger.selection.failedSources
                 : ledger.failedSources;
@@ -1482,9 +1548,6 @@ export function Projects({ workspace }) {
                   aria-label={`${p.name} 프로젝트 상세`}
                 >
                   <button type="button" tabIndex={-1} className="hub-project-detail-sheet__backdrop" aria-label="프로젝트 상세 닫기" onClick={closeProjectDetail} />
-                  <div className="hub-project-detail-sheet__links">
-                    <ProjectPlanningLinks projectId={p.id} projectName={p.name} />
-                  </div>
                   <ProjectDetailPanel
                     project={p}
                     container={pBrand}
@@ -1493,11 +1556,13 @@ export function Projects({ workspace }) {
                     decisions={pDecisions}
                     notes={pNotes}
                     checks={pChecks}
+                    content={pContent}
                     syncState={syncState}
                     failedSources={detailFailedSources}
                     statusTone={statusTone}
                     updateTone={updateTone}
                     checkTone={checkTone}
+                    contentTone={contentTone}
                     orderPending={orderPending}
                     orderResult={orderResult}
                     onClose={closeProjectDetail}
@@ -1552,7 +1617,15 @@ export function Projects({ workspace }) {
                               size={16}
                               label={`${t.done ? '다시 열기' : '완료'}: ${t.title}`}
                             />
-                            <div style={{ minWidth: 0 }}>
+                            <div
+                              className="hub-row"
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`${t.title} 편집`}
+                              onClick={() => editTodo(t)}
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); editTodo(t); } }}
+                              style={{ minWidth: 0, borderRadius: 'var(--r-sm)', padding: '2px 6px', margin: '-2px -6px' }}
+                            >
                               <div style={{ fontSize: 13, textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</div>
                               <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3 }}>
                                 {pBrand.glyph} {pBrand.name} · {proj?.name}
@@ -1893,7 +1966,7 @@ export function Projects({ workspace }) {
       />
 
       <EditDrawer
-        title="할 일 만들기"
+        title={taskEditSource ? '할 일 편집' : '할 일 만들기'}
         subtitle="프로젝트 실행 항목"
         record={taskDraft}
         fields={[
@@ -1931,10 +2004,16 @@ export function Projects({ workspace }) {
             ],
           },
           { key: 'dueAt', label: '기한', inputType: 'date' },
+          {
+            key: 'description',
+            label: '설명 · 참고 자료',
+            type: 'textarea',
+            placeholder: '상세 내용, 참고 링크, 메모를 적어두세요.',
+          },
         ]}
         onChange={(key, value) => setTaskDraft(current => ({ ...current, [key]: value }))}
         onSave={persistTask}
-        onClose={() => setTaskDraft(null)}
+        onClose={() => { setTaskDraft(null); setTaskEditSource(null); }}
       />
     </div>
   );

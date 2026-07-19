@@ -804,7 +804,6 @@
   }
 
   .hub-project-primary-control,
-  .hub-project-planning-links a,
   .hub-project-board-status {
     min-height: 44px !important;
   }
@@ -844,14 +843,6 @@
     border-radius: 0;
     background: oklch(0.10 0.006 250 / 0.72) !important;
     backdrop-filter: blur(6px);
-  }
-
-  .hub-project-detail-sheet__links {
-    width: 100%;
-    border: 1px solid var(--line-soft) !important;
-    border-bottom: 0 !important;
-    border-radius: var(--r-lg) var(--r-lg) 0 0;
-    background: var(--surface) !important;
   }
 
   .hub-project-detail-sheet > aside {

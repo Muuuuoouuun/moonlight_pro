@@ -49,6 +49,7 @@ export function ProjectDetailPanel({
   container,
   todos = [],
   updates = [],
+  content = [],
   decisions = [],
   notes = [],
   checks = [],
@@ -57,6 +58,7 @@ export function ProjectDetailPanel({
   statusTone = {},
   updateTone = {},
   checkTone = {},
+  contentTone = {},
   orderPending = false,
   orderResult = null,
   onClose,
@@ -143,6 +145,9 @@ export function ProjectDetailPanel({
         </div>
         <DetailSection title="최근 업데이트" count={updates.length} empty={failedEmpty("project_updates", syncState === "preview" ? "live 연결 후 project_updates가 여기에 표시됩니다." : "이 프로젝트에 연결된 update가 아직 없습니다.")}>
           {updates.map((update) => <ActivityRow key={update.id} title={update.title} body={update.summary || update.nextAction} meta={update.progress !== null && update.progress !== undefined ? `${update.progress}%` : update.happenedAtLabel} badge={update.source} tone={updateTone[update.status] || "neutral"} />)}
+        </DetailSection>
+        <DetailSection title="연관 콘텐츠" count={content.length} empty={syncState === "preview" ? "live 연결 후 이 브랜드에 연결된 콘텐츠가 여기에 표시됩니다." : "이 브랜드에 연결된 콘텐츠가 아직 없습니다."}>
+          {content.map((item) => <ActivityRow key={item.id} title={item.title} body={[item.kind, item.channel].filter(Boolean).join(" · ")} meta={item.when} badge={item.statusLabel} tone={contentTone[item.status] || "neutral"} />)}
         </DetailSection>
         <DetailSection title="결정" count={decisions.length} empty={failedEmpty("decisions", "이 프로젝트에 연결된 결정 기록이 없습니다.")}>
           {decisions.map((decision) => <ActivityRow key={decision.id} title={decision.title} body={decision.summary} meta={decision.decidedAtLabel} badge="decision" tone="moon" />)}

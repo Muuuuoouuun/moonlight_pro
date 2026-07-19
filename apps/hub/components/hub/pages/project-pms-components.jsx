@@ -58,23 +58,6 @@ export function ProjectProgressGauge({ progress, compact = false, ariaLabel = "�
   );
 }
 
-export function ProjectPlanningLinks({ projectId, projectName = "프로젝트" }) {
-  if (!projectId) return null;
-  const encodedProjectId = encodeURIComponent(projectId);
-  const links = [
-    { label: "상세 · 목록", href: `/dashboard/work/projects?project=${encodedProjectId}` },
-    { label: "Timeline", href: `/dashboard/work/projects?view=timeline&project=${encodedProjectId}` },
-    { label: "Roadmap", href: `/dashboard/work/roadmap?project=${encodedProjectId}` },
-    { label: "Rhythm", href: `/dashboard/work/rhythm?project=${encodedProjectId}` },
-  ];
-
-  return (
-    <nav className="hub-project-planning-links" aria-label={`${projectName} 기획 화면`}>
-      {links.map((link) => <a key={link.label} href={link.href}>{link.label}</a>)}
-    </nav>
-  );
-}
-
 const PORTFOLIO_CELLS = [
   { key: "active", label: "진행 중", description: "active 원장 상태" },
   { key: "blockedOrOverdue", label: "막힘 · 지연", description: "막힘 또는 기한 경과" },

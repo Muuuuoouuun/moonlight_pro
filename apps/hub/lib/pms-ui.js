@@ -295,7 +295,36 @@ export function buildTaskDraft({ projectId = null, initialStatus = "todo" } = {}
     status: TASK_STATUSES.has(initialStatus) ? initialStatus : "todo",
     priority: "medium",
     dueAt: "",
+    description: "",
   };
+}
+
+export function buildTaskEditDraft(todo = {}) {
+  return {
+    kind: "task",
+    isNew: false,
+    id: todo.id,
+    title: todo.title || "",
+    // todo.priority is lossily collapsed for the compact board dot (critical->high,
+    // medium->med) — priorityRaw is the unlossy value the drawer must round-trip.
+    projectId: todo.project || "",
+    status: TASK_STATUSES.has(todo.status) ? todo.status : "todo",
+    priority: todo.priorityRaw || todo.priority || "medium",
+    dueAt: dateInputValue(todo.dueAt),
+    description: todo.description || "",
+  };
+}
+
+export function buildTaskPatch(source = {}, draft = {}) {
+  const original = buildTaskEditDraft(source);
+  const patch = { id: source.id };
+
+  const fields = ["title", "projectId", "status", "priority", "dueAt", "description"];
+  fields.forEach((field) => {
+    const next = field === "dueAt" ? dateInputValue(draft[field]) : (draft[field] ?? "");
+    if (next !== original[field]) patch[field] = next;
+  });
+  return patch;
 }
 
 const MS_PER_DAY = 86_400_000;
