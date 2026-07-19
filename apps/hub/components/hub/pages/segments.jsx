@@ -11,7 +11,7 @@ import React from 'react';
 import { Iconed } from "../hub-icons";
 import { Badge, Button, Card, Dot, EmptyState, Input, SyncBadge, SegmentedControl } from "../hub-primitives";
 import { filterLeadsByWorkspace, getWorkspace } from "../workspace-map";
-import { clearExpandedSegments, toggleExpandedSegment } from "./segments-state.mjs";
+import { clearExpandedSegments, sortSegmentsByPriority, toggleExpandedSegment } from "./segments-state.mjs";
 
 // Same ledger endpoint the Revenue pages use; local copy so this page stays
 // independent of revenue.jsx internals.
@@ -75,7 +75,7 @@ function groupLeads(leads, dimension) {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(lead);
   });
-  return [...groups.entries()]
+  const segments = [...groups.entries()]
     .map(([label, members]) => ({
       label,
       members,
@@ -84,8 +84,9 @@ function groupLeads(leads, dimension) {
         members.reduce((a, l) => a + (Number(l.score) || 0), 0) / Math.max(1, members.length),
       ),
       qualified: members.filter((l) => l.stage === 'Qualified').length,
-    }))
-    .sort((a, b) => b.count - a.count);
+    }));
+
+  return sortSegmentsByPriority(segments, dimension);
 }
 
 export function Segments({ workspace, onNavigate }) {

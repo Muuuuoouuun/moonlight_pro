@@ -29,6 +29,24 @@ test("changing the dimension can collapse every segment", () => {
   assert.equal(clearExpandedSegments().size, 0);
 });
 
+test("stage segments prioritize progressed leads over high-volume New leads", async () => {
+  const state = await import("./segments-state.mjs");
+
+  assert.equal(typeof state.sortSegmentsByPriority, "function");
+
+  const sorted = state.sortSegmentsByPriority([
+    { label: "New", count: 83 },
+    { label: "Customer", count: 20 },
+    { label: "Contact", count: 14 },
+  ], "stage");
+
+  assert.deepEqual(sorted.map((segment) => segment.label), [
+    "Customer",
+    "Contact",
+    "New",
+  ]);
+});
+
 test("Segments uses independent expansion state and non-stretching cards", () => {
   const source = readFileSync(new URL("./segments.jsx", import.meta.url), "utf8");
 
@@ -36,4 +54,5 @@ test("Segments uses independent expansion state and non-stretching cards", () =>
   assert.match(source, /expanded\.has\(seg\.label\)/);
   assert.match(source, /alignItems:\s*['"]start['"]/);
   assert.match(source, /overflowY:\s*['"]auto['"]/);
+  assert.match(source, /sortSegmentsByPriority\(.*dimension\)/);
 });
