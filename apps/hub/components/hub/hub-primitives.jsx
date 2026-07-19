@@ -342,32 +342,156 @@ export function Placeholder({ label = 'image', w, h, style }) {
   );
 }
 
-// Canonical live/preview status indicator for page headers. `state` accepts:
-// 'live' (success), 'partial' (warning), 'syncing' | 'loading' (info),
-// 'preview' (neutral), and 'error' (danger). mono label, xs
-// outline Badge, marginLeft 8.
-export function SyncBadge({ state, style }) {
-  const map = {
-    live:    { tone: 'success', label: 'live' },
-    partial: { tone: 'warning', label: 'partial' },
-    syncing: { tone: 'info',    label: 'syncing' },
-    loading: { tone: 'info',    label: 'syncing' },
-    preview: { tone: 'neutral', label: 'preview' },
-    error:   { tone: 'danger',  label: 'error' },
-  };
-  const m = map[state] || map.error;
-  // NOTE: this branch's Badge forwards `style` but not `className`, so the full `.mono`
-  // treatment (font + 'ss02' feature + tightened tracking) is applied inline.
+const CERTAINTY_STATES = {
+  confirmed:   { label: '확정', borderStyle: 'solid',  marker: 'filled' },
+  recommended: { label: '권장', borderStyle: 'dashed', marker: 'diamond' },
+  unknown:     { label: '미정', borderStyle: 'dotted', marker: 'unknown' },
+};
+
+function CertaintyMarker({ marker }) {
+  if (marker === 'unknown') {
+    return <span aria-hidden="true" style={{ width: 8, textAlign: 'center', fontSize: 9, fontWeight: 700, lineHeight: 1 }}>?</span>;
+  }
+  return <span aria-hidden="true" style={{
+    width: 6,
+    height: 6,
+    flexShrink: 0,
+    borderRadius: marker === 'filled' ? 999 : 1,
+    border: marker === 'filled' ? 'none' : '1px solid currentColor',
+    background: marker === 'filled' ? 'currentColor' : 'transparent',
+    transform: marker === 'diamond' ? 'rotate(45deg)' : undefined,
+  }} />;
+}
+
+export function CertaintyBadge({ state = 'unknown', label, style }) {
+  const config = CERTAINTY_STATES[state] || CERTAINTY_STATES.unknown;
+  const visibleLabel = label || config.label;
   return (
-    <Badge
-      tone={m.tone}
-      size="xs"
-      variant="outline"
-      style={{ marginLeft: 8, fontFamily: 'var(--font-mono)', fontFeatureSettings: "'ss02'", letterSpacing: 0, ...style }}
+    <span
+      data-certainty={state}
+      aria-label={`확정도: ${visibleLabel}`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '2px 6px', borderRadius: 999,
+        color: state === 'unknown' ? 'var(--fg-dim)' : 'var(--fg-muted)',
+        background: 'transparent',
+        borderWidth: 1, borderColor: 'var(--line-strong)', borderStyle: config.borderStyle,
+        fontSize: 10, fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap',
+        ...style,
+      }}
     >
-      {m.label}
-    </Badge>
+      <CertaintyMarker marker={config.marker} />
+      {visibleLabel}
+    </span>
   );
+}
+
+const LIFECYCLE_STATES = {
+  queued:    { label: '수집', icon: 'inbox' },
+  active:    { label: '진행 중', icon: 'play' },
+  waiting:   { label: '대기', icon: 'pause' },
+  blocked:   { label: '막힘', icon: 'x', danger: true },
+  done:      { label: '완료', icon: 'check' },
+  cancelled: { label: '취소', icon: 'x' },
+};
+
+export function LifecycleBadge({ state = 'queued', label, reason, style }) {
+  const config = LIFECYCLE_STATES[state] || LIFECYCLE_STATES.queued;
+  const visibleLabel = label || config.label;
+  const fullLabel = reason ? `${visibleLabel} · ${reason}` : visibleLabel;
+  return (
+    <span
+      data-lifecycle={state}
+      aria-label={`진행 상태: ${fullLabel}`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '2px 6px', borderRadius: 999,
+        color: config.danger ? 'var(--danger)' : 'var(--fg-muted)',
+        background: config.danger ? 'var(--danger-bg)' : 'transparent',
+        border: `1px solid ${config.danger ? 'var(--danger-line)' : 'var(--line)'}`,
+        fontSize: 10, fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap',
+        ...style,
+      }}
+    >
+      <Iconed name={config.icon} size={10} aria-hidden="true" />
+      {fullLabel}
+    </span>
+  );
+}
+
+const TRUTH_STATES = {
+  live:    { tone: 'neutral', label: 'live',        icon: 'signal' },
+  partial: { tone: 'neutral', label: '일부 데이터', icon: 'signal', borderStyle: 'dashed' },
+  syncing: { tone: 'neutral', label: '동기화 중',   icon: 'runs' },
+  loading: { tone: 'neutral', label: '불러오는 중', icon: 'runs' },
+  preview: { tone: 'neutral', label: 'preview',     icon: 'link', borderStyle: 'dashed' },
+  error:   { tone: 'danger',  label: 'error',       icon: 'x' },
+};
+
+export function TruthBadge({ state = 'error', label, style }) {
+  const config = TRUTH_STATES[state] || TRUTH_STATES.error;
+  const visibleLabel = label || config.label;
+  const danger = config.tone === 'danger';
+  return (
+    <span
+      data-truth={state}
+      aria-label={`데이터 상태: ${visibleLabel}`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        padding: '2px 6px', borderRadius: 999,
+        color: danger ? 'var(--danger)' : 'var(--fg-muted)',
+        background: danger ? 'var(--danger-bg)' : 'transparent',
+        borderWidth: 1,
+        borderColor: danger ? 'var(--danger-line)' : 'var(--line)',
+        borderStyle: config.borderStyle || 'solid',
+        fontSize: 10, fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap',
+        fontFamily: 'var(--font-mono)', fontFeatureSettings: "'ss02'", letterSpacing: 0,
+        ...style,
+      }}
+    >
+      <Iconed name={config.icon} size={9} aria-hidden="true" />
+      {visibleLabel}
+    </span>
+  );
+}
+
+const ATTENTION_LABELS = {
+  urgent: '긴급',
+  critical: '즉시 확인',
+};
+
+export function AttentionRail({ level = 'none', label, children, style }) {
+  const active = level === 'urgent' || level === 'critical';
+  const visibleLabel = active ? (label || ATTENTION_LABELS[level]) : null;
+  return (
+    <div
+      data-attention={level}
+      aria-label={active ? `주의 수준: ${visibleLabel}` : undefined}
+      role={level === 'critical' ? 'alert' : undefined}
+      style={{
+        minWidth: 0,
+        paddingLeft: active ? 10 : 0,
+        boxShadow: active ? 'inset 1px 0 0 var(--danger)' : undefined,
+        ...style,
+      }}
+    >
+      {active && (
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 6,
+          color: 'var(--danger)', fontSize: 10, fontWeight: 600, lineHeight: 1,
+        }}>
+          <Iconed name={level === 'critical' ? 'x' : 'clock'} size={10} aria-hidden="true" />
+          {visibleLabel}
+        </span>
+      )}
+      {children}
+    </div>
+  );
+}
+
+// Compatibility wrapper for existing page headers. New code should use TruthBadge.
+export function SyncBadge({ state, style }) {
+  return <TruthBadge state={state} style={{ marginLeft: 8, ...style }} />;
 }
 
 // Canonical pill-group toolbar (type / status / view filters). `options`: [{ key, label,

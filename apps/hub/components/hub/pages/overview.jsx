@@ -31,15 +31,14 @@ const PERIOD_OPTIONS = [
 const KIND_LABEL = { work: '작업', decision: '결정', content: '콘텐츠', automation: '자동화' };
 const CHART_HEIGHT = 120;
 
-// Project-status donut ring colors — keyed to operator-home-summary.js's
-// PROJECT_SERIES keys (planning/active/review/blocked/done/backlog). 'blocked'
-// stays warning to match the DistributionRows convention used elsewhere.
+// Project-status donut ring colors — categories use a monochrome Moonstone/neutral
+// scale. Only genuinely blocked work receives the danger signal.
 const RING_COLORS = {
   planning: 'var(--fg-faint)',
-  active: 'var(--moon-300)',
-  review: 'var(--info)',
-  blocked: 'var(--warning)',
-  done: 'var(--success)',
+  active: 'var(--accent)',
+  review: 'var(--moon-500)',
+  blocked: 'var(--danger)',
+  done: 'var(--fg-dim)',
   backlog: 'var(--line-strong)',
 };
 
@@ -105,20 +104,12 @@ function useOverviewLedger() {
   return { ledger, syncState };
 }
 
-// Stacked daily bars — work / decisions / content, bottom to top. Pure CSS/div,
-// no charting library, same ceiling of sophistication as the rest of the hub
-// (see Sparkline). Order puts the highest-volume series (work) at the base so
-// the smaller series don't get visually swallowed. The "work" fill is
-// --moon-300 to exactly match its own legend Dot (tone="moon" resolves to
-// --moon-300) — a plain --moon-400 fill here reads as an off-shade mismatch
-// against the legend right above it.
-// Segment stack order, bottom → top. Colors match the legend Dots exactly
-// (tone="moon"→--moon-300, info, success) so a fill never reads as an off-shade
-// against the key right above the chart.
+// Stacked daily bars — category distinction stays within the Moonstone/neutral
+// luminance scale so green/yellow never imply success or warning by accident.
 const ACTIVITY_SEGMENTS = [
-  { key: 'work', label: '작업', color: 'var(--moon-300)', get: (d) => d.work },
-  { key: 'decisions', label: '결정', color: 'var(--info)', get: (d) => d.decisions },
-  { key: 'content', label: '발행', color: 'var(--success)', get: (d) => d.content },
+  { key: 'work', label: '작업', color: 'var(--accent)', get: (d) => d.work },
+  { key: 'decisions', label: '결정', color: 'var(--moon-500)', get: (d) => d.decisions },
+  { key: 'content', label: '발행', color: 'var(--fg-dim)', get: (d) => d.content },
 ];
 
 const Y_AXIS_W = 24;
@@ -380,7 +371,7 @@ function RhythmCard({ rhythm, state, onNavigate }) {
       {availability.showData ? (
         <>
           {availability.reason === 'partial' && (
-            <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--warning)' }}>리듬 원장 부분 데이터 · 읽힌 체크인만 표시합니다.</div>
+            <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--fg-muted)' }}>리듬 원장 부분 데이터 · 읽힌 체크인만 표시합니다.</div>
           )}
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
             <span className="stat" style={{ fontSize: 24, fontWeight: 600 }}>{completedAvailable ? completed : '—'}/{total}</span>
@@ -431,7 +422,7 @@ function SeriesRows({ series = [], label }) {
           <div key={item.key} style={{ display: 'grid', gridTemplateColumns: '56px minmax(0, 1fr) 26px', gap: 8, alignItems: 'center' }}>
             <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{item.label}</span>
             <span style={{ height: 6, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }}>
-              <span style={{ display: 'block', height: '100%', width: `${Math.max(value ? 6 : 0, Math.round(((value || 0) / max) * 100))}%`, borderRadius: 999, background: item.key === 'blocked' ? 'var(--warning)' : 'var(--moon-500)', transition: 'width 260ms ease' }} />
+              <span style={{ display: 'block', height: '100%', width: `${Math.max(value ? 6 : 0, Math.round(((value || 0) / max) * 100))}%`, borderRadius: 999, background: item.key === 'blocked' ? 'var(--danger)' : 'var(--moon-500)', transition: 'width 260ms ease' }} />
             </span>
             <span className="mono" style={{ fontSize: 11, color: value ? 'var(--fg)' : 'var(--fg-faint)', textAlign: 'right' }}>{available ? value : '—'}</span>
           </div>
@@ -566,7 +557,7 @@ export function Overview({ onNavigate }) {
             최근 작업과 기획 흐름을 정리합니다<SyncBadge state={syncState} />
           </div>
           {disclosureMessages.map((message) => (
-            <div key={message.kind} role="status" style={{ marginTop: 5, fontSize: 11.5, color: 'var(--warning)' }}>
+            <div key={message.kind} role="status" style={{ marginTop: 5, fontSize: 11.5, color: 'var(--fg-muted)' }}>
               {message.text}
             </div>
           ))}
@@ -583,9 +574,12 @@ export function Overview({ onNavigate }) {
           <div style={{ fontSize: 13, fontWeight: 500 }}>작업·기획 활동 추이</div>
           <div style={{ flex: 1 }} />
           <div style={{ display: 'flex', gap: 12 }}>
-            <span style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Dot tone="moon" /> 작업</span>
-            <span style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Dot tone="info" /> 결정</span>
-            <span style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Dot tone="success" /> 발행</span>
+            {ACTIVITY_SEGMENTS.map((segment) => (
+              <span key={segment.key} style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: 999, background: segment.color }} />
+                {segment.label}
+              </span>
+            ))}
           </div>
         </div>
         {ledger.activitySeries?.length ? (
@@ -617,7 +611,7 @@ export function Overview({ onNavigate }) {
           {projectPanel.showData ? (
             <>
               {projectPanel.reason === 'partial' && (
-                <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--warning)' }}>프로젝트 부분 데이터 · 읽힌 프로젝트만 표시합니다.</div>
+                <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--fg-muted)' }}>프로젝트 부분 데이터 · 읽힌 프로젝트만 표시합니다.</div>
               )}
               <DonutChart series={pms.projectStatusSeries} centerLabel="프로젝트" />
             </>
@@ -641,7 +635,7 @@ export function Overview({ onNavigate }) {
           {contentPanel.showData ? (
             <>
               {contentPanel.reason === 'partial' && (
-                <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--warning)' }}>콘텐츠 부분 데이터 · 읽힌 항목만 표시합니다.</div>
+                <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--fg-muted)' }}>콘텐츠 부분 데이터 · 읽힌 항목만 표시합니다.</div>
               )}
               <SeriesRows series={contentSummary.pipelineSeries} label="콘텐츠 파이프라인 분포" />
             </>
@@ -687,7 +681,7 @@ export function Overview({ onNavigate }) {
           {revenuePanel.showData ? (
             <>
               {revenuePanel.reason === 'partial' && (
-                <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--warning)' }}>매출 원장 부분 데이터 · 읽힌 딜만 표시합니다.</div>
+                <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--fg-muted)' }}>매출 원장 부분 데이터 · 읽힌 딜만 표시합니다.</div>
               )}
               <div style={{ display: 'flex', gap: 2, height: 24, borderRadius: 'var(--r-sm)', overflow: 'hidden', background: 'var(--surface-3)', padding: 2 }}>
                 {stageSeries.map((s) => (
@@ -735,7 +729,7 @@ export function Overview({ onNavigate }) {
           {automationPanel.showData ? (
             <>
               {automationPanel.reason === 'partial' && (
-                <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--warning)' }}>자동화 원장 부분 데이터 · 읽힌 지표만 표시합니다.</div>
+                <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--fg-muted)' }}>자동화 원장 부분 데이터 · 읽힌 지표만 표시합니다.</div>
               )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {automationMetrics.map((metric) => (
@@ -764,7 +758,7 @@ export function Overview({ onNavigate }) {
         <SectionTitle right={<span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>클릭하면 해당 서피스로 이동</span>}>최근 활동</SectionTitle>
         <Card>
           {!recentActivityTruth.complete && (
-            <div role="status" style={{ padding: '10px 12px', marginBottom: activity.length ? 8 : 0, border: '1px solid var(--warning-line)', borderRadius: 'var(--r-sm)', color: 'var(--warning)', fontSize: 11.5 }}>
+            <div role="status" style={{ padding: '10px 12px', marginBottom: activity.length ? 8 : 0, border: '1px dashed var(--line)', borderRadius: 'var(--r-sm)', color: 'var(--fg-muted)', fontSize: 11.5 }}>
               {recentActivityTruth.reason === 'preview'
                 ? `최근 활동 원장 미연결 · ${recentActivityTruth.unavailableSources.join(', ')} 원장을 연결하면 빈 상태를 확인할 수 있습니다.`
                 : recentActivityTruth.reason === 'partial'

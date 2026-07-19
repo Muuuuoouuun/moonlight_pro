@@ -21,6 +21,9 @@
   --moon-bg:       oklch(0.35 0.008 250 / 0.9);
   --moon-line:     var(--moon-600);
   --pms-moonstone: #5274a8;
+  --accent:        #5274a8;
+  --accent-soft:   oklch(0.52 0.08 250 / 0.16);
+  --accent-line:   oklch(0.58 0.09 250 / 0.55);
 
   --z-project-detail: 61;
   --z-drawer-overlay: 70;
@@ -102,6 +105,9 @@
   --moon-bg:       var(--surface-3);
   --moon-line:     var(--moon-300);
   --pms-moonstone: #5274a8;
+  --accent:        #5274a8;
+  --accent-soft:   oklch(0.90 0.04 250 / 0.7);
+  --accent-line:   oklch(0.52 0.10 250 / 0.45);
 
   --fg:            oklch(0.20 0.008 250);
   --fg-muted:      oklch(0.42 0.008 250);

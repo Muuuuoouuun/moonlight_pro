@@ -10,15 +10,15 @@ const PLAYBOOK_FAMILIES = [];
 const PLAYBOOK_CATALOG = [];
 
 const QUICK_COMMANDS = [
-  { slash: '/brief',     label: '아침 브리프 열기',    dest: 'dashboard/daily-brief',        tone: 'moon' },
-  { slash: '/work',      label: 'Work OS 집중 모드',   dest: 'dashboard/work/projects',      tone: 'info' },
-  { slash: '/pipeline',  label: 'Revenue 파이프라인',  dest: 'dashboard/revenue/overview',   tone: 'warning' },
-  { slash: '/queue',     label: '발행 큐 점검',        dest: 'dashboard/content/queue',      tone: 'success' },
-  { slash: '/studio',    label: 'Studio 드래프트',     dest: 'dashboard/content/studio',     tone: 'success' },
-  { slash: '/runs',      label: '자동화 Run log',      dest: 'dashboard/automations/runs',   tone: 'danger' },
-  { slash: '/flows',     label: 'Flow 캔버스 열기',    dest: 'dashboard/automations/flows',  tone: 'moon' },
-  { slash: '/orders',    label: '에이전트 작업 큐',    dest: 'dashboard/agents/orders',      tone: 'info' },
-  { slash: '/council',   label: 'Council 소집',        dest: 'dashboard/agents/council',     tone: 'info' },
+  { slash: '/brief',     label: '아침 브리프 열기',    dest: 'dashboard/daily-brief',        tone: 'neutral' },
+  { slash: '/work',      label: 'Work OS 집중 모드',   dest: 'dashboard/work/projects',      tone: 'neutral' },
+  { slash: '/pipeline',  label: 'Revenue 파이프라인',  dest: 'dashboard/revenue/overview',   tone: 'neutral' },
+  { slash: '/queue',     label: '발행 큐 점검',        dest: 'dashboard/content/queue',      tone: 'neutral' },
+  { slash: '/studio',    label: 'Studio 드래프트',     dest: 'dashboard/content/studio',     tone: 'neutral' },
+  { slash: '/runs',      label: '자동화 Run log',      dest: 'dashboard/automations/runs',   tone: 'neutral' },
+  { slash: '/flows',     label: 'Flow 캔버스 열기',    dest: 'dashboard/automations/flows',  tone: 'neutral' },
+  { slash: '/orders',    label: '에이전트 작업 큐',    dest: 'dashboard/agents/orders',      tone: 'neutral' },
+  { slash: '/council',   label: 'Council 소집',        dest: 'dashboard/agents/council',     tone: 'neutral' },
 ];
 
 const EMPTY_META_THREADS_STATUS = {

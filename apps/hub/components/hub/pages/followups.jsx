@@ -18,7 +18,7 @@ const CRM_REACTION_LABEL = { positive: "긍정", neutral: "중립", concern: "�
 // (page hung on the loading fallback, no console error). Three small object literals are cheaper
 // than that.
 const ACT_ICON = { email: "email", meeting: "calendar", call: "signal", note: "edit", deal: "deals", kakao: "chat", quote: "orders", ai: "sparkle", info_session: "brief", demo: "play", visit: "building", update: "rhythm" };
-const ACT_TONE = { email: "info", meeting: "moon", call: "warning", note: "neutral", deal: "success", kakao: "warning", quote: "neutral", ai: "moon", info_session: "info", demo: "moon", visit: "success", update: "neutral" };
+const ACT_TONE = Object.fromEntries(Object.keys(ACT_ICON).map((key) => [key, "neutral"]));
 const ACT_LABEL = { email: "Email", meeting: "Meeting", call: "Call", note: "Note", deal: "Deal", kakao: "카카오", quote: "견적", ai: "AI", info_session: "설명회", demo: "데모", visit: "방문", update: "Update" };
 
 const STAGE_BY_KEY = Object.fromEntries(DEAL_STAGES.map((s) => [s.key, s]));
@@ -43,8 +43,8 @@ const BUCKET_OPTIONS = [
   { key: "week", label: "이번 주" },
 ];
 const LANE_LABEL = { lead: "리드", deal: "딜", event: "일정" };
-const LANE_TONE = { lead: "moon", deal: "company", event: "info" };
-const BUCKET_STRIPE = { overdue: "var(--danger-line)", today: "var(--warning-line)" };
+const LANE_TONE = { lead: "neutral", deal: "neutral", event: "neutral" };
+const BUCKET_STRIPE = { overdue: "var(--danger)" };
 
 function useFollowups() {
   const [state, setState] = React.useState({ syncState: "loading", items: [], summary: {}, calendarReason: "" });
@@ -181,10 +181,12 @@ function ActivityPanel({ item, onClose, onNavigate }) {
       footer={item.href ? <Button variant="outline" size="sm" onClick={() => onNavigate?.(item.href)}>정식 편집 열기</Button> : undefined}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--fg-faint)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-        최근 기록<SyncBadge state={state.syncState === "error" ? "preview" : state.syncState} />
+        최근 기록<SyncBadge state={state.syncState} />
       </div>
       {state.syncState === "loading" ? (
         <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>불러오는 중…</div>
+      ) : state.syncState === "error" ? (
+        <EmptyState icon="clock" title="활동 기록을 읽지 못했습니다" description="원장 연결 상태를 확인한 뒤 다시 열어 주세요." style={{ minHeight: 140 }} />
       ) : state.activities.length === 0 ? (
         <EmptyState icon="clock" title="활동 기록이 없습니다" description="연락 기록이 쌓이면 여기에 표시됩니다." style={{ minHeight: 140 }} />
       ) : (
@@ -225,7 +227,7 @@ function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onClo
         display: "flex", flexDirection: "column", gap: 8,
         padding: "12px 16px",
         borderBottom: "1px solid var(--line-soft)",
-        boxShadow: BUCKET_STRIPE[item.bucket] ? `inset 2px 0 0 ${BUCKET_STRIPE[item.bucket]}` : undefined,
+        boxShadow: BUCKET_STRIPE[item.bucket] ? `inset 1px 0 0 ${BUCKET_STRIPE[item.bucket]}` : undefined,
         opacity: logged ? 0.6 : 1,
       }}
     >
@@ -244,8 +246,8 @@ function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onClo
           <span style={{ fontSize: 12, color: "var(--fg-faint)" }}>· {item.company}</span>
         )}
         {item.kind !== "event" && <Badge tone={LANE_TONE[item.kind]} size="xs" variant="outline">{LANE_LABEL[item.kind]}</Badge>}
-        {stage && <Badge tone={stage.color} size="xs">{stage.label}</Badge>}
-        <Badge tone="moon" size="xs">{item.channel}</Badge>
+        {stage && <Badge tone="neutral" size="xs" variant="outline">{stage.label}</Badge>}
+        <Badge tone="neutral" size="xs" variant="outline">{item.channel}</Badge>
         <div style={{ flex: 1 }} />
         {item.phone && <span className="mono" style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>{item.phone}</span>}
       </div>
@@ -275,8 +277,8 @@ function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onClo
         ) : (
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             {logged ? (
-              <span style={{ fontSize: 12, color: "var(--success)", display: "flex", alignItems: "center", gap: 6 }}>
-                <Dot tone="success" /> 기록됨: {logged}
+              <span style={{ fontSize: 12, color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                <Dot tone="neutral" /> 기록됨: {logged}
               </span>
             ) : (
               LOG_ACTIONS.map((a) => (

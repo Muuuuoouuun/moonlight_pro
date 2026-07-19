@@ -1,7 +1,9 @@
 # Moonlight Design System
 
 > Current version — reflects the Moonlight Pro bundle now shipped in `apps/hub`.
-> Token names below match `apps/hub/components/hub/hub-tokens.css` verbatim.
+> Existing token names below match `apps/hub/components/hub/hub-tokens.css` verbatim.
+> Contracts marked **target** are approved design direction and remain implementation work until the
+> corresponding token or primitive is added to code.
 > Previous "Com_Moon / Moonstone Command Deck" naming is retired.
 
 ## 1. Product Read
@@ -55,8 +57,9 @@ Bloomberg (command-deck rhythm: status / count / next action).
 ## 5. Color System
 
 The palette has **two theme modes** (dark is the hub default, light is available) sharing one
-cool moonstone accent stack. Semantic colors stay muted on purpose so they never compete
-with the accent.
+cool moonstone accent stack. Color does not classify product domains or ordinary workflow
+stages. It communicates only interaction emphasis and true urgency; certainty and lifecycle
+use line style, shape, icon, label, and luminance instead.
 
 ### 5.1 Canonical tokens (CSS custom properties)
 
@@ -116,15 +119,99 @@ Defined in `apps/hub/components/hub/hub-tokens.css` and scoped under `.hub-app`.
 
 ### 5.2 Usage rules
 
-- **Accent anchor:** `--moon-300`. Primary CTAs use `--moon-200` fill with `--moon-100` border.
+- **Accent anchor:** `--accent` is the theme-stable Moonstone `#5274a8` alias. Accent means current position, selection,
+  focus, or the single primary action. It never means a category.
+- **Primary CTA:** use `--moon-200` fill with `--moon-100` border. Keep one visually dominant
+  primary CTA per view; global and page-level create actions must not compete.
 - **Surface order:** `--bg` → `--surface` → `--surface-2` → `--surface-3` for nested elevation.
 - **Borders:** always `1px`. Never thicken. Use `--line-soft` for hairlines, `--line` for dividers,
   `--line-strong` only for pressed/emphasized states.
 - **Gradients:** reserved for the brand mark and the moonstone CTA rim. Never fill a hero, card,
   or section background with a colored gradient.
-- **Status colors:** live on chips, dots, and left-border accents. Never as full card fills.
-- **Personal / Company** badges are the only identity labels in the data layer — they have their
-  own color pair and must stay visually distinct from semantic status colors.
+- **Danger red:** reserved for immediate-loss states: overdue/missed, a blocker that prevents the
+  next action, persistence/sync/automation failure, urgent KA, and destructive actions. It lives on
+  an icon, direct label, or 1px left rail. A low-alpha background is allowed only for a compact
+  error/critical banner; never fill ordinary cards or rows red.
+- **No warning-by-default:** today, due soon, waiting, new changes, high scores, hot leads, and
+  partial data are not red. Use order, weight, a clock/pause icon, and direct copy instead.
+- **Legacy semantic tokens:** `--success`, `--warning`, and `--info` remain temporarily for existing
+  call sites. New surfaces must not use them to classify categories or ordinary workflow stages.
+  Completion uses a check icon plus neutral text; partial/preview uses explicit truth-state labels.
+- **Identity tokens:** `--personal` and `--company` are legacy compatibility tokens. New surfaces use
+  neutral `Personal` / `Company` labels and glyphs; do not introduce new teal or purple identity color.
+- **Status color is never sufficient alone:** pair every colored signal with a label and an icon or
+  geometric marker. Never rely on a dot whose meaning is available only from its color.
+
+### 5.3 Multi-channel state grammar
+
+Each visual channel owns one meaning. Do not let one `tone` value stand in for urgency,
+certainty, lifecycle, and source truth at once.
+
+| Dimension | Primary channel | Values | Rule |
+| --- | --- | --- | --- |
+| Interaction | Moonstone | current · selected · focus · primary action | One accent meaning; hover stays neutral |
+| Urgency | danger red | normal · urgent · critical | Red only when delay or failure causes real loss |
+| Certainty | edge pattern + marker + label | confirmed · recommended · unknown | Solid / dashed / dotted; never semantic color |
+| Lifecycle | icon + direct text | queued · active · waiting · blocked · done · cancelled | Only blocked may inherit danger |
+| Source truth | truth badge + copy | live · partial · preview · error | Error is danger; the rest remain neutral |
+
+#### Certainty
+
+| State | Edge | Marker | Copy and luminance |
+| --- | --- | --- | --- |
+| `confirmed` | solid 1px | filled circle or verification glyph | normal foreground; say `확정` where ambiguity exists |
+| `recommended` | dashed 1px | outline diamond | `권장` label in `--fg-muted` |
+| `unknown` | dotted underline or open edge | question mark / open circle | `미정` or `확인 필요` in `--fg-dim` |
+
+Do not lower opacity on the whole component. That reads as disabled and can reduce text contrast.
+Reduce only the edge, marker, and supporting metadata luminance; keep the title and available action legible.
+
+#### Lifecycle
+
+| State | Required cue | Color |
+| --- | --- | --- |
+| `queued` / inbox | open circle + direct label | neutral |
+| `active` | half-circle or play/progress glyph | neutral; Moonstone only when current/selected |
+| `waiting` | pause glyph + named dependency | neutral |
+| `blocked` | blocked/octagon glyph + reason + 1px rail | danger when it prevents the next action |
+| `done` | check glyph + lower-emphasis text | neutral, not green |
+| `cancelled` | slash glyph + direct label | neutral |
+
+#### Source truth
+
+- `live`: quiet neutral label; no green proof-by-color.
+- `partial`: split-circle/info glyph + `일부 데이터` + missing source and retry action. Use danger
+  only if acting on the partial view would be unsafe.
+- `preview`: dashed container or badge + connection/setup glyph + `Preview · 연결 필요`; never show
+  mock work rows beside it.
+- `error`: danger icon + plain-language cause + preserved input + retry.
+
+#### Collision precedence
+
+When one item has multiple states, assign each to a separate region:
+
+1. Outer outline: keyboard focus or selection, always Moonstone.
+2. Left 1px rail: urgent/critical attention, danger only.
+3. Header badge: certainty, using solid/dashed/dotted geometry.
+4. Row icon: lifecycle.
+5. Supporting copy: reason, dependency, and next action.
+
+Example: an urgent AI recommendation uses a danger left rail, a dashed `◇ 권장` badge, and a
+Moonstone `확정하기` action. It does not turn the entire recommendation red or blue.
+
+#### Red-budget rule
+
+- Above the fold: at most one dominant red region.
+- Full view: target no more than three strong red regions.
+- If urgent items exceed the budget, show a red aggregate count in the section header and use a
+  small danger glyph per row instead of repeated fills or rails.
+- Urgent indicators never blink. A one-time entrance transition is allowed; persistent animation is not.
+
+#### Charts and dense data
+
+- Distinguish series with Moonstone luminance, solid/dashed/dotted strokes, marker shapes, and direct labels.
+- Reserve danger red for an anomaly, breached threshold, or failed run; never use it as a routine series color.
+- Legends must remain understandable in monochrome and forced-colors mode.
 
 ## 6. Typography
 
@@ -219,7 +306,7 @@ truth. Do not recreate them ad-hoc inside pages.
 - 금액은 표시 문자열(`₩1.2M`/`₩900K`)을 숫자로 파싱해 정렬, 단계는 퍼널 순서로 정렬 (알파벳 금지).
 
 **상태 표시.**
-- 좌측 액센트 스트라이프는 `--*-line` 토큰 + `inset 2px 0 0` box-shadow — 배경 fill·두꺼운 보더 금지 (§5.2).
+- 좌측 액센트 스트라이프는 `--*-line` 토큰 + `inset 1px 0 0` box-shadow — 배경 fill·두꺼운 보더 금지 (§5.2).
 - stalled 기준은 `STALLED_DAYS`(현재 14일) 상수 하나 — 페이지별 하드코딩 금지.
 
 **Hover.**
@@ -229,6 +316,35 @@ truth. Do not recreate them ad-hoc inside pages.
 **텍스트 크기 플로어.**
 - 데이터 값 ≥ 12px · 보조 메타(ID·타임스탬프·마이크로 카운트·상태 플래그) ≥ 10.5px ·
   10px 미만 금지 (예외: 미니어처 프리뷰 캔버스 — 슬라이드 썸네일 등).
+
+### 8.2 State Primitives (shipped 2026-07-19)
+
+Do not expand `Badge tone="..."` into more page-level meanings. Migrate toward four small,
+composable primitives so pages declare semantics and the primitive owns presentation.
+
+| Primitive | Contract | Responsibility |
+| --- | --- | --- |
+| `AttentionRail` | `level="none | urgent | critical"` | Danger rail and accessible urgency copy |
+| `CertaintyBadge` | `state="confirmed | recommended | unknown"` | Edge pattern, marker, and explicit label |
+| `LifecycleBadge` | `state="queued | active | waiting | blocked | done | cancelled"` | Neutral lifecycle icon and label; danger only for a real blocker |
+| `TruthBadge` | `state="live | partial | syncing | loading | preview | error"` | Source honesty and visible data-state copy |
+
+```jsx
+<AttentionRail level="urgent">
+  <CertaintyBadge state="recommended" />
+  <LifecycleBadge state="waiting" reason="고객 회신 필요" />
+</AttentionRail>
+```
+
+Implementation rules:
+
+- The props above are semantic enums, not color names.
+- `TruthBadge` replaces new ad-hoc `SyncBadge` tone mappings; existing `SyncBadge` is a compatibility
+  wrapper so current call sites receive the same grammar during migration.
+- Components expose visible Korean labels and an equivalent accessible name. Icons are never decorative
+  when they carry state meaning.
+- Selection/focus stays outside these primitives so a selected urgent item can retain both meanings.
+- Page code must not pass raw hex/OKLCH values or choose `success`, `warning`, or `info` for a category.
 
 ## 9. Motion
 
@@ -240,6 +356,9 @@ Deliberate, never playful.
 - Drawer: 180ms slide-in (`hubDrawerIn`), overlay 160ms fade (`hubFadeIn`), reduced-motion respected.
 - Hover travel: no more than `4px`.
 - Live indicators: `mlMoonPulse` at 1.2–1.5s.
+- Urgent/critical indicators do not loop, blink, or pulse. Red already carries sufficient emphasis.
+- Certainty changes may transition dashed → solid and marker → verified over `160–200ms`; do not add
+  a green celebration state.
 
 Respect `prefers-reduced-motion`.
 
@@ -257,6 +376,10 @@ Bad: `혁신적인 솔루션` · `최적화된 시너지` · `AI 기반 차세�
 - Keyboard navigation works for all core flows (⌘K palette is the fast path).
 - Focus uses `outline: 1px solid var(--moon-300)` with 2px offset — never relies on browser defaults.
 - Loading / empty / success / error states are part of the design, not afterthoughts.
+- Color never carries state alone. Every urgent, certainty, lifecycle, and truth state includes visible
+  text plus an icon, marker, edge pattern, or shape that survives grayscale and color-vision differences.
+- Dashed and dotted certainty states require direct labels (`권장`, `미정`, `확인 필요`); pattern alone
+  is not an accessible name.
 - 아이콘/글리프 전용 버튼은 `aria-label` 또는 `tooltip` 필수 (`IconButton`을 쓰면 자동).
 - 클릭 가능한 `<div>`는 `role="button"` + `tabIndex={0}` + Enter/Space 핸들러 3종 세트 없이는 금지.
   펼침/접힘 토글에는 `aria-expanded`.
@@ -277,6 +400,10 @@ Do not ship:
 - Overpacked dashboard with 12 cards above the fold
 - Neon / jewel-tone accents
 - Any reintroduction of brand green, bright blue, or purple as accent
+- Red for ordinary `today`, new-change, high-score, waiting, or category states
+- Success/warning/info colors used as chart series or workflow categories
+- Whole-component opacity used to mean uncertain or unconfirmed
+- Full-card semantic fills or repeating urgent animations
 - Glossy chrome, mirror reflections, Web3 metallic sheen
 - Center-aligned everything
 - Chart-heavy screens without a clear operator action
@@ -300,3 +427,14 @@ Build order when adding a new surface:
 2. Compose with existing primitives first; drop to raw `<div>` only when a primitive doesn't fit.
 3. Add the page component under `components/hub/pages/` and register in `hub-app.jsx` PAGE_MAP.
 4. If the page introduces a new top-level route, add it to `NAV_TREE` in `hub-data.js`.
+
+## 15. Decisions Log
+
+| Date | Decision | Status | Rationale |
+| --- | --- | --- | --- |
+| 2026-07-19 | Separate interaction, urgency, certainty, lifecycle, and source truth into distinct visual channels | confirmed | Prevents semantic color drift while keeping urgent work immediately scannable |
+| 2026-07-19 | Allow danger red for true urgency, blocking failure, and destructive action | confirmed | Immediate-loss states need a stronger signal than the neutral system |
+| 2026-07-19 | Express recommended/unknown states through line pattern, marker, label, and luminance | confirmed | Keeps the palette restrained and avoids presenting a recommendation as fact |
+| 2026-07-19 | Freeze new category use of success/warning/info and new colored Personal/Company labels | confirmed | Color remains rare and meaningful; existing usages can migrate incrementally |
+| 2026-07-19 | Add semantic state primitives before broad page migration | confirmed | Central ownership prevents each tab from inventing a different color grammar |
+| 2026-07-19 | Apply the first migration to Overview, My Work, Follow-ups, Decisions, Automations, Segments, and Settings | confirmed | Proves the grammar across urgency, certainty, lifecycle, truth, charts, and category labels |

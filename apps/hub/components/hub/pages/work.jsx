@@ -3,7 +3,7 @@
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Card, IconButton, Button, Progress, EmptyState, EditDrawer, Kbd, SegmentedControl } from "../hub-primitives";
+import { Badge, Card, IconButton, Button, Progress, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge } from "../hub-primitives";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 import {
   buildRoadmapItemAriaLabel,
@@ -764,7 +764,10 @@ export function Decisions() {
             >
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
                 <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{d.date}</span>
-                <Badge tone={d.status === 'Committed' ? 'success' : 'warning'} size="xs">{d.status}</Badge>
+                <CertaintyBadge
+                  state={d.status === 'Committed' ? 'confirmed' : 'unknown'}
+                  label={d.status === 'Committed' ? '확정' : '미정 · Draft'}
+                />
                 <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>by {d.by}</span>
                 <div style={{ flex: 1 }} />
                 <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>

@@ -46,13 +46,13 @@ const DIMENSIONS = [
 ];
 
 const SCORE_BANDS = [
-  { key: 'hot', label: '핫 (70+)', tone: 'success', test: (s) => s >= 70 },
-  { key: 'warm', label: '웜 (40–69)', tone: 'warning', test: (s) => s >= 40 && s < 70 },
-  { key: 'cold', label: '콜드 (1–39)', tone: 'info', test: (s) => s >= 1 && s < 40 },
+  { key: 'hot', label: '핫 (70+)', tone: 'neutral', test: (s) => s >= 70 },
+  { key: 'warm', label: '웜 (40–69)', tone: 'neutral', test: (s) => s >= 40 && s < 70 },
+  { key: 'cold', label: '콜드 (1–39)', tone: 'neutral', test: (s) => s >= 1 && s < 40 },
   { key: 'unscored', label: '미채점', tone: 'neutral', test: (s) => !s },
 ];
 
-const STAGE_TONE = { New: 'info', Contact: 'moon', Qualified: 'success', Lost: 'danger' };
+const STAGE_TONE = { New: 'neutral', Contact: 'neutral', Qualified: 'neutral', Lost: 'neutral' };
 
 function segmentValueOf(lead, dimension) {
   if (dimension === 'scoreBand') {
@@ -172,7 +172,7 @@ export function Segments({ workspace, onNavigate }) {
                   <div>
                     <div style={{ fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Avg score</div>
                     <div className="mono" style={{ fontSize: 12.5, marginTop: 3, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                      <Dot tone={seg.avgScore >= 70 ? 'success' : seg.avgScore >= 40 ? 'warning' : 'neutral'} />
+                      <Dot tone="neutral" />
                       {seg.avgScore || '—'}
                     </div>
                   </div>

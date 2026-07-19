@@ -39,13 +39,13 @@ const SORT_OPTIONS = [
   { key: 'priority', label: '우선순위' },
 ];
 
-const LANE_TONE = { task: 'moon', deal: 'company', event: 'info' };
+const LANE_TONE = { task: 'neutral', deal: 'neutral', event: 'neutral' };
 const LANE_LABEL = { task: '할 일', deal: '딜', event: '일정' };
 
 const BUCKETS = [
   { key: 'overdue', label: '지남', tone: 'danger' },
-  { key: 'today', label: '오늘', tone: 'warning' },
-  { key: 'week', label: '이번 주', tone: 'info' },
+  { key: 'today', label: '오늘', tone: 'neutral' },
+  { key: 'week', label: '이번 주', tone: 'neutral' },
   { key: 'later', label: '나중', tone: 'neutral' },
 ];
 const BUCKET_RANK = { overdue: 0, today: 1, week: 2, later: 3 };
@@ -56,15 +56,15 @@ const normalizeBucket = (item) => (BUCKET_RANK[item.bucket] != null ? item.bucke
 // 시그널 스트립 타일 — 클릭하면 리스트 렌즈 + 해당 기한 필터 토글. '나중'은 신호가
 // 아니므로 타일에서 제외 (기한 세그먼트 토글에는 그대로 있다).
 const SIGNAL_TILES = [
-  { key: 'overdue', label: '기한 지남', color: 'var(--danger)', stripe: 'var(--danger-line)' },
-  { key: 'today', label: '오늘', color: 'var(--warning)', stripe: 'var(--warning-line)' },
-  { key: 'week', label: '이번 주', color: 'var(--info)' },
+  { key: 'overdue', label: '기한 지남', color: 'var(--danger)', stripe: 'var(--danger)' },
+  { key: 'today', label: '오늘', color: 'var(--fg)' },
+  { key: 'week', label: '이번 주', color: 'var(--fg-dim)' },
 ];
 
 // 리스트 그룹 헤더 텍스트 톤 — 긴급 버킷만 semantic 색, 나머지는 중립 (§5.2 절제).
 const BUCKET_HEADER = {
   overdue: { label: '기한 지남', color: 'var(--danger)' },
-  today: { label: '오늘', color: 'var(--warning)' },
+  today: { label: '오늘', color: 'var(--fg-dim)' },
   week: { label: '이번 주', color: 'var(--fg-dim)' },
   later: { label: '나중', color: 'var(--fg-faint)' },
 };
@@ -218,9 +218,9 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
         // 방금 추가 하이라이트는 selected보다 우선; overdue/stalled의 semantic 좌측 스트라이프는
         // 유지하고 그 외엔 moon 스트라이프로 표시. justAdded 해제 시 600ms로 fade.
         background: justAdded ? 'var(--surface-3)' : selected ? 'var(--surface-2)' : undefined,
-        boxShadow: item.bucket === 'overdue' ? 'inset 2px 0 0 var(--danger-line)'
-          : item.stalled ? 'inset 2px 0 0 var(--warning-line)'
-            : justAdded ? 'inset 2px 0 0 var(--moon-400)' : undefined,
+        boxShadow: item.bucket === 'overdue' ? 'inset 1px 0 0 var(--danger)'
+          : item.stalled ? 'inset 1px 0 0 var(--line-strong)'
+            : justAdded ? 'inset 1px 0 0 var(--accent)' : undefined,
         transition: 'background 600ms ease, box-shadow 600ms ease',
       }}
     >
@@ -251,7 +251,7 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
       )}
       <span className="mono" style={{
         fontSize: 11, flexShrink: 0, minWidth: 64, textAlign: 'right',
-        color: item.bucket === 'overdue' ? 'var(--danger)' : item.bucket === 'today' ? 'var(--warning)' : 'var(--fg-faint)',
+        color: item.bucket === 'overdue' ? 'var(--danger)' : item.bucket === 'today' ? 'var(--fg-muted)' : 'var(--fg-faint)',
       }}>
         {item.whenLabel}
       </span>
@@ -271,7 +271,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
       label: '기한',
       value: item.whenLabel,
       mono: true,
-      tone: item.bucket === 'overdue' ? 'var(--danger)' : item.bucket === 'today' ? 'var(--warning)' : undefined,
+      tone: item.bucket === 'overdue' ? 'var(--danger)' : undefined,
     },
     item.lane === 'task' && {
       label: '상태',
@@ -798,7 +798,7 @@ export function MyWork({ onNavigate }) {
                 background: active ? 'var(--surface-2)' : 'var(--surface)',
                 border: `1px solid ${active ? 'var(--line-strong)' : 'var(--line-soft)'}`,
                 borderRadius: 'var(--r-lg)',
-                boxShadow: count > 0 && t.stripe ? `inset 2px 0 0 ${t.stripe}` : undefined,
+                boxShadow: count > 0 && t.stripe ? `inset 1px 0 0 ${t.stripe}` : undefined,
                 transition: 'background 120ms ease, border-color 120ms ease',
               }}
             >
@@ -1127,7 +1127,7 @@ export function MyWork({ onNavigate }) {
                           borderRadius: 'var(--r-sm)', padding: '9px 10px',
                           cursor: draggable ? 'grab' : clickable ? 'pointer' : 'default',
                           opacity: dragItemId === item.id ? 0.4 : 1,
-                          boxShadow: item.stalled ? 'inset 2px 0 0 var(--warning-line)' : undefined,
+                          boxShadow: item.stalled ? 'inset 1px 0 0 var(--line-strong)' : undefined,
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
@@ -1247,7 +1247,7 @@ function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, co
         </div>
       )}
       {overdue.length > 0 && (
-        <Card pad={false} style={{ overflow: 'hidden', boxShadow: 'inset 2px 0 0 var(--danger-line)' }}>
+        <Card pad={false} style={{ overflow: 'hidden', boxShadow: 'inset 1px 0 0 var(--danger)' }}>
           <div style={{ padding: '8px 14px', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--danger)', borderBottom: '1px solid var(--line-soft)' }}>
             기한 지남 {overdue.length}
           </div>

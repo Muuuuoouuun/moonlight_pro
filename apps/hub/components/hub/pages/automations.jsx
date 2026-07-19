@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Progress, SectionTitle, Kbd, EmptyState, SyncBadge } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Progress, SectionTitle, Kbd, EmptyState, SyncBadge, LifecycleBadge } from "../hub-primitives";
 
 const EMPTY_AUTOMATION_SUMMARY = {
   runsToday: 0,
@@ -61,7 +61,7 @@ function useAutomationsLedger() {
 }
 
 export function AutomationsIndex({ onNavigate }) {
-  const sTone = { Active: 'success', Paused: 'warning', Error: 'danger' };
+  const automationLifecycle = (status) => ({ Active: 'active', Paused: 'waiting', Error: 'blocked' }[status] || 'queued');
   const { automations, summary, syncState } = useAutomationsLedger();
   const [statusOverrides, setStatusOverrides] = React.useState({});
   const rows = automations.map(a => statusOverrides[a.id] ? { ...a, status: statusOverrides[a.id] } : a);
@@ -112,7 +112,7 @@ export function AutomationsIndex({ onNavigate }) {
               <span style={{ fontSize: 13 }}>{a.name}</span>
             </div>
             <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{a.trigger}</span>
-            <Badge tone={sTone[a.status]} size="xs">{a.status}</Badge>
+            <LifecycleBadge state={automationLifecycle(a.status)} label={a.status} />
             <span style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>{a.lastRun}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="mono" style={{ fontSize: 12, color: a.success === a.runs24 ? 'var(--success)' : 'var(--warning)' }}>

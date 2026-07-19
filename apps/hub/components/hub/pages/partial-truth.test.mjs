@@ -8,9 +8,10 @@ const dailyBriefSource = await readFile(new URL("./daily-brief.jsx", import.meta
 const workSource = await readFile(new URL("./work.jsx", import.meta.url), "utf8");
 const overviewTruth = await import("./overview-truth.js").catch(() => null);
 
-test("shared SyncBadge maps partial explicitly instead of falling back to preview", () => {
-  assert.match(primitivesSource, /partial:\s*\{\s*tone:\s*["']warning["'],\s*label:\s*["']partial["']/);
-  assert.doesNotMatch(primitivesSource, /map\[state\]\s*\|\|\s*map\.preview/);
+test("shared truth badge maps partial explicitly without warning color", () => {
+  assert.match(primitivesSource, /partial:\s*\{\s*tone:\s*["']neutral["'],\s*label:\s*["']일부 데이터["']/);
+  assert.match(primitivesSource, /export function SyncBadge[\s\S]*?<TruthBadge state=\{state\}/);
+  assert.doesNotMatch(primitivesSource, /TRUTH_STATES\[state\]\s*\|\|\s*TRUTH_STATES\.preview/);
 });
 
 test("overview error presentation keeps partial status and null KPI truth", () => {
