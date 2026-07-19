@@ -940,6 +940,7 @@ create index if not exists idx_tasks_workspace_project_status on public.tasks (w
 create index if not exists idx_workspace_memberships_user_status on public.workspace_memberships (user_id, status);
 create index if not exists idx_workspace_memberships_workspace_role on public.workspace_memberships (workspace_id, role, status);
 create index if not exists idx_brands_workspace_status on public.brands (workspace_id, status);
+create unique index if not exists idx_areas_workspace_slug on public.areas (workspace_id, slug) where slug is not null;
 create index if not exists idx_content_items_workspace_status on public.content_items (workspace_id, status);
 create index if not exists idx_content_items_workspace_brand_status_updated on public.content_items (workspace_id, brand_id, status, updated_at desc);
 create unique index if not exists idx_content_items_workspace_slug on public.content_items (workspace_id, slug) where slug is not null;

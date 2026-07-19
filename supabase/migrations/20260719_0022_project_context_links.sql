@@ -45,6 +45,13 @@ create index if not exists idx_projects_workspace_customer_account_updated
   on public.projects (workspace_id, customer_account_id, updated_at desc)
   where customer_account_id is not null;
 
+-- The canonical seed below is only idempotent per (workspace_id, slug) if the
+-- pair is actually unique — without this, concurrent/re-run migrations can
+-- duplicate 'sales' etc. and make selectProjectAreaId non-deterministic.
+create unique index if not exists idx_areas_workspace_slug
+  on public.areas (workspace_id, slug)
+  where slug is not null;
+
 insert into public.areas (workspace_id, slug, name, kind, status)
 select
   workspace.id,

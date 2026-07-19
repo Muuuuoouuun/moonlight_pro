@@ -955,12 +955,15 @@ export function Projects({ workspace }) {
   React.useEffect(() => {
     const onKey = (event) => {
       if (!shouldOpenGlobalProjectCreate(event, { drawerOpen })) return;
+      // 첫 원장 로드 전에는 areas가 비어 "업무 분야가 없습니다" 오탐 에러가 뜬다 —
+      // ?new=project 딥링크 이펙트와 같은 로드 완료 가드를 공유한다.
+      if (!initialLoadDoneRef.current || syncState === 'loading') return;
       const opened = openGlobalProjectCreate();
       if (opened) event.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [drawerOpen, openGlobalProjectCreate]);
+  }, [drawerOpen, openGlobalProjectCreate, syncState]);
 
   // ?project=<id> is the canonical detail selection. Normalize only the view;
   // the project id stays in the URL so reloads and exact bounded reads remain open.
