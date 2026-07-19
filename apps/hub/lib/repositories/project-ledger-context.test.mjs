@@ -305,7 +305,7 @@ test("builds exact selector and optional referenced-relation fetch plans", () =>
   });
 });
 
-test("fetches referenced relations in parallel scope and degrades unavailable lookups to empty", async () => {
+test("fetches referenced relations in parallel scope and names unavailable lookups as failed sources", async () => {
   assert.ok(context, "project-ledger-context.js must exist");
   const calls = [];
   const rowsByTable = {
@@ -361,5 +361,48 @@ test("fetches referenced relations in parallel scope and degrades unavailable lo
     areaRows: rowsByTable.areas,
     leadRows: [],
     accountRows: rowsByTable.customer_accounts,
+    failedSources: ["leads"],
+  });
+});
+
+test("surfaces thrown reference lookups as failed sources instead of silent empty rows", async () => {
+  assert.ok(context, "project-ledger-context.js must exist");
+  const result = await context.fetchProjectReferenceRows([
+    { area_id: "area-inactive", lead_id: "lead-lost", customer_account_id: "account-closed" },
+  ], {
+    fetchRows: async (table) => {
+      if (table === "areas") return [{ id: "area-inactive", name: "이전 영업", status: "archived" }];
+      if (table === "leads") return [];
+      throw new Error("reference read failed");
+    },
+  });
+
+  assert.deepEqual(result, {
+    areaRows: [{ id: "area-inactive", name: "이전 영업", status: "archived" }],
+    leadRows: [],
+    accountRows: [],
+    failedSources: ["customer_accounts"],
+  });
+});
+
+test("returns no failed sources when every reference lookup succeeds or none is needed", async () => {
+  assert.ok(context, "project-ledger-context.js must exist");
+  const succeeded = await context.fetchProjectReferenceRows([
+    { area_id: "area-1" },
+  ], {
+    fetchRows: async () => [{ id: "area-1", name: "영업", status: "active" }],
+  });
+  assert.deepEqual(succeeded.failedSources, []);
+
+  const noReferences = await context.fetchProjectReferenceRows([{}], {
+    fetchRows: async () => {
+      throw new Error("must not be called");
+    },
+  });
+  assert.deepEqual(noReferences, {
+    areaRows: [],
+    leadRows: [],
+    accountRows: [],
+    failedSources: [],
   });
 });

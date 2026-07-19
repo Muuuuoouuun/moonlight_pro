@@ -421,6 +421,46 @@ test("unavailable Lead and Account catalogs stay named instead of becoming live-
   assert.deepEqual(ledger.projectEntities, []);
 });
 
+test("failed referenced-relation lookups drop the ledger to partial instead of live with null labels", async () => {
+  const state = globalThis.__operatingLedgerTestState;
+  state.calls = [];
+  state.workspaceId = "workspace-1";
+  state.config = { url: "https://supabase.example.com", apiKey: "test-key" };
+  state.counts = { tasks: 0 };
+  state.rows = {
+    brands: [],
+    projects: [{
+      id: "project-1",
+      area_id: "area-archived",
+      lead_id: "lead-lost",
+      name: "아카이브 영역 프로젝트",
+      status: "active",
+      priority: "medium",
+      created_at: "2026-07-01T00:00:00.000Z",
+      updated_at: "2026-07-17T00:00:00.000Z",
+    }],
+    tasks: [],
+    project_updates: [],
+    decisions: [],
+    notes: [],
+    routine_checks: [],
+    customer_accounts: [],
+  };
+  state.rowQueues = {
+    areas: [[], null],
+    leads: [[], null],
+  };
+
+  const ledger = await operatingLedger.getProjectLedger();
+  const project = ledger.projects[0];
+
+  assert.equal(ledger.source, "supabase");
+  assert.equal(ledger.partial, true);
+  assert.deepEqual(ledger.failedSources, ["areas", "leads"]);
+  assert.equal(project.areaName, null);
+  assert.equal(project.entityLabel, null);
+});
+
 test("failed update evidence stays explicit while complete task evidence remains usable", async () => {
   const state = globalThis.__operatingLedgerTestState;
   state.calls = [];

@@ -183,7 +183,7 @@ export async function fetchProjectReferenceRows(rows = [], {
   fetchRows,
   withWorkspaceFilters = (filters) => filters,
 } = {}) {
-  const result = { areaRows: [], leadRows: [], accountRows: [] };
+  const result = { areaRows: [], leadRows: [], accountRows: [], failedSources: [] };
   if (typeof fetchRows !== "function") return result;
 
   const outputKey = {
@@ -198,14 +198,16 @@ export async function fetchProjectReferenceRows(rows = [], {
         ...request.options,
         filters: withWorkspaceFilters(request.options.filters),
       });
-      return [outputKey[key], Array.isArray(relationRows) ? relationRows : []];
+      if (!Array.isArray(relationRows)) return [outputKey[key], [], request.table];
+      return [outputKey[key], relationRows, null];
     } catch {
-      return [outputKey[key], []];
+      return [outputKey[key], [], request.table];
     }
   }));
 
-  fetched.forEach(([key, relationRows]) => {
+  fetched.forEach(([key, relationRows, failedSource]) => {
     result[key] = relationRows;
+    if (failedSource) result.failedSources.push(failedSource);
   });
   return result;
 }

@@ -731,6 +731,9 @@ export async function getProjectLedger({ projectId = null } = {}) {
     fetchRows: fetchSupabaseRows,
     withWorkspaceFilters: withWorkspaceFilter,
   });
+  const referenceFailedSources = Array.isArray(referencedRows.failedSources)
+    ? referencedRows.failedSources
+    : [];
 
   const brandById = new Map(brandRows.map((brand) => {
     const key = brand.slug || brand.id;
@@ -831,11 +834,13 @@ export async function getProjectLedger({ projectId = null } = {}) {
     },
     partial: optionalFailedSources.length > 0
       || catalogFailedSources.length > 0
+      || referenceFailedSources.length > 0
       || selectionFailedSources.length > 0
       || partialSources.length > 0,
     failedSources: uniqueSources([
       ...optionalFailedSources,
       ...catalogFailedSources,
+      ...referenceFailedSources,
       ...selectionFailedSources,
     ]),
     partialSources,
@@ -843,7 +848,11 @@ export async function getProjectLedger({ projectId = null } = {}) {
       ? {
           projectId: selectedProjectId,
           found: selectedProjectFound,
-          failedSources: uniqueSources([...catalogFailedSources, ...selectionFailedSources]),
+          failedSources: uniqueSources([
+            ...catalogFailedSources,
+            ...referenceFailedSources,
+            ...selectionFailedSources,
+          ]),
           partialSources: uniqueSources(selectionTruncatedSources),
         }
       : null,
