@@ -201,6 +201,21 @@ test("board cards expose a labelled non-drag status control", () => {
   assert.match(projectsSource, /visibleColumns\.map\(option/);
 });
 
+test("task status controls lock the same item until its durable reload finishes", () => {
+  const updateStart = projectsSource.indexOf("const updateTaskStatus");
+  const updateEnd = projectsSource.indexOf("const toggleTodo", updateStart);
+  const updateBlock = projectsSource.slice(updateStart, updateEnd);
+
+  assert.match(projectsSource.slice(0, updateStart), /const taskStatusPendingRef = React\.useRef\(new Set\(\)\)/);
+  assert.match(projectsSource.slice(0, updateStart), /const \[pendingTaskIds, setPendingTaskIds\] = React\.useState/);
+  assert.match(updateBlock, /if \(taskStatusPendingRef\.current\.has\(id\)\) return false/);
+  assert.match(updateBlock, /taskStatusPendingRef\.current\.add\(id\)/);
+  assert.match(updateBlock, /finally[\s\S]{0,220}taskStatusPendingRef\.current\.delete\(id\)/);
+  assert.match(projectsSource, /disabled=\{pendingTaskIds\.has\(t\.id\)\}/);
+  assert.match(projectsSource, /pendingTodoIds=\{pendingTaskIds\}/);
+  assert.match(detailPanelSource, /disabled=\{pendingTodoIds\.has\(todo\.id\)\}/);
+});
+
 test("project reads keep error distinct from preview and offer retry", () => {
   const loadStart = projectsSource.indexOf("const loadLedger");
   const effectStart = projectsSource.indexOf("React.useEffect", loadStart);
@@ -221,10 +236,47 @@ test("canonical project selection is forwarded to the Projects API before the bo
   assert.match(projectsSource.slice(0, loadStart), /const selectedProjectId = searchParams\.get\(['"]project['"]\)/);
   assert.match(loadBlock, /projectId\s*=\s*selectedProjectId/);
   assert.match(loadBlock, /\/api\/hub\/projects\?project=\$\{encodeURIComponent\(exactProjectId\)\}/);
-  assert.match(loadBlock, /fetch\(endpoint, \{ cache: ['"]no-store['"] \}\)/);
+  assert.match(loadBlock, /fetch\(endpoint, \{ cache: ['"]no-store['"], signal: controller\.signal \}\)/);
   assert.match(loadBlock, /\[selectedProjectId\]/);
   assert.match(projectsSource, /ledger\.selection\?\.projectId === p\.id/);
   assert.match(projectsSource, /failedSources=\{detailFailedSources\}/);
+});
+
+test("a superseded project read cannot overwrite the latest ledger state", () => {
+  const loadStart = projectsSource.indexOf("const loadLedger");
+  const effectStart = projectsSource.indexOf("React.useEffect", loadStart);
+  const loadBlock = projectsSource.slice(loadStart, effectStart);
+
+  assert.match(projectsSource.slice(0, loadStart), /const ledgerReadRef = React\.useRef/);
+  assert.match(loadBlock, /ledgerReadRef\.current\.controller\?\.abort\(\)/);
+  assert.match(loadBlock, /const controller = new AbortController\(\)/);
+  assert.match(loadBlock, /signal:\s*controller\.signal/);
+  assert.match(loadBlock, /const isCurrentRequest = \(\) =>/);
+  assert.match(loadBlock, /if \(!isCurrentRequest\(\)\)[\s\S]{0,100}stale:\s*true/);
+  assert.match(loadBlock, /AbortError[\s\S]{0,140}stale:\s*true/);
+});
+
+test("mutation reloads keep the current ledger mounted while refreshing", () => {
+  const loadStart = projectsSource.indexOf("const loadLedger");
+  const effectStart = projectsSource.indexOf("React.useEffect", loadStart);
+  const loadBlock = projectsSource.slice(loadStart, effectStart);
+
+  assert.match(loadBlock, /setSyncState\(current\s*=>[\s\S]{0,180}initial[\s\S]{0,180}loading/);
+  assert.doesNotMatch(loadBlock, /^\s*setSyncState\(['"]loading['"]\);/m);
+});
+
+test("the linked-content ledger loads only when project detail is used", () => {
+  const contentStart = projectsSource.indexOf('프로젝트 상세의 "연관 콘텐츠"');
+  const effectStart = projectsSource.indexOf("React.useEffect", contentStart);
+  const contentEnd = projectsSource.indexOf("React.useEffect", effectStart + 1);
+  const contentBlock = projectsSource.slice(contentStart, contentEnd);
+
+  assert.ok(contentStart >= 0 && effectStart > contentStart && contentEnd > effectStart);
+  assert.match(projectsSource.slice(0, contentStart), /const contentLoadedRef = React\.useRef\(false\)/);
+  assert.match(contentBlock, /if \(!openDetail \|\| contentLoadedRef\.current\) return undefined/);
+  assert.match(contentBlock, /contentLoadedRef\.current = true/);
+  assert.match(contentBlock, /AbortController/);
+  assert.match(contentBlock, /\[openDetail\]/);
 });
 
 test("partial project reads preserve core rows and offer a named retry state", () => {
@@ -370,4 +422,31 @@ test("desktop detail-open rows fit the standard sidebar-constrained width withou
   assert.match(detailRow, /gap:\s*\d+px/);
   assert.match(detailRow, /padding:\s*0\s+\d+px/);
   assert.doesNotMatch(detailRow, /overflow:\s*hidden/);
+});
+
+test("mobile project todos collapse to a readable two-column card instead of squeezing desktop tracks", () => {
+  assert.match(projectsSource, /className=["']hub-project-todo-row["']/);
+  assert.match(projectsSource, /className=["']hub-project-todo-check["']/);
+  assert.match(projectsSource, /className=["']hub-project-todo-main hub-row["']/);
+  assert.match(projectsSource, /className=["']hub-project-todo-priority["']/);
+  assert.match(projectsSource, /className=["']mono hub-project-todo-due["']/);
+
+  const mobileStart = responsiveCss.indexOf("@media (max-width: 900px)");
+  const mobileCss = responsiveCss.slice(mobileStart);
+  assert.match(mobileCss, /\.hub-project-todo-row\s*\{[\s\S]*?grid-template-columns:\s*44px minmax\(0,\s*1fr\)/);
+  assert.match(mobileCss, /\.hub-project-todo-check\s*\{[\s\S]*?min-width:\s*44px[\s\S]*?min-height:\s*44px/);
+  assert.match(mobileCss, /\.hub-project-todo-main\s*\{[\s\S]*?grid-column:\s*2/);
+  assert.match(mobileCss, /\.hub-project-todo-assignee\s*\{[\s\S]*?display:\s*none/);
+});
+
+test("desktop project detail owns a viewport-bounded scroller and persistent action footer", () => {
+  assert.match(detailPanelSource, /className=["']hub-project-detail-panel["']/);
+  assert.match(detailPanelSource, /className=["']hub-project-detail-actions["']/);
+  assert.match(projectsSource, /hub-project-page-header--detail/);
+  assert.match(projectsSource, /className=["']hub-project-brand-trigger["']/);
+  assert.match(globalCss, /\.hub-app \.hub-project-detail-sheet\s*\{[\s\S]*?max-height:\s*calc\(100dvh - 126px\)/);
+  assert.match(globalCss, /\.hub-project-page-header--detail \.hub-project-header-context[\s\S]*?display:\s*none/);
+  assert.match(globalCss, /\.hub-project-page-header--detail \.hub-project-brand-trigger__meta[\s\S]*?display:\s*none/);
+  assert.match(globalCss, /\.hub-app \.hub-project-detail-actions\s*\{[\s\S]*?flex:\s*0 0 auto/);
+  assert.match(globalCss, /\.hub-app \.hub-project-detail-panel\s*\{[\s\S]*?min-height:\s*0/);
 });

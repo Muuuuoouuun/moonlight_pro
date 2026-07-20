@@ -8,6 +8,14 @@ import { buildQuickCapture, isDurableQuickCaptureResult } from "@/lib/quick-task
 import { isDurableTaskUpdateResult } from "@/lib/task-today";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
+import {
+  beginRhythmCheck,
+  buildRhythmCheckPayload,
+  createRhythmCheckState,
+  finishRhythmCheck,
+  getRhythmProgressProps,
+  resolveRhythmCheckResult,
+} from "@/lib/rhythm-ui";
 
 function formatBriefDate(date) {
   return new Intl.DateTimeFormat('en-US', {
@@ -196,8 +204,8 @@ function QuickTaskCapture({ onNavigate, onSaved }) {
           <div className="hub-stackable-row" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <label htmlFor="daily-brief-quick-task" className="mono" style={{ flex: 1, fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Quick Capture</label>
             <div role="group" aria-label="저장 위치" style={{ display: 'flex', gap: 4 }}>
-              <Button type="button" variant={hint === 'task' ? 'secondary' : 'ghost'} size="xs" aria-pressed={hint === 'task'} disabled={saving} onClick={() => changeHint('task')} style={{ minHeight: 44 }}>할 일</Button>
-              <Button type="button" variant={hint === 'inbox' ? 'secondary' : 'ghost'} size="xs" aria-pressed={hint === 'inbox'} disabled={saving} onClick={() => changeHint('inbox')} style={{ minHeight: 44 }}>정리 전</Button>
+              <Button type="button" variant={hint === 'task' ? 'secondary' : 'ghost'} size="xs" aria-pressed={hint === 'task'} disabled={saving} onClick={() => changeHint('task')}>할 일</Button>
+              <Button type="button" variant={hint === 'inbox' ? 'secondary' : 'ghost'} size="xs" aria-pressed={hint === 'inbox'} disabled={saving} onClick={() => changeHint('inbox')}>정리 전</Button>
             </div>
           </div>
           <input
@@ -213,14 +221,14 @@ function QuickTaskCapture({ onNavigate, onSaved }) {
             maxLength={4000}
             disabled={saving}
             style={{
-              width: '100%', minHeight: 44, padding: '10px 12px', fontSize: 16, lineHeight: 1.45,
+              width: '100%', padding: '10px 12px', fontSize: 16, lineHeight: 1.45,
               color: 'var(--fg)', background: 'var(--surface-2)',
               border: `1px solid ${state.status === 'error' ? 'var(--danger-line)' : 'var(--line-soft)'}`,
               borderRadius: 'var(--r-sm)', outline: 'none',
             }}
           />
         </div>
-        <Button type="submit" variant="primary" size="md" icon="plus" disabled={saving || !raw.trim()} style={{ minHeight: 44 }}>
+        <Button type="submit" variant="primary" size="md" icon="plus" disabled={saving || !raw.trim()}>
           {saving ? '저장 중' : hint === 'task' ? '할 일 저장' : '정리 전 저장'}
         </Button>
       </form>
@@ -294,11 +302,11 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
                 key={task.id}
                 className="hub-stackable-row"
                 style={{
-                  minHeight: 56,
+                  minHeight: 'calc(var(--row-h) + 20px)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 10,
-                  padding: '6px 10px 6px 14px',
+                  padding: 'var(--pad-y) var(--pad-x)',
                   borderBottom: index < items.length - 1 ? '1px solid var(--line-soft)' : 'none',
                 }}
               >
@@ -326,7 +334,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
               <button
                 type="button"
                 onClick={() => onNavigate?.('dashboard/work/projects?view=todos')}
-                style={{ minHeight: 44, border: 0, borderTop: '1px solid var(--line-soft)', background: 'var(--surface-2)', color: 'var(--fg-muted)', fontSize: 11.5 }}
+                style={{ border: 0, borderTop: '1px solid var(--line-soft)', background: 'var(--surface-2)', color: 'var(--fg-muted)', fontSize: 11.5 }}
               >
                 할 일 {taskToday.hiddenCount}건 더 보기
               </button>
@@ -593,7 +601,7 @@ function OperatorPulse({ operatorHome, contentBrands, onNavigate }) {
                     key={lane.key}
                     type="button"
                     onClick={() => onNavigate(`dashboard/classin/content?brand=${encodeURIComponent(lane.key)}`)}
-                    style={{ minHeight: 44, display: 'grid', gridTemplateColumns: '1fr auto auto', alignItems: 'center', gap: 10, padding: '7px 9px', textAlign: 'left', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', color: 'var(--fg)' }}
+                    style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', alignItems: 'center', gap: 10, padding: '7px 9px', textAlign: 'left', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', color: 'var(--fg)' }}
                   >
                     <span style={{ fontSize: 11.5 }}>{lane.label}</span>
                     <span style={{ fontSize: 10.5, color: 'var(--fg-muted)' }}>{lane.connection === 'live' ? 'live' : lane.connection}</span>
@@ -1213,7 +1221,7 @@ function CommandCard({ s, remaining, onNavigate }) {
       border: '1px solid var(--line-soft)',
       borderLeft: `1px solid ${line}`,
       borderRadius: 'var(--r-xl)',
-      padding: '20px 22px',
+      padding: 'var(--card-pad)',
       boxShadow: `0 0 0 1px ${line}, 0 18px 44px -26px ${line}`,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -1258,7 +1266,7 @@ function CommandClear({ signalCount }) {
   return (
     <div style={{
       background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-xl)',
-      padding: '22px 22px', display: 'flex', alignItems: 'center', gap: 14,
+      padding: 'var(--card-pad)', display: 'flex', alignItems: 'center', gap: 14,
     }}>
       <span style={{ width: 34, height: 34, borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--success)', flexShrink: 0 }}>
         <Iconed name="check" size={17} />
@@ -1307,6 +1315,147 @@ function MoreDetail({ title, children }) {
   );
 }
 
+// Right-rail daily routine glance — same routine_checks data and check-in write path as
+// dashboard/work/rhythm (reuses lib/rhythm-ui.js's payload/result/mutation-state helpers so
+// behavior never drifts from the canonical Rhythm page). Own fetch to /api/hub/work, same
+// per-card-ledger pattern as PipelineShapeCard/SalesFunnelCard/ContentCadenceCard below.
+function RhythmPanel({ onNavigate }) {
+  const [ledger, setLedger] = React.useState({ rituals: [], summary: null });
+  const [syncState, setSyncState] = React.useState('preview');
+  const [mutationState, setMutationState] = React.useState(() => createRhythmCheckState());
+  const attemptSequenceRef = React.useRef(0);
+  const latestAttemptRef = React.useRef(new Map());
+
+  const load = React.useCallback(async () => {
+    setSyncState((prev) => (prev === 'preview' ? 'loading' : prev));
+    try {
+      const response = await fetch('/api/hub/work', { cache: 'no-store' });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data || data.status === 'error') {
+        setSyncState('error');
+        return false;
+      }
+      setLedger({
+        rituals: Array.isArray(data.rituals) ? data.rituals : [],
+        summary: data.summary || null,
+      });
+      setSyncState(data.source === 'supabase' ? 'live' : 'preview');
+      return true;
+    } catch {
+      setSyncState('error');
+      return false;
+    }
+  }, []);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const checkIn = React.useCallback(async (ritual) => {
+    const ritualId = ritual.id;
+    const attemptId = `${Date.now()}-${attemptSequenceRef.current + 1}`;
+    attemptSequenceRef.current += 1;
+    latestAttemptRef.current.set(ritualId, attemptId);
+    setMutationState((state) => beginRhythmCheck(state, ritualId, attemptId));
+
+    try {
+      const response = await fetch('/api/routine/check', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(buildRhythmCheckPayload(ritual)),
+      });
+      const data = await response.json().catch(() => null);
+      let result = resolveRhythmCheckResult({ responseOk: response.ok, httpStatus: response.status, data });
+
+      if (latestAttemptRef.current.get(ritualId) !== attemptId) return;
+      if (result.shouldRefetch) {
+        const refreshed = await load();
+        if (latestAttemptRef.current.get(ritualId) !== attemptId) return;
+        if (!refreshed) result = { ...result, message: `${result.message} 다시 읽지 못했습니다.` };
+      }
+      setMutationState((state) => finishRhythmCheck(state, ritualId, attemptId, result));
+    } catch (error) {
+      if (latestAttemptRef.current.get(ritualId) !== attemptId) return;
+      setMutationState((state) => finishRhythmCheck(state, ritualId, attemptId, resolveRhythmCheckResult({ error })));
+    }
+  }, [load]);
+
+  const rituals = ledger.rituals;
+  const summary = ledger.summary || { ritualsCompletedThisWeek: 0, ritualsTotalThisWeek: 0, longestStreak: 0, longestStreakRitual: '' };
+  const completed = summary.ritualsCompletedThisWeek;
+  const total = summary.ritualsTotalThisWeek;
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const rhythmProgressProps = getRhythmProgressProps({ completed, total });
+
+  return (
+    <div style={{ position: 'sticky', top: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      <SectionTitle right={<SyncBadge state={syncState} />}>리듬</SectionTitle>
+      <Card>
+        {total > 0 ? (
+          <>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <span className="stat" style={{ fontSize: 22, fontWeight: 600 }}>{completed}/{total}</span>
+              <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>이번 주 완료</span>
+            </div>
+            <div {...rhythmProgressProps} style={{ marginTop: 10 }}><Progress value={percent} /></div>
+            {summary.longestStreak > 0 && (
+              <div style={{ marginTop: 10, fontSize: 11, color: 'var(--fg-muted)' }}>
+                최장 <span className="mono" style={{ color: 'var(--success)' }}>{summary.longestStreak}일</span>
+                {summary.longestStreakRitual ? ` · ${summary.longestStreakRitual}` : ''}
+              </div>
+            )}
+            <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {rituals.map((r, i) => {
+                const pending = Boolean(mutationState.pendingByRitual?.[r.id]);
+                const feedback = mutationState.feedbackByRitual?.[r.id];
+                const weeks = Array.isArray(r.weeks) ? r.weeks : [];
+                return (
+                  <div key={r.id} style={{ paddingBottom: 10, borderBottom: i < rituals.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{r.streak || 0}d</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                      <div role="img" aria-label={`최근 7일 체크 기록: ${weeks.join(', ')}`} style={{ display: 'flex', gap: 3 }}>
+                        {weeks.map((v, wi) => (
+                          <span key={wi} aria-hidden="true" style={{ width: 12, height: 12, borderRadius: 3, background: v ? 'var(--moon-500)' : 'var(--surface-3)', border: '1px solid var(--line-soft)' }} />
+                        ))}
+                      </div>
+                      <div style={{ flex: 1 }} />
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        disabled={pending}
+                        aria-label={`${r.name} 체크인 저장`}
+                        onClick={() => checkIn(r)}
+                      >
+                        {pending ? '저장 중' : '체크인'}
+                      </Button>
+                    </div>
+                    {feedback && (
+                      <div aria-live="polite" style={{ marginTop: 4, fontSize: 10.5, color: feedback.kind === 'error' ? 'var(--danger)' : feedback.kind === 'preview' ? 'var(--warning)' : 'var(--fg-muted)' }}>
+                        {feedback.message}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <EmptyState
+            icon="rhythm"
+            title={syncState === 'live' ? '등록된 루틴 없음' : '루틴 확인 대기'}
+            description={syncState === 'live' ? 'Rhythm에서 루틴을 만들면 여기 표시됩니다.' : '기록이 연결되면 이번 주 리듬을 표시합니다.'}
+            style={{ minHeight: 140 }}
+          />
+        )}
+        <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/rhythm')} style={{ marginTop: 12, width: '100%' }}>
+          Rhythm 전체 보기
+        </Button>
+      </Card>
+    </div>
+  );
+}
+
 // The queue is a decision list, not an inbox — past five, the operator is
 // triaging instead of deciding. The rest stay one click away.
 const QUEUE_LIMIT = 5;
@@ -1349,63 +1498,72 @@ export function DailyBrief({ onNavigate }) {
         </div>
       </div>
 
-      <QuickTaskCapture onNavigate={onNavigate} onSaved={refreshLedger} />
+      {/* 좌: 판단·실행 스택(기존 그대로) · 우: 리듬(매일 루틴) 고정 패널 — content.jsx/
+          revenue.jsx와 같은 hub-grid--split 컨벤션(1fr + 300px 사이드레일, ≤1200px에서
+          1열로 접힘). */}
+      <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: 'var(--gap)', alignItems: 'start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', minWidth: 0 }}>
+          <QuickTaskCapture onNavigate={onNavigate} onSaved={refreshLedger} />
 
-      <StatusLine state={ledger} />
+          <StatusLine state={ledger} />
 
-      {/* ① 지금 할 일 — the one command */}
-      {command ? (
-        <CommandCard s={command} remaining={waiting.length} onNavigate={onNavigate} />
-      ) : (
-        <CommandClear signalCount={signalCount} />
-      )}
-
-      {/* ② 결정 큐 — five at most; the rest expand on demand */}
-      <div>
-        <SectionTitle right={<div style={{ display: 'flex', gap: 6 }}>
-          <Badge tone="danger" size="xs">{urgentCount} urgent</Badge>
-          <Badge tone="warning" size="xs">{todayCount} today</Badge>
-          <Badge tone="success" size="xs">{okCount} ok</Badge>
-        </div>}>
-          결정 큐
-        </SectionTitle>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {queue.length ? (
-            queue.map((s) => <SignalCard key={s.id} s={s} defaultExpanded={s.tone === 'danger'} onNavigate={onNavigate} />)
+          {/* ① 지금 할 일 — the one command */}
+          {command ? (
+            <CommandCard s={command} remaining={waiting.length} onNavigate={onNavigate} />
           ) : (
-            <Card>
-              <EmptyState icon="check" title={command ? '큐가 비었습니다' : '오늘 신호 없음'} description={command ? '가장 급한 하나만 위에 남았어요. 처리하면 브리핑이 정리됩니다.' : '새 신호가 들어오면 명령 카드로 가장 먼저 올라옵니다.'} />
-            </Card>
+            <CommandClear signalCount={signalCount} />
           )}
-          {queueOverflow > 0 && (
-            <Button variant="ghost" size="sm" icon="chevronD" onClick={() => setQueueExpanded(true)}>
-              대기 결정 {queueOverflow}건 더 보기
+
+          {/* ② 결정 큐 — five at most; the rest expand on demand */}
+          <div>
+            <SectionTitle right={<div style={{ display: 'flex', gap: 6 }}>
+              <Badge tone="danger" size="xs">{urgentCount} urgent</Badge>
+              <Badge tone="warning" size="xs">{todayCount} today</Badge>
+              <Badge tone="success" size="xs">{okCount} ok</Badge>
+            </div>}>
+              결정 큐
+            </SectionTitle>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {queue.length ? (
+                queue.map((s) => <SignalCard key={s.id} s={s} defaultExpanded={s.tone === 'danger'} onNavigate={onNavigate} />)
+              ) : (
+                <Card>
+                  <EmptyState icon="check" title={command ? '큐가 비었습니다' : '오늘 신호 없음'} description={command ? '가장 급한 하나만 위에 남았어요. 처리하면 브리핑이 정리됩니다.' : '새 신호가 들어오면 명령 카드로 가장 먼저 올라옵니다.'} />
+                </Card>
+              )}
+              {queueOverflow > 0 && (
+                <Button variant="ghost" size="sm" icon="chevronD" onClick={() => setQueueExpanded(true)}>
+                  대기 결정 {queueOverflow}건 더 보기
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={refreshLedger} />
+
+          {/* ③ 지표 — four numbers, full size */}
+          <div>
+            <SectionTitle right={<span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>클릭하면 해당 서피스로 이동</span>}>지표</SectionTitle>
+            <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
+              {ledger.metrics.map((m) => <MetricCard key={m.label} m={m} onNavigate={onNavigate} compact />)}
+            </div>
+          </div>
+
+          <OperatorPulse operatorHome={ledger.operatorHome} contentBrands={ledger.contentBrands} onNavigate={onNavigate} />
+
+          <MoreDetail title="오늘 상세 · 모닝 브리프 · 승인 대기">
+            <MorningBriefCard brief={ledger.morningBrief} onNavigate={onNavigate} />
+            <ApprovalQueueCard onNavigate={onNavigate} />
+
+            {/* 집계(파이프라인·퍼널·콘텐츠 추세)는 현황이 정본 — 오늘은 판단에 집중 (§2.2 경계 계약). */}
+            <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate('dashboard/overview')}>
+              파이프라인 · 퍼널 · 콘텐츠 추세는 현황에서
             </Button>
-          )}
+          </MoreDetail>
         </div>
+
+        <RhythmPanel onNavigate={onNavigate} />
       </div>
-
-      <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={refreshLedger} />
-
-      {/* ③ 지표 — four numbers, full size */}
-      <div>
-        <SectionTitle right={<span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>클릭하면 해당 서피스로 이동</span>}>지표</SectionTitle>
-        <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
-          {ledger.metrics.map((m) => <MetricCard key={m.label} m={m} onNavigate={onNavigate} />)}
-        </div>
-      </div>
-
-      <OperatorPulse operatorHome={ledger.operatorHome} contentBrands={ledger.contentBrands} onNavigate={onNavigate} />
-
-      <MoreDetail title="오늘 상세 · 모닝 브리프 · 승인 대기">
-        <MorningBriefCard brief={ledger.morningBrief} onNavigate={onNavigate} />
-        <ApprovalQueueCard onNavigate={onNavigate} />
-
-        {/* 집계(파이프라인·퍼널·콘텐츠 추세)는 현황이 정본 — 오늘은 판단에 집중 (§2.2 경계 계약). */}
-        <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate('dashboard/overview')}>
-          파이프라인 · 퍼널 · 콘텐츠 추세는 현황에서
-        </Button>
-      </MoreDetail>
     </div>
   );
 }

@@ -61,12 +61,15 @@ export function ProjectDetailPanel({
   contentTone = {},
   orderPending = false,
   orderResult = null,
+  pendingTodoIds = new Set(),
   onClose,
   onEdit,
   onToggleTodo,
   onCreateTodo,
   onOpen,
   onSendOrder,
+  onComplete,
+  onArchive,
 }) {
   if (!project) return null;
   const doneCount = todos.filter((todo) => todo.done).length;
@@ -78,13 +81,13 @@ export function ProjectDetailPanel({
     : empty;
 
   return (
-    <aside aria-label={`${project.name} 상세`} style={{ borderLeft: "1px solid var(--line-soft)", background: "var(--surface)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <aside className="hub-project-detail-panel" aria-label={`${project.name} 상세`} style={{ borderLeft: "1px solid var(--line-soft)", background: "var(--surface)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--line-soft)", display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ fontSize: 16, color: "var(--fg-muted)" }}>{container?.glyph}</span>
         <div style={{ fontSize: 11, color: "var(--fg-faint)", flex: 1 }}>{container?.name || "저장 위치 미정"}</div>
         <IconButton icon="x" size={22} iconSize={12} tooltip="상세 닫기" onClick={onClose} />
       </div>
-      <div className="scroll-y" style={{ flex: 1, padding: 16, display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="hub-project-detail-body scroll-y" style={{ flex: 1, padding: 16, display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 500, letterSpacing: "-0.01em" }}>{project.name}</div>
           <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
@@ -133,6 +136,7 @@ export function ProjectDetailPanel({
                 <Checkbox
                   checked={todo.done}
                   onChange={() => onToggleTodo?.(todo.id)}
+                  disabled={pendingTodoIds.has(todo.id)}
                   size={16}
                   label={`${todo.done ? "다시 열기" : "완료"}: ${todo.title}`}
                 />
@@ -159,11 +163,21 @@ export function ProjectDetailPanel({
           {checks.map((check) => <ActivityRow key={check.id} title={check.checkType} body={check.note} meta={check.checkedAtLabel} badge={check.status} tone={checkTone[check.status] || "neutral"} />)}
         </DetailSection>
       </div>
-      <div style={{ padding: 12, borderTop: "1px solid var(--line-soft)", display: "flex", alignItems: "center", gap: 6 }}>
-        <Button variant="outline" size="sm" onClick={() => onEdit?.(project)}>편집</Button>
-        <Button variant="primary" size="sm" icon="chat" style={{ flex: 1 }} onClick={() => onOpen?.(project)}>열기</Button>
-        <Button variant="outline" size="sm" icon="orders" onClick={() => onSendOrder?.(project)}>{orderPending ? "Sending…" : "주문 보내기"}</Button>
-        {orderResult && !orderPending && <span className="mono" style={{ fontSize: 10.5, color: orderResult.tone === "ok" ? "var(--success)" : "var(--danger)", whiteSpace: "nowrap" }}>{orderResult.label}</span>}
+      <div className="hub-project-detail-actions">
+        <div style={{ padding: "10px 12px 0", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+          <Button variant="ghost" size="sm" icon="check" onClick={() => onComplete?.(project)}>
+            {project.statusKey === "completed" ? "다시 열기" : "완료"}
+          </Button>
+          <Button variant="ghost" size="sm" icon="archive" onClick={() => onArchive?.(project)}>
+            {project.statusKey === "archived" ? "보관 해제" : "보관"}
+          </Button>
+        </div>
+        <div style={{ padding: 12, display: "flex", alignItems: "center", gap: 6 }}>
+          <Button variant="outline" size="sm" onClick={() => onEdit?.(project)}>편집</Button>
+          <Button variant="primary" size="sm" icon="chat" style={{ flex: 1 }} onClick={() => onOpen?.(project)}>열기</Button>
+          <Button variant="outline" size="sm" icon="orders" onClick={() => onSendOrder?.(project)}>{orderPending ? "Sending…" : "주문 보내기"}</Button>
+          {orderResult && !orderPending && <span className="mono" style={{ fontSize: 10.5, color: orderResult.tone === "ok" ? "var(--success)" : "var(--danger)", whiteSpace: "nowrap" }}>{orderResult.label}</span>}
+        </div>
       </div>
     </aside>
   );

@@ -166,3 +166,51 @@ test("EditDrawer only binds its save shortcut for an open record and blocks re-e
   assert.match(primitivesSource, /savingRef\.current/);
   assert.match(primitivesSource, /f\.type === 'textarea'/);
 });
+
+test("canonical checkboxes expose a native disabled state during durable writes", () => {
+  const checkboxStart = primitivesSource.indexOf("export function Checkbox");
+  const checkboxEnd = primitivesSource.indexOf("export const Input", checkboxStart);
+  const checkboxBlock = primitivesSource.slice(checkboxStart, checkboxEnd);
+
+  assert.match(checkboxBlock, /disabled = false/);
+  assert.match(checkboxBlock, /disabled=\{disabled\}/);
+  assert.match(checkboxBlock, /aria-busy=\{disabled \? ['"]true['"] : undefined\}/);
+});
+
+test("EditDrawer protects dirty drafts and uses explicit save copy", () => {
+  assert.match(primitivesSource, /const initialRecordSignatureRef = React\.useRef/);
+  assert.match(primitivesSource, /const dirty = Boolean\(record/);
+  assert.match(primitivesSource, /입력한 변경사항을 버릴까요\?/);
+  assert.match(primitivesSource, /onClose=\{requestClose\}/);
+  assert.match(primitivesSource, /saveLabel = ['"]변경사항 저장['"]/);
+  assert.match(primitivesSource, /saveState === ['"]saving['"] \? ['"]저장 중…['"] : saveLabel/);
+  assert.match(projectsSource, /saveLabel=\{taskEditSource \? ['"]변경사항 저장['"] : ['"]할 일 만들기['"]\}/);
+  assert.match(projectsSource, /saveLabel=["']컨테이너 만들기["']/);
+});
+
+test("project creation opens a recoverable draft even when no canonical area is loaded", () => {
+  const globalStart = projectsSource.indexOf("const openGlobalProjectCreate");
+  const globalEnd = projectsSource.indexOf("const createContentProject", globalStart);
+  const globalBlock = projectsSource.slice(globalStart, globalEnd);
+
+  assert.ok(globalStart >= 0 && globalEnd > globalStart);
+  assert.match(globalBlock, /const areaId = selectProjectAreaId\(ledger\.areas\) \|\| ['"]/);
+  assert.match(globalBlock, /setProjectDraft\(buildProjectDraft/);
+  assert.doesNotMatch(globalBlock, /return false/);
+  assert.match(projectsSource, /onRetryAreas=\{\(\) => loadLedger\(\{ initial: true \}\)\}/);
+});
+
+test("project create drawer explains an empty area ledger and offers an inline retry", () => {
+  assert.match(createDrawerSource, /const areaEmpty = !areaUnavailable && areas\.length === 0/);
+  assert.match(createDrawerSource, /업무 분야 원장이 비어 있습니다/);
+  assert.match(createDrawerSource, /onRetryAreas/);
+  assert.match(createDrawerSource, /원장 다시 불러오기/);
+  assert.match(createDrawerSource, /disabled=\{saving \|\| areaUnavailable \|\| areaEmpty\}/);
+});
+
+test("project create drawer also protects a changed draft from accidental close", () => {
+  assert.match(createDrawerSource, /const initialDraftSignatureRef = React\.useRef/);
+  assert.match(createDrawerSource, /입력한 변경사항을 버릴까요\?/);
+  assert.match(createDrawerSource, /onClose=\{requestClose\}/);
+  assert.match(createDrawerSource, /onClick=\{requestClose\}/);
+});

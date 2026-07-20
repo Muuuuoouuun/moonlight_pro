@@ -198,7 +198,7 @@ assert(
     liveSchemaSql.includes("alter column progress drop not null") &&
     pendingMigrationSql.includes("20260717_0020_nullable_project_progress.sql") &&
     migrationRunnerSql.includes("20260717_0020_nullable_project_progress.sql") &&
-    supabaseReadme.includes("0019~0021") &&
+    supabaseReadme.includes("0019~0023") &&
     supabaseReadme.includes("`0020`(nullable project progress)") &&
     pmsCommandSql.includes("hasInitialProgress ? { progress: initialProgress } : {}"),
   "project progress evidence contract",

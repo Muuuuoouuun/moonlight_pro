@@ -68,18 +68,24 @@ function buildActivitySeries(
       content: contentAvailable ? 0 : null,
     });
   }
-  updates.forEach((update) => {
-    const key = dayKey(update.happenedAt);
-    if (key && buckets.has(key)) buckets.get(key).work += 1;
-  });
-  decisions.forEach((decision) => {
-    const key = dayKey(decision.decidedAt);
-    if (key && buckets.has(key)) buckets.get(key).decisions += 1;
-  });
-  publishLogs.filter((log) => log.status === "published").forEach((log) => {
-    const key = dayKey(log.publishedAt || log.createdAt);
-    if (key && buckets.has(key)) buckets.get(key).content += 1;
-  });
+  if (updatesAvailable) {
+    updates.forEach((update) => {
+      const key = dayKey(update.happenedAt);
+      if (key && buckets.has(key)) buckets.get(key).work += 1;
+    });
+  }
+  if (decisionsAvailable) {
+    decisions.forEach((decision) => {
+      const key = dayKey(decision.decidedAt);
+      if (key && buckets.has(key)) buckets.get(key).decisions += 1;
+    });
+  }
+  if (contentAvailable) {
+    publishLogs.filter((log) => log.status === "published").forEach((log) => {
+      const key = dayKey(log.publishedAt || log.createdAt);
+      if (key && buckets.has(key)) buckets.get(key).content += 1;
+    });
+  }
   return Array.from(buckets.values());
 }
 

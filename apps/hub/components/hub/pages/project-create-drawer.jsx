@@ -38,6 +38,7 @@ export function ProjectCreateDrawer({
   onSave,
   onRetryWithNewClientId,
   onOpenConflictProject,
+  onRetryAreas,
 }) {
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [errors, setErrors] = React.useState({});
@@ -46,10 +47,12 @@ export function ProjectCreateDrawer({
   const [conflictProject, setConflictProject] = React.useState(null);
   const savingRef = React.useRef(false);
   const retryingClientIdRef = React.useRef(null);
+  const initialDraftSignatureRef = React.useRef(null);
   const titleRef = React.useRef(null);
   const areaRef = React.useRef(null);
   const formId = React.useId();
   const areaUnavailable = failedSources.includes("areas");
+  const areaEmpty = !areaUnavailable && areas.length === 0;
   const entityCatalogUnavailable = failedSources.includes("leads")
     || failedSources.includes("customer_accounts");
 
@@ -64,7 +67,17 @@ export function ProjectCreateDrawer({
     setFeedback("");
     setConflictProject(null);
     savingRef.current = false;
+    initialDraftSignatureRef.current = draft ? JSON.stringify(draft) : null;
   }, [draft?.clientId]);
+
+  const dirty = Boolean(draft
+    && initialDraftSignatureRef.current
+    && JSON.stringify(draft) !== initialDraftSignatureRef.current);
+  const requestClose = React.useCallback(() => {
+    if (savingRef.current) return;
+    if (dirty && typeof window !== "undefined" && !window.confirm("입력한 변경사항을 버릴까요?")) return;
+    onClose?.();
+  }, [dirty, onClose]);
 
   const update = React.useCallback((key, value) => {
     onChange?.(key, value);
@@ -77,9 +90,11 @@ export function ProjectCreateDrawer({
   }, [onChange]);
 
   const validateDraft = React.useCallback((candidate) => {
-    if (areaUnavailable) {
+    if (areaUnavailable || areaEmpty) {
       setSaveState("degraded");
-      setFeedback("업무 분야 목록을 불러오지 못했습니다. 새 프로젝트 만들기를 잠시 사용할 수 없습니다.");
+      setFeedback(areaUnavailable
+        ? "업무 분야 목록을 불러오지 못했습니다. 새 프로젝트 만들기를 잠시 사용할 수 없습니다."
+        : "업무 분야 원장이 비어 있습니다. 원장을 다시 불러온 뒤 시도하세요.");
       return false;
     }
     const nextErrors = validateProjectDraft(candidate);
@@ -93,7 +108,7 @@ export function ProjectCreateDrawer({
       else areaRef.current?.focus();
     });
     return false;
-  }, [areaUnavailable]);
+  }, [areaEmpty, areaUnavailable]);
 
   const saveDraft = React.useCallback(async (candidate) => {
     if (savingRef.current) return;
@@ -175,7 +190,7 @@ export function ProjectCreateDrawer({
     <Drawer
       title="프로젝트 만들기"
       subtitle="큰 결과와 첫 행동부터 기록하세요."
-      onClose={() => { if (!savingRef.current) onClose?.(); }}
+      onClose={requestClose}
       initialFocusRef={titleRef}
       width="min(420px, 100vw)"
       footerStyle={{ flexWrap: "wrap" }}
@@ -187,11 +202,11 @@ export function ProjectCreateDrawer({
               <Button variant="ghost" size="sm" onClick={handleOpenConflictProject} disabled={saving || !conflictProject} style={{ minHeight: 44 }}>기존 프로젝트 열기</Button>
             </div>
           )}
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={saving} style={{ minHeight: 44 }}>취소</Button>
+          <Button variant="ghost" size="sm" onClick={requestClose} disabled={saving} style={{ minHeight: 44 }}>취소</Button>
           <div aria-live="polite" style={{ flex: 1, minWidth: 0, fontSize: 11, lineHeight: 1.4, color: saveState === "error" || saveState === "conflict" ? "var(--danger)" : "var(--fg-muted)" }}>
             {feedback || <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Kbd>⌘↵</Kbd></span>}
           </div>
-          <Button variant="primary" size="sm" type="submit" form={formId} disabled={saving || areaUnavailable} style={{ minHeight: 44 }}>
+          <Button variant="primary" size="sm" type="submit" form={formId} disabled={saving || areaUnavailable || areaEmpty} style={{ minHeight: 44 }}>
             {saving ? "만드는 중…" : "프로젝트 만들기"}
           </Button>
         </>
@@ -247,6 +262,7 @@ export function ProjectCreateDrawer({
             aria-describedby={[
               errors.areaId ? "project-area-error" : null,
               areaUnavailable ? "project-area-unavailable" : null,
+              areaEmpty ? "project-area-empty" : null,
             ].filter(Boolean).join(" ") || undefined}
             style={CONTROL_STYLE}
           >
@@ -258,6 +274,14 @@ export function ProjectCreateDrawer({
             <span id="project-area-unavailable" role="status" style={{ color: "var(--danger)", letterSpacing: 0 }}>
               업무 분야 목록을 불러오지 못했습니다. 새 프로젝트 만들기를 잠시 사용할 수 없습니다.
             </span>
+          )}
+          {areaEmpty && (
+            <div id="project-area-empty" role="status" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", letterSpacing: 0 }}>
+              <span style={{ flex: 1, minWidth: 180, color: "var(--danger)" }}>
+                업무 분야 원장이 비어 있습니다. 운영 원장을 적용한 뒤 다시 불러오세요.
+              </span>
+              <Button variant="outline" size="sm" onClick={onRetryAreas} style={{ minHeight: 44 }}>원장 다시 불러오기</Button>
+            </div>
           )}
         </label>
 

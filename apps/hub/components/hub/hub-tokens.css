@@ -831,6 +831,50 @@
     display: none;
   }
 
+  .hub-project-todo-row {
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+    grid-template-rows: auto auto !important;
+    gap: 2px 8px !important;
+    padding: 8px 12px !important;
+  }
+
+  .hub-project-todo-check {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    min-width: 44px;
+    min-height: 44px;
+    margin-left: -10px;
+  }
+
+  .hub-project-todo-main {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    min-width: 0;
+    margin: 0 !important;
+    padding: 7px 0 !important;
+  }
+
+  .hub-project-todo-assignee {
+    display: none;
+  }
+
+  .hub-project-todo-priority,
+  .hub-project-todo-due {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    padding-bottom: 6px;
+  }
+
+  .hub-project-todo-priority {
+    justify-self: start;
+  }
+
+  .hub-project-todo-due {
+    justify-self: end;
+  }
+
   .hub-project-primary-control,
   .hub-project-board-status {
     min-height: 44px !important;
@@ -855,6 +899,7 @@
     display: flex !important;
     width: 100vw !important;
     height: 100dvh !important;
+    max-height: none !important;
     min-height: 0 !important;
     padding-top: max(52px, 8dvh);
     overflow: hidden !important;

@@ -201,6 +201,8 @@ function mapDeal(row, companyById) {
     closeAt: row.expected_close_at || "",
     activityAt: row.last_activity_at || row.updated_at || row.created_at || "",
     age: ageDays(row.last_activity_at || row.updated_at || row.created_at),
+    hidden: Boolean(row.hidden_at),
+    hiddenAt: row.hidden_at || null,
   };
 }
 

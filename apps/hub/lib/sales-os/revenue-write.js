@@ -138,6 +138,10 @@ export function buildDealWrite(payload = {}) {
       if (!Number.isNaN(parsed.getTime())) columns.expected_close_at = parsed.toISOString();
     }
   }
+  // 되돌릴 수 있는 숨기기 — hidden:true/false 토글이 hidden_at 타임스탬프를 세우거나 지운다.
+  if (payload.hidden !== undefined) {
+    columns.hidden_at = payload.hidden ? new Date().toISOString() : null;
+  }
 
   const type = normalizeType(payload.type);
   if (type) metaPatch.account_kind = type;

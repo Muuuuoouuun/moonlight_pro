@@ -59,6 +59,6 @@ test("nullable project progress ships through both existing-database migration p
     applyMigrations,
     /const DEFAULT_MIGRATIONS = \[[\s\S]*20260717_0019_routine_check_idempotency\.sql[\s\S]*20260717_0020_nullable_project_progress\.sql[\s\S]*\]/,
   );
-  assert.match(supabaseReadme, /0019~0021/);
+  assert.match(supabaseReadme, /0019~0023/);
   assert.match(supabaseReadme, /`0020`\(nullable project progress\)/);
 });

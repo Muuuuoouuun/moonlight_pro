@@ -962,6 +962,7 @@ export function Deals({ workspace, onNavigate }) {
   const [deals, setDeals] = React.useState(ledger.deals);
   const [drag, setDrag] = React.useState(null);
   const [filter, setFilter] = React.useState('all');
+  const [showHidden, setShowHidden] = React.useState(false);
   const [editDealId, setEditDealId] = React.useState(null);
   const dragMovedRef = React.useRef(false); // true from dragStart until just after dragEnd — suppresses the card click
 
@@ -974,11 +975,22 @@ export function Deals({ workspace, onNavigate }) {
   // deals (pass-through when unscoped). setDeals still holds the full ledger set.
   const ws = getWorkspace(workspace);
   const scopedDeals = filterDealsByWorkspace(deals, workspace);
-  const wsEmpty = Boolean(ws) && scopedDeals.length === 0;
+  // 초기화(숨기기)된 딜은 기본적으로 파이프라인에서 빠진다 — 되돌릴 수 있는 정리이지
+  // 삭제가 아니다. showHidden이 켜지면 다시 전부 보인다(카드는 흐리게 표시).
+  const hiddenCount = scopedDeals.filter(d => d.hidden).length;
+  const visibleDeals = showHidden ? scopedDeals : scopedDeals.filter(d => !d.hidden);
+  const wsEmpty = Boolean(ws) && visibleDeals.length === 0;
   const editingDeal = editDealId ? deals.find(d => d.id === editDealId) : null;
 
+  const toggleDealHidden = (id, nextHidden) => {
+    setDeals(ds => ds.map(d => (d.id === id ? { ...d, hidden: nextHidden } : d)));
+    if (!String(id).toLowerCase().startsWith('local-')) {
+      saveRevenueRecord('deal', 'update', { id, hidden: nextHidden });
+    }
+  };
+
   const totals = DEAL_STAGES.reduce((acc, s) => {
-    const items = scopedDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
+    const items = visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
     acc[s.key] = { count: items.length, sum: items.reduce((a, b) => a + b.value, 0) };
     return acc;
   }, {});
@@ -1103,6 +1115,12 @@ export function Deals({ workspace, onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
+        {hiddenCount > 0 && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 10, fontSize: 11.5, color: 'var(--fg-muted)' }}>
+            <Checkbox checked={showHidden} onChange={setShowHidden} size={16} label={`숨긴 딜 ${hiddenCount}건 보기`} />
+            <span>숨긴 딜 {hiddenCount}건 보기</span>
+          </div>
+        )}
         <SegmentedControl className="hub-toolbar" style={{ marginRight: 8 }} options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
         <Button variant="primary" size="sm" icon="plus" onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>
       </div>
@@ -1144,7 +1162,7 @@ export function Deals({ workspace, onNavigate }) {
       {!wsEmpty && (
       <ScrollShadowX>
         {DEAL_STAGES.map(s => {
-          const items = scopedDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
+          const items = visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
           return (
             <div key={s.key}
               onDragOver={e => e.preventDefault()}
@@ -1187,7 +1205,7 @@ export function Deals({ workspace, onNavigate }) {
                       border: '1px solid var(--line-soft)',
                       borderRadius: 'var(--r-sm)',
                       padding: '10px 11px', cursor: 'grab',
-                      opacity: drag === d.id ? 0.4 : 1,
+                      opacity: drag === d.id ? 0.4 : (d.hidden ? 0.5 : 1),
                       boxShadow: stalled ? 'inset 2px 0 0 var(--danger-line)' : undefined,
                     }}>
                     {/* 이름이 첫 줄 — UUID는 판단 데이터가 아니라 드로어 부제로 충분한 계기
@@ -1197,6 +1215,13 @@ export function Deals({ workspace, onNavigate }) {
                         flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--fg)', lineHeight: 1.35,
                         display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                       }}>{d.name}</div>
+                      <IconButton
+                        icon="eye"
+                        size={20}
+                        iconSize={12}
+                        tooltip={d.hidden ? '파이프라인에 다시 보이기' : '파이프라인에서 숨기기'}
+                        onClick={(e) => { e.stopPropagation(); toggleDealHidden(d.id, !d.hidden); }}
+                      />
                       <IconButton
                         icon="sparkle"
                         size={20}

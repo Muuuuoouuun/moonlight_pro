@@ -1,5 +1,5 @@
 -- ============================================================================
--- apply-pending.sql — 적용 대기 마이그레이션 묶음 (0003 → 0011 + 0019~0021, 시점순)
+-- apply-pending.sql — 적용 대기 마이그레이션 묶음 (0003 → 0011 + 0019~0023, 시점순)
 --
 -- 생성물(편의용 번들). 정본은 supabase/migrations/<each>.sql 개별 파일.
 -- 전부 멱등(if not exists / 제약 재생성 / on conflict / not-exists 시드 가드)이라
@@ -910,6 +910,87 @@ alter table if exists public.projects
 -- ─────────────────────────────────────────────────────────────────────────
 alter table if exists public.tasks
   add column if not exists description text;
+
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- 20260719_0022_project_context_links.sql
+-- Project context links for the fast-create flow (lead/customer account).
+-- ─────────────────────────────────────────────────────────────────────────
+alter table if exists public.projects
+  add column if not exists lead_id uuid,
+  add column if not exists customer_account_id uuid;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'projects_lead_id_fkey'
+      and conrelid = 'public.projects'::regclass
+  ) then
+    alter table public.projects
+      add constraint projects_lead_id_fkey
+      foreign key (lead_id) references public.leads(id) on delete set null;
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'projects_customer_account_id_fkey'
+      and conrelid = 'public.projects'::regclass
+  ) then
+    alter table public.projects
+      add constraint projects_customer_account_id_fkey
+      foreign key (customer_account_id) references public.customer_accounts(id) on delete set null;
+  end if;
+end $$;
+
+alter table public.projects
+  drop constraint if exists projects_single_customer_context;
+alter table public.projects
+  add constraint projects_single_customer_context
+  check (num_nonnulls(lead_id, customer_account_id) <= 1);
+
+create index if not exists idx_projects_workspace_lead_updated
+  on public.projects (workspace_id, lead_id, updated_at desc)
+  where lead_id is not null;
+
+create index if not exists idx_projects_workspace_customer_account_updated
+  on public.projects (workspace_id, customer_account_id, updated_at desc)
+  where customer_account_id is not null;
+
+create unique index if not exists idx_areas_workspace_slug
+  on public.areas (workspace_id, slug)
+  where slug is not null;
+
+insert into public.areas (workspace_id, slug, name, kind, status)
+select
+  workspace.id,
+  canonical.slug,
+  canonical.name,
+  canonical.kind,
+  'active'
+from public.workspaces as workspace
+cross join (values
+  ('sales', '영업', 'client'),
+  ('marketing', '마케팅', 'growth'),
+  ('content', '콘텐츠', 'brand'),
+  ('it', 'IT', 'ops'),
+  ('ai-third-party-development', 'AI 기반 서드파티 개발', 'ops'),
+  ('personal-projects', '개인 프로젝트', 'personal')
+) as canonical(slug, name, kind)
+where not exists (
+  select 1
+  from public.areas as existing
+  where existing.workspace_id = workspace.id
+    and existing.slug = canonical.slug
+);
+
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- 20260719_0023_deal_hidden_at.sql
+-- Reversible hide/show for deals (파이프라인에서만 걷어내는 용도).
+-- ─────────────────────────────────────────────────────────────────────────
+alter table if exists public.deals
+  add column if not exists hidden_at timestamptz;
 
 
 -- end of apply-pending.sql

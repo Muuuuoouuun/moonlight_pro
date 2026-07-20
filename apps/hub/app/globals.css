@@ -5806,6 +5806,68 @@ button {
   text-align: left;
 }
 
+.hub-app .hub-project-todo-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 140px 100px 80px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 14px;
+}
+
+.hub-app .hub-project-todo-row[data-last="false"] {
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.hub-app .hub-project-todo-row[data-done="true"] {
+  opacity: 0.5;
+}
+
+.hub-app .hub-project-todo-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hub-app .hub-project-todo-main {
+  min-width: 0;
+  margin: -2px -6px;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+}
+
+.hub-app .hub-project-todo-assignee,
+.hub-app .hub-project-todo-priority,
+.hub-app .hub-project-todo-due {
+  color: var(--fg-muted);
+  font-size: 11.5px;
+}
+
+.hub-app .hub-project-todo-priority {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.hub-app .hub-project-todo-due {
+  font-size: 12px;
+  text-align: right;
+}
+
+.hub-app .hub-project-page-header--detail .hub-project-header-context,
+.hub-app .hub-project-page-header--detail .hub-project-header-terminal,
+.hub-app .hub-project-page-header--detail .hub-project-brand-trigger__meta {
+  display: none !important;
+}
+
+.hub-app .hub-project-page-header--detail .hub-project-brand-trigger {
+  flex: 0 0 36px;
+  width: 36px;
+  min-width: 36px;
+  justify-content: center;
+  gap: 0 !important;
+  padding-inline: 8px !important;
+}
+
 .hub-app .hub-project-detail-sheet {
   display: flex;
   flex-direction: column;
@@ -5813,6 +5875,9 @@ button {
   min-height: 0;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.04);
+  height: 100%;
+  max-height: calc(100dvh - 126px);
+  align-self: stretch;
 }
 
 .hub-app .hub-project-detail-sheet__backdrop {
@@ -5822,6 +5887,23 @@ button {
 .hub-app .hub-project-detail-sheet > aside {
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.hub-app .hub-project-detail-panel {
+  min-height: 0;
+  height: 100%;
+}
+
+.hub-app .hub-project-detail-body {
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.hub-app .hub-project-detail-actions {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--line-soft);
+  background: var(--surface);
+  box-shadow: 0 -12px 24px -22px oklch(0 0 0 / 0.85);
 }
 
 .hub-app .hub-project-board-status {

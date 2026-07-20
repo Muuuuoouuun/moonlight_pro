@@ -277,12 +277,14 @@ export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
 // `label` names the checkbox for screen readers (the visual label usually sits in a
 // sibling cell, so SRs would otherwise announce an unnamed 14px button). Always pass it
 // on new call sites — e.g. the row's title.
-export function Checkbox({ checked, onChange, size = 14, label }) {
+export function Checkbox({ checked, onChange, size = 14, label, disabled = false }) {
   return (
     <button
       role="checkbox"
       aria-checked={Boolean(checked)}
       aria-label={label || '선택'}
+      aria-busy={disabled ? 'true' : undefined}
+      disabled={disabled}
       className="hub-checkbox"
       onClick={(e) => { e.stopPropagation(); onChange?.(!checked); }} style={{
       position: 'relative',
@@ -290,7 +292,7 @@ export function Checkbox({ checked, onChange, size = 14, label }) {
       border: `1px solid ${checked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
       background: checked ? 'var(--moon-300)' : 'transparent',
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      transition: 'all .12s ease', flexShrink: 0,
+      transition: 'all .12s ease', flexShrink: 0, opacity: disabled ? 0.55 : 1,
     }}>
       {checked && <Iconed name="check" size={size - 4} style={{ color: 'var(--bg)', strokeWidth: 3 }} />}
     </button>
@@ -640,16 +642,30 @@ function groupFieldRows(fields) {
 
 // Shared field-driven edit drawer. Revenue behavior is canonical for save feedback,
 // ESC close, and optimistic delete confirmation. Composes on top of Drawer for the shell.
-// Cmd/Ctrl+Enter mirrors the footer 완료 (save) button.
-export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)', children }) {
+// Cmd/Ctrl+Enter mirrors the explicit save button. The initial signature is kept for the
+// lifetime of one opened record so ESC, the overlay, and the close button cannot silently
+// discard a changed draft.
+export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)', saveLabel = '변경사항 저장', children }) {
   const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | conflict | error
   const [saveFeedback, setSaveFeedback] = React.useState('');
   const savingRef = React.useRef(false);
+  const initialRecordSignatureRef = React.useRef(null);
+  const recordIdentity = record?.id ?? record?.clientId ?? (record ? '__anonymous__' : null);
   React.useEffect(() => {
     savingRef.current = false;
     setSaveState('idle');
     setSaveFeedback('');
-  }, [record?.id]);
+    initialRecordSignatureRef.current = record ? JSON.stringify(record) : null;
+  }, [recordIdentity]);
+
+  const dirty = Boolean(record
+    && initialRecordSignatureRef.current
+    && JSON.stringify(record) !== initialRecordSignatureRef.current);
+  const requestClose = React.useCallback(() => {
+    if (savingRef.current) return;
+    if (dirty && typeof window !== 'undefined' && !window.confirm('입력한 변경사항을 버릴까요?')) return;
+    onClose?.();
+  }, [dirty, onClose]);
 
   const handleDone = async () => {
     if (savingRef.current) return;
@@ -702,7 +718,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
     <Drawer
       title={title}
       subtitle={subtitle}
-      onClose={onClose}
+      onClose={requestClose}
       width={width}
       footer={
         <>
@@ -721,10 +737,10 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
             )}
           </div>
           {(saveState === 'preview' || saveState === 'conflict' || saveState === 'error') && (
-            <Button variant="ghost" size="sm" onClick={onClose}>닫기</Button>
+            <Button variant="ghost" size="sm" onClick={requestClose}>닫기</Button>
           )}
           <Button variant="primary" size="sm" onClick={handleDone} disabled={saveState === 'saving'}>
-            {saveState === 'saving' ? '저장 중…' : '완료'}
+            {saveState === 'saving' ? '저장 중…' : saveLabel}
           </Button>
         </>
       }

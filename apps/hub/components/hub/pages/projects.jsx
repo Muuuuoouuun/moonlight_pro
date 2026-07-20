@@ -91,6 +91,12 @@ const PROJECT_CATEGORIES = [
   { key: 'ka-deal', label: 'KA·딜' },
   { key: 'general', label: '일반' },
 ];
+// 완료·보관된 프로젝트는 "터미널" — 기본 리스트에서 걷어내고 "완료·보관 항목 보기"
+// 토글로만 다시 노출한다. 삭제도 archived로의 같은 상태 전환이라 이 집합을 공유한다.
+const TERMINAL_PROJECT_STATUSES = new Set(['completed', 'archived', 'cancelled']);
+function isTerminalProject(p) {
+  return TERMINAL_PROJECT_STATUSES.has(String(p?.statusKey || '').toLowerCase());
+}
 const FOLDER_STORAGE_KEY = 'mlp.pms.folders';
 // List 뷰의 브랜드 섹션 접기 상태 (전체 브랜드 볼 때만). UI 전용, 브랜드 slug로 영속.
 const BRAND_SECTION_KEY = 'mlp.pms.brand-sections';
@@ -198,15 +204,20 @@ export function Projects({ workspace }) {
     taskAggregation: null,
   });
   const [todos, setTodos] = React.useState([]);
+  const [pendingTaskIds, setPendingTaskIds] = React.useState(() => new Set());
   const [contentItems, setContentItems] = React.useState([]);
   const [drag, setDrag] = React.useState(null);
   const [expanded, setExpanded] = React.useState(() => new Set());
+  const [showTerminal, setShowTerminal] = React.useState(false);
   const [openDetail, setOpenDetail] = React.useState(null);
   const [mobileDetail, setMobileDetail] = React.useState(false);
   const [brandMenuOpen, setBrandMenuOpen] = React.useState(false);
   const [sidebarHidden, setSidebarHidden] = React.useState(false);
   const [syncState, setSyncState] = React.useState('preview');
   const [readError, setReadError] = React.useState(null);
+  const ledgerReadRef = React.useRef({ requestId: 0, controller: null });
+  const taskStatusPendingRef = React.useRef(new Set());
+  const contentLoadedRef = React.useRef(false);
   const brandMenuRef = React.useRef(null);
   const detailSheetRef = React.useRef(null);
   const detailReturnFocusRef = React.useRef(null);
@@ -279,7 +290,9 @@ export function Projects({ workspace }) {
   const wsDefaultBrand = ws
     ? (brands.find(b => b.key !== 'all')?.key || brands[0]?.key || 'all')
     : 'all';
-  const projects = brand === 'all' ? allProjects : allProjects.filter(p => p.brand === brand);
+  const brandProjects = brand === 'all' ? allProjects : allProjects.filter(p => p.brand === brand);
+  const terminalCount = brandProjects.filter(isTerminalProject).length;
+  const projects = showTerminal ? brandProjects : brandProjects.filter(p => !isTerminalProject(p));
   const brandTodos = brand === 'all' ? scopedTodos : scopedTodos.filter(t => t.brand === brand);
   const currentBrand = brands.find(b => b.key === brand) || brands[0] || EMPTY_ALL_BRAND;
   const visibleColumns = buildTaskBoardColumns(brandTodos, allProjects);
@@ -301,15 +314,24 @@ export function Projects({ workspace }) {
     initial = false,
     projectId = selectedProjectId,
   } = {}) => {
-    setSyncState('loading');
+    const requestId = ledgerReadRef.current.requestId + 1;
+    ledgerReadRef.current.controller?.abort();
+    const controller = new AbortController();
+    ledgerReadRef.current = { requestId, controller };
+    const isCurrentRequest = () => ledgerReadRef.current.requestId === requestId;
+
+    // 최초/범위 전환은 명시적인 loading 상태를 쓰되, 저장 뒤 재검증은 현재 원장을
+    // 유지한다. 성공 여부가 정해지기 전까지 행 전체가 사라지는 깜빡임을 막는다.
+    setSyncState(current => initial || !['live', 'partial'].includes(current) ? 'loading' : current);
     setReadError(null);
     try {
       const exactProjectId = typeof projectId === 'string' ? projectId.trim() : '';
       const endpoint = exactProjectId
         ? `/api/hub/projects?project=${encodeURIComponent(exactProjectId)}`
         : '/api/hub/projects';
-      const response = await fetch(endpoint, { cache: 'no-store' });
+      const response = await fetch(endpoint, { cache: 'no-store', signal: controller.signal });
       const data = await response.json().catch(() => null);
+      if (!isCurrentRequest()) return { ok: false, stale: true, projects: [], todos: [] };
 
       if (!response.ok || !data || data.status === 'error' || data.source === 'error') {
         setSyncState('error');
@@ -366,6 +388,9 @@ export function Projects({ workspace }) {
       setReadError(null);
       return { ok: false, projects: [], todos: [] };
     } catch (error) {
+      if (error?.name === 'AbortError' || !isCurrentRequest()) {
+        return { ok: false, stale: true, projects: [], todos: [] };
+      }
       setSyncState('error');
       setReadError(error instanceof Error ? error.message : String(error));
       return { ok: false, projects: [], todos: [] };
@@ -377,25 +402,29 @@ export function Projects({ workspace }) {
   const initialLoadDoneRef = React.useRef(false);
   React.useEffect(() => {
     loadLedger({ initial: true }).finally(() => { initialLoadDoneRef.current = true; });
+    return () => { ledgerReadRef.current.controller?.abort(); };
   }, [loadLedger]);
 
-  // 프로젝트 상세의 "연관 콘텐츠" 섹션용 — 콘텐츠 원장을 한 번 읽어 브랜드로 매칭한다.
-  // 보조 데이터이므로 실패해도 프로젝트 원장 로드를 막지 않고 조용히 빈 상태로 둔다.
+  // 프로젝트 상세의 "연관 콘텐츠" 섹션용. 상세를 실제로 열기 전에는 큰 콘텐츠
+  // 원장을 요청하지 않고, 성공한 첫 조회만 재사용한다.
   React.useEffect(() => {
-    let cancelled = false;
+    if (!openDetail || contentLoadedRef.current) return undefined;
+    const controller = new AbortController();
     (async () => {
       try {
-        const res = await fetch('/api/hub/content', { cache: 'no-store' });
+        const res = await fetch('/api/hub/content', { cache: 'no-store', signal: controller.signal });
         const data = await res.json().catch(() => null);
-        if (!cancelled && data?.source === 'supabase' && Array.isArray(data.items)) {
+        if (!res.ok || !data || data.source === 'error' || controller.signal.aborted) return;
+        if (data.source === 'supabase' && Array.isArray(data.items)) {
           setContentItems(data.items);
         }
+        contentLoadedRef.current = true;
       } catch {
         // 콘텐츠 원장 읽기 실패는 무시 — 상세 패널의 보조 섹션이다.
       }
     })();
-    return () => { cancelled = true; };
-  }, []);
+    return () => { controller.abort(); };
+  }, [openDetail]);
 
   React.useEffect(() => {
     if (!brands.some(b => b.key === brand)) {
@@ -501,11 +530,8 @@ export function Projects({ workspace }) {
     const contextBrand = brandKeyOverride
       ? (brands.find(item => item.key === brandKeyOverride) || null)
       : (brand === 'all' ? null : currentBrand);
-    const areaId = selectProjectAreaId(ledger.areas);
-    if (!areaId) {
-      setOrderResult({ tone: 'err', label: '프로젝트를 연결할 업무 분야가 없습니다' });
-      return false;
-    }
+    const areaId = selectProjectAreaId(ledger.areas) || '';
+    setOrderResult(null);
     setProjectCreateContext(contextBrand?.id === 'all' ? null : contextBrand);
     setProjectEditSource(null);
     setProjectDraft(buildProjectDraft({
@@ -518,11 +544,8 @@ export function Projects({ workspace }) {
   }, [brand, brands, currentBrand, ledger.areas, workspace]);
 
   const openGlobalProjectCreate = React.useCallback(() => {
-    const areaId = selectProjectAreaId(ledger.areas);
-    if (!areaId) {
-      setOrderResult({ tone: 'err', label: '프로젝트를 연결할 업무 분야가 없습니다' });
-      return false;
-    }
+    const areaId = selectProjectAreaId(ledger.areas) || '';
+    setOrderResult(null);
     setProjectCreateContext(null);
     setProjectEditSource(null);
     setProjectDraft(buildProjectDraft({
@@ -542,11 +565,8 @@ export function Projects({ workspace }) {
       setOrderResult({ tone: 'err', label: '콘텐츠를 연결할 브랜드가 없습니다' });
       return false;
     }
-    const areaId = selectProjectAreaId(ledger.areas, 'content');
-    if (!areaId) {
-      setOrderResult({ tone: 'err', label: '콘텐츠 프로젝트를 연결할 업무 분야가 없습니다' });
-      return false;
-    }
+    const areaId = selectProjectAreaId(ledger.areas, 'content') || selectProjectAreaId(ledger.areas) || '';
+    setOrderResult(null);
     setProjectCreateContext(contextBrand?.id === 'all' ? null : contextBrand);
     setProjectEditSource(null);
     setProjectDraft({
@@ -571,6 +591,40 @@ export function Projects({ workspace }) {
     setProjectEditSource(project);
     setProjectDraft(buildProjectEditDraft(project));
   }, []);
+
+  // 완료·보관 둘 다 상태 전환 하나로 — "숨기기"와 "삭제(소프트)"가 같은 archived
+  // 전환을 쓰기로 한 결정과 일치한다. 원자료(할 일·업데이트·결정)는 그대로 남는다.
+  const setProjectStatus = React.useCallback(async (project, status) => {
+    try {
+      // 단순 상태 플립이라 낙관적 동시성 체크(expectedUpdatedAt)는 쓰지 않는다 — 걸면
+      // updated_at 미세 오차로 409만 늘어난다(체크박스 토글과 동일한 신뢰 수준).
+      const response = await fetch('/api/hub/projects', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: project.id, status }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.status !== 'saved') {
+        setOrderResult({ tone: 'err', label: data.error || `저장 실패 ${response.status}` });
+        return;
+      }
+      await loadLedger();
+      setOrderResult({
+        tone: 'ok',
+        label: status === 'completed' ? '완료 처리됨' : status === 'archived' ? '보관됨' : '다시 열림',
+      });
+    } catch (error) {
+      setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+    }
+  }, [loadLedger]);
+
+  const completeProject = React.useCallback((project) => {
+    setProjectStatus(project, project.statusKey === 'completed' ? 'active' : 'completed');
+  }, [setProjectStatus]);
+
+  const archiveProject = React.useCallback((project) => {
+    setProjectStatus(project, project.statusKey === 'archived' ? 'active' : 'archived');
+  }, [setProjectStatus]);
 
   const createTodo = React.useCallback((projectId = null, initialStatus = 'todo') => {
     setTaskEditSource(null);
@@ -886,23 +940,33 @@ export function Projects({ workspace }) {
   }, [loadLedger, taskDraft, taskEditSource]);
 
   const updateTaskStatus = React.useCallback(async (id, status) => {
-    const response = await fetch('/api/hub/tasks', {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id, status }),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || data.status !== 'saved') {
-      throw new Error(data.error || `상태 저장 실패 ${response.status}`);
+    if (taskStatusPendingRef.current.has(id)) return false;
+    taskStatusPendingRef.current.add(id);
+    setPendingTaskIds(new Set(taskStatusPendingRef.current));
+    try {
+      const response = await fetch('/api/hub/tasks', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, status }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.status !== 'saved') {
+        throw new Error(data.error || `상태 저장 실패 ${response.status}`);
+      }
+      await loadLedger();
+      return true;
+    } finally {
+      taskStatusPendingRef.current.delete(id);
+      setPendingTaskIds(new Set(taskStatusPendingRef.current));
     }
-    await loadLedger();
   }, [loadLedger]);
 
   const toggleTodo = React.useCallback(async (id) => {
     const todo = todos.find(item => item.id === id);
     if (!todo) return;
     try {
-      await updateTaskStatus(id, todo.status === 'done' ? 'todo' : 'done');
+      const updated = await updateTaskStatus(id, todo.status === 'done' ? 'todo' : 'done');
+      if (!updated) return;
       setOrderResult({ tone: 'ok', label: todo.status === 'done' ? '할 일 다시 열림' : '할 일 완료됨' });
     } catch (error) {
       setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
@@ -913,7 +977,8 @@ export function Projects({ workspace }) {
     const status = taskStatusForBoardColumn(column);
     if (!status) return;
     try {
-      await updateTaskStatus(id, status);
+      const updated = await updateTaskStatus(id, status);
+      if (!updated) return;
       setOrderResult({ tone: 'ok', label: '보드 상태 저장됨' });
     } catch (error) {
       setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
@@ -1237,12 +1302,12 @@ export function Projects({ workspace }) {
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div className="hub-page-header" style={{ padding: '14px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className={`hub-page-header hub-project-page-header${openDetail ? ' hub-project-page-header--detail' : ''}`} style={{ padding: '14px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 12 }}>
           {sidebarHidden && (
             <IconButton icon="chevronR" size={28} iconSize={14} onClick={() => setSidebarHidden(false)} tooltip="브랜드 사이드바 펼치기" />
           )}
           <div ref={brandMenuRef} style={{ position: 'relative' }}>
-            <button onClick={() => setBrandMenuOpen(o => !o)} style={{
+            <button className="hub-project-brand-trigger" aria-label={`${currentBrand.name} 범위 선택`} onClick={() => setBrandMenuOpen(o => !o)} style={{
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '6px 10px 6px 8px',
               background: brandMenuOpen ? 'var(--surface-3)' : 'var(--surface-2)',
@@ -1280,11 +1345,13 @@ export function Projects({ workspace }) {
                   return null;
                 })()}
               </span>
-              <span style={{ fontSize: 13, fontWeight: 500, letterSpacing: '-0.005em' }}>{currentBrand.name}</span>
-              <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)', background: 'var(--surface)', padding: '1px 5px', borderRadius: 4, border: '1px solid var(--line-soft)' }}>
-                {brand === 'all' ? allProjects.length : (currentBrand.projects || 0)}
+              <span className="hub-project-brand-trigger__meta" style={{ display: 'contents' }}>
+                <span style={{ fontSize: 13, fontWeight: 500, letterSpacing: '-0.005em', whiteSpace: 'nowrap' }}>{currentBrand.name}</span>
+                <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)', background: 'var(--surface)', padding: '1px 5px', borderRadius: 4, border: '1px solid var(--line-soft)' }}>
+                  {brand === 'all' ? allProjects.length : (currentBrand.projects || 0)}
+                </span>
+                <span style={{ fontSize: 9, color: 'var(--fg-faint)', marginLeft: 2, transform: brandMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>▼</span>
               </span>
-              <span style={{ fontSize: 9, color: 'var(--fg-faint)', marginLeft: 2, transform: brandMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>▼</span>
             </button>
             {brandMenuOpen && (
               <div style={{
@@ -1317,7 +1384,7 @@ export function Projects({ workspace }) {
               </div>
             )}
           </div>
-          <div>
+          <div className="hub-project-header-context">
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Projects</h2>
             <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
               {projectHeaderSummary} · {currentBrand.desc}
@@ -1325,6 +1392,12 @@ export function Projects({ workspace }) {
             </div>
           </div>
           <div style={{ flex: 1 }} />
+          {terminalCount > 0 && (
+            <div className="hub-project-header-terminal" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 10, fontSize: 11.5, color: 'var(--fg-muted)' }}>
+              <Checkbox checked={showTerminal} onChange={setShowTerminal} size={16} label={`완료·보관 ${terminalCount}건 보기`} />
+              <span>완료·보관 {terminalCount}건 보기</span>
+            </div>
+          )}
           <SegmentedControl
             label="보기"
             options={PROJECT_VIEW_OPTIONS}
@@ -1447,7 +1520,7 @@ export function Projects({ workspace }) {
                           const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
                           const isSel = openDetail === p.id;
                           const dueTime = p.dueAt ? new Date(p.dueAt).getTime() : Number.NaN;
-                          const terminal = ['completed', 'archived', 'cancelled'].includes(String(p.statusKey || '').toLowerCase());
+                          const terminal = isTerminalProject(p);
                           const overdue = !terminal && Number.isFinite(dueTime) && dueTime < new Date().setHours(0, 0, 0, 0);
                           const blocked = String(p.statusKey || '').toLowerCase() === 'blocked' || p.status === 'Blocked';
                           const nextAction = p.displayNextAction || p.projectNextAction || (p.updateEvidencePartial ? '업데이트 기록 미확인' : '다음 행동 미정');
@@ -1516,6 +1589,7 @@ export function Projects({ workspace }) {
                                       <Checkbox
                                         checked={t.done}
                                         onChange={() => toggleTodo(t.id)}
+                                        disabled={pendingTaskIds.has(t.id)}
                                         size={16}
                                         label={`${t.done ? '다시 열기' : '완료'}: ${t.title}`}
                                       />
@@ -1608,6 +1682,7 @@ export function Projects({ workspace }) {
                     contentTone={contentTone}
                     orderPending={orderPending}
                     orderResult={orderResult}
+                    pendingTodoIds={pendingTaskIds}
                     onClose={closeProjectDetail}
                     onEdit={editProject}
                     onToggleTodo={toggleTodo}
@@ -1617,6 +1692,8 @@ export function Projects({ workspace }) {
                       setView('tree');
                     }}
                     onSendOrder={sendProjectOrder}
+                    onComplete={completeProject}
+                    onArchive={archiveProject}
                   />
                 </div>
               );
@@ -1648,20 +1725,18 @@ export function Projects({ workspace }) {
                         const proj = allProjects.find(p => p.id === t.project);
                         const pBrand = brands.find(b => b.key === t.brand) || brands[0] || EMPTY_ALL_BRAND;
                         return (
-                          <div key={t.id} style={{
-                            display: 'grid', gridTemplateColumns: '22px 1fr 140px 100px 80px',
-                            padding: '10px 14px', alignItems: 'center', gap: 10,
-                            borderBottom: i < items.length - 1 ? '1px solid var(--line-soft)' : 'none',
-                            opacity: t.done ? 0.5 : 1,
-                          }}>
-                            <Checkbox
-                              checked={t.done}
-                              onChange={() => toggleTodo(t.id)}
-                              size={16}
-                              label={`${t.done ? '다시 열기' : '완료'}: ${t.title}`}
-                            />
+                          <div key={t.id} className="hub-project-todo-row" data-done={t.done ? 'true' : 'false'} data-last={i === items.length - 1 ? 'true' : 'false'}>
+                            <div className="hub-project-todo-check">
+                              <Checkbox
+                                checked={t.done}
+                                onChange={() => toggleTodo(t.id)}
+                                disabled={pendingTaskIds.has(t.id)}
+                                size={16}
+                                label={`${t.done ? '다시 열기' : '완료'}: ${t.title}`}
+                              />
+                            </div>
                             <div
-                              className="hub-row"
+                              className="hub-project-todo-main hub-row"
                               role="button"
                               tabIndex={0}
                               aria-label={`${t.title} 편집`}
@@ -1674,11 +1749,11 @@ export function Projects({ workspace }) {
                                 {pBrand.glyph} {pBrand.name} · {proj?.name}
                               </div>
                             </div>
-                            <span style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>{t.assignee}</span>
-                            <span style={{ fontSize: 11.5, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                            <span className="hub-project-todo-assignee">{t.assignee}</span>
+                            <span className="hub-project-todo-priority">
                               <Dot tone={prioTone[t.priority]} />{t.priority}
                             </span>
-                            <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', textAlign: 'right' }}>{t.due}</span>
+                            <span className="mono hub-project-todo-due">{t.due}</span>
                           </div>
                         );
                       })}
@@ -1731,6 +1806,8 @@ export function Projects({ workspace }) {
                       <select
                         className="hub-project-board-status"
                         aria-label={`${c.title} 상태 변경`}
+                        aria-busy={pendingTaskIds.has(c.id) ? 'true' : undefined}
+                        disabled={pendingTaskIds.has(c.id)}
                         value={col.key}
                         onClick={(event) => event.stopPropagation()}
                         onPointerDown={(event) => event.stopPropagation()}
@@ -1917,6 +1994,7 @@ export function Projects({ workspace }) {
           onSave={persistProjectCreate}
           onRetryWithNewClientId={retryProjectCreateWithNewId}
           onOpenConflictProject={openConflictProject}
+          onRetryAreas={() => loadLedger({ initial: true })}
           onClose={() => {
             setProjectDraft(null);
             setProjectCreateContext(null);
@@ -1971,6 +2049,7 @@ export function Projects({ workspace }) {
           ]}
           onChange={(key, value) => setProjectDraft(current => ({ ...current, [key]: value }))}
           onSave={persistProjectEdit}
+          saveLabel="변경사항 저장"
           onClose={() => {
             setProjectDraft(null);
             setProjectEditSource(null);
@@ -2006,6 +2085,7 @@ export function Projects({ workspace }) {
         ]}
         onChange={(key, value) => setContainerDraft(current => ({ ...current, [key]: value }))}
         onSave={persistContainer}
+        saveLabel="컨테이너 만들기"
         onClose={() => setContainerDraft(null)}
       />
 
@@ -2057,6 +2137,7 @@ export function Projects({ workspace }) {
         ]}
         onChange={(key, value) => setTaskDraft(current => ({ ...current, [key]: value }))}
         onSave={persistTask}
+        saveLabel={taskEditSource ? '변경사항 저장' : '할 일 만들기'}
         onClose={() => { setTaskDraft(null); setTaskEditSource(null); }}
       />
     </div>
