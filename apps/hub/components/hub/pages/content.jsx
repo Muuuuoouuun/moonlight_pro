@@ -1024,6 +1024,20 @@ export function Queue({ workspace }) {
     const brandParam = brandFilter !== 'all' ? `&brand=${encodeURIComponent(brandFilter)}` : '';
     router.push(`/dashboard/content/studio${id ? `?item=${encodeURIComponent(id)}` : '?new=draft'}${id ? '' : brandParam}`);
   }, [brandFilter, router]);
+
+  // Page-level `n` — jump to a new Studio draft when focus isn't in a field (§8.1 create contract).
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if ((e.key !== 'n' && e.key !== 'N') || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+      e.preventDefault();
+      openStudio();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [openStudio]);
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1036,7 +1050,7 @@ export function Queue({ workspace }) {
         </div>
         <div style={{ flex: 1 }} />
         <Tabs className="hub-toolbar" tabs={tabs} active={tab} onChange={setTab} ariaLabel="Publishing queue filters" style={{ borderBottom: 'none' }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={() => openStudio()}>Draft</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={() => openStudio()}>Draft <Kbd>N</Kbd></Button>
       </div>
 
       {cadence && (
@@ -1547,6 +1561,21 @@ export function Campaigns() {
     return () => window.removeEventListener('keydown', onKey);
   }, [focusMode]);
 
+  // Page-level `n` — quick-create a campaign when focus isn't in a field (§8.1 create contract).
+  React.useEffect(() => {
+    if (creating) return;
+    const onKey = (e) => {
+      if ((e.key !== 'n' && e.key !== 'N') || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+      e.preventDefault();
+      createCampaign();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [creating, ledger.syncState]);
+
   const toggleFocusMode = React.useCallback(() => {
     setFocusMode(v => !v);
   }, []);
@@ -1572,7 +1601,7 @@ export function Campaigns() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating}>Campaign</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating}>Campaign <Kbd>N</Kbd></Button>
       </div>
 
       {!selected && (

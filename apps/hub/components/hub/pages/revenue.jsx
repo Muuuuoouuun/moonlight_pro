@@ -155,7 +155,7 @@ export function useRevenueLedger() {
 }
 
 // Persist a Revenue drawer edit to the Supabase-backed write route. `kind` is
-// 'lead' | 'deal' | 'case', `op` is 'create' | 'update' | 'delete'. Returns
+// 'lead' | 'deal' | 'case' | 'account' | 'activity', `op` is 'create' | 'update' | 'delete'. Returns
 // { ok, status, id } — `ok` is true only when the row actually saved; 'preview' means the
 // backend isn't configured (or the DB refused the write) and the optimistic local row stands.
 export async function saveRevenueRecord(kind, op, record) {
@@ -463,6 +463,9 @@ export function Leads({ workspace }) {
   const [leadEdits, setLeadEdits] = React.useState({}); // { [id]: patch } — overlays any lead (local or ledger)
   const [deletedLeadIds, setDeletedLeadIds] = React.useState(() => new Set()); // hide removed ledger rows
   const [editLeadId, setEditLeadId] = React.useState(null);
+  // Seeded-but-untouched local rows — dropped when the drawer closes without an edit or
+  // save, so ESC/overlay close doesn't leave a ghost "새 리드" row on the list.
+  const pristineSeedRef = React.useRef(new Set());
   // Scope the merged ledger to the active workspace (pass-through when unscoped). The
   // The ledger hook only exposes API-backed rows — scoping never mixes sources. Drawer
   // edits overlay onto whichever row (local or ledger) they key to; deletes drop the row.
@@ -507,6 +510,7 @@ export function Leads({ workspace }) {
   const stageTone = { New: 'info', Contact: 'moon', Qualified: 'moon', Customer: 'company', Lost: 'danger' };
   const createLead = () => {
     const id = `local-lead-${Date.now()}`;
+    pristineSeedRef.current.add(id);
     setLocalLeads(prev => [{
       id,
       name: '새 리드',
@@ -527,6 +531,7 @@ export function Leads({ workspace }) {
   // overlay re-keys onto it. `editingLead` carries the workspace tag → scoped creates stick.
   const persistLead = async () => {
     if (!editingLead) return { ok: false, status: 'error' };
+    pristineSeedRef.current.delete(editLeadId);
     const isNew = String(editLeadId).startsWith('local-lead-');
     const r = await saveRevenueRecord('lead', isNew ? 'create' : 'update', editingLead);
     if (r.ok && isNew && r.id) {
@@ -755,10 +760,19 @@ export function Leads({ workspace }) {
           { key: 'situation', label: '현재 상황', placeholder: '검토중 · 경쟁사 사용 · 예산확보…' },
           { key: 'value', label: '금액', placeholder: '₩0' },
         ]}
-        onChange={(key, val) => setLeadEdits(prev => ({ ...prev, [editLeadId]: { ...prev[editLeadId], [key]: val } }))}
+        onChange={(key, val) => {
+          pristineSeedRef.current.delete(editLeadId);
+          setLeadEdits(prev => ({ ...prev, [editLeadId]: { ...prev[editLeadId], [key]: val } }));
+        }}
         onSave={persistLead}
         onDelete={deleteLead}
-        onClose={() => setEditLeadId(null)}
+        onClose={() => {
+          const id = editLeadId;
+          setEditLeadId(null);
+          if (id && pristineSeedRef.current.delete(id)) {
+            setLocalLeads(prev => prev.filter(l => l.id !== id));
+          }
+        }}
       >
         <LeadEnrichmentPanel lead={editingLead} />
       </EditDrawer>
@@ -777,6 +791,9 @@ export function Deals({ workspace, onNavigate }) {
   const [filter, setFilter] = React.useState('all');
   const [editDealId, setEditDealId] = React.useState(null);
   const dragMovedRef = React.useRef(false); // true from dragStart until just after dragEnd — suppresses the card click
+  // Seeded-but-untouched local cards — dropped when the drawer closes without an edit or
+  // save, so ESC/overlay close doesn't leave a ghost "새 딜" card on the board.
+  const pristineSeedRef = React.useRef(new Set());
 
   // Sync local deals state when live data arrives
   React.useEffect(() => {
@@ -814,6 +831,7 @@ export function Deals({ workspace, onNavigate }) {
   // creating where you're looking needs no follow-up drag. Falls back to the first stage.
   const createDeal = (stage) => {
     const id = `LOCAL-${Date.now().toString().slice(-4)}`;
+    pristineSeedRef.current.add(id);
     setDeals(prev => [{
       id,
       name: '새 딜',
@@ -834,6 +852,7 @@ export function Deals({ workspace, onNavigate }) {
   // and `owner` are not reversed back to expected_close_at / owner_id — best-effort by design.
   const persistDeal = async () => {
     if (!editingDeal) return { ok: false, status: 'error' };
+    pristineSeedRef.current.delete(editDealId);
     const isNew = String(editDealId).toLowerCase().startsWith('local-');
     const r = await saveRevenueRecord('deal', isNew ? 'create' : 'update', editingDeal);
     if (r.ok && isNew && r.id) {
@@ -1051,10 +1070,19 @@ export function Deals({ workspace, onNavigate }) {
           { key: 'closeAt', row: 'meta', label: '예상 마감', inputType: 'date' },
           { key: 'type', row: 'meta', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
         ]}
-        onChange={(key, val) => setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, [key]: val } : d)))}
+        onChange={(key, val) => {
+          pristineSeedRef.current.delete(editDealId);
+          setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, [key]: val } : d)));
+        }}
         onSave={persistDeal}
         onDelete={deleteDeal}
-        onClose={() => setEditDealId(null)}
+        onClose={() => {
+          const id = editDealId;
+          setEditDealId(null);
+          if (id && pristineSeedRef.current.delete(id)) {
+            setDeals(ds => ds.filter(d => d.id !== id));
+          }
+        }}
       />
     </div>
   );
@@ -1069,6 +1097,9 @@ export function Cases() {
   const [caseEdits, setCaseEdits] = React.useState({}); // { [id]: patch } — overlays any case
   const [deletedCaseIds, setDeletedCaseIds] = React.useState(() => new Set());
   const [editCaseId, setEditCaseId] = React.useState(null);
+  // Seeded-but-untouched local rows — dropped when the drawer closes without an edit or
+  // save, so ESC/overlay close doesn't leave a ghost "새 운영 케이스" row on the list.
+  const pristineSeedRef = React.useRef(new Set());
   const ledgerCases = Array.isArray(ledger.cases) ? ledger.cases : [];
   const cases = [...localCases, ...ledgerCases]
     .filter(c => !deletedCaseIds.has(c.id))
@@ -1078,6 +1109,7 @@ export function Cases() {
   const pTone = { high: 'danger', med: 'warning', low: 'neutral' };
   const createCase = () => {
     const id = `CASE-${Date.now()}`;
+    pristineSeedRef.current.add(id);
     setLocalCases(prev => [{
       id,
       title: '새 운영 케이스',
@@ -1095,6 +1127,7 @@ export function Cases() {
   // real id replaces the local one so a later edit takes the update path and the overlay re-keys.
   const persistCase = async () => {
     if (!editingCase) return { ok: false, status: 'error' };
+    pristineSeedRef.current.delete(editCaseId);
     const isNew = String(editCaseId).startsWith('CASE-');
     const r = await saveRevenueRecord('case', isNew ? 'create' : 'update', editingCase);
     if (r.ok && isNew && r.id) {
@@ -1205,10 +1238,19 @@ export function Cases() {
           { key: 'opened', label: '오픈 시점' },
           { key: 'owner', label: '담당' },
         ]}
-        onChange={(key, val) => setCaseEdits(prev => ({ ...prev, [editCaseId]: { ...prev[editCaseId], [key]: val } }))}
+        onChange={(key, val) => {
+          pristineSeedRef.current.delete(editCaseId);
+          setCaseEdits(prev => ({ ...prev, [editCaseId]: { ...prev[editCaseId], [key]: val } }));
+        }}
         onSave={persistCase}
         onDelete={deleteCase}
-        onClose={() => setEditCaseId(null)}
+        onClose={() => {
+          const id = editCaseId;
+          setEditCaseId(null);
+          if (id && pristineSeedRef.current.delete(id)) {
+            setLocalCases(prev => prev.filter(c => c.id !== id));
+          }
+        }}
       />
     </div>
   );
@@ -1571,6 +1613,10 @@ export function Accounts({ workspace, onNavigate }) {
   const [filter, setFilter] = React.useState('all');
   const [selected, setSelected] = React.useState(null);
   const [details, setDetails] = React.useState({});
+  const [editAccountId, setEditAccountId] = React.useState(null);
+  // Seeded-but-untouched local rows — dropped when the drawer closes without an edit or
+  // save, so ESC/overlay close doesn't leave a ghost "새 계정" card behind.
+  const pristineSeedRef = React.useRef(new Set());
 
   const term = search.trim().toLowerCase();
   const filtered = ACCOUNTS.filter(a =>
@@ -1700,10 +1746,15 @@ export function Accounts({ workspace, onNavigate }) {
     setSelected(name);
     setView('detail');
   };
+  // Seed a local row and open the EditDrawer (§8.1 create contract). The old path jumped
+  // straight to the detail view without ever persisting — the account vanished on reload
+  // and, with no id, its activities could never reach crm_activities either.
   const createAccount = () => {
-    const name = '새 계정';
+    const id = `local-account-${Date.now()}`;
+    pristineSeedRef.current.add(id);
     setLocalAccounts(prev => [{
-      name,
+      id,
+      name: '새 계정',
       type: filter === 'personal' || filter === 'company' ? filter : 'company',
       health: 'ok',
       value: 0,
@@ -1714,9 +1765,49 @@ export function Accounts({ workspace, onNavigate }) {
       // Tag in-workspace creates so the scoped view doesn't silently drop them.
       ...(ws ? { workspace } : {}),
     }, ...prev]);
-    setSelected(name);
-    setView('detail');
+    setEditAccountId(id); // open the editor immediately so the new account can be filled in
   };
+
+  const editingAccount = editAccountId ? ACCOUNTS.find(a => a.id === editAccountId) : null;
+
+  // Persist the drawer edit. New local rows (id `local-account-…`) insert; on success the
+  // returned real id replaces the local one so activities/notes can persist against it.
+  const persistAccount = async () => {
+    if (!editingAccount) return { ok: false, status: 'error' };
+    pristineSeedRef.current.delete(editAccountId);
+    const isNew = String(editAccountId).startsWith('local-account-');
+    const r = await saveRevenueRecord('account', isNew ? 'create' : 'update', editingAccount);
+    if (r.ok && isNew && r.id) {
+      const realId = r.id;
+      setLocalAccounts(prev => prev.map(a => (a.id === editAccountId ? { ...a, id: realId } : a)));
+      setEditAccountId(realId);
+    }
+    return r;
+  };
+
+  // Delete: drop the row locally (optimistic) and best-effort remove it from the ledger.
+  const deleteAccount = async () => {
+    if (!editAccountId) return { ok: false };
+    const isLocal = String(editAccountId).startsWith('local-account-');
+    setLocalAccounts(prev => prev.filter(a => a.id !== editAccountId));
+    if (isLocal) return { ok: true, status: 'local' };
+    return saveRevenueRecord('account', 'delete', { id: editAccountId });
+  };
+
+  // Page-level `n` — quick-create an account when no drawer is open and focus isn't in a field.
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if ((e.key !== 'n' && e.key !== 'N') || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (editAccountId) return;
+      const t = e.target;
+      const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+      e.preventDefault();
+      createAccount();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editAccountId, filter, ws, workspace]);
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%', minHeight: 0 }}>
@@ -1746,7 +1837,7 @@ export function Accounts({ workspace, onNavigate }) {
         <SegmentedControl className="hub-toolbar" options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
 
         <Input className="hub-toolbar" placeholder="계정 검색…" icon="search" value={search} onChange={setSearch} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account <Kbd>N</Kbd></Button>
       </div>
 
       {wsEmpty && (
@@ -1919,6 +2010,31 @@ export function Accounts({ workspace, onNavigate }) {
           </div>
         </Card>
       )}
+
+      <EditDrawer
+        title={editingAccount ? (editingAccount.name || '계정 편집') : ''}
+        subtitle="계정 정보 편집"
+        record={editingAccount}
+        fields={[
+          { key: 'name', label: '이름' },
+          { key: 'type', row: 'r1', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
+          { key: 'health', row: 'r1', label: '헬스', type: 'select', options: [{ value: 'ok', label: 'OK' }, { value: 'warning', label: 'Warning' }, { value: 'risk', label: 'Risk' }] },
+          { key: 'note', label: '메모', placeholder: '계정 특이사항…' },
+        ]}
+        onChange={(key, val) => {
+          pristineSeedRef.current.delete(editAccountId);
+          setLocalAccounts(prev => prev.map(a => (a.id === editAccountId ? { ...a, [key]: val } : a)));
+        }}
+        onSave={persistAccount}
+        onDelete={deleteAccount}
+        onClose={() => {
+          const id = editAccountId;
+          setEditAccountId(null);
+          if (id && pristineSeedRef.current.delete(id)) {
+            setLocalAccounts(prev => prev.filter(a => a.id !== id));
+          }
+        }}
+      />
     </div>
   );
 }
