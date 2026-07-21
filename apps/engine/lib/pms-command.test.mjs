@@ -412,7 +412,9 @@ test("normalizes an editable project patch without changing workspace ownership"
     filters: [
       ["id", "eq.11111111-1111-4111-8111-111111111111"],
       ["workspace_id", "eq.33333333-3333-4333-8333-333333333333"],
-      ["updated_at", "eq.2026-07-14T03:34:56.000Z"],
+      // The raw client string, not a Date→toISOString() re-format — Postgres
+      // compares timestamptz values, and re-formatting truncated microseconds.
+      ["updated_at", "eq.2026-07-14T12:34:56+09:00"],
     ],
     patch: {
       brand_id: "22222222-2222-4222-8222-222222222222",
@@ -428,6 +430,27 @@ test("normalizes an editable project patch without changing workspace ownership"
       updated_at: "2026-07-15T02:00:00.000Z",
     },
   });
+});
+
+test("keeps Postgres microsecond precision in the optimistic-lock filter", () => {
+  // Regression: dateTime()'s toISOString() truncated …52.676457+00:00 to
+  // …52.676Z, so the eq.updated_at filter never matched microsecond rows and
+  // every optimistic-locked update_project 409'd as stale.
+  const result = pmsCommand.normalizePmsCommand({
+    action: "update_project",
+    id: "11111111-1111-4111-8111-111111111111",
+    status: "completed",
+    expectedUpdatedAt: "2026-04-20T07:20:52.676457+00:00",
+  }, {
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    now: "2026-07-19T02:00:00.000Z",
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    result.filters.find(([key]) => key === "updated_at"),
+    ["updated_at", "eq.2026-04-20T07:20:52.676457+00:00"],
+  );
 });
 
 test("clears project brand and typed entity context without changing other fields", () => {

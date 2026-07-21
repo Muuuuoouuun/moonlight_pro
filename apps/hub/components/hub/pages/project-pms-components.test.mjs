@@ -183,9 +183,25 @@ test("project and task rows use native keyboard controls and named canonical che
   assert.match(projectsSource, /import \{[\s\S]*Checkbox[\s\S]*\} from ["']\.\.\/hub-primitives["']/);
   assert.match(projectsSource, /className=["']hub-project-row__open["']/);
   assert.match(projectsSource, /aria-label=\{`\$\{p\.name\} 상세 열기`\}/);
-  assert.match(projectsSource, /<Checkbox[\s\S]{0,420}label=\{`프로젝트 선택: \$\{p\.name\}`\}/);
+  // The row checkbox means "complete" — same semantics as the subtask checkbox
+  // below it (selection is the row click's job). Checking schedules an undoable
+  // completion; on an already-terminal row it reopens.
+  assert.match(projectsSource, /<Checkbox[\s\S]{0,520}label=\{terminal \? `다시 열기: \$\{p\.name\}` : `완료: \$\{p\.name\}`\}/);
+  assert.match(projectsSource, /onChange=\{\(\) => terminal \? completeProject\(p\) : scheduleCompleteProject\(p\)\}/);
   assert.match(projectsSource, /<Checkbox[\s\S]{0,420}label=\{`\$\{t\.done \? ['"]다시 열기['"] : ['"]완료['"]\}: \$\{t\.title\}`\}/);
   assert.doesNotMatch(projectsSource, /<input\s+type=["']checkbox["']/);
+});
+
+test("row completion is undoable and terminal projects live in a collapsed section", () => {
+  // 3.5s cancel window: the PATCH only fires after the undo window closes.
+  assert.match(projectsSource, /PROJECT_UNDO_MS = 3500/);
+  assert.match(projectsSource, /action: \{ label: '되돌리기', onClick: \(\) => undoCompleteProject\(project\) \}/);
+  assert.match(projectsSource, /pendingCompleteTimers\.current\.forEach\(\(timerId\) => clearTimeout\(timerId\)\)/);
+  // Terminal projects never mix into the active groups — they render only in
+  // the collapsed 완료·보관 accordion at the bottom (aria-expanded contract).
+  assert.match(projectsSource, /const projects = brandProjects\.filter\(p => !isTerminalProject\(p\) && !hiddenIds\.has\(p\.id\)\)/);
+  assert.match(projectsSource, /aria-expanded=\{showTerminal\}/);
+  assert.match(projectsSource, /label=\{`다시 열기: \$\{p\.name\}`\}/);
 });
 
 test("project detail checklist also uses the labelled canonical Checkbox", () => {

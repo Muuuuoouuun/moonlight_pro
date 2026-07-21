@@ -241,14 +241,9 @@ Fallbacks: `'Inter Tight', ui-sans-serif, system-ui, sans-serif` for sans, `'Cas
 ### Spacing scale
 `4, 8, 12, 16, 24, 32, 48, 64, 96`
 
-### Density (scoped)
-The hub supports three density modes via `data-density` on the root:
-
-| Mode      | row-h | pad-y | pad-x | gap | section-gap | card-pad |
-| --------- | ----: | ----: | ----: | --: | ----------: | -------: |
-| `compact` |   30  |    6  |   10  |  8  |         16  |      14  |
-| `default` |   36  |   10  |   14  | 12  |         24  |      20  |
-| `relaxed` |   44  |   14  |   18  | 16  |         32  |      28  |
+### Density (fixed)
+The hub ships one fixed density — no user-facing toggle. Values: `row-h: 36`, `pad-y: 10`,
+`pad-x: 14`, `gap: 12`, `section-gap: 24`, `card-pad: 20`.
 
 ### Radius
 - Small controls: `6px` (`--r-sm`)
@@ -418,7 +413,7 @@ Do not ship:
 | Icons                              | `apps/hub/components/hub/hub-icons.jsx`                      |
 | Primitives                         | `apps/hub/components/hub/hub-primitives.jsx`                 |
 | Data model / nav tree              | `apps/hub/components/hub/hub-data.js`                        |
-| Shell (sidebar / topbar / palette) | `apps/hub/components/hub/hub-{sidebar,topbar,command-palette,tweaks-panel}.jsx` |
+| Shell (sidebar / topbar / palette) | `apps/hub/components/hub/hub-{sidebar,topbar,command-palette}.jsx` |
 | Pages                              | `apps/hub/components/hub/pages/*.jsx`                        |
 | Route mount                        | `apps/hub/app/dashboard/[[...path]]/page.jsx`                |
 

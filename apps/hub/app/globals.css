@@ -5639,12 +5639,37 @@ button {
 .hub-app .hub-project-identity__copy strong,
 .hub-app .hub-project-next-action strong {
   overflow: hidden;
-  color: var(--fg);
-  font-size: 12.5px;
-  font-weight: 500;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Hierarchy: the project name is the row's single anchor; next-action reads as
+   supporting context, not a competing title. */
+.hub-app .hub-project-identity__copy strong {
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.hub-app .hub-project-next-action strong {
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* Completion flash (row checkbox → undo window): brief strikethrough on the
+   name before the row optimistically leaves the list. Matches my-work. */
+.hub-app .hub-project-row[data-completing="true"] .hub-project-identity__copy strong {
+  color: var(--fg-faint);
+  text-decoration: line-through;
+  transition: color 180ms ease;
+}
+
+/* Terminal rows (완료·보관 섹션에서 재사용될 때): lower contrast layer. */
+.hub-app .hub-project-row[data-terminal="true"] .hub-project-identity__copy strong {
+  color: var(--fg-muted);
+  font-weight: 500;
 }
 
 .hub-app .hub-project-identity__copy > span,
@@ -5854,7 +5879,6 @@ button {
 }
 
 .hub-app .hub-project-page-header--detail .hub-project-header-context,
-.hub-app .hub-project-page-header--detail .hub-project-header-terminal,
 .hub-app .hub-project-page-header--detail .hub-project-brand-trigger__meta {
   display: none !important;
 }

@@ -270,11 +270,18 @@ export function normalizePmsCommand(
       ["workspace_id", `eq.${workspaceId}`],
     ];
     if (has(input, "expectedUpdatedAt") || has(input, "expected_updated_at")) {
-      const expectedUpdatedAt = dateTime(input.expectedUpdatedAt ?? input.expected_updated_at);
+      const rawExpected = text(input.expectedUpdatedAt ?? input.expected_updated_at, 100);
+      const expectedUpdatedAt = dateTime(rawExpected);
       if (!expectedUpdatedAt.ok || !expectedUpdatedAt.value) {
         return { ok: false, reason: "invalid-expected-updated-at" };
       }
-      filters.push(["updated_at", `eq.${expectedUpdatedAt.value}`]);
+      // Filter on the raw string the client read back from Postgres, not the
+      // Date→toISOString() re-format: toISOString() truncates Postgres's
+      // microsecond precision (…52.676457+00:00 → …52.676Z), so the eq filter
+      // never matched rows whose updated_at carries microseconds and every
+      // optimistic-locked update 409'd as stale. dateTime() above still
+      // validates that the string is a real timestamp.
+      filters.push(["updated_at", `eq.${rawExpected}`]);
     }
 
     const patch: Record<string, unknown> = {};

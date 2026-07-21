@@ -236,8 +236,12 @@ test("Escape and backdrop focus the opener before synchronously closing mobile n
   assert.doesNotMatch(appSource, /closeMobileNavigation[\s\S]{0,500}requestAnimationFrame/);
   assert.match(
     appSource,
-    /shouldMobileNavigationHandleEscape\([\s\S]*?paletteOpen[\s\S]*?tweaksOpen[\s\S]*?event\.key === ["']Escape["'][\s\S]*?closeMobileNavigation\(\)/,
+    /shouldMobileNavigationHandleEscape\([\s\S]*?paletteOpen[\s\S]*?event\.key === ["']Escape["'][\s\S]*?closeMobileNavigation\(\)/,
   );
+  // No density/Tweaks panel — the row checkbox owns completion now (see projects.jsx),
+  // and there is no other settings surface competing for the overlay stack.
+  assert.doesNotMatch(appSource, /tweaksOpen|setTweaksOpen|toggleTweaksPanel|\bdensity\b|\bonDensity\b/);
+  assert.doesNotMatch(topbarSource, /onTweaksToggle|\bdensity\b|\bonDensity\b/);
   assert.match(
     appSource,
     /<div[\s\S]*?className="hub-mobile-backdrop"[\s\S]*?aria-hidden="true"[\s\S]*?onClick=\{closeMobileNavigation\}/,
@@ -269,7 +273,7 @@ test("the programmatically focused main landmark survives the SPA page swap", ()
 test("opening a top overlay closes mobile navigation and keeps Escape on the topmost layer", () => {
   assert.match(
     appSource,
-    /const openCommandPalette = React\.useCallback\([\s\S]*?closeMobileNavigation\(\)[\s\S]*?setTweaksOpen\(false\)[\s\S]*?setPaletteOpen\(true\)/,
+    /const openCommandPalette = React\.useCallback\([\s\S]*?closeMobileNavigation\(\)[\s\S]*?setPaletteOpen\(true\)/,
   );
   assert.match(appSource, /openPalette=\{openCommandPalette\}/);
   assert.match(appSource, /if \(paletteOpen\)[\s\S]*?setPaletteOpen\(false\)[\s\S]*?openCommandPalette\(\)/);

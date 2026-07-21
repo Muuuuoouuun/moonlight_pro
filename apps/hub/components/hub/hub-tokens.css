@@ -147,9 +147,6 @@
     0 20px 60px -20px oklch(0.3 0.01 250 / 0.18);
 }
 
-.hub-app[data-density="compact"] { --row-h: 30px; --pad-y: 6px; --pad-x: 10px; --gap: 8px; --section-gap: 16px; --card-pad: 14px; }
-.hub-app[data-density="relaxed"] { --row-h: 44px; --pad-y: 14px; --pad-x: 18px; --gap: 16px; --section-gap: 32px; --card-pad: 28px; }
-
 .hub-app, .hub-app * { box-sizing: border-box; }
 .hub-app {
   background: var(--bg);

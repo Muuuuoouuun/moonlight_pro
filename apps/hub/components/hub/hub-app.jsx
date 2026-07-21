@@ -9,7 +9,6 @@ import "./hub-tokens.css";
 import { Sidebar } from "./hub-sidebar";
 import { TopBar } from "./hub-topbar";
 import { CommandPalette } from "./hub-command-palette";
-import { TweaksPanel } from "./hub-tweaks-panel";
 import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
 import {
   beginMobileNavigationRoute,
@@ -260,10 +259,8 @@ export function HubApp() {
   // SSR and the first client render must use the same values. Persisted browser
   // preferences are restored only after hydration, then written synchronously
   // from user actions so StrictMode cannot clobber them with the defaults.
-  const [density, setDensity] = React.useState(DEFAULT_HUB_PREFERENCES.density);
   const [theme, setTheme] = React.useState(DEFAULT_HUB_PREFERENCES.theme);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
-  const [tweaksOpen, setTweaksOpen] = React.useState(false);
   const rootRef = React.useRef(null);
   const menuButtonRef = React.useRef(null);
   const mobileCloseButtonRef = React.useRef(null);
@@ -275,15 +272,7 @@ export function HubApp() {
     let storage = null;
     try { storage = window.localStorage; } catch { /* storage can be blocked */ }
     const stored = readHubPreferences(storage);
-    setDensity(stored.density);
     setTheme(stored.theme);
-  }, []);
-
-  const updateDensity = React.useCallback((nextDensity) => {
-    setDensity(nextDensity);
-    let storage = null;
-    try { storage = window.localStorage; } catch { /* storage can be blocked */ }
-    persistHubPreference(storage, 'density', nextDensity);
   }, []);
 
   const updateTheme = React.useCallback((nextTheme) => {
@@ -356,7 +345,6 @@ export function HubApp() {
     const ownsEscape = shouldMobileNavigationHandleEscape({
       open: mobileNavState.open,
       paletteOpen,
-      tweaksOpen,
     });
     if (!ownsEscape) return;
     const onKey = (event) => {
@@ -367,7 +355,7 @@ export function HubApp() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [closeMobileNavigation, mobileNavState.open, paletteOpen, tweaksOpen]);
+  }, [closeMobileNavigation, mobileNavState.open, paletteOpen]);
 
   React.useEffect(() => {
     const media = window.matchMedia(MOBILE_NAV_QUERY);
@@ -389,24 +377,13 @@ export function HubApp() {
 
   const openCommandPalette = React.useCallback(() => {
     closeMobileNavigation();
-    setTweaksOpen(false);
     setPaletteOpen(true);
   }, [closeMobileNavigation]);
 
-  const toggleTweaksPanel = React.useCallback(() => {
-    if (tweaksOpen) {
-      setTweaksOpen(false);
-      return;
-    }
-    closeMobileNavigation();
-    setPaletteOpen(false);
-    setTweaksOpen(true);
-  }, [closeMobileNavigation, tweaksOpen]);
-
   const openMobileNavigation = React.useCallback(() => {
-    if (!isMobileViewport || paletteOpen || tweaksOpen) return;
+    if (!isMobileViewport || paletteOpen) return;
     setNavOpen(true);
-  }, [isMobileViewport, paletteOpen, tweaksOpen]);
+  }, [isMobileViewport, paletteOpen]);
 
   React.useEffect(() => {
     const onKey = (e) => {
@@ -425,7 +402,7 @@ export function HubApp() {
   const sidebarCollapsed = collapsed && !navOpen;
 
   return (
-    <div ref={rootRef} className="hub-app" data-theme={theme} data-density={density}>
+    <div ref={rootRef} className="hub-app" data-theme={theme}>
       <div className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'}>
         <div
           className="hub-mobile-backdrop"
@@ -453,9 +430,6 @@ export function HubApp() {
             onSidebarOpen={openMobileNavigation}
             navOpen={mobileNavState.open}
             menuButtonRef={menuButtonRef}
-            onTweaksToggle={toggleTweaksPanel}
-            density={density}
-            onDensity={updateDensity}
             theme={theme}
             onTheme={updateTheme}
           />
@@ -470,7 +444,6 @@ export function HubApp() {
         </div>
       </div>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={navigate} />
-      <TweaksPanel open={tweaksOpen} onClose={() => setTweaksOpen(false)} density={density} onDensity={updateDensity} />
     </div>
   );
 }

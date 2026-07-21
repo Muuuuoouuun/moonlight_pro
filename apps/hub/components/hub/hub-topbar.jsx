@@ -20,7 +20,7 @@ const LABELS = {
   'integrations': 'Integrations', 'activity': 'Activity', 'issues': 'Issues',
 };
 
-export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, onTweaksToggle, onSidebarOpen, onNew, navOpen, menuButtonRef }) {
+export function TopBar({ path, onNavigate, theme, onTheme, onSidebarOpen, onNew, navOpen, menuButtonRef }) {
   const segments = path.split('/').filter(Boolean);
   const now = new Date();
   const weekday = ['일','월','화','수','목','금','토'][now.getDay()];
@@ -78,17 +78,6 @@ export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, o
         <span className="mono" style={{ color: 'var(--fg)' }}>{weekday} · {m}/{d} · {hh}:{mm}</span>
       </div>
 
-      <div className="hub-topbar__density" style={{ display: 'flex', alignItems: 'center', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-        {['compact','default','relaxed'].map(d => (
-          <button key={d} onClick={() => onDensity(d)} style={{
-            padding: '4px 9px', fontSize: 11, fontWeight: 500, borderRadius: 4,
-            color: density === d ? 'var(--fg)' : 'var(--fg-faint)',
-            background: density === d ? 'var(--surface-3)' : 'transparent',
-            textTransform: 'capitalize',
-          }}>{d}</button>
-        ))}
-      </div>
-
       <IconButton className="hub-topbar__secondary" icon="sparkle" tooltip="Ask Agents" onClick={() => onNavigate('dashboard/agents/chat')} />
       <button onClick={() => onTheme(theme === 'dark' ? 'light' : 'dark')}
         title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
@@ -101,7 +90,6 @@ export function TopBar({ path, onNavigate, density, onDensity, theme, onTheme, o
         }}>
         <Iconed name={theme === 'dark' ? 'moon' : 'sun'} size={13} />
       </button>
-      <IconButton icon="settings" tooltip="Tweaks" onClick={onTweaksToggle} />
       <IconButton className="hub-topbar__secondary" icon="bell" tooltip="Open Daily Brief" onClick={() => onNavigate('dashboard/daily-brief')} />
       <Button className="hub-topbar__primary-action" variant="primary" size="sm" icon="plus" onClick={onNew}>New</Button>
     </header>

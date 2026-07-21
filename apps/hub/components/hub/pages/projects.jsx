@@ -209,6 +209,12 @@ export function Projects({ workspace }) {
   const [drag, setDrag] = React.useState(null);
   const [expanded, setExpanded] = React.useState(() => new Set());
   const [showTerminal, setShowTerminal] = React.useState(false);
+  // Row-checkbox completion (my-work의 undo 계약과 동일): 체크 → 짧은 취소선
+  // 플래시 → 리스트에서 낙관적으로 사라짐 → 3.5초 되돌리기 창이 닫힌 뒤에야
+  // 실제 PATCH가 나간다. 실수 탭이 진짜 복구 가능해야 한다.
+  const [completingIds, setCompletingIds] = React.useState(() => new Set());
+  const [hiddenIds, setHiddenIds] = React.useState(() => new Set());
+  const pendingCompleteTimers = React.useRef(new Map());
   const [openDetail, setOpenDetail] = React.useState(null);
   const [mobileDetail, setMobileDetail] = React.useState(false);
   const [brandMenuOpen, setBrandMenuOpen] = React.useState(false);
@@ -291,8 +297,12 @@ export function Projects({ workspace }) {
     ? (brands.find(b => b.key !== 'all')?.key || brands[0]?.key || 'all')
     : 'all';
   const brandProjects = brand === 'all' ? allProjects : allProjects.filter(p => p.brand === brand);
-  const terminalCount = brandProjects.filter(isTerminalProject).length;
-  const projects = showTerminal ? brandProjects : brandProjects.filter(p => !isTerminalProject(p));
+  // 완료·보관은 본 리스트에 섞지 않는다 — 활성 그룹들 아래의 접힌 아코디언 섹션이
+  // 유일한 표시 위치다(§8.1 상태 표시). hiddenIds는 완료 체크 후 되돌리기 창이
+  // 열려 있는 동안의 낙관적 숨김.
+  const terminalProjects = brandProjects.filter(isTerminalProject);
+  const terminalCount = terminalProjects.length;
+  const projects = brandProjects.filter(p => !isTerminalProject(p) && !hiddenIds.has(p.id));
   const brandTodos = brand === 'all' ? scopedTodos : scopedTodos.filter(t => t.brand === brand);
   const currentBrand = brands.find(b => b.key === brand) || brands[0] || EMPTY_ALL_BRAND;
   const visibleColumns = buildTaskBoardColumns(brandTodos, allProjects);
@@ -524,6 +534,38 @@ export function Projects({ workspace }) {
     };
   }, [closeProjectDetail, drawerOpen, mobileDetail, openDetail]);
 
+  // 데스크톱: 우측 상세 패널 바깥(빈 공간) 클릭 → 패널 접기. 모바일 시트는 이미
+  // backdrop이 담당한다. 행 클릭은 제외 — 행은 "다른 프로젝트로 전환"이라 닫기와
+  // 경쟁하면 같은 행 재클릭 시 닫힘→즉시 재열림으로 보인다.
+  React.useEffect(() => {
+    if (!openDetail || drawerOpen || mobileDetail) return undefined;
+    const onDown = (event) => {
+      const sheet = detailSheetRef.current;
+      if (!sheet || sheet.contains(event.target)) return;
+      if (event.target.closest('.hub-project-row, .hub-kanban-card, [role="dialog"]')) return;
+      closeProjectDetail();
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [closeProjectDetail, drawerOpen, mobileDetail, openDetail]);
+
+  // ⌘Z/Ctrl+Z: 되돌리기 창(완료 체크 후 3.5초)이 열려 있는 동안 토스트의
+  // 되돌리기 버튼과 같은 동작. 입력 필드 안에서는 브라우저의 텍스트 undo를
+  // 가로채지 않는다.
+  React.useEffect(() => {
+    const action = orderResult?.action;
+    if (!action) return undefined;
+    const onKey = (event) => {
+      if (event.key.toLowerCase() !== 'z' || !(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
+      const tag = event.target?.tagName?.toLowerCase?.() || '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || event.target?.isContentEditable) return;
+      event.preventDefault();
+      action.onClick();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [orderResult]);
+
   const toggleExpand = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const createProject = React.useCallback((initialStatus = 'Planning', brandKeyOverride = null) => {
     // Contextual entry points (brand sections and status lanes) may seed location.
@@ -596,12 +638,17 @@ export function Projects({ workspace }) {
   // 전환을 쓰기로 한 결정과 일치한다. 원자료(할 일·업데이트·결정)는 그대로 남는다.
   const setProjectStatus = React.useCallback(async (project, status) => {
     try {
-      // 단순 상태 플립이라 낙관적 동시성 체크(expectedUpdatedAt)는 쓰지 않는다 — 걸면
-      // updated_at 미세 오차로 409만 늘어난다(체크박스 토글과 동일한 신뢰 수준).
+      // 낙관적 동시성 체크(expectedUpdatedAt) 유지 — "미세 오차로 409" 문제는
+      // 엔진의 마이크로초 절삭 버그였고 a780c98에서 근본 수정됐다. 이제 409는
+      // 진짜로 다른 곳에서 먼저 수정한 경우에만 난다.
       const response = await fetch('/api/hub/projects', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: project.id, status }),
+        body: JSON.stringify({
+          id: project.id,
+          status,
+          ...(project.updatedAt ? { expectedUpdatedAt: project.updatedAt } : {}),
+        }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.status !== 'saved') {
@@ -625,6 +672,43 @@ export function Projects({ workspace }) {
   const archiveProject = React.useCallback((project) => {
     setProjectStatus(project, project.statusKey === 'archived' ? 'active' : 'archived');
   }, [setProjectStatus]);
+
+  const PROJECT_UNDO_MS = 3500;
+  const PROJECT_STRIKE_MS = 180; // DESIGN.md 모션 가이드(120–180ms)와 일치
+
+  const undoCompleteProject = React.useCallback((project) => {
+    const timerId = pendingCompleteTimers.current.get(project.id);
+    if (timerId) { clearTimeout(timerId); pendingCompleteTimers.current.delete(project.id); }
+    setCompletingIds((s) => { const n = new Set(s); n.delete(project.id); return n; });
+    setHiddenIds((s) => { const n = new Set(s); n.delete(project.id); return n; });
+    setOrderResult({ tone: 'ok', label: '완료 취소됨' });
+  }, []);
+
+  // 행 체크박스의 완료: 취소선 플래시 → 낙관적 숨김 → 되돌리기 창이 닫힌 뒤에만
+  // 실제 PATCH. 디테일 패널이 열린 프로젝트를 완료하면 패널도 닫는다(사라진 행의
+  // 유령 패널 방지).
+  const scheduleCompleteProject = React.useCallback((project) => {
+    const id = project.id;
+    setCompletingIds((s) => new Set(s).add(id));
+    setTimeout(() => {
+      setCompletingIds((s) => { const n = new Set(s); n.delete(id); return n; });
+      setHiddenIds((s) => new Set(s).add(id));
+    }, PROJECT_STRIKE_MS);
+    setOpenDetail((cur) => (cur === id ? null : cur));
+    setOrderResult({ tone: 'ok', label: '프로젝트 완료됨', action: { label: '되돌리기', onClick: () => undoCompleteProject(project) } });
+    const timerId = setTimeout(async () => {
+      pendingCompleteTimers.current.delete(id);
+      await setProjectStatus(project, 'completed');
+      setHiddenIds((s) => { if (!s.has(id)) return s; const n = new Set(s); n.delete(id); return n; });
+    }, PROJECT_UNDO_MS);
+    pendingCompleteTimers.current.set(id, timerId);
+  }, [setProjectStatus, undoCompleteProject]);
+
+  React.useEffect(() => () => {
+    // Unmount 안전장치: 페이지가 사라진 뒤 늦은 타이머가 PATCH를 쏘지 않게.
+    pendingCompleteTimers.current.forEach((timerId) => clearTimeout(timerId));
+    pendingCompleteTimers.current.clear();
+  }, []);
 
   const createTodo = React.useCallback((projectId = null, initialStatus = 'todo') => {
     setTaskEditSource(null);
@@ -1392,12 +1476,6 @@ export function Projects({ workspace }) {
             </div>
           </div>
           <div style={{ flex: 1 }} />
-          {terminalCount > 0 && (
-            <div className="hub-project-header-terminal" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 10, fontSize: 11.5, color: 'var(--fg-muted)' }}>
-              <Checkbox checked={showTerminal} onChange={setShowTerminal} size={16} label={`완료·보관 ${terminalCount}건 보기`} />
-              <span>완료·보관 {terminalCount}건 보기</span>
-            </div>
-          )}
           <SegmentedControl
             label="보기"
             options={PROJECT_VIEW_OPTIONS}
@@ -1405,8 +1483,16 @@ export function Projects({ workspace }) {
             onChange={setView}
           />
           {orderResult && (
-            <span className="mono" style={{ fontSize: 10.5, color: orderResult.tone === 'ok' ? 'var(--success)' : 'var(--danger)', whiteSpace: 'nowrap' }}>
+            <span className="mono" style={{ fontSize: 10.5, color: orderResult.tone === 'ok' ? 'var(--success)' : 'var(--danger)', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               {orderResult.label}
+              {orderResult.action && (
+                <button
+                  onClick={orderResult.action.onClick}
+                  style={{ fontSize: 10.5, color: 'var(--moon-200)', textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                >
+                  {orderResult.action.label} <Kbd>⌘Z</Kbd>
+                </button>
+              )}
             </span>
           )}
           {view === 'todos' && (
@@ -1524,9 +1610,10 @@ export function Projects({ workspace }) {
                           const overdue = !terminal && Number.isFinite(dueTime) && dueTime < new Date().setHours(0, 0, 0, 0);
                           const blocked = String(p.statusKey || '').toLowerCase() === 'blocked' || p.status === 'Blocked';
                           const nextAction = p.displayNextAction || p.projectNextAction || (p.updateEvidencePartial ? '업데이트 기록 미확인' : '다음 행동 미정');
+                          const completing = completingIds.has(p.id);
                           return (
                             <React.Fragment key={p.id}>
-                              <div className="hub-project-row" data-selected={isSel ? 'true' : 'false'}>
+                              <div className="hub-project-row" data-selected={isSel ? 'true' : 'false'} data-completing={completing ? 'true' : 'false'} data-terminal={terminal ? 'true' : 'false'}>
                                 <div className="hub-project-row__controls">
                                   <button
                                     type="button"
@@ -1537,11 +1624,14 @@ export function Projects({ workspace }) {
                                   >
                                   <span style={{ display: 'inline-block', transition: 'transform .15s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', fontSize: 10 }}>▶</span>
                                   </button>
+                                  {/* 하위 아이템 체크박스와 같은 의미(완료)로 통일 — 선택은 행
+                                      클릭이 담당한다. 체크 → 되돌리기 창과 함께 리스트에서 빠지고
+                                      아래 완료·보관 섹션으로 이동. */}
                                   <Checkbox
-                                    checked={isSel}
-                                    onChange={(checked) => checked ? openProjectDetail(p.id) : closeProjectDetail()}
+                                    checked={terminal || completing}
+                                    onChange={() => terminal ? completeProject(p) : scheduleCompleteProject(p)}
                                     size={16}
-                                    label={`프로젝트 선택: ${p.name}`}
+                                    label={terminal ? `다시 열기: ${p.name}` : `완료: ${p.name}`}
                                   />
                                 </div>
                                 <button
@@ -1640,6 +1730,66 @@ export function Projects({ workspace }) {
                     );
                   });
                 })()}
+
+                {/* 완료·보관 — 본 리스트에 섞지 않고 항상 맨 아래 접힌 섹션(기본 접힘).
+                    §8.1 펼침/접힘 계약: aria-expanded + 셰브런. 행은 낮은 대비로
+                    렌더해 활성 작업과 시각적 층을 분리한다. */}
+                {terminalCount > 0 && (
+                  <div>
+                    <button
+                      type="button"
+                      className="hub-row"
+                      aria-expanded={showTerminal}
+                      onClick={() => setShowTerminal(v => !v)}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '6px 8px', marginBottom: showTerminal ? 10 : 0, borderRadius: 'var(--r-sm)',
+                        textAlign: 'left', color: 'var(--fg-dim)',
+                      }}
+                    >
+                      <Iconed name="chevronD" size={12} style={{ transform: showTerminal ? 'none' : 'rotate(-90deg)', color: 'var(--fg-faint)' }} />
+                      <span style={{ fontSize: 12.5, fontWeight: 600 }}>완료·보관</span>
+                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4 }}>{terminalCount}</span>
+                    </button>
+                    {showTerminal && (
+                      <Card pad={false} className="hub-table-card">
+                        {terminalProjects.map((p, pi) => {
+                          const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
+                          return (
+                            <div
+                              key={p.id}
+                              className="hub-row"
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 10,
+                                padding: 'var(--pad-y) var(--pad-x)', minHeight: 'var(--row-h)',
+                                borderBottom: pi < terminalProjects.length - 1 ? '1px solid var(--line-soft)' : 'none',
+                              }}
+                            >
+                              <Checkbox
+                                checked
+                                onChange={() => setProjectStatus(p, 'active')}
+                                size={16}
+                                label={`다시 열기: ${p.name}`}
+                              />
+                              <span style={{ fontSize: 12.5, color: 'var(--fg-faint)' }} aria-hidden="true">{pBrand.glyph}</span>
+                              <button
+                                type="button"
+                                className="hub-row"
+                                onClick={() => openProjectDetail(p.id)}
+                                style={{ flex: 1, minWidth: 0, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, padding: '2px 4px', margin: '-2px -4px', borderRadius: 'var(--r-sm)' }}
+                              >
+                                <span style={{ fontSize: 13, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                                <span style={{ fontSize: 11, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{pBrand.name}</span>
+                              </button>
+                              <Badge tone="neutral" size="xs">{STATUS_LABEL_KO[p.status] || p.status}</Badge>
+                              <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', flexShrink: 0 }}>{p.due || ''}</span>
+                            </div>
+                          );
+                        })}
+                      </Card>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
