@@ -36,3 +36,23 @@ async function forwardBrandWrite(req) {
 export function POST(req) {
   return forwardBrandWrite(req);
 }
+
+// Rename/reclassify an existing container. Slug is intentionally absent from the
+// payload — brand keys are identifiers for filters and folder grouping.
+export async function PATCH(req) {
+  const guard = assertHubWriteAllowed(req);
+  if (guard) return guard;
+
+  const parsed = await readHubWriteJson(req);
+  if (parsed.error) return parsed.error;
+
+  const result = await forwardPmsCommand({
+    ...parsed.data,
+    action: "update_brand",
+    workspaceId: resolveDefaultWorkspaceId(),
+  });
+  return NextResponse.json(
+    { ...result.data, brand: result.data?.entity || null },
+    { status: result.httpStatus },
+  );
+}

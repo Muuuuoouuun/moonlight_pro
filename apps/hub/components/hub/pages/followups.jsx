@@ -76,7 +76,7 @@ function useFollowups() {
 // Inline min-record capture (operator-workflow-profile.md §7 확정): 대화 요약 + 고객 반응 +
 // 다음 행동과 날짜(또는 기약 없음). Replaces the old fire-immediately quick-log tap — a single
 // tap used to write nothing but the action tag, which fell short of the confirmed requirement.
-function LogForm({ item, action, label, onCancel, onSubmit, submitting }) {
+function LogForm({ item, action, label, onCancel, onSubmit, submitting, error }) {
   const [summary, setSummary] = React.useState("");
   const [reaction, setReaction] = React.useState(null);
   const [nextAction, setNextAction] = React.useState("");
@@ -122,7 +122,10 @@ function LogForm({ item, action, label, onCancel, onSubmit, submitting }) {
         <span style={{ fontSize: 11.5, color: "var(--fg-faint)" }}>기약 없음</span>
       </div>
 
-      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+        {error && (
+          <span role="alert" style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: "var(--danger)" }}>{error}</span>
+        )}
         <Button variant="ghost" size="xs" onClick={onCancel} disabled={submitting}>취소</Button>
         <Button
           variant="primary"
@@ -215,7 +218,7 @@ function ActivityPanel({ item, onClose, onNavigate }) {
   );
 }
 
-function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onCloseLog, onSubmitLog, submitting, logged }) {
+function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onCloseLog, onSubmitLog, submitting, logError, logged }) {
   const stage = stageMeta(item.stage);
   const clickable = Boolean(item.href);
   const isLogging = logDraft?.itemId === item.id;
@@ -271,6 +274,7 @@ function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onClo
             action={logDraft.action}
             label={logDraft.label}
             submitting={submitting}
+            error={logError}
             onCancel={onCloseLog}
             onSubmit={(fields) => onSubmitLog(item, logDraft.action, logDraft.label, fields)}
           />
@@ -303,6 +307,7 @@ export function Followups({ onNavigate }) {
   const [bucket, setBucket] = React.useState("all");
   const [logDraft, setLogDraft] = React.useState(null); // { itemId, action, label }
   const [submitting, setSubmitting] = React.useState(false);
+  const [logError, setLogError] = React.useState(null);
   const [logged, setLogged] = React.useState({}); // id → action label
   const [panelItem, setPanelItem] = React.useState(null); // row whose activity panel is open
 
@@ -338,13 +343,14 @@ export function Followups({ onNavigate }) {
     if (pathname) router.replace(pathname);
   }, [focusParam, syncState, items, pathname, router]);
 
-  const openLog = (item, action, label) => setLogDraft({ itemId: item.id, action, label });
-  const closeLog = () => setLogDraft(null);
+  const openLog = (item, action, label) => { setLogError(null); setLogDraft({ itemId: item.id, action, label }); };
+  const closeLog = () => { setLogError(null); setLogDraft(null); };
 
   const submitLog = async (item, action, label, { summary, reaction, nextAction, at, dormant }) => {
     setSubmitting(true);
+    setLogError(null);
     try {
-      await fetch("/api/integrations/outcomes/record", {
+      const res = await fetch("/api/integrations/outcomes/record", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -362,11 +368,14 @@ export function Followups({ onNavigate }) {
           },
         }),
       });
+      // 4xx/5xx도 fetch는 resolve한다 — ok 확인 없이는 실패가 "기록됨"으로 표시된다.
+      if (!res.ok) throw new Error(`outcomes/record ${res.status}`);
       setLogged((m) => ({ ...m, [item.id]: label }));
       setLogDraft(null);
       await reload();
     } catch {
-      /* non-fatal — leave the form open so the operator can retry */
+      // 입력을 유지한 채 폼을 열어두고 실패를 표시해 재시도할 수 있게 한다.
+      setLogError("기록 저장에 실패했습니다. 다시 시도하세요.");
     } finally {
       setSubmitting(false);
     }
@@ -438,6 +447,7 @@ export function Followups({ onNavigate }) {
               onCloseLog={closeLog}
               onSubmitLog={submitLog}
               submitting={submitting}
+              logError={logError}
               logged={logged[item.id]}
             />
           ))

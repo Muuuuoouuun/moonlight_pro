@@ -5,11 +5,13 @@ import { projectCreateFeedback, validateProjectDraft } from "@/lib/pms-ui";
 import { Button, Drawer, Kbd } from "../hub-primitives";
 import { Iconed } from "../hub-icons";
 
+// DRAWER_INPUT_STYLE(hub-primitives)과 같은 32px/13px 밀도 — 모바일 44px 터치 플로어는
+// hub-tokens.css의 coarse-pointer 미디어쿼리가 input/textarea/select 전체에 이미 강제한다.
 const CONTROL_STYLE = {
   width: "100%",
-  minHeight: 44,
-  padding: "0 11px",
-  fontSize: 16,
+  minHeight: 32,
+  padding: "0 10px",
+  fontSize: 13,
   lineHeight: 1.45,
   color: "var(--fg)",
   background: "var(--surface-2)",
@@ -198,15 +200,15 @@ export function ProjectCreateDrawer({
         <>
           {saveState === "conflict" && (
             <div style={{ width: "100%", display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <Button variant="outline" size="sm" onClick={handleRetryWithNewClientId} disabled={saving} style={{ minHeight: 44 }}>새 요청으로 다시 시도</Button>
-              <Button variant="ghost" size="sm" onClick={handleOpenConflictProject} disabled={saving || !conflictProject} style={{ minHeight: 44 }}>기존 프로젝트 열기</Button>
+              <Button variant="outline" size="sm" onClick={handleRetryWithNewClientId} disabled={saving}>새 요청으로 다시 시도</Button>
+              <Button variant="ghost" size="sm" onClick={handleOpenConflictProject} disabled={saving || !conflictProject}>기존 프로젝트 열기</Button>
             </div>
           )}
-          <Button variant="ghost" size="sm" onClick={requestClose} disabled={saving} style={{ minHeight: 44 }}>취소</Button>
+          <Button variant="ghost" size="sm" onClick={requestClose} disabled={saving}>취소</Button>
           <div aria-live="polite" style={{ flex: 1, minWidth: 0, fontSize: 11, lineHeight: 1.4, color: saveState === "error" || saveState === "conflict" ? "var(--danger)" : "var(--fg-muted)" }}>
             {feedback || <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Kbd>⌘↵</Kbd></span>}
           </div>
-          <Button variant="primary" size="sm" type="submit" form={formId} disabled={saving || areaUnavailable || areaEmpty} style={{ minHeight: 44 }}>
+          <Button variant="primary" size="sm" type="submit" form={formId} disabled={saving || areaUnavailable || areaEmpty}>
             {saving ? "만드는 중…" : "프로젝트 만들기"}
           </Button>
         </>
@@ -280,7 +282,7 @@ export function ProjectCreateDrawer({
               <span style={{ flex: 1, minWidth: 180, color: "var(--danger)" }}>
                 업무 분야 원장이 비어 있습니다. 운영 원장을 적용한 뒤 다시 불러오세요.
               </span>
-              <Button variant="outline" size="sm" onClick={onRetryAreas} style={{ minHeight: 44 }}>원장 다시 불러오기</Button>
+              <Button variant="outline" size="sm" onClick={onRetryAreas}>원장 다시 불러오기</Button>
             </div>
           )}
         </label>
@@ -291,7 +293,7 @@ export function ProjectCreateDrawer({
             aria-expanded={advancedOpen}
             aria-controls="project-create-advanced"
             onClick={() => setAdvancedOpen((open) => !open)}
-            style={{ width: "100%", minHeight: 44, display: "flex", alignItems: "center", gap: 8, color: "var(--fg-muted)", fontSize: 12.5, textAlign: "left" }}
+            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, color: "var(--fg-muted)", fontSize: 12.5, textAlign: "left" }}
           >
             <Iconed name="chevronR" size={14} style={{ transform: advancedOpen ? "rotate(90deg)" : "none", transition: "transform 160ms ease" }} />
             <span style={{ flex: 1 }}>상세 설정</span>

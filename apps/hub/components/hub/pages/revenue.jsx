@@ -802,7 +802,9 @@ export function Leads({ workspace }) {
           { key: 'scale', row: 'r3', label: '규모', placeholder: '학생수 · 직원수' },
           { key: 'units', row: 'r3', label: '도입 댓수', inputType: 'number', placeholder: '0' },
           { key: 'situation', label: '현재 상황', placeholder: '검토중 · 경쟁사 사용 · 예산확보…' },
-          { key: 'value', label: '금액', placeholder: '₩0' },
+          // 딜과 달리 텍스트 입력이 의도: 리드 value는 "₩1.2M" 표시 문자열로 읽혀 오고
+          // parseMoneyLabel이 축약형(₩1.2M · 1.2M · 1200000)을 그대로 받는다.
+          { key: 'value', label: '금액', placeholder: '₩1.2M · 1200000' },
         ]}
         onChange={(key, val) => setLeadEdits(prev => ({ ...prev, [editLeadId]: { ...prev[editLeadId], [key]: val } }))}
         onSave={persistLead}
@@ -1308,17 +1310,57 @@ export function Deals({ workspace, onNavigate }) {
 // Shared grid template for Cases — gap added so Type/Priority/Status chips never butt the next column
 const CASES_GRID = '80px 1fr 160px 112px 100px 100px 110px 90px';
 
+// 우선순위·상태는 알파벳이 아니라 심각도/수명 순서로 정렬한다 (§8.1 — 단계는 퍼널 순).
+const CASE_PRIORITY_RANK = { low: 0, med: 1, high: 2 };
+const CASE_STATUS_RANK = { Open: 0, Waiting: 1, Resolved: 2 };
+
+function sortCases(rows, sort) {
+  if (!sort.key) return rows;
+  const dir = sort.dir === 'desc' ? -1 : 1;
+  const value = (c) => sort.key === 'priority' ? (CASE_PRIORITY_RANK[c.priority] ?? -1)
+    : sort.key === 'status' ? (CASE_STATUS_RANK[c.status] ?? -1)
+    : sort.key === 'opened' ? new Date(c.openedAt || 0).getTime()
+    : String(c[sort.key] || '').toLowerCase();
+  return [...rows].sort((a, b) => {
+    const av = value(a);
+    const bv = value(b);
+    return av < bv ? -dir : av > bv ? dir : 0;
+  });
+}
+
 export function Cases() {
   const { ledger, syncState } = useRevenueLedger();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const [localCases, setLocalCases] = React.useState([]);
   const [caseEdits, setCaseEdits] = React.useState({}); // { [id]: patch } — overlays any case
   const [deletedCaseIds, setDeletedCaseIds] = React.useState(() => new Set());
   const [editCaseId, setEditCaseId] = React.useState(null);
+  const [sort, setSort] = React.useState({ key: null, dir: 'asc' });
   const ledgerCases = Array.isArray(ledger.cases) ? ledger.cases : [];
-  const cases = [...localCases, ...ledgerCases]
+  const mergedCases = [...localCases, ...ledgerCases]
     .filter(c => !deletedCaseIds.has(c.id))
     .map(c => (caseEdits[c.id] ? { ...c, ...caseEdits[c.id] } : c));
-  const editingCase = editCaseId ? cases.find(c => c.id === editCaseId) : null;
+  const cases = sortCases(mergedCases, sort);
+  const editingCase = editCaseId ? mergedCases.find(c => c.id === editCaseId) : null;
+  // asc → desc → 해제(원장 순) 3단 토글 — Leads와 같은 계약.
+  const toggleSort = (key) => setSort(s =>
+    s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: null, dir: 'asc' }
+  );
+  const SortHead = ({ k, children, align }) => (
+    <button type="button" onClick={() => toggleSort(k)} title={`${children} 기준 정렬`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3, width: '100%',
+        justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
+        fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
+        color: sort.key === k ? 'var(--fg-muted)' : 'var(--fg-faint)',
+        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+      }}>
+      {children}
+      <span style={{ fontSize: 8, opacity: sort.key === k ? 1 : 0 }}>{sort.dir === 'desc' && sort.key === k ? '▼' : '▲'}</span>
+    </button>
+  );
   const sTone = { Open: 'warning', Waiting: 'info', Resolved: 'success' };
   const pTone = { high: 'danger', med: 'warning', low: 'neutral' };
   const createCase = () => {
@@ -1331,10 +1373,25 @@ export function Cases() {
       priority: 'med',
       status: 'Open',
       opened: '방금',
+      openedAt: new Date().toISOString(),
       owner: 'Me',
     }, ...prev]);
     setEditCaseId(id); // open the editor immediately so the new case can be filled in
   };
+
+  // Deep-link: ?case=<id> opens that case's EditDrawer once the ledger has loaded — Leads의
+  // ?lead=와 같은 one-shot 계약 (소비 후 쿼리 소거, 새로고침 시 재실행 없음).
+  const caseParam = searchParams?.get('case') || null;
+  const consumedCaseRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!caseParam || syncState === 'loading') return;
+    if (consumedCaseRef.current === caseParam) return;
+    if (mergedCases.some(c => String(c.id) === String(caseParam))) {
+      consumedCaseRef.current = caseParam;
+      setEditCaseId(caseParam);
+      if (pathname) router.replace(pathname);
+    }
+  }, [caseParam, syncState, mergedCases, pathname, router]);
 
   // Persist the drawer edit. New local rows (id `CASE-…`) insert; on success the returned
   // real id replaces the local one so a later edit takes the update path and the overlay re-keys.
@@ -1396,7 +1453,7 @@ export function Cases() {
       </div>
       <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          <span>ID</span><span>Title</span><span>Account</span><span>Type</span><span>Priority</span><span>Status</span><span>Opened</span><span style={{ textAlign: 'right' }}>Owner</span>
+          <span>ID</span><SortHead k="title">Title</SortHead><SortHead k="account">Account</SortHead><span>Type</span><SortHead k="priority">Priority</SortHead><SortHead k="status">Status</SortHead><SortHead k="opened">Opened</SortHead><span style={{ textAlign: 'right' }}>Owner</span>
         </div>
         {cases.length === 0 && (
           <EmptyState
@@ -1444,11 +1501,11 @@ export function Cases() {
         fields={[
           { key: 'title', label: '제목' },
           { key: 'account', label: '계정', placeholder: '계정·고객명' },
-          { key: 'type', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
-          { key: 'priority', label: '우선순위', type: 'select', options: [{ value: 'low', label: 'Low' }, { value: 'med', label: 'Med' }, { value: 'high', label: 'High' }] },
+          // 오픈 시점·담당은 뺐다: opened는 opened_at에서 파생된 상대 라벨(수정 불가)이고,
+          // owner는 리드/딜과 같은 이유(1인 운영, buildCaseWrite가 저장한 적 없음)로 죽은 필드였다.
+          { key: 'type', row: 'class', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
+          { key: 'priority', row: 'class', label: '우선순위', type: 'select', options: [{ value: 'low', label: 'Low' }, { value: 'med', label: 'Med' }, { value: 'high', label: 'High' }] },
           { key: 'status', label: '상태', type: 'select', options: [{ value: 'Open', label: 'Open' }, { value: 'Waiting', label: 'Waiting' }, { value: 'Resolved', label: 'Resolved' }] },
-          { key: 'opened', label: '오픈 시점' },
-          { key: 'owner', label: '담당' },
         ]}
         onChange={(key, val) => setCaseEdits(prev => ({ ...prev, [editCaseId]: { ...prev[editCaseId], [key]: val } }))}
         onSave={persistCase}

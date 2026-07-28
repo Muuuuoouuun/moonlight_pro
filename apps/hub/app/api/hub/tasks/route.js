@@ -2,9 +2,15 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
+import { eqFilter, withWorkspaceFilter } from "@/lib/server-read";
 import { forwardPmsCommand } from "@/lib/pms-engine-client";
 import { getProjectLedger } from "@/lib/repositories/operating-ledger";
-import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { isCanonicalUuid } from "@/lib/uuid.js";
+import {
+  deleteSupabaseRecord,
+  resolveDefaultWorkspaceId,
+  resolveSupabaseConfig,
+} from "@/lib/server-write";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -95,4 +101,46 @@ export async function PATCH(req) {
     { ...result.data, task: result.data?.entity || null },
     { status: result.httpStatus },
   );
+}
+
+// Hard-delete a task row. The Engine's PMS command pipeline has no delete action —
+// hub-direct Supabase delete follows the same precedent as /api/routine's DELETE.
+export async function DELETE(req) {
+  const guard = assertHubWriteAllowed(req);
+  if (guard) return guard;
+
+  const parsed = await readHubWriteJson(req);
+  if (parsed.error) return parsed.error;
+
+  const id = typeof parsed.data?.id === "string" ? parsed.data.id.trim() : "";
+  if (!isCanonicalUuid(id)) {
+    return NextResponse.json(
+      { status: "invalid-input", error: "invalid-task-id" },
+      { status: 400 },
+    );
+  }
+
+  if (!resolveSupabaseConfig()) {
+    return NextResponse.json(
+      { status: "preview", message: "Supabase is not configured. This delete was not saved." },
+      { status: 202 },
+    );
+  }
+
+  const persistence = await deleteSupabaseRecord(
+    "tasks",
+    withWorkspaceFilter([["id", eqFilter(id)]]),
+  );
+  if (!persistence.persisted) {
+    return NextResponse.json(
+      {
+        status: "error",
+        error: persistence.detail || persistence.reason || "Task delete persistence failed.",
+        retryable: true,
+      },
+      { status: 502 },
+    );
+  }
+
+  return NextResponse.json({ status: "saved", message: "Task deleted." }, { status: 200 });
 }

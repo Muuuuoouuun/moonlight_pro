@@ -85,6 +85,9 @@ function mapTaskItems(todos, projects, todayKey, weekEndKey) {
         entityId: t.id,
         lane: "task",
         title: t.title || "제목 없음",
+        // 내 작업의 할 일 편집 드로어가 설명을 보여주고 고칠 수 있도록 실어 보낸다 —
+        // 없으면 드로어 저장이 기존 설명을 확인할 길 없이 진행된다.
+        description: t.description || "",
         bucket: bucketFor(t.dueAt, todayKey, weekEndKey),
         whenAt: t.dueAt || "",
         whenLabel: t.dueAt ? shortDate(t.dueAt) : "기한 없음",
@@ -279,5 +282,10 @@ export async function getAttentionLedger() {
     sourceFailures,
     calendarReason: calendar?.ok ? "" : calendar?.reason || "",
     items,
+    // My Work의 할 일 편집 드로어가 프로젝트 재배정 select를 채우는 용도 — id/name만
+    // 필요하니 프로젝트 원장 전체를 다시 내려보내지 않는다.
+    projects: taskLedgerReadable
+      ? (Array.isArray(projectLedger?.projects) ? projectLedger.projects.map((p) => ({ id: p.id, name: p.name })) : [])
+      : [],
   };
 }

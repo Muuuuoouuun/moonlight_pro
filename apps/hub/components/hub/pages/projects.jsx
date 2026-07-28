@@ -26,6 +26,8 @@ import {
   resolveProjectDraftOrgScope,
   selectProjectAreaId,
   shouldOpenGlobalProjectCreate,
+  TASK_PRIORITY_OPTIONS,
+  TASK_STATUS_OPTIONS,
   taskStatusForBoardColumn,
   validateProjectDraft,
 } from "@/lib/pms-ui";
@@ -916,11 +918,60 @@ export function Projects({ workspace }) {
     });
   }, [workspace]);
 
+  // 기존 컨테이너 편집 — 이름·분류·소속만. glyph는 드로어에 없지만 update_brand의
+  // meta 통째-교체에서 유실되지 않도록 draft에 실어 보낸다.
+  const editContainer = React.useCallback((container) => {
+    if (!container?.id || container.key === 'all') return;
+    setContainerDraft({
+      kind: 'container',
+      isNew: false,
+      id: container.id,
+      name: container.name || '',
+      category: container.category || 'general',
+      orgScope: container.orgScope || 'personal',
+      glyph: container.glyph || '',
+    });
+  }, []);
+
   // Create a container (brand row). saved/duplicate → reload; preview (Engine not
   // configured) → keep an optimistic local row so the folder fills immediately.
+  // Edit mode (isNew:false) PATCHes name·category·orgScope — slug/key는 그대로 둔다.
   const persistContainer = React.useCallback(async () => {
     const name = containerDraft?.name?.trim();
     if (!name) return { ok: false, status: 'invalid-input' };
+
+    if (containerDraft.isNew === false) {
+      try {
+        const response = await fetch('/api/hub/brands', {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            id: containerDraft.id,
+            name,
+            category: containerDraft.category,
+            orgScope: containerDraft.orgScope,
+            ...(containerDraft.glyph ? { glyph: containerDraft.glyph } : {}),
+            source: 'hub-projects',
+          }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (response.ok && data.status === 'saved') {
+          await loadLedger();
+          setOrderResult({ tone: 'ok', label: '컨테이너 수정됨' });
+          return { ok: true, status: 'saved' };
+        }
+        if (data.status === 'preview') {
+          // 원장 행의 로컬 오버레이는 없다 — 저장 안 된 수정을 반영된 것처럼 그리지 않는다.
+          return { ok: true, status: 'preview' };
+        }
+        setOrderResult({ tone: 'err', label: data.error || `수정 실패 ${response.status}` });
+        return { ok: false, status: data.status || 'error' };
+      } catch (error) {
+        setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+        return { ok: false, status: 'error' };
+      }
+    }
+
     const slug = slugifyContainer(name, containerDraft.id);
     try {
       const response = await fetch('/api/hub/brands', {
@@ -1023,6 +1074,29 @@ export function Projects({ workspace }) {
     }
   }, [loadLedger, taskDraft, taskEditSource]);
 
+  // 기존 할 일 삭제 — hub-direct DELETE (엔진 파이프라인엔 삭제 액션이 없다, tasks route 참고).
+  const deleteTask = React.useCallback(async () => {
+    const id = taskEditSource?.id;
+    if (!id) return;
+    try {
+      const response = await fetch('/api/hub/tasks', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && ['saved', 'preview'].includes(data.status)) {
+        if (data.status === 'saved') await loadLedger();
+        setTaskEditSource(null);
+        setOrderResult({ tone: 'ok', label: data.status === 'preview' ? '할 일 삭제 · 저장 대기(preview)' : '할 일 삭제됨' });
+        return;
+      }
+      setOrderResult({ tone: 'err', label: data.error || `삭제 실패 ${response.status}` });
+    } catch (error) {
+      setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+    }
+  }, [loadLedger, taskEditSource]);
+
   const updateTaskStatus = React.useCallback(async (id, status) => {
     if (taskStatusPendingRef.current.has(id)) return false;
     taskStatusPendingRef.current.add(id);
@@ -1107,12 +1181,19 @@ export function Projects({ workspace }) {
       // 첫 원장 로드 전에는 areas가 비어 "업무 분야가 없습니다" 오탐 에러가 뜬다 —
       // ?new=project 딥링크 이펙트와 같은 로드 완료 가드를 공유한다.
       if (!initialLoadDoneRef.current || syncState === 'loading') return;
+      // N은 현재 뷰의 primary 생성을 따른다 — To-dos 뷰의 primary는 할 일 생성이라,
+      // 여기서도 프로젝트를 만들면 보고 있는 목록과 무관한 레코드가 생긴다.
+      if (view === 'todos') {
+        createTodo();
+        event.preventDefault();
+        return;
+      }
       const opened = openGlobalProjectCreate();
       if (opened) event.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [drawerOpen, openGlobalProjectCreate, syncState]);
+  }, [createTodo, drawerOpen, openGlobalProjectCreate, syncState, view]);
 
   // ?project=<id> is the canonical detail selection. Normalize only the view;
   // the project id stays in the URL so reloads and exact bounded reads remain open.
@@ -1335,6 +1416,9 @@ export function Projects({ workspace }) {
             <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-faint)' }}>분류</div>
             <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>프로젝트 컨테이너 · {Math.max(0, brands.length - 1)}개</div>
           </div>
+          {currentBrand && currentBrand.key !== 'all' && currentBrand.id && (
+            <IconButton icon="edit" size={24} iconSize={12} onClick={() => editContainer(currentBrand)} tooltip={`${currentBrand.name} 컨테이너 편집`} />
+          )}
           <IconButton icon="plus" size={24} iconSize={13} onClick={createContainer} tooltip="새 컨테이너 (KA·딜·일반)" />
           <IconButton icon="chevronL" size={24} iconSize={13} onClick={() => setSidebarHidden(true)} tooltip="접기" />
         </div>
@@ -1496,10 +1580,10 @@ export function Projects({ workspace }) {
             </span>
           )}
           {view === 'todos' && (
-            <Button variant="primary" size="sm" icon="plus" onClick={() => createTodo()}>To-do</Button>
+            <Button variant="primary" size="sm" icon="plus" onClick={() => createTodo()}>To-do <Kbd>N</Kbd></Button>
           )}
           <Button className="hub-project-primary-control" variant={view === 'todos' ? 'outline' : 'primary'} size="sm" icon="plus" onClick={openGlobalProjectCreate}>
-            Project <Kbd>N</Kbd>
+            Project {view !== 'todos' && <Kbd>N</Kbd>}
           </Button>
         </div>
 
@@ -2208,13 +2292,14 @@ export function Projects({ workspace }) {
       )}
 
       <EditDrawer
-        title="새 컨테이너"
-        subtitle="브랜드·KA·딜·일반을 분류와 함께 만든다"
+        title={containerDraft?.isNew === false ? '컨테이너 편집' : '새 컨테이너'}
+        subtitle={containerDraft?.isNew === false ? '이름·분류·소속을 변경한다 (key는 유지)' : '브랜드·KA·딜·일반을 분류와 함께 만든다'}
         record={containerDraft}
         fields={[
           { key: 'name', label: '이름', placeholder: '예: 우리학원 KA · 신규 브랜드' },
           {
             key: 'category',
+            row: 'container-class',
             label: '분류',
             type: 'select',
             options: [
@@ -2225,6 +2310,7 @@ export function Projects({ workspace }) {
           },
           {
             key: 'orgScope',
+            row: 'container-class',
             label: '소속',
             type: 'select',
             options: [
@@ -2235,7 +2321,7 @@ export function Projects({ workspace }) {
         ]}
         onChange={(key, value) => setContainerDraft(current => ({ ...current, [key]: value }))}
         onSave={persistContainer}
-        saveLabel="컨테이너 만들기"
+        saveLabel={containerDraft?.isNew === false ? '변경사항 저장' : '컨테이너 만들기'}
         onClose={() => setContainerDraft(null)}
       />
 
@@ -2254,29 +2340,8 @@ export function Projects({ workspace }) {
               ...allProjects.map(item => ({ value: item.id, label: item.name })),
             ],
           },
-          {
-            key: 'status',
-            label: '상태',
-            type: 'select',
-            options: [
-              { value: 'inbox', label: '수집' },
-              { value: 'todo', label: '계획' },
-              { value: 'doing', label: '진행' },
-              { value: 'blocked', label: '대기' },
-              { value: 'done', label: '완료' },
-            ],
-          },
-          {
-            key: 'priority',
-            label: '우선순위',
-            type: 'select',
-            options: [
-              { value: 'low', label: '낮음' },
-              { value: 'medium', label: '보통' },
-              { value: 'high', label: '높음' },
-              { value: 'critical', label: '긴급' },
-            ],
-          },
+          { key: 'status', row: 'task-state', label: '상태', type: 'select', options: TASK_STATUS_OPTIONS },
+          { key: 'priority', row: 'task-state', label: '우선순위', type: 'select', options: TASK_PRIORITY_OPTIONS },
           { key: 'dueAt', label: '기한', inputType: 'date' },
           {
             key: 'description',
@@ -2287,6 +2352,7 @@ export function Projects({ workspace }) {
         ]}
         onChange={(key, value) => setTaskDraft(current => ({ ...current, [key]: value }))}
         onSave={persistTask}
+        onDelete={taskEditSource ? deleteTask : undefined}
         saveLabel={taskEditSource ? '변경사항 저장' : '할 일 만들기'}
         onClose={() => { setTaskDraft(null); setTaskEditSource(null); }}
       />

@@ -104,6 +104,23 @@ export function buildProjectCreatePayload(draft = {}) {
   };
 }
 
+// 할 일 상태·우선순위 셀렉트 옵션 — my-work와 projects의 할 일 드로어가 같은 enum을
+// 각자 하드코딩하다 어긋나지 않도록 한 곳에 둔다 (engine PRIORITIES/STATUS와 짝).
+export const TASK_STATUS_OPTIONS = [
+  { value: "inbox", label: "수집" },
+  { value: "todo", label: "계획" },
+  { value: "doing", label: "진행" },
+  { value: "blocked", label: "대기" },
+  { value: "done", label: "완료" },
+];
+
+export const TASK_PRIORITY_OPTIONS = [
+  { value: "low", label: "낮음" },
+  { value: "medium", label: "보통" },
+  { value: "high", label: "높음" },
+  { value: "critical", label: "긴급" },
+];
+
 export function selectProjectAreaId(areas = [], preferredSlug = null) {
   const canonicalAreas = areas.filter((area) => area?.canonical && area?.id);
   if (preferredSlug) {

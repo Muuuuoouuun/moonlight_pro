@@ -4,6 +4,7 @@ import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, Button, Checkbox, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer } from "../hub-primitives";
+import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from "@/lib/pms-ui";
 
 // 내 작업 — one personal operating surface, three lenses over the cross-lane attention
 // read model (tasks + open deals + calendar week). Design contract from the operator:
@@ -125,20 +126,6 @@ function buildSectionRows(sectionItems, groupEvents = false) {
   return rows;
 }
 
-const TASK_STATUS_OPTIONS = [
-  { value: 'inbox', label: '수집' },
-  { value: 'todo', label: '계획' },
-  { value: 'doing', label: '진행' },
-  { value: 'blocked', label: '대기' },
-  { value: 'done', label: '완료' },
-];
-const TASK_PRIORITY_OPTIONS = [
-  { value: 'low', label: '낮음' },
-  { value: 'medium', label: '보통' },
-  { value: 'high', label: '높음' },
-  { value: 'critical', label: '긴급' },
-];
-
 function readStoredOption(key, options, fallback) {
   if (typeof window === 'undefined') return fallback;
   const stored = window.localStorage.getItem(key);
@@ -165,7 +152,7 @@ function priorityValue(item) {
 }
 
 function useAttentionLedger() {
-  const [data, setData] = React.useState({ items: [], sources: {}, calendarReason: '' });
+  const [data, setData] = React.useState({ items: [], sources: {}, calendarReason: '', projects: [] });
   const [state, setState] = React.useState('loading');
 
   const load = React.useCallback(async () => {
@@ -176,7 +163,7 @@ function useAttentionLedger() {
         setState('error');
         return null;
       }
-      setData({ items: json.items || [], sources: json.sources || {}, calendarReason: json.calendarReason || '' });
+      setData({ items: json.items || [], sources: json.sources || {}, calendarReason: json.calendarReason || '', projects: json.projects || [] });
       setState('ready');
       return json;
     } catch {
@@ -367,7 +354,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
 }
 
 export function MyWork({ onNavigate }) {
-  const { items, sources, calendarReason, state, reload } = useAttentionLedger();
+  const { items, sources, calendarReason, projects, state, reload } = useAttentionLedger();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -598,7 +585,10 @@ export function MyWork({ onNavigate }) {
   // Task edit drawer — 패널의 "상세 편집" 버튼에서 연다. Edits title/status/priority/due
   // through the extended PATCH /api/hub/tasks contract (update_task accepts a partial patch).
   const openTaskDraft = (item) => {
-    setTaskDraft({ id: item.entityId, title: item.title, status: item.status, priority: item.priority || 'medium', dueAt: item.whenAt || '' });
+    // _sourceDescription: 저장 시 "바뀌었을 때만" description을 PATCH에 싣기 위한 원본 스냅샷.
+    // 라이브 DB에 0021(task description) 마이그레이션이 아직 없으면 이 키가 포함된 PATCH가
+    // 통째로 실패하므로, 건드리지 않은 저장까지 막지 않게 한다.
+    setTaskDraft({ id: item.entityId, title: item.title, status: item.status, priority: item.priority || 'medium', dueAt: item.whenAt || '', description: item.description || '', projectId: item.projectId || '', _sourceDescription: item.description || '' });
   };
 
   const detailItem = React.useMemo(
@@ -662,6 +652,10 @@ export function MyWork({ onNavigate }) {
           status: taskDraft.status,
           priority: taskDraft.priority,
           dueAt: taskDraft.dueAt || null,
+          projectId: taskDraft.projectId || null,
+          ...((taskDraft.description ?? '') !== (taskDraft._sourceDescription ?? '')
+            ? { description: taskDraft.description ?? '' }
+            : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -675,6 +669,31 @@ export function MyWork({ onNavigate }) {
     } catch (error) {
       setNotice({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
       return { ok: false, status: 'error' };
+    }
+  };
+
+  // 낙관적 tombstone(hiddenIds) + 실패 시 복원 — deleteRitual(work.jsx)과 같은 계약.
+  const deleteTaskDetail = async () => {
+    if (!taskDraft?.id) return;
+    const rowId = `task-${taskDraft.id}`;
+    setHiddenIds((prev) => new Set(prev).add(rowId));
+    try {
+      const res = await fetch('/api/hub/tasks', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: taskDraft.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && ['saved', 'preview'].includes(data.status)) {
+        setNotice({ tone: 'ok', label: data.status === 'preview' ? '할 일 삭제 · 저장 대기(preview)' : '할 일 삭제됨' });
+        if (data.status === 'saved') await reload();
+        return;
+      }
+      setHiddenIds((prev) => { const next = new Set(prev); next.delete(rowId); return next; });
+      setNotice({ tone: 'err', label: data.error || `삭제 실패 ${res.status}` });
+    } catch (error) {
+      setHiddenIds((prev) => { const next = new Set(prev); next.delete(rowId); return next; });
+      setNotice({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
     }
   };
 
@@ -1197,12 +1216,23 @@ export function MyWork({ onNavigate }) {
         record={taskDraft}
         fields={[
           { key: 'title', label: '제목' },
-          { key: 'status', label: '상태', type: 'select', options: TASK_STATUS_OPTIONS },
-          { key: 'priority', label: '우선순위', type: 'select', options: TASK_PRIORITY_OPTIONS },
+          { key: 'status', row: 'task-state', label: '상태', type: 'select', options: TASK_STATUS_OPTIONS },
+          { key: 'priority', row: 'task-state', label: '우선순위', type: 'select', options: TASK_PRIORITY_OPTIONS },
           { key: 'dueAt', label: '기한', inputType: 'date' },
+          {
+            key: 'projectId',
+            label: '프로젝트',
+            type: 'select',
+            options: [
+              { value: '', label: '미지정' },
+              ...projects.map((p) => ({ value: p.id, label: p.name })),
+            ],
+          },
+          { key: 'description', label: '설명 · 참고 자료', type: 'textarea', placeholder: '상세 내용, 참고 링크, 메모를 적어두세요.' },
         ]}
         onChange={(key, val) => setTaskDraft((d) => (d ? { ...d, [key]: val } : d))}
         onSave={persistTaskDetail}
+        onDelete={deleteTaskDetail}
         onClose={() => setTaskDraft(null)}
       />
     </div>

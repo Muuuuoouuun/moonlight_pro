@@ -275,6 +275,8 @@ function mapCase(row, accountById) {
     status: CASE_STATUS_LABEL[statusKey] || "Open",
     priority: priorityDisplay,
     opened: formatRelative(row.opened_at || row.created_at),
+    // 정렬용 원시 타임스탬프 — opened는 상대 라벨이라 문자열 정렬이 시간순이 아니다.
+    openedAt: row.opened_at || row.created_at || "",
     owner: row.owner_id ? "Me" : "Unassigned",
   };
 }

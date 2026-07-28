@@ -10,7 +10,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import {
   Badge, Card, Button, Avatar, Input, EmptyState, SyncBadge, Kbd, Drawer,
-  SegmentedControl, Divider,
+  SegmentedControl, Divider, Checkbox,
 } from "../hub-primitives";
 import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel } from "./revenue";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
@@ -207,7 +207,7 @@ function QuickLog({ onSave }) {
         style={{ width: "100%", resize: "vertical", background: "transparent", border: "none", outline: "none", color: "var(--fg)", fontSize: 12.5, fontFamily: "inherit", lineHeight: 1.5 }}
       />
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <select value={type} onChange={e => setType(e.target.value)} style={{ height: 26, padding: "0 8px", fontSize: 11.5, background: "var(--surface-3)", color: "var(--fg)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)", outline: "none" }}>
+        <select value={type} onChange={e => setType(e.target.value)} style={{ height: 30, padding: "0 8px", fontSize: 12.5, background: "var(--surface-3)", color: "var(--fg)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)", outline: "none" }}>
           {["call", "kakao", "meeting", "email", "visit", "quote", "note"].map(k => (
             <option key={k} value={k}>{ACT_LABEL[k]}</option>
           ))}
@@ -298,32 +298,20 @@ function ContactOutcomeSheet({ row, onSaved }) {
     <div style={{ border: "1px solid var(--line)", borderRadius: "var(--r-sm)", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ fontSize: 12, fontWeight: 500 }}>컨택 완료 기록</span>
-        <select value={kind} onChange={e => setKind(e.target.value)} style={{ height: 24, padding: "0 6px", fontSize: 11, background: "var(--surface-3)", color: "var(--fg)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)", outline: "none" }}>
+        <select value={kind} onChange={e => setKind(e.target.value)} style={{ height: 30, padding: "0 8px", fontSize: 12.5, background: "var(--surface-3)", color: "var(--fg)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)", outline: "none" }}>
           {OUTCOME_KINDS.map(k => <option key={k} value={k}>{ACT_LABEL[k]}</option>)}
         </select>
       </div>
 
       <div>
         <div style={{ fontSize: 10.5, color: "var(--fg-faint)", marginBottom: 5 }}>고객 반응 (필수)</div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {REACTIONS.map(r => (
-            <button
-              key={r.key}
-              type="button"
-              onClick={() => setReaction(r.key)}
-              aria-pressed={reaction === r.key}
-              style={{
-                height: 28, padding: "0 11px", borderRadius: "var(--r-sm)", cursor: "pointer",
-                fontSize: 11.5, fontWeight: 500, fontFamily: "inherit",
-                border: `1px solid ${reaction === r.key ? "var(--moon-300)" : "var(--line)"}`,
-                background: reaction === r.key ? "var(--surface-3)" : "var(--surface-2)",
-                color: reaction === r.key ? "var(--fg)" : "var(--fg-muted)",
-              }}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="고객 반응"
+          options={REACTIONS.map(r => ({ key: r.key, label: r.label }))}
+          value={reaction}
+          onChange={setReaction}
+          style={{ flexWrap: "wrap", background: "none", border: "none", padding: 0 }}
+        />
       </div>
 
       <div>
@@ -355,23 +343,17 @@ function ContactOutcomeSheet({ row, onSaved }) {
             onChange={e => setNextAt(e.target.value)}
             disabled={dormant}
             className="mono"
-            style={{ width: "100%", height: 32, padding: "0 8px", fontSize: 11.5, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)", color: "var(--fg)", outline: "none", opacity: dormant ? 0.45 : 1 }}
+            style={{ width: "100%", height: 32, padding: "0 8px", fontSize: 12, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)", color: "var(--fg)", outline: "none", opacity: dormant ? 0.45 : 1 }}
           />
         </div>
-        <button
-          type="button"
-          onClick={() => { setDormant(v => !v); if (state === "warn") setState("idle"); }}
-          aria-pressed={dormant}
-          style={{
-            height: 32, padding: "0 11px", borderRadius: "var(--r-sm)", cursor: "pointer",
-            fontSize: 11.5, fontWeight: 500, fontFamily: "inherit", whiteSpace: "nowrap",
-            border: `1px solid ${dormant ? "var(--moon-300)" : "var(--line)"}`,
-            background: dormant ? "var(--surface-3)" : "var(--surface-2)",
-            color: dormant ? "var(--fg)" : "var(--fg-muted)",
-          }}
-        >
-          기약 없음
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, height: 32 }}>
+          <Checkbox
+            checked={dormant}
+            onChange={(v) => { setDormant(v); if (state === "warn") setState("idle"); }}
+            label="기약 없음"
+          />
+          <span style={{ fontSize: 12, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>기약 없음</span>
+        </div>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -439,7 +421,7 @@ function DealPipelineSection({ deals }) {
   );
 }
 
-function Customer360Drawer({ row, onClose }) {
+function Customer360Drawer({ row, onClose, onNavigate }) {
   const [activities, setActivities] = React.useState([]);
   const [actSync, setActSync] = React.useState("loading");
   // 컨택 완료 시트 저장 직후 부모 원장 재조회 없이 최신 다음 액션을 반영
@@ -480,9 +462,19 @@ function Customer360Drawer({ row, onClose }) {
     saveRevenueRecord("activity", "create", { ...linkParam, type, body }).then(r => {
       if (r.ok && r.id) {
         setActivities(prev => prev.map(a => (a.id === temp.id ? { ...a, id: r.id } : a)));
+        return;
       }
+      // 저장 실패한 낙관적 행을 남겨두면 다음 리로드 때 소리 없이 사라진다 — 즉시 걷어내 표시.
+      setActivities(prev => prev.filter(a => a.id !== temp.id));
     });
   };
+
+  // 이 드로어는 접촉 기록용 360 뷰 — 이름·연락처·단계의 원본 편집은 리드 정식 편집기
+  // (?lead= 딥링크)가 담당한다. 계약 고객(account)은 아직 ?account= 딥링크가 없어
+  // followups ActivityPanel과 같은 규칙으로 링크를 숨긴다.
+  const editHref = row.kind !== "account" && row.id
+    ? `dashboard/revenue/leads?lead=${encodeURIComponent(row.id)}`
+    : null;
 
   return (
     <Drawer
@@ -490,6 +482,7 @@ function Customer360Drawer({ row, onClose }) {
       subtitle={row.person ? `${row.name}${row.personTitle ? ` · ${row.personTitle}` : ""}` : (row.sub || null)}
       onClose={onClose}
       width="min(440px, 96vw)"
+      footer={editHref ? <Button variant="outline" size="sm" onClick={() => onNavigate?.(editHref)}>정식 편집 열기</Button> : undefined}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {/* 헤더 요약 */}
@@ -533,11 +526,15 @@ function Customer360Drawer({ row, onClose }) {
             ]}
             value={focusOverride}
             onChange={(next) => {
+              const prevValue = focusOverride;
               setFocusOverride(next);
               if (!row.id) return;
               saveRevenueRecord(row.kind === "account" ? "account" : "lead", "update", {
                 id: row.id,
                 focusOverride: next,
+              }).then(r => {
+                // 실패하면 토글을 원위치 — 저장 안 된 값이 계속 선택돼 보이면 안 된다.
+                if (!r?.ok) setFocusOverride(prevValue);
               });
             }}
           />
@@ -773,7 +770,7 @@ export function Customers({ onNavigate }) {
         ))}
       </Card>
 
-      {openRow && <Customer360Drawer row={openRow} onClose={() => setOpenKey(null)} />}
+      {openRow && <Customer360Drawer row={openRow} onClose={() => setOpenKey(null)} onNavigate={onNavigate} />}
     </div>
   );
 }

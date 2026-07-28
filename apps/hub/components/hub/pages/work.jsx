@@ -754,7 +754,8 @@ export function Decisions() {
         )}
         {list.map(d => (
           <div key={d.id} style={{ position: 'relative', marginBottom: 18 }}>
-            <div style={{ position: 'absolute', left: -21, top: 14, width: 10, height: 10, borderRadius: 999, background: 'var(--bg)', border: '2px solid var(--moon-400)' }} />
+            {/* §5.2 1px 보더 — 자매 마커(로드맵 노드)와 같은 1px + inset 링 관례. */}
+            <div style={{ position: 'absolute', left: -21, top: 14, width: 10, height: 10, borderRadius: 999, background: 'var(--bg)', border: '1px solid var(--moon-400)', boxShadow: 'inset 0 0 0 1px var(--moon-400)' }} />
             <Card
               interactive
               role="button"
@@ -794,6 +795,8 @@ export function Decisions() {
           onChange={updateDraft}
           onClose={() => setEditDecisionId(null)}
           onSave={persistDecision}
+          // onDelete 없음은 의도: 결정 원장은 append-only 저널이다 — 번복은 지우는 게 아니라
+          // 새 결정으로 기록한다 (Rhythm의 deleteRitual과 달리 이력 자체가 가치라서).
         >
           <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>근거</span>

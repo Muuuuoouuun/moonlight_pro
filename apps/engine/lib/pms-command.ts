@@ -448,5 +448,39 @@ export function normalizePmsCommand(
     };
   }
 
+  if (action === "update_brand") {
+    const id = uuid(input.id);
+    const name = text(input.name || input.title, 200);
+    const category = text(input.category, 30).toLowerCase();
+    const orgScope = text(input.orgScope || input.org_scope, 30).toLowerCase();
+    const glyph = text(input.glyph, 8);
+
+    if (!id) return { ok: false, reason: "invalid-id" };
+    if (!name) return { ok: false, reason: "missing-name" };
+    if (!BRAND_CATEGORIES.has(category)) return { ok: false, reason: "invalid-category" };
+    if (!BRAND_ORG_SCOPES.has(orgScope)) return { ok: false, reason: "invalid-org-scope" };
+
+    return {
+      ok: true,
+      action,
+      table: "brands",
+      filters: [
+        ["id", `eq.${id}`],
+        ["workspace_id", `eq.${workspaceId}`],
+      ],
+      // slug은 받지 않는다 — 브랜드 key(필터·폴더 그룹 식별자)라 편집으로 바뀌면 안 된다.
+      // meta는 통째로 교체되므로 호출자는 category·org_scope와 유지할 glyph를 함께 보낸다.
+      patch: {
+        name,
+        meta: {
+          category,
+          org_scope: orgScope,
+          source: text(input.source || "hub-projects", 80),
+          ...(glyph ? { glyph } : {}),
+        },
+      },
+    };
+  }
+
   return { ok: false, reason: "invalid-action" };
 }
