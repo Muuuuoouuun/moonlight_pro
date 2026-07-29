@@ -656,7 +656,7 @@ export function Overview({ onNavigate }) {
         <SegmentedControl className="hub-page-actions" label="기간" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
       </div>
 
-      <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
+      <div className="hub-grid--metrics stagger-up" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
         {kpiCards.map((k) => <KpiCard key={k.label} k={k} onNavigate={onNavigate} />)}
       </div>
 

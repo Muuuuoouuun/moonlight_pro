@@ -335,7 +335,20 @@
 
 @keyframes mlMoonPulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
 @keyframes mlFadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-.hub-app .fade-up { animation: mlFadeUp 0.2s ease-out; }
+.hub-app .fade-up { animation: mlFadeUp var(--dur-enter) ease-out; }
+
+/* §9 card cascade — put on a container whose direct children rise in sequence
+   (KPI strips, card grids, section stacks). Not for data rows: row lists stay instant.
+   `both` keeps late children invisible until their delay; cap at child 8 so long
+   grids don't drift past the page-reveal window. */
+.hub-app .stagger-up > * { animation: mlFadeUp var(--dur-enter) var(--ease-hub) both; }
+.hub-app .stagger-up > :nth-child(2) { animation-delay: var(--stagger-step); }
+.hub-app .stagger-up > :nth-child(3) { animation-delay: calc(var(--stagger-step) * 2); }
+.hub-app .stagger-up > :nth-child(4) { animation-delay: calc(var(--stagger-step) * 3); }
+.hub-app .stagger-up > :nth-child(5) { animation-delay: calc(var(--stagger-step) * 4); }
+.hub-app .stagger-up > :nth-child(6) { animation-delay: calc(var(--stagger-step) * 5); }
+.hub-app .stagger-up > :nth-child(7) { animation-delay: calc(var(--stagger-step) * 6); }
+.hub-app .stagger-up > :nth-child(n+8) { animation-delay: calc(var(--stagger-step) * 7); }
 
 /* Drawer / sheet motion (DESIGN.md §9: 160–200ms, reduced-motion respected) */
 @keyframes hubDrawerIn { from { transform: translateX(14px); opacity: 0; } to { transform: none; opacity: 1; } }

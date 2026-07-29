@@ -1315,7 +1315,7 @@ function MoreDetail({ title, children }) {
         <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{open ? '접기' : '펼치기'}</span>
       </button>
       {open && (
-        <div className="fade-up" style={{ marginTop: 'var(--gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+        <div className="stagger-up" style={{ marginTop: 'var(--gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
           {children}
         </div>
       )}
@@ -1510,7 +1510,7 @@ export function DailyBrief({ onNavigate }) {
           revenue.jsx와 같은 hub-grid--split 컨벤션(1fr + 300px 사이드레일, ≤1200px에서
           1열로 접힘). */}
       <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: 'var(--gap)', alignItems: 'start' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', minWidth: 0 }}>
+        <div className="stagger-up" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', minWidth: 0 }}>
           <QuickTaskCapture onNavigate={onNavigate} onSaved={refreshLedger} />
 
           <StatusLine state={ledger} />
