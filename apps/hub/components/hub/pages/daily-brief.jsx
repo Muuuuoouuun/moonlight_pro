@@ -1233,7 +1233,8 @@ function CommandCard({ s, remaining, onNavigate }) {
       boxShadow: `0 0 0 1px ${line}, 0 18px 44px -26px ${line}`,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        <span style={{ width: 7, height: 7, borderRadius: 999, background: accent, boxShadow: `0 0 8px ${accent}`, animation: s.tone === 'danger' ? 'mlMoonPulse 1.4s ease-in-out infinite' : 'none', flexShrink: 0 }} />
+        {/* §9: urgent 인디케이터는 루프 금지 — red+glow가 이미 충분한 강조 */}
+        <span style={{ width: 7, height: 7, borderRadius: 999, background: accent, boxShadow: `0 0 8px ${accent}`, flexShrink: 0 }} />
         <span className="mono" style={{ fontSize: 10.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--fg-dim)' }}>지금 가장 급한 결정</span>
         <Badge tone="neutral" size="xs">{s.kind}</Badge>
         <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{s.meta}</span>

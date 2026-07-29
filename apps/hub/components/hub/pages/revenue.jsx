@@ -1527,7 +1527,6 @@ function emptyDetail() {
 }
 
 function HealthDot({ health }) {
-  const pulse = health === 'warning';
   return (
     <span
       title={health}
@@ -1535,7 +1534,6 @@ function HealthDot({ health }) {
         width: 7, height: 7, borderRadius: 999,
         background: `var(--${H_TONE[health]})`,
         display: 'inline-block',
-        animation: pulse ? 'mlMoonPulse 1.4s ease-in-out infinite' : 'none',
         flexShrink: 0,
       }}
     />
