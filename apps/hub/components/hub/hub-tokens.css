@@ -236,6 +236,21 @@
   .hub-app .hub-kanban-add { transition: none; }
 }
 
+/* IconButton hover — CSS-owned per §8.1 (no JS onMouseEnter/Leave). Danger tone keeps
+   its color on hover: destructive intent must not read as neutral mid-interaction. */
+.hub-app .hub-iconbtn {
+  color: var(--fg-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background var(--dur-hover) ease, border-color var(--dur-hover) ease, color var(--dur-hover) ease;
+}
+.hub-app .hub-iconbtn:hover { background: var(--surface-3); border-color: var(--line-soft); color: var(--fg); }
+.hub-app .hub-iconbtn--danger { color: var(--danger); }
+.hub-app .hub-iconbtn--danger:hover { color: var(--danger); }
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-iconbtn { transition: none; }
+}
+
 /* Sidebar anchor row — same contract as .hub-row (CSS hover, no JS handlers),
    sized for the consolidated eight-anchor nav: one tap target, no accordion. */
 .hub-app .hub-nav-item {

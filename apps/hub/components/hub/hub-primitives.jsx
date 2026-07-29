@@ -163,7 +163,8 @@ export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRig
     <button {...props} type={type} className={className} onClick={onClick} disabled={disabled} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: s.gap,
       height: s.h, padding: `0 ${s.px}px`, fontSize: s.fs, fontWeight: 500,
-      borderRadius: 'var(--r-sm)', whiteSpace: 'nowrap', transition: 'all .12s ease',
+      borderRadius: 'var(--r-sm)', whiteSpace: 'nowrap',
+      transition: 'background var(--dur-hover) ease, border-color var(--dur-hover) ease, color var(--dur-hover) ease, opacity var(--dur-hover) ease',
       ...v, ...style,
       ...(disabled && { opacity: 0.45, cursor: 'not-allowed', pointerEvents: 'none' }),
     }}>
@@ -175,21 +176,15 @@ export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRig
 }
 
 export const IconButton = React.forwardRef(function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tooltip, style, className, disabled = false, ...props }, ref) {
+  const toneCls = tone === 'danger' ? ' hub-iconbtn--danger' : '';
   return (
-    <button {...props} ref={ref} type="button" className={className} onClick={onClick} disabled={disabled} title={tooltip} aria-label={props['aria-label'] || tooltip} style={{
+    <button {...props} ref={ref} type="button" className={`hub-iconbtn${toneCls}${className ? ` ${className}` : ''}`} onClick={onClick} disabled={disabled} title={tooltip} aria-label={props['aria-label'] || tooltip} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       width: size, height: size,
-      color: tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)',
-      background: 'transparent',
-      border: '1px solid transparent',
       borderRadius: 'var(--r-sm)',
-      transition: 'all .12s ease',
       ...style,
       ...(disabled && { opacity: 0.45, cursor: 'not-allowed', pointerEvents: 'none' }),
-    }}
-      onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-3)'; e.currentTarget.style.borderColor = 'var(--line-soft)'; e.currentTarget.style.color = 'var(--fg)'; }}
-      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.color = tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)'; }}
-    >
+    }}>
       <Iconed name={icon} size={iconSize} />
     </button>
   );
@@ -223,7 +218,7 @@ export function Progress({ value = 0, tone = 'moon', height = 4 }) {
   const map = { moon: 'var(--moon-300)', success: 'var(--success)', warning: 'var(--warning)', danger: 'var(--danger)' };
   return (
     <div style={{ height, background: 'oklch(0.28 0.008 250 / 0.6)', borderRadius: 999, overflow: 'hidden' }}>
-      <div style={{ width: `${value}%`, height: '100%', background: map[tone], borderRadius: 999, transition: 'width .3s ease' }} />
+      <div style={{ width: `${value}%`, height: '100%', background: map[tone], borderRadius: 999, transition: 'width var(--dur-enter) var(--ease-hub)' }} />
     </div>
   );
 }
@@ -293,7 +288,7 @@ export function Checkbox({ checked, onChange, size = 14, label, disabled = false
       border: `1px solid ${checked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
       background: checked ? 'var(--moon-300)' : 'transparent',
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      transition: 'all .12s ease', flexShrink: 0, opacity: disabled ? 0.55 : 1,
+      transition: 'background var(--dur-hover) ease, border-color var(--dur-hover) ease', flexShrink: 0, opacity: disabled ? 0.55 : 1,
     }}>
       {checked && <Iconed name="check" size={size - 4} style={{ color: 'var(--bg)', strokeWidth: 3 }} />}
     </button>
@@ -310,7 +305,7 @@ export const Input = React.forwardRef(function Input({ placeholder, icon, value,
       background: 'var(--surface-2)',
       border: '1px solid var(--line-soft)',
       borderRadius: 'var(--r-sm)',
-      transition: 'border-color .15s ease',
+      transition: 'border-color var(--dur-hover) ease',
       ...style,
     }}>
       {icon && <Iconed name={icon} size={13} style={{ color: 'var(--fg-faint)' }} />}
