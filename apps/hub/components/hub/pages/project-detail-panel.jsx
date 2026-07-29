@@ -81,7 +81,7 @@ export function ProjectDetailPanel({
     : empty;
 
   return (
-    <aside className="hub-project-detail-panel" aria-label={`${project.name} 상세`} style={{ borderLeft: "1px solid var(--line-soft)", background: "var(--surface)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <aside className="hub-project-detail-panel" aria-label={`${project.name} 상세`} style={{ borderLeft: "1px solid var(--line-soft)", background: "var(--surface)", display: "flex", flexDirection: "column", overflow: "hidden", animation: "mlFadeUp var(--dur-enter) var(--ease-hub)" }}>
       <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--line-soft)", display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ fontSize: 16, color: "var(--fg-muted)" }}>{container?.glyph}</span>
         <div style={{ fontSize: 11, color: "var(--fg-faint)", flex: 1 }}>{container?.name || "저장 위치 미정"}</div>
