@@ -28,6 +28,7 @@
   --z-project-detail: 61;
   --z-drawer-overlay: 70;
   --z-drawer: 71;
+  --z-palette: 1100; /* ⌘K — 모바일 사이드바(1000) 포함 모든 서피스 위 */
 
   --fg:            var(--moon-100);
   --fg-muted:      var(--moon-400);

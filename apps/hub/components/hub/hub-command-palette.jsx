@@ -59,12 +59,13 @@ export function CommandPalette({ open, onClose, onNavigate }) {
 
   return (
     <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, zIndex: 100,
+      position: 'fixed', inset: 0, zIndex: 'var(--z-palette)',
       background: 'oklch(0 0 0 / 0.6)',
       backdropFilter: 'blur(6px)',
       display: 'flex', justifyContent: 'center', paddingTop: '12vh',
-      animation: 'mlFadeUp .15s ease-out',
+      animation: 'hubFadeIn var(--dur-overlay) ease-out',
     }}>
+      {/* 오버레이는 페이드만, 패널이 §9 다이얼로그 윈도(160–200ms)로 상승 */}
       <div onClick={e => e.stopPropagation()} style={{
         width: 580, maxWidth: '90vw', maxHeight: '70vh',
         background: 'var(--surface-2)',
@@ -72,6 +73,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
         borderRadius: 'var(--r-lg)',
         boxShadow: 'var(--shadow-pop)',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        animation: 'mlFadeUp var(--dur-panel) var(--ease-hub)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--line-soft)' }}>
           <Iconed name="search" size={15} style={{ color: 'var(--fg-faint)' }} />
