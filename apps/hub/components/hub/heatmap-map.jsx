@@ -212,8 +212,8 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
                       ? "drop-shadow(0 0 1.1px color-mix(in oklch, var(--moon-200) 35%, transparent))"
                       : "none",
                   transition: reducedMotion
-                    ? "opacity 280ms ease-out"
-                    : "opacity 240ms ease-out, fill 220ms cubic-bezier(0.2, 0.7, 0.3, 1), stroke 220ms cubic-bezier(0.2, 0.7, 0.3, 1), transform 200ms cubic-bezier(0.2, 0.7, 0.3, 1), filter 200ms ease-out",
+                    ? "none"
+                    : "opacity 240ms ease-out, fill 220ms var(--ease-hub), stroke 220ms var(--ease-hub), transform 200ms var(--ease-hub), filter 200ms ease-out",
                   // 하이라이트가 먼저 켜지고 이웃이 반 박자 늦게 물러난다
                   transitionDelay: !reducedMotion && otherHovered ? "50ms" : "0ms",
                 }}
@@ -296,8 +296,8 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
                   strokeWidth: 0.3,
                   opacity: revealedSet.has(row.label) ? (hov ? 1 : otherHovered ? 0.4 : 0.95) : 0,
                   transition: reducedMotion
-                    ? "opacity 280ms ease-out"
-                    : "opacity 240ms ease-out, fill 220ms cubic-bezier(0.2, 0.7, 0.3, 1)",
+                    ? "none"
+                    : "opacity 240ms ease-out, fill 220ms var(--ease-hub)",
                   transitionDelay: !reducedMotion && otherHovered ? "50ms" : "0ms",
                 }}
               >
@@ -330,7 +330,7 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
               borderRadius: "var(--r-sm)",
               padding: "10px 12px",
               boxShadow: "inset 2px 0 0 var(--moon-300), var(--shadow-pop)",
-              animation: reducedMotion ? "none" : "hubFadeIn 140ms ease-out",
+              animation: reducedMotion ? "none" : "hubFadeIn var(--dur-overlay) ease-out",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>

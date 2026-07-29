@@ -56,8 +56,8 @@ function RegionDetail({ row, offMap = false, onJump }) {
     return <div style={{ fontSize: 12, color: "var(--fg-faint)", padding: "6px 2px" }}>지역을 선택하거나 호버하면 상세가 표시됩니다.</div>;
   }
   return (
-    // key로 지역 전환마다 140ms 크로스페이드 — 값이 뚝 바뀌는 대신 계기가 갱신되는 느낌
-    <div key={row.label} style={{ animation: "hubFadeIn 140ms ease-out" }}>
+    // key로 지역 전환마다 크로스페이드(--dur-overlay) — 값이 뚝 바뀌는 대신 계기가 갱신되는 느낌
+    <div key={row.label} style={{ animation: "hubFadeIn var(--dur-overlay) ease-out" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", paddingBottom: 10, borderBottom: "1px solid var(--line-soft)" }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em", display: "flex", alignItems: "center", gap: 7 }}>
