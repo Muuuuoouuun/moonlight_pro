@@ -86,13 +86,8 @@ const Settings = lazyPage(() => import("./pages/evolution-settings").then(m => m
 // import() dedupes against dynamic()'s loader, so this fills the same module
 // cache the router reads from; failures are harmless (navigation just
 // re-fetches).
-const PREFETCH_PAGES = [
-  () => import("./pages/daily-brief"),
-  () => import("./pages/my-work"),
-  () => import("./pages/revenue"),
-  () => import("./pages/projects"),
-  () => import("./pages/overview"),
-];
+const prefetchDailyBrief = () => import("./pages/daily-brief");
+const prefetchMyWork = () => import("./pages/my-work");
 
 const MOBILE_NAV_QUERY = '(max-width: 900px)';
 
@@ -110,22 +105,21 @@ function useMobileViewport() {
   return isMobileViewport;
 }
 
-function useIdlePagePrefetch() {
+function useIdlePagePrefetch(path) {
   React.useEffect(() => {
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType || '')) return undefined;
+
     let cancelled = false;
     const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1500));
     const cancelIdle = window.cancelIdleCallback || clearTimeout;
     // One module per idle slot — never compete with user-initiated work.
-    let queue = [...PREFETCH_PAGES];
-    let handle;
-    const pump = () => {
-      if (cancelled || !queue.length) return;
-      const load = queue.shift();
-      load().catch(() => {}).finally(() => { if (!cancelled) handle = idle(pump); });
-    };
-    handle = idle(pump);
+    const load = path === 'dashboard/daily-brief' ? prefetchMyWork : prefetchDailyBrief;
+    const handle = idle(() => {
+      if (!cancelled) load().catch(() => {});
+    });
     return () => { cancelled = true; cancelIdle(handle); };
-  }, []);
+  }, [path]);
 }
 
 function LegacyPlaceholder({ path, onNavigate }) {
@@ -234,7 +228,6 @@ const PARENT_JUMP = {
 };
 
 export function HubApp() {
-  useIdlePagePrefetch();
   const isMobileViewport = useMobileViewport();
   const router = useRouter();
   const pathname = usePathname() || '/dashboard';
@@ -242,6 +235,7 @@ export function HubApp() {
   const stripped = pathname.replace(/^\/+/, '').replace(/\/$/, '');
   let path = stripped || 'dashboard';
   if (PARENT_JUMP[path]) path = PARENT_JUMP[path];
+  useIdlePagePrefetch(path);
 
   // The Projects surface is shared by two sidebar anchors (할 일 · 프로젝트·기획);
   // `view` is what tells them apart, so the shell has to hand it to the sidebar.
@@ -418,6 +412,7 @@ export function HubApp() {
 
   return (
     <div ref={rootRef} className="hub-app" data-theme={theme} data-density={density}>
+      <a className="hub-skip-link" href="#hub-main-content">본문으로 건너뛰기</a>
       <div className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'}>
         <div
           className="hub-mobile-backdrop"
@@ -452,6 +447,7 @@ export function HubApp() {
             onTheme={updateTheme}
           />
           <main
+            id="hub-main-content"
             ref={mainRef}
             tabIndex={-1}
             aria-hidden={mobileNavState.mainHidden ? 'true' : undefined}

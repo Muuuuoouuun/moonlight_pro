@@ -88,6 +88,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - Daily note/Obsidian: [`daily-operating-note-todo.md`](daily-operating-note-todo.md)
 - GitHub Work OS: [`github-workos-mvp-mockup.md`](github-workos-mvp-mockup.md)
 - Sales Guru: [`sales-guru-mentor-agent-plan.md`](sales-guru-mentor-agent-plan.md)
+- **AI 멘토 통합(Council+Guru)**: [`ai-mentor-unification-plan.md`](ai-mentor-unification-plan.md) — **신규(2026-07-20)**. 위 두 문서(Agent/Council, Sales Guru)와 지식 베이스 3종을 코드 기준으로 나란히 진단하고 하나의 "AI 멘토" 계약으로 묶는 통합 기획. 코드 변경 없음, 선택지는 전부 미정.
 - ClassIn CRM 결합: [`sales-os-crm-integration-plan.md`](sales-os-crm-integration-plan.md) — 문서 자체가 보류 상태이며 새 정본 경계를 먼저 적용
 - AI Sales 팀 운영: [`sales-os/team-operating-layer.md`](sales-os/team-operating-layer.md), [`sales-os/personas/`](sales-os/personas/)
 

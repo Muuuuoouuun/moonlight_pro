@@ -82,3 +82,9 @@ export function POST(req) {
 export function PATCH(req) {
   return forwardProjectWrite(req, "update_project");
 }
+
+// Soft delete (migration 0021): stamps deleted_at. Child tasks keep their project_id but
+// the project leaves every read-model surface (all reads filter deleted_at is null).
+export function DELETE(req) {
+  return forwardProjectWrite(req, "delete_project");
+}

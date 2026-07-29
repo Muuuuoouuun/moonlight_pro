@@ -515,7 +515,10 @@ function groupFieldRows(fields) {
 // Shared field-driven edit drawer. Revenue behavior is canonical for save feedback,
 // ESC close, and optimistic delete confirmation. Composes on top of Drawer for the shell.
 // Cmd/Ctrl+Enter mirrors the footer 완료 (save) button.
-export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)', children }) {
+// `saveLabel` defaults to '완료' but must be overridden on any surface where "완료" already
+// means something else in the record itself — 내 작업's status field has a 완료 option, so a
+// footer also reading 완료 made "saved my edits" and "finished this task" the same word.
+export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, saveLabel = '완료', width = 'min(380px, 92vw)', children }) {
   const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | conflict | error
   const [saveFeedback, setSaveFeedback] = React.useState('');
   const savingRef = React.useRef(false);
@@ -598,7 +601,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
             <Button variant="ghost" size="sm" onClick={onClose}>닫기</Button>
           )}
           <Button variant="primary" size="sm" onClick={handleDone} disabled={saveState === 'saving'}>
-            {saveState === 'saving' ? '저장 중…' : '완료'}
+            {saveState === 'saving' ? '저장 중…' : saveLabel}
           </Button>
         </>
       }

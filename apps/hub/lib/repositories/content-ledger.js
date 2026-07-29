@@ -891,12 +891,13 @@ export async function getContentLedger() {
       order: "updated_at.desc",
       filters: withWorkspaceFilter([
         ["status", inFilter(ITEM_STATUSES)],
+        ["deleted_at", "is.null"],
       ]),
     }),
     fetchSupabaseRows("content_variants", {
       limit: 160,
       order: "updated_at.desc",
-      filters: withWorkspaceFilter(),
+      filters: withWorkspaceFilter([["deleted_at", "is.null"]]),
     }),
     fetchSupabaseRows("publish_logs", {
       limit: 80,
@@ -913,6 +914,7 @@ export async function getContentLedger() {
       order: "name.asc",
       filters: withWorkspaceFilter([
         ["status", "eq.active"],
+        ["deleted_at", "is.null"],
       ]),
     }),
     fetchSupabaseRows("campaigns", {

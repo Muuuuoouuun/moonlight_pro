@@ -24,6 +24,7 @@ const DEFAULT_MIGRATIONS = [
   "20260617_0006_crm_xiaoshouyi_owner_names.sql",
   "20260717_0019_routine_check_idempotency.sql",
   "20260717_0020_nullable_project_progress.sql",
+  "20260720_0021_pms_soft_delete.sql",
 ];
 
 function parseEnvFile(filepath) {

@@ -162,6 +162,22 @@
 .hub-app button { font-family: inherit; color: inherit; background: none; border: none; cursor: pointer; padding: 0; }
 .hub-app input, .hub-app textarea { font-family: inherit; color: inherit; }
 .hub-app a { color: inherit; text-decoration: none; }
+.hub-app .hub-skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 1001;
+  transform: translateY(-160%);
+  padding: 9px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--elevated);
+  color: var(--fg);
+  box-shadow: var(--shadow-pop);
+  font-size: 12.5px;
+  transition: transform 120ms ease;
+}
+.hub-app .hub-skip-link:focus { transform: translateY(0); }
 .hub-app .mono { font-family: var(--font-mono); font-feature-settings: 'ss02'; letter-spacing: 0; font-variant-numeric: tabular-nums; }
 /* Sans numeric utility — column-stable lining figures for counts that stay in sans (e.g. Badge) */
 .hub-app .num { font-variant-numeric: tabular-nums lining-nums; }
@@ -187,6 +203,7 @@
    click doesn't leave a ring, only Tab/roving-arrow-key navigation does. */
 .hub-app .hub-row:focus-visible { outline: 1px solid var(--moon-300); outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-skip-link { transition: none; }
   .hub-app .hub-row { transition: none; }
 }
 
@@ -294,6 +311,13 @@
 .hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; border-radius: 2px; }
 /* Text-field wrappers that suppress the inner input's own ring surface the focus on the wrapper (§11) */
 .hub-app .hub-field:focus-within { border-color: var(--moon-300); }
+.hub-app .hub-studio-title::placeholder,
+.hub-app .hub-studio-body::placeholder { color: var(--fg-faint); opacity: 1; }
+.hub-app .hub-studio-title:focus-visible,
+.hub-app .hub-studio-body:focus-visible { outline-offset: 5px; border-radius: var(--r-sm); }
+.hub-app .hub-card-action { border-radius: var(--r-sm); }
+.hub-app .hub-signal-trigger:hover,
+.hub-app .hub-card-action:hover { background: var(--surface-2) !important; }
 
 @keyframes mlMoonPulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
 @keyframes mlFadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
@@ -687,6 +711,21 @@
     border-left: 0 !important;
     border-top: 1px solid var(--line-soft) !important;
     min-height: 280px;
+  }
+
+  .hub-studio-toolbar {
+    flex-wrap: wrap;
+    padding: 8px 12px !important;
+    gap: 6px !important;
+    overflow: visible !important;
+  }
+
+  .hub-studio-toolbar-spacer {
+    display: none;
+  }
+
+  .hub-studio-toolbar-save-state {
+    margin-left: auto;
   }
 
   .hub-studio-canvas {

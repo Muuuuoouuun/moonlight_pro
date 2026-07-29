@@ -30,7 +30,7 @@ const BRAND_REFERENCES = {
   },
   operator: {
     label: "Operator Notes",
-    rule: "Founder memo tone. Short, directional, and grounded in what changed.",
+    rule: "Operator memo tone. Short, directional, and grounded in what changed.",
     messages: ["what moved", "why it matters", "next move"],
   },
 };

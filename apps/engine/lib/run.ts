@@ -158,22 +158,23 @@ async function buildProjectsCommandResponse() {
   const [projectCount, openTaskCount, projects, tasks, updates] = await Promise.all([
     countSupabaseRows(
       "projects",
-      withWorkspaceFilter([makeFilter("status", inFilter(["active", "blocked"]))]),
+      withWorkspaceFilter([makeFilter("status", inFilter(["active", "blocked"])), makeFilter("deleted_at", "is.null")]),
     ),
     countSupabaseRows(
       "tasks",
-      withWorkspaceFilter([makeFilter("status", inFilter(["inbox", "todo", "doing", "blocked"]))]),
+      withWorkspaceFilter([makeFilter("status", inFilter(["inbox", "todo", "doing", "blocked"])), makeFilter("deleted_at", "is.null")]),
     ),
     fetchSupabaseRows("projects", {
       limit: 3,
       order: "created_at.desc",
-      filters: withWorkspaceFilter(),
+      filters: withWorkspaceFilter([makeFilter("deleted_at", "is.null")]),
     }),
     fetchSupabaseRows("tasks", {
       limit: 3,
       order: "created_at.desc",
       filters: withWorkspaceFilter([
         makeFilter("status", inFilter(["inbox", "todo", "doing", "blocked"])),
+        makeFilter("deleted_at", "is.null"),
       ]),
     }),
     fetchSupabaseRows("project_updates", {
@@ -232,6 +233,7 @@ async function buildPmsCommandResponse() {
       order: "created_at.desc",
       filters: withWorkspaceFilter([
         makeFilter("status", inFilter(["inbox", "todo", "doing", "blocked"])),
+        makeFilter("deleted_at", "is.null"),
       ]),
     }),
     fetchSupabaseRows("decisions", {
@@ -242,7 +244,7 @@ async function buildPmsCommandResponse() {
     fetchSupabaseRows("projects", {
       limit: 12,
       order: "created_at.desc",
-      filters: withWorkspaceFilter(),
+      filters: withWorkspaceFilter([makeFilter("deleted_at", "is.null")]),
     }),
   ]);
 

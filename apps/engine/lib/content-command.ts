@@ -42,6 +42,14 @@ export type NormalizedContentCommand =
       campaignId: string;
       campaignRecord: RecordValue;
     }
+  | {
+      ok: true;
+      action: "delete_content";
+      workspaceId: string;
+      contentId: string;
+      variantId: string | null;
+      now: string;
+    }
   | { ok: false; reason: string };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -141,6 +149,17 @@ export function normalizeContentCommand(
     if (!campaignId) return { ok: false, reason: "invalid-campaign-id" };
     if (!validateWorkspaceRecord(campaignRecord, workspaceId)) return { ok: false, reason: "campaign-workspace-mismatch" };
     return { ok: true, action, workspaceId, campaignId, campaignRecord };
+  }
+
+  // Soft delete (migration 0021): stamp deleted_at on the item (and its variant, if known)
+  // so the draft leaves the queue but stays recoverable. variantId is optional — some rows
+  // only carry the content id.
+  if (action === "delete_content") {
+    const contentId = uuid(input.contentId);
+    if (!contentId) return { ok: false, reason: "invalid-content-id" };
+    const variantId = uuid(input.variantId);
+    const nowValue = text(input.now, 100) || new Date().toISOString();
+    return { ok: true, action, workspaceId, contentId, variantId, now: nowValue };
   }
 
   return { ok: false, reason: "invalid-action" };

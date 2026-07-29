@@ -9,6 +9,8 @@ export function CommandPalette({ open, onClose, onNavigate }) {
   const [q, setQ] = React.useState('');
   const [idx, setIdx] = React.useState(0);
   const inputRef = React.useRef(null);
+  const dialogRef = React.useRef(null);
+  const previousFocusRef = React.useRef(null);
 
   const items = React.useMemo(() => {
     const flat = [];
@@ -32,23 +34,29 @@ export function CommandPalette({ open, onClose, onNavigate }) {
   }, [q, items]);
 
   React.useEffect(() => {
-    if (open) { setQ(''); setIdx(0); setTimeout(() => inputRef.current?.focus(), 30); }
+    if (!open) return undefined;
+    previousFocusRef.current = document.activeElement;
+    setQ('');
+    setIdx(0);
+    const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 30);
+    return () => {
+      window.clearTimeout(focusTimer);
+      previousFocusRef.current?.focus?.();
+    };
   }, [open]);
   React.useEffect(() => { setIdx(0); }, [q]);
 
-  // Global ESC — close even when focus has left the search input (list hover, etc.).
   React.useEffect(() => {
     if (!open) return;
-    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+    dialogRef.current
+      ?.querySelector(`[data-command-index="${idx}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [idx, open, filtered.length]);
 
   if (!open) return null;
 
   const handleKey = (e) => {
-    if (e.key === 'Escape') { onClose(); return; }
-    if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(filtered.length - 1, i + 1)); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => filtered.length ? Math.min(filtered.length - 1, i + 1) : 0); }
     if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(0, i - 1)); }
     if (e.key === 'Enter') {
       const it = filtered[idx];
@@ -57,18 +65,48 @@ export function CommandPalette({ open, onClose, onNavigate }) {
     }
   };
 
+  const handleDialogKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+
+    const focusable = Array.from(dialogRef.current?.querySelectorAll(
+      'button:not([disabled]):not([tabindex="-1"]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ) || []);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   return (
-    <div onClick={onClose} style={{
+    <div onClick={(event) => { if (event.target === event.currentTarget) onClose(); }} style={{
       position: 'fixed', inset: 0, zIndex: 100,
-      background: 'oklch(0 0 0 / 0.6)',
-      backdropFilter: 'blur(6px)',
+      background: 'oklch(0.08 0.004 250 / 0.84)',
+      backdropFilter: 'blur(10px)',
       display: 'flex', justifyContent: 'center', paddingTop: '12vh',
       animation: 'mlFadeUp .15s ease-out',
     }}>
-      <div onClick={e => e.stopPropagation()} style={{
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="빠른 이동 및 실행"
+        onKeyDown={handleDialogKeyDown}
+        onClick={e => e.stopPropagation()}
+        style={{
         width: 580, maxWidth: '90vw', maxHeight: '70vh',
-        background: 'var(--surface-2)',
-        border: '1px solid var(--line)',
+        background: 'var(--elevated)',
+        border: '1px solid var(--line-strong)',
         borderRadius: 'var(--r-lg)',
         boxShadow: 'var(--shadow-pop)',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
@@ -76,16 +114,31 @@ export function CommandPalette({ open, onClose, onNavigate }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--line-soft)' }}>
           <Iconed name="search" size={15} style={{ color: 'var(--fg-faint)' }} />
           <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} onKeyDown={handleKey}
+            aria-label="페이지와 작업 검색"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="hub-command-results"
+            aria-expanded="true"
+            aria-activedescendant={filtered[idx] ? `hub-command-option-${idx}` : undefined}
             placeholder="Search pages, actions…"
             style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--fg)', fontSize: 14 }} />
           <Kbd>esc</Kbd>
         </div>
-        <div className="scroll-y" style={{ flex: 1, padding: 6 }}>
+        <div id="hub-command-results" role="listbox" className="scroll-y" style={{ flex: 1, padding: 6 }}>
           {filtered.length === 0 && (
             <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--fg-faint)', fontSize: 13 }}>No results</div>
           )}
           {filtered.map((it, i) => (
-            <button key={i} onClick={() => { if (it.path) onNavigate(it.path); onClose(); }} onMouseEnter={() => setIdx(i)} style={{
+            <button
+              id={`hub-command-option-${i}`}
+              data-command-index={i}
+              role="option"
+              aria-selected={idx === i}
+              tabIndex={-1}
+              key={i}
+              onClick={() => { if (it.path) onNavigate(it.path); onClose(); }}
+              onMouseEnter={() => setIdx(i)}
+              style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10,
               padding: '9px 12px', borderRadius: 'var(--r-sm)',
               background: idx === i ? 'var(--surface-3)' : 'transparent',

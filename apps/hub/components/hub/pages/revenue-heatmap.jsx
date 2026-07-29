@@ -437,10 +437,10 @@ function CustomerRankRow({ customer, rank, max, metricKey, onSelect, onJump }) {
       onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
       style={{
         display: "grid", gridTemplateColumns: "18px minmax(0,1.2fr) minmax(0,1fr) 62px 26px",
-        gap: 8, alignItems: "center", padding: "6px 6px", borderRadius: 4, cursor: "pointer",
+        gap: 8, alignItems: "center", padding: "calc(var(--pad-y) - 3px) calc(var(--pad-x) - 6px)", borderRadius: 4, cursor: "pointer",
       }}
     >
-      <span className="mono" style={{ fontSize: 10, color: "var(--fg-faint)" }}>{String(rank).padStart(2, "0")}</span>
+      <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>{String(rank).padStart(2, "0")}</span>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{customer.name}</div>
         <div style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>{customer.region || "지역 미상"}</div>
@@ -591,7 +591,7 @@ function aggregate(ledger, { period, item }) {
 // ── 페이지 ───────────────────────────────────────────────────────────────────
 
 export function RevenueHeatmap({ onNavigate }) {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState } = useRevenueLedger('heatmap');
   const [periodKey, setPeriodKey] = React.useState("all");
   const [itemKey, setItemKey] = React.useState("all");
   const [metricKey, setMetricKey] = React.useState("expected");
@@ -684,18 +684,33 @@ export function RevenueHeatmap({ onNavigate }) {
               {otherRows.length > 0 && (
                 <div>
                   <div className="eyebrow" style={{ fontSize: 10.5, letterSpacing: "0.06em", color: "var(--fg-dim)", textTransform: "uppercase", margin: "0 2px 6px" }}>
-                    지도 외 · 지역 미상
+                    지도 외 · 지역 미상{onNavigate ? " · 눌러서 딜에서 지역 채우기" : ""}
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                    {otherRows.map(r => (
-                      <span key={r.region} className="mono" style={{
+                    {otherRows.map(r => {
+                      // 빈 상태 안내("지역 태그를 채우면…")가 가리키는 바로 그 문제 — 누르면 딜 목록으로
+                      // 보내 지역 태그를 채우게 한다. onNavigate가 없으면 정적 표시로 폴백.
+                      const pillStyle = {
                         fontSize: 10.5, color: "var(--fg-muted)",
                         background: "var(--surface-2)", border: "1px solid var(--line-soft)",
                         borderRadius: 999, padding: "3px 9px",
-                      }}>
-                        {r.region} {fmtMoney(r[metricKey])}
-                      </span>
-                    ))}
+                      };
+                      const label = `${r.region} ${fmtMoney(r[metricKey])}`;
+                      return onNavigate ? (
+                        <button
+                          key={r.region}
+                          type="button"
+                          className="mono hub-row"
+                          title={`${r.region} 딜에 지역 태그 채우기`}
+                          onClick={() => onNavigate("dashboard/revenue/deals")}
+                          style={{ ...pillStyle, cursor: "pointer" }}
+                        >
+                          {label}
+                        </button>
+                      ) : (
+                        <span key={r.region} className="mono" style={pillStyle}>{label}</span>
+                      );
+                    })}
                   </div>
                 </div>
               )}

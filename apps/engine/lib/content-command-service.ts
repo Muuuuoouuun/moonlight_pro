@@ -4,6 +4,7 @@ type PersistenceResult = {
   persisted: boolean;
   reason: string;
   detail?: string;
+  rows?: Array<Record<string, unknown>>;
 };
 
 type Dependencies = {
@@ -12,6 +13,7 @@ type Dependencies = {
     table: string,
     filters: Array<[string, string]>,
     patch: Record<string, unknown>,
+    options?: { returnRepresentation?: boolean },
   ) => Promise<PersistenceResult>;
   remove: (table: string, filters: Array<[string, string]>) => Promise<PersistenceResult>;
   fetchRows: (
@@ -104,11 +106,27 @@ export async function executeContentCommand(
 
   if (command.action === "update_draft") {
     const [item, variant] = await Promise.all([
-      dependencies.update("content_items", filters(command.contentId, command.workspaceId), command.itemPatch),
-      dependencies.update("content_variants", filters(command.variantId, command.workspaceId), command.variantPatch),
+      dependencies.update(
+        "content_items",
+        filters(command.contentId, command.workspaceId),
+        command.itemPatch,
+        { returnRepresentation: true },
+      ),
+      dependencies.update(
+        "content_variants",
+        filters(command.variantId, command.workspaceId),
+        command.variantPatch,
+        { returnRepresentation: true },
+      ),
     ]);
     if (!item.persisted) return failure("item-update-failed", item, { contentId: command.contentId, variantId: command.variantId });
     if (!variant.persisted) return failure("variant-update-failed", variant, { contentId: command.contentId, variantId: command.variantId });
+    if (!item.rows?.length) {
+      return failure("item-update-failed", { persisted: false, reason: "not-found" }, { contentId: command.contentId, variantId: command.variantId });
+    }
+    if (!variant.rows?.length) {
+      return failure("variant-update-failed", { persisted: false, reason: "not-found" }, { contentId: command.contentId, variantId: command.variantId });
+    }
     return {
       status: "saved",
       action: command.action,
@@ -152,6 +170,37 @@ export async function executeContentCommand(
       assetId: command.assetId,
       event: command.event,
       persistence: { log, asset },
+    };
+  }
+
+  if (command.action === "delete_content") {
+    const itemPatch = { deleted_at: command.now, updated_at: command.now };
+    const item = await dependencies.update(
+      "content_items",
+      filters(command.contentId, command.workspaceId),
+      itemPatch,
+      { returnRepresentation: true },
+    );
+    if (!item.persisted) return failure("item-delete-failed", item, { contentId: command.contentId });
+    if (!item.rows?.length) {
+      return failure("item-delete-failed", { persisted: false, reason: "not-found" }, { contentId: command.contentId });
+    }
+    // Variant delete is best-effort — the queue is item-driven, so an orphaned variant row
+    // never surfaces; not every caller knows the variant id.
+    if (command.variantId) {
+      await dependencies.update(
+        "content_variants",
+        filters(command.variantId, command.workspaceId),
+        { deleted_at: command.now, updated_at: command.now },
+        { returnRepresentation: false },
+      );
+    }
+    return {
+      status: "saved",
+      action: command.action,
+      contentId: command.contentId,
+      variantId: command.variantId,
+      persistence: { item },
     };
   }
 

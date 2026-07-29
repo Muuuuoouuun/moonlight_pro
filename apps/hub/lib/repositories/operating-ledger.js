@@ -3,6 +3,7 @@ import {
   eqFilter,
   fetchSupabaseRows,
   inFilter,
+  isNullFilter,
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
@@ -472,8 +473,11 @@ export async function getProjectLedger({ projectId = null } = {}) {
   }
 
   const taskStatuses = ["inbox", "todo", "doing", "blocked", "done"];
+  // deleted_at is null → hide soft-deleted rows (migration 0021). Applied to every
+  // projects/tasks/brands read below so a deleted record leaves every surface.
   const taskFilters = withWorkspaceFilter([
     ["status", inFilter(taskStatuses)],
+    ["deleted_at", isNullFilter()],
   ]);
   const [
     brandRows,
@@ -493,13 +497,14 @@ export async function getProjectLedger({ projectId = null } = {}) {
   ] = await Promise.all([
     fetchSupabaseRows("brands", {
       order: "name.asc",
-      filters: withWorkspaceFilter([["status", eqFilter("active")]]),
+      filters: withWorkspaceFilter([["status", eqFilter("active")], ["deleted_at", isNullFilter()]]),
     }),
     fetchSupabaseRows("projects", {
       limit: PROJECT_READ_LIMIT + 1,
       order: "updated_at.desc",
       filters: withWorkspaceFilter([
         ["status", inFilter(["draft", "active", "blocked", "completed", "archived"])],
+        ["deleted_at", isNullFilter()],
       ]),
     }),
     fetchSupabaseRows("tasks", {
@@ -531,7 +536,7 @@ export async function getProjectLedger({ projectId = null } = {}) {
     selectedProjectId
       ? fetchSupabaseRows("projects", {
           limit: 2,
-          filters: withWorkspaceFilter([["id", eqFilter(selectedProjectId)]]),
+          filters: withWorkspaceFilter([["id", eqFilter(selectedProjectId)], ["deleted_at", isNullFilter()]]),
         })
       : Promise.resolve([]),
     selectedProjectId
@@ -541,6 +546,7 @@ export async function getProjectLedger({ projectId = null } = {}) {
           filters: withWorkspaceFilter([
             ["project_id", eqFilter(selectedProjectId)],
             ["status", inFilter(taskStatuses)],
+            ["deleted_at", isNullFilter()],
           ]),
         })
       : Promise.resolve([]),

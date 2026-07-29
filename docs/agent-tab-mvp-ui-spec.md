@@ -1,6 +1,7 @@
 # Com_Moon Agent 탭 MVP UI / 제품 스펙
 
 > 상태: DEFERRED FEATURE SPEC — 현재 Phase 1B·1C보다 먼저 구현하지 않는다. Agent/Council 자산은 보존하되 현재 제품 우선순위는 `docs/README.md`와 Personal Operator OS 심화 설계를 따른다.
+> 관계: [`ai-mentor-unification-plan.md`](ai-mentor-unification-plan.md)는 이 문서의 §6 `Council` 서브탭 정의("여러 에이전트의 합의를 보는 레이어")가 실제 코드의 Council(팀 로스터+브랜드 멘토 혼재)과 어떻게 달라졌는지 진단하고 이름 재정의 선택지를 제시한다. 이 문서의 Overview/Roster/Orders/Threads 구조 자체는 대체되지 않았다.
 
 ## 1. 문서 목적
 

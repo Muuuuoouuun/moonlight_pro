@@ -36,3 +36,23 @@ async function forwardBrandWrite(req) {
 export function POST(req) {
   return forwardBrandWrite(req);
 }
+
+// Soft delete (migration 0021): stamps deleted_at so the container leaves the tree but
+// stays recoverable. Projects keep their brand_id (they just lose the container grouping).
+export async function DELETE(req) {
+  const guard = assertHubWriteAllowed(req);
+  if (guard) return guard;
+
+  const parsed = await readHubWriteJson(req);
+  if (parsed.error) return parsed.error;
+
+  const result = await forwardPmsCommand({
+    id: parsed.data.id,
+    action: "delete_container",
+    workspaceId: resolveDefaultWorkspaceId(),
+  });
+  return NextResponse.json(
+    { ...result.data, brand: result.data?.entity || null },
+    { status: result.httpStatus },
+  );
+}

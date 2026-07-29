@@ -131,16 +131,21 @@ async function buildOpenClawSnapshot(input: OpenClawSyncInput = {}) {
         ["project_id", eqFilter(projectId)],
       ]
     : workspaceFilter;
+  // 소프트 삭제된(deleted_at) 행 제외 (migration 0021). projects·tasks에만 컬럼이 있으므로
+  // project_updates가 쓰는 childFilter에는 넣지 않는다 (그 테이블엔 deleted_at이 없다).
+  const liveFilter: [string, string] = ["deleted_at", "is.null"];
   const [projects, tasks, updates, integrations] = await Promise.all([
     fetchSupabaseRows("projects", {
       select: "id,name,status,priority,next_action,due_at,created_at",
-      filters: projectId ? [...workspaceFilter, ["id", eqFilter(projectId)]] : workspaceFilter,
+      filters: projectId
+        ? [...workspaceFilter, ["id", eqFilter(projectId)], liveFilter]
+        : [...workspaceFilter, liveFilter],
       order: "created_at.desc",
       limit: projectId ? 1 : 8,
     }),
     fetchSupabaseRows("tasks", {
       select: "id,project_id,title,status,next_action,due_at,created_at",
-      filters: childFilter,
+      filters: [...childFilter, liveFilter],
       order: "created_at.desc",
       limit: 16,
     }),

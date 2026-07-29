@@ -376,5 +376,33 @@ export function normalizePmsCommand(
     };
   }
 
+  // Soft delete (migration 0021): stamp deleted_at instead of removing the row, so the
+  // record leaves every read-model surface (all reads filter deleted_at is null) but stays
+  // recoverable and never cascades milestones or orphans child tasks/decisions. Tables:
+  //   delete_task → tasks · delete_project → projects · delete_container/delete_brand → brands.
+  const DELETE_ACTIONS: Record<string, "tasks" | "projects" | "brands"> = {
+    delete_task: "tasks",
+    delete_project: "projects",
+    delete_container: "brands",
+    delete_brand: "brands",
+  };
+  if (has(DELETE_ACTIONS, action)) {
+    const id = uuid(input.id);
+    if (!id) return { ok: false, reason: "invalid-id" };
+    return {
+      ok: true,
+      action,
+      table: DELETE_ACTIONS[action],
+      filters: [
+        ["id", `eq.${id}`],
+        ["workspace_id", `eq.${workspaceId}`],
+      ],
+      patch: {
+        deleted_at: now.value,
+        updated_at: now.value,
+      },
+    };
+  }
+
   return { ok: false, reason: "invalid-action" };
 }

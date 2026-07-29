@@ -430,9 +430,28 @@ function DealPipelineSection({ deals }) {
   );
 }
 
-function Customer360Drawer({ row, onClose }) {
+function Customer360Drawer({ row, onClose, onPatch }) {
   const [activities, setActivities] = React.useState([]);
   const [actSync, setActSync] = React.useState("loading");
+  // 이름 편집 — 신규 생성은 "새 고객" 리터럴로 들어오는데 이 드로어에 이름 필드가 없어
+  // 영구히 못 고치는 행이 쌓였다. 저장은 blur/Enter에서 1회, 실패 시 원래 값으로 되돌린다.
+  const [nameDraft, setNameDraft] = React.useState(row.name || "");
+  const [nameState, setNameState] = React.useState("idle"); // idle | saving | saved | error
+  React.useEffect(() => { setNameDraft(row.name || ""); setNameState("idle"); }, [row.key, row.name]);
+
+  const commitName = async () => {
+    const next = nameDraft.trim();
+    if (!next || next === (row.name || "")) { setNameDraft(row.name || ""); return; }
+    if (!row.id) { setNameState("error"); return; }
+    setNameState("saving");
+    const r = await saveRevenueRecord(row.kind === "account" ? "account" : "lead", "update", { id: row.id, name: next });
+    if (r.ok) {
+      setNameState("saved");
+      onPatch?.({ name: next });
+    } else {
+      setNameState("error");
+    }
+  };
   // 컨택 완료 시트 저장 직후 부모 원장 재조회 없이 최신 다음 액션을 반영
   const [nextActionOverride, setNextActionOverride] = React.useState(null);
   const [focusOverride, setFocusOverride] = React.useState(row.focusOverride || "default");
@@ -472,6 +491,36 @@ function Customer360Drawer({ row, onClose }) {
       width="min(440px, 96vw)"
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* 이름 — 이 드로어에서 유일하게 편집 가능한 원장 필드 */}
+        <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--fg-dim)" }}>
+            {row.kind === "account" ? "계정명" : "고객·학원명"}
+          </span>
+          <input
+            value={nameDraft}
+            onChange={(e) => { setNameDraft(e.target.value); setNameState("idle"); }}
+            onBlur={commitName}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
+              if (e.key === "Escape") { setNameDraft(row.name || ""); setNameState("idle"); }
+            }}
+            disabled={nameState === "saving"}
+            placeholder="고객·학원명"
+            style={{
+              height: 32, padding: "0 10px", fontSize: 13, width: "100%",
+              background: "var(--surface-2)", color: "var(--fg)",
+              border: `1px solid ${nameState === "error" ? "var(--danger)" : "var(--line)"}`,
+              borderRadius: "var(--r-sm)",
+            }}
+          />
+          <span aria-live="polite" style={{ fontSize: 10.5, minHeight: 13, color: nameState === "error" ? "var(--danger)" : "var(--fg-faint)" }}>
+            {nameState === "saving" ? "저장 중…"
+              : nameState === "saved" ? "저장됨"
+              : nameState === "error" ? "저장에 실패했습니다. 다시 시도하세요."
+              : ""}
+          </span>
+        </label>
+
         {/* 헤더 요약 */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           {row.health && (
@@ -567,13 +616,19 @@ function Customer360Drawer({ row, onClose }) {
 // ── 페이지 ──────────────────────────────────────────────────────────────────
 
 export function Customers({ onNavigate }) {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState } = useRevenueLedger('customers');
   const [segment, setSegment] = React.useState("all");
   const [search, setSearch] = React.useState("");
   const [sort, setSort] = React.useState({ key: null, dir: "asc" });
   const [openKey, setOpenKey] = React.useState(null);
 
-  const allRows = React.useMemo(() => toRows(ledger), [ledger]);
+  // 드로어 인라인 편집 오버레이 — 원장을 다시 부르지 않고 이름/단계 수정을 목록에 즉시 반영한다.
+  // (이게 없으면 "새 고객"으로 생성된 행의 이름을 어디서도 고칠 수 없었다.)
+  const [rowEdits, setRowEdits] = React.useState({});
+  const allRows = React.useMemo(() => {
+    const rows = toRows(ledger);
+    return rows.map(r => (rowEdits[r.key] ? { ...r, ...rowEdits[r.key] } : r));
+  }, [ledger, rowEdits]);
 
   // 딥링크: ?customer=<kind>:<id> — 원장 로드 후 1회만 열고 쿼리 소거 (DESIGN §8.1)
   const searchParams = useSearchParams();
@@ -645,7 +700,7 @@ export function Customers({ onNavigate }) {
   const openRow = sorted.find(r => r.key === openKey) || allRows.find(r => r.key === openKey) || null;
 
   const caret = (key) => (
-    <span className="mono" style={{ display: "inline-block", width: 10, fontSize: 9, color: "var(--fg-dim)" }}>
+    <span className="mono" style={{ display: "inline-block", width: 10, fontSize: 10.5, color: "var(--fg-dim)" }}>
       {sort.key === key ? (sort.dir === "asc" ? "▲" : "▼") : ""}
     </span>
   );
@@ -676,7 +731,7 @@ export function Customers({ onNavigate }) {
 
       <Card pad={false} style={{ overflow: "hidden" }}>
         <div style={{
-          display: "grid", gridTemplateColumns: gridCols, gap: 12, padding: "9px 16px",
+          display: "grid", gridTemplateColumns: gridCols, gap: 12, padding: "calc(var(--pad-y) - 1px) var(--pad-x)",
           background: "var(--surface-2)", borderBottom: "1px solid var(--line)",
           fontSize: 10.5, fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--fg-faint)",
         }}>
@@ -708,9 +763,9 @@ export function Customers({ onNavigate }) {
             onClick={() => setOpenKey(r.key)}
             onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpenKey(r.key); } }}
             style={{
-              display: "grid", gridTemplateColumns: gridCols, gap: 12, padding: "11px 16px",
+              display: "grid", gridTemplateColumns: gridCols, gap: 12, padding: "var(--pad-y) var(--pad-x)",
               borderBottom: "1px solid var(--line-soft)", alignItems: "center", cursor: "pointer",
-              boxShadow: r.health === "risk" && !r.dormant ? "inset 2px 0 0 var(--danger)" : "none",
+              boxShadow: r.health === "risk" && !r.dormant ? "inset 2px 0 0 var(--danger-line)" : "none",
               opacity: r.dormant ? 0.55 : 1,
             }}
           >
@@ -753,7 +808,13 @@ export function Customers({ onNavigate }) {
         ))}
       </Card>
 
-      {openRow && <Customer360Drawer row={openRow} onClose={() => setOpenKey(null)} />}
+      {openRow && (
+        <Customer360Drawer
+          row={openRow}
+          onClose={() => setOpenKey(null)}
+          onPatch={(patch) => setRowEdits(prev => ({ ...prev, [openRow.key]: { ...prev[openRow.key], ...patch } }))}
+        />
+      )}
     </div>
   );
 }

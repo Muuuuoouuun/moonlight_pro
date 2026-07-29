@@ -1,6 +1,7 @@
 import {
   eqFilter,
   fetchSupabaseRows,
+  isNullFilter,
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
@@ -385,7 +386,9 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
       limit: selectedProjectId ? 2 : ROADMAP_ROW_LIMIT + 1,
       order: "due_at.asc",
       filters: withWorkspaceFilter(
-        selectedProjectId ? [["id", eqFilter(selectedProjectId)]] : [],
+        selectedProjectId
+          ? [["id", eqFilter(selectedProjectId)], ["deleted_at", isNullFilter()]]
+          : [["deleted_at", isNullFilter()]],
       ),
     }),
     fetchSupabaseRows("milestones", {

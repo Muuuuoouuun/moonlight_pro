@@ -96,3 +96,23 @@ export async function PATCH(req) {
     { status: result.httpStatus },
   );
 }
+
+// Soft delete (migration 0021): stamps deleted_at so the task leaves every surface but
+// stays recoverable. Body carries { id }.
+export async function DELETE(req) {
+  const guard = assertHubWriteAllowed(req);
+  if (guard) return guard;
+
+  const parsed = await readHubWriteJson(req);
+  if (parsed.error) return parsed.error;
+
+  const result = await forwardPmsCommand({
+    id: parsed.data.id,
+    action: "delete_task",
+    workspaceId: resolveDefaultWorkspaceId(),
+  });
+  return NextResponse.json(
+    { ...result.data, task: result.data?.entity || null },
+    { status: result.httpStatus },
+  );
+}

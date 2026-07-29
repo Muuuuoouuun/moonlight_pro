@@ -39,6 +39,11 @@ export function inFilter(values) {
   return `in.(${values.join(",")})`;
 }
 
+// PostgREST "column is null" — used to scope reads to live (non-soft-deleted) rows.
+export function isNullFilter() {
+  return "is.null";
+}
+
 export function withWorkspaceFilter(filters = []) {
   const workspaceId = resolveDefaultWorkspaceId();
   return workspaceId ? [["workspace_id", eqFilter(workspaceId)], ...filters] : filters;

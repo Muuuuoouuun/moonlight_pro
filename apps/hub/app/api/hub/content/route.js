@@ -11,6 +11,7 @@ import {
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { buildContentBrandCatalog } from "@/lib/content-brand-catalog";
 import { forwardContentCommand } from "@/lib/content-engine-client";
+import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -143,6 +144,47 @@ export async function POST(req) {
         status: "error",
         error: error instanceof Error ? error.message : String(error),
       },
+      { status: 500 },
+    );
+  }
+}
+
+// Soft delete (migration 0021): stamps deleted_at on the content item (and its variant)
+// so an errant draft leaves the queue but stays recoverable. Body carries { contentId, variantId? }.
+export async function DELETE(req) {
+  try {
+    const guard = assertHubWriteAllowed(req);
+    if (guard) return guard;
+
+    const parsed = await readHubWriteJson(req, { maxBytes: 8 * 1024 });
+    if (parsed.error) return parsed.error;
+
+    const contentId = typeof parsed.data?.contentId === "string" ? parsed.data.contentId.trim() : "";
+    if (!contentId) {
+      return NextResponse.json(
+        { status: "error", error: "contentId is required to delete a content item." },
+        { status: 400 },
+      );
+    }
+
+    const workspaceId = resolveDefaultWorkspaceId();
+    if (!workspaceId) {
+      return NextResponse.json(
+        { status: "preview", message: "Workspace ID is not configured yet. Content delete is preview only.", contentId },
+        { status: 202 },
+      );
+    }
+
+    const result = await forwardContentCommand({
+      action: "delete_content",
+      workspaceId,
+      contentId,
+      variantId: typeof parsed.data?.variantId === "string" ? parsed.data.variantId.trim() : null,
+    });
+    return NextResponse.json(result.data, { status: result.httpStatus });
+  } catch (error) {
+    return NextResponse.json(
+      { status: "error", error: error instanceof Error ? error.message : String(error) },
       { status: 500 },
     );
   }
