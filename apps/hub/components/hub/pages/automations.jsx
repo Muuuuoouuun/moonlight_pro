@@ -342,7 +342,7 @@ export function Webhooks({ onNavigate }) {
             background: state && state.label
               ? (state.tone === 'success' ? 'var(--success-bg)' : state.tone === 'warning' ? 'var(--warning-bg)' : state.tone === 'danger' ? 'var(--danger-bg)' : 'transparent')
               : 'transparent',
-            transition: 'background-color .4s ease',
+            transition: 'background-color var(--dur-enter) ease',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <Dot tone={sTone[h.status]} />

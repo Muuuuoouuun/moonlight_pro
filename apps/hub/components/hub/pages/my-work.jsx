@@ -208,7 +208,7 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
         boxShadow: item.bucket === 'overdue' ? 'inset 1px 0 0 var(--danger)'
           : item.stalled ? 'inset 1px 0 0 var(--line-strong)'
             : justAdded ? 'inset 1px 0 0 var(--accent)' : undefined,
-        transition: 'background 600ms ease, box-shadow 600ms ease',
+        transition: 'background var(--dur-enter) ease, box-shadow var(--dur-enter) ease',
       }}
     >
       {item.lane === 'task' ? (
