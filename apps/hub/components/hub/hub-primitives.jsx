@@ -61,14 +61,16 @@ export function Kbd({ children, style }) {
 }
 
 export function Card({ children, style, pad = true, interactive = false, className, ...props }) {
+  // interactive면 .hub-card-link가 border+hover(색·-1px rise)를 소유 — 인라인 border를
+  // 넣으면 CSS hover가 지므로 클래스 쪽에 맡긴다.
+  const cls = [interactive ? 'hub-card-link' : '', className || ''].filter(Boolean).join(' ') || undefined;
   return (
-    <div {...props} className={className} style={{
+    <div {...props} className={cls} style={{
       background: 'var(--surface)',
-      border: '1px solid var(--line-soft)',
+      ...(interactive ? {} : { border: '1px solid var(--line-soft)' }),
       borderRadius: 'var(--r-lg)',
       boxShadow: 'var(--shadow-card)',
       padding: pad ? 'var(--card-pad)' : 0,
-      transition: 'border-color .15s ease, transform .15s ease',
       ...(interactive && { cursor: 'pointer' }),
       ...style,
     }}>{children}</div>

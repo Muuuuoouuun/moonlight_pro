@@ -200,8 +200,8 @@
 .hub-app .hub-row:focus-visible { outline: 1px solid var(--moon-300); outline-offset: -2px; }
 /* Interactive card (border emphasis instead of bg fill) — same no-JS-hover contract as .hub-row
    for card-shaped click targets like quick-command tiles. */
-.hub-app .hub-card-link { border: 1px solid var(--line-soft); transition: border-color 120ms ease; }
-.hub-app .hub-card-link:hover { border-color: var(--line); }
+.hub-app .hub-card-link { border: 1px solid var(--line-soft); transition: border-color var(--dur-hover) ease, transform var(--dur-hover) ease; }
+.hub-app .hub-card-link:hover { border-color: var(--line); transform: translateY(-1px); }
 @media (prefers-reduced-motion: reduce) {
   .hub-app .hub-row,
   .hub-app .hub-card-link { transition: none; }
