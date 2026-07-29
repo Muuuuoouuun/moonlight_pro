@@ -81,6 +81,14 @@
   --r: 10px;
   --r-lg: 14px;
   --r-xl: 20px;
+
+  /* Motion (§9) — the only sanctioned durations/curve; raw ms literals in pages are legacy debt */
+  --dur-hover: 120ms;
+  --dur-enter: 200ms;
+  --dur-panel: 180ms;
+  --dur-overlay: 160ms;
+  --ease-hub: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --stagger-step: 45ms;
 }
 
 .hub-app[data-theme="light"] {
@@ -332,8 +340,17 @@
 /* Drawer / sheet motion (DESIGN.md §9: 160–200ms, reduced-motion respected) */
 @keyframes hubDrawerIn { from { transform: translateX(14px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes hubFadeIn { from { opacity: 0; } to { opacity: 1; } }
-.hub-app .hub-drawer { animation: hubDrawerIn 180ms cubic-bezier(0.2, 0.7, 0.3, 1); }
-.hub-app .hub-drawer-overlay { animation: hubFadeIn 160ms ease-out; }
+.hub-app .hub-drawer { animation: hubDrawerIn var(--dur-panel) var(--ease-hub); }
+.hub-app .hub-drawer-overlay { animation: hubFadeIn var(--dur-overlay) ease-out; }
+
+/* Hub-owned reduced-motion catch-all — globals.css has one too, but the hub must not
+   depend on a marketing stylesheet for its a11y floor (inline JSX transitions included). */
+@media (prefers-reduced-motion: reduce) {
+  .hub-app *, .hub-app *::before, .hub-app *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
 
 .hub-app .scroll-y { overflow-y: auto; }
 
