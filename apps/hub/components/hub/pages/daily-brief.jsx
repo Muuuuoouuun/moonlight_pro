@@ -1496,7 +1496,8 @@ export function DailyBrief({ onNavigate }) {
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}>
         <div>
           <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>{formatBriefDate(now)}</div>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em' }}>{greetingFor(now)}, <span style={{ color: 'var(--moon-300)' }}>Junhyuk</span></h1>
+          {/* §11: 페이지당 h2 정확히 1개 — 인사말이 이 페이지의 타이틀 모먼트(시각 크기는 유지) */}
+          <h2 style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em' }}>{greetingFor(now)}, <span style={{ color: 'var(--moon-300)' }}>Junhyuk</span></h2>
           <div style={{ marginTop: 6, fontSize: 13.5, color: 'var(--fg-muted)', maxWidth: '60ch', lineHeight: 1.55 }}>
             오늘 <span style={{ color: 'var(--fg)' }}>{signalCount}개 신호</span> · <span style={{ color: urgentCount > 0 ? 'var(--danger)' : 'inherit' }}>{urgentCount} 즉시</span> · <span style={{ color: 'inherit' }}>{todayCount} 오늘</span> · {okCount} 여유
           </div>
