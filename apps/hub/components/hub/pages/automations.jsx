@@ -381,7 +381,7 @@ export function Runs() {
         </div>
         <div style={{ flex: 1 }} />
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--success)' }}>
-          <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--success)', animation: 'mlMoonPulse 1.5s infinite' }} />
+          <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--success)', animation: 'mlMoonPulse 1.4s ease-in-out infinite' }} />
           {liveLabel}
         </span>
       </div>

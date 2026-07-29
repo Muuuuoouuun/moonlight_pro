@@ -231,7 +231,7 @@ function GuruCoachPanel({ onNavigate }) {
 
       {state === 'loading' && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
-          <div style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
+          <div style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.4s ease-in-out infinite' }} />
           기록을 읽고 코칭을 정리하는 중…
         </div>
       )}
