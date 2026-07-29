@@ -1,3 +1,5 @@
+import { engineTransportFailure, sanitizeEngineResponse } from "./engine-client-public.js";
+
 const SHARED_SECRET_HEADER = "x-com-moon-shared-secret";
 
 export async function forwardContentCommand(
@@ -41,16 +43,13 @@ export async function forwardContentCommand(
     return {
       ok: response.ok,
       httpStatus: response.status,
-      data,
+      data: sanitizeEngineResponse(data, response.status),
     };
-  } catch (error) {
+  } catch {
     return {
       ok: false,
       httpStatus: 502,
-      data: {
-        status: "error",
-        error: error instanceof Error ? error.message : String(error),
-      },
+      data: engineTransportFailure(),
     };
   }
 }

@@ -44,7 +44,12 @@ export async function POST(req: Request) {
 
   const result = await executeContentCommand(body, { workspaceId }, {
     insert: insertSupabaseRecord,
-    update: updateSupabaseRecord,
+    update: (table, filters, patch, options) => updateSupabaseRecord(
+      table,
+      filters,
+      patch,
+      options,
+    ),
     remove: deleteSupabaseRecord,
     fetchRows: async (table, options = {}) => fetchSupabaseRows(
       table,

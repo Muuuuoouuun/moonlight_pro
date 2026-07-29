@@ -303,7 +303,8 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
                 key={task.id}
                 className="hub-stackable-row"
                 style={{
-                  minHeight: 'calc(var(--row-h) + 20px)',
+                  // 44px 터치 타깃 플로어(§11)는 지키되, 그 위로는 밀도를 따라간다.
+                  minHeight: 'max(44px, calc(var(--row-h) + 20px))',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 10,
@@ -422,10 +423,56 @@ function useDailyBriefLedger(refreshKey) {
   return state;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Persist a brief decision to the decisions ledger so a choice leaves a durable trace
+// (previously it only lived in local state — a refresh showed the signal as undecided
+// again with zero record). Returns { ok, status, error }.
+async function persistBriefDecision(signal, label) {
+  try {
+    const ref = signal?.source?.ref;
+    const res = await fetch('/api/hub/decisions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title: signal?.title || label,
+        rationale: `선택: ${label}${signal?.source?.from ? ` · ${signal.source.from}${ref ? ` ${ref}` : ''}` : ''}`,
+        summary: label,
+        decidedAt: new Date().toISOString(),
+        ...(typeof ref === 'string' && UUID_RE.test(ref) ? { projectId: ref } : {}),
+        source: 'daily-brief',
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && ['saved', 'duplicate', 'preview'].includes(data.status)) {
+      return { ok: true, status: data.status };
+    }
+    return { ok: false, status: data.status || 'error', error: data.error || `HTTP ${res.status}` };
+  } catch (error) {
+    return { ok: false, status: 'error', error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
   // Surface the highest-priority signal first-open (§3.1: <5s).
   const [expanded, setExpanded] = React.useState(defaultExpanded != null ? defaultExpanded : (index === 0 || s.tone === 'danger'));
   const [decided, setDecided] = React.useState(null);
+  const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | error
+  const detailId = React.useId();
+
+  // Record the decision durably, then optimistically mark it + navigate. On failure the
+  // choice stays visible but a retry hint appears (nothing silently lost).
+  const chooseDecision = React.useCallback((label, action) => {
+    setDecided(label);
+    setSaveState('saving');
+    const target = SIGNAL_TARGETS[action];
+    if (target && target !== 'dashboard/daily-brief') onNavigate?.(withEntityRef(target, s.source));
+    persistBriefDecision(s, label).then(r => {
+      setSaveState(r.ok ? (r.status === 'preview' ? 'preview' : 'idle') : 'error');
+    });
+  }, [onNavigate, s]);
+
+  const undoDecision = React.useCallback(() => { setDecided(null); setSaveState('idle'); }, []);
   // §5.2 collision precedence: urgency lives on the left rail + dot (danger only);
   // ordinary lanes (today/queue/info) stay neutral instead of painting semantic hues.
   const borderTone = s.tone === 'danger' ? 'var(--danger-line)' : 'var(--line)';
@@ -441,7 +488,14 @@ function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
       opacity: decided ? 0.55 : 1,
       transition: 'opacity .2s',
     }}>
-      <div className="hub-stackable-row" onClick={() => setExpanded(e => !e)} style={{ padding: 'var(--card-pad)', cursor: 'pointer', display: 'flex', gap: 14 }}>
+      <button
+        type="button"
+        className="hub-stackable-row hub-signal-trigger"
+        aria-expanded={expanded}
+        aria-controls={detailId}
+        onClick={() => setExpanded(e => !e)}
+        style={{ width: '100%', padding: 'var(--card-pad)', cursor: 'pointer', display: 'flex', gap: 14, textAlign: 'left', background: 'transparent', color: 'inherit' }}
+      >
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 2 }}>
           <Dot tone={s.tone === 'danger' ? 'danger' : 'neutral'} size={8} />
         </div>
@@ -457,23 +511,31 @@ function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
           </div>
           <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.55, maxWidth: '70ch' }}>{s.summary}</div>
           {decided && (
-            <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--success)' }}>
-              <Iconed name="check" size={12} />
-              <span>Decision · {decided}</span>
+            <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: saveState === 'error' ? 'var(--danger)' : 'var(--success)' }}>
+              <Iconed name={saveState === 'error' ? 'flag' : 'check'} size={12} />
+              <span>
+                {saveState === 'saving' ? `기록 중 · ${decided}`
+                  : saveState === 'error' ? `기록 실패 · ${decided}`
+                  : saveState === 'preview' ? `Decision · ${decided} (preview)`
+                  : `Decision · ${decided}`}
+              </span>
+              {/* SignalCard도 되돌리기를 제공 — 더 자주 보는 목록인데 CommandCard와 달리 실수
+                  복구 경로가 없었다. div가 button 안이므로 stopPropagation 필수. */}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); undoDecision(); }}
+                style={{ fontSize: 11, color: 'var(--fg-muted)', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+              >되돌리기</button>
             </div>
           )}
         </div>
         <Iconed name="chevronD" size={14} style={{ color: 'var(--fg-faint)', transform: expanded ? '' : 'rotate(-90deg)', transition: 'transform .15s' }} />
-      </div>
+      </button>
       {expanded && !decided && (
-        <div style={{ padding: '0 var(--card-pad) var(--card-pad)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div id={detailId} style={{ padding: '0 var(--card-pad) var(--card-pad)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {s.decisions.map((d, i) => (
             <Button key={i} variant={d.primary ? 'primary' : 'secondary'} size="sm" icon={d.primary ? 'bolt' : null}
-              onClick={() => {
-                setDecided(d.label);
-                const target = SIGNAL_TARGETS[d.action];
-                if (target && target !== 'dashboard/daily-brief') onNavigate?.(withEntityRef(target, s.source));
-              }}>
+              onClick={() => chooseDecision(d.label, d.action)}>
               {d.label}
             </Button>
           ))}
@@ -674,9 +736,18 @@ function MorningBriefCard({ brief, onNavigate }) {
             return (
               <div
                 key={`${item.lane}-${i}`}
+                // 클릭 가능한 div는 role/tabIndex/Enter·Space 3종 세트가 필수 (§11) — 없으면
+                // 브리프의 핵심 "오늘 이 3개"를 키보드로는 아예 열 수 없다.
+                className={target ? 'hub-row' : undefined}
+                role={target ? 'button' : undefined}
+                tabIndex={target ? 0 : undefined}
+                aria-label={target ? `${item.title} 열기` : undefined}
                 onClick={target ? () => onNavigate?.(target) : undefined}
+                onKeyDown={target ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.(target); }
+                } : undefined}
                 style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 14px',
+                  display: 'flex', alignItems: 'flex-start', gap: 10, padding: 'var(--pad-y) var(--pad-x)',
                   cursor: target ? 'pointer' : 'default',
                   borderBottom: i < items.length - 1 ? '1px solid var(--line-soft)' : 'none',
                 }}
@@ -896,7 +967,7 @@ function PipelineShapeCard({ onNavigate }) {
 
   React.useEffect(() => {
     let active = true;
-    fetch('/api/hub/revenue', { cache: 'no-store' })
+    fetch('/api/hub/revenue?view=deals', { cache: 'no-store' })
       .then((r) => r.json().catch(() => null))
       .then((d) => {
         if (!active) return;
@@ -1215,6 +1286,16 @@ function StatusLine({ state }) {
 // already exposed. This is the "<5s, what's my next move?" surface (DESIGN.md §3.1).
 function CommandCard({ s, remaining, onNavigate }) {
   const [decided, setDecided] = React.useState(null);
+  const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | error
+  const chooseDecision = React.useCallback((label, action) => {
+    setDecided(label);
+    setSaveState('saving');
+    const target = SIGNAL_TARGETS[action];
+    if (target && target !== 'dashboard/daily-brief') onNavigate?.(withEntityRef(target, s.source));
+    persistBriefDecision(s, label).then(r => {
+      setSaveState(r.ok ? (r.status === 'preview' ? 'preview' : 'idle') : 'error');
+    });
+  }, [onNavigate, s]);
   // §5.2 red-budget: only true urgency colors the command ring. Everything else reads
   // as the top item by position and size alone — warning/info/success rims were reading
   // as a banned warm-gold halo around the hero card.
@@ -1244,20 +1325,21 @@ function CommandCard({ s, remaining, onNavigate }) {
       <div style={{ fontSize: 21, fontWeight: 500, letterSpacing: '-0.015em', color: 'var(--fg)', marginBottom: 8, lineHeight: 1.25 }}>{s.title}</div>
       <div style={{ fontSize: 13.5, color: 'var(--fg-muted)', lineHeight: 1.6, maxWidth: '76ch' }}>{s.summary}</div>
       {decided ? (
-        <div style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--success)' }}>
-          <Iconed name="check" size={14} />
-          <span>Decision · {decided}</span>
-          <Button variant="ghost" size="sm" onClick={() => setDecided(null)}>되돌리기</Button>
+        <div style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: saveState === 'error' ? 'var(--danger)' : 'var(--success)' }}>
+          <Iconed name={saveState === 'error' ? 'flag' : 'check'} size={14} />
+          <span>
+            {saveState === 'saving' ? `기록 중 · ${decided}`
+              : saveState === 'error' ? `기록 실패 · ${decided}`
+              : saveState === 'preview' ? `Decision · ${decided} (preview)`
+              : `Decision · ${decided}`}
+          </span>
+          <Button variant="ghost" size="sm" onClick={() => { setDecided(null); setSaveState('idle'); }}>되돌리기</Button>
         </div>
       ) : (
         <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {s.decisions.map((d, i) => (
             <Button key={i} variant={d.primary ? 'primary' : 'secondary'} size="md" icon={d.primary ? 'bolt' : null}
-              onClick={() => {
-                setDecided(d.label);
-                const target = SIGNAL_TARGETS[d.action];
-                if (target && target !== 'dashboard/daily-brief') onNavigate?.(withEntityRef(target, s.source));
-              }}>
+              onClick={() => chooseDecision(d.label, d.action)}>
               {d.label}
             </Button>
           ))}

@@ -27,6 +27,7 @@ const DEFAULT_MIGRATIONS = [
   "20260718_0021_task_description.sql",
   "20260719_0022_project_context_links.sql",
   "20260719_0023_deal_hidden_at.sql",
+  "20260720_0024_pms_soft_delete.sql",
 ];
 
 function parseEnvFile(filepath) {

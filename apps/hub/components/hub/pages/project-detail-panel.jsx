@@ -23,7 +23,7 @@ function DetailSection({ title, count = 0, empty, children }) {
 
 function ActivityRow({ title, body, meta, badge, tone = "neutral" }) {
   return (
-    <div style={{ padding: "9px 10px", background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)" }}>
+    <div style={{ padding: "var(--pad-y) var(--pad-x)", background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
         {badge && <Badge tone={tone} size="xs">{badge}</Badge>}
         <div style={{ flex: 1, minWidth: 0, fontSize: 12.2, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
@@ -97,7 +97,7 @@ export function ProjectDetailPanel({
           </div>
         </div>
         {failedSources.length > 0 && (
-          <div role="status" style={{ padding: "9px 10px", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", color: "var(--fg-muted)", fontSize: 11.5 }}>
+          <div role="status" style={{ padding: "var(--pad-y) var(--pad-x)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", color: "var(--fg-muted)", fontSize: 11.5 }}>
             일부 기록을 읽지 못했습니다 · {failedSources.join(", ")}
           </div>
         )}
@@ -132,7 +132,7 @@ export function ProjectDetailPanel({
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {todos.map((todo) => (
-              <div key={todo.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
+              <div key={todo.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "calc(var(--pad-y) - 3px) calc(var(--pad-x) - 4px)", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line-soft)" }}>
                 <Checkbox
                   checked={todo.done}
                   onChange={() => onToggleTodo?.(todo.id)}
@@ -144,7 +144,7 @@ export function ProjectDetailPanel({
                 <span className="mono" style={{ fontSize: 12, color: "var(--fg-muted)" }}>{todo.due}</span>
               </div>
             ))}
-            <button onClick={() => onCreateTodo?.(project.id)} style={{ padding: "6px 8px", textAlign: "left", fontSize: 11.5, color: "var(--fg-faint)" }}>＋ 항목 추가</button>
+            <button onClick={() => onCreateTodo?.(project.id)} style={{ padding: "calc(var(--pad-y) - 3px) calc(var(--pad-x) - 4px)", textAlign: "left", fontSize: 11.5, color: "var(--fg-faint)" }}>＋ 항목 추가</button>
           </div>
         </div>
         <DetailSection title="최근 업데이트" count={updates.length} empty={failedEmpty("project_updates", syncState === "preview" ? "live 연결 후 project_updates가 여기에 표시됩니다." : "이 프로젝트에 연결된 update가 아직 없습니다.")}>

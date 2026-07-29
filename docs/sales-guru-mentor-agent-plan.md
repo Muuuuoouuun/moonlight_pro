@@ -1,6 +1,7 @@
 # 세일즈 구루 멘토 에이전트 — 적용 기획
 
 > 상태: DEFERRED FEATURE SPEC — 기존 Guru 자산은 유지하지만 현재 Phase 1B·1C보다 먼저 확장하지 않는다.
+> 관계: [`ai-mentor-unification-plan.md`](ai-mentor-unification-plan.md)가 이 문서와 Council(`agent-tab-mvp-ui-spec.md`)을 코드 기준으로 나란히 비교하고 하나의 "AI 멘토" 계약으로 묶는다. 이 문서의 §5·§14(모드·지식베이스 매핑) 세부는 그대로 유효하며 재복제하지 않는다.
 
 ## 1. 문서 목적
 

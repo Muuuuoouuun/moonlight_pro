@@ -168,7 +168,6 @@ function buildInstagramIntegration(status) {
 
 export function Evolution({ onNavigate }) {
   const [tab, setTab] = React.useState('all');
-  const [lastRun, setLastRun] = React.useState(null);
   const tagTone = { upgrade: 'moon', bug: 'danger', insight: 'info', note: 'neutral' };
   const playbookTarget = (family) => ({
     delivery: 'dashboard/agents/orders?new=delivery',
@@ -233,11 +232,6 @@ export function Evolution({ onNavigate }) {
         <SectionTitle subtitle="운영 절차 · 시스템을 바꾸는 방법" right={<Button variant="outline" size="xs" icon="plus" onClick={() => onNavigate?.('dashboard/agents/orders?new=playbook')}>Playbook</Button>}>
           Playbooks
         </SectionTitle>
-        {lastRun && (
-          <div className="mono" style={{ fontSize: 11, color: 'var(--success)', marginBottom: 8 }}>
-            queued · {lastRun}
-          </div>
-        )}
         <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--gap)', marginBottom: 'var(--gap)' }}>
           {PLAYBOOK_FAMILIES.map(f => (
             <Card key={f.key} style={{ cursor: 'pointer' }}>
@@ -255,7 +249,12 @@ export function Evolution({ onNavigate }) {
             <span>Playbook</span><span>Family</span><span>Cadence</span><span>Trigger</span><span>Owner</span><span style={{ textAlign: 'right' }} />
           </div>
           {PLAYBOOK_CATALOG.length === 0 && (
-            <EmptyState icon="folder" title="플레이북이 없습니다" description="플레이북 기록이 연결되면 운영 절차가 여기에 표시됩니다." />
+            <EmptyState
+              icon="folder"
+              title="플레이북이 없습니다"
+              description="반복 운영 절차를 플레이북으로 만들면 여기에서 실행 표면으로 바로 이동합니다. 아직 저장소가 연결되지 않아 지금은 에이전트 작업 큐에서 초안을 만듭니다."
+              action={<Button variant="outline" size="sm" icon="plus" onClick={() => onNavigate?.('dashboard/agents/orders?new=playbook')}>플레이북 초안 만들기</Button>}
+            />
           )}
           {PLAYBOOK_CATALOG.map((p, i) => {
             const fam = PLAYBOOK_FAMILIES.find(f => f.key === p.family);
@@ -274,16 +273,14 @@ export function Evolution({ onNavigate }) {
                 <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.trigger}</span>
                 <span style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>{p.owner}</span>
                 <div style={{ textAlign: 'right' }}>
+                  {/* 실행 표면으로 이동한다 — 큐잉/비동기 실행이 아니라 열기다(정직한 라벨). */}
                   <Button
                     variant="ghost"
                     size="xs"
                     iconRight="arrowRight"
-                    onClick={() => {
-                      setLastRun(p.name);
-                      onNavigate?.(playbookTarget(p.family));
-                    }}
+                    onClick={() => onNavigate?.(playbookTarget(p.family))}
                   >
-                    Run
+                    열기
                   </Button>
                 </div>
               </div>
@@ -301,6 +298,8 @@ export function Evolution({ onNavigate }) {
           Commands
         </SectionTitle>
         <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--gap)' }}>
+          {/* hover는 .hub-row CSS가 처리한다 — 인라인 onMouseEnter/Leave는 reduced-motion을
+              무시하고 드리프트를 만든다 (§8.1). */}
           {QUICK_COMMANDS.map(c => (
             <button key={c.slash} className="hub-card-link" onClick={() => onNavigate?.(c.dest)} style={{
               textAlign: 'left', padding: 'var(--card-pad)',
@@ -338,7 +337,7 @@ export function Evolution({ onNavigate }) {
             />
           )}
           {filteredLog.map((e, i) => (
-            <div key={`${e.at}-${e.tag}-${i}`} style={{ padding: '14px 18px', borderBottom: i < filteredLog.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+            <div key={`${e.at}-${e.tag}-${i}`} style={{ padding: 'var(--pad-y) var(--pad-x)', borderBottom: i < filteredLog.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
               <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', width: 100, flexShrink: 0, paddingTop: 2 }}>{e.at}</span>
               <Badge tone={tagTone[e.tag]} size="xs" style={{ flexShrink: 0 }}>{e.tag}</Badge>
               <div style={{ fontSize: 13, color: 'var(--fg-muted)', lineHeight: 1.55, flex: 1 }}>{e.msg}</div>
@@ -550,10 +549,10 @@ export function Settings({ onNavigate }) {
         <SectionTitle>Profile</SectionTitle>
         <Card>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <Avatar name="Hyeon Park" size={52} />
+            <Avatar name="문준혁" size={52} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 500 }}>Hyeon Park</div>
-              <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>hyeon@moonlight.pro · Founder · KST</div>
+              <div style={{ fontSize: 15, fontWeight: 500 }}>문준혁</div>
+              <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Junhyuk Mun · Personal Operator · KST</div>
             </div>
             <Badge tone="neutral" size="xs">local profile</Badge>
           </div>
@@ -564,7 +563,7 @@ export function Settings({ onNavigate }) {
         <SectionTitle>Integrations</SectionTitle>
         <Card pad={false}>
           {integrationRows.map((it, i, arr) => (
-            <div key={it.n} style={{ padding: '14px 18px', borderBottom: i < arr.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div key={it.n} style={{ padding: 'var(--pad-y) var(--pad-x)', borderBottom: i < arr.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-muted)' }}>
                 <Iconed name={it.i} size={15} />
               </div>
@@ -622,7 +621,7 @@ export function Settings({ onNavigate }) {
             <Iconed name="plus" size={12} style={{ color: 'var(--fg-faint)' }} />
             <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>새 API 키 발급</span>
             <div style={{ flex: 1 }} />
-            <Button variant="outline" size="sm" icon="plus" disabled>Create key</Button>
+            <Button variant="outline" size="sm" icon="plus" disabled title="키 발급 경로가 아직 연결되지 않았습니다 — 준비되면 활성화됩니다.">Create key</Button>
           </div>
         </Card>
         <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -643,7 +642,7 @@ export function Settings({ onNavigate }) {
             <Iconed name="webhook" size={12} style={{ color: 'var(--fg-faint)' }} />
             <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>Outgoing webhooks · 발생 이벤트를 외부로 푸시</span>
             <div style={{ flex: 1 }} />
-            <Button variant="outline" size="sm" icon="plus" disabled>Add endpoint</Button>
+            <Button variant="outline" size="sm" icon="plus" disabled title="endpoint 등록 경로가 아직 연결되지 않았습니다 — 준비되면 활성화됩니다.">Add endpoint</Button>
           </div>
         </Card>
       </div>

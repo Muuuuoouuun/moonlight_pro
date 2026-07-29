@@ -43,3 +43,25 @@ test("forwards quick capture to Engine with only the shared server secret", asyn
     data: { status: "saved", destinationType: "task" },
   });
 });
+
+test("sanitizes capture persistence and transport failures", async () => {
+  const env = {
+    COM_MOON_ENGINE_URL: "http://127.0.0.1:3001",
+    COM_MOON_SHARED_WEBHOOK_SECRET: "shared-secret",
+  };
+  const upstream = await captureClient.forwardCaptureCommand({}, {
+    env,
+    fetchImpl: async () => new Response(JSON.stringify({
+      status: "error",
+      error: "capture-failed",
+      detail: "private-schema=do-not-leak",
+    }), { status: 502 }),
+  });
+  const transport = await captureClient.forwardCaptureCommand({}, {
+    env,
+    fetchImpl: async () => { throw new Error("private-host=do-not-leak"); },
+  });
+
+  assert.deepEqual(upstream.data, { status: "error", error: "capture-failed" });
+  assert.deepEqual(transport.data, { status: "error", error: "engine-unreachable", retryable: true });
+});

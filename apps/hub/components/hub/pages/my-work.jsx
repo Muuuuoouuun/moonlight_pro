@@ -588,7 +588,9 @@ export function MyWork({ onNavigate }) {
     // _sourceDescription: 저장 시 "바뀌었을 때만" description을 PATCH에 싣기 위한 원본 스냅샷.
     // 라이브 DB에 0021(task description) 마이그레이션이 아직 없으면 이 키가 포함된 PATCH가
     // 통째로 실패하므로, 건드리지 않은 저장까지 막지 않게 한다.
-    setTaskDraft({ id: item.entityId, title: item.title, status: item.status, priority: item.priority || 'medium', dueAt: item.whenAt || '', description: item.description || '', projectId: item.projectId || '', _sourceDescription: item.description || '' });
+    // openedStatus는 저장 시 "이번 편집에서 완료로 바뀌었는지"를 판정해 체크박스 경로와 같은
+    // 완료 피드백(+되돌리기)을 주기 위한 기준값이다 — 드로어로 완료하면 아무 표시가 없었다.
+    setTaskDraft({ id: item.entityId, title: item.title, status: item.status, priority: item.priority || 'medium', dueAt: item.whenAt || '', description: item.description || '', projectId: item.projectId || '', _sourceDescription: item.description || '', openedStatus: item.status });
   };
 
   const detailItem = React.useMemo(
@@ -640,6 +642,24 @@ export function MyWork({ onNavigate }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [detailId, taskDraft]);
 
+  // 드로어에서 완료 처리한 뒤의 되돌리기 — 이미 저장된 상태라 이전 상태로 되돌리는 PATCH.
+  const revertTaskStatus = async (id, status) => {
+    if (!id || !status) return;
+    try {
+      const res = await fetch('/api/hub/tasks', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, status }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.status !== 'saved') throw new Error(data.error || `되돌리기 실패 ${res.status}`);
+      setNotice({ tone: 'ok', label: '완료 취소됨' });
+      await reload();
+    } catch (error) {
+      setNotice({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
   const persistTaskDetail = async () => {
     if (!taskDraft?.title?.trim()) return { ok: false, status: 'invalid-input' };
     try {
@@ -663,7 +683,21 @@ export function MyWork({ onNavigate }) {
         setNotice({ tone: 'err', label: data.error || `저장 실패 (${data.status || res.status})` });
         return { ok: false, status: data.status || 'error' };
       }
-      setNotice({ tone: 'ok', label: '할 일 업데이트됨' });
+      // 완료 처리는 체크박스 경로와 같은 문구 + 되돌리기를 준다. 이미 영속됐으므로 되돌리기는
+      // 낙관적 취소가 아니라 이전 상태로 되돌리는 실제 PATCH다.
+      const completedNow = taskDraft.status === 'done' && taskDraft.openedStatus !== 'done';
+      const prevStatus = taskDraft.openedStatus;
+      const taskId = taskDraft.id;
+      setNotice(completedNow
+        ? {
+            tone: 'ok',
+            label: '할 일 완료됨',
+            action: {
+              label: '되돌리기',
+              onClick: () => revertTaskStatus(taskId, prevStatus),
+            },
+          }
+        : { tone: 'ok', label: '할 일 업데이트됨' });
       await reload();
       return { ok: true, status: 'saved' };
     } catch (error) {
@@ -672,9 +706,11 @@ export function MyWork({ onNavigate }) {
     }
   };
 
+  // 소프트 삭제 — 퀵애드로 잘못 만든 할 일을 지운다(migration 0024, deleted_at). 완료 처리와
+  // 달리 목록에서 완전히 사라진다. EditDrawer가 확인 다이얼로그를 처리한다.
   // 낙관적 tombstone(hiddenIds) + 실패 시 복원 — deleteRitual(work.jsx)과 같은 계약.
   const deleteTaskDetail = async () => {
-    if (!taskDraft?.id) return;
+    if (!taskDraft?.id) return { ok: false, status: 'error' };
     const rowId = `task-${taskDraft.id}`;
     setHiddenIds((prev) => new Set(prev).add(rowId));
     try {
@@ -687,13 +723,15 @@ export function MyWork({ onNavigate }) {
       if (res.ok && ['saved', 'preview'].includes(data.status)) {
         setNotice({ tone: 'ok', label: data.status === 'preview' ? '할 일 삭제 · 저장 대기(preview)' : '할 일 삭제됨' });
         if (data.status === 'saved') await reload();
-        return;
+        return { ok: true, status: data.status };
       }
       setHiddenIds((prev) => { const next = new Set(prev); next.delete(rowId); return next; });
       setNotice({ tone: 'err', label: data.error || `삭제 실패 ${res.status}` });
+      return { ok: false, status: data.status || 'error' };
     } catch (error) {
       setHiddenIds((prev) => { const next = new Set(prev); next.delete(rowId); return next; });
       setNotice({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+      return { ok: false, status: 'error' };
     }
   };
 
@@ -702,6 +740,9 @@ export function MyWork({ onNavigate }) {
   React.useEffect(() => {
     const onKey = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // 드로어가 열려 있으면 페이지 단축키는 쉰다 (§8.1) — 이 가드가 없으면 드로어 푸터 버튼에
+      // 포커스가 있을 때 N이 오버레이 뒤에 가려진 퀵애드 입력으로 포커스를 훔쳐갔다.
+      if (taskDraft) return;
       const t = e.target;
       const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
@@ -710,7 +751,7 @@ export function MyWork({ onNavigate }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [taskDraft]);
 
   // ↑↓ moves real focus between visible rows (roving tabindex) when the list lens is open —
   // Enter/Space then just work through each row's own handler, no separate global handler
@@ -841,7 +882,7 @@ export function MyWork({ onNavigate }) {
             placeholder="새 할 일 — Enter로 저장"
             // outline을 죽이지 않는다 — 전역 :focus-visible 링(§11)이 키보드 포커스를 표시한다.
             style={{
-              flex: 1, height: 36, padding: '0 12px', fontSize: 13,
+              flex: 1, height: 'calc(var(--row-h) + 6px)', padding: '0 12px', fontSize: 13,
               background: 'var(--surface)', border: '1px solid var(--line)',
               borderRadius: 'var(--r-sm)',
             }}
@@ -863,7 +904,7 @@ export function MyWork({ onNavigate }) {
               value={quickDue}
               onChange={(e) => setQuickDue(e.target.value)}
               style={{
-                height: 30, padding: '0 10px', fontSize: 12,
+                height: 'var(--row-h)', padding: '0 10px', fontSize: 12,
                 background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
                 borderRadius: 'var(--r-sm)', color: 'var(--fg)',
               }}
@@ -872,7 +913,7 @@ export function MyWork({ onNavigate }) {
               value={quickPriority}
               onChange={(e) => setQuickPriority(e.target.value)}
               style={{
-                height: 30, padding: '0 8px', fontSize: 12,
+                height: 'var(--row-h)', padding: '0 8px', fontSize: 12,
                 background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
                 borderRadius: 'var(--r-sm)', color: 'var(--fg)',
               }}

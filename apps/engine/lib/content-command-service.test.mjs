@@ -105,3 +105,35 @@ test("treats an exact item and variant retry as an idempotent duplicate", async 
   assert.equal(result.contentId, CONTENT_ID);
   assert.equal(result.variantId, VARIANT_ID);
 });
+
+test("never reports a zero-row draft update as saved", async () => {
+  const updates = [];
+  const result = await contentService.executeContentCommand(
+    {
+      action: "update_draft",
+      workspaceId: WORKSPACE_ID,
+      contentId: CONTENT_ID,
+      variantId: VARIANT_ID,
+      itemPatch: { title: "Updated item" },
+      variantPatch: { title: "Updated variant" },
+    },
+    { workspaceId: WORKSPACE_ID },
+    {
+      insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
+      update: async (table, rowFilters, patch, options) => {
+        updates.push({ table, rowFilters, patch, options });
+        return table === "content_items"
+          ? { persisted: true, reason: "ok", rows: [] }
+          : { persisted: true, reason: "ok", rows: [{ id: VARIANT_ID }] };
+      },
+      remove: async () => ({ persisted: false, reason: "unexpected-remove" }),
+      fetchRows: async () => [],
+    },
+  );
+
+  assert.equal(result.status, "error");
+  assert.equal(result.error, "item-update-failed");
+  assert.equal(result.detail, "not-found");
+  assert.equal(updates.length, 2);
+  assert.ok(updates.every((entry) => entry.options?.returnRepresentation === true));
+});

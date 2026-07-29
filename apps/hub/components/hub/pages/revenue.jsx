@@ -108,7 +108,7 @@ function buildRevenueAttention(leads, deals) {
   return items.slice(0, 4);
 }
 
-export function useRevenueLedger() {
+export function useRevenueLedger(view = 'full') {
   const [ledger, setLedger] = React.useState({
     source: 'preview',
     leads: [],
@@ -130,7 +130,7 @@ export function useRevenueLedger() {
     async function load(attempt = 0) {
       setSyncState('loading');
       try {
-        const response = await fetch('/api/hub/revenue', { cache: 'no-store' });
+        const response = await fetch(`/api/hub/revenue?view=${encodeURIComponent(view)}`, { cache: 'no-store' });
         const data = await response.json().catch(() => null);
         if (!active) return;
         if (!response.ok || !data || data.status === 'error') {
@@ -164,13 +164,13 @@ export function useRevenueLedger() {
     }
     load();
     return () => { active = false; clearTimeout(retryTimer); };
-  }, []);
+  }, [view]);
 
   return { ledger, syncState };
 }
 
 // Persist a Revenue drawer edit to the Supabase-backed write route. `kind` is
-// 'lead' | 'deal' | 'case', `op` is 'create' | 'update' | 'delete'. Returns
+// 'lead' | 'deal' | 'case' | 'account' | 'activity', `op` is 'create' | 'update' | 'delete'. Returns
 // { ok, status, id } — `ok` is true only when the row actually saved; 'preview' means the
 // backend isn't configured (or the DB refused the write) and the optimistic local row stands.
 export async function saveRevenueRecord(kind, op, record) {
@@ -260,7 +260,7 @@ function GuruCoachPanel({ onNavigate }) {
 }
 
 export function RevenueOverview({ onNavigate }) {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState } = useRevenueLedger('overview');
   const [period, setPeriod] = React.useState('MTD');
   const LEADS = ledger.leads;
   const DEALS = ledger.deals;
@@ -504,7 +504,7 @@ export function LeadEnrichmentPanel({ lead }) {
 }
 
 export function Leads({ workspace }) {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState } = useRevenueLedger('leads');
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -512,6 +512,9 @@ export function Leads({ workspace }) {
   const [leadEdits, setLeadEdits] = React.useState({}); // { [id]: patch } — overlays any lead (local or ledger)
   const [deletedLeadIds, setDeletedLeadIds] = React.useState(() => new Set()); // hide removed ledger rows
   const [editLeadId, setEditLeadId] = React.useState(null);
+  // Seeded-but-untouched local rows — dropped when the drawer closes without an edit or
+  // save, so ESC/overlay close doesn't leave a ghost "새 리드" row on the list.
+  const pristineSeedRef = React.useRef(new Set());
   // Scope the merged ledger to the active workspace (pass-through when unscoped). The
   // The ledger hook only exposes API-backed rows — scoping never mixes sources. Drawer
   // edits overlay onto whichever row (local or ledger) they key to; deletes drop the row.
@@ -556,6 +559,7 @@ export function Leads({ workspace }) {
   const stageTone = { New: 'info', Contact: 'moon', Qualified: 'moon', Customer: 'company', Lost: 'danger' };
   const createLead = () => {
     const id = `local-lead-${Date.now()}`;
+    pristineSeedRef.current.add(id);
     setLocalLeads(prev => [{
       id,
       name: '새 리드',
@@ -576,6 +580,7 @@ export function Leads({ workspace }) {
   // overlay re-keys onto it. `editingLead` carries the workspace tag → scoped creates stick.
   const persistLead = async () => {
     if (!editingLead) return { ok: false, status: 'error' };
+    pristineSeedRef.current.delete(editLeadId);
     const isNew = String(editLeadId).startsWith('local-lead-');
     const r = await saveRevenueRecord('lead', isNew ? 'create' : 'update', editingLead);
     if (r.ok && isNew && r.id) {
@@ -806,10 +811,19 @@ export function Leads({ workspace }) {
           // parseMoneyLabel이 축약형(₩1.2M · 1.2M · 1200000)을 그대로 받는다.
           { key: 'value', label: '금액', placeholder: '₩1.2M · 1200000' },
         ]}
-        onChange={(key, val) => setLeadEdits(prev => ({ ...prev, [editLeadId]: { ...prev[editLeadId], [key]: val } }))}
+        onChange={(key, val) => {
+          pristineSeedRef.current.delete(editLeadId);
+          setLeadEdits(prev => ({ ...prev, [editLeadId]: { ...prev[editLeadId], [key]: val } }));
+        }}
         onSave={persistLead}
         onDelete={deleteLead}
-        onClose={() => setEditLeadId(null)}
+        onClose={() => {
+          const id = editLeadId;
+          setEditLeadId(null);
+          if (id && pristineSeedRef.current.delete(id)) {
+            setLocalLeads(prev => prev.filter(l => l.id !== id));
+          }
+        }}
       >
         <LeadEnrichmentPanel lead={editingLead} />
       </EditDrawer>
@@ -956,7 +970,7 @@ function DealTaskPanel({ deal, onSaved }) {
 }
 
 export function Deals({ workspace, onNavigate }) {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState } = useRevenueLedger('deals');
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -967,6 +981,9 @@ export function Deals({ workspace, onNavigate }) {
   const [showHidden, setShowHidden] = React.useState(false);
   const [editDealId, setEditDealId] = React.useState(null);
   const dragMovedRef = React.useRef(false); // true from dragStart until just after dragEnd — suppresses the card click
+  // Seeded-but-untouched local cards — dropped when the drawer closes without an edit or
+  // save, so ESC/overlay close doesn't leave a ghost "새 딜" card on the board.
+  const pristineSeedRef = React.useRef(new Set());
 
   // Sync local deals state when live data arrives
   React.useEffect(() => {
@@ -1037,6 +1054,7 @@ export function Deals({ workspace, onNavigate }) {
   // creating where you're looking needs no follow-up drag. Falls back to the first stage.
   const createDeal = (stage) => {
     const id = `LOCAL-${Date.now().toString().slice(-4)}`;
+    pristineSeedRef.current.add(id);
     setDeals(prev => [{
       id,
       name: '새 딜',
@@ -1057,6 +1075,7 @@ export function Deals({ workspace, onNavigate }) {
   // and `owner` are not reversed back to expected_close_at / owner_id — best-effort by design.
   const persistDeal = async () => {
     if (!editingDeal) return { ok: false, status: 'error' };
+    pristineSeedRef.current.delete(editDealId);
     const isNew = String(editDealId).toLowerCase().startsWith('local-');
     const r = await saveRevenueRecord('deal', isNew ? 'create' : 'update', editingDeal);
     if (r.ok && isNew && r.id) {
@@ -1156,6 +1175,9 @@ export function Deals({ workspace, onNavigate }) {
             icon="deals"
             title={`${ws.label} — 해당하는 딜이 없습니다`}
             description={`이 워크스페이스에 매칭되는 딜이 없습니다. 다른 워크스페이스로 태그된 딜은 여기에 표시되지 않습니다. 딜을 등록하거나 기록에 ${ws.label} 태그가 연결되면 파이프라인이 채워집니다.`}
+            action={DEAL_STAGES[0] && (
+              <Button variant="primary" size="sm" icon="plus" onClick={() => createDeal(DEAL_STAGES[0].key)}>{ws.label}에 딜 추가</Button>
+            )}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
@@ -1180,14 +1202,14 @@ export function Deals({ workspace, onNavigate }) {
                 // across the whole board and ties each column to its masthead gauge segment.
                 boxShadow: `inset 0 2px 0 0 ${STAGE_LINE[s.color] || 'var(--line-strong)'}`,
               }}>
-              <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)' }}>
+              <div style={{ padding: 'var(--pad-y) var(--pad-x)', borderBottom: '1px solid var(--line-soft)' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 600 }}>{s.label}</span>
                   <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', marginLeft: 'auto' }}>{totals[s.key].count}</span>
                 </div>
                 <div className="mono" style={{ fontSize: 12, color: totals[s.key].sum ? 'var(--fg-muted)' : 'var(--fg-faint)', marginTop: 4 }}>{fmt(totals[s.key].sum)}</div>
               </div>
-              <div className="scroll-y" style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 6, minHeight: 100 }}>
+              <div className="scroll-y" style={{ flex: 1, padding: 'calc(var(--gap) - 4px)', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 100 }}>
                 {items.map(d => {
                   // Stalled = open (not won/lost) and aged past the follow-up window. Surfaces
                   // in every open column, not just Negotiation, and marks the card with a
@@ -1292,10 +1314,19 @@ export function Deals({ workspace, onNavigate }) {
           { key: 'closeAt', row: 'meta', label: '예상 마감', inputType: 'date' },
           { key: 'type', row: 'meta', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
         ]}
-        onChange={(key, val) => setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, [key]: val } : d)))}
+        onChange={(key, val) => {
+          pristineSeedRef.current.delete(editDealId);
+          setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, [key]: val } : d)));
+        }}
         onSave={persistDeal}
         onDelete={deleteDeal}
-        onClose={() => setEditDealId(null)}
+        onClose={() => {
+          const id = editDealId;
+          setEditDealId(null);
+          if (id && pristineSeedRef.current.delete(id)) {
+            setDeals(ds => ds.filter(d => d.id !== id));
+          }
+        }}
       >
         <DealTaskPanel deal={editingDeal} onSaved={loadDealTaskStats} />
       </EditDrawer>
@@ -1325,7 +1356,7 @@ function sortCases(rows, sort) {
 }
 
 export function Cases() {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState } = useRevenueLedger('cases');
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -1334,6 +1365,9 @@ export function Cases() {
   const [deletedCaseIds, setDeletedCaseIds] = React.useState(() => new Set());
   const [editCaseId, setEditCaseId] = React.useState(null);
   const [sort, setSort] = React.useState({ key: null, dir: 'asc' });
+  // Seeded-but-untouched local rows — dropped when the drawer closes without an edit or
+  // save, so ESC/overlay close doesn't leave a ghost "새 운영 케이스" row on the list.
+  const pristineSeedRef = React.useRef(new Set());
   const ledgerCases = Array.isArray(ledger.cases) ? ledger.cases : [];
   const mergedCases = [...localCases, ...ledgerCases]
     .filter(c => !deletedCaseIds.has(c.id))
@@ -1359,8 +1393,21 @@ export function Cases() {
   );
   const sTone = { Open: 'warning', Waiting: 'info', Resolved: 'success' };
   const pTone = { high: 'danger', med: 'warning', low: 'neutral' };
+  // Scope + search, matching every other Revenue surface — a long mixed case list had no
+  // way to narrow before this (the only Revenue table shipping neither control).
+  const [filter, setFilter] = React.useState('all');
+  const [search, setSearch] = React.useState('');
+  const term = search.trim().toLowerCase();
+  const visibleCases = cases.filter(c => {
+    const searchText = [c.id, c.title, c.account, c.status, c.priority, c.owner]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return (filter === 'all' || c.type === filter) && (!term || searchText.includes(term));
+  });
   const createCase = () => {
     const id = `CASE-${Date.now()}`;
+    pristineSeedRef.current.add(id);
     setLocalCases(prev => [{
       id,
       title: '새 운영 케이스',
@@ -1393,6 +1440,7 @@ export function Cases() {
   // real id replaces the local one so a later edit takes the update path and the overlay re-keys.
   const persistCase = async () => {
     if (!editingCase) return { ok: false, status: 'error' };
+    pristineSeedRef.current.delete(editCaseId);
     const isNew = String(editCaseId).startsWith('CASE-');
     const r = await saveRevenueRecord('case', isNew ? 'create' : 'update', editingCase);
     if (r.ok && isNew && r.id) {
@@ -1445,21 +1493,28 @@ export function Cases() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
+        <SegmentedControl className="hub-toolbar" style={{ marginRight: 8 }} options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
+        <Input className="hub-toolbar" placeholder="ID·제목·계정 검색…" icon="search" value={search} onChange={setSearch} />
+        <div style={{ width: 8 }} />
         <Button variant="primary" size="sm" icon="plus" onClick={createCase}>Case <Kbd>N</Kbd></Button>
       </div>
       <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>ID</span><SortHead k="title">Title</SortHead><SortHead k="account">Account</SortHead><span>Type</span><SortHead k="priority">Priority</SortHead><SortHead k="status">Status</SortHead><SortHead k="opened">Opened</SortHead><span style={{ textAlign: 'right' }}>Owner</span>
         </div>
-        {cases.length === 0 && (
+        {visibleCases.length === 0 && (
           <EmptyState
-            icon="cases"
-            title="운영 케이스가 없습니다"
-            description={syncState === 'live' ? 'Supabase operation_cases 기록에 표시할 케이스가 없습니다.' : '지원/운영 이슈가 생기면 계정과 함께 표시됩니다.'}
-            action={<Button variant="primary" size="sm" icon="plus" onClick={createCase}>케이스 추가</Button>}
+            icon={cases.length === 0 ? 'cases' : 'search'}
+            title={cases.length === 0 ? '운영 케이스가 없습니다' : '일치하는 케이스가 없습니다'}
+            description={cases.length === 0
+              ? (syncState === 'live' ? 'Supabase operation_cases 기록에 표시할 케이스가 없습니다.' : '지원/운영 이슈가 생기면 계정과 함께 표시됩니다.')
+              : `${cases.length}건 중 0건 · 필터: ${filter}${term ? ` · "${search}" 검색` : ''}`}
+            action={term
+              ? <Button variant="ghost" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
+              : <Button variant="primary" size="sm" icon="plus" onClick={createCase}>케이스 추가</Button>}
           />
         )}
-        {cases.map((c, i) => (
+        {visibleCases.map((c, i) => (
           <div key={c.id} className="hub-row"
             role="button" tabIndex={0}
             onClick={() => setEditCaseId(c.id)}
@@ -1467,7 +1522,7 @@ export function Cases() {
             style={{
               display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12,
               padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', cursor: 'pointer',
-              borderBottom: i < cases.length - 1 ? '1px solid var(--line-soft)' : 'none',
+              borderBottom: i < visibleCases.length - 1 ? '1px solid var(--line-soft)' : 'none',
               // High-priority open cases carry a danger left-accent (§5.2) — resolved ones stay quiet.
               boxShadow: c.priority === 'high' && c.status !== 'Resolved' ? 'inset 2px 0 0 var(--danger-line)' : undefined,
             }}
@@ -1497,16 +1552,26 @@ export function Cases() {
         fields={[
           { key: 'title', label: '제목' },
           { key: 'account', label: '계정', placeholder: '계정·고객명' },
-          // 오픈 시점·담당은 뺐다: opened는 opened_at에서 파생된 상대 라벨(수정 불가)이고,
-          // owner는 리드/딜과 같은 이유(1인 운영, buildCaseWrite가 저장한 적 없음)로 죽은 필드였다.
+          // 오픈 시점·담당은 뺐다: buildCaseWrite가 두 값을 operation_cases로 되돌리지 않아
+          // 편집해도 저장 직후 원래 값으로 조용히 되돌아갔다(= 죽은 필드). opened는 opened_at
+          // 파생 표시값이고 owner는 1인 운영에서 항상 Me — Leads가 owner를 뺀 이유와 같다.
           { key: 'type', row: 'class', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
           { key: 'priority', row: 'class', label: '우선순위', type: 'select', options: [{ value: 'low', label: 'Low' }, { value: 'med', label: 'Med' }, { value: 'high', label: 'High' }] },
           { key: 'status', label: '상태', type: 'select', options: [{ value: 'Open', label: 'Open' }, { value: 'Waiting', label: 'Waiting' }, { value: 'Resolved', label: 'Resolved' }] },
         ]}
-        onChange={(key, val) => setCaseEdits(prev => ({ ...prev, [editCaseId]: { ...prev[editCaseId], [key]: val } }))}
+        onChange={(key, val) => {
+          pristineSeedRef.current.delete(editCaseId);
+          setCaseEdits(prev => ({ ...prev, [editCaseId]: { ...prev[editCaseId], [key]: val } }));
+        }}
         onSave={persistCase}
         onDelete={deleteCase}
-        onClose={() => setEditCaseId(null)}
+        onClose={() => {
+          const id = editCaseId;
+          setEditCaseId(null);
+          if (id && pristineSeedRef.current.delete(id)) {
+            setLocalCases(prev => prev.filter(c => c.id !== id));
+          }
+        }}
       />
     </div>
   );
@@ -1671,7 +1736,7 @@ function QuickActions({ onAction }) {
   );
 }
 
-function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAddNote, onNavigate }) {
+function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAddNote, onNavigate, onEdit }) {
   const [tab, setTab] = React.useState('activity');
   const [noteText, setNoteText] = React.useState('');
   // Quick actions (ContactMenu/QuickActions — "Schedule meeting" etc.) used to write a
@@ -1724,6 +1789,9 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <div style={{ fontSize: 17, fontWeight: 500 }}>{account.name}</div>
+              {/* Detail is a full view mode, not a peek — without this the operator would have
+                  to switch back to Cards/List just to correct a name or health. */}
+              {onEdit && <IconButton icon="edit" size={24} iconSize={13} tooltip="계정 편집" onClick={onEdit} />}
               <Badge tone={account.type === 'personal' ? 'personal' : 'company'} size="xs">
                 <Iconed name={account.type === 'personal' ? 'user' : 'building'} size={9} />
                 {account.type === 'personal' ? 'Personal' : 'Company'}
@@ -1942,20 +2010,37 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
   );
 }
 
+// Shared grid template for the Accounts list view — the trailing column carries the
+// timestamp *and* the row's edit button, so it's wider than a bare timestamp needs.
+const ACCOUNTS_GRID = '32px 1.6fr 110px 70px 110px 70px 120px 100px 132px';
+
 export function Accounts({ workspace, onNavigate }) {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState } = useRevenueLedger('accounts');
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const [localAccounts, setLocalAccounts] = React.useState([]);
+  const [accountEdits, setAccountEdits] = React.useState({}); // { [id]: patch } — overlays any account (local or ledger)
+  const [deletedAccountIds, setDeletedAccountIds] = React.useState(() => new Set()); // hide removed ledger rows
   const ledgerAccounts = Array.isArray(ledger.accounts) ? ledger.accounts : [];
   // Scope the merged ledger to the active workspace (pass-through when unscoped). The
-  // The ledger hook only exposes API-backed records; scoping never mixes sources.
+  // ledger hook only exposes API-backed records; scoping never mixes sources. Drawer edits
+  // overlay onto whichever record (local or ledger) they key to; deletes drop the record.
   const ws = getWorkspace(workspace);
-  const ACCOUNTS = filterAccountsByWorkspace([...localAccounts, ...ledgerAccounts], workspace);
+  const mergedAccounts = [...localAccounts, ...ledgerAccounts]
+    .filter(a => !deletedAccountIds.has(a.id))
+    .map(a => (accountEdits[a.id] ? { ...a, ...accountEdits[a.id] } : a));
+  const ACCOUNTS = filterAccountsByWorkspace(mergedAccounts, workspace);
   const wsEmpty = Boolean(ws) && ACCOUNTS.length === 0;
   const [view, setView] = React.useState('cards'); // cards | list | detail
   const [search, setSearch] = React.useState('');
   const [filter, setFilter] = React.useState('all');
   const [selected, setSelected] = React.useState(null);
   const [details, setDetails] = React.useState({});
+  const [editAccountId, setEditAccountId] = React.useState(null);
+  // Seeded-but-untouched local rows — dropped when the drawer closes without an edit or
+  // save, so ESC/overlay close doesn't leave a ghost "새 계정" card behind.
+  const pristineSeedRef = React.useRef(new Set());
 
   const term = search.trim().toLowerCase();
   const filtered = ACCOUNTS.filter(a => {
@@ -2107,10 +2192,15 @@ export function Accounts({ workspace, onNavigate }) {
     setSelected(name);
     setView('detail');
   };
+  // Seed a local row and open the EditDrawer (§8.1 create contract). The old path jumped
+  // straight to the detail view without ever persisting — the account vanished on reload
+  // and, with no id, its activities could never reach crm_activities either.
   const createAccount = () => {
-    const name = '새 계정';
+    const id = `local-account-${Date.now()}`;
+    pristineSeedRef.current.add(id);
     setLocalAccounts(prev => [{
-      name,
+      id,
+      name: '새 계정',
       type: filter === 'personal' || filter === 'company' ? filter : 'company',
       health: 'ok',
       value: 0,
@@ -2121,9 +2211,72 @@ export function Accounts({ workspace, onNavigate }) {
       // Tag in-workspace creates so the scoped view doesn't silently drop them.
       ...(ws ? { workspace } : {}),
     }, ...prev]);
-    setSelected(name);
-    setView('detail');
+    setEditAccountId(id); // open the editor immediately so the new account can be filled in
   };
+
+  const editingAccount = editAccountId ? mergedAccounts.find(a => a.id === editAccountId) : null;
+
+  // Persist the drawer edit. New local rows (id `local-account-…`) insert; on success the
+  // returned real id replaces the local one so activities/notes can persist against it.
+  const persistAccount = async () => {
+    if (!editingAccount) return { ok: false, status: 'error' };
+    pristineSeedRef.current.delete(editAccountId);
+    const isNew = String(editAccountId).startsWith('local-account-');
+    const r = await saveRevenueRecord('account', isNew ? 'create' : 'update', editingAccount);
+    if (r.ok && isNew && r.id) {
+      const realId = r.id;
+      setLocalAccounts(prev => prev.map(a => (a.id === editAccountId ? { ...a, id: realId } : a)));
+      setAccountEdits(prev => {
+        if (!prev[editAccountId]) return prev;
+        const next = { ...prev, [realId]: prev[editAccountId] };
+        delete next[editAccountId];
+        return next;
+      });
+      setEditAccountId(realId);
+    }
+    return r;
+  };
+
+  // Delete: drop the row locally (optimistic) and best-effort remove it from the ledger.
+  // Unsaved local rows (no DB id) skip the network call entirely.
+  const deleteAccount = async () => {
+    if (!editAccountId) return { ok: false };
+    const isLocal = String(editAccountId).startsWith('local-account-');
+    setLocalAccounts(prev => prev.filter(a => a.id !== editAccountId));
+    setDeletedAccountIds(prev => new Set(prev).add(editAccountId));
+    if (isLocal) return { ok: true, status: 'local' };
+    return saveRevenueRecord('account', 'delete', { id: editAccountId });
+  };
+
+  // Deep-link: ?account=<id> opens that account's EditDrawer once the ledger has loaded and
+  // the record exists in the merged list. One-shot per param, then strip the query so a
+  // refresh doesn't replay it. Mirrors the ?lead= / ?deal= contract (§8.1).
+  const accountParam = searchParams?.get('account') || null;
+  const consumedAccountRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!accountParam || syncState === 'loading') return;
+    if (consumedAccountRef.current === accountParam) return;
+    if (mergedAccounts.some(a => String(a.id) === String(accountParam))) {
+      consumedAccountRef.current = accountParam;
+      setEditAccountId(accountParam);
+      if (pathname) router.replace(pathname);
+    }
+  }, [accountParam, syncState, mergedAccounts, pathname, router]);
+
+  // Page-level `n` — quick-create an account when no drawer is open and focus isn't in a field.
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if ((e.key !== 'n' && e.key !== 'N') || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (editAccountId) return;
+      const t = e.target;
+      const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+      e.preventDefault();
+      createAccount();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editAccountId, filter, ws, workspace]);
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%', minHeight: 0 }}>
@@ -2153,7 +2306,7 @@ export function Accounts({ workspace, onNavigate }) {
         <SegmentedControl className="hub-toolbar" options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
 
         <Input className="hub-toolbar" placeholder="계정·담당자·전화·딜 검색…" icon="search" value={search} onChange={setSearch} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account <Kbd>N</Kbd></Button>
       </div>
 
       {wsEmpty && (
@@ -2162,6 +2315,7 @@ export function Accounts({ workspace, onNavigate }) {
             icon="accounts"
             title={`${ws.label} — 해당하는 계정이 없습니다`}
             description={`이 워크스페이스에 매칭되는 계정이 없습니다. 다른 워크스페이스로 태그된 계정은 여기에 표시되지 않습니다. 계정을 등록하거나 기록에 ${ws.label} 태그가 연결되면 나타납니다.`}
+            action={<Button variant="primary" size="sm" icon="plus" onClick={createAccount}>{ws.label}에 계정 추가</Button>}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
@@ -2171,8 +2325,24 @@ export function Accounts({ workspace, onNavigate }) {
       {!wsEmpty && view === 'cards' && (
         <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--gap)' }}>
           {filtered.map(a => (
-            <Card key={a.name} interactive style={{ cursor: 'pointer' }}>
-              <div onClick={() => openDetail(a.name)}>
+            <Card key={a.name} interactive style={{ position: 'relative' }}>
+              {/* Edit sits outside the card's main button — nesting a button inside a button is
+                  invalid, and without it a saved account could never be re-opened for editing. */}
+              <IconButton
+                icon="edit"
+                size={24}
+                iconSize={13}
+                tooltip={`${a.name} 편집`}
+                onClick={() => setEditAccountId(a.id)}
+                style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}
+              />
+              <button
+                type="button"
+                className="hub-card-action"
+                aria-label={`${a.name} 계정 상세 열기`}
+                onClick={() => openDetail(a.name)}
+                style={{ width: '100%', display: 'block', textAlign: 'left', background: 'transparent', color: 'inherit' }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                   <Avatar name={a.name} size={36} tone={a.type === 'personal' ? 'personal' : 'company'} />
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -2206,7 +2376,7 @@ export function Accounts({ workspace, onNavigate }) {
                     </span>
                   </div>
                 )}
-              </div>
+              </button>
             </Card>
           ))}
           {filtered.length === 0 && (
@@ -2226,7 +2396,7 @@ export function Accounts({ workspace, onNavigate }) {
         <Card pad={false} className="hub-table-card">
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '32px 1.6fr 110px 70px 110px 70px 120px 100px 100px',
+            gridTemplateColumns: ACCOUNTS_GRID,
             gap: 12,
             padding: '10px 16px',
             borderBottom: '1px solid var(--line-soft)',
@@ -2236,10 +2406,14 @@ export function Accounts({ workspace, onNavigate }) {
           </div>
           {filtered.map((a, i) => (
             <div key={a.name} className="hub-row"
+              role="button" tabIndex={0}
+              aria-label={`${a.name} 계정 상세 열기`}
               onClick={() => openDetail(a.name)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(a.name); } }}
               style={{
+                width: '100%', textAlign: 'left', color: 'inherit',
                 display: 'grid',
-                gridTemplateColumns: '32px 1.6fr 110px 70px 110px 70px 120px 100px 100px',
+                gridTemplateColumns: ACCOUNTS_GRID,
                 gap: 12,
                 padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center',
                 borderBottom: i < filtered.length - 1 ? '1px solid var(--line-soft)' : 'none',
@@ -2267,7 +2441,16 @@ export function Accounts({ workspace, onNavigate }) {
               <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{a.deals}</span>
               <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>{a.last}</span>
               <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{a.owner}</span>
-              <span className="mono" style={{ textAlign: 'right', fontSize: 11, color: 'var(--fg-faint)' }}>{a.lastAt}</span>
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{a.lastAt}</span>
+                <IconButton
+                  icon="edit"
+                  size={22}
+                  iconSize={12}
+                  tooltip={`${a.name} 편집`}
+                  onClick={(e) => { e.stopPropagation(); setEditAccountId(a.id); }}
+                />
+              </span>
             </div>
           ))}
           {filtered.length === 0 && (
@@ -2275,6 +2458,9 @@ export function Accounts({ workspace, onNavigate }) {
               icon="accounts"
               title="계정이 없습니다"
               description={syncState === 'live' ? 'Supabase customer_accounts 기록이 비어 있습니다.' : '필터나 검색어를 조정하면 계정을 다시 찾을 수 있습니다.'}
+              action={term
+                ? <Button variant="ghost" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
+                : <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>}
             />
           )}
         </Card>
@@ -2290,16 +2476,20 @@ export function Accounts({ workspace, onNavigate }) {
               {filtered.map(a => {
                 const isSel = a.name === selected;
                 return (
-                  <div key={a.name} className="hub-row"
+                  <button type="button" key={a.name} className="hub-row"
+                    aria-label={`${a.name} 계정 선택`}
+                    aria-pressed={isSel}
                     onClick={() => setSelected(a.name)}
                     style={{
+                      width: '100%', textAlign: 'left', color: 'inherit',
                       display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '10px 14px', cursor: 'pointer',
+                      padding: 'var(--pad-y) var(--pad-x)', cursor: 'pointer',
                       borderLeft: `2px solid ${isSel ? 'var(--moon-300)' : 'transparent'}`,
-                      // Selected row pins its fill inline; unselected rows leave background
-                      // to .hub-row:hover (an inline 'transparent' would out-rank the class).
-                      background: isSel ? 'var(--surface-2)' : undefined,
                       borderBottom: '1px solid var(--line-soft)',
+                      // Only the selected row pins a background inline — leaving it unset
+                      // otherwise lets .hub-row's CSS :hover win (an inline `transparent`
+                      // would outrank the class rule and kill hover entirely).
+                      ...(isSel ? { background: 'var(--surface-2)' } : null),
                     }}
                   >
                     <Avatar name={a.name} size={28} tone={a.type === 'personal' ? 'personal' : 'company'} />
@@ -2312,7 +2502,7 @@ export function Accounts({ workspace, onNavigate }) {
                         {fmt(a.value)} · <span style={{ color: 'var(--fg-faint)' }}>{a.last}</span>
                       </div>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
               {filtered.length === 0 && (
@@ -2334,10 +2524,36 @@ export function Accounts({ workspace, onNavigate }) {
               onPinNote={selectedAcc ? handlePinNote(selectedAcc.name) : () => {}}
               onAddNote={selectedAcc ? handleAddNote(selectedAcc.name) : () => {}}
               onNavigate={onNavigate}
+              onEdit={selectedAcc ? () => setEditAccountId(selectedAcc.id) : undefined}
             />
           </div>
         </Card>
       )}
+
+      <EditDrawer
+        title={editingAccount ? (editingAccount.name || '계정 편집') : ''}
+        subtitle="계정 정보 편집"
+        record={editingAccount}
+        fields={[
+          { key: 'name', label: '이름' },
+          { key: 'type', row: 'r1', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
+          { key: 'health', row: 'r1', label: '헬스', type: 'select', options: [{ value: 'ok', label: 'OK' }, { value: 'warning', label: 'Warning' }, { value: 'risk', label: 'Risk' }] },
+          { key: 'note', label: '메모', placeholder: '계정 특이사항…' },
+        ]}
+        onChange={(key, val) => {
+          pristineSeedRef.current.delete(editAccountId);
+          setAccountEdits(prev => ({ ...prev, [editAccountId]: { ...prev[editAccountId], [key]: val } }));
+        }}
+        onSave={persistAccount}
+        onDelete={deleteAccount}
+        onClose={() => {
+          const id = editAccountId;
+          setEditAccountId(null);
+          if (id && pristineSeedRef.current.delete(id)) {
+            setLocalAccounts(prev => prev.filter(a => a.id !== id));
+          }
+        }}
+      />
     </div>
   );
 }

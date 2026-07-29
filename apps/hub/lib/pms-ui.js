@@ -717,6 +717,11 @@ export function buildTaskBoardColumns(todos = [], projects = []) {
       priority: todo.priority,
       project: project?.name || "미지정",
       due: todo.due,
+      // 카드가 원본 할 일의 식별자·상태를 그대로 들고 간다 — 보드에서 카드를 눌러 편집
+      // 드로어를 열려면 표시용 project 이름이 아니라 projectId/status가 필요하다.
+      projectId: todo.project || null,
+      status: todo.status,
+      dueAt: todo.dueAt ?? null,
     });
   });
 

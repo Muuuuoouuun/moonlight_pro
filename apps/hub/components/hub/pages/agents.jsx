@@ -3,7 +3,7 @@
 import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd, EmptyState } from "../hub-primitives";
-import { requestGuruCoaching, GURU_MODE_LABEL, GURU_PREVIEW_NOTE } from "../guru-client";
+import { requestGuruCoaching, guruChatPath, GURU_MODE_LABEL, GURU_PREVIEW_NOTE } from "../guru-client";
 import { requestCouncilAdvice, councilChatPath } from "../council-client";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 import { PERSONA_CONTRACT } from "@/lib/sales-os/persona-contract";
@@ -236,6 +236,17 @@ export function AgentsChat({ onNavigate }) {
               <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', alignSelf: 'center' }}>· 메시지를 보내면 제안/이메일 초안으로 보고 검토합니다</span>
             </div>
           )}
+          {/* 미연결 페르소나는 무엇을 보내든 캔 응답만 돌아온다 — 보내기 전에 알려준다.
+              (이전에는 실제 질문을 다 쓰고 전송한 뒤에야 연결 안 됨을 알 수 있었다.) */}
+          {agentKey !== 'guru' && (
+            <div style={{ maxWidth: 720, margin: '0 auto 8px', display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: 'var(--fg-muted)' }}>
+              <Badge tone="warning" size="xs">미연결</Badge>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                {persona.name}는 아직 채팅 실행에 연결되지 않았습니다 — 메시지는 저장되지 않습니다.
+              </span>
+              <Button variant="ghost" size="xs" onClick={() => onNavigate?.(guruChatPath({}))}>Guru로 전환</Button>
+            </div>
+          )}
           <div style={{ maxWidth: 720, margin: '0 auto', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', padding: 10 }}>
             <textarea value={input} onChange={e => setInput(e.target.value)} placeholder={`Message ${persona.name}…`} style={{
               width: '100%', minHeight: 52, resize: 'none',
@@ -387,8 +398,15 @@ export function AgentsCouncil({ onNavigate }) {
       )}
       <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--gap)' }}>
         {roster.personas.map(a => (
-          <Card key={a.id} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.(`dashboard/agents/chat?agent=${a.id}`)}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <Card key={a.id}>
+            <button
+              type="button"
+              className="hub-card-action"
+              aria-label={`${a.nameKo || a.id} 페르소나 대화 열기`}
+              onClick={() => onNavigate?.(`dashboard/agents/chat?agent=${a.id}`)}
+              style={{ width: '100%', display: 'block', textAlign: 'left', background: 'transparent', color: 'inherit' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
               <div style={{
                 width: 36, height: 36, borderRadius: 999,
                 background: 'radial-gradient(circle at 35% 30%, var(--moon-200), var(--moon-500) 60%, var(--moon-700))',
@@ -402,13 +420,14 @@ export function AgentsCouncil({ onNavigate }) {
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.role}</div>
               </div>
-            </div>
-            <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.5, paddingTop: 10, borderTop: '1px solid var(--line-soft)' }}>
-              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)', marginBottom: 5 }}>Recent</div>
-              {a.lastRun
-                ? <>{shortWhen(a.lastRun.ranAt)} · {a.lastRun.summary || `${a.emits} 산출`}</>
-                : (a.status === 'idle' ? '아직 실행 기록 없음' : '실행 대기')}
-            </div>
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.5, paddingTop: 10, borderTop: '1px solid var(--line-soft)' }}>
+                <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)', marginBottom: 5 }}>Recent</div>
+                {a.lastRun
+                  ? <>{shortWhen(a.lastRun.ranAt)} · {a.lastRun.summary || `${a.emits} 산출`}</>
+                  : (a.status === 'idle' ? '아직 실행 기록 없음' : '실행 대기')}
+              </div>
+            </button>
           </Card>
         ))}
       </div>
@@ -429,6 +448,13 @@ function shortWhen(iso) {
   return new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric' }).format(d);
 }
 
+// 승인/실행 실패를 사람이 읽을 수 있는 한 줄로 — 서버가 이유를 주면 그대로 보여준다.
+async function describeOrderFailure(res, label) {
+  const data = await res.json().catch(() => null);
+  const reason = data?.error || data?.reason || data?.message || `HTTP ${res.status}`;
+  return `${label} 실패 — ${reason}`;
+}
+
 // Live render: real work_orders (the semi-auto queue) + the configured persona roster.
 export function AgentsOrders({ onNavigate }) {
   const [orders, setOrders] = React.useState(null); // null = loading
@@ -436,6 +462,8 @@ export function AgentsOrders({ onNavigate }) {
   const [live, setLive] = React.useState(false);
   const [busyId, setBusyId] = React.useState(null);
   const [copiedId, setCopiedId] = React.useState(null);
+  // 승인/보류/실행이 실패해도 busy만 풀리고 아무 신호가 없었다 — 결정 큐에서 가장 위험한 침묵.
+  const [actionError, setActionError] = React.useState(null);
 
   // 딜 채널이 카톡/전화 중심이라 "복사"가 실제 발송 경로 — 초안을 클립보드로 옮겨 보내는 흐름.
   const copyDraft = async (o) => {
@@ -480,7 +508,14 @@ export function AgentsOrders({ onNavigate }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id, status }),
       });
-      if (res.ok) setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+      if (res.ok) {
+        setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+        setActionError(null);
+      } else {
+        setActionError(await describeOrderFailure(res, '승인/보류'));
+      }
+    } catch (error) {
+      setActionError(`승인/보류 실패 — ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setBusyId(null);
     }
@@ -496,7 +531,14 @@ export function AgentsOrders({ onNavigate }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id, status: 'executed', outcome: { action } }),
       });
-      if (res.ok) setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: 'executed' } : o)));
+      if (res.ok) {
+        setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: 'executed' } : o)));
+        setActionError(null);
+      } else {
+        setActionError(await describeOrderFailure(res, '실행'));
+      }
+    } catch (error) {
+      setActionError(`실행 실패 — ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setBusyId(null);
     }
@@ -513,7 +555,14 @@ export function AgentsOrders({ onNavigate }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id, status: 'executed' }),
       });
-      if (res.ok) setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: 'executed' } : o)));
+      if (res.ok) {
+        setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: 'executed' } : o)));
+        setActionError(null);
+      } else {
+        setActionError(await describeOrderFailure(res, '리드 승격'));
+      }
+    } catch (error) {
+      setActionError(`리드 승격 실패 — ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setBusyId(null);
     }
@@ -533,6 +582,20 @@ export function AgentsOrders({ onNavigate }) {
         <div style={{ flex: 1 }} />
         <Badge tone={live ? 'success' : 'neutral'} size="xs">{live ? 'live' : 'preview'}</Badge>
       </div>
+
+      {actionError && (
+        <Card
+          pad={false}
+          role="alert"
+          style={{
+            padding: 'var(--pad-y) var(--pad-x)', display: 'flex', alignItems: 'center', gap: 10,
+            boxShadow: 'inset 2px 0 0 var(--danger-line)',
+          }}
+        >
+          <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: 'var(--danger)' }}>{actionError}</span>
+          <Button variant="ghost" size="xs" onClick={() => setActionError(null)}>닫기</Button>
+        </Card>
+      )}
 
       {personas.length > 0 && (
         <Card pad={false} style={{ padding: '10px 14px', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', background: 'var(--surface-2)' }}>

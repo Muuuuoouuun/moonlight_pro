@@ -643,6 +643,9 @@ function groupFieldRows(fields) {
 // Cmd/Ctrl+Enter mirrors the explicit save button. The initial signature is kept for the
 // lifetime of one opened record so ESC, the overlay, and the close button cannot silently
 // discard a changed draft.
+// `saveLabel` defaults to '변경사항 저장' rather than '완료' on purpose — 내 작업's status field
+// has its own 완료 option, and a footer reading 완료 made "saved my edits" and "finished this
+// task" the same word.
 export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)', saveLabel = '변경사항 저장', children }) {
   const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | conflict | error
   const [saveFeedback, setSaveFeedback] = React.useState('');

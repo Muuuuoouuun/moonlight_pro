@@ -2,15 +2,10 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
-import { eqFilter, withWorkspaceFilter } from "@/lib/server-read";
 import { forwardPmsCommand } from "@/lib/pms-engine-client";
 import { getProjectLedger } from "@/lib/repositories/operating-ledger";
 import { isCanonicalUuid } from "@/lib/uuid.js";
-import {
-  deleteSupabaseRecord,
-  resolveDefaultWorkspaceId,
-  resolveSupabaseConfig,
-} from "@/lib/server-write";
+import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -103,8 +98,10 @@ export async function PATCH(req) {
   );
 }
 
-// Hard-delete a task row. The Engine's PMS command pipeline has no delete action —
-// hub-direct Supabase delete follows the same precedent as /api/routine's DELETE.
+// Soft delete (migration 0024): stamps deleted_at so the task leaves every surface but
+// stays recoverable. Body carries { id }. Routed through the Engine's delete_task command
+// rather than a hub-direct Supabase delete — a hard delete cascades milestones and orphans
+// decisions, and Engine owns writes.
 export async function DELETE(req) {
   const guard = assertHubWriteAllowed(req);
   if (guard) return guard;
@@ -120,27 +117,13 @@ export async function DELETE(req) {
     );
   }
 
-  if (!resolveSupabaseConfig()) {
-    return NextResponse.json(
-      { status: "preview", message: "Supabase is not configured. This delete was not saved." },
-      { status: 202 },
-    );
-  }
-
-  const persistence = await deleteSupabaseRecord(
-    "tasks",
-    withWorkspaceFilter([["id", eqFilter(id)]]),
+  const result = await forwardPmsCommand({
+    id,
+    action: "delete_task",
+    workspaceId: resolveDefaultWorkspaceId(),
+  });
+  return NextResponse.json(
+    { ...result.data, task: result.data?.entity || null },
+    { status: result.httpStatus },
   );
-  if (!persistence.persisted) {
-    return NextResponse.json(
-      {
-        status: "error",
-        error: persistence.detail || persistence.reason || "Task delete persistence failed.",
-        retryable: true,
-      },
-      { status: 502 },
-    );
-  }
-
-  return NextResponse.json({ status: "saved", message: "Task deleted." }, { status: 200 });
 }

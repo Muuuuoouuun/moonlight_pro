@@ -5,6 +5,7 @@ import {
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
+import { getRevenueViewNeeds } from "../revenue-ledger-view.js";
 import { resolveLeadEnrichmentView } from "../sales-os/lead-view.js";
 import { DEAL_STAGES, STAGE_ALIASES, LEGACY_DB_STAGE_VALUES } from "../deal-stages.js";
 
@@ -371,7 +372,7 @@ export async function getAccountActivities(accountId) {
   return getCrmActivities({ accountId });
 }
 
-export async function getRevenueLedger() {
+export async function getRevenueLedger({ view } = {}) {
   const workspaceId = resolveDefaultWorkspaceId();
   const supabaseConfig = resolveSupabaseConfig();
 
@@ -379,40 +380,43 @@ export async function getRevenueLedger() {
     return emptyLedger(false, workspaceId || null);
   }
 
+  const needs = getRevenueViewNeeds(view);
+  const load = (key, request) => needs.has(key) ? request() : Promise.resolve([]);
   const [leadRows, dealRows, accountRows, caseRows, companyRows, contactRows] = await Promise.all([
-    fetchSupabaseRows("leads", {
+    load("leads", () => fetchSupabaseRows("leads", {
       limit: 120,
       order: "last_touch_at.desc.nullslast",
       filters: withWorkspaceFilter(),
-    }),
-    fetchSupabaseRows("deals", {
+    })),
+    load("deals", () => fetchSupabaseRows("deals", {
       limit: 120,
       order: "updated_at.desc.nullslast",
       filters: withWorkspaceFilter([
         ["stage", inFilter(LEGACY_DB_STAGE_VALUES)],
       ]),
-    }),
-    fetchSupabaseRows("customer_accounts", {
+    })),
+    load("accounts", () => fetchSupabaseRows("customer_accounts", {
       limit: 120,
       order: "updated_at.desc.nullslast",
       filters: withWorkspaceFilter([["status", inFilter(["active", "paused", "closed"])]]),
-    }),
-    fetchSupabaseRows("operation_cases", {
+    })),
+    load("cases", () => fetchSupabaseRows("operation_cases", {
       limit: 120,
       order: "opened_at.desc.nullslast",
       filters: withWorkspaceFilter(),
-    }),
-    fetchSupabaseRows("companies", {
+    })),
+    load("companies", () => fetchSupabaseRows("companies", {
       limit: 200,
       filters: withWorkspaceFilter(),
-    }),
-    fetchSupabaseRows("contacts", {
+    })),
+    load("contacts", () => fetchSupabaseRows("contacts", {
       limit: 200,
       filters: withWorkspaceFilter(),
-    }),
+    })),
   ]);
 
-  if (!leadRows || !dealRows || !accountRows || !caseRows) {
+  const requiredRows = { leads: leadRows, deals: dealRows, accounts: accountRows, cases: caseRows, companies: companyRows, contacts: contactRows };
+  if ([...needs].some((key) => !Array.isArray(requiredRows[key]))) {
     return { ...emptyLedger(true, workspaceId), source: "preview" };
   }
 

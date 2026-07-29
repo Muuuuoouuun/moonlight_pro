@@ -1,11 +1,13 @@
 "use client";
 
 import React from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar, SyncBadge, SegmentedControl } from "../hub-primitives";
 import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
+import { requestCouncilAdvice } from "../council-client";
 import { shouldRestoreActiveStudioDraft } from "@/lib/content-studio-routing";
+import { getContentStudioReadiness, hasContentStudioDraft } from "@/lib/content-studio-readiness";
 
 const STUDIO_DRAFT_DB = "moonlight-content-studio";
 const STUDIO_DRAFT_STORE = "drafts";
@@ -208,6 +210,8 @@ function useContentLedger() {
 export function Studio({ workspace }) {
   const ws = getWorkspace(workspace);
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const itemParam = searchParams.get("item");
   const newParam = searchParams.get("new");
   const brandParam = searchParams.get("brand");
@@ -224,6 +228,9 @@ export function Studio({ workspace }) {
   const [activeSlide, setActiveSlide] = React.useState(0);
   const [drag, setDrag] = React.useState(null);
   const [extraSuggestions, setExtraSuggestions] = React.useState([]);
+  const [askText, setAskText] = React.useState('');
+  const [askPending, setAskPending] = React.useState(false);
+  const askPendingRef = React.useRef(false);
   const [dismissedSuggestionKeys, setDismissedSuggestionKeys] = React.useState(() => new Set());
   const [pendingSend, setPendingSend] = React.useState(null); // 'publish' | 'schedule' | null
   const [lastSentAt, setLastSentAt] = React.useState(null);
@@ -235,6 +242,15 @@ export function Studio({ workspace }) {
   const [localSavedAt, setLocalSavedAt] = React.useState(null);
   const [dirty, setDirty] = React.useState(false);
   const loadedItemRef = React.useRef(null);
+  const itemLoadedRef = React.useRef(false);
+  const editRevisionRef = React.useRef(0);
+  const saveInFlightRef = React.useRef(false);
+
+  const markDirty = React.useCallback(() => {
+    editRevisionRef.current += 1;
+    setDirty(true);
+    setSaveState(current => current === 'saving' ? current : 'dirty');
+  }, []);
 
   const formatTime = (d) => {
     try {
@@ -253,6 +269,14 @@ export function Studio({ workspace }) {
       ? { slides, format: 'instagram-carousel', export: { target: 'google_drive' } }
       : body
   ), [body, mode, slides]);
+  const studioReadiness = React.useMemo(
+    () => getContentStudioReadiness({ mode, title, body, slides }),
+    [body, mode, slides, title],
+  );
+  const hasDraftContent = React.useMemo(
+    () => hasContentStudioDraft({ mode, title, body, slides }),
+    [body, mode, slides, title],
+  );
 
   const applyDraft = React.useCallback((draft, { restored = false } = {}) => {
     if (!draft) return;
@@ -262,14 +286,20 @@ export function Studio({ workspace }) {
     if (draft.mode === 'carousel' || draft.mode === 'blog') setMode(draft.mode);
     if (typeof draft.title === 'string') setTitle(draft.title);
     if (typeof draft.body === 'string') setBody(draft.body);
-    if (Array.isArray(draft.slides) && draft.slides.length) setSlides(draft.slides);
+    if (Array.isArray(draft.slides) && draft.slides.length) {
+      setSlides(draft.slides);
+      setActiveSlide(0);
+    }
     if (draft.updatedAt) setLocalSavedAt(draft.updatedAt);
+    editRevisionRef.current += 1;
     setDirty(false);
     if (restored) setSaveState('restored');
   }, []);
 
   React.useEffect(() => {
     let active = true;
+    // A ledger item loaded in this session wins for the rest of it — see the ?item= strip below.
+    if (itemLoadedRef.current) return undefined;
     if (!shouldRestoreActiveStudioDraft({ itemParam, newParam })) return undefined;
 
     readStudioDraft(ACTIVE_DRAFT_KEY).then((draft) => {
@@ -309,10 +339,12 @@ export function Studio({ workspace }) {
     setTitle(variant?.title || item.title);
     if (nextMode === "carousel" && nextSlides) {
       setSlides(nextSlides);
+      setActiveSlide(0);
     } else if (variant?.body && nextMode === "blog") {
       setBody(variant.body);
     }
     setLastSavedAt(variant?.updatedAt || item.updatedAt || null);
+    editRevisionRef.current += 1;
     setDirty(false);
     setSaveState("loaded");
     if (isUnsupportedType) {
@@ -322,7 +354,13 @@ export function Studio({ workspace }) {
       }, ...s]);
     }
     loadedItemRef.current = itemParam;
-  }, [itemParam, ledger]);
+    // Strip ?item= once consumed (§8.1 deep-link contract) so a refresh or a shared link
+    // doesn't replay the ledger load over in-progress local edits. itemLoadedRef latches
+    // first: clearing the query re-runs the restore effect above with empty params, and
+    // without the latch that would clobber the item we just loaded with the active mirror.
+    itemLoadedRef.current = true;
+    if (pathname) router.replace(pathname);
+  }, [itemParam, ledger, pathname, router]);
 
   React.useEffect(() => {
     if (!localMirror) return undefined;
@@ -348,8 +386,11 @@ export function Studio({ workspace }) {
 
   const saveDraft = React.useCallback(async (reason = "manual") => {
     if (!autoSave && reason === "autosave") return;
+    if (saveInFlightRef.current) return null;
 
     const method = contentId && variantId ? "PATCH" : "POST";
+    const savedRevision = editRevisionRef.current;
+    saveInFlightRef.current = true;
     setSaveState("saving");
 
     try {
@@ -383,29 +424,68 @@ export function Studio({ workspace }) {
 
       if (data.contentId) setContentId(data.contentId);
       if (data.variantId) setVariantId(data.variantId);
-      setLastSavedAt(new Date().toISOString());
-      setSaveState(data.status === "preview" ? "preview" : "saved");
-      setDirty(false);
-      return data;
+      if (data.status !== "preview") setLastSavedAt(new Date().toISOString());
+      if (editRevisionRef.current === savedRevision) {
+        setSaveState(data.status === "preview" ? "preview" : "saved");
+        setDirty(false);
+      } else {
+        setSaveState("dirty");
+      }
+      return { ...data, studioRevision: savedRevision };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
+      const feedback = localMirror
+        ? `서버 저장 실패 — ${msg} · 브라우저 사본은 유지됩니다.`
+        : `저장 실패 — ${msg}`;
       setSaveState("error");
-      setExtraSuggestions(s => [{ tone: 'danger', text: `저장 실패 — ${msg}` }, ...s]);
+      setExtraSuggestions(s => s.some(item => item.text === feedback)
+        ? s
+        : [{ tone: 'danger', text: feedback }, ...s]);
       return null;
+    } finally {
+      saveInFlightRef.current = false;
     }
   }, [autoSave, body, contentId, currentBodyPayload, localMirror, mode, selectedBrand, slides, title, variantId, variantType]);
 
   React.useEffect(() => {
-    if (!autoSave || !dirty) return undefined;
+    const onSaveShortcut = (event) => {
+      if (
+        event.defaultPrevented || event.isComposing || event.shiftKey || event.altKey ||
+        !(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 's'
+      ) return;
+      if (event.target instanceof Element && event.target.closest('[role="dialog"][aria-modal="true"]')) return;
+      event.preventDefault();
+      if (saveInFlightRef.current) return;
+      if (!hasDraftContent && !contentId) {
+        setExtraSuggestions(s => [{ tone: 'warning', text: '저장할 제목이나 본문을 먼저 입력하세요.' }, ...s]);
+        return;
+      }
+      saveDraft('manual');
+    };
+
+    window.addEventListener('keydown', onSaveShortcut);
+    return () => window.removeEventListener('keydown', onSaveShortcut);
+  }, [contentId, hasDraftContent, saveDraft]);
+
+  React.useEffect(() => {
+    if (!autoSave || !dirty || saveState === 'saving' || saveState === 'error') return undefined;
 
     const timer = window.setTimeout(() => {
       saveDraft("autosave");
     }, 1200);
 
     return () => window.clearTimeout(timer);
-  }, [autoSave, dirty, saveDraft]);
+  }, [autoSave, dirty, saveDraft, saveState]);
 
   async function recordHandoff(action) {
+    if (saveInFlightRef.current) {
+      setExtraSuggestions(s => [{ tone: 'warning', text: '현재 저장이 끝난 뒤 다시 시도하세요.' }, ...s]);
+      return;
+    }
+    if (!studioReadiness.ready) {
+      setExtraSuggestions(s => [{ tone: 'warning', text: studioReadiness.message }, ...s]);
+      return;
+    }
     setPendingSend(action);
     const startedAt = Date.now();
     const isSchedule = action === 'schedule';
@@ -417,6 +497,9 @@ export function Studio({ workspace }) {
       const saved = needsSave ? await saveDraft("handoff") : null;
       if (needsSave && !saved) {
         throw new Error("초안 저장이 완료되지 않아 handoff를 중단했습니다.");
+      }
+      if (needsSave && saved?.studioRevision !== editRevisionRef.current) {
+        throw new Error("저장 중 내용이 변경되었습니다. 최신 변경이 저장된 뒤 다시 시도하세요.");
       }
 
       const nextContentId = saved?.contentId || contentId;
@@ -522,12 +605,16 @@ export function Studio({ workspace }) {
       .slice(0, 5);
   }, [contentId, ledger.publishLogs, localHandoffLogs, variantId]);
 
-  const wordCount = body.split(/\s+/).filter(Boolean).length;
+  const wordCount = React.useMemo(() => body.split(/\s+/).filter(Boolean).length, [body]);
   const readingTime = Math.max(1, Math.round(wordCount / 180));
   const saveLabel = saveState === "saving"
     ? "saving…"
     : saveState === "error"
     ? (localSavedAt ? `local saved · ${formatTime(new Date(localSavedAt))}` : "save failed")
+    : saveState === "dirty"
+    ? "unsaved changes"
+    : saveState === "preview"
+    ? (localSavedAt ? `preview · local mirror ${formatTime(new Date(localSavedAt))}` : "preview only")
     : lastSavedAt
     ? `cloud saved · ${formatTime(new Date(lastSavedAt))}`
     : localSavedAt
@@ -536,28 +623,95 @@ export function Studio({ workspace }) {
     ? `${wordCount} words · ${readingTime}min read`
     : `${slides.length} slides · Google Drive export`;
 
+  // The toolbar chip used to be a hardcoded <Badge>Draft</Badge>, so a piece stayed labelled
+  // "Draft" forever — even after Publish logged a handoff. Derive it from the record's actual
+  // lifecycle instead: in-flight → handed off/published → saved draft → local-only.
+  const lifecycle = React.useMemo(() => {
+    if (pendingSend === 'schedule') return { label: 'Queuing…', tone: 'info' };
+    if (pendingSend === 'publish') return { label: 'Logging…', tone: 'info' };
+    const latest = handoffLogs[0];
+    if (latest?.status === 'published') return { label: 'Published', tone: 'success' };
+    if (latest?.status === 'queued') return { label: 'Handed off', tone: 'info' };
+    if (!contentId) return { label: 'Local draft', tone: 'neutral' };
+    return { label: dirty ? 'Draft · 미저장' : 'Draft', tone: 'warning' };
+  }, [contentId, dirty, handoffLogs, pendingSend]);
+
+  // Save state carries meaning, so it must not read as one uniform dim grey (a failed save
+  // and a successful one were previously distinguishable only by reading 11px mono text).
+  const saveLabelColor = saveState === 'error'
+    ? 'var(--danger)'
+    : saveState === 'dirty'
+    ? 'var(--warning)'
+    : saveState === 'preview'
+    ? 'var(--fg-muted)'
+    : 'var(--fg-faint)';
+
   const moveSlide = (from, to) => {
     if (from === to) return;
     setSlides(s => { const n = s.slice(); const [m] = n.splice(from, 1); n.splice(to, 0, m); return n; });
     setActiveSlide(to);
-    setDirty(true);
+    markDirty();
   };
   const addSlide = () => {
     setSlides(s => [...s, { id: 'new-' + Date.now(), bg: SLIDE_PALETTE.seed, title: 'New slide', sub: '' }]);
-    setDirty(true);
+    markDirty();
   };
   const updateSlide = (i, patch) => {
     setSlides(s => s.map((x, j) => j === i ? { ...x, ...patch } : x));
-    setDirty(true);
+    markDirty();
   };
   const removeSlide = (i) => {
+    if (slides.length <= 1) {
+      setExtraSuggestions(s => [{ tone: 'warning', text: '카드 뉴스에는 최소 한 장의 슬라이드가 필요합니다.' }, ...s]);
+      return;
+    }
     setSlides(s => s.filter((_, j) => j !== i));
-    setDirty(true);
+    setActiveSlide(current => current > i ? current - 1 : Math.min(current, slides.length - 2));
+    markDirty();
   };
+  // Ask the Council brand-mentor to critique the current draft. council-client.js was written
+  // for this ("Reused by the Studio editor") but the composer below was never wired to it, so
+  // both the AI toolbar button and the Ask box were inert. Results come back as `kind:'advice'`
+  // — the only suggestion kind that gets an Apply button (system notices must never be
+  // Apply-able, or a "저장 실패 — HTTP 500" toast can be quoted into the article body).
+  const askCouncil = React.useCallback(async (prompt) => {
+    if (askPendingRef.current) return;
+    const draftText = mode === 'blog'
+      ? [title, body].filter(Boolean).join('\n\n')
+      : slides.map((s, i) => `${i + 1}. ${s.title}${s.sub ? ` — ${s.sub}` : ''}`).join('\n');
+    if (!draftText.trim() && !prompt?.trim()) {
+      setExtraSuggestions(s => [{ tone: 'warning', text: '검토할 초안이나 질문을 먼저 입력하세요.' }, ...s]);
+      return;
+    }
+    askPendingRef.current = true;
+    setAskPending(true);
+    try {
+      const r = await requestCouncilAdvice({
+        mode: 'content-critique',
+        ref: contentId || null,
+        draft: prompt?.trim() ? `${prompt.trim()}\n\n---\n${draftText}` : draftText,
+      });
+      if (r.state === 'done') {
+        setExtraSuggestions(s => [{ kind: 'advice', tone: 'moon', text: r.text }, ...s]);
+        setAskText('');
+      } else {
+        setExtraSuggestions(s => [{
+          tone: r.state === 'preview' ? 'warning' : 'danger',
+          text: r.state === 'preview'
+            ? `Council 자문을 생성할 수 없습니다 — ${r.note}`
+            : `Council 자문 실패 — ${r.note}`,
+        }, ...s]);
+      }
+    } finally {
+      askPendingRef.current = false;
+      setAskPending(false);
+    }
+  }, [body, contentId, mode, slides, title]);
+
   const applyToolbarAction = (tool) => {
     if (!tool) return;
     if (tool === 'ai') {
-      setExtraSuggestions(s => [{ tone: 'warning', text: 'AI 제안 생성은 아직 실행 경로에 연결되지 않았습니다.' }, ...s]);
+      askCouncil('');
       return;
     }
     const snippets = {
@@ -569,7 +723,7 @@ export function Studio({ workspace }) {
       image: '\n![설명](image-url)\n',
     };
     setBody(prev => `${prev}${snippets[tool] || ''}`);
-    setDirty(true);
+    markDirty();
   };
 
   const cur = slides[activeSlide] || slides[0];
@@ -582,14 +736,13 @@ export function Studio({ workspace }) {
   return (
     <div className="hub-studio-shell" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', height: '100%', overflow: 'hidden' }}>
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <div className="hub-studio-toolbar" style={{ padding: 'var(--pad-y) var(--section-gap)', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           <SegmentedControl
             options={[{ key: 'blog', label: 'Blog / Insight' }, { key: 'carousel', label: 'Card News' }]}
             value={mode}
-            onChange={(k) => { setMode(k); setDirty(true); }}
+            onChange={(k) => { setMode(k); markDirty(); }}
           />
-          {/* Draft는 라이프사이클 단계 — 경고색이 아니라 중립 (§5.2). */}
-          <Badge tone="neutral" size="xs">Draft</Badge>
+          <Badge tone={lifecycle.tone} size="xs">{lifecycle.label}</Badge>
           {ws && (
             <span
               title={`${ws.label} 워크스페이스 스코프`}
@@ -614,8 +767,8 @@ export function Studio({ workspace }) {
           <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
             {mode === 'blog' ? <>Web article · <span className="mono">{contentId ? contentId.slice(0, 8) : 'LOCAL'}</span></> : <>Card News · <span className="mono">{variantId ? variantId.slice(0, 8) : 'LOCAL'}</span> · {slides.length} slides</>}
           </span>
-          <div style={{ flex: 1 }} />
-          <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>
+          <div className="hub-studio-toolbar-spacer" style={{ flex: 1 }} />
+          <span className="mono hub-studio-toolbar-save-state" role="status" aria-live="polite" style={{ fontSize: 11, color: lastSentAt ? 'var(--fg-faint)' : saveLabelColor }}>
             {lastSentAt
               ? `handoff · ${formatTime(lastSentAt)}`
               : saveLabel}
@@ -640,7 +793,9 @@ export function Studio({ workspace }) {
           </div>
           <IconButton
             icon="check"
-            tooltip="Save now"
+            tooltip="Save now · Ctrl/⌘S"
+            aria-keyshortcuts="Control+S Meta+S"
+            disabled={(!hasDraftContent && !contentId) || saveState === 'saving'}
             onClick={() => saveDraft("manual")}
             style={{ color: saveState === 'error' ? 'var(--danger)' : 'var(--fg-muted)' }}
           />
@@ -652,6 +807,8 @@ export function Studio({ workspace }) {
           <Button
             variant="secondary"
             size="sm"
+            disabled={!studioReadiness.ready || pendingSend !== null || saveState === 'saving'}
+            title={studioReadiness.ready ? '자동화 handoff 요청 기록' : studioReadiness.message}
             onClick={() => recordHandoff('schedule')}
           >
             {pendingSend === 'schedule' ? 'Queuing…' : 'Schedule'}
@@ -660,15 +817,28 @@ export function Studio({ workspace }) {
             variant="primary"
             size="sm"
             icon="send"
+            disabled={!studioReadiness.ready || pendingSend !== null || saveState === 'saving'}
+            title={studioReadiness.ready ? '수동 export 기록' : studioReadiness.message}
             onClick={() => recordHandoff('publish')}
           >
             {pendingSend === 'publish' ? 'Logging…' : 'Publish'}
           </Button>
         </div>
 
+        {!studioReadiness.ready && (
+          <div
+            className="hub-studio-readiness"
+            role="status"
+            aria-live="polite"
+            style={{ padding: 'calc(var(--pad-y) - 3px) var(--section-gap)', borderBottom: '1px solid var(--line-soft)', background: 'var(--surface)', color: 'var(--fg-muted)', fontSize: 11.5, flexShrink: 0 }}
+          >
+            {studioReadiness.message} 입력 전에는 Schedule과 Publish가 잠깁니다.
+          </div>
+        )}
+
         {mode === 'blog' && (
           <>
-            <div style={{ padding: '8px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', gap: 4, flexShrink: 0 }}>
+            <div style={{ padding: 'calc(var(--pad-y) - 2px) var(--section-gap)', borderBottom: '1px solid var(--line-soft)', display: 'flex', gap: 4, flexShrink: 0 }}>
               {[
                 { i: 'sparkle', t: 'AI', action: 'ai' }, { t: '|' }, { l: 'H1', action: 'h1' }, { l: 'H2', action: 'h2' }, { l: 'B', action: 'bold', style: { fontWeight: 700 } },
                 { l: 'i', action: 'italic', style: { fontStyle: 'italic' } }, { t: '|' }, { i: 'link', action: 'link' }, { i: 'upload', t: 'Image', action: 'image' },
@@ -680,16 +850,19 @@ export function Studio({ workspace }) {
                 </button>
               ))}
             </div>
-            <div className="scroll-y" style={{ flex: 1, padding: '40px 20px' }}>
+            <div className="scroll-y" style={{ flex: 1, padding: 'calc(var(--section-gap) * 1.5) var(--section-gap)' }}>
               <div style={{ maxWidth: 680, margin: '0 auto' }}>
-                {/* 에디터 캔버스 예외: 타이틀·본문은 캐럿이 포커스 표식 (my-work.jsx:842 패턴) — outline 제거 유지 */}
-                <input value={title} onChange={e => { setTitle(e.target.value); setDirty(true); }} style={{
-                  width: '100%', background: 'transparent', border: 'none', outline: 'none',
+                {/* outline은 제거하지 않는다 — .hub-studio-title:focus-visible이 글로벌 포커스 링을
+                    offset 5px로 받아낸다 (FINDING-013). */}
+                <input id="studio-blog-title" className="hub-studio-title" aria-label="콘텐츠 제목" placeholder="콘텐츠 제목"
+                  value={title} onChange={e => { setTitle(e.target.value); markDirty(); }} style={{
+                  width: '100%', background: 'transparent', border: 'none',
                   color: 'var(--fg)', fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4,
                 }} />
-                <div style={{ fontSize: 13, color: 'var(--fg-faint)', marginBottom: 28 }}>By Hyeon Park · Web article preview 우선 · n8n handoff 대기</div>
-                <textarea value={body} onChange={e => { setBody(e.target.value); setDirty(true); }} style={{
-                  width: '100%', minHeight: 420, background: 'transparent', border: 'none', outline: 'none', resize: 'none',
+                <div style={{ fontSize: 13, color: 'var(--fg-faint)', marginBottom: 28 }}>By 문준혁 · Web article preview 우선 · n8n handoff 대기</div>
+                <textarea id="studio-blog-body" className="hub-studio-body" aria-label="콘텐츠 본문" placeholder="근거와 결론이 드러나는 본문을 작성하세요."
+                  value={body} onChange={e => { setBody(e.target.value); markDirty(); }} style={{
+                  width: '100%', minHeight: 420, background: 'transparent', border: 'none', resize: 'none',
                   color: 'var(--fg)', fontSize: 15, lineHeight: 1.7, fontFamily: 'var(--font-sans)', letterSpacing: '-0.005em',
                 }} />
                 <div style={{
@@ -717,9 +890,11 @@ export function Studio({ workspace }) {
 
         {mode === 'carousel' && (
           <>
-            <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', gap: 8, overflowX: 'auto', flexShrink: 0 }}>
+            <div style={{ padding: 'var(--pad-y) var(--pad-x)', borderBottom: '1px solid var(--line-soft)', display: 'flex', gap: 8, overflowX: 'auto', flexShrink: 0 }}>
               {slides.map((s, i) => (
-                <div key={s.id}
+                <button type="button" key={s.id}
+                  aria-label={`슬라이드 ${i + 1} 선택`}
+                  aria-pressed={activeSlide === i}
                   draggable onDragStart={() => setDrag(i)}
                   onDragOver={e => e.preventDefault()}
                   onDrop={() => drag !== null && moveSlide(drag, i)}
@@ -734,7 +909,7 @@ export function Studio({ workspace }) {
                   }}>
                   <div style={{ fontWeight: 600 }}>{s.title.slice(0, 18)}</div>
                   <div style={{ position: 'absolute', top: 3, left: 6, fontSize: 8, color: 'rgba(255,255,255,0.6)' }} className="mono">{i + 1}</div>
-                </div>
+                </button>
               ))}
               <button onClick={addSlide} style={{
                 width: 72, height: 72, flexShrink: 0, border: '1px dashed var(--line)', borderRadius: 8,
@@ -771,16 +946,16 @@ export function Studio({ workspace }) {
 
               <Card className="hub-studio-card" style={{ width: 320 }}>
                 <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 10 }}>Slide {activeSlide + 1}</div>
-                <label style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Title</label>
-                <input value={cur.title} onChange={e => updateSlide(activeSlide, { title: e.target.value })}
+                <label htmlFor={`studio-slide-title-${cur.id}`} style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Title</label>
+                <input id={`studio-slide-title-${cur.id}`} className="hub-field" value={cur.title} onChange={e => updateSlide(activeSlide, { title: e.target.value })}
                   style={{ width: '100%', marginTop: 4, marginBottom: 12, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', fontSize: 13 }} />
-                <label style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Subtitle</label>
-                <input value={cur.sub} onChange={e => updateSlide(activeSlide, { sub: e.target.value })}
+                <label htmlFor={`studio-slide-subtitle-${cur.id}`} style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Subtitle</label>
+                <input id={`studio-slide-subtitle-${cur.id}`} className="hub-field" value={cur.sub} onChange={e => updateSlide(activeSlide, { sub: e.target.value })}
                   style={{ width: '100%', marginTop: 4, marginBottom: 12, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', fontSize: 13 }} />
                 <label style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Background</label>
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-                  {SLIDE_SWATCHES.map(c => (
-                    <button key={c} onClick={() => updateSlide(activeSlide, { bg: c })}
+                  {SLIDE_SWATCHES.map((c, index) => (
+                    <button key={c} aria-label={`배경 색상 ${index + 1}`} aria-pressed={cur.bg === c} onClick={() => updateSlide(activeSlide, { bg: c })}
                       style={{ width: 26, height: 26, borderRadius: 6, background: c, border: cur.bg === c ? '2px solid var(--moon-200)' : '1px solid var(--line-soft)' }} />
                   ))}
                 </div>
@@ -797,7 +972,15 @@ export function Studio({ workspace }) {
                     Photo
                   </Button>
                   <div style={{ flex: 1 }} />
-                  <Button variant="ghost" size="xs" onClick={() => removeSlide(activeSlide)}>Delete</Button>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    disabled={slides.length <= 1}
+                    title={slides.length <= 1 ? '최소 한 장은 유지해야 합니다.' : '현재 슬라이드 삭제'}
+                    onClick={() => removeSlide(activeSlide)}
+                  >
+                    Delete
+                  </Button>
                 </div>
                 <div style={{ marginTop: 12, padding: 10, background: 'var(--surface-2)', borderRadius: 'var(--r-sm)', border: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
                   <Iconed name="sparkle" size={11} style={{ color: 'var(--moon-300)' }} /> 드래그로 순서 편집 · 썸네일 클릭으로 선택
@@ -809,11 +992,11 @@ export function Studio({ workspace }) {
       </div>
 
       <aside style={{ borderLeft: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ padding: 'var(--pad-y) var(--pad-x)', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <Iconed name="sparkle" size={14} style={{ color: 'var(--moon-300)' }} />
           <div style={{ fontSize: 12.5, fontWeight: 500, flex: 1 }}>Writer · Studio Agent</div>
         </div>
-        <div className="scroll-y" style={{ flex: 1, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="scroll-y" style={{ flex: 1, padding: 'var(--card-pad)', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em' }}>Brand</div>
           <div style={{
             padding: 10,
@@ -835,7 +1018,7 @@ export function Studio({ workspace }) {
                     key={brand.id}
                     onClick={() => {
                       setSelectedBrandId(brand.id);
-                      setDirty(true);
+                      markDirty();
                     }}
                     style={{
                       minHeight: 28,
@@ -895,25 +1078,43 @@ export function Studio({ workspace }) {
           </div>
 
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em' }}>Suggestions</div>
+          {suggestions.length === 0 && (
+            <div style={{ fontSize: 12, color: 'var(--fg-faint)', lineHeight: 1.5 }}>
+              아래 입력창이나 툴바의 AI 버튼으로 Council에 초안 검토를 요청하면 여기에 표시됩니다.
+            </div>
+          )}
           {suggestions.map((s, i) => (
             <div key={i} style={{
-              padding: '10px 11px', background: 'var(--surface-2)',
+              padding: 'var(--pad-y) var(--pad-x)', background: 'var(--surface-2)',
               border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
               fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.5,
+              // Status reads from the left stripe (§5.2) — a danger notice shouldn't be
+              // distinguishable only by a 6px dot.
+              boxShadow: `inset 2px 0 0 var(--${s.tone === 'danger' ? 'danger' : s.tone === 'warning' ? 'warning' : s.tone === 'info' ? 'info' : 'moon'}-line, var(--line-strong))`,
+              whiteSpace: 'pre-wrap',
             }}>
-              <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}><Dot tone={s.tone} /></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <Dot tone={s.tone} />
+                <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)' }}>
+                  {s.kind === 'advice' ? 'Council 자문' : '알림'}
+                </span>
+              </div>
               {s.text}
               <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                {/* Apply is advice-only. System notices (save/handoff failures) share this list
+                    but must never be quotable into the draft — that shipped an "HTTP 500" line
+                    straight into the article body. */}
+                {s.kind === 'advice' && (
                 <Button
                   variant="outline"
                   size="xs"
                   onClick={() => {
                     if (mode === 'blog') {
                       setBody(prev => `${prev}\n\n> 적용한 제안: ${s.text}`);
+                      markDirty();
                     } else {
                       updateSlide(activeSlide, { sub: s.text.slice(0, 64) });
                     }
-                    setDirty(true);
                     if (typeof s.extraIndex === 'number') {
                       setExtraSuggestions(prev => prev.filter((_, idx) => idx !== s.extraIndex));
                     } else {
@@ -923,6 +1124,7 @@ export function Studio({ workspace }) {
                 >
                   Apply
                 </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="xs"
@@ -987,12 +1189,26 @@ export function Studio({ workspace }) {
             </div>
           </div>
         </div>
-        <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)' }}>
+        <div style={{ padding: 'var(--gap)', borderTop: '1px solid var(--line-soft)' }}>
+          <form
+            onSubmit={(e) => { e.preventDefault(); askCouncil(askText); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)' }}
+          >
             <Iconed name="sparkle" size={12} style={{ color: 'var(--moon-300)' }} />
-            <input placeholder={mode === 'blog' ? 'Ask Writer…' : 'Ask Studio — slide copy, layout…'} style={{ flex: 1, background: 'transparent', border: 'none', color: 'var(--fg)', fontSize: 12 }} />
-            <Kbd>⏎</Kbd>
-          </div>
+            <input
+              value={askText}
+              onChange={(e) => setAskText(e.target.value)}
+              disabled={askPending}
+              aria-label="Council에게 콘텐츠 검토 요청"
+              placeholder={askPending
+                ? '검토 요청 중…'
+                : mode === 'blog' ? 'Ask Writer — 본문 검토 요청…' : 'Ask Studio — 슬라이드 카피·구성 검토…'}
+              style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', color: 'var(--fg)', fontSize: 12 }}
+            />
+            <button type="submit" disabled={askPending} aria-label="검토 요청 보내기" style={{ background: 'none', border: 'none', padding: 0, cursor: askPending ? 'not-allowed' : 'pointer' }}>
+              <Kbd>⏎</Kbd>
+            </button>
+          </form>
         </div>
       </aside>
     </div>
@@ -1006,10 +1222,37 @@ export function Queue({ workspace }) {
   const [tab, setTab] = React.useState('all');
   const [brandFilter, setBrandFilter] = React.useState(() => searchParams.get('brand') || 'all');
   const ledger = useContentLedger();
+  // 삭제된 행은 낙관적으로 감춘다 — useContentLedger는 mount-once라 refetch 핸들이 없다.
+  const [deletedIds, setDeletedIds] = React.useState(() => new Set());
+  const [deleteNotice, setDeleteNotice] = React.useState(null);
   // Scope the brand filter pills + queue items to this workspace (pass-through when unscoped).
   const brands = ws ? filterBrandsByWorkspace(ledger.brands || [], workspace) : (ledger.brands || []);
   const queueSource = Array.isArray(ledger.queue) ? ledger.queue : [];
-  const queue = filterContentByWorkspace(queueSource, workspace);
+  const queue = filterContentByWorkspace(queueSource, workspace).filter(c => !deletedIds.has(c.id));
+
+  // Soft-delete an errant draft (migration 0024 · DELETE /api/hub/content). Optimistically
+  // hides the row; restores it if the server rejects.
+  const deleteQueueItem = React.useCallback(async (item) => {
+    if (typeof window !== 'undefined' && !window.confirm(`"${item.title || '이 콘텐츠'}"를 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    setDeletedIds(prev => new Set(prev).add(item.id));
+    try {
+      const res = await fetch('/api/hub/content', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ contentId: item.id, variantId: item.variantId || null }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !['saved', 'preview'].includes(data.status)) {
+        setDeletedIds(prev => { const n = new Set(prev); n.delete(item.id); return n; });
+        setDeleteNotice({ tone: 'danger', text: `삭제 실패 — ${data.error || `HTTP ${res.status}`}` });
+        return;
+      }
+      setDeleteNotice({ tone: 'moon', text: data.status === 'preview' ? '삭제 · 저장 대기(preview)' : '콘텐츠 삭제됨' });
+    } catch (error) {
+      setDeletedIds(prev => { const n = new Set(prev); n.delete(item.id); return n; });
+      setDeleteNotice({ tone: 'danger', text: `삭제 실패 — ${error instanceof Error ? error.message : String(error)}` });
+    }
+  }, []);
   const statusTone = {
     Inbox: 'neutral',
     Drafting: 'warning',
@@ -1047,6 +1290,20 @@ export function Queue({ workspace }) {
     const brandParam = brandFilter !== 'all' ? `&brand=${encodeURIComponent(brandFilter)}` : '';
     router.push(`/dashboard/content/studio${id ? `?item=${encodeURIComponent(id)}` : '?new=draft'}${id ? '' : brandParam}`);
   }, [brandFilter, router]);
+
+  // Page-level `n` — jump to a new Studio draft when focus isn't in a field (§8.1 create contract).
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if ((e.key !== 'n' && e.key !== 'N') || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+      e.preventDefault();
+      openStudio();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [openStudio]);
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1059,8 +1316,21 @@ export function Queue({ workspace }) {
         </div>
         <div style={{ flex: 1 }} />
         <Tabs className="hub-toolbar" tabs={tabs} active={tab} onChange={setTab} ariaLabel="Publishing queue filters" style={{ borderBottom: 'none' }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={() => openStudio()}>Draft</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={() => openStudio()}>Draft <Kbd>N</Kbd></Button>
       </div>
+
+      {deleteNotice && (
+        <div role="status" aria-live="polite" style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: 'var(--pad-y) var(--pad-x)', borderRadius: 'var(--r-sm)',
+          background: 'var(--surface)', border: '1px solid var(--line-soft)',
+          boxShadow: `inset 2px 0 0 var(--${deleteNotice.tone === 'danger' ? 'danger' : 'moon'}-line)`,
+          fontSize: 12.5, color: 'var(--fg-muted)',
+        }}>
+          <span style={{ flex: 1, minWidth: 0 }}>{deleteNotice.text}</span>
+          <Button variant="ghost" size="xs" onClick={() => setDeleteNotice(null)}>닫기</Button>
+        </div>
+      )}
 
       {cadence && (
         <div style={{
@@ -1161,7 +1431,7 @@ export function Queue({ workspace }) {
         {visibleQueue.map((c, i) => (
           <div key={c.id} className="hub-row" style={{
             display: 'grid', gridTemplateColumns: '1fr 110px 110px 100px 120px 130px 80px',
-            padding: '12px 16px', alignItems: 'center',
+            padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center',
             borderBottom: i < visibleQueue.length - 1 ? '1px solid var(--line-soft)' : 'none',
             cursor: 'pointer',
           }}
@@ -1189,7 +1459,17 @@ export function Queue({ workspace }) {
             </span>
             <span><Badge tone={statusTone[c.statusLabel || c.status] || 'neutral'} size="xs">{c.statusLabel || c.status}</Badge></span>
             <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{c.when}</span>
-            <span style={{ textAlign: 'right', fontSize: 12, color: 'var(--fg-muted)' }}>{c.author}</span>
+            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2, minWidth: 0 }}>
+              <span style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.author}</span>
+              <IconButton
+                icon="archive"
+                size={22}
+                iconSize={12}
+                tone="danger"
+                tooltip={`${c.title || '콘텐츠'} 삭제`}
+                onClick={(e) => { e.stopPropagation(); deleteQueueItem(c); }}
+              />
+            </span>
           </div>
         ))}
       </Card>
@@ -1568,6 +1848,21 @@ export function Campaigns() {
     return () => window.removeEventListener('keydown', onKey);
   }, [focusMode]);
 
+  // Page-level `n` — quick-create a campaign when focus isn't in a field (§8.1 create contract).
+  React.useEffect(() => {
+    if (creating) return;
+    const onKey = (e) => {
+      if ((e.key !== 'n' && e.key !== 'N') || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+      e.preventDefault();
+      createCampaign();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [creating, ledger.syncState]);
+
   const toggleFocusMode = React.useCallback(() => {
     setFocusMode(v => !v);
   }, []);
@@ -1593,7 +1888,7 @@ export function Campaigns() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating}>Campaign</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating}>Campaign <Kbd>N</Kbd></Button>
       </div>
 
       {!selected && (

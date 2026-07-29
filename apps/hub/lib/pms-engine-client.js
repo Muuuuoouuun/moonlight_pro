@@ -1,3 +1,5 @@
+import { engineTransportFailure, sanitizeEngineResponse } from "./engine-client-public.js";
+
 const SHARED_SECRET_HEADER = "x-com-moon-shared-secret";
 
 export async function forwardPmsCommand(
@@ -37,9 +39,7 @@ export async function forwardPmsCommand(
       status: response.status === 409 ? "conflict" : "error",
       error: `engine-http-${response.status}`,
     }));
-    const publicData = data && typeof data === "object"
-      ? Object.fromEntries(Object.entries(data).filter(([key]) => key !== "detail"))
-      : { status: "error", error: `engine-http-${response.status}` };
+    const publicData = sanitizeEngineResponse(data, response.status);
 
     return {
       ok: response.ok,
@@ -50,11 +50,7 @@ export async function forwardPmsCommand(
     return {
       ok: false,
       httpStatus: 502,
-      data: {
-        status: "error",
-        error: "engine-unreachable",
-        retryable: true,
-      },
+      data: engineTransportFailure(),
     };
   }
 }

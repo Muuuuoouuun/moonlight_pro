@@ -1,3 +1,5 @@
+import { engineTransportFailure, sanitizeEngineResponse } from "./engine-client-public.js";
+
 const SHARED_SECRET_HEADER = "x-com-moon-shared-secret";
 
 export async function forwardCaptureCommand(
@@ -39,16 +41,12 @@ export async function forwardCaptureCommand(
       retryable: response.status >= 500,
     }));
 
-    return { ok: response.ok, httpStatus: response.status, data };
-  } catch (error) {
+    return { ok: response.ok, httpStatus: response.status, data: sanitizeEngineResponse(data, response.status) };
+  } catch {
     return {
       ok: false,
       httpStatus: 502,
-      data: {
-        status: "error",
-        error: error instanceof Error ? error.message : String(error),
-        retryable: true,
-      },
+      data: engineTransportFailure(),
     };
   }
 }

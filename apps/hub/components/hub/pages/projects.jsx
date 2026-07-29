@@ -238,6 +238,8 @@ export function Projects({ workspace }) {
   const [projectEditSource, setProjectEditSource] = React.useState(null);
   const [taskDraft, setTaskDraft] = React.useState(null);
   const [taskEditSource, setTaskEditSource] = React.useState(null);
+  // 드래그 직후의 click을 편집 열기로 오인하지 않도록 하는 가드 (Deals 칸반과 동일한 패턴).
+  const dragMovedRef = React.useRef(false);
   const [containerDraft, setContainerDraft] = React.useState(null);
   const [localContainers, setLocalContainers] = React.useState([]);
   const drawerOpen = Boolean(projectDraft || taskDraft || containerDraft);
@@ -720,7 +722,10 @@ export function Projects({ workspace }) {
     });
   }, []);
 
+  // 기존 할 일 편집 — 이 드로어는 생성 전용이라 보드 카드나 To-do 행에서 제목·기한·우선순위를
+  // 고칠 방법이 아예 없었다. taskEditSource가 있으면 persistTask가 PATCH 경로를 탄다.
   const editTodo = React.useCallback((todo) => {
+    if (!todo?.id) return;
     setTaskEditSource(todo);
     setTaskDraft(buildTaskEditDraft(todo));
   }, []);
@@ -736,6 +741,12 @@ export function Projects({ workspace }) {
         body: JSON.stringify(buildProjectCreatePayload(draft)),
       });
       const data = await response.json().catch(() => ({}));
+      // preview(=Supabase 미설정)는 실패가 아니다 — 바로 아래 persistContainer가 이미 그렇게
+      // 다룬다. 같은 흐름에서 프로젝트 생성만 에러 문구를 띄워 "저장 안 된 것처럼" 보였다.
+      if (data.status === 'preview') {
+        setOrderResult({ tone: 'ok', label: '프로젝트 생성 · 저장 대기(preview)' });
+        return { ok: true, status: 'preview', project: data.project || null };
+      }
       if (!response.ok || !['saved', 'duplicate'].includes(data.status)) {
         setOrderResult({ tone: 'err', label: data.error || `저장 실패 ${response.status}` });
         return {
@@ -905,6 +916,32 @@ export function Projects({ workspace }) {
     }
   }, [loadLedger, projectDraft, projectEditSource]);
 
+  // 소프트 삭제 — deleted_at을 찍어 원장에서 감춘다(migration 0024). 하위 할 일은 project_id를
+  // 유지하되 컨테이너 그룹핑만 잃는다. EditDrawer가 확인 다이얼로그를 이미 처리한다.
+  const deleteProject = React.useCallback(async () => {
+    const id = projectEditSource?.id || projectDraft?.id;
+    if (!id) return { ok: false, status: 'error' };
+    try {
+      const response = await fetch('/api/hub/projects', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !['saved', 'preview'].includes(data.status)) {
+        setOrderResult({ tone: 'err', label: data.error || `삭제 실패 ${response.status}` });
+        return { ok: false, status: data.status || 'error' };
+      }
+      setOpenDetail(null);
+      await loadLedger();
+      setOrderResult({ tone: 'ok', label: data.status === 'preview' ? '프로젝트 삭제 · 저장 대기(preview)' : '프로젝트 삭제됨' });
+      return { ok: true, status: data.status };
+    } catch (error) {
+      setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+      return { ok: false, status: 'error' };
+    }
+  }, [loadLedger, projectDraft, projectEditSource]);
+
   const createContainer = React.useCallback(() => {
     // Seed the drawer with the current scope's org so a container made under the
     // 개인 view lands in 개인, and under ClassIn lands in 업무·클래스인.
@@ -1018,6 +1055,7 @@ export function Projects({ workspace }) {
   const persistTask = React.useCallback(async () => {
     if (!taskDraft?.title?.trim()) return { ok: false, status: 'invalid-input' };
 
+    // 기존 항목은 PATCH(update_task 부분 패치), 신규는 POST — 같은 드로어가 두 경로를 쓴다.
     if (taskEditSource) {
       const patch = buildTaskPatch(taskEditSource, taskDraft);
       if (Object.keys(patch).length <= 1) {
@@ -1072,12 +1110,13 @@ export function Projects({ workspace }) {
       setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
       return { ok: false, status: 'error' };
     }
-  }, [loadLedger, taskDraft, taskEditSource]);
+  }, [loadLedger, taskDraft]);
 
-  // 기존 할 일 삭제 — hub-direct DELETE (엔진 파이프라인엔 삭제 액션이 없다, tasks route 참고).
+  // 소프트 삭제 — 기존(영속) 할 일만 삭제한다. 아직 저장 안 된 신규 드래프트는 닫기로 버린다.
   const deleteTask = React.useCallback(async () => {
+    // 기존(영속) 할 일만 삭제한다 — 아직 저장 안 된 신규 드래프트는 닫기로 버린다.
     const id = taskEditSource?.id;
-    if (!id) return;
+    if (!id) return { ok: false, status: 'error' };
     try {
       const response = await fetch('/api/hub/tasks', {
         method: 'DELETE',
@@ -1085,15 +1124,17 @@ export function Projects({ workspace }) {
         body: JSON.stringify({ id }),
       });
       const data = await response.json().catch(() => ({}));
-      if (response.ok && ['saved', 'preview'].includes(data.status)) {
-        if (data.status === 'saved') await loadLedger();
-        setTaskEditSource(null);
-        setOrderResult({ tone: 'ok', label: data.status === 'preview' ? '할 일 삭제 · 저장 대기(preview)' : '할 일 삭제됨' });
-        return;
+      if (!response.ok || !['saved', 'preview'].includes(data.status)) {
+        setOrderResult({ tone: 'err', label: data.error || `삭제 실패 ${response.status}` });
+        return { ok: false, status: data.status || 'error' };
       }
-      setOrderResult({ tone: 'err', label: data.error || `삭제 실패 ${response.status}` });
+      if (data.status === 'saved') await loadLedger();
+      setTaskEditSource(null);
+      setOrderResult({ tone: 'ok', label: data.status === 'preview' ? '할 일 삭제 · 저장 대기(preview)' : '할 일 삭제됨' });
+      return { ok: true, status: data.status };
     } catch (error) {
       setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+      return { ok: false, status: 'error' };
     }
   }, [loadLedger, taskEditSource]);
 
@@ -2024,7 +2065,13 @@ export function Projects({ workspace }) {
                     <div style={{ padding: '18px 8px', fontSize: 11.5, color: 'var(--fg-faint)', textAlign: 'center' }}>카드 없음</div>
                   )}
                   {col.cards.map(c => (
-                    <div key={c.id} draggable onDragStart={() => setDrag(c.id)} onDragEnd={() => setDrag(null)}
+                    <div key={c.id} className="hub-kanban-card" draggable
+                      role="button" tabIndex={0}
+                      aria-label={`${c.title} 편집`}
+                      onClick={() => { if (!dragMovedRef.current) editTodo(c); }}
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); editTodo(c); } }}
+                      onDragStart={() => { dragMovedRef.current = true; setDrag(c.id); }}
+                      onDragEnd={() => { setDrag(null); setTimeout(() => { dragMovedRef.current = false; }, 0); }}
                       style={{
                         background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
                         borderRadius: 'var(--r-sm)', padding: 'var(--pad-y) var(--pad-x)', cursor: 'grab',
@@ -2286,6 +2333,7 @@ export function Projects({ workspace }) {
           onChange={(key, value) => setProjectDraft(current => ({ ...current, [key]: value }))}
           onSave={persistProjectEdit}
           saveLabel="변경사항 저장"
+          onDelete={deleteProject}
           onClose={() => {
             setProjectDraft(null);
             setProjectEditSource(null);
@@ -2328,8 +2376,8 @@ export function Projects({ workspace }) {
       />
 
       <EditDrawer
-        title={taskEditSource ? '할 일 편집' : '할 일 만들기'}
-        subtitle="프로젝트 실행 항목"
+        title={taskEditSource ? (taskDraft?.title || '할 일 편집') : '할 일 만들기'}
+        subtitle={taskEditSource ? '프로젝트 실행 항목 편집' : '프로젝트 실행 항목'}
         record={taskDraft}
         fields={[
           { key: 'title', label: '할 일', placeholder: '실행할 작업' },

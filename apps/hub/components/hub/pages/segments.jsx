@@ -19,7 +19,7 @@ function useLeadsLedger() {
   const [state, setState] = React.useState({ syncState: 'loading', source: 'preview', leads: [] });
   React.useEffect(() => {
     let cancelled = false;
-    fetch('/api/hub/revenue')
+    fetch('/api/hub/revenue?view=leads')
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;

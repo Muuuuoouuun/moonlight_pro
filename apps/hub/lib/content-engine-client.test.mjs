@@ -44,3 +44,25 @@ test("forwards a content command to Engine with only the shared server secret", 
     data: { status: "saved", contentId: "content-id" },
   });
 });
+
+test("sanitizes content persistence and transport failures", async () => {
+  const env = {
+    COM_MOON_ENGINE_URL: "http://127.0.0.1:3001",
+    COM_MOON_SHARED_WEBHOOK_SECRET: "shared-secret",
+  };
+  const upstream = await contentClient.forwardContentCommand({}, {
+    env,
+    fetchImpl: async () => new Response(JSON.stringify({
+      status: "error",
+      error: "item-update-failed",
+      detail: "private-service-key=do-not-leak",
+    }), { status: 502 }),
+  });
+  const transport = await contentClient.forwardContentCommand({}, {
+    env,
+    fetchImpl: async () => { throw new Error("private-host=do-not-leak"); },
+  });
+
+  assert.deepEqual(upstream.data, { status: "error", error: "item-update-failed" });
+  assert.deepEqual(transport.data, { status: "error", error: "engine-unreachable", retryable: true });
+});

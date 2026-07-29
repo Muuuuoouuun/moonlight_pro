@@ -154,10 +154,10 @@ function CustomerRankRow({ customer, rank, max, metricKey, onSelect, onJump, onP
       onBlur={onPeek ? () => onPeek(null) : undefined}
       style={{
         display: "grid", gridTemplateColumns: "18px minmax(0,1.2fr) minmax(0,1fr) 62px 26px",
-        gap: 8, alignItems: "center", padding: "6px 6px", borderRadius: 4, cursor: "pointer",
+        gap: 8, alignItems: "center", padding: "calc(var(--pad-y) - 3px) calc(var(--pad-x) - 6px)", borderRadius: 4, cursor: "pointer",
       }}
     >
-      <span className="mono" style={{ fontSize: 10, color: "var(--fg-faint)" }}>{String(rank).padStart(2, "0")}</span>
+      <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>{String(rank).padStart(2, "0")}</span>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{customer.name}</div>
         <div style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>{customer.region || "지역 미상"}</div>
@@ -380,7 +380,8 @@ function aggregate(ledger, { item, cutoff = null, range = null }) {
 // ── 페이지 ───────────────────────────────────────────────────────────────────
 
 export function RevenueHeatmap({ onNavigate }) {
-  const { ledger, syncState } = useRevenueLedger();
+  // 'heatmap' 뷰 — 이 화면이 쓰는 원장 필드만 받아 페이로드를 줄인다 (revenue-ledger-view.js).
+  const { ledger, syncState } = useRevenueLedger('heatmap');
   const [periodMode, setPeriodMode] = React.useState("all");
   const [recentKey, setRecentKey] = React.useState("90d");
   const [monthKey, setMonthKey] = React.useState(null);
@@ -537,6 +538,7 @@ export function RevenueHeatmap({ onNavigate }) {
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                     {otherRows.map(r => {
+                      // 지도 외 행도 선택해 우측 레일에서 상세를 볼 수 있다 (지도 하이라이트만 없음).
                       const isSelected = selected?.label === r.label;
                       return (
                         <button
