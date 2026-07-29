@@ -329,7 +329,7 @@ export function RevenueOverview({ onNavigate }) {
             {hasPipelineValue ? pipelineByStage.map(s => (
               <div key={s.key} title={`${s.label} · ${fmt(s.sum)}`} style={{
                 flex: s.sum,
-                background: `var(--${s.color === 'neutral' ? 'fg-faint' : s.color === 'moon' ? 'moon-500' : s.color})`,
+                background: STAGE_FILL[s.color],
                 opacity: 0.9,
               }} />
             )) : (
@@ -339,7 +339,7 @@ export function RevenueOverview({ onNavigate }) {
           <div style={{ display: 'flex', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
             {pipelineByStage.map(s => (
               <div key={s.key} style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <Dot tone={s.color} />
+                <span aria-hidden style={{ width: 6, height: 6, borderRadius: 999, background: STAGE_FILL[s.color], flexShrink: 0 }} />
                 <span style={{ color: 'var(--fg)' }}>{s.label}</span>
                 <span className="mono" style={{ color: 'var(--fg-faint)' }}>{fmt(s.sum)} · {s.count}</span>
               </div>

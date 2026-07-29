@@ -49,23 +49,27 @@ export const LEGACY_DB_STAGE_VALUES = [
 ];
 
 // Stage tone key -> solid CSS token, for gauge/segment fills (Deals masthead, Daily Brief
-// PipelineShapeCard). One map so the two instruments can't drift apart.
+// PipelineShapeCard, revenue funnel bar). One map so the instruments can't drift apart.
+// DESIGN.md §5.3: chart series must not use success/warning/danger — the funnel reads as a
+// moonstone luminance ramp instead (cold=dim → hot=bright), which stays legible in
+// monochrome and keeps semantic colors reserved for real urgency. Keys are the legacy
+// stage-tone identifiers from DEAL_STAGES[].color; values are funnel-position luminance.
 export const STAGE_FILL = {
-  neutral: "var(--fg-faint)",
-  info: "var(--info)",
-  moon: "var(--moon-400)",
-  warning: "var(--warning)",
-  danger: "var(--danger)",
-  success: "var(--success)",
+  neutral: "var(--moon-700)",
+  info: "var(--moon-600)",
+  moon: "var(--moon-500)",
+  warning: "var(--moon-400)",
+  danger: "var(--moon-300)",
+  success: "var(--moon-200)",
 };
 
 // Stage tone key -> hairline token for the §5.2 inset-stripe idiom (kanban column top
-// stripes). Kept separate from STAGE_FILL because stripes read at lower alpha.
+// stripes). Same luminance ramp as STAGE_FILL, one step dimmer so stripes stay hairline-quiet.
 export const STAGE_LINE = {
   neutral: "var(--line-strong)",
-  info: "var(--info-line)",
+  info: "var(--moon-700)",
   moon: "var(--moon-600)",
-  warning: "var(--warning-line)",
-  danger: "var(--danger-line)",
-  success: "var(--success-line)",
+  warning: "var(--moon-500)",
+  danger: "var(--moon-400)",
+  success: "var(--moon-300)",
 };
