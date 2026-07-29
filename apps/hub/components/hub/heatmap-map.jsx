@@ -57,11 +57,16 @@ const LABEL_NUDGE = {
   "부산": { dx: 1.5, dy: 2 },
 };
 
-export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricLabel }) {
+// linkedLabel: 우측 레일(고객 순위·주요 고객)에서 호버된 지역 — 지도가 하이라이트로
+// 응답해 두 계기가 연결돼 있음을 보여준다. 실제 마우스 호버(hovered)와 달리
+// 리프트·툴팁 없이 밝기/디밍만 따라간다.
+export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricLabel, linkedLabel = null }) {
   const [hovered, setHovered] = React.useState(null);
   const [mousePos, setMousePos] = React.useState({ x: 0, y: 0 });
   const rowsByLabel = React.useMemo(() => new Map(rows.map(r => [r.label, r])), [rows]);
   const hoveredRow = hovered ? rowsByLabel.get(hovered) || null : null;
+  // 하이라이트 기준: 지도 위 마우스가 우선, 없으면 레일에서 연동된 지역
+  const activeLabel = hovered ?? (linkedLabel && rowsByLabel.has(linkedLabel) ? linkedLabel : null);
   const max = React.useMemo(() => Math.max(1, ...rows.map(r => r[metricKey] || 0)), [rows, metricKey]);
   const dataCount = React.useMemo(() => rows.filter(r => (r[metricKey] || 0) > 0).length, [rows, metricKey]);
   const hasData = dataCount > 0;
@@ -70,12 +75,12 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
     [],
   );
 
-  // 호버된 지역을 마지막에 그려서 리프트 섀도가 이웃 스트로크 위에 얹히게 한다
+  // 하이라이트된 지역을 마지막에 그려서 리프트 섀도가 이웃 스트로크 위에 얹히게 한다
   const orderedShapes = React.useMemo(() => {
-    if (!hovered) return KOREA_PROVINCE_SHAPES;
+    if (!activeLabel) return KOREA_PROVINCE_SHAPES;
     return [...KOREA_PROVINCE_SHAPES].sort((a, b) =>
-      a.label === hovered ? 1 : b.label === hovered ? -1 : 0);
-  }, [hovered]);
+      a.label === activeLabel ? 1 : b.label === activeLabel ? -1 : 0);
+  }, [activeLabel]);
 
   // 북→남 순차 리빌 (reduced-motion이면 즉시 표시)
   const revealOrder = React.useMemo(() => [...rows].sort((a, b) => a.y - b.y).map(r => r.label), [rows]);
@@ -180,8 +185,9 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
             const row = rowsByLabel.get(s.label);
             if (!row) return null;
             const sel = selectedLabel === row.label;
-            const hov = hovered === row.label;
-            const otherHovered = hovered !== null && !hov;
+            const hov = activeLabel === row.label; // 지도 호버 또는 레일 연동
+            const lifted = hovered === row.label; // 물리 리프트는 실제 마우스 호버만
+            const otherHovered = activeLabel !== null && !hov;
             const shown = revealedSet.has(row.label);
             const value = row[metricKey] || 0;
             return (
@@ -199,10 +205,12 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
                   outline: "none",
                   transformBox: "fill-box",
                   transformOrigin: "center",
-                  transform: hov && !reducedMotion ? "scale(1.02)" : "scale(1)",
-                  filter: hov
+                  transform: lifted && !reducedMotion ? "scale(1.02)" : "scale(1)",
+                  filter: lifted
                     ? "drop-shadow(0 0 1.1px color-mix(in oklch, var(--moon-200) 45%, transparent)) drop-shadow(0 1.2px 1.6px color-mix(in oklch, var(--bg) 68%, transparent))"
-                    : "none",
+                    : hov
+                      ? "drop-shadow(0 0 1.1px color-mix(in oklch, var(--moon-200) 35%, transparent))"
+                      : "none",
                   transition: reducedMotion
                     ? "opacity 280ms ease-out"
                     : "opacity 240ms ease-out, fill 220ms cubic-bezier(0.2, 0.7, 0.3, 1), stroke 220ms cubic-bezier(0.2, 0.7, 0.3, 1), transform 200ms cubic-bezier(0.2, 0.7, 0.3, 1), filter 200ms ease-out",
@@ -251,7 +259,7 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
             const y = s.y + 1 + nudge.dy;
             if (!row) {
               // 무데이터 지역 — 아주 작고 흐리게, 리빌 스윕이 끝난 뒤 점등
-              const dimmed = hovered !== null;
+              const dimmed = activeLabel !== null;
               return (
                 <text
                   key={`label-${s.label}`}
@@ -272,8 +280,8 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
                 </text>
               );
             }
-            const hov = hovered === row.label;
-            const otherHovered = hovered !== null && !hov;
+            const hov = activeLabel === row.label;
+            const otherHovered = activeLabel !== null && !hov;
             return (
               <text
                 key={`label-${s.label}`}

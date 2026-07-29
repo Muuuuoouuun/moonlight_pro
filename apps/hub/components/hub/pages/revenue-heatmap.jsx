@@ -56,7 +56,8 @@ function RegionDetail({ row, offMap = false, onJump }) {
     return <div style={{ fontSize: 12, color: "var(--fg-faint)", padding: "6px 2px" }}>지역을 선택하거나 호버하면 상세가 표시됩니다.</div>;
   }
   return (
-    <div>
+    // key로 지역 전환마다 140ms 크로스페이드 — 값이 뚝 바뀌는 대신 계기가 갱신되는 느낌
+    <div key={row.label} style={{ animation: "hubFadeIn 140ms ease-out" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", paddingBottom: 10, borderBottom: "1px solid var(--line-soft)" }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em", display: "flex", alignItems: "center", gap: 7 }}>
@@ -75,7 +76,7 @@ function RegionDetail({ row, offMap = false, onJump }) {
         const pct = total > 0 ? (row.confirmed / total) * 100 : 0;
         return (
           <div style={{ display: "flex", height: 5, borderRadius: 999, overflow: "hidden", margin: "10px 0 2px", background: "var(--surface-3)" }}>
-            <span style={{ width: `${pct}%`, background: "var(--moon-300)" }} />
+            <span style={{ width: `${pct}%`, background: "var(--moon-300)", transition: "width 240ms cubic-bezier(0.2, 0.7, 0.3, 1)" }} />
             <span style={{ flex: 1, background: "color-mix(in oklch, var(--moon-500) 45%, transparent)" }} />
           </div>
         );
@@ -136,7 +137,7 @@ function RegionDetail({ row, offMap = false, onJump }) {
   );
 }
 
-function CustomerRankRow({ customer, rank, max, metricKey, onSelect, onJump }) {
+function CustomerRankRow({ customer, rank, max, metricKey, onSelect, onJump, onPeek }) {
   const value = customer[metricKey] || 0;
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
@@ -146,6 +147,11 @@ function CustomerRankRow({ customer, rank, max, metricKey, onSelect, onJump }) {
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
+      // 레일→지도 연동: 행에 머무는 동안 지도의 해당 지역이 켜진다 (행 배경은 hub-row가 담당)
+      onMouseEnter={onPeek ? () => onPeek(customer.canonical || null) : undefined}
+      onMouseLeave={onPeek ? () => onPeek(null) : undefined}
+      onFocus={onPeek ? () => onPeek(customer.canonical || null) : undefined}
+      onBlur={onPeek ? () => onPeek(null) : undefined}
       style={{
         display: "grid", gridTemplateColumns: "18px minmax(0,1.2fr) minmax(0,1fr) 62px 26px",
         gap: 8, alignItems: "center", padding: "6px 6px", borderRadius: 4, cursor: "pointer",
@@ -157,7 +163,7 @@ function CustomerRankRow({ customer, rank, max, metricKey, onSelect, onJump }) {
         <div style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>{customer.region || "지역 미상"}</div>
       </div>
       <div style={{ height: 4, background: "var(--surface-3)", borderRadius: 999, overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${pct}%`, background: heatFill(value, max), borderRadius: 999 }} />
+        <div style={{ height: "100%", width: `${pct}%`, background: heatFill(value, max), borderRadius: 999, transition: "width 240ms cubic-bezier(0.2, 0.7, 0.3, 1)" }} />
       </div>
       <span className="num" style={{ fontSize: 11, fontWeight: 600, textAlign: "right", color: "var(--moon-200)", fontVariantNumeric: "tabular-nums" }}>
         {fmtMoney(value)}
@@ -382,6 +388,8 @@ export function RevenueHeatmap({ onNavigate }) {
   const [itemKey, setItemKey] = React.useState("all");
   const [metricKey, setMetricKey] = React.useState("expected");
   const [selectedLabel, setSelectedLabel] = React.useState(null);
+  // 레일→지도 연동 하이라이트 (고객 순위 행 호버 시 해당 지역이 켜짐)
+  const [linkedLabel, setLinkedLabel] = React.useState(null);
 
   // 월/분기 후보는 원장 딜에서 실제 존재하는 것만 (최근 우선). 라벨은 현재 연도 기준.
   const nowYear = new Date().getFullYear();
@@ -493,6 +501,7 @@ export function RevenueHeatmap({ onNavigate }) {
               onSelect={r => setSelectedLabel(r.label)}
               metricKey={metricKey}
               metricLabel={metric.longLabel}
+              linkedLabel={linkedLabel}
             />
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
@@ -515,6 +524,7 @@ export function RevenueHeatmap({ onNavigate }) {
                       metricKey={metricKey}
                       onSelect={() => setSelectedLabel(c.canonical || c.region || "지역 미상")}
                       onJump={jumpToCustomer}
+                      onPeek={setLinkedLabel}
                     />
                   ))}
                 </div>

@@ -212,6 +212,22 @@
   .hub-app .hub-kanban-card { transition: none; }
 }
 
+/* Kanban column "+ 추가" dashed button — same no-JS-hover contract as the cards above. */
+.hub-app .hub-kanban-add {
+  color: var(--fg-faint);
+  border: 1px dashed var(--line-soft);
+  background: transparent;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.hub-app .hub-kanban-add:hover {
+  color: var(--fg-muted);
+  border-color: var(--line);
+  background: var(--surface-2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-kanban-add { transition: none; }
+}
+
 /* Sidebar anchor row — same contract as .hub-row (CSS hover, no JS handlers),
    sized for the consolidated eight-anchor nav: one tap target, no accordion. */
 .hub-app .hub-nav-item {

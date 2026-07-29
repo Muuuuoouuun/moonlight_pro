@@ -269,7 +269,7 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, onNavig
           <div style={{
             width: 22, height: 22, borderRadius: 999,
             background: 'radial-gradient(circle at 35% 30%, var(--moon-100), var(--moon-400) 60%, var(--moon-700))',
-            boxShadow: '0 0 12px oklch(0.78 0.008 250 / 0.3)',
+            boxShadow: '0 0 12px color-mix(in oklch, var(--moon-300) 30%, transparent)',
           }} />
         </button>
         {SIDEBAR_PRIMARY.map(a => {
@@ -316,7 +316,7 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, onNavig
           <div style={{
             width: 22, height: 22, borderRadius: 999,
             background: 'radial-gradient(circle at 35% 30%, var(--moon-100), var(--moon-400) 60%, var(--moon-700))',
-            boxShadow: '0 0 12px oklch(0.78 0.008 250 / 0.3), inset 0 -1px 2px oklch(0 0 0 / 0.5)',
+            boxShadow: '0 0 12px color-mix(in oklch, var(--moon-300) 30%, transparent), inset 0 -1px 2px oklch(0 0 0 / 0.5)',
           }} />
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em' }}>Moonlight</div>

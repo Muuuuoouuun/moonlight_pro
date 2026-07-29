@@ -588,7 +588,8 @@ export function Studio({ workspace }) {
             value={mode}
             onChange={(k) => { setMode(k); setDirty(true); }}
           />
-          <Badge tone="warning" size="xs">Draft</Badge>
+          {/* Draft는 라이프사이클 단계 — 경고색이 아니라 중립 (§5.2). */}
+          <Badge tone="neutral" size="xs">Draft</Badge>
           {ws && (
             <span
               title={`${ws.label} 워크스페이스 스코프`}

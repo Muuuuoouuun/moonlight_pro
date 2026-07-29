@@ -16,7 +16,8 @@ export function Badge({ children, tone = 'neutral', variant = 'soft', size = 'sm
   };
   const t = tones[tone] || tones.neutral;
   const pad = size === 'xs' ? '2px 6px' : size === 'sm' ? '3px 8px' : '5px 10px';
-  const fs = size === 'xs' ? 10 : 11;
+  // 상태 플래그는 보조 메타 — DESIGN.md 크기 플로어(≥10.5px)에 맞춘다.
+  const fs = size === 'xs' ? 10.5 : 11;
   const base = {
     display: 'inline-flex', alignItems: 'center', gap: 4,
     padding: pad, fontSize: fs, fontWeight: 500, letterSpacing: '0.02em',

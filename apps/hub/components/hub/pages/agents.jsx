@@ -392,7 +392,7 @@ export function AgentsCouncil({ onNavigate }) {
               <div style={{
                 width: 36, height: 36, borderRadius: 999,
                 background: 'radial-gradient(circle at 35% 30%, var(--moon-200), var(--moon-500) 60%, var(--moon-700))',
-                boxShadow: '0 0 10px oklch(0.78 0.008 250 / 0.2)',
+                boxShadow: '0 0 10px color-mix(in oklch, var(--moon-300) 20%, transparent)',
                 flexShrink: 0,
               }} />
               <div style={{ minWidth: 0, flex: 1 }}>
@@ -592,8 +592,9 @@ export function AgentsOrders({ onNavigate }) {
             )}
             {o.live && o.status === 'approved' && (o.kind === 'dm' || o.kind === 'lead' ? (
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '0 16px 12px 116px' }}>
-                <span style={{ fontSize: 11, color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <Dot tone="success" size={6} /> 신규 리드
+                {/* 완료 확인은 check + 중립 텍스트 (§5.2 — green 축하 금지). */}
+                <span style={{ fontSize: 11, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Iconed name="check" size={11} /> 신규 리드
                 </span>
                 <Button variant="outline" size="xs" onClick={() => promote(o.id)}>리드로 등록</Button>
               </div>
@@ -601,16 +602,16 @@ export function AgentsOrders({ onNavigate }) {
               // 승인 = Studio 파이프라인으로 구체화(서버가 idea→draft 승격 + variant 생성).
               // 콘텐츠 초안은 영업 퍼널 outcome을 절대 남기지 않는다 — 완료는 무-outcome executed.
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '0 16px 12px 116px' }}>
-                <span style={{ fontSize: 11, color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <Dot tone="success" size={6} /> Studio 초안 생성
+                <span style={{ fontSize: 11, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Iconed name="check" size={11} /> Studio 초안 생성
                 </span>
                 <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/content/studio')}>Studio 열기</Button>
                 <Button variant="ghost" size="xs" onClick={() => promote(o.id)}>완료</Button>
               </div>
             ) : (
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '0 16px 12px 116px' }}>
-                <span style={{ fontSize: 11, color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <Dot tone="success" size={6} /> 실행 결과
+                <span style={{ fontSize: 11, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Iconed name="check" size={11} /> 실행 결과
                 </span>
                 {WO_EXECUTE_ACTIONS.map((a) => (
                   <Button key={a.action} variant="outline" size="xs" onClick={() => execute(o.id, a.action)}>{a.label}</Button>

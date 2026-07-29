@@ -1335,7 +1335,8 @@ export function Projects({ workspace }) {
             <span style={{
               position: 'absolute', top: -3, right: -3,
               width: 7, height: 7, borderRadius: 999,
-              background: 'var(--danger)',
+              // 새 변동은 손실 상태가 아니다 (§5.2 no-warning-by-default) — 조용한 문스톤 점.
+              background: 'var(--moon-400)',
               boxShadow: '0 0 0 2px ' + (active ? 'var(--surface-3)' : 'var(--surface)'),
             }} />
           )}
@@ -1345,12 +1346,12 @@ export function Projects({ workspace }) {
           <span style={{
             fontSize: 10.5, fontWeight: 600, fontFamily: 'var(--font-mono)',
             minWidth: 16, height: 14, padding: '0 5px',
-            borderRadius: 999, background: 'var(--danger)', color: 'var(--bg)',
+            borderRadius: 999, background: 'var(--surface-3)', color: 'var(--fg-muted)',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             letterSpacing: '-0.02em',
           }}>{changes > 99 ? '99+' : changes}</span>
         )}
-        <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)', background: active ? 'var(--surface)' : 'transparent', padding: '1px 5px', borderRadius: 4 }}>{count}</span>
+        <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: active ? 'var(--surface)' : 'transparent', padding: '1px 5px', borderRadius: 4 }}>{count}</span>
       </button>
     );
   };
@@ -1376,7 +1377,7 @@ export function Projects({ workspace }) {
             <span style={{
               position: 'absolute', top: -3, right: -2,
               width: 8, height: 8, borderRadius: 999,
-              background: 'var(--danger)',
+              background: 'var(--moon-400)',
               boxShadow: '0 0 0 2px var(--surface)',
             }} />
           )}
@@ -1388,7 +1389,7 @@ export function Projects({ workspace }) {
               <span style={{
                 fontSize: 10.5, fontWeight: 600, fontFamily: 'var(--font-mono)',
                 minWidth: 16, height: 14, padding: '0 5px',
-                borderRadius: 999, background: 'var(--danger)', color: 'var(--bg)',
+                borderRadius: 999, background: 'var(--surface-3)', color: 'var(--fg-muted)',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 letterSpacing: '-0.02em',
               }}>{changes > 99 ? '99+' : changes}</span>
@@ -1399,8 +1400,8 @@ export function Projects({ workspace }) {
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-          <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)' }}>{count}p</span>
-          <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)' }}>{bTodos}t</span>
+          <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{count}p</span>
+          <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{bTodos}t</span>
         </div>
         {active && <span style={{ fontSize: 11, color: 'var(--moon-300)' }}>✓</span>}
       </button>
@@ -1486,13 +1487,14 @@ export function Projects({ workspace }) {
                 {currentBrand.glyph}
                 {(() => {
                   const totalChanges = brands.filter(b => b.key !== 'all').reduce((s, b) => s + (b.changes || 0), 0);
+                  // 새 변동 카운트 — 손실 신호가 아니므로 중립 칩 (§5.2), 글자는 10.5px 플로어.
                   if (brand === 'all' && totalChanges > 0) {
                     return (
                       <span style={{
-                        position: 'absolute', top: -4, right: -6,
-                        minWidth: 14, height: 14, padding: '0 4px',
-                        borderRadius: 999, background: 'var(--danger)', color: 'var(--bg)',
-                        fontSize: 9, fontWeight: 600, fontFamily: 'var(--font-mono)',
+                        position: 'absolute', top: -5, right: -7,
+                        minWidth: 15, height: 15, padding: '0 4px',
+                        borderRadius: 999, background: 'var(--surface-3)', color: 'var(--fg-muted)',
+                        fontSize: 10.5, fontWeight: 600, fontFamily: 'var(--font-mono)',
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                         boxShadow: '0 0 0 2px var(--surface-2)',
                       }}>{totalChanges}</span>
@@ -1501,10 +1503,10 @@ export function Projects({ workspace }) {
                   if (brand !== 'all' && currentBrand.changes > 0) {
                     return (
                       <span style={{
-                        position: 'absolute', top: -4, right: -6,
-                        minWidth: 14, height: 14, padding: '0 4px',
-                        borderRadius: 999, background: 'var(--danger)', color: 'var(--bg)',
-                        fontSize: 9, fontWeight: 600, fontFamily: 'var(--font-mono)',
+                        position: 'absolute', top: -5, right: -7,
+                        minWidth: 15, height: 15, padding: '0 4px',
+                        borderRadius: 999, background: 'var(--surface-3)', color: 'var(--fg-muted)',
+                        fontSize: 10.5, fontWeight: 600, fontFamily: 'var(--font-mono)',
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                         boxShadow: '0 0 0 2px var(--surface-2)',
                       }}>{currentBrand.changes}</span>
@@ -1515,7 +1517,7 @@ export function Projects({ workspace }) {
               </span>
               <span className="hub-project-brand-trigger__meta" style={{ display: 'contents' }}>
                 <span style={{ fontSize: 13, fontWeight: 500, letterSpacing: '-0.005em', whiteSpace: 'nowrap' }}>{currentBrand.name}</span>
-                <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)', background: 'var(--surface)', padding: '1px 5px', borderRadius: 4, border: '1px solid var(--line-soft)' }}>
+                <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface)', padding: '1px 5px', borderRadius: 4, border: '1px solid var(--line-soft)' }}>
                   {brand === 'all' ? allProjects.length : (currentBrand.projects || 0)}
                 </span>
                 <span style={{ fontSize: 9, color: 'var(--fg-faint)', marginLeft: 2, transform: brandMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>▼</span>
@@ -1794,7 +1796,7 @@ export function Projects({ workspace }) {
                           <button onClick={() => createContentProject(section.id)} style={{
                             flex: 1, padding: '10px 14px', textAlign: 'left',
                             fontSize: 11.5, color: 'var(--fg-muted)',
-                          }}>＋ 콘텐츠 <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)' }}>기획·초안·검토·업로드</span></button>
+                          }}>＋ 콘텐츠 <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>기획·초안·검토·업로드</span></button>
                           <button onClick={() => createProject('Planning', section.id)} style={{
                             flex: '0 0 auto', padding: '10px 14px',
                             fontSize: 11.5, color: 'var(--fg-faint)',
@@ -2119,9 +2121,9 @@ export function Projects({ workspace }) {
                           <div style={{ padding: '8px 14px', fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>프로젝트</div>
                           <div style={{ position: 'relative', padding: '8px 0', background: 'var(--surface-2)' }}>
                             {weekTicks.map((tick, i) => (
-                              <span key={i} className="mono" style={{ position: 'absolute', left: `${tick.offsetPct}%`, fontSize: 10, color: 'var(--fg-faint)', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>{tick.label}</span>
+                              <span key={i} className="mono" style={{ position: 'absolute', left: `${tick.offsetPct}%`, fontSize: 10.5, color: 'var(--fg-faint)', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>{tick.label}</span>
                             ))}
-                            <span className="mono" style={{ position: 'absolute', left: `${timeline.todayPct}%`, top: 0, fontSize: 10, color: 'var(--moon-300)', transform: 'translateX(-50%)', fontWeight: 600, whiteSpace: 'nowrap' }}>오늘</span>
+                            <span className="mono" style={{ position: 'absolute', left: `${timeline.todayPct}%`, top: 0, fontSize: 10.5, color: 'var(--moon-300)', transform: 'translateX(-50%)', fontWeight: 600, whiteSpace: 'nowrap' }}>오늘</span>
                           </div>
                         </div>
                         {timeline.items.map((item, i) => {

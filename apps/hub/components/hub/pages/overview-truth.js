@@ -1,7 +1,7 @@
 const KPI_DEFINITIONS = [
   {
     key: "updatesThisWeek",
-    label: "최근 7일 작업 업데이트",
+    label: "작업 업데이트",
     hint: "프로젝트 진행 기록",
     failureHint: "프로젝트 업데이트 읽기 실패",
     disconnectedHint: "프로젝트 업데이트 원장 미연결",
@@ -13,7 +13,7 @@ const KPI_DEFINITIONS = [
   },
   {
     key: "decisionsThisWeek",
-    label: "최근 7일 결정 기록",
+    label: "결정 기록",
     hint: "기획·판단 로그",
     failureHint: "결정 기록 읽기 실패",
     disconnectedHint: "결정 기록 원장 미연결",
@@ -25,7 +25,7 @@ const KPI_DEFINITIONS = [
   },
   {
     key: "publishedThisWeek",
-    label: "최근 7일 발행",
+    label: "발행",
     hint: "콘텐츠 발행 완료",
     failureHint: "발행 기록 읽기 실패",
     disconnectedHint: "발행 기록 원장 미연결",
@@ -46,6 +46,21 @@ function isAvailableValue(value) {
 function sparkValues(series, key) {
   const values = (Array.isArray(series) ? series : []).slice(-7).map((item) => item?.[key]);
   return values.every(isAvailableValue) ? values.map(Number) : [];
+}
+
+// 선택한 기간(7/14/30일)만큼의 일별 버킷을 더한다. 이전에는 KPI가 서버에서
+// withinDays(...,7)로 고정 집계돼 있어, 헤더에서 30일을 골라도 KPI는 7일 그대로였다
+// (기간 컨트롤이 활동 차트만 제어 = 화면이 거짓말). activitySeries는 이미 30일치 일별
+// 버킷을 담고 있고 서버의 7일 집계와 같은 원본(updates/decisions/publish_logs)에서 나오므로,
+// 여기서 창을 다시 합하면 추가 왕복 없이 KPI가 기간을 따라간다.
+// 창 안에 하나라도 읽지 못한 버킷이 있으면 합계를 만들지 않는다 — 부분 데이터를 합쳐
+// 확정된 숫자처럼 보여주지 않기 위해서다(sparkValues와 같은 규칙).
+function windowSum(series, key, days) {
+  const window = (Array.isArray(series) ? series : []).slice(-days);
+  if (window.length === 0) return null;
+  const values = window.map((item) => item?.[key]);
+  if (!values.every(isAvailableValue)) return null;
+  return values.reduce((sum, value) => sum + Number(value), 0);
 }
 
 function fallbackState(status) {
@@ -127,7 +142,9 @@ export function buildOverviewKpiCards({
   activitySeries = [],
   sources = [],
   status,
+  days = 7,
 } = {}) {
+  const windowDays = Number.isFinite(Number(days)) && Number(days) > 0 ? Number(days) : 7;
   const cards = KPI_DEFINITIONS.map((definition) => {
     const context = metricContext({
       sources,
@@ -135,16 +152,23 @@ export function buildOverviewKpiCards({
       sourceKey: definition.sourceKey,
       dependency: definition.dependency,
     });
-    const available = context.available && isAvailableValue(kpis[definition.key]);
+    const windowed = windowSum(activitySeries, definition.sparkKey, windowDays);
+    // 창 합계를 못 만들면 서버의 고정 7일 집계로 후퇴한다 — 단, 그때는 라벨도 7일로
+    // 되돌려서 숫자와 기간 표기가 어긋나지 않게 한다.
+    const usesWindow = windowed !== null;
+    const value = usesWindow ? windowed : kpis[definition.key];
+    const label = `최근 ${usesWindow ? windowDays : 7}일 ${definition.label}`;
+    const available = context.available && isAvailableValue(value);
     if (!available) {
       return unavailableCard({
         ...definition,
+        label,
         reason: context.reason || "error",
       });
     }
     return {
-      label: definition.label,
-      value: kpis[definition.key],
+      label,
+      value,
       hint: definition.hint,
       tone: definition.tone,
       nav: definition.nav,

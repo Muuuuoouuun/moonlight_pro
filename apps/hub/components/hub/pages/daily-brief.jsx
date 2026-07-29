@@ -278,19 +278,20 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
     }
   }
 
+  // §5.2: missed is the only immediate-loss lane; today/inbox are ordinary stages → neutral.
   const laneTone = {
     missed: 'danger',
-    today: 'warning',
+    today: 'neutral',
     waiting: 'neutral',
-    inbox: 'info',
+    inbox: 'neutral',
   };
 
   return (
     <div aria-label="오늘 할 일">
       <SectionTitle right={(
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Badge tone="danger" size="xs">놓침 {counts.missed || 0}</Badge>
-          <Badge tone="warning" size="xs">오늘 {counts.today || 0}</Badge>
+          <Badge tone={(counts.missed || 0) > 0 ? 'danger' : 'neutral'} size="xs">놓침 {counts.missed || 0}</Badge>
+          <Badge tone="neutral" size="xs">오늘 {counts.today || 0}</Badge>
           <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/projects?view=todos')}>모두 보기</Button>
         </div>
       )}>오늘 할 일</SectionTitle>
@@ -425,7 +426,9 @@ function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
   // Surface the highest-priority signal first-open (§3.1: <5s).
   const [expanded, setExpanded] = React.useState(defaultExpanded != null ? defaultExpanded : (index === 0 || s.tone === 'danger'));
   const [decided, setDecided] = React.useState(null);
-  const borderTone = { danger: 'var(--danger-line)', warning: 'var(--warning-line)', success: 'var(--success-line)', info: 'var(--info-line)' }[s.tone] || 'var(--line)';
+  // §5.2 collision precedence: urgency lives on the left rail + dot (danger only);
+  // ordinary lanes (today/queue/info) stay neutral instead of painting semantic hues.
+  const borderTone = s.tone === 'danger' ? 'var(--danger-line)' : 'var(--line)';
   const openContext = () => onNavigate?.(CONTEXT_TARGETS[s.kind] || 'dashboard/daily-brief');
 
   return (
@@ -440,11 +443,11 @@ function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
     }}>
       <div className="hub-stackable-row" onClick={() => setExpanded(e => !e)} style={{ padding: 'var(--card-pad)', cursor: 'pointer', display: 'flex', gap: 14 }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 2 }}>
-          <Dot tone={s.tone} size={8} />
+          <Dot tone={s.tone === 'danger' ? 'danger' : 'neutral'} size={8} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-            <Badge tone={s.tone} size="xs">{s.kind}</Badge>
+            <Badge tone="neutral" size="xs">{s.kind}</Badge>
             <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{s.meta}</span>
             <div style={{ flex: 1 }} />
             <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>from {s.source.from} · <span className="mono">{s.source.ref}</span></span>
@@ -825,8 +828,9 @@ function ApprovalQueueCard({ onNavigate }) {
               </div>
               {approved[o.id] && (o.kind === 'dm' || o.kind === 'lead' ? (
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 11, color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <Dot tone="success" size={6} /> 승인됨 · 신규 리드
+                  {/* 완료 확인은 check + 중립 텍스트 (§5.2 — green 축하 금지). */}
+                  <span style={{ fontSize: 11, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Iconed name="check" size={11} /> 승인됨 · 신규 리드
                   </span>
                   <Button variant="outline" size="xs" onClick={() => promote(o.id)}>리드로 등록</Button>
                 </div>
@@ -834,16 +838,16 @@ function ApprovalQueueCard({ onNavigate }) {
                 // 승인 = Studio 파이프라인으로 구체화(서버가 idea→draft 승격 + variant 생성).
                 // 콘텐츠 초안은 영업 퍼널 outcome을 절대 남기지 않는다 — 완료는 무-outcome executed.
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 11, color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <Dot tone="success" size={6} /> 승인됨 · Studio 초안 생성
+                  <span style={{ fontSize: 11, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Iconed name="check" size={11} /> 승인됨 · Studio 초안 생성
                   </span>
                   <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/content/studio')}>Studio 열기</Button>
                   <Button variant="ghost" size="xs" onClick={() => promote(o.id)}>완료</Button>
                 </div>
               ) : (
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 11, color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <Dot tone="success" size={6} /> 승인됨 · 실행 결과
+                  <span style={{ fontSize: 11, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Iconed name="check" size={11} /> 승인됨 · 실행 결과
                   </span>
                   {o.kind === 'followup-draft' && o.body?.body && (
                     <Button variant="ghost" size="xs" onClick={() => copyDraft(o)}>{copiedId === o.id ? '복사됨' : '복사'}</Button>
@@ -936,7 +940,8 @@ function PipelineShapeCard({ onNavigate }) {
                 </span>
                 <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{formatMoney(data.value)}</span>
                 <div style={{ flex: 1 }} />
-                {data.stalled > 0 && <Badge tone="warning" size="xs">정체 {data.stalled}</Badge>}
+                {/* 정체는 Deals 보드와 같은 문법(danger) — amber 아님 (§5.2). */}
+                {data.stalled > 0 && <Badge tone="danger" size="xs">정체 {data.stalled}</Badge>}
               </div>
               {/* 단계 분포 세그먼트 바 — 폭 ∝ 딜 수, 빈 단계는 흐린 슬라이버로 남긴다. */}
               <div style={{ marginTop: 12, display: 'flex', gap: 3, height: 8, borderRadius: 999, overflow: 'hidden' }}>
@@ -964,11 +969,11 @@ function PipelineShapeCard({ onNavigate }) {
                     borderRadius: 'var(--r-sm)', cursor: 'pointer',
                   }}
                 >
-                  <Dot tone="warning" size={6} />
+                  <Dot tone="danger" size={6} />
                   <span style={{ fontSize: 12, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
                     가장 정체: {data.top.name}
                   </span>
-                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--warning)', flexShrink: 0 }}>{data.top.age}일</span>
+                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--danger)', flexShrink: 0 }}>{data.top.age}일</span>
                 </button>
               )}
             </>
@@ -1210,8 +1215,11 @@ function StatusLine({ state }) {
 // already exposed. This is the "<5s, what's my next move?" surface (DESIGN.md §3.1).
 function CommandCard({ s, remaining, onNavigate }) {
   const [decided, setDecided] = React.useState(null);
-  const line = { danger: 'var(--danger-line)', warning: 'var(--warning-line)', success: 'var(--success-line)', info: 'var(--info-line)' }[s.tone] || 'var(--line)';
-  const accent = { danger: 'var(--danger)', warning: 'var(--warning)', success: 'var(--success)', info: 'var(--info)' }[s.tone] || 'var(--moon-300)';
+  // §5.2 red-budget: only true urgency colors the command ring. Everything else reads
+  // as the top item by position and size alone — warning/info/success rims were reading
+  // as a banned warm-gold halo around the hero card.
+  const line = s.tone === 'danger' ? 'var(--danger-line)' : 'var(--line-strong)';
+  const accent = s.tone === 'danger' ? 'var(--danger)' : 'var(--moon-300)';
   const hasRecord = s.source?.ref && !SENTINEL_REFS.has(String(s.source.ref).trim().toUpperCase());
   const openRecord = () => onNavigate?.(withEntityRef(CONTEXT_TARGETS[s.kind] || 'dashboard/daily-brief', s.source));
   return (
@@ -1227,7 +1235,7 @@ function CommandCard({ s, remaining, onNavigate }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         <span style={{ width: 7, height: 7, borderRadius: 999, background: accent, boxShadow: `0 0 8px ${accent}`, animation: s.tone === 'danger' ? 'mlMoonPulse 1.4s ease-in-out infinite' : 'none', flexShrink: 0 }} />
         <span className="mono" style={{ fontSize: 10.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--fg-dim)' }}>지금 가장 급한 결정</span>
-        <Badge tone={s.tone} size="xs">{s.kind}</Badge>
+        <Badge tone="neutral" size="xs">{s.kind}</Badge>
         <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{s.meta}</span>
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>from {s.source?.from} · <span className="mono">{s.source?.ref}</span></span>
@@ -1489,7 +1497,7 @@ export function DailyBrief({ onNavigate }) {
           <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>{formatBriefDate(now)}</div>
           <h1 style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em' }}>{greetingFor(now)}, <span style={{ color: 'var(--moon-300)' }}>Junhyuk</span></h1>
           <div style={{ marginTop: 6, fontSize: 13.5, color: 'var(--fg-muted)', maxWidth: '60ch', lineHeight: 1.55 }}>
-            오늘 <span style={{ color: 'var(--fg)' }}>{signalCount}개 신호</span> · <span style={{ color: 'var(--danger)' }}>{urgentCount} 즉시</span> · <span style={{ color: 'var(--warning)' }}>{todayCount} 오늘</span> · {okCount} 여유
+            오늘 <span style={{ color: 'var(--fg)' }}>{signalCount}개 신호</span> · <span style={{ color: urgentCount > 0 ? 'var(--danger)' : 'inherit' }}>{urgentCount} 즉시</span> · <span style={{ color: 'inherit' }}>{todayCount} 오늘</span> · {okCount} 여유
           </div>
         </div>
         <div className="hub-page-actions hub-page-actions--row" style={{ display: 'flex', gap: 8 }}>
@@ -1517,9 +1525,10 @@ export function DailyBrief({ onNavigate }) {
           {/* ② 결정 큐 — five at most; the rest expand on demand */}
           <div>
             <SectionTitle right={<div style={{ display: 'flex', gap: 6 }}>
-              <Badge tone="danger" size="xs">{urgentCount} urgent</Badge>
-              <Badge tone="warning" size="xs">{todayCount} today</Badge>
-              <Badge tone="success" size="xs">{okCount} ok</Badge>
+              {/* §5.2: red only when urgency is real; today/ok are ordinary states → neutral. */}
+              <Badge tone={urgentCount > 0 ? 'danger' : 'neutral'} size="xs">{urgentCount} urgent</Badge>
+              <Badge tone="neutral" size="xs">{todayCount} today</Badge>
+              <Badge tone="neutral" size="xs">{okCount} ok</Badge>
             </div>}>
               결정 큐
             </SectionTitle>

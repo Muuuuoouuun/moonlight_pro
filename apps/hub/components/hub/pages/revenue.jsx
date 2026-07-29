@@ -323,7 +323,7 @@ export function RevenueOverview({ onNavigate }) {
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>Pipeline by stage</div>
             <div style={{ flex: 1 }} />
-            <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{fmt(pipeline)}</span>
+            <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{fmt(pipeline)}</span>
           </div>
           <div style={{ display: 'flex', height: 28, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--line-soft)' }}>
             {hasPipelineValue ? pipelineByStage.map(s => (
@@ -367,7 +367,7 @@ export function RevenueOverview({ onNavigate }) {
                     <div style={{ width: totalBrandMRR > 0 ? `${(b.mrr / totalBrandMRR) * 100}%` : '0%', height: '100%', background: 'var(--moon-400)' }} />
                   </div>
                 </div>
-                <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', textAlign: 'right' }}>{fmt(b.mrr)}</span>
+                <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', textAlign: 'right' }}>{fmt(b.mrr)}</span>
               </div>
             ))}
           </div>
@@ -1260,16 +1260,12 @@ export function Deals({ workspace, onNavigate }) {
                 <button
                   onClick={() => createDeal(s.key)}
                   title={`${s.label}에 새 딜 추가`}
+                  className="hub-kanban-add"
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                     width: '100%', padding: '7px 8px', marginTop: items.length ? 2 : 0,
-                    fontSize: 11.5, color: 'var(--fg-faint)',
-                    border: '1px dashed var(--line-soft)', borderRadius: 'var(--r-sm)',
-                    background: 'transparent', cursor: 'pointer',
-                    transition: 'color 120ms ease, border-color 120ms ease, background 120ms ease',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--fg-muted)'; e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.background = 'var(--surface-2)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--fg-faint)'; e.currentTarget.style.borderColor = 'var(--line-soft)'; e.currentTarget.style.background = 'transparent'; }}>
+                    fontSize: 11.5, borderRadius: 'var(--r-sm)', cursor: 'pointer',
+                  }}>
                   <Iconed name="plus" size={11} /> 딜 추가
                 </button>
               </div>

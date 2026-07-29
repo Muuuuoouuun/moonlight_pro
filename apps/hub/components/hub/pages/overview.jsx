@@ -35,7 +35,7 @@ const CHART_HEIGHT = 120;
 // scale. Only genuinely blocked work receives the danger signal.
 const RING_COLORS = {
   planning: 'var(--fg-faint)',
-  active: 'var(--accent)',
+  active: 'var(--moon-300)',
   review: 'var(--moon-500)',
   blocked: 'var(--danger)',
   done: 'var(--fg-dim)',
@@ -104,10 +104,102 @@ function useOverviewLedger() {
   return { ledger, syncState };
 }
 
+// 패널 문구 단일 테이블 — 이전에는 카드마다 4중첩 삼항 안에 문구가 흩어져 있어 같은
+// 상태(preview/error/partial/empty)인데도 표현이 조금씩 달랐다. reason → [제목, 설명].
+const PANEL_COPY = {
+  projects: {
+    title: '프로젝트 상태',
+    icon: 'projects',
+    preview: ['프로젝트 원장 미연결', '프로젝트 원장을 연결하면 상태 분포가 표시됩니다.'],
+    error: ['프로젝트 원장 읽기 실패', '프로젝트 원장을 다시 읽은 뒤 상태 분포를 표시합니다.'],
+    partial: ['프로젝트 부분 데이터', '원장의 일부만 읽혀 빈 상태로 확정할 수 없습니다.'],
+    empty: ['프로젝트 데이터 없음', '프로젝트가 생기면 상태 분포가 표시됩니다.'],
+    partialNotice: '프로젝트 부분 데이터 · 읽힌 프로젝트만 표시합니다.',
+  },
+  content: {
+    title: '콘텐츠 파이프라인',
+    icon: 'content',
+    preview: ['콘텐츠 원장 미연결', '콘텐츠 원장을 연결하면 파이프라인이 표시됩니다.'],
+    error: ['콘텐츠 원장 읽기 실패', '콘텐츠 원장을 다시 읽은 뒤 파이프라인을 표시합니다.'],
+    partial: ['콘텐츠 부분 데이터', '원장의 일부만 읽혀 빈 상태로 확정할 수 없습니다.'],
+    empty: ['콘텐츠 데이터 없음', '콘텐츠 아이템이 생기면 파이프라인이 표시됩니다.'],
+    partialNotice: '콘텐츠 부분 데이터 · 읽힌 항목만 표시합니다.',
+  },
+  brand: {
+    title: '브랜드별 최근 활동',
+    icon: 'brand',
+    preview: ['브랜드 활동 원장 미연결', '프로젝트 원장을 연결하면 브랜드별 활동이 표시됩니다.'],
+    error: ['브랜드 활동 원장을 읽지 못했습니다', '프로젝트 업데이트와 결정 원장을 다시 읽은 뒤 표시합니다.'],
+    partial: ['브랜드 활동 부분 데이터', '원장의 일부만 읽혀 비중을 확정할 수 없습니다.'],
+    empty: ['브랜드 활동 없음', '프로젝트 업데이트·결정이 쌓이면 브랜드별 비중이 표시됩니다.'],
+    partialNotice: '브랜드 활동 부분 데이터 · 읽힌 기록만 표시합니다.',
+  },
+  revenue: {
+    title: '파이프라인 단계',
+    icon: 'deals',
+    preview: ['매출 원장 미연결', '매출 원장을 연결하면 파이프라인 단계가 표시됩니다.'],
+    error: ['매출 원장 읽기 실패', '매출 원장을 다시 읽은 뒤 파이프라인을 표시합니다.'],
+    partial: ['매출 원장 부분 데이터', '원장의 일부만 읽혀 딜이 없다고 확정할 수 없습니다.'],
+    empty: ['딜이 없습니다', '파이프라인에 딜이 생기면 단계별 분포가 표시됩니다.'],
+    partialNotice: '매출 원장 부분 데이터 · 읽힌 딜만 표시합니다.',
+  },
+  automations: {
+    title: '자동화 현황',
+    icon: 'automations',
+    preview: ['자동화 원장 미연결', '자동화 원장을 연결하면 실행 현황이 표시됩니다.'],
+    error: ['자동화 원장 읽기 실패', '자동화 원장을 다시 읽은 뒤 실행 현황을 표시합니다.'],
+    partial: ['자동화 원장 부분 데이터', '원장의 일부만 읽혀 실행 수를 확정할 수 없습니다.'],
+    empty: ['자동화 데이터 없음', '자동화가 생기면 실행 현황이 표시됩니다.'],
+    partialNotice: '자동화 원장 부분 데이터 · 읽힌 지표만 표시합니다.',
+  },
+  rhythm: {
+    title: '리듬',
+    icon: 'rhythm',
+    preview: ['리듬 원장 미연결', '리듬 원장을 연결하면 이번 주 체크인이 표시됩니다.'],
+    error: ['리듬 원장 읽기 실패', '리듬 원장을 다시 읽은 뒤 체크인을 표시합니다.'],
+    partial: ['리듬 원장 부분 데이터', '원장의 일부만 읽혀 빈 상태로 확정할 수 없습니다.'],
+    empty: ['루틴 기록 없음', '체크인이 기록되면 이번 주 리듬이 표시됩니다.'],
+    partialNotice: '리듬 원장 부분 데이터 · 읽힌 체크인만 표시합니다.',
+  },
+};
+
+// 카드 헤더(제목 · SyncBadge · 이동 버튼)와 availability 기반 본문 분기를 한 곳으로 흡수.
+// 이전에는 이 마크업이 6개 패널에 복붙돼 있었고(§8.1 primitives-first 위반) marginBottom도
+// 12/14로 이미 드리프트가 시작돼 있었다. availability는 overviewPanelAvailability()의
+// { state, showData, reason } 계약을 그대로 받는다.
+function PanelCard({ panel, availability, onOpen, openLabel = '열기', action, children }) {
+  const copy = PANEL_COPY[panel];
+  const [emptyTitle, emptyDescription] = copy[availability.reason] || copy.empty;
+  return (
+    <Card>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 500 }}>{copy.title}</div>
+        <SyncBadge state={availability.state} />
+        <div style={{ flex: 1 }} />
+        {action || (onOpen && (
+          <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={onOpen}>{openLabel}</Button>
+        ))}
+      </div>
+      {availability.showData ? (
+        <>
+          {availability.reason === 'partial' && copy.partialNotice && (
+            <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--fg-muted)' }}>{copy.partialNotice}</div>
+          )}
+          {children}
+        </>
+      ) : (
+        <EmptyState icon={copy.icon} title={emptyTitle} description={emptyDescription} style={{ minHeight: 140 }} />
+      )}
+    </Card>
+  );
+}
+
 // Stacked daily bars — category distinction stays within the Moonstone/neutral
 // luminance scale so green/yellow never imply success or warning by accident.
 const ACTIVITY_SEGMENTS = [
-  { key: 'work', label: '작업', color: 'var(--accent)', get: (d) => d.work },
+  // §5.3 charts: series separate by Moonstone luminance only — accent is reserved for
+  // interaction (current/selected), never a category color.
+  { key: 'work', label: '작업', color: 'var(--moon-300)', get: (d) => d.work },
   { key: 'decisions', label: '결정', color: 'var(--moon-500)', get: (d) => d.decisions },
   { key: 'content', label: '발행', color: 'var(--fg-dim)', get: (d) => d.content },
 ];
@@ -143,7 +235,7 @@ function ActivityChart({ series, days, sources, status }) {
       <div
         className="mono"
         aria-hidden="true"
-        style={{ width: Y_AXIS_W, height: CHART_HEIGHT, flexShrink: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', alignItems: 'flex-end', fontSize: 9.5, color: 'var(--fg-faint)', lineHeight: 1 }}
+        style={{ width: Y_AXIS_W, height: CHART_HEIGHT, flexShrink: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', alignItems: 'flex-end', fontSize: 10.5, color: 'var(--fg-faint)', lineHeight: 1 }}
       >
         <span>{max}</span>
         <span>{mid}</span>
@@ -361,70 +453,57 @@ function RhythmCard({ rhythm, state, onNavigate }) {
     && Number.isFinite(Number(summary.longestStreak));
 
   return (
-    <Card>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 500 }}>리듬</div>
-        <SyncBadge state={availability.state} />
-        <div style={{ flex: 1 }} />
-        <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/rhythm')}>열기</Button>
+    <PanelCard panel="rhythm" availability={availability} onOpen={() => onNavigate?.('dashboard/work/rhythm')}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <span className="stat" style={{ fontSize: 24, fontWeight: 600 }}>{completedAvailable ? completed : '—'}/{total}</span>
+        <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>이번 주 완료</span>
       </div>
-      {availability.showData ? (
-        <>
-          {availability.reason === 'partial' && (
-            <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--fg-muted)' }}>리듬 원장 부분 데이터 · 읽힌 체크인만 표시합니다.</div>
-          )}
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-            <span className="stat" style={{ fontSize: 24, fontWeight: 600 }}>{completedAvailable ? completed : '—'}/{total}</span>
-            <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>이번 주 완료</span>
-          </div>
-          {percent !== null && <div style={{ marginTop: 10 }}><Progress value={percent} /></div>}
-          <div style={{ marginTop: 10, fontSize: 11, color: 'var(--fg-muted)' }}>
-            최장 streak{' '}
-            <span className="mono" style={{ color: longestStreakAvailable && summary.longestStreak > 0 ? 'var(--success)' : 'var(--fg-faint)' }}>{longestStreakAvailable ? `${summary.longestStreak}일` : '—'}</span>
-            {summary.longestStreakRitual ? <span style={{ color: 'var(--fg-faint)' }}> · {summary.longestStreakRitual}</span> : null}
-          </div>
-          {rituals.length > 0 && (
-            <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {rituals.map((r) => (
-                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 11, color: 'var(--fg-muted)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
-                  <div style={{ display: 'flex', gap: 2 }}>
-                    {(r.weeks || []).map((v, i) => (
-                      <span key={i} style={{ width: 8, height: 8, borderRadius: 2, background: v ? 'var(--moon-400)' : 'var(--surface-3)' }} />
-                    ))}
-                  </div>
-                </div>
-              ))}
+      {percent !== null && <div style={{ marginTop: 10 }}><Progress value={percent} /></div>}
+      <div style={{ marginTop: 10, fontSize: 11, color: 'var(--fg-muted)' }}>
+        최장 streak{' '}
+        <span className="mono" style={{ color: longestStreakAvailable && summary.longestStreak > 0 ? 'var(--success)' : 'var(--fg-faint)' }}>{longestStreakAvailable ? `${summary.longestStreak}일` : '—'}</span>
+        {summary.longestStreakRitual ? <span style={{ color: 'var(--fg-faint)' }}> · {summary.longestStreakRitual}</span> : null}
+      </div>
+      {rituals.length > 0 && (
+        <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {rituals.map((r) => (
+            <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, color: 'var(--fg-muted)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+              <div style={{ display: 'flex', gap: 2 }}>
+                {(r.weeks || []).map((v, i) => (
+                  <span key={i} style={{ width: 8, height: 8, borderRadius: 2, background: v ? 'var(--moon-400)' : 'var(--surface-3)' }} />
+                ))}
+              </div>
             </div>
-          )}
-        </>
-      ) : availability.reason === 'preview' ? (
-        <EmptyState icon="rhythm" title="리듬 원장 미연결" description="리듬 원장을 연결하면 이번 주 체크인이 표시됩니다." style={{ minHeight: 140 }} />
-      ) : availability.reason === 'error' ? (
-        <EmptyState icon="rhythm" title="리듬 원장 읽기 실패" description="리듬 원장을 다시 읽은 뒤 체크인을 표시합니다." style={{ minHeight: 140 }} />
-      ) : availability.reason === 'partial' ? (
-        <EmptyState icon="rhythm" title="리듬 원장 부분 데이터" description="원장의 일부만 읽혀 빈 상태로 확정할 수 없습니다." style={{ minHeight: 140 }} />
-      ) : (
-        <EmptyState icon="rhythm" title="루틴 기록 없음" description="체크인이 기록되면 이번 주 리듬이 표시됩니다." style={{ minHeight: 140 }} />
+          ))}
+        </div>
       )}
-    </Card>
+    </PanelCard>
   );
 }
 
+// 순서가 있는 단계 분포(퍼널)의 단일 표현. 콘텐츠 파이프라인과 딜 파이프라인 단계가 같은
+// "단계별 분포"인데도 각각 가로 막대행 / 세그먼트 바로 그려져 서로 비교가 안 됐다 —
+// 두 퍼널을 이 컴포넌트 하나로 통일한다. `meta`(예: 금액)는 값 옆에 흐리게 붙는다.
+// 구성(부분-전체)인 프로젝트 상태만 도넛을 유지한다 — 합계가 의미를 갖는 유일한 패널.
 function SeriesRows({ series = [], label }) {
   const max = Math.max(1, ...series.map((item) => Number(item.value) || 0));
+  const hasMeta = series.some((item) => item.meta);
   return (
     <div role="img" aria-label={label} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {series.map((item) => {
         const available = item.value !== null && item.value !== undefined && Number.isFinite(Number(item.value));
         const value = available ? Number(item.value) : null;
         return (
-          <div key={item.key} style={{ display: 'grid', gridTemplateColumns: '56px minmax(0, 1fr) 26px', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{item.label}</span>
+          <div key={item.key} style={{ display: 'grid', gridTemplateColumns: `56px minmax(0, 1fr) ${hasMeta ? 'auto' : '26px'}`, gap: 8, alignItems: 'center' }}>
+            <span style={{ fontSize: 11, color: 'var(--fg-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>
             <span style={{ height: 6, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }}>
               <span style={{ display: 'block', height: '100%', width: `${Math.max(value ? 6 : 0, Math.round(((value || 0) / max) * 100))}%`, borderRadius: 999, background: item.key === 'blocked' ? 'var(--danger)' : 'var(--moon-500)', transition: 'width 260ms ease' }} />
             </span>
-            <span className="mono" style={{ fontSize: 11, color: value ? 'var(--fg)' : 'var(--fg-faint)', textAlign: 'right' }}>{available ? value : '—'}</span>
+            <span className="mono" style={{ fontSize: 11, textAlign: 'right', whiteSpace: 'nowrap' }}>
+              <span style={{ color: value ? 'var(--fg)' : 'var(--fg-faint)' }}>{available ? value : '—'}</span>
+              {item.meta && <span style={{ color: 'var(--fg-faint)' }}> · {item.meta}</span>}
+            </span>
           </div>
         );
       })}
@@ -458,10 +537,12 @@ function KpiCard({ k, onNavigate }) {
         <div className="stat" style={{ fontSize: 28, fontWeight: 600, lineHeight: 1.1 }}>{k.value}</div>
         <div style={{ flex: 1 }} />
         {k.spark && k.spark.some((v) => v > 0) && (
-          <Sparkline values={k.spark} tone={k.tone === 'warning' ? 'warning' : k.tone === 'success' ? 'success' : 'moon'} width={56} height={20} />
+          <Sparkline values={k.spark} tone="moon" width={56} height={20} />
         )}
       </div>
-      <div style={{ marginTop: 6, fontSize: 11, color: k.tone === 'moon' || k.tone === 'neutral' ? 'var(--fg-faint)' : `var(--${k.tone})` }}>{k.hint}</div>
+      {/* §5.2: hint labels classify the metric (기획·발행 등) — category text stays neutral;
+          only a real blocker keeps the danger channel. */}
+      <div style={{ marginTop: 6, fontSize: 11, color: k.tone === 'danger' ? 'var(--danger)' : 'var(--fg-faint)' }}>{k.hint}</div>
     </div>
   );
 }
@@ -538,14 +619,24 @@ export function Overview({ onNavigate }) {
   });
   const projectActivity = projectActivityAvailability(ledger.sources || [], ledger.status || syncState);
   const recentActivityTruth = recentActivityAvailability(ledger.sources || [], ledger.status || syncState);
+  // 브랜드 활동은 projectActivityAvailability(업데이트·결정 두 슬라이스 모두 필요)를 쓰므로
+  // 다른 패널과 계약이 다르다 — PanelCard가 이해하는 { state, showData, reason }로 맞춘다.
+  const brandPanel = {
+    state: projectActivity.state === 'live-empty' ? 'live' : projectActivity.state,
+    showData: projectActivity.brandActivity && brandActivity.length > 0,
+    reason: !projectActivity.brandActivity
+      ? (projectActivity.reason === 'preview' ? 'preview' : projectActivity.reason === 'partial' ? 'partial' : 'error')
+      : brandActivity.length === 0 ? 'empty' : null,
+  };
 
-  // Last 7 buckets of the same daily series feed each KPI's sparkline — no
-  // separate fetch, just a different slice of activitySeries per pillar.
+  // KPI는 헤더에서 고른 기간을 그대로 따른다 — 스파크라인은 계속 최근 7일 모양을 보여준다
+  // (카드 안 미니 추세는 창 길이와 무관하게 "최근 흐름"을 뜻함).
   const kpiCards = buildOverviewKpiCards({
     kpis,
     activitySeries: ledger.activitySeries || [],
     sources: ledger.sources || [],
     status: ledger.status || syncState,
+    days: Number(period),
   });
 
   return (
@@ -600,194 +691,89 @@ export function Overview({ onNavigate }) {
         )}
       </Card>
 
-      <div className="hub-grid--three" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--gap)' }}>
-        <Card>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>프로젝트 상태</div>
-            <SyncBadge state={projectPanel.state} />
-            <div style={{ flex: 1 }} />
-            <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/projects')}>열기</Button>
-          </div>
-          {projectPanel.showData ? (
-            <>
-              {projectPanel.reason === 'partial' && (
-                <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--fg-muted)' }}>프로젝트 부분 데이터 · 읽힌 프로젝트만 표시합니다.</div>
-              )}
-              <DonutChart series={pms.projectStatusSeries} centerLabel="프로젝트" />
-            </>
-          ) : projectPanel.reason === 'preview' ? (
-            <EmptyState icon="projects" title="프로젝트 원장 미연결" description="프로젝트 원장을 연결하면 상태 분포가 표시됩니다." style={{ minHeight: 140 }} />
-          ) : projectPanel.reason === 'error' ? (
-            <EmptyState icon="projects" title="프로젝트 원장 읽기 실패" description="프로젝트 원장을 다시 읽은 뒤 상태 분포를 표시합니다." style={{ minHeight: 140 }} />
-          ) : projectPanel.reason === 'partial' ? (
-            <EmptyState icon="projects" title="프로젝트 부분 데이터" description="원장의 일부만 읽혀 빈 상태로 확정할 수 없습니다." style={{ minHeight: 140 }} />
-          ) : (
-            <EmptyState icon="projects" title="프로젝트 데이터 없음" description="프로젝트가 생기면 상태 분포가 표시됩니다." style={{ minHeight: 140 }} />
-          )}
-        </Card>
-        <Card>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>콘텐츠 파이프라인</div>
-            <SyncBadge state={contentPanel.state} />
-            <div style={{ flex: 1 }} />
-            <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/content/queue')}>열기</Button>
-          </div>
-          {contentPanel.showData ? (
-            <>
-              {contentPanel.reason === 'partial' && (
-                <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--fg-muted)' }}>콘텐츠 부분 데이터 · 읽힌 항목만 표시합니다.</div>
-              )}
-              <SeriesRows series={contentSummary.pipelineSeries} label="콘텐츠 파이프라인 분포" />
-            </>
-          ) : contentPanel.reason === 'preview' ? (
-            <EmptyState icon="content" title="콘텐츠 원장 미연결" description="콘텐츠 원장을 연결하면 파이프라인이 표시됩니다." style={{ minHeight: 140 }} />
-          ) : contentPanel.reason === 'error' ? (
-            <EmptyState icon="content" title="콘텐츠 원장 읽기 실패" description="콘텐츠 원장을 다시 읽은 뒤 파이프라인을 표시합니다." style={{ minHeight: 140 }} />
-          ) : contentPanel.reason === 'partial' ? (
-            <EmptyState icon="content" title="콘텐츠 부분 데이터" description="원장의 일부만 읽혀 빈 상태로 확정할 수 없습니다." style={{ minHeight: 140 }} />
-          ) : (
-            <EmptyState icon="content" title="콘텐츠 데이터 없음" description="콘텐츠 아이템이 생기면 파이프라인이 표시됩니다." style={{ minHeight: 140 }} />
-          )}
-        </Card>
-        <Card>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>브랜드별 최근 활동</div>
-            <SyncBadge state={sourceState('projects')} />
-            <div style={{ flex: 1 }} />
-            <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/projects')}>열기</Button>
-          </div>
-          {!projectActivity.brandActivity ? (
-            projectActivity.reason === 'preview' ? (
-              <EmptyState icon="brand" title="브랜드 활동 원장 미연결" description="프로젝트 원장을 연결하면 브랜드별 활동이 표시됩니다." style={{ minHeight: 140 }} />
-            ) : (
-              <EmptyState icon="brand" title="브랜드 활동 원장을 읽지 못했습니다" description="프로젝트 업데이트와 결정 원장을 다시 읽은 뒤 표시합니다." style={{ minHeight: 140 }} />
-            )
-          ) : brandActivity.length ? (
-            <BrandActivityBars brands={brandActivity} />
-          ) : (
-            <EmptyState icon="brand" title="브랜드 활동 없음" description="프로젝트 업데이트·결정이 쌓이면 브랜드별 비중이 표시됩니다." style={{ minHeight: 140 }} />
-          )}
-        </Card>
-      </div>
+      {/* 좌: 도메인 분포(무엇이 어디에 쌓여 있나) · 우: 흐름 레일(리듬 + 최근 활동).
+          이전에는 7개 카드가 3+3+1 균등 격자로 늘어서 위계가 없었다(§3.1 "5초 안에 무엇이
+          중요한지", §13 overpacked dashboard). 지표→추세→분포/흐름 순으로 눈이 흐르게 하고,
+          최하단에 묻혀 있던 최근 활동을 우측 레일로 끌어올린다. hub-grid--split은 ≤1200px에서
+          1열로 접힌다. */}
+      <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 'var(--gap)', alignItems: 'start' }}>
+        <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--gap)' }}>
+          <PanelCard panel="projects" availability={projectPanel} onOpen={() => onNavigate?.('dashboard/work/projects')}>
+            <DonutChart series={pms?.projectStatusSeries || []} centerLabel="프로젝트" />
+          </PanelCard>
 
-      <div className="hub-grid--three" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--gap)' }}>
-        <Card>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>파이프라인 단계</div>
-            <SyncBadge state={revenuePanel.state} />
-            <div style={{ flex: 1 }} />
-            <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/revenue/overview')}>Revenue 열기</Button>
-          </div>
-          {revenuePanel.showData ? (
-            <>
-              {revenuePanel.reason === 'partial' && (
-                <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--fg-muted)' }}>매출 원장 부분 데이터 · 읽힌 딜만 표시합니다.</div>
-              )}
-              <div style={{ display: 'flex', gap: 2, height: 24, borderRadius: 'var(--r-sm)', overflow: 'hidden', background: 'var(--surface-3)', padding: 2 }}>
-                {stageSeries.map((s) => (
-                  <div
-                    key={s.key}
-                    title={`${s.label} · ${s.count}건`}
-                    style={{
-                      flex: s.count || 0.0001,
-                      minWidth: s.count ? 3 : 0,
-                      borderRadius: 3,
-                      background: `var(--${s.color === 'neutral' ? 'fg-faint' : s.color === 'moon' ? 'moon-500' : s.color})`,
-                      transition: 'flex 260ms ease',
-                    }}
-                  />
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
-                {stageSeries.map((s) => (
-                  <div key={s.key} style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                    <Dot tone={s.color} />
-                    <span style={{ color: 'var(--fg)' }}>{s.label}</span>
-                    <span className="mono" style={{ color: 'var(--fg-faint)' }}>{s.count}건 · {fmtMoney(s.sum)}</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : revenuePanel.reason === 'preview' ? (
-            <EmptyState icon="deals" title="매출 원장 미연결" description="매출 원장을 연결하면 파이프라인 단계가 표시됩니다." style={{ minHeight: 140 }} />
-          ) : revenuePanel.reason === 'error' ? (
-            <EmptyState icon="deals" title="매출 원장 읽기 실패" description="매출 원장을 다시 읽은 뒤 파이프라인을 표시합니다." style={{ minHeight: 140 }} />
-          ) : revenuePanel.reason === 'partial' ? (
-            <EmptyState icon="deals" title="매출 원장 부분 데이터" description="원장의 일부만 읽혀 딜이 없다고 확정할 수 없습니다." style={{ minHeight: 140 }} />
-          ) : (
-            <EmptyState icon="deals" title="딜이 없습니다" description="파이프라인에 딜이 생기면 단계별 분포가 표시됩니다." style={{ minHeight: 140 }} />
-          )}
-        </Card>
+          <PanelCard panel="content" availability={contentPanel} onOpen={() => onNavigate?.('dashboard/content/queue')}>
+            <SeriesRows series={contentSummary?.pipelineSeries || []} label="콘텐츠 파이프라인 분포" />
+          </PanelCard>
 
-        <Card>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>자동화 현황</div>
-            <SyncBadge state={automationPanel.state} />
-            <div style={{ flex: 1 }} />
-            <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/automations/runs')}>Runs 열기</Button>
-          </div>
-          {automationPanel.showData ? (
-            <>
-              {automationPanel.reason === 'partial' && (
-                <div role="status" style={{ marginBottom: 10, fontSize: 11, color: 'var(--fg-muted)' }}>자동화 원장 부분 데이터 · 읽힌 지표만 표시합니다.</div>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {automationMetrics.map((metric) => (
-                  <div key={metric.key} style={{ padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 'var(--r-sm)', border: '1px solid var(--line-soft)' }}>
-                    <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{metric.label}</div>
-                    <div className="stat" style={{ fontSize: 18, fontWeight: 600, marginTop: 4, color: metric.tone === 'neutral' ? 'var(--fg-faint)' : `var(--${metric.tone})` }}>{metric.value}</div>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : automationPanel.reason === 'preview' ? (
-            <EmptyState icon="automations" title="자동화 원장 미연결" description="자동화 원장을 연결하면 실행 현황이 표시됩니다." style={{ minHeight: 140 }} />
-          ) : automationPanel.reason === 'error' ? (
-            <EmptyState icon="automations" title="자동화 원장 읽기 실패" description="자동화 원장을 다시 읽은 뒤 실행 현황을 표시합니다." style={{ minHeight: 140 }} />
-          ) : automationPanel.reason === 'partial' ? (
-            <EmptyState icon="automations" title="자동화 원장 부분 데이터" description="원장의 일부만 읽혀 실행 수를 확정할 수 없습니다." style={{ minHeight: 140 }} />
-          ) : (
-            <EmptyState icon="automations" title="자동화 데이터 없음" description="자동화가 생기면 실행 현황이 표시됩니다." style={{ minHeight: 140 }} />
-          )}
-        </Card>
+          <PanelCard panel="revenue" availability={revenuePanel} onOpen={() => onNavigate?.('dashboard/revenue/overview')} openLabel="Revenue 열기">
+            {/* 딜 단계도 콘텐츠와 같은 퍼널이므로 같은 표현을 쓴다 — 이전에는 세그먼트 바 +
+                별도 범례라 같은 성격의 두 패널을 나란히 두고도 비교가 안 됐다. */}
+            <SeriesRows
+              series={stageSeries.map((s) => ({ key: s.key, label: s.label, value: s.count, meta: fmtMoney(s.sum) }))}
+              label="딜 파이프라인 단계 분포"
+            />
+          </PanelCard>
 
-        <RhythmCard rhythm={ledger.rhythm} state={ledger.rhythm?.state || sourceState('work')} onNavigate={onNavigate} />
-      </div>
-
-      <div>
-        <SectionTitle right={<span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>클릭하면 해당 서피스로 이동</span>}>최근 활동</SectionTitle>
-        <Card>
-          {!recentActivityTruth.complete && (
-            <div role="status" style={{ padding: '10px 12px', marginBottom: activity.length ? 8 : 0, border: '1px dashed var(--line)', borderRadius: 'var(--r-sm)', color: 'var(--fg-muted)', fontSize: 11.5 }}>
-              {recentActivityTruth.reason === 'preview'
-                ? `최근 활동 원장 미연결 · ${recentActivityTruth.unavailableSources.join(', ')} 원장을 연결하면 빈 상태를 확인할 수 있습니다.`
-                : recentActivityTruth.reason === 'partial'
-                  ? `최근 활동 원장 부분 데이터 · ${recentActivityTruth.unavailableSources.join(', ')} 기록이 일부만 읽혔습니다.`
-                  : `최근 활동 원장 일부를 읽지 못했습니다 · ${recentActivityTruth.unavailableSources.join(', ')} 기록을 다시 확인하세요.`}
+          <PanelCard panel="automations" availability={automationPanel} onOpen={() => onNavigate?.('dashboard/automations/runs')} openLabel="Runs 열기">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {automationMetrics.map((metric) => (
+                <div key={metric.key} style={{ padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 'var(--r-sm)', border: '1px solid var(--line-soft)' }}>
+                  <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{metric.label}</div>
+                  {/* truth-model tone은 정직성 신호(성공=live 증명)로 유지하고, 색은 §5.2대로
+                      danger만 칠한다 — 실패 0을 초록으로 축하하지 않는다. */}
+                  <div className="stat" style={{ fontSize: 18, fontWeight: 600, marginTop: 4, color: metric.tone === 'danger' ? 'var(--danger)' : metric.tone === 'neutral' ? 'var(--fg-faint)' : 'var(--fg)' }}>{metric.value}</div>
+                </div>
+              ))}
             </div>
-          )}
-          {activity.length === 0 ? (
-            recentActivityTruth.complete ? (
-              <EmptyState icon="clock" title="최근 활동이 없습니다" description="작업 업데이트, 결정, 발행, 자동화 실행이 기록되면 여기에 모입니다." style={{ minHeight: 160 }} />
-            ) : null
-          ) : (
-            <>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {visibleActivity.map((item, i) => (
-                  <React.Fragment key={item.id}>
-                    <ActivityRow item={item} onNavigate={onNavigate} />
-                    {i < visibleActivity.length - 1 && <Divider />}
-                  </React.Fragment>
-                ))}
-              </div>
-              {activity.length > visibleActivity.length && (
-                <Button variant="ghost" size="sm" icon="chevronD" onClick={() => setActivityExpanded(true)} style={{ marginTop: 8 }}>
-                  활동 {activity.length - visibleActivity.length}건 더 보기
-                </Button>
+          </PanelCard>
+
+          <div style={{ gridColumn: '1 / -1' }}>
+            <PanelCard panel="brand" availability={brandPanel} onOpen={() => onNavigate?.('dashboard/work/projects')}>
+              <BrandActivityBars brands={brandActivity} />
+            </PanelCard>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)', minWidth: 0 }}>
+          <RhythmCard rhythm={ledger.rhythm} state={ledger.rhythm?.state || sourceState('work')} onNavigate={onNavigate} />
+
+          <div>
+            <SectionTitle right={<span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>클릭하면 이동</span>}>최근 활동</SectionTitle>
+            <Card>
+              {!recentActivityTruth.complete && (
+                <div role="status" style={{ padding: '10px 12px', marginBottom: activity.length ? 8 : 0, border: '1px dashed var(--line)', borderRadius: 'var(--r-sm)', color: 'var(--fg-muted)', fontSize: 11.5 }}>
+                  {recentActivityTruth.reason === 'preview'
+                    ? `최근 활동 원장 미연결 · ${recentActivityTruth.unavailableSources.join(', ')} 원장을 연결하면 빈 상태를 확인할 수 있습니다.`
+                    : recentActivityTruth.reason === 'partial'
+                      ? `최근 활동 원장 부분 데이터 · ${recentActivityTruth.unavailableSources.join(', ')} 기록이 일부만 읽혔습니다.`
+                      : `최근 활동 원장 일부를 읽지 못했습니다 · ${recentActivityTruth.unavailableSources.join(', ')} 기록을 다시 확인하세요.`}
+                </div>
               )}
-            </>
-          )}
-        </Card>
+              {activity.length === 0 ? (
+                recentActivityTruth.complete ? (
+                  <EmptyState icon="clock" title="최근 활동이 없습니다" description="작업 업데이트, 결정, 발행, 자동화 실행이 기록되면 여기에 모입니다." style={{ minHeight: 160 }} />
+                ) : null
+              ) : (
+                <>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {visibleActivity.map((item, i) => (
+                      <React.Fragment key={item.id}>
+                        <ActivityRow item={item} onNavigate={onNavigate} />
+                        {i < visibleActivity.length - 1 && <Divider />}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                  {activity.length > visibleActivity.length && (
+                    <Button variant="ghost" size="sm" icon="chevronD" onClick={() => setActivityExpanded(true)} style={{ marginTop: 8 }}>
+                      활동 {activity.length - visibleActivity.length}건 더 보기
+                    </Button>
+                  )}
+                </>
+              )}
+            </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

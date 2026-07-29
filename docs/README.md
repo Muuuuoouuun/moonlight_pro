@@ -1,7 +1,7 @@
 # Moonlight 문서 지도
 
 > 상태: ACTIVE DOCUMENTATION INDEX
-> 마지막 정리: 2026-07-16
+> 마지막 정리: 2026-07-16 (Phase 1C 상태 행만 2026-07-29 갱신)
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -45,7 +45,7 @@
 | Phase 0 신뢰 기준선 | 완료·푸시 | `5c9ccc2`, `codex/moonlight-phase0-trust` |
 | Phase 1A Durable Task Loop | 완료 | project/task durable create·update·status·reload, 홈 Quick Capture의 task/work-order 두 destination, 공통 receipt의 duplicate/conflict, task-only Today 완료·재조회를 live 검증 |
 | Phase 1B Action Desk | 부분 작동 | Daily Brief 6개 ledger와 owner-verified 집중 고객 3건은 live. 정식 Attention adapter, Calendar agenda, source timeout/partial 계약은 남음 |
-| Phase 1C Contact Outcome Loop | 미완료 | 기존 `outreach_outcomes` 기록은 있으나 요약·반응·다음 task를 묶는 원자적 `record_contact_outcome_v1`은 없음 |
+| Phase 1C Contact Outcome Loop | 부분 작동 | `record_contact_outcome_v1` 원자 RPC(마이그레이션 `20260716_0018`)와 고객 DB 컨택 완료 시트는 live. 고객 연락(followups) 인라인 폼은 여전히 비원자 `outreach_outcomes` 단건 insert 경로를 사용 — 두 경로 중 정본 화면은 미정(2026-07-29 운영자 확인) |
 | ClassIn 전체 동기화·음성 AI·콘텐츠 직접 발행 | 보류 | 별도 하드 게이트 필요 |
 
 Phase 0는 Content canonical contract, write 응답 분류, honest empty/error UI, 사용자 identity, Content 승인 원자화를 포함한다. 당시 검증 기준선은 Node test 50/50, contract check, typecheck, Hub/Engine build 통과다. 2026-07-15 현재 저장소 검증은 102/102이며 Phase 1A 완료를 뜻한다. Phase 1B·1C는 아직 남아 있으므로 Phase 1 전체 완료로 해석하지 않는다.

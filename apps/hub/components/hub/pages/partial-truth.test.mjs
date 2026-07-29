@@ -8,6 +8,71 @@ const dailyBriefSource = await readFile(new URL("./daily-brief.jsx", import.meta
 const workSource = await readFile(new URL("./work.jsx", import.meta.url), "utf8");
 const overviewTruth = await import("./overview-truth.js").catch(() => null);
 
+// 기간 토글이 활동 차트만 제어하고 KPI는 서버의 고정 7일 집계에 묶여 있던 버그
+// (30일을 골라도 KPI는 "최근 7일" 그대로)를 잠근다.
+test("overview KPIs follow the selected period instead of a fixed 7-day window", () => {
+  const bucket = (work) => ({ work, decisions: 0, content: 0 });
+  // 30일치 버킷: 최근 7일은 1씩, 그 이전 23일은 10씩.
+  const activitySeries = [
+    ...Array.from({ length: 23 }, () => bucket(10)),
+    ...Array.from({ length: 7 }, () => bucket(1)),
+  ];
+  const args = {
+    kpis: { updatesThisWeek: 7, decisionsThisWeek: 0, publishedThisWeek: 0, activeProjects: 1, blockedProjects: 0 },
+    activitySeries,
+    status: "live",
+    sources: [
+      { key: "projects", state: "live", failedSources: [] },
+      { key: "content", state: "live", failedSources: [] },
+    ],
+  };
+
+  const sevenDay = overviewTruth.buildOverviewKpiCards({ ...args, days: 7 });
+  assert.equal(sevenDay[0].value, 7, "7일 창은 최근 7개 버킷(1×7)만 더해야 한다");
+  assert.match(sevenDay[0].label, /최근 7일/);
+
+  const thirtyDay = overviewTruth.buildOverviewKpiCards({ ...args, days: 30 });
+  assert.equal(thirtyDay[0].value, 237, "30일 창은 23×10 + 7×1 = 237이어야 한다");
+  assert.match(thirtyDay[0].label, /최근 30일/, "라벨도 선택한 기간을 따라가야 한다");
+});
+
+test("overview KPI window refuses to sum across an unreadable bucket", () => {
+  const activitySeries = [
+    { work: null, decisions: 0, content: 0 },
+    ...Array.from({ length: 6 }, () => ({ work: 5, decisions: 0, content: 0 })),
+  ];
+  const cards = overviewTruth.buildOverviewKpiCards({
+    // 서버의 고정 집계는 값이 있지만, 창 안에 읽지 못한 버킷이 있으면 합계를 만들지 않는다.
+    kpis: { updatesThisWeek: 30, decisionsThisWeek: 0, publishedThisWeek: 0, activeProjects: 1, blockedProjects: 0 },
+    activitySeries,
+    status: "partial",
+    days: 7,
+    sources: [
+      { key: "projects", state: "partial", failedSources: ["project_updates"] },
+      { key: "content", state: "live", failedSources: [] },
+    ],
+  });
+
+  assert.equal(cards[0].value, "—", "부분 데이터를 합쳐 확정 숫자처럼 보여주면 안 된다");
+});
+
+test("overview KPIs fall back to the server 7-day count when no daily series is available", () => {
+  const cards = overviewTruth.buildOverviewKpiCards({
+    kpis: { updatesThisWeek: 4, decisionsThisWeek: 2, publishedThisWeek: 1, activeProjects: 3, blockedProjects: 0 },
+    activitySeries: [],
+    status: "live",
+    days: 30,
+    sources: [
+      { key: "projects", state: "live", failedSources: [] },
+      { key: "content", state: "live", failedSources: [] },
+    ],
+  });
+
+  assert.equal(cards[0].value, 4);
+  // 창을 못 만들었으면 라벨도 7일로 되돌려 숫자와 기간 표기가 어긋나지 않게 한다.
+  assert.match(cards[0].label, /최근 7일/);
+});
+
 test("shared truth badge maps partial explicitly without warning color", () => {
   assert.match(primitivesSource, /partial:\s*\{\s*tone:\s*["']neutral["'],\s*label:\s*["']일부 데이터["']/);
   assert.match(primitivesSource, /export function SyncBadge[\s\S]*?<TruthBadge state=\{state\}/);
