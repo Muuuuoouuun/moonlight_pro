@@ -239,7 +239,7 @@ export function AgentsChat({ onNavigate }) {
           <div style={{ maxWidth: 720, margin: '0 auto', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', padding: 10 }}>
             <textarea value={input} onChange={e => setInput(e.target.value)} placeholder={`Message ${persona.name}…`} style={{
               width: '100%', minHeight: 52, resize: 'none',
-              background: 'transparent', border: 'none', outline: 'none',
+              background: 'transparent', border: 'none',
               color: 'var(--fg)', fontSize: 13.5, lineHeight: 1.5,
             }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>

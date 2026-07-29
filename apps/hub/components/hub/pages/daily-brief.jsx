@@ -224,7 +224,7 @@ function QuickTaskCapture({ onNavigate, onSaved }) {
               width: '100%', padding: '10px 12px', fontSize: 16, lineHeight: 1.45,
               color: 'var(--fg)', background: 'var(--surface-2)',
               border: `1px solid ${state.status === 'error' ? 'var(--danger-line)' : 'var(--line-soft)'}`,
-              borderRadius: 'var(--r-sm)', outline: 'none',
+              borderRadius: 'var(--r-sm)',
             }}
           />
         </div>

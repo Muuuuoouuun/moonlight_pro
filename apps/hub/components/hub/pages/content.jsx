@@ -682,6 +682,7 @@ export function Studio({ workspace }) {
             </div>
             <div className="scroll-y" style={{ flex: 1, padding: '40px 20px' }}>
               <div style={{ maxWidth: 680, margin: '0 auto' }}>
+                {/* 에디터 캔버스 예외: 타이틀·본문은 캐럿이 포커스 표식 (my-work.jsx:842 패턴) — outline 제거 유지 */}
                 <input value={title} onChange={e => { setTitle(e.target.value); setDirty(true); }} style={{
                   width: '100%', background: 'transparent', border: 'none', outline: 'none',
                   color: 'var(--fg)', fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4,
@@ -772,10 +773,10 @@ export function Studio({ workspace }) {
                 <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 10 }}>Slide {activeSlide + 1}</div>
                 <label style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Title</label>
                 <input value={cur.title} onChange={e => updateSlide(activeSlide, { title: e.target.value })}
-                  style={{ width: '100%', marginTop: 4, marginBottom: 12, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', fontSize: 13, outline: 'none' }} />
+                  style={{ width: '100%', marginTop: 4, marginBottom: 12, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', fontSize: 13 }} />
                 <label style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Subtitle</label>
                 <input value={cur.sub} onChange={e => updateSlide(activeSlide, { sub: e.target.value })}
-                  style={{ width: '100%', marginTop: 4, marginBottom: 12, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', fontSize: 13, outline: 'none' }} />
+                  style={{ width: '100%', marginTop: 4, marginBottom: 12, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', fontSize: 13 }} />
                 <label style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Background</label>
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, marginBottom: 14, flexWrap: 'wrap' }}>
                   {SLIDE_SWATCHES.map(c => (
@@ -989,7 +990,7 @@ export function Studio({ workspace }) {
         <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)' }}>
             <Iconed name="sparkle" size={12} style={{ color: 'var(--moon-300)' }} />
-            <input placeholder={mode === 'blog' ? 'Ask Writer…' : 'Ask Studio — slide copy, layout…'} style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--fg)', fontSize: 12 }} />
+            <input placeholder={mode === 'blog' ? 'Ask Writer…' : 'Ask Studio — slide copy, layout…'} style={{ flex: 1, background: 'transparent', border: 'none', color: 'var(--fg)', fontSize: 12 }} />
             <Kbd>⏎</Kbd>
           </div>
         </div>

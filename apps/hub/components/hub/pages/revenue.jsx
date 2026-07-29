@@ -931,7 +931,7 @@ function DealTaskPanel({ deal, onSaved }) {
             style={{
               height: 30, padding: '0 10px', fontSize: 12,
               background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
-              borderRadius: 'var(--r-sm)', outline: 'none', color: 'var(--fg)',
+              borderRadius: 'var(--r-sm)', color: 'var(--fg)',
             }}
           />
         </>
@@ -1630,7 +1630,7 @@ function LogComposer({ onLog, preset }) {
         rows={2}
         style={{
           width: '100%', resize: 'vertical',
-          background: 'transparent', border: 'none', outline: 'none',
+          background: 'transparent', border: 'none',
           color: 'var(--fg)', fontSize: 12.5, fontFamily: 'inherit',
           lineHeight: 1.5,
         }}
@@ -1643,7 +1643,6 @@ function LogComposer({ onLog, preset }) {
             height: 26, padding: '0 8px', fontSize: 11.5,
             background: 'var(--surface-3)', color: 'var(--fg)',
             border: '1px solid var(--line)', borderRadius: 'var(--r-sm)',
-            outline: 'none',
           }}
         >
           {Object.keys(ACT_LABEL).map(k => <option key={k} value={k}>{ACT_LABEL[k]}</option>)}
@@ -1903,7 +1902,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
                 rows={2}
                 style={{
                   width: '100%', resize: 'vertical',
-                  background: 'transparent', border: 'none', outline: 'none',
+                  background: 'transparent', border: 'none',
                   color: 'var(--fg)', fontSize: 12.5, fontFamily: 'inherit', lineHeight: 1.5,
                 }}
               />
