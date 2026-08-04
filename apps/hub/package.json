@@ -9,6 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@com-moon/supabase-rest": "*",
     "@com-moon/ui": "*",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "next": "^16.2.4",

@@ -10,5 +10,8 @@
     ".": "./index.ts",
     "./logger": "./logger.ts",
     "./types": "./types.ts"
+  },
+  "dependencies": {
+    "@com-moon/supabase-rest": "*"
   }
 }

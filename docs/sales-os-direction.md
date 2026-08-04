@@ -132,6 +132,12 @@ Zoom 대체재·전자칠판 스펙표로 설명하면 가치가 작아짐.
 | v1.4 | classin_home CRM 읽어와 통합(내 ownerId 딜을 한 화면) | 대기 |
 | vNext | 네이버 공식 API 시드(법적) · 광고비/퍼널 연동(classin_home 재사용) · 5팀 오케스트레이션 + agents.jsx 토큰화 · 인스타/스레드 자동 발행 · 5배 계기판 | 보류 |
 
+### 7.1 개인 Sales OS 적용 문서
+
+- [Personal Sales OS 넛지 레이어](sales-os/personal-sales-os-nudge-layer.md) — CRM을 기록장이 아니라 매일 매출 행동을 만드는 OS로 적용하는 실행 기획.
+- [Personal Sales OS 적용방안](sales-os/personal-sales-os-application-plan.md) — 폰 연동 전, Next Action/Nudge/Sales Inbox를 Hub에 적용하는 구현 단위 계획.
+- [Phone Bridge 우선 기획서](sales-os/phone-bridge-priority-plan.md) — 전화/문자/카카오톡 접점을 Sales Inbox로 가져오는 별도 하위 시스템 기획.
+
 ---
 
 ## 8. v1.1 구현 계획 (실행 준비)

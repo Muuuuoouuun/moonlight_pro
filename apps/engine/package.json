@@ -16,6 +16,7 @@
   "dependencies": {
     "@com-moon/content-manager": "*",
     "@com-moon/hub-gateway": "*",
+    "@com-moon/supabase-rest": "*",
     "next": "^16.2.4",
     "react": "^18",
     "react-dom": "^18"

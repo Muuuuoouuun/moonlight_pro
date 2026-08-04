@@ -1,291 +1,57 @@
-interface SupabaseRestConfig {
-  url: string;
-  apiKey: string;
+// Engine Supabase access — delegates to the shared @com-moon/supabase-rest
+// client (timeouts, bulk writes, duplicate detection, error logging live there).
+// Kept as a module so engine call sites keep their import path and the loose
+// `any` row typing they were written against.
+import {
+  checkSupabaseRest as sharedCheckSupabaseRest,
+  countSupabaseRows as sharedCountSupabaseRows,
+  fetchSupabaseRows as sharedFetchSupabaseRows,
+  insertSupabaseRecord as sharedInsertSupabaseRecord,
+  updateSupabaseRecord as sharedUpdateSupabaseRecord,
+  upsertSupabaseRecords as sharedUpsertSupabaseRecords,
+  type SupabaseFilter,
+  type SupabaseHealthResult,
+  type SupabaseQueryOptions,
+  type SupabaseUpsertOptions,
+  type SupabaseWriteOptions,
+  type SupabaseWriteResult,
+} from "@com-moon/supabase-rest";
+
+export { inFilter } from "@com-moon/supabase-rest";
+
+export function checkSupabaseRest(table = "projects"): Promise<SupabaseHealthResult> {
+  return sharedCheckSupabaseRest(table);
 }
 
-interface SupabaseQueryOptions {
-  select?: string;
-  filters?: Array<[string, string]>;
-  limit?: number;
-  order?: string;
+export function fetchSupabaseRows(table: string, options: SupabaseQueryOptions = {}): Promise<any[] | null> {
+  return sharedFetchSupabaseRows<any>(table, options);
 }
 
-function resolveSupabaseRestConfig(): SupabaseRestConfig | null {
-  const url = process.env.SUPABASE_URL?.trim();
-  const apiKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
-    process.env.SUPABASE_ANON_KEY?.trim();
-
-  if (!url || !apiKey) {
-    return null;
-  }
-
-  return {
-    url: url.replace(/\/$/, ""),
-    apiKey,
-  };
+export function countSupabaseRows(table: string, filters: SupabaseFilter[] = []): Promise<number | null> {
+  return sharedCountSupabaseRows(table, filters);
 }
 
-function isOpaqueSupabaseApiKey(apiKey: string) {
-  return apiKey.startsWith("sb_publishable_") || apiKey.startsWith("sb_secret_");
-}
-
-function makeHeaders(apiKey: string, options: { contentType?: string; prefer?: string } = {}) {
-  const headers: Record<string, string> = {
-    apikey: apiKey,
-  };
-
-  if (options.contentType) {
-    headers["content-type"] = options.contentType;
-  }
-
-  if (!isOpaqueSupabaseApiKey(apiKey)) {
-    headers.authorization = `Bearer ${apiKey}`;
-  }
-
-  if (options.prefer) {
-    headers.prefer = options.prefer;
-  }
-
-  return headers;
-}
-
-function buildRestUrl(baseUrl: string, table: string, options: SupabaseQueryOptions = {}) {
-  const { select = "*", filters = [], limit, order } = options;
-  const params = new URLSearchParams();
-
-  params.set("select", select);
-
-  if (typeof limit === "number") {
-    params.set("limit", String(limit));
-  }
-
-  if (order) {
-    params.set("order", order);
-  }
-
-  filters.forEach(([key, value]) => {
-    params.append(key, value);
-  });
-
-  return `${baseUrl}/rest/v1/${table}?${params.toString()}`;
-}
-
-function buildMutationUrl(baseUrl: string, table: string, filters: Array<[string, string]> = []) {
-  const params = new URLSearchParams();
-
-  filters.forEach(([key, value]) => {
-    params.append(key, value);
-  });
-
-  const query = params.toString();
-  return `${baseUrl}/rest/v1/${table}${query ? `?${query}` : ""}`;
-}
-
-function extractCount(contentRange: string | null) {
-  if (!contentRange) {
-    return null;
-  }
-
-  const [, count] = contentRange.split("/");
-  const parsed = Number.parseInt(count || "", 10);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-export function inFilter(values: string[]) {
-  return `in.(${values.join(",")})`;
-}
-
-export async function checkSupabaseRest(table = "projects") {
-  const config = resolveSupabaseRestConfig();
-
-  if (!config) {
-    return {
-      configured: false,
-      reachable: false,
-      status: null,
-      reason: "missing-config",
-    };
-  }
-
-  try {
-    const response = await fetch(buildRestUrl(config.url, table, {
-      select: "id",
-      limit: 1,
-    }), {
-      headers: makeHeaders(config.apiKey),
-      cache: "no-store",
-    });
-
-    return {
-      configured: true,
-      reachable: response.ok,
-      status: response.status,
-      reason: response.ok ? "ok" : `http-${response.status}`,
-    };
-  } catch (error) {
-    return {
-      configured: true,
-      reachable: false,
-      status: null,
-      reason: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-export async function fetchSupabaseRows(table: string, options: SupabaseQueryOptions = {}) {
-  const config = resolveSupabaseRestConfig();
-
-  if (!config) {
-    return null;
-  }
-
-  try {
-    const response = await fetch(buildRestUrl(config.url, table, options), {
-      headers: makeHeaders(config.apiKey),
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return await response.json();
-  } catch {
-    return null;
-  }
-}
-
-export async function countSupabaseRows(table: string, filters: Array<[string, string]> = []) {
-  const config = resolveSupabaseRestConfig();
-
-  if (!config) {
-    return null;
-  }
-
-  try {
-    const response = await fetch(
-      buildRestUrl(config.url, table, {
-        select: "id",
-        filters,
-        limit: 1,
-      }),
-      {
-        headers: {
-          ...makeHeaders(config.apiKey, { prefer: "count=exact" }),
-          Range: "0-0",
-        },
-        cache: "no-store",
-      },
-    );
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return extractCount(response.headers.get("content-range"));
-  } catch {
-    return null;
-  }
-}
-
-export async function insertSupabaseRecord(table: string, record: Record<string, unknown>) {
-  const config = resolveSupabaseRestConfig();
-
-  if (!config) {
-    return {
-      persisted: false,
-      reason: "missing-config",
-    };
-  }
-
-  try {
-    const response = await fetch(buildMutationUrl(config.url, table), {
-      method: "POST",
-      headers: makeHeaders(config.apiKey, {
-        contentType: "application/json",
-        prefer: "return=minimal",
-      }),
-      body: JSON.stringify(record),
-    });
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      const isDuplicate =
-        response.status === 409 &&
-        (detail.includes("23505") ||
-          detail.includes("duplicate key value") ||
-          detail.includes("idx_webhook_events_provider_event"));
-
-      return {
-        persisted: false,
-        reason: isDuplicate ? "duplicate" : `http-${response.status}`,
-        detail,
-      };
-    }
-
-    return {
-      persisted: true,
-      reason: "ok",
-    };
-  } catch (error) {
-    return {
-      persisted: false,
-      reason: "request-failed",
-      detail: String(error),
-    };
-  }
-}
-
-export async function updateSupabaseRecord(
+export function insertSupabaseRecord(
   table: string,
-  filters: Array<[string, string]>,
+  record: Record<string, unknown> | Array<Record<string, unknown>>,
+  options: SupabaseWriteOptions = {},
+): Promise<SupabaseWriteResult<any>> {
+  return sharedInsertSupabaseRecord<any>(table, record, options);
+}
+
+export function upsertSupabaseRecords(
+  table: string,
+  records: Record<string, unknown> | Array<Record<string, unknown>>,
+  options: SupabaseUpsertOptions = {},
+): Promise<SupabaseWriteResult<any>> {
+  return sharedUpsertSupabaseRecords<any>(table, records, options);
+}
+
+export function updateSupabaseRecord(
+  table: string,
+  filters: SupabaseFilter[],
   record: Record<string, unknown>,
-) {
-  const config = resolveSupabaseRestConfig();
-
-  if (!config) {
-    return {
-      persisted: false,
-      reason: "missing-config",
-    };
-  }
-
-  if (!filters.length) {
-    return {
-      persisted: false,
-      reason: "missing-filters",
-    };
-  }
-
-  try {
-    const response = await fetch(buildMutationUrl(config.url, table, filters), {
-      method: "PATCH",
-      headers: makeHeaders(config.apiKey, {
-        contentType: "application/json",
-        prefer: "return=minimal",
-      }),
-      body: JSON.stringify(record),
-    });
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      return {
-        persisted: false,
-        reason: `http-${response.status}`,
-        detail,
-      };
-    }
-
-    return {
-      persisted: true,
-      reason: "ok",
-    };
-  } catch (error) {
-    return {
-      persisted: false,
-      reason: "request-failed",
-      detail: String(error),
-    };
-  }
+  options: SupabaseWriteOptions = {},
+): Promise<SupabaseWriteResult<any>> {
+  return sharedUpdateSupabaseRecord<any>(table, filters, record, options);
 }

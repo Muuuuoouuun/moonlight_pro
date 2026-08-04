@@ -1,56 +1,23 @@
+// Hub write layer — persistence delegates to the shared @com-moon/supabase-rest
+// client; this module keeps the hub-specific record builders and the engine
+// webhook bridge.
+export {
+  deleteSupabaseRecord,
+  insertSupabaseRecord,
+  makeSupabaseHeaders,
+  resolveDefaultWorkspaceId,
+  resolveSupabaseConfig,
+  updateSupabaseRecord,
+  upsertSupabaseRecords,
+} from "@com-moon/supabase-rest";
+
+import { resolveDefaultWorkspaceId } from "@com-moon/supabase-rest";
+
 const PROJECT_UPDATE_STATUSES = new Set(["reported", "active", "blocked", "done"]);
 const ROUTINE_CHECK_TYPES = new Set(["morning", "midday", "evening", "weekly"]);
 const ROUTINE_CHECK_STATUSES = new Set(["pending", "done", "skipped", "blocked"]);
 const SHARED_WEBHOOK_SECRET_HEADER = "x-com-moon-shared-secret";
 const PROJECT_WEBHOOK_TARGETS = new Set(["generic", "moltbot"]);
-
-export function resolveSupabaseConfig() {
-  const url = process.env.SUPABASE_URL?.trim();
-  const apiKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
-    process.env.SUPABASE_ANON_KEY?.trim();
-
-  if (!url || !apiKey) {
-    return null;
-  }
-
-  return {
-    url: url.replace(/\/$/, ""),
-    apiKey,
-  };
-}
-
-function isOpaqueSupabaseApiKey(apiKey) {
-  return apiKey.startsWith("sb_publishable_") || apiKey.startsWith("sb_secret_");
-}
-
-export function makeSupabaseHeaders(apiKey, { contentType, prefer } = {}) {
-  const headers = {
-    apikey: apiKey,
-  };
-
-  if (contentType) {
-    headers["content-type"] = contentType;
-  }
-
-  if (!isOpaqueSupabaseApiKey(apiKey)) {
-    headers.authorization = `Bearer ${apiKey}`;
-  }
-
-  if (prefer) {
-    headers.prefer = prefer;
-  }
-
-  return headers;
-}
-
-export function resolveDefaultWorkspaceId() {
-  return (
-    process.env.COM_MOON_DEFAULT_WORKSPACE_ID?.trim() ||
-    process.env.DEFAULT_WORKSPACE_ID?.trim() ||
-    ""
-  );
-}
 
 function resolveEngineUrl() {
   return (process.env.COM_MOON_ENGINE_URL?.trim() || "").replace(/\/$/, "");
@@ -182,185 +149,6 @@ function buildProjectWebhookRequestBody(payload, target) {
       origin: "hub-webhook-test",
     },
   };
-}
-
-export async function insertSupabaseRecord(table, record, options = {}) {
-  const config = resolveSupabaseConfig();
-  const returnRepresentation = options.returnRepresentation === true;
-  const select = typeof options.select === "string" && options.select.trim()
-    ? options.select.trim()
-    : "";
-
-  if (!config) {
-    return {
-      persisted: false,
-      reason: "missing-config",
-    };
-  }
-
-  try {
-    const response = await fetch(`${config.url}/rest/v1/${table}${returnRepresentation && select ? `?select=${encodeURIComponent(select)}` : ""}`, {
-      method: "POST",
-      headers: makeSupabaseHeaders(config.apiKey, {
-        contentType: "application/json",
-        prefer: returnRepresentation ? "return=representation" : "return=minimal",
-      }),
-      body: JSON.stringify(record),
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      return {
-        persisted: false,
-        reason: `http-${response.status}`,
-        detail,
-      };
-    }
-
-    if (returnRepresentation) {
-      const rows = await response.json().catch(() => null);
-      const row = Array.isArray(rows) ? rows[0] || null : null;
-      return {
-        persisted: true,
-        reason: "ok",
-        record: row,
-        id: row?.id || null,
-      };
-    }
-
-    return {
-      persisted: true,
-      reason: "ok",
-    };
-  } catch (error) {
-    return {
-      persisted: false,
-      reason: "request-failed",
-      detail: String(error),
-    };
-  }
-}
-
-function buildFilterQuery(filters = []) {
-  const params = new URLSearchParams();
-
-  filters.forEach(([key, value]) => {
-    params.append(key, value);
-  });
-
-  const query = params.toString();
-  return query ? `?${query}` : "";
-}
-
-export async function updateSupabaseRecord(table, filters = [], record = {}, options = {}) {
-  const config = resolveSupabaseConfig();
-  const returnRepresentation = options.returnRepresentation === true;
-  const select = typeof options.select === "string" && options.select.trim()
-    ? options.select.trim()
-    : "";
-
-  if (!config) {
-    return {
-      persisted: false,
-      reason: "missing-config",
-    };
-  }
-
-  try {
-    const queryFilters = [...filters];
-    if (returnRepresentation && select) {
-      queryFilters.unshift(["select", select]);
-    }
-
-    const response = await fetch(`${config.url}/rest/v1/${table}${buildFilterQuery(queryFilters)}`, {
-      method: "PATCH",
-      headers: makeSupabaseHeaders(config.apiKey, {
-        contentType: "application/json",
-        prefer: returnRepresentation ? "return=representation" : "return=minimal",
-      }),
-      body: JSON.stringify(record),
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      return {
-        persisted: false,
-        reason: `http-${response.status}`,
-        detail,
-      };
-    }
-
-    if (returnRepresentation) {
-      const rows = await response.json().catch(() => null);
-      const row = Array.isArray(rows) ? rows[0] || null : null;
-      return {
-        persisted: Boolean(row),
-        reason: row ? "ok" : "no-matching-row",
-        record: row,
-        id: row?.id || null,
-      };
-    }
-
-    return {
-      persisted: true,
-      reason: "ok",
-    };
-  } catch (error) {
-    return {
-      persisted: false,
-      reason: "request-failed",
-      detail: String(error),
-    };
-  }
-}
-
-export async function deleteSupabaseRecord(table, filters = []) {
-  const config = resolveSupabaseConfig();
-
-  if (!config) {
-    return {
-      persisted: false,
-      reason: "missing-config",
-    };
-  }
-
-  if (!Array.isArray(filters) || filters.length === 0) {
-    // Refuse an unfiltered DELETE — that would wipe the whole table.
-    return {
-      persisted: false,
-      reason: "missing-filter",
-    };
-  }
-
-  try {
-    const response = await fetch(`${config.url}/rest/v1/${table}${buildFilterQuery(filters)}`, {
-      method: "DELETE",
-      headers: makeSupabaseHeaders(config.apiKey, { prefer: "return=minimal" }),
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      return {
-        persisted: false,
-        reason: `http-${response.status}`,
-        detail,
-      };
-    }
-
-    return {
-      persisted: true,
-      reason: "ok",
-    };
-  } catch (error) {
-    return {
-      persisted: false,
-      reason: "request-failed",
-      detail: String(error),
-    };
-  }
 }
 
 export function buildProjectUpdateRecord(payload) {
