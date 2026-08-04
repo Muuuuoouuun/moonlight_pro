@@ -304,6 +304,22 @@ export function sidebarChildren(anchorKey, scope) {
   return list.length > 1 ? list : [];
 }
 
+// Second-level destinations live in the top bar, not in a nested sidebar.
+// Keeping this derivation beside the sidebar contract prevents the two shells
+// from inventing different labels, scope paths, or active-state rules.
+export function topNavigationForRoute(activePath, scope = DEFAULT_SCOPE, view) {
+  const anchorKey = ownerAnchorKey(activePath);
+  const anchor = SIDEBAR_ANCHORS.find((item) => item.key === anchorKey) || null;
+  if (!anchor) return { anchor: null, tabs: [], activeTab: null };
+
+  const tabs = sidebarChildren(anchor.key, scope);
+  const activeTab = tabs.find((tab) => (
+    isSidebarChildActive(anchor.key, tab.path, activePath, view)
+  )) || null;
+
+  return { anchor, tabs, activeTab };
+}
+
 function pathnameOf(path) {
   return String(path || '').split(/[?#]/)[0].replace(/^\/+|\/+$/g, '');
 }

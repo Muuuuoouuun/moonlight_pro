@@ -14,8 +14,10 @@ import {
   beginMobileNavigationRoute,
   clearMobileNavigationRouteFocus,
   completeMobileNavigationDesktopHandoff,
+  deriveSidebarScope,
   dismissMobileNavigation,
   getMobileNavigationState,
+  normalizeScope,
   readMobileNavigationRouteFocus,
   rememberMobileNavigationRouteFocus,
   setElementInert,
@@ -187,7 +189,7 @@ const PAGE_MAP = {
   'dashboard/daily-brief': (n) => <DailyBrief onNavigate={n} />,
   'dashboard/overview': (n) => <Overview onNavigate={n} />,
   'dashboard/work/my': (n) => <MyWork onNavigate={n} />,
-  'dashboard/work/calendar': () => <Calendar />,
+  'dashboard/work/calendar': (n) => <Calendar onNavigate={n} />,
   'dashboard/work/projects': () => <Projects />,
   'dashboard/work/decisions': () => <Decisions />,
   'dashboard/work/roadmap': () => <Roadmap />,
@@ -253,9 +255,13 @@ export function HubApp() {
   // The Projects surface is shared by two sidebar anchors (할 일 · 프로젝트·기획);
   // `view` is what tells them apart, so the shell has to hand it to the sidebar.
   const view = searchParams.get('view');
+  const queryScope = searchParams.get('scope');
+  const routeScope = deriveSidebarScope(path)
+    || (queryScope ? normalizeScope(queryScope) : null);
 
   const [collapsed, setCollapsed] = React.useState(false);
   const [navOpen, setNavOpen] = React.useState(false);
+  const [navScope, setNavScope] = React.useState(routeScope || 'all');
   // SSR and the first client render must use the same values. Persisted browser
   // preferences are restored only after hydration, then written synchronously
   // from user actions so StrictMode cannot clobber them with the defaults.
@@ -413,6 +419,8 @@ export function HubApp() {
           className="hub-sidebar-root"
           active={path}
           view={view}
+          routeScope={routeScope}
+          onScopeChange={setNavScope}
           onNavigate={navigateFromSidebar}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setCollapsed(c => !c)}
@@ -425,6 +433,8 @@ export function HubApp() {
         <div className="hub-main">
           <TopBar
             path={path}
+            view={view}
+            scope={routeScope || navScope}
             onNavigate={navigate}
             onNew={openCommandPalette}
             onSidebarOpen={openMobileNavigation}

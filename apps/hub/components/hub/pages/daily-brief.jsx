@@ -119,7 +119,8 @@ function syncTone(state) {
   if (state === 'live') return 'success';
   if (state === 'partial') return 'warning';
   if (state === 'error') return 'danger';
-  if (state === 'mixed' || state === 'preview' || state === 'syncing') return 'warning';
+  if (state === 'mixed' || state === 'syncing') return 'info';
+  if (state === 'preview') return 'moon';
   return 'neutral';
 }
 
@@ -1228,20 +1229,19 @@ function CommandCard({ s, remaining, onNavigate }) {
       background: 'var(--surface)',
       border: '1px solid var(--line-soft)',
       borderLeft: `1px solid ${line}`,
-      borderRadius: 'var(--r-xl)',
+      borderRadius: 'var(--r-lg)',
       padding: 'var(--card-pad)',
-      boxShadow: `0 0 0 1px ${line}, 0 18px 44px -26px ${line}`,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         {/* §9: urgent 인디케이터는 루프 금지 — red+glow가 이미 충분한 강조 */}
-        <span style={{ width: 7, height: 7, borderRadius: 999, background: accent, boxShadow: `0 0 8px ${accent}`, flexShrink: 0 }} />
+        <span style={{ width: 7, height: 7, borderRadius: 999, background: accent, flexShrink: 0 }} />
         <span className="mono" style={{ fontSize: 10.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--fg-dim)' }}>지금 가장 급한 결정</span>
         <Badge tone="neutral" size="xs">{s.kind}</Badge>
         <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{s.meta}</span>
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>from {s.source?.from} · <span className="mono">{s.source?.ref}</span></span>
       </div>
-      <div style={{ fontSize: 21, fontWeight: 500, letterSpacing: '-0.015em', color: 'var(--fg)', marginBottom: 8, lineHeight: 1.25 }}>{s.title}</div>
+      <div style={{ fontSize: 24, fontWeight: 650, letterSpacing: '-0.025em', color: 'var(--fg)', marginBottom: 8, lineHeight: 1.2 }}>{s.title}</div>
       <div style={{ fontSize: 13.5, color: 'var(--fg-muted)', lineHeight: 1.6, maxWidth: '76ch' }}>{s.summary}</div>
       {decided ? (
         <div style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--success)' }}>
@@ -1395,7 +1395,7 @@ function RhythmPanel({ onNavigate }) {
   const rhythmProgressProps = getRhythmProgressProps({ completed, total });
 
   return (
-    <div style={{ position: 'sticky', top: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <SectionTitle right={<SyncBadge state={syncState} />}>리듬</SectionTitle>
       <Card>
         {total > 0 ? (
@@ -1465,9 +1465,9 @@ function RhythmPanel({ onNavigate }) {
   );
 }
 
-// The queue is a decision list, not an inbox — past five, the operator is
-// triaging instead of deciding. The rest stay one click away.
-const QUEUE_LIMIT = 5;
+// The queue is a decision list, not an inbox. Three items keep the first scan
+// calm; the rest stay one click away.
+const QUEUE_LIMIT = 3;
 
 export function DailyBrief({ onNavigate }) {
   const [now, setNow] = React.useState(() => new Date());
@@ -1489,48 +1489,40 @@ export function DailyBrief({ onNavigate }) {
   const waiting = ranked.slice(1);
   const queue = queueExpanded ? waiting : waiting.slice(0, QUEUE_LIMIT);
   const queueOverflow = waiting.length - queue.length;
-  const okCount = Math.max(0, signalCount - urgentCount - todayCount);
-
   return (
-    <div className="hub-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', padding: 'var(--section-gap)', maxWidth: 1120, margin: '0 auto', width: '100%' }}>
-      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20 }}>
+    <div className="hub-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', padding: 'var(--section-gap)', maxWidth: 1000, margin: '0 auto', width: '100%' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24 }}>
         <div>
           <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>{formatBriefDate(now)}</div>
-          {/* §11: 페이지당 h2 정확히 1개 — 인사말이 이 페이지의 타이틀 모먼트(시각 크기는 유지) */}
-          <h2 style={{ margin: 0, fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em' }}>{greetingFor(now)}, <span style={{ color: 'var(--moon-300)' }}>Junhyuk</span></h2>
-          <div style={{ marginTop: 6, fontSize: 13.5, color: 'var(--fg-muted)', maxWidth: '60ch', lineHeight: 1.55 }}>
-            오늘 <span style={{ color: 'var(--fg)' }}>{signalCount}개 신호</span> · <span style={{ color: urgentCount > 0 ? 'var(--danger)' : 'inherit' }}>{urgentCount} 즉시</span> · <span style={{ color: 'inherit' }}>{todayCount} 오늘</span> · {okCount} 여유
+          <h2 style={{ margin: 0, fontSize: 'clamp(30px, 4vw, 38px)', fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.05 }}>오늘의 실행</h2>
+          <div style={{ marginTop: 9, fontSize: 13.5, color: 'var(--fg-muted)', maxWidth: '62ch', lineHeight: 1.55 }}>
+            {greetingFor(now)}, Junhyuk · <span style={{ color: 'var(--fg)' }}>신호 {signalCount}</span> · <span style={{ color: urgentCount > 0 ? 'var(--danger)' : 'inherit' }}>즉시 {urgentCount}</span> · 오늘 {todayCount}
           </div>
         </div>
         <div className="hub-page-actions hub-page-actions--row" style={{ display: 'flex', gap: 8 }}>
-          <Button variant="secondary" size="md" icon="sparkle" onClick={() => onNavigate('dashboard/agents/chat')}>Ask Council</Button>
-          <Button variant="outline" size="md" icon="clock" onClick={() => onNavigate('dashboard/work/calendar?focus=15')}>Start 15m focus</Button>
+          <Button variant="ghost" size="md" icon="sparkle" onClick={() => onNavigate('dashboard/agents/chat')}>Council에 묻기</Button>
+          <Button variant="primary" size="md" icon="clock" onClick={() => onNavigate('dashboard/work/calendar?focus=15')}>15분 집중</Button>
         </div>
       </div>
 
-      {/* 좌: 판단·실행 스택(기존 그대로) · 우: 리듬(매일 루틴) 고정 패널 — content.jsx/
-          revenue.jsx와 같은 hub-grid--split 컨벤션(1fr + 300px 사이드레일, ≤1200px에서
-          1열로 접힘). */}
-      <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: 'var(--gap)', alignItems: 'start' }}>
-        <div className="stagger-up" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', minWidth: 0 }}>
-          <QuickTaskCapture onNavigate={onNavigate} onSaved={refreshLedger} />
+      <StatusLine state={ledger} />
 
-          <StatusLine state={ledger} />
+      <div className="stagger-up" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', minWidth: 0 }}>
+        <QuickTaskCapture onNavigate={onNavigate} onSaved={refreshLedger} />
 
-          {/* ① 지금 할 일 — the one command */}
-          {command ? (
-            <CommandCard s={command} remaining={waiting.length} onNavigate={onNavigate} />
-          ) : (
-            <CommandClear signalCount={signalCount} />
-          )}
+        {command ? (
+          <CommandCard s={command} remaining={waiting.length} onNavigate={onNavigate} />
+        ) : (
+          <CommandClear signalCount={signalCount} />
+        )}
 
-          {/* ② 결정 큐 — five at most; the rest expand on demand */}
+        <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.05fr) minmax(300px, .95fr)', gap: 'var(--section-gap)', alignItems: 'start' }}>
+          <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={refreshLedger} />
+
           <div>
             <SectionTitle right={<div style={{ display: 'flex', gap: 6 }}>
-              {/* §5.2: red only when urgency is real; today/ok are ordinary states → neutral. */}
               <Badge tone={urgentCount > 0 ? 'danger' : 'neutral'} size="xs">{urgentCount} urgent</Badge>
               <Badge tone="neutral" size="xs">{todayCount} today</Badge>
-              <Badge tone="neutral" size="xs">{okCount} ok</Badge>
             </div>}>
               결정 큐
             </SectionTitle>
@@ -1549,31 +1541,21 @@ export function DailyBrief({ onNavigate }) {
               )}
             </div>
           </div>
+        </div>
 
-          <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={refreshLedger} />
-
-          {/* ③ 지표 — four numbers, full size */}
+        <MoreDetail title="보조 정보 · 지표, 리듬, 모닝 브리프">
           <div>
-            <SectionTitle right={<span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>클릭하면 해당 서피스로 이동</span>}>지표</SectionTitle>
+            <SectionTitle right={<Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate('dashboard/overview')}>현황에서 보기</Button>}>운영 지표</SectionTitle>
             <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
               {ledger.metrics.map((m) => <MetricCard key={m.label} m={m} onNavigate={onNavigate} compact />)}
             </div>
           </div>
 
           <OperatorPulse operatorHome={ledger.operatorHome} contentBrands={ledger.contentBrands} onNavigate={onNavigate} />
-
-          <MoreDetail title="오늘 상세 · 모닝 브리프 · 승인 대기">
-            <MorningBriefCard brief={ledger.morningBrief} onNavigate={onNavigate} />
-            <ApprovalQueueCard onNavigate={onNavigate} />
-
-            {/* 집계(파이프라인·퍼널·콘텐츠 추세)는 현황이 정본 — 오늘은 판단에 집중 (§2.2 경계 계약). */}
-            <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate('dashboard/overview')}>
-              파이프라인 · 퍼널 · 콘텐츠 추세는 현황에서
-            </Button>
-          </MoreDetail>
-        </div>
-
-        <RhythmPanel onNavigate={onNavigate} />
+          <RhythmPanel onNavigate={onNavigate} />
+          <MorningBriefCard brief={ledger.morningBrief} onNavigate={onNavigate} />
+          <ApprovalQueueCard onNavigate={onNavigate} />
+        </MoreDetail>
       </div>
     </div>
   );

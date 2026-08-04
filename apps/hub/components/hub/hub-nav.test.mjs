@@ -17,6 +17,7 @@ import {
   ownerAnchorKey,
   resolveSidebarPath,
   sidebarChildren,
+  topNavigationForRoute,
 } from "./hub-nav.js";
 import * as mobileNavRuntime from "./hub-nav.js";
 
@@ -108,7 +109,7 @@ test("active state survives query strings and leading slashes", () => {
   assert.equal(ownerAnchorKey("dashboard/content/queue#top"), "content");
 });
 
-// ── Second level (2026-07-15 spec) ────────────────────────────────────────
+// ── Second level — horizontal top navigation ─────────────────────────────
 
 test("every child resolves and is owned by its parent anchor in every scope", () => {
   for (const anchor of SIDEBAR_ANCHORS) {
@@ -186,6 +187,25 @@ test("AI·자동화 children all carry a group label for the two-eyebrow layout"
       assert.ok(["Agents", "Automations"].includes(child.group), `${child.key} group`);
     }
   }
+});
+
+test("second-level destinations resolve into the top bar with one active tab", () => {
+  const revenue = topNavigationForRoute("dashboard/revenue/deals", "all");
+  assert.equal(revenue.anchor?.key, "revenue");
+  assert.equal(revenue.activeTab?.key, "rev-deals");
+  assert.ok(revenue.tabs.length >= 6);
+
+  const today = topNavigationForRoute("dashboard/daily-brief", "all");
+  assert.equal(today.anchor?.key, "today");
+  assert.deepEqual(today.tabs, []);
+  assert.equal(today.activeTab, null);
+});
+
+test("sidebar is one level deep and the top bar owns contextual tabs", () => {
+  assert.doesNotMatch(sidebarSource, /hub-nav-caret|hub-nav-sublist|hub-nav-subgroup/);
+  assert.match(topbarSource, /topNavigationForRoute\(path, scope, view\)/);
+  assert.match(topbarSource, /className="hub-topbar__tabs"/);
+  assert.match(topbarSource, /aria-current=\{selected \? 'page' : undefined\}/);
 });
 
 // ── Mobile navigation accessibility contract ─────────────────────────────

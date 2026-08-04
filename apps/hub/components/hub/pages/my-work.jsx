@@ -401,6 +401,7 @@ export function MyWork({ onNavigate }) {
   // 우측 상세 패널이 보고 있는 item.id — 파생 조회라서 reload 후 항목이 사라지면
   // (완료·삭제) 패널도 같이 닫힌다.
   const [detailId, setDetailId] = React.useState(null);
+  const taskDeepLinkRef = React.useRef(null);
   // 접힌 프로젝트 아코디언 (projectId 기준, 세션 한정).
   const [collapsedProjects, setCollapsedProjects] = React.useState(() => new Set());
   // 일정 아코디언 펼침 상태 (버킷 키 기준) — 오늘 일정은 하루의 컨텍스트라 기본 펼침,
@@ -614,6 +615,31 @@ export function MyWork({ onNavigate }) {
       document.getElementById(`mywork-row-${attentionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 80);
   }, []);
+
+  // Calendar task chips deep-link here with the durable task id. Resolve it to
+  // the attention row, clear filters that could hide it, and open the existing
+  // detail panel instead of creating a second task-detail implementation.
+  React.useEffect(() => {
+    const requestedTaskId = searchParams?.get('task');
+    if (!requestedTaskId || taskDeepLinkRef.current === requestedTaskId) return;
+    const item = items.find((candidate) => (
+      candidate.lane === 'task'
+      && (candidate.entityId === requestedTaskId || candidate.id === requestedTaskId || candidate.id === `task-${requestedTaskId}`)
+    ));
+    if (!item) return;
+
+    taskDeepLinkRef.current = requestedTaskId;
+    setLane('task');
+    setBucketFilter('all');
+    setSearch('');
+    setDetailId(item.id);
+    scrollToRow(item.id);
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('task');
+    params.delete('lens');
+    router.replace(`${pathname}${params.size ? `?${params}` : ''}`);
+  }, [items, pathname, router, searchParams, scrollToRow]);
 
   const toggleProject = (projectId) => {
     setCollapsedProjects((prev) => {

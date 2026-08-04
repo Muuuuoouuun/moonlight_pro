@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, IconButton, Button, Progress, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge } from "../hub-primitives";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
+import { mapTasksToCalendar } from "@/lib/calendar-task-view";
 import {
   buildRoadmapItemAriaLabel,
   buildRoadmapProjection,
@@ -313,28 +314,57 @@ function useCalendarEvents(days) {
   return { ...state, refetch };
 }
 
-export function Calendar() {
+function useCalendarTasks(days) {
+  const [state, setState] = React.useState({ status: 'loading', tasks: [], message: '' });
+  const weekKey = days[0]?.toISOString().slice(0, 10) || '';
+
+  React.useEffect(() => {
+    let active = true;
+    setState((current) => ({ ...current, status: 'loading' }));
+    fetch('/api/hub/tasks', { cache: 'no-store' })
+      .then((response) => response.json().catch(() => null).then((data) => ({ response, data })))
+      .then(({ response, data }) => {
+        if (!active) return;
+        if (!response.ok || !data || data.status === 'error') {
+          setState({ status: 'error', tasks: [], message: data?.error || 'Task 기한을 불러오지 못했습니다.' });
+          return;
+        }
+        setState({
+          status: data.status || 'preview',
+          tasks: Array.isArray(data.tasks) ? data.tasks : [],
+          message: data.status === 'preview' ? 'Task 원장 연결 후 기한을 표시합니다.' : '',
+        });
+      })
+      .catch(() => active && setState({ status: 'error', tasks: [], message: 'Task 기한을 불러오지 못했습니다.' }));
+
+    return () => { active = false; };
+  }, [weekKey]);
+
+  return state;
+}
+
+export function Calendar({ onNavigate }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const [now, setNow] = React.useState(() => new Date());
-  const [weekOffset, setWeekOffset] = React.useState(0);
-  const [viewMode, setViewMode] = React.useState('Week');
+  const [selectedDate, setSelectedDate] = React.useState(() => new Date());
+  const [viewMode, setViewMode] = React.useState('week');
   const [gcalStatus, setGcalStatus] = React.useState('idle');
   const [gcalMessage, setGcalMessage] = React.useState('');
   const [creating, setCreating] = React.useState(false);
   const focusAppliedRef = React.useRef(false);
-  const viewedDateForFetch = addDays(now, weekOffset * 7);
-  const { days: fetchDays } = buildCalendarWeek(viewedDateForFetch);
+  const { days: fetchDays } = buildCalendarWeek(selectedDate);
   const calendarData = useCalendarEvents(fetchDays);
+  const taskData = useCalendarTasks(fetchDays);
   const calendarCapabilities = resolveCalendarCapabilities(calendarData);
   const isLive = calendarCapabilities.isLive;
   const isReadOnly = isLive && calendarData.readOnly;
 
   // Creates a real Google Calendar event when connected; otherwise falls back to a
   // clear read-only/disconnected message without fabricating a local event.
-  const createEvent = React.useCallback(async ({ day, startHour, endHour, title }) => {
-    const targetDay = fetchDays[day] || fetchDays[0];
+  const createEvent = React.useCallback(async ({ date, startHour, endHour, title }) => {
+    const targetDay = date || fetchDays[0];
     if (!calendarCapabilities.canCreate) {
       setGcalMessage(
         isReadOnly
@@ -369,11 +399,11 @@ export function Calendar() {
   React.useEffect(() => {
     const minutes = Number(searchParams.get('focus'));
     if (!minutes || focusAppliedRef.current) return;
-    const week = buildCalendarWeek(now);
-    setWeekOffset(0);
+    setSelectedDate(now);
+    setViewMode('day');
     focusAppliedRef.current = true;
     createEvent({
-      day: week.todayIndex >= 0 ? week.todayIndex : 0,
+      date: now,
       startHour: 13,
       endHour: 13 + Math.max(15, minutes) / 60,
       title: `${minutes}m focus block`,
@@ -441,10 +471,19 @@ export function Calendar() {
     : 'var(--fg-faint)';
 
   const hours = Array.from({ length: 12 }, (_, i) => 8 + i);
-  const { labels: dayLabels, weekLabel, todayIndex } = buildCalendarWeek(viewedDateForFetch);
+  const selectedWeek = buildCalendarWeek(selectedDate);
+  const visibleDays = viewMode === 'day' ? [selectedDate] : selectedWeek.days;
+  const dayLabels = visibleDays.map((date) => `${['일','월','화','수','목','금','토'][date.getDay()]} ${date.getDate()}`);
+  const periodLabel = viewMode === 'day'
+    ? new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(selectedDate)
+    : selectedWeek.weekLabel;
+  const todayIndex = visibleDays.findIndex((date) => sameDate(date, now));
+  const selectedIndex = visibleDays.findIndex((date) => sameDate(date, selectedDate));
   const gridEvents = calendarCapabilities.shouldShowEvents
-    ? mapGoogleEventsToGrid(calendarData.events, fetchDays)
+    ? mapGoogleEventsToGrid(calendarData.events, visibleDays)
     : [];
+  const gridTasks = mapTasksToCalendar(taskData.tasks, visibleDays);
+  const columnTemplate = `56px repeat(${visibleDays.length}, minmax(${viewMode === 'day' ? '320px' : '120px'}, 1fr))`;
   const calBadge = calendarData.status === 'live'
     ? { label: calendarCapabilities.badge, color: 'var(--success)' }
     : calendarData.status === 'loading'
@@ -452,12 +491,28 @@ export function Calendar() {
     : { label: calendarCapabilities.badge, color: 'var(--fg-faint)' };
   const addEvent = () => {
     createEvent({
-      day: todayIndex >= 0 ? todayIndex : 0,
+      date: selectedDate,
       startHour: 13,
       endHour: 14,
       title: '새 일정',
     });
   };
+  const movePeriod = (direction) => {
+    setSelectedDate((date) => addDays(date, direction * (viewMode === 'day' ? 1 : 7)));
+  };
+  const selectDay = (date) => {
+    setSelectedDate(new Date(date));
+    setViewMode('day');
+  };
+  const taskStateLabel = taskData.status === 'loading'
+    ? 'Task syncing'
+    : taskData.status === 'live'
+    ? 'Task live'
+    : taskData.status === 'partial'
+    ? 'Task partial'
+    : taskData.status === 'error'
+    ? 'Task error'
+    : 'Task preview';
   const toneBg = { moon: 'var(--moon-bg)', company: 'var(--company-bg)', personal: 'var(--personal-bg)', info: 'var(--info-bg)', warning: 'var(--warning-bg)' };
   const toneFg = { moon: 'var(--moon-100)', company: 'var(--company)', personal: 'var(--personal)', info: 'var(--info)', warning: 'var(--warning)' };
   const toneBd = { moon: 'var(--moon-line)', company: 'var(--company-line)', personal: 'var(--personal-line)', info: 'var(--info-line)', warning: 'var(--warning-line)' };
@@ -466,11 +521,13 @@ export function Calendar() {
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500, letterSpacing: '-0.01em' }}>Calendar</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <span>{weekLabel}</span>
+          <h2 style={{ margin: 0, fontSize: 28, fontWeight: 700, letterSpacing: '-0.025em' }}>Calendar</h2>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span>{periodLabel}</span>
             <span style={{ color: 'var(--fg-faint)' }}>·</span>
             <span className="mono" style={{ color: calBadge.color }}>{calBadge.label}</span>
+            <span style={{ color: 'var(--fg-faint)' }}>·</span>
+            <span className="mono" style={{ color: taskData.status === 'error' ? 'var(--danger)' : 'var(--fg-dim)' }}>{taskStateLabel}</span>
             <span style={{ color: 'var(--fg-faint)' }}>·</span>
             <span style={{ color: gcalColor }}>{gcalLabel}</span>
             <Button variant="ghost" size="xs" onClick={connectGoogleCalendar}>
@@ -483,20 +540,20 @@ export function Calendar() {
                 : 'Connect Google Calendar'}
             </Button>
           </div>
-          {(gcalMessage || calendarData.message) && (
-            <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>{gcalMessage || calendarData.message}</div>
+          {(gcalMessage || calendarData.message || taskData.message) && (
+            <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>{gcalMessage || calendarData.message || taskData.message}</div>
           )}
         </div>
         <div style={{ flex: 1 }} />
         <div className="hub-toolbar" style={{ display: 'flex', gap: 6 }}>
-          <IconButton icon="chevronL" tooltip="Previous week" onClick={() => setWeekOffset(v => v - 1)} />
-          <Button variant="secondary" size="sm" onClick={() => setWeekOffset(0)}>Today</Button>
-          <IconButton icon="chevronR" tooltip="Next week" onClick={() => setWeekOffset(v => v + 1)} />
+          <IconButton icon="chevronL" tooltip={viewMode === 'day' ? 'Previous day' : 'Previous week'} onClick={() => movePeriod(-1)} />
+          <Button variant="secondary" size="sm" onClick={() => setSelectedDate(new Date(now))}>Today</Button>
+          <IconButton icon="chevronR" tooltip={viewMode === 'day' ? 'Next day' : 'Next week'} onClick={() => movePeriod(1)} />
         </div>
         <SegmentedControl
           className="hub-toolbar"
           label="캘린더 보기"
-          options={['Day', 'Week', 'Month'].map(v => ({ key: v, label: v }))}
+          options={[{ key: 'day', label: 'Day' }, { key: 'week', label: 'Week' }]}
           value={viewMode}
           onChange={setViewMode}
         />
@@ -504,24 +561,71 @@ export function Calendar() {
       </div>
 
       <Card pad={false} className="hub-table-card" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', borderBottom: '1px solid var(--line-soft)' }}>
+        <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, borderBottom: '1px solid var(--line-soft)' }}>
           <div />
           {dayLabels.map((d, i) => (
-            <div key={d} style={{ padding: '10px 12px', borderLeft: '1px solid var(--line-soft)', fontSize: 11.5, color: i === todayIndex ? 'var(--fg)' : 'var(--fg-muted)' }}>
+            <button
+              key={`${d}-${i}`}
+              type="button"
+              aria-label={`${d} 일간 보기`}
+              aria-pressed={i === selectedIndex}
+              onClick={() => selectDay(visibleDays[i])}
+              style={{
+                minHeight: 48, padding: '8px 12px', borderLeft: '1px solid var(--line-soft)',
+                fontSize: 11.5, fontWeight: i === selectedIndex ? 650 : 450,
+                color: i === todayIndex || i === selectedIndex ? 'var(--fg)' : 'var(--fg-muted)',
+                background: i === selectedIndex ? 'var(--surface-2)' : 'transparent', textAlign: 'left',
+              }}
+            >
               {d}
               {i === todayIndex && <span style={{ marginLeft: 6, color: 'var(--moon-300)' }}>· Today</span>}
-            </div>
+            </button>
           ))}
         </div>
+        <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, borderBottom: '1px solid var(--line-soft)', background: 'var(--surface-2)' }}>
+          <div className="mono" style={{ padding: '12px 10px', fontSize: 10, color: 'var(--fg-faint)', textAlign: 'right' }}>TASK</div>
+          {visibleDays.map((date, dayIndex) => {
+            const tasks = gridTasks.filter((task) => task.day === dayIndex);
+            const shown = tasks.slice(0, viewMode === 'day' ? 8 : 2);
+            return (
+              <div key={date.toISOString()} style={{ minHeight: 54, padding: 5, borderLeft: '1px solid var(--line-soft)', display: 'flex', flexDirection: viewMode === 'day' ? 'row' : 'column', gap: 4, flexWrap: viewMode === 'day' ? 'wrap' : 'nowrap' }}>
+                {shown.map((task) => (
+                  <button
+                    key={task.id}
+                    type="button"
+                    className="hub-row"
+                    aria-label={`할 일 열기: ${task.title}`}
+                    onClick={() => onNavigate?.(`dashboard/work/my?task=${encodeURIComponent(task.id)}`)}
+                    style={{
+                      minHeight: 44, minWidth: 0, padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 7,
+                      color: 'var(--fg)', background: 'var(--surface)', border: '1px solid var(--line-soft)',
+                      borderRadius: 'var(--r-sm)', fontSize: 11.5, textAlign: 'left',
+                      flex: viewMode === 'day' ? '0 1 280px' : '0 0 auto',
+                    }}
+                  >
+                    <span aria-hidden="true" style={{ width: 8, height: 8, border: '1px solid var(--fg-dim)', borderRadius: 2, flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
+                  </button>
+                ))}
+                {tasks.length > shown.length && (
+                  <button type="button" onClick={() => onNavigate?.('dashboard/work/my?lens=week')} style={{ minHeight: 36, padding: '0 8px', color: 'var(--fg-dim)', fontSize: 10.5, textAlign: 'left' }}>
+                    +{tasks.length - shown.length} tasks
+                  </button>
+                )}
+                {tasks.length === 0 && <span style={{ padding: '8px', color: 'var(--fg-faint)', fontSize: 10.5 }}>—</span>}
+              </div>
+            );
+          })}
+        </div>
         <div className="scroll-y" style={{ flex: 1 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', position: 'relative' }}>
+          <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, position: 'relative' }}>
             <div>
               {hours.map(h => (
                 <div key={h} className="mono" style={{ height: 52, padding: '4px 10px', fontSize: 10, color: 'var(--fg-faint)', textAlign: 'right' }}>{h}:00</div>
               ))}
             </div>
-            {dayLabels.map((_, di) => (
-              <div key={di} style={{ borderLeft: '1px solid var(--line-soft)', position: 'relative' }}>
+            {visibleDays.map((date, di) => (
+              <div key={date.toISOString()} style={{ borderLeft: '1px solid var(--line-soft)', position: 'relative' }}>
                 {hours.map(h => <div key={h} style={{ height: 52, borderBottom: '1px solid var(--line-soft)' }} />)}
                 {gridEvents.filter(e => e.day === di).map((e, ei) => {
                   const top = (e.start - 8) * 52;
