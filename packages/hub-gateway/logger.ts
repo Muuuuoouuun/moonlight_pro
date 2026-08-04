@@ -1,81 +1,19 @@
+import { insertSupabaseRecord } from "@com-moon/supabase-rest";
+
 import type { LogEntry, LogLevel } from "./types";
 
-interface SupabaseLogConfig {
-  url: string;
-  apiKey: string;
-  table: string;
-}
-
-function resolveSupabaseLogConfig(): SupabaseLogConfig | null {
-  const url = process.env.SUPABASE_URL?.trim();
-  const apiKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
-    process.env.SUPABASE_ANON_KEY?.trim();
-  const table = process.env.SUPABASE_ERROR_LOGS_TABLE?.trim() || "error_logs";
-
-  if (!url || !apiKey) {
-    return null;
-  }
-
-  return {
-    url: url.replace(/\/$/, ""),
-    apiKey,
-    table,
-  };
-}
-
-function isOpaqueSupabaseApiKey(apiKey: string) {
-  return apiKey.startsWith("sb_publishable_") || apiKey.startsWith("sb_secret_");
-}
-
-function makeSupabaseHeaders(apiKey: string, options: { contentType?: string; prefer?: string } = {}) {
-  const headers: Record<string, string> = {
-    apikey: apiKey,
-  };
-
-  if (options.contentType) {
-    headers["content-type"] = options.contentType;
-  }
-
-  if (!isOpaqueSupabaseApiKey(apiKey)) {
-    headers.authorization = `Bearer ${apiKey}`;
-  }
-
-  if (options.prefer) {
-    headers.prefer = options.prefer;
-  }
-
-  return headers;
+function resolveLogTable() {
+  return process.env.SUPABASE_ERROR_LOGS_TABLE?.trim() || "error_logs";
 }
 
 async function persistLogEntry(entry: LogEntry) {
-  const config = resolveSupabaseLogConfig();
+  const result = await insertSupabaseRecord(resolveLogTable(), { ...entry });
 
-  if (!config) {
-    return false;
+  if (!result.persisted && result.reason !== "missing-config") {
+    console.warn("[HUB-OS-LOG-PERSIST-FAILED]", result.reason, result.detail || "");
   }
 
-  try {
-    const response = await fetch(`${config.url}/rest/v1/${config.table}`, {
-      method: "POST",
-      headers: makeSupabaseHeaders(config.apiKey, {
-        contentType: "application/json",
-        prefer: "return=minimal",
-      }),
-      body: JSON.stringify(entry),
-    });
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      console.warn("[HUB-OS-LOG-PERSIST-FAILED]", response.status, detail);
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.warn("[HUB-OS-LOG-PERSIST-ERROR]", String(error));
-    return false;
-  }
+  return result.persisted;
 }
 
 function emit(level: LogLevel, entry: LogEntry) {
