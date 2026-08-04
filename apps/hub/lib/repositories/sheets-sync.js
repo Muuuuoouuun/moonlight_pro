@@ -3,19 +3,30 @@
 // Honors the design's proposal model: sheet rows land in `lead_intake_raw`
 // first, then `promoteStagedLeads` creates/links `companies` + `leads`. The DB
 // stays the source of truth; the sheet never upserts directly.
+//
+// Both hot paths run in batch phases (one lookup + one bulk write per entity)
+// instead of per-row round trips: a 200-row promote is ~8 HTTP calls, not 600+.
 
 import {
-  countSupabaseRows,
   eqFilter,
   fetchSupabaseRows,
   inFilter,
+  inFilterQuoted,
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import {
-  makeSupabaseHeaders,
+  insertSupabaseRecord,
   resolveDefaultWorkspaceId,
   resolveSupabaseConfig,
+  updateSupabaseRecord,
+  upsertSupabaseRecords,
 } from "@/lib/server-write";
+import {
+  batchInsertStagingRows,
+  compactMeta,
+  mapWithConcurrency,
+  tallyStagingByStatus,
+} from "@/lib/repositories/repo-utils";
 import { mapRowToIntake, rowsToObjects } from "@/lib/sheets-normalize";
 import { fetchGoogleUserEmail } from "@/lib/google-oauth";
 import {
@@ -45,16 +56,6 @@ function sheetSourceRef(sheetName, normalized) {
   return `${sheet}!${ref}`;
 }
 
-function compactMeta(obj) {
-  return Object.fromEntries(
-    Object.entries(obj).filter(([, value]) => {
-      if (value == null) return false;
-      if (typeof value === "string" && !value.trim()) return false;
-      return true;
-    }),
-  );
-}
-
 function scopeFailureDetail(check) {
   return [check.reason, check.source, check.actual ? `actual=${check.actual}` : null, check.expected ? `expected=${check.expected}` : null]
     .filter(Boolean)
@@ -72,78 +73,6 @@ async function assertSheetsPersonalScope(connection, accessToken) {
   return { ok: true, email: emailCheck.email, spreadsheetId: sheetCheck.spreadsheetId };
 }
 
-// --- local insert-with-return (server-write inserts are return=minimal) ------
-
-async function insertReturning(table, record) {
-  const config = resolveSupabaseConfig();
-  if (!config) return null;
-
-  try {
-    const response = await fetch(`${config.url}/rest/v1/${table}`, {
-      method: "POST",
-      headers: makeSupabaseHeaders(config.apiKey, {
-        contentType: "application/json",
-        prefer: "return=representation",
-      }),
-      body: JSON.stringify(record),
-      cache: "no-store",
-    });
-    if (!response.ok) {
-      return { error: `http-${response.status}`, detail: await response.text().catch(() => "") };
-    }
-    const rows = await response.json();
-    return Array.isArray(rows) ? rows[0] || null : rows;
-  } catch (error) {
-    return { error: "request-failed", detail: String(error) };
-  }
-}
-
-// Insert that tolerates the staging unique-index conflict (re-import) as a skip.
-async function insertStagingRow(record) {
-  const config = resolveSupabaseConfig();
-  if (!config) return { ok: false, reason: "missing-config" };
-
-  try {
-    const response = await fetch(`${config.url}/rest/v1/${STAGING_TABLE}`, {
-      method: "POST",
-      headers: makeSupabaseHeaders(config.apiKey, {
-        contentType: "application/json",
-        prefer: "return=minimal",
-      }),
-      body: JSON.stringify(record),
-      cache: "no-store",
-    });
-    if (response.status === 409) return { ok: false, reason: "duplicate" };
-    if (!response.ok) return { ok: false, reason: `http-${response.status}` };
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, reason: "request-failed", detail: String(error) };
-  }
-}
-
-async function patchRows(table, filters, record) {
-  const config = resolveSupabaseConfig();
-  if (!config) return { ok: false };
-
-  const params = new URLSearchParams();
-  filters.forEach(([key, value]) => params.append(key, value));
-
-  try {
-    const response = await fetch(`${config.url}/rest/v1/${table}?${params.toString()}`, {
-      method: "PATCH",
-      headers: makeSupabaseHeaders(config.apiKey, {
-        contentType: "application/json",
-        prefer: "return=minimal",
-      }),
-      body: JSON.stringify(record),
-      cache: "no-store",
-    });
-    return { ok: response.ok };
-  } catch {
-    return { ok: false };
-  }
-}
-
 // --- status -----------------------------------------------------------------
 
 export async function getSheetsSyncStatus(workspaceId = resolveDefaultWorkspaceId()) {
@@ -152,21 +81,20 @@ export async function getSheetsSyncStatus(workspaceId = resolveDefaultWorkspaceI
     return { source: "preview", configured: Boolean(config), connected: false, spreadsheetId: null, staging: {}, recentRuns: [] };
   }
 
-  const [connectionRows, recentRuns, pending, promoted, merged, review] = await Promise.all([
+  const [connectionRows, recentRuns, staging] = await Promise.all([
     fetchSupabaseRows("integration_connections", {
+      select: "id,config,last_synced_at",
       filters: withWorkspaceFilter([["provider", eqFilter("google_sheets")]]),
       order: "created_at.desc",
       limit: 1,
     }),
     fetchSupabaseRows("sync_runs", {
+      select: "status,payload,started_at,error_message",
       filters: withWorkspaceFilter([["payload->>provider", eqFilter("google_sheets")]]),
       order: "started_at.desc",
       limit: 10,
     }),
-    countSupabaseRows(STAGING_TABLE, withWorkspaceFilter([["status", eqFilter("pending")], ["source", eqFilter("google_sheets")]])),
-    countSupabaseRows(STAGING_TABLE, withWorkspaceFilter([["status", eqFilter("promoted")], ["source", eqFilter("google_sheets")]])),
-    countSupabaseRows(STAGING_TABLE, withWorkspaceFilter([["status", eqFilter("merged")], ["source", eqFilter("google_sheets")]])),
-    countSupabaseRows(STAGING_TABLE, withWorkspaceFilter([["status", eqFilter("review")], ["source", eqFilter("google_sheets")]])),
+    tallyStagingByStatus("google_sheets"),
   ]);
 
   const connection = connectionRows?.[0] || null;
@@ -179,7 +107,7 @@ export async function getSheetsSyncStatus(workspaceId = resolveDefaultWorkspaceI
     expectedOperatorEmail: resolveOperatorEmail(),
     expectedSpreadsheetId: resolvePersonalLeadsSpreadsheetId() || null,
     lastSyncAt: connection?.last_synced_at || null,
-    staging: { pending: pending ?? 0, promoted: promoted ?? 0, merged: merged ?? 0, review: review ?? 0 },
+    staging,
     recentRuns: (recentRuns || []).map((r) => ({
       status: r.status,
       action: r.payload?.action || null,
@@ -224,16 +152,16 @@ export async function importSheetToStaging({
     });
     const objects = rowsToObjects(values);
 
-    let imported = 0;
-    let skipped = 0;
+    let blank = 0;
+    const records = [];
     for (const obj of objects) {
       const normalized = mapRowToIntake(obj, headerMap);
       if (!normalized.name && !normalized.phone) {
-        skipped += 1;
+        blank += 1;
         continue;
       }
       const sourceRef = sheetSourceRef(sheetName, normalized);
-      const result = await insertStagingRow({
+      records.push({
         workspace_id: workspaceId || null,
         connection_id: connection.connectionId,
         source: "google_sheets",
@@ -243,17 +171,17 @@ export async function importSheetToStaging({
         match_key: normalized.match_key,
         status: "pending",
       });
-      if (result.ok) imported += 1;
-      else skipped += 1;
     }
+
+    const { imported, skipped } = await batchInsertStagingRows(records);
 
     await recordGoogleSheetsSync({
       workspaceId,
       connectionId: connection.connectionId,
       status: "success",
-      payload: { action: "import", sheet: sheetName, imported, skipped, total: objects.length },
+      payload: { action: "import", sheet: sheetName, imported, skipped: skipped + blank, total: objects.length },
     });
-    return { ok: true, imported, skipped, total: objects.length };
+    return { ok: true, imported, skipped: skipped + blank, total: objects.length };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await recordGoogleSheetsSync({
@@ -269,12 +197,100 @@ export async function importSheetToStaging({
 
 // --- promote: staging -> companies/leads (dedupe) ---------------------------
 
-async function findCompanyByMatchKey(workspaceId, matchKey) {
-  const rows = await fetchSupabaseRows("companies", {
-    filters: withWorkspaceFilter([["match_key", eqFilter(matchKey)]]),
-    limit: 1,
-  });
-  return rows?.[0] || null;
+function buildCompanyRecord(workspaceId, row) {
+  const n = row.normalized || {};
+  return {
+    workspace_id: workspaceId,
+    name: n.name || "이름미상 기관",
+    phone: n.phone || null,
+    address: n.address || null,
+    match_key: n.match_key,
+    status: "prospect",
+    meta: compactMeta({
+      source: n.source || "google_sheets",
+      source_transport: "google_sheets",
+      lane: "classin_sales",
+      intake_id: row.id,
+      campaign: n.campaign_name,
+      form_id: n.form_id,
+    }),
+  };
+}
+
+function buildLeadRecord(workspaceId, row, company, contactId, now) {
+  const n = row.normalized || {};
+  return {
+    workspace_id: workspaceId,
+    company_id: company.id,
+    contact_id: contactId,
+    name: n.name || company.name,
+    email: n.email || null,
+    source: n.source || "google_sheets",
+    channel: classinLeadChannel(n),
+    status: n.status || "new",
+    score: classinLeadScore(n),
+    next_action: classinNextAction(n),
+    last_touch_at: now,
+    updated_at: now,
+    meta: compactMeta({
+      lane: "classin_sales",
+      source_transport: row.source || "google_sheets",
+      source_family: n.source || "google_sheets",
+      source_ref: n.source_ref || row.source_ref || null,
+      sheet_name: n.sheet_name || null,
+      match_key: n.match_key,
+      address: n.address || null,
+      contact_name: n.contact_name || null,
+      intake_id: row.id,
+      note: n.note || null,
+      campaign: n.campaign_name || null,
+      ad_name: n.ad_name || null,
+      adset_name: n.adset_name || null,
+      ad_id: n.ad_id || null,
+      form_name: n.form_name || null,
+      form_id: n.form_id || null,
+      created_time: n.created_time || null,
+      intent: n.intent || null,
+      validity: n.validity || null,
+      unit_count: n.unit_count ?? null,
+      revenue_cny: n.revenue_cny ?? null,
+      currency: n.currency || (n.revenue_cny ? "CNY" : null),
+      crm_stage: n.crm_stage || null,
+      customer_state: n.customer_state || null,
+      extra: n.extra && Object.keys(n.extra).length ? n.extra : null,
+    }),
+  };
+}
+
+// Finalize staging rows in one upsert-as-patch call. Every row carries the same
+// key set (PostgREST bulk requires uniform keys); id conflicts route each row to
+// DO UPDATE, and workspace_id/source are echoed to satisfy insert-shape checks.
+async function finalizeStagingRows(entries) {
+  if (!entries.length) {
+    return { persisted: true, reason: "ok" };
+  }
+
+  const payload = entries.map(({ row, patch }) => ({
+    id: row.id,
+    workspace_id: row.workspace_id,
+    source: row.source,
+    status: patch.status,
+    company_id: patch.company_id ?? null,
+    lead_id: patch.lead_id ?? null,
+    promoted_at: patch.promoted_at ?? null,
+    note: patch.note ?? null,
+  }));
+
+  const bulk = await upsertSupabaseRecords(STAGING_TABLE, payload, { onConflict: "id" });
+  if (bulk.persisted) {
+    return bulk;
+  }
+
+  // Degraded path: one PATCH per row with a small concurrency cap.
+  await mapWithConcurrency(entries, 8, ({ row, patch }) =>
+    updateSupabaseRecord(STAGING_TABLE, [["id", eqFilter(row.id)]], patch),
+  );
+  return { persisted: true, reason: "fallback-patch" };
 }
 
 export async function promoteStagedLeads({
@@ -301,129 +317,166 @@ export async function promoteStagedLeads({
   });
   if (!pendingRows) return { ok: false, reason: "read-failed" };
 
-  let promoted = 0;
-  let mergedCount = 0;
-  let review = 0;
   const now = new Date().toISOString();
+  const finalize = [];
+  const markReview = (row, note, companyId = null) => {
+    finalize.push({ row, patch: { status: "review", note, company_id: companyId } });
+  };
 
+  // Phase 1 — split rows without a match key straight into review.
+  const keyedRows = [];
   for (const row of pendingRows) {
-    const n = row.normalized || {};
-    if (!n.match_key) {
-      await patchRows(STAGING_TABLE, [["id", eqFilter(row.id)]], { status: "review", note: "no match_key" });
-      review += 1;
+    if (row.normalized?.match_key) keyedRows.push(row);
+    else markReview(row, "no match_key");
+  }
+
+  // Phase 2 — resolve companies for every match key in one read, create the
+  // missing ones in one bulk insert. First row per new key counts as the
+  // creator ("promoted"); later rows merge into it, same as the sequential run.
+  const matchKeys = [...new Set(keyedRows.map((row) => row.normalized.match_key))];
+  const companyByKey = new Map();
+  if (matchKeys.length) {
+    const existingCompanies = await fetchSupabaseRows("companies", {
+      select: "id,name,phone,match_key",
+      filters: withWorkspaceFilter([["match_key", inFilterQuoted(matchKeys)]]),
+      limit: matchKeys.length,
+    });
+    for (const company of existingCompanies || []) {
+      if (!companyByKey.has(company.match_key)) companyByKey.set(company.match_key, company);
+    }
+  }
+
+  const creatorRowByKey = new Map();
+  for (const row of keyedRows) {
+    const key = row.normalized.match_key;
+    if (!companyByKey.has(key) && !creatorRowByKey.has(key)) {
+      creatorRowByKey.set(key, row);
+    }
+  }
+
+  const failedCompanyKeys = new Set();
+  if (creatorRowByKey.size) {
+    const newCompanyRecords = [...creatorRowByKey.values()].map((row) => buildCompanyRecord(workspaceId, row));
+    const created = await insertSupabaseRecord("companies", newCompanyRecords, {
+      returnRepresentation: true,
+      select: "id,name,phone,match_key",
+    });
+    if (created.persisted) {
+      for (const company of created.records || []) {
+        companyByKey.set(company.match_key, company);
+      }
+    } else {
+      for (const key of creatorRowByKey.keys()) failedCompanyKeys.add(key);
+    }
+  }
+
+  const promotable = [];
+  for (const row of keyedRows) {
+    const key = row.normalized.match_key;
+    if (failedCompanyKeys.has(key)) {
+      markReview(row, "company-insert-failed");
       continue;
     }
-
-    let company = await findCompanyByMatchKey(workspaceId, n.match_key);
-    let outcome = "merged";
-
+    const company = companyByKey.get(key);
     if (!company) {
-      const created = await insertReturning("companies", {
-        workspace_id: workspaceId,
-        name: n.name || "이름미상 기관",
-        phone: n.phone || null,
-        address: n.address || null,
-        match_key: n.match_key,
-        status: "prospect",
-        meta: compactMeta({
-          source: n.source || "google_sheets",
-          source_transport: "google_sheets",
-          lane: "classin_sales",
-          intake_id: row.id,
-          campaign: n.campaign_name,
-          form_id: n.form_id,
-        }),
-      });
-      if (!created || created.error) {
-        await patchRows(STAGING_TABLE, [["id", eqFilter(row.id)]], { status: "review", note: created?.error || "company-insert-failed" });
-        review += 1;
-        continue;
-      }
-      company = created;
-      outcome = "promoted";
+      markReview(row, "company-insert-failed");
+      continue;
+    }
+    promotable.push({
+      row,
+      company,
+      outcome: creatorRowByKey.get(key) === row ? "promoted" : "merged",
+    });
+  }
+
+  // Phase 3 — contacts: one lookup across the touched companies, one bulk
+  // insert for the missing (company, name) pairs. Best-effort like before —
+  // a failed contact write downgrades to contact_id null, never blocks the lead.
+  const contactRows = promotable.filter(({ row }) => row.normalized?.contact_name);
+  const contactIdByKey = new Map();
+  if (contactRows.length) {
+    const companyIds = [...new Set(contactRows.map(({ company }) => company.id))];
+    const existingContacts = await fetchSupabaseRows("contacts", {
+      select: "id,company_id,name",
+      filters: withWorkspaceFilter([["company_id", inFilter(companyIds)]]),
+      limit: 1000,
+    });
+    for (const contact of existingContacts || []) {
+      const key = `${contact.company_id}→${contact.name}`;
+      if (!contactIdByKey.has(key)) contactIdByKey.set(key, contact.id);
     }
 
-    // Create/link a contact (decision-maker) when we have a name. Business cards
-    // carry title/email, so the person becomes a first-class contact, not just meta.
-    let contactId = null;
-    const contactName = n.contact_name;
-    if (contactName) {
-      const existingContact = await fetchSupabaseRows("contacts", {
-        filters: withWorkspaceFilter([["company_id", eqFilter(company.id)], ["name", eqFilter(contactName)]]),
-        limit: 1,
-      });
-      if (Array.isArray(existingContact) && existingContact[0]) {
-        contactId = existingContact[0].id;
-      } else {
-        const createdContact = await insertReturning("contacts", {
+    const newContactByKey = new Map();
+    for (const { row, company } of contactRows) {
+      const n = row.normalized;
+      const key = `${company.id}→${n.contact_name}`;
+      if (!contactIdByKey.has(key) && !newContactByKey.has(key)) {
+        newContactByKey.set(key, {
           workspace_id: workspaceId,
           company_id: company.id,
-          name: contactName,
+          name: n.contact_name,
           email: n.email || null,
           title: n.title || null,
         });
-        contactId = createdContact && !createdContact.error ? createdContact.id : null;
       }
     }
 
-    const lead = await insertReturning("leads", {
-      workspace_id: workspaceId,
-      company_id: company.id,
-      contact_id: contactId,
-      name: n.name || company.name,
-      email: n.email || null,
-      source: n.source || "google_sheets",
-      channel: classinLeadChannel(n),
-      status: n.status || "new",
-      score: classinLeadScore(n),
-      next_action: classinNextAction(n),
-      last_touch_at: now,
-      updated_at: now,
-      meta: compactMeta({
-        lane: "classin_sales",
-        source_transport: row.source || "google_sheets",
-        source_family: n.source || "google_sheets",
-        source_ref: n.source_ref || row.source_ref || null,
-        sheet_name: n.sheet_name || null,
-        match_key: n.match_key,
-        address: n.address || null,
-        contact_name: n.contact_name || null,
-        intake_id: row.id,
-        note: n.note || null,
-        campaign: n.campaign_name || null,
-        ad_name: n.ad_name || null,
-        adset_name: n.adset_name || null,
-        ad_id: n.ad_id || null,
-        form_name: n.form_name || null,
-        form_id: n.form_id || null,
-        created_time: n.created_time || null,
-        intent: n.intent || null,
-        validity: n.validity || null,
-        unit_count: n.unit_count ?? null,
-        revenue_cny: n.revenue_cny ?? null,
-        currency: n.currency || (n.revenue_cny ? "CNY" : null),
-        crm_stage: n.crm_stage || null,
-        customer_state: n.customer_state || null,
-        extra: n.extra && Object.keys(n.extra).length ? n.extra : null,
-      }),
-    });
-
-    if (!lead || lead.error) {
-      await patchRows(STAGING_TABLE, [["id", eqFilter(row.id)]], { status: "review", note: lead?.error || "lead-insert-failed", company_id: company.id });
-      review += 1;
-      continue;
+    if (newContactByKey.size) {
+      const createdContacts = await insertSupabaseRecord("contacts", [...newContactByKey.values()], {
+        returnRepresentation: true,
+        select: "id,company_id,name",
+      });
+      for (const contact of createdContacts.records || []) {
+        contactIdByKey.set(`${contact.company_id}→${contact.name}`, contact.id);
+      }
     }
-
-    await patchRows(STAGING_TABLE, [["id", eqFilter(row.id)]], {
-      status: outcome,
-      company_id: company.id,
-      lead_id: lead.id,
-      promoted_at: now,
-    });
-    if (outcome === "promoted") promoted += 1;
-    else mergedCount += 1;
   }
 
+  // Phase 4 — leads: one bulk insert; representation rows map back by index.
+  let promoted = 0;
+  let mergedCount = 0;
+  if (promotable.length) {
+    const leadRecords = promotable.map(({ row, company }) => {
+      const contactKey = `${company.id}→${row.normalized?.contact_name}`;
+      const contactId = row.normalized?.contact_name ? contactIdByKey.get(contactKey) ?? null : null;
+      return buildLeadRecord(workspaceId, row, company, contactId, now);
+    });
+
+    const createdLeads = await insertSupabaseRecord("leads", leadRecords, {
+      returnRepresentation: true,
+      select: "id",
+    });
+
+    if (createdLeads.persisted && Array.isArray(createdLeads.records)) {
+      promotable.forEach(({ row, company, outcome }, index) => {
+        const lead = createdLeads.records[index];
+        if (!lead?.id) {
+          markReview(row, "lead-insert-failed", company.id);
+          return;
+        }
+        finalize.push({
+          row,
+          patch: {
+            status: outcome,
+            company_id: company.id,
+            lead_id: lead.id,
+            promoted_at: now,
+          },
+        });
+        if (outcome === "promoted") promoted += 1;
+        else mergedCount += 1;
+      });
+    } else {
+      for (const { row, company } of promotable) {
+        markReview(row, createdLeads.reason || "lead-insert-failed", company.id);
+      }
+    }
+  }
+
+  // Phase 5 — one bulk status write for every staging row we touched.
+  await finalizeStagingRows(finalize);
+
+  const review = finalize.filter(({ patch }) => patch.status === "review").length;
   await recordGoogleSheetsSync({
     workspaceId,
     status: "success",
@@ -460,11 +513,16 @@ export async function pushLeadsToSheet({
 
     const [leads, companies] = await Promise.all([
       fetchSupabaseRows("leads", {
+        select: "id,name,status,score,next_action,last_touch_at,company_id,meta",
         filters: withWorkspaceFilter(),
         order: "last_touch_at.desc.nullslast",
         limit: 500,
       }),
-      fetchSupabaseRows("companies", { filters: withWorkspaceFilter(), limit: 1000 }),
+      fetchSupabaseRows("companies", {
+        select: "id,name,phone",
+        filters: withWorkspaceFilter(),
+        limit: 1000,
+      }),
     ]);
     const companyById = new Map((companies || []).map((c) => [c.id, c]));
 

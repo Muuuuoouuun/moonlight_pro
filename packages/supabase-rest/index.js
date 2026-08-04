@@ -71,6 +71,14 @@ export function inFilter(values) {
   return `in.(${values.join(",")})`;
 }
 
+// in.() with PostgREST double-quoting — safe for values containing commas,
+// parens, or quotes (e.g. free-text match keys). Prefer this over inFilter for
+// any value that isn't a UUID/enum you control.
+export function inFilterQuoted(values) {
+  const quoted = values.map((value) => `"${String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`);
+  return `in.(${quoted.join(",")})`;
+}
+
 export function withWorkspaceFilter(filters = []) {
   const workspaceId = resolveDefaultWorkspaceId();
   return workspaceId ? [["workspace_id", eqFilter(workspaceId)], ...filters] : filters;

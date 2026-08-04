@@ -412,6 +412,7 @@ export async function getProjectLedger() {
 
   const [brandRows, projectRows, taskRows, updateRows, decisionRows, noteRows, routineRows] = await Promise.all([
     fetchSupabaseRows("brands", {
+      limit: 80,
       order: "name.asc",
       filters: withWorkspaceFilter([["status", eqFilter("active")]]),
     }),

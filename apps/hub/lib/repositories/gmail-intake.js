@@ -12,7 +12,7 @@
 import { randomUUID } from "crypto";
 
 import {
-  makeSupabaseHeaders,
+  insertSupabaseRecord,
   resolveDefaultWorkspaceId,
   resolveSupabaseConfig,
 } from "@/lib/server-write";
@@ -41,33 +41,6 @@ function previewResult(reason, byDisposition) {
     skipped: 0,
     byDisposition,
   };
-}
-
-// Insert that tolerates the staging unique-index conflict (re-scan the same
-// message) as a skip — same contract as sheets-sync.js's insertStagingRow.
-async function insertStagingRow(record) {
-  const config = resolveSupabaseConfig();
-  if (!config) return { ok: false, reason: "missing-config" };
-
-  try {
-    const response = await fetch(`${config.url}/rest/v1/${STAGING_TABLE}`, {
-      method: "POST",
-      headers: makeSupabaseHeaders(config.apiKey, {
-        contentType: "application/json",
-        prefer: "return=minimal",
-      }),
-      body: JSON.stringify(record),
-      cache: "no-store",
-    });
-    if (response.status === 409) return { ok: false, reason: "duplicate" };
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      return { ok: false, reason: `http-${response.status}`, detail };
-    }
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, reason: "request-failed", detail: String(error) };
-  }
 }
 
 function buildIntakeRecord({ workspaceId, message, classification }) {
@@ -168,12 +141,13 @@ export async function scanGmailForLeads({
     }
 
     const record = buildIntakeRecord({ workspaceId, message, classification });
-    const result = await insertStagingRow(record);
-    if (result.ok) {
+    // The unique (workspace_id, source, source_ref) index turns a re-scan of the
+    // same message into reason "duplicate"; that and transient write failures
+    // both surface as "skipped" — the scan itself still succeeded.
+    const result = await insertSupabaseRecord(STAGING_TABLE, record);
+    if (result.persisted) {
       staged += 1;
     } else {
-      // Duplicate (already scanned this message) or a transient write
-      // failure both surface as "skipped" — the scan itself still succeeded.
       skipped += 1;
     }
   }

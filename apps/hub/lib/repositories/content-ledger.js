@@ -298,27 +298,20 @@ function titleFromItem(item) {
   return (item?.title || "").trim() || "제목 없음";
 }
 
-function resolveItemChannel(item, variants) {
-  const variant = variants.find((v) => v.content_id === item.id);
-  if (variant?.variant_type && VARIANT_CHANNEL_LABEL[variant.variant_type]) {
-    return VARIANT_CHANNEL_LABEL[variant.variant_type];
-  }
-  return "Web";
-}
-
-function resolveItemKind(item, variants) {
-  const variant = variants.find((v) => v.content_id === item.id);
-  if (variant?.variant_type && VARIANT_KIND_LABEL[variant.variant_type]) {
-    return VARIANT_KIND_LABEL[variant.variant_type];
-  }
-  return "Blog";
-}
-
 function mapItems(rows, variants, brandById) {
+  // First variant per content item, matching the previous `.find()` semantics —
+  // but built once instead of re-scanning the variants array 1-3× per item.
+  const firstVariantByContentId = new Map();
+  for (const variant of variants) {
+    if (!firstVariantByContentId.has(variant.content_id)) {
+      firstVariantByContentId.set(variant.content_id, variant);
+    }
+  }
+
   return rows.map((row) => {
     const status = ITEM_STATUSES.includes(row.status) ? row.status : "draft";
     const whenSource = row.scheduled_at || row.published_at || row.updated_at || row.created_at;
-    const variant = variants.find((v) => v.content_id === row.id);
+    const variant = firstVariantByContentId.get(row.id) || null;
     const brand = row.brand_id ? brandById.get(row.brand_id) : null;
 
     return {
@@ -329,8 +322,8 @@ function mapItems(rows, variants, brandById) {
       slug: row.slug || null,
       status,
       statusLabel: ITEM_STATUS_LABEL[status] || "Draft",
-      kind: variant?.variant_type ? (VARIANT_KIND_LABEL[variant.variant_type] || "Blog") : resolveItemKind(row, variants),
-      channel: variant?.variant_type ? (VARIANT_CHANNEL_LABEL[variant.variant_type] || "Web") : resolveItemChannel(row, variants),
+      kind: (variant?.variant_type && VARIANT_KIND_LABEL[variant.variant_type]) || "Blog",
+      channel: (variant?.variant_type && VARIANT_CHANNEL_LABEL[variant.variant_type]) || "Web",
       when: formatShortDate(whenSource),
       author: row.owner_id ? "Me" : "Team",
       nextAction: row.next_action || "",

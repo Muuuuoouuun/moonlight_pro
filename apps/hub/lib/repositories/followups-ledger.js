@@ -7,7 +7,12 @@
 // Channels follow the real motion (NO email): early=전화/문자, mid=방문, 고객=카톡.
 
 import { eqFilter, fetchSupabaseRows, inFilter, withWorkspaceFilter } from "@/lib/server-read";
-import { resolveDefaultWorkspaceId, resolveSupabaseConfig, updateSupabaseRecord } from "@/lib/server-write";
+import {
+  resolveDefaultWorkspaceId,
+  resolveSupabaseConfig,
+  updateSupabaseRecord,
+  upsertSupabaseRecords,
+} from "@/lib/server-write";
 
 import { momentumScore, outcomeBoost, priorityFor } from "@/lib/sales-os/followup-scoring";
 import {
@@ -80,17 +85,28 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
 
   const [leads, deals, companies, outcomes] = await Promise.all([
     fetchSupabaseRows("leads", {
+      select: "id,name,status,score,next_action,company_id,channel,source,last_touch_at,updated_at,created_at,meta",
       filters: withWorkspaceFilter([["status", inFilter(["new", "qualified", "nurturing"])]]),
       order: "last_touch_at.asc.nullsfirst",
       limit: 300,
     }),
     fetchSupabaseRows("deals", {
+      select: "id,title,stage,amount,company_id,last_activity_at,updated_at,created_at,meta",
       filters: withWorkspaceFilter([["stage", inFilter(["prospect", "proposal", "negotiation", "lead", "qualified", "qual", "neg", "prop"])]]),
       order: "updated_at.asc.nullsfirst",
       limit: 300,
     }),
-    fetchSupabaseRows("companies", { filters: withWorkspaceFilter(), limit: 1000 }),
-    fetchSupabaseRows("outreach_outcomes", { filters: withWorkspaceFilter(), order: "occurred_at.desc", limit: 500 }),
+    fetchSupabaseRows("companies", {
+      select: "id,name,phone",
+      filters: withWorkspaceFilter(),
+      limit: 1000,
+    }),
+    fetchSupabaseRows("outreach_outcomes", {
+      select: "lead_id,company_id,action,occurred_at",
+      filters: withWorkspaceFilter(),
+      order: "occurred_at.desc",
+      limit: 500,
+    }),
   ]);
 
   if (!leads && !deals) {
@@ -205,10 +221,16 @@ export async function recomputeLeadScores({ workspaceId = resolveDefaultWorkspac
 
   const [leads, outcomes] = await Promise.all([
     fetchSupabaseRows("leads", {
+      select: "id,company_id,score",
       filters: withWorkspaceFilter([["status", inFilter(["new", "qualified", "nurturing"])]]),
       limit: 500,
     }),
-    fetchSupabaseRows("outreach_outcomes", { filters: withWorkspaceFilter(), order: "occurred_at.desc", limit: 1000 }),
+    fetchSupabaseRows("outreach_outcomes", {
+      select: "lead_id,company_id,action,occurred_at",
+      filters: withWorkspaceFilter(),
+      order: "occurred_at.desc",
+      limit: 1000,
+    }),
   ]);
 
   if (!leads) {
@@ -228,7 +250,7 @@ export async function recomputeLeadScores({ workspaceId = resolveDefaultWorkspac
     else if (o.company_id) pushTo(byCompany, o.company_id, o);
   });
 
-  let updated = 0;
+  const changed = [];
   for (const lead of leads) {
     const history = [
       ...(byLead.get(lead.id) || []),
@@ -245,13 +267,28 @@ export async function recomputeLeadScores({ workspaceId = resolveDefaultWorkspac
     });
 
     if (Math.abs(score - toNum(lead.score, 0)) < minDelta) continue;
+    changed.push({ id: lead.id, workspace_id: workspaceId, score });
+  }
 
-    const res = await updateSupabaseRecord(
-      "leads",
-      [["id", eqFilter(lead.id)], ["workspace_id", eqFilter(workspaceId)]],
-      { score },
-    );
-    if (res.persisted) updated += 1;
+  // One bulk upsert (id conflict → DO UPDATE score) instead of one PATCH per
+  // lead — the previous loop issued up to 500 sequential round trips.
+  let updated = 0;
+  if (changed.length) {
+    const res = await upsertSupabaseRecords("leads", changed, { onConflict: "id" });
+    if (res.persisted) {
+      updated = changed.length;
+    } else {
+      const singles = await Promise.all(
+        changed.map((row) =>
+          updateSupabaseRecord(
+            "leads",
+            [["id", eqFilter(row.id)], ["workspace_id", eqFilter(workspaceId)]],
+            { score: row.score },
+          ),
+        ),
+      );
+      updated = singles.filter((r) => r.persisted).length;
+    }
   }
 
   return { persisted: true, reason: "ok", updated, scanned: leads.length };

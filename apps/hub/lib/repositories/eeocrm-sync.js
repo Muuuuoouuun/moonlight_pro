@@ -15,9 +15,9 @@ import { Client } from "@modelcontextprotocol/sdk/client";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 
 import {
-  countSupabaseRows,
   eqFilter,
   fetchSupabaseRows,
+  inFilterQuoted,
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import {
@@ -29,10 +29,14 @@ import {
 import { computeMatchKey, normalizeName, normalizePhone } from "@/lib/sheets-normalize";
 import { recordGoogleSheetsSync } from "@/lib/google-sheets";
 import { promoteStagedLeads } from "@/lib/repositories/sheets-sync";
+import {
+  batchInsertStagingRows,
+  compactMeta,
+  tallyStagingByStatus,
+} from "@/lib/repositories/repo-utils";
 import { assertEeocrmOwnerId, resolveEeocrmOwnerId } from "@/lib/sales-os/operator-scope";
 import { extractEeocrmRecords } from "@/lib/external-crm/eeocrm-response";
 
-const STAGING_TABLE = "lead_intake_raw";
 const PROVIDER = "eeocrm";
 const OWNER_ID = resolveEeocrmOwnerId(); // 문준혁 — eeoCRM ownerId, see lib/external-crm/owner-names.js
 const PAGE_SIZE = 100; // XOQL hard cap per the tool's own contract
@@ -47,16 +51,6 @@ const STATUS_CODE_TO_LEAD_STATUS = {
   5: "nurturing", // 진행중
   16: "nurturing",
 };
-
-function compactMeta(obj) {
-  return Object.fromEntries(
-    Object.entries(obj).filter(([, value]) => {
-      if (value == null) return false;
-      if (typeof value === "string" && !value.trim()) return false;
-      return true;
-    }),
-  );
-}
 
 function normalizeEeocrmPhone(value) {
   const raw = String(value ?? "").trim();
@@ -296,43 +290,73 @@ async function fetchEeocrmPages(client, buildSoql, maxPages = DEFAULT_MAX_PAGES)
   return { ok: true, records, truncated };
 }
 
-async function findCompanyByEeocrmAccountId(workspaceId, accountId) {
-  if (!accountId) return null;
-  const rows = await fetchSupabaseRows("companies", {
-    filters: [["workspace_id", eqFilter(workspaceId)], ["meta->>eeocrm_account_id", eqFilter(accountId)]],
-    limit: 1,
-  });
-  return rows?.[0] || null;
+const COMPANY_SELECT = "id,name,phone,address,match_key,status,meta";
+
+// Prefetches every company the account batch could resolve to — by eeoCRM
+// account id, match key, or exact name — in three reads total, replacing the
+// old 1-3 sequential lookups *per account*. The maps are kept current as new
+// companies are inserted so later records resolve exactly like the sequential
+// run did.
+async function buildCompanyIndex(workspaceId, mappedAccounts) {
+  const accountIds = [...new Set(mappedAccounts.map((m) => m.meta.eeocrm_account_id).filter(Boolean))];
+  const matchKeys = [...new Set(mappedAccounts.map((m) => m.match_key).filter(Boolean))];
+  const names = [...new Set(mappedAccounts.map((m) => m.name).filter(Boolean))];
+
+  const [byAccountIdRows, byMatchKeyRows, byNameRows] = await Promise.all([
+    accountIds.length
+      ? fetchSupabaseRows("companies", {
+          select: COMPANY_SELECT,
+          filters: [["workspace_id", eqFilter(workspaceId)], ["meta->>eeocrm_account_id", inFilterQuoted(accountIds)]],
+          limit: accountIds.length,
+        })
+      : [],
+    matchKeys.length
+      ? fetchSupabaseRows("companies", {
+          select: COMPANY_SELECT,
+          filters: [["workspace_id", eqFilter(workspaceId)], ["match_key", inFilterQuoted(matchKeys)]],
+          limit: matchKeys.length,
+        })
+      : [],
+    names.length
+      ? fetchSupabaseRows("companies", {
+          select: COMPANY_SELECT,
+          filters: [["workspace_id", eqFilter(workspaceId)], ["name", inFilterQuoted(names)]],
+          limit: names.length,
+        })
+      : [],
+  ]);
+
+  const index = { byAccountId: new Map(), byMatchKey: new Map(), byName: new Map() };
+  const register = (company) => {
+    if (!company) return;
+    const accountId = company.meta?.eeocrm_account_id;
+    if (accountId && !index.byAccountId.has(String(accountId))) index.byAccountId.set(String(accountId), company);
+    if (company.match_key && !index.byMatchKey.has(company.match_key)) index.byMatchKey.set(company.match_key, company);
+    if (company.name && !index.byName.has(company.name)) index.byName.set(company.name, company);
+  };
+  // byName last so the more specific keys win their slots first.
+  (byAccountIdRows || []).forEach(register);
+  (byMatchKeyRows || []).forEach(register);
+  (byNameRows || []).forEach(register);
+  index.register = register;
+  return index;
 }
 
-async function findCompanyForEeocrmAccount(workspaceId, mapped) {
-  const byAccountId = await findCompanyByEeocrmAccountId(workspaceId, mapped.meta.eeocrm_account_id);
-  if (byAccountId) return byAccountId;
-
-  if (mapped.match_key) {
-    const rows = await fetchSupabaseRows("companies", {
-      filters: [["workspace_id", eqFilter(workspaceId)], ["match_key", eqFilter(mapped.match_key)]],
-      limit: 1,
-    });
-    if (rows?.[0]) return rows[0];
-  }
-
-  if (mapped.name) {
-    const rows = await fetchSupabaseRows("companies", {
-      filters: [["workspace_id", eqFilter(workspaceId)], ["name", eqFilter(mapped.name)]],
-      limit: 1,
-    });
-    if (rows?.[0]) return rows[0];
-  }
-
-  return null;
+function findCompanyForEeocrmAccount(companyIndex, mapped) {
+  const accountId = mapped.meta.eeocrm_account_id;
+  return (
+    (accountId ? companyIndex.byAccountId.get(String(accountId)) : null) ||
+    (mapped.match_key ? companyIndex.byMatchKey.get(mapped.match_key) : null) ||
+    (mapped.name ? companyIndex.byName.get(mapped.name) : null) ||
+    null
+  );
 }
 
-async function upsertEeocrmAccountCompany(workspaceId, record) {
+async function upsertEeocrmAccountCompany(workspaceId, record, companyIndex) {
   const mapped = mapEeocrmAccountToCompany(record);
   if (!mapped.name) return { ok: false, reason: "missing-name" };
 
-  const existing = await findCompanyForEeocrmAccount(workspaceId, mapped);
+  const existing = findCompanyForEeocrmAccount(companyIndex, mapped);
   if (existing) {
     const mergedMeta = compactMeta({ ...(existing.meta || {}), ...mapped.meta });
     const update = await updateSupabaseRecord(
@@ -345,10 +369,12 @@ async function upsertEeocrmAccountCompany(workspaceId, record) {
         status: existing.status === "inactive" ? "inactive" : "active",
         meta: mergedMeta,
       },
-      { returnRepresentation: true, select: "*" },
+      { returnRepresentation: true, select: COMPANY_SELECT },
     );
     if (!update.persisted) return { ok: false, reason: update.reason || "company-update-failed", detail: update.detail };
-    return { ok: true, company: update.record || existing, created: false };
+    const company = update.record || existing;
+    companyIndex.register(company);
+    return { ok: true, company, created: false };
   }
 
   const inserted = await insertSupabaseRecord(
@@ -362,14 +388,35 @@ async function upsertEeocrmAccountCompany(workspaceId, record) {
       status: "active",
       meta: mapped.meta,
     },
-    { returnRepresentation: true, select: "*" },
+    { returnRepresentation: true, select: COMPANY_SELECT },
   );
 
   if (!inserted.persisted) return { ok: false, reason: inserted.reason || "company-insert-failed", detail: inserted.detail };
+  companyIndex.register(inserted.record);
   return { ok: true, company: inserted.record, created: true };
 }
 
-async function upsertEeocrmContact(workspaceId, record, companyByEeocrmAccountId) {
+const contactIndexKey = (companyId, name) => `${companyId}→${name}`;
+
+// One read for every contact under the batch's companies; the map stays current
+// as inserts land so duplicate contact rows in the same run resolve to one row.
+async function buildContactIndex(workspaceId, companyIds) {
+  const index = new Map();
+  if (!companyIds.length) return index;
+
+  const rows = await fetchSupabaseRows("contacts", {
+    select: "id,company_id,name,email",
+    filters: [["workspace_id", eqFilter(workspaceId)], ["company_id", inFilterQuoted(companyIds)]],
+    limit: 2000,
+  });
+  for (const contact of rows || []) {
+    const key = contactIndexKey(contact.company_id, contact.name);
+    if (!index.has(key)) index.set(key, contact);
+  }
+  return index;
+}
+
+async function upsertEeocrmContact(workspaceId, record, companyByEeocrmAccountId, contactIndex) {
   const accountId = record.accountId != null ? String(record.accountId) : "";
   const company = companyByEeocrmAccountId.get(accountId);
   if (!company?.id) return { ok: false, reason: "missing-company" };
@@ -378,20 +425,19 @@ async function upsertEeocrmContact(workspaceId, record, companyByEeocrmAccountId
   if (!name) return { ok: false, reason: "missing-name" };
   const email = record.email ? String(record.email).trim() || null : null;
 
-  const existing = await fetchSupabaseRows("contacts", {
-    filters: [["workspace_id", eqFilter(workspaceId)], ["company_id", eqFilter(company.id)], ["name", eqFilter(name)]],
-    limit: 1,
-  });
-  if (existing?.[0]) {
-    if (email && !existing[0].email) {
+  const existing = contactIndex.get(contactIndexKey(company.id, name));
+  if (existing) {
+    if (email && !existing.email) {
       await updateSupabaseRecord(
         "contacts",
-        [["id", eqFilter(existing[0].id)], ["workspace_id", eqFilter(workspaceId)]],
+        [["id", eqFilter(existing.id)], ["workspace_id", eqFilter(workspaceId)]],
         { email },
       );
-      return { ok: true, contact: { ...existing[0], email }, created: false };
+      const merged = { ...existing, email };
+      contactIndex.set(contactIndexKey(company.id, name), merged);
+      return { ok: true, contact: merged, created: false };
     }
-    return { ok: true, contact: existing[0], created: false };
+    return { ok: true, contact: existing, created: false };
   }
 
   const inserted = await insertSupabaseRecord(
@@ -403,31 +449,36 @@ async function upsertEeocrmContact(workspaceId, record, companyByEeocrmAccountId
       email,
       title: null,
     },
-    { returnRepresentation: true, select: "*" },
+    { returnRepresentation: true, select: "id,company_id,name,email" },
   );
   if (!inserted.persisted) return { ok: false, reason: inserted.reason || "contact-insert-failed", detail: inserted.detail };
+  contactIndex.set(contactIndexKey(company.id, name), inserted.record);
   return { ok: true, contact: inserted.record, created: true };
 }
 
-async function findDealByMetaRef(workspaceId, key, value) {
-  if (!value) return null;
-  const rows = await fetchSupabaseRows("deals", {
-    filters: [["workspace_id", eqFilter(workspaceId)], [`meta->>${key}`, eqFilter(value)]],
-    limit: 1,
+const DEAL_SELECT = "id,company_id,title,amount,currency,stage,expected_close_at,last_activity_at,won_at,lost_at,meta";
+const CUSTOMER_ACCOUNT_SELECT = "id,company_id,name,status,meta";
+
+// One read per meta key across the whole batch (deals by opportunity/order id,
+// customer accounts by eeoCRM account id) — replaces one lookup per record.
+async function fetchRowsByMetaRef(workspaceId, table, select, metaKey, values) {
+  const unique = [...new Set(values.filter(Boolean).map(String))];
+  const index = new Map();
+  if (!unique.length) return index;
+
+  const rows = await fetchSupabaseRows(table, {
+    select,
+    filters: [["workspace_id", eqFilter(workspaceId)], [`meta->>${metaKey}`, inFilterQuoted(unique)]],
+    limit: unique.length,
   });
-  return rows?.[0] || null;
+  for (const row of rows || []) {
+    const key = row.meta?.[metaKey];
+    if (key != null && !index.has(String(key))) index.set(String(key), row);
+  }
+  return index;
 }
 
-async function findCustomerAccountByEeocrmAccountId(workspaceId, accountId) {
-  if (!accountId) return null;
-  const rows = await fetchSupabaseRows("customer_accounts", {
-    filters: [["workspace_id", eqFilter(workspaceId)], ["meta->>eeocrm_account_id", eqFilter(accountId)]],
-    limit: 1,
-  });
-  return rows?.[0] || null;
-}
-
-async function upsertEeocrmCustomerAccount(workspaceId, account, company) {
+async function upsertEeocrmCustomerAccount(workspaceId, account, company, customerAccountIndex) {
   const accountId = account.id != null ? String(account.id) : "";
   if (!accountId) return { ok: false, reason: "missing-account-id" };
   const name = normalizeName(account.accountName) || company?.name;
@@ -442,7 +493,7 @@ async function upsertEeocrmCustomerAccount(workspaceId, account, company) {
     eeocrm_owner_id: account.ownerId != null ? String(account.ownerId) : null,
     eeocrm_entity_type: account.entityType != null ? String(account.entityType) : null,
   });
-  const existing = await findCustomerAccountByEeocrmAccountId(workspaceId, accountId);
+  const existing = customerAccountIndex.get(accountId) || null;
 
   if (existing) {
     const update = await updateSupabaseRecord(
@@ -454,10 +505,12 @@ async function upsertEeocrmCustomerAccount(workspaceId, account, company) {
         status: existing.status === "closed" ? "closed" : "active",
         meta: compactMeta({ ...(existing.meta || {}), ...meta }),
       },
-      { returnRepresentation: true, select: "*" },
+      { returnRepresentation: true, select: CUSTOMER_ACCOUNT_SELECT },
     );
     if (!update.persisted) return { ok: false, reason: update.reason || "customer-account-update-failed", detail: update.detail };
-    return { ok: true, account: update.record || existing, created: false };
+    const merged = update.record || existing;
+    customerAccountIndex.set(accountId, merged);
+    return { ok: true, account: merged, created: false };
   }
 
   const inserted = await insertSupabaseRecord(
@@ -470,19 +523,20 @@ async function upsertEeocrmCustomerAccount(workspaceId, account, company) {
       started_at: timestampFromMillis(account.createdAt),
       meta,
     },
-    { returnRepresentation: true, select: "*" },
+    { returnRepresentation: true, select: CUSTOMER_ACCOUNT_SELECT },
   );
   if (!inserted.persisted) return { ok: false, reason: inserted.reason || "customer-account-insert-failed", detail: inserted.detail };
+  customerAccountIndex.set(accountId, inserted.record);
   return { ok: true, account: inserted.record, created: true };
 }
 
-async function upsertEeocrmOpportunityDeal(workspaceId, record, companyByEeocrmAccountId) {
+async function upsertEeocrmOpportunityDeal(workspaceId, record, companyByEeocrmAccountId, dealByOpportunityRef) {
   const opportunityId = record.id != null ? String(record.id) : "";
   if (!opportunityId) return { ok: false, reason: "missing-opportunity-id" };
 
   const company = companyByEeocrmAccountId.get(String(record.accountId ?? ""));
   const mapped = mapEeocrmOpportunityToDeal(record, company);
-  const existing = await findDealByMetaRef(workspaceId, "eeocrm_opportunity_id", opportunityId);
+  const existing = dealByOpportunityRef.get(opportunityId) || null;
 
   if (existing) {
     const update = await updateSupabaseRecord(
@@ -500,7 +554,7 @@ async function upsertEeocrmOpportunityDeal(workspaceId, record, companyByEeocrmA
         lost_at: mapped.lost_at,
         meta: compactMeta({ ...(existing.meta || {}), ...mapped.meta }),
       },
-      { returnRepresentation: true, select: "*" },
+      { returnRepresentation: true, select: DEAL_SELECT },
     );
     if (!update.persisted) return { ok: false, reason: update.reason || "deal-update-failed", detail: update.detail };
     return { ok: true, deal: update.record || existing, created: false };
@@ -521,13 +575,13 @@ async function upsertEeocrmOpportunityDeal(workspaceId, record, companyByEeocrmA
       lost_at: mapped.lost_at,
       meta: mapped.meta,
     },
-    { returnRepresentation: true, select: "*" },
+    { returnRepresentation: true, select: DEAL_SELECT },
   );
   if (!inserted.persisted) return { ok: false, reason: inserted.reason || "deal-insert-failed", detail: inserted.detail };
   return { ok: true, deal: inserted.record, created: true };
 }
 
-async function upsertEeocrmOrderDeal(workspaceId, record, companyByEeocrmAccountId, dealByEeocrmOpportunityId) {
+async function upsertEeocrmOrderDeal(workspaceId, record, companyByEeocrmAccountId, dealByEeocrmOpportunityId, dealByOrderRef) {
   const orderId = record.id != null ? String(record.id) : "";
   if (!orderId) return { ok: false, reason: "missing-order-id" };
 
@@ -553,14 +607,14 @@ async function upsertEeocrmOrderDeal(workspaceId, record, companyByEeocrmAccount
           currency: "CNY",
         }),
       },
-      { returnRepresentation: true, select: "*" },
+      { returnRepresentation: true, select: DEAL_SELECT },
     );
     if (!update.persisted) return { ok: false, reason: update.reason || "order-link-failed", detail: update.detail };
     dealByEeocrmOpportunityId.set(opportunityId, update.record || opportunityDeal);
     return { ok: true, deal: update.record || opportunityDeal, created: false, linkedToOpportunity: true };
   }
 
-  const existing = await findDealByMetaRef(workspaceId, "eeocrm_order_id", orderId);
+  const existing = dealByOrderRef.get(orderId) || null;
   if (existing) return { ok: true, deal: existing, created: false };
 
   const company = companyByEeocrmAccountId.get(String(record.accountId ?? ""));
@@ -579,13 +633,35 @@ async function upsertEeocrmOrderDeal(workspaceId, record, companyByEeocrmAccount
       won_at: mapped.won_at,
       meta: mapped.meta,
     },
-    { returnRepresentation: true, select: "*" },
+    { returnRepresentation: true, select: DEAL_SELECT },
   );
   if (!inserted.persisted) return { ok: false, reason: inserted.reason || "order-deal-insert-failed", detail: inserted.detail };
   return { ok: true, deal: inserted.record, created: true };
 }
 
-async function upsertEeocrmActivity(workspaceId, record, customerAccountByEeocrmAccountId, companyByEeocrmAccountId) {
+// occurred_at is normalized to epoch millis: PostgREST returns "+00:00" offsets
+// while timestampFromMillis emits "Z", and a raw string key would never match.
+const activityDedupeKey = (accountId, occurredAt, kind, body) =>
+  `${accountId}|${new Date(occurredAt).getTime()}|${kind}|${body}`;
+
+// One read of the batch accounts' existing activities builds the dedupe set the
+// old code re-queried per record (an eq on free-text `body` each time).
+async function buildActivityDedupeSet(workspaceId, accountIds) {
+  const seen = new Set();
+  if (!accountIds.length) return seen;
+
+  const rows = await fetchSupabaseRows("crm_activities", {
+    select: "account_id,occurred_at,kind,body",
+    filters: [["workspace_id", eqFilter(workspaceId)], ["account_id", inFilterQuoted(accountIds)]],
+    limit: 5000,
+  });
+  for (const row of rows || []) {
+    seen.add(activityDedupeKey(row.account_id, row.occurred_at, row.kind, row.body));
+  }
+  return seen;
+}
+
+async function upsertEeocrmActivity(workspaceId, record, customerAccountByEeocrmAccountId, companyByEeocrmAccountId, activityKeys) {
   const eeocrmAccountId = record.dbcRelation26 != null ? String(record.dbcRelation26) : "";
   if (!eeocrmAccountId) return { ok: false, reason: "missing-account-relation" };
 
@@ -599,17 +675,8 @@ async function upsertEeocrmActivity(workspaceId, record, customerAccountByEeocrm
   const occurredAt = timestampFromMillis(record.startTime);
   if (!occurredAt) return { ok: false, reason: "missing-occurred-at" };
   const kind = kindForEeocrmActivity(record);
-  const existing = await fetchSupabaseRows("crm_activities", {
-    filters: [
-      ["workspace_id", eqFilter(workspaceId)],
-      ["account_id", eqFilter(account.id)],
-      ["occurred_at", eqFilter(occurredAt)],
-      ["kind", eqFilter(kind)],
-      ["body", eqFilter(body)],
-    ],
-    limit: 1,
-  });
-  if (existing?.[0]) return { ok: true, activity: existing[0], created: false };
+  const dedupeKey = activityDedupeKey(account.id, occurredAt, kind, body);
+  if (activityKeys.has(dedupeKey)) return { ok: true, activity: null, created: false };
 
   const inserted = await insertSupabaseRecord(
     "crm_activities",
@@ -623,9 +690,10 @@ async function upsertEeocrmActivity(workspaceId, record, customerAccountByEeocrm
       owner_id: null,
       occurred_at: occurredAt || new Date().toISOString(),
     },
-    { returnRepresentation: true, select: "*" },
+    { returnRepresentation: true, select: "id" },
   );
   if (!inserted.persisted) return { ok: false, reason: inserted.reason || "activity-insert-failed", detail: inserted.detail };
+  activityKeys.add(dedupeKey);
   return { ok: true, activity: inserted.record, created: true };
 }
 
@@ -637,16 +705,14 @@ export async function getEeocrmSyncStatus(workspaceId = resolveDefaultWorkspaceI
     return { source: "preview", configured: Boolean(config), staging: {}, recentRuns: [], mcpUrl: resolveMcpUrl() };
   }
 
-  const [recentRuns, pending, promoted, merged, review] = await Promise.all([
+  const [recentRuns, staging] = await Promise.all([
     fetchSupabaseRows("sync_runs", {
+      select: "status,payload,started_at,error_message",
       filters: withWorkspaceFilter([["payload->>provider", eqFilter(PROVIDER)]]),
       order: "started_at.desc",
       limit: 10,
     }),
-    countSupabaseRows(STAGING_TABLE, withWorkspaceFilter([["status", eqFilter("pending")], ["source", eqFilter(PROVIDER)]])),
-    countSupabaseRows(STAGING_TABLE, withWorkspaceFilter([["status", eqFilter("promoted")], ["source", eqFilter(PROVIDER)]])),
-    countSupabaseRows(STAGING_TABLE, withWorkspaceFilter([["status", eqFilter("merged")], ["source", eqFilter(PROVIDER)]])),
-    countSupabaseRows(STAGING_TABLE, withWorkspaceFilter([["status", eqFilter("review")], ["source", eqFilter(PROVIDER)]])),
+    tallyStagingByStatus(PROVIDER),
   ]);
 
   const runs = recentRuns || [];
@@ -659,7 +725,7 @@ export async function getEeocrmSyncStatus(workspaceId = resolveDefaultWorkspaceI
     ownerId: OWNER_ID,
     expectedOwnerId: resolveEeocrmOwnerId(),
     lastSyncAt: lastSuccess?.started_at || null,
-    staging: { pending: pending ?? 0, promoted: promoted ?? 0, merged: merged ?? 0, review: review ?? 0 },
+    staging,
     recentRuns: runs.map((r) => ({
       status: r.status,
       action: r.payload?.action || null,
@@ -695,6 +761,7 @@ export async function importEeocrmLeadsToStaging({
       const records = queryResult.records;
       total += records.length;
 
+      const stagingRecords = [];
       for (const record of records) {
         const normalized = mapEeocrmLeadToIntake(record);
         if (!normalized.match_key) {
@@ -702,7 +769,7 @@ export async function importEeocrmLeadsToStaging({
           continue;
         }
         const sourceRef = `eeocrm:lead:${record.id}`;
-        const inserted = await insertSupabaseRecord(STAGING_TABLE, {
+        stagingRecords.push({
           workspace_id: workspaceId,
           source: PROVIDER,
           source_ref: sourceRef,
@@ -711,9 +778,13 @@ export async function importEeocrmLeadsToStaging({
           match_key: normalized.match_key,
           status: "pending",
         });
-        if (inserted.persisted) imported += 1;
-        else skipped += 1; // includes http-409 (already staged — idempotent re-run)
       }
+
+      // One pre-check + one bulk insert per page; re-staged rows count as skipped
+      // (idempotent re-run), same as the old per-row 409 handling.
+      const batch = await batchInsertStagingRows(stagingRecords);
+      imported += batch.imported;
+      skipped += batch.skipped;
 
       if (records.length < PAGE_SIZE) break;
       if (page === maxPages - 1) truncated = true;
@@ -752,6 +823,17 @@ export async function hydrateEeocrmAccountsContacts({
     );
     if (!accountResult.ok) return accountResult;
 
+    // Prefetch phase — every per-record lookup the old loops issued is replaced
+    // by one batched read per entity type (companies ×3 keys, customer accounts,
+    // contacts, deals ×2 refs, activity dedupe keys). Writes stay sequential so
+    // merge semantics and ordering match the previous implementation exactly.
+    const mappedAccounts = accountResult.records.map((record) => mapEeocrmAccountToCompany(record));
+    const accountEeocrmIds = accountResult.records.map((record) => String(record.id ?? "")).filter(Boolean);
+    const [companyIndex, customerAccountIndex] = await Promise.all([
+      buildCompanyIndex(workspaceId, mappedAccounts),
+      fetchRowsByMetaRef(workspaceId, "customer_accounts", CUSTOMER_ACCOUNT_SELECT, "eeocrm_account_id", accountEeocrmIds),
+    ]);
+
     const companyByEeocrmAccountId = new Map();
     const customerAccountByEeocrmAccountId = new Map();
     let accountsCreated = 0;
@@ -762,7 +844,7 @@ export async function hydrateEeocrmAccountsContacts({
     let customerAccountsSkipped = 0;
 
     for (const account of accountResult.records) {
-      const upserted = await upsertEeocrmAccountCompany(workspaceId, account);
+      const upserted = await upsertEeocrmAccountCompany(workspaceId, account, companyIndex);
       if (!upserted.ok || !upserted.company) {
         accountsSkipped += 1;
         continue;
@@ -771,7 +853,7 @@ export async function hydrateEeocrmAccountsContacts({
       if (upserted.created) accountsCreated += 1;
       else accountsLinked += 1;
 
-      const customerAccount = await upsertEeocrmCustomerAccount(workspaceId, account, upserted.company);
+      const customerAccount = await upsertEeocrmCustomerAccount(workspaceId, account, upserted.company, customerAccountIndex);
       if (!customerAccount.ok || !customerAccount.account) {
         customerAccountsSkipped += 1;
         continue;
@@ -788,12 +870,17 @@ export async function hydrateEeocrmAccountsContacts({
     );
     if (!contactResult.ok) return contactResult;
 
+    const contactIndex = await buildContactIndex(
+      workspaceId,
+      [...companyByEeocrmAccountId.values()].map((company) => company.id),
+    );
+
     let contactsCreated = 0;
     let contactsLinked = 0;
     let contactsSkipped = 0;
 
     for (const contact of contactResult.records) {
-      const upserted = await upsertEeocrmContact(workspaceId, contact, companyByEeocrmAccountId);
+      const upserted = await upsertEeocrmContact(workspaceId, contact, companyByEeocrmAccountId, contactIndex);
       if (!upserted.ok) {
         contactsSkipped += 1;
         continue;
@@ -809,13 +896,21 @@ export async function hydrateEeocrmAccountsContacts({
     );
     if (!opportunityResult.ok) return opportunityResult;
 
+    const dealByOpportunityRef = await fetchRowsByMetaRef(
+      workspaceId,
+      "deals",
+      DEAL_SELECT,
+      "eeocrm_opportunity_id",
+      opportunityResult.records.map((record) => record.id),
+    );
+
     const dealByEeocrmOpportunityId = new Map();
     let dealsCreated = 0;
     let dealsLinked = 0;
     let dealsSkipped = 0;
 
     for (const opportunity of opportunityResult.records) {
-      const upserted = await upsertEeocrmOpportunityDeal(workspaceId, opportunity, companyByEeocrmAccountId);
+      const upserted = await upsertEeocrmOpportunityDeal(workspaceId, opportunity, companyByEeocrmAccountId, dealByOpportunityRef);
       if (!upserted.ok || !upserted.deal) {
         dealsSkipped += 1;
         continue;
@@ -832,12 +927,20 @@ export async function hydrateEeocrmAccountsContacts({
     );
     if (!orderResult.ok) return orderResult;
 
+    const dealByOrderRef = await fetchRowsByMetaRef(
+      workspaceId,
+      "deals",
+      DEAL_SELECT,
+      "eeocrm_order_id",
+      orderResult.records.map((record) => record.id),
+    );
+
     let ordersCreated = 0;
     let ordersLinked = 0;
     let ordersSkipped = 0;
 
     for (const order of orderResult.records) {
-      const upserted = await upsertEeocrmOrderDeal(workspaceId, order, companyByEeocrmAccountId, dealByEeocrmOpportunityId);
+      const upserted = await upsertEeocrmOrderDeal(workspaceId, order, companyByEeocrmAccountId, dealByEeocrmOpportunityId, dealByOrderRef);
       if (!upserted.ok) {
         ordersSkipped += 1;
         continue;
@@ -853,12 +956,17 @@ export async function hydrateEeocrmAccountsContacts({
     );
     if (!activityResult.ok) return activityResult;
 
+    const activityKeys = await buildActivityDedupeSet(
+      workspaceId,
+      [...customerAccountByEeocrmAccountId.values()].map((account) => account.id),
+    );
+
     let activitiesCreated = 0;
     let activitiesLinked = 0;
     let activitiesSkipped = 0;
 
     for (const activity of activityResult.records) {
-      const upserted = await upsertEeocrmActivity(workspaceId, activity, customerAccountByEeocrmAccountId, companyByEeocrmAccountId);
+      const upserted = await upsertEeocrmActivity(workspaceId, activity, customerAccountByEeocrmAccountId, companyByEeocrmAccountId, activityKeys);
       if (!upserted.ok) {
         activitiesSkipped += 1;
         continue;

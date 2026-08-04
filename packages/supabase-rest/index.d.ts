@@ -68,6 +68,7 @@ export function makeSupabaseHeaders(
 export function resolveDefaultWorkspaceId(): string;
 export function eqFilter(value: string | number): string;
 export function inFilter(values: Array<string | number>): string;
+export function inFilterQuoted(values: Array<string | number>): string;
 export function withWorkspaceFilter(filters?: SupabaseFilter[]): SupabaseFilter[];
 
 export function fetchSupabaseRows<T = Record<string, unknown>>(

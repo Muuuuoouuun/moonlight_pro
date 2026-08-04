@@ -1,20 +1,20 @@
 -- ============================================================================
--- apply-pending.sql — 적용 대기 마이그레이션 묶음 (0003 → 0011, 시점순)
+-- apply-pending.sql — 적용 대기 마이그레이션 묶음 (0003 → 0018, 시점순)
 --
--- 생성물(편의용 번들). 정본은 supabase/migrations/<each>.sql 개별 파일.
--- 전부 멱등(if not exists / 제약 재생성 / on conflict / not-exists 시드 가드)이라
--- 이미 적용된 항목이 섞여 있어도 재실행 무해.
---
--- 적용: Supabase 대시보드 SQL Editor에 전체 붙여넣기 → Run.
---       또는 PAT 있으면 scripts/apply-migrations.mjs 로 개별 적용.
--- 전제: 20260420_0001_*(foundation), 20260425_0002_* 가 먼저 적용돼 있어야 함.
+-- 용도: 기존 Supabase 프로젝트의 대시보드 SQL Editor 에 한 번에 붙여넣는
+--       편의 번들. 정본은 supabase/migrations/ 의 개별 파일이다.
+-- 멱등: 모든 구성 마이그레이션이 if not exists / 동적 제약 재생성 패턴을 사용.
+-- 참고: 라이브 프로젝트(rwqefdxalmbrkybxqwxj)에는 0003→0018 전부 적용·검증됨
+--       (2026-08-04). 이 번들은 새/다른 기존 프로젝트를 따라잡게 할 때 쓴다.
 -- 주의: 바깥 트랜잭션으로 감싸지 않음 — 20260602_0003 이 자체 begin/commit 을 가져
---       중첩 트랜잭션을 피하기 위함. 각 마이그레이션은 멱등이라 부분 적용도 안전.
+--       중첩 트랜잭션이 되면 실패한다. SQL Editor 기본(Run) 그대로 실행할 것.
 -- ============================================================================
 
--- ─────────────────────────────────────────────────────────────────────────
+
+-- ============================================================================
 -- 20260427_0003_content_os_variant_contract.sql
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+
 -- Align Content OS DB constraints with the Hub Studio/Queue contract.
 --
 -- This is safe after the Supabase-first foundation migration. It keeps legacy
@@ -60,9 +60,10 @@ alter table public.content_variants
   check (variant_type in ('card_news', 'blog', 'blog_insight', 'newsletter', 'social_post', 'x_thread', 'reels_script', 'landing_copy'));
 
 
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
 -- 20260427_0004_canonical_brand_directory.sql
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+
 -- Keep the live Supabase brand directory aligned with Hub fallback brands.
 --
 -- The Hub initially renders the local fallback directory, then replaces it with
@@ -221,9 +222,10 @@ set
   updated_at = now();
 
 
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
 -- 20260602_0003_content_variant_type_contract.sql
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+
 begin;
 
 update content_variants
@@ -245,9 +247,10 @@ alter table if exists content_variants
 commit;
 
 
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
 -- 20260602_0004_live_setup_contracts.sql
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+
 -- Moonlight live setup contract fixes
 -- Apply to existing Supabase projects that already ran schema.sql and earlier
 -- migrations. New projects can run supabase/setup/00_live_schema.sql instead.
@@ -447,9 +450,10 @@ end;
 $$;
 
 
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
 -- 20260617_0005_sales_os_sheets_sync.sql
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+
 -- Sales OS v1 — Google Sheets sync staging + sales plays
 --
 -- Backs the approved design "ClassIn B2B 세일즈 OS — B의 척추 + C의 실행".
@@ -590,9 +594,10 @@ set
   updated_at = now();
 
 
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
 -- 20260617_0006_crm_xiaoshouyi_owner_names.sql
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+
 -- CRM (Xiaoshouyi/EEO) ownerId -> name resolution for moonlight.
 --
 -- Xiaoshouyi records carry only a numeric `ownerId`. This curated table resolves
@@ -632,9 +637,10 @@ set
   updated_at   = now();
 
 
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
 -- 20260617_0007_content_idea_cadence.sql
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+
 -- Content OS: idea-queue ranking + publishing cadence (Sales OS v1.1).
 --
 -- Additive only. Backs two things from the approved Sales OS v3 design:
@@ -671,9 +677,10 @@ create index if not exists content_items_cadence_idx
   where status = 'published';
 
 
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
 -- 20260618_0008_outreach_outcomes.sql
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+
 -- Learning sink for the sales daily-loop (closes the loop).
 --
 -- Approved design: clmagi-codex-moonlight-p0-hardening-design-20260618-000940.md
@@ -708,9 +715,10 @@ create index if not exists idx_outreach_outcomes_play
   on public.outreach_outcomes (workspace_id, play, occurred_at desc);
 
 
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
 -- 20260618_0009_business_card_source.sql
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+
 -- Allow business-card intake as a lead_intake_raw source (Sales OS).
 -- Additive: widens the source check constraint. Safe after 0005.
 -- (0008 = outreach_outcomes, a different table — no conflict.)
@@ -730,9 +738,10 @@ alter table public.lead_intake_raw
   check (source in ('google_sheets', 'csv', 'manual', 'naver', 'business_card'));
 
 
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
 -- 20260618_0010_agents_personas_inbox.sql
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+
 -- Sales OS AI 팀 운영 레이어 (v1.3) — agents 시드 + Inbox 캡처 소스.
 --
 -- 설계: docs/sales-os/team-operating-layer.md · capture-spine.md
@@ -808,9 +817,10 @@ begin
 end $$;
 
 
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
 -- 20260619_0011_work_orders_agent_runs.sql
--- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+
 -- Sales OS 심화 v0 — 반자동 큐 + 에피소드 메모리 (Phase 0 토대).
 --
 -- 설계: docs/sales-os/ai-sales-system-deep-config.md (Phase 0)
@@ -885,8 +895,14 @@ create index if not exists idx_work_orders_company
 create index if not exists idx_work_orders_run
   on public.work_orders (run_id);
 
+
+-- ============================================================================
 -- 20260620_0012_work_orders_execution_claim.sql
--- Add transient execution-claim status for duplicate-send prevention.
+-- ============================================================================
+
+-- Add the transient execution-claim status used to prevent double sends/uploads.
+-- Flow: proposed -> approved -> executing -> executed. Terminal: executed, dismissed.
+
 alter table if exists public.work_orders
   drop constraint if exists work_orders_status_check;
 
@@ -895,9 +911,13 @@ alter table if exists public.work_orders
   check (status in ('proposed', 'approved', 'executing', 'executed', 'dismissed'));
 
 
+-- ============================================================================
 -- 20260702_0013_eeocrm_source.sql
--- Allow eeoCRM (Xiaoshouyi personal MCP) intake as a lead_intake_raw source.
--- Widens the same source check constraint 0009/0010 already widened.
+-- ============================================================================
+
+-- Allow eeoCRM (Xiaoshouyi personal MCP) intake as a lead_intake_raw source (Sales OS).
+-- Additive: widens the source check constraint. Safe after 0009/0010, which already
+-- widened this same constraint for 'business_card' and 'inbox'.
 do $$
 declare c text;
 begin
@@ -912,6 +932,251 @@ end $$;
 alter table public.lead_intake_raw
   add constraint lead_intake_raw_source_check
   check (source in ('google_sheets', 'csv', 'manual', 'naver', 'business_card', 'inbox', 'eeocrm'));
+
+
+-- ============================================================================
+-- 20260707_0014_crm_activities.sql
+-- ============================================================================
+
+-- CRM activity timeline — human-facing interaction log per lead/deal/account.
+--
+-- The Revenue surface (apps/hub/components/hub/pages/revenue.jsx) logs what
+-- actually happened with a lead/account: 통화(call) · 미팅(meeting) · 설명회
+-- (info_session) · 데모(demo) · 방문(visit) · 이메일(email) · 소식(update) ·
+-- 노트(note). Until now the Account detail panel kept these in React state
+-- only — a refresh dropped every logged call/note. This table makes the
+-- timeline durable. Additive + idempotent (create table/index if not exists).
+--
+-- Distinct from `outreach_outcomes` (0008): that table is a funnel-measurement
+-- sink with a fixed sent/replied/meeting/proposal/won/lost enum for the "5x"
+-- loop. This one is the free-form operator timeline (any interaction kind,
+-- plus pinnable notes). They can coexist; a logged call may also produce an
+-- outreach_outcome, but this table is the record of the conversation itself.
+
+create table if not exists public.crm_activities (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  -- Entity linkage — an activity hangs off exactly one of these (account is most common).
+  lead_id uuid references public.leads(id) on delete cascade,
+  deal_id uuid references public.deals(id) on delete cascade,
+  account_id uuid references public.customer_accounts(id) on delete cascade,
+  company_id uuid references public.companies(id) on delete set null,
+  entity_type text not null default 'account'
+    check (entity_type in ('lead', 'deal', 'account')),
+  kind text not null default 'update'
+    check (kind in ('call', 'meeting', 'info_session', 'demo', 'visit', 'email', 'update', 'note', 'deal')),
+  body text not null default '',
+  pinned boolean not null default false,   -- meaningful for kind='note'
+  owner_id uuid references public.profiles(id) on delete set null,
+  occurred_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_crm_activities_account
+  on public.crm_activities (workspace_id, account_id, occurred_at desc);
+create index if not exists idx_crm_activities_lead
+  on public.crm_activities (workspace_id, lead_id, occurred_at desc);
+create index if not exists idx_crm_activities_deal
+  on public.crm_activities (workspace_id, deal_id, occurred_at desc);
+create index if not exists idx_crm_activities_recent
+  on public.crm_activities (workspace_id, occurred_at desc);
+
+
+-- ============================================================================
+-- 20260707_0015_lead_intake_gmail_source.sql
+-- ============================================================================
+
+-- Allow Gmail-scanned lead candidates as a lead_intake_raw source (Sales OS).
+-- Additive: widens the source check constraint. Safe after 0013 — the recreated
+-- check must carry EVERY previously-allowed value ('business_card' from 0009,
+-- 'inbox' from 0010, 'eeocrm' from 0013), or applying this migration would fail
+-- on rows using them / silently break those intake paths.
+-- Idempotent constraint recreation so re-running is a no-op.
+do $$
+declare c text;
+begin
+  select conname into c from pg_constraint
+   where conrelid = 'public.lead_intake_raw'::regclass
+     and pg_get_constraintdef(oid) like '%source%';
+  if c is not null then
+    execute format('alter table public.lead_intake_raw drop constraint %I', c);
+  end if;
+end $$;
+
+alter table public.lead_intake_raw
+  add constraint lead_intake_raw_source_check
+  check (source in ('google_sheets', 'csv', 'manual', 'naver', 'business_card', 'inbox', 'eeocrm', 'gmail'));
+
+
+-- ============================================================================
+-- 20260707_0016_campaigns_meta.sql
+-- ============================================================================
+
+-- Campaigns display metadata — the Hub Campaigns war room card renders fields
+-- beyond the base `campaigns` columns (id, name, channel, status, start_date,
+-- end_date): a channel list, a progress percent, and a goal/current pair
+-- ("신청 40" / 24). None of those have a dedicated column and don't warrant
+-- one yet (still shaping), so they live in a jsonb `meta` column, matching the
+-- convention already used by `content_items.meta` / `leads.meta` etc.
+-- Additive + idempotent.
+
+alter table public.campaigns
+  add column if not exists meta jsonb not null default '{}'::jsonb;
+
+alter table public.campaigns
+  add column if not exists updated_at timestamptz not null default now();
+
+
+-- ============================================================================
+-- 20260707_0017_work_orders_open_followup_unique.sql
+-- ============================================================================
+
+-- One OPEN followup work_order per deal — DB-level dedupe for the stalled-deal scan.
+--
+-- The scan (apps/hub/lib/sales-os/stalled-scan.js) and the kanban's manual queue
+-- button both propose followups with a read-then-insert dedupe, which races under
+-- concurrent requests (two brief loads can both see "no open order" and insert).
+-- This partial unique index makes the insert itself the arbiter: the loser gets a
+-- unique-violation, which createWorkOrder surfaces as persisted:false and the scan
+-- counts as skipped. Terminal orders (executed/dismissed) don't block a new proposal.
+-- Additive + idempotent.
+
+create unique index if not exists uq_work_orders_open_followup
+  on public.work_orders (workspace_id, deal_id)
+  where kind = 'followup'
+    and status in ('proposed', 'approved', 'executing')
+    and deal_id is not null;
+
+
+-- ============================================================================
+-- 20260804_0018_backend_optimization.sql
+-- ============================================================================
+
+-- Backend/DB 최적화 배치 — 코드가 실제로 치는 조회 키에 인덱스를 맞추고,
+-- 단일-콜 upsert(on_conflict)가 성립하도록 unique 제약을 추가한다.
+--
+-- 근거(2026-08-04 백엔드 조사):
+-- - eeoCRM hydrate/sheets promote 루프가 JSONB 경로·복합 키 조회를 레코드마다
+--   반복 실행 — 전부 seq scan이었음. 배치화 코드(레코드당→배치당 1회)와 함께
+--   이 인덱스들이 남은 스캔 비용을 제거한다.
+-- - integration_connections 는 upsert 가 (read→write→read) 3왕복이던 것을
+--   on_conflict 단일 콜로 바꿈 → unique (workspace_id, provider) 필요.
+-- - field_mappings 는 notion-sync 가 프로퍼티당 SELECT+INSERT 하던 것을
+--   bulk ignore-duplicates 로 바꿈 → 4-컬럼 unique 필요.
+-- - lead_intake_raw 의 재임포트 dedupe 는 partial unique 라 PostgREST
+--   on_conflict 의 arbiter 로 쓸 수 없었음 → full unique 로 교체.
+--
+-- 안전: additive + 멱등(if not exists). 파괴적 변경 없음 — 기존 partial index
+-- drop 은 동일 키의 full unique 생성 *이후*에만 수행.
+-- 적용: npm run db:migrate 20260804_0018_backend_optimization.sql
+-- (라이브 확인 2026-08-04: integration_connections·field_mappings·lead_intake_raw
+--  모두 중복 0 — unique 생성이 즉시 성립. 만에 하나 다른 환경에 중복이 있으면
+--  아래 suffix 가드가 0002 패턴대로 비파괴 격리한다.)
+
+-- ----------------------------------------------------------------------------
+-- 1. eeoCRM 동기화 조회 키 (JSONB 표현식 인덱스)
+-- ----------------------------------------------------------------------------
+
+create index if not exists idx_companies_eeocrm_account_id
+  on public.companies ((meta->>'eeocrm_account_id'))
+  where meta ? 'eeocrm_account_id';
+
+create index if not exists idx_customer_accounts_eeocrm_account_id
+  on public.customer_accounts ((meta->>'eeocrm_account_id'))
+  where meta ? 'eeocrm_account_id';
+
+create index if not exists idx_deals_eeocrm_opportunity_id
+  on public.deals ((meta->>'eeocrm_opportunity_id'))
+  where meta ? 'eeocrm_opportunity_id';
+
+create index if not exists idx_deals_eeocrm_order_id
+  on public.deals ((meta->>'eeocrm_order_id'))
+  where meta ? 'eeocrm_order_id';
+
+-- sheets/eeocrm 상태 뷰의 최근 실행 조회: payload->>provider 필터 + started_at 정렬.
+create index if not exists idx_sync_runs_provider_started
+  on public.sync_runs (workspace_id, (payload->>'provider'), started_at desc);
+
+-- ----------------------------------------------------------------------------
+-- 2. promote/hydrate 배치 조회 키
+-- ----------------------------------------------------------------------------
+
+-- contacts 는 인덱스가 하나도 없었다. promote/hydrate 의 (회사, 이름) 결정자
+-- 조회와 company_id in.() 프리페치를 커버.
+create index if not exists idx_contacts_workspace_company_name
+  on public.contacts (workspace_id, company_id, name);
+
+-- promote 의 pending 스캔: (status, source) 필터 + created_at.asc 정렬.
+create index if not exists idx_lead_intake_raw_status_source_created
+  on public.lead_intake_raw (workspace_id, status, source, created_at);
+
+-- eeoCRM hydrate 의 name 폴백 조회.
+create index if not exists idx_companies_workspace_name
+  on public.companies (workspace_id, name);
+
+-- automations 대시보드의 미해결 에러 카운트: resolved=false 필터 + 최신순.
+create index if not exists idx_error_logs_workspace_unresolved
+  on public.error_logs (workspace_id, timestamp desc)
+  where resolved = false;
+
+-- ----------------------------------------------------------------------------
+-- 3. integration_connections — 단일-콜 upsert 성립
+-- ----------------------------------------------------------------------------
+
+-- 혹시 남아 있을 중복을 0002 패턴대로 비파괴 격리(최신 행이 정본 유지).
+with ranked_connections as (
+  select
+    id,
+    row_number() over (
+      partition by workspace_id, provider
+      order by created_at desc, id desc
+    ) as duplicate_rank
+  from public.integration_connections
+  where provider not like '%:duplicate:%'
+)
+update public.integration_connections
+set provider = provider || ':duplicate:' || id::text
+where id in (
+  select id from ranked_connections where duplicate_rank > 1
+);
+
+create unique index if not exists uq_integration_connections_workspace_provider
+  on public.integration_connections (workspace_id, provider);
+
+-- ----------------------------------------------------------------------------
+-- 4. field_mappings — bulk ignore-duplicates 성립 (+ 첫 인덱스)
+-- ----------------------------------------------------------------------------
+
+with ranked_mappings as (
+  select
+    id,
+    row_number() over (
+      partition by workspace_id, connection_id, source_field, target_field
+      order by created_at desc, id desc
+    ) as duplicate_rank
+  from public.field_mappings
+  where source_field not like '%:duplicate:%'
+)
+update public.field_mappings
+set source_field = source_field || ':duplicate:' || id::text
+where id in (
+  select id from ranked_mappings where duplicate_rank > 1
+);
+
+create unique index if not exists uq_field_mappings_scope
+  on public.field_mappings (workspace_id, connection_id, source_field, target_field);
+
+-- ----------------------------------------------------------------------------
+-- 5. lead_intake_raw 재임포트 dedupe — partial → full unique 교체
+-- ----------------------------------------------------------------------------
+-- partial unique 는 PostgREST on_conflict 의 arbiter 가 될 수 없다(추론에 WHERE
+-- 절이 필요). full unique 는 NULLS DISTINCT(기본)라 source_ref null 행의 기존
+-- 동작(중복 허용)이 그대로 유지된다. 새 인덱스 생성 후에만 기존 것을 제거.
+
+create unique index if not exists uq_lead_intake_raw_source_ref_all
+  on public.lead_intake_raw (workspace_id, source, source_ref);
+
+drop index if exists public.uq_lead_intake_raw_source_ref;
 
 
 -- end of apply-pending.sql

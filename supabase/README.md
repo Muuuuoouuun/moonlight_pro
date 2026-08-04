@@ -15,7 +15,13 @@ Com_Moon Hub OS의 현재 로컬 스키마와 시드 데이터를 정리한 안�
 - `migrations/20260618_0010_agents_personas_inbox.sql`: 5 페르소나 agents 시드 + `lead_intake_raw.source='inbox'`
 - `migrations/20260619_0011_work_orders_agent_runs.sql`: 반자동 승인 큐(`work_orders`) + 에피소드 메모리(`agent_runs`)
 - `migrations/20260620_0012_work_orders_execution_claim.sql`: 승인된 주문의 실행 claim 상태(`executing`) 추가
-- `apply-pending.sql`: **편의 번들** — 0003→0011을 시점순으로 묶은 단일 파일(멱등). 대시보드 SQL Editor에 한 번에 붙여넣기용. 정본은 위 개별 migration 파일.
+- `migrations/20260702_0013_eeocrm_source.sql`: `lead_intake_raw.source='eeocrm'` 추가
+- `migrations/20260707_0014_crm_activities.sql`: CRM 활동 타임라인(`crm_activities`)
+- `migrations/20260707_0015_lead_intake_gmail_source.sql`: `lead_intake_raw.source='gmail'` 추가
+- `migrations/20260707_0016_campaigns_meta.sql`: `campaigns.meta`/`updated_at`
+- `migrations/20260707_0017_work_orders_open_followup_unique.sql`: 오픈 팔로업 중복 방지 unique
+- `migrations/20260804_0018_backend_optimization.sql`: 백엔드 최적화 — eeoCRM JSONB 조회 키·배치 조회 인덱스, `integration_connections`/`field_mappings` unique(단일-콜 upsert 성립), staging dedupe full unique 교체
+- `apply-pending.sql`: **편의 번들** — 0003→0018을 시점순으로 묶은 단일 파일(멱등). 대시보드 SQL Editor에 한 번에 붙여넣기용. 정본은 위 개별 migration 파일.
 - `seed.supabase_first.sql`: foundation migration 이후 넣는 브랜드/프로젝트 seed 보강
 - `policies/supabase_first_rls.sql`: Auth 연결 후 적용할 RLS 정책 초안
 - `setup/`: 새 Supabase 프로젝트에 순서대로 적용하는 live setup pack
@@ -44,8 +50,10 @@ Com_Moon Hub OS의 현재 로컬 스키마와 시드 데이터를 정리한 안�
 1. `migrations/20260602_0004_live_setup_contracts.sql` 실행
 2. `setup/01_storage.sql` 실행
 3. `setup/99_smoke_checks.sql` 실행
-4. Sales OS 마이그레이션 적용 (0003→0012): **간편 경로** = `apply-pending.sql` 전체를 SQL Editor에 붙여넣고 Run (멱등, 원자적). **개별 경로** = PAT(`SUPABASE_ACCESS_TOKEN=sbp_...`) 설정 후 `node scripts/apply-migrations.mjs <파일들…>`. 포함: `20260602_0003`(variant_type 5종)·`0004`·`0005`~`0009`(시트·CRM·cadence·outcomes·명함)·`0010`(페르소나 시드·inbox)·`0011`(work_orders·agent_runs)·`0012`(execution claim).
+4. Sales OS 마이그레이션 적용 (0003→0018): **간편 경로** = `apply-pending.sql` 전체를 SQL Editor에 붙여넣고 Run (멱등). **개별 경로** = PAT(`SUPABASE_ACCESS_TOKEN=sbp_...`) 설정 후 `node scripts/apply-migrations.mjs <파일들…>`. 포함: `20260602_0003`(variant_type 5종)·`0004`·`0005`~`0009`(시트·CRM·cadence·outcomes·명함)·`0010`(페르소나 시드·inbox)·`0011`(work_orders·agent_runs)·`0012`(execution claim)·`0013`~`0017`(eeocrm·crm_activities·gmail·campaigns.meta·팔로업 unique)·`0018`(백엔드 최적화 인덱스/unique).
 5. 앱 환경 변수를 실제 project URL/key/workspace ID로 맞춘 뒤 `npm run check:connections` 실행
+
+> **라이브 적용 상태 (2026-08-04 확인):** 운영 프로젝트(rwqefdxalmbrkybxqwxj)에는 0003→0018 전부 적용·검증 완료. `schema_migrations` 추적 테이블이 없으므로 적용 여부는 마커(테이블/인덱스/제약 존재)로 확인한다.
 
 > 번호 메모: `0003`·`0004`는 `20260427`·`20260602` 두 벌이 있습니다(브랜치 병합 흔적). 적용은 날짜 접두사 순서대로 — `apply-pending.sql`이 그 순서를 이미 반영합니다.
 

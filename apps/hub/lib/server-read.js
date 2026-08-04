@@ -7,5 +7,6 @@ export {
   fetchSupabaseRows,
   fetchSupabaseRowsDetailed,
   inFilter,
+  inFilterQuoted,
   withWorkspaceFilter,
 } from "@com-moon/supabase-rest";
