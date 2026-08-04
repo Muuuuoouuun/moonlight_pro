@@ -77,6 +77,8 @@ async function forwardToN8n(update: TelegramUpdate): Promise<boolean> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(update),
+    cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!response.ok) {

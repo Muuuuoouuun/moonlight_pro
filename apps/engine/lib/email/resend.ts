@@ -83,6 +83,7 @@ export async function sendWithResend(input: ResendSendInput) {
       reply_to: input.replyTo || config.replyTo || undefined,
     }),
     cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (!response.ok) {

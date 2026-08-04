@@ -1,3 +1,4 @@
+import { resolveDefaultWorkspaceId } from "@com-moon/supabase-rest";
 import { logError, logEvent } from "@com-moon/hub-gateway";
 
 import { insertSupabaseRecord } from "../supabase-rest";
@@ -40,8 +41,14 @@ async function recordEmailSync({
   payload: Record<string, unknown>;
   errorMessage?: string | null;
 }) {
+  // sync_runs.workspace_id is NOT NULL — a null write only produces a silent
+  // 400. Report the missing scope explicitly instead.
+  if (!workspaceId) {
+    return { persisted: false, reason: "missing-workspace" };
+  }
+
   return insertSupabaseRecord("sync_runs", {
-    workspace_id: workspaceId || null,
+    workspace_id: workspaceId,
     connection_id: connectionId,
     status,
     payload: {
@@ -67,7 +74,7 @@ export async function sendEmail(input: EmailSendRequest) {
   const action = normalizeString(input.action, "dry-run");
   const dryRun = action !== "send";
   const channel = normalizeString(input.channel, "resend").toLowerCase();
-  const workspaceId = normalizeString(input.workspaceId);
+  const workspaceId = normalizeString(input.workspaceId) || resolveDefaultWorkspaceId();
   const to = buildRecipient(input);
   const subject = normalizeString(input.subject);
   const body = normalizeString(input.body);

@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 
+// Gemini generations can legitimately run tens of seconds; cap the route
+// so a hung upstream cannot pin a serverless invocation past a minute.
+export const maxDuration = 60;
+
 import { generateGeminiText, getGeminiIntegrationStatus } from "../../../../lib/gemini";
 import {
   insertIntegrationSyncRun,

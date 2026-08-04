@@ -3,7 +3,7 @@ import {
   resolveDefaultWorkspaceId,
   upsertIntegrationConnection,
 } from "./integration-state";
-import { fetchSupabaseRows, insertSupabaseRecord } from "./supabase-rest";
+import { fetchSupabaseRows, insertSupabaseRecord, upsertSupabaseRecords } from "./supabase-rest";
 
 type NotionDatabaseKind = "projects" | "tasks" | "decisions" | "notes";
 
@@ -115,6 +115,7 @@ async function fetchNotionJson<T>(
       headers: makeNotionHeaders(),
       body: options.body ? JSON.stringify(options.body) : undefined,
       cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
     });
     const text = await response.text();
     const data = text ? JSON.parse(text) : null;
@@ -185,51 +186,74 @@ function mappingTypeFor(targetField: string) {
   return targetField.includes(".status") || targetField.includes(".due_at") ? "transform" : "copy";
 }
 
-async function ensureFieldMapping({
-  connectionId,
-  sourceField,
-  targetField,
-  mappingType,
-}: {
+interface FieldMappingInput {
   connectionId: string;
   sourceField: string;
   targetField: string;
   mappingType: string;
-}) {
+}
+
+// One SELECT for the connection's existing mappings + one bulk write for the
+// missing ones — replaces the old per-property SELECT+INSERT pair (40-80 HTTP
+// calls per sync at 4 databases × 10-20 properties).
+async function ensureFieldMappings(connectionId: string, mappings: FieldMappingInput[]) {
   const workspaceId = resolveDefaultWorkspaceId();
 
   if (!workspaceId) {
-    return {
-      persisted: false,
-      reason: "missing-workspace",
-    };
+    return { checked: mappings.length, inserted: 0, persisted: false, reason: "missing-workspace" };
+  }
+
+  if (!mappings.length) {
+    return { checked: 0, inserted: 0, persisted: true, reason: "ok" };
   }
 
   const existing = await fetchSupabaseRows("field_mappings", {
-    select: "id",
+    select: "source_field,target_field",
     filters: [
       ["workspace_id", `eq.${workspaceId}`],
       ["connection_id", `eq.${connectionId}`],
-      ["source_field", `eq.${sourceField}`],
-      ["target_field", `eq.${targetField}`],
     ],
-    limit: 1,
+    limit: 1000,
   });
 
-  if (Array.isArray(existing) && existing[0]?.id) {
-    return {
-      persisted: true,
-      reason: "exists",
-    };
+  const existingKeys = new Set(
+    (Array.isArray(existing) ? existing : []).map(
+      (row: any) => `${row.source_field}→${row.target_field}`,
+    ),
+  );
+
+  const missing = mappings
+    .filter((mapping) => !existingKeys.has(`${mapping.sourceField}→${mapping.targetField}`))
+    .map((mapping) => ({
+      workspace_id: workspaceId,
+      connection_id: connectionId,
+      source_field: mapping.sourceField,
+      target_field: mapping.targetField,
+      mapping_type: mapping.mappingType,
+    }));
+
+  if (!missing.length) {
+    return { checked: mappings.length, inserted: 0, persisted: true, reason: "ok" };
   }
 
-  return insertSupabaseRecord("field_mappings", {
-    workspace_id: workspaceId,
-    connection_id: connectionId,
-    source_field: sourceField,
-    target_field: targetField,
-    mapping_type: mappingType,
+  // ignore-duplicates makes concurrent syncs race-safe once migration 0018's
+  // unique index exists; before it lands (42P10) a plain bulk insert still works.
+  let write = await upsertSupabaseRecords("field_mappings", missing, {
+    onConflict: "workspace_id,connection_id,source_field,target_field",
+    ignoreDuplicates: true,
   });
+
+  if (!write.persisted && typeof write.detail === "string" && write.detail.includes("42P10")) {
+    write = await insertSupabaseRecord("field_mappings", missing);
+  }
+
+  return {
+    checked: mappings.length,
+    inserted: write.persisted ? missing.length : 0,
+    persisted: write.persisted,
+    reason: write.reason,
+    ...(write.detail ? { detail: write.detail } : {}),
+  };
 }
 
 async function inspectDatabase(database: NotionDatabaseConfig) {
@@ -380,43 +404,47 @@ export async function syncNotionReadOnly() {
   });
   const connectionId = connection.connection?.id || null;
   const mappingWrites = connectionId
-    ? await Promise.all(
+    ? await ensureFieldMappings(
+        connectionId,
         successes.flatMap((database) =>
-          database.mappings.map((mapping) =>
-            ensureFieldMapping({
-              connectionId,
-              sourceField: `${database.kind}.${mapping.sourceField}`,
-              targetField: mapping.targetField,
-              mappingType: mapping.mappingType,
-            }),
-          ),
+          database.mappings.map((mapping) => ({
+            connectionId,
+            sourceField: `${database.kind}.${mapping.sourceField}`,
+            targetField: mapping.targetField,
+            mappingType: mapping.mappingType,
+          })),
         ),
       )
-    : [];
-  const projectUpdate = await insertSupabaseRecord("project_updates", {
-    workspace_id: resolveDefaultWorkspaceId() || null,
-    project_id: null,
-    source: "notion",
-    event_type: "notion.sync.read",
-    status: failures.length && !successes.length ? "blocked" : "reported",
-    title: "Notion read sync",
-    summary: [
-      `${successes.length} database(s) reachable`,
-      `${failures.length} failure(s)`,
-      `${mappingWrites.length} field mapping check(s)`,
-    ].join(" · "),
-    progress: null,
-    milestone: null,
-    next_action: failures.length
-      ? "Fix Notion token or database IDs, then rerun Notion read sync."
-      : "Review field mappings before enabling write-back.",
-    payload: {
-      successes,
-      failures,
-      mappingWrites,
-    },
-    happened_at: finishedAt,
-  });
+    : { checked: 0, inserted: 0, persisted: false, reason: "missing-connection" };
+  // project_updates.workspace_id is NOT NULL — attempting the insert with null
+  // just 400s. Skip it explicitly when no workspace is configured.
+  const projectUpdateWorkspaceId = resolveDefaultWorkspaceId();
+  const projectUpdate = projectUpdateWorkspaceId
+    ? await insertSupabaseRecord("project_updates", {
+        workspace_id: projectUpdateWorkspaceId,
+        project_id: null,
+        source: "notion",
+        event_type: "notion.sync.read",
+        status: failures.length && !successes.length ? "blocked" : "reported",
+        title: "Notion read sync",
+        summary: [
+          `${successes.length} database(s) reachable`,
+          `${failures.length} failure(s)`,
+          `${mappingWrites.checked} field mapping check(s)`,
+        ].join(" · "),
+        progress: null,
+        milestone: null,
+        next_action: failures.length
+          ? "Fix Notion token or database IDs, then rerun Notion read sync."
+          : "Review field mappings before enabling write-back.",
+        payload: {
+          successes,
+          failures,
+          mappingWrites,
+        },
+        happened_at: finishedAt,
+      })
+    : { persisted: false, reason: "missing-workspace" };
   const syncRun = await insertIntegrationSyncRun({
     provider: "notion",
     connectionId,

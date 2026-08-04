@@ -13,6 +13,8 @@ export interface SupabaseQueryOptions {
   timeoutMs?: number;
   /** Set false to bypass in-flight GET dedup for this call. */
   dedupe?: boolean;
+  /** "exact" adds Prefer: count=exact and fills `count` in the detailed result. */
+  count?: "exact";
 }
 
 export interface SupabaseReadError {
@@ -23,6 +25,8 @@ export interface SupabaseReadError {
 
 export interface SupabaseDetailedReadResult<T = Record<string, unknown>> {
   rows: T[] | null;
+  /** Total count of the filtered set — only when the query asked for count: "exact". */
+  count: number | null;
   configured: boolean;
   error: SupabaseReadError | null;
 }

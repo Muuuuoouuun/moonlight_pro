@@ -77,10 +77,12 @@ async function latestFailures() {
   }
 
   const [errorLogs, syncFailures] = await Promise.all([
+    // error_logs keys its event time as `timestamp` (not created_at) — asking for
+    // created_at made PostgREST 400 and this digest permanently reported "none".
     fetchSupabaseRows("error_logs", {
-      select: "id,context,source,level,trace,created_at,payload",
+      select: "id,context,source,level,trace,timestamp,payload",
       filters: [["workspace_id", `eq.${workspaceId}`]],
-      order: "created_at.desc",
+      order: "timestamp.desc",
       limit: 5,
     }),
     fetchSupabaseRows("sync_runs", {
@@ -110,7 +112,7 @@ function failureLines(items: any[], label: string) {
     ...items.slice(0, 5).map((item) => {
       const title = item.context || item.error_message || item.payload?.provider || item.id;
       const source = item.source || item.payload?.provider || "unknown";
-      const timestamp = item.created_at || item.started_at || item.finished_at || "";
+      const timestamp = item.timestamp || item.started_at || item.finished_at || "";
       return `- ${title} (${source}) ${timestamp}`.trim();
     }),
   ];
@@ -150,6 +152,7 @@ async function sendWebhook(text: string): Promise<SlackDelivery> {
       },
       body: JSON.stringify({ text }),
       cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
     });
 
     return {
@@ -195,6 +198,7 @@ async function sendBotMessage(text: string): Promise<SlackDelivery> {
         unfurl_media: false,
       }),
       cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
     });
     const data = await response.json().catch(() => null);
     const ok = response.ok && data?.ok !== false;

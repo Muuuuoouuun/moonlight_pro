@@ -1,3 +1,5 @@
+import { resolveDefaultWorkspaceId } from "@com-moon/supabase-rest";
+
 import { fetchSupabaseRows } from "../supabase-rest";
 import {
   buildMultipartAlternativeEmail,
@@ -51,14 +53,21 @@ function resolveFallbackSenderEmail() {
 }
 
 export async function fetchLatestGoogleGmailConnection(workspaceId = "") {
-  const filters: Array<[string, string]> = [["provider", `eq.${GOOGLE_GMAIL_PROVIDER}`]];
+  // Fail closed on tenant scope: without an explicit or default workspace we do
+  // NOT query at all — the service-role key would otherwise pick up the newest
+  // Gmail connection from any workspace. Env-fallback credentials still apply.
+  const scopedWorkspaceId = workspaceId || resolveDefaultWorkspaceId();
 
-  if (workspaceId) {
-    filters.push(["workspace_id", `eq.${workspaceId}`]);
+  if (!scopedWorkspaceId) {
+    return null;
   }
 
   const rows = await fetchSupabaseRows("integration_connections", {
-    filters,
+    select: "id,workspace_id,provider,status,config,last_synced_at,created_at",
+    filters: [
+      ["provider", `eq.${GOOGLE_GMAIL_PROVIDER}`],
+      ["workspace_id", `eq.${scopedWorkspaceId}`],
+    ],
     order: "created_at.desc",
     limit: 1,
   });
@@ -87,6 +96,7 @@ async function exchangeGoogleRefreshToken(refreshToken: string) {
     },
     body: body.toString(),
     cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!response.ok) {
@@ -110,7 +120,18 @@ async function resolveGmailAccess(workspaceId = "") {
     };
   }
 
-  const tokenData = await exchangeGoogleRefreshToken(refreshToken);
+  // A token-exchange failure must come back as { ok: false } like every other
+  // failure here — a throw would skip the caller's sync_runs failure ledger row.
+  let tokenData: { access_token?: string } | null = null;
+  try {
+    tokenData = await exchangeGoogleRefreshToken(refreshToken);
+  } catch (error) {
+    return {
+      ok: false as const,
+      reason: error instanceof Error ? error.message : String(error),
+      connection,
+    };
+  }
   const senderEmail =
     connection?.config?.email || resolveFallbackSenderEmail();
 
@@ -183,6 +204,7 @@ export async function sendWithGmail(input: GmailSendInput) {
     },
     body: JSON.stringify({ raw }),
     cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (!response.ok) {

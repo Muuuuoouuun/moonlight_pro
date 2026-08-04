@@ -87,6 +87,7 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
         },
         body: JSON.stringify(body),
         cache: "no-store",
+        signal: AbortSignal.timeout(45_000),
       },
     );
     const text = await response.text();

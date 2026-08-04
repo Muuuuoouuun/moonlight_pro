@@ -1,7 +1,10 @@
+import { eqFilter, resolveDefaultWorkspaceId } from "@com-moon/supabase-rest";
+
 import {
   fetchSupabaseRows,
   insertSupabaseRecord,
   updateSupabaseRecord,
+  upsertSupabaseRecords,
 } from "./supabase-rest";
 
 type IntegrationStatus = "pending" | "connected" | "error" | "disabled";
@@ -22,17 +25,9 @@ interface SyncRunInput {
   errorMessage?: string | null;
 }
 
-export function resolveDefaultWorkspaceId() {
-  return (
-    process.env.COM_MOON_DEFAULT_WORKSPACE_ID?.trim() ||
-    process.env.DEFAULT_WORKSPACE_ID?.trim() ||
-    ""
-  );
-}
+export { resolveDefaultWorkspaceId };
 
-function eqFilter(value: string) {
-  return `eq.${value}`;
-}
+const CONNECTION_SELECT = "id,workspace_id,provider,status,config,last_synced_at,created_at";
 
 export async function findIntegrationConnection(
   provider: string,
@@ -43,7 +38,7 @@ export async function findIntegrationConnection(
   }
 
   const rows = await fetchSupabaseRows("integration_connections", {
-    select: "id,workspace_id,provider,status,config,last_synced_at,created_at",
+    select: CONNECTION_SELECT,
     filters: [
       ["workspace_id", eqFilter(workspaceId)],
       ["provider", eqFilter(provider)],
@@ -55,25 +50,18 @@ export async function findIntegrationConnection(
   return Array.isArray(rows) ? rows[0] || null : null;
 }
 
-export async function upsertIntegrationConnection(input: IntegrationConnectionInput) {
-  const workspaceId = resolveDefaultWorkspaceId();
+// Missing-constraint marker (42P10) — raised until migration 0018's
+// unique (workspace_id, provider) lands; we then take the legacy 3-call path.
+function isMissingOnConflictTarget(result: { reason?: string; detail?: string }) {
+  return typeof result.detail === "string" && result.detail.includes("42P10");
+}
 
-  if (!workspaceId) {
-    return {
-      persisted: false,
-      reason: "missing-workspace",
-      connection: null,
-    };
-  }
-
-  const existing = await findIntegrationConnection(input.provider, workspaceId);
-  const record = {
-    workspace_id: workspaceId,
-    provider: input.provider,
-    status: input.status,
-    config: input.config || {},
-    last_synced_at: input.lastSyncedAt || null,
-  };
+async function legacyUpsertIntegrationConnection(
+  workspaceId: string,
+  record: Record<string, unknown>,
+  provider: string,
+) {
+  const existing = await findIntegrationConnection(provider, workspaceId);
 
   const persistence = existing?.id
     ? await updateSupabaseRecord(
@@ -88,7 +76,45 @@ export async function upsertIntegrationConnection(input: IntegrationConnectionIn
 
   return {
     ...persistence,
-    connection: await findIntegrationConnection(input.provider, workspaceId),
+    connection: await findIntegrationConnection(provider, workspaceId),
+  };
+}
+
+export async function upsertIntegrationConnection(input: IntegrationConnectionInput) {
+  const workspaceId = resolveDefaultWorkspaceId();
+
+  if (!workspaceId) {
+    return {
+      persisted: false,
+      reason: "missing-workspace",
+      connection: null,
+    };
+  }
+
+  const record = {
+    workspace_id: workspaceId,
+    provider: input.provider,
+    status: input.status,
+    config: input.config || {},
+    last_synced_at: input.lastSyncedAt || null,
+  };
+
+  // One round trip: INSERT ... ON CONFLICT (workspace_id, provider) DO UPDATE.
+  const result = await upsertSupabaseRecords("integration_connections", record, {
+    onConflict: "workspace_id,provider",
+    returnRepresentation: true,
+    select: CONNECTION_SELECT,
+  });
+
+  if (!result.persisted && isMissingOnConflictTarget(result)) {
+    return legacyUpsertIntegrationConnection(workspaceId, record, input.provider);
+  }
+
+  return {
+    persisted: result.persisted,
+    reason: result.reason,
+    ...(result.detail ? { detail: result.detail } : {}),
+    connection: result.record || null,
   };
 }
 

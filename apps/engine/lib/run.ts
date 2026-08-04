@@ -4,8 +4,8 @@ import { generateCardNews } from "@com-moon/content-manager";
 import { logError, logEvent } from "@com-moon/hub-gateway";
 
 import {
-  countSupabaseRows,
   fetchSupabaseRows,
+  fetchSupabaseRowsDetailed,
   inFilter,
   insertSupabaseRecord,
   updateSupabaseRecord,
@@ -14,6 +14,8 @@ import {
   getTelegramMessage,
   getTelegramText,
   parseTelegramCommand,
+  type TelegramCommand,
+  type TelegramMessage,
   type TelegramUpdate,
 } from "./telegram";
 import { listSharedProjectWebhookRoutes } from "./shared-webhook";
@@ -33,9 +35,8 @@ function makeFilter(key: string, value: string): SupabaseFilter {
   return [key, value];
 }
 
-function withWorkspaceFilter(filters: SupabaseFilter[] = []) {
-  const workspaceId = resolveWorkspaceId();
-  return workspaceId ? [makeFilter("workspace_id", `eq.${workspaceId}`), ...filters] : filters;
+function workspaceFilter(workspaceId: string, filters: SupabaseFilter[] = []) {
+  return [makeFilter("workspace_id", `eq.${workspaceId}`), ...filters];
 }
 
 function resolveTelegramProviderEventId(update: TelegramUpdate) {
@@ -69,11 +70,43 @@ async function reserveTelegramUpdate(update: TelegramUpdate, startedAt: string) 
     received_at: startedAt,
   });
 
+  if (reservation.persisted || reservation.reason !== "duplicate") {
+    return {
+      reserved: reservation.persisted,
+      workspaceId,
+      providerEventId,
+      reason: reservation.reason,
+      detail: reservation.detail,
+    };
+  }
+
+  // Duplicate delivery. If the earlier attempt *failed*, atomically re-claim the
+  // row (status failed → received) so Telegram's retry actually re-processes it —
+  // otherwise a transient failure would be dropped forever behind the unique index.
+  const reclaim = await updateSupabaseRecord(
+    "webhook_events",
+    [
+      makeFilter("workspace_id", `eq.${workspaceId}`),
+      makeFilter("source", "eq.telegram"),
+      makeFilter("provider_event_id", `eq.${providerEventId}`),
+      makeFilter("status", "eq.failed"),
+    ],
+    {
+      status: "received",
+      error_message: null,
+      payload: {
+        update_id: update.update_id,
+        phase: "retry",
+      },
+    },
+    { returnRepresentation: true, select: "id" },
+  );
+
   return {
-    reserved: reservation.persisted,
+    reserved: reclaim.persisted,
     workspaceId,
     providerEventId,
-    reason: reservation.reason,
+    reason: reclaim.persisted ? "reclaimed-failed" : "duplicate",
     detail: reservation.detail,
   };
 }
@@ -125,12 +158,12 @@ function normalizeTaskStatus(value: string | null | undefined) {
     return "done";
   }
 
-  if (normalized === "blocked") {
-    return "blocked";
+  if (normalized === "doing") {
+    return "doing";
   }
 
-  if (["doing", "active", "in_progress"].includes(normalized || "")) {
-    return "doing";
+  if (normalized === "blocked") {
+    return "blocked";
   }
 
   if (normalized === "inbox") {
@@ -140,34 +173,51 @@ function normalizeTaskStatus(value: string | null | undefined) {
   return "todo";
 }
 
+const OPEN_TASK_STATUSES = ["inbox", "todo", "doing", "blocked"];
+
 async function buildProjectsCommandResponse() {
-  const [projectCount, openTaskCount, projects, tasks, updates] = await Promise.all([
-    countSupabaseRows(
-      "projects",
-      withWorkspaceFilter([makeFilter("status", inFilter(["active", "blocked"]))]),
-    ),
-    countSupabaseRows(
-      "tasks",
-      withWorkspaceFilter([makeFilter("status", inFilter(["inbox", "todo", "doing", "blocked"]))]),
-    ),
+  const workspaceId = resolveWorkspaceId();
+
+  if (!workspaceId) {
+    // Fail closed: without a workspace scope we refuse to query at all — the
+    // service-role key would otherwise read every workspace's rows.
+    return {
+      message: "Project lane needs COM_MOON_DEFAULT_WORKSPACE_ID before it can read the ledger.",
+      next: ["Set COM_MOON_DEFAULT_WORKSPACE_ID to the target workspaces.id."],
+    };
+  }
+
+  // tasks: one request returns both the open-task rows and the exact open count.
+  const [projectCount, projects, tasksDetailed, updates] = await Promise.all([
+    fetchSupabaseRowsDetailed("projects", {
+      select: "id",
+      limit: 1,
+      count: "exact",
+      filters: workspaceFilter(workspaceId, [makeFilter("status", inFilter(["active", "blocked"]))]),
+    }).then((result) => result.count),
     fetchSupabaseRows("projects", {
+      select: "id,name,status,next_action",
       limit: 3,
       order: "created_at.desc",
-      filters: withWorkspaceFilter(),
+      filters: workspaceFilter(workspaceId),
     }),
-    fetchSupabaseRows("tasks", {
+    fetchSupabaseRowsDetailed("tasks", {
+      select: "id,title,status,next_action",
       limit: 3,
       order: "created_at.desc",
-      filters: withWorkspaceFilter([
-        makeFilter("status", inFilter(["inbox", "todo", "doing", "blocked"])),
-      ]),
+      count: "exact",
+      filters: workspaceFilter(workspaceId, [makeFilter("status", inFilter(OPEN_TASK_STATUSES))]),
     }),
     fetchSupabaseRows("project_updates", {
+      select: "id,title,happened_at",
       limit: 3,
       order: "happened_at.desc",
-      filters: withWorkspaceFilter(),
+      filters: workspaceFilter(workspaceId),
     }),
   ]);
+
+  const tasks = tasksDetailed.rows;
+  const openTaskCount = tasksDetailed.count;
 
   if (projectCount == null && openTaskCount == null && !projects?.length && !tasks?.length && !updates?.length) {
     return {
@@ -207,28 +257,35 @@ async function buildProjectsCommandResponse() {
 }
 
 async function buildPmsCommandResponse() {
-  const [checks, tasks, decisions, projects] = await Promise.all([
+  const workspaceId = resolveWorkspaceId();
+
+  if (!workspaceId) {
+    return {
+      message: "PMS cadence lane needs COM_MOON_DEFAULT_WORKSPACE_ID before it can read the ledger.",
+      checkpoints: ["morning", "midday", "evening", "weekly"],
+    };
+  }
+
+  // tasks embed their project name via the FK (select=...,projects(name)) — no
+  // separate projects fetch just to build an id → name map.
+  const [checks, tasks, decisions] = await Promise.all([
     fetchSupabaseRows("routine_checks", {
+      select: "id,check_type,status,note",
       limit: 4,
       order: "created_at.desc",
-      filters: withWorkspaceFilter(),
+      filters: workspaceFilter(workspaceId),
     }),
     fetchSupabaseRows("tasks", {
+      select: "id,title,status,next_action,project_id,projects(name)",
       limit: 3,
       order: "created_at.desc",
-      filters: withWorkspaceFilter([
-        makeFilter("status", inFilter(["inbox", "todo", "doing", "blocked"])),
-      ]),
+      filters: workspaceFilter(workspaceId, [makeFilter("status", inFilter(OPEN_TASK_STATUSES))]),
     }),
     fetchSupabaseRows("decisions", {
+      select: "id,title,summary",
       limit: 2,
       order: "decided_at.desc",
-      filters: withWorkspaceFilter(),
-    }),
-    fetchSupabaseRows("projects", {
-      limit: 12,
-      order: "created_at.desc",
-      filters: withWorkspaceFilter(),
+      filters: workspaceFilter(workspaceId),
     }),
   ]);
 
@@ -239,7 +296,6 @@ async function buildPmsCommandResponse() {
     };
   }
 
-  const projectNames = new Map((projects || []).map((item: any) => [item.id, item.name]));
   const normalizedChecks = (checks || []).map((item: any) => normalizeRoutineStatus(item.status));
 
   return {
@@ -256,7 +312,7 @@ async function buildPmsCommandResponse() {
     })),
     tasks: (tasks || []).map((item: any) => ({
       title: item.title,
-      project: projectNames.get(item.project_id) || "Unassigned",
+      project: item.projects?.name || "Unassigned",
       status: normalizeTaskStatus(item.status),
       nextAction: item.next_action || "Define the next move before this task stalls.",
     })),
@@ -372,6 +428,135 @@ export interface EngineRunResult {
   finishedAt: string;
 }
 
+interface CommandContext {
+  runId: string;
+  command: TelegramCommand;
+  message: TelegramMessage | null;
+}
+
+interface CommandOutcome {
+  status: "completed" | "ignored";
+  response: unknown;
+  logLevel?: "info" | "warn";
+}
+
+async function handleCardNewsCommand({ runId, command, message }: CommandContext): Promise<CommandOutcome> {
+  const topic =
+    command.args.join(" ").trim() ||
+    message?.chat?.title?.trim() ||
+    "Untitled Card News";
+
+  const result = await generateCardNews({
+    topic,
+    templateId: DEFAULT_CARD_NEWS_TEMPLATE_ID,
+  });
+  const workspaceId = resolveWorkspaceId();
+  const contentItemId = randomUUID();
+  const contentVariantId = randomUUID();
+
+  let contentItemPersistence: { persisted: boolean; reason: string } = {
+    persisted: false,
+    reason: "missing-workspace",
+  };
+  let contentVariantPersistence: { persisted: boolean; reason: string } = {
+    persisted: false,
+    reason: "missing-workspace",
+  };
+
+  if (workspaceId) {
+    // content_variants.content_id references content_items(id) — the parent row
+    // must land first; firing both concurrently loses the FK race.
+    contentItemPersistence = await insertSupabaseRecord("content_items", {
+      id: contentItemId,
+      workspace_id: workspaceId,
+      title: result.title,
+      source_idea: topic,
+      idea_source: "telegram",
+      source_type: "idea",
+      status: "draft",
+      summary: result.summary,
+      next_action: "Review the generated draft in Content > Queue.",
+      visibility: "private",
+      meta: {
+        generated_by: "telegram",
+        template_id: result.templateId,
+        run_id: runId,
+      },
+      created_at: result.generatedAt,
+      updated_at: result.generatedAt,
+    });
+
+    contentVariantPersistence = contentItemPersistence.persisted
+      ? await insertSupabaseRecord("content_variants", {
+          id: contentVariantId,
+          workspace_id: workspaceId,
+          content_id: contentItemId,
+          variant_type: "card_news",
+          title: result.title,
+          body: JSON.stringify(result),
+          summary: result.summary,
+          excerpt: result.summary,
+          status: "draft",
+          visibility: "private",
+          meta: {
+            generated_by: "telegram",
+            template_id: result.templateId,
+            slide_count: result.slideCount,
+            run_id: runId,
+          },
+          created_at: result.generatedAt,
+          updated_at: result.generatedAt,
+        })
+      : { persisted: false, reason: "content-item-not-persisted" };
+  }
+
+  return {
+    status: "completed",
+    response: {
+      ...result,
+      contentItemId: workspaceId ? contentItemId : null,
+      contentVariantId: workspaceId ? contentVariantId : null,
+      hubPath: "/dashboard/content/queue",
+      persistence: {
+        contentItem: contentItemPersistence,
+        contentVariant: contentVariantPersistence,
+      },
+    },
+  };
+}
+
+const COMMAND_HANDLERS: Record<string, (context: CommandContext) => Promise<CommandOutcome>> = {
+  cardnews: handleCardNewsCommand,
+  status: async ({ command }) => ({
+    status: "completed",
+    response: { message: "Engine is alive.", command: command.name },
+  }),
+  ping: async ({ command }) => ({
+    status: "completed",
+    response: { message: "Engine is alive.", command: command.name },
+  }),
+  projects: async () => ({
+    status: "completed",
+    response: await buildProjectsCommandResponse(),
+  }),
+  pms: async () => ({
+    status: "completed",
+    response: await buildPmsCommandResponse(),
+  }),
+  webhooks: async () => ({
+    status: "completed",
+    response: {
+      message: "Webhook surface is ready.",
+      routes: [
+        "/api/webhook/telegram",
+        "/api/webhook/project",
+        ...listSharedProjectWebhookRoutes(),
+        "/api/health",
+      ],
+    },
+  }),
+};
+
 export async function runTelegramUpdate(update: TelegramUpdate): Promise<EngineRunResult> {
   const runId = randomUUID();
   const startedAt = new Date().toISOString();
@@ -396,7 +581,10 @@ export async function runTelegramUpdate(update: TelegramUpdate): Promise<EngineR
   const text = getTelegramText(update);
   const command = parseTelegramCommand(text);
 
-  await logEvent({
+  // Receipt log — held (not awaited) so it overlaps with command work; finalize
+  // awaits it before the response returns. logEvent never rejects (hub-gateway
+  // catches internally), so holding the promise cannot produce an unhandled rejection.
+  const receiptLogged = logEvent({
     context: "telegram-webhook",
     payload: {
       runId,
@@ -410,384 +598,102 @@ export async function runTelegramUpdate(update: TelegramUpdate): Promise<EngineR
     level: "info",
   });
 
-  if (!command) {
+  const finalize = async ({
+    status,
+    response,
+    commandName,
+    logLevel,
+    errorMessage,
+  }: {
+    status: "completed" | "ignored" | "failed";
+    response: unknown;
+    commandName: string | null;
+    logLevel?: "info" | "warn";
+    errorMessage?: string;
+  }): Promise<EngineRunResult> => {
     const finishedAt = new Date().toISOString();
-    const response = {
-      message: "No slash command detected.",
-    };
+    const commandLog = errorMessage
+      ? logError({
+          context: "telegram-command",
+          payload: { runId, command: commandName, text, error: errorMessage },
+          trace: `telegram:${runId}`,
+          timestamp: finishedAt,
+          level: "error",
+        })
+      : commandName
+        ? logEvent({
+            context: "telegram-command",
+            payload: { runId, command: commandName, response },
+            trace: `telegram:${runId}`,
+            timestamp: finishedAt,
+            level: logLevel ?? "info",
+          })
+        : Promise.resolve();
 
-    await persistEngineArtifacts({
-      runId,
-      command: null,
-      status: "ignored",
-      update,
-      text,
-      response,
-      startedAt,
-      finishedAt,
-    });
+    await Promise.all([
+      receiptLogged,
+      commandLog,
+      persistEngineArtifacts({
+        runId,
+        command: commandName,
+        status,
+        update,
+        text,
+        response,
+        startedAt,
+        finishedAt,
+        errorMessage,
+      }),
+    ]);
 
     return {
       runId,
       source: "telegram",
-      status: "ignored",
-      command: null,
+      status,
+      command: commandName,
       response,
       startedAt,
       finishedAt,
     };
+  };
+
+  if (!command) {
+    return finalize({
+      status: "ignored",
+      response: { message: "No slash command detected." },
+      commandName: null,
+    });
   }
 
   try {
-    if (command.name === "cardnews") {
-      const topic =
-        command.args.join(" ").trim() ||
-        message?.chat?.title?.trim() ||
-        "Untitled Card News";
+    const handler = COMMAND_HANDLERS[command.name];
 
-      const result = await generateCardNews({
-        topic,
-        templateId: DEFAULT_CARD_NEWS_TEMPLATE_ID,
-      });
-      const workspaceId = resolveWorkspaceId();
-      const contentItemId = randomUUID();
-      const contentVariantId = randomUUID();
-      const contentPersistence = workspaceId
-        ? await Promise.all([
-            insertSupabaseRecord("content_items", {
-              id: contentItemId,
-              workspace_id: workspaceId,
-              title: result.title,
-              source_idea: topic,
-              idea_source: "telegram",
-              source_type: "idea",
-              status: "draft",
-              summary: result.summary,
-              next_action: "Review the generated draft in Content > Queue.",
-              visibility: "private",
-              meta: {
-                generated_by: "telegram",
-                template_id: result.templateId,
-                run_id: runId,
-              },
-              created_at: result.generatedAt,
-              updated_at: result.generatedAt,
-            }),
-            insertSupabaseRecord("content_variants", {
-              id: contentVariantId,
-              workspace_id: workspaceId,
-              content_id: contentItemId,
-              variant_type: "card_news",
-              title: result.title,
-              body: JSON.stringify(result),
-              summary: result.summary,
-              excerpt: result.summary,
-              status: "draft",
-              visibility: "private",
-              meta: {
-                generated_by: "telegram",
-                template_id: result.templateId,
-                slide_count: result.slideCount,
-                run_id: runId,
-              },
-              created_at: result.generatedAt,
-              updated_at: result.generatedAt,
-            }),
-          ])
-        : [
-            { persisted: false, reason: "missing-workspace" },
-            { persisted: false, reason: "missing-workspace" },
-          ];
-      const response = {
-        ...result,
-        contentItemId: workspaceId ? contentItemId : null,
-        contentVariantId: workspaceId ? contentVariantId : null,
-        hubPath: "/dashboard/content/queue",
-        persistence: {
-          contentItem: contentPersistence[0],
-          contentVariant: contentPersistence[1],
-        },
-      };
-
-      const finishedAt = new Date().toISOString();
-
-      await logEvent({
-        context: "telegram-command",
-        payload: {
-          runId,
-          command: command.name,
-          topic,
-          result: response,
-        },
-        trace: `telegram:${runId}`,
-        timestamp: finishedAt,
-        level: "info",
-      });
-
-      await persistEngineArtifacts({
-        runId,
-        command: command.name,
-        status: "completed",
-        update,
-        text,
-        response,
-        startedAt,
-        finishedAt,
-      });
-
-      return {
-        runId,
-        source: "telegram",
-        status: "completed",
-        command: command.name,
-        response,
-        startedAt,
-        finishedAt,
-      };
-    }
-
-    if (command.name === "status" || command.name === "ping") {
-      const finishedAt = new Date().toISOString();
-      const response = {
-        message: "Engine is alive.",
-        command: command.name,
-      };
-
-      await logEvent({
-        context: "telegram-command",
-        payload: {
-          runId,
-          command: command.name,
-          response,
-        },
-        trace: `telegram:${runId}`,
-        timestamp: finishedAt,
-        level: "info",
-      });
-
-      await persistEngineArtifacts({
-        runId,
-        command: command.name,
-        status: "completed",
-        update,
-        text,
-        response,
-        startedAt,
-        finishedAt,
-      });
-
-      return {
-        runId,
-        source: "telegram",
-        status: "completed",
-        command: command.name,
-        response,
-        startedAt,
-        finishedAt,
-      };
-    }
-
-    if (command.name === "projects") {
-      const finishedAt = new Date().toISOString();
-      const response = await buildProjectsCommandResponse();
-
-      await logEvent({
-        context: "telegram-command",
-        payload: {
-          runId,
-          command: command.name,
-          response,
-        },
-        trace: `telegram:${runId}`,
-        timestamp: finishedAt,
-        level: "info",
-      });
-
-      await persistEngineArtifacts({
-        runId,
-        command: command.name,
-        status: "completed",
-        update,
-        text,
-        response,
-        startedAt,
-        finishedAt,
-      });
-
-      return {
-        runId,
-        source: "telegram",
-        status: "completed",
-        command: command.name,
-        response,
-        startedAt,
-        finishedAt,
-      };
-    }
-
-    if (command.name === "pms") {
-      const finishedAt = new Date().toISOString();
-      const response = await buildPmsCommandResponse();
-
-      await logEvent({
-        context: "telegram-command",
-        payload: {
-          runId,
-          command: command.name,
-          response,
-        },
-        trace: `telegram:${runId}`,
-        timestamp: finishedAt,
-        level: "info",
-      });
-
-      await persistEngineArtifacts({
-        runId,
-        command: command.name,
-        status: "completed",
-        update,
-        text,
-        response,
-        startedAt,
-        finishedAt,
-      });
-
-      return {
-        runId,
-        source: "telegram",
-        status: "completed",
-        command: command.name,
-        response,
-        startedAt,
-        finishedAt,
-      };
-    }
-
-    if (command.name === "webhooks") {
-      const finishedAt = new Date().toISOString();
-      const response = {
-        message: "Webhook surface is ready.",
-        routes: [
-          "/api/webhook/telegram",
-          "/api/webhook/project",
-          ...listSharedProjectWebhookRoutes(),
-          "/api/health",
-        ],
-      };
-
-      await logEvent({
-        context: "telegram-command",
-        payload: {
-          runId,
-          command: command.name,
-          response,
-        },
-        trace: `telegram:${runId}`,
-        timestamp: finishedAt,
-        level: "info",
-      });
-
-      await persistEngineArtifacts({
-        runId,
-        command: command.name,
-        status: "completed",
-        update,
-        text,
-        response,
-        startedAt,
-        finishedAt,
-      });
-
-      return {
-        runId,
-        source: "telegram",
-        status: "completed",
-        command: command.name,
-        response,
-        startedAt,
-        finishedAt,
-      };
-    }
-
-    const finishedAt = new Date().toISOString();
-    const response = {
-      message: `Unsupported command: ${command.name}`,
-      command: command.name,
-    };
-
-    await logEvent({
-      context: "telegram-command",
-      payload: {
-        runId,
-        command: command.name,
-        response,
-      },
-      trace: `telegram:${runId}`,
-      timestamp: finishedAt,
-        level: "warn",
-      });
-
-      await persistEngineArtifacts({
-        runId,
-        command: command.name,
+    if (!handler) {
+      return await finalize({
         status: "ignored",
-        update,
-        text,
-        response,
-        startedAt,
-        finishedAt,
+        response: {
+          message: `Unsupported command: ${command.name}`,
+          command: command.name,
+        },
+        commandName: command.name,
+        logLevel: "warn",
       });
+    }
 
-      return {
-        runId,
-        source: "telegram",
-        status: "ignored",
-        command: command.name,
-        response,
-        startedAt,
-        finishedAt,
-      };
-  } catch (error) {
-    const finishedAt = new Date().toISOString();
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    await logError({
-      context: "telegram-command",
-      payload: {
-        runId,
-        command: command.name,
-        text,
-        error: errorMessage,
-      },
-      trace: `telegram:${runId}`,
-      timestamp: finishedAt,
-      level: "error",
+    const outcome = await handler({ runId, command, message });
+    return await finalize({
+      status: outcome.status,
+      response: outcome.response,
+      commandName: command.name,
+      logLevel: outcome.logLevel,
     });
-
-    await persistEngineArtifacts({
-      runId,
-      command: command.name,
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return finalize({
       status: "failed",
-      update,
-      text,
-      response: {
-        error: errorMessage,
-      },
-      startedAt,
-      finishedAt,
+      response: { error: errorMessage },
+      commandName: command.name,
       errorMessage,
     });
-
-    return {
-      runId,
-      source: "telegram",
-      status: "failed",
-      command: command.name,
-      response: {
-        error: errorMessage,
-      },
-      startedAt,
-      finishedAt,
-    };
   }
 }

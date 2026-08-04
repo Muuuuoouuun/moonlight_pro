@@ -214,25 +214,40 @@ export async function fetchSupabaseRowsDetailed(table, options = {}) {
   const config = resolveSupabaseConfig();
 
   if (!config) {
-    return { rows: null, configured: false, error: null };
+    return { rows: null, count: null, configured: false, error: null };
   }
 
+  // count: "exact" returns the total row count of the filtered set alongside the
+  // (limited) rows in one request, via the Content-Range header.
+  const withCount = options.count === "exact";
   const url = buildRestUrl(config.url, table, options);
   const request = () =>
     supabaseFetch("select", table, url, {
-      headers: makeSupabaseHeaders(config.apiKey),
+      headers: makeSupabaseHeaders(config.apiKey, withCount ? { prefer: "count=exact" } : {}),
       timeoutMs: options.timeoutMs,
     });
 
-  const result = options.dedupe === false ? await request() : await dedupedRead(url, request);
+  const result = options.dedupe === false || withCount
+    ? await request()
+    : await dedupedRead(url, request);
 
   if (!result.ok) {
     const reason = result.failureReason || `http-${result.status}`;
     logSupabaseFailure("select", table, reason, result.text);
-    return { rows: null, configured: true, error: { reason, status: result.status, detail: result.text } };
+    return {
+      rows: null,
+      count: null,
+      configured: true,
+      error: { reason, status: result.status, detail: result.text },
+    };
   }
 
-  return { rows: parseRows(result.text) ?? [], configured: true, error: null };
+  return {
+    rows: parseRows(result.text) ?? [],
+    count: withCount ? extractCount(result.contentRange) : null,
+    configured: true,
+    error: null,
+  };
 }
 
 export async function fetchSupabaseRows(table, options = {}) {

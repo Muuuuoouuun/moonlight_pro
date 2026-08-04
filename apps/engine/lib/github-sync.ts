@@ -141,6 +141,7 @@ async function fetchGitHubJson<T>(path: string): Promise<GitHubApiResult<T>> {
     const response = await fetch(`${normalizeApiBaseUrl()}${path}`, {
       headers: makeGitHubHeaders(),
       cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
     });
     const text = await response.text();
     const data = text ? JSON.parse(text) : null;

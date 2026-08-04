@@ -6,9 +6,11 @@ import {
   checkSupabaseRest as sharedCheckSupabaseRest,
   countSupabaseRows as sharedCountSupabaseRows,
   fetchSupabaseRows as sharedFetchSupabaseRows,
+  fetchSupabaseRowsDetailed as sharedFetchSupabaseRowsDetailed,
   insertSupabaseRecord as sharedInsertSupabaseRecord,
   updateSupabaseRecord as sharedUpdateSupabaseRecord,
   upsertSupabaseRecords as sharedUpsertSupabaseRecords,
+  type SupabaseDetailedReadResult,
   type SupabaseFilter,
   type SupabaseHealthResult,
   type SupabaseQueryOptions,
@@ -18,6 +20,13 @@ import {
 } from "@com-moon/supabase-rest";
 
 export { inFilter } from "@com-moon/supabase-rest";
+
+export function fetchSupabaseRowsDetailed(
+  table: string,
+  options: SupabaseQueryOptions = {},
+): Promise<SupabaseDetailedReadResult<any>> {
+  return sharedFetchSupabaseRowsDetailed<any>(table, options);
+}
 
 export function checkSupabaseRest(table = "projects"): Promise<SupabaseHealthResult> {
   return sharedCheckSupabaseRest(table);
