@@ -353,6 +353,138 @@
 @keyframes mlFadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .hub-app .fade-up { animation: mlFadeUp var(--dur-enter) ease-out; }
 
+/* Daily Brief keeps motion functional and scarce: one intro reveal, one command reveal,
+   and hover feedback only on destinations that actually navigate. Static status/cards
+   deliberately stay still. */
+.hub-app .daily-brief__command-reveal {
+  animation: mlFadeUp var(--dur-enter) var(--ease-hub) both;
+  animation-delay: var(--stagger-step);
+}
+.hub-app .daily-brief {
+  --brief-panel-line: rgba(82, 116, 168, 0.26);
+  --brief-panel-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.025) inset,
+    0 10px 26px -22px rgba(0, 0, 0, 0.9);
+  --brief-panel-shadow-hover:
+    0 1px 0 rgba(255, 255, 255, 0.035) inset,
+    0 14px 30px -22px rgba(0, 0, 0, 0.95);
+}
+.hub-app[data-theme="light"] .daily-brief {
+  --brief-panel-line: rgba(82, 116, 168, 0.22);
+  --brief-panel-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.75) inset,
+    0 9px 22px -18px rgba(12, 16, 24, 0.22);
+  --brief-panel-shadow-hover:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 12px 26px -18px rgba(12, 16, 24, 0.26);
+}
+.hub-app .daily-brief__panel {
+  border-left-color: var(--brief-panel-line) !important;
+  box-shadow: var(--brief-panel-shadow) !important;
+}
+.hub-app .daily-brief__panel--danger {
+  border-left-color: var(--danger-line) !important;
+}
+.hub-app .daily-brief__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.hub-app .daily-brief__nav-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+  color: var(--fg-faint);
+  font-size: 10.5px;
+}
+.hub-app .daily-brief__nav-label > :first-child {
+  color: var(--fg-dim);
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+.hub-app .daily-brief__nav-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+}
+.hub-app .daily-brief__jump {
+  min-width: 0;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  color: var(--fg-muted);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-left-color: var(--brief-panel-line);
+  border-radius: var(--r-sm);
+  box-shadow: var(--brief-panel-shadow);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color var(--dur-hover) var(--ease-hub),
+    background var(--dur-hover) var(--ease-hub),
+    border-color var(--dur-hover) var(--ease-hub),
+    box-shadow var(--dur-hover) var(--ease-hub),
+    transform var(--dur-hover) var(--ease-hub);
+}
+.hub-app .daily-brief__jump-icon {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--moon-300);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-xs);
+}
+.hub-app .daily-brief__jump-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hub-app .daily-brief__jump-copy strong {
+  overflow: hidden;
+  color: var(--fg);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hub-app .daily-brief__jump-copy small {
+  overflow: hidden;
+  color: var(--fg-faint);
+  font-size: 10.5px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (hover: hover) and (pointer: fine) {
+  .hub-app .daily-brief__jump:hover {
+    color: var(--fg);
+    background: var(--surface-2);
+    border-color: var(--line);
+    border-left-color: var(--brief-panel-line);
+    box-shadow: var(--brief-panel-shadow-hover);
+    transform: translateY(-1px);
+  }
+  .hub-app .daily-brief__jump:hover > svg:last-child {
+    transform: translateX(2px);
+  }
+}
+.hub-app .daily-brief__jump > svg:last-child {
+  transition: transform var(--dur-hover) var(--ease-hub);
+}
+.hub-app .daily-brief__jump:active { transform: translateY(0); }
+
 /* §9 card cascade — put on a container whose direct children rise in sequence
    (KPI strips, card grids, section stacks). Not for data rows: row lists stay instant.
    `both` keeps late children invisible until their delay; cap at child 8 so long
@@ -672,6 +804,10 @@
   .hub-app {
     --section-gap: 16px;
     --card-pad: 16px;
+  }
+
+  .hub-app .daily-brief__nav-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .hub-mobile-only {
@@ -1141,6 +1277,15 @@
   .hub-app {
     --section-gap: 12px;
     --card-pad: 14px;
+  }
+
+  .hub-app .daily-brief__nav-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hub-app .daily-brief__jump {
+    min-height: 48px;
+    padding: 7px 9px;
   }
 
   .hub-grid--metrics,

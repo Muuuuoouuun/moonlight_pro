@@ -85,6 +85,14 @@ const METRIC_TARGETS = {
   Published: 'dashboard/content/queue',
 };
 
+const BRIEF_DESTINATIONS = [
+  { key: 'tasks', label: '내 작업', icon: 'inbox', target: 'dashboard/work/my' },
+  { key: 'calendar', label: '캘린더', icon: 'calendar', target: 'dashboard/work/calendar' },
+  { key: 'projects', label: '프로젝트', icon: 'projects', target: 'dashboard/work/projects' },
+  { key: 'followups', label: '고객 연락', icon: 'bell', target: 'dashboard/revenue/followups' },
+  { key: 'content', label: '콘텐츠', icon: 'content', target: 'dashboard/content/queue' },
+];
+
 // Deep-link a signal decision to the specific record drawer when the target is the
 // deals/leads board and the signal carries a real id — revenue.jsx reads ?deal=/?lead=.
 // Sentinel refs (TODAY/NEW/PROPOSED…) are aggregate signals with no single record.
@@ -199,7 +207,7 @@ function QuickTaskCapture({ onNavigate, onSaved }) {
   }
 
   return (
-    <Card>
+    <Card className="daily-brief__capture daily-brief__panel" style={{ padding: '14px 16px' }}>
       <form aria-label="빠른 입력" onSubmit={submit} className="hub-stackable-row" style={{ display: 'flex', alignItems: 'end', gap: 10 }}>
         <div style={{ display: 'flex', flex: '1 1 360px', minWidth: 0, flexDirection: 'column', gap: 7 }}>
           <div className="hub-stackable-row" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -222,7 +230,7 @@ function QuickTaskCapture({ onNavigate, onSaved }) {
             maxLength={4000}
             disabled={saving}
             style={{
-              width: '100%', padding: '10px 12px', fontSize: 16, lineHeight: 1.45,
+              width: '100%', padding: '8px 11px', fontSize: 16, lineHeight: 1.4,
               color: 'var(--fg)', background: 'var(--surface-2)',
               border: `1px solid ${state.status === 'error' ? 'var(--danger-line)' : 'var(--line-soft)'}`,
               borderRadius: 'var(--r-sm)',
@@ -233,7 +241,7 @@ function QuickTaskCapture({ onNavigate, onSaved }) {
           {saving ? '저장 중' : hint === 'task' ? '할 일 저장' : '정리 전 저장'}
         </Button>
       </form>
-      <div style={{ marginTop: 8, minHeight: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ marginTop: 4, minHeight: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
         <span role={state.status === 'error' ? 'alert' : 'status'} aria-live="polite" style={{ flex: 1, fontSize: 11.5, color: stateColor }}>
           {state.message}
         </span>
@@ -296,7 +304,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
           <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/projects?view=todos')}>모두 보기</Button>
         </div>
       )}>오늘 할 일</SectionTitle>
-      <Card pad={false}>
+      <Card pad={false} className="daily-brief__panel">
         {items.length ? (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {items.map((task, index) => (
@@ -429,14 +437,12 @@ function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
   const [decided, setDecided] = React.useState(null);
   // §5.2 collision precedence: urgency lives on the left rail + dot (danger only);
   // ordinary lanes (today/queue/info) stay neutral instead of painting semantic hues.
-  const borderTone = s.tone === 'danger' ? 'var(--danger-line)' : 'var(--line)';
   const openContext = () => onNavigate?.(CONTEXT_TARGETS[s.kind] || 'dashboard/daily-brief');
 
   return (
-    <div style={{
+    <div className={`daily-brief__panel${s.tone === 'danger' ? ' daily-brief__panel--danger' : ''}`} style={{
       background: 'var(--surface)',
       border: '1px solid var(--line-soft)',
-      borderLeft: `1px solid ${borderTone}`,
       borderRadius: 'var(--r-lg)',
       overflow: 'hidden',
       opacity: decided ? 0.55 : 1,
@@ -1212,6 +1218,45 @@ function StatusLine({ state }) {
   );
 }
 
+function BriefNavigation({ taskToday, onNavigate }) {
+  const taskCount = Number(taskToday?.counts?.missed || 0) + Number(taskToday?.counts?.today || 0);
+  const taskDetail = taskToday?.state === 'live' ? `${taskCount}건 확인` : '기록 확인';
+  const detailByKey = {
+    tasks: taskDetail,
+    calendar: '일정 배치',
+    projects: '진행 확인',
+    followups: '후속 조치',
+    content: '큐 확인',
+  };
+
+  return (
+    <nav aria-label="Daily Brief 빠른 이동" className="daily-brief__nav">
+      <div className="daily-brief__nav-label">
+        <span>빠른 이동</span>
+        <span>핵심 탭 바로가기</span>
+      </div>
+      <div className="daily-brief__nav-grid">
+        {BRIEF_DESTINATIONS.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            className="daily-brief__jump"
+            aria-label={`${item.label}: ${detailByKey[item.key]}`}
+            onClick={() => onNavigate?.(item.target)}
+          >
+            <span className="daily-brief__jump-icon"><Iconed name={item.icon} size={15} /></span>
+            <span className="daily-brief__jump-copy">
+              <strong>{item.label}</strong>
+              <small>{detailByKey[item.key]}</small>
+            </span>
+            <Iconed name="chevronR" size={13} style={{ color: 'var(--fg-faint)' }} />
+          </button>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
 // The command — the single highest-priority signal, rendered full-width with its decisions
 // already exposed. This is the "<5s, what's my next move?" surface (DESIGN.md §3.1).
 function CommandCard({ s, remaining, onNavigate }) {
@@ -1219,20 +1264,18 @@ function CommandCard({ s, remaining, onNavigate }) {
   // §5.2 red-budget: only true urgency colors the command ring. Everything else reads
   // as the top item by position and size alone — warning/info/success rims were reading
   // as a banned warm-gold halo around the hero card.
-  const line = s.tone === 'danger' ? 'var(--danger-line)' : 'var(--line-strong)';
   const accent = s.tone === 'danger' ? 'var(--danger)' : 'var(--moon-300)';
   const hasRecord = s.source?.ref && !SENTINEL_REFS.has(String(s.source.ref).trim().toUpperCase());
   const openRecord = () => onNavigate?.(withEntityRef(CONTEXT_TARGETS[s.kind] || 'dashboard/daily-brief', s.source));
   return (
-    <div style={{
+    <div className={`daily-brief__panel${s.tone === 'danger' ? ' daily-brief__panel--danger' : ''}`} style={{
       position: 'relative', overflow: 'hidden',
       background: 'var(--surface)',
       border: '1px solid var(--line-soft)',
-      borderLeft: `1px solid ${line}`,
       borderRadius: 'var(--r-lg)',
-      padding: 'var(--card-pad)',
+      padding: 16,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 9, flexWrap: 'wrap' }}>
         {/* §9: urgent 인디케이터는 루프 금지 — red+glow가 이미 충분한 강조 */}
         <span style={{ width: 7, height: 7, borderRadius: 999, background: accent, flexShrink: 0 }} />
         <span className="mono" style={{ fontSize: 10.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--fg-dim)' }}>지금 가장 급한 결정</span>
@@ -1241,8 +1284,8 @@ function CommandCard({ s, remaining, onNavigate }) {
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>from {s.source?.from} · <span className="mono">{s.source?.ref}</span></span>
       </div>
-      <div style={{ fontSize: 24, fontWeight: 650, letterSpacing: '-0.025em', color: 'var(--fg)', marginBottom: 8, lineHeight: 1.2 }}>{s.title}</div>
-      <div style={{ fontSize: 13.5, color: 'var(--fg-muted)', lineHeight: 1.6, maxWidth: '76ch' }}>{s.summary}</div>
+      <div style={{ fontSize: 21, fontWeight: 650, letterSpacing: '-0.025em', color: 'var(--fg)', marginBottom: 6, lineHeight: 1.22 }}>{s.title}</div>
+      <div style={{ fontSize: 13, color: 'var(--fg-muted)', lineHeight: 1.5, maxWidth: '76ch' }}>{s.summary}</div>
       {decided ? (
         <div style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--success)' }}>
           <Iconed name="check" size={14} />
@@ -1250,7 +1293,7 @@ function CommandCard({ s, remaining, onNavigate }) {
           <Button variant="ghost" size="sm" onClick={() => setDecided(null)}>되돌리기</Button>
         </div>
       ) : (
-        <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {s.decisions.map((d, i) => (
             <Button key={i} variant={d.primary ? 'primary' : 'secondary'} size="md" icon={d.primary ? 'bolt' : null}
               onClick={() => {
@@ -1273,9 +1316,9 @@ function CommandCard({ s, remaining, onNavigate }) {
 // Calm state when nothing is urgent — the brief still answers "what matters" with "nothing on fire".
 function CommandClear({ signalCount }) {
   return (
-    <div style={{
+    <div className="daily-brief__panel" style={{
       background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-xl)',
-      padding: 'var(--card-pad)', display: 'flex', alignItems: 'center', gap: 14,
+      padding: '13px 16px', display: 'flex', alignItems: 'center', gap: 12,
     }}>
       <span style={{ width: 34, height: 34, borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--success)', flexShrink: 0 }}>
         <Iconed name="check" size={17} />
@@ -1301,7 +1344,7 @@ function MoreDetail({ title, children }) {
         type="button"
         onClick={() => setOpen(o => !o)}
         aria-expanded={open}
-        className="hub-row"
+        className="hub-row daily-brief__panel"
         style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 8,
           padding: '11px 14px',
@@ -1311,12 +1354,12 @@ function MoreDetail({ title, children }) {
           color: 'var(--fg-muted)', fontSize: 12.5, textAlign: 'left',
         }}
       >
-        <Iconed name="chevronD" size={13} style={{ color: 'var(--fg-faint)', transform: open ? 'rotate(0)' : 'rotate(-90deg)', transition: 'transform .15s' }} />
+        <Iconed name="chevronD" size={13} style={{ color: 'var(--fg-faint)', transform: open ? 'rotate(0)' : 'rotate(-90deg)', transition: 'transform var(--dur-panel) var(--ease-hub)' }} />
         <span style={{ flex: 1 }}>{title}</span>
         <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{open ? '접기' : '펼치기'}</span>
       </button>
       {open && (
-        <div className="stagger-up" style={{ marginTop: 'var(--gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+        <div className="fade-up" style={{ marginTop: 'var(--gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
           {children}
         </div>
       )}
@@ -1465,9 +1508,9 @@ function RhythmPanel({ onNavigate }) {
   );
 }
 
-// The queue is a decision list, not an inbox. Three items keep the first scan
+// The queue is a decision list, not an inbox. Two items keep the first scan
 // calm; the rest stay one click away.
-const QUEUE_LIMIT = 3;
+const QUEUE_LIMIT = 2;
 
 export function DailyBrief({ onNavigate }) {
   const [now, setNow] = React.useState(() => new Date());
@@ -1490,12 +1533,12 @@ export function DailyBrief({ onNavigate }) {
   const queue = queueExpanded ? waiting : waiting.slice(0, QUEUE_LIMIT);
   const queueOverflow = waiting.length - queue.length;
   return (
-    <div className="hub-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', padding: 'var(--section-gap)', maxWidth: 1000, margin: '0 auto', width: '100%' }}>
-      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24 }}>
+    <div className="hub-page daily-brief" style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 'var(--section-gap)', maxWidth: 1040, margin: '0 auto', width: '100%' }}>
+      <div className="hub-page-header daily-brief__intro fade-up" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20 }}>
         <div>
-          <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>{formatBriefDate(now)}</div>
-          <h2 style={{ margin: 0, fontSize: 'clamp(30px, 4vw, 38px)', fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.05 }}>오늘의 실행</h2>
-          <div style={{ marginTop: 9, fontSize: 13.5, color: 'var(--fg-muted)', maxWidth: '62ch', lineHeight: 1.55 }}>
+          <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}>{formatBriefDate(now)}</div>
+          <h2 style={{ margin: 0, fontSize: 'clamp(27px, 3vw, 32px)', fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.08 }}>오늘의 실행</h2>
+          <div style={{ marginTop: 6, fontSize: 13, color: 'var(--fg-muted)', maxWidth: '62ch', lineHeight: 1.45 }}>
             {greetingFor(now)}, Junhyuk · <span style={{ color: 'var(--fg)' }}>신호 {signalCount}</span> · <span style={{ color: urgentCount > 0 ? 'var(--danger)' : 'inherit' }}>즉시 {urgentCount}</span> · 오늘 {todayCount}
           </div>
         </div>
@@ -1507,16 +1550,20 @@ export function DailyBrief({ onNavigate }) {
 
       <StatusLine state={ledger} />
 
-      <div className="stagger-up" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', minWidth: 0 }}>
+      <BriefNavigation taskToday={ledger.taskToday} onNavigate={onNavigate} />
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
         <QuickTaskCapture onNavigate={onNavigate} onSaved={refreshLedger} />
 
-        {command ? (
-          <CommandCard s={command} remaining={waiting.length} onNavigate={onNavigate} />
-        ) : (
-          <CommandClear signalCount={signalCount} />
-        )}
+        <div className="daily-brief__command-reveal">
+          {command ? (
+            <CommandCard s={command} remaining={waiting.length} onNavigate={onNavigate} />
+          ) : (
+            <CommandClear signalCount={signalCount} />
+          )}
+        </div>
 
-        <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.05fr) minmax(300px, .95fr)', gap: 'var(--section-gap)', alignItems: 'start' }}>
+        <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.05fr) minmax(300px, .95fr)', gap: 16, alignItems: 'start' }}>
           <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={refreshLedger} />
 
           <div>
@@ -1530,7 +1577,7 @@ export function DailyBrief({ onNavigate }) {
               {queue.length ? (
                 queue.map((s) => <SignalCard key={s.id} s={s} defaultExpanded={s.tone === 'danger'} onNavigate={onNavigate} />)
               ) : (
-                <Card>
+                <Card className="daily-brief__panel">
                   <EmptyState icon="check" title={command ? '큐가 비었습니다' : '오늘 신호 없음'} description={command ? '가장 급한 하나만 위에 남았어요. 처리하면 브리핑이 정리됩니다.' : '새 신호가 들어오면 명령 카드로 가장 먼저 올라옵니다.'} />
                 </Card>
               )}

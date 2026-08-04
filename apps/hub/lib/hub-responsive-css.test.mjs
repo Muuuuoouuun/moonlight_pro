@@ -83,6 +83,38 @@ test("Daily Brief quick capture has a real label and announced save state", () =
   assert.match(dailyBriefSource, /fetch\('\/api\/hub\/inbox'/);
 });
 
+test("Daily Brief quick navigation activates the core operating tabs", () => {
+  assert.match(dailyBriefSource, /<nav aria-label="Daily Brief 빠른 이동"/);
+  for (const target of [
+    "dashboard/work/my",
+    "dashboard/work/calendar",
+    "dashboard/work/projects",
+    "dashboard/revenue/followups",
+    "dashboard/content/queue",
+  ]) {
+    assert.match(dailyBriefSource, new RegExp(`target: ['"]${target}['"]`));
+  }
+  assert.match(dailyBriefSource, /onClick=\{\(\) => onNavigate\?\.\(item\.target\)\}/);
+});
+
+test("Daily Brief motion stays selective and pointer-aware", () => {
+  assert.match(dailyBriefSource, /daily-brief__intro fade-up/);
+  assert.match(dailyBriefSource, /className="daily-brief__command-reveal"/);
+  assert.match(css, /@media\s*\(hover:\s*hover\)\s*and\s*\(pointer:\s*fine\)[\s\S]*?\.hub-app \.daily-brief__jump:hover/);
+  assert.match(css, /\.hub-app \.daily-brief__command-reveal\s*\{[\s\S]*?animation:\s*mlFadeUp var\(--dur-enter\) var\(--ease-hub\)/);
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.hub-app \*, \.hub-app \*::before, \.hub-app \*::after/);
+});
+
+test("Daily Brief panels share a subtle one-pixel accent and low elevation", () => {
+  assert.match(css, /--brief-panel-line:\s*rgba\(82,\s*116,\s*168,\s*0\.26\)/);
+  assert.match(css, /--brief-panel-shadow:[\s\S]*?0 10px 26px -22px rgba\(0, 0, 0, 0\.9\)/);
+  assert.match(css, /\.hub-app \.daily-brief__panel\s*\{[\s\S]*?border-left-color:\s*var\(--brief-panel-line\)[\s\S]*?box-shadow:\s*var\(--brief-panel-shadow\)/);
+  assert.match(css, /\.hub-app \.daily-brief__jump\s*\{[\s\S]*?border:\s*1px solid var\(--line-soft\)[\s\S]*?border-left-color:\s*var\(--brief-panel-line\)/);
+  assert.match(dailyBriefSource, /daily-brief__capture daily-brief__panel/);
+  assert.match(dailyBriefSource, /<Card pad=\{false\} className="daily-brief__panel">/);
+  assert.match(dailyBriefSource, /daily-brief__panel--danger/);
+});
+
 test("Daily Brief task-only Today exposes durable completion controls", () => {
   assert.match(dailyBriefSource, /aria-label="오늘 할 일"/);
   assert.match(dailyBriefSource, /aria-label=\{`완료: \$\{task\.title\}`\}/);
