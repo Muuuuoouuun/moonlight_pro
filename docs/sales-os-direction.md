@@ -1,7 +1,7 @@
 # Sales OS — 방향성 & 설계 지침 (SSOT)
 
-> moonlight Sales OS의 단일 진실 원천. 흩어진 결정(office-hours v2/v3 설계 문서, 메모리, 인터뷰)을
-> 한 곳에 정리. 구현·리뷰 전 여기를 먼저 읽는다.
+> 상태: ACTIVE DOMAIN REFERENCE — 2026-07-13 이후 운영자 사실과 데이터 소유권은 `docs/operator-workflow-profile.md`와 Personal Operator OS 심화 설계가 우선한다.
+> Sales OS 내부 결정의 참조 문서다. 구현·리뷰 전 `docs/README.md`의 문서 우선순위를 먼저 확인한다.
 > 최종 갱신: 2026-06-17 · 설계 문서: `~/.gstack/projects/Muuuuoouuun-moonlight_pro/clmagi-codex-moonlight-p0-hardening-design-20260617-230521.md` (APPROVED, supersedes 155433)
 
 ---
@@ -25,7 +25,8 @@ Hub/Engine/Supabase 위에 얹는다(신규 구축 아님).
 | **classinkr-web** | 회사 홈페이지(사용자 구축) | ClassIn 로직·팀 지향 시스템 참고 | ⚠️ **이 머신(clmagi)엔 없음** — 사용자 다른 머신(`bigmac_moon`)에 있음 |
 
 **경계 규칙**
-- moonlight는 classin_home의 CRM·딜·퍼널을 **재구축하지 않는다 → 읽는다**(v1.4). 이미 classin_home에
+- **2026-07-13 우선 결정:** 처음에는 ClassIn/Neo CRM의 운영자 담당 고객을 가져오고, 이후 Moonlight를 개인 업무 정본으로 사용한다. ClassIn은 회사 공식 객체·공식 활동 요약의 정본으로 남으며, Moonlight의 개인 상세 메모는 보내지 않는다. 동기화는 우선 수동 버튼으로 없는 기록만 가져오고 공식 write는 outbox/승인 경계를 거친다.
+- 아래 “재구축하지 않고 읽는다”는 문장은 초기 v1.4 결합 방향의 역사적 제약이다. 새 결정을 막는 제품 원칙으로 사용하지 않는다. 기존 자산 파악에는 계속 참고한다. 이미 classin_home에
   있는 것: `external_crm_records`(Xiaoshouyi 스냅샷), `crm_xiaoshouyi_owner_names`(문준혁=
   3935704427463307), `deals`(contact→quote→contract→confirmed→installation→payment→closed) + 금액/
   결제 상태, 퍼널 이코노믹스(노출→리드→…→고객, CPL/CPA/CPD/ROI), **채널별 광고비**(구글·메타·네이버·
@@ -126,11 +127,16 @@ Zoom 대체재·전자칠판 스펙표로 설명하면 가치가 작아짐.
 | 단계 | 내용 | 상태 |
 | ---- | ---- | ---- |
 | v1.0 | 구글시트 동기화(import→staging→승격, DB→시트 push), sales_plays/lead_intake_raw DDL | ✅ 머지·라이브 적용됨 |
-| **v1.1** | **콘텐츠 아이디어 큐 + 발행 케이던스 엔진** (이번 첫 수) | ▶ §8 계획 |
-| v1.2 | 팔로업/다음행동 엔진(단계·정체 기반 "오늘 연락할 사람+채널+왜+자료") | 대기 |
-| v1.3 | 인바운드 DM→리드 포착(콘텐츠↔딜 루프, 반수작업) | 대기 |
-| v1.4 | classin_home CRM 읽어와 통합(내 ownerId 딜을 한 화면) | 대기 |
-| vNext | 네이버 공식 API 시드(법적) · 광고비/퍼널 연동(classin_home 재사용) · 5팀 오케스트레이션 + agents.jsx 토큰화 · 인스타/스레드 자동 발행 · 5배 계기판 | 보류 |
+| v1.1 | 콘텐츠 아이디어 큐 + 발행 케이던스 엔진 | ✅ 머지됨 (`content_items`/`content_variants` 확장 + Content 페이지 Queue 탭) |
+| v1.2 | 팔로업/다음행동 엔진 + `outreach_outcomes` 싱크 | ✅ 머지됨 (`followups.jsx`, `outcomes-ledger.js`) |
+| Guru P0–P2 | 세일즈 구루 멘토 에이전트(페르소나 → Engine 루프 → 딜 단위 코칭) | ✅ 머지됨 — `docs/sales-guru-mentor-agent-plan.md` |
+| Sales OS Phase 0–4 | work_orders/agent_runs 스파인 · 360 컨텍스트 어셈블러 · 인박스 라우터 · 크로스필러 리스크 · outcome-weighted triage + leads.score | ✅ 머지됨 |
+| 학습 루프 closing | work_order 실행 결과 → `outreach_outcomes` → `agent_runs.outcome_id` 귀속(멱등) | ✅ 머지됨 |
+| **v1.4 — CRM 통합** | classin_home 딜/퍼널을 읽어와 Guru의 `crm_facts` gap 해소 | P0a(코드 배관: `crmFacts` 파라미터, `crm-pipeline.js`)만 완료 · **이후 보류**(아래 결정 참고) |
+| v1.3 | 인바운드 DM→리드 포착(콘텐츠↔딜 루프, 반수작업) | ✅ 머지됨 — legacy 분류기는 `inbox-classify.js`에 유지하고, 삭제된 direct `inbox-router.js` write 대신 Quick Capture는 Hub BFF→Engine capture command→atomic receipt로 `work_orders`에 저장한다. 승인된 `dm`/`lead` work order를 실제 `leads` row로 닫는 `promoteCaptureToLead`(`work-orders.js`)가 루프를 완성한다. `lead_intake_raw`→`companies` 매칭(구조화 필드 필요)은 의도적으로 생략 — 자유 텍스트에서 회사 매칭을 추측하지 않고, bare lead를 Revenue › Leads에서 사람이 채우게 함(§8 지식과 동일한 안전 원칙) |
+| vNext | 네이버 공식 API 시드(법적) · 광고비/퍼널 연동(classin_home 재사용) · agents.jsx 팔레트 토큰화 · 인스타/스레드 자동 발행 · 5배 계기판 | 보류 |
+
+> **2026-07-10 결정**: v1.4(classin_home CRM 통합)는 classin_home 레포 접근·별도 Supabase 프로젝트 여부 확인 등 moonlight 바깥의 의존이 커서 **후순위로 보류**한다. 당분간은 moonlight_pro 안에서 자체 완결되는 작업(v1.3 인바운드 캡처, 정리/부채 항목 등)을 우선한다. 상세 트레이드오프·재개 시 체크리스트는 `docs/sales-os-crm-integration-plan.md` 참고 — 그 문서의 P0a(라이브 DB 무영향)는 이미 머지됐고, P0b(마이그레이션) 이후부터가 보류 대상이다.
 
 ### 7.1 개인 Sales OS 적용 문서
 
@@ -178,7 +184,7 @@ Zoom 대체재·전자칠판 스펙표로 설명하면 가치가 작아짐.
 
 ## 9. Open Questions
 
-1. **moonlight ↔ classin_home 결합 방식**(v1.4): 같은/연결 Supabase 직접 읽기 vs eeocrm MCP 라이브 vs push. (v1.1 비차단)
+1. **moonlight ↔ classin_home 결합 방식**(v1.4): 같은/연결 Supabase 직접 읽기 vs eeocrm MCP 라이브 vs push. `docs/sales-os-crm-integration-plan.md`가 push 스냅샷(C안)을 추천했으나, **실행 자체가 2026-07-10부로 보류**돼 이 질문의 최종 답은 재개 시점까지 미확정으로 남는다. (v1.1 비차단)
 2. ~~classinkr-web 접근~~ → **해소:** 이 머신엔 없음, classin_home 포지셔닝 파일을 SSOT로 사용.
 3. **케이던스 목표 수치** — 주 5건? 포맷 분배(카드뉴스/스레드/릴스)? (잠정 5, 빌드 중 조정)
 4. **랭킹 1순위 신호** — 앵글 vs 단계 vs 철학(content_rules) 중 무엇 우선? (The Assignment 데이터로 보정)

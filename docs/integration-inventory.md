@@ -69,12 +69,14 @@ Supabase는 이제 Hub/Engine의 1차 원장으로 본다. 다음 연결들은 �
 - `POST /api/webhook/project`
 - `POST /api/webhook/project/openclaw`
 - `POST /api/webhook/project/moltbot`
+- `POST /api/pms/command`
 
 관련 코드:
 
 - `apps/engine/app/api/health/route.ts`
 - `apps/engine/app/api/webhook/telegram/route.ts`
 - `apps/engine/app/api/webhook/project/route.ts`
+- `apps/engine/app/api/pms/command/route.ts`
 
 ### 현재 허브에서 이미 볼 수 있는 운영 화면
 
@@ -85,21 +87,24 @@ Supabase는 이제 Hub/Engine의 1차 원장으로 본다. 다음 연결들은 �
 
 ## 연결 카탈로그
 
+상태 표기는 런타임 증거를 기준으로 한다. `Connected`는 현재 authenticated/reachable 경로가 확인된 경우, `Reachable`은 인증 없는 public read만 확인된 경우, `Implemented, not configured`는 코드와 callback이 있으나 provider credential이 없는 경우, `Ready`는 intake 코드만 있고 외부 등록이 남은 경우다. OpenClaw의 Telegram/Slack 채널과 Moonlight Engine의 직접 provider webhook은 별도 연결이다.
+
 | Provider | 역할 | 연결 방식 | 현재 상태 | 내부 연결 지점 | 필요한 것 | 다음 액션 |
 | --- | --- | --- | --- | --- | --- | --- |
-| Supabase | 시스템 원장, 로그, 프로젝트, task, sync 상태 저장 | REST + DB | Implemented | Hub, Engine, `packages/hub-gateway` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` 또는 `SUPABASE_ANON_KEY`, `COM_MOON_DEFAULT_WORKSPACE_ID` | 실제 workspace 기준으로 env 채우고 live 데이터 연결 |
-| Telegram | 인바운드 명령, 빠른 운영 입력 | Webhook intake | Ready | `/api/webhook/telegram`, `automation_runs`, `webhook_events` | 공개 Engine URL, Telegram bot webhook 등록 | 봇 webhook를 engine URL에 연결하고 smoke test 실행 |
+| Supabase | 시스템 원장, 로그, 프로젝트, task, sync 상태 저장 | REST + DB | Connected (local) | Hub, Engine, `packages/hub-gateway` | 로컬 workspace와 REST credential 설정 완료. production은 별도 secret 주입 필요 | production 환경에서 workspace·REST 권한을 재검증하고 local credential을 복사하지 않음 |
+| Moonlight PMS | 프로젝트·task 생성, project 편집, task 상태 이동 | Hub BFF + authenticated Engine command | Connected (local) | `/api/hub/projects`, `/api/hub/tasks`, `/api/pms/command`, `projects`, `tasks` | Hub/Engine shared secret, Hub write guard, live workspace | dependency·milestone·delete는 별도 Phase 3 계약 전까지 추가하지 않음 |
+| Telegram (direct Engine) | 인바운드 명령, 빠른 운영 입력 | Webhook intake | Ready, external registration pending | `/api/webhook/telegram`, `automation_runs`, `webhook_events` | 공개 Engine URL, Telegram bot webhook 등록 | OpenClaw Telegram 채널과 합치지 말고 direct webhook이 필요할 때만 별도 등록·smoke 실행 |
 | Project tools | 외부 PM/진행률 도구에서 progress/PMS 이벤트 수집 | Generic webhook | Ready | `/api/webhook/project`, `project_updates`, `routine_checks`, `projects` | 공개 Engine URL, 공급자 payload mapping | 먼저 하나의 PM 도구 payload를 webhook contract에 맞춤 |
-| OpenClaw | 외부 agent workflow에서 프로젝트/운영 이벤트 전달 + Moonlight 상태 outbound sync | Shared webhook alias + local/Telegram/Slack relay | Ready | `/api/webhook/project/openclaw`, `/api/integrations/openclaw/sync`, `project_updates`, `sync_runs`, `webhook_events` | 공개 Engine URL, `COM_MOON_SHARED_WEBHOOK_SECRET`, local URL 또는 Telegram/Slack relay 설정 | 로컬 OpenClaw면 `OPENCLAW_LOCAL_URL`, 채팅 기반이면 `OPENCLAW_TELEGRAM_CHAT_ID` 또는 `OPENCLAW_SLACK_WEBHOOK_URL`를 채우고 sync smoke test 실행 |
+| OpenClaw | 외부 agent workflow에서 프로젝트/운영 이벤트 전달 + Moonlight 상태 outbound sync | Shared webhook alias + local/Telegram/Slack relay | Connected (local) | `/api/webhook/project/openclaw`, `/api/integrations/openclaw/sync`, `project_updates`, `sync_runs`, `webhook_events` | 로컬 Engine·relay·gateway와 분리된 shared/sync secret | 로컬 sync와 inbound는 검증됨. 공개 Engine 배포 전까지 external provider route는 Ready로만 취급하고, 수정 후 첫 09:30 Telegram delivery를 확인 |
 | Moltbot | bot/operator workflow에서 PMS 또는 project 이벤트 전달 | Shared webhook alias | Ready | `/api/webhook/project/moltbot`, `project_updates`, `routine_checks`, `webhook_events` | 공개 Engine URL, `COM_MOON_SHARED_WEBHOOK_SECRET` 권장, payload field mapping | Moltbot payload를 alias route에 보내고 routine or progress event를 확인 |
-| GitHub | 작업 히스토리, PR 리뷰 상태, 이슈 압력, milestone 기반 로드맵 | API read / sync | Ready | `Work OS > PMS`, `Work OS > Roadmap`, `integration_connections`, `sync_runs` | `GITHUB_TOKEN`, `GITHUB_REPOSITORIES` | 메인 repo부터 연결해서 PR/issue/milestone이 PMS와 로드맵에 보이게 만들기 |
+| GitHub | 작업 히스토리, PR 리뷰 상태, 이슈 압력, milestone 기반 로드맵 | API read / sync | Reachable (public read); ledger sync unverified | `Work OS > PMS`, `Work OS > Roadmap`, `integration_connections`, `sync_runs` | `GITHUB_REPOSITORIES` 설정됨. private/rate-limit 범위에는 `GITHUB_TOKEN` 필요 | public repo read와 실제 `sync_runs` 적재를 분리 검증한 뒤 Connected로 승격 |
 | Notion | 프로젝트, task, 의사결정, 노트, 문서 허브화 | API sync | Planned | `integration_connections`, `field_mappings`, `sync_runs` | `NOTION_TOKEN`, database IDs | projects/tasks 2개 DB부터 매핑 설계 |
-| Google Calendar | 일정, 마감일, cadence 블록 연결 | OAuth + sync + event write | Ready | `Work OS > Calendar`, `routine_checks`, `projects.due_at`, `tasks.due_at`, `sync_runs` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALENDAR_ID` | Google OAuth env를 채우고 Work OS > Calendar에서 연결 후 실제 캘린더를 하나 붙이기 |
+| Google Calendar | 일정, 마감일, cadence 블록 연결 | OAuth + live read + event write, iCal read-only fallback | Connected (local) | `Work OS > Calendar`, `integration_connections`, `sync_runs` | 로컬 env 설정 완료. 배포 시 production callback URI와 동일한 OAuth env 필요 | 공개 Hub URL 확정 후 `https://<hub-host>/api/calendar/google/callback` 등록 및 배포 환경 연결 검증 |
 | Samsung Calendar | Galaxy 기기 일정 가시성 | Google account sync on device | Supported via Google sync | `Work OS > Calendar` | Google Calendar 연결, Samsung Calendar 앱에서 같은 Google 계정 sync | 허브에서는 Google Calendar를 source로 연결하고, Galaxy 기기에서는 그 캘린더를 표시 |
 | Email | 리드 follow-up, 인바운드 메일, 캠페인/알림 발송 | Inbox sync + send provider | Planned | `leads`, `campaigns`, `campaign_runs`, `sync_runs` | Gmail API 또는 IMAP 선택, SMTP/Resend/Postmark 등 발송 provider 선택 | inbox sync와 outbound send 중 1차 범위를 먼저 결정 |
-| Instagram API | `moon.classin`/Classmooni Instagram content lane | Instagram Login OAuth + token ledger | Ready | `/api/social/instagram/connect`, `/api/social/instagram/callback`, `integration_connections`, `sync_runs`, Settings > Integrations | `COM_MOON_INSTAGRAM_APP_ID`, `COM_MOON_INSTAGRAM_APP_SECRET`, `COM_MOON_INSTAGRAM_BRAND_HANDLE`, `COM_MOON_OAUTH_STATE_SECRET`, 공개 Hub URL | Meta Dashboard의 Instagram OAuth redirect에 `/api/social/instagram/callback`를 등록하고 Settings에서 연결 |
-| Meta Threads | `moon.classin` 브랜드 content lane | OAuth + token ledger + removal callbacks | Ready | `/api/social/meta/threads/connect`, `/api/social/meta/threads/callback`, `/api/social/meta/threads/deauthorize`, `/api/social/meta/threads/data-deletion`, `integration_connections`, `sync_runs`, Settings > Integrations | `COM_MOON_META_THREADS_APP_ID`, `COM_MOON_META_THREADS_APP_SECRET`, `COM_MOON_META_THREADS_BRAND_HANDLE`, `COM_MOON_OAUTH_STATE_SECRET`, 공개 Hub URL | Meta Dashboard의 Threads OAuth/제거/삭제 callback을 Settings URL로 등록하고 연결 |
-| Slack | 에러 알림, approval loop, lightweight command | Bot + webhook | Planned | `error_logs`, `sync_runs`, `automation_runs`, `webhook_events` | `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, 채널 라우팅 규칙 | 실패 알림부터 시작하고 양방향 command는 나중에 추가 |
+| Instagram API | `moon.classin`/Classmooni Instagram content lane | Instagram Login OAuth + token ledger | Implemented, not configured | `/api/social/instagram/connect`, `/api/social/instagram/callback`, `integration_connections`, `sync_runs`, Settings > Integrations | App ID/secret 없음. OAuth state secret과 local callback 코드만 존재하며 공개 Hub URL 필요 | Meta Dashboard 등록 전에는 missing-config를 유지하고 연결로 표기하지 않음 |
+| Meta Threads | `moon.classin` 브랜드 content lane | OAuth + token ledger + removal callbacks | Implemented, not configured | `/api/social/meta/threads/connect`, `/api/social/meta/threads/callback`, `/api/social/meta/threads/deauthorize`, `/api/social/meta/threads/data-deletion`, `integration_connections`, `sync_runs`, Settings > Integrations | App ID/secret 없음. OAuth state secret과 local callback 코드만 존재하며 공개 Hub URL 필요 | Meta Dashboard 등록 전에는 missing-config를 유지하고 연결로 표기하지 않음 |
+| Slack (direct Moonlight) | 에러 알림, approval loop, lightweight command | Bot + webhook | Planned; OpenClaw Slack channel is separately connected | `error_logs`, `sync_runs`, `automation_runs`, `webhook_events` | direct Moonlight bot token/signing secret과 채널 라우팅 규칙은 없음 | OpenClaw outbound를 재사용할지 direct Slack intake가 필요한지 확정 전 추가 credential을 만들지 않음 |
 
 ## 권장 연결 순서
 
@@ -202,6 +207,15 @@ OpenClaw가 Moonlight로 응답할 때는 기존 inbound lane을 그대로 쓴�
 
 - `POST /api/webhook/project/openclaw`
 
+2026-07-15 로컬 runtime 상태:
+
+- Gateway는 Homebrew Node 24.18.0 고정 경로로 launchd에서 실행되며 supervisor config audit와 RPC가 통과했다.
+- Telegram/Slack channel은 둘 다 configured/running/probe success다. 이는 Moonlight Engine의 Telegram webhook 또는 Slack failure-alert 구현 상태와는 별도 연결이다.
+- Telegram group inbound는 운영자 1명 allowlist + 4개 reachable group + mention-required다. native command 148개가 Telegram 한도 100개를 넘겨 native menu는 껐고 text command는 유지한다.
+- OpenClaw static secret 6개는 macOS Keychain SecretRef로 이동했고 plaintext/unresolved/shadowed가 0이다. OpenAI Codex OAuth는 회전형 OAuth profile이라 static-secret migration 대상이 아니다.
+- Main session은 1,030,410/200,000 tokens에서 공식 reset 후 0/200,000으로 정리했고 원문은 archive했다. session retention은 180일, disk budget은 500MB다.
+- 평일 09:30 뉴스 cron은 Telegram target과 failure alert가 설정됐으나, 수정 뒤 첫 scheduled run의 `delivered=true`는 아직 미래 검증이다.
+
 ### Projects folder bridge
 
 로컬 `~/Desktop/Projects` 아래의 여러 프로젝트는 아직 같은 원장에 직접 연결되어 있지 않다. 1차 연결은 각 프로젝트를 별도 API로 억지로 붙이는 방식이 아니라,
@@ -246,12 +260,48 @@ npm run inventory:project-connections -- --output docs/projects-connection-inven
 
 Google Calendar는 이제 직접 연결 가능한 1차 일정 provider다.
 
+#### 2026-07-15 연결 상태 — 확정
+
+- Google Cloud의 기존 `classinproject-moon` 프로젝트를 사용한다.
+- Hub 전용 웹 OAuth 클라이언트 이름은 `moonlight-hub-calendar`다.
+- OAuth audience는 조직 내부용이며, 범위는 `https://www.googleapis.com/auth/calendar.events`다.
+- 로컬 callback은 `http://localhost:3000/api/calendar/google/callback`으로 등록됐다.
+- `integration_connections`의 `google_calendar` connection은 `connected`이며 access token과 refresh token이 저장됐다.
+- Google Calendar API가 반환한 primary identity를 원장의 `external_account_id`에 보정했고, 다음 OAuth callback도 이를 자동 저장한다. 문서에는 `j***@classin.com`으로만 표기한다.
+- Hub API smoke check는 `source: oauth`, `readOnly: false`로 성공했고, 2026-07-15~07-31 범위에서 실제 일정 11건을 읽었다.
+- 실제 일정 생성·수정 smoke test는 사용자 캘린더에 불필요한 이벤트를 만들지 않기 위해 실행하지 않았다.
+- `GOOGLE_CALENDAR_ICAL_URL`은 OAuth connection이 없을 때만 쓰는 읽기 전용 fallback으로 유지한다. 저장소 문서에는 실제 공개/비공개 URL을 기록하지 않는다.
+
+상시 연결의 의미:
+
+- Hub Calendar를 열거나 조회 주간을 바꿀 때 Google `primary` calendar를 live read한다.
+- access token이 만료되면 저장된 refresh token으로 자동 갱신한다.
+- 이벤트를 별도 Moonlight task로 전량 복제하는 background mirror는 두지 않는다.
+- production 배포 전에는 실제 HTTPS Hub callback URI를 OAuth 클라이언트에 추가하고 같은 자격증명을 배포 환경의 secret으로 설정해야 한다.
+
 현재 구현 범위:
 
 - Google OAuth 연결
 - `Work OS > Calendar` 안에서 외부 Google 일정 읽기
 - 허브에서 Google 일정 생성 / 수정
 - sync 이력 `integration_connections`, `sync_runs` 기록
+
+#### 2026-07-15 control-plane 실행 상태 — 확정
+
+| 경계 | 상태 | 확인 증거 |
+| --- | --- | --- |
+| Hub / Engine / relay | live | 각 health 200, `npm run check:connections` 전체 PASS, launchd 두 job running |
+| OpenClaw cron | configured, target authenticated, delivery 검증 대기 | 평일 09:30 KST, Telegram announce 대상 명시. token probe와 대상 supergroup 조회 성공, bot administrator. 마지막 run은 00:40 수정 전 `not-delivered` |
+| Moonlight MCP | Codex enabled, Claude Code connected | stdio 도구 13개, Claude `list_tasks` live 6건, SDK `create_task` 저장·재조회 성공. Desktop 앱보다 config 기록이 늦고 Moonlight child가 없어, 활성 세션 종료 후 승인된 재시작·tool discovery 확인 필요 |
+| Claude account connectors | registered, not authenticated | Notion·Figma·Google Drive·Gmail·Google Calendar·Vercel은 모두 `Needs authentication`. local Moonlight MCP만 Connected. Desktop config와 ignored project `.mcp.json`은 Moonlight 1개·inline env 0 |
+| Codex connector layer | local MCP healthy; optional remote auth split | bundled Computer Use plugin은 유지하고 중복 disabled 수동 block을 제거. Codex import 기준 node_repl·Moonlight 2/2 ok/offline 0. GitHub bearer connector는 enabled, Figma·Notion은 not logged in이며 연결로 표기하지 않음 |
+| OpenClaw workspace MCP | Google process registered, provider auth required | `mcporter`가 Keychain wrapper와 exact `mcp-google@2.3.0` lockfile을 통해 `google-workspace` 26개 도구를 발견하지만 실제 Calendar/Gmail/Contacts 호출은 `Authentication required`. Hub Calendar OAuth와 별도 연결이며 합치지 않음. 401 invalid였던 Notion server 등록과 평문 token은 제거. dependency audit은 critical/high 0, fix 없는 moderate 5 |
+| Google Calendar | live / writable | OAuth source, account identity 저장, 07-15~07-31 11건 read |
+| iCal | fallback-only | OAuth 연결이 없을 때만 사용하는 read-only 경로, 현재 응답에 혼합되지 않음 |
+| Gmail / Sheets OAuth | disabled | health와 개별 status API가 모두 `provider-not-enabled`; Supabase ledger 존재를 OAuth `live`로 표시하지 않음 |
+| eeoCRM | snapshot | Moonlight 총 119 leads 중 117건이 eeoCRM snapshot. 문준혁 exact-owner bridge는 16건만 `Me`로 분리. 증거 포함 dry-run은 16건 모두 unchanged이며 `--apply`는 `--evidence` 없이는 거부 |
+| credential copies | plaintext files removed | OpenClaw inbound와 격리 credential 파일은 0개. `mcporter.json`의 Google client ID/secret은 Keychain 항목 2개 + mode `0700` wrapper로 이동했고 config에는 command만 남음. 공식 `mcp-google` 요구에 맞는 installed/localhost client를 보존된 감사 기록의 이중 해시로 복구했다. 향후 refresh token은 `0700` 전용 디렉터리 아래 `0600` 파일로 격리하며, Hub Calendar는 서로 다른 활성 OAuth client를 유지 |
+| Google Cloud IAM | previous audit only | 두 Owner, 미사용 Editor service account, broad API key가 기록됨. 이번 재검증은 로컬 `gcloud` 부재와 Cloud Console 로그인 부재로 미완료 |
 
 권장 1차 범위:
 

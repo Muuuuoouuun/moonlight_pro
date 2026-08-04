@@ -3,7 +3,7 @@
 import React from "react";
 import { Iconed } from "./hub-icons";
 
-export function Badge({ children, tone = 'neutral', variant = 'soft', size = 'sm', style }) {
+export function Badge({ children, tone = 'neutral', variant = 'soft', size = 'sm', numeric = false, style }) {
   const tones = {
     neutral: { fg: 'var(--moon-200)', bg: 'oklch(0.30 0.008 250 / 0.5)', bd: 'var(--line)' },
     moon:    { fg: 'var(--moon-100)', bg: 'oklch(0.40 0.008 250 / 0.25)', bd: 'var(--moon-600)' },
@@ -16,38 +16,18 @@ export function Badge({ children, tone = 'neutral', variant = 'soft', size = 'sm
   };
   const t = tones[tone] || tones.neutral;
   const pad = size === 'xs' ? '2px 6px' : size === 'sm' ? '3px 8px' : '5px 10px';
-  const fs = size === 'xs' ? 10 : 11;
+  // 상태 플래그는 보조 메타 — DESIGN.md 크기 플로어(≥10.5px)에 맞춘다.
+  const fs = size === 'xs' ? 10.5 : 11;
   const base = {
     display: 'inline-flex', alignItems: 'center', gap: 4,
     padding: pad, fontSize: fs, fontWeight: 500, letterSpacing: '0.02em',
     borderRadius: 999, lineHeight: 1, whiteSpace: 'nowrap',
+    ...(numeric && { fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', letterSpacing: 0 }),
   };
   if (variant === 'outline') {
     return <span style={{ ...base, color: t.fg, border: `1px solid ${t.bd}`, background: 'transparent', ...style }}>{children}</span>;
   }
   return <span style={{ ...base, color: t.fg, background: t.bg, border: `1px solid ${t.bd}`, ...style }}>{children}</span>;
-}
-
-// Canonical live/mock/preview status indicator for page headers. `state` accepts:
-// 'live' (success), 'syncing' | 'loading' (info), 'mock' (neutral), 'preview' (neutral,
-// label reads "preview" — for surfaces that mean "DB not configured" rather than "using
-// fixture data"), 'error' (danger). Visual matches the original revenue.jsx badge: mono
-// label, xs outline Badge, marginLeft 8.
-export function SyncBadge({ state, style }) {
-  const map = {
-    live:    { tone: 'success', label: 'live' },
-    syncing: { tone: 'info',    label: 'syncing' },
-    loading: { tone: 'info',    label: 'syncing' },
-    mock:    { tone: 'neutral', label: 'mock' },
-    preview: { tone: 'neutral', label: 'preview' },
-    error:   { tone: 'danger',  label: 'error' },
-  };
-  const m = map[state] || map.mock;
-  return (
-    <Badge tone={m.tone} size="xs" variant="outline" className="mono" style={{ marginLeft: 8, ...style }}>
-      {m.label}
-    </Badge>
-  );
 }
 
 export function Dot({ tone = 'neutral', size = 6, style }) {
@@ -80,32 +60,17 @@ export function Kbd({ children, style }) {
   );
 }
 
-export function Card({ children, style, pad = true, interactive = false, className, onClick, onKeyDown, role, tabIndex, ...props }) {
-  const keyboardInteractive = interactive && typeof onClick === 'function';
-  const handleKeyDown = (event) => {
-    onKeyDown?.(event);
-    if (!keyboardInteractive || event.defaultPrevented || event.currentTarget !== event.target) return;
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      onClick(event);
-    }
-  };
-
+export function Card({ children, style, pad = true, interactive = false, className, ...props }) {
+  // interactive면 .hub-card-link가 border+hover(색·-1px rise)를 소유 — 인라인 border를
+  // 넣으면 CSS hover가 지므로 클래스 쪽에 맡긴다.
+  const cls = [interactive ? 'hub-card-link' : '', className || ''].filter(Boolean).join(' ') || undefined;
   return (
-    <div
-      {...props}
-      className={className}
-      onClick={onClick}
-      onKeyDown={handleKeyDown}
-      role={role ?? (keyboardInteractive ? 'button' : undefined)}
-      tabIndex={tabIndex ?? (keyboardInteractive ? 0 : undefined)}
-      style={{
+    <div {...props} className={cls} style={{
       background: 'var(--surface)',
-      border: '1px solid var(--line-soft)',
+      ...(interactive ? {} : { border: '1px solid var(--line-soft)' }),
       borderRadius: 'var(--r-lg)',
       boxShadow: 'var(--shadow-card)',
       padding: pad ? 'var(--card-pad)' : 0,
-      transition: 'border-color .15s ease, transform .15s ease',
       ...(interactive && { cursor: 'pointer' }),
       ...style,
     }}>{children}</div>
@@ -116,7 +81,7 @@ export function SectionTitle({ children, right, style, subtitle }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 'var(--gap)', ...style }}>
       <div>
-        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-dim)', fontWeight: 500 }}>{children}</div>
+        <h3 style={{ margin: 0, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-dim)', fontWeight: 500 }}>{children}</h3>
         {subtitle && <div style={{ fontSize: 12, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}
       </div>
       {right}
@@ -200,10 +165,10 @@ export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRig
     <button {...props} type={type} className={className} onClick={onClick} disabled={disabled} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: s.gap,
       height: s.h, padding: `0 ${s.px}px`, fontSize: s.fs, fontWeight: 500,
-      borderRadius: 'var(--r-sm)', whiteSpace: 'nowrap', transition: 'all .12s ease',
-      opacity: disabled ? 0.55 : 1,
-      cursor: disabled ? 'not-allowed' : 'pointer',
+      borderRadius: 'var(--r-sm)', whiteSpace: 'nowrap',
+      transition: 'background var(--dur-hover) ease, border-color var(--dur-hover) ease, color var(--dur-hover) ease, opacity var(--dur-hover) ease',
       ...v, ...style,
+      ...(disabled && { opacity: 0.45, cursor: 'not-allowed', pointerEvents: 'none' }),
     }}>
       {icon && <Iconed name={icon} size={14} />}
       {children}
@@ -212,207 +177,20 @@ export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRig
   );
 }
 
-export function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tooltip, style, className, ...props }) {
+export const IconButton = React.forwardRef(function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tooltip, style, className, disabled = false, ...props }, ref) {
+  const toneCls = tone === 'danger' ? ' hub-iconbtn--danger' : '';
   return (
-    <button {...props} className={className} onClick={onClick} title={tooltip} aria-label={props['aria-label'] || tooltip} style={{
+    <button {...props} ref={ref} type="button" className={`hub-iconbtn${toneCls}${className ? ` ${className}` : ''}`} onClick={onClick} disabled={disabled} title={tooltip} aria-label={props['aria-label'] || tooltip} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       width: size, height: size,
-      color: tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)',
-      background: 'transparent',
-      border: '1px solid transparent',
       borderRadius: 'var(--r-sm)',
-      transition: 'all .12s ease',
       ...style,
-    }}
-      onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-3)'; e.currentTarget.style.borderColor = 'var(--line-soft)'; e.currentTarget.style.color = 'var(--fg)'; }}
-      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.color = tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)'; }}
-    >
+      ...(disabled && { opacity: 0.45, cursor: 'not-allowed', pointerEvents: 'none' }),
+    }}>
       <Iconed name={icon} size={iconSize} />
     </button>
   );
-}
-
-const DRAWER_INPUT_STYLE = {
-  height: 30,
-  padding: '0 9px',
-  fontSize: 12.5,
-  background: 'var(--surface-2)',
-  color: 'var(--fg)',
-  border: '1px solid var(--line)',
-  borderRadius: 'var(--r-sm)',
-  width: '100%',
-};
-
-// Shared right-side drawer shell: overlay + aside + header (title/subtitle/close) +
-// scrollable body + optional footer bar, with ESC-to-close. EditDrawer and the Guru
-// diagnosis drawer (revenue.jsx) both compose on top of this — it only owns the shell,
-// not field rendering or save/delete semantics.
-export function Drawer({ title, subtitle, onClose, onSubmit, footer, footerStyle, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', children }) {
-  const titleId = React.useId();
-  const subtitleId = React.useId();
-  const panelRef = React.useRef(null);
-  const previousFocusRef = React.useRef(null);
-
-  React.useEffect(() => {
-    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setTimeout(() => panelRef.current?.focus(), 0);
-    const onKey = (e) => {
-      if (e.key === 'Escape') { onClose?.(); return; }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); onSubmit?.(); return; }
-      if (e.key !== 'Tab') return;
-
-      const focusable = Array.from(panelRef.current?.querySelectorAll([
-        'a[href]',
-        'button:not([disabled])',
-        'input:not([disabled])',
-        'select:not([disabled])',
-        'textarea:not([disabled])',
-        '[tabindex]:not([tabindex="-1"])',
-      ].join(',')) || []).filter(el => el instanceof HTMLElement && !el.hidden && el.getAttribute('aria-hidden') !== 'true');
-
-      if (!focusable.length) {
-        e.preventDefault();
-        panelRef.current?.focus();
-        return;
-      }
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      previousFocusRef.current?.focus?.();
-    };
-  }, [onClose, onSubmit]);
-
-  return (
-    <>
-      <div className="hub-drawer-overlay" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / 0.4)', zIndex: 60 }} />
-      <aside
-        ref={panelRef}
-        className="hub-drawer"
-        role="dialog"
-        data-drawer-open="true"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={subtitle ? subtitleId : undefined}
-        tabIndex={-1}
-        style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0, width, zIndex: 61,
-        background: 'var(--surface)', borderLeft: `1px solid ${borderLeft}`,
-        display: 'flex', flexDirection: 'column',
-        boxShadow: '-8px 0 32px -12px oklch(0 0 0 / 0.5)',
-      }}>
-        <div style={{ padding: '11px 12px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div id={titleId} style={{ fontSize: 13.5, fontWeight: 500 }}>{title}</div>
-            {subtitle && <div id={subtitleId} style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 1 }}>{subtitle}</div>}
-          </div>
-          <IconButton icon="x" size={24} iconSize={13} tooltip="닫기" onClick={onClose} />
-        </div>
-        <div className="scroll-y" style={{ flex: 1, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {children}
-        </div>
-        {footer && (
-          <div style={{ padding: '8px 10px', borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8, ...footerStyle }}>
-            {footer}
-          </div>
-        )}
-      </aside>
-    </>
-  );
-}
-
-// Shared field-driven edit drawer. Revenue behavior is canonical for save feedback,
-// ESC close, and optimistic delete confirmation. Composes on top of Drawer for the shell.
-export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)', children }) {
-  const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | error
-  React.useEffect(() => { setSaveState('idle'); }, [record?.id]);
-
-  const handleDone = async () => {
-    if (saveState === 'saving') return;
-    if (!onSave) { onClose(); return; }
-    setSaveState('saving');
-    const r = await onSave();
-    if (r?.ok) { setSaveState('idle'); onClose(); }
-    else { setSaveState(r?.status === 'preview' ? 'preview' : 'error'); }
-  };
-
-  const handleDelete = async () => {
-    if (!onDelete) return;
-    if (typeof window !== 'undefined' && !window.confirm('이 항목을 삭제할까요? 되돌릴 수 없습니다.')) return;
-    setSaveState('saving');
-    await onDelete();
-    onClose();
-  };
-
-  if (!record) return null;
-  return (
-    <Drawer
-      title={title}
-      subtitle={subtitle}
-      onClose={onClose}
-      onSubmit={handleDone}
-      width={width}
-      footer={
-        <>
-          {onDelete && (
-            <Button variant="ghost" size="sm" onClick={handleDelete} disabled={saveState === 'saving'} style={{ color: 'var(--danger)' }}>삭제</Button>
-          )}
-          <div style={{ flex: 1, minWidth: 0, fontSize: 11, lineHeight: 1.4 }}>
-            {saveState === 'preview' && (
-              <span style={{ color: 'var(--fg-muted)' }}>저장 위치(Supabase)가 설정되지 않아 로컬에만 반영됩니다.</span>
-            )}
-            {saveState === 'error' && (
-              <span style={{ color: 'var(--danger)' }}>저장에 실패했습니다. 다시 시도하세요.</span>
-            )}
-          </div>
-          {(saveState === 'preview' || saveState === 'error') && (
-            <Button variant="ghost" size="sm" onClick={onClose}>닫기</Button>
-          )}
-          <Button variant="primary" size="sm" onClick={handleDone} disabled={saveState === 'saving'}>
-            {saveState === 'saving' ? '저장 중…' : '완료'}
-          </Button>
-        </>
-      }
-    >
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 10px' }}>
-        {fields.map(f => (
-          <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 3, gridColumn: f.width === 'half' ? 'span 1' : 'span 2' }}>
-            <span style={{ fontSize: 10, lineHeight: 1.15, textTransform: 'uppercase', letterSpacing: 0, color: 'var(--fg-faint)' }}>{f.label}</span>
-            {f.type === 'select' ? (
-              <select value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
-                {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            ) : (
-              <input
-                type={f.inputType || 'text'}
-                value={record[f.key] ?? ''}
-                placeholder={f.placeholder || ''}
-                onChange={e => onChange(f.key, f.inputType === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value)}
-                style={DRAWER_INPUT_STYLE}
-              />
-            )}
-          </label>
-        ))}
-      </div>
-      {children && (
-        <>
-          <Divider style={{ margin: '2px 0' }} />
-          {children}
-        </>
-      )}
-    </Drawer>
-  );
-}
+});
 
 export function Avatar({ name, size = 24, tone = 'moon' }) {
   const initials = (name || '?').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase();
@@ -442,7 +220,7 @@ export function Progress({ value = 0, tone = 'moon', height = 4 }) {
   const map = { moon: 'var(--moon-300)', success: 'var(--success)', warning: 'var(--warning)', danger: 'var(--danger)' };
   return (
     <div style={{ height, background: 'oklch(0.28 0.008 250 / 0.6)', borderRadius: 999, overflow: 'hidden' }}>
-      <div style={{ width: `${value}%`, height: '100%', background: map[tone], borderRadius: 999, transition: 'width .3s ease' }} />
+      <div style={{ width: `${value}%`, height: '100%', background: map[tone], borderRadius: 999, transition: 'width var(--dur-enter) var(--ease-hub)' }} />
     </div>
   );
 }
@@ -465,65 +243,13 @@ export function Divider({ style }) {
   return <div style={{ height: 1, background: 'var(--line-soft)', ...style }} />;
 }
 
-// Canonical pill-group toolbar (type/status/view filters). `options`: [{ key, label,
-// dot?: tone string, count?: number }]. Container + button visuals match the
-// inline pattern duplicated across Revenue/Segments/Intake before this primitive existed.
-// Call sites keep any bespoke onChange side effects (e.g. Accounts view toggle
-// auto-selecting the first account) by handling that logic before/inside their onChange.
-export function SegmentedControl({ options, value, onChange, className, style }) {
-  return (
-    <div className={className} style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, ...style }}>
-      {options.map(o => {
-        const isActive = o.key === value;
-        return (
-          <button key={o.key} type="button" onClick={() => onChange?.(o.key)} style={{
-            padding: '4px 10px', fontSize: 11.5, borderRadius: 4,
-            color: isActive ? 'var(--fg)' : 'var(--fg-faint)',
-            background: isActive ? 'var(--surface-3)' : 'transparent',
-            display: 'inline-flex', alignItems: 'center', gap: 5,
-          }}>
-            {o.dot && <Dot tone={o.dot} />}
-            {o.label}
-            {o.count != null && <span className="mono" style={{ fontSize: 10 }}>{o.count}</span>}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
-  const tablistRef = React.useRef(null);
-  const moveFocus = (currentKey, direction) => {
-    const currentIndex = tabs.findIndex(t => t.key === currentKey);
-    if (currentIndex < 0 || !tabs.length) return;
-    const next = tabs[(currentIndex + direction + tabs.length) % tabs.length];
-    onChange?.(next.key);
-    setTimeout(() => {
-      tablistRef.current
-        ?.querySelector(`[data-tab-key="${CSS.escape(String(next.key))}"]`)
-        ?.focus();
-    }, 0);
-  };
-
   return (
-    <div ref={tablistRef} className={className} role="tablist" aria-label={ariaLabel} style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--line-soft)', ...style }}>
+    <div className={className} role="tablist" aria-label={ariaLabel} style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--line-soft)', ...style }}>
       {tabs.map(t => {
         const isActive = t.key === active;
         return (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            data-tab-key={String(t.key)}
-            aria-selected={isActive}
-            tabIndex={isActive ? 0 : -1}
-            onClick={() => onChange?.(t.key)}
-            onKeyDown={(event) => {
-              if (event.key === 'ArrowRight') { event.preventDefault(); moveFocus(t.key, 1); }
-              if (event.key === 'ArrowLeft') { event.preventDefault(); moveFocus(t.key, -1); }
-            }}
-            style={{
+          <button key={t.key} type="button" role="tab" aria-selected={isActive} onClick={() => onChange?.(t.key)} style={{
             padding: '8px 12px', fontSize: 12.5, fontWeight: 500,
             color: isActive ? 'var(--fg)' : 'var(--fg-dim)',
             borderBottom: `1px solid ${isActive ? 'var(--moon-200)' : 'transparent'}`,
@@ -546,64 +272,59 @@ export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
   );
 }
 
-export function Checkbox({ checked, onChange, size = 14, ariaLabel, label, disabled = false }) {
-  const hitSize = Math.max(28, size);
+// `label` names the checkbox for screen readers (the visual label usually sits in a
+// sibling cell, so SRs would otherwise announce an unnamed 14px button). Always pass it
+// on new call sites — e.g. the row's title.
+export function Checkbox({ checked, onChange, size = 14, label, disabled = false }) {
   return (
-    <button type="button" role="checkbox" aria-checked={!!checked} aria-label={ariaLabel || label || 'Toggle item'} disabled={disabled} onClick={(e) => { e.stopPropagation(); if (!disabled) onChange?.(!checked); }} style={{
-      width: hitSize, height: hitSize, borderRadius: 'var(--r-sm)',
+    <button
+      role="checkbox"
+      aria-checked={Boolean(checked)}
+      aria-label={label || '선택'}
+      aria-busy={disabled ? 'true' : undefined}
+      disabled={disabled}
+      className="hub-checkbox"
+      onClick={(e) => { e.stopPropagation(); onChange?.(!checked); }} style={{
+      position: 'relative',
+      width: size, height: size, borderRadius: 4,
+      border: `1px solid ${checked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
+      background: checked ? 'var(--moon-300)' : 'transparent',
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      transition: 'all .12s ease', flexShrink: 0,
-      opacity: disabled ? 0.55 : 1,
-      cursor: disabled ? 'not-allowed' : 'pointer',
+      transition: 'background var(--dur-hover) ease, border-color var(--dur-hover) ease', flexShrink: 0, opacity: disabled ? 0.55 : 1,
     }}>
-      <span aria-hidden="true" style={{
-        width: size, height: size, borderRadius: 4,
-        border: `1px solid ${checked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
-        background: checked ? 'var(--moon-300)' : 'transparent',
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        {checked && <Iconed name="check" size={size - 4} style={{ color: 'var(--bg)', strokeWidth: 3 }} />}
-      </span>
+      {checked && <Iconed name="check" size={size - 4} style={{ color: 'var(--bg)', strokeWidth: 3 }} />}
     </button>
   );
 }
 
-export function Input({ placeholder, icon, value, onChange, style, size = 'sm', className, ariaLabel, id, name, type = 'text', autoComplete, onKeyDown, inputStyle, autoFocus }) {
+export const Input = React.forwardRef(function Input({ placeholder, icon, value, onChange, style, size = 'sm', className }, ref) {
   const sizes = { sm: { h: 30, fs: 12.5 }, md: { h: 34, fs: 13 } };
   const s = sizes[size];
-  const wrapperClassName = ['hub-input', className].filter(Boolean).join(' ');
   return (
-    <div className={wrapperClassName} style={{
+    <div className={`hub-field${className ? ` ${className}` : ''}`} style={{
       display: 'inline-flex', alignItems: 'center', gap: 8,
       height: s.h, padding: '0 10px',
       background: 'var(--surface-2)',
       border: '1px solid var(--line-soft)',
       borderRadius: 'var(--r-sm)',
-      transition: 'border-color .15s ease',
+      transition: 'border-color var(--dur-hover) ease',
       ...style,
     }}>
       {icon && <Iconed name={icon} size={13} style={{ color: 'var(--fg-faint)' }} />}
       <input
-        id={id}
-        name={name}
-        type={type}
-        aria-label={ariaLabel || placeholder}
-        autoComplete={autoComplete}
+        ref={ref}
         value={value}
-        autoFocus={autoFocus}
         onChange={(e) => onChange?.(e.target.value)}
-        onKeyDown={onKeyDown}
         placeholder={placeholder}
         style={{
           flex: 1, minWidth: 0,
           background: 'transparent', border: 'none', outline: 'none',
           color: 'var(--fg)', fontSize: s.fs,
-          ...inputStyle,
         }}
       />
     </div>
   );
-}
+});
 
 export function Placeholder({ label = 'image', w, h, style }) {
   return (
@@ -617,6 +338,491 @@ export function Placeholder({ label = 'image', w, h, style }) {
       ...style,
     }}>
       <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)', letterSpacing: '0.04em' }}>{label}</span>
+    </div>
+  );
+}
+
+const CERTAINTY_STATES = {
+  confirmed:   { label: '확정', borderStyle: 'solid',  marker: 'filled' },
+  recommended: { label: '권장', borderStyle: 'dashed', marker: 'diamond' },
+  unknown:     { label: '미정', borderStyle: 'dotted', marker: 'unknown' },
+};
+
+function CertaintyMarker({ marker }) {
+  if (marker === 'unknown') {
+    return <span aria-hidden="true" style={{ width: 8, textAlign: 'center', fontSize: 9, fontWeight: 700, lineHeight: 1 }}>?</span>;
+  }
+  return <span aria-hidden="true" style={{
+    width: 6,
+    height: 6,
+    flexShrink: 0,
+    borderRadius: marker === 'filled' ? 999 : 1,
+    border: marker === 'filled' ? 'none' : '1px solid currentColor',
+    background: marker === 'filled' ? 'currentColor' : 'transparent',
+    transform: marker === 'diamond' ? 'rotate(45deg)' : undefined,
+  }} />;
+}
+
+export function CertaintyBadge({ state = 'unknown', label, style }) {
+  const config = CERTAINTY_STATES[state] || CERTAINTY_STATES.unknown;
+  const visibleLabel = label || config.label;
+  return (
+    <span
+      data-certainty={state}
+      aria-label={`확정도: ${visibleLabel}`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '2px 6px', borderRadius: 999,
+        color: state === 'unknown' ? 'var(--fg-dim)' : 'var(--fg-muted)',
+        background: 'transparent',
+        borderWidth: 1, borderColor: 'var(--line-strong)', borderStyle: config.borderStyle,
+        fontSize: 10, fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap',
+        ...style,
+      }}
+    >
+      <CertaintyMarker marker={config.marker} />
+      {visibleLabel}
+    </span>
+  );
+}
+
+const LIFECYCLE_STATES = {
+  queued:    { label: '수집', icon: 'inbox' },
+  active:    { label: '진행 중', icon: 'play' },
+  waiting:   { label: '대기', icon: 'pause' },
+  blocked:   { label: '막힘', icon: 'x', danger: true },
+  done:      { label: '완료', icon: 'check' },
+  cancelled: { label: '취소', icon: 'x' },
+};
+
+export function LifecycleBadge({ state = 'queued', label, reason, style }) {
+  const config = LIFECYCLE_STATES[state] || LIFECYCLE_STATES.queued;
+  const visibleLabel = label || config.label;
+  const fullLabel = reason ? `${visibleLabel} · ${reason}` : visibleLabel;
+  return (
+    <span
+      data-lifecycle={state}
+      aria-label={`진행 상태: ${fullLabel}`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '2px 6px', borderRadius: 999,
+        color: config.danger ? 'var(--danger)' : 'var(--fg-muted)',
+        background: config.danger ? 'var(--danger-bg)' : 'transparent',
+        border: `1px solid ${config.danger ? 'var(--danger-line)' : 'var(--line)'}`,
+        fontSize: 10, fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap',
+        ...style,
+      }}
+    >
+      <Iconed name={config.icon} size={10} aria-hidden="true" />
+      {fullLabel}
+    </span>
+  );
+}
+
+const TRUTH_STATES = {
+  live:    { tone: 'neutral', label: 'live',        icon: 'signal' },
+  partial: { tone: 'neutral', label: '일부 데이터', icon: 'signal', borderStyle: 'dashed' },
+  syncing: { tone: 'neutral', label: '동기화 중',   icon: 'runs' },
+  loading: { tone: 'neutral', label: '불러오는 중', icon: 'runs' },
+  preview: { tone: 'neutral', label: 'preview',     icon: 'link', borderStyle: 'dashed' },
+  error:   { tone: 'danger',  label: 'error',       icon: 'x' },
+};
+
+export function TruthBadge({ state = 'error', label, style }) {
+  const config = TRUTH_STATES[state] || TRUTH_STATES.error;
+  const visibleLabel = label || config.label;
+  const danger = config.tone === 'danger';
+  return (
+    <span
+      data-truth={state}
+      aria-label={`데이터 상태: ${visibleLabel}`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        padding: '2px 6px', borderRadius: 999,
+        color: danger ? 'var(--danger)' : 'var(--fg-muted)',
+        background: danger ? 'var(--danger-bg)' : 'transparent',
+        borderWidth: 1,
+        borderColor: danger ? 'var(--danger-line)' : 'var(--line)',
+        borderStyle: config.borderStyle || 'solid',
+        fontSize: 10, fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap',
+        fontFamily: 'var(--font-mono)', fontFeatureSettings: "'ss02'", letterSpacing: 0,
+        ...style,
+      }}
+    >
+      <Iconed name={config.icon} size={9} aria-hidden="true" />
+      {visibleLabel}
+    </span>
+  );
+}
+
+const ATTENTION_LABELS = {
+  urgent: '긴급',
+  critical: '즉시 확인',
+};
+
+export function AttentionRail({ level = 'none', label, children, style }) {
+  const active = level === 'urgent' || level === 'critical';
+  const visibleLabel = active ? (label || ATTENTION_LABELS[level]) : null;
+  return (
+    <div
+      data-attention={level}
+      aria-label={active ? `주의 수준: ${visibleLabel}` : undefined}
+      role={level === 'critical' ? 'alert' : undefined}
+      style={{
+        minWidth: 0,
+        paddingLeft: active ? 10 : 0,
+        boxShadow: active ? 'inset 1px 0 0 var(--danger)' : undefined,
+        ...style,
+      }}
+    >
+      {active && (
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 6,
+          color: 'var(--danger)', fontSize: 10, fontWeight: 600, lineHeight: 1,
+        }}>
+          <Iconed name={level === 'critical' ? 'x' : 'clock'} size={10} aria-hidden="true" />
+          {visibleLabel}
+        </span>
+      )}
+      {children}
+    </div>
+  );
+}
+
+// Compatibility wrapper for existing page headers. New code should use TruthBadge.
+export function SyncBadge({ state, style }) {
+  return <TruthBadge state={state} style={{ marginLeft: 8, ...style }} />;
+}
+
+// Canonical pill-group toolbar (type / status / view filters). `options`: [{ key, label,
+// dot?: tone string, count?: number }]. Call sites keep any bespoke onChange side effects
+// by handling that logic inside their onChange.
+// `label` names the group for screen readers; `fill` spreads the segments across the
+// available width (segments stay side-by-side on mobile — never stacked).
+export function SegmentedControl({ options, value, onChange, className, style, label, fill }) {
+  return (
+    <div
+      className={className}
+      role="group"
+      aria-label={label}
+      style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, ...style }}
+    >
+      {options.map(o => {
+        const isActive = o.key === value;
+        return (
+          <button key={o.key} type="button" onClick={() => onChange?.(o.key)} aria-pressed={isActive} style={{
+            padding: '4px 10px', fontSize: 11.5, borderRadius: 4, whiteSpace: 'nowrap',
+            color: isActive ? 'var(--fg)' : 'var(--fg-faint)',
+            background: isActive ? 'var(--surface-3)' : 'transparent',
+            display: 'inline-flex', alignItems: 'center', justifyContent: fill ? 'center' : undefined, gap: 5,
+            flex: fill ? '1 1 0' : undefined, minWidth: fill ? 0 : undefined,
+          }}>
+            {o.dot && <Dot tone={o.dot} />}
+            {o.label}
+            {o.count != null && <span className="mono" style={{ fontSize: 10 }}>{o.count}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const DRAWER_INPUT_STYLE = {
+  height: 32,
+  padding: '0 10px',
+  fontSize: 13,
+  background: 'var(--surface-2)',
+  color: 'var(--fg)',
+  border: '1px solid var(--line)',
+  borderRadius: 'var(--r-sm)',
+  width: '100%',
+  fontVariantNumeric: 'tabular-nums',
+};
+
+// Elements the drawer's focus manager treats as tab stops.
+const DRAWER_FOCUSABLE = 'input, select, textarea, button, a[href], [tabindex]:not([tabindex="-1"])';
+
+// Shared right-side drawer shell: overlay + aside + header (title/subtitle/close) +
+// scrollable body + optional footer bar. Owns ESC-to-close, focus-in-on-mount +
+// focus-restore-on-unmount, and a light Tab focus trap — not field rendering or
+// save/delete semantics. EditDrawer and the Guru diagnosis drawer compose on top.
+export function Drawer({ title, subtitle, onClose, footer, footerStyle, initialFocusRef, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', children }) {
+  const asideRef = React.useRef(null);
+  const bodyRef = React.useRef(null);
+
+  // ESC anywhere closes the drawer.
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  // Focus the first field on mount; restore focus to the opener on unmount.
+  React.useEffect(() => {
+    const previouslyFocused = typeof document !== 'undefined' ? document.activeElement : null;
+    const raf = requestAnimationFrame(() => {
+      const scope = bodyRef.current || asideRef.current;
+      const preferred = initialFocusRef?.current;
+      const first = preferred && scope?.contains(preferred)
+        ? preferred
+        : scope?.querySelector(DRAWER_FOCUSABLE);
+      if (first && typeof first.focus === 'function') first.focus();
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      if (previouslyFocused && typeof previouslyFocused.focus === 'function') previouslyFocused.focus();
+    };
+  }, [initialFocusRef]);
+
+  // Light focus trap: keep Tab inside the drawer, wrapping first↔last.
+  const handleKeyDown = (e) => {
+    if (e.key !== 'Tab') return;
+    const root = asideRef.current;
+    if (!root) return;
+    const nodes = Array.from(root.querySelectorAll(DRAWER_FOCUSABLE)).filter(el => !el.disabled && el.offsetParent !== null);
+    if (nodes.length === 0) return;
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+
+  return (
+    <>
+      <div className="hub-drawer-overlay" aria-hidden="true" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / 0.4)', zIndex: 'var(--z-drawer-overlay)' }} />
+      <aside
+        ref={asideRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof title === 'string' ? title : undefined}
+        onKeyDown={handleKeyDown}
+        className="hub-drawer"
+        style={{
+          position: 'fixed', top: 0, right: 0, bottom: 0, width, zIndex: 'var(--z-drawer)',
+          background: 'var(--surface)', borderLeft: `1px solid ${borderLeft}`,
+          display: 'flex', flexDirection: 'column',
+          boxShadow: '-8px 0 32px -12px oklch(0 0 0 / 0.5)',
+        }}
+      >
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 500 }}>{title}</div>
+            {subtitle && <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}
+          </div>
+          <IconButton icon="x" size={44} iconSize={13} tooltip="닫기" onClick={onClose} style={{ margin: -10 }} />
+        </div>
+        <div ref={bodyRef} className="scroll-y" style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {children}
+        </div>
+        {footer && (
+          <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, ...footerStyle }}>
+            {footer}
+          </div>
+        )}
+      </aside>
+    </>
+  );
+}
+
+// Groups consecutive fields sharing a `row` key into one flex row (compact, side-by-side
+// inputs for related fields — 단계+금액, 타입+지역, etc.) instead of every field getting its
+// own full-width block regardless of how little content it holds. Fields without `row` (the
+// default — every existing EditDrawer call site) render exactly as before, one per row.
+function groupFieldRows(fields) {
+  const rows = [];
+  fields.forEach((f) => {
+    const last = rows[rows.length - 1];
+    if (f.row && last && last.row === f.row) last.fields.push(f);
+    else rows.push({ row: f.row || null, fields: [f] });
+  });
+  return rows;
+}
+
+// Shared field-driven edit drawer. Revenue behavior is canonical for save feedback,
+// ESC close, and optimistic delete confirmation. Composes on top of Drawer for the shell.
+// Cmd/Ctrl+Enter mirrors the explicit save button. The initial signature is kept for the
+// lifetime of one opened record so ESC, the overlay, and the close button cannot silently
+// discard a changed draft.
+export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)', saveLabel = '변경사항 저장', children }) {
+  const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | conflict | error
+  const [saveFeedback, setSaveFeedback] = React.useState('');
+  const savingRef = React.useRef(false);
+  const initialRecordSignatureRef = React.useRef(null);
+  const recordIdentity = record?.id ?? record?.clientId ?? (record ? '__anonymous__' : null);
+  React.useEffect(() => {
+    savingRef.current = false;
+    setSaveState('idle');
+    setSaveFeedback('');
+    initialRecordSignatureRef.current = record ? JSON.stringify(record) : null;
+  }, [recordIdentity]);
+
+  const dirty = Boolean(record
+    && initialRecordSignatureRef.current
+    && JSON.stringify(record) !== initialRecordSignatureRef.current);
+  const requestClose = React.useCallback(() => {
+    if (savingRef.current) return;
+    if (dirty && typeof window !== 'undefined' && !window.confirm('입력한 변경사항을 버릴까요?')) return;
+    onClose?.();
+  }, [dirty, onClose]);
+
+  const handleDone = async () => {
+    if (savingRef.current) return;
+    if (!onSave) { onClose(); return; }
+    savingRef.current = true;
+    setSaveState('saving');
+    setSaveFeedback('');
+    try {
+      const r = await onSave();
+      if (r?.ok) { setSaveState('idle'); onClose(); }
+      else if (r?.status === 'preview') setSaveState('preview');
+      else if (r?.status === 'conflict') {
+        setSaveFeedback(r?.message || '다른 변경이 먼저 저장되었습니다. 입력을 유지했으니 원장을 확인한 뒤 다시 시도하세요.');
+        setSaveState('conflict');
+      }
+      else setSaveState('error');
+    } finally {
+      savingRef.current = false;
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!onDelete || savingRef.current) return;
+    if (typeof window !== 'undefined' && !window.confirm('이 항목을 삭제할까요? 되돌릴 수 없습니다.')) return;
+    savingRef.current = true;
+    setSaveState('saving');
+    try {
+      await onDelete();
+      onClose();
+    } finally {
+      savingRef.current = false;
+    }
+  };
+
+  // Cmd/Ctrl+Enter saves. A ref keeps the window listener pointed at the latest
+  // handler without re-binding every render.
+  const handleDoneRef = React.useRef(handleDone);
+  handleDoneRef.current = handleDone;
+  React.useEffect(() => {
+    if (!record) return undefined;
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleDoneRef.current?.(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [record?.id]);
+
+  if (!record) return null;
+  return (
+    <Drawer
+      title={title}
+      subtitle={subtitle}
+      onClose={requestClose}
+      width={width}
+      footer={
+        <>
+          {onDelete && (
+            <Button variant="ghost" size="sm" onClick={handleDelete} disabled={saveState === 'saving'} style={{ color: 'var(--danger)' }}>삭제</Button>
+          )}
+          <div aria-live="polite" style={{ flex: 1, minWidth: 0, fontSize: 11, lineHeight: 1.4 }}>
+            {saveState === 'preview' && (
+              <span style={{ color: 'var(--fg-muted)' }}>저장 위치(Supabase)가 설정되지 않아 로컬에만 반영됩니다.</span>
+            )}
+            {saveState === 'conflict' && (
+              <span style={{ color: 'var(--danger)' }}>{saveFeedback || '다른 변경이 먼저 저장되었습니다. 입력을 유지했으니 원장을 확인한 뒤 다시 시도하세요.'}</span>
+            )}
+            {saveState === 'error' && (
+              <span style={{ color: 'var(--danger)' }}>저장에 실패했습니다. 다시 시도하세요.</span>
+            )}
+          </div>
+          {(saveState === 'preview' || saveState === 'conflict' || saveState === 'error') && (
+            <Button variant="ghost" size="sm" onClick={requestClose}>닫기</Button>
+          )}
+          <Button variant="primary" size="sm" onClick={handleDone} disabled={saveState === 'saving'}>
+            {saveState === 'saving' ? '저장 중…' : saveLabel}
+          </Button>
+        </>
+      }
+    >
+      {groupFieldRows(fields).map((group, i) => (
+        <div key={group.row || `solo-${i}`} style={group.fields.length > 1 ? { display: 'flex', gap: 10 } : undefined}>
+          {group.fields.map(f => (
+            <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5, ...(group.fields.length > 1 ? { flex: 1, minWidth: 0 } : null) }}>
+              <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>{f.label}</span>
+              {f.type === 'select' ? (
+                <select value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
+                  {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              ) : f.type === 'textarea' ? (
+                <textarea
+                  value={record[f.key] ?? ''}
+                  placeholder={f.placeholder || ''}
+                  rows={f.rows || 5}
+                  onChange={e => onChange(f.key, e.target.value)}
+                  style={{ ...DRAWER_INPUT_STYLE, height: 'auto', minHeight: 112, padding: '9px 10px', lineHeight: 1.5, resize: 'vertical' }}
+                />
+              ) : (
+                <input
+                  type={f.inputType || 'text'}
+                  // <input type="date"> requires an exact YYYY-MM-DD value — a full ISO
+                  // timestamp ("2026-07-20T00:00:00+00:00", what every dueAt/closeAt read
+                  // path returns) fails the native format check and the browser silently
+                  // renders it blank instead of erroring, so this slice is load-bearing.
+                  value={f.inputType === 'date' ? String(record[f.key] ?? '').slice(0, 10) : (record[f.key] ?? '')}
+                  placeholder={f.placeholder || ''}
+                  onChange={e => onChange(f.key, f.inputType === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value)}
+                  style={DRAWER_INPUT_STYLE}
+                />
+              )}
+            </label>
+          ))}
+        </div>
+      ))}
+      {children}
+    </Drawer>
+  );
+}
+
+// Horizontal-scroll wrapper for multi-column kanban strips (Deals, task board, 내 작업).
+// Renders an edge fade + chevron on whichever side still has hidden columns, so a 6-stage
+// pipeline doesn't read as "only 4 stages" when the rest is off-screen with no visual cue.
+// Recomputes on scroll and on resize (column count can change with the workspace filter).
+export function ScrollShadowX({ children, className, style }) {
+  const ref = React.useRef(null);
+  const [edges, setEdges] = React.useState({ left: false, right: false });
+
+  const measure = React.useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    setEdges({
+      left: el.scrollLeft > 4,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+    });
+  }, []);
+
+  React.useEffect(() => {
+    measure();
+    const el = ref.current;
+    if (!el) return undefined;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [measure, children]);
+
+  return (
+    <div style={{ position: 'relative', flex: 1, minHeight: 0, ...style }}>
+      <div ref={ref} className={`hub-scroll-x${className ? ` ${className}` : ''}`} onScroll={measure} style={{ display: 'flex', gap: 'var(--gap)', overflowX: 'auto', height: '100%', paddingBottom: 4 }}>
+        {children}
+      </div>
+      {edges.left && (
+        <div className="hub-scroll-edge hub-scroll-edge--left" aria-hidden="true">
+          <Iconed name="chevronL" size={12} />
+        </div>
+      )}
+      {edges.right && (
+        <div className="hub-scroll-edge hub-scroll-edge--right" aria-hidden="true">
+          <Iconed name="chevronR" size={12} />
+        </div>
+      )}
     </div>
   );
 }

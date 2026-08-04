@@ -1,0 +1,115 @@
+// Pure read-model helpers for compact operator-home summaries.
+
+const PROJECT_SERIES = [
+  { key: "planning", label: "계획", statuses: new Set(["Planning"]) },
+  { key: "active", label: "진행", statuses: new Set(["In progress"]) },
+  { key: "review", label: "검토", statuses: new Set(["Review"]) },
+  { key: "blocked", label: "막힘", statuses: new Set(["Blocked"]) },
+  { key: "done", label: "완료", statuses: new Set(["Done"]) },
+  { key: "backlog", label: "보관", statuses: new Set(["Backlog"]) },
+];
+
+const CONTENT_SERIES = [
+  { key: "idea", label: "아이디어" },
+  { key: "draft", label: "제작" },
+  { key: "review", label: "검토" },
+  { key: "scheduled", label: "대기" },
+  { key: "published", label: "발행" },
+];
+
+function countBy(values, predicate) {
+  return values.reduce((count, value) => count + (predicate(value) ? 1 : 0), 0);
+}
+
+function buildPmsSummary(ledger) {
+  const projects = Array.isArray(ledger.projects) ? ledger.projects : [];
+  const todos = Array.isArray(ledger.todos) ? ledger.todos : [];
+  const taskStatsPartial = ledger?.taskAggregation?.partial === true
+    || (Array.isArray(ledger?.partialSources) && ledger.partialSources.includes("tasks"));
+  const projectStatsPartial = Array.isArray(ledger?.partialSources)
+    && ledger.partialSources.includes("projects");
+  const completedTasks = countBy(todos, (todo) => todo?.done === true);
+  const openTasks = todos.length - completedTasks;
+
+  return {
+    totalProjects: projectStatsPartial ? null : projects.length,
+    activeProjects: projectStatsPartial
+      ? null
+      : countBy(projects, (project) => !["Done", "Backlog"].includes(project?.status)),
+    blockedProjects: projectStatsPartial
+      ? null
+      : countBy(projects, (project) => project?.status === "Blocked"),
+    openTasks: taskStatsPartial ? null : openTasks,
+    dueOrOverdueTasks: taskStatsPartial
+      ? null
+      : countBy(todos, (todo) => todo?.done !== true && todo?.bucket === "오늘"),
+    completedTasks: taskStatsPartial ? null : completedTasks,
+    taskCompletionRate: taskStatsPartial
+      ? null
+      : todos.length ? Math.round((completedTasks / todos.length) * 100) : 0,
+    projectStatusSeries: PROJECT_SERIES.map(({ key, label, statuses }) => ({
+      key,
+      label,
+      value: projectStatsPartial
+        ? null
+        : countBy(projects, (project) => statuses.has(project?.status)),
+    })),
+    taskStatusSeries: [
+      { key: "open", label: "열림", value: taskStatsPartial ? null : openTasks },
+      { key: "done", label: "완료", value: taskStatsPartial ? null : completedTasks },
+    ],
+  };
+}
+
+function buildContentSummary(ledger) {
+  const items = Array.isArray(ledger.items) ? ledger.items : [];
+  const publishLogs = Array.isArray(ledger.publishLogs) ? ledger.publishLogs : [];
+  const statusOf = (item) => item?.statusKey || item?.status;
+  const failedSources = new Set(Array.isArray(ledger.failedSources) ? ledger.failedSources : []);
+  const itemsAvailable = !failedSources.has("items") && !failedSources.has("content_items");
+  const publishLogsAvailable = !failedSources.has("publish_logs") && !failedSources.has("publishLogs");
+
+  return {
+    totalItems: itemsAvailable ? items.length : null,
+    ideas: itemsAvailable ? countBy(items, (item) => statusOf(item) === "idea") : null,
+    inProduction: itemsAvailable
+      ? countBy(items, (item) => ["draft", "review"].includes(statusOf(item)))
+      : null,
+    scheduled: itemsAvailable ? countBy(items, (item) => statusOf(item) === "scheduled") : null,
+    published: itemsAvailable ? countBy(items, (item) => statusOf(item) === "published") : null,
+    failed: publishLogsAvailable ? countBy(publishLogs, (log) => log?.status === "failed") : null,
+    pipelineSeries: CONTENT_SERIES.map(({ key, label }) => ({
+      key,
+      label,
+      value: itemsAvailable ? countBy(items, (item) => statusOf(item) === key) : null,
+    })),
+  };
+}
+
+function ledgerState(ledger) {
+  if (ledger?.source === "supabase") return ledger?.partial ? "partial" : "live";
+  if (ledger?.source === "error" || ledger?.status === "error") return "error";
+  return "preview";
+}
+
+function combinedState(states) {
+  const liveCount = states.filter((state) => state === "live").length;
+  if (liveCount === states.length) return "live";
+  if (states.includes("partial")) return "partial";
+  if (liveCount > 0) return "partial";
+  return states.includes("error") ? "error" : "preview";
+}
+
+export function buildOperatorHomeSummary({ projects = {}, content = {} } = {}) {
+  const sources = {
+    projects: ledgerState(projects),
+    content: ledgerState(content),
+  };
+
+  return {
+    state: combinedState(Object.values(sources)),
+    sources,
+    pms: ["live", "partial"].includes(sources.projects) ? buildPmsSummary(projects) : null,
+    content: ["live", "partial"].includes(sources.content) ? buildContentSummary(content) : null,
+  };
+}

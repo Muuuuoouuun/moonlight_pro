@@ -106,6 +106,17 @@ export function deleteSupabaseRecord(
   filters: SupabaseFilter[],
   options?: { timeoutMs?: number },
 ): Promise<SupabaseWriteResult>;
+export function invokeSupabaseRpc(
+  name: string,
+  params?: Record<string, unknown>,
+  options?: { timeoutMs?: number },
+): Promise<{
+  ok: boolean;
+  status: number | null;
+  data?: unknown;
+  error?: string;
+  detail?: string;
+}>;
 
 export function checkSupabaseRest(
   table?: string,

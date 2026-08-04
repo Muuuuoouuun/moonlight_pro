@@ -483,6 +483,46 @@ export async function deleteSupabaseRecord(table, filters = [], options = {}) {
   return outcome;
 }
 
+// PostgREST RPC compatibility for command-style routes. Keeping this in the
+// shared client lets Hub and Engine use the same config, auth and timeout
+// semantics after the backend client consolidation.
+export async function invokeSupabaseRpc(name, params = {}, options = {}) {
+  const config = resolveSupabaseConfig();
+
+  if (!config) {
+    return { ok: false, status: null, error: "missing-config" };
+  }
+
+  const url = `${config.url}/rest/v1/rpc/${encodeURIComponent(name)}`;
+  const result = await supabaseFetch("rpc", name, url, {
+    method: "POST",
+    headers: makeSupabaseHeaders(config.apiKey, { contentType: "application/json" }),
+    body: JSON.stringify(params),
+    timeoutMs: options.timeoutMs,
+  });
+
+  if (!result.ok) {
+    const error = result.failureReason || `http-${result.status}`;
+    let detail = result.text;
+    try {
+      const parsed = JSON.parse(result.text || "{}");
+      detail = typeof parsed?.message === "string" ? parsed.message : result.text;
+    } catch {
+      // Keep the bounded raw response as diagnostic detail.
+    }
+    logSupabaseFailure("rpc", name, error, detail);
+    return { ok: false, status: result.status, error, detail };
+  }
+
+  let data = null;
+  try {
+    data = result.text ? JSON.parse(result.text) : null;
+  } catch {
+    data = result.text;
+  }
+  return { ok: true, status: result.status, data };
+}
+
 // ============================================================================
 // Health
 // ============================================================================

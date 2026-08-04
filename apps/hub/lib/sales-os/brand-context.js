@@ -11,10 +11,21 @@ import { getContentLedger } from "@/lib/repositories/content-ledger";
 import { getProjectLedger } from "@/lib/repositories/operating-ledger";
 import { getRecentAgentRuns } from "@/lib/sales-os/agent-runs";
 import { cadenceStatusString } from "@/lib/sales-os/context-schema";
-import { brandsForWorkspace } from "@/components/hub/workspace-map";
+import { filterBrandsByWorkspace } from "@/components/hub/workspace-map";
 
 const COUNCIL_AGENT = "council";
 const trim = (arr, n) => (Array.isArray(arr) ? arr.slice(0, n) : []);
+
+// Brand keys that belong to a workspace — real_v1.1 replacement for the removed
+// `brandsForWorkspace(workspace)`. workspace-map no longer keeps a static per-workspace
+// `brands` array; membership is now derived from each brand's orgScope (the SSOT). We filter
+// the BRANDS registry through that resolver and drop the 'all' pseudo-brand, preserving the
+// original return shape (an array of brand key strings).
+function brandKeysForWorkspace(brands, workspace) {
+  return filterBrandsByWorkspace(brands, workspace)
+    .filter((b) => b && b.key && b.key !== "all")
+    .map((b) => b.key);
+}
 
 async function settled(promise, source, missing) {
   try {
@@ -56,20 +67,47 @@ function selectFocusBrand(brands, ownKeys, ref) {
   return list.find((b) => ownKeys.includes(b.key)) || list[0];
 }
 
-export async function assembleBrandContext({ mode = "brand-strategy", ref = null, draft = null } = {}) {
+export async function assembleBrandContext({ mode = "brand-strategy", ref = null, draft = null, workspace = "brand" } = {}) {
   const missing = [];
-  const [content, projectLedger, runsRes] = await Promise.all([
+  let [content, projectLedger, runsRes] = await Promise.all([
     settled(getContentLedger(), "content-ledger", missing),
     settled(getProjectLedger(), "operating-ledger", missing),
     settled(getRecentAgentRuns({ agent: COUNCIL_AGENT, ref, limit: 5 }), "agent_runs", missing),
   ]);
 
-  if (!content && !projectLedger) {
-    return { source: "preview", error: "brand ledgers unavailable", missing };
+  if (content?.source === "error") {
+    missing.push({
+      source: "content-ledger",
+      reason: content.error || "content-ledger-read-failed",
+      failedSources: Array.isArray(content.failedSources) ? content.failedSources : [],
+    });
+    content = null;
+  }
+  if (projectLedger?.source === "error") {
+    missing.push({
+      source: "operating-ledger",
+      reason: projectLedger.error || "project-ledger-core-read-failed",
+      failedSources: Array.isArray(projectLedger.failedSources) ? projectLedger.failedSources : [],
+    });
+    projectLedger = null;
+  } else if (projectLedger?.source === "supabase" && projectLedger.partial) {
+    missing.push({
+      source: "operating-ledger",
+      reason: "project-ledger-partial-read",
+      failedSources: Array.isArray(projectLedger.failedSources) ? projectLedger.failedSources : [],
+    });
   }
 
-  const ownKeys = brandsForWorkspace("brand");
+  if (!content && !projectLedger) {
+    return {
+      source: missing.length ? "error" : "preview",
+      error: "brand ledgers unavailable",
+      missing,
+    };
+  }
+
   const brands = content?.brands || [];
+  const ownKeys = brandKeysForWorkspace(brands, workspace);
   const focusBrand = selectFocusBrand(brands, ownKeys, ref);
 
   // Scope projects to the 브랜드 workspace brands; if nothing matches yet, keep all so the
@@ -94,7 +132,7 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
   const ideaQueue = trim(content?.ideaQueue, 8);
 
   const context = {
-    source: content?.source || projectLedger?.source || "preview",
+    source: missing.length ? "partial" : content?.source || projectLedger?.source || "preview",
     brand: brandGuardrail(focusBrand),
     brands: brands.map((b) => ({ key: b.key, name: b.name, kind: b.kind, voice: b.voice })),
     content: content

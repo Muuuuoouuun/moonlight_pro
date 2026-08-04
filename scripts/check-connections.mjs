@@ -5,6 +5,12 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
+import { resolveControlPlaneReadiness } from "../apps/hub/lib/integration-readiness.js";
+import {
+  classifyWorkspaceGoogleMcp,
+  summarizeGoogleOAuthProviders,
+} from "./connection-status.mjs";
+
 const root = process.cwd();
 
 function parseEnvFile(filepath) {
@@ -217,7 +223,7 @@ async function checkGitHubIntegration(label, env, failures) {
 async function checkGeminiIntegration(label, env, failures) {
   const apiKey = env.GEMINI_API_KEY || env.GOOGLE_GENERATIVE_AI_API_KEY || "";
   const apiBaseUrl = (env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-  const model = env.GEMINI_MODEL || env.AI_DEFAULT_MODEL || "gemini-3.5-flash";
+  const model = env.GEMINI_MODEL || env.AI_DEFAULT_MODEL || "gemini-3-flash-preview";
 
   if (!apiKey) {
     printResult("WARN", `${label} Gemini integration`, "missing GEMINI_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY");
@@ -241,6 +247,56 @@ async function checkGeminiIntegration(label, env, failures) {
     `models check failed (${result.status || "no-status"})`,
   );
   failures.push(`${label}:GEMINI_INTEGRATION`);
+}
+
+async function checkOpenClawIntegration(label, env, failures) {
+  const localUrl = env.OPENCLAW_LOCAL_URL?.trim();
+  const remoteUrl = env.OPENCLAW_REMOTE_URL?.trim();
+  const telegramReady = Boolean(env.TELEGRAM_BOT_TOKEN?.trim() && env.OPENCLAW_TELEGRAM_CHAT_ID?.trim());
+  const slackReady = Boolean(env.OPENCLAW_SLACK_WEBHOOK_URL?.trim());
+  const projectId = env.OPENCLAW_PROJECT_ID?.trim();
+  const configuredTransports = [
+    localUrl ? "local" : "",
+    remoteUrl ? "remote" : "",
+    telegramReady ? "telegram" : "",
+    slackReady ? "slack" : "",
+  ].filter(Boolean);
+
+  if (!projectId) {
+    printResult("WARN", `${label} OpenClaw project`, "missing OPENCLAW_PROJECT_ID");
+  } else {
+    printResult("PASS", `${label} OpenClaw project`, projectId);
+  }
+
+  if (!configuredTransports.length) {
+    printResult(
+      "WARN",
+      `${label} OpenClaw transport`,
+      "missing OPENCLAW_LOCAL_URL, OPENCLAW_REMOTE_URL, Telegram chat, or Slack webhook",
+    );
+    return;
+  }
+
+  if (localUrl) {
+    const { openclawRelay } = await resolveControlPlaneReadiness(env);
+
+    if (openclawRelay.reachable) {
+      printResult("PASS", `${label} OpenClaw relay`, `${localUrl} reachable`);
+    } else {
+      const fallbackReady = Boolean(remoteUrl || telegramReady || slackReady);
+      printResult(
+        fallbackReady ? "WARN" : "FAIL",
+        `${label} OpenClaw relay`,
+        `${localUrl} ${openclawRelay.status} (${openclawRelay.reason})`,
+      );
+
+      if (!fallbackReady) {
+        failures.push(`${label}:OPENCLAW_RELAY`);
+      }
+    }
+  }
+
+  printResult("PASS", `${label} OpenClaw configured transports`, configuredTransports.join(", "));
 }
 
 async function checkSupabase(label, env, failures) {
@@ -314,10 +370,59 @@ async function checkHubHealth(label, env, failures) {
     const routes = Array.isArray(result.data?.routes) ? result.data.routes.length : 0;
     const oauthState = result.data?.config?.oauthStateSecretConfigured ? "configured" : "missing";
     printResult("PASS", `${label} Hub`, `/api/health reachable with ${routes} routes; OAuth state secret ${oauthState}`);
+    for (const provider of summarizeGoogleOAuthProviders(result.data)) {
+      printResult(provider.level, `${label} Google OAuth ${provider.provider}`, provider.detail);
+    }
   } else {
     const reason = result.data?.database?.supabase?.reason || result.data?.status || result.data;
     printResult("FAIL", `${label} Hub`, `health check failed (${result.status || "no-status"}; ${JSON.stringify(reason)})`);
     failures.push(`${label}:HUB_HEALTH`);
+  }
+}
+
+async function checkLocalWorkspaceMcp() {
+  const home = process.env.HOME || "";
+  const configPath = path.join(home, ".openclaw", "workspace", "config", "mcporter.json");
+
+  if (!home || !existsSync(configPath)) {
+    printResult("INFO", "OpenClaw workspace Google MCP", "local mcporter config not present");
+    return;
+  }
+
+  try {
+    const server = JSON.parse(runCommand("mcporter", [
+      "--config",
+      configPath,
+      "list",
+      "google-workspace",
+      "--schema",
+      "--json",
+    ]));
+    let probeResult = null;
+
+    if (server?.status === "ok") {
+      probeResult = JSON.parse(runCommand("mcporter", [
+        "--config",
+        configPath,
+        "call",
+        "google-workspace.list-calendars",
+        "--output",
+        "json",
+      ]));
+    }
+
+    const result = classifyWorkspaceGoogleMcp({
+      serverStatus: server?.status,
+      toolCount: Array.isArray(server?.tools) ? server.tools.length : 0,
+      probeResult,
+    });
+    printResult(result.level, "OpenClaw workspace Google MCP", result.detail);
+  } catch (error) {
+    printResult(
+      "WARN",
+      "OpenClaw workspace Google MCP",
+      error instanceof Error ? error.message.split("\n")[0] : String(error),
+    );
   }
 }
 
@@ -363,6 +468,9 @@ async function main() {
   printSection("Integrations");
   await checkGitHubIntegration("Hub", hubEnv, failures);
   await checkGitHubIntegration("Engine", engineEnv, failures);
+  await checkOpenClawIntegration("Hub", hubEnv, failures);
+  await checkOpenClawIntegration("Engine", engineEnv, failures);
+  await checkLocalWorkspaceMcp();
   await checkGeminiIntegration("Hub", hubEnv, failures);
   await checkGeminiIntegration("Engine", engineEnv, failures);
 

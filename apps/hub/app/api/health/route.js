@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 
 import {
+  resolveControlPlaneReadiness,
+  resolveGoogleOAuthProviderReadiness,
+  resolveSecretReadiness,
+} from "@/lib/integration-readiness";
+import {
   makeSupabaseHeaders,
   resolveDefaultWorkspaceId,
   resolveSupabaseConfig,
@@ -40,7 +45,12 @@ async function checkSupabaseRest() {
 }
 
 export async function GET() {
-  const supabase = await checkSupabaseRest();
+  const [supabase, controlPlane] = await Promise.all([
+    checkSupabaseRest(),
+    resolveControlPlaneReadiness(),
+  ]);
+  const googleOAuth = resolveGoogleOAuthProviderReadiness();
+  const secrets = resolveSecretReadiness();
   const isHealthy = supabase.ok;
 
   return NextResponse.json({
@@ -52,27 +62,28 @@ export async function GET() {
     },
     config: {
       workspaceConfigured: Boolean(resolveDefaultWorkspaceId()),
-      engineUrlConfigured: Boolean(process.env.COM_MOON_ENGINE_URL?.trim()),
+      engineUrlConfigured: controlPlane.engine.configured,
       hubUrlConfigured: Boolean(
         process.env.COM_MOON_HUB_URL?.trim() ||
           process.env.NEXT_PUBLIC_APP_URL?.trim(),
       ),
-      sharedWebhookSecretConfigured: Boolean(
-        process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim(),
-      ),
-      oauthStateSecretConfigured: Boolean(
-        process.env.COM_MOON_OAUTH_STATE_SECRET?.trim() ||
-          process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim(),
-      ),
-      googleOAuthConfigured: Boolean(
-        process.env.GOOGLE_CLIENT_ID?.trim() &&
-          process.env.GOOGLE_CLIENT_SECRET?.trim(),
-      ),
+      sharedWebhookSecretConfigured: secrets.sharedWebhook.configured,
+      oauthStateSecretConfigured: secrets.oauthState.configured,
+      hubWriteSecretConfigured: secrets.hubWrite.configured,
+      openClawSyncSecretConfigured: secrets.openclawSync.configured,
+      secretsSeparated: secrets.separated,
+      googleOAuthConfigured: googleOAuth.calendar.configured,
       githubConfigured: Boolean(process.env.GITHUB_REPOSITORIES?.trim()),
       geminiConfigured: Boolean(
         process.env.GEMINI_API_KEY?.trim() ||
-          process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim(),
+        process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim(),
       ),
+    },
+    integrations: {
+      engine: controlPlane.engine,
+      openclawRelay: controlPlane.openclawRelay,
+      googleOAuth,
+      secrets,
     },
     routes: [
       { method: "GET", path: "/api/health" },

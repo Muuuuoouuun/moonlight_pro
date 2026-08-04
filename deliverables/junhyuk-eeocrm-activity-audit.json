@@ -1,0 +1,50 @@
+{
+  "auditedAt": "2026-07-15T01:40:00+09:00",
+  "scope": {
+    "ownerExternalId": "3935704427463307",
+    "ownerName": "문준혁",
+    "ownerCode": "EEO04186",
+    "officialOwnerAccounts": 22,
+    "exactMatchedCompanies": 13,
+    "targetedMoonlightLeads": 16
+  },
+  "activitySources": {
+    "googleCalendarEventsScannedSevenMonths": 248,
+    "classInCrmCustomerEventsTotal": 0,
+    "classInCrmCustomerEventsMatched": 0,
+    "classInCrmTasksTotal": 0,
+    "classInCrmTasksMatched": 0,
+    "classInCrmCaptureRowsTotal": 0,
+    "classInCrmCaptureRowsMatched": 0
+  },
+  "leadLevelEvidence": {
+    "calendarTouchpoint": 6,
+    "meeting": 3,
+    "call": 0,
+    "directInfoSession": 0,
+    "publicInfoSessionSignal": 2,
+    "commercialHistory": 6,
+    "engagementUnknown": 10,
+    "publicHighConfidence": 11
+  },
+  "pipeline": {
+    "officialStatusPreserved": true,
+    "customerSuccess": 16,
+    "activePipeline": 0,
+    "newPipeline": 0,
+    "closedLost": 0
+  },
+  "scoreDistribution": {
+    "50": 2,
+    "55": 7,
+    "60": 1,
+    "81": 1,
+    "83": 3,
+    "93": 2
+  },
+  "interpretation": {
+    "missingActivityPolicy": "No ClassIn customer-event, task, or capture rows exist. Leads without calendar or commercial evidence remain engagement:unknown and receive no engagement points.",
+    "publicSignalPolicy": "Public info-session and channel evidence is tagged separately and is not treated as a direct sales touchpoint.",
+    "ownershipPolicy": "Only exact owner-account matches for Junhyuk are enriched; the other eeoCRM snapshot leads remain outside this scope."
+  }
+}

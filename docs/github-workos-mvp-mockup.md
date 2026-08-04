@@ -1,5 +1,7 @@
 # GitHub-Backed Work OS MVP Mockup
 
+> 상태: DEFERRED FEATURE SPEC — GitHub delivery lane은 Phase 1 durable task/action loop 뒤에 검토한다.
+
 ## Purpose
 
 This doc defines the first mockup layer for `apps/hub > Work OS` when GitHub becomes the delivery source of truth.
@@ -156,4 +158,3 @@ Milestone card content:
 - One screen should answer one main question
 - If a block does not change the operator's next action, it should be hidden from MVP
 - GitHub should be treated as the signal source, not the final UI authority
-

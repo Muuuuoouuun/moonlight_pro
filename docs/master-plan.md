@@ -1,9 +1,11 @@
 <!-- /autoplan restore point: /Users/bigmac_moon/.gstack/projects/Muuuuoouuun-moonlight_pro/codex-moonlight-p0-hardening-autoplan-restore-20260502-133848.md -->
-# Moonlight Founder Command Loop: Master Plan & Architecture
+# Moonlight Command Loop: 2026-05 Strategy Review Archive
 
-Status: active source of truth
+Status: HISTORICAL STRATEGY REFERENCE — superseded by `docs/README.md` and the 2026-07-13 Personal Operator OS design
 Updated: 2026-05-02
-Branch: `codex/moonlight-p0-hardening`
+Original branch: `codex/moonlight-p0-hardening`
+
+> 이 문서는 2026-05 `/autoplan` 검토와 결정 배경을 보존한다. 현재 제품 사실, 구현 단계, 테스트 상태를 판단할 때는 `docs/README.md`, `docs/operator-workflow-profile.md`, `docs/superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`, `docs/master-roadmap.md`를 우선한다.
 
 ## 1. Product Thesis
 

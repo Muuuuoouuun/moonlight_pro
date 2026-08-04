@@ -1,5 +1,7 @@
 # Engine / OS 분리 설명과 자동화 · 카드뉴스 UI 탭 구성 계획
 
+> 상태: ACTIVE ARCHITECTURE REFERENCE — Hub/Engine/Shared Domain 경계만 유효하다. 탭 구성과 구현 순서는 `docs/README.md`와 현재 로드맵이 우선한다.
+
 ## 1. 이 문서의 목적
 
 이 문서는 Com_Moon에서 자주 섞여 보이는 3개 층을 명확히 분리한다.

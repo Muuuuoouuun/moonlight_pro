@@ -5,9 +5,11 @@
 import {
   checkSupabaseRest as sharedCheckSupabaseRest,
   countSupabaseRows as sharedCountSupabaseRows,
+  deleteSupabaseRecord as sharedDeleteSupabaseRecord,
   fetchSupabaseRows as sharedFetchSupabaseRows,
   fetchSupabaseRowsDetailed as sharedFetchSupabaseRowsDetailed,
   insertSupabaseRecord as sharedInsertSupabaseRecord,
+  invokeSupabaseRpc as sharedInvokeSupabaseRpc,
   updateSupabaseRecord as sharedUpdateSupabaseRecord,
   upsertSupabaseRecords as sharedUpsertSupabaseRecords,
   type SupabaseDetailedReadResult,
@@ -63,4 +65,20 @@ export function updateSupabaseRecord(
   options: SupabaseWriteOptions = {},
 ): Promise<SupabaseWriteResult<any>> {
   return sharedUpdateSupabaseRecord<any>(table, filters, record, options);
+}
+
+export function deleteSupabaseRecord(
+  table: string,
+  filters: SupabaseFilter[],
+  options: { timeoutMs?: number } = {},
+): Promise<SupabaseWriteResult<any>> {
+  return sharedDeleteSupabaseRecord(table, filters, options);
+}
+
+export function invokeSupabaseRpc(
+  name: string,
+  params: Record<string, unknown> = {},
+  options: { timeoutMs?: number } = {},
+) {
+  return sharedInvokeSupabaseRpc(name, params, options);
 }

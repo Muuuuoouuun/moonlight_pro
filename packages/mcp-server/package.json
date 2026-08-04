@@ -1,0 +1,18 @@
+{
+  "name": "@com-moon/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server exposing Moonlight Hub read/write actions as tools for MCP-compatible Claude clients (Claude Desktop, Claude Code, claude.ai custom connectors).",
+  "bin": {
+    "moonlight-mcp": "./src/index.js"
+  },
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.24.1"
+  }
+}

@@ -1,5 +1,7 @@
 # 세일즈 구루 멘토 에이전트 — 적용 기획
 
+> 상태: DEFERRED FEATURE SPEC — 기존 Guru 자산은 유지하지만 현재 Phase 1B·1C보다 먼저 확장하지 않는다.
+
 ## 1. 문서 목적
 
 이 문서는 Moonlight에 **세일즈 구루 멘토 에이전트(Sales Guru)** 를 도입하는 방법을
@@ -135,8 +137,7 @@ Guru는 **새 데이터 소스를 만들지 않고** 기존 원장을 읽고 쓴
 { key: 'guru', label: 'Guru', role: '영업 멘토 · 딜 코칭', tone: 'moon', last: '클래스인 딜 진단' },
 ```
 
-`agents.jsx`의 `OFFICE_AGENTS`에도 동일 페르소나를 추가해 VR Office에 자리 배치
-(색은 기존 `a.color` 관례 따르되 DESIGN 안티패턴 색은 금지).
+Agents 표면은 Chat · Orders · Council만 유지하며, Guru는 동일 페르소나 레지스트리에서 노출한다.
 
 ## 8. 멘토 프롬프트 설계
 
@@ -188,7 +189,7 @@ prompt(mode, context):
 
 | Phase | 범위 | 산출물 |
 | --- | --- | --- |
-| **P0 — 페르소나** | `COUNCIL`/`OFFICE_AGENTS`에 guru 추가, Chat 진입 | UI에 멘토 등장 (mock 응답) |
+| **P0 — 페르소나** | 페르소나 레지스트리에 guru 추가, Chat 진입 | UI에 멘토 등장 (preview 상태) |
 | **P1 — Engine 루프** | `ai/sales-mentor` route + Hub proxy, `pipeline-triage` 1개 모드 | 실제 LLM 코칭 1종 |
 | **P2 — 컨텍스트 심화** | `deal-review` / account 연동, project_updates 적재 | 딜 단위 진단 + 원장 기록 |
 | **P3 — 회고/자동화** | `weekly-retro` 스케줄 오더, Runs 가시화 | 주간 자동 영업 회고 |
@@ -216,7 +217,7 @@ P0는 데이터 변경 없이 프론트만으로 가치 검증 가능 → 가장
 - [x] `docs/sales-decision-styles.md` — 구매자 의사결정 7스타일 (운영자 제공)
 - [x] `docs/marketing-branding-gurus.md` — 마케팅/브랜딩 3인 (운영자 제공)
 - [x] `apps/hub/components/hub/hub-data.js` — `COUNCIL`에 `guru` 추가
-- [x] `apps/hub/components/hub/pages/agents.jsx` — `OFFICE_AGENTS`에 guru, Chat 페르소나 분기(`?agent=guru`)
+- [x] `apps/hub/components/hub/pages/agents.jsx` — Chat 페르소나 분기(`?agent=guru`)
 - [x] `apps/engine/app/api/ai/sales-mentor/route.ts` — 신규 (brief route 템플릿, 4개 모드)
 - [x] `apps/hub/app/api/hub/sales-mentor/route.js` — Engine proxy (원장 컨텍스트 + shared secret)
 - [x] `apps/hub/components/hub/pages/revenue.jsx` — Overview "Guru 코칭" 패널(`pipeline-triage`)

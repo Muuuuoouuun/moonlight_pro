@@ -1,39 +1,27 @@
-// Workspace map — the real operating layer for Moonlight Pro Hub.
+// Workspace map — org_scope-driven membership for the Moonlight Pro Hub.
 //
-// The sidebar is organized around the live workstreams that actually run first:
-//   1. classin  (클래스인)    — current company sales/ops lane
-//   2. brand    (브랜드 업무)  — brand / content publishing work
+// Two live workspaces scope the pages by the *real* org_scope split that live brands carry:
+//   1. classin (클래스인)  — company sales / pipeline / CRM lane
+//   2. brand   (브랜드)     — brand / content / publishing work
 //
-// `company` remains below as a legacy-compatible lens for older routes. In the
-// active IA, company work is folded into ClassIn because that is the user's live
-// revenue surface.
+// Membership resolution mirrors the backend's resolveBrandOrgScope
+// (lib/repositories/operating-ledger.js): a live brand object's `orgScope` wins;
+// unresolved records default to the personal lane.
+// The 'personal' default routes untagged/unknown-brand records into the 브랜드 lane
+// instead of dropping them from both workspaces — same default as the backend.
+// This is the SINGLE SOURCE OF TRUTH and SUPERSEDES real_v1's hardcoded per-workspace
+// `brands` arrays — re-home a brand by flipping its orgScope, not by editing lists here.
 //
-// Each workspace declares which REAL records belong to it. Pages read these
-// membership sets to scope their live data (and fall back to an explicit
-// preview/empty state when a workspace has no data yet — never mock+live mix).
-//
-// ── TUNING ──────────────────────────────────────────────────────────────────
-// The `brands` arrays below are the single source of truth for which brand
-// belongs to which workspace. Move a brand key between arrays to re-home it.
-// Brand keys come from BRANDS in hub-data.js:
-//   sinabro · gore · holyfuncollector · bridgemaker · moonpm
-//   classmoon · studyseagull · politicofficer · 22nomad
-//
-// NOTE: `glyph` (🎓🏢🎨) is intentionally NON-RENDERED metadata for reference
-// only — the UI uses the monochrome `icon` field. Do not surface the emoji on
-// operator surfaces (DESIGN.md: no novelty glyphs).
+// Pages read these filters against live records and render explicit preview/empty
+// states when the source is unavailable.
 
 export const WORKSPACES = {
   classin: {
     key: 'classin',
     label: '클래스인',
-    glyph: '🎓',
     icon: 'classin',
     desc: '회사 영업 · 파이프라인 · 고객관리',
-    // ClassIn current-company work can still carry older brand tags from the
-    // project ledger, so include the known labels until records get explicit
-    // workspace/lane tags.
-    brands: ['classmoon', 'studyseagull', 'bridgemaker', 'moonpm'],
+    // Legacy deals/leads/accounts carry `type: 'company' | 'personal'`; classin === company line.
     revenueTypes: ['company'],
     accountKeywords: [
       'classin',
@@ -49,26 +37,11 @@ export const WORKSPACES = {
       'cohort',
     ],
   },
-  company: {
-    key: 'company',
-    label: '회사',
-    glyph: '🏢',
-    icon: 'building',
-    desc: 'Legacy · 클래스인으로 흡수',
-    // Agency (BridgeMaker), the hub tool itself (MoonPM), research (Politic_Officer).
-    brands: ['bridgemaker', 'moonpm', 'politicofficer'],
-    // Company pipeline = all company-type deals/leads.
-    revenueTypes: ['company'],
-    accountKeywords: [],
-  },
   brand: {
     key: 'brand',
-    label: '브랜드 업무',
-    glyph: '🎨',
+    label: '브랜드',
     icon: 'brand',
     desc: '브랜드 · 콘텐츠 · 발행',
-    // Content / product / community / personal brands.
-    brands: ['sinabro', 'gore', 'holyfuncollector', '22nomad'],
     // Personal-line revenue (coaching, advisory) rides with brand work.
     revenueTypes: ['personal'],
     accountKeywords: [],
@@ -85,53 +58,98 @@ export function getWorkspace(ws) {
   return isWorkspace(ws) ? WORKSPACES[ws] : null;
 }
 
-// Brand keys that belong to a workspace (empty array for unknown ws).
+// Legacy callers still need a finite brand-key catalog while live records move
+// to org_scope. Keep this compatibility list out of membership resolution: live
+// brand objects remain authoritative in brandInWorkspace/filter functions.
+const LEGACY_WORKSPACE_BRANDS = {
+  classin: ['classmoon', 'studyseagull', 'bridgemaker', 'moonpm'],
+  brand: ['sinabro', 'gore', 'holyfuncollector', '22nomad', 'politicofficer'],
+};
+
 export function brandsForWorkspace(ws) {
-  const w = getWorkspace(ws);
-  return w ? w.brands.slice() : [];
+  return [...(LEGACY_WORKSPACE_BRANDS[ws] || [])];
 }
 
-// Does a brand key belong to this workspace?
-export function brandInWorkspace(brandKey, ws) {
-  const w = getWorkspace(ws);
-  if (!w || !brandKey) return false;
-  return w.brands.includes(brandKey);
+// Resolve a brand KEY to its org scope with live-object priority: a brand object in
+// `brandObjects` carrying a string orgScope wins (live Supabase brands may use slugs the
+// static set has never seen), else the static classin set, else 'personal'. An 'all' or
+// missing key therefore resolves to 'personal' — untagged records land in the 브랜드 lane
+// rather than disappearing.
+function resolveOrgScopeForKey(key, brandObjects) {
+  if (key && Array.isArray(brandObjects)) {
+    const hit = brandObjects.find((b) => b && b.key === key);
+    if (hit && typeof hit.orgScope === 'string') return hit.orgScope;
+  }
+  return 'personal';
 }
 
-// ── Pure filters — pages call these against their live OR fallback arrays ─────
-// Each returns a NEW array; an unknown/absent workspace returns the input
-// unchanged so non-scoped (global) pages keep working.
-
-export function filterProjectsByWorkspace(projects, ws) {
-  const w = getWorkspace(ws);
-  if (!w || !Array.isArray(projects)) return projects || [];
-  return projects.filter((p) =>
-    p.workspace === ws ||
-    w.brands.includes(p.brand) ||
-    matchAccountKeyword(p.name || p.title, w.accountKeywords)
-  );
+// classin ⇔ orgScope 'classin'; brand ⇔ anything else.
+function scopeMatchesWorkspace(orgScope, ws) {
+  return ws === 'classin' ? orgScope === 'classin' : orgScope !== 'classin';
 }
 
-export function filterTodosByWorkspace(todos, ws) {
-  const w = getWorkspace(ws);
-  if (!w || !Array.isArray(todos)) return todos || [];
-  return todos.filter((t) =>
-    t.workspace === ws ||
-    w.brands.includes(t.brand) ||
-    matchAccountKeyword(t.title || t.name, w.accountKeywords)
-  );
-}
-
-export function filterBrandsByWorkspace(brands, ws) {
-  const w = getWorkspace(ws);
-  if (!w || !Array.isArray(brands)) return brands || [];
-  return brands.filter((b) => b.key === 'all' || w.brands.includes(b.key));
+// Does a brand belong to this workspace? Accepts either a brand KEY string or a brand
+// OBJECT. Objects prefer their resolved `orgScope`; both paths fall back through the
+// static classin set to the 'personal' default (never "in neither workspace").
+export function brandInWorkspace(brand, ws) {
+  if (!getWorkspace(ws) || !brand) return false;
+  if (typeof brand === 'string') {
+    return scopeMatchesWorkspace(resolveOrgScopeForKey(brand, null), ws);
+  }
+  const scope = typeof brand.orgScope === 'string'
+    ? brand.orgScope
+    : resolveOrgScopeForKey(brand.key, null);
+  return scopeMatchesWorkspace(scope, ws);
 }
 
 function matchAccountKeyword(name, keywords) {
   if (!name || !keywords?.length) return false;
   const lower = String(name).toLowerCase();
   return keywords.some((kw) => lower.includes(String(kw).toLowerCase()));
+}
+
+// Keyword rescue only applies when the record's type doesn't contradict the workspace's
+// revenue lane — a type:'personal' deal named "광고 카피 자문" must NOT leak into classin
+// just because '광고' is a classin keyword. Typeless records can still be rescued.
+function keywordRescue(record, w) {
+  if (record.type && w.revenueTypes.length && !w.revenueTypes.includes(record.type)) return false;
+  return matchAccountKeyword(record.name, w.accountKeywords);
+}
+
+// ── Pure filters — pages call these against their live OR fallback arrays ─────
+// Each returns a NEW array; an unknown/absent workspace returns the input unchanged
+// so non-scoped (global) pages keep working. A valid project workspace is authoritative;
+// legacy projects fall back to brand org scope and classin keywords. Revenue records keep
+// their existing workspace/type/brand/keyword matching behavior.
+
+export function filterBrandsByWorkspace(brands, ws) {
+  const w = getWorkspace(ws);
+  if (!w || !Array.isArray(brands)) return brands || [];
+  return brands.filter((b) => b.key === 'all' || brandInWorkspace(b, ws));
+}
+
+// `brands` = the unfiltered live brand objects array the page already holds. It lets
+// records whose brand slug is unknown to local routing configuration
+// follow their live brand's resolved orgScope when no valid explicit workspace exists.
+export function filterProjectsByWorkspace(projects, ws, brands) {
+  const w = getWorkspace(ws);
+  if (!w || !Array.isArray(projects)) return projects || [];
+  return projects.filter((p) => {
+    if (isWorkspace(p.workspace)) return p.workspace === ws;
+    return scopeMatchesWorkspace(resolveOrgScopeForKey(p.brand, brands), ws)
+      || matchAccountKeyword(p.name || p.title, w.accountKeywords);
+  });
+}
+
+export function filterTodosByWorkspace(todos, ws, brands) {
+  const w = getWorkspace(ws);
+  if (!w || !Array.isArray(todos)) return todos || [];
+  return todos.filter(
+    (t) =>
+      t.workspace === ws ||
+      scopeMatchesWorkspace(resolveOrgScopeForKey(t.brand, brands), ws) ||
+      matchAccountKeyword(t.title || t.name, w.accountKeywords),
+  );
 }
 
 export function filterDealsByWorkspace(deals, ws) {
@@ -142,7 +160,7 @@ export function filterDealsByWorkspace(deals, ws) {
       d.workspace === ws || // explicit tag wins (set on records created in-workspace)
       (w.revenueTypes.length && w.revenueTypes.includes(d.type)) ||
       brandInWorkspace(d.brand, ws) ||
-      matchAccountKeyword(d.name, w.accountKeywords),
+      keywordRescue(d, w),
   );
 }
 
@@ -154,20 +172,33 @@ export function filterLeadsByWorkspace(leads, ws) {
       l.workspace === ws || // explicit tag wins (set on records created in-workspace)
       (w.revenueTypes.length && w.revenueTypes.includes(l.type)) ||
       brandInWorkspace(l.brand, ws) ||
-      matchAccountKeyword(l.name, w.accountKeywords),
+      keywordRescue(l, w),
   );
 }
 
-// Content items rarely carry a brand field yet; scope on whatever brand/program
-// tag exists (field names vary across mock + live: brand / brandKey / brandId /
-// program), plus an explicit `workspace` tag. Otherwise return [] so the page
-// shows an honest preview/empty state for that workspace.
+// Accounts carry the same `type: 'company' | 'personal'` field as deals/leads but no
+// brand tag — scope on explicit workspace → type lane → tightened keyword rescue.
+export function filterAccountsByWorkspace(accounts, ws) {
+  const w = getWorkspace(ws);
+  if (!w || !Array.isArray(accounts)) return accounts || [];
+  return accounts.filter(
+    (a) =>
+      a.workspace === ws ||
+      (w.revenueTypes.length && w.revenueTypes.includes(a.type)) ||
+      keywordRescue(a, w),
+  );
+}
+
+// Content items rarely carry a brand field yet; scope on whatever brand/program tag
+// exists (field names vary across live sources: brand / brandKey / brandId / program),
+// plus an explicit `workspace` tag. Untagged items are dropped so the page shows an
+// honest preview/empty state for that workspace.
 export function filterContentByWorkspace(items, ws) {
   const w = getWorkspace(ws);
   if (!w || !Array.isArray(items)) return items || [];
   return items.filter((c) => {
     if (c.workspace === ws) return true;
     const tag = c.brand || c.brandKey || c.brandId || c.program;
-    return Boolean(tag) && (w.brands.includes(tag) || tag === ws);
+    return brandInWorkspace(tag, ws) || tag === ws;
   });
 }

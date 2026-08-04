@@ -187,7 +187,7 @@
     },
     "aiOverview": {
       "label": "Overview",
-      "description": "Roster, quick dispatch, and office pulse at a glance"
+      "description": "Roster, quick dispatch, and recent agent activity at a glance"
     },
     "aiChat": {
       "label": "Threads",

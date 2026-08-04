@@ -1,84 +1,69 @@
 "use client";
 
 import React from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Sparkline, EditDrawer, SyncBadge, SegmentedControl, Drawer, Checkbox } from "../hub-primitives";
-import {
-  LEADS as FALLBACK_LEADS,
-  DEAL_STAGES as FALLBACK_DEAL_STAGES,
-  DEALS as FALLBACK_DEALS,
-  BRANDS,
-  ACCOUNT_DETAIL,
-} from "../hub-data";
+import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, Progress } from "../hub-primitives";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
-import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace } from "../workspace-map";
-import { useCrmSelection, useCrmKeyboard } from "../use-crm-keyboard";
-import { ShortcutOverlay } from "../crm-shortcut-overlay";
-import { BulkBar, SavedViews } from "../crm-bulk-bar";
+import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
+import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
+import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
+import { DEAL_STAGES, STAGE_FILL, STAGE_LINE } from "@/lib/deal-stages";
+import { selectProjectAreaId } from "@/lib/pms-ui";
 
+// HW/SW 딜은 100만원 미만 건도 흔해서 M 고정 포맷은 "₩0.1M" 같은 값을 만든다.
+// revenue-ledger.js의 formatMoneyLabel과 같은 K/M 임계값으로 맞춘다.
 const fmt = v => {
   const n = Number(v);
   if (!Number.isFinite(n) || n === 0) return '₩0';
-  return '₩' + (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000000) return '₩' + (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return '₩' + Math.round(n / 1000) + 'K';
+  return '₩' + n;
 };
 
-// Persist a drawer edit to the Supabase-backed write route. `kind` is 'lead' | 'deal',
-// `op` is 'create' | 'update'. Returns { ok, status, id } — `ok` only when the row was
-// actually saved; 'preview' means the backend isn't configured and the local row stands.
-async function saveRevenueRecord(kind, op, record) {
-  try {
-    const resp = await fetch(`/api/hub/revenue/${kind}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ op, ...record }),
-    });
-    const data = await resp.json().catch(() => ({}));
-    return { ok: resp.ok && data.status === 'saved', status: data.status || 'error', id: data.id, data };
-  } catch (err) {
-    return { ok: false, status: 'error', error: err instanceof Error ? err.message : String(err) };
-  }
+// A deal counts as "stalled" once it has aged this many days in an open stage. Two weeks
+// is the follow-up window — high enough that a deal mid-motion isn't flagged as neglected.
+const STALLED_DAYS = 14;
+
+
+// Shared All/Personal/Company scope filter for every Revenue surface (Leads, Deals,
+// Accounts). One source so the identity dots and labels can't drift between pages.
+const SCOPE_OPTIONS = [
+  { key: 'all', label: 'All' },
+  { key: 'personal', label: 'Personal', dot: 'personal' },
+  { key: 'company', label: 'Company', dot: 'company' },
+];
+
+// Parse a display amount ("₩1.2M", "₩900K", "₩0", or a raw number) to a comparable number,
+// so the Leads table can sort by value even though the display model stores a string.
+function parseAmount(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  const s = String(v || '').replace(/[₩,\s]/g, '');
+  const m = /([0-9.]+)\s*([MmKk]?)/.exec(s);
+  if (!m) return 0;
+  const n = parseFloat(m[1]) || 0;
+  const unit = (m[2] || '').toLowerCase();
+  return unit === 'm' ? n * 1e6 : unit === 'k' ? n * 1e3 : n;
 }
 
-// Activity timeline persistence (crm_activities). create/pin/delete via POST; read via GET.
-async function saveActivity(op, payload) {
-  try {
-    const resp = await fetch('/api/hub/revenue/activity', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ op, ...payload }),
-    });
-    const data = await resp.json().catch(() => ({}));
-    return { ok: resp.ok && data.status === 'saved', status: data.status || 'error', activity: data.activity, id: data.id };
-  } catch (err) {
-    return { ok: false, status: 'error', error: err instanceof Error ? err.message : String(err) };
-  }
-}
+// Funnel order so "Stage" sorts by pipeline position, not alphabetically.
+const LEAD_STAGE_ORDER = { New: 0, Contact: 1, Qualified: 2, Customer: 3, Lost: 4 };
 
-async function fetchActivities({ accountId, leadId, dealId, companyId }) {
-  const q = new URLSearchParams();
-  if (accountId) q.set('accountId', accountId);
-  if (leadId) q.set('leadId', leadId);
-  if (dealId) q.set('dealId', dealId);
-  if (companyId) q.set('companyId', companyId);
-  try {
-    const resp = await fetch(`/api/hub/revenue/activity?${q.toString()}`);
-    const data = await resp.json().catch(() => ({}));
-    return { ok: resp.ok, status: data.status || 'error', activities: Array.isArray(data.activities) ? data.activities : [] };
-  } catch {
-    return { ok: false, status: 'error', activities: [] };
-  }
-}
-
-// Cross-tab navigation path for a logical CRM entity, staying in the caller's workspace.
-// classin workspace uses its own routes (revenue=Leads, pipeline=Deals, accounts=Accounts);
-// elsewhere the standalone revenue routes — so a jump never drops the operator into a
-// different workspace.
-function crmTabPath(workspace, tab, params = '') {
-  const map = workspace === 'classin'
-    ? { leads: 'dashboard/classin/revenue', deals: 'dashboard/classin/pipeline', accounts: 'dashboard/classin/accounts' }
-    : { leads: 'dashboard/revenue/leads', deals: 'dashboard/revenue/deals', accounts: 'dashboard/revenue/accounts' };
-  return (map[tab] || map.leads) + params;
+// Sort a lead list by the active column. Value sorts numerically (parsed), Stage by funnel
+// position, everything else case-insensitively. Returns the input untouched when no key is set.
+function sortLeads(list, sort) {
+  if (!sort.key) return list;
+  const dir = sort.dir === 'asc' ? 1 : -1;
+  const keyOf = (l) => {
+    if (sort.key === 'value') return parseAmount(l.value);
+    if (sort.key === 'score') return Number(l.score) || 0;
+    if (sort.key === 'stage') return LEAD_STAGE_ORDER[l.stage] ?? 99;
+    return String(l[sort.key] || '').toLowerCase();
+  };
+  return [...list].sort((a, b) => {
+    const va = keyOf(a), vb = keyOf(b);
+    return va < vb ? -dir : va > vb ? dir : 0;
+  });
 }
 
 function formatPercentDelta(current, previous) {
@@ -91,14 +76,13 @@ function formatPercentDelta(current, previous) {
 function buildRevenueAttention(leads, deals) {
   const items = [];
   deals
-    .filter((deal) => deal.stage !== 'won' && deal.stage !== 'lost' && Number(deal.age) > 10)
+    .filter((deal) => deal.stage !== 'closing' && deal.stage !== 'lost' && Number(deal.age) >= STALLED_DAYS)
     .slice(0, 3)
     .forEach((deal) => {
       items.push({
         tone: 'warning',
         t: `${deal.name} — ${deal.age}d stalled`,
         s: 'follow-up 필요',
-        go: 'dashboard/revenue/deals',
       });
     });
 
@@ -108,93 +92,99 @@ function buildRevenueAttention(leads, deals) {
       tone: 'info',
       t: `신규 리드 ${newLeads}건`,
       s: '분류·할당 필요',
-      go: 'dashboard/revenue/leads',
     });
   }
 
-  const wonDeals = deals.filter((deal) => deal.stage === 'won');
+  const wonDeals = deals.filter((deal) => deal.stage === 'closing');
   if (wonDeals.length > 0) {
     const wonTotal = wonDeals.reduce((sum, deal) => sum + deal.value, 0);
     items.push({
       tone: 'success',
       t: `Won ${wonDeals.length}건 · ${fmt(wonTotal)}`,
       s: '온보딩 킥오프',
-      go: 'dashboard/revenue/accounts',
     });
   }
 
   return items.slice(0, 4);
 }
 
-const FALLBACK_ACCOUNTS = [
-  { name: '클래스인',        type: 'company',  deals: 2, value: 18000000, last: '오늘',    lastAt: '11:02', health: 'warning', owner: 'Me' },
-  { name: 'Studio Park',     type: 'company',  deals: 1, value: 6000000,  last: '3일 전',  lastAt: '3d',    health: 'ok',      owner: 'Me' },
-  { name: 'Beanly Coffee',   type: 'company',  deals: 1, value: 4200000,  last: '오늘',    lastAt: '14:15', health: 'ok',      owner: 'Council' },
-  { name: 'Han 스튜디오',    type: 'company',  deals: 1, value: 3500000,  last: '5일 전',  lastAt: '5d',    health: 'warning', owner: 'Me' },
-  { name: '베어브릭',         type: 'company',  deals: 1, value: 7800000,  last: '2주 전',  lastAt: '14d',   health: 'ok',      owner: 'Me' },
-  { name: '이재민',           type: 'personal', deals: 1, value: 1200000,  last: '오늘',    lastAt: '08:45', health: 'ok',      owner: 'Me' },
-  { name: '정하윤',           type: 'personal', deals: 1, value: 900000,   last: '어제',    lastAt: '1d',    health: 'ok',      owner: 'Me' },
-  { name: 'Jihoon (코칭)',    type: 'personal', deals: 1, value: 600000,   last: '오늘',    lastAt: '16:00', health: 'ok',      owner: 'Me' },
-];
-
-const FALLBACK_CASES = [
-  { id: 'CS-104', title: 'Spring Cohort 계약 검토', account: '클래스인', type: 'company', status: 'Open', priority: 'high', opened: '3일 전', owner: 'Me' },
-  { id: 'CS-103', title: '결제 영수증 재발행', account: '이재민', type: 'personal', status: 'Waiting', priority: 'low', opened: '어제', owner: 'Automation' },
-  { id: 'CS-102', title: '뉴스레터 구독 취소 이슈', account: 'Studio Park', type: 'company', status: 'Open', priority: 'med', opened: '2일 전', owner: 'Me' },
-  { id: 'CS-101', title: '도메인 인증 재설정', account: 'Moonlight', type: 'company', status: 'Resolved', priority: 'med', opened: '5일 전', owner: 'Me' },
-  { id: 'CS-099', title: '코칭 일정 재조정', account: 'Jihoon', type: 'personal', status: 'Resolved', priority: 'low', opened: '지난 주', owner: 'Me' },
-];
-
-function useRevenueLedger() {
+export function useRevenueLedger() {
   const [ledger, setLedger] = React.useState({
-    source: 'mock',
-    leads: FALLBACK_LEADS,
-    deals: FALLBACK_DEALS,
-    stages: FALLBACK_DEAL_STAGES,
-    accounts: FALLBACK_ACCOUNTS,
-    cases: FALLBACK_CASES,
+    source: 'preview',
+    leads: [],
+    deals: [],
+    stages: [],
+    accounts: [],
+    cases: [],
+    contacts: [],
+    companies: [],
     summary: null,
   });
-  const [syncState, setSyncState] = React.useState('mock');
-  // Bump to re-run the fetch effect. reload() surfaces it so callers (business-card promote,
-  // score recompute) can refresh the ledger in place instead of a full window reload.
-  const [reloadTick, setReloadTick] = React.useState(0);
-  const reload = React.useCallback(() => setReloadTick(t => t + 1), []);
+  const [syncState, setSyncState] = React.useState('preview');
 
   React.useEffect(() => {
     let active = true;
-    async function load() {
+    let retryTimer = null;
+    // dev 리컴파일·순간 네트워크 실패로 첫 fetch가 죽으면 preview에 고착됐다 —
+    // 실패 1회는 1.2초 뒤 재시도하고, 그래도 실패하면 정직하게 preview로 남긴다.
+    async function load(attempt = 0) {
       setSyncState('loading');
       try {
         const response = await fetch('/api/hub/revenue', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
-        if (!active || !response.ok || !data || data.status === 'error') {
-          if (active) setSyncState('mock');
+        if (!active) return;
+        if (!response.ok || !data || data.status === 'error') {
+          if (attempt === 0) {
+            retryTimer = setTimeout(() => { if (active) load(1); }, 1200);
+          } else {
+            setSyncState('preview');
+          }
           return;
         }
-        if (data.source === 'supabase') {
-          setLedger({
-            source: 'supabase',
-            leads: Array.isArray(data.leads) ? data.leads : [],
-            deals: Array.isArray(data.deals) ? data.deals : [],
-            stages: Array.isArray(data.stages) && data.stages.length ? data.stages : FALLBACK_DEAL_STAGES,
-            accounts: Array.isArray(data.accounts) ? data.accounts : [],
-            cases: Array.isArray(data.cases) ? data.cases : [],
-            summary: data.summary || null,
-          });
-          setSyncState('live');
-        } else {
-          setSyncState('mock');
-        }
+        setLedger({
+          source: data.source === 'supabase' ? 'supabase' : 'preview',
+          leads: Array.isArray(data.leads) ? data.leads : [],
+          deals: Array.isArray(data.deals) ? data.deals : [],
+          stages: Array.isArray(data.stages) ? data.stages : [],
+          accounts: Array.isArray(data.accounts) ? data.accounts : [],
+          cases: Array.isArray(data.cases) ? data.cases : [],
+          contacts: Array.isArray(data.contacts) ? data.contacts : [],
+          companies: Array.isArray(data.companies) ? data.companies : [],
+          summary: data.summary || null,
+        });
+        setSyncState(data.source === 'supabase' ? 'live' : 'preview');
       } catch {
-        if (active) setSyncState('mock');
+        if (!active) return;
+        if (attempt === 0) {
+          retryTimer = setTimeout(() => { if (active) load(1); }, 1200);
+        } else {
+          setSyncState('preview');
+        }
       }
     }
     load();
-    return () => { active = false; };
-  }, [reloadTick]);
+    return () => { active = false; clearTimeout(retryTimer); };
+  }, []);
 
-  return { ledger, syncState, reload };
+  return { ledger, syncState };
+}
+
+// Persist a Revenue drawer edit to the Supabase-backed write route. `kind` is
+// 'lead' | 'deal' | 'case', `op` is 'create' | 'update' | 'delete'. Returns
+// { ok, status, id } — `ok` is true only when the row actually saved; 'preview' means the
+// backend isn't configured (or the DB refused the write) and the optimistic local row stands.
+export async function saveRevenueRecord(kind, op, record) {
+  try {
+    const resp = await fetch(`/api/hub/revenue/${kind}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ op, ...record }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    return { ok: resp.ok && data.status === 'saved', status: data.status || 'error', id: data.id, data };
+  } catch (err) {
+    return { ok: false, status: 'error', error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 function GuruCoachPanel({ onNavigate }) {
@@ -241,8 +231,8 @@ function GuruCoachPanel({ onNavigate }) {
 
       {state === 'loading' && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
-          <div style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
-          원장을 읽고 코칭을 정리하는 중…
+          <div style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.4s ease-in-out infinite' }} />
+          기록을 읽고 코칭을 정리하는 중…
         </div>
       )}
 
@@ -269,78 +259,6 @@ function GuruCoachPanel({ onNavigate }) {
   );
 }
 
-// Compact "오늘 팔로업" strip — surfaces the top overdue items from getFollowups on the Overview
-// + Deals board so the operator sees who to contact without leaving the page. Silent in preview /
-// when empty (mock/live discipline). 기록 dual-writes (outcome + activity, same as QuickLogBar);
-// 스누즈 sets meta.snooze_until so getFollowups suppresses the row until due.
-function TodayFollowupStrip({ onNavigate, workspace, limit = 5 }) {
-  const [state, setState] = React.useState({ status: 'loading', items: [], summary: {} });
-  const [done, setDone] = React.useState({});
-
-  React.useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const r = await fetch('/api/hub/followups', { cache: 'no-store' });
-        const d = await r.json().catch(() => null);
-        if (!alive) return;
-        if (!r.ok || !d) { setState(s => ({ ...s, status: 'error' })); return; }
-        setState({ status: d.status === 'live' ? 'live' : 'preview', items: Array.isArray(d.items) ? d.items.slice(0, limit) : [], summary: d.summary || {} });
-      } catch { if (alive) setState(s => ({ ...s, status: 'error' })); }
-    })();
-    return () => { alive = false; };
-  }, [limit]);
-
-  const idPayload = (item) => ({ leadId: item.kind === 'lead' ? item.id : null, dealId: item.kind === 'deal' ? item.id : null });
-  const logTouch = (item) => {
-    setDone(m => ({ ...m, [item.id]: '기록됨' }));
-    fetch('/api/integrations/outcomes/record', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...idPayload(item), channel: item.channel, action: 'sent', play: 'followup', note: `${item.name} · ${item.why}` }) }).catch(() => {});
-    fetch('/api/hub/revenue/activity', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op: 'create', ...idPayload(item), entityType: item.kind, kind: 'call', body: `${item.channel} 접촉 · ${item.name}` }) }).catch(() => {});
-  };
-  const snooze = (item, days) => {
-    const until = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
-    setDone(m => ({ ...m, [item.id]: `${until}까지` }));
-    saveRevenueRecord(item.kind, 'update', { id: item.id, snooze_until: until });
-  };
-
-  const { status, items, summary } = state;
-  if (status !== 'live' || items.length === 0) return null;
-
-  return (
-    <Card>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <Iconed name="bell" size={14} style={{ color: 'var(--moon-300)' }} />
-        <span style={{ fontSize: 12.5, fontWeight: 600 }}>오늘 팔로업</span>
-        <Badge tone="danger" size="xs">{summary.overdue ?? items.length} overdue</Badge>
-        <div style={{ flex: 1 }} />
-        <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/revenue/followups')}>전체</Button>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {items.map((item, i) => (
-          <div key={`${item.kind}-${item.id}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderTop: i > 0 ? '1px solid var(--line-soft)' : 'none', opacity: done[item.id] ? 0.55 : 1, minWidth: 0 }}>
-            <Badge tone="moon" size="xs">{item.channel}</Badge>
-            <button
-              onClick={() => onNavigate?.(crmTabPath(workspace, item.kind === 'lead' ? 'leads' : 'deals', `?${item.kind === 'lead' ? 'lead' : 'deal'}=${encodeURIComponent(item.id)}`))}
-              title="열기"
-              style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap', color: 'var(--fg)', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
-            >{item.name}</button>
-            <span style={{ fontSize: 11.5, color: 'var(--fg-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{item.why}</span>
-            <div style={{ flex: 1 }} />
-            {done[item.id] ? (
-              <span style={{ fontSize: 11, color: 'var(--success)', whiteSpace: 'nowrap' }}>{done[item.id]}</span>
-            ) : (
-              <>
-                <Button variant="outline" size="xs" onClick={() => logTouch(item)}>기록</Button>
-                <Button variant="ghost" size="xs" onClick={() => snooze(item, 3)}>3일</Button>
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
 export function RevenueOverview({ onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
   const [period, setPeriod] = React.useState('MTD');
@@ -349,9 +267,8 @@ export function RevenueOverview({ onNavigate }) {
   const DEAL_STAGES = ledger.stages;
   const summary = ledger.summary;
   const isLiveLedger = ledger.source === 'supabase';
-
-  const mrr = summary?.mrr ?? (isLiveLedger ? 0 : 8400000);
-  const mrrPrev = summary?.mrrPrev ?? (isLiveLedger ? 0 : 7500000);
+  const mrr = summary?.mrr ?? 0;
+  const mrrPrev = summary?.mrrPrev ?? 0;
   const pipelineByStage = DEAL_STAGES.map(s => ({
     ...s,
     sum: DEALS.filter(d => d.stage === s.key).reduce((a, b) => a + b.value, 0),
@@ -360,55 +277,13 @@ export function RevenueOverview({ onNavigate }) {
   const hasPipelineValue = pipelineByStage.some(s => s.sum > 0);
   const pipeline = summary?.pipeline ?? pipelineByStage.reduce((a, b) => a + b.sum, 0);
   const openLeads = summary?.leadsCount ?? LEADS.length;
-  const openDeals = summary?.openDeals ?? DEALS.filter(d => d.stage !== 'won').length;
-  const wonMTD = summary?.wonMTD ?? DEALS.filter(d => d.stage === 'won').reduce((a, b) => a + b.value, 0);
-  const newThisMonth = summary?.newThisMonth ?? (isLiveLedger ? 0 : 12);
-  const wonDealsCount = DEALS.filter(d => d.stage === 'won').length;
-  // Live join: group won-deal value by the deal's brand meta (mapDeal → resolveBrand).
-  // Brands outside the BRANDS registry still show, with a neutral glyph and their raw key.
-  const byBrand = isLiveLedger
-    ? (() => {
-      const sums = new Map();
-      DEALS.filter(d => d.stage === 'won' && d.brand).forEach(d => {
-        sums.set(d.brand, (sums.get(d.brand) || 0) + Number(d.value || 0));
-      });
-      return [...sums.entries()]
-        .map(([key, mrr]) => {
-          const meta = BRANDS.find(b => b.key === key);
-          return { key, name: meta?.name || key, glyph: meta?.glyph || '◾', mrr };
-        })
-        .sort((a, b) => b.mrr - a.mrr)
-        .slice(0, 6);
-    })()
-    : BRANDS.filter(b => b.key !== 'all').slice(0, 6).map((b, i) => ({
-      ...b,
-      mrr: [2.4, 1.8, 0.6, 2.0, 0.9, 0.7][i] * 1000000,
-    }));
+  const openDeals = summary?.openDeals ?? DEALS.filter(d => d.stage !== 'closing').length;
+  const wonMTD = summary?.wonMTD ?? DEALS.filter(d => d.stage === 'closing').reduce((a, b) => a + b.value, 0);
+  const newThisMonth = summary?.newThisMonth ?? 0;
+  const wonDealsCount = DEALS.filter(d => d.stage === 'closing').length;
+  const byBrand = [];
   const totalBrandMRR = byBrand.reduce((a, b) => a + b.mrr, 0);
-  const attentionItems = isLiveLedger
-    ? buildRevenueAttention(LEADS, DEALS)
-    : [
-      { tone: 'danger', t: '클래스인 — 계약서 응답 2일째', s: '리마인드 메일 추천', go: 'dashboard/revenue/deals' },
-      { tone: 'warning', t: 'Studio Park — 제안서 14일 정체', s: 'follow-up 필요', go: 'dashboard/revenue/deals' },
-      { tone: 'info', t: '이번 주 신규 리드 +12', s: '분류·할당 필요', go: 'dashboard/revenue/leads' },
-      { tone: 'success', t: 'Won: 베어브릭 콜라보 ₩7.8M', s: '온보딩 킥오프', go: 'dashboard/revenue/accounts' },
-    ];
-
-  // Summary data stays month-scope until the ledger exposes QTD/YTD aggregates —
-  // the toggle drives the caption so the header never shows a stale hardcoded month.
-  const now = new Date();
-  const periodLabel = period === 'QTD'
-    ? `Q${Math.floor(now.getMonth() / 3) + 1} · 분기 요약`
-    : period === 'YTD'
-    ? `${now.getFullYear()}년 · 연간 요약`
-    : `${now.getMonth() + 1}월 · 이번 달 요약`;
-
-  const kpis = [
-    { l: isLiveLedger ? 'MRR (추정)' : 'MRR', v: fmt(mrr), d: isLiveLedger ? 'won MTD 기반 추정' : formatPercentDelta(mrr, mrrPrev), tone: mrr > mrrPrev ? 'success' : 'neutral', go: 'dashboard/revenue/accounts', trend: isLiveLedger ? null : [6.2, 6.8, 6.5, 7.1, 7.5, 7.5, 8.4], trendTone: 'success' },
-    { l: 'Pipeline', v: fmt(pipeline), d: `${openDeals} deals`, tone: 'moon', go: 'dashboard/revenue/deals', trend: isLiveLedger ? null : [24, 28, 26, 31, 30, 33, 33.5], trendTone: 'moon' },
-    { l: 'Open leads', v: openLeads, d: `이번달 신규 ${newThisMonth}`, tone: 'info', go: 'dashboard/revenue/leads', trend: isLiveLedger ? null : [3, 5, 4, 7, 9, 12, 12], trendTone: 'moon' },
-    { l: 'Won MTD', v: fmt(wonMTD), d: `${wonDealsCount} deals`, tone: wonMTD > 0 ? 'success' : 'neutral', go: 'dashboard/revenue/deals', trend: null },
-  ];
+  const attentionItems = buildRevenueAttention(LEADS, DEALS);
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
@@ -416,54 +291,45 @@ export function RevenueOverview({ onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Revenue overview</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            {periodLabel}<SyncBadge state={syncState} />
+            {new Intl.DateTimeFormat('ko-KR', { month: 'long' }).format(new Date())} · 이번 달 요약<SyncBadge state={syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
         <SegmentedControl
           className="hub-page-actions"
-          options={['MTD','QTD','YTD'].map(p => ({ key: p, label: p }))}
+          options={['MTD', 'QTD', 'YTD'].map(p => ({ key: p, label: p }))}
           value={period}
           onChange={setPeriod}
         />
       </div>
 
-      <TodayFollowupStrip onNavigate={onNavigate} />
-      <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--gap)' }}>
-        {kpis.map((k) => (
-          <Card key={k.l} interactive onClick={() => onNavigate?.(k.go)}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>{k.l}</span>
-              <span style={{ flex: 1 }} />
-              <Iconed name="arrowRight" size={11} style={{ color: 'var(--fg-faint)', opacity: 0.6 }} />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
-              <div className="mono" style={{ fontSize: 26, marginTop: 10, fontWeight: 500 }}>{k.v}</div>
-              <div style={{ flex: 1 }} />
-              {k.trend && (
-                <span style={{ marginBottom: 4 }}>
-                  <Sparkline values={k.trend} width={60} height={18} tone={k.trendTone} />
-                </span>
-              )}
-            </div>
-            <div style={{ fontSize: 11, color: k.tone === 'neutral' ? 'var(--fg-faint)' : `var(--${k.tone})`, marginTop: 4 }}>{k.d}</div>
+      <div className="hub-grid--metrics stagger-up" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
+        {[
+          { l: 'MRR', v: fmt(mrr), d: formatPercentDelta(mrr, mrrPrev), tone: mrr > mrrPrev ? 'success' : 'neutral' },
+          { l: 'Pipeline', v: fmt(pipeline), d: `${openDeals} deals`, tone: 'moon' },
+          { l: 'Open leads', v: openLeads, d: `이번달 신규 ${newThisMonth}`, tone: 'info' },
+          { l: 'Won MTD', v: fmt(wonMTD), d: `${wonDealsCount} deals`, tone: wonMTD > 0 ? 'success' : 'neutral' },
+        ].map((k, i) => (
+          <Card key={i}>
+            <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>{k.l}</div>
+            <div className="stat" style={{ fontSize: 28, marginTop: 10, fontWeight: 600, lineHeight: 1.1 }}>{k.v}</div>
+            <div style={{ fontSize: 11, color: k.tone === 'neutral' ? 'var(--fg-faint)' : `var(--${k.tone})`, marginTop: 6 }}>{k.d}</div>
           </Card>
         ))}
       </div>
 
-      <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(0, 1fr)', gap: 'var(--gap)' }}>
+      <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 'var(--gap)' }}>
         <Card>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>Pipeline by stage</div>
             <div style={{ flex: 1 }} />
-            <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{fmt(pipeline)}</span>
-            <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/revenue/deals')}>Deals</Button>
+            <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{fmt(pipeline)}</span>
           </div>
           <div style={{ display: 'flex', height: 28, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--line-soft)' }}>
             {hasPipelineValue ? pipelineByStage.map(s => (
               <div key={s.key} title={`${s.label} · ${fmt(s.sum)}`} style={{
                 flex: s.sum,
-                background: `var(--${s.color === 'neutral' ? 'fg-faint' : s.color === 'moon' ? 'moon-500' : s.color})`,
+                background: STAGE_FILL[s.color],
                 opacity: 0.9,
               }} />
             )) : (
@@ -473,7 +339,7 @@ export function RevenueOverview({ onNavigate }) {
           <div style={{ display: 'flex', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
             {pipelineByStage.map(s => (
               <div key={s.key} style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <Dot tone={s.color} />
+                <span aria-hidden style={{ width: 6, height: 6, borderRadius: 999, background: STAGE_FILL[s.color], flexShrink: 0 }} />
                 <span style={{ color: 'var(--fg)' }}>{s.label}</span>
                 <span className="mono" style={{ color: 'var(--fg-faint)' }}>{fmt(s.sum)} · {s.count}</span>
               </div>
@@ -488,7 +354,7 @@ export function RevenueOverview({ onNavigate }) {
               <EmptyState
                 icon="revenue"
                 title="브랜드별 매출 집계 없음"
-                description="won 딜에 brand 메타가 붙으면 여기 자동 집계됩니다. (딜 meta.brand · Supabase live)"
+                description="Supabase revenue 기록은 live입니다. 브랜드별 매출 join이 준비되면 이 패널이 자동으로 채워집니다."
                 style={{ minHeight: 170, padding: '22px 12px' }}
               />
             )}
@@ -501,7 +367,7 @@ export function RevenueOverview({ onNavigate }) {
                     <div style={{ width: totalBrandMRR > 0 ? `${(b.mrr / totalBrandMRR) * 100}%` : '0%', height: '100%', background: 'var(--moon-400)' }} />
                   </div>
                 </div>
-                <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', textAlign: 'right' }}>{fmt(b.mrr)}</span>
+                <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', textAlign: 'right' }}>{fmt(b.mrr)}</span>
               </div>
             ))}
           </div>
@@ -510,16 +376,12 @@ export function RevenueOverview({ onNavigate }) {
 
       <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>Top deals</div>
-            <div style={{ flex: 1 }} />
-            <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/revenue/deals')}>전체 보기</Button>
-          </div>
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Top deals</div>
           {DEALS.length === 0 && (
             <EmptyState
               icon="deals"
               title="딜이 없습니다"
-              description={isLiveLedger ? 'Supabase deals 원장에 표시할 딜이 없습니다.' : '딜이 생기면 금액순으로 표시됩니다.'}
+              description={isLiveLedger ? 'Supabase deals 기록에 표시할 딜이 없습니다.' : '딜이 생기면 금액순으로 표시됩니다.'}
               style={{ minHeight: 170, padding: '22px 12px' }}
             />
           )}
@@ -546,23 +408,12 @@ export function RevenueOverview({ onNavigate }) {
             />
           )}
           {attentionItems.map((x, i, arr) => (
-            <div key={i}
-              onClick={() => x.go && onNavigate?.(x.go)}
-              onMouseEnter={e => { if (x.go) e.currentTarget.style.background = 'var(--surface-2)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-              style={{
-                display: 'flex', alignItems: 'flex-start', gap: 10,
-                padding: '9px 8px', margin: '0 -8px', borderRadius: 'var(--r-sm)',
-                cursor: x.go ? 'pointer' : 'default',
-                borderBottom: i < arr.length - 1 ? '1px solid var(--line-soft)' : 'none',
-              }}
-            >
+            <div key={i} style={{ display: 'flex', gap: 10, padding: '9px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
               <Dot tone={x.tone} />
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div>
                 <div style={{ fontSize: 12.5 }}>{x.t}</div>
                 <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 2 }}>{x.s}</div>
               </div>
-              {x.go && <Iconed name="chevronR" size={12} style={{ color: 'var(--fg-faint)', marginTop: 2, flexShrink: 0 }} />}
             </div>
           ))}
         </Card>
@@ -574,305 +425,135 @@ export function RevenueOverview({ onNavigate }) {
 }
 
 // Shared grid template for Leads rows — gap between columns so badges never butt the next cell
-const LEADS_GRID = '26px 1fr 112px 112px 124px 64px 100px 90px 92px';
+const LEADS_GRID = '26px 1fr 112px 112px 124px 100px 90px 92px';
 
-// Compact meta tags under a lead name — 지역·규모·현재 상황·도입 댓수 (blank ones are skipped).
-function LeadTagChips({ lead }) {
-  const chips = [];
-  if (lead.region) chips.push({ icon: 'globe', text: lead.region });
-  if (lead.units) chips.push({ icon: 'tag', text: `${lead.units}대` });
-  if (lead.scale) chips.push({ icon: null, text: lead.scale });
-  if (lead.situation) chips.push({ icon: null, text: lead.situation });
-  if (chips.length === 0) return null;
-  return (
-    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 3 }}>
-      {chips.map((c, i) => (
-        <span key={i} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 3,
-          fontSize: 10, color: 'var(--fg-faint)',
-          background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
-          borderRadius: 4, padding: '1px 6px',
-          whiteSpace: 'nowrap', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis',
-        }}>
-          {c.icon && <Iconed name={c.icon} size={9} />}
-          {c.text}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-// Mini kanban-card chips for a joined lead — reuses LeadTagChips' visual language (region · units)
-// but inline and capped at 2 so the card height gain stays ≤ 1 line. Renders null when absent.
-function DealLeadMiniChips({ lead }) {
+export function LeadEnrichmentPanel({ lead }) {
   if (!lead) return null;
-  const chips = [];
-  if (lead.region) chips.push({ icon: 'globe', text: lead.region });
-  if (lead.units) chips.push({ icon: 'tag', text: `${lead.units}대` });
-  if (chips.length === 0) return null;
-  return (
-    <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap', marginBottom: 8, overflow: 'hidden' }}>
-      {chips.slice(0, 2).map((c, i) => (
-        <span key={i} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 3,
-          fontSize: 9.5, color: 'var(--fg-faint)',
-          background: 'var(--surface-3)', border: '1px solid var(--line-soft)',
-          borderRadius: 4, padding: '1px 5px',
-          whiteSpace: 'nowrap', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis',
-        }}>
-          {c.icon && <Iconed name={c.icon} size={8} />}
-          {c.text}
-        </span>
-      ))}
-    </div>
-  );
-}
+  const summary = buildLeadTagSummary(lead.enrichmentTags || []);
+  const calendar = lead.activityEvidence?.calendar || {};
+  const directTouchCount = ['meeting', 'call', 'infoSession', 'other']
+    .reduce((sum, key) => sum + (Number(calendar[key]) || 0), 0);
+  const rows = [
+    ['과목', summary.subjects],
+    ['지역', summary.regions],
+    ['직접 접점', summary.directActivities],
+    ['접점 소스', summary.activitySources],
+    ['공개 신호', summary.publicSignals],
+    ['프로그램', summary.programs],
+    ['공개 채널', summary.channels],
+  ].filter(([, values]) => values.length > 0);
+  const hasRelationship = Boolean(lead.companyName || lead.contactName || lead.contactEmail || lead.contactPhone);
+  const hasEnrichment = rows.length > 0 || lead.engagementState === 'present' || lead.publicEvidenceCount > 0;
 
-const QUICK_LOG_CHANNELS = [
-  { key: 'call', label: '전화', channel: '전화', kind: 'call' },
-  { key: 'dm', label: 'DM', channel: 'DM', kind: 'note' },
-  { key: 'visit', label: '방문', channel: '방문', kind: 'visit' },
-  { key: 'kakao', label: '카톡', channel: '카톡', kind: 'note' },
-];
-const QUICK_SNOOZE = [{ label: '내일', days: 1 }, { label: '3일', days: 3 }, { label: '1주', days: 7 }];
-
-// One-click channel log for the Lead/Deal drawer. Dual-writes: crm_activities (durable timeline,
-// read by DrawerTimeline) + outreach_outcomes (feeds tomorrow's follow-up priority — same endpoint
-// followups.jsx uses). Snooze sets meta.snooze_until so getFollowups suppresses the row until due.
-// No-ops gracefully for unsaved local rows (no id to attach to yet).
-function QuickLogBar({ entityType, entityId }) {
-  const [busy, setBusy] = React.useState(null);
-  const [logged, setLogged] = React.useState(null);
-  const [snoozed, setSnoozed] = React.useState(null);
-  const isLocal = String(entityId ?? '').toLowerCase().startsWith('local-');
-  const idKey = entityType === 'lead' ? 'leadId' : 'dealId';
-
-  const log = async (ch) => {
-    setBusy(ch.key);
-    await saveActivity('create', { [idKey]: isLocal ? null : entityId, entityType, kind: ch.kind, body: `${ch.label} 접촉` });
-    try {
-      await fetch('/api/integrations/outcomes/record', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          leadId: entityType === 'lead' && !isLocal ? entityId : null,
-          dealId: entityType === 'deal' && !isLocal ? entityId : null,
-          channel: ch.channel, action: 'sent', play: 'followup', note: `${ch.label} 접촉 기록`,
-        }),
-      });
-    } catch { /* non-fatal — the timeline entry is already saved */ }
-    setLogged(ch.label);
-    setBusy(null);
-  };
-
-  const snooze = async (days) => {
-    setBusy(`s${days}`);
-    const until = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
-    await saveRevenueRecord(entityType, 'update', { id: entityId, snooze_until: until });
-    setSnoozed(until);
-    setBusy(null);
-  };
+  if (!hasRelationship && !hasEnrichment && !lead.nextAction) return null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)' }}>
-      <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0, color: 'var(--fg-faint)', minWidth: 54 }}>빠른 기록</span>
-        {QUICK_LOG_CHANNELS.map(ch => (
-          <Button key={ch.key} variant="outline" size="xs" onClick={() => log(ch)} active={busy === ch.key} disabled={Boolean(busy)}>
-            {busy === ch.key ? '…' : ch.label}
-          </Button>
-        ))}
-        {logged && <span style={{ fontSize: 11, color: 'var(--success)' }}>{logged} 기록됨</span>}
-      </div>
-      <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0, color: 'var(--fg-faint)', minWidth: 54 }}>다음 팔로업</span>
-        {QUICK_SNOOZE.map(o => (
-          <Button key={o.days} variant="ghost" size="xs" onClick={() => snooze(o.days)} active={busy === `s${o.days}`} disabled={Boolean(busy)}>
-            {o.label}
-          </Button>
-        ))}
-        {snoozed && <span style={{ fontSize: 11, color: 'var(--moon-200)' }}>{snoozed}까지 스누즈</span>}
-      </div>
-      {isLocal && <span style={{ fontSize: 10, color: 'var(--fg-faint)' }}>저장 후 기록·스누즈가 원장에 반영됩니다.</span>}
-    </div>
-  );
-}
-
-// Reusable activity timeline for the Lead/Deal EditDrawer children slot. Mirrors the Accounts
-// optimistic pattern (pushActivity tmp-id → server id swap + in-flight merge). Skips entirely for
-// unsaved local rows; in preview (no live ledger) shows a muted note instead of fabricating rows.
-function DrawerTimeline({ entityType, entityId, title = '활동 타임라인' }) {
-  const isLocal = String(entityId ?? '').startsWith('local-') || String(entityId ?? '').toLowerCase().startsWith('local-');
-  const [rows, setRows] = React.useState([]);
-  const [phase, setPhase] = React.useState('idle'); // idle | loading | live | preview
-  const [kind, setKind] = React.useState('call');
-  const [body, setBody] = React.useState('');
-  const [saving, setSaving] = React.useState(false);
-
-  React.useEffect(() => {
-    if (isLocal || !entityId) { setRows([]); setPhase('idle'); return undefined; }
-    let cancelled = false;
-    setPhase('loading');
-    setRows([]);
-    const q = entityType === 'deal' ? { dealId: entityId } : { leadId: entityId };
-    fetchActivities(q).then(res => {
-      if (cancelled) return;
-      if (res.status === 'live') {
-        setRows(res.activities.map(a => ({ id: a.id, kind: a.kind, body: a.body, at: a.at, who: a.who })));
-        setPhase('live');
-      } else {
-        setPhase('preview');
-      }
-    });
-    return () => { cancelled = true; };
-  }, [entityType, entityId, isLocal]);
-
-  if (isLocal || !entityId) return null;
-
-  const log = async () => {
-    const text = body.trim();
-    if (!text || saving) return;
-    const tmp = `tmp-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-    setRows(prev => [{ id: tmp, kind, body: text, at: '방금', who: 'Me' }, ...prev]);
-    setBody('');
-    setSaving(true);
-    const payload = entityType === 'deal'
-      ? { dealId: entityId, entityType: 'deal', kind, body: text }
-      : { leadId: entityId, entityType: 'lead', kind, body: text };
-    const r = await saveActivity('create', payload);
-    setSaving(false);
-    if (r.ok && r.activity) {
-      setRows(prev => prev.map(a => a.id === tmp
-        ? { id: r.activity.id, kind: r.activity.kind, body: r.activity.body, at: r.activity.at, who: r.activity.who }
-        : a));
-    }
-  };
-
-  const visible = rows.slice(0, 30);
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-      <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)' }}>{title}</div>
-
-      {/* Mini composer */}
-      <div style={{
-        background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
-        borderRadius: 'var(--r-sm)', padding: 8, display: 'flex', flexDirection: 'column', gap: 8,
-      }}>
-        <textarea
-          aria-label="활동 기록"
-          value={body}
-          onChange={e => setBody(e.target.value)}
-          placeholder="활동 기록… (통화·미팅·이메일 메모)"
-          rows={2}
-          style={{
-            width: '100%', resize: 'vertical', background: 'transparent', border: 'none', outline: 'none',
-            color: 'var(--fg)', fontSize: 12.5, fontFamily: 'inherit', lineHeight: 1.5,
-          }}
-        />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <select
-          aria-label="활동 유형"
-          value={kind}
-            onChange={e => setKind(e.target.value)}
-            style={{
-              height: 26, padding: '0 8px', fontSize: 11.5,
-              background: 'var(--surface-3)', color: 'var(--fg)',
-              border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', outline: 'none',
-            }}
-          >
-            {ACTIVITY_KIND_OPTIONS.map(k => <option key={k} value={k}>{ACT_LABEL[k]}</option>)}
-          </select>
-          <div style={{ flex: 1 }} />
-          <Button variant="primary" size="xs" onClick={log} disabled={saving || !body.trim()}>기록</Button>
-        </div>
-      </div>
-
-      {/* Timeline rows */}
-      {phase === 'preview' && (
-        <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', padding: '6px 0', lineHeight: 1.5 }}>
-          기록 없음 · Supabase 연결 시 저장됩니다
-        </div>
-      )}
-      {phase === 'live' && visible.length === 0 && (
-        <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', padding: '6px 0' }}>아직 기록이 없습니다.</div>
-      )}
-      {(phase === 'live' || rows.length > 0) && visible.length > 0 && (
-        <div className="scroll-y" style={{ display: 'flex', flexDirection: 'column', maxHeight: 240 }}>
-          {visible.map((a, i) => (
-            <div key={a.id} style={{
-              display: 'grid', gridTemplateColumns: '18px 1fr auto', gap: 10, padding: '9px 0',
-              borderBottom: i < visible.length - 1 ? '1px solid var(--line-soft)' : 'none',
-              alignItems: 'flex-start',
-            }}>
-              <span style={{ color: `var(--${ACT_TONE[a.kind] === 'neutral' ? 'fg-muted' : ACT_TONE[a.kind] || 'fg-muted'})`, marginTop: 1 }}>
-                <Iconed name={ACT_ICON[a.kind] || 'edit'} size={13} />
-              </span>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{a.body}</div>
-                <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3, display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <Badge tone={ACT_TONE[a.kind] || 'neutral'} size="xs" variant="outline">{ACT_LABEL[a.kind] || a.kind}</Badge>
-                  <span>{a.who}</span>
-                </div>
+    <div style={{ padding: 12, border: '1px solid var(--line-soft)', borderRadius: 'var(--r)', background: 'var(--surface-2)', display: 'flex', flexDirection: 'column', gap: 9 }}>
+      {hasRelationship && (
+        <div style={{ display: 'grid', gridTemplateColumns: '68px 1fr', gap: 8, alignItems: 'start' }}>
+          <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>고객 문맥</span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12, color: 'var(--fg)' }}>
+              {[lead.companyName, lead.contactName, lead.contactTitle].filter(Boolean).join(' · ')}
+            </div>
+            {(lead.contactPhone || lead.contactEmail) && (
+              <div className="mono" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 3, fontSize: 10.5, color: 'var(--fg-muted)' }}>
+                {lead.contactPhone && <span>{lead.contactPhone}</span>}
+                {lead.contactEmail && <span>{lead.contactEmail}</span>}
               </div>
-              <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{a.at}</span>
+            )}
+          </div>
+        </div>
+      )}
+      {lead.nextAction && (
+        <div style={{ display: 'grid', gridTemplateColumns: '68px 1fr', gap: 8, alignItems: 'start' }}>
+          <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>다음 행동</span>
+          <div style={{ fontSize: 12, color: 'var(--moon-200)', lineHeight: 1.45 }}>
+            {lead.nextAction}
+            {lead.nextActionAt && <span className="mono" style={{ marginLeft: 7, fontSize: 10.5, color: 'var(--fg-muted)' }}>{String(lead.nextActionAt).slice(0, 10)}</span>}
+          </div>
+        </div>
+      )}
+      {hasEnrichment && (
+        <>
+          <Divider />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ flex: 1, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>분류 · 증거</span>
+            <Badge tone={lead.engagementState === 'present' ? 'info' : 'neutral'} size="xs">
+              {lead.engagementState === 'present' ? `접점 ${directTouchCount || '확인'}` : '접점 미확인'}
+            </Badge>
+            {lead.publicEvidenceCount > 0 && <Badge tone="neutral" size="xs">공개 근거 {lead.publicEvidenceCount}</Badge>}
+          </div>
+          {rows.map(([label, values]) => (
+            <div key={label} style={{ display: 'grid', gridTemplateColumns: '68px 1fr', gap: 8, alignItems: 'start' }}>
+              <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{label}</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                {values.map(value => <Badge key={value} tone="neutral" size="xs" variant="outline">{value}</Badge>)}
+              </div>
             </div>
           ))}
-        </div>
+          {lead.engagementState !== 'present' && (
+            <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', lineHeight: 1.45 }}>
+              확인된 콜·미팅 로그가 없습니다. 공개 설명회·채널 신호는 직접 접점 점수와 분리합니다.
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 }
 
-export function Leads({ workspace, onNavigate }) {
-  const { ledger, syncState, reload } = useRevenueLedger();
+export function Leads({ workspace }) {
+  const { ledger, syncState } = useRevenueLedger();
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const [localLeads, setLocalLeads] = React.useState([]);
   const [leadEdits, setLeadEdits] = React.useState({}); // { [id]: patch } — overlays any lead (local or ledger)
   const [deletedLeadIds, setDeletedLeadIds] = React.useState(() => new Set()); // hide removed ledger rows
   const [editLeadId, setEditLeadId] = React.useState(null);
-  const [leadAddText, setLeadAddText] = React.useState(''); // inline quick-add row text
-  const [convertNote, setConvertNote] = React.useState(null); // { tone, text } — inline 리드→딜 전환 feedback
-  const [toast, setToast] = React.useState(null); // { text } — transient bottom-right feedback (score recompute)
-  const [recomputing, setRecomputing] = React.useState(false);
-  const toastTimerRef = React.useRef(null);
-  const showToast = React.useCallback((text) => {
-    setToast({ text });
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
-  }, []);
-  React.useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
+  // Scope the merged ledger to the active workspace (pass-through when unscoped). The
+  // The ledger hook only exposes API-backed rows — scoping never mixes sources. Drawer
+  // edits overlay onto whichever row (local or ledger) they key to; deletes drop the row.
   const ws = getWorkspace(workspace);
   const mergedLeads = [...localLeads, ...ledger.leads]
     .filter(l => !deletedLeadIds.has(l.id))
     .map(l => (leadEdits[l.id] ? { ...l, ...leadEdits[l.id] } : l));
   const LEADS = filterLeadsByWorkspace(mergedLeads, workspace);
-  const editingLead = editLeadId ? mergedLeads.find(l => l.id === editLeadId) : null;
-
-  // Deep-link: ?lead=<id> opens that lead's EditDrawer once the ledger has loaded and the
-  // lead exists in the merged list. Guarded per param value so closing the drawer is sticky.
-  const leadParam = searchParams.get('lead');
-  const consumedLeadRef = React.useRef(null);
-  React.useEffect(() => {
-    if (!leadParam || syncState === 'loading') return;
-    if (consumedLeadRef.current === leadParam) return;
-    if (mergedLeads.some(l => String(l.id) === String(leadParam))) {
-      consumedLeadRef.current = leadParam;
-      setEditLeadId(leadParam);
-    }
-  }, [leadParam, syncState, mergedLeads]);
   const wsEmpty = Boolean(ws) && LEADS.length === 0;
+  const editingLead = editLeadId ? mergedLeads.find(l => l.id === editLeadId) : null;
   const [filter, setFilter] = React.useState('all');
-  const [stageFilter, setStageFilter] = React.useState('all');
-  const [sortByScore, setSortByScore] = React.useState(false);
   const [search, setSearch] = React.useState('');
+  const [sort, setSort] = React.useState({ key: null, dir: 'asc' });
   const term = search.trim().toLowerCase();
-  const filtered = LEADS.filter(l =>
-    (filter === 'all' || l.type === filter) &&
-    (stageFilter === 'all' || l.stage === stageFilter) &&
-    (!term || l.name.toLowerCase().includes(term) || l.source.toLowerCase().includes(term) || l.stage.toLowerCase().includes(term))
+  const filtered = LEADS.filter(l => {
+    const searchText = [l.name, l.companyName, l.contactName, l.contactPhone, l.contactEmail, l.source, l.stage, l.region, l.nextAction, ...(l.enrichmentTags || [])]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return (filter === 'all' || l.type === filter) && (!term || searchText.includes(term));
+  });
+  const sortedLeads = sortLeads(filtered, sort);
+  // Toggle a column: first click sorts asc, second flips to desc, third clears back to ledger order.
+  const toggleSort = (key) => setSort(s =>
+    s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: null, dir: 'asc' }
   );
-  const visibleLeads = sortByScore ? filtered.slice().sort((a, b) => (b.score || 0) - (a.score || 0)) : filtered;
-  const stageTone = { New: 'info', Contact: 'moon', Qualified: 'success', Lost: 'danger' };
+  // Clickable column header. Reserves the caret's width even when inactive so sorting never
+  // shifts the header layout; active column brightens and shows the direction.
+  const SortHead = ({ k, children, align }) => (
+    <button type="button" onClick={() => toggleSort(k)} title={`${children} 기준 정렬`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3, width: '100%',
+        justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
+        fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
+        color: sort.key === k ? 'var(--fg-muted)' : 'var(--fg-faint)',
+        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+      }}>
+      {children}
+      <span style={{ fontSize: 8, opacity: sort.key === k ? 1 : 0 }}>{sort.dir === 'desc' && sort.key === k ? '▼' : '▲'}</span>
+    </button>
+  );
+  const stageTone = { New: 'info', Contact: 'moon', Qualified: 'moon', Customer: 'company', Lost: 'danger' };
   const createLead = () => {
     const id = `local-lead-${Date.now()}`;
     setLocalLeads(prev => [{
@@ -890,31 +571,9 @@ export function Leads({ workspace, onNavigate }) {
     setEditLeadId(id); // open the editor immediately so the new lead can be filled in
   };
 
-  // Inline quick-add: create a lead from just a name, persist immediately, keep it in the list
-  // (no drawer). Mirrors createLead's minimal shape + persistLead's id-swap on success.
-  const createLeadInline = (name) => {
-    const trimmed = String(name || '').trim();
-    if (!trimmed) return;
-    const id = `local-lead-${Date.now()}`;
-    const lead = {
-      id,
-      name: trimmed,
-      type: filter === 'personal' || filter === 'company' ? filter : 'company',
-      source: 'Manual',
-      stage: 'New',
-      value: '₩0',
-      last: '방금',
-      owner: 'Me',
-      ...(ws ? { workspace } : {}),
-    };
-    setLocalLeads(prev => [lead, ...prev]);
-    saveRevenueRecord('lead', 'create', lead).then(r => {
-      if (r.ok && r.id) setLocalLeads(prev => prev.map(l => (l.id === id ? { ...l, id: r.id } : l)));
-    });
-  };
-
   // Persist the drawer edit. New local rows (id `local-lead-…`) insert; on success the
-  // returned real id replaces the local one so a later edit takes the update path.
+  // returned real id replaces the local one so a later edit takes the update path and the
+  // overlay re-keys onto it. `editingLead` carries the workspace tag → scoped creates stick.
   const persistLead = async () => {
     if (!editingLead) return { ok: false, status: 'error' };
     const isNew = String(editLeadId).startsWith('local-lead-');
@@ -944,65 +603,35 @@ export function Leads({ workspace, onNavigate }) {
     return saveRevenueRecord('lead', 'delete', { id: editLeadId });
   };
 
-  // 리드 → 딜 전환. Creates a deal seeded from the lead (value accepts '₩1.2M' style — parsed
-  // server-side by buildDealWrite), logs a [전환] activity, then deep-links to the pipeline.
-  // Preview (DB down): keep the drawer open and surface an inline note near the button.
-  const [converting, setConverting] = React.useState(false);
-  const convertLeadToDeal = async () => {
-    if (!editingLead || converting) return;
-    setConverting(true);
-    setConvertNote(null);
-    const r = await saveRevenueRecord('deal', 'create', {
-      name: editingLead.name,
-      type: editingLead.type,
-      stage: 'qual',
-      value: editingLead.value,
-      ...(editingLead.workspace ? { workspace: editingLead.workspace } : (ws ? { workspace } : {})),
-    });
-    setConverting(false);
-    if (r.ok && r.id) {
-      saveActivity('create', {
-        leadId: String(editingLead.id).startsWith('local-lead-') ? null : editingLead.id,
-        entityType: 'lead',
-        kind: 'deal',
-        body: `[전환] ${editingLead.name} → 딜 생성`,
-      }).catch(() => {});
-      const target = ws ? 'dashboard/classin/pipeline' : 'dashboard/revenue/deals';
-      onNavigate?.(`${target}?deal=${r.id}`);
-    } else {
-      setConvertNote({
-        tone: r.status === 'preview' ? 'neutral' : 'danger',
-        text: r.status === 'preview'
-          ? '저장 위치(Supabase)가 설정되지 않아 딜을 생성할 수 없습니다.'
-          : '딜 전환에 실패했습니다. 다시 시도하세요.',
-      });
+  // Deep-link: ?lead=<id> opens that lead's EditDrawer once the ledger has loaded and the
+  // lead exists in the merged list. One-shot per param, then strip the query so a refresh
+  // doesn't replay it. Makes Segments' openLead links functional.
+  const leadParam = searchParams?.get('lead') || null;
+  const consumedLeadRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!leadParam || syncState === 'loading') return;
+    if (consumedLeadRef.current === leadParam) return;
+    if (mergedLeads.some(l => String(l.id) === String(leadParam))) {
+      consumedLeadRef.current = leadParam;
+      setEditLeadId(leadParam);
+      if (pathname) router.replace(pathname);
     }
-  };
+  }, [leadParam, syncState, mergedLeads, pathname, router]);
 
-  // 스코어 재계산 — POST the existing followups recompute action, then reload the ledger in place.
-  // Same-origin write (operator session/origin covers the guard, like the other Revenue writes).
-  const recomputeScores = async () => {
-    if (recomputing) return;
-    setRecomputing(true);
-    try {
-      const resp = await fetch('/api/hub/followups', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'recompute-scores' }),
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (resp.ok && (data.status === 'ok' || data.status === 'skipped')) {
-        showToast(data.status === 'ok' ? '스코어 재계산 완료' : '재계산 완료 · 반영할 리드 없음');
-        reload();
-      } else {
-        showToast('스코어 재계산 실패 · 다시 시도하세요');
-      }
-    } catch {
-      showToast('스코어 재계산 실패 · 다시 시도하세요');
-    } finally {
-      setRecomputing(false);
-    }
-  };
+  // Page-level `n` — quick-create a lead when no drawer is open and focus isn't in a field.
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if ((e.key !== 'n' && e.key !== 'N') || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (editLeadId) return;
+      const t = e.target;
+      const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+      e.preventDefault();
+      createLead();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editLeadId, filter, ws, workspace]);
 
   const cardFileRef = React.useRef(null);
   const [cardState, setCardState] = React.useState(null); // { phase, status, fields, error }
@@ -1033,41 +662,6 @@ export function Leads({ workspace, onNavigate }) {
     }
   }
 
-  const selection = useCrmSelection(visibleLeads);
-  const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
-  useCrmKeyboard({
-    selection,
-    onNew: createLead,
-    onEditSelected: (id) => setEditLeadId(id),
-    onSearchFocus: () => document.getElementById('leads-search')?.focus(),
-    onToggleSelect: selection.toggleSelected,
-    onHelp: () => setShortcutsOpen(true),
-  });
-  // Bulk actions over the multi-selected leads (Set). Optimistic local update + best-effort
-  // persist per row (same partial-patch path the kanban stage move uses).
-  const bulkSetStage = (stage) => {
-    selection.selectedIds.forEach((id) => {
-      setLeadEdits(prev => ({ ...prev, [id]: { ...prev[id], stage } }));
-      if (!String(id).startsWith('local-lead-')) saveRevenueRecord('lead', 'update', { id, stage });
-    });
-    selection.clearSelected();
-  };
-  const bulkSnooze = (days) => {
-    const until = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
-    selection.selectedIds.forEach((id) => {
-      if (!String(id).startsWith('local-lead-')) saveRevenueRecord('lead', 'update', { id, snooze_until: until });
-    });
-    selection.clearSelected();
-  };
-  const bulkDelete = () => {
-    const ids = Array.from(selection.selectedIds);
-    if (typeof window !== 'undefined' && !window.confirm(`${ids.length}개 리드를 삭제할까요? 되돌릴 수 없습니다.`)) return;
-    setDeletedLeadIds(prev => { const n = new Set(prev); ids.forEach(id => n.add(id)); return n; });
-    setLocalLeads(prev => prev.filter(l => !selection.selectedIds.has(l.id)));
-    ids.forEach((id) => { if (!String(id).startsWith('local-lead-')) saveRevenueRecord('lead', 'delete', { id }); });
-    selection.clearSelected();
-  };
-
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
@@ -1079,66 +673,14 @@ export function Leads({ workspace, onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <SegmentedControl
-          className="hub-toolbar"
-          style={{ marginRight: 8 }}
-          options={[{ key: 'all', label: 'All' }, { key: 'personal', label: 'Personal', dot: 'personal' }, { key: 'company', label: 'Company', dot: 'company' }]}
-          value={filter}
-          onChange={setFilter}
-        />
-        <Input id="leads-search" className="hub-toolbar" placeholder="이름·소스·단계 검색…" icon="search" value={search} onChange={setSearch} />
-        <button className="hub-toolbar" onClick={() => setSortByScore(v => !v)} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 5,
-          padding: '4px 10px', fontSize: 11.5, borderRadius: 999,
-          border: `1px solid ${sortByScore ? 'var(--line-strong)' : 'var(--line-soft)'}`,
-          color: sortByScore ? 'var(--fg)' : 'var(--fg-muted)',
-          background: sortByScore ? 'var(--surface-3)' : 'var(--surface-2)',
-        }}>
-          <Dot tone="success" />
-          Score
-        </button>
-        <Button className="hub-toolbar" variant="ghost" size="xs" icon="bolt" onClick={recomputeScores} disabled={recomputing} style={{ marginLeft: 4 }}>
-          {recomputing ? '재계산 중…' : '스코어 재계산'}
-        </Button>
+        <SegmentedControl className="hub-toolbar" style={{ marginRight: 8 }} options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
+        <Input className="hub-toolbar" placeholder="이름·소스·단계 검색…" icon="search" value={search} onChange={setSearch} />
         <div style={{ width: 8 }} />
         <Button variant="secondary" size="sm" icon="plus" onClick={() => cardFileRef.current?.click()}>명함</Button>
         <input ref={cardFileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onCardFile} />
         <div style={{ width: 6 }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createLead}>Lead</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createLead}>Lead <Kbd>N</Kbd></Button>
       </div>
-
-      {!wsEmpty && LEADS.length > 0 && (
-        <div className="hub-toolbar" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {Object.keys(stageTone).map(st => {
-            const count = LEADS.filter(l => l.stage === st).length;
-            const active = stageFilter === st;
-            return (
-              <button key={st} onClick={() => setStageFilter(active ? 'all' : st)} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '5px 10px', fontSize: 11.5, borderRadius: 999,
-                border: `1px solid ${active ? 'var(--line-strong)' : 'var(--line-soft)'}`,
-                background: active ? 'var(--surface-3)' : 'var(--surface)',
-                color: active ? 'var(--fg)' : 'var(--fg-muted)',
-              }}>
-                <Dot tone={stageTone[st]} />
-                {st}
-                <span className="mono" style={{ fontSize: 10.5, color: active ? 'var(--fg)' : 'var(--fg-faint)' }}>{count}</span>
-              </button>
-            );
-          })}
-          <div style={{ flex: 1 }} />
-          <SavedViews
-            viewKey="leads"
-            current={{ filter, stageFilter, sortByScore, search }}
-            onApply={(v) => {
-              setFilter(v.filter ?? 'all');
-              setStageFilter(v.stageFilter ?? 'all');
-              setSortByScore(Boolean(v.sortByScore));
-              setSearch(v.search ?? '');
-            }}
-          />
-        </div>
-      )}
 
       {cardState && (() => {
         const reading = cardState.phase === 'reading';
@@ -1163,10 +705,7 @@ export function Leads({ workspace, onNavigate }) {
             <span style={{ fontSize: 12.5, color: 'var(--fg-muted)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summary}</span>
             <div style={{ flex: 1 }} />
             {s === 'promoted' && (
-              <Button variant="ghost" size="xs" onClick={() => { reload(); setCardState(null); }}>목록 새로고침</Button>
-            )}
-            {(s === 'review' || s === 'rejected') && (
-              <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/classin/intake')}>인박스에서 검토 →</Button>
+              <Button variant="ghost" size="xs" onClick={() => window.location.reload()}>목록 새로고침</Button>
             )}
             {!reading && (
               <Button variant="ghost" size="xs" onClick={() => setCardState(null)}>닫기</Button>
@@ -1179,75 +718,54 @@ export function Leads({ workspace, onNavigate }) {
         <Card>
           <EmptyState
             icon="leads"
-            title={`${ws.label} — 아직 연결된 리드가 없습니다.`}
-            description={`${ws.label} 워크스페이스에 매칭되는 리드가 없습니다. 리드를 등록하거나 원장에 ${ws.label} 태그가 연결되면 여기에 표시됩니다.`}
+            title={`${ws.label} — 해당하는 리드가 없습니다`}
+            description={`이 워크스페이스에 매칭되는 리드가 없습니다. 다른 워크스페이스로 태그된 리드는 여기에 표시되지 않습니다. 리드를 등록하거나 기록에 ${ws.label} 태그가 연결되면 나타납니다.`}
+            action={<Button variant="primary" size="sm" icon="plus" onClick={createLead}>{ws.label}에 리드 추가</Button>}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
       )}
 
       {!wsEmpty && (
-      <Card pad={false} className="hub-table-card">
-        <div style={{ display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          <span /><span>Name</span><span>Type</span><span>Source</span><span>Stage</span><span>Score</span><span>Value</span><span>Owner</span><span style={{ textAlign: 'right' }}>Last</span>
+      <Card pad={false} className="hub-table-card hub-leads-table">
+        <div className="hub-leads-grid" style={{ display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+          <span /><SortHead k="name">Name</SortHead><span>Type</span><SortHead k="source">Source</SortHead><SortHead k="stage">Stage</SortHead><SortHead k="score">Score</SortHead><SortHead k="owner">Owner</SortHead><span style={{ textAlign: 'right' }}>Last</span>
         </div>
-        <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--line-soft)' }}>
-          <Input
-            placeholder="+ 리드 이름 입력 후 Enter"
-            value={leadAddText}
-            onChange={setLeadAddText}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && leadAddText.trim()) { createLeadInline(leadAddText); setLeadAddText(''); }
-              else if (e.key === 'Escape') { setLeadAddText(''); }
-            }}
-            style={{ display: 'flex', width: '100%' }}
-          />
-        </div>
-        {filtered.length === 0 && (
+        {sortedLeads.length === 0 && (
           <div style={{ padding: '36px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             <Iconed name="search" size={20} style={{ color: 'var(--fg-faint)' }} />
             <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>일치하는 리드가 없습니다.</div>
             <div style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>
-              {term ? <>"<span className="mono">{search}</span>" 검색 결과 0건 · 필터: {filter}{stageFilter !== 'all' ? ` · ${stageFilter}` : ''}</> : <>필터: {filter}{stageFilter !== 'all' ? ` · ${stageFilter}` : ''} · {LEADS.length}건 중 0건</>}
+              {term ? <>"<span className="mono">{search}</span>" 검색 결과 0건 · 필터: {filter}</> : <>필터: {filter} · {LEADS.length}건 중 0건</>}
+            </div>
+            <div style={{ marginTop: 6 }}>
+              {term
+                ? <Button variant="ghost" size="xs" onClick={() => setSearch('')}>검색 지우기</Button>
+                : <Button variant="secondary" size="xs" icon="plus" onClick={createLead}>리드 추가</Button>}
             </div>
           </div>
         )}
-        {visibleLeads.map((l, i) => (
-          <div
-            key={l.id}
-            role="button"
-            tabIndex={0}
-            aria-label={`${l.name} 리드 편집`}
-            style={{
-            display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12,
-            padding: '12px 16px', alignItems: 'center', cursor: 'pointer',
-            borderBottom: i < visibleLeads.length - 1 ? '1px solid var(--line-soft)' : 'none',
-            outline: selection.selectedId === l.id ? '1px solid var(--moon-300)' : 'none',
-            outlineOffset: -1,
-          }}
+        {sortedLeads.map((l, i) => (
+          <div key={l.id} className="hub-row hub-leads-grid"
+            role="button" tabIndex={0}
             onClick={() => setEditLeadId(l.id)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                setEditLeadId(l.id);
-              }
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditLeadId(l.id); } }}
+            style={{
+              display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12,
+              padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', cursor: 'pointer',
+              borderBottom: i < sortedLeads.length - 1 ? '1px solid var(--line-soft)' : 'none',
             }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
-            <span
-              onClick={(e) => { e.stopPropagation(); selection.toggleSelected(l.id); }}
-              style={{ paddingRight: 4, display: 'flex', cursor: 'pointer' }}
-              title="선택 토글"
-            >
-              {(selection.selectedIds.size > 0 || selection.selectedIds.has(l.id))
-                ? <Checkbox checked={selection.selectedIds.has(l.id)} onChange={() => {}} ariaLabel={`${l.name} 선택`} />
-                : <Avatar name={l.name.replace(/^.*—\s*/, '')} size={22} tone={l.type === 'personal' ? 'personal' : 'company'} />}
+            <span style={{ paddingRight: 4, display: 'flex' }}>
+              <Avatar name={l.name.replace(/^.*—\s*/, '')} size={22} tone={l.type === 'personal' ? 'personal' : 'company'} />
             </span>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</div>
-              <LeadTagChips lead={l} />
-            </div>
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: 'block', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</span>
+              {l.nextAction && <span className="hub-lead-next-action" style={{ display: 'block', marginTop: 2, fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.nextAction}</span>}
+              <span className="hub-lead-mobile-meta">
+                {l.type === 'personal' ? 'Personal' : 'Company'} · {l.owner || 'Unassigned'} · score {l.score ?? '—'}{l.priorityLane === 'customer_success' ? ' · CS' : ''}
+              </span>
+            </span>
             <span style={{ paddingRight: 8, minWidth: 0 }}>
               <Badge tone={l.type === 'personal' ? 'personal' : 'company'} size="xs">
                 <Iconed name={l.type === 'personal' ? 'user' : 'building'} size={9} />
@@ -1258,14 +776,10 @@ export function Leads({ workspace, onNavigate }) {
             <span style={{ paddingRight: 8, minWidth: 0 }}>
               <Badge tone={stageTone[l.stage]} size="xs" variant="outline">{l.stage}</Badge>
             </span>
-            {typeof l.score === 'number' && l.score > 0 ? (
-              <span className="mono" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <Dot tone={l.score >= 70 ? 'success' : l.score >= 40 ? 'warning' : 'neutral'} />{l.score}
-              </span>
-            ) : (
-              <span className="mono" style={{ fontSize: 12, color: 'var(--fg-faint)' }}>—</span>
-            )}
-            <span className="mono" style={{ fontSize: 12 }}>{l.value}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span className="mono" style={{ fontSize: 12, color: l.score >= 70 ? 'var(--moon-200)' : 'var(--fg-muted)' }}>{l.score ?? '—'}</span>
+              {l.priorityLane === 'customer_success' && <Badge tone="company" size="xs">CS</Badge>}
+            </span>
             <span style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.owner}</span>
             <span className="mono" style={{ textAlign: 'right', fontSize: 11.5, color: 'var(--fg-faint)' }}>{l.last}</span>
           </div>
@@ -1273,97 +787,168 @@ export function Leads({ workspace, onNavigate }) {
       </Card>
       )}
 
-      <ShortcutOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-      <BulkBar count={selection.selectedIds.size} onClear={selection.clearSelected}>
-        <select
-          aria-label="일괄 스테이지 변경"
-          defaultValue=""
-          onChange={(e) => { if (e.target.value) bulkSetStage(e.target.value); e.target.value = ''; }}
-          style={{ height: 26, padding: '0 8px', fontSize: 11.5, background: 'var(--surface-2)', color: 'var(--fg)', border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', outline: 'none' }}
-        >
-          <option value="" disabled>스테이지…</option>
-          <option value="New">New</option>
-          <option value="Contact">Contact</option>
-          <option value="Qualified">Qualified</option>
-          <option value="Lost">Lost</option>
-        </select>
-        <Button variant="ghost" size="xs" onClick={() => bulkSnooze(3)}>3일 스누즈</Button>
-        <Button variant="ghost" size="xs" onClick={bulkDelete} style={{ color: 'var(--danger)' }}>삭제</Button>
-      </BulkBar>
       <EditDrawer
         title={editingLead ? (editingLead.name || '리드 편집') : ''}
         subtitle="리드 정보 편집"
         record={editingLead}
         fields={[
           { key: 'name', label: '이름' },
-          { key: 'type', label: '타입', type: 'select', width: 'half', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
-          { key: 'source', label: '유입경로 (소스)', width: 'half', placeholder: 'Referral · Website · Meta · 설명회…' },
-          { key: 'region', label: '지역', width: 'half', placeholder: '서울 · 경기 · 부산…' },
-          { key: 'scale', label: '규모', width: 'half', placeholder: '학생수 · 직원수 · 매출 규모' },
+          // 타입+단계 — 이 리드를 어떻게 다룰지 정하는 두 값. 담당은 뺐다: 1인 운영
+          // 시스템에서 항상 Me뿐이고 buildLeadWrite가 애초에 owner를 저장한 적이 없다.
+          { key: 'type', row: 'r1', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
+          { key: 'stage', row: 'r1', label: '단계', type: 'select', options: [{ value: 'New', label: 'New' }, { value: 'Contact', label: 'Contact' }, { value: 'Qualified', label: 'Qualified' }, { value: 'Customer', label: 'Customer' }, { value: 'Lost', label: 'Lost' }] },
+          { key: 'source', row: 'r2', label: '유입경로', placeholder: 'Referral · Website · Meta…' },
+          { key: 'region', row: 'r2', label: '지역', placeholder: '서울 · 경기 · 부산…' },
+          { key: 'scale', row: 'r3', label: '규모', placeholder: '학생수 · 직원수' },
+          { key: 'units', row: 'r3', label: '도입 댓수', inputType: 'number', placeholder: '0' },
           { key: 'situation', label: '현재 상황', placeholder: '검토중 · 경쟁사 사용 · 예산확보…' },
-          { key: 'units', label: '도입 댓수', inputType: 'number', width: 'half', placeholder: '0' },
-          { key: 'stage', label: '단계', type: 'select', width: 'half', options: [{ value: 'New', label: 'New' }, { value: 'Contact', label: 'Contact' }, { value: 'Qualified', label: 'Qualified' }, { value: 'Lost', label: 'Lost' }] },
-          { key: 'value', label: '금액', width: 'half', placeholder: '₩0' },
-          { key: 'owner', label: '담당', width: 'half' },
+          // 딜과 달리 텍스트 입력이 의도: 리드 value는 "₩1.2M" 표시 문자열로 읽혀 오고
+          // parseMoneyLabel이 축약형(₩1.2M · 1.2M · 1200000)을 그대로 받는다.
+          { key: 'value', label: '금액', placeholder: '₩1.2M · 1200000' },
         ]}
         onChange={(key, val) => setLeadEdits(prev => ({ ...prev, [editLeadId]: { ...prev[editLeadId], [key]: val } }))}
         onSave={persistLead}
         onDelete={deleteLead}
-        onClose={() => { setEditLeadId(null); setConvertNote(null); }}
+        onClose={() => setEditLeadId(null)}
       >
-        {editingLead && (
-          <>
-            {editingLead.account && (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(crmTabPath(workspace, 'accounts', `?acct=${encodeURIComponent(editingLead.account)}`))}>고객 보기</Button>
-              </div>
-            )}
-            <QuickLogBar entityType="lead" entityId={editingLead.id} />
-            <DrawerTimeline entityType="lead" entityId={editingLead.id} title="활동 타임라인" />
-          </>
-        )}
+        <LeadEnrichmentPanel lead={editingLead} />
       </EditDrawer>
+    </div>
+  );
+}
 
-      {/* 리드 → 딜 전환 — anchored above the EditDrawer footer. Non-local leads only. */}
-      {editingLead && !String(editLeadId).startsWith('local-lead-') && (
-        <div style={{
-          position: 'fixed', right: 0, bottom: 47, zIndex: 62,
-          width: 'min(380px, 92vw)',
-          padding: '8px 12px',
-          borderTop: '1px solid var(--line-soft)',
-          background: 'var(--surface)',
-          display: 'flex', flexDirection: 'column', gap: 6,
-        }}>
-          {convertNote && (
-            <div style={{ fontSize: 10.5, lineHeight: 1.35, color: convertNote.tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)' }}>
-              {convertNote.text}
+// 딜 체크리스트 — 공유 실행 척추의 딜 쪽 절반. 판매 과정의 하위 항목(견적서 발송·데모
+// 준비·재미팅 잡기)이 딜 안에 산다. 저장은 tasks 원장(meta.deal_id)이라 '내 작업'의
+// 할 일 레인에도 그대로 흐른다. 클로징 딜에는 판매 후 실행(A/S)을 낮은 우선순위 후속
+// 프로젝트로 분리하는 버튼이 붙는다 — 딜은 돈을 추적하고 닫히는 레코드, 실행은 계속되는
+// 프로젝트의 몫이라는 경계.
+function DealTaskPanel({ deal, onSaved }) {
+  const dealId = deal?.id || null;
+  const isLocal = String(dealId || '').toLowerCase().startsWith('local-');
+  const [tasks, setTasks] = React.useState(null); // null = loading
+  const [title, setTitle] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [asState, setAsState] = React.useState('idle'); // idle | saving | done | error
+
+  const load = React.useCallback(async () => {
+    if (!dealId || isLocal) { setTasks([]); return; }
+    try {
+      const res = await fetch('/api/hub/tasks', { cache: 'no-store' });
+      const data = await res.json().catch(() => null);
+      const all = Array.isArray(data?.tasks) ? data.tasks : [];
+      setTasks(all.filter(t => t.dealId === dealId));
+    } catch { setTasks([]); }
+  }, [dealId, isLocal]);
+  React.useEffect(() => { setAsState('idle'); setTitle(''); load(); }, [load]);
+
+  const addTask = async () => {
+    const t = title.trim();
+    if (!t || busy || isLocal) return;
+    setBusy(true);
+    try {
+      const res = await fetch('/api/hub/tasks', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: t, dealId, source: 'hub-deal-checklist' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.status === 'saved') { setTitle(''); await load(); onSaved?.(); }
+    } finally { setBusy(false); }
+  };
+
+  const toggleTask = async (task) => {
+    await fetch('/api/hub/tasks', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: task.id, status: task.done ? 'todo' : 'done' }),
+    }).catch(() => {});
+    await load();
+    onSaved?.();
+  };
+
+  // A/S 후속 프로젝트 — 자동 생성이 아니라 운영자 버튼(후보 확인 UI 원칙). 우선순위 low.
+  const createFollowupProject = async () => {
+    if (asState === 'saving' || isLocal) return;
+    setAsState('saving');
+    try {
+      // areaId·orgScope는 create_project 필수 계약(2026-07-17 create-drawer spec).
+      // A/S는 영업(sales) 분야, 매출 레인 딜은 클래스인 소속으로 귀속한다.
+      const ledgerRes = await fetch('/api/hub/projects');
+      const ledger = await ledgerRes.json().catch(() => ({}));
+      const areaId = selectProjectAreaId(ledger.areas || [], 'sales');
+      if (!areaId) { setAsState('error'); return; }
+      const res = await fetch('/api/hub/projects', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: `${deal.name} · A/S`,
+          summary: '클로징 딜의 판매 후 실행 (설치·교육·운영)',
+          priority: 'low',
+          dealId,
+          areaId,
+          orgScope: 'classin',
+          source: 'deal-followup',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setAsState(res.ok && ['saved', 'duplicate'].includes(data.status) ? 'done' : 'error');
+    } catch { setAsState('error'); }
+  };
+
+  const open = (tasks || []).filter(t => !t.done);
+  const done = (tasks || []).filter(t => t.done);
+  const total = (tasks || []).length;
+
+  return (
+    <div style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>체크리스트</span>
+        {total > 0 && <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', marginLeft: 'auto' }}>{done.length}/{total}</span>}
+      </div>
+      {total > 0 && <Progress value={Math.round((done.length / total) * 100)} tone={done.length === total ? 'success' : 'moon'} />}
+
+      {isLocal ? (
+        <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', lineHeight: 1.5 }}>딜을 먼저 저장하면 하위 항목을 추가할 수 있습니다.</div>
+      ) : (
+        <>
+          {tasks === null && <div style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>불러오는 중…</div>}
+          {[...open, ...done].map((t) => (
+            <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 24 }}>
+              <Checkbox checked={t.done} onChange={() => toggleTask(t)} label={`${t.title} 완료`} />
+              <span style={{
+                fontSize: 12.5, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                color: t.done ? 'var(--fg-faint)' : 'var(--fg)',
+                textDecoration: t.done ? 'line-through' : 'none',
+              }}>{t.title}</span>
+              {t.dueAt && <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', flexShrink: 0 }}>{t.due}</span>}
             </div>
-          )}
-          <Button
-            variant={editingLead.stage === 'Qualified' ? 'primary' : 'secondary'}
-            size="xs"
-            icon="deals"
-            onClick={convertLeadToDeal}
-            disabled={converting}
-            style={{ width: '100%' }}
-          >
-            {converting ? '전환 중…' : '딜로 전환'}
-          </Button>
-        </div>
+          ))}
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); addTask(); } }}
+            placeholder="하위 항목 추가 — Enter로 저장"
+            style={{
+              height: 30, padding: '0 10px', fontSize: 12,
+              background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
+              borderRadius: 'var(--r-sm)', color: 'var(--fg)',
+            }}
+          />
+        </>
       )}
 
-      {toast && (
-        <div style={{
-          position: 'fixed', right: 20, bottom: 20, zIndex: 70,
-          maxWidth: 'min(360px, calc(100vw - 40px))',
-          padding: '11px 14px',
-          background: 'var(--surface)',
-          border: '1px solid var(--line-soft)',
-          borderRadius: 'var(--r-lg)',
-          boxShadow: '0 8px 24px -12px oklch(0 0 0 / 0.55)',
-          display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <span style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45 }}>{toast.text}</span>
+      {deal?.stage === 'closing' && !isLocal && (
+        <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {asState === 'done' ? (
+            <span style={{ fontSize: 11.5, color: 'var(--success)' }}>A/S 프로젝트 생성됨 — 프로젝트·기획에서 확인</span>
+          ) : (
+            <>
+              <Button variant="outline" size="xs" icon="projects" onClick={createFollowupProject} disabled={asState === 'saving'}>
+                {asState === 'saving' ? '생성 중…' : 'A/S 프로젝트 만들기'}
+              </Button>
+              {asState === 'error' && <span style={{ fontSize: 11, color: 'var(--danger)' }}>생성 실패 — 다시 시도</span>}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -1373,292 +958,99 @@ export function Leads({ workspace, onNavigate }) {
 export function Deals({ workspace, onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const DEAL_STAGES = ledger.stages;
   const [deals, setDeals] = React.useState(ledger.deals);
   const [drag, setDrag] = React.useState(null);
-  const [overStage, setOverStage] = React.useState(null);
-  const [movingDeals, setMovingDeals] = React.useState(() => new Set());
   const [filter, setFilter] = React.useState('all');
-  const [stalledOnly, setStalledOnly] = React.useState(false);
-  const [search, setSearch] = React.useState('');
+  const [showHidden, setShowHidden] = React.useState(false);
   const [editDealId, setEditDealId] = React.useState(null);
-  const [addStage, setAddStage] = React.useState(null); // kanban column with an open inline quick-add
-  const [addText, setAddText] = React.useState('');
-  const [companyCleared, setCompanyCleared] = React.useState(null); // ?company= filter dismissed for this value
-  const [editDealPrevStage, setEditDealPrevStage] = React.useState(null);
-  const [queuedDeals, setQueuedDeals] = React.useState(() => new Set()); // deals with a proposed follow-up (seeded from the queue on mount)
-  const [guruDeal, setGuruDeal] = React.useState(null);
-  const [guru, setGuru] = React.useState({ phase: 'idle', text: '', state: null });
-  const [guruSaved, setGuruSaved] = React.useState(false); // '활동으로 저장' one-shot in the diagnosis drawer
-  const [toast, setToast] = React.useState(null); // { text, action? } — transient bottom-right feedback
-  const toastTimerRef = React.useRef(null);
-  const moveSeqRef = React.useRef(0);
-  const latestMoveRef = React.useRef(new Map());
-
-  // Show a transient toast (auto-dismiss ~4s). `action` = { label, go } renders a mini link button.
-  const showToast = React.useCallback((text, action = null) => {
-    setToast({ text, action });
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
-  }, []);
-  React.useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
-
-  // Seed the queued set once from the approval queue so already-proposed follow-ups render as
-  // "queued" (no double-proposing). Only kind 'followup' orders with a dealId count.
-  const queueSeededRef = React.useRef(false);
-  React.useEffect(() => {
-    if (queueSeededRef.current) return;
-    queueSeededRef.current = true;
-    let active = true;
-    (async () => {
-      try {
-        const resp = await fetch('/api/hub/work-orders?status=proposed,approved,executing', { cache: 'no-store' });
-        const data = await resp.json().catch(() => null);
-        const orders = Array.isArray(data?.orders) ? data.orders : [];
-        const ids = orders.filter(o => o.kind === 'followup' && o.dealId).map(o => o.dealId);
-        if (active && ids.length) setQueuedDeals(prev => { const next = new Set(prev); ids.forEach(id => next.add(id)); return next; });
-      } catch {
-        // queue unreachable — leave the set as-is
-      }
-    })();
-    return () => { active = false; };
-  }, []);
-
-  // Propose a follow-up work order for a stalled deal. Optimistic: the card flags "제안됨"
-  // immediately; the queue item lands in work_orders (status 'proposed') for operator approval.
-  const queueFollowup = async (deal) => {
-    if (queuedDeals.has(deal.id)) return;
-    setQueuedDeals(prev => new Set(prev).add(deal.id));
-    try {
-      const resp = await fetch('/api/hub/work-orders', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          action: 'create',
-          persona: 'guru',
-          kind: 'followup',
-          title: `${deal.name} — ${deal.age}d 정체 follow-up`,
-          dealId: String(deal.id).startsWith('LOCAL-') ? null : deal.id,
-          source: 'manual',
-          body: { reason: 'stalled', age: deal.age, stage: deal.stage, value: deal.value },
-        }),
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok || data.persisted === false) {
-        setQueuedDeals(prev => {
-          const next = new Set(prev);
-          next.delete(deal.id);
-          return next;
-        });
-        showToast(data.reason === 'missing-workspace' ? 'workspace 설정이 없어 큐는 생성되지 않음' : 'follow-up 큐 생성 실패');
-        return;
-      }
-    } catch {
-      setQueuedDeals(prev => {
-        const next = new Set(prev);
-        next.delete(deal.id);
-        return next;
-      });
-      showToast('follow-up 큐 생성 실패');
-      return;
-    }
-    showToast('follow-up 제안이 큐에 추가됨 · Daily Brief에서 승인', { label: '브리프 열기', go: 'dashboard/daily-brief' });
-  };
+  const dragMovedRef = React.useRef(false); // true from dragStart until just after dragEnd — suppresses the card click
 
   // Sync local deals state when live data arrives
   React.useEffect(() => {
     setDeals(ledger.deals);
   }, [ledger.deals]);
-  const editingDeal = editDealId ? deals.find(d => d.id === editDealId) : null;
 
-  React.useEffect(() => {
-    if (!guruDeal) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') setGuruDeal(null); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [guruDeal]);
-
+  // Scope BEFORE grouping by stage so the kanban columns only ever show in-workspace
+  // deals (pass-through when unscoped). setDeals still holds the full ledger set.
   const ws = getWorkspace(workspace);
   const scopedDeals = filterDealsByWorkspace(deals, workspace);
-  const wsEmpty = Boolean(ws) && scopedDeals.length === 0;
+  // 초기화(숨기기)된 딜은 기본적으로 파이프라인에서 빠진다 — 되돌릴 수 있는 정리이지
+  // 삭제가 아니다. showHidden이 켜지면 다시 전부 보인다(카드는 흐리게 표시).
+  const hiddenCount = scopedDeals.filter(d => d.hidden).length;
+  const visibleDeals = showHidden ? scopedDeals : scopedDeals.filter(d => !d.hidden);
+  const wsEmpty = Boolean(ws) && visibleDeals.length === 0;
+  const editingDeal = editDealId ? deals.find(d => d.id === editDealId) : null;
 
-  // Join a deal back to its lead (by leadId) so the drawer can link out and the kanban card can
-  // surface region/units chips. Keyed on the live ledger's leads; empty in preview/mock.
-  const leadById = React.useMemo(() => {
-    const m = new Map();
-    (ledger.leads || []).forEach(l => { if (l && l.id != null) m.set(String(l.id), l); });
-    return m;
-  }, [ledger.leads]);
-  const leadForDeal = (deal) => (deal && deal.leadId != null ? leadById.get(String(deal.leadId)) || null : null);
+  const toggleDealHidden = (id, nextHidden) => {
+    setDeals(ds => ds.map(d => (d.id === id ? { ...d, hidden: nextHidden } : d)));
+    if (!String(id).toLowerCase().startsWith('local-')) {
+      saveRevenueRecord('deal', 'update', { id, hidden: nextHidden });
+    }
+  };
 
-  const companyParam = searchParams.get('company');
-  const companyFilter = companyParam && companyCleared !== companyParam ? companyParam : null;
-  const companyName = companyFilter ? (scopedDeals.find(d => String(d.companyId) === String(companyFilter))?.account || null) : null;
-  const term = search.trim().toLowerCase();
-  const isStalled = (d) => d.stage !== 'won' && d.stage !== 'lost' && Number(d.age) > 10;
-  const matches = (d) => (filter === 'all' || d.type === filter)
-    && (!stalledOnly || isStalled(d))
-    && (!companyFilter || String(d.companyId) === String(companyFilter))
-    && (!term || String(d.name || '').toLowerCase().includes(term) || String(d.owner || '').toLowerCase().includes(term));
   const totals = DEAL_STAGES.reduce((acc, s) => {
-    const items = scopedDeals.filter(d => d.stage === s.key && matches(d));
+    const items = visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
     acc[s.key] = { count: items.length, sum: items.reduce((a, b) => a + b.value, 0) };
     return acc;
   }, {});
-  // Header total stays the true pipeline (type filter only) — stalledOnly narrows the board, not the fact.
-  const grandTotal = scopedDeals.filter(d => filter === 'all' || d.type === filter).reduce((a, b) => a + b.value, 0);
-  const stalledCount = scopedDeals.filter(d => (filter === 'all' || d.type === filter) && isStalled(d)).length;
-  const openDealEditor = (deal) => {
-    setEditDealPrevStage(deal?.stage ?? null);
-    setEditDealId(deal?.id ?? null);
-  };
-  const fireStageTransition = (deal, from, to) => {
-    if (!deal || String(deal.id).toLowerCase().startsWith('local-') || from === to) return;
-    saveActivity('create', {
-      dealId: deal.id,
-      entityType: 'deal',
-      kind: 'deal',
-      body: `[Stage] ${deal.name} — ${from} → ${to}`,
-    }).catch(() => {});
-    if (to === 'won' && from !== 'won') {
-      fetch('/api/hub/work-orders', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          action: 'create',
-          persona: 'guru',
-          kind: 'onboarding',
-          title: `[Won] ${deal.name} 온보딩 시작 제안`,
-          dealId: deal.id,
-          body: { reason: 'won-trigger', stage_from: from, value: deal.value },
-          source: 'manual',
-        }),
-      }).catch(() => {});
-      saveActivity('create', {
-        dealId: deal.id,
-        entityType: 'deal',
-        kind: 'deal',
-        body: `[Won] ${deal.name} — 계약 성사 (${from} → won)`,
-      }).catch(() => {});
-      showToast('온보딩 제안 생성됨 · 승인 대기', { label: '브리프 열기', go: 'dashboard/daily-brief' });
-    }
-    if (to === 'lost' && from !== 'lost') {
-      saveActivity('create', {
-        dealId: deal.id,
-        entityType: 'deal',
-        kind: 'update',
-        body: `[Lost] ${deal.name} — 실패 처리 (${from} → lost)`,
-      }).catch(() => {});
-    }
-  };
-  const openGuruDiagnosis = async (deal) => {
-    setGuruDeal(deal);
-    setGuruSaved(false);
-    setGuru({ phase: 'loading', text: '', state: null });
-    try {
-      const r = await requestGuruCoaching({ mode: 'deal-review', ref: deal.id });
-      setGuru({ phase: 'done', text: r.text || r.note || '', state: r.state });
-    } catch (err) {
-      setGuru({ phase: 'done', text: err instanceof Error ? err.message : '진단 요청에 실패했습니다.', state: 'error' });
-    }
-  };
-
-  // Save the Guru diagnosis as a deal note (crm_activities). Truncate the body at ~2000 chars.
-  const saveGuruDiagnosis = async () => {
-    if (!guruDeal || guruSaved) return;
-    const body = `[Guru 진단] ${guru.text}`.slice(0, 2000);
-    const r = await saveActivity('create', {
-      dealId: String(guruDeal.id).toLowerCase().startsWith('local-') ? null : guruDeal.id,
-      entityType: 'deal',
-      kind: 'note',
-      body,
-    });
-    if (r.ok) setGuruSaved(true);
-  };
-
-  // Deep-link: ?deal=<id> opens that deal's EditDrawer; ?deal=<id>&guru=1 opens the Guru
-  // diagnosis drawer instead. One-shot per param value; silent if the deal isn't in the list.
-  const dealParam = searchParams.get('deal');
-  const guruParam = searchParams.get('guru');
-  const consumedDealRef = React.useRef(null);
-  React.useEffect(() => {
-    if (!dealParam || syncState === 'loading') return;
-    const token = `${dealParam}:${guruParam || ''}`;
-    if (consumedDealRef.current === token) return;
-    const target = deals.find(d => String(d.id) === String(dealParam));
-    if (!target) return;
-    consumedDealRef.current = token;
-    if (guruParam === '1') openGuruDiagnosis(target);
-    else openDealEditor(target);
-  }, [dealParam, guruParam, syncState, deals]);
-
-  const move = async (id, to) => {
-    const cur = deals.find(d => d.id === id);
-    if (!cur || cur.stage === to) return;
-    setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: to } : d)));
-    // Persist the stage change in the background; the optimistic move stands regardless.
-    // Unsaved local cards (no DB id) only persist once saved through the drawer.
+  // Command-deck readout split: money in motion (open stages) vs money landed (closing).
+  // The old single grandTotal blended won deals into "pipeline", overstating what's open.
+  const openStages = DEAL_STAGES.filter(s => s.key !== 'closing' && s.key !== 'lost');
+  const openTotal = openStages.reduce((a, s) => a + (totals[s.key]?.sum || 0), 0);
+  const openCount = openStages.reduce((a, s) => a + (totals[s.key]?.count || 0), 0);
+  const closingTotal = totals.closing?.sum || 0;
+  // Drag-to-move: optimistic local move, then persist the stage in the background for
+  // ledger-backed deals (local cards persist once saved through the drawer). Fire-and-forget —
+  // the optimistic move stands regardless of the write result.
+  const move = (id, to) => {
+    setDeals(ds => ds.map(d => d.id === id ? { ...d, stage: to } : d));
     if (!String(id).toLowerCase().startsWith('local-')) {
-      const token = `${id}:${++moveSeqRef.current}`;
-      latestMoveRef.current.set(id, token);
-      setMovingDeals(prev => new Set(prev).add(id));
-      const r = await saveRevenueRecord('deal', 'update', { id, stage: to });
-      if (latestMoveRef.current.get(id) !== token) return;
-      latestMoveRef.current.delete(id);
-      setMovingDeals(prev => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-      if (r.status === 'preview') {
-        showToast('저장 위치가 없어 로컬에서만 단계가 이동됨');
-      } else if (!r.ok && r.status !== 'noop') {
-        setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: cur.stage } : d)));
-        showToast('단계 이동 저장 실패 · 이전 단계로 되돌림');
-        return;
-      } else if (r.ok) {
-        fireStageTransition(cur, cur.stage, to);
-      }
-      return;
+      saveRevenueRecord('deal', 'update', { id, stage: to });
     }
   };
-  // Create a deal directly in `stageKey`. With a `title` (inline column quick-add) it persists
-  // immediately and stays put; without one (top button) it opens the editor to be filled in.
-  const createDealInStage = (stageKey = DEAL_STAGES[0]?.key || 'lead', title = '') => {
-    const id = `LOCAL-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const deal = {
+  // 딜별 체크리스트 카운트 (공유 실행 척추의 보드 표면) — tasks 원장에서 meta.deal_id로
+  // 연결된 하위 항목을 집계해 카드에 ✓n/m으로 얹는다. 드로어가 닫힐 때 재집계해서
+  // 방금 추가·완료한 항목이 보드에 바로 반영되게 한다.
+  const [dealTaskStats, setDealTaskStats] = React.useState(new Map());
+  const loadDealTaskStats = React.useCallback(async () => {
+    try {
+      const res = await fetch('/api/hub/tasks', { cache: 'no-store' });
+      const data = await res.json().catch(() => null);
+      const stats = new Map();
+      (Array.isArray(data?.tasks) ? data.tasks : []).forEach((t) => {
+        if (!t.dealId) return;
+        const s = stats.get(t.dealId) || { done: 0, total: 0 };
+        s.total += 1;
+        if (t.done) s.done += 1;
+        stats.set(t.dealId, s);
+      });
+      setDealTaskStats(stats);
+    } catch { /* board count is decorative — the drawer keeps its own live list */ }
+  }, []);
+  React.useEffect(() => { loadDealTaskStats(); }, [loadDealTaskStats]);
+  React.useEffect(() => { if (!editDealId) loadDealTaskStats(); }, [editDealId, loadDealTaskStats]);
+
+  // `stage` lets a column's inline "+ 딜 추가" seed the deal directly in that stage, so
+  // creating where you're looking needs no follow-up drag. Falls back to the first stage.
+  const createDeal = (stage) => {
+    const id = `LOCAL-${Date.now().toString().slice(-4)}`;
+    setDeals(prev => [{
       id,
-      name: title || '새 딜',
+      name: '새 딜',
       type: filter === 'personal' || filter === 'company' ? filter : 'company',
-      stage: stageKey,
+      stage: (typeof stage === 'string' && stage) || DEAL_STAGES[0]?.key || 'consult',
       value: 0,
-      owner: 'Me',
-      close: '미정',
+      close: '미정', // card footer display — stays a formatted label until the next reload
+      closeAt: '', // the drawer's real, writable date field (see buildDealWrite)
       age: 0,
       // Tag in-workspace creates so the scoped pipeline doesn't silently drop them.
       ...(ws ? { workspace } : {}),
-    };
-    setDeals(prev => [deal, ...prev]);
-    if (title) {
-      saveRevenueRecord('deal', 'create', deal).then(r => {
-        if (r.ok && r.id) setDeals(ds => ds.map(d => (d.id === id ? { ...d, id: r.id } : d)));
-        else if (r.status === 'preview') showToast('저장 위치가 없어 새 딜은 로컬에서만 생성됨');
-        else if (!r.ok) showToast('새 딜 저장 실패 · 로컬 카드로 유지됨');
-      });
-    } else {
-      openDealEditor(deal); // open the editor immediately so the new deal can be filled in
-    }
-    return id;
+    }, ...prev]);
+    setEditDealId(id); // open the editor immediately so the new deal can be filled in
   };
-  const createDeal = () => createDealInStage();
-  const newDealParam = searchParams.get('new');
-  const consumedNewDealRef = React.useRef(null);
-  React.useEffect(() => {
-    if (newDealParam !== 'deal' || syncState === 'loading') return;
-    if (consumedNewDealRef.current === newDealParam) return;
-    consumedNewDealRef.current = newDealParam;
-    createDealInStage();
-  }, [newDealParam, syncState]);
 
   // Persist the drawer edit. New local rows (id `LOCAL-…`) insert; on success the returned
   // real id replaces the local one so a later edit takes the update path. `close` (free-text)
@@ -1666,16 +1058,11 @@ export function Deals({ workspace, onNavigate }) {
   const persistDeal = async () => {
     if (!editingDeal) return { ok: false, status: 'error' };
     const isNew = String(editDealId).toLowerCase().startsWith('local-');
-    const savedDeal = { ...editingDeal };
     const r = await saveRevenueRecord('deal', isNew ? 'create' : 'update', editingDeal);
     if (r.ok && isNew && r.id) {
       const realId = r.id;
-      savedDeal.id = realId;
       setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, id: realId } : d)));
       setEditDealId(realId);
-    }
-    if (r.ok && editDealPrevStage && editDealPrevStage !== savedDeal.stage && (savedDeal.stage === 'won' || savedDeal.stage === 'lost')) {
-      fireStageTransition(savedDeal, editDealPrevStage, savedDeal.stage);
     }
     return r;
   };
@@ -1689,17 +1076,34 @@ export function Deals({ workspace, onNavigate }) {
     return saveRevenueRecord('deal', 'delete', { id: editDealId });
   };
 
-  const visibleDeals = scopedDeals.filter(matches);
-  const selection = useCrmSelection(visibleDeals);
-  const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
-  useCrmKeyboard({
-    selection,
-    onNew: createDeal,
-    onEditSelected: (id) => { const d = deals.find(x => x.id === id); if (d) openDealEditor(d); },
-    onSearchFocus: () => document.getElementById('deals-search')?.focus(),
-    onStageMove: (i) => { if (selection.selectedId != null && DEAL_STAGES[i]) move(selection.selectedId, DEAL_STAGES[i].key); },
-    onHelp: () => setShortcutsOpen(true),
-  });
+  // Deep-link: ?deal=<id> opens that deal's EditDrawer once the ledger has loaded. One-shot
+  // per param, then strip the query so a refresh doesn't replay it.
+  const dealParam = searchParams?.get('deal') || null;
+  const consumedDealRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!dealParam || syncState === 'loading') return;
+    if (consumedDealRef.current === dealParam) return;
+    if (deals.some(d => String(d.id) === String(dealParam))) {
+      consumedDealRef.current = dealParam;
+      setEditDealId(dealParam);
+      if (pathname) router.replace(pathname);
+    }
+  }, [dealParam, syncState, deals, pathname, router]);
+
+  // Page-level `n` — quick-create a deal when no drawer is open and focus isn't in a field.
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if ((e.key !== 'n' && e.key !== 'N') || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (editDealId) return;
+      const t = e.target;
+      const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+      e.preventDefault();
+      createDeal();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editDealId, filter, ws, workspace]);
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%' }}>
@@ -1707,45 +1111,42 @@ export function Deals({ workspace, onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Deals</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            Pipeline <span className="mono" style={{ color: 'var(--fg)' }}>{fmt(grandTotal)}</span> across {DEAL_STAGES.length} stages
+            열린 파이프라인 <span className="mono" style={{ color: 'var(--fg)' }}>{fmt(openTotal)}</span> · <span className="mono">{openCount}</span>건
+            {closingTotal > 0 && <> · 클로징 <span className="mono" style={{ color: 'var(--success)' }}>{fmt(closingTotal)}</span></>}
             <SyncBadge state={syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <SegmentedControl
-          className="hub-toolbar"
-          style={{ marginRight: 8 }}
-          options={[{ key: 'all', label: 'All' }, { key: 'personal', label: 'Personal' }, { key: 'company', label: 'Company' }]}
-          value={filter}
-          onChange={setFilter}
-        />
-        <Input id="deals-search" className="hub-toolbar" placeholder="딜·담당 검색…" icon="search" value={search} onChange={setSearch} style={{ marginRight: 8 }} />
-        {stalledCount > 0 && (
-          <button
-            onClick={() => setStalledOnly(v => !v)}
-            title={stalledOnly ? '전체 딜 보기' : '정체 딜만 보기'}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              padding: '4px 10px', fontSize: 11.5, borderRadius: 999, marginRight: 8,
-              border: `1px solid ${stalledOnly ? 'var(--line-strong)' : 'var(--line-soft)'}`,
-              background: stalledOnly ? 'var(--danger-bg)' : 'var(--surface-2)',
-              color: 'var(--danger)',
-            }}
-          >
-            <Iconed name="clock" size={11} />
-            {stalledCount} stalled
-          </button>
+        {hiddenCount > 0 && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 10, fontSize: 11.5, color: 'var(--fg-muted)' }}>
+            <Checkbox checked={showHidden} onChange={setShowHidden} size={16} label={`숨긴 딜 ${hiddenCount}건 보기`} />
+            <span>숨긴 딜 {hiddenCount}건 보기</span>
+          </div>
         )}
-        <Button variant="primary" size="sm" icon="plus" onClick={createDeal}>Deal</Button>
+        <SegmentedControl className="hub-toolbar" style={{ marginRight: 8 }} options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
+        <Button variant="primary" size="sm" icon="plus" onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>
       </div>
 
-      <TodayFollowupStrip onNavigate={onNavigate} workspace={workspace} />
-
-      {companyFilter && (
-        <div style={{ display: 'inline-flex', alignSelf: 'flex-start', alignItems: 'center', gap: 6, padding: '5px 10px', fontSize: 11.5, borderRadius: 999, border: '1px solid var(--line)', background: 'var(--surface-2)', color: 'var(--fg-muted)' }}>
-          <Iconed name="filter" size={11} />
-          {companyName ? `고객: ${companyName}` : '이 고객의 딜'}
-          <button onClick={() => setCompanyCleared(companyParam)} aria-label="회사 필터 해제" style={{ background: 'transparent', border: 'none', color: 'var(--fg-faint)', cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>×</button>
+      {/* 게이지 마스트헤드 — 열린 딜 금액의 단계 분포를 한 줄 세그먼트로. 아래 컬럼들의
+          top 스트라이프와 같은 heat 토큰을 써서 게이지와 보드가 하나의 계기로 읽힌다.
+          (읽기 전용 — 모바일 44px 버튼 플로어와 충돌하는 클릭 타깃을 만들지 않는다.) */}
+      {!wsEmpty && openTotal > 0 && (
+        <div style={{ display: 'flex', gap: 2, height: 6, borderRadius: 999, overflow: 'hidden' }} aria-hidden="true">
+          {openStages.map(s => {
+            const sum = totals[s.key]?.sum || 0;
+            return (
+              <div
+                key={s.key}
+                title={`${s.label} · ${fmt(sum)} · ${totals[s.key]?.count || 0}건`}
+                style={{
+                  flex: sum || 0.02,
+                  minWidth: sum ? 6 : 2,
+                  background: STAGE_FILL[s.color] || 'var(--fg-faint)',
+                  opacity: sum ? 0.9 : 0.25,
+                }}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -1753,255 +1154,150 @@ export function Deals({ workspace, onNavigate }) {
         <Card>
           <EmptyState
             icon="deals"
-            title={`${ws.label} — 아직 연결된 딜이 없습니다.`}
-            description={`${ws.label} 워크스페이스에 매칭되는 딜이 없습니다. 딜을 등록하거나 원장에 ${ws.label} 태그가 연결되면 파이프라인이 채워집니다.`}
+            title={`${ws.label} — 해당하는 딜이 없습니다`}
+            description={`이 워크스페이스에 매칭되는 딜이 없습니다. 다른 워크스페이스로 태그된 딜은 여기에 표시되지 않습니다. 딜을 등록하거나 기록에 ${ws.label} 태그가 연결되면 파이프라인이 채워집니다.`}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
       )}
 
       {!wsEmpty && (
-      <div className="hub-scroll-x" style={{ display: 'flex', gap: 'var(--gap)', overflowX: 'auto', flex: 1, paddingBottom: 4 }}>
+      <ScrollShadowX>
         {DEAL_STAGES.map(s => {
-          const items = scopedDeals.filter(d => d.stage === s.key && matches(d));
-          const isOver = Boolean(drag) && overStage === s.key;
+          const items = visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
           return (
             <div key={s.key}
-              onDragOver={e => { e.preventDefault(); if (drag) setOverStage(s.key); }}
-              onDragLeave={() => setOverStage(cur => (cur === s.key ? null : cur))}
-              onDrop={() => { if (drag) move(drag, s.key); setOverStage(null); }}
+              onDragOver={e => e.preventDefault()}
+              onDrop={() => drag && move(drag, s.key)}
               style={{
                 width: 260, flexShrink: 0,
-                background: isOver ? 'var(--surface-2)' : 'var(--surface)',
-                border: `1px solid ${isOver ? 'var(--line-strong)' : 'var(--line-soft)'}`,
+                background: 'var(--surface)',
+                border: '1px solid var(--line-soft)',
                 borderRadius: 'var(--r-lg)',
                 display: 'flex', flexDirection: 'column',
-                transition: 'background .12s ease, border-color .12s ease',
+                // Stage heat as a 2px top stripe (§5.2 inset-stripe idiom, rotated to the
+                // column top) — replaces the 6px Dot so the funnel's cold→hot gradient reads
+                // across the whole board and ties each column to its masthead gauge segment.
+                boxShadow: `inset 0 2px 0 0 ${STAGE_LINE[s.color] || 'var(--line-strong)'}`,
               }}>
               <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Dot tone={s.color} />
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 600 }}>{s.label}</span>
-                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginLeft: 'auto' }}>{totals[s.key].count}</span>
+                  <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', marginLeft: 'auto' }}>{totals[s.key].count}</span>
                 </div>
-                <div className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 4 }}>{fmt(totals[s.key].sum)}</div>
+                <div className="mono" style={{ fontSize: 12, color: totals[s.key].sum ? 'var(--fg-muted)' : 'var(--fg-faint)', marginTop: 4 }}>{fmt(totals[s.key].sum)}</div>
               </div>
               <div className="scroll-y" style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 6, minHeight: 100 }}>
-                {items.map(d => (
+                {items.map(d => {
+                  // Stalled = open (not won/lost) and aged past the follow-up window. Surfaces
+                  // in every open column, not just Negotiation, and marks the card with a
+                  // danger inset stripe (§5.2 left-accent — never a full fill or a thick border).
+                  const stalled = Number(d.age) >= STALLED_DAYS && s.key !== 'closing' && s.key !== 'lost';
+                  return (
                   <div key={d.id}
+                    className="hub-kanban-card"
                     draggable
-                    onClick={() => openDealEditor(d)}
-                    onDragStart={() => setDrag(d.id)}
-                    onDragEnd={() => { setDrag(null); setOverStage(null); }}
+                    role="button" tabIndex={0}
+                    onClick={() => { if (dragMovedRef.current) return; setEditDealId(d.id); }}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditDealId(d.id); } }}
+                    onDragStart={() => { dragMovedRef.current = true; setDrag(d.id); }}
+                    onDragEnd={() => { setDrag(null); setTimeout(() => { dragMovedRef.current = false; }, 0); }}
                     style={{
                       background: 'var(--surface-2)',
                       border: '1px solid var(--line-soft)',
                       borderRadius: 'var(--r-sm)',
                       padding: '10px 11px', cursor: 'grab',
-                      opacity: drag === d.id ? 0.4 : movingDeals.has(d.id) ? 0.65 : 1,
-                      outline: selection.selectedId === d.id ? '1px solid var(--moon-300)' : 'none',
-                      outlineOffset: 2,
+                      opacity: drag === d.id ? 0.4 : (d.hidden ? 0.5 : 1),
+                      boxShadow: stalled ? 'inset 2px 0 0 var(--danger-line)' : undefined,
                     }}>
-                    <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 6 }}>
-                      <span className="mono" style={{ fontSize: 9.5, color: 'var(--fg-faint)' }}>{d.id}</span>
-                      <div style={{ flex: 1 }} />
-                      {d.age > 10 && s.key !== 'won' && s.key !== 'lost' && (
-                        <IconButton
-                          icon="queue"
-                          size={20}
-                          iconSize={12}
-                          tooltip={queuedDeals.has(d.id) ? '큐에 있음' : 'follow-up 작업 큐에 추가'}
-                          onClick={(e) => { e.stopPropagation(); if (!queuedDeals.has(d.id)) queueFollowup(d); }}
-                          style={queuedDeals.has(d.id) ? { color: 'var(--moon-200)' } : undefined}
-                        />
-                      )}
+                    {/* 이름이 첫 줄 — UUID는 판단 데이터가 아니라 드로어 부제로 충분한 계기
+                        소음이었다. 카드에서 가장 좋은 자리는 고객이 갖는다. */}
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                      <div style={{
+                        flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--fg)', lineHeight: 1.35,
+                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                      }}>{d.name}</div>
+                      <IconButton
+                        icon="eye"
+                        size={20}
+                        iconSize={12}
+                        tooltip={d.hidden ? '파이프라인에 다시 보이기' : '파이프라인에서 숨기기'}
+                        onClick={(e) => { e.stopPropagation(); toggleDealHidden(d.id, !d.hidden); }}
+                      />
                       <IconButton
                         icon="sparkle"
                         size={20}
                         iconSize={12}
                         tooltip="Guru에게 진단 요청"
-                        onClick={(e) => { e.stopPropagation(); openGuruDiagnosis(d); }}
+                        onClick={(e) => { e.stopPropagation(); onNavigate?.(guruChatPath({ mode: 'deal-review', ref: d.id })); }}
                       />
                       <Badge tone={d.type === 'personal' ? 'personal' : 'company'} size="xs">
                         {d.type === 'personal' ? 'P' : 'C'}
                       </Badge>
                     </div>
-                    <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.4, marginBottom: 8 }}>{d.name}</div>
-                    <DealLeadMiniChips lead={leadForDeal(d)} />
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                      <span className="mono" style={{ fontSize: 12, color: 'var(--moon-200)' }}>{fmt(d.value)}</span>
-                      <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{d.close}</span>
+                    {/* 금액이 카드에서 가장 밝은 데이터 — 영업 보드의 두 번째 읽기 대상. */}
+                    <div style={{ marginTop: 8, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                      <span className="mono" style={{ fontSize: 12.5, color: d.value ? 'var(--moon-100)' : 'var(--fg-faint)' }}>{fmt(d.value)}</span>
+                      <div style={{ flex: 1 }} />
+                      {(() => {
+                        const stat = dealTaskStats.get(d.id);
+                        return stat?.total ? (
+                          <span className="mono" style={{ fontSize: 10.5, color: stat.done === stat.total ? 'var(--success)' : 'var(--fg-faint)' }}>
+                            ✓{stat.done}/{stat.total}
+                          </span>
+                        ) : null;
+                      })()}
+                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{d.close}</span>
                     </div>
-                    {isStalled(d) && (
-                      <div style={{ marginTop: 6, fontSize: 10, color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <Iconed name="clock" size={10} /> {d.age}d stalled
-                      </div>
-                    )}
-                    {movingDeals.has(d.id) && (
-                      <div style={{ marginTop: 6, fontSize: 10, color: 'var(--fg-faint)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ width: 5, height: 5, borderRadius: 999, background: 'var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
-                        저장 중
+                    {stalled && (
+                      <div style={{ marginTop: 6, fontSize: 10.5, color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <Iconed name="clock" size={10} /> {d.age}일 정체
                       </div>
                     )}
                   </div>
-                ))}
-                {addStage === s.key ? (
-                  <Input
-                    autoFocus
-                    placeholder="딜 이름 + Enter"
-                    value={addText}
-                    onChange={setAddText}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && addText.trim()) { createDealInStage(s.key, addText.trim()); setAddStage(null); setAddText(''); }
-                      else if (e.key === 'Escape') { setAddStage(null); setAddText(''); }
-                    }}
-                    style={{ display: 'flex' }}
-                  />
-                ) : (
-                  <button
-                    onClick={() => { setAddStage(s.key); setAddText(''); }}
-                    style={{
-                      padding: '6px 10px', fontSize: 11.5, color: 'var(--fg-faint)',
-                      background: 'transparent', border: '1px dashed var(--line-soft)',
-                      borderRadius: 'var(--r-sm)', textAlign: 'left', cursor: 'pointer',
-                    }}
-                  >
-                    + 딜
-                  </button>
-                )}
+                  );
+                })}
+                <button
+                  onClick={() => createDeal(s.key)}
+                  title={`${s.label}에 새 딜 추가`}
+                  className="hub-kanban-add"
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                    width: '100%', padding: '7px 8px', marginTop: items.length ? 2 : 0,
+                    fontSize: 11.5, borderRadius: 'var(--r-sm)', cursor: 'pointer',
+                  }}>
+                  <Iconed name="plus" size={11} /> 딜 추가
+                </button>
               </div>
             </div>
           );
         })}
-      </div>
+      </ScrollShadowX>
       )}
 
-      {guruDeal && (
-        <Drawer
-          title="Guru 딜 진단"
-          subtitle={`${guruDeal.name} · ${guruDeal.stage} · ${fmt(guruDeal.value)}`}
-          onClose={() => setGuruDeal(null)}
-          width="min(440px, 92vw)"
-          borderLeft="var(--line-soft)"
-          footerStyle={{ flexWrap: 'wrap' }}
-          footer={
-            <>
-              <Button variant="ghost" size="sm" onClick={() => openGuruDiagnosis(guruDeal)} disabled={guru.phase === 'loading'}>다시 진단</Button>
-              {guru.phase === 'done' && guru.state === 'done' && (
-                <Button variant="outline" size="sm" icon="edit" onClick={saveGuruDiagnosis} disabled={guruSaved}>
-                  {guruSaved ? '저장됨' : '활동으로 저장'}
-                </Button>
-              )}
-              <div style={{ flex: 1 }} />
-              {guruDeal.age > 10 && guruDeal.stage !== 'won' && guruDeal.stage !== 'lost' ? (
-                <Button variant="primary" size="sm" icon="queue" onClick={() => queueFollowup(guruDeal)}>follow-up 큐에 추가</Button>
-              ) : (
-                <Button variant="primary" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.(guruChatPath({ mode: 'deal-review', ref: guruDeal.id }))}>Chat에서 이어가기</Button>
-              )}
-            </>
-          }
-        >
-          {guru.phase === 'loading' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
-              <div style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
-              컨텍스트 조립 → Engine 진단 중…
-            </div>
-          )}
-          {guru.phase === 'done' && guru.state === 'done' && (
-            <div style={{ fontSize: 13, lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{guru.text}</div>
-          )}
-          {guru.phase === 'done' && guru.state === 'preview' && (
-            <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.55 }}>
-              <Badge tone="neutral" size="xs">preview</Badge>
-              <span style={{ marginLeft: 8 }}>Engine이 아직 연결되지 않아 코칭을 생성할 수 없습니다. (COM_MOON_ENGINE_URL 미설정)</span>
-            </div>
-          )}
-          {guru.phase === 'done' && guru.state === 'error' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
-              <div style={{ fontSize: 12, color: 'var(--danger)', lineHeight: 1.55 }}>
-                Guru 진단에 실패했습니다. 잠시 후 다시 시도하세요.
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => openGuruDiagnosis(guruDeal)}>다시 시도</Button>
-            </div>
-          )}
-        </Drawer>
-      )}
-
-      {toast && (
-        <div style={{
-          position: 'fixed', right: 20, bottom: 20, zIndex: 70,
-          maxWidth: 'min(360px, calc(100vw - 40px))',
-          padding: '11px 14px',
-          background: 'var(--surface)',
-          border: '1px solid var(--line-soft)',
-          borderRadius: 'var(--r-lg)',
-          boxShadow: '0 8px 24px -12px oklch(0 0 0 / 0.55)',
-          display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <span style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45 }}>{toast.text}</span>
-          {toast.action && (
-            <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => { onNavigate?.(toast.action.go); setToast(null); }}>{toast.action.label}</Button>
-          )}
-        </div>
-      )}
-
-      <ShortcutOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <EditDrawer
         title={editingDeal ? (editingDeal.name || '딜 편집') : ''}
         subtitle={editingDeal ? `${editingDeal.id} · 딜 정보 편집` : ''}
         record={editingDeal}
         fields={[
           { key: 'name', label: '딜 이름' },
-          { key: 'type', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
-          { key: 'stage', label: '단계', type: 'select', options: [
+          // 단계+금액 한 줄 — 결정에 실제로 쓰이는 두 값. 타입+마감은 그다음 줄, 부차적.
+          // 담당은 뺐다: 1인 운영 시스템이라 항상 Me뿐이고, buildDealWrite가 애초에
+          // owner를 저장한 적이 없어 편집 가능한 척만 하던 필드였다.
+          { key: 'stage', row: 'primary', label: '단계', type: 'select', options: [
             ...DEAL_STAGES.map(s => ({ value: s.key, label: s.label })),
             ...(DEAL_STAGES.some(s => s.key === 'lost') ? [] : [{ value: 'lost', label: 'Lost' }]),
           ] },
-          { key: 'value', label: '금액 (₩)', inputType: 'number', placeholder: '0' },
-          { key: 'close', label: '예상 마감', placeholder: '5월 12일' },
-          { key: 'owner', label: '담당' },
+          { key: 'value', row: 'primary', label: '금액 (₩)', inputType: 'number', placeholder: '0' },
+          { key: 'closeAt', row: 'meta', label: '예상 마감', inputType: 'date' },
+          { key: 'type', row: 'meta', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
         ]}
         onChange={(key, val) => setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, [key]: val } : d)))}
         onSave={persistDeal}
         onDelete={deleteDeal}
-        onClose={() => { setEditDealId(null); setEditDealPrevStage(null); }}
+        onClose={() => setEditDealId(null)}
       >
-        {editingDeal && (() => {
-          const linkedLead = leadForDeal(editingDeal);
-          // Mirror convertLeadToDeal's path pick: in-workspace → classin, else the flat leads route.
-          const leadPath = ws ? 'dashboard/classin/revenue' : 'dashboard/revenue/leads';
-          return (
-            <>
-              {linkedLead && (
-                <div style={{
-                  display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4,
-                  padding: 10, background: 'var(--surface-2)',
-                  border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)' }}>연결된 리드</span>
-                    <div style={{ flex: 1 }} />
-                    <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(`${leadPath}?lead=${linkedLead.id}`)}>리드 열기</Button>
-                  </div>
-                  <div style={{ fontSize: 13, color: 'var(--fg)' }}>{linkedLead.name}</div>
-                  <LeadTagChips lead={linkedLead} />
-                </div>
-              )}
-              {(editingDeal.leadId || editingDeal.account) && (
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {editingDeal.leadId && (
-                    <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(crmTabPath(workspace, 'leads', `?lead=${encodeURIComponent(editingDeal.leadId)}`))}>리드 보기</Button>
-                  )}
-                  {editingDeal.account && (
-                    <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(crmTabPath(workspace, 'accounts', `?acct=${encodeURIComponent(editingDeal.account)}`))}>고객 보기</Button>
-                  )}
-                </div>
-              )}
-              <QuickLogBar entityType="deal" entityId={editingDeal.id} />
-              <DrawerTimeline entityType="deal" entityId={editingDeal.id} title="활동 타임라인" />
-            </>
-          );
-        })()}
+        <DealTaskPanel deal={editingDeal} onSaved={loadDealTaskStats} />
       </EditDrawer>
     </div>
   );
@@ -2010,32 +1306,57 @@ export function Deals({ workspace, onNavigate }) {
 // Shared grid template for Cases — gap added so Type/Priority/Status chips never butt the next column
 const CASES_GRID = '80px 1fr 160px 112px 100px 100px 110px 90px';
 
-export function Cases({ onNavigate }) {
+// 우선순위·상태는 알파벳이 아니라 심각도/수명 순서로 정렬한다 (§8.1 — 단계는 퍼널 순).
+const CASE_PRIORITY_RANK = { low: 0, med: 1, high: 2 };
+const CASE_STATUS_RANK = { Open: 0, Waiting: 1, Resolved: 2 };
+
+function sortCases(rows, sort) {
+  if (!sort.key) return rows;
+  const dir = sort.dir === 'desc' ? -1 : 1;
+  const value = (c) => sort.key === 'priority' ? (CASE_PRIORITY_RANK[c.priority] ?? -1)
+    : sort.key === 'status' ? (CASE_STATUS_RANK[c.status] ?? -1)
+    : sort.key === 'opened' ? new Date(c.openedAt || 0).getTime()
+    : String(c[sort.key] || '').toLowerCase();
+  return [...rows].sort((a, b) => {
+    const av = value(a);
+    const bv = value(b);
+    return av < bv ? -dir : av > bv ? dir : 0;
+  });
+}
+
+export function Cases() {
   const { ledger, syncState } = useRevenueLedger();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const [localCases, setLocalCases] = React.useState([]);
   const [caseEdits, setCaseEdits] = React.useState({}); // { [id]: patch } — overlays any case
   const [deletedCaseIds, setDeletedCaseIds] = React.useState(() => new Set());
   const [editCaseId, setEditCaseId] = React.useState(null);
-  const [caseAddText, setCaseAddText] = React.useState(''); // inline quick-add row text
-  const [statusFilter, setStatusFilter] = React.useState('all');
-  const [typeFilter, setTypeFilter] = React.useState('all');
-  const [search, setSearch] = React.useState('');
-  const ledgerCases = ledger.source === 'supabase'
-    ? (Array.isArray(ledger.cases) ? ledger.cases : [])
-    : (Array.isArray(ledger.cases) ? ledger.cases : FALLBACK_CASES);
-  const cases = [...localCases, ...ledgerCases]
+  const [sort, setSort] = React.useState({ key: null, dir: 'asc' });
+  const ledgerCases = Array.isArray(ledger.cases) ? ledger.cases : [];
+  const mergedCases = [...localCases, ...ledgerCases]
     .filter(c => !deletedCaseIds.has(c.id))
     .map(c => (caseEdits[c.id] ? { ...c, ...caseEdits[c.id] } : c));
-  const term = search.trim().toLowerCase();
-  // Signal first: keep incoming order but sink resolved cases below live ones.
-  const visibleCases = cases.filter(c =>
-    (statusFilter === 'all' || c.status === statusFilter) &&
-    (typeFilter === 'all' || c.type === typeFilter) &&
-    (!term || String(c.title || '').toLowerCase().includes(term) || String(c.account || '').toLowerCase().includes(term))
-  )
-    .slice()
-    .sort((a, b) => Number(a.status === 'Resolved') - Number(b.status === 'Resolved'));
-  const editingCase = editCaseId ? cases.find(c => c.id === editCaseId) : null;
+  const cases = sortCases(mergedCases, sort);
+  const editingCase = editCaseId ? mergedCases.find(c => c.id === editCaseId) : null;
+  // asc → desc → 해제(원장 순) 3단 토글 — Leads와 같은 계약.
+  const toggleSort = (key) => setSort(s =>
+    s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: null, dir: 'asc' }
+  );
+  const SortHead = ({ k, children, align }) => (
+    <button type="button" onClick={() => toggleSort(k)} title={`${children} 기준 정렬`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3, width: '100%',
+        justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
+        fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
+        color: sort.key === k ? 'var(--fg-muted)' : 'var(--fg-faint)',
+        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+      }}>
+      {children}
+      <span style={{ fontSize: 8, opacity: sort.key === k ? 1 : 0 }}>{sort.dir === 'desc' && sort.key === k ? '▼' : '▲'}</span>
+    </button>
+  );
   const sTone = { Open: 'warning', Waiting: 'info', Resolved: 'success' };
   const pTone = { high: 'danger', med: 'warning', low: 'neutral' };
   const createCase = () => {
@@ -2048,32 +1369,28 @@ export function Cases({ onNavigate }) {
       priority: 'med',
       status: 'Open',
       opened: '방금',
+      openedAt: new Date().toISOString(),
       owner: 'Me',
     }, ...prev]);
-    setEditCaseId(id);
+    setEditCaseId(id); // open the editor immediately so the new case can be filled in
   };
 
-  // Inline quick-add: create a case from just a title, persist immediately, no drawer.
-  const createCaseInline = (title) => {
-    const trimmed = String(title || '').trim();
-    if (!trimmed) return;
-    const id = `CASE-${Date.now()}`;
-    const c = {
-      id,
-      title: trimmed,
-      account: '미지정',
-      type: 'company',
-      priority: 'med',
-      status: 'Open',
-      opened: '방금',
-      owner: 'Me',
-    };
-    setLocalCases(prev => [c, ...prev]);
-    saveRevenueRecord('case', 'create', c).then(r => {
-      if (r.ok && r.id) setLocalCases(prev => prev.map(x => (x.id === id ? { ...x, id: r.id } : x)));
-    });
-  };
+  // Deep-link: ?case=<id> opens that case's EditDrawer once the ledger has loaded — Leads의
+  // ?lead=와 같은 one-shot 계약 (소비 후 쿼리 소거, 새로고침 시 재실행 없음).
+  const caseParam = searchParams?.get('case') || null;
+  const consumedCaseRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!caseParam || syncState === 'loading') return;
+    if (consumedCaseRef.current === caseParam) return;
+    if (mergedCases.some(c => String(c.id) === String(caseParam))) {
+      consumedCaseRef.current = caseParam;
+      setEditCaseId(caseParam);
+      if (pathname) router.replace(pathname);
+    }
+  }, [caseParam, syncState, mergedCases, pathname, router]);
 
+  // Persist the drawer edit. New local rows (id `CASE-…`) insert; on success the returned
+  // real id replaces the local one so a later edit takes the update path and the overlay re-keys.
   const persistCase = async () => {
     if (!editingCase) return { ok: false, status: 'error' };
     const isNew = String(editCaseId).startsWith('CASE-');
@@ -2092,6 +1409,7 @@ export function Cases({ onNavigate }) {
     return r;
   };
 
+  // Delete: drop the row locally (optimistic) and best-effort remove it from the ledger.
   const deleteCase = async () => {
     if (!editCaseId) return { ok: false };
     const isLocal = String(editCaseId).startsWith('CASE-');
@@ -2100,6 +1418,21 @@ export function Cases({ onNavigate }) {
     if (isLocal) return { ok: true, status: 'local' };
     return saveRevenueRecord('case', 'delete', { id: editCaseId });
   };
+
+  // Page-level `n` — quick-create a case when no drawer is open and focus isn't in a field.
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if ((e.key !== 'n' && e.key !== 'N') || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (editCaseId) return;
+      const t = e.target;
+      const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+      e.preventDefault();
+      createCase();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editCaseId]);
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
@@ -2112,90 +1445,36 @@ export function Cases({ onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <SegmentedControl
-          className="hub-toolbar"
-          style={{ marginRight: 8 }}
-          options={[{ key: 'all', label: 'All' }, { key: 'personal', label: 'Personal', dot: 'personal' }, { key: 'company', label: 'Company', dot: 'company' }]}
-          value={typeFilter}
-          onChange={setTypeFilter}
-        />
-        <Input className="hub-toolbar" placeholder="제목·계정 검색…" icon="search" value={search} onChange={setSearch} />
-        <div style={{ width: 8 }} />
-        <SegmentedControl
-          className="hub-toolbar"
-          style={{ marginRight: 8 }}
-          options={[{ key: 'all', label: 'All' },{ key: 'Open', label: 'Open' },{ key: 'Waiting', label: 'Waiting' },{ key: 'Resolved', label: 'Resolved' }].map(t => ({
-            ...t,
-            count: t.key === 'all' ? cases.length : cases.filter(c => c.status === t.key).length,
-          }))}
-          value={statusFilter}
-          onChange={setStatusFilter}
-        />
-        <Button variant="primary" size="sm" icon="plus" onClick={createCase}>Case</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createCase}>Case <Kbd>N</Kbd></Button>
       </div>
       <Card pad={false} className="hub-table-card">
         <div style={{ display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          <span>ID</span><span>Title</span><span>Account</span><span>Type</span><span>Priority</span><span>Status</span><span>Opened</span><span style={{ textAlign: 'right' }}>Owner</span>
+          <span>ID</span><SortHead k="title">Title</SortHead><SortHead k="account">Account</SortHead><span>Type</span><SortHead k="priority">Priority</SortHead><SortHead k="status">Status</SortHead><SortHead k="opened">Opened</SortHead><span style={{ textAlign: 'right' }}>Owner</span>
         </div>
-        <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--line-soft)' }}>
-          <Input
-            placeholder="+ 케이스 제목 입력 후 Enter"
-            value={caseAddText}
-            onChange={setCaseAddText}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && caseAddText.trim()) { createCaseInline(caseAddText); setCaseAddText(''); }
-              else if (e.key === 'Escape') { setCaseAddText(''); }
-            }}
-            style={{ display: 'flex', width: '100%' }}
-          />
-        </div>
-        {visibleCases.length === 0 && (
+        {cases.length === 0 && (
           <EmptyState
             icon="cases"
-            title={statusFilter !== 'all' && cases.length > 0 ? `${statusFilter} 상태의 케이스가 없습니다` : '운영 케이스가 없습니다'}
-            description={statusFilter !== 'all' && cases.length > 0
-              ? '상태 필터를 All로 되돌리면 전체 케이스가 표시됩니다.'
-              : syncState === 'live' ? 'Supabase operation_cases 원장에 표시할 케이스가 없습니다.' : '지원/운영 이슈가 생기면 계정과 함께 표시됩니다.'}
+            title="운영 케이스가 없습니다"
+            description={syncState === 'live' ? 'Supabase operation_cases 기록에 표시할 케이스가 없습니다.' : '지원/운영 이슈가 생기면 계정과 함께 표시됩니다.'}
+            action={<Button variant="primary" size="sm" icon="plus" onClick={createCase}>케이스 추가</Button>}
           />
         )}
-        {visibleCases.map((c, i) => (
-          <div
-            key={c.id}
-            role="button"
-            tabIndex={0}
-            aria-label={`${c.title} 케이스 편집`}
-            style={{
-            display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12,
-            padding: '12px 16px', alignItems: 'center', cursor: 'pointer',
-            borderBottom: i < visibleCases.length - 1 ? '1px solid var(--line-soft)' : 'none',
-          }}
+        {cases.map((c, i) => (
+          <div key={c.id} className="hub-row"
+            role="button" tabIndex={0}
             onClick={() => setEditCaseId(c.id)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                setEditCaseId(c.id);
-              }
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditCaseId(c.id); } }}
+            style={{
+              display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12,
+              padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', cursor: 'pointer',
+              borderBottom: i < cases.length - 1 ? '1px solid var(--line-soft)' : 'none',
+              // High-priority open cases carry a danger left-accent (§5.2) — resolved ones stay quiet.
+              boxShadow: c.priority === 'high' && c.status !== 'Resolved' ? 'inset 2px 0 0 var(--danger-line)' : undefined,
             }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
-            <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{c.id}</span>
+            <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{c.id}</span>
             <span style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.title}</span>
-            <span
-              onClick={(e) => {
-                if (!c.account || c.account === '—') return;
-                e.stopPropagation();
-                onNavigate?.('dashboard/revenue/accounts?acct=' + encodeURIComponent(c.account));
-              }}
-              onMouseEnter={e => { if (c.account && c.account !== '—') e.currentTarget.style.color = 'var(--moon-300)'; }}
-              onMouseLeave={e => { e.currentTarget.style.color = 'var(--fg-muted)'; }}
-              style={{
-                fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                cursor: c.account && c.account !== '—' ? 'pointer' : 'default',
-              }}
-            >
-              {c.account}
-            </span>
+            <span style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.account}</span>
             <span style={{ paddingRight: 8, minWidth: 0 }}>
               <Badge tone={c.type === 'personal' ? 'personal' : 'company'} size="xs">{c.type === 'personal' ? 'Personal' : 'Company'}</Badge>
             </span>
@@ -2218,11 +1497,11 @@ export function Cases({ onNavigate }) {
         fields={[
           { key: 'title', label: '제목' },
           { key: 'account', label: '계정', placeholder: '계정·고객명' },
-          { key: 'type', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
-          { key: 'priority', label: '우선순위', type: 'select', options: [{ value: 'low', label: 'Low' }, { value: 'med', label: 'Med' }, { value: 'high', label: 'High' }] },
+          // 오픈 시점·담당은 뺐다: opened는 opened_at에서 파생된 상대 라벨(수정 불가)이고,
+          // owner는 리드/딜과 같은 이유(1인 운영, buildCaseWrite가 저장한 적 없음)로 죽은 필드였다.
+          { key: 'type', row: 'class', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
+          { key: 'priority', row: 'class', label: '우선순위', type: 'select', options: [{ value: 'low', label: 'Low' }, { value: 'med', label: 'Med' }, { value: 'high', label: 'High' }] },
           { key: 'status', label: '상태', type: 'select', options: [{ value: 'Open', label: 'Open' }, { value: 'Waiting', label: 'Waiting' }, { value: 'Resolved', label: 'Resolved' }] },
-          { key: 'opened', label: '오픈 시점' },
-          { key: 'owner', label: '담당' },
         ]}
         onChange={(key, val) => setCaseEdits(prev => ({ ...prev, [editCaseId]: { ...prev[editCaseId], [key]: val } }))}
         onSave={persistCase}
@@ -2237,27 +1516,17 @@ export function Cases({ onNavigate }) {
 
 const H_TONE = { ok: 'success', warning: 'warning', risk: 'danger' };
 
-const ACT_ICON = {
-  call: 'signal', meeting: 'calendar', info_session: 'brief', demo: 'play',
-  visit: 'flag', email: 'email', update: 'bell', note: 'edit', deal: 'deals',
-};
-const ACT_TONE = {
-  call: 'warning', meeting: 'moon', info_session: 'info', demo: 'success',
-  visit: 'personal', email: 'info', update: 'neutral', note: 'neutral', deal: 'success',
-};
-const ACT_LABEL = {
-  call: '통화', meeting: '미팅', info_session: '설명회', demo: '데모',
-  visit: '방문', email: '이메일', update: '소식', note: '노트', deal: '딜',
-};
-// Kinds offered in the Activity composer. Notes live in their own tab, so 'note' is excluded here.
-const ACTIVITY_KIND_OPTIONS = ['call', 'meeting', 'info_session', 'demo', 'visit', 'email', 'update', 'deal'];
+const ACT_ICON = { email: 'email', meeting: 'calendar', call: 'signal', note: 'edit', deal: 'deals', kakao: 'chat', quote: 'orders', ai: 'sparkle', info_session: 'brief', demo: 'play', visit: 'building', update: 'rhythm' };
+const ACT_TONE = { email: 'info', meeting: 'moon', call: 'warning', note: 'neutral', deal: 'success', kakao: 'warning', quote: 'neutral', ai: 'moon', info_session: 'info', demo: 'moon', visit: 'success', update: 'neutral' };
+const ACT_LABEL = { email: 'Email', meeting: 'Meeting', call: 'Call', note: 'Note', deal: 'Deal', kakao: '카카오', quote: '견적', ai: 'AI', info_session: '설명회', demo: '데모', visit: '방문', update: 'Update' };
+const REACTION_LABEL = { positive: '긍정', neutral: '중립', concern: '우려', rejected: '거절', no_response: '무응답' };
+const REACTION_TONE = { positive: 'success', neutral: 'neutral', concern: 'warning', rejected: 'danger', no_response: 'neutral' };
 
 function emptyDetail() {
-  return { mrr: 0, contacts: [], activity: [], notes: [] };
+  return { mrr: 0, contacts: [], deals: [], activity: [], notes: [] };
 }
 
 function HealthDot({ health }) {
-  const pulse = health === 'warning';
   return (
     <span
       title={health}
@@ -2265,102 +1534,9 @@ function HealthDot({ health }) {
         width: 7, height: 7, borderRadius: 999,
         background: `var(--${H_TONE[health]})`,
         display: 'inline-block',
-        animation: pulse ? 'mlMoonPulse 1.4s ease-in-out infinite' : 'none',
         flexShrink: 0,
       }}
     />
-  );
-}
-
-const HEALTH_COPY = {
-  ok: { label: '양호', tone: 'moon', next: '진행 딜과 최근 기록을 유지하세요.' },
-  warning: { label: '주의', tone: 'warning', next: '최근 접점과 다음 약속을 확인하세요.' },
-  risk: { label: '위험', tone: 'danger', next: '오늘 접점과 미해결 이슈를 먼저 확인하세요.' },
-};
-
-function healthCopy(health) {
-  return HEALTH_COPY[health] || HEALTH_COPY.ok;
-}
-
-function AccountSignalChip({ account }) {
-  const h = healthCopy(account.health);
-  const label = account.health === 'risk'
-    ? '위험 · 우선 확인'
-    : account.health === 'warning'
-    ? '주의 · 접점 필요'
-    : account.deals > 0
-    ? `${account.deals} deals`
-    : '기록 대기';
-  return (
-    <Badge tone={h.tone} size="xs" variant="outline" style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-      {label}
-    </Badge>
-  );
-}
-
-function AccountStatusStrip({ account, detail, onActivityFocus, onNoteFocus, onDealFocus }) {
-  const d = detail || emptyDetail();
-  const h = healthCopy(account.health);
-  const recent = (d.activity || []).slice(0, 3);
-  const pinned = (d.notes || []).find(n => n.pinned) || null;
-  const latest = recent[0];
-  const recentTitle = latest ? '최근 기록' : '최근 업데이트';
-  const recentBody = latest ? latest.msg : `${account.last || '—'} · ${account.lastAt || '—'}`;
-
-  return (
-    <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
-      <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 10, minHeight: 112 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-          <HealthDot health={account.health} />
-          <span style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>상태</span>
-        </div>
-        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <Badge tone={h.tone} size="xs" variant="outline">{h.label}</Badge>
-          <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{account.owner}</span>
-        </div>
-        <div style={{ marginTop: 8, fontSize: 11.5, lineHeight: 1.45, color: 'var(--fg-muted)' }}>{h.next}</div>
-      </div>
-
-      <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 10, minHeight: 112 }}>
-        <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>다음 액션</div>
-        <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45 }}>{account.deals > 0 ? '진행 딜 확인 후 고객 기록을 남기세요.' : '첫 딜 또는 활동 기록을 만들어 맥락을 시작하세요.'}</div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-          <Button variant="secondary" size="xs" icon="edit" onClick={onActivityFocus}>활동 기록</Button>
-          <Button variant="outline" size="xs" icon="deals" onClick={onDealFocus}>딜</Button>
-        </div>
-      </div>
-
-      <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 10, minHeight: 112 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{recentTitle}</span>
-          <Badge tone="neutral" size="xs" variant="outline">{(d.activity || []).length}</Badge>
-        </div>
-        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {recent.length === 0 ? (
-            <div style={{ fontSize: 11.5, lineHeight: 1.45, color: 'var(--fg-muted)' }}>{recentBody}</div>
-          ) : recent.map((a, i) => (
-            <div key={a.id || `${a.at}-${i}`} style={{ display: 'grid', gridTemplateColumns: '14px 1fr auto', gap: 6, alignItems: 'start' }}>
-              <span style={{ color: `var(--${ACT_TONE[a.type] === 'neutral' ? 'fg-muted' : ACT_TONE[a.type] || 'fg-muted'})`, marginTop: 1 }}>
-                <Iconed name={ACT_ICON[a.type] || 'edit'} size={12} />
-              </span>
-              <span style={{ fontSize: 11.5, lineHeight: 1.35, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.msg}</span>
-              <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{a.at}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 10, minHeight: 112 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>핀 노트</span>
-          <Iconed name="star" size={11} style={{ color: pinned ? 'var(--moon-300)' : 'var(--fg-faint)' }} />
-        </div>
-        <div style={{ marginTop: 8, fontSize: 11.5, color: pinned ? 'var(--fg)' : 'var(--fg-muted)', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-          {pinned ? pinned.body : '중요 노트가 아직 없습니다.'}
-        </div>
-        <Button variant="ghost" size="xs" icon="edit" onClick={onNoteFocus} style={{ marginTop: 8 }}>노트 추가</Button>
-      </div>
-    </div>
   );
 }
 
@@ -2375,10 +1551,10 @@ function ContactMenu({ onAction }) {
   }, [open]);
 
   const items = [
-    { key: 'email',   icon: 'email',    label: '이메일 보내기' },
-    { key: 'meeting', icon: 'calendar', label: '미팅 잡기' },
-    { key: 'chat',    icon: 'chat',     label: '채팅 스레드' },
     { key: 'call',    icon: 'signal',   label: '통화 기록' },
+    { key: 'kakao',   icon: 'chat',     label: '카카오·문자 기록' },
+    { key: 'meeting', icon: 'calendar', label: '일정 잡기' },
+    { key: 'note',    icon: 'edit',     label: '메모 추가' },
   ];
 
   return (
@@ -2395,18 +1571,16 @@ function ContactMenu({ onAction }) {
           padding: 4,
         }}>
           {items.map(it => (
-            <button key={it.key}
+            <button key={it.key} className="hub-row"
               onClick={() => { onAction(it.key); setOpen(false); }}
               style={{
-                display: 'flex', alignItems: 'center', gap: 7, width: '100%',
+                display: 'flex', alignItems: 'center', width: '100%',
                 padding: '7px 10px', fontSize: 12, color: 'var(--fg)',
-                background: 'transparent', border: 'none', borderRadius: 4,
+                border: 'none', borderRadius: 4,
                 cursor: 'pointer', textAlign: 'left',
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
-              <Iconed name={it.icon} size={13} />
+              <Iconed name={it.icon} size={12} style={{ marginRight: 8, color: 'var(--fg-muted)' }} />
               {it.label}
             </button>
           ))}
@@ -2416,15 +1590,29 @@ function ContactMenu({ onAction }) {
   );
 }
 
-function LogComposer({ onLog }) {
-  const [type, setType] = React.useState('call');
+// `preset` is set by a quick-action click (ContactMenu/QuickActions — "Schedule meeting" etc.):
+// it seeds the type + a starting draft instead of the old behavior of silently writing a
+// canned message with no way to enter real details. `preset.seq` is a bump counter so clicking
+// the same quick action twice in a row (e.g. "Schedule meeting" again before saving) still
+// re-applies the preset and re-focuses, even though type/text otherwise look unchanged.
+function LogComposer({ onLog, preset }) {
+  const [type, setType] = React.useState('note');
   const [text, setText] = React.useState('');
+  const textRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!preset) return;
+    setType(preset.type || 'note');
+    setText(preset.text || '');
+    textRef.current?.focus();
+  }, [preset?.seq]);
+
   const save = () => {
     const body = text.trim();
     if (!body) return;
     onLog({ type, msg: body });
     setText('');
-    setType('call');
+    setType('note');
   };
   return (
     <div style={{
@@ -2435,31 +1623,29 @@ function LogComposer({ onLog }) {
       display: 'flex', flexDirection: 'column', gap: 8,
     }}>
       <textarea
-        aria-label="활동 기록"
+        ref={textRef}
         value={text}
         onChange={e => setText(e.target.value)}
-        placeholder="활동 기록… (이메일 회신, 통화 메모, 결정 요약 등)"
+        placeholder="활동 기록… (통화, 카카오·문자, 미팅, 결정 요약 등)"
         rows={2}
         style={{
           width: '100%', resize: 'vertical',
-          background: 'transparent', border: 'none', outline: 'none',
+          background: 'transparent', border: 'none',
           color: 'var(--fg)', fontSize: 12.5, fontFamily: 'inherit',
           lineHeight: 1.5,
         }}
       />
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <select
-          aria-label="활동 유형"
           value={type}
           onChange={e => setType(e.target.value)}
           style={{
             height: 26, padding: '0 8px', fontSize: 11.5,
             background: 'var(--surface-3)', color: 'var(--fg)',
             border: '1px solid var(--line)', borderRadius: 'var(--r-sm)',
-            outline: 'none',
           }}
         >
-          {ACTIVITY_KIND_OPTIONS.map(k => <option key={k} value={k}>{ACT_LABEL[k]}</option>)}
+          {Object.keys(ACT_LABEL).map(k => <option key={k} value={k}>{ACT_LABEL[k]}</option>)}
         </select>
         <div style={{ flex: 1 }} />
         <Button variant="primary" size="xs" onClick={save}>Save</Button>
@@ -2470,11 +1656,11 @@ function LogComposer({ onLog }) {
 
 function QuickActions({ onAction }) {
   const acts = [
-    { k: 'email',   label: '이메일',     variant: 'primary',  icon: 'email' },
-    { k: 'meeting', label: '미팅 잡기',   variant: 'outline',  icon: 'calendar' },
-    { k: 'deal',    label: '새 딜',      variant: 'outline',  icon: 'deals' },
-    { k: 'call',    label: '통화 기록',   variant: 'outline',  icon: 'signal' },
-    { k: 'note',    label: '노트 추가',   variant: 'outline',  icon: 'edit' },
+    { k: 'call',    label: '통화 기록',        variant: 'primary',  icon: 'signal' },
+    { k: 'kakao',   label: '메시지 기록',      variant: 'outline',  icon: 'chat' },
+    { k: 'meeting', label: '일정 잡기',        variant: 'outline',  icon: 'calendar' },
+    { k: 'deal',    label: '딜 메모',           variant: 'outline',  icon: 'deals' },
+    { k: 'note',    label: '메모',              variant: 'outline',  icon: 'edit' },
   ];
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -2485,26 +1671,29 @@ function QuickActions({ onAction }) {
   );
 }
 
-function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, onNavigate, onEdit }) {
+function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAddNote, onNavigate }) {
   const [tab, setTab] = React.useState('activity');
   const [noteText, setNoteText] = React.useState('');
-  const [activityKind, setActivityKind] = React.useState('all');
-  const noteInputRef = React.useRef(null);
-  const focusNotes = React.useCallback(() => {
-    setTab('notes');
-    setTimeout(() => noteInputRef.current?.focus(), 0);
-  }, []);
-  const focusActivity = React.useCallback(() => {
+  // Quick actions (ContactMenu/QuickActions — "Schedule meeting" etc.) used to write a
+  // canned message straight to crm_activities with no way to enter real details. Now they
+  // switch to Activity and seed LogComposer instead — the click chooses the type + a starter
+  // draft, the operator still has to type and hit Save. `seq` forces LogComposer to re-apply
+  // the preset even if type/text look unchanged from the last click.
+  const [composerPreset, setComposerPreset] = React.useState({ type: 'note', text: '', seq: 0 });
+  const handleQuickAction = (kind, contactName) => {
+    const type = kind;
+    const starters = {
+      email: '이메일: ',
+      meeting: '미팅: ',
+      kakao: '카카오·문자: ',
+      call: '통화: ',
+      deal: '',
+      note: '',
+    };
+    const text = contactName ? `${contactName} — ${starters[kind] || ''}` : (starters[kind] || '');
     setTab('activity');
-  }, []);
-  const handleQuickAction = React.useCallback((kind, contactName) => {
-    if (kind === 'note') {
-      focusNotes();
-      return;
-    }
-    if (kind === 'call') focusActivity();
-    onAction(kind, contactName);
-  }, [focusActivity, focusNotes, onAction]);
+    setComposerPreset((p) => ({ type, text, seq: p.seq + 1 }));
+  };
   if (!account) {
     return (
       <div style={{
@@ -2519,20 +1708,10 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
   }
 
   const d = detail || emptyDetail();
-  const activityKindOptions = [
-    { key: 'all', label: '전체' },
-    { key: 'call', label: '통화' },
-    { key: 'meeting', label: '미팅' },
-    { key: 'info_session', label: '설명회' },
-    { key: 'demo', label: '데모' },
-    { key: 'visit', label: '방문' },
-  ];
-  const visibleActivity = d.activity.length > 15 && activityKind !== 'all'
-    ? d.activity.filter(a => a.type === activityKind)
-    : d.activity;
   const tabs = [
     { key: 'activity', label: 'Activity', count: d.activity.length },
     { key: 'contacts', label: 'Contacts', count: d.contacts.length },
+    { key: 'deals',    label: 'Deals',    count: d.deals.length },
     { key: 'notes',    label: 'Notes',    count: d.notes.length },
   ];
 
@@ -2557,18 +1736,7 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
             <div style={{ display: 'flex', gap: 18, marginTop: 10 }}>
               <div>
                 <div style={{ fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Deals</div>
-                {account.deals > 0 && account.companyId ? (
-                  <button
-                    onClick={() => {
-                      const inClassin = typeof window !== 'undefined' && window.location.pathname.includes('/classin/');
-                      onNavigate?.(crmTabPath(inClassin ? 'classin' : undefined, 'deals', `?company=${encodeURIComponent(account.companyId)}`));
-                    }}
-                    title="이 고객의 딜 보기"
-                    style={{ fontSize: 13, marginTop: 3, color: 'var(--moon-200)', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
-                  >{account.deals} →</button>
-                ) : (
-                  <div style={{ fontSize: 13, marginTop: 3 }}>{account.deals}</div>
-                )}
+                <div className="mono" style={{ fontSize: 13, marginTop: 3 }}>{account.deals}</div>
               </div>
               <div>
                 <div style={{ fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Value</div>
@@ -2595,17 +1763,19 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
           >
             Ask Guru
           </Button>
-          {onEdit && (
-            <Button variant="outline" size="xs" icon="edit" onClick={() => onEdit(account)}>편집</Button>
-          )}
         </div>
-        <AccountStatusStrip
-          account={account}
-          detail={d}
-          onActivityFocus={focusActivity}
-          onNoteFocus={focusNotes}
-          onDealFocus={() => onAction('deal')}
-        />
+        {(account.nextAction || account.dormant) && (
+          <div style={{ marginTop: 12, padding: '9px 11px', display: 'flex', alignItems: 'flex-start', gap: 8, border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)' }}>
+            <Iconed name="arrowRight" size={12} style={{ marginTop: 2, color: 'var(--moon-300)' }} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)' }}>다음 행동</div>
+              <div style={{ marginTop: 2, fontSize: 12.5, lineHeight: 1.45, color: 'var(--moon-200)' }}>
+                {account.dormant ? '기약 없음' : account.nextAction}
+                {account.nextActionAt && <span className="mono" style={{ marginLeft: 7, fontSize: 10.5, color: 'var(--fg-muted)' }}>{String(account.nextActionAt).slice(0, 10)}</span>}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -2615,23 +1785,16 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
       <div className="scroll-y" style={{ flex: 1, minHeight: 0, padding: 'var(--card-pad)', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {tab === 'activity' && (
           <>
-            <LogComposer onLog={onLog} />
-            {d.activity.length > 15 && (
-              <SegmentedControl
-                options={activityKindOptions}
-                value={activityKind}
-                onChange={setActivityKind}
-              />
-            )}
+            <LogComposer onLog={onLog} preset={composerPreset} />
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {visibleActivity.length === 0 && (
+              {d.activity.length === 0 && (
                 <div style={{ fontSize: 12, color: 'var(--fg-faint)', padding: '12px 0' }}>아직 기록이 없습니다.</div>
               )}
-              {visibleActivity.map((a, i) => (
+              {d.activity.map((a, i) => (
                 <div key={i} style={{
-                  display: 'grid', gridTemplateColumns: '18px 1fr auto',
+                  display: 'grid', gridTemplateColumns: '18px 1fr auto auto',
                   gap: 10, padding: '10px 0',
-                  borderBottom: i < visibleActivity.length - 1 ? '1px solid var(--line-soft)' : 'none',
+                  borderBottom: i < d.activity.length - 1 ? '1px solid var(--line-soft)' : 'none',
                   alignItems: 'flex-start',
                 }}>
                   <span style={{ color: `var(--${ACT_TONE[a.type] === 'neutral' ? 'fg-muted' : ACT_TONE[a.type]})`, marginTop: 1 }}>
@@ -2641,10 +1804,12 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
                     <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{a.msg}</div>
                     <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3, display: 'flex', gap: 6, alignItems: 'center' }}>
                       <Badge tone={ACT_TONE[a.type]} size="xs" variant="outline">{ACT_LABEL[a.type]}</Badge>
+                      {a.reaction && <Badge tone={REACTION_TONE[a.reaction] || 'neutral'} size="xs" variant="outline">{REACTION_LABEL[a.reaction] || a.reaction}</Badge>}
                       <span>{a.who}</span>
                     </div>
                   </div>
-                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{a.at}</span>
+                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', marginTop: 1 }}>{a.at}</span>
+                  <IconButton icon="x" size={20} iconSize={11} tooltip="기록 삭제" onClick={() => onDeleteActivity(a)} />
                 </div>
               ))}
             </div>
@@ -2670,17 +1835,54 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
                     <span style={{ fontSize: 13, fontWeight: 500 }}>{c.name}</span>
                     <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>· {c.role}</span>
                   </div>
-                  {(c.email || c.phone) && (
-                    <div className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                      {c.email && <span>{c.email}</span>}
-                      {c.phone && <span>{c.phone}</span>}
+                  <div className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    {c.phone && <span>{c.phone}</span>}
+                    {c.email && <span>{c.email}</span>}
+                    {!c.phone && !c.email && <span>연락처 미등록</span>}
+                  </div>
+                  {c.labels.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 5 }}>
+                      {c.labels.map((label) => <Badge key={label} tone="neutral" size="xs" variant="outline">{label}</Badge>)}
                     </div>
                   )}
-                  {c.lastContact && <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3 }}>Last: {c.lastContact}</div>}
+                  <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3 }}>Last: {c.lastContact}</div>
                 </div>
-                <ContactMenu onAction={(kind) => onAction(kind, c.name)} />
+                <ContactMenu onAction={(kind) => handleQuickAction(kind, c.name)} />
               </div>
             ))}
+          </div>
+        )}
+
+        {tab === 'deals' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {d.deals.length === 0 && (
+              <div style={{ fontSize: 12, color: 'var(--fg-faint)' }}>이 계정에 연결된 딜이 없습니다.</div>
+            )}
+            {d.deals.map((deal) => {
+              const stage = DEAL_STAGES.find((item) => item.key === deal.stage);
+              return (
+                <button
+                  key={deal.id}
+                  type="button"
+                  onClick={() => onNavigate?.(`dashboard/revenue/deals?deal=${encodeURIComponent(deal.id)}`)}
+                  style={{
+                    display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'center',
+                    width: '100%', padding: 12, textAlign: 'left', cursor: 'pointer',
+                    color: 'var(--fg)', background: 'var(--surface-2)',
+                    border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
+                  }}
+                >
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{deal.name}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>
+                      <Badge tone={stage?.color || 'neutral'} size="xs" variant="outline">{stage?.label || deal.stage}</Badge>
+                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>마감 {deal.close || '미정'}</span>
+                    </span>
+                  </span>
+                  <span className="mono" style={{ fontSize: 12, color: 'var(--moon-200)' }}>{fmt(deal.value)}</span>
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -2694,15 +1896,13 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
               display: 'flex', flexDirection: 'column', gap: 8,
             }}>
               <textarea
-                ref={noteInputRef}
-                aria-label="계정 노트 추가"
                 value={noteText}
                 onChange={e => setNoteText(e.target.value)}
                 placeholder="노트 추가… 키워드·결정·다음 액션 기록"
                 rows={2}
                 style={{
                   width: '100%', resize: 'vertical',
-                  background: 'transparent', border: 'none', outline: 'none',
+                  background: 'transparent', border: 'none',
                   color: 'var(--fg)', fontSize: 12.5, fontFamily: 'inherit', lineHeight: 1.5,
                 }}
               />
@@ -2742,66 +1942,33 @@ function DetailPanel({ account, detail, onAction, onLog, onPinNote, onAddNote, o
   );
 }
 
-export function Accounts({ onNavigate }) {
+export function Accounts({ workspace, onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
-  const searchParams = useSearchParams();
   const [localAccounts, setLocalAccounts] = React.useState([]);
-  const [accountEdits, setAccountEdits] = React.useState({}); // { [stableKey]: patch } — overlays any row
-  const [deletedAccountKeys, setDeletedAccountKeys] = React.useState(() => new Set());
-  const [view, setView] = React.useState(() => {
-    if (typeof window === 'undefined') return 'cards';
-    try {
-      const saved = window.localStorage.getItem('hub:accounts-view:v1');
-      return saved === 'cards' || saved === 'list' || saved === 'detail' ? saved : 'cards';
-    } catch {
-      return 'cards';
-    }
-  }); // cards | list | detail
+  const ledgerAccounts = Array.isArray(ledger.accounts) ? ledger.accounts : [];
+  // Scope the merged ledger to the active workspace (pass-through when unscoped). The
+  // The ledger hook only exposes API-backed records; scoping never mixes sources.
+  const ws = getWorkspace(workspace);
+  const ACCOUNTS = filterAccountsByWorkspace([...localAccounts, ...ledgerAccounts], workspace);
+  const wsEmpty = Boolean(ws) && ACCOUNTS.length === 0;
+  const [view, setView] = React.useState('cards'); // cards | list | detail
   const [search, setSearch] = React.useState('');
   const [filter, setFilter] = React.useState('all');
   const [selected, setSelected] = React.useState(null);
   const [details, setDetails] = React.useState({});
-  const [editAccountKey, setEditAccountKey] = React.useState(null); // stable key of the row being edited
-  const [editOrigName, setEditOrigName] = React.useState(null); // name at open-time, to keep name-keyed selection in sync on rename
-  const [accountDraft, setAccountDraft] = React.useState(null); // decoupled draft so the list stays stable while typing
-  const ledgerAccounts = ledger.source === 'supabase'
-    ? (Array.isArray(ledger.accounts) ? ledger.accounts : [])
-    : (Array.isArray(ledger.accounts) ? ledger.accounts : FALLBACK_ACCOUNTS);
-  // Attach a stable key (Supabase id, a generated local key, or name for mock rows) so edits and
-  // deletes survive renames — the name-keyed selection UI keeps working on top of it.
-  const ACCOUNTS = [...localAccounts, ...ledgerAccounts]
-    .map(a => ({ ...a, _key: a._key || a.id || a.name }))
-    .filter(a => !deletedAccountKeys.has(a._key))
-    .map(a => (accountEdits[a._key] ? { ...a, ...accountEdits[a._key] } : a));
-
-  React.useEffect(() => {
-    try {
-      window.localStorage.setItem('hub:accounts-view:v1', view);
-    } catch {
-      // ignore storage failures; the visible view state still works for this session
-    }
-  }, [view]);
 
   const term = search.trim().toLowerCase();
-  const filtered = ACCOUNTS.filter(a =>
-    (filter === 'all' || a.type === filter) &&
-    (!term || a.name.toLowerCase().includes(term))
-  );
-
-  // Deep-link: ?acct=<accountId-or-name> selects it and switches to detail. One-shot per param
-  // value; silent if no account in the merged list matches. Runs before the validity effect so a
-  // matched selection sticks.
-  const acctParam = searchParams.get('acct');
-  const consumedAcctRef = React.useRef(null);
-  React.useEffect(() => {
-    if (!acctParam || syncState === 'loading') return;
-    if (consumedAcctRef.current === acctParam) return;
-    const hit = ACCOUNTS.find(a => String(a.id) === String(acctParam) || a.name === acctParam);
-    if (!hit) return;
-    consumedAcctRef.current = acctParam;
-    setSelected(hit.name);
-    setView('detail');
-  }, [acctParam, syncState, ACCOUNTS]);
+  const filtered = ACCOUNTS.filter(a => {
+    const relationship = buildAccountRelationshipDetail(a, ledger);
+    const searchText = [
+      a.name,
+      a.nextAction,
+      a.dormant ? '기약 없음 휴면' : null,
+      ...relationship.contacts.flatMap((contact) => [contact.name, contact.role, contact.phone, contact.email, ...contact.labels]),
+      ...relationship.deals.map((deal) => deal.name),
+    ].filter(Boolean).join(' ').toLowerCase();
+    return (filter === 'all' || a.type === filter) && (!term || searchText.includes(term));
+  });
 
   // Keep selection valid across filter changes
   React.useEffect(() => {
@@ -2810,190 +1977,140 @@ export function Accounts({ onNavigate }) {
     }
   }, [view, filtered, selected]);
 
-  // Detail for the panel. Live mode: local `details[name]` (fetched activity/notes) wins; when it
-  // carries no contacts, surface the ledger row's `account.contacts`. Mock mode keeps ACCOUNT_DETAIL.
-  // Never mix live account + mock contacts — a live account with no contacts stays empty.
   const getDetail = (account) => {
-    const name = typeof account === 'string' ? account : account?.name;
-    const isLive = ledger.source === 'supabase';
-    const base = details[name] || (isLive ? null : ACCOUNT_DETAIL[name]) || emptyDetail();
-    if (isLive && typeof account === 'object' && account) {
-      const hasLocalContacts = Array.isArray(base.contacts) && base.contacts.length > 0;
-      if (!hasLocalContacts) {
-        return { ...base, contacts: Array.isArray(account.contacts) ? account.contacts : [] };
-      }
-    }
-    return base;
+    if (!account) return emptyDetail();
+    const linked = buildAccountRelationshipDetail(account, ledger);
+    const stored = details[account.name] || emptyDetail();
+    return { ...stored, contacts: linked.contacts, deals: linked.deals };
   };
 
-  const tmpId = () => `tmp-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-
-  // Optimistically prepend an activity entry, returning the full row (with temp id) for reconciliation.
-  const pushActivity = (name, entry) => {
-    const full = { id: entry.id || tmpId(), at: '방금', who: 'Me', ...entry };
-    setDetails(prev => {
-      const cur = prev[name] || emptyDetail();
-      return { ...prev, [name]: { ...cur, activity: [full, ...cur.activity] } };
-    });
-    return full;
-  };
-
-  // Persist a logged activity to crm_activities (live accounts only) and swap the temp id for the real one.
-  const persistActivityEntry = (name, full) => {
+  // 활동·노트는 crm_activities 원장으로 영속화한다. 계정에 id가 없으면(로컬 생성 직후)
+  // 낙관적 로컬 행만 유지 — preview 상태로 정직하게 남긴다.
+  const persistActivity = (name, entry, { alsoNote = false } = {}) => {
     const acc = ACCOUNTS.find(a => a.name === name);
-    if (!acc?.id) return; // local/mock account — session-only, matches the preview pattern
-    saveActivity('create', {
-      accountId: acc.id, companyId: acc.companyId || null, entityType: 'account',
-      kind: full.type, body: full.msg,
-    }).then(r => {
-      if (!r.ok || !r.activity) return;
-      setDetails(prev => {
-        const cur = prev[name];
-        if (!cur) return prev;
-        return {
-          ...prev,
-          [name]: {
-            ...cur,
-            activity: cur.activity.map(a => a.id === full.id
-              ? { id: r.activity.id, type: r.activity.kind, msg: r.activity.body, who: r.activity.who, at: r.activity.at }
-              : a),
-          },
-        };
-      });
-    });
-  };
+    const tempId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const localRow = { id: tempId, at: '방금', who: 'Me', pinned: false, ...entry };
 
-  // QuickActions 'New deal' — create a real deal named after the account, then deep-link to the
-  // pipeline. Preview (DB down): log the intent as an activity so the click still leaves a trace.
-  const createDealForAccount = async (name) => {
-    const acc = ACCOUNTS.find(a => a.name === name);
-    if (!acc) return;
-    const r = await saveRevenueRecord('deal', 'create', {
-      name: acc.name,
-      type: acc.type,
-      stage: 'qual',
-    });
-    if (r.ok && r.id) {
-      const inClassin = typeof window !== 'undefined' && window.location.pathname.includes('/classin/');
-      onNavigate?.(crmTabPath(inClassin ? 'classin' : undefined, 'deals', `?deal=${encodeURIComponent(r.id)}`));
-    } else {
-      const full = pushActivity(name, { type: 'deal', msg: '새 딜 초안 생성' });
-      persistActivityEntry(name, full);
-    }
-  };
-
-  const handleAction = (name) => (kind, contactName) => {
-    if (kind === 'deal') { createDealForAccount(name); return; }
-    const labels = {
-      email:   contactName ? `${contactName}에게 이메일 발송 기록` : '이메일 발송 기록',
-      meeting: contactName ? `${contactName}와 미팅 일정 등록` : '미팅 일정 등록',
-      chat:    contactName ? `${contactName} 채팅 스레드 오픈` : '채팅 스레드 오픈',
-      call:    contactName ? `${contactName} 통화 기록` : '통화 기록',
-      note:    '노트 추가 (간단)',
-    };
-    const type = kind === 'chat' || kind === 'note' ? 'update' : kind;
-    const full = pushActivity(name, { type, msg: labels[kind] || `${kind} 액션` });
-    persistActivityEntry(name, full);
-  };
-
-  const handleLog = (name) => ({ type, msg }) => {
-    const full = pushActivity(name, { type, msg });
-    persistActivityEntry(name, full);
-  };
-
-  const handlePinNote = (name) => (note) => {
-    const nextPinned = !note.pinned;
     setDetails(prev => {
       const cur = prev[name] || emptyDetail();
       return {
         ...prev,
         [name]: {
           ...cur,
-          notes: cur.notes.map(n => ((note.id && n.id === note.id) || n === note) ? { ...n, pinned: nextPinned } : n),
+          activity: [localRow, ...cur.activity],
+          ...(alsoNote
+            ? { notes: [{ id: tempId, at: '방금', pinned: false, body: entry.msg }, ...cur.notes] }
+            : {}),
         },
       };
     });
-    if (note.id && !String(note.id).startsWith('tmp-')) {
-      const acc = ACCOUNTS.find(a => a.name === name);
-      if (acc?.id) saveActivity('pin', { id: note.id, pinned: nextPinned });
+
+    if (!acc?.id) return;
+    saveRevenueRecord('activity', 'create', {
+      accountId: acc.id,
+      companyId: acc.companyId,
+      type: entry.type,
+      body: entry.msg,
+    }).then(r => {
+      if (!r.ok || !r.id) return;
+      // 임시 id → 실제 id 치환 (pinned 토글이 서버 행을 가리키도록)
+      setDetails(prev => {
+        const cur = prev[name];
+        if (!cur) return prev;
+        const swap = row => (row.id === tempId ? { ...row, id: r.id } : row);
+        return { ...prev, [name]: { ...cur, activity: cur.activity.map(swap), notes: cur.notes.map(swap) } };
+      });
+    });
+  };
+
+  const pushActivity = (name, entry) => persistActivity(name, entry);
+
+  const handleLog = (name) => ({ type, msg }) => {
+    pushActivity(name, { type, msg });
+  };
+
+  // Delete/undo for an activity row — the backend (/api/hub/revenue/activity, op:'delete')
+  // already supported this; nothing in the UI called it. A row still optimistic-local (never
+  // persisted, id starts with 'local-') just gets dropped client-side, same as handlePinNote's
+  // existing local-vs-persisted split below.
+  const handleDeleteActivity = (name) => (activity) => {
+    setDetails(prev => {
+      const cur = prev[name];
+      if (!cur) return prev;
+      const match = row => (activity.id ? row.id === activity.id : row === activity);
+      return {
+        ...prev,
+        [name]: { ...cur, activity: cur.activity.filter(row => !match(row)), notes: cur.notes.filter(row => !match(row)) },
+      };
+    });
+    if (activity.id && !String(activity.id).startsWith('local-')) {
+      saveRevenueRecord('activity', 'delete', { id: activity.id });
+    }
+  };
+
+  const handlePinNote = (name) => (note) => {
+    const nextPinned = !note.pinned;
+    setDetails(prev => {
+      const cur = prev[name] || emptyDetail();
+      const flip = n => ((note.id ? n.id === note.id : n === note) ? { ...n, pinned: nextPinned } : n);
+      return {
+        ...prev,
+        [name]: { ...cur, notes: cur.notes.map(flip), activity: cur.activity.map(flip) },
+      };
+    });
+    if (note.id && !String(note.id).startsWith('local-')) {
+      saveRevenueRecord('activity', 'update', { id: note.id, pinned: nextPinned });
     }
   };
 
   const handleAddNote = (name) => (body) => {
-    const localId = tmpId();
-    setDetails(prev => {
-      const cur = prev[name] || emptyDetail();
-      return { ...prev, [name]: { ...cur, notes: [{ id: localId, at: '방금', pinned: false, body }, ...cur.notes] } };
-    });
-    const acc = ACCOUNTS.find(a => a.name === name);
-    if (!acc?.id) return;
-    saveActivity('create', {
-      accountId: acc.id, companyId: acc.companyId || null, entityType: 'account', kind: 'note', body,
-    }).then(r => {
-      if (!r.ok || !r.activity) return;
-      setDetails(prev => {
-        const cur = prev[name];
-        if (!cur) return prev;
-        return {
-          ...prev,
-          [name]: { ...cur, notes: cur.notes.map(n => n.id === localId ? { id: r.activity.id, body: r.activity.body, pinned: r.activity.pinned, at: r.activity.at } : n) },
-        };
-      });
-    });
+    persistActivity(name, { type: 'note', msg: body }, { alsoNote: true });
   };
 
   const selectedAcc = filtered.find(a => a.name === selected) || null;
-  // Health signal counts surfaced in the header (merged from origin/real_v1's Revenue redesign).
-  const warnCount = ACCOUNTS.filter(a => a.health === 'warning').length;
-  const riskCount = ACCOUNTS.filter(a => a.health === 'risk').length;
 
-  // Load a live account's saved activity/notes the first time it's opened in detail view.
-  // Guarded by a ref so re-renders don't refetch (which would clobber optimistic local entries).
-  const loadedActivityRef = React.useRef(new Set());
+  // Detail 뷰 진입/계정 전환 시 crm_activities에서 활동·노트를 로드한다.
   React.useEffect(() => {
+    if (view !== 'detail' || !selectedAcc?.id) return;
     const acc = selectedAcc;
-    if (view !== 'detail' || !acc || !acc.id || loadedActivityRef.current.has(acc.id)) return undefined;
-    loadedActivityRef.current.add(acc.id);
-    let cancelled = false;
-    fetchActivities({ accountId: acc.id, companyId: acc.companyId }).then(res => {
-      if (cancelled || res.status !== 'live') return;
-      const activity = res.activities.filter(a => a.kind !== 'note')
-        .map(a => ({ id: a.id, type: a.kind, msg: a.body, who: a.who, at: a.at }));
-      const notes = res.activities.filter(a => a.kind === 'note')
-        .map(a => ({ id: a.id, body: a.body, pinned: a.pinned, at: a.at }));
-      setDetails(prev => {
-        const cur = prev[acc.name] || emptyDetail();
-        // Merge, don't replace: the operator may have logged entries while this fetch
-        // was in flight (optimistic tmp- rows, or already-reconciled real ids the server
-        // response predates). Keep any local row whose id isn't in the fetched set.
-        const fetchedActivityIds = new Set(activity.map(a => a.id));
-        const fetchedNoteIds = new Set(notes.map(n => n.id));
-        const localActivity = (cur.activity || []).filter(a => a.id && !fetchedActivityIds.has(a.id));
-        const localNotes = (cur.notes || []).filter(n => n.id && !fetchedNoteIds.has(n.id));
-        return {
-          ...prev,
-          [acc.name]: { ...cur, activity: [...localActivity, ...activity], notes: [...localNotes, ...notes] },
-        };
-      });
-    });
-    return () => { cancelled = true; };
-  }, [view, selectedAcc?.id, selectedAcc?.name]);
+    let alive = true;
+    const query = acc.companyId
+      ? `companyId=${encodeURIComponent(acc.companyId)}`
+      : `accountId=${encodeURIComponent(acc.id)}`;
+    fetch(`/api/hub/revenue/activity?${query}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        if (!alive) return;
+        const rows = Array.isArray(data.activities) ? data.activities : [];
+        setDetails(prev => {
+          const cur = prev[acc.name] || emptyDetail();
+          // 서버 행 + 아직 저장 안 된 로컬 행(local- 접두)만 병합 — 중복 없이 원장이 정본
+          const localOnly = cur.activity.filter(a => String(a.id).startsWith('local-'));
+          const activity = [...localOnly, ...rows];
+          return {
+            ...prev,
+            [acc.name]: {
+              ...cur,
+              activity,
+              notes: activity
+                .filter(a => a.type === 'note')
+                .map(a => ({ id: a.id, at: a.at, pinned: a.pinned, body: a.msg })),
+            },
+          };
+        });
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [view, selectedAcc?.id, selectedAcc?.companyId]);
 
   const openDetail = (name) => {
     setSelected(name);
     setView('detail');
   };
-  const openEditAccount = (account) => {
-    if (!account) return;
-    setEditAccountKey(account._key || account.id || account.name);
-    setEditOrigName(account.name);
-    setAccountDraft({ ...account });
-  };
-
   const createAccount = () => {
-    const newAcc = {
-      _key: `local-acct-${Date.now()}`,
-      name: '새 계정',
+    const name = '새 계정';
+    setLocalAccounts(prev => [{
+      name,
       type: filter === 'personal' || filter === 'company' ? filter : 'company',
       health: 'ok',
       value: 0,
@@ -3001,44 +2118,11 @@ export function Accounts({ onNavigate }) {
       last: '방금',
       owner: 'Me',
       lastAt: '방금',
-    };
-    setLocalAccounts(prev => [newAcc, ...prev]);
-    setSelected(newAcc.name);
+      // Tag in-workspace creates so the scoped view doesn't silently drop them.
+      ...(ws ? { workspace } : {}),
+    }, ...prev]);
+    setSelected(name);
     setView('detail');
-    openEditAccount(newAcc); // open the editor immediately so the new account can be named
-  };
-  const newAccountParam = searchParams.get('new');
-  const consumedNewAccountRef = React.useRef(null);
-  React.useEffect(() => {
-    if (newAccountParam !== 'account' || syncState === 'loading') return;
-    if (consumedNewAccountRef.current === newAccountParam) return;
-    consumedNewAccountRef.current = newAccountParam;
-    createAccount();
-  }, [newAccountParam, syncState]);
-
-  // Persist an account edit. Ledger rows (Supabase id) update; local rows insert. The edit is
-  // reflected locally via the stable-key overlay either way, so renames never desync.
-  const persistAccount = async () => {
-    if (!accountDraft) return { ok: false, status: 'error' };
-    const key = editAccountKey;
-    const isLocal = !accountDraft.id;
-    const r = await saveRevenueRecord('account', isLocal ? 'create' : 'update', accountDraft);
-    setAccountEdits(prev => ({ ...prev, [key]: { ...accountDraft } }));
-    // Stamp the returned DB id onto the local row so a later edit takes the update path.
-    if (isLocal && r.id) setLocalAccounts(prev => prev.map(a => (a._key === key ? { ...a, id: r.id } : a)));
-    if (accountDraft.name !== editOrigName && selected === editOrigName) setSelected(accountDraft.name);
-    return r;
-  };
-
-  const deleteAccount = async () => {
-    if (!editAccountKey) return { ok: false };
-    const key = editAccountKey;
-    const draftId = accountDraft?.id;
-    setLocalAccounts(prev => prev.filter(a => a._key !== key));
-    setDeletedAccountKeys(prev => new Set(prev).add(key));
-    if (selected === editOrigName) { setSelected(null); setView('cards'); }
-    if (!draftId) return { ok: true, status: 'local' };
-    return saveRevenueRecord('account', 'delete', { id: draftId });
   };
 
   return (
@@ -3049,8 +2133,6 @@ export function Accounts({ onNavigate }) {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Accounts</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {ACCOUNTS.filter(a => a.type === 'company').length} companies · {ACCOUNTS.filter(a => a.type === 'personal').length} individuals
-            {riskCount > 0 && <span style={{ color: 'var(--danger)', marginLeft: 8 }}>위험 {riskCount}</span>}
-            {warnCount > 0 && <span style={{ color: 'var(--warning)', marginLeft: 8 }}>주의 {warnCount}</span>}
             <SyncBadge state={syncState} />
           </div>
         </div>
@@ -3058,6 +2140,7 @@ export function Accounts({ onNavigate }) {
 
         {/* View mode toggle */}
         <SegmentedControl
+          className="hub-toolbar"
           options={[{ key: 'cards', label: 'Cards' }, { key: 'list', label: 'List' }, { key: 'detail', label: 'Detail' }]}
           value={view}
           onChange={(k) => {
@@ -3067,21 +2150,28 @@ export function Accounts({ onNavigate }) {
         />
 
         {/* Type filter */}
-        <SegmentedControl
-          options={[{ key: 'all', label: 'All' }, { key: 'personal', label: 'Personal', dot: 'personal' }, { key: 'company', label: 'Company', dot: 'company' }]}
-          value={filter}
-          onChange={setFilter}
-        />
+        <SegmentedControl className="hub-toolbar" options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
 
-        <Input className="hub-toolbar" placeholder="계정 검색…" icon="search" value={search} onChange={setSearch} />
+        <Input className="hub-toolbar" placeholder="계정·담당자·전화·딜 검색…" icon="search" value={search} onChange={setSearch} />
         <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>
       </div>
 
+      {wsEmpty && (
+        <Card>
+          <EmptyState
+            icon="accounts"
+            title={`${ws.label} — 해당하는 계정이 없습니다`}
+            description={`이 워크스페이스에 매칭되는 계정이 없습니다. 다른 워크스페이스로 태그된 계정은 여기에 표시되지 않습니다. 계정을 등록하거나 기록에 ${ws.label} 태그가 연결되면 나타납니다.`}
+            style={{ minHeight: 200, padding: '28px 12px' }}
+          />
+        </Card>
+      )}
+
       {/* Content by view */}
-      {view === 'cards' && (
+      {!wsEmpty && view === 'cards' && (
         <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--gap)' }}>
           {filtered.map(a => (
-            <Card key={a._key} interactive style={{ cursor: 'pointer' }}>
+            <Card key={a.name} interactive style={{ cursor: 'pointer' }}>
               <div onClick={() => openDetail(a.name)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                   <Avatar name={a.name} size={36} tone={a.type === 'personal' ? 'personal' : 'company'} />
@@ -3090,16 +2180,11 @@ export function Accounts({ onNavigate }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
                       <Badge tone={a.type === 'personal' ? 'personal' : 'company'} size="xs">{a.type === 'personal' ? 'Personal' : 'Company'}</Badge>
                       <HealthDot health={a.health} />
-                      <AccountSignalChip account={a} />
+                      {buildAccountRelationshipDetail(a, ledger).contacts.length > 0 && (
+                        <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{buildAccountRelationshipDetail(a, ledger).contacts.length}명</span>
+                      )}
                     </div>
                   </div>
-                  <IconButton
-                    icon="edit"
-                    size={24}
-                    iconSize={12}
-                    tooltip="계정 편집"
-                    onClick={(e) => { e.stopPropagation(); openEditAccount(a); }}
-                  />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, paddingTop: 10, borderTop: '1px solid var(--line-soft)' }}>
                   <div>
@@ -3113,6 +2198,14 @@ export function Accounts({ onNavigate }) {
                     </div>
                   </div>
                 </div>
+                {(a.nextAction || a.dormant) && (
+                  <div style={{ marginTop: 10, paddingTop: 9, borderTop: '1px solid var(--line-soft)', display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                    <Iconed name="arrowRight" size={11} style={{ marginTop: 2, color: 'var(--moon-300)' }} />
+                    <span style={{ minWidth: 0, fontSize: 11.5, lineHeight: 1.4, color: 'var(--fg-muted)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {a.dormant ? '기약 없음' : a.nextAction}{a.nextActionAt ? ` · ${String(a.nextActionAt).slice(0, 10)}` : ''}
+                    </span>
+                  </div>
+                )}
               </div>
             </Card>
           ))}
@@ -3121,7 +2214,7 @@ export function Accounts({ onNavigate }) {
               <EmptyState
                 icon="accounts"
                 title="계정이 없습니다"
-                description={syncState === 'live' ? 'Supabase customer_accounts 원장에 표시할 계정이 없습니다.' : '필터나 검색어를 조정하면 계정을 다시 찾을 수 있습니다.'}
+                description={syncState === 'live' ? 'Supabase customer_accounts 기록에 표시할 계정이 없습니다.' : '필터나 검색어를 조정하면 계정을 다시 찾을 수 있습니다.'}
                 action={<Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>}
               />
             </Card>
@@ -3129,7 +2222,7 @@ export function Accounts({ onNavigate }) {
         </div>
       )}
 
-      {view === 'list' && (
+      {!wsEmpty && view === 'list' && (
         <Card pad={false} className="hub-table-card">
           <div style={{
             display: 'grid',
@@ -3142,33 +2235,24 @@ export function Accounts({ onNavigate }) {
             <span /><span>Name</span><span>Type</span><span>Health</span><span>Value</span><span>Deals</span><span>Last contact</span><span>Owner</span><span style={{ textAlign: 'right' }}>마지막 접점 시간</span>
           </div>
           {filtered.map((a, i) => (
-            <div
-              key={a._key}
-              role="button"
-              tabIndex={0}
-              aria-label={`${a.name} 계정 상세 열기`}
+            <div key={a.name} className="hub-row"
               onClick={() => openDetail(a.name)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  openDetail(a.name);
-                }
-              }}
               style={{
                 display: 'grid',
                 gridTemplateColumns: '32px 1.6fr 110px 70px 110px 70px 120px 100px 100px',
                 gap: 12,
-                padding: '10px 16px', alignItems: 'center',
+                padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center',
                 borderBottom: i < filtered.length - 1 ? '1px solid var(--line-soft)' : 'none',
                 cursor: 'pointer',
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
               <span style={{ paddingRight: 4, display: 'flex' }}>
                 <Avatar name={a.name} size={24} tone={a.type === 'personal' ? 'personal' : 'company'} />
               </span>
-              <span style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name}</span>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name}</span>
+                {(a.nextAction || a.dormant) && <span style={{ display: 'block', marginTop: 2, fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.dormant ? '기약 없음' : a.nextAction}</span>}
+              </span>
               <span style={{ paddingRight: 8 }}>
                 <Badge tone={a.type === 'personal' ? 'personal' : 'company'} size="xs">
                   <Iconed name={a.type === 'personal' ? 'user' : 'building'} size={9} />
@@ -3177,10 +2261,10 @@ export function Accounts({ onNavigate }) {
               </span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <HealthDot health={a.health} />
-                <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{healthCopy(a.health).label}</span>
+                <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{a.health}</span>
               </span>
               <span className="mono" style={{ fontSize: 12, color: 'var(--moon-200)' }}>{fmt(a.value)}</span>
-              <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{a.deals}</span>
+              <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{a.deals}</span>
               <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>{a.last}</span>
               <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{a.owner}</span>
               <span className="mono" style={{ textAlign: 'right', fontSize: 11, color: 'var(--fg-faint)' }}>{a.lastAt}</span>
@@ -3190,13 +2274,13 @@ export function Accounts({ onNavigate }) {
             <EmptyState
               icon="accounts"
               title="계정이 없습니다"
-              description={syncState === 'live' ? 'Supabase customer_accounts 원장이 비어 있습니다.' : '필터나 검색어를 조정하면 계정을 다시 찾을 수 있습니다.'}
+              description={syncState === 'live' ? 'Supabase customer_accounts 기록이 비어 있습니다.' : '필터나 검색어를 조정하면 계정을 다시 찾을 수 있습니다.'}
             />
           )}
         </Card>
       )}
 
-      {view === 'detail' && (
+      {!wsEmpty && view === 'detail' && (
         <Card pad={false} className="hub-detail-card" style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
           <div style={{ width: '30%', minWidth: 240, borderRight: '1px solid var(--line-soft)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
@@ -3206,28 +2290,17 @@ export function Accounts({ onNavigate }) {
               {filtered.map(a => {
                 const isSel = a.name === selected;
                 return (
-                  <div
-                    key={a._key}
-                    role="button"
-                    tabIndex={0}
-                    aria-current={isSel ? 'true' : undefined}
-                    aria-label={`${a.name} 계정 선택`}
+                  <div key={a.name} className="hub-row"
                     onClick={() => setSelected(a.name)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        setSelected(a.name);
-                      }
-                    }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '10px 14px', cursor: 'pointer',
                       borderLeft: `2px solid ${isSel ? 'var(--moon-300)' : 'transparent'}`,
-                      background: isSel ? 'var(--surface-2)' : 'transparent',
+                      // Selected row pins its fill inline; unselected rows leave background
+                      // to .hub-row:hover (an inline 'transparent' would out-rank the class).
+                      background: isSel ? 'var(--surface-2)' : undefined,
                       borderBottom: '1px solid var(--line-soft)',
                     }}
-                    onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = 'var(--surface-2)'; }}
-                    onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = 'transparent'; }}
                   >
                     <Avatar name={a.name} size={28} tone={a.type === 'personal' ? 'personal' : 'company'} />
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -3237,9 +2310,6 @@ export function Accounts({ onNavigate }) {
                       </div>
                       <div className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>
                         {fmt(a.value)} · <span style={{ color: 'var(--fg-faint)' }}>{a.last}</span>
-                      </div>
-                      <div style={{ marginTop: 4 }}>
-                        <AccountSignalChip account={a} />
                       </div>
                     </div>
                   </div>
@@ -3259,33 +2329,15 @@ export function Accounts({ onNavigate }) {
             <DetailPanel
               account={selectedAcc}
               detail={selectedAcc ? getDetail(selectedAcc) : null}
-              onAction={selectedAcc ? handleAction(selectedAcc.name) : () => {}}
               onLog={selectedAcc ? handleLog(selectedAcc.name) : () => {}}
+              onDeleteActivity={selectedAcc ? handleDeleteActivity(selectedAcc.name) : () => {}}
               onPinNote={selectedAcc ? handlePinNote(selectedAcc.name) : () => {}}
               onAddNote={selectedAcc ? handleAddNote(selectedAcc.name) : () => {}}
               onNavigate={onNavigate}
-              onEdit={openEditAccount}
             />
           </div>
         </Card>
       )}
-
-      <EditDrawer
-        title={accountDraft ? (accountDraft.name || '계정 편집') : ''}
-        subtitle="계정 정보 편집"
-        record={accountDraft}
-        fields={[
-          { key: 'name', label: '계정명' },
-          { key: 'type', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
-          { key: 'health', label: '헬스', type: 'select', options: [{ value: 'ok', label: '양호' }, { value: 'warning', label: '주의' }, { value: 'risk', label: '위험' }] },
-          { key: 'owner', label: '담당' },
-          { key: 'note', label: '메모', placeholder: '계정 메모·다음 액션' },
-        ]}
-        onChange={(key, val) => setAccountDraft(prev => (prev ? { ...prev, [key]: val } : prev))}
-        onSave={persistAccount}
-        onDelete={deleteAccount}
-        onClose={() => { setEditAccountKey(null); setEditOrigName(null); setAccountDraft(null); }}
-      />
     </div>
   );
 }

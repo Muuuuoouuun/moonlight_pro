@@ -18,6 +18,7 @@ import {
   type TelegramMessage,
   type TelegramUpdate,
 } from "./telegram";
+import { generateGeminiText } from "./gemini";
 import { listSharedProjectWebhookRoutes } from "./shared-webhook";
 
 const DEFAULT_CARD_NEWS_TEMPLATE_ID = "classin_cardnews_math_v3";
@@ -446,10 +447,13 @@ async function handleCardNewsCommand({ runId, command, message }: CommandContext
     message?.chat?.title?.trim() ||
     "Untitled Card News";
 
-  const result = await generateCardNews({
-    topic,
-    templateId: DEFAULT_CARD_NEWS_TEMPLATE_ID,
-  });
+  const result = await generateCardNews(
+    {
+      topic,
+      templateId: DEFAULT_CARD_NEWS_TEMPLATE_ID,
+    },
+    generateGeminiText,
+  );
   const workspaceId = resolveWorkspaceId();
   const contentItemId = randomUUID();
   const contentVariantId = randomUUID();

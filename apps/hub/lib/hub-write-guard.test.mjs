@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 
 import { HUB_WRITE_SECRET_HEADER, assertHubWriteAllowed } from "./hub-write-guard.js";
-import { OPERATOR_SESSION_COOKIE, createOperatorSessionToken } from "./operator-session.js";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -14,8 +13,8 @@ afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
 });
 
-function makeRequest(headers = {}) {
-  return new Request("https://hub.example.com/api/projects/update", {
+function makeRequest(headers = {}, url = "https://hub.example.com/api/projects/update") {
+  return new Request(url, {
     method: "POST",
     headers,
   });
@@ -56,73 +55,34 @@ test("local hub writes keep the same-origin fallback for smoke testing", () => {
   assert.equal(result, null);
 });
 
-test("production hub writes allow a valid operator session cookie on same-origin requests", () => {
+test("production localhost allows same-origin browser writes without exposing a secret", () => {
   process.env.NODE_ENV = "production";
-  process.env.COM_MOON_HUB_URL = "https://hub.example.com";
-  process.env.COM_MOON_HUB_WRITE_SECRET = "expected-secret";
-  process.env.COM_MOON_OPERATOR_SESSION_SECRET = "session-secret";
-  const token = createOperatorSessionToken();
+  process.env.COM_MOON_HUB_URL = "http://127.0.0.1:3000";
+  process.env.COM_MOON_HUB_WRITE_SECRET = "server-only-secret";
 
-  const result = assertHubWriteAllowed(
-    makeRequest({
-      origin: "https://hub.example.com",
-      cookie: `${OPERATOR_SESSION_COOKIE}=${token}`,
-    }),
-  );
+  const result = assertHubWriteAllowed(makeRequest(
+    { origin: "http://127.0.0.1:3000" },
+    "http://127.0.0.1:3000/api/hub/projects",
+  ));
 
   assert.equal(result, null);
 });
 
-test("production hub writes reject tampered operator session cookies", async () => {
+test("production loopback accepts localhost and 127 aliases only on the same port", async () => {
   process.env.NODE_ENV = "production";
-  process.env.COM_MOON_HUB_URL = "https://hub.example.com";
-  process.env.COM_MOON_HUB_WRITE_SECRET = "expected-secret";
-  process.env.COM_MOON_OPERATOR_SESSION_SECRET = "session-secret";
-  const token = `${createOperatorSessionToken()}x`;
+  process.env.COM_MOON_HUB_URL = "http://localhost:3000";
+  process.env.COM_MOON_HUB_WRITE_SECRET = "server-only-secret";
 
-  const result = assertHubWriteAllowed(
-    makeRequest({
-      origin: "https://hub.example.com",
-      cookie: `${OPERATOR_SESSION_COOKIE}=${token}`,
-    }),
-  );
+  const aliasResult = assertHubWriteAllowed(makeRequest(
+    { origin: "http://127.0.0.1:3000" },
+    "http://localhost:3000/api/hub/projects",
+  ));
+  const wrongPortResult = assertHubWriteAllowed(makeRequest(
+    { origin: "http://127.0.0.1:3001" },
+    "http://localhost:3000/api/hub/projects",
+  ));
 
-  assert.ok(result instanceof Response);
-  assert.equal(result.status, 401);
-});
-
-test("production hub writes reject expired operator session cookies", async () => {
-  process.env.NODE_ENV = "production";
-  process.env.COM_MOON_HUB_URL = "https://hub.example.com";
-  process.env.COM_MOON_HUB_WRITE_SECRET = "expected-secret";
-  process.env.COM_MOON_OPERATOR_SESSION_SECRET = "session-secret";
-  const token = createOperatorSessionToken({ ttlSeconds: 1, now: Date.now() - 60000 });
-
-  const result = assertHubWriteAllowed(
-    makeRequest({
-      origin: "https://hub.example.com",
-      cookie: `${OPERATOR_SESSION_COOKIE}=${token}`,
-    }),
-  );
-
-  assert.ok(result instanceof Response);
-  assert.equal(result.status, 401);
-});
-
-test("production hub writes reject valid operator sessions from cross-origin requests", async () => {
-  process.env.NODE_ENV = "production";
-  process.env.COM_MOON_HUB_URL = "https://hub.example.com";
-  process.env.COM_MOON_HUB_WRITE_SECRET = "expected-secret";
-  process.env.COM_MOON_OPERATOR_SESSION_SECRET = "session-secret";
-  const token = createOperatorSessionToken();
-
-  const result = assertHubWriteAllowed(
-    makeRequest({
-      origin: "https://evil.example.com",
-      cookie: `${OPERATOR_SESSION_COOKIE}=${token}`,
-    }),
-  );
-
-  assert.ok(result instanceof Response);
-  assert.equal(result.status, 401);
+  assert.equal(aliasResult, null);
+  assert.ok(wrongPortResult instanceof Response);
+  assert.equal(wrongPortResult.status, 401);
 });

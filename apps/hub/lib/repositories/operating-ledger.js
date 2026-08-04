@@ -1,50 +1,61 @@
 import {
+  countSupabaseRows,
   eqFilter,
   fetchSupabaseRows,
   inFilter,
   withWorkspaceFilter,
 } from "@/lib/server-read";
-import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
+import { buildProjectProgress } from "../pms-ui.js";
+import {
+  buildProjectCatalogFetchPlan,
+  buildProjectEntities,
+  fetchProjectReferenceRows,
+  mapProjectAreas,
+  mapProjectRows,
+  mergeProjectRelationRows,
+} from "./project-ledger-context.js";
 
 const BRAND_GLYPHS = ["◐", "◇", "✦", "◆", "●", "□", "△", "◎", "◌", "✧"];
-const CANONICAL_BRAND_ORDER = {
-  sinabro: 10,
-  gore: 20,
-  holyfuncollector: 30,
-  bridgemaker: 40,
-  moonpm: 50,
-  classmoon: 60,
-  studyseagull: 70,
-  politicofficer: 80,
-  "22nomad": 90,
-};
-const CANONICAL_BRAND_TONES = {
-  sinabro: "info",
-  gore: "company",
-  holyfuncollector: "warning",
-  bridgemaker: "moon",
-  moonpm: "warning",
-  classmoon: "info",
-  studyseagull: "danger",
-  politicofficer: "info",
-  "22nomad": "personal",
-};
-const CANONICAL_BRAND_GLYPHS = {
-  sinabro: "✦",
-  gore: "◌",
-  holyfuncollector: "✧",
-  bridgemaker: "◇",
-  moonpm: "◐",
-  classmoon: "□",
-  studyseagull: "△",
-  politicofficer: "◎",
-  "22nomad": "◻",
+const PROJECT_READ_LIMIT = 80;
+const TASK_READ_LIMIT = 160;
+const PROJECT_UPDATE_READ_LIMIT = 120;
+const OPTIONAL_READ_LIMIT = 80;
+
+// PMS container category (2026-07-15 spec §4.1): 'sns-channel' | 'ka-deal' |
+// 'general'. meta.category overrides; unknown values read as "general" — the
+// code never guesses. The canonical list is the operator-confirmed 2026-07-15
+// assignment (every existing container is an SNS channel).
+const BRAND_CATEGORIES = new Set(["sns-channel", "ka-deal", "general"]);
+const CANONICAL_BRAND_CATEGORY = {
+  sinabro: "sns-channel",
+  gore: "sns-channel",
+  holyfuncollector: "sns-channel",
+  bridgemaker: "sns-channel",
+  moonpm: "sns-channel",
+  classmoon: "sns-channel",
+  studyseagull: "sns-channel",
+  politicofficer: "sns-channel",
+  "22nomad": "sns-channel",
 };
 
-function clampProgress(value) {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.max(0, Math.min(100, parsed));
+function resolveBrandCategory(key, meta) {
+  const raw = typeof meta?.category === "string" ? meta.category.trim() : "";
+  if (BRAND_CATEGORIES.has(raw)) return raw;
+  return CANONICAL_BRAND_CATEGORY[key] || "general";
+}
+
+// Which brands are ClassIn (company) work vs. personal brands. Defaults to
+// "personal" when a brand isn't listed here and has no meta.org_scope.
+const CANONICAL_BRAND_ORG_SCOPE = {
+  classmoon: "classin",
+  studyseagull: "classin",
+  classin_side: "classin",
+};
+
+function resolveBrandOrgScope(key, meta) {
+  if (typeof meta?.org_scope === "string" && meta.org_scope.trim()) return meta.org_scope.trim();
+  return CANONICAL_BRAND_ORG_SCOPE[key] || "personal";
 }
 
 function normalizeProjectStatus(status) {
@@ -77,22 +88,6 @@ function normalizeBrandKind(kind) {
   if (["community", "content"].includes(normalized)) return "warning";
 
   return "moon";
-}
-
-function resolveBrandOrder(key, meta, index) {
-  const parsed = Number.parseInt(String(meta?.order ?? ""), 10);
-  if (Number.isFinite(parsed)) return parsed;
-  return CANONICAL_BRAND_ORDER[key] ?? 1000 + index;
-}
-
-function resolveBrandTone(key, kind, meta) {
-  if (typeof meta?.tone === "string" && meta.tone.trim()) return meta.tone.trim();
-  return CANONICAL_BRAND_TONES[key] || normalizeBrandKind(kind);
-}
-
-function resolveBrandGlyph(key, meta, index) {
-  if (typeof meta?.glyph === "string" && meta.glyph.trim()) return meta.glyph.trim();
-  return CANONICAL_BRAND_GLYPHS[key] || BRAND_GLYPHS[index % BRAND_GLYPHS.length];
 }
 
 function formatShortDate(value) {
@@ -189,23 +184,18 @@ function mapBrands(rows, projects, todos, updates) {
       key,
       id: row.id,
       name: row.name,
-      glyph: resolveBrandGlyph(key, meta, index),
-      tone: resolveBrandTone(key, row.kind, meta),
+      glyph: meta.glyph || BRAND_GLYPHS[index % BRAND_GLYPHS.length],
+      tone: meta.tone || normalizeBrandKind(row.kind),
+      category: resolveBrandCategory(key, meta),
+      orgScope: resolveBrandOrgScope(key, meta),
       kind: row.kind || "brand",
       desc: row.description || "운영 브랜드",
-      philosophy: typeof meta.philosophy === "string" ? meta.philosophy : "",
-      direction: typeof meta.direction === "string" ? meta.direction : "",
-      cadence: typeof meta.cadence === "string" ? meta.cadence : "",
       projects: projectCounts.get(key) || 0,
       tasks: todoCounts.get(key) || 0,
       open: todoCounts.get(key) || 0,
       changes: changeCounts.get(key) || 0,
-      sortOrder: resolveBrandOrder(key, meta, index),
     };
-  }).sort((a, b) => (
-    a.sortOrder - b.sortOrder ||
-    a.name.localeCompare(b.name, "ko")
-  )).map(({ sortOrder, ...brand }) => brand);
+  });
 
   const openTodoCount = todos.filter((todo) => !todo.done).length;
 
@@ -215,7 +205,18 @@ function mapBrands(rows, projects, todos, updates) {
   ];
 }
 
-function mapProjects(rows, brandById, taskStats, updateStats) {
+export function mapProjects(
+  rows,
+  brandById,
+  taskStats,
+  updateStats,
+  {
+    taskStatsPartial = false,
+    updateStatsPartial = false,
+    taskCompleteProjectIds = new Set(),
+    updateCompleteProjectIds = new Set(),
+  } = {},
+) {
   return rows.map((row) => {
     const brand = row.brand_id && brandById.get(row.brand_id);
     const stats = taskStats.get(row.id) || { total: 0, done: 0 };
@@ -223,22 +224,60 @@ function mapProjects(rows, brandById, taskStats, updateStats) {
     const latestProgress = Number.isFinite(updates.latest?.progress)
       ? updates.latest.progress
       : null;
-    const progress = latestProgress ?? clampProgress(row.progress);
+    const reportedProgress = latestProgress ?? (Number.isFinite(row.progress) ? row.progress : null);
+    const projectTaskStatsPartial = taskStatsPartial && !taskCompleteProjectIds.has(row.id);
+    const projectUpdateStatsPartial = updateStatsPartial && !updateCompleteProjectIds.has(row.id);
+    const baseDisplayProgress = buildProjectProgress({
+      tasks: stats,
+      reportedProgress,
+      partial: projectTaskStatsPartial,
+    });
+    const taskEvidenceComplete = stats.total > 0 && !projectTaskStatsPartial;
+    const displayProgress = projectUpdateStatsPartial
+      ? taskEvidenceComplete
+        ? { ...baseDisplayProgress, evidencePartial: true }
+        : {
+            value: null,
+            source: baseDisplayProgress?.source || "reported",
+            label: "업데이트 진척 읽기 실패",
+            done: baseDisplayProgress?.done ?? null,
+            total: baseDisplayProgress?.total ?? null,
+            partial: true,
+            evidencePartial: true,
+          }
+      : baseDisplayProgress;
+    const displaySummary = row.summary || updates.latest?.summary || row.next_action || "";
+    const displayNextAction = row.next_action || updates.latest?.nextAction || "";
 
     return {
       id: row.id,
       brand: brand?.slug || "all",
+      brandId: row.brand_id ?? null,
       name: row.name,
+      statusKey: row.status ?? null,
       status: normalizeProjectStatus(row.status),
-      progress,
+      priority: row.priority ?? null,
+      projectSummary: row.summary ?? null,
+      projectProgress: row.progress ?? null,
+      projectNextAction: row.next_action ?? null,
+      displaySummary,
+      displayNextAction,
+      displayProgress,
+      latestUpdate: updates.latest,
+      updateEvidencePartial: projectUpdateStatsPartial,
+      progress: displayProgress?.value ?? null,
       due: formatShortDate(row.due_at),
+      startedAt: row.started_at ?? null,
+      dueAt: row.due_at ?? null,
+      updatedAt: row.updated_at ?? null,
       owner: row.owner_id ? "Me" : "Unassigned",
       tag: row.meta?.tag || null,
       tasks: stats.total,
       done: stats.done,
+      tasksPartial: projectTaskStatsPartial,
       changes: updates.count,
-      summary: row.summary || updates.latest?.summary || row.next_action || "",
-      nextAction: row.next_action || updates.latest?.nextAction || "",
+      summary: displaySummary,
+      nextAction: displayNextAction,
       createdAt: row.created_at,
       createdAtLabel: formatShortDate(row.created_at),
       lastActivityAt: updates.latest?.happenedAt || row.last_activity_at || row.updated_at || row.created_at,
@@ -257,11 +296,23 @@ function mapTodos(rows, projectById, brandById) {
       brand: brand?.slug || "all",
       project: row.project_id || "",
       title: row.title,
+      description: row.description || "",
+      status: row.status || "inbox",
       due: formatShortDate(row.due_at),
+      dueAt: row.due_at || "",
       bucket: resolveDueBucket(row.due_at),
       done: row.status === "done",
       priority: normalizeTodoPriority(row.priority),
+      // Unlossy priority (low/medium/high/critical, matching the engine's PRIORITIES enum) —
+      // `priority` above collapses critical->high and medium->med for the compact board dot,
+      // which round-trips badly through an edit-and-save (attention-ledger.js needs this raw
+      // form so a re-save doesn't silently downgrade critical or send an invalid "med").
+      priorityRaw: String(row.priority || "medium").toLowerCase(),
+      // Deal-linked sub-task (meta.deal_id, written by create_task's dealId) — the Deals
+      // drawer checklist filters on this; null for ordinary project/standalone tasks.
+      dealId: row.meta?.deal_id || null,
       assignee: row.owner_id ? "Me" : "Unassigned",
+      updatedAt: row.updated_at || row.created_at || "",
     };
   });
 }
@@ -391,14 +442,31 @@ function buildBoardColumns(projects, todos) {
   return columns;
 }
 
-export async function getProjectLedger() {
-  const workspaceId = resolveDefaultWorkspaceId();
+function mergeRowsById(primaryRows, supplementalRows) {
+  const rowsById = new Map();
+  [...primaryRows, ...supplementalRows].forEach((row) => {
+    if (!row?.id) return;
+    rowsById.set(row.id, row);
+  });
+  return Array.from(rowsById.values());
+}
 
-  if (!workspaceId) {
+function uniqueSources(sources) {
+  return Array.from(new Set(sources));
+}
+
+export async function getProjectLedger({ projectId = null } = {}) {
+  const workspaceId = resolveDefaultWorkspaceId();
+  const supabaseConfig = resolveSupabaseConfig();
+  const selectedProjectId = typeof projectId === "string" ? projectId.trim() : "";
+
+  if (!workspaceId || !supabaseConfig) {
     return {
       source: "preview",
       configured: false,
-      workspaceId: null,
+      workspaceId: workspaceId || null,
+      areas: [],
+      projectEntities: [],
       brands: [],
       projects: [],
       todos: [],
@@ -407,56 +475,158 @@ export async function getProjectLedger() {
       notes: [],
       checks: [],
       columns: [],
+      taskAggregation: null,
+      partial: false,
+      failedSources: [],
+      partialSources: [],
+      selection: selectedProjectId
+        ? { projectId: selectedProjectId, found: false, failedSources: [], partialSources: [] }
+        : null,
     };
   }
 
-  const [brandRows, projectRows, taskRows, updateRows, decisionRows, noteRows, routineRows] = await Promise.all([
+  const taskStatuses = ["inbox", "todo", "doing", "blocked", "done"];
+  const taskFilters = withWorkspaceFilter([
+    ["status", inFilter(taskStatuses)],
+  ]);
+  const catalogPlan = buildProjectCatalogFetchPlan();
+  const [
+    brandRows,
+    projectRows,
+    taskRows,
+    taskRowCount,
+    updateRows,
+    decisionRows,
+    noteRows,
+    routineRows,
+    selectedProjectRows,
+    selectedTaskRows,
+    selectedUpdateRows,
+    selectedDecisionRows,
+    selectedNoteRows,
+    selectedRoutineRows,
+    areaRows,
+    leadRows,
+    accountRows,
+  ] = await Promise.all([
     fetchSupabaseRows("brands", {
       limit: 80,
       order: "name.asc",
       filters: withWorkspaceFilter([["status", eqFilter("active")]]),
     }),
     fetchSupabaseRows("projects", {
-      limit: 80,
+      limit: PROJECT_READ_LIMIT + 1,
       order: "updated_at.desc",
       filters: withWorkspaceFilter([
         ["status", inFilter(["draft", "active", "blocked", "completed", "archived"])],
       ]),
     }),
     fetchSupabaseRows("tasks", {
-      limit: 160,
+      limit: TASK_READ_LIMIT,
       order: "updated_at.desc",
-      filters: withWorkspaceFilter([
-        ["status", inFilter(["inbox", "todo", "doing", "blocked", "done"])],
-      ]),
+      filters: taskFilters,
     }),
+    countSupabaseRows("tasks", taskFilters),
     fetchSupabaseRows("project_updates", {
-      limit: 120,
+      limit: PROJECT_UPDATE_READ_LIMIT + 1,
       order: "happened_at.desc",
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("decisions", {
-      limit: 80,
+      limit: OPTIONAL_READ_LIMIT + 1,
       order: "decided_at.desc",
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("notes", {
-      limit: 80,
+      limit: OPTIONAL_READ_LIMIT + 1,
       order: "created_at.desc",
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("routine_checks", {
-      limit: 80,
+      limit: OPTIONAL_READ_LIMIT + 1,
       order: "created_at.desc",
       filters: withWorkspaceFilter(),
     }),
+    selectedProjectId
+      ? fetchSupabaseRows("projects", {
+          limit: 2,
+          filters: withWorkspaceFilter([["id", eqFilter(selectedProjectId)]]),
+        })
+      : Promise.resolve([]),
+    selectedProjectId
+      ? fetchSupabaseRows("tasks", {
+          limit: TASK_READ_LIMIT + 1,
+          order: "updated_at.desc",
+          filters: withWorkspaceFilter([
+            ["project_id", eqFilter(selectedProjectId)],
+            ["status", inFilter(taskStatuses)],
+          ]),
+        })
+      : Promise.resolve([]),
+    selectedProjectId
+      ? fetchSupabaseRows("project_updates", {
+          limit: PROJECT_UPDATE_READ_LIMIT + 1,
+          order: "happened_at.desc",
+          filters: withWorkspaceFilter([["project_id", eqFilter(selectedProjectId)]]),
+        })
+      : Promise.resolve([]),
+    selectedProjectId
+      ? fetchSupabaseRows("decisions", {
+          limit: OPTIONAL_READ_LIMIT + 1,
+          order: "decided_at.desc",
+          filters: withWorkspaceFilter([["project_id", eqFilter(selectedProjectId)]]),
+        })
+      : Promise.resolve([]),
+    selectedProjectId
+      ? fetchSupabaseRows("notes", {
+          limit: OPTIONAL_READ_LIMIT + 1,
+          order: "created_at.desc",
+          filters: withWorkspaceFilter([["project_id", eqFilter(selectedProjectId)]]),
+        })
+      : Promise.resolve([]),
+    selectedProjectId
+      ? fetchSupabaseRows("routine_checks", {
+          limit: OPTIONAL_READ_LIMIT + 1,
+          order: "created_at.desc",
+          filters: withWorkspaceFilter([["project_id", eqFilter(selectedProjectId)]]),
+        })
+      : Promise.resolve([]),
+    fetchSupabaseRows(catalogPlan.areas.table, {
+      ...catalogPlan.areas.options,
+      filters: withWorkspaceFilter(catalogPlan.areas.options.filters),
+    }),
+    fetchSupabaseRows(catalogPlan.leads.table, {
+      ...catalogPlan.leads.options,
+      filters: withWorkspaceFilter(catalogPlan.leads.options.filters),
+    }),
+    fetchSupabaseRows(catalogPlan.accounts.table, {
+      ...catalogPlan.accounts.options,
+      filters: withWorkspaceFilter(catalogPlan.accounts.options.filters),
+    }),
   ]);
 
-  if (!brandRows || !projectRows || !taskRows) {
+  const failedSources = uniqueSources([
+    ["brands", brandRows],
+    ["projects", projectRows],
+    ["tasks", taskRows],
+    ...(selectedProjectId ? [
+      ["projects", selectedProjectRows],
+      ["tasks", selectedTaskRows],
+    ] : []),
+  ]
+    .filter(([, rows]) => !Array.isArray(rows))
+    .map(([source]) => source));
+
+  if (failedSources.length > 0) {
     return {
-      source: "preview",
+      source: "error",
       configured: true,
       workspaceId,
+      error: "project-ledger-core-read-failed",
+      failedSources,
+      retryable: true,
+      areas: [],
+      projectEntities: [],
       brands: [],
       projects: [],
       todos: [],
@@ -465,14 +635,131 @@ export async function getProjectLedger() {
       notes: [],
       checks: [],
       columns: [],
+      taskAggregation: null,
+      partial: false,
+      partialSources: [],
+      selection: selectedProjectId
+        ? { projectId: selectedProjectId, found: false, failedSources, partialSources: [] }
+        : null,
     };
   }
 
-  const brandById = new Map(brandRows.map((brand) => [brand.id, brand]));
-  const projectById = new Map(projectRows.map((project) => [project.id, project]));
+  const optionalSources = [
+    ["project_updates", updateRows],
+    ["decisions", decisionRows],
+    ["notes", noteRows],
+    ["routine_checks", routineRows],
+  ];
+  const catalogSources = [
+    ["areas", areaRows],
+    ["leads", leadRows],
+    ["customer_accounts", accountRows],
+  ];
+  const optionalFailedSources = optionalSources
+    .filter(([, rows]) => !Array.isArray(rows))
+    .map(([source]) => source);
+  const catalogFailedSources = catalogSources
+    .filter(([, rows]) => !Array.isArray(rows))
+    .map(([source]) => source);
+  const selectionOptionalSources = selectedProjectId
+    ? [
+        ["project_updates", selectedUpdateRows],
+        ["decisions", selectedDecisionRows],
+        ["notes", selectedNoteRows],
+        ["routine_checks", selectedRoutineRows],
+      ]
+    : [];
+  const selectionFailedSources = selectionOptionalSources
+    .filter(([, rows]) => !Array.isArray(rows))
+    .map(([source]) => source);
+  const truncatedSources = [
+    ["projects", projectRows, PROJECT_READ_LIMIT],
+    ["project_updates", updateRows, PROJECT_UPDATE_READ_LIMIT],
+    ["decisions", decisionRows, OPTIONAL_READ_LIMIT],
+    ["notes", noteRows, OPTIONAL_READ_LIMIT],
+    ["routine_checks", routineRows, OPTIONAL_READ_LIMIT],
+  ]
+    .filter(([, rows, limit]) => Array.isArray(rows) && rows.length > limit)
+    .map(([source]) => source);
+  const selectionTruncatedSources = selectedProjectId
+    ? [
+        ["projects", selectedProjectRows, 1],
+        ["tasks", selectedTaskRows, TASK_READ_LIMIT],
+        ["project_updates", selectedUpdateRows, PROJECT_UPDATE_READ_LIMIT],
+        ["decisions", selectedDecisionRows, OPTIONAL_READ_LIMIT],
+        ["notes", selectedNoteRows, OPTIONAL_READ_LIMIT],
+        ["routine_checks", selectedRoutineRows, OPTIONAL_READ_LIMIT],
+      ]
+        .filter(([, rows, limit]) => Array.isArray(rows) && rows.length > limit)
+        .map(([source]) => source)
+    : [];
+  const updateStatsPartial = !Array.isArray(updateRows)
+    || truncatedSources.includes("project_updates");
+  const visibleProjectRows = mergeRowsById(
+    projectRows.slice(0, PROJECT_READ_LIMIT),
+    Array.isArray(selectedProjectRows) ? selectedProjectRows.slice(0, 1) : [],
+  );
+  const visibleTaskRows = mergeRowsById(
+    taskRows,
+    Array.isArray(selectedTaskRows) ? selectedTaskRows.slice(0, TASK_READ_LIMIT) : [],
+  );
+  const visibleUpdateRows = mergeRowsById(
+    Array.isArray(updateRows) ? updateRows.slice(0, PROJECT_UPDATE_READ_LIMIT) : [],
+    Array.isArray(selectedUpdateRows) ? selectedUpdateRows.slice(0, PROJECT_UPDATE_READ_LIMIT) : [],
+  );
+  const visibleDecisionRows = mergeRowsById(
+    Array.isArray(decisionRows) ? decisionRows.slice(0, OPTIONAL_READ_LIMIT) : [],
+    Array.isArray(selectedDecisionRows) ? selectedDecisionRows.slice(0, OPTIONAL_READ_LIMIT) : [],
+  );
+  const visibleNoteRows = mergeRowsById(
+    Array.isArray(noteRows) ? noteRows.slice(0, OPTIONAL_READ_LIMIT) : [],
+    Array.isArray(selectedNoteRows) ? selectedNoteRows.slice(0, OPTIONAL_READ_LIMIT) : [],
+  );
+  const visibleRoutineRows = mergeRowsById(
+    Array.isArray(routineRows) ? routineRows.slice(0, OPTIONAL_READ_LIMIT) : [],
+    Array.isArray(selectedRoutineRows) ? selectedRoutineRows.slice(0, OPTIONAL_READ_LIMIT) : [],
+  );
+  const taskStatsPartial = !Number.isFinite(taskRowCount)
+    || taskRowCount !== visibleTaskRows.length
+    || selectionTruncatedSources.includes("tasks");
+  const partialSources = uniqueSources([
+    ...(taskStatsPartial ? ["tasks"] : []),
+    ...truncatedSources,
+    ...selectionTruncatedSources,
+  ]);
+
+  const referencedRows = await fetchProjectReferenceRows(visibleProjectRows, {
+    fetchRows: fetchSupabaseRows,
+    withWorkspaceFilters: withWorkspaceFilter,
+  });
+  const referenceFailedSources = Array.isArray(referencedRows.failedSources)
+    ? referencedRows.failedSources
+    : [];
+
+  const brandById = new Map(brandRows.map((brand) => {
+    const key = brand.slug || brand.id;
+    const meta = brand.meta && typeof brand.meta === "object" ? brand.meta : {};
+    return [brand.id, {
+      ...brand,
+      orgScope: resolveBrandOrgScope(key, meta),
+    }];
+  }));
+  const areaById = new Map(
+    mergeProjectRelationRows(areaRows || [], referencedRows.areaRows)
+      .map((area) => [area.id, area]),
+  );
+  const leadById = new Map(
+    mergeProjectRelationRows(leadRows || [], referencedRows.leadRows)
+      .map((lead) => [lead.id, lead]),
+  );
+  const accountById = new Map(
+    mergeProjectRelationRows(accountRows || [], referencedRows.accountRows)
+      .map((account) => [account.id, account]),
+  );
+  const projectById = new Map(visibleProjectRows.map((project) => [project.id, project]));
   const taskStats = new Map();
 
-  taskRows.forEach((task) => {
+  visibleTaskRows.forEach((task) => {
     if (!task.project_id) return;
     const stats = taskStats.get(task.project_id) || { total: 0, done: 0 };
     stats.total += 1;
@@ -480,23 +767,95 @@ export async function getProjectLedger() {
     taskStats.set(task.project_id, stats);
   });
 
-  const updates = mapProjectUpdates(updateRows || []);
+  const updates = mapProjectUpdates(visibleUpdateRows);
   const updateStats = buildUpdateStats(updates);
-  const todos = mapTodos(taskRows, projectById, brandById);
-  const projects = mapProjects(projectRows, brandById, taskStats, updateStats);
+  const todos = mapTodos(visibleTaskRows, projectById, brandById);
+  const selectedProjectFound = selectedProjectId
+    ? visibleProjectRows.some((project) => project.id === selectedProjectId)
+    : false;
+  const taskCompleteProjectIds = selectedProjectFound
+    && Array.isArray(selectedTaskRows)
+    && !selectionTruncatedSources.includes("tasks")
+      ? new Set([selectedProjectId])
+      : new Set();
+  const updateCompleteProjectIds = selectedProjectFound
+    && Array.isArray(selectedUpdateRows)
+    && !selectionTruncatedSources.includes("project_updates")
+      ? new Set([selectedProjectId])
+      : new Set();
+  const baseProjects = mapProjects(visibleProjectRows, brandById, taskStats, updateStats, {
+    taskStatsPartial,
+    updateStatsPartial,
+    taskCompleteProjectIds,
+    updateCompleteProjectIds,
+  });
+  const contextById = new Map(mapProjectRows(visibleProjectRows, {
+    brandById,
+    areaById,
+    leadById,
+    accountById,
+  }).map((project) => [project.id, project]));
+  const projects = baseProjects.map((project) => {
+    const contextProject = contextById.get(project.id);
+    if (!contextProject) return project;
+    return {
+      ...project,
+      areaId: contextProject.areaId,
+      areaName: contextProject.areaName,
+      brandId: contextProject.brandId,
+      brand: contextProject.brand,
+      entityRef: contextProject.entityRef,
+      entityLabel: contextProject.entityLabel,
+      orgScope: contextProject.orgScope,
+      workspace: contextProject.workspace,
+    };
+  });
   const brands = mapBrands(brandRows, projects, todos, updates);
+  const areas = mapProjectAreas(areaRows || []);
+  const projectEntities = buildProjectEntities(leadRows || [], accountRows || []);
 
   return {
     source: "supabase",
     configured: true,
     workspaceId,
+    areas,
+    projectEntities,
     brands,
     projects,
     todos,
     updates,
-    decisions: mapDecisions(decisionRows || []),
-    notes: mapNotes(noteRows || []),
-    checks: mapRoutineChecks(routineRows || []),
+    decisions: mapDecisions(visibleDecisionRows),
+    notes: mapNotes(visibleNoteRows),
+    checks: mapRoutineChecks(visibleRoutineRows),
     columns: buildBoardColumns(projects, todos),
+    taskAggregation: {
+      loaded: visibleTaskRows.length,
+      total: Number.isFinite(taskRowCount) ? taskRowCount : null,
+      partial: taskStatsPartial,
+    },
+    partial: optionalFailedSources.length > 0
+      || catalogFailedSources.length > 0
+      || referenceFailedSources.length > 0
+      || selectionFailedSources.length > 0
+      || partialSources.length > 0,
+    failedSources: uniqueSources([
+      ...optionalFailedSources,
+      ...catalogFailedSources,
+      ...referenceFailedSources,
+      ...selectionFailedSources,
+    ]),
+    partialSources,
+    selection: selectedProjectId
+      ? {
+          projectId: selectedProjectId,
+          found: selectedProjectFound,
+          failedSources: uniqueSources([
+            ...catalogFailedSources,
+            ...referenceFailedSources,
+            ...selectionFailedSources,
+          ]),
+          partialSources: uniqueSources(selectionTruncatedSources),
+        }
+      : null,
   };
 }

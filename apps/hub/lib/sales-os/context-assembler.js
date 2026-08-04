@@ -7,21 +7,19 @@
 // context shape (deals/leads/accounts/cases/focus kept) so the Engine prompt stays compatible.
 
 import { getContentLedger } from "@/lib/repositories/content-ledger";
+import { getCrmPipeline } from "@/lib/repositories/crm-pipeline";
 import { getRecentOutcomes } from "@/lib/repositories/outcomes-ledger";
 import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
 
 import { getRecentAgentRuns } from "@/lib/sales-os/agent-runs";
 import {
+  OWNER_ID,
   buildFocusOperatingContext,
   cadenceStatusString,
   normalizeOutcome,
   outcomesForEntity,
   selectBrand,
 } from "@/lib/sales-os/context-schema";
-import {
-  buildLeadSourceMix,
-  getClassInOperatorContext,
-} from "@/lib/sales-os/operator-context";
 
 const trim = (arr, n) => (Array.isArray(arr) ? arr.slice(0, n) : []);
 
@@ -49,16 +47,10 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
 
   const normalizedOutcomes = (outcomesRes?.outcomes || []).map(normalizeOutcome).filter(Boolean);
   const brand = selectBrand(content?.brands);
-  const leadSourceMix = buildLeadSourceMix(ledger.leads || []);
-  const operator = getClassInOperatorContext({
-    leadSourceMix,
-    monthlyKpi: ledger.summary?.classinMonthlyKpi || null,
-  });
 
   const context = {
     source: ledger.source,
     summary: ledger.summary || null,
-    operator,
     stages: ledger.stages || [],
     deals: trim(ledger.deals, 40),
     leads: trim(ledger.leads, 40),
@@ -82,7 +74,9 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
     missing,
   };
 
-  if (ref && mode === "deal-review") {
+  // deal-review AND followup-draft both need the deal-scoped focus (buyer style, recent
+  // outcomes, next-action hint) — followup-draft writes the message off exactly this slice.
+  if (ref && (mode === "deal-review" || mode === "followup-draft")) {
     const needle = ref.toLowerCase();
     const deal =
       (ledger.deals || []).find(
@@ -90,15 +84,13 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
       ) || null;
     const account =
       (ledger.accounts || []).find((a) => (a.name || "").toLowerCase().includes(needle)) || null;
-    // Lead match: prefer the deal's own lead_id link, fall back to a name-substring match —
-    // this is what fills score/next_action_hint/contact in the focus context.
-    const lead = deal
-      ? (ledger.leads || []).find((l) => deal.leadId && l.id === deal.leadId) ||
-        (ledger.leads || []).find((l) => (l.name || "").toLowerCase().includes((deal.name || "").toLowerCase())) ||
-        null
-      : null;
     const entityOutcomes = deal ? outcomesForEntity(normalizedOutcomes, { dealId: deal.id }) : [];
-    context.focus = buildFocusOperatingContext({ deal, account, lead, entityOutcomes, brand });
+    // v1.4 CRM gap fill — resolves to null until the classin_crm_snapshot push lands (P0b/P1);
+    // buildFocusOperatingContext degrades that to the existing "eeoCRM" missing[] entry.
+    const crmFacts = deal
+      ? await settled(getCrmPipeline({ ownerId: OWNER_ID, dealId: deal.id }), "crm-pipeline", missing)
+      : null;
+    context.focus = buildFocusOperatingContext({ deal, account, entityOutcomes, brand, crmFacts });
   }
 
   return context;

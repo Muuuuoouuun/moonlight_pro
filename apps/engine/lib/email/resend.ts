@@ -31,6 +31,16 @@ function resolveResendConfig() {
   };
 }
 
+export function getResendIntegrationStatus() {
+  const config = resolveResendConfig();
+
+  return {
+    configured: Boolean(config),
+    provider: "resend",
+    fromEmail: config?.fromEmail || null,
+  };
+}
+
 function formatFromAddress(fromEmail: string, fromName?: string | null) {
   if (!fromName?.trim()) {
     return fromEmail;

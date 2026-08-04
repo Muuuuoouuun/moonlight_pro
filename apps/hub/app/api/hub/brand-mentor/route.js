@@ -45,7 +45,7 @@ async function callEngine(body) {
   } catch (error) {
     // Engine configured but unreachable (down / wrong URL): degrade to a clean error the
     // client normalizes, instead of throwing a 500. Honest preview/error states are part
-    // of the design (CLAUDE.md: never mix mock + live).
+    // of the design (never mix preview + live records).
     return {
       status: 502,
       data: { status: "error", reason: `Engine 연결 실패: ${error instanceof Error ? error.message : String(error)}` },

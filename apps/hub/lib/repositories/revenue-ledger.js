@@ -4,33 +4,15 @@ import {
   inFilter,
   withWorkspaceFilter,
 } from "@/lib/server-read";
-import { resolveDefaultWorkspaceId } from "@/lib/server-write";
-import { getClassInTargets, isValidLeadFlag } from "@/lib/sales-os/operator-context";
-
-const DEAL_STAGES = [
-  { key: "lead", label: "Lead", color: "neutral" },
-  { key: "qual", label: "Qualified", color: "info" },
-  { key: "prop", label: "Proposal", color: "moon" },
-  { key: "neg", label: "Negotiation", color: "warning" },
-  { key: "won", label: "Won", color: "success" },
-];
-
-const STAGE_ALIASES = {
-  prospect: "lead",
-  new: "lead",
-  qualified: "qual",
-  nurturing: "qual",
-  proposal: "prop",
-  negotiation: "neg",
-  won: "won",
-  lost: "lost",
-};
+import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
+import { resolveLeadEnrichmentView } from "../sales-os/lead-view.js";
+import { DEAL_STAGES, STAGE_ALIASES, LEGACY_DB_STAGE_VALUES } from "../deal-stages.js";
 
 const LEAD_STAGE_LABEL = {
   new: "New",
   qualified: "Qualified",
   nurturing: "Contact",
-  won: "Qualified",
+  won: "Customer",
   lost: "Lost",
 };
 
@@ -48,63 +30,17 @@ function toNumber(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function lowerText(...values) {
-  return values
-    .filter((v) => v != null)
-    .map((v) => String(v).toLowerCase())
-    .join(" ");
-}
-
-function metaNumber(meta, keys, fallback = 0) {
-  for (const key of keys) {
-    const value = meta?.[key];
-    if (value == null || String(value).trim() === "") continue;
-    const n = Number(String(value ?? "").replace(/,/g, ""));
-    if (Number.isFinite(n)) return n;
-  }
-  return fallback;
-}
-
-function isCurrentMonth(value) {
-  if (!value) return false;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
-  const now = new Date();
-  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
-}
-
-function resolveWorkspace(row) {
-  const meta = row?.meta || {};
-  if (meta.workspace) return meta.workspace;
-  if (meta.lane === "classin_sales") return "classin";
-  return null;
-}
-
-function resolveBrand(row) {
-  const meta = row?.meta || {};
-  return meta.brand || meta.brand_key || meta.brandKey || null;
-}
-
-function isClassInRaw(row) {
-  const meta = row?.meta || {};
-  if (meta.lane === "classin_sales" || meta.workspace === "classin") return true;
-  const hay = lowerText(
-    row?.source,
-    row?.channel,
-    row?.title,
-    row?.name,
-    meta.source_family,
-    meta.campaign,
-    meta.form_name,
-    meta.intent,
-    meta.note,
-  );
-  return /(classin|class in|클래스인|설명회|전자칠판|meta_ads|광고|캠페인)/.test(hay);
-}
-
 function normalizeStage(value) {
   const key = String(value || "").toLowerCase();
-  return STAGE_ALIASES[key] || (DEAL_STAGES.some(s => s.key === key) ? key : "lead");
+  return STAGE_ALIASES[key] || (DEAL_STAGES.some(s => s.key === key) ? key : "potential");
+}
+
+// Display stage: meta.stage_detail (fine-grained, written by buildDealWrite) wins over the
+// coarse CHECK-constrained column — legacy rows without it fall back to the column aliases.
+function resolveDealStage(row) {
+  const detail = String(row?.meta?.stage_detail || "").toLowerCase();
+  if (detail === "lost" || DEAL_STAGES.some(s => s.key === detail)) return detail;
+  return normalizeStage(row?.stage);
 }
 
 function formatShortDate(value) {
@@ -163,6 +99,23 @@ function resolveType(row) {
   return row?.company_id ? "company" : "personal";
 }
 
+// Explicit workspace tag from meta (set by in-workspace creates via buildLeadWrite/
+// buildDealWrite) → the Revenue pages' workspace-map scoping matches on this first, so a
+// scoped create survives a live save + reload. `classin_sales` lane is an alias for classin.
+function resolveWorkspace(row) {
+  const meta = row?.meta || {};
+  if (meta.workspace) return meta.workspace;
+  if (meta.lane === "classin_sales") return "classin";
+  return null;
+}
+
+// Brand key from meta (various live-source slugs) — feeds brandInWorkspace() so a
+// record follows its brand's org scope when it carries no explicit workspace tag.
+function resolveBrand(row) {
+  const meta = row?.meta || {};
+  return meta.brand || meta.brand_key || meta.brandKey || null;
+}
+
 function mapLead(row, companyById, contactById) {
   const type = resolveType(row);
   const company = row.company_id ? companyById.get(row.company_id) : null;
@@ -177,60 +130,83 @@ function mapLead(row, companyById, contactById) {
 
   const statusKey = String(row.status || "new").toLowerCase();
   const meta = row?.meta || {};
-  const value = toNumber(meta.value ?? row?.score * 100000, 0);
+  const enrichmentView = resolveLeadEnrichmentView(row);
+  const value = enrichmentView.valueAmount || 0;
   const units = toNumber(meta.units ?? meta.unit_count, 0);
 
   return {
     id: row.id,
+    companyId: row.company_id || null,
+    contactId: row.contact_id || null,
+    // 운영자 수동 포커스 3단 조정 (raise/default/lower) — 숫자 점수와 별개 축
+    focusOverride: meta.focus_override === "raise" || meta.focus_override === "lower" ? meta.focus_override : "default",
+    // 기약 없음 휴면 상태 (buildFollowupWrite가 meta에 기록) — 고객 DB 뷰의 휴면 세그먼트 소스
+    dormant: Boolean(meta.dormant),
+    dormantSince: meta.dormant_since || null,
+    nextActionAt: meta.next_action_at || null,
     name: displayName,
     type,
+    // Scoping tags — workspace-map matches on these; also the round-trip target for the
+    // Leads EditDrawer's workspace-tagged creates.
     workspace: resolveWorkspace(row),
     brand: resolveBrand(row),
     source: row.source || row.channel || "—",
     stage: LEAD_STAGE_LABEL[statusKey] || "New",
-    score: toNumber(row.score, 0),
-    // Guru deal-review focus context reads these (context-schema.js) — keep them on the
-    // projection so the 360 context no longer has to report them as missing[].
-    nextAction: row.next_action || null,
-    account: company?.name || null, // company name → cross-link to the Accounts tab (?acct=)
-    contactName: contact?.name || null,
-    contactEmail: contact?.email || null,
+    // Raw follow-up score (0–100) for the Segments score-band grouping; null = unscored.
+    score: enrichmentView.score,
     value: value ? formatMoneyLabel(value) : "—",
-    // Lightweight tags (meta-backed). 유입경로 is `source` above; these four editable in the drawer.
-    region: meta.region || "",
+    // Lightweight meta-backed tags — editable in the Leads EditDrawer, reversed by
+    // buildLeadWrite. '' fallbacks keep the drawer inputs controlled.
+    region: enrichmentView.region,
     scale: meta.scale || "",
     situation: meta.situation || "",
-    campaign: meta.campaign || null,
     units: units > 0 ? units : "",
+    companyName: company?.name || null,
+    contactName: contact?.name || null,
+    contactEmail: contact?.email || null,
+    contactPhone: contact?.phone || null,
+    contactTitle: contact?.title || null,
     last: formatRelative(row.last_touch_at || row.updated_at || row.created_at),
-    owner: row.owner_id ? "Me" : "Unassigned",
+    owner: enrichmentView.owner,
+    priorityLane: enrichmentView.priorityLane,
+    nextAction: enrichmentView.nextAction,
+    enrichmentTags: enrichmentView.enrichmentTags,
+    engagementState: enrichmentView.engagementState,
+    publicEvidenceCount: enrichmentView.publicEvidenceCount,
+    activityEvidence: enrichmentView.activityEvidence,
   };
 }
 
 function mapDeal(row, companyById) {
   const type = resolveType(row);
   const company = row.company_id ? companyById.get(row.company_id) : null;
-  const stage = normalizeStage(row.stage);
+  const stage = resolveDealStage(row);
   const name = row.title || row.name || company?.name || "Untitled deal";
 
   return {
     id: row.id,
-    leadId: row.lead_id || null, // ties the deal back to its lead for Guru focus context
-    companyId: row.company_id || null, // ties the deal to its account (?company= filter)
-    account: company?.name || null, // company name → cross-link to the Accounts tab (?acct=)
+    leadId: row.lead_id || null, // ties the deal back to its lead (deep-link + focus context)
+    companyId: row.company_id || null, // account 행에서 딜 파이프라인을 붙이는 조인 키
     name,
     type,
+    // Scoping tags — workspace-map matches on these; round-trip target for scoped creates.
     workspace: resolveWorkspace(row),
     brand: resolveBrand(row),
     stage,
     value: toNumber(row.amount, 0),
     owner: row.owner_id ? "Me" : "Unassigned",
     close: formatShortDate(row.expected_close_at),
+    // Raw ISO timestamps for cross-lane consumers (attention-ledger buckets by closeAt and
+    // sorts recency by activityAt) — the display fields above stay label-only.
+    closeAt: row.expected_close_at || "",
+    activityAt: row.last_activity_at || row.updated_at || row.created_at || "",
     age: ageDays(row.last_activity_at || row.updated_at || row.created_at),
+    hidden: Boolean(row.hidden_at),
+    hiddenAt: row.hidden_at || null,
   };
 }
 
-function mapAccount(row, dealStatsByCompany, contactsByCompany) {
+function mapAccount(row, dealStatsByCompany) {
   const type = resolveType(row);
   const stats = (row.company_id && dealStatsByCompany.get(row.company_id)) || {
     deals: 0,
@@ -238,12 +214,9 @@ function mapAccount(row, dealStatsByCompany, contactsByCompany) {
   };
   const health = resolveHealth(row.health_score, row.status);
   const lastAt = row.updated_at || row.started_at || row.created_at;
-  // Contacts attached from the company-grouped map. Only real `contacts` columns are mapped
-  // (name/title/email — no `phone` column in schema.sql), with '' fallbacks for the display shape.
-  const contacts = (row.company_id && contactsByCompany?.get(row.company_id)) || [];
 
   return {
-    id: row.id,
+    id: row.id, // crm_activities 링크 대상 — 로컬 생성 행(id 없음)은 활동이 preview로만 남는다
     companyId: row.company_id || null,
     name: row.name,
     type,
@@ -252,8 +225,28 @@ function mapAccount(row, dealStatsByCompany, contactsByCompany) {
     last: formatRelative(lastAt),
     lastAt: formatRelativeShort(lastAt),
     health,
+    nextAction: row.next_action || "",
+    nextActionAt: row.meta?.next_action_at || null,
+    dormant: Boolean(row.meta?.dormant),
+    focusOverride: row.meta?.focus_override === "raise" || row.meta?.focus_override === "lower"
+      ? row.meta.focus_override
+      : "default",
     owner: row.owner_id ? "Me" : "Unassigned",
-    contacts,
+  };
+}
+
+// contacts 행 → 고객 DB·Customer 360이 쓰는 사람 모델 (spec §9 Contact 중심)
+function mapContact(row) {
+  const lastAt = row.updated_at || row.created_at;
+  return {
+    id: row.id,
+    companyId: row.company_id || null,
+    name: row.name || "이름 없음",
+    email: row.email || null,
+    phone: row.phone || null,
+    title: row.title || null,
+    labels: Array.isArray(row.meta?.labels) ? row.meta.labels : [],
+    last: formatRelative(lastAt),
   };
 }
 
@@ -282,52 +275,16 @@ function mapCase(row, accountById) {
     status: CASE_STATUS_LABEL[statusKey] || "Open",
     priority: priorityDisplay,
     opened: formatRelative(row.opened_at || row.created_at),
+    // 정렬용 원시 타임스탬프 — opened는 상대 라벨이라 문자열 정렬이 시간순이 아니다.
+    openedAt: row.opened_at || row.created_at || "",
     owner: row.owner_id ? "Me" : "Unassigned",
   };
 }
 
-function buildClassInMonthlyKpi(leadRows, dealRows) {
-  const targets = getClassInTargets();
-  const classinLeads = (leadRows || []).filter(isClassInRaw);
-  const classinDeals = (dealRows || []).filter(isClassInRaw);
-  const wonThisMonth = classinDeals.filter((row) => {
-    const stage = normalizeStage(row.stage);
-    return stage === "won" && isCurrentMonth(row.won_at || row.closed_at || row.last_activity_at || row.updated_at || row.created_at);
-  });
-
-  const contracts = wonThisMonth.length;
-  const units = wonThisMonth.reduce((sum, row) => sum + metaNumber(row.meta, ["unit_count", "units", "hardware_units"], 0), 0);
-  const revenueCny = wonThisMonth.reduce((sum, row) => {
-    const meta = row.meta || {};
-    const explicit = metaNumber(meta, ["revenue_cny", "amount_cny"], null);
-    if (explicit != null) return sum + explicit;
-    const currency = String(meta.currency || row.currency || "").toUpperCase();
-    return currency === "CNY" ? sum + toNumber(row.amount, 0) : sum;
-  }, 0);
-  const newLeads = classinLeads.filter((row) => isCurrentMonth(row.created_at || row.updated_at || row.last_touch_at)).length;
-  const validLeads = classinLeads.filter((row) => {
-    const status = String(row.status || "").toLowerCase();
-    return ["qualified", "nurturing", "won"].includes(status) || isValidLeadFlag(row);
-  }).length;
-
-  const pct = (value, target) => (target > 0 ? Math.round((value / target) * 1000) / 10 : 0);
-  return {
-    month: new Date().toISOString().slice(0, 7),
-    targets,
-    actual: { contracts, units, revenueCny, newLeads, validLeads },
-    progress: {
-      contractsPct: pct(contracts, targets.monthlyContractTarget),
-      unitsPct: pct(units, targets.monthlyUnitTarget),
-      revenuePct: pct(revenueCny, targets.monthlyRevenueTargetCny),
-    },
-    note: "ClassIn lane is inferred from meta.lane/workspace/source keywords until company CRM read adapters provide stronger facts.",
-  };
-}
-
-function buildSummary(leads, deals, leadRows = [], dealRows = []) {
-  const pipeline = deals.filter(d => d.stage !== "won" && d.stage !== "lost")
+function buildSummary(leads, deals) {
+  const pipeline = deals.filter(d => d.stage !== "closing" && d.stage !== "lost")
     .reduce((sum, d) => sum + d.value, 0);
-  const wonMTD = deals.filter(d => d.stage === "won").reduce((sum, d) => sum + d.value, 0);
+  const wonMTD = deals.filter(d => d.stage === "closing").reduce((sum, d) => sum + d.value, 0);
   const mrr = Math.round(wonMTD * 0.12);
 
   return {
@@ -336,9 +293,8 @@ function buildSummary(leads, deals, leadRows = [], dealRows = []) {
     pipeline,
     leadsCount: leads.length,
     newThisMonth: leads.filter(l => l.stage === "New").length,
-    openDeals: deals.filter(d => d.stage !== "won" && d.stage !== "lost").length,
+    openDeals: deals.filter(d => d.stage !== "closing" && d.stage !== "lost").length,
     wonMTD,
-    classinMonthlyKpi: buildClassInMonthlyKpi(leadRows, dealRows),
   };
 }
 
@@ -351,6 +307,8 @@ function emptyLedger(configured, workspaceId) {
     deals: [],
     accounts: [],
     cases: [],
+    contacts: [],
+    companies: [],
     stages: DEAL_STAGES,
     summary: {
       mrr: 0,
@@ -360,16 +318,65 @@ function emptyLedger(configured, workspaceId) {
       newThisMonth: 0,
       openDeals: 0,
       wonMTD: 0,
-      classinMonthlyKpi: buildClassInMonthlyKpi([], []),
     },
   };
 }
 
+// crm_activities 행 → DetailPanel 표시 모델. live 테이블은 kind 컬럼을 쓴다.
+// notes 탭은 type='note'만 분리해 쓴다.
+function mapActivity(row) {
+  return {
+    id: row.id,
+    type: row.kind || row.type || "note",
+    msg: row.body || "",
+    at: formatRelative(row.occurred_at || row.created_at),
+    occurredAt: row.occurred_at || row.created_at || "",
+    who: "Me",
+    pinned: Boolean(row.pinned),
+    reaction: row.reaction || null,
+    leadId: row.lead_id || null,
+    dealId: row.deal_id || null,
+    contactId: row.contact_id || null,
+  };
+}
+
+// 활동·노트 lazy load — 계정·리드·딜·회사 기준.
+// `companyId`는 팔로업 탭의 활동 패널이 쓴다: 라이브 crm_activities 110행 중 company_id는
+// 109행에 있지만 lead_id는 1행, deal_id는 0행뿐이라 (기록이 회사/계정 기준으로 쌓여 왔다)
+// 리드·딜 id로 조인하면 사실상 전부 "기록 없음"이 된다.
+// 미설정 환경은 configured:false로 정직하게 표시하고 빈 배열을 준다 — mock을 섞지 않는다.
+export async function getCrmActivities({ accountId, leadId, dealId, companyId } = {}) {
+  const workspaceId = resolveDefaultWorkspaceId();
+  const filterCol = accountId ? "account_id" : leadId ? "lead_id" : dealId ? "deal_id" : companyId ? "company_id" : null;
+  const filterVal = accountId || leadId || dealId || companyId;
+  if (!workspaceId || !filterCol) {
+    return { configured: Boolean(workspaceId), activities: [] };
+  }
+
+  const rows = await fetchSupabaseRows("crm_activities", {
+    limit: 200,
+    order: "occurred_at.desc",
+    filters: withWorkspaceFilter([[filterCol, eqFilter(filterVal)]]),
+  });
+
+  if (!rows) {
+    return { configured: true, activities: null }; // fetch 실패 — 호출측이 preview로 강등
+  }
+
+  return { configured: true, activities: rows.map(mapActivity) };
+}
+
+// 하위호환 별칭 (Accounts DetailPanel)
+export async function getAccountActivities(accountId) {
+  return getCrmActivities({ accountId });
+}
+
 export async function getRevenueLedger() {
   const workspaceId = resolveDefaultWorkspaceId();
+  const supabaseConfig = resolveSupabaseConfig();
 
-  if (!workspaceId) {
-    return emptyLedger(false, null);
+  if (!workspaceId || !supabaseConfig) {
+    return emptyLedger(false, workspaceId || null);
   }
 
   const [leadRows, dealRows, accountRows, caseRows, companyRows, contactRows] = await Promise.all([
@@ -382,7 +389,7 @@ export async function getRevenueLedger() {
       limit: 120,
       order: "updated_at.desc.nullslast",
       filters: withWorkspaceFilter([
-        ["stage", inFilter(["prospect", "lead", "qualified", "qual", "proposal", "prop", "negotiation", "neg", "won", "lost"])],
+        ["stage", inFilter(LEGACY_DB_STAGE_VALUES)],
       ]),
     }),
     fetchSupabaseRows("customer_accounts", {
@@ -412,21 +419,6 @@ export async function getRevenueLedger() {
   const companyById = new Map((companyRows || []).map(c => [c.id, c]));
   const contactById = new Map((contactRows || []).map(c => [c.id, c]));
 
-  // Group contacts by company so each account projection can carry its own roster.
-  // Shape mirrors the DetailPanel contacts tab; `phone` has no column in schema.sql → ''.
-  const contactsByCompany = new Map();
-  (contactRows || []).forEach(row => {
-    if (!row.company_id) return;
-    const list = contactsByCompany.get(row.company_id) || [];
-    list.push({
-      name: row.name || "",
-      role: row.title || "",
-      email: row.email || "",
-      phone: "",
-    });
-    contactsByCompany.set(row.company_id, list);
-  });
-
   const deals = dealRows.map(row => mapDeal(row, companyById));
   const dealStatsByCompany = new Map();
   dealRows.forEach(row => {
@@ -438,10 +430,10 @@ export async function getRevenueLedger() {
   });
 
   const accountRaw = new Map(accountRows.map(a => [a.id, a]));
-  const accounts = accountRows.map(row => mapAccount(row, dealStatsByCompany, contactsByCompany));
+  const accounts = accountRows.map(row => mapAccount(row, dealStatsByCompany));
   const leads = leadRows.map(row => mapLead(row, companyById, contactById));
   const cases = caseRows.map(row => mapCase(row, accountRaw));
-  const summary = buildSummary(leads, deals, leadRows, dealRows);
+  const summary = buildSummary(leads, deals);
 
   return {
     source: "supabase",
@@ -451,6 +443,16 @@ export async function getRevenueLedger() {
     deals,
     accounts,
     cases,
+    contacts: (contactRows || []).map(mapContact),
+    companies: (companyRows || []).map(c => ({
+      id: c.id,
+      name: c.name || "",
+      // Sales Ledger 시트 싱크(scripts/sync-rev-ledger.mjs)가 채우는 지역·규모 —
+      // 히트맵의 회사 단위 지역 폴백과 KA 표시가 이 값을 읽는다
+      region: c.meta?.region || null,
+      scale: c.meta?.scale || null,
+      ka: Boolean(c.meta?.ka),
+    })),
     stages: DEAL_STAGES,
     summary,
   };

@@ -1,7 +1,10 @@
-# Moonlight Founder Command Loop: Master Roadmap
+# Moonlight Personal Operator Loop: Master Roadmap
 
 Status: active roadmap
-Updated: 2026-05-02
+Updated: 2026-07-15
+
+> 현재 사실과 문서 우선순위: `docs/README.md`
+> 현재 단계: Phase 0·Phase 1A 완료, Phase 1B 부분 작동. Quick Capture의 task/work-order 두 destination과 공통 receipt, task-only Today 완료·재조회는 live이며 정식 Attention adapter와 Calendar agenda 계약이 다음 범위
 
 ## 1. North Star
 
@@ -27,6 +30,12 @@ The roadmap is not organized around three legacy projects. Those projects remain
 - Public web detached from active workspace.
 - Hub/Engine health endpoints.
 - Basic contract checks and CI.
+- Content variant canonical contract.
+- Honest write response taxonomy and live-empty/error UI.
+- `Junhyuk Mun` operator identity and atomic Content draft approval.
+- Verification: Node test 50/50, contracts, typecheck, Hub/Engine build.
+
+Implementation record: `5c9ccc2` on `codex/moonlight-phase0-trust`.
 
 ### Phase 1: Daily Control, Current
 
@@ -34,11 +43,11 @@ Goal: Moonlight becomes the first-open surface.
 
 Must ship:
 
-- Today-first stack: Today, Alerts, Approvals, Cross-lane Feed, Next 3 Actions.
+- **1A Durable Task Loop:** quick text → durable task → task-only Today → complete → reload.
+- **1B Action Desk:** real follow-up and Google Calendar sources, urgent KA 1, focus customers 3~5, deterministic ranking.
+- **1C Contact Outcome Loop:** summary, reaction, next action/date, activity, and task creation in one durable flow.
 - Work OS shows live projects, blockers, decisions, routine checks, and next actions.
-- Content queue/studio saves to Supabase or honest preview/local mirror state.
-- Revenue surfaces separate individual/company contexts without becoming a generic CRM clone.
-- Automations shows failures, partials, live/preview state, and retry candidates.
+- Content and Revenue remain contextual lanes, not competing home dashboards.
 
 Exit gate:
 
@@ -98,13 +107,12 @@ Exit gate before starting:
 
 ## 4. Current Priority Stack
 
-1. `Overview` / Today-first decision stack.
-2. Engine intake hardening and test coverage.
-3. Content action loop: idea -> variants -> handoff/export logs.
-4. Revenue next-action loop.
-5. Automations failure-response flow.
-6. Integration readiness: GitHub, Telegram, Google Calendar, Gmail/Resend, Notion, OpenClaw, n8n.
-7. Decision memory and guided repair.
+1. Finish Phase 1B Attention adapter, real Google Calendar agenda, source timeout/partial contract, and stable slotting. Daily Brief already reads six live ledgers and exposes three verified-owner focus customers without unassigned CRM records.
+2. Build Phase 1C atomic contact outcome and next-action loop. Existing outcome logging is not the required one-transaction completion flow.
+3. Keep the completed Phase 1A task/inbox receipt spine, live PMS, and three ClassIn content lanes on their existing Hub→Engine→Supabase write boundaries while Phase 1 closes.
+4. Project candidate, delay, and bottleneck management.
+5. Content idea → variant → handoff/export history.
+6. Guided repair and broader integration readiness.
 
 ## 5. Retired Premises
 

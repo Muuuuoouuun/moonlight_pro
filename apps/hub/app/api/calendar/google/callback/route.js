@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import {
   decodeGoogleCalendarState,
   exchangeGoogleCalendarCode,
+  fetchGoogleCalendarAccountIdentity,
   recordGoogleCalendarSync,
   resolveGoogleCalendarRedirectUri,
   saveGoogleCalendarConnection,
@@ -58,10 +59,15 @@ export async function GET(req) {
       code,
       redirectUri: resolveGoogleCalendarRedirectUri(origin),
     });
+    const externalAccountId = await fetchGoogleCalendarAccountIdentity({
+      accessToken: tokenData.access_token,
+      calendarId,
+    });
     const saved = await saveGoogleCalendarConnection({
       workspaceId,
       calendarId,
       tokenData,
+      externalAccountId,
     });
 
     await recordGoogleCalendarSync({
@@ -72,6 +78,7 @@ export async function GET(req) {
         provider: "google_calendar",
         action: "oauth_connect",
         calendarId,
+        accountIdentified: Boolean(externalAccountId),
       },
     });
 

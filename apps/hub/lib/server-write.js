@@ -4,6 +4,7 @@
 export {
   deleteSupabaseRecord,
   insertSupabaseRecord,
+  invokeSupabaseRpc,
   makeSupabaseHeaders,
   resolveDefaultWorkspaceId,
   resolveSupabaseConfig,

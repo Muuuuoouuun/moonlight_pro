@@ -49,19 +49,19 @@ test("buildLeadWrite drops unknown stages and never emits owner/last", () => {
   assert.deepEqual(metaPatch, {});
 });
 
-test("buildDealWrite maps name→title, validates stage key, value→amount", () => {
+test("buildDealWrite maps canonical display stage to the constrained DB stage", () => {
   const { columns, metaPatch } = buildDealWrite({
     name: "베어브릭 콜라보",
-    stage: "neg",
+    stage: "final",
     value: 7_800_000,
     type: "personal",
     close: "5월 12일", // best-effort: not reversed
   });
   assert.equal(columns.title, "베어브릭 콜라보");
-  assert.equal(columns.stage, "neg");
+  assert.equal(columns.stage, "negotiation");
   assert.equal(columns.amount, 7_800_000);
   assert.equal("expected_close_at" in columns, false);
-  assert.deepEqual(metaPatch, { account_kind: "personal" });
+  assert.deepEqual(metaPatch, { stage_detail: "final", account_kind: "personal" });
 });
 
 test("buildDealWrite rejects non-canonical stage values", () => {

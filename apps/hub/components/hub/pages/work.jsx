@@ -1,10 +1,29 @@
 "use client";
 
 import React from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Card, IconButton, Button, Progress, EmptyState } from "../hub-primitives";
-import { DECISIONS as FALLBACK_DECISIONS, RITUALS as FALLBACK_RITUALS } from "../hub-data";
+import { Badge, Card, IconButton, Button, Progress, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge } from "../hub-primitives";
+import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
+import { mapTasksToCalendar } from "@/lib/calendar-task-view";
+import {
+  buildRoadmapItemAriaLabel,
+  buildRoadmapProjection,
+  createClientId,
+} from "@/lib/pms-ui";
+import {
+  beginRhythmCheck,
+  buildRhythmCheckPayload,
+  buildRhythmDefinePayload,
+  buildRhythmDeletePayload,
+  buildRhythmEditPayload,
+  createRhythmCheckState,
+  filterRhythmRows,
+  finishRhythmCheck,
+  getRhythmProgressProps,
+  resolveRhythmCheckResult,
+  summarizeRhythmRows,
+} from "@/lib/rhythm-ui";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const EN_MONTH = new Intl.DateTimeFormat('en-US', { month: 'long' });
@@ -48,85 +67,329 @@ function buildCalendarWeek(now) {
   };
 }
 
-function buildRoadmapMonths(now) {
-  return Array.from({ length: 4 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    return EN_MONTH.format(d);
-  });
-}
-
 function formatHour(value) {
   const hour = Math.floor(value);
   const minutes = Math.round((value - hour) * 60);
   return `${hour}:${String(minutes).padStart(2, '0')}`;
 }
 
-function useWorkLedger() {
+function useWorkLedger(projectId = null) {
   const [state, setState] = React.useState({
-    source: 'mock',
-    decisions: FALLBACK_DECISIONS,
-    rituals: FALLBACK_RITUALS,
+    source: 'preview',
+    decisions: [],
+    decisionsState: { state: 'preview', partial: false, error: null },
+    rituals: [],
+    projects: [],
     summary: null,
-    syncState: 'mock',
+    syncState: 'preview',
+    rhythmState: 'preview',
+    rhythmPartial: false,
+    rhythmTruncatedSources: [],
+    rhythmError: null,
+    roadmap: {
+      source: 'preview',
+      state: 'loading',
+      partial: false,
+      error: null,
+      failedSources: [],
+      truncatedSources: [],
+      projects: [],
+      milestones: [],
+    },
   });
+  const requestRef = React.useRef(0);
+  const projectQuery = typeof projectId === 'string' ? projectId.trim() : '';
+
+  const load = React.useCallback(async () => {
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
+    setState((prev) => ({
+      ...prev,
+      syncState: 'loading',
+      decisionsState: { ...prev.decisionsState, state: 'loading' },
+      rhythmState: 'loading',
+      rhythmPartial: false,
+      rhythmTruncatedSources: [],
+      roadmap: { ...prev.roadmap, state: 'loading' },
+    }));
+    try {
+      const endpoint = projectQuery
+        ? `/api/hub/work?project=${encodeURIComponent(projectQuery)}`
+        : '/api/hub/work';
+      const response = await fetch(endpoint, { cache: 'no-store' });
+      const data = await response.json().catch(() => null);
+      if (requestId !== requestRef.current) return false;
+
+      if (!response.ok || !data || data.status === 'error') {
+        const message = data?.error || data?.message || `업무 원장 응답 실패 (${response.status})`;
+        setState((prev) => ({
+          ...prev,
+          syncState: 'error',
+          decisionsState: {
+            state: 'error',
+            partial: false,
+            error: { message, retryable: true },
+          },
+          rhythmState: 'error',
+          rhythmPartial: false,
+          rhythmTruncatedSources: [],
+          rhythmError: message,
+          rituals: [],
+          summary: null,
+          roadmap: {
+            ...prev.roadmap,
+            source: 'supabase',
+            state: 'error',
+            partial: false,
+            error: { message, retryable: true },
+            failedSources: ['projects', 'milestones'],
+            truncatedSources: [],
+            projects: [],
+            milestones: [],
+          },
+        }));
+        return false;
+      }
+
+      const roadmap = data.roadmap && typeof data.roadmap === 'object'
+        ? data.roadmap
+        : {
+            source: data.source === 'supabase' ? 'supabase' : 'preview',
+            state: data.source === 'supabase' ? 'error' : 'preview',
+            partial: false,
+            error: data.source === 'supabase'
+              ? { message: '로드맵 응답이 없습니다.', retryable: true }
+              : null,
+            failedSources: data.source === 'supabase' ? ['projects', 'milestones'] : [],
+            truncatedSources: [],
+            projects: [],
+            milestones: [],
+          };
+      const rhythm = data.rhythm && typeof data.rhythm === 'object'
+        ? data.rhythm
+        : {
+            state: data.source === 'supabase'
+              ? (Array.isArray(data.rituals) && data.rituals.length > 0 ? 'live' : 'live-empty')
+              : 'preview',
+            partial: false,
+            truncatedSources: [],
+            error: null,
+          };
+      const decisionsState = data.decisionsState && typeof data.decisionsState === 'object'
+        ? data.decisionsState
+        : {
+            state: data.source === 'supabase'
+              ? (Array.isArray(data.decisions) && data.decisions.length > 0 ? 'live' : 'live-empty')
+              : 'preview',
+            partial: false,
+            error: null,
+          };
+
+      setState({
+        source: data.source === 'supabase' ? 'supabase' : 'preview',
+        decisions: Array.isArray(data.decisions) ? data.decisions : [],
+        decisionsState,
+        rituals: Array.isArray(data.rituals) ? data.rituals : [],
+        projects: Array.isArray(data.projects) ? data.projects : [],
+        summary: data.summary || null,
+        syncState: data.source === 'supabase' ? 'live' : 'preview',
+        rhythmState: rhythm.state || 'error',
+        rhythmPartial: Boolean(rhythm.partial),
+        rhythmTruncatedSources: Array.isArray(rhythm.truncatedSources)
+          ? rhythm.truncatedSources
+          : [],
+        rhythmError: rhythm.error?.message || null,
+        roadmap,
+      });
+      return rhythm.state === 'live' || rhythm.state === 'live-empty' || rhythm.state === 'partial';
+    } catch (error) {
+      if (requestId !== requestRef.current) return false;
+      const message = error instanceof Error ? error.message : String(error);
+      setState((prev) => ({
+        ...prev,
+        syncState: 'error',
+        decisionsState: {
+          state: 'error',
+          partial: false,
+          error: { message, retryable: true },
+        },
+        rhythmState: 'error',
+        rhythmPartial: false,
+        rhythmTruncatedSources: [],
+        rhythmError: message,
+        rituals: [],
+        summary: null,
+        roadmap: {
+          ...prev.roadmap,
+          source: 'supabase',
+          state: 'error',
+          partial: false,
+          error: { message, retryable: true },
+          failedSources: ['projects', 'milestones'],
+          truncatedSources: [],
+          projects: [],
+          milestones: [],
+        },
+      }));
+      return false;
+    }
+  }, [projectQuery]);
+
+  React.useEffect(() => {
+    load();
+    return () => { requestRef.current += 1; };
+  }, [load]);
+
+  return { ...state, retry: load };
+}
+
+// Google's event.start is an ISO datetime (or an all-day date) — plot it onto the
+// currently viewed week's grid. Events outside `days` are dropped (paginated by week).
+function mapGoogleEventsToGrid(events, days) {
+  return events.map((e) => {
+    const start = new Date(e.start);
+    const end = new Date(e.end || e.start);
+    if (Number.isNaN(start.getTime())) return null;
+    const day = days.findIndex((d) => sameDate(d, start));
+    if (day === -1) return null;
+    const startHour = e.allDay ? 8 : start.getHours() + start.getMinutes() / 60;
+    const rawEndHour = e.allDay ? 9 : end.getHours() + end.getMinutes() / 60;
+    return {
+      id: e.id,
+      day,
+      start: startHour,
+      end: Math.max(startHour + 0.25, rawEndHour),
+      title: e.title,
+      tone: 'moon',
+    };
+  }).filter(Boolean);
+}
+
+// Real read/write path against Google Calendar (apps/hub/lib/google-calendar.js +
+// /api/calendar/google/event). Was previously 100% local React state with zero
+// persistence — every "새 일정" vanished on reload regardless of connection status.
+function useCalendarEvents(days) {
+  const [state, setState] = React.useState({
+    status: 'loading',
+    source: null,
+    readOnly: false,
+    message: '',
+    events: [],
+  });
+  const weekKey = days[0]?.toISOString().slice(0, 10) || '';
+  const [refreshToken, setRefreshToken] = React.useState(0);
 
   React.useEffect(() => {
     let active = true;
+    setState((s) => ({ ...s, status: 'loading' }));
+    const timeMin = new Date(days[0]);
+    const timeMax = new Date(days[6].getTime() + DAY_MS);
+    const params = new URLSearchParams({ timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString() });
 
-    async function load() {
-      setState((prev) => ({ ...prev, syncState: 'loading' }));
-      try {
-        const response = await fetch('/api/hub/work', { cache: 'no-store' });
-        const data = await response.json().catch(() => null);
+    fetch(`/api/calendar/google/event?${params.toString()}`, { cache: 'no-store' })
+      .then((r) => r.json().catch(() => null))
+      .then((d) => {
+        if (!active) return;
+        setState({
+          status: d?.status || 'preview',
+          source: d?.source || null,
+          readOnly: Boolean(d?.readOnly),
+          message: d?.message || '',
+          events: Array.isArray(d?.events) ? d.events : [],
+        });
+      })
+      .catch(() => active && setState({
+        status: 'error',
+        source: null,
+        readOnly: false,
+        message: 'Calendar 일정을 불러오지 못했습니다.',
+        events: [],
+      }));
 
-        if (!active || !response.ok || !data || data.status === 'error') {
-          if (active) setState((prev) => ({ ...prev, syncState: 'mock' }));
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekKey, refreshToken]);
+
+  const refetch = React.useCallback(() => setRefreshToken((v) => v + 1), []);
+  return { ...state, refetch };
+}
+
+function useCalendarTasks(days) {
+  const [state, setState] = React.useState({ status: 'loading', tasks: [], message: '' });
+  const weekKey = days[0]?.toISOString().slice(0, 10) || '';
+
+  React.useEffect(() => {
+    let active = true;
+    setState((current) => ({ ...current, status: 'loading' }));
+    fetch('/api/hub/tasks', { cache: 'no-store' })
+      .then((response) => response.json().catch(() => null).then((data) => ({ response, data })))
+      .then(({ response, data }) => {
+        if (!active) return;
+        if (!response.ok || !data || data.status === 'error') {
+          setState({ status: 'error', tasks: [], message: data?.error || 'Task 기한을 불러오지 못했습니다.' });
           return;
         }
+        setState({
+          status: data.status || 'preview',
+          tasks: Array.isArray(data.tasks) ? data.tasks : [],
+          message: data.status === 'preview' ? 'Task 원장 연결 후 기한을 표시합니다.' : '',
+        });
+      })
+      .catch(() => active && setState({ status: 'error', tasks: [], message: 'Task 기한을 불러오지 못했습니다.' }));
 
-        if (data.source === 'supabase') {
-          setState({
-            source: data.source,
-            decisions: Array.isArray(data.decisions) ? data.decisions : [],
-            rituals: Array.isArray(data.rituals) ? data.rituals : [],
-            summary: data.summary || null,
-            syncState: 'live',
-          });
-        } else {
-          setState((prev) => ({ ...prev, syncState: 'mock' }));
-        }
-      } catch {
-        if (active) setState((prev) => ({ ...prev, syncState: 'mock' }));
-      }
-    }
-
-    load();
     return () => { active = false; };
-  }, []);
+  }, [weekKey]);
 
   return state;
 }
 
-export function Calendar() {
+export function Calendar({ onNavigate }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const [now, setNow] = React.useState(() => new Date());
-  const [weekOffset, setWeekOffset] = React.useState(0);
-  const [viewMode, setViewMode] = React.useState('Week');
+  const [selectedDate, setSelectedDate] = React.useState(() => new Date());
+  const [viewMode, setViewMode] = React.useState('week');
   const [gcalStatus, setGcalStatus] = React.useState('idle');
   const [gcalMessage, setGcalMessage] = React.useState('');
+  const [creating, setCreating] = React.useState(false);
   const focusAppliedRef = React.useRef(false);
-  const [events, setEvents] = React.useState(() => [
-    { day: 0, start: 10, end: 11, title: 'Weekly kickoff', tone: 'moon' },
-    { day: 0, start: 14, end: 16, title: 'Moonlight Web v2 — deep work', tone: 'moon' },
-    { day: 1, start: 9, end: 10, title: '뉴스레터 outline', tone: 'moon' },
-    { day: 1, start: 15, end: 16.5, title: '클래스인 2차 미팅', tone: 'company' },
-    { day: 2, start: 11, end: 12, title: 'Council sync', tone: 'info' },
-    { day: 2, start: 16, end: 17, title: '자문 — 정하윤', tone: 'personal' },
-    { day: 3, start: 10, end: 11.5, title: 'Pricing workshop', tone: 'moon' },
-    { day: 4, start: 10, end: 11, title: '클래스인 Discovery', tone: 'company' },
-    { day: 4, start: 16, end: 17, title: '코칭 — Jihoon', tone: 'personal' },
-    { day: 4, start: 11.5, end: 13, title: '뉴스레터 마감', tone: 'warning' },
-  ]);
+  const { days: fetchDays } = buildCalendarWeek(selectedDate);
+  const calendarData = useCalendarEvents(fetchDays);
+  const taskData = useCalendarTasks(fetchDays);
+  const calendarCapabilities = resolveCalendarCapabilities(calendarData);
+  const isLive = calendarCapabilities.isLive;
+  const isReadOnly = isLive && calendarData.readOnly;
+
+  // Creates a real Google Calendar event when connected; otherwise falls back to a
+  // clear read-only/disconnected message without fabricating a local event.
+  const createEvent = React.useCallback(async ({ date, startHour, endHour, title }) => {
+    const targetDay = date || fetchDays[0];
+    if (!calendarCapabilities.canCreate) {
+      setGcalMessage(
+        isReadOnly
+          ? 'iCal 연결은 읽기 전용입니다. 일정 생성·수정에는 Google OAuth 연결이 필요합니다.'
+          : 'Google Calendar 연결 후 일정을 만들 수 있습니다.',
+      );
+      return;
+    }
+    const startAt = new Date(targetDay); startAt.setHours(Math.floor(startHour), (startHour % 1) * 60, 0, 0);
+    const endAt = new Date(targetDay); endAt.setHours(Math.floor(endHour), (endHour % 1) * 60, 0, 0);
+    setCreating(true);
+    try {
+      const res = await fetch('/api/calendar/google/event', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title, startAt: startAt.toISOString(), endAt: endAt.toISOString() }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.status === 'saved' || data?.status === 'updated') {
+        calendarData.refetch();
+      }
+    } finally {
+      setCreating(false);
+    }
+  }, [fetchDays, calendarCapabilities.canCreate, isReadOnly, calendarData]);
 
   React.useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60000);
@@ -136,19 +399,17 @@ export function Calendar() {
   React.useEffect(() => {
     const minutes = Number(searchParams.get('focus'));
     if (!minutes || focusAppliedRef.current) return;
-    const week = buildCalendarWeek(now);
-    setWeekOffset(0);
-    setEvents(prev => [
-      ...prev,
-      {
-        day: week.todayIndex >= 0 ? week.todayIndex : 0,
-        start: 13,
-        end: 13 + Math.max(15, minutes) / 60,
-        title: `${minutes}m focus block`,
-        tone: 'moon',
-      },
-    ]);
+    setSelectedDate(now);
+    setViewMode('day');
     focusAppliedRef.current = true;
+    createEvent({
+      date: now,
+      startHour: 13,
+      endHour: 13 + Math.max(15, minutes) / 60,
+      title: `${minutes}m focus block`,
+    });
+    router.replace(pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [now, searchParams]);
 
   async function connectGoogleCalendar() {
@@ -188,7 +449,11 @@ export function Calendar() {
     }
   }
 
-  const gcalLabel = gcalStatus === 'connected'
+  const gcalLabel = calendarData.source === 'ical' && isLive
+    ? '● iCal live · read only'
+    : isLive
+    ? '● Google Calendar live'
+    : gcalStatus === 'connected'
     ? '● Google Calendar synced 2m ago'
     : gcalStatus === 'connecting'
     ? '● Connecting…'
@@ -197,7 +462,7 @@ export function Calendar() {
     : gcalStatus === 'error'
     ? '● Connect failed'
     : '● Not connected';
-  const gcalColor = gcalStatus === 'connected'
+  const gcalColor = isLive || gcalStatus === 'connected'
     ? 'var(--success)'
     : gcalStatus === 'preview'
     ? 'var(--warning)'
@@ -206,77 +471,163 @@ export function Calendar() {
     : 'var(--fg-faint)';
 
   const hours = Array.from({ length: 12 }, (_, i) => 8 + i);
-  const viewedDate = addDays(now, weekOffset * 7);
-  const { labels: days, weekLabel, todayIndex } = buildCalendarWeek(viewedDate);
+  const selectedWeek = buildCalendarWeek(selectedDate);
+  const visibleDays = viewMode === 'day' ? [selectedDate] : selectedWeek.days;
+  const dayLabels = visibleDays.map((date) => `${['일','월','화','수','목','금','토'][date.getDay()]} ${date.getDate()}`);
+  const periodLabel = viewMode === 'day'
+    ? new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(selectedDate)
+    : selectedWeek.weekLabel;
+  const todayIndex = visibleDays.findIndex((date) => sameDate(date, now));
+  const selectedIndex = visibleDays.findIndex((date) => sameDate(date, selectedDate));
+  const gridEvents = calendarCapabilities.shouldShowEvents
+    ? mapGoogleEventsToGrid(calendarData.events, visibleDays)
+    : [];
+  const gridTasks = mapTasksToCalendar(taskData.tasks, visibleDays);
+  const columnTemplate = `56px repeat(${visibleDays.length}, minmax(${viewMode === 'day' ? '320px' : '120px'}, 1fr))`;
+  const calBadge = calendarData.status === 'live'
+    ? { label: calendarCapabilities.badge, color: 'var(--success)' }
+    : calendarData.status === 'loading'
+    ? { label: 'syncing', color: 'var(--warning)' }
+    : { label: calendarCapabilities.badge, color: 'var(--fg-faint)' };
   const addEvent = () => {
-    const today = buildCalendarWeek(viewedDate).todayIndex;
-    setEvents(prev => [
-      ...prev,
-      {
-        day: today >= 0 ? today : 0,
-        start: 13,
-        end: 14,
-        title: '새 일정',
-        tone: 'moon',
-      },
-    ]);
+    createEvent({
+      date: selectedDate,
+      startHour: 13,
+      endHour: 14,
+      title: '새 일정',
+    });
   };
-  const toneBg = { moon: 'oklch(0.35 0.008 250 / 0.9)', company: 'var(--company-bg)', personal: 'var(--personal-bg)', info: 'var(--info-bg)', warning: 'var(--warning-bg)' };
+  const movePeriod = (direction) => {
+    setSelectedDate((date) => addDays(date, direction * (viewMode === 'day' ? 1 : 7)));
+  };
+  const selectDay = (date) => {
+    setSelectedDate(new Date(date));
+    setViewMode('day');
+  };
+  const taskStateLabel = taskData.status === 'loading'
+    ? 'Task syncing'
+    : taskData.status === 'live'
+    ? 'Task live'
+    : taskData.status === 'partial'
+    ? 'Task partial'
+    : taskData.status === 'error'
+    ? 'Task error'
+    : 'Task preview';
+  const toneBg = { moon: 'var(--moon-bg)', company: 'var(--company-bg)', personal: 'var(--personal-bg)', info: 'var(--info-bg)', warning: 'var(--warning-bg)' };
   const toneFg = { moon: 'var(--moon-100)', company: 'var(--company)', personal: 'var(--personal)', info: 'var(--info)', warning: 'var(--warning)' };
-  const toneBd = { moon: 'var(--moon-600)', company: 'oklch(0.5 0.04 290 / 0.5)', personal: 'oklch(0.5 0.04 200 / 0.5)', info: 'oklch(0.5 0.06 230 / 0.5)', warning: 'oklch(0.5 0.09 85 / 0.5)' };
+  const toneBd = { moon: 'var(--moon-line)', company: 'var(--company-line)', personal: 'var(--personal-line)', info: 'var(--info-line)', warning: 'var(--warning-line)' };
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500, letterSpacing: '-0.01em' }}>Calendar</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <span>{weekLabel}</span>
+          <h2 style={{ margin: 0, fontSize: 28, fontWeight: 700, letterSpacing: '-0.025em' }}>Calendar</h2>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span>{periodLabel}</span>
+            <span style={{ color: 'var(--fg-faint)' }}>·</span>
+            <span className="mono" style={{ color: calBadge.color }}>{calBadge.label}</span>
+            <span style={{ color: 'var(--fg-faint)' }}>·</span>
+            <span className="mono" style={{ color: taskData.status === 'error' ? 'var(--danger)' : 'var(--fg-dim)' }}>{taskStateLabel}</span>
             <span style={{ color: 'var(--fg-faint)' }}>·</span>
             <span style={{ color: gcalColor }}>{gcalLabel}</span>
             <Button variant="ghost" size="xs" onClick={connectGoogleCalendar}>
-              {gcalStatus === 'connecting' ? 'Connecting…' : gcalStatus === 'connected' ? 'Reconnect' : 'Connect Google Calendar'}
+              {gcalStatus === 'connecting'
+                ? 'Connecting…'
+                : isReadOnly
+                ? 'Enable editing'
+                : isLive
+                ? 'Reconnect'
+                : 'Connect Google Calendar'}
             </Button>
           </div>
-          {gcalMessage && (
-            <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>{gcalMessage}</div>
+          {(gcalMessage || calendarData.message || taskData.message) && (
+            <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>{gcalMessage || calendarData.message || taskData.message}</div>
           )}
         </div>
         <div style={{ flex: 1 }} />
         <div className="hub-toolbar" style={{ display: 'flex', gap: 6 }}>
-          <IconButton icon="chevronL" tooltip="Previous week" onClick={() => setWeekOffset(v => v - 1)} />
-          <Button variant="secondary" size="sm" onClick={() => setWeekOffset(0)}>Today</Button>
-          <IconButton icon="chevronR" tooltip="Next week" onClick={() => setWeekOffset(v => v + 1)} />
+          <IconButton icon="chevronL" tooltip={viewMode === 'day' ? 'Previous day' : 'Previous week'} onClick={() => movePeriod(-1)} />
+          <Button variant="secondary" size="sm" onClick={() => setSelectedDate(new Date(now))}>Today</Button>
+          <IconButton icon="chevronR" tooltip={viewMode === 'day' ? 'Next day' : 'Next week'} onClick={() => movePeriod(1)} />
         </div>
-        <div className="hub-toolbar" style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-          {['Day','Week','Month'].map(v => (
-            <button key={v} onClick={() => setViewMode(v)} style={{ padding: '4px 10px', fontSize: 11.5, borderRadius: 4, color: v === viewMode ? 'var(--fg)' : 'var(--fg-faint)', background: v === viewMode ? 'var(--surface-3)' : 'transparent' }}>{v}</button>
-          ))}
-        </div>
-        <Button variant="primary" size="sm" icon="plus" onClick={addEvent}>Event</Button>
+        <SegmentedControl
+          className="hub-toolbar"
+          label="캘린더 보기"
+          options={[{ key: 'day', label: 'Day' }, { key: 'week', label: 'Week' }]}
+          value={viewMode}
+          onChange={setViewMode}
+        />
+        <Button variant="primary" size="sm" icon="plus" onClick={addEvent} disabled={creating || !calendarCapabilities.canCreate}>Event</Button>
       </div>
 
       <Card pad={false} className="hub-table-card" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', borderBottom: '1px solid var(--line-soft)' }}>
+        <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, borderBottom: '1px solid var(--line-soft)' }}>
           <div />
-          {days.map((d, i) => (
-            <div key={d} style={{ padding: '10px 12px', borderLeft: '1px solid var(--line-soft)', fontSize: 11.5, color: i === todayIndex ? 'var(--fg)' : 'var(--fg-muted)' }}>
+          {dayLabels.map((d, i) => (
+            <button
+              key={`${d}-${i}`}
+              type="button"
+              aria-label={`${d} 일간 보기`}
+              aria-pressed={i === selectedIndex}
+              onClick={() => selectDay(visibleDays[i])}
+              style={{
+                minHeight: 48, padding: '8px 12px', borderLeft: '1px solid var(--line-soft)',
+                fontSize: 11.5, fontWeight: i === selectedIndex ? 650 : 450,
+                color: i === todayIndex || i === selectedIndex ? 'var(--fg)' : 'var(--fg-muted)',
+                background: i === selectedIndex ? 'var(--surface-2)' : 'transparent', textAlign: 'left',
+              }}
+            >
               {d}
               {i === todayIndex && <span style={{ marginLeft: 6, color: 'var(--moon-300)' }}>· Today</span>}
-            </div>
+            </button>
           ))}
         </div>
+        <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, borderBottom: '1px solid var(--line-soft)', background: 'var(--surface-2)' }}>
+          <div className="mono" style={{ padding: '12px 10px', fontSize: 10, color: 'var(--fg-faint)', textAlign: 'right' }}>TASK</div>
+          {visibleDays.map((date, dayIndex) => {
+            const tasks = gridTasks.filter((task) => task.day === dayIndex);
+            const shown = tasks.slice(0, viewMode === 'day' ? 8 : 2);
+            return (
+              <div key={date.toISOString()} style={{ minHeight: 54, padding: 5, borderLeft: '1px solid var(--line-soft)', display: 'flex', flexDirection: viewMode === 'day' ? 'row' : 'column', gap: 4, flexWrap: viewMode === 'day' ? 'wrap' : 'nowrap' }}>
+                {shown.map((task) => (
+                  <button
+                    key={task.id}
+                    type="button"
+                    className="hub-row"
+                    aria-label={`할 일 열기: ${task.title}`}
+                    onClick={() => onNavigate?.(`dashboard/work/my?task=${encodeURIComponent(task.id)}`)}
+                    style={{
+                      minHeight: 44, minWidth: 0, padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 7,
+                      color: 'var(--fg)', background: 'var(--surface)', border: '1px solid var(--line-soft)',
+                      borderRadius: 'var(--r-sm)', fontSize: 11.5, textAlign: 'left',
+                      flex: viewMode === 'day' ? '0 1 280px' : '0 0 auto',
+                    }}
+                  >
+                    <span aria-hidden="true" style={{ width: 8, height: 8, border: '1px solid var(--fg-dim)', borderRadius: 2, flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
+                  </button>
+                ))}
+                {tasks.length > shown.length && (
+                  <button type="button" onClick={() => onNavigate?.('dashboard/work/my?lens=week')} style={{ minHeight: 36, padding: '0 8px', color: 'var(--fg-dim)', fontSize: 10.5, textAlign: 'left' }}>
+                    +{tasks.length - shown.length} tasks
+                  </button>
+                )}
+                {tasks.length === 0 && <span style={{ padding: '8px', color: 'var(--fg-faint)', fontSize: 10.5 }}>—</span>}
+              </div>
+            );
+          })}
+        </div>
         <div className="scroll-y" style={{ flex: 1 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', position: 'relative' }}>
+          <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, position: 'relative' }}>
             <div>
               {hours.map(h => (
                 <div key={h} className="mono" style={{ height: 52, padding: '4px 10px', fontSize: 10, color: 'var(--fg-faint)', textAlign: 'right' }}>{h}:00</div>
               ))}
             </div>
-            {days.map((_, di) => (
-              <div key={di} style={{ borderLeft: '1px solid var(--line-soft)', position: 'relative' }}>
+            {visibleDays.map((date, di) => (
+              <div key={date.toISOString()} style={{ borderLeft: '1px solid var(--line-soft)', position: 'relative' }}>
                 {hours.map(h => <div key={h} style={{ height: 52, borderBottom: '1px solid var(--line-soft)' }} />)}
-                {events.filter(e => e.day === di).map((e, ei) => {
+                {gridEvents.filter(e => e.day === di).map((e, ei) => {
                   const top = (e.start - 8) * 52;
                   const height = (e.end - e.start) * 52 - 2;
                   return (
@@ -284,12 +635,12 @@ export function Calendar() {
                       position: 'absolute', top, left: 4, right: 4, height,
                       background: toneBg[e.tone], color: toneFg[e.tone],
                       border: `1px solid ${toneBd[e.tone]}`,
-                      borderLeft: `2px solid ${toneFg[e.tone]}`,
+                      borderLeft: `2px solid ${toneBd[e.tone]}`,
                       borderRadius: 6, padding: '6px 8px',
                       fontSize: 11, fontWeight: 500, overflow: 'hidden',
                     }}>
                       {e.title}
-                      <div className="mono" style={{ fontSize: 9.5, opacity: 0.7, marginTop: 3 }}>{formatHour(e.start)} – {formatHour(e.end)}</div>
+                      <div className="mono" style={{ fontSize: 10.5, opacity: 0.7, marginTop: 3 }}>{formatHour(e.start)} – {formatHour(e.end)}</div>
                     </div>
                   );
                 })}
@@ -302,33 +653,161 @@ export function Calendar() {
   );
 }
 
+function buildDecisionDraft() {
+  return {
+    kind: 'decision',
+    isNew: true,
+    id: createClientId(),
+    title: '새 결정 기록',
+    date: '',
+    status: 'Draft',
+    by: 'Me',
+    links: 0,
+    reason: '',
+    projectId: '',
+    rationale: '',
+    decidedAt: '',
+  };
+}
+
+// ritualKey는 저장 시점(persistRitual)에 이름으로부터 생성한다 — 드로어에서 이름을
+// 정하기 전까지는 비워 둔다 (buildRhythmDefinePayload가 slugifyRitualName + id로 채운다).
+function buildRhythmDraft(defaultProjectId) {
+  return {
+    kind: 'ritual',
+    isNew: true,
+    id: createClientId(),
+    ritualKey: '',
+    name: '새 루틴',
+    checkType: 'morning',
+    projectId: defaultProjectId || '',
+  };
+}
+
 export function Decisions() {
   const searchParams = useSearchParams();
-  const { decisions, syncState } = useWorkLedger();
+  const router = useRouter();
+  const pathname = usePathname();
+  const {
+    decisions: liveDecisions,
+    decisionsState,
+    projects: linkableProjects,
+    retry,
+  } = useWorkLedger();
   const [localDecisions, setLocalDecisions] = React.useState([]);
+  const [decisionEdits, setDecisionEdits] = React.useState({}); // { [id]: patch } overlay onto local or live rows
+  const [editDecisionId, setEditDecisionId] = React.useState(null);
   const createdFromQueryRef = React.useRef(false);
-  const createDecision = React.useCallback((campaignRef = null) => {
-    const id = `local-decision-${Date.now()}`;
-    const createdAt = new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(new Date());
-    setLocalDecisions(prev => [{
-      id,
-      title: campaignRef ? '새 결정 기록 (캠페인 연계)' : '새 결정 기록',
-      date: createdAt,
-      status: 'Draft',
-      by: 'Me',
-      // campaign:<id> tag makes the Campaigns → Decisions deep link round-trip traceable.
-      reason: campaignRef
-        ? `campaign:${campaignRef} — 맥락, 선택지, 근거를 이어서 적어주세요.`
-        : '맥락, 선택지, 근거를 이어서 적어주세요.',
-      links: campaignRef ? 1 : 0,
-    }, ...prev]);
+
+  const mergedDecisions = [...localDecisions, ...(Array.isArray(liveDecisions) ? liveDecisions : [])]
+    .map(d => (decisionEdits[d.id] ? { ...d, ...decisionEdits[d.id] } : d));
+  const editingDecision = editDecisionId ? mergedDecisions.find(d => d.id === editDecisionId) : null;
+
+  const createDecision = React.useCallback(() => {
+    const draft = buildDecisionDraft();
+    setLocalDecisions(prev => [draft, ...prev]);
+    setEditDecisionId(draft.id);
   }, []);
+
   React.useEffect(() => {
     if (searchParams.get('new') !== 'decision' || createdFromQueryRef.current) return;
-    createDecision(searchParams.get('campaign'));
+    createDecision();
     createdFromQueryRef.current = true;
-  }, [createDecision, searchParams]);
-  const list = [...localDecisions, ...(Array.isArray(decisions) ? decisions : [])];
+    router.replace(pathname);
+  }, [createDecision, searchParams, router, pathname]);
+  const decisionSyncState = decisionsState?.state || 'error';
+  const decisionComplete = decisionSyncState === 'live' || decisionSyncState === 'live-empty';
+  const decisionLabel = decisionSyncState === 'live' || decisionSyncState === 'live-empty'
+    ? 'live'
+    : decisionSyncState === 'loading'
+      ? 'syncing'
+      : decisionSyncState;
+  const decisionColor = decisionComplete
+    ? 'var(--success)'
+    : decisionSyncState === 'loading' || decisionSyncState === 'partial'
+      ? 'var(--warning)'
+      : decisionSyncState === 'error'
+        ? 'var(--danger)'
+        : 'var(--fg-faint)';
+
+  // Page-level `n` — quick-record a decision when no drawer is open and focus isn't in a field.
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if ((e.key !== 'n' && e.key !== 'N') || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (editDecisionId) return;
+      const t = e.target;
+      const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+      e.preventDefault();
+      createDecision();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editDecisionId, createDecision]);
+
+  // Keeps the timeline card's Draft/Committed badge and reason preview in sync with the
+  // drawer while it's open (and after save) — those are precomputed display fields on the
+  // base record, not derived from decidedAt/rationale at render time, so they'd otherwise
+  // stay stale until the next full ledger reload.
+  const updateDraft = (key, value) => {
+    setDecisionEdits(prev => {
+      const patch = { ...prev[editDecisionId], [key]: value };
+      if (key === 'decidedAt') {
+        patch.status = value ? 'Committed' : 'Draft';
+        patch.date = value ? new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(new Date(value)) : '';
+      }
+      if (key === 'rationale') patch.reason = value;
+      return { ...prev, [editDecisionId]: patch };
+    });
+  };
+
+  // Persist the drawer edit. New local rows (client-generated id) POST; existing rows PATCH.
+  // `decided_at` left blank keeps the decision as Draft (work-ledger.js resolveDecisionStatus) —
+  // there is no separate manual status field.
+  const persistDecision = React.useCallback(async () => {
+    if (!editingDecision?.title?.trim()) return { ok: false, status: 'invalid-input' };
+    try {
+      const response = await fetch('/api/hub/decisions', {
+        method: editingDecision.isNew ? 'POST' : 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: editingDecision.id,
+          title: editingDecision.title,
+          projectId: editingDecision.projectId || '',
+          rationale: editingDecision.rationale || '',
+          decidedAt: editingDecision.decidedAt || '',
+          source: 'hub-work',
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !['saved', 'duplicate'].includes(data.status)) {
+        return { ok: false, status: data.status || 'error' };
+      }
+      if (editingDecision.isNew) {
+        const realId = data.decision?.id || editingDecision.id;
+        setLocalDecisions(prev => prev.map(d => (d.id === editDecisionId ? { ...d, id: realId, isNew: false } : d)));
+        // Guard the re-key: id is client-generated up front, so realId === editDecisionId in
+        // the common case, and setting+deleting the same overlay key would silently drop the
+        // just-saved edits (title/rationale/decidedAt/status/reason) back to their stale
+        // pre-edit values. Only remap when the server actually assigned a different id.
+        if (realId !== editDecisionId) {
+          setDecisionEdits(prev => {
+            if (!prev[editDecisionId]) return prev;
+            const next = { ...prev, [realId]: prev[editDecisionId] };
+            delete next[editDecisionId];
+            return next;
+          });
+          setEditDecisionId(realId);
+        }
+      }
+      return { ok: true, status: data.status };
+    } catch (error) {
+      return { ok: false, status: 'error', error: error instanceof Error ? error.message : String(error) };
+    }
+  }, [editingDecision, editDecisionId]);
+
+  const list = mergedDecisions;
+  const projectOptions = [{ value: '', label: '연결 안 함' }, ...(Array.isArray(linkableProjects) ? linkableProjects : []).map(p => ({ value: p.id, label: p.name }))];
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', maxWidth: 1000, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
@@ -337,33 +816,63 @@ export function Decisions() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Decisions</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch', lineHeight: 1.5 }}>
             실행의 근거가 되는 결정들의 타임라인. 각 결정에는 맥락·선택·근거를 남깁니다.
-            <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-              {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
+            <span className="mono" style={{ marginLeft: 8, color: decisionColor }}>
+              {decisionLabel}
             </span>
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision <Kbd>N</Kbd></Button>
       </div>
+      {!decisionComplete && decisionSyncState !== 'loading' && (
+        <Card>
+          <EmptyState
+            icon="decisions"
+            title={decisionSyncState === 'error'
+              ? '결정 원장 읽기 실패'
+              : decisionSyncState === 'partial'
+                ? '결정 원장 부분 데이터'
+                : '결정 원장 미연결'}
+            description={decisionSyncState === 'error'
+              ? decisionsState?.error?.message || '결정 기록을 다시 읽은 뒤 빈 상태를 확인합니다.'
+              : decisionSyncState === 'partial'
+                ? '읽힌 결정만 표시하며, 기록이 없다고 확정하지 않습니다.'
+                : 'Supabase decisions 원장을 연결하면 결정 타임라인이 표시됩니다.'}
+            action={(decisionSyncState === 'error' || decisionSyncState === 'partial')
+              ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
+              : undefined}
+          />
+        </Card>
+      )}
       <div style={{ position: 'relative', paddingLeft: 28 }}>
         <div style={{ position: 'absolute', left: 11, top: 6, bottom: 6, width: 1, background: 'var(--line-soft)' }} />
-        {list.length === 0 && (
+        {list.length === 0 && decisionComplete && (
           <Card>
             <EmptyState
               icon="decisions"
               title="결정 기록이 없습니다"
-              description={syncState === 'live' ? 'Supabase decisions 원장에 아직 기록된 결정이 없습니다.' : '중요한 판단을 남기면 타임라인에 쌓입니다.'}
+              description="Supabase decisions 기록에 아직 기록된 결정이 없습니다."
               action={<Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision</Button>}
             />
           </Card>
         )}
         {list.map(d => (
           <div key={d.id} style={{ position: 'relative', marginBottom: 18 }}>
-            <div style={{ position: 'absolute', left: -21, top: 14, width: 10, height: 10, borderRadius: 999, background: 'var(--bg)', border: '2px solid var(--moon-400)' }} />
-            <Card>
+            {/* §5.2 1px 보더 — 자매 마커(로드맵 노드)와 같은 1px + inset 링 관례. */}
+            <div style={{ position: 'absolute', left: -21, top: 14, width: 10, height: 10, borderRadius: 999, background: 'var(--bg)', border: '1px solid var(--moon-400)', boxShadow: 'inset 0 0 0 1px var(--moon-400)' }} />
+            <Card
+              interactive
+              role="button"
+              tabIndex={0}
+              onClick={() => setEditDecisionId(d.id)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditDecisionId(d.id); } }}
+            >
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
                 <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{d.date}</span>
-                <Badge tone={d.status === 'Committed' ? 'success' : 'warning'} size="xs">{d.status}</Badge>
+                <CertaintyBadge
+                  state={d.status === 'Committed' ? 'confirmed' : 'unknown'}
+                  label={d.status === 'Committed' ? '확정' : '미정 · Draft'}
+                />
                 <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>by {d.by}</span>
                 <div style={{ flex: 1 }} />
                 <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -371,174 +880,622 @@ export function Decisions() {
                 </span>
               </div>
               <div style={{ fontSize: 14.5, fontWeight: 500, marginBottom: 6, letterSpacing: '-0.01em' }}>{d.title}</div>
-              <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.55 }}>{d.reason}</div>
+              <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.55 }}>{d.reason || '근거가 아직 없습니다.'}</div>
             </Card>
           </div>
         ))}
       </div>
+
+      {editingDecision && (
+        <EditDrawer
+          title={editingDecision.isNew ? '결정 기록하기' : '결정 편집'}
+          subtitle={editingDecision.decidedAt ? 'Committed' : 'Draft · 결정일을 정하면 Committed로 바뀝니다'}
+          record={editingDecision}
+          fields={[
+            { key: 'title', label: '제목', placeholder: '어떤 결정인가요?' },
+            { key: 'decidedAt', label: '결정일', inputType: 'date', row: 'meta' },
+            { key: 'projectId', label: '연결된 프로젝트', type: 'select', row: 'meta', options: projectOptions },
+          ]}
+          onChange={updateDraft}
+          onClose={() => setEditDecisionId(null)}
+          onSave={persistDecision}
+          // onDelete 없음은 의도: 결정 원장은 append-only 저널이다 — 번복은 지우는 게 아니라
+          // 새 결정으로 기록한다 (Rhythm의 deleteRitual과 달리 이력 자체가 가치라서).
+        >
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>근거</span>
+            <textarea
+              value={editingDecision.rationale || ''}
+              onChange={(e) => updateDraft('rationale', e.target.value)}
+              placeholder="맥락, 선택지, 근거를 적어주세요."
+              rows={5}
+              style={{
+                width: '100%', resize: 'vertical',
+                background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
+                padding: 10, color: 'var(--fg)', fontSize: 12.5, fontFamily: 'inherit', lineHeight: 1.55,
+              }}
+            />
+          </label>
+        </EditDrawer>
+      )}
     </div>
   );
 }
 
 export function Roadmap() {
-  const months = React.useMemo(() => buildRoadmapMonths(new Date()), []);
-  const [items, setItems] = React.useState(() => [
-    { name: 'Moonlight Web v2 launch', start: 0, len: 1, tone: 'moon', tag: null },
-    { name: '클래스인 Spring Cohort', start: 0.5, len: 1.2, tone: 'company', tag: 'company' },
-    { name: 'Pricing experiment Q2', start: 1, len: 2, tone: 'moon', tag: null },
-    { name: 'Newsletter auto v2', start: 0, len: 0.5, tone: 'moon', tag: null },
-    { name: '개인 브랜드 사이트', start: 1.2, len: 1.5, tone: 'personal', tag: 'personal' },
-    { name: 'Partner referral program', start: 1.5, len: 1.5, tone: 'moon', tag: null },
-    { name: 'Agents Orders v3', start: 2, len: 1, tone: 'moon', tag: null },
-  ]);
-  const draftQ3 = () => {
-    setItems(prev => prev.some(it => it.name === 'Council Q3 draft')
-      ? prev
-      : [...prev, { name: 'Council Q3 draft', start: 3, len: 0.8, tone: 'moon', tag: null }]);
-  };
-  const toneMap = { moon: 'var(--moon-400)', company: 'var(--company)', personal: 'var(--personal)' };
+  const searchParams = useSearchParams();
+  const selectedProjectId = searchParams.get('project');
+  const { roadmap, retry } = useWorkLedger(selectedProjectId);
+  const roadmapProjection = React.useMemo(
+    () => buildRoadmapProjection(roadmap, { selectedProjectId }),
+    [roadmap, selectedProjectId],
+  );
+  const months = React.useMemo(
+    () => roadmapProjection.months.map(month => ({ ...month, label: EN_MONTH.format(month.start) })),
+    [roadmapProjection.months],
+  );
+  const items = roadmapProjection.items;
+  const statusLabel = roadmap.state === 'loading'
+    ? 'syncing'
+    : roadmap.state === 'preview'
+      ? 'preview'
+      : roadmap.state === 'partial'
+        ? 'partial'
+        : roadmap.state === 'error'
+          ? 'error'
+          : 'live';
+  const statusColor = roadmap.state === 'error'
+    ? 'var(--danger)'
+    : roadmap.state === 'partial'
+      ? 'var(--warning)'
+      : roadmap.state === 'live' || roadmap.state === 'live-empty'
+      ? 'var(--success)'
+        : 'var(--fg-faint)';
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Roadmap</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Q2 outlook · 7 initiatives</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+            프로젝트와 마일스톤의 4개월 계획 축
+            <span className="mono" style={{ marginLeft: 8, color: statusColor }}>{statusLabel}</span>
+          </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="secondary" size="sm" icon="sparkle" onClick={draftQ3}>Let Council draft Q3</Button>
+        {selectedProjectId && (
+          <a
+            href={`/dashboard/work/projects?project=${encodeURIComponent(selectedProjectId)}`}
+            style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', color: 'var(--moon-300)', fontSize: 12.5, textUnderlineOffset: 3 }}
+          >
+            프로젝트로 돌아가기
+          </a>
+        )}
       </div>
 
-      <Card pad={false} className="hub-table-card">
-        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', borderBottom: '1px solid var(--line-soft)' }}>
-          <div style={{ padding: '10px 14px', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Initiative</div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
-            {months.map(m => (
-              <div key={m} style={{ padding: '10px 14px', fontSize: 11, color: 'var(--fg-faint)', borderLeft: '1px solid var(--line-soft)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{m}</div>
-            ))}
+      {roadmap.partial && (
+        <div role="status" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12, color: 'var(--warning)' }}>
+            {roadmap.failedSources.length > 0 && (
+              <span>일부 원장을 읽지 못했습니다 · {roadmap.failedSources.join(', ')}</span>
+            )}
+            {roadmap.truncatedSources.length > 0 && (
+              <span>표시 한도를 넘어 일부만 표시합니다 · {roadmap.truncatedSources.join(', ')}</span>
+            )}
           </div>
+          <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
         </div>
-        {items.map((it, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '220px 1fr', borderBottom: i < items.length - 1 ? '1px solid var(--line-soft)' : 'none', alignItems: 'center' }}>
-            <div style={{ padding: '14px', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12.5 }}>{it.name}</span>
-              {it.tag === 'personal' && <Badge tone="personal" size="xs">P</Badge>}
-              {it.tag === 'company' && <Badge tone="company" size="xs">C</Badge>}
-            </div>
-            <div style={{ position: 'relative', height: 44, display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
-              {months.map((_, mi) => <div key={mi} style={{ borderLeft: '1px solid var(--line-soft)' }} />)}
-              <div style={{
-                position: 'absolute', top: 12, height: 20,
-                left: `calc(${(it.start / months.length) * 100}% + 4px)`,
-                width: `calc(${(it.len / months.length) * 100}% - 8px)`,
-                background: toneMap[it.tone],
-                opacity: 0.85,
-                borderRadius: 6,
-                boxShadow: '0 1px 0 oklch(1 0 0 / 0.1) inset',
-              }} />
+      )}
+
+      <Card pad={false} className="hub-table-card">
+        {roadmap.state === 'loading' && (
+          <EmptyState icon="roadmap" title="로드맵을 읽는 중입니다" description="프로젝트와 마일스톤 원장을 확인하고 있습니다." style={{ minHeight: 220 }} />
+        )}
+        {roadmap.state === 'preview' && (
+          <EmptyState icon="roadmap" title="로드맵 원장이 연결되지 않았습니다" description="Supabase 연결 후 실제 프로젝트 일정만 표시됩니다." style={{ minHeight: 220 }} />
+        )}
+        {roadmap.state === 'error' && (
+          <EmptyState
+            icon="roadmap"
+            title="로드맵을 읽지 못했습니다"
+            description={roadmap.error?.message || '프로젝트와 마일스톤 원장을 다시 확인해 주세요.'}
+            action={<Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>}
+            style={{ minHeight: 220 }}
+          />
+        )}
+        {roadmap.state === 'live-empty' && (
+          <EmptyState icon="roadmap" title="로드맵 일정이 없습니다" description="기한이 있는 프로젝트나 목표일이 있는 마일스톤을 만들면 4개월 축에 표시됩니다." style={{ minHeight: 220 }} />
+        )}
+        {(roadmap.state === 'live' || roadmap.state === 'partial') && items.length === 0 && (
+          <EmptyState
+            icon="roadmap"
+            title={selectedProjectId ? '선택한 프로젝트의 4개월 일정이 없습니다' : '4개월 안에 표시할 일정이 없습니다'}
+            description="프로젝트 시작일·마감일 또는 마일스톤 목표일을 확인해 주세요."
+            style={{ minHeight: 220 }}
+          />
+        )}
+        {(roadmap.state === 'live' || roadmap.state === 'partial') && items.length > 0 && (
+          <div className="hub-scroll-x" style={{ overflowX: 'auto' }}>
+            <div style={{ minWidth: 760 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', borderBottom: '1px solid var(--line-soft)' }}>
+                <div style={{ padding: '10px 14px', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>프로젝트 · 마일스톤</div>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
+                  {months.map(month => (
+                    <div key={month.key} style={{ padding: '10px 14px', fontSize: 11, color: 'var(--fg-faint)', borderLeft: '1px solid var(--line-soft)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{month.label}</div>
+                  ))}
+                </div>
+              </div>
+              {items.map((item, index) => (
+                <div
+                  key={item.id}
+                  data-kind={item.kind}
+                  data-selected={selectedProjectId === item.projectId ? 'true' : 'false'}
+                  style={{
+                    display: 'grid', gridTemplateColumns: '240px 1fr', alignItems: 'center',
+                    borderBottom: index < items.length - 1 ? '1px solid var(--line-soft)' : 'none',
+                    background: selectedProjectId === item.projectId ? 'var(--surface-2)' : 'transparent',
+                  }}
+                >
+                  <a
+                    href={`/dashboard/work/projects?project=${encodeURIComponent(item.projectId)}`}
+                    aria-current={selectedProjectId === item.projectId ? 'page' : undefined}
+                    aria-label={buildRoadmapItemAriaLabel(item)}
+                    style={{ minHeight: 52, padding: '8px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', color: 'inherit', textDecoration: 'none' }}
+                  >
+                    <span style={{ fontSize: 12.5, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                    <span style={{ marginTop: 3, fontSize: 10.5, color: 'var(--fg-faint)' }}>{item.meta}</span>
+                  </a>
+                  <div style={{ position: 'relative', minHeight: 52, display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
+                    {months.map(month => <div key={month.key} style={{ borderLeft: '1px solid var(--line-soft)' }} />)}
+                    {item.kind === 'range' ? (
+                      <span aria-hidden="true" style={{ position: 'absolute', top: 17, left: `${item.startPct}%`, width: `${item.widthPct}%`, height: 18, borderRadius: 999, background: 'var(--surface-3)', border: '1px solid var(--line)', boxShadow: 'inset 2px 0 0 var(--moon-300)' }} />
+                    ) : (
+                      <span aria-hidden="true" style={{ position: 'absolute', top: 17, left: `${item.markerPct}%`, width: 16, height: 16, borderRadius: item.kind === 'milestone' ? 3 : 999, background: 'var(--surface-3)', border: '1px solid var(--moon-300)', boxShadow: 'inset 0 0 0 3px var(--surface-3), inset 0 0 0 8px var(--moon-300)', transform: item.kind === 'milestone' ? 'translateX(-50%) rotate(45deg)' : 'translateX(-50%)' }} />
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
+        )}
       </Card>
     </div>
   );
 }
 
 export function Rhythm() {
-  const { rituals: liveRituals, summary, syncState } = useWorkLedger();
-  const [checkedRituals, setCheckedRituals] = React.useState(() => new Set());
-  const rituals = Array.isArray(liveRituals) ? liveRituals : [];
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const selectedProjectId = searchParams.get('project')?.trim() || null;
+  const {
+    rituals: liveRituals,
+    rhythmState,
+    rhythmPartial,
+    rhythmTruncatedSources,
+    rhythmError,
+    projects: linkableProjects,
+    retry,
+  } = useWorkLedger(selectedProjectId);
+  const [mutationState, setMutationState] = React.useState(() => createRhythmCheckState());
+  const attemptSequenceRef = React.useRef(0);
+  const latestAttemptRef = React.useRef(new Map());
+  const rituals = React.useMemo(
+    () => filterRhythmRows(liveRituals, selectedProjectId),
+    [liveRituals, selectedProjectId],
+  );
 
-  const completed = summary?.ritualsCompletedThisWeek ?? rituals.filter(r => r.weeks?.some(v => v === 1)).length;
-  const total = summary?.ritualsTotalThisWeek ?? rituals.length;
-  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  // 루틴 생성·수정. 스키마에 별도 rituals 테이블이 없어(work-ledger.js WHY 주석), 생성은
+  // status:'pending' 씨앗 행을 심는 것이고, 수정은 같은 (project_id, ritual_key) 그룹의
+  // 모든 행을 배치로 patch하는 것이다 — 둘 다 /api/routine이 처리한다(체크인 이벤트는
+  // 계속 /api/routine/check).
+  const [localRituals, setLocalRituals] = React.useState([]);
+  const [ritualEdits, setRitualEdits] = React.useState({});
+  const [editRitualId, setEditRitualId] = React.useState(null);
+  const createdRitualFromQueryRef = React.useRef(false);
+  // 삭제된 (projectId, ritualKey) tombstone — revenue.jsx의 deleteLead와 동일한 낙관적
+  // 삭제 패턴: 클릭 즉시 목록에서 숨기고, 실패하면 tombstone을 지워 되돌린다.
+  const [deletedRitualIdentities, setDeletedRitualIdentities] = React.useState(() => new Set());
 
-  let longestStreak = summary?.longestStreak ?? 0;
-  let longestStreakRitual = summary?.longestStreakRitual ?? '';
-  if (!summary) {
-    rituals.forEach(r => {
-      if ((r.streak || 0) > longestStreak) {
-        longestStreak = r.streak;
-        longestStreakRitual = r.name;
+  // 라이브 목록에 같은 (projectId, ritualKey)가 이미 나타나면 로컬 초안을 숨긴다 —
+  // retry() 이후 자동으로 실제 행으로 대체되어, 수동으로 정리할 필요가 없다. dedup은
+  // overlay(ritualEdits)가 적용된 값으로 비교해야 한다 — 원본 localRituals는 저장 시점에
+  // ritualKey만 채워지고 projectId/checkType 등은 계속 overlay에만 있으므로, overlay 없이
+  // 비교하면 정체성이 어긋나 라이브 행과 중복 표시된다.
+  const liveRitualIdentities = React.useMemo(
+    () => new Set(rituals.map((r) => `${r.projectId || ''}::${r.ritualKey}`)),
+    [rituals],
+  );
+  const overlaidLocalRituals = localRituals.map((r) => (ritualEdits[r.id] ? { ...r, ...ritualEdits[r.id] } : r));
+  const visibleLocalRituals = overlaidLocalRituals.filter(
+    (r) => !r.ritualKey || !liveRitualIdentities.has(`${r.projectId || ''}::${r.ritualKey}`),
+  );
+  // baseRituals는 원본(overlay 미적용) — persistRitual/deleteRitual이 "원래 값"을 찾을 때만 쓴다.
+  const baseRituals = [...localRituals, ...rituals];
+  const mergedRituals = [...visibleLocalRituals, ...rituals.map((r) => (ritualEdits[r.id] ? { ...r, ...ritualEdits[r.id] } : r))]
+    .filter((r) => !deletedRitualIdentities.has(`${r.projectId || ''}::${r.ritualKey}`));
+  const editingRitual = editRitualId ? mergedRituals.find((r) => r.id === editRitualId) : null;
+  const projectOptions = [
+    { value: '', label: '연결 안 함' },
+    ...(Array.isArray(linkableProjects) ? linkableProjects : []).map((p) => ({ value: p.id, label: p.name })),
+  ];
+  const checkTypeOptions = [
+    { value: 'morning', label: '아침' },
+    { value: 'midday', label: '낮' },
+    { value: 'evening', label: '저녁' },
+    { value: 'weekly', label: '주간' },
+  ];
+
+  const createRitual = React.useCallback(() => {
+    const draft = buildRhythmDraft(selectedProjectId);
+    setLocalRituals((prev) => [draft, ...prev]);
+    setEditRitualId(draft.id);
+  }, [selectedProjectId]);
+
+  React.useEffect(() => {
+    if (searchParams.get('new') !== 'rhythm' || createdRitualFromQueryRef.current) return;
+    createRitual();
+    createdRitualFromQueryRef.current = true;
+    router.replace(pathname);
+  }, [createRitual, searchParams, router, pathname]);
+
+  // 페이지 레벨 `n` — 드로어가 닫혀 있고 포커스가 입력 필드 밖일 때만 새 루틴을 만든다
+  // (DESIGN.md §8.1).
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if ((e.key !== 'n' && e.key !== 'N') || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (editRitualId) return;
+      const t = e.target;
+      const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+      e.preventDefault();
+      createRitual();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editRitualId, createRitual]);
+
+  const updateRitualDraft = (key, value) => {
+    setRitualEdits((prev) => ({ ...prev, [editRitualId]: { ...prev[editRitualId], [key]: value } }));
+  };
+
+  // 새 루틴: /api/routine에 status:'pending' 씨앗 행 생성 → retry()로 원장을 다시 읽어
+  // mapRituals가 이 행을 리추얼로 집계하게 한다.
+  // 기존 루틴 수정: 원래(overlay 적용 전) 값과 비교해 바뀐 필드만 /api/routine PATCH로
+  // 보낸다 — 서버가 같은 ritualKey·matchProjectId를 가진 모든 행을 배치로 patch한다.
+  const persistRitual = React.useCallback(async () => {
+    if (!editingRitual?.name?.trim()) return { ok: false, status: 'invalid-input' };
+    try {
+      if (editingRitual.isNew) {
+        const payload = buildRhythmDefinePayload(editingRitual);
+        setLocalRituals((prev) => prev.map((r) => (r.id === editingRitual.id ? { ...r, ritualKey: payload.ritualKey } : r)));
+        const response = await fetch('/api/routine', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ...payload, source: 'hub-work' }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.status !== 'saved') {
+          return { ok: false, status: data.status || 'error' };
+        }
+        await retry();
+        // 라이브 원장이 이 루틴을 반영했으니 로컬 초안은 완전히 제거한다. render-time
+        // dedup(identity 비교)만으로는 불충분하다 — 이후 이 루틴을 다시 편집해 연결
+        // 프로젝트(=grouping key)가 바뀌면, identity가 더 이상 일치하지 않아 낡은 초안이
+        // "안 보이는 상태"에서 벗어나 유령처럼 재등장한다.
+        setLocalRituals((prev) => prev.filter((r) => r.id !== editingRitual.id));
+        setRitualEdits((prev) => {
+          if (!prev[editingRitual.id]) return prev;
+          const next = { ...prev };
+          delete next[editingRitual.id];
+          return next;
+        });
+        return { ok: true, status: data.status };
       }
-    });
-  }
+
+      const original = baseRituals.find((r) => r.id === editRitualId);
+      const payload = buildRhythmEditPayload(original, editingRitual);
+      const response = await fetch('/api/routine', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...payload, source: 'hub-work' }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.status !== 'saved') {
+        return { ok: false, status: data.status || 'error' };
+      }
+      await retry();
+      return { ok: true, status: data.status };
+    } catch (error) {
+      return { ok: false, status: 'error', error: error instanceof Error ? error.message : String(error) };
+    }
+  }, [editingRitual, editRitualId, baseRituals, retry]);
+
+  // 삭제 = 그 루틴의 정의(씨앗) 행 + 모든 체크인 이력을 함께 지운다. EditDrawer가 삭제
+  // 전에 window.confirm으로 확인을 받으므로 여기서 다시 묻지 않는다. 로컬(아직 저장 안 된)
+  // 초안은 API 호출 없이 그냥 상태에서 제거한다.
+  const deleteRitual = React.useCallback(async () => {
+    if (!editingRitual) return;
+    if (editingRitual.isNew) {
+      setLocalRituals((prev) => prev.filter((r) => r.id !== editingRitual.id));
+      setRitualEdits((prev) => {
+        if (!prev[editingRitual.id]) return prev;
+        const next = { ...prev };
+        delete next[editingRitual.id];
+        return next;
+      });
+      return;
+    }
+
+    const original = baseRituals.find((r) => r.id === editRitualId) || editingRitual;
+    const identity = `${original.projectId || ''}::${original.ritualKey}`;
+    setDeletedRitualIdentities((prev) => new Set(prev).add(identity));
+
+    try {
+      const payload = buildRhythmDeletePayload(original);
+      const response = await fetch('/api/routine', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...payload, source: 'hub-work' }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.status === 'saved') {
+        await retry();
+        return;
+      }
+      // 삭제 실패 — tombstone을 지워 되돌린다(행이 다시 보인다).
+      setDeletedRitualIdentities((prev) => {
+        const next = new Set(prev);
+        next.delete(identity);
+        return next;
+      });
+    } catch {
+      setDeletedRitualIdentities((prev) => {
+        const next = new Set(prev);
+        next.delete(identity);
+        return next;
+      });
+    }
+  }, [editingRitual, editRitualId, baseRituals, retry]);
+
+  const summary = React.useMemo(() => summarizeRhythmRows(rituals), [rituals]);
+
+  React.useEffect(() => {
+    latestAttemptRef.current.clear();
+    setMutationState(createRhythmCheckState());
+  }, [selectedProjectId]);
+
+  const completed = summary.ritualsCompletedThisWeek;
+  const total = summary.ritualsTotalThisWeek;
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const rhythmProgressProps = getRhythmProgressProps({
+    partial: rhythmPartial,
+    completed,
+    total,
+  });
+  const longestStreak = summary.longestStreak;
+  const longestStreakRitual = summary.longestStreakRitual;
+  const selectedProjectName = rituals.find((ritual) => ritual.projectName)?.projectName || '';
+  const syncLabel = rhythmState === 'live' || rhythmState === 'live-empty'
+    ? 'live'
+    : rhythmState === 'partial'
+      ? 'partial · observed'
+    : rhythmState === 'loading'
+      ? 'syncing'
+      : rhythmState === 'error'
+        ? 'error'
+        : 'preview · unsaved';
+  const syncColor = rhythmState === 'live' || rhythmState === 'live-empty'
+    ? 'var(--moon-300)'
+    : rhythmState === 'partial'
+      ? 'var(--warning)'
+    : rhythmState === 'loading'
+      ? 'var(--warning)'
+      : rhythmState === 'error'
+        ? 'var(--danger)'
+        : 'var(--fg-faint)';
+
+  const checkIn = React.useCallback(async (ritual) => {
+    const ritualId = ritual.id;
+    const attemptId = `${Date.now()}-${attemptSequenceRef.current + 1}`;
+    attemptSequenceRef.current += 1;
+    latestAttemptRef.current.set(ritualId, attemptId);
+    setMutationState((state) => beginRhythmCheck(state, ritualId, attemptId));
+
+    try {
+      const response = await fetch('/api/routine/check', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(buildRhythmCheckPayload(ritual)),
+      });
+      const data = await response.json().catch(() => null);
+      let result = resolveRhythmCheckResult({
+        responseOk: response.ok,
+        httpStatus: response.status,
+        data,
+      });
+
+      if (latestAttemptRef.current.get(ritualId) !== attemptId) return;
+      if (result.shouldRefetch) {
+        const refreshed = await retry();
+        if (latestAttemptRef.current.get(ritualId) !== attemptId) return;
+        if (!refreshed) {
+          result = {
+            ...result,
+            message: `${result.message} 저장은 확인됐지만 주간 현황을 다시 읽지 못했습니다. 다시 읽어 주세요.`,
+          };
+        }
+      }
+
+      setMutationState((state) => finishRhythmCheck(
+        state,
+        ritualId,
+        attemptId,
+        result,
+      ));
+    } catch (error) {
+      if (latestAttemptRef.current.get(ritualId) !== attemptId) return;
+      const result = resolveRhythmCheckResult({ error });
+      setMutationState((state) => finishRhythmCheck(
+        state,
+        ritualId,
+        attemptId,
+        result,
+      ));
+    }
+  }, [retry]);
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
-      <div>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Rhythm</h2>
-        <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-          루틴은 실행의 인프라
-          <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-            {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
-          </span>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Rhythm</h2>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+            루틴은 실행의 인프라
+            <span className="mono" style={{ marginLeft: 8, color: syncColor }}>
+              {syncLabel}
+            </span>
+          </div>
+          {selectedProjectId && (
+            <a
+              href={`/dashboard/work/projects?project=${encodeURIComponent(selectedProjectId)}`}
+              style={{ minHeight: 44, marginTop: 6, display: 'inline-flex', alignItems: 'center', color: 'var(--moon-300)', fontSize: 12.5, textUnderlineOffset: 3 }}
+            >
+              프로젝트로 돌아가기{selectedProjectName ? ` · ${selectedProjectName}` : ''}
+            </a>
+          )}
         </div>
+        <div style={{ flex: 1 }} />
+        <Button variant="primary" size="sm" icon="plus" onClick={createRitual}>새 루틴 <Kbd>N</Kbd></Button>
       </div>
+
+      {rhythmState === 'error' && (
+        <div role="alert" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
+          <span style={{ flex: 1, fontSize: 12, color: 'var(--danger)' }}>{rhythmError || '리듬 원장을 읽지 못했습니다. 체크인 상태를 확인하려면 다시 읽어 주세요.'}</span>
+          <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
+        </div>
+      )}
+
+      {rhythmState === 'partial' && (
+        <div role="alert" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
+          <span style={{ flex: 1, fontSize: 12, color: 'var(--warning)' }}>
+            일부 기록만 표시합니다. {rhythmTruncatedSources.includes('routine_checks') ? 'routine_checks가 조회 한도를 초과해 최근 240건을 관측했습니다.' : '리듬 원장의 일부만 관측했습니다.'}
+          </span>
+          <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
+        </div>
+      )}
 
       <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>This week</div>
-          <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="mono">{completed} / {total}</div>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>rituals completed</div>
-          <div style={{ marginTop: 14 }}><Progress value={percent} /></div>
+          <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="stat">{completed} / {total}</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{rhythmPartial ? '관측된 완료 · 일부 기록' : 'rituals completed'}</div>
+          {rhythmPartial ? (
+            <div {...rhythmProgressProps} style={{ marginTop: 14, fontSize: 11, color: 'var(--fg-faint)' }}>
+              관측 {completed} / {total} · 일부 기록
+            </div>
+          ) : (
+            <div {...rhythmProgressProps} style={{ marginTop: 14 }}><Progress value={percent} /></div>
+          )}
         </Card>
         <Card>
           <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Longest streak</div>
-          <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="mono">{longestStreak} <span style={{ fontSize: 14, color: 'var(--fg-faint)' }}>days</span></div>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{longestStreakRitual || '루틴 체크인 기록 없음'}</div>
+          <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="stat">{longestStreak} <span style={{ fontSize: 14, color: 'var(--fg-faint)' }}>days</span></div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{longestStreakRitual || '루틴 체크인 기록 없음'}{rhythmPartial ? ' · 관측값' : ''}</div>
         </Card>
       </div>
 
       <Card pad={false} className="hub-table-card">
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'grid', gridTemplateColumns: '1fr 160px 90px 100px' }}>
-          <span>Ritual</span><span>Last 7 days</span><span>Streak</span><span style={{ textAlign: 'right' }}>Action</span>
-        </div>
-        {rituals.length === 0 && (
+        {mergedRituals.length === 0 && (
           <EmptyState
             icon="rhythm"
-            title="루틴 체크 기록이 없습니다"
-            description={syncState === 'live' ? 'Supabase routine_checks 원장이 비어 있습니다.' : '체크인을 기록하면 주간 리듬과 streak가 계산됩니다.'}
+            title={selectedProjectId ? '선택한 프로젝트의 리듬이 없습니다' : '루틴 체크 기록이 없습니다'}
+            description={rhythmState === 'live-empty' ? 'Supabase routine_checks 기록이 비어 있습니다.' : rhythmState === 'error' ? '원장을 다시 읽은 뒤 체크인 상태를 확인해 주세요.' : rhythmState === 'partial' ? '일부 기록만 관측되어 전체 리듬 상태를 확정할 수 없습니다.' : '루틴을 만들면 매일 체크인할 항목이 여기에 표시됩니다.'}
+            action={rhythmState === 'error' || rhythmState === 'partial'
+              ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
+              : <Button variant="primary" size="sm" icon="plus" onClick={createRitual}>새 루틴</Button>}
             style={{ minHeight: 220 }}
           />
         )}
-        {rituals.map((r, i) => {
-          const isChecked = checkedRituals.has(r.id || r.name || i);
-          const weeks = Array.isArray(r.weeks) ? [...r.weeks] : [0,0,0,0,0,0,0];
-          if (isChecked) weeks[weeks.length - 1] = 1;
-          return (
-            <div key={r.id || r.name || i} style={{ padding: '14px 16px', borderBottom: i < rituals.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'grid', gridTemplateColumns: '1fr 160px 90px 100px', alignItems: 'center' }}>
-              <span style={{ fontSize: 13 }}>{r.name}</span>
-              <div style={{ display: 'flex', gap: 4 }}>
-                {weeks.map((v, j) => (
-                  <div key={j} style={{
-                    width: 18, height: 18, borderRadius: 4,
-                    background: v ? 'var(--moon-500)' : 'var(--surface-3)',
-                    border: v ? 'none' : '1px solid var(--line-soft)',
-                  }} />
-                ))}
+        {mergedRituals.length > 0 && (
+          <div className="hub-rhythm-scroll" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ minWidth: 720 }}>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 180px 90px 128px' }}>
+                <span>Ritual</span><span>Last 7 days</span><span>Streak</span><span style={{ textAlign: 'right' }}>Action</span>
               </div>
-              <span className="mono" style={{ fontSize: 12, color: (r.streak || 0) > 10 ? 'var(--success)' : 'var(--fg-muted)' }}>{r.streak || 0}d</span>
-              <div style={{ textAlign: 'right' }}>
-                <Button
-                  variant={isChecked ? 'secondary' : 'ghost'}
-                  size="xs"
-                  onClick={() => {
-                    const key = r.id || r.name || i;
-                    setCheckedRituals(prev => {
-                      const next = new Set(prev);
-                      next.has(key) ? next.delete(key) : next.add(key);
-                      return next;
-                    });
-                  }}
-                >
-                  {isChecked ? 'Checked' : 'Check in'}
-                </Button>
-              </div>
+              {mergedRituals.map((r, i) => {
+                const weeks = Array.isArray(r.weeks) ? r.weeks : [0,0,0,0,0,0,0];
+                const pending = Boolean(mutationState.pendingByRitual[r.id]);
+                const feedback = mutationState.feedbackByRitual[r.id];
+                const bitmapText = weeks.map((value, index) => `${index === 6 ? '오늘' : `${6 - index}일 전`} ${value ? '완료' : '미완료'}`).join(', ');
+                return (
+                  <div
+                    key={r.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setEditRitualId(r.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditRitualId(r.id); } }}
+                    className="hub-row"
+                    style={{ padding: '12px 16px', minHeight: 68, borderBottom: i < mergedRituals.length - 1 ? '1px solid var(--line-soft)' : 'none', display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 180px 90px 128px', alignItems: 'center', cursor: 'pointer' }}
+                  >
+                    <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <span style={{ fontSize: 13 }}>{r.name}</span>
+                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{r.checkType} · {r.ritualKey}</span>
+                      {r.projectHref && (
+                        <a href={r.projectHref} onClick={(e) => e.stopPropagation()} style={{ width: 'fit-content', color: 'var(--moon-300)', fontSize: 11.5, textUnderlineOffset: 3 }}>{r.projectName || '연결 프로젝트'}</a>
+                      )}
+                      {feedback && (
+                        <span aria-live="polite" style={{ fontSize: 11, color: feedback.kind === 'error' ? 'var(--danger)' : feedback.kind === 'preview' ? 'var(--warning)' : 'var(--fg-muted)' }}>
+                          {feedback.message}
+                        </span>
+                      )}
+                    </div>
+                    <div role="img" aria-label={`최근 7일 체크 기록: ${bitmapText}`} style={{ display: 'flex', gap: 4 }}>
+                      {weeks.map((value, index) => (
+                        <span key={index} aria-hidden="true" style={{
+                          width: 18, height: 18, borderRadius: 4,
+                          background: value ? 'var(--moon-500)' : 'var(--surface-3)',
+                          border: '1px solid var(--line-soft)',
+                        }} />
+                      ))}
+                    </div>
+                    <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{r.streak || 0}d</span>
+                    <div style={{ textAlign: 'right' }}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={pending}
+                        aria-label={`${r.projectName ? `${r.projectName} · ` : ''}${r.name} 체크인 저장`}
+                        style={{ minHeight: 44 }}
+                        onClick={(e) => { e.stopPropagation(); checkIn(r); }}
+                      >
+                        {pending ? '저장 중…' : '체크인 저장'}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        )}
       </Card>
+
+      {editingRitual && (
+        <EditDrawer
+          title={editingRitual.isNew ? '새 루틴 만들기' : '루틴 편집'}
+          subtitle={editingRitual.isNew ? undefined : `${editingRitual.streak || 0}일 연속 · 이번 주 ${(editingRitual.weeks || []).filter(Boolean).length}/7`}
+          record={editingRitual}
+          fields={[
+            { key: 'name', label: '이름', placeholder: '예: 아침 스트레칭' },
+            { key: 'checkType', label: '체크 타입', type: 'select', row: 'meta', options: checkTypeOptions },
+            { key: 'projectId', label: '연결 프로젝트', type: 'select', row: 'meta', options: projectOptions },
+          ]}
+          onChange={updateRitualDraft}
+          onClose={() => setEditRitualId(null)}
+          onSave={persistRitual}
+          onDelete={deleteRitual}
+        />
+      )}
     </div>
   );
 }

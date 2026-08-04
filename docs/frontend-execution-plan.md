@@ -1,6 +1,6 @@
 # Com_Moon Frontend Execution Plan
 
-> Status: historical pre-detach plan. The active frontend is now Hub only; public web routes were removed from the workspace to keep execution focused.
+> Status: HISTORICAL PRE-DETACH PLAN. The active frontend is Hub only; current execution order comes from `docs/master-roadmap.md` and the 2026-07-13 Personal Operator OS design.
 
 ## 1. Current Truth
 

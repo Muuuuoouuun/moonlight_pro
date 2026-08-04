@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
-import { executeApprovedWorkOrder } from "@/lib/sales-os/work-order-executor";
-import { createWorkOrder, decideWorkOrder, getQueueSummary, getWorkOrders } from "@/lib/sales-os/work-orders";
+import { decideWorkOrder, getQueueSummary, getWorkOrders } from "@/lib/sales-os/work-orders";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,17 +15,14 @@ export async function GET(req) {
     return NextResponse.json(summary, { status: 200 });
   }
 
-  const rawStatus = searchParams.get("status");
-  const status = rawStatus && rawStatus.includes(",")
-    ? rawStatus.split(",").map((item) => item.trim()).filter(Boolean)
-    : rawStatus;
+  const status = searchParams.get("status");
   const orders = await getWorkOrders({ status: status || null, limit: 100 });
   return NextResponse.json(orders, { status: 200 });
 }
 
-// POST { id, status } — the 1-click decision (approve | dismiss | executed).
-// POST { id, action: "execute" } — replay an approved external work order, or mark manual work done.
-// POST { action: "create", persona, kind, title, dealId, ... } — propose a new queue item.
+// POST { id, status, outcome? } — the 1-click decision (approve | dismiss | executed).
+// When status='executed' carries outcome:{action,note?,occurredAt?}, the learning loop closes:
+// the outreach outcome is logged and attributed back to this order (and its agent run).
 export async function POST(req) {
   const guard = assertHubWriteAllowed(req);
   if (guard) return guard;
@@ -36,29 +32,27 @@ export async function POST(req) {
 
   const input = parsed.data || {};
   const id = typeof input.id === "string" ? input.id : null;
-  const action = typeof input.action === "string" ? input.action.trim().toLowerCase() : "";
   const status = typeof input.status === "string" ? input.status : null;
+  const outcome =
+    input.outcome && typeof input.outcome === "object"
+      ? {
+          action: typeof input.outcome.action === "string" ? input.outcome.action : null,
+          note: typeof input.outcome.note === "string" ? input.outcome.note : null,
+          occurredAt: typeof input.outcome.occurredAt === "string" ? input.outcome.occurredAt : null,
+        }
+      : null;
 
-  if (action === "create") {
-    const result = await createWorkOrder({
-      persona: input.persona,
-      kind: input.kind,
-      title: input.title,
-      body: input.body && typeof input.body === "object" ? input.body : {},
-      leadId: input.leadId || null,
-      dealId: input.dealId || null,
-      companyId: input.companyId || null,
-      channel: input.channel || null,
-      source: input.source || "manual",
-    });
-    return NextResponse.json(result, { status: result.persisted ? 200 : 202 });
+  const result = await decideWorkOrder({ id, status, outcome });
+
+  // 400 on bad input; 200 on success and on benign idempotent no-ops (double-submit).
+  if (result.reason === "invalid-action" || result.reason === "invalid-decision") {
+    return NextResponse.json(result, { status: 400 });
   }
-
-  if (action === "execute") {
-    const result = await executeApprovedWorkOrder({ req, id });
-    return NextResponse.json(result.data, { status: result.status });
-  }
-
-  const result = await decideWorkOrder({ id, status });
-  return NextResponse.json(result, { status: result.persisted ? 200 : 400 });
+  const ok =
+    result.persisted ||
+    result.reason === "already-attributed" ||
+    result.reason === "already-executed" ||
+    result.reason === "already-promoted" ||
+    result.reason === "already-decided";
+  return NextResponse.json(result, { status: ok ? 200 : 400 });
 }

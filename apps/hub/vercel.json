@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    { "path": "/api/cron/recompute-scores", "schedule": "0 15 * * *" },
+    { "path": "/api/cron/followup-autopilot", "schedule": "0 22 * * *" },
+    { "path": "/api/cron/content-flywheel", "schedule": "30 22 * * *" },
+    { "path": "/api/cron/chief-of-staff", "schedule": "45 22 * * *" }
+  ]
+}

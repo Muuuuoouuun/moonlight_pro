@@ -1,17 +1,17 @@
 "use client";
 
 // Lead Segments — group the live lead ledger by an operator-picked dimension
-// (유입경로 · 단계 · 스코어밴드 · 지역 · 규모). The follow-up scoring pipeline and the
-// meta tags (region/scale) already exist on every lead projection; this page is the
-// browsing surface the Sales OS audit flagged as missing. Read-only v1: click a
-// segment to expand its member leads inline.
+// (유입경로 · 단계 · 유형 · 스코어밴드). This is the browsing surface the Sales OS audit
+// flagged as missing. Read-only v1: click a segment to expand its member leads inline.
+// `score` ships on the live projection (revenue-ledger mapLead). region/scale dimensions
+// were dropped because no data source exists for them.
 
 import React from 'react';
 
-import { LEADS as FALLBACK_LEADS } from "../hub-data";
 import { Iconed } from "../hub-icons";
 import { Badge, Button, Card, Dot, EmptyState, Input, SyncBadge, SegmentedControl } from "../hub-primitives";
 import { filterLeadsByWorkspace, getWorkspace } from "../workspace-map";
+import { clearExpandedSegments, sortSegmentsByPriority, toggleExpandedSegment } from "./segments-state.mjs";
 
 // Same ledger endpoint the Revenue pages use; local copy so this page stays
 // independent of revenue.jsx internals.
@@ -25,15 +25,13 @@ function useLeadsLedger() {
         if (cancelled) return;
         const live = data?.source === 'supabase';
         setState({
-          syncState: live ? 'live' : 'mock',
+          syncState: live ? 'live' : 'preview',
           source: live ? 'supabase' : 'preview',
-          // Sibling pages (Leads 등) show the mock fixtures under a 'mock' badge when the
-          // ledger is preview — mirror that instead of an empty board.
-          leads: live && Array.isArray(data?.leads) ? data.leads : FALLBACK_LEADS,
+          leads: Array.isArray(data?.leads) ? data.leads : [],
         });
       })
       .catch(() => {
-        if (!cancelled) setState({ syncState: 'mock', source: 'preview', leads: FALLBACK_LEADS });
+        if (!cancelled) setState({ syncState: 'preview', source: 'preview', leads: [] });
       });
     return () => { cancelled = true; };
   }, []);
@@ -43,24 +41,27 @@ function useLeadsLedger() {
 const DIMENSIONS = [
   { key: 'source', label: '유입경로' },
   { key: 'stage', label: '단계' },
+  { key: 'type', label: '유형' },
   { key: 'scoreBand', label: '스코어' },
-  { key: 'region', label: '지역' },
-  { key: 'scale', label: '규모' },
 ];
 
 const SCORE_BANDS = [
-  { key: 'hot', label: '핫 (70+)', tone: 'success', test: (s) => s >= 70 },
-  { key: 'warm', label: '웜 (40–69)', tone: 'warning', test: (s) => s >= 40 && s < 70 },
-  { key: 'cold', label: '콜드 (1–39)', tone: 'info', test: (s) => s >= 1 && s < 40 },
+  { key: 'hot', label: '핫 (70+)', tone: 'neutral', test: (s) => s >= 70 },
+  { key: 'warm', label: '웜 (40–69)', tone: 'neutral', test: (s) => s >= 40 && s < 70 },
+  { key: 'cold', label: '콜드 (1–39)', tone: 'neutral', test: (s) => s >= 1 && s < 40 },
   { key: 'unscored', label: '미채점', tone: 'neutral', test: (s) => !s },
 ];
 
-const STAGE_TONE = { New: 'info', Contact: 'moon', Qualified: 'success', Lost: 'danger' };
+const STAGE_TONE = { New: 'neutral', Contact: 'neutral', Qualified: 'neutral', Lost: 'neutral' };
 
 function segmentValueOf(lead, dimension) {
   if (dimension === 'scoreBand') {
     const band = SCORE_BANDS.find((b) => b.test(Number(lead.score) || 0));
     return band ? band.label : '미채점';
+  }
+  if (dimension === 'type') {
+    // Match the label casing the sibling Revenue pages use for the type badge.
+    return lead.type === 'personal' ? 'Personal' : lead.type === 'company' ? 'Company' : '(미지정)';
   }
   const raw = lead[dimension];
   if (!raw || raw === '—') return '(미지정)';
@@ -74,7 +75,7 @@ function groupLeads(leads, dimension) {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(lead);
   });
-  return [...groups.entries()]
+  const segments = [...groups.entries()]
     .map(([label, members]) => ({
       label,
       members,
@@ -83,14 +84,15 @@ function groupLeads(leads, dimension) {
         members.reduce((a, l) => a + (Number(l.score) || 0), 0) / Math.max(1, members.length),
       ),
       qualified: members.filter((l) => l.stage === 'Qualified').length,
-    }))
-    .sort((a, b) => b.count - a.count);
+    }));
+
+  return sortSegmentsByPriority(segments, dimension);
 }
 
 export function Segments({ workspace, onNavigate }) {
   const { syncState, source, leads: allLeads } = useLeadsLedger();
   const ws = getWorkspace(workspace);
-  // Clicking a member row deep-links to that lead's drawer. Mirror the workspace path pick used by
+  // Clicking a member row deep-links to that lead. Mirror the workspace path pick used by
   // the Revenue pages: classin scope opens the classin Leads surface, else the flat leads route.
   const openLead = (lead) => {
     if (!lead || lead.id == null) return;
@@ -100,7 +102,8 @@ export function Segments({ workspace, onNavigate }) {
   const leads = filterLeadsByWorkspace(allLeads, workspace);
   const [dimension, setDimension] = React.useState('source');
   const [search, setSearch] = React.useState('');
-  const [expanded, setExpanded] = React.useState(null); // segment label
+  const [expanded, setExpanded] = React.useState(() => clearExpandedSegments());
+  const toggleSegment = (label) => setExpanded((current) => toggleExpandedSegment(current, label));
 
   const term = search.trim().toLowerCase();
   const searched = term
@@ -124,9 +127,9 @@ export function Segments({ workspace, onNavigate }) {
           className="hub-toolbar"
           options={DIMENSIONS.map((d) => ({ key: d.key, label: d.label }))}
           value={dimension}
-          onChange={(key) => { setDimension(key); setExpanded(null); }}
+          onChange={(key) => { setDimension(key); setExpanded(clearExpandedSegments()); }}
         />
-        <Input className="hub-toolbar" ariaLabel="리드 이름 검색" placeholder="리드 이름 검색…" icon="search" value={search} onChange={setSearch} />
+        <Input className="hub-toolbar" placeholder="리드 이름 검색…" icon="search" value={search} onChange={setSearch} />
       </div>
 
       {segments.length === 0 && (
@@ -138,27 +141,25 @@ export function Segments({ workspace, onNavigate }) {
               ? '리드가 없거나 검색 결과가 비어 있습니다.'
               : 'Supabase 연결 후 리드가 쌓이면 유입경로·지역·규모·스코어별로 자동 그룹핑됩니다.'}
             action={source === 'supabase' ? (
-              <Button variant="primary" size="sm" icon="inbox" onClick={() => onNavigate?.('dashboard/classin/intake')}>리드 인박스 열기</Button>
+              // No intake surface in this branch — send the operator to the classin Leads list.
+              <Button variant="primary" size="sm" icon="inbox" onClick={() => onNavigate?.('dashboard/classin/revenue')}>리드 목록 열기</Button>
             ) : null}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--gap)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', alignItems: 'start', gap: 'var(--gap)' }}>
         {segments.map((seg) => {
-          const isOpen = expanded === seg.label;
+          const isOpen = expanded.has(seg.label);
           return (
-            <Card key={seg.label} style={{ padding: 0, overflow: 'hidden' }}>
-              <button
-                type="button"
+            <Card key={seg.label} interactive style={{ cursor: 'pointer' }} >
+              <div
+                role="button"
+                tabIndex={0}
                 aria-expanded={isOpen}
-                aria-label={`${seg.label} 세그먼트 ${isOpen ? '접기' : '펼치기'}`}
-                onClick={() => setExpanded(isOpen ? null : seg.label)}
-                style={{
-                  width: '100%', padding: 'var(--card-pad)', textAlign: 'left',
-                  display: 'block', color: 'inherit',
-                }}
+                onClick={() => toggleSegment(seg.label)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSegment(seg.label); } }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 500, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -171,7 +172,7 @@ export function Segments({ workspace, onNavigate }) {
                   <div>
                     <div style={{ fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Avg score</div>
                     <div className="mono" style={{ fontSize: 12.5, marginTop: 3, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                      <Dot tone={seg.avgScore >= 70 ? 'success' : seg.avgScore >= 40 ? 'warning' : 'neutral'} />
+                      <Dot tone="neutral" />
                       {seg.avgScore || '—'}
                     </div>
                   </div>
@@ -180,30 +181,24 @@ export function Segments({ workspace, onNavigate }) {
                     <div className="mono" style={{ fontSize: 12.5, marginTop: 3 }}>{seg.qualified}</div>
                   </div>
                 </div>
-              </button>
-              {isOpen && (
-                  <div style={{ borderTop: '1px solid var(--line-soft)', padding: '6px var(--card-pad) var(--card-pad)' }}>
+                {isOpen && (
+                  <div style={{ marginTop: 10, borderTop: '1px solid var(--line-soft)', paddingTop: 6, maxHeight: 'min(520px, calc(100vh - 220px))', overflowY: 'auto', overscrollBehavior: 'contain' }}>
                     {seg.members.map((l, i) => (
-                      <button key={l.id || i}
-                        type="button"
-                        disabled={l.id == null}
-                        aria-label={`${l.name} 리드 열기`}
+                      <div key={l.id || i} className="hub-row"
                         onClick={(e) => { e.stopPropagation(); openLead(l); }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                         style={{
-                          width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px', margin: '0 -8px',
+                          display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px', margin: '0 -8px',
                           borderRadius: 'var(--r-sm)', cursor: l.id != null ? 'pointer' : 'default',
                           borderBottom: i < seg.members.length - 1 ? '1px solid var(--line-soft)' : 'none',
-                          textAlign: 'left', opacity: l.id == null ? 0.6 : 1,
                         }}>
                         <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</span>
                         <Badge tone={STAGE_TONE[l.stage] || 'neutral'} size="xs" variant="outline">{l.stage}</Badge>
-                        {Number(l.score) > 0 && <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{l.score}</span>}
-                      </button>
+                        {Number(l.score) > 0 && <span className="mono" style={{ fontSize: 12, color: 'var(--fg)' }}>{l.score}</span>}
+                      </div>
                     ))}
                   </div>
                 )}
+              </div>
             </Card>
           );
         })}

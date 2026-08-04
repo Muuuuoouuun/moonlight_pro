@@ -1,7 +1,6 @@
 import { timingSafeEqual } from "crypto";
 
 import { NextResponse } from "next/server.js";
-import { verifyOperatorSessionRequest } from "./operator-session.js";
 
 export const HUB_WRITE_SECRET_HEADER = "x-com-moon-hub-write-secret";
 const DEFAULT_MAX_JSON_BYTES = 64 * 1024;
@@ -15,6 +14,32 @@ function normalizeOrigin(value) {
     return new URL(value).origin;
   } catch {
     return null;
+  }
+}
+
+function isLoopbackOrigin(value) {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  } catch {
+    return false;
+  }
+}
+
+function areEquivalentLoopbackOrigins(left, right) {
+  try {
+    const leftUrl = new URL(left);
+    const rightUrl = new URL(right);
+    const resolvePort = (url) => url.port || (url.protocol === "https:" ? "443" : "80");
+
+    return (
+      isLoopbackOrigin(leftUrl.origin) &&
+      isLoopbackOrigin(rightUrl.origin) &&
+      leftUrl.protocol === rightUrl.protocol &&
+      resolvePort(leftUrl) === resolvePort(rightUrl)
+    );
+  } catch {
+    return false;
   }
 }
 
@@ -92,16 +117,16 @@ export function assertHubWriteAllowed(req) {
 
   const requestOrigin = resolveRequestOrigin(req);
   const expectedOrigins = resolveExpectedOrigins(req);
-  const operatorSession = verifyOperatorSessionRequest(req);
+  const sameOrigin = Boolean(requestOrigin && expectedOrigins.has(requestOrigin));
+  const equivalentLoopback = Boolean(
+    requestOrigin && areEquivalentLoopbackOrigins(requestOrigin, req.url),
+  );
 
-  if (operatorSession.ok && requestOrigin && expectedOrigins.has(requestOrigin)) {
+  if (
+    (sameOrigin && (!isProductionRuntime() || isLoopbackOrigin(requestOrigin))) ||
+    equivalentLoopback
+  ) {
     return null;
-  }
-
-  if (!isProductionRuntime()) {
-    if (requestOrigin && expectedOrigins.has(requestOrigin)) {
-      return null;
-    }
   }
 
   return NextResponse.json(

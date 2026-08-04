@@ -18,6 +18,17 @@
   --moon-500:      oklch(0.58 0.010 250);
   --moon-600:      oklch(0.48 0.009 250);
   --moon-700:      oklch(0.38 0.008 250);
+  --moon-bg:       oklch(0.35 0.008 250 / 0.9);
+  --moon-line:     var(--moon-600);
+  --pms-moonstone: #5274a8;
+  --accent:        #5274a8;
+  --accent-soft:   oklch(0.52 0.08 250 / 0.16);
+  --accent-line:   oklch(0.58 0.09 250 / 0.55);
+
+  --z-project-detail: 61;
+  --z-drawer-overlay: 70;
+  --z-drawer: 71;
+  --z-palette: 1100; /* ⌘K — 모바일 사이드바(1000) 포함 모든 서피스 위 */
 
   --fg:            var(--moon-100);
   --fg-muted:      var(--moon-400);
@@ -38,6 +49,14 @@
   --company:       oklch(0.78 0.04 290);
   --company-bg:    oklch(0.30 0.03 290 / 0.3);
 
+  /* Semantic hairlines — left-border accents / chip outlines only (never full fills, §5.2) */
+  --success-line:  oklch(0.5 0.08 155 / 0.5);
+  --warning-line:  oklch(0.5 0.09 85 / 0.5);
+  --danger-line:   oklch(0.5 0.1 25 / 0.5);
+  --info-line:     oklch(0.5 0.06 230 / 0.5);
+  --personal-line: oklch(0.5 0.05 200 / 0.5);
+  --company-line:  oklch(0.5 0.04 290 / 0.5);
+
   --shadow-soft: 0 1px 0 0 oklch(1 0 0 / 0.03) inset, 0 0 0 1px var(--line-soft);
   --shadow-card:
     0 1px 0 0 oklch(1 0 0 / 0.04) inset,
@@ -48,8 +67,8 @@
     0 0 0 1px var(--line),
     0 20px 60px -20px oklch(0 0 0 / 0.6);
 
-  --font-sans: 'Inter Tight', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-sans: 'SUIT Variable', 'Inter Tight', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Cascadia Mono', ui-monospace, 'SF Mono', Consolas, monospace;
 
   --row-h: 36px;
   --pad-y: 10px;
@@ -63,6 +82,14 @@
   --r: 10px;
   --r-lg: 14px;
   --r-xl: 20px;
+
+  /* Motion (§9) — the only sanctioned durations/curve; raw ms literals in pages are legacy debt */
+  --dur-hover: 120ms;
+  --dur-enter: 200ms;
+  --dur-panel: 180ms;
+  --dur-overlay: 160ms;
+  --ease-hub: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --stagger-step: 45ms;
 }
 
 .hub-app[data-theme="light"] {
@@ -84,11 +111,17 @@
   --moon-500:      oklch(0.66 0.008 250);
   --moon-600:      oklch(0.76 0.006 250);
   --moon-700:      oklch(0.88 0.005 250);
+  --moon-bg:       var(--surface-3);
+  --moon-line:     var(--moon-300);
+  --pms-moonstone: #5274a8;
+  --accent:        #5274a8;
+  --accent-soft:   oklch(0.90 0.04 250 / 0.7);
+  --accent-line:   oklch(0.52 0.10 250 / 0.45);
 
   --fg:            oklch(0.20 0.008 250);
   --fg-muted:      oklch(0.42 0.008 250);
   --fg-dim:        oklch(0.54 0.008 250);
-  --fg-faint:      oklch(0.66 0.007 250);
+  --fg-faint:      oklch(0.52 0.007 250);
 
   --success:       oklch(0.48 0.14 155);
   --success-bg:    oklch(0.94 0.04 155 / 0.6);
@@ -104,6 +137,14 @@
   --company:       oklch(0.42 0.1 290);
   --company-bg:    oklch(0.94 0.04 290 / 0.7);
 
+  /* Semantic hairlines — light theme */
+  --success-line:  oklch(0.55 0.12 155 / 0.5);
+  --warning-line:  oklch(0.6 0.13 65 / 0.5);
+  --danger-line:   oklch(0.6 0.16 25 / 0.5);
+  --info-line:     oklch(0.55 0.12 230 / 0.5);
+  --personal-line: oklch(0.5 0.09 200 / 0.5);
+  --company-line:  oklch(0.5 0.09 290 / 0.5);
+
   --shadow-soft: 0 1px 0 0 oklch(1 0 0 / 0.6) inset, 0 0 0 1px var(--line-soft);
   --shadow-card:
     0 1px 0 0 oklch(1 0 0 / 0.8) inset,
@@ -114,9 +155,6 @@
     0 0 0 1px var(--line),
     0 20px 60px -20px oklch(0.3 0.01 250 / 0.18);
 }
-
-.hub-app[data-density="compact"] { --row-h: 30px; --pad-y: 6px; --pad-x: 10px; --gap: 8px; --section-gap: 16px; --card-pad: 14px; }
-.hub-app[data-density="relaxed"] { --row-h: 44px; --pad-y: 14px; --pad-x: 18px; --gap: 16px; --section-gap: 32px; --card-pad: 28px; }
 
 .hub-app, .hub-app * { box-sizing: border-box; }
 .hub-app {
@@ -136,7 +174,14 @@
 .hub-app button { font-family: inherit; color: inherit; background: none; border: none; cursor: pointer; padding: 0; }
 .hub-app input, .hub-app textarea { font-family: inherit; color: inherit; }
 .hub-app a { color: inherit; text-decoration: none; }
-.hub-app .mono { font-family: var(--font-mono); font-feature-settings: 'ss02'; letter-spacing: -0.02em; }
+.hub-app .mono { font-family: var(--font-mono); font-feature-settings: 'ss02'; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+/* Sans numeric utility — column-stable lining figures for counts that stay in sans (e.g. Badge) */
+.hub-app .num { font-variant-numeric: tabular-nums lining-nums; }
+/* Display figures — hero KPI / big metric numbers stay in the SUIT sans for a premium,
+   non-code read, with column-stable lining figures and a touch of display tracking.
+   Rule of thumb: display numbers (≥18px) use .stat; instrument data (IDs, timestamps,
+   inline values) uses .mono. */
+.hub-app .stat { font-variant-numeric: tabular-nums lining-nums; letter-spacing: -0.015em; font-feature-settings: 'ss01'; }
 
 .hub-app ::-webkit-scrollbar { width: 10px; height: 10px; }
 .hub-app ::-webkit-scrollbar-track { background: transparent; }
@@ -146,20 +191,195 @@
 .hub-app .hairline-t { border-top: 1px solid var(--line-soft); }
 .hub-app .hairline-b { border-bottom: 1px solid var(--line-soft); }
 
-.hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; border-radius: 2px; }
-.hub-app .hub-input:focus-within {
-  outline: 1px solid var(--moon-300);
-  outline-offset: 2px;
+/* Interactive row hover — use this class instead of onMouseEnter/Leave JS handlers.
+   Themable, respects reduced-motion, and can't drift per call site. */
+.hub-app .hub-row { background: transparent; transition: background 120ms ease; }
+.hub-app .hub-row:hover { background: var(--surface-2); }
+/* Keyboard-only focus ring (§11: never rely on browser defaults) — :focus-visible so a mouse
+   click doesn't leave a ring, only Tab/roving-arrow-key navigation does. */
+.hub-app .hub-row:focus-visible { outline: 1px solid var(--moon-300); outline-offset: -2px; }
+/* Interactive card (border emphasis instead of bg fill) — same no-JS-hover contract as .hub-row
+   for card-shaped click targets like quick-command tiles. */
+.hub-app .hub-card-link { border: 1px solid var(--line-soft); transition: border-color var(--dur-hover) ease, transform var(--dur-hover) ease; }
+.hub-app .hub-card-link:hover { border-color: var(--line); transform: translateY(-1px); }
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-row,
+  .hub-app .hub-card-link { transition: none; }
 }
+
+/* Checkbox tap halo — visual box stays 14px, touch target grows to ≥32px on coarse
+   pointers only (§11 touch-target floor without inflating desktop density). */
+@media (pointer: coarse) {
+  .hub-app .hub-checkbox::before { content: ''; position: absolute; inset: -9px; }
+}
+
+/* Kanban card hover (rests at --surface-2, one step lighter than .hub-row's --surface/--bg
+   rest state) — same "no JS hover handler" contract, different resting surface. */
+.hub-app .hub-kanban-card { transition: background 120ms ease, box-shadow 120ms ease; }
+.hub-app .hub-kanban-card:hover { background: var(--surface-3); }
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-kanban-card { transition: none; }
+}
+
+/* Kanban column "+ 추가" dashed button — same no-JS-hover contract as the cards above. */
+.hub-app .hub-kanban-add {
+  color: var(--fg-faint);
+  border: 1px dashed var(--line-soft);
+  background: transparent;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.hub-app .hub-kanban-add:hover {
+  color: var(--fg-muted);
+  border-color: var(--line);
+  background: var(--surface-2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-kanban-add { transition: none; }
+}
+
+/* IconButton hover — CSS-owned per §8.1 (no JS onMouseEnter/Leave). Danger tone keeps
+   its color on hover: destructive intent must not read as neutral mid-interaction. */
+.hub-app .hub-iconbtn {
+  color: var(--fg-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background var(--dur-hover) ease, border-color var(--dur-hover) ease, color var(--dur-hover) ease;
+}
+.hub-app .hub-iconbtn:hover { background: var(--surface-3); border-color: var(--line-soft); color: var(--fg); }
+.hub-app .hub-iconbtn--danger { color: var(--danger); }
+.hub-app .hub-iconbtn--danger:hover { color: var(--danger); }
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-iconbtn { transition: none; }
+}
+
+/* Sidebar anchor row — same contract as .hub-row (CSS hover, no JS handlers),
+   sized for the consolidated eight-anchor nav: one tap target, no accordion. */
+.hub-app .hub-nav-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 10px;
+  margin-bottom: 2px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--fg-muted);
+  background: transparent;
+  border-radius: var(--r-sm);
+  border-left: 2px solid transparent;
+  text-align: left;
+  transition: background 120ms ease, color 120ms ease;
+}
+/* Clickable KPI card — border lifts on hover. CSS, not onMouseEnter handlers. */
+.hub-app .hub-metric-card { transition: border-color 120ms ease; }
+.hub-app .hub-metric-card[role="button"]:hover { border-color: var(--line-strong); }
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-metric-card { transition: none; }
+}
+
+/* Pinned utilities (AI·자동화 · 설정) — same anchor, quieter weight. */
+.hub-app .hub-nav-item--sm {
+  height: 34px;
+  font-size: 12.5px;
+  color: var(--fg-dim);
+}
+.hub-app .hub-nav-item:hover { background: var(--surface-2); color: var(--fg); }
+.hub-app .hub-nav-item[aria-current="page"] {
+  color: var(--fg);
+  background: var(--surface-3);
+  border-left-color: var(--moon-200);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-nav-item { transition: none; }
+}
+
+/* Second-level nav (2026-07-15 spec) — manual accordion under each anchor.
+   The label button navigates; the caret is a separate toggle target so
+   "expand" never accidentally becomes "navigate". */
+.hub-app .hub-nav-group { display: flex; align-items: center; gap: 2px; }
+.hub-app .hub-nav-group > .hub-nav-item { flex: 1; min-width: 0; }
+.hub-app .hub-nav-caret {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  color: var(--fg-faint);
+  background: transparent;
+}
+.hub-app .hub-nav-caret:hover { background: var(--surface-2); color: var(--fg); }
+.hub-app .hub-nav-caret svg { transition: transform 160ms ease; }
+.hub-app .hub-nav-caret[aria-expanded="false"] svg { transform: rotate(-90deg); }
+.hub-app .hub-nav-sublist { margin: -1px 0 4px; animation: mlFadeUp 180ms ease both; }
+.hub-app .hub-nav-sub {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 10px 0 35px;
+  margin-bottom: 1px;
+  font-size: 12px;
+  color: var(--fg-dim);
+  background: transparent;
+  border-radius: var(--r-sm);
+  text-align: left;
+  transition: background 120ms ease, color 120ms ease;
+}
+.hub-app .hub-nav-sub:hover { background: var(--surface-2); color: var(--fg); }
+.hub-app .hub-nav-sub[aria-current="page"] { color: var(--fg); background: var(--surface-3); }
+.hub-app .hub-nav-subgroup {
+  padding: 8px 10px 3px 35px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--fg-faint);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-nav-caret svg { transition: none; }
+  .hub-app .hub-nav-sublist { animation: none; }
+  .hub-app .hub-nav-sub { transition: none; }
+}
+
+.hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; border-radius: 2px; }
+/* Text-field wrappers that suppress the inner input's own ring surface the focus on the wrapper (§11) */
+.hub-app .hub-field:focus-within { border-color: var(--moon-300); }
 
 @keyframes mlMoonPulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
 @keyframes mlFadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-.hub-app .fade-up { animation: mlFadeUp 0.2s ease-out; }
+.hub-app .fade-up { animation: mlFadeUp var(--dur-enter) ease-out; }
 
-@keyframes mlDrawerIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
-@keyframes mlFadeIn { from { opacity: 0; } to { opacity: 1; } }
-.hub-app .hub-drawer { animation: mlDrawerIn 0.18s ease-out; }
-.hub-app .hub-drawer-overlay { animation: mlFadeIn 0.16s ease-out; }
+/* §9 card cascade — put on a container whose direct children rise in sequence
+   (KPI strips, card grids, section stacks). Not for data rows: row lists stay instant.
+   `both` keeps late children invisible until their delay; cap at child 8 so long
+   grids don't drift past the page-reveal window. */
+.hub-app .stagger-up > * { animation: mlFadeUp var(--dur-enter) var(--ease-hub) both; }
+.hub-app .stagger-up > :nth-child(2) { animation-delay: var(--stagger-step); }
+.hub-app .stagger-up > :nth-child(3) { animation-delay: calc(var(--stagger-step) * 2); }
+.hub-app .stagger-up > :nth-child(4) { animation-delay: calc(var(--stagger-step) * 3); }
+.hub-app .stagger-up > :nth-child(5) { animation-delay: calc(var(--stagger-step) * 4); }
+.hub-app .stagger-up > :nth-child(6) { animation-delay: calc(var(--stagger-step) * 5); }
+.hub-app .stagger-up > :nth-child(7) { animation-delay: calc(var(--stagger-step) * 6); }
+.hub-app .stagger-up > :nth-child(n+8) { animation-delay: calc(var(--stagger-step) * 7); }
+
+/* Drawer / sheet motion (DESIGN.md §9: 160–200ms, reduced-motion respected) */
+@keyframes hubDrawerIn { from { transform: translateX(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes hubFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.hub-app .hub-drawer { animation: hubDrawerIn var(--dur-panel) var(--ease-hub); }
+.hub-app .hub-drawer-overlay { animation: hubFadeIn var(--dur-overlay) ease-out; }
+
+/* Hub-owned reduced-motion catch-all — globals.css has one too, but the hub must not
+   depend on a marketing stylesheet for its a11y floor (inline JSX transitions included). */
+@media (prefers-reduced-motion: reduce) {
+  .hub-app *, .hub-app *::before, .hub-app *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
 
 .hub-app .scroll-y { overflow-y: auto; }
 
@@ -187,7 +407,8 @@
 }
 
 .hub-mobile-backdrop,
-.hub-mobile-only {
+.hub-mobile-only,
+.hub-mobile-nav-close {
   display: none !important;
 }
 
@@ -195,8 +416,89 @@
   min-width: 0;
 }
 
+.hub-topbar__main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 16px;
+}
+
 .hub-topbar__crumbs {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
   flex: 0 1 auto;
+}
+
+.hub-topbar__section {
+  overflow: hidden;
+  color: var(--fg-faint);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.hub-topbar__title {
+  overflow: hidden;
+  color: var(--fg);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hub-topbar__tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 16px;
+  overflow-x: auto;
+  border-top: 1px solid var(--line-soft);
+  scrollbar-width: none;
+}
+
+.hub-topbar__tabs::-webkit-scrollbar { display: none; }
+
+.hub-topbar__tabs button {
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0 10px;
+  color: var(--fg-dim);
+  font-size: 12.5px;
+  font-weight: 450;
+  white-space: nowrap;
+  transition: color 140ms ease, background 140ms ease;
+}
+
+.hub-topbar__tabs button:hover {
+  color: var(--fg);
+  background: var(--surface-2);
+}
+
+.hub-topbar__tabs button[aria-current="page"] {
+  color: var(--fg);
+  font-weight: 650;
+}
+
+.hub-topbar__tabs button[aria-current="page"]::after {
+  position: absolute;
+  right: 10px;
+  bottom: 0;
+  left: 10px;
+  height: 1px;
+  background: var(--accent);
+  content: "";
 }
 
 .hub-page-header {
@@ -213,7 +515,7 @@
   -webkit-overflow-scrolling: touch;
 }
 
-.hub-table-card > div:not([class]) {
+.hub-table-card > div:not([class]):not([data-empty="true"]) {
   min-width: 720px;
 }
 
@@ -230,9 +532,41 @@
   min-width: 0;
 }
 
+.hub-lead-mobile-meta {
+  display: none;
+}
+
 .hub-scroll-x {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Scroll-edge cue for multi-column kanban strips (ScrollShadowX primitive) — a fade + chevron
+   so hidden columns (e.g. a 6-stage pipeline past the 4th visible column) aren't mistaken for
+   "that's all of them". Pointer-events none: it's a read-only affordance, not a click target. */
+.hub-app .hub-scroll-edge {
+  position: absolute;
+  top: 0;
+  bottom: 4px;
+  width: 40px;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  color: var(--fg-faint);
+  transition: opacity 150ms ease;
+}
+.hub-app .hub-scroll-edge--left {
+  left: 0;
+  justify-content: flex-start;
+  background: linear-gradient(to right, var(--bg) 0%, transparent 100%);
+}
+.hub-app .hub-scroll-edge--right {
+  right: 0;
+  justify-content: flex-end;
+  background: linear-gradient(to left, var(--bg) 0%, transparent 100%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-scroll-edge { transition: none; }
 }
 
 .campaign-war-room,
@@ -307,6 +641,14 @@
     min-width: 44px;
   }
 
+  /* Checkboxes keep their 14px face — the blanket 44px floors turned them into tall
+     pills on phones. Their rows carry the touch height; a padded hit-area wrapper is
+     the eventual fix if bare-checkbox taps prove fiddly. */
+  .hub-app button[role="checkbox"] {
+    min-width: 0;
+    min-height: 0;
+  }
+
   .hub-app input,
   .hub-app textarea,
   .hub-app select {
@@ -334,6 +676,21 @@
 
   .hub-mobile-only {
     display: inline-flex !important;
+  }
+
+  .hub-mobile-nav-opener {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .hub-mobile-nav-close {
+    display: inline-flex !important;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .hub-desktop-sidebar-collapse {
+    display: none !important;
   }
 
   .hub-mobile-hidden,
@@ -366,12 +723,17 @@
     max-width: 304px !important;
     height: 100dvh !important;
     transform: translateX(-104%);
-    transition: transform 0.18s ease;
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform 0.18s ease, visibility 0s linear 0.18s;
     box-shadow: var(--shadow-pop);
   }
 
   .hub-shell[data-nav-open="true"] .hub-sidebar-root {
     transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
   }
 
   .hub-main {
@@ -381,8 +743,14 @@
   .hub-topbar {
     height: auto !important;
     min-height: 52px;
-    padding: 8px 12px !important;
-    gap: 8px !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+
+  .hub-topbar__main {
+    min-height: 52px;
+    padding: 4px 12px;
+    gap: 8px;
   }
 
   .hub-topbar__crumbs {
@@ -390,12 +758,17 @@
     overflow: hidden;
   }
 
-  .hub-topbar__crumbs button {
-    max-width: 34vw;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-height: 44px !important;
+  .hub-topbar__section {
+    display: none;
+  }
+
+  .hub-topbar__title {
+    font-size: 14.5px;
+  }
+
+  .hub-topbar__tabs {
+    min-height: 45px;
+    padding: 0 12px;
   }
 
   .hub-topbar__primary-action {
@@ -446,6 +819,17 @@
   .hub-page-actions > *,
   .hub-toolbar > * {
     flex: 1 1 auto;
+  }
+
+  /* Opt-out: quick actions that must stay on one row at phone widths
+     (e.g. Daily Brief 할 일/정리 전 pair) instead of wrap-stacking. */
+  .hub-page-actions--row {
+    flex-wrap: nowrap !important;
+  }
+
+  .hub-page-actions--row > * {
+    flex: 1 1 0 !important;
+    min-width: 0;
   }
 
   .hub-grid--metrics,
@@ -499,12 +883,204 @@
   }
 
   .hub-chat-shell > aside,
-  .hub-workspace-shell > aside {
+  .hub-workspace-shell > aside:not(.hub-drawer) {
     display: none !important;
   }
 
   .hub-projects-main-grid {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* 내 작업 상세 패널 — 좁은 화면에서는 우측 칼럼 대신 목록 아래로 스택. sticky를 풀어
+     본문 스크롤을 막지 않는다. */
+  .hub-mywork-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .hub-mywork-detail {
+    position: static !important;
+    /* 클릭한 항목의 상세가 첫 화면에 바로 보이도록 목록 위로 끌어올린다. */
+    order: -1;
+  }
+
+  .hub-project-table {
+    overflow-x: hidden !important;
+  }
+
+  .hub-project-list-head {
+    display: none !important;
+  }
+
+  .hub-project-row {
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+    grid-template-rows: auto !important;
+    gap: 0 !important;
+    padding: 0 !important;
+  }
+
+  .hub-project-row__controls {
+    grid-column: 1 !important;
+    grid-row: 1 / span 3 !important;
+    align-items: flex-start !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+    padding: 8px 0 8px 8px !important;
+  }
+
+  .hub-project-row__open {
+    grid-column: 2 !important;
+    grid-row: auto !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 9px !important;
+    min-height: 0 !important;
+    padding: 12px !important;
+  }
+
+  .hub-project-row > .hub-pms-progress {
+    grid-column: 2 !important;
+    grid-row: auto !important;
+    padding: 0 12px 12px;
+  }
+
+  .hub-project-next-action {
+    padding: 8px 10px;
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r-sm);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .hub-project-due-risk,
+  .hub-project-secondary-state {
+    flex-direction: row !important;
+    align-items: center !important;
+    flex-wrap: wrap;
+  }
+
+  .hub-project-due-risk {
+    gap: 6px 10px !important;
+  }
+
+  .hub-project-secondary-state {
+    grid-column: 2 !important;
+    grid-row: auto !important;
+    gap: 8px !important;
+    padding: 0 12px 12px;
+  }
+
+  .hub-project-subtasks {
+    padding-left: 44px !important;
+  }
+
+  .hub-project-subtask {
+    grid-template-columns: 18px minmax(0, 1fr) !important;
+    min-height: 44px !important;
+  }
+
+  .hub-project-subtask__assignee,
+  .hub-project-subtask__due {
+    display: none;
+  }
+
+  .hub-project-todo-row {
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+    grid-template-rows: auto auto !important;
+    gap: 2px 8px !important;
+    padding: 8px 12px !important;
+  }
+
+  .hub-project-todo-check {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    min-width: 44px;
+    min-height: 44px;
+    margin-left: -10px;
+  }
+
+  .hub-project-todo-main {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    min-width: 0;
+    margin: 0 !important;
+    padding: 7px 0 !important;
+  }
+
+  .hub-project-todo-assignee {
+    display: none;
+  }
+
+  .hub-project-todo-priority,
+  .hub-project-todo-due {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    padding-bottom: 6px;
+  }
+
+  .hub-project-todo-priority {
+    justify-self: start;
+  }
+
+  .hub-project-todo-due {
+    justify-self: end;
+  }
+
+  .hub-project-primary-control,
+  .hub-project-board-status {
+    min-height: 44px !important;
+  }
+
+  .hub-pms-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .hub-pms-summary__cell:nth-child(2) {
+    border-right: 0 !important;
+  }
+
+  .hub-pms-summary__cell:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .hub-project-detail-sheet {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: var(--z-project-detail) !important;
+    display: flex !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    padding-top: max(52px, 8dvh);
+    overflow: hidden !important;
+    background: transparent !important;
+  }
+
+  .hub-project-detail-sheet__backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: block !important;
+    width: 100%;
+    min-height: 100% !important;
+    border-radius: 0;
+    background: oklch(0.10 0.006 250 / 0.72) !important;
+    backdrop-filter: blur(6px);
+  }
+
+  .hub-project-detail-sheet > aside {
+    position: relative;
+    z-index: 1;
+    width: 100% !important;
+    min-width: 0 !important;
+    border-top: 1px solid var(--line-soft);
+    border-left: 0 !important;
+    background: var(--surface) !important;
+  }
+
+  .hub-project-detail-sheet > aside > div:first-child,
+  .hub-project-detail-sheet > aside > div:last-child {
+    min-height: 52px;
   }
 
   .campaign-war-room {
@@ -526,6 +1102,41 @@
   }
 }
 
+@media (max-width: 768px) {
+  /* Leads is a decision list on narrow screens, not a shrunken spreadsheet. Keep the
+     identity and stage in the first viewport; the drawer owns the remaining fields. */
+  .hub-leads-table {
+    overflow-x: hidden !important;
+  }
+
+  .hub-leads-grid {
+    min-width: 0 !important;
+    grid-template-columns: 26px minmax(0, 1fr) 78px !important;
+    gap: 10px !important;
+  }
+
+  .hub-leads-grid > :nth-child(3),
+  .hub-leads-grid > :nth-child(4),
+  .hub-leads-grid > :nth-child(6),
+  .hub-leads-grid > :nth-child(7),
+  .hub-leads-grid > :nth-child(8),
+  .hub-lead-next-action {
+    display: none !important;
+  }
+
+  .hub-lead-mobile-meta {
+    display: block;
+    margin-top: 2px;
+    overflow: hidden;
+    color: var(--fg-faint);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 @media (max-width: 560px) {
   .hub-app {
     --section-gap: 12px;
@@ -537,16 +1148,18 @@
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
-  .hub-page-actions > *,
-  .hub-toolbar > * {
-    flex-basis: 100%;
+  /* Segmented controls stay horizontal on phones — the ≤900px rules already make each
+     toolbar unit full-width (flex: 1 1 auto on children shares one row). Forcing
+     flex-basis: 100% on the children stacked the 3 filter buttons into a ⅓-screen
+     vertical block (design-review F-001). */
+
+  /* 내 작업 행 meta — 폰에서는 잘린 "견적 · ₩10K…"가 제목만 압축하고 정보는 못 준다.
+     identity(제목)와 날짜만 남긴다; 정체는 stripe, 긴급도는 날짜 색이 이미 전달. */
+  .hub-mywork-meta {
+    display: none;
   }
 
-  .hub-topbar__crumbs button {
-    max-width: 42vw;
-  }
-
-  .hub-table-card > div:not([class]) {
+  .hub-table-card > div:not([class]):not([data-empty="true"]) {
     min-width: 640px;
   }
 
@@ -560,9 +1173,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hub-app .fade-up,
-  .hub-app .hub-drawer,
-  .hub-app .hub-drawer-overlay,
   .campaign-war-room,
   .campaign-war-room__list,
   .campaign-war-room__detail,
@@ -570,5 +1180,10 @@
   .campaign-tab-stage[data-focus="true"] {
     animation: none !important;
     transition: none !important;
+  }
+
+  .hub-app .hub-drawer,
+  .hub-app .hub-drawer-overlay {
+    animation: none !important;
   }
 }

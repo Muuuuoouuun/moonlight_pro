@@ -4,16 +4,37 @@ import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar, SyncBadge, SegmentedControl } from "../hub-primitives";
-import {
-  CONTENT_QUEUE as FALLBACK_CONTENT_QUEUE,
-  CAMPAIGNS as FALLBACK_CAMPAIGNS,
-} from "../hub-data";
 import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
-import { requestCouncilAdvice, councilChatPath, COUNCIL_PREVIEW_NOTE } from "../council-client";
+import { shouldRestoreActiveStudioDraft } from "@/lib/content-studio-routing";
 
 const STUDIO_DRAFT_DB = "moonlight-content-studio";
 const STUDIO_DRAFT_STORE = "drafts";
 const ACTIVE_DRAFT_KEY = "active";
+
+// Card-news slide backgrounds — content colors baked into exported slides, so they are
+// deliberately theme-independent raw values (not --surface/--moon theme tokens).
+// `seed` is addSlide's default background, kept distinct from the 8 swatch-picker tones.
+const SLIDE_PALETTE = {
+  plum:  'oklch(0.35 0.04 280)',
+  blue:  'oklch(0.35 0.05 220)',
+  teal:  'oklch(0.35 0.05 180)',
+  green: 'oklch(0.35 0.05 150)',
+  amber: 'oklch(0.35 0.05 85)',
+  rust:  'oklch(0.35 0.06 30)',
+  ink:   'oklch(0.28 0.01 250)',
+  paper: 'oklch(0.95 0 0)',
+  seed:  'oklch(0.3 0.02 250)',
+};
+const SLIDE_SWATCHES = [
+  SLIDE_PALETTE.plum,
+  SLIDE_PALETTE.blue,
+  SLIDE_PALETTE.teal,
+  SLIDE_PALETTE.green,
+  SLIDE_PALETTE.amber,
+  SLIDE_PALETTE.rust,
+  SLIDE_PALETTE.ink,
+  SLIDE_PALETTE.paper,
+];
 
 function openStudioDraftDb() {
   if (typeof window === "undefined" || !window.indexedDB) {
@@ -118,41 +139,17 @@ function handoffTone(status) {
   return "info";
 }
 
-function parseCouncilSuggestionItems(text) {
-  const raw = String(text || "").trim();
-  if (!raw) return [];
-
-  const cleanItem = (item) => item
-    .replace(/^\s*(?:[-·]\s+|\d+[.)]\s+)/, "")
-    .trim();
-  const hasMeaning = (item) => item.replace(/[\s\-·*#.:;,'"()[\]{}]/g, "").length >= 4;
-  const bulletParts = raw
-    .split(/(?:^|\n)\s*(?:[-·]\s+|\d+[.)]\s+)/)
-    .map(cleanItem)
-    .filter((item) => item && hasMeaning(item));
-  const hasBulletMarkers = /(?:^|\n)\s*(?:[-·]\s+|\d+[.)]\s+)/.test(raw);
-  const normalizedBulletParts = hasBulletMarkers && !/^\s*(?:[-·]\s+|\d+[.)]\s+)/.test(raw)
-    ? bulletParts.slice(1)
-    : bulletParts;
-  const lineParts = raw
-    .split(/\n+/)
-    .map(cleanItem)
-    .filter((item) => item && hasMeaning(item));
-  const parts = normalizedBulletParts.length > 1 ? normalizedBulletParts : lineParts;
-
-  return parts.slice(0, 5);
-}
-
 function useContentLedger() {
   const [state, setState] = React.useState({
-    source: "mock",
-    syncState: "mock",
+    source: "preview",
+    syncState: "preview",
     brands: [],
     items: [],
     variants: [],
     assets: [],
     publishLogs: [],
-    queue: FALLBACK_CONTENT_QUEUE,
+    campaigns: [],
+    queue: [],
     pipeline: [],
     attention: [],
     summary: null,
@@ -170,7 +167,7 @@ function useContentLedger() {
         const data = await response.json().catch(() => null);
 
         if (!active || !response.ok || !data || data.status === "error") {
-          if (active) setState((s) => ({ ...s, syncState: "mock" }));
+          if (active) setState((s) => ({ ...s, syncState: "preview" }));
           return;
         }
 
@@ -183,6 +180,7 @@ function useContentLedger() {
             variants: Array.isArray(data.variants) ? data.variants : [],
             assets: Array.isArray(data.assets) ? data.assets : [],
             publishLogs: Array.isArray(data.publishLogs) ? data.publishLogs : [],
+            campaigns: Array.isArray(data.campaigns) ? data.campaigns : [],
             queue: Array.isArray(data.queue) ? data.queue : [],
             pipeline: Array.isArray(data.pipeline) ? data.pipeline : [],
             attention: Array.isArray(data.attention) ? data.attention : [],
@@ -191,10 +189,10 @@ function useContentLedger() {
             cadence: data.cadence || null,
           });
         } else {
-          setState((s) => ({ ...s, syncState: "mock" }));
+          setState((s) => ({ ...s, source: "preview", syncState: "preview", campaigns: [], queue: [] }));
         }
       } catch {
-        if (active) setState((s) => ({ ...s, syncState: "mock" }));
+        if (active) setState((s) => ({ ...s, source: "preview", syncState: "preview", campaigns: [], queue: [] }));
       }
     }
 
@@ -207,130 +205,26 @@ function useContentLedger() {
   return state;
 }
 
-// Campaigns ledger — same fetch-on-mount / source contract as useContentLedger,
-// scoped to /api/hub/campaigns. syncState mirrors the Publishing queue badge
-// ('loading' | 'live' | 'mock') so Campaigns reads honestly when Supabase isn't
-// configured instead of silently mixing mock + live rows.
-function useCampaignLedger() {
-  const [state, setState] = React.useState({
-    source: "mock",
-    syncState: "mock",
-    campaigns: FALLBACK_CAMPAIGNS,
-  });
-
-  const reload = React.useCallback(async () => {
-    setState((s) => ({ ...s, syncState: "loading" }));
-    try {
-      const response = await fetch("/api/hub/campaigns", { cache: "no-store" });
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok || !data || data.status === "error") {
-        setState((s) => ({ ...s, syncState: "mock" }));
-        return;
-      }
-
-      if (data.source === "supabase") {
-        setState({
-          source: data.source,
-          syncState: "live",
-          campaigns: Array.isArray(data.campaigns) ? data.campaigns : [],
-        });
-      } else {
-        setState((s) => ({ ...s, syncState: "mock" }));
-      }
-    } catch {
-      setState((s) => ({ ...s, syncState: "mock" }));
-    }
-  }, []);
-
-  React.useEffect(() => {
-    let active = true;
-    (async () => {
-      if (!active) return;
-      await reload();
-    })();
-    return () => {
-      active = false;
-    };
-  }, [reload]);
-
-  return { ...state, reload, setState };
-}
-
-// Revenue leads for the Audience tab join — fetched once per Campaigns mount.
-// Mirrors the source contract above ('mock' | 'supabase') so the audience tab
-// can tell a real empty match from "Supabase isn't configured" and never mix
-// live leads into the illustrative rows.
-function useAudienceLeads() {
-  const [state, setState] = React.useState({ source: "mock", leads: [] });
-
-  React.useEffect(() => {
-    let active = true;
-
-    (async () => {
-      try {
-        const response = await fetch("/api/hub/revenue", { cache: "no-store" });
-        const data = await response.json().catch(() => null);
-        if (!active || !response.ok || !data || data.status === "error") return;
-
-        setState({
-          source: data.source === "supabase" ? "supabase" : "mock",
-          leads: Array.isArray(data.leads) ? data.leads : [],
-        });
-      } catch {
-        // Network failure — keep the mock/empty fallback, matches useCampaignLedger.
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  return state;
-}
-
 export function Studio({ workspace }) {
   const ws = getWorkspace(workspace);
-  const router = useRouter();
   const searchParams = useSearchParams();
   const itemParam = searchParams.get("item");
+  const newParam = searchParams.get("new");
   const brandParam = searchParams.get("brand");
-  const wantCouncil = searchParams.get("council") === "1"; // ?council=1 → auto-run Council 검토 (Queue ✨)
   const ledger = useContentLedger();
   const [mode, setMode] = React.useState('blog');
   const [selectedBrandId, setSelectedBrandId] = React.useState("");
   const [contentId, setContentId] = React.useState(null);
   const [variantId, setVariantId] = React.useState(null);
-  const [title, setTitle] = React.useState('결정을 기록하는 노트의 구조');
-  const [body, setBody] = React.useState(
-`1인 창업자에게 결정은 공기처럼 흐른다. 매일 수십 개. 그런데도 대부분 기억에
-남지 않는다. 이 글에서 내가 쓰는 결정 노트의 네 칸 구조를 공유한다.
-
-## 네 칸
-
-1. 맥락 — 왜 지금 결정해야 하는가
-2. 선택 — 무엇을 선택했는가 (그리고 무엇을 선택하지 않았는가)
-3. 근거 — 어떤 데이터·직관·제약이 작용했는가
-4. 회고 — 2주 후 이 결정은 어떻게 보이는가
-
-## 한 가지 예시
-
-지난달 가격 티어를 3개에서 2개로 줄였다. 맥락은 중간 티어 이탈률 38%. 선택은
-단순화. 근거는 전환 분석과 '선택의 피로' 가설. 회고는 2주 후…`
-  );
+  const [title, setTitle] = React.useState('');
+  const [body, setBody] = React.useState('');
   const [slides, setSlides] = React.useState([
-    { id: 's1', bg: 'oklch(0.35 0.04 280)', title: '결정 노트: 네 칸이면 충분하다', sub: '1인 창업자를 위한 기록법' },
-    { id: 's2', bg: 'oklch(0.35 0.05 220)', title: '맥락', sub: '왜 지금 결정해야 하는가' },
-    { id: 's3', bg: 'oklch(0.35 0.05 180)', title: '선택', sub: '무엇을 선택했고 무엇을 버렸나' },
-    { id: 's4', bg: 'oklch(0.35 0.05 150)', title: '근거', sub: '데이터·직관·제약' },
-    { id: 's5', bg: 'oklch(0.35 0.05 85)', title: '회고', sub: '2주 후 되돌아보기' },
-    { id: 's6', bg: 'oklch(0.35 0.06 30)', title: '한 가지 예시', sub: '가격 티어 3→2' },
-    { id: 's7', bg: 'oklch(0.28 0.01 250)', title: '저장하세요', sub: '@moonlight.pro' },
+    { id: 'draft-1', bg: 'oklch(0.3 0.02 250)', title: '', sub: '' },
   ]);
   const [activeSlide, setActiveSlide] = React.useState(0);
   const [drag, setDrag] = React.useState(null);
   const [extraSuggestions, setExtraSuggestions] = React.useState([]);
+  const [dismissedSuggestionKeys, setDismissedSuggestionKeys] = React.useState(() => new Set());
   const [pendingSend, setPendingSend] = React.useState(null); // 'publish' | 'schedule' | null
   const [lastSentAt, setLastSentAt] = React.useState(null);
   const [localHandoffLogs, setLocalHandoffLogs] = React.useState([]);
@@ -340,8 +234,6 @@ export function Studio({ workspace }) {
   const [lastSavedAt, setLastSavedAt] = React.useState(null);
   const [localSavedAt, setLocalSavedAt] = React.useState(null);
   const [dirty, setDirty] = React.useState(false);
-  const [council, setCouncil] = React.useState({ state: 'idle', text: '', note: '' }); // Council content-critique (live AI)
-  const [councilSuggestions, setCouncilSuggestions] = React.useState({ state: 'idle', text: '', note: '', items: [], parsedItems: false });
   const loadedItemRef = React.useRef(null);
 
   const formatTime = (d) => {
@@ -378,7 +270,7 @@ export function Studio({ workspace }) {
 
   React.useEffect(() => {
     let active = true;
-    if (itemParam) return undefined;
+    if (!shouldRestoreActiveStudioDraft({ itemParam, newParam })) return undefined;
 
     readStudioDraft(ACTIVE_DRAFT_KEY).then((draft) => {
       if (!active || !draft) return;
@@ -388,7 +280,7 @@ export function Studio({ workspace }) {
     return () => {
       active = false;
     };
-  }, [applyDraft, itemParam]);
+  }, [applyDraft, itemParam, newParam]);
 
   React.useEffect(() => {
     const nextBrand = chooseDefaultBrand(brands, brandParam);
@@ -408,6 +300,7 @@ export function Studio({ workspace }) {
     ));
     const nextMode = variant?.type === "card_news" ? "carousel" : "blog";
     const nextSlides = variant?.type === "card_news" ? parseVariantSlides(variant.body) : null;
+    const isUnsupportedType = Boolean(variant?.type) && !["blog", "blog_insight", "card_news"].includes(variant.type);
 
     setContentId(item.id);
     setVariantId(variant?.id || item.variantId || null);
@@ -422,6 +315,12 @@ export function Studio({ workspace }) {
     setLastSavedAt(variant?.updatedAt || item.updatedAt || null);
     setDirty(false);
     setSaveState("loaded");
+    if (isUnsupportedType) {
+      setExtraSuggestions(s => [{
+        tone: 'warning',
+        text: `Studio는 아직 "${variant.type}" 타입 편집을 지원하지 않습니다 — Blog 모드로 임시 표시 중입니다.`,
+      }, ...s]);
+    }
     loadedItemRef.current = itemParam;
   }, [itemParam, ledger]);
 
@@ -564,21 +463,14 @@ export function Studio({ workspace }) {
       const elapsed = Date.now() - startedAt;
       if (elapsed < 100) await new Promise(r => setTimeout(r, 100 - elapsed));
 
-      if (data.status === 'approval_required') {
-        const workOrderId = data.workOrder?.id || data.workOrder?.record?.id || null;
-        const persisted = data.workOrder?.persisted;
-        setExtraSuggestions(s => [{
-          tone: persisted ? 'info' : 'warning',
-          text: persisted
-            ? `승인 큐에 올림 · ${String(workOrderId || 'approval').slice(0, 8)} · 외부 전달/업로드는 실행하지 않았습니다.`
-            : `승인 필요 · 큐 저장 실패 · 외부 전달/업로드는 실행하지 않았습니다.`,
-        }, ...s]);
-        return;
-      }
-
       if (!response.ok && data.status !== 'preview' && data.status !== 'logged') {
         const msg = data.error || data.message || `HTTP ${response.status}`;
         setExtraSuggestions(s => [{ tone: 'danger', text: `handoff 실패 — ${msg}` }, ...s]);
+        return;
+      }
+
+      if (data.status === 'preview') {
+        setExtraSuggestions(s => [{ tone: 'warning', text: '기록이 연결되지 않아 handoff 기록을 만들지 않았습니다.' }, ...s]);
         return;
       }
 
@@ -651,7 +543,7 @@ export function Studio({ workspace }) {
     setDirty(true);
   };
   const addSlide = () => {
-    setSlides(s => [...s, { id: 'new-' + Date.now(), bg: 'oklch(0.3 0.02 250)', title: 'New slide', sub: '' }]);
+    setSlides(s => [...s, { id: 'new-' + Date.now(), bg: SLIDE_PALETTE.seed, title: 'New slide', sub: '' }]);
     setDirty(true);
   };
   const updateSlide = (i, patch) => {
@@ -659,64 +551,13 @@ export function Studio({ workspace }) {
     setDirty(true);
   };
   const removeSlide = (i) => {
-    if (slides.length <= 1) {
-      setExtraSuggestions(prev => [{ tone: 'warning', text: 'Carousel needs at least one slide.' }, ...prev]);
-      return;
-    }
-    setSlides(s => {
-      const next = s.filter((_, j) => j !== i);
-      return next.length ? next : s;
-    });
-    setActiveSlide(Math.max(0, Math.min(i, slides.length - 2)));
+    setSlides(s => s.filter((_, j) => j !== i));
     setDirty(true);
   };
-  // Live Council content-critique (Writer lens) against the Engine brand-mentor.
-  const runCouncilCritique = React.useCallback(async () => {
-    setCouncil({ state: 'loading', text: '', note: '' });
-    const draft = mode === 'carousel'
-      ? `${title}\n\n${slides.map((s, i) => `${i + 1}. ${s.title} — ${s.sub}`).join('\n')}`
-      : `${title}\n\n${body}`;
-    const r = await requestCouncilAdvice({ mode: 'content-critique', draft });
-    if (r.state === 'done') {
-      setCouncil({ state: 'done', text: r.text, note: '' });
-    } else {
-      setCouncil({ state: r.state, text: '', note: r.note || '' });
-    }
-  }, [body, mode, slides, title]);
-
-  const runCouncilSuggestions = React.useCallback(async () => {
-    setCouncilSuggestions({ state: 'loading', text: '', note: '', items: [], parsedItems: false });
-    const draft = mode === 'carousel'
-      ? `${title}\n\n${slides.map((s, i) => `${i + 1}. ${s.title} — ${s.sub}`).join('\n')}`
-      : `${title}\n\n${body}`;
-    const r = await requestCouncilAdvice({ mode: 'content-critique', draft });
-    if (r.state === 'done') {
-      const items = parseCouncilSuggestionItems(r.text);
-      setCouncilSuggestions({
-        state: 'done',
-        text: r.text || '',
-        note: '',
-        items,
-        parsedItems: items.length > 0,
-      });
-    } else {
-      setCouncilSuggestions({ state: r.state, text: '', note: r.note || '', items: [], parsedItems: false });
-    }
-  }, [body, mode, slides, title]);
-
-  // Auto-run the critique once when arriving via the Queue ✨ (?council=1), after the item loads.
-  const councilAutoRef = React.useRef(false);
-  React.useEffect(() => {
-    if (!wantCouncil || councilAutoRef.current) return;
-    if (itemParam && loadedItemRef.current !== itemParam) return; // wait for the item draft to load
-    councilAutoRef.current = true;
-    runCouncilCritique();
-  }, [wantCouncil, itemParam, contentId, runCouncilCritique]);
-
   const applyToolbarAction = (tool) => {
     if (!tool) return;
     if (tool === 'ai') {
-      runCouncilCritique();
+      setExtraSuggestions(s => [{ tone: 'warning', text: 'AI 제안 생성은 아직 실행 경로에 연결되지 않았습니다.' }, ...s]);
       return;
     }
     const snippets = {
@@ -731,15 +572,12 @@ export function Studio({ workspace }) {
     setDirty(true);
   };
 
-  const cur = slides[activeSlide] || slides[0] || { title: '', sub: '', bg: 'var(--surface-2)' };
+  const cur = slides[activeSlide] || slides[0];
+  const baseSuggestions = [];
   const suggestions = [
     ...extraSuggestions.map((s, i) => ({ ...s, key: `extra-${i}`, extraIndex: i })),
+    ...baseSuggestions.filter(s => !dismissedSuggestionKeys.has(s.key)),
   ];
-  const councilSuggestionCards = councilSuggestions.items.map((text, i) => ({
-    key: `council-suggestion-${i}`,
-    tone: i === 0 ? 'moon' : 'info',
-    text,
-  }));
 
   return (
     <div className="hub-studio-shell" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', height: '100%', overflow: 'hidden' }}>
@@ -750,7 +588,8 @@ export function Studio({ workspace }) {
             value={mode}
             onChange={(k) => { setMode(k); setDirty(true); }}
           />
-          <Badge tone="warning" size="xs">Draft</Badge>
+          {/* Draft는 라이프사이클 단계 — 경고색이 아니라 중립 (§5.2). */}
+          <Badge tone="neutral" size="xs">Draft</Badge>
           {ws && (
             <span
               title={`${ws.label} 워크스페이스 스코프`}
@@ -781,18 +620,24 @@ export function Studio({ workspace }) {
               ? `handoff · ${formatTime(lastSentAt)}`
               : saveLabel}
           </span>
-          <IconButton
-            icon="upload"
-            tooltip={autoSave ? "Supabase autosave on" : "Supabase autosave off"}
-            onClick={() => setAutoSave(v => !v)}
-            style={{ color: autoSave ? 'var(--moon-200)' : 'var(--fg-faint)' }}
-          />
-          <IconButton
-            icon="folder"
-            tooltip={localMirror ? "Browser mirror on" : "Browser mirror off"}
-            onClick={() => setLocalMirror(v => !v)}
-            style={{ color: localMirror ? 'var(--moon-200)' : 'var(--fg-faint)' }}
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <IconButton
+              icon="upload"
+              tooltip={autoSave ? "Supabase autosave on" : "Supabase autosave off — 클릭해서 켜기"}
+              onClick={() => setAutoSave(v => !v)}
+              style={{ color: autoSave ? 'var(--moon-200)' : 'var(--fg-faint)' }}
+            />
+            {!autoSave && <span className="mono" style={{ fontSize: 10.5, color: 'var(--warning)' }}>OFF</span>}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <IconButton
+              icon="folder"
+              tooltip={localMirror ? "Browser mirror on" : "Browser mirror off — 클릭해서 켜기"}
+              onClick={() => setLocalMirror(v => !v)}
+              style={{ color: localMirror ? 'var(--moon-200)' : 'var(--fg-faint)' }}
+            />
+            {!localMirror && <span className="mono" style={{ fontSize: 10.5, color: 'var(--warning)' }}>OFF</span>}
+          </div>
           <IconButton
             icon="check"
             tooltip="Save now"
@@ -809,7 +654,7 @@ export function Studio({ workspace }) {
             size="sm"
             onClick={() => recordHandoff('schedule')}
           >
-            {pendingSend === 'schedule' ? 'Queuing…' : 'Request schedule'}
+            {pendingSend === 'schedule' ? 'Queuing…' : 'Schedule'}
           </Button>
           <Button
             variant="primary"
@@ -817,7 +662,7 @@ export function Studio({ workspace }) {
             icon="send"
             onClick={() => recordHandoff('publish')}
           >
-            {pendingSend === 'publish' ? 'Queuing…' : 'Request publish'}
+            {pendingSend === 'publish' ? 'Logging…' : 'Publish'}
           </Button>
         </div>
 
@@ -828,7 +673,7 @@ export function Studio({ workspace }) {
                 { i: 'sparkle', t: 'AI', action: 'ai' }, { t: '|' }, { l: 'H1', action: 'h1' }, { l: 'H2', action: 'h2' }, { l: 'B', action: 'bold', style: { fontWeight: 700 } },
                 { l: 'i', action: 'italic', style: { fontStyle: 'italic' } }, { t: '|' }, { i: 'link', action: 'link' }, { i: 'upload', t: 'Image', action: 'image' },
               ].map((b, i) => b.t === '|' ? <div key={i} style={{ width: 1, background: 'var(--line-soft)', margin: '0 2px' }} /> : (
-                <button key={i} aria-label={b.l || b.t || b.action} onClick={() => applyToolbarAction(b.action)} style={{ height: 26, padding: '0 9px', borderRadius: 4, fontSize: 11.5, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 5, ...(b.style || {}) }}>
+                <button key={i} onClick={() => applyToolbarAction(b.action)} style={{ height: 26, padding: '0 9px', borderRadius: 4, fontSize: 11.5, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 5, ...(b.style || {}) }}>
                   {b.i && <Iconed name={b.i} size={12} />}
                   {b.l && <span>{b.l}</span>}
                   {b.t && <span>{b.t}</span>}
@@ -837,12 +682,13 @@ export function Studio({ workspace }) {
             </div>
             <div className="scroll-y" style={{ flex: 1, padding: '40px 20px' }}>
               <div style={{ maxWidth: 680, margin: '0 auto' }}>
-                <input aria-label="Article title" value={title} onChange={e => { setTitle(e.target.value); setDirty(true); }} style={{
+                {/* 에디터 캔버스 예외: 타이틀·본문은 캐럿이 포커스 표식 (my-work.jsx:842 패턴) — outline 제거 유지 */}
+                <input value={title} onChange={e => { setTitle(e.target.value); setDirty(true); }} style={{
                   width: '100%', background: 'transparent', border: 'none', outline: 'none',
                   color: 'var(--fg)', fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4,
                 }} />
                 <div style={{ fontSize: 13, color: 'var(--fg-faint)', marginBottom: 28 }}>By Hyeon Park · Web article preview 우선 · n8n handoff 대기</div>
-                <textarea aria-label="Article body" value={body} onChange={e => { setBody(e.target.value); setDirty(true); }} style={{
+                <textarea value={body} onChange={e => { setBody(e.target.value); setDirty(true); }} style={{
                   width: '100%', minHeight: 420, background: 'transparent', border: 'none', outline: 'none', resize: 'none',
                   color: 'var(--fg)', fontSize: 15, lineHeight: 1.7, fontFamily: 'var(--font-sans)', letterSpacing: '-0.005em',
                 }} />
@@ -873,10 +719,7 @@ export function Studio({ workspace }) {
           <>
             <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', gap: 8, overflowX: 'auto', flexShrink: 0 }}>
               {slides.map((s, i) => (
-                <button key={s.id}
-                  type="button"
-                  aria-label={`Slide ${i + 1} 선택`}
-                  aria-pressed={activeSlide === i}
+                <div key={s.id}
                   draggable onDragStart={() => setDrag(i)}
                   onDragOver={e => e.preventDefault()}
                   onDrop={() => drag !== null && moveSlide(drag, i)}
@@ -884,17 +727,16 @@ export function Studio({ workspace }) {
                   style={{
                     width: 72, height: 72, flexShrink: 0, position: 'relative', cursor: 'grab',
                     borderRadius: 8, background: s.bg,
-                    border: `1px solid ${activeSlide === i ? 'var(--moon-200)' : 'var(--line-soft)'}`,
-                    boxShadow: activeSlide === i ? 'inset 0 0 0 1px var(--moon-200)' : 'none',
+                    border: activeSlide === i ? '2px solid var(--moon-200)' : '1px solid var(--line-soft)',
                     display: 'flex', flexDirection: 'column', padding: 6, justifyContent: 'flex-end',
                     color: '#fff', fontSize: 8, lineHeight: 1.2,
                     opacity: drag === i ? 0.4 : 1,
                   }}>
                   <div style={{ fontWeight: 600 }}>{s.title.slice(0, 18)}</div>
                   <div style={{ position: 'absolute', top: 3, left: 6, fontSize: 8, color: 'rgba(255,255,255,0.6)' }} className="mono">{i + 1}</div>
-                </button>
+                </div>
               ))}
-              <button aria-label="슬라이드 추가" onClick={addSlide} style={{
+              <button onClick={addSlide} style={{
                 width: 72, height: 72, flexShrink: 0, border: '1px dashed var(--line)', borderRadius: 8,
                 background: 'var(--surface-2)', color: 'var(--fg-muted)', fontSize: 20,
               }}>＋</button>
@@ -930,15 +772,15 @@ export function Studio({ workspace }) {
               <Card className="hub-studio-card" style={{ width: 320 }}>
                 <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 10 }}>Slide {activeSlide + 1}</div>
                 <label style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Title</label>
-                <input aria-label="Slide title" value={cur.title} onChange={e => updateSlide(activeSlide, { title: e.target.value })}
-                  style={{ width: '100%', marginTop: 4, marginBottom: 12, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', fontSize: 13, outline: 'none' }} />
+                <input value={cur.title} onChange={e => updateSlide(activeSlide, { title: e.target.value })}
+                  style={{ width: '100%', marginTop: 4, marginBottom: 12, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', fontSize: 13 }} />
                 <label style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Subtitle</label>
-                <input aria-label="Slide subtitle" value={cur.sub} onChange={e => updateSlide(activeSlide, { sub: e.target.value })}
-                  style={{ width: '100%', marginTop: 4, marginBottom: 12, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', fontSize: 13, outline: 'none' }} />
+                <input value={cur.sub} onChange={e => updateSlide(activeSlide, { sub: e.target.value })}
+                  style={{ width: '100%', marginTop: 4, marginBottom: 12, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', fontSize: 13 }} />
                 <label style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Background</label>
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-                  {['oklch(0.35 0.04 280)','oklch(0.35 0.05 220)','oklch(0.35 0.05 180)','oklch(0.35 0.05 150)','oklch(0.35 0.05 85)','oklch(0.35 0.06 30)','oklch(0.28 0.01 250)','oklch(0.95 0 0)'].map(c => (
-                    <button key={c} aria-label="슬라이드 배경색 선택" aria-pressed={cur.bg === c} onClick={() => updateSlide(activeSlide, { bg: c })}
+                  {SLIDE_SWATCHES.map(c => (
+                    <button key={c} onClick={() => updateSlide(activeSlide, { bg: c })}
                       style={{ width: 26, height: 26, borderRadius: 6, background: c, border: cur.bg === c ? '2px solid var(--moon-200)' : '1px solid var(--line-soft)' }} />
                   ))}
                 </div>
@@ -955,7 +797,7 @@ export function Studio({ workspace }) {
                     Photo
                   </Button>
                   <div style={{ flex: 1 }} />
-                  <Button variant="ghost" size="xs" disabled={slides.length <= 1} onClick={() => removeSlide(activeSlide)}>Delete</Button>
+                  <Button variant="ghost" size="xs" onClick={() => removeSlide(activeSlide)}>Delete</Button>
                 </div>
                 <div style={{ marginTop: 12, padding: 10, background: 'var(--surface-2)', borderRadius: 'var(--r-sm)', border: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
                   <Iconed name="sparkle" size={11} style={{ color: 'var(--moon-300)' }} /> 드래그로 순서 편집 · 썸네일 클릭으로 선택
@@ -969,40 +811,9 @@ export function Studio({ workspace }) {
       <aside style={{ borderLeft: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <Iconed name="sparkle" size={14} style={{ color: 'var(--moon-300)' }} />
-          <div style={{ fontSize: 12.5, fontWeight: 500, flex: 1 }}>Council · Writer 자문</div>
-          <Button variant="primary" size="xs" icon="sparkle" disabled={council.state === 'loading'} onClick={runCouncilCritique}>
-            {council.state === 'loading' ? '검토 중…' : council.state === 'done' ? '다시 검토' : 'Council 검토'}
-          </Button>
+          <div style={{ fontSize: 12.5, fontWeight: 500, flex: 1 }}>Writer · Studio Agent</div>
         </div>
         <div className="scroll-y" style={{ flex: 1, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {council.state !== 'idle' && (
-            <div style={{ padding: 11, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Badge tone="moon" size="xs">Council 검토</Badge>
-                <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>Writer 렌즈 · 초안 진단</span>
-                <div style={{ flex: 1 }} />
-                <IconButton icon="x" size={20} iconSize={11} tooltip="닫기" onClick={() => setCouncil({ state: 'idle', text: '', note: '' })} />
-              </div>
-              {council.state === 'loading' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-muted)' }}>
-                  <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.2s ease-in-out infinite' }} />
-                  원장·브랜드 보이스를 읽고 검토하는 중…
-                </div>
-              )}
-              {council.state === 'done' && (
-                <>
-                  <div style={{ fontSize: 12, color: 'var(--fg)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{council.text}</div>
-                  <Button variant="outline" size="xs" iconRight="arrowRight" onClick={() => router.push('/' + councilChatPath({ mode: 'content-critique' }))}>Chat에서 이어가기</Button>
-                </>
-              )}
-              {(council.state === 'preview' || council.state === 'error') && (
-                <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
-                  <Badge tone={council.state === 'preview' ? 'neutral' : 'danger'} size="xs">{council.state === 'preview' ? 'preview' : 'error'}</Badge>
-                  <span style={{ marginLeft: 6 }}>{council.state === 'preview' ? COUNCIL_PREVIEW_NOTE : council.note}</span>
-                </div>
-              )}
-            </div>
-          )}
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em' }}>Brand</div>
           <div style={{
             padding: 10,
@@ -1085,7 +896,7 @@ export function Studio({ workspace }) {
 
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em' }}>Suggestions</div>
           {suggestions.map((s, i) => (
-            <div key={s.key || i} style={{
+            <div key={i} style={{
               padding: '10px 11px', background: 'var(--surface-2)',
               border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
               fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.5,
@@ -1105,6 +916,8 @@ export function Studio({ workspace }) {
                     setDirty(true);
                     if (typeof s.extraIndex === 'number') {
                       setExtraSuggestions(prev => prev.filter((_, idx) => idx !== s.extraIndex));
+                    } else {
+                      setDismissedSuggestionKeys(prev => new Set([...prev, s.key]));
                     }
                   }}
                 >
@@ -1116,78 +929,9 @@ export function Studio({ workspace }) {
                   onClick={() => {
                     if (typeof s.extraIndex === 'number') {
                       setExtraSuggestions(prev => prev.filter((_, idx) => idx !== s.extraIndex));
-                    }
-                  }}
-                >
-                  Skip
-                </Button>
-              </div>
-            </div>
-          ))}
-          {councilSuggestions.state === 'idle' && (
-            <div style={{
-              padding: '10px 11px',
-              background: 'var(--surface-2)',
-              border: '1px solid var(--line-soft)',
-              borderRadius: 'var(--r-sm)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}>
-              <div style={{ flex: 1, fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
-                초안 기반 제안을 생성하려면 Council에 요청하세요.
-              </div>
-              <Button variant="secondary" size="xs" onClick={runCouncilSuggestions}>제안 생성</Button>
-            </div>
-          )}
-          {councilSuggestions.state === 'loading' && (
-            <div style={{
-              padding: '10px 11px',
-              background: 'var(--surface-2)',
-              border: '1px solid var(--line-soft)',
-              borderRadius: 'var(--r-sm)',
-              fontSize: 12,
-              color: 'var(--fg-muted)',
-              lineHeight: 1.5,
-            }}>
-              브랜드 보이스 기준으로 검토 중…
-            </div>
-          )}
-          {councilSuggestions.state === 'done' && councilSuggestionCards.length > 0 && councilSuggestionCards.map((s) => (
-            <div key={s.key} style={{
-              padding: '10px 11px', background: 'var(--surface-2)',
-              border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
-              fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.5,
-            }}>
-              <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}><Dot tone={s.tone} /></div>
-              {s.text}
-              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={() => {
-                    if (mode === 'blog') {
-                      setBody(prev => `${prev}\n\n> 적용한 제안: ${s.text}`);
                     } else {
-                      updateSlide(activeSlide, { sub: s.text.slice(0, 64) });
+                      setDismissedSuggestionKeys(prev => new Set([...prev, s.key]));
                     }
-                    setDirty(true);
-                    setCouncilSuggestions(prev => ({
-                      ...prev,
-                      items: prev.items.filter((item) => item !== s.text),
-                    }));
-                  }}
-                >
-                  Apply
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => {
-                    setCouncilSuggestions(prev => ({
-                      ...prev,
-                      items: prev.items.filter((item) => item !== s.text),
-                    }));
                   }}
                 >
                   Skip
@@ -1195,50 +939,6 @@ export function Studio({ workspace }) {
               </div>
             </div>
           ))}
-          {councilSuggestions.state === 'done' && !councilSuggestions.parsedItems && (
-            <div style={{
-              padding: '10px 11px',
-              background: 'var(--surface-2)',
-              border: '1px solid var(--line-soft)',
-              borderRadius: 'var(--r-sm)',
-              fontSize: 12,
-              color: 'var(--fg-muted)',
-              lineHeight: 1.5,
-              whiteSpace: 'pre-wrap',
-            }}>
-              {councilSuggestions.text}
-            </div>
-          )}
-          {councilSuggestions.state === 'preview' && (
-            <div style={{
-              padding: '10px 11px',
-              background: 'var(--surface-2)',
-              border: '1px solid var(--line-soft)',
-              borderRadius: 'var(--r-sm)',
-              fontSize: 11.5,
-              color: 'var(--fg-muted)',
-              lineHeight: 1.5,
-            }}>
-              <Badge tone="neutral" size="xs">preview</Badge>
-              <span style={{ marginLeft: 6 }}>{COUNCIL_PREVIEW_NOTE}</span>
-            </div>
-          )}
-          {councilSuggestions.state === 'error' && (
-            <div style={{
-              padding: '10px 11px',
-              background: 'var(--surface-2)',
-              border: '1px solid var(--line-soft)',
-              borderRadius: 'var(--r-sm)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}>
-              <div style={{ flex: 1, fontSize: 12, color: 'var(--danger)', lineHeight: 1.5 }}>
-                제안을 생성하지 못했습니다.
-              </div>
-              <Button variant="ghost" size="xs" onClick={runCouncilSuggestions}>다시 시도</Button>
-            </div>
-          )}
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em', marginTop: 8 }}>Handoff history</div>
           <div style={{
             padding: 10,
@@ -1251,7 +951,7 @@ export function Studio({ workspace }) {
           }}>
             {handoffLogs.length === 0 && (
               <div style={{ fontSize: 12, color: 'var(--fg-faint)', lineHeight: 1.45 }}>
-                Request 버튼은 먼저 승인 큐에 올립니다. 승인 후 실행된 handoff/export만 여기에 기록됩니다.
+                Schedule 또는 Publish를 누르면 Supabase publish_logs에 기록됩니다.
               </div>
             )}
             {handoffLogs.map((log) => (
@@ -1290,7 +990,7 @@ export function Studio({ workspace }) {
         <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)' }}>
             <Iconed name="sparkle" size={12} style={{ color: 'var(--moon-300)' }} />
-            <input aria-label={mode === 'blog' ? 'Ask Writer' : 'Ask Studio'} placeholder={mode === 'blog' ? 'Ask Writer…' : 'Ask Studio — slide copy, layout…'} style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--fg)', fontSize: 12 }} />
+            <input placeholder={mode === 'blog' ? 'Ask Writer…' : 'Ask Studio — slide copy, layout…'} style={{ flex: 1, background: 'transparent', border: 'none', color: 'var(--fg)', fontSize: 12 }} />
             <Kbd>⏎</Kbd>
           </div>
         </div>
@@ -1302,13 +1002,13 @@ export function Studio({ workspace }) {
 export function Queue({ workspace }) {
   const ws = getWorkspace(workspace);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [tab, setTab] = React.useState('all');
-  const [brandFilter, setBrandFilter] = React.useState('all');
+  const [brandFilter, setBrandFilter] = React.useState(() => searchParams.get('brand') || 'all');
   const ledger = useContentLedger();
+  // Scope the brand filter pills + queue items to this workspace (pass-through when unscoped).
   const brands = ws ? filterBrandsByWorkspace(ledger.brands || [], workspace) : (ledger.brands || []);
-  const queueSource = ledger.source === "supabase"
-    ? (Array.isArray(ledger.queue) ? ledger.queue : [])
-    : (ledger.queue?.length ? ledger.queue : FALLBACK_CONTENT_QUEUE);
+  const queueSource = Array.isArray(ledger.queue) ? ledger.queue : [];
   const queue = filterContentByWorkspace(queueSource, workspace);
   const statusTone = {
     Inbox: 'neutral',
@@ -1347,10 +1047,6 @@ export function Queue({ workspace }) {
     const brandParam = brandFilter !== 'all' ? `&brand=${encodeURIComponent(brandFilter)}` : '';
     router.push(`/dashboard/content/studio${id ? `?item=${encodeURIComponent(id)}` : '?new=draft'}${id ? '' : brandParam}`);
   }, [brandFilter, router]);
-  // Open the item in Studio and auto-run the Council 검토 (Writer lens) on the full draft.
-  const openCouncilCritique = React.useCallback((id) => {
-    router.push(`/dashboard/content/studio?item=${encodeURIComponent(id)}&council=1`);
-  }, [router]);
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1374,7 +1070,7 @@ export function Queue({ workspace }) {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>이번 주 발행</span>
-            <span className="mono" style={{ fontSize: 20, fontWeight: 600, color: 'var(--fg)', letterSpacing: '-0.02em' }}>
+            <span className="stat" style={{ fontSize: 20, fontWeight: 600, color: 'var(--fg)' }}>
               {cadence.published}<span style={{ color: 'var(--fg-faint)', fontWeight: 400 }}>/{cadence.goal}</span>
             </span>
             <Badge tone={cadence.behind ? 'warning' : 'success'} size="xs">
@@ -1457,13 +1153,13 @@ export function Queue({ workspace }) {
             icon="queue"
             title={tab === 'all' ? '발행 큐가 비어 있습니다' : `${activeLabel} 항목이 없습니다`}
             description={tab === 'all'
-              ? (ledger.syncState === 'live' ? 'Supabase content_items/content_variants 원장에 표시할 콘텐츠가 없습니다.' : '초안을 만들면 큐와 파이프라인에 표시됩니다.')
+              ? (ledger.syncState === 'live' ? 'Supabase content_items/content_variants 기록에 표시할 콘텐츠가 없습니다.' : '초안을 만들면 큐와 파이프라인에 표시됩니다.')
               : `${activeLabel} 상태의 콘텐츠가 생기면 이 필터에 표시됩니다.`}
             action={<Button variant="primary" size="sm" icon="plus" onClick={() => openStudio()}>Draft</Button>}
           />
         )}
         {visibleQueue.map((c, i) => (
-          <div key={c.id} style={{
+          <div key={c.id} className="hub-row" style={{
             display: 'grid', gridTemplateColumns: '1fr 110px 110px 100px 120px 130px 80px',
             padding: '12px 16px', alignItems: 'center',
             borderBottom: i < visibleQueue.length - 1 ? '1px solid var(--line-soft)' : 'none',
@@ -1478,8 +1174,6 @@ export function Queue({ workspace }) {
                 openStudio(c.id);
               }
             }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
               <Iconed name={c.kind === 'Newsletter' ? 'email' : c.kind === 'Blog' ? 'content' : c.kind === 'Reel' ? 'play' : 'send'} size={13} style={{ color: 'var(--fg-faint)' }} />
@@ -1493,18 +1187,9 @@ export function Queue({ workspace }) {
             <span>
               <Badge tone={c.brandTone || 'neutral'} variant="outline" size="xs">{c.brandGlyph || '•'} {c.brandName || '—'}</Badge>
             </span>
-            <span><Badge tone={statusTone[c.status] || 'neutral'} size="xs">{c.status}</Badge></span>
+            <span><Badge tone={statusTone[c.statusLabel || c.status] || 'neutral'} size="xs">{c.statusLabel || c.status}</Badge></span>
             <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{c.when}</span>
-            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-              <IconButton
-                icon="sparkle"
-                size={20}
-                iconSize={11}
-                tooltip="Council 검토"
-                onClick={(e) => { e.stopPropagation(); openCouncilCritique(c.id); }}
-              />
-              <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{c.author}</span>
-            </span>
+            <span style={{ textAlign: 'right', fontSize: 12, color: 'var(--fg-muted)' }}>{c.author}</span>
           </div>
         ))}
       </Card>
@@ -1512,184 +1197,7 @@ export function Queue({ workspace }) {
   );
 }
 
-const CAMPAIGN_WAR_ROOMS = {
-  cm1: {
-    pulse: {
-      positioning: '1인 창업자가 봄 시즌 운영 리듬을 2주 안에 되찾게 만드는 cohort launch.',
-      nextMove: 'Landing hero proof를 보강하고, 24시간 내 warm lead 8명에게 founder-note follow-up을 보냅니다.',
-      risk: '신청 수는 좋지만 회사 리드와 개인 리드가 한 offer 안에서 섞여 메시지가 흐려질 수 있습니다.',
-      ai: [
-        { label: 'Push', detail: '개인 창업자용 pain copy를 첫 화면에 고정', tone: 'moon' },
-        { label: 'Pause', detail: 'X thread 3번 소재는 proof 부족. 케이스 인용 전까지 보류', tone: 'warning' },
-        { label: 'Ask', detail: '신청자 5명에게 "왜 지금인가" 한 문장 회수', tone: 'info' },
-      ],
-      metrics: [
-        { label: 'Goal', value: '24 / 40', detail: '신청 60%', tone: 'moon' },
-        { label: 'Pipeline', value: '₩18.0M', detail: '2 company deals', tone: 'success' },
-        { label: 'Lead fit', value: '72%', detail: 'ICP match', tone: 'info' },
-        { label: 'Risk', value: '2', detail: 'message split', tone: 'warning' },
-      ],
-    },
-    strategy: {
-      icp: '운영은 직접 하지만 콘텐츠, 리드, 루틴이 흩어진 1인 창업자와 boutique operator.',
-      promise: '매일 아침 무엇을 해야 하는지 보이고, 발행과 follow-up이 끊기지 않는 운영 리듬.',
-      wedge: 'Daily Brief + Content Queue + Revenue follow-up을 하나의 cohort ritual로 묶습니다.',
-      enemy: '좋은 생각은 많은데, 실행 표면이 Notion, Gmail, 캘린더, Slack으로 흩어지는 상태.',
-      proof: ['뉴스레터 #47 draft to send loop', 'Gmail to CRM 태깅 17건', '클래스인 deal follow-up 지연 감지'],
-      decisions: [
-        { label: '개인/회사 offer를 같은 랜딩에서 분기', status: 'Trial', owner: 'Me' },
-        { label: '가격표보다 운영 리듬 proof를 먼저 노출', status: 'Committed', owner: 'Council' },
-        { label: '신청 CTA는 "상담" 대신 "운영 리듬 점검"', status: 'Watch', owner: 'Me' },
-      ],
-    },
-    surfaces: [
-      { type: 'Landing', name: 'Spring Cohort landing', role: 'Primary conversion', status: 'Live', cta: '운영 리듬 점검 신청', signal: '24 signups', url: '/spring-cohort?utm_campaign=cm1' },
-      { type: 'Insight', name: '1인 창업자의 운영 OS 만들기', role: 'Trust asset', status: 'Scheduled', cta: 'Daily Brief 보기', signal: 'Queue c2', url: '/insights/operating-os' },
-      { type: 'Newsletter', name: '뉴스레터 #47', role: 'Warm audience push', status: 'Draft', cta: 'Cohort waitlist', signal: '2,143 subs', url: 'Email' },
-      { type: 'X Thread', name: '결정 기록하기', role: 'Top-of-funnel hook', status: 'Scheduled', cta: 'Read the full note', signal: 'Queue c6', url: 'x.com' },
-      { type: 'Referral', name: 'Founder intro link', role: 'Warm referral', status: 'Review', cta: '소개 코드로 신청', signal: '3 intros', url: '/spring-cohort/ref' },
-    ],
-    content: [
-      { title: '뉴스레터 #47 · 4월 둘째 주', stage: 'Draft', channel: 'Email', action: '2번 섹션 proof 보강' },
-      { title: '1인 창업자의 운영 OS 만들기', stage: 'Scheduled', channel: 'Web', action: '랜딩 CTA 연결 확인' },
-      { title: 'Thread · 결정 기록하기', stage: 'Scheduled', channel: 'X', action: '첫 문장 A/B 준비' },
-      { title: 'Cohort landing hero proof', stage: 'Review', channel: 'Web', action: '클래스인 신호 익명화' },
-    ],
-    audience: [
-      { segment: 'Warm founders', count: 2143, fit: 78, next: 'Founder-note email', source: 'Newsletter' },
-      { segment: 'Company operators', count: 47, fit: 63, next: 'Case-study CTA', source: 'LinkedIn/referral' },
-      { segment: 'Personal coaching leads', count: 18, fit: 84, next: 'DM follow-up', source: 'X' },
-    ],
-    attribution: [
-      { channel: 'Newsletter', spend: '₩0', leads: 14, pipeline: '₩4.2M', note: 'highest intent' },
-      { channel: 'Referral', spend: '₩0', leads: 6, pipeline: '₩9.8M', note: 'best deal quality' },
-      { channel: 'X', spend: '₩0', leads: 4, pipeline: '₩0.9M', note: 'top funnel only' },
-      { channel: 'Landing direct', spend: '₩0', leads: 8, pipeline: '₩3.1M', note: 'CTA copy test needed' },
-    ],
-    automations: [
-      { name: '뉴스레터 발행 → Resend', status: 'Active', ai: 'AI 교정', last: '어제', health: '1/1 ok' },
-      { name: 'Gmail → CRM 리드 태깅', status: 'Active', ai: 'AI 분류', last: '3분 전', health: '15/17 ok' },
-      { name: '리드 무응답 3일 → 리마인더', status: 'Active', ai: 'Follow-up draft', last: '오늘', health: '2/2 ok' },
-      { name: 'Landing form → campaign_id 기록', status: 'Draft', ai: 'None', last: 'not live', health: 'needs webhook' },
-    ],
-    activity: [
-      '오늘 11:02 · 클래스인 follow-up email 기록, campaign source 연결',
-      '어제 18:00 · Resend dry-run 성공, newsletter CTA 대기',
-      '어제 11:08 · Council이 referral conversion을 강한 신호로 표시',
-    ],
-  },
-  cm2: {
-    pulse: {
-      positioning: '개인 브랜드 사이트를 신뢰 자산과 리드 캡처 표면으로 전환하는 launch system.',
-      nextMove: 'About hero보다 proof strip을 먼저 다듬고, insight 2개를 landing CTA에 연결합니다.',
-      risk: '브랜드 무드는 좋아졌지만 offer가 아직 "무엇을 맡길 수 있는가"까지 닿지 않습니다.',
-      ai: [
-        { label: 'Push', detail: 'Case link가 없는 주장에는 proof slot을 붙이기', tone: 'moon' },
-        { label: 'Rewrite', detail: 'Hero headline을 역할 설명이 아니라 literal offer로 전환', tone: 'warning' },
-        { label: 'Connect', detail: 'Contact form source를 campaign_id로 기록', tone: 'info' },
-      ],
-      metrics: [
-        { label: 'Goal', value: '12 / 200', detail: '구독자 +6%', tone: 'warning' },
-        { label: 'Surfaces', value: '4', detail: '2 draft', tone: 'moon' },
-        { label: 'Lead fit', value: '58%', detail: 'too broad', tone: 'warning' },
-        { label: 'Proof', value: '3', detail: 'case assets', tone: 'info' },
-      ],
-    },
-    strategy: {
-      icp: '운영형 창업자, 브랜드/콘텐츠/자동화가 한 번에 필요한 boutique client.',
-      promise: '생각과 실행을 한 화면에서 움직이는 private operating system.',
-      wedge: '공개 사이트는 미디어가 아니라 proof router가 됩니다.',
-      enemy: '예쁜 포트폴리오인데 다음 행동과 신뢰 증거가 없는 상태.',
-      proof: ['Hub screenshot reel', 'Revenue follow-up 기록', 'Automation flow canvas'],
-      decisions: [
-        { label: '랜딩 H1은 브랜드명이 아니라 literal offer 우선', status: 'Committed', owner: 'Me' },
-        { label: 'Newsletter opt-in은 footer가 아니라 proof 뒤에 배치', status: 'Trial', owner: 'Writer' },
-        { label: '광고는 아직 집행하지 않고 organic proof 먼저', status: 'Watch', owner: 'Council' },
-      ],
-    },
-    surfaces: [
-      { type: 'Landing', name: 'Personal brand home', role: 'Primary proof router', status: 'Draft', cta: '운영 상담 신청', signal: 'copy review', url: '/' },
-      { type: 'Case', name: 'Moonlight Hub operating case', role: 'Proof asset', status: 'Draft', cta: 'View system', signal: 'screenshots ready', url: '/cases/moonlight-hub' },
-      { type: 'Insight', name: '결정을 기록하는 노트의 구조', role: 'Trust asset', status: 'Review', cta: 'Subscribe', signal: 'Studio draft', url: '/insights/decision-note' },
-      { type: 'Newsletter', name: 'Launch letter', role: 'Warm launch', status: 'Idea', cta: 'Forward to a founder', signal: 'outline only', url: 'Email' },
-    ],
-    content: [
-      { title: 'Moonlight 대시보드 스크린샷 릴', stage: 'Review', channel: 'Instagram', action: '제품 맥락 캡션 추가' },
-      { title: '결정을 기록하는 노트의 구조', stage: 'Draft', channel: 'Newsletter', action: 'case CTA 삽입' },
-      { title: 'Personal site proof strip', stage: 'Idea', channel: 'Web', action: '3 proof cards 선별' },
-    ],
-    audience: [
-      { segment: 'Founder operators', count: 86, fit: 72, next: 'Proof-led launch email', source: 'Newsletter' },
-      { segment: 'Brand consulting leads', count: 24, fit: 55, next: 'Case study retarget', source: 'Referral' },
-    ],
-    attribution: [
-      { channel: 'Newsletter', spend: '₩0', leads: 5, pipeline: '₩1.2M', note: 'small but warm' },
-      { channel: 'Organic X', spend: '₩0', leads: 4, pipeline: '₩0.6M', note: 'needs offer clarity' },
-      { channel: 'Direct', spend: '₩0', leads: 3, pipeline: '₩0', note: 'tracking incomplete' },
-    ],
-    automations: [
-      { name: 'Contact form → lead 생성', status: 'Draft', ai: 'Lead summary', last: 'not live', health: 'needs form' },
-      { name: 'Newsletter signup → welcome email', status: 'Planning', ai: 'Segment label', last: 'not live', health: 'provider pending' },
-    ],
-    activity: [
-      '오늘 09:30 · proof strip copy review 필요',
-      '어제 16:20 · case outline이 Studio draft로 이동',
-      '2일 전 · Council이 광고 집행 보류 추천',
-    ],
-  },
-  cm3: {
-    pulse: {
-      positioning: '연말 회고를 콘텐츠 자산으로 바꿔 다음 해 상담과 구독으로 이어지게 만드는 long-tail campaign.',
-      nextMove: '첫 회고의 관찰 프레임을 정하고, 4편의 반복 구조를 고정합니다.',
-      risk: '아직 시즌성이 멀어서 지금은 production rhythm보다 archive strategy가 더 중요합니다.',
-      ai: [
-        { label: 'Frame', detail: '회고 4편을 decision, revenue, rhythm, automation으로 분리', tone: 'moon' },
-        { label: 'Hold', detail: '발행 스케줄은 11월 전까지 확정하지 않기', tone: 'neutral' },
-        { label: 'Collect', detail: '매주 activity log에서 회고 후보 자동 수집', tone: 'info' },
-      ],
-      metrics: [
-        { label: 'Goal', value: '0 / 4', detail: '회고 4편', tone: 'neutral' },
-        { label: 'Assets', value: '6', detail: 'raw notes', tone: 'info' },
-        { label: 'Readiness', value: '18%', detail: 'early', tone: 'warning' },
-        { label: 'Runs', value: '0', detail: 'not active', tone: 'neutral' },
-      ],
-    },
-    strategy: {
-      icp: '한 해를 돌아보며 다음 해 운영 체계를 재설계하려는 creator-founder.',
-      promise: '회고가 감상이 아니라 다음 운영 시스템의 입력이 됩니다.',
-      wedge: 'Daily Brief, Decisions, Automations 로그를 회고의 raw material로 씁니다.',
-      enemy: '좋은 일기처럼 읽히지만 아무 행동도 바꾸지 않는 연말 콘텐츠.',
-      proof: ['Decision log', 'Automation runs', 'Revenue movement'],
-      decisions: [
-        { label: '시즌 전까지 archive만 수집', status: 'Committed', owner: 'Coach' },
-        { label: '발행은 4편 series format으로 고정', status: 'Draft', owner: 'Writer' },
-      ],
-    },
-    surfaces: [
-      { type: 'Series', name: 'Year-end operating review', role: 'Editorial series', status: 'Draft', cta: 'Subscribe for review kit', signal: 'outline', url: '/insights/year-end' },
-      { type: 'Template', name: 'Decision review kit', role: 'Lead magnet', status: 'Idea', cta: 'Download', signal: 'not scoped', url: '/resources/review-kit' },
-    ],
-    content: [
-      { title: '가격 실험 회고', stage: 'Idea', channel: 'Blog', action: '결정 d3 연결' },
-      { title: 'Weekly review template update', stage: 'Idea', channel: 'Newsletter', action: 'routine proof 수집' },
-    ],
-    audience: [
-      { segment: 'Existing subscribers', count: 2143, fit: 61, next: 'Waitlist prompt', source: 'Newsletter' },
-      { segment: 'Coaching alumni', count: 32, fit: 82, next: 'Personal note', source: 'CRM' },
-    ],
-    attribution: [
-      { channel: 'Newsletter', spend: '₩0', leads: 0, pipeline: '₩0', note: 'not launched' },
-      { channel: 'Search', spend: '₩0', leads: 0, pipeline: '₩0', note: 'future long-tail' },
-    ],
-    automations: [
-      { name: 'Activity log → 회고 후보 수집', status: 'Planning', ai: 'Theme clustering', last: 'not live', health: 'needs rule' },
-    ],
-    activity: [
-      '이번 주 · 회고 후보 6개 수집됨',
-      '2일 전 · 가격 실험 회고가 Content Queue idea로 이동',
-    ],
-  },
-};
+const CAMPAIGN_WAR_ROOMS = {};
 
 const CAMPAIGN_TABS = [
   { key: 'pulse', label: 'Pulse' },
@@ -1700,15 +1208,6 @@ const CAMPAIGN_TABS = [
   { key: 'attribution', label: 'Attribution' },
   { key: 'automation', label: 'Automation' },
 ];
-
-// Stage-appropriate next action for the live Audience join (keyed by leads.stage
-// label from revenue-ledger's LEAD_STAGE_LABEL: New / Contact / Qualified / Lost).
-const AUDIENCE_STAGE_NEXT = {
-  New: '첫 컨택',
-  Contact: '후속 미팅',
-  Qualified: '제안/견적',
-  Lost: '재접촉 검토',
-};
 
 function CampaignMetric({ item }) {
   return (
@@ -1723,7 +1222,7 @@ function CampaignMetric({ item }) {
         <Dot tone={item.tone || 'moon'} size={6} />
         <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{item.label}</span>
       </div>
-      <div className="mono" style={{ fontSize: 18, color: 'var(--fg)', lineHeight: 1 }}>{item.value}</div>
+      <div className="stat" style={{ fontSize: 18, color: 'var(--fg)', lineHeight: 1 }}>{item.value}</div>
       <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', marginTop: 5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.detail}</div>
     </div>
   );
@@ -1738,7 +1237,7 @@ function CampaignLine({ label, value, tone = 'moon' }) {
   );
 }
 
-function CampaignTabPanel({ tab, campaign, detail, audienceLeads }) {
+function CampaignTabPanel({ tab, campaign, detail }) {
   const router = useRouter();
   const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral', Live: 'success', Scheduled: 'info', Review: 'moon', Idea: 'neutral' };
 
@@ -1854,50 +1353,9 @@ function CampaignTabPanel({ tab, campaign, detail, audienceLeads }) {
   }
 
   if (tab === 'audience') {
-    // Live join: leads.meta.campaign (free-text ad-set/campaign name from ad imports)
-    // matched case-insensitively against this campaign's name, either direction
-    // (imported ad-set names are rarely an exact match to the Hub campaign name).
-    const campaignName = String(campaign?.name || '').trim().toLowerCase();
-    const liveMatches = campaignName
-      ? (audienceLeads?.leads || []).filter((lead) => {
-          const leadCampaign = String(lead?.campaign || '').trim().toLowerCase();
-          if (!leadCampaign) return false;
-          return leadCampaign.includes(campaignName) || campaignName.includes(leadCampaign);
-        })
-      : [];
-    const isLive = audienceLeads?.source === 'supabase' && liveMatches.length > 0;
-
-    const liveRows = isLive
-      ? Object.values(
-          liveMatches.reduce((groups, lead) => {
-            const stageLabel = lead.stage || 'New';
-            const group = groups[stageLabel] || { segment: stageLabel, count: 0, scoreSum: 0, next: AUDIENCE_STAGE_NEXT[stageLabel] || '후속 미팅', source: 'Leads' };
-            group.count += 1;
-            group.scoreSum += Number(lead.score) || 0;
-            groups[stageLabel] = group;
-            return groups;
-          }, {}),
-        ).map((group) => ({
-          segment: group.segment,
-          count: group.count,
-          fit: Math.round(group.scoreSum / group.count),
-          next: group.next,
-          source: group.source,
-        }))
-      : [];
-
-    const rows = isLive ? liveRows : detail.audience;
-
     return (
-      <div>
-        <SectionTitle
-          subtitle={isLive ? 'leads 원장에서 이 캠페인과 매칭된 실제 오디언스입니다.' : '실제 leads/accounts 연동 전 일러스트레이션입니다.'}
-          right={isLive ? <Badge tone="success" size="xs">live</Badge> : <Badge tone="warning" size="xs">예시 데이터</Badge>}
-        >
-          Audience
-        </SectionTitle>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 'var(--gap)' }}>
-        {rows.map((item) => (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 'var(--gap)' }}>
+        {detail.audience.map((item) => (
           <Card key={item.segment}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Avatar name={item.segment} size={30} tone={item.fit >= 75 ? 'personal' : 'company'} />
@@ -1919,7 +1377,6 @@ function CampaignTabPanel({ tab, campaign, detail, audienceLeads }) {
             </div>
           </Card>
         ))}
-        </div>
       </div>
     );
   }
@@ -2012,40 +1469,58 @@ function CampaignTabPanel({ tab, campaign, detail, audienceLeads }) {
   );
 }
 
-// Status select options for the inline status editor. Value is the DB-shaped
-// status key (matches campaigns.status check constraint); label is what the
-// war-room card already renders via sTone/Badge.
-const CAMPAIGN_STATUS_OPTIONS = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'active', label: 'Active' },
-  { value: 'paused', label: 'Planning' },
-  { value: 'completed', label: 'Done' },
-];
+// Live campaigns (real Supabase rows) don't have curated war-room content yet —
+// the deep strategy/surfaces/audience/attribution breakdown is a separate,
+// larger data-model decision (see docs/personal-os audit, 2026-07-10). Rather
+// so a real campaign gets an honest placeholder until that model is built.
+function buildPreviewCampaignDetail(campaign) {
+  return {
+    pulse: {
+      positioning: '아직 전략이 작성되지 않았습니다.',
+      nextMove: 'Strategy 탭에서 ICP·promise·wedge를 정의하면 다음 행동이 표시됩니다.',
+      risk: '',
+      ai: [],
+      metrics: [
+        { label: 'Goal', value: `${campaign?.current ?? 0} / ${campaign?.goal || '—'}`, detail: campaign?.status || '', tone: 'neutral' },
+      ],
+    },
+    strategy: { icp: '', promise: '', wedge: '', enemy: '', proof: [], decisions: [] },
+    surfaces: [],
+    content: [],
+    audience: [],
+    attribution: [],
+    automations: [],
+    activity: [],
+  };
+}
 
 export function Campaigns() {
   const router = useRouter();
-  const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral', Done: 'success' };
-  const ledger = useCampaignLedger();
-  const campaigns = ledger.campaigns;
-  const audienceLeads = useAudienceLeads();
-  const [selectedId, setSelectedId] = React.useState(FALLBACK_CAMPAIGNS[0]?.id);
+  const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral', Paused: 'warning', Completed: 'info' };
+  const ledger = useContentLedger();
+  const [campaigns, setCampaigns] = React.useState([]);
+  const [selectedId, setSelectedId] = React.useState(null);
   const [tab, setTab] = React.useState('pulse');
   const [focusMode, setFocusMode] = React.useState(false);
-  const selected = campaigns.find(c => c.id === selectedId) || campaigns[0];
-  const detail = CAMPAIGN_WAR_ROOMS[selected?.id] || CAMPAIGN_WAR_ROOMS.cm1;
-  const activeTabLabel = CAMPAIGN_TABS.find(t => t.key === tab)?.label || 'Pulse';
+  const [creating, setCreating] = React.useState(false);
 
-  // Keep the selection valid once live data replaces the fallback list.
   React.useEffect(() => {
-    if (!campaigns.length) return;
-    if (!campaigns.some(c => c.id === selectedId)) {
-      setSelectedId(campaigns[0].id);
-    }
-  }, [campaigns, selectedId]);
+    const nextCampaigns = Array.isArray(ledger.campaigns) ? ledger.campaigns : [];
+    setCampaigns(nextCampaigns);
+    setSelectedId((prev) => (nextCampaigns.some((c) => c.id === prev) ? prev : nextCampaigns[0]?.id || null));
+  }, [ledger.syncState, ledger.campaigns]);
 
-  const createCampaign = React.useCallback(async () => {
+  const selected = campaigns.find(c => c.id === selectedId) || campaigns[0] || null;
+  // Campaign rows without an attached war-room ledger use an honest empty detail.
+  const detail = selected
+    ? (CAMPAIGN_WAR_ROOMS[selected.id] || buildPreviewCampaignDetail(selected))
+    : null;
+  const activeTabLabel = CAMPAIGN_TABS.find(t => t.key === tab)?.label || 'Pulse';
+  const createCampaign = async () => {
+    if (creating) return;
+    setCreating(true);
     const localId = `local-campaign-${Date.now()}`;
-    const draft = {
+    const next = {
       id: localId,
       name: '새 캠페인',
       status: 'Draft',
@@ -2055,80 +1530,34 @@ export function Campaigns() {
       goal: '목표 설정',
       current: 0,
     };
-    ledger.setState(s => ({ ...s, campaigns: [draft, ...s.campaigns] }));
+    setCampaigns(prev => [next, ...prev]);
     setSelectedId(localId);
     setTab('pulse');
     setFocusMode(true);
-
     try {
-      const response = await fetch('/api/hub/campaigns', {
+      const res = await fetch('/api/hub/content', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          op: 'create',
-          name: draft.name,
-          status: draft.status,
-          channels: draft.channels,
-          progress: draft.progress,
-          goal: draft.goal,
-          current: draft.current,
-        }),
+        body: JSON.stringify({ action: 'campaign', name: next.name }),
       });
-      const data = await response.json().catch(() => null);
-      if (data?.status === 'saved' && data.id) {
-        // Swap the optimistic local id for the real one so later PATCHes target it.
-        // If the operator edited status while the create was in flight, that edit only
-        // lives locally (updateCampaignStatus skips PATCH on local ids) — preserve it
-        // over the server row and persist it now that a real id exists.
-        let dirtyStatus = null;
-        ledger.setState(s => ({
-          ...s,
-          campaigns: s.campaigns.map(c => {
-            if (c.id !== localId) return c;
-            if (c.status !== draft.status) dirtyStatus = c.status;
-            return { ...c, ...(data.campaign || {}), id: data.id, ...(dirtyStatus ? { status: dirtyStatus } : {}) };
-          }),
-        }));
-        setSelectedId(prev => (prev === localId ? data.id : prev));
-        if (dirtyStatus) {
-          fetch('/api/hub/campaigns', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ op: 'update', id: data.id, status: dirtyStatus }),
-          }).catch(() => {});
-        }
-      }
-      // preview/error: keep the optimistic local row — same contract as the Revenue drawer.
-    } catch {
-      // Network failure — keep the optimistic local row, stay silent (matches Revenue drawer behavior).
-    }
-  }, [ledger]);
-
-  // Inline status edit — optimistic PATCH, mirrors createCampaign's fire-and-keep-local pattern.
-  const updateCampaignStatus = React.useCallback(async (id, nextLabel) => {
-    const prevCampaigns = campaigns;
-    ledger.setState(s => ({
-      ...s,
-      campaigns: s.campaigns.map(c => (c.id === id ? { ...c, status: nextLabel } : c)),
-    }));
-
-    if (String(id).startsWith('local-campaign-')) return; // not persisted yet, nothing to PATCH
-
-    try {
-      const response = await fetch('/api/hub/campaigns', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ op: 'update', id, status: nextLabel }),
-      });
-      const data = await response.json().catch(() => null);
-      if (data?.status === 'error') {
-        // Roll back on a hard error only — preview keeps the optimistic value.
-        ledger.setState(s => ({ ...s, campaigns: prevCampaigns }));
+      const data = await res.json().catch(() => null);
+      if (data?.status === 'saved' && data?.campaign?.id) {
+        const savedId = data.campaign.id;
+        setCampaigns(prev => prev.map(c => (c.id === localId ? { ...c, id: savedId } : c)));
+        setSelectedId(savedId);
+      } else {
+        setCampaigns(prev => prev.filter(c => c.id !== localId));
+        setSelectedId(null);
+        setFocusMode(false);
       }
     } catch {
-      // Network failure — keep the optimistic value, consistent with createCampaign.
+      setCampaigns(prev => prev.filter(c => c.id !== localId));
+      setSelectedId(null);
+      setFocusMode(false);
+    } finally {
+      setCreating(false);
     }
-  }, [campaigns, ledger]);
+  };
 
   React.useEffect(() => {
     if (!focusMode) return;
@@ -2164,17 +1593,15 @@ export function Campaigns() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createCampaign}>Campaign</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating}>Campaign</Button>
       </div>
 
-      {campaigns.length === 0 && (
+      {!selected && (
         <EmptyState
           icon="campaigns"
-          title="아직 캠페인이 없습니다"
-          description={ledger.syncState === 'live'
-            ? 'Supabase campaigns 원장에 표시할 캠페인이 없습니다.'
-            : '캠페인을 만들면 war room에 표시됩니다.'}
-          action={<Button variant="primary" size="sm" icon="plus" onClick={createCampaign}>Campaign</Button>}
+          title="캠페인이 없습니다"
+          description={ledger.syncState === 'live' ? 'Supabase campaigns 기록이 비어 있습니다.' : '캠페인을 만들면 war room에 표시됩니다.'}
+          action={<Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating}>Campaign</Button>}
         />
       )}
 
@@ -2187,7 +1614,7 @@ export function Campaigns() {
         <aside className="campaign-war-room__list" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {campaigns.map(c => {
             const active = c.id === selected.id;
-            const cDetail = CAMPAIGN_WAR_ROOMS[c.id] || detail;
+            const cDetail = CAMPAIGN_WAR_ROOMS[c.id] || buildPreviewCampaignDetail(c);
             return (
               <div key={c.id} role="button" tabIndex={0} onClick={() => selectCampaign(c.id)} onDoubleClick={() => focusCampaign(c.id)} onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -2210,30 +1637,7 @@ export function Campaigns() {
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                        <select
-                          aria-label={`${c.name} 상태 변경`}
-                          value={CAMPAIGN_STATUS_OPTIONS.find(opt => opt.label === c.status)?.value || 'draft'}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => {
-                            const opt = CAMPAIGN_STATUS_OPTIONS.find(o => o.value === e.target.value);
-                            if (opt) updateCampaignStatus(c.id, opt.label);
-                          }}
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 500,
-                            minHeight: 32,
-                            padding: '5px 8px',
-                            borderRadius: 999,
-                            border: '1px solid var(--line-soft)',
-                            background: 'var(--surface-3)',
-                            color: `var(--${sTone[c.status] === 'success' ? 'success' : sTone[c.status] === 'warning' ? 'warning' : 'fg-muted'})`,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {CAMPAIGN_STATUS_OPTIONS.map(opt => (
-                            <option key={opt.value} value={opt.value}>{opt.label}</option>
-                          ))}
-                        </select>
+                        <Badge tone={sTone[c.status]} size="xs">{c.status}</Badge>
                         <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>ends {c.end}</span>
                       </div>
                       <div style={{ fontSize: 14.5, fontWeight: 500, letterSpacing: '-0.01em', color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
@@ -2344,7 +1748,7 @@ export function Campaigns() {
           </Card>
 
           <div className="campaign-tab-stage" data-focus={focusMode ? 'true' : 'false'} key={`${selected.id}-${tab}-${focusMode ? 'focus' : 'normal'}`}>
-            <CampaignTabPanel tab={tab} campaign={selected} detail={detail} audienceLeads={audienceLeads} />
+            <CampaignTabPanel tab={tab} campaign={selected} detail={detail} />
           </div>
         </section>
       </div>

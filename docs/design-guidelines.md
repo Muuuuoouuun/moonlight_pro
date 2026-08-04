@@ -1,6 +1,9 @@
 # Com_Moon Design Guidelines
 
-> Moon Design System — Black · Silver · White  
+> 상태: SUPERSEDED — 현재 UI 단일 출처는 루트 `DESIGN.md`다. 이 문서의 light/white 중심 토큰과 "이 문서가 단일 출처"라는 표현은 새 구현에 적용하지 않는다.
+> 용도: 초기 디자인 결정의 역사적 참고만 허용한다.
+
+> Moon Design System — Black · Silver · White
 > 최소주의(Minimalism) 기반, 한국어 우선, Pretendard 서체
 
 ---
@@ -69,7 +72,7 @@
 font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 ```
 
-- **Pretendard** — 기본 서체. 한국어/영문 동시 지원.  
+- **Pretendard** — 기본 서체. 한국어/영문 동시 지원.
   CDN: `https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css`
 - 한국어 기본, 영어 전환 가능 (`lang="ko"` / `lang="en"`)
 - `antialiased` 렌더링 필수

@@ -1,22 +1,31 @@
 import { NextResponse } from "next/server";
 
-import { assertHubWriteAllowed } from "@/lib/hub-write-guard";
 import { getAutomationsLedger } from "@/lib/repositories/automations-ledger";
+import { getMorningBrief } from "@/lib/repositories/brief-ledger";
 import { getContentLedger } from "@/lib/repositories/content-ledger";
-import { getFollowups } from "@/lib/repositories/followups-ledger";
 import { getProjectLedger } from "@/lib/repositories/operating-ledger";
 import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
 import { getWorkLedger } from "@/lib/repositories/work-ledger";
-import { getRecentAgentRuns } from "@/lib/sales-os/agent-runs";
-import { scanStalledDeals } from "@/lib/sales-os/stalled-scan";
 import { getWorkOrders } from "@/lib/sales-os/work-orders";
+import {
+  buildContentBrandCatalog,
+  filterContentLedgerToBrandLanes,
+} from "@/lib/content-brand-catalog";
+import { buildOperatorHomeSummary } from "@/lib/operator-home-summary";
+import { buildTaskToday } from "@/lib/task-today";
+import {
+  filterOperatorOwnedRevenue,
+  selectOperatorFocusLeads,
+} from "@/lib/operator-revenue-scope";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function ledgerState(result) {
   if (result.status === "rejected") return "error";
-  return result.value?.source === "supabase" ? "live" : "preview";
+  if (result.value?.source === "error") return "error";
+  if (result.value?.source === "supabase") return result.value.partial ? "partial" : "live";
+  return "preview";
 }
 
 function readLedger(result, fallback = {}) {
@@ -31,12 +40,12 @@ function formatMoney(amount) {
   return `₩${n}`;
 }
 
-function metric(label, value, delta, tone = "moon", spark = [3, 4, 3, 5, 4, 6, 5, 7], target = null) {
-  return target ? { label, value, delta, tone, spark, target } : { label, value, delta, tone, spark };
+function metric(label, value, delta, tone = "moon", spark = [3, 4, 3, 5, 4, 6, 5, 7]) {
+  return { label, value, delta, tone, spark };
 }
 
-function action(label, actionKey, primary = false, target = null) {
-  return target ? { label, action: actionKey, primary, target } : { label, action: actionKey, primary };
+function action(label, actionKey, primary = false) {
+  return { label, action: actionKey, primary };
 }
 
 // Cross-pillar risk: the strategist judgment a solo operator lacks bandwidth for.
@@ -55,7 +64,7 @@ function nameTokens(name) {
 
 function buildUnifiedRiskSignals(revenue, projects, automations) {
   const staleDeals = (Array.isArray(revenue.deals) ? revenue.deals : []).filter(
-    (d) => d.stage !== "won" && d.stage !== "lost" && Number(d.age) >= 10,
+    (d) => d.stage !== "closing" && d.stage !== "lost" && Number(d.age) >= 10,
   );
   const blocked = (Array.isArray(projects.projects) ? projects.projects : []).filter(
     (p) => p.status === "Blocked",
@@ -113,18 +122,29 @@ function buildUnifiedRiskSignals(revenue, projects, automations) {
 }
 
 // Pending approvals nudge — the proposed work-order queue surfaced in the signal feed.
+// Groups by persona so this reads as "which agents are waiting on me" instead of just
+// a bare count — the same roster Council/Orders show, not a separately invented one.
 function buildApprovalSignals(queue) {
   const pending = queue?.pending || 0;
   if (!pending) return [];
-  const preview = (queue.orders || []).slice(0, 3).map((o) => o.title).join(" · ");
+  const orders = queue.orders || [];
+  const byPersona = new Map();
+  orders.forEach((o) => {
+    const key = o.persona || "미지정";
+    byPersona.set(key, (byPersona.get(key) || 0) + 1);
+  });
+  const personaBreakdown = Array.from(byPersona.entries())
+    .map(([persona, count]) => (count > 1 ? `${persona} ${count}` : persona))
+    .join(" · ");
+  const preview = orders.slice(0, 3).map((o) => o.title).join(" · ");
   return [{
     id: "queue-approvals",
     tone: "info",
     kind: "Queue",
-    title: `승인 대기 ${pending}건`,
+    title: `승인 대기 ${pending}건 — ${personaBreakdown}`,
     summary: preview || "페르소나·인박스가 제안한 액션이 승인을 기다립니다.",
     meta: "Work orders · proposed",
-    source: { from: "Queue", ref: "PROPOSED" },
+    source: { from: "Agents", ref: "PROPOSED" },
     decisions: [action("승인 큐 확인", "queueApprovals", true)],
   }];
 }
@@ -134,8 +154,24 @@ function buildRevenueSignals(revenue) {
   const leads = Array.isArray(revenue.leads) ? revenue.leads : [];
   const signals = [];
 
+  selectOperatorFocusLeads(revenue).forEach((lead) => {
+    signals.push({
+      id: `revenue-focus-${lead.id}`,
+      tone: "info",
+      kind: "Revenue",
+      title: `${lead.name} — 고객 성공 후속`,
+      summary: lead.nextAction,
+      meta: "Focus customer · verified owner",
+      source: { from: "Leads", ref: lead.id },
+      decisions: [
+        action("리드 열기", "leads", true),
+        action("오늘 보류", "wait"),
+      ],
+    });
+  });
+
   deals
-    .filter((deal) => deal.stage !== "won" && deal.stage !== "lost" && Number(deal.age) >= 10)
+    .filter((deal) => deal.stage !== "closing" && deal.stage !== "lost" && Number(deal.age) >= 10)
     .sort((a, b) => Number(b.value || 0) - Number(a.value || 0))
     .slice(0, 2)
     .forEach((deal) => {
@@ -149,7 +185,7 @@ function buildRevenueSignals(revenue) {
         meta: `Deal · ${formatMoney(deal.value)} · close ${deal.close}`,
         source: { from: "Deals", ref: deal.id },
         decisions: [
-          action("팔로업 열기", "followup", true),
+          action("리마인드 초안", "followup", true),
           action("딜 보드 열기", "deals"),
           action("오늘 보류", "wait"),
         ],
@@ -174,48 +210,6 @@ function buildRevenueSignals(revenue) {
   }
 
   return signals;
-}
-
-function buildFollowupSignals(followups) {
-  const items = Array.isArray(followups.items) ? followups.items : [];
-  if (!items.length) return [];
-
-  const top = items.slice(0, 3);
-  const urgent = top.some((item) => Number(item.priority || 0) >= 80);
-  return [{
-    id: "followups-today",
-    tone: urgent ? "danger" : "warning",
-    kind: "Revenue",
-    title: `오늘 연락 ${items.length}건`,
-    summary: top.map((item) => `${item.name}(${item.channel})`).join(" · "),
-    meta: "Follow-ups · ClassIn cadence",
-    source: { from: "Followups", ref: "TODAY" },
-    decisions: [
-      action("Follow-ups 열기", "followup", true),
-      action("리드 보기", "leads"),
-    ],
-  }];
-}
-
-function buildGuruSignals(runsLedger) {
-  const runs = Array.isArray(runsLedger.runs) ? runsLedger.runs : [];
-  if (!runs.length) return [];
-  const latest = runs[0];
-  const mode = encodeURIComponent(latest.mode || "sales");
-  const ref = encodeURIComponent(latest.ref || "pipeline");
-  return [{
-    id: `guru-memory-${latest.id}`,
-    tone: latest.result === "error" ? "warning" : "info",
-    kind: "Agent",
-    title: "최근 Guru 코칭 이어가기",
-    summary: `${latest.mode || "sales"} · ${latest.ref || "pipeline"} — 이전 조언과 중복되지 않게 다음 액션을 정리하세요.`,
-    meta: `Guru · ${latest.ranAt ? latest.ranAt.slice(0, 10) : "recent"}`,
-    source: { from: "Guru", ref: latest.id },
-    decisions: [
-      action("Guru 열기", "chat", true, `dashboard/agents/chat?agent=guru&mode=${mode}&ref=${ref}`),
-      action("승인 큐 확인", "queueApprovals"),
-    ],
-  }];
 }
 
 function buildContentSignals(content) {
@@ -305,8 +299,13 @@ function buildAutomationSignals(automations) {
 
 function buildWorkSignals(projects, work) {
   const projectRows = Array.isArray(projects.projects) ? projects.projects : [];
-  const todos = Array.isArray(projects.todos) ? projects.todos : [];
   const decisions = Array.isArray(work.decisions) ? work.decisions : [];
+  const decisionState = work?.decisionsState?.state;
+  const decisionComplete = decisionState
+    ? decisionState === "live" || decisionState === "live-empty"
+    : work?.source === "supabase"
+      && !(work.failedSources || []).includes("decisions")
+      && !(work.partialSources || []).includes("decisions");
   const signals = [];
 
   const blocked = projectRows.find((project) => project.status === "Blocked");
@@ -326,24 +325,7 @@ function buildWorkSignals(projects, work) {
     });
   }
 
-  const todayHigh = todos.find((todo) => todo.bucket === "오늘" && todo.priority === "high" && !todo.done);
-  if (todayHigh) {
-    signals.push({
-      id: `work-today-${todayHigh.id}`,
-      tone: "warning",
-      kind: "Work",
-      title: `${todayHigh.title} — 오늘`,
-      summary: `${todayHigh.assignee} 담당. 집중 블록으로 바로 전환할 수 있습니다.`,
-      meta: `Task · ${todayHigh.due}`,
-      source: { from: "Tasks", ref: todayHigh.id },
-      decisions: [
-        action("15분 집중", "focus", true),
-        action("Projects 보기", "projects"),
-      ],
-    });
-  }
-
-  if (!decisions.length && signals.length < 2) {
+  if (decisionComplete && !decisions.length && signals.length < 2) {
     signals.push({
       id: "work-decision-missing",
       tone: "info",
@@ -362,93 +344,56 @@ function buildWorkSignals(projects, work) {
   return signals;
 }
 
-function buildBlocks(projects, content) {
-  const todos = Array.isArray(projects.todos) ? projects.todos : [];
-  const projectById = new Map((Array.isArray(projects.projects) ? projects.projects : []).map((project) => [project.id, project]));
-  const contentQueue = Array.isArray(content.queue) ? content.queue : [];
-  const blocks = [];
-
-  todos
-    .filter((todo) => todo.bucket === "오늘" && !todo.done)
-    .slice(0, 4)
-    .forEach((todo, index) => {
-      blocks.push({
-        time: `${String(9 + index).padStart(2, "0")}:00`,
-        title: todo.title,
-        kind: projectById.get(todo.project)?.name || "Task",
-        tag: todo.priority === "high" ? "company" : null,
-        done: false,
-        todoId: todo.id,
-      });
-    });
-
-  const nextContent = contentQueue.find((item) => ["Draft", "Review", "Scheduled"].includes(item.status));
-  if (nextContent) {
-    blocks.push({
-      time: "14:00",
-      title: nextContent.title,
-      kind: `${nextContent.kind} · ${nextContent.status}`,
-      tag: null,
-      done: false,
-    });
-  }
-
-  return blocks.slice(0, 6);
-}
-
 function buildMetrics(revenue, content, automations, projects) {
   const revenueSummary = revenue.summary || {};
   const contentSummary = content.summary || {};
   const automationSummary = automations.summary || {};
-  const classinKpi = revenueSummary.classinMonthlyKpi || null;
-  const openProjects = Array.isArray(projects.projects)
+  const projectsReadable = projects?.source === "supabase";
+  const openProjects = projectsReadable && Array.isArray(projects.projects)
     ? projects.projects.filter((project) => project.status !== "Done").length
-    : 0;
+    : null;
 
-  const base = [
-    metric("MRR", formatMoney(revenueSummary.mrr || 0), revenueSummary.mrr ? "ledger" : "waiting", revenueSummary.mrr ? "success" : "neutral", undefined, "dashboard/revenue/overview"),
-    metric("Pipeline", formatMoney(revenueSummary.pipeline || 0), `${revenueSummary.openDeals || 0} deals`, "moon", undefined, "dashboard/classin/pipeline"),
-    metric("Published", String(contentSummary.published || 0), `${contentSummary.drafts || 0} drafts`, "info", undefined, "dashboard/content/queue"),
-    metric("Runs failed", String(automationSummary.failuresToday || 0), `${automationSummary.runsToday || 0} runs`, automationSummary.failuresToday ? "warning" : "success", undefined, "dashboard/automations/runs"),
-    metric("Open work", String(openProjects), "active projects", "moon"),
-  ];
-
-  if (classinKpi?.targets) {
-    base.unshift(metric(
-      "ClassIn",
-      `${classinKpi.actual?.contracts || 0}/${classinKpi.targets.monthlyContractTarget || 60}`,
-      `${classinKpi.actual?.units || 0}대 · ${classinKpi.actual?.revenueCny || 0} CNY`,
-      (classinKpi.actual?.contracts || 0) > 0 ? "success" : "moon",
-      undefined,
-      "dashboard/classin/pipeline",
-    ));
-  }
-
-  return base.slice(0, 4);
+  return [
+    metric("MRR", formatMoney(revenueSummary.mrr || 0), revenueSummary.mrr ? "ledger" : "waiting", revenueSummary.mrr ? "success" : "neutral"),
+    metric("Pipeline", formatMoney(revenueSummary.pipeline || 0), `${revenueSummary.openDeals || 0} deals`, "moon"),
+    metric("Published", String(contentSummary.published || 0), `${contentSummary.drafts || 0} drafts`, "info"),
+    metric("Runs failed", String(automationSummary.failuresToday || 0), `${automationSummary.runsToday || 0} runs`, automationSummary.failuresToday ? "warning" : "success"),
+    metric("Open work", openProjects === null ? "—" : String(openProjects), projectsReadable ? "active projects" : "project ledger unavailable", "moon"),
+  ].slice(0, 4);
 }
 
 function buildSources(results) {
   return [
-    { key: "projects", label: "Projects", state: ledgerState(results.projects) },
-    { key: "work", label: "Work", state: ledgerState(results.work) },
-    { key: "content", label: "Content", state: ledgerState(results.content) },
-    { key: "revenue", label: "Revenue", state: ledgerState(results.revenue) },
-    { key: "followups", label: "Followups", state: ledgerState(results.followups) },
-    { key: "automations", label: "Automations", state: ledgerState(results.automations) },
-    { key: "guru", label: "Guru", state: ledgerState(results.guruRuns) },
-  ];
+    ["projects", "Projects"],
+    ["work", "Work"],
+    ["content", "Content"],
+    ["revenue", "Revenue"],
+    ["automations", "Automations"],
+    ["orders", "Agents"],
+  ].map(([resultKey, label]) => {
+    const result = results[resultKey];
+    const value = result.status === "fulfilled" ? result.value : null;
+    return {
+      key: resultKey === "orders" ? "agents" : resultKey,
+      label,
+      state: ledgerState(result),
+      failedSources: Array.isArray(value?.failedSources) ? value.failedSources : [],
+      partialSources: Array.isArray(value?.partialSources) ? value.partialSources : [],
+      error: value?.source === "error" ? value.error || `${resultKey}-ledger-read-failed` : null,
+      retryable: value?.source === "error" ? value.retryable !== false : false,
+    };
+  });
 }
 
-export async function GET(req) {
-  const [projectsResult, workResult, contentResult, revenueResult, automationsResult, followupsResult, guruRunsResult, ordersResult] = await Promise.allSettled([
+export async function GET() {
+  const [projectsResult, workResult, contentResult, revenueResult, automationsResult, ordersResult, briefResult] = await Promise.allSettled([
     getProjectLedger(),
     getWorkLedger(),
     getContentLedger(),
     getRevenueLedger(),
     getAutomationsLedger(),
-    getFollowups({ limit: 12 }),
-    getRecentAgentRuns({ agent: "guru", limit: 3 }),
     getWorkOrders({ status: "proposed", limit: 20 }),
+    getMorningBrief(),
   ]);
 
   const results = {
@@ -457,77 +402,78 @@ export async function GET(req) {
     content: contentResult,
     revenue: revenueResult,
     automations: automationsResult,
-    followups: followupsResult,
-    guruRuns: guruRunsResult,
+    orders: ordersResult,
   };
 
   const projects = readLedger(projectsResult);
   const work = readLedger(workResult);
   const content = readLedger(contentResult);
   const revenue = readLedger(revenueResult);
+  const operatorRevenue = filterOperatorOwnedRevenue(revenue);
   const automations = readLedger(automationsResult);
-  const followups = readLedger(followupsResult);
-  const guruRuns = readLedger(guruRunsResult);
   const ordersLedger = readLedger(ordersResult, { source: "preview", orders: [] });
+  // Chief of Staff composed brief (ai.morning_brief) — the cron's output finally has a reader.
+  const morning = readLedger(briefResult, { source: "preview", brief: null });
   const queue = {
     source: ordersLedger.source || "preview",
     pending: Array.isArray(ordersLedger.orders) ? ordersLedger.orders.length : 0,
     orders: Array.isArray(ordersLedger.orders) ? ordersLedger.orders.slice(0, 12) : [],
   };
-
-  // Opportunistic stalled-deal scan — idempotent (dedupes on open followup per deal,
-  // enforced by uq_work_orders_open_followup at the DB level), so piggybacking on the
-  // brief keeps the approval queue fresh without cron infra. Because this GET would
-  // otherwise become an unauthenticated write path, the scan only runs when the request
-  // passes the same write guard as the POST routes (operator session / secret / dev
-  // origin); anonymous or bot hits get a pure read-only brief. A scan failure never
-  // blocks the brief.
-  try {
-    const scan = assertHubWriteAllowed(req) === null
-      ? await scanStalledDeals({ ledger: revenue })
-      : null;
-    if (scan?.created > 0) {
-      const refreshed = await getWorkOrders({ status: "proposed", limit: 20 });
-      if (refreshed.source === "supabase") {
-        queue.source = refreshed.source;
-        queue.pending = refreshed.orders.length;
-        queue.orders = refreshed.orders.slice(0, 12);
-      }
-    }
-  } catch {
-    // brief must render even if the scan fails
-  }
-
   const sources = buildSources(results);
   const liveCount = sources.filter((source) => source.state === "live").length;
   const errorCount = sources.filter((source) => source.state === "error").length;
+  const partialCount = sources.filter((source) => source.state === "partial").length;
+  const failedSources = sources
+    .filter((source) => ["error", "partial"].includes(source.state))
+    .map((source) => source.key);
   const signals = [
-    ...buildUnifiedRiskSignals(revenue, projects, automations),
+    ...buildUnifiedRiskSignals(operatorRevenue, projects, automations),
     ...buildApprovalSignals(queue),
-    ...buildFollowupSignals(followups),
-    ...buildGuruSignals(guruRuns),
-    ...buildRevenueSignals(revenue),
+    ...buildRevenueSignals(operatorRevenue),
     ...buildContentSignals(content),
     ...buildAutomationSignals(automations),
     ...buildWorkSignals(projects, work),
   ].slice(0, 7);
+  const operatorHome = buildOperatorHomeSummary({
+    projects,
+    content: filterContentLedgerToBrandLanes(content),
+  });
+  const projectState = ledgerState(projectsResult);
+  const taskToday = projects?.source === "supabase"
+    ? {
+        ...buildTaskToday(projects.todos),
+        state: projects.taskAggregation?.partial === true ? "partial" : "live",
+      }
+    : {
+        state: projectState,
+        items: [],
+        counts: null,
+        hiddenCount: null,
+        error: projects?.source === "error" ? projects.error || "project-ledger-core-read-failed" : null,
+      };
+  const contentBrands = buildContentBrandCatalog(content);
 
   return NextResponse.json({
-    status: errorCount ? "partial" : liveCount ? "live" : "preview",
-    source: liveCount ? "supabase" : "preview",
+    status: errorCount || partialCount ? "partial" : liveCount ? "live" : "preview",
+    source: errorCount || partialCount ? "partial" : liveCount ? "supabase" : "preview",
     generatedAt: new Date().toISOString(),
     sources,
+    failedSources,
     summary: {
       liveCount,
       previewCount: sources.filter((source) => source.state === "preview").length,
       errorCount,
+      partialCount,
       signalCount: signals.length,
       urgentCount: signals.filter((signal) => signal.tone === "danger").length,
       todayCount: signals.filter((signal) => signal.tone === "warning").length,
     },
     metrics: buildMetrics(revenue, content, automations, projects),
+    operatorHome,
+    taskToday,
+    contentBrands,
     signals,
-    blocks: buildBlocks(projects, content),
     queue,
+    morningBrief: morning.brief || null,
   });
 }

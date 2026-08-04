@@ -2,14 +2,7 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Progress, SectionTitle, Kbd, EmptyState, SyncBadge } from "../hub-primitives";
-import { AUTOMATIONS as FALLBACK_AUTOMATIONS, RUN_LOG as FALLBACK_RUN_LOG } from "../hub-data";
-import {
-  BULK_SENDER_PATTERNS,
-  SUPPORT_KEYWORDS,
-  LEAD_INQUIRY_KEYWORDS,
-  PERSONAL_EMAIL_DOMAINS,
-} from "@/lib/email-lead-classifier";
+import { Badge, Dot, Card, IconButton, Button, Progress, SectionTitle, Kbd, EmptyState, SyncBadge, LifecycleBadge } from "../hub-primitives";
 
 const EMPTY_AUTOMATION_SUMMARY = {
   runsToday: 0,
@@ -21,20 +14,14 @@ const EMPTY_AUTOMATION_SUMMARY = {
 
 function useAutomationsLedger() {
   const [state, setState] = React.useState({
-    source: 'mock',
-    syncState: 'mock',
-    automations: FALLBACK_AUTOMATIONS,
-    runs: FALLBACK_RUN_LOG,
+    source: 'preview',
+    syncState: 'preview',
+    automations: [],
+    runs: [],
     webhookEvents: [],
     errors: [],
     integrations: [],
-    summary: {
-      runsToday: 23,
-      failuresToday: 0,
-      activeAutomations: FALLBACK_AUTOMATIONS.filter(a => a.status === 'Active').length,
-      webhookEventsToday: 0,
-      integrationsConnected: 0,
-    },
+    summary: EMPTY_AUTOMATION_SUMMARY,
   });
 
   React.useEffect(() => {
@@ -45,7 +32,7 @@ function useAutomationsLedger() {
         const response = await fetch('/api/hub/automations', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
         if (!active || !response.ok || !data || data.status === 'error') {
-          if (active) setState(s => ({ ...s, syncState: 'mock' }));
+          if (active) setState(s => ({ ...s, syncState: 'preview' }));
           return;
         }
         if (data.source === 'supabase') {
@@ -60,10 +47,10 @@ function useAutomationsLedger() {
             summary: { ...EMPTY_AUTOMATION_SUMMARY, ...(data.summary || {}) },
           });
         } else {
-          setState(s => ({ ...s, syncState: 'mock' }));
+          setState(s => ({ ...s, source: 'preview', syncState: 'preview', automations: [], runs: [], webhookEvents: [], summary: EMPTY_AUTOMATION_SUMMARY }));
         }
       } catch {
-        if (active) setState(s => ({ ...s, syncState: 'mock' }));
+        if (active) setState(s => ({ ...s, source: 'preview', syncState: 'preview', automations: [], runs: [], webhookEvents: [], summary: EMPTY_AUTOMATION_SUMMARY }));
       }
     }
     load();
@@ -74,12 +61,12 @@ function useAutomationsLedger() {
 }
 
 export function AutomationsIndex({ onNavigate }) {
-  const sTone = { Active: 'success', Paused: 'warning', Error: 'danger' };
+  const automationLifecycle = (status) => ({ Active: 'active', Paused: 'waiting', Error: 'blocked' }[status] || 'queued');
   const { automations, summary, syncState } = useAutomationsLedger();
   const [statusOverrides, setStatusOverrides] = React.useState({});
   const rows = automations.map(a => statusOverrides[a.id] ? { ...a, status: statusOverrides[a.id] } : a);
   const activeCount = rows.filter(a => a.status === 'Active').length || summary?.activeAutomations || 0;
-  const runsTodayCount = summary?.runsToday ?? 23;
+  const runsTodayCount = summary?.runsToday ?? 0;
   const toggleAutomation = (automation) => {
     setStatusOverrides(prev => ({
       ...prev,
@@ -109,7 +96,7 @@ export function AutomationsIndex({ onNavigate }) {
         {automations.length === 0 && (
           <EmptyState
             icon="automations"
-            title="자동화 원장이 비어 있습니다"
+            title="자동화 기록이 비어 있습니다"
             description={syncState === 'live' ? 'Supabase automations 테이블에 표시할 flow가 없습니다.' : 'flow를 만들면 실행 상태와 성공률이 여기에 표시됩니다.'}
             action={<Button variant="primary" size="sm" icon="plus" onClick={() => onNavigate('dashboard/automations/flows?new=flow')}>Flow</Button>}
           />
@@ -125,7 +112,7 @@ export function AutomationsIndex({ onNavigate }) {
               <span style={{ fontSize: 13 }}>{a.name}</span>
             </div>
             <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{a.trigger}</span>
-            <Badge tone={sTone[a.status]} size="xs">{a.status}</Badge>
+            <LifecycleBadge state={automationLifecycle(a.status)} label={a.status} />
             <span style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>{a.lastRun}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="mono" style={{ fontSize: 12, color: a.success === a.runs24 ? 'var(--success)' : 'var(--warning)' }}>
@@ -148,136 +135,50 @@ export function AutomationsIndex({ onNavigate }) {
   );
 }
 
-// Real tag rules — sourced straight from the classifier's exported keyword
-// constants so this table can never drift from what the engine actually does.
-const EMAIL_TAG_RULES = [
-  {
-    cond: `from: ${BULK_SENDER_PATTERNS.slice(0, 3).join(', ')} 등`,
-    then: 'tag: Ignore · 대량/알림성 발신',
-    tone: 'neutral',
-  },
-  {
-    cond: `subject/snippet: ${SUPPORT_KEYWORDS.slice(0, 4).join(', ')}`,
-    then: 'tag: Support',
-    tone: 'info',
-  },
-  {
-    cond: `개인 도메인: ${PERSONAL_EMAIL_DOMAINS.slice(0, 3).join(', ')} 등`,
-    then: 'tag: Personal',
-    tone: 'personal',
-  },
-  {
-    cond: `업무 도메인 + ${LEAD_INQUIRY_KEYWORDS.slice(0, 4).join(', ')} 등`,
-    then: 'tag: Lead · Intake Inbox 스테이징',
-    tone: 'moon',
-  },
-];
+const EMPTY_EMAIL_STATUS = { status: 'loading', configured: false };
 
-function useGmailConnectionStatus() {
-  const [state, setState] = React.useState({ syncState: 'loading', data: null });
-
-  const reload = React.useCallback(async () => {
-    setState((s) => ({ ...s, syncState: 'loading' }));
-    try {
-      const response = await fetch('/api/email/gmail/status', { cache: 'no-store' });
-      const data = await response.json().catch(() => null);
-      if (!response.ok || !data) {
-        setState({ syncState: 'error', data: null });
-        return;
-      }
-      setState({ syncState: 'live', data });
-    } catch {
-      setState({ syncState: 'error', data: null });
-    }
-  }, []);
+function useEmailIntegrationStatus(url) {
+  const [state, setState] = React.useState(EMPTY_EMAIL_STATUS);
 
   React.useEffect(() => {
     let active = true;
-    (async () => {
-      await reload();
-      if (!active) return;
-    })();
-    return () => { active = false; };
-  }, [reload]);
 
-  return { ...state, reload };
+    fetch(url, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!active) return;
+        setState(data || { status: 'missing-config', configured: false });
+      })
+      .catch(() => {
+        if (active) setState({ status: 'degraded', configured: false });
+      });
+
+    return () => { active = false; };
+  }, [url]);
+
+  return state;
 }
 
-function GmailScanControl() {
-  const [scanState, setScanState] = React.useState({ pending: false, result: null, tone: null });
-
-  async function runScan() {
-    setScanState({ pending: true, result: null, tone: null });
-    try {
-      const response = await fetch('/api/hub/email/scan', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      const data = await response.json().catch(() => ({}));
-
-      if (response.ok && data.status === 'ok') {
-        setScanState({
-          pending: false,
-          result: `스캔 ${data.scanned ?? 0} · 리드 후보 ${data.staged ?? 0}건 staging${data.skipped ? ` · 중복 ${data.skipped}건 skip` : ''} → 리드 인박스에서 검토`,
-          tone: 'success',
-        });
-      } else if (data.status === 'preview') {
-        setScanState({
-          pending: false,
-          result: `preview · ${data.reason || 'Gmail 연결이 필요합니다'}`,
-          tone: 'warning',
-        });
-      } else {
-        setScanState({
-          pending: false,
-          result: `실패 · ${data.error || data.reason || response.status}`,
-          tone: 'danger',
-        });
-      }
-    } catch (error) {
-      setScanState({ pending: false, result: `실패 · ${error?.message || 'request-failed'}`, tone: 'danger' });
-    }
-  }
-
-  return (
-    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <Button variant="primary" size="xs" icon="play" onClick={runScan} disabled={scanState.pending}>
-          {scanState.pending ? '스캔 중…' : '지금 스캔'}
-        </Button>
-      </div>
-      {scanState.result && (
-        <div style={{
-          fontSize: 11, lineHeight: 1.5,
-          color: scanState.tone === 'success' ? 'var(--success)' : scanState.tone === 'warning' ? 'var(--warning)' : scanState.tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)',
-        }}>
-          {scanState.result}
-        </div>
-      )}
-    </div>
-  );
+function emailStatusBadge(status) {
+  if (status === 'connected') return { tone: 'success', label: 'Connected' };
+  if (status === 'ready') return { tone: 'info', label: 'OAuth ready' };
+  if (status === 'disabled') return { tone: 'neutral', label: 'Disabled' };
+  if (status === 'degraded') return { tone: 'warning', label: 'Status unknown' };
+  if (status === 'loading') return { tone: 'neutral', label: 'Checking…' };
+  return { tone: 'neutral', label: 'Not connected' };
 }
 
 export function EmailAutomation({ onNavigate }) {
-  const { syncState, data: gmailStatus } = useGmailConnectionStatus();
-  const connected = gmailStatus?.status === 'connected';
-  const gmailEmail = gmailStatus?.connection?.email || gmailStatus?.senderEmail || null;
-  const gmailBadgeTone = connected ? 'success' : gmailStatus?.status === 'ready' ? 'warning' : 'neutral';
-  const gmailBadgeLabel = connected ? 'Active' : gmailStatus?.status === 'ready' ? 'Ready' : syncState === 'loading' ? '확인 중' : 'Not connected';
-  const gmailSubline = connected
-    ? `${gmailEmail || 'me'} · connected`
-    : gmailStatus?.status === 'ready'
-    ? '연결 대기 · OAuth 완료 필요'
-    : syncState === 'loading'
-    ? '상태 확인 중…'
-    : '연결되지 않음';
+  const gmail = useEmailIntegrationStatus('/api/email/gmail/status');
+  const resend = useEmailIntegrationStatus('/api/email/resend/status');
+  const gmailBadge = emailStatusBadge(gmail.status);
+  const resendBadge = emailStatusBadge(resend.status);
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', maxWidth: 1100 }}>
       <div>
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Email automations</h2>
-        <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Gmail 수신 · Resend 발송</div>
+        <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Gmail OAuth · Resend 발송</div>
       </div>
       <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
@@ -287,16 +188,21 @@ export function EmailAutomation({ onNavigate }) {
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13.5, fontWeight: 500 }}>Gmail</div>
-              <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{gmailSubline}</div>
+              <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>
+                {gmail.connection?.email || gmail.connection?.mailbox || (gmail.status === 'disabled' ? 'OAuth provider 비활성' : gmail.configured ? 'OAuth 연결 대기' : '연동 미설정')}
+              </div>
             </div>
-            <Badge tone={gmailBadgeTone} size="xs">{gmailBadgeLabel}</Badge>
+            <Badge tone={gmailBadge.tone} size="xs">{gmailBadge.label}</Badge>
           </div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.6 }}>
-            수신 메일을 Lead · Support · Personal · Ignore로 분류. 리드 후보는 Intake Inbox에 스테이징되며, 검토 후 CRM으로 승격합니다.
+            현재 범위는 Gmail 발송 OAuth 준비 단계입니다. Inbox 읽기·자동 태깅은 별도 scope 검증 전까지 비활성입니다.
           </div>
-          <GmailScanControl />
-          <div style={{ marginTop: 10, display: 'flex', gap: 6 }}>
-            <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/automations/flows')}>Rules</Button>
+          <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
+            {gmailBadge.label === 'Not connected' || gmailBadge.label === 'OAuth ready' ? (
+              <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/settings')}>Connect</Button>
+            ) : (
+              <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/automations/flows')}>Rules</Button>
+            )}
             <Button variant="ghost" size="xs" onClick={() => onNavigate?.('dashboard/automations/runs')}>Logs</Button>
           </div>
         </Card>
@@ -307,9 +213,11 @@ export function EmailAutomation({ onNavigate }) {
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13.5, fontWeight: 500 }}>Resend</div>
-              <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>newsletter@moonlight.pro</div>
+              <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>
+                {resend.fromEmail || (resend.configured ? '발신 주소 확인 중' : 'RESEND_API_KEY 미설정')}
+              </div>
             </div>
-            <Badge tone="success" size="xs">Active</Badge>
+            <Badge tone={resendBadge.tone} size="xs">{resendBadge.label}</Badge>
           </div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.6 }}>
             뉴스레터, 트랜잭션 메일, 리마인더 발송. 스케줄된 발송은 Queue에서 관리.
@@ -323,8 +231,13 @@ export function EmailAutomation({ onNavigate }) {
 
       <SectionTitle>Tag rules</SectionTitle>
       <Card pad={false} className="hub-table-card">
-        {EMAIL_TAG_RULES.map((r, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 20px 1fr 60px', alignItems: 'center', padding: '12px 16px', borderBottom: i < EMAIL_TAG_RULES.length - 1 ? '1px solid var(--line-soft)' : 'none', gap: 10 }}>
+        {[
+          { cond: 'from:@* AND subject 한정', then: 'tag: Lead · create CRM', tone: 'moon' },
+          { cond: 'subject contains "invoice"', then: 'tag: Finance · archive 30d', tone: 'info' },
+          { cond: 'from: jihoon@*, jaemin@*', then: 'tag: Personal', tone: 'personal' },
+          { cond: 'has Stripe link', then: 'tag: Revenue · notify', tone: 'success' },
+        ].map((r, i) => (
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 20px 1fr 60px', alignItems: 'center', padding: '12px 16px', borderBottom: i < 3 ? '1px solid var(--line-soft)' : 'none', gap: 10 }}>
             <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>{r.cond}</span>
             <Iconed name="arrowRight" size={13} style={{ color: 'var(--fg-faint)' }} />
             <div><Badge tone={r.tone} size="xs">{r.then}</Badge></div>
@@ -337,13 +250,6 @@ export function EmailAutomation({ onNavigate }) {
     </div>
   );
 }
-
-const FALLBACK_HOOKS = [
-  { name: 'Stripe — payment_succeeded', url: 'https://moonlight.pro/hooks/stripe', status: 'ok', lastHit: '1h ago', count24: 4 },
-  { name: 'Calendly — invite.created', url: 'https://moonlight.pro/hooks/calendly', status: 'ok', lastHit: '3h ago', count24: 2 },
-  { name: 'Notion — page.updated', url: 'https://moonlight.pro/hooks/notion', status: 'warn', lastHit: '5h ago', count24: 11 },
-  { name: 'Custom — Form submission', url: 'https://moonlight.pro/hooks/form', status: 'ok', lastHit: 'Today', count24: 6 },
-];
 
 function aggregateWebhookEndpoints(events) {
   if (!events?.length) return [];
@@ -368,7 +274,7 @@ function aggregateWebhookEndpoints(events) {
 export function Webhooks({ onNavigate }) {
   const { webhookEvents, syncState } = useAutomationsLedger();
   const liveHooks = aggregateWebhookEndpoints(webhookEvents);
-  const hooks = syncState === 'live' ? liveHooks : (liveHooks.length ? liveHooks : FALLBACK_HOOKS);
+  const hooks = liveHooks;
   const sTone = { ok: 'success', warn: 'warning', err: 'danger' };
   const [testState, setTestState] = React.useState({}); // { [idx]: { tone: 'success'|'warning'|'danger', label, pending } }
 
@@ -436,7 +342,7 @@ export function Webhooks({ onNavigate }) {
             background: state && state.label
               ? (state.tone === 'success' ? 'var(--success-bg)' : state.tone === 'warning' ? 'var(--warning-bg)' : state.tone === 'danger' ? 'var(--danger-bg)' : 'transparent')
               : 'transparent',
-            transition: 'background-color .4s ease',
+            transition: 'background-color var(--dur-enter) ease',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <Dot tone={sTone[h.status]} />
@@ -461,10 +367,8 @@ export function Webhooks({ onNavigate }) {
 export function Runs() {
   const sIcon = { ok: { c: 'var(--success)', t: '●' }, warn: { c: 'var(--warning)', t: '▲' }, err: { c: 'var(--danger)', t: '✕' } };
   const { runs, syncState } = useAutomationsLedger();
-  const rows = syncState === 'live'
-    ? (Array.isArray(runs) ? runs : [])
-    : (runs?.length ? runs : FALLBACK_RUN_LOG);
-  const liveLabel = syncState === 'live' ? 'Live' : syncState === 'loading' ? 'Syncing' : 'Mock';
+  const rows = Array.isArray(runs) ? runs : [];
+  const liveLabel = syncState === 'live' ? 'Live' : syncState === 'loading' ? 'Syncing' : 'Preview';
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
@@ -477,11 +381,11 @@ export function Runs() {
         </div>
         <div style={{ flex: 1 }} />
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--success)' }}>
-          <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--success)', animation: 'mlMoonPulse 1.5s infinite' }} />
+          <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--success)', animation: 'mlMoonPulse 1.4s ease-in-out infinite' }} />
           {liveLabel}
         </span>
       </div>
-      <Card pad={false} className="hub-table-card" style={{ background: 'oklch(0.17 0.005 250)' }}>
+      <Card pad={false} className="hub-table-card" style={{ background: 'var(--bg)' }}>
         <div className="mono" style={{ padding: '12px 14px', fontSize: 12 }}>
           {rows.length === 0 && (
             <EmptyState
@@ -501,7 +405,7 @@ export function Runs() {
               <span style={{ color: sIcon[r.status].c, textAlign: 'center' }}>{sIcon[r.status].t}</span>
               <span style={{ color: 'var(--fg)' }}>{r.flow}</span>
               <span style={{ color: 'var(--fg-faint)', textAlign: 'right' }}>{r.ms}ms</span>
-              <span style={{ color: 'var(--fg-muted)' }}>{typeof r.detail === 'string' ? r.detail : JSON.stringify(r.detail)}</span>
+              <span style={{ color: 'var(--fg-muted)' }}>{r.detail}</span>
             </div>
           ))}
         </div>
@@ -510,405 +414,28 @@ export function Runs() {
   );
 }
 
-const FLOW_LIBRARY = [
-  { id: 'f1', name: 'Gmail → CRM 리드 태깅', status: 'Active', nodes: 6, runs24: 17, success: 15 },
-  { id: 'f2', name: '뉴스레터 발행 → Resend', status: 'Active', nodes: 8, runs24: 1, success: 1 },
-  { id: 'f3', name: 'Stripe → Slack 알림', status: 'Active', nodes: 4, runs24: 4, success: 4 },
-  { id: 'f4', name: 'Calendly → 노션 페이지 생성', status: 'Paused', nodes: 5, runs24: 0, success: 0 },
-  { id: 'f5', name: '리드 무응답 3일 → 리마인더', status: 'Active', nodes: 7, runs24: 2, success: 2 },
-];
-
-const FLOW_GRAPHS = {
-  f1: {
-    title: 'Gmail → CRM 리드 태깅',
-    description: '수신 메일을 분석해 Leads/Support/Personal로 태깅하고, 신규 리드는 CRM에 자동 생성합니다.',
-    trigger: { type: 'Gmail', event: 'email.received' },
-    nodes: [
-      { id: 'n1', kind: 'trigger', app: 'gmail', title: 'Gmail · 수신', sub: 'label:INBOX', col: 0, row: 1 },
-      { id: 'n2', kind: 'logic', app: 'filter', title: 'Filter', sub: 'subject ≠ notice', col: 1, row: 1 },
-      { id: 'n3', kind: 'ai', app: 'claude', title: 'AI 분류', sub: 'haiku · 3 태그', col: 2, row: 1 },
-      { id: 'n4', kind: 'logic', app: 'router', title: 'Router', sub: '3개 브랜치', col: 3, row: 1 },
-      { id: 'n5', kind: 'action', app: 'crm', title: 'CRM · 리드 생성', sub: '신규일 때만', col: 4, row: 0 },
-      { id: 'n6', kind: 'action', app: 'slack', title: 'Slack · #leads 알림', sub: 'MRR ≥ $500', col: 4, row: 1 },
-      { id: 'n7', kind: 'action', app: 'gmail', title: 'Gmail · 라벨 지정', sub: 'Support', col: 4, row: 2 },
-    ],
-    edges: [
-      { from: 'n1', to: 'n2' }, { from: 'n2', to: 'n3' }, { from: 'n3', to: 'n4' },
-      { from: 'n4', to: 'n5', label: 'Lead' }, { from: 'n4', to: 'n6', label: 'Revenue' }, { from: 'n4', to: 'n7', label: 'Support' },
-    ],
-  },
-  f2: {
-    title: '뉴스레터 발행 → Resend',
-    description: 'Content Studio 발행 버튼 → 렌더링 → Resend 발송 → 메트릭 수집.',
-    trigger: { type: 'Schedule', event: '매일 18:00' },
-    nodes: [
-      { id: 'n1', kind: 'trigger', app: 'clock', title: 'Schedule', sub: '매일 18:00', col: 0, row: 1 },
-      { id: 'n2', kind: 'logic', app: 'filter', title: 'Queue에 draft 있음?', sub: 'status=ready', col: 1, row: 1 },
-      { id: 'n3', kind: 'ai', app: 'claude', title: 'AI 교정', sub: '맞춤법·톤', col: 2, row: 1 },
-      { id: 'n4', kind: 'action', app: 'render', title: 'Render MJML', sub: '2 layouts', col: 3, row: 1 },
-      { id: 'n5', kind: 'action', app: 'resend', title: 'Resend · 발송', sub: '2,143 subs', col: 4, row: 1 },
-      { id: 'n6', kind: 'action', app: 'db', title: 'DB · 로그 기록', sub: 'campaign_id', col: 5, row: 0 },
-      { id: 'n7', kind: 'action', app: 'slack', title: 'Slack · 발송 완료', sub: '#newsletter', col: 5, row: 2 },
-    ],
-    edges: [
-      { from: 'n1', to: 'n2' }, { from: 'n2', to: 'n3' }, { from: 'n3', to: 'n4' },
-      { from: 'n4', to: 'n5' }, { from: 'n5', to: 'n6' }, { from: 'n5', to: 'n7' },
-    ],
-  },
-  f3: {
-    title: 'Stripe → Slack 알림',
-    description: '결제 성공 이벤트를 Slack 채널로 보내고, MRR 집계에 반영.',
-    trigger: { type: 'Webhook', event: 'stripe.payment_succeeded' },
-    nodes: [
-      { id: 'n1', kind: 'trigger', app: 'webhook', title: 'Webhook', sub: 'stripe.payment', col: 0, row: 1 },
-      { id: 'n2', kind: 'ai', app: 'claude', title: '요약 생성', sub: 'haiku', col: 1, row: 1 },
-      { id: 'n3', kind: 'action', app: 'slack', title: 'Slack · #revenue', sub: 'happy sound 🎉', col: 2, row: 1 },
-      { id: 'n4', kind: 'action', app: 'db', title: 'DB · MRR 업데이트', sub: 'monthly_rev', col: 2, row: 2 },
-    ],
-    edges: [{ from: 'n1', to: 'n2' }, { from: 'n2', to: 'n3' }, { from: 'n2', to: 'n4' }],
-  },
-  f4: {
-    title: 'Calendly → 노션 페이지 생성',
-    description: '미팅 초대가 생성되면 노션에 준비 페이지를 자동 생성.',
-    trigger: { type: 'Webhook', event: 'calendly.invite.created' },
-    nodes: [
-      { id: 'n1', kind: 'trigger', app: 'webhook', title: 'Calendly', sub: 'invite.created', col: 0, row: 1 },
-      { id: 'n2', kind: 'logic', app: 'filter', title: 'Type: 신규', sub: 'new meeting', col: 1, row: 1 },
-      { id: 'n3', kind: 'ai', app: 'claude', title: '의제 초안', sub: '과거 미팅 참조', col: 2, row: 1 },
-      { id: 'n4', kind: 'action', app: 'notion', title: 'Notion · 페이지 생성', sub: 'Meetings DB', col: 3, row: 1 },
-      { id: 'n5', kind: 'action', app: 'gmail', title: 'Gmail · 준비 이메일', sub: 'to:me', col: 3, row: 2 },
-    ],
-    edges: [{ from: 'n1', to: 'n2' }, { from: 'n2', to: 'n3' }, { from: 'n3', to: 'n4' }, { from: 'n3', to: 'n5' }],
-  },
-  f5: {
-    title: '리드 무응답 3일 → 리마인더',
-    description: '리드 상태가 Contact에 3일 이상 머무르면 자동 팔로업 초안.',
-    trigger: { type: 'Schedule', event: '매일 09:00' },
-    nodes: [
-      { id: 'n1', kind: 'trigger', app: 'clock', title: 'Schedule', sub: '매일 09:00', col: 0, row: 1 },
-      { id: 'n2', kind: 'action', app: 'crm', title: 'CRM 쿼리', sub: 'stage=Contact ≥3d', col: 1, row: 1 },
-      { id: 'n3', kind: 'logic', app: 'loop', title: 'Loop', sub: '각 리드마다', col: 2, row: 1 },
-      { id: 'n4', kind: 'ai', app: 'claude', title: '팔로업 초안', sub: '톤:정중', col: 3, row: 0 },
-      { id: 'n5', kind: 'action', app: 'gmail', title: 'Gmail · 초안 생성', sub: 'draft only', col: 4, row: 0 },
-      { id: 'n6', kind: 'action', app: 'slack', title: 'Slack · 내 DM', sub: '검토 요청', col: 3, row: 2 },
-    ],
-    edges: [{ from: 'n1', to: 'n2' }, { from: 'n2', to: 'n3' }, { from: 'n3', to: 'n4' }, { from: 'n4', to: 'n5' }, { from: 'n3', to: 'n6' }],
-  },
-};
-
-const NODE_KIND = {
-  trigger: { bg: 'oklch(0.62 0.17 30)', label: 'Trigger' },
-  logic: { bg: 'oklch(0.58 0.12 250)', label: 'Logic' },
-  ai: { bg: 'oklch(0.55 0.14 290)', label: 'AI' },
-  action: { bg: 'oklch(0.58 0.14 200)', label: 'Action' },
-};
-
-const APP_GLYPH = {
-  gmail: '✉', clock: '🕘', webhook: '⚡', filter: '⑂', router: '⇒',
-  claude: '✦', crm: '◎', slack: '#', resend: '📤', render: '▦', db: '▤',
-  notion: '◇', loop: '↻',
-};
-
-function FlowField({ label, value, mono }) {
-  return (
-    <div>
-      <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginBottom: 3 }}>{label}</div>
-      <div style={{
-        padding: '6px 9px',
-        background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
-        fontSize: 12, fontFamily: mono ? 'var(--font-mono)' : 'var(--font-sans)', color: 'var(--fg)',
-      }}>{value}</div>
-    </div>
-  );
-}
-
 export function Flows({ onNavigate }) {
-  const [flowLibrary, setFlowLibrary] = React.useState(FLOW_LIBRARY);
-  const [flowGraphs, setFlowGraphs] = React.useState(FLOW_GRAPHS);
-  const [sel, setSel] = React.useState('f1');
-  const [selNode, setSelNode] = React.useState('n1');
-  const graph = flowGraphs[sel] || flowGraphs.f1;
-  const flowMeta = flowLibrary.find(f => f.id === sel) || flowLibrary[0];
-
-  const canvasRef = React.useRef(null);
-  const panState = React.useRef({ dragging: false, moved: false, x: 0, y: 0, sl: 0, st: 0 });
-  const [grabbing, setGrabbing] = React.useState(false);
-  const [zoom, setZoom] = React.useState(100);
-  const [testState, setTestState] = React.useState(null);
-  const createFlow = () => {
-    const id = `local-flow-${Date.now()}`;
-    const nextFlow = { id, name: '새 Flow', status: 'Paused', nodes: 2, runs24: 0, success: 0 };
-    const nextGraph = {
-      title: '새 Flow',
-      description: '새 자동화 흐름 초안.',
-      trigger: { type: 'Manual', event: 'draft' },
-      nodes: [
-        { id: 'n1', kind: 'trigger', app: 'clock', title: 'Manual trigger', sub: 'draft', col: 0, row: 1 },
-        { id: 'n2', kind: 'action', app: 'db', title: 'DB · 기록', sub: 'preview', col: 1, row: 1 },
-      ],
-      edges: [{ from: 'n1', to: 'n2' }],
-    };
-    setFlowLibrary(prev => [nextFlow, ...prev]);
-    setFlowGraphs(prev => ({ ...prev, [id]: nextGraph }));
-    setSel(id);
-    setSelNode('n1');
-  };
-  const toggleFlow = () => {
-    setFlowLibrary(prev => prev.map(f => (
-      f.id === sel ? { ...f, status: f.status === 'Active' ? 'Paused' : 'Active' } : f
-    )));
-  };
-  const markTest = (label) => {
-    setTestState(label);
-    window.setTimeout(() => setTestState(null), 2500);
-  };
-
-  const onPanDown = (e) => {
-    if (e.button !== 0) return;
-    if (e.target.closest('button')) return;
-    const el = canvasRef.current;
-    if (!el) return;
-    panState.current = { dragging: true, moved: false, x: e.clientX, y: e.clientY, sl: el.scrollLeft, st: el.scrollTop };
-    setGrabbing(true);
-    e.preventDefault();
-  };
-  const onPanMove = (e) => {
-    const p = panState.current;
-    if (!p.dragging) return;
-    const dx = e.clientX - p.x, dy = e.clientY - p.y;
-    if (!p.moved && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) p.moved = true;
-    const el = canvasRef.current;
-    if (el) { el.scrollLeft = p.sl - dx; el.scrollTop = p.st - dy; }
-  };
-  const onPanUp = () => { panState.current.dragging = false; setGrabbing(false); };
-
-  const COL_W = 200, ROW_H = 110, NODE_W = 164, NODE_H = 74;
-  const maxCol = Math.max(...graph.nodes.map(n => n.col));
-  const maxRow = Math.max(...graph.nodes.map(n => n.row));
-  const canvasW = (maxCol + 1) * COL_W + 80;
-  const canvasH = (maxRow + 1) * ROW_H + 80;
-  const nodePos = (n) => ({ x: 40 + n.col * COL_W, y: 40 + n.row * ROW_H });
-  const selectedNode = graph.nodes.find(n => n.id === selNode) || graph.nodes[0];
-
+  const { syncState } = useAutomationsLedger();
   return (
-    <div className="hub-workspace-shell" style={{ display: 'grid', gridTemplateColumns: '240px 1fr 300px', height: '100%', overflow: 'hidden' }}>
-      <aside style={{ borderRight: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>Flows</div>
-            <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 3 }}>{flowLibrary.filter(f => f.status === 'Active').length} active</div>
-          </div>
-          <IconButton icon="plus" size={24} iconSize={13} tooltip="Create flow" onClick={createFlow} />
-        </div>
-        <div className="scroll-y" style={{ flex: 1, padding: 6 }}>
-          {flowLibrary.map(f => {
-            const active = sel === f.id;
-            return (
-              <button key={f.id} onClick={() => { setSel(f.id); setSelNode((flowGraphs[f.id] || flowGraphs.f1).nodes[0].id); }} style={{
-                width: '100%', padding: '9px 10px', marginBottom: 2, textAlign: 'left',
-                background: active ? 'var(--surface-3)' : 'transparent',
-                border: active ? '1px solid var(--line)' : '1px solid transparent',
-                borderRadius: 'var(--r-sm)',
-                color: active ? 'var(--fg)' : 'var(--fg-muted)',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: 999, background: f.status === 'Active' ? 'var(--success)' : 'var(--fg-faint)' }} />
-                  <span style={{ fontSize: 12.5, fontWeight: active ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{f.name}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10.5, color: 'var(--fg-faint)' }}>
-                  <span className="mono">{f.nodes} nodes</span>
-                  <span>·</span>
-                  <span className="mono">{f.success}/{f.runs24} · 24h</span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ padding: 10, borderTop: '1px solid var(--line-soft)', fontSize: 10.5, color: 'var(--fg-faint)' }}>
-          <div style={{ marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Templates</div>
-          {['Lead nurture · 7d', 'Abandoned checkout', 'Weekly digest'].map(t => (
-            <div key={t} style={{ padding: '4px 6px', fontSize: 11.5, color: 'var(--fg-muted)' }}>{t}</div>
-          ))}
-        </div>
-      </aside>
-
-      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div>
-            <div style={{ fontSize: 13.5, fontWeight: 500 }}>{graph.title}</div>
-            <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>
-              <span className="mono">{flowMeta.id.toUpperCase()}</span> · {graph.trigger.type} · {graph.trigger.event}
-            </div>
-          </div>
-          <div style={{ flex: 1 }} />
-          <Badge tone={flowMeta.status === 'Active' ? 'success' : 'warning'} size="xs">{flowMeta.status}</Badge>
-          <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{flowMeta.success}/{flowMeta.runs24} · 24h</span>
-          {testState && <Badge tone="success" size="xs">{testState}</Badge>}
-          <IconButton icon="eye" tooltip="Test run" onClick={() => markTest('test queued')} />
-          <IconButton icon={flowMeta.status === 'Active' ? 'pause' : 'play'} tooltip={flowMeta.status === 'Active' ? 'Pause flow' : 'Resume flow'} onClick={toggleFlow} />
-          <Button variant="outline" size="sm" icon="runs" onClick={() => onNavigate?.('dashboard/automations/runs')}>Runs</Button>
-        </div>
-
-        <div ref={canvasRef}
-          onMouseDown={onPanDown} onMouseMove={onPanMove} onMouseUp={onPanUp} onMouseLeave={onPanUp}
-          style={{
-            flex: 1, overflow: 'auto', position: 'relative',
-            cursor: grabbing ? 'grabbing' : 'grab',
-            userSelect: grabbing ? 'none' : 'auto',
-            background: `
-              radial-gradient(circle at 10px 10px, var(--line-soft) 1px, transparent 1px) 0 0 / 20px 20px,
-              var(--surface-2)
-            `,
-          }}>
-          <div style={{ position: 'relative', width: canvasW, height: canvasH, minWidth: '100%', minHeight: '100%' }}>
-            <svg style={{ position: 'absolute', inset: 0, width: canvasW, height: canvasH, pointerEvents: 'none' }}>
-              <defs>
-                <marker id="flow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-                  <path d="M0,0 L10,5 L0,10 Z" fill="var(--fg-faint)" />
-                </marker>
-              </defs>
-              {graph.edges.map((e, i) => {
-                const from = graph.nodes.find(n => n.id === e.from);
-                const to = graph.nodes.find(n => n.id === e.to);
-                const a = nodePos(from), b = nodePos(to);
-                const x1 = a.x + NODE_W, y1 = a.y + NODE_H / 2;
-                const x2 = b.x, y2 = b.y + NODE_H / 2;
-                const cx = (x1 + x2) / 2;
-                const d = `M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`;
-                const isHot = selNode === e.from || selNode === e.to;
-                return (
-                  <g key={i}>
-                    <path d={d} stroke={isHot ? 'var(--moon-300)' : 'var(--line-strong)'} strokeWidth={isHot ? 2 : 1.5} fill="none" markerEnd="url(#flow-arrow)" />
-                    {e.label && (
-                      <g>
-                        <rect x={cx - 26} y={(y1 + y2) / 2 - 9} width={52} height={18} rx={9} fill="var(--surface)" stroke="var(--line-soft)" />
-                        <text x={cx} y={(y1 + y2) / 2 + 3.5} textAnchor="middle" fontSize="10" fill="var(--fg-muted)" fontFamily="var(--font-mono)">{e.label}</text>
-                      </g>
-                    )}
-                  </g>
-                );
-              })}
-            </svg>
-            {graph.nodes.map(n => {
-              const p = nodePos(n);
-              const kind = NODE_KIND[n.kind];
-              const isSel = selNode === n.id;
-              return (
-                <button key={n.id} onClick={() => setSelNode(n.id)} style={{
-                  position: 'absolute', left: p.x, top: p.y,
-                  width: NODE_W, height: NODE_H, padding: 0,
-                  background: 'var(--surface)',
-                  border: isSel ? '2px solid var(--moon-300)' : '1px solid var(--line)',
-                  borderRadius: 'var(--r)',
-                  boxShadow: isSel ? '0 8px 20px -8px oklch(0.78 0.04 280 / 0.35)' : '0 2px 6px -2px oklch(0 0 0 / 0.3)',
-                  cursor: 'pointer', overflow: 'hidden',
-                  display: 'flex', flexDirection: 'column', textAlign: 'left',
-                }}>
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '4px 8px',
-                    background: kind.bg, color: '#fff',
-                    fontSize: 9.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase',
-                  }}>
-                    <span style={{ fontSize: 11, lineHeight: 1 }}>{APP_GLYPH[n.app] || '◇'}</span>
-                    <span>{kind.label}</span>
-                    <div style={{ flex: 1 }} />
-                    <span style={{ opacity: 0.7, fontFamily: 'var(--font-mono)', textTransform: 'none', letterSpacing: 0 }}>{n.id}</span>
-                  </div>
-                  <div style={{ padding: '7px 10px', flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--fg)', letterSpacing: '-0.005em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.title}</div>
-                    <div className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.sub}</div>
-                  </div>
-                  {n.kind !== 'trigger' && (
-                    <div style={{ position: 'absolute', left: -5, top: '50%', transform: 'translateY(-50%)', width: 9, height: 9, borderRadius: 999, background: 'var(--surface-3)', border: '1.5px solid var(--line-strong)' }} />
-                  )}
-                  <div style={{ position: 'absolute', right: -5, top: '50%', transform: 'translateY(-50%)', width: 9, height: 9, borderRadius: 999, background: 'var(--moon-400)', border: '1.5px solid var(--bg)' }} />
-                </button>
-              );
-            })}
+    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Flows</h2>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
+            자동화 정의 기록
+            <SyncBadge state={syncState} />
           </div>
         </div>
-
-        <div style={{ padding: '8px 16px', borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, fontSize: 11, color: 'var(--fg-faint)' }}>
-          <Kbd>drag</Kbd><span>이동</span>
-          <Kbd>Space</Kbd><span>pan</span>
-          <Kbd>⌘D</Kbd><span>복제</span>
-          <div style={{ flex: 1 }} />
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2 }}>
-            <button onClick={() => setZoom(z => Math.max(60, z - 10))} style={{ width: 22, height: 20, color: 'var(--fg-muted)' }}>−</button>
-            <span className="mono" style={{ fontSize: 11, padding: '0 6px' }}>{zoom}%</span>
-            <button onClick={() => setZoom(z => Math.min(140, z + 10))} style={{ width: 22, height: 20, color: 'var(--fg-muted)' }}>+</button>
-          </div>
-          <span className="mono">last run {flowMeta.status === 'Active' ? '2분 전' : 'paused'}</span>
-        </div>
+        <div style={{ flex: 1 }} />
+        <Button variant="outline" size="sm" icon="runs" onClick={() => onNavigate?.('dashboard/automations/runs')}>Runs</Button>
       </div>
-
-      <aside style={{ borderLeft: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)' }}>
-          <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>Inspector</div>
-          <div style={{ fontSize: 13, fontWeight: 500, marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: 2, background: NODE_KIND[selectedNode.kind].bg }} />
-            {selectedNode.title}
-          </div>
-        </div>
-        <div className="scroll-y" style={{ flex: 1, padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr', rowGap: 8, fontSize: 12 }}>
-            <span style={{ color: 'var(--fg-faint)' }}>Kind</span>
-            <span>{NODE_KIND[selectedNode.kind].label}</span>
-            <span style={{ color: 'var(--fg-faint)' }}>App</span>
-            <span className="mono">{selectedNode.app}</span>
-            <span style={{ color: 'var(--fg-faint)' }}>Node</span>
-            <span className="mono">{selectedNode.id}</span>
-          </div>
-          <div>
-            <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 6 }}>Configuration</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {selectedNode.kind === 'trigger' && (<>
-                <FlowField label="Event" value={graph.trigger.event} mono />
-                <FlowField label="Source" value={graph.trigger.type} />
-                <FlowField label="Polling" value="realtime · push" />
-              </>)}
-              {selectedNode.kind === 'logic' && (<>
-                <FlowField label="Condition" value={selectedNode.sub} mono />
-                <FlowField label="On false" value="skip branch" />
-              </>)}
-              {selectedNode.kind === 'ai' && (<>
-                <FlowField label="Model" value="Claude Haiku 4.5" mono />
-                <FlowField label="Prompt" value={selectedNode.sub} />
-                <FlowField label="Max tokens" value="512" mono />
-              </>)}
-              {selectedNode.kind === 'action' && (<>
-                <FlowField label="App" value={selectedNode.app} mono />
-                <FlowField label="Operation" value={selectedNode.title.split('·')[1]?.trim() || selectedNode.title} />
-                <FlowField label="Args" value={selectedNode.sub} mono />
-              </>)}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 6 }}>Sample output</div>
-            <pre className="mono" style={{
-              margin: 0, padding: 10,
-              background: 'oklch(0.17 0.005 250)', color: 'oklch(0.82 0.01 250)',
-              border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)',
-              fontSize: 10.5, lineHeight: 1.55, overflow: 'auto', maxHeight: 180,
-            }}>{`{\n  "node": "${selectedNode.id}",\n  "ok": true,\n  "ms": 140,\n  "output": {\n    "kind": "${selectedNode.kind}",\n    "summary": "${selectedNode.title}"\n  }\n}`}</pre>
-          </div>
-          <div>
-            <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 6 }}>Recent runs</div>
-            <div style={{ display: 'flex', gap: 3 }}>
-              {Array.from({ length: 20 }).map((_, i) => {
-                const ok = (i + selectedNode.id.charCodeAt(1)) % 9 !== 3;
-                return <div key={i} style={{ width: 10, height: 20, borderRadius: 2, background: ok ? 'var(--success)' : 'var(--danger)', opacity: 0.75 }} />;
-              })}
-            </div>
-            <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 6 }}>최근 20회 · 오류 1건</div>
-          </div>
-        </div>
-        <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', gap: 6 }}>
-          <Button variant="outline" size="sm" icon="play" style={{ flex: 1 }} onClick={() => markTest(`${selectedNode.id} ok`)}>Test node</Button>
-          <IconButton icon="moreV" tooltip="Open run log" onClick={() => onNavigate?.('dashboard/automations/runs')} />
-        </div>
-      </aside>
+      <Card>
+        <EmptyState
+          icon="zap"
+          title="등록된 Flow가 없습니다"
+          description="실제 자동화 정의를 읽는 기록이 연결되면 이 화면에 표시됩니다."
+        />
+      </Card>
     </div>
   );
 }

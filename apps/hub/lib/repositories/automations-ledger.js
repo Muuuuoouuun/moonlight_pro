@@ -4,7 +4,7 @@ import {
   inFilter,
   withWorkspaceFilter,
 } from "@/lib/server-read";
-import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
 
 const AUTOMATION_STATUSES = ["draft", "active", "paused", "disabled"];
 const RUN_STATUSES = ["queued", "running", "success", "failure", "ignored"];
@@ -260,9 +260,10 @@ function emptyLedger({ configured, workspaceId }) {
 
 export async function getAutomationsLedger() {
   const workspaceId = resolveDefaultWorkspaceId();
+  const supabaseConfig = resolveSupabaseConfig();
 
-  if (!workspaceId) {
-    return emptyLedger({ configured: false, workspaceId: null });
+  if (!workspaceId || !supabaseConfig) {
+    return emptyLedger({ configured: false, workspaceId: workspaceId || null });
   }
 
   const since = last24hThreshold();

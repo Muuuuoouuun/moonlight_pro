@@ -29,6 +29,7 @@ credentials.json
 google-credentials*.json
 **/google-credentials*.json
 .gstack/
+.superpowers/
 .claude/
-# Personal MCP config (local eeoCRM SSE on :3010 — not team-shareable)
+# Local MCP client config (not team-shareable)
 .mcp.json

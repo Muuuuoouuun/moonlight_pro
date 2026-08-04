@@ -1,0 +1,327 @@
+{
+  "auditedAt": "2026-07-15T03:45:49+09:00",
+  "scope": "Moonlight operator OS, exact-owner eeoCRM enrichment, PMS/content writes, MCP, OAuth/IAM, OpenClaw",
+  "crm": {
+    "moonlightLeadCount": 119,
+    "eeocrmSnapshotCount": 117,
+    "exactOwnerLeadCount": 16,
+    "exactMatchedCompanyCount": 13,
+    "publicEvidenceSourceCount": 17,
+    "taggedLeadCount": 16,
+    "engagementPresent": 6,
+    "engagementUnknown": 10,
+    "directMeetingTags": 3,
+    "directCallTags": 0,
+    "directInfoSessionTags": 0,
+    "publicInfoSessionSignals": 2,
+    "scoreDistribution": { "50": 2, "55": 7, "60": 1, "81": 1, "83": 3, "93": 2 },
+    "officialActivityTables": { "customerEvents": 0, "tasks": 0, "captureRows": 0 },
+    "evidenceBackedDryRun": {
+      "officialOwnerAccounts": 22,
+      "moonlightEeoCrmLeads": 117,
+      "exactMatchedCompanies": 13,
+      "targetedLeads": 16,
+      "changedLeads": 0,
+      "unchangedLeads": 16,
+      "calendarEventsScanned": 248,
+      "taggedLeads": 16,
+      "customerSuccessLaneLeads": 16
+    },
+    "applyGuard": "--apply is rejected unless --evidence is supplied, preventing evidence omission from erasing existing public enrichment signals.",
+    "homeSignalGate": {
+      "fullRevenueLedgerLeads": 119,
+      "verifiedOwnerLeads": 16,
+      "focusSignals": 3,
+      "unverifiedRevenueSignals": 0,
+      "selection": "customer_success with a next action; score descending and stable id tie-break; numeric score hidden from the home signal"
+    },
+    "policy": "Public signals remain separate from direct contact; missing activity is unknown, not zero intent."
+  },
+  "pms": {
+    "source": "supabase",
+    "projects": 4,
+    "tasks": 6,
+    "writePath": "Hub BFF -> Engine /api/pms/command -> Supabase -> Hub repository",
+    "liveRoundTrip": "passed",
+    "hydratedUi": "localhost:3000 verified: 4 projects, 6 open tasks, 2 due-or-overdue tasks, 1 blocked project",
+    "quickTaskCapture": {
+      "status": "live-task-and-work-order-destinations",
+      "path": "Daily Brief -> Hub /api/hub/inbox -> Engine /api/capture/command -> capture_quick_input_v1 -> tasks|work_orders + mutation_receipts",
+      "taskSavedReadBack": true,
+      "inboxSavedReadBack": true,
+      "taskSameIdRetry": "HTTP 200 duplicate with the original task destination ID",
+      "inboxSameIdRetry": "HTTP 200 duplicate with the original work-order destination ID",
+      "crossDestinationConflict": "same key reused for another destination returns HTTP 409 idempotency-key-reused and retryable=false",
+      "rawInputPreserved": true,
+      "failurePolicy": "clear only on saved or duplicate; preserve raw input and receipt key on failure; editing after failure starts a new key",
+      "mobile390x844": "task/inbox toggle, input, and submit button inside first fold; document overflow 0",
+      "remainingPhase1A": null
+    },
+    "captureReceipt": {
+      "migration": "20260715_0014_quick_capture_receipts.sql applied live",
+      "table": "mutation_receipts",
+      "uniqueKey": ["workspace_id", "idempotency_key"],
+      "rpc": "capture_quick_input_v1",
+      "atomicDestinations": ["task", "work_order"],
+      "completedReceiptsObservedDuringSmoke": 3,
+      "temporaryRowsRemaining": 0
+    },
+    "taskToday": {
+      "status": "live-task-only-loop",
+      "lanes": { "missed": 2, "today": 1, "waiting": 1, "inbox": 0, "shown": 4 },
+      "quickCaptureRefresh": "saved inbox task appeared in the same page after durable read-back",
+      "completionRoundTrip": "PATCH through Hub BFF and Engine saved done; re-read removed the task from Today",
+      "completedTasksVisible": 0,
+      "mobile390x844": "rows fit without horizontal overflow; completion controls are 44px and have task-specific aria labels",
+      "temporaryRowsRemaining": 0
+    },
+    "temporaryRowsRemaining": 0
+  },
+  "content": {
+    "source": "supabase",
+    "lanes": {
+      "classmoon": { "connection": "live", "items": 1 },
+      "classin_side": { "connection": "live", "items": 0 },
+      "studyseagull": { "connection": "live", "items": 0 }
+    },
+    "outsideLaneItems": 2,
+    "writePath": "Hub BFF -> Engine /api/content/command -> Supabase -> Hub repository",
+    "createRetryUpdateReadBack": "passed",
+    "hydratedUi": "localhost:3000 verified: Class.Moon 1, ClassIn Side 0, Study.Seagull 0, outside lanes 2",
+    "emptyLaneOnboarding": "passed at 390x844: empty state fits its 340px card and new-draft brand survives Studio local-mirror initialization",
+    "temporaryRowsRemaining": 0
+  },
+  "mcp": {
+    "transport": "local stdio",
+    "toolCount": 13,
+    "codex": "enabled",
+    "claudeCode": "connected",
+    "claudeLiveTaskReadCount": 6,
+    "createTaskReadBack": "passed",
+    "freshSdkSmoke": {
+      "toolCount": 13,
+      "taskReadSource": "supabase",
+      "taskReadStatus": "live",
+      "taskCountBefore": 6,
+      "createStatus": "saved",
+      "readBack": true,
+      "taskCountAfterCleanup": 6
+    },
+    "openClawWorkspace": {
+      "mcporterGoogleWorkspace": "registered-provider-auth-required",
+      "discoveredToolCount": 26,
+      "providerReadProbe": "authentication-required",
+      "credentialStorage": "Keychain-backed wrapper; mcporter config plaintext env count 0",
+      "package": "mcp-google@2.3.0",
+      "exactLockfile": true,
+      "authLauncher": "~/.moonlight/bin/mcporter-google-workspace auth",
+      "productionDependencyAudit": { "critical": 0, "high": 0, "moderate": 5, "low": 0, "directPackageFixAvailable": false },
+      "notionServer": "removed-after-401-invalid-token"
+    },
+    "codexConfigCleanup": {
+      "bundledComputerUsePlugin": "enabled",
+      "duplicateDisabledManualComputerUseBlock": "removed",
+      "mcporterImportedServers": { "ok": 2, "offline": 0, "names": ["node_repl", "moonlight"] },
+      "remoteConnectors": { "github": "enabled-bearer", "figma": "not-logged-in", "notion": "not-logged-in" }
+    },
+    "claudeCodeConnectors": {
+      "moonlight": "connected",
+      "needsAuthentication": ["notion", "figma", "google-drive", "gmail", "google-calendar", "vercel"],
+      "desktopConfig": { "mode": "0600", "serverCount": 1, "inlineEnvCount": 0, "lifecycle": "configured-not-restart-verified" },
+      "projectConfig": { "serverCount": 1, "inlineEnvCount": 0, "gitIgnored": true }
+    },
+    "temporaryRowsRemaining": 0,
+    "claudeDesktop": "configured-not-restart-verified",
+    "claudeDesktopEvidence": {
+      "appStartedAt": "2026-07-14T22:04:59+09:00",
+      "configModifiedAt": "2026-07-15T01:03:04+09:00",
+      "moonlightChildProcess": false,
+      "restartPolicy": "Do not restart while active Claude sessions exist without explicit user approval."
+    }
+  },
+  "googleOAuth": {
+    "calendar": { "status": "live", "source": "oauth", "readOnly": false, "boundedEventCount": 11 },
+    "ical": { "status": "fallback-only", "mergedWithOAuth": false },
+    "gmail": { "status": "disabled", "reason": "provider-not-enabled" },
+    "sheets": { "status": "disabled", "reason": "provider-not-enabled", "ledgerConfigured": true },
+    "credentialFiles": {
+      "openClawInbound": 0,
+      "quarantine": 0,
+      "retainedPlaintextFiles": 0,
+      "mcporterKeychainEntries": 2,
+      "wrapperMode": "0700",
+      "mcporterClientType": "installed",
+      "mcporterRedirect": "localhost",
+      "recoveredFromPreservedAuditWithMatchingHashes": true,
+      "futureTokenPath": "~/.moonlight/tokens/google-workspace.json",
+      "tokenDirectoryMode": "0700",
+      "tokenFileBeforeAuthentication": "absent",
+      "cleanup": "Misconfigured web client and plaintext files removed; package-compatible installed client restored to Keychain; Hub Calendar keeps its different active client."
+    }
+  },
+  "otherProviderStatus": {
+    "resend": { "status": "missing-config", "configured": false },
+    "instagram": { "status": "missing-config", "configured": false, "oauthCallbackImplemented": true },
+    "threads": { "status": "missing-config", "configured": false, "oauthAndRemovalCallbacksImplemented": true },
+    "github": { "status": "reachable-public-read", "configuredRepositoryCount": 1, "ledgerSyncVerified": false },
+    "telegramDirectEngine": { "status": "ready-external-registration-pending", "separateFromOpenClawChannel": true },
+    "slackDirectMoonlight": { "status": "planned", "openClawChannelConnectedSeparately": true }
+  },
+  "openclaw": {
+    "installedVersion": "2026.3.28",
+    "availableStableVersion": "2026.7.1",
+    "updateDryRun": "passed",
+    "updatePolicy": "Deferred until the first post-fix 09:30 delivery is verified, to keep the delivery test single-variable.",
+    "gateway": "reachable",
+    "relay": "reachable",
+    "gatewayRuntime": {
+      "node": "Homebrew node@24 24.18.0",
+      "program": "/opt/homebrew/opt/node@24/bin/node",
+      "supervisorConfigAudit": "passed",
+      "rpc": "passed"
+    },
+    "security": {
+      "criticalBefore": 2,
+      "criticalAfter": 0,
+      "warnings": 2,
+      "telegramGroupPolicy": "allowlist",
+      "allowedReachableGroups": 4,
+      "requireMentionForAllGroups": true,
+      "allowedGroupSenders": 1,
+      "nativeCommandMenu": "disabled-after-148-exceeded-platform-limit-100"
+    },
+    "staticSecrets": {
+      "provider": "macOS Keychain exec SecretRef",
+      "references": 6,
+      "resolved": 6,
+      "plaintext": 0,
+      "unresolved": 0,
+      "shadowed": 0,
+      "plaintextBackupsRemoved": 5,
+      "oauthLegacyResidue": 1,
+      "oauthLegacyResiduePolicy": "Retain: rotating OpenAI Codex OAuth is outside static SecretRef migration scope."
+    },
+    "sessions": {
+      "entries": 50,
+      "mainTokensBeforeReset": 1030410,
+      "mainContextTokens": 200000,
+      "mainTokensAfterReset": 0,
+      "mainTranscriptArchiveBytes": 104788519,
+      "missingIndexesRemoved": 1,
+      "maintenance": {
+        "mode": "enforce",
+        "pruneAfter": "180d",
+        "maxEntries": 500,
+        "maxDiskBytes": "500mb",
+        "highWaterBytes": "400mb"
+      }
+    },
+    "cron": "enabled",
+    "schedule": "30 9 * * 1-5 Asia/Seoul",
+    "telegramCredentialProbe": "passed",
+    "targetChatProbe": "passed",
+    "botMembership": "administrator",
+    "lastRunAt": "2026-07-14T09:30:00+09:00",
+    "deliveryConfigUpdatedAt": "2026-07-15T00:40:22+09:00",
+    "lastDeliveryStatus": "not-delivered",
+    "nextVerification": "First scheduled run after config update; require delivered=true."
+  },
+  "iam": {
+    "liveAudit": "blocked",
+    "reason": "gcloud not installed and no authenticated Cloud Console session",
+    "localCredentialPath": "none",
+    "chromeFallback": "requires explicit user approval; no Chrome process, gcloud binary, or local gcloud config detected",
+    "previousSnapshot": "two Owners, unused Editor service account without keys, broad API key",
+    "mutationPolicy": "Do not remove roles or restrict/delete keys until authenticated usage and recovery-path audit."
+  },
+  "completionMatrix": {
+    "registrationCleanup": {
+      "status": "complete-local",
+      "evidence": "Four responsibility-specific Moonlight secrets are separated; OpenClaw inbound and credential quarantine files are 0; mcporter Google client values use two Keychain entries with no plaintext config env; invalid Notion MCP registration was removed; OpenClaw core static secrets resolve 6/6 with plaintext and unresolved counts 0.",
+      "remaining": "Google Cloud IAM live role/key audit requires an authenticated admin surface and explicit mutation decisions."
+    },
+    "exactOwnerCrm": {
+      "status": "complete-snapshot",
+      "evidence": "119 total leads, 117 eeoCRM snapshot rows, 16 exact Junhyuk-owned rows, 16/16 tagged, 13 exact matched companies and 17 public evidence sources; direct and public signals remain separate.",
+      "remaining": "A Mac-compatible authenticated eeoCRM provider connection is not available, so this is not labeled live sync."
+    },
+    "personalOperatorOs": {
+      "status": "phase1a-complete-phase1b-partial",
+      "evidence": "Daily Brief reads six live ledgers, renders seven ranked signals, exposes PMS and ClassIn summaries without mock/live mixing, and closes the Quick Capture receipt-to-task-to-Today loop. The formal Attention adapter, Calendar agenda, named partials, and stable slotting remain Phase 1B."
+    },
+    "pms": {
+      "status": "phase1a-complete",
+      "evidence": "Four projects and six tasks are live; durable project/task create-update-complete, task/work-order Quick Capture with an atomic receipt, duplicate/conflict handling, and task-only Today completion passed Hub-to-Engine-to-Supabase read-back."
+    },
+    "content": {
+      "status": "complete-current-scope",
+      "evidence": "Class.Moon, ClassIn Side, and Study.Seagull are canonical live lanes with counts 1/0/0; content create-idempotency-update-read-back and rollback passed; empty-lane Draft stays in the mobile viewport and preserves the requested Studio brand."
+    },
+    "webhookAndMcp": {
+      "status": "complete-local-with-desktop-lifecycle-pending",
+      "evidence": "Signed/shared-secret webhook acceptance and duplicate suppression passed; MCP exposes 13 tools and passed fresh create-read-delete; Codex and Claude Code are connected.",
+      "remaining": "Claude Desktop loaded before its config was written and needs an approved restart to verify tool discovery."
+    },
+    "inheritance": {
+      "status": "complete",
+      "evidence": "Integration boundaries, source-of-truth rules, provider gates, secret responsibilities, warnings, and completion evidence are documented."
+    },
+    "usabilityScore": {
+      "status": "complete",
+      "score": 89,
+      "evidence": "Operator usability rubric remains exactly 89/100 after desktop and mobile runtime audits."
+    }
+  },
+  "verification": {
+    "repositoryTests": { "passed": 102, "failed": 0, "latestFocusedSuitePassed": 102, "latestFocusedSuiteFailed": 0 },
+    "monorepoTypecheck": "passed",
+    "hubAndEngineBuild": "passed",
+    "connectionCheck": "all-critical-passed; Hub and Engine each report 11 routes; Calendar PASS enabled/configured; Gmail and Sheets INFO disabled; OpenClaw Google MCP INFO process-ok/provider-auth-required",
+    "hydratedBrowser": {
+      "origin": "http://localhost:3000",
+      "dailyBrief": "6/6 ledgers live; 7 signals; task/inbox Quick Capture toggle and task-only Today rendered with 4 task rows and durable completion; PMS and ClassIn content pulse rendered; 390x844 document overflow 0 and visible interactive targets >=44x44",
+      "projects": "4 projects; 6 open todos; List, Board, To-dos controls rendered",
+      "content": "3 items; canonical Class.Moon, ClassIn Side, Study.Seagull lanes rendered; at 390x844 the empty lane stays within its 340px card and the requested brand survives new-draft Studio initialization",
+      "revenueLeads": "119 total; 16 exact-owner rows resolve to Me; 390x844 identity column 188px with no document/card overflow; 768x1024 and 1440x1000 regressions passed",
+      "runtimeRegression": "Fresh SSR exposed legacy isLiveLedger ReferenceError; fixed with source regression test, HTTP 200, console-clean browser recheck, and production build"
+    },
+    "signedWebhookSmoke": {
+      "unauthenticatedHttpStatus": 401,
+      "authenticatedHttpStatus": 202,
+      "acceptedStatus": "accepted",
+      "duplicateHttpStatus": 200,
+      "duplicateStatus": "duplicate",
+      "webhookEventReadBack": 1,
+      "projectUpdateReadBack": 1,
+      "temporaryRowsRemaining": 0
+    },
+    "captureCommandSmoke": {
+      "unauthenticatedEngineHttpStatus": 401,
+      "taskSaveHttpStatus": 201,
+      "taskDuplicateHttpStatus": 200,
+      "inboxSaveHttpStatus": 201,
+      "inboxDuplicateHttpStatus": 200,
+      "crossDestinationConflictHttpStatus": 409,
+      "sameDestinationIdsOnDuplicate": true,
+      "rawInputPreserved": true,
+      "temporaryTaskRowsRemaining": 0,
+      "temporaryWorkOrderRowsRemaining": 0,
+      "temporaryReceiptRowsRemaining": 0
+    },
+    "liveTemporaryRowsRemaining": 0,
+    "latestLiveRecheck": {
+      "at": "2026-07-15T03:45:49+09:00",
+      "revenue": "supabase live; 119-row searchable ledger preserved; evidence-backed dry-run over 117 eeoCRM rows targeted 16 exact-owner leads with changed 0; Daily Brief now exposes three verified customer-success follow-ups and zero unverified Revenue signals",
+      "pms": "supabase live; 4 projects; 6 tasks; 1 blocked; Quick Capture task/work-order save/read-back and same-ID duplicates passed; cross-destination key reuse returned 409; task-only Today save-refresh-complete-re-read passed; task/work-order/receipt residue 0",
+      "content": "three canonical ClassIn lanes live with counts 1/0/0 and two outside-lane items",
+      "dailyBrief": "six of six sources live; seven signals"
+    },
+    "localProcessCleanup": {
+      "staleHeadlessAuditGroupsRemoved": 2,
+      "staleHomeCredentialSearchRemoved": 1,
+      "userChromeOrClaudeSessionsTouched": false,
+      "servicesAfterCleanup": "Hub 200; Engine 200; relay 200"
+    }
+  },
+  "selfEvaluation": 89
+}

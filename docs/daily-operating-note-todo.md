@@ -1,5 +1,7 @@
 # Daily Operating Note Todo
 
+> 상태: DEFERRED FEATURE BACKLOG — 별도 Daily Note 홈과 Obsidian 양방향 sync는 현재 범위가 아니다. 일정·할 일은 Phase 1 Action Desk에 먼저 통합한다.
+
 이 문서는 `캘린더 + 일정 + 데일리 인사이트 + 메모 + Obsidian 연결`을
 Com_Moon Hub 안에서 실제 구현 순서로 내리기 위한 실행용 체크리스트다.
 

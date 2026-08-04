@@ -77,6 +77,9 @@ argument-hint: "[건수 또는 기관명, 기본 3건]"
 - 콘텐츠가 앵글을 골랐고 채널 발행 골격이 필요 → **제작**(`production`) 활성(콘텐츠 출력에 의존, 순차).
 - 어떤 페르소나든 **아웃바운드 후보**(고객에게 나갈 카피)를 내면 → **검수**(`review`) 활성(필수).
 - 각 항목의 `work_order`에 `activate:[persona ids]`와 `why_now`를 명시.
+- 루프가 이 제안을 `work_orders`(status `proposed`)로 적재하면서 `agent_runs`도 기록한다면, 그 run의
+  id를 `work_orders.run_id`에 심는다 — 실행 결과(`outreach_outcomes`)가 제안을 낸 run에 귀속돼
+  내일 트리아지가 "어떤 제안이 실제로 통했는지"를 학습한다(§11의 짝).
 
 ## 5. 선택 페르소나 병렬 생산 (Claude Code 서브에이전트)
 선택된 페르소나를 **서브에이전트로 병렬** 실행하고, 각 서브에이전트에 registry가 가리키는 해당 페르소나 파일

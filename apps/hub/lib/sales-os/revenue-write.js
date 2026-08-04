@@ -19,11 +19,20 @@ const LEAD_STATUS_BY_STAGE = {
   New: "new",
   Contact: "nurturing",
   Qualified: "qualified",
+  Customer: "won",
   Lost: "lost",
 };
 
-// Canonical deal stage keys (mapDeal normalizes DB aliases down to these).
-const DEAL_STAGE_KEYS = new Set(["lead", "qual", "prop", "neg", "won", "lost"]);
+const DEAL_STAGE_KEYS = new Set(["potential", "contact", "consult", "quote", "final", "closing", "lost"]);
+const STAGE_KEY_TO_DB = {
+  potential: "prospect",
+  contact: "prospect",
+  consult: "prospect",
+  quote: "proposal",
+  final: "negotiation",
+  closing: "won",
+  lost: "lost",
+};
 
 // "₩1.2M" / "₩900K" / "₩0" / "—" / 1200000 → number. Tolerates raw numbers and commas.
 export function parseMoneyLabel(value) {
@@ -69,6 +78,11 @@ export function buildLeadWrite(payload = {}) {
   if (type) metaPatch.account_kind = type;
   if (payload.value != null) metaPatch.value = parseMoneyLabel(payload.value);
   if (payload.workspace) metaPatch.workspace = payload.workspace;
+  if (payload.focusOverride !== undefined) {
+    metaPatch.focus_override = payload.focusOverride === "raise" || payload.focusOverride === "lower"
+      ? payload.focusOverride
+      : null;
+  }
 
   // Lightweight lead tags — 지역·규모·현재 상황·도입 댓수. Live in meta so no schema churn;
   // 유입경로 stays on the `source` column above. `undefined` means "untouched" (skip); an
@@ -101,10 +115,22 @@ export function buildDealWrite(payload = {}) {
     columns.title = payload.name.trim();
   }
   if (DEAL_STAGE_KEYS.has(String(payload.stage))) {
-    columns.stage = String(payload.stage);
+    columns.stage = STAGE_KEY_TO_DB[String(payload.stage)];
+    metaPatch.stage_detail = String(payload.stage);
   }
   if (payload.value != null) {
     columns.amount = parseMoneyLabel(payload.value);
+  }
+  if (payload.closeAt !== undefined) {
+    const raw = String(payload.closeAt || "").trim();
+    if (!raw) columns.expected_close_at = null;
+    else {
+      const parsed = new Date(raw);
+      if (!Number.isNaN(parsed.getTime())) columns.expected_close_at = parsed.toISOString();
+    }
+  }
+  if (payload.hidden !== undefined) {
+    columns.hidden_at = payload.hidden ? new Date().toISOString() : null;
   }
 
   const type = normalizeType(payload.type);
@@ -117,6 +143,26 @@ export function buildDealWrite(payload = {}) {
   }
   if (payload.snooze_until !== undefined) {
     metaPatch.snooze_until = String(payload.snooze_until).trim() || null;
+  }
+
+  return { columns, metaPatch };
+}
+
+export function buildFollowupWrite(payload = {}) {
+  const columns = {};
+  const metaPatch = {};
+
+  if (typeof payload.text === "string") {
+    columns.next_action = payload.text.trim() || null;
+  }
+  if (payload.dormant === true) {
+    metaPatch.dormant = true;
+    metaPatch.dormant_since = new Date().toISOString();
+    metaPatch.next_action_at = null;
+  } else if (payload.at != null) {
+    metaPatch.dormant = false;
+    metaPatch.dormant_since = null;
+    metaPatch.next_action_at = String(payload.at);
   }
 
   return { columns, metaPatch };
@@ -177,6 +223,49 @@ export function buildAccountWrite(payload = {}) {
   if (type) metaPatch.account_kind = type;
   if (payload.note != null) metaPatch.note = String(payload.note).trim() || null;
   if (payload.workspace) metaPatch.workspace = payload.workspace;
+  if (payload.focusOverride !== undefined) {
+    metaPatch.focus_override = payload.focusOverride === "raise" || payload.focusOverride === "lower"
+      ? payload.focusOverride
+      : null;
+  }
+
+  return { columns, metaPatch };
+}
+
+const ACTIVITY_KINDS = new Set([
+  "call", "meeting", "info_session", "demo", "visit", "email", "update",
+  "note", "deal", "kakao", "quote", "ai",
+]);
+const ACTIVITY_REACTIONS = new Set(["positive", "neutral", "concern", "rejected", "no_response"]);
+
+export function buildActivityWrite(payload = {}) {
+  const columns = {};
+  const metaPatch = {};
+
+  if (typeof payload.body === "string" && payload.body.trim()) {
+    columns.body = payload.body.trim();
+  }
+  if (ACTIVITY_KINDS.has(String(payload.type))) {
+    columns.kind = String(payload.type);
+  }
+  if (payload.pinned !== undefined) {
+    columns.pinned = Boolean(payload.pinned);
+  }
+  if (payload.reaction !== undefined) {
+    columns.reaction = ACTIVITY_REACTIONS.has(String(payload.reaction))
+      ? String(payload.reaction)
+      : null;
+  }
+
+  for (const key of ["account_id", "company_id", "lead_id", "deal_id", "contact_id"]) {
+    const camel = key.replace(/_([a-z])/g, (_, character) => character.toUpperCase());
+    if (payload[camel] !== undefined) columns[key] = payload[camel] || null;
+  }
+
+  if (columns.account_id) columns.entity_type = "account";
+  else if (columns.deal_id) columns.entity_type = "deal";
+  else if (columns.lead_id) columns.entity_type = "lead";
+  if (payload.occurredAt) columns.occurred_at = String(payload.occurredAt);
 
   return { columns, metaPatch };
 }

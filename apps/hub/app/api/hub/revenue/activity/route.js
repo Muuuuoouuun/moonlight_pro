@@ -1,30 +1,30 @@
 import { NextResponse } from "next/server";
 
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
-import {
-  deleteActivity,
-  getActivitiesFor,
-  recordActivity,
-  setActivityPinned,
-} from "@/lib/repositories/crm-activities";
+import { getCrmActivities } from "@/lib/repositories/revenue-ledger";
+import { buildActivityWrite, persistRevenueRecord } from "@/lib/sales-os/revenue-write";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Read a single entity's activity timeline. No write guard — read-only, like GET /api/hub/revenue.
+// GET ?accountId= | ?leadId= | ?dealId= | ?companyId= — 상세 패널·팔로업 탭의 활동·노트 lazy load.
 export async function GET(req) {
   try {
-    const { searchParams } = new URL(req.url);
-    const accountId = searchParams.get("accountId");
-    const leadId = searchParams.get("leadId");
-    const dealId = searchParams.get("dealId");
-    const companyId = searchParams.get("companyId");
-
-    const result = await getActivitiesFor({ accountId, leadId, dealId, companyId });
-    return NextResponse.json({
-      status: result.source === "supabase" ? "live" : "preview",
-      ...result,
+    const params = new URL(req.url).searchParams;
+    const result = await getCrmActivities({
+      accountId: params.get("accountId") || "",
+      leadId: params.get("leadId") || "",
+      dealId: params.get("dealId") || "",
+      companyId: params.get("companyId") || "",
     });
+
+    if (!result.configured) {
+      return NextResponse.json({ status: "preview", activities: [] }, { status: 202 });
+    }
+    if (result.activities === null) {
+      return NextResponse.json({ status: "preview", reason: "fetch-failed", activities: [] }, { status: 202 });
+    }
+    return NextResponse.json({ status: "live", activities: result.activities });
   } catch (error) {
     return NextResponse.json(
       { status: "error", error: error instanceof Error ? error.message : String(error) },
@@ -33,7 +33,7 @@ export async function GET(req) {
   }
 }
 
-// Log / pin / delete an activity. Write-guarded like the other Revenue POST routes.
+// POST { op, id?, ...payload } — create(활동/노트 기록) · update(pinned 토글 등) · delete.
 export async function POST(req) {
   try {
     const guard = assertHubWriteAllowed(req);
@@ -43,38 +43,19 @@ export async function POST(req) {
     if (parsed.error) return parsed.error;
 
     const payload = parsed.data || {};
-    const op = payload.op === "pin" ? "pin" : payload.op === "delete" ? "delete" : "create";
+    const op = payload.op === "create" ? "create" : payload.op === "delete" ? "delete" : "update";
 
-    // A non-persisted write is `preview` (config/workspace missing, DB unreachable, PostgREST
-    // refused) — the caller keeps its optimistic local entry, same as the lead/deal/account
-    // routes. Only genuinely malformed input (missing entity/id) is a hard 400 error.
-    let result;
-    if (op === "pin") {
-      const res = await setActivityPinned({ id: payload.id, pinned: payload.pinned });
-      result = res.persisted
-        ? { status: "saved", activity: res.activity }
-        : { status: res.reason === "missing-id" ? "error" : "preview", reason: res.reason, detail: res.detail };
-    } else if (op === "delete") {
-      const res = await deleteActivity({ id: payload.id });
-      result = res.persisted
-        ? { status: "saved", id: res.id }
-        : { status: res.reason === "missing-id" ? "error" : "preview", reason: res.reason };
-    } else {
-      const res = await recordActivity({
-        leadId: payload.leadId,
-        dealId: payload.dealId,
-        accountId: payload.accountId,
-        companyId: payload.companyId,
-        entityType: payload.entityType,
-        kind: payload.kind,
-        body: payload.body,
-        pinned: payload.pinned,
-        occurredAt: payload.occurredAt,
-      });
-      result = res.persisted
-        ? { status: "saved", id: res.id, activity: res.activity }
-        : { status: res.reason === "missing-entity" ? "error" : "preview", reason: res.reason, detail: res.detail };
+    if (op === "create" && !(typeof payload.body === "string" && payload.body.trim())) {
+      return NextResponse.json({ status: "error", reason: "empty-body" }, { status: 400 });
     }
+
+    const result = await persistRevenueRecord({
+      table: "crm_activities",
+      op,
+      id: payload.id,
+      payload,
+      build: buildActivityWrite,
+    });
 
     const httpStatus = result.status === "saved" ? 200 : result.status === "error" ? 400 : 202;
     return NextResponse.json(result, { status: httpStatus });

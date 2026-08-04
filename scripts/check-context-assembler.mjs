@@ -89,6 +89,18 @@ eq("focus recent_outcomes count", focus.ledger.recent_outcomes.length, 2);
 eq("focus content empty for deal", focus.content.idea_queue_top.length, 0);
 ok("focus missing notes eeoCRM + leads + contacts", focus.missing.length === 3 && focus.missing.some((m) => m.source === "eeoCRM"));
 
+// --- buildFocusOperatingContext with crmFacts (Sales OS v1.4 gap fill) ---
+const focusWithCrm = buildFocusOperatingContext({
+  deal: { id: "D1", name: "강남학원 도입", stage: "prop", value: 3000000 },
+  account: { name: "강남학원" },
+  entityOutcomes: [],
+  brand: { voice: "classmoon", rules: ["R"], forbidden: ["F"] },
+  crmFacts: { stage: "contract", amount: 3000000, paymentStatus: "pending", lastContactAt: null, syncedAt: "2026-07-10T00:00:00Z" },
+});
+eq("focus crm_facts passthrough", focusWithCrm.crm_facts, { stage: "contract", amount: 3000000, paymentStatus: "pending", lastContactAt: null, syncedAt: "2026-07-10T00:00:00Z" });
+ok("focus with crmFacts drops eeoCRM from missing", !focusWithCrm.missing.some((m) => m.source === "eeoCRM"));
+eq("focus with crmFacts keeps leads + contacts missing", focusWithCrm.missing.length, 2);
+
 const noDeal = buildFocusOperatingContext({ deal: null });
 eq("focus no deal -> found false", noDeal.found, false);
 eq("focus no deal -> missing deals", noDeal.missing[0].source, "deals");

@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { recordAgentRun } from "@/lib/sales-os/agent-runs";
 import { assembleSalesContext } from "@/lib/sales-os/context-assembler";
-import { createWorkOrder } from "@/lib/sales-os/work-orders";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -78,45 +77,6 @@ function resultStateFromStatus(status) {
   return "error";
 }
 
-function modeLabel(mode) {
-  return ({
-    "pipeline-triage": "파이프라인 분류",
-    "deal-review": "딜 진단",
-    "proposal-critique": "제안 검토",
-    "weekly-retro": "주간 회고",
-  })[mode] || mode;
-}
-
-async function createGuruWorkOrder({ mode, ref, context, data }) {
-  if (data?.status !== "generated" || !data?.text) {
-    return { persisted: false, reason: "not-generated" };
-  }
-
-  const kpi = context?.operator?.monthlyKpi || context?.summary?.classinMonthlyKpi || null;
-  return createWorkOrder({
-    persona: "guru",
-    kind: "sales_next_action",
-    title: `Guru ${modeLabel(mode)} 승인 필요${ref ? ` · ${ref}` : ""}`,
-    body: {
-      mode,
-      ref,
-      gate: "human_approval",
-      lane: "classin_sales",
-      summary: data.text.slice(0, 2000),
-      classinMonthlyKpi: kpi,
-      contextSummary: summarizeContext(context),
-      policy: {
-        noCompanyCrmPush: true,
-        noDirectCustomerSend: true,
-        customerDeliveryRequiresApproval: true,
-      },
-    },
-    gate: "human_approval",
-    source: "guru",
-    channel: "approval",
-  });
-}
-
 export async function POST(req) {
   const guard = assertHubWriteAllowed(req);
   if (guard) {
@@ -135,25 +95,28 @@ export async function POST(req) {
 
   const context = await assembleSalesContext({ mode, ref });
   const result = await callEngine({ mode, ref, draft, context });
-  const workOrder = await createGuruWorkOrder({ mode, ref, context, data: result.data });
 
   // Episodic memory: log what Guru recommended so the next call can remember it (best-effort).
+  let runId = null;
   try {
-    await recordAgentRun({
+    const run = await recordAgentRun({
       agent: "guru",
       mode,
       ref,
       inputSummary: summarizeContext(context),
       recommendation: trimRecommendation(result.data),
-      emittedCount: workOrder?.persisted ? 1 : 0,
       result: resultStateFromStatus(result.status),
     });
+    runId = run?.id || null;
   } catch {
     // logging is best-effort — never let it break the coaching response.
   }
 
-  const data = result.data && typeof result.data === "object"
-    ? { ...result.data, workOrder }
-    : result.data;
-  return NextResponse.json(data, { status: result.status });
+  // runId rides along so whoever turns this coaching into a work order can set
+  // work_orders.run_id — the hook that makes outcome→run attribution live.
+  const payload =
+    result.data && typeof result.data === "object" && !Array.isArray(result.data)
+      ? { ...result.data, runId }
+      : result.data;
+  return NextResponse.json(payload, { status: result.status });
 }

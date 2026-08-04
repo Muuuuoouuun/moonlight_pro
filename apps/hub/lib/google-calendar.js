@@ -5,6 +5,15 @@ import {
   resolveSupabaseConfig,
   updateSupabaseRecord,
 } from "@/lib/server-write";
+import {
+  listGoogleCalendarIcalEvents,
+  readGoogleCalendarEventsWithIcalFallback,
+} from "@/lib/google-calendar-ical";
+import {
+  isGoogleOAuthProviderEnabled,
+  resolveOAuthStateSecret,
+} from "@/lib/integration-readiness";
+import { extractGoogleCalendarAccountIdentity } from "@/lib/google-calendar-identity";
 import { createHmac, timingSafeEqual } from "crypto";
 
 const GOOGLE_CALENDAR_PROVIDER = "google_calendar";
@@ -75,14 +84,6 @@ async function fetchSupabaseRows(table, options = {}) {
   } catch {
     return null;
   }
-}
-
-function resolveOAuthStateSecret() {
-  return (
-    process.env.COM_MOON_OAUTH_STATE_SECRET?.trim() ||
-    process.env.COM_MOON_SHARED_WEBHOOK_SECRET?.trim() ||
-    ""
-  );
 }
 
 export function hasGoogleCalendarOAuthStateSecret() {
@@ -167,7 +168,11 @@ export function buildGoogleCalendarAuthUrl({
 }) {
   const oauth = resolveGoogleOAuthConfig();
 
-  if (!oauth || !hasGoogleCalendarOAuthStateSecret()) {
+  if (
+    !oauth ||
+    !hasGoogleCalendarOAuthStateSecret() ||
+    !isGoogleOAuthProviderEnabled("calendar")
+  ) {
     return null;
   }
 
@@ -226,6 +231,23 @@ export async function exchangeGoogleCalendarCode({ code, redirectUri }) {
   });
 }
 
+export async function fetchGoogleCalendarAccountIdentity({ accessToken, calendarId = "primary" }) {
+  if (!accessToken) return null;
+
+  const url = new URL(`${GOOGLE_CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events`);
+  url.searchParams.set("maxResults", "1");
+  url.searchParams.set("singleEvents", "true");
+  url.searchParams.set("timeMin", new Date().toISOString());
+
+  const response = await fetch(url, {
+    headers: { authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  if (!response.ok) return null;
+
+  return extractGoogleCalendarAccountIdentity(await response.json());
+}
+
 export async function refreshGoogleCalendarAccessToken(refreshToken) {
   return exchangeGoogleToken({
     refresh_token: refreshToken,
@@ -250,6 +272,7 @@ export async function saveGoogleCalendarConnection({
   workspaceId = resolveDefaultWorkspaceId(),
   calendarId,
   tokenData,
+  externalAccountId = null,
 }) {
   const existing = await fetchLatestGoogleCalendarConnection(workspaceId);
   const now = new Date().toISOString();
@@ -266,6 +289,7 @@ export async function saveGoogleCalendarConnection({
     workspace_id: workspaceId || null,
     provider: GOOGLE_CALENDAR_PROVIDER,
     status: "connected",
+    external_account_id: externalAccountId || existing?.external_account_id || null,
     config,
     last_synced_at: now,
   };
@@ -426,44 +450,59 @@ export async function listGoogleCalendarEvents({
   maxResults = 20,
 }) {
   try {
-    const access = await ensureGoogleCalendarAccess({ workspaceId, calendarId });
+    const now = new Date();
+    const effectiveTimeMin = timeMin || now.toISOString();
+    const effectiveTimeMax =
+      timeMax || new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const iCalUrl = process.env.GOOGLE_CALENDAR_ICAL_URL?.trim() || "";
 
-    if (!access.ok) {
-      return {
-        ok: false,
-        reason: access.reason,
-        items: [],
-        connection: access.connection,
-      };
-    }
+    return await readGoogleCalendarEventsWithIcalFallback({
+      readOAuth: async () => {
+        const access = await ensureGoogleCalendarAccess({ workspaceId, calendarId });
 
-    const params = new URLSearchParams({
-      singleEvents: "true",
-      orderBy: "startTime",
-      maxResults: String(maxResults),
+        if (!access.ok) {
+          return {
+            ok: false,
+            reason: access.reason,
+            items: [],
+            connection: access.connection,
+          };
+        }
+
+        const params = new URLSearchParams({
+          singleEvents: "true",
+          orderBy: "startTime",
+          maxResults: String(maxResults),
+          timeMin: effectiveTimeMin,
+          timeMax: effectiveTimeMax,
+        });
+        const encodedCalendarId = encodeURIComponent(access.calendarId);
+        const payload = await fetchGoogleCalendarJson(
+          `${GOOGLE_CALENDAR_API_BASE}/calendars/${encodedCalendarId}/events?${params.toString()}`,
+          access.accessToken,
+        );
+
+        return {
+          ok: true,
+          reason: "ok",
+          items: Array.isArray(payload.items) ? payload.items : [],
+          connection: access.connection,
+          calendarId: access.calendarId,
+        };
+      },
+      readIcal: iCalUrl
+        ? async () => ({
+            ...(await listGoogleCalendarIcalEvents({
+              feedUrl: iCalUrl,
+              timeMin: effectiveTimeMin,
+              timeMax: effectiveTimeMax,
+              maxResults,
+            })),
+            connection: null,
+            calendarId: "ical",
+          })
+        : undefined,
     });
-
-    if (timeMin) {
-      params.set("timeMin", timeMin);
-    }
-
-    if (timeMax) {
-      params.set("timeMax", timeMax);
-    }
-
-    const encodedCalendarId = encodeURIComponent(access.calendarId);
-    const payload = await fetchGoogleCalendarJson(
-      `${GOOGLE_CALENDAR_API_BASE}/calendars/${encodedCalendarId}/events?${params.toString()}`,
-      access.accessToken,
-    );
-
-    return {
-      ok: true,
-      reason: "ok",
-      items: Array.isArray(payload.items) ? payload.items : [],
-      connection: access.connection,
-      calendarId: access.calendarId,
-    };
   } catch (error) {
     return {
       ok: false,

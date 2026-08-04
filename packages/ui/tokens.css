@@ -68,8 +68,10 @@
   --cm-font-serif:
     "MaruBuri", "Iowan Old Style", "Palatino Linotype", "Book Antiqua",
     "Times New Roman", Georgia, serif;
+  /* SUIT leads — it is the bundled face (apps/hub @font-face); Pretendard is only a
+     system-installed fallback. Keep in sync with `fonts.sans` in tokens.ts. */
   --cm-font-sans:
-    "Pretendard Variable", "Pretendard", "SUIT Variable",
+    "SUIT Variable", "Pretendard Variable", "Pretendard",
     "Apple SD Gothic Neo", "Noto Sans KR", "Helvetica Neue", Arial, sans-serif;
   --cm-font-mono:
     "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas,
