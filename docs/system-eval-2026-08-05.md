@@ -20,6 +20,9 @@
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | 기준선 (iter 1 평가) | 2026-08-05 | 44 | 57 | 63 | 72 | 74 | 76 | 72 | 41 | **62.4** |
 | 재감사 (iter 1~4 반영 후) | 2026-08-05 | 80 | 85 | 88 | 72 | 72 | 77 | — | — | **79.0*** |
+| 2차 재감사 (iter 5 반영 후, 부분) | 2026-08-05 | 87 | 86 | — | — | 84 | — | — | — | 부분 측정** |
+
+\** 2차 재감사는 축별 감사 에이전트 5기 중 2기만 완주(속도 84 · 정체성 87 · 사용성 86). 안정성·디자인·UI/UX·편의 에이전트는 세션 한도로 중단 — 09:10Z 리셋 후 재실행. 완주 2기의 잔여 지적(셸 ReferenceError·ClassIn 앵커 아카이브 착지·가짜 페르소나·팬아웃·캐시 부재 등)은 6~9차 수리로 전부 반영 완료.
 
 \* 재감사는 새 체크리스트(각 축 감사 에이전트의 잔여 결함 실측)로 기준선보다 엄격하게 측정 — 안정성·속도는 기준선 대비 하락이 아니라 새로 발견된 결함(무음 병합 소실·records 불일치·팬아웃) 반영. UI/UX·부가기능 축은 세션 한도로 미측정, 5차 수리 후 통합 재측정.
 
@@ -148,6 +151,18 @@
 3. 정체성/사용성(1·2/3) — §7 fold 순서: FocusSlots(긴급 KA·집중 고객·오늘 일정)를 CommandCard 위로. KA 빈 상태에 지정 방법 명시("KA 지정은 Sales Ledger 시트"). 집중 고객 숫자 점수 노출 제거(§7 금지). `queueApprovals` 죽은 self-link → agents/orders. 메시지 축 부재를 StatusLine에 정적 고지. classin 별칭 → LEGACY_REDIRECTS, intake-inbox 死페이지 삭제, ⌘K 설정/콘텐츠 키워드 보강.
 4. 속도(3/3) — attention-ledger를 lean `getTaskLedger`(4콜/1웨이브)로 전환(최다 호출 엔드포인트, 기존 14콜/2웨이브). projects 태스크 낙관 flip+rollback(전체 reload 대기 제거). revenue SortHead 모듈 호이스트(헤더 unmount/remount 제거)·Leads/Accounts 파생 memo(검색 인덱스 1회 구축). SUIT/JetBrains preload + **MaruBuri 9.6MB 死폰트 삭제**.
 5. 디자인(4·5) — §5.3 semantic 색 전면 소거(44곳 실측분): deal-stages `color`→`ramp` 인덱스 개명(Badge 톤 오용 경로 차단, Moonstone 게이지 유지), daily-brief syncTone(live=green 등) → error만 danger, work/content/automations/customers 등 truth·lifecycle·카테고리 색 전부 중립화. **hub-primitives 다크 전용 OKLCH 15곳 → 테마 토큰**(라이트 AA 복구). 칸반 스트라이프·드롭타깃 2px→1px. agents 채팅 h2 신설, overview 차트 키보드 탐색(←→/Home/End), 10px 메타 10곳 → 10.5, DESIGN.md §11 Daily Brief Display 카브아웃 명문화.
+
+### Iteration 6~9 (2026-08-05) — 반영 완료
+
+주제: **2차 재감사 완주 축(속도 84·정체성 87·사용성 86)의 잔여 지적 전량 소진 + 미완주 축 선제 수리.**
+검증: 각 배치 `npm test` 549/549 · hub build 통과. 커밋 99a38cc · a350014 · 42de74e · 720b0a5 · 300cdff.
+
+- **6차 (정체성/사용성)**: 셸 코어 결함 2건 수리 — hub-sidebar `ownerAnchorKey` 미import ReferenceError(스코프 토글 무음 no-op), ClassIn 고객 연락 앵커가 제거된 별칭으로 착지(Archive 플레이스홀더) → 정본 경로. 가짜 페르소나 "Hyeon Park" 3면 → 문준혁. followups h2를 D4 확정 라벨 "고객 연락"으로, 푸터 카피를 실제 writer(crm_activities)로 정정. daily-brief 집중 고객 행에 §7 최소 정보(이유·기한/기약 없음·최근 활동) 추가, 점프 칩을 확정 슬롯 아래로. content Queue/Campaigns N 단축키(usePageCreateHotkey 신설).
+- **7차 (속도)**: next-intl 전면 제거(소비자 0, 전 페이지 런타임+메시지 번들 — legal 3페이지 static 복귀). daily-brief 60초 시계 BriefClock 리프 분리(분당 전체 트리 리렌더 제거). my-work 기한 변경(드래그·미루기) 낙관 반영+실패 롤백. revenue 원장 모듈 스코프 stale-while-revalidate 캐시(탭 전환 스켈레톤 제거, 신선도 1 RTT). projects 할 일 편집 저장 PATCH 응답 로컬 병합.
+- **8차 (속도 — 첫 화면 팬아웃)**: daily-brief 라우트를 lean `getTaskLedger`(4콜)로 전환 — getProjectLedger 11~14콜/2웨이브 제거(시스템 최다 비용 라우트). lean projection에 status·partialSources 추가로 신호·요약·정직성 소비처 호환. 캡처/완료 후 재검증을 전체 집계(~30콜) → tasks 4콜 슬라이스 교체(refreshTasks). StatusLine error/partial 다시 읽기 버튼. 집계 테스트 4건을 lean 계약으로 갱신.
+- **9차 (안정성/디자인)**: use-undoable-action pagehide flush(탭 닫기 시 3.5초 창 내 쓰기 확정 소실 → 최선 노력, re-audit S14). revenue 딜 체크리스트 읽기 실패 정직화(빈 목록 위장 금지). overview 활동 피드 카테고리 semantic 톤 → 중립(§5.3). engine webhook 11개 라우트 인증 검증 전수 확인(전부 통과), localStorage JSON.parse 전수 확인(전부 try 가드), fetch r.ok 휴리스틱 전수 스캔(실긍정 1건만 — 체크리스트).
+
+**미완주 축 보류 항목** (09:10Z 재감사에서 확인): overview 라우트 lean 전환(~35콜, 브랜드/updates/decisions projection 필요 — M), beforeunload keepalive 보장(현행 pagehide 최선 노력), overview 활동 차트 위 브랜드·글리프 lean 필드.
 
 ### 다음 회차 백로그 (점수 영향 순)
 
