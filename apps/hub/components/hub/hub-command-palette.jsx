@@ -6,10 +6,52 @@ import { Kbd } from "./hub-primitives";
 import { NAV_TREE, LEGACY_TREE } from "./hub-data";
 import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
 
+// 레코드 검색(2026-08-05) — 팔레트가 페이지 내비만 하던 것을 "이름을 치면 그 레코드"로.
+// 이미 존재하는 딥링크(?customer= ?deal= ?task=)에 얹는 팔레트측 배선이라 새 API가 없다.
+// 60초 모듈 캐시: 1인용 도구에서 팔레트를 여닫을 때마다 원장을 다시 읽지 않는다.
+let RECORDS_CACHE = { at: 0, items: [] };
+async function loadRecordItems() {
+  if (Date.now() - RECORDS_CACHE.at < 60_000) return RECORDS_CACHE.items;
+  const [rev, tasks] = await Promise.all([
+    fetch('/api/hub/revenue', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null),
+    fetch('/api/hub/tasks', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null),
+  ]);
+  const items = [];
+  (Array.isArray(rev?.leads) ? rev.leads : []).forEach((l) => {
+    if (!l?.id || !l?.name) return;
+    items.push({
+      kind: '고객', label: l.name, icon: 'leads',
+      path: `dashboard/revenue/customers?customer=${encodeURIComponent(`lead:${l.id}`)}`,
+      keywords: [l.companyName || '', l.stage || ''],
+    });
+  });
+  (Array.isArray(rev?.deals) ? rev.deals : []).forEach((d) => {
+    if (!d?.id || !d?.name) return;
+    items.push({ kind: '딜', label: d.name, icon: 'deals', path: `dashboard/revenue/deals?deal=${encodeURIComponent(d.id)}` });
+  });
+  (Array.isArray(tasks?.tasks) ? tasks.tasks : []).forEach((t) => {
+    if (!t?.id || !t?.title || t.done) return;
+    items.push({ kind: '할 일', label: t.title, icon: 'inbox', path: `dashboard/work/my?task=${encodeURIComponent(t.id)}` });
+  });
+  RECORDS_CACHE = { at: Date.now(), items };
+  return items;
+}
+
+const RECORD_RESULT_CAP = 8;
+
 export function CommandPalette({ open, onClose, onNavigate }) {
   const [q, setQ] = React.useState('');
   const [idx, setIdx] = React.useState(0);
+  const [records, setRecords] = React.useState([]);
   const inputRef = React.useRef(null);
+
+  // 열릴 때 레코드 인덱스를 예열(캐시 60s) — 검색어를 치는 시점엔 이미 로컬 필터만 남는다.
+  React.useEffect(() => {
+    if (!open) return undefined;
+    let active = true;
+    loadRecordItems().then((items) => { if (active) setRecords(items); });
+    return () => { active = false; };
+  }, [open]);
 
   const items = React.useMemo(() => {
     const flat = [];
@@ -27,10 +69,12 @@ export function CommandPalette({ open, onClose, onNavigate }) {
   }, []);
 
   const filtered = React.useMemo(() => {
-    if (!q) return items;
+    if (!q) return items; // 빈 검색 = 내비 목록 (레코드는 검색어가 있을 때만 섞인다)
     const lc = q.toLowerCase();
-    return items.filter(i => (i.label + ' ' + (i.keywords || []).join(' ')).toLowerCase().includes(lc));
-  }, [q, items]);
+    const match = (i) => (i.label + ' ' + (i.keywords || []).join(' ')).toLowerCase().includes(lc);
+    const recordHits = records.filter(match).slice(0, RECORD_RESULT_CAP);
+    return [...recordHits, ...items.filter(match)];
+  }, [q, items, records]);
 
   React.useEffect(() => {
     if (open) { setQ(''); setIdx(0); setTimeout(() => inputRef.current?.focus(), 30); }
@@ -84,7 +128,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--line-soft)' }}>
           <Iconed name="search" size={15} style={{ color: 'var(--fg-faint)' }} />
           <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} onKeyDown={handleKey}
-            placeholder="Search pages, actions…"
+            placeholder="페이지·액션·고객·딜·할 일 검색…"
             style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--fg)', fontSize: 14 }} />
           <Kbd>esc</Kbd>
         </div>

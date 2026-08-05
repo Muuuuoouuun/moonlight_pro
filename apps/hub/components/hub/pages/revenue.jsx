@@ -551,7 +551,7 @@ export function Leads({ workspace }) {
         background: 'none', border: 'none', padding: 0, cursor: 'pointer',
       }}>
       {children}
-      <span style={{ fontSize: 8, opacity: sort.key === k ? 1 : 0 }}>{sort.dir === 'desc' && sort.key === k ? '▼' : '▲'}</span>
+      <span style={{ fontSize: 10.5, opacity: sort.key === k ? 1 : 0 }}>{sort.dir === 'desc' && sort.key === k ? '▼' : '▲'}</span>
     </button>
   );
   const stageTone = { New: 'info', Contact: 'moon', Qualified: 'moon', Customer: 'company', Lost: 'danger' };
@@ -992,16 +992,27 @@ export function Deals({ workspace, onNavigate }) {
     setDeals(ledger.deals);
   }, [ledger.deals]);
 
+  // 드로어 편집은 드래프트 오버레이로 격리 — 이전에는 키스트로크마다 setDeals(전체 배열
+  // re-map)로 보드 전체가 재계산됐다(system-eval P-6, 이 파일 memo 0개). 보드는 저장
+  // 성공 시점에만 갱신되고, 타이핑은 드래프트 객체 하나만 바꾼다.
+  const [dealDrafts, setDealDrafts] = React.useState({});
+
   // Scope BEFORE grouping by stage so the kanban columns only ever show in-workspace
   // deals (pass-through when unscoped). setDeals still holds the full ledger set.
   const ws = getWorkspace(workspace);
-  const scopedDeals = filterDealsByWorkspace(deals, workspace);
+  const scopedDeals = React.useMemo(() => filterDealsByWorkspace(deals, workspace), [deals, workspace]);
   // 초기화(숨기기)된 딜은 기본적으로 파이프라인에서 빠진다 — 되돌릴 수 있는 정리이지
-  // 삭제가 아니다. showHidden이 켜지면 다시 전부 보인다(카드는 흐리게 표시).
-  const hiddenCount = scopedDeals.filter(d => d.hidden).length;
-  const visibleDeals = showHidden ? scopedDeals : scopedDeals.filter(d => !d.hidden);
+  // 삭제가 아니다. showHidden이 켜지면 다시 전부 보인다(dashed 엣지 + 숨김 뱃지).
+  const hiddenCount = React.useMemo(() => scopedDeals.filter(d => d.hidden).length, [scopedDeals]);
+  const visibleDeals = React.useMemo(
+    () => (showHidden ? scopedDeals : scopedDeals.filter(d => !d.hidden)),
+    [scopedDeals, showHidden],
+  );
   const wsEmpty = Boolean(ws) && visibleDeals.length === 0;
-  const editingDeal = editDealId ? deals.find(d => d.id === editDealId) : null;
+  const editingBase = editDealId ? deals.find(d => d.id === editDealId) : null;
+  const editingDeal = editingBase
+    ? (dealDrafts[editDealId] ? { ...editingBase, ...dealDrafts[editDealId] } : editingBase)
+    : null;
 
   const toggleDealHidden = (id, nextHidden) => {
     setDeals(ds => ds.map(d => (d.id === id ? { ...d, hidden: nextHidden } : d)));
@@ -1010,11 +1021,11 @@ export function Deals({ workspace, onNavigate }) {
     }
   };
 
-  const totals = DEAL_STAGES.reduce((acc, s) => {
+  const totals = React.useMemo(() => DEAL_STAGES.reduce((acc, s) => {
     const items = visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
     acc[s.key] = { count: items.length, sum: items.reduce((a, b) => a + b.value, 0) };
     return acc;
-  }, {});
+  }, {}), [visibleDeals, filter]);
   // Command-deck readout split: money in motion (open stages) vs money landed (closing).
   // The old single grandTotal blended won deals into "pipeline", overstating what's open.
   const openStages = DEAL_STAGES.filter(s => s.key !== 'closing' && s.key !== 'lost');
@@ -1079,10 +1090,13 @@ export function Deals({ workspace, onNavigate }) {
     if (!editingDeal) return { ok: false, status: 'error' };
     const isNew = String(editDealId).toLowerCase().startsWith('local-');
     const r = await saveRevenueRecord('deal', isNew ? 'create' : 'update', editingDeal);
-    if (r.ok && isNew && r.id) {
-      const realId = r.id;
-      setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, id: realId } : d)));
-      setEditDealId(realId);
+    if (r.ok) {
+      // 저장 성공 시점에 드래프트를 보드에 커밋 — 타이핑 중에는 보드가 재계산되지 않는다.
+      const draft = dealDrafts[editDealId];
+      const realId = isNew && r.id ? r.id : editDealId;
+      setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, ...(draft || {}), id: realId } : d)));
+      setDealDrafts(prev => { if (!prev[editDealId]) return prev; const next = { ...prev }; delete next[editDealId]; return next; });
+      if (isNew && r.id) setEditDealId(realId);
     }
     return r;
   };
@@ -1327,10 +1341,14 @@ export function Deals({ workspace, onNavigate }) {
           { key: 'closeAt', row: 'meta', label: '예상 마감', inputType: 'date' },
           { key: 'type', row: 'meta', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
         ]}
-        onChange={(key, val) => setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, [key]: val } : d)))}
+        onChange={(key, val) => setDealDrafts(prev => ({ ...prev, [editDealId]: { ...prev[editDealId], [key]: val } }))}
         onSave={persistDeal}
         onDelete={deleteDeal}
-        onClose={() => setEditDealId(null)}
+        onClose={() => {
+          // 닫기 = 미저장 드래프트 폐기(EditDrawer의 dirty confirm이 이미 실수를 막는다).
+          setDealDrafts(prev => { if (!editDealId || !prev[editDealId]) return prev; const next = { ...prev }; delete next[editDealId]; return next; });
+          setEditDealId(null);
+        }}
       >
         <DealTaskPanel deal={editingDeal} onSaved={loadDealTaskStats} />
       </EditDrawer>
@@ -1389,7 +1407,7 @@ export function Cases() {
         background: 'none', border: 'none', padding: 0, cursor: 'pointer',
       }}>
       {children}
-      <span style={{ fontSize: 8, opacity: sort.key === k ? 1 : 0 }}>{sort.dir === 'desc' && sort.key === k ? '▼' : '▲'}</span>
+      <span style={{ fontSize: 10.5, opacity: sort.key === k ? 1 : 0 }}>{sort.dir === 'desc' && sort.key === k ? '▼' : '▲'}</span>
     </button>
   );
   const sTone = { Open: 'warning', Waiting: 'info', Resolved: 'success' };
@@ -1483,7 +1501,7 @@ export function Cases() {
         <Button variant="primary" size="sm" icon="plus" onClick={createCase}>Case <Kbd>N</Kbd></Button>
       </div>
       <Card pad={false} className="hub-table-card">
-        <div style={{ display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+        <div className="hub-table-min" style={{ display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           <span>ID</span><SortHead k="title">Title</SortHead><SortHead k="account">Account</SortHead><span>Type</span><SortHead k="priority">Priority</SortHead><SortHead k="status">Status</SortHead><SortHead k="opened">Opened</SortHead><span style={{ textAlign: 'right' }}>Owner</span>
         </div>
         {cases.length === 0 && (
@@ -1495,7 +1513,7 @@ export function Cases() {
           />
         )}
         {cases.map((c, i) => (
-          <div key={c.id} className="hub-row"
+          <div key={c.id} className="hub-row hub-table-min"
             role="button" tabIndex={0}
             onClick={() => setEditCaseId(c.id)}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditCaseId(c.id); } }}
@@ -1991,9 +2009,10 @@ export function Accounts({ workspace, onNavigate }) {
   const [filter, setFilter] = React.useState('all');
   const [selected, setSelected] = React.useState(null);
   const [details, setDetails] = React.useState({});
+  const [sort, setSort] = React.useState({ key: null, dir: 'asc' });
 
   const term = search.trim().toLowerCase();
-  const filtered = ACCOUNTS.filter(a => {
+  const searched = ACCOUNTS.filter(a => {
     const relationship = buildAccountRelationshipDetail(a, ledger);
     const searchText = [
       a.name,
@@ -2004,6 +2023,37 @@ export function Accounts({ workspace, onNavigate }) {
     ].filter(Boolean).join(' ').toLowerCase();
     return (filter === 'all' || a.type === filter) && (!term || searchText.includes(term));
   });
+  // asc → desc → 해제(원장 순) 3단 토글 — Leads·Cases와 같은 §8.1 계약. health는
+  // 알파벳이 아니라 심각도 순(ok<warning<risk), value·deals는 숫자.
+  const ACCOUNT_HEALTH_RANK = { ok: 0, warning: 1, risk: 2 };
+  const filtered = React.useMemo(() => {
+    if (!sort.key) return searched;
+    const dir = sort.dir === 'desc' ? -1 : 1;
+    const value = (a) => sort.key === 'health' ? (ACCOUNT_HEALTH_RANK[a.health] ?? -1)
+      : sort.key === 'value' ? (Number(a.value) || 0)
+      : sort.key === 'deals' ? (Number(a.deals) || 0)
+      : String(a[sort.key] || '').toLowerCase();
+    return [...searched].sort((x, y) => {
+      const xv = value(x); const yv = value(y);
+      return xv < yv ? -dir : xv > yv ? dir : 0;
+    });
+  }, [searched, sort]);
+  const toggleSort = (key) => setSort(s =>
+    s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: null, dir: 'asc' }
+  );
+  const SortHead = ({ k, children, align }) => (
+    <button type="button" onClick={() => toggleSort(k)} title={`${children} 기준 정렬`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3, width: '100%',
+        justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
+        fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
+        color: sort.key === k ? 'var(--fg-muted)' : 'var(--fg-faint)',
+        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+      }}>
+      {children}
+      <span style={{ fontSize: 10.5, opacity: sort.key === k ? 1 : 0 }}>{sort.dir === 'desc' && sort.key === k ? '▼' : '▲'}</span>
+    </button>
+  );
 
   // Keep selection valid across filter changes
   React.useEffect(() => {
@@ -2142,6 +2192,33 @@ export function Accounts({ workspace, onNavigate }) {
     setSelected(name);
     setView('detail');
   };
+
+  // 딥링크: ?account=<name> — 원장 로드 후 1회만 열고 쿼리 소거(§8.1). Revenue 표면 중
+  // 유일하게 딥링크가 없던 표면이었다(system-eval U-S3).
+  const accountSearchParams = useSearchParams();
+  const accountRouter = useRouter();
+  const accountPathname = usePathname();
+  const accountParam = accountSearchParams?.get('account') || null;
+  const consumedAccountRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!accountParam || consumedAccountRef.current === accountParam) return;
+    if (!ACCOUNTS.some(a => a.name === accountParam)) return;
+    consumedAccountRef.current = accountParam;
+    setSelected(accountParam);
+    setView('detail');
+    if (accountPathname) accountRouter.replace(accountPathname);
+  }, [accountParam, ACCOUNTS, accountPathname, accountRouter]);
+
+  // 키보드 계층(§8.1 표준): j/k 이동 · e 상세 · n 생성 · / 검색 — 다른 Revenue 표면과 동일.
+  const accountSearchRef = React.useRef(null);
+  const accountKbRows = React.useMemo(() => filtered.map(a => ({ id: a.name })), [filtered]);
+  const accountSelection = useCrmSelection(accountKbRows);
+  useCrmKeyboard({
+    selection: accountSelection,
+    onNew: () => createAccount(),
+    onEditSelected: (name) => openDetail(name),
+    onSearchFocus: () => accountSearchRef.current?.focus(),
+  });
   const createAccount = () => {
     const name = '새 계정';
     setLocalAccounts(prev => [{
@@ -2187,8 +2264,8 @@ export function Accounts({ workspace, onNavigate }) {
         {/* Type filter */}
         <SegmentedControl className="hub-toolbar" options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
 
-        <Input className="hub-toolbar" placeholder="계정·담당자·전화·딜 검색…" icon="search" value={search} onChange={setSearch} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>
+        <Input ref={accountSearchRef} className="hub-toolbar" placeholder="계정·담당자·전화·딜 검색…" icon="search" value={search} onChange={setSearch} />
+        <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account <Kbd>N</Kbd></Button>
       </div>
 
       {wsEmpty && (
@@ -2264,7 +2341,7 @@ export function Accounts({ workspace, onNavigate }) {
 
       {!wsEmpty && view === 'list' && (
         <Card pad={false} className="hub-table-card">
-          <div style={{
+          <div className="hub-table-min" style={{
             display: 'grid',
             gridTemplateColumns: '32px 1.6fr 110px 70px 110px 70px 120px 100px 100px',
             gap: 12,
@@ -2272,12 +2349,13 @@ export function Accounts({ workspace, onNavigate }) {
             borderBottom: '1px solid var(--line-soft)',
             fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em',
           }}>
-            <span /><span>Name</span><span>Type</span><span>Health</span><span>Value</span><span>Deals</span><span>Last contact</span><span>Owner</span><span style={{ textAlign: 'right' }}>마지막 접점 시간</span>
+            <span /><SortHead k="name">Name</SortHead><span>Type</span><SortHead k="health">Health</SortHead><SortHead k="value">Value</SortHead><SortHead k="deals">Deals</SortHead><span>Last contact</span><span>Owner</span><span style={{ textAlign: 'right' }}>마지막 접점 시간</span>
           </div>
           {filtered.map((a, i) => (
-            <div key={a.name} className="hub-row"
+            <div key={a.name} className="hub-row hub-table-min"
               role="button"
               tabIndex={0}
+              data-account-row={a.name}
               onClick={() => openDetail(a.name)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(a.name); } }}
               style={{
@@ -2287,6 +2365,8 @@ export function Accounts({ workspace, onNavigate }) {
                 padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center',
                 borderBottom: i < filtered.length - 1 ? '1px solid var(--line-soft)' : 'none',
                 cursor: 'pointer',
+                outline: accountSelection.selectedId === a.name ? '1px solid var(--moon-300)' : undefined,
+                outlineOffset: -1,
               }}
             >
               <span style={{ paddingRight: 4, display: 'flex' }}>

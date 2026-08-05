@@ -282,7 +282,7 @@ function QuickTaskCapture({ onNavigate, onSaved }) {
           {state.message}
         </span>
         {state.status === 'saved' && state.destinationType === 'task' && (
-          <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/projects?view=todos')}>할 일 보기</Button>
+          <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/my')}>할 일 보기</Button>
         )}
       </div>
     </Card>
@@ -355,7 +355,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Badge tone={(counts.missed || 0) > 0 ? 'danger' : 'neutral'} size="xs">놓침 {counts.missed || 0}</Badge>
           <Badge tone="neutral" size="xs">오늘 {counts.today || 0}</Badge>
-          <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/projects?view=todos')}>모두 보기</Button>
+          <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/my')}>모두 보기</Button>
         </div>
       )}>오늘 할 일</SectionTitle>
       <Card pad={false} className="daily-brief__panel">
@@ -396,7 +396,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
             {taskToday?.hiddenCount > 0 && (
               <button
                 type="button"
-                onClick={() => onNavigate?.('dashboard/work/projects?view=todos')}
+                onClick={() => onNavigate?.('dashboard/work/my')}
                 style={{ border: 0, borderTop: '1px solid var(--line-soft)', background: 'var(--surface-2)', color: 'var(--fg-muted)', fontSize: 11.5 }}
               >
                 할 일 {taskToday.hiddenCount}건 더 보기
@@ -407,7 +407,8 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
           <EmptyState
             icon="check"
             title={taskToday?.state === 'live' ? '오늘 할 일이 비었습니다' : '할 일 기록 확인 대기'}
-            description={taskToday?.state === 'live' ? '놓침·오늘·대기·정리 전 task가 없습니다.' : 'tasks 기록이 live가 되면 실제 항목만 표시합니다.'}
+            description={taskToday?.state === 'live' ? '위의 빠른 캡처(Enter)로 바로 추가하거나 내 작업에서 계획하세요.' : 'tasks 기록이 live가 되면 실제 항목만 표시합니다.'}
+            action={taskToday?.state === 'live' ? <Button variant="outline" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/my')}>내 작업 열기</Button> : undefined}
             style={{ minHeight: 150 }}
           />
         )}
@@ -629,7 +630,7 @@ function OperatorPulse({ operatorHome, contentBrands, onNavigate }) {
             <div style={{ fontSize: 13, fontWeight: 500 }}>PMS</div>
             <SyncBadge state={operatorHome?.sources?.projects || 'preview'} />
             <div style={{ flex: 1 }} />
-            <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate('dashboard/work/projects?view=todos')}>My Tasks</Button>
+            <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate('dashboard/work/my')}>My Tasks</Button>
           </div>
           {pms ? (
             <>
@@ -1491,14 +1492,16 @@ export function DailyBrief({ onNavigate }) {
           </div>
         </div>
 
-        <MoreDetail title="보조 정보 · 지표, 리듬, 모닝 브리프">
-          <div>
-            <SectionTitle right={<Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate('dashboard/overview')}>현황에서 보기</Button>}>운영 지표</SectionTitle>
-            <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
-              {ledger.metrics.map((m) => <MetricCard key={m.label} m={m} onNavigate={onNavigate} compact />)}
-            </div>
+        {/* 매출 pulse는 §2 첫 화면 판단축 — 접힌 MoreDetail 뒤가 아니라 "지금 값"으로
+            상시 노출한다(2026-07-15 §2.2 QA 결정 B 유지 항목, system-eval B-11). */}
+        <div>
+          <SectionTitle right={<Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate('dashboard/overview')}>현황에서 보기</Button>}>운영 지표</SectionTitle>
+          <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
+            {ledger.metrics.map((m) => <MetricCard key={m.label} m={m} onNavigate={onNavigate} compact />)}
           </div>
+        </div>
 
+        <MoreDetail title="보조 정보 · 리듬, 모닝 브리프, 승인">
           <OperatorPulse operatorHome={ledger.operatorHome} contentBrands={ledger.contentBrands} onNavigate={onNavigate} />
           <RhythmPanel onNavigate={onNavigate} />
           <MorningBriefCard brief={ledger.morningBrief} onNavigate={onNavigate} />

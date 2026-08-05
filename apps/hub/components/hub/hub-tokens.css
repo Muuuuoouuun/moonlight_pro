@@ -1315,6 +1315,14 @@
   .hub-table-card .scroll-y > div:not([class]) {
     min-width: 640px;
   }
+
+  /* 헤더(클래스 없는 div)만 640px로 고정되고 본문 행(.hub-row)은 뷰포트 폭으로 줄어
+     컬럼 라벨과 값이 어긋나던 모바일 드리프트 수리(system-eval U-S8) — 헤더와 행이
+     같은 폭 규칙을 공유해야 그리드가 정렬된다. Cases·Accounts 리스트가 사용. */
+  .hub-table-card > .hub-table-min,
+  .hub-table-card > .hub-row.hub-table-min {
+    min-width: 640px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

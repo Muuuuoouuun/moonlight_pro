@@ -299,17 +299,28 @@ export function Projects({ workspace }) {
   const wsDefaultBrand = ws
     ? (brands.find(b => b.key !== 'all')?.key || brands[0]?.key || 'all')
     : 'all';
-  const brandProjects = brand === 'all' ? allProjects : allProjects.filter(p => p.brand === brand);
+  // 파생 목록 memo — 생성 드로어 타이핑(projectDraft만 변경)마다 트리·보드가 전부
+  // 재계산되던 것을 차단한다(system-eval P-7; deps는 원장·스코프 변화에만 반응).
+  const brandProjects = React.useMemo(
+    () => (brand === 'all' ? allProjects : allProjects.filter(p => p.brand === brand)),
+    [allProjects, brand],
+  );
   // 완료·보관은 본 리스트에 섞지 않는다 — 활성 그룹들 아래의 접힌 아코디언 섹션이
   // 유일한 표시 위치다(§8.1 상태 표시). hiddenIds는 완료 체크 후 되돌리기 창이
   // 열려 있는 동안의 낙관적 숨김.
-  const terminalProjects = brandProjects.filter(isTerminalProject);
+  const terminalProjects = React.useMemo(() => brandProjects.filter(isTerminalProject), [brandProjects]);
   const terminalCount = terminalProjects.length;
-  const projects = brandProjects.filter(p => !isTerminalProject(p) && !hiddenIds.has(p.id));
-  const brandTodos = brand === 'all' ? scopedTodos : scopedTodos.filter(t => t.brand === brand);
+  const projects = React.useMemo(
+    () => brandProjects.filter(p => !isTerminalProject(p) && !hiddenIds.has(p.id)),
+    [brandProjects, hiddenIds],
+  );
+  const brandTodos = React.useMemo(
+    () => (brand === 'all' ? scopedTodos : scopedTodos.filter(t => t.brand === brand)),
+    [scopedTodos, brand],
+  );
   const currentBrand = brands.find(b => b.key === brand) || brands[0] || EMPTY_ALL_BRAND;
-  const visibleColumns = buildTaskBoardColumns(brandTodos, allProjects);
-  const openTodoCount = brandTodos.filter(t => !t.done).length;
+  const visibleColumns = React.useMemo(() => buildTaskBoardColumns(brandTodos, allProjects), [brandTodos, allProjects]);
+  const openTodoCount = React.useMemo(() => brandTodos.filter(t => !t.done).length, [brandTodos]);
   const projectReadPartial = ledger.partialSources?.includes('projects') === true;
   const projectHeaderSummary = (() => {
     const taskReadPartial = ledger.taskAggregation?.partial === true || ledger.partialSources?.includes('tasks');
@@ -1526,7 +1537,7 @@ export function Projects({ workspace }) {
                 <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface)', padding: '1px 5px', borderRadius: 4, border: '1px solid var(--line-soft)' }}>
                   {brand === 'all' ? allProjects.length : (currentBrand.projects || 0)}
                 </span>
-                <span style={{ fontSize: 9, color: 'var(--fg-faint)', marginLeft: 2, transform: brandMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>▼</span>
+                <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginLeft: 2, transform: brandMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>▼</span>
               </span>
             </button>
             {brandMenuOpen && (

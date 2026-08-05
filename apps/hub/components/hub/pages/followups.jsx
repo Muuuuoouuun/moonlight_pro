@@ -4,6 +4,7 @@ import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Button, Card, Checkbox, Divider, Drawer, Dot, EmptyState, SegmentedControl, SyncBadge } from "../hub-primitives";
+import { useUndoableAction } from "../use-undoable-action";
 import { QUICK_LOG_ACTIONS as LOG_ACTIONS, REACTION_OPTIONS } from "@/lib/sales-os/outcome-attribution";
 import { DEAL_STAGES, STAGE_ALIASES } from "@/lib/deal-stages";
 
@@ -81,12 +82,13 @@ function useFollowups() {
 // Inline min-record capture (operator-workflow-profile.md §7 확정): 대화 요약 + 고객 반응 +
 // 다음 행동과 날짜(또는 기약 없음). Replaces the old fire-immediately quick-log tap — a single
 // tap used to write nothing but the action tag, which fell short of the confirmed requirement.
-function LogForm({ item, action, label, onCancel, onSubmit, submitting, error }) {
-  const [summary, setSummary] = React.useState("");
-  const [reaction, setReaction] = React.useState(null);
-  const [nextAction, setNextAction] = React.useState("");
-  const [at, setAt] = React.useState("");
-  const [dormant, setDormant] = React.useState(false);
+function LogForm({ item, action, label, onCancel, onSubmit, submitting, error, initial }) {
+  // initial: 저장 실패로 폼을 되살릴 때 입력을 복원한다(무언 소실 금지).
+  const [summary, setSummary] = React.useState(initial?.summary ?? "");
+  const [reaction, setReaction] = React.useState(initial?.reaction ?? null);
+  const [nextAction, setNextAction] = React.useState(initial?.nextAction ?? "");
+  const [at, setAt] = React.useState(initial?.at ?? "");
+  const [dormant, setDormant] = React.useState(Boolean(initial?.dormant));
 
   // 확정 최소 기록(프로필 §7): 요약 + 반응 + 다음 행동 날짜(또는 기약 없음). RPC도 요약·반응이
   // 비면 invalid-input으로 거부하므로 여기서 먼저 막는다. 노응답 기록은 반응이 자동(no_response).
@@ -233,7 +235,7 @@ function ActivityPanel({ item, onClose, onNavigate }) {
   );
 }
 
-function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onCloseLog, onSubmitLog, submitting, logError, logged }) {
+function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onCloseLog, onSubmitLog, logError, logged }) {
   const stage = stageMeta(item.stage);
   const clickable = Boolean(item.href);
   const isLogging = logDraft?.itemId === item.id;
@@ -284,10 +286,11 @@ function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onClo
       {item.kind !== "event" && (
         isLogging ? (
           <LogForm
+            key={logDraft.initial ? "restored" : "fresh"}
             item={item}
             action={logDraft.action}
             label={logDraft.label}
-            submitting={submitting}
+            initial={logDraft.initial}
             error={logError}
             onCancel={onCloseLog}
             onSubmit={(fields) => onSubmitLog(item, logDraft.action, logDraft.label, fields)}
@@ -319,11 +322,12 @@ export function Followups({ onNavigate }) {
   const pathname = usePathname();
   const [lane, setLane] = React.useState("all");
   const [bucket, setBucket] = React.useState("all");
-  const [logDraft, setLogDraft] = React.useState(null); // { itemId, action, label }
-  const [submitting, setSubmitting] = React.useState(false);
+  const [logDraft, setLogDraft] = React.useState(null); // { itemId, action, label, initial? }
   const [logError, setLogError] = React.useState(null);
   const [logged, setLogged] = React.useState({}); // id → action label
+  const [notice, setNotice] = React.useState(null); // { tone, label, action? } — 되돌리기 창 표시
   const [panelItem, setPanelItem] = React.useState(null); // row whose activity panel is open
+  const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
 
   const laneCounts = React.useMemo(() => {
     const counts = { all: items.length, lead: 0, deal: 0, event: 0 };
@@ -364,9 +368,7 @@ export function Followups({ onNavigate }) {
   // (기존 /api/integrations/outcomes/record는 outreach insert와 lead 갱신이 비원자 2단계라
   // 반쪽 저장 시 next_action 날짜가 옛값으로 남아 리드가 오늘/지남 버킷에서 소리 없이 빠졌고,
   // outreach_outcomes는 이 페이지의 활동 패널이 읽는 crm_activities에도 나타나지 않았다.)
-  const submitLog = async (item, action, label, { summary, reaction, nextAction, at, dormant }) => {
-    setSubmitting(true);
-    setLogError(null);
+  const persistLog = async (item, action, label, { summary, reaction, nextAction, at, dormant }) => {
     try {
       const res = await fetch("/api/hub/revenue/contact-outcome", {
         method: "POST",
@@ -388,19 +390,34 @@ export function Followups({ onNavigate }) {
         const reason = data?.status === "preview" ? "preview" : data?.error || res.status;
         throw new Error(`contact-outcome ${reason}`);
       }
-      setLogged((m) => ({ ...m, [item.id]: label }));
-      setLogDraft(null);
       await reload();
     } catch (err) {
-      // 입력을 유지한 채 폼을 열어두고 실패를 표시해 재시도할 수 있게 한다.
+      // 늦은 실패: 기록됨 표시를 걷어내고 폼을 입력 그대로 되살린다(무언 소실 금지).
+      setLogged((m) => { const n = { ...m }; delete n[item.id]; return n; });
+      setLogDraft({ itemId: item.id, action, label, initial: { summary, reaction, nextAction, at, dormant } });
       setLogError(
         String(err?.message || "").includes("preview")
           ? "Supabase 미연결 — 기록이 저장되지 않았습니다. 연결 후 다시 시도하세요."
           : "기록 저장에 실패했습니다. 다시 시도하세요.",
       );
-    } finally {
-      setSubmitting(false);
+      setNotice({ tone: "err", label: "기록 저장 실패 — 입력을 복원했습니다." });
     }
+  };
+
+  // 기록도 되돌리기 창을 갖는다(최고 빈도 액션 — my-work 완료와 같은 deferred-write 계약):
+  // 즉시 "기록됨"으로 표시하되 실제 POST는 3.5초 뒤. 되돌리기는 진짜 취소(네트워크 없음).
+  const submitLog = (item, action, label, fields) => {
+    setLogError(null);
+    setLogged((m) => ({ ...m, [item.id]: label }));
+    setLogDraft(null);
+    setNotice({ tone: "ok", label: `기록됨 · ${item.name}`, action: { label: "되돌리기", onClick: () => undoLog(item) } });
+    scheduleUndoable(`log-${item.id}`, () => persistLog(item, action, label, fields));
+  };
+
+  const undoLog = (item) => {
+    if (!cancelUndoable(`log-${item.id}`)) return; // 창이 닫혔으면 이미 POST됐다
+    setLogged((m) => { const n = { ...m }; delete n[item.id]; return n; });
+    setNotice({ tone: "ok", label: "기록 취소됨" });
   };
 
   return (
@@ -417,6 +434,19 @@ export function Followups({ onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
+        {notice && (
+          // live region(§11) — 되돌리기 창 개방을 스크린리더에도 알린다. 완료 카피는 중립(§5.3).
+          <span
+            role={notice.tone === "err" ? "alert" : "status"}
+            aria-live="polite"
+            style={{ fontSize: 11.5, color: notice.tone === "err" ? "var(--danger)" : "var(--fg-muted)", display: "inline-flex", alignItems: "center", gap: 8, marginRight: 8 }}
+          >
+            {notice.label}
+            {notice.action && (
+              <Button variant="ghost" size="xs" onClick={notice.action.onClick}>{notice.action.label}</Button>
+            )}
+          </span>
+        )}
         <Button variant="ghost" size="sm" icon="runs" onClick={reload}>새로고침</Button>
       </div>
 
@@ -479,7 +509,6 @@ export function Followups({ onNavigate }) {
               onOpenLog={openLog}
               onCloseLog={closeLog}
               onSubmitLog={submitLog}
-              submitting={submitting}
               logError={logError}
               logged={logged[item.id]}
             />

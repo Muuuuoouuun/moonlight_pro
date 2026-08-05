@@ -1017,15 +1017,17 @@ export function Queue({ workspace }) {
   const brands = ws ? filterBrandsByWorkspace(ledger.brands || [], workspace) : (ledger.brands || []);
   const queueSource = Array.isArray(ledger.queue) ? ledger.queue : [];
   const queue = filterContentByWorkspace(queueSource, workspace);
+  // 큐 lifecycle은 카테고리 — semantic 색 금지(§5.2/§5.3). 현재 단계(Ready/Review)만
+  // Moonstone으로 살짝 밝히고 나머지는 라벨이 전달한다.
   const statusTone = {
     Inbox: 'neutral',
-    Drafting: 'warning',
+    Drafting: 'neutral',
     Ready: 'moon',
-    'Handed off': 'info',
-    Watch: 'success',
+    'Handed off': 'neutral',
+    Watch: 'neutral',
     Archived: 'neutral',
-    Draft: 'warning',
-    Scheduled: 'info',
+    Draft: 'neutral',
+    Scheduled: 'neutral',
     Review: 'moon',
     Idea: 'neutral',
     Outline: 'neutral',
@@ -1246,7 +1248,8 @@ function CampaignLine({ label, value, tone = 'moon' }) {
 
 function CampaignTabPanel({ tab, campaign, detail }) {
   const router = useRouter();
-  const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral', Live: 'success', Scheduled: 'info', Review: 'moon', Idea: 'neutral' };
+  // 콘텐츠 lifecycle은 카테고리 — semantic 색 금지(§5.2/§5.3), 라벨이 상태를 전달한다.
+  const sTone = { Active: 'neutral', Planning: 'neutral', Draft: 'neutral', Live: 'neutral', Scheduled: 'neutral', Review: 'moon', Idea: 'neutral' };
 
   if (tab === 'strategy') {
     return (
@@ -1503,7 +1506,8 @@ function buildPreviewCampaignDetail(campaign) {
 
 export function Campaigns() {
   const router = useRouter();
-  const sTone = { Active: 'success', Planning: 'warning', Draft: 'neutral', Paused: 'warning', Completed: 'info' };
+  // 캠페인 lifecycle도 중립 — done/paused는 라벨·아이콘 몫(§5.3).
+  const sTone = { Active: 'neutral', Planning: 'neutral', Draft: 'neutral', Paused: 'neutral', Completed: 'neutral' };
   const ledger = useContentLedger();
   const [campaigns, setCampaigns] = React.useState([]);
   const [selectedId, setSelectedId] = React.useState(null);

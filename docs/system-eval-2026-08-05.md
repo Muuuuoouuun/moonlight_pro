@@ -123,6 +123,18 @@
 4. 디자인 — §15 잔여 정리: 캘린더 이벤트 카테고리의 info/warning 死매핑 제거, evolution copied 녹색 fill·outgoing 녹색·active=success 뱃지 중립화, overview streak 녹색 제거(§13 high-score).
 5. 정체성 — **내비 정직성**: 보류 스코프 탭(Agents×3·Flows·Email·Sheets·Evolution)에 `준비 중` 마커 — 코어와 같은 완성 표면처럼 읽히지 않게. Runs·Webhooks·자동화 개요는 Engine 실행 피드백 계약(§1)이라 코어 유지.
 
+### Iteration 4 (2026-08-05) — 반영 완료
+
+주제: **전 축 잔여 감점 소진 — 재평가 전 마지막 수리 회차.**
+검증: `npm test` 484/484 · hub/engine build 통과.
+
+1. 속도 — Deals 드로어 타이핑을 드래프트 오버레이로 격리(키스트로크당 보드 전체 재계산 제거, 저장 시점에만 커밋) + scopedDeals/visibleDeals/totals memo. Projects 파생 목록 5종 memo(생성 드로어 타이핑 시 트리 재계산 차단).
+2. 편의 — **⌘K 레코드 검색**: 고객·딜·할 일 이름 검색 → 기존 딥링크로 직행(60초 캐시, 새 API 없음). **followups 기록 되돌리기**: 3.5초 지연 쓰기 + 늦은 실패 시 입력 복원(무언 소실 금지). Accounts에 N 단축키·j/k/e·검색 포커스.
+3. UI/UX — Accounts 표준화: 3단 정렬(name/health/value/deals, 심각도 순) + `?account=` 딥링크 + Kbd N. Cases·Accounts 모바일 헤더-행 폭 드리프트 수리(`hub-table-min` 공유 규칙). 캐럿·글리프 10px 미만 5곳 → 10.5px.
+4. 안정성 — 읽기 실패→preview 오독 잔여 2곳(customers 활동, segments) error로 분리. overview에 reload 노출 + 에러/미연결/빈 상태에 행동 부여.
+5. 디자인 — customers HEALTH_TONE 신호등 해체(risk만 danger), content 큐/캠페인 lifecycle 톤 전면 중립화, DESIGN.md §15에 상태 primitive 채택 실측 보정 행 추가(선언-실제 불일치 해소).
+6. 사용성/정체성 — 운영 지표 4카드를 접힌 MoreDetail 밖 상시 노출로(§2 매출 pulse "지금 값"), 할 일 목적지 4곳을 정본(work/my)으로 통일(B-12).
+
 ### 다음 회차 백로그 (점수 영향 순)
 
 - 편의 부가기능: 기존 키보드 시스템(useCrmKeyboard/ShortcutOverlay/BulkBar) 전면 배선, 공유 undo 훅 + live-region 토스트 → followups 기록·완료·스테이지 변경·삭제(soft) 확장, ⌘K 레코드 검색.

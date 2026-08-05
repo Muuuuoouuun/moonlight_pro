@@ -79,6 +79,8 @@ const EMPTY_LEDGER = {
 function useOverviewLedger() {
   const [ledger, setLedger] = React.useState(EMPTY_LEDGER);
   const [syncState, setSyncState] = React.useState('preview');
+  const [reloadKey, setReloadKey] = React.useState(0);
+  const reload = React.useCallback(() => setReloadKey((k) => k + 1), []);
 
   React.useEffect(() => {
     let active = true;
@@ -99,9 +101,9 @@ function useOverviewLedger() {
     }
     load();
     return () => { active = false; };
-  }, []);
+  }, [reloadKey]);
 
-  return { ledger, syncState };
+  return { ledger, syncState, reload };
 }
 
 // 패널 문구 단일 테이블 — 이전에는 카드마다 4중첩 삼항 안에 문구가 흩어져 있어 같은
@@ -575,7 +577,7 @@ function ActivityRow({ item, onNavigate }) {
 }
 
 export function Overview({ onNavigate }) {
-  const { ledger, syncState } = useOverviewLedger();
+  const { ledger, syncState, reload } = useOverviewLedger();
   const [period, setPeriod] = React.useState('14');
   const [activityExpanded, setActivityExpanded] = React.useState(false);
 
@@ -683,11 +685,11 @@ export function Overview({ onNavigate }) {
           />
         ) : (
           syncState === 'preview' ? (
-            <EmptyState icon="signal" title="활동 원장 미연결" description="프로젝트·콘텐츠 원장을 연결하면 활동 추이가 표시됩니다." style={{ minHeight: 160 }} />
+            <EmptyState icon="signal" title="활동 원장 미연결" description="프로젝트·콘텐츠 원장을 연결하면 활동 추이가 표시됩니다." action={<Button variant="outline" size="sm" onClick={() => onNavigate?.('dashboard/settings')}>연결 설정 열기</Button>} style={{ minHeight: 160 }} />
           ) : syncState === 'error' || syncState === 'partial' ? (
-            <EmptyState icon="signal" title="활동 원장 일부를 읽지 못했습니다" description="활동 원장을 다시 읽은 뒤 추이를 표시합니다." style={{ minHeight: 160 }} />
+            <EmptyState icon="signal" title="활동 원장 일부를 읽지 못했습니다" description="지금 값은 불완전할 수 있습니다. 다시 읽어 주세요." action={<Button variant="outline" size="sm" onClick={reload}>다시 시도</Button>} style={{ minHeight: 160 }} />
           ) : (
-            <EmptyState icon="signal" title="활동 기록이 없습니다" description="프로젝트 업데이트와 결정이 기록되면 추이가 표시됩니다." style={{ minHeight: 160 }} />
+            <EmptyState icon="signal" title="활동 기록이 없습니다" description="프로젝트 업데이트와 결정이 기록되면 추이가 표시됩니다." action={<Button variant="outline" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/projects')}>프로젝트 열기</Button>} style={{ minHeight: 160 }} />
           )
         )}
       </Card>

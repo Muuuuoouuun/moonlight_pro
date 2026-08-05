@@ -351,7 +351,7 @@ const CERTAINTY_STATES = {
 
 function CertaintyMarker({ marker }) {
   if (marker === 'unknown') {
-    return <span aria-hidden="true" style={{ width: 8, textAlign: 'center', fontSize: 9, fontWeight: 700, lineHeight: 1 }}>?</span>;
+    return <span aria-hidden="true" style={{ width: 8, textAlign: 'center', fontSize: 10.5, fontWeight: 700, lineHeight: 1 }}>?</span>;
   }
   return <span aria-hidden="true" style={{
     width: 6,

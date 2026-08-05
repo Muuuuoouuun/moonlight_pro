@@ -20,7 +20,11 @@ function useLeadsLedger() {
   React.useEffect(() => {
     let cancelled = false;
     fetch('/api/hub/revenue')
-      .then((r) => r.json())
+      .then((r) => {
+        // 읽기 실패는 error — preview로 오독하면 세그먼트 0건이 "리드 없음"으로 보인다(§5.3).
+        if (!r.ok) throw new Error(`revenue ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
         if (cancelled) return;
         const live = data?.source === 'supabase';
@@ -31,7 +35,7 @@ function useLeadsLedger() {
         });
       })
       .catch(() => {
-        if (!cancelled) setState({ syncState: 'preview', source: 'preview', leads: [] });
+        if (!cancelled) setState({ syncState: 'error', source: 'preview', leads: [] });
       });
     return () => { cancelled = true; };
   }, []);

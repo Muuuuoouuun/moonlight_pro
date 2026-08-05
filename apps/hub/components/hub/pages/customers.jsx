@@ -43,7 +43,8 @@ function scoreBand(score) {
   return "ok";
 }
 
-const HEALTH_TONE = { ok: "success", warning: "warning", risk: "danger" };
+// health는 점수 밴드 — 신호등 금지(§5.2). 이탈 위험(risk)만 danger, 나머지는 중립.
+const HEALTH_TONE = { ok: "neutral", warning: "neutral", risk: "danger" };
 const LEAD_STAGE_ORDER = { New: 0, Contact: 1, Qualified: 2, Customer: 3, Lost: 4 };
 
 // 통합 행 모델: 리드와 계정을 같은 컬럼 계약으로 투영
@@ -446,12 +447,16 @@ function Customer360Drawer({ row, onClose, onNavigate }) {
         ? `accountId=${encodeURIComponent(row.id)}`
         : `leadId=${encodeURIComponent(row.id)}`;
     fetch(`/api/hub/revenue/activity?${qs}`, { cache: "no-store" })
-      .then(r => r.json())
+      .then(r => {
+        // 5xx를 preview로 오독하면 "기록 없음"으로 보인다 — 읽기 실패는 error(§5.3).
+        if (!r.ok) throw new Error(`activity ${r.status}`);
+        return r.json();
+      })
       .then(d => {
         setActivities(Array.isArray(d.activities) ? d.activities : []);
         setActSync(d.status === "live" ? "live" : "preview");
       })
-      .catch(() => setActSync("preview"));
+      .catch(() => setActSync("error"));
   }, [row.id, row.kind, row.companyId]);
 
   React.useEffect(() => { reload(); }, [reload]);
@@ -684,7 +689,7 @@ export function Customers({ onNavigate }) {
   const openRow = sorted.find(r => r.key === openKey) || allRows.find(r => r.key === openKey) || null;
 
   const caret = (key) => (
-    <span className="mono" style={{ display: "inline-block", width: 10, fontSize: 9, color: "var(--fg-dim)" }}>
+    <span className="mono" style={{ display: "inline-block", width: 12, fontSize: 10.5, color: "var(--fg-dim)" }}>
       {sort.key === key ? (sort.dir === "asc" ? "▲" : "▼") : ""}
     </span>
   );

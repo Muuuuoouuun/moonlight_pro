@@ -202,7 +202,7 @@ test("row completion is undoable and terminal projects live in a collapsed secti
   assert.match(projectsSource, /if \(!cancelUndoable\(project\.id\)\) return;/);
   // Terminal projects never mix into the active groups — they render only in
   // the collapsed 완료·보관 accordion at the bottom (aria-expanded contract).
-  assert.match(projectsSource, /const projects = brandProjects\.filter\(p => !isTerminalProject\(p\) && !hiddenIds\.has\(p\.id\)\)/);
+  assert.match(projectsSource, /brandProjects\.filter\(p => !isTerminalProject\(p\) && !hiddenIds\.has\(p\.id\)\)/);
   assert.match(projectsSource, /aria-expanded=\{showTerminal\}/);
   assert.match(projectsSource, /label=\{`다시 열기: \$\{p\.name\}`\}/);
 });
