@@ -92,25 +92,30 @@ const CONTENT_CHILDREN = [
 
 // AI·자동화 renders its nine children under two eyebrow group labels.
 // Sheets is the one scope-dependent entry (ClassIn owns 시트 동기화).
+// `deferred: true` — docs/README §4 보류 스코프(Agents/Council, Flow 캔버스, Email, 시트
+// 동기화 하드게이트, Evolution). 페이지는 접근 가능하되 탭에 '준비 중' 마커를 달아
+// 코어와 동일한 완성 표면처럼 보이지 않게 한다(2026-08-05 system-eval — 비핵심 표면이
+// 전부 코어 가중치로 노출되던 문제의 정직성 조치). Runs·Webhooks·자동화 개요는 Engine
+// 실행 피드백(§1 계약)이라 코어 유지.
 function aiChildren(sheetsPath) {
   return [
-    { key: 'ai-chat', label: 'Chat', path: 'dashboard/agents/chat', group: 'Agents' },
-    { key: 'ai-orders', label: 'Orders', path: 'dashboard/agents/orders', group: 'Agents' },
-    { key: 'ai-council', label: 'Council', path: 'dashboard/agents/council', group: 'Agents' },
+    { key: 'ai-chat', label: 'Chat', path: 'dashboard/agents/chat', group: 'Agents', deferred: true },
+    { key: 'ai-orders', label: 'Orders', path: 'dashboard/agents/orders', group: 'Agents', deferred: true },
+    { key: 'ai-council', label: 'Council', path: 'dashboard/agents/council', group: 'Agents', deferred: true },
     // AutomationsIndex — implemented page (PAGE_MAP) with no sidebar/search row until
     // 2026-07-17. Global (unscoped), so it appears identically in every scope.
     { key: 'ai-automations-overview', label: '자동화 개요', path: 'dashboard/automations', group: 'Automations' },
     { key: 'ai-runs', label: 'Runs', path: 'dashboard/automations/runs', group: 'Automations' },
-    { key: 'ai-flows', label: 'Flows', path: 'dashboard/automations/flows', group: 'Automations' },
-    { key: 'ai-email', label: 'Email', path: 'dashboard/automations/email', group: 'Automations' },
+    { key: 'ai-flows', label: 'Flows', path: 'dashboard/automations/flows', group: 'Automations', deferred: true },
+    { key: 'ai-email', label: 'Email', path: 'dashboard/automations/email', group: 'Automations', deferred: true },
     { key: 'ai-webhooks', label: 'Webhooks', path: 'dashboard/automations/webhooks', group: 'Automations' },
-    { key: 'ai-sheets', label: 'Sheets', path: sheetsPath, group: 'Automations' },
+    { key: 'ai-sheets', label: 'Sheets', path: sheetsPath, group: 'Automations', deferred: true },
   ];
 }
 
 const SETTINGS_CHILDREN = [
   { key: 'sys-settings', label: 'Settings', path: 'dashboard/settings' },
-  { key: 'sys-evolution', label: 'Evolution', path: 'dashboard/evolution' },
+  { key: 'sys-evolution', label: 'Evolution', path: 'dashboard/evolution', deferred: true },
 ];
 
 export const SIDEBAR_PRIMARY = [

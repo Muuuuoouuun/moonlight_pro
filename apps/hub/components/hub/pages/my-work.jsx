@@ -701,13 +701,20 @@ export function MyWork({ onNavigate }) {
         body: JSON.stringify({ id: taskDraft.id }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && ['saved', 'preview'].includes(data.status)) {
-        setNotice({ tone: 'ok', label: data.status === 'preview' ? '할 일 삭제 · 저장 대기(preview)' : '할 일 삭제됨' });
-        if (data.status === 'saved') await reload();
+      if (res.ok && data.status === 'saved') {
+        setNotice({ tone: 'ok', label: '할 일 삭제됨' });
+        await reload();
         return;
       }
+      // preview(백엔드 미구성)는 "저장 대기"가 아니다 — 대기열이 없어 영영 지워지지 않는다.
+      // 행을 복귀시키고 사실대로 말한다(Phase 0 taxonomy).
       setHiddenIds((prev) => { const next = new Set(prev); next.delete(rowId); return next; });
-      setNotice({ tone: 'err', label: data.error || `삭제 실패 ${res.status}` });
+      setNotice({
+        tone: 'err',
+        label: data.status === 'preview'
+          ? 'Supabase 미설정 — 삭제가 저장되지 않았습니다.'
+          : data.error || `삭제 실패 ${res.status}`,
+      });
     } catch (error) {
       setHiddenIds((prev) => { const next = new Set(prev); next.delete(rowId); return next; });
       setNotice({ tone: 'err', label: error instanceof Error ? error.message : String(error) });

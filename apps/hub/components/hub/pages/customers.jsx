@@ -456,8 +456,10 @@ function Customer360Drawer({ row, onClose, onNavigate }) {
 
   React.useEffect(() => { reload(); }, [reload]);
 
+  const [actError, setActError] = React.useState(null);
   const logActivity = ({ type, body }) => {
     const temp = { id: `local-${Date.now()}`, type, msg: body, at: "방금" };
+    setActError(null);
     setActivities(prev => [temp, ...prev]);
     if (!row.id) return;
     saveRevenueRecord("activity", "create", { ...linkParam, type, body }).then(r => {
@@ -465,8 +467,10 @@ function Customer360Drawer({ row, onClose, onNavigate }) {
         setActivities(prev => prev.map(a => (a.id === temp.id ? { ...a, id: r.id } : a)));
         return;
       }
-      // 저장 실패한 낙관적 행을 남겨두면 다음 리로드 때 소리 없이 사라진다 — 즉시 걷어내 표시.
+      // 저장 실패한 낙관적 행을 남겨두면 다음 리로드 때 소리 없이 사라진다 — 즉시 걷어내고
+      // 입력 내용을 에러에 실어 되살릴 수 있게 표시한다(무언 롤백 금지).
       setActivities(prev => prev.filter(a => a.id !== temp.id));
+      setActError({ body, message: r.status === "preview" ? "Supabase 미설정 — 기록이 저장되지 않았습니다." : "기록 저장에 실패했습니다. 다시 시도하세요." });
     });
   };
 
@@ -576,6 +580,12 @@ function Customer360Drawer({ row, onClose, onNavigate }) {
         </div>
 
         {/* 빠른 기록 */}
+        {actError && (
+          <div role="alert" style={{ fontSize: 11.5, color: "var(--danger)", lineHeight: 1.5 }}>
+            {actError.message}
+            {actError.body && <span style={{ color: "var(--fg-muted)" }}> · 입력: “{actError.body}”</span>}
+          </div>
+        )}
         <QuickLog onSave={logActivity} />
       </div>
     </Drawer>

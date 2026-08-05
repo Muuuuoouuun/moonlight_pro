@@ -96,6 +96,12 @@ export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSideba
                 onClick={() => onNavigate(tab.path)}
               >
                 {tab.label}
+                {/* 보류 스코프 마커(README §4) — 코어와 같은 완성 표면처럼 읽히지 않게. */}
+                {tab.deferred && (
+                  <span style={{ marginLeft: 5, fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: 0 }}>
+                    준비 중
+                  </span>
+                )}
               </button>
             );
           })}

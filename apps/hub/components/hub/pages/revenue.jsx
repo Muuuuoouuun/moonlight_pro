@@ -1110,20 +1110,28 @@ export function Deals({ workspace, onNavigate }) {
     }
   }, [dealParam, syncState, deals, pathname, router]);
 
-  // Page-level `n` — quick-create a deal when no drawer is open and focus isn't in a field.
+  // 키보드 계층(2026-08-05 배선): j/k 카드 이동(컬럼 순서로 평탄화) · e 편집 · n 생성 ·
+  // 1–5 선택 딜 스테이지 이동 · Esc 해제. 수제 n 리스너를 훅으로 흡수. 치트시트(?)의
+  // "1–5 스테이지 이동"은 이 배선이 생기면서 다시 유효해졌다.
+  const boardItems = React.useMemo(
+    () => DEAL_STAGES.flatMap(s => visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter))),
+    [visibleDeals, filter],
+  );
+  const selection = useCrmSelection(boardItems);
+  useCrmKeyboard({
+    selection,
+    onNew: () => createDeal(),
+    onEditSelected: (id) => setEditDealId(id),
+    onStageMove: (stageIndex) => {
+      if (!selection.selectedId) return;
+      const stage = DEAL_STAGES[stageIndex];
+      if (stage) move(selection.selectedId, stage.key);
+    },
+  });
   React.useEffect(() => {
-    const onKey = (e) => {
-      if ((e.key !== 'n' && e.key !== 'N') || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (editDealId) return;
-      const t = e.target;
-      const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
-      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
-      e.preventDefault();
-      createDeal();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [editDealId, filter, ws, workspace]);
+    if (!selection.selectedId) return;
+    document.querySelector(`[data-deal-card="${CSS.escape(String(selection.selectedId))}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [selection.selectedId]);
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%' }}>
@@ -1218,17 +1226,23 @@ export function Deals({ workspace, onNavigate }) {
                     className="hub-kanban-card"
                     draggable
                     role="button" tabIndex={0}
+                    data-deal-card={d.id}
                     onClick={() => { if (dragMovedRef.current) return; setEditDealId(d.id); }}
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditDealId(d.id); } }}
                     onDragStart={() => { dragMovedRef.current = true; setDrag(d.id); }}
                     onDragEnd={() => { setDrag(null); setTimeout(() => { dragMovedRef.current = false; }, 0); }}
                     style={{
                       background: 'var(--surface-2)',
-                      border: '1px solid var(--line-soft)',
+                      // 숨긴 딜은 전체 opacity 대신 dashed 엣지 + 숨김 뱃지(§5.3 — 상태를
+                      // 흐림으로 인코딩하지 않는다). 드래그 중 0.4는 인터랙션 피드백이라 유지.
+                      border: `1px ${d.hidden ? 'dashed' : 'solid'} var(--line-soft)`,
                       borderRadius: 'var(--r-sm)',
                       padding: '10px 11px', cursor: 'grab',
-                      opacity: drag === d.id ? 0.4 : (d.hidden ? 0.5 : 1),
+                      opacity: drag === d.id ? 0.4 : 1,
                       boxShadow: stalled ? 'inset 1px 0 0 var(--danger-line)' : undefined,
+                      // j/k 키보드 선택 — §5.3 선택은 Moonstone 외곽 outline.
+                      outline: selection.selectedId === d.id ? '1px solid var(--moon-300)' : undefined,
+                      outlineOffset: 1,
                     }}>
                     {/* 이름이 첫 줄 — UUID는 판단 데이터가 아니라 드로어 부제로 충분한 계기
                         소음이었다. 카드에서 가장 좋은 자리는 고객이 갖는다. */}
@@ -1251,6 +1265,7 @@ export function Deals({ workspace, onNavigate }) {
                         tooltip="Guru에게 진단 요청"
                         onClick={(e) => { e.stopPropagation(); onNavigate?.(guruChatPath({ mode: 'deal-review', ref: d.id })); }}
                       />
+                      {d.hidden && <Badge tone="neutral" size="xs" variant="outline">숨김</Badge>}
                       <Badge tone={d.type === 'personal' ? 'personal' : 'company'} size="xs">
                         {d.type === 'personal' ? 'P' : 'C'}
                       </Badge>

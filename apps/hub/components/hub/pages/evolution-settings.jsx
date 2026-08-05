@@ -367,11 +367,12 @@ function CopyRow({ value, mono }) {
       padding: '5px 6px 5px 10px',
     }}>
       <span className={mono ? 'mono' : ''} style={{ flex: 1, fontSize: 12, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</span>
+      {/* 완료 확인은 중립 체크 + 라벨(§5.3 done ≠ green) — 녹색 solid fill 금지. */}
       <button onClick={copy} style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
         height: 24, padding: '0 8px',
-        background: copied ? 'var(--success)' : 'var(--surface)',
-        color: copied ? 'var(--bg)' : 'var(--fg-muted)',
+        background: copied ? 'var(--surface-3)' : 'var(--surface)',
+        color: copied ? 'var(--fg)' : 'var(--fg-muted)',
         border: '1px solid var(--line)', borderRadius: 4,
         fontSize: 11, fontFamily: 'var(--font-sans)',
         transition: 'background .15s, color .15s',
@@ -412,11 +413,12 @@ function KeyRow({ item, last, kind }) {
       display: 'flex', flexDirection: 'column', gap: 8,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {/* outgoing은 방향 카테고리 — semantic 녹색 금지(§5.2), send 아이콘이 방향을 전달. */}
         <div style={{
           width: 26, height: 26, borderRadius: 6,
-          background: kind === 'key' ? 'var(--elevated)' : kind === 'outgoing' ? 'var(--success-bg)' : 'var(--surface-3)',
+          background: kind === 'key' ? 'var(--elevated)' : 'var(--surface-3)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: kind === 'key' ? 'var(--moon-300)' : kind === 'outgoing' ? 'var(--success)' : 'var(--fg-muted)',
+          color: kind === 'key' ? 'var(--moon-300)' : 'var(--fg-muted)',
         }}>
           <Iconed name={kind === 'key' ? 'lock' : kind === 'outgoing' ? 'send' : 'webhook'} size={12} />
         </div>
@@ -446,7 +448,8 @@ function KeyRow({ item, last, kind }) {
             </>)}
           </div>
         </div>
-        {kind !== 'key' && <Badge tone={item.active ? 'success' : 'neutral'} size="xs">{item.active ? 'active' : 'paused'}</Badge>}
+        {/* lifecycle active는 중립(§5.3) — 색이 아니라 라벨이 상태를 전달. */}
+        {kind !== 'key' && <Badge tone="neutral" size="xs" variant={item.active ? 'soft' : 'outline'}>{item.active ? 'active' : 'paused'}</Badge>}
         {kind === 'key' && (
           <button onClick={() => setRevealed(r => !r)} title={revealed ? 'Hide details' : 'Show details'} style={{
             width: 26, height: 26, borderRadius: 6,

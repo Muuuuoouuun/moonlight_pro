@@ -281,8 +281,18 @@ async function readExistingMeta(table, id, workspaceId) {
 }
 
 // Shared insert/update path for both the lead and deal routes. Returns a small status
-// envelope: `saved` (persisted), `preview` (config/workspace missing or PostgREST refused —
-// caller keeps its optimistic local row), `noop` (nothing to change), or `error`.
+// envelope: `saved` (persisted) · `preview` (백엔드 미구성 — 낙관적 로컬 행 유지가 정당한
+// 유일한 경우) · `failed` (라이브 백엔드가 거부: timeout/RLS/5xx — 재시도 대상) ·
+// `noop` · `error` (잘못된 입력).
+//
+// Phase 0 taxonomy: 이전에는 모든 비-missing-config 실패가 preview로 재라벨돼 소비자가
+// 라이브 거부를 "저장 대기"처럼 표시했다(2026-08-05 system-eval S-3).
+function persistFailure(res) {
+  return res.reason === "missing-config"
+    ? { status: "preview", reason: res.reason, detail: res.detail }
+    : { status: "failed", reason: res.reason, detail: res.detail };
+}
+
 export async function persistRevenueRecord({ table, op, id, payload, build }) {
   const workspaceId = resolveDefaultWorkspaceId();
 
@@ -293,7 +303,7 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
       ["id", eqFilter(id)],
       ["workspace_id", eqFilter(workspaceId)],
     ]);
-    return res.persisted ? { status: "saved", id } : { status: "preview", reason: res.reason, detail: res.detail };
+    return res.persisted ? { status: "saved", id } : persistFailure(res);
   }
 
   const { columns, metaPatch } = build(payload);
@@ -309,7 +319,7 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
     const res = await insertSupabaseRecord(table, record, { returnRepresentation: true, select: "*" });
     return res.persisted
       ? { status: "saved", id: res.id, record: res.record }
-      : { status: "preview", reason: res.reason, detail: res.detail };
+      : persistFailure(res);
   }
 
   if (!id) return { status: "error", reason: "missing-id" };
@@ -328,5 +338,5 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
   );
   return res.persisted
     ? { status: "saved", id, record: res.record }
-    : { status: "preview", reason: res.reason, detail: res.detail };
+    : persistFailure(res);
 }

@@ -537,9 +537,12 @@ export function Calendar({ onNavigate }) {
     : taskData.status === 'error'
     ? 'Task error'
     : 'Task preview';
-  const toneBg = { moon: 'var(--moon-bg)', company: 'var(--company-bg)', personal: 'var(--personal-bg)', info: 'var(--info-bg)', warning: 'var(--warning-bg)' };
-  const toneFg = { moon: 'var(--moon-100)', company: 'var(--company)', personal: 'var(--personal)', info: 'var(--info)', warning: 'var(--warning)' };
-  const toneBd = { moon: 'var(--moon-line)', company: 'var(--company-line)', personal: 'var(--personal-line)', info: 'var(--info-line)', warning: 'var(--warning-line)' };
+  // 이벤트 카테고리에 semantic 색(info/warning) 금지(§5.2) — 실 이벤트는 전부 moon이고
+  // 남아 있던 info/warning 매핑은 mock 시절의 死항목이라 제거했다. company/personal은
+  // legacy identity 토큰의 기존 call site로 유지.
+  const toneBg = { moon: 'var(--moon-bg)', company: 'var(--company-bg)', personal: 'var(--personal-bg)' };
+  const toneFg = { moon: 'var(--moon-100)', company: 'var(--company)', personal: 'var(--personal)' };
+  const toneBd = { moon: 'var(--moon-line)', company: 'var(--company-line)', personal: 'var(--personal-line)' };
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%' }}>

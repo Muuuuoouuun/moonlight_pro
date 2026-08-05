@@ -112,6 +112,17 @@
 3. 정체성 — 첫 화면 확정 슬롯 컷오버(§2/§7): `buildDailyFocus`(lib/daily-focus.js, 계약 테스트 6건) — **긴급 KA ≤1**(KA 회사 × 기한 지난 다음 행동/7일+ 방치 딜, danger 레일), **집중 고객 ≤5**(`selectOperatorFocusLeads` limit 파라미터화 — 신호 큐 tone 정렬에 밀려 소실되던 풀을 명명 슬롯으로), **오늘 일정**(Google Calendar KST 오늘 창, Phase 1B 계약 최초 충족; 미연결은 preview+연결 CTA). 슬롯별 독립 truth 상태. Quick Capture를 §7 1순위 위치로.
 4. 정체성 — 보류 스코프 정리: 첫 화면 히어로 CTA 'Council에 묻기'(보류 스코프) → '고객 연락'(코어 루프). 렌더 0회로 첫 화면 청크에 실려 있던 카드 3종(~270줄) 삭제. 도달 불가 eeocrm-sync 死코드 체인 삭제(페이지+라우트 2+repository+response 모듈, git 히스토리 보존).
 
+### Iteration 3 (2026-08-05) — 반영 완료
+
+주제: **속도 최대 항목(死 CSS 퍼지) + 안정성 taxonomy 완결 + 칸반 키보드 + 내비 정직성.**
+검증: `npm test` 484/484 · hub/engine build 통과.
+
+1. 속도 — **globals.css 死셀렉터 퍼지: 115KB → 24KB(-79%)**. detach된 public web 시절 셀렉터 704룰 제거(보수 규칙: 룰의 클래스 토큰이 소스에 하나라도 존재하면 유지, @font-face/keyframes/element 셀렉터 보존, 원본은 git 히스토리). 렌더 블로킹 CSS의 ~80%가 사라져 모바일 FCP 직접 개선.
+2. 안정성 — revenue-write **preview/failed 분리 완결**(Phase 0 taxonomy): preview는 missing-config만, 라이브 백엔드 거부(timeout/RLS/5xx)는 `failed`→502 (lead/deal/case/account/activity 5개 라우트). EditDrawer는 failed를 자동으로 에러 경로(입력 보존+재시도)로 처리. my-work 삭제의 preview 오독 수리(행 복귀+사실 고지), customers 활동 기록 무언 롤백에 입력 보존 에러 표시.
+3. UI/UX — **Deals 칸반 키보드**: j/k 카드 이동(컬럼 순서 평탄화+선택 outline+scrollIntoView) · e 편집 · **1–5 선택 딜 스테이지 이동** · n 흡수. 치트시트에 1–5 행 복원. 숨긴 딜의 전체 opacity → dashed 엣지+숨김 뱃지(§5.3).
+4. 디자인 — §15 잔여 정리: 캘린더 이벤트 카테고리의 info/warning 死매핑 제거, evolution copied 녹색 fill·outgoing 녹색·active=success 뱃지 중립화, overview streak 녹색 제거(§13 high-score).
+5. 정체성 — **내비 정직성**: 보류 스코프 탭(Agents×3·Flows·Email·Sheets·Evolution)에 `준비 중` 마커 — 코어와 같은 완성 표면처럼 읽히지 않게. Runs·Webhooks·자동화 개요는 Engine 실행 피드백 계약(§1)이라 코어 유지.
+
 ### 다음 회차 백로그 (점수 영향 순)
 
 - 편의 부가기능: 기존 키보드 시스템(useCrmKeyboard/ShortcutOverlay/BulkBar) 전면 배선, 공유 undo 훅 + live-region 토스트 → followups 기록·완료·스테이지 변경·삭제(soft) 확장, ⌘K 레코드 검색.

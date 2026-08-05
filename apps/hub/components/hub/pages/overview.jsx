@@ -461,7 +461,8 @@ function RhythmCard({ rhythm, state, onNavigate }) {
       {percent !== null && <div style={{ marginTop: 10 }}><Progress value={percent} /></div>}
       <div style={{ marginTop: 10, fontSize: 11, color: 'var(--fg-muted)' }}>
         최장 streak{' '}
-        <span className="mono" style={{ color: longestStreakAvailable && summary.longestStreak > 0 ? 'var(--success)' : 'var(--fg-faint)' }}>{longestStreakAvailable ? `${summary.longestStreak}일` : '—'}</span>
+        {/* 좋은 수치를 색으로 축하하지 않는다(§13 high-score) — 값 자체가 정보. */}
+        <span className="mono" style={{ color: longestStreakAvailable && summary.longestStreak > 0 ? 'var(--fg)' : 'var(--fg-faint)' }}>{longestStreakAvailable ? `${summary.longestStreak}일` : '—'}</span>
         {summary.longestStreakRitual ? <span style={{ color: 'var(--fg-faint)' }}> · {summary.longestStreakRitual}</span> : null}
       </div>
       {rituals.length > 0 && (
