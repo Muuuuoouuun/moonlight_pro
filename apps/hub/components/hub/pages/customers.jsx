@@ -784,7 +784,7 @@ export function Customers({ onNavigate }) {
             <div>
               {r.health ? (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <span className="num" style={{ fontSize: 12, fontWeight: 500, color: `var(--${HEALTH_TONE[r.health]})` }}>
+                  <span className="num" style={{ fontSize: 12, fontWeight: 500, color: HEALTH_TONE[r.health] === 'danger' ? 'var(--danger)' : 'var(--fg-muted)' }}>
                     {r.healthScore != null ? r.healthScore : { ok: "안전", warning: "주의", risk: "위험" }[r.health]}
                   </span>
                 </span>

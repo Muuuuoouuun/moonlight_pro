@@ -223,7 +223,7 @@ function ActivityPanel({ item, onClose, onNavigate }) {
           {state.activities.map((a, i) => (
             <React.Fragment key={a.id}>
               <div style={{ display: "grid", gridTemplateColumns: "18px 1fr auto", gap: 10, padding: "10px 0", alignItems: "flex-start" }}>
-                <span style={{ color: `var(--${ACT_TONE[a.type] === "neutral" ? "fg-muted" : ACT_TONE[a.type] || "fg-muted"})`, marginTop: 1 }}>
+                <span style={{ color: "var(--fg-muted)", marginTop: 1 }}>
                   <Iconed name={ACT_ICON[a.type] || "edit"} size={13} />
                 </span>
                 <div style={{ minWidth: 0 }}>

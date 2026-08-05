@@ -5,11 +5,12 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, Progress } from "../hub-primitives";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
-import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
+import { useCrmKeyboard, useCrmSelection, usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
 import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
 import { DEAL_STAGES, STAGE_FILL, STAGE_LINE } from "@/lib/deal-stages";
+import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { selectProjectAreaId } from "@/lib/pms-ui";
 
 // HW/SW 딜은 100만원 미만 건도 흔해서 M 고정 포맷은 "₩0.1M" 같은 값을 만든다.
@@ -81,7 +82,7 @@ function buildRevenueAttention(leads, deals) {
     .slice(0, 3)
     .forEach((deal) => {
       items.push({
-        tone: 'warning',
+        tone: 'neutral',
         t: `${deal.name} — ${deal.age}d stalled`,
         s: 'follow-up 필요',
       });
@@ -90,7 +91,7 @@ function buildRevenueAttention(leads, deals) {
   const newLeads = leads.filter((lead) => lead.stage === 'New').length;
   if (newLeads > 0) {
     items.push({
-      tone: 'info',
+      tone: 'neutral',
       t: `신규 리드 ${newLeads}건`,
       s: '분류·할당 필요',
     });
@@ -100,7 +101,7 @@ function buildRevenueAttention(leads, deals) {
   if (wonDeals.length > 0) {
     const wonTotal = wonDeals.reduce((sum, deal) => sum + deal.value, 0);
     items.push({
-      tone: 'success',
+      tone: 'neutral',
       t: `Won ${wonDeals.length}건 · ${fmt(wonTotal)}`,
       s: '온보딩 킥오프',
     });
@@ -132,6 +133,7 @@ export function useRevenueLedger() {
     && Date.now() - revenueLedgerCache.at < REVENUE_CACHE_SERVABLE_MS;
   const [ledger, setLedger] = React.useState(servable ? revenueLedgerCache.ledger : EMPTY_REVENUE_LEDGER);
   const [syncState, setSyncState] = React.useState(servable ? revenueLedgerCache.syncState : 'preview');
+  const [refreshKey, setRefreshKey] = React.useState(0);
 
   React.useEffect(() => {
     let active = true;
@@ -189,9 +191,15 @@ export function useRevenueLedger() {
     }
     load();
     return () => { active = false; clearTimeout(retryTimer); };
+  }, [refreshKey]);
+
+  const reload = React.useCallback(() => {
+    // 모듈 캐시를 무효화하고 재조회 — 명함 스캔 승격 등 쓰기 직후 목록 갱신용.
+    revenueLedgerCache = null;
+    setRefreshKey((k) => k + 1);
   }, []);
 
-  return { ledger, syncState };
+  return { ledger, syncState, reload };
 }
 
 // 3단 정렬 헤더(§8.1) — 컴포넌트 안에서 정의하면 렌더마다 함수 identity가 바뀌어
@@ -305,7 +313,6 @@ function GuruCoachPanel({ onNavigate }) {
 
 export function RevenueOverview({ onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
-  const [period, setPeriod] = React.useState('MTD');
   const LEADS = ledger.leads;
   const DEALS = ledger.deals;
   const DEAL_STAGES = ledger.stages;
@@ -339,20 +346,17 @@ export function RevenueOverview({ onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <SegmentedControl
-          className="hub-page-actions"
-          options={['MTD', 'QTD', 'YTD'].map(p => ({ key: p, label: p }))}
-          value={period}
-          onChange={setPeriod}
-        />
+        {/* MTD/QTD/YTD 토글 제거(2026-08-05 재감사): period를 소비하는 데이터가 없어
+            클릭해도 숫자가 안 바뀌는 죽은 컨트롤이었다. 분기/연간 뷰는 서버 요약이
+            생길 때 실데이터와 함께 복귀한다. */}
       </div>
 
       <div className="hub-grid--metrics stagger-up" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
         {[
-          { l: 'MRR', v: fmt(mrr), d: formatPercentDelta(mrr, mrrPrev), tone: mrr > mrrPrev ? 'success' : 'neutral' },
+          { l: 'MRR', v: fmt(mrr), d: formatPercentDelta(mrr, mrrPrev), tone: 'neutral' },
           { l: 'Pipeline', v: fmt(pipeline), d: `${openDeals} deals`, tone: 'moon' },
-          { l: 'Open leads', v: openLeads, d: `이번달 신규 ${newThisMonth}`, tone: 'info' },
-          { l: 'Won MTD', v: fmt(wonMTD), d: `${wonDealsCount} deals`, tone: wonMTD > 0 ? 'success' : 'neutral' },
+          { l: 'Open leads', v: openLeads, d: `이번달 신규 ${newThisMonth}`, tone: 'neutral' },
+          { l: 'Won MTD', v: fmt(wonMTD), d: `${wonDealsCount} deals`, tone: 'neutral' },
         ].map((k, i) => (
           <Card key={i}>
             <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>{k.l}</div>
@@ -523,7 +527,7 @@ export function LeadEnrichmentPanel({ lead }) {
           <Divider />
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ flex: 1, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>분류 · 증거</span>
-            <Badge tone={lead.engagementState === 'present' ? 'info' : 'neutral'} size="xs">
+            <Badge tone="neutral" size="xs">
               {lead.engagementState === 'present' ? `접점 ${directTouchCount || '확인'}` : '접점 미확인'}
             </Badge>
             {lead.publicEvidenceCount > 0 && <Badge tone="neutral" size="xs">공개 근거 {lead.publicEvidenceCount}</Badge>}
@@ -548,7 +552,7 @@ export function LeadEnrichmentPanel({ lead }) {
 }
 
 export function Leads({ workspace }) {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -741,7 +745,7 @@ export function Leads({ workspace }) {
             <span style={{ fontSize: 12.5, color: 'var(--fg-muted)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summary}</span>
             <div style={{ flex: 1 }} />
             {s === 'promoted' && (
-              <Button variant="ghost" size="xs" onClick={() => window.location.reload()}>목록 새로고침</Button>
+              <Button variant="ghost" size="xs" onClick={reloadLedger}>목록 새로고침</Button>
             )}
             {!reading && (
               <Button variant="ghost" size="xs" onClick={() => setCardState(null)}>닫기</Button>
@@ -905,7 +909,10 @@ function DealTaskPanel({ deal, onSaved }) {
     } finally { setBusy(false); }
   };
 
+  const togglingRef = React.useRef(new Set());
   const toggleTask = async (task) => {
+    if (togglingRef.current.has(task.id)) return; // 연타 가드 — 이전 PATCH가 끝나기 전 재발화 금지
+    togglingRef.current.add(task.id);
     setListError(null);
     try {
       const res = await fetch('/api/hub/tasks', {
@@ -918,6 +925,8 @@ function DealTaskPanel({ deal, onSaved }) {
       if (!res.ok || data.status !== 'saved') setListError('완료 상태 저장에 실패했습니다. 다시 시도하세요.');
     } catch {
       setListError('완료 상태 저장에 실패했습니다. 다시 시도하세요.');
+    } finally {
+      togglingRef.current.delete(task.id);
     }
     await load();
     onSaved?.();
@@ -962,7 +971,7 @@ function DealTaskPanel({ deal, onSaved }) {
         <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>체크리스트</span>
         {total > 0 && <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', marginLeft: 'auto' }}>{done.length}/{total}</span>}
       </div>
-      {total > 0 && <Progress value={Math.round((done.length / total) * 100)} tone={done.length === total ? 'success' : 'moon'} />}
+      {total > 0 && <Progress value={Math.round((done.length / total) * 100)} tone="moon" />}
 
       {isLocal ? (
         <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', lineHeight: 1.5 }}>딜을 먼저 저장하면 하위 항목을 추가할 수 있습니다.</div>
@@ -1024,7 +1033,13 @@ export function Deals({ workspace, onNavigate }) {
   const [filter, setFilter] = React.useState('all');
   const [showHidden, setShowHidden] = React.useState(false);
   const [editDealId, setEditDealId] = React.useState(null);
+  const [boardNotice, setBoardNotice] = React.useState(null); // { tone: 'err', label } — 이동/숨김 저장 실패 안내
   const dragMovedRef = React.useRef(false); // true from dragStart until just after dragEnd — suppresses the card click
+  React.useEffect(() => {
+    if (!boardNotice) return undefined;
+    const id = setTimeout(() => setBoardNotice(null), 6000);
+    return () => clearTimeout(id);
+  }, [boardNotice]);
 
   // Sync local deals state when live data arrives
   React.useEffect(() => {
@@ -1056,7 +1071,12 @@ export function Deals({ workspace, onNavigate }) {
   const toggleDealHidden = (id, nextHidden) => {
     setDeals(ds => ds.map(d => (d.id === id ? { ...d, hidden: nextHidden } : d)));
     if (!String(id).toLowerCase().startsWith('local-')) {
-      saveRevenueRecord('deal', 'update', { id, hidden: nextHidden });
+      saveRevenueRecord('deal', 'update', { id, hidden: nextHidden }).then((r) => {
+        if (r.ok) return;
+        // 실패한 낙관 토글은 되돌리고 명명한다 — 새로고침 때 말없이 스냅백하던 경로.
+        setDeals(ds => ds.map(d => (d.id === id ? { ...d, hidden: !nextHidden } : d)));
+        setBoardNotice({ tone: 'err', label: `숨김 상태 저장 실패 (${r.status})` });
+      });
     }
   };
 
@@ -1072,12 +1092,17 @@ export function Deals({ workspace, onNavigate }) {
   const openCount = openStages.reduce((a, s) => a + (totals[s.key]?.count || 0), 0);
   const closingTotal = totals.closing?.sum || 0;
   // Drag-to-move: optimistic local move, then persist the stage in the background for
-  // ledger-backed deals (local cards persist once saved through the drawer). Fire-and-forget —
-  // the optimistic move stands regardless of the write result.
+  // ledger-backed deals. 실패 시 원래 스테이지로 롤백 + role=status 안내 — "낙관 이동이
+  // 결과와 무관하게 서 있는" fire-and-forget 경로 제거(2026-08-05 재감사).
   const move = (id, to) => {
+    const prevStage = deals.find(d => d.id === id)?.stage;
     setDeals(ds => ds.map(d => d.id === id ? { ...d, stage: to } : d));
     if (!String(id).toLowerCase().startsWith('local-')) {
-      saveRevenueRecord('deal', 'update', { id, stage: to });
+      saveRevenueRecord('deal', 'update', { id, stage: to }).then((r) => {
+        if (r.ok) return;
+        if (prevStage) setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: prevStage } : d)));
+        setBoardNotice({ tone: 'err', label: `스테이지 이동 저장 실패 (${r.status}) — 원위치로 되돌렸습니다` });
+      });
     }
   };
   // 딜별 체크리스트 카운트 (공유 실행 척추의 보드 표면) — tasks 원장에서 meta.deal_id로
@@ -1195,6 +1220,11 @@ export function Deals({ workspace, onNavigate }) {
             열린 파이프라인 <span className="mono" style={{ color: 'var(--fg)' }}>{fmt(openTotal)}</span> · <span className="mono">{openCount}</span>건
             {closingTotal > 0 && <> · 클로징 <span className="mono" style={{ color: 'var(--moon-200)' }}>{fmt(closingTotal)}</span></>}
             <SyncBadge state={syncState} />
+            {boardNotice && (
+              <span role="status" aria-live="polite" style={{ marginLeft: 8, fontSize: 11.5, color: boardNotice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)' }}>
+                {boardNotice.label}
+              </span>
+            )}
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -1237,6 +1267,7 @@ export function Deals({ workspace, onNavigate }) {
             icon="deals"
             title={`${ws.label} — 해당하는 딜이 없습니다`}
             description={`이 워크스페이스에 매칭되는 딜이 없습니다. 다른 워크스페이스로 태그된 딜은 여기에 표시되지 않습니다. 딜을 등록하거나 기록에 ${ws.label} 태그가 연결되면 파이프라인이 채워집니다.`}
+            action={<Button variant="primary" size="sm" icon="plus" onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
@@ -1436,8 +1467,9 @@ export function Cases() {
   const toggleSort = (key) => setSort(s =>
     s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: null, dir: 'asc' }
   );
-  const sTone = { Open: 'warning', Waiting: 'info', Resolved: 'success' };
-  const pTone = { high: 'danger', med: 'warning', low: 'neutral' };
+  // lifecycle은 §5.3 중립 — 라벨/아이콘이 상태를 말한다.
+  const sTone = { Open: 'neutral', Waiting: 'neutral', Resolved: 'neutral' };
+  const pTone = { high: 'danger', med: 'neutral', low: 'neutral' };
   const createCase = () => {
     const id = `CASE-${Date.now()}`;
     setLocalCases(prev => [{
@@ -1498,20 +1530,10 @@ export function Cases() {
     return saveRevenueRecord('case', 'delete', { id: editCaseId });
   };
 
-  // Page-level `n` — quick-create a case when no drawer is open and focus isn't in a field.
-  React.useEffect(() => {
-    const onKey = (e) => {
-      if ((e.key !== 'n' && e.key !== 'N') || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (editCaseId) return;
-      const t = e.target;
-      const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
-      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
-      e.preventDefault();
-      createCase();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [editCaseId]);
+  // Page-level `n` — 공유 훅으로 흡수: 수제 리스너는 드로어/팔레트 열림 가드가 빠져
+  // ⌘K 아래에서도 발화했다(2026-08-05 재감사 M).
+  const createCaseHotkey = React.useCallback(() => { if (!editCaseId) createCase(); }, [editCaseId]);
+  usePageCreateHotkey(createCaseHotkey);
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
@@ -1593,25 +1615,29 @@ export function Cases() {
 
 // ---------- ACCOUNTS (lightweight CRM) ----------
 
-const H_TONE = { ok: 'success', warning: 'warning', risk: 'danger' };
+// health는 risk만 danger — ok/주의는 라벨이 말한다(§5.2 no-warning-by-default).
+const H_TONE = { ok: 'neutral', warning: 'neutral', risk: 'danger' };
 
 const ACT_ICON = { email: 'email', meeting: 'calendar', call: 'signal', note: 'edit', deal: 'deals', kakao: 'chat', quote: 'orders', ai: 'sparkle', info_session: 'brief', demo: 'play', visit: 'building', update: 'rhythm' };
-const ACT_TONE = { email: 'info', meeting: 'moon', call: 'warning', note: 'neutral', deal: 'success', kakao: 'warning', quote: 'neutral', ai: 'moon', info_session: 'info', demo: 'moon', visit: 'success', update: 'neutral' };
+// 활동 종류는 카테고리 — 아이콘(ACT_ICON)이 종류를 말하고 톤은 전부 중립(§5.2 동결).
+const ACT_TONE = { email: 'neutral', meeting: 'neutral', call: 'neutral', note: 'neutral', deal: 'neutral', kakao: 'neutral', quote: 'neutral', ai: 'neutral', info_session: 'neutral', demo: 'neutral', visit: 'neutral', update: 'neutral' };
 const ACT_LABEL = { email: 'Email', meeting: 'Meeting', call: 'Call', note: 'Note', deal: 'Deal', kakao: '카카오', quote: '견적', ai: 'AI', info_session: '설명회', demo: '데모', visit: '방문', update: 'Update' };
 const REACTION_LABEL = { positive: '긍정', neutral: '중립', concern: '우려', rejected: '거절', no_response: '무응답' };
-const REACTION_TONE = { positive: 'success', neutral: 'neutral', concern: 'warning', rejected: 'danger', no_response: 'neutral' };
+// 반응은 기록 데이터 — 색 증명 없이 라벨로 읽는다. 전부 중립.
+const REACTION_TONE = { positive: 'neutral', neutral: 'neutral', concern: 'neutral', rejected: 'neutral', no_response: 'neutral' };
 
 function emptyDetail() {
   return { mrr: 0, contacts: [], deals: [], activity: [], notes: [] };
 }
 
 function HealthDot({ health }) {
+  const tone = H_TONE[health] || 'neutral';
   return (
     <span
       title={health}
       style={{
         width: 7, height: 7, borderRadius: 999,
-        background: `var(--${H_TONE[health]})`,
+        background: tone === 'danger' ? 'var(--danger)' : 'var(--moon-500)',
         display: 'inline-block',
         flexShrink: 0,
       }}
@@ -1750,7 +1776,8 @@ function QuickActions({ onAction }) {
   );
 }
 
-function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAddNote, onNavigate, activityError }) {
+function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAddNote, onNavigate, activityError, deleteNotice, onRename }) {
+  const [renaming, setRenaming] = React.useState(false);
   const [tab, setTab] = React.useState('activity');
   const [noteText, setNoteText] = React.useState('');
   // Quick actions (ContactMenu/QuickActions — "Schedule meeting" etc.) used to write a
@@ -1802,7 +1829,24 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
           <Avatar name={account.name} size={52} tone={account.type === 'personal' ? 'personal' : 'company'} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 17, fontWeight: 500 }}>{account.name}</div>
+              {renaming ? (
+                <input
+                  autoFocus
+                  defaultValue={account.name}
+                  aria-label="계정 이름 변경"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { onRename?.(e.currentTarget.value); setRenaming(false); }
+                    if (e.key === 'Escape') { e.stopPropagation(); setRenaming(false); }
+                  }}
+                  onBlur={(e) => { onRename?.(e.currentTarget.value); setRenaming(false); }}
+                  style={{ fontSize: 17, fontWeight: 500, background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-sm)', color: 'var(--fg)', padding: '2px 8px', minWidth: 160 }}
+                />
+              ) : (
+                <div style={{ fontSize: 17, fontWeight: 500 }}>{account.name}</div>
+              )}
+              {onRename && !renaming && (
+                <IconButton icon="edit" size={22} iconSize={12} tooltip="이름 변경" onClick={() => setRenaming(true)} />
+              )}
               <Badge tone={account.type === 'personal' ? 'personal' : 'company'} size="xs">
                 <Iconed name={account.type === 'personal' ? 'user' : 'building'} size={9} />
                 {account.type === 'personal' ? 'Personal' : 'Company'}
@@ -1870,6 +1914,12 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
                 {activityError.body && <span style={{ color: 'var(--fg-muted)' }}> · 입력: “{activityError.body}”</span>}
               </div>
             )}
+            {deleteNotice && (
+              <div role="status" aria-live="polite" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: 'var(--fg-muted)' }}>
+                <span>{deleteNotice.label}</span>
+                <Button variant="ghost" size="xs" onClick={deleteNotice.undo}>되돌리기</Button>
+              </div>
+            )}
             <LogComposer onLog={onLog} preset={composerPreset} />
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {d.activity.length === 0 && (
@@ -1882,7 +1932,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
                   borderBottom: i < d.activity.length - 1 ? '1px solid var(--line-soft)' : 'none',
                   alignItems: 'flex-start',
                 }}>
-                  <span style={{ color: `var(--${ACT_TONE[a.type] === 'neutral' ? 'fg-muted' : ACT_TONE[a.type]})`, marginTop: 1 }}>
+                  <span style={{ color: 'var(--fg-muted)', marginTop: 1 }}>
                     <Iconed name={ACT_ICON[a.type] || 'edit'} size={13} />
                   </span>
                   <div style={{ minWidth: 0 }}>
@@ -2097,6 +2147,8 @@ export function Accounts({ workspace, onNavigate }) {
     return { ...stored, contacts: linked.contacts, deals: linked.deals };
   };
   const [activityError, setActivityError] = React.useState(null); // { name, message, body? }
+  const [deleteNotice, setDeleteNotice] = React.useState(null); // { key, name, label, undo }
+  const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
 
   // 활동·노트는 crm_activities 원장으로 영속화한다. 계정에 id가 없으면(로컬 생성 직후)
   // 낙관적 로컬 행만 유지 — preview 상태로 정직하게 남긴다.
@@ -2162,37 +2214,64 @@ export function Accounts({ workspace, onNavigate }) {
     pushActivity(name, { type, msg });
   };
 
-  // Delete/undo for an activity row — the backend (/api/hub/revenue/activity, op:'delete')
-  // already supported this; nothing in the UI called it. A row still optimistic-local (never
-  // persisted, id starts with 'local-') just gets dropped client-side, same as handlePinNote's
-  // existing local-vs-persisted split below.
+  // 삭제는 3.5초 지연 쓰기 + 되돌리기(공유 undo 계약) — 이전엔 확인도 되돌리기도 없이
+  // 즉시 hard delete였고 쓰기 결과도 확인하지 않았다(2026-08-05 재감사 L). 창 안에 되돌리면
+  // 서버 왕복 없이 진짜 취소, 창이 지나면 실행하고 실패 시 행 복원 + 에러 명명.
   const handleDeleteActivity = (name) => (activity) => {
+    const match = row => (activity.id ? row.id === activity.id : row === activity);
+    let removedActivity = [];
+    let removedNotes = [];
     setDetails(prev => {
       const cur = prev[name];
       if (!cur) return prev;
-      const match = row => (activity.id ? row.id === activity.id : row === activity);
+      removedActivity = cur.activity.filter(match);
+      removedNotes = cur.notes.filter(match);
       return {
         ...prev,
         [name]: { ...cur, activity: cur.activity.filter(row => !match(row)), notes: cur.notes.filter(row => !match(row)) },
       };
     });
-    if (activity.id && !String(activity.id).startsWith('local-')) {
-      saveRevenueRecord('activity', 'delete', { id: activity.id });
-    }
+    const restoreRows = () => setDetails(prev => {
+      const cur = prev[name] || emptyDetail();
+      return {
+        ...prev,
+        [name]: {
+          ...cur,
+          activity: [...removedActivity, ...cur.activity],
+          notes: [...removedNotes, ...cur.notes],
+        },
+      };
+    });
+    if (!activity.id || String(activity.id).startsWith('local-')) return; // 로컬 행은 클라이언트 드롭으로 끝
+    const key = `activity-delete-${activity.id}`;
+    scheduleUndoable(key, () => {
+      setDeleteNotice(cur => (cur?.key === key ? null : cur));
+      saveRevenueRecord('activity', 'delete', { id: activity.id }).then((r) => {
+        if (r.ok) return;
+        restoreRows();
+        setActivityError({ name, message: `기록 삭제 실패 (${r.status}) — 행을 복원했습니다.` });
+      });
+    });
+    setDeleteNotice({ key, name, label: '기록 삭제됨', undo: () => { if (cancelUndoable(key)) restoreRows(); setDeleteNotice(null); } });
   };
 
   const handlePinNote = (name) => (note) => {
     const nextPinned = !note.pinned;
-    setDetails(prev => {
+    const flipTo = (pinned) => setDetails(prev => {
       const cur = prev[name] || emptyDetail();
-      const flip = n => ((note.id ? n.id === note.id : n === note) ? { ...n, pinned: nextPinned } : n);
+      const flip = n => ((note.id ? n.id === note.id : n === note) ? { ...n, pinned } : n);
       return {
         ...prev,
         [name]: { ...cur, notes: cur.notes.map(flip), activity: cur.activity.map(flip) },
       };
     });
+    flipTo(nextPinned);
     if (note.id && !String(note.id).startsWith('local-')) {
-      saveRevenueRecord('activity', 'update', { id: note.id, pinned: nextPinned });
+      saveRevenueRecord('activity', 'update', { id: note.id, pinned: nextPinned }).then((r) => {
+        if (r.ok) return;
+        flipTo(!nextPinned); // 실패한 핀 토글은 명시적으로 되돌린다 — 무언 리버트 금지
+        setActivityError({ name, message: `핀 저장 실패 (${r.status})` });
+      });
     }
   };
 
@@ -2211,9 +2290,14 @@ export function Accounts({ workspace, onNavigate }) {
       ? `companyId=${encodeURIComponent(acc.companyId)}`
       : `accountId=${encodeURIComponent(acc.id)}`;
     fetch(`/api/hub/revenue/activity?${query}`, { cache: 'no-store' })
-      .then(r => r.json())
-      .then(data => {
+      .then(async (r) => ({ ok: r.ok, data: await r.json().catch(() => null) }))
+      .then(({ ok, data }) => {
         if (!alive) return;
+        if (!ok || !data || data.status === 'error') {
+          // 읽기 실패로 보이던 기록을 []로 갈아치우지 않는다 — 표시 유지 + 에러 명명.
+          setActivityError({ name: acc.name, message: '활동 기록을 읽지 못했습니다 — 다시 열면 재시도합니다.' });
+          return;
+        }
         const rows = Array.isArray(data.activities) ? data.activities : [];
         setDetails(prev => {
           const cur = prev[acc.name] || emptyDetail();
@@ -2232,7 +2316,9 @@ export function Accounts({ workspace, onNavigate }) {
           };
         });
       })
-      .catch(() => {});
+      .catch(() => {
+        if (alive) setActivityError({ name: acc.name, message: '활동 기록을 읽지 못했습니다 — 다시 열면 재시도합니다.' });
+      });
     return () => { alive = false; };
   }, [view, selectedAcc?.id, selectedAcc?.companyId]);
 
@@ -2267,11 +2353,19 @@ export function Accounts({ workspace, onNavigate }) {
     onEditSelected: (name) => openDetail(name),
     onSearchFocus: () => accountSearchRef.current?.focus(),
   });
-  const createAccount = () => {
-    const name = '새 계정';
+  // j/k 커서를 화면 안에 유지 — cards 뷰는 그리드라 리스트식 scrollIntoView가 없다.
+  React.useEffect(() => {
+    if (!accountSelection.selectedId) return;
+    document.querySelector('[data-kb-selected="true"]')?.scrollIntoView({ block: 'nearest' });
+  }, [accountSelection.selectedId]);
+  // 생성은 즉시 영속 — 이전에는 로컬 전용 '새 계정' 팬텀(저장 경로·이름 변경 없음,
+  // 새로고침 시 증발, 기록 시도 시 "먼저 저장해야" 안내만)이었다(2026-08-05 재감사 L).
+  const createAccount = async () => {
+    const name = `새 계정 ${new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date())}`;
+    const type = filter === 'personal' || filter === 'company' ? filter : 'company';
     setLocalAccounts(prev => [{
       name,
-      type: filter === 'personal' || filter === 'company' ? filter : 'company',
+      type,
       health: 'ok',
       value: 0,
       deals: 0,
@@ -2283,6 +2377,39 @@ export function Accounts({ workspace, onNavigate }) {
     }, ...prev]);
     setSelected(name);
     setView('detail');
+    const r = await saveRevenueRecord('account', 'create', { name, type, ...(ws ? { workspace } : {}) });
+    if (r.ok && r.id) {
+      setLocalAccounts(prev => prev.map(a => (a.name === name ? { ...a, id: r.id } : a)));
+    } else if (r.status !== 'preview') {
+      // 라이브 백엔드 거부 — 팬텀을 남기지 않고 제거 + 명명 (preview=미구성만 로컬 유지 정당)
+      setLocalAccounts(prev => prev.filter(a => a.name !== name));
+      setView('list');
+      setActivityError({ name, message: `계정 생성 실패 (${r.status}) — 다시 시도하세요.` });
+    }
+  };
+
+  // 이름 변경 — 상세 헤더 연필 버튼. details/selected가 이름 키라 네 곳을 함께 옮긴다.
+  const renameAccount = async (account, nextNameRaw) => {
+    const nextName = String(nextNameRaw || '').trim();
+    if (!nextName || nextName === account.name) return;
+    const prevName = account.name;
+    const applyName = (from, to) => {
+      setLocalAccounts(prev => prev.map(a => (a.name === from ? { ...a, name: to } : a)));
+      setDetails(prev => {
+        if (!prev[from]) return prev;
+        const next = { ...prev, [to]: prev[from] };
+        delete next[from];
+        return next;
+      });
+      setSelected(cur => (cur === from ? to : cur));
+    };
+    applyName(prevName, nextName);
+    if (!account.id) return; // 미영속(preview) 행은 로컬 이름만
+    const r = await saveRevenueRecord('account', 'update', { id: account.id, name: nextName });
+    if (!r.ok) {
+      applyName(nextName, prevName);
+      setActivityError({ name: prevName, message: `이름 변경 실패 (${r.status})` });
+    }
   };
 
   return (
@@ -2331,7 +2458,17 @@ export function Accounts({ workspace, onNavigate }) {
       {!wsEmpty && view === 'cards' && (
         <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--gap)' }}>
           {filtered.map(a => (
-            <Card key={a.name} interactive style={{ cursor: 'pointer' }}>
+            <Card
+              key={a.name}
+              interactive
+              data-kb-selected={accountSelection.selectedId === a.name ? 'true' : undefined}
+              style={{
+                cursor: 'pointer',
+                // j/k 커서 — 기본 뷰(cards)에서도 선택 위치가 보이게 (§8.1; 재감사 M)
+                ...(accountSelection.selectedId === a.name
+                  ? { outline: '1px solid var(--moon-300)', outlineOffset: 2 }
+                  : {}),
+              }}>
               <div
                 role="button"
                 tabIndex={0}
@@ -2510,6 +2647,8 @@ export function Accounts({ workspace, onNavigate }) {
               onAddNote={selectedAcc ? handleAddNote(selectedAcc.name) : () => {}}
               onNavigate={onNavigate}
               activityError={activityError && selectedAcc && activityError.name === selectedAcc.name ? activityError : null}
+              deleteNotice={deleteNotice && selectedAcc && deleteNotice.name === selectedAcc.name ? deleteNotice : null}
+              onRename={selectedAcc ? (next) => renameAccount(selectedAcc, next) : null}
             />
           </div>
         </Card>
