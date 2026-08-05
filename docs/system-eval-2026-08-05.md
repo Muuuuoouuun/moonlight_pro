@@ -19,6 +19,9 @@
 | 회차 | 날짜 | 정체성·핵심기능 | 사용성 | 편의성 | 안정성 | 속도 | 디자인 | UI/UX | 편의 부가기능 | **평균** |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | 기준선 (iter 1 평가) | 2026-08-05 | 44 | 57 | 63 | 72 | 74 | 76 | 72 | 41 | **62.4** |
+| 재감사 (iter 1~4 반영 후) | 2026-08-05 | 80 | 85 | 88 | 72 | 72 | 77 | — | — | **79.0*** |
+
+\* 재감사는 새 체크리스트(각 축 감사 에이전트의 잔여 결함 실측)로 기준선보다 엄격하게 측정 — 안정성·속도는 기준선 대비 하락이 아니라 새로 발견된 결함(무음 병합 소실·records 불일치·팬아웃) 반영. UI/UX·부가기능 축은 세션 한도로 미측정, 5차 수리 후 통합 재측정.
 
 ## 2. 축별 요약 (기준선)
 
@@ -134,6 +137,17 @@
 4. 안정성 — 읽기 실패→preview 오독 잔여 2곳(customers 활동, segments) error로 분리. overview에 reload 노출 + 에러/미연결/빈 상태에 행동 부여.
 5. 디자인 — customers HEALTH_TONE 신호등 해체(risk만 danger), content 큐/캠페인 lifecycle 톤 전면 중립화, DESIGN.md §15에 상태 primitive 채택 실측 보정 행 추가(선언-실제 불일치 해소).
 6. 사용성/정체성 — 운영 지표 4카드를 접힌 MoreDetail 밖 상시 노출로(§2 매출 pulse "지금 값"), 할 일 목적지 4곳을 정본(work/my)으로 통일(B-12).
+
+### Iteration 5 (2026-08-05) — 반영 완료
+
+주제: **재감사(축별 감사 에이전트 4/5) → 실측 잔여 결함 5개 배치 수리.**
+검증: 각 배치마다 `npm test` 549/549 · hub build 통과. 커밋 d920e76 · 1b3a9e4 · e333466 · 2a80f34.
+
+1. 안정성(1/3) — 읽기 실패 정직화 마감: followups-ledger 한쪽 소스 null → `partial`+failedSources, 둘 다 → `error`(기존엔 한쪽 null이면 live로 렌더돼 행이 무음 소실). daily-brief/revenue 훅 transport 실패 → `error`(기존 preview 오독). overview `ledger.status` error 우선. work-orders/캘린더/사이드바 뱃지 `r.ok` 가드. followups/my-work 훅 staleness guard(늦은 응답이 새 상태를 덮는 레이스 차단).
+2. 안정성(2/3) — 무음 쓰기 소실 제거: revenue persistActivity 실패 시 낙관 행 제거+입력 복원+role=alert 에러(기존엔 실패 무시+입력 소거). **engine pms-command-service `persistence.rows`→`records` 수리**(에코 반환·stale-409 데드코드 부활) + 유닛 mock 동기화. 테스트 글롭에 engine/packages 편입(484→549, quoted globstar).
+3. 정체성/사용성(1·2/3) — §7 fold 순서: FocusSlots(긴급 KA·집중 고객·오늘 일정)를 CommandCard 위로. KA 빈 상태에 지정 방법 명시("KA 지정은 Sales Ledger 시트"). 집중 고객 숫자 점수 노출 제거(§7 금지). `queueApprovals` 죽은 self-link → agents/orders. 메시지 축 부재를 StatusLine에 정적 고지. classin 별칭 → LEGACY_REDIRECTS, intake-inbox 死페이지 삭제, ⌘K 설정/콘텐츠 키워드 보강.
+4. 속도(3/3) — attention-ledger를 lean `getTaskLedger`(4콜/1웨이브)로 전환(최다 호출 엔드포인트, 기존 14콜/2웨이브). projects 태스크 낙관 flip+rollback(전체 reload 대기 제거). revenue SortHead 모듈 호이스트(헤더 unmount/remount 제거)·Leads/Accounts 파생 memo(검색 인덱스 1회 구축). SUIT/JetBrains preload + **MaruBuri 9.6MB 死폰트 삭제**.
+5. 디자인(4·5) — §5.3 semantic 색 전면 소거(44곳 실측분): deal-stages `color`→`ramp` 인덱스 개명(Badge 톤 오용 경로 차단, Moonstone 게이지 유지), daily-brief syncTone(live=green 등) → error만 danger, work/content/automations/customers 등 truth·lifecycle·카테고리 색 전부 중립화. **hub-primitives 다크 전용 OKLCH 15곳 → 테마 토큰**(라이트 AA 복구). 칸반 스트라이프·드롭타깃 2px→1px. agents 채팅 h2 신설, overview 차트 키보드 탐색(←→/Home/End), 10px 메타 10곳 → 10.5, DESIGN.md §11 Daily Brief Display 카브아웃 명문화.
 
 ### 다음 회차 백로그 (점수 영향 순)
 
