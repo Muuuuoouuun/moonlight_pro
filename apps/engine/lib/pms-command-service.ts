@@ -240,8 +240,8 @@ export async function executePmsCommand(
       };
     }
 
-    if (Array.isArray(persistence.rows)) {
-      if (!persistence.rows[0]) {
+    if (Array.isArray(persistence.records)) {
+      if (!persistence.records[0]) {
         if (filterValue(command.filters, "updated_at")) {
           const identityFilters = command.filters.filter(
             ([key]) => key === "id" || key === "workspace_id",
@@ -282,7 +282,7 @@ export async function executePmsCommand(
       return {
         status: "saved",
         action: command.action,
-        entity: persistence.rows[0],
+        entity: persistence.records[0],
       };
     }
 

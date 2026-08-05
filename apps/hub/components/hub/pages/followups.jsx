@@ -54,12 +54,20 @@ const BUCKET_STRIPE = { overdue: "var(--danger)" };
 
 function useFollowups() {
   const [state, setState] = React.useState({ syncState: "loading", items: [], summary: {}, calendarReason: "" });
+  // 새로고침·기록 후 reload가 겹치면 늦게 온 이전 응답이 최신 목록을 덮을 수 있다 —
+  // 요청 id로 최신 요청만 반영한다(re-audit S13).
+  const requestRef = React.useRef(0);
 
   const load = React.useCallback(async () => {
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
+    const isCurrent = () => requestRef.current === requestId;
     setState((s) => ({ ...s, syncState: "loading" }));
     try {
       const r = await fetch("/api/hub/followups", { cache: "no-store" });
+      if (!isCurrent()) return;
       const d = await r.json().catch(() => null);
+      if (!isCurrent()) return;
       if (!r.ok || !d || d.status === "error") {
         setState((s) => ({ ...s, syncState: "error" }));
         return;
@@ -72,7 +80,7 @@ function useFollowups() {
         calendarReason: d.calendarReason || "",
       });
     } catch {
-      setState((s) => ({ ...s, syncState: "error" }));
+      if (isCurrent()) setState((s) => ({ ...s, syncState: "error" }));
     }
   }, []);
 

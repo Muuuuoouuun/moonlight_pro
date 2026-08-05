@@ -1725,7 +1725,7 @@ function QuickActions({ onAction }) {
   );
 }
 
-function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAddNote, onNavigate }) {
+function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAddNote, onNavigate, activityError }) {
   const [tab, setTab] = React.useState('activity');
   const [noteText, setNoteText] = React.useState('');
   // Quick actions (ContactMenu/QuickActions — "Schedule meeting" etc.) used to write a
@@ -1839,6 +1839,12 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
       <div className="scroll-y" style={{ flex: 1, minHeight: 0, padding: 'var(--card-pad)', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {tab === 'activity' && (
           <>
+            {activityError && (
+              <div role="alert" style={{ fontSize: 11.5, color: 'var(--danger)', lineHeight: 1.5 }}>
+                {activityError.message}
+                {activityError.body && <span style={{ color: 'var(--fg-muted)' }}> · 입력: “{activityError.body}”</span>}
+              </div>
+            )}
             <LogComposer onLog={onLog} preset={composerPreset} />
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {d.activity.length === 0 && (
@@ -2069,6 +2075,7 @@ export function Accounts({ workspace, onNavigate }) {
     const stored = details[account.name] || emptyDetail();
     return { ...stored, contacts: linked.contacts, deals: linked.deals };
   };
+  const [activityError, setActivityError] = React.useState(null); // { name, message, body? }
 
   // 활동·노트는 crm_activities 원장으로 영속화한다. 계정에 id가 없으면(로컬 생성 직후)
   // 낙관적 로컬 행만 유지 — preview 상태로 정직하게 남긴다.
@@ -2091,14 +2098,33 @@ export function Accounts({ workspace, onNavigate }) {
       };
     });
 
-    if (!acc?.id) return;
+    if (!acc?.id) {
+      // 아직 저장 안 된 로컬 계정 — 기록이 원장에 남지 않는다는 사실을 표시한다.
+      setActivityError({ name, message: '계정을 먼저 저장해야 기록이 원장에 남습니다. 지금 기록은 이 화면에만 있습니다.' });
+      return;
+    }
     saveRevenueRecord('activity', 'create', {
       accountId: acc.id,
       companyId: acc.companyId,
       type: entry.type,
       body: entry.msg,
     }).then(r => {
-      if (!r.ok || !r.id) return;
+      if (!r.ok || !r.id) {
+        // 무음 소실 금지(re-audit S4): 실패한 낙관 행을 걷어내고 입력을 에러에 실어 복원한다.
+        setDetails(prev => {
+          const cur = prev[name];
+          if (!cur) return prev;
+          const drop = row => row.id !== tempId;
+          return { ...prev, [name]: { ...cur, activity: cur.activity.filter(drop), notes: cur.notes.filter(drop) } };
+        });
+        setActivityError({
+          name,
+          message: r.status === 'preview' ? 'Supabase 미설정 — 기록이 저장되지 않았습니다.' : '기록 저장에 실패했습니다. 다시 시도하세요.',
+          body: entry.msg,
+        });
+        return;
+      }
+      setActivityError(null);
       // 임시 id → 실제 id 치환 (pinned 토글이 서버 행을 가리키도록)
       setDetails(prev => {
         const cur = prev[name];
@@ -2462,6 +2488,7 @@ export function Accounts({ workspace, onNavigate }) {
               onPinNote={selectedAcc ? handlePinNote(selectedAcc.name) : () => {}}
               onAddNote={selectedAcc ? handleAddNote(selectedAcc.name) : () => {}}
               onNavigate={onNavigate}
+              activityError={activityError && selectedAcc && activityError.name === selectedAcc.name ? activityError : null}
             />
           </div>
         </Card>

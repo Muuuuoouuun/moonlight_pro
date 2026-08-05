@@ -155,11 +155,17 @@ function priorityValue(item) {
 function useAttentionLedger() {
   const [data, setData] = React.useState({ items: [], sources: {}, calendarReason: '', projects: [] });
   const [state, setState] = React.useState('loading');
+  // 완료/미루기 뒤 reload가 겹치면 늦은 이전 응답이 최신 목록을 덮는다 — 최신 요청만 반영.
+  const requestRef = React.useRef(0);
 
   const load = React.useCallback(async () => {
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
+    const isCurrent = () => requestRef.current === requestId;
     try {
       const res = await fetch('/api/hub/attention', { cache: 'no-store' });
       const json = await res.json().catch(() => null);
+      if (!isCurrent()) return null;
       if (!res.ok || !json || json.status === 'error') {
         setState('error');
         return null;
@@ -168,7 +174,7 @@ function useAttentionLedger() {
       setState('ready');
       return json;
     } catch {
-      setState('error');
+      if (isCurrent()) setState('error');
       return null;
     }
   }, []);
