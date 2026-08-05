@@ -109,28 +109,41 @@ function buildRevenueAttention(leads, deals) {
   return items.slice(0, 4);
 }
 
+const EMPTY_REVENUE_LEDGER = {
+  source: 'preview',
+  leads: [],
+  deals: [],
+  stages: [],
+  accounts: [],
+  cases: [],
+  contacts: [],
+  companies: [],
+  summary: null,
+};
+
+// 모듈 스코프 stale-while-revalidate 캐시 — Leads↔Deals↔Accounts↔Cases↔Customers 탭
+// 전환은 훅을 리마운트하므로, 캐시 없이는 전환마다 동일한 6콜 원장을 다시 받고 스켈레톤을
+// 보였다(re-audit 속도 #3). 캐시는 즉시 서빙하고 항상 배경 재검증하므로 신선도는 1 RTT다.
+const REVENUE_CACHE_SERVABLE_MS = 5 * 60 * 1000;
+let revenueLedgerCache = null; // { at, ledger, syncState }
+
 export function useRevenueLedger() {
-  const [ledger, setLedger] = React.useState({
-    source: 'preview',
-    leads: [],
-    deals: [],
-    stages: [],
-    accounts: [],
-    cases: [],
-    contacts: [],
-    companies: [],
-    summary: null,
-  });
-  const [syncState, setSyncState] = React.useState('preview');
+  const servable = revenueLedgerCache
+    && Date.now() - revenueLedgerCache.at < REVENUE_CACHE_SERVABLE_MS;
+  const [ledger, setLedger] = React.useState(servable ? revenueLedgerCache.ledger : EMPTY_REVENUE_LEDGER);
+  const [syncState, setSyncState] = React.useState(servable ? revenueLedgerCache.syncState : 'preview');
 
   React.useEffect(() => {
     let active = true;
     let retryTimer = null;
+    const hasServableCache = Boolean(
+      revenueLedgerCache && Date.now() - revenueLedgerCache.at < REVENUE_CACHE_SERVABLE_MS
+    );
     // dev 리컴파일·순간 네트워크 실패로 첫 fetch가 죽으면 preview에 고착됐다 —
     // 실패 1회는 1.2초 뒤 재시도하고, 그래도 실패하면 error로 표시한다(preview는
     // "미구성"의 뜻 — 라이브 read 거부를 preview로 라벨하면 0건이 사실처럼 보인다).
     async function load(attempt = 0) {
-      setSyncState('loading');
+      if (!hasServableCache) setSyncState('loading'); // 캐시 서빙 중엔 스켈레톤 없이 조용히 재검증
       try {
         const response = await fetch('/api/hub/revenue', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
@@ -138,12 +151,12 @@ export function useRevenueLedger() {
         if (!response.ok || !data || data.status === 'error') {
           if (attempt === 0) {
             retryTimer = setTimeout(() => { if (active) load(1); }, 1200);
-          } else {
+          } else if (!hasServableCache) {
             setSyncState('error');
           }
           return;
         }
-        setLedger({
+        const nextLedger = {
           source: data.source === 'supabase' ? 'supabase' : 'preview',
           leads: Array.isArray(data.leads) ? data.leads : [],
           deals: Array.isArray(data.deals) ? data.deals : [],
@@ -153,13 +166,16 @@ export function useRevenueLedger() {
           contacts: Array.isArray(data.contacts) ? data.contacts : [],
           companies: Array.isArray(data.companies) ? data.companies : [],
           summary: data.summary || null,
-        });
-        setSyncState(data.source === 'supabase' ? 'live' : 'preview');
+        };
+        const nextState = data.source === 'supabase' ? 'live' : 'preview';
+        revenueLedgerCache = { at: Date.now(), ledger: nextLedger, syncState: nextState };
+        setLedger(nextLedger);
+        setSyncState(nextState);
       } catch {
         if (!active) return;
         if (attempt === 0) {
           retryTimer = setTimeout(() => { if (active) load(1); }, 1200);
-        } else {
+        } else if (!hasServableCache) {
           setSyncState('error');
         }
       }

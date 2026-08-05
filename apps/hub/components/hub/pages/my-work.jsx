@@ -420,6 +420,9 @@ export function MyWork({ onNavigate }) {
   // fires when a timer runs out, so "되돌리기" is a real cancel, not a re-create.
   const [completingIds, setCompletingIds] = React.useState(() => new Set());
   const [hiddenIds, setHiddenIds] = React.useState(() => new Set());
+  // 낙관적 기한 변경 오버레이 — PATCH 응답을 기다리지 않고 카드가 즉시 버킷을 옮긴다.
+  // 배경 reload가 서버 진실로 덮으면 해당 패치를 걷어낸다.
+  const [itemPatches, setItemPatches] = React.useState({});
   // 공유 되돌리기 훅 — 언마운트 시 clear가 아니라 **flush**한다. 이전 구현은 타이머만
   // 지워서 "완료됨" 영수증 후 3.5초 내 페이지 이탈 시 PATCH가 조용히 증발했다.
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
@@ -428,7 +431,10 @@ export function MyWork({ onNavigate }) {
   const rowRefs = React.useRef([]);
 
   const visible = React.useMemo(() => {
-    let filtered = lane === 'all' ? items : items.filter((i) => i.lane === lane);
+    const patched = Object.keys(itemPatches).length
+      ? items.map((i) => (itemPatches[i.id] ? { ...i, ...itemPatches[i.id] } : i))
+      : items;
+    let filtered = lane === 'all' ? patched : patched.filter((i) => i.lane === lane);
     filtered = filtered.filter((i) => !hiddenIds.has(i.id));
     // Bucket filter is a 리스트-only control (board already shows every bucket as its own
     // column; week already shows every day) — applying it there too would silently empty
@@ -441,7 +447,7 @@ export function MyWork({ onNavigate }) {
     else if (sort === 'priority') sorted.sort((a, b) => (priorityValue(b) - priorityValue(a)) || (recencyValue(b) - recencyValue(a)));
     else sorted.sort((a, b) => dueValue(a) - dueValue(b));
     return sorted;
-  }, [items, lane, bucketFilter, search, sort, hiddenIds, lens]);
+  }, [items, lane, bucketFilter, search, sort, hiddenIds, lens, itemPatches]);
 
   // Durable quick-add task: POST /api/hub/tasks (Phase 1A write path). 상세 토글을 열면
   // 기한·우선순위도 한 번에 저장 — 기본은 제목만(빠른 경로) 그대로 유지.
@@ -552,6 +558,25 @@ export function MyWork({ onNavigate }) {
   // due-date write path here). Dropping on 지남 is a no-op (there's no sensible date for
   // "make this overdue").
   const rescheduleTask = async (item, dueAt, noticeLabel = '기한 변경됨') => {
+    // KST 기준 낙관 버킷 — 서버 resolveDueBucket과 같은 경계(오늘/7일/없음).
+    const todayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
+    const bucket = !dueAt
+      ? 'later'
+      : dueAt < todayKey
+        ? 'overdue'
+        : dueAt === todayKey
+          ? 'today'
+          : (Date.parse(dueAt) - Date.parse(todayKey)) / 86400000 <= 7
+            ? 'week'
+            : 'later';
+    const clearPatch = () => setItemPatches((p) => {
+      if (!(item.id in p)) return p;
+      const next = { ...p };
+      delete next[item.id];
+      return next;
+    });
+    setItemPatches((p) => ({ ...p, [item.id]: { bucket, whenAt: dueAt || null } }));
+    setNotice({ tone: 'ok', label: noticeLabel });
     try {
       const res = await fetch('/api/hub/tasks', {
         method: 'PATCH',
@@ -560,9 +585,9 @@ export function MyWork({ onNavigate }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.status !== 'saved') throw new Error(data.error || `기한 변경 실패 ${res.status}`);
-      setNotice({ tone: 'ok', label: noticeLabel });
-      await reload();
+      reload().finally(clearPatch); // 배경 재검증 — 카드 이동을 붙잡지 않는다
     } catch (error) {
+      clearPatch(); // 실패 → 원래 버킷으로 복귀
       setNotice({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
     }
   };

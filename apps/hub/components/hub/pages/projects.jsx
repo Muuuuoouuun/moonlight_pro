@@ -1052,7 +1052,18 @@ export function Projects({ workspace }) {
           setOrderResult({ tone: 'err', label: data.error || `저장 실패 ${response.status}` });
           return { ok: false, status: data.status || 'error' };
         }
-        await loadLedger();
+        // PATCH 응답의 task로 로컬 병합 — 영수증이 전체 원장 read를 기다리지 않는다.
+        const saved = data.task || null;
+        setTodos(ts => ts.map(t => (t.id === patch.id
+          ? {
+              ...t,
+              ...(saved?.title != null ? { title: saved.title } : {}),
+              ...(saved?.status != null ? { status: saved.status, done: saved.status === 'done' } : {}),
+              ...(saved?.priority != null ? { priorityRaw: saved.priority } : {}),
+              ...(saved && ('dueAt' in saved || 'due_at' in saved) ? { dueAt: saved.dueAt ?? saved.due_at ?? null } : {}),
+            }
+          : t)));
+        loadLedger(); // 배경 재검증(보드·카운트 정합)
         setTaskEditSource(null);
         setOrderResult({ tone: 'ok', label: '할 일 저장됨' });
         return { ok: true, status: data.status };

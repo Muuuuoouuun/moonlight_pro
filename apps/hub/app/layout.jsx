@@ -1,5 +1,3 @@
-import { NextIntlClientProvider } from "next-intl";
-import { getLocale, getMessages } from "next-intl/server";
 import "./globals.css";
 
 export const metadata = {
@@ -15,12 +13,11 @@ export const viewport = {
   themeColor: "#0c1018",
 };
 
-export default async function RootLayout({ children }) {
-  const locale = await getLocale();
-  const messages = await getMessages();
-
+// next-intl 제거(2026-08-05 system-eval 속도 감사): useTranslations 소비자 0인데
+// 전 페이지에 클라이언트 런타임+메시지 번들이 실렸다. 허브는 한국어 단일 로케일.
+export default function RootLayout({ children }) {
   return (
-    <html lang={locale}>
+    <html lang="ko">
       <head>
         <link
           rel="preload"
@@ -37,11 +34,7 @@ export default async function RootLayout({ children }) {
           crossOrigin="anonymous"
         />
       </head>
-      <body className="app-body">
-        <NextIntlClientProvider locale={locale} messages={messages}>
-          {children}
-        </NextIntlClientProvider>
-      </body>
+      <body className="app-body">{children}</body>
     </html>
   );
 }

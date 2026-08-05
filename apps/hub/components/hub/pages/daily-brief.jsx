@@ -1433,17 +1433,29 @@ function FocusSlots({ dailyFocus, onNavigate }) {
 // calm; the rest stay one click away.
 const QUEUE_LIMIT = 2;
 
-export function DailyBrief({ onNavigate }) {
+// 60초 시계를 페이지 루트에서 분리 — 분마다 전체 브리핑 트리가 아니라 이 리프만 다시 그린다.
+function BriefClock({ signalCount, urgentCount, todayCount }) {
   const [now, setNow] = React.useState(() => new Date());
-  const [refreshKey, setRefreshKey] = React.useState(0);
-  const ledger = useDailyBriefLedger(refreshKey);
-  const [queueExpanded, setQueueExpanded] = React.useState(false);
-  const refreshLedger = React.useCallback(() => setRefreshKey((key) => key + 1), []);
-
   React.useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60000);
     return () => window.clearInterval(id);
   }, []);
+  return (
+    <>
+      <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}>{formatBriefDate(now)}</div>
+      <h2 style={{ margin: 0, fontSize: 'clamp(27px, 3vw, 32px)', fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.08 }}>오늘의 실행</h2>
+      <div style={{ marginTop: 6, fontSize: 13, color: 'var(--fg-muted)', maxWidth: '62ch', lineHeight: 1.45 }}>
+        {greetingFor(now)}, 준혁 · <span style={{ color: 'var(--fg)' }}>신호 {signalCount}</span> · <span style={{ color: urgentCount > 0 ? 'var(--danger)' : 'inherit' }}>즉시 {urgentCount}</span> · 오늘 {todayCount}
+      </div>
+    </>
+  );
+}
+
+export function DailyBrief({ onNavigate }) {
+  const [refreshKey, setRefreshKey] = React.useState(0);
+  const ledger = useDailyBriefLedger(refreshKey);
+  const [queueExpanded, setQueueExpanded] = React.useState(false);
+  const refreshLedger = React.useCallback(() => setRefreshKey((key) => key + 1), []);
 
   const urgentCount = ledger.summary?.urgentCount ?? ledger.signals.filter(s => s.tone === 'danger').length;
   const todayCount = ledger.summary?.todayCount ?? ledger.signals.filter(s => s.tone === 'warning').length;
@@ -1457,11 +1469,7 @@ export function DailyBrief({ onNavigate }) {
     <div className="hub-page daily-brief" style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 'var(--section-gap)', maxWidth: 1040, margin: '0 auto', width: '100%' }}>
       <div className="hub-page-header daily-brief__intro fade-up" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20 }}>
         <div>
-          <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}>{formatBriefDate(now)}</div>
-          <h2 style={{ margin: 0, fontSize: 'clamp(27px, 3vw, 32px)', fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.08 }}>오늘의 실행</h2>
-          <div style={{ marginTop: 6, fontSize: 13, color: 'var(--fg-muted)', maxWidth: '62ch', lineHeight: 1.45 }}>
-            {greetingFor(now)}, Junhyuk · <span style={{ color: 'var(--fg)' }}>신호 {signalCount}</span> · <span style={{ color: urgentCount > 0 ? 'var(--danger)' : 'inherit' }}>즉시 {urgentCount}</span> · 오늘 {todayCount}
-          </div>
+          <BriefClock signalCount={signalCount} urgentCount={urgentCount} todayCount={todayCount} />
         </div>
         <div className="hub-page-actions hub-page-actions--row" style={{ display: 'flex', gap: 8 }}>
           {/* 보류 스코프(Council)가 히어로 CTA를 점유하던 것을 코어 루프(고객 연락)로 교체

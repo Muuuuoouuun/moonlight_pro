@@ -1,7 +1,3 @@
-import createNextIntlPlugin from "next-intl/plugin";
-
-const withNextIntl = createNextIntlPlugin("./i18n/request.js");
-
 /** @type {import("next").NextConfig} */
 const nextConfig = {
   transpilePackages: ["@com-moon/ui"],
@@ -11,4 +7,4 @@ const nextConfig = {
   ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
 };
 
-export default withNextIntl(nextConfig);
+export default nextConfig;
