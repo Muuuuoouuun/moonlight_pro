@@ -590,7 +590,8 @@ export function Overview({ onNavigate }) {
   const activity = Array.isArray(ledger.recentActivity) ? ledger.recentActivity : [];
   const visibleActivity = activityExpanded ? activity : activity.slice(0, 8);
   const hasPipelineValue = stageSeries.some((s) => s.count > 0);
-  const overviewStatus = ledger.status || syncState;
+  // transport error가 EMPTY_LEDGER의 'preview'에 가려지지 않게 error 우선(re-audit S9).
+  const overviewStatus = syncState === 'error' ? 'error' : (ledger.status || syncState);
   const panelAvailability = (sourceKey, hasData, dependencies) => overviewPanelAvailability({
     sources: ledger.sources || [],
     status: overviewStatus,

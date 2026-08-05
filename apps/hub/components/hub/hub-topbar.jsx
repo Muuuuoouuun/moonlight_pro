@@ -68,7 +68,8 @@ export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSideba
           <span className="mono" style={{ color: 'var(--fg)' }}>{weekday} · {m}/{d} · {hh}:{mm}</span>
         </div>
 
-        <IconButton className="hub-topbar__secondary" icon="sparkle" tooltip="Ask Agents" onClick={() => onNavigate('dashboard/agents/chat')} />
+        {/* 보류 스코프(Agents) 상시 버튼 제거 — 코어 루프(고객 연락)가 그 자리를 갖는다. */}
+        <IconButton className="hub-topbar__secondary" icon="signal" tooltip="고객 연락 열기" onClick={() => onNavigate('dashboard/revenue/followups')} />
         <button onClick={() => onTheme(theme === 'dark' ? 'light' : 'dark')}
           title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
           aria-label={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}

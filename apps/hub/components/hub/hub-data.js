@@ -62,8 +62,8 @@ export const NAV_TREE = [
   {
     key: 'content', label: 'Content', icon: 'content', secondary: true,
     children: [
-      { key: 'queue', label: 'Queue', icon: 'queue', path: 'dashboard/content/queue' },
-      { key: 'studio', label: 'Studio', icon: 'studio', path: 'dashboard/content/studio' },
+      { key: 'queue', label: 'Queue', icon: 'queue', path: 'dashboard/content/queue', keywords: ['콘텐츠', '발행 큐'] },
+      { key: 'studio', label: 'Studio', icon: 'studio', path: 'dashboard/content/studio', keywords: ['스튜디오', '작성'] },
       { key: 'campaigns', label: 'Campaigns', icon: 'campaigns', path: 'dashboard/content/campaigns' },
     ],
   },
@@ -81,8 +81,8 @@ export const NAV_TREE = [
   {
     key: 'system', label: 'System', icon: 'settings', secondary: true,
     children: [
-      { key: 'evolution', label: 'Evolution', icon: 'evolution', path: 'dashboard/evolution' },
-      { key: 'settings', label: 'Settings', icon: 'settings', path: 'dashboard/settings' },
+      { key: 'evolution', label: 'Evolution', icon: 'evolution', path: 'dashboard/evolution', keywords: ['에볼루션', '시스템 로그'] },
+      { key: 'settings', label: 'Settings', icon: 'settings', path: 'dashboard/settings', keywords: ['설정', '세팅', '환경', '연결'] },
     ],
   },
 ];
@@ -110,5 +110,6 @@ export const LEGACY_REDIRECTS = {
   'dashboard/evolution/logs': { to: 'dashboard/evolution', label: 'Evolution · Log' },
   'dashboard/projects': { to: 'dashboard/work/projects', label: 'Projects' },
   'dashboard/classin/intake': { to: 'dashboard/classin/revenue', label: '결제·리드' },
+  'dashboard/classin/followups': { to: 'dashboard/revenue/followups', label: '고객 연락' },
   'dashboard/agents/office': { to: 'dashboard/agents/chat', label: 'Agents · Chat' },
 };

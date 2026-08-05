@@ -223,7 +223,8 @@ const PAGE_MAP = {
   'dashboard/classin/revenue': () => <Leads workspace="classin" />,
   'dashboard/classin/segments': (n) => <Segments workspace="classin" onNavigate={n} />,
   'dashboard/classin/accounts': (n) => <Accounts workspace="classin" onNavigate={n} />,
-  'dashboard/classin/followups': (n) => <Followups onNavigate={n} />,
+  // classin/followups 별칭 제거(2026-08-05): workspace prop 없이 revenue/followups와
+  // 바이트 동일한 중복 목적지였다 — LEGACY_REDIRECTS가 북마크를 정본으로 안내한다.
   'dashboard/classin/projects': () => <Projects workspace="classin" />,
   'dashboard/classin/automations': () => <SheetsSync />,
   'dashboard/classin/cohorts': () => <Projects workspace="classin" />,   // legacy real_v1 bookmark alias

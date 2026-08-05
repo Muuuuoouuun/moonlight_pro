@@ -385,6 +385,11 @@
 .hub-app .daily-brief__panel--danger {
   border-left-color: var(--danger-line) !important;
 }
+/* 빠른 이동 칩은 사이드바가 숨는 모바일 전용 — 데스크톱에서는 사이드바 앵커와 완전
+   중복이라 첫 fold만 밀어냈다(2026-08-05 re-audit). */
+@media (min-width: 901px) {
+  .hub-app .daily-brief__nav { display: none; }
+}
 .hub-app .daily-brief__nav {
   display: flex;
   flex-direction: column;

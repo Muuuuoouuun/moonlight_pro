@@ -60,12 +60,13 @@ function useFollowups() {
     try {
       const r = await fetch("/api/hub/followups", { cache: "no-store" });
       const d = await r.json().catch(() => null);
-      if (!r.ok || !d) {
+      if (!r.ok || !d || d.status === "error") {
         setState((s) => ({ ...s, syncState: "error" }));
         return;
       }
       setState({
-        syncState: d.status === "live" ? "live" : "preview",
+        // partial = 일부 소스 read 실패 — live로 뭉개지 않고 배지로 표시한다(§5.3).
+        syncState: d.status === "live" ? "live" : d.status === "partial" ? "partial" : "preview",
         items: Array.isArray(d.items) ? d.items : [],
         summary: d.summary || {},
         calendarReason: d.calendarReason || "",
@@ -427,7 +428,7 @@ export function Followups({ onNavigate }) {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>팔로업</h2>
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             오늘 연락할 사람 · 채널 · 왜 · 다음 행동
-            {syncState === "live" && (summary.overdue ?? 0) > 0 && (
+            {["live", "partial"].includes(syncState) && (summary.overdue ?? 0) > 0 && (
               <span className="num" style={{ marginLeft: 8, color: "var(--danger)" }}>{summary.overdue} overdue</span>
             )}
             <SyncBadge state={syncState} />
@@ -487,7 +488,7 @@ export function Followups({ onNavigate }) {
           ) : (
             <EmptyState
               icon="rhythm"
-              title={syncState === "live" ? "표시할 항목이 없습니다" : "팔로업 데이터 없음"}
+              title={["live", "partial"].includes(syncState) ? "표시할 항목이 없습니다" : "팔로업 데이터 없음"}
               description={
                 syncState !== "live"
                   ? "리드·딜이 쌓이고 Supabase가 연결되면 표시됩니다."

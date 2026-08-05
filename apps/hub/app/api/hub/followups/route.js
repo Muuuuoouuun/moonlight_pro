@@ -11,8 +11,12 @@ export async function GET(req) {
     const limit = Number(req.nextUrl.searchParams.get("limit")) || 25;
     const data = await getFollowups({ limit });
 
+    // read 실패는 error(502) — preview(미구성)로 뭉개면 "오늘 할 일 없음"으로 오독된다.
+    if (data.source === "error") {
+      return NextResponse.json({ status: "error", ...data }, { status: 502 });
+    }
     return NextResponse.json({
-      status: data.source === "supabase" ? "live" : "preview",
+      status: data.source === "supabase" ? (data.partial ? "partial" : "live") : "preview",
       ...data,
     });
   } catch (error) {

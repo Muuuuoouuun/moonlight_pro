@@ -83,7 +83,7 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
     return { source: "preview", configured: Boolean(config), items: [], summary: { overdue: 0, dueToday: 0, total: 0 } };
   }
 
-  const [leads, deals, companies, outcomes] = await Promise.all([
+  const [leadRows, dealRows, companies, outcomes] = await Promise.all([
     fetchSupabaseRows("leads", {
       select: "id,name,status,score,next_action,company_id,channel,source,last_touch_at,updated_at,created_at,meta",
       filters: withWorkspaceFilter([["status", inFilter(["new", "qualified", "nurturing"])]]),
@@ -109,9 +109,28 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
     }),
   ]);
 
-  if (!leads && !deals) {
-    return { source: "preview", configured: true, items: [], summary: { overdue: 0, dueToday: 0, total: 0 } };
+  // read 실패(null)와 빈 결과([])를 구분한다 — 이전에는 한쪽(leads)이 타임아웃돼도
+  // 나머지 한쪽만으로 source:"supabase"(live 배지)를 반환해 리드 후속 전체가 소리 없이
+  // 사라졌다(2026-08-05 re-audit S1). "후속 누락 0건" 목표에서 최악의 무음 경로.
+  if (leadRows === null && dealRows === null) {
+    return {
+      source: "error",
+      configured: true,
+      error: "followups-read-failed",
+      failedSources: ["leads", "deals"],
+      retryable: true,
+      items: [],
+      summary: { overdue: 0, dueToday: 0, total: 0 },
+    };
   }
+  const failedSources = [
+    ...(leadRows === null ? ["leads"] : []),
+    ...(dealRows === null ? ["deals"] : []),
+    ...(companies === null ? ["companies"] : []),
+    ...(outcomes === null ? ["outreach_outcomes"] : []),
+  ];
+  const leads = leadRows || [];
+  const deals = dealRows || [];
 
   const companyById = new Map((companies || []).map((c) => [c.id, c]));
   // last outcome per lead and per company
@@ -205,6 +224,9 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
   return {
     source: "supabase",
     configured: true,
+    // 한쪽 소스라도 읽기 실패면 partial — live 배지 뒤에 소실된 행을 숨기지 않는다.
+    partial: failedSources.length > 0,
+    failedSources,
     items: capped,
     summary: { overdue: items.length, dueToday, total: items.length, shown: capped.length },
   };

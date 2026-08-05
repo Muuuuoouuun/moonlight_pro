@@ -251,10 +251,12 @@ export const SIDEBAR_UTILITIES = [
     icon: 'sparkle',
     scopeAware: false,
     owns: ['dashboard/agents', 'dashboard/automations', 'dashboard/classin/automations'],
+    // 대표 경로는 코어(Engine 실행 로그) — 보류 스코프(agents/chat)가 앵커 착지 지점을
+    // 점유하면 사이드바 클릭 = '준비 중' 표면 착지가 된다(2026-08-05 re-audit).
     paths: {
-      all: 'dashboard/agents/chat',
-      classin: 'dashboard/agents/chat',
-      personal: 'dashboard/agents/chat',
+      all: 'dashboard/automations/runs',
+      classin: 'dashboard/automations/runs',
+      personal: 'dashboard/automations/runs',
     },
     children: {
       all: aiChildren('dashboard/automations/sheets'),

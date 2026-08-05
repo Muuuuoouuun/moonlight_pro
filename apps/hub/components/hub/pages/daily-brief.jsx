@@ -65,7 +65,9 @@ const SIGNAL_TARGETS = {
   decision: 'dashboard/work/decisions?new=decision',
   rhythm: 'dashboard/work/rhythm',
   focus: 'dashboard/work/calendar?focus=15',
-  queueApprovals: 'dashboard/daily-brief',
+  // 승인 큐의 정본 표면(agents/orders) — 자기 경로(daily-brief)를 가리키면 내비가
+  // 스킵돼 "처리함"만 찍히는 no-op 버튼이 된다(2026-08-05 re-audit #6).
+  queueApprovals: 'dashboard/agents/orders',
 };
 
 const CONTEXT_TARGETS = {
@@ -452,7 +454,9 @@ function useDailyBriefLedger(refreshKey) {
         const response = await fetch('/api/hub/daily-brief', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
         if (!active || !response.ok || !data) {
-          if (active) setState((prev) => ({ ...prev, syncState: 'preview' }));
+          // transport 실패는 error — preview로 뭉개면 첫 화면이 "Supabase 연결 후 live
+          // 전환"이라는 거짓 안내와 함께 신호 0건으로 렌더된다(re-audit S5).
+          if (active) setState((prev) => ({ ...prev, syncState: 'error' }));
           return;
         }
 
@@ -480,7 +484,7 @@ function useDailyBriefLedger(refreshKey) {
           morningBrief: data.morningBrief || null,
         });
       } catch {
-        if (active) setState((prev) => ({ ...prev, syncState: 'preview' }));
+        if (active) setState((prev) => ({ ...prev, syncState: 'error' }));
       }
     }
 
@@ -809,7 +813,11 @@ function ApprovalQueueCard({ onNavigate }) {
   React.useEffect(() => {
     let active = true;
     fetch('/api/hub/work-orders?status=proposed', { cache: 'no-store' })
-      .then((r) => r.json().catch(() => null))
+      .then((r) => {
+        // 승인 큐 read 실패를 empty로 뭉개면 "승인 대기 없음"으로 오독된다(re-audit S10).
+        if (!r.ok) throw new Error(`work-orders ${r.status}`);
+        return r.json();
+      })
       .then((d) => {
         if (!active) return;
         if (d && Array.isArray(d.orders)) {
@@ -819,7 +827,7 @@ function ApprovalQueueCard({ onNavigate }) {
           setState('empty');
         }
       })
-      .catch(() => active && setState('empty'));
+      .catch(() => active && setState('error'));
     return () => { active = false; };
   }, []);
 
@@ -857,14 +865,17 @@ function ApprovalQueueCard({ onNavigate }) {
 
   return (
     <div>
-      <SectionTitle right={<Badge tone={pending ? 'moon' : 'success'} size="xs">{pending} 대기</Badge>}>
+      {/* 대기 0은 상태 정보 — 녹색 완료 아님(§5.3), 중립 유지. */}
+      <SectionTitle right={<Badge tone={pending ? 'moon' : 'neutral'} size="xs">{pending} 대기</Badge>}>
         승인 큐
       </SectionTitle>
       <Card pad={false}>
         {orders.length === 0 ? (
-          <div style={{ padding: 14, fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+          <div role={state === 'error' ? 'alert' : undefined} style={{ padding: 14, fontSize: 12.5, color: state === 'error' ? 'var(--danger)' : 'var(--fg-muted)', lineHeight: 1.5 }}>
             {state === 'loading'
               ? '큐 확인 중…'
+              : state === 'error'
+              ? '승인 큐를 읽지 못했습니다 — 대기 제안이 있을 수 있습니다. 새로고침해 주세요.'
               : '승인 대기 중인 제안이 없습니다. /inbox·/team이 제안을 올리면 여기서 1클릭으로 처리합니다.'}
           </div>
         ) : (
@@ -970,7 +981,9 @@ function StatusLine({ state }) {
   const liveCount = Number(state.summary?.liveCount || 0);
   const sourceCount = state.sources.length;
   const label = state.syncState === 'mixed' ? `${liveCount}/${sourceCount || 6} live` : sourceLabel(state.syncState);
-  const detail = state.syncState === 'preview'
+  const detail = state.syncState === 'error'
+    ? '브리핑을 읽지 못했습니다 — 지금 화면은 비어 보여도 실제 일이 있을 수 있습니다'
+    : state.syncState === 'preview'
     ? 'Supabase 연결 후 live 전환'
     : state.syncState === 'partial'
     ? '일부 운영 기록을 읽지 못했습니다'
@@ -1003,6 +1016,9 @@ function StatusLine({ state }) {
               {source.label} · {sourceLabel(source.state)}
             </Badge>
           ))}
+          {/* §2의 5개 판단축 중 메시지 축은 데이터 소스(카톡·전화 원장)가 아직 없다 —
+              침묵 대신 부재를 고지한다(가짜 UI 금지, 2026-08-05 re-audit #8). */}
+          <Badge tone="neutral" variant="outline" size="xs">메시지 · 소스 없음(미연동)</Badge>
         </div>
       )}
     </div>
@@ -1323,7 +1339,14 @@ function FocusSlots({ dailyFocus, onNavigate }) {
   return (
     <div className="hub-grid--two daily-brief__focus" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.05fr) minmax(300px, .95fr)', gap: 16, alignItems: 'start' }}>
       <Card pad={false} className="daily-brief__panel" aria-label="긴급 KA와 집중 고객">
-        {/* 긴급 KA — §5.2 허용 red: urgent KA. 대상 없으면 행 자체를 만들지 않는다(최대 1건). */}
+        {/* 긴급 KA — §5.2 허용 red: urgent KA (최대 1건). live인데 후보가 없으면 침묵하지
+            않고 부재와 지정 경로(Sales Ledger 시트의 companies.meta.ka)를 고지한다 —
+            존재하지 않는 기능이 존재하는 척하지 않기(2026-08-05 re-audit #1). */}
+        {ka.state === 'live' && !ka.item && (
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11.5, color: 'var(--fg-faint)' }}>
+            긴급 KA 없음 — KA 지정은 Sales Ledger 시트(companies.meta.ka)에서 관리됩니다.
+          </div>
+        )}
         {ka.item && (
           <div style={{ boxShadow: 'inset 1px 0 0 var(--danger-line)', borderBottom: '1px solid var(--line-soft)' }}>
             {eyebrow('긴급 KA')}
@@ -1374,7 +1397,7 @@ function FocusSlots({ dailyFocus, onNavigate }) {
                 </div>
                 {item.nextAction && <div style={{ marginTop: 1, fontSize: 11, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>→ {item.nextAction}</div>}
               </div>
-              {item.score != null && <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-muted)', flexShrink: 0 }}>{item.score}</span>}
+              {/* §7 확정: 숫자 점수를 첫 화면에 노출하지 않는다 — 순서(1~5)가 이미 우선순위를 전달. */}
             </div>
           ))
         )}
@@ -1455,6 +1478,10 @@ export function DailyBrief({ onNavigate }) {
       <BriefNavigation taskToday={ledger.taskToday} onNavigate={onNavigate} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+        {/* §7 확정 fold 순서: Capture → 긴급 KA·집중 고객·오늘 일정 → 신호. 명명된 슬롯이
+            tone 정렬 신호(자동화 실패 등)보다 위 — 고객이 히어로 자리를 갖는다. */}
+        <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} />
+
         <div className="daily-brief__command-reveal">
           {command ? (
             <CommandCard s={command} remaining={waiting.length} onNavigate={onNavigate} />
@@ -1462,8 +1489,6 @@ export function DailyBrief({ onNavigate }) {
             <CommandClear signalCount={signalCount} />
           )}
         </div>
-
-        <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} />
 
         <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.05fr) minmax(300px, .95fr)', gap: 16, alignItems: 'start' }}>
           <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={refreshLedger} />

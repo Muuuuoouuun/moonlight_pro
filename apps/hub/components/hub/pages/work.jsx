@@ -299,7 +299,11 @@ function useCalendarEvents(days) {
     const params = new URLSearchParams({ timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString() });
 
     fetch(`/api/calendar/google/event?${params.toString()}`, { cache: 'no-store' })
-      .then((r) => r.json().catch(() => null))
+      .then((r) => {
+        // 5xx의 HTML 에러 페이지가 d=null → 'preview'로 위장되던 경로(re-audit S11).
+        if (!r.ok) throw new Error(`calendar ${r.status}`);
+        return r.json().catch(() => null);
+      })
       .then((d) => {
         if (!active) return;
         setState({

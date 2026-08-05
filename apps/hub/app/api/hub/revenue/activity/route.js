@@ -22,7 +22,9 @@ export async function GET(req) {
       return NextResponse.json({ status: "preview", activities: [] }, { status: 202 });
     }
     if (result.activities === null) {
-      return NextResponse.json({ status: "preview", reason: "fetch-failed", activities: [] }, { status: 202 });
+      // 라이브 백엔드의 read 실패 — preview(미구성)로 재라벨하면 "이 고객과 연락한 적
+      // 없음"으로 오독된다(2026-08-05 re-audit S3). 502로 실패를 실패라고 말한다.
+      return NextResponse.json({ status: "error", reason: "fetch-failed", activities: [] }, { status: 502 });
     }
     return NextResponse.json({ status: "live", activities: result.activities });
   } catch (error) {

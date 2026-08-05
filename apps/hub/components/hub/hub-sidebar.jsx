@@ -57,7 +57,10 @@ function useAnchorCounts() {
     let active = true;
 
     fetch('/api/hub/followups', { cache: 'no-store' })
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`followups ${r.status}`); // 실패 시 뱃지 생략(0으로 위장 금지)
+        return r.json();
+      })
       .then(d => {
         if (!active) return;
         const items = Array.isArray(d?.items) ? d.items : [];

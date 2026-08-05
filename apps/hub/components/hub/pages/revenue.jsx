@@ -127,7 +127,8 @@ export function useRevenueLedger() {
     let active = true;
     let retryTimer = null;
     // dev 리컴파일·순간 네트워크 실패로 첫 fetch가 죽으면 preview에 고착됐다 —
-    // 실패 1회는 1.2초 뒤 재시도하고, 그래도 실패하면 정직하게 preview로 남긴다.
+    // 실패 1회는 1.2초 뒤 재시도하고, 그래도 실패하면 error로 표시한다(preview는
+    // "미구성"의 뜻 — 라이브 read 거부를 preview로 라벨하면 0건이 사실처럼 보인다).
     async function load(attempt = 0) {
       setSyncState('loading');
       try {
@@ -138,7 +139,7 @@ export function useRevenueLedger() {
           if (attempt === 0) {
             retryTimer = setTimeout(() => { if (active) load(1); }, 1200);
           } else {
-            setSyncState('preview');
+            setSyncState('error');
           }
           return;
         }
@@ -159,7 +160,7 @@ export function useRevenueLedger() {
         if (attempt === 0) {
           retryTimer = setTimeout(() => { if (active) load(1); }, 1200);
         } else {
-          setSyncState('preview');
+          setSyncState('error');
         }
       }
     }
