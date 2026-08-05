@@ -75,7 +75,7 @@ registerHooks({
   resolve(specifier, context, nextResolve) {
     const stubs = {
       "next/server": nextServerStub,
-      // tasks 라우트는 lean getTaskLedger를, overview/daily-brief는 전체 getProjectLedger를
+      // tasks·daily-brief 라우트는 lean getTaskLedger를, overview는 전체 getProjectLedger를
       // 쓴다 — 각자 독립 state 키로 스텁해 계약을 따로 검증한다.
       "@/lib/repositories/operating-ledger":
         repositoryStub("projects", "getProjectLedger") + repositoryStub("tasksLedger", "getTaskLedger"),
@@ -399,33 +399,36 @@ test("overview propagates a truncated rhythm read as partial rather than live", 
 });
 
 test("daily brief exposes the project error without manufacturing open-work zero", async () => {
-  state.projects = {
+  // daily-brief는 lean getTaskLedger 소비자 — 코어 read 실패는 lean 계약의 error 봉투로 온다.
+  state.tasksLedger = {
     source: "error",
     configured: true,
     error: "project-ledger-core-read-failed",
-    failedSources: ["projects", "tasks"],
-    projects: [],
+    failedSources: ["tasks"],
     todos: [],
-    updates: [],
-    decisions: [],
+    projects: [],
   };
 
   const body = await (await dailyBriefRoute.GET()).json();
   const projectsSource = body.sources.find((source) => source.key === "projects");
   assert.equal(body.status, "partial");
   assert.equal(projectsSource.state, "error");
-  assert.deepEqual(projectsSource.failedSources, ["projects", "tasks"]);
+  assert.deepEqual(projectsSource.failedSources, ["tasks"]);
   assert.deepEqual(body.failedSources, ["projects"]);
   assert.equal(body.taskToday.state, "error");
   assert.equal(body.taskToday.counts, null);
   assert.equal(body.operatorHome.sources.projects, "error");
 });
 
-test("daily brief keeps task Today live while naming unrelated optional partials", async () => {
-  state.projects = liveProjectLedger({
+test("daily brief keeps task Today live while naming unrelated context partials", async () => {
+  // lean read에서 brands/projects 컨텍스트 실패는 partial로 명명되지만, 태스크 집계가
+  // 온전하면 taskToday는 live를 유지한다(과거: notes 같은 무관 소스에도 끌려갔다).
+  state.tasksLedger = liveTaskLedger({
     partial: true,
-    failedSources: ["notes"],
+    failedSources: ["brands"],
+    partialSources: ["brands"],
     todos: [],
+    taskAggregation: { loaded: 0, total: 0, partial: false },
   });
 
   const body = await (await dailyBriefRoute.GET()).json();
@@ -433,13 +436,13 @@ test("daily brief keeps task Today live while naming unrelated optional partials
   assert.equal(body.status, "partial");
   assert.equal(body.source, "partial");
   assert.equal(projectsSource.state, "partial");
-  assert.deepEqual(projectsSource.failedSources, ["notes"]);
+  assert.deepEqual(projectsSource.failedSources, ["brands"]);
   assert.equal(body.taskToday.state, "live");
   assert.equal(body.taskToday.counts.total, 0);
 });
 
 test("daily brief marks only task Today partial for an incomplete task aggregation", async () => {
-  state.projects = liveProjectLedger({
+  state.tasksLedger = liveTaskLedger({
     partial: true,
     partialSources: ["tasks"],
     taskAggregation: { loaded: 160, total: 161, partial: true },
@@ -488,6 +491,11 @@ test("overview and daily brief never call a partial-only aggregate preview", asy
   state.projects = liveProjectLedger({
     partial: true,
     failedSources: ["notes"],
+  });
+  // daily-brief의 projects 소스는 lean ledger — 같은 시나리오로 partial을 만든다.
+  state.tasksLedger = liveTaskLedger({
+    partial: true,
+    failedSources: ["brands"],
   });
   state.content = { source: "preview", items: [], publishLogs: [], brands: [], summary: {} };
   state.revenue = { source: "preview", deals: [], leads: [], stages: [], summary: {} };
