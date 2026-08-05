@@ -489,7 +489,29 @@ function useDailyBriefLedger(refreshKey) {
     return () => { active = false; };
   }, [refreshKey]);
 
-  return state;
+  // 캡처/완료 후 좁은 재검증 — 전체 집계(~30콜)가 아니라 tasks lean read(4콜)만 다시
+  // 받아 taskToday 슬라이스를 교체한다(re-audit 속도 #1 후반부). 실패는 조용히 무시 —
+  // 다음 전체 refresh가 정합을 회복하고, 로컬 낙관 상태는 이미 화면에 반영돼 있다.
+  const refreshTasks = React.useCallback(async () => {
+    try {
+      const res = await fetch('/api/hub/tasks', { cache: 'no-store' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || data.status === 'error') return false;
+      const todos = Array.isArray(data.tasks) ? data.tasks : [];
+      setState((prev) => ({
+        ...prev,
+        taskToday: {
+          ...buildTaskToday(todos),
+          state: data.partial === true ? 'partial' : 'live',
+        },
+      }));
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  return { ...state, refreshTasks };
 }
 
 function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
@@ -969,7 +991,7 @@ function ApprovalQueueCard({ onNavigate }) {
 
 // Slim replacement for the old full-card DataTrustStrip — one quiet status line, with the
 // per-ledger source badges tucked behind a toggle so telemetry stops competing with signal.
-function StatusLine({ state }) {
+function StatusLine({ state, onRetry }) {
   const [open, setOpen] = React.useState(false);
   const liveCount = Number(state.summary?.liveCount || 0);
   const sourceCount = state.sources.length;
@@ -990,6 +1012,9 @@ function StatusLine({ state }) {
       <Dot tone={syncTone(state.syncState)} size={6} />
       <span className="mono" style={{ color: 'var(--fg-dim)', letterSpacing: 0 }}>{label}</span>
       <span style={{ color: 'var(--fg-faint)' }}>· {detail}</span>
+      {onRetry && ['error', 'partial'].includes(state.syncState) && (
+        <Button variant="ghost" size="xs" onClick={onRetry}>다시 읽기</Button>
+      )}
       {sourceCount > 0 && (
         <button
           type="button"
@@ -1479,10 +1504,10 @@ export function DailyBrief({ onNavigate }) {
         </div>
       </div>
 
-      <StatusLine state={ledger} />
+      <StatusLine state={ledger} onRetry={refreshLedger} />
 
       {/* §7 슬롯 순서: Quick Capture가 첫 fold 1순위 — 내비 칩보다 위. */}
-      <QuickTaskCapture onNavigate={onNavigate} onSaved={refreshLedger} />
+      <QuickTaskCapture onNavigate={onNavigate} onSaved={ledger.refreshTasks} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
         {/* §7 확정 fold 순서: Capture → 긴급 KA·집중 고객·오늘 일정 → 신호. 명명된 슬롯이
@@ -1501,7 +1526,7 @@ export function DailyBrief({ onNavigate }) {
         </div>
 
         <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.05fr) minmax(300px, .95fr)', gap: 16, alignItems: 'start' }}>
-          <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={refreshLedger} />
+          <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
 
           <div>
             <SectionTitle right={<div style={{ display: 'flex', gap: 6 }}>

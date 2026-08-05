@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getAutomationsLedger } from "@/lib/repositories/automations-ledger";
 import { getMorningBrief } from "@/lib/repositories/brief-ledger";
 import { getContentLedger } from "@/lib/repositories/content-ledger";
-import { getProjectLedger } from "@/lib/repositories/operating-ledger";
+import { getTaskLedger } from "@/lib/repositories/operating-ledger";
 import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
 import { getWorkLedger } from "@/lib/repositories/work-ledger";
 import { getWorkOrders } from "@/lib/sales-os/work-orders";
@@ -398,7 +398,7 @@ export async function GET() {
   const endOfTodayIso = new Date(`${todayKey}T23:59:59+09:00`).toISOString();
 
   const [projectsResult, workResult, contentResult, revenueResult, automationsResult, ordersResult, briefResult, calendarResult] = await Promise.allSettled([
-    getProjectLedger(),
+    getTaskLedger(), // lean 4콜 — 이 라우트는 projects(status)·todos·집계만 소비 (11~14콜 전체 원장 불필요)
     getWorkLedger(),
     getContentLedger(),
     getRevenueLedger(),

@@ -553,9 +553,13 @@ export async function getTaskLedger() {
     configured: true,
     workspaceId,
     todos: mapTodos(taskRows, projectById, brandById),
-    // attention-ledger 등 소비자가 프로젝트 이름 조인에 쓰는 최소 카탈로그 — 전체
-    // getProjectLedger(11+콜)를 다시 태우지 않기 위한 id/name projection.
-    projects: Array.from(projectById.values()).map((p) => ({ id: p.id, name: p.name })),
+    // attention-ledger·daily-brief 소비자가 이름 조인·상태 신호에 쓰는 최소 카탈로그 —
+    // 전체 getProjectLedger(11+콜)를 다시 태우지 않기 위한 id/name/status projection.
+    projects: Array.from(projectById.values()).map((p) => ({
+      id: p.id,
+      name: p.name,
+      status: normalizeProjectStatus(p.status),
+    })),
     taskAggregation: {
       loaded: taskRows.length,
       total: Number.isFinite(taskRowCount) ? taskRowCount : null,
@@ -563,6 +567,9 @@ export async function getTaskLedger() {
     },
     partial: contextFailedSources.length > 0 || aggregationPartial,
     failedSources: contextFailedSources,
+    // operator-home-summary 등이 부분 통계를 null로 강등할 때 보는 어휘 —
+    // 실패한 컨텍스트 소스(brands/projects)와 부분 태스크 집계를 같은 이름으로 노출한다.
+    partialSources: [...contextFailedSources, ...(aggregationPartial ? ["tasks"] : [])],
   };
 }
 
