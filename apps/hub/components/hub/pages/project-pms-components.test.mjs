@@ -193,10 +193,13 @@ test("project and task rows use native keyboard controls and named canonical che
 });
 
 test("row completion is undoable and terminal projects live in a collapsed section", () => {
-  // 3.5s cancel window: the PATCH only fires after the undo window closes.
-  assert.match(projectsSource, /PROJECT_UNDO_MS = 3500/);
+  // 3.5s cancel window: the PATCH only fires after the undo window closes. The window
+  // lives in the shared useUndoableAction hook, whose unmount semantic is flush(즉시 실행)
+  // — 페이지 이탈로 "완료됨" 영수증이 증발하지 않는다(2026-08-05 system-eval).
+  assert.match(projectsSource, /import \{ useUndoableAction \} from ["']\.\.\/use-undoable-action["']/);
   assert.match(projectsSource, /action: \{ label: '되돌리기', onClick: \(\) => undoCompleteProject\(project\) \}/);
-  assert.match(projectsSource, /pendingCompleteTimers\.current\.forEach\(\(timerId\) => clearTimeout\(timerId\)\)/);
+  assert.match(projectsSource, /scheduleUndoable\(id, async \(\) => \{/);
+  assert.match(projectsSource, /if \(!cancelUndoable\(project\.id\)\) return;/);
   // Terminal projects never mix into the active groups — they render only in
   // the collapsed 완료·보관 accordion at the bottom (aria-expanded contract).
   assert.match(projectsSource, /const projects = brandProjects\.filter\(p => !isTerminalProject\(p\) && !hiddenIds\.has\(p\.id\)\)/);

@@ -12,6 +12,7 @@ import {
   Badge, Card, Button, Avatar, Input, EmptyState, SyncBadge, Kbd, Drawer,
   SegmentedControl, Divider, Checkbox,
 } from "../hub-primitives";
+import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel } from "./revenue";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
 
@@ -647,21 +648,22 @@ export function Customers({ onNavigate }) {
       })
       .finally(() => { creatingRef.current = false; });
   }, []);
+  // 키보드 계층(2026-08-05 배선): j/k 행 이동 · e 열기 · n 생성 · / 검색 · Esc 해제.
+  // 수제 N 리스너를 훅으로 흡수 — 입력/드로어(role=dialog)/치트시트에서는 훅이 양보하고,
+  // 연타 재진입은 createCustomer의 creatingRef가 막는다.
+  const searchRef = React.useRef(null);
+  const kbRows = React.useMemo(() => sorted.map(r => ({ id: r.key })), [sorted]);
+  const selection = useCrmSelection(kbRows);
+  useCrmKeyboard({
+    selection,
+    onNew: createCustomer,
+    onEditSelected: (key) => setOpenKey(key),
+    onSearchFocus: () => searchRef.current?.focus(),
+  });
   React.useEffect(() => {
-    const onKey = (e) => {
-      if (e.key !== "n" && e.key !== "N") return;
-      // ⌘N/Ctrl+N(새 창)·Alt 조합·키 반복은 브라우저/OS 몫 — 가로채지 않는다
-      // (revenue.jsx·work.jsx·pms-ui.js의 N 가드와 동일 계약).
-      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
-      if (openKey) return;
-      const t = e.target;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
-      e.preventDefault();
-      createCustomer();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [openKey, createCustomer]);
+    if (!selection.selectedId) return;
+    document.querySelector(`[data-customer-row="${CSS.escape(selection.selectedId)}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [selection.selectedId]);
 
   const counts = React.useMemo(() => {
     const c = {};
@@ -690,7 +692,7 @@ export function Customers({ onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Input className="hub-toolbar" placeholder="학원명·담당자·지역 검색…" icon="search" value={search} onChange={setSearch} />
+        <Input ref={searchRef} className="hub-toolbar" placeholder="학원명·담당자·지역 검색…" icon="search" value={search} onChange={setSearch} />
         <Button variant="primary" size="sm" icon="plus" onClick={createCustomer}>고객 등록 <Kbd>N</Kbd></Button>
       </div>
 
@@ -732,19 +734,22 @@ export function Customers({ onNavigate }) {
             className="hub-row"
             role="button"
             tabIndex={0}
+            data-customer-row={r.key}
             onClick={() => setOpenKey(r.key)}
             onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpenKey(r.key); } }}
             style={{
               display: "grid", gridTemplateColumns: gridCols, gap: 12, padding: "11px 16px",
               borderBottom: "1px solid var(--line-soft)", alignItems: "center", cursor: "pointer",
               boxShadow: r.health === "risk" && !r.dormant ? "inset 1px 0 0 var(--danger-line)" : "none",
-              opacity: r.dormant ? 0.55 : 1,
+              // 휴면은 행 전체 opacity 금지(§5.3) — "기약 없음 (휴면)" 라벨 + 이름 luminance로 전달.
+              outline: selection.selectedId === r.key ? "1px solid var(--moon-300)" : undefined,
+              outlineOffset: -1,
             }}
           >
             <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 10 }}>
               <Avatar name={r.name} size={30} tone={r.type === "personal" ? "personal" : "company"} />
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
+                <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: r.dormant ? "var(--fg-muted)" : undefined }}>{r.name}</div>
                 <div style={{ fontSize: 11, color: "var(--fg-faint)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {[r.person, r.sub].filter(Boolean).join(" · ") || "—"}
                   {r.kind === "lead" && r.deals?.length > 0 && (() => {

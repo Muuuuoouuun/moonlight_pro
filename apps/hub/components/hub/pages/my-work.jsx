@@ -4,6 +4,7 @@ import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, Button, Checkbox, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer } from "../hub-primitives";
+import { UNDO_WINDOW_MS, useUndoableAction } from "../use-undoable-action";
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from "@/lib/pms-ui";
 
 // 내 작업 — one personal operating surface, three lenses over the cross-lane attention
@@ -409,20 +410,16 @@ export function MyWork({ onNavigate }) {
   const [expandedEventBuckets, setExpandedEventBuckets] = React.useState(() => new Set(['today']));
   const [dragItemId, setDragItemId] = React.useState(null);
   // completingIds: brief strikethrough flash. hiddenIds: optimistically removed from view
-  // while the undo window (pendingTimers) is still open — completeTask only actually fires
-  // when a timer runs out, so "되돌리기" is a real cancel, not a re-create.
+  // while the undo window (useUndoableAction) is still open — completeTask only actually
+  // fires when a timer runs out, so "되돌리기" is a real cancel, not a re-create.
   const [completingIds, setCompletingIds] = React.useState(() => new Set());
   const [hiddenIds, setHiddenIds] = React.useState(() => new Set());
-  const pendingTimers = React.useRef(new Map());
+  // 공유 되돌리기 훅 — 언마운트 시 clear가 아니라 **flush**한다. 이전 구현은 타이머만
+  // 지워서 "완료됨" 영수증 후 3.5초 내 페이지 이탈 시 PATCH가 조용히 증발했다.
+  const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
   const quickRef = React.useRef(null);
   const searchRef = React.useRef(null);
   const rowRefs = React.useRef([]);
-
-  React.useEffect(() => () => {
-    // Unmount safety: don't let a stale timer fire a PATCH after the page is gone.
-    pendingTimers.current.forEach((timerId) => clearTimeout(timerId));
-    pendingTimers.current.clear();
-  }, []);
 
   const visible = React.useMemo(() => {
     let filtered = lane === 'all' ? items : items.filter((i) => i.lane === lane);
@@ -497,7 +494,6 @@ export function MyWork({ onNavigate }) {
     }
   };
 
-  const UNDO_WINDOW_MS = 3500;
   const STRIKE_MS = 180; // matches DESIGN.md's 120–180ms motion guide
 
   // The actual persist — only ever called after the undo window closes (or never, if the
@@ -535,17 +531,12 @@ export function MyWork({ onNavigate }) {
 
     setNotice({ tone: 'ok', label: '할 일 완료됨', action: { label: '되돌리기', onClick: () => undoComplete(item) } });
 
-    const timerId = setTimeout(() => {
-      pendingTimers.current.delete(id);
-      persistComplete(item);
-    }, UNDO_WINDOW_MS);
-    pendingTimers.current.set(id, timerId);
+    scheduleUndoable(id, () => persistComplete(item), UNDO_WINDOW_MS);
   };
 
   const undoComplete = (item) => {
     const id = item.id;
-    const timerId = pendingTimers.current.get(id);
-    if (timerId) { clearTimeout(timerId); pendingTimers.current.delete(id); }
+    if (!cancelUndoable(id)) return; // 창이 이미 닫혔으면 PATCH가 나갔다 — 되돌릴 수 없음
     setCompletingIds((s) => { const n = new Set(s); n.delete(id); return n; });
     setHiddenIds((s) => { const n = new Set(s); n.delete(id); return n; });
     setNotice({ tone: 'ok', label: '완료 취소됨' });
@@ -928,7 +919,13 @@ export function MyWork({ onNavigate }) {
         )}
         {lens !== 'week' && <SegmentedControl label="정렬" options={SORT_OPTIONS} value={sort} onChange={setSort} />}
         {notice && (
-          <span style={{ fontSize: 11.5, color: notice.tone === 'ok' ? 'var(--success)' : 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          // live region 필수(§11): 되돌리기 창이 열렸다는 사실을 스크린리더도 알아야 한다.
+          // 완료는 중립(§5.3 done ≠ green) — 에러만 danger.
+          <span
+            role={notice.tone === 'err' ? 'alert' : 'status'}
+            aria-live="polite"
+            style={{ fontSize: 11.5, color: notice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+          >
             {notice.label}
             {notice.action && (
               <button

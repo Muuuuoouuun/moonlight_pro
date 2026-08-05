@@ -102,6 +102,16 @@
 6. 디자인: 2px 레일 7곳·2px 보더 5곳 → 1px 계약 복구(선택 강조는 §5.3 외곽 outline로), h2 위반 2곳(Calendar 28/700→20/500, Studio h2 추가), 상태 primitive 라벨 10→10.5px(12페이지 일괄), followups 기록 행·daily-brief 결정 카드의 전체 opacity 제거, automations 행 전체 semantic fill → danger 1px 레일, 성공률 신호등 색 → 중립.
 7. UI/UX: **ESC 레이어 스택**(`esc-layers.js`) — 드로어 위 ⌘K에서 ESC가 팔레트만 닫음. §11 클릭 div triple 수복(Accounts 3곳·Segments 멤버·daily-brief 2곳·Projects 보드 카드 — 보드 카드는 열기 자체가 불가능했던 것을 수리). customers N 가드(⌘N 하이재킹·연타 대량 생성 차단). 죽은 create 경로 정직화(`?new=flow`/`?new=playbook`/`?new=delivery` 제거, automations 가짜 pause 토글 비활성+사유). ⌘K 어휘를 D4 확정 라벨과 동기화(고객 연락·영업·프로젝트 검색 가능), 중복 팔레트 행 2개 제거.
 
+### Iteration 2 (2026-08-05) — 반영 완료
+
+주제: **최저 2개 축 공략 — 편의 부가기능(死 키보드 시스템 배선·공유 undo)과 정체성(첫 화면 슬롯 컷오버·死코드 제거).**
+검증: `npm test` 484/484 · typecheck · hub/engine build 통과.
+
+1. 편의 — 키보드 시스템 배선: import 0곳이던 `ShortcutOverlay`(한국어 치트시트)를 hub-app 전역 `?` 키로 배선(ESC 레이어 스택 참여, 배선 안 된 키는 치트시트에서 제거해 정직 유지). `useCrmKeyboard`/`useCrmSelection`을 Leads·Customers에 배선 — j/k 행 이동(+Moonstone 선택 outline·scrollIntoView), e 편집, / 검색 포커스, Esc 해제, n은 페이지별 수제 리스너를 훅으로 흡수(중복 구현 정리 시작).
+2. 편의/안정성 — 공유 되돌리기 훅 `useUndoableAction`: my-work의 deferred-write 패턴 추출 + **언마운트 시멘틱을 clear→flush로 교정**(기존엔 "완료됨" 영수증 후 3.5초 내 페이지 이탈 시 PATCH가 조용히 증발하는 무음 손실 경로였음). daily-brief 오늘 할 일 완료에 3.5초 되돌리기 신설, my-work·projects 이관, 알림 스팬에 `role=status`/`aria-live` 부여, 완료 카피 중립화(§5.3).
+3. 정체성 — 첫 화면 확정 슬롯 컷오버(§2/§7): `buildDailyFocus`(lib/daily-focus.js, 계약 테스트 6건) — **긴급 KA ≤1**(KA 회사 × 기한 지난 다음 행동/7일+ 방치 딜, danger 레일), **집중 고객 ≤5**(`selectOperatorFocusLeads` limit 파라미터화 — 신호 큐 tone 정렬에 밀려 소실되던 풀을 명명 슬롯으로), **오늘 일정**(Google Calendar KST 오늘 창, Phase 1B 계약 최초 충족; 미연결은 preview+연결 CTA). 슬롯별 독립 truth 상태. Quick Capture를 §7 1순위 위치로.
+4. 정체성 — 보류 스코프 정리: 첫 화면 히어로 CTA 'Council에 묻기'(보류 스코프) → '고객 연락'(코어 루프). 렌더 0회로 첫 화면 청크에 실려 있던 카드 3종(~270줄) 삭제. 도달 불가 eeocrm-sync 死코드 체인 삭제(페이지+라우트 2+repository+response 모듈, git 히스토리 보존).
+
 ### 다음 회차 백로그 (점수 영향 순)
 
 - 편의 부가기능: 기존 키보드 시스템(useCrmKeyboard/ShortcutOverlay/BulkBar) 전면 배선, 공유 undo 훅 + live-region 토스트 → followups 기록·완료·스테이지 변경·삭제(soft) 확장, ⌘K 레코드 검색.

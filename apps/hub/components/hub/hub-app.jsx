@@ -9,6 +9,7 @@ import "./hub-tokens.css";
 import { Sidebar } from "./hub-sidebar";
 import { TopBar } from "./hub-topbar";
 import { CommandPalette } from "./hub-command-palette";
+import { ShortcutOverlay } from "./crm-shortcut-overlay";
 import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
 import {
   beginMobileNavigationRoute,
@@ -267,6 +268,7 @@ export function HubApp() {
   // from user actions so StrictMode cannot clobber them with the defaults.
   const [theme, setTheme] = React.useState(DEFAULT_HUB_PREFERENCES.theme);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
+  const [helpOpen, setHelpOpen] = React.useState(false);
   const rootRef = React.useRef(null);
   const menuButtonRef = React.useRef(null);
   const mobileCloseButtonRef = React.useRef(null);
@@ -403,6 +405,21 @@ export function HubApp() {
     return () => window.removeEventListener('keydown', onKey);
   }, [openCommandPalette, paletteOpen]);
 
+  // `?` → 전역 단축키 치트시트. 이미 작성돼 있던 ShortcutOverlay가 import 0곳으로 죽어
+  // 있었다(2026-08-05 system-eval U-S1) — 어디서든 열리는 도움말로 배선한다.
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== '?' || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (paletteOpen) return;
+      e.preventDefault();
+      setHelpOpen(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [paletteOpen]);
+
   const render = PAGE_MAP[path];
   const page = render ? render(navigate) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
   const sidebarCollapsed = collapsed && !navOpen;
@@ -454,6 +471,7 @@ export function HubApp() {
         </div>
       </div>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={navigate} />
+      <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }

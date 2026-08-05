@@ -4,6 +4,7 @@ import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Checkbox, EmptyState, SyncBadge, SegmentedControl, EditDrawer, Kbd } from "../hub-primitives";
+import { useUndoableAction } from "../use-undoable-action";
 import {
   buildProjectCreatePayload,
   buildProjectDraft,
@@ -216,7 +217,7 @@ export function Projects({ workspace }) {
   // 실제 PATCH가 나간다. 실수 탭이 진짜 복구 가능해야 한다.
   const [completingIds, setCompletingIds] = React.useState(() => new Set());
   const [hiddenIds, setHiddenIds] = React.useState(() => new Set());
-  const pendingCompleteTimers = React.useRef(new Map());
+  const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
   const [openDetail, setOpenDetail] = React.useState(null);
   const [mobileDetail, setMobileDetail] = React.useState(false);
   const [brandMenuOpen, setBrandMenuOpen] = React.useState(false);
@@ -689,20 +690,19 @@ export function Projects({ workspace }) {
     setProjectStatus(project, project.statusKey === 'archived' ? 'active' : 'archived');
   }, [setProjectStatus]);
 
-  const PROJECT_UNDO_MS = 3500;
   const PROJECT_STRIKE_MS = 180; // DESIGN.md 모션 가이드(120–180ms)와 일치
 
   const undoCompleteProject = React.useCallback((project) => {
-    const timerId = pendingCompleteTimers.current.get(project.id);
-    if (timerId) { clearTimeout(timerId); pendingCompleteTimers.current.delete(project.id); }
+    if (!cancelUndoable(project.id)) return; // 창이 이미 닫혔으면 PATCH가 나갔다
     setCompletingIds((s) => { const n = new Set(s); n.delete(project.id); return n; });
     setHiddenIds((s) => { const n = new Set(s); n.delete(project.id); return n; });
     setOrderResult({ tone: 'ok', label: '완료 취소됨' });
-  }, []);
+  }, [cancelUndoable]);
 
   // 행 체크박스의 완료: 취소선 플래시 → 낙관적 숨김 → 되돌리기 창이 닫힌 뒤에만
   // 실제 PATCH. 디테일 패널이 열린 프로젝트를 완료하면 패널도 닫는다(사라진 행의
-  // 유령 패널 방지).
+  // 유령 패널 방지). 공유 훅이 언마운트 시 flush하므로 "완료됨" 영수증 후 페이지를
+  // 떠나도 쓰기가 증발하지 않는다.
   const scheduleCompleteProject = React.useCallback((project) => {
     const id = project.id;
     setCompletingIds((s) => new Set(s).add(id));
@@ -712,19 +712,11 @@ export function Projects({ workspace }) {
     }, PROJECT_STRIKE_MS);
     setOpenDetail((cur) => (cur === id ? null : cur));
     setOrderResult({ tone: 'ok', label: '프로젝트 완료됨', action: { label: '되돌리기', onClick: () => undoCompleteProject(project) } });
-    const timerId = setTimeout(async () => {
-      pendingCompleteTimers.current.delete(id);
+    scheduleUndoable(id, async () => {
       await setProjectStatus(project, 'completed');
       setHiddenIds((s) => { if (!s.has(id)) return s; const n = new Set(s); n.delete(id); return n; });
-    }, PROJECT_UNDO_MS);
-    pendingCompleteTimers.current.set(id, timerId);
-  }, [setProjectStatus, undoCompleteProject]);
-
-  React.useEffect(() => () => {
-    // Unmount 안전장치: 페이지가 사라진 뒤 늦은 타이머가 PATCH를 쏘지 않게.
-    pendingCompleteTimers.current.forEach((timerId) => clearTimeout(timerId));
-    pendingCompleteTimers.current.clear();
-  }, []);
+    });
+  }, [setProjectStatus, undoCompleteProject, scheduleUndoable]);
 
   const createTodo = React.useCallback((projectId = null, initialStatus = 'todo') => {
     setTaskEditSource(null);
@@ -1583,7 +1575,14 @@ export function Projects({ workspace }) {
             onChange={setView}
           />
           {orderResult && (
-            <span className="mono" style={{ fontSize: 10.5, color: orderResult.tone === 'ok' ? 'var(--success)' : 'var(--danger)', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            // live region 필수(§11) — 되돌리기 창 개방을 스크린리더에도 알린다.
+            // 완료 카피는 중립(§5.3 done ≠ green), 에러만 danger.
+            <span
+              className="mono"
+              role={orderResult.tone === 'err' ? 'alert' : 'status'}
+              aria-live="polite"
+              style={{ fontSize: 10.5, color: orderResult.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+            >
               {orderResult.label}
               {orderResult.action && (
                 <button

@@ -17,6 +17,8 @@ import {
   filterOperatorOwnedRevenue,
   selectOperatorFocusLeads,
 } from "@/lib/operator-revenue-scope";
+import { buildDailyFocus } from "@/lib/daily-focus";
+import { listGoogleCalendarEvents } from "@/lib/google-calendar";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -388,7 +390,14 @@ function buildSources(results) {
 }
 
 export async function GET() {
-  const [projectsResult, workResult, contentResult, revenueResult, automationsResult, ordersResult, briefResult] = await Promise.allSettled([
+  // 오늘 일정 슬롯(§2/§7 — Phase 1B 계약)의 시간 창: KST 오늘 하루.
+  const todayKey = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+  const startOfTodayIso = new Date(`${todayKey}T00:00:00+09:00`).toISOString();
+  const endOfTodayIso = new Date(`${todayKey}T23:59:59+09:00`).toISOString();
+
+  const [projectsResult, workResult, contentResult, revenueResult, automationsResult, ordersResult, briefResult, calendarResult] = await Promise.allSettled([
     getProjectLedger(),
     getWorkLedger(),
     getContentLedger(),
@@ -396,6 +405,7 @@ export async function GET() {
     getAutomationsLedger(),
     getWorkOrders({ status: "proposed", limit: 20 }),
     getMorningBrief(),
+    listGoogleCalendarEvents({ timeMin: startOfTodayIso, timeMax: endOfTodayIso, maxResults: 20 }),
   ]);
 
   const results = {
@@ -416,6 +426,10 @@ export async function GET() {
   const ordersLedger = readLedger(ordersResult, { source: "preview", orders: [] });
   // Chief of Staff composed brief (ai.morning_brief) — the cron's output finally has a reader.
   const morning = readLedger(briefResult, { source: "preview", brief: null });
+  const calendar = readLedger(calendarResult, { ok: false, reason: "calendar-read-failed", items: [] });
+  // §2 확정 슬롯: 긴급 KA ≤1 · 집중 고객 ≤5 · 오늘 일정 — tone 정렬 신호 큐와 별개의
+  // 명명된 풀. 각 슬롯이 자기 소스 truth 상태를 따로 갖는다.
+  const dailyFocus = buildDailyFocus({ revenue: operatorRevenue, calendar });
   const queue = {
     source: ordersLedger.source || "preview",
     pending: Array.isArray(ordersLedger.orders) ? ordersLedger.orders.length : 0,
@@ -475,6 +489,7 @@ export async function GET() {
     taskToday,
     contentBrands,
     signals,
+    dailyFocus,
     queue,
     morningBrief: morning.brief || null,
   });

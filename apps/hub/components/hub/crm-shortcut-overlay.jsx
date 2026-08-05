@@ -5,26 +5,31 @@
 
 import React from "react";
 import { Kbd } from "./hub-primitives";
+import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
 
 const SHORTCUTS = [
-  { keys: ["J", "K"], label: "위/아래 선택 이동" },
+  { keys: ["⌘", "K"], label: "명령 팔레트 (이동)" },
+  { keys: ["J", "K"], label: "위/아래 선택 이동 (목록)" },
   { keys: ["E"], label: "선택 항목 편집" },
   { keys: ["N"], label: "새 항목 생성" },
   { keys: ["/"], label: "검색 포커스" },
-  { keys: ["1", "–", "5"], label: "선택 딜 스테이지 이동" },
-  { keys: ["X"], label: "선택 토글 (일괄)" },
+  { keys: ["⌘", "Z"], label: "완료 직후 되돌리기 (할 일)" },
   { keys: ["⌘", "↵"], label: "드로어 저장" },
   { keys: ["Esc"], label: "닫기 / 선택 해제" },
   { keys: ["?"], label: "이 도움말" },
 ];
 
 export function ShortcutOverlay({ open, onClose }) {
+  // ESC 레이어 스택 참여 — 드로어 위에서 열려도 ESC가 이 오버레이만 닫는다.
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
   React.useEffect(() => {
     if (!open) return undefined;
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const layer = pushEscLayer();
+    const onKey = (e) => { if (e.key === "Escape" && isTopEscLayer(layer)) onCloseRef.current(); };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+    return () => { window.removeEventListener("keydown", onKey); popEscLayer(layer); };
+  }, [open]);
 
   if (!open) return null;
 

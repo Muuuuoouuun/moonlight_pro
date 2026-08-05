@@ -5,6 +5,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, Progress } from "../hub-primitives";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
+import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
 import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
@@ -618,20 +619,21 @@ export function Leads({ workspace }) {
     }
   }, [leadParam, syncState, mergedLeads, pathname, router]);
 
-  // Page-level `n` — quick-create a lead when no drawer is open and focus isn't in a field.
+  // 키보드 계층(2026-08-05 배선): j/k 행 이동 · e 편집 · n 생성 · / 검색 포커스 · Esc 해제.
+  // useCrmKeyboard가 입력 포커스/드로어(role=dialog)/치트시트에서 스스로 양보하므로 기존
+  // 수제 N 리스너는 이 훅으로 흡수한다(중복 구현 6곳 문제의 첫 정리).
+  const searchRef = React.useRef(null);
+  const selection = useCrmSelection(sortedLeads);
+  useCrmKeyboard({
+    selection,
+    onNew: createLead,
+    onEditSelected: (id) => setEditLeadId(id),
+    onSearchFocus: () => searchRef.current?.focus(),
+  });
   React.useEffect(() => {
-    const onKey = (e) => {
-      if ((e.key !== 'n' && e.key !== 'N') || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (editLeadId) return;
-      const t = e.target;
-      const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
-      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
-      e.preventDefault();
-      createLead();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [editLeadId, filter, ws, workspace]);
+    if (!selection.selectedId) return;
+    document.querySelector(`[data-lead-row="${selection.selectedId}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [selection.selectedId]);
 
   const cardFileRef = React.useRef(null);
   const [cardState, setCardState] = React.useState(null); // { phase, status, fields, error }
@@ -674,7 +676,7 @@ export function Leads({ workspace }) {
         </div>
         <div style={{ flex: 1 }} />
         <SegmentedControl className="hub-toolbar" style={{ marginRight: 8 }} options={SCOPE_OPTIONS} value={filter} onChange={setFilter} />
-        <Input className="hub-toolbar" placeholder="이름·소스·단계 검색…" icon="search" value={search} onChange={setSearch} />
+        <Input ref={searchRef} className="hub-toolbar" placeholder="이름·소스·단계 검색…" icon="search" value={search} onChange={setSearch} />
         <div style={{ width: 8 }} />
         <Button variant="secondary" size="sm" icon="plus" onClick={() => cardFileRef.current?.click()}>명함</Button>
         <input ref={cardFileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onCardFile} />
@@ -748,12 +750,16 @@ export function Leads({ workspace }) {
         {sortedLeads.map((l, i) => (
           <div key={l.id} className="hub-row hub-leads-grid"
             role="button" tabIndex={0}
+            data-lead-row={l.id}
             onClick={() => setEditLeadId(l.id)}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditLeadId(l.id); } }}
             style={{
               display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12,
               padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', cursor: 'pointer',
               borderBottom: i < sortedLeads.length - 1 ? '1px solid var(--line-soft)' : 'none',
+              // j/k 키보드 선택 — §5.3 충돌 우선순위상 선택은 Moonstone 외곽 outline.
+              outline: selection.selectedId === l.id ? '1px solid var(--moon-300)' : undefined,
+              outlineOffset: -1,
             }}
           >
             <span style={{ paddingRight: 4, display: 'flex' }}>

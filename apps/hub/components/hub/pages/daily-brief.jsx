@@ -3,11 +3,11 @@
 import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, Progress, Sparkline, SyncBadge, EmptyState } from "../hub-primitives";
+import { useUndoableAction } from "../use-undoable-action";
 import { createClientId } from "@/lib/pms-ui";
 import { buildQuickCapture, isDurableQuickCaptureResult } from "@/lib/quick-task-capture";
 import { isDurableTaskUpdateResult } from "@/lib/task-today";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
-import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
 import {
   beginRhythmCheck,
   buildRhythmCheckPayload,
@@ -290,15 +290,16 @@ function QuickTaskCapture({ onNavigate, onSaved }) {
 }
 
 function TaskToday({ taskToday, onNavigate, onChanged }) {
-  const items = Array.isArray(taskToday?.items) ? taskToday.items : [];
+  const allItems = Array.isArray(taskToday?.items) ? taskToday.items : [];
   const counts = taskToday?.counts || {};
-  const [pendingId, setPendingId] = React.useState(null);
-  const [feedback, setFeedback] = React.useState({ status: 'idle', message: '' });
+  const [feedback, setFeedback] = React.useState({ status: 'idle', message: '', action: null });
+  // my-work와 동일한 되돌리기 계약(공유 훅): 완료 탭 → 행 낙관 제거 → 3.5초 되돌리기 창이
+  // 닫힌 뒤에만 PATCH. 창 안의 되돌리기는 네트워크 없이 완전 복구, 언마운트는 flush.
+  const [hiddenIds, setHiddenIds] = React.useState(() => new Set());
+  const { schedule, cancel } = useUndoableAction();
+  const items = allItems.filter((t) => !hiddenIds.has(t.id));
 
-  async function complete(task) {
-    setPendingId(task.id);
-    setFeedback({ status: 'saving', message: `${task.title} 완료 처리 중…` });
-
+  async function persistComplete(task) {
     try {
       const response = await fetch('/api/hub/tasks', {
         method: 'PATCH',
@@ -311,16 +312,33 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
         throw new Error(data.error || data.status || `완료 저장 실패 (${response.status})`);
       }
 
-      setFeedback({ status: 'saved', message: `${task.title} 완료. Today를 다시 불러왔습니다.` });
+      setFeedback({ status: 'saved', message: `${task.title} 완료됨.`, action: null });
       onChanged?.();
     } catch (error) {
+      // 실패 시 행 복귀 — 완료된 것처럼 남기지 않는다.
+      setHiddenIds((s) => { const n = new Set(s); n.delete(task.id); return n; });
       setFeedback({
         status: 'error',
         message: error instanceof Error ? error.message : '완료 상태를 저장하지 못했습니다.',
+        action: null,
       });
-    } finally {
-      setPendingId(null);
     }
+  }
+
+  function complete(task) {
+    setHiddenIds((s) => new Set(s).add(task.id));
+    setFeedback({
+      status: 'pending',
+      message: `${task.title} 완료됨`,
+      action: { label: '되돌리기', onClick: () => undoComplete(task) },
+    });
+    schedule(task.id, () => persistComplete(task));
+  }
+
+  function undoComplete(task) {
+    if (!cancel(task.id)) return; // 창이 이미 닫혔으면 되돌릴 수 없음
+    setHiddenIds((s) => { const n = new Set(s); n.delete(task.id); return n; });
+    setFeedback({ status: 'idle', message: '완료 취소됨', action: null });
   }
 
   // §5.2: missed is the only immediate-loss lane; today/inbox are ordinary stages → neutral.
@@ -368,11 +386,10 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
                   size="sm"
                   icon="check"
                   aria-label={`완료: ${task.title}`}
-                  disabled={pendingId === task.id}
                   onClick={() => complete(task)}
                   style={{ minHeight: 44 }}
                 >
-                  {pendingId === task.id ? '저장 중' : '완료'}
+                  완료
                 </Button>
               </div>
             ))}
@@ -395,12 +412,16 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
           />
         )}
       </Card>
+      {/* 완료 피드백은 중립(§5.3 done ≠ green); 되돌리기 창이 열려 있는 동안 액션 노출. */}
       <div
         role={feedback.status === 'error' ? 'alert' : 'status'}
         aria-live="polite"
-        style={{ minHeight: 18, marginTop: 6, fontSize: 11.5, color: feedback.status === 'error' ? 'var(--danger)' : 'var(--success)' }}
+        style={{ minHeight: 22, marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: feedback.status === 'error' ? 'var(--danger)' : 'var(--fg-muted)' }}
       >
-        {feedback.message}
+        <span>{feedback.message}</span>
+        {feedback.action && (
+          <Button variant="ghost" size="xs" onClick={feedback.action.onClick}>{feedback.action.label}</Button>
+        )}
       </div>
     </div>
   );
@@ -417,6 +438,7 @@ function useDailyBriefLedger(refreshKey) {
     taskToday: { state: 'preview', items: [], counts: {}, hiddenCount: 0 },
     contentBrands: null,
     signals: [],
+    dailyFocus: null,
     morningBrief: null,
   });
 
@@ -453,6 +475,7 @@ function useDailyBriefLedger(refreshKey) {
           taskToday: data.taskToday || { state: 'preview', items: [], counts: {}, hiddenCount: 0 },
           contentBrands: data.contentBrands || null,
           signals: Array.isArray(data.signals) ? data.signals : [],
+          dailyFocus: data.dailyFocus || null,
           morningBrief: data.morningBrief || null,
         });
       } catch {
@@ -936,292 +959,8 @@ function ApprovalQueueCard({ onNavigate }) {
   );
 }
 
-// 파이프라인 형태 — 열린 딜의 단계 분포를 한 줄 세그먼트 바로. 딜이 어디에 몰려 있고(병목)
-// 며칠째 정체된 게 몇 건인지 5초 안에 읽고 딜 보드로 넘어가게 한다. raw count가 아니라
-// 분포 + 정체(urgency)를 보여주는 게 DESIGN.md 대시보드 원칙.
-//
-// Derived from the shared lib/deal-stages.js taxonomy and STAGE_FILL tokens (not redeclared
-// here) so this widget can't drift from the Deals kanban's masthead gauge — "closing" is
-// dropped since PipelineShapeCard only ever shows open (not closing/lost) deals, matching
-// its own `open` filter below.
-const PIPELINE_STAGES = DEAL_STAGES
-  .filter((s) => s.key !== 'closing')
-  .map((s) => ({ key: s.key, label: s.label, color: STAGE_FILL[s.color] || 'var(--fg-faint)' }));
-
-function PipelineShapeCard({ onNavigate }) {
-  const [data, setData] = React.useState(null);
-  const [state, setState] = React.useState('loading');
-
-  React.useEffect(() => {
-    let active = true;
-    fetch('/api/hub/revenue', { cache: 'no-store' })
-      .then((r) => r.json().catch(() => null))
-      .then((d) => {
-        if (!active) return;
-        if (d && d.source === 'supabase' && Array.isArray(d.deals)) {
-          const open = d.deals.filter((x) => x.stage !== 'closing' && x.stage !== 'lost');
-          const byStage = PIPELINE_STAGES.map((s) => ({
-            ...s,
-            count: open.filter((x) => x.stage === s.key).length,
-          }));
-          const stalled = open
-            .filter((x) => Number(x.age) >= 10)
-            .sort((a, b) => Number(b.age) - Number(a.age));
-          setData({
-            open: open.length,
-            value: open.reduce((sum, x) => sum + Number(x.value || 0), 0),
-            byStage,
-            stalled: stalled.length,
-            top: stalled[0] || null,
-          });
-          setState('live');
-        } else {
-          setState('preview');
-        }
-      })
-      .catch(() => active && setState('preview'));
-    return () => { active = false; };
-  }, []);
-
-  return (
-    <div>
-      <SectionTitle right={<SyncBadge state={state} />}>
-        파이프라인
-      </SectionTitle>
-      <Card>
-        {state === 'live' && data ? (
-          data.open > 0 ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span className="stat" style={{ fontSize: 24, fontWeight: 600 }}>
-                  {data.open}<span style={{ color: 'var(--fg-faint)', fontWeight: 400, fontSize: 14 }}> 딜</span>
-                </span>
-                <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{formatMoney(data.value)}</span>
-                <div style={{ flex: 1 }} />
-                {/* 정체는 Deals 보드와 같은 문법(danger) — amber 아님 (§5.2). */}
-                {data.stalled > 0 && <Badge tone="danger" size="xs">정체 {data.stalled}</Badge>}
-              </div>
-              {/* 단계 분포 세그먼트 바 — 폭 ∝ 딜 수, 빈 단계는 흐린 슬라이버로 남긴다. */}
-              <div style={{ marginTop: 12, display: 'flex', gap: 3, height: 8, borderRadius: 999, overflow: 'hidden' }}>
-                {data.byStage.map((s) => (
-                  <div key={s.key} title={`${s.label} ${s.count}`} style={{
-                    flex: s.count || 0.04, background: s.color, minWidth: s.count ? 6 : 2, opacity: s.count ? 1 : 0.25,
-                  }} />
-                ))}
-              </div>
-              <div style={{ marginTop: 10, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                {data.byStage.map((s) => (
-                  <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: 2, background: s.color, flexShrink: 0, opacity: s.count ? 1 : 0.35 }} />
-                    <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{s.label}</span>
-                    <span className="mono" style={{ fontSize: 11, color: s.count ? 'var(--fg)' : 'var(--fg-faint)' }}>{s.count}</span>
-                  </div>
-                ))}
-              </div>
-              {data.top && (
-                <button
-                  onClick={() => onNavigate(`dashboard/revenue/deals?deal=${encodeURIComponent(data.top.id)}`)}
-                  style={{
-                    marginTop: 12, width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
-                    borderRadius: 'var(--r-sm)', cursor: 'pointer',
-                  }}
-                >
-                  <Dot tone="danger" size={6} />
-                  <span style={{ fontSize: 12, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
-                    가장 정체: {data.top.name}
-                  </span>
-                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--danger)', flexShrink: 0 }}>{data.top.age}일</span>
-                </button>
-              )}
-            </>
-          ) : (
-            <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
-              열린 딜이 없습니다. 리드를 딜로 전환하면 파이프라인 형태가 여기 표시됩니다.
-            </div>
-          )
-        ) : (
-          <>
-            <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
-              Supabase 매출 기록이 연결되면 열린 딜의 단계 분포와 정체 딜이 여기에 표시됩니다.
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <Button variant="outline" size="sm" icon="deals" onClick={() => onNavigate('dashboard/revenue/deals')}>딜 보드 열기</Button>
-            </div>
-          </>
-        )}
-      </Card>
-    </div>
-  );
-}
-
-// 계약 퍼널 — the contracts half of the 5x dashboard (the content half is ContentCadenceCard
-// below). Renders the funnel every quick-log tap / executed work order writes into
-// outreach_outcomes — the measurement loop that makes logging worth the extra taps.
-const FUNNEL_LABEL = { sent: '접촉', replied: '응답', meeting: '미팅', proposal: '제안', won: '계약' };
-
-function SalesFunnelCard({ onNavigate }) {
-  const [stats, setStats] = React.useState(null);
-  const [state, setState] = React.useState('loading');
-
-  React.useEffect(() => {
-    let active = true;
-    fetch('/api/hub/outcomes?limit=1', { cache: 'no-store' })
-      .then((r) => r.json().catch(() => null))
-      .then((d) => {
-        if (!active) return;
-        if (d && d.stats?.source === 'supabase') {
-          setStats(d.stats);
-          setState('live');
-        } else {
-          setState('preview');
-        }
-      })
-      .catch(() => active && setState('preview'));
-    return () => { active = false; };
-  }, []);
-
-  const funnel = stats?.funnel || [];
-  const sent = funnel.find((f) => f.stage === 'sent')?.count || 0;
-  const won = funnel.find((f) => f.stage === 'won')?.count || 0;
-
-  return (
-    <div>
-      <SectionTitle right={<SyncBadge state={state} />}>
-        계약 퍼널
-      </SectionTitle>
-      <Card>
-        {state === 'live' && stats ? (
-          stats.total > 0 ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span className="stat" style={{ fontSize: 24, fontWeight: 600 }}>
-                  {won}<span style={{ color: 'var(--fg-faint)', fontWeight: 400, fontSize: 14 }}> 계약</span>
-                </span>
-                <div style={{ flex: 1 }} />
-                <Badge tone={won > 0 ? 'success' : 'neutral'} size="xs">접촉→계약 {stats.ratios?.overall ?? 0}%</Badge>
-              </div>
-              <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
-                {funnel.map((f) => (
-                  <div key={f.stage} style={{ flex: 1, minWidth: 0 }}>
-                    <div className="mono" style={{ fontSize: 13, fontWeight: 600, textAlign: 'center' }}>{f.count}</div>
-                    <div style={{ marginTop: 4, height: 3, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', borderRadius: 999, background: 'var(--moon-500)', width: `${sent > 0 ? Math.round((f.count / sent) * 100) : 0}%` }} />
-                    </div>
-                    <div style={{ fontSize: 10, color: 'var(--fg-faint)', textAlign: 'center', marginTop: 4 }}>{FUNNEL_LABEL[f.stage] || f.stage}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ marginTop: 12, fontSize: 11, color: 'var(--fg-muted)', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <span>응답률 <span className="mono">{stats.ratios?.replyRate ?? 0}%</span></span>
-                <span>미팅 전환 <span className="mono">{stats.ratios?.meetingRate ?? 0}%</span></span>
-                <span>계약 전환 <span className="mono">{stats.ratios?.winRate ?? 0}%</span></span>
-              </div>
-            </>
-          ) : (
-            <>
-              <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
-                아직 기록된 실행 결과가 없습니다. 승인 큐·Follow-ups의 결과 버튼(전화함/응답/미팅)이 이 퍼널을 채웁니다.
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <Button variant="outline" size="sm" icon="bell" onClick={() => onNavigate('dashboard/revenue/followups')}>Follow-ups 열기</Button>
-              </div>
-            </>
-          )
-        ) : (
-          <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
-            Supabase 연결 후 접촉→응답→미팅→제안→계약 퍼널이 여기에 표시됩니다.
-          </div>
-        )}
-      </Card>
-    </div>
-  );
-}
-
-function ContentCadenceCard({ onNavigate }) {
-  const [data, setData] = React.useState(null);
-  const [state, setState] = React.useState("loading");
-
-  React.useEffect(() => {
-    let active = true;
-    fetch("/api/hub/content", { cache: "no-store" })
-      .then((r) => r.json().catch(() => null))
-      .then((d) => {
-        if (!active) return;
-        if (d && d.source === "supabase" && d.cadence) {
-          setData({ cadence: d.cadence, ideas: Array.isArray(d.ideaQueue) ? d.ideaQueue : [] });
-          setState("live");
-        } else {
-          setState("preview");
-        }
-      })
-      .catch(() => active && setState("preview"));
-    return () => { active = false; };
-  }, []);
-
-  const cadence = data?.cadence;
-  const ideas = data?.ideas || [];
-  const pct = cadence ? Math.min(100, Math.round((cadence.published / Math.max(cadence.goal, 1)) * 100)) : 0;
-
-  return (
-    <div>
-      <SectionTitle right={<SyncBadge state={state} />}>
-        콘텐츠 발행
-      </SectionTitle>
-      <Card>
-        {state === "live" && cadence ? (
-          <>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-              <span className="stat" style={{ fontSize: 24, fontWeight: 600 }}>
-                {cadence.published}<span style={{ color: "var(--fg-faint)", fontWeight: 400 }}>/{cadence.goal}</span>
-              </span>
-              <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>이번 주</span>
-              <div style={{ flex: 1 }} />
-              <Badge tone={cadence.behind ? "warning" : "success"} size="xs">
-                {cadence.behind ? `${cadence.remaining}건 남음` : "목표 달성"}
-              </Badge>
-            </div>
-            <div style={{ marginTop: 10 }}>
-              <Progress value={pct} tone={cadence.behind ? "warning" : "success"} />
-            </div>
-            <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)" }}>오늘의 아이디어</span>
-              <span className="mono" style={{ fontSize: 10.5, color: cadence.queueDepth >= 10 ? "var(--fg-faint)" : "var(--warning)" }}>큐 {cadence.queueDepth}</span>
-            </div>
-            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-              {ideas.slice(0, 3).map((idea) => (
-                <button
-                  key={idea.id}
-                  onClick={() => onNavigate("dashboard/content/queue")}
-                  style={{
-                    textAlign: "left", display: "flex", alignItems: "center", gap: 8,
-                    padding: "7px 9px", background: "var(--surface-2)",
-                    border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)",
-                  }}
-                >
-                  <span className="mono" style={{ fontSize: 10.5, color: "var(--moon-300)", flexShrink: 0 }}>{Math.round(idea.rank)}</span>
-                  <span style={{ fontSize: 12, color: "var(--fg)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{idea.title}</span>
-                </button>
-              ))}
-              {ideas.length === 0 && (
-                <div style={{ fontSize: 12, color: "var(--fg-faint)" }}>큐에 아이디어가 없습니다. Studio에서 추가하세요.</div>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.5 }}>
-              Supabase 콘텐츠 기록이 연결되면 이번 주 발행 진척과 아이디어 큐가 여기에 표시됩니다.
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <Button variant="outline" size="sm" icon="queue" onClick={() => onNavigate("dashboard/content/queue")}>Queue 열기</Button>
-            </div>
-          </>
-        )}
-      </Card>
-    </div>
-  );
-}
+// (PipelineShapeCard·SalesFunnelCard·ContentCadenceCard 및 그 상수들은 2026-08-05 제거 —
+// 2026-07-15 §2.2 QA 결정 B로 렌더 트리에서 빠진 뒤에도 ~290줄이 첫 화면 청크에 실려 있었다.)
 
 // Slim replacement for the old full-card DataTrustStrip — one quiet status line, with the
 // per-ledger source badges tucked behind a toggle so telemetry stops competing with signal.
@@ -1422,8 +1161,7 @@ function MoreDetail({ title, children }) {
 
 // Right-rail daily routine glance — same routine_checks data and check-in write path as
 // dashboard/work/rhythm (reuses lib/rhythm-ui.js's payload/result/mutation-state helpers so
-// behavior never drifts from the canonical Rhythm page). Own fetch to /api/hub/work, same
-// per-card-ledger pattern as PipelineShapeCard/SalesFunnelCard/ContentCadenceCard below.
+// behavior never drifts from the canonical Rhythm page). Own fetch to /api/hub/work.
 function RhythmPanel({ onNavigate }) {
   const [ledger, setLedger] = React.useState({ rituals: [], summary: null });
   const [syncState, setSyncState] = React.useState('preview');
@@ -1561,6 +1299,111 @@ function RhythmPanel({ onNavigate }) {
   );
 }
 
+// §2 확정 슬롯 — 긴급 KA(최대 1) · 집중 고객(3~5) · 오늘 일정. tone 정렬 신호 큐에 섞여
+// 소실되던 풀을 명명된 자리로 분리한 첫 화면의 핵심 계약(2026-08-05 컷오버). 각 슬롯은
+// 자기 소스의 truth 상태를 따로 표시한다 — 캘린더 미연결이 매출 슬롯을 오염시키지 않는다.
+function FocusSlots({ dailyFocus, onNavigate }) {
+  if (!dailyFocus) return null;
+  const ka = dailyFocus.urgentKa || {};
+  const focus = dailyFocus.focusCustomers || {};
+  const agenda = dailyFocus.todayAgenda || {};
+  const focusItems = Array.isArray(focus.items) ? focus.items : [];
+  const agendaItems = Array.isArray(agenda.items) ? agenda.items : [];
+  const revenuePreview = focus.state !== 'live';
+
+  const eyebrow = (label, right = null) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px 6px', fontSize: 11, color: 'var(--fg-dim)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+      {label}
+      <div style={{ flex: 1 }} />
+      {right}
+    </div>
+  );
+
+  return (
+    <div className="hub-grid--two daily-brief__focus" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.05fr) minmax(300px, .95fr)', gap: 16, alignItems: 'start' }}>
+      <Card pad={false} className="daily-brief__panel" aria-label="긴급 KA와 집중 고객">
+        {/* 긴급 KA — §5.2 허용 red: urgent KA. 대상 없으면 행 자체를 만들지 않는다(최대 1건). */}
+        {ka.item && (
+          <div style={{ boxShadow: 'inset 1px 0 0 var(--danger-line)', borderBottom: '1px solid var(--line-soft)' }}>
+            {eyebrow('긴급 KA')}
+            <div
+              className="hub-row"
+              role="button"
+              tabIndex={0}
+              onClick={() => onNavigate?.(ka.item.href)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.(ka.item.href); } }}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 16px 12px', cursor: 'pointer' }}
+            >
+              <Iconed name="bell" size={14} style={{ color: 'var(--danger)', flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {ka.item.name}
+                  {ka.item.company && ka.item.company !== ka.item.name && <span style={{ color: 'var(--fg-faint)', fontWeight: 400 }}> · {ka.item.company}</span>}
+                </div>
+                <div style={{ marginTop: 2, fontSize: 11.5, color: 'var(--fg-muted)' }}>
+                  {ka.item.reason}{ka.item.nextAction ? ` → ${ka.item.nextAction}` : ''}
+                </div>
+              </div>
+              <Iconed name="chevronR" size={12} style={{ color: 'var(--fg-faint)' }} />
+            </div>
+          </div>
+        )}
+
+        {eyebrow(`집중 고객 ${focusItems.length ? focusItems.length : ''}`.trim(), revenuePreview ? <SyncBadge state="preview" /> : null)}
+        {revenuePreview ? (
+          <div style={{ padding: '2px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>매출 원장이 연결되면 집중 고객 3~5건이 여기에 표시됩니다.</div>
+        ) : focusItems.length === 0 ? (
+          <div style={{ padding: '2px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>집중 고객 없음 — CS 레인에 다음 행동이 있는 리드가 없습니다.</div>
+        ) : (
+          focusItems.map((item, i) => (
+            <div
+              key={item.id}
+              className="hub-row"
+              role="button"
+              tabIndex={0}
+              onClick={() => onNavigate?.(item.href)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.(item.href); } }}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', cursor: 'pointer', borderBottom: i < focusItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}
+            >
+              <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', width: 14, flexShrink: 0 }}>{i + 1}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {item.name}
+                  {item.company && item.company !== item.name && <span style={{ color: 'var(--fg-faint)' }}> · {item.company}</span>}
+                </div>
+                {item.nextAction && <div style={{ marginTop: 1, fontSize: 11, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>→ {item.nextAction}</div>}
+              </div>
+              {item.score != null && <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-muted)', flexShrink: 0 }}>{item.score}</span>}
+            </div>
+          ))
+        )}
+      </Card>
+
+      <Card pad={false} className="daily-brief__panel" aria-label="오늘 일정">
+        {eyebrow('오늘 일정', agenda.state !== 'live' ? <SyncBadge state="preview" /> : null)}
+        {agenda.state !== 'live' ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>
+            Google Calendar 미연결 — 오늘 일정을 표시하려면 연결하세요.
+            <Button variant="ghost" size="xs" onClick={() => onNavigate?.('dashboard/work/calendar')}>연결</Button>
+          </div>
+        ) : agendaItems.length === 0 ? (
+          <div style={{ padding: '2px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>오늘 일정 없음.</div>
+        ) : (
+          agendaItems.map((event, i) => (
+            <div key={event.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderBottom: i < agendaItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+              <span className="mono" style={{ fontSize: 11.5, color: event.allDay ? 'var(--fg-faint)' : 'var(--fg-muted)', width: 42, flexShrink: 0 }}>{event.whenLabel}</span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title}</span>
+            </div>
+          ))
+        )}
+        <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/calendar')} style={{ margin: '4px 10px 10px' }}>
+          캘린더 열기
+        </Button>
+      </Card>
+    </div>
+  );
+}
+
 // The queue is a decision list, not an inbox. Two items keep the first scan
 // calm; the rest stay one click away.
 const QUEUE_LIMIT = 2;
@@ -1596,18 +1439,21 @@ export function DailyBrief({ onNavigate }) {
           </div>
         </div>
         <div className="hub-page-actions hub-page-actions--row" style={{ display: 'flex', gap: 8 }}>
-          <Button variant="ghost" size="md" icon="sparkle" onClick={() => onNavigate('dashboard/agents/chat')}>Council에 묻기</Button>
+          {/* 보류 스코프(Council)가 히어로 CTA를 점유하던 것을 코어 루프(고객 연락)로 교체
+              — README §4 보류 표면은 첫 화면 프라임 자리에서 뺀다(2026-08-05 system-eval B-10). */}
+          <Button variant="ghost" size="md" icon="bell" onClick={() => onNavigate('dashboard/revenue/followups')}>고객 연락</Button>
           <Button variant="primary" size="md" icon="clock" onClick={() => onNavigate('dashboard/work/calendar?focus=15')}>15분 집중</Button>
         </div>
       </div>
 
       <StatusLine state={ledger} />
 
+      {/* §7 슬롯 순서: Quick Capture가 첫 fold 1순위 — 내비 칩보다 위. */}
+      <QuickTaskCapture onNavigate={onNavigate} onSaved={refreshLedger} />
+
       <BriefNavigation taskToday={ledger.taskToday} onNavigate={onNavigate} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
-        <QuickTaskCapture onNavigate={onNavigate} onSaved={refreshLedger} />
-
         <div className="daily-brief__command-reveal">
           {command ? (
             <CommandCard s={command} remaining={waiting.length} onNavigate={onNavigate} />
@@ -1615,6 +1461,8 @@ export function DailyBrief({ onNavigate }) {
             <CommandClear signalCount={signalCount} />
           )}
         </div>
+
+        <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} />
 
         <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.05fr) minmax(300px, .95fr)', gap: 16, alignItems: 'start' }}>
           <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={refreshLedger} />

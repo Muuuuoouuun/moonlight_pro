@@ -17,7 +17,8 @@ export function filterOperatorOwnedRevenue(revenue = {}) {
 // 점수 동률·근소 차이를 뒤집을 만큼만 가산한다 — 원점수는 건드리지 않는다.
 const FOCUS_OVERRIDE_BOOST = { raise: 1, default: 0, lower: -1 };
 
-export function selectOperatorFocusLeads(revenue = {}) {
+// limit: §2 확정 "집중 고객 3~5건" — 기존 소비자(신호 큐)는 3, 첫 화면 슬롯은 5까지.
+export function selectOperatorFocusLeads(revenue = {}, { limit = 3 } = {}) {
   return filterOperatorOwnedRevenue(revenue).leads
     .filter((lead) => (
       lead?.priorityLane === "customer_success" &&
@@ -33,5 +34,5 @@ export function selectOperatorFocusLeads(revenue = {}) {
       if (scoreDelta) return scoreDelta;
       return String(left.id) < String(right.id) ? -1 : String(left.id) > String(right.id) ? 1 : 0;
     })
-    .slice(0, 3);
+    .slice(0, limit);
 }

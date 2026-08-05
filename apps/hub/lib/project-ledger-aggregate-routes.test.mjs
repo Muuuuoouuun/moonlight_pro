@@ -92,6 +92,9 @@ registerHooks({
       "@/lib/hub-write-guard": writeGuardStub,
       "@/lib/pms-engine-client": engineClientStub,
       "@/lib/server-write": serverWriteStub,
+      // daily-brief의 오늘 일정 슬롯 소스 — 이 스위트에서는 미연결 preview로 고정한다.
+      "@/lib/google-calendar":
+        'export async function listGoogleCalendarEvents() { return { ok: false, reason: "calendar-not-connected", items: [] }; }',
     };
     if (stubs[specifier]) {
       return { url: `data:text/javascript,${encodeURIComponent(stubs[specifier])}`, shortCircuit: true };
