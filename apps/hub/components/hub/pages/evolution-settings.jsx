@@ -170,8 +170,9 @@ export function Evolution({ onNavigate }) {
   const [tab, setTab] = React.useState('all');
   const [lastRun, setLastRun] = React.useState(null);
   const tagTone = { upgrade: 'moon', bug: 'danger', insight: 'info', note: 'neutral' };
+  // ?new=delivery는 AgentsOrders가 소비하지 않는 죽은 파라미터였다 — 목적지만 남긴다.
   const playbookTarget = (family) => ({
-    delivery: 'dashboard/agents/orders?new=delivery',
+    delivery: 'dashboard/agents/orders',
     recovery: 'dashboard/automations/runs',
     planning: 'dashboard/work/rhythm',
     content: 'dashboard/content/queue',
@@ -230,7 +231,9 @@ export function Evolution({ onNavigate }) {
 
       {/* Playbooks — how the system changes */}
       <div>
-        <SectionTitle subtitle="운영 절차 · 시스템을 바꾸는 방법" right={<Button variant="outline" size="xs" icon="plus" onClick={() => onNavigate?.('dashboard/agents/orders?new=playbook')}>Playbook</Button>}>
+        {/* "+ Playbook" 버튼은 ?new=playbook을 아무 표면도 소비하지 않아 생성을 약속만 하던
+            죽은 CTA였다 — 실제 목적지(작업 지시 목록)로 가는 정직한 링크로 교체. */}
+        <SectionTitle subtitle="운영 절차 · 시스템을 바꾸는 방법" right={<Button variant="outline" size="xs" icon="orders" onClick={() => onNavigate?.('dashboard/agents/orders')}>작업 지시 보기</Button>}>
           Playbooks
         </SectionTitle>
         {lastRun && (

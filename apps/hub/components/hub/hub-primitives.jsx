@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Iconed } from "./hub-icons";
+import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
 
 export function Badge({ children, tone = 'neutral', variant = 'soft', size = 'sm', numeric = false, style }) {
   const tones = {
@@ -376,7 +377,7 @@ export function CertaintyBadge({ state = 'unknown', label, style }) {
         color: state === 'unknown' ? 'var(--fg-dim)' : 'var(--fg-muted)',
         background: 'transparent',
         borderWidth: 1, borderColor: 'var(--line-strong)', borderStyle: config.borderStyle,
-        fontSize: 10, fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap',
+        fontSize: 10.5, fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap',
         ...style,
       }}
     >
@@ -409,7 +410,7 @@ export function LifecycleBadge({ state = 'queued', label, reason, style }) {
         color: config.danger ? 'var(--danger)' : 'var(--fg-muted)',
         background: config.danger ? 'var(--danger-bg)' : 'transparent',
         border: `1px solid ${config.danger ? 'var(--danger-line)' : 'var(--line)'}`,
-        fontSize: 10, fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap',
+        fontSize: 10.5, fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap',
         ...style,
       }}
     >
@@ -444,7 +445,7 @@ export function TruthBadge({ state = 'error', label, style }) {
         borderWidth: 1,
         borderColor: danger ? 'var(--danger-line)' : 'var(--line)',
         borderStyle: config.borderStyle || 'solid',
-        fontSize: 10, fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap',
+        fontSize: 10.5, fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap',
         fontFamily: 'var(--font-mono)', fontFeatureSettings: "'ss02'", letterSpacing: 0,
         ...style,
       }}
@@ -478,7 +479,7 @@ export function AttentionRail({ level = 'none', label, children, style }) {
       {active && (
         <span style={{
           display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 6,
-          color: 'var(--danger)', fontSize: 10, fontWeight: 600, lineHeight: 1,
+          color: 'var(--danger)', fontSize: 10.5, fontWeight: 600, lineHeight: 1,
         }}>
           <Iconed name={level === 'critical' ? 'x' : 'clock'} size={10} aria-hidden="true" />
           {visibleLabel}
@@ -519,7 +520,7 @@ export function SegmentedControl({ options, value, onChange, className, style, l
           }}>
             {o.dot && <Dot tone={o.dot} />}
             {o.label}
-            {o.count != null && <span className="mono" style={{ fontSize: 10 }}>{o.count}</span>}
+            {o.count != null && <span className="mono" style={{ fontSize: 10.5 }}>{o.count}</span>}
           </button>
         );
       })}
@@ -550,12 +551,17 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, initialF
   const asideRef = React.useRef(null);
   const bodyRef = React.useRef(null);
 
-  // ESC anywhere closes the drawer.
+  // ESC는 이 드로어가 최상위 레이어일 때만 닫는다 — 드로어 위에 ⌘K 팔레트가 열려 있으면
+  // 팔레트가 먼저 닫혀야 한다(esc-layers.js). onClose는 ref로 읽어 부모 리렌더가 레이어
+  // 순서를 흔들지 않게 한다(마운트당 1회 등록).
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
   React.useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    const layer = pushEscLayer();
+    const onKey = (e) => { if (e.key === 'Escape' && isTopEscLayer(layer)) onCloseRef.current?.(); };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+    return () => { window.removeEventListener('keydown', onKey); popEscLayer(layer); };
+  }, []);
 
   // Focus the first field on mount; restore focus to the opener on unmount.
   React.useEffect(() => {

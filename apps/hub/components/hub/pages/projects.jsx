@@ -322,9 +322,14 @@ export function Projects({ workspace }) {
           : 'preview · 실제 원장 미연결';
   })();
 
+  // selectedProjectId를 deps에 넣으면 상세 열기/닫기(URL param 변경)마다 loadLedger가
+  // 재생성되고 마운트 이펙트가 전체 원장을 재조회한다 — 목록 탐색이 전부 네트워크 왕복이
+  // 된다. 최신값은 ref로 읽고, 재조회는 아래의 "로드 창 밖 선택" 이펙트만 담당한다.
+  const selectedProjectIdRef = React.useRef(selectedProjectId);
+  selectedProjectIdRef.current = selectedProjectId;
   const loadLedger = React.useCallback(async ({
     initial = false,
-    projectId = selectedProjectId,
+    projectId = selectedProjectIdRef.current,
   } = {}) => {
     const requestId = ledgerReadRef.current.requestId + 1;
     ledgerReadRef.current.controller?.abort();
@@ -407,7 +412,7 @@ export function Projects({ workspace }) {
       setReadError(error instanceof Error ? error.message : String(error));
       return { ok: false, projects: [], todos: [] };
     }
-  }, [selectedProjectId]);
+  }, []);
 
   // ?project= 딥링크가 "원장 로드 후 1회" 계약(§8.1)을 지킬 수 있도록 최초 로드 완료를
   // 기록한다 — syncState 초기값이 'preview'라서 상태만으로는 로드 전/후를 구분 못 한다.
@@ -416,6 +421,15 @@ export function Projects({ workspace }) {
     loadLedger({ initial: true }).finally(() => { initialLoadDoneRef.current = true; });
     return () => { ledgerReadRef.current.controller?.abort(); };
   }, [loadLedger]);
+
+  // 상세 열기(?project= 설정)에만 exact read — per-project updates/notes/decisions 보강
+  // (selection read-back 계약)을 유지한다. 닫기(null)는 재조회하지 않는다: 이전에는 열기와
+  // 닫기 모두 전체 원장을 다시 읽어 목록 탐색이 왕복 2회짜리였다. 기존 원장을 유지한 채
+  // 백그라운드로 도는 재검증이라 로딩 깜빡임도 없다.
+  React.useEffect(() => {
+    if (!selectedProjectId || !initialLoadDoneRef.current) return;
+    loadLedger({ projectId: selectedProjectId });
+  }, [selectedProjectId, loadLedger]);
 
   // 프로젝트 상세의 "연관 콘텐츠" 섹션용. 상세를 실제로 열기 전에는 큰 콘텐츠
   // 원장을 요청하지 않고, 성공한 첫 조회만 재사용한다.
@@ -2025,6 +2039,24 @@ export function Projects({ workspace }) {
                   )}
                   {col.cards.map(c => (
                     <div key={c.id} draggable onDragStart={() => setDrag(c.id)} onDragEnd={() => setDrag(null)}
+                      // 보드 카드도 열 수 있어야 한다(§8.1 edit 계약) — 이전에는 이동만 가능하고
+                      // 마우스로도 키보드로도 편집을 열 방법이 없었다. 클릭/Enter → 태스크 드로어,
+                      // project-* 카드는 프로젝트 상세로.
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${c.title} 열기`}
+                      onClick={() => {
+                        if (String(c.id).startsWith('project-')) { openProjectDetail(String(c.id).slice('project-'.length)); return; }
+                        const t = todos.find(x => x.id === c.id);
+                        if (t) editTodo(t);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                        e.preventDefault();
+                        if (String(c.id).startsWith('project-')) { openProjectDetail(String(c.id).slice('project-'.length)); return; }
+                        const t = todos.find(x => x.id === c.id);
+                        if (t) editTodo(t);
+                      }}
                       style={{
                         background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
                         borderRadius: 'var(--r-sm)', padding: 'var(--pad-y) var(--pad-x)', cursor: 'grab',
@@ -2163,7 +2195,7 @@ export function Projects({ workspace }) {
                                     position: 'absolute', left: `${item.startPct}%`, width: `${item.widthPct}%`,
                                     top: 18, height: 18, borderRadius: 999,
                                     background: 'var(--surface-3)', border: '1px solid var(--line)',
-                                    boxShadow: `inset 2px 0 0 ${lineToken}`,
+                                    boxShadow: `inset 1px 0 0 ${lineToken}`,
                                   }} />
                                 ) : (
                                   <span

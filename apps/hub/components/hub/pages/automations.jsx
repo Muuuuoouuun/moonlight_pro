@@ -63,16 +63,9 @@ function useAutomationsLedger() {
 export function AutomationsIndex({ onNavigate }) {
   const automationLifecycle = (status) => ({ Active: 'active', Paused: 'waiting', Error: 'blocked' }[status] || 'queued');
   const { automations, summary, syncState } = useAutomationsLedger();
-  const [statusOverrides, setStatusOverrides] = React.useState({});
-  const rows = automations.map(a => statusOverrides[a.id] ? { ...a, status: statusOverrides[a.id] } : a);
+  const rows = automations;
   const activeCount = rows.filter(a => a.status === 'Active').length || summary?.activeAutomations || 0;
   const runsTodayCount = summary?.runsToday ?? 0;
-  const toggleAutomation = (automation) => {
-    setStatusOverrides(prev => ({
-      ...prev,
-      [automation.id]: automation.status === 'Active' ? 'Paused' : 'Active',
-    }));
-  };
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
@@ -86,7 +79,9 @@ export function AutomationsIndex({ onNavigate }) {
         <div style={{ flex: 1 }} />
         <Button variant="secondary" size="sm" icon="runs" onClick={() => onNavigate('dashboard/automations/runs')}>Run log</Button>
         <div style={{ width: 8 }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={() => onNavigate('dashboard/automations/flows?new=flow')}>Flow</Button>
+        {/* Flow 생성 경로는 미구현 — ?new=flow는 아무도 소비하지 않는 죽은 약속이었다.
+            생성을 약속하지 않는 정직한 내비게이션으로 교체(추가 기능이 아니라 정합). */}
+        <Button variant="secondary" size="sm" icon="zap" onClick={() => onNavigate('dashboard/automations/flows')}>Flow 캔버스</Button>
       </div>
 
       <Card pad={false} className="hub-table-card">
@@ -97,8 +92,8 @@ export function AutomationsIndex({ onNavigate }) {
           <EmptyState
             icon="automations"
             title="자동화 기록이 비어 있습니다"
-            description={syncState === 'live' ? 'Supabase automations 테이블에 표시할 flow가 없습니다.' : 'flow를 만들면 실행 상태와 성공률이 여기에 표시됩니다.'}
-            action={<Button variant="primary" size="sm" icon="plus" onClick={() => onNavigate('dashboard/automations/flows?new=flow')}>Flow</Button>}
+            description={syncState === 'live' ? 'Supabase automations 테이블에 표시할 flow가 없습니다. Flow 등록은 Engine 배선으로 이뤄집니다.' : 'flow가 등록되면 실행 상태와 성공률이 여기에 표시됩니다.'}
+            action={<Button variant="secondary" size="sm" icon="zap" onClick={() => onNavigate('dashboard/automations/flows')}>Flow 캔버스 보기</Button>}
           />
         )}
         {rows.map((a, i) => (
@@ -115,16 +110,19 @@ export function AutomationsIndex({ onNavigate }) {
             <LifecycleBadge state={automationLifecycle(a.status)} label={a.status} />
             <span style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>{a.lastRun}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="mono" style={{ fontSize: 12, color: a.success === a.runs24 ? 'var(--success)' : 'var(--warning)' }}>
+              {/* 성공률은 일상 지표 — 신호등 색 금지(§5.2), 수치 자체가 정보를 전달한다. */}
+              <span className="mono" style={{ fontSize: 12, color: 'var(--fg)' }}>
                 {a.success}/{a.runs24}
               </span>
-              <div style={{ flex: 1 }}><Progress value={a.runs24 ? (a.success / a.runs24) * 100 : 0} tone={a.success === a.runs24 ? 'success' : 'warning'} /></div>
+              <div style={{ flex: 1 }}><Progress value={a.runs24 ? (a.success / a.runs24) * 100 : 0} tone="moon" /></div>
             </div>
             <div style={{ textAlign: 'right' }}>
+              {/* 상태 write 경로 미구현(automations API는 GET뿐) — 토글이 리로드에 조용히
+                  원복되는 가짜 스위치였다. 배선 전까지 비활성 + 이유 노출이 정직하다. */}
               <IconButton
                 icon={a.status === 'Active' ? 'pause' : 'play'}
-                tooltip={a.status === 'Active' ? 'Pause flow' : 'Resume flow'}
-                onClick={() => toggleAutomation(a)}
+                tooltip="상태 변경은 아직 원장에 연결되지 않았습니다"
+                disabled
               />
               <IconButton icon="moreV" tooltip="Open flow canvas" onClick={() => onNavigate('dashboard/automations/flows')} />
             </div>
@@ -339,10 +337,8 @@ export function Webhooks({ onNavigate }) {
           <div key={i} style={{
             padding: '14px 16px',
             borderBottom: i < hooks.length - 1 ? '1px solid var(--line-soft)' : 'none',
-            background: state && state.label
-              ? (state.tone === 'success' ? 'var(--success-bg)' : state.tone === 'warning' ? 'var(--warning-bg)' : state.tone === 'danger' ? 'var(--danger-bg)' : 'transparent')
-              : 'transparent',
-            transition: 'background-color var(--dur-enter) ease',
+            // 행 전체 semantic fill 금지(§13) — 실패만 1px danger 레일, 성공/경고는 뱃지 라벨이 전달.
+            boxShadow: state?.label && state.tone === 'danger' ? 'inset 1px 0 0 var(--danger-line)' : undefined,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <Dot tone={sTone[h.status]} />

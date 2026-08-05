@@ -98,6 +98,7 @@ function useWorkLedger(projectId = null) {
     },
   });
   const requestRef = React.useRef(0);
+  const baseSnapshotRef = React.useRef(null);
   const projectQuery = typeof projectId === 'string' ? projectId.trim() : '';
 
   const load = React.useCallback(async () => {
@@ -185,7 +186,7 @@ function useWorkLedger(projectId = null) {
             error: null,
           };
 
-      setState({
+      const nextState = {
         source: data.source === 'supabase' ? 'supabase' : 'preview',
         decisions: Array.isArray(data.decisions) ? data.decisions : [],
         decisionsState,
@@ -200,7 +201,10 @@ function useWorkLedger(projectId = null) {
           : [],
         rhythmError: rhythm.error?.message || null,
         roadmap,
-      });
+      };
+      setState(nextState);
+      // 프로젝트 미선택 상태의 성공 응답을 스냅샷 — 로드맵 선택 해제 시 재조회 없이 복원한다.
+      if (!projectQuery) baseSnapshotRef.current = nextState;
       return rhythm.state === 'live' || rhythm.state === 'live-empty' || rhythm.state === 'partial';
     } catch (error) {
       if (requestId !== requestRef.current) return false;
@@ -236,9 +240,17 @@ function useWorkLedger(projectId = null) {
   }, [projectQuery]);
 
   React.useEffect(() => {
+    // 로드맵 선택 해제(project param 제거)는 이미 받아둔 base 응답을 복원한다 — 선택/해제
+    // 왕복마다 업무 원장 전체를 다시 읽던 패턴 제거. 로드맵 뷰는 읽기 전용이라 선택 중
+    // base가 뒤에서 변하는 경로는 없고, 명시적 retry()는 여전히 네트워크로 간다.
+    if (!projectQuery && baseSnapshotRef.current) {
+      requestRef.current += 1; // 진행 중인 선택-스코프 응답 무효화
+      setState(baseSnapshotRef.current);
+      return () => { requestRef.current += 1; };
+    }
     load();
     return () => { requestRef.current += 1; };
-  }, [load]);
+  }, [load, projectQuery]);
 
   return { ...state, retry: load };
 }
@@ -353,6 +365,7 @@ export function Calendar({ onNavigate }) {
   const [gcalStatus, setGcalStatus] = React.useState('idle');
   const [gcalMessage, setGcalMessage] = React.useState('');
   const [creating, setCreating] = React.useState(false);
+  const [createError, setCreateError] = React.useState('');
   const focusAppliedRef = React.useRef(false);
   const { days: fetchDays } = buildCalendarWeek(selectedDate);
   const calendarData = useCalendarEvents(fetchDays);
@@ -376,6 +389,7 @@ export function Calendar({ onNavigate }) {
     const startAt = new Date(targetDay); startAt.setHours(Math.floor(startHour), (startHour % 1) * 60, 0, 0);
     const endAt = new Date(targetDay); endAt.setHours(Math.floor(endHour), (endHour % 1) * 60, 0, 0);
     setCreating(true);
+    setCreateError('');
     try {
       const res = await fetch('/api/calendar/google/event', {
         method: 'POST',
@@ -385,7 +399,17 @@ export function Calendar({ onNavigate }) {
       const data = await res.json().catch(() => null);
       if (data?.status === 'saved' || data?.status === 'updated') {
         calendarData.refetch();
+      } else {
+        // 무음 실패 금지 — 만료 토큰(401)·미연결이면 블록이 그냥 안 생겨서 드래그 실수처럼
+        // 보였다. ?focus= 딥링크의 자동 생성도 이 경로를 타므로 원인을 반드시 표시한다.
+        setCreateError(
+          data?.message || data?.error
+            ? `일정 생성 실패 — ${data.message || data.error}`
+            : `일정 생성 실패 (${res.status}) — Google Calendar 연결 상태를 확인하세요.`,
+        );
       }
+    } catch {
+      setCreateError('일정 생성 실패 — 네트워크 오류. 다시 시도하세요.');
     } finally {
       setCreating(false);
     }
@@ -521,7 +545,8 @@ export function Calendar({ onNavigate }) {
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 28, fontWeight: 700, letterSpacing: '-0.025em' }}>Calendar</h2>
+          {/* 페이지 타이틀 계약(§11): 정확히 하나의 h2, 20px/500 — 앱 전체 타이틀과 동일 스케일. */}
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Calendar</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span>{periodLabel}</span>
             <span style={{ color: 'var(--fg-faint)' }}>·</span>
@@ -540,8 +565,14 @@ export function Calendar({ onNavigate }) {
                 : 'Connect Google Calendar'}
             </Button>
           </div>
-          {(gcalMessage || calendarData.message || taskData.message) && (
-            <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>{gcalMessage || calendarData.message || taskData.message}</div>
+          {(createError || gcalMessage || calendarData.message || taskData.message) && (
+            <div
+              className="mono"
+              role={createError ? 'alert' : undefined}
+              style={{ fontSize: 11, color: createError ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 4 }}
+            >
+              {createError || gcalMessage || calendarData.message || taskData.message}
+            </div>
           )}
         </div>
         <div style={{ flex: 1 }} />
@@ -635,7 +666,7 @@ export function Calendar({ onNavigate }) {
                       position: 'absolute', top, left: 4, right: 4, height,
                       background: toneBg[e.tone], color: toneFg[e.tone],
                       border: `1px solid ${toneBd[e.tone]}`,
-                      borderLeft: `2px solid ${toneBd[e.tone]}`,
+                      borderLeft: `1px solid ${toneBd[e.tone]}`,
                       borderRadius: 6, padding: '6px 8px',
                       fontSize: 11, fontWeight: 500, overflow: 'hidden',
                     }}>
@@ -1048,7 +1079,7 @@ export function Roadmap() {
                   <div style={{ position: 'relative', minHeight: 52, display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
                     {months.map(month => <div key={month.key} style={{ borderLeft: '1px solid var(--line-soft)' }} />)}
                     {item.kind === 'range' ? (
-                      <span aria-hidden="true" style={{ position: 'absolute', top: 17, left: `${item.startPct}%`, width: `${item.widthPct}%`, height: 18, borderRadius: 999, background: 'var(--surface-3)', border: '1px solid var(--line)', boxShadow: 'inset 2px 0 0 var(--moon-300)' }} />
+                      <span aria-hidden="true" style={{ position: 'absolute', top: 17, left: `${item.startPct}%`, width: `${item.widthPct}%`, height: 18, borderRadius: 999, background: 'var(--surface-3)', border: '1px solid var(--line)', boxShadow: 'inset 1px 0 0 var(--moon-300)' }} />
                     ) : (
                       <span aria-hidden="true" style={{ position: 'absolute', top: 17, left: `${item.markerPct}%`, width: 16, height: 16, borderRadius: item.kind === 'milestone' ? 3 : 999, background: 'var(--surface-3)', border: '1px solid var(--moon-300)', boxShadow: 'inset 0 0 0 3px var(--surface-3), inset 0 0 0 8px var(--moon-300)', transform: item.kind === 'milestone' ? 'translateX(-50%) rotate(45deg)' : 'translateX(-50%)' }} />
                     )}

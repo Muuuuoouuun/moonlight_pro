@@ -34,11 +34,15 @@ function normalizeProjectStatus(status) {
   return "In progress";
 }
 
+// 서버(UTC)에서 실행되므로 운영자 시간대를 고정한다 — 미지정 시 배포 환경에서 -9시간 라벨이 나온다.
+const TIME_ZONE = "Asia/Seoul";
+
 function formatShortDate(value) {
   if (!value) return "미정";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "미정";
   return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: TIME_ZONE,
     month: "numeric",
     day: "numeric",
   }).format(date);
@@ -49,6 +53,7 @@ function formatActivityTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: TIME_ZONE,
     month: "numeric",
     day: "numeric",
     hour: "2-digit",

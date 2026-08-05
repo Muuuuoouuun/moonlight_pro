@@ -185,7 +185,10 @@ test("EditDrawer protects dirty drafts and uses explicit save copy", () => {
   assert.match(primitivesSource, /saveLabel = ['"]변경사항 저장['"]/);
   assert.match(primitivesSource, /saveState === ['"]saving['"] \? ['"]저장 중…['"] : saveLabel/);
   assert.match(projectsSource, /saveLabel=\{taskEditSource \? ['"]변경사항 저장['"] : ['"]할 일 만들기['"]\}/);
-  assert.match(projectsSource, /saveLabel=["']컨테이너 만들기["']/);
+  assert.match(
+    projectsSource,
+    /saveLabel=\{containerDraft\?\.isNew === false \? ['"]변경사항 저장['"] : ['"]컨테이너 만들기['"]\}/,
+  );
 });
 
 test("project creation opens a recoverable draft even when no canonical area is loaded", () => {

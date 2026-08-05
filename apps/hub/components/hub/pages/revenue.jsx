@@ -828,23 +828,26 @@ function DealTaskPanel({ deal, onSaved }) {
   const [tasks, setTasks] = React.useState(null); // null = loading
   const [title, setTitle] = React.useState('');
   const [busy, setBusy] = React.useState(false);
+  const [listError, setListError] = React.useState(null);
   const [asState, setAsState] = React.useState('idle'); // idle | saving | done | error
 
   const load = React.useCallback(async () => {
     if (!dealId || isLocal) { setTasks([]); return; }
     try {
-      const res = await fetch('/api/hub/tasks', { cache: 'no-store' });
+      // ?dealId= 서버 필터 — 전체 태스크를 받아 클라이언트에서 거르던 페이로드 낭비 제거.
+      const res = await fetch(`/api/hub/tasks?dealId=${encodeURIComponent(dealId)}`, { cache: 'no-store' });
       const data = await res.json().catch(() => null);
       const all = Array.isArray(data?.tasks) ? data.tasks : [];
       setTasks(all.filter(t => t.dealId === dealId));
     } catch { setTasks([]); }
   }, [dealId, isLocal]);
-  React.useEffect(() => { setAsState('idle'); setTitle(''); load(); }, [load]);
+  React.useEffect(() => { setAsState('idle'); setTitle(''); setListError(null); load(); }, [load]);
 
   const addTask = async () => {
     const t = title.trim();
     if (!t || busy || isLocal) return;
     setBusy(true);
+    setListError(null);
     try {
       const res = await fetch('/api/hub/tasks', {
         method: 'POST',
@@ -853,15 +856,24 @@ function DealTaskPanel({ deal, onSaved }) {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.status === 'saved') { setTitle(''); await load(); onSaved?.(); }
+      else setListError('항목 저장에 실패했습니다. 다시 시도하세요.');
     } finally { setBusy(false); }
   };
 
   const toggleTask = async (task) => {
-    await fetch('/api/hub/tasks', {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: task.id, status: task.done ? 'todo' : 'done' }),
-    }).catch(() => {});
+    setListError(null);
+    try {
+      const res = await fetch('/api/hub/tasks', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: task.id, status: task.done ? 'todo' : 'done' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      // 실패를 삼키고 reload만 하면 체크가 소리 없이 원상복구된다 — 원인을 표시한다.
+      if (!res.ok || data.status !== 'saved') setListError('완료 상태 저장에 실패했습니다. 다시 시도하세요.');
+    } catch {
+      setListError('완료 상태 저장에 실패했습니다. 다시 시도하세요.');
+    }
     await load();
     onSaved?.();
   };
@@ -934,6 +946,7 @@ function DealTaskPanel({ deal, onSaved }) {
               borderRadius: 'var(--r-sm)', color: 'var(--fg)',
             }}
           />
+          {listError && <span role="alert" style={{ fontSize: 11, color: 'var(--danger)' }}>{listError}</span>}
         </>
       )}
 
@@ -1030,7 +1043,8 @@ export function Deals({ workspace, onNavigate }) {
       setDealTaskStats(stats);
     } catch { /* board count is decorative — the drawer keeps its own live list */ }
   }, []);
-  React.useEffect(() => { loadDealTaskStats(); }, [loadDealTaskStats]);
+  // 마운트 + 드로어 닫힘 재조회를 한 이펙트로 — 마운트 시 editDealId가 null이라 이펙트가
+  // 둘이면 동일 요청이 2번 나간다(첫 진입 비용 2배).
   React.useEffect(() => { if (!editDealId) loadDealTaskStats(); }, [editDealId, loadDealTaskStats]);
 
   // `stage` lets a column's inline "+ 딜 추가" seed the deal directly in that stage, so
@@ -1208,7 +1222,7 @@ export function Deals({ workspace, onNavigate }) {
                       borderRadius: 'var(--r-sm)',
                       padding: '10px 11px', cursor: 'grab',
                       opacity: drag === d.id ? 0.4 : (d.hidden ? 0.5 : 1),
-                      boxShadow: stalled ? 'inset 2px 0 0 var(--danger-line)' : undefined,
+                      boxShadow: stalled ? 'inset 1px 0 0 var(--danger-line)' : undefined,
                     }}>
                     {/* 이름이 첫 줄 — UUID는 판단 데이터가 아니라 드로어 부제로 충분한 계기
                         소음이었다. 카드에서 가장 좋은 자리는 고객이 갖는다. */}
@@ -1469,7 +1483,7 @@ export function Cases() {
               padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', cursor: 'pointer',
               borderBottom: i < cases.length - 1 ? '1px solid var(--line-soft)' : 'none',
               // High-priority open cases carry a danger left-accent (§5.2) — resolved ones stay quiet.
-              boxShadow: c.priority === 'high' && c.status !== 'Resolved' ? 'inset 2px 0 0 var(--danger-line)' : undefined,
+              boxShadow: c.priority === 'high' && c.status !== 'Resolved' ? 'inset 1px 0 0 var(--danger-line)' : undefined,
             }}
           >
             <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{c.id}</span>
@@ -2172,7 +2186,12 @@ export function Accounts({ workspace, onNavigate }) {
         <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--gap)' }}>
           {filtered.map(a => (
             <Card key={a.name} interactive style={{ cursor: 'pointer' }}>
-              <div onClick={() => openDetail(a.name)}>
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => openDetail(a.name)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(a.name); } }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                   <Avatar name={a.name} size={36} tone={a.type === 'personal' ? 'personal' : 'company'} />
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -2236,7 +2255,10 @@ export function Accounts({ workspace, onNavigate }) {
           </div>
           {filtered.map((a, i) => (
             <div key={a.name} className="hub-row"
+              role="button"
+              tabIndex={0}
               onClick={() => openDetail(a.name)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(a.name); } }}
               style={{
                 display: 'grid',
                 gridTemplateColumns: '32px 1.6fr 110px 70px 110px 70px 120px 100px 100px',
@@ -2291,11 +2313,15 @@ export function Accounts({ workspace, onNavigate }) {
                 const isSel = a.name === selected;
                 return (
                   <div key={a.name} className="hub-row"
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isSel}
                     onClick={() => setSelected(a.name)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(a.name); } }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '10px 14px', cursor: 'pointer',
-                      borderLeft: `2px solid ${isSel ? 'var(--moon-300)' : 'transparent'}`,
+                      borderLeft: `1px solid ${isSel ? 'var(--moon-300)' : 'transparent'}`,
                       // Selected row pins its fill inline; unselected rows leave background
                       // to .hub-row:hover (an inline 'transparent' would out-rank the class).
                       background: isSel ? 'var(--surface-2)' : undefined,

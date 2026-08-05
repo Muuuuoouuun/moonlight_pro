@@ -634,15 +634,25 @@ export function Customers({ onNavigate }) {
     });
   }, [filtered, sort]);
 
-  // N 단축키: 드로어 닫힘 + 입력 포커스 밖일 때 새 고객(리드) 생성
+  // N 단축키: 드로어 닫힘 + 입력 포커스 밖일 때 새 고객(리드) 생성.
+  // creatingRef: 이 생성은 즉시 영속 write라 연타/저장 지연 중 재진입을 막지 않으면
+  // "새 고객" 행이 원장에 줄줄이 쌓인다.
+  const creatingRef = React.useRef(false);
   const createCustomer = React.useCallback(() => {
-    saveRevenueRecord("lead", "create", { name: "새 고객", stage: "New" }).then(r => {
-      if (r.ok && r.id) setOpenKey(`lead:${r.id}`);
-    });
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+    saveRevenueRecord("lead", "create", { name: "새 고객", stage: "New" })
+      .then(r => {
+        if (r.ok && r.id) setOpenKey(`lead:${r.id}`);
+      })
+      .finally(() => { creatingRef.current = false; });
   }, []);
   React.useEffect(() => {
     const onKey = (e) => {
       if (e.key !== "n" && e.key !== "N") return;
+      // ⌘N/Ctrl+N(새 창)·Alt 조합·키 반복은 브라우저/OS 몫 — 가로채지 않는다
+      // (revenue.jsx·work.jsx·pms-ui.js의 N 가드와 동일 계약).
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
       if (openKey) return;
       const t = e.target;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
@@ -727,7 +737,7 @@ export function Customers({ onNavigate }) {
             style={{
               display: "grid", gridTemplateColumns: gridCols, gap: 12, padding: "11px 16px",
               borderBottom: "1px solid var(--line-soft)", alignItems: "center", cursor: "pointer",
-              boxShadow: r.health === "risk" && !r.dormant ? "inset 2px 0 0 var(--danger)" : "none",
+              boxShadow: r.health === "risk" && !r.dormant ? "inset 1px 0 0 var(--danger-line)" : "none",
               opacity: r.dormant ? 0.55 : 1,
             }}
           >

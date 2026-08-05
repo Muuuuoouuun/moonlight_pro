@@ -12,9 +12,10 @@ export const NAV_TREE = [
       { key: 'classin-revenue', label: 'Leads', icon: 'leads', path: 'dashboard/classin/revenue', keywords: ['leads', '리드', '결제'] },
       { key: 'classin-segments', label: '세그먼트', icon: 'filter', path: 'dashboard/classin/segments', keywords: ['segments', '세그먼트'] },
       { key: 'classin-accounts', label: 'Accounts', icon: 'accounts', path: 'dashboard/classin/accounts', keywords: ['accounts', '계정', '고객'] },
-      { key: 'classin-followups', label: 'Follow-ups', icon: 'bell', path: 'dashboard/classin/followups', keywords: ['followup', '팔로업'] },
+      // classin-followups·classin-automations 행 제거(2026-08-05): workspace prop 없이
+      // dashboard/revenue/followups·dashboard/automations/sheets와 바이트 동일한 페이지를
+      // 가리키는 중복 팔레트 항목이었다. 라우트 자체는 PAGE_MAP에 남아 북마크는 유지된다.
       { key: 'classin-projects', label: '프로젝트', icon: 'projects', path: 'dashboard/classin/projects' },
-      { key: 'classin-automations', label: '시트 동기화', icon: 'automations', path: 'dashboard/classin/automations', keywords: ['sheets', '시트', 'sync', '자동화'] },
     ],
   },
   {
@@ -36,24 +37,26 @@ export const NAV_TREE = [
   {
     key: 'work', label: 'Work', icon: 'work', secondary: true,
     children: [
-      { key: 'projects', label: 'Projects', icon: 'projects', path: 'dashboard/work/projects' },
-      { key: 'calendar', label: 'Calendar', icon: 'calendar', path: 'dashboard/work/calendar' },
-      { key: 'rhythm', label: 'Rhythm', icon: 'rhythm', path: 'dashboard/work/rhythm' },
-      { key: 'decisions', label: 'Decisions', icon: 'decisions', path: 'dashboard/work/decisions' },
-      { key: 'roadmap', label: 'Roadmap', icon: 'roadmap', path: 'dashboard/work/roadmap' },
+      { key: 'projects', label: 'Projects', icon: 'projects', path: 'dashboard/work/projects', keywords: ['프로젝트', '기획', 'pms'] },
+      { key: 'calendar', label: 'Calendar', icon: 'calendar', path: 'dashboard/work/calendar', keywords: ['캘린더', '일정'] },
+      { key: 'rhythm', label: 'Rhythm', icon: 'rhythm', path: 'dashboard/work/rhythm', keywords: ['리듬', '루틴'] },
+      { key: 'decisions', label: 'Decisions', icon: 'decisions', path: 'dashboard/work/decisions', keywords: ['결정', '의사결정'] },
+      { key: 'roadmap', label: 'Roadmap', icon: 'roadmap', path: 'dashboard/work/roadmap', keywords: ['로드맵'] },
     ],
   },
   {
+    // 팔레트 어휘를 사이드바(hub-nav.js)의 D4 확정 라벨과 동기화(2026-07-15 스펙) — 운영자가
+    // 매일 보는 라벨(영업·매출, 고객 연락)로 검색했을 때 0건이 나오지 않아야 한다.
     key: 'revenue', label: 'Revenue', icon: 'revenue', secondary: true,
     children: [
-      { key: 'overview', label: '개요', icon: 'revenue', path: 'dashboard/revenue/overview', keywords: ['revenue overview', '매출 개요'] },
+      { key: 'overview', label: '개요', icon: 'revenue', path: 'dashboard/revenue/overview', keywords: ['revenue overview', '매출 개요', '영업', '영업·매출'] },
       { key: 'customers', label: '고객 DB', icon: 'accounts', path: 'dashboard/revenue/customers', keywords: ['customers', '고객', 'crm', '통합'] },
       { key: 'heatmap', label: '매출 히트맵', icon: 'globe', path: 'dashboard/revenue/heatmap', keywords: ['heatmap', '히트맵', '지역', '지도', 'map'] },
-      { key: 'deals', label: 'Deals', icon: 'deals', path: 'dashboard/revenue/deals' },
-      { key: 'leads', label: 'Leads', icon: 'leads', path: 'dashboard/revenue/leads' },
-      { key: 'accounts', label: 'Accounts', icon: 'accounts', path: 'dashboard/revenue/accounts' },
-      { key: 'cases', label: 'Cases', icon: 'cases', path: 'dashboard/revenue/cases' },
-      { key: 'followups', label: 'Follow-ups', icon: 'bell', path: 'dashboard/revenue/followups' },
+      { key: 'deals', label: 'Deals', icon: 'deals', path: 'dashboard/revenue/deals', keywords: ['딜', '파이프라인', '영업'] },
+      { key: 'leads', label: 'Leads', icon: 'leads', path: 'dashboard/revenue/leads', keywords: ['리드', '영업'] },
+      { key: 'accounts', label: 'Accounts', icon: 'accounts', path: 'dashboard/revenue/accounts', keywords: ['계정', '고객사'] },
+      { key: 'cases', label: 'Cases', icon: 'cases', path: 'dashboard/revenue/cases', keywords: ['케이스', 'cs'] },
+      { key: 'followups', label: '고객 연락', icon: 'bell', path: 'dashboard/revenue/followups', keywords: ['followup', 'follow-ups', '팔로업', '연락', '후속'] },
     ],
   },
   {

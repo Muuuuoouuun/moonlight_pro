@@ -252,7 +252,14 @@ test("timeouts surface as reason timeout instead of hanging", async () => {
       });
     });
 
-  const result = await insertSupabaseRecord("leads", { a: 1 }, { timeoutMs: 20 });
-  assert.equal(result.persisted, false);
-  assert.equal(result.reason, "timeout");
+  // AbortSignal.timeout의 내부 타이머는 unref다 — 이 테스트만 남으면 이벤트 루프가
+  // abort 발화 전에 비어 cancelledByParent로 죽는다. ref된 타이머로 잡아둔다.
+  const keepAlive = setTimeout(() => {}, 5000);
+  try {
+    const result = await insertSupabaseRecord("leads", { a: 1 }, { timeoutMs: 20 });
+    assert.equal(result.persisted, false);
+    assert.equal(result.reason, "timeout");
+  } finally {
+    clearTimeout(keepAlive);
+  }
 });

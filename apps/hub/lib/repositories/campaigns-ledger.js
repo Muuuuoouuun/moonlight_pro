@@ -78,7 +78,11 @@ function formatEnd(value) {
   if (!value) return "미정";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "미정";
-  return new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric" }).format(date);
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "long",
+    day: "numeric",
+  }).format(date);
 }
 
 function normalizeChannels(meta, channelColumn) {

@@ -31,6 +31,7 @@ function formatDecisionDate(value) {
 
   try {
     return new Intl.DateTimeFormat("ko-KR", {
+      timeZone: "Asia/Seoul",
       month: "long",
       day: "numeric",
     }).format(date);

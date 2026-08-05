@@ -78,5 +78,18 @@ export async function POST(req) {
     });
   }
 
-  return NextResponse.json({ status: result.persisted ? "ok" : "error", result, followup });
+  // outcome insert와 followup 갱신 중 하나라도 실패하면 실패로 응답한다 — 둘 다 성공해야
+  // "기록됨"이다. followup이 반쪽 실패하면 next_action 날짜가 옛값으로 남아 리드가 오늘/지남
+  // 버킷에서 소리 없이 빠진다(후속 누락 0건 목표의 정면 위반).
+  const followupFailed = Boolean(followup && followup.status !== "saved");
+  const saved = result.persisted && !followupFailed;
+  return NextResponse.json(
+    {
+      status: saved ? "saved" : "error",
+      reason: saved ? undefined : (!result.persisted ? result.reason || "outcome-failed" : "followup-failed"),
+      result,
+      followup,
+    },
+    { status: saved ? 200 : 502 },
+  );
 }

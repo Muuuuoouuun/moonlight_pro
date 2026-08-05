@@ -267,7 +267,7 @@
   color: var(--fg-muted);
   background: transparent;
   border-radius: var(--r-sm);
-  border-left: 2px solid transparent;
+  border-left: 1px solid transparent;
   text-align: left;
   transition: background 120ms ease, color 120ms ease;
 }

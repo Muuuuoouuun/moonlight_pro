@@ -329,7 +329,7 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
               border: "1px solid var(--line)",
               borderRadius: "var(--r-sm)",
               padding: "10px 12px",
-              boxShadow: "inset 2px 0 0 var(--moon-300), var(--shadow-pop)",
+              boxShadow: "inset 1px 0 0 var(--moon-300), var(--shadow-pop)",
               animation: reducedMotion ? "none" : "hubFadeIn var(--dur-overlay) ease-out",
             }}
           >

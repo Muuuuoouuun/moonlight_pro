@@ -583,6 +583,8 @@ export function Studio({ workspace }) {
     <div className="hub-studio-shell" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', height: '100%', overflow: 'hidden' }}>
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          {/* 페이지 타이틀 계약(§11): 브레드크럼만으로 대체 금지 — 에디터라도 h2 하나는 가진다. */}
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500, whiteSpace: 'nowrap' }}>스튜디오</h2>
           <SegmentedControl
             options={[{ key: 'blog', label: 'Blog / Insight' }, { key: 'carousel', label: 'Card News' }]}
             value={mode}
@@ -727,7 +729,11 @@ export function Studio({ workspace }) {
                   style={{
                     width: 72, height: 72, flexShrink: 0, position: 'relative', cursor: 'grab',
                     borderRadius: 8, background: s.bg,
-                    border: activeSlide === i ? '2px solid var(--moon-200)' : '1px solid var(--line-soft)',
+                    // 선택은 1px 보더 + Moonstone 외곽 outline(§5.3) — 2px 보더는 금지이고
+                    // 1px↔2px 전환은 선택할 때마다 1px 레이아웃 시프트를 만들었다.
+                    border: activeSlide === i ? '1px solid var(--moon-200)' : '1px solid var(--line-soft)',
+                    outline: activeSlide === i ? '1px solid var(--moon-200)' : 'none',
+                    outlineOffset: 1,
                     display: 'flex', flexDirection: 'column', padding: 6, justifyContent: 'flex-end',
                     color: '#fff', fontSize: 8, lineHeight: 1.2,
                     opacity: drag === i ? 0.4 : 1,
@@ -781,7 +787,8 @@ export function Studio({ workspace }) {
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, marginBottom: 14, flexWrap: 'wrap' }}>
                   {SLIDE_SWATCHES.map(c => (
                     <button key={c} onClick={() => updateSlide(activeSlide, { bg: c })}
-                      style={{ width: 26, height: 26, borderRadius: 6, background: c, border: cur.bg === c ? '2px solid var(--moon-200)' : '1px solid var(--line-soft)' }} />
+                      aria-label={`배경색 ${c}`}
+                      style={{ width: 26, height: 26, borderRadius: 6, background: c, border: cur.bg === c ? '1px solid var(--moon-200)' : '1px solid var(--line-soft)', outline: cur.bg === c ? '1px solid var(--moon-200)' : 'none', outlineOffset: 1 }} />
                   ))}
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>

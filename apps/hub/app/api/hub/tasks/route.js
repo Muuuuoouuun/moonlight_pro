@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { eqFilter, withWorkspaceFilter } from "@/lib/server-read";
 import { forwardPmsCommand } from "@/lib/pms-engine-client";
-import { getProjectLedger } from "@/lib/repositories/operating-ledger";
+import { getTaskLedger } from "@/lib/repositories/operating-ledger";
 import { isCanonicalUuid } from "@/lib/uuid.js";
 import {
   deleteSupabaseRecord,
@@ -15,9 +15,10 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req) {
   try {
-    const ledger = await getProjectLedger();
+    // lean read (tasks·projects·brands 3콜) — 전체 프로젝트 원장 11+콜을 태우던 핫패스였다.
+    const ledger = await getTaskLedger();
 
     if (ledger.source === "error") {
       return NextResponse.json(
@@ -35,7 +36,12 @@ export async function GET() {
       );
     }
 
-    const taskPartial = ledger.source === "supabase" && ledger.taskAggregation?.partial === true;
+    const taskPartial = ledger.source === "supabase" && ledger.partial === true;
+
+    // ?dealId= — Deals 체크리스트가 전체 목록을 받아 클라이언트에서 거르던 것을 서버에서 축소.
+    let dealId = null;
+    try { dealId = new URL(req.url).searchParams.get("dealId"); } catch {}
+    const tasks = dealId ? ledger.todos.filter((t) => t.dealId === dealId) : ledger.todos;
 
     return NextResponse.json({
       status: ledger.source === "supabase"
@@ -45,8 +51,13 @@ export async function GET() {
       configured: ledger.configured,
       workspaceId: ledger.workspaceId,
       partial: taskPartial,
-      failedSources: taskPartial ? ["tasks"] : [],
-      tasks: ledger.todos,
+      failedSources: taskPartial
+        ? Array.from(new Set([
+            ...(ledger.taskAggregation?.partial ? ["tasks"] : []),
+            ...(ledger.failedSources || []),
+          ]))
+        : [],
+      tasks,
     });
   } catch (error) {
     console.error("[hub/tasks] task ledger read failed", error);

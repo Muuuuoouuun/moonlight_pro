@@ -6,6 +6,9 @@ import {
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
 
+// 서버(UTC) 실행 — 운영자 시간대 고정 없이는 배포 환경에서 라벨이 -9시간 밀린다.
+const TIME_ZONE = "Asia/Seoul";
+
 const AUTOMATION_STATUSES = ["draft", "active", "paused", "disabled"];
 const RUN_STATUSES = ["queued", "running", "success", "failure", "ignored"];
 const WEBHOOK_STATUSES = ["received", "processed", "ignored", "failed"];
@@ -33,10 +36,15 @@ const WEBHOOK_STATUS_TONE = {
   failed: "err",
 };
 
-function startOfDayUTC() {
-  const now = new Date();
-  now.setUTCHours(0, 0, 0, 0);
-  return now;
+function startOfOperatorDay() {
+  // "오늘 실행" 경계는 운영자의 달력일(KST 자정) — UTC 자정이면 오전 9시에 리셋된다.
+  const dayKey = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  return new Date(`${dayKey}T00:00:00+09:00`);
 }
 
 function last24hThreshold() {
@@ -60,7 +68,11 @@ function formatRelative(value) {
   if (days === 1) return "어제";
   if (days < 7) return `${days}일 전`;
 
-  return new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric" }).format(date);
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: TIME_ZONE,
+    month: "numeric",
+    day: "numeric",
+  }).format(date);
 }
 
 function formatClock(value) {
@@ -68,6 +80,7 @@ function formatClock(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "--:--:--";
   return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: TIME_ZONE,
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -267,7 +280,7 @@ export async function getAutomationsLedger() {
   }
 
   const since = last24hThreshold();
-  const sinceDayStart = startOfDayUTC();
+  const sinceDayStart = startOfOperatorDay();
 
   const [automationRows, triggerRows, runRows, webhookRows, integrationRows, errorRows] = await Promise.all([
     fetchSupabaseRows("automations", {

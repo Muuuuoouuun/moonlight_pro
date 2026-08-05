@@ -77,6 +77,42 @@ const CONTEXT_TARGETS = {
   Work: 'dashboard/work/projects',
 };
 
+// 결정 상태는 KST 날짜 스코프로 이 기기에 영속한다 — 이전에는 컴포넌트 로컬 state뿐이라
+// "✓ 처리" 영수증이 새로고침에 증발하는 가짜였다. 신호는 매일 원장에서 재파생되므로 날짜
+// 키가 자연 만료다. (원장 영속 dismiss는 attention 컷오버 백로그 — 그때 이 키를 대체한다.)
+const BRIEF_DECISION_PREFIX = 'hub:brief-decisions:';
+function briefDecisionStorageKey() {
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  return `${BRIEF_DECISION_PREFIX}${day}`;
+}
+function signalDecisionKey(s) {
+  return `${s.kind}|${s.source?.ref || s.title}`;
+}
+function useBriefDecision(signalKey) {
+  const [decided, setDecidedState] = React.useState(null);
+  React.useEffect(() => {
+    try {
+      const map = JSON.parse(localStorage.getItem(briefDecisionStorageKey()) || '{}');
+      setDecidedState(map[signalKey] || null);
+    } catch { /* storage 불가 환경에서는 세션 한정 동작으로 남긴다 */ }
+  }, [signalKey]);
+  const setDecided = React.useCallback((label) => {
+    setDecidedState(label);
+    try {
+      const key = briefDecisionStorageKey();
+      const map = JSON.parse(localStorage.getItem(key) || '{}');
+      if (label == null) delete map[signalKey]; else map[signalKey] = label;
+      localStorage.setItem(key, JSON.stringify(map));
+      // 지난 날짜 키 정리 — 하루 지난 결정 기록은 재사용되지 않는다.
+      for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(BRIEF_DECISION_PREFIX) && k !== key) localStorage.removeItem(k);
+      }
+    } catch { /* ditto */ }
+  }, [signalKey]);
+  return [decided, setDecided];
+}
+
 // KPI cards click through to their surface (falls back to the API-provided m.target).
 const METRIC_TARGETS = {
   MRR: 'dashboard/revenue/overview',
@@ -434,7 +470,7 @@ function useDailyBriefLedger(refreshKey) {
 function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
   // Surface the highest-priority signal first-open (§3.1: <5s).
   const [expanded, setExpanded] = React.useState(defaultExpanded != null ? defaultExpanded : (index === 0 || s.tone === 'danger'));
-  const [decided, setDecided] = React.useState(null);
+  const [decided, setDecided] = useBriefDecision(signalDecisionKey(s));
   // §5.2 collision precedence: urgency lives on the left rail + dot (danger only);
   // ordinary lanes (today/queue/info) stay neutral instead of painting semantic hues.
   const openContext = () => onNavigate?.(CONTEXT_TARGETS[s.kind] || 'dashboard/daily-brief');
@@ -445,10 +481,16 @@ function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
       border: '1px solid var(--line-soft)',
       borderRadius: 'var(--r-lg)',
       overflow: 'hidden',
-      opacity: decided ? 0.55 : 1,
-      transition: 'opacity .2s',
     }}>
-      <div className="hub-stackable-row" onClick={() => setExpanded(e => !e)} style={{ padding: 'var(--card-pad)', cursor: 'pointer', display: 'flex', gap: 14 }}>
+      <div
+        className="hub-stackable-row"
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onClick={() => setExpanded(e => !e)}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(v => !v); } }}
+        style={{ padding: 'var(--card-pad)', cursor: 'pointer', display: 'flex', gap: 14 }}
+      >
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 2 }}>
           <Dot tone={s.tone === 'danger' ? 'danger' : 'neutral'} size={8} />
         </div>
@@ -464,9 +506,11 @@ function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
           </div>
           <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.55, maxWidth: '70ch' }}>{s.summary}</div>
           {decided && (
-            <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--success)' }}>
+            // done은 중립 체크 + 낮은 강조 텍스트 — 녹색 완료 금지(§5.3 lifecycle).
+            <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--fg-muted)' }}>
               <Iconed name="check" size={12} />
-              <span>Decision · {decided}</span>
+              <span>오늘 처리함 · {decided}</span>
+              <Button variant="ghost" size="xs" onClick={(e) => { e.stopPropagation(); setDecided(null); }}>되돌리기</Button>
             </div>
           )}
         </div>
@@ -518,7 +562,10 @@ function MetricCard({ m, onNavigate, compact }) {
         {/* ≥18px → .stat (sans tabular), never mono — DESIGN.md §6 hybrid number rule. */}
         <div className="stat" style={{ fontSize: compact ? 18 : 30, fontWeight: 600 }}>{m.value}</div>
         <div style={{ flex: 1 }} />
-        <Sparkline values={m.spark} tone={m.tone === 'warning' ? 'warning' : m.tone === 'success' ? 'success' : 'moon'} width={compact ? 48 : 70} height={compact ? 16 : 22} />
+        {/* 실측 시계열이 있을 때만 — 합성 스파크는 지어낸 추세를 실데이터처럼 보이게 한다. */}
+        {Array.isArray(m.spark) && m.spark.length > 1 && (
+          <Sparkline values={m.spark} tone={m.tone === 'warning' ? 'warning' : m.tone === 'success' ? 'success' : 'moon'} width={compact ? 48 : 70} height={compact ? 16 : 22} />
+        )}
       </div>
       <div style={{ marginTop: compact ? 3 : 6, fontSize: compact ? 10.5 : 11.5, color: m.tone === 'success' ? 'var(--success)' : m.tone === 'warning' ? 'var(--warning)' : 'var(--fg-faint)' }}>{m.delta}</div>
     </div>
@@ -681,7 +728,11 @@ function MorningBriefCard({ brief, onNavigate }) {
             return (
               <div
                 key={`${item.lane}-${i}`}
+                role={target ? 'button' : undefined}
+                tabIndex={target ? 0 : undefined}
                 onClick={target ? () => onNavigate?.(target) : undefined}
+                onKeyDown={target ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.(target); } } : undefined}
+                className={target ? 'hub-row' : undefined}
                 style={{
                   display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 14px',
                   cursor: target ? 'pointer' : 'default',
@@ -1260,7 +1311,7 @@ function BriefNavigation({ taskToday, onNavigate }) {
 // The command — the single highest-priority signal, rendered full-width with its decisions
 // already exposed. This is the "<5s, what's my next move?" surface (DESIGN.md §3.1).
 function CommandCard({ s, remaining, onNavigate }) {
-  const [decided, setDecided] = React.useState(null);
+  const [decided, setDecided] = useBriefDecision(signalDecisionKey(s));
   // §5.2 red-budget: only true urgency colors the command ring. Everything else reads
   // as the top item by position and size alone — warning/info/success rims were reading
   // as a banned warm-gold halo around the hero card.
@@ -1287,9 +1338,10 @@ function CommandCard({ s, remaining, onNavigate }) {
       <div style={{ fontSize: 21, fontWeight: 650, letterSpacing: '-0.025em', color: 'var(--fg)', marginBottom: 6, lineHeight: 1.22 }}>{s.title}</div>
       <div style={{ fontSize: 13, color: 'var(--fg-muted)', lineHeight: 1.5, maxWidth: '76ch' }}>{s.summary}</div>
       {decided ? (
-        <div style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--success)' }}>
+        // done은 중립 체크 + 낮은 강조 텍스트 — 녹색 완료 금지(§5.3 lifecycle).
+        <div style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
           <Iconed name="check" size={14} />
-          <span>Decision · {decided}</span>
+          <span>오늘 처리함 · {decided}</span>
           <Button variant="ghost" size="sm" onClick={() => setDecided(null)}>되돌리기</Button>
         </div>
       ) : (
@@ -1320,7 +1372,8 @@ function CommandClear({ signalCount }) {
       background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-xl)',
       padding: '13px 16px', display: 'flex', alignItems: 'center', gap: 12,
     }}>
-      <span style={{ width: 34, height: 34, borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--success)', flexShrink: 0 }}>
+      {/* all-clear도 중립 체크 — 녹색 완료 상태 금지(§5.3 done = neutral, not green). */}
+      <span style={{ width: 34, height: 34, borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-muted)', flexShrink: 0 }}>
         <Iconed name="check" size={17} />
       </span>
       <div>

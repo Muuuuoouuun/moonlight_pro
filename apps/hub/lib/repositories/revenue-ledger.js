@@ -43,11 +43,18 @@ function resolveDealStage(row) {
   return normalizeStage(row?.stage);
 }
 
+// 서버(UTC) 실행 — 운영자 시간대 고정 없이는 배포 환경에서 라벨이 -9시간 밀린다.
+const TIME_ZONE = "Asia/Seoul";
+
 function formatShortDate(value) {
   if (!value) return "미정";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "미정";
-  return new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric" }).format(date);
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: TIME_ZONE,
+    month: "numeric",
+    day: "numeric",
+  }).format(date);
 }
 
 function formatRelative(value) {
@@ -70,6 +77,7 @@ function formatRelativeShort(value) {
   const diffDays = Math.round((Date.now() - date.getTime()) / 86400000);
   if (diffDays <= 0) {
     return new Intl.DateTimeFormat("ko-KR", {
+      timeZone: TIME_ZONE,
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,

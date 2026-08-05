@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "crypto";
 
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 
 import { logError, logInfo, logWarning } from "@com-moon/hub-gateway";
 
@@ -126,42 +126,46 @@ export async function POST(req: Request) {
     }
 
     const result = await runTelegramUpdate(update);
-    let forwardedToN8n = false;
 
-    try {
-      forwardedToN8n = await forwardToN8n(update);
+    // n8n 포워딩은 응답에 필요 없는 부수 작업인데 ACK 앞에서 await되면 타임아웃(10초)만큼
+    // Telegram 재시도를 유발할 수 있다 — after()로 응답 이후에 실행한다(결과는 로그로만 남김).
+    after(async () => {
+      try {
+        const forwarded = await forwardToN8n(update);
 
-      if (forwardedToN8n) {
-        await logInfo({
-          context: "telegram-webhook",
+        if (forwarded) {
+          await logInfo({
+            context: "telegram-webhook",
+            payload: {
+              runId: result.runId,
+              updateId: update.update_id ?? null,
+              forwardedToN8n: true,
+            },
+            trace: "telegram-api",
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } catch (forwardError) {
+        await logWarning({
+          context: "telegram-webhook-forward",
           payload: {
             runId: result.runId,
             updateId: update.update_id ?? null,
-            forwardedToN8n: true,
+            error: String(forwardError),
           },
           trace: "telegram-api",
           timestamp: new Date().toISOString(),
         });
       }
-    } catch (forwardError) {
-      await logWarning({
-        context: "telegram-webhook-forward",
-        payload: {
-          runId: result.runId,
-          updateId: update.update_id ?? null,
-          error: String(forwardError),
-        },
-        trace: "telegram-api",
-        timestamp: new Date().toISOString(),
-      });
-    }
+    });
 
     return NextResponse.json({
       status: result.status,
       runId: result.runId,
       command: result.command,
       response: result.response,
-      forwardedToN8n,
+      // 포워딩은 응답 이후 실행으로 이동 — 결과는 telegram-webhook-forward 로그에서 확인.
+      forwardedToN8n: "deferred",
     });
   } catch (error) {
     await logError({

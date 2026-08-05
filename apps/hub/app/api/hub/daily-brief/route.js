@@ -40,7 +40,9 @@ function formatMoney(amount) {
   return `₩${n}`;
 }
 
-function metric(label, value, delta, tone = "moon", spark = [3, 4, 3, 5, 4, 6, 5, 7]) {
+// spark는 실측 시계열이 있을 때만 채운다 — 합성 기본값을 넣으면 라이브 지표 옆에 지어낸
+// 상승 곡선이 실데이터처럼 렌더된다(§2 운영결과 6 위반). 없으면 클라이언트가 생략한다.
+function metric(label, value, delta, tone = "moon", spark = null) {
   return { label, value, delta, tone, spark };
 }
 

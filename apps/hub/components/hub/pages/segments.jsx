@@ -185,7 +185,10 @@ export function Segments({ workspace, onNavigate }) {
                   <div style={{ marginTop: 10, borderTop: '1px solid var(--line-soft)', paddingTop: 6, maxHeight: 'min(520px, calc(100vh - 220px))', overflowY: 'auto', overscrollBehavior: 'contain' }}>
                     {seg.members.map((l, i) => (
                       <div key={l.id || i} className="hub-row"
+                        role={l.id != null ? 'button' : undefined}
+                        tabIndex={l.id != null ? 0 : undefined}
                         onClick={(e) => { e.stopPropagation(); openLead(l); }}
+                        onKeyDown={l.id != null ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openLead(l); } } : undefined}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px', margin: '0 -8px',
                           borderRadius: 'var(--r-sm)', cursor: l.id != null ? 'pointer' : 'default',

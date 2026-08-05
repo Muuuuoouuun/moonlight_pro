@@ -75,7 +75,10 @@ registerHooks({
   resolve(specifier, context, nextResolve) {
     const stubs = {
       "next/server": nextServerStub,
-      "@/lib/repositories/operating-ledger": repositoryStub("projects", "getProjectLedger"),
+      // tasks 라우트는 lean getTaskLedger를, overview/daily-brief는 전체 getProjectLedger를
+      // 쓴다 — 각자 독립 state 키로 스텁해 계약을 따로 검증한다.
+      "@/lib/repositories/operating-ledger":
+        repositoryStub("projects", "getProjectLedger") + repositoryStub("tasksLedger", "getTaskLedger"),
       "@/lib/repositories/content-ledger": repositoryStub("content", "getContentLedger"),
       "@/lib/repositories/revenue-ledger": repositoryStub("revenue", "getRevenueLedger"),
       "@/lib/repositories/automations-ledger": repositoryStub("automations", "getAutomationsLedger"),
@@ -118,9 +121,25 @@ function liveProjectLedger(overrides = {}) {
   };
 }
 
+// lean getTaskLedger 계약의 성공 응답 — notes/checks 등 옵션 소스는 아예 읽지 않는다.
+function liveTaskLedger(overrides = {}) {
+  return {
+    source: "supabase",
+    configured: true,
+    workspaceId: "workspace-1",
+    partial: false,
+    failedSources: [],
+    todos: [{ id: "task-1", title: "Live task", done: false, status: "todo", dealId: null }],
+    taskAggregation: { loaded: 1, total: 1, partial: false },
+    ...overrides,
+  };
+}
+
 function resetState() {
   state.projectsError = null;
   state.projects = liveProjectLedger();
+  state.tasksLedgerError = null;
+  state.tasksLedger = liveTaskLedger();
   state.content = { source: "supabase", items: [], publishLogs: [], brands: [], queue: [], attention: [], summary: {}, ideaQueue: [] };
   state.revenue = { source: "supabase", deals: [], leads: [], stages: [], summary: {} };
   state.automations = { source: "supabase", runs: [], automations: [], summary: {} };
@@ -131,8 +150,8 @@ function resetState() {
 
 beforeEach(resetState);
 
-test("tasks API returns 502 instead of flattening a configured project read error", async () => {
-  state.projects = {
+test("tasks API returns 502 instead of flattening a configured task read error", async () => {
+  state.tasksLedger = {
     source: "error",
     configured: true,
     error: "project-ledger-core-read-failed",
@@ -140,7 +159,7 @@ test("tasks API returns 502 instead of flattening a configured project read erro
     todos: [],
   };
 
-  const response = await tasksRoute.GET();
+  const response = await tasksRoute.GET(new Request("http://hub.test/api/hub/tasks"));
   const body = await response.json();
 
   assert.equal(response.status, 502);
@@ -150,13 +169,13 @@ test("tasks API returns 502 instead of flattening a configured project read erro
   assert.deepEqual(body.failedSources, ["tasks"]);
 });
 
-test("tasks API stays live when only notes and routine checks are partial", async () => {
-  state.projects = liveProjectLedger({
-    partial: true,
-    failedSources: ["notes", "routine_checks"],
-  });
+test("tasks API stays live when unrelated full-ledger sources are partial", async () => {
+  // lean read는 notes/routine_checks를 아예 읽지 않는다 — 전체 원장이 부분 실패여도
+  // 태스크 목록은 live를 유지한다(과거: 전체 getProjectLedger 상태에 끌려갔다).
+  state.projects = liveProjectLedger({ partial: true, failedSources: ["notes", "routine_checks"] });
+  state.tasksLedger = liveTaskLedger();
 
-  const response = await tasksRoute.GET();
+  const response = await tasksRoute.GET(new Request("http://hub.test/api/hub/tasks"));
   const body = await response.json();
 
   assert.equal(response.status, 200);
@@ -167,13 +186,12 @@ test("tasks API stays live when only notes and routine checks are partial", asyn
 });
 
 test("tasks API marks an incomplete task aggregation partial", async () => {
-  state.projects = liveProjectLedger({
+  state.tasksLedger = liveTaskLedger({
     partial: true,
-    partialSources: ["tasks"],
     taskAggregation: { loaded: 160, total: 161, partial: true },
   });
 
-  const body = await (await tasksRoute.GET()).json();
+  const body = await (await tasksRoute.GET(new Request("http://hub.test/api/hub/tasks"))).json();
 
   assert.equal(body.status, "partial");
   assert.equal(body.partial, true);
@@ -181,14 +199,28 @@ test("tasks API marks an incomplete task aggregation partial", async () => {
   assert.equal(body.tasks.length, 1);
 });
 
+test("tasks API narrows to one deal with ?dealId=", async () => {
+  state.tasksLedger = liveTaskLedger({
+    todos: [
+      { id: "task-1", title: "Deal task", done: false, status: "todo", dealId: "deal-9" },
+      { id: "task-2", title: "Other", done: false, status: "todo", dealId: null },
+    ],
+  });
+
+  const body = await (await tasksRoute.GET(new Request("http://hub.test/api/hub/tasks?dealId=deal-9"))).json();
+
+  assert.equal(body.tasks.length, 1);
+  assert.equal(body.tasks[0].id, "task-1");
+});
+
 test("tasks API catch logs server-side and returns a fixed safe error", async () => {
-  state.projectsError = new Error("private-service-key=do-not-leak");
+  state.tasksLedgerError = new Error("private-service-key=do-not-leak");
   const originalError = console.error;
   const logged = [];
   console.error = (...args) => logged.push(args);
 
   try {
-    const response = await tasksRoute.GET();
+    const response = await tasksRoute.GET(new Request("http://hub.test/api/hub/tasks"));
     const body = await response.json();
 
     assert.equal(response.status, 500);

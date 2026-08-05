@@ -5557,7 +5557,7 @@ button {
 .hub-app .hub-project-row:hover,
 .hub-app .hub-project-row[data-selected="true"] {
   background: rgba(82, 116, 168, 0.11);
-  box-shadow: inset 2px 0 0 var(--pms-moonstone);
+  box-shadow: inset 1px 0 0 var(--pms-moonstone);
 }
 
 .hub-app .hub-project-row__controls {

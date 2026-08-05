@@ -90,6 +90,22 @@ function normalizeBrandKind(kind) {
   return "moon";
 }
 
+// 서버(UTC)에서 실행되므로 운영자 시간대를 고정한다. 미지정 시 배포 환경에서
+// 라벨이 -9시간 밀리고, "오늘" 버킷이 KST 아침(00~09시) 동안 하루 어긋난다.
+const TIME_ZONE = "Asia/Seoul";
+
+function kstDayKey(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  // en-CA → YYYY-MM-DD
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
 function formatShortDate(value) {
   if (!value) return "미정";
 
@@ -97,6 +113,7 @@ function formatShortDate(value) {
   if (Number.isNaN(date.getTime())) return "미정";
 
   return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: TIME_ZONE,
     month: "numeric",
     day: "numeric",
   }).format(date);
@@ -109,6 +126,7 @@ function formatActivityTime(value) {
   if (Number.isNaN(date.getTime())) return "";
 
   return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: TIME_ZONE,
     month: "numeric",
     day: "numeric",
     hour: "2-digit",
@@ -120,16 +138,14 @@ function formatActivityTime(value) {
 function resolveDueBucket(value) {
   if (!value) return "다음주";
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "다음주";
+  const targetKey = kstDayKey(value);
+  if (!targetKey) return "다음주";
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const target = new Date(date);
-  target.setHours(0, 0, 0, 0);
-
-  const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
+  const todayKey = kstDayKey(new Date());
+  // day-key(YYYY-MM-DD)를 UTC 자정으로 파싱하면 양쪽이 같은 기준이라 달력일 차가 정확하다.
+  const diffDays = Math.round(
+    (Date.parse(targetKey) - Date.parse(todayKey)) / 86400000,
+  );
 
   if (diffDays <= 0) return "오늘";
   if (diffDays === 1) return "내일";
@@ -453,6 +469,96 @@ function mergeRowsById(primaryRows, supplementalRows) {
 
 function uniqueSources(sources) {
   return Array.from(new Set(sources));
+}
+
+// 태스크 목록 전용 lean read — /api/hub/tasks GET의 핫패스. 전체 getProjectLedger()는
+// 11개+ read(updates/decisions/notes/checks/catalog/reference)를 팬아웃하지만 태스크
+// 목록은 그중 tasks·projects·brands 3개만 쓴다. 응답 계약(todos 형태·preview/error/
+// partial 의미)은 getProjectLedger와 동일하게 유지한다.
+export async function getTaskLedger() {
+  const workspaceId = resolveDefaultWorkspaceId();
+  const supabaseConfig = resolveSupabaseConfig();
+
+  if (!workspaceId || !supabaseConfig) {
+    return {
+      source: "preview",
+      configured: false,
+      workspaceId: workspaceId || null,
+      todos: [],
+      taskAggregation: null,
+      partial: false,
+      failedSources: [],
+    };
+  }
+
+  const taskStatuses = ["inbox", "todo", "doing", "blocked", "done"];
+  const taskFilters = withWorkspaceFilter([["status", inFilter(taskStatuses)]]);
+  const [brandRows, projectRows, taskRows, taskRowCount] = await Promise.all([
+    fetchSupabaseRows("brands", {
+      limit: 80,
+      order: "name.asc",
+      filters: withWorkspaceFilter([["status", eqFilter("active")]]),
+    }),
+    fetchSupabaseRows("projects", {
+      limit: PROJECT_READ_LIMIT + 1,
+      order: "updated_at.desc",
+      filters: withWorkspaceFilter([
+        ["status", inFilter(["draft", "active", "blocked", "completed", "archived"])],
+      ]),
+    }),
+    fetchSupabaseRows("tasks", {
+      limit: TASK_READ_LIMIT,
+      order: "updated_at.desc",
+      filters: taskFilters,
+    }),
+    countSupabaseRows("tasks", taskFilters),
+  ]);
+
+  if (!Array.isArray(taskRows)) {
+    return {
+      source: "error",
+      configured: true,
+      workspaceId,
+      error: "project-ledger-core-read-failed",
+      failedSources: ["tasks"],
+      retryable: true,
+      todos: [],
+      taskAggregation: null,
+      partial: false,
+    };
+  }
+
+  // brands/projects가 실패해도 todos 자체는 계산 가능(브랜드가 "all"로 강등될 뿐) —
+  // 조용히 정상인 척하지 않고 partial + failedSources로 표시한다.
+  const contextFailedSources = [
+    ["brands", brandRows],
+    ["projects", projectRows],
+  ]
+    .filter(([, rows]) => !Array.isArray(rows))
+    .map(([source]) => source);
+  const brandById = new Map(
+    (Array.isArray(brandRows) ? brandRows : []).map((brand) => [brand.id, brand]),
+  );
+  const projectById = new Map(
+    (Array.isArray(projectRows) ? projectRows.slice(0, PROJECT_READ_LIMIT) : [])
+      .map((project) => [project.id, project]),
+  );
+  const aggregationPartial =
+    !Number.isFinite(taskRowCount) || taskRowCount !== taskRows.length;
+
+  return {
+    source: "supabase",
+    configured: true,
+    workspaceId,
+    todos: mapTodos(taskRows, projectById, brandById),
+    taskAggregation: {
+      loaded: taskRows.length,
+      total: Number.isFinite(taskRowCount) ? taskRowCount : null,
+      partial: aggregationPartial,
+    },
+    partial: contextFailedSources.length > 0 || aggregationPartial,
+    failedSources: contextFailedSources,
+  };
 }
 
 export async function getProjectLedger({ projectId = null } = {}) {

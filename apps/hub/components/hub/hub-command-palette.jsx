@@ -4,6 +4,7 @@ import React from "react";
 import { Iconed } from "./hub-icons";
 import { Kbd } from "./hub-primitives";
 import { NAV_TREE, LEGACY_TREE } from "./hub-data";
+import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
 
 export function CommandPalette({ open, onClose, onNavigate }) {
   const [q, setQ] = React.useState('');
@@ -37,12 +38,17 @@ export function CommandPalette({ open, onClose, onNavigate }) {
   React.useEffect(() => { setIdx(0); }, [q]);
 
   // Global ESC — close even when focus has left the search input (list hover, etc.).
+  // 팔레트는 열릴 때 ESC 레이어 스택에 올라간다: 드로어 위에서 열렸으면 ESC가 팔레트만 닫고
+  // 드로어(와 dirty confirm)는 건드리지 않는다.
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
   React.useEffect(() => {
     if (!open) return;
-    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    const layer = pushEscLayer();
+    const onKey = (e) => { if (e.key === 'Escape' && isTopEscLayer(layer)) onCloseRef.current?.(); };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+    return () => { window.removeEventListener('keydown', onKey); popEscLayer(layer); };
+  }, [open]);
 
   if (!open) return null;
 

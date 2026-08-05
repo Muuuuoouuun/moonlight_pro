@@ -30,6 +30,11 @@ function stageMeta(rawStage) {
 
 const CHANNEL_ICON = { "전화/문자": "chat", "방문": "building", "카톡": "chat", "일정": "calendar" };
 
+// record_contact_outcome_v1 어휘로의 매핑 — 이 페이지의 운영자 어휘(관심/고민중/보류/거절,
+// 채널 라벨)는 유지하고 전송 시에만 RPC canonical로 변환한다.
+const RPC_KIND_BY_CHANNEL = { "카톡": "kakao", "방문": "visit", "전화/문자": "call" };
+const RPC_REACTION = { interested: "positive", considering: "neutral", hold: "concern", declined: "rejected" };
+
 const LANE_OPTIONS = [
   { key: "all", label: "전체" },
   { key: "lead", label: "리드" },
@@ -83,7 +88,13 @@ function LogForm({ item, action, label, onCancel, onSubmit, submitting, error })
   const [at, setAt] = React.useState("");
   const [dormant, setDormant] = React.useState(false);
 
-  const canSubmit = Boolean(dormant || at) && !submitting;
+  // 확정 최소 기록(프로필 §7): 요약 + 반응 + 다음 행동 날짜(또는 기약 없음). RPC도 요약·반응이
+  // 비면 invalid-input으로 거부하므로 여기서 먼저 막는다. 노응답 기록은 반응이 자동(no_response).
+  const canSubmit =
+    Boolean(summary.trim()) &&
+    Boolean(reaction || action === "no_response") &&
+    Boolean(dormant || at) &&
+    !submitting;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)" }}>
@@ -161,7 +172,11 @@ function ActivityPanel({ item, onClose, onNavigate }) {
         ? `dealId=${encodeURIComponent(item.id)}`
         : `leadId=${encodeURIComponent(item.id)}`;
     fetch(`/api/hub/revenue/activity?${qs}`, { cache: "no-store" })
-      .then((r) => r.json())
+      .then((r) => {
+        // 5xx JSON 응답을 preview로 오독하면 "활동 기록이 없습니다"로 보인다 — 읽기 실패는 error.
+        if (!r.ok) throw new Error(`activity ${r.status}`);
+        return r.json();
+      })
       .then((d) => {
         if (!active) return;
         setState({
@@ -231,7 +246,6 @@ function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onClo
         padding: "12px 16px",
         borderBottom: "1px solid var(--line-soft)",
         boxShadow: BUCKET_STRIPE[item.bucket] ? `inset 1px 0 0 ${BUCKET_STRIPE[item.bucket]}` : undefined,
-        opacity: logged ? 0.6 : 1,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -346,36 +360,44 @@ export function Followups({ onNavigate }) {
   const openLog = (item, action, label) => { setLogError(null); setLogDraft({ itemId: item.id, action, label }); };
   const closeLog = () => { setLogError(null); setLogDraft(null); };
 
+  // Phase 1C 원자 RPC 경로 — 활동 기록 + 대상 원장 next_action 갱신이 한 트랜잭션이다.
+  // (기존 /api/integrations/outcomes/record는 outreach insert와 lead 갱신이 비원자 2단계라
+  // 반쪽 저장 시 next_action 날짜가 옛값으로 남아 리드가 오늘/지남 버킷에서 소리 없이 빠졌고,
+  // outreach_outcomes는 이 페이지의 활동 패널이 읽는 crm_activities에도 나타나지 않았다.)
   const submitLog = async (item, action, label, { summary, reaction, nextAction, at, dormant }) => {
     setSubmitting(true);
     setLogError(null);
     try {
-      const res = await fetch("/api/integrations/outcomes/record", {
+      const res = await fetch("/api/hub/revenue/contact-outcome", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          leadId: item.kind === "lead" ? item.id : null,
-          dealId: item.kind === "deal" ? item.id : null,
-          channel: item.channel,
-          action,
-          play: "followup",
-          note: summary || null,
-          reaction: reaction || null,
-          nextAction: {
-            text: nextAction || null,
-            at: dormant ? null : at || null,
-            dormant: Boolean(dormant),
-          },
+          entityType: item.kind, // 'lead' | 'deal'
+          entityId: item.id,
+          kind: action === "meeting" ? "meeting" : RPC_KIND_BY_CHANNEL[item.channel] || "call",
+          summary,
+          reaction: action === "no_response" ? "no_response" : RPC_REACTION[reaction] || "",
+          nextAction: nextAction || null,
+          nextActionAt: dormant ? null : at || null,
+          dormant: Boolean(dormant),
         }),
       });
-      // 4xx/5xx도 fetch는 resolve한다 — ok 확인 없이는 실패가 "기록됨"으로 표시된다.
-      if (!res.ok) throw new Error(`outcomes/record ${res.status}`);
+      const data = await res.json().catch(() => null);
+      // 4xx/5xx도 fetch는 resolve한다 — status='saved' 확인 없이는 실패가 "기록됨"으로 표시된다.
+      if (!res.ok || data?.status !== "saved") {
+        const reason = data?.status === "preview" ? "preview" : data?.error || res.status;
+        throw new Error(`contact-outcome ${reason}`);
+      }
       setLogged((m) => ({ ...m, [item.id]: label }));
       setLogDraft(null);
       await reload();
-    } catch {
+    } catch (err) {
       // 입력을 유지한 채 폼을 열어두고 실패를 표시해 재시도할 수 있게 한다.
-      setLogError("기록 저장에 실패했습니다. 다시 시도하세요.");
+      setLogError(
+        String(err?.message || "").includes("preview")
+          ? "Supabase 미연결 — 기록이 저장되지 않았습니다. 연결 후 다시 시도하세요."
+          : "기록 저장에 실패했습니다. 다시 시도하세요.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -423,18 +445,29 @@ export function Followups({ onNavigate }) {
 
       <Card pad={false} className="hub-table-card">
         {visible.length === 0 ? (
-          <EmptyState
-            icon="rhythm"
-            title={syncState === "live" ? "표시할 항목이 없습니다" : "팔로업 데이터 없음"}
-            description={
-              syncState !== "live"
-                ? "리드·딜이 쌓이고 Supabase가 연결되면 표시됩니다."
-                : lane === "all" && bucket === "all"
-                  ? "정체된 리드·딜이 생기면 여기에 우선순위로 뜹니다."
-                  : "이 필터에 해당하는 항목이 없습니다."
-            }
-            action={lane !== "all" || bucket !== "all" ? <Button variant="outline" size="sm" onClick={() => { setLane("all"); setBucket("all"); }}>전체 보기</Button> : undefined}
-          />
+          // error를 preview 문구("연결되면 표시됩니다")로 뭉개면 읽기 실패가 "오늘 할 일 없음"으로
+          // 보인다 — 후속 누락 0건 목표에서 가장 위험한 오독이라 상태별로 분리한다(§5.3 source truth).
+          syncState === "error" ? (
+            <EmptyState
+              icon="clock"
+              title="팔로업 원장을 읽지 못했습니다"
+              description="지금 화면은 비어 보이지만 실제 후속 항목이 있을 수 있습니다. 다시 시도해 주세요."
+              action={<Button variant="outline" size="sm" onClick={reload}>다시 시도</Button>}
+            />
+          ) : (
+            <EmptyState
+              icon="rhythm"
+              title={syncState === "live" ? "표시할 항목이 없습니다" : "팔로업 데이터 없음"}
+              description={
+                syncState !== "live"
+                  ? "리드·딜이 쌓이고 Supabase가 연결되면 표시됩니다."
+                  : lane === "all" && bucket === "all"
+                    ? "정체된 리드·딜이 생기면 여기에 우선순위로 뜹니다."
+                    : "이 필터에 해당하는 항목이 없습니다."
+              }
+              action={lane !== "all" || bucket !== "all" ? <Button variant="outline" size="sm" onClick={() => { setLane("all"); setBucket("all"); }}>전체 보기</Button> : undefined}
+            />
+          )
         ) : (
           visible.map((item) => (
             <FollowupRow

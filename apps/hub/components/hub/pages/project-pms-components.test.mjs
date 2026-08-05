@@ -250,10 +250,15 @@ test("canonical project selection is forwarded to the Projects API before the bo
   const loadBlock = projectsSource.slice(loadStart, effectStart);
 
   assert.match(projectsSource.slice(0, loadStart), /const selectedProjectId = searchParams\.get\(['"]project['"]\)/);
-  assert.match(loadBlock, /projectId\s*=\s*selectedProjectId/);
+  // 선택값은 ref로 읽는다 — deps에 넣으면 상세 열기/닫기마다 마운트 이펙트가 전체 원장을
+  // 재조회한다(2026-08-05 perf). 선택 read-back은 아래 전용 이펙트가 담당한다.
+  assert.match(projectsSource.slice(0, loadStart), /selectedProjectIdRef\.current = selectedProjectId/);
+  assert.match(loadBlock, /projectId\s*=\s*selectedProjectIdRef\.current/);
   assert.match(loadBlock, /\/api\/hub\/projects\?project=\$\{encodeURIComponent\(exactProjectId\)\}/);
   assert.match(loadBlock, /fetch\(endpoint, \{ cache: ['"]no-store['"], signal: controller\.signal \}\)/);
-  assert.match(loadBlock, /\[selectedProjectId\]/);
+  // 열기 시 exact read를 수행하는 선택 이펙트 — 닫기(null)는 재조회하지 않는다.
+  assert.match(projectsSource, /if \(!selectedProjectId \|\| !initialLoadDoneRef\.current\) return;/);
+  assert.match(projectsSource, /loadLedger\(\{ projectId: selectedProjectId \}\)/);
   assert.match(projectsSource, /ledger\.selection\?\.projectId === p\.id/);
   assert.match(projectsSource, /failedSources=\{detailFailedSources\}/);
 });

@@ -20,6 +20,11 @@ export async function getProjectLedger(options) {
   if (state.throwError) throw state.throwError;
   return state.ledger;
 }
+export async function getTaskLedger() {
+  const state = globalThis.__projectsRouteTestState;
+  if (state.throwError) throw state.throwError;
+  return state.ledger;
+}
 `;
 
 const writeGuardStub = `

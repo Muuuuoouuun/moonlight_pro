@@ -24,7 +24,7 @@
     "dev:hub": "npm --workspace @com-moon/hub run dev",
     "dev:engine": "npm --workspace @com-moon/engine run dev",
     "inventory:project-connections": "node ./scripts/inventory-project-connections.mjs",
-    "test": "node --import ./scripts/register-hub-alias.mjs --test scripts/*.test.mjs apps/hub/lib/*.test.mjs apps/hub/lib/**/*.test.mjs packages/*/*.test.mjs",
+    "test": "node --import ./scripts/register-hub-alias.mjs --test scripts/*.test.mjs apps/hub/lib/*.test.mjs apps/hub/lib/**/*.test.mjs \"apps/hub/components/**/*.test.mjs\" packages/*/*.test.mjs",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck"
   },
