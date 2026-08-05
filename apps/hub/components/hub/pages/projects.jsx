@@ -1118,6 +1118,16 @@ export function Projects({ workspace }) {
     if (taskStatusPendingRef.current.has(id)) return false;
     taskStatusPendingRef.current.add(id);
     setPendingTaskIds(new Set(taskStatusPendingRef.current));
+    // 낙관 flip — 체크박스가 PATCH+전체 원장 read를 직렬로 기다리며 멈춰 있던 것을
+    // 즉시 반영하고, 실패 시 원상복구한다(2026-08-05 re-audit 속도 #2).
+    const prevTodo = todos.find(item => item.id === id);
+    const prevStatus = prevTodo?.status;
+    const rollback = () => {
+      if (prevTodo) setTodos(ts => ts.map(t => (t.id === id ? { ...t, status: prevStatus, done: prevStatus === 'done' } : t)));
+    };
+    if (prevTodo) {
+      setTodos(ts => ts.map(t => (t.id === id ? { ...t, status, done: status === 'done' } : t)));
+    }
     try {
       const response = await fetch('/api/hub/tasks', {
         method: 'PATCH',
@@ -1126,15 +1136,20 @@ export function Projects({ workspace }) {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.status !== 'saved') {
+        rollback();
         throw new Error(data.error || `상태 저장 실패 ${response.status}`);
       }
-      await loadLedger();
+      // 백그라운드 재검증(카운트·보드 정합) — UI는 이미 정착했으니 기다리지 않는다.
+      loadLedger();
       return true;
+    } catch (error) {
+      if (!(error instanceof Error && error.message.startsWith('상태 저장 실패'))) rollback();
+      throw error;
     } finally {
       taskStatusPendingRef.current.delete(id);
       setPendingTaskIds(new Set(taskStatusPendingRef.current));
     }
-  }, [loadLedger]);
+  }, [loadLedger, todos]);
 
   const toggleTodo = React.useCallback(async (id) => {
     const todo = todos.find(item => item.id === id);

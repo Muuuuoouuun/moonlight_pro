@@ -171,6 +171,25 @@ export function useRevenueLedger() {
   return { ledger, syncState };
 }
 
+// 3단 정렬 헤더(§8.1) — 컴포넌트 안에서 정의하면 렌더마다 함수 identity가 바뀌어
+// React가 헤더 버튼을 매번 unmount/remount한다(re-audit 속도 #5). 모듈 스코프 1개를
+// Leads·Cases·Accounts가 공유한다. 캐럿은 비활성일 때도 폭 예약.
+function SortHead({ k, sort, onToggle, children, align }) {
+  return (
+    <button type="button" onClick={() => onToggle(k)} title={`${children} 기준 정렬`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3, width: '100%',
+        justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
+        fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
+        color: sort.key === k ? 'var(--fg-muted)' : 'var(--fg-faint)',
+        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+      }}>
+      {children}
+      <span style={{ fontSize: 10.5, opacity: sort.key === k ? 1 : 0 }}>{sort.dir === 'desc' && sort.key === k ? '▼' : '▲'}</span>
+    </button>
+  );
+}
+
 // Persist a Revenue drawer edit to the Supabase-backed write route. `kind` is
 // 'lead' | 'deal' | 'case', `op` is 'create' | 'update' | 'delete'. Returns
 // { ok, status, id } — `ok` is true only when the row actually saved; 'preview' means the
@@ -518,43 +537,35 @@ export function Leads({ workspace }) {
   // The ledger hook only exposes API-backed rows — scoping never mixes sources. Drawer
   // edits overlay onto whichever row (local or ledger) they key to; deletes drop the row.
   const ws = getWorkspace(workspace);
-  const mergedLeads = [...localLeads, ...ledger.leads]
-    .filter(l => !deletedLeadIds.has(l.id))
-    .map(l => (leadEdits[l.id] ? { ...l, ...leadEdits[l.id] } : l));
-  const LEADS = filterLeadsByWorkspace(mergedLeads, workspace);
-  const wsEmpty = Boolean(ws) && LEADS.length === 0;
-  const editingLead = editLeadId ? mergedLeads.find(l => l.id === editLeadId) : null;
   const [filter, setFilter] = React.useState('all');
   const [search, setSearch] = React.useState('');
   const [sort, setSort] = React.useState({ key: null, dir: 'asc' });
+  // 파생 목록 memo(re-audit 속도 #4) — 이전에는 드로어·검색 키스트로크마다 120행
+  // merge + 10필드 searchText 조립 + sort가 전부 재실행됐다.
+  const mergedLeads = React.useMemo(
+    () => [...localLeads, ...ledger.leads]
+      .filter(l => !deletedLeadIds.has(l.id))
+      .map(l => (leadEdits[l.id] ? { ...l, ...leadEdits[l.id] } : l)),
+    [localLeads, ledger.leads, deletedLeadIds, leadEdits],
+  );
+  const LEADS = React.useMemo(() => filterLeadsByWorkspace(mergedLeads, workspace), [mergedLeads, workspace]);
+  const wsEmpty = Boolean(ws) && LEADS.length === 0;
+  const editingLead = editLeadId ? mergedLeads.find(l => l.id === editLeadId) : null;
   const term = search.trim().toLowerCase();
-  const filtered = LEADS.filter(l => {
+  const filtered = React.useMemo(() => LEADS.filter(l => {
     const searchText = [l.name, l.companyName, l.contactName, l.contactPhone, l.contactEmail, l.source, l.stage, l.region, l.nextAction, ...(l.enrichmentTags || [])]
       .filter(Boolean)
       .join(' ')
       .toLowerCase();
     return (filter === 'all' || l.type === filter) && (!term || searchText.includes(term));
-  });
-  const sortedLeads = sortLeads(filtered, sort);
+  }), [LEADS, filter, term]);
+  const sortedLeads = React.useMemo(() => sortLeads(filtered, sort), [filtered, sort]);
   // Toggle a column: first click sorts asc, second flips to desc, third clears back to ledger order.
   const toggleSort = (key) => setSort(s =>
     s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: null, dir: 'asc' }
   );
   // Clickable column header. Reserves the caret's width even when inactive so sorting never
   // shifts the header layout; active column brightens and shows the direction.
-  const SortHead = ({ k, children, align }) => (
-    <button type="button" onClick={() => toggleSort(k)} title={`${children} 기준 정렬`}
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 3, width: '100%',
-        justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
-        fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
-        color: sort.key === k ? 'var(--fg-muted)' : 'var(--fg-faint)',
-        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-      }}>
-      {children}
-      <span style={{ fontSize: 10.5, opacity: sort.key === k ? 1 : 0 }}>{sort.dir === 'desc' && sort.key === k ? '▼' : '▲'}</span>
-    </button>
-  );
   const stageTone = { New: 'info', Contact: 'moon', Qualified: 'moon', Customer: 'company', Lost: 'danger' };
   const createLead = () => {
     const id = `local-lead-${Date.now()}`;
@@ -732,7 +743,7 @@ export function Leads({ workspace }) {
       {!wsEmpty && (
       <Card pad={false} className="hub-table-card hub-leads-table">
         <div className="hub-leads-grid" style={{ display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          <span /><SortHead k="name">Name</SortHead><span>Type</span><SortHead k="source">Source</SortHead><SortHead k="stage">Stage</SortHead><SortHead k="score">Score</SortHead><SortHead k="owner">Owner</SortHead><span style={{ textAlign: 'right' }}>Last</span>
+          <span /><SortHead k="name" sort={sort} onToggle={toggleSort}>Name</SortHead><span>Type</span><SortHead k="source" sort={sort} onToggle={toggleSort}>Source</SortHead><SortHead k="stage" sort={sort} onToggle={toggleSort}>Stage</SortHead><SortHead k="score" sort={sort} onToggle={toggleSort}>Score</SortHead><SortHead k="owner" sort={sort} onToggle={toggleSort}>Owner</SortHead><span style={{ textAlign: 'right' }}>Last</span>
         </div>
         {sortedLeads.length === 0 && (
           <div style={{ padding: '36px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -1398,19 +1409,6 @@ export function Cases() {
   const toggleSort = (key) => setSort(s =>
     s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: null, dir: 'asc' }
   );
-  const SortHead = ({ k, children, align }) => (
-    <button type="button" onClick={() => toggleSort(k)} title={`${children} 기준 정렬`}
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 3, width: '100%',
-        justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
-        fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
-        color: sort.key === k ? 'var(--fg-muted)' : 'var(--fg-faint)',
-        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-      }}>
-      {children}
-      <span style={{ fontSize: 10.5, opacity: sort.key === k ? 1 : 0 }}>{sort.dir === 'desc' && sort.key === k ? '▼' : '▲'}</span>
-    </button>
-  );
   const sTone = { Open: 'warning', Waiting: 'info', Resolved: 'success' };
   const pTone = { high: 'danger', med: 'warning', low: 'neutral' };
   const createCase = () => {
@@ -1503,7 +1501,7 @@ export function Cases() {
       </div>
       <Card pad={false} className="hub-table-card">
         <div className="hub-table-min" style={{ display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          <span>ID</span><SortHead k="title">Title</SortHead><SortHead k="account">Account</SortHead><span>Type</span><SortHead k="priority">Priority</SortHead><SortHead k="status">Status</SortHead><SortHead k="opened">Opened</SortHead><span style={{ textAlign: 'right' }}>Owner</span>
+          <span>ID</span><SortHead k="title" sort={sort} onToggle={toggleSort}>Title</SortHead><SortHead k="account" sort={sort} onToggle={toggleSort}>Account</SortHead><span>Type</span><SortHead k="priority" sort={sort} onToggle={toggleSort}>Priority</SortHead><SortHead k="status" sort={sort} onToggle={toggleSort}>Status</SortHead><SortHead k="opened" sort={sort} onToggle={toggleSort}>Opened</SortHead><span style={{ textAlign: 'right' }}>Owner</span>
         </div>
         {cases.length === 0 && (
           <EmptyState
@@ -2019,17 +2017,26 @@ export function Accounts({ workspace, onNavigate }) {
   const [sort, setSort] = React.useState({ key: null, dir: 'asc' });
 
   const term = search.trim().toLowerCase();
-  const searched = ACCOUNTS.filter(a => {
-    const relationship = buildAccountRelationshipDetail(a, ledger);
-    const searchText = [
-      a.name,
-      a.nextAction,
-      a.dormant ? '기약 없음 휴면' : null,
-      ...relationship.contacts.flatMap((contact) => [contact.name, contact.role, contact.phone, contact.email, ...contact.labels]),
-      ...relationship.deals.map((deal) => deal.name),
-    ].filter(Boolean).join(' ').toLowerCase();
-    return (filter === 'all' || a.type === filter) && (!term || searchText.includes(term));
-  });
+  // 검색 텍스트 인덱스를 원장 변경 시 1회만 조립(re-audit 속도 #4) — 이전에는 키스트로크마다
+  // 계정×(contacts 200 + deals 120) 관계 조인을 다시 돌렸다(≈38k 비교/문자).
+  const accountSearchText = React.useMemo(() => {
+    const map = new Map();
+    ACCOUNTS.forEach((a) => {
+      const relationship = buildAccountRelationshipDetail(a, ledger);
+      map.set(a.name, [
+        a.name,
+        a.nextAction,
+        a.dormant ? '기약 없음 휴면' : null,
+        ...relationship.contacts.flatMap((contact) => [contact.name, contact.role, contact.phone, contact.email, ...contact.labels]),
+        ...relationship.deals.map((deal) => deal.name),
+      ].filter(Boolean).join(' ').toLowerCase());
+    });
+    return map;
+  }, [ACCOUNTS, ledger]);
+  const searched = React.useMemo(
+    () => ACCOUNTS.filter(a => (filter === 'all' || a.type === filter) && (!term || (accountSearchText.get(a.name) || '').includes(term))),
+    [ACCOUNTS, accountSearchText, filter, term],
+  );
   // asc → desc → 해제(원장 순) 3단 토글 — Leads·Cases와 같은 §8.1 계약. health는
   // 알파벳이 아니라 심각도 순(ok<warning<risk), value·deals는 숫자.
   const ACCOUNT_HEALTH_RANK = { ok: 0, warning: 1, risk: 2 };
@@ -2047,19 +2054,6 @@ export function Accounts({ workspace, onNavigate }) {
   }, [searched, sort]);
   const toggleSort = (key) => setSort(s =>
     s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: null, dir: 'asc' }
-  );
-  const SortHead = ({ k, children, align }) => (
-    <button type="button" onClick={() => toggleSort(k)} title={`${children} 기준 정렬`}
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 3, width: '100%',
-        justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
-        fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
-        color: sort.key === k ? 'var(--fg-muted)' : 'var(--fg-faint)',
-        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-      }}>
-      {children}
-      <span style={{ fontSize: 10.5, opacity: sort.key === k ? 1 : 0 }}>{sort.dir === 'desc' && sort.key === k ? '▼' : '▲'}</span>
-    </button>
   );
 
   // Keep selection valid across filter changes
@@ -2376,7 +2370,7 @@ export function Accounts({ workspace, onNavigate }) {
             borderBottom: '1px solid var(--line-soft)',
             fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em',
           }}>
-            <span /><SortHead k="name">Name</SortHead><span>Type</span><SortHead k="health">Health</SortHead><SortHead k="value">Value</SortHead><SortHead k="deals">Deals</SortHead><span>Last contact</span><span>Owner</span><span style={{ textAlign: 'right' }}>마지막 접점 시간</span>
+            <span /><SortHead k="name" sort={sort} onToggle={toggleSort}>Name</SortHead><span>Type</span><SortHead k="health" sort={sort} onToggle={toggleSort}>Health</SortHead><SortHead k="value" sort={sort} onToggle={toggleSort}>Value</SortHead><SortHead k="deals" sort={sort} onToggle={toggleSort}>Deals</SortHead><span>Last contact</span><span>Owner</span><span style={{ textAlign: 'right' }}>마지막 접점 시간</span>
           </div>
           {filtered.map((a, i) => (
             <div key={a.name} className="hub-row hub-table-min"

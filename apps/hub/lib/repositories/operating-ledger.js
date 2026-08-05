@@ -485,6 +485,7 @@ export async function getTaskLedger() {
       configured: false,
       workspaceId: workspaceId || null,
       todos: [],
+      projects: [],
       taskAggregation: null,
       partial: false,
       failedSources: [],
@@ -523,6 +524,7 @@ export async function getTaskLedger() {
       failedSources: ["tasks"],
       retryable: true,
       todos: [],
+      projects: [],
       taskAggregation: null,
       partial: false,
     };
@@ -551,6 +553,9 @@ export async function getTaskLedger() {
     configured: true,
     workspaceId,
     todos: mapTodos(taskRows, projectById, brandById),
+    // attention-ledger 등 소비자가 프로젝트 이름 조인에 쓰는 최소 카탈로그 — 전체
+    // getProjectLedger(11+콜)를 다시 태우지 않기 위한 id/name projection.
+    projects: Array.from(projectById.values()).map((p) => ({ id: p.id, name: p.name })),
     taskAggregation: {
       loaded: taskRows.length,
       total: Number.isFinite(taskRowCount) ? taskRowCount : null,

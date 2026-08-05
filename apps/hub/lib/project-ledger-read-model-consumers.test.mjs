@@ -4,6 +4,7 @@ import { beforeEach, test } from "node:test";
 
 const operatingStub = `
 export async function getProjectLedger() { return globalThis.__projectReadModelState.projects; }
+export async function getTaskLedger() { return globalThis.__projectReadModelState.projects; }
 `;
 const revenueStub = `
 export async function getRevenueLedger() { return globalThis.__projectReadModelState.revenue; }

@@ -12,7 +12,11 @@
 // `href` is a hub deep-link (deals open their native drawer); tasks carry `status` so the
 // list can complete them durably through PATCH /api/hub/tasks.
 
-import { getProjectLedger } from "./operating-ledger";
+// 태스크 소스는 lean read(getTaskLedger, 4콜/1웨이브) — 전체 getProjectLedger(11+콜/
+// 2웨이브)는 decisions/notes/checks/catalog 등 이 원장이 쓰지 않는 데이터까지 태웠다
+// (2026-08-05 re-audit 속도 #1). 이 엔드포인트는 내 작업 로드 + 모든 완료/미루기 뒤
+// reload가 타는 핫패스다.
+import { getTaskLedger } from "./operating-ledger";
 import { getRevenueLedger } from "./revenue-ledger";
 import { listGoogleCalendarEvents } from "../google-calendar";
 
@@ -211,7 +215,7 @@ export async function getAttentionLedger() {
   const weekEndIso = new Date(now.getTime() + 7 * DAY_MS).toISOString();
 
   const [projectLedger, revenueLedger, calendar] = await Promise.all([
-    getProjectLedger().catch(() => ({
+    getTaskLedger().catch(() => ({
       source: "error",
       error: "project-ledger-request-failed",
       failedSources: ["tasks"],
