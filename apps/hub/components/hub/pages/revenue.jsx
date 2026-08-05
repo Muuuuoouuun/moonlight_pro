@@ -698,7 +698,7 @@ export function Leads({ workspace }) {
       {cardState && (() => {
         const reading = cardState.phase === 'reading';
         const s = cardState.status;
-        const tone = reading ? 'info' : s === 'promoted' ? 'success' : s === 'review' ? 'warning' : s === 'preview' ? 'moon' : 'danger';
+        const tone = reading ? 'neutral' : s === 'rejected' || s === 'error' ? 'danger' : 'neutral';
         const label = reading ? '추출 중' : s === 'promoted' ? '추가됨' : s === 'review' ? '확인 필요' : s === 'rejected' ? '식별 불가' : s === 'preview' ? '미리보기' : '실패';
         const f = cardState.fields || {};
         const summary = reading

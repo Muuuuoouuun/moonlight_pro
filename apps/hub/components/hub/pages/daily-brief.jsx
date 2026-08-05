@@ -1389,6 +1389,14 @@ function FocusSlots({ dailyFocus, onNavigate }) {
                   {item.company && item.company !== item.name && <span style={{ color: 'var(--fg-faint)' }}> · {item.company}</span>}
                 </div>
                 {item.nextAction && <div style={{ marginTop: 1, fontSize: 11, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>→ {item.nextAction}</div>}
+                {/* deep-design §7 행동 행 최소 정보: 이유 · 기한(기약 없음 포함) · 최근 활동 */}
+                <div style={{ marginTop: 1, fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {item.reason}
+                  {item.dueLabel && (
+                    <span style={{ color: item.dueOverdue ? 'var(--danger)' : 'var(--fg-faint)' }}> · {item.dueLabel}</span>
+                  )}
+                  {item.lastTouch && <span> · 최근 {item.lastTouch}</span>}
+                </div>
               </div>
               {/* §7 확정: 숫자 점수를 첫 화면에 노출하지 않는다 — 순서(1~5)가 이미 우선순위를 전달. */}
             </div>
@@ -1468,12 +1476,13 @@ export function DailyBrief({ onNavigate }) {
       {/* §7 슬롯 순서: Quick Capture가 첫 fold 1순위 — 내비 칩보다 위. */}
       <QuickTaskCapture onNavigate={onNavigate} onSaved={refreshLedger} />
 
-      <BriefNavigation taskToday={ledger.taskToday} onNavigate={onNavigate} />
-
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
         {/* §7 확정 fold 순서: Capture → 긴급 KA·집중 고객·오늘 일정 → 신호. 명명된 슬롯이
-            tone 정렬 신호(자동화 실패 등)보다 위 — 고객이 히어로 자리를 갖는다. */}
+            tone 정렬 신호(자동화 실패 등)보다 위 — 고객이 히어로 자리를 갖는다.
+            모바일 점프 칩은 확정 슬롯 아래로 — fold 순서에 끼어들지 않는다. */}
         <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} />
+
+        <BriefNavigation taskToday={ledger.taskToday} onNavigate={onNavigate} />
 
         <div className="daily-brief__command-reveal">
           {command ? (

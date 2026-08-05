@@ -46,6 +46,24 @@ function shouldYield() {
   return false;
 }
 
+// 선택 시스템이 없는 리스트 서피스용 페이지 레벨 `n` 생성 단축키 (§8.1) —
+// 동일한 yield 규칙(입력 중·드로어/팔레트 열림 시 양보)을 공유한다.
+export function usePageCreateHotkey(onNew, { enabled = true } = {}) {
+  React.useEffect(() => {
+    if (!enabled || typeof onNew !== "function") return undefined;
+    const onKey = (e) => {
+      if (e.defaultPrevented || e.isComposing) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key !== "n") return;
+      if (shouldYield()) return;
+      e.preventDefault();
+      onNew();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [enabled, onNew]);
+}
+
 export function useCrmKeyboard({ enabled = true, selection, onNew, onEditSelected, onSearchFocus, onStageMove, onHelp, onToggleSelect }) {
   React.useEffect(() => {
     if (!enabled) return undefined;

@@ -433,7 +433,7 @@ export function Followups({ onNavigate }) {
     <div className="hub-page" style={{ padding: "var(--section-gap)", display: "flex", flexDirection: "column", gap: "var(--gap)", maxWidth: 1100 }}>
       <div className="hub-page-header" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>팔로업</h2>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>고객 연락</h2>
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             오늘 연락할 사람 · 채널 · 왜 · 다음 행동
             {["live", "partial"].includes(syncState) && (summary.overdue ?? 0) > 0 && (
@@ -525,7 +525,7 @@ export function Followups({ onNavigate }) {
         )}
       </Card>
       <div style={{ fontSize: 11, color: "var(--fg-faint)" }}>
-        기록한 결과는 outreach_outcomes에 쌓여 내일 우선순위·전환 퍼널에 반영됩니다.
+        기록한 결과는 crm_activities에 쌓여 내일 우선순위·전환 퍼널에 반영됩니다.
       </div>
 
       {panelItem && <ActivityPanel item={panelItem} onClose={() => setPanelItem(null)} onNavigate={onNavigate} />}

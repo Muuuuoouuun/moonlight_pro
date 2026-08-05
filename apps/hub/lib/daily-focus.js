@@ -123,14 +123,33 @@ export function buildDailyFocus({ revenue, calendar, now = new Date() } = {}) {
     },
     focusCustomers: {
       state: revenueReadable ? "live" : "preview",
-      items: focusLeads.map((lead) => ({
-        id: lead.id,
-        name: lead.name,
-        company: lead.companyName || null,
-        nextAction: lead.nextAction || "",
-        score: Number.isFinite(lead.score) ? Math.round(lead.score) : null,
-        href: `dashboard/revenue/customers?customer=${encodeURIComponent(`lead:${lead.id}`)}`,
-      })),
+      // deep-design §7 행동 행 최소 정보: 지금 올린 이유 · 기한(또는 기약 없음) · 최근 활동.
+      items: focusLeads.map((lead) => {
+        const dueKey = lead.nextActionAt ? kstDayKey(lead.nextActionAt) : "";
+        const overdueDays = dueKey ? diffKstDays(dueKey, todayKey) : 0;
+        return {
+          id: lead.id,
+          name: lead.name,
+          company: lead.companyName || null,
+          nextAction: lead.nextAction || "",
+          score: Number.isFinite(lead.score) ? Math.round(lead.score) : null,
+          dueLabel: !dueKey
+            ? "기약 없음"
+            : overdueDays > 0
+              ? `기한 ${overdueDays}일 지남`
+              : overdueDays === 0
+                ? "오늘까지"
+                : `기한 ${dueKey.slice(5).replace("-", ".")}`,
+          dueOverdue: Boolean(dueKey) && overdueDays > 0,
+          lastTouch: lead.last || null,
+          reason: lead.focusOverride === "raise"
+            ? "수동 상향"
+            : dueKey && overdueDays >= 0
+              ? "다음 행동 기한 도래"
+              : "다음 행동 대기",
+          href: `dashboard/revenue/customers?customer=${encodeURIComponent(`lead:${lead.id}`)}`,
+        };
+      }),
     },
     todayAgenda: {
       state: calendarOk ? "live" : "preview",

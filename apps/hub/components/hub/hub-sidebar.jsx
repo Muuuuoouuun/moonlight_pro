@@ -11,6 +11,7 @@ import {
   deriveSidebarScope,
   isSidebarAnchorActive,
   normalizeScope,
+  ownerAnchorKey,
   resolveSidebarPath,
   setElementInert,
   getMobileNavigationTabTarget,
@@ -298,9 +299,9 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeSc
         padding: '10px 12px', borderTop: '1px solid var(--line-soft)',
         display: 'flex', alignItems: 'center', gap: 9,
       }}>
-        <Avatar name="Hyeon Park" size={26} />
+        <Avatar name="문준혁" size={26} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Hyeon Park</div>
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>문준혁</div>
           <div style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>Founder · Pro</div>
         </div>
         <IconButton icon="bell" size={24} iconSize={13} tooltip="Open Daily Brief" onClick={() => onNavigate('dashboard/daily-brief')} />

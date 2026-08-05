@@ -186,10 +186,12 @@ export const SIDEBAR_PRIMARY = [
     label: '고객 연락',
     icon: 'bell',
     scopeAware: true,
+    // classin/followups 페이지는 제거됨(LEGACY_REDIRECTS) — owns는 옛 딥링크의
+    // 액티브 판정용으로만 유지하고, 내비 착지는 항상 정본 페이지다.
     owns: ['dashboard/revenue/followups', 'dashboard/classin/followups'],
     paths: {
       all: 'dashboard/revenue/followups',
-      classin: 'dashboard/classin/followups',
+      classin: 'dashboard/revenue/followups?scope=classin',
       personal: 'dashboard/revenue/followups?scope=personal',
     },
   },

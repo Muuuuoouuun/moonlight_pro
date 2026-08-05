@@ -4,6 +4,7 @@ import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar, SyncBadge, SegmentedControl } from "../hub-primitives";
+import { usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
 import { shouldRestoreActiveStudioDraft } from "@/lib/content-studio-routing";
 
@@ -689,7 +690,7 @@ export function Studio({ workspace }) {
                   width: '100%', background: 'transparent', border: 'none', outline: 'none',
                   color: 'var(--fg)', fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4,
                 }} />
-                <div style={{ fontSize: 13, color: 'var(--fg-faint)', marginBottom: 28 }}>By Hyeon Park · Web article preview 우선 · n8n handoff 대기</div>
+                <div style={{ fontSize: 13, color: 'var(--fg-faint)', marginBottom: 28 }}>By 문준혁 · Web article preview 우선 · n8n handoff 대기</div>
                 <textarea value={body} onChange={e => { setBody(e.target.value); setDirty(true); }} style={{
                   width: '100%', minHeight: 420, background: 'transparent', border: 'none', outline: 'none', resize: 'none',
                   color: 'var(--fg)', fontSize: 15, lineHeight: 1.7, fontFamily: 'var(--font-sans)', letterSpacing: '-0.005em',
@@ -1056,6 +1057,8 @@ export function Queue({ workspace }) {
     const brandParam = brandFilter !== 'all' ? `&brand=${encodeURIComponent(brandFilter)}` : '';
     router.push(`/dashboard/content/studio${id ? `?item=${encodeURIComponent(id)}` : '?new=draft'}${id ? '' : brandParam}`);
   }, [brandFilter, router]);
+  const createDraft = React.useCallback(() => openStudio(), [openStudio]);
+  usePageCreateHotkey(createDraft);
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1068,7 +1071,7 @@ export function Queue({ workspace }) {
         </div>
         <div style={{ flex: 1 }} />
         <Tabs className="hub-toolbar" tabs={tabs} active={tab} onChange={setTab} ariaLabel="Publishing queue filters" style={{ borderBottom: 'none' }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={() => openStudio()}>Draft</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createDraft}>Draft <Kbd>N</Kbd></Button>
       </div>
 
       {cadence && (
@@ -1154,7 +1157,7 @@ export function Queue({ workspace }) {
             icon="queue"
             title={`${ws.label} — 아직 연결된 콘텐츠가 없습니다.`}
             description="콘텐츠에 워크스페이스 태그가 붙으면 여기에 모입니다."
-            action={<Button variant="primary" size="sm" icon="plus" onClick={() => openStudio()}>Draft</Button>}
+            action={<Button variant="primary" size="sm" icon="plus" onClick={createDraft}>Draft <Kbd>N</Kbd></Button>}
           />
         )}
         {visibleQueue.length === 0 && !ws && (
@@ -1164,7 +1167,7 @@ export function Queue({ workspace }) {
             description={tab === 'all'
               ? (ledger.syncState === 'live' ? 'Supabase content_items/content_variants 기록에 표시할 콘텐츠가 없습니다.' : '초안을 만들면 큐와 파이프라인에 표시됩니다.')
               : `${activeLabel} 상태의 콘텐츠가 생기면 이 필터에 표시됩니다.`}
-            action={<Button variant="primary" size="sm" icon="plus" onClick={() => openStudio()}>Draft</Button>}
+            action={<Button variant="primary" size="sm" icon="plus" onClick={createDraft}>Draft <Kbd>N</Kbd></Button>}
           />
         )}
         {visibleQueue.map((c, i) => (
@@ -1569,6 +1572,14 @@ export function Campaigns() {
       setCreating(false);
     }
   };
+  const createCampaignRef = React.useRef(createCampaign);
+  createCampaignRef.current = createCampaign;
+  const creatingRef = React.useRef(creating);
+  creatingRef.current = creating;
+  const createCampaignHotkey = React.useCallback(() => {
+    if (!creatingRef.current) createCampaignRef.current();
+  }, []);
+  usePageCreateHotkey(createCampaignHotkey);
 
   React.useEffect(() => {
     if (!focusMode) return;
@@ -1604,7 +1615,7 @@ export function Campaigns() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating}>Campaign</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating}>Campaign <Kbd>N</Kbd></Button>
       </div>
 
       {!selected && (
