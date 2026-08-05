@@ -128,7 +128,7 @@ function buildRecentActivity(projects, content, automations) {
     events.push({
       id: `update-${update.id}`,
       kind: "work",
-      tone: "moon",
+      tone: "neutral",
       title: update.title || "작업 업데이트",
       summary: update.summary || update.nextAction || "",
       at: update.happenedAt,
@@ -140,7 +140,7 @@ function buildRecentActivity(projects, content, automations) {
     events.push({
       id: `decision-${decision.id}`,
       kind: "decision",
-      tone: "info",
+      tone: "neutral",
       title: decision.title || "결정",
       summary: decision.summary || "",
       at: decision.decidedAt,
@@ -154,7 +154,7 @@ function buildRecentActivity(projects, content, automations) {
       events.push({
         id: `publish-${log.id}`,
         kind: "content",
-        tone: "success",
+        tone: "neutral",
         title: log.title || "콘텐츠 발행",
         summary: log.channel ? `${log.channel} 채널로 발행` : "발행 완료",
         at: log.publishedAt || log.createdAt,

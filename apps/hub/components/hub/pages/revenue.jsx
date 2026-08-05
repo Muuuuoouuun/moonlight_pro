@@ -870,9 +870,14 @@ function DealTaskPanel({ deal, onSaved }) {
       // ?dealId= 서버 필터 — 전체 태스크를 받아 클라이언트에서 거르던 페이로드 낭비 제거.
       const res = await fetch(`/api/hub/tasks?dealId=${encodeURIComponent(dealId)}`, { cache: 'no-store' });
       const data = await res.json().catch(() => null);
-      const all = Array.isArray(data?.tasks) ? data.tasks : [];
+      if (!res.ok || !data || data.status === 'error') {
+        // 읽기 실패를 빈 체크리스트(0건이 사실인 것처럼)로 뭉개지 않는다.
+        setListError('체크리스트를 읽지 못했습니다 — 다시 열면 재시도합니다.');
+        return;
+      }
+      const all = Array.isArray(data.tasks) ? data.tasks : [];
       setTasks(all.filter(t => t.dealId === dealId));
-    } catch { setTasks([]); }
+    } catch { setListError('체크리스트를 읽지 못했습니다 — 다시 열면 재시도합니다.'); }
   }, [dealId, isLocal]);
   React.useEffect(() => { setAsState('idle'); setTitle(''); setListError(null); load(); }, [load]);
 

@@ -24,6 +24,22 @@ export function useUndoableAction() {
     timers.current.clear();
   }, []);
 
+  // 탭 닫기/앱 전환(pagehide)도 flush — 언마운트 flush는 SPA 내 이동만 덮는다.
+  // 탭을 닫으면 3.5초 창 안의 쓰기가 조용히 증발했다(re-audit S14). pagehide 시점의
+  // fetch는 브라우저가 끝까지 보장하진 않지만(keepalive 아님), 손실 확정 → 최선 노력으로
+  // 바뀐다. bfcache 복원(persisted) 후 재방문에도 타이머 맵은 비워져 이중 실행이 없다.
+  React.useEffect(() => {
+    const flushAll = () => {
+      timers.current.forEach(({ timerId, run }) => {
+        clearTimeout(timerId);
+        try { run(); } catch { /* 콜백 자신의 에러 처리에 맡긴다 */ }
+      });
+      timers.current.clear();
+    };
+    window.addEventListener('pagehide', flushAll);
+    return () => window.removeEventListener('pagehide', flushAll);
+  }, []);
+
   // 같은 key로 재예약하면 이전 예약은 대체된다(타이머만 교체, 실행하지 않음).
   const schedule = React.useCallback((key, run, delay = UNDO_WINDOW_MS) => {
     const existing = timers.current.get(key);
