@@ -162,12 +162,9 @@ function rankSignals(signals) {
 }
 
 function syncTone(state) {
-  if (state === 'live') return 'success';
-  if (state === 'partial') return 'warning';
-  if (state === 'error') return 'danger';
-  if (state === 'mixed' || state === 'syncing') return 'info';
-  if (state === 'preview') return 'moon';
-  return 'neutral';
+  // §5.3 source truth: error alone is danger — live/partial/preview stay neutral
+  // (proof-by-color is banned; the visible label carries the state).
+  return state === 'error' ? 'danger' : 'neutral';
 }
 
 function sourceLabel(state) {
@@ -234,7 +231,7 @@ function QuickTaskCapture({ onNavigate, onSaved }) {
   const stateColor = state.status === 'error'
     ? 'var(--danger)'
     : state.status === 'saved'
-      ? 'var(--success)'
+      ? 'var(--fg-muted)'
       : 'var(--fg-faint)';
 
   function changeHint(nextHint) {
@@ -592,10 +589,10 @@ function MetricCard({ m, onNavigate, compact }) {
         <div style={{ flex: 1 }} />
         {/* 실측 시계열이 있을 때만 — 합성 스파크는 지어낸 추세를 실데이터처럼 보이게 한다. */}
         {Array.isArray(m.spark) && m.spark.length > 1 && (
-          <Sparkline values={m.spark} tone={m.tone === 'warning' ? 'warning' : m.tone === 'success' ? 'success' : 'moon'} width={compact ? 48 : 70} height={compact ? 16 : 22} />
+          <Sparkline values={m.spark} tone="moon" width={compact ? 48 : 70} height={compact ? 16 : 22} />
         )}
       </div>
-      <div style={{ marginTop: compact ? 3 : 6, fontSize: compact ? 10.5 : 11.5, color: m.tone === 'success' ? 'var(--success)' : m.tone === 'warning' ? 'var(--warning)' : 'var(--fg-faint)' }}>{m.delta}</div>
+      <div style={{ marginTop: compact ? 3 : 6, fontSize: compact ? 10.5 : 11.5, color: m.tone ? 'var(--fg-muted)' : 'var(--fg-faint)' }}>{m.delta}</div>
     </div>
   );
 }
@@ -610,7 +607,7 @@ function DistributionRows({ series = [], label }) {
           <div key={item.key} style={{ display: 'grid', gridTemplateColumns: '48px minmax(0, 1fr) 24px', gap: 8, alignItems: 'center' }}>
             <span style={{ fontSize: 10.5, color: 'var(--fg-muted)' }}>{item.label}</span>
             <span style={{ height: 5, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }}>
-              <span style={{ display: 'block', height: '100%', width: `${Math.max(value ? 8 : 0, Math.round((value / max) * 100))}%`, borderRadius: 999, background: item.key === 'blocked' ? 'var(--warning)' : 'var(--moon-500)' }} />
+              <span style={{ display: 'block', height: '100%', width: `${Math.max(value ? 8 : 0, Math.round((value / max) * 100))}%`, borderRadius: 999, background: item.key === 'blocked' ? 'var(--moon-300)' : 'var(--moon-500)' }} />
             </span>
             <span className="mono" style={{ fontSize: 10.5, color: value ? 'var(--fg)' : 'var(--fg-faint)', textAlign: 'right' }}>{value}</span>
           </div>
@@ -647,7 +644,7 @@ function OperatorPulse({ operatorHome, contentBrands, onNavigate }) {
                 ].map(([label, value]) => (
                   <div key={label} style={{ padding: '8px 9px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', minWidth: 0 }}>
                     <div className="stat" style={{ fontSize: 18, fontWeight: 600 }}>{value}</div>
-                    <div style={{ marginTop: 2, fontSize: 10, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{label}</div>
+                    <div style={{ marginTop: 2, fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{label}</div>
                   </div>
                 ))}
               </div>
@@ -676,7 +673,7 @@ function OperatorPulse({ operatorHome, contentBrands, onNavigate }) {
                 ].map(([label, value]) => (
                   <div key={label} style={{ padding: '8px 9px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', minWidth: 0 }}>
                     <div className="stat" style={{ fontSize: 18, fontWeight: 600 }}>{value}</div>
-                    <div style={{ marginTop: 2, fontSize: 10, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{label}</div>
+                    <div style={{ marginTop: 2, fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{label}</div>
                   </div>
                 ))}
               </div>
@@ -704,20 +701,16 @@ function OperatorPulse({ operatorHome, contentBrands, onNavigate }) {
   );
 }
 
-const WO_KIND_TONE = {
-  outcome: 'moon', lead: 'moon', dm: 'moon',
-  idea: 'info', engagement: 'info',
-  review: 'warning', note: 'neutral',
-  'followup-draft': 'moon', 'content-draft': 'info',
-};
+// 작업 주문 kind는 카테고리 — §5.2 동결: 카테고리에 semantic/accent 톤 금지.
+const WO_KIND_TONE = {};
 
 // Chief of Staff 브리핑 — the /api/cron/chief-of-staff composed agenda, read back from
 // project_updates (ai.morning_brief) via /api/hub/daily-brief. Renders only when a fresh
 // (<24h) brief exists; lanes map to identity tones (sales=company, brand=personal).
 const BRIEF_LANE_META = {
-  approve: { label: '승인', tone: 'moon' },
-  sales: { label: '영업', tone: 'company' },
-  brand: { label: '브랜드', tone: 'personal' },
+  approve: { label: '승인', tone: 'neutral' },
+  sales: { label: '영업', tone: 'neutral' },
+  brand: { label: '브랜드', tone: 'neutral' },
 };
 
 function MorningBriefCard({ brief, onNavigate }) {
@@ -882,7 +875,7 @@ function ApprovalQueueCard({ onNavigate }) {
           <>
           {personaCounts.length > 0 && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid var(--line-soft)', background: 'var(--surface-2)' }}>
-              <span style={{ fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>대기</span>
+              <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>대기</span>
               {personaCounts.map(([p, c]) => (
                 <Badge key={p} tone="neutral" variant="outline" size="xs">{p} {c}</Badge>
               ))}
@@ -897,7 +890,7 @@ function ApprovalQueueCard({ onNavigate }) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                     <Badge tone={WO_KIND_TONE[o.kind] || 'neutral'} size="xs">{o.kind}</Badge>
-                    <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)' }}>{o.persona}{o.channel ? ` · ${o.channel}` : ''}</span>
+                    <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{o.persona}{o.channel ? ` · ${o.channel}` : ''}</span>
                   </div>
                   <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {o.title}
@@ -1258,7 +1251,7 @@ function RhythmPanel({ onNavigate }) {
             <div {...rhythmProgressProps} style={{ marginTop: 10 }}><Progress value={percent} /></div>
             {summary.longestStreak > 0 && (
               <div style={{ marginTop: 10, fontSize: 11, color: 'var(--fg-muted)' }}>
-                최장 <span className="mono" style={{ color: 'var(--success)' }}>{summary.longestStreak}일</span>
+                최장 <span className="mono" style={{ color: 'var(--fg)' }}>{summary.longestStreak}일</span>
                 {summary.longestStreakRitual ? ` · ${summary.longestStreakRitual}` : ''}
               </div>
             )}
@@ -1291,7 +1284,7 @@ function RhythmPanel({ onNavigate }) {
                       </Button>
                     </div>
                     {feedback && (
-                      <div aria-live="polite" style={{ marginTop: 4, fontSize: 10.5, color: feedback.kind === 'error' ? 'var(--danger)' : feedback.kind === 'preview' ? 'var(--warning)' : 'var(--fg-muted)' }}>
+                      <div aria-live="polite" style={{ marginTop: 4, fontSize: 10.5, color: feedback.kind === 'error' ? 'var(--danger)' : 'var(--fg-muted)' }}>
                         {feedback.message}
                       </div>
                     )}

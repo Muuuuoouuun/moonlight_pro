@@ -84,7 +84,7 @@ function RegionDetail({ row, offMap = false, onJump }) {
       <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 14px" }}>
         <div>
           <div style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>확정 (클로징)</div>
-          <div className="num" style={{ fontSize: 13, fontWeight: 600, color: "var(--success)", marginTop: 2 }}>{fmtMoney(row.confirmed)}</div>
+          <div className="num" style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginTop: 2 }}>{fmtMoney(row.confirmed)}</div>
         </div>
         <div>
           <div style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>파이프라인 (진행 중)</div>
@@ -157,7 +157,7 @@ function CustomerRankRow({ customer, rank, max, metricKey, onSelect, onJump, onP
         gap: 8, alignItems: "center", padding: "6px 6px", borderRadius: 4, cursor: "pointer",
       }}
     >
-      <span className="mono" style={{ fontSize: 10, color: "var(--fg-faint)" }}>{String(rank).padStart(2, "0")}</span>
+      <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>{String(rank).padStart(2, "0")}</span>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{customer.name}</div>
         <div style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>{customer.region || "지역 미상"}</div>

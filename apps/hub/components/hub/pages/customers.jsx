@@ -361,7 +361,7 @@ function ContactOutcomeSheet({ row, onSaved }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <div style={{ flex: 1, minWidth: 0, fontSize: 11, lineHeight: 1.4 }}>
           {state === "warn" && (
-            <span style={{ color: "var(--warning)" }}>다음 액션이 비어 있습니다. 그래도 저장하려면 한 번 더 누르세요.</span>
+            <span style={{ color: "var(--fg-muted)" }}>다음 액션이 비어 있습니다. 그래도 저장하려면 한 번 더 누르세요.</span>
           )}
           {state === "error" && <span style={{ color: "var(--danger)" }}>{errorMsg}</span>}
         </div>
@@ -393,7 +393,7 @@ function DealStageRail({ stage }) {
           key={s.key}
           style={{
             width: 14, height: 4, borderRadius: 2,
-            background: i < cur ? "var(--moon-600)" : i === cur ? STAGE_FILL[s.color] : "var(--surface-3)",
+            background: i < cur ? "var(--moon-600)" : i === cur ? STAGE_FILL[s.ramp] : "var(--surface-3)",
           }}
         />
       ))}
@@ -507,7 +507,7 @@ function Customer360Drawer({ row, onClose, onNavigate }) {
           </Badge>
           {row.dormant && <Badge tone="neutral" size="xs" variant="outline">기약 없음</Badge>}
           <div style={{ flex: 1 }} />
-          <span className="stat" style={{ fontSize: 16 }}>{fmtMoney(row.valueNum)}</span>
+          <span className="mono" style={{ fontSize: 15 }}>{fmtMoney(row.valueNum)}</span>
         </div>
 
         {/* 연락처 */}

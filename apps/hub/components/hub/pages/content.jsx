@@ -317,7 +317,7 @@ export function Studio({ workspace }) {
     setSaveState("loaded");
     if (isUnsupportedType) {
       setExtraSuggestions(s => [{
-        tone: 'warning',
+        tone: 'neutral',
         text: `Studio는 아직 "${variant.type}" 타입 편집을 지원하지 않습니다 — Blog 모드로 임시 표시 중입니다.`,
       }, ...s]);
     }
@@ -470,7 +470,7 @@ export function Studio({ workspace }) {
       }
 
       if (data.status === 'preview') {
-        setExtraSuggestions(s => [{ tone: 'warning', text: '기록이 연결되지 않아 handoff 기록을 만들지 않았습니다.' }, ...s]);
+        setExtraSuggestions(s => [{ tone: 'neutral', text: '기록이 연결되지 않아 handoff 기록을 만들지 않았습니다.' }, ...s]);
         return;
       }
 
@@ -557,7 +557,7 @@ export function Studio({ workspace }) {
   const applyToolbarAction = (tool) => {
     if (!tool) return;
     if (tool === 'ai') {
-      setExtraSuggestions(s => [{ tone: 'warning', text: 'AI 제안 생성은 아직 실행 경로에 연결되지 않았습니다.' }, ...s]);
+      setExtraSuggestions(s => [{ tone: 'neutral', text: 'AI 제안 생성은 아직 실행 경로에 연결되지 않았습니다.' }, ...s]);
       return;
     }
     const snippets = {
@@ -629,7 +629,7 @@ export function Studio({ workspace }) {
               onClick={() => setAutoSave(v => !v)}
               style={{ color: autoSave ? 'var(--moon-200)' : 'var(--fg-faint)' }}
             />
-            {!autoSave && <span className="mono" style={{ fontSize: 10.5, color: 'var(--warning)' }}>OFF</span>}
+            {!autoSave && <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-muted)' }}>OFF</span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
             <IconButton
@@ -638,7 +638,7 @@ export function Studio({ workspace }) {
               onClick={() => setLocalMirror(v => !v)}
               style={{ color: localMirror ? 'var(--moon-200)' : 'var(--fg-faint)' }}
             />
-            {!localMirror && <span className="mono" style={{ fontSize: 10.5, color: 'var(--warning)' }}>OFF</span>}
+            {!localMirror && <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-muted)' }}>OFF</span>}
           </div>
           <IconButton
             icon="check"
@@ -1028,10 +1028,10 @@ export function Queue({ workspace }) {
     Archived: 'neutral',
     Draft: 'neutral',
     Scheduled: 'neutral',
-    Review: 'moon',
+    Review: 'neutral',
     Idea: 'neutral',
     Outline: 'neutral',
-    Published: 'success',
+    Published: 'neutral',
   };
   const tabs = [
     { key: 'all', label: 'All', count: queue.length },
@@ -1082,14 +1082,14 @@ export function Queue({ workspace }) {
             <span className="stat" style={{ fontSize: 20, fontWeight: 600, color: 'var(--fg)' }}>
               {cadence.published}<span style={{ color: 'var(--fg-faint)', fontWeight: 400 }}>/{cadence.goal}</span>
             </span>
-            <Badge tone={cadence.behind ? 'warning' : 'success'} size="xs">
+            <Badge tone="neutral" size="xs">
               {cadence.behind ? `${cadence.remaining}건 남음` : '목표 달성'}
             </Badge>
           </div>
           <div style={{ width: 1, height: 24, background: 'var(--line-soft)' }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>아이디어 큐</span>
-            <span className="mono" style={{ fontSize: 15, color: cadence.queueDepth >= 10 ? 'var(--fg)' : 'var(--warning)' }}>{cadence.queueDepth}</span>
+            <span className="mono" style={{ fontSize: 15, color: 'var(--fg)' }}>{cadence.queueDepth}</span>
             {cadence.queueDepth < 10 && <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>· 10개 이상 권장</span>}
           </div>
           <div style={{ flex: 1 }} />
@@ -1280,7 +1280,7 @@ function CampaignTabPanel({ tab, campaign, detail }) {
                 <div key={item.label} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, padding: '10px 0', borderBottom: i < detail.strategy.decisions.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
                   <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45 }}>{item.label}</div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <Badge tone={item.status === 'Committed' ? 'success' : item.status === 'Trial' ? 'moon' : 'warning'} size="xs">{item.status}</Badge>
+                    <Badge tone="neutral" size="xs">{item.status}</Badge>
                     <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{item.owner}</span>
                   </div>
                 </div>
@@ -1380,7 +1380,7 @@ function CampaignTabPanel({ tab, campaign, detail }) {
                 <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>ICP fit</span>
                 <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{item.fit}%</span>
               </div>
-              <Progress value={item.fit} tone={item.fit >= 75 ? 'moon' : 'warning'} />
+              <Progress value={item.fit} tone="moon" />
             </div>
             <div style={{ marginTop: 12, padding: '9px 10px', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', fontSize: 12, color: 'var(--fg-muted)' }}>
               Next: {item.next}
@@ -1423,10 +1423,10 @@ function CampaignTabPanel({ tab, campaign, detail }) {
                 <Iconed name={item.ai === 'None' ? 'zap' : 'sparkle'} size={13} style={{ color: item.ai === 'None' ? 'var(--fg-faint)' : 'var(--moon-300)' }} />
                 <span style={{ fontSize: 13, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
               </div>
-              <Badge tone={item.status === 'Active' ? 'success' : item.status === 'Draft' ? 'neutral' : 'warning'} size="xs">{item.status}</Badge>
+              <Badge tone="neutral" size="xs">{item.status}</Badge>
               <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{item.ai}</span>
               <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{item.last}</span>
-              <span className="mono" style={{ fontSize: 11, color: item.health.includes('needs') ? 'var(--warning)' : 'var(--success)' }}>{item.health}</span>
+              <span className="mono" style={{ fontSize: 11, color: item.health.includes('needs') ? 'var(--fg)' : 'var(--fg-muted)' }}>{item.health}</span>
             </div>
           ))}
         </Card>

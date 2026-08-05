@@ -361,7 +361,7 @@ export function Webhooks({ onNavigate }) {
 }
 
 export function Runs() {
-  const sIcon = { ok: { c: 'var(--success)', t: '●' }, warn: { c: 'var(--warning)', t: '▲' }, err: { c: 'var(--danger)', t: '✕' } };
+  const sIcon = { ok: { c: 'var(--fg-muted)', t: '●' }, warn: { c: 'var(--fg)', t: '▲' }, err: { c: 'var(--danger)', t: '✕' } };
   const { runs, syncState } = useAutomationsLedger();
   const rows = Array.isArray(runs) ? runs : [];
   const liveLabel = syncState === 'live' ? 'Live' : syncState === 'loading' ? 'Syncing' : 'Preview';
@@ -376,8 +376,8 @@ export function Runs() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--success)' }}>
-          <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--success)', animation: 'mlMoonPulse 1.4s ease-in-out infinite' }} />
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--fg-muted)' }}>
+          <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', animation: 'mlMoonPulse 1.4s ease-in-out infinite' }} />
           {liveLabel}
         </span>
       </div>

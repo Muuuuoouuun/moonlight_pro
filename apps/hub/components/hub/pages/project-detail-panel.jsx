@@ -176,7 +176,7 @@ export function ProjectDetailPanel({
           <Button variant="outline" size="sm" onClick={() => onEdit?.(project)}>편집</Button>
           <Button variant="primary" size="sm" icon="chat" style={{ flex: 1 }} onClick={() => onOpen?.(project)}>열기</Button>
           <Button variant="outline" size="sm" icon="orders" onClick={() => onSendOrder?.(project)}>{orderPending ? "Sending…" : "주문 보내기"}</Button>
-          {orderResult && !orderPending && <span className="mono" style={{ fontSize: 10.5, color: orderResult.tone === "ok" ? "var(--success)" : "var(--danger)", whiteSpace: "nowrap" }}>{orderResult.label}</span>}
+          {orderResult && !orderPending && <span className="mono" style={{ fontSize: 10.5, color: orderResult.tone === "ok" ? "var(--fg-muted)" : "var(--danger)", whiteSpace: "nowrap" }}>{orderResult.label}</span>}
         </div>
       </div>
     </aside>

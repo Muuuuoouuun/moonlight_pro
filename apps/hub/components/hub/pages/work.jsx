@@ -491,9 +491,7 @@ export function Calendar({ onNavigate }) {
     ? '● Connect failed'
     : '● Not connected';
   const gcalColor = isLive || gcalStatus === 'connected'
-    ? 'var(--success)'
-    : gcalStatus === 'preview'
-    ? 'var(--warning)'
+    ? 'var(--fg-muted)'
     : gcalStatus === 'error'
     ? 'var(--danger)'
     : 'var(--fg-faint)';
@@ -513,9 +511,9 @@ export function Calendar({ onNavigate }) {
   const gridTasks = mapTasksToCalendar(taskData.tasks, visibleDays);
   const columnTemplate = `56px repeat(${visibleDays.length}, minmax(${viewMode === 'day' ? '320px' : '120px'}, 1fr))`;
   const calBadge = calendarData.status === 'live'
-    ? { label: calendarCapabilities.badge, color: 'var(--success)' }
+    ? { label: calendarCapabilities.badge, color: 'var(--fg-muted)' }
     : calendarData.status === 'loading'
-    ? { label: 'syncing', color: 'var(--warning)' }
+    ? { label: 'syncing', color: 'var(--fg-muted)' }
     : { label: calendarCapabilities.badge, color: 'var(--fg-faint)' };
   const addEvent = () => {
     createEvent({
@@ -621,7 +619,7 @@ export function Calendar({ onNavigate }) {
           ))}
         </div>
         <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, borderBottom: '1px solid var(--line-soft)', background: 'var(--surface-2)' }}>
-          <div className="mono" style={{ padding: '12px 10px', fontSize: 10, color: 'var(--fg-faint)', textAlign: 'right' }}>TASK</div>
+          <div className="mono" style={{ padding: '12px 10px', fontSize: 10.5, color: 'var(--fg-faint)', textAlign: 'right' }}>TASK</div>
           {visibleDays.map((date, dayIndex) => {
             const tasks = gridTasks.filter((task) => task.day === dayIndex);
             const shown = tasks.slice(0, viewMode === 'day' ? 8 : 2);
@@ -659,7 +657,7 @@ export function Calendar({ onNavigate }) {
           <div className="hub-calendar-grid" style={{ display: 'grid', gridTemplateColumns: columnTemplate, position: 'relative' }}>
             <div>
               {hours.map(h => (
-                <div key={h} className="mono" style={{ height: 52, padding: '4px 10px', fontSize: 10, color: 'var(--fg-faint)', textAlign: 'right' }}>{h}:00</div>
+                <div key={h} className="mono" style={{ height: 52, padding: '4px 10px', fontSize: 10.5, color: 'var(--fg-faint)', textAlign: 'right' }}>{h}:00</div>
               ))}
             </div>
             {visibleDays.map((date, di) => (
@@ -761,12 +759,10 @@ export function Decisions() {
       ? 'syncing'
       : decisionSyncState;
   const decisionColor = decisionComplete
-    ? 'var(--success)'
-    : decisionSyncState === 'loading' || decisionSyncState === 'partial'
-      ? 'var(--warning)'
-      : decisionSyncState === 'error'
-        ? 'var(--danger)'
-        : 'var(--fg-faint)';
+    ? 'var(--fg-muted)'
+    : decisionSyncState === 'error'
+      ? 'var(--danger)'
+      : 'var(--fg-faint)';
 
   // Page-level `n` — quick-record a decision when no drawer is open and focus isn't in a field.
   React.useEffect(() => {
@@ -984,11 +980,9 @@ export function Roadmap() {
           : 'live';
   const statusColor = roadmap.state === 'error'
     ? 'var(--danger)'
-    : roadmap.state === 'partial'
-      ? 'var(--warning)'
-      : roadmap.state === 'live' || roadmap.state === 'live-empty'
-      ? 'var(--success)'
-        : 'var(--fg-faint)';
+    : roadmap.state === 'live' || roadmap.state === 'live-empty'
+      ? 'var(--fg-muted)'
+      : 'var(--fg-faint)';
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
@@ -1013,7 +1007,7 @@ export function Roadmap() {
 
       {roadmap.partial && (
         <div role="status" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12, color: 'var(--warning)' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12, color: 'var(--fg-muted)' }}>
             {roadmap.failedSources.length > 0 && (
               <span>일부 원장을 읽지 못했습니다 · {roadmap.failedSources.join(', ')}</span>
             )}
@@ -1324,14 +1318,10 @@ export function Rhythm() {
         ? 'error'
         : 'preview · unsaved';
   const syncColor = rhythmState === 'live' || rhythmState === 'live-empty'
-    ? 'var(--moon-300)'
-    : rhythmState === 'partial'
-      ? 'var(--warning)'
-    : rhythmState === 'loading'
-      ? 'var(--warning)'
-      : rhythmState === 'error'
-        ? 'var(--danger)'
-        : 'var(--fg-faint)';
+    ? 'var(--fg-muted)'
+    : rhythmState === 'error'
+      ? 'var(--danger)'
+      : 'var(--fg-faint)';
 
   const checkIn = React.useCallback(async (ritual) => {
     const ritualId = ritual.id;
@@ -1416,7 +1406,7 @@ export function Rhythm() {
 
       {rhythmState === 'partial' && (
         <div role="alert" style={{ minHeight: 44, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)' }}>
-          <span style={{ flex: 1, fontSize: 12, color: 'var(--warning)' }}>
+          <span style={{ flex: 1, fontSize: 12, color: 'var(--fg-muted)' }}>
             일부 기록만 표시합니다. {rhythmTruncatedSources.includes('routine_checks') ? 'routine_checks가 조회 한도를 초과해 최근 240건을 관측했습니다.' : '리듬 원장의 일부만 관측했습니다.'}
           </span>
           <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
@@ -1483,7 +1473,7 @@ export function Rhythm() {
                         <a href={r.projectHref} onClick={(e) => e.stopPropagation()} style={{ width: 'fit-content', color: 'var(--moon-300)', fontSize: 11.5, textUnderlineOffset: 3 }}>{r.projectName || '연결 프로젝트'}</a>
                       )}
                       {feedback && (
-                        <span aria-live="polite" style={{ fontSize: 11, color: feedback.kind === 'error' ? 'var(--danger)' : feedback.kind === 'preview' ? 'var(--warning)' : 'var(--fg-muted)' }}>
+                        <span aria-live="polite" style={{ fontSize: 11, color: feedback.kind === 'error' ? 'var(--danger)' : 'var(--fg-muted)' }}>
                           {feedback.message}
                         </span>
                       )}

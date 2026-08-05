@@ -6,14 +6,14 @@ import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
 
 export function Badge({ children, tone = 'neutral', variant = 'soft', size = 'sm', numeric = false, style }) {
   const tones = {
-    neutral: { fg: 'var(--moon-200)', bg: 'oklch(0.30 0.008 250 / 0.5)', bd: 'var(--line)' },
-    moon:    { fg: 'var(--moon-100)', bg: 'oklch(0.40 0.008 250 / 0.25)', bd: 'var(--moon-600)' },
-    success: { fg: 'var(--success)', bg: 'var(--success-bg)', bd: 'oklch(0.5 0.08 155 / 0.4)' },
-    warning: { fg: 'var(--warning)', bg: 'var(--warning-bg)', bd: 'oklch(0.5 0.09 85 / 0.4)' },
-    danger:  { fg: 'var(--danger)', bg: 'var(--danger-bg)', bd: 'oklch(0.5 0.1 25 / 0.4)' },
-    info:    { fg: 'var(--info)', bg: 'var(--info-bg)', bd: 'oklch(0.5 0.06 230 / 0.4)' },
-    personal:{ fg: 'var(--personal)', bg: 'var(--personal-bg)', bd: 'oklch(0.5 0.04 200 / 0.45)' },
-    company: { fg: 'var(--company)', bg: 'var(--company-bg)', bd: 'oklch(0.5 0.04 290 / 0.45)' },
+    neutral: { fg: 'var(--moon-200)', bg: 'var(--surface-3)', bd: 'var(--line)' },
+    moon:    { fg: 'var(--moon-100)', bg: 'var(--moon-bg)', bd: 'var(--moon-600)' },
+    success: { fg: 'var(--success)', bg: 'var(--success-bg)', bd: 'var(--success-line)' },
+    warning: { fg: 'var(--warning)', bg: 'var(--warning-bg)', bd: 'var(--warning-line)' },
+    danger:  { fg: 'var(--danger)', bg: 'var(--danger-bg)', bd: 'var(--danger-line)' },
+    info:    { fg: 'var(--info)', bg: 'var(--info-bg)', bd: 'var(--info-line)' },
+    personal:{ fg: 'var(--personal)', bg: 'var(--personal-bg)', bd: 'var(--personal-line)' },
+    company: { fg: 'var(--company)', bg: 'var(--company-bg)', bd: 'var(--company-line)' },
   };
   const t = tones[tone] || tones.neutral;
   const pad = size === 'xs' ? '2px 6px' : size === 'sm' ? '3px 8px' : '5px 10px';
@@ -52,7 +52,7 @@ export function Kbd({ children, style }) {
       minWidth: 18, height: 18, padding: '0 5px',
       fontSize: 10.5, fontWeight: 500,
       color: 'var(--moon-300)',
-      background: 'oklch(0.28 0.008 250 / 0.6)',
+      background: 'var(--surface-2)',
       border: '1px solid var(--line)',
       borderRadius: 4,
       boxShadow: '0 1px 0 0 oklch(0 0 0 / 0.3)',
@@ -158,7 +158,7 @@ export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRig
     danger: {
       color: 'var(--danger)',
       background: 'var(--danger-bg)',
-      border: '1px solid oklch(0.5 0.1 25 / 0.4)',
+      border: '1px solid var(--danger-line)',
     },
   };
   const v = variants[variant];
@@ -196,11 +196,11 @@ export const IconButton = React.forwardRef(function IconButton({ icon, onClick, 
 export function Avatar({ name, size = 24, tone = 'moon' }) {
   const initials = (name || '?').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase();
   const toneMap = {
-    moon:   { bg: 'oklch(0.35 0.008 250)', fg: 'var(--moon-100)' },
+    moon:   { bg: 'var(--moon-bg)', fg: 'var(--moon-100)' },
     personal: { bg: 'var(--personal-bg)', fg: 'var(--personal)' },
     company:  { bg: 'var(--company-bg)', fg: 'var(--company)' },
-    amber:  { bg: 'oklch(0.32 0.06 85 / 0.4)', fg: 'var(--warning)' },
-    green:  { bg: 'oklch(0.32 0.05 155 / 0.4)', fg: 'var(--success)' },
+    amber:  { bg: 'var(--warning-bg)', fg: 'var(--warning)' },
+    green:  { bg: 'var(--success-bg)', fg: 'var(--success)' },
     info:   { bg: 'var(--info-bg)', fg: 'var(--info)' },
     neutral:{ bg: 'var(--surface-3)', fg: 'var(--fg-muted)' },
   };
@@ -220,7 +220,7 @@ export function Avatar({ name, size = 24, tone = 'moon' }) {
 export function Progress({ value = 0, tone = 'moon', height = 4 }) {
   const map = { moon: 'var(--moon-300)', success: 'var(--success)', warning: 'var(--warning)', danger: 'var(--danger)' };
   return (
-    <div style={{ height, background: 'oklch(0.28 0.008 250 / 0.6)', borderRadius: 999, overflow: 'hidden' }}>
+    <div style={{ height, background: 'var(--surface-3)', borderRadius: 999, overflow: 'hidden' }}>
       <div style={{ width: `${value}%`, height: '100%', background: map[tone], borderRadius: 999, transition: 'width var(--dur-enter) var(--ease-hub)' }} />
     </div>
   );
@@ -263,7 +263,7 @@ export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
               <span className="mono" style={{
                 fontSize: 10.5, color: 'var(--fg-faint)',
                 padding: '1px 5px', borderRadius: 4,
-                background: 'oklch(0.28 0.008 250 / 0.5)',
+                background: 'var(--surface-3)',
               }}>{t.count}</span>
             )}
           </button>
@@ -332,13 +332,13 @@ export function Placeholder({ label = 'image', w, h, style }) {
     <div style={{
       position: 'relative',
       width: w, height: h,
-      background: 'repeating-linear-gradient(135deg, oklch(0.22 0.006 250), oklch(0.22 0.006 250) 4px, oklch(0.25 0.007 250) 4px, oklch(0.25 0.007 250) 8px)',
+      background: 'repeating-linear-gradient(135deg, var(--surface-2), var(--surface-2) 4px, var(--surface-3) 4px, var(--surface-3) 8px)',
       border: '1px solid var(--line-soft)',
       borderRadius: 'var(--r-sm)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       ...style,
     }}>
-      <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)', letterSpacing: '0.04em' }}>{label}</span>
+      <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.04em' }}>{label}</span>
     </div>
   );
 }

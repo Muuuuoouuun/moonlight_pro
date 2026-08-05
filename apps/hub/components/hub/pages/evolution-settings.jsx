@@ -237,7 +237,7 @@ export function Evolution({ onNavigate }) {
           Playbooks
         </SectionTitle>
         {lastRun && (
-          <div className="mono" style={{ fontSize: 11, color: 'var(--success)', marginBottom: 8 }}>
+          <div className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', marginBottom: 8 }}>
             queued · {lastRun}
           </div>
         )}
@@ -462,7 +462,7 @@ function KeyRow({ item, last, kind }) {
         <button onClick={copy} title="Copy" style={{
           display: 'inline-flex', alignItems: 'center', gap: 5,
           height: 26, padding: '0 10px',
-          background: copied ? 'var(--success)' : 'var(--surface-2)',
+          background: copied ? 'var(--moon-300)' : 'var(--surface-2)',
           color: copied ? 'var(--bg)' : 'var(--fg-muted)',
           border: '1px solid var(--line-soft)', borderRadius: 6,
           fontSize: 11, transition: 'background .15s, color .15s',

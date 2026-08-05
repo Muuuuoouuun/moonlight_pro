@@ -350,7 +350,7 @@ export function RevenueOverview({ onNavigate }) {
             {hasPipelineValue ? pipelineByStage.map(s => (
               <div key={s.key} title={`${s.label} · ${fmt(s.sum)}`} style={{
                 flex: s.sum,
-                background: STAGE_FILL[s.color],
+                background: STAGE_FILL[s.ramp],
                 opacity: 0.9,
               }} />
             )) : (
@@ -360,7 +360,7 @@ export function RevenueOverview({ onNavigate }) {
           <div style={{ display: 'flex', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
             {pipelineByStage.map(s => (
               <div key={s.key} style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <span aria-hidden style={{ width: 6, height: 6, borderRadius: 999, background: STAGE_FILL[s.color], flexShrink: 0 }} />
+                <span aria-hidden style={{ width: 6, height: 6, borderRadius: 999, background: STAGE_FILL[s.ramp], flexShrink: 0 }} />
                 <span style={{ color: 'var(--fg)' }}>{s.label}</span>
                 <span className="mono" style={{ color: 'var(--fg-faint)' }}>{fmt(s.sum)} · {s.count}</span>
               </div>
@@ -566,7 +566,6 @@ export function Leads({ workspace }) {
   );
   // Clickable column header. Reserves the caret's width even when inactive so sorting never
   // shifts the header layout; active column brightens and shows the direction.
-  const stageTone = { New: 'info', Contact: 'moon', Qualified: 'moon', Customer: 'company', Lost: 'danger' };
   const createLead = () => {
     const id = `local-lead-${Date.now()}`;
     setLocalLeads(prev => [{
@@ -792,7 +791,7 @@ export function Leads({ workspace }) {
             </span>
             <span style={{ fontSize: 12, color: 'var(--fg-muted)', paddingRight: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.source}</span>
             <span style={{ paddingRight: 8, minWidth: 0 }}>
-              <Badge tone={stageTone[l.stage]} size="xs" variant="outline">{l.stage}</Badge>
+              <Badge tone="neutral" size="xs" variant="outline">{l.stage}</Badge>
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span className="mono" style={{ fontSize: 12, color: l.score >= 70 ? 'var(--moon-200)' : 'var(--fg-muted)' }}>{l.score ?? '—'}</span>
@@ -971,7 +970,7 @@ function DealTaskPanel({ deal, onSaved }) {
       {deal?.stage === 'closing' && !isLocal && (
         <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
           {asState === 'done' ? (
-            <span style={{ fontSize: 11.5, color: 'var(--success)' }}>A/S 프로젝트 생성됨 — 프로젝트·기획에서 확인</span>
+            <span style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>A/S 프로젝트 생성됨 — 프로젝트·기획에서 확인</span>
           ) : (
             <>
               <Button variant="outline" size="xs" icon="projects" onClick={createFollowupProject} disabled={asState === 'saving'}>
@@ -1166,7 +1165,7 @@ export function Deals({ workspace, onNavigate }) {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Deals</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             열린 파이프라인 <span className="mono" style={{ color: 'var(--fg)' }}>{fmt(openTotal)}</span> · <span className="mono">{openCount}</span>건
-            {closingTotal > 0 && <> · 클로징 <span className="mono" style={{ color: 'var(--success)' }}>{fmt(closingTotal)}</span></>}
+            {closingTotal > 0 && <> · 클로징 <span className="mono" style={{ color: 'var(--moon-200)' }}>{fmt(closingTotal)}</span></>}
             <SyncBadge state={syncState} />
           </div>
         </div>
@@ -1195,7 +1194,7 @@ export function Deals({ workspace, onNavigate }) {
                 style={{
                   flex: sum || 0.02,
                   minWidth: sum ? 6 : 2,
-                  background: STAGE_FILL[s.color] || 'var(--fg-faint)',
+                  background: STAGE_FILL[s.ramp] || 'var(--fg-faint)',
                   opacity: sum ? 0.9 : 0.25,
                 }}
               />
@@ -1229,10 +1228,10 @@ export function Deals({ workspace, onNavigate }) {
                 border: '1px solid var(--line-soft)',
                 borderRadius: 'var(--r-lg)',
                 display: 'flex', flexDirection: 'column',
-                // Stage heat as a 2px top stripe (§5.2 inset-stripe idiom, rotated to the
-                // column top) — replaces the 6px Dot so the funnel's cold→hot gradient reads
-                // across the whole board and ties each column to its masthead gauge segment.
-                boxShadow: `inset 0 2px 0 0 ${STAGE_LINE[s.color] || 'var(--line-strong)'}`,
+                // Stage heat as a 1px top stripe (§5.2 inset-stripe idiom, rotated to the
+                // column top) so the funnel's cold→hot gradient reads across the board and
+                // ties each column to its masthead gauge segment.
+                boxShadow: `inset 0 1px 0 0 ${STAGE_LINE[s.ramp] || 'var(--line-strong)'}`,
               }}>
               <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
@@ -1303,7 +1302,7 @@ export function Deals({ workspace, onNavigate }) {
                       {(() => {
                         const stat = dealTaskStats.get(d.id);
                         return stat?.total ? (
-                          <span className="mono" style={{ fontSize: 10.5, color: stat.done === stat.total ? 'var(--success)' : 'var(--fg-faint)' }}>
+                          <span className="mono" style={{ fontSize: 10.5, color: stat.done === stat.total ? 'var(--fg-muted)' : 'var(--fg-faint)' }}>
                             ✓{stat.done}/{stat.total}
                           </span>
                         ) : null;
@@ -1933,7 +1932,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
                   <span style={{ minWidth: 0 }}>
                     <span style={{ display: 'block', fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{deal.name}</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>
-                      <Badge tone={stage?.color || 'neutral'} size="xs" variant="outline">{stage?.label || deal.stage}</Badge>
+                      <Badge tone="neutral" size="xs" variant="outline">{stage?.label || deal.stage}</Badge>
                       <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>마감 {deal.close || '미정'}</span>
                     </span>
                   </span>

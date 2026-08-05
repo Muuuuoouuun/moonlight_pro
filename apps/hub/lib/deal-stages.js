@@ -11,15 +11,16 @@
 // (and adding "데모") still needs a migration against the real constraint once Supabase
 // access is available.
 //
-// Colors are a cold→hot heat read along the funnel (existing Dot/Badge tokens only):
-// dim silver -> blue -> silver -> amber -> hot -> won-green.
+// `ramp` is a funnel-position luminance index (0=cold → 5=hot) consumed only by
+// STAGE_FILL / STAGE_LINE below. It is NOT a Badge/Dot tone — stage chips render
+// tone="neutral" per DESIGN.md §5.3 (lifecycle/category never uses semantic color).
 export const DEAL_STAGES = [
-  { key: "potential", label: "잠재 리드", color: "neutral" },
-  { key: "contact", label: "컨택", color: "info" },
-  { key: "consult", label: "상담", color: "moon" },
-  { key: "quote", label: "견적", color: "warning" },
-  { key: "final", label: "최종미팅", color: "danger" },
-  { key: "closing", label: "클로징", color: "success" },
+  { key: "potential", label: "잠재 리드", ramp: 0 },
+  { key: "contact", label: "컨택", ramp: 1 },
+  { key: "consult", label: "상담", ramp: 2 },
+  { key: "quote", label: "견적", ramp: 3 },
+  { key: "final", label: "최종미팅", ramp: 4 },
+  { key: "closing", label: "클로징", ramp: 5 },
 ];
 
 // Raw `deals.stage` DB values (current schema + legacy alias words seen in older rows) ->
@@ -48,28 +49,27 @@ export const LEGACY_DB_STAGE_VALUES = [
   "proposal", "prop", "negotiation", "neg", "won", "lost",
 ];
 
-// Stage tone key -> solid CSS token, for gauge/segment fills (Deals masthead, Daily Brief
+// Ramp index -> solid CSS token, for gauge/segment fills (Deals masthead, Daily Brief
 // PipelineShapeCard, revenue funnel bar). One map so the instruments can't drift apart.
 // DESIGN.md §5.3: chart series must not use success/warning/danger — the funnel reads as a
 // moonstone luminance ramp instead (cold=dim → hot=bright), which stays legible in
-// monochrome and keeps semantic colors reserved for real urgency. Keys are the legacy
-// stage-tone identifiers from DEAL_STAGES[].color; values are funnel-position luminance.
-export const STAGE_FILL = {
-  neutral: "var(--moon-700)",
-  info: "var(--moon-600)",
-  moon: "var(--moon-500)",
-  warning: "var(--moon-400)",
-  danger: "var(--moon-300)",
-  success: "var(--moon-200)",
-};
+// monochrome and keeps semantic colors reserved for real urgency.
+export const STAGE_FILL = [
+  "var(--moon-700)",
+  "var(--moon-600)",
+  "var(--moon-500)",
+  "var(--moon-400)",
+  "var(--moon-300)",
+  "var(--moon-200)",
+];
 
-// Stage tone key -> hairline token for the §5.2 inset-stripe idiom (kanban column top
+// Ramp index -> hairline token for the §5.2 inset-stripe idiom (kanban column top
 // stripes). Same luminance ramp as STAGE_FILL, one step dimmer so stripes stay hairline-quiet.
-export const STAGE_LINE = {
-  neutral: "var(--line-strong)",
-  info: "var(--moon-700)",
-  moon: "var(--moon-600)",
-  warning: "var(--moon-500)",
-  danger: "var(--moon-400)",
-  success: "var(--moon-300)",
-};
+export const STAGE_LINE = [
+  "var(--line-strong)",
+  "var(--moon-700)",
+  "var(--moon-600)",
+  "var(--moon-500)",
+  "var(--moon-400)",
+  "var(--moon-300)",
+];

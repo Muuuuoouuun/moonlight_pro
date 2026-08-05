@@ -511,7 +511,10 @@ test("overview consumes API status and failed sources for partial disclosures", 
 });
 
 test("daily brief names partial state and does not collapse it into mixed or preview", () => {
-  assert.match(dailyBriefSource, /if \(state === ["']partial["']\) return ["']warning["']/);
+  // §5.3 source truth: only error is danger — partial stays neutral in tone, and the
+  // distinction is carried by the label/copy asserted below, never by amber paint.
+  assert.match(dailyBriefSource, /state === ["']error["'] \? ["']danger["'] : ["']neutral["']/);
+  assert.doesNotMatch(dailyBriefSource, /if \(state === ["']partial["']\) return ["']warning["']/);
   assert.match(dailyBriefSource, /if \(state === ["']partial["']\) return ["']partial["']/);
   assert.match(dailyBriefSource, /data\.status === ["']partial["']/);
   assert.match(dailyBriefSource, /일부 운영 기록을 읽지 못했습니다/);

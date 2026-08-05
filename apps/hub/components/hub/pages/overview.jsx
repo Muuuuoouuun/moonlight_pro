@@ -284,7 +284,21 @@ function ActivityChart({ series, days, sources, status }) {
             ))}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap, height: CHART_HEIGHT, borderBottom: '1px solid var(--line)', position: 'relative' }}>
+          <div
+            tabIndex={0}
+            role="group"
+            aria-label="일별 활동 차트 — 좌우 화살표로 날짜 이동"
+            onKeyDown={(e) => {
+              if (!data.length) return;
+              if (e.key === 'ArrowRight') { e.preventDefault(); setHoverIndex((cur) => Math.min((cur == null ? data.length - 1 : cur) + 1, data.length - 1)); }
+              else if (e.key === 'ArrowLeft') { e.preventDefault(); setHoverIndex((cur) => Math.max((cur == null ? data.length - 1 : cur) - 1, 0)); }
+              else if (e.key === 'Home') { e.preventDefault(); setHoverIndex(0); }
+              else if (e.key === 'End') { e.preventDefault(); setHoverIndex(data.length - 1); }
+            }}
+            onFocus={() => setHoverIndex((cur) => (cur == null ? data.length - 1 : cur))}
+            onBlur={() => setHoverIndex(null)}
+            style={{ display: 'flex', alignItems: 'flex-end', gap, height: CHART_HEIGHT, borderBottom: '1px solid var(--line)', position: 'relative' }}
+          >
             {data.map((d, i) => {
               const total = d.work + d.decisions + d.content;
               const dimmed = hoverIndex != null && hoverIndex !== i;
@@ -293,8 +307,7 @@ function ActivityChart({ series, days, sources, status }) {
               return (
                 <div
                   key={d.date}
-                  role="button"
-                  tabIndex={-1}
+                  role="img"
                   aria-label={`${dayLabel(d.date)} · 작업 ${d.work} · 결정 ${d.decisions} · 발행 ${d.content}`}
                   onMouseEnter={() => setHoverIndex(i)}
                   onMouseLeave={() => setHoverIndex((cur) => (cur === i ? null : cur))}

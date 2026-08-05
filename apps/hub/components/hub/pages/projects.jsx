@@ -1357,7 +1357,7 @@ export function Projects({ workspace }) {
         position: 'relative',
         cursor: draggable ? 'grab' : 'pointer',
         opacity: dragging ? 0.4 : 1,
-        boxShadow: dropTarget ? 'inset 0 2px 0 0 var(--moon-300)' : undefined,
+        boxShadow: dropTarget ? 'inset 0 1px 0 0 var(--moon-300)' : undefined,
       }}>
         {draggable && <Iconed name="drag" size={10} style={{ color: 'var(--fg-faint)', flexShrink: 0, marginRight: -4 }} />}
         {/* 글리프 단색·축소 (2026-07-15 spec §5) — 톤은 Badge/Dot에만. */}
@@ -1484,7 +1484,7 @@ export function Projects({ workspace }) {
                         color: 'var(--fg-dim)', fontSize: 11, textAlign: 'left',
                         cursor: 'grab',
                         opacity: fDragging ? 0.4 : 1,
-                        boxShadow: fDropTarget ? 'inset 0 2px 0 0 var(--moon-300)' : undefined,
+                        boxShadow: fDropTarget ? 'inset 0 1px 0 0 var(--moon-300)' : undefined,
                       }}
                     >
                       <Iconed name="drag" size={10} style={{ color: 'var(--fg-faint)', flexShrink: 0 }} />

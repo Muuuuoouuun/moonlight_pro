@@ -181,7 +181,7 @@ export function AgentsChat({ onNavigate }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
                 <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{c.agent}</span>
                 <div style={{ flex: 1 }} />
-                <span className="mono" style={{ fontSize: 10, color: 'var(--fg-faint)' }}>{c.time}</span>
+                <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{c.time}</span>
               </div>
             </button>
           ))}
@@ -192,7 +192,8 @@ export function AgentsChat({ onNavigate }) {
         <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10 }}>
           <Avatar name={persona.name} size={26} tone="moon" />
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>{persona.title}</div>
+            {/* §11: 페이지당 정확히 하나의 h2 페이지 타이틀(20px/500) — 채팅 메인 페인의 페르소나 스트립이 그 자리다. */}
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500, lineHeight: 1.2 }}>{persona.title}</h2>
             <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{persona.name} · {persona.role}</div>
           </div>
           <Button variant={pinned ? 'secondary' : 'outline'} size="sm" icon="link" onClick={() => setPinned(v => !v)}>{pinned ? 'Pinned' : 'Pin to Brief'}</Button>
@@ -404,7 +405,7 @@ export function AgentsCouncil({ onNavigate }) {
               </div>
             </div>
             <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.5, paddingTop: 10, borderTop: '1px solid var(--line-soft)' }}>
-              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)', marginBottom: 5 }}>Recent</div>
+              <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-faint)', marginBottom: 5 }}>Recent</div>
               {a.lastRun
                 ? <>{shortWhen(a.lastRun.ranAt)} · {a.lastRun.summary || `${a.emits} 산출`}</>
                 : (a.status === 'idle' ? '아직 실행 기록 없음' : '실행 대기')}

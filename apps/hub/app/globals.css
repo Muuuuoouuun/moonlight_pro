@@ -24,41 +24,6 @@
   src: url('/fonts/JetBrainsMono-Variable.woff2') format('woff2-variations');
 }
 
-@font-face {
-  font-family: 'MaruBuri';
-  font-weight: 200;
-  font-display: swap;
-  src: url('/fonts/MaruBuri-ExtraLight.woff') format('woff');
-}
-
-@font-face {
-  font-family: 'MaruBuri';
-  font-weight: 300;
-  font-display: swap;
-  src: url('/fonts/MaruBuri-Light.woff') format('woff');
-}
-
-@font-face {
-  font-family: 'MaruBuri';
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/MaruBuri-Regular.woff') format('woff');
-}
-
-@font-face {
-  font-family: 'MaruBuri';
-  font-weight: 600;
-  font-display: swap;
-  src: url('/fonts/MaruBuri-SemiBold.woff') format('woff');
-}
-
-@font-face {
-  font-family: 'MaruBuri';
-  font-weight: 700;
-  font-display: swap;
-  src: url('/fonts/MaruBuri-Bold.woff') format('woff');
-}
-
 /*
  * Hub legacy variables — remapped to the Smoked Command Deck palette.
  *
@@ -74,7 +39,6 @@
  */
 :root {
   color-scheme: dark;
-  --font-display: var(--cm-font-serif);
   --font-body: var(--cm-font-sans);
   --font-mono: var(--cm-font-mono);
   --bg: var(--cm-ink-900);

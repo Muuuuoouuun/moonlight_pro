@@ -188,7 +188,6 @@ function buildRevenueStageSeries(revenue) {
     return {
       key: stage.key,
       label: stage.label,
-      color: stage.color,
       count: stageDeals.length,
       sum: stageDeals.reduce((sum, deal) => sum + (Number(deal.value) || 0), 0),
     };
