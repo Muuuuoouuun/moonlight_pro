@@ -492,10 +492,15 @@ function useDailyBriefLedger(refreshKey) {
   // 캡처/완료 후 좁은 재검증 — 전체 집계(~30콜)가 아니라 tasks lean read(4콜)만 다시
   // 받아 taskToday 슬라이스를 교체한다(re-audit 속도 #1 후반부). 실패는 조용히 무시 —
   // 다음 전체 refresh가 정합을 회복하고, 로컬 낙관 상태는 이미 화면에 반영돼 있다.
+  const taskRefreshRef = React.useRef(0);
   const refreshTasks = React.useCallback(async () => {
+    // 연속 완료 시 늦은 이전 응답이 최신 목록을 덮지 않게 최신 요청만 반영.
+    const requestId = taskRefreshRef.current + 1;
+    taskRefreshRef.current = requestId;
     try {
       const res = await fetch('/api/hub/tasks', { cache: 'no-store' });
       const data = await res.json().catch(() => null);
+      if (taskRefreshRef.current !== requestId) return false;
       if (!res.ok || !data || data.status === 'error') return false;
       const todos = Array.isArray(data.tasks) ? data.tasks : [];
       setState((prev) => ({

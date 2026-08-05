@@ -153,6 +153,9 @@ export function useRevenueLedger() {
             retryTimer = setTimeout(() => { if (active) load(1); }, 1200);
           } else if (!hasServableCache) {
             setSyncState('error');
+          } else {
+            // 캐시를 계속 보여주되 live로 위장하지 않는다 — 재검증 실패는 partial(오래된 데이터).
+            setSyncState('partial');
           }
           return;
         }
@@ -167,7 +170,9 @@ export function useRevenueLedger() {
           companies: Array.isArray(data.companies) ? data.companies : [],
           summary: data.summary || null,
         };
-        const nextState = data.source === 'supabase' ? 'live' : 'preview';
+        const nextState = data.source === 'supabase'
+          ? data.status === 'partial' ? 'partial' : 'live'
+          : 'preview';
         revenueLedgerCache = { at: Date.now(), ledger: nextLedger, syncState: nextState };
         setLedger(nextLedger);
         setSyncState(nextState);
@@ -177,6 +182,8 @@ export function useRevenueLedger() {
           retryTimer = setTimeout(() => { if (active) load(1); }, 1200);
         } else if (!hasServableCache) {
           setSyncState('error');
+        } else {
+          setSyncState('partial');
         }
       }
     }

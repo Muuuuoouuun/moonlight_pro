@@ -313,5 +313,9 @@ export async function recomputeLeadScores({ workspaceId = resolveDefaultWorkspac
     }
   }
 
+  // 쓰기가 전부 실패했는데 persisted:true/ok로 보고하면 무언 실패 — 명명한다.
+  if (changed.length && updated === 0) {
+    return { persisted: false, reason: "score-write-failed", updated: 0, scanned: leads.length };
+  }
   return { persisted: true, reason: "ok", updated, scanned: leads.length };
 }

@@ -276,7 +276,11 @@ async function readExistingMeta(table, id, workspaceId) {
     filters: [["id", eqFilter(id)], ["workspace_id", eqFilter(workspaceId)]],
     limit: 1,
   });
-  const meta = Array.isArray(rows) && rows[0] ? rows[0].meta : null;
+  // read 실패(null)와 "meta 없는 행"({})을 구분한다 — 실패를 {}로 뭉개면 patch가
+  // 기존 meta 전체(snooze_until/value/stage_detail…)를 덮어쓰고 saved로 보고된다
+  // (2026-08-05 재감사 안정성 M: meta-wipe).
+  if (!Array.isArray(rows)) return null;
+  const meta = rows[0] ? rows[0].meta : null;
   return meta && typeof meta === "object" ? meta : {};
 }
 
@@ -326,7 +330,15 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
   if (!workspaceId) return { status: "preview", reason: "missing-workspace" };
 
   // Merge meta against the live row so we never drop sibling keys (brand, lane, campaign…).
-  const mergedMeta = hasMeta ? { ...(await readExistingMeta(table, id, workspaceId)), ...metaPatch } : null;
+  let mergedMeta = null;
+  if (hasMeta) {
+    const existingMeta = await readExistingMeta(table, id, workspaceId);
+    if (existingMeta === null) {
+      // 병합 기준을 못 읽었으면 저장을 중단한다 — 빈 meta 위에 덮어쓰면 무언 데이터 파괴.
+      return { status: "failed", reason: "meta-read-failed", detail: "existing meta unreadable; save aborted to avoid wiping sibling keys" };
+    }
+    mergedMeta = { ...existingMeta, ...metaPatch };
+  }
   const patch = { ...columns, ...(mergedMeta ? { meta: mergedMeta } : {}) };
   if (!Object.keys(patch).length) return { status: "noop" };
 

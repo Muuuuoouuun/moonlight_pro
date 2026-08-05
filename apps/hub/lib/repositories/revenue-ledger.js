@@ -421,9 +421,29 @@ export async function getRevenueLedger() {
   ]);
 
   if (!leadRows || !dealRows || !accountRows || !caseRows) {
-    return { ...emptyLedger(true, workspaceId), source: "preview" };
+    // 코어 read 실패는 error — preview("미구성")로 라벨하면 30초 블립 동안 리드/딜이
+    // "0건이 사실"처럼 렌더되고 첫 화면 KA/집중 슬롯이 조용히 빈다(2026-08-05 재감사 S).
+    const failedSources = [
+      ["leads", leadRows],
+      ["deals", dealRows],
+      ["accounts", accountRows],
+      ["cases", caseRows],
+    ].filter(([, rows]) => !Array.isArray(rows)).map(([key]) => key);
+    return {
+      ...emptyLedger(true, workspaceId),
+      source: "error",
+      error: "revenue-ledger-core-read-failed",
+      failedSources,
+      retryable: true,
+    };
   }
 
+  // 보강 소스(companies/contacts) 실패는 코어를 죽이지 않되 partial로 명명한다 —
+  // live 배지 아래에서 회사명/연락처가 조용히 사라지던 무언 강등 제거.
+  const enrichmentFailedSources = [
+    ["companies", companyRows],
+    ["contacts", contactRows],
+  ].filter(([, rows]) => !Array.isArray(rows)).map(([key]) => key);
   const companyById = new Map((companyRows || []).map(c => [c.id, c]));
   const contactById = new Map((contactRows || []).map(c => [c.id, c]));
 
@@ -445,6 +465,8 @@ export async function getRevenueLedger() {
 
   return {
     source: "supabase",
+    partial: enrichmentFailedSources.length > 0,
+    failedSources: enrichmentFailedSources,
     configured: true,
     workspaceId,
     leads,

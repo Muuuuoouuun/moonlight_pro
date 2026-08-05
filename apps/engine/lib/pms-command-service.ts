@@ -4,7 +4,9 @@ type PersistenceResult = {
   persisted: boolean;
   reason: string;
   detail?: string;
-  rows?: Array<Record<string, unknown>>;
+  record?: Record<string, unknown> | null;
+  id?: string | null;
+  records?: Array<Record<string, unknown>>;
 };
 
 type RowReadResult =
@@ -232,7 +234,7 @@ export async function executePmsCommand(
 
   if (command.filters && command.patch) {
     const persistence = await dependencies.update(command.table, command.filters, command.patch);
-    if (!persistence.persisted) {
+    if (!persistence.persisted && persistence.reason !== "no-matching-row") {
       return {
         status: "error",
         error: persistence.reason,
@@ -240,6 +242,9 @@ export async function executePmsCommand(
       };
     }
 
+    // supabase-rest는 0행 PATCH를 {persisted:false, reason:"no-matching-row", records:[]}로
+    // 반환한다 — 여기서 502로 끊으면 stale-409 재기동/404 분기가 프로덕션에서 죽는다
+    // (2026-08-05 재감사 안정성 M).
     if (Array.isArray(persistence.records)) {
       if (!persistence.records[0]) {
         if (filterValue(command.filters, "updated_at")) {

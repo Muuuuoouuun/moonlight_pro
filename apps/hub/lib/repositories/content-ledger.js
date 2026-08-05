@@ -924,8 +924,16 @@ export async function getContentLedger() {
   ]);
 
   if (!itemRows || !variantRows || !logRows) {
+    // 코어 read 실패 = error — preview로 라벨하면 큐/파이프라인이 "0건이 사실"처럼 렌더된다.
     return {
-      source: "preview",
+      source: "error",
+      error: "content-ledger-core-read-failed",
+      failedSources: [
+        ["items", itemRows],
+        ["variants", variantRows],
+        ["publish_logs", logRows],
+      ].filter(([, rows]) => !Array.isArray(rows)).map(([key]) => key),
+      retryable: true,
       configured: true,
       workspaceId,
       brands: [],
@@ -951,9 +959,17 @@ export async function getContentLedger() {
   const publishLogs = mapPublishLogs(logRows, variantById);
   const assets = Array.isArray(assetRows) ? mapAssets(assetRows, variantById) : [];
   const campaigns = Array.isArray(campaignRows) ? mapCampaigns(campaignRows, brandById) : [];
+  // 옵션 소스(brands/assets/campaigns) 실패는 live 배지 아래 무언 강등이 아니라 partial로 명명.
+  const optionalFailedSources = [
+    ["brands", brandRows],
+    ["assets", assetRows],
+    ["campaigns", campaignRows],
+  ].filter(([, rows]) => !Array.isArray(rows)).map(([key]) => key);
 
   return {
     source: "supabase",
+    partial: optionalFailedSources.length > 0,
+    failedSources: optionalFailedSources,
     configured: true,
     workspaceId,
     brands,

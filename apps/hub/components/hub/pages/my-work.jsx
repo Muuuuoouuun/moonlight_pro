@@ -129,11 +129,13 @@ function buildSectionRows(sectionItems, groupEvents = false) {
 
 function readStoredOption(key, options, fallback) {
   if (typeof window === 'undefined') return fallback;
-  const stored = window.localStorage.getItem(key);
-  return stored && options.some((o) => o.key === stored) ? stored : fallback;
+  try {
+    const stored = window.localStorage.getItem(key);
+    return stored && options.some((o) => o.key === stored) ? stored : fallback;
+  } catch { return fallback; } // Safari private 등 storage 차단 환경
 }
 function writeStoredOption(key, value) {
-  if (typeof window !== 'undefined') window.localStorage.setItem(key, value);
+  try { if (typeof window !== 'undefined') window.localStorage.setItem(key, value); } catch { /* ignore */ }
 }
 
 function recencyValue(item) {
@@ -585,7 +587,10 @@ export function MyWork({ onNavigate }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.status !== 'saved') throw new Error(data.error || `기한 변경 실패 ${res.status}`);
-      reload().finally(clearPatch); // 배경 재검증 — 카드 이동을 붙잡지 않는다
+      // 배경 재검증 — 카드 이동을 붙잡지 않는다. 패치는 reload가 실제로 새 데이터를
+      // 적용했을 때만 걷는다: superseded/실패 reload에서 걷으면 저장된 카드가 옛
+      // 버킷으로 스냅백한다(재감사 안정성 L/M 레이스).
+      reload().then((fresh) => { if (fresh) clearPatch(); }).catch(() => {}); // null = 실패/superseded → 패치 유지
     } catch (error) {
       clearPatch(); // 실패 → 원래 버킷으로 복귀
       setNotice({ tone: 'err', label: error instanceof Error ? error.message : String(error) });

@@ -168,14 +168,15 @@ function useContentLedger() {
         const data = await response.json().catch(() => null);
 
         if (!active || !response.ok || !data || data.status === "error") {
-          if (active) setState((s) => ({ ...s, syncState: "preview" }));
+          // 라이브 read 실패는 error — preview("미구성")로 뭉개면 큐가 0건이 사실처럼 보인다.
+          if (active) setState((s) => ({ ...s, syncState: "error" }));
           return;
         }
 
         if (data.source === "supabase") {
           setState({
             source: data.source,
-            syncState: "live",
+            syncState: data.status === "partial" ? "partial" : "live",
             brands: Array.isArray(data.brands) ? data.brands : [],
             items: Array.isArray(data.items) ? data.items : [],
             variants: Array.isArray(data.variants) ? data.variants : [],
@@ -193,7 +194,7 @@ function useContentLedger() {
           setState((s) => ({ ...s, source: "preview", syncState: "preview", campaigns: [], queue: [] }));
         }
       } catch {
-        if (active) setState((s) => ({ ...s, source: "preview", syncState: "preview", campaigns: [], queue: [] }));
+        if (active) setState((s) => ({ ...s, syncState: "error" }));
       }
     }
 

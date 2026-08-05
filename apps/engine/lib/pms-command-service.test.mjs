@@ -502,7 +502,7 @@ test("reports a stale project update as conflict when no row matches the concurr
     now: "2026-07-17T01:00:00.000Z",
   }, {
     insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
-    update: async () => ({ persisted: true, reason: "ok", records: [] }),
+    update: async () => ({ persisted: false, reason: "no-matching-row", records: [] }),
     fetchRows: async (table, options) => {
       assert.equal(table, "projects");
       assert.deepEqual(options, {
@@ -536,7 +536,7 @@ test("reports a missing concurrency-guarded project update target as not found",
     now: "2026-07-17T01:00:00.000Z",
   }, {
     insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
-    update: async () => ({ persisted: true, reason: "ok", records: [] }),
+    update: async () => ({ persisted: false, reason: "no-matching-row", records: [] }),
     fetchRows: async () => [],
   });
 
@@ -558,7 +558,7 @@ test("reports a guarded project current-row lookup failure as an error", async (
     now: "2026-07-17T01:00:00.000Z",
   }, {
     insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
-    update: async () => ({ persisted: true, reason: "ok", records: [] }),
+    update: async () => ({ persisted: false, reason: "no-matching-row", records: [] }),
     fetchRows: async () => null,
   });
 
@@ -579,7 +579,7 @@ test("reports a missing project update target when no row matches without a conc
     now: "2026-07-17T01:00:00.000Z",
   }, {
     insert: async () => ({ persisted: false, reason: "unexpected-insert" }),
-    update: async () => ({ persisted: true, reason: "ok", records: [] }),
+    update: async () => ({ persisted: false, reason: "no-matching-row", records: [] }),
     fetchRows: async () => {
       throw new Error("unguarded zero-row updates must not perform a follow-up read");
     },
@@ -601,7 +601,7 @@ test("rejects project brand relationships outside the workspace on create and up
     },
     update: async (...args) => {
       writes.push(["update", ...args]);
-      return { persisted: true, reason: "ok", records: [] };
+      return { persisted: false, reason: "no-matching-row", records: [] };
     },
     fetchRows: async (table, options) => {
       assert.deepEqual(options.filters, [
@@ -648,7 +648,7 @@ test("rejects task project relationships outside the workspace on create and upd
     },
     update: async (...args) => {
       writes.push(["update", ...args]);
-      return { persisted: true, reason: "ok", records: [] };
+      return { persisted: false, reason: "no-matching-row", records: [] };
     },
     fetchRows: async (table, options) => {
       assert.equal(table, "projects");
