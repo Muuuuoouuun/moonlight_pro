@@ -420,7 +420,15 @@ export function Calendar({ onNavigate }) {
   }, [fetchDays, calendarCapabilities.canCreate, isReadOnly, calendarData]);
 
   React.useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 60000);
+    // `now`의 소비처는 전부 날짜 granularity(todayIndex·Today 버튼·focus 시드)다 —
+    // 분마다 새 Date로 그리드 전체를 리렌더하지 않고, 날짜가 바뀐 틱에만 상태를 바꾼다
+    // (동일 참조 반환 시 React가 리렌더를 생략, 7차 속도 — daily-brief BriefClock과 같은 클래스).
+    const id = window.setInterval(() => {
+      setNow((prev) => {
+        const next = new Date();
+        return sameDate(prev, next) ? prev : next;
+      });
+    }, 60000);
     return () => window.clearInterval(id);
   }, []);
 
@@ -963,7 +971,7 @@ export function Decisions() {
   );
 }
 
-export function Roadmap() {
+export function Roadmap({ onNavigate }) {
   const searchParams = useSearchParams();
   const selectedProjectId = searchParams.get('project');
   const { roadmap, retry } = useWorkLedger(selectedProjectId);
@@ -1043,13 +1051,20 @@ export function Roadmap() {
           />
         )}
         {roadmap.state === 'live-empty' && (
-          <EmptyState icon="roadmap" title="로드맵 일정이 없습니다" description="기한이 있는 프로젝트나 목표일이 있는 마일스톤을 만들면 4개월 축에 표시됩니다." style={{ minHeight: 220 }} />
+          <EmptyState
+            icon="roadmap"
+            title="로드맵 일정이 없습니다"
+            description="기한이 있는 프로젝트나 목표일이 있는 마일스톤을 만들면 4개월 축에 표시됩니다."
+            action={<Button variant="primary" size="sm" icon="plus" onClick={() => onNavigate?.('dashboard/work/projects?new=project')}>프로젝트 만들기</Button>}
+            style={{ minHeight: 220 }}
+          />
         )}
         {(roadmap.state === 'live' || roadmap.state === 'partial') && items.length === 0 && (
           <EmptyState
             icon="roadmap"
             title={selectedProjectId ? '선택한 프로젝트의 4개월 일정이 없습니다' : '4개월 안에 표시할 일정이 없습니다'}
             description="프로젝트 시작일·마감일 또는 마일스톤 목표일을 확인해 주세요."
+            action={<Button variant="secondary" size="sm" onClick={() => onNavigate?.('dashboard/work/projects')}>프로젝트 열기</Button>}
             style={{ minHeight: 220 }}
           />
         )}

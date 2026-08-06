@@ -141,6 +141,11 @@ Defined in `apps/hub/components/hub/hub-tokens.css` and scoped under `.hub-app`.
   neutral `Personal` / `Company` labels and glyphs; do not introduce new teal or purple identity color.
 - **Status color is never sufficient alone:** pair every colored signal with a label and an icon or
   geometric marker. Never rely on a dot whose meaning is available only from its color.
+- **Value emphasis vs accent:** `--moon-100`~`--moon-300` doubles as the foreground luminance ramp
+  (`--fg` = `--moon-100`). Setting a data value (금액·수치) in `--moon-200` is **luminance emphasis
+  of foreground data, not accent semantics** — it does not mean current/selected and does not
+  classify a category. This is the one sanctioned use of the moon ramp outside §5.2 accent meanings;
+  it applies only to scalar data values, never to labels, badges, or status text.
 
 ### 5.3 Multi-channel state grammar
 
@@ -434,3 +439,4 @@ Build order when adding a new surface:
 | 2026-07-19 | Add semantic state primitives before broad page migration | confirmed | Central ownership prevents each tab from inventing a different color grammar |
 | 2026-07-19 | Apply the first migration to Overview, My Work, Follow-ups, Decisions, Automations, Segments, and Settings | confirmed | Proves the grammar across urgency, certainty, lifecycle, truth, charts, and category labels |
 | 2026-08-05 | 상태 primitive 채택 실측 보정: `TruthBadge`는 `SyncBadge` 래퍼로 전면 적용, `CertaintyBadge`·`LifecycleBadge`는 일부 표면, `AttentionRail`은 미채택(레일은 §8.1 inset 1px 규칙으로 인라인 구현이 현행) | confirmed | 2026-08-05 system-eval — 위 행의 "완료" 선언과 실제 코드가 달랐다. 계약(1px 레일·중립 lifecycle·truth 상태)은 전 표면 준수로 정리했고, primitive 껍데기 교체는 잔여 마이그레이션으로 남긴다 |
+| 2026-08-06 | 금액·수치 데이터 값의 `--moon-200` 착색은 accent 의미가 아니라 포그라운드 명도 램프 활용으로 명문화 (§5.2 "Value emphasis vs accent") | confirmed | 2026-08-06 7차 재감사 — 전 Revenue 표면이 일관되게 쓰는 기존 관행과 §5.2 "accent≠카테고리" 문면의 긴장을 해소. 스칼라 값 한정, 라벨·뱃지·상태 텍스트 금지 |

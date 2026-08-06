@@ -700,9 +700,13 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
       // 삭제 결과 봉투를 소비한다 — 실패(502/failed)를 버리고 닫으면 행이 낙관 제거된 채
       // "삭제됨"으로 믿게 되고 다음 로드에 부활한다(4차 재감사 M — 유일하게 남은 무언 경로).
       const result = await onDelete();
-      if (result && result.ok === false && result.status !== 'local' && result.status !== 'preview') {
+      if (result && result.ok === false && result.status !== 'local') {
+        // preview 삭제도 실패다 — 영속 대기열이 없어 로컬 제거는 다음 로드에 부활한다.
+        // 호출자가 행을 복원하고, 여기서 원인을 명명한다(7차 안정성 — my-work 계약으로 통일).
         setSaveState('error');
-        setSaveFeedback(`삭제 실패 (${result.status || 'error'}) — 항목은 그대로 있습니다. 다시 시도하세요.`);
+        setSaveFeedback(result.status === 'preview'
+          ? 'Supabase 미설정 — 삭제가 저장되지 않습니다. 항목은 그대로 있습니다.'
+          : `삭제 실패 (${result.status || 'error'}) — 항목은 그대로 있습니다. 다시 시도하세요.`);
         return; // 드로어를 열어 두고 원인 표시
       }
       onClose();

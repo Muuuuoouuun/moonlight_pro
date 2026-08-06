@@ -406,6 +406,18 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
               </button>
             )}
           </div>
+        ) : taskToday?.state === 'error' ? (
+          // read 실패 ≠ 미연결 — preview 카피("live가 되면…")로 뭉개면 실패가 "연결 대기"로
+          // 오독되고 실제 할 일이 무음 소실된 것처럼 보인다(7차 안정성 S).
+          <div role="alert">
+            <EmptyState
+              icon="alert"
+              title="할 일을 읽지 못했습니다"
+              description="비어 보여도 실제 할 일이 있을 수 있습니다 — 다시 읽어 주세요."
+              action={<Button variant="secondary" size="sm" onClick={() => onChanged?.()}>다시 읽기</Button>}
+              style={{ minHeight: 150 }}
+            />
+          </div>
         ) : (
           <EmptyState
             icon="check"

@@ -199,10 +199,10 @@ test("row completion is undoable and terminal projects live in a collapsed secti
   assert.match(projectsSource, /import \{ useUndoableAction \} from ["']\.\.\/use-undoable-action["']/);
   assert.match(projectsSource, /action: \{ label: '되돌리기', onClick: \(\) => undoCompleteProject\(project\) \}/);
   assert.match(projectsSource, /scheduleUndoable\(id, async \(\) => \{/);
-  // 6차 재감사: 창 닫힘 후에도 undo 버튼이 남아 no-op이던 것을 self-clear로 교정 —
-  // cancel 실패 분기가 버튼을 걷는 새 계약을 잠근다.
+  // 7차 재감사: 창 닫힘 시 알림 전체 소거(라벨만 남기면 영구 표시) — revenue·daily-brief와
+  // 통일된 계약을 cancel 실패 분기에서 잠근다.
   assert.match(projectsSource, /if \(!cancelUndoable\(project\.id\)\) \{/);
-  assert.match(projectsSource, /cur\?\.key === `complete-\$\{project\.id\}` \? \{ \.\.\.cur, action: null \}/);
+  assert.match(projectsSource, /cur\?\.key === `complete-\$\{project\.id\}` \? null : cur/);
   // Terminal projects never mix into the active groups — they render only in
   // the collapsed 완료·보관 accordion at the bottom (aria-expanded contract).
   assert.match(projectsSource, /brandProjects\.filter\(p => !isTerminalProject\(p\) && !hiddenIds\.has\(p\.id\)\)/);

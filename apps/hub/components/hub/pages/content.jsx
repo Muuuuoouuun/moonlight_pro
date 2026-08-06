@@ -984,24 +984,21 @@ export function Studio({ workspace }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line-soft)' }}>
               <span>Channel</span><span style={{ color: 'var(--fg)' }}>{mode === 'blog' ? 'Web handoff' : 'Instagram handoff'}</span>
             </div>
+            {/* Audience·Schedule은 아직 어느 원장에도 배선돼 있지 않다 — 지어낸 값("2,143
+                subscribers"·"오늘 18:00")을 라이브 Brand 옆에 실데이터처럼 두지 않는다(7차 정체성). */}
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line-soft)' }}>
-              <span>Audience</span><span style={{ color: 'var(--fg)' }}>{mode === 'blog' ? '2,143 subscribers' : '공개'}</span>
+              <span>Audience</span><span style={{ color: 'var(--fg-faint)' }}>— 미연결</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line-soft)' }}>
               <span>Brand</span><span style={{ color: 'var(--fg)' }}>{selectedBrand?.name || 'Workspace'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-              <span>Schedule</span><span style={{ color: 'var(--fg)' }}>오늘 18:00</span>
+              <span>Schedule</span><span style={{ color: 'var(--fg-faint)' }}>— 미연결</span>
             </div>
           </div>
         </div>
-        <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)' }}>
-            <Iconed name="sparkle" size={12} style={{ color: 'var(--moon-300)' }} />
-            <input placeholder={mode === 'blog' ? 'Ask Writer…' : 'Ask Studio — slide copy, layout…'} style={{ flex: 1, background: 'transparent', border: 'none', color: 'var(--fg)', fontSize: 12 }} />
-            <Kbd>⏎</Kbd>
-          </div>
-        </div>
+        {/* "Ask Writer/Studio" 입력은 핸들러가 전혀 없는 死 어포던스였다(⏎ 힌트까지 걸고
+            무반응) — AI 배선이 생기기 전까지 렌더하지 않는다(7차 사용성, §13). */}
       </aside>
     </div>
   );

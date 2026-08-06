@@ -5,7 +5,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Checkbox, EmptyState, SyncBadge, SegmentedControl, EditDrawer, Kbd } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
-import { usePageCreateHotkey } from "../use-crm-keyboard";
 import {
   buildProjectCreatePayload,
   buildProjectDraft,
@@ -246,7 +245,6 @@ export function Projects({ workspace }) {
   const [orderPending, setOrderPending] = React.useState(false);
   const [orderResult, setOrderResult] = React.useState(null); // { tone: 'ok'|'err', label }
   const [projectDraft, setProjectDraft] = React.useState(null);
-  const [projectCreateContext, setProjectCreateContext] = React.useState(null);
   const [projectEditSource, setProjectEditSource] = React.useState(null);
   const [taskDraft, setTaskDraft] = React.useState(null);
   const [taskEditSource, setTaskEditSource] = React.useState(null);
@@ -643,7 +641,6 @@ export function Projects({ workspace }) {
       : (brand === 'all' ? null : currentBrand);
     const areaId = selectProjectAreaId(ledger.areas) || '';
     setOrderResult(null);
-    setProjectCreateContext(contextBrand?.id === 'all' ? null : contextBrand);
     setProjectEditSource(null);
     setProjectDraft(buildProjectDraft({
       contextBrand,
@@ -657,7 +654,6 @@ export function Projects({ workspace }) {
   const openGlobalProjectCreate = React.useCallback(() => {
     const areaId = selectProjectAreaId(ledger.areas) || '';
     setOrderResult(null);
-    setProjectCreateContext(null);
     setProjectEditSource(null);
     setProjectDraft(buildProjectDraft({
       areaId,
@@ -678,7 +674,6 @@ export function Projects({ workspace }) {
     }
     const areaId = selectProjectAreaId(ledger.areas, 'content') || selectProjectAreaId(ledger.areas) || '';
     setOrderResult(null);
-    setProjectCreateContext(contextBrand?.id === 'all' ? null : contextBrand);
     setProjectEditSource(null);
     setProjectDraft({
       ...buildProjectDraft({
@@ -698,7 +693,6 @@ export function Projects({ workspace }) {
   }, [brand, brands, currentBrand, ledger.areas, workspace]);
 
   const editProject = React.useCallback((project) => {
-    setProjectCreateContext(null);
     setProjectEditSource(project);
     setProjectDraft(buildProjectEditDraft(project));
   }, []);
@@ -746,7 +740,7 @@ export function Projects({ workspace }) {
 
   const undoCompleteProject = React.useCallback((project) => {
     if (!cancelUndoable(project.id)) {
-      setOrderResult((cur) => (cur?.key === `complete-${project.id}` ? { ...cur, action: null } : cur));
+      setOrderResult((cur) => (cur?.key === `complete-${project.id}` ? null : cur));
       return; // 창이 이미 닫혔으면 PATCH가 나갔다
     }
     setCompletingIds((s) => { const n = new Set(s); n.delete(project.id); return n; });
@@ -768,8 +762,9 @@ export function Projects({ workspace }) {
     setOpenDetail((cur) => (cur === id ? null : cur));
     setOrderResult({ key: `complete-${id}`, tone: 'ok', label: '프로젝트 완료됨', action: { label: '되돌리기', onClick: () => undoCompleteProject(project) } });
     scheduleUndoable(id, async () => {
-      // 창이 닫히는 순간 되돌리기 버튼을 걷는다 — 눌러도 no-op인 죽은 버튼 방지(6차 재감사).
-      setOrderResult((cur) => (cur?.key === `complete-${id}` ? { ...cur, action: null } : cur));
+      // 창이 닫히면 알림을 통째로 걷는다 — 라벨만 남기면 다음 액션까지 영구 표시된다
+      // (7차 UIUX — revenue·daily-brief의 전체 소거 패턴으로 통일).
+      setOrderResult((cur) => (cur?.key === `complete-${id}` ? null : cur));
       await setProjectStatus(project, 'completed');
       setHiddenIds((s) => { if (!s.has(id)) return s; const n = new Set(s); n.delete(id); return n; });
     });
@@ -783,9 +778,9 @@ export function Projects({ workspace }) {
     });
   }, []);
 
-  // 페이지 레벨 N — 치트시트/버튼의 <Kbd>N</Kbd> 광고와 실제 배선 일치(6차 재감사: 死 힌트).
-  const createTodoHotkey = React.useCallback(() => createTodo(), [createTodo]);
-  usePageCreateHotkey(createTodoHotkey);
+  // 페이지 레벨 N은 아래 뷰 인지 리스너 한 곳이 소유한다(todos → 할 일, 그 외 → 프로젝트).
+  // 18차에 추가했던 무조건 usePageCreateHotkey는 preventDefault로 그 리스너를 영구
+  // 가려 List/Board에서 N이 엉뚱한 To-do 드로어를 열었다(7차 사용성 회귀) — 제거.
 
   const editTodo = React.useCallback((todo) => {
     setTaskEditSource(todo);
@@ -1166,32 +1161,59 @@ export function Projects({ workspace }) {
   }, [loadLedger, taskDraft, taskEditSource]);
 
   // 기존 할 일 삭제 — hub-direct DELETE (엔진 파이프라인엔 삭제 액션이 없다, tasks route 참고).
+  // 낙관 제거 → 3.5초 되돌리기 창 → 창이 닫힌 뒤에만 실제 DELETE(7차 편의 — hard delete의
+  // 안전장치가 confirm뿐이던 격차를 완료와 같은 지연-undo 계약으로). 늦은 실패·preview는
+  // 행 복원 + 원인 명명.
   const deleteTask = React.useCallback(async () => {
     const id = taskEditSource?.id;
     if (!id) return { ok: false, status: 'no-selection' };
-    try {
-      const response = await fetch('/api/hub/tasks', {
-        method: 'DELETE',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (response.ok && ['saved', 'preview'].includes(data.status)) {
-        if (data.status === 'saved') {
-          setTodos(ts => ts.filter(t => t.id !== id)); // 즉시 반영 — 전체 read 대기 없음
+    const removed = todos.find(t => t.id === id) || null;
+    const key = `delete-task-${id}`;
+    setTodos(ts => ts.filter(t => t.id !== id)); // 즉시 반영 — 전체 read 대기 없음
+    setTaskEditSource(null);
+    const restore = () => {
+      if (removed) setTodos(ts => (ts.some(t => t.id === id) ? ts : [removed, ...ts]));
+    };
+    setOrderResult({
+      key,
+      tone: 'ok',
+      label: '할 일 삭제됨',
+      action: {
+        label: '되돌리기',
+        onClick: () => {
+          if (!cancelUndoable(key)) return; // 창이 닫혔으면 DELETE가 나갔다
+          restore();
+          setOrderResult({ tone: 'ok', label: '삭제 취소됨' });
+        },
+      },
+    });
+    scheduleUndoable(key, async () => {
+      setOrderResult((cur) => (cur?.key === key ? null : cur)); // 창 종료 시 전체 소거(7차 UIUX 통일)
+      try {
+        const response = await fetch('/api/hub/tasks', {
+          method: 'DELETE',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ id }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (response.ok && data.status === 'saved') {
           loadLedger(); // 배경 재검증
+          return;
         }
-        setTaskEditSource(null);
-        setOrderResult({ tone: 'ok', label: data.status === 'preview' ? '할 일 삭제 · 백엔드 미구성이라 로컬에서만 지워졌습니다' : '할 일 삭제됨' });
-        return { ok: true, status: data.status };
+        restore();
+        setOrderResult({
+          tone: 'err',
+          label: data.status === 'preview'
+            ? 'Supabase 미설정 — 삭제가 저장되지 않아 할 일을 되살렸습니다.'
+            : data.error || `삭제 실패 ${response.status} — 할 일을 되살렸습니다.`,
+        });
+      } catch (error) {
+        restore();
+        setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
       }
-      setOrderResult({ tone: 'err', label: data.error || `삭제 실패 ${response.status}` });
-      return { ok: false, status: data.status || 'error' };
-    } catch (error) {
-      setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
-      return { ok: false, status: 'error' };
-    }
-  }, [loadLedger, taskEditSource]);
+    });
+    return { ok: true, status: 'deferred' };
+  }, [cancelUndoable, loadLedger, scheduleUndoable, taskEditSource, todos]);
 
   const updateTaskStatus = React.useCallback(async (id, status) => {
     if (taskStatusPendingRef.current.has(id)) return false;
@@ -1540,7 +1562,7 @@ export function Projects({ workspace }) {
           {brands.filter(b => b.key === 'all').map(renderBrandSidebarRow)}
           {brandGroups.map(group => group.items.length === 0 ? null : (
             <div key={group.key}>
-              <div style={{ padding: '10px 10px 4px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>
+              <div style={{ padding: '10px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>
                 {group.label}
               </div>
               {group.folders.map(folder => {
@@ -1828,7 +1850,7 @@ export function Projects({ workspace }) {
                                     aria-expanded={isOpen}
                                     onClick={() => toggleExpand(p.id)}
                                   >
-                                  <span style={{ display: 'inline-block', transition: 'transform .15s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', fontSize: 10 }}>▶</span>
+                                  <span style={{ display: 'inline-block', transition: 'transform .15s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', fontSize: 10.5 }}>▶</span>
                                   </button>
                                   {/* 하위 아이템 체크박스와 같은 의미(완료)로 통일 — 선택은 행
                                       클릭이 담당한다. 체크 → 되돌리기 창과 함께 리스트에서 빠지고

@@ -563,6 +563,14 @@ export function Leads({ workspace }) {
   const [leadEdits, setLeadEdits] = React.useState({}); // { [id]: patch } — overlays any lead (local or ledger)
   const [deletedLeadIds, setDeletedLeadIds] = React.useState(() => new Set()); // hide removed ledger rows
   const [editLeadId, setEditLeadId] = React.useState(null);
+  // 리드 삭제 지연-undo(7차 편의) — 창 종료 후 실제 DELETE, 실패 시 복원 알림.
+  const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
+  const [deleteNotice, setDeleteNotice] = React.useState(null); // { key, tone, label, undo }
+  React.useEffect(() => {
+    if (!deleteNotice || deleteNotice.undo) return undefined; // undo 창 알림은 창 종료 콜백이 걷는다
+    const t = setTimeout(() => setDeleteNotice(null), 8000);
+    return () => clearTimeout(t);
+  }, [deleteNotice]);
   // Scope the merged ledger to the active workspace (pass-through when unscoped). The
   // The ledger hook only exposes API-backed rows — scoping never mixes sources. Drawer
   // edits overlay onto whichever row (local or ledger) they key to; deletes drop the row.
@@ -639,8 +647,9 @@ export function Leads({ workspace }) {
     return r;
   };
 
-  // Delete: drop the row locally (optimistic) and best-effort remove it from the ledger.
-  // Unsaved local rows (no DB id) skip the network call entirely.
+  // Delete: 낙관 tombstone → 3.5초 되돌리기 창 → 창이 닫힌 뒤에만 실제 DELETE.
+  // hard delete의 안전장치가 confirm 하나뿐이던 격차를 완료·기록과 같은 지연-undo
+  // 계약으로 메운다(7차 편의 — 고빈도 엔티티부터). 미저장 로컬 행은 네트워크 생략.
   const deleteLead = async () => {
     if (!editLeadId) return { ok: false };
     const id = editLeadId;
@@ -648,12 +657,34 @@ export function Leads({ workspace }) {
     setLocalLeads(prev => prev.filter(l => l.id !== id));
     setDeletedLeadIds(prev => new Set(prev).add(id));
     if (isLocal) return { ok: true, status: 'local' };
-    const r = await saveRevenueRecord('lead', 'delete', { id });
-    if (!r.ok && r.status !== 'preview') {
-      // 실패한 삭제는 행을 복원한다 — 낙관 제거된 채 두면 다음 로드에 부활(4차 재감사 M).
-      setDeletedLeadIds(prev => { const n = new Set(prev); n.delete(id); return n; });
-    }
-    return r;
+    const key = `delete-lead-${id}`;
+    setDeleteNotice({
+      key,
+      tone: 'ok',
+      label: '리드 삭제됨',
+      undo: () => {
+        if (cancelUndoable(key)) setDeletedLeadIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+        setDeleteNotice(null);
+      },
+    });
+    scheduleUndoable(key, () => {
+      setDeleteNotice(cur => (cur?.key === key ? null : cur)); // 창 종료 시 전체 소거(7차 UIUX 통일)
+      saveRevenueRecord('lead', 'delete', { id }).then(r => {
+        if (!r.ok) {
+          // 늦은 실패·preview: 행 복원 + 원인 명명(무언 소실 금지).
+          setDeletedLeadIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+          setDeleteNotice({
+            key: `${key}-fail`,
+            tone: 'err',
+            label: r.status === 'preview'
+              ? 'Supabase 미설정 — 삭제가 저장되지 않아 리드를 되살렸습니다.'
+              : `삭제 실패 (${r.status}) — 리드를 되살렸습니다.`,
+            undo: null,
+          });
+        }
+      });
+    });
+    return { ok: true, status: 'deferred' };
   };
 
   // Deep-link: ?lead=<id> opens that lead's EditDrawer once the ledger has loaded and the
@@ -721,6 +752,12 @@ export function Leads({ workspace }) {
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Leads</h2>
+          {deleteNotice && (
+            <div role={deleteNotice.tone === 'err' ? 'alert' : 'status'} aria-live="polite" style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: deleteNotice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)' }}>
+              <span>{deleteNotice.label}</span>
+              {deleteNotice.undo && <Button variant="ghost" size="xs" onClick={deleteNotice.undo}>되돌리기</Button>}
+            </div>
+          )}
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {LEADS.length} leads · {LEADS.filter(l => l.type === 'personal').length} personal · {LEADS.filter(l => l.type === 'company').length} company
             <SyncBadge state={syncState} />
@@ -1204,8 +1241,8 @@ export function Deals({ workspace, onNavigate }) {
     setDeals(ds => ds.filter(d => d.id !== id));
     if (isLocal) return { ok: true, status: 'local' };
     const r = await saveRevenueRecord('deal', 'delete', { id });
-    if (!r.ok && r.status !== 'preview' && removed) {
-      setDeals(ds => (ds.some(d => d.id === id) ? ds : [removed, ...ds]));
+    if (!r.ok && removed) {
+      setDeals(ds => (ds.some(d => d.id === id) ? ds : [removed, ...ds])); // preview 포함 복원(7차)
     }
     return r;
   };
@@ -1565,8 +1602,8 @@ export function Cases() {
     setDeletedCaseIds(prev => new Set(prev).add(id));
     if (isLocal) return { ok: true, status: 'local' };
     const r = await saveRevenueRecord('case', 'delete', { id });
-    if (!r.ok && r.status !== 'preview') {
-      setDeletedCaseIds(prev => { const n = new Set(prev); n.delete(id); return n; }); // 실패 복원
+    if (!r.ok) {
+      setDeletedCaseIds(prev => { const n = new Set(prev); n.delete(id); return n; }); // 실패·preview 복원(7차)
     }
     return r;
   };
@@ -1913,19 +1950,19 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
             </div>
             <div style={{ display: 'flex', gap: 18, marginTop: 10 }}>
               <div>
-                <div style={{ fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Deals</div>
+                <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Deals</div>
                 <div className="mono" style={{ fontSize: 13, marginTop: 3 }}>{account.deals}</div>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Value</div>
+                <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Value</div>
                 <div className="mono" style={{ fontSize: 13, marginTop: 3, color: 'var(--moon-200)' }}>{fmt(account.value)}</div>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>MRR</div>
+                <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>MRR</div>
                 <div className="mono" style={{ fontSize: 13, marginTop: 3 }}>{d.mrr ? fmt(d.mrr) : '—'}</div>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Last contact</div>
+                <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Last contact</div>
                 <div className="mono" style={{ fontSize: 12, marginTop: 3, color: 'var(--fg-muted)' }}>{account.last} · {account.lastAt}</div>
               </div>
             </div>
@@ -2561,11 +2598,11 @@ export function Accounts({ workspace, onNavigate }) {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, paddingTop: 10, borderTop: '1px solid var(--line-soft)' }}>
                   <div>
-                    <div style={{ fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Value</div>
+                    <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Value</div>
                     <div className="mono" style={{ fontSize: 13, color: 'var(--fg)', marginTop: 3 }}>{fmt(a.value)}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Deals · Last</div>
+                    <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Deals · Last</div>
                     <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 3 }}>
                       {a.deals} · <span className="mono">{a.last}</span>
                     </div>

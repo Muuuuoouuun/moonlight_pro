@@ -11,36 +11,18 @@ import React from 'react';
 import { Iconed } from "../hub-icons";
 import { Badge, Button, Card, Dot, EmptyState, Input, SyncBadge, SegmentedControl } from "../hub-primitives";
 import { filterLeadsByWorkspace, getWorkspace } from "../workspace-map";
+import { useRevenueLedger } from "./revenue";
 import { clearExpandedSegments, sortSegmentsByPriority, toggleExpandedSegment } from "./segments-state.mjs";
 
-// Same ledger endpoint the Revenue pages use; local copy so this page stays
-// independent of revenue.jsx internals.
+// 로컬 fetch 복제 제거(7차 속도) — Revenue 표면들이 데운 모듈 SWR 캐시를 그대로 재사용해
+// 탭 진입마다 7콜 원장을 다시 받지 않는다(no-store·재시도·error 분류도 훅이 소유).
 function useLeadsLedger() {
-  const [state, setState] = React.useState({ syncState: 'loading', source: 'preview', leads: [] });
-  React.useEffect(() => {
-    let cancelled = false;
-    fetch('/api/hub/revenue')
-      .then((r) => {
-        // 읽기 실패는 error — preview로 오독하면 세그먼트 0건이 "리드 없음"으로 보인다(§5.3).
-        if (!r.ok) throw new Error(`revenue ${r.status}`);
-        return r.json();
-      })
-      .then((data) => {
-        if (cancelled) return;
-        const live = data?.source === 'supabase';
-        setState({
-          syncState: live ? 'live' : 'preview',
-          source: live ? 'supabase' : 'preview',
-          leads: Array.isArray(data?.leads) ? data.leads : [],
-        });
-      })
-      .catch(() => {
-        // error를 source:'preview'로 두면 빈 상태가 "연결 후 자동 그룹핑" 카피로 위장된다.
-        if (!cancelled) setState({ syncState: 'error', source: 'error', leads: [] });
-      });
-    return () => { cancelled = true; };
-  }, []);
-  return state;
+  const { ledger, syncState } = useRevenueLedger();
+  return {
+    syncState,
+    source: syncState === 'error' ? 'error' : ledger?.source || 'preview',
+    leads: Array.isArray(ledger?.leads) ? ledger.leads : [],
+  };
 }
 
 const DIMENSIONS = [
@@ -177,14 +159,14 @@ export function Segments({ workspace, onNavigate }) {
                 </div>
                 <div style={{ display: 'flex', gap: 14, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--line-soft)' }}>
                   <div>
-                    <div style={{ fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Avg score</div>
+                    <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Avg score</div>
                     <div className="mono" style={{ fontSize: 12.5, marginTop: 3, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                       <Dot tone="neutral" />
                       {seg.avgScore || '—'}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 10, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Qualified</div>
+                    <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Qualified</div>
                     <div className="mono" style={{ fontSize: 12.5, marginTop: 3 }}>{seg.qualified}</div>
                   </div>
                 </div>

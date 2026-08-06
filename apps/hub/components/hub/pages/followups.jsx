@@ -53,8 +53,18 @@ const LANE_LABEL = { lead: "리드", deal: "딜", event: "일정" };
 const LANE_TONE = { lead: "neutral", deal: "neutral", event: "neutral" };
 const BUCKET_STRIPE = { overdue: "var(--danger)" };
 
+// 모듈 스코프 SWR(7차 속도): 코어 데일리 표면인데 탭 복귀마다 스켈레톤 + 원장 재조회를
+// 반복하던 유일한 예외였다 — 5분 내 캐시를 즉시 서빙하고 항상 배경 재검증한다
+// (revenue/daily-brief/attention/projects와 같은 serve-then-revalidate 계약).
+// 재검증 실패는 기존대로 error 명명 — 오래된 데이터를 live로 위장하지 않는다.
+const FOLLOWUPS_CACHE_SERVABLE_MS = 5 * 60 * 1000;
+let followupsCache = null; // { at, state: { syncState, items, summary } }
+
 function useFollowups() {
-  const [state, setState] = React.useState({ syncState: "loading", items: [], summary: {} });
+  const cached = followupsCache && Date.now() - followupsCache.at < FOLLOWUPS_CACHE_SERVABLE_MS
+    ? followupsCache.state
+    : null;
+  const [state, setState] = React.useState(cached || { syncState: "loading", items: [], summary: {} });
   // 새로고침·기록 후 reload가 겹치면 늦게 온 이전 응답이 최신 목록을 덮을 수 있다 —
   // 요청 id로 최신 요청만 반영한다(re-audit S13).
   const requestRef = React.useRef(0);
@@ -63,7 +73,9 @@ function useFollowups() {
     const requestId = requestRef.current + 1;
     requestRef.current = requestId;
     const isCurrent = () => requestRef.current === requestId;
-    setState((s) => ({ ...s, syncState: "loading" }));
+    // 캐시 서빙 중에는 로딩 스켈레톤으로 갈아치우지 않는다 — 조용한 재검증.
+    const servable = followupsCache && Date.now() - followupsCache.at < FOLLOWUPS_CACHE_SERVABLE_MS;
+    if (!servable) setState((s) => ({ ...s, syncState: "loading" }));
     try {
       const r = await fetch("/api/hub/followups", { cache: "no-store" });
       if (!isCurrent()) return;
@@ -73,12 +85,14 @@ function useFollowups() {
         setState((s) => ({ ...s, syncState: "error" }));
         return;
       }
-      setState({
+      const next = {
         // partial = 일부 소스 read 실패 — live로 뭉개지 않고 배지로 표시한다(§5.3).
         syncState: d.status === "live" ? "live" : d.status === "partial" ? "partial" : "preview",
         items: Array.isArray(d.items) ? d.items : [],
         summary: d.summary || {},
-      });
+      };
+      followupsCache = { at: Date.now(), state: next };
+      setState(next);
     } catch {
       if (isCurrent()) setState((s) => ({ ...s, syncState: "error" }));
     }
@@ -439,8 +453,9 @@ export function Followups({ onNavigate }) {
     setLogDraft(null);
     setNotice({ key, tone: "ok", label: `기록됨 · ${item.name}`, action: { label: "되돌리기", onClick: () => undoLog(item) } });
     scheduleUndoable(key, () => {
-      // 창이 닫히는 순간 되돌리기 버튼을 걷는다 — 눌러도 no-op인 죽은 버튼 방지(재감사 M).
-      setNotice((cur) => (cur?.key === key ? { ...cur, action: null } : cur));
+      // 창이 닫히면 알림을 통째로 걷는다 — 라벨만 남기면 "기록됨"이 다음 액션까지
+      // 영구 표시된다(7차 UIUX — revenue·daily-brief의 전체 소거 패턴으로 통일).
+      setNotice((cur) => (cur?.key === key ? null : cur));
       persistLog(item, action, label, fields);
     });
   };
@@ -448,7 +463,7 @@ export function Followups({ onNavigate }) {
   const undoLog = (item) => {
     const key = `log-${item.id}`;
     if (!cancelUndoable(key)) {
-      setNotice((cur) => (cur?.key === key ? { ...cur, action: null } : cur));
+      setNotice((cur) => (cur?.key === key ? null : cur));
       return; // 창이 닫혔으면 이미 POST됐다
     }
     setLogged((m) => { const n = { ...m }; delete n[item.id]; return n; });

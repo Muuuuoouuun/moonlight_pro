@@ -566,8 +566,9 @@ export function MyWork({ onNavigate }) {
     setNotice({ key: `complete-${id}`, tone: 'ok', label: '할 일 완료됨', action: { label: '되돌리기', onClick: () => undoComplete(item) } });
 
     scheduleUndoable(id, () => {
-      // 창이 닫히는 순간 되돌리기 버튼을 걷는다 — 눌러도 no-op인 죽은 버튼 방지(4차 재감사 S).
-      setNotice((cur) => (cur?.key === `complete-${id}` ? { ...cur, action: null } : cur));
+      // 창이 닫히면 알림을 통째로 걷는다 — 버튼만 지우면 "완료됨" 라벨이 다음 액션까지
+      // 영구 표시된다(7차 UIUX — revenue 활동 삭제·daily-brief 보류의 전체 소거 패턴으로 통일).
+      setNotice((cur) => (cur?.key === `complete-${id}` ? null : cur));
       persistComplete(item);
     }, UNDO_WINDOW_MS);
   };
@@ -771,38 +772,56 @@ export function MyWork({ onNavigate }) {
     }
   };
 
-  // 낙관적 tombstone(hiddenIds) + 실패 시 복원 — deleteRitual(work.jsx)과 같은 계약.
+  // 낙관 tombstone → 3.5초 되돌리기 창 → 창이 닫힌 뒤에만 실제 DELETE(7차 편의 —
+  // hard delete의 안전장치가 confirm뿐이던 격차를 완료와 같은 지연-undo 계약으로).
+  // 늦은 실패·preview는 행 복원 + 원인 명명(Phase 0 taxonomy).
   const deleteTaskDetail = async () => {
     if (!taskDraft?.id) return { ok: false, status: 'no-selection' };
-    const rowId = `task-${taskDraft.id}`;
+    const taskId = taskDraft.id;
+    const rowId = `task-${taskId}`;
+    const key = `delete-${taskId}`;
     setHiddenIds((prev) => new Set(prev).add(rowId));
-    try {
-      const res = await fetch('/api/hub/tasks', {
-        method: 'DELETE',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: taskDraft.id }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.status === 'saved') {
-        setNotice({ tone: 'ok', label: '할 일 삭제됨' });
-        reload(); // 배경 재검증 — 영수증을 붙잡지 않는다
-        return { ok: true, status: 'saved' };
-      }
-      // preview(백엔드 미구성)는 "저장 대기"가 아니다 — 대기열이 없어 영영 지워지지 않는다.
-      // 행을 복귀시키고 사실대로 말한다(Phase 0 taxonomy).
-      setHiddenIds((prev) => { const next = new Set(prev); next.delete(rowId); return next; });
-      setNotice({
-        tone: 'err',
-        label: data.status === 'preview'
-          ? 'Supabase 미설정 — 삭제가 저장되지 않았습니다.'
-          : data.error || `삭제 실패 ${res.status}`,
-      });
-      return { ok: false, status: data.status || 'error' };
-    } catch (error) {
-      setHiddenIds((prev) => { const next = new Set(prev); next.delete(rowId); return next; });
-      setNotice({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
-      return { ok: false, status: 'error' };
-    }
+    setNotice({
+      key,
+      tone: 'ok',
+      label: '할 일 삭제됨',
+      action: {
+        label: '되돌리기',
+        onClick: () => {
+          if (!cancelUndoable(key)) return; // 창이 닫혔으면 DELETE가 나갔다
+          setHiddenIds((prev) => { const next = new Set(prev); next.delete(rowId); return next; });
+          setNotice({ tone: 'ok', label: '삭제 취소됨' });
+        },
+      },
+    });
+    scheduleUndoable(key, () => {
+      setNotice((cur) => (cur?.key === key ? null : cur)); // 창 종료 시 전체 소거(7차 UIUX 통일)
+      (async () => {
+        try {
+          const res = await fetch('/api/hub/tasks', {
+            method: 'DELETE',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ id: taskId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.status === 'saved') {
+            reload(); // 배경 재검증 — 영수증을 붙잡지 않는다
+            return;
+          }
+          setHiddenIds((prev) => { const next = new Set(prev); next.delete(rowId); return next; });
+          setNotice({
+            tone: 'err',
+            label: data.status === 'preview'
+              ? 'Supabase 미설정 — 삭제가 저장되지 않아 할 일을 되살렸습니다.'
+              : data.error || `삭제 실패 ${res.status} — 할 일을 되살렸습니다.`,
+          });
+        } catch (error) {
+          setHiddenIds((prev) => { const next = new Set(prev); next.delete(rowId); return next; });
+          setNotice({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+        }
+      })();
+    });
+    return { ok: true, status: 'deferred' };
   };
 
   // Page-level N focuses quick-add (list surface create contract, §8.1); / focuses search

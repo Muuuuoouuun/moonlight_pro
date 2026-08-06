@@ -45,7 +45,6 @@ export function AgentsChat({ onNavigate }) {
   const [agentKey, setAgentKey] = React.useState(DEFAULT_PERSONA_KEY);
   const [thread, setThread] = React.useState([]);
   const [conversations, setConversations] = React.useState([]);
-  const [pinned, setPinned] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const busyRef = React.useRef(false);
   const persona = CHAT_PERSONAS[agentKey] || CHAT_PERSONAS[DEFAULT_PERSONA_KEY];
@@ -196,7 +195,8 @@ export function AgentsChat({ onNavigate }) {
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500, lineHeight: 1.2 }}>{persona.title}</h2>
             <div style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{persona.name} · {persona.role}</div>
           </div>
-          <Button variant={pinned ? 'secondary' : 'outline'} size="sm" icon="link" onClick={() => setPinned(v => !v)}>{pinned ? 'Pinned' : 'Pin to Brief'}</Button>
+          {/* "Pin to Brief"는 로컬 state만 뒤집고 "Pinned" 영수증을 내던 가짜 크로스-표면
+              약속이었다(7차 정체성) — Daily Brief 배선이 생기기 전까지 렌더하지 않는다. */}
         </div>
 
         <div className="scroll-y" style={{ flex: 1, padding: '20px 20px 10px' }}>
@@ -397,10 +397,11 @@ export function AgentsCouncil({ onNavigate }) {
             onClick={() => onNavigate?.(`dashboard/agents/chat?agent=${a.id}`)}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.(`dashboard/agents/chat?agent=${a.id}`); } }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              {/* §4/§13: 컬러 라디얼 그라디언트·glow 금지 — 단색 서피스 + 헤어라인으로 교체(7차 디자인) */}
               <div style={{
                 width: 36, height: 36, borderRadius: 999,
-                background: 'radial-gradient(circle at 35% 30%, var(--moon-200), var(--moon-500) 60%, var(--moon-700))',
-                boxShadow: '0 0 10px color-mix(in oklch, var(--moon-300) 20%, transparent)',
+                background: 'var(--surface-3)',
+                border: '1px solid var(--line)',
                 flexShrink: 0,
               }} />
               <div style={{ minWidth: 0, flex: 1 }}>
@@ -608,9 +609,8 @@ export function AgentsOrders({ onNavigate }) {
                     <Button variant="primary" size="xs" onClick={() => decide(o.id, 'approved')}>승인</Button>
                     <Button variant="ghost" size="xs" onClick={() => decide(o.id, 'dismissed')}>보류</Button>
                   </>
-                ) : (
-                  <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(`dashboard/agents/chat`)}>Open</Button>
-                )}
+                ) : null /* 결정 끝난 행의 "Open"은 ?order= 제거 후 맥락 없는 빈 채팅에
+                  착지하는 死 어포던스였다(7차 사용성) — 행 자체가 기록이라 액션 불필요 */}
               </div>
             </div>
             {/* AI-drafted message preview — operator reads it before the 1-click approve. No auto-send.

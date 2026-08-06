@@ -188,7 +188,7 @@ const PAGE_MAP = {
   'dashboard/work/calendar': (n) => <Calendar onNavigate={n} />,
   'dashboard/work/projects': () => <Projects />,
   'dashboard/work/decisions': () => <Decisions />,
-  'dashboard/work/roadmap': () => <Roadmap />,
+  'dashboard/work/roadmap': (n) => <Roadmap onNavigate={n} />,
   'dashboard/work/rhythm': () => <Rhythm />,
   'dashboard/content/studio': () => <Studio />,
   'dashboard/content/queue': () => <Queue />,
