@@ -14,7 +14,7 @@ import {
 } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
-import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel } from "./revenue";
+import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel, SortHead } from "./revenue";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
 
 // "₩1.2M"/"₩900K"/"—" → 정렬용 숫자 (DESIGN.md §8.1: 금액은 표시 문자열을 파싱해 정렬)
@@ -737,12 +737,6 @@ export function Customers({ onNavigate }) {
 
   const openRow = sorted.find(r => r.key === openKey) || allRows.find(r => r.key === openKey) || null;
 
-  const caret = (key) => (
-    <span className="mono" style={{ display: "inline-block", width: 12, fontSize: 10.5, color: "var(--fg-dim)" }}>
-      {sort.key === key ? (sort.dir === "asc" ? "▲" : "▼") : ""}
-    </span>
-  );
-
   const gridCols = "minmax(0,2.1fr) 0.9fr 0.9fr 1.3fr 0.9fr";
 
   return (
@@ -774,11 +768,12 @@ export function Customers({ onNavigate }) {
           background: "var(--surface-2)", borderBottom: "1px solid var(--line)",
           fontSize: 10.5, fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--fg-faint)",
         }}>
-          <button onClick={() => cycleSort("name")} style={{ all: "unset", cursor: "pointer", textAlign: "left" }}>고객 · 담당자 {caret("name")}</button>
-          <button onClick={() => cycleSort("stage")} style={{ all: "unset", cursor: "pointer" }}>단계 {caret("stage")}</button>
-          <button onClick={() => cycleSort("health")} style={{ all: "unset", cursor: "pointer" }}>건강도 {caret("health")}</button>
+          {/* 인라인 정렬 헤더 3중 복제 제거(6차 사용성 S) — revenue의 SortHead 공유 (§8.1 primitives first) */}
+          <SortHead k="name" sort={sort} onToggle={cycleSort}>고객 · 담당자</SortHead>
+          <SortHead k="stage" sort={sort} onToggle={cycleSort}>단계</SortHead>
+          <SortHead k="health" sort={sort} onToggle={cycleSort}>건강도</SortHead>
           <span>다음 액션</span>
-          <button onClick={() => cycleSort("value")} style={{ all: "unset", cursor: "pointer", textAlign: "right" }}>금액 {caret("value")}</button>
+          <SortHead k="value" sort={sort} onToggle={cycleSort} align="right">금액</SortHead>
         </div>
 
         {sorted.length === 0 && (

@@ -647,11 +647,6 @@ export function Studio({ workspace }) {
             onClick={() => saveDraft("manual")}
             style={{ color: saveState === 'error' ? 'var(--danger)' : 'var(--fg-muted)' }}
           />
-          <IconButton
-            icon="eye"
-            tooltip="Preview"
-            onClick={() => setExtraSuggestions(s => [{ tone: 'neutral', text: 'Preview refreshed in the editor.' }, ...s])}
-          />
           <Button
             variant="secondary"
             size="sm"
@@ -723,10 +718,15 @@ export function Studio({ workspace }) {
             <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', gap: 8, overflowX: 'auto', flexShrink: 0 }}>
               {slides.map((s, i) => (
                 <div key={s.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`슬라이드 ${i + 1} 선택`}
+                  aria-pressed={activeSlide === i}
                   draggable onDragStart={() => setDrag(i)}
                   onDragOver={e => e.preventDefault()}
                   onDrop={() => drag !== null && moveSlide(drag, i)}
                   onClick={() => setActiveSlide(i)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveSlide(i); } }}
                   style={{
                     width: 72, height: 72, flexShrink: 0, position: 'relative', cursor: 'grab',
                     borderRadius: 8, background: s.bg,
@@ -799,7 +799,7 @@ export function Studio({ workspace }) {
                     icon="upload"
                     onClick={() => {
                       addSlide();
-                      setExtraSuggestions(s => [{ tone: 'neutral', text: 'Photo placeholder slide added.' }, ...s]);
+                      setExtraSuggestions(s => [{ tone: 'neutral', text: '빈 슬라이드를 추가했습니다 — 사진 업로드는 아직 미배선입니다.' }, ...s]);
                     }}
                   >
                     Photo

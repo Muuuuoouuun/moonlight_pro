@@ -839,6 +839,8 @@ function ApprovalQueueCard({ onNavigate }) {
   const [orders, setOrders] = React.useState([]);
   const [state, setState] = React.useState('loading');
   const [busyId, setBusyId] = React.useState(null);
+  const [dismissNotice, setDismissNotice] = React.useState(null);
+  const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
   const [actionError, setActionError] = React.useState(null);
   const [approved, setApproved] = React.useState({}); // id → true once approved (reveals execute row)
   const [copiedId, setCopiedId] = React.useState(null);
@@ -901,7 +903,27 @@ function ApprovalQueueCard({ onNavigate }) {
   // proposed → approved reveals the execute row; execute logs the realized outcome and
   // closes the outcome-attribution loop. dismiss drops it.
   const approve = async (id) => { if (await post(id, { status: 'approved' })) setApproved((m) => ({ ...m, [id]: true })); };
-  const dismiss = async (id) => { if (await post(id, { status: 'dismissed' })) setOrders((prev) => prev.filter((o) => o.id !== id)); };
+  // 보류는 3.5초 지연 실행 + 되돌리기 — 1클릭 영구 제거였던 유일한 무안전망 액션(6차 재감사).
+  const dismiss = (id) => {
+    const removed = orders.find((o) => o.id === id) || null;
+    setOrders((prev) => prev.filter((o) => o.id !== id));
+    const key = `dismiss-${id}`;
+    scheduleUndoable(key, () => {
+      setActionError((cur) => cur); // no-op — 상태 유지
+      setDismissNotice((cur) => (cur?.key === key ? null : cur));
+      post(id, { status: 'dismissed' }).then((ok) => {
+        if (!ok && removed) setOrders((prev) => (prev.some((o) => o.id === id) ? prev : [removed, ...prev]));
+      });
+    });
+    setDismissNotice({
+      key,
+      label: '제안 보류됨',
+      undo: () => {
+        if (cancelUndoable(key) && removed) setOrders((prev) => (prev.some((o) => o.id === id) ? prev : [removed, ...prev]));
+        setDismissNotice(null);
+      },
+    });
+  };
   const execute = async (id, action) => { if (await post(id, { status: 'executed', outcome: { action } })) setOrders((prev) => prev.filter((o) => o.id !== id)); };
   // dm/lead capture → executed with no outcome payload, closes the lead-capture loop instead
   // (work_orders.lead_id back-fill — see work-orders.js promoteCaptureToLead).
@@ -923,6 +945,12 @@ function ApprovalQueueCard({ onNavigate }) {
       </SectionTitle>
       {actionError && (
         <div role="alert" style={{ marginBottom: 8, fontSize: 12, color: 'var(--danger)' }}>{actionError}</div>
+      )}
+      {dismissNotice && (
+        <div role="status" aria-live="polite" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-muted)' }}>
+          <span>{dismissNotice.label}</span>
+          <Button variant="ghost" size="xs" onClick={dismissNotice.undo}>되돌리기</Button>
+        </div>
       )}
       <Card pad={false}>
         {orders.length === 0 ? (

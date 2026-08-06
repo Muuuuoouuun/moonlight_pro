@@ -205,9 +205,12 @@ export function useRevenueLedger() {
 // 3단 정렬 헤더(§8.1) — 컴포넌트 안에서 정의하면 렌더마다 함수 identity가 바뀌어
 // React가 헤더 버튼을 매번 unmount/remount한다(re-audit 속도 #5). 모듈 스코프 1개를
 // Leads·Cases·Accounts가 공유한다. 캐럿은 비활성일 때도 폭 예약.
-function SortHead({ k, sort, onToggle, children, align }) {
+export function SortHead({ k, sort, onToggle, children, align }) {
+  // aria-sort는 columnheader 롤 전용이라 버튼엔 무효 — 동적 aria-label로 현재 방향을 AT에 노출.
+  const dirLabel = sort.key === k ? (sort.dir === 'desc' ? '내림차순' : '오름차순') : '정렬 안 함';
   return (
     <button type="button" onClick={() => onToggle(k)} title={`${children} 기준 정렬`}
+      aria-label={`${children} 기준 정렬 — 현재 ${dirLabel}`}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 3, width: '100%',
         justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
@@ -832,7 +835,7 @@ export function Leads({ workspace }) {
               <Badge tone="neutral" size="xs" variant="outline">{l.stage}</Badge>
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span className="mono" style={{ fontSize: 12, color: l.score >= 70 ? 'var(--moon-200)' : 'var(--fg-muted)' }}>{l.score ?? '—'}</span>
+              <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' /* §13 high-score 강조 금지 — 순서·정렬이 우선순위 전달 */ }}>{l.score ?? '—'}</span>
               {l.priorityLane === 'customer_success' && <Badge tone="neutral" size="xs">CS</Badge>}
             </span>
             <span style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.owner}</span>
@@ -2403,6 +2406,11 @@ export function Accounts({ workspace, onNavigate }) {
   // 키보드 계층(§8.1 표준): j/k 이동 · e 상세 · n 생성 · / 검색 — 다른 Revenue 표면과 동일.
   const accountSearchRef = React.useRef(null);
   const [accountsNotice, setAccountsNotice] = React.useState(null);
+  React.useEffect(() => {
+    if (!accountsNotice) return undefined;
+    const id = setTimeout(() => setAccountsNotice(null), 8000);
+    return () => clearTimeout(id);
+  }, [accountsNotice]);
   const accountKbRows = React.useMemo(() => filtered.map(a => ({ id: a.name })), [filtered]);
   const accountSelection = useCrmSelection(accountKbRows);
   useCrmKeyboard({
@@ -2510,6 +2518,7 @@ export function Accounts({ workspace, onNavigate }) {
             icon="accounts"
             title={`${ws.label} — 해당하는 계정이 없습니다`}
             description={`이 워크스페이스에 매칭되는 계정이 없습니다. 다른 워크스페이스로 태그된 계정은 여기에 표시되지 않습니다. 계정을 등록하거나 기록에 ${ws.label} 태그가 연결되면 나타납니다.`}
+            action={<Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account 등록</Button>}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
@@ -2577,9 +2586,11 @@ export function Accounts({ workspace, onNavigate }) {
             <Card style={{ gridColumn: '1 / -1' }}>
               <EmptyState
                 icon="accounts"
-                title="계정이 없습니다"
-                description={syncState === 'live' ? 'Supabase customer_accounts 기록에 표시할 계정이 없습니다.' : '필터나 검색어를 조정하면 계정을 다시 찾을 수 있습니다.'}
-                action={<Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>}
+                title={search.trim() ? '검색 결과가 없습니다' : '계정이 없습니다'}
+                description={search.trim() ? '다른 검색어를 시도하거나 검색을 지우세요.' : syncState === 'live' ? 'Supabase customer_accounts 기록에 표시할 계정이 없습니다.' : '필터를 조정하거나 첫 계정을 등록하세요.'}
+                action={search.trim()
+                  ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
+                  : <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>}
               />
             </Card>
           )}
@@ -2644,8 +2655,11 @@ export function Accounts({ workspace, onNavigate }) {
           {filtered.length === 0 && (
             <EmptyState
               icon="accounts"
-              title="계정이 없습니다"
-              description={syncState === 'live' ? 'Supabase customer_accounts 기록이 비어 있습니다.' : '필터나 검색어를 조정하면 계정을 다시 찾을 수 있습니다.'}
+              title={search.trim() ? '검색 결과가 없습니다' : '계정이 없습니다'}
+              description={search.trim() ? '다른 검색어를 시도하거나 검색을 지우세요.' : syncState === 'live' ? 'Supabase customer_accounts 기록이 비어 있습니다.' : '필터를 조정하거나 첫 계정을 등록하세요.'}
+              action={search.trim()
+                ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
+                : <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>}
             />
           )}
         </Card>
@@ -2697,8 +2711,11 @@ export function Accounts({ workspace, onNavigate }) {
               {filtered.length === 0 && (
                 <EmptyState
                   icon="accounts"
-                  title="계정 없음"
-                  description="선택할 계정이 없습니다."
+                  title={search.trim() ? '검색 결과 없음' : '계정 없음'}
+                  description={search.trim() ? '다른 검색어를 시도하거나 검색을 지우세요.' : '선택할 계정이 없습니다.'}
+                  action={search.trim()
+                    ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
+                    : <Button variant="ghost" size="sm" icon="plus" onClick={createAccount}>Account 등록</Button>}
                   style={{ minHeight: 220, padding: '24px 12px' }}
                 />
               )}

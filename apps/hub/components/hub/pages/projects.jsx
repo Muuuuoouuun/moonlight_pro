@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Checkbox, EmptyState, SyncBadge, SegmentedControl, EditDrawer, Kbd } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
+import { usePageCreateHotkey } from "../use-crm-keyboard";
 import {
   buildProjectCreatePayload,
   buildProjectDraft,
@@ -744,7 +745,10 @@ export function Projects({ workspace }) {
   const PROJECT_STRIKE_MS = 180; // DESIGN.md 모션 가이드(120–180ms)와 일치
 
   const undoCompleteProject = React.useCallback((project) => {
-    if (!cancelUndoable(project.id)) return; // 창이 이미 닫혔으면 PATCH가 나갔다
+    if (!cancelUndoable(project.id)) {
+      setOrderResult((cur) => (cur?.key === `complete-${project.id}` ? { ...cur, action: null } : cur));
+      return; // 창이 이미 닫혔으면 PATCH가 나갔다
+    }
     setCompletingIds((s) => { const n = new Set(s); n.delete(project.id); return n; });
     setHiddenIds((s) => { const n = new Set(s); n.delete(project.id); return n; });
     setOrderResult({ tone: 'ok', label: '완료 취소됨' });
@@ -762,8 +766,10 @@ export function Projects({ workspace }) {
       setHiddenIds((s) => new Set(s).add(id));
     }, PROJECT_STRIKE_MS);
     setOpenDetail((cur) => (cur === id ? null : cur));
-    setOrderResult({ tone: 'ok', label: '프로젝트 완료됨', action: { label: '되돌리기', onClick: () => undoCompleteProject(project) } });
+    setOrderResult({ key: `complete-${id}`, tone: 'ok', label: '프로젝트 완료됨', action: { label: '되돌리기', onClick: () => undoCompleteProject(project) } });
     scheduleUndoable(id, async () => {
+      // 창이 닫히는 순간 되돌리기 버튼을 걷는다 — 눌러도 no-op인 죽은 버튼 방지(6차 재감사).
+      setOrderResult((cur) => (cur?.key === `complete-${id}` ? { ...cur, action: null } : cur));
       await setProjectStatus(project, 'completed');
       setHiddenIds((s) => { if (!s.has(id)) return s; const n = new Set(s); n.delete(id); return n; });
     });
@@ -776,6 +782,10 @@ export function Projects({ workspace }) {
       id: createClientId(),
     });
   }, []);
+
+  // 페이지 레벨 N — 치트시트/버튼의 <Kbd>N</Kbd> 광고와 실제 배선 일치(6차 재감사: 死 힌트).
+  const createTodoHotkey = React.useCallback(() => createTodo(), [createTodo]);
+  usePageCreateHotkey(createTodoHotkey);
 
   const editTodo = React.useCallback((todo) => {
     setTaskEditSource(todo);
@@ -1158,7 +1168,7 @@ export function Projects({ workspace }) {
   // 기존 할 일 삭제 — hub-direct DELETE (엔진 파이프라인엔 삭제 액션이 없다, tasks route 참고).
   const deleteTask = React.useCallback(async () => {
     const id = taskEditSource?.id;
-    if (!id) return;
+    if (!id) return { ok: false, status: 'no-selection' };
     try {
       const response = await fetch('/api/hub/tasks', {
         method: 'DELETE',
@@ -1173,11 +1183,13 @@ export function Projects({ workspace }) {
         }
         setTaskEditSource(null);
         setOrderResult({ tone: 'ok', label: data.status === 'preview' ? '할 일 삭제 · 백엔드 미구성이라 로컬에서만 지워졌습니다' : '할 일 삭제됨' });
-        return;
+        return { ok: true, status: data.status };
       }
       setOrderResult({ tone: 'err', label: data.error || `삭제 실패 ${response.status}` });
+      return { ok: false, status: data.status || 'error' };
     } catch (error) {
       setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+      return { ok: false, status: 'error' };
     }
   }, [loadLedger, taskEditSource]);
 

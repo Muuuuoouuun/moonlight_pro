@@ -54,7 +54,7 @@ const LANE_TONE = { lead: "neutral", deal: "neutral", event: "neutral" };
 const BUCKET_STRIPE = { overdue: "var(--danger)" };
 
 function useFollowups() {
-  const [state, setState] = React.useState({ syncState: "loading", items: [], summary: {}, calendarReason: "" });
+  const [state, setState] = React.useState({ syncState: "loading", items: [], summary: {} });
   // 새로고침·기록 후 reload가 겹치면 늦게 온 이전 응답이 최신 목록을 덮을 수 있다 —
   // 요청 id로 최신 요청만 반영한다(re-audit S13).
   const requestRef = React.useRef(0);
@@ -78,7 +78,6 @@ function useFollowups() {
         syncState: d.status === "live" ? "live" : d.status === "partial" ? "partial" : "preview",
         items: Array.isArray(d.items) ? d.items : [],
         summary: d.summary || {},
-        calendarReason: d.calendarReason || "",
       });
     } catch {
       if (isCurrent()) setState((s) => ({ ...s, syncState: "error" }));
@@ -328,7 +327,7 @@ function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onClo
 }
 
 export function Followups({ onNavigate }) {
-  const { syncState, items, summary, calendarReason, reload } = useFollowups();
+  const { syncState, items, summary, reload } = useFollowups();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -500,14 +499,6 @@ export function Followups({ onNavigate }) {
           onChange={setBucket}
         />
       </div>
-
-      {summary.events === 0 && calendarReason && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, color: "var(--fg-muted)" }}>
-          <SyncBadge state="preview" />
-          Google Calendar 미연결 — 리드·딜 후속만 표시 중입니다.
-          <Button variant="ghost" size="xs" onClick={() => onNavigate?.("dashboard/work/calendar")}>연결</Button>
-        </div>
-      )}
 
       <Card pad={false} className="hub-table-card">
         {visible.length === 0 ? (

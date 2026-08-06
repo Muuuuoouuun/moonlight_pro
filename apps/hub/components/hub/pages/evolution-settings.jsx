@@ -298,7 +298,7 @@ export function Evolution({ onNavigate }) {
       {/* Commands — how the system is operated */}
       <div>
         <SectionTitle
-          subtitle="빠른 이동 + 슬래시 커맨드 · 시스템을 실행하는 방법"
+          subtitle="빠른 이동 카드 · 클릭 또는 ⌘K 팔레트로 이동 — 슬래시 입력은 미배선"
           right={<span style={{ fontSize: 10.5, color: 'var(--fg-faint)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><Kbd>⌘</Kbd><Kbd>K</Kbd> palette</span>}
         >
           Commands
@@ -312,9 +312,9 @@ export function Evolution({ onNavigate }) {
               display: 'flex', flexDirection: 'column', gap: 8, cursor: 'pointer',
             }}
             >
+              {/* 장식 Dot 제거(§13) · slash는 타이핑 가능한 커맨드가 아니라 카드 이름 — accent 아님(§5.2) */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Dot tone={c.tone} />
-                <span className="mono" style={{ fontSize: 12, color: 'var(--moon-300)' }}>{c.slash}</span>
+                <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{c.slash}</span>
                 <div style={{ flex: 1 }} />
                 <Iconed name="arrowRight" size={12} style={{ color: 'var(--fg-faint)' }} />
               </div>

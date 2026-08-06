@@ -773,7 +773,7 @@ export function MyWork({ onNavigate }) {
 
   // 낙관적 tombstone(hiddenIds) + 실패 시 복원 — deleteRitual(work.jsx)과 같은 계약.
   const deleteTaskDetail = async () => {
-    if (!taskDraft?.id) return;
+    if (!taskDraft?.id) return { ok: false, status: 'no-selection' };
     const rowId = `task-${taskDraft.id}`;
     setHiddenIds((prev) => new Set(prev).add(rowId));
     try {
@@ -785,8 +785,8 @@ export function MyWork({ onNavigate }) {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.status === 'saved') {
         setNotice({ tone: 'ok', label: '할 일 삭제됨' });
-        await reload();
-        return;
+        reload(); // 배경 재검증 — 영수증을 붙잡지 않는다
+        return { ok: true, status: 'saved' };
       }
       // preview(백엔드 미구성)는 "저장 대기"가 아니다 — 대기열이 없어 영영 지워지지 않는다.
       // 행을 복귀시키고 사실대로 말한다(Phase 0 taxonomy).
@@ -797,9 +797,11 @@ export function MyWork({ onNavigate }) {
           ? 'Supabase 미설정 — 삭제가 저장되지 않았습니다.'
           : data.error || `삭제 실패 ${res.status}`,
       });
+      return { ok: false, status: data.status || 'error' };
     } catch (error) {
       setHiddenIds((prev) => { const next = new Set(prev); next.delete(rowId); return next; });
       setNotice({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+      return { ok: false, status: 'error' };
     }
   };
 
@@ -1297,8 +1299,10 @@ export function MyWork({ onNavigate }) {
           <Card>
             <EmptyState
               icon="calendar"
-              title="Google Calendar가 연결되지 않았습니다"
-              description={calendarReason || '연결하면 이번 주 일정이 할 일·딜과 함께 표시됩니다.'}
+              title={sources.calendar === 'error' ? '캘린더를 읽지 못했습니다' : 'Google Calendar가 연결되지 않았습니다'}
+              description={sources.calendar === 'error'
+                ? '일정이 있어도 표시되지 않습니다 — 새로고침으로 재시도하세요.'
+                : '연결하면 이번 주 일정이 할 일·딜과 함께 표시됩니다.'}
               action={<Button variant="outline" size="sm" onClick={() => onNavigate?.('dashboard/work/calendar')}>Calendar 설정 열기</Button>}
               style={{ minHeight: 180, padding: '28px 12px' }}
             />
@@ -1392,10 +1396,12 @@ function WeekAgenda({ items, sourcesCalendar, onComplete, onOpen, onNavigate, co
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       {sourcesCalendar !== 'live' && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: 'var(--fg-muted)' }}>
-          <SyncBadge state="preview" />
-          일정 레인 미연결 — 할 일·딜 기한만 표시 중입니다.
-          <Button variant="ghost" size="xs" onClick={() => onNavigate?.('dashboard/work/calendar')}>연결</Button>
+        <div role={sourcesCalendar === 'error' ? 'alert' : undefined} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: sourcesCalendar === 'error' ? 'var(--danger)' : 'var(--fg-muted)' }}>
+          <SyncBadge state={sourcesCalendar === 'error' ? 'error' : 'preview'} />
+          {sourcesCalendar === 'error'
+            ? '캘린더를 읽지 못했습니다 — 일정이 있어도 표시되지 않습니다.'
+            : '일정 레인 미연결 — 할 일·딜 기한만 표시 중입니다.'}
+          <Button variant="ghost" size="xs" onClick={() => onNavigate?.('dashboard/work/calendar')}>{sourcesCalendar === 'error' ? '캘린더 열기' : '연결'}</Button>
         </div>
       )}
       {overdue.length > 0 && (

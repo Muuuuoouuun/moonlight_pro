@@ -445,6 +445,7 @@ export function AgentsOrders({ onNavigate }) {
   const [live, setLive] = React.useState(false);
   const [busyId, setBusyId] = React.useState(null);
   const [actionError, setActionError] = React.useState(null);
+  const [readError, setReadError] = React.useState(null);
   const [copiedId, setCopiedId] = React.useState(null);
 
   // 딜 채널이 카톡/전화 중심이라 "복사"가 실제 발송 경로 — 초안을 클립보드로 옮겨 보내는 흐름.
@@ -462,10 +463,17 @@ export function AgentsOrders({ onNavigate }) {
   React.useEffect(() => {
     let active = true;
     fetch('/api/hub/work-orders', { cache: 'no-store' })
-      .then((r) => r.json().catch(() => null))
-      .then((d) => {
+      .then(async (r) => ({ ok: r.ok, d: await r.json().catch(() => null) }))
+      .then(({ ok, d }) => {
         if (!active) return;
-        if (d && Array.isArray(d.orders) && d.source === 'supabase') {
+        if (!ok || !d || d.status === 'error') {
+          // read 실패를 빈 큐("대기 제안 없음")로 위장하지 않는다 — 후속 누락 0건 계약.
+          setReadError('승인 큐를 읽지 못했습니다 — 대기 제안이 있을 수 있습니다. 새로고침으로 재시도하세요.');
+          setOrders([]);
+          setLive(false);
+          return;
+        }
+        if (Array.isArray(d.orders) && d.source === 'supabase') {
           setOrders(d.orders);
           setLive(true);
         } else {
@@ -473,7 +481,12 @@ export function AgentsOrders({ onNavigate }) {
           setLive(false);
         }
       })
-      .catch(() => active && (setOrders([]), setLive(false)));
+      .catch(() => {
+        if (!active) return;
+        setReadError('승인 큐를 읽지 못했습니다 — 대기 제안이 있을 수 있습니다. 새로고침으로 재시도하세요.');
+        setOrders([]);
+        setLive(false);
+      });
     fetch('/api/hub/agents', { cache: 'no-store' })
       .then((r) => r.json().catch(() => null))
       .then((d) => { if (active && d && Array.isArray(d.personas)) setPersonas(d.personas); })
@@ -549,6 +562,7 @@ export function AgentsOrders({ onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Agent orders</h2>
           {actionError && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{actionError}</div>}
+          {readError && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{readError}</div>}
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>페르소나·인박스가 올린 제안 큐 · 1클릭 승인</div>
         </div>
         <div style={{ flex: 1 }} />
@@ -595,7 +609,7 @@ export function AgentsOrders({ onNavigate }) {
                     <Button variant="ghost" size="xs" onClick={() => decide(o.id, 'dismissed')}>보류</Button>
                   </>
                 ) : (
-                  <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(`dashboard/agents/chat?order=${o.id}`)}>Open</Button>
+                  <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.(`dashboard/agents/chat`)}>Open</Button>
                 )}
               </div>
             </div>

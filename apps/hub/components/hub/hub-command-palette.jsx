@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Iconed } from "./hub-icons";
-import { Kbd } from "./hub-primitives";
+import { Button, Kbd } from "./hub-primitives";
 import { NAV_TREE, LEGACY_TREE } from "./hub-data";
 import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
 
@@ -134,7 +134,11 @@ export function CommandPalette({ open, onClose, onNavigate }) {
         </div>
         <div className="scroll-y" style={{ flex: 1, padding: 6 }}>
           {filtered.length === 0 && (
-            <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--fg-faint)', fontSize: 13 }}>No results</div>
+            <div style={{ padding: '36px 20px', textAlign: 'center', color: 'var(--fg-faint)', fontSize: 13, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <span>‘{q}’에 해당하는 결과가 없습니다</span>
+              {/* §8.1 검색 0건 CTA — 빈 검색은 항상 내비 목록이 있으므로 이 분기는 q 존재를 전제 */}
+              <Button variant="outline" size="sm" onClick={() => { setQ(''); inputRef.current?.focus(); }}>검색 지우기</Button>
+            </div>
           )}
           {filtered.map((it, i) => (
             <button key={i} onClick={() => { if (it.path) onNavigate(it.path); onClose(); }} onMouseEnter={() => setIdx(i)} style={{

@@ -573,10 +573,16 @@ export function Calendar({ onNavigate }) {
           {(createError || gcalMessage || calendarData.message || taskData.message) && (
             <div
               className="mono"
-              role={createError ? 'alert' : undefined}
-              style={{ fontSize: 11, color: createError ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 4 }}
+              role={createError || calendarData.message === 'calendar-read-failed' ? 'alert' : undefined}
+              style={{ fontSize: 11, color: createError || calendarData.message === 'calendar-read-failed' ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 4 }}
             >
-              {createError || gcalMessage || calendarData.message || taskData.message}
+              {/* 머신 토큰을 운영자 카피로 — reason 슬러그가 그대로 노출되지 않게(6차 재감사 S) */}
+              {createError
+                || gcalMessage
+                || (calendarData.message === 'calendar-read-failed'
+                  ? '캘린더를 읽지 못했습니다 — 일정이 있어도 표시되지 않습니다.'
+                  : calendarData.message)
+                || taskData.message}
             </div>
           )}
         </div>

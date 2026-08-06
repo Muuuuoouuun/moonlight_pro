@@ -21,7 +21,8 @@ export async function getMorningBrief({ withinHours = DEFAULT_WINDOW_HOURS } = {
     order: "happened_at.desc",
     limit: 1,
   });
-  if (!rows) return { source: "preview", brief: null };
+  // read 실패는 error — preview로 두면 "cron 미실행"과 구분되지 않는다(6차 재감사 S).
+  if (!rows) return { source: "error", error: "brief-ledger-read-failed", brief: null };
 
   const row = rows[0];
   if (!row) return { source: "supabase", brief: null };

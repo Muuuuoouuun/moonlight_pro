@@ -178,7 +178,7 @@ export const SIDEBAR_PRIMARY = [
     paths: {
       all: 'dashboard/revenue/overview',
       classin: 'dashboard/classin/pipeline',
-      personal: 'dashboard/revenue/overview?scope=personal',
+      personal: 'dashboard/revenue/overview', // scope 쿼리 소비자 없음 — 과약속 제거(6차 재감사)
     },
     children: {
       all: REVENUE_CHILDREN,
@@ -195,9 +195,10 @@ export const SIDEBAR_PRIMARY = [
     // 액티브 판정용으로만 유지하고, 내비 착지는 항상 정본 페이지다.
     owns: ['dashboard/revenue/followups', 'dashboard/classin/followups'],
     paths: {
+      // followups는 전역 큐 — scope 쿼리 소비자가 없어 데이터가 동일했다(과약속 제거).
       all: 'dashboard/revenue/followups',
-      classin: 'dashboard/revenue/followups?scope=classin',
-      personal: 'dashboard/revenue/followups?scope=personal',
+      classin: 'dashboard/revenue/followups',
+      personal: 'dashboard/revenue/followups',
     },
   },
   {
