@@ -444,6 +444,7 @@ export function AgentsOrders({ onNavigate }) {
   const [personas, setPersonas] = React.useState([]);
   const [live, setLive] = React.useState(false);
   const [busyId, setBusyId] = React.useState(null);
+  const [actionError, setActionError] = React.useState(null);
   const [copiedId, setCopiedId] = React.useState(null);
 
   // 딜 채널이 카톡/전화 중심이라 "복사"가 실제 발송 경로 — 초안을 클립보드로 옮겨 보내는 흐름.
@@ -483,6 +484,7 @@ export function AgentsOrders({ onNavigate }) {
   async function decide(id, status) {
     if (busyId) return;
     setBusyId(id);
+    setActionError(null);
     try {
       const res = await fetch('/api/hub/work-orders', {
         method: 'POST',
@@ -490,6 +492,9 @@ export function AgentsOrders({ onNavigate }) {
         body: JSON.stringify({ id, status }),
       });
       if (res.ok) setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+      else setActionError(`처리 실패 (${res.status}) — 스테일 전이면 새로고침 후 다시 시도하세요.`);
+    } catch {
+      setActionError('처리 실패 — 네트워크를 확인하고 다시 시도하세요.');
     } finally {
       setBusyId(null);
     }
@@ -506,6 +511,9 @@ export function AgentsOrders({ onNavigate }) {
         body: JSON.stringify({ id, status: 'executed', outcome: { action } }),
       });
       if (res.ok) setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: 'executed' } : o)));
+      else setActionError(`처리 실패 (${res.status}) — 다시 시도하세요.`);
+    } catch {
+      setActionError('처리 실패 — 네트워크를 확인하고 다시 시도하세요.');
     } finally {
       setBusyId(null);
     }
@@ -523,6 +531,9 @@ export function AgentsOrders({ onNavigate }) {
         body: JSON.stringify({ id, status: 'executed' }),
       });
       if (res.ok) setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: 'executed' } : o)));
+      else setActionError(`처리 실패 (${res.status}) — 다시 시도하세요.`);
+    } catch {
+      setActionError('처리 실패 — 네트워크를 확인하고 다시 시도하세요.');
     } finally {
       setBusyId(null);
     }
@@ -537,6 +548,7 @@ export function AgentsOrders({ onNavigate }) {
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Agent orders</h2>
+          {actionError && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{actionError}</div>}
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>페르소나·인박스가 올린 제안 큐 · 1클릭 승인</div>
         </div>
         <div style={{ flex: 1 }} />

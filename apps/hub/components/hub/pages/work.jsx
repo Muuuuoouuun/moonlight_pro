@@ -772,6 +772,7 @@ export function Decisions() {
       const t = e.target;
       const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+      if (document.querySelector('[data-drawer-open="true"], [role="dialog"], [data-shortcut-overlay="true"]')) return; // 다이얼로그 위 발화 금지(§8.1)
       e.preventDefault();
       createDecision();
     };
@@ -1180,6 +1181,7 @@ export function Rhythm() {
       const t = e.target;
       const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+      if (document.querySelector('[data-drawer-open="true"], [role="dialog"], [data-shortcut-overlay="true"]')) return; // 다이얼로그 위 발화 금지(§8.1)
       e.preventDefault();
       createRitual();
     };

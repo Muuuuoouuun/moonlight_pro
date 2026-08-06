@@ -32,7 +32,9 @@ function useAutomationsLedger() {
         const response = await fetch('/api/hub/automations', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
         if (!active || !response.ok || !data || data.status === 'error') {
-          if (active) setState(s => ({ ...s, syncState: 'preview' }));
+          // 라이브 read 실패는 error — preview("미구성")로 뭉개면 실행 로그가
+          // "기록이 없습니다"로 위장된다(4차 재감사 M — Engine 실행 피드백은 §1 코어).
+          if (active) setState(s => ({ ...s, syncState: 'error' }));
           return;
         }
         if (data.source === 'supabase') {
@@ -50,7 +52,7 @@ function useAutomationsLedger() {
           setState(s => ({ ...s, source: 'preview', syncState: 'preview', automations: [], runs: [], webhookEvents: [], summary: EMPTY_AUTOMATION_SUMMARY }));
         }
       } catch {
-        if (active) setState(s => ({ ...s, source: 'preview', syncState: 'preview', automations: [], runs: [], webhookEvents: [], summary: EMPTY_AUTOMATION_SUMMARY }));
+        if (active) setState(s => ({ ...s, syncState: 'error' }));
       }
     }
     load();
@@ -91,8 +93,10 @@ export function AutomationsIndex({ onNavigate }) {
         {automations.length === 0 && (
           <EmptyState
             icon="automations"
-            title="자동화 기록이 비어 있습니다"
-            description={syncState === 'live' ? 'Supabase automations 테이블에 표시할 flow가 없습니다. Flow 등록은 Engine 배선으로 이뤄집니다.' : 'flow가 등록되면 실행 상태와 성공률이 여기에 표시됩니다.'}
+            title={syncState === 'error' ? '자동화 기록을 읽지 못했습니다' : '자동화 기록이 비어 있습니다'}
+            description={syncState === 'error'
+              ? '지금 화면은 비어 보여도 실제 flow가 있을 수 있습니다. 새로고침으로 재시도하세요.'
+              : syncState === 'live' ? 'Supabase automations 테이블에 표시할 flow가 없습니다. Flow 등록은 Engine 배선으로 이뤄집니다.' : 'flow가 등록되면 실행 상태와 성공률이 여기에 표시됩니다.'}
             action={<Button variant="secondary" size="sm" icon="zap" onClick={() => onNavigate('dashboard/automations/flows')}>Flow 캔버스 보기</Button>}
           />
         )}
@@ -327,8 +331,10 @@ export function Webhooks({ onNavigate }) {
         {hooks.length === 0 && (
           <EmptyState
             icon="webhook"
-            title="수신된 webhook 이벤트가 없습니다"
-            description="Project webhook smoke test나 Telegram webhook이 들어오면 endpoint별 활동이 집계됩니다."
+            title={syncState === 'error' ? 'webhook 기록을 읽지 못했습니다' : '수신된 webhook 이벤트가 없습니다'}
+            description={syncState === 'error'
+              ? '지금 화면은 비어 보여도 실제 이벤트가 있을 수 있습니다. 새로고침으로 재시도하세요.'
+              : 'Project webhook smoke test나 Telegram webhook이 들어오면 endpoint별 활동이 집계됩니다.'}
             action={<Button variant="primary" size="sm" icon="play" onClick={() => runHookTest(0, { name: 'Project smoke test', url: '/api/webhooks/project-test' })}>Send test</Button>}
           />
         )}
@@ -383,8 +389,10 @@ export function Runs() {
           {rows.length === 0 && (
             <EmptyState
               icon="runs"
-              title="실행 로그가 없습니다"
-              description="Engine이 automation_runs에 기록을 남기면 이 로그가 채워집니다."
+              title={syncState === 'error' ? '실행 로그를 읽지 못했습니다' : '실행 로그가 없습니다'}
+              description={syncState === 'error'
+                ? '지금 화면은 비어 보여도 실제 실행 기록이 있을 수 있습니다. 새로고침으로 재시도하세요.'
+                : 'Engine이 automation_runs에 기록을 남기면 이 로그가 채워집니다.'}
               style={{ minHeight: 220 }}
             />
           )}

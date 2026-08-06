@@ -89,6 +89,9 @@ export function selectUrgentKa(revenue = {}, now = new Date()) {
 // 매출 슬롯을 preview로 오염시키지 않는다).
 export function buildDailyFocus({ revenue, calendar, now = new Date() } = {}) {
   const revenueReadable = revenue?.source === "supabase";
+  // 라이브 read 실패는 error — preview("미구성")로 뭉개면 첫 화면 KA/집중 슬롯이
+  // "연결하세요" 카피와 함께 무언 공백이 된다(4차 재감사 M).
+  const revenueState = revenueReadable ? "live" : revenue?.source === "error" ? "error" : "preview";
   const focusLeads = revenueReadable ? selectOperatorFocusLeads(revenue, { limit: 5 }) : [];
   const todayKey = kstDayKey(now);
   const calendarOk = Boolean(calendar?.ok);
@@ -118,11 +121,11 @@ export function buildDailyFocus({ revenue, calendar, now = new Date() } = {}) {
 
   return {
     urgentKa: {
-      state: revenueReadable ? "live" : "preview",
+      state: revenueState,
       item: revenueReadable ? selectUrgentKa(revenue, now) : null,
     },
     focusCustomers: {
-      state: revenueReadable ? "live" : "preview",
+      state: revenueState,
       // deep-design §7 행동 행 최소 정보: 지금 올린 이유 · 기한(또는 기약 없음) · 최근 활동.
       items: focusLeads.map((lead) => {
         const dueKey = lead.nextActionAt ? kstDayKey(lead.nextActionAt) : "";
@@ -152,7 +155,11 @@ export function buildDailyFocus({ revenue, calendar, now = new Date() } = {}) {
       }),
     },
     todayAgenda: {
-      state: calendarOk ? "live" : "preview",
+      state: calendarOk
+        ? "live"
+        : calendar?.reason === "calendar-read-failed"
+          ? "error"
+          : "preview",
       reason: calendarOk ? "" : calendar?.reason || "calendar-not-connected",
       items: agendaItems,
     },

@@ -60,7 +60,14 @@ export async function POST(req: Request) {
 
   const result = await executeContentCommand(body, { workspaceId }, {
     insert: insertSupabaseRecord,
-    update: updateSupabaseRecord,
+    // return=representation — 0행 PATCH가 {persisted:true,"ok"}로 위장해 존재하지 않는
+    // draft 저장이 "saved" 200으로 돌아가던 무음 세이브 차단(pms 라우트 10차와 동일 클래스).
+    update: (table, filters, patch) => updateSupabaseRecord(
+      table,
+      filters,
+      patch,
+      { returnRepresentation: true },
+    ),
     remove: deleteSupabaseRecord,
     fetchRows: async (table, options = {}) => fetchSupabaseRows(
       table,

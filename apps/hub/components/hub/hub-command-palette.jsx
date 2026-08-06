@@ -64,7 +64,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
     flat.push({ kind: 'Action', label: 'New Project', path: 'dashboard/work/projects?new=project', icon: 'projects' });
     flat.push({ kind: 'Action', label: 'New Content draft', path: 'dashboard/content/studio?new=draft', icon: 'studio' });
     flat.push({ kind: 'Action', label: 'Start 15m focus timer', path: 'dashboard/work/calendar?focus=15', icon: 'clock' });
-    flat.push({ kind: 'Action', label: 'Ask Council — next week plan', path: 'dashboard/agents/chat?prompt=next-week-plan', icon: 'council' });
+    // 'Ask Council — next week plan' 제거(4차 재감사 S): prompt=next-week-plan 소비자가 없어 보류 표면의 빈 채팅에 착지했다.
     return flat;
   }, []);
 

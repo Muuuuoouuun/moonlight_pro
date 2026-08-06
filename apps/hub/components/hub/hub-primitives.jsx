@@ -697,8 +697,18 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
     savingRef.current = true;
     setSaveState('saving');
     try {
-      await onDelete();
+      // 삭제 결과 봉투를 소비한다 — 실패(502/failed)를 버리고 닫으면 행이 낙관 제거된 채
+      // "삭제됨"으로 믿게 되고 다음 로드에 부활한다(4차 재감사 M — 유일하게 남은 무언 경로).
+      const result = await onDelete();
+      if (result && result.ok === false && result.status !== 'local' && result.status !== 'preview') {
+        setSaveState('error');
+        setSaveFeedback(`삭제 실패 (${result.status || 'error'}) — 항목은 그대로 있습니다. 다시 시도하세요.`);
+        return; // 드로어를 열어 두고 원인 표시
+      }
       onClose();
+    } catch {
+      setSaveState('error');
+      setSaveFeedback('삭제 실패 — 네트워크를 확인하고 다시 시도하세요.');
     } finally {
       savingRef.current = false;
     }
@@ -737,7 +747,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
               <span style={{ color: 'var(--danger)' }}>{saveFeedback || '다른 변경이 먼저 저장되었습니다. 입력을 유지했으니 원장을 확인한 뒤 다시 시도하세요.'}</span>
             )}
             {saveState === 'error' && (
-              <span style={{ color: 'var(--danger)' }}>저장에 실패했습니다. 다시 시도하세요.</span>
+              <span style={{ color: 'var(--danger)' }}>{saveFeedback || '저장에 실패했습니다. 다시 시도하세요.'}</span>
             )}
           </div>
           {(saveState === 'preview' || saveState === 'conflict' || saveState === 'error') && (

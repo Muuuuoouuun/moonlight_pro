@@ -103,12 +103,12 @@ export async function executeContentCommand(
   }
 
   if (command.action === "update_draft") {
-    const [item, variant] = await Promise.all([
-      dependencies.update("content_items", filters(command.contentId, command.workspaceId), command.itemPatch),
-      dependencies.update("content_variants", filters(command.variantId, command.workspaceId), command.variantPatch),
-    ]);
+    // 순차 실행 + 반쪽 성공 명명 — 병렬 Promise.all은 item만 저장되고 variant가 실패해도
+    // 어느 쪽이 남았는지 알 수 없었다(4차 재감사 M). 보상 롤백 대신 정확한 상태 보고.
+    const item = await dependencies.update("content_items", filters(command.contentId, command.workspaceId), command.itemPatch);
     if (!item.persisted) return failure("item-update-failed", item, { contentId: command.contentId, variantId: command.variantId });
-    if (!variant.persisted) return failure("variant-update-failed", variant, { contentId: command.contentId, variantId: command.variantId });
+    const variant = await dependencies.update("content_variants", filters(command.variantId, command.workspaceId), command.variantPatch);
+    if (!variant.persisted) return failure("variant-update-failed-item-saved", variant, { contentId: command.contentId, variantId: command.variantId });
     return {
       status: "saved",
       action: command.action,

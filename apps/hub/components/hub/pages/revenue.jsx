@@ -635,11 +635,17 @@ export function Leads({ workspace }) {
   // Unsaved local rows (no DB id) skip the network call entirely.
   const deleteLead = async () => {
     if (!editLeadId) return { ok: false };
-    const isLocal = String(editLeadId).startsWith('local-lead-');
-    setLocalLeads(prev => prev.filter(l => l.id !== editLeadId));
-    setDeletedLeadIds(prev => new Set(prev).add(editLeadId));
+    const id = editLeadId;
+    const isLocal = String(id).startsWith('local-lead-');
+    setLocalLeads(prev => prev.filter(l => l.id !== id));
+    setDeletedLeadIds(prev => new Set(prev).add(id));
     if (isLocal) return { ok: true, status: 'local' };
-    return saveRevenueRecord('lead', 'delete', { id: editLeadId });
+    const r = await saveRevenueRecord('lead', 'delete', { id });
+    if (!r.ok && r.status !== 'preview') {
+      // 실패한 삭제는 행을 복원한다 — 낙관 제거된 채 두면 다음 로드에 부활(4차 재감사 M).
+      setDeletedLeadIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+    }
+    return r;
   };
 
   // Deep-link: ?lead=<id> opens that lead's EditDrawer once the ledger has loaded and the
@@ -1165,13 +1171,19 @@ export function Deals({ workspace, onNavigate }) {
     return r;
   };
 
-  // Delete: drop the card locally (optimistic) and best-effort remove it from the ledger.
+  // Delete: optimistic drop + 실패 시 카드 복원 (드로어가 봉투를 소비해 원인 표시).
   const deleteDeal = async () => {
     if (!editDealId) return { ok: false };
-    const isLocal = String(editDealId).toLowerCase().startsWith('local-');
-    setDeals(ds => ds.filter(d => d.id !== editDealId));
+    const id = editDealId;
+    const removed = deals.find(d => d.id === id) || null;
+    const isLocal = String(id).toLowerCase().startsWith('local-');
+    setDeals(ds => ds.filter(d => d.id !== id));
     if (isLocal) return { ok: true, status: 'local' };
-    return saveRevenueRecord('deal', 'delete', { id: editDealId });
+    const r = await saveRevenueRecord('deal', 'delete', { id });
+    if (!r.ok && r.status !== 'preview' && removed) {
+      setDeals(ds => (ds.some(d => d.id === id) ? ds : [removed, ...ds]));
+    }
+    return r;
   };
 
   // Deep-link: ?deal=<id> opens that deal's EditDrawer once the ledger has loaded. One-shot
@@ -1523,11 +1535,16 @@ export function Cases() {
   // Delete: drop the row locally (optimistic) and best-effort remove it from the ledger.
   const deleteCase = async () => {
     if (!editCaseId) return { ok: false };
-    const isLocal = String(editCaseId).startsWith('CASE-');
-    setLocalCases(prev => prev.filter(c => c.id !== editCaseId));
-    setDeletedCaseIds(prev => new Set(prev).add(editCaseId));
+    const id = editCaseId;
+    const isLocal = String(id).startsWith('CASE-');
+    setLocalCases(prev => prev.filter(c => c.id !== id));
+    setDeletedCaseIds(prev => new Set(prev).add(id));
     if (isLocal) return { ok: true, status: 'local' };
-    return saveRevenueRecord('case', 'delete', { id: editCaseId });
+    const r = await saveRevenueRecord('case', 'delete', { id });
+    if (!r.ok && r.status !== 'preview') {
+      setDeletedCaseIds(prev => { const n = new Set(prev); n.delete(id); return n; }); // 실패 복원
+    }
+    return r;
   };
 
   // Page-level `n` — 공유 훅으로 흡수: 수제 리스너는 드로어/팔레트 열림 가드가 빠져

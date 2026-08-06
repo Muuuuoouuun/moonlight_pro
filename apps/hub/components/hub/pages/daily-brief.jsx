@@ -46,7 +46,7 @@ function formatMoney(amount) {
 const SIGNAL_TARGETS = {
   draft: 'dashboard/content/studio?new=draft',
   escalate: 'dashboard/revenue/deals',
-  followup: 'dashboard/revenue/deals?draft=followup',
+  followup: 'dashboard/revenue/deals', // ?draft= 소비자 없음 — 죽은 파라미터 제거(4차 재감사 S)
   deals: 'dashboard/revenue/deals',
   leads: 'dashboard/revenue/leads',
   revenue: 'dashboard/revenue/overview',
@@ -1349,7 +1349,8 @@ function FocusSlots({ dailyFocus, onNavigate }) {
   const agenda = dailyFocus.todayAgenda || {};
   const focusItems = Array.isArray(focus.items) ? focus.items : [];
   const agendaItems = Array.isArray(agenda.items) ? agenda.items : [];
-  const revenuePreview = focus.state !== 'live';
+  const revenueError = focus.state === 'error';
+  const revenuePreview = focus.state === 'preview';
 
   const eyebrow = (label, right = null) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px 6px', fontSize: 11, color: 'var(--fg-dim)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
@@ -1368,6 +1369,11 @@ function FocusSlots({ dailyFocus, onNavigate }) {
         {ka.state === 'live' && !ka.item && (
           <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11.5, color: 'var(--fg-faint)' }}>
             긴급 KA 없음 — KA 지정은 Sales Ledger 시트(companies.meta.ka)에서 관리됩니다.
+          </div>
+        )}
+        {ka.state === 'error' && (
+          <div role="alert" style={{ padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11.5, color: 'var(--danger)' }}>
+            매출 원장을 읽지 못해 긴급 KA를 판정할 수 없습니다 — 지금 화면은 비어 보여도 실제 긴급 건이 있을 수 있습니다.
           </div>
         )}
         {ka.item && (
@@ -1396,8 +1402,10 @@ function FocusSlots({ dailyFocus, onNavigate }) {
           </div>
         )}
 
-        {eyebrow(`집중 고객 ${focusItems.length ? focusItems.length : ''}`.trim(), revenuePreview ? <SyncBadge state="preview" /> : null)}
-        {revenuePreview ? (
+        {eyebrow(`집중 고객 ${focusItems.length ? focusItems.length : ''}`.trim(), revenueError ? <SyncBadge state="error" /> : revenuePreview ? <SyncBadge state="preview" /> : null)}
+        {revenueError ? (
+          <div role="alert" style={{ padding: '2px 16px 14px', fontSize: 12, color: 'var(--danger)' }}>매출 원장을 읽지 못했습니다 — 상단 상태줄의 다시 읽기로 재시도하세요.</div>
+        ) : revenuePreview ? (
           <div style={{ padding: '2px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>매출 원장이 연결되면 집중 고객 3~5건이 여기에 표시됩니다.</div>
         ) : focusItems.length === 0 ? (
           <div style={{ padding: '2px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>집중 고객 없음 — CS 레인에 다음 행동이 있는 리드가 없습니다.</div>
@@ -1435,8 +1443,13 @@ function FocusSlots({ dailyFocus, onNavigate }) {
       </Card>
 
       <Card pad={false} className="daily-brief__panel" aria-label="오늘 일정">
-        {eyebrow('오늘 일정', agenda.state !== 'live' ? <SyncBadge state="preview" /> : null)}
-        {agenda.state !== 'live' ? (
+        {eyebrow('오늘 일정', agenda.state !== 'live' ? <SyncBadge state={agenda.state} /> : null)}
+        {agenda.state === 'error' ? (
+          <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 16px 14px', fontSize: 12, color: 'var(--danger)' }}>
+            캘린더를 읽지 못했습니다 — 일정이 있어도 표시되지 않습니다.
+            <Button variant="ghost" size="xs" onClick={() => onNavigate?.('dashboard/work/calendar')}>캘린더 열기</Button>
+          </div>
+        ) : agenda.state !== 'live' ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>
             Google Calendar 미연결 — 오늘 일정을 표시하려면 연결하세요.
             <Button variant="ghost" size="xs" onClick={() => onNavigate?.('dashboard/work/calendar')}>연결</Button>
@@ -1561,7 +1574,7 @@ export function DailyBrief({ onNavigate }) {
             상시 노출한다(2026-07-15 §2.2 QA 결정 B 유지 항목, system-eval B-11). */}
         <div>
           <SectionTitle right={<Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate('dashboard/overview')}>현황에서 보기</Button>}>운영 지표</SectionTitle>
-          <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
+          <div className="hub-grid--metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--gap)' }}>
             {ledger.metrics.map((m) => <MetricCard key={m.label} m={m} onNavigate={onNavigate} compact />)}
           </div>
         </div>

@@ -221,7 +221,13 @@ export async function getAttentionLedger() {
       failedSources: ["tasks"],
       todos: [],
     })),
-    getRevenueLedger().catch(() => null),
+    getRevenueLedger().catch(() => ({
+      source: "error",
+      error: "revenue-ledger-request-failed",
+      failedSources: ["deals"],
+      leads: [],
+      deals: [],
+    })),
     listGoogleCalendarEvents({ timeMin: startOfTodayIso, timeMax: weekEndIso, maxResults: 50 }).catch(
       () => ({ ok: false, reason: "calendar-read-failed", items: [] }),
     ),
@@ -249,9 +255,23 @@ export async function getAttentionLedger() {
         failedSources: taskFailedSources,
       }]
     : [];
+  const dealSourceState = revenueLedger?.source === "error"
+    ? "error"
+    : revenueLedger?.source === "supabase"
+      ? "live"
+      : "preview"; // 라이브 read 거부를 preview("미구성")로 뭉개지 않는다(4차 재감사 M)
+  if (dealSourceState === "error") {
+    sourceFailures.push({
+      source: "deals",
+      error: revenueLedger?.error || "revenue-ledger-core-read-failed",
+      failedSources: Array.isArray(revenueLedger?.failedSources) && revenueLedger.failedSources.length
+        ? revenueLedger.failedSources
+        : ["deals"],
+    });
+  }
   const sources = {
     tasks: taskSourceState,
-    deals: revenueLedger?.source === "supabase" ? "live" : "preview",
+    deals: dealSourceState,
     calendar: calendar?.ok ? "live" : "preview",
   };
 

@@ -198,7 +198,14 @@ export function shouldOpenGlobalProjectCreate(event = {}, { drawerOpen = false }
   const target = event.target;
   const tagName = String(target?.tagName || "").toLowerCase();
   if (["input", "textarea", "select"].includes(tagName)) return false;
-  return !target?.isContentEditable;
+  if (target?.isContentEditable) return false;
+  // 다이얼로그(⌘K·치트시트·드로어)가 떠 있으면 양보 — aria-modal 뒤에서 생성 드로어가
+  // 열리던 2키 재현 경로 차단(4차 재감사 M — use-crm-keyboard shouldYield와 동일 규칙).
+  if (typeof document !== "undefined"
+    && document.querySelector('[data-drawer-open="true"], [role="dialog"], [data-shortcut-overlay="true"]')) {
+    return false;
+  }
+  return true;
 }
 
 export function validateProjectDraft(draft = {}) {

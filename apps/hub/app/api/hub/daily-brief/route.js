@@ -363,7 +363,7 @@ function buildMetrics(revenue, content, automations, projects) {
     metric("Published", String(contentSummary.published || 0), `${contentSummary.drafts || 0} drafts`, "info"),
     metric("Runs failed", String(automationSummary.failuresToday || 0), `${automationSummary.runsToday || 0} runs`, automationSummary.failuresToday ? "warning" : "success"),
     metric("Open work", openProjects === null ? "—" : String(openProjects), projectsReadable ? "active projects" : "project ledger unavailable", "moon"),
-  ].slice(0, 4);
+  ].slice(0, 5);
 }
 
 function buildSources(results) {
