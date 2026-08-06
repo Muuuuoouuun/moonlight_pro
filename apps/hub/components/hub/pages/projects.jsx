@@ -45,12 +45,12 @@ import {
   filterTodosByWorkspace,
 } from "../workspace-map";
 
-const EMPTY_ALL_BRAND = {
-
 // 모듈 스코프 stale-while-revalidate — 탭 복귀마다 11~14콜 원장 read를 기다리며 트리가
 // 비던 것을 제거(4차 재감사 속도 M). 캐시 즉시 서빙 + 마운트마다 배경 재검증.
 const PROJECTS_CACHE_SERVABLE_MS = 5 * 60 * 1000;
 let projectsLedgerCache = null; // { at, ledger, todos, syncState }
+
+const EMPTY_ALL_BRAND = {
   key: 'all',
   id: 'all',
   name: '전체 브랜드',
