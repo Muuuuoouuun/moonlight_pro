@@ -208,6 +208,7 @@ async function exchangeGoogleToken(params) {
 
   const response = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",
+    signal: AbortSignal.timeout(8000), // 스톨된 구글 연결이 첫 화면 스켈레톤을 분 단위로 잡지 않게
     headers: {
       "content-type": "application/x-www-form-urlencoded",
     },
@@ -358,14 +359,16 @@ async function refreshConnectionAccessToken(connection) {
   };
 
   if (connection.id) {
-    await updateSupabaseRecord(
+    // 갱신 토큰 저장을 이벤트 fetch와 직렬로 기다리지 않는다(핫패스 +1 RTT 제거) —
+    // 저장이 실패해도 다음 요청이 다시 refresh할 뿐이라 무해하다.
+    void updateSupabaseRecord(
       "integration_connections",
       [["id", `eq.${connection.id}`]],
       {
         config: nextConfig,
         last_synced_at: new Date().toISOString(),
       },
-    );
+    ).catch(() => {});
   }
 
   return {
@@ -425,6 +428,7 @@ export async function ensureGoogleCalendarAccess({
 
 async function fetchGoogleCalendarJson(url, accessToken, options = {}) {
   const response = await fetch(url, {
+    signal: AbortSignal.timeout(8000), // 첫 화면/내 작업이 이 체인을 await한다 — 무한 대기 금지
     ...options,
     headers: {
       "content-type": "application/json",

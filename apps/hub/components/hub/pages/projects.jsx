@@ -46,6 +46,11 @@ import {
 } from "../workspace-map";
 
 const EMPTY_ALL_BRAND = {
+
+// 모듈 스코프 stale-while-revalidate — 탭 복귀마다 11~14콜 원장 read를 기다리며 트리가
+// 비던 것을 제거(4차 재감사 속도 M). 캐시 즉시 서빙 + 마운트마다 배경 재검증.
+const PROJECTS_CACHE_SERVABLE_MS = 5 * 60 * 1000;
+let projectsLedgerCache = null; // { at, ledger, todos, syncState }
   key: 'all',
   id: 'all',
   name: '전체 브랜드',
@@ -190,7 +195,11 @@ export function Projects({ workspace }) {
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [pathname, router]);
-  const [ledger, setLedger] = React.useState({
+  const cachedProjects = projectsLedgerCache
+    && Date.now() - projectsLedgerCache.at < PROJECTS_CACHE_SERVABLE_MS
+    ? projectsLedgerCache
+    : null;
+  const [ledger, setLedger] = React.useState(cachedProjects ? cachedProjects.ledger : {
     source: 'preview',
     areas: [],
     projectEntities: [],
@@ -206,7 +215,7 @@ export function Projects({ workspace }) {
     partialSources: [],
     taskAggregation: null,
   });
-  const [todos, setTodos] = React.useState([]);
+  const [todos, setTodos] = React.useState(cachedProjects ? cachedProjects.todos : []);
   const [pendingTaskIds, setPendingTaskIds] = React.useState(() => new Set());
   const [contentItems, setContentItems] = React.useState([]);
   const [drag, setDrag] = React.useState(null);
@@ -222,7 +231,7 @@ export function Projects({ workspace }) {
   const [mobileDetail, setMobileDetail] = React.useState(false);
   const [brandMenuOpen, setBrandMenuOpen] = React.useState(false);
   const [sidebarHidden, setSidebarHidden] = React.useState(false);
-  const [syncState, setSyncState] = React.useState('preview');
+  const [syncState, setSyncState] = React.useState(cachedProjects ? cachedProjects.syncState : 'preview');
   const [readError, setReadError] = React.useState(null);
   const ledgerReadRef = React.useRef({ requestId: 0, controller: null });
   const taskStatusPendingRef = React.useRef(new Set());
@@ -351,7 +360,7 @@ export function Projects({ workspace }) {
 
     // 최초/범위 전환은 명시적인 loading 상태를 쓰되, 저장 뒤 재검증은 현재 원장을
     // 유지한다. 성공 여부가 정해지기 전까지 행 전체가 사라지는 깜빡임을 막는다.
-    setSyncState(current => initial || !['live', 'partial'].includes(current) ? 'loading' : current);
+    setSyncState(current => (['live', 'partial'].includes(current) ? current : 'loading')); // 캐시/현재 원장 서빙 중엔 조용히 재검증
     setReadError(null);
     try {
       const exactProjectId = typeof projectId === 'string' ? projectId.trim() : '';
@@ -392,6 +401,31 @@ export function Projects({ workspace }) {
         if (initial) setExpanded(new Set(liveProjects.slice(0, 2).map(p => p.id)));
         setSyncState(data.partial ? 'partial' : 'live');
         setReadError(null);
+        if (!exactProjectId) {
+          // 전체 범위 read만 캐시 — 프로젝트 상세 read는 목록 스냅샷이 아니다.
+          projectsLedgerCache = {
+            at: Date.now(),
+            ledger: {
+              source: data.source,
+              areas: Array.isArray(data.areas) ? data.areas : [],
+              projectEntities: Array.isArray(data.projectEntities) ? data.projectEntities : [],
+              brands: data.brands?.length ? data.brands : [EMPTY_ALL_BRAND],
+              projects: liveProjects,
+              updates: Array.isArray(data.updates) ? data.updates : [],
+              decisions: Array.isArray(data.decisions) ? data.decisions : [],
+              notes: Array.isArray(data.notes) ? data.notes : [],
+              checks: Array.isArray(data.checks) ? data.checks : [],
+              columns: Array.isArray(data.columns) ? data.columns : [],
+              partial: Boolean(data.partial),
+              failedSources: Array.isArray(data.failedSources) ? data.failedSources : [],
+              partialSources: Array.isArray(data.partialSources) ? data.partialSources : [],
+              taskAggregation: data.taskAggregation || null,
+              selection: data.selection || null,
+            },
+            todos: liveTodos,
+            syncState: data.partial ? 'partial' : 'live',
+          };
+        }
         return { ok: true, projects: liveProjects, todos: liveTodos };
       }
 

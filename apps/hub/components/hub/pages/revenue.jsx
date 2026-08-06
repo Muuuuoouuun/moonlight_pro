@@ -920,22 +920,33 @@ function DealTaskPanel({ deal, onSaved }) {
     if (togglingRef.current.has(task.id)) return; // 연타 가드 — 이전 PATCH가 끝나기 전 재발화 금지
     togglingRef.current.add(task.id);
     setListError(null);
+    // 낙관 flip — 체크박스가 Hub→Engine→Supabase 왕복+재조회를 직렬로 기다리지 않는다
+    // (4차 재감사 속도 M). 실패 시 원상복구 + 원인 표시.
+    const nextDone = !task.done;
+    setTasks(ts => ts.map(t => (t.id === task.id ? { ...t, done: nextDone } : t)));
+    let saved = false;
     try {
       const res = await fetch('/api/hub/tasks', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: task.id, status: task.done ? 'todo' : 'done' }),
+        body: JSON.stringify({ id: task.id, status: nextDone ? 'done' : 'todo' }),
       });
       const data = await res.json().catch(() => ({}));
-      // 실패를 삼키고 reload만 하면 체크가 소리 없이 원상복구된다 — 원인을 표시한다.
-      if (!res.ok || data.status !== 'saved') setListError('완료 상태 저장에 실패했습니다. 다시 시도하세요.');
+      saved = res.ok && data.status === 'saved';
+      if (!saved) {
+        setTasks(ts => ts.map(t => (t.id === task.id ? { ...t, done: task.done } : t)));
+        setListError('완료 상태 저장에 실패했습니다. 다시 시도하세요.');
+      }
     } catch {
+      setTasks(ts => ts.map(t => (t.id === task.id ? { ...t, done: task.done } : t)));
       setListError('완료 상태 저장에 실패했습니다. 다시 시도하세요.');
     } finally {
       togglingRef.current.delete(task.id);
     }
-    await load();
-    onSaved?.();
+    if (saved) {
+      load(); // 배경 재검증 — 체크 반영을 붙잡지 않는다
+      onSaved?.();
+    }
   };
 
   // A/S 후속 프로젝트 — 자동 생성이 아니라 운영자 버튼(후보 확인 UI 원칙). 우선순위 low.

@@ -154,9 +154,18 @@ function priorityValue(item) {
   return Number.isFinite(item.priorityScore) ? item.priorityScore : 0;
 }
 
+// 모듈 스코프 stale-while-revalidate — 탭 복귀마다 10콜+캘린더 체인을 기다리며 목록이
+// 비던 것을 제거(4차 재감사 속도 M). 캐시 즉시 서빙 + 항상 배경 재검증.
+const ATTENTION_CACHE_SERVABLE_MS = 5 * 60 * 1000;
+let attentionLedgerCache = null; // { at, data, state }
+
 function useAttentionLedger() {
-  const [data, setData] = React.useState({ items: [], sources: {}, calendarReason: '', projects: [] });
-  const [state, setState] = React.useState('loading');
+  const cachedAttention = attentionLedgerCache
+    && Date.now() - attentionLedgerCache.at < ATTENTION_CACHE_SERVABLE_MS
+    ? attentionLedgerCache
+    : null;
+  const [data, setData] = React.useState(cachedAttention ? cachedAttention.data : { items: [], sources: {}, calendarReason: '', projects: [] });
+  const [state, setState] = React.useState(cachedAttention ? cachedAttention.state : 'loading');
   // 완료/미루기 뒤 reload가 겹치면 늦은 이전 응답이 최신 목록을 덮는다 — 최신 요청만 반영.
   const requestRef = React.useRef(0);
 
@@ -169,14 +178,17 @@ function useAttentionLedger() {
       const json = await res.json().catch(() => null);
       if (!isCurrent()) return null;
       if (!res.ok || !json || json.status === 'error') {
-        setState('error');
+        // 캐시 서빙 중이면 error로 화면을 비우지 않고 오래된 데이터임을 표시한다.
+        setState(attentionLedgerCache ? 'stale' : 'error');
         return null;
       }
-      setData({ items: json.items || [], sources: json.sources || {}, calendarReason: json.calendarReason || '', projects: json.projects || [] });
+      const nextData = { items: json.items || [], sources: json.sources || {}, calendarReason: json.calendarReason || '', projects: json.projects || [] };
+      attentionLedgerCache = { at: Date.now(), data: nextData, state: 'ready' };
+      setData(nextData);
       setState('ready');
       return json;
     } catch {
-      if (isCurrent()) setState('error');
+      if (isCurrent()) setState(attentionLedgerCache ? 'stale' : 'error');
       return null;
     }
   }, []);
@@ -717,7 +729,29 @@ export function MyWork({ onNavigate }) {
         return { ok: false, status: data.status || 'error' };
       }
       setNotice({ tone: 'ok', label: '할 일 업데이트됨' });
-      await reload();
+      // 저장 영수증이 전체 attention read(10콜+캘린더 체인)를 기다리지 않는다 —
+      // 표시 필드를 낙관 병합하고 배경 재검증(4차 재감사 속도 M).
+      const detailItemId = detailId;
+      if (detailItemId) {
+        setItemPatches((prev) => ({
+          ...prev,
+          [detailItemId]: {
+            ...(prev[detailItemId] || {}),
+            title: taskDraft.title,
+            whenAt: taskDraft.dueAt || null,
+          },
+        }));
+      }
+      reload().then((fresh) => {
+        if (fresh && detailItemId) {
+          setItemPatches((prev) => {
+            if (!(detailItemId in prev)) return prev;
+            const next = { ...prev };
+            delete next[detailItemId];
+            return next;
+          });
+        }
+      }).catch(() => {});
       return { ok: true, status: 'saved' };
     } catch (error) {
       setNotice({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
@@ -1008,8 +1042,14 @@ export function MyWork({ onNavigate }) {
           <EmptyState icon="alert" title="읽기 실패" description="attention 기록을 불러오지 못했습니다." action={<Button variant="outline" size="sm" onClick={reload}>다시 시도</Button>} />
         </Card>
       )}
+      {state === 'stale' && (
+        <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', background: 'var(--surface)', fontSize: 12, color: 'var(--fg-muted)' }}>
+          <span style={{ flex: 1 }}>재검증에 실패해 마지막으로 읽은 데이터를 표시 중입니다.</span>
+          <Button variant="secondary" size="sm" onClick={reload}>다시 읽기</Button>
+        </div>
+      )}
 
-      {state === 'ready' && lens === 'list' && (
+      {['ready', 'stale'].includes(state) && lens === 'list' && (
         <Card pad={false} style={{ overflow: 'hidden' }}>
           {visible.length === 0 ? (
             <EmptyState
@@ -1177,7 +1217,7 @@ export function MyWork({ onNavigate }) {
         </Card>
       )}
 
-      {state === 'ready' && lens === 'board' && (
+      {['ready', 'stale'].includes(state) && lens === 'board' && (
         <ScrollShadowX>
           {BUCKETS.map((b) => {
             const bucketItems = visible.filter((i) => i.bucket === b.key);
@@ -1241,7 +1281,7 @@ export function MyWork({ onNavigate }) {
         </ScrollShadowX>
       )}
 
-      {state === 'ready' && lens === 'week' && (
+      {['ready', 'stale'].includes(state) && lens === 'week' && (
         sources.calendar !== 'live' && lane === 'event' ? (
           <Card>
             <EmptyState

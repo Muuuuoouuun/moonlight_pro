@@ -427,33 +427,44 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
   );
 }
 
+const EMPTY_DAILY_BRIEF_STATE = {
+  syncState: 'syncing',
+  generatedAt: null,
+  sources: [],
+  summary: null,
+  metrics: [],
+  operatorHome: null,
+  taskToday: { state: 'preview', items: [], counts: {}, hiddenCount: 0 },
+  contentBrands: null,
+  signals: [],
+  dailyFocus: null,
+  morningBrief: null,
+};
+
+// 모듈 스코프 stale-while-revalidate — 탭 복귀마다 ~30콜 팬아웃을 다시 기다리며
+// 슬롯이 비던 것을 제거(4차 재감사 속도 M). 캐시는 즉시 서빙, 항상 배경 재검증.
+const DAILY_BRIEF_CACHE_SERVABLE_MS = 5 * 60 * 1000;
+let dailyBriefCache = null; // { at, state }
+
 function useDailyBriefLedger(refreshKey) {
-  const [state, setState] = React.useState({
-    syncState: 'syncing',
-    generatedAt: null,
-    sources: [],
-    summary: null,
-    metrics: [],
-    operatorHome: null,
-    taskToday: { state: 'preview', items: [], counts: {}, hiddenCount: 0 },
-    contentBrands: null,
-    signals: [],
-    dailyFocus: null,
-    morningBrief: null,
-  });
+  const servable = dailyBriefCache && Date.now() - dailyBriefCache.at < DAILY_BRIEF_CACHE_SERVABLE_MS;
+  const [state, setState] = React.useState(servable ? dailyBriefCache.state : EMPTY_DAILY_BRIEF_STATE);
 
   React.useEffect(() => {
     let active = true;
+    const hasServableCache = Boolean(
+      dailyBriefCache && Date.now() - dailyBriefCache.at < DAILY_BRIEF_CACHE_SERVABLE_MS
+    );
 
     async function load() {
-      setState((prev) => ({ ...prev, syncState: 'syncing' }));
+      if (!hasServableCache) setState((prev) => ({ ...prev, syncState: 'syncing' })); // 캐시 서빙 중엔 조용히 재검증
       try {
         const response = await fetch('/api/hub/daily-brief', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
         if (!active || !response.ok || !data) {
           // transport 실패는 error — preview로 뭉개면 첫 화면이 "Supabase 연결 후 live
           // 전환"이라는 거짓 안내와 함께 신호 0건으로 렌더된다(re-audit S5).
-          if (active) setState((prev) => ({ ...prev, syncState: 'error' }));
+          if (active) setState((prev) => ({ ...prev, syncState: hasServableCache ? 'partial' : 'error' }));
           return;
         }
 
@@ -467,7 +478,7 @@ function useDailyBriefLedger(refreshKey) {
               ? 'mixed'
               : 'preview';
 
-        setState({
+        const nextState = {
           syncState: nextSyncState,
           generatedAt: data.generatedAt || null,
           sources: Array.isArray(data.sources) ? data.sources : [],
@@ -479,9 +490,12 @@ function useDailyBriefLedger(refreshKey) {
           signals: Array.isArray(data.signals) ? data.signals : [],
           dailyFocus: data.dailyFocus || null,
           morningBrief: data.morningBrief || null,
-        });
+        };
+        dailyBriefCache = { at: Date.now(), state: nextState };
+        setState(nextState);
       } catch {
-        if (active) setState((prev) => ({ ...prev, syncState: 'error' }));
+        // 캐시를 보여주는 중이면 live 위장 대신 partial(오래된 데이터) — 없으면 error.
+        if (active) setState((prev) => ({ ...prev, syncState: hasServableCache ? 'partial' : 'error' }));
       }
     }
 

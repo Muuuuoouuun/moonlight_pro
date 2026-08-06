@@ -285,7 +285,9 @@ test("mutation reloads keep the current ledger mounted while refreshing", () => 
   const effectStart = projectsSource.indexOf("React.useEffect", loadStart);
   const loadBlock = projectsSource.slice(loadStart, effectStart);
 
-  assert.match(loadBlock, /setSyncState\(current\s*=>[\s\S]{0,180}initial[\s\S]{0,180}loading/);
+  // SWR 캐시 도입(4차 재감사): initial 여부와 무관하게, 현재 원장이 live/partial이면
+  // loading으로 덮지 않는다 — 뮤테이션 재검증과 캐시 서빙 마운트 둘 다 행을 유지한다.
+  assert.match(loadBlock, /setSyncState\(current\s*=>[\s\S]{0,180}(live|partial)[\s\S]{0,180}loading/);
   assert.doesNotMatch(loadBlock, /^\s*setSyncState\(['"]loading['"]\);/m);
 });
 
