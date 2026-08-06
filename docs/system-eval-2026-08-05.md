@@ -26,6 +26,9 @@
 | 5차 재감사 (iter 14~16 반영 후, 전 축) | 2026-08-06 | 90 | 89 | 87 | 85 | 90 | 90 | 88 | 87† | **88.4** |
 | 6차 재감사 (iter 17 반영 후, 전 축) | 2026-08-06 | 90 | 89 | 87 | 88 | 90 | 90 | 88 | 87† | **88.9** |
 | 7차 재감사 (iter 18 반영 후, 전 축) | 2026-08-06 | 88 | 89 | 87 | 89 | 90 | 90 | 89 | 87† | **88.9** |
+| 8차 재감사 (iter 19 반영 후, 4축 측정) | 2026-08-06 | 88 | 88 | — | 91 | 92 | —‡ | —‡ | —‡ | 부분 측정 |
+
+\‡ 8차 디자인·UI/UX·편의 감사는 세션 한도로 중단(12:20Z 리셋 후 재실행 예정) — 해당 3축은 7차 측정치(90·89·87)가 최신이다.
 
 \** 2차 재감사는 축별 감사 에이전트 5기 중 2기만 완주(속도 84 · 정체성 87 · 사용성 86). 안정성·디자인·UI/UX·편의 에이전트는 세션 한도로 중단 — 09:10Z 리셋 후 재실행. 완주 2기의 잔여 지적(셸 ReferenceError·ClassIn 앵커 아카이브 착지·가짜 페르소나·팬아웃·캐시 부재 등)은 6~9차 수리로 전부 반영 완료.
 
@@ -222,6 +225,16 @@
 - **2/2 (전 축 소진)**: projects 무조건 N 훅 제거(18차 회귀 — preventDefault가 뷰 인지 리스너를 가려 List/Board에서 To-do 드로어 오발). content Studio 지어낸 Audience/Schedule → "— 미연결", 핸들러 없는 Ask 입력 제거. agents 가짜 Pin 영수증·맥락 없는 Open·아바타 radial-gradient/glow(§4/§13) 제거. **삭제 지연-undo 이식(편의 최대 격차)**: 태스크(my-work·projects)·리드 3.5초 창 → 창 종료 후 DELETE, 실패·preview 복원+명명, EditDrawer preview 삭제 실패 명명 통일. **알림 수명 통일(UIUX 90 진입로)**: 창 종료 시 전체 소거 — my-work/followups/projects를 revenue·daily-brief 패턴으로. TaskToday error≠preview 분리(role=alert+다시 읽기). Roadmap 빈 상태 CTA 2곳. 10px 메타 10곳 → 10.5. DESIGN.md §5.2 값 필드 moon-200 명도 강조 명문화. followups 모듈 SWR·segments Revenue 캐시 재사용·work 캘린더 분당 리렌더 → 날짜 틱. 죽은 projectCreateContext 제거.
 
 **잔여 명시 보류(신규 2 + 기존 유지)**: my-work 완료/미루기 후 좁은 재검증(attention 전체 reload → tasks 슬라이스, M — 낙관 숨김 뒤 배경 비용이라 체감 없음), daily-brief 보조 정보 펼침 시 재조회(S — lazy mount라 첫 화면 비용 0). 기존: 첫 화면 attention-ledger 통합(Phase 1B — 정체성 캡), Projects/PMS 전체 j/k(L), window.confirm 스타일드 플로(M), overview lean, hub-write-guard/flush/BulkBar/TopBar New.
+
+### Iteration 20 (2026-08-06) — 반영 완료
+
+주제: **8차 재감사(속도92 · 안정성91 · 정체성88 · 사용성88 — 디자인/UIUX/편의는 세션 한도로 미측정) 중 안정성 계약 구멍 소진.** 8차는 19차 클레임 15항 중 14항을 실체 확인(NOT-REAL 1건 = outcomes 라우트 미수리)했고, 안정성 89→91 · 속도 90→92로 올라 두 축이 90선을 넘었다.
+검증: `npm test` 552/552(신규 3) · hub build · engine tsc 통과. 커밋 01e2bda.
+
+- **0행 DELETE 감지(systemic)**: `deleteSupabaseRecord`가 `return=minimal` 고정이라 RLS 거부·이미 삭제됨·workspace 불일치가 전부 `{persisted:true,"ok"}`로 성공 위장됐다. 19차가 그 위에 삭제 undo 3종(my-work·projects·revenue)을 얹은 상태라 "삭제됨" 영수증 뒤 다음 로드에 레코드가 부활할 수 있는 구조였다. `return=representation` + 0행 → `no-matching-row`로 update(10차)의 기존 계약과 통일. tasks 라우트는 재시도 불가 상황을 `retryable:false` + 한국어 원인으로 구분. DELETE mock이 `204 + []`를 반환하던 불가능 스텁을 실제 PostgREST 동작으로 교정하고 0행 계약 테스트 3건 신설.
+- **read 실패 preview 재라벨 잔량 소거**: outcomes 라우트(원장 error를 preview 200으로 되뭉개던 19차 미착지 절반), campaigns·persona-registry·agent-runs 원장 3곳, campaigns 라우트 `failed` 202→502. 전부 Phase 0 분류(preview = 미구성 전용)로 정렬.
+
+**8차 잔여(다음 배치)**: sheets-sync read 실패가 "미연결 + 연결 CTA"로 위장(M), work-ledger 전 소스 실패도 partial 200(S), ⌘K가 revenueLedgerCache 미재사용(S), overview/content/work/automations 모듈 SWR 부재(M), work `?focus=` 로딩 레이스로 첫 화면 primary CTA 무음 실패(S), automations 가짜 webhook endpoint URL(S), revenue 빈 상태 error 분기 부재(M), Studio 고정 Figure 플레이스홀더(S), TruthBadge 개발 토큰 라벨(S).
 
 ### 다음 회차 백로그 (점수 영향 순)
 
