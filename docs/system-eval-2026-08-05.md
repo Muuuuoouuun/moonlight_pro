@@ -164,6 +164,18 @@
 
 **미완주 축 보류 항목** (09:10Z 재감사에서 확인): overview 라우트 lean 전환(~35콜, 브랜드/updates/decisions projection 필요 — M), beforeunload keepalive 보장(현행 pagehide 최선 노력), overview 활동 차트 위 브랜드·글리프 lean 필드.
 
+### Iteration 10~13 (2026-08-05) — 반영 완료
+
+주제: **3차 재감사 완주(안정성 78 · 디자인 84 · UI/UX 84 · 편의 86) → 지적 목록 전량 소진.**
+검증: 각 배치 `npm test` 549/549 · engine tsc --noEmit · hub/engine build 통과. 커밋 8f82bc3 · 8468b74 · 5333e00 · ed963a3.
+
+- **10차 (안정성 코어)**: revenue/content 원장 코어 read 실패 → error+502(기존 preview 200 — 블립 동안 "0건이 사실"+첫 화면 슬롯 무언 공백+5분 캐시 고착), 보강 소스 실패는 partial 명명. engine 0행 PATCH 단락 제거로 stale-409/404 분기 프로덕션 부활 + PersistenceResult 타입 정합 + 불가능 mock 6건 수정. revenue-write meta 병합 기준 read 실패 시 저장 중단(meta-wipe 차단). SWR 캐시 재검증 실패 시 partial 표시(오래된 live 위장 금지). recomputeLeadScores 전량 실패 명명, itemPatches 레이스, refreshTasks 요청 id, localStorage 가드.
+- **11차 (Revenue 총정리)**: Accounts 생성 즉시 영속+인라인 이름 변경(팬텀 제거), 활동 삭제 3.5초 undo+실패 복원, 핀/스테이지 이동/숨김 토글 결과 확인+롤백+role=status, MTD/QTD/YTD 죽은 토글 제거, Cases n 가드 복원, cards 뷰 j/k 커서, 딜 체크리스트 연타 가드, Accounts 360 활동 읽기 실패 정직화, ACT/REACTION/health/케이스/메트릭 §5.3 전면 중립화.
+- **12차 (잔여 표면 + 셸)**: 브랜드 톤 레인보우 소스 2곳(content-ledger CANONICAL_BRAND_TONES — studyseagull 상시 danger 칩 — + operating-ledger kind 분기) 소거, sheets-sync/automations/agents/content/evolution-settings/projects 잔여 semantic 소거, work Rhythm 수제 라벨 → SyncBadge, overview-truth 금지 어휘 중립화 + green-proof 강제 테스트 단언 §5.3로 반전, 라이트 테마 fg-dim/faint 사다리 역전 수정+warning AA. followups j/k/e 배선+만료 undo 버튼 소거, my-work j/k 별칭, customers/캠페인 생성 실패 명명, ⌘K role=dialog, 모바일 ESC 레이어 존중, LegacyPlaceholder Button primitive, 치트시트 ⌘Z 표기 실측 정합.
+- **13차**: ShortcutOverlay 닫기 버튼+포커스 이동, engine 명령 라우트 3곳 64KB 바디 상한.
+
+**명시 보류 3건**: hub-write-guard 프로덕션 인증 루프(operator-session 쿠키 통합 — 배포 모드 확인 필요, 로컬/cron 전제에선 비발화), 언마운트 후 flush 실패의 무언성(연락 기록 — pagehide 최선 노력까지 반영, keepalive 보장은 콜백 소유 fetch 구조상 별도 작업), overview 라우트 lean 전환(브랜드/updates/decisions projection 필요 — M, 보조 표면).
+
 ### 다음 회차 백로그 (점수 영향 순)
 
 - 편의 부가기능: 기존 키보드 시스템(useCrmKeyboard/ShortcutOverlay/BulkBar) 전면 배선, 공유 undo 훅 + live-region 토스트 → followups 기록·완료·스테이지 변경·삭제(soft) 확장, ⌘K 레코드 검색.
