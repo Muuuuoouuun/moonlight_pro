@@ -35,7 +35,10 @@ export async function scanStalledDeals({
 
   const deals = Array.isArray(rev.deals) ? rev.deals : [];
   const stalled = deals.filter(
-    (d) => d.stage !== "won" && d.stage !== "lost" && Number(d.age) > thresholdDays,
+    (d) => d.trackingEligible !== false
+      && d.stage !== "won"
+      && d.stage !== "lost"
+      && Number(d.age) > thresholdDays,
   );
   if (!stalled.length) {
     return { status: "ok", stalled: 0, created: 0, skipped: 0, proposals: [] };

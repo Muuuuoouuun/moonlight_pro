@@ -5,9 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, Sparkline, EditDrawer, SyncBadge, SegmentedControl, Drawer, Checkbox } from "../hub-primitives";
 import {
-  LEADS as FALLBACK_LEADS,
   DEAL_STAGES as FALLBACK_DEAL_STAGES,
-  DEALS as FALLBACK_DEALS,
   BRANDS,
   ACCOUNT_DETAIL,
 } from "../hub-data";
@@ -91,7 +89,7 @@ function formatPercentDelta(current, previous) {
 function buildRevenueAttention(leads, deals) {
   const items = [];
   deals
-    .filter((deal) => deal.stage !== 'won' && deal.stage !== 'lost' && Number(deal.age) > 10)
+    .filter((deal) => deal.trackingEligible !== false && deal.stage !== 'won' && deal.stage !== 'lost' && Number(deal.age) > 10)
     .slice(0, 3)
     .forEach((deal) => {
       items.push({
@@ -102,7 +100,7 @@ function buildRevenueAttention(leads, deals) {
       });
     });
 
-  const newLeads = leads.filter((lead) => lead.stage === 'New').length;
+  const newLeads = leads.filter((lead) => lead.trackingEligible !== false && lead.stage === 'New').length;
   if (newLeads > 0) {
     items.push({
       tone: 'info',
@@ -112,7 +110,7 @@ function buildRevenueAttention(leads, deals) {
     });
   }
 
-  const wonDeals = deals.filter((deal) => deal.stage === 'won');
+  const wonDeals = deals.filter((deal) => deal.trackingEligible !== false && deal.stage === 'won');
   if (wonDeals.length > 0) {
     const wonTotal = wonDeals.reduce((sum, deal) => sum + deal.value, 0);
     items.push({
@@ -126,36 +124,17 @@ function buildRevenueAttention(leads, deals) {
   return items.slice(0, 4);
 }
 
-const FALLBACK_ACCOUNTS = [
-  { name: '클래스인',        type: 'company',  deals: 2, value: 18000000, last: '오늘',    lastAt: '11:02', health: 'warning', owner: 'Me' },
-  { name: 'Studio Park',     type: 'company',  deals: 1, value: 6000000,  last: '3일 전',  lastAt: '3d',    health: 'ok',      owner: 'Me' },
-  { name: 'Beanly Coffee',   type: 'company',  deals: 1, value: 4200000,  last: '오늘',    lastAt: '14:15', health: 'ok',      owner: 'Council' },
-  { name: 'Han 스튜디오',    type: 'company',  deals: 1, value: 3500000,  last: '5일 전',  lastAt: '5d',    health: 'warning', owner: 'Me' },
-  { name: '베어브릭',         type: 'company',  deals: 1, value: 7800000,  last: '2주 전',  lastAt: '14d',   health: 'ok',      owner: 'Me' },
-  { name: '이재민',           type: 'personal', deals: 1, value: 1200000,  last: '오늘',    lastAt: '08:45', health: 'ok',      owner: 'Me' },
-  { name: '정하윤',           type: 'personal', deals: 1, value: 900000,   last: '어제',    lastAt: '1d',    health: 'ok',      owner: 'Me' },
-  { name: 'Jihoon (코칭)',    type: 'personal', deals: 1, value: 600000,   last: '오늘',    lastAt: '16:00', health: 'ok',      owner: 'Me' },
-];
-
-const FALLBACK_CASES = [
-  { id: 'CS-104', title: 'Spring Cohort 계약 검토', account: '클래스인', type: 'company', status: 'Open', priority: 'high', opened: '3일 전', owner: 'Me' },
-  { id: 'CS-103', title: '결제 영수증 재발행', account: '이재민', type: 'personal', status: 'Waiting', priority: 'low', opened: '어제', owner: 'Automation' },
-  { id: 'CS-102', title: '뉴스레터 구독 취소 이슈', account: 'Studio Park', type: 'company', status: 'Open', priority: 'med', opened: '2일 전', owner: 'Me' },
-  { id: 'CS-101', title: '도메인 인증 재설정', account: 'Moonlight', type: 'company', status: 'Resolved', priority: 'med', opened: '5일 전', owner: 'Me' },
-  { id: 'CS-099', title: '코칭 일정 재조정', account: 'Jihoon', type: 'personal', status: 'Resolved', priority: 'low', opened: '지난 주', owner: 'Me' },
-];
-
 function useRevenueLedger() {
   const [ledger, setLedger] = React.useState({
-    source: 'mock',
-    leads: FALLBACK_LEADS,
-    deals: FALLBACK_DEALS,
+    source: 'preview',
+    leads: [],
+    deals: [],
     stages: FALLBACK_DEAL_STAGES,
-    accounts: FALLBACK_ACCOUNTS,
-    cases: FALLBACK_CASES,
+    accounts: [],
+    cases: [],
     summary: null,
   });
-  const [syncState, setSyncState] = React.useState('mock');
+  const [syncState, setSyncState] = React.useState('loading');
   // Bump to re-run the fetch effect. reload() surfaces it so callers (business-card promote,
   // score recompute) can refresh the ledger in place instead of a full window reload.
   const [reloadTick, setReloadTick] = React.useState(0);
@@ -169,7 +148,7 @@ function useRevenueLedger() {
         const response = await fetch('/api/hub/revenue', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
         if (!active || !response.ok || !data || data.status === 'error') {
-          if (active) setSyncState('mock');
+          if (active) setSyncState('error');
           return;
         }
         if (data.source === 'supabase') {
@@ -184,10 +163,10 @@ function useRevenueLedger() {
           });
           setSyncState('live');
         } else {
-          setSyncState('mock');
+          setSyncState('preview');
         }
       } catch {
-        if (active) setSyncState('mock');
+        if (active) setSyncState('error');
       }
     }
     load();
@@ -350,8 +329,8 @@ export function RevenueOverview({ onNavigate }) {
   const summary = ledger.summary;
   const isLiveLedger = ledger.source === 'supabase';
 
-  const mrr = summary?.mrr ?? (isLiveLedger ? 0 : 8400000);
-  const mrrPrev = summary?.mrrPrev ?? (isLiveLedger ? 0 : 7500000);
+  const mrr = summary?.mrr ?? 0;
+  const mrrPrev = summary?.mrrPrev ?? 0;
   const pipelineByStage = DEAL_STAGES.map(s => ({
     ...s,
     sum: DEALS.filter(d => d.stage === s.key).reduce((a, b) => a + b.value, 0),
@@ -362,7 +341,7 @@ export function RevenueOverview({ onNavigate }) {
   const openLeads = summary?.leadsCount ?? LEADS.length;
   const openDeals = summary?.openDeals ?? DEALS.filter(d => d.stage !== 'won').length;
   const wonMTD = summary?.wonMTD ?? DEALS.filter(d => d.stage === 'won').reduce((a, b) => a + b.value, 0);
-  const newThisMonth = summary?.newThisMonth ?? (isLiveLedger ? 0 : 12);
+  const newThisMonth = summary?.newThisMonth ?? 0;
   const wonDealsCount = DEALS.filter(d => d.stage === 'won').length;
   // Live join: group won-deal value by the deal's brand meta (mapDeal → resolveBrand).
   // Brands outside the BRANDS registry still show, with a neutral glyph and their raw key.
@@ -380,19 +359,11 @@ export function RevenueOverview({ onNavigate }) {
         .sort((a, b) => b.mrr - a.mrr)
         .slice(0, 6);
     })()
-    : BRANDS.filter(b => b.key !== 'all').slice(0, 6).map((b, i) => ({
-      ...b,
-      mrr: [2.4, 1.8, 0.6, 2.0, 0.9, 0.7][i] * 1000000,
-    }));
+    : [];
   const totalBrandMRR = byBrand.reduce((a, b) => a + b.mrr, 0);
   const attentionItems = isLiveLedger
     ? buildRevenueAttention(LEADS, DEALS)
-    : [
-      { tone: 'danger', t: '클래스인 — 계약서 응답 2일째', s: '리마인드 메일 추천', go: 'dashboard/revenue/deals' },
-      { tone: 'warning', t: 'Studio Park — 제안서 14일 정체', s: 'follow-up 필요', go: 'dashboard/revenue/deals' },
-      { tone: 'info', t: '이번 주 신규 리드 +12', s: '분류·할당 필요', go: 'dashboard/revenue/leads' },
-      { tone: 'success', t: 'Won: 베어브릭 콜라보 ₩7.8M', s: '온보딩 킥오프', go: 'dashboard/revenue/accounts' },
-    ];
+    : [];
 
   // Summary data stays month-scope until the ledger exposes QTD/YTD aggregates —
   // the toggle drives the caption so the header never shows a stale hardcoded month.
@@ -404,9 +375,9 @@ export function RevenueOverview({ onNavigate }) {
     : `${now.getMonth() + 1}월 · 이번 달 요약`;
 
   const kpis = [
-    { l: isLiveLedger ? 'MRR (추정)' : 'MRR', v: fmt(mrr), d: isLiveLedger ? 'won MTD 기반 추정' : formatPercentDelta(mrr, mrrPrev), tone: mrr > mrrPrev ? 'success' : 'neutral', go: 'dashboard/revenue/accounts', trend: isLiveLedger ? null : [6.2, 6.8, 6.5, 7.1, 7.5, 7.5, 8.4], trendTone: 'success' },
-    { l: 'Pipeline', v: fmt(pipeline), d: `${openDeals} deals`, tone: 'moon', go: 'dashboard/revenue/deals', trend: isLiveLedger ? null : [24, 28, 26, 31, 30, 33, 33.5], trendTone: 'moon' },
-    { l: 'Open leads', v: openLeads, d: `이번달 신규 ${newThisMonth}`, tone: 'info', go: 'dashboard/revenue/leads', trend: isLiveLedger ? null : [3, 5, 4, 7, 9, 12, 12], trendTone: 'moon' },
+    { l: 'MRR (추정)', v: fmt(mrr), d: isLiveLedger ? 'won MTD 기반 추정' : formatPercentDelta(mrr, mrrPrev), tone: mrr > mrrPrev ? 'success' : 'neutral', go: 'dashboard/revenue/accounts', trend: null, trendTone: 'success' },
+    { l: 'Pipeline', v: fmt(pipeline), d: `${openDeals} deals`, tone: 'moon', go: 'dashboard/revenue/deals', trend: null, trendTone: 'moon' },
+    { l: 'Open leads', v: openLeads, d: `이번달 신규 ${newThisMonth}`, tone: 'info', go: 'dashboard/revenue/leads', trend: null, trendTone: 'moon' },
     { l: 'Won MTD', v: fmt(wonMTD), d: `${wonDealsCount} deals`, tone: wonMTD > 0 ? 'success' : 'neutral', go: 'dashboard/revenue/deals', trend: null },
   ];
 
@@ -2022,7 +1993,7 @@ export function Cases({ onNavigate }) {
   const [search, setSearch] = React.useState('');
   const ledgerCases = ledger.source === 'supabase'
     ? (Array.isArray(ledger.cases) ? ledger.cases : [])
-    : (Array.isArray(ledger.cases) ? ledger.cases : FALLBACK_CASES);
+    : (Array.isArray(ledger.cases) ? ledger.cases : []);
   const cases = [...localCases, ...ledgerCases]
     .filter(c => !deletedCaseIds.has(c.id))
     .map(c => (caseEdits[c.id] ? { ...c, ...caseEdits[c.id] } : c));
@@ -2766,7 +2737,7 @@ export function Accounts({ onNavigate }) {
   const [accountDraft, setAccountDraft] = React.useState(null); // decoupled draft so the list stays stable while typing
   const ledgerAccounts = ledger.source === 'supabase'
     ? (Array.isArray(ledger.accounts) ? ledger.accounts : [])
-    : (Array.isArray(ledger.accounts) ? ledger.accounts : FALLBACK_ACCOUNTS);
+    : (Array.isArray(ledger.accounts) ? ledger.accounts : []);
   // Attach a stable key (Supabase id, a generated local key, or name for mock rows) so edits and
   // deletes survive renames — the name-keyed selection UI keeps working on top of it.
   const ACCOUNTS = [...localAccounts, ...ledgerAccounts]

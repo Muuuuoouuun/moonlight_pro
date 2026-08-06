@@ -55,7 +55,10 @@ function nameTokens(name) {
 
 function buildUnifiedRiskSignals(revenue, projects, automations) {
   const staleDeals = (Array.isArray(revenue.deals) ? revenue.deals : []).filter(
-    (d) => d.stage !== "won" && d.stage !== "lost" && Number(d.age) >= 10,
+    (d) => d.trackingEligible !== false
+      && d.stage !== "won"
+      && d.stage !== "lost"
+      && Number(d.age) >= 10,
   );
   const blocked = (Array.isArray(projects.projects) ? projects.projects : []).filter(
     (p) => p.status === "Blocked",
@@ -135,7 +138,10 @@ function buildRevenueSignals(revenue) {
   const signals = [];
 
   deals
-    .filter((deal) => deal.stage !== "won" && deal.stage !== "lost" && Number(deal.age) >= 10)
+    .filter((deal) => deal.trackingEligible !== false
+      && deal.stage !== "won"
+      && deal.stage !== "lost"
+      && Number(deal.age) >= 10)
     .sort((a, b) => Number(b.value || 0) - Number(a.value || 0))
     .slice(0, 2)
     .forEach((deal) => {
@@ -156,7 +162,9 @@ function buildRevenueSignals(revenue) {
       });
     });
 
-  const newLeads = leads.filter((lead) => lead.stage === "New").slice(0, 3);
+  const newLeads = leads
+    .filter((lead) => lead.trackingEligible !== false && lead.stage === "New")
+    .slice(0, 3);
   if (newLeads.length) {
     signals.push({
       id: "revenue-new-leads",
@@ -197,10 +205,19 @@ function buildFollowupSignals(followups) {
   }];
 }
 
-function buildGuruSignals(runsLedger) {
+function buildGuruSignals(runsLedger, revenue) {
   const runs = Array.isArray(runsLedger.runs) ? runsLedger.runs : [];
   if (!runs.length) return [];
-  const latest = runs[0];
+  const eligibleDealIds = new Set(
+    (Array.isArray(revenue.deals) ? revenue.deals : [])
+      .filter((deal) => deal.trackingEligible !== false)
+      .map((deal) => deal.id),
+  );
+  const latest = runs.find((run) => {
+    if (!String(run.mode || "").includes("followup")) return true;
+    return eligibleDealIds.has(run.ref);
+  });
+  if (!latest) return [];
   const mode = encodeURIComponent(latest.mode || "sales");
   const ref = encodeURIComponent(latest.ref || "pipeline");
   return [{
@@ -469,10 +486,23 @@ export async function GET(req) {
   const followups = readLedger(followupsResult);
   const guruRuns = readLedger(guruRunsResult);
   const ordersLedger = readLedger(ordersResult, { source: "preview", orders: [] });
+  const isTrackedContactOrder = (order) => {
+    if (!["followup", "followup-draft"].includes(order.kind)) return true;
+    if (order.leadId) {
+      return (revenue.leads || []).some((lead) => lead.id === order.leadId && lead.trackingEligible !== false);
+    }
+    if (order.dealId) {
+      return (revenue.deals || []).some((deal) => deal.id === order.dealId && deal.trackingEligible !== false);
+    }
+    return true;
+  };
+  const visibleOrders = Array.isArray(ordersLedger.orders)
+    ? ordersLedger.orders.filter(isTrackedContactOrder)
+    : [];
   const queue = {
     source: ordersLedger.source || "preview",
-    pending: Array.isArray(ordersLedger.orders) ? ordersLedger.orders.length : 0,
-    orders: Array.isArray(ordersLedger.orders) ? ordersLedger.orders.slice(0, 12) : [],
+    pending: visibleOrders.length,
+    orders: visibleOrders.slice(0, 12),
   };
 
   // Opportunistic stalled-deal scan — idempotent (dedupes on open followup per deal,
@@ -489,9 +519,10 @@ export async function GET(req) {
     if (scan?.created > 0) {
       const refreshed = await getWorkOrders({ status: "proposed", limit: 20 });
       if (refreshed.source === "supabase") {
+        const refreshedVisible = refreshed.orders.filter(isTrackedContactOrder);
         queue.source = refreshed.source;
-        queue.pending = refreshed.orders.length;
-        queue.orders = refreshed.orders.slice(0, 12);
+        queue.pending = refreshedVisible.length;
+        queue.orders = refreshedVisible.slice(0, 12);
       }
     }
   } catch {
@@ -505,7 +536,7 @@ export async function GET(req) {
     ...buildUnifiedRiskSignals(revenue, projects, automations),
     ...buildApprovalSignals(queue),
     ...buildFollowupSignals(followups),
-    ...buildGuruSignals(guruRuns),
+    ...buildGuruSignals(guruRuns, revenue),
     ...buildRevenueSignals(revenue),
     ...buildContentSignals(content),
     ...buildAutomationSignals(automations),

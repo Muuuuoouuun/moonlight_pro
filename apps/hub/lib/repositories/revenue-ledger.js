@@ -6,6 +6,10 @@ import {
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 import { getClassInTargets, isValidLeadFlag } from "@/lib/sales-os/operator-context";
+import {
+  getContactTrackingStartedAt,
+  isContactTrackingEligible,
+} from "@/lib/sales-os/contact-tracking";
 
 const DEAL_STAGES = [
   { key: "lead", label: "Lead", color: "neutral" },
@@ -163,7 +167,7 @@ function resolveType(row) {
   return row?.company_id ? "company" : "personal";
 }
 
-function mapLead(row, companyById, contactById) {
+function mapLead(row, companyById, contactById, trackingStartedAt = null) {
   const type = resolveType(row);
   const company = row.company_id ? companyById.get(row.company_id) : null;
   const contact = row.contact_id ? contactById.get(row.contact_id) : null;
@@ -204,10 +208,11 @@ function mapLead(row, companyById, contactById) {
     units: units > 0 ? units : "",
     last: formatRelative(row.last_touch_at || row.updated_at || row.created_at),
     owner: row.owner_id ? "Me" : "Unassigned",
+    trackingEligible: isContactTrackingEligible(row, trackingStartedAt),
   };
 }
 
-function mapDeal(row, companyById) {
+function mapDeal(row, companyById, trackingStartedAt = null) {
   const type = resolveType(row);
   const company = row.company_id ? companyById.get(row.company_id) : null;
   const stage = normalizeStage(row.stage);
@@ -227,6 +232,7 @@ function mapDeal(row, companyById) {
     owner: row.owner_id ? "Me" : "Unassigned",
     close: formatShortDate(row.expected_close_at),
     age: ageDays(row.last_activity_at || row.updated_at || row.created_at),
+    trackingEligible: isContactTrackingEligible(row, trackingStartedAt),
   };
 }
 
@@ -372,7 +378,7 @@ export async function getRevenueLedger() {
     return emptyLedger(false, null);
   }
 
-  const [leadRows, dealRows, accountRows, caseRows, companyRows, contactRows] = await Promise.all([
+  const [leadRows, dealRows, accountRows, caseRows, companyRows, contactRows, trackingStartedAt] = await Promise.all([
     fetchSupabaseRows("leads", {
       limit: 120,
       order: "last_touch_at.desc.nullslast",
@@ -403,6 +409,7 @@ export async function getRevenueLedger() {
       limit: 200,
       filters: withWorkspaceFilter(),
     }),
+    getContactTrackingStartedAt(workspaceId),
   ]);
 
   if (!leadRows || !dealRows || !accountRows || !caseRows) {
@@ -427,7 +434,7 @@ export async function getRevenueLedger() {
     contactsByCompany.set(row.company_id, list);
   });
 
-  const deals = dealRows.map(row => mapDeal(row, companyById));
+  const deals = dealRows.map(row => mapDeal(row, companyById, trackingStartedAt));
   const dealStatsByCompany = new Map();
   dealRows.forEach(row => {
     if (!row.company_id) return;
@@ -439,7 +446,7 @@ export async function getRevenueLedger() {
 
   const accountRaw = new Map(accountRows.map(a => [a.id, a]));
   const accounts = accountRows.map(row => mapAccount(row, dealStatsByCompany, contactsByCompany));
-  const leads = leadRows.map(row => mapLead(row, companyById, contactById));
+  const leads = leadRows.map(row => mapLead(row, companyById, contactById, trackingStartedAt));
   const cases = caseRows.map(row => mapCase(row, accountRaw));
   const summary = buildSummary(leads, deals, leadRows, dealRows);
 
@@ -447,6 +454,7 @@ export async function getRevenueLedger() {
     source: "supabase",
     configured: true,
     workspaceId,
+    trackingStartedAt,
     leads,
     deals,
     accounts,

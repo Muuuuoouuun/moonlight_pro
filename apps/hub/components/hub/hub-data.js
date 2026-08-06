@@ -225,46 +225,12 @@ export const KANBAN_COLUMNS = [
   ]},
 ];
 
-export const DECISIONS = [
-  { id: 'd1', title: '가격 체계 티어 3→2로 축소', date: '4월 14일', status: 'Committed', by: 'Me + Council', reason: '전환 분석 결과 중간 티어 이탈률 38%', links: 2 },
-  { id: 'd2', title: '클래스인 계약 범위 2차 협상 수용', date: '4월 12일', status: 'Committed', by: 'Me', reason: '장기 레퍼런스 가치 > 단기 마진', links: 3 },
-  { id: 'd3', title: '뉴스레터 발행을 주1회로 축소', date: '4월 9일', status: 'Trial (4w)', by: 'Me', reason: '품질>빈도 실험', links: 1 },
-  { id: 'd4', title: 'Notion에서 내부 Hub로 프로젝트 이전', date: '4월 2일', status: 'Committed', by: 'Me', reason: '컨텍스트 파편화', links: 5 },
-];
-
-export const RITUALS = [
-  { id: 'r1', name: 'Daily Brief · 07:00', streak: 23, weeks: [1,1,1,1,1,1,1] },
-  { id: 'r2', name: 'Deep work block · 14:00', streak: 12, weeks: [1,1,1,0,1,1,1] },
-  { id: 'r3', name: 'Weekly Review · 금', streak: 3, weeks: [1,1,1,1,0,0,0] },
-  { id: 'r4', name: 'Monthly retrospective', streak: 4, weeks: [1,1,1,1,0,0,0] },
-  { id: 'r5', name: 'Evening shutdown · 22:00', streak: 8, weeks: [1,0,1,1,1,1,0] },
-];
-
-export const LEADS = [
-  { id: 'l1', name: '클래스인 — 김지수 대표', type: 'company', source: 'Referral', stage: 'Qualified', value: '₩18M', last: '2일 전', owner: 'Me' },
-  { id: 'l2', name: '이재민 (개인 코칭)', type: 'personal', source: 'Newsletter', stage: 'New', value: '₩1.2M', last: '오늘', owner: 'Me' },
-  { id: 'l3', name: 'Studio Park — 박소연', type: 'company', source: 'Website', stage: 'Contact', value: '₩6M', last: '3일 전', owner: 'Me' },
-  { id: 'l4', name: '정하윤 (프리랜서 자문)', type: 'personal', source: 'LinkedIn', stage: 'Qualified', value: '₩900K', last: '어제', owner: 'Me' },
-  { id: 'l5', name: 'Beanly Coffee — 홍지민', type: 'company', source: 'Event', stage: 'New', value: '₩4.2M', last: '오늘', owner: 'Council' },
-  { id: 'l6', name: 'Han 스튜디오', type: 'company', source: 'Website', stage: 'Contact', value: '₩3.5M', last: '5일 전', owner: 'Me' },
-];
-
 export const DEAL_STAGES = [
   { key: 'lead', label: 'Lead', color: 'neutral' },
   { key: 'qual', label: 'Qualified', color: 'info' },
   { key: 'prop', label: 'Proposal', color: 'moon' },
   { key: 'neg',  label: 'Negotiation', color: 'warning' },
   { key: 'won',  label: 'Won', color: 'success' },
-];
-
-export const DEALS = [
-  { id: 'DEAL-031', name: '클래스인 Spring Cohort', type: 'company',  stage: 'neg',  value: 18000000, owner: 'Me',      close: '5월 12일', age: 14 },
-  { id: 'DEAL-029', name: 'Studio Park 리브랜딩',    type: 'company',  stage: 'prop', value: 6000000,  owner: 'Me',      close: '5월 28일', age: 8 },
-  { id: 'DEAL-027', name: '이재민 개인 코칭 3mo',    type: 'personal', stage: 'qual', value: 1200000,  owner: 'Me',      close: '4월 말',  age: 2 },
-  { id: 'DEAL-025', name: 'Beanly Coffee 온라인 전략', type: 'company', stage: 'lead', value: 4200000, owner: 'Council', close: '6월',     age: 1 },
-  { id: 'DEAL-022', name: '정하윤 자문',             type: 'personal', stage: 'qual', value: 900000,   owner: 'Me',      close: '5월 초',  age: 4 },
-  { id: 'DEAL-018', name: 'Han 스튜디오',            type: 'company',  stage: 'prop', value: 3500000,  owner: 'Me',      close: '5월 15일', age: 11 },
-  { id: 'DEAL-014', name: '베어브릭 콜라보',          type: 'company',  stage: 'won',  value: 7800000,  owner: 'Me',      close: '4월 1일',  age: 32 },
 ];
 
 // brandKey ties each item to a brand (= workspace lens). Newsletters/threads

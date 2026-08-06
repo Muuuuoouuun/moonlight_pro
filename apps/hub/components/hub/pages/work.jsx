@@ -4,7 +4,6 @@ import React from "react";
 import { useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, IconButton, Button, Progress, EmptyState } from "../hub-primitives";
-import { DECISIONS as FALLBACK_DECISIONS, RITUALS as FALLBACK_RITUALS } from "../hub-data";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const EN_MONTH = new Intl.DateTimeFormat('en-US', { month: 'long' });
@@ -63,11 +62,11 @@ function formatHour(value) {
 
 function useWorkLedger() {
   const [state, setState] = React.useState({
-    source: 'mock',
-    decisions: FALLBACK_DECISIONS,
-    rituals: FALLBACK_RITUALS,
+    source: 'preview',
+    decisions: [],
+    rituals: [],
     summary: null,
-    syncState: 'mock',
+    syncState: 'loading',
   });
 
   React.useEffect(() => {
@@ -80,7 +79,7 @@ function useWorkLedger() {
         const data = await response.json().catch(() => null);
 
         if (!active || !response.ok || !data || data.status === 'error') {
-          if (active) setState((prev) => ({ ...prev, syncState: 'mock' }));
+          if (active) setState((prev) => ({ ...prev, syncState: 'error' }));
           return;
         }
 
@@ -93,10 +92,10 @@ function useWorkLedger() {
             syncState: 'live',
           });
         } else {
-          setState((prev) => ({ ...prev, syncState: 'mock' }));
+          setState((prev) => ({ ...prev, syncState: 'preview' }));
         }
       } catch {
-        if (active) setState((prev) => ({ ...prev, syncState: 'mock' }));
+        if (active) setState((prev) => ({ ...prev, syncState: 'error' }));
       }
     }
 
@@ -338,7 +337,7 @@ export function Decisions() {
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch', lineHeight: 1.5 }}>
             실행의 근거가 되는 결정들의 타임라인. 각 결정에는 맥락·선택·근거를 남깁니다.
             <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-              {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
+              {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : syncState === 'error' ? 'error' : 'preview'}
             </span>
           </div>
         </div>
@@ -471,7 +470,7 @@ export function Rhythm() {
         <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
           루틴은 실행의 인프라
           <span className="mono" style={{ marginLeft: 8, color: syncState === 'live' ? 'var(--success)' : syncState === 'loading' ? 'var(--warning)' : 'var(--fg-faint)' }}>
-            {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : 'mock'}
+            {syncState === 'live' ? 'live' : syncState === 'loading' ? 'syncing' : syncState === 'error' ? 'error' : 'preview'}
           </span>
         </div>
       </div>
