@@ -388,6 +388,7 @@ function buildSources(results) {
     ["revenue", "Revenue"],
     ["automations", "Automations"],
     ["orders", "Agents"],
+    ["brief", "Brief"], // 아침 브리프 read 실패가 화면에서 무음 소실되지 않게 sources에 편입(7차)
   ].map(([resultKey, label]) => {
     const result = results[resultKey];
     const value = result.status === "fulfilled" ? result.value : null;
@@ -429,6 +430,7 @@ export async function GET() {
     revenue: revenueResult,
     automations: automationsResult,
     orders: ordersResult,
+    brief: briefResult,
   };
 
   const projects = readLedger(projectsResult);
@@ -437,7 +439,8 @@ export async function GET() {
   const revenue = readLedger(revenueResult);
   const operatorRevenue = filterOperatorOwnedRevenue(revenue);
   const automations = readLedger(automationsResult);
-  const ordersLedger = readLedger(ordersResult, { source: "preview", orders: [] });
+  // reject(transport throw)는 read 실패다 — preview로 두면 승인 큐 신호가 "빈 큐"로 위장된다.
+  const ordersLedger = readLedger(ordersResult, { source: "error", error: "work-orders-request-failed", orders: [] });
   // Chief of Staff composed brief (ai.morning_brief) — the cron's output finally has a reader.
   const morning = readLedger(briefResult, { source: "preview", brief: null });
   const calendar = readLedger(calendarResult, { ok: false, reason: "calendar-read-failed", items: [] });

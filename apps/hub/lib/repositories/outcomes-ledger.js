@@ -8,7 +8,7 @@
 import { randomUUID } from "crypto";
 
 import { eqFilter, fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-read";
-import { insertSupabaseRecord, resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { insertSupabaseRecord, resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
 
 import { isValidOutcomeAction } from "@/lib/sales-os/outcome-attribution";
 
@@ -66,7 +66,7 @@ export async function getRecentOutcomes({
   limit = 30,
   play = null,
 } = {}) {
-  if (!workspaceId) return { source: "preview", outcomes: [] };
+  if (!workspaceId || !resolveSupabaseConfig()) return { source: "preview", outcomes: [] };
 
   const filters = withWorkspaceFilter(play ? [["play", eqFilter(play)]] : []);
   const rows = await fetchSupabaseRows("outreach_outcomes", {
@@ -74,7 +74,8 @@ export async function getRecentOutcomes({
     order: "occurred_at.desc",
     limit,
   });
-  if (!rows) return { source: "preview", outcomes: [] };
+  // Phase 0 분류: 구성된 환경의 read 실패는 error — preview는 미구성 전용.
+  if (!rows) return { source: "error", error: "outcomes-read-failed", retryable: true, outcomes: [] };
 
   return {
     source: "supabase",
@@ -98,14 +99,14 @@ export async function getOutcomeStats({
   workspaceId = resolveDefaultWorkspaceId(),
   limit = 500,
 } = {}) {
-  if (!workspaceId) return { source: "preview", counts: {}, funnel: [], ratios: {} };
+  if (!workspaceId || !resolveSupabaseConfig()) return { source: "preview", counts: {}, funnel: [], ratios: {} };
 
   const rows = await fetchSupabaseRows("outreach_outcomes", {
     filters: withWorkspaceFilter(),
     order: "occurred_at.desc",
     limit,
   });
-  if (!rows) return { source: "preview", counts: {}, funnel: [], ratios: {} };
+  if (!rows) return { source: "error", error: "outcomes-read-failed", retryable: true, counts: {}, funnel: [], ratios: {} };
 
   const counts = {};
   for (const a of ACTIONS) counts[a] = 0;

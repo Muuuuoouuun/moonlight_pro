@@ -10,14 +10,15 @@ export const dynamic = "force-dynamic";
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
 
+  // read 실패는 502 — 200으로 내리면 소비자 r.ok 가드가 전부 통과해 "빈 큐"로 위장된다.
   if (searchParams.get("summary")) {
     const summary = await getQueueSummary();
-    return NextResponse.json(summary, { status: 200 });
+    return NextResponse.json(summary, { status: summary.source === "error" ? 502 : 200 });
   }
 
   const status = searchParams.get("status");
   const orders = await getWorkOrders({ status: status || null, limit: 100 });
-  return NextResponse.json(orders, { status: 200 });
+  return NextResponse.json(orders, { status: orders.source === "error" ? 502 : 200 });
 }
 
 // POST { id, status, outcome? } — the 1-click decision (approve | dismiss | executed).

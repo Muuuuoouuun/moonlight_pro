@@ -10,6 +10,7 @@ import {
   deleteSupabaseRecord,
   insertSupabaseRecord,
   resolveDefaultWorkspaceId,
+  resolveSupabaseConfig,
   updateSupabaseRecord,
 } from "@/lib/server-write";
 
@@ -147,7 +148,12 @@ export async function getActivitiesFor({
     hasLiveResult = true;
     for (const row of rows) byId.set(row.id, row);
   }
-  if (!hasLiveResult) return { source: "preview", activities: [] };
+  // Phase 0 분류: 전 스코프 read 실패는 구성돼 있으면 error — preview는 미구성 전용.
+  if (!hasLiveResult) {
+    return resolveSupabaseConfig()
+      ? { source: "error", error: "crm-activities-read-failed", retryable: true, activities: [] }
+      : { source: "preview", activities: [] };
+  }
 
   const rows = Array.from(byId.values())
     .sort((a, b) => activityTime(b) - activityTime(a))

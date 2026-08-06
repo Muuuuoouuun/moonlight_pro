@@ -502,6 +502,7 @@ test("overview and daily brief never call a partial-only aggregate preview", asy
   state.automations = { source: "preview", runs: [], automations: [], summary: {} };
   state.work = { source: "preview", decisions: [], rituals: [], summary: {} };
   state.orders = { source: "preview", orders: [] };
+  state.brief = { source: "preview", brief: null }; // brief도 sources에 편입(7차) — 시나리오 전제(전 소스 비-live)에 맞춘다
 
   const overview = await (await overviewRoute.GET()).json();
   const daily = await (await dailyBriefRoute.GET()).json();

@@ -5,7 +5,7 @@
 // registry.json gates.no_auto_send=true — nothing leaves the queue without an operator decision.
 
 import { eqFilter, fetchSupabaseRows, inFilter, withWorkspaceFilter } from "../server-read.js";
-import { insertSupabaseRecord, resolveDefaultWorkspaceId, updateSupabaseRecord } from "../server-write.js";
+import { insertSupabaseRecord, resolveDefaultWorkspaceId, resolveSupabaseConfig, updateSupabaseRecord } from "../server-write.js";
 
 const STATUSES = new Set(["proposed", "approved", "executing", "executed", "dismissed"]);
 const SOURCES = new Set(["team", "inbox", "guru", "manual"]);
@@ -83,7 +83,7 @@ export async function getWorkOrders({
   status = null,
   limit = 50,
 } = {}) {
-  if (!workspaceId) return { source: "preview", orders: [] };
+  if (!workspaceId || !resolveSupabaseConfig()) return { source: "preview", orders: [] };
 
   const extra = [];
   if (status) {
@@ -95,7 +95,11 @@ export async function getWorkOrders({
     order: "proposed_at.desc",
     limit,
   });
-  if (!rows) return { source: "preview", orders: [] };
+  if (!rows) {
+    // 구성돼 있는데 read가 죽었다 — preview("미구성")로 뭉개면 대기 승인이 "빈 큐"로
+    // 위장돼 첫 화면·에이전트 큐 가드가 전부 불발한다(7차 안정성 — 90 진입로의 미착지 절반).
+    return { source: "error", error: "work-orders-read-failed", retryable: true, orders: [] };
+  }
 
   return { source: "supabase", orders: rows.map(mapWorkOrder) };
 }

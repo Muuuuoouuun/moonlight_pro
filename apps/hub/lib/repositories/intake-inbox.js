@@ -10,7 +10,7 @@
 // is reused as-is via the API route.
 
 import { eqFilter, fetchSupabaseRows } from "@/lib/server-read";
-import { resolveDefaultWorkspaceId, updateSupabaseRecord } from "@/lib/server-write";
+import { resolveDefaultWorkspaceId, resolveSupabaseConfig, updateSupabaseRecord } from "@/lib/server-write";
 import { computeMatchKey } from "@/lib/sheets-normalize";
 
 const STAGING_TABLE = "lead_intake_raw";
@@ -62,7 +62,7 @@ export async function listStagedIntake({
   source = null,
   limit = 100,
 } = {}) {
-  if (!workspaceId) return { source: "preview", rows: [] };
+  if (!workspaceId || !resolveSupabaseConfig()) return { source: "preview", rows: [] };
 
   const filters = [["workspace_id", eqFilter(workspaceId)]];
   if (status) filters.push(["status", eqFilter(status)]);
@@ -73,7 +73,8 @@ export async function listStagedIntake({
     order: "created_at.desc",
     limit,
   });
-  if (!rows) return { source: "preview", rows: [] };
+  // Phase 0 분류: 구성된 환경의 read 실패는 error — preview는 미구성 전용.
+  if (!rows) return { source: "error", error: "intake-read-failed", retryable: true, rows: [] };
 
   return { source: "supabase", rows: rows.map(mapIntakeRow) };
 }
