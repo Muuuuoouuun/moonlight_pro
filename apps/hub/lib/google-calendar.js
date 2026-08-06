@@ -74,6 +74,7 @@ async function fetchSupabaseRows(table, options = {}) {
     const response = await fetch(url, {
       headers: makeSupabaseHeaders(config.apiKey),
       cache: "no-store",
+      signal: AbortSignal.timeout(8000), // 캘린더 체인의 첫 leg — 무상한이면 첫 화면을 잡는다
     });
 
     if (!response.ok) {

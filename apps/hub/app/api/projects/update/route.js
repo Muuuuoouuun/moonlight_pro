@@ -63,6 +63,9 @@ export async function POST(req) {
               ["workspace_id", `eq.${record.workspace_id}`],
             ],
             projectPatch,
+            // 0행 패치({persisted:false,"no-matching-row"})를 감지해 partial로 명명 —
+            // return=minimal 204는 "아무 행도 안 맞음"을 saved로 위장한다(6차 재감사 S/M).
+            { returnRepresentation: true },
           )
         : { persisted: false, reason: "not-patched" };
 

@@ -317,7 +317,19 @@ export async function getAutomationsLedger() {
   ]);
 
   if (!automationRows || !runRows || !webhookRows) {
-    return emptyLedger({ configured: true, workspaceId });
+    // 코어 read 실패는 error — preview("미구성")로 두면 실패한 웹훅/실행이 "기록 없음"으로
+    // 위장된다(6차 재감사 M — revenue/content 10차와 동일 클래스, Engine 실행 피드백 §1 코어).
+    return {
+      ...emptyLedger({ configured: true, workspaceId }),
+      source: "error",
+      error: "automations-ledger-core-read-failed",
+      failedSources: [
+        ["automations", automationRows],
+        ["automation_runs", runRows],
+        ["webhook_events", webhookRows],
+      ].filter(([, rows]) => !Array.isArray(rows)).map(([key]) => key),
+      retryable: true,
+    };
   }
 
   const triggerById = new Map((triggerRows || []).map((t) => [t.id, t]));
