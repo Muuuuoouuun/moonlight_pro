@@ -25,6 +25,7 @@
 | 4차 재감사 (iter 10~13 반영 후, 전 축) | 2026-08-06 | 90 | 89 | 88† | 83 | 87 | 90 | 87 | 88† | **87.6** |
 | 5차 재감사 (iter 14~16 반영 후, 전 축) | 2026-08-06 | 90 | 89 | 87 | 85 | 90 | 90 | 88 | 87† | **88.4** |
 | 6차 재감사 (iter 17 반영 후, 전 축) | 2026-08-06 | 90 | 89 | 87 | 88 | 90 | 90 | 88 | 87† | **88.9** |
+| 7차 재감사 (iter 18 반영 후, 전 축) | 2026-08-06 | 88 | 89 | 87 | 89 | 90 | 90 | 89 | 87† | **88.9** |
 
 \** 2차 재감사는 축별 감사 에이전트 5기 중 2기만 완주(속도 84 · 정체성 87 · 사용성 86). 안정성·디자인·UI/UX·편의 에이전트는 세션 한도로 중단 — 09:10Z 리셋 후 재실행. 완주 2기의 잔여 지적(셸 ReferenceError·ClassIn 앵커 아카이브 착지·가짜 페르소나·팬아웃·캐시 부재 등)은 6~9차 수리로 전부 반영 완료.
 
@@ -211,6 +212,16 @@
 - **2/2 (전 축 소진)**: agents 승인 큐 read 실패 role=alert 가드(진입로 2/2)+死 `?order=` 제거. my-work 캘린더 error 소비 분기(EmptyState·WeekAgenda·캘린더 열기)+deleteTaskDetail 봉투. projects deleteTask 봉투·완료 undo 자동 소거·N 단축키. daily-brief 승인 dismiss deferred-undo(실패 시 복원)+brief-ledger error 전파. followups 死 캘린더 어포던스·배관 제거. work 캘린더 실패 카피 인간화. 전역 error.jsx role=alert+h2. content 가짜 Preview 버튼 제거·Photo 정직 영수증·썸네일 a11y 3종. hub-nav 스코프 앵커 과약속 2경로 정리. revenue 점수 accent 중립화·계정 알림 자동 소거·Accounts 빈 상태 3뷰 CTA(검색 지우기/생성)·SortHead aria 방향 노출+export. customers 인라인 정렬 헤더 3중 복제 → 공유 SortHead(§8.1 primitives first). ⌘K 0건 → 검색어 표시+검색 지우기 CTA. evolution-settings 슬래시 과약속 카피·장식 Dot 제거·slash 라벨 accent 해제.
 
 **잔여 명시 보류(기존 명명 유지)**: 첫 화면 attention-ledger 통합(Phase 1B — 정체성 90 캡), Projects/PMS 전체 j/k 문법(L), window.confirm 스타일드 플로(M), overview lean, hub-write-guard/flush/BulkBar/TopBar New.
+
+### Iteration 19 (2026-08-06, 2배치) — 반영 완료
+
+주제: **7차 재감사(속도90 · 디자인90 · 안정성89 · 사용성89 · UIUX89 · 정체성88 · 편의87, 평균 88.9) 지적 전량 소진.** 7차는 18차 클레임 12/12 실체 확인(선언-실제 불일치 0건) 위에서 신규 결함만 남겼다 — 정체성 88 하락은 Studio 가짜 설정값 발견, 사용성 89 정체는 18차 자체가 만든 N 회귀.
+검증: 각 배치 `npm test` 549/549 · hub build 통과. 커밋 80c9b66 · 3fee0b4.
+
+- **1/2 (안정성 백엔드 — 90 진입로 착지)**: work-orders 구성 환경 read 실패 preview 위장 → error+502(6차 채점자가 명명한 진입로의 미착지 절반 — 첫 화면·agents 승인 큐 가드가 이제 실제 발화). attention 라우트 코어(tasks) 레인 실패 502(내 작업 "표시할 항목이 없습니다" 위장 차단 — 소비자 error 분기는 기존 배선 발화). daily-brief sources에 brief 편입 + orders reject 폴백 error + brief-ledger 미구성 가드. Phase 0 잔여 relabel 4곳(outcomes×2·crm-activities·intake) error 분류.
+- **2/2 (전 축 소진)**: projects 무조건 N 훅 제거(18차 회귀 — preventDefault가 뷰 인지 리스너를 가려 List/Board에서 To-do 드로어 오발). content Studio 지어낸 Audience/Schedule → "— 미연결", 핸들러 없는 Ask 입력 제거. agents 가짜 Pin 영수증·맥락 없는 Open·아바타 radial-gradient/glow(§4/§13) 제거. **삭제 지연-undo 이식(편의 최대 격차)**: 태스크(my-work·projects)·리드 3.5초 창 → 창 종료 후 DELETE, 실패·preview 복원+명명, EditDrawer preview 삭제 실패 명명 통일. **알림 수명 통일(UIUX 90 진입로)**: 창 종료 시 전체 소거 — my-work/followups/projects를 revenue·daily-brief 패턴으로. TaskToday error≠preview 분리(role=alert+다시 읽기). Roadmap 빈 상태 CTA 2곳. 10px 메타 10곳 → 10.5. DESIGN.md §5.2 값 필드 moon-200 명도 강조 명문화. followups 모듈 SWR·segments Revenue 캐시 재사용·work 캘린더 분당 리렌더 → 날짜 틱. 죽은 projectCreateContext 제거.
+
+**잔여 명시 보류(신규 2 + 기존 유지)**: my-work 완료/미루기 후 좁은 재검증(attention 전체 reload → tasks 슬라이스, M — 낙관 숨김 뒤 배경 비용이라 체감 없음), daily-brief 보조 정보 펼침 시 재조회(S — lazy mount라 첫 화면 비용 0). 기존: 첫 화면 attention-ledger 통합(Phase 1B — 정체성 캡), Projects/PMS 전체 j/k(L), window.confirm 스타일드 플로(M), overview lean, hub-write-guard/flush/BulkBar/TopBar New.
 
 ### 다음 회차 백로그 (점수 영향 순)
 
