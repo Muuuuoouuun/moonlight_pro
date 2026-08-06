@@ -23,6 +23,7 @@
 | 2차 재감사 (iter 5 반영 후, 부분) | 2026-08-05 | 87 | 86 | — | — | 84 | — | — | — | 부분 측정** |
 | 3차 재감사 (iter 6~9 반영 후) | 2026-08-05 | — | — | 86† | 78 | — | 84 | 84 | — | 부분 측정 |
 | 4차 재감사 (iter 10~13 반영 후, 전 축) | 2026-08-06 | 90 | 89 | 88† | 83 | 87 | 90 | 87 | 88† | **87.6** |
+| 5차 재감사 (iter 14~16 반영 후, 전 축) | 2026-08-06 | 90 | 89 | 87 | 85 | 90 | 90 | 88 | 87† | **88.4** |
 
 \** 2차 재감사는 축별 감사 에이전트 5기 중 2기만 완주(속도 84 · 정체성 87 · 사용성 86). 안정성·디자인·UI/UX·편의 에이전트는 세션 한도로 중단 — 09:10Z 리셋 후 재실행. 완주 2기의 잔여 지적(셸 ReferenceError·ClassIn 앵커 아카이브 착지·가짜 페르소나·팬아웃·캐시 부재 등)은 6~9차 수리로 전부 반영 완료.
 
@@ -188,6 +189,17 @@
 - **16차 (채점 잔여 마감)**: my-work/daily-brief 만료 undo 버튼 자동 소거, Cases j/k/e(4테이블 문법 완성), Accounts list/detail 커서, projects 생성/삭제 로컬 병합, Segments/content Queue error 카피, customers 딥링크 빈 원장 소비, ?scope=personal 실소비(Leads/Deals/Accounts 필터 시드), projects·customers·daily-brief 라우트 잔여 moon/semantic 톤 중립, HealthDot 라벨 동반, 死 tone 필드·고아 폼 제거.
 
 **명시 보류(문서 명명 유지)**: 첫 화면 attention-ledger 통합(Phase 1B 잔여 — 정체성 캡), overview 라우트 lean 전환(보조 표면), hub-write-guard 프로덕션 오리진(배포 모드 확인 필요), 언마운트 후 flush 실패 무언성(pagehide 최선 노력까지), BulkBar 미배선(1인 운영 성숙도에서 후순위), TopBar New 생성 진입 강화, 알림 수명 통일.
+
+### Iteration 17 (2026-08-06) — 반영 완료
+
+주제: **5차 재감사(속도90 · 정체성90 · 디자인90 · 사용성89 · UIUX88 · 편의87 · 안정성85, 평균 88.4) 지적 전량 소진.**
+검증: `npm test` 549/549 · hub build 통과. 커밋 38f770f.
+
+- iter-15 회귀 2건 수리(만료 캐시 위 stale 위장·refreshTasks 캐시 미갱신), 캘린더 실패 reason 구조화로 도달 불가하던 error 분기 실도달, 첫 화면 승인 큐 무언 no-op 제거(role=alert), deleteRitual 결과 봉투, /api/projects/update Phase 0 3분할+정직 영수증, 전역 error.jsx, 운영 지표 read 실패 시 '—'+원인(0 단언 제거).
+- customers 연락 기록 시트 deferred-write undo 패리티(최고 빈도 액션 진입점 통일), Accounts 생성 실패 목록 가시화, Send test 빈 상태 결과 표시, followups 빈 상태 CTA, A/S·주문 결과 role=alert.
+- 잔여 accent-as-category 8곳·색-단독 신호 3곳·가짜 태그 룰 샘플 명시·죽은 파라미터 2종·scope 과약속 5경로 정리, DESIGN §8.1 레일 문구 실측 정합.
+
+**잔여 명시 보류**: 첫 화면 attention-ledger 통합(Phase 1B — 정체성 90 캡), Projects/PMS j/k 문법(L), window.confirm 삭제 확인의 스타일드 플로 전환(M), overview lean(보조), hub-write-guard/flush/BulkBar/TopBar New(기존 명명 유지).
 
 ### 다음 회차 백로그 (점수 영향 순)
 
