@@ -14,10 +14,9 @@ export async function GET(req) {
     const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 50;
 
     const result = await getCampaigns({ limit });
-    return NextResponse.json({
-      status: result.source === "supabase" ? "live" : "preview",
-      ...result,
-    });
+    // read 실패는 502 — 200/preview로 내리면 캠페인 0건이 사실처럼 보인다(Phase 0).
+    const status = result.source === "supabase" ? "live" : result.source === "error" ? "error" : "preview";
+    return NextResponse.json({ status, ...result }, { status: status === "error" ? 502 : 200 });
   } catch (error) {
     return NextResponse.json(
       { status: "error", error: error instanceof Error ? error.message : String(error) },
@@ -40,7 +39,11 @@ export async function POST(req) {
 
     const result = await saveCampaign({ op, id: payload.id, payload });
 
-    const httpStatus = result.status === "saved" ? 200 : result.status === "error" ? 400 : 202;
+    // failed(라이브 거부) 202는 "저장 대기"로 오독된다 — Phase 0: preview 202 / failed 502 / error 400.
+    const httpStatus = result.status === "saved" ? 200
+      : result.status === "error" ? 400
+      : result.status === "failed" ? 502
+      : 202;
     return NextResponse.json(result, { status: httpStatus });
   } catch (error) {
     return NextResponse.json(

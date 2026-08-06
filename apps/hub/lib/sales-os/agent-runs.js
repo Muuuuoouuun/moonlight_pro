@@ -8,7 +8,7 @@
 import { randomUUID } from "crypto";
 
 import { eqFilter, fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-read";
-import { insertSupabaseRecord, resolveDefaultWorkspaceId, updateSupabaseRecord } from "@/lib/server-write";
+import { insertSupabaseRecord, resolveDefaultWorkspaceId, resolveSupabaseConfig, updateSupabaseRecord } from "@/lib/server-write";
 
 const RESULTS = new Set(["ok", "needs_human", "error"]);
 
@@ -74,7 +74,7 @@ export async function getRecentAgentRuns({
   agent = null,
   limit = 10,
 } = {}) {
-  if (!workspaceId) return { source: "preview", runs: [] };
+  if (!workspaceId || !resolveSupabaseConfig()) return { source: "preview", runs: [] };
 
   const extra = [];
   if (ref) extra.push(["ref", eqFilter(ref)]);
@@ -85,7 +85,8 @@ export async function getRecentAgentRuns({
     order: "ran_at.desc",
     limit,
   });
-  if (!rows) return { source: "preview", runs: [] };
+  // Phase 0 분류: read 실패는 error — "실행 이력 없음"으로 위장하면 멘토 컨텍스트가 조용히 빈다.
+  if (!rows) return { source: "error", error: "agent-runs-read-failed", retryable: true, runs: [] };
 
   return {
     source: "supabase",

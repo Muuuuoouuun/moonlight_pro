@@ -472,14 +472,24 @@ export async function deleteSupabaseRecord(table, filters = [], options = {}) {
   const url = buildMutationUrl(config.url, table, filters);
   const result = await supabaseFetch("delete", table, url, {
     method: "DELETE",
-    headers: makeSupabaseHeaders(config.apiKey, { prefer: "return=minimal" }),
+    headers: makeSupabaseHeaders(config.apiKey, { prefer: "return=representation" }),
     timeoutMs: options.timeoutMs,
   });
 
-  const outcome = buildWriteResult(result, { returnRepresentation: false, bulk: false });
-  if (!outcome.persisted) {
-    logSupabaseFailure("delete", table, outcome.reason, outcome.detail);
+  if (result.ok) {
+    // 0행 DELETE 감지 — return=minimal에선 RLS 거부·이미 삭제됨·workspace 불일치가
+    // 성공과 구분되지 않아 "삭제됨" 영수증 뒤 다음 로드에 레코드가 부활했다(8차 안정성 M).
+    // update의 no-matching-row 계약과 동일한 분류.
+    const rows = parseRows(result.text) || [];
+    if (rows.length === 0) {
+      logSupabaseFailure("delete", table, "no-matching-row", result.text);
+      return { persisted: false, reason: "no-matching-row", records: [] };
+    }
+    return { persisted: true, reason: "ok", records: rows, record: rows[0], id: rows[0]?.id || null };
   }
+
+  const outcome = buildWriteResult(result, { returnRepresentation: false, bulk: false });
+  logSupabaseFailure("delete", table, outcome.reason, outcome.detail);
   return outcome;
 }
 

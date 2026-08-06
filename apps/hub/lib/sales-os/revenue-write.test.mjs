@@ -115,7 +115,7 @@ test("buildDealWrite maps next_action and snooze_until into meta (deals has no n
 
 let calls;
 
-function installSupabaseFetch({ existingMeta } = {}) {
+function installSupabaseFetch({ existingMeta, deleteReturnsRows = true } = {}) {
   calls = [];
   globalThis.fetch = async (input, init = {}) => {
     const url = String(input);
@@ -133,7 +133,9 @@ function installSupabaseFetch({ existingMeta } = {}) {
       return jsonResponse([{ id: "existing-id", ...(init.body ? JSON.parse(init.body) : {}) }]);
     }
     if (method === "DELETE") {
-      return jsonResponse([], 204);
+      // return=representation — PostgREST가 삭제된 행을 되돌려준다. 빈 배열은 "지울 행이
+      // 없었다"(RLS 거부·이미 삭제됨)는 뜻이라 성공 mock으로 쓰면 안 된다.
+      return jsonResponse(deleteReturnsRows === false ? [] : [{ id: "deal-9" }]);
     }
     return jsonResponse([], 400);
   };
@@ -206,6 +208,20 @@ test("persistRevenueRecord delete issues a filtered DELETE scoped to the workspa
   assert.ok(del, "expected a DELETE");
   assert.match(del.url, /id=eq\.deal-9/);
   assert.match(del.url, new RegExp(`workspace_id=eq\\.${WORKSPACE_ID}`));
+});
+
+test("persistRevenueRecord delete names a 0-row DELETE instead of reporting saved", async () => {
+  // RLS 거부·이미 삭제됨·workspace 불일치는 200 + 빈 표현으로 온다 — saved로 뭉개면
+  // "삭제됨" 영수증 뒤 다음 로드에 레코드가 부활한다(8차 안정성 M).
+  installSupabaseFetch({ deleteReturnsRows: false });
+  const result = await persistRevenueRecord({
+    table: "deals",
+    op: "delete",
+    id: "deal-9",
+    build: buildDealWrite,
+  });
+  assert.equal(result.status, "failed");
+  assert.equal(result.reason, "no-matching-row");
 });
 
 test("persistRevenueRecord delete without id is an error, never an unfiltered wipe", async () => {

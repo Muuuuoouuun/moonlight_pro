@@ -242,6 +242,30 @@ test("deleteSupabaseRecord refuses an unfiltered DELETE", async () => {
   assert.equal(result.reason, "missing-filter");
 });
 
+test("deleteSupabaseRecord reports no-matching-row on empty representation", async () => {
+  // RLS 거부·이미 삭제됨·workspace 불일치는 200 + 빈 배열로 온다 — saved로 뭉개면
+  // "삭제됨" 영수증 뒤 다음 로드에 레코드가 부활한다(8차 안정성).
+  let seenPrefer = "";
+  globalThis.fetch = async (url, init) => {
+    seenPrefer = init.headers.prefer;
+    return jsonResponse([]);
+  };
+
+  const result = await deleteSupabaseRecord("tasks", [["id", "eq.missing"]]);
+  assert.match(seenPrefer, /return=representation/);
+  assert.equal(result.persisted, false);
+  assert.equal(result.reason, "no-matching-row");
+});
+
+test("deleteSupabaseRecord returns the deleted representation on success", async () => {
+  globalThis.fetch = async () => jsonResponse([{ id: "t1" }]);
+
+  const result = await deleteSupabaseRecord("tasks", [["id", "eq.t1"]]);
+  assert.equal(result.persisted, true);
+  assert.equal(result.id, "t1");
+  assert.equal(result.records.length, 1);
+});
+
 test("timeouts surface as reason timeout instead of hanging", async () => {
   globalThis.fetch = async (url, init) =>
     new Promise((resolve, reject) => {

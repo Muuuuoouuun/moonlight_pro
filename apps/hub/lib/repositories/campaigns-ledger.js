@@ -13,6 +13,7 @@ import { eqFilter, fetchSupabaseRows, withWorkspaceFilter } from "../server-read
 import {
   insertSupabaseRecord,
   resolveDefaultWorkspaceId,
+  resolveSupabaseConfig,
   updateSupabaseRecord,
   deleteSupabaseRecord,
 } from "../server-write.js";
@@ -125,14 +126,19 @@ export async function getCampaigns({ workspaceId, limit = 50 } = {}) {
     return { source: "preview", configured: false, workspaceId: null, campaigns: [] };
   }
 
+  if (!resolveSupabaseConfig()) {
+    return { source: "preview", configured: false, workspaceId: resolvedWorkspaceId, campaigns: [] };
+  }
+
   const rows = await fetchSupabaseRows("campaigns", {
     limit,
     order: "updated_at.desc",
     filters: withWorkspaceFilter(),
   });
 
+  // Phase 0 분류: 구성된 환경의 read 실패는 error — preview는 미구성 전용(8차 안정성).
   if (!rows) {
-    return { source: "preview", configured: true, workspaceId: resolvedWorkspaceId, campaigns: [] };
+    return { source: "error", error: "campaigns-read-failed", retryable: true, configured: true, workspaceId: resolvedWorkspaceId, campaigns: [] };
   }
 
   return {
@@ -211,7 +217,9 @@ export async function saveCampaign({ op = "create", id, payload = {} } = {}) {
     ]);
     return res.persisted
       ? { status: "saved", id }
-      : { status: "preview", reason: res.reason, detail: res.detail };
+      : res.reason === "missing-config"
+        ? { status: "preview", reason: res.reason, detail: res.detail }
+        : { status: "failed", reason: res.reason, detail: res.detail }; // 라이브 거부는 preview가 아니다(Phase 0)
   }
 
   const { columns, metaPatch } = buildCampaignWrite(payload);

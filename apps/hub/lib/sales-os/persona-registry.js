@@ -8,12 +8,12 @@
 // Pure normalize/merge logic lives in persona-contract.js (kept @/-free for unit tests).
 
 import { fetchSupabaseRows, inFilter, withWorkspaceFilter } from "@/lib/server-read";
-import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
 
 import { PERSONA_IDS, mergePersonas } from "@/lib/sales-os/persona-contract";
 
 export async function getPersonas({ workspaceId = resolveDefaultWorkspaceId() } = {}) {
-  if (!workspaceId) {
+  if (!workspaceId || !resolveSupabaseConfig()) {
     return { source: "preview", personas: mergePersonas([]) };
   }
 
@@ -23,8 +23,9 @@ export async function getPersonas({ workspaceId = resolveDefaultWorkspaceId() } 
     limit: 50,
   });
 
+  // Phase 0 분류: 구성된 환경의 read 실패는 error — preview(계약 기본값)로 뭉개지 않는다.
   if (!rows) {
-    return { source: "preview", personas: mergePersonas([]) };
+    return { source: "error", error: "persona-read-failed", retryable: true, personas: mergePersonas([]) };
   }
 
   // Only seeded personas carry config.persona_id — this excludes generic sales/content agents

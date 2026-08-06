@@ -143,11 +143,17 @@ export async function DELETE(req) {
     withWorkspaceFilter([["id", eqFilter(id)]]),
   );
   if (!persistence.persisted) {
+    // no-matching-row = 지울 행이 없었다(이미 삭제됨·권한 거부·workspace 불일치). 재시도해도
+    // 결과가 같으니 retryable=false로 구분한다 — 전송 실패와 다른 상황이다.
+    const missing = persistence.reason === "no-matching-row";
     return NextResponse.json(
       {
         status: "error",
-        error: persistence.detail || persistence.reason || "Task delete persistence failed.",
-        retryable: true,
+        reason: persistence.reason || null,
+        error: missing
+          ? "삭제할 할 일을 찾지 못했습니다 — 이미 삭제됐거나 권한이 없습니다."
+          : persistence.detail || persistence.reason || "Task delete persistence failed.",
+        retryable: !missing,
       },
       { status: 502 },
     );
