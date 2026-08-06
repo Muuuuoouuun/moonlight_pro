@@ -60,7 +60,7 @@ const SIGNAL_TARGETS = {
   accept: 'dashboard/work/roadmap',
   chat: 'dashboard/agents/chat',
   hold: 'dashboard/work/decisions',
-  start: 'dashboard/work/rhythm?check=weekly-review',
+  start: 'dashboard/work/rhythm',
   projects: 'dashboard/work/projects',
   decision: 'dashboard/work/decisions?new=decision',
   rhythm: 'dashboard/work/rhythm',
@@ -521,13 +521,19 @@ function useDailyBriefLedger(refreshKey) {
       if (taskRefreshRef.current !== requestId) return false;
       if (!res.ok || !data || data.status === 'error') return false;
       const todos = Array.isArray(data.tasks) ? data.tasks : [];
-      setState((prev) => ({
-        ...prev,
-        taskToday: {
-          ...buildTaskToday(todos),
-          state: data.partial === true ? 'partial' : 'live',
-        },
-      }));
+      setState((prev) => {
+        const next = {
+          ...prev,
+          taskToday: {
+            ...buildTaskToday(todos),
+            state: data.partial === true ? 'partial' : 'live',
+          },
+        };
+        // 캐시도 함께 갱신 — 5분 내 탭 복귀가 캡처/완료 이전 스냅샷을 재서빙해
+        // 완료한 일이 되살아나던 회귀 차단(5차 재감사 S, iter-15 회귀).
+        if (dailyBriefCache) dailyBriefCache = { at: dailyBriefCache.at, state: next };
+        return next;
+      });
       return true;
     } catch {
       return false;
@@ -778,7 +784,7 @@ function MorningBriefCard({ brief, onNavigate }) {
     <div>
       <SectionTitle right={<div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         {when && <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{when}</span>}
-        <Badge tone="moon" size="xs">Chief of Staff</Badge>
+        <Badge tone="neutral" size="xs">Chief of Staff</Badge>
       </div>}>
         오늘 이 3개만
       </SectionTitle>
@@ -833,6 +839,7 @@ function ApprovalQueueCard({ onNavigate }) {
   const [orders, setOrders] = React.useState([]);
   const [state, setState] = React.useState('loading');
   const [busyId, setBusyId] = React.useState(null);
+  const [actionError, setActionError] = React.useState(null);
   const [approved, setApproved] = React.useState({}); // id → true once approved (reveals execute row)
   const [copiedId, setCopiedId] = React.useState(null);
 
@@ -872,13 +879,20 @@ function ApprovalQueueCard({ onNavigate }) {
   async function post(id, body) {
     if (busyId) return false;
     setBusyId(id);
+    setActionError(null);
     try {
       const res = await fetch('/api/hub/work-orders', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id, ...body }),
       });
+      // 실패(400 스테일 전이/RLS·네트워크)를 무언 no-op으로 두지 않는다 — agents 큐와
+      // 동일 계약(5차 재감사 S: 첫 화면 쌍둥이만 미적용이었다).
+      if (!res.ok) setActionError(`처리 실패 (${res.status}) — 새로고침 후 다시 시도하세요.`);
       return res.ok;
+    } catch {
+      setActionError('처리 실패 — 네트워크를 확인하고 다시 시도하세요.');
+      return false;
     } finally {
       setBusyId(null);
     }
@@ -904,9 +918,12 @@ function ApprovalQueueCard({ onNavigate }) {
   return (
     <div>
       {/* 대기 0은 상태 정보 — 녹색 완료 아님(§5.3), 중립 유지. */}
-      <SectionTitle right={<Badge tone={pending ? 'moon' : 'neutral'} size="xs">{pending} 대기</Badge>}>
+      <SectionTitle right={<Badge tone="neutral" size="xs">{pending} 대기</Badge>}>
         승인 큐
       </SectionTitle>
+      {actionError && (
+        <div role="alert" style={{ marginBottom: 8, fontSize: 12, color: 'var(--danger)' }}>{actionError}</div>
+      )}
       <Card pad={false}>
         {orders.length === 0 ? (
           <div role={state === 'error' ? 'alert' : undefined} style={{ padding: 14, fontSize: 12.5, color: state === 'error' ? 'var(--danger)' : 'var(--fg-muted)', lineHeight: 1.5 }}>

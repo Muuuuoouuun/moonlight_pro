@@ -12,6 +12,7 @@ import {
   Badge, Card, Button, Avatar, Input, EmptyState, SyncBadge, Kbd, Drawer,
   SegmentedControl, Divider, Checkbox,
 } from "../hub-primitives";
+import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel } from "./revenue";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
@@ -235,7 +236,7 @@ const REACTIONS = [
 ];
 const OUTCOME_KINDS = ["call", "kakao", "meeting", "visit", "demo", "email"];
 
-function ContactOutcomeSheet({ row, onSaved }) {
+function ContactOutcomeSheet({ row, onSaved, onUndone }) {
   const [kind, setKind] = React.useState("call");
   const [reaction, setReaction] = React.useState(null);
   const [summary, setSummary] = React.useState("");
@@ -249,49 +250,81 @@ function ContactOutcomeSheet({ row, onSaved }) {
     setReaction(null); setSummary(""); setNextAction(""); setNextAt("");
     setDormant(false); setState("idle"); setErrorMsg("");
   };
+  const [pendingUndo, setPendingUndo] = React.useState(null);
 
-  const save = async ({ ignoreWarning = false } = {}) => {
+  // followups submitLog와 같은 deferred-write 계약(5차 재감사 M: 같은 최고 빈도 액션이
+  // 진입점에 따라 되돌리기 유무가 갈렸다): 즉시 반영+3.5초 되돌리기, 창이 닫히면 POST,
+  // 늦은 실패 시 입력 복원+명명.
+  const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
+  const persist = async (payload, snapshot) => {
+    try {
+      const resp = await fetch("/api/hub/revenue/contact-outcome", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (resp.ok && data.status === "saved") return;
+      // 늦은 실패 — 입력 복원 + 원인 명명 (낙관 행 제거는 onUndone이 담당)
+      onUndone?.(snapshot.optimisticId);
+      setKind(snapshot.kind); setSummary(snapshot.summary); setReaction(snapshot.reaction);
+      setNextAction(snapshot.nextAction); setNextAt(snapshot.nextAt); setDormant(snapshot.dormant);
+      setState("error");
+      setErrorMsg(`${data.error || data.reason || "저장에 실패했습니다."} — 입력을 복원했습니다.`);
+    } catch (err) {
+      onUndone?.(snapshot.optimisticId);
+      setKind(snapshot.kind); setSummary(snapshot.summary); setReaction(snapshot.reaction);
+      setNextAction(snapshot.nextAction); setNextAt(snapshot.nextAt); setDormant(snapshot.dormant);
+      setState("error");
+      setErrorMsg(`${err instanceof Error ? err.message : String(err)} — 입력을 복원했습니다.`);
+    }
+  };
+
+  const save = ({ ignoreWarning = false } = {}) => {
     if (!summary.trim() || !reaction) return;
     // 다음 액션도 기약 없음도 없으면 저장 전 1회 경고 (열린 건을 공백으로 두지 않기)
     if (!dormant && !nextAction.trim() && !ignoreWarning) {
       setState("warn");
       return;
     }
-    setState("saving");
-    try {
-      const resp = await fetch("/api/hub/revenue/contact-outcome", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          entityType: row.kind === "account" ? "account" : "lead",
-          entityId: row.id,
-          kind,
-          summary: summary.trim(),
-          reaction,
-          nextAction: dormant ? null : (nextAction.trim() || null),
-          nextActionAt: dormant ? null : (nextAt || null),
-          dormant,
-        }),
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (resp.ok && data.status === "saved") {
-        onSaved({
-          activityId: data.activityId,
-          kind,
-          summary: summary.trim(),
-          reaction,
-          nextAction: dormant ? "기약 없음 (휴면)" : nextAction.trim(),
-          dormant,
-        });
-        reset();
-        return;
-      }
-      setState("error");
-      setErrorMsg(data.error || data.reason || "저장에 실패했습니다.");
-    } catch (err) {
-      setState("error");
-      setErrorMsg(err instanceof Error ? err.message : String(err));
-    }
+    const optimisticId = `local-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const snapshot = { optimisticId, kind, summary: summary.trim(), reaction, nextAction: nextAction.trim(), nextAt, dormant };
+    const payload = {
+      entityType: row.kind === "account" ? "account" : "lead",
+      entityId: row.id,
+      kind,
+      summary: summary.trim(),
+      reaction,
+      nextAction: dormant ? null : (nextAction.trim() || null),
+      nextActionAt: dormant ? null : (nextAt || null),
+      dormant,
+    };
+    onSaved({
+      activityId: optimisticId,
+      kind,
+      summary: summary.trim(),
+      reaction,
+      nextAction: dormant ? "기약 없음 (휴면)" : nextAction.trim(),
+      dormant,
+    });
+    reset();
+    const key = `contact-${optimisticId}`;
+    scheduleUndoable(key, () => {
+      setPendingUndo((cur) => (cur?.key === key ? null : cur)); // 창 닫힘 — 죽은 버튼 방지
+      persist(payload, snapshot);
+    });
+    setPendingUndo({
+      key,
+      label: "기록됨",
+      undo: () => {
+        if (cancelUndoable(key)) {
+          onUndone?.(optimisticId);
+          setKind(snapshot.kind); setSummary(snapshot.summary); setReaction(snapshot.reaction);
+          setNextAction(snapshot.nextAction); setNextAt(snapshot.nextAt); setDormant(snapshot.dormant);
+        }
+        setPendingUndo(null);
+      },
+    });
   };
 
   const canSave = Boolean(summary.trim() && reaction) && state !== "saving";
@@ -363,7 +396,13 @@ function ContactOutcomeSheet({ row, onSaved }) {
           {state === "warn" && (
             <span style={{ color: "var(--fg-muted)" }}>다음 액션이 비어 있습니다. 그래도 저장하려면 한 번 더 누르세요.</span>
           )}
-          {state === "error" && <span style={{ color: "var(--danger)" }}>{errorMsg}</span>}
+          {state === "error" && <span role="alert" style={{ color: "var(--danger)" }}>{errorMsg}</span>}
+          {pendingUndo && (
+            <span role="status" aria-live="polite" style={{ color: "var(--fg-muted)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              {pendingUndo.label}
+              <Button variant="ghost" size="xs" onClick={pendingUndo.undo}>되돌리기</Button>
+            </span>
+          )}
         </div>
         <Button
           variant="primary"
@@ -566,10 +605,14 @@ function Customer360Drawer({ row, onClose, onNavigate }) {
           row={row}
           onSaved={(o) => {
             setActivities(prev => [
-              { id: o.activityId || `local-${Date.now()}`, type: o.kind, msg: o.summary, at: "방금", reaction: o.reaction },
+              { id: o.activityId, type: o.kind, msg: o.summary, at: "방금", reaction: o.reaction },
               ...prev,
             ]);
             setNextActionOverride(o.nextAction || null);
+          }}
+          onUndone={(optimisticId) => {
+            setActivities(prev => prev.filter(a => a.id !== optimisticId));
+            setNextActionOverride(null);
           }}
         />
 

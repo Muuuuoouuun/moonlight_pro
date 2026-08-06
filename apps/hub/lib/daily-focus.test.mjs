@@ -105,9 +105,13 @@ test("buildDailyFocus: 오늘 일정은 KST 오늘만, 시간순, 미연결은 p
   assert.equal(focus.todayAgenda.items.find((i) => i.id === "e4").whenLabel, "종일");
   assert.equal(focus.todayAgenda.items.find((i) => i.id === "e1").whenLabel, "07:30");
 
-  const off = buildDailyFocus({ revenue: revenueFixture(), calendar: { ok: false, reason: "not-connected" }, now: NOW });
+  // 실제 producer 어휘(missing-*)만 preview — read 실패는 error로 구분된다(5차 재감사 M).
+  const off = buildDailyFocus({ revenue: revenueFixture(), calendar: { ok: false, reason: "missing-connection" }, now: NOW });
   assert.equal(off.todayAgenda.state, "preview");
-  assert.equal(off.todayAgenda.reason, "not-connected");
+  assert.equal(off.todayAgenda.reason, "missing-connection");
+
+  const failed = buildDailyFocus({ revenue: revenueFixture(), calendar: { ok: false, reason: "calendar-read-failed" }, now: NOW });
+  assert.equal(failed.todayAgenda.state, "error");
   assert.equal(off.todayAgenda.items.length, 0);
 });
 

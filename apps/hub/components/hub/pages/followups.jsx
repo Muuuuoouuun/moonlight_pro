@@ -531,7 +531,9 @@ export function Followups({ onNavigate }) {
                     ? "정체된 리드·딜이 생기면 여기에 우선순위로 뜹니다."
                     : "이 필터에 해당하는 항목이 없습니다."
               }
-              action={lane !== "all" || bucket !== "all" ? <Button variant="outline" size="sm" onClick={() => { setLane("all"); setBucket("all"); }}>전체 보기</Button> : undefined}
+              action={lane !== "all" || bucket !== "all"
+                ? <Button variant="outline" size="sm" onClick={() => { setLane("all"); setBucket("all"); }}>전체 보기</Button>
+                : <Button variant="outline" size="sm" icon="leads" onClick={() => onNavigate?.("dashboard/revenue/leads")}>리드 목록 열기</Button>}
             />
           )
         ) : (

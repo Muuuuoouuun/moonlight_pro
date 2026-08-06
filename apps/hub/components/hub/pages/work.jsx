@@ -1249,7 +1249,7 @@ export function Rhythm() {
   // 전에 window.confirm으로 확인을 받으므로 여기서 다시 묻지 않는다. 로컬(아직 저장 안 된)
   // 초안은 API 호출 없이 그냥 상태에서 제거한다.
   const deleteRitual = React.useCallback(async () => {
-    if (!editingRitual) return;
+    if (!editingRitual) return { ok: false, status: 'no-selection' };
     if (editingRitual.isNew) {
       setLocalRituals((prev) => prev.filter((r) => r.id !== editingRitual.id));
       setRitualEdits((prev) => {
@@ -1258,7 +1258,7 @@ export function Rhythm() {
         delete next[editingRitual.id];
         return next;
       });
-      return;
+      return { ok: true, status: 'local' };
     }
 
     const original = baseRituals.find((r) => r.id === editRitualId) || editingRitual;
@@ -1275,20 +1275,23 @@ export function Rhythm() {
       const data = await response.json().catch(() => ({}));
       if (response.ok && data.status === 'saved') {
         await retry();
-        return;
+        return { ok: true, status: 'saved' };
       }
-      // 삭제 실패 — tombstone을 지워 되돌린다(행이 다시 보인다).
+      // 삭제 실패 — tombstone을 지워 되돌리고(행이 다시 보인다) 봉투로 명명한다:
+      // undefined를 돌려주면 EditDrawer가 성공으로 알고 닫힌다(5차 재감사 S).
       setDeletedRitualIdentities((prev) => {
         const next = new Set(prev);
         next.delete(identity);
         return next;
       });
+      return { ok: false, status: data.status || `error-${response.status}` };
     } catch {
       setDeletedRitualIdentities((prev) => {
         const next = new Set(prev);
         next.delete(identity);
         return next;
       });
+      return { ok: false, status: 'error' };
     }
   }, [editingRitual, editRitualId, baseRituals, retry]);
 

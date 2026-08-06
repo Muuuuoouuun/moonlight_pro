@@ -75,7 +75,8 @@ const PROJECT_VIEWS = new Set(PROJECT_VIEW_OPTIONS.map(v => v.key));
 // Timeline view: status → left-stripe token (§5.2 — status color lives on stripes/chips,
 // never as a full bar fill) and the same Korean status labels the List view row uses.
 const STATUS_LINE_TOKEN = {
-  'In progress': 'var(--pms-moonstone)',
+  // lifecycle 스트라이프는 중립 — Moonstone은 current/selected 전용(§5.3, 5차 재감사 S).
+  'In progress': 'var(--line-strong)',
   Review: 'var(--line-strong)',
   Planning: 'var(--line-strong)',
   Backlog: 'var(--line-soft)',
@@ -275,9 +276,14 @@ export function Projects({ workspace }) {
       const elapsed = Date.now() - startedAt;
       if (elapsed < 100) await new Promise(r => setTimeout(r, 100 - elapsed));
 
-      if (response.ok || data.status === 'saved' || data.status === 'preview') {
+      if (data.status === 'saved') {
         setOrderResult({ tone: 'ok', label: `↗ ${formatTime(new Date())}` });
+      } else if (data.status === 'preview') {
+        setOrderResult({ tone: 'ok', label: `저장 대기(preview) · ${formatTime(new Date())}` });
+      } else if (data.status === 'partial') {
+        setOrderResult({ tone: 'err', label: '업데이트는 저장, 프로젝트 행 패치 실패 — 상태가 오래됐을 수 있습니다' });
       } else {
+        // failed(502)·error — OK 영수증으로 위장하지 않는다(5차 재감사 S/M).
         setOrderResult({ tone: 'err', label: data.error || data.message || `실패 ${response.status}` });
       }
     } catch (error) {
@@ -1166,7 +1172,7 @@ export function Projects({ workspace }) {
           loadLedger(); // 배경 재검증
         }
         setTaskEditSource(null);
-        setOrderResult({ tone: 'ok', label: data.status === 'preview' ? '할 일 삭제 · 저장 대기(preview)' : '할 일 삭제됨' });
+        setOrderResult({ tone: 'ok', label: data.status === 'preview' ? '할 일 삭제 · 백엔드 미구성이라 로컬에서만 지워졌습니다' : '할 일 삭제됨' });
         return;
       }
       setOrderResult({ tone: 'err', label: data.error || `삭제 실패 ${response.status}` });
@@ -1734,10 +1740,10 @@ export function Projects({ workspace }) {
                 )}
                 {(() => {
                   const STATUS_GROUPS = [
-                    { key: 'In progress', label: '진행중', tone: 'var(--pms-moonstone)' },
+                    { key: 'In progress', label: '진행중', tone: 'var(--line-strong)' },
                     { key: 'Blocked',     label: '막힘',   tone: 'var(--danger)' },
                     { key: 'Review',      label: '검토',   tone: 'var(--line-strong)' },
-                    { key: 'Planning',    label: '계획',   tone: 'var(--pms-moonstone)' },
+                    { key: 'Planning',    label: '계획',   tone: 'var(--line-strong)' },
                     { key: 'Done',        label: '완료',   tone: 'var(--fg-dim)' },
                     { key: 'Backlog',     label: '백로그', tone: 'var(--fg-faint)' },
                   ];
@@ -1880,7 +1886,9 @@ export function Projects({ workspace }) {
                                         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); editTodo(t); } }}
                                         style={{ borderRadius: 'var(--r-sm)', padding: '4px 6px', margin: '-4px -6px' }}
                                       >
-                                        <Dot tone={prioTone[t.priority]} size={4} />
+                                        <span title={`우선순위 ${t.priority || 'medium'}`} style={{ display: 'inline-flex' }}>
+                                          <Dot tone={prioTone[t.priority]} size={4} />
+                                        </span>
                                         <span>{t.title}</span>
                                       </div>
                                       <span className="hub-project-subtask__assignee">{t.assignee}</span>
@@ -2151,7 +2159,9 @@ export function Projects({ workspace }) {
                         opacity: drag === c.id ? 0.4 : 1,
                       }}>
                       <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 6 }}>
-                        <Dot tone={prioTone[c.priority]} size={5} />
+                        <span title={`우선순위 ${c.priority || 'medium'}`} style={{ display: 'inline-flex' }}>
+                          <Dot tone={prioTone[c.priority]} size={5} />
+                        </span>
                         <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{c.project}</span>
                         <div style={{ flex: 1 }} />
                         {c.tag === 'personal' && <Badge tone="personal" size="xs">P</Badge>}

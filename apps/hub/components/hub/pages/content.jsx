@@ -1254,7 +1254,7 @@ function CampaignLine({ label, value, tone = 'moon' }) {
 function CampaignTabPanel({ tab, campaign, detail }) {
   const router = useRouter();
   // 콘텐츠 lifecycle은 카테고리 — semantic 색 금지(§5.2/§5.3), 라벨이 상태를 전달한다.
-  const sTone = { Active: 'neutral', Planning: 'neutral', Draft: 'neutral', Live: 'neutral', Scheduled: 'neutral', Review: 'moon', Idea: 'neutral' };
+  const sTone = { Active: 'neutral', Planning: 'neutral', Draft: 'neutral', Live: 'neutral', Scheduled: 'neutral', Review: 'neutral', Idea: 'neutral' };
 
   if (tab === 'strategy') {
     return (

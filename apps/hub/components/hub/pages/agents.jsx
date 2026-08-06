@@ -311,7 +311,7 @@ function CouncilCoachPanel({ onNavigate }) {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>Council 자문</div>
-            <Badge tone="moon" size="xs">브랜드 카운슬</Badge>
+            <Badge tone="neutral" size="xs">브랜드 카운슬</Badge>
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', marginTop: 2 }}>이번 주 브랜드 전략 — 무엇부터 손댈지</div>
         </div>

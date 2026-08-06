@@ -349,6 +349,11 @@ function buildWorkSignals(projects, work) {
 }
 
 function buildMetrics(revenue, content, automations, projects) {
+  // 읽지 못한 원장의 지표를 0으로 단언하지 않는다 — 실패한 자동화 read가
+  // "Runs failed 0"으로, 매출 블립이 "₩0 MRR"로 위장되던 경로(5차 재감사 M).
+  const revenueReadable = revenue?.source === "supabase";
+  const contentReadable = content?.source === "supabase";
+  const automationsReadable = automations?.source === "supabase";
   const revenueSummary = revenue.summary || {};
   const contentSummary = content.summary || {};
   const automationSummary = automations.summary || {};
@@ -359,10 +364,18 @@ function buildMetrics(revenue, content, automations, projects) {
 
   return [
     // §5.3: 지표 톤은 실패만 danger — 카테고리/증가에 semantic·moon 배정 금지.
-    metric("MRR", formatMoney(revenueSummary.mrr || 0), revenueSummary.mrr ? "ledger" : "waiting", "neutral"),
-    metric("Pipeline", formatMoney(revenueSummary.pipeline || 0), `${revenueSummary.openDeals || 0} deals`, "neutral"),
-    metric("Published", String(contentSummary.published || 0), `${contentSummary.drafts || 0} drafts`, "neutral"),
-    metric("Runs failed", String(automationSummary.failuresToday || 0), `${automationSummary.runsToday || 0} runs`, automationSummary.failuresToday ? "danger" : "neutral"),
+    revenueReadable
+      ? metric("MRR", formatMoney(revenueSummary.mrr || 0), revenueSummary.mrr ? "ledger" : "waiting", "neutral")
+      : metric("MRR", "—", revenue?.source === "error" ? "revenue read failed" : "ledger unavailable", "neutral"),
+    revenueReadable
+      ? metric("Pipeline", formatMoney(revenueSummary.pipeline || 0), `${revenueSummary.openDeals || 0} deals`, "neutral")
+      : metric("Pipeline", "—", revenue?.source === "error" ? "revenue read failed" : "ledger unavailable", "neutral"),
+    contentReadable
+      ? metric("Published", String(contentSummary.published || 0), `${contentSummary.drafts || 0} drafts`, "neutral")
+      : metric("Published", "—", content?.source === "error" ? "content read failed" : "ledger unavailable", "neutral"),
+    automationsReadable
+      ? metric("Runs failed", String(automationSummary.failuresToday || 0), `${automationSummary.runsToday || 0} runs`, automationSummary.failuresToday ? "danger" : "neutral")
+      : metric("Runs failed", "—", automations?.source === "error" ? "automation read failed" : "ledger unavailable", automations?.source === "error" ? "danger" : "neutral"),
     metric("Open work", openProjects === null ? "—" : String(openProjects), projectsReadable ? "active projects" : "project ledger unavailable", "neutral"),
   ].slice(0, 5);
 }

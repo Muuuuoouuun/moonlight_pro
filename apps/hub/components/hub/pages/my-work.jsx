@@ -179,7 +179,11 @@ function useAttentionLedger() {
       if (!isCurrent()) return null;
       if (!res.ok || !json || json.status === 'error') {
         // 캐시 서빙 중이면 error로 화면을 비우지 않고 오래된 데이터임을 표시한다.
-        setState(attentionLedgerCache ? 'stale' : 'error');
+        // 단, 신선도 게이트를 통과한(=실제로 서빙 중인) 캐시만 — 만료 캐시 위에서
+        // 'stale'을 선언하면 빈 목록이 "마지막 데이터"로 위장된다(5차 재감사 S).
+        const servingCache = attentionLedgerCache
+          && Date.now() - attentionLedgerCache.at < ATTENTION_CACHE_SERVABLE_MS;
+        setState(servingCache ? 'stale' : 'error');
         return null;
       }
       const nextData = { items: json.items || [], sources: json.sources || {}, calendarReason: json.calendarReason || '', projects: json.projects || [] };
@@ -188,7 +192,11 @@ function useAttentionLedger() {
       setState('ready');
       return json;
     } catch {
-      if (isCurrent()) setState(attentionLedgerCache ? 'stale' : 'error');
+      if (isCurrent()) {
+        const servingCache = attentionLedgerCache
+          && Date.now() - attentionLedgerCache.at < ATTENTION_CACHE_SERVABLE_MS;
+        setState(servingCache ? 'stale' : 'error');
+      }
       return null;
     }
   }, []);

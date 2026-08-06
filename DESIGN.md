@@ -301,7 +301,7 @@ truth. Do not recreate them ad-hoc inside pages.
 - 금액은 표시 문자열(`₩1.2M`/`₩900K`)을 숫자로 파싱해 정렬, 단계는 퍼널 순서로 정렬 (알파벳 금지).
 
 **상태 표시.**
-- 좌측 액센트 스트라이프는 `--*-line` 토큰 + `inset 1px 0 0` box-shadow — 배경 fill·두꺼운 보더 금지 (§5.2).
+- 좌측 액센트 스트라이프는 `inset 1px 0 0` box-shadow — 토큰은 `--*-line`(저채도) 또는 위급 레일에 한해 본색 `--danger`를 쓴다(현행 코드·state-usage 테스트 기준). 배경 fill·두꺼운 보더 금지 (§5.2).
 - stalled 기준은 `STALLED_DAYS`(현재 14일) 상수 하나 — 페이지별 하드코딩 금지.
 
 **Hover.**

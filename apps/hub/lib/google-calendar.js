@@ -510,7 +510,10 @@ export async function listGoogleCalendarEvents({
   } catch (error) {
     return {
       ok: false,
-      reason: error instanceof Error ? error.message : String(error),
+      // 구조화된 reason — "미연결"(missing-*)과 "read 실패"를 소비자가 구분해야
+      // 실패가 "연결하세요" preview 카피로 위장되지 않는다(5차 재감사 M).
+      reason: "calendar-read-failed",
+      detail: error instanceof Error ? error.message : String(error),
       items: [],
       connection: null,
       calendarId: calendarId || process.env.GOOGLE_CALENDAR_ID?.trim() || "primary",

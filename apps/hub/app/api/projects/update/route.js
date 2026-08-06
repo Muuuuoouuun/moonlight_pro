@@ -67,15 +67,35 @@ export async function POST(req) {
         : { persisted: false, reason: "not-patched" };
 
     if (!persistence.persisted) {
+      // Phase 0 taxonomy: preview는 missing-config만 — 라이브 거부(timeout/RLS/5xx)는
+      // failed→502 (5차 재감사: revenue-write 3차 수정이 이 라우트엔 미도달).
+      const isPreview = persistence.reason === "missing-config";
       return NextResponse.json(
         {
-          status: "preview",
-          message: "Project update payload is valid, but persistence is not configured or failed.",
+          status: isPreview ? "preview" : "failed",
+          message: isPreview
+            ? "Project update payload is valid, but persistence is not configured."
+            : "Live backend refused the project update — retry.",
           preview: record,
           persistence,
           projectPersistence,
         },
-        { status: 202 },
+        { status: isPreview ? 202 : 502 },
+      );
+    }
+
+    // 업데이트 행은 저장됐는데 프로젝트 행 패치가 거부된 반쪽 성공도 명명한다.
+    if (projectPersistence && projectPersistence.persisted === false
+      && !["not-patched", "missing-config"].includes(projectPersistence.reason)) {
+      return NextResponse.json(
+        {
+          status: "partial",
+          message: "Update row saved, but the project row patch failed — status/next action may be stale.",
+          preview: record,
+          persistence,
+          projectPersistence,
+        },
+        { status: 207 },
       );
     }
 

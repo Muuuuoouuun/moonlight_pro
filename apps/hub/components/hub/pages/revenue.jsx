@@ -264,7 +264,7 @@ function GuruCoachPanel({ onNavigate }) {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>Guru 코칭</div>
-            <Badge tone="moon" size="xs">영업 멘토</Badge>
+            <Badge tone="neutral" size="xs">영업 멘토</Badge>
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', marginTop: 2 }}>이번 주 파이프라인 분류 — 무엇부터 손댈지</div>
         </div>
@@ -354,7 +354,7 @@ export function RevenueOverview({ onNavigate }) {
       <div className="hub-grid--metrics stagger-up" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap)' }}>
         {[
           { l: 'MRR', v: fmt(mrr), d: formatPercentDelta(mrr, mrrPrev), tone: 'neutral' },
-          { l: 'Pipeline', v: fmt(pipeline), d: `${openDeals} deals`, tone: 'moon' },
+          { l: 'Pipeline', v: fmt(pipeline), d: `${openDeals} deals`, tone: 'neutral' },
           { l: 'Open leads', v: openLeads, d: `이번달 신규 ${newThisMonth}`, tone: 'neutral' },
           { l: 'Won MTD', v: fmt(wonMTD), d: `${wonDealsCount} deals`, tone: 'neutral' },
         ].map((k, i) => (
@@ -833,7 +833,7 @@ export function Leads({ workspace }) {
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span className="mono" style={{ fontSize: 12, color: l.score >= 70 ? 'var(--moon-200)' : 'var(--fg-muted)' }}>{l.score ?? '—'}</span>
-              {l.priorityLane === 'customer_success' && <Badge tone="company" size="xs">CS</Badge>}
+              {l.priorityLane === 'customer_success' && <Badge tone="neutral" size="xs">CS</Badge>}
             </span>
             <span style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.owner}</span>
             <span className="mono" style={{ textAlign: 'right', fontSize: 11.5, color: 'var(--fg-faint)' }}>{l.last}</span>
@@ -1035,7 +1035,7 @@ function DealTaskPanel({ deal, onSaved }) {
               <Button variant="outline" size="xs" icon="projects" onClick={createFollowupProject} disabled={asState === 'saving'}>
                 {asState === 'saving' ? '생성 중…' : 'A/S 프로젝트 만들기'}
               </Button>
-              {asState === 'error' && <span style={{ fontSize: 11, color: 'var(--danger)' }}>생성 실패 — 다시 시도</span>}
+              {asState === 'error' && <span role="alert" style={{ fontSize: 11, color: 'var(--danger)' }}>생성 실패 — 다시 시도</span>}
             </>
           )}
         </div>
@@ -2402,6 +2402,7 @@ export function Accounts({ workspace, onNavigate }) {
 
   // 키보드 계층(§8.1 표준): j/k 이동 · e 상세 · n 생성 · / 검색 — 다른 Revenue 표면과 동일.
   const accountSearchRef = React.useRef(null);
+  const [accountsNotice, setAccountsNotice] = React.useState(null);
   const accountKbRows = React.useMemo(() => filtered.map(a => ({ id: a.name })), [filtered]);
   const accountSelection = useCrmSelection(accountKbRows);
   useCrmKeyboard({
@@ -2438,10 +2439,12 @@ export function Accounts({ workspace, onNavigate }) {
     if (r.ok && r.id) {
       setLocalAccounts(prev => prev.map(a => (a.name === name ? { ...a, id: r.id } : a)));
     } else if (r.status !== 'preview') {
-      // 라이브 백엔드 거부 — 팬텀을 남기지 않고 제거 + 명명 (preview=미구성만 로컬 유지 정당)
+      // 라이브 백엔드 거부 — 팬텀을 남기지 않고 제거 + 명명 (preview=미구성만 로컬 유지 정당).
+      // activityError는 detail 패널 전용이라 목록 복귀 후엔 보이지 않는다 — 페이지 알림 사용
+      // (5차 재감사: 무언 실패로 남던 유일한 생성 경로).
       setLocalAccounts(prev => prev.filter(a => a.name !== name));
       setView('list');
-      setActivityError({ name, message: `계정 생성 실패 (${r.status}) — 다시 시도하세요.` });
+      setAccountsNotice(`계정 생성 실패 (${r.status}) — 다시 시도하세요.`);
     }
   };
 
@@ -2475,6 +2478,7 @@ export function Accounts({ workspace, onNavigate }) {
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Accounts</h2>
+          {accountsNotice && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{accountsNotice}</div>}
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             {ACCOUNTS.filter(a => a.type === 'company').length} companies · {ACCOUNTS.filter(a => a.type === 'personal').length} individuals
             <SyncBadge state={syncState} />

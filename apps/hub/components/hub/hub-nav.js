@@ -44,8 +44,13 @@ export function normalizeScope(scope) {
 // sub-list — the anchor itself is the destination.
 
 // Second-level destinations, defined once so the per-scope tables stay readable.
+// ?scope=personal은 실제로 소비하는 표면(Leads/Deals/Accounts의 개인 필터 시드)에만
+// 붙인다 — 나머지는 전역 집계 뷰라 파라미터가 과약속이었다(5차 재감사 S).
+const SCOPE_CONSUMING_CHILD_KEYS = new Set(['rev-leads', 'rev-deals', 'rev-accounts']);
 function personalScoped(children) {
-  return children.map((c) => ({ ...c, path: `${c.path}?scope=personal` }));
+  return children.map((c) => (
+    SCOPE_CONSUMING_CHILD_KEYS.has(c.key) ? { ...c, path: `${c.path}?scope=personal` } : c
+  ));
 }
 
 const REVENUE_CHILDREN = [

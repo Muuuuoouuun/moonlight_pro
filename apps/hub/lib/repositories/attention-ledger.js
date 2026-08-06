@@ -272,7 +272,11 @@ export async function getAttentionLedger() {
   const sources = {
     tasks: taskSourceState,
     deals: dealSourceState,
-    calendar: calendar?.ok ? "live" : "preview",
+    calendar: calendar?.ok
+      ? "live"
+      : ["calendar-not-connected", "missing-connection", "missing-access-token", "missing-config"].includes(calendar?.reason || "calendar-not-connected")
+        ? "preview"
+        : "error",
   };
 
   // Deal entityId → linked lead's follow-up score (0–100). Deals carry lead_id; leads carry

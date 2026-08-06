@@ -155,11 +155,12 @@ export function buildDailyFocus({ revenue, calendar, now = new Date() } = {}) {
       }),
     },
     todayAgenda: {
+      // 미연결 계열(missing-*)만 preview — 그 외(read 실패·타임아웃·토큰 만료)는 error.
       state: calendarOk
         ? "live"
-        : calendar?.reason === "calendar-read-failed"
-          ? "error"
-          : "preview",
+        : ["calendar-not-connected", "missing-connection", "missing-access-token", "missing-config"].includes(calendar?.reason || "calendar-not-connected")
+          ? "preview"
+          : "error",
       reason: calendarOk ? "" : calendar?.reason || "calendar-not-connected",
       items: agendaItems,
     },

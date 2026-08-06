@@ -97,7 +97,7 @@ export function AutomationsIndex({ onNavigate }) {
             description={syncState === 'error'
               ? '지금 화면은 비어 보여도 실제 flow가 있을 수 있습니다. 새로고침으로 재시도하세요.'
               : syncState === 'live' ? 'Supabase automations 테이블에 표시할 flow가 없습니다. Flow 등록은 Engine 배선으로 이뤄집니다.' : 'flow가 등록되면 실행 상태와 성공률이 여기에 표시됩니다.'}
-            action={<Button variant="secondary" size="sm" icon="zap" onClick={() => onNavigate('dashboard/automations/flows')}>Flow 캔버스 보기</Button>}
+            action={<Button variant="secondary" size="sm" icon="runs" onClick={() => onNavigate('dashboard/automations/runs')}>실행 로그 보기</Button>}
           />
         )}
         {rows.map((a, i) => (
@@ -232,7 +232,7 @@ export function EmailAutomation({ onNavigate }) {
         </Card>
       </div>
 
-      <SectionTitle>Tag rules</SectionTitle>
+      <SectionTitle right={<Badge tone="neutral" size="xs">샘플 · 미배선</Badge>}>Tag rules</SectionTitle>
       <Card pad={false} className="hub-table-card">
         {[
           { cond: 'from:@* AND subject 한정', then: 'tag: Lead · create CRM', tone: 'neutral' },
@@ -335,7 +335,19 @@ export function Webhooks({ onNavigate }) {
             description={syncState === 'error'
               ? '지금 화면은 비어 보여도 실제 이벤트가 있을 수 있습니다. 새로고침으로 재시도하세요.'
               : 'Project webhook smoke test나 Telegram webhook이 들어오면 endpoint별 활동이 집계됩니다.'}
-            action={<Button variant="primary" size="sm" icon="play" onClick={() => runHookTest(0, { name: 'Project smoke test', url: '/api/webhooks/project-test' })}>Send test</Button>}
+            action={
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <Button variant="primary" size="sm" icon="play" onClick={() => runHookTest(0, { name: 'Project smoke test', url: '/api/webhooks/project-test' })}>
+                  {testState[0]?.pending ? '전송 중…' : 'Send test'}
+                </Button>
+                {/* 목록이 비어 hooks.map이 결과를 못 그린다 — 여기서 직접 표시(무언 no-op 방지, 5차 재감사 S) */}
+                {testState[0] && !testState[0].pending && (
+                  <span role="status" aria-live="polite" style={{ fontSize: 11.5, color: testState[0].tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)' }}>
+                    {testState[0].label}
+                  </span>
+                )}
+              </span>
+            }
           />
         )}
         {hooks.map((h, i) => {
@@ -350,6 +362,7 @@ export function Webhooks({ onNavigate }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <Dot tone={sTone[h.status]} />
               <span style={{ fontSize: 13, fontWeight: 500 }}>{h.name}</span>
+              {h.status === 'err' && <span style={{ fontSize: 10.5, color: 'var(--danger)' }}>실패</span>}
               <div style={{ flex: 1 }} />
               {state && state.label && (
                 <Badge tone={state.tone} size="xs">{state.label}</Badge>
