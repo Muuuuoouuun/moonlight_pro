@@ -21,6 +21,8 @@
 | 기준선 (iter 1 평가) | 2026-08-05 | 44 | 57 | 63 | 72 | 74 | 76 | 72 | 41 | **62.4** |
 | 재감사 (iter 1~4 반영 후) | 2026-08-05 | 80 | 85 | 88 | 72 | 72 | 77 | — | — | **79.0*** |
 | 2차 재감사 (iter 5 반영 후, 부분) | 2026-08-05 | 87 | 86 | — | — | 84 | — | — | — | 부분 측정** |
+| 3차 재감사 (iter 6~9 반영 후) | 2026-08-05 | — | — | 86† | 78 | — | 84 | 84 | — | 부분 측정 |
+| 4차 재감사 (iter 10~13 반영 후, 전 축) | 2026-08-06 | 90 | 89 | 88† | 83 | 87 | 90 | 87 | 88† | **87.6** |
 
 \** 2차 재감사는 축별 감사 에이전트 5기 중 2기만 완주(속도 84 · 정체성 87 · 사용성 86). 안정성·디자인·UI/UX·편의 에이전트는 세션 한도로 중단 — 09:10Z 리셋 후 재실행. 완주 2기의 잔여 지적(셸 ReferenceError·ClassIn 앵커 아카이브 착지·가짜 페르소나·팬아웃·캐시 부재 등)은 6~9차 수리로 전부 반영 완료.
 
@@ -175,6 +177,17 @@
 - **13차**: ShortcutOverlay 닫기 버튼+포커스 이동, engine 명령 라우트 3곳 64KB 바디 상한.
 
 **명시 보류 3건**: hub-write-guard 프로덕션 인증 루프(operator-session 쿠키 통합 — 배포 모드 확인 필요, 로컬/cron 전제에선 비발화), 언마운트 후 flush 실패의 무언성(연락 기록 — pagehide 최선 노력까지 반영, keepalive 보장은 콜백 소유 fetch 구조상 별도 작업), overview 라우트 lean 전환(브랜드/updates/decisions projection 필요 — M, 보조 표면).
+
+### Iteration 14~16 (2026-08-06) — 반영 완료
+
+주제: **4차 재감사(전 축 측정: 정체성90 · 디자인90 · 사용성89 · 편의88 · 속도87 · UIUX87 · 안정성83, 평균 87.6) 지적 전량 소진.**
+검증: 각 배치 `npm test` 549/549 · engine tsc · hub/engine build 통과. 커밋 c66a739 · bbcb89e · 8d68a4e · ef46b31.
+
+- **14차 (조건부 무음 실패 + 첫 화면 error 정직화)**: attention-ledger 딜 레인 revenue error 반영(기존 preview 위장), daily-focus/FocusSlots가 read 실패를 "비어 보여도 실제 건이 있을 수 있습니다"로 명명(preview "연결하세요" 위장 제거, 캘린더 read 실패도 미연결과 구분). EditDrawer 삭제가 결과 봉투 소비(실패 시 드로어 유지+원인+낙관 제거 복원 — 마지막 드로어 무음 소실 경로). engine content 라우트 return=representation(0행 PATCH saved 위장 차단)+update_draft 순차·반쪽 성공 명명. automations 클러스터 error 정직화+빈 상태 분기. agents 승인 3핸들러 실패 role=alert. 수제 n 리스너 4곳 다이얼로그 가드. 기획 pulse 5지표 복원, 죽은 ?draft=·⌘K Council 행 제거.
+- **15차 (속도 — 핫 표면 SWR)**: daily-brief/attention/projects 모듈 스코프 stale-while-revalidate(탭 복귀 스켈레톤 제거, 재검증 실패 시 partial/stale 명명). my-work 드로어 저장 낙관 병합(전체 reload 비대기), 딜 체크리스트 낙관 flip. google-calendar AbortSignal.timeout(8s) — 유일한 무한대 핫패스 외부 의존 상한 + 갱신 토큰 저장 fire-and-forget.
+- **16차 (채점 잔여 마감)**: my-work/daily-brief 만료 undo 버튼 자동 소거, Cases j/k/e(4테이블 문법 완성), Accounts list/detail 커서, projects 생성/삭제 로컬 병합, Segments/content Queue error 카피, customers 딥링크 빈 원장 소비, ?scope=personal 실소비(Leads/Deals/Accounts 필터 시드), projects·customers·daily-brief 라우트 잔여 moon/semantic 톤 중립, HealthDot 라벨 동반, 死 tone 필드·고아 폼 제거.
+
+**명시 보류(문서 명명 유지)**: 첫 화면 attention-ledger 통합(Phase 1B 잔여 — 정체성 캡), overview 라우트 lean 전환(보조 표면), hub-write-guard 프로덕션 오리진(배포 모드 확인 필요), 언마운트 후 flush 실패 무언성(pagehide 최선 노력까지), BulkBar 미배선(1인 운영 성숙도에서 후순위), TopBar New 생성 진입 강화, 알림 수명 통일.
 
 ### 다음 회차 백로그 (점수 영향 순)
 
