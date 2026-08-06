@@ -605,6 +605,7 @@ export function Customers({ onNavigate }) {
   const [search, setSearch] = React.useState("");
   const [sort, setSort] = React.useState({ key: null, dir: "asc" });
   const [openKey, setOpenKey] = React.useState(null);
+  const [createError, setCreateError] = React.useState(null);
 
   const allRows = React.useMemo(() => toRows(ledger), [ledger]);
 
@@ -657,9 +658,11 @@ export function Customers({ onNavigate }) {
   const createCustomer = React.useCallback(() => {
     if (creatingRef.current) return;
     creatingRef.current = true;
+    setCreateError(null);
     saveRevenueRecord("lead", "create", { name: "새 고객", stage: "New" })
       .then(r => {
         if (r.ok && r.id) setOpenKey(`lead:${r.id}`);
+        else setCreateError(`고객 생성 실패 (${r.status}) — 다시 시도하세요.`); // 무언 실패 금지(재감사 M)
       })
       .finally(() => { creatingRef.current = false; });
   }, []);
@@ -701,6 +704,7 @@ export function Customers({ onNavigate }) {
       <div className="hub-page-header" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>고객 DB</h2>
+          {createError && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{createError}</div>}
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             리드 {ledger.leads?.length || 0} · 계약 고객 {ledger.accounts?.length || 0}
             <SyncBadge state={syncState} />

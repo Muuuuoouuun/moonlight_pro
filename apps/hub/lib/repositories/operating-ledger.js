@@ -79,15 +79,9 @@ function normalizeTodoPriority(priority) {
   return "med";
 }
 
-function normalizeBrandKind(kind) {
-  const normalized = String(kind || "").toLowerCase();
-
-  if (["client", "agency", "company"].includes(normalized)) return "company";
-  if (["personal", "life"].includes(normalized)) return "personal";
-  if (["education", "research"].includes(normalized)) return "info";
-  if (["community", "content"].includes(normalized)) return "warning";
-
-  return "moon";
+function normalizeBrandKind() {
+  // §5.2: 브랜드 kind는 카테고리 — semantic/identity 톤 배정 금지. 글리프·라벨이 정체성.
+  return "neutral";
 }
 
 // 서버(UTC)에서 실행되므로 운영자 시간대를 고정한다. 미지정 시 배포 환경에서

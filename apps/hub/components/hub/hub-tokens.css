@@ -120,12 +120,14 @@
 
   --fg:            oklch(0.20 0.008 250);
   --fg-muted:      oklch(0.42 0.008 250);
-  --fg-dim:        oklch(0.54 0.008 250);
-  --fg-faint:      oklch(0.52 0.007 250);
+  /* 라이트 강조 사다리: 밝을수록 옅다 — dim(0.50) < faint(0.55). 이전엔 dim(0.54)이
+     faint(0.52)보다 옅어 위계가 뒤집혀 있었다(2026-08-05 재감사 §11). */
+  --fg-dim:        oklch(0.50 0.008 250);
+  --fg-faint:      oklch(0.55 0.007 250);
 
   --success:       oklch(0.48 0.14 155);
   --success-bg:    oklch(0.94 0.04 155 / 0.6);
-  --warning:       oklch(0.55 0.14 65);
+  --warning:       oklch(0.50 0.14 65); /* 0.55는 warning-bg 위 대비 ~4.3:1 경계 — 어둡혀 AA 확보 */
   --warning-bg:    oklch(0.95 0.06 85 / 0.6);
   --danger:        oklch(0.52 0.19 25);
   --danger-bg:     oklch(0.95 0.05 25 / 0.6);

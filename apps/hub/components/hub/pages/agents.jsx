@@ -371,7 +371,7 @@ export function AgentsCouncil({ onNavigate }) {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Badge tone={roster.status === 'live' ? 'success' : 'neutral'} size="xs">{roster.status === 'live' ? 'live' : 'preview'}</Badge>
+        <Badge tone="neutral" size="xs">{roster.status === 'live' ? 'live' : 'preview'}</Badge>
         <Button variant="primary" size="sm" icon="sparkle" onClick={() => onNavigate?.('dashboard/agents/chat?prompt=council')}>Convene</Button>
       </div>
 
@@ -388,7 +388,14 @@ export function AgentsCouncil({ onNavigate }) {
       )}
       <div className="hub-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--gap)' }}>
         {roster.personas.map(a => (
-          <Card key={a.id} style={{ cursor: 'pointer' }} onClick={() => onNavigate?.(`dashboard/agents/chat?agent=${a.id}`)}>
+          <Card
+            key={a.id}
+            role="button"
+            tabIndex={0}
+            aria-label={`${a.nameKo || a.id} 채팅 열기`}
+            style={{ cursor: 'pointer' }}
+            onClick={() => onNavigate?.(`dashboard/agents/chat?agent=${a.id}`)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.(`dashboard/agents/chat?agent=${a.id}`); } }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
               <div style={{
                 width: 36, height: 36, borderRadius: 999,
@@ -399,7 +406,7 @@ export function AgentsCouncil({ onNavigate }) {
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: 13.5, fontWeight: 500 }}>{a.nameKo || a.id}</span>
-                  <Dot tone={a.status === 'idle' ? 'neutral' : 'success'} size={6} />
+                  <Dot tone={a.status === 'idle' ? 'neutral' : 'moon'} size={6} />
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.role}</div>
               </div>
@@ -417,7 +424,8 @@ export function AgentsCouncil({ onNavigate }) {
   );
 }
 
-const WO_STATUS_TONE = { proposed: 'warning', approved: 'info', executed: 'success', dismissed: 'neutral', done: 'success', review: 'warning', draft: 'neutral' };
+// lifecycle은 §5.3 중립 — 라벨이 상태를 말한다.
+const WO_STATUS_TONE = { proposed: 'neutral', approved: 'neutral', executed: 'neutral', dismissed: 'neutral', done: 'neutral', review: 'neutral', draft: 'neutral' };
 
 function shortWhen(iso) {
   if (!iso) return '—';
@@ -532,7 +540,7 @@ export function AgentsOrders({ onNavigate }) {
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>페르소나·인박스가 올린 제안 큐 · 1클릭 승인</div>
         </div>
         <div style={{ flex: 1 }} />
-        <Badge tone={live ? 'success' : 'neutral'} size="xs">{live ? 'live' : 'preview'}</Badge>
+        <Badge tone="neutral" size="xs">{live ? 'live' : 'preview'}</Badge>
       </div>
 
       {personas.length > 0 && (

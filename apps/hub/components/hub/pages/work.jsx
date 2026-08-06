@@ -3,7 +3,7 @@
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Card, IconButton, Button, Progress, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge } from "../hub-primitives";
+import { Badge, Card, IconButton, Button, Progress, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge } from "../hub-primitives";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 import { mapTasksToCalendar } from "@/lib/calendar-task-view";
 import {
@@ -1308,20 +1308,12 @@ export function Rhythm() {
   const longestStreak = summary.longestStreak;
   const longestStreakRitual = summary.longestStreakRitual;
   const selectedProjectName = rituals.find((ritual) => ritual.projectName)?.projectName || '';
-  const syncLabel = rhythmState === 'live' || rhythmState === 'live-empty'
+  // §8.1 primitives-first — 수제 sync 라벨을 SyncBadge로 교체 (live-empty→live 매핑만 여기서).
+  const rhythmBadgeState = rhythmState === 'live-empty'
     ? 'live'
-    : rhythmState === 'partial'
-      ? 'partial · observed'
     : rhythmState === 'loading'
       ? 'syncing'
-      : rhythmState === 'error'
-        ? 'error'
-        : 'preview · unsaved';
-  const syncColor = rhythmState === 'live' || rhythmState === 'live-empty'
-    ? 'var(--fg-muted)'
-    : rhythmState === 'error'
-      ? 'var(--danger)'
-      : 'var(--fg-faint)';
+      : rhythmState;
 
   const checkIn = React.useCallback(async (ritual) => {
     const ritualId = ritual.id;
@@ -1380,9 +1372,7 @@ export function Rhythm() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Rhythm</h2>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
             루틴은 실행의 인프라
-            <span className="mono" style={{ marginLeft: 8, color: syncColor }}>
-              {syncLabel}
-            </span>
+            <SyncBadge state={rhythmBadgeState} />
           </div>
           {selectedProjectId && (
             <a

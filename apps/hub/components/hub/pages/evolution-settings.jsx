@@ -66,7 +66,7 @@ function buildMetaThreadsIntegration(status) {
     return {
       n: 'Meta Threads',
       s: 'Connected',
-      t: 'success',
+      t: 'neutral',
       i: 'globe',
       provider: 'meta_threads',
       detail: `${profileHandle}${expiresAt ? ` · token ${expiresAt}` : ''}`,
@@ -102,7 +102,7 @@ function buildMetaThreadsIntegration(status) {
   return {
     n: 'Meta Threads',
     s: 'Needs config',
-    t: 'warning',
+    t: 'neutral',
     i: 'globe',
     provider: 'meta_threads',
     detail: `@${brandHandle} · env`,
@@ -121,7 +121,7 @@ function buildInstagramIntegration(status) {
     return {
       n: 'Instagram API',
       s: 'Connected',
-      t: 'success',
+      t: 'neutral',
       i: 'globe',
       provider: 'instagram_api',
       detail: `${profileHandle}${accountType ? ` · ${accountType}` : ''}${expiresAt ? ` · token ${expiresAt}` : ''}`,
@@ -157,7 +157,7 @@ function buildInstagramIntegration(status) {
   return {
     n: 'Instagram API',
     s: 'Needs config',
-    t: 'warning',
+    t: 'neutral',
     i: 'globe',
     provider: 'instagram_api',
     detail: `@${brandHandle} · env`,
@@ -169,7 +169,7 @@ function buildInstagramIntegration(status) {
 export function Evolution({ onNavigate }) {
   const [tab, setTab] = React.useState('all');
   const [lastRun, setLastRun] = React.useState(null);
-  const tagTone = { upgrade: 'moon', bug: 'danger', insight: 'info', note: 'neutral' };
+  const tagTone = { upgrade: 'neutral', bug: 'danger', insight: 'neutral', note: 'neutral' };
   // ?new=delivery는 AgentsOrders가 소비하지 않는 죽은 파라미터였다 — 목적지만 남긴다.
   const playbookTarget = (family) => ({
     delivery: 'dashboard/agents/orders',

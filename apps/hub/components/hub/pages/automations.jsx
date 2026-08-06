@@ -158,10 +158,11 @@ function useEmailIntegrationStatus(url) {
 }
 
 function emailStatusBadge(status) {
-  if (status === 'connected') return { tone: 'success', label: 'Connected' };
-  if (status === 'ready') return { tone: 'info', label: 'OAuth ready' };
+  // §5.3 truth 중립 — 라벨이 상태를 말한다. 실패만 danger인데 이 표면엔 실패 상태가 없다.
+  if (status === 'connected') return { tone: 'neutral', label: 'Connected' };
+  if (status === 'ready') return { tone: 'neutral', label: 'OAuth ready' };
   if (status === 'disabled') return { tone: 'neutral', label: 'Disabled' };
-  if (status === 'degraded') return { tone: 'warning', label: 'Status unknown' };
+  if (status === 'degraded') return { tone: 'neutral', label: 'Status unknown' };
   if (status === 'loading') return { tone: 'neutral', label: 'Checking…' };
   return { tone: 'neutral', label: 'Not connected' };
 }
@@ -230,10 +231,10 @@ export function EmailAutomation({ onNavigate }) {
       <SectionTitle>Tag rules</SectionTitle>
       <Card pad={false} className="hub-table-card">
         {[
-          { cond: 'from:@* AND subject 한정', then: 'tag: Lead · create CRM', tone: 'moon' },
-          { cond: 'subject contains "invoice"', then: 'tag: Finance · archive 30d', tone: 'info' },
-          { cond: 'from: jihoon@*, jaemin@*', then: 'tag: Personal', tone: 'personal' },
-          { cond: 'has Stripe link', then: 'tag: Revenue · notify', tone: 'success' },
+          { cond: 'from:@* AND subject 한정', then: 'tag: Lead · create CRM', tone: 'neutral' },
+          { cond: 'subject contains "invoice"', then: 'tag: Finance · archive 30d', tone: 'neutral' },
+          { cond: 'from: jihoon@*, jaemin@*', then: 'tag: Personal', tone: 'neutral' },
+          { cond: 'has Stripe link', then: 'tag: Revenue · notify', tone: 'neutral' },
         ].map((r, i) => (
           <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 20px 1fr 60px', alignItems: 'center', padding: '12px 16px', borderBottom: i < 3 ? '1px solid var(--line-soft)' : 'none', gap: 10 }}>
             <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>{r.cond}</span>
@@ -273,7 +274,7 @@ export function Webhooks({ onNavigate }) {
   const { webhookEvents, syncState } = useAutomationsLedger();
   const liveHooks = aggregateWebhookEndpoints(webhookEvents);
   const hooks = liveHooks;
-  const sTone = { ok: 'success', warn: 'warning', err: 'danger' };
+  const sTone = { ok: 'neutral', warn: 'neutral', err: 'danger' };
   const [testState, setTestState] = React.useState({}); // { [idx]: { tone: 'success'|'warning'|'danger', label, pending } }
 
   async function runHookTest(idx, hook) {
@@ -288,11 +289,11 @@ export function Webhooks({ onNavigate }) {
 
       let entry;
       if (data && data.preview === true) {
-        entry = { tone: 'warning', label: 'preview' };
+        entry = { tone: 'neutral', label: 'preview' };
       } else if (response.ok && (data.status === 'sent' || data.sent)) {
-        entry = { tone: 'success', label: '✓ sent' };
+        entry = { tone: 'neutral', label: '✓ sent' };
       } else if (response.ok) {
-        entry = { tone: 'warning', label: 'preview' };
+        entry = { tone: 'neutral', label: 'preview' };
       } else {
         entry = { tone: 'danger', label: 'failed' };
       }
@@ -364,7 +365,6 @@ export function Runs() {
   const sIcon = { ok: { c: 'var(--fg-muted)', t: '●' }, warn: { c: 'var(--fg)', t: '▲' }, err: { c: 'var(--danger)', t: '✕' } };
   const { runs, syncState } = useAutomationsLedger();
   const rows = Array.isArray(runs) ? runs : [];
-  const liveLabel = syncState === 'live' ? 'Live' : syncState === 'loading' ? 'Syncing' : 'Preview';
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
@@ -376,10 +376,7 @@ export function Runs() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--fg-muted)' }}>
-          <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', animation: 'mlMoonPulse 1.4s ease-in-out infinite' }} />
-          {liveLabel}
-        </span>
+        {/* 인라인 live 라벨 제거 — SyncBadge가 canonical(§8.1 중복 금지). */}
       </div>
       <Card pad={false} className="hub-table-card" style={{ background: 'var(--bg)' }}>
         <div className="mono" style={{ padding: '12px 14px', fontSize: 12 }}>

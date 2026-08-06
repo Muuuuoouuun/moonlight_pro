@@ -108,7 +108,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
   };
 
   return (
-    <div onClick={onClose} style={{
+    <div onClick={onClose} role="dialog" aria-modal="true" aria-label="명령 팔레트" style={{
       position: 'fixed', inset: 0, zIndex: 'var(--z-palette)',
       background: 'oklch(0 0 0 / 0.6)',
       backdropFilter: 'blur(6px)',

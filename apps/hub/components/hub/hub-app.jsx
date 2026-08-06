@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
 
+import { Button } from "./hub-primitives";
 import { Sidebar } from "./hub-sidebar";
 import { TopBar } from "./hub-topbar";
 import { CommandPalette } from "./hub-command-palette";
@@ -159,15 +160,9 @@ function LegacyPlaceholder({ path, onNavigate }) {
               해당 섹션에서 이어서 작업하시면 됩니다.
             </div>
             <div style={{ marginTop: 14, display: 'flex', gap: 8, alignItems: 'center' }}>
-              <button onClick={() => onNavigate?.(redirect.to)} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '7px 14px', fontSize: 12.5, fontWeight: 500,
-                color: 'var(--bg)', background: 'var(--moon-200)',
-                border: '1px solid var(--moon-100)', borderRadius: 'var(--r-sm)',
-                cursor: 'pointer',
-              }}>
+              <Button variant="primary" size="sm" onClick={() => onNavigate?.(redirect.to)}>
                 {redirect.label} 열기 →
-              </button>
+              </Button>
               <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>/{path}</span>
             </div>
           </>
@@ -354,6 +349,7 @@ export function HubApp() {
     const ownsEscape = shouldMobileNavigationHandleEscape({
       open: mobileNavState.open,
       paletteOpen,
+      helpOpen,
     });
     if (!ownsEscape) return;
     const onKey = (event) => {
@@ -364,7 +360,7 @@ export function HubApp() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [closeMobileNavigation, mobileNavState.open, paletteOpen]);
+  }, [closeMobileNavigation, mobileNavState.open, paletteOpen, helpOpen]);
 
   React.useEffect(() => {
     const media = window.matchMedia(MOBILE_NAV_QUERY);

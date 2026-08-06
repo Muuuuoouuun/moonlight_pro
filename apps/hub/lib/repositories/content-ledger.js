@@ -71,17 +71,9 @@ const CANONICAL_BRAND_ORDER = {
   politicofficer: 80,
   "22nomad": 90,
 };
-const CANONICAL_BRAND_TONES = {
-  sinabro: "info",
-  gore: "company",
-  holyfuncollector: "warning",
-  bridgemaker: "moon",
-  moonpm: "warning",
-  classmoon: "info",
-  studyseagull: "danger",
-  politicofficer: "info",
-  "22nomad": "personal",
-};
+// §5: 색은 제품 도메인을 분류하지 않는다 — 브랜드 정체성은 글리프+라벨 몫.
+// (이전: 브랜드별 info/warning/danger 레인보우 — studyseagull은 큐 행마다 상시 red 칩)
+const CANONICAL_BRAND_TONES = {};
 const CANONICAL_BRAND_GLYPHS = {
   sinabro: "✦",
   gore: "◌",
@@ -227,10 +219,7 @@ function normalizeArray(value, fallback = []) {
 function resolveBrandTone(slug, kind, meta) {
   if (typeof meta?.tone === "string" && meta.tone.trim()) return meta.tone.trim();
   if (CANONICAL_BRAND_TONES[slug]) return CANONICAL_BRAND_TONES[slug];
-  if (kind === "content") return "warning";
-  if (kind === "education") return "info";
-  if (kind === "personal") return "personal";
-  if (kind === "agency") return "company";
+  // kind(도메인)로 semantic 톤을 배정하던 분기 제거 — 전부 중립(§5.2 카테고리 동결).
   return "neutral";
 }
 

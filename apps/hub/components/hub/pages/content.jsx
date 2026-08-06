@@ -135,9 +135,8 @@ function handoffEventLabel(event, status) {
 }
 
 function handoffTone(status) {
-  if (status === "failed") return "danger";
-  if (status === "published") return "success";
-  return "info";
+  // §5.3: 실패만 danger — published(완료)·큐 상태는 중립, 라벨이 말한다.
+  return status === "failed" ? "danger" : "neutral";
 }
 
 function useContentLedger() {
@@ -651,7 +650,7 @@ export function Studio({ workspace }) {
           <IconButton
             icon="eye"
             tooltip="Preview"
-            onClick={() => setExtraSuggestions(s => [{ tone: 'info', text: 'Preview refreshed in the editor.' }, ...s])}
+            onClick={() => setExtraSuggestions(s => [{ tone: 'neutral', text: 'Preview refreshed in the editor.' }, ...s])}
           />
           <Button
             variant="secondary"
@@ -800,7 +799,7 @@ export function Studio({ workspace }) {
                     icon="upload"
                     onClick={() => {
                       addSlide();
-                      setExtraSuggestions(s => [{ tone: 'info', text: 'Photo placeholder slide added.' }, ...s]);
+                      setExtraSuggestions(s => [{ tone: 'neutral', text: 'Photo placeholder slide added.' }, ...s]);
                     }}
                   >
                     Photo
@@ -1372,7 +1371,7 @@ function CampaignTabPanel({ tab, campaign, detail }) {
         {detail.audience.map((item) => (
           <Card key={item.segment}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Avatar name={item.segment} size={30} tone={item.fit >= 75 ? 'personal' : 'company'} />
+              <Avatar name={item.segment} size={30} tone="neutral" />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.segment}</div>
                 <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>{item.source}</div>
@@ -1518,6 +1517,7 @@ export function Campaigns() {
   const [tab, setTab] = React.useState('pulse');
   const [focusMode, setFocusMode] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
+  const [createError, setCreateError] = React.useState(null);
 
   React.useEffect(() => {
     const nextCampaigns = Array.isArray(ledger.campaigns) ? ledger.campaigns : [];
@@ -1564,11 +1564,13 @@ export function Campaigns() {
         setCampaigns(prev => prev.filter(c => c.id !== localId));
         setSelectedId(null);
         setFocusMode(false);
+        setCreateError(`캠페인 생성 실패 (${data?.status || res.status}) — 다시 시도하세요.`);
       }
     } catch {
       setCampaigns(prev => prev.filter(c => c.id !== localId));
       setSelectedId(null);
       setFocusMode(false);
+      setCreateError('캠페인 생성 실패 — 네트워크를 확인하고 다시 시도하세요.');
     } finally {
       setCreating(false);
     }
@@ -1616,8 +1618,12 @@ export function Campaigns() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createCampaign} disabled={creating}>Campaign <Kbd>N</Kbd></Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={() => { setCreateError(null); createCampaign(); }} disabled={creating}>Campaign <Kbd>N</Kbd></Button>
       </div>
+
+      {createError && (
+        <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', padding: '0 2px' }}>{createError}</div>
+      )}
 
       {!selected && (
         <EmptyState

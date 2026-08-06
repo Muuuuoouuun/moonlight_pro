@@ -5,6 +5,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Button, Card, Checkbox, Divider, Drawer, Dot, EmptyState, SegmentedControl, SyncBadge } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
+import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { QUICK_LOG_ACTIONS as LOG_ACTIONS, REACTION_OPTIONS } from "@/lib/sales-os/outcome-attribution";
 import { DEAL_STAGES, STAGE_ALIASES } from "@/lib/deal-stages";
 
@@ -244,7 +245,7 @@ function ActivityPanel({ item, onClose, onNavigate }) {
   );
 }
 
-function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onCloseLog, onSubmitLog, logError, logged }) {
+function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onCloseLog, onSubmitLog, logError, logged, kbSelected }) {
   const stage = stageMeta(item.stage);
   const clickable = Boolean(item.href);
   const isLogging = logDraft?.itemId === item.id;
@@ -252,11 +253,13 @@ function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onClo
   return (
     <div
       className="hub-row"
+      data-kb-row={`${item.kind}-${item.id}`}
       style={{
         display: "flex", flexDirection: "column", gap: 8,
         padding: "12px 16px",
         borderBottom: "1px solid var(--line-soft)",
         boxShadow: BUCKET_STRIPE[item.bucket] ? `inset 1px 0 0 ${BUCKET_STRIPE[item.bucket]}` : undefined,
+        ...(kbSelected ? { outline: '1px solid var(--moon-300)', outlineOffset: -1 } : {}),
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -370,6 +373,21 @@ export function Followups({ onNavigate }) {
     if (pathname) router.replace(pathname);
   }, [focusParam, syncState, items, pathname, router]);
 
+  // 키보드 계층(§8.1) — 코어 데일리 루프에 j/k/e 배선: j/k 행 이동, e 상세 패널.
+  const kbRows = React.useMemo(() => visible.map((i) => ({ id: `${i.kind}-${i.id}` })), [visible]);
+  const kbSelection = useCrmSelection(kbRows);
+  useCrmKeyboard({
+    selection: kbSelection,
+    onEditSelected: (rowId) => {
+      const item = visible.find((i) => `${i.kind}-${i.id}` === rowId);
+      if (item) setPanelItem(item);
+    },
+  });
+  React.useEffect(() => {
+    if (!kbSelection.selectedId) return;
+    document.querySelector(`[data-kb-row="${CSS.escape(kbSelection.selectedId)}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [kbSelection.selectedId]);
+
   const openLog = (item, action, label) => { setLogError(null); setLogDraft({ itemId: item.id, action, label }); };
   const closeLog = () => { setLogError(null); setLogDraft(null); };
 
@@ -416,15 +434,24 @@ export function Followups({ onNavigate }) {
   // 기록도 되돌리기 창을 갖는다(최고 빈도 액션 — my-work 완료와 같은 deferred-write 계약):
   // 즉시 "기록됨"으로 표시하되 실제 POST는 3.5초 뒤. 되돌리기는 진짜 취소(네트워크 없음).
   const submitLog = (item, action, label, fields) => {
+    const key = `log-${item.id}`;
     setLogError(null);
     setLogged((m) => ({ ...m, [item.id]: label }));
     setLogDraft(null);
-    setNotice({ tone: "ok", label: `기록됨 · ${item.name}`, action: { label: "되돌리기", onClick: () => undoLog(item) } });
-    scheduleUndoable(`log-${item.id}`, () => persistLog(item, action, label, fields));
+    setNotice({ key, tone: "ok", label: `기록됨 · ${item.name}`, action: { label: "되돌리기", onClick: () => undoLog(item) } });
+    scheduleUndoable(key, () => {
+      // 창이 닫히는 순간 되돌리기 버튼을 걷는다 — 눌러도 no-op인 죽은 버튼 방지(재감사 M).
+      setNotice((cur) => (cur?.key === key ? { ...cur, action: null } : cur));
+      persistLog(item, action, label, fields);
+    });
   };
 
   const undoLog = (item) => {
-    if (!cancelUndoable(`log-${item.id}`)) return; // 창이 닫혔으면 이미 POST됐다
+    const key = `log-${item.id}`;
+    if (!cancelUndoable(key)) {
+      setNotice((cur) => (cur?.key === key ? { ...cur, action: null } : cur));
+      return; // 창이 닫혔으면 이미 POST됐다
+    }
     setLogged((m) => { const n = { ...m }; delete n[item.id]; return n; });
     setNotice({ tone: "ok", label: "기록 취소됨" });
   };
@@ -511,6 +538,7 @@ export function Followups({ onNavigate }) {
           visible.map((item) => (
             <FollowupRow
               key={`${item.kind}-${item.id}`}
+              kbSelected={kbSelection.selectedId === `${item.kind}-${item.id}`}
               item={item}
               onNavigate={onNavigate}
               onOpenPanel={setPanelItem}

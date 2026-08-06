@@ -435,8 +435,9 @@ export function getMobileNavigationTabTarget({ focusables, activeElement, shiftK
   return null;
 }
 
-export function shouldMobileNavigationHandleEscape({ open, paletteOpen, tweaksOpen }) {
-  return Boolean(open && !paletteOpen && !tweaksOpen);
+export function shouldMobileNavigationHandleEscape({ open, paletteOpen, tweaksOpen, helpOpen }) {
+  // 치트시트(helpOpen)가 떠 있으면 ESC는 그 레이어 몫 — 한 번에 두 레이어가 닫히지 않게.
+  return Boolean(open && !paletteOpen && !tweaksOpen && !helpOpen);
 }
 
 export function shouldFocusMainAfterMobileNavigation({ pending, currentPath, navOpen }) {

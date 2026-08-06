@@ -4,14 +4,15 @@ import React from "react";
 import { Iconed } from "../hub-icons";
 import { Card, Button, Badge, Dot, SectionTitle, EmptyState } from "../hub-primitives";
 
+// §5.3 lifecycle 중립 — 라벨이 상태를 말하고, 색 증명은 없다.
 const STAGING_LABELS = [
-  { key: "pending", label: "대기", tone: "warning" },
-  { key: "promoted", label: "신규 등록", tone: "success" },
-  { key: "merged", label: "기존 매칭", tone: "moon" },
-  { key: "review", label: "검토 필요", tone: "danger" },
+  { key: "pending", label: "대기", tone: "neutral" },
+  { key: "promoted", label: "신규 등록", tone: "neutral" },
+  { key: "merged", label: "기존 매칭", tone: "neutral" },
+  { key: "review", label: "검토 필요", tone: "neutral" },
 ];
 
-const RUN_TONE = { success: "success", failure: "danger", running: "warning", queued: "neutral" };
+const RUN_TONE = { success: "neutral", failure: "danger", running: "neutral", queued: "neutral" };
 
 function shortId(id) {
   if (!id) return "—";
@@ -82,7 +83,7 @@ export function SheetsSync() {
       if (!r.ok) {
         setMsg({ tone: "danger", text: d?.reason ? `실패: ${d.reason}` : `실패 (${r.status})` });
       } else {
-        setMsg({ tone: d.status === "ok" ? "success" : "warning", text: summarize(action, d?.results) });
+        setMsg({ tone: "neutral", text: summarize(action, d?.results) });
         load();
       }
     } catch (e) {
@@ -136,7 +137,7 @@ export function SheetsSync() {
               {lastSyncAt ? ` · 최근 ${new Date(lastSyncAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}
             </div>
           </div>
-          <Badge tone={connected ? "success" : "neutral"} size="xs">{connected ? "연결됨" : "미연결"}</Badge>
+          <Badge tone="neutral" size="xs">{connected ? "연결됨" : "미연결"}</Badge>
         </div>
 
         {!connected && (
@@ -171,8 +172,8 @@ export function SheetsSync() {
               <Button variant="ghost" size="sm" icon="link" onClick={connect}>재연결</Button>
             </div>
             {msg && (
-              <div style={{ marginTop: 10, fontSize: 12, color: `var(--${msg.tone})`, display: "flex", alignItems: "center", gap: 6 }}>
-                <Dot tone={msg.tone} />
+              <div role="status" aria-live="polite" style={{ marginTop: 10, fontSize: 12, color: msg.tone === 'danger' ? 'var(--danger)' : 'var(--fg-muted)', display: "flex", alignItems: "center", gap: 6 }}>
+                <Dot tone={msg.tone === 'danger' ? 'danger' : 'neutral'} />
                 {msg.text}
               </div>
             )}

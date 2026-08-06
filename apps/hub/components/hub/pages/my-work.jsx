@@ -778,10 +778,14 @@ export function MyWork({ onNavigate }) {
   React.useEffect(() => {
     if (lens !== 'list') return undefined;
     const onKey = (e) => {
-      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      // CRM 표면과 문법 통일 — j/k도 ↓/↑와 같은 행 이동(재감사: 분리 문법 M).
+      const down = e.key === 'ArrowDown' || e.key === 'j';
+      const up = e.key === 'ArrowUp' || e.key === 'k';
+      if (!down && !up) return;
       const t = e.target;
       const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
-      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+      if (document.querySelector('[data-drawer-open="true"], [role="dialog"], [data-shortcut-overlay="true"]')) return;
       const refs = rowRefs.current.filter(Boolean);
       if (!refs.length) return;
       e.preventDefault();
@@ -789,7 +793,7 @@ export function MyWork({ onNavigate }) {
       const currentIdx = refs.indexOf(active);
       const nextIdx = currentIdx === -1
         ? 0
-        : e.key === 'ArrowDown'
+        : down
           ? Math.min(refs.length - 1, currentIdx + 1)
           : Math.max(0, currentIdx - 1);
       refs[nextIdx]?.focus();

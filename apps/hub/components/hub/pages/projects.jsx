@@ -1194,7 +1194,8 @@ export function Projects({ workspace }) {
   const prioTone = { critical: 'danger', high: 'danger', med: 'neutral', medium: 'neutral', low: 'neutral' };
   const updateTone = { reported: 'neutral', active: 'moon', blocked: 'danger', done: 'neutral' };
   const checkTone = { pending: 'neutral', done: 'neutral', skipped: 'neutral', blocked: 'danger' };
-  const contentTone = { idea: 'neutral', draft: 'neutral', review: 'moon', scheduled: 'info', published: 'success', archived: 'neutral' };
+  // 콘텐츠 lifecycle은 §5.3 중립 — statusLabel이 상태를 말한다.
+  const contentTone = { idea: 'neutral', draft: 'neutral', review: 'neutral', scheduled: 'neutral', published: 'neutral', archived: 'neutral' };
 
   React.useEffect(() => {
     const close = (e) => { if (brandMenuRef.current && !brandMenuRef.current.contains(e.target)) setBrandMenuOpen(false); };

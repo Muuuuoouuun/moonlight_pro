@@ -17,7 +17,7 @@ const KPI_DEFINITIONS = [
     hint: "기획·판단 로그",
     failureHint: "결정 기록 읽기 실패",
     disconnectedHint: "결정 기록 원장 미연결",
-    tone: "info",
+    tone: "neutral",
     nav: "dashboard/work/decisions",
     sparkKey: "decisions",
     sourceKey: "projects",
@@ -29,7 +29,7 @@ const KPI_DEFINITIONS = [
     hint: "콘텐츠 발행 완료",
     failureHint: "발행 기록 읽기 실패",
     disconnectedHint: "발행 기록 원장 미연결",
-    tone: "success",
+    tone: "neutral",
     nav: "dashboard/content/queue",
     sparkKey: "content",
     sourceKey: "content",
@@ -122,7 +122,7 @@ function unavailableCard({ label, nav, reason, failureHint, disconnectedHint }) 
     label,
     value: "—",
     hint: reason === "preview" ? disconnectedHint : failureHint,
-    tone: reason === "preview" ? "neutral" : "warning",
+    tone: "neutral",
     nav,
     spark: [],
   };
@@ -204,7 +204,7 @@ export function buildOverviewKpiCards({
       : blocked > 0
         ? `${blocked}건 막힘`
         : "막힌 프로젝트 없음",
-    tone: !blockedAvailable || blocked > 0 ? "warning" : "moon",
+    tone: "neutral",
     nav: "dashboard/work/projects",
     spark: [],
   });
@@ -331,12 +331,10 @@ export function buildAutomationMetricRows(summary = {}, state = "error") {
         ? "neutral"
         : failures > 0
           ? "danger"
-          : resolvedState === "live"
-            ? "success"
-            : "neutral",
+          : "neutral",
     },
     { key: "active", label: "활성 자동화", value: metric("activeAutomations"), tone: "fg" },
-    { key: "integrations", label: "연동됨", value: metric("integrationsConnected"), tone: "info" },
+    { key: "integrations", label: "연동됨", value: metric("integrationsConnected"), tone: "neutral" },
   ].map((item) => item.value === "—" ? { ...item, tone: "neutral" } : item);
 }
 

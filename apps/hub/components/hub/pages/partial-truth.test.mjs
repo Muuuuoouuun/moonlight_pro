@@ -146,7 +146,8 @@ test("overview distinguishes preview nulls, error nulls, and live zeroes", () =>
   });
   assert.equal(liveCards.every((card) => card.value === 0), true);
   assert.equal(liveCards.some((card) => /읽기 실패|미연결/.test(card.hint)), false);
-  assert.equal(liveCards[2].tone, "success");
+  // §5.3: live는 조용한 중립 — green proof-by-color를 계약으로 강제하지 않는다.
+  assert.equal(liveCards[2].tone, "neutral");
 
   assert.equal(overviewTruth.overviewSyncState({ status: "mystery", source: "mystery" }), "error");
 });
@@ -453,7 +454,8 @@ test("overview automation metrics never manufacture zero or success from unavail
     integrationsConnected: 0,
   }, "live");
   assert.deepEqual(live.map((metric) => metric.value), [0, 0, 0, 0]);
-  assert.equal(live[1].tone, "success");
+  // 실패 0건은 중립 — success 색 증명은 §5.3 위반이었다.
+  assert.equal(live[1].tone, "neutral");
 });
 
 test("overview header keeps failed and partial source disclosures distinct", () => {
