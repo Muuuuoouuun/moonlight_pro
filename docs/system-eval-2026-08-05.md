@@ -24,6 +24,7 @@
 | 3차 재감사 (iter 6~9 반영 후) | 2026-08-05 | — | — | 86† | 78 | — | 84 | 84 | — | 부분 측정 |
 | 4차 재감사 (iter 10~13 반영 후, 전 축) | 2026-08-06 | 90 | 89 | 88† | 83 | 87 | 90 | 87 | 88† | **87.6** |
 | 5차 재감사 (iter 14~16 반영 후, 전 축) | 2026-08-06 | 90 | 89 | 87 | 85 | 90 | 90 | 88 | 87† | **88.4** |
+| 6차 재감사 (iter 17 반영 후, 전 축) | 2026-08-06 | 90 | 89 | 87 | 88 | 90 | 90 | 88 | 87† | **88.9** |
 
 \** 2차 재감사는 축별 감사 에이전트 5기 중 2기만 완주(속도 84 · 정체성 87 · 사용성 86). 안정성·디자인·UI/UX·편의 에이전트는 세션 한도로 중단 — 09:10Z 리셋 후 재실행. 완주 2기의 잔여 지적(셸 ReferenceError·ClassIn 앵커 아카이브 착지·가짜 페르소나·팬아웃·캐시 부재 등)은 6~9차 수리로 전부 반영 완료.
 
@@ -200,6 +201,16 @@
 - 잔여 accent-as-category 8곳·색-단독 신호 3곳·가짜 태그 룰 샘플 명시·죽은 파라미터 2종·scope 과약속 5경로 정리, DESIGN §8.1 레일 문구 실측 정합.
 
 **잔여 명시 보류**: 첫 화면 attention-ledger 통합(Phase 1B — 정체성 90 캡), Projects/PMS j/k 문법(L), window.confirm 삭제 확인의 스타일드 플로 전환(M), overview lean(보조), hub-write-guard/flush/BulkBar/TopBar New(기존 명명 유지).
+
+### Iteration 18 (2026-08-06, 2배치) — 반영 완료
+
+주제: **6차 재감사(속도90 · 정체성90 · 디자인90 · 사용성89 · UIUX88 · 안정성88 · 편의87, 평균 88.9) 지적 전량 소진.**
+검증: 각 배치 `npm test` 549/549 · engine tsc · hub build 통과. 커밋 9d8d0cf · 2505a0e.
+
+- **1/2 (안정성 잔여)**: automations-ledger 코어 read 실패 → error 봉투+failedSources+라우트 502(기존 preview 위장 — 채점자 명명 "안정성 90 진입로" 1/2). engine 0행 PATCH returnRepresentation 감지, 캘린더 전 leg AbortSignal.timeout(8s) 상한.
+- **2/2 (전 축 소진)**: agents 승인 큐 read 실패 role=alert 가드(진입로 2/2)+死 `?order=` 제거. my-work 캘린더 error 소비 분기(EmptyState·WeekAgenda·캘린더 열기)+deleteTaskDetail 봉투. projects deleteTask 봉투·완료 undo 자동 소거·N 단축키. daily-brief 승인 dismiss deferred-undo(실패 시 복원)+brief-ledger error 전파. followups 死 캘린더 어포던스·배관 제거. work 캘린더 실패 카피 인간화. 전역 error.jsx role=alert+h2. content 가짜 Preview 버튼 제거·Photo 정직 영수증·썸네일 a11y 3종. hub-nav 스코프 앵커 과약속 2경로 정리. revenue 점수 accent 중립화·계정 알림 자동 소거·Accounts 빈 상태 3뷰 CTA(검색 지우기/생성)·SortHead aria 방향 노출+export. customers 인라인 정렬 헤더 3중 복제 → 공유 SortHead(§8.1 primitives first). ⌘K 0건 → 검색어 표시+검색 지우기 CTA. evolution-settings 슬래시 과약속 카피·장식 Dot 제거·slash 라벨 accent 해제.
+
+**잔여 명시 보류(기존 명명 유지)**: 첫 화면 attention-ledger 통합(Phase 1B — 정체성 90 캡), Projects/PMS 전체 j/k 문법(L), window.confirm 스타일드 플로(M), overview lean, hub-write-guard/flush/BulkBar/TopBar New.
 
 ### 다음 회차 백로그 (점수 영향 순)
 
