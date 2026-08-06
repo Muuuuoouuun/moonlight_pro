@@ -1127,7 +1127,20 @@ export function Projects({ workspace }) {
         setOrderResult({ tone: 'err', label: data.error || `저장 실패 ${response.status}` });
         return { ok: false, status: data.status || 'error' };
       }
-      await loadLedger();
+      // POST 에코(task)를 로컬 append — 영수증이 11+콜 전체 read를 기다리지 않는다.
+      const created = data.task || null;
+      if (created?.id) {
+        setTodos(ts => (ts.some(t => t.id === created.id) ? ts : [{
+          id: created.id,
+          title: created.title || taskDraft.title,
+          status: created.status || taskDraft.status || 'todo',
+          done: (created.status || taskDraft.status) === 'done',
+          priorityRaw: created.priority || taskDraft.priority || 'medium',
+          dueAt: created.due_at ?? created.dueAt ?? taskDraft.dueAt ?? null,
+          projectId: created.project_id ?? created.projectId ?? taskDraft.projectId ?? null,
+        }, ...ts]));
+      }
+      loadLedger(); // 배경 재검증 (브랜드 조인·버킷 라벨 정합)
       setOrderResult({ tone: 'ok', label: '할 일 저장됨' });
       return { ok: true, status: data.status };
     } catch (error) {
@@ -1148,7 +1161,10 @@ export function Projects({ workspace }) {
       });
       const data = await response.json().catch(() => ({}));
       if (response.ok && ['saved', 'preview'].includes(data.status)) {
-        if (data.status === 'saved') await loadLedger();
+        if (data.status === 'saved') {
+          setTodos(ts => ts.filter(t => t.id !== id)); // 즉시 반영 — 전체 read 대기 없음
+          loadLedger(); // 배경 재검증
+        }
         setTaskEditSource(null);
         setOrderResult({ tone: 'ok', label: data.status === 'preview' ? '할 일 삭제 · 저장 대기(preview)' : '할 일 삭제됨' });
         return;
@@ -1224,9 +1240,10 @@ export function Projects({ workspace }) {
     createTodo(null, taskStatusForBoardColumn(column) || 'todo');
   }, [createTodo]);
 
-  const statusTone = { 'In progress': 'moon', Review: 'neutral', Planning: 'neutral', Backlog: 'neutral', Blocked: 'danger', Done: 'neutral' };
+  // lifecycle은 중립 — moon은 current/selected 전용(§5.3). Blocked만 danger.
+  const statusTone = { 'In progress': 'neutral', Review: 'neutral', Planning: 'neutral', Backlog: 'neutral', Blocked: 'danger', Done: 'neutral' };
   const prioTone = { critical: 'danger', high: 'danger', med: 'neutral', medium: 'neutral', low: 'neutral' };
-  const updateTone = { reported: 'neutral', active: 'moon', blocked: 'danger', done: 'neutral' };
+  const updateTone = { reported: 'neutral', active: 'neutral', blocked: 'danger', done: 'neutral' };
   const checkTone = { pending: 'neutral', done: 'neutral', skipped: 'neutral', blocked: 'danger' };
   // 콘텐츠 lifecycle은 §5.3 중립 — statusLabel이 상태를 말한다.
   const contentTone = { idea: 'neutral', draft: 'neutral', review: 'neutral', scheduled: 'neutral', published: 'neutral', archived: 'neutral' };

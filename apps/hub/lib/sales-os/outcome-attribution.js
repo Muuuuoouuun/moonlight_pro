@@ -32,10 +32,12 @@ export function isValidOutcomeAction(action) {
 // source so the three surfaces can't silently drift out of sync with each other or with
 // OUTCOME_ACTIONS above.
 export const QUICK_LOG_ACTIONS = [
-  { label: "전화함", action: "sent", tone: "moon" },
-  { label: "응답", action: "replied", tone: "info" },
-  { label: "미팅", action: "meeting", tone: "success" },
-  { label: "노응답", action: "no_response", tone: "neutral" },
+  // tone 필드 제거(2026-08-05 재감사): 소비자 3곳 모두 plain Button 렌더 — 死 semantic
+  // 어휘가 드리프트 위험만 남겼다.
+  { label: "전화함", action: "sent" },
+  { label: "응답", action: "replied" },
+  { label: "미팅", action: "meeting" },
+  { label: "노응답", action: "no_response" },
 ];
 
 // Customer reaction vocabulary for the followups quick-log mini-form (operator-workflow-profile

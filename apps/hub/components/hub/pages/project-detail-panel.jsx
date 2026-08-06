@@ -154,7 +154,7 @@ export function ProjectDetailPanel({
           {content.map((item) => <ActivityRow key={item.id} title={item.title} body={[item.kind, item.channel].filter(Boolean).join(" · ")} meta={item.when} badge={item.statusLabel} tone={contentTone[item.status] || "neutral"} />)}
         </DetailSection>
         <DetailSection title="결정" count={decisions.length} empty={failedEmpty("decisions", "이 프로젝트에 연결된 결정 기록이 없습니다.")}>
-          {decisions.map((decision) => <ActivityRow key={decision.id} title={decision.title} body={decision.summary} meta={decision.decidedAtLabel} badge="decision" tone="moon" />)}
+          {decisions.map((decision) => <ActivityRow key={decision.id} title={decision.title} body={decision.summary} meta={decision.decidedAtLabel} badge="decision" tone="neutral" />)}
         </DetailSection>
         <DetailSection title="노트" count={notes.length} empty={failedEmpty("notes", "이 프로젝트에 연결된 노트가 없습니다.")}>
           {notes.map((note) => <ActivityRow key={note.id} title={note.title} body={note.body} meta={note.createdAtLabel} badge="note" />)}

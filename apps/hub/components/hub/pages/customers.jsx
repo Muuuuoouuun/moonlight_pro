@@ -502,7 +502,7 @@ function Customer360Drawer({ row, onClose, onNavigate }) {
               {row.healthScore != null ? `스코어 ${row.healthScore}` : `건강도 ${row.health}`}
             </Badge>
           )}
-          <Badge tone={row.kind === "account" ? "moon" : "neutral"} size="xs" variant="outline">
+          <Badge tone="neutral" size="xs" variant="outline">
             {row.kind === "account" ? "계약 고객" : row.stage}
           </Badge>
           {row.dormant && <Badge tone="neutral" size="xs" variant="outline">기약 없음</Badge>}
@@ -615,13 +615,16 @@ export function Customers({ onNavigate }) {
   const pathname = usePathname();
   const deepLinkDone = React.useRef(false);
   React.useEffect(() => {
-    if (deepLinkDone.current || !allRows.length) return;
+    // 원장이 아직 로드 전(loading)일 때만 대기 — 빈/preview DB에서도 파라미터를 소비하고
+    // 설명한다(기존: 빈 원장이면 ?customer= 링크가 영원히 무시·무설명, 4차 재감사 S).
+    if (deepLinkDone.current || syncState === 'loading') return;
     const target = searchParams?.get("customer");
     if (!target) { deepLinkDone.current = true; return; }
     deepLinkDone.current = true;
     if (allRows.some(r => r.key === target)) setOpenKey(target);
+    else setCreateError('링크의 고객을 찾을 수 없습니다 — 원장이 비어 있거나 항목이 삭제됐습니다.');
     router.replace(pathname, { scroll: false });
-  }, [allRows, searchParams, router, pathname]);
+  }, [allRows, searchParams, router, pathname, syncState]);
 
   const term = search.trim().toLowerCase();
   const filtered = allRows.filter(r =>
@@ -784,7 +787,7 @@ export function Customers({ onNavigate }) {
                 </div>
               </div>
             </div>
-            <Badge tone={r.kind === "account" ? "moon" : "neutral"} size="xs" variant="outline">{r.stage}</Badge>
+            <Badge tone="neutral" size="xs" variant="outline">{r.stage}</Badge>
             <div>
               {r.health ? (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>

@@ -331,7 +331,11 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
       message: `${task.title} 완료됨`,
       action: { label: '되돌리기', onClick: () => undoComplete(task) },
     });
-    schedule(task.id, () => persistComplete(task));
+    schedule(task.id, () => {
+      // 창이 닫히면 되돌리기 버튼을 걷는다 — 죽은 버튼 방지(4차 재감사 S).
+      setFeedback((cur) => (cur?.status === 'pending' ? { ...cur, action: null } : cur));
+      persistComplete(task);
+    });
   }
 
   function undoComplete(task) {

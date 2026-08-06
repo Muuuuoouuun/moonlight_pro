@@ -35,7 +35,8 @@ function useLeadsLedger() {
         });
       })
       .catch(() => {
-        if (!cancelled) setState({ syncState: 'error', source: 'preview', leads: [] });
+        // error를 source:'preview'로 두면 빈 상태가 "연결 후 자동 그룹핑" 카피로 위장된다.
+        if (!cancelled) setState({ syncState: 'error', source: 'error', leads: [] });
       });
     return () => { cancelled = true; };
   }, []);
@@ -143,7 +144,9 @@ export function Segments({ workspace, onNavigate }) {
             title="세그먼트가 없습니다"
             description={source === 'supabase'
               ? '리드가 없거나 검색 결과가 비어 있습니다.'
-              : 'Supabase 연결 후 리드가 쌓이면 유입경로·지역·규모·스코어별로 자동 그룹핑됩니다.'}
+              : source === 'error'
+                ? '리드 원장을 읽지 못했습니다 — 지금 화면은 비어 보여도 실제 세그먼트가 있을 수 있습니다. 새로고침으로 재시도하세요.'
+                : 'Supabase 연결 후 리드가 쌓이면 유입경로·지역·규모·스코어별로 자동 그룹핑됩니다.'}
             action={source === 'supabase' ? (
               // No intake surface in this branch — send the operator to the classin Leads list.
               <Button variant="primary" size="sm" icon="inbox" onClick={() => onNavigate?.('dashboard/classin/revenue')}>리드 목록 열기</Button>

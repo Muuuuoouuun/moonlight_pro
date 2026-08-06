@@ -492,7 +492,7 @@ export function Studio({ workspace }) {
       }, ...s]);
       const detail = data.assetId ? ` · asset ${String(data.assetId).slice(0, 8)}` : '';
       setExtraSuggestions(s => [{
-        tone: isSchedule ? 'info' : 'moon',
+        tone: 'neutral',
         text: isSchedule
           ? `handoff queued · ${String(data.logId || 'preview').slice(0, 8)}`
           : `manual export logged · ${String(data.logId || 'preview').slice(0, 8)}${detail}`,
@@ -1165,7 +1165,9 @@ export function Queue({ workspace }) {
             icon="queue"
             title={tab === 'all' ? '발행 큐가 비어 있습니다' : `${activeLabel} 항목이 없습니다`}
             description={tab === 'all'
-              ? (ledger.syncState === 'live' ? 'Supabase content_items/content_variants 기록에 표시할 콘텐츠가 없습니다.' : '초안을 만들면 큐와 파이프라인에 표시됩니다.')
+              ? (ledger.syncState === 'error'
+                  ? '콘텐츠 원장을 읽지 못했습니다 — 비어 보여도 실제 콘텐츠가 있을 수 있습니다. 새로고침으로 재시도하세요.'
+                  : ledger.syncState === 'live' ? 'Supabase content_items/content_variants 기록에 표시할 콘텐츠가 없습니다.' : '초안을 만들면 큐와 파이프라인에 표시됩니다.')
               : `${activeLabel} 상태의 콘텐츠가 생기면 이 필터에 표시됩니다.`}
             action={<Button variant="primary" size="sm" icon="plus" onClick={createDraft}>Draft <Kbd>N</Kbd></Button>}
           />

@@ -143,7 +143,7 @@ function buildApprovalSignals(queue) {
   const preview = orders.slice(0, 3).map((o) => o.title).join(" · ");
   return [{
     id: "queue-approvals",
-    tone: "info",
+    tone: "neutral",
     kind: "Queue",
     title: `승인 대기 ${pending}건 — ${personaBreakdown}`,
     summary: preview || "페르소나·인박스가 제안한 액션이 승인을 기다립니다.",
@@ -161,7 +161,7 @@ function buildRevenueSignals(revenue) {
   selectOperatorFocusLeads(revenue).forEach((lead) => {
     signals.push({
       id: `revenue-focus-${lead.id}`,
-      tone: "info",
+      tone: "neutral",
       kind: "Revenue",
       title: `${lead.name} — 고객 성공 후속`,
       summary: lead.nextAction,
@@ -200,7 +200,7 @@ function buildRevenueSignals(revenue) {
   if (newLeads.length) {
     signals.push({
       id: "revenue-new-leads",
-      tone: "info",
+      tone: "neutral",
       kind: "Revenue",
       title: `신규 리드 ${newLeads.length}건 분류 대기`,
       summary: newLeads.map((lead) => lead.name).join(" · "),
@@ -241,7 +241,7 @@ function buildContentSignals(content) {
   if (draft && signals.length < 2) {
     signals.push({
       id: `content-draft-${draft.id}`,
-      tone: "warning",
+      tone: "neutral",
       kind: "Content",
       title: `${draft.title} — ${draft.status}`,
       summary: `${draft.kind} / ${draft.channel}. 다음 발행 산출물로 이어갈 수 있습니다.`,
@@ -285,7 +285,7 @@ function buildAutomationSignals(automations) {
   if (paused && signals.length < 2) {
     signals.push({
       id: `automation-paused-${paused.id}`,
-      tone: "warning",
+      tone: "neutral",
       kind: "Automation",
       title: `${paused.name} paused`,
       summary: "중요 flow라면 다시 켜고 최근 실행 로그를 확인하세요.",
@@ -332,7 +332,7 @@ function buildWorkSignals(projects, work) {
   if (decisionComplete && !decisions.length && signals.length < 2) {
     signals.push({
       id: "work-decision-missing",
-      tone: "info",
+      tone: "neutral",
       kind: "Work",
       title: "오늘의 결정 기록이 비어 있습니다",
       summary: "브랜드 자산으로 남길 판단을 하나라도 기록하면 주간 회고와 콘텐츠 전환이 쉬워집니다.",
@@ -358,11 +358,12 @@ function buildMetrics(revenue, content, automations, projects) {
     : null;
 
   return [
-    metric("MRR", formatMoney(revenueSummary.mrr || 0), revenueSummary.mrr ? "ledger" : "waiting", revenueSummary.mrr ? "success" : "neutral"),
-    metric("Pipeline", formatMoney(revenueSummary.pipeline || 0), `${revenueSummary.openDeals || 0} deals`, "moon"),
-    metric("Published", String(contentSummary.published || 0), `${contentSummary.drafts || 0} drafts`, "info"),
-    metric("Runs failed", String(automationSummary.failuresToday || 0), `${automationSummary.runsToday || 0} runs`, automationSummary.failuresToday ? "warning" : "success"),
-    metric("Open work", openProjects === null ? "—" : String(openProjects), projectsReadable ? "active projects" : "project ledger unavailable", "moon"),
+    // §5.3: 지표 톤은 실패만 danger — 카테고리/증가에 semantic·moon 배정 금지.
+    metric("MRR", formatMoney(revenueSummary.mrr || 0), revenueSummary.mrr ? "ledger" : "waiting", "neutral"),
+    metric("Pipeline", formatMoney(revenueSummary.pipeline || 0), `${revenueSummary.openDeals || 0} deals`, "neutral"),
+    metric("Published", String(contentSummary.published || 0), `${contentSummary.drafts || 0} drafts`, "neutral"),
+    metric("Runs failed", String(automationSummary.failuresToday || 0), `${automationSummary.runsToday || 0} runs`, automationSummary.failuresToday ? "danger" : "neutral"),
+    metric("Open work", openProjects === null ? "—" : String(openProjects), projectsReadable ? "active projects" : "project ledger unavailable", "neutral"),
   ].slice(0, 5);
 }
 

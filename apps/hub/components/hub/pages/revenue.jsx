@@ -361,7 +361,7 @@ export function RevenueOverview({ onNavigate }) {
           <Card key={i}>
             <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>{k.l}</div>
             <div className="stat" style={{ fontSize: 28, marginTop: 10, fontWeight: 600, lineHeight: 1.1 }}>{k.v}</div>
-            <div style={{ fontSize: 11, color: k.tone === 'neutral' ? 'var(--fg-faint)' : `var(--${k.tone})`, marginTop: 6 }}>{k.d}</div>
+            <div style={{ fontSize: 11, color: k.tone === 'moon' ? 'var(--moon-300)' : k.tone === 'danger' ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 6 }}>{k.d}</div>
           </Card>
         ))}
       </div>
@@ -564,7 +564,12 @@ export function Leads({ workspace }) {
   // The ledger hook only exposes API-backed rows — scoping never mixes sources. Drawer
   // edits overlay onto whichever row (local or ledger) they key to; deletes drop the row.
   const ws = getWorkspace(workspace);
-  const [filter, setFilter] = React.useState('all');
+  const [filter, setFilter] = React.useState(() => {
+    // 사이드바 personal 스코프 경로(?scope=personal)를 실소비 — 착지 시 개인 필터로 시작
+    // (기존: 스코프 토글이 데이터에 아무 영향 없는 과약속, 4차 재감사 M).
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('scope') === 'personal') return 'personal';
+    return 'all';
+  });
   const [search, setSearch] = React.useState('');
   const [sort, setSort] = React.useState({ key: null, dir: 'asc' });
   // 파생 목록 memo(re-audit 속도 #4) — 이전에는 드로어·검색 키스트로크마다 120행
@@ -1047,7 +1052,12 @@ export function Deals({ workspace, onNavigate }) {
   const DEAL_STAGES = ledger.stages;
   const [deals, setDeals] = React.useState(ledger.deals);
   const [drag, setDrag] = React.useState(null);
-  const [filter, setFilter] = React.useState('all');
+  const [filter, setFilter] = React.useState(() => {
+    // 사이드바 personal 스코프 경로(?scope=personal)를 실소비 — 착지 시 개인 필터로 시작
+    // (기존: 스코프 토글이 데이터에 아무 영향 없는 과약속, 4차 재감사 M).
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('scope') === 'personal') return 'personal';
+    return 'all';
+  });
   const [showHidden, setShowHidden] = React.useState(false);
   const [editDealId, setEditDealId] = React.useState(null);
   const [boardNotice, setBoardNotice] = React.useState(null); // { tone: 'err', label } — 이동/숨김 저장 실패 안내
@@ -1562,6 +1572,17 @@ export function Cases() {
   // ⌘K 아래에서도 발화했다(2026-08-05 재감사 M).
   const createCaseHotkey = React.useCallback(() => { if (!editCaseId) createCase(); }, [editCaseId]);
   usePageCreateHotkey(createCaseHotkey);
+  // j/k/e — 나머지 Revenue 테이블 3곳과 같은 키보드 문법(4차 재감사 S: Cases만 공백).
+  const caseKbRows = React.useMemo(() => cases.map((c) => ({ id: c.id })), [cases]);
+  const caseSelection = useCrmSelection(caseKbRows);
+  useCrmKeyboard({
+    selection: caseSelection,
+    onEditSelected: (id) => setEditCaseId(id),
+  });
+  React.useEffect(() => {
+    if (!caseSelection.selectedId) return;
+    document.querySelector(`[data-case-row="${CSS.escape(String(caseSelection.selectedId))}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [caseSelection.selectedId]);
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
@@ -1591,11 +1612,14 @@ export function Cases() {
         {cases.map((c, i) => (
           <div key={c.id} className="hub-row hub-table-min"
             role="button" tabIndex={0}
+            data-case-row={c.id}
             onClick={() => setEditCaseId(c.id)}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditCaseId(c.id); } }}
             style={{
               display: 'grid', gridTemplateColumns: CASES_GRID, gap: 12,
               padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', cursor: 'pointer',
+              outline: caseSelection.selectedId === c.id ? '1px solid var(--moon-300)' : undefined,
+              outlineOffset: -1,
               borderBottom: i < cases.length - 1 ? '1px solid var(--line-soft)' : 'none',
               // High-priority open cases carry a danger left-accent (§5.2) — resolved ones stay quiet.
               boxShadow: c.priority === 'high' && c.status !== 'Resolved' ? 'inset 1px 0 0 var(--danger-line)' : undefined,
@@ -2116,7 +2140,12 @@ export function Accounts({ workspace, onNavigate }) {
   const wsEmpty = Boolean(ws) && ACCOUNTS.length === 0;
   const [view, setView] = React.useState('cards'); // cards | list | detail
   const [search, setSearch] = React.useState('');
-  const [filter, setFilter] = React.useState('all');
+  const [filter, setFilter] = React.useState(() => {
+    // 사이드바 personal 스코프 경로(?scope=personal)를 실소비 — 착지 시 개인 필터로 시작
+    // (기존: 스코프 토글이 데이터에 아무 영향 없는 과약속, 4차 재감사 M).
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('scope') === 'personal') return 'personal';
+    return 'all';
+  });
   const [selected, setSelected] = React.useState(null);
   const [details, setDetails] = React.useState({});
   const [sort, setSort] = React.useState({ key: null, dir: 'asc' });
@@ -2510,6 +2539,7 @@ export function Accounts({ workspace, onNavigate }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
                       <Badge tone={a.type === 'personal' ? 'personal' : 'company'} size="xs">{a.type === 'personal' ? 'Personal' : 'Company'}</Badge>
                       <HealthDot health={a.health} />
+                      {a.health === 'risk' && <span style={{ fontSize: 10.5, color: 'var(--danger)' }}>위험</span>}
                       {buildAccountRelationshipDetail(a, ledger).contacts.length > 0 && (
                         <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{buildAccountRelationshipDetail(a, ledger).contacts.length}명</span>
                       )}
@@ -2569,6 +2599,7 @@ export function Accounts({ workspace, onNavigate }) {
               role="button"
               tabIndex={0}
               data-account-row={a.name}
+              data-kb-selected={accountSelection.selectedId === a.name ? 'true' : undefined}
               onClick={() => openDetail(a.name)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(a.name); } }}
               style={{
@@ -2630,11 +2661,14 @@ export function Accounts({ workspace, onNavigate }) {
                     role="button"
                     tabIndex={0}
                     aria-pressed={isSel}
+                    data-kb-selected={accountSelection.selectedId === a.name ? 'true' : undefined}
                     onClick={() => setSelected(a.name)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(a.name); } }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '10px 14px', cursor: 'pointer',
+                      outline: accountSelection.selectedId === a.name ? '1px solid var(--moon-300)' : undefined,
+                      outlineOffset: -1,
                       borderLeft: `1px solid ${isSel ? 'var(--moon-300)' : 'transparent'}`,
                       // Selected row pins its fill inline; unselected rows leave background
                       // to .hub-row:hover (an inline 'transparent' would out-rank the class).
@@ -2647,6 +2681,7 @@ export function Accounts({ workspace, onNavigate }) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         <span style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name}</span>
                         <HealthDot health={a.health} />
+                        {a.health === 'risk' && <span style={{ fontSize: 10.5, color: 'var(--danger)', flexShrink: 0 }}>위험</span>}
                       </div>
                       <div className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>
                         {fmt(a.value)} · <span style={{ color: 'var(--fg-faint)' }}>{a.last}</span>

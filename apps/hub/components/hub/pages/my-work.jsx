@@ -555,9 +555,13 @@ export function MyWork({ onNavigate }) {
       setHiddenIds((s) => new Set(s).add(id));
     }, STRIKE_MS);
 
-    setNotice({ tone: 'ok', label: '할 일 완료됨', action: { label: '되돌리기', onClick: () => undoComplete(item) } });
+    setNotice({ key: `complete-${id}`, tone: 'ok', label: '할 일 완료됨', action: { label: '되돌리기', onClick: () => undoComplete(item) } });
 
-    scheduleUndoable(id, () => persistComplete(item), UNDO_WINDOW_MS);
+    scheduleUndoable(id, () => {
+      // 창이 닫히는 순간 되돌리기 버튼을 걷는다 — 눌러도 no-op인 죽은 버튼 방지(4차 재감사 S).
+      setNotice((cur) => (cur?.key === `complete-${id}` ? { ...cur, action: null } : cur));
+      persistComplete(item);
+    }, UNDO_WINDOW_MS);
   };
 
   const undoComplete = (item) => {
@@ -949,7 +953,6 @@ export function MyWork({ onNavigate }) {
             icon={showQuickDetail ? 'x' : 'clock'}
             tooltip={showQuickDetail ? '상세 닫기' : '기한·우선순위 추가'}
             onClick={() => setShowQuickDetail((v) => !v)}
-            tone={showQuickDetail ? 'danger' : undefined}
           />
           <Button variant="primary" size="sm" icon="plus" onClick={createTask} disabled={saving || !quickTitle.trim()}>
             할 일 <Kbd>N</Kbd>
