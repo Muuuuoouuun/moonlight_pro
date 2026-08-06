@@ -46,13 +46,19 @@ export function ShortcutOverlay({ open, onClose }) {
         aria-modal="true"
         aria-label="키보드 단축키"
         data-shortcut-overlay="true"
+        tabIndex={-1}
+        ref={(node) => { if (node && open) node.focus(); }}
         onClick={(e) => e.stopPropagation()}
         style={{
         width: 380, maxWidth: "90vw", height: "fit-content",
         background: "var(--surface-2)", border: "1px solid var(--line)",
         borderRadius: "var(--r-lg)", boxShadow: "var(--shadow-pop)", padding: 16,
+        outline: "none",
       }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)", marginBottom: 12 }}>키보드 단축키</div>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)", flex: 1 }}>키보드 단축키</div>
+          <button type="button" aria-label="닫기" onClick={onClose} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: "var(--r-sm)", color: "var(--fg-faint)", background: "transparent", border: "none", cursor: "pointer", fontSize: 14 }}>✕</button>
+        </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {SHORTCUTS.map((s, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12.5, color: "var(--fg-muted)" }}>
