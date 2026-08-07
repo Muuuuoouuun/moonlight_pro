@@ -27,8 +27,11 @@
 | 6차 재감사 (iter 17 반영 후, 전 축) | 2026-08-06 | 90 | 89 | 87 | 88 | 90 | 90 | 88 | 87† | **88.9** |
 | 7차 재감사 (iter 18 반영 후, 전 축) | 2026-08-06 | 88 | 89 | 87 | 89 | 90 | 90 | 89 | 87† | **88.9** |
 | 8차 재감사 (iter 19 반영 후, 4축 측정) | 2026-08-06 | 88 | 88 | — | 91 | 92 | —‡ | —‡ | —‡ | 부분 측정 |
+| 9차 재감사 (iter 21 반영 후, 사용성 측정) | 2026-08-07 | — | **90** | — | — | — | — | — | — | 부분 측정§ |
 
 \‡ 8차 디자인·UI/UX·편의 감사는 세션 한도로 중단(12:20Z 리셋 후 재실행 예정) — 해당 3축은 7차 측정치(90·89·87)가 최신이다.
+
+\§ 9차는 사용성 단축 집중 회차 — 21차 조치(첫 화면 우선순위 단일화·truth 어휘 운영자화·read 실패 정직화 잔량)가 전부 사용성 체크리스트 3항목을 겨냥했다. 타 축은 미측정(직전 측정치 유지). 사용성 90 근거와 잔여 경미 결손은 Iteration 21 로그에 명시.
 
 \** 2차 재감사는 축별 감사 에이전트 5기 중 2기만 완주(속도 84 · 정체성 87 · 사용성 86). 안정성·디자인·UI/UX·편의 에이전트는 세션 한도로 중단 — 09:10Z 리셋 후 재실행. 완주 2기의 잔여 지적(셸 ReferenceError·ClassIn 앵커 아카이브 착지·가짜 페르소나·팬아웃·캐시 부재 등)은 6~9차 수리로 전부 반영 완료.
 
@@ -235,6 +238,23 @@
 - **read 실패 preview 재라벨 잔량 소거**: outcomes 라우트(원장 error를 preview 200으로 되뭉개던 19차 미착지 절반), campaigns·persona-registry·agent-runs 원장 3곳, campaigns 라우트 `failed` 202→502. 전부 Phase 0 분류(preview = 미구성 전용)로 정렬.
 
 **8차 잔여(다음 배치)**: sheets-sync read 실패가 "미연결 + 연결 CTA"로 위장(M), work-ledger 전 소스 실패도 partial 200(S), ⌘K가 revenueLedgerCache 미재사용(S), overview/content/work/automations 모듈 SWR 부재(M), work `?focus=` 로딩 레이스로 첫 화면 primary CTA 무음 실패(S), automations 가짜 webhook endpoint URL(S), revenue 빈 상태 error 분기 부재(M), Studio 고정 Figure 플레이스홀더(S), TruthBadge 개발 토큰 라벨(S).
+
+### Iteration 21 (2026-08-07) — 반영 완료
+
+주제: **사용성 88→90 착지 — 첫 화면 우선순위 이중화 해소 + truth 어휘 운영자화 + read 실패 정직화 잔량 + 8차 잔여 소진.**
+검증: `npm test` 469 중 460 통과 — 실패 9건 전부 `module.registerHooks`(Node ≥22.15) 파일로 로컬 v22.14 환경 격차(착수 전 기준선과 동일, 워크스페이스 링크 복구로 실행 범위 445→469). hub/engine build · engine tsc 통과. work-ledger 전 소스 실패 시나리오는 22.14 호환 로더로 3/3 별도 실측. 첫 화면·webhooks·studio·sheets는 라이브 Supabase 연결 상태로 브라우저 실측.
+
+- **A(최대 감점원) — 첫 화면 우선순위 엔진 이중화 해소**: 확정 슬롯(buildDailyFocus)과 tone 정렬 신호 큐가 같은 `selectOperatorFocusLeads`를 따로 호출해 같은 고객이 「집중 고객」 슬롯과 「결정 큐」에 동시 렌더되고, 헤더 "신호 N"이 중복까지 셌다(5초 판단 첫 앵커가 화면에서 검증 불가). 신호에 `subject:{type,id}` 부여 + `withoutFocusDuplicates`(daily-focus.js, 정원 slice **앞** 적용, 계약 테스트 2건) — 슬롯이 정본, 신호는 나머지. 헤더 "즉시"는 `focusUrgentCount`(danger 레일 단 긴급 KA) 합산으로 큐 배지와 분리 — 실측: 신호 2 = 커맨드 1 + 큐 1 정합.
+- **F — 집중 고객 회사 단위 dedupe**: 같은 학원의 리드 레코드 복수 존재 시 5칸에 같은 이름이 반복 렌더(실측: 윤유경플러스학원 ×2 · Studysync ×3 = 실제 고객 2곳). §7 슬롯 단위는 "고객" — `selectOperatorFocusLeads`가 회사당 최고 우선순위 1건만, limit **앞**에서 dedupe(계약 테스트 2건). 실측: 5칸이 5개 상이 고객으로 전환, 밀려났던 고객 3곳 최초 표면화.
+- **C — truth 어휘 운영자화(30 호출처 일괄)**: TRUTH_STATES `live`/`preview`/`error` 개발 토큰 → `실시간`/`Preview · 연결 필요`/`읽기 실패`(§5.3/§10), `reason` 슬롯 신설(§5.3 평문 원인), mono 지정 해제(§6 대상 아님 + 한글 SUIT 폴백 혼합 렌더). StatusLine sourceLabel 동어휘. 재시도 버튼은 배지 밖 형제 Button 유지(모바일 44px 플로어가 배지 줄 파괴).
+- **B — 첫 화면 유일 primary CTA 복구**: `?focus=15` 소비가 마운트 시점 `canCreate=false`(캘린더 loading)에 걸려 항상 "연결 후 생성" 안내 + `router.replace`로 param까지 소거(재시도 경로 소멸). capabilities 확정 후로 게이트, loading 중 param 보존, 생성 불가 사유 3분기(읽기 실패·확인 중·미연결). 계약 테스트 1건.
+- **D — sheets-sync read 실패 위장 제거(8차 잔여 M)**: 연결 행 read 실패가 "미연결 + 연결 CTA"로 위장 → `source:"error"` + 라우트 502 + "확인 불가 · 다시 읽기"(이미 연결돼 있을 수 있음을 명시). staging 집계 실패는 0이 아니라 '—'(`tallyStagingByStatus` nullOnReadFailure), 보강 소스 실패 failedSources 명명. 헤더 raw 토큰 → SyncBadge.
+- **E — 접힌 보조 섹션 다음 행동**: MoreDetail `summary` 슬롯 — 접힘 상태에서 승인 대기 N건 노출, 단 승인이 신호로 승격돼 있으면 생략(A와 같은 규칙: 위에서 자리 받은 것을 아래서 반복 카운트 금지). 오늘 일정 카드 상태별 인라인 CTA + 푸터 CTA 이중 렌더 → 푸터 1개 통합(라벨만 상태 추종).
+- **F(잔여) — read 실패·가짜 UI 소진**: revenue Leads/Deals/Accounts `wsEmpty`가 error에서도 "N건 없음 + 생성 CTA" 렌더(read 실패가 빈 워크스페이스로 위장 + 중복 생성 유도) → 공용 `LedgerReadError`(다시 읽기, 3표면). work-ledger 세 코어 레인(결정·리듬·로드맵) 전부 error 시 partial 200 → `source:"error"` + 502(8차 잔여 S, 계약 테스트 2건). automations 가짜 webhook URL(`https://moonlight.pro/hooks/…` 날조) → 실제 Engine 수신 경로만(`engine /api/webhook/telegram`), 미매핑 소스는 경로 생략(8차 잔여 S). Studio 전 초안 하단 고정 "Figure 1 · 네 칸 구조 다이어그램" 플레이스홀더 제거(8차 잔여 S).
+
+**9차 사용성 90 근거**: 체크리스트 ① 5초 판단 — 헤더 숫자·화면 실측 정합 + 슬롯 중복 0 + 고객 단위 5칸. ② 섹션별 다음 행동 — 일정 카드 CTA 1개, 접힘 헤더 요약, error 빈 상태에 올바른 행동(다시 읽기, 생성 유도 제거). ③ 진실 상태 — 30 호출처 운영자 어휘 + 코어 read 실패 error/502 정렬(sheets·work) + 가짜 데이터 2건 소거. **잔여 경미 결손(완화책 있음)**: fold 7영역은 §7 확정 계약이라 보존(중복 제거·접힘 요약으로 실질 완화 — 축소는 계약 변경 필요), MoreDetail 내부 리듬·모닝 브리프는 요약 미노출, 집중 고객 행 사유 문구 동질(리드 원천 데이터 품질 — 화면 계약 밖).
+
+**8차 잔여 처리 현황**: 9건 중 7건 소진(sheets-sync M · work-ledger S · ?focus= S · automations webhook S · revenue 빈 상태 M · Studio Figure S · TruthBadge S). 잔여 2건은 속도 축: ⌘K revenueLedgerCache 미재사용(S) · overview/content/work/automations 모듈 SWR 부재(M).
 
 ### 다음 회차 백로그 (점수 영향 순)
 
