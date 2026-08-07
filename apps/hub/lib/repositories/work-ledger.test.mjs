@@ -194,6 +194,36 @@ test("both failed roadmap tables report error rather than preview or live-empty"
   assert.equal(ledger.roadmap.error.retryable, true);
 });
 
+// 8차 잔여 S: 전 소스 실패가 partial 200으로 위장되던 계약 구멍 — 세 코어 레인(결정·리듬·
+// 로드맵)이 전부 error면 원장 전체가 error다. "일부 데이터"는 살아있는 레인이 있을 때만.
+test("all core lanes failing is a whole-ledger error, not partial", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.rows.decisions = null;
+  state.rows.routine_checks = null;
+  state.rows.projects = null;
+  state.rows.milestones = null;
+
+  const ledger = await workLedger.getWorkLedger();
+
+  assert.equal(ledger.source, "error");
+  assert.equal(ledger.error, "work-ledger-read-failed");
+  assert.equal(ledger.partial, false, "전면 실패를 '일부 데이터'로 표기하면 안 된다");
+});
+
+test("one live lane keeps the ledger partial instead of error", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.rows.decisions = null;
+  state.rows.routine_checks = null;
+  // projects/milestones는 빈 배열(read 성공) — 로드맵 레인은 살아 있다.
+
+  const ledger = await workLedger.getWorkLedger();
+
+  assert.equal(ledger.source, "supabase");
+  assert.equal(ledger.partial, true);
+  assert.ok(ledger.failedSources.includes("decisions"));
+  assert.ok(ledger.failedSources.includes("routine_checks"));
+});
+
 test("an unconfigured workspace keeps roadmap in explicit preview", async () => {
   globalThis.__workLedgerTestState.workspaceId = null;
 

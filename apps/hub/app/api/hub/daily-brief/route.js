@@ -17,7 +17,7 @@ import {
   filterOperatorOwnedRevenue,
   selectOperatorFocusLeads,
 } from "@/lib/operator-revenue-scope";
-import { buildDailyFocus } from "@/lib/daily-focus";
+import { buildDailyFocus, withoutFocusDuplicates } from "@/lib/daily-focus";
 import { listGoogleCalendarEvents } from "@/lib/google-calendar";
 
 export const runtime = "nodejs";
@@ -161,6 +161,9 @@ function buildRevenueSignals(revenue) {
   selectOperatorFocusLeads(revenue).forEach((lead) => {
     signals.push({
       id: `revenue-focus-${lead.id}`,
+      // subject = 이 신호가 가리키는 원장 레코드. 첫 화면 확정 슬롯이 같은 레코드를 이미
+      // 렌더했는지 판정하는 유일한 근거다(withoutFocusDuplicates).
+      subject: { type: "lead", id: lead.id },
       tone: "neutral",
       kind: "Revenue",
       title: `${lead.name} — 고객 성공 후속`,
@@ -182,6 +185,7 @@ function buildRevenueSignals(revenue) {
       const danger = Number(deal.age) >= 14 || Number(deal.value) >= 10000000;
       signals.push({
         id: `revenue-stale-${deal.id}`,
+        subject: { type: "deal", id: deal.id },
         tone: danger ? "danger" : "warning",
         kind: "Revenue",
         title: `${deal.name} — ${deal.age}일째 정체`,
@@ -459,14 +463,17 @@ export async function GET() {
   const failedSources = sources
     .filter((source) => ["error", "partial"].includes(source.state))
     .map((source) => source.key);
-  const signals = [
-    ...buildUnifiedRiskSignals(operatorRevenue, projects, automations),
-    ...buildApprovalSignals(queue),
-    ...buildRevenueSignals(operatorRevenue),
-    ...buildContentSignals(content),
-    ...buildAutomationSignals(automations),
-    ...buildWorkSignals(projects, work),
-  ].slice(0, 7);
+  const signals = withoutFocusDuplicates(
+    [
+      ...buildUnifiedRiskSignals(operatorRevenue, projects, automations),
+      ...buildApprovalSignals(queue),
+      ...buildRevenueSignals(operatorRevenue),
+      ...buildContentSignals(content),
+      ...buildAutomationSignals(automations),
+      ...buildWorkSignals(projects, work),
+    ],
+    dailyFocus,
+  ).slice(0, 7);
   const operatorHome = buildOperatorHomeSummary({
     projects,
     content: filterContentLedgerToBrandLanes(content),
@@ -497,9 +504,13 @@ export async function GET() {
       previewCount: sources.filter((source) => source.state === "preview").length,
       errorCount,
       partialCount,
+      // urgentCount는 신호 큐 전용(「결정 큐」 배지가 소비) — 확정 슬롯은 큐에 없다.
       signalCount: signals.length,
       urgentCount: signals.filter((signal) => signal.tone === "danger").length,
       todayCount: signals.filter((signal) => signal.tone === "warning").length,
+      // 헤더 "즉시 N"은 화면 전체 기준이라 danger 레일을 단 긴급 KA 슬롯까지 포함해야 한다 —
+      // 큐 배지와 헤더가 같은 수를 쓰면 둘 중 하나는 반드시 틀린다(사용성 재감사 A).
+      focusUrgentCount: dailyFocus?.urgentKa?.item ? 1 : 0,
     },
     metrics: buildMetrics(revenue, content, automations, projects),
     operatorHome,

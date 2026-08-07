@@ -517,7 +517,10 @@ test("daily brief names partial state and does not collapse it into mixed or pre
   // distinction is carried by the label/copy asserted below, never by amber paint.
   assert.match(dailyBriefSource, /state === ["']error["'] \? ["']danger["'] : ["']neutral["']/);
   assert.doesNotMatch(dailyBriefSource, /if \(state === ["']partial["']\) return ["']warning["']/);
-  assert.match(dailyBriefSource, /if \(state === ["']partial["']\) return ["']partial["']/);
+  // 라벨은 운영자 한국어 — 첫 화면 상태 줄이 개발 토큰을 노출하지 않는다(사용성 재감사 C).
+  assert.match(dailyBriefSource, /if \(state === ["']partial["']\) return ["']일부 데이터["']/);
+  assert.match(dailyBriefSource, /if \(state === ["']live["']\) return ["']실시간["']/);
+  assert.match(dailyBriefSource, /if \(state === ["']error["']\) return ["']읽기 실패["']/);
   assert.match(dailyBriefSource, /data\.status === ["']partial["']/);
   assert.match(dailyBriefSource, /일부 운영 기록을 읽지 못했습니다/);
 });
@@ -529,4 +532,22 @@ test("Decisions withholds the empty state when its configured ledger is incomple
   assert.match(workSource, /결정 원장 미연결/);
   assert.match(workSource, /decisionComplete/);
   assert.match(workSource, /retry/);
+});
+
+// 첫 화면의 유일한 primary CTA('15분 집중' → work/calendar?focus=15)가 마운트 레이스로
+// 늘 무음 실패하던 경로를 잠근다(2026-08-07 사용성 재감사 B).
+test("focus deep-link waits for resolved calendar capabilities before creating", () => {
+  const focusEffect = workSource.match(/const minutes = Number\(searchParams\.get\('focus'\)\);[\s\S]*?\}, \[now, searchParams[^\]]*\]\);/);
+  assert.ok(focusEffect, "?focus= 소비 이펙트가 있어야 한다");
+  // loading 동안에는 생성 시도도, 파라미터 소거도 하지 않는다 — 둘 다 재시도 경로를 없앤다.
+  assert.match(focusEffect[0], /if \(calendarData\.status === 'loading'\) return;/);
+  const gate = focusEffect[0].indexOf("calendarData.status === 'loading'");
+  assert.ok(gate < focusEffect[0].indexOf('createEvent({'), "게이트가 createEvent 앞에 있어야 한다");
+  assert.ok(gate < focusEffect[0].indexOf('router.replace(pathname)'), "게이트가 router.replace 앞에 있어야 한다");
+  assert.ok(gate < focusEffect[0].indexOf('focusAppliedRef.current = true'), "게이트가 1회성 플래그 앞에 있어야 한다");
+  // 상태가 바뀌면 이펙트가 다시 돌아야 게이트가 열린다.
+  assert.match(focusEffect[0], /\}, \[now, searchParams, calendarData\.status, createEvent\]\);/);
+  // 생성 불가 사유를 "연결하세요"로 뭉개지 않는다.
+  assert.match(workSource, /캘린더를 읽지 못해 일정을 만들 수 없습니다/);
+  assert.match(workSource, /캘린더 연결 상태를 확인하는 중입니다/);
 });

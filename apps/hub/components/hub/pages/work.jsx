@@ -383,10 +383,16 @@ export function Calendar({ onNavigate }) {
   const createEvent = React.useCallback(async ({ date, startHour, endHour, title }) => {
     const targetDay = date || fetchDays[0];
     if (!calendarCapabilities.canCreate) {
+      // 원인별로 다른 문장을 준다 — 읽기 실패·확인 중을 "연결하세요"로 뭉개면 이미 연결한
+      // 운영자가 할 일이 없는 안내를 받는다(사용성 재감사 B).
       setGcalMessage(
         isReadOnly
           ? 'iCal 연결은 읽기 전용입니다. 일정 생성·수정에는 Google OAuth 연결이 필요합니다.'
-          : 'Google Calendar 연결 후 일정을 만들 수 있습니다.',
+          : calendarData.status === 'error'
+            ? '캘린더를 읽지 못해 일정을 만들 수 없습니다. 다시 시도하세요.'
+            : calendarData.status === 'loading'
+              ? '캘린더 연결 상태를 확인하는 중입니다. 잠시 후 다시 시도하세요.'
+              : 'Google Calendar 연결 후 일정을 만들 수 있습니다.',
       );
       return;
     }
@@ -435,8 +441,15 @@ export function Calendar({ onNavigate }) {
   React.useEffect(() => {
     const minutes = Number(searchParams.get('focus'));
     if (!minutes || focusAppliedRef.current) return;
+    // 첫 화면 primary CTA('15분 집중')의 착지 지점이다. 마운트 시점엔 캘린더가 아직
+    // status='loading'이라 canCreate가 항상 false인데, 예전엔 그대로 createEvent를 불러
+    // "Google Calendar 연결 후…"(이미 연결돼 있어도)를 띄우고 router.replace로 ?focus=까지
+    // 지워 재시도 경로마저 없앴다 — 제품의 유일한 primary 버튼이 늘 무음 실패했다
+    // (8차 잔여 · 2026-08-07 사용성 재감사 B).
+    // 뷰 전환은 즉시(사용자가 이동을 체감), 생성은 캘린더 상태가 확정된 뒤에만 시도한다.
     setSelectedDate(now);
     setViewMode('day');
+    if (calendarData.status === 'loading') return;
     focusAppliedRef.current = true;
     createEvent({
       date: now,
@@ -446,7 +459,7 @@ export function Calendar({ onNavigate }) {
     });
     router.replace(pathname);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [now, searchParams]);
+  }, [now, searchParams, calendarData.status, createEvent]);
 
   async function connectGoogleCalendar() {
     setGcalStatus('connecting');

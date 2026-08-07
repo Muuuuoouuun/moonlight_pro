@@ -202,6 +202,23 @@ export function useRevenueLedger() {
   return { ledger, syncState, reload };
 }
 
+// 원장 read 실패 공용 빈 상태 — Leads·Deals·Accounts의 wsEmpty 분기가 error에서도
+// "N건 없음 + 생성 CTA"를 그려 read 실패가 빈 워크스페이스로 위장됐다(8차 잔여 M).
+// 생성 유도는 실패 화면에서 금물: 운영자가 이미 있는 레코드를 중복 생성하게 된다.
+function LedgerReadError({ noun, onRetry }) {
+  return (
+    <Card>
+      <EmptyState
+        icon="x"
+        title={`${noun}을(를) 읽지 못했습니다`}
+        description="지금 화면은 비어 보여도 실제 기록이 있을 수 있습니다. 새로 만들기 전에 다시 읽어 확인하세요."
+        action={onRetry ? <Button variant="secondary" size="sm" icon="runs" onClick={onRetry}>다시 읽기</Button> : undefined}
+        style={{ minHeight: 200, padding: '28px 12px' }}
+      />
+    </Card>
+  );
+}
+
 // 3단 정렬 헤더(§8.1) — 컴포넌트 안에서 정의하면 렌더마다 함수 identity가 바뀌어
 // React가 헤더 버튼을 매번 unmount/remount한다(re-audit 속도 #5). 모듈 스코프 1개를
 // Leads·Cases·Accounts가 공유한다. 캐럿은 비활성일 때도 폭 예약.
@@ -806,6 +823,9 @@ export function Leads({ workspace }) {
       })()}
 
       {wsEmpty && (
+        syncState === 'error' ? (
+          <LedgerReadError noun="리드 목록" onRetry={reloadLedger} />
+        ) : (
         <Card>
           <EmptyState
             icon="leads"
@@ -815,6 +835,7 @@ export function Leads({ workspace }) {
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
+        )
       )}
 
       {!wsEmpty && (
@@ -1085,7 +1106,7 @@ function DealTaskPanel({ deal, onSaved }) {
 }
 
 export function Deals({ workspace, onNavigate }) {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -1335,6 +1356,9 @@ export function Deals({ workspace, onNavigate }) {
       )}
 
       {wsEmpty && (
+        syncState === 'error' ? (
+          <LedgerReadError noun="딜 파이프라인" onRetry={reloadLedger} />
+        ) : (
         <Card>
           <EmptyState
             icon="deals"
@@ -1344,6 +1368,7 @@ export function Deals({ workspace, onNavigate }) {
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
+        )
       )}
 
       {!wsEmpty && (
@@ -2170,7 +2195,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
 }
 
 export function Accounts({ workspace, onNavigate }) {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const [localAccounts, setLocalAccounts] = React.useState([]);
   const ledgerAccounts = Array.isArray(ledger.accounts) ? ledger.accounts : [];
   // Scope the merged ledger to the active workspace (pass-through when unscoped). The
@@ -2550,6 +2575,9 @@ export function Accounts({ workspace, onNavigate }) {
       </div>
 
       {wsEmpty && (
+        syncState === 'error' ? (
+          <LedgerReadError noun="계정 목록" onRetry={reloadLedger} />
+        ) : (
         <Card>
           <EmptyState
             icon="accounts"
@@ -2559,6 +2587,7 @@ export function Accounts({ workspace, onNavigate }) {
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
+        )
       )}
 
       {/* Content by view */}

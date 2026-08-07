@@ -3,7 +3,7 @@
 import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar, SyncBadge, SegmentedControl } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, SectionTitle, EmptyState, Avatar, SyncBadge, SegmentedControl } from "../hub-primitives";
 import { usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
 import { shouldRestoreActiveStudioDraft } from "@/lib/content-studio-routing";
@@ -704,10 +704,8 @@ export function Studio({ workspace }) {
                     {body.length > 1200 ? '…' : ''}
                   </div>
                 </div>
-                <div style={{ marginTop: 24 }}>
-                  <Placeholder label="inline figure — decision note 4-box" h={220} />
-                  <div style={{ fontSize: 12, color: 'var(--fg-faint)', marginTop: 6 }}>Figure 1 · 네 칸 구조 다이어그램</div>
-                </div>
+                {/* 고정 "Figure 1" 플레이스홀더 제거 — 모든 초안 아래 존재하지 않는 다이어그램이
+                    문서 내용처럼 렌더됐다(8차 잔여 S: 가짜 UI). 이미지 삽입은 툴바 Image 경로만. */}
               </div>
             </div>
           </>

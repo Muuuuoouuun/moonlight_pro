@@ -460,8 +460,14 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
     ...roadmap.truncatedSources,
   ];
 
+  // 세 코어 레인(결정·리듬·로드맵)이 전부 error면 "일부 데이터"가 아니라 전면 read 실패다 —
+  // partial 200으로 내리면 상태줄이 '일부'를 말하는 동안 화면 전체가 비어 렌더된다(8차 잔여 S).
+  const allCoreFailed =
+    decisionsState.state === "error" && rhythm.state === "error" && roadmap.state === "error";
+
   return {
-    source: "supabase",
+    source: allCoreFailed ? "error" : "supabase",
+    ...(allCoreFailed ? { error: "work-ledger-read-failed" } : {}),
     configured: true,
     workspaceId,
     timeZone,
@@ -472,7 +478,7 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
     rhythm,
     roadmap,
     summary: summarizeRituals(rituals),
-    partial: failedSources.length > 0 || partialSources.length > 0,
+    partial: !allCoreFailed && (failedSources.length > 0 || partialSources.length > 0),
     failedSources,
     partialSources,
   };

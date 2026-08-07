@@ -254,6 +254,14 @@ export function EmailAutomation({ onNavigate }) {
   );
 }
 
+// 실제 Engine 수신 라우트만 경로로 표시한다 — 예전엔 `https://moonlight.pro/hooks/…`라는
+// 존재하지 않는 URL을 지어내 렌더했다(8차 잔여 S: 가짜 endpoint). 매핑에 없는 소스는
+// 경로를 생략한다(이름 줄이 이미 source·eventType을 전달).
+const ENGINE_INGEST_PATHS = {
+  telegram: 'engine /api/webhook/telegram',
+  project: 'engine /api/webhook/project',
+};
+
 function aggregateWebhookEndpoints(events) {
   if (!events?.length) return [];
   const byKey = new Map();
@@ -261,7 +269,7 @@ function aggregateWebhookEndpoints(events) {
     const key = `${ev.source}·${ev.eventType}`;
     const entry = byKey.get(key) || {
       name: `${ev.source} — ${ev.eventType}`,
-      url: `https://moonlight.pro/hooks/${ev.source}`,
+      url: ENGINE_INGEST_PATHS[ev.source] || null,
       status: 'ok',
       lastHit: ev.lastHit,
       count24: 0,
@@ -371,7 +379,7 @@ export function Webhooks({ onNavigate }) {
               <IconButton icon="play" tooltip="Send test" onClick={() => runHookTest(i, h)} />
               <IconButton icon="moreV" tooltip="Manage endpoint" onClick={() => onNavigate?.('dashboard/settings')} />
             </div>
-            <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 6, paddingLeft: 16 }}>{h.url}</div>
+            {h.url && <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 6, paddingLeft: 16 }}>{h.url}</div>}
           </div>
           );
         })}

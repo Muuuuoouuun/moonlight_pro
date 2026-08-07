@@ -26,10 +26,11 @@ export async function GET(req) {
         ? ledger.partial ? "partial" : "live"
         : "preview";
 
-    return NextResponse.json({
-      status,
-      ...ledger,
-    });
+    // 전면 read 실패는 502 — 200으로 내리면 r.ok 가드 소비자에게 성공으로 읽힌다(Phase 0).
+    return NextResponse.json(
+      { status, ...ledger },
+      { status: status === "error" ? 502 : 200 },
+    );
   } catch (error) {
     return NextResponse.json(
       {

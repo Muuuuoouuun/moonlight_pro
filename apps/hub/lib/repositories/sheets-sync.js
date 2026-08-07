@@ -94,20 +94,43 @@ export async function getSheetsSyncStatus(workspaceId = resolveDefaultWorkspaceI
       order: "started_at.desc",
       limit: 10,
     }),
-    tallyStagingByStatus("google_sheets"),
+    tallyStagingByStatus("google_sheets", { nullOnReadFailure: true }),
   ]);
 
-  const connection = connectionRows?.[0] || null;
+  // 연결 행은 코어다 — 못 읽으면 connected 판정 자체가 성립하지 않는다. 예전엔 null이
+  // "연결 안 됨"과 구분되지 않아 RLS 거부·타임아웃 중에도 화면이 "미연결 + 연결하기 CTA"로
+  // 위장됐다(8차 잔여 M · Phase 0: preview는 미구성 전용).
+  if (connectionRows === null) {
+    return {
+      source: "error",
+      error: "sheets-connection-read-failed",
+      configured: true,
+      connected: false,
+      spreadsheetId: null,
+      staging: {},
+      recentRuns: [],
+    };
+  }
+
+  // 보강 소스(스테이징 집계·최근 run)는 실패해도 연결 판정을 막지 않는다 — 다만 0으로
+  // 뭉개지 말고 어느 소스가 빠졌는지 이름을 남긴다.
+  const failedSources = [];
+  if (staging === null) failedSources.push("lead_intake_raw");
+  if (recentRuns === null) failedSources.push("sync_runs");
+
+  const connection = connectionRows[0] || null;
 
   return {
     source: "supabase",
+    partial: failedSources.length > 0,
+    failedSources,
     configured: true,
     connected: Boolean(connection?.config?.refreshToken) || Boolean(process.env.GOOGLE_SHEETS_REFRESH_TOKEN?.trim()),
     spreadsheetId: connection?.config?.spreadsheetId || resolvePersonalLeadsSpreadsheetId() || null,
     expectedOperatorEmail: resolveOperatorEmail(),
     expectedSpreadsheetId: resolvePersonalLeadsSpreadsheetId() || null,
     lastSyncAt: connection?.last_synced_at || null,
-    staging,
+    staging: staging === null ? null : staging,
     recentRuns: (recentRuns || []).map((r) => ({
       status: r.status,
       action: r.payload?.action || null,

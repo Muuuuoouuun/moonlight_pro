@@ -420,23 +420,32 @@ export function LifecycleBadge({ state = 'queued', label, reason, style }) {
   );
 }
 
+// 라벨은 운영자가 읽고 바로 행동할 수 있는 한국어다. `live`/`preview`/`error` 개발 토큰은
+// 1인 운영자에게 "이 화면을 믿어도 되는지 / 지금 뭘 해야 하는지"를 말해주지 않았다
+// (DESIGN §5.3 source truth · §10 운영자 어휘 — 2026-08-07 사용성 재감사 C).
+// 폰트는 sans — 상태 라벨은 §6의 mono 대상(ID·타임스탬프·키바인딩·계기 수치)이 아니고,
+// 한글은 어차피 SUIT로 폴백해 mono 지정이 혼합 렌더만 만들었다.
 const TRUTH_STATES = {
-  live:    { tone: 'neutral', label: 'live',        icon: 'signal' },
-  partial: { tone: 'neutral', label: '일부 데이터', icon: 'signal', borderStyle: 'dashed' },
-  syncing: { tone: 'neutral', label: '동기화 중',   icon: 'runs' },
-  loading: { tone: 'neutral', label: '불러오는 중', icon: 'runs' },
-  preview: { tone: 'neutral', label: 'preview',     icon: 'link', borderStyle: 'dashed' },
-  error:   { tone: 'danger',  label: 'error',       icon: 'x' },
+  live:    { tone: 'neutral', label: '실시간',             icon: 'signal' },
+  partial: { tone: 'neutral', label: '일부 데이터',        icon: 'signal', borderStyle: 'dashed' },
+  syncing: { tone: 'neutral', label: '동기화 중',          icon: 'runs' },
+  loading: { tone: 'neutral', label: '불러오는 중',        icon: 'runs' },
+  preview: { tone: 'neutral', label: 'Preview · 연결 필요', icon: 'link', borderStyle: 'dashed' },
+  error:   { tone: 'danger',  label: '읽기 실패',          icon: 'x' },
 };
 
-export function TruthBadge({ state = 'error', label, style }) {
+// `reason`은 §5.3이 partial/error에 요구하는 "누락 소스·평문 원인"을 배지 안에 싣는 슬롯이다.
+// 재시도 버튼은 여기 넣지 않는다 — 모바일에서 `.hub-app button`이 44px 플로어를 받아
+// (hub-tokens.css) 배지 줄을 깨뜨린다. 재시도는 배지 옆 형제 Button이 소유한다.
+export function TruthBadge({ state = 'error', label, reason, style }) {
   const config = TRUTH_STATES[state] || TRUTH_STATES.error;
   const visibleLabel = label || config.label;
+  const fullLabel = reason ? `${visibleLabel} · ${reason}` : visibleLabel;
   const danger = config.tone === 'danger';
   return (
     <span
       data-truth={state}
-      aria-label={`데이터 상태: ${visibleLabel}`}
+      aria-label={`데이터 상태: ${fullLabel}`}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 4,
         padding: '2px 6px', borderRadius: 999,
@@ -446,12 +455,11 @@ export function TruthBadge({ state = 'error', label, style }) {
         borderColor: danger ? 'var(--danger-line)' : 'var(--line)',
         borderStyle: config.borderStyle || 'solid',
         fontSize: 10.5, fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap',
-        fontFamily: 'var(--font-mono)', fontFeatureSettings: "'ss02'", letterSpacing: 0,
         ...style,
       }}
     >
       <Iconed name={config.icon} size={9} aria-hidden="true" />
-      {visibleLabel}
+      {fullLabel}
     </span>
   );
 }
@@ -491,8 +499,8 @@ export function AttentionRail({ level = 'none', label, children, style }) {
 }
 
 // Compatibility wrapper for existing page headers. New code should use TruthBadge.
-export function SyncBadge({ state, style }) {
-  return <TruthBadge state={state} style={{ marginLeft: 8, ...style }} />;
+export function SyncBadge({ state, reason, style }) {
+  return <TruthBadge state={state} reason={reason} style={{ marginLeft: 8, ...style }} />;
 }
 
 // Canonical pill-group toolbar (type / status / view filters). `options`: [{ key, label,
