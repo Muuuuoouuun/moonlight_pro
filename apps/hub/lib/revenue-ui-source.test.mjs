@@ -18,6 +18,22 @@ test("RevenueOverview defines the live-ledger flag used by its empty state", () 
   );
 });
 
+// 스테이지 변경 되돌리기(24차) — 최고 빈도 뮤테이션의 마지막 undo 공백. 지연 쓰기 계약:
+// 창이 닫힌 뒤에만 PATCH, 되돌리기는 네트워크 없는 진짜 취소, 연속 이동은 최초 원위치 복원.
+test("deal stage moves defer the PATCH behind a 3.5s undo window", () => {
+  const moveBlock = revenueSource.match(/const pendingStageRef[\s\S]*?\n  \};/);
+  assert.ok(moveBlock, "지연 쓰기 move 블록이 있어야 한다");
+  assert.match(moveBlock[0], /scheduleUndoable\(key, \(\) => \{/);
+  // PATCH는 예약 콜백 안에서만 — 즉시 실행 경로가 남으면 undo가 역연산이 돼버린다.
+  const immediatePersist = moveBlock[0].split('scheduleUndoable')[0];
+  assert.doesNotMatch(immediatePersist, /saveRevenueRecord/);
+  assert.match(moveBlock[0], /const undoBase = pendingStageRef\.current\.get\(key\) \?\? prevStage;/);
+  assert.match(moveBlock[0], /if \(cancelUndoable\(key\)\)/);
+  // 창 종료 시 알림 소거(19차 수명 계약) + 실패 롤백 명명.
+  assert.match(moveBlock[0], /setBoardNotice\(cur => \(cur\?\.key === key \? null : cur\)\)/);
+  assert.match(moveBlock[0], /스테이지 이동 저장 실패/);
+});
+
 // TopBar New·⌘K 생성 딥링크의 착지 계약(22차) — 각 표면이 ?new=<kind>를 1회 소비하고
 // 쿼리를 소거한다. 소비가 없으면 셸의 New는 다시 팔레트 위장 버튼으로 퇴행한다.
 test("revenue surfaces consume their ?new= create deep links exactly once", () => {

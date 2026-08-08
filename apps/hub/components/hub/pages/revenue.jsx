@@ -1131,7 +1131,13 @@ export function Deals({ workspace, onNavigate }) {
   });
   const [showHidden, setShowHidden] = React.useState(false);
   const [editDealId, setEditDealId] = React.useState(null);
-  const [boardNotice, setBoardNotice] = React.useState(null); // { tone: 'err', label } — 이동/숨김 저장 실패 안내
+  const [boardNotice, setBoardNotice] = React.useState(null); // { key?, tone, label, undo? } — 이동 되돌리기·저장 실패 안내
+  const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
+  React.useEffect(() => {
+    if (!boardNotice || boardNotice.undo) return undefined; // undo 창 알림은 창 종료 콜백이 걷는다
+    const t = setTimeout(() => setBoardNotice(null), 8000);
+    return () => clearTimeout(t);
+  }, [boardNotice]);
   const dragMovedRef = React.useRef(false); // true from dragStart until just after dragEnd — suppresses the card click
   React.useEffect(() => {
     if (!boardNotice) return undefined;
@@ -1178,30 +1184,54 @@ export function Deals({ workspace, onNavigate }) {
     }
   };
 
+  // DEAL_STAGES를 deps에 반드시 포함 — 원장 도착으로 stages만 갱신된 렌더에서 totals가
+  // stale 빈 객체로 남으면 컬럼 헤더의 totals[s.key].count가 크래시한다(24차 실측 발견).
   const totals = React.useMemo(() => DEAL_STAGES.reduce((acc, s) => {
     const items = visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
     acc[s.key] = { count: items.length, sum: items.reduce((a, b) => a + b.value, 0) };
     return acc;
-  }, {}), [visibleDeals, filter]);
+  }, {}), [DEAL_STAGES, visibleDeals, filter]);
   // Command-deck readout split: money in motion (open stages) vs money landed (closing).
   // The old single grandTotal blended won deals into "pipeline", overstating what's open.
   const openStages = DEAL_STAGES.filter(s => s.key !== 'closing' && s.key !== 'lost');
   const openTotal = openStages.reduce((a, s) => a + (totals[s.key]?.sum || 0), 0);
   const openCount = openStages.reduce((a, s) => a + (totals[s.key]?.count || 0), 0);
   const closingTotal = totals.closing?.sum || 0;
-  // Drag-to-move: optimistic local move, then persist the stage in the background for
-  // ledger-backed deals. 실패 시 원래 스테이지로 롤백 + role=status 안내 — "낙관 이동이
-  // 결과와 무관하게 서 있는" fire-and-forget 경로 제거(2026-08-05 재감사).
+  // Drag-to-move: 낙관 이동 → 3.5초 되돌리기 창 → 창이 닫힌 뒤에만 PATCH(지연 쓰기 —
+  // 삭제·완료와 같은 useUndoableAction 계약). 스테이지 변경은 최고 빈도 뮤테이션인데
+  // 되돌리기가 없던 마지막 항목이었다(기준선 §2.8 — 24차). 창 안에서 같은 딜을 연속
+  // 이동하면 예약이 대체되고 되돌리기는 최초 원위치로 복원한다. 실패 시 롤백 + 명명.
+  const pendingStageRef = React.useRef(new Map()); // key → 최초 prevStage
   const move = (id, to) => {
     const prevStage = deals.find(d => d.id === id)?.stage;
+    if (!prevStage || prevStage === to) return;
     setDeals(ds => ds.map(d => d.id === id ? { ...d, stage: to } : d));
-    if (!String(id).toLowerCase().startsWith('local-')) {
+    if (String(id).toLowerCase().startsWith('local-')) return;
+    const key = `deal-stage-${id}`;
+    const undoBase = pendingStageRef.current.get(key) ?? prevStage;
+    pendingStageRef.current.set(key, undoBase);
+    const stageLabel = DEAL_STAGES.find(s => s.key === to)?.label || to;
+    scheduleUndoable(key, () => {
+      pendingStageRef.current.delete(key);
+      setBoardNotice(cur => (cur?.key === key ? null : cur)); // 창 종료 시 알림 소거(19차 수명 계약)
       saveRevenueRecord('deal', 'update', { id, stage: to }).then((r) => {
         if (r.ok) return;
-        if (prevStage) setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: prevStage } : d)));
+        setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: undoBase } : d)));
         setBoardNotice({ tone: 'err', label: `스테이지 이동 저장 실패 (${r.status}) — 원위치로 되돌렸습니다` });
       });
-    }
+    });
+    setBoardNotice({
+      key,
+      tone: 'ok',
+      label: `${stageLabel}(으)로 이동됨`,
+      undo: () => {
+        if (cancelUndoable(key)) {
+          pendingStageRef.current.delete(key);
+          setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: undoBase } : d)));
+        }
+        setBoardNotice(null);
+      },
+    });
   };
   // 딜별 체크리스트 카운트 (공유 실행 척추의 보드 표면) — tasks 원장에서 meta.deal_id로
   // 연결된 하위 항목을 집계해 카드에 ✓n/m으로 얹는다. 드로어가 닫힐 때 재집계해서
@@ -1336,8 +1366,9 @@ export function Deals({ workspace, onNavigate }) {
             {closingTotal > 0 && <> · 클로징 <span className="mono" style={{ color: 'var(--moon-200)' }}>{fmt(closingTotal)}</span></>}
             <SyncBadge state={syncState} />
             {boardNotice && (
-              <span role="status" aria-live="polite" style={{ marginLeft: 8, fontSize: 11.5, color: boardNotice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)' }}>
+              <span role={boardNotice.tone === 'err' ? 'alert' : 'status'} aria-live="polite" style={{ marginLeft: 8, fontSize: 11.5, color: boardNotice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 {boardNotice.label}
+                {boardNotice.undo && <Button variant="ghost" size="xs" onClick={boardNotice.undo}>되돌리기</Button>}
               </span>
             )}
           </div>
@@ -1414,9 +1445,9 @@ export function Deals({ workspace, onNavigate }) {
               <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 600 }}>{s.label}</span>
-                  <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', marginLeft: 'auto' }}>{totals[s.key].count}</span>
+                  <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', marginLeft: 'auto' }}>{totals[s.key]?.count ?? 0}</span>
                 </div>
-                <div className="mono" style={{ fontSize: 12, color: totals[s.key].sum ? 'var(--fg-muted)' : 'var(--fg-faint)', marginTop: 4 }}>{fmt(totals[s.key].sum)}</div>
+                <div className="mono" style={{ fontSize: 12, color: totals[s.key]?.sum ? 'var(--fg-muted)' : 'var(--fg-faint)', marginTop: 4 }}>{fmt(totals[s.key]?.sum ?? 0)}</div>
               </div>
               <div className="scroll-y" style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 6, minHeight: 100 }}>
                 {items.map(d => {
