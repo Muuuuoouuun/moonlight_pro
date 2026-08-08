@@ -65,9 +65,10 @@ export function selectBrand(brands) {
 }
 
 // Assemble one deal's operating_context (spine §1, item_type "deal": entity·crm_facts·ledger filled,
-// content/social empty). `deal`/`account` are the revenue-ledger *projections* (which drop
-// score/next_action/contact) — those gaps are recorded honestly in missing[].
-export function buildFocusOperatingContext({ deal = null, account = null, entityOutcomes = [], brand = BRAND_FALLBACK, crmFacts = null } = {}) {
+// content/social empty). `deal`/`account`/`lead` are the revenue-ledger *projections* — mapLead
+// carries score/nextAction/contactName, so a matched lead fills those slots; anything still
+// unavailable is recorded honestly in missing[].
+export function buildFocusOperatingContext({ deal = null, account = null, lead = null, entityOutcomes = [], brand = BRAND_FALLBACK, crmFacts = null } = {}) {
   if (!deal) {
     return {
       item_id: null,
@@ -82,12 +83,21 @@ export function buildFocusOperatingContext({ deal = null, account = null, entity
   );
   const lastTouch = sorted[0]?.at || null;
 
+  const contact = lead?.contactName
+    ? lead.contactEmail
+      ? `${lead.contactName} <${lead.contactEmail}>`
+      : lead.contactName
+    : null;
+
+  const missing = [];
+  if (!lead) {
+    missing.push({ source: "leads", reason: "focus deal과 매칭되는 리드 없음 (score/next_action 미보강)" });
+    missing.push({ source: "contacts", reason: "리드 미매칭 — contact 미보강" });
+  } else if (!contact) {
+    missing.push({ source: "contacts", reason: "리드에 연결된 연락처 없음" });
+  }
   // eeoCRM gap only remains "missing" when no snapshot resolved it (Sales OS v1.4 —
   // docs/sales-os-crm-integration-plan.md §4). Once crmFacts lands, the honest gap closes.
-  const missing = [
-    { source: "leads", reason: "score/next_action_hint는 revenue 레저 투영에 없음 (raw row 필요)" },
-    { source: "contacts", reason: "contact는 revenue 레저 투영에 없음" },
-  ];
   if (!crmFacts) {
     missing.push({ source: "eeoCRM", reason: "MCP 미연결 — crm_facts 보강 없음" });
   }
@@ -98,8 +108,8 @@ export function buildFocusOperatingContext({ deal = null, account = null, entity
     found: true,
     entity: {
       company: account?.name || deal.name || null,
-      contact: null,
-      lead_id: null,
+      contact,
+      lead_id: lead?.id || null,
       deal_id: deal.id,
       stage: deal.stage || null,
       amount: Number.isFinite(deal.value) ? deal.value : null,
@@ -109,8 +119,8 @@ export function buildFocusOperatingContext({ deal = null, account = null, entity
     ledger: {
       recent_outcomes: Array.isArray(entityOutcomes) ? entityOutcomes : [],
       last_touch: lastTouch,
-      score: null,
-      next_action_hint: null,
+      score: Number.isFinite(lead?.score) && lead.score > 0 ? lead.score : null,
+      next_action_hint: lead?.nextAction || null,
     },
     content: { cadence_status: null, idea_queue_top: [], recent_published: [] },
     social_signals: { winners: [], losers: [] },

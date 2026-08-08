@@ -68,7 +68,10 @@ function nameTokens(name) {
 
 function buildUnifiedRiskSignals(revenue, projects, automations) {
   const staleDeals = (Array.isArray(revenue.deals) ? revenue.deals : []).filter(
-    (d) => d.stage !== "closing" && d.stage !== "lost" && Number(d.age) >= 10,
+    (d) => d.trackingEligible !== false
+      && d.stage !== "closing"
+      && d.stage !== "lost"
+      && Number(d.age) >= 10,
   );
   const blocked = (Array.isArray(projects.projects) ? projects.projects : []).filter(
     (p) => p.status === "Blocked",
@@ -175,7 +178,10 @@ function buildRevenueSignals(revenue) {
   });
 
   deals
-    .filter((deal) => deal.stage !== "closing" && deal.stage !== "lost" && Number(deal.age) >= 10)
+    .filter((deal) => deal.trackingEligible !== false
+      && deal.stage !== "closing"
+      && deal.stage !== "lost"
+      && Number(deal.age) >= 10)
     .sort((a, b) => Number(b.value || 0) - Number(a.value || 0))
     .slice(0, 2)
     .forEach((deal) => {
@@ -447,10 +453,25 @@ export async function GET() {
   // §2 확정 슬롯: 긴급 KA ≤1 · 집중 고객 ≤5 · 오늘 일정 — tone 정렬 신호 큐와 별개의
   // 명명된 풀. 각 슬롯이 자기 소스 truth 상태를 따로 갖는다.
   const dailyFocus = buildDailyFocus({ revenue: operatorRevenue, calendar });
+  // 컨택 추적 컷오버 이전에 등록된 리드/딜의 follow-up 주문은 승인 큐에서 가린다
+  // (contact-tracking 리셋 계약). 컷오버가 없으면 trackingEligible이 undefined라 전부 통과한다.
+  const isTrackedContactOrder = (order) => {
+    if (!["followup", "followup-draft"].includes(order.kind)) return true;
+    if (order.leadId) {
+      return (revenue.leads || []).some((lead) => lead.id === order.leadId && lead.trackingEligible !== false);
+    }
+    if (order.dealId) {
+      return (revenue.deals || []).some((deal) => deal.id === order.dealId && deal.trackingEligible !== false);
+    }
+    return true;
+  };
+  const visibleOrders = Array.isArray(ordersLedger.orders)
+    ? ordersLedger.orders.filter(isTrackedContactOrder)
+    : [];
   const queue = {
     source: ordersLedger.source || "preview",
-    pending: Array.isArray(ordersLedger.orders) ? ordersLedger.orders.length : 0,
-    orders: Array.isArray(ordersLedger.orders) ? ordersLedger.orders.slice(0, 12) : [],
+    pending: visibleOrders.length,
+    orders: visibleOrders.slice(0, 12),
   };
   const sources = buildSources(results);
   const liveCount = sources.filter((source) => source.state === "live").length;

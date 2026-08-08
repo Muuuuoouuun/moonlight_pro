@@ -15,6 +15,7 @@ import {
 } from "@/lib/server-write";
 
 import { momentumScore, outcomeBoost, priorityFor } from "@/lib/sales-os/followup-scoring";
+import { getContactTrackingStartedAt } from "@/lib/sales-os/contact-tracking";
 import {
   isExplanationLead,
   isMetaAdsLead,
@@ -83,16 +84,26 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
     return { source: "preview", configured: Boolean(config), items: [], summary: { overdue: 0, dueToday: 0, total: 0 } };
   }
 
+  const trackingStartedAt = await getContactTrackingStartedAt(workspaceId);
+  const entityWindow = trackingStartedAt ? [["created_at", `gte.${trackingStartedAt}`]] : [];
+  const outcomeWindow = trackingStartedAt ? [["occurred_at", `gte.${trackingStartedAt}`]] : [];
+
   const [leadRows, dealRows, companies, outcomes] = await Promise.all([
     fetchSupabaseRows("leads", {
       select: "id,name,status,score,next_action,company_id,channel,source,last_touch_at,updated_at,created_at,meta",
-      filters: withWorkspaceFilter([["status", inFilter(["new", "qualified", "nurturing"])]]),
+      filters: withWorkspaceFilter([
+        ["status", inFilter(["new", "qualified", "nurturing"])],
+        ...entityWindow,
+      ]),
       order: "last_touch_at.asc.nullsfirst",
       limit: 300,
     }),
     fetchSupabaseRows("deals", {
       select: "id,title,stage,amount,company_id,last_activity_at,updated_at,created_at,meta",
-      filters: withWorkspaceFilter([["stage", inFilter(["prospect", "proposal", "negotiation", "lead", "qualified", "qual", "neg", "prop"])]]),
+      filters: withWorkspaceFilter([
+        ["stage", inFilter(["prospect", "proposal", "negotiation", "lead", "qualified", "qual", "neg", "prop"])],
+        ...entityWindow,
+      ]),
       order: "updated_at.asc.nullsfirst",
       limit: 300,
     }),
@@ -103,7 +114,7 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
     }),
     fetchSupabaseRows("outreach_outcomes", {
       select: "lead_id,company_id,action,occurred_at",
-      filters: withWorkspaceFilter(),
+      filters: withWorkspaceFilter(outcomeWindow),
       order: "occurred_at.desc",
       limit: 500,
     }),
@@ -227,6 +238,7 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
     // 한쪽 소스라도 읽기 실패면 partial — live 배지 뒤에 소실된 행을 숨기지 않는다.
     partial: failedSources.length > 0,
     failedSources,
+    trackingStartedAt,
     items: capped,
     summary: { overdue: items.length, dueToday, total: items.length, shown: capped.length },
   };
@@ -241,15 +253,22 @@ export async function recomputeLeadScores({ workspaceId = resolveDefaultWorkspac
     return { persisted: false, reason: config ? "missing-workspace" : "missing-config", updated: 0, scanned: 0 };
   }
 
+  const trackingStartedAt = await getContactTrackingStartedAt(workspaceId);
+  const leadWindow = trackingStartedAt ? [["created_at", `gte.${trackingStartedAt}`]] : [];
+  const outcomeWindow = trackingStartedAt ? [["occurred_at", `gte.${trackingStartedAt}`]] : [];
+
   const [leads, outcomes] = await Promise.all([
     fetchSupabaseRows("leads", {
       select: "id,company_id,score",
-      filters: withWorkspaceFilter([["status", inFilter(["new", "qualified", "nurturing"])]]),
+      filters: withWorkspaceFilter([
+        ["status", inFilter(["new", "qualified", "nurturing"])],
+        ...leadWindow,
+      ]),
       limit: 500,
     }),
     fetchSupabaseRows("outreach_outcomes", {
       select: "lead_id,company_id,action,occurred_at",
-      filters: withWorkspaceFilter(),
+      filters: withWorkspaceFilter(outcomeWindow),
       order: "occurred_at.desc",
       limit: 1000,
     }),

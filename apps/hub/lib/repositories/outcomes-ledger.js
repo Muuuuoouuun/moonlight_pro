@@ -10,6 +10,11 @@ import { randomUUID } from "crypto";
 import { eqFilter, fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-read";
 import { insertSupabaseRecord, resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
 
+import {
+  getContactTrackingScope,
+  getContactTrackingStartedAt,
+  isContactOutcomeEligible,
+} from "@/lib/sales-os/contact-tracking";
 import { isValidOutcomeAction } from "@/lib/sales-os/outcome-attribution";
 
 const ACTIONS = new Set(["sent", "replied", "meeting", "proposal", "won", "lost", "no_response"]);
@@ -68,18 +73,24 @@ export async function getRecentOutcomes({
 } = {}) {
   if (!workspaceId || !resolveSupabaseConfig()) return { source: "preview", outcomes: [] };
 
-  const filters = withWorkspaceFilter(play ? [["play", eqFilter(play)]] : []);
+  const trackingStartedAt = await getContactTrackingStartedAt(workspaceId);
+  const trackingScope = await getContactTrackingScope(workspaceId, trackingStartedAt);
+  const filters = withWorkspaceFilter([
+    ...(play ? [["play", eqFilter(play)]] : []),
+    ...(trackingStartedAt ? [["occurred_at", `gte.${trackingStartedAt}`]] : []),
+  ]);
   const rows = await fetchSupabaseRows("outreach_outcomes", {
     filters,
     order: "occurred_at.desc",
-    limit,
+    limit: trackingScope ? Math.max(limit, 500) : limit,
   });
   // Phase 0 분류: 구성된 환경의 read 실패는 error — preview는 미구성 전용.
   if (!rows) return { source: "error", error: "outcomes-read-failed", retryable: true, outcomes: [] };
 
   return {
     source: "supabase",
-    outcomes: rows.map((r) => ({
+    trackingStartedAt,
+    outcomes: rows.filter((row) => isContactOutcomeEligible(row, trackingScope)).slice(0, limit).map((r) => ({
       id: r.id,
       leadId: r.lead_id,
       dealId: r.deal_id,
@@ -101,16 +112,21 @@ export async function getOutcomeStats({
 } = {}) {
   if (!workspaceId || !resolveSupabaseConfig()) return { source: "preview", counts: {}, funnel: [], ratios: {} };
 
+  const trackingStartedAt = await getContactTrackingStartedAt(workspaceId);
+  const trackingScope = await getContactTrackingScope(workspaceId, trackingStartedAt);
   const rows = await fetchSupabaseRows("outreach_outcomes", {
-    filters: withWorkspaceFilter(),
+    filters: withWorkspaceFilter(
+      trackingStartedAt ? [["occurred_at", `gte.${trackingStartedAt}`]] : [],
+    ),
     order: "occurred_at.desc",
     limit,
   });
   if (!rows) return { source: "error", error: "outcomes-read-failed", retryable: true, counts: {}, funnel: [], ratios: {} };
 
+  const trackedRows = rows.filter((row) => isContactOutcomeEligible(row, trackingScope));
   const counts = {};
   for (const a of ACTIONS) counts[a] = 0;
-  rows.forEach((r) => {
+  trackedRows.forEach((r) => {
     const a = normalizeAction(r.action);
     counts[a] = (counts[a] || 0) + 1;
   });
@@ -119,7 +135,7 @@ export async function getOutcomeStats({
   const depth = (a) => FUNNEL.indexOf(a);
   const funnel = FUNNEL.map((stage) => {
     const stageDepth = FUNNEL.indexOf(stage);
-    const n = rows.filter((r) => {
+    const n = trackedRows.filter((r) => {
       const d = depth(normalizeAction(r.action));
       return d >= stageDepth && d !== -1;
     }).length;
@@ -135,5 +151,5 @@ export async function getOutcomeStats({
     overall: ratio(at("won"), at("sent")),             // 접촉→계약 %
   };
 
-  return { source: "supabase", total: rows.length, counts, funnel, ratios };
+  return { source: "supabase", trackingStartedAt, total: trackedRows.length, counts, funnel, ratios };
 }

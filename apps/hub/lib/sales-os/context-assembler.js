@@ -84,13 +84,20 @@ export async function assembleSalesContext({ mode = "pipeline-triage", ref = nul
       ) || null;
     const account =
       (ledger.accounts || []).find((a) => (a.name || "").toLowerCase().includes(needle)) || null;
+    // Lead match: prefer the deal's own lead_id link, fall back to a name-substring match —
+    // this is what fills score/next_action_hint/contact in the focus context.
+    const lead = deal
+      ? (ledger.leads || []).find((l) => deal.leadId && l.id === deal.leadId) ||
+        (ledger.leads || []).find((l) => (l.name || "").toLowerCase().includes((deal.name || "").toLowerCase())) ||
+        null
+      : null;
     const entityOutcomes = deal ? outcomesForEntity(normalizedOutcomes, { dealId: deal.id }) : [];
     // v1.4 CRM gap fill — resolves to null until the classin_crm_snapshot push lands (P0b/P1);
     // buildFocusOperatingContext degrades that to the existing "eeoCRM" missing[] entry.
     const crmFacts = deal
       ? await settled(getCrmPipeline({ ownerId: OWNER_ID, dealId: deal.id }), "crm-pipeline", missing)
       : null;
-    context.focus = buildFocusOperatingContext({ deal, account, entityOutcomes, brand, crmFacts });
+    context.focus = buildFocusOperatingContext({ deal, account, lead, entityOutcomes, brand, crmFacts });
   }
 
   return context;

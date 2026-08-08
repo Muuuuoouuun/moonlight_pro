@@ -78,7 +78,7 @@ function formatPercentDelta(current, previous) {
 function buildRevenueAttention(leads, deals) {
   const items = [];
   deals
-    .filter((deal) => deal.stage !== 'closing' && deal.stage !== 'lost' && Number(deal.age) >= STALLED_DAYS)
+    .filter((deal) => deal.trackingEligible !== false && deal.stage !== 'closing' && deal.stage !== 'lost' && Number(deal.age) >= STALLED_DAYS)
     .slice(0, 3)
     .forEach((deal) => {
       items.push({
@@ -88,7 +88,7 @@ function buildRevenueAttention(leads, deals) {
       });
     });
 
-  const newLeads = leads.filter((lead) => lead.stage === 'New').length;
+  const newLeads = leads.filter((lead) => lead.trackingEligible !== false && lead.stage === 'New').length;
   if (newLeads > 0) {
     items.push({
       tone: 'neutral',
@@ -97,7 +97,7 @@ function buildRevenueAttention(leads, deals) {
     });
   }
 
-  const wonDeals = deals.filter((deal) => deal.stage === 'closing');
+  const wonDeals = deals.filter((deal) => deal.trackingEligible !== false && deal.stage === 'closing');
   if (wonDeals.length > 0) {
     const wonTotal = wonDeals.reduce((sum, deal) => sum + deal.value, 0);
     items.push({

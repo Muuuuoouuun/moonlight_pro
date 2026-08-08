@@ -5,6 +5,10 @@ import {
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
+import {
+  getContactTrackingStartedAt,
+  isContactTrackingEligible,
+} from "@/lib/sales-os/contact-tracking";
 import { resolveLeadEnrichmentView } from "../sales-os/lead-view.js";
 import { DEAL_STAGES, STAGE_ALIASES, LEGACY_DB_STAGE_VALUES } from "../deal-stages.js";
 
@@ -124,7 +128,7 @@ function resolveBrand(row) {
   return meta.brand || meta.brand_key || meta.brandKey || null;
 }
 
-function mapLead(row, companyById, contactById) {
+function mapLead(row, companyById, contactById, trackingStartedAt = null) {
   const type = resolveType(row);
   const company = row.company_id ? companyById.get(row.company_id) : null;
   const contact = row.contact_id ? contactById.get(row.contact_id) : null;
@@ -182,10 +186,11 @@ function mapLead(row, companyById, contactById) {
     engagementState: enrichmentView.engagementState,
     publicEvidenceCount: enrichmentView.publicEvidenceCount,
     activityEvidence: enrichmentView.activityEvidence,
+    trackingEligible: isContactTrackingEligible(row, trackingStartedAt),
   };
 }
 
-function mapDeal(row, companyById) {
+function mapDeal(row, companyById, trackingStartedAt = null) {
   const type = resolveType(row);
   const company = row.company_id ? companyById.get(row.company_id) : null;
   const stage = resolveDealStage(row);
@@ -211,6 +216,7 @@ function mapDeal(row, companyById) {
     age: ageDays(row.last_activity_at || row.updated_at || row.created_at),
     hidden: Boolean(row.hidden_at),
     hiddenAt: row.hidden_at || null,
+    trackingEligible: isContactTrackingEligible(row, trackingStartedAt),
   };
 }
 
@@ -387,7 +393,7 @@ export async function getRevenueLedger() {
     return emptyLedger(false, workspaceId || null);
   }
 
-  const [leadRows, dealRows, accountRows, caseRows, companyRows, contactRows] = await Promise.all([
+  const [leadRows, dealRows, accountRows, caseRows, companyRows, contactRows, trackingStartedAt] = await Promise.all([
     fetchSupabaseRows("leads", {
       limit: 120,
       order: "last_touch_at.desc.nullslast",
@@ -418,6 +424,7 @@ export async function getRevenueLedger() {
       limit: 200,
       filters: withWorkspaceFilter(),
     }),
+    getContactTrackingStartedAt(workspaceId),
   ]);
 
   if (!leadRows || !dealRows || !accountRows || !caseRows) {
@@ -447,7 +454,7 @@ export async function getRevenueLedger() {
   const companyById = new Map((companyRows || []).map(c => [c.id, c]));
   const contactById = new Map((contactRows || []).map(c => [c.id, c]));
 
-  const deals = dealRows.map(row => mapDeal(row, companyById));
+  const deals = dealRows.map(row => mapDeal(row, companyById, trackingStartedAt));
   const dealStatsByCompany = new Map();
   dealRows.forEach(row => {
     if (!row.company_id) return;
@@ -459,7 +466,7 @@ export async function getRevenueLedger() {
 
   const accountRaw = new Map(accountRows.map(a => [a.id, a]));
   const accounts = accountRows.map(row => mapAccount(row, dealStatsByCompany));
-  const leads = leadRows.map(row => mapLead(row, companyById, contactById));
+  const leads = leadRows.map(row => mapLead(row, companyById, contactById, trackingStartedAt));
   const cases = caseRows.map(row => mapCase(row, accountRaw));
   const summary = buildSummary(leads, deals);
 
@@ -469,6 +476,7 @@ export async function getRevenueLedger() {
     failedSources: enrichmentFailedSources,
     configured: true,
     workspaceId,
+    trackingStartedAt,
     leads,
     deals,
     accounts,
