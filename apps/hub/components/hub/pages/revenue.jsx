@@ -12,6 +12,7 @@ import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
 import { DEAL_STAGES, STAGE_FILL, STAGE_LINE } from "@/lib/deal-stages";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { selectProjectAreaId } from "@/lib/pms-ui";
+import { readRevenueCache, writeRevenueCache, clearRevenueCache } from "../revenue-shared-cache";
 
 // HW/SW 딜은 100만원 미만 건도 흔해서 M 고정 포맷은 "₩0.1M" 같은 값을 만든다.
 // revenue-ledger.js의 formatMoneyLabel과 같은 K/M 임계값으로 맞춘다.
@@ -125,22 +126,18 @@ const EMPTY_REVENUE_LEDGER = {
 // 모듈 스코프 stale-while-revalidate 캐시 — Leads↔Deals↔Accounts↔Cases↔Customers 탭
 // 전환은 훅을 리마운트하므로, 캐시 없이는 전환마다 동일한 6콜 원장을 다시 받고 스켈레톤을
 // 보였다(re-audit 속도 #3). 캐시는 즉시 서빙하고 항상 배경 재검증하므로 신선도는 1 RTT다.
-const REVENUE_CACHE_SERVABLE_MS = 5 * 60 * 1000;
-let revenueLedgerCache = null; // { at, ledger, syncState }
+// 저장소는 revenue-shared-cache 공유 모듈 — ⌘K 레코드 검색이 같은 스냅샷을 재사용한다.
 
 export function useRevenueLedger() {
-  const servable = revenueLedgerCache
-    && Date.now() - revenueLedgerCache.at < REVENUE_CACHE_SERVABLE_MS;
-  const [ledger, setLedger] = React.useState(servable ? revenueLedgerCache.ledger : EMPTY_REVENUE_LEDGER);
-  const [syncState, setSyncState] = React.useState(servable ? revenueLedgerCache.syncState : 'preview');
+  const servableCache = readRevenueCache();
+  const [ledger, setLedger] = React.useState(servableCache ? servableCache.ledger : EMPTY_REVENUE_LEDGER);
+  const [syncState, setSyncState] = React.useState(servableCache ? servableCache.syncState : 'preview');
   const [refreshKey, setRefreshKey] = React.useState(0);
 
   React.useEffect(() => {
     let active = true;
     let retryTimer = null;
-    const hasServableCache = Boolean(
-      revenueLedgerCache && Date.now() - revenueLedgerCache.at < REVENUE_CACHE_SERVABLE_MS
-    );
+    const hasServableCache = Boolean(readRevenueCache());
     // dev 리컴파일·순간 네트워크 실패로 첫 fetch가 죽으면 preview에 고착됐다 —
     // 실패 1회는 1.2초 뒤 재시도하고, 그래도 실패하면 error로 표시한다(preview는
     // "미구성"의 뜻 — 라이브 read 거부를 preview로 라벨하면 0건이 사실처럼 보인다).
@@ -175,7 +172,7 @@ export function useRevenueLedger() {
         const nextState = data.source === 'supabase'
           ? data.status === 'partial' ? 'partial' : 'live'
           : 'preview';
-        revenueLedgerCache = { at: Date.now(), ledger: nextLedger, syncState: nextState };
+        writeRevenueCache({ at: Date.now(), ledger: nextLedger, syncState: nextState });
         setLedger(nextLedger);
         setSyncState(nextState);
       } catch {
@@ -195,7 +192,7 @@ export function useRevenueLedger() {
 
   const reload = React.useCallback(() => {
     // 모듈 캐시를 무효화하고 재조회 — 명함 스캔 승격 등 쓰기 직후 목록 갱신용.
-    revenueLedgerCache = null;
+    clearRevenueCache();
     setRefreshKey((k) => k + 1);
   }, []);
 
@@ -303,7 +300,8 @@ function GuruCoachPanel({ onNavigate }) {
 
       {state === 'loading' && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
-          <div style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.4s ease-in-out infinite' }} />
+          {/* glow 그림자 제거(§4 — 장식 광원 금지, 펄스만 live 신호) */}
+          <div style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', animation: 'mlMoonPulse 1.4s ease-in-out infinite' }} />
           기록을 읽고 코칭을 정리하는 중…
         </div>
       )}
@@ -642,6 +640,18 @@ export function Leads({ workspace }) {
     }, ...prev]);
     setEditLeadId(id); // open the editor immediately so the new lead can be filled in
   };
+
+  // ?new=lead — TopBar New·⌘K 생성 딥링크를 1회 소비하고 쿼리 소거(§8.1 생성·연계).
+  // 셸의 New가 팔레트만 열던 것을 "지금 보는 표면에 만든다"로 잇는 착지 지점.
+  const createdLeadFromQueryRef = React.useRef(false);
+  React.useEffect(() => {
+    if (searchParams.get('new') !== 'lead') { createdLeadFromQueryRef.current = false; return; }
+    if (createdLeadFromQueryRef.current) return;
+    createdLeadFromQueryRef.current = true;
+    createLead();
+    router.replace(pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Persist the drawer edit. New local rows (id `local-lead-…`) insert; on success the
   // returned real id replaces the local one so a later edit takes the update path and the
@@ -1268,6 +1278,17 @@ export function Deals({ workspace, onNavigate }) {
     return r;
   };
 
+  // ?new=deal — TopBar New·⌘K 생성 딥링크 1회 소비(§8.1 생성·연계, Leads와 동일 계약).
+  const createdDealFromQueryRef = React.useRef(false);
+  React.useEffect(() => {
+    if (searchParams.get('new') !== 'deal') { createdDealFromQueryRef.current = false; return; }
+    if (createdDealFromQueryRef.current) return;
+    createdDealFromQueryRef.current = true;
+    createDeal();
+    router.replace(pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   // Deep-link: ?deal=<id> opens that deal's EditDrawer once the ledger has loaded. One-shot
   // per param, then strip the query so a refresh doesn't replay it.
   const dealParam = searchParams?.get('deal') || null;
@@ -1583,6 +1604,17 @@ export function Cases() {
     }, ...prev]);
     setEditCaseId(id); // open the editor immediately so the new case can be filled in
   };
+
+  // ?new=case — TopBar New·⌘K 생성 딥링크 1회 소비(§8.1 생성·연계, Leads와 동일 계약).
+  const createdCaseFromQueryRef = React.useRef(false);
+  React.useEffect(() => {
+    if (searchParams.get('new') !== 'case') { createdCaseFromQueryRef.current = false; return; }
+    if (createdCaseFromQueryRef.current) return;
+    createdCaseFromQueryRef.current = true;
+    createCase();
+    router.replace(pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Deep-link: ?case=<id> opens that case's EditDrawer once the ledger has loaded — Leads의
   // ?lead=와 같은 one-shot 계약 (소비 후 쿼리 소거, 새로고침 시 재실행 없음).
@@ -2517,6 +2549,17 @@ export function Accounts({ workspace, onNavigate }) {
       setAccountsNotice(`계정 생성 실패 (${r.status}) — 다시 시도하세요.`);
     }
   };
+
+  // ?new=account — TopBar New·⌘K 생성 딥링크 1회 소비(§8.1 생성·연계, Leads와 동일 계약).
+  const createdAccountFromQueryRef = React.useRef(false);
+  React.useEffect(() => {
+    if (accountSearchParams.get('new') !== 'account') { createdAccountFromQueryRef.current = false; return; }
+    if (createdAccountFromQueryRef.current) return;
+    createdAccountFromQueryRef.current = true;
+    createAccount();
+    if (accountPathname) accountRouter.replace(accountPathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountSearchParams]);
 
   // 이름 변경 — 상세 헤더 연필 버튼. details/selected가 이름 키라 네 곳을 함께 옮긴다.
   const renameAccount = async (account, nextNameRaw) => {

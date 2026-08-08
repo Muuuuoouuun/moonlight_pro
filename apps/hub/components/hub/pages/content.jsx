@@ -139,41 +139,53 @@ function handoffTone(status) {
   return status === "failed" ? "danger" : "neutral";
 }
 
+const EMPTY_CONTENT_LEDGER = {
+  source: "preview",
+  syncState: "preview",
+  brands: [],
+  items: [],
+  variants: [],
+  assets: [],
+  publishLogs: [],
+  campaigns: [],
+  queue: [],
+  pipeline: [],
+  attention: [],
+  summary: null,
+  ideaQueue: [],
+  cadence: null,
+};
+
+// 모듈 스코프 stale-while-revalidate — Studio↔Queue↔Campaigns 탭 전환마다 원장을 다시
+// 기다리며 스켈레톤을 보이던 것을 제거(8차 잔여 M). 재검증 실패는 partial(위장 금지).
+const CONTENT_CACHE_SERVABLE_MS = 5 * 60 * 1000;
+let contentLedgerCache = null; // { at, state }
+
 function useContentLedger() {
-  const [state, setState] = React.useState({
-    source: "preview",
-    syncState: "preview",
-    brands: [],
-    items: [],
-    variants: [],
-    assets: [],
-    publishLogs: [],
-    campaigns: [],
-    queue: [],
-    pipeline: [],
-    attention: [],
-    summary: null,
-    ideaQueue: [],
-    cadence: null,
-  });
+  const servable = contentLedgerCache
+    && Date.now() - contentLedgerCache.at < CONTENT_CACHE_SERVABLE_MS;
+  const [state, setState] = React.useState(servable ? contentLedgerCache.state : EMPTY_CONTENT_LEDGER);
 
   React.useEffect(() => {
     let active = true;
+    const hasServableCache = Boolean(
+      contentLedgerCache && Date.now() - contentLedgerCache.at < CONTENT_CACHE_SERVABLE_MS
+    );
 
     async function loadLedger() {
-      setState((s) => ({ ...s, syncState: "loading" }));
+      if (!hasServableCache) setState((s) => ({ ...s, syncState: "loading" })); // 캐시 서빙 중엔 조용히 재검증
       try {
         const response = await fetch("/api/hub/content", { cache: "no-store" });
         const data = await response.json().catch(() => null);
 
         if (!active || !response.ok || !data || data.status === "error") {
           // 라이브 read 실패는 error — preview("미구성")로 뭉개면 큐가 0건이 사실처럼 보인다.
-          if (active) setState((s) => ({ ...s, syncState: "error" }));
+          if (active) setState((s) => ({ ...s, syncState: hasServableCache ? "partial" : "error" }));
           return;
         }
 
         if (data.source === "supabase") {
-          setState({
+          const nextState = {
             source: data.source,
             syncState: data.status === "partial" ? "partial" : "live",
             brands: Array.isArray(data.brands) ? data.brands : [],
@@ -188,12 +200,14 @@ function useContentLedger() {
             summary: data.summary || null,
             ideaQueue: Array.isArray(data.ideaQueue) ? data.ideaQueue : [],
             cadence: data.cadence || null,
-          });
+          };
+          contentLedgerCache = { at: Date.now(), state: nextState };
+          setState(nextState);
         } else {
           setState((s) => ({ ...s, source: "preview", syncState: "preview", campaigns: [], queue: [] }));
         }
       } catch {
-        if (active) setState((s) => ({ ...s, syncState: "error" }));
+        if (active) setState((s) => ({ ...s, syncState: hasServableCache ? "partial" : "error" }));
       }
     }
 

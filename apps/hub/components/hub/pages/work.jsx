@@ -73,8 +73,17 @@ function formatHour(value) {
   return `${hour}:${String(minutes).padStart(2, '0')}`;
 }
 
+// 모듈 스코프 stale-while-revalidate — Decisions↔Rhythm↔Roadmap 탭 전환은 훅을 리마운트해
+// 전환마다 업무 원장을 다시 기다렸다(8차 잔여 M). base(프로젝트 미선택) 응답만 캐시한다 —
+// 선택 스코프 응답은 base 스냅샷 복원 로직이 이미 담당.
+const WORK_CACHE_SERVABLE_MS = 5 * 60 * 1000;
+let workLedgerCache = null; // { at, state }
+
 function useWorkLedger(projectId = null) {
-  const [state, setState] = React.useState({
+  const projectQuery = typeof projectId === 'string' ? projectId.trim() : '';
+  const servable = !projectQuery && workLedgerCache
+    && Date.now() - workLedgerCache.at < WORK_CACHE_SERVABLE_MS;
+  const [state, setState] = React.useState(servable ? workLedgerCache.state : {
     source: 'preview',
     decisions: [],
     decisionsState: { state: 'preview', partial: false, error: null },
@@ -99,20 +108,25 @@ function useWorkLedger(projectId = null) {
   });
   const requestRef = React.useRef(0);
   const baseSnapshotRef = React.useRef(null);
-  const projectQuery = typeof projectId === 'string' ? projectId.trim() : '';
 
   const load = React.useCallback(async () => {
     const requestId = requestRef.current + 1;
     requestRef.current = requestId;
-    setState((prev) => ({
-      ...prev,
-      syncState: 'loading',
-      decisionsState: { ...prev.decisionsState, state: 'loading' },
-      rhythmState: 'loading',
-      rhythmPartial: false,
-      rhythmTruncatedSources: [],
-      roadmap: { ...prev.roadmap, state: 'loading' },
-    }));
+    const hasServableCache = !projectQuery && Boolean(
+      workLedgerCache && Date.now() - workLedgerCache.at < WORK_CACHE_SERVABLE_MS
+    );
+    if (!hasServableCache) {
+      // 캐시 서빙 중엔 스켈레톤 없이 조용히 재검증한다.
+      setState((prev) => ({
+        ...prev,
+        syncState: 'loading',
+        decisionsState: { ...prev.decisionsState, state: 'loading' },
+        rhythmState: 'loading',
+        rhythmPartial: false,
+        rhythmTruncatedSources: [],
+        roadmap: { ...prev.roadmap, state: 'loading' },
+      }));
+    }
     try {
       const endpoint = projectQuery
         ? `/api/hub/work?project=${encodeURIComponent(projectQuery)}`
@@ -122,6 +136,12 @@ function useWorkLedger(projectId = null) {
       if (requestId !== requestRef.current) return false;
 
       if (!response.ok || !data || data.status === 'error') {
+        // 캐시를 보여주는 중이면 데이터를 지우지 않는다 — 재검증 실패는 partial(오래된
+        // 데이터 명명)이고, 캐시가 없을 때만 전면 error로 전환한다(SWR 공통 규칙).
+        if (hasServableCache) {
+          setState((prev) => ({ ...prev, syncState: 'partial' }));
+          return false;
+        }
         const message = data?.error || data?.message || `업무 원장 응답 실패 (${response.status})`;
         setState((prev) => ({
           ...prev,
@@ -204,10 +224,17 @@ function useWorkLedger(projectId = null) {
       };
       setState(nextState);
       // 프로젝트 미선택 상태의 성공 응답을 스냅샷 — 로드맵 선택 해제 시 재조회 없이 복원한다.
-      if (!projectQuery) baseSnapshotRef.current = nextState;
+      if (!projectQuery) {
+        baseSnapshotRef.current = nextState;
+        workLedgerCache = { at: Date.now(), state: nextState };
+      }
       return rhythm.state === 'live' || rhythm.state === 'live-empty' || rhythm.state === 'partial';
     } catch (error) {
       if (requestId !== requestRef.current) return false;
+      if (hasServableCache) {
+        setState((prev) => ({ ...prev, syncState: 'partial' }));
+        return false;
+      }
       const message = error instanceof Error ? error.message : String(error);
       setState((prev) => ({
         ...prev,
@@ -1280,8 +1307,8 @@ export function Rhythm() {
   }, [editingRitual, editRitualId, baseRituals, retry]);
 
   // 삭제 = 그 루틴의 정의(씨앗) 행 + 모든 체크인 이력을 함께 지운다. EditDrawer가 삭제
-  // 전에 window.confirm으로 확인을 받으므로 여기서 다시 묻지 않는다. 로컬(아직 저장 안 된)
-  // 초안은 API 호출 없이 그냥 상태에서 제거한다.
+  // 전에 푸터 인라인 확인(22차 스타일드 플로)을 받으므로 여기서 다시 묻지 않는다.
+  // 로컬(아직 저장 안 된) 초안은 API 호출 없이 그냥 상태에서 제거한다.
   const deleteRitual = React.useCallback(async () => {
     if (!editingRitual) return { ok: false, status: 'no-selection' };
     if (editingRitual.isNew) {

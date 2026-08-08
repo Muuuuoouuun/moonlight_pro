@@ -126,7 +126,7 @@ export function EmptyState({ icon = 'inbox', title, description, action, style }
   );
 }
 
-export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRight, style, onClick, active, type = 'button', className, disabled = false, ...props }) {
+export const Button = React.forwardRef(function Button({ children, variant = 'ghost', size = 'sm', icon, iconRight, style, onClick, active, type = 'button', className, disabled = false, ...props }, ref) {
   const sizes = {
     xs: { h: 24, px: 8, fs: 12, gap: 5 },
     sm: { h: 30, px: 11, fs: 12.5, gap: 6 },
@@ -163,7 +163,7 @@ export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRig
   };
   const v = variants[variant];
   return (
-    <button {...props} type={type} className={className} onClick={onClick} disabled={disabled} style={{
+    <button {...props} ref={ref} type={type} className={className} onClick={onClick} disabled={disabled} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: s.gap,
       height: s.h, padding: `0 ${s.px}px`, fontSize: s.fs, fontWeight: 500,
       borderRadius: 'var(--r-sm)', whiteSpace: 'nowrap',
@@ -176,7 +176,7 @@ export function Button({ children, variant = 'ghost', size = 'sm', icon, iconRig
       {iconRight && <Iconed name={iconRight} size={14} />}
     </button>
   );
-}
+});
 
 export const IconButton = React.forwardRef(function IconButton({ icon, onClick, size = 28, iconSize = 14, tone, tooltip, style, className, disabled = false, ...props }, ref) {
   const toneCls = tone === 'danger' ? ' hub-iconbtn--danger' : '';
@@ -660,6 +660,11 @@ function groupFieldRows(fields) {
 export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)', saveLabel = '변경사항 저장', children }) {
   const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | conflict | error
   const [saveFeedback, setSaveFeedback] = React.useState('');
+  // 파괴 확인은 브라우저 confirm()이 아니라 푸터 인라인 2단계다 — OS 다이얼로그는 디자인
+  // 시스템·ESC 레이어 밖이고(§8.1), 모바일에서 뷰포트를 가리며, 문구·버튼 위계를 못 가진다
+  // (백로그 M: window.confirm 스타일드 플로). null | 'discard' | 'delete'.
+  const [confirming, setConfirming] = React.useState(null);
+  const confirmCancelRef = React.useRef(null);
   const savingRef = React.useRef(false);
   const initialRecordSignatureRef = React.useRef(null);
   const recordIdentity = record?.id ?? record?.clientId ?? (record ? '__anonymous__' : null);
@@ -667,17 +672,25 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
     savingRef.current = false;
     setSaveState('idle');
     setSaveFeedback('');
+    setConfirming(null);
     initialRecordSignatureRef.current = record ? JSON.stringify(record) : null;
   }, [recordIdentity]);
+
+  // 확인 스트립이 뜨면 포커스를 취소 버튼으로 — ESC·Enter가 파괴 쪽에 얹히지 않게.
+  React.useEffect(() => {
+    if (confirming) confirmCancelRef.current?.focus();
+  }, [confirming]);
 
   const dirty = Boolean(record
     && initialRecordSignatureRef.current
     && JSON.stringify(record) !== initialRecordSignatureRef.current);
   const requestClose = React.useCallback(() => {
     if (savingRef.current) return;
-    if (dirty && typeof window !== 'undefined' && !window.confirm('입력한 변경사항을 버릴까요?')) return;
+    // ESC/오버레이는 확인 스트립부터 해제한다(취소 시멘틱) — 닫힘·버림은 명시 버튼만.
+    if (confirming) { setConfirming(null); return; }
+    if (dirty) { setConfirming('discard'); return; }
     onClose?.();
-  }, [dirty, onClose]);
+  }, [confirming, dirty, onClose]);
 
   const handleDone = async () => {
     if (savingRef.current) return;
@@ -699,9 +712,15 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
     }
   };
 
-  const handleDelete = async () => {
+  // 1차 클릭은 확인 스트립만 연다 — 실제 삭제는 performDelete(확인 버튼)가 수행.
+  const handleDelete = () => {
     if (!onDelete || savingRef.current) return;
-    if (typeof window !== 'undefined' && !window.confirm('이 항목을 삭제할까요? 되돌릴 수 없습니다.')) return;
+    setConfirming('delete');
+  };
+
+  const performDelete = async () => {
+    if (!onDelete || savingRef.current) return;
+    setConfirming(null);
     savingRef.current = true;
     setSaveState('saving');
     try {
@@ -747,6 +766,25 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
       onClose={requestClose}
       width={width}
       footer={
+        confirming ? (
+          <>
+            <span role="alert" style={{ flex: 1, minWidth: 0, fontSize: 12, lineHeight: 1.4, color: confirming === 'delete' ? 'var(--danger)' : 'var(--fg-muted)' }}>
+              {confirming === 'delete'
+                ? '이 항목을 삭제할까요? 되돌릴 수 없습니다.'
+                : '저장하지 않은 변경이 있습니다 — 버리고 닫을까요?'}
+            </span>
+            <Button ref={confirmCancelRef} variant="ghost" size="sm" onClick={() => setConfirming(null)}>
+              {confirming === 'delete' ? '취소' : '계속 편집'}
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={confirming === 'delete' ? performDelete : () => { setConfirming(null); onClose?.(); }}
+            >
+              {confirming === 'delete' ? '삭제' : '버리고 닫기'}
+            </Button>
+          </>
+        ) : (
         <>
           {onDelete && (
             <Button variant="ghost" size="sm" onClick={handleDelete} disabled={saveState === 'saving'} style={{ color: 'var(--danger)' }}>삭제</Button>
@@ -769,6 +807,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
             {saveState === 'saving' ? '저장 중…' : saveLabel}
           </Button>
         </>
+        )
       }
     >
       {groupFieldRows(fields).map((group, i) => (

@@ -76,27 +76,43 @@ const EMPTY_LEDGER = {
   recentActivity: [],
 };
 
+// 모듈 스코프 stale-while-revalidate — 탭 복귀마다 최다 팬아웃 라우트(~35콜)를 기다리며
+// 스켈레톤을 보이던 것을 제거(8차 잔여 M — daily-brief/attention/projects 15차와 같은 클래스).
+// 캐시는 즉시 서빙 + 항상 배경 재검증, 재검증 실패는 partial(오래된 live 위장 금지).
+const OVERVIEW_CACHE_SERVABLE_MS = 5 * 60 * 1000;
+let overviewLedgerCache = null; // { at, ledger, syncState }
+
 function useOverviewLedger() {
-  const [ledger, setLedger] = React.useState(EMPTY_LEDGER);
-  const [syncState, setSyncState] = React.useState('preview');
+  const servable = overviewLedgerCache
+    && Date.now() - overviewLedgerCache.at < OVERVIEW_CACHE_SERVABLE_MS;
+  const [ledger, setLedger] = React.useState(servable ? overviewLedgerCache.ledger : EMPTY_LEDGER);
+  const [syncState, setSyncState] = React.useState(servable ? overviewLedgerCache.syncState : 'preview');
   const [reloadKey, setReloadKey] = React.useState(0);
-  const reload = React.useCallback(() => setReloadKey((k) => k + 1), []);
+  const reload = React.useCallback(() => {
+    overviewLedgerCache = null;
+    setReloadKey((k) => k + 1);
+  }, []);
 
   React.useEffect(() => {
     let active = true;
+    const hasServableCache = Boolean(
+      overviewLedgerCache && Date.now() - overviewLedgerCache.at < OVERVIEW_CACHE_SERVABLE_MS
+    );
     async function load() {
-      setSyncState('loading');
+      if (!hasServableCache) setSyncState('loading'); // 캐시 서빙 중엔 조용히 재검증
       try {
         const response = await fetch('/api/hub/overview', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
         if (!active || !response.ok || !data) {
-          if (active) setSyncState('error');
+          if (active) setSyncState(hasServableCache ? 'partial' : 'error');
           return;
         }
+        const nextState = overviewSyncState(data);
+        overviewLedgerCache = { at: Date.now(), ledger: data, syncState: nextState };
         setLedger(data);
-        setSyncState(overviewSyncState(data));
+        setSyncState(nextState);
       } catch {
-        if (active) setSyncState('error');
+        if (active) setSyncState(hasServableCache ? 'partial' : 'error');
       }
     }
     load();

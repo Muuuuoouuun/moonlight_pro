@@ -299,6 +299,18 @@ test("opening a top overlay closes mobile navigation and keeps Escape on the top
   assert.match(appSource, /if \(paletteOpen\)[\s\S]*?setPaletteOpen\(false\)[\s\S]*?openCommandPalette\(\)/);
 });
 
+// TopBar New는 "지금 보는 표면에 만든다" — 팔레트만 열던 위장 버튼(기준선 §2.8)의 회귀 가드.
+test("TopBar New routes to the current surface's create deep link with palette fallback", () => {
+  assert.match(appSource, /onNew=\{createOnCurrentSurface\}/);
+  assert.match(appSource, /dashboard\/revenue\/leads\?new=lead/);
+  assert.match(appSource, /dashboard\/revenue\/deals\?new=deal/);
+  assert.match(appSource, /dashboard\/revenue\/accounts\?new=account/);
+  assert.match(appSource, /dashboard\/revenue\/cases\?new=case/);
+  assert.match(appSource, /dashboard\/work\/rhythm\?new=rhythm/);
+  // 매핑 없는 표면만 팔레트 폴백.
+  assert.match(appSource, /const createOnCurrentSurface = React\.useCallback\([\s\S]*?if \(target\) navigate\(target\);[\s\S]*?else openCommandPalette\(\);/);
+});
+
 test("leaving the mobile breakpoint commits close before handing focus to desktop main", () => {
   assert.match(appSource, /import \{ flushSync \} from ["']react-dom["']/);
   assert.match(

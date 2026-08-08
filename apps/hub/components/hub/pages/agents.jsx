@@ -217,7 +217,8 @@ export function AgentsChat({ onNavigate }) {
                   }}>
                     {m.pending ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--fg-muted)' }}>
-                        <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.4s ease-in-out infinite' }} />
+                        {/* glow 그림자 제거(§4 calibrated, not decorated — 19차 아바타 glow와 동일 클래스) */}
+                        <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', animation: 'mlMoonPulse 1.4s ease-in-out infinite' }} />
                         기록을 읽고 코칭을 정리하는 중…
                       </span>
                     ) : m.text}

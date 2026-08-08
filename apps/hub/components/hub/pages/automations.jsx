@@ -12,8 +12,15 @@ const EMPTY_AUTOMATION_SUMMARY = {
   integrationsConnected: 0,
 };
 
+// 모듈 스코프 stale-while-revalidate — 개요↔Flows↔Webhooks↔Runs 탭 전환마다 원장을 다시
+// 기다리며 스켈레톤을 보이던 것을 제거(8차 잔여 M). 재검증 실패는 partial(위장 금지).
+const AUTOMATIONS_CACHE_SERVABLE_MS = 5 * 60 * 1000;
+let automationsLedgerCache = null; // { at, state }
+
 function useAutomationsLedger() {
-  const [state, setState] = React.useState({
+  const servable = automationsLedgerCache
+    && Date.now() - automationsLedgerCache.at < AUTOMATIONS_CACHE_SERVABLE_MS;
+  const [state, setState] = React.useState(servable ? automationsLedgerCache.state : {
     source: 'preview',
     syncState: 'preview',
     automations: [],
@@ -26,19 +33,22 @@ function useAutomationsLedger() {
 
   React.useEffect(() => {
     let active = true;
+    const hasServableCache = Boolean(
+      automationsLedgerCache && Date.now() - automationsLedgerCache.at < AUTOMATIONS_CACHE_SERVABLE_MS
+    );
     async function load() {
-      setState(s => ({ ...s, syncState: 'loading' }));
+      if (!hasServableCache) setState(s => ({ ...s, syncState: 'loading' })); // 캐시 서빙 중엔 조용히 재검증
       try {
         const response = await fetch('/api/hub/automations', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
         if (!active || !response.ok || !data || data.status === 'error') {
           // 라이브 read 실패는 error — preview("미구성")로 뭉개면 실행 로그가
           // "기록이 없습니다"로 위장된다(4차 재감사 M — Engine 실행 피드백은 §1 코어).
-          if (active) setState(s => ({ ...s, syncState: 'error' }));
+          if (active) setState(s => ({ ...s, syncState: hasServableCache ? 'partial' : 'error' }));
           return;
         }
         if (data.source === 'supabase') {
-          setState({
+          const nextState = {
             source: 'supabase',
             syncState: 'live',
             automations: Array.isArray(data.automations) ? data.automations : [],
@@ -47,12 +57,14 @@ function useAutomationsLedger() {
             errors: Array.isArray(data.errors) ? data.errors : [],
             integrations: Array.isArray(data.integrations) ? data.integrations : [],
             summary: { ...EMPTY_AUTOMATION_SUMMARY, ...(data.summary || {}) },
-          });
+          };
+          automationsLedgerCache = { at: Date.now(), state: nextState };
+          setState(nextState);
         } else {
           setState(s => ({ ...s, source: 'preview', syncState: 'preview', automations: [], runs: [], webhookEvents: [], summary: EMPTY_AUTOMATION_SUMMARY }));
         }
       } catch {
-        if (active) setState(s => ({ ...s, syncState: 'error' }));
+        if (active) setState(s => ({ ...s, syncState: hasServableCache ? 'partial' : 'error' }));
       }
     }
     load();

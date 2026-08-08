@@ -180,7 +180,14 @@ test("canonical checkboxes expose a native disabled state during durable writes"
 test("EditDrawer protects dirty drafts and uses explicit save copy", () => {
   assert.match(primitivesSource, /const initialRecordSignatureRef = React\.useRef/);
   assert.match(primitivesSource, /const dirty = Boolean\(record/);
-  assert.match(primitivesSource, /입력한 변경사항을 버릴까요\?/);
+  // 22차: OS confirm() → 푸터 인라인 2단계 확인(디자인 시스템·ESC 레이어 안, 취소 시멘틱).
+  assert.doesNotMatch(primitivesSource, /window\.confirm\(/);
+  assert.match(primitivesSource, /저장하지 않은 변경이 있습니다 — 버리고 닫을까요\?/);
+  assert.match(primitivesSource, /이 항목을 삭제할까요\? 되돌릴 수 없습니다\./);
+  // ESC/오버레이는 확인 스트립부터 해제하고, 버림·삭제는 명시 danger 버튼만 수행한다.
+  assert.match(primitivesSource, /if \(confirming\) \{ setConfirming\(null\); return; \}/);
+  assert.match(primitivesSource, /if \(dirty\) \{ setConfirming\('discard'\); return; \}/);
+  assert.match(primitivesSource, /onClick=\{confirming === 'delete' \? performDelete : \(\) => \{ setConfirming\(null\); onClose\?\.\(\); \}\}/);
   assert.match(primitivesSource, /onClose=\{requestClose\}/);
   assert.match(primitivesSource, /saveLabel = ['"]변경사항 저장['"]/);
   assert.match(primitivesSource, /saveState === ['"]saving['"] \? ['"]저장 중…['"] : saveLabel/);
@@ -213,7 +220,10 @@ test("project create drawer explains an empty area ledger and offers an inline r
 
 test("project create drawer also protects a changed draft from accidental close", () => {
   assert.match(createDrawerSource, /const initialDraftSignatureRef = React\.useRef/);
-  assert.match(createDrawerSource, /입력한 변경사항을 버릴까요\?/);
+  // 22차: EditDrawer와 같은 인라인 2단계 — OS confirm 금지, ESC는 스트립 해제.
+  assert.doesNotMatch(createDrawerSource, /window\.confirm\(/);
+  assert.match(createDrawerSource, /저장하지 않은 변경이 있습니다 — 버리고 닫을까요\?/);
+  assert.match(createDrawerSource, /if \(confirmingDiscard\) \{ setConfirmingDiscard\(false\); return; \}/);
   assert.match(createDrawerSource, /onClose=\{requestClose\}/);
   assert.match(createDrawerSource, /onClick=\{requestClose\}/);
 });

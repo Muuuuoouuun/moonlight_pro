@@ -28,6 +28,9 @@
 | 7차 재감사 (iter 18 반영 후, 전 축) | 2026-08-06 | 88 | 89 | 87 | 89 | 90 | 90 | 89 | 87† | **88.9** |
 | 8차 재감사 (iter 19 반영 후, 4축 측정) | 2026-08-06 | 88 | 88 | — | 91 | 92 | —‡ | —‡ | —‡ | 부분 측정 |
 | 9차 재감사 (iter 21 반영 후, 사용성 측정) | 2026-08-07 | — | **90** | — | — | — | — | — | — | 부분 측정§ |
+| 10차 재감사 (iter 22 반영 후, 4축 측정) | 2026-08-08 | — | — | — | — | **94** | **91** | **91** | **89** | 부분 측정¶ |
+
+\¶ 10차는 반응·애니메이션·편의 UX·디자인 적합성·정렬·생성·연계 집중 회차(22차 조치 대상 4축만 측정). 속도 94 = 잔여 백로그 소진(⌘K 캐시 재사용 + 모듈 SWR 4곳 — 코어 read 전 표면 SWR, 탭 전환 스켈레톤 0; 잔여는 overview 라우트 lean 전환뿐으로 보조 표면 + SWR 완화). 편의 89 = confirm 스타일드 플로·TopBar New 실 생성 소진, 잔여 BulkBar(명시 보류)·Projects j/k(L). UIUX 91 = 생성 계약 4표면 확장 + 확인 플로 ESC 레이어·포커스 준수, 잔여 Projects j/k. 디자인 91 = glow 2곳 소거 + §9 모션 감사 통과(reduced-motion 전역 킬·펄스 1.4s·urgent 무애니메이션 확인).
 
 \‡ 8차 디자인·UI/UX·편의 감사는 세션 한도로 중단(12:20Z 리셋 후 재실행 예정) — 해당 3축은 7차 측정치(90·89·87)가 최신이다.
 
@@ -255,6 +258,19 @@
 **9차 사용성 90 근거**: 체크리스트 ① 5초 판단 — 헤더 숫자·화면 실측 정합 + 슬롯 중복 0 + 고객 단위 5칸. ② 섹션별 다음 행동 — 일정 카드 CTA 1개, 접힘 헤더 요약, error 빈 상태에 올바른 행동(다시 읽기, 생성 유도 제거). ③ 진실 상태 — 30 호출처 운영자 어휘 + 코어 read 실패 error/502 정렬(sheets·work) + 가짜 데이터 2건 소거. **잔여 경미 결손(완화책 있음)**: fold 7영역은 §7 확정 계약이라 보존(중복 제거·접힘 요약으로 실질 완화 — 축소는 계약 변경 필요), MoreDetail 내부 리듬·모닝 브리프는 요약 미노출, 집중 고객 행 사유 문구 동질(리드 원천 데이터 품질 — 화면 계약 밖).
 
 **8차 잔여 처리 현황**: 9건 중 7건 소진(sheets-sync M · work-ledger S · ?focus= S · automations webhook S · revenue 빈 상태 M · Studio Figure S · TruthBadge S). 잔여 2건은 속도 축: ⌘K revenueLedgerCache 미재사용(S) · overview/content/work/automations 모듈 SWR 부재(M).
+
+### Iteration 22 (2026-08-08) — 반영 완료
+
+주제: **반응·애니메이션·편의 UX·디자인 적합성·정렬·생성·연계 — 8차 잔여 속도 2건 + 백로그 M 항목 소진.**
+검증: `npm test` 471 중 462 통과(실패 9건 = registerHooks Node ≥22.15 환경 격차, 기준선 동일). hub/engine build 통과. 라이브 브라우저 실측: TopBar New→리드 즉시 생성+드로어, 확인 스트립 3플로(ESC 취소·재해제·버리고 닫기, 포커스가 취소 버튼으로), Decisions→Rhythm 탭 전환 스켈레톤 0, 콘솔 에러 0.
+
+- **반응(속도 백로그 소진)**: overview/content/work/automations 훅에 모듈 스코프 stale-while-revalidate 이식(탭 전환·복귀 스켈레톤 제거, 재검증 실패는 partial — revenue/daily-brief 15차와 동일 클래스, work는 base 응답만 캐시). ⌘K 레코드 검색이 Revenue SWR 캐시를 재사용(`revenue-shared-cache.js` 공유 모듈 신설 — 페이지 청크를 셸로 끌지 않고 캐시만 분리, Revenue를 방금 본 직후 팔레트가 같은 원장을 재조회하던 것 제거).
+- **입출력 생성·연계**: TopBar New가 현재 표면의 생성 딥링크로 직행(팔레트 위장 해소 — 기준선 §2.8 지적). Leads/Deals/Cases/Accounts에 `?new=` 1회 소비+쿼리 소거 신설(projects/decisions/rhythm/studio 기존 소비와 동일 계약), ⌘K에 New Lead/Deal/Account/Case 4행 추가. 매핑 없는 표면만 팔레트 폴백. 계약 테스트 2건(셸 매핑·표면 소비).
+- **편의 UX(confirm 스타일드 플로 — 백로그 M)**: EditDrawer·project-create-drawer의 window.confirm 3곳 → 푸터 인라인 2단계 확인. ESC/오버레이는 스트립부터 해제(취소 시멘틱 — 연타로 버려지지 않음), 버림·삭제는 명시 danger 버튼만, 스트립 표시 시 포커스가 취소 버튼으로 이동. Button primitive forwardRef 전환(포커스 이동용, props 계약 유지). 계약 테스트 3건 갱신+강화.
+- **디자인 적합성·애니메이션(§9 감사)**: 위반 스캔 결과 reduced-motion 전역 킬(.hub-app 인라인 포함) ✓ · 펄스 1.2–1.5s ✓ · urgent 무애니메이션 ✓. 잔여 위반은 live 도트 glow 그림자 2곳(agents 채팅·revenue guru — 19차 아바타 glow와 동일 §4/§13 클래스) → 소거.
+- **정렬(§8.1 커버리지 감사)**: 헤더 컬럼 테이블 4곳(Leads·Cases·Accounts·customers) 전부 공유 SortHead 3단 토글 적용 확인 — 미이관 0. Runs는 시간순 로그, Segments·content Queue는 카드형으로 정렬 계약 대상 아님(수리 불요 판정).
+
+**잔여(다음 회차)**: Projects/PMS 전체 j/k 문법(L — 편의·UIUX 공통 최대 잔여), BulkBar 배선(명시 보류 유지 — 1인 운영 후순위), overview 라우트 lean 전환(보조 표면, SWR 완화로 체감 0), 비코어 표면(Segments·Automations·Agents·Intake) §8.1 계약 이관.
 
 ### 다음 회차 백로그 (점수 영향 순)
 
