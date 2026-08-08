@@ -18,6 +18,19 @@ test("RevenueOverview defines the live-ledger flag used by its empty state", () 
   );
 });
 
+// BulkBar 첫 실채택(25차) — 기준선 §2.8부터 미배선. x 다중 선택 → 하단 바 → 단계 일괄
+// 변경(건별 영속 + 부분 실패 건수 명명 + 적용 후 선택 해제).
+test("Leads wires the bulk bar with per-record persistence and named partial failure", () => {
+  assert.match(revenueSource, /import \{ BulkBar \} from "\.\.\/crm-bulk-bar"/);
+  assert.match(revenueSource, /onToggleSelect: selection\.toggleSelected/);
+  assert.match(revenueSource, /<BulkBar count=\{selection\.selectedIds\.size\} onClear=\{selection\.clearSelected\}>/);
+  const bulkBlock = revenueSource.match(/const applyBulkStage[\s\S]*?\n  \};/);
+  assert.ok(bulkBlock, "applyBulkStage가 있어야 한다");
+  assert.match(bulkBlock[0], /Promise\.all\(ids\.map\(\(id\) => saveRevenueRecord\('lead', 'update', \{ id, stage \}\)\)\)/);
+  assert.match(bulkBlock[0], /건 실패/);
+  assert.match(bulkBlock[0], /selection\.clearSelected\(\)/);
+});
+
 // 스테이지 변경 되돌리기(24차) — 최고 빈도 뮤테이션의 마지막 undo 공백. 지연 쓰기 계약:
 // 창이 닫힌 뒤에만 PATCH, 되돌리기는 네트워크 없는 진짜 취소, 연속 이동은 최초 원위치 복원.
 test("deal stage moves defer the PATCH behind a 3.5s undo window", () => {

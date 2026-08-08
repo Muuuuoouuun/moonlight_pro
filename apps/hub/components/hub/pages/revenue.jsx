@@ -13,6 +13,7 @@ import { DEAL_STAGES, STAGE_FILL, STAGE_LINE } from "@/lib/deal-stages";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { selectProjectAreaId } from "@/lib/pms-ui";
 import { readRevenueCache, writeRevenueCache, clearRevenueCache } from "../revenue-shared-cache";
+import { BulkBar } from "../crm-bulk-bar";
 
 // HW/SW 딜은 100만원 미만 건도 흔해서 M 고정 포맷은 "₩0.1M" 같은 값을 만든다.
 // revenue-ledger.js의 formatMoneyLabel과 같은 K/M 임계값으로 맞춘다.
@@ -729,9 +730,9 @@ export function Leads({ workspace }) {
     }
   }, [leadParam, syncState, mergedLeads, pathname, router]);
 
-  // 키보드 계층(2026-08-05 배선): j/k 행 이동 · e 편집 · n 생성 · / 검색 포커스 · Esc 해제.
-  // useCrmKeyboard가 입력 포커스/드로어(role=dialog)/치트시트에서 스스로 양보하므로 기존
-  // 수제 N 리스너는 이 훅으로 흡수한다(중복 구현 6곳 문제의 첫 정리).
+  // 키보드 계층(2026-08-05 배선): j/k 행 이동 · e 편집 · n 생성 · / 검색 포커스 · x 다중 선택 ·
+  // Esc 해제. useCrmKeyboard가 입력 포커스/드로어(role=dialog)/치트시트에서 스스로 양보하므로
+  // 기존 수제 N 리스너는 이 훅으로 흡수한다(중복 구현 6곳 문제의 첫 정리).
   const searchRef = React.useRef(null);
   const selection = useCrmSelection(sortedLeads);
   useCrmKeyboard({
@@ -739,11 +740,38 @@ export function Leads({ workspace }) {
     onNew: createLead,
     onEditSelected: (id) => setEditLeadId(id),
     onSearchFocus: () => searchRef.current?.focus(),
+    onToggleSelect: selection.toggleSelected,
   });
   React.useEffect(() => {
     if (!selection.selectedId) return;
     document.querySelector(`[data-lead-row="${selection.selectedId}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [selection.selectedId]);
+
+  // 벌크 바(25차) — 기준선 §2.8부터 미배선이던 BulkBar의 첫 실채택. "1인 운영 후순위" 보류는
+  // 운영자의 94 목표 지시(2026-08-08)로 해제됐고, 118행 리드 목록(eeocrm 이관분)에서 단계
+  // 일괄 정리는 실제 반복 작업이다. 행 클릭 다중 선택이 아니라 x 키·행 체크 두 경로 모두
+  // selection.selectedIds 하나를 쓴다. 일괄 변경은 건별 영속 + 실패 건수 명명(무언 부분 실패 금지).
+  const [bulkBusy, setBulkBusy] = React.useState(false);
+  const applyBulkStage = async (stage) => {
+    const ids = [...selection.selectedIds];
+    if (!ids.length || bulkBusy) return;
+    setBulkBusy(true);
+    const results = await Promise.all(ids.map((id) => saveRevenueRecord('lead', 'update', { id, stage })));
+    const okIds = ids.filter((_, i) => results[i].ok);
+    if (okIds.length) {
+      setLeadEdits(prev => {
+        const next = { ...prev };
+        okIds.forEach((id) => { next[id] = { ...(next[id] || {}), stage }; });
+        return next;
+      });
+    }
+    const failed = ids.length - okIds.length;
+    setDeleteNotice(failed
+      ? { key: 'bulk-stage', tone: 'err', label: `단계 일괄 변경 — ${okIds.length}건 저장, ${failed}건 실패 (다시 시도하세요)` }
+      : { key: 'bulk-stage', tone: 'ok', label: `${okIds.length}건 단계 → ${stage} 변경됨` });
+    selection.clearSelected();
+    setBulkBusy(false);
+  };
 
   const cardFileRef = React.useRef(null);
   const [cardState, setCardState] = React.useState(null); // { phase, status, fields, error }
@@ -871,6 +899,7 @@ export function Leads({ workspace }) {
           <div key={l.id} className="hub-row hub-leads-grid"
             role="button" tabIndex={0}
             data-lead-row={l.id}
+            data-multi-selected={selection.selectedIds.has(l.id) ? 'true' : undefined}
             onClick={() => setEditLeadId(l.id)}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditLeadId(l.id); } }}
             style={{
@@ -880,6 +909,8 @@ export function Leads({ workspace }) {
               // j/k 키보드 선택 — §5.3 충돌 우선순위상 선택은 Moonstone 외곽 outline.
               outline: selection.selectedId === l.id ? '1px solid var(--moon-300)' : undefined,
               outlineOffset: -1,
+              // x 다중 선택 — 커서(outline)와 구분되는 조용한 배경 표시(벌크 바가 주 신호).
+              background: selection.selectedIds.has(l.id) ? 'var(--surface-2)' : undefined,
             }}
           >
             <span style={{ paddingRight: 4, display: 'flex' }}>
@@ -939,6 +970,28 @@ export function Leads({ workspace }) {
       >
         <LeadEnrichmentPanel lead={editingLead} />
       </EditDrawer>
+
+      {/* 벌크 바 — x로 담은 선택이 있을 때만 뜨는 하단 플로팅 바(§2.8 첫 실채택). */}
+      <BulkBar count={selection.selectedIds.size} onClear={selection.clearSelected}>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--fg-muted)' }}>
+          단계 일괄 변경
+          <select
+            aria-label="선택한 리드 단계 일괄 변경"
+            disabled={bulkBusy}
+            value=""
+            onChange={(e) => { if (e.target.value) applyBulkStage(e.target.value); }}
+            style={{
+              height: 26, padding: '0 8px', fontSize: 12, borderRadius: 'var(--r-sm)',
+              background: 'var(--surface-2)', color: 'var(--fg)', border: '1px solid var(--line)',
+            }}
+          >
+            <option value="">{bulkBusy ? '저장 중…' : '단계 선택'}</option>
+            {['New', 'Contact', 'Qualified', 'Customer', 'Lost'].map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </label>
+      </BulkBar>
     </div>
   );
 }
