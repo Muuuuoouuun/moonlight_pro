@@ -75,7 +75,9 @@ export function useCrmKeyboard({ enabled = true, selection, onNew, onEditSelecte
       if (k === "j") { e.preventDefault(); selection.moveSelection("down"); }
       else if (k === "k") { e.preventDefault(); selection.moveSelection("up"); }
       else if (k === "e" && selection.selectedId != null) { e.preventDefault(); onEditSelected?.(selection.selectedId); }
-      else if (k === "n") { e.preventDefault(); onNew?.(); }
+      // onNew가 없으면 n을 소비하지 않는다 — preventDefault만 하면 페이지의 뷰 인지
+      // N 리스너(projects 등)가 영구히 가려진다(18차 usePageCreateHotkey 회귀와 동일 클래스).
+      else if (k === "n" && onNew) { e.preventDefault(); onNew(); }
       else if (k === "/") { e.preventDefault(); onSearchFocus?.(); }
       else if (k === "?") { e.preventDefault(); onHelp?.(); }
       else if (k === "x" && selection.selectedId != null && onToggleSelect) { e.preventDefault(); onToggleSelect(selection.selectedId); }

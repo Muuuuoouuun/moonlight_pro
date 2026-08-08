@@ -29,6 +29,9 @@
 | 8차 재감사 (iter 19 반영 후, 4축 측정) | 2026-08-06 | 88 | 88 | — | 91 | 92 | —‡ | —‡ | —‡ | 부분 측정 |
 | 9차 재감사 (iter 21 반영 후, 사용성 측정) | 2026-08-07 | — | **90** | — | — | — | — | — | — | 부분 측정§ |
 | 10차 재감사 (iter 22 반영 후, 4축 측정) | 2026-08-08 | — | — | — | — | **94** | **91** | **91** | **89** | 부분 측정¶ |
+| 11차 재감사 (iter 23 반영 후, 2축 측정) | 2026-08-08 | — | — | — | — | — | — | **92** | **90** | 부분 측정# |
+
+\# 11차는 23차(PMS j/k — 편의·UIUX 공통 최대 잔여 L) 반영분만 재측정. UIUX 92 = j/k·e 문법이 코어 목록 표면 전체(Revenue 4 + followups·my-work·customers + PMS tree/board)에 성립, 잔여는 비코어 표면(Segments·Automations·Agents·Intake) 계약 이관. 편의 90 = 키보드 문법 완결로 90 진입, 잔여 BulkBar(명시 보류 — 운영자 결정 필요)·TopBar New 비매핑 표면 폴백. 두 축 모두 94에는 대형 잔여(비코어 전면 이관·보류 해제)가 남아 다음 회차 필요.
 
 \¶ 10차는 반응·애니메이션·편의 UX·디자인 적합성·정렬·생성·연계 집중 회차(22차 조치 대상 4축만 측정). 속도 94 = 잔여 백로그 소진(⌘K 캐시 재사용 + 모듈 SWR 4곳 — 코어 read 전 표면 SWR, 탭 전환 스켈레톤 0; 잔여는 overview 라우트 lean 전환뿐으로 보조 표면 + SWR 완화). 편의 89 = confirm 스타일드 플로·TopBar New 실 생성 소진, 잔여 BulkBar(명시 보류)·Projects j/k(L). UIUX 91 = 생성 계약 4표면 확장 + 확인 플로 ESC 레이어·포커스 준수, 잔여 Projects j/k. 디자인 91 = glow 2곳 소거 + §9 모션 감사 통과(reduced-motion 전역 킬·펄스 1.4s·urgent 무애니메이션 확인).
 
@@ -271,6 +274,16 @@
 - **정렬(§8.1 커버리지 감사)**: 헤더 컬럼 테이블 4곳(Leads·Cases·Accounts·customers) 전부 공유 SortHead 3단 토글 적용 확인 — 미이관 0. Runs는 시간순 로그, Segments·content Queue는 카드형으로 정렬 계약 대상 아님(수리 불요 판정).
 
 **잔여(다음 회차)**: Projects/PMS 전체 j/k 문법(L — 편의·UIUX 공통 최대 잔여), BulkBar 배선(명시 보류 유지 — 1인 운영 후순위), overview 라우트 lean 전환(보조 표면, SWR 완화로 체감 0), 비코어 표면(Segments·Automations·Agents·Intake) §8.1 계약 이관.
+
+### Iteration 23 (2026-08-08) — 반영 완료
+
+주제: **PMS j/k 키보드 문법(백로그 L — 편의·UIUX 공통 최대 잔여) + 브라우저 실측 중 발견한 생성 드로어 크래시 수리.**
+검증: `npm test` 473 중 464 통과(실패 9건 = registerHooks 환경 격차, 기준선 동일). hub/engine build 통과. 라이브 실측: j/k 커서(Moonstone outline)·e 상세(?project= 딥링크)·ESC 닫기·n 뷰 인지 생성 전부 발화, 생성 드로어 열림→닫힘 사이클 에러 0.
+
+- **PMS j/k(23차)**: 리스트(tree) 섹션 계산을 훅 레벨 `listSections`로 추출해 렌더와 커서가 같은 가시 순서를 공유(접힌 브랜드 섹션 제외). tree는 행 평탄화, board는 컬럼 순서 평탄화(Deals 칸반 동일 문법)로 `useCrmSelection`/`useCrmKeyboard` 배선 — j/k 이동·e 열기(보드의 task 카드는 태스크 드로어, project 카드·목록 행은 상세 패널)·스크롤 추적. n은 바인딩하지 않음 — 뷰 인지 리스너(todos→할 일, 그 외→프로젝트)가 계속 소유(18차 회귀 재발 방지).
+- **공유 훅 보정**: `useCrmKeyboard`가 onNew 미제공 시 n을 preventDefault로 소비하지 않게 — 소비만 하고 아무 것도 안 하면 페이지의 뷰 인지 N 리스너가 영구히 가려진다(18차 usePageCreateHotkey 회귀와 동일 클래스). 기존 호출처(onNew 제공)는 무영향.
+- **생성 드로어 크래시(실측 발견)**: ProjectCreateDrawer `onClose`가 19차에 상태째 제거된 `setProjectCreateContext(null)`를 여전히 호출 — 생성 드로어를 닫을 때마다 ReferenceError가 발생하고 있었다(드로어는 닫히지만 핸들러가 죽는 무언 크래시). 죽은 호출 제거, 열림→닫힘 사이클 에러 0 실측.
+- 계약 테스트 2건: PMS j/k 배선(listSections 공유·n 미바인딩·양뷰 data-kb-row·스크롤 추적) + 공유 훅 n 양보.
 
 ### 다음 회차 백로그 (점수 영향 순)
 

@@ -218,6 +218,28 @@ test("project create drawer explains an empty area ledger and offers an inline r
   assert.match(createDrawerSource, /disabled=\{saving \|\| areaUnavailable \|\| areaEmpty\}/);
 });
 
+// 23차: Revenue 4표면과 같은 j/k 문법의 마지막 공백(PMS) — 렌더와 커서가 같은 가시 순서를
+// 공유해야 하고(listSections 훅 레벨), n은 뷰 인지 리스너 소유가 유지돼야 한다(18차 회귀).
+test("PMS list and board share the CRM j/k grammar without stealing the n key", () => {
+  assert.match(projectsSource, /const listSections = React\.useMemo/);
+  assert.match(projectsSource, /const kbSelection = useCrmSelection\(kbRows\)/);
+  assert.match(projectsSource, /enabled: \(view === 'tree' \|\| view === 'board'\) && !drawerOpen/);
+  // n 미바인딩 — 뷰 인지 리스너(todos→할 일, 그 외→프로젝트)가 계속 소유한다.
+  const kbBlock = projectsSource.match(/useCrmKeyboard\(\{[\s\S]*?\}\);/);
+  assert.ok(kbBlock, "useCrmKeyboard 배선이 있어야 한다");
+  assert.doesNotMatch(kbBlock[0], /onNew/);
+  // 커서 가시화 + 스크롤 추적 — 목록 행과 보드 카드 둘 다.
+  assert.match(projectsSource, /data-kb-row=\{p\.id\}/);
+  assert.match(projectsSource, /data-kb-row=\{c\.id\}/);
+  assert.match(projectsSource, /data-kb-row="\$\{CSS\.escape\(String\(kbSelection\.selectedId\)\)\}"/);
+});
+
+test("shared CRM keyboard hook yields the n key when no onNew handler is bound", async () => {
+  const { readFile: rf } = await import("node:fs/promises");
+  const crmHookSource = await rf(new URL("../use-crm-keyboard.js", import.meta.url), "utf8");
+  assert.match(crmHookSource, /else if \(k === "n" && onNew\) \{ e\.preventDefault\(\); onNew\(\); \}/);
+});
+
 test("project create drawer also protects a changed draft from accidental close", () => {
   assert.match(createDrawerSource, /const initialDraftSignatureRef = React\.useRef/);
   // 22차: EditDrawer와 같은 인라인 2단계 — OS confirm 금지, ESC는 스트립 해제.
