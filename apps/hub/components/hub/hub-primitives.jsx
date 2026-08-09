@@ -464,6 +464,34 @@ export function TruthBadge({ state = 'error', label, reason, style }) {
   );
 }
 
+// 다음 행동 날짜의 빠른 프리셋 — 연락 기록(§7 확정 최소 기록)의 date picker 수동 조작이
+// 최고 빈도 액션의 반복 마찰이었다(27차 편의성 실측). 값은 로컬(KST 운영) 날짜 문자열로
+// date input과 동일 형식. followups·customers 컨택 시트가 공유한다(§8.1 primitives-first).
+export function DateQuickPresets({ onPick, disabled, style }) {
+  const presets = [
+    { label: '내일', days: 1 },
+    { label: '3일 뒤', days: 3 },
+    { label: '다음 주', days: 7 },
+  ];
+  const pick = (days) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    onPick(`${y}-${m}-${day}`);
+  };
+  return (
+    <span style={{ display: 'inline-flex', gap: 4, ...style }}>
+      {presets.map((p) => (
+        <Button key={p.days} type="button" variant="ghost" size="xs" disabled={disabled} onClick={() => pick(p.days)}>
+          {p.label}
+        </Button>
+      ))}
+    </span>
+  );
+}
+
 const ATTENTION_LABELS = {
   urgent: '긴급',
   critical: '즉시 확인',
