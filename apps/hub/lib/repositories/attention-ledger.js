@@ -207,7 +207,12 @@ function assignPriority(item, leadScoreByDealEntityId) {
   return { priorityScore: 1000, priorityReason: "일반" };
 }
 
-export async function getAttentionLedger() {
+// includeRaw: 첫 화면(daily-brief)이 이 원장을 정본 어댑터로 소비할 때(Phase 1B A-1 컷오버)
+// 원본 원장(projectLedger/revenue/calendar)을 함께 받는다 — 첫 화면은 §7 확정 슬롯(KA·집중
+// 고객·오늘 일정·할 일 레인)을 원본 위에 프로젝션해야 하는데, 이걸 위해 같은 원장을 라우트가
+// 따로 또 읽으면(기존 구조) 우선순위 판정이 두 벌로 갈라진다. my-work 등 기존 소비자는
+// 옵션 미지정으로 기존 계약 그대로.
+export async function getAttentionLedger({ includeRaw = false } = {}) {
   const now = new Date();
   const todayKey = dateKey(now);
   const weekEndKey = dateKey(new Date(now.getTime() + 6 * DAY_MS));
@@ -315,5 +320,8 @@ export async function getAttentionLedger() {
     projects: taskLedgerReadable
       ? (Array.isArray(projectLedger?.projects) ? projectLedger.projects.map((p) => ({ id: p.id, name: p.name })) : [])
       : [],
+    // 원본 원장 — 첫 화면 슬롯 프로젝션용(위 주석). catch 폴백 객체도 그대로 노출되므로
+    // 소비자의 기존 source==='error'/'supabase' 분기가 무수정 동작한다.
+    ...(includeRaw ? { raw: { projectLedger, revenue: revenueLedger, calendar } } : {}),
   };
 }

@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 
+import { getAttentionLedger } from "@/lib/repositories/attention-ledger";
 import { getAutomationsLedger } from "@/lib/repositories/automations-ledger";
 import { getMorningBrief } from "@/lib/repositories/brief-ledger";
 import { getContentLedger } from "@/lib/repositories/content-ledger";
-import { getTaskLedger } from "@/lib/repositories/operating-ledger";
-import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
 import { getWorkLedger } from "@/lib/repositories/work-ledger";
 import { getWorkOrders } from "@/lib/sales-os/work-orders";
 import {
@@ -18,7 +17,6 @@ import {
   selectOperatorFocusLeads,
 } from "@/lib/operator-revenue-scope";
 import { buildDailyFocus, withoutFocusDuplicates } from "@/lib/daily-focus";
-import { listGoogleCalendarEvents } from "@/lib/google-calendar";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,9 +64,11 @@ function nameTokens(name) {
     .filter((t) => t.length >= 2 && !RISK_STOP.has(t));
 }
 
-function buildUnifiedRiskSignals(revenue, projects, automations) {
+// staleDealIds: attention 원장(§4 공식)의 stalled 판정 — 이 라우트의 자체 age>=10 하드코딩을
+// 대체한다(A-1 컷오버 + §8.1 STALLED_DAYS 단일 기준). operator 스코프는 revenue.deals 조인이 보장.
+function buildUnifiedRiskSignals(revenue, projects, automations, staleDealIds = new Set()) {
   const staleDeals = (Array.isArray(revenue.deals) ? revenue.deals : []).filter(
-    (d) => d.stage !== "closing" && d.stage !== "lost" && Number(d.age) >= 10,
+    (d) => staleDealIds.has(d.id),
   );
   const blocked = (Array.isArray(projects.projects) ? projects.projects : []).filter(
     (p) => p.status === "Blocked",
@@ -153,7 +153,7 @@ function buildApprovalSignals(queue) {
   }];
 }
 
-function buildRevenueSignals(revenue) {
+function buildRevenueSignals(revenue, staleDealIds = new Set()) {
   const deals = Array.isArray(revenue.deals) ? revenue.deals : [];
   const leads = Array.isArray(revenue.leads) ? revenue.leads : [];
   const signals = [];
@@ -177,16 +177,18 @@ function buildRevenueSignals(revenue) {
     });
   });
 
+  // 정체 딜 판정은 attention 원장이 정본(§4 "다음 연락 시점 지남" = STALLED_DAYS 14) —
+  // 이 라우트의 자체 age>=10 밴드는 §8.1 단일 기준 위반이었고, 내 작업과 첫 화면이 같은
+  // 딜을 다르게 판정했다(A-1). stalled(14+)는 즉시 손실 위험이라 전부 danger.
   deals
-    .filter((deal) => deal.stage !== "closing" && deal.stage !== "lost" && Number(deal.age) >= 10)
+    .filter((deal) => staleDealIds.has(deal.id))
     .sort((a, b) => Number(b.value || 0) - Number(a.value || 0))
     .slice(0, 2)
     .forEach((deal) => {
-      const danger = Number(deal.age) >= 14 || Number(deal.value) >= 10000000;
       signals.push({
         id: `revenue-stale-${deal.id}`,
         subject: { type: "deal", id: deal.id },
-        tone: danger ? "danger" : "warning",
+        tone: "danger",
         kind: "Revenue",
         title: `${deal.name} — ${deal.age}일째 정체`,
         summary: `${deal.stage} 단계에서 마지막 활동이 오래됐습니다. 오늘 follow-up을 보내거나 다음 액션을 명확히 정해야 합니다.`,
@@ -409,23 +411,32 @@ function buildSources(results) {
 }
 
 export async function GET() {
-  // 오늘 일정 슬롯(§2/§7 — Phase 1B 계약)의 시간 창: KST 오늘 하루.
-  const todayKey = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit",
-  }).format(new Date());
-  const startOfTodayIso = new Date(`${todayKey}T00:00:00+09:00`).toISOString();
-  const endOfTodayIso = new Date(`${todayKey}T23:59:59+09:00`).toISOString();
-
-  const [projectsResult, workResult, contentResult, revenueResult, automationsResult, ordersResult, briefResult, calendarResult] = await Promise.allSettled([
-    getTaskLedger(), // lean 4콜 — 이 라우트는 projects(status)·todos·집계만 소비 (11~14콜 전체 원장 불필요)
+  // A-1 컷오버(Phase 1B 잔여 — README §3): tasks·revenue·calendar는 attention 원장을 정본
+  // 어댑터로 한 번만 읽는다. 예전엔 이 라우트가 같은 세 원장을 attention과 별개로 다시 읽어
+  // "지금 중요한 것" 판정이 첫 화면과 내 작업에서 두 벌로 갈라졌다(정체성 캡의 원인).
+  // §7 확정 슬롯(KA·집중 고객·오늘 일정·할 일 레인)은 attention.raw 원본 위의 프로젝션.
+  const [attentionResult, workResult, contentResult, automationsResult, ordersResult, briefResult] = await Promise.allSettled([
+    getAttentionLedger({ includeRaw: true }),
     getWorkLedger(),
     getContentLedger(),
-    getRevenueLedger(),
     getAutomationsLedger(),
     getWorkOrders({ status: "proposed", limit: 20 }),
     getMorningBrief(),
-    listGoogleCalendarEvents({ timeMin: startOfTodayIso, timeMax: endOfTodayIso, maxResults: 20 }),
   ]);
+
+  const attention = readLedger(attentionResult, null);
+  // attention 자체가 죽으면(예외) 세 원장 전부 read 실패로 명명 — 빈 화면 위장 금지.
+  const rawFallback = {
+    projectLedger: { source: "error", error: "attention-ledger-request-failed", failedSources: ["tasks"], todos: [], projects: [] },
+    revenue: { source: "error", error: "attention-ledger-request-failed", failedSources: ["deals"], leads: [], deals: [] },
+    calendar: { ok: false, reason: "calendar-read-failed", items: [] },
+  };
+  const raw = attention?.raw || rawFallback;
+
+  // buildSources/ledgerState의 기존 allSettled 계약을 유지하기 위해 raw 원장을 결과 봉투로
+  // 재포장한다 — 판정 로직(ledgerState)은 원장 shape만 보므로 무수정 동작.
+  const projectsResult = { status: "fulfilled", value: raw.projectLedger };
+  const revenueResult = { status: "fulfilled", value: raw.revenue };
 
   const results = {
     projects: projectsResult,
@@ -447,7 +458,9 @@ export async function GET() {
   const ordersLedger = readLedger(ordersResult, { source: "error", error: "work-orders-request-failed", orders: [] });
   // Chief of Staff composed brief (ai.morning_brief) — the cron's output finally has a reader.
   const morning = readLedger(briefResult, { source: "preview", brief: null });
-  const calendar = readLedger(calendarResult, { ok: false, reason: "calendar-read-failed", items: [] });
+  // attention의 캘린더 창은 7일(내 작업과 공유) — 오늘 일정 슬롯은 buildDailyFocus가
+  // KST 오늘로 자체 필터하므로 창이 넓어도 프로젝션은 동일하다.
+  const calendar = raw.calendar || { ok: false, reason: "calendar-read-failed", items: [] };
   // §2 확정 슬롯: 긴급 KA ≤1 · 집중 고객 ≤5 · 오늘 일정 — tone 정렬 신호 큐와 별개의
   // 명명된 풀. 각 슬롯이 자기 소스 truth 상태를 따로 갖는다.
   const dailyFocus = buildDailyFocus({ revenue: operatorRevenue, calendar });
@@ -463,11 +476,19 @@ export async function GET() {
   const failedSources = sources
     .filter((source) => ["error", "partial"].includes(source.state))
     .map((source) => source.key);
+  // A-1: 정체 딜 신호의 판정원은 attention 원장 하나 — 첫 화면 신호와 내 작업 deal 레인이
+  // 같은 stalled 집합(§4 공식·STALLED_DAYS)을 본다. entityId → operator 스코프 조인은
+  // build* 안에서 revenue.deals 필터가 수행.
+  const staleDealIds = new Set(
+    (attention?.items || [])
+      .filter((item) => item.lane === "deal" && item.stalled)
+      .map((item) => item.entityId),
+  );
   const signals = withoutFocusDuplicates(
     [
-      ...buildUnifiedRiskSignals(operatorRevenue, projects, automations),
+      ...buildUnifiedRiskSignals(operatorRevenue, projects, automations, staleDealIds),
       ...buildApprovalSignals(queue),
-      ...buildRevenueSignals(operatorRevenue),
+      ...buildRevenueSignals(operatorRevenue, staleDealIds),
       ...buildContentSignals(content),
       ...buildAutomationSignals(automations),
       ...buildWorkSignals(projects, work),

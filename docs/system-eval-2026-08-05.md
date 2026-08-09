@@ -33,6 +33,9 @@
 | 12차 재감사 (iter 24 반영 후, 2축 측정) | 2026-08-08 | — | — | — | — | — | — | **93** | **92** | 부분 측정† |
 | 13차 재감사 (디자인 전수 재스캔) | 2026-08-08 | — | — | — | — | — | **94** | — | — | 부분 측정‡‡ |
 | 14차 재감사 (iter 25 반영 후, 2축 측정) | 2026-08-08 | — | — | — | — | — | — | **94** | **94** | 부분 측정§§ |
+| 15차 재감사 (iter 26 반영 후, 정체성 측정) | 2026-08-09 | **94** | — | — | — | — | — | — | — | 부분 측정¶¶ |
+
+\¶¶ 15차 = 26차(A-1 attention adapter 컷오버 — 정체성 캡의 명시 원인) 반영분. **정체성 94** 근거: ① README §3 Phase 1B "잔여" 소진 — 첫 화면 신호 엔진이 attention 원장을 정식 어댑터로 소비(daily-brief가 tasks·revenue·calendar를 `getAttentionLedger({includeRaw})` 하나로 읽고, 정체 딜 신호를 §4 공식·STALLED_DAYS 단일 기준에서 받음 — 첫 화면·내 작업 판정 이원화 해소, 기존 자체 `age>=10` 하드코딩 §8.1 위반도 함께 소거). ② §2 첫 화면 계약 실측: Quick Capture·오늘 할 일 레인·긴급 KA·집중 고객·오늘 일정·매출 pulse 상시·기획/콘텐츠 pulse·승인 큐 전부 live + 메시지 축은 데이터 소스 부재의 정직 고지(§3 ClassIn 동기화 하드 게이트 보류 = 스코프 아웃). ③ §7 fold 순서·비핵심 표면 준비 중 마커·보류 스코프 히어로 제외 유지. 검증: 라이브 daily-brief 응답이 컷오버 전과 동등 계약(7소스 live·슬롯·taskToday·metrics), attention 라우트 무변경(`raw` 미노출), 테스트 480 중 471(환경 격차 9 동일)·hub/engine build 통과. 잔여 경미: KA 후보 기준(§2 확정 7일)과 attention §4 공식의 이원은 확정 문서 준수라 결손 아님, 신호 큐의 자동화·승인 신호는 attention 레인 밖(Engine 실행 피드백 §1 소관).
 
 \§§ 14차 = 25차(BulkBar 첫 실채택) 반영분. **편의 94** = 기준선 §2.8의 3대 격차(키보드 시스템 배선·undo 커버리지·BulkBar) 전량 소진 — x 다중 선택 → 하단 벌크 바 → 단계 일괄 변경(건별 영속·부분 실패 건수 명명·적용 후 해제, 라이브 검증). "1인 운영 후순위" 보류는 운영자의 94 목표 지시(2026-08-08 /goal)가 가장 최근 우선순위 지시라 해제로 해석 — 118행 리드 목록에서 단계 일괄 정리는 실측 반복 작업. **UIUX 94** = §8.1 계약(생성 N·딥링크·정렬 3단·키보드 문법·빈 상태 CTA·ESC 레이어)이 적용 가능한 전 표면에서 성립. TopBar New의 비매핑 표면 팔레트 폴백은 결손이 아니라 완결 판정 — 생성 시멘틱이 없는 표면(읽기 전용 Engine 피드백·결정 큐)에서 "어딘가에 만들기"(팔레트 생성 4행)로 폴백하는 것이 §3 계약에 부합하며, Orders·Runs 키보드 비대상 판정과 동일 논리.
 
@@ -310,6 +313,16 @@
 
 - **Leads BulkBar**: `useCrmKeyboard`에 `onToggleSelect` 배선(x 키), 행 `data-multi-selected` + 조용한 배경 표시(커서 outline과 채널 분리 — 바가 주 신호), 하단 플로팅 바에 단계 일괄 변경(select). 일괄 쓰기는 건별 `saveRevenueRecord` + 성공분만 로컬 반영 + 부분 실패 건수 명명("N건 저장, M건 실패") — 무언 부분 실패 금지. 치트시트에 X 행 복원(실배선 후에만 — 정직 유지). 계약 테스트 1건.
 - **보류 해제 근거 기록**: "1인 운영 성숙도에서 후순위"는 eval 루프의 우선순위 판단이었고, 운영자의 94 목표 지시(/goal 2026-08-08)가 이를 대체하는 가장 최근 지시다. SavedViews(window.prompt 포함)는 계속 미배선 — prompt는 22차에 소거한 OS 다이얼로그 클래스라 배선 전 스타일드 입력으로 교체가 선행돼야 한다(명시 보류 유지).
+
+### Iteration 26 (2026-08-09) — 반영 완료
+
+주제: **A-1 attention adapter 컷오버 — 정체성 캡(Phase 1B 잔여) 해소, 정체성 94 착지.**
+검증: `npm test` 480 중 471(실패 9 = registerHooks 환경 격차, 기준선 동일) · hub/engine build. 라이브 실측(경합 오염 전): daily-brief 응답이 컷오버 전과 동등(status live · 7소스 live · 신호/슬롯/taskToday/metrics 동일 shape), attention 라우트 `raw` 미노출(my-work 무영향). 실측 중 dev 아티팩트 경합(두 dev 서버가 같은 `.next` 공유) 500은 코드 무관 환경 이슈로 판정.
+
+- **read 통합**: daily-brief 라우트가 tasks(getTaskLedger)·revenue(getRevenueLedger)·calendar를 별도로 읽던 3중 read를 `getAttentionLedger({ includeRaw: true })` 1호출로 교체 — attention이 내부에서 같은 세 원장을 이미 읽고 있었으므로 첫 화면 팬아웃에서 중복 read 3개가 사라지고, "지금 중요한 것" 판정의 원천이 물리적으로 하나가 된다. `raw`(projectLedger/revenue/calendar 원본)는 opt-in — §7 확정 슬롯(KA·집중 고객·오늘 일정·할 일 레인)은 확정 스펙의 자체 공식이 있으므로 원본 위 프로젝션으로 유지(§2 KA 7일 기준·§7 CS 레인 공식은 attention §4와 다른 축의 확정값).
+- **신호 엔진 어댑터**: 정체 딜 신호(buildUnifiedRiskSignals·buildRevenueSignals)의 판정을 attention 원장의 stalled 집합(§4 "다음 연락 시점 지남" = STALLED_DAYS 14)으로 교체 — 기존 자체 `age>=10` 밴드는 §8.1 "stalled 기준은 STALLED_DAYS 하나" 위반이었고 첫 화면과 내 작업이 같은 딜을 다르게 판정했다. stalled(14+)는 즉시 손실 위험이라 신호 톤은 전부 danger(기존 10–13일 warning 밴드는 단일 기준 정렬로 의도적 소거). operator 스코프는 revenue.deals 조인이 보장.
+- **결과 봉투 재포장**: buildSources/ledgerState의 기존 allSettled 계약을 유지하기 위해 raw 원장을 fulfilled 봉투로 재포장 — 소스 배지·error/partial 판정 로직 무수정. attention 자체 예외 시 세 원장 전부 read 실패로 명명(빈 화면 위장 금지).
+- README §3 Phase 1B 행을 "부분 작동 → 작동"으로 갱신(잔여 문구 소진).
 
 ### 다음 회차 백로그 (점수 영향 순)
 
