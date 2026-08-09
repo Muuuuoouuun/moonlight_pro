@@ -161,6 +161,13 @@ test("project detail keeps useful display context while editing goal detail as m
   assert.match(projectsSource, /key: 'summary'[\s\S]{0,120}type: 'textarea'/);
 });
 
+test("project detail reads back the deal backlink without adding a deal field to create", () => {
+  assert.match(detailPanelSource, /project\.originDealId/);
+  assert.match(detailPanelSource, /\/dashboard\/revenue\/deals\?deal=/);
+  // 07-17 스펙: 생성 드로어에는 딜 선택 필드를 넣지 않는다 — 읽기 노출만.
+  assert.doesNotMatch(createDrawerSource, /originDealId|dealId/);
+});
+
 test("EditDrawer only binds its save shortcut for an open record and blocks re-entry", () => {
   assert.match(primitivesSource, /if \(!record\) return[\s\S]{0,240}addEventListener\('keydown'/);
   assert.match(primitivesSource, /savingRef\.current/);

@@ -47,6 +47,42 @@ test("deal stage moves defer the PATCH behind a 3.5s undo window", () => {
   assert.match(moveBlock[0], /스테이지 이동 저장 실패/);
 });
 
+// 딜 backlink 노출 — create_project가 이미 쓰고 있던 meta.origin_deal_id를 되읽는다.
+// 생성 드로어에 딜 필드를 추가하는 방향(07-17 스펙이 뺀 것)으로 드리프트하지 않는지 함께 고정.
+function sourceBlock(startMarker, endMarker) {
+  const start = revenueSource.indexOf(startMarker);
+  const end = revenueSource.indexOf(endMarker, start);
+  assert.ok(start !== -1 && end > start, `${startMarker} 블록이 있어야 한다`);
+  return revenueSource.slice(start, end);
+}
+
+test("deal drawer surfaces linked projects from the existing origin_deal_id backlink", () => {
+  assert.match(revenueSource, /p\.originDealId === dealId/);
+  assert.match(revenueSource, /<DealLinkedProjectsPanel deal=\{editingDeal\} onNavigate=\{onNavigate\} \/>/);
+  // 읽기 실패를 0건으로 뭉개지 않는다 — 체크리스트와 같은 정직성 계약.
+  const panel = sourceBlock("function DealLinkedProjectsPanel", "function DealNextMeetingPanel");
+  assert.match(panel, /setLoadError\(/);
+  assert.match(panel, /role="alert"/);
+});
+
+// 다음 미팅 — 캘린더 능력 판정은 공용 헬퍼 재사용, 실패는 항상 가시화,
+// 그리고 결과를 deals에 병합하지 않는다(EditDrawer dirty 오탐 방지).
+test("다음 미팅 잡기 reuses the shared calendar capability check and stays out of deal state", () => {
+  assert.match(revenueSource, /import \{ resolveCalendarCapabilities \} from "@\/lib\/calendar-capabilities"/);
+  const panel = sourceBlock("function DealNextMeetingPanel", "export function Deals");
+  assert.match(panel, /resolveCalendarCapabilities\(/);
+  assert.match(panel, /fetch\('\/api\/calendar\/google\/event'/);
+  assert.match(panel, /saveRevenueRecord\('deal', 'update', \{ id: dealId, next_meeting: breadcrumb \}\)/);
+  // 저장 성공 경로가 editingDeal의 JSON 모양을 바꾸면 닫을 때 미저장 경고가 오탐한다.
+  assert.doesNotMatch(panel, /setDeals\(/);
+  assert.doesNotMatch(panel, /setDealDrafts\(/);
+  // 캘린더 생성 성공 + breadcrumb 저장 실패 시 캘린더에 재POST하지 않는다(중복 일정 방지).
+  const retryStart = panel.indexOf("const saveBreadcrumb");
+  const retry = panel.slice(retryStart, panel.indexOf("const createMeeting", retryStart));
+  assert.ok(retryStart !== -1 && retry.length > 0, "saveBreadcrumb 재시도 경로가 있어야 한다");
+  assert.doesNotMatch(retry, /\/api\/calendar\/google\/event/);
+});
+
 // TopBar New·⌘K 생성 딥링크의 착지 계약(22차) — 각 표면이 ?new=<kind>를 1회 소비하고
 // 쿼리를 소거한다. 소비가 없으면 셸의 New는 다시 팔레트 위장 버튼으로 퇴행한다.
 test("revenue surfaces consume their ?new= create deep links exactly once", () => {

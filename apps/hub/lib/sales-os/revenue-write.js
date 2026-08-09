@@ -144,6 +144,11 @@ export function buildDealWrite(payload = {}) {
   if (payload.snooze_until !== undefined) {
     metaPatch.snooze_until = String(payload.snooze_until).trim() || null;
   }
+  // 다음 미팅 breadcrumb — 일정 자체의 정본은 Google Calendar다. 여기엔 다시 찾아갈
+  // {eventId, summary, startAt, htmlLink}만 남긴다 (projects.meta.origin_deal_id와 같은 성격).
+  if (payload.next_meeting !== undefined) {
+    metaPatch.next_meeting = payload.next_meeting || null;
+  }
 
   return { columns, metaPatch };
 }

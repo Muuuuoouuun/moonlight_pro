@@ -282,6 +282,9 @@ export function mapProjects(
       updatedAt: row.updated_at ?? null,
       owner: row.owner_id ? "Me" : "Unassigned",
       tag: row.meta?.tag || null,
+      // create_project가 A/S 후속 프로젝트에 심어둔 딜 backlink. 지금까지 쓰기만 하고
+      // 읽지 않아 DB에만 있던 값 — mapTodos의 dealId와 같은 meta 읽기 패턴.
+      originDealId: row.meta?.origin_deal_id || null,
       tasks: stats.total,
       done: stats.done,
       tasksPartial: projectTaskStatsPartial,

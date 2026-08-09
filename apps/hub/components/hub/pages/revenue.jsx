@@ -12,6 +12,7 @@ import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
 import { DEAL_STAGES, STAGE_FILL, STAGE_LINE } from "@/lib/deal-stages";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { selectProjectAreaId } from "@/lib/pms-ui";
+import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 import { readRevenueCache, writeRevenueCache, clearRevenueCache } from "../revenue-shared-cache";
 import { BulkBar } from "../crm-bulk-bar";
 
@@ -23,6 +24,17 @@ const fmt = v => {
   if (n >= 1000000) return '₩' + (n / 1000000).toFixed(1) + 'M';
   if (n >= 1000) return '₩' + Math.round(n / 1000) + 'K';
   return '₩' + n;
+};
+
+// 다음 미팅은 방금 만든 직후(서버 왕복 전)에도 그려야 해서 클라이언트에서 포맷한다 —
+// 다른 날짜 필드가 전부 repository에서 포맷돼 오는 것과 다른 이유다.
+const formatMeetingTime = (iso) => {
+  const d = new Date(iso || '');
+  if (Number.isNaN(d.getTime())) return '미정';
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(d);
 };
 
 // A deal counts as "stalled" once it has aged this many days in an open stage. Two weeks
@@ -1168,6 +1180,240 @@ function DealTaskPanel({ deal, onSaved }) {
   );
 }
 
+// 딜 → 프로젝트 backlink. create_project가 A/S 후속 프로젝트에 심어둔
+// meta.origin_deal_id를 되읽어 보여준다 — 지금까지 쓰기만 하고 읽지 않아 DB에만
+// 있던 연결이다. 자동 연동·생성 드로어 딜 필드는 범위 밖(07-17 스펙).
+function DealLinkedProjectsPanel({ deal, onNavigate }) {
+  const dealId = deal?.id || null;
+  const isLocal = String(dealId || '').toLowerCase().startsWith('local-');
+  const [projects, setProjects] = React.useState(null); // null = loading
+  const [loadError, setLoadError] = React.useState(null);
+
+  React.useEffect(() => {
+    let active = true;
+    setLoadError(null);
+    if (!dealId || isLocal) { setProjects([]); return undefined; }
+    setProjects(null);
+    (async () => {
+      try {
+        const res = await fetch('/api/hub/projects', { cache: 'no-store' });
+        const data = await res.json().catch(() => null);
+        if (!active) return;
+        if (!res.ok || !data || data.status === 'error') {
+          // 읽기 실패를 "연결된 프로젝트 0건"으로 뭉개지 않는다 (체크리스트와 동일 계약).
+          setLoadError('연결된 프로젝트를 읽지 못했습니다 — 다시 열면 재시도합니다.');
+          return;
+        }
+        setProjects((data.projects || []).filter(p => p.originDealId === dealId));
+      } catch {
+        if (active) setLoadError('연결된 프로젝트를 읽지 못했습니다 — 다시 열면 재시도합니다.');
+      }
+    })();
+    return () => { active = false; };
+  }, [dealId, isLocal]);
+
+  if (isLocal || (!loadError && projects !== null && projects.length === 0)) return null;
+
+  return (
+    <div style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>연결된 프로젝트</span>
+        {projects?.length > 0 && (
+          <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', marginLeft: 'auto' }}>{projects.length}</span>
+        )}
+      </div>
+      {projects === null && !loadError && <div style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>불러오는 중…</div>}
+      {(projects || []).map((p) => (
+        <div
+          key={p.id}
+          className="hub-row"
+          role="button"
+          tabIndex={0}
+          onClick={() => onNavigate?.(`dashboard/work/projects?project=${encodeURIComponent(p.id)}`)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onNavigate?.(`dashboard/work/projects?project=${encodeURIComponent(p.id)}`);
+            }
+          }}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 32, padding: '0 6px', borderRadius: 'var(--r-sm)', cursor: 'pointer' }}
+        >
+          <Iconed name="projects" size={12} style={{ color: 'var(--fg-faint)', flexShrink: 0 }} />
+          <span style={{ fontSize: 12.5, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+          <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', flexShrink: 0 }}>{p.status}</span>
+        </div>
+      ))}
+      {loadError && <span role="alert" style={{ fontSize: 11, color: 'var(--danger)' }}>{loadError}</span>}
+    </div>
+  );
+}
+
+// 다음 미팅 — My Work 주간 캘린더가 쓰는 /api/calendar/google/event를 그대로 재사용한다.
+// 일정 정본은 Google Calendar이고 딜에는 다시 찾아갈 breadcrumb만 meta에 남긴다.
+// 상태를 deals에 병합하지 않는 이유: EditDrawer의 dirty 판정이 record의 JSON 비교라
+// (hub-primitives), 저장 성공 후 editingDeal 모양이 바뀌면 이미 저장된 건에 대해
+// "저장하지 않은 변경이 있습니다"가 뜬다. DealTaskPanel이 tasks를 로컬로 두는 것과 같은 이유.
+function DealNextMeetingPanel({ deal, onNavigate }) {
+  const dealId = deal?.id || null;
+  const isLocal = String(dealId || '').toLowerCase().startsWith('local-');
+  const [capability, setCapability] = React.useState(null); // null = 확인 중
+  const [meeting, setMeeting] = React.useState(null);
+  const [open, setOpen] = React.useState(false);
+  const [startAt, setStartAt] = React.useState('');
+  const [title, setTitle] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState(null);
+  const [orphan, setOrphan] = React.useState(null); // 캘린더엔 생겼는데 breadcrumb 저장 실패
+
+  React.useEffect(() => {
+    let active = true;
+    setMeeting(deal?.nextMeeting || null);
+    setOpen(false); setError(null); setOrphan(null); setStartAt('');
+    setTitle(deal?.name ? `${deal.name} 미팅` : '미팅');
+    if (!dealId || isLocal) return undefined;
+    setCapability(null);
+    fetch('/api/calendar/google/event', { cache: 'no-store' })
+      .then(r => r.json())
+      .catch(() => null)
+      .then((d) => {
+        if (!active) return;
+        setCapability(resolveCalendarCapabilities({ status: d?.status || 'error', source: d?.source, readOnly: d?.readOnly }));
+      });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dealId, isLocal]);
+
+  // breadcrumb만 저장 — 캘린더에 다시 POST하지 않는다(중복 일정 방지).
+  const saveBreadcrumb = async (breadcrumb) => {
+    const r = await saveRevenueRecord('deal', 'update', { id: dealId, next_meeting: breadcrumb });
+    if (r.ok) { setMeeting(breadcrumb); setOrphan(null); setOpen(false); return true; }
+    setOrphan(breadcrumb);
+    setError('일정은 캘린더에 만들어졌지만 딜에 연결하지 못했습니다. 다시 연결하세요.');
+    return false;
+  };
+
+  const createMeeting = async () => {
+    if (saving || !startAt) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const start = new Date(startAt);
+      if (Number.isNaN(start.getTime())) { setError('시작 시각을 확인하세요.'); return; }
+      const end = new Date(start.getTime() + 60 * 60 * 1000); // 기본 1시간
+      const res = await fetch('/api/calendar/google/event', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: title.trim() || '미팅',
+          startAt: start.toISOString(),
+          endAt: end.toISOString(),
+          timeZone: 'Asia/Seoul',
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.status !== 'saved' && data?.status !== 'updated') {
+        // 무음 실패 금지 — 원인을 그대로 보여준다.
+        setError(data?.message || data?.error
+          ? `일정 생성 실패 — ${data.message || data.error}`
+          : `일정 생성 실패 (${res.status}) — 캘린더 연결 상태를 확인하세요.`);
+        return;
+      }
+      await saveBreadcrumb({
+        eventId: data.event?.id || null,
+        summary: data.event?.summary || title.trim() || '미팅',
+        startAt: start.toISOString(),
+        htmlLink: data.event?.htmlLink || null,
+      });
+    } catch {
+      setError('일정 생성 실패 — 네트워크 오류. 다시 시도하세요.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const blockedReason = capability === null
+    ? '캘린더 연결 상태를 확인하는 중입니다.'
+    : capability.badge === 'iCal · read only'
+      ? 'iCal 연결은 읽기 전용입니다. 일정 생성에는 Google OAuth 연결이 필요합니다.'
+      : 'Google Calendar 연결 후 일정을 만들 수 있습니다.';
+
+  return (
+    <div style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>다음 미팅</span>
+
+      {meeting && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <Iconed name="calendar" size={12} style={{ color: 'var(--fg-faint)', flexShrink: 0 }} />
+          <span className="mono" style={{ fontSize: 12, color: 'var(--fg)' }}>{formatMeetingTime(meeting.startAt)}</span>
+          <span style={{ fontSize: 12, color: 'var(--fg-muted)', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meeting.summary}</span>
+          {meeting.htmlLink && (
+            <a
+              href={meeting.htmlLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: 11.5, color: 'var(--moon-300)', minHeight: 44, display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}
+            >
+              캘린더에서 보기
+            </a>
+          )}
+        </div>
+      )}
+
+      {isLocal ? (
+        <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', lineHeight: 1.5 }}>딜을 먼저 저장하면 다음 미팅을 잡을 수 있습니다.</div>
+      ) : orphan ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Button variant="outline" size="xs" onClick={() => saveBreadcrumb(orphan)}>딜에 다시 연결</Button>
+        </div>
+      ) : !capability?.canCreate ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11.5, color: 'var(--fg-faint)', lineHeight: 1.5 }}>{blockedReason}</span>
+          {capability && !capability.isLive && (
+            <button
+              type="button"
+              onClick={() => onNavigate?.('dashboard/work/calendar')}
+              style={{ fontSize: 11.5, color: 'var(--moon-300)', minHeight: 44, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+            >
+              캘린더 연결하러 가기
+            </button>
+          )}
+        </div>
+      ) : open ? (
+        <>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="일정 제목"
+            style={{ height: 30, padding: '0 10px', fontSize: 12, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)' }}
+          />
+          <input
+            type="datetime-local"
+            value={startAt}
+            onChange={(e) => setStartAt(e.target.value)}
+            aria-label="미팅 시작 시각"
+            style={{ height: 30, padding: '0 10px', fontSize: 12, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)' }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Button variant="primary" size="xs" onClick={createMeeting} disabled={saving || !startAt}>
+              {saving ? '만드는 중…' : '일정 만들기'}
+            </Button>
+            <Button variant="ghost" size="xs" onClick={() => { setOpen(false); setError(null); }}>취소</Button>
+            <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>1시간 · Asia/Seoul</span>
+          </div>
+        </>
+      ) : (
+        <div>
+          <Button variant="outline" size="xs" icon="calendar" onClick={() => setOpen(true)}>
+            {meeting ? '다시 잡기' : '다음 미팅 잡기'}
+          </Button>
+        </div>
+      )}
+
+      {error && <span role="alert" style={{ fontSize: 11, color: 'var(--danger)' }}>{error}</span>}
+    </div>
+  );
+}
+
 export function Deals({ workspace, onNavigate }) {
   const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
@@ -1624,6 +1870,8 @@ export function Deals({ workspace, onNavigate }) {
         }}
       >
         <DealTaskPanel deal={editingDeal} onSaved={loadDealTaskStats} />
+        <DealNextMeetingPanel deal={editingDeal} onNavigate={onNavigate} />
+        <DealLinkedProjectsPanel deal={editingDeal} onNavigate={onNavigate} />
       </EditDrawer>
     </div>
   );
