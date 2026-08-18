@@ -345,6 +345,17 @@
 - **내비 속도**: `experimental.staleTimes { dynamic: 300 }` — force-dynamic 대시보드가 사이드바 클릭마다 동일 셸 RSC를 서버 왕복(100~400ms)하던 것을 재사용으로 전환. 프로드 실측: 첫 방문 RSC 1회 → 재방문 0회(dev는 라우터 캐시 우회라 효과 비가시가 정상).
 - **Leads 무변별 컬럼 자동 숨김**: 117행이 5컬럼에서 전 행 동일값(Type=Company·Source=eeocrm·Owner=Unassigned·score 25 + 동일 next-action 문구)을 반복 — 변별 없는 컬럼은 그리드째 숨기고, Owner는 드로어와 같은 근거(1인 운영·미영속)로 정적 제거, next-action 최빈 문구(60%↑)는 이관 템플릿으로 판정해 고유 액션만 표시. 모바일 숨김은 nth-child 위치 → `.hub-lc-m` 클래스 계약으로 전환(+테스트 갱신).
 
+### Iteration 29 (2026-08-18) — 반영 완료
+
+주제: **운영자 인터뷰 Q116~Q121 확정의 즉시 구현 — 우선순위·고객 연락·주간 리포트.**
+검증: `npm test` 581/581 · 라이브 실측(followups API jsonb 필터 live, weekly-report 양 스코프 200 live, 화요일 카드 null 정상, 콘솔 에러 0).
+
+- **고객 연락 빈 상태 기준 명시(Q117)**: "기한 지남 딜 9 vs 연락 0" 모순 오독 해소 — 4-2-3-1 계층(트래킹 게이트 최우선, 무접촉 자동 유입 최하위)이 의도임을 카피로 명시.
+- **내 작업 무기한 분리(Q120)**: '전체 기한' 리스트에서 무기한(나중) 제외 — '나중' 렌즈 전용. 방금 추가한 무기한 할 일만 저장 확인용 예외(justAddedId).
+- **다음 연락일 tier-2 유입(Q117·Q121)**: 연락 기록 프리셋(27차)이 저장하는 meta.next_action_at을 followups 원장이 실소비 — 트래킹 윈도 밖 엔티티도 날짜 도래 시 유입(도래 전엔 정체 사유로도 유입 금지, 사유 '예약한 연락일 도래'). 후속: followups-ledger 전용 테스트 신설(기존 0건 파일).
+- **주간 리포트 이원화(Q118·Q119)**: 월=개인/목=회사(ClassIn) 아침 첫 화면 카드 + `/api/hub/weekly-report` + weekly-report 원장(7일 실기록 집계, 4소스 전멸 시 error·부분 실패 failedSources 명명). deals 스코프는 meta.type(컬럼 부재 확인).
+- **기본 정렬 기한순(Q116)**: my-work 기본 정렬 `due` — 28차 커밋 561573f에 선반영.
+
 ### 다음 회차 백로그 (점수 영향 순)
 
 - 편의 부가기능: 기존 키보드 시스템(useCrmKeyboard/ShortcutOverlay/BulkBar) 전면 배선, 공유 undo 훅 + live-region 토스트 → followups 기록·완료·스테이지 변경·삭제(soft) 확장, ⌘K 레코드 검색.
