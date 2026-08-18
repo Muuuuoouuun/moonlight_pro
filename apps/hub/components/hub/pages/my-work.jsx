@@ -406,7 +406,9 @@ export function MyWork({ onNavigate }) {
   // restore passes (StrictMode runs mount effects twice, making the clobber deterministic).
   const [lane, setLaneState] = React.useState('all');
   const [bucketFilter, setBucketFilterState] = React.useState('all');
-  const [sort, setSortState] = React.useState('recent');
+  // 기본 정렬은 기한 임박순 — Q116 확정(2026-08-18): 종류 무관 기한순, 동일 기한은
+  // 고객 > 프로젝트 > 콘텐츠. '최신'은 수동 토글로 유지.
+  const [sort, setSortState] = React.useState('due');
   React.useEffect(() => {
     setLaneState(readStoredOption('mlp.mywork.lane', LANE_OPTIONS, 'all'));
     setBucketFilterState(readStoredOption('mlp.mywork.bucket', BUCKET_OPTIONS, 'all'));
