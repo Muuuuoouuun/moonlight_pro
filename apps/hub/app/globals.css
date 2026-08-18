@@ -4,7 +4,8 @@
    전체 원본은 git 히스토리(1dada12 이전)에 보존. */
 
 @import "@com-moon/ui/tokens.css";
-@import "@com-moon/ui/primitives.css";
+/* primitives.css(.cm-* 454줄)는 허브에서 미사용 — 2026-08-18 재감사 28차에서 제거.
+   허브 프리미티브는 hub-primitives.jsx가 정본이다. */
 
 /* ── Local fonts ─────────────────────────────────────────────────── */
 @font-face {
@@ -511,25 +512,10 @@ button {
  * Delivery Situation Board — shared primitives
  *
  * Used by: PMS (`hub-pms__`), Roadmap (`hub-roadmap__`),
- * and Releases (`hub-releases__`) surfaces. Everything here follows
- * the hub's void-black canvas rule: card backgrounds use
- * rgba(255,255,255,0.04~0.07), borders use rgba(255,255,255,0.07).
- * No white fills, no warm accents.
+ * and Releases (`hub-releases__`) surfaces. 서피스·보더는
+ * hub-tokens.css의 `--surface*`/`--line*` 토큰만 사용한다(§5.2).
+ * 하드코딩 rgba·white fill·warm accent 금지. 레일은 1px(§8.1).
  * ================================================================== */
-
-/* ── Rhythm rim ────────────────────────────────────────────────────
- * 2px left rim utility. Apply to any card via `data-rim="alert"` or
- * `"muted"` to tag urgency without adding decoration elsewhere.
- */
-
-
-/* ── Heat strip (shared KPI row) ───────────────────────────────── */
-
-
-/* ── Sync badge (relative time pill) ─────────────────────────── */
-
-
-/* ── New-since dot (since-last-visit marker) ──────────────────── */
 
 
 /* ==================================================================
@@ -653,10 +639,14 @@ button {
   transition: background 150ms ease, box-shadow 150ms ease;
 }
 
-.hub-app .hub-project-row:hover,
+/* §5.3 채널 분리: hover는 중립(액센트는 current/selected 전용), 좌측 1px 레일은
+ * 위급(danger) 채널이므로 선택 표시는 인셋 아웃라인으로 그린다(재감사 28차). */
+.hub-app .hub-project-row:hover {
+  background: var(--surface-2);
+}
 .hub-app .hub-project-row[data-selected="true"] {
-  background: rgba(82, 116, 168, 0.11);
-  box-shadow: inset 1px 0 0 var(--pms-moonstone);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
 }
 
 .hub-app .hub-project-row__controls {
