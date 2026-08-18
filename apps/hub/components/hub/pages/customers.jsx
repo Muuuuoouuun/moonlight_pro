@@ -765,17 +765,18 @@ export function Customers({ onNavigate }) {
       />
 
       <Card pad={false} style={{ overflow: "hidden" }}>
-        <div style={{
+        <div className="hub-customers-grid" style={{
           display: "grid", gridTemplateColumns: gridCols, gap: 12, padding: "9px 16px",
           background: "var(--surface-2)", borderBottom: "1px solid var(--line)",
           fontSize: 10.5, fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--fg-faint)",
         }}>
-          {/* 인라인 정렬 헤더 3중 복제 제거(6차 사용성 S) — revenue의 SortHead 공유 (§8.1 primitives first) */}
+          {/* 인라인 정렬 헤더 3중 복제 제거(6차 사용성 S) — revenue의 SortHead 공유 (§8.1 primitives first)
+              모바일(.hub-lc-m 숨김)은 신원+단계만 — 건강도 위험은 행 danger 레일이 전달(30차). */}
           <SortHead k="name" sort={sort} onToggle={cycleSort}>고객 · 담당자</SortHead>
           <SortHead k="stage" sort={sort} onToggle={cycleSort}>단계</SortHead>
-          <SortHead k="health" sort={sort} onToggle={cycleSort}>건강도</SortHead>
-          <span>다음 액션</span>
-          <SortHead k="value" sort={sort} onToggle={cycleSort} align="right">금액</SortHead>
+          <SortHead k="health" sort={sort} onToggle={cycleSort} className="hub-lc-m">건강도</SortHead>
+          <span className="hub-lc-m">다음 액션</span>
+          <SortHead k="value" sort={sort} onToggle={cycleSort} align="right" className="hub-lc-m">금액</SortHead>
         </div>
 
         {sorted.length === 0 && (
@@ -793,7 +794,7 @@ export function Customers({ onNavigate }) {
         {sorted.map(r => (
           <div
             key={r.key}
-            className="hub-row"
+            className="hub-row hub-customers-grid"
             role="button"
             tabIndex={0}
             data-customer-row={r.key}
@@ -828,7 +829,7 @@ export function Customers({ onNavigate }) {
               </div>
             </div>
             <Badge tone="neutral" size="xs" variant="outline">{r.stage}</Badge>
-            <div>
+            <div className="hub-lc-m">
               {r.health ? (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   <span className="num" style={{ fontSize: 12, fontWeight: 500, color: HEALTH_TONE[r.health] === 'danger' ? 'var(--danger)' : 'var(--fg-muted)' }}>
@@ -837,10 +838,10 @@ export function Customers({ onNavigate }) {
                 </span>
               ) : <span style={{ fontSize: 11, color: "var(--fg-faint)" }}>—</span>}
             </div>
-            <div style={{ fontSize: 12, color: "var(--fg-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div className="hub-lc-m" style={{ fontSize: 12, color: "var(--fg-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {r.dormant ? "기약 없음 (휴면)" : (r.nextAction || "—")}
             </div>
-            <div className="num" style={{ fontSize: 12.5, fontWeight: 500, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+            <div className="num hub-lc-m" style={{ fontSize: 12.5, fontWeight: 500, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
               {fmtMoney(r.valueNum)}
             </div>
           </div>

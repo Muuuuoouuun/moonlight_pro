@@ -771,8 +771,12 @@
     height: 100dvh;
   }
 
-  .hub-app button {
-    min-height: 44px;
+  /* 터치 플로어는 button 요소만으로는 부족하다 — 행·칩·링크가 role="button" div이거나
+     인라인 min-height(28px 칩)로 우회했다(재감사 30차 모바일 실측: 37px 행·28px 칩·23px 링크).
+     !important는 인라인 스타일을 이기기 위한 의도적 사용. */
+  .hub-app button,
+  .hub-app [role="button"] {
+    min-height: 44px !important;
   }
 
   .hub-app button[title],
@@ -785,7 +789,7 @@
      the eventual fix if bare-checkbox taps prove fiddly. */
   .hub-app button[role="checkbox"] {
     min-width: 0;
-    min-height: 0;
+    min-height: 0 !important;
   }
 
   .hub-app input,
@@ -1259,10 +1263,17 @@
   }
 
   /* 모바일에서 숨는 컬럼은 위치(nth-child)가 아니라 .hub-lc-m 클래스로 지정한다 —
-     무변별 컬럼 자동 숨김(28차)으로 데스크톱 컬럼 수가 데이터에 따라 달라지기 때문. */
+     무변별 컬럼 자동 숨김(28차)으로 데스크톱 컬럼 수가 데이터에 따라 달라지기 때문.
+     30차: customers도 같은 계약 — 결정 리스트(신원+단계)로 붕괴, 건강도는 danger 레일이 전달. */
   .hub-leads-grid > .hub-lc-m,
+  .hub-customers-grid > .hub-lc-m,
   .hub-lead-next-action {
     display: none !important;
+  }
+
+  .hub-customers-grid {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 10px !important;
   }
 
   .hub-lead-mobile-meta {
