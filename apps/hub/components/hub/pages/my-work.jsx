@@ -463,7 +463,13 @@ export function MyWork({ onNavigate }) {
     // Bucket filter is a 리스트-only control (board already shows every bucket as its own
     // column; week already shows every day) — applying it there too would silently empty
     // most columns/days without any visible chip explaining why.
-    if (lens === 'list' && bucketFilter !== 'all') filtered = filtered.filter((i) => i.bucket === bucketFilter);
+    if (lens === 'list') {
+      filtered = bucketFilter === 'all'
+        // Q120 확정(2026-08-18): '전체 기한'은 기한 있는 실행만 — 무기한(나중)은 '나중' 렌즈로
+        // 분리한다. 방금 추가한 무기한 할 일만 예외로 남겨 저장 확인 흐름을 지킨다.
+        ? filtered.filter((i) => normalizeBucket(i) !== 'later' || i.id === justAddedId)
+        : filtered.filter((i) => i.bucket === bucketFilter);
+    }
     const q = search.trim().toLowerCase();
     if (q) filtered = filtered.filter((i) => i.title.toLowerCase().includes(q));
     const sorted = [...filtered];
@@ -471,7 +477,7 @@ export function MyWork({ onNavigate }) {
     else if (sort === 'priority') sorted.sort((a, b) => (priorityValue(b) - priorityValue(a)) || (recencyValue(b) - recencyValue(a)));
     else sorted.sort((a, b) => dueValue(a) - dueValue(b));
     return sorted;
-  }, [items, lane, bucketFilter, search, sort, hiddenIds, lens, itemPatches]);
+  }, [items, lane, bucketFilter, search, sort, hiddenIds, lens, itemPatches, justAddedId]);
 
   // Durable quick-add task: POST /api/hub/tasks (Phase 1A write path). 상세 토글을 열면
   // 기한·우선순위도 한 번에 저장 — 기본은 제목만(빠른 경로) 그대로 유지.
