@@ -335,6 +335,16 @@
 - **DateQuickPresets primitive 신설**: 내일·3일 뒤·다음 주 3프리셋 — 연락 기록(§7 확정 최소 기록)의 date picker 수동 조작(3~4클릭)이 최고 빈도 액션의 마지막 반복 마찰이었다. followups LogForm·customers 컨택 시트 양쪽 배선(§8.1 primitives-first — 인라인 2곳 중복 방지). 임의 날짜는 기존 date input 폴백 유지, 기약 없음 체크 시 비활성.
 - **편의성 16차 재실측**: 체크리스트 3동작 전부 라이브 측정(위 %%각주) — 7차(87) 측정에 미반영이던 17·22·24·25차 개선(시트 undo 패리티·New 생성 직행·스테이지 undo·BulkBar)을 처음 반영해 94 착지.
 
+### Iteration 28 (2026-08-18) — 반영 완료
+
+주제: **real_v1.8(21~27차) 로컬 라인 통합 + 외부 감사 기반 디자인 문법·내비 속도·Leads 사용성.**
+검증: `npm test` 581/581(586개 인식, 통합 후 registerHooks 격차 0 — attention ESM import 수리로 기준선 실패 9건 소진) · 프로드 빌드 + `next start` 실측 · 데스크톱/모바일(375px) 브라우저 실측.
+
+- **real_v1.8 머지**: 공통 조상 ba7996e에서 갈라진 원격 10커밋(21~27차)과 로컬 3커밋(컨택 트래킹 리셋·재통합 + 로컬판 21차)을 병합 — 충돌 15파일. 동일 기능의 양측 중복 구현(모듈 SWR·read 실패 정직화·가짜 endpoint 소거)은 원격 채택, 상호보완 기능은 합집합(mapDeal = export+trackingStartedAt+nextMeeting, daily-brief stalled = attention §4 공식 ∩ trackingEligible, moltbot 웹훅 매핑). 원격 잠재 결함 3종 수리: attention-ledger 확장자 없는 ESM import(테스트 프로세스에서 모듈 해석 실패), aggregate-routes 테스트의 A-1 어댑터 스텁 부재(26차 라우트 컷오버 미반영), 로컬 계약 단언 테스트 포팅.
+- **디자인 문법(외부 소스 감사 C2·H2)**: `.hub-project-row` hover의 액센트 배경+Moonstone 좌측 레일을 중립(`--surface-2`)으로 분리 — §5.3 "hover는 중립, 좌측 1px 레일은 위급 채널" 위반이 매 마우스 패스를 '선택/위급'처럼 읽히게 했다. 선택은 `--accent-soft` + 1px 인셋 아웃라인. 미사용 `@com-moon/ui/primitives.css`(.cm-* 454줄) import 제거, PMS 블록의 rgba 하드코딩 유도 스테일 주석 소거.
+- **내비 속도**: `experimental.staleTimes { dynamic: 300 }` — force-dynamic 대시보드가 사이드바 클릭마다 동일 셸 RSC를 서버 왕복(100~400ms)하던 것을 재사용으로 전환. 프로드 실측: 첫 방문 RSC 1회 → 재방문 0회(dev는 라우터 캐시 우회라 효과 비가시가 정상).
+- **Leads 무변별 컬럼 자동 숨김**: 117행이 5컬럼에서 전 행 동일값(Type=Company·Source=eeocrm·Owner=Unassigned·score 25 + 동일 next-action 문구)을 반복 — 변별 없는 컬럼은 그리드째 숨기고, Owner는 드로어와 같은 근거(1인 운영·미영속)로 정적 제거, next-action 최빈 문구(60%↑)는 이관 템플릿으로 판정해 고유 액션만 표시. 모바일 숨김은 nth-child 위치 → `.hub-lc-m` 클래스 계약으로 전환(+테스트 갱신).
+
 ### 다음 회차 백로그 (점수 영향 순)
 
 - 편의 부가기능: 기존 키보드 시스템(useCrmKeyboard/ShortcutOverlay/BulkBar) 전면 배선, 공유 undo 훅 + live-region 토스트 → followups 기록·완료·스테이지 변경·삭제(soft) 확장, ⌘K 레코드 검색.
