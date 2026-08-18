@@ -1581,6 +1581,81 @@ function BriefClock({ signalCount, urgentCount, todayCount }) {
   );
 }
 
+// 주간 정리 리포트 카드 — Q118·Q119 확정(2026-08-18): 월요일 아침 = 개인, 목요일 아침 =
+// 회사(ClassIn). 해당 요일에만 렌더하고 다른 날은 null(§7 fold 순서를 어지럽히지 않는다).
+const WEEKLY_SCOPE_BY_DAY = { Mon: 'personal', Thu: 'company' };
+
+function weeklyScopeToday() {
+  const day = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', weekday: 'short' }).format(new Date());
+  return WEEKLY_SCOPE_BY_DAY[day] || null;
+}
+
+function WeeklyReportCard() {
+  const scope = weeklyScopeToday();
+  const [state, setState] = React.useState({ syncState: 'loading', report: null });
+  React.useEffect(() => {
+    if (!scope) return;
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/hub/weekly-report?scope=${scope}`, { cache: 'no-store' });
+        const data = await res.json().catch(() => null);
+        if (!active) return;
+        if (!res.ok || !data || data.status === 'error') { setState({ syncState: 'error', report: null }); return; }
+        setState({ syncState: data.status === 'partial' ? 'partial' : data.status === 'preview' ? 'preview' : 'live', report: data });
+      } catch { if (active) setState({ syncState: 'error', report: null }); }
+    })();
+    return () => { active = false; };
+  }, [scope]);
+  if (!scope) return null;
+  const title = scope === 'company' ? '회사 주간 리포트 · ClassIn' : '나의 주간 리포트';
+  const { report, syncState } = state;
+  const stats = report?.stats;
+  const rows = !stats ? [] : scope === 'company'
+    ? [
+        { label: '연락', value: stats.contacts },
+        { label: '신규 딜', value: stats.newDeals },
+        { label: '진행 딜', value: stats.movedDeals },
+        { label: 'Won', value: stats.wonDeals },
+      ]
+    : [
+        { label: '완료 할 일', value: stats.doneTasks },
+        { label: '발행', value: stats.publishes },
+        { label: '연락', value: stats.contacts },
+        { label: '개인 딜', value: stats.personalDeals },
+      ];
+  return (
+    <Card className="fade-up">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <SectionTitle style={{ margin: 0 }}>{title}</SectionTitle>
+        <SyncBadge state={syncState} />
+        <span style={{ fontSize: 11, color: 'var(--fg-dim)' }}>지난 7일</span>
+      </div>
+      {syncState === 'error' ? (
+        <div style={{ fontSize: 12.5, color: 'var(--fg-muted)' }}>주간 기록을 읽지 못했습니다 — 아래 수치 없이 넘어가지 말고 새로고침으로 다시 확인하세요.</div>
+      ) : (
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+          {rows.map((r) => (
+            <div key={r.label} style={{ minWidth: 72 }}>
+              <div className="stat" style={{ fontSize: 22 }}>{syncState === 'loading' ? '—' : r.value}</div>
+              <div style={{ fontSize: 11, color: 'var(--fg-dim)', marginTop: 2 }}>{r.label}</div>
+            </div>
+          ))}
+          {report?.highlights?.length > 0 && (
+            <div style={{ flex: 1, minWidth: 180, fontSize: 12, color: 'var(--fg-muted)' }}>
+              {report.highlights.map((h, i) => (
+                <div key={i} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {h.kind === 'won' ? 'Won · ' : '완료 · '}{h.label}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export function DailyBrief({ onNavigate }) {
   const [refreshKey, setRefreshKey] = React.useState(0);
   const ledger = useDailyBriefLedger(refreshKey);
@@ -1626,6 +1701,9 @@ export function DailyBrief({ onNavigate }) {
 
       {/* §7 슬롯 순서: Quick Capture가 첫 fold 1순위 — 내비 칩보다 위. */}
       <QuickTaskCapture onNavigate={onNavigate} onSaved={ledger.refreshTasks} />
+
+      {/* Q118·Q119: 월(개인)·목(회사) 아침에만 뜨는 주간 정리 — 다른 요일은 null. */}
+      <WeeklyReportCard />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
         {/* §7 확정 fold 순서: Capture → 긴급 KA·집중 고객·오늘 일정 → 신호. 명명된 슬롯이
