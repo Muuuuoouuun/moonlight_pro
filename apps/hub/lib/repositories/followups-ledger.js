@@ -88,7 +88,7 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
   const entityWindow = trackingStartedAt ? [["created_at", `gte.${trackingStartedAt}`]] : [];
   const outcomeWindow = trackingStartedAt ? [["occurred_at", `gte.${trackingStartedAt}`]] : [];
 
-  const [leadRows, dealRows, companies, outcomes] = await Promise.all([
+  const [leadRows, dealRows, companies, outcomes, datedLeadRows, datedDealRows] = await Promise.all([
     fetchSupabaseRows("leads", {
       select: "id,name,status,score,next_action,company_id,channel,source,last_touch_at,updated_at,created_at,meta",
       filters: withWorkspaceFilter([
@@ -118,6 +118,29 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
       order: "occurred_at.desc",
       limit: 500,
     }),
+    // Q117 tier-2(2026-08-18): 다음 연락일을 기록한 엔티티는 트래킹 윈도 밖(트래킹 시작 전
+    // 생성)이어도 유입한다 — 날짜 기록 자체가 "연락 가치 있음"이라는 운영자 신호다.
+    // 윈도가 없으면 본 조회가 전부 담으므로 추가 조회를 생략한다.
+    trackingStartedAt
+      ? fetchSupabaseRows("leads", {
+          select: "id,name,status,score,next_action,company_id,channel,source,last_touch_at,updated_at,created_at,meta",
+          filters: withWorkspaceFilter([
+            ["status", inFilter(["new", "qualified", "nurturing"])],
+            ["meta->>next_action_at", "not.is.null"],
+          ]),
+          limit: 100,
+        })
+      : Promise.resolve([]),
+    trackingStartedAt
+      ? fetchSupabaseRows("deals", {
+          select: "id,title,stage,amount,company_id,last_activity_at,updated_at,created_at,meta",
+          filters: withWorkspaceFilter([
+            ["stage", inFilter(["prospect", "proposal", "negotiation", "lead", "qualified", "qual", "neg", "prop"])],
+            ["meta->>next_action_at", "not.is.null"],
+          ]),
+          limit: 100,
+        })
+      : Promise.resolve([]),
   ]);
 
   // read 실패(null)와 빈 결과([])를 구분한다 — 이전에는 한쪽(leads)이 타임아웃돼도
@@ -140,8 +163,15 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
     ...(companies === null ? ["companies"] : []),
     ...(outcomes === null ? ["outreach_outcomes"] : []),
   ];
-  const leads = leadRows || [];
-  const deals = dealRows || [];
+  // tier-2 병합 — 본 조회와 겹치는 id는 한 번만(연락일 기록건이 윈도 안에도 있을 수 있다).
+  const mergeById = (base, extra) => {
+    const seen = new Set(base.map((r) => r.id));
+    // 윈도 밖 tier-2 행은 태그한다 — 날짜 도래 전에는 정체 사유로도 유입시키지 않기 위해
+    // (Q117: 무접촉 자동 유입은 최하위, 날짜 기록건은 그 날짜에만).
+    return [...base, ...(extra || []).filter((r) => r && !seen.has(r.id)).map((r) => ({ ...r, __tier2: true }))];
+  };
+  const leads = mergeById(leadRows || [], datedLeadRows);
+  const deals = mergeById(dealRows || [], datedDealRows);
 
   const companyById = new Map((companies || []).map((c) => [c.id, c]));
   // last outcome per lead and per company
@@ -163,12 +193,18 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
     const since = daysSince(touch);
     const threshold = thresholdForLead(stage, lead);
     const overdue = since == null || since >= threshold;
-    if (!overdue) return;
+    // Q117 tier-2: 기록한 다음 연락일이 도래(오늘 포함)하면 정체 임계와 무관하게 유입.
+    const nextAt = lead.meta?.next_action_at || null;
+    const nextDue = nextAt ? (daysSince(nextAt) ?? -1) >= 0 : false;
+    if (lead.__tier2 && !nextDue) return; // 윈도 밖 기록건은 도래일에만
+    if (!overdue && !nextDue) return;
 
     const outcome = lastOutcomeByLead.get(lead.id) || (lead.company_id && lastOutcomeByCompany.get(lead.company_id));
     const outcomeAge = outcome ? daysSince(outcome.occurred_at) : null;
     const reasonPrefix = sourceReason(lead);
-    const why = outcome
+    const why = nextDue && !overdue
+      ? `${reasonPrefix}예약한 연락일 도래 · ${stage}`
+      : outcome
       ? `${reasonPrefix}마지막 ${outcome.action} ${outcomeAge ?? "?"}일 전 · ${stage}`
       : `${reasonPrefix}${since == null ? "무접촉" : `${since}일째 무접촉`} · ${stage}`;
 
@@ -200,11 +236,17 @@ export async function getFollowups({ workspaceId = resolveDefaultWorkspaceId(), 
     const touch = deal.last_activity_at || deal.updated_at || deal.created_at;
     const since = daysSince(touch);
     const threshold = STALE_DAYS[stage] ?? DEFAULT_STALE;
-    if (since != null && since < threshold) return;
+    const dealNextAt = deal.meta?.next_action_at || null;
+    const dealNextDue = dealNextAt ? (daysSince(dealNextAt) ?? -1) >= 0 : false;
+    const dealStale = !(since != null && since < threshold);
+    if (deal.__tier2 && !dealNextDue) return; // 윈도 밖 기록건은 도래일에만
+    if (!dealStale && !dealNextDue) return;
 
     const outcome = deal.company_id && lastOutcomeByCompany.get(deal.company_id);
     const outcomeAge = outcome ? daysSince(outcome.occurred_at) : null;
-    const why = outcome
+    const why = dealNextDue && !dealStale
+      ? `예약한 연락일 도래 · ${stage}`
+      : outcome
       ? `마지막 ${outcome.action} ${outcomeAge ?? "?"}일 전 · ${stage}`
       : `${since == null ? "활동 없음" : `${since}일째 정체`} · ${stage}`;
 
