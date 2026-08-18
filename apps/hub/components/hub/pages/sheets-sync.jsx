@@ -33,11 +33,14 @@ export function SheetsSync() {
     syncState: "loading",
     enabled: false,
     reason: null,
-    connected: false,
+    // connected는 3-값이다: true(연결됨) · false(미연결 확인) · null(확인 불가).
+    // read가 거부되면 null을 유지해 "미연결 + 연결 CTA"로 위장하지 않는다.
+    connected: null,
     spreadsheetId: null,
     lastSyncAt: null,
-    staging: {},
-    recentRuns: [],
+    staging: null,
+    recentRuns: null,
+    failedSources: [],
   });
   const [busy, setBusy] = React.useState(null);
   const [msg, setMsg] = React.useState(null);
@@ -47,8 +50,15 @@ export function SheetsSync() {
     try {
       const r = await fetch("/api/hub/sheets", { cache: "no-store" });
       const d = await r.json().catch(() => null);
-      if (!r.ok || !d) {
-        setState((s) => ({ ...s, syncState: "error" }));
+      if (!r.ok || !d || d.status === "error") {
+        setState((s) => ({
+          ...s,
+          syncState: "error",
+          connected: null,
+          staging: null,
+          recentRuns: null,
+          failedSources: Array.isArray(d?.failedSources) ? d.failedSources : [],
+        }));
         return;
       }
       setState({
@@ -58,11 +68,12 @@ export function SheetsSync() {
         connected: Boolean(d.connected),
         spreadsheetId: d.spreadsheetId || null,
         lastSyncAt: d.lastSyncAt || null,
-        staging: d.staging || {},
-        recentRuns: Array.isArray(d.recentRuns) ? d.recentRuns : [],
+        staging: d.staging && typeof d.staging === "object" ? d.staging : null,
+        recentRuns: Array.isArray(d.recentRuns) ? d.recentRuns : null,
+        failedSources: Array.isArray(d.failedSources) ? d.failedSources : [],
       });
     } catch {
-      setState((s) => ({ ...s, syncState: "error" }));
+      setState((s) => ({ ...s, syncState: "error", connected: null, staging: null, recentRuns: null }));
     }
   }, []);
 
@@ -97,7 +108,8 @@ export function SheetsSync() {
     window.location.href = "/api/integrations/sheets/connect";
   };
 
-  const { syncState, enabled, reason, connected, spreadsheetId, lastSyncAt, staging, recentRuns } = state;
+  const { syncState, enabled, reason, connected, spreadsheetId, lastSyncAt, staging, recentRuns, failedSources } = state;
+  const connectionUnknown = connected === null;
   const syncLabel = syncState === "live"
     ? "live"
     : syncState === "loading"
@@ -137,10 +149,28 @@ export function SheetsSync() {
               {lastSyncAt ? ` · 최근 ${new Date(lastSyncAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}
             </div>
           </div>
-          <Badge tone="neutral" size="xs">{connected ? "연결됨" : "미연결"}</Badge>
+          <Badge tone={connectionUnknown ? "danger" : "neutral"} size="xs">
+            {connectionUnknown ? "확인 불가" : connected ? "연결됨" : "미연결"}
+          </Badge>
         </div>
 
-        {!connected && (
+        {connectionUnknown && (
+          // 연결 상태를 모를 때 연결 CTA를 띄우면 이미 연결된 계정에 재연결을 지시하게 된다.
+          // 원인을 명명하고 다시 읽기만 제공한다.
+          <div role="alert" style={{ marginTop: 12, fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.6 }}>
+            연결 상태를 읽지 못했습니다. 연결이 끊긴 것인지 원장 읽기가 실패한 것인지 구분할 수 없습니다.
+            {failedSources?.length ? (
+              <span className="mono" style={{ marginLeft: 6, color: "var(--fg-faint)" }}>
+                {failedSources.join(", ")}
+              </span>
+            ) : null}
+            <div style={{ marginTop: 12 }}>
+              <Button variant="primary" size="sm" icon="runs" onClick={load}>다시 읽기</Button>
+            </div>
+          </div>
+        )}
+
+        {connected === false && (
           <div style={{ marginTop: 12, fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.6 }}>
             {enabled
               ? "구글 계정으로 연결하면 시트의 리드를 DB로 가져오고, 라이브 뷰를 시트로 되돌립니다."
@@ -160,7 +190,7 @@ export function SheetsSync() {
                 <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: "var(--r-sm)", background: "var(--surface-2)", border: "1px solid var(--line-soft)" }}>
                   <Dot tone={s.tone} />
                   <span style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>{s.label}</span>
-                  <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{staging?.[s.key] ?? 0}</span>
+                  <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{staging ? staging[s.key] ?? 0 : "—"}</span>
                 </div>
               ))}
             </div>
@@ -184,7 +214,15 @@ export function SheetsSync() {
       {/* Recent sync runs */}
       <SectionTitle>최근 동기화</SectionTitle>
       <Card pad={false} className="hub-table-card">
-        {recentRuns.length === 0 ? (
+        {!Array.isArray(recentRuns) ? (
+          // read 실패를 "이력 없음"으로 렌더하면 실패한 동기화가 없었던 일이 된다.
+          <EmptyState
+            icon="runs"
+            title="동기화 이력을 읽지 못했습니다"
+            description="실행 기록이 비어 있는 것인지 읽기가 실패한 것인지 구분할 수 없습니다."
+            action={<Button variant="secondary" size="sm" icon="runs" onClick={load}>다시 읽기</Button>}
+          />
+        ) : recentRuns.length === 0 ? (
           <EmptyState
             icon="runs"
             title="동기화 이력이 없습니다"

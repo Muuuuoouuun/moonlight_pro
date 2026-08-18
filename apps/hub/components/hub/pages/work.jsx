@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { createLedgerCache } from "../module-ledger-cache";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, IconButton, Button, Progress, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge } from "../hub-primitives";
@@ -73,46 +74,60 @@ function formatHour(value) {
   return `${hour}:${String(minutes).padStart(2, '0')}`;
 }
 
-function useWorkLedger(projectId = null) {
-  const [state, setState] = React.useState({
+// Decisions↔Rhythm↔Roadmap 탭 전환마다 업무 원장을 다시 받던 경로(8차 잔여).
+// 프로젝트 스코프별로 응답이 다르므로 key를 함께 저장하고 일치할 때만 서빙한다.
+const workCache = createLedgerCache();
+
+const EMPTY_WORK_STATE = {
+  source: 'preview',
+  decisions: [],
+  decisionsState: { state: 'preview', partial: false, error: null },
+  rituals: [],
+  projects: [],
+  summary: null,
+  syncState: 'preview',
+  rhythmState: 'preview',
+  rhythmPartial: false,
+  rhythmTruncatedSources: [],
+  rhythmError: null,
+  roadmap: {
     source: 'preview',
-    decisions: [],
-    decisionsState: { state: 'preview', partial: false, error: null },
-    rituals: [],
+    state: 'loading',
+    partial: false,
+    error: null,
+    failedSources: [],
+    truncatedSources: [],
     projects: [],
-    summary: null,
-    syncState: 'preview',
-    rhythmState: 'preview',
-    rhythmPartial: false,
-    rhythmTruncatedSources: [],
-    rhythmError: null,
-    roadmap: {
-      source: 'preview',
-      state: 'loading',
-      partial: false,
-      error: null,
-      failedSources: [],
-      truncatedSources: [],
-      projects: [],
-      milestones: [],
-    },
+    milestones: [],
+  },
+};
+
+function useWorkLedger(projectId = null) {
+  const projectQuery = typeof projectId === 'string' ? projectId.trim() : '';
+  const [state, setState] = React.useState(() => {
+    const cached = workCache.read();
+    return cached && cached.key === projectQuery ? cached.state : EMPTY_WORK_STATE;
   });
   const requestRef = React.useRef(0);
   const baseSnapshotRef = React.useRef(null);
-  const projectQuery = typeof projectId === 'string' ? projectId.trim() : '';
 
   const load = React.useCallback(async () => {
     const requestId = requestRef.current + 1;
     requestRef.current = requestId;
-    setState((prev) => ({
-      ...prev,
-      syncState: 'loading',
-      decisionsState: { ...prev.decisionsState, state: 'loading' },
-      rhythmState: 'loading',
-      rhythmPartial: false,
-      rhythmTruncatedSources: [],
-      roadmap: { ...prev.roadmap, state: 'loading' },
-    }));
+    // 같은 스코프의 캐시를 서빙 중이면 스켈레톤 없이 조용히 재검증한다(모듈 SWR).
+    const cachedEntry = workCache.read();
+    const servable = Boolean(cachedEntry && cachedEntry.key === projectQuery);
+    if (!servable) {
+      setState((prev) => ({
+        ...prev,
+        syncState: 'loading',
+        decisionsState: { ...prev.decisionsState, state: 'loading' },
+        rhythmState: 'loading',
+        rhythmPartial: false,
+        rhythmTruncatedSources: [],
+        roadmap: { ...prev.roadmap, state: 'loading' },
+      }));
+    }
     try {
       const endpoint = projectQuery
         ? `/api/hub/work?project=${encodeURIComponent(projectQuery)}`
@@ -123,6 +138,19 @@ function useWorkLedger(projectId = null) {
 
       if (!response.ok || !data || data.status === 'error') {
         const message = data?.error || data?.message || `업무 원장 응답 실패 (${response.status})`;
+        // 재검증 1회 실패로 화면을 비우면 오히려 "기록 0건"으로 보인다 —
+        // 서빙 중이던 값은 유지하고 partial로만 낮춘다.
+        if (servable) {
+          setState((prev) => ({
+            ...prev,
+            syncState: 'partial',
+            decisionsState: { ...prev.decisionsState, partial: true, error: { message, retryable: true } },
+            rhythmPartial: true,
+            rhythmError: message,
+            roadmap: { ...prev.roadmap, partial: true, error: { message, retryable: true } },
+          }));
+          return false;
+        }
         setState((prev) => ({
           ...prev,
           syncState: 'error',
@@ -202,6 +230,7 @@ function useWorkLedger(projectId = null) {
         rhythmError: rhythm.error?.message || null,
         roadmap,
       };
+      workCache.write({ key: projectQuery, state: nextState });
       setState(nextState);
       // 프로젝트 미선택 상태의 성공 응답을 스냅샷 — 로드맵 선택 해제 시 재조회 없이 복원한다.
       if (!projectQuery) baseSnapshotRef.current = nextState;
@@ -209,6 +238,17 @@ function useWorkLedger(projectId = null) {
     } catch (error) {
       if (requestId !== requestRef.current) return false;
       const message = error instanceof Error ? error.message : String(error);
+      if (servable) {
+        setState((prev) => ({
+          ...prev,
+          syncState: 'partial',
+          decisionsState: { ...prev.decisionsState, partial: true, error: { message, retryable: true } },
+          rhythmPartial: true,
+          rhythmError: message,
+          roadmap: { ...prev.roadmap, partial: true, error: { message, retryable: true } },
+        }));
+        return false;
+      }
       setState((prev) => ({
         ...prev,
         syncState: 'error',
@@ -435,6 +475,11 @@ export function Calendar({ onNavigate }) {
   React.useEffect(() => {
     const minutes = Number(searchParams.get('focus'));
     if (!minutes || focusAppliedRef.current) return;
+    // 캘린더 능력이 확정되기 전에는 canCreate가 무조건 false다(badge='syncing').
+    // 그대로 진행하면 첫 화면 primary CTA의 ?focus= 딥링크가 "연결 후 만들 수
+    // 있습니다"로 잘못 실패하고, router.replace가 파라미터를 지워 재시도 경로까지
+    // 사라진다. 능력이 확정될 때까지 적용을 미룬다.
+    if (calendarData.status === 'loading') return;
     setSelectedDate(now);
     setViewMode('day');
     focusAppliedRef.current = true;
@@ -446,7 +491,7 @@ export function Calendar({ onNavigate }) {
     });
     router.replace(pathname);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [now, searchParams]);
+  }, [now, searchParams, calendarData.status]);
 
   async function connectGoogleCalendar() {
     setGcalStatus('connecting');

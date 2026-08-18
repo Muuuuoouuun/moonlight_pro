@@ -20,11 +20,16 @@ export async function GET(req) {
       );
     }
     const ledger = await getWorkLedger({ projectId });
-    const status = ledger.source === "error"
-      ? "error"
-      : ledger.source === "supabase"
-        ? ledger.partial ? "partial" : "live"
-        : "preview";
+
+    if (ledger.source === "error") {
+      // 코어 read 거부는 502 — 200으로 뭉개면 소비자가 재시도하지 않고
+      // 빈 결정/리듬/로드맵을 "기록 없음"으로 렌더한다.
+      return NextResponse.json({ status: "error", ...ledger }, { status: 502 });
+    }
+
+    const status = ledger.source === "supabase"
+      ? ledger.partial ? "partial" : "live"
+      : "preview";
 
     return NextResponse.json({
       status,

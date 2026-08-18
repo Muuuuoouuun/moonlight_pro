@@ -25,8 +25,9 @@ test("certainty is communicated by geometry and direct labels instead of semanti
 test("truth states stay neutral unless the source is actually in error", () => {
   assert.match(primitivesSource, /live:\s*\{[^}]*tone:\s*["']neutral["'][^}]*label:\s*["']live["']/s);
   assert.match(primitivesSource, /partial:\s*\{[^}]*tone:\s*["']neutral["'][^}]*label:\s*["']일부 데이터["']/s);
-  assert.match(primitivesSource, /preview:\s*\{[^}]*tone:\s*["']neutral["'][^}]*label:\s*["']preview["']/s);
-  assert.match(primitivesSource, /error:\s*\{[^}]*tone:\s*["']danger["'][^}]*label:\s*["']error["']/s);
+  // DESIGN.md §11 Source truth — 라벨은 운영자 문장이어야 한다(개발 토큰 노출 금지).
+  assert.match(primitivesSource, /preview:\s*\{[^}]*tone:\s*["']neutral["'][^}]*label:\s*["']Preview · 연결 필요["']/s);
+  assert.match(primitivesSource, /error:\s*\{[^}]*tone:\s*["']danger["'][^}]*label:\s*["']읽기 실패["']/s);
   assert.match(primitivesSource, /export function SyncBadge[\s\S]*?<TruthBadge state=\{state\}/);
 });
 

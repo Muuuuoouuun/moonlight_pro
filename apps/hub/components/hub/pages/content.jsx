@@ -1,9 +1,10 @@
 "use client";
 
 import React from "react";
+import { createLedgerCache } from "../module-ledger-cache";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, Placeholder, SectionTitle, EmptyState, Avatar, SyncBadge, SegmentedControl } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, SectionTitle, EmptyState, Avatar, SyncBadge, SegmentedControl } from "../hub-primitives";
 import { usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
 import { shouldRestoreActiveStudioDraft } from "@/lib/content-studio-routing";
@@ -139,41 +140,49 @@ function handoffTone(status) {
   return status === "failed" ? "danger" : "neutral";
 }
 
+const EMPTY_CONTENT_STATE = {
+  source: "preview",
+  syncState: "preview",
+  brands: [],
+  items: [],
+  variants: [],
+  assets: [],
+  publishLogs: [],
+  campaigns: [],
+  queue: [],
+  pipeline: [],
+  attention: [],
+  summary: null,
+  ideaQueue: [],
+  cadence: null,
+};
+
+// Studio↔Queue↔Campaigns 탭 전환마다 콘텐츠 원장을 다시 받던 경로(8차 잔여).
+const contentCache = createLedgerCache();
+
 function useContentLedger() {
-  const [state, setState] = React.useState({
-    source: "preview",
-    syncState: "preview",
-    brands: [],
-    items: [],
-    variants: [],
-    assets: [],
-    publishLogs: [],
-    campaigns: [],
-    queue: [],
-    pipeline: [],
-    attention: [],
-    summary: null,
-    ideaQueue: [],
-    cadence: null,
-  });
+  const [state, setState] = React.useState(() => contentCache.read() || EMPTY_CONTENT_STATE);
 
   React.useEffect(() => {
     let active = true;
 
     async function loadLedger() {
-      setState((s) => ({ ...s, syncState: "loading" }));
+      // 캐시 서빙 중엔 스켈레톤 없이 조용히 재검증한다(모듈 SWR).
+      const servable = contentCache.read();
+      if (!servable) setState((s) => ({ ...s, syncState: "loading" }));
       try {
         const response = await fetch("/api/hub/content", { cache: "no-store" });
         const data = await response.json().catch(() => null);
 
         if (!active || !response.ok || !data || data.status === "error") {
           // 라이브 read 실패는 error — preview("미구성")로 뭉개면 큐가 0건이 사실처럼 보인다.
-          if (active) setState((s) => ({ ...s, syncState: "error" }));
+          // 캐시를 서빙 중이었다면 오래된 값을 live로 위장하지 않고 partial로 낮춘다.
+          if (active) setState((s) => ({ ...s, syncState: servable ? "partial" : "error" }));
           return;
         }
 
         if (data.source === "supabase") {
-          setState({
+          const next = {
             source: data.source,
             syncState: data.status === "partial" ? "partial" : "live",
             brands: Array.isArray(data.brands) ? data.brands : [],
@@ -188,12 +197,14 @@ function useContentLedger() {
             summary: data.summary || null,
             ideaQueue: Array.isArray(data.ideaQueue) ? data.ideaQueue : [],
             cadence: data.cadence || null,
-          });
+          };
+          contentCache.write(next);
+          setState(next);
         } else {
           setState((s) => ({ ...s, source: "preview", syncState: "preview", campaigns: [], queue: [] }));
         }
       } catch {
-        if (active) setState((s) => ({ ...s, syncState: "error" }));
+        if (active) setState((s) => ({ ...s, syncState: servable ? "partial" : "error" }));
       }
     }
 
@@ -703,10 +714,6 @@ export function Studio({ workspace }) {
                     {body.slice(0, 1200)}
                     {body.length > 1200 ? '…' : ''}
                   </div>
-                </div>
-                <div style={{ marginTop: 24 }}>
-                  <Placeholder label="inline figure — decision note 4-box" h={220} />
-                  <div style={{ fontSize: 12, color: 'var(--fg-faint)', marginTop: 6 }}>Figure 1 · 네 칸 구조 다이어그램</div>
                 </div>
               </div>
             </div>

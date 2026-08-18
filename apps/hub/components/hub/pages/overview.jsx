@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { createLedgerCache } from "../module-ledger-cache";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, SectionTitle, Button, Dot, Divider, EmptyState, SyncBadge, SegmentedControl, Sparkline, Progress } from "../hub-primitives";
 import {
@@ -76,27 +77,39 @@ const EMPTY_LEDGER = {
   recentActivity: [],
 };
 
+// 탭 복귀마다 ~35콜 원장을 다시 받고 스켈레톤을 보이던 경로(8차 잔여).
+const overviewCache = createLedgerCache();
+
 function useOverviewLedger() {
-  const [ledger, setLedger] = React.useState(EMPTY_LEDGER);
-  const [syncState, setSyncState] = React.useState('preview');
+  const cached = overviewCache.read();
+  const [ledger, setLedger] = React.useState(cached ? cached.ledger : EMPTY_LEDGER);
+  const [syncState, setSyncState] = React.useState(cached ? cached.syncState : 'preview');
   const [reloadKey, setReloadKey] = React.useState(0);
-  const reload = React.useCallback(() => setReloadKey((k) => k + 1), []);
+  const reload = React.useCallback(() => {
+    overviewCache.clear();
+    setReloadKey((k) => k + 1);
+  }, []);
 
   React.useEffect(() => {
     let active = true;
     async function load() {
-      setSyncState('loading');
+      // 캐시 서빙 중엔 스켈레톤 없이 조용히 재검증한다(모듈 SWR).
+      const servable = overviewCache.read();
+      if (!servable) setSyncState('loading');
       try {
         const response = await fetch('/api/hub/overview', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
         if (!active || !response.ok || !data) {
-          if (active) setSyncState('error');
+          // 오래된 캐시를 live로 위장하지 않는다 — 재검증 실패는 partial로 낮춘다.
+          if (active) setSyncState(servable ? 'partial' : 'error');
           return;
         }
+        const nextSyncState = overviewSyncState(data);
+        overviewCache.write({ ledger: data, syncState: nextSyncState });
         setLedger(data);
-        setSyncState(overviewSyncState(data));
+        setSyncState(nextSyncState);
       } catch {
-        if (active) setSyncState('error');
+        if (active) setSyncState(servable ? 'partial' : 'error');
       }
     }
     load();

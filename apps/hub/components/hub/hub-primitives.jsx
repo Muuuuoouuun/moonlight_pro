@@ -425,8 +425,10 @@ const TRUTH_STATES = {
   partial: { tone: 'neutral', label: '일부 데이터', icon: 'signal', borderStyle: 'dashed' },
   syncing: { tone: 'neutral', label: '동기화 중',   icon: 'runs' },
   loading: { tone: 'neutral', label: '불러오는 중', icon: 'runs' },
-  preview: { tone: 'neutral', label: 'preview',     icon: 'link', borderStyle: 'dashed' },
-  error:   { tone: 'danger',  label: 'error',       icon: 'x' },
+  // DESIGN.md §11 Source truth: preview는 `Preview · 연결 필요`, error는 평문 원인.
+  // 개발 토큰('preview'/'error')을 그대로 노출하면 운영자가 상태를 읽을 수 없다.
+  preview: { tone: 'neutral', label: 'Preview · 연결 필요', icon: 'link', borderStyle: 'dashed' },
+  error:   { tone: 'danger',  label: '읽기 실패',           icon: 'x' },
 };
 
 export function TruthBadge({ state = 'error', label, style }) {

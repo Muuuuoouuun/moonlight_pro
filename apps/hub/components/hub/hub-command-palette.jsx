@@ -5,6 +5,7 @@ import { Iconed } from "./hub-icons";
 import { Button, Kbd } from "./hub-primitives";
 import { NAV_TREE, LEGACY_TREE } from "./hub-data";
 import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
+import { readRevenueLedgerCache } from "./revenue-ledger-cache";
 
 // 레코드 검색(2026-08-05) — 팔레트가 페이지 내비만 하던 것을 "이름을 치면 그 레코드"로.
 // 이미 존재하는 딥링크(?customer= ?deal= ?task=)에 얹는 팔레트측 배선이라 새 API가 없다.
@@ -12,8 +13,13 @@ import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
 let RECORDS_CACHE = { at: 0, items: [] };
 async function loadRecordItems() {
   if (Date.now() - RECORDS_CACHE.at < 60_000) return RECORDS_CACHE.items;
+  // 매출 표면이 이미 받아둔 스냅샷이 신선하면 그대로 쓴다 — 팔레트가 따로 읽으면
+  // 방금 렌더한 목록과 다른 스냅샷을 검색하게 되고 원장 호출도 두 배가 된다.
+  const cachedRevenue = readRevenueLedgerCache(60_000);
   const [rev, tasks] = await Promise.all([
-    fetch('/api/hub/revenue', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null),
+    cachedRevenue
+      ? Promise.resolve(cachedRevenue.ledger)
+      : fetch('/api/hub/revenue', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null),
     fetch('/api/hub/tasks', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null),
   ]);
   const items = [];

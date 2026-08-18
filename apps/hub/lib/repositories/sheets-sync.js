@@ -97,23 +97,52 @@ export async function getSheetsSyncStatus(workspaceId = resolveDefaultWorkspaceI
     tallyStagingByStatus("google_sheets"),
   ]);
 
-  const connection = connectionRows?.[0] || null;
+  // 연결 원장 read 실패를 connected:false로 뭉개면 화면이 "미연결 + 연결 CTA"를 띄운다.
+  // 실제로는 연결돼 있을 수 있으므로 재연결을 유도하는 건 거짓 지시다
+  // (Phase 0 분류: preview = 미구성 전용, read 거부 = error).
+  if (!Array.isArray(connectionRows)) {
+    return {
+      source: "error",
+      configured: true,
+      error: "sheets-sync-status-read-failed",
+      failedSources: ["integration_connections"],
+      partial: false,
+      connected: null,
+      spreadsheetId: null,
+      expectedOperatorEmail: resolveOperatorEmail(),
+      expectedSpreadsheetId: resolvePersonalLeadsSpreadsheetId() || null,
+      lastSyncAt: null,
+      staging: null,
+      recentRuns: [],
+    };
+  }
+
+  const connection = connectionRows[0] || null;
+  const failedSources = [
+    ...(Array.isArray(recentRuns) ? [] : ["sync_runs"]),
+    ...(staging === null ? [STAGING_TABLE] : []),
+  ];
 
   return {
     source: "supabase",
     configured: true,
+    partial: failedSources.length > 0,
+    failedSources,
     connected: Boolean(connection?.config?.refreshToken) || Boolean(process.env.GOOGLE_SHEETS_REFRESH_TOKEN?.trim()),
     spreadsheetId: connection?.config?.spreadsheetId || resolvePersonalLeadsSpreadsheetId() || null,
     expectedOperatorEmail: resolveOperatorEmail(),
     expectedSpreadsheetId: resolvePersonalLeadsSpreadsheetId() || null,
     lastSyncAt: connection?.last_synced_at || null,
+    // 실패한 보조 소스는 빈 값이 아니라 null로 넘겨 화면이 0/빈 목록을 사실로 렌더하지 않게 한다.
     staging,
-    recentRuns: (recentRuns || []).map((r) => ({
-      status: r.status,
-      action: r.payload?.action || null,
-      startedAt: r.started_at,
-      error: r.error_message || null,
-    })),
+    recentRuns: Array.isArray(recentRuns)
+      ? recentRuns.map((r) => ({
+          status: r.status,
+          action: r.payload?.action || null,
+          startedAt: r.started_at,
+          error: r.error_message || null,
+        }))
+      : null,
   };
 }
 

@@ -687,3 +687,46 @@ test("rhythm row limit boundary is complete at 240 and explicitly partial at 241
   const call = state.calls.find((entry) => entry.table === "routine_checks");
   assert.equal(call.options.limit, 241);
 });
+
+test("every core section failing reports a top-level error envelope, not partial", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.rows.decisions = null;
+  state.rows.routine_checks = null;
+  state.rows.projects = null;
+  state.rows.milestones = null;
+
+  const ledger = await workLedger.getWorkLedger();
+
+  assert.equal(ledger.decisionsState.state, "error");
+  assert.equal(ledger.rhythm.state, "error");
+  assert.equal(ledger.roadmap.state, "error");
+  // 전 섹션 실패는 partial이 아니라 error — 소비자가 "기록 0건"을 사실로 렌더하면 안 된다.
+  assert.equal(ledger.source, "error");
+  assert.equal(ledger.error, "work-ledger-core-read-failed");
+  assert.deepEqual(ledger.decisions, []);
+  assert.deepEqual(ledger.rituals, []);
+  assert.ok(ledger.failedSources.includes("decisions"));
+  assert.ok(ledger.failedSources.includes("routine_checks"));
+});
+
+test("a surviving core section keeps the ledger at partial rather than error", async () => {
+  const state = globalThis.__workLedgerTestState;
+  state.rows.decisions = null;
+  state.rows.routine_checks = null;
+  state.rows.projects = [{
+    id: "project-1",
+    name: "살아있는 프로젝트",
+    status: "active",
+    priority: "high",
+    started_at: null,
+    due_at: "2026-09-01",
+  }];
+  state.rows.milestones = [];
+
+  const ledger = await workLedger.getWorkLedger();
+
+  assert.equal(ledger.roadmap.state, "live");
+  assert.equal(ledger.source, "supabase");
+  assert.equal(ledger.error, null);
+  assert.equal(ledger.partial, true);
+});

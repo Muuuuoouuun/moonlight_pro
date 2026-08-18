@@ -4,6 +4,7 @@ import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, Progress } from "../hub-primitives";
+import { clearRevenueLedgerCache, readRevenueLedgerCache, writeRevenueLedgerCache } from "../revenue-ledger-cache";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { useCrmKeyboard, useCrmSelection, usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
@@ -125,22 +126,16 @@ const EMPTY_REVENUE_LEDGER = {
 // 모듈 스코프 stale-while-revalidate 캐시 — Leads↔Deals↔Accounts↔Cases↔Customers 탭
 // 전환은 훅을 리마운트하므로, 캐시 없이는 전환마다 동일한 6콜 원장을 다시 받고 스켈레톤을
 // 보였다(re-audit 속도 #3). 캐시는 즉시 서빙하고 항상 배경 재검증하므로 신선도는 1 RTT다.
-const REVENUE_CACHE_SERVABLE_MS = 5 * 60 * 1000;
-let revenueLedgerCache = null; // { at, ledger, syncState }
-
 export function useRevenueLedger() {
-  const servable = revenueLedgerCache
-    && Date.now() - revenueLedgerCache.at < REVENUE_CACHE_SERVABLE_MS;
-  const [ledger, setLedger] = React.useState(servable ? revenueLedgerCache.ledger : EMPTY_REVENUE_LEDGER);
-  const [syncState, setSyncState] = React.useState(servable ? revenueLedgerCache.syncState : 'preview');
+  const servable = readRevenueLedgerCache();
+  const [ledger, setLedger] = React.useState(servable ? servable.ledger : EMPTY_REVENUE_LEDGER);
+  const [syncState, setSyncState] = React.useState(servable ? servable.syncState : 'preview');
   const [refreshKey, setRefreshKey] = React.useState(0);
 
   React.useEffect(() => {
     let active = true;
     let retryTimer = null;
-    const hasServableCache = Boolean(
-      revenueLedgerCache && Date.now() - revenueLedgerCache.at < REVENUE_CACHE_SERVABLE_MS
-    );
+    const hasServableCache = Boolean(readRevenueLedgerCache());
     // dev 리컴파일·순간 네트워크 실패로 첫 fetch가 죽으면 preview에 고착됐다 —
     // 실패 1회는 1.2초 뒤 재시도하고, 그래도 실패하면 error로 표시한다(preview는
     // "미구성"의 뜻 — 라이브 read 거부를 preview로 라벨하면 0건이 사실처럼 보인다).
@@ -175,7 +170,7 @@ export function useRevenueLedger() {
         const nextState = data.source === 'supabase'
           ? data.status === 'partial' ? 'partial' : 'live'
           : 'preview';
-        revenueLedgerCache = { at: Date.now(), ledger: nextLedger, syncState: nextState };
+        writeRevenueLedgerCache(nextLedger, nextState);
         setLedger(nextLedger);
         setSyncState(nextState);
       } catch {
@@ -195,11 +190,26 @@ export function useRevenueLedger() {
 
   const reload = React.useCallback(() => {
     // 모듈 캐시를 무효화하고 재조회 — 명함 스캔 승격 등 쓰기 직후 목록 갱신용.
-    revenueLedgerCache = null;
+    clearRevenueLedgerCache();
     setRefreshKey((k) => k + 1);
   }, []);
 
   return { ledger, syncState, reload };
+}
+
+// 원장 read가 거부됐을 때의 빈 상태. "없습니다 + 등록하세요"로 렌더하면 실제로는
+// 행이 있는데도 운영자가 중복 등록을 하게 된다 — 원인을 명명하고 다시 읽기만 준다.
+// syncState !== 'error'이면 null을 돌려 기존 빈 상태 카피를 그대로 쓴다.
+function readFailureEmpty(syncState, label, reload) {
+  if (syncState !== 'error') return null;
+  return {
+    icon: 'x',
+    title: `${label} 기록을 읽지 못했습니다`,
+    description: '비어 있는 것인지 읽기가 실패한 것인지 구분할 수 없습니다.',
+    action: reload
+      ? <Button variant="secondary" size="sm" icon="runs" onClick={reload}>다시 읽기</Button>
+      : null,
+  };
 }
 
 // 3단 정렬 헤더(§8.1) — 컴포넌트 안에서 정의하면 렌더마다 함수 identity가 바뀌어
@@ -315,7 +325,7 @@ function GuruCoachPanel({ onNavigate }) {
 }
 
 export function RevenueOverview({ onNavigate }) {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const LEADS = ledger.leads;
   const DEALS = ledger.deals;
   const DEAL_STAGES = ledger.stages;
@@ -403,9 +413,13 @@ export function RevenueOverview({ onNavigate }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {byBrand.length === 0 && (
               <EmptyState
-                icon="revenue"
-                title="브랜드별 매출 집계 없음"
-                description="Supabase revenue 기록은 live입니다. 브랜드별 매출 join이 준비되면 이 패널이 자동으로 채워집니다."
+                {...(readFailureEmpty(syncState, '매출', reloadLedger) || {
+                  icon: 'revenue',
+                  title: '브랜드별 매출 집계 없음',
+                  description: isLiveLedger
+                    ? '브랜드별 매출 join이 준비되면 이 패널이 자동으로 채워집니다.'
+                    : '매출 원장이 연결되면 브랜드별 집계가 표시됩니다.',
+                })}
                 style={{ minHeight: 170, padding: '22px 12px' }}
               />
             )}
@@ -430,9 +444,11 @@ export function RevenueOverview({ onNavigate }) {
           <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Top deals</div>
           {DEALS.length === 0 && (
             <EmptyState
-              icon="deals"
-              title="딜이 없습니다"
-              description={isLiveLedger ? 'Supabase deals 기록에 표시할 딜이 없습니다.' : '딜이 생기면 금액순으로 표시됩니다.'}
+              {...(readFailureEmpty(syncState, '딜', reloadLedger) || {
+                icon: 'deals',
+                title: '딜이 없습니다',
+                description: isLiveLedger ? 'Supabase deals 기록에 표시할 딜이 없습니다.' : '딜이 생기면 금액순으로 표시됩니다.',
+              })}
               style={{ minHeight: 170, padding: '22px 12px' }}
             />
           )}
@@ -452,9 +468,11 @@ export function RevenueOverview({ onNavigate }) {
           <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Attention needed</div>
           {attentionItems.length === 0 && (
             <EmptyState
-              icon="bell"
-              title="주의가 필요한 항목이 없습니다"
-              description="stalled deal, 신규 리드, won deal 신호가 생기면 여기에 올라옵니다."
+              {...(readFailureEmpty(syncState, '매출', reloadLedger) || {
+                icon: 'bell',
+                title: '주의가 필요한 항목이 없습니다',
+                description: 'stalled deal, 신규 리드, won deal 신호가 생기면 여기에 올라옵니다.',
+              })}
               style={{ minHeight: 170, padding: '22px 12px' }}
             />
           )}
@@ -808,10 +826,12 @@ export function Leads({ workspace }) {
       {wsEmpty && (
         <Card>
           <EmptyState
-            icon="leads"
-            title={`${ws.label} — 해당하는 리드가 없습니다`}
-            description={`이 워크스페이스에 매칭되는 리드가 없습니다. 다른 워크스페이스로 태그된 리드는 여기에 표시되지 않습니다. 리드를 등록하거나 기록에 ${ws.label} 태그가 연결되면 나타납니다.`}
-            action={<Button variant="primary" size="sm" icon="plus" onClick={createLead}>{ws.label}에 리드 추가</Button>}
+            {...(readFailureEmpty(syncState, '리드', reloadLedger) || {
+              icon: 'leads',
+              title: `${ws.label} — 해당하는 리드가 없습니다`,
+              description: `이 워크스페이스에 매칭되는 리드가 없습니다. 다른 워크스페이스로 태그된 리드는 여기에 표시되지 않습니다. 리드를 등록하거나 기록에 ${ws.label} 태그가 연결되면 나타납니다.`,
+              action: <Button variant="primary" size="sm" icon="plus" onClick={createLead}>{ws.label}에 리드 추가</Button>,
+            })}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
@@ -1085,7 +1105,7 @@ function DealTaskPanel({ deal, onSaved }) {
 }
 
 export function Deals({ workspace, onNavigate }) {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -1337,10 +1357,12 @@ export function Deals({ workspace, onNavigate }) {
       {wsEmpty && (
         <Card>
           <EmptyState
-            icon="deals"
-            title={`${ws.label} — 해당하는 딜이 없습니다`}
-            description={`이 워크스페이스에 매칭되는 딜이 없습니다. 다른 워크스페이스로 태그된 딜은 여기에 표시되지 않습니다. 딜을 등록하거나 기록에 ${ws.label} 태그가 연결되면 파이프라인이 채워집니다.`}
-            action={<Button variant="primary" size="sm" icon="plus" onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>}
+            {...(readFailureEmpty(syncState, '딜', reloadLedger) || {
+              icon: 'deals',
+              title: `${ws.label} — 해당하는 딜이 없습니다`,
+              description: `이 워크스페이스에 매칭되는 딜이 없습니다. 다른 워크스페이스로 태그된 딜은 여기에 표시되지 않습니다. 딜을 등록하거나 기록에 ${ws.label} 태그가 연결되면 파이프라인이 채워집니다.`,
+              action: <Button variant="primary" size="sm" icon="plus" onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>,
+            })}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
@@ -1521,7 +1543,7 @@ function sortCases(rows, sort) {
 }
 
 export function Cases() {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -1643,10 +1665,12 @@ export function Cases() {
         </div>
         {cases.length === 0 && (
           <EmptyState
-            icon="cases"
-            title="운영 케이스가 없습니다"
-            description={syncState === 'live' ? 'Supabase operation_cases 기록에 표시할 케이스가 없습니다.' : '지원/운영 이슈가 생기면 계정과 함께 표시됩니다.'}
-            action={<Button variant="primary" size="sm" icon="plus" onClick={createCase}>케이스 추가</Button>}
+            {...(readFailureEmpty(syncState, '운영 케이스', reloadLedger) || {
+              icon: 'cases',
+              title: '운영 케이스가 없습니다',
+              description: syncState === 'live' ? 'Supabase operation_cases 기록에 표시할 케이스가 없습니다.' : '지원/운영 이슈가 생기면 계정과 함께 표시됩니다.',
+              action: <Button variant="primary" size="sm" icon="plus" onClick={createCase}>케이스 추가</Button>,
+            })}
           />
         )}
         {cases.map((c, i) => (
@@ -2170,7 +2194,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
 }
 
 export function Accounts({ workspace, onNavigate }) {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const [localAccounts, setLocalAccounts] = React.useState([]);
   const ledgerAccounts = Array.isArray(ledger.accounts) ? ledger.accounts : [];
   // Scope the merged ledger to the active workspace (pass-through when unscoped). The
@@ -2552,10 +2576,12 @@ export function Accounts({ workspace, onNavigate }) {
       {wsEmpty && (
         <Card>
           <EmptyState
-            icon="accounts"
-            title={`${ws.label} — 해당하는 계정이 없습니다`}
-            description={`이 워크스페이스에 매칭되는 계정이 없습니다. 다른 워크스페이스로 태그된 계정은 여기에 표시되지 않습니다. 계정을 등록하거나 기록에 ${ws.label} 태그가 연결되면 나타납니다.`}
-            action={<Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account 등록</Button>}
+            {...(readFailureEmpty(syncState, '계정', reloadLedger) || {
+              icon: 'accounts',
+              title: `${ws.label} — 해당하는 계정이 없습니다`,
+              description: `이 워크스페이스에 매칭되는 계정이 없습니다. 다른 워크스페이스로 태그된 계정은 여기에 표시되지 않습니다. 계정을 등록하거나 기록에 ${ws.label} 태그가 연결되면 나타납니다.`,
+              action: <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account 등록</Button>,
+            })}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
@@ -2622,12 +2648,14 @@ export function Accounts({ workspace, onNavigate }) {
           {filtered.length === 0 && (
             <Card style={{ gridColumn: '1 / -1' }}>
               <EmptyState
-                icon="accounts"
-                title={search.trim() ? '검색 결과가 없습니다' : '계정이 없습니다'}
-                description={search.trim() ? '다른 검색어를 시도하거나 검색을 지우세요.' : syncState === 'live' ? 'Supabase customer_accounts 기록에 표시할 계정이 없습니다.' : '필터를 조정하거나 첫 계정을 등록하세요.'}
-                action={search.trim()
-                  ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
-                  : <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>}
+                {...(readFailureEmpty(syncState, '계정', reloadLedger) || {
+                  icon: 'accounts',
+                  title: search.trim() ? '검색 결과가 없습니다' : '계정이 없습니다',
+                  description: search.trim() ? '다른 검색어를 시도하거나 검색을 지우세요.' : syncState === 'live' ? 'Supabase customer_accounts 기록에 표시할 계정이 없습니다.' : '필터를 조정하거나 첫 계정을 등록하세요.',
+                  action: search.trim()
+                    ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
+                    : <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>,
+                })}
               />
             </Card>
           )}
@@ -2691,12 +2719,14 @@ export function Accounts({ workspace, onNavigate }) {
           ))}
           {filtered.length === 0 && (
             <EmptyState
-              icon="accounts"
-              title={search.trim() ? '검색 결과가 없습니다' : '계정이 없습니다'}
-              description={search.trim() ? '다른 검색어를 시도하거나 검색을 지우세요.' : syncState === 'live' ? 'Supabase customer_accounts 기록이 비어 있습니다.' : '필터를 조정하거나 첫 계정을 등록하세요.'}
-              action={search.trim()
-                ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
-                : <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>}
+              {...(readFailureEmpty(syncState, '계정', reloadLedger) || {
+                icon: 'accounts',
+                title: search.trim() ? '검색 결과가 없습니다' : '계정이 없습니다',
+                description: search.trim() ? '다른 검색어를 시도하거나 검색을 지우세요.' : syncState === 'live' ? 'Supabase customer_accounts 기록이 비어 있습니다.' : '필터를 조정하거나 첫 계정을 등록하세요.',
+                action: search.trim()
+                  ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
+                  : <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>,
+              })}
             />
           )}
         </Card>

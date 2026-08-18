@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { createLedgerCache } from "../module-ledger-cache";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Progress, SectionTitle, Kbd, EmptyState, SyncBadge, LifecycleBadge } from "../hub-primitives";
 
@@ -12,33 +13,40 @@ const EMPTY_AUTOMATION_SUMMARY = {
   integrationsConnected: 0,
 };
 
+const EMPTY_AUTOMATION_STATE = {
+  source: 'preview',
+  syncState: 'preview',
+  automations: [],
+  runs: [],
+  webhookEvents: [],
+  errors: [],
+  integrations: [],
+  summary: EMPTY_AUTOMATION_SUMMARY,
+};
+
+// 탭을 오갈 때마다 자동화 원장을 다시 받고 스켈레톤을 보이던 경로(8차 잔여).
+const automationsCache = createLedgerCache();
+
 function useAutomationsLedger() {
-  const [state, setState] = React.useState({
-    source: 'preview',
-    syncState: 'preview',
-    automations: [],
-    runs: [],
-    webhookEvents: [],
-    errors: [],
-    integrations: [],
-    summary: EMPTY_AUTOMATION_SUMMARY,
-  });
+  const [state, setState] = React.useState(() => automationsCache.read() || EMPTY_AUTOMATION_STATE);
 
   React.useEffect(() => {
     let active = true;
     async function load() {
-      setState(s => ({ ...s, syncState: 'loading' }));
+      // 캐시를 서빙 중이면 스켈레톤 없이 조용히 재검증한다(모듈 SWR).
+      if (!automationsCache.read()) setState(s => ({ ...s, syncState: 'loading' }));
       try {
         const response = await fetch('/api/hub/automations', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
         if (!active || !response.ok || !data || data.status === 'error') {
           // 라이브 read 실패는 error — preview("미구성")로 뭉개면 실행 로그가
           // "기록이 없습니다"로 위장된다(4차 재감사 M — Engine 실행 피드백은 §1 코어).
-          if (active) setState(s => ({ ...s, syncState: 'error' }));
+          // 캐시를 서빙 중이었다면 오래된 값을 live로 위장하지 않고 partial로 낮춘다.
+          if (active) setState(s => ({ ...s, syncState: automationsCache.read() ? 'partial' : 'error' }));
           return;
         }
         if (data.source === 'supabase') {
-          setState({
+          const next = {
             source: 'supabase',
             syncState: 'live',
             automations: Array.isArray(data.automations) ? data.automations : [],
@@ -47,7 +55,9 @@ function useAutomationsLedger() {
             errors: Array.isArray(data.errors) ? data.errors : [],
             integrations: Array.isArray(data.integrations) ? data.integrations : [],
             summary: { ...EMPTY_AUTOMATION_SUMMARY, ...(data.summary || {}) },
-          });
+          };
+          automationsCache.write(next);
+          setState(next);
         } else {
           setState(s => ({ ...s, source: 'preview', syncState: 'preview', automations: [], runs: [], webhookEvents: [], summary: EMPTY_AUTOMATION_SUMMARY }));
         }
@@ -254,6 +264,21 @@ export function EmailAutomation({ onNavigate }) {
   );
 }
 
+// Engine이 실제로 수신하는 경로만 표시한다. 이전 구현은 존재하지 않는
+// `https://moonlight.pro/hooks/<source>`를 지어내 mono로 렌더했다 — 운영자가
+// 그대로 복사해 provider에 등록하면 조용히 실패한다. 알 수 없는 source는
+// 경로를 만들지 않고 비운다(§5.3 정직성).
+const ENGINE_WEBHOOK_ROUTES = {
+  telegram: '/api/webhook/telegram',
+  moltbot: '/api/webhook/project/moltbot',
+  project: '/api/webhook/project',
+};
+
+function resolveWebhookRoute(source) {
+  const key = String(source || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+  return ENGINE_WEBHOOK_ROUTES[key] || null;
+}
+
 function aggregateWebhookEndpoints(events) {
   if (!events?.length) return [];
   const byKey = new Map();
@@ -261,7 +286,8 @@ function aggregateWebhookEndpoints(events) {
     const key = `${ev.source}·${ev.eventType}`;
     const entry = byKey.get(key) || {
       name: `${ev.source} — ${ev.eventType}`,
-      url: `https://moonlight.pro/hooks/${ev.source}`,
+      source: ev.source,
+      url: resolveWebhookRoute(ev.source),
       status: 'ok',
       lastHit: ev.lastHit,
       count24: 0,
@@ -287,7 +313,7 @@ export function Webhooks({ onNavigate }) {
       const response = await fetch('/api/webhooks/project-test', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ slug: hook.name, source: hook.url }),
+        body: JSON.stringify({ slug: hook.name, source: hook.source || hook.name }),
       });
       const data = await response.json().catch(() => ({}));
 
@@ -371,7 +397,9 @@ export function Webhooks({ onNavigate }) {
               <IconButton icon="play" tooltip="Send test" onClick={() => runHookTest(i, h)} />
               <IconButton icon="moreV" tooltip="Manage endpoint" onClick={() => onNavigate?.('dashboard/settings')} />
             </div>
-            <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 6, paddingLeft: 16 }}>{h.url}</div>
+            <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 6, paddingLeft: 16 }}>
+              {h.url || '수신 경로 미확인'}
+            </div>
           </div>
           );
         })}

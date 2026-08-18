@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 
-import { promoteStagedLeads } from "./sheets-sync.js";
+import { getSheetsSyncStatus, promoteStagedLeads } from "./sheets-sync.js";
 
 const ORIGINAL_ENV = { ...process.env };
 const ORIGINAL_FETCH = globalThis.fetch;
@@ -155,4 +155,67 @@ test("promoteStagedLeads sends failed lead batches to review instead of dropping
   assert.equal(result.promoted + result.merged, 0);
   assert.equal(bodies.finalize[0].status, "review");
   assert.equal(bodies.finalize[0].company_id, "C2");
+});
+
+// 읽기 실패가 "미연결"로 위장하면 화면이 연결 CTA를 띄워, 이미 연결된 계정에
+// 재연결을 지시하게 된다. Phase 0 분류상 preview는 미구성 전용이다.
+function statusFetchStub({ connections, runs, staging }) {
+  return async (url) => {
+    const table = new URL(String(url)).pathname.split("/").pop();
+    if (table === "integration_connections") {
+      return connections === null ? jsonResponse({ message: "denied" }, 500) : jsonResponse(connections);
+    }
+    if (table === "sync_runs") {
+      return runs === null ? jsonResponse({ message: "denied" }, 500) : jsonResponse(runs);
+    }
+    if (table === "lead_intake_raw") {
+      return staging === null ? jsonResponse({ message: "denied" }, 500) : jsonResponse(staging);
+    }
+    return jsonResponse([]);
+  };
+}
+
+test("a failed connection read reports error instead of a fake disconnected state", async () => {
+  globalThis.fetch = statusFetchStub({ connections: null, runs: [], staging: [] });
+
+  const status = await getSheetsSyncStatus(WORKSPACE_ID);
+
+  assert.equal(status.source, "error");
+  assert.equal(status.error, "sheets-sync-status-read-failed");
+  // connected:false는 "미연결 확인"을 뜻한다 — 모를 때는 null이어야 한다.
+  assert.equal(status.connected, null);
+  assert.deepEqual(status.failedSources, ["integration_connections"]);
+  assert.equal(status.staging, null);
+});
+
+test("a failed runs read stays partial and never renders an empty history as fact", async () => {
+  globalThis.fetch = statusFetchStub({
+    connections: [{ id: "conn-1", config: { refreshToken: "r" }, last_synced_at: null }],
+    runs: null,
+    staging: [],
+  });
+
+  const status = await getSheetsSyncStatus(WORKSPACE_ID);
+
+  assert.equal(status.source, "supabase");
+  assert.equal(status.connected, true);
+  assert.equal(status.partial, true);
+  assert.deepEqual(status.failedSources, ["sync_runs"]);
+  assert.equal(status.recentRuns, null);
+});
+
+test("a failed staging tally is null rather than an all-zero count", async () => {
+  globalThis.fetch = statusFetchStub({
+    connections: [{ id: "conn-1", config: { refreshToken: "r" }, last_synced_at: null }],
+    runs: [],
+    staging: null,
+  });
+
+  const status = await getSheetsSyncStatus(WORKSPACE_ID);
+
+  assert.equal(status.source, "supabase");
+  assert.equal(status.partial, true);
+  assert.deepEqual(status.failedSources, ["lead_intake_raw"]);
+  assert.equal(status.staging, null);
+  assert.deepEqual(status.recentRuns, []);
 });
