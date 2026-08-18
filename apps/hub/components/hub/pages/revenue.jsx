@@ -232,11 +232,11 @@ function LedgerReadError({ noun, onRetry }) {
 // 3단 정렬 헤더(§8.1) — 컴포넌트 안에서 정의하면 렌더마다 함수 identity가 바뀌어
 // React가 헤더 버튼을 매번 unmount/remount한다(re-audit 속도 #5). 모듈 스코프 1개를
 // Leads·Cases·Accounts가 공유한다. 캐럿은 비활성일 때도 폭 예약.
-export function SortHead({ k, sort, onToggle, children, align }) {
+export function SortHead({ k, sort, onToggle, children, align, className }) {
   // aria-sort는 columnheader 롤 전용이라 버튼엔 무효 — 동적 aria-label로 현재 방향을 AT에 노출.
   const dirLabel = sort.key === k ? (sort.dir === 'desc' ? '내림차순' : '오름차순') : '정렬 안 함';
   return (
-    <button type="button" onClick={() => onToggle(k)} title={`${children} 기준 정렬`}
+    <button type="button" className={className} onClick={() => onToggle(k)} title={`${children} 기준 정렬`}
       aria-label={`${children} 기준 정렬 — 현재 ${dirLabel}`}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 3, width: '100%',
@@ -504,7 +504,7 @@ export function RevenueOverview({ onNavigate }) {
 }
 
 // Shared grid template for Leads rows — gap between columns so badges never butt the next cell
-const LEADS_GRID = '26px 1fr 112px 112px 124px 100px 90px 92px';
+// Leads 그리드는 무변별 컬럼 자동 숨김 때문에 컴포넌트 안 leadsGrid memo로 계산한다(28차).
 
 export function LeadEnrichmentPanel({ lead }) {
   if (!lead) return null;
@@ -630,6 +630,36 @@ export function Leads({ workspace }) {
       .toLowerCase();
     return (filter === 'all' || l.type === filter) && (!term || searchText.includes(term));
   }), [LEADS, filter, term]);
+  // 무변별 컬럼 자동 숨김(28차 사용성) — 전 행이 같은 값인 컬럼은 신호가 0이라 표에서 뺀다.
+  // eeocrm 이관 직후처럼 Type=Company·Source=eeocrm·Score=25가 117행 반복되던 화면이 대상.
+  // 판정은 워크스페이스 전체 목록(LEADS) 기준 — 검색·필터로 시야가 좁아져도 컬럼이 출렁이지 않는다.
+  const leadCols = React.useMemo(() => {
+    const varied = (get) => {
+      const seen = new Set();
+      for (const l of LEADS) { seen.add(get(l) ?? ''); if (seen.size > 1) return true; }
+      return false;
+    };
+    // 다음 행동의 최빈 문구가 과반(60%↑)이면 이관 템플릿이다 — 그 행들은 숨기고
+    // 템플릿과 다른 고유 액션만 남긴다(반복 문구 117줄은 신호가 아니라 소음).
+    const freq = new Map();
+    for (const l of LEADS) {
+      const v = (l.nextAction || '').trim();
+      if (v) freq.set(v, (freq.get(v) || 0) + 1);
+    }
+    let modal = null; let modalCount = 0;
+    for (const [v, n] of freq) if (n > modalCount) { modal = v; modalCount = n; }
+    return {
+      type: varied(l => l.type),
+      source: varied(l => l.source),
+      score: varied(l => l.score) || LEADS.some(l => l.priorityLane === 'customer_success'),
+      nextActionTemplate: LEADS.length > 3 && modalCount >= LEADS.length * 0.6 ? modal : null,
+    };
+  }, [LEADS]);
+  const leadsGrid = React.useMemo(() => [
+    '26px', 'minmax(0, 1fr)',
+    leadCols.type && '112px', leadCols.source && '112px',
+    '124px', leadCols.score && '100px', '92px',
+  ].filter(Boolean).join(' '), [leadCols]);
   const sortedLeads = React.useMemo(() => sortLeads(filtered, sort), [filtered, sort]);
   // Toggle a column: first click sorts asc, second flips to desc, third clears back to ledger order.
   const toggleSort = (key) => setSort(s =>
@@ -890,8 +920,9 @@ export function Leads({ workspace }) {
 
       {!wsEmpty && (
       <Card pad={false} className="hub-table-card hub-leads-table">
-        <div className="hub-leads-grid" style={{ display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          <span /><SortHead k="name" sort={sort} onToggle={toggleSort}>Name</SortHead><span>Type</span><SortHead k="source" sort={sort} onToggle={toggleSort}>Source</SortHead><SortHead k="stage" sort={sort} onToggle={toggleSort}>Stage</SortHead><SortHead k="score" sort={sort} onToggle={toggleSort}>Score</SortHead><SortHead k="owner" sort={sort} onToggle={toggleSort}>Owner</SortHead><span style={{ textAlign: 'right' }}>Last</span>
+        <div className="hub-leads-grid" style={{ display: 'grid', gridTemplateColumns: leadsGrid, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+          {/* Owner 컬럼 없음 — 1인 운영이라 항상 Me이고 buildLeadWrite가 owner를 저장한 적이 없다(드로어와 동일 결정). */}
+          <span /><SortHead k="name" sort={sort} onToggle={toggleSort}>Name</SortHead>{leadCols.type && <span className="hub-lc-m">Type</span>}{leadCols.source && <SortHead k="source" sort={sort} onToggle={toggleSort} className="hub-lc-m">Source</SortHead>}<SortHead k="stage" sort={sort} onToggle={toggleSort}>Stage</SortHead>{leadCols.score && <SortHead k="score" sort={sort} onToggle={toggleSort} className="hub-lc-m">Score</SortHead>}<span className="hub-lc-m" style={{ textAlign: 'right' }}>Last</span>
         </div>
         {sortedLeads.length === 0 && (
           <div style={{ padding: '36px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -915,7 +946,7 @@ export function Leads({ workspace }) {
             onClick={() => setEditLeadId(l.id)}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditLeadId(l.id); } }}
             style={{
-              display: 'grid', gridTemplateColumns: LEADS_GRID, gap: 12,
+              display: 'grid', gridTemplateColumns: leadsGrid, gap: 12,
               padding: 'var(--pad-y) var(--pad-x)', alignItems: 'center', cursor: 'pointer',
               borderBottom: i < sortedLeads.length - 1 ? '1px solid var(--line-soft)' : 'none',
               // j/k 키보드 선택 — §5.3 충돌 우선순위상 선택은 Moonstone 외곽 outline.
@@ -930,27 +961,31 @@ export function Leads({ workspace }) {
             </span>
             <span style={{ minWidth: 0 }}>
               <span style={{ display: 'block', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</span>
-              {l.nextAction && <span className="hub-lead-next-action" style={{ display: 'block', marginTop: 2, fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.nextAction}</span>}
+              {l.nextAction && l.nextAction.trim() !== leadCols.nextActionTemplate && <span className="hub-lead-next-action" style={{ display: 'block', marginTop: 2, fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.nextAction}</span>}
               <span className="hub-lead-mobile-meta">
-                {l.type === 'personal' ? 'Personal' : 'Company'} · {l.owner || 'Unassigned'} · score {l.score ?? '—'}{l.priorityLane === 'customer_success' ? ' · CS' : ''}
+                {l.type === 'personal' ? 'Personal' : 'Company'} · score {l.score ?? '—'}{l.priorityLane === 'customer_success' ? ' · CS' : ''}
               </span>
             </span>
-            <span style={{ paddingRight: 8, minWidth: 0 }}>
+            {leadCols.type && (
+            <span className="hub-lc-m" style={{ paddingRight: 8, minWidth: 0 }}>
               <Badge tone={l.type === 'personal' ? 'personal' : 'company'} size="xs">
                 <Iconed name={l.type === 'personal' ? 'user' : 'building'} size={9} />
                 {l.type === 'personal' ? 'Personal' : 'Company'}
               </Badge>
             </span>
-            <span style={{ fontSize: 12, color: 'var(--fg-muted)', paddingRight: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.source}</span>
+            )}
+            {leadCols.source && <span className="hub-lc-m" style={{ fontSize: 12, color: 'var(--fg-muted)', paddingRight: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.source}</span>}
             <span style={{ paddingRight: 8, minWidth: 0 }}>
               <Badge tone="neutral" size="xs" variant="outline">{l.stage}</Badge>
             </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {leadCols.score && (
+            <span className="hub-lc-m" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' /* §13 high-score 강조 금지 — 순서·정렬이 우선순위 전달 */ }}>{l.score ?? '—'}</span>
               {l.priorityLane === 'customer_success' && <Badge tone="neutral" size="xs">CS</Badge>}
             </span>
-            <span style={{ fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.owner}</span>
-            <span className="mono" style={{ textAlign: 'right', fontSize: 11.5, color: 'var(--fg-faint)' }}>{l.last}</span>
+            )}
+            {/* Owner 셀 제거 — 드로어와 같은 결정(1인 운영·미영속 필드). */}
+            <span className="mono hub-lc-m" style={{ textAlign: 'right', fontSize: 11.5, color: 'var(--fg-faint)' }}>{l.last}</span>
           </div>
         ))}
       </Card>

@@ -32,7 +32,10 @@ test("mobile leads keeps identity and stage visible without horizontal overflow"
   assert.match(revenueSource, /className="hub-table-card hub-leads-table"/);
   assert.match(revenueSource, /className="hub-row hub-leads-grid"/);
   assert.match(css, /\.hub-leads-grid\s*\{[\s\S]*?grid-template-columns:\s*26px minmax\(0,\s*1fr\) 78px !important/);
-  assert.match(css, /\.hub-leads-grid\s*>\s*:nth-child\(3\)[\s\S]*?\.hub-lead-next-action\s*\{[\s\S]*?display:\s*none !important/);
+  // 28차: 모바일 숨김은 위치가 아니라 .hub-lc-m 클래스 계약 — 무변별 컬럼 자동 숨김으로
+  // 데스크톱 컬럼 수가 가변이라 nth-child 위치 규칙은 성립하지 않는다.
+  assert.match(css, /\.hub-leads-grid\s*>\s*\.hub-lc-m[\s\S]*?\.hub-lead-next-action\s*\{[\s\S]*?display:\s*none !important/);
+  assert.match(revenueSource, /className="hub-lc-m"/);
   assert.match(css, /\.hub-lead-mobile-meta\s*\{[\s\S]*?display:\s*block/);
 });
 

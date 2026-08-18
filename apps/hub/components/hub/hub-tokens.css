@@ -1258,11 +1258,9 @@
     gap: 10px !important;
   }
 
-  .hub-leads-grid > :nth-child(3),
-  .hub-leads-grid > :nth-child(4),
-  .hub-leads-grid > :nth-child(6),
-  .hub-leads-grid > :nth-child(7),
-  .hub-leads-grid > :nth-child(8),
+  /* 모바일에서 숨는 컬럼은 위치(nth-child)가 아니라 .hub-lc-m 클래스로 지정한다 —
+     무변별 컬럼 자동 숨김(28차)으로 데스크톱 컬럼 수가 데이터에 따라 달라지기 때문. */
+  .hub-leads-grid > .hub-lc-m,
   .hub-lead-next-action {
     display: none !important;
   }
