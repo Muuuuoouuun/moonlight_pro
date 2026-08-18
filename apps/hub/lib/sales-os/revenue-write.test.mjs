@@ -111,6 +111,18 @@ test("buildDealWrite maps next_action and snooze_until into meta (deals has no n
   assert.equal(metaPatch.snooze_until, "2026-07-11");
 });
 
+test("buildDealWrite carries the next-meeting breadcrumb into meta untouched", () => {
+  const breadcrumb = {
+    eventId: "evt-1",
+    summary: "갈무리학원 미팅",
+    startAt: "2026-08-15T05:00:00.000Z",
+    htmlLink: "https://calendar.google.com/event?eid=evt-1",
+  };
+  assert.deepEqual(buildDealWrite({ next_meeting: breadcrumb }).metaPatch.next_meeting, breadcrumb);
+  assert.equal(buildDealWrite({ next_meeting: null }).metaPatch.next_meeting, null);
+  assert.equal("next_meeting" in buildDealWrite({ name: "x" }).metaPatch, false);
+});
+
 // ---- persistRevenueRecord with a mocked Supabase REST surface ----
 
 let calls;

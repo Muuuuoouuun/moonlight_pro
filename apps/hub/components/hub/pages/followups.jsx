@@ -3,7 +3,7 @@
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Button, Card, Checkbox, Divider, Drawer, Dot, EmptyState, SegmentedControl, SyncBadge } from "../hub-primitives";
+import { Badge, Button, Card, Checkbox, DateQuickPresets, Divider, Drawer, Dot, EmptyState, SegmentedControl, SyncBadge } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { QUICK_LOG_ACTIONS as LOG_ACTIONS, REACTION_OPTIONS } from "@/lib/sales-os/outcome-attribution";
@@ -154,6 +154,8 @@ function LogForm({ item, action, label, onCancel, onSubmit, submitting, error, i
           onChange={(e) => setAt(e.target.value)}
           style={{ height: 32, padding: "0 8px", fontSize: 12.5, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)", outline: "none", opacity: dormant ? 0.5 : 1 }}
         />
+        {/* 최고 빈도 액션의 date picker 반복 마찰 제거 — 프리셋 1클릭(27차 편의성). */}
+        <DateQuickPresets disabled={dormant} onPick={setAt} />
         <Checkbox checked={dormant} onChange={(v) => { setDormant(v); if (v) setAt(""); }} label="기약 없음" />
         <span style={{ fontSize: 11.5, color: "var(--fg-faint)" }}>기약 없음</span>
       </div>

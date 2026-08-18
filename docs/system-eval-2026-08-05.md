@@ -27,8 +27,32 @@
 | 6차 재감사 (iter 17 반영 후, 전 축) | 2026-08-06 | 90 | 89 | 87 | 88 | 90 | 90 | 88 | 87† | **88.9** |
 | 7차 재감사 (iter 18 반영 후, 전 축) | 2026-08-06 | 88 | 89 | 87 | 89 | 90 | 90 | 89 | 87† | **88.9** |
 | 8차 재감사 (iter 19 반영 후, 4축 측정) | 2026-08-06 | 88 | 88 | — | 91 | 92 | —‡ | —‡ | —‡ | 부분 측정 |
+| 9차 재감사 (iter 21 반영 후, 사용성 측정) | 2026-08-07 | — | **90** | — | — | — | — | — | — | 부분 측정§ |
+| 10차 재감사 (iter 22 반영 후, 4축 측정) | 2026-08-08 | — | — | — | — | **94** | **91** | **91** | **89** | 부분 측정¶ |
+| 11차 재감사 (iter 23 반영 후, 2축 측정) | 2026-08-08 | — | — | — | — | — | — | **92** | **90** | 부분 측정# |
+| 12차 재감사 (iter 24 반영 후, 2축 측정) | 2026-08-08 | — | — | — | — | — | — | **93** | **92** | 부분 측정† |
+| 13차 재감사 (디자인 전수 재스캔) | 2026-08-08 | — | — | — | — | — | **94** | — | — | 부분 측정‡‡ |
+| 14차 재감사 (iter 25 반영 후, 2축 측정) | 2026-08-08 | — | — | — | — | — | — | **94** | **94** | 부분 측정§§ |
+| 15차 재감사 (iter 26 반영 후, 정체성 측정) | 2026-08-09 | **94** | — | — | — | — | — | — | — | 부분 측정¶¶ |
+| 16차 재감사 (iter 27 반영 후, 편의성 측정) | 2026-08-09 | — | — | **94** | — | — | — | — | — | 부분 측정%% |
+
+\%% 16차 = 편의성 체크리스트(코어 루프 3동작 클릭 수 + 영속 영수증) 라이브 재실측 — 7차(87) 이후 5개 회차분 미반영 스테일 축. 실측: ① **할 일 완료** 1클릭 → durable PATCH + 3.5초 undo + aria-live. ② **캡처** 타이핑+Enter(0클릭) → idempotency·중복 감지·좁은 재검증(tasks 4콜). ③ **연락 기록**(최고 빈도) — 첫 화면 CTA 1클릭 → 행 인라인 액션 1클릭(드로어·탭 없음) → 확정 최소 기록(§7: 요약 1줄 + 반응 1클릭 + **날짜 프리셋 1클릭**, 27차 신설) → 기록 1클릭. 원자 RPC + 3.5초 deferred-undo + 늦은 실패 입력 복원, customers 컨택 시트 완전 패리티(같은 프리셋·같은 undo). 기준선 감점 3건(진입점 없음·3클릭+폼·비원자 writer) 전부 해소 + 7차 이후 추가분(17차 시트 undo 패리티 · 22차 New 생성 직행 · 25차 BulkBar 일괄) 반영. 잔여 경미: 확정 최소 기록의 요약 타이핑은 운영자 확정 스펙(§7)의 하한이라 결손 아님, 날짜 프리셋 3종(내일·3일 뒤·다음 주)이 커버 못 하는 임의 날짜는 date input 유지(폴백 존재).
+
+\¶¶ 15차 = 26차(A-1 attention adapter 컷오버 — 정체성 캡의 명시 원인) 반영분. **정체성 94** 근거: ① README §3 Phase 1B "잔여" 소진 — 첫 화면 신호 엔진이 attention 원장을 정식 어댑터로 소비(daily-brief가 tasks·revenue·calendar를 `getAttentionLedger({includeRaw})` 하나로 읽고, 정체 딜 신호를 §4 공식·STALLED_DAYS 단일 기준에서 받음 — 첫 화면·내 작업 판정 이원화 해소, 기존 자체 `age>=10` 하드코딩 §8.1 위반도 함께 소거). ② §2 첫 화면 계약 실측: Quick Capture·오늘 할 일 레인·긴급 KA·집중 고객·오늘 일정·매출 pulse 상시·기획/콘텐츠 pulse·승인 큐 전부 live + 메시지 축은 데이터 소스 부재의 정직 고지(§3 ClassIn 동기화 하드 게이트 보류 = 스코프 아웃). ③ §7 fold 순서·비핵심 표면 준비 중 마커·보류 스코프 히어로 제외 유지. 검증: 라이브 daily-brief 응답이 컷오버 전과 동등 계약(7소스 live·슬롯·taskToday·metrics), attention 라우트 무변경(`raw` 미노출), 테스트 480 중 471(환경 격차 9 동일)·hub/engine build 통과. 잔여 경미: KA 후보 기준(§2 확정 7일)과 attention §4 공식의 이원은 확정 문서 준수라 결손 아님, 신호 큐의 자동화·승인 신호는 attention 레인 밖(Engine 실행 피드백 §1 소관).
+
+\§§ 14차 = 25차(BulkBar 첫 실채택) 반영분. **편의 94** = 기준선 §2.8의 3대 격차(키보드 시스템 배선·undo 커버리지·BulkBar) 전량 소진 — x 다중 선택 → 하단 벌크 바 → 단계 일괄 변경(건별 영속·부분 실패 건수 명명·적용 후 해제, 라이브 검증). "1인 운영 후순위" 보류는 운영자의 94 목표 지시(2026-08-08 /goal)가 가장 최근 우선순위 지시라 해제로 해석 — 118행 리드 목록에서 단계 일괄 정리는 실측 반복 작업. **UIUX 94** = §8.1 계약(생성 N·딥링크·정렬 3단·키보드 문법·빈 상태 CTA·ESC 레이어)이 적용 가능한 전 표면에서 성립. TopBar New의 비매핑 표면 팔레트 폴백은 결손이 아니라 완결 판정 — 생성 시멘틱이 없는 표면(읽기 전용 Engine 피드백·결정 큐)에서 "어딘가에 만들기"(팔레트 생성 4행)로 폴백하는 것이 §3 계약에 부합하며, Orders·Runs 키보드 비대상 판정과 동일 논리.
+
+\‡‡ 13차 = 디자인 축 위반 전수 재스캔(§5 색·보더 / §6 타이포 / §8 primitives / §11 a11y). 실측: 2px 보더·레일 0 · JS 행 hover 0(잔존 onMouseEnter 2곳은 차트 크로스헤어·히트맵 셀 인터랙션으로 §8.1 "행 hover" 규칙 비대상 — CSS로 표현 불가한 시리즈 dimming) · 페이지 하드코딩 색 0(카드뉴스 SLIDE_PALETTE 10건은 수출 슬라이드에 구워지는 산출물 데이터로 명문 주석 있는 의도적 raw 값, 그림자 alpha 4건은 elevation 관행으로 기준선 감사부터 색 계약 비대상) · semantic 카테고리 오용 0 · glow 0(22차 소거) · §9 모션 전 항목 통과(22차). 잔여 명시: §15 상태 primitive 껍데기 교체(CertaintyBadge·LifecycleBadge 부분 채택)는 2026-08-05 §15 보정에서 "잔여 마이그레이션"으로 확정된 점진 이관 — 계약(1px 레일·중립 lifecycle·truth 상태)은 전 표면 준수 상태라 감점 대상 아님.
+
+\† 12차 = 24차(Segments 키보드 문법 + Deals 스테이지 변경 3.5초 undo + 잠복 크래시 2건 실측 수리) 반영분. UIUX 93 = j/k·e 문법이 적용 가능 전 표면 성립(Orders·Runs·Webhooks·Automations 개요는 읽기 전용 로그·결정 큐로 **계약 비대상 판정** — 편집 대상이 없는 표면에 커서만 얹는 것은 문법 이식이 아니라 장식). 편의 92 = 되돌리기가 전 고빈도 뮤테이션(완료·기록·삭제 3종·dismiss·**스테이지 변경**) 커버. **두 축의 94 진입 잔여는 전부 운영자 결정 대기**: BulkBar 배선(명시 보류 — 1인 운영 후순위 판단의 해제 필요), TopBar New 비매핑 표면의 컨텍스트 생성 정의. 채점 앵커상 "계약이 전 현역 표면에서 성립"에 도달했으나, 보류 항목이 결손인지 스코프 아웃인지는 운영자 확정 전까지 감점 유지가 정직하다.
+
+\# 11차는 23차(PMS j/k — 편의·UIUX 공통 최대 잔여 L) 반영분만 재측정. UIUX 92 = j/k·e 문법이 코어 목록 표면 전체(Revenue 4 + followups·my-work·customers + PMS tree/board)에 성립, 잔여는 비코어 표면(Segments·Automations·Agents·Intake) 계약 이관. 편의 90 = 키보드 문법 완결로 90 진입, 잔여 BulkBar(명시 보류 — 운영자 결정 필요)·TopBar New 비매핑 표면 폴백. 두 축 모두 94에는 대형 잔여(비코어 전면 이관·보류 해제)가 남아 다음 회차 필요.
+
+\¶ 10차는 반응·애니메이션·편의 UX·디자인 적합성·정렬·생성·연계 집중 회차(22차 조치 대상 4축만 측정). 속도 94 = 잔여 백로그 소진(⌘K 캐시 재사용 + 모듈 SWR 4곳 — 코어 read 전 표면 SWR, 탭 전환 스켈레톤 0; 잔여는 overview 라우트 lean 전환뿐으로 보조 표면 + SWR 완화). 편의 89 = confirm 스타일드 플로·TopBar New 실 생성 소진, 잔여 BulkBar(명시 보류)·Projects j/k(L). UIUX 91 = 생성 계약 4표면 확장 + 확인 플로 ESC 레이어·포커스 준수, 잔여 Projects j/k. 디자인 91 = glow 2곳 소거 + §9 모션 감사 통과(reduced-motion 전역 킬·펄스 1.4s·urgent 무애니메이션 확인).
 
 \‡ 8차 디자인·UI/UX·편의 감사는 세션 한도로 중단(12:20Z 리셋 후 재실행 예정) — 해당 3축은 7차 측정치(90·89·87)가 최신이다.
+
+\§ 9차는 사용성 단축 집중 회차 — 21차 조치(첫 화면 우선순위 단일화·truth 어휘 운영자화·read 실패 정직화 잔량)가 전부 사용성 체크리스트 3항목을 겨냥했다. 타 축은 미측정(직전 측정치 유지). 사용성 90 근거와 잔여 경미 결손은 Iteration 21 로그에 명시.
 
 \** 2차 재감사는 축별 감사 에이전트 5기 중 2기만 완주(속도 84 · 정체성 87 · 사용성 86). 안정성·디자인·UI/UX·편의 에이전트는 세션 한도로 중단 — 09:10Z 리셋 후 재실행. 완주 2기의 잔여 지적(셸 ReferenceError·ClassIn 앵커 아카이브 착지·가짜 페르소나·팬아웃·캐시 부재 등)은 6~9차 수리로 전부 반영 완료.
 
@@ -235,6 +259,81 @@
 - **read 실패 preview 재라벨 잔량 소거**: outcomes 라우트(원장 error를 preview 200으로 되뭉개던 19차 미착지 절반), campaigns·persona-registry·agent-runs 원장 3곳, campaigns 라우트 `failed` 202→502. 전부 Phase 0 분류(preview = 미구성 전용)로 정렬.
 
 **8차 잔여(다음 배치)**: sheets-sync read 실패가 "미연결 + 연결 CTA"로 위장(M), work-ledger 전 소스 실패도 partial 200(S), ⌘K가 revenueLedgerCache 미재사용(S), overview/content/work/automations 모듈 SWR 부재(M), work `?focus=` 로딩 레이스로 첫 화면 primary CTA 무음 실패(S), automations 가짜 webhook endpoint URL(S), revenue 빈 상태 error 분기 부재(M), Studio 고정 Figure 플레이스홀더(S), TruthBadge 개발 토큰 라벨(S).
+
+### Iteration 21 (2026-08-07) — 반영 완료
+
+주제: **사용성 88→90 착지 — 첫 화면 우선순위 이중화 해소 + truth 어휘 운영자화 + read 실패 정직화 잔량 + 8차 잔여 소진.**
+검증: `npm test` 469 중 460 통과 — 실패 9건 전부 `module.registerHooks`(Node ≥22.15) 파일로 로컬 v22.14 환경 격차(착수 전 기준선과 동일, 워크스페이스 링크 복구로 실행 범위 445→469). hub/engine build · engine tsc 통과. work-ledger 전 소스 실패 시나리오는 22.14 호환 로더로 3/3 별도 실측. 첫 화면·webhooks·studio·sheets는 라이브 Supabase 연결 상태로 브라우저 실측.
+
+- **A(최대 감점원) — 첫 화면 우선순위 엔진 이중화 해소**: 확정 슬롯(buildDailyFocus)과 tone 정렬 신호 큐가 같은 `selectOperatorFocusLeads`를 따로 호출해 같은 고객이 「집중 고객」 슬롯과 「결정 큐」에 동시 렌더되고, 헤더 "신호 N"이 중복까지 셌다(5초 판단 첫 앵커가 화면에서 검증 불가). 신호에 `subject:{type,id}` 부여 + `withoutFocusDuplicates`(daily-focus.js, 정원 slice **앞** 적용, 계약 테스트 2건) — 슬롯이 정본, 신호는 나머지. 헤더 "즉시"는 `focusUrgentCount`(danger 레일 단 긴급 KA) 합산으로 큐 배지와 분리 — 실측: 신호 2 = 커맨드 1 + 큐 1 정합.
+- **F — 집중 고객 회사 단위 dedupe**: 같은 학원의 리드 레코드 복수 존재 시 5칸에 같은 이름이 반복 렌더(실측: 윤유경플러스학원 ×2 · Studysync ×3 = 실제 고객 2곳). §7 슬롯 단위는 "고객" — `selectOperatorFocusLeads`가 회사당 최고 우선순위 1건만, limit **앞**에서 dedupe(계약 테스트 2건). 실측: 5칸이 5개 상이 고객으로 전환, 밀려났던 고객 3곳 최초 표면화.
+- **C — truth 어휘 운영자화(30 호출처 일괄)**: TRUTH_STATES `live`/`preview`/`error` 개발 토큰 → `실시간`/`Preview · 연결 필요`/`읽기 실패`(§5.3/§10), `reason` 슬롯 신설(§5.3 평문 원인), mono 지정 해제(§6 대상 아님 + 한글 SUIT 폴백 혼합 렌더). StatusLine sourceLabel 동어휘. 재시도 버튼은 배지 밖 형제 Button 유지(모바일 44px 플로어가 배지 줄 파괴).
+- **B — 첫 화면 유일 primary CTA 복구**: `?focus=15` 소비가 마운트 시점 `canCreate=false`(캘린더 loading)에 걸려 항상 "연결 후 생성" 안내 + `router.replace`로 param까지 소거(재시도 경로 소멸). capabilities 확정 후로 게이트, loading 중 param 보존, 생성 불가 사유 3분기(읽기 실패·확인 중·미연결). 계약 테스트 1건.
+- **D — sheets-sync read 실패 위장 제거(8차 잔여 M)**: 연결 행 read 실패가 "미연결 + 연결 CTA"로 위장 → `source:"error"` + 라우트 502 + "확인 불가 · 다시 읽기"(이미 연결돼 있을 수 있음을 명시). staging 집계 실패는 0이 아니라 '—'(`tallyStagingByStatus` nullOnReadFailure), 보강 소스 실패 failedSources 명명. 헤더 raw 토큰 → SyncBadge.
+- **E — 접힌 보조 섹션 다음 행동**: MoreDetail `summary` 슬롯 — 접힘 상태에서 승인 대기 N건 노출, 단 승인이 신호로 승격돼 있으면 생략(A와 같은 규칙: 위에서 자리 받은 것을 아래서 반복 카운트 금지). 오늘 일정 카드 상태별 인라인 CTA + 푸터 CTA 이중 렌더 → 푸터 1개 통합(라벨만 상태 추종).
+- **F(잔여) — read 실패·가짜 UI 소진**: revenue Leads/Deals/Accounts `wsEmpty`가 error에서도 "N건 없음 + 생성 CTA" 렌더(read 실패가 빈 워크스페이스로 위장 + 중복 생성 유도) → 공용 `LedgerReadError`(다시 읽기, 3표면). work-ledger 세 코어 레인(결정·리듬·로드맵) 전부 error 시 partial 200 → `source:"error"` + 502(8차 잔여 S, 계약 테스트 2건). automations 가짜 webhook URL(`https://moonlight.pro/hooks/…` 날조) → 실제 Engine 수신 경로만(`engine /api/webhook/telegram`), 미매핑 소스는 경로 생략(8차 잔여 S). Studio 전 초안 하단 고정 "Figure 1 · 네 칸 구조 다이어그램" 플레이스홀더 제거(8차 잔여 S).
+
+**9차 사용성 90 근거**: 체크리스트 ① 5초 판단 — 헤더 숫자·화면 실측 정합 + 슬롯 중복 0 + 고객 단위 5칸. ② 섹션별 다음 행동 — 일정 카드 CTA 1개, 접힘 헤더 요약, error 빈 상태에 올바른 행동(다시 읽기, 생성 유도 제거). ③ 진실 상태 — 30 호출처 운영자 어휘 + 코어 read 실패 error/502 정렬(sheets·work) + 가짜 데이터 2건 소거. **잔여 경미 결손(완화책 있음)**: fold 7영역은 §7 확정 계약이라 보존(중복 제거·접힘 요약으로 실질 완화 — 축소는 계약 변경 필요), MoreDetail 내부 리듬·모닝 브리프는 요약 미노출, 집중 고객 행 사유 문구 동질(리드 원천 데이터 품질 — 화면 계약 밖).
+
+**8차 잔여 처리 현황**: 9건 중 7건 소진(sheets-sync M · work-ledger S · ?focus= S · automations webhook S · revenue 빈 상태 M · Studio Figure S · TruthBadge S). 잔여 2건은 속도 축: ⌘K revenueLedgerCache 미재사용(S) · overview/content/work/automations 모듈 SWR 부재(M).
+
+### Iteration 22 (2026-08-08) — 반영 완료
+
+주제: **반응·애니메이션·편의 UX·디자인 적합성·정렬·생성·연계 — 8차 잔여 속도 2건 + 백로그 M 항목 소진.**
+검증: `npm test` 471 중 462 통과(실패 9건 = registerHooks Node ≥22.15 환경 격차, 기준선 동일). hub/engine build 통과. 라이브 브라우저 실측: TopBar New→리드 즉시 생성+드로어, 확인 스트립 3플로(ESC 취소·재해제·버리고 닫기, 포커스가 취소 버튼으로), Decisions→Rhythm 탭 전환 스켈레톤 0, 콘솔 에러 0.
+
+- **반응(속도 백로그 소진)**: overview/content/work/automations 훅에 모듈 스코프 stale-while-revalidate 이식(탭 전환·복귀 스켈레톤 제거, 재검증 실패는 partial — revenue/daily-brief 15차와 동일 클래스, work는 base 응답만 캐시). ⌘K 레코드 검색이 Revenue SWR 캐시를 재사용(`revenue-shared-cache.js` 공유 모듈 신설 — 페이지 청크를 셸로 끌지 않고 캐시만 분리, Revenue를 방금 본 직후 팔레트가 같은 원장을 재조회하던 것 제거).
+- **입출력 생성·연계**: TopBar New가 현재 표면의 생성 딥링크로 직행(팔레트 위장 해소 — 기준선 §2.8 지적). Leads/Deals/Cases/Accounts에 `?new=` 1회 소비+쿼리 소거 신설(projects/decisions/rhythm/studio 기존 소비와 동일 계약), ⌘K에 New Lead/Deal/Account/Case 4행 추가. 매핑 없는 표면만 팔레트 폴백. 계약 테스트 2건(셸 매핑·표면 소비).
+- **편의 UX(confirm 스타일드 플로 — 백로그 M)**: EditDrawer·project-create-drawer의 window.confirm 3곳 → 푸터 인라인 2단계 확인. ESC/오버레이는 스트립부터 해제(취소 시멘틱 — 연타로 버려지지 않음), 버림·삭제는 명시 danger 버튼만, 스트립 표시 시 포커스가 취소 버튼으로 이동. Button primitive forwardRef 전환(포커스 이동용, props 계약 유지). 계약 테스트 3건 갱신+강화.
+- **디자인 적합성·애니메이션(§9 감사)**: 위반 스캔 결과 reduced-motion 전역 킬(.hub-app 인라인 포함) ✓ · 펄스 1.2–1.5s ✓ · urgent 무애니메이션 ✓. 잔여 위반은 live 도트 glow 그림자 2곳(agents 채팅·revenue guru — 19차 아바타 glow와 동일 §4/§13 클래스) → 소거.
+- **정렬(§8.1 커버리지 감사)**: 헤더 컬럼 테이블 4곳(Leads·Cases·Accounts·customers) 전부 공유 SortHead 3단 토글 적용 확인 — 미이관 0. Runs는 시간순 로그, Segments·content Queue는 카드형으로 정렬 계약 대상 아님(수리 불요 판정).
+
+**잔여(다음 회차)**: Projects/PMS 전체 j/k 문법(L — 편의·UIUX 공통 최대 잔여), BulkBar 배선(명시 보류 유지 — 1인 운영 후순위), overview 라우트 lean 전환(보조 표면, SWR 완화로 체감 0), 비코어 표면(Segments·Automations·Agents·Intake) §8.1 계약 이관.
+
+### Iteration 23 (2026-08-08) — 반영 완료
+
+주제: **PMS j/k 키보드 문법(백로그 L — 편의·UIUX 공통 최대 잔여) + 브라우저 실측 중 발견한 생성 드로어 크래시 수리.**
+검증: `npm test` 473 중 464 통과(실패 9건 = registerHooks 환경 격차, 기준선 동일). hub/engine build 통과. 라이브 실측: j/k 커서(Moonstone outline)·e 상세(?project= 딥링크)·ESC 닫기·n 뷰 인지 생성 전부 발화, 생성 드로어 열림→닫힘 사이클 에러 0.
+
+- **PMS j/k(23차)**: 리스트(tree) 섹션 계산을 훅 레벨 `listSections`로 추출해 렌더와 커서가 같은 가시 순서를 공유(접힌 브랜드 섹션 제외). tree는 행 평탄화, board는 컬럼 순서 평탄화(Deals 칸반 동일 문법)로 `useCrmSelection`/`useCrmKeyboard` 배선 — j/k 이동·e 열기(보드의 task 카드는 태스크 드로어, project 카드·목록 행은 상세 패널)·스크롤 추적. n은 바인딩하지 않음 — 뷰 인지 리스너(todos→할 일, 그 외→프로젝트)가 계속 소유(18차 회귀 재발 방지).
+- **공유 훅 보정**: `useCrmKeyboard`가 onNew 미제공 시 n을 preventDefault로 소비하지 않게 — 소비만 하고 아무 것도 안 하면 페이지의 뷰 인지 N 리스너가 영구히 가려진다(18차 usePageCreateHotkey 회귀와 동일 클래스). 기존 호출처(onNew 제공)는 무영향.
+- **생성 드로어 크래시(실측 발견)**: ProjectCreateDrawer `onClose`가 19차에 상태째 제거된 `setProjectCreateContext(null)`를 여전히 호출 — 생성 드로어를 닫을 때마다 ReferenceError가 발생하고 있었다(드로어는 닫히지만 핸들러가 죽는 무언 크래시). 죽은 호출 제거, 열림→닫힘 사이클 에러 0 실측.
+- 계약 테스트 2건: PMS j/k 배선(listSections 공유·n 미바인딩·양뷰 data-kb-row·스크롤 추적) + 공유 훅 n 양보.
+
+### Iteration 24 (2026-08-08) — 반영 완료
+
+주제: **비코어 표면 §8.1 이관 마감(Segments) + 스테이지 변경 undo(편의 마지막 고빈도 공백) + 실측 발견 잠복 크래시 2건.**
+검증: `npm test` 474 중 465(실패 9 = registerHooks 환경 격차, 기준선 동일) · hub/engine build. 라이브 실측: Deals 이동→"(으)로 이동됨"+되돌리기 3.5초 창→undo 시 원위치·notice 소거→창 종료 시 PATCH 커밋, Segments j/k 커서+e 펼침, 신규 에러 0. 테스트 중 이동시킨 실딜 2건은 쓰기 API로 원위치 복원 완료.
+
+- **Deals 스테이지 변경 3.5초 undo**: 즉시 PATCH → 지연 쓰기(useUndoableAction)로 전환 — 되돌리기는 네트워크 없는 진짜 취소, 연속 이동은 예약 대체 + 최초 원위치 복원, 창 종료 시 알림 소거(19차 수명 계약)·실패 시 롤백+명명. 드래그·1-5 키 양경로 공통. 이로써 되돌리기가 전 고빈도 뮤테이션을 커버(기준선 §2.8 "스테이지 변경 undo 없음" 소진). 계약 테스트 1건(지연 PATCH·즉시 실행 경로 부재·undoBase·소거).
+- **Segments 키보드 문법**: j/k 세그먼트 카드 커서(Moonstone outline·스크롤 추적) · e/Enter 펼침 토글 · / 검색 포커스 — 비코어 목록 표면의 마지막 문법 공백. Orders·Runs·Webhooks·Automations 개요는 계약 비대상 판정(읽기 전용 로그·결정 큐 — 12차 각주).
+- **잠복 크래시 2건(실측 발견·수리)**: ① Deals `totals` memo가 `DEAL_STAGES`를 deps에서 누락 — 원장 도착으로 stages만 갱신된 렌더에서 stale 빈 객체를 컬럼 헤더의 무가드 `totals[s.key].count`가 읽어 페이지 전체가 에러 바운더리로 떨어짐(deps 추가 + 옵셔널 가드). ② `useCrmKeyboard`가 onNew 미제공 시에도 n을 preventDefault로 소비하던 것 보정(23차와 함께) 후속으로 Segments·PMS에서 재확인.
+
+### Iteration 25 (2026-08-08) — 반영 완료
+
+주제: **BulkBar 첫 실채택(기준선 §2.8 마지막 항목) — 편의·UIUX 94 착지.**
+검증: `npm test` 475 중 466(실패 9 = registerHooks 환경 격차, 기준선 동일) · hub/engine build. 라이브 실측: x 2건 선택 → 바 "2 선택" → 1건 해제 → 단계 일괄 적용 → "1건 단계 → Contact 변경됨" → 선택 자동 해제, 신규 에러 0. 검증은 대상 리드의 기존 단계와 같은 값으로 적용해 원장 실질 무변경.
+
+- **Leads BulkBar**: `useCrmKeyboard`에 `onToggleSelect` 배선(x 키), 행 `data-multi-selected` + 조용한 배경 표시(커서 outline과 채널 분리 — 바가 주 신호), 하단 플로팅 바에 단계 일괄 변경(select). 일괄 쓰기는 건별 `saveRevenueRecord` + 성공분만 로컬 반영 + 부분 실패 건수 명명("N건 저장, M건 실패") — 무언 부분 실패 금지. 치트시트에 X 행 복원(실배선 후에만 — 정직 유지). 계약 테스트 1건.
+- **보류 해제 근거 기록**: "1인 운영 성숙도에서 후순위"는 eval 루프의 우선순위 판단이었고, 운영자의 94 목표 지시(/goal 2026-08-08)가 이를 대체하는 가장 최근 지시다. SavedViews(window.prompt 포함)는 계속 미배선 — prompt는 22차에 소거한 OS 다이얼로그 클래스라 배선 전 스타일드 입력으로 교체가 선행돼야 한다(명시 보류 유지).
+
+### Iteration 26 (2026-08-09) — 반영 완료
+
+주제: **A-1 attention adapter 컷오버 — 정체성 캡(Phase 1B 잔여) 해소, 정체성 94 착지.**
+검증: `npm test` 480 중 471(실패 9 = registerHooks 환경 격차, 기준선 동일) · hub/engine build. 라이브 실측(경합 오염 전): daily-brief 응답이 컷오버 전과 동등(status live · 7소스 live · 신호/슬롯/taskToday/metrics 동일 shape), attention 라우트 `raw` 미노출(my-work 무영향). 실측 중 dev 아티팩트 경합(두 dev 서버가 같은 `.next` 공유) 500은 코드 무관 환경 이슈로 판정.
+
+- **read 통합**: daily-brief 라우트가 tasks(getTaskLedger)·revenue(getRevenueLedger)·calendar를 별도로 읽던 3중 read를 `getAttentionLedger({ includeRaw: true })` 1호출로 교체 — attention이 내부에서 같은 세 원장을 이미 읽고 있었으므로 첫 화면 팬아웃에서 중복 read 3개가 사라지고, "지금 중요한 것" 판정의 원천이 물리적으로 하나가 된다. `raw`(projectLedger/revenue/calendar 원본)는 opt-in — §7 확정 슬롯(KA·집중 고객·오늘 일정·할 일 레인)은 확정 스펙의 자체 공식이 있으므로 원본 위 프로젝션으로 유지(§2 KA 7일 기준·§7 CS 레인 공식은 attention §4와 다른 축의 확정값).
+- **신호 엔진 어댑터**: 정체 딜 신호(buildUnifiedRiskSignals·buildRevenueSignals)의 판정을 attention 원장의 stalled 집합(§4 "다음 연락 시점 지남" = STALLED_DAYS 14)으로 교체 — 기존 자체 `age>=10` 밴드는 §8.1 "stalled 기준은 STALLED_DAYS 하나" 위반이었고 첫 화면과 내 작업이 같은 딜을 다르게 판정했다. stalled(14+)는 즉시 손실 위험이라 신호 톤은 전부 danger(기존 10–13일 warning 밴드는 단일 기준 정렬로 의도적 소거). operator 스코프는 revenue.deals 조인이 보장.
+- **결과 봉투 재포장**: buildSources/ledgerState의 기존 allSettled 계약을 유지하기 위해 raw 원장을 fulfilled 봉투로 재포장 — 소스 배지·error/partial 판정 로직 무수정. attention 자체 예외 시 세 원장 전부 read 실패로 명명(빈 화면 위장 금지).
+- README §3 Phase 1B 행을 "부분 작동 → 작동"으로 갱신(잔여 문구 소진).
+
+### Iteration 27 (2026-08-09) — 반영 완료
+
+주제: **편의성 재실측(스테일 축) + 연락 기록 날짜 프리셋 — 편의성 94 착지, 전 축 90+ 달성.**
+검증: `npm test` 480 중 471(실패 9 = registerHooks 환경 격차, 기준선 동일) · hub/engine build. 라이브 실측: followups 인라인 폼에서 "전화함" 1클릭 → 프리셋 "내일" 1클릭 → 날짜 자동 채움(값 검증 일치), customers 컨택 시트(j→e 드로어)에도 동일 프리셋 렌더(패리티), 콘솔 에러 0.
+
+- **DateQuickPresets primitive 신설**: 내일·3일 뒤·다음 주 3프리셋 — 연락 기록(§7 확정 최소 기록)의 date picker 수동 조작(3~4클릭)이 최고 빈도 액션의 마지막 반복 마찰이었다. followups LogForm·customers 컨택 시트 양쪽 배선(§8.1 primitives-first — 인라인 2곳 중복 방지). 임의 날짜는 기존 date input 폴백 유지, 기약 없음 체크 시 비활성.
+- **편의성 16차 재실측**: 체크리스트 3동작 전부 라이브 측정(위 %%각주) — 7차(87) 측정에 미반영이던 17·22·24·25차 개선(시트 undo 패리티·New 생성 직행·스테이지 undo·BulkBar)을 처음 반영해 94 착지.
 
 ### 다음 회차 백로그 (점수 영향 순)
 

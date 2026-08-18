@@ -118,6 +118,33 @@ test("keeps raw project source fields separate from latest-update display data",
   });
 });
 
+test("reads the deal backlink create_project wrote into project meta", () => {
+  const [linked, unlinked] = operatingLedger.mapProjects(
+    [
+      {
+        id: "project-1",
+        name: "A/S 후속",
+        status: "active",
+        created_at: "2026-08-01T00:00:00.000Z",
+        meta: { origin_deal_id: "deal-42" },
+      },
+      {
+        id: "project-2",
+        name: "일반 프로젝트",
+        status: "active",
+        created_at: "2026-08-01T00:00:00.000Z",
+        meta: {},
+      },
+    ],
+    new Map(),
+    new Map(),
+    new Map(),
+  );
+
+  assert.equal(linked.originDealId, "deal-42");
+  assert.equal(unlinked.originDealId, null);
+});
+
 test("marks project progress partial when the capped task read is smaller than the exact aggregate", async () => {
   const state = globalThis.__operatingLedgerTestState;
   state.calls = [];

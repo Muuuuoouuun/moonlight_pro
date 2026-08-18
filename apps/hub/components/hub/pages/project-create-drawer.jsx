@@ -75,11 +75,16 @@ export function ProjectCreateDrawer({
   const dirty = Boolean(draft
     && initialDraftSignatureRef.current
     && JSON.stringify(draft) !== initialDraftSignatureRef.current);
+  // 버림 확인은 EditDrawer와 같은 푸터 인라인 2단계 — window.confirm은 디자인 시스템·ESC
+  // 레이어 밖 OS 다이얼로그다(백로그 M). ESC/오버레이/취소는 스트립부터 해제한다.
+  const [confirmingDiscard, setConfirmingDiscard] = React.useState(false);
+  React.useEffect(() => { setConfirmingDiscard(false); }, [draft?.clientId]);
   const requestClose = React.useCallback(() => {
     if (savingRef.current) return;
-    if (dirty && typeof window !== "undefined" && !window.confirm("입력한 변경사항을 버릴까요?")) return;
+    if (confirmingDiscard) { setConfirmingDiscard(false); return; }
+    if (dirty) { setConfirmingDiscard(true); return; }
     onClose?.();
-  }, [dirty, onClose]);
+  }, [confirmingDiscard, dirty, onClose]);
 
   const update = React.useCallback((key, value) => {
     onChange?.(key, value);
@@ -196,7 +201,15 @@ export function ProjectCreateDrawer({
       initialFocusRef={titleRef}
       width="min(420px, 100vw)"
       footerStyle={{ flexWrap: "wrap" }}
-      footer={(
+      footer={confirmingDiscard ? (
+        <>
+          <span role="alert" style={{ flex: 1, minWidth: 0, fontSize: 12, lineHeight: 1.4, color: "var(--fg-muted)" }}>
+            저장하지 않은 변경이 있습니다 — 버리고 닫을까요?
+          </span>
+          <Button variant="ghost" size="sm" onClick={() => setConfirmingDiscard(false)} style={{ minHeight: 44 }}>계속 편집</Button>
+          <Button variant="danger" size="sm" onClick={() => { setConfirmingDiscard(false); onClose?.(); }} style={{ minHeight: 44 }}>버리고 닫기</Button>
+        </>
+      ) : (
         <>
           {saveState === "conflict" && (
             <div style={{ width: "100%", display: "flex", flexWrap: "wrap", gap: 8 }}>

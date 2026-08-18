@@ -127,8 +127,9 @@ test("Daily Brief task-only Today exposes durable completion controls", () => {
 });
 
 test("shared Button forwards native accessibility attributes", () => {
-  assert.match(primitivesSource, /export function Button\(\{[\s\S]*?\.\.\.props[\s\S]*?\}\) \{/);
-  assert.match(primitivesSource, /<button\s+\{\.\.\.props\}\s+type=\{type\}/);
+  // 22차: 확인 스트립 포커스 이동을 위해 forwardRef로 전환 — props 전달 계약은 유지.
+  assert.match(primitivesSource, /export const Button = React\.forwardRef\(function Button\(\{[\s\S]*?\.\.\.props[\s\S]*?\}, ref\) \{/);
+  assert.match(primitivesSource, /<button\s+\{\.\.\.props\}\s+ref=\{ref\}\s+type=\{type\}/);
 });
 
 test("mobile PMS controls keep 44px targets while project cards avoid horizontal overflow", () => {

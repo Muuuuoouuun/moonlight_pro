@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { createLedgerCache } from "../module-ledger-cache";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, SectionTitle, EmptyState, Avatar, SyncBadge, SegmentedControl } from "../hub-primitives";
@@ -140,7 +139,7 @@ function handoffTone(status) {
   return status === "failed" ? "danger" : "neutral";
 }
 
-const EMPTY_CONTENT_STATE = {
+const EMPTY_CONTENT_LEDGER = {
   source: "preview",
   syncState: "preview",
   brands: [],
@@ -157,32 +156,36 @@ const EMPTY_CONTENT_STATE = {
   cadence: null,
 };
 
-// Studio↔Queue↔Campaigns 탭 전환마다 콘텐츠 원장을 다시 받던 경로(8차 잔여).
-const contentCache = createLedgerCache();
+// 모듈 스코프 stale-while-revalidate — Studio↔Queue↔Campaigns 탭 전환마다 원장을 다시
+// 기다리며 스켈레톤을 보이던 것을 제거(8차 잔여 M). 재검증 실패는 partial(위장 금지).
+const CONTENT_CACHE_SERVABLE_MS = 5 * 60 * 1000;
+let contentLedgerCache = null; // { at, state }
 
 function useContentLedger() {
-  const [state, setState] = React.useState(() => contentCache.read() || EMPTY_CONTENT_STATE);
+  const servable = contentLedgerCache
+    && Date.now() - contentLedgerCache.at < CONTENT_CACHE_SERVABLE_MS;
+  const [state, setState] = React.useState(servable ? contentLedgerCache.state : EMPTY_CONTENT_LEDGER);
 
   React.useEffect(() => {
     let active = true;
+    const hasServableCache = Boolean(
+      contentLedgerCache && Date.now() - contentLedgerCache.at < CONTENT_CACHE_SERVABLE_MS
+    );
 
     async function loadLedger() {
-      // 캐시 서빙 중엔 스켈레톤 없이 조용히 재검증한다(모듈 SWR).
-      const servable = contentCache.read();
-      if (!servable) setState((s) => ({ ...s, syncState: "loading" }));
+      if (!hasServableCache) setState((s) => ({ ...s, syncState: "loading" })); // 캐시 서빙 중엔 조용히 재검증
       try {
         const response = await fetch("/api/hub/content", { cache: "no-store" });
         const data = await response.json().catch(() => null);
 
         if (!active || !response.ok || !data || data.status === "error") {
           // 라이브 read 실패는 error — preview("미구성")로 뭉개면 큐가 0건이 사실처럼 보인다.
-          // 캐시를 서빙 중이었다면 오래된 값을 live로 위장하지 않고 partial로 낮춘다.
-          if (active) setState((s) => ({ ...s, syncState: servable ? "partial" : "error" }));
+          if (active) setState((s) => ({ ...s, syncState: hasServableCache ? "partial" : "error" }));
           return;
         }
 
         if (data.source === "supabase") {
-          const next = {
+          const nextState = {
             source: data.source,
             syncState: data.status === "partial" ? "partial" : "live",
             brands: Array.isArray(data.brands) ? data.brands : [],
@@ -198,13 +201,13 @@ function useContentLedger() {
             ideaQueue: Array.isArray(data.ideaQueue) ? data.ideaQueue : [],
             cadence: data.cadence || null,
           };
-          contentCache.write(next);
-          setState(next);
+          contentLedgerCache = { at: Date.now(), state: nextState };
+          setState(nextState);
         } else {
           setState((s) => ({ ...s, source: "preview", syncState: "preview", campaigns: [], queue: [] }));
         }
       } catch {
-        if (active) setState((s) => ({ ...s, syncState: servable ? "partial" : "error" }));
+        if (active) setState((s) => ({ ...s, syncState: hasServableCache ? "partial" : "error" }));
       }
     }
 
@@ -715,6 +718,8 @@ export function Studio({ workspace }) {
                     {body.length > 1200 ? '…' : ''}
                   </div>
                 </div>
+                {/* 고정 "Figure 1" 플레이스홀더 제거 — 모든 초안 아래 존재하지 않는 다이어그램이
+                    문서 내용처럼 렌더됐다(8차 잔여 S: 가짜 UI). 이미지 삽입은 툴바 Image 경로만. */}
               </div>
             </div>
           </>

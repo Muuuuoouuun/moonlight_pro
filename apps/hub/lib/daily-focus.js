@@ -85,6 +85,35 @@ export function selectUrgentKa(revenue = {}, now = new Date()) {
   return candidates[0];
 }
 
+// 첫 화면은 우선순위 판정을 두 벌 돌린다: 확정 슬롯(buildDailyFocus)과 tone 정렬 신호 큐
+// (daily-brief 라우트의 build*Signals). 둘 다 같은 selectOperatorFocusLeads를 호출해서 같은
+// 고객이 「집중 고객」 슬롯과 「결정 큐」에 동시에 렌더됐고, 헤더 "신호 N"이 그 중복까지 세서
+// 5초 판단의 첫 앵커를 화면에서 검증할 수 없었다(2026-08-07 사용성 재감사 A).
+// 규칙: 확정 슬롯이 정본이고, 신호 큐는 슬롯이 다루지 않는 나머지만 싣는다.
+export function focusOccupiedKeys(dailyFocus) {
+  const keys = new Set();
+  const ka = dailyFocus?.urgentKa?.item;
+  if (ka?.kind && ka?.id) keys.add(`${ka.kind}:${ka.id}`);
+  (dailyFocus?.focusCustomers?.items || []).forEach((item) => {
+    if (item?.id) keys.add(`lead:${item.id}`);
+  });
+  return keys;
+}
+
+// 신호는 `subject: { type, id }`로 자기가 가리키는 원장 레코드를 밝힌다. subject가 없는
+// 집계 신호(복합 리스크·신규 리드 묶음 등)는 슬롯과 1:1 대응이 아니므로 그대로 둔다.
+// 반드시 정원 slice 앞에서 호출한다 — 뒤에서 걸면 중복이 자리를 먹고 진짜 신호가 잘린다.
+export function withoutFocusDuplicates(signals, dailyFocus) {
+  const list = Array.isArray(signals) ? signals : [];
+  const occupied = focusOccupiedKeys(dailyFocus);
+  if (!occupied.size) return list;
+  return list.filter((signal) => {
+    const subject = signal?.subject;
+    if (!subject?.type || !subject?.id) return true;
+    return !occupied.has(`${subject.type}:${subject.id}`);
+  });
+}
+
 // 슬롯 묶음 — 각 슬롯이 자기 소스의 truth 상태를 따로 들고 간다(§5.3: 캘린더 미연결이
 // 매출 슬롯을 preview로 오염시키지 않는다).
 export function buildDailyFocus({ revenue, calendar, now = new Date() } = {}) {

@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { createLedgerCache } from "../module-ledger-cache";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, IconButton, Button, Progress, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge } from "../hub-primitives";
@@ -74,39 +73,38 @@ function formatHour(value) {
   return `${hour}:${String(minutes).padStart(2, '0')}`;
 }
 
-// Decisions↔Rhythm↔Roadmap 탭 전환마다 업무 원장을 다시 받던 경로(8차 잔여).
-// 프로젝트 스코프별로 응답이 다르므로 key를 함께 저장하고 일치할 때만 서빙한다.
-const workCache = createLedgerCache();
-
-const EMPTY_WORK_STATE = {
-  source: 'preview',
-  decisions: [],
-  decisionsState: { state: 'preview', partial: false, error: null },
-  rituals: [],
-  projects: [],
-  summary: null,
-  syncState: 'preview',
-  rhythmState: 'preview',
-  rhythmPartial: false,
-  rhythmTruncatedSources: [],
-  rhythmError: null,
-  roadmap: {
-    source: 'preview',
-    state: 'loading',
-    partial: false,
-    error: null,
-    failedSources: [],
-    truncatedSources: [],
-    projects: [],
-    milestones: [],
-  },
-};
+// 모듈 스코프 stale-while-revalidate — Decisions↔Rhythm↔Roadmap 탭 전환은 훅을 리마운트해
+// 전환마다 업무 원장을 다시 기다렸다(8차 잔여 M). base(프로젝트 미선택) 응답만 캐시한다 —
+// 선택 스코프 응답은 base 스냅샷 복원 로직이 이미 담당.
+const WORK_CACHE_SERVABLE_MS = 5 * 60 * 1000;
+let workLedgerCache = null; // { at, state }
 
 function useWorkLedger(projectId = null) {
   const projectQuery = typeof projectId === 'string' ? projectId.trim() : '';
-  const [state, setState] = React.useState(() => {
-    const cached = workCache.read();
-    return cached && cached.key === projectQuery ? cached.state : EMPTY_WORK_STATE;
+  const servable = !projectQuery && workLedgerCache
+    && Date.now() - workLedgerCache.at < WORK_CACHE_SERVABLE_MS;
+  const [state, setState] = React.useState(servable ? workLedgerCache.state : {
+    source: 'preview',
+    decisions: [],
+    decisionsState: { state: 'preview', partial: false, error: null },
+    rituals: [],
+    projects: [],
+    summary: null,
+    syncState: 'preview',
+    rhythmState: 'preview',
+    rhythmPartial: false,
+    rhythmTruncatedSources: [],
+    rhythmError: null,
+    roadmap: {
+      source: 'preview',
+      state: 'loading',
+      partial: false,
+      error: null,
+      failedSources: [],
+      truncatedSources: [],
+      projects: [],
+      milestones: [],
+    },
   });
   const requestRef = React.useRef(0);
   const baseSnapshotRef = React.useRef(null);
@@ -114,10 +112,11 @@ function useWorkLedger(projectId = null) {
   const load = React.useCallback(async () => {
     const requestId = requestRef.current + 1;
     requestRef.current = requestId;
-    // 같은 스코프의 캐시를 서빙 중이면 스켈레톤 없이 조용히 재검증한다(모듈 SWR).
-    const cachedEntry = workCache.read();
-    const servable = Boolean(cachedEntry && cachedEntry.key === projectQuery);
-    if (!servable) {
+    const hasServableCache = !projectQuery && Boolean(
+      workLedgerCache && Date.now() - workLedgerCache.at < WORK_CACHE_SERVABLE_MS
+    );
+    if (!hasServableCache) {
+      // 캐시 서빙 중엔 스켈레톤 없이 조용히 재검증한다.
       setState((prev) => ({
         ...prev,
         syncState: 'loading',
@@ -137,20 +136,13 @@ function useWorkLedger(projectId = null) {
       if (requestId !== requestRef.current) return false;
 
       if (!response.ok || !data || data.status === 'error') {
-        const message = data?.error || data?.message || `업무 원장 응답 실패 (${response.status})`;
-        // 재검증 1회 실패로 화면을 비우면 오히려 "기록 0건"으로 보인다 —
-        // 서빙 중이던 값은 유지하고 partial로만 낮춘다.
-        if (servable) {
-          setState((prev) => ({
-            ...prev,
-            syncState: 'partial',
-            decisionsState: { ...prev.decisionsState, partial: true, error: { message, retryable: true } },
-            rhythmPartial: true,
-            rhythmError: message,
-            roadmap: { ...prev.roadmap, partial: true, error: { message, retryable: true } },
-          }));
+        // 캐시를 보여주는 중이면 데이터를 지우지 않는다 — 재검증 실패는 partial(오래된
+        // 데이터 명명)이고, 캐시가 없을 때만 전면 error로 전환한다(SWR 공통 규칙).
+        if (hasServableCache) {
+          setState((prev) => ({ ...prev, syncState: 'partial' }));
           return false;
         }
+        const message = data?.error || data?.message || `업무 원장 응답 실패 (${response.status})`;
         setState((prev) => ({
           ...prev,
           syncState: 'error',
@@ -230,25 +222,20 @@ function useWorkLedger(projectId = null) {
         rhythmError: rhythm.error?.message || null,
         roadmap,
       };
-      workCache.write({ key: projectQuery, state: nextState });
       setState(nextState);
       // 프로젝트 미선택 상태의 성공 응답을 스냅샷 — 로드맵 선택 해제 시 재조회 없이 복원한다.
-      if (!projectQuery) baseSnapshotRef.current = nextState;
+      if (!projectQuery) {
+        baseSnapshotRef.current = nextState;
+        workLedgerCache = { at: Date.now(), state: nextState };
+      }
       return rhythm.state === 'live' || rhythm.state === 'live-empty' || rhythm.state === 'partial';
     } catch (error) {
       if (requestId !== requestRef.current) return false;
-      const message = error instanceof Error ? error.message : String(error);
-      if (servable) {
-        setState((prev) => ({
-          ...prev,
-          syncState: 'partial',
-          decisionsState: { ...prev.decisionsState, partial: true, error: { message, retryable: true } },
-          rhythmPartial: true,
-          rhythmError: message,
-          roadmap: { ...prev.roadmap, partial: true, error: { message, retryable: true } },
-        }));
+      if (hasServableCache) {
+        setState((prev) => ({ ...prev, syncState: 'partial' }));
         return false;
       }
+      const message = error instanceof Error ? error.message : String(error);
       setState((prev) => ({
         ...prev,
         syncState: 'error',
@@ -423,10 +410,16 @@ export function Calendar({ onNavigate }) {
   const createEvent = React.useCallback(async ({ date, startHour, endHour, title }) => {
     const targetDay = date || fetchDays[0];
     if (!calendarCapabilities.canCreate) {
+      // 원인별로 다른 문장을 준다 — 읽기 실패·확인 중을 "연결하세요"로 뭉개면 이미 연결한
+      // 운영자가 할 일이 없는 안내를 받는다(사용성 재감사 B).
       setGcalMessage(
         isReadOnly
           ? 'iCal 연결은 읽기 전용입니다. 일정 생성·수정에는 Google OAuth 연결이 필요합니다.'
-          : 'Google Calendar 연결 후 일정을 만들 수 있습니다.',
+          : calendarData.status === 'error'
+            ? '캘린더를 읽지 못해 일정을 만들 수 없습니다. 다시 시도하세요.'
+            : calendarData.status === 'loading'
+              ? '캘린더 연결 상태를 확인하는 중입니다. 잠시 후 다시 시도하세요.'
+              : 'Google Calendar 연결 후 일정을 만들 수 있습니다.',
       );
       return;
     }
@@ -475,13 +468,15 @@ export function Calendar({ onNavigate }) {
   React.useEffect(() => {
     const minutes = Number(searchParams.get('focus'));
     if (!minutes || focusAppliedRef.current) return;
-    // 캘린더 능력이 확정되기 전에는 canCreate가 무조건 false다(badge='syncing').
-    // 그대로 진행하면 첫 화면 primary CTA의 ?focus= 딥링크가 "연결 후 만들 수
-    // 있습니다"로 잘못 실패하고, router.replace가 파라미터를 지워 재시도 경로까지
-    // 사라진다. 능력이 확정될 때까지 적용을 미룬다.
-    if (calendarData.status === 'loading') return;
+    // 첫 화면 primary CTA('15분 집중')의 착지 지점이다. 마운트 시점엔 캘린더가 아직
+    // status='loading'이라 canCreate가 항상 false인데, 예전엔 그대로 createEvent를 불러
+    // "Google Calendar 연결 후…"(이미 연결돼 있어도)를 띄우고 router.replace로 ?focus=까지
+    // 지워 재시도 경로마저 없앴다 — 제품의 유일한 primary 버튼이 늘 무음 실패했다
+    // (8차 잔여 · 2026-08-07 사용성 재감사 B).
+    // 뷰 전환은 즉시(사용자가 이동을 체감), 생성은 캘린더 상태가 확정된 뒤에만 시도한다.
     setSelectedDate(now);
     setViewMode('day');
+    if (calendarData.status === 'loading') return;
     focusAppliedRef.current = true;
     createEvent({
       date: now,
@@ -491,7 +486,7 @@ export function Calendar({ onNavigate }) {
     });
     router.replace(pathname);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [now, searchParams, calendarData.status]);
+  }, [now, searchParams, calendarData.status, createEvent]);
 
   async function connectGoogleCalendar() {
     setGcalStatus('connecting');
@@ -1312,8 +1307,8 @@ export function Rhythm() {
   }, [editingRitual, editRitualId, baseRituals, retry]);
 
   // 삭제 = 그 루틴의 정의(씨앗) 행 + 모든 체크인 이력을 함께 지운다. EditDrawer가 삭제
-  // 전에 window.confirm으로 확인을 받으므로 여기서 다시 묻지 않는다. 로컬(아직 저장 안 된)
-  // 초안은 API 호출 없이 그냥 상태에서 제거한다.
+  // 전에 푸터 인라인 확인(22차 스타일드 플로)을 받으므로 여기서 다시 묻지 않는다.
+  // 로컬(아직 저장 안 된) 초안은 API 호출 없이 그냥 상태에서 제거한다.
   const deleteRitual = React.useCallback(async () => {
     if (!editingRitual) return { ok: false, status: 'no-selection' };
     if (editingRitual.isNew) {

@@ -35,19 +35,19 @@ export async function mapWithConcurrency(items, limit, fn) {
 
 // Tally staging rows by status for one source in a single fetch — replaces the
 // previous four count=exact scans per status view.
-// 읽기가 거부되면 null을 돌려준다 — `rows || []`로 뭉개면 전 상태 0건 집계가
-// "유입이 없다"는 사실처럼 렌더된다(호출부가 실패를 명명해야 한다).
-export async function tallyStagingByStatus(source) {
+// fetchSupabaseRows는 read 실패에 null을 준다(throw 없음). 기본값은 기존 호환을 위해
+// 0 집계지만, 호출처가 "못 읽음"과 "정말 0건"을 구분해야 하면 nullOnReadFailure를 켠다 —
+// 스테이징 카운트를 0으로 렌더하면 읽기 실패가 "처리할 게 없음"으로 위장된다.
+export async function tallyStagingByStatus(source, { nullOnReadFailure = false } = {}) {
   const rows = await fetchSupabaseRows(STAGING_TABLE, {
     select: "status",
     filters: withWorkspaceFilter([["source", eqFilter(source)]]),
     limit: 5000,
   });
-
-  if (!Array.isArray(rows)) return null;
+  if (rows === null && nullOnReadFailure) return null;
 
   const tally = Object.fromEntries(STAGING_STATUSES.map((status) => [status, 0]));
-  for (const row of rows) {
+  for (const row of rows || []) {
     if (row.status in tally) tally[row.status] += 1;
   }
   return tally;

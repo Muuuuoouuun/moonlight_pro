@@ -167,13 +167,16 @@ function syncTone(state) {
   return state === 'error' ? 'danger' : 'neutral';
 }
 
+// TruthBadge의 TRUTH_STATES와 같은 어휘를 쓴다 — 첫 화면 상태 줄은 제품에서 가장 많이 읽히는
+// 한 줄인데 `live`/`preview`/`error` 개발 토큰이라 "믿어도 되는 화면인지"를 말해주지 못했다
+// (DESIGN §5.3/§10 — 2026-08-07 사용성 재감사 C).
 function sourceLabel(state) {
-  if (state === 'live') return 'live';
-  if (state === 'partial') return 'partial';
-  if (state === 'error') return 'error';
-  if (state === 'syncing') return 'syncing';
-  if (state === 'mixed') return 'mixed';
-  return 'preview';
+  if (state === 'live') return '실시간';
+  if (state === 'partial') return '일부 데이터';
+  if (state === 'error') return '읽기 실패';
+  if (state === 'syncing') return '동기화 중';
+  if (state === 'mixed') return '혼합';
+  return '연결 필요';
 }
 
 function QuickTaskCapture({ onNavigate, onSaved }) {
@@ -454,6 +457,9 @@ const EMPTY_DAILY_BRIEF_STATE = {
   contentBrands: null,
   signals: [],
   dailyFocus: null,
+  // 접힌 보조 섹션의 헤더가 "안에 뭐가 있는지"를 말하려면 카드를 마운트하지 않고도 셀 수
+  // 있어야 한다 — 브리핑 원장이 이미 싣고 오는 승인 큐 요약을 그대로 쓴다(사용성 재감사 E).
+  queue: null,
   morningBrief: null,
 };
 
@@ -505,6 +511,7 @@ function useDailyBriefLedger(refreshKey) {
           contentBrands: data.contentBrands || null,
           signals: Array.isArray(data.signals) ? data.signals : [],
           dailyFocus: data.dailyFocus || null,
+          queue: data.queue || null,
           morningBrief: data.morningBrief || null,
         };
         dailyBriefCache = { at: Date.now(), state: nextState };
@@ -1075,18 +1082,18 @@ function StatusLine({ state, onRetry }) {
   const [open, setOpen] = React.useState(false);
   const liveCount = Number(state.summary?.liveCount || 0);
   const sourceCount = state.sources.length;
-  const label = state.syncState === 'mixed' ? `${liveCount}/${sourceCount || 6} live` : sourceLabel(state.syncState);
+  const label = state.syncState === 'mixed' ? `${liveCount}/${sourceCount || 6} 실시간` : sourceLabel(state.syncState);
   const detail = state.syncState === 'error'
     ? '브리핑을 읽지 못했습니다 — 지금 화면은 비어 보여도 실제 일이 있을 수 있습니다'
     : state.syncState === 'preview'
-    ? 'Supabase 연결 후 live 전환'
+    ? 'Supabase 연결 후 실시간 기록으로 전환됩니다'
     : state.syncState === 'partial'
     ? '일부 운영 기록을 읽지 못했습니다'
     : state.syncState === 'mixed'
-    ? '일부 기록은 live, 일부는 preview'
+    ? '일부 기록은 실시간, 일부는 연결 필요'
     : state.syncState === 'syncing'
     ? '기록 상태 확인 중'
-    : '모든 운영 기록 live';
+    : '모든 운영 기록 실시간';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--fg-faint)', padding: '0 2px' }}>
       <Dot tone={syncTone(state.syncState)} size={6} />
@@ -1243,7 +1250,9 @@ function CommandClear({ signalCount }) {
 // The brief shows three things: the one command, the decisions waiting, the four
 // numbers. Everything else is real but not first-scan material, so it sits behind
 // this disclosure rather than competing for the top of the page.
-function MoreDetail({ title, children }) {
+// `summary`는 접힌 상태에서 안에 무엇이 기다리는지 말한다 — 접혀 있다는 이유로 "섹션당
+// 다음 행동 1개" 계약 밖에 있던 보조 섹션(승인 큐 포함)을 계약 안으로 들인다(사용성 재감사 E).
+function MoreDetail({ title, summary, children }) {
   const [open, setOpen] = React.useState(false);
   return (
     <div>
@@ -1263,6 +1272,9 @@ function MoreDetail({ title, children }) {
       >
         <Iconed name="chevronD" size={13} style={{ color: 'var(--fg-faint)', transform: open ? 'rotate(0)' : 'rotate(-90deg)', transition: 'transform var(--dur-panel) var(--ease-hub)' }} />
         <span style={{ flex: 1 }}>{title}</span>
+        {!open && summary && (
+          <span style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>{summary}</span>
+        )}
         <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{open ? '접기' : '펼치기'}</span>
       </button>
       {open && (
@@ -1519,15 +1531,15 @@ function FocusSlots({ dailyFocus, onNavigate }) {
 
       <Card pad={false} className="daily-brief__panel" aria-label="오늘 일정">
         {eyebrow('오늘 일정', agenda.state !== 'live' ? <SyncBadge state={agenda.state} /> : null)}
+        {/* 카드당 CTA 1개(§3) — 상태별 인라인 버튼과 푸터 버튼이 같은 목적지로 2개 렌더되던
+            것을 푸터 하나로 통합하고, 라벨만 상태를 따라간다(사용성 재감사 F). */}
         {agenda.state === 'error' ? (
-          <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 16px 14px', fontSize: 12, color: 'var(--danger)' }}>
+          <div role="alert" style={{ padding: '2px 16px 14px', fontSize: 12, color: 'var(--danger)' }}>
             캘린더를 읽지 못했습니다 — 일정이 있어도 표시되지 않습니다.
-            <Button variant="ghost" size="xs" onClick={() => onNavigate?.('dashboard/work/calendar')}>캘린더 열기</Button>
           </div>
         ) : agenda.state !== 'live' ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>
+          <div style={{ padding: '2px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>
             Google Calendar 미연결 — 오늘 일정을 표시하려면 연결하세요.
-            <Button variant="ghost" size="xs" onClick={() => onNavigate?.('dashboard/work/calendar')}>연결</Button>
           </div>
         ) : agendaItems.length === 0 ? (
           <div style={{ padding: '2px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>오늘 일정 없음.</div>
@@ -1540,7 +1552,7 @@ function FocusSlots({ dailyFocus, onNavigate }) {
           ))
         )}
         <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/calendar')} style={{ margin: '4px 10px 10px' }}>
-          캘린더 열기
+          {agenda.state === 'live' || agenda.state === 'error' ? '캘린더 열기' : 'Google Calendar 연결'}
         </Button>
       </Card>
     </div>
@@ -1578,6 +1590,19 @@ export function DailyBrief({ onNavigate }) {
   const urgentCount = ledger.summary?.urgentCount ?? ledger.signals.filter(s => s.tone === 'danger').length;
   const todayCount = ledger.summary?.todayCount ?? ledger.signals.filter(s => s.tone === 'warning').length;
   const signalCount = ledger.signals.length;
+  // 헤더는 화면 전체의 요약이고 「결정 큐」 배지는 큐만의 요약이다 — 확정 슬롯의 긴급 KA는
+  // danger 레일을 달고 화면 맨 위에 있으므로 헤더 "즉시"에는 반드시 포함된다(사용성 재감사 A).
+  const focusUrgentCount = ledger.summary?.focusUrgentCount ?? (ledger.dailyFocus?.urgentKa?.item ? 1 : 0);
+  const screenUrgentCount = urgentCount + focusUrgentCount;
+  // 접힌 헤더의 요약 — 0건을 굳이 말하지 않고(소음), read 실패는 0으로 뭉개지 않는다.
+  // 승인 대기가 이미 신호(queue-approvals)로 올라와 있으면 반복하지 않는다: A-2와 같은 규칙으로,
+  // 위에서 자리를 받은 것을 아래에서 또 세면 첫 화면 숫자가 다시 검증 불가가 된다.
+  const approvalPromoted = ledger.signals.some((s) => s.id === 'queue-approvals');
+  const approvalSummary = ledger.queue?.source === 'error'
+    ? '승인 큐 확인 불가'
+    : !approvalPromoted && Number(ledger.queue?.pending) > 0
+      ? `승인 대기 ${ledger.queue.pending}건`
+      : null;
   const ranked = React.useMemo(() => rankSignals(ledger.signals), [ledger.signals]);
   const command = ranked[0] || null;
   const waiting = ranked.slice(1);
@@ -1587,7 +1612,7 @@ export function DailyBrief({ onNavigate }) {
     <div className="hub-page daily-brief" style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 'var(--section-gap)', maxWidth: 1040, margin: '0 auto', width: '100%' }}>
       <div className="hub-page-header daily-brief__intro fade-up" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20 }}>
         <div>
-          <BriefClock signalCount={signalCount} urgentCount={urgentCount} todayCount={todayCount} />
+          <BriefClock signalCount={signalCount} urgentCount={screenUrgentCount} todayCount={todayCount} />
         </div>
         <div className="hub-page-actions hub-page-actions--row" style={{ display: 'flex', gap: 8 }}>
           {/* 보류 스코프(Council)가 히어로 CTA를 점유하던 것을 코어 루프(고객 연락)로 교체
@@ -1654,7 +1679,7 @@ export function DailyBrief({ onNavigate }) {
           </div>
         </div>
 
-        <MoreDetail title="보조 정보 · 리듬, 모닝 브리프, 승인">
+        <MoreDetail title="보조 정보 · 리듬, 모닝 브리프, 승인" summary={approvalSummary}>
           <OperatorPulse operatorHome={ledger.operatorHome} contentBrands={ledger.contentBrands} onNavigate={onNavigate} />
           <RhythmPanel onNavigate={onNavigate} />
           <MorningBriefCard brief={ledger.morningBrief} onNavigate={onNavigate} />

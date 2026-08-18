@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { createLedgerCache } from "../module-ledger-cache";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, SectionTitle, Button, Dot, Divider, EmptyState, SyncBadge, SegmentedControl, Sparkline, Progress } from "../hub-primitives";
 import {
@@ -77,39 +76,43 @@ const EMPTY_LEDGER = {
   recentActivity: [],
 };
 
-// 탭 복귀마다 ~35콜 원장을 다시 받고 스켈레톤을 보이던 경로(8차 잔여).
-const overviewCache = createLedgerCache();
+// 모듈 스코프 stale-while-revalidate — 탭 복귀마다 최다 팬아웃 라우트(~35콜)를 기다리며
+// 스켈레톤을 보이던 것을 제거(8차 잔여 M — daily-brief/attention/projects 15차와 같은 클래스).
+// 캐시는 즉시 서빙 + 항상 배경 재검증, 재검증 실패는 partial(오래된 live 위장 금지).
+const OVERVIEW_CACHE_SERVABLE_MS = 5 * 60 * 1000;
+let overviewLedgerCache = null; // { at, ledger, syncState }
 
 function useOverviewLedger() {
-  const cached = overviewCache.read();
-  const [ledger, setLedger] = React.useState(cached ? cached.ledger : EMPTY_LEDGER);
-  const [syncState, setSyncState] = React.useState(cached ? cached.syncState : 'preview');
+  const servable = overviewLedgerCache
+    && Date.now() - overviewLedgerCache.at < OVERVIEW_CACHE_SERVABLE_MS;
+  const [ledger, setLedger] = React.useState(servable ? overviewLedgerCache.ledger : EMPTY_LEDGER);
+  const [syncState, setSyncState] = React.useState(servable ? overviewLedgerCache.syncState : 'preview');
   const [reloadKey, setReloadKey] = React.useState(0);
   const reload = React.useCallback(() => {
-    overviewCache.clear();
+    overviewLedgerCache = null;
     setReloadKey((k) => k + 1);
   }, []);
 
   React.useEffect(() => {
     let active = true;
+    const hasServableCache = Boolean(
+      overviewLedgerCache && Date.now() - overviewLedgerCache.at < OVERVIEW_CACHE_SERVABLE_MS
+    );
     async function load() {
-      // 캐시 서빙 중엔 스켈레톤 없이 조용히 재검증한다(모듈 SWR).
-      const servable = overviewCache.read();
-      if (!servable) setSyncState('loading');
+      if (!hasServableCache) setSyncState('loading'); // 캐시 서빙 중엔 조용히 재검증
       try {
         const response = await fetch('/api/hub/overview', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
         if (!active || !response.ok || !data) {
-          // 오래된 캐시를 live로 위장하지 않는다 — 재검증 실패는 partial로 낮춘다.
-          if (active) setSyncState(servable ? 'partial' : 'error');
+          if (active) setSyncState(hasServableCache ? 'partial' : 'error');
           return;
         }
-        const nextSyncState = overviewSyncState(data);
-        overviewCache.write({ ledger: data, syncState: nextSyncState });
+        const nextState = overviewSyncState(data);
+        overviewLedgerCache = { at: Date.now(), ledger: data, syncState: nextState };
         setLedger(data);
-        setSyncState(nextSyncState);
+        setSyncState(nextState);
       } catch {
-        if (active) setSyncState(servable ? 'partial' : 'error');
+        if (active) setSyncState(hasServableCache ? 'partial' : 'error');
       }
     }
     load();

@@ -454,21 +454,20 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
       : []),
     ...roadmap.failedSources,
   ];
-  // 결정·리듬·로드맵 세 섹션의 read가 모두 거부되면 이 표면에 사실인 데이터가 하나도 없다.
-  // partial 200으로 두면 소비자가 "기록 0건"을 사실로 렌더하고 재시도하지 않는다
-  // (automations-ledger 18차 · attention 19차와 같은 코어 read 실패 계약).
-  const coreReadFailed = decisionsState.state === "error"
-    && rhythm.state === "error"
-    && roadmap.state === "error";
   const partialSources = [
     ...decisionsState.truncatedSources,
     ...rhythm.truncatedSources,
     ...roadmap.truncatedSources,
   ];
 
+  // 세 코어 레인(결정·리듬·로드맵)이 전부 error면 "일부 데이터"가 아니라 전면 read 실패다 —
+  // partial 200으로 내리면 상태줄이 '일부'를 말하는 동안 화면 전체가 비어 렌더된다(8차 잔여 S).
+  const allCoreFailed =
+    decisionsState.state === "error" && rhythm.state === "error" && roadmap.state === "error";
+
   return {
-    source: coreReadFailed ? "error" : "supabase",
-    error: coreReadFailed ? "work-ledger-core-read-failed" : null,
+    source: allCoreFailed ? "error" : "supabase",
+    ...(allCoreFailed ? { error: "work-ledger-read-failed" } : {}),
     configured: true,
     workspaceId,
     timeZone,
@@ -479,7 +478,7 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
     rhythm,
     roadmap,
     summary: summarizeRituals(rituals),
-    partial: failedSources.length > 0 || partialSources.length > 0,
+    partial: !allCoreFailed && (failedSources.length > 0 || partialSources.length > 0),
     failedSources,
     partialSources,
   };

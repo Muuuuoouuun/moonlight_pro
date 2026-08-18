@@ -94,55 +94,49 @@ export async function getSheetsSyncStatus(workspaceId = resolveDefaultWorkspaceI
       order: "started_at.desc",
       limit: 10,
     }),
-    tallyStagingByStatus("google_sheets"),
+    tallyStagingByStatus("google_sheets", { nullOnReadFailure: true }),
   ]);
 
-  // 연결 원장 read 실패를 connected:false로 뭉개면 화면이 "미연결 + 연결 CTA"를 띄운다.
-  // 실제로는 연결돼 있을 수 있으므로 재연결을 유도하는 건 거짓 지시다
-  // (Phase 0 분류: preview = 미구성 전용, read 거부 = error).
-  if (!Array.isArray(connectionRows)) {
+  // 연결 행은 코어다 — 못 읽으면 connected 판정 자체가 성립하지 않는다. 예전엔 null이
+  // "연결 안 됨"과 구분되지 않아 RLS 거부·타임아웃 중에도 화면이 "미연결 + 연결하기 CTA"로
+  // 위장됐다(8차 잔여 M · Phase 0: preview는 미구성 전용).
+  if (connectionRows === null) {
     return {
       source: "error",
+      error: "sheets-connection-read-failed",
       configured: true,
-      error: "sheets-sync-status-read-failed",
-      failedSources: ["integration_connections"],
-      partial: false,
-      connected: null,
+      connected: false,
       spreadsheetId: null,
-      expectedOperatorEmail: resolveOperatorEmail(),
-      expectedSpreadsheetId: resolvePersonalLeadsSpreadsheetId() || null,
-      lastSyncAt: null,
-      staging: null,
+      staging: {},
       recentRuns: [],
     };
   }
 
+  // 보강 소스(스테이징 집계·최근 run)는 실패해도 연결 판정을 막지 않는다 — 다만 0으로
+  // 뭉개지 말고 어느 소스가 빠졌는지 이름을 남긴다.
+  const failedSources = [];
+  if (staging === null) failedSources.push("lead_intake_raw");
+  if (recentRuns === null) failedSources.push("sync_runs");
+
   const connection = connectionRows[0] || null;
-  const failedSources = [
-    ...(Array.isArray(recentRuns) ? [] : ["sync_runs"]),
-    ...(staging === null ? [STAGING_TABLE] : []),
-  ];
 
   return {
     source: "supabase",
-    configured: true,
     partial: failedSources.length > 0,
     failedSources,
+    configured: true,
     connected: Boolean(connection?.config?.refreshToken) || Boolean(process.env.GOOGLE_SHEETS_REFRESH_TOKEN?.trim()),
     spreadsheetId: connection?.config?.spreadsheetId || resolvePersonalLeadsSpreadsheetId() || null,
     expectedOperatorEmail: resolveOperatorEmail(),
     expectedSpreadsheetId: resolvePersonalLeadsSpreadsheetId() || null,
     lastSyncAt: connection?.last_synced_at || null,
-    // 실패한 보조 소스는 빈 값이 아니라 null로 넘겨 화면이 0/빈 목록을 사실로 렌더하지 않게 한다.
-    staging,
-    recentRuns: Array.isArray(recentRuns)
-      ? recentRuns.map((r) => ({
-          status: r.status,
-          action: r.payload?.action || null,
-          startedAt: r.started_at,
-          error: r.error_message || null,
-        }))
-      : null,
+    staging: staging === null ? null : staging,
+    recentRuns: (recentRuns || []).map((r) => ({
+      status: r.status,
+      action: r.payload?.action || null,
+      startedAt: r.started_at,
+      error: r.error_message || null,
+    })),
   };
 }
 

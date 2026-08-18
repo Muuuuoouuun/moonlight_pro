@@ -29,8 +29,11 @@ registerHooks({
   resolve(specifier, context, nextResolve) {
     const stubs = {
       "./operating-ledger": operatingStub,
+      "./operating-ledger.js": operatingStub,
       "./revenue-ledger": revenueStub,
+      "./revenue-ledger.js": revenueStub,
       "../google-calendar": calendarStub,
+      "../google-calendar.js": calendarStub,
       "@/lib/repositories/operating-ledger": operatingStub,
       "@/lib/repositories/content-ledger": contentStub,
       "@/lib/sales-os/agent-runs": runsStub,

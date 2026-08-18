@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Checkbox, EmptyState, SyncBadge, SegmentedControl, EditDrawer, Kbd } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
+import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import {
   buildProjectCreatePayload,
   buildProjectDraft,
@@ -109,6 +110,15 @@ function isTerminalProject(p) {
 const FOLDER_STORAGE_KEY = 'mlp.pms.folders';
 // List 뷰의 브랜드 섹션 접기 상태 (전체 브랜드 볼 때만). UI 전용, 브랜드 slug로 영속.
 const BRAND_SECTION_KEY = 'mlp.pms.brand-sections';
+// 리스트(tree) 뷰 상태 그룹 — 렌더와 j/k 평탄화(23차)가 같은 순서를 공유한다.
+const LIST_STATUS_GROUPS = [
+  { key: 'In progress', label: '진행중', tone: 'var(--line-strong)' },
+  { key: 'Blocked',     label: '막힘',   tone: 'var(--danger)' },
+  { key: 'Review',      label: '검토',   tone: 'var(--line-strong)' },
+  { key: 'Planning',    label: '계획',   tone: 'var(--line-strong)' },
+  { key: 'Done',        label: '완료',   tone: 'var(--fg-dim)' },
+  { key: 'Backlog',     label: '백로그', tone: 'var(--fg-faint)' },
+];
 // 사이드바 드래그 정렬 — 분류(폴더)와 컨테이너(브랜드) 순서. UI 전용, localStorage 영속.
 const FOLDER_ORDER_KEY = 'mlp.pms.folder-order';
 const BRAND_ORDER_KEY = 'mlp.pms.brand-order';
@@ -1406,6 +1416,52 @@ export function Projects({ workspace }) {
     });
   }, []);
 
+  // 리스트(tree) 섹션을 훅 레벨로 — 렌더와 j/k 커서가 같은 가시 순서를 공유한다(23차,
+  // Revenue 4표면과 같은 §8.1 키보드 문법의 마지막 공백이 PMS였다).
+  const listSections = React.useMemo(() => (
+    brand === 'all'
+      ? brands.filter(b => b.key !== 'all')
+          .map(b => ({ kind: 'brand', id: b.key, brand: b, items: projects.filter(p => p.brand === b.key) }))
+          .filter(s => s.items.length > 0)
+      : LIST_STATUS_GROUPS
+          .map(g => ({ kind: 'status', id: g.key, statusKey: g.key, label: g.label, tone: g.tone, items: projects.filter(p => p.status === g.key) }))
+          .filter(s => s.items.length > 0)
+  ), [brand, brands, projects]);
+
+  // j/k 순회 대상 — tree 뷰는 접힌 브랜드 섹션 제외 평탄화, board 뷰는 컬럼 순서 평탄화
+  // (Deals 칸반과 동일 문법). 다른 뷰(todos·timeline)는 각자 문법이 있어 비활성.
+  const kbRows = React.useMemo(() => {
+    if (view === 'tree') {
+      return listSections
+        .filter(s => !(s.kind === 'brand' && brandSectionsCollapsed[s.id]))
+        .flatMap(s => s.items.map(p => ({ id: p.id })));
+    }
+    if (view === 'board') {
+      return visibleColumns.flatMap(col => col.cards.map(c => ({ id: c.id })));
+    }
+    return [];
+  }, [view, listSections, brandSectionsCollapsed, visibleColumns]);
+
+  const kbSelection = useCrmSelection(kbRows);
+  const openKbSelected = React.useCallback((id) => {
+    if (view === 'board' && !String(id).startsWith('project-')) {
+      const t = todos.find(x => x.id === id);
+      if (t) { editTodo(t); return; }
+    }
+    const projectId = String(id).startsWith('project-') ? String(id).slice('project-'.length) : id;
+    openProjectDetail(projectId);
+  }, [view, todos, editTodo, openProjectDetail]);
+  useCrmKeyboard({
+    enabled: (view === 'tree' || view === 'board') && !drawerOpen,
+    selection: kbSelection,
+    // n은 위 뷰 인지 리스너가 소유(18차 회귀 이력) — 여기서는 바인딩하지 않는다.
+    onEditSelected: openKbSelected,
+  });
+  React.useEffect(() => {
+    if (!kbSelection.selectedId) return;
+    document.querySelector(`[data-kb-row="${CSS.escape(String(kbSelection.selectedId))}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [kbSelection.selectedId]);
+
   // 브랜드가 속한 폴더 id (scope:category) — 브랜드 드롭은 같은 폴더 안에서만 재정렬한다.
   const folderIdOf = (b) => `${b.orgScope === 'classin' ? 'classin' : 'personal'}:${b.category || 'general'}`;
 
@@ -1773,23 +1829,9 @@ export function Projects({ workspace }) {
                   </Card>
                 )}
                 {(() => {
-                  const STATUS_GROUPS = [
-                    { key: 'In progress', label: '진행중', tone: 'var(--line-strong)' },
-                    { key: 'Blocked',     label: '막힘',   tone: 'var(--danger)' },
-                    { key: 'Review',      label: '검토',   tone: 'var(--line-strong)' },
-                    { key: 'Planning',    label: '계획',   tone: 'var(--line-strong)' },
-                    { key: 'Done',        label: '완료',   tone: 'var(--fg-dim)' },
-                    { key: 'Backlog',     label: '백로그', tone: 'var(--fg-faint)' },
-                  ];
-                  // 전체 브랜드 뷰는 브랜드별 아코디언(목록 전체 접기), 특정 브랜드 뷰는 기존 상태별 그룹.
-                  const sections = brand === 'all'
-                    ? brands.filter(b => b.key !== 'all')
-                        .map(b => ({ kind: 'brand', id: b.key, brand: b, items: projects.filter(p => p.brand === b.key) }))
-                        .filter(s => s.items.length > 0)
-                    : STATUS_GROUPS
-                        .map(g => ({ kind: 'status', id: g.key, statusKey: g.key, label: g.label, tone: g.tone, items: projects.filter(p => p.status === g.key) }))
-                        .filter(s => s.items.length > 0);
-                  return sections.map(section => {
+                  // 전체 브랜드 뷰는 브랜드별 아코디언(목록 전체 접기), 특정 브랜드 뷰는 상태별 그룹.
+                  // 섹션 계산은 훅 레벨 listSections — j/k 커서와 같은 가시 순서를 공유(23차).
+                  return listSections.map(section => {
                     const items = section.items;
                     const collapsed = section.kind === 'brand' && Boolean(brandSectionsCollapsed[section.id]);
                     return (
@@ -1841,7 +1883,15 @@ export function Projects({ workspace }) {
                           const completing = completingIds.has(p.id);
                           return (
                             <React.Fragment key={p.id}>
-                              <div className="hub-project-row" data-selected={isSel ? 'true' : 'false'} data-completing={completing ? 'true' : 'false'} data-terminal={terminal ? 'true' : 'false'}>
+                              <div
+                                className="hub-project-row"
+                                data-selected={isSel ? 'true' : 'false'}
+                                data-completing={completing ? 'true' : 'false'}
+                                data-terminal={terminal ? 'true' : 'false'}
+                                data-kb-row={p.id}
+                                // j/k 키보드 커서 — §5.3 충돌 우선순위상 선택은 Moonstone 외곽 outline.
+                                style={kbSelection.selectedId === p.id ? { outline: '1px solid var(--moon-300)', outlineOffset: -1 } : undefined}
+                              >
                                 <div className="hub-project-row__controls">
                                   <button
                                     type="button"
@@ -2175,6 +2225,7 @@ export function Projects({ workspace }) {
                       role="button"
                       tabIndex={0}
                       aria-label={`${c.title} 열기`}
+                      data-kb-row={c.id}
                       onClick={() => {
                         if (String(c.id).startsWith('project-')) { openProjectDetail(String(c.id).slice('project-'.length)); return; }
                         const t = todos.find(x => x.id === c.id);
@@ -2191,6 +2242,8 @@ export function Projects({ workspace }) {
                         background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
                         borderRadius: 'var(--r-sm)', padding: 'var(--pad-y) var(--pad-x)', cursor: 'grab',
                         opacity: drag === c.id ? 0.4 : 1,
+                        // j/k 키보드 커서 — Deals 칸반과 동일 문법(23차).
+                        ...(kbSelection.selectedId === c.id ? { outline: '1px solid var(--moon-300)', outlineOffset: -1 } : {}),
                       }}>
                       <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 6 }}>
                         <span title={`우선순위 ${c.priority || 'medium'}`} style={{ display: 'inline-flex' }}>
@@ -2395,10 +2448,9 @@ export function Projects({ workspace }) {
           onRetryWithNewClientId={retryProjectCreateWithNewId}
           onOpenConflictProject={openConflictProject}
           onRetryAreas={() => loadLedger({ initial: true })}
-          onClose={() => {
-            setProjectDraft(null);
-            setProjectCreateContext(null);
-          }}
+          // setProjectCreateContext는 19차에 상태째 제거됐는데 이 호출만 살아남아 생성
+          // 드로어를 닫을 때마다 ReferenceError를 던졌다(23차 브라우저 실측에서 발견).
+          onClose={() => setProjectDraft(null)}
         />
       )}
 

@@ -190,7 +190,7 @@ function mapLead(row, companyById, contactById, trackingStartedAt = null) {
   };
 }
 
-function mapDeal(row, companyById, trackingStartedAt = null) {
+export function mapDeal(row, companyById, trackingStartedAt = null) {
   const type = resolveType(row);
   const company = row.company_id ? companyById.get(row.company_id) : null;
   const stage = resolveDealStage(row);
@@ -217,6 +217,10 @@ function mapDeal(row, companyById, trackingStartedAt = null) {
     hidden: Boolean(row.hidden_at),
     hiddenAt: row.hidden_at || null,
     trackingEligible: isContactTrackingEligible(row, trackingStartedAt),
+    // Google Calendar에 잡아둔 다음 미팅의 breadcrumb (일정 정본은 Google 쪽).
+    nextMeeting: (row.meta?.next_meeting && typeof row.meta.next_meeting === "object")
+      ? row.meta.next_meeting
+      : null,
   };
 }
 

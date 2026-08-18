@@ -10,7 +10,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import {
   Badge, Card, Button, Avatar, Input, EmptyState, SyncBadge, Kbd, Drawer,
-  SegmentedControl, Divider, Checkbox,
+  SegmentedControl, Divider, Checkbox, DateQuickPresets,
 } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
@@ -380,6 +380,8 @@ function ContactOutcomeSheet({ row, onSaved, onUndone }) {
             className="mono"
             style={{ width: "100%", height: 32, padding: "0 8px", fontSize: 12, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)", color: "var(--fg)", outline: "none", opacity: dormant ? 0.45 : 1 }}
           />
+          {/* date picker 반복 마찰 제거 — followups LogForm과 동일 프리셋(27차 편의성). */}
+          <DateQuickPresets disabled={dormant} onPick={setNextAt} style={{ marginTop: 4 }} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, height: 32 }}>
           <Checkbox

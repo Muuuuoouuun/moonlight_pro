@@ -161,6 +161,13 @@ test("project detail keeps useful display context while editing goal detail as m
   assert.match(projectsSource, /key: 'summary'[\s\S]{0,120}type: 'textarea'/);
 });
 
+test("project detail reads back the deal backlink without adding a deal field to create", () => {
+  assert.match(detailPanelSource, /project\.originDealId/);
+  assert.match(detailPanelSource, /\/dashboard\/revenue\/deals\?deal=/);
+  // 07-17 스펙: 생성 드로어에는 딜 선택 필드를 넣지 않는다 — 읽기 노출만.
+  assert.doesNotMatch(createDrawerSource, /originDealId|dealId/);
+});
+
 test("EditDrawer only binds its save shortcut for an open record and blocks re-entry", () => {
   assert.match(primitivesSource, /if \(!record\) return[\s\S]{0,240}addEventListener\('keydown'/);
   assert.match(primitivesSource, /savingRef\.current/);
@@ -180,7 +187,14 @@ test("canonical checkboxes expose a native disabled state during durable writes"
 test("EditDrawer protects dirty drafts and uses explicit save copy", () => {
   assert.match(primitivesSource, /const initialRecordSignatureRef = React\.useRef/);
   assert.match(primitivesSource, /const dirty = Boolean\(record/);
-  assert.match(primitivesSource, /입력한 변경사항을 버릴까요\?/);
+  // 22차: OS confirm() → 푸터 인라인 2단계 확인(디자인 시스템·ESC 레이어 안, 취소 시멘틱).
+  assert.doesNotMatch(primitivesSource, /window\.confirm\(/);
+  assert.match(primitivesSource, /저장하지 않은 변경이 있습니다 — 버리고 닫을까요\?/);
+  assert.match(primitivesSource, /이 항목을 삭제할까요\? 되돌릴 수 없습니다\./);
+  // ESC/오버레이는 확인 스트립부터 해제하고, 버림·삭제는 명시 danger 버튼만 수행한다.
+  assert.match(primitivesSource, /if \(confirming\) \{ setConfirming\(null\); return; \}/);
+  assert.match(primitivesSource, /if \(dirty\) \{ setConfirming\('discard'\); return; \}/);
+  assert.match(primitivesSource, /onClick=\{confirming === 'delete' \? performDelete : \(\) => \{ setConfirming\(null\); onClose\?\.\(\); \}\}/);
   assert.match(primitivesSource, /onClose=\{requestClose\}/);
   assert.match(primitivesSource, /saveLabel = ['"]변경사항 저장['"]/);
   assert.match(primitivesSource, /saveState === ['"]saving['"] \? ['"]저장 중…['"] : saveLabel/);
@@ -211,9 +225,34 @@ test("project create drawer explains an empty area ledger and offers an inline r
   assert.match(createDrawerSource, /disabled=\{saving \|\| areaUnavailable \|\| areaEmpty\}/);
 });
 
+// 23차: Revenue 4표면과 같은 j/k 문법의 마지막 공백(PMS) — 렌더와 커서가 같은 가시 순서를
+// 공유해야 하고(listSections 훅 레벨), n은 뷰 인지 리스너 소유가 유지돼야 한다(18차 회귀).
+test("PMS list and board share the CRM j/k grammar without stealing the n key", () => {
+  assert.match(projectsSource, /const listSections = React\.useMemo/);
+  assert.match(projectsSource, /const kbSelection = useCrmSelection\(kbRows\)/);
+  assert.match(projectsSource, /enabled: \(view === 'tree' \|\| view === 'board'\) && !drawerOpen/);
+  // n 미바인딩 — 뷰 인지 리스너(todos→할 일, 그 외→프로젝트)가 계속 소유한다.
+  const kbBlock = projectsSource.match(/useCrmKeyboard\(\{[\s\S]*?\}\);/);
+  assert.ok(kbBlock, "useCrmKeyboard 배선이 있어야 한다");
+  assert.doesNotMatch(kbBlock[0], /onNew/);
+  // 커서 가시화 + 스크롤 추적 — 목록 행과 보드 카드 둘 다.
+  assert.match(projectsSource, /data-kb-row=\{p\.id\}/);
+  assert.match(projectsSource, /data-kb-row=\{c\.id\}/);
+  assert.match(projectsSource, /data-kb-row="\$\{CSS\.escape\(String\(kbSelection\.selectedId\)\)\}"/);
+});
+
+test("shared CRM keyboard hook yields the n key when no onNew handler is bound", async () => {
+  const { readFile: rf } = await import("node:fs/promises");
+  const crmHookSource = await rf(new URL("../use-crm-keyboard.js", import.meta.url), "utf8");
+  assert.match(crmHookSource, /else if \(k === "n" && onNew\) \{ e\.preventDefault\(\); onNew\(\); \}/);
+});
+
 test("project create drawer also protects a changed draft from accidental close", () => {
   assert.match(createDrawerSource, /const initialDraftSignatureRef = React\.useRef/);
-  assert.match(createDrawerSource, /입력한 변경사항을 버릴까요\?/);
+  // 22차: EditDrawer와 같은 인라인 2단계 — OS confirm 금지, ESC는 스트립 해제.
+  assert.doesNotMatch(createDrawerSource, /window\.confirm\(/);
+  assert.match(createDrawerSource, /저장하지 않은 변경이 있습니다 — 버리고 닫을까요\?/);
+  assert.match(createDrawerSource, /if \(confirmingDiscard\) \{ setConfirmingDiscard\(false\); return; \}/);
   assert.match(createDrawerSource, /onClose=\{requestClose\}/);
   assert.match(createDrawerSource, /onClick=\{requestClose\}/);
 });

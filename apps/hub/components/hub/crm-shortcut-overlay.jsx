@@ -13,6 +13,7 @@ const SHORTCUTS = [
   { keys: ["E"], label: "선택 항목 편집" },
   { keys: ["N"], label: "새 항목 생성" },
   { keys: ["/"], label: "검색 포커스" },
+  { keys: ["X"], label: "다중 선택 → 벌크 바 (Leads)" },
   { keys: ["1", "–", "5"], label: "선택 딜 스테이지 이동 (Deals)" },
   { keys: ["⌘", "Z"], label: "완료 직후 되돌리기 (프로젝트·기획)" },
   { keys: ["⌘", "↵"], label: "드로어 저장" },

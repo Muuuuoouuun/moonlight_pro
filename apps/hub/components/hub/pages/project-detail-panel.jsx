@@ -117,6 +117,19 @@ export function ProjectDetailPanel({
           <span style={{ color: "var(--fg-muted)", whiteSpace: "pre-wrap" }}>{displayNextAction || (project.updateEvidencePartial ? "project_updates를 읽지 못해 확인할 수 없습니다." : "아직 지정되지 않음")}</span>
           <span style={{ color: "var(--fg-faint)" }}>생성</span>
           <span className="mono" style={{ color: "var(--fg-muted)" }}>{project.createdAtLabel || "미정"}</span>
+          {project.originDealId && (
+            <>
+              <span style={{ color: "var(--fg-faint)" }}>원본 딜</span>
+              {/* Projects는 PAGE_MAP에서 onNavigate를 받지 않아 SPA 이동이 불가하다 —
+                  같은 파일군의 기존 자체 링크(projects.jsx)와 동일하게 앵커로 간다. */}
+              <a
+                href={`/dashboard/revenue/deals?deal=${encodeURIComponent(project.originDealId)}`}
+                style={{ color: "var(--moon-300)", minHeight: 44, display: "inline-flex", alignItems: "center" }}
+              >
+                딜 보기
+              </a>
+            </>
+          )}
         </div>
         <div>
           <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)", marginBottom: 6 }}>목표 결과</div>

@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { buildDailyFocus, selectUrgentKa } from "./daily-focus.js";
+import {
+  buildDailyFocus,
+  focusOccupiedKeys,
+  selectUrgentKa,
+  withoutFocusDuplicates,
+} from "./daily-focus.js";
 
 // 고정 시각: 2026-08-05 12:00 KST (= 03:00Z). KST day-key 판정이 UTC 서버에서도 정확한지
 // 이 시각으로 함께 검증한다.
@@ -121,4 +126,45 @@ test("buildDailyFocus: 매출 원장이 preview면 KA·집중 슬롯도 preview 
   assert.equal(focus.urgentKa.item, null);
   assert.equal(focus.focusCustomers.state, "preview");
   assert.equal(focus.focusCustomers.items.length, 0);
+});
+
+// 확정 슬롯과 신호 큐가 같은 원장을 두 번 읽어 같은 고객을 첫 화면에 두 번 렌더하던 구조를
+// 잠근다 — 슬롯이 정본, 신호는 나머지(2026-08-07 사용성 재감사 A).
+test("withoutFocusDuplicates: 확정 슬롯이 점유한 레코드는 신호 큐에서 빠진다", () => {
+  const dailyFocus = {
+    urgentKa: { state: "live", item: { kind: "deal", id: "d1", name: "KA 연간계약" } },
+    focusCustomers: { state: "live", items: [{ id: "a" }, { id: "b" }] },
+  };
+  const signals = [
+    { id: "risk-convergence", tone: "danger" },                          // subject 없음 → 유지
+    { id: "revenue-focus-a", subject: { type: "lead", id: "a" } },       // 집중 고객 중복 → 제거
+    { id: "revenue-focus-c", subject: { type: "lead", id: "c" } },       // 슬롯 밖 → 유지
+    { id: "revenue-stale-d1", subject: { type: "deal", id: "d1" } },     // 긴급 KA 중복 → 제거
+    { id: "revenue-stale-d2", subject: { type: "deal", id: "d2" } },     // 슬롯 밖 → 유지
+  ];
+
+  assert.deepEqual(
+    withoutFocusDuplicates(signals, dailyFocus).map((s) => s.id),
+    ["risk-convergence", "revenue-focus-c", "revenue-stale-d2"],
+  );
+
+  // 타입이 다르면 같은 id여도 다른 레코드다 — lead:a가 deal:a를 지우면 안 된다.
+  assert.deepEqual(
+    withoutFocusDuplicates([{ id: "x", subject: { type: "deal", id: "a" } }], dailyFocus).map((s) => s.id),
+    ["x"],
+  );
+
+  // 슬롯이 비었으면(원장 preview·error 포함) 원본을 그대로 통과시킨다.
+  assert.equal(withoutFocusDuplicates(signals, { urgentKa: { item: null }, focusCustomers: { items: [] } }).length, 5);
+  assert.equal(withoutFocusDuplicates(signals, null).length, 5);
+  assert.deepEqual(withoutFocusDuplicates(null, dailyFocus), []);
+});
+
+test("focusOccupiedKeys: KA 슬롯은 kind로 구분되고 집중 고객은 전부 lead 키다", () => {
+  const keys = focusOccupiedKeys({
+    urgentKa: { item: { kind: "lead", id: "l9" } },
+    focusCustomers: { items: [{ id: "a" }, { id: "b" }, { notAnId: true }] },
+  });
+  assert.deepEqual([...keys].sort(), ["lead:a", "lead:b", "lead:l9"]);
+  assert.equal(focusOccupiedKeys(undefined).size, 0);
 });

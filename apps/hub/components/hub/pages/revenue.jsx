@@ -4,7 +4,6 @@ import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, Progress } from "../hub-primitives";
-import { clearRevenueLedgerCache, readRevenueLedgerCache, writeRevenueLedgerCache } from "../revenue-ledger-cache";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { useCrmKeyboard, useCrmSelection, usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
@@ -13,6 +12,9 @@ import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
 import { DEAL_STAGES, STAGE_FILL, STAGE_LINE } from "@/lib/deal-stages";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { selectProjectAreaId } from "@/lib/pms-ui";
+import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
+import { readRevenueCache, writeRevenueCache, clearRevenueCache } from "../revenue-shared-cache";
+import { BulkBar } from "../crm-bulk-bar";
 
 // HW/SW 딜은 100만원 미만 건도 흔해서 M 고정 포맷은 "₩0.1M" 같은 값을 만든다.
 // revenue-ledger.js의 formatMoneyLabel과 같은 K/M 임계값으로 맞춘다.
@@ -22,6 +24,17 @@ const fmt = v => {
   if (n >= 1000000) return '₩' + (n / 1000000).toFixed(1) + 'M';
   if (n >= 1000) return '₩' + Math.round(n / 1000) + 'K';
   return '₩' + n;
+};
+
+// 다음 미팅은 방금 만든 직후(서버 왕복 전)에도 그려야 해서 클라이언트에서 포맷한다 —
+// 다른 날짜 필드가 전부 repository에서 포맷돼 오는 것과 다른 이유다.
+const formatMeetingTime = (iso) => {
+  const d = new Date(iso || '');
+  if (Number.isNaN(d.getTime())) return '미정';
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(d);
 };
 
 // A deal counts as "stalled" once it has aged this many days in an open stage. Two weeks
@@ -79,7 +92,7 @@ function formatPercentDelta(current, previous) {
 function buildRevenueAttention(leads, deals) {
   const items = [];
   deals
-    .filter((deal) => deal.trackingEligible !== false && deal.stage !== 'closing' && deal.stage !== 'lost' && Number(deal.age) >= STALLED_DAYS)
+    .filter((deal) => deal.stage !== 'closing' && deal.stage !== 'lost' && Number(deal.age) >= STALLED_DAYS)
     .slice(0, 3)
     .forEach((deal) => {
       items.push({
@@ -89,7 +102,7 @@ function buildRevenueAttention(leads, deals) {
       });
     });
 
-  const newLeads = leads.filter((lead) => lead.trackingEligible !== false && lead.stage === 'New').length;
+  const newLeads = leads.filter((lead) => lead.stage === 'New').length;
   if (newLeads > 0) {
     items.push({
       tone: 'neutral',
@@ -98,7 +111,7 @@ function buildRevenueAttention(leads, deals) {
     });
   }
 
-  const wonDeals = deals.filter((deal) => deal.trackingEligible !== false && deal.stage === 'closing');
+  const wonDeals = deals.filter((deal) => deal.stage === 'closing');
   if (wonDeals.length > 0) {
     const wonTotal = wonDeals.reduce((sum, deal) => sum + deal.value, 0);
     items.push({
@@ -126,16 +139,18 @@ const EMPTY_REVENUE_LEDGER = {
 // 모듈 스코프 stale-while-revalidate 캐시 — Leads↔Deals↔Accounts↔Cases↔Customers 탭
 // 전환은 훅을 리마운트하므로, 캐시 없이는 전환마다 동일한 6콜 원장을 다시 받고 스켈레톤을
 // 보였다(re-audit 속도 #3). 캐시는 즉시 서빙하고 항상 배경 재검증하므로 신선도는 1 RTT다.
+// 저장소는 revenue-shared-cache 공유 모듈 — ⌘K 레코드 검색이 같은 스냅샷을 재사용한다.
+
 export function useRevenueLedger() {
-  const servable = readRevenueLedgerCache();
-  const [ledger, setLedger] = React.useState(servable ? servable.ledger : EMPTY_REVENUE_LEDGER);
-  const [syncState, setSyncState] = React.useState(servable ? servable.syncState : 'preview');
+  const servableCache = readRevenueCache();
+  const [ledger, setLedger] = React.useState(servableCache ? servableCache.ledger : EMPTY_REVENUE_LEDGER);
+  const [syncState, setSyncState] = React.useState(servableCache ? servableCache.syncState : 'preview');
   const [refreshKey, setRefreshKey] = React.useState(0);
 
   React.useEffect(() => {
     let active = true;
     let retryTimer = null;
-    const hasServableCache = Boolean(readRevenueLedgerCache());
+    const hasServableCache = Boolean(readRevenueCache());
     // dev 리컴파일·순간 네트워크 실패로 첫 fetch가 죽으면 preview에 고착됐다 —
     // 실패 1회는 1.2초 뒤 재시도하고, 그래도 실패하면 error로 표시한다(preview는
     // "미구성"의 뜻 — 라이브 read 거부를 preview로 라벨하면 0건이 사실처럼 보인다).
@@ -170,7 +185,7 @@ export function useRevenueLedger() {
         const nextState = data.source === 'supabase'
           ? data.status === 'partial' ? 'partial' : 'live'
           : 'preview';
-        writeRevenueLedgerCache(nextLedger, nextState);
+        writeRevenueCache({ at: Date.now(), ledger: nextLedger, syncState: nextState });
         setLedger(nextLedger);
         setSyncState(nextState);
       } catch {
@@ -190,26 +205,28 @@ export function useRevenueLedger() {
 
   const reload = React.useCallback(() => {
     // 모듈 캐시를 무효화하고 재조회 — 명함 스캔 승격 등 쓰기 직후 목록 갱신용.
-    clearRevenueLedgerCache();
+    clearRevenueCache();
     setRefreshKey((k) => k + 1);
   }, []);
 
   return { ledger, syncState, reload };
 }
 
-// 원장 read가 거부됐을 때의 빈 상태. "없습니다 + 등록하세요"로 렌더하면 실제로는
-// 행이 있는데도 운영자가 중복 등록을 하게 된다 — 원인을 명명하고 다시 읽기만 준다.
-// syncState !== 'error'이면 null을 돌려 기존 빈 상태 카피를 그대로 쓴다.
-function readFailureEmpty(syncState, label, reload) {
-  if (syncState !== 'error') return null;
-  return {
-    icon: 'x',
-    title: `${label} 기록을 읽지 못했습니다`,
-    description: '비어 있는 것인지 읽기가 실패한 것인지 구분할 수 없습니다.',
-    action: reload
-      ? <Button variant="secondary" size="sm" icon="runs" onClick={reload}>다시 읽기</Button>
-      : null,
-  };
+// 원장 read 실패 공용 빈 상태 — Leads·Deals·Accounts의 wsEmpty 분기가 error에서도
+// "N건 없음 + 생성 CTA"를 그려 read 실패가 빈 워크스페이스로 위장됐다(8차 잔여 M).
+// 생성 유도는 실패 화면에서 금물: 운영자가 이미 있는 레코드를 중복 생성하게 된다.
+function LedgerReadError({ noun, onRetry }) {
+  return (
+    <Card>
+      <EmptyState
+        icon="x"
+        title={`${noun}을(를) 읽지 못했습니다`}
+        description="지금 화면은 비어 보여도 실제 기록이 있을 수 있습니다. 새로 만들기 전에 다시 읽어 확인하세요."
+        action={onRetry ? <Button variant="secondary" size="sm" icon="runs" onClick={onRetry}>다시 읽기</Button> : undefined}
+        style={{ minHeight: 200, padding: '28px 12px' }}
+      />
+    </Card>
+  );
 }
 
 // 3단 정렬 헤더(§8.1) — 컴포넌트 안에서 정의하면 렌더마다 함수 identity가 바뀌어
@@ -296,7 +313,8 @@ function GuruCoachPanel({ onNavigate }) {
 
       {state === 'loading' && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
-          <div style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', boxShadow: '0 0 8px var(--moon-300)', animation: 'mlMoonPulse 1.4s ease-in-out infinite' }} />
+          {/* glow 그림자 제거(§4 — 장식 광원 금지, 펄스만 live 신호) */}
+          <div style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', animation: 'mlMoonPulse 1.4s ease-in-out infinite' }} />
           기록을 읽고 코칭을 정리하는 중…
         </div>
       )}
@@ -325,7 +343,7 @@ function GuruCoachPanel({ onNavigate }) {
 }
 
 export function RevenueOverview({ onNavigate }) {
-  const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
+  const { ledger, syncState } = useRevenueLedger();
   const LEADS = ledger.leads;
   const DEALS = ledger.deals;
   const DEAL_STAGES = ledger.stages;
@@ -413,13 +431,9 @@ export function RevenueOverview({ onNavigate }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {byBrand.length === 0 && (
               <EmptyState
-                {...(readFailureEmpty(syncState, '매출', reloadLedger) || {
-                  icon: 'revenue',
-                  title: '브랜드별 매출 집계 없음',
-                  description: isLiveLedger
-                    ? '브랜드별 매출 join이 준비되면 이 패널이 자동으로 채워집니다.'
-                    : '매출 원장이 연결되면 브랜드별 집계가 표시됩니다.',
-                })}
+                icon="revenue"
+                title="브랜드별 매출 집계 없음"
+                description="Supabase revenue 기록은 live입니다. 브랜드별 매출 join이 준비되면 이 패널이 자동으로 채워집니다."
                 style={{ minHeight: 170, padding: '22px 12px' }}
               />
             )}
@@ -444,11 +458,9 @@ export function RevenueOverview({ onNavigate }) {
           <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Top deals</div>
           {DEALS.length === 0 && (
             <EmptyState
-              {...(readFailureEmpty(syncState, '딜', reloadLedger) || {
-                icon: 'deals',
-                title: '딜이 없습니다',
-                description: isLiveLedger ? 'Supabase deals 기록에 표시할 딜이 없습니다.' : '딜이 생기면 금액순으로 표시됩니다.',
-              })}
+              icon="deals"
+              title="딜이 없습니다"
+              description={isLiveLedger ? 'Supabase deals 기록에 표시할 딜이 없습니다.' : '딜이 생기면 금액순으로 표시됩니다.'}
               style={{ minHeight: 170, padding: '22px 12px' }}
             />
           )}
@@ -468,11 +480,9 @@ export function RevenueOverview({ onNavigate }) {
           <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Attention needed</div>
           {attentionItems.length === 0 && (
             <EmptyState
-              {...(readFailureEmpty(syncState, '매출', reloadLedger) || {
-                icon: 'bell',
-                title: '주의가 필요한 항목이 없습니다',
-                description: 'stalled deal, 신규 리드, won deal 신호가 생기면 여기에 올라옵니다.',
-              })}
+              icon="bell"
+              title="주의가 필요한 항목이 없습니다"
+              description="stalled deal, 신규 리드, won deal 신호가 생기면 여기에 올라옵니다."
               style={{ minHeight: 170, padding: '22px 12px' }}
             />
           )}
@@ -644,6 +654,18 @@ export function Leads({ workspace }) {
     setEditLeadId(id); // open the editor immediately so the new lead can be filled in
   };
 
+  // ?new=lead — TopBar New·⌘K 생성 딥링크를 1회 소비하고 쿼리 소거(§8.1 생성·연계).
+  // 셸의 New가 팔레트만 열던 것을 "지금 보는 표면에 만든다"로 잇는 착지 지점.
+  const createdLeadFromQueryRef = React.useRef(false);
+  React.useEffect(() => {
+    if (searchParams.get('new') !== 'lead') { createdLeadFromQueryRef.current = false; return; }
+    if (createdLeadFromQueryRef.current) return;
+    createdLeadFromQueryRef.current = true;
+    createLead();
+    router.replace(pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   // Persist the drawer edit. New local rows (id `local-lead-…`) insert; on success the
   // returned real id replaces the local one so a later edit takes the update path and the
   // overlay re-keys onto it. `editingLead` carries the workspace tag → scoped creates stick.
@@ -720,9 +742,9 @@ export function Leads({ workspace }) {
     }
   }, [leadParam, syncState, mergedLeads, pathname, router]);
 
-  // 키보드 계층(2026-08-05 배선): j/k 행 이동 · e 편집 · n 생성 · / 검색 포커스 · Esc 해제.
-  // useCrmKeyboard가 입력 포커스/드로어(role=dialog)/치트시트에서 스스로 양보하므로 기존
-  // 수제 N 리스너는 이 훅으로 흡수한다(중복 구현 6곳 문제의 첫 정리).
+  // 키보드 계층(2026-08-05 배선): j/k 행 이동 · e 편집 · n 생성 · / 검색 포커스 · x 다중 선택 ·
+  // Esc 해제. useCrmKeyboard가 입력 포커스/드로어(role=dialog)/치트시트에서 스스로 양보하므로
+  // 기존 수제 N 리스너는 이 훅으로 흡수한다(중복 구현 6곳 문제의 첫 정리).
   const searchRef = React.useRef(null);
   const selection = useCrmSelection(sortedLeads);
   useCrmKeyboard({
@@ -730,11 +752,38 @@ export function Leads({ workspace }) {
     onNew: createLead,
     onEditSelected: (id) => setEditLeadId(id),
     onSearchFocus: () => searchRef.current?.focus(),
+    onToggleSelect: selection.toggleSelected,
   });
   React.useEffect(() => {
     if (!selection.selectedId) return;
     document.querySelector(`[data-lead-row="${selection.selectedId}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [selection.selectedId]);
+
+  // 벌크 바(25차) — 기준선 §2.8부터 미배선이던 BulkBar의 첫 실채택. "1인 운영 후순위" 보류는
+  // 운영자의 94 목표 지시(2026-08-08)로 해제됐고, 118행 리드 목록(eeocrm 이관분)에서 단계
+  // 일괄 정리는 실제 반복 작업이다. 행 클릭 다중 선택이 아니라 x 키·행 체크 두 경로 모두
+  // selection.selectedIds 하나를 쓴다. 일괄 변경은 건별 영속 + 실패 건수 명명(무언 부분 실패 금지).
+  const [bulkBusy, setBulkBusy] = React.useState(false);
+  const applyBulkStage = async (stage) => {
+    const ids = [...selection.selectedIds];
+    if (!ids.length || bulkBusy) return;
+    setBulkBusy(true);
+    const results = await Promise.all(ids.map((id) => saveRevenueRecord('lead', 'update', { id, stage })));
+    const okIds = ids.filter((_, i) => results[i].ok);
+    if (okIds.length) {
+      setLeadEdits(prev => {
+        const next = { ...prev };
+        okIds.forEach((id) => { next[id] = { ...(next[id] || {}), stage }; });
+        return next;
+      });
+    }
+    const failed = ids.length - okIds.length;
+    setDeleteNotice(failed
+      ? { key: 'bulk-stage', tone: 'err', label: `단계 일괄 변경 — ${okIds.length}건 저장, ${failed}건 실패 (다시 시도하세요)` }
+      : { key: 'bulk-stage', tone: 'ok', label: `${okIds.length}건 단계 → ${stage} 변경됨` });
+    selection.clearSelected();
+    setBulkBusy(false);
+  };
 
   const cardFileRef = React.useRef(null);
   const [cardState, setCardState] = React.useState(null); // { phase, status, fields, error }
@@ -824,17 +873,19 @@ export function Leads({ workspace }) {
       })()}
 
       {wsEmpty && (
+        syncState === 'error' ? (
+          <LedgerReadError noun="리드 목록" onRetry={reloadLedger} />
+        ) : (
         <Card>
           <EmptyState
-            {...(readFailureEmpty(syncState, '리드', reloadLedger) || {
-              icon: 'leads',
-              title: `${ws.label} — 해당하는 리드가 없습니다`,
-              description: `이 워크스페이스에 매칭되는 리드가 없습니다. 다른 워크스페이스로 태그된 리드는 여기에 표시되지 않습니다. 리드를 등록하거나 기록에 ${ws.label} 태그가 연결되면 나타납니다.`,
-              action: <Button variant="primary" size="sm" icon="plus" onClick={createLead}>{ws.label}에 리드 추가</Button>,
-            })}
+            icon="leads"
+            title={`${ws.label} — 해당하는 리드가 없습니다`}
+            description={`이 워크스페이스에 매칭되는 리드가 없습니다. 다른 워크스페이스로 태그된 리드는 여기에 표시되지 않습니다. 리드를 등록하거나 기록에 ${ws.label} 태그가 연결되면 나타납니다.`}
+            action={<Button variant="primary" size="sm" icon="plus" onClick={createLead}>{ws.label}에 리드 추가</Button>}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
+        )
       )}
 
       {!wsEmpty && (
@@ -860,6 +911,7 @@ export function Leads({ workspace }) {
           <div key={l.id} className="hub-row hub-leads-grid"
             role="button" tabIndex={0}
             data-lead-row={l.id}
+            data-multi-selected={selection.selectedIds.has(l.id) ? 'true' : undefined}
             onClick={() => setEditLeadId(l.id)}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditLeadId(l.id); } }}
             style={{
@@ -869,6 +921,8 @@ export function Leads({ workspace }) {
               // j/k 키보드 선택 — §5.3 충돌 우선순위상 선택은 Moonstone 외곽 outline.
               outline: selection.selectedId === l.id ? '1px solid var(--moon-300)' : undefined,
               outlineOffset: -1,
+              // x 다중 선택 — 커서(outline)와 구분되는 조용한 배경 표시(벌크 바가 주 신호).
+              background: selection.selectedIds.has(l.id) ? 'var(--surface-2)' : undefined,
             }}
           >
             <span style={{ paddingRight: 4, display: 'flex' }}>
@@ -928,6 +982,28 @@ export function Leads({ workspace }) {
       >
         <LeadEnrichmentPanel lead={editingLead} />
       </EditDrawer>
+
+      {/* 벌크 바 — x로 담은 선택이 있을 때만 뜨는 하단 플로팅 바(§2.8 첫 실채택). */}
+      <BulkBar count={selection.selectedIds.size} onClear={selection.clearSelected}>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--fg-muted)' }}>
+          단계 일괄 변경
+          <select
+            aria-label="선택한 리드 단계 일괄 변경"
+            disabled={bulkBusy}
+            value=""
+            onChange={(e) => { if (e.target.value) applyBulkStage(e.target.value); }}
+            style={{
+              height: 26, padding: '0 8px', fontSize: 12, borderRadius: 'var(--r-sm)',
+              background: 'var(--surface-2)', color: 'var(--fg)', border: '1px solid var(--line)',
+            }}
+          >
+            <option value="">{bulkBusy ? '저장 중…' : '단계 선택'}</option>
+            {['New', 'Contact', 'Qualified', 'Customer', 'Lost'].map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </label>
+      </BulkBar>
     </div>
   );
 }
@@ -1104,6 +1180,240 @@ function DealTaskPanel({ deal, onSaved }) {
   );
 }
 
+// 딜 → 프로젝트 backlink. create_project가 A/S 후속 프로젝트에 심어둔
+// meta.origin_deal_id를 되읽어 보여준다 — 지금까지 쓰기만 하고 읽지 않아 DB에만
+// 있던 연결이다. 자동 연동·생성 드로어 딜 필드는 범위 밖(07-17 스펙).
+function DealLinkedProjectsPanel({ deal, onNavigate }) {
+  const dealId = deal?.id || null;
+  const isLocal = String(dealId || '').toLowerCase().startsWith('local-');
+  const [projects, setProjects] = React.useState(null); // null = loading
+  const [loadError, setLoadError] = React.useState(null);
+
+  React.useEffect(() => {
+    let active = true;
+    setLoadError(null);
+    if (!dealId || isLocal) { setProjects([]); return undefined; }
+    setProjects(null);
+    (async () => {
+      try {
+        const res = await fetch('/api/hub/projects', { cache: 'no-store' });
+        const data = await res.json().catch(() => null);
+        if (!active) return;
+        if (!res.ok || !data || data.status === 'error') {
+          // 읽기 실패를 "연결된 프로젝트 0건"으로 뭉개지 않는다 (체크리스트와 동일 계약).
+          setLoadError('연결된 프로젝트를 읽지 못했습니다 — 다시 열면 재시도합니다.');
+          return;
+        }
+        setProjects((data.projects || []).filter(p => p.originDealId === dealId));
+      } catch {
+        if (active) setLoadError('연결된 프로젝트를 읽지 못했습니다 — 다시 열면 재시도합니다.');
+      }
+    })();
+    return () => { active = false; };
+  }, [dealId, isLocal]);
+
+  if (isLocal || (!loadError && projects !== null && projects.length === 0)) return null;
+
+  return (
+    <div style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>연결된 프로젝트</span>
+        {projects?.length > 0 && (
+          <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', marginLeft: 'auto' }}>{projects.length}</span>
+        )}
+      </div>
+      {projects === null && !loadError && <div style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>불러오는 중…</div>}
+      {(projects || []).map((p) => (
+        <div
+          key={p.id}
+          className="hub-row"
+          role="button"
+          tabIndex={0}
+          onClick={() => onNavigate?.(`dashboard/work/projects?project=${encodeURIComponent(p.id)}`)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onNavigate?.(`dashboard/work/projects?project=${encodeURIComponent(p.id)}`);
+            }
+          }}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 32, padding: '0 6px', borderRadius: 'var(--r-sm)', cursor: 'pointer' }}
+        >
+          <Iconed name="projects" size={12} style={{ color: 'var(--fg-faint)', flexShrink: 0 }} />
+          <span style={{ fontSize: 12.5, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+          <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', flexShrink: 0 }}>{p.status}</span>
+        </div>
+      ))}
+      {loadError && <span role="alert" style={{ fontSize: 11, color: 'var(--danger)' }}>{loadError}</span>}
+    </div>
+  );
+}
+
+// 다음 미팅 — My Work 주간 캘린더가 쓰는 /api/calendar/google/event를 그대로 재사용한다.
+// 일정 정본은 Google Calendar이고 딜에는 다시 찾아갈 breadcrumb만 meta에 남긴다.
+// 상태를 deals에 병합하지 않는 이유: EditDrawer의 dirty 판정이 record의 JSON 비교라
+// (hub-primitives), 저장 성공 후 editingDeal 모양이 바뀌면 이미 저장된 건에 대해
+// "저장하지 않은 변경이 있습니다"가 뜬다. DealTaskPanel이 tasks를 로컬로 두는 것과 같은 이유.
+function DealNextMeetingPanel({ deal, onNavigate }) {
+  const dealId = deal?.id || null;
+  const isLocal = String(dealId || '').toLowerCase().startsWith('local-');
+  const [capability, setCapability] = React.useState(null); // null = 확인 중
+  const [meeting, setMeeting] = React.useState(null);
+  const [open, setOpen] = React.useState(false);
+  const [startAt, setStartAt] = React.useState('');
+  const [title, setTitle] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState(null);
+  const [orphan, setOrphan] = React.useState(null); // 캘린더엔 생겼는데 breadcrumb 저장 실패
+
+  React.useEffect(() => {
+    let active = true;
+    setMeeting(deal?.nextMeeting || null);
+    setOpen(false); setError(null); setOrphan(null); setStartAt('');
+    setTitle(deal?.name ? `${deal.name} 미팅` : '미팅');
+    if (!dealId || isLocal) return undefined;
+    setCapability(null);
+    fetch('/api/calendar/google/event', { cache: 'no-store' })
+      .then(r => r.json())
+      .catch(() => null)
+      .then((d) => {
+        if (!active) return;
+        setCapability(resolveCalendarCapabilities({ status: d?.status || 'error', source: d?.source, readOnly: d?.readOnly }));
+      });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dealId, isLocal]);
+
+  // breadcrumb만 저장 — 캘린더에 다시 POST하지 않는다(중복 일정 방지).
+  const saveBreadcrumb = async (breadcrumb) => {
+    const r = await saveRevenueRecord('deal', 'update', { id: dealId, next_meeting: breadcrumb });
+    if (r.ok) { setMeeting(breadcrumb); setOrphan(null); setOpen(false); return true; }
+    setOrphan(breadcrumb);
+    setError('일정은 캘린더에 만들어졌지만 딜에 연결하지 못했습니다. 다시 연결하세요.');
+    return false;
+  };
+
+  const createMeeting = async () => {
+    if (saving || !startAt) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const start = new Date(startAt);
+      if (Number.isNaN(start.getTime())) { setError('시작 시각을 확인하세요.'); return; }
+      const end = new Date(start.getTime() + 60 * 60 * 1000); // 기본 1시간
+      const res = await fetch('/api/calendar/google/event', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: title.trim() || '미팅',
+          startAt: start.toISOString(),
+          endAt: end.toISOString(),
+          timeZone: 'Asia/Seoul',
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.status !== 'saved' && data?.status !== 'updated') {
+        // 무음 실패 금지 — 원인을 그대로 보여준다.
+        setError(data?.message || data?.error
+          ? `일정 생성 실패 — ${data.message || data.error}`
+          : `일정 생성 실패 (${res.status}) — 캘린더 연결 상태를 확인하세요.`);
+        return;
+      }
+      await saveBreadcrumb({
+        eventId: data.event?.id || null,
+        summary: data.event?.summary || title.trim() || '미팅',
+        startAt: start.toISOString(),
+        htmlLink: data.event?.htmlLink || null,
+      });
+    } catch {
+      setError('일정 생성 실패 — 네트워크 오류. 다시 시도하세요.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const blockedReason = capability === null
+    ? '캘린더 연결 상태를 확인하는 중입니다.'
+    : capability.badge === 'iCal · read only'
+      ? 'iCal 연결은 읽기 전용입니다. 일정 생성에는 Google OAuth 연결이 필요합니다.'
+      : 'Google Calendar 연결 후 일정을 만들 수 있습니다.';
+
+  return (
+    <div style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>다음 미팅</span>
+
+      {meeting && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <Iconed name="calendar" size={12} style={{ color: 'var(--fg-faint)', flexShrink: 0 }} />
+          <span className="mono" style={{ fontSize: 12, color: 'var(--fg)' }}>{formatMeetingTime(meeting.startAt)}</span>
+          <span style={{ fontSize: 12, color: 'var(--fg-muted)', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meeting.summary}</span>
+          {meeting.htmlLink && (
+            <a
+              href={meeting.htmlLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: 11.5, color: 'var(--moon-300)', minHeight: 44, display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}
+            >
+              캘린더에서 보기
+            </a>
+          )}
+        </div>
+      )}
+
+      {isLocal ? (
+        <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', lineHeight: 1.5 }}>딜을 먼저 저장하면 다음 미팅을 잡을 수 있습니다.</div>
+      ) : orphan ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Button variant="outline" size="xs" onClick={() => saveBreadcrumb(orphan)}>딜에 다시 연결</Button>
+        </div>
+      ) : !capability?.canCreate ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11.5, color: 'var(--fg-faint)', lineHeight: 1.5 }}>{blockedReason}</span>
+          {capability && !capability.isLive && (
+            <button
+              type="button"
+              onClick={() => onNavigate?.('dashboard/work/calendar')}
+              style={{ fontSize: 11.5, color: 'var(--moon-300)', minHeight: 44, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+            >
+              캘린더 연결하러 가기
+            </button>
+          )}
+        </div>
+      ) : open ? (
+        <>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="일정 제목"
+            style={{ height: 30, padding: '0 10px', fontSize: 12, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)' }}
+          />
+          <input
+            type="datetime-local"
+            value={startAt}
+            onChange={(e) => setStartAt(e.target.value)}
+            aria-label="미팅 시작 시각"
+            style={{ height: 30, padding: '0 10px', fontSize: 12, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', color: 'var(--fg)' }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Button variant="primary" size="xs" onClick={createMeeting} disabled={saving || !startAt}>
+              {saving ? '만드는 중…' : '일정 만들기'}
+            </Button>
+            <Button variant="ghost" size="xs" onClick={() => { setOpen(false); setError(null); }}>취소</Button>
+            <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>1시간 · Asia/Seoul</span>
+          </div>
+        </>
+      ) : (
+        <div>
+          <Button variant="outline" size="xs" icon="calendar" onClick={() => setOpen(true)}>
+            {meeting ? '다시 잡기' : '다음 미팅 잡기'}
+          </Button>
+        </div>
+      )}
+
+      {error && <span role="alert" style={{ fontSize: 11, color: 'var(--danger)' }}>{error}</span>}
+    </div>
+  );
+}
+
 export function Deals({ workspace, onNavigate }) {
   const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
@@ -1120,7 +1430,13 @@ export function Deals({ workspace, onNavigate }) {
   });
   const [showHidden, setShowHidden] = React.useState(false);
   const [editDealId, setEditDealId] = React.useState(null);
-  const [boardNotice, setBoardNotice] = React.useState(null); // { tone: 'err', label } — 이동/숨김 저장 실패 안내
+  const [boardNotice, setBoardNotice] = React.useState(null); // { key?, tone, label, undo? } — 이동 되돌리기·저장 실패 안내
+  const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
+  React.useEffect(() => {
+    if (!boardNotice || boardNotice.undo) return undefined; // undo 창 알림은 창 종료 콜백이 걷는다
+    const t = setTimeout(() => setBoardNotice(null), 8000);
+    return () => clearTimeout(t);
+  }, [boardNotice]);
   const dragMovedRef = React.useRef(false); // true from dragStart until just after dragEnd — suppresses the card click
   React.useEffect(() => {
     if (!boardNotice) return undefined;
@@ -1167,30 +1483,54 @@ export function Deals({ workspace, onNavigate }) {
     }
   };
 
+  // DEAL_STAGES를 deps에 반드시 포함 — 원장 도착으로 stages만 갱신된 렌더에서 totals가
+  // stale 빈 객체로 남으면 컬럼 헤더의 totals[s.key].count가 크래시한다(24차 실측 발견).
   const totals = React.useMemo(() => DEAL_STAGES.reduce((acc, s) => {
     const items = visibleDeals.filter(d => d.stage === s.key && (filter === 'all' || d.type === filter));
     acc[s.key] = { count: items.length, sum: items.reduce((a, b) => a + b.value, 0) };
     return acc;
-  }, {}), [visibleDeals, filter]);
+  }, {}), [DEAL_STAGES, visibleDeals, filter]);
   // Command-deck readout split: money in motion (open stages) vs money landed (closing).
   // The old single grandTotal blended won deals into "pipeline", overstating what's open.
   const openStages = DEAL_STAGES.filter(s => s.key !== 'closing' && s.key !== 'lost');
   const openTotal = openStages.reduce((a, s) => a + (totals[s.key]?.sum || 0), 0);
   const openCount = openStages.reduce((a, s) => a + (totals[s.key]?.count || 0), 0);
   const closingTotal = totals.closing?.sum || 0;
-  // Drag-to-move: optimistic local move, then persist the stage in the background for
-  // ledger-backed deals. 실패 시 원래 스테이지로 롤백 + role=status 안내 — "낙관 이동이
-  // 결과와 무관하게 서 있는" fire-and-forget 경로 제거(2026-08-05 재감사).
+  // Drag-to-move: 낙관 이동 → 3.5초 되돌리기 창 → 창이 닫힌 뒤에만 PATCH(지연 쓰기 —
+  // 삭제·완료와 같은 useUndoableAction 계약). 스테이지 변경은 최고 빈도 뮤테이션인데
+  // 되돌리기가 없던 마지막 항목이었다(기준선 §2.8 — 24차). 창 안에서 같은 딜을 연속
+  // 이동하면 예약이 대체되고 되돌리기는 최초 원위치로 복원한다. 실패 시 롤백 + 명명.
+  const pendingStageRef = React.useRef(new Map()); // key → 최초 prevStage
   const move = (id, to) => {
     const prevStage = deals.find(d => d.id === id)?.stage;
+    if (!prevStage || prevStage === to) return;
     setDeals(ds => ds.map(d => d.id === id ? { ...d, stage: to } : d));
-    if (!String(id).toLowerCase().startsWith('local-')) {
+    if (String(id).toLowerCase().startsWith('local-')) return;
+    const key = `deal-stage-${id}`;
+    const undoBase = pendingStageRef.current.get(key) ?? prevStage;
+    pendingStageRef.current.set(key, undoBase);
+    const stageLabel = DEAL_STAGES.find(s => s.key === to)?.label || to;
+    scheduleUndoable(key, () => {
+      pendingStageRef.current.delete(key);
+      setBoardNotice(cur => (cur?.key === key ? null : cur)); // 창 종료 시 알림 소거(19차 수명 계약)
       saveRevenueRecord('deal', 'update', { id, stage: to }).then((r) => {
         if (r.ok) return;
-        if (prevStage) setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: prevStage } : d)));
+        setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: undoBase } : d)));
         setBoardNotice({ tone: 'err', label: `스테이지 이동 저장 실패 (${r.status}) — 원위치로 되돌렸습니다` });
       });
-    }
+    });
+    setBoardNotice({
+      key,
+      tone: 'ok',
+      label: `${stageLabel}(으)로 이동됨`,
+      undo: () => {
+        if (cancelUndoable(key)) {
+          pendingStageRef.current.delete(key);
+          setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: undoBase } : d)));
+        }
+        setBoardNotice(null);
+      },
+    });
   };
   // 딜별 체크리스트 카운트 (공유 실행 척추의 보드 표면) — tasks 원장에서 meta.deal_id로
   // 연결된 하위 항목을 집계해 카드에 ✓n/m으로 얹는다. 드로어가 닫힐 때 재집계해서
@@ -1267,6 +1607,17 @@ export function Deals({ workspace, onNavigate }) {
     return r;
   };
 
+  // ?new=deal — TopBar New·⌘K 생성 딥링크 1회 소비(§8.1 생성·연계, Leads와 동일 계약).
+  const createdDealFromQueryRef = React.useRef(false);
+  React.useEffect(() => {
+    if (searchParams.get('new') !== 'deal') { createdDealFromQueryRef.current = false; return; }
+    if (createdDealFromQueryRef.current) return;
+    createdDealFromQueryRef.current = true;
+    createDeal();
+    router.replace(pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   // Deep-link: ?deal=<id> opens that deal's EditDrawer once the ledger has loaded. One-shot
   // per param, then strip the query so a refresh doesn't replay it.
   const dealParam = searchParams?.get('deal') || null;
@@ -1314,8 +1665,9 @@ export function Deals({ workspace, onNavigate }) {
             {closingTotal > 0 && <> · 클로징 <span className="mono" style={{ color: 'var(--moon-200)' }}>{fmt(closingTotal)}</span></>}
             <SyncBadge state={syncState} />
             {boardNotice && (
-              <span role="status" aria-live="polite" style={{ marginLeft: 8, fontSize: 11.5, color: boardNotice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)' }}>
+              <span role={boardNotice.tone === 'err' ? 'alert' : 'status'} aria-live="polite" style={{ marginLeft: 8, fontSize: 11.5, color: boardNotice.tone === 'err' ? 'var(--danger)' : 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 {boardNotice.label}
+                {boardNotice.undo && <Button variant="ghost" size="xs" onClick={boardNotice.undo}>되돌리기</Button>}
               </span>
             )}
           </div>
@@ -1355,17 +1707,19 @@ export function Deals({ workspace, onNavigate }) {
       )}
 
       {wsEmpty && (
+        syncState === 'error' ? (
+          <LedgerReadError noun="딜 파이프라인" onRetry={reloadLedger} />
+        ) : (
         <Card>
           <EmptyState
-            {...(readFailureEmpty(syncState, '딜', reloadLedger) || {
-              icon: 'deals',
-              title: `${ws.label} — 해당하는 딜이 없습니다`,
-              description: `이 워크스페이스에 매칭되는 딜이 없습니다. 다른 워크스페이스로 태그된 딜은 여기에 표시되지 않습니다. 딜을 등록하거나 기록에 ${ws.label} 태그가 연결되면 파이프라인이 채워집니다.`,
-              action: <Button variant="primary" size="sm" icon="plus" onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>,
-            })}
+            icon="deals"
+            title={`${ws.label} — 해당하는 딜이 없습니다`}
+            description={`이 워크스페이스에 매칭되는 딜이 없습니다. 다른 워크스페이스로 태그된 딜은 여기에 표시되지 않습니다. 딜을 등록하거나 기록에 ${ws.label} 태그가 연결되면 파이프라인이 채워집니다.`}
+            action={<Button variant="primary" size="sm" icon="plus" onClick={() => createDeal()}>Deal <Kbd>N</Kbd></Button>}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
+        )
       )}
 
       {!wsEmpty && (
@@ -1390,9 +1744,9 @@ export function Deals({ workspace, onNavigate }) {
               <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 600 }}>{s.label}</span>
-                  <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', marginLeft: 'auto' }}>{totals[s.key].count}</span>
+                  <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', marginLeft: 'auto' }}>{totals[s.key]?.count ?? 0}</span>
                 </div>
-                <div className="mono" style={{ fontSize: 12, color: totals[s.key].sum ? 'var(--fg-muted)' : 'var(--fg-faint)', marginTop: 4 }}>{fmt(totals[s.key].sum)}</div>
+                <div className="mono" style={{ fontSize: 12, color: totals[s.key]?.sum ? 'var(--fg-muted)' : 'var(--fg-faint)', marginTop: 4 }}>{fmt(totals[s.key]?.sum ?? 0)}</div>
               </div>
               <div className="scroll-y" style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 6, minHeight: 100 }}>
                 {items.map(d => {
@@ -1516,6 +1870,8 @@ export function Deals({ workspace, onNavigate }) {
         }}
       >
         <DealTaskPanel deal={editingDeal} onSaved={loadDealTaskStats} />
+        <DealNextMeetingPanel deal={editingDeal} onNavigate={onNavigate} />
+        <DealLinkedProjectsPanel deal={editingDeal} onNavigate={onNavigate} />
       </EditDrawer>
     </div>
   );
@@ -1543,7 +1899,7 @@ function sortCases(rows, sort) {
 }
 
 export function Cases() {
-  const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
+  const { ledger, syncState } = useRevenueLedger();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -1580,6 +1936,17 @@ export function Cases() {
     }, ...prev]);
     setEditCaseId(id); // open the editor immediately so the new case can be filled in
   };
+
+  // ?new=case — TopBar New·⌘K 생성 딥링크 1회 소비(§8.1 생성·연계, Leads와 동일 계약).
+  const createdCaseFromQueryRef = React.useRef(false);
+  React.useEffect(() => {
+    if (searchParams.get('new') !== 'case') { createdCaseFromQueryRef.current = false; return; }
+    if (createdCaseFromQueryRef.current) return;
+    createdCaseFromQueryRef.current = true;
+    createCase();
+    router.replace(pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Deep-link: ?case=<id> opens that case's EditDrawer once the ledger has loaded — Leads의
   // ?lead=와 같은 one-shot 계약 (소비 후 쿼리 소거, 새로고침 시 재실행 없음).
@@ -1665,12 +2032,10 @@ export function Cases() {
         </div>
         {cases.length === 0 && (
           <EmptyState
-            {...(readFailureEmpty(syncState, '운영 케이스', reloadLedger) || {
-              icon: 'cases',
-              title: '운영 케이스가 없습니다',
-              description: syncState === 'live' ? 'Supabase operation_cases 기록에 표시할 케이스가 없습니다.' : '지원/운영 이슈가 생기면 계정과 함께 표시됩니다.',
-              action: <Button variant="primary" size="sm" icon="plus" onClick={createCase}>케이스 추가</Button>,
-            })}
+            icon="cases"
+            title="운영 케이스가 없습니다"
+            description={syncState === 'live' ? 'Supabase operation_cases 기록에 표시할 케이스가 없습니다.' : '지원/운영 이슈가 생기면 계정과 함께 표시됩니다.'}
+            action={<Button variant="primary" size="sm" icon="plus" onClick={createCase}>케이스 추가</Button>}
           />
         )}
         {cases.map((c, i) => (
@@ -2517,6 +2882,17 @@ export function Accounts({ workspace, onNavigate }) {
     }
   };
 
+  // ?new=account — TopBar New·⌘K 생성 딥링크 1회 소비(§8.1 생성·연계, Leads와 동일 계약).
+  const createdAccountFromQueryRef = React.useRef(false);
+  React.useEffect(() => {
+    if (accountSearchParams.get('new') !== 'account') { createdAccountFromQueryRef.current = false; return; }
+    if (createdAccountFromQueryRef.current) return;
+    createdAccountFromQueryRef.current = true;
+    createAccount();
+    if (accountPathname) accountRouter.replace(accountPathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountSearchParams]);
+
   // 이름 변경 — 상세 헤더 연필 버튼. details/selected가 이름 키라 네 곳을 함께 옮긴다.
   const renameAccount = async (account, nextNameRaw) => {
     const nextName = String(nextNameRaw || '').trim();
@@ -2574,17 +2950,19 @@ export function Accounts({ workspace, onNavigate }) {
       </div>
 
       {wsEmpty && (
+        syncState === 'error' ? (
+          <LedgerReadError noun="계정 목록" onRetry={reloadLedger} />
+        ) : (
         <Card>
           <EmptyState
-            {...(readFailureEmpty(syncState, '계정', reloadLedger) || {
-              icon: 'accounts',
-              title: `${ws.label} — 해당하는 계정이 없습니다`,
-              description: `이 워크스페이스에 매칭되는 계정이 없습니다. 다른 워크스페이스로 태그된 계정은 여기에 표시되지 않습니다. 계정을 등록하거나 기록에 ${ws.label} 태그가 연결되면 나타납니다.`,
-              action: <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account 등록</Button>,
-            })}
+            icon="accounts"
+            title={`${ws.label} — 해당하는 계정이 없습니다`}
+            description={`이 워크스페이스에 매칭되는 계정이 없습니다. 다른 워크스페이스로 태그된 계정은 여기에 표시되지 않습니다. 계정을 등록하거나 기록에 ${ws.label} 태그가 연결되면 나타납니다.`}
+            action={<Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account 등록</Button>}
             style={{ minHeight: 200, padding: '28px 12px' }}
           />
         </Card>
+        )
       )}
 
       {/* Content by view */}
@@ -2648,14 +3026,12 @@ export function Accounts({ workspace, onNavigate }) {
           {filtered.length === 0 && (
             <Card style={{ gridColumn: '1 / -1' }}>
               <EmptyState
-                {...(readFailureEmpty(syncState, '계정', reloadLedger) || {
-                  icon: 'accounts',
-                  title: search.trim() ? '검색 결과가 없습니다' : '계정이 없습니다',
-                  description: search.trim() ? '다른 검색어를 시도하거나 검색을 지우세요.' : syncState === 'live' ? 'Supabase customer_accounts 기록에 표시할 계정이 없습니다.' : '필터를 조정하거나 첫 계정을 등록하세요.',
-                  action: search.trim()
-                    ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
-                    : <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>,
-                })}
+                icon="accounts"
+                title={search.trim() ? '검색 결과가 없습니다' : '계정이 없습니다'}
+                description={search.trim() ? '다른 검색어를 시도하거나 검색을 지우세요.' : syncState === 'live' ? 'Supabase customer_accounts 기록에 표시할 계정이 없습니다.' : '필터를 조정하거나 첫 계정을 등록하세요.'}
+                action={search.trim()
+                  ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
+                  : <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>}
               />
             </Card>
           )}
@@ -2719,14 +3095,12 @@ export function Accounts({ workspace, onNavigate }) {
           ))}
           {filtered.length === 0 && (
             <EmptyState
-              {...(readFailureEmpty(syncState, '계정', reloadLedger) || {
-                icon: 'accounts',
-                title: search.trim() ? '검색 결과가 없습니다' : '계정이 없습니다',
-                description: search.trim() ? '다른 검색어를 시도하거나 검색을 지우세요.' : syncState === 'live' ? 'Supabase customer_accounts 기록이 비어 있습니다.' : '필터를 조정하거나 첫 계정을 등록하세요.',
-                action: search.trim()
-                  ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
-                  : <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>,
-              })}
+              icon="accounts"
+              title={search.trim() ? '검색 결과가 없습니다' : '계정이 없습니다'}
+              description={search.trim() ? '다른 검색어를 시도하거나 검색을 지우세요.' : syncState === 'live' ? 'Supabase customer_accounts 기록이 비어 있습니다.' : '필터를 조정하거나 첫 계정을 등록하세요.'}
+              action={search.trim()
+                ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
+                : <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>}
             />
           )}
         </Card>

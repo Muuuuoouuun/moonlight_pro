@@ -385,6 +385,28 @@ export function HubApp() {
     setPaletteOpen(true);
   }, [closeMobileNavigation]);
 
+  // TopBar New — "지금 보는 표면에 만든다". 예전엔 primary New가 팔레트만 열어(위장 버튼,
+  // 기준선 감사 §2.8) 생성까지 두 단계였다. 표면별 생성 딥링크(각 페이지가 1회 소비 후
+  // 쿼리 소거)로 직행하고, 생성 대상이 없는 표면에서만 팔레트로 폴백한다(§8.1 생성).
+  const createTargetForPath = React.useCallback((currentPath) => {
+    const p = String(currentPath || '');
+    if (p.startsWith('dashboard/revenue/leads') || p.startsWith('dashboard/revenue/customers')) return 'dashboard/revenue/leads?new=lead';
+    if (p.startsWith('dashboard/revenue/deals')) return 'dashboard/revenue/deals?new=deal';
+    if (p.startsWith('dashboard/revenue/accounts')) return 'dashboard/revenue/accounts?new=account';
+    if (p.startsWith('dashboard/revenue/cases')) return 'dashboard/revenue/cases?new=case';
+    if (p.startsWith('dashboard/work/projects') || p.startsWith('dashboard/work/roadmap')) return 'dashboard/work/projects?new=project';
+    if (p.startsWith('dashboard/work/decisions')) return 'dashboard/work/decisions?new=decision';
+    if (p.startsWith('dashboard/work/rhythm')) return 'dashboard/work/rhythm?new=rhythm';
+    if (p.startsWith('dashboard/content')) return 'dashboard/content/studio?new=draft';
+    return null;
+  }, []);
+
+  const createOnCurrentSurface = React.useCallback(() => {
+    const target = createTargetForPath(path);
+    if (target) navigate(target);
+    else openCommandPalette();
+  }, [createTargetForPath, path, navigate, openCommandPalette]);
+
   const openMobileNavigation = React.useCallback(() => {
     if (!isMobileViewport || paletteOpen) return;
     setNavOpen(true);
@@ -450,7 +472,7 @@ export function HubApp() {
             view={view}
             scope={routeScope || navScope}
             onNavigate={navigate}
-            onNew={openCommandPalette}
+            onNew={createOnCurrentSurface}
             onSidebarOpen={openMobileNavigation}
             navOpen={mobileNavState.open}
             menuButtonRef={menuButtonRef}

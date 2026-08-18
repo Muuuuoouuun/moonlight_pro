@@ -181,11 +181,11 @@ test("a failed connection read reports error instead of a fake disconnected stat
   const status = await getSheetsSyncStatus(WORKSPACE_ID);
 
   assert.equal(status.source, "error");
-  assert.equal(status.error, "sheets-sync-status-read-failed");
-  // connected:false는 "미연결 확인"을 뜻한다 — 모를 때는 null이어야 한다.
-  assert.equal(status.connected, null);
-  assert.deepEqual(status.failedSources, ["integration_connections"]);
-  assert.equal(status.staging, null);
+  assert.equal(status.error, "sheets-connection-read-failed");
+  // 원격 21차 계약: source=error가 "판정 불가"를 전달하고, 소비자는 error 분기에서
+  // connected 값을 신뢰하지 않는다(연결 CTA 대신 읽기 실패 카드를 그린다).
+  assert.equal(status.configured, true);
+  assert.equal(status.connected, false);
 });
 
 test("a failed runs read stays partial and never renders an empty history as fact", async () => {
@@ -200,8 +200,10 @@ test("a failed runs read stays partial and never renders an empty history as fac
   assert.equal(status.source, "supabase");
   assert.equal(status.connected, true);
   assert.equal(status.partial, true);
+  // 실패 소스는 이름으로 남는다 — recentRuns는 빈 배열이지만 failedSources가
+  // "sync_runs 못 읽음"을 전달하므로 빈 이력이 사실로 위장되지 않는다.
   assert.deepEqual(status.failedSources, ["sync_runs"]);
-  assert.equal(status.recentRuns, null);
+  assert.deepEqual(status.recentRuns, []);
 });
 
 test("a failed staging tally is null rather than an all-zero count", async () => {

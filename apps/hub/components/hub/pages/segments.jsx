@@ -11,6 +11,7 @@ import React from 'react';
 import { Iconed } from "../hub-icons";
 import { Badge, Button, Card, Dot, EmptyState, Input, SyncBadge, SegmentedControl } from "../hub-primitives";
 import { filterLeadsByWorkspace, getWorkspace } from "../workspace-map";
+import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { useRevenueLedger } from "./revenue";
 import { clearExpandedSegments, sortSegmentsByPriority, toggleExpandedSegment } from "./segments-state.mjs";
 
@@ -99,6 +100,21 @@ export function Segments({ workspace, onNavigate }) {
   const segments = groupLeads(searched, dimension);
   const dimLabel = DIMENSIONS.find((d) => d.key === dimension)?.label || dimension;
 
+  // 키보드 계층(§8.1 — 24차): j/k 세그먼트 카드 이동 · e/Enter 펼침 토글 · / 검색 포커스.
+  // 비코어 표면 중 마지막까지 문법이 없던 목록 — 코어와 같은 훅을 그대로 쓴다.
+  const searchRef = React.useRef(null);
+  const kbRows = React.useMemo(() => segments.map((s) => ({ id: s.label })), [segments]);
+  const kbSelection = useCrmSelection(kbRows);
+  useCrmKeyboard({
+    selection: kbSelection,
+    onEditSelected: (label) => toggleSegment(label),
+    onSearchFocus: () => searchRef.current?.focus(),
+  });
+  React.useEffect(() => {
+    if (!kbSelection.selectedId) return;
+    document.querySelector(`[data-kb-row="${CSS.escape(String(kbSelection.selectedId))}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [kbSelection.selectedId]);
+
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -116,7 +132,7 @@ export function Segments({ workspace, onNavigate }) {
           value={dimension}
           onChange={(key) => { setDimension(key); setExpanded(clearExpandedSegments()); }}
         />
-        <Input className="hub-toolbar" placeholder="리드 이름 검색…" icon="search" value={search} onChange={setSearch} />
+        <Input ref={searchRef} className="hub-toolbar" placeholder="리드 이름 검색…" icon="search" value={search} onChange={setSearch} />
       </div>
 
       {segments.length === 0 && (
@@ -142,7 +158,13 @@ export function Segments({ workspace, onNavigate }) {
         {segments.map((seg) => {
           const isOpen = expanded.has(seg.label);
           return (
-            <Card key={seg.label} interactive style={{ cursor: 'pointer' }} >
+            <Card
+              key={seg.label}
+              interactive
+              data-kb-row={seg.label}
+              // j/k 키보드 커서 — 코어 표면과 동일한 Moonstone 외곽 outline(§5.3).
+              style={{ cursor: 'pointer', ...(kbSelection.selectedId === seg.label ? { outline: '1px solid var(--moon-300)', outlineOffset: -1 } : {}) }}
+            >
               <div
                 role="button"
                 tabIndex={0}

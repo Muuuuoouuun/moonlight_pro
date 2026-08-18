@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { createLedgerCache } from "../module-ledger-cache";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Progress, SectionTitle, Kbd, EmptyState, SyncBadge, LifecycleBadge } from "../hub-primitives";
 
@@ -13,40 +12,43 @@ const EMPTY_AUTOMATION_SUMMARY = {
   integrationsConnected: 0,
 };
 
-const EMPTY_AUTOMATION_STATE = {
-  source: 'preview',
-  syncState: 'preview',
-  automations: [],
-  runs: [],
-  webhookEvents: [],
-  errors: [],
-  integrations: [],
-  summary: EMPTY_AUTOMATION_SUMMARY,
-};
-
-// 탭을 오갈 때마다 자동화 원장을 다시 받고 스켈레톤을 보이던 경로(8차 잔여).
-const automationsCache = createLedgerCache();
+// 모듈 스코프 stale-while-revalidate — 개요↔Flows↔Webhooks↔Runs 탭 전환마다 원장을 다시
+// 기다리며 스켈레톤을 보이던 것을 제거(8차 잔여 M). 재검증 실패는 partial(위장 금지).
+const AUTOMATIONS_CACHE_SERVABLE_MS = 5 * 60 * 1000;
+let automationsLedgerCache = null; // { at, state }
 
 function useAutomationsLedger() {
-  const [state, setState] = React.useState(() => automationsCache.read() || EMPTY_AUTOMATION_STATE);
+  const servable = automationsLedgerCache
+    && Date.now() - automationsLedgerCache.at < AUTOMATIONS_CACHE_SERVABLE_MS;
+  const [state, setState] = React.useState(servable ? automationsLedgerCache.state : {
+    source: 'preview',
+    syncState: 'preview',
+    automations: [],
+    runs: [],
+    webhookEvents: [],
+    errors: [],
+    integrations: [],
+    summary: EMPTY_AUTOMATION_SUMMARY,
+  });
 
   React.useEffect(() => {
     let active = true;
+    const hasServableCache = Boolean(
+      automationsLedgerCache && Date.now() - automationsLedgerCache.at < AUTOMATIONS_CACHE_SERVABLE_MS
+    );
     async function load() {
-      // 캐시를 서빙 중이면 스켈레톤 없이 조용히 재검증한다(모듈 SWR).
-      if (!automationsCache.read()) setState(s => ({ ...s, syncState: 'loading' }));
+      if (!hasServableCache) setState(s => ({ ...s, syncState: 'loading' })); // 캐시 서빙 중엔 조용히 재검증
       try {
         const response = await fetch('/api/hub/automations', { cache: 'no-store' });
         const data = await response.json().catch(() => null);
         if (!active || !response.ok || !data || data.status === 'error') {
           // 라이브 read 실패는 error — preview("미구성")로 뭉개면 실행 로그가
           // "기록이 없습니다"로 위장된다(4차 재감사 M — Engine 실행 피드백은 §1 코어).
-          // 캐시를 서빙 중이었다면 오래된 값을 live로 위장하지 않고 partial로 낮춘다.
-          if (active) setState(s => ({ ...s, syncState: automationsCache.read() ? 'partial' : 'error' }));
+          if (active) setState(s => ({ ...s, syncState: hasServableCache ? 'partial' : 'error' }));
           return;
         }
         if (data.source === 'supabase') {
-          const next = {
+          const nextState = {
             source: 'supabase',
             syncState: 'live',
             automations: Array.isArray(data.automations) ? data.automations : [],
@@ -56,13 +58,13 @@ function useAutomationsLedger() {
             integrations: Array.isArray(data.integrations) ? data.integrations : [],
             summary: { ...EMPTY_AUTOMATION_SUMMARY, ...(data.summary || {}) },
           };
-          automationsCache.write(next);
-          setState(next);
+          automationsLedgerCache = { at: Date.now(), state: nextState };
+          setState(nextState);
         } else {
           setState(s => ({ ...s, source: 'preview', syncState: 'preview', automations: [], runs: [], webhookEvents: [], summary: EMPTY_AUTOMATION_SUMMARY }));
         }
       } catch {
-        if (active) setState(s => ({ ...s, syncState: 'error' }));
+        if (active) setState(s => ({ ...s, syncState: hasServableCache ? 'partial' : 'error' }));
       }
     }
     load();
@@ -264,20 +266,14 @@ export function EmailAutomation({ onNavigate }) {
   );
 }
 
-// Engine이 실제로 수신하는 경로만 표시한다. 이전 구현은 존재하지 않는
-// `https://moonlight.pro/hooks/<source>`를 지어내 mono로 렌더했다 — 운영자가
-// 그대로 복사해 provider에 등록하면 조용히 실패한다. 알 수 없는 source는
-// 경로를 만들지 않고 비운다(§5.3 정직성).
-const ENGINE_WEBHOOK_ROUTES = {
-  telegram: '/api/webhook/telegram',
-  moltbot: '/api/webhook/project/moltbot',
-  project: '/api/webhook/project',
+// 실제 Engine 수신 라우트만 경로로 표시한다 — 예전엔 `https://moonlight.pro/hooks/…`라는
+// 존재하지 않는 URL을 지어내 렌더했다(8차 잔여 S: 가짜 endpoint). 매핑에 없는 소스는
+// 경로를 생략한다(이름 줄이 이미 source·eventType을 전달).
+const ENGINE_INGEST_PATHS = {
+  telegram: 'engine /api/webhook/telegram',
+  moltbot: 'engine /api/webhook/project/moltbot',
+  project: 'engine /api/webhook/project',
 };
-
-function resolveWebhookRoute(source) {
-  const key = String(source || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
-  return ENGINE_WEBHOOK_ROUTES[key] || null;
-}
 
 function aggregateWebhookEndpoints(events) {
   if (!events?.length) return [];
@@ -286,8 +282,7 @@ function aggregateWebhookEndpoints(events) {
     const key = `${ev.source}·${ev.eventType}`;
     const entry = byKey.get(key) || {
       name: `${ev.source} — ${ev.eventType}`,
-      source: ev.source,
-      url: resolveWebhookRoute(ev.source),
+      url: ENGINE_INGEST_PATHS[ev.source] || null,
       status: 'ok',
       lastHit: ev.lastHit,
       count24: 0,
@@ -313,7 +308,7 @@ export function Webhooks({ onNavigate }) {
       const response = await fetch('/api/webhooks/project-test', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ slug: hook.name, source: hook.source || hook.name }),
+        body: JSON.stringify({ slug: hook.name, source: hook.url }),
       });
       const data = await response.json().catch(() => ({}));
 
@@ -397,9 +392,7 @@ export function Webhooks({ onNavigate }) {
               <IconButton icon="play" tooltip="Send test" onClick={() => runHookTest(i, h)} />
               <IconButton icon="moreV" tooltip="Manage endpoint" onClick={() => onNavigate?.('dashboard/settings')} />
             </div>
-            <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 6, paddingLeft: 16 }}>
-              {h.url || '수신 경로 미확인'}
-            </div>
+            {h.url && <div className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 6, paddingLeft: 16 }}>{h.url}</div>}
           </div>
           );
         })}

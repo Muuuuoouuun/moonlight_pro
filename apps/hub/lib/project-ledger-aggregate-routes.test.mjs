@@ -83,6 +83,23 @@ registerHooks({
       "@/lib/repositories/revenue-ledger": repositoryStub("revenue", "getRevenueLedger"),
       "@/lib/repositories/automations-ledger": repositoryStub("automations", "getAutomationsLedger"),
       "@/lib/repositories/work-ledger": repositoryStub("work", "getWorkLedger"),
+      // daily-brief의 A-1 어댑터 정본 — 실모듈을 로드하면 상대 import 체인이
+      // (operating·revenue·google-calendar) 스텁을 우회해 실 read를 시도한다.
+      // 계약: attention.raw가 lean 태스크 원장·revenue 원장·calendar를 동반한다.
+      "@/lib/repositories/attention-ledger": `
+export async function getAttentionLedger() {
+  const s = globalThis.__projectAggregateRouteState || {};
+  return s.attention || {
+    source: "supabase",
+    items: [],
+    raw: {
+      projectLedger: s.tasksLedger,
+      revenue: s.revenue,
+      calendar: { ok: false, reason: "calendar-not-connected", items: [] },
+    },
+  };
+}
+`,
       "@/lib/repositories/brief-ledger": repositoryStub("brief", "getMorningBrief"),
       "@/lib/sales-os/work-orders": repositoryStub("orders", "getWorkOrders"),
       "@/lib/operator-home-summary": operatorHomeStub,
