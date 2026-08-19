@@ -711,13 +711,6 @@ button {
   min-width: 0;
 }
 
-.hub-app .hub-project-identity__glyph {
-  flex: 0 0 22px;
-  color: var(--fg-muted);
-  font-size: 14px;
-  text-align: center;
-}
-
 .hub-app .hub-project-identity__copy,
 .hub-app .hub-project-next-action,
 .hub-app .hub-project-due-risk {

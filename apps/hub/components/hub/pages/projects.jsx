@@ -36,6 +36,7 @@ import {
 import { ProjectCreateDrawer } from "./project-create-drawer";
 import { ProjectDetailPanel } from "./project-detail-panel";
 import {
+  BrandMark,
   ProjectPortfolioSummary,
   ProjectProgressGauge,
 } from "./project-pms-components";
@@ -108,8 +109,17 @@ function isTerminalProject(p) {
   return TERMINAL_PROJECT_STATUSES.has(String(p?.statusKey || '').toLowerCase());
 }
 const FOLDER_STORAGE_KEY = 'mlp.pms.folders';
+// 사이드바 폴더 안 "진행 없음" 묶음의 펼침 상태. UI 전용, 기본 접힘.
+const IDLE_OPEN_KEY = 'mlp.pms.idle-open';
 // List 뷰의 브랜드 섹션 접기 상태 (전체 브랜드 볼 때만). UI 전용, 브랜드 slug로 영속.
 const BRAND_SECTION_KEY = 'mlp.pms.brand-sections';
+
+// 진행 신호 — 살아있는 프로젝트·열린 할 일·새 변동 중 하나라도 있으면 "진행 중" 컨테이너.
+// 신호가 없는 컨테이너는 사이드바에서 폴더 하단 "진행 없음" 묶음으로 내려가고 기본 접힘이다
+// (2026-08-19 운영자 지시 — 07-15 스펙 §4.2 "기본 펼침"을 대체).
+function isBrandActive(b) {
+  return (b?.projects || 0) > 0 || (b?.open || 0) > 0 || (b?.changes || 0) > 0;
+}
 // 리스트(tree) 뷰 상태 그룹 — 렌더와 j/k 평탄화(23차)가 같은 순서를 공유한다.
 const LIST_STATUS_GROUPS = [
   { key: 'In progress', label: '진행중', tone: 'var(--line-strong)' },
@@ -1375,16 +1385,26 @@ export function Projects({ workspace }) {
     return scopes.map(g => ({
       ...g,
       folders: orderedCategories
-        .map(cat => ({
-          ...cat,
-          id: `${g.key}:${cat.key}`,
-          items: applyCustomOrder(g.items.filter(b => (b.category || 'general') === cat.key), brandOrder, b => b.key),
-        }))
+        .map(cat => {
+          const members = applyCustomOrder(g.items.filter(b => (b.category || 'general') === cat.key), brandOrder, b => b.key);
+          // 진행 신호가 있는 컨테이너가 항상 위 — 수동 드래그 순서는 각 구간 안에서만 유효.
+          const activeItems = members.filter(isBrandActive);
+          const idleItems = members.filter(b => !isBrandActive(b));
+          return {
+            ...cat,
+            id: `${g.key}:${cat.key}`,
+            items: [...activeItems, ...idleItems],
+            activeItems,
+            idleItems,
+            hasActive: activeItems.length > 0,
+          };
+        })
         .filter(f => f.items.length > 0),
     }));
   }, [brands, folderOrder, brandOrder]);
 
-  // Folder collapse — default expanded; persisted per folder id.
+  // Folder collapse — 저장값이 없으면 진행 신호로 기본값을 정한다: 진행 중인 컨테이너가
+  // 하나도 없는 폴더는 접힘. 수동 토글은 localStorage에 영속되어 기본값을 이긴다.
   const [foldersCollapsed, setFoldersCollapsed] = React.useState({});
   React.useEffect(() => {
     try {
@@ -1392,10 +1412,27 @@ export function Projects({ workspace }) {
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) setFoldersCollapsed(parsed);
     } catch { /* defaults apply */ }
   }, []);
-  const toggleFolder = React.useCallback((id) => {
+  // currentClosed는 렌더에서 기본값까지 해석한 현재 상태 — 저장 맵에는 다음 상태를 명시적으로 기록한다.
+  const toggleFolder = React.useCallback((id, currentClosed) => {
     setFoldersCollapsed(prev => {
-      const map = { ...prev, [id]: !prev[id] };
+      const map = { ...prev, [id]: !currentClosed };
       try { localStorage.setItem(FOLDER_STORAGE_KEY, JSON.stringify(map)); } catch { /* ignore */ }
+      return map;
+    });
+  }, []);
+
+  // 폴더 하단 "진행 없음" 묶음 펼침 상태 — 기본 접힘, 폴더 id로 영속.
+  const [idleOpen, setIdleOpen] = React.useState({});
+  React.useEffect(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(IDLE_OPEN_KEY) || 'null');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) setIdleOpen(parsed);
+    } catch { /* defaults apply */ }
+  }, []);
+  const toggleIdle = React.useCallback((id) => {
+    setIdleOpen(prev => {
+      const map = { ...prev, [id]: !prev[id] };
+      try { localStorage.setItem(IDLE_OPEN_KEY, JSON.stringify(map)); } catch { /* ignore */ }
       return map;
     });
   }, []);
@@ -1489,7 +1526,9 @@ export function Projects({ workspace }) {
     setSidebarDrag(null); setDragOverKey(null);
   };
 
-  const renderBrandSidebarRow = (b) => {
+  // indent: 폴더 아래 트리 자식 행 (레일 래퍼 안). 드래그 핸들 아이콘은 소음이라 제거 —
+  // draggable 속성과 grab 커서는 유지되므로 정렬 기능은 그대로다 (2026-08-19 위계 정리).
+  const renderBrandSidebarRow = (b, { indent = false } = {}) => {
     const active = brand === b.key;
     const count = b.key === 'all' ? allProjects.length : (b.projects || 0);
     const changes = b.key === 'all'
@@ -1500,16 +1539,16 @@ export function Projects({ workspace }) {
     const dropTarget = draggable && sidebarDrag?.type === 'brand' && dragOverKey === b.key
       && sidebarDrag.key !== b.key && sidebarDrag.folderId === folderIdOf(b);
     return (
-      <button key={b.key} onClick={() => setBrand(b.key)}
+      <button key={b.key} className="hub-row" onClick={() => setBrand(b.key)}
         draggable={draggable}
         onDragStart={draggable ? () => setSidebarDrag({ type: 'brand', key: b.key, folderId: folderIdOf(b) }) : undefined}
         onDragEnd={() => { setSidebarDrag(null); setDragOverKey(null); }}
         onDragOver={draggable ? (e) => { e.preventDefault(); if (sidebarDrag?.type === 'brand') setDragOverKey(b.key); } : undefined}
         onDrop={draggable ? (e) => { e.preventDefault(); handleBrandDrop(b); } : undefined}
         style={{
-        width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-        padding: '8px 10px', marginBottom: 1,
-        background: active ? 'var(--surface-3)' : 'transparent',
+        width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+        padding: indent ? '6px 8px' : '8px 10px', marginBottom: 1,
+        background: active ? 'var(--surface-3)' : undefined,
         border: active ? '1px solid var(--line)' : '1px solid transparent',
         borderRadius: 'var(--r-sm)', textAlign: 'left',
         color: active ? 'var(--fg)' : 'var(--fg-muted)',
@@ -1518,10 +1557,8 @@ export function Projects({ workspace }) {
         opacity: dragging ? 0.4 : 1,
         boxShadow: dropTarget ? 'inset 0 1px 0 0 var(--moon-300)' : undefined,
       }}>
-        {draggable && <Iconed name="drag" size={10} style={{ color: 'var(--fg-faint)', flexShrink: 0, marginRight: -4 }} />}
-        {/* 글리프 단색·축소 (2026-07-15 spec §5) — 톤은 Badge/Dot에만. */}
-        <span style={{ fontSize: 12, width: 18, textAlign: 'center', position: 'relative', color: active ? 'var(--fg-muted)' : 'var(--fg-faint)' }}>
-          {b.glyph}
+        <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+          <BrandMark brand={b} size={18} active={active} />
           {changes > 0 && (
             <span style={{
               position: 'absolute', top: -3, right: -3,
@@ -1562,8 +1599,8 @@ export function Projects({ workspace }) {
         textAlign: 'left', color: active ? 'var(--fg)' : 'var(--fg-muted)',
         cursor: 'pointer', position: 'relative',
       }}>
-        <span style={{ fontSize: 12, width: 18, textAlign: 'center', position: 'relative', color: active ? 'var(--fg-muted)' : 'var(--fg-faint)' }}>
-          {b.glyph}
+        <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+          <BrandMark brand={b} size={20} active={active} />
           {changes > 0 && (
             <span style={{
               position: 'absolute', top: -3, right: -2,
@@ -1615,23 +1652,32 @@ export function Projects({ workspace }) {
           <IconButton icon="chevronL" size={24} iconSize={13} onClick={() => setSidebarHidden(true)} tooltip="접기" />
         </div>
         <div className="scroll-y" style={{ flex: 1, padding: 6 }}>
-          {brands.filter(b => b.key === 'all').map(renderBrandSidebarRow)}
+          {brands.filter(b => b.key === 'all').map(b => renderBrandSidebarRow(b))}
           {brandGroups.map(group => group.items.length === 0 ? null : (
             <div key={group.key}>
-              <div style={{ padding: '10px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>
+              <div style={{ padding: '12px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>
                 {group.label}
               </div>
               {group.folders.map(folder => {
-                const closed = Boolean(foldersCollapsed[folder.id]);
+                // 현재 선택 브랜드를 품은 폴더는 저장값과 무관하게 항상 열린다 (자동 열림은
+                // 저장 상태를 덮어쓰지 않는다 — 07-15 스펙 §3.1의 앵커 계약과 같은 문법).
+                const containsCurrent = folder.items.some(x => x.key === brand);
+                const savedClosed = Object.prototype.hasOwnProperty.call(foldersCollapsed, folder.id)
+                  ? Boolean(foldersCollapsed[folder.id])
+                  : !folder.hasActive; // 저장값 없음 → 진행 중인 컨테이너가 없으면 접힘
+                const closed = containsCurrent ? false : savedClosed;
                 const fDragging = sidebarDrag?.type === 'folder' && sidebarDrag.key === folder.key;
                 const fDropTarget = sidebarDrag?.type === 'folder' && dragOverKey === folder.id && sidebarDrag.key !== folder.key;
+                const idleTail = folder.hasActive && folder.idleItems.length > 0;
+                const idleOpened = !idleTail ? false
+                  : (folder.idleItems.some(x => x.key === brand) || Boolean(idleOpen[folder.id]));
                 return (
                   <div key={folder.id}>
                     <button
                       type="button"
                       className="hub-row"
                       aria-expanded={!closed}
-                      onClick={() => toggleFolder(folder.id)}
+                      onClick={() => toggleFolder(folder.id, closed)}
                       draggable
                       onDragStart={() => setSidebarDrag({ type: 'folder', key: folder.key })}
                       onDragEnd={() => { setSidebarDrag(null); setDragOverKey(null); }}
@@ -1646,12 +1692,35 @@ export function Projects({ workspace }) {
                         boxShadow: fDropTarget ? 'inset 0 1px 0 0 var(--moon-300)' : undefined,
                       }}
                     >
-                      <Iconed name="drag" size={10} style={{ color: 'var(--fg-faint)', flexShrink: 0 }} />
-                      <Iconed name="chevronD" size={11} style={{ transform: closed ? 'rotate(-90deg)' : 'none' }} />
+                      <Iconed name="chevronD" size={11} style={{ flexShrink: 0, transform: closed ? 'rotate(-90deg)' : 'none' }} />
                       <span style={{ flex: 1 }}>{folder.label}</span>
                       <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{folder.items.length}</span>
                     </button>
-                    {!closed && folder.items.map(renderBrandSidebarRow)}
+                    {!closed && (
+                      <div style={{ margin: '1px 0 4px 16px', paddingLeft: 6, borderLeft: '1px solid var(--line-soft)' }}>
+                        {(folder.hasActive ? folder.activeItems : folder.items).map(b => renderBrandSidebarRow(b, { indent: true }))}
+                        {idleTail && (
+                          <>
+                            <button
+                              type="button"
+                              className="hub-row"
+                              aria-expanded={idleOpened}
+                              onClick={() => toggleIdle(folder.id)}
+                              style={{
+                                width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+                                padding: '4px 8px', borderRadius: 'var(--r-sm)',
+                                color: 'var(--fg-faint)', fontSize: 11, textAlign: 'left', cursor: 'pointer',
+                              }}
+                            >
+                              <Iconed name="chevronD" size={10} style={{ flexShrink: 0, transform: idleOpened ? 'none' : 'rotate(-90deg)' }} />
+                              <span style={{ flex: 1 }}>진행 없음</span>
+                              <span className="mono" style={{ fontSize: 10.5 }}>{folder.idleItems.length}</span>
+                            </button>
+                            {idleOpened && folder.idleItems.map(b => renderBrandSidebarRow(b, { indent: true }))}
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1674,8 +1743,8 @@ export function Projects({ workspace }) {
               border: '1px solid var(--line)', borderRadius: 'var(--r-sm)',
               color: 'var(--fg)', cursor: 'pointer', position: 'relative',
             }}>
-              <span style={{ fontSize: 14, position: 'relative', color: 'var(--fg-muted)' }}>
-                {currentBrand.glyph}
+              <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+                <BrandMark brand={currentBrand} size={20} />
                 {(() => {
                   const totalChanges = brands.filter(b => b.key !== 'all').reduce((s, b) => s + (b.changes || 0), 0);
                   // 새 변동 카운트 — 손실 신호가 아니므로 중립 칩 (§5.2), 글자는 10.5px 플로어.
@@ -1849,7 +1918,7 @@ export function Projects({ workspace }) {
                         }}
                       >
                         <Iconed name="chevronD" size={12} style={{ transform: collapsed ? 'rotate(-90deg)' : 'none', color: 'var(--fg-faint)' }} />
-                        <span style={{ fontSize: 13, color: 'var(--fg-muted)' }}>{section.brand.glyph}</span>
+                        <BrandMark brand={section.brand} size={18} />
                         <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{section.brand.name}</span>
                         <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4 }}>{items.length}</span>
                       </button>
@@ -1919,7 +1988,7 @@ export function Projects({ workspace }) {
                                   onClick={() => openProjectDetail(p.id)}
                                 >
                                   <div className="hub-project-identity">
-                                    <span className="hub-project-identity__glyph" aria-hidden="true">{pBrand.glyph}</span>
+                                    <BrandMark brand={pBrand} size={18} />
                                     <div className="hub-project-identity__copy">
                                       <strong>{p.name}</strong>
                                       <span>{pBrand.name} · 할 일 {pTodos.length}</span>
@@ -2051,7 +2120,7 @@ export function Projects({ workspace }) {
                                 size={16}
                                 label={`다시 열기: ${p.name}`}
                               />
-                              <span style={{ fontSize: 12.5, color: 'var(--fg-faint)' }} aria-hidden="true">{pBrand.glyph}</span>
+                              <BrandMark brand={pBrand} size={16} />
                               <button
                                 type="button"
                                 className="hub-row"
@@ -2176,7 +2245,7 @@ export function Projects({ workspace }) {
                             >
                               <div style={{ fontSize: 13, textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</div>
                               <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3 }}>
-                                {pBrand.glyph} {pBrand.name} · {proj?.name}
+                                {pBrand.name} · {proj?.name}
                               </div>
                             </div>
                             <span className="hub-project-todo-assignee">{t.assignee}</span>
@@ -2358,7 +2427,7 @@ export function Projects({ workspace }) {
                               }}
                             >
                               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 14px', minWidth: 0 }}>
-                                <span style={{ fontSize: 13, color: 'var(--fg-muted)' }}>{pBrand.glyph}</span>
+                                <BrandMark brand={pBrand} size={16} style={{ marginTop: 2 }} />
                                 <div style={{ minWidth: 0, flex: 1 }}>
                                   <a
                                     href={timelineProjectHref(p.id)}
@@ -2421,7 +2490,7 @@ export function Projects({ workspace }) {
                               background: selectedProjectId === p.id ? 'var(--surface-2)' : 'transparent',
                             }}
                           >
-                            <span style={{ fontSize: 13, color: 'var(--fg-muted)' }}>{pBrand.glyph}</span>
+                            <BrandMark brand={pBrand} size={16} />
                             <span style={{ flex: 1, fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
                             <Badge tone={statusTone[p.status]} size="xs">{STATUS_LABEL_KO[p.status] || p.status}</Badge>
                           </a>

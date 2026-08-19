@@ -1,7 +1,36 @@
 "use client";
 
 import React from "react";
+import { Iconed } from "../hub-icons";
 import { buildProjectPortfolioMetrics } from "./project-pms-metrics";
+
+// 컨테이너 모노그램 마크 — 모양·무게가 제각각인 기하 글리프(◐ ◇ □ △ …)를 렌더에서
+// 대체한다(2026-08-19 운영자 지시 "아이콘 변경"). 이름 첫 글자를 고정 타일에 새겨
+// 목록의 시각 무게를 균일하게 만들고, '전체 브랜드'(kind:index)만 brand 아이콘을 쓴다.
+// meta.glyph 데이터는 그대로 둔다 — 표현만 교체라 되돌리기 쉽다.
+export function BrandMark({ brand, size = 18, active = false, style }) {
+  const isIndex = !brand || brand.kind === 'index' || brand.key === 'all';
+  const letter = isIndex ? '' : (Array.from(String(brand.name || '').trim())[0] || '·').toUpperCase();
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: size, height: size, flexShrink: 0,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        borderRadius: Math.max(4, Math.round(size * 0.26)),
+        background: active ? 'var(--elevated)' : 'var(--surface-3)',
+        border: '1px solid var(--line-soft)',
+        color: active ? 'var(--fg)' : 'var(--fg-muted)',
+        // 타일 글자도 §6 크기 플로어(10.5px) 아래로 내리지 않는다.
+        fontSize: Math.max(10.5, Math.round(size * 0.55)),
+        fontWeight: 600, lineHeight: 1, letterSpacing: 0,
+        ...style,
+      }}
+    >
+      {isIndex ? <Iconed name="brand" size={Math.round(size * 0.62)} /> : letter}
+    </span>
+  );
+}
 
 function evidenceCount(progress) {
   if (!Number.isFinite(progress?.done) || !Number.isFinite(progress?.total)) return "";
