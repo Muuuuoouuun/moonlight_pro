@@ -111,6 +111,9 @@ function isTerminalProject(p) {
 const FOLDER_STORAGE_KEY = 'mlp.pms.folders';
 // 사이드바 폴더 안 "진행 없음" 묶음의 펼침 상태. UI 전용, 기본 접힘.
 const IDLE_OPEN_KEY = 'mlp.pms.idle-open';
+// 브랜드 사이드바 전체의 표시 상태 — 기본 접힘(2026-08-19 운영자 지시), 헤더의
+// 브랜드 트리거 메뉴가 기본 셀렉터다. 수동 토글은 영속.
+const SIDEBAR_HIDDEN_KEY = 'mlp.pms.sidebar-hidden';
 // List 뷰의 브랜드 섹션 접기 상태 (전체 브랜드 볼 때만). UI 전용, 브랜드 slug로 영속.
 const BRAND_SECTION_KEY = 'mlp.pms.brand-sections';
 
@@ -251,7 +254,18 @@ export function Projects({ workspace }) {
   const [openDetail, setOpenDetail] = React.useState(null);
   const [mobileDetail, setMobileDetail] = React.useState(false);
   const [brandMenuOpen, setBrandMenuOpen] = React.useState(false);
-  const [sidebarHidden, setSidebarHidden] = React.useState(false);
+  // 기본 접힘 — 저장된 사용자 토글이 있으면 그 값을 따른다 (SSR 안전하게 마운트 후 로드).
+  const [sidebarHidden, setSidebarHiddenState] = React.useState(true);
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem(SIDEBAR_HIDDEN_KEY);
+      if (saved === '0') setSidebarHiddenState(false);
+    } catch { /* default applies */ }
+  }, []);
+  const setSidebarHidden = React.useCallback((v) => {
+    setSidebarHiddenState(v);
+    try { localStorage.setItem(SIDEBAR_HIDDEN_KEY, v ? '1' : '0'); } catch { /* ignore */ }
+  }, []);
   const [syncState, setSyncState] = React.useState(cachedProjects ? cachedProjects.syncState : 'preview');
   const [readError, setReadError] = React.useState(null);
   const ledgerReadRef = React.useRef({ requestId: 0, controller: null });
