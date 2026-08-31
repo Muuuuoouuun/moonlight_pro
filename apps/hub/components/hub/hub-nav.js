@@ -212,6 +212,22 @@ export const SIDEBAR_PRIMARY = [
     },
   },
   {
+    // 브랜드 — 정체성·리듬·기록을 소유한다. 콘텐츠 바로 앞에 두어 제작 흐름과
+    // 인접하게 하되 표면은 분리한다 (2026-08-29 브랜드 탭 설계 §3·§5.2).
+    // 앵커 세트는 고정 계약이 아니다 (2026-07-15 스펙 §3.1) — 비효율이 파악되면 추가한다.
+    key: 'brands',
+    label: '브랜드',
+    icon: 'brand',
+    scopeAware: true,
+    // 라우트가 복수형인 이유: `dashboard/brand/*`는 이미 개인 스코프 별칭이 점유했다.
+    owns: ['dashboard/brands'],
+    paths: {
+      all: 'dashboard/brands',
+      classin: 'dashboard/brands?scope=classin',
+      personal: 'dashboard/brands?scope=personal',
+    },
+  },
+  {
     key: 'content',
     label: '콘텐츠',
     icon: 'content',

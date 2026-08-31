@@ -31,6 +31,70 @@ const TASK_BOARD_COLUMNS = [
 ];
 const CONTENT_PIPELINE_STAGES = ["기획", "초안", "검토", "업로드"];
 
+// ── PMS 컨테이너 트리 ─────────────────────────────────────────────────────────
+// order(키 배열)에 없는 항목은 원래 순서를 유지하며 맨 뒤로 (stable sort).
+export function applyCustomOrder(items, order, keyOf) {
+  if (!order || !order.length) return items;
+  const idx = new Map(order.map((k, i) => [k, i]));
+  const rank = (it) => (idx.has(keyOf(it)) ? idx.get(keyOf(it)) : Number.POSITIVE_INFINITY);
+  return [...items].sort((a, b) => rank(a) - rank(b));
+}
+
+// 프로젝트도 열린 태스크도 없는 컨테이너는 "빈 컨테이너"다.
+export function containerHasWork(container) {
+  return (container?.projects || 0) > 0 || (container?.open || 0) > 0;
+}
+
+// 스코프(업무·개인) → 분류 폴더 → 컨테이너 3단 트리.
+//
+// 브랜드 탭이 브랜드를 소유한 뒤로 PMS는 *일이 붙어 있는* 컨테이너만 그린다
+// (2026-08-29 브랜드 탭 설계 §4 P0-1). 숨긴 컨테이너는 지워진 게 아니라 개수로만
+// 보고되고, 프로젝트가 하나 생기면 저절로 트리에 복귀하므로 재생성 절차가 없다.
+//
+// 두 가지는 비어 있어도 항상 남는다:
+//   - 지금 선택 중인 컨테이너 (보고 있는 것이 발밑에서 사라지면 안 된다)
+//   - 저장 대기(preview) 컨테이너 (방금 만든 것이 즉시 사라지면 안 된다)
+export function buildContainerTree(brands = [], {
+  categories = [],
+  folderOrder = [],
+  brandOrder = [],
+  selectedKey = null,
+  showEmpty = false,
+} = {}) {
+  const real = (Array.isArray(brands) ? brands : []).filter((b) => b && b.key !== "all");
+  const visible = (b) => (
+    showEmpty || containerHasWork(b) || Boolean(b.preview) || b.key === selectedKey
+  );
+  const orderedCategories = applyCustomOrder(categories, folderOrder, (c) => c.key);
+  const scopes = [
+    { key: "classin", label: "업무 · 클래스인", items: real.filter((b) => b.orgScope === "classin") },
+    { key: "personal", label: "개인", items: real.filter((b) => b.orgScope !== "classin") },
+  ];
+
+  return {
+    groups: scopes.map((group) => {
+      const items = group.items.filter(visible);
+      return {
+        ...group,
+        items,
+        folders: orderedCategories
+          .map((cat) => ({
+            ...cat,
+            id: `${group.key}:${cat.key}`,
+            items: applyCustomOrder(
+              items.filter((b) => (b.category || "general") === cat.key),
+              brandOrder,
+              (b) => b.key,
+            ),
+          }))
+          .filter((folder) => folder.items.length > 0),
+      };
+    }),
+    hiddenCount: real.filter((b) => !visible(b)).length,
+    visibleCount: real.filter(visible).length,
+  };
+}
+
 export function taskStatusForBoardColumn(column) {
   return TASK_STATUS_BY_COLUMN[column] || null;
 }
@@ -609,9 +673,13 @@ function roadmapPosition(date, window) {
   return ((monthIndex + monthFraction) / ROADMAP_MONTH_COUNT) * 100;
 }
 
+// `brandKey` is a lens, not a data source: when set, only projects on that brand
+// (and milestones whose parent project resolves to it) stay on the timeline. A
+// milestone whose project row is absent is dropped rather than guessed at.
 export function buildRoadmapProjection(roadmap = {}, {
   now = new Date(),
   selectedProjectId = null,
+  brandKey = null,
 } = {}) {
   const window = buildRoadmapWindow(now);
   const projects = Array.isArray(roadmap.projects) ? roadmap.projects : [];
@@ -620,6 +688,7 @@ export function buildRoadmapProjection(roadmap = {}, {
 
   const projectItems = projects.flatMap((project) => {
     if (selectedProjectId && project.id !== selectedProjectId) return [];
+    if (brandKey && project.brandKey !== brandKey) return [];
     const due = toPlanningDate(project.dueAt);
     if (!due) return [];
     const started = toPlanningDate(project.startedAt);
@@ -631,6 +700,8 @@ export function buildRoadmapProjection(roadmap = {}, {
         id: `project:${project.id}`,
         projectId: project.id,
         name: project.name,
+        brandKey: project.brandKey ?? null,
+        brandName: project.brandName ?? null,
         meta: "프로젝트 마감",
         kind: "marker",
         dueAt: project.dueAt,
@@ -645,6 +716,8 @@ export function buildRoadmapProjection(roadmap = {}, {
       id: `project:${project.id}`,
       projectId: project.id,
       name: project.name,
+      brandKey: project.brandKey ?? null,
+      brandName: project.brandName ?? null,
       meta: "프로젝트 기간",
       kind: "range",
       startedAt: project.startedAt,
@@ -661,10 +734,13 @@ export function buildRoadmapProjection(roadmap = {}, {
     const target = toPlanningDate(milestone.targetAt);
     if (!target || target < window.start || target >= window.end) return [];
     const project = projectById.get(milestone.projectId);
+    if (brandKey && project?.brandKey !== brandKey) return [];
     return [{
       id: `milestone:${milestone.id}`,
       projectId: milestone.projectId,
       projectName: project?.name || null,
+      brandKey: project?.brandKey ?? null,
+      brandName: project?.brandName ?? null,
       name: milestone.title,
       meta: project?.name ? `${project.name} · 마일스톤` : "마일스톤",
       kind: "milestone",

@@ -274,6 +274,13 @@ function mapBrands(rows) {
         "Avoid decorative copy without an operator signal.",
       ]),
       forbidden: normalizeArray(meta.forbidden_terms),
+      sourceLinks: normalizeArray(meta.source_links),
+      // 주당 발행 목표는 운영자가 명시적으로 넣기 전까지 없다 — 브랜드 탭이
+      // cadence에서 *권장값*을 유도하되 확정처럼 보이지 않게 표시한다
+      // (2026-08-29 브랜드 탭 설계 §7.1).
+      weeklyGoal: Number.isFinite(Number(meta.weekly_goal)) && Number(meta.weekly_goal) > 0
+        ? Number(meta.weekly_goal)
+        : null,
       sortOrder: resolveBrandOrder(slug, meta, index),
     };
   }).sort((a, b) => (

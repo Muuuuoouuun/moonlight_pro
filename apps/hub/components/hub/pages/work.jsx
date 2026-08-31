@@ -926,9 +926,25 @@ export function Roadmap() {
   const searchParams = useSearchParams();
   const selectedProjectId = searchParams.get('project');
   const { roadmap, retry } = useWorkLedger(selectedProjectId);
+  // 브랜드 렌즈 — 로드맵은 프로젝트가 정본이므로 여기서는 필터만 제공한다
+  // (2026-08-29 브랜드 탭 설계 §4 P0-4). 브랜드 관리는 브랜드 탭이 소유한다.
+  const [brandFilter, setBrandFilter] = React.useState('all');
+  const roadmapBrands = React.useMemo(
+    () => (Array.isArray(roadmap.brands) ? roadmap.brands : []),
+    [roadmap.brands],
+  );
+  // 원장이 다시 읽히면서 필터로 잡아둔 브랜드가 사라지면 조용히 전체로 돌아간다.
+  React.useEffect(() => {
+    if (brandFilter !== 'all' && !roadmapBrands.some(b => b.key === brandFilter)) {
+      setBrandFilter('all');
+    }
+  }, [brandFilter, roadmapBrands]);
   const roadmapProjection = React.useMemo(
-    () => buildRoadmapProjection(roadmap, { selectedProjectId }),
-    [roadmap, selectedProjectId],
+    () => buildRoadmapProjection(roadmap, {
+      selectedProjectId,
+      brandKey: brandFilter === 'all' ? null : brandFilter,
+    }),
+    [brandFilter, roadmap, selectedProjectId],
   );
   const months = React.useMemo(
     () => roadmapProjection.months.map(month => ({ ...month, label: EN_MONTH.format(month.start) })),
@@ -963,6 +979,24 @@ export function Roadmap() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
+        {roadmapBrands.length > 0 && (
+          <select
+            aria-label="브랜드로 로드맵 좁히기"
+            value={brandFilter}
+            onChange={(e) => setBrandFilter(e.target.value)}
+            style={{
+              height: 32, padding: '0 10px', fontSize: 12.5,
+              background: 'var(--surface-2)', color: 'var(--fg)',
+              border: '1px solid var(--line)', borderRadius: 'var(--r-sm)',
+              maxWidth: 200,
+            }}
+          >
+            <option value="all">전체 브랜드</option>
+            {roadmapBrands.map(b => (
+              <option key={b.key} value={b.key}>{b.name}</option>
+            ))}
+          </select>
+        )}
         {selectedProjectId && (
           <a
             href={`/dashboard/work/projects?project=${encodeURIComponent(selectedProjectId)}`}
@@ -1009,8 +1043,17 @@ export function Roadmap() {
         {(roadmap.state === 'live' || roadmap.state === 'partial') && items.length === 0 && (
           <EmptyState
             icon="roadmap"
-            title={selectedProjectId ? '선택한 프로젝트의 4개월 일정이 없습니다' : '4개월 안에 표시할 일정이 없습니다'}
+            title={
+              brandFilter !== 'all'
+                ? '이 브랜드의 4개월 일정이 없습니다'
+                : selectedProjectId
+                  ? '선택한 프로젝트의 4개월 일정이 없습니다'
+                  : '4개월 안에 표시할 일정이 없습니다'
+            }
             description="프로젝트 시작일·마감일 또는 마일스톤 목표일을 확인해 주세요."
+            action={brandFilter !== 'all'
+              ? <Button variant="secondary" size="sm" onClick={() => setBrandFilter('all')}>전체 브랜드 보기</Button>
+              : undefined}
             style={{ minHeight: 220 }}
           />
         )}
