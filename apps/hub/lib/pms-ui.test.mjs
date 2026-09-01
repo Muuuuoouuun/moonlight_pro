@@ -878,13 +878,15 @@ test("the selected and the not-yet-saved container survive an empty tree", () =>
   assert.equal(tree.hiddenCount, 1);
 });
 
-test("showEmpty restores every hidden container without changing order", () => {
+test("showEmpty restores every hidden container into the idle segment", () => {
   const brands = [container("sinabro"), container("gore", { projects: 1 }), container("22nomad")];
 
   const shown = pmsUi.buildContainerTree(brands, { categories: CATEGORIES, showEmpty: true });
   const keys = shown.groups.flatMap((g) => g.folders.flatMap((f) => f.items.map((b) => b.key)));
 
-  assert.deepEqual(keys, ["sinabro", "gore", "22nomad"]);
+  // 진행 우선 정렬이 lib 계약이 되면서(2026-09-01) 복원 순서는 "원래 자리"가 아니라
+  // 활성(gore) 다음 휴면 구간이다 — 복원 자체는 전원, hiddenCount 0.
+  assert.deepEqual(keys, ["gore", "sinabro", "22nomad"]);
   assert.equal(shown.hiddenCount, 0);
 });
 
@@ -896,6 +898,39 @@ test("hiding a folder's last container removes the folder rather than leaving an
 
   const personal = tree.groups.find((g) => g.key === "personal");
   assert.deepEqual(personal.folders.map((f) => f.key), ["ka-deal"]);
+});
+
+test("folders put active containers first and expose the active/idle split", () => {
+  // showEmpty로 드러난 빈 컨테이너는 휴면 구간으로 내려간다 — 드래그 순서(gore 먼저)는
+  // 각 구간 안에서만 유효하다 (2026-08-19 진행 우선 정렬, 2026-09-01 lib 승격).
+  const brands = [
+    container("sinabro"),
+    container("gore", { projects: 1 }),
+    container("22nomad", { open: 2 }),
+  ];
+
+  const tree = pmsUi.buildContainerTree(brands, {
+    categories: CATEGORIES,
+    brandOrder: ["sinabro", "22nomad", "gore"],
+    showEmpty: true,
+  });
+
+  const folder = tree.groups.find((g) => g.key === "personal").folders[0];
+  assert.deepEqual(folder.items.map((b) => b.key), ["22nomad", "gore", "sinabro"]);
+  assert.deepEqual(folder.activeItems.map((b) => b.key), ["22nomad", "gore"]);
+  assert.deepEqual(folder.idleItems.map((b) => b.key), ["sinabro"]);
+  assert.equal(folder.hasActive, true);
+});
+
+test("a selected empty container is the idle tail, not an active row", () => {
+  const tree = pmsUi.buildContainerTree(
+    [container("sinabro"), container("gore", { projects: 1 })],
+    { categories: CATEGORIES, selectedKey: "sinabro" },
+  );
+
+  const folder = tree.groups.find((g) => g.key === "personal").folders[0];
+  assert.deepEqual(folder.activeItems.map((b) => b.key), ["gore"]);
+  assert.deepEqual(folder.idleItems.map((b) => b.key), ["sinabro"]);
 });
 
 test("containers split by org scope and keep their custom order", () => {

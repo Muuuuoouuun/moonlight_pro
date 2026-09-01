@@ -52,6 +52,10 @@ function useContentLedgerForBrands() {
       }
       setState({
         source: data.source === "supabase" ? "supabase" : "preview",
+        // content route는 보조 소스(brands 포함) 일부가 죽으면 200 + status:"partial"을
+        // 준다 — 이를 live로 뭉개면 read 실패가 "브랜드 없음"으로 위장된다 (content.jsx와
+        // 같은 계약, 2609 병합 리뷰 #2).
+        partial: data.source === "supabase" && data.status === "partial",
         brands: Array.isArray(data.brands) ? data.brands : [],
         items: Array.isArray(data.items) ? data.items : [],
         publishLogs: Array.isArray(data.publishLogs) ? data.publishLogs : [],
@@ -66,8 +70,8 @@ function useContentLedgerForBrands() {
   return { ledger: state, reload: load };
 }
 
-function syncStateOf(source) {
-  if (source === "supabase") return "live";
+function syncStateOf(source, partial = false) {
+  if (source === "supabase") return partial ? "partial" : "live";
   if (source === "loading") return "loading";
   if (source === "error") return "error";
   return "preview";
@@ -353,7 +357,7 @@ export function Brands() {
     [ledger, scope],
   );
   const selected = selectBrand(directory, selectedKey);
-  const syncState = syncStateOf(ledger.source);
+  const syncState = syncStateOf(ledger.source, ledger.partial);
 
   const setQuery = React.useCallback((next) => {
     const params = new URLSearchParams(searchParams.toString());

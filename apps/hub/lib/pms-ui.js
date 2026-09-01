@@ -41,6 +41,9 @@ export function applyCustomOrder(items, order, keyOf) {
 }
 
 // 프로젝트도 열린 태스크도 없는 컨테이너는 "빈 컨테이너"다.
+// `changes`(project_updates 수)는 별도 항이 아니다 — operating-ledger.mapBrands가
+// 업데이트를 *프로젝트를 경유해서만* 브랜드에 귀속시키므로 changes>0 ⇒ projects>0.
+// 이 술어가 숨김 판정과 진행/휴면 분류의 단일 정본이다 (2026-09-01 2609 병합 리뷰).
 export function containerHasWork(container) {
   return (container?.projects || 0) > 0 || (container?.open || 0) > 0;
 }
@@ -78,15 +81,26 @@ export function buildContainerTree(brands = [], {
         ...group,
         items,
         folders: orderedCategories
-          .map((cat) => ({
-            ...cat,
-            id: `${group.key}:${cat.key}`,
-            items: applyCustomOrder(
+          .map((cat) => {
+            const members = applyCustomOrder(
               items.filter((b) => (b.category || "general") === cat.key),
               brandOrder,
               (b) => b.key,
-            ),
-          }))
+            );
+            // 진행 신호가 있는 컨테이너가 항상 위 — 수동 드래그 순서는 각 구간 안에서만
+            // 유효 (2026-08-19 운영자 지시). showEmpty·선택·preview로 남은 빈 컨테이너가
+            // 휴면 구간이다.
+            const activeItems = members.filter(containerHasWork);
+            const idleItems = members.filter((b) => !containerHasWork(b));
+            return {
+              ...cat,
+              id: `${group.key}:${cat.key}`,
+              items: [...activeItems, ...idleItems],
+              activeItems,
+              idleItems,
+              hasActive: activeItems.length > 0,
+            };
+          })
           .filter((folder) => folder.items.length > 0),
       };
     }),

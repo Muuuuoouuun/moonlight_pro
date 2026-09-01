@@ -46,7 +46,8 @@ export function normalizeScope(scope) {
 // Second-level destinations, defined once so the per-scope tables stay readable.
 // ?scope=personal은 실제로 소비하는 표면(Leads/Deals/Accounts의 개인 필터 시드)에만
 // 붙인다 — 나머지는 전역 집계 뷰라 파라미터가 과약속이었다(5차 재감사 S).
-const SCOPE_CONSUMING_CHILD_KEYS = new Set(['rev-leads', 'rev-deals', 'rev-accounts']);
+// rev-overview는 2609 병합으로 소비자가 생겼다 — scope=personal이 개인 캐시플로 로드맵을 연다.
+const SCOPE_CONSUMING_CHILD_KEYS = new Set(['rev-overview', 'rev-leads', 'rev-deals', 'rev-accounts']);
 function personalScoped(children) {
   return children.map((c) => (
     SCOPE_CONSUMING_CHILD_KEYS.has(c.key) ? { ...c, path: `${c.path}?scope=personal` } : c
@@ -188,7 +189,9 @@ export const SIDEBAR_PRIMARY = [
     paths: {
       all: 'dashboard/revenue/overview',
       classin: 'dashboard/classin/pipeline',
-      personal: 'dashboard/revenue/overview', // scope 쿼리 소비자 없음 — 과약속 제거(6차 재감사)
+      // 개인 스코프 개요는 30일 캐시플로 로드맵이 소비한다 (2026-08-31 personal-revenue,
+      // 2609 병합으로 합류). 6차 재감사의 "소비자 없음" 전제가 이때 거짓이 됐다.
+      personal: 'dashboard/revenue/overview?scope=personal',
     },
     children: {
       all: REVENUE_CHILDREN,

@@ -906,7 +906,9 @@ export async function getContentLedger() {
       filters: withWorkspaceFilter(),
     }),
     fetchSupabaseRows("brands", {
-      limit: 40,
+      // operating-ledger(80)와 정합 — PMS가 아는 브랜드가 여기 목록 밖이면
+      // /dashboard/brands?b= 딥링크가 selectBrand null로 미끄러진다 (2609 병합 리뷰 #7).
+      limit: 80,
       order: "name.asc",
       filters: withWorkspaceFilter([
         ["status", "eq.active"],

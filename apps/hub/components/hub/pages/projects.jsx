@@ -7,7 +7,7 @@ import { Badge, Dot, Card, IconButton, Button, Checkbox, EmptyState, Input, Sync
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import {
-  applyCustomOrder,
+  buildContainerTree,
   buildProjectCreatePayload,
   buildProjectDraft,
   buildProjectEditDraft,
@@ -128,12 +128,9 @@ const SIDEBAR_HIDDEN_KEY = 'mlp.pms.sidebar-hidden';
 // List 뷰의 브랜드 섹션 접기 상태 (전체 브랜드 볼 때만). UI 전용, 브랜드 slug로 영속.
 const BRAND_SECTION_KEY = 'mlp.pms.brand-sections';
 
-// 진행 신호 — 살아있는 프로젝트·열린 할 일·새 변동 중 하나라도 있으면 "진행 중" 컨테이너.
-// 신호가 없는 컨테이너는 사이드바에서 폴더 하단 "진행 없음" 묶음으로 내려가고 기본 접힘이다
-// (2026-08-19 운영자 지시 — 07-15 스펙 §4.2 "기본 펼침"을 대체).
-function isBrandActive(b) {
-  return (b?.projects || 0) > 0 || (b?.open || 0) > 0 || (b?.changes || 0) > 0;
-}
+// 진행/휴면·숨김 판정은 pms-ui의 containerHasWork가 단일 정본이다 — changes는
+// 프로젝트를 경유해서만 집계되므로(changes>0 ⇒ projects>0) 별도 항이 아니다
+// (2026-09-01 2609 병합 리뷰에서 페이지 지역 술어 isBrandActive를 흡수).
 // 리스트(tree) 뷰 상태 그룹 — 렌더와 j/k 평탄화(23차)가 같은 순서를 공유한다.
 const LIST_STATUS_GROUPS = [
   { key: 'In progress', label: '진행중', tone: 'var(--line-strong)' },
@@ -1500,50 +1497,16 @@ export function Projects({ workspace }) {
     });
   }, []);
 
-  // 컨테이너 트리 — 두 계보의 합성 (2026-09-01 2609 병합):
-  //   ① 08-29 P0-1(win): 일 없는 컨테이너는 그리지 않는다. 숨김 판정은 pms-ui
-  //      buildContainerTree와 같은 보존 규칙(선택·preview 유지)을 따르되, 활동 술어는
-  //      mac 계보의 isBrandActive(changes 포함)를 쓴다 — 새 변동만 있는 브랜드가
-  //      토글 뒤로 사라지면 안 된다.
-  //   ② 08-19(mac): 보이는 컨테이너는 진행 신호 우선 정렬 + 폴더 하단 "진행 없음" 묶음.
-  //      숨김이 일 없는 집합을 흡수하므로 idle 묶음은 선택 중인 빈 컨테이너 정도만 남는다.
-  const containerTree = React.useMemo(() => {
-    const real = brands.filter(b => b.key !== 'all');
-    const keep = (b) => showEmptyContainers || isBrandActive(b) || Boolean(b.preview) || b.key === brand;
-    const scopes = [
-      { key: 'classin', label: '업무 · 클래스인', items: real.filter(b => b.orgScope === 'classin') },
-      { key: 'personal', label: '개인', items: real.filter(b => b.orgScope !== 'classin') },
-    ];
-    const orderedCategories = applyCustomOrder(PROJECT_CATEGORIES, folderOrder, c => c.key);
-    const groups = scopes.map(g => {
-      const visibleItems = g.items.filter(keep);
-      return {
-        ...g,
-        items: visibleItems,
-        folders: orderedCategories
-          .map(cat => {
-            const members = applyCustomOrder(visibleItems.filter(b => (b.category || 'general') === cat.key), brandOrder, b => b.key);
-            // 진행 신호가 있는 컨테이너가 항상 위 — 수동 드래그 순서는 각 구간 안에서만 유효.
-            const activeItems = members.filter(isBrandActive);
-            const idleItems = members.filter(b => !isBrandActive(b));
-            return {
-              ...cat,
-              id: `${g.key}:${cat.key}`,
-              items: [...activeItems, ...idleItems],
-              activeItems,
-              idleItems,
-              hasActive: activeItems.length > 0,
-            };
-          })
-          .filter(f => f.items.length > 0),
-      };
-    });
-    return {
-      groups,
-      hiddenCount: real.filter(b => !keep(b)).length,
-      visibleCount: real.filter(keep).length,
-    };
-  }, [brands, folderOrder, brandOrder, brand, showEmptyContainers]);
+  // 컨테이너 트리 — 두 계보의 합성 (2026-09-01 2609 병합): 숨김(08-29 P0-1 win)과
+  // 진행 우선 정렬 + 휴면 묶음(08-19 mac)을 pms-ui.buildContainerTree 하나가 소유한다.
+  // 보존 규칙(선택·preview는 비어도 유지)·hiddenCount 계약은 lib 테스트가 지킨다.
+  const containerTree = React.useMemo(() => buildContainerTree(brands, {
+    categories: PROJECT_CATEGORIES,
+    folderOrder,
+    brandOrder,
+    selectedKey: brand,
+    showEmpty: showEmptyContainers,
+  }), [brands, folderOrder, brandOrder, brand, showEmptyContainers]);
   const brandGroups = containerTree.groups;
   const hiddenContainerCount = containerTree.hiddenCount;
 
@@ -1823,20 +1786,26 @@ export function Projects({ workspace }) {
                 {group.label}
               </div>
               {group.folders.map(folder => {
-                // 현재 선택 브랜드를 품은 폴더는 저장값과 무관하게 항상 열린다 (자동 열림은
-                // 저장 상태를 덮어쓰지 않는다 — 07-15 스펙 §3.1의 앵커 계약과 같은 문법).
                 const containsCurrent = folder.items.some(x => x.key === brand);
+                const hasSavedPref = Object.prototype.hasOwnProperty.call(foldersCollapsed, folder.id);
                 // 저장값 없음 → 진행 컨테이너가 없으면 접힘. 브랜드 소유 분류(sns-channel)는
                 // 진행이 있어도 기본 접힘으로 시작한다 (08-29 §4 P0-3 — 관리는 브랜드 탭 몫).
-                const savedClosed = Object.prototype.hasOwnProperty.call(foldersCollapsed, folder.id)
+                // 숨긴 컨테이너를 보는 동안은 기본 열림 — 방금 "보기"를 눌렀는데 결과가 접힌
+                // 폴더 뒤에 숨으면 토글이 무반응으로 읽힌다 (2609 병합 리뷰 #3).
+                const savedClosed = hasSavedPref
                   ? Boolean(foldersCollapsed[folder.id])
-                  : (folder.key === BRAND_OWNED_CATEGORY ? true : !folder.hasActive);
-                const closed = containsCurrent ? false : savedClosed;
+                  : (showEmptyContainers ? false
+                    : (folder.key === BRAND_OWNED_CATEGORY ? true : !folder.hasActive));
+                // 현재 선택 브랜드를 품은 폴더는 저장값이 없을 때만 자동으로 열린다 — 명시적으로
+                // 접어둔 선택은 존중해, 자동 열림이 접기 클릭을 무반응으로 만들지 않게 한다
+                // (2609 병합 리뷰 #6; "자동 열림은 저장 상태를 덮어쓰지 않는다"를 문면대로).
+                const closed = (containsCurrent && !hasSavedPref) ? false : savedClosed;
                 const fDragging = sidebarDrag?.type === 'folder' && sidebarDrag.key === folder.key;
                 const fDropTarget = sidebarDrag?.type === 'folder' && dragOverKey === folder.id && sidebarDrag.key !== folder.key;
                 const idleTail = folder.hasActive && folder.idleItems.length > 0;
+                // showEmptyContainers 동안 휴면 묶음도 펼친다 — 드러낸 빈 컨테이너가 그 안에 있다.
                 const idleOpened = !idleTail ? false
-                  : (folder.idleItems.some(x => x.key === brand) || Boolean(idleOpen[folder.id]));
+                  : (showEmptyContainers || folder.idleItems.some(x => x.key === brand) || Boolean(idleOpen[folder.id]));
                 return (
                   <div key={folder.id}>
                     <button
