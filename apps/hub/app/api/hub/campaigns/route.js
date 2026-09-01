@@ -14,14 +14,15 @@ export async function GET(req) {
     const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 50;
 
     const result = await getCampaigns({ limit });
-    // read 실패는 502 — 200/preview로 내리면 캠페인 0건이 사실처럼 보인다(Phase 0).
+    // read 실패는 status:"error" 봉투로 알린다(HTTP 200, daily-brief 계약) — 200/preview로
+    // 내리면 캠페인 0건이 사실처럼 보이므로 status 값은 error를 유지한다(Phase 0).
     const status = result.source === "supabase" ? "live" : result.source === "error" ? "error" : "preview";
-    return NextResponse.json({ status, ...result }, { status: status === "error" ? 502 : 200 });
+    return NextResponse.json({ status, ...result });
   } catch (error) {
-    return NextResponse.json(
-      { status: "error", error: error instanceof Error ? error.message : String(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({
+      status: "error",
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 

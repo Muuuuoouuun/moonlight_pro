@@ -10,13 +10,10 @@ export async function GET() {
   try {
     const status = await getSheetsSyncStatus();
     // buildGoogleProviderStatus는 env 준비도 + connected만 본다 — 원장 read가 실패했는데
-    // 200으로 내리면 'ready'(=연결만 하면 됨)로 뭉개져 운영자가 있지도 않은 연결 작업을
-    // 하게 된다. 코어 read 실패는 502 + error다(8차 잔여 M · Phase 0 분류).
+    // status:"error" 없이 내리면 'ready'(=연결만 하면 됨)로 뭉개져 운영자가 있지도 않은 연결
+    // 작업을 하게 된다. 코어 read 실패는 status:"error" + HTTP 200(daily-brief 계약)이다.
     if (status.source === "error") {
-      return NextResponse.json(
-        { ...status, provider: "google_sheets", status: "error" },
-        { status: 502 },
-      );
+      return NextResponse.json({ ...status, provider: "google_sheets", status: "error" });
     }
 
     const providerStatus = buildGoogleProviderStatus("sheets", {
@@ -30,12 +27,9 @@ export async function GET() {
       ...providerStatus,
     });
   } catch (error) {
-    return NextResponse.json(
-      {
-        status: "error",
-        error: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({
+      status: "error",
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }

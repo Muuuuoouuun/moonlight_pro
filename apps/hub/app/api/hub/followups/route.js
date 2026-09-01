@@ -11,19 +11,20 @@ export async function GET(req) {
     const limit = Number(req.nextUrl.searchParams.get("limit")) || 25;
     const data = await getFollowups({ limit });
 
-    // read 실패는 error(502) — preview(미구성)로 뭉개면 "오늘 할 일 없음"으로 오독된다.
+    // read 실패는 status:"error" 봉투로 알린다(HTTP 200) — 5xx로 내리면 공유 캐시·인프라가
+    // daily-brief와 다른 계약을 보게 된다. preview(미구성)와는 status 값으로 구분된다.
     if (data.source === "error") {
-      return NextResponse.json({ status: "error", ...data }, { status: 502 });
+      return NextResponse.json({ status: "error", ...data });
     }
     return NextResponse.json({
       status: data.source === "supabase" ? (data.partial ? "partial" : "live") : "preview",
       ...data,
     });
   } catch (error) {
-    return NextResponse.json(
-      { status: "error", error: error instanceof Error ? error.message : String(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({
+      status: "error",
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 

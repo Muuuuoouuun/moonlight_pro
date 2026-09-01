@@ -16,13 +16,14 @@ export async function GET(request) {
     const scope = url.searchParams.get("scope") === "company" ? "company" : "personal";
     const report = await getWeeklyReport({ scope });
     if (report.source === "error") {
-      return NextResponse.json({ status: "error", ...report }, { status: 502 });
+      // read 실패는 status:"error" 봉투로 알린다(HTTP 200, daily-brief 계약).
+      return NextResponse.json({ status: "error", ...report });
     }
     return NextResponse.json({ status: report.partial ? "partial" : "live", ...report });
   } catch (error) {
-    return NextResponse.json(
-      { status: "error", error: error instanceof Error ? error.message : String(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({
+      status: "error",
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }

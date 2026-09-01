@@ -20,10 +20,10 @@ export async function GET() {
     const ledger = await getContentLedger();
 
     if (ledger.source === "error") {
-      // 라이브 read 거부는 502 — 200으로 뭉개면 소비자가 재시도하지 않는다.
+      // read 실패는 status:"error" 봉투로 알린다(HTTP 200) — daily-brief와 같은 계약.
+      // 5xx로 내리면 공유 캐시·인프라가 이 라우트를 장애로 오판한다.
       return NextResponse.json(
         { status: "error", ...ledger, brandCatalog: buildContentBrandCatalog(ledger) },
-        { status: 502 },
       );
     }
 
@@ -35,13 +35,10 @@ export async function GET() {
       brandCatalog: buildContentBrandCatalog(ledger),
     });
   } catch (error) {
-    return NextResponse.json(
-      {
-        status: "error",
-        error: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({
+      status: "error",
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 

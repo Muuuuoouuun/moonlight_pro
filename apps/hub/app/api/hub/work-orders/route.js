@@ -8,17 +8,26 @@ export const dynamic = "force-dynamic";
 
 // GET ?status=proposed | ?summary=1 — read the approval queue.
 export async function GET(req) {
-  const { searchParams } = new URL(req.url);
+  try {
+    const { searchParams } = new URL(req.url);
 
-  // read 실패는 502 — 200으로 내리면 소비자 r.ok 가드가 전부 통과해 "빈 큐"로 위장된다.
-  if (searchParams.get("summary")) {
-    const summary = await getQueueSummary();
-    return NextResponse.json(summary, { status: summary.source === "error" ? 502 : 200 });
+    // read 실패는 body status:"error"로 알린다(HTTP 200, daily-brief 계약) — getWorkOrders/
+    // getQueueSummary는 source만 돌려주므로 여기서 status를 얹지 않으면 소비자의
+    // d.status === 'error' 가드가 발동하지 않는다(예전엔 502 HTTP 자체가 유일한 신호였다).
+    if (searchParams.get("summary")) {
+      const summary = await getQueueSummary();
+      return NextResponse.json({ status: summary.source === "error" ? "error" : "ok", ...summary });
+    }
+
+    const status = searchParams.get("status");
+    const orders = await getWorkOrders({ status: status || null, limit: 100 });
+    return NextResponse.json({ status: orders.source === "error" ? "error" : "ok", ...orders });
+  } catch (error) {
+    return NextResponse.json({
+      status: "error",
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
-
-  const status = searchParams.get("status");
-  const orders = await getWorkOrders({ status: status || null, limit: 100 });
-  return NextResponse.json(orders, { status: orders.source === "error" ? 502 : 200 });
 }
 
 // POST { id, status, outcome? } — the 1-click decision (approve | dismiss | executed).

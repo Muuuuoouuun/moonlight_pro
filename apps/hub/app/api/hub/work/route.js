@@ -22,27 +22,20 @@ export async function GET(req) {
     const ledger = await getWorkLedger({ projectId });
 
     if (ledger.source === "error") {
-      // 코어 read 거부는 502 — 200으로 뭉개면 소비자가 재시도하지 않고
-      // 빈 결정/리듬/로드맵을 "기록 없음"으로 렌더한다.
-      return NextResponse.json({ status: "error", ...ledger }, { status: 502 });
+      // 코어 read 거부는 status:"error" 봉투로 알린다(HTTP 200, daily-brief 계약) — 5xx로
+      // 내리면 소비자가 재시도하지 않고 빈 결정/리듬/로드맵을 "기록 없음"으로 렌더한다.
+      return NextResponse.json({ status: "error", ...ledger });
     }
 
     const status = ledger.source === "supabase"
       ? ledger.partial ? "partial" : "live"
       : "preview";
 
-    // 전면 read 실패는 502 — 200으로 내리면 r.ok 가드 소비자에게 성공으로 읽힌다(Phase 0).
-    return NextResponse.json(
-      { status, ...ledger },
-      { status: status === "error" ? 502 : 200 },
-    );
+    return NextResponse.json({ status, ...ledger });
   } catch (error) {
-    return NextResponse.json(
-      {
-        status: "error",
-        error: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({
+      status: "error",
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }

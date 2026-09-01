@@ -36,11 +36,14 @@ export async function GET(req) {
     });
 
     // 못 셌으면 "참조 0"으로 답하지 않는다 — 그 답을 믿고 삭제하면 이력이 사라진다.
+    // HTTP는 200으로 유지하고(daily-brief 계약) status:"error"로만 알린다.
     if (!refs.ok) {
-      return NextResponse.json(
-        { status: "error", reason: refs.reason, table: refs.table, detail: refs.detail || null },
-        { status: 502 },
-      );
+      return NextResponse.json({
+        status: "error",
+        reason: refs.reason,
+        table: refs.table,
+        detail: refs.detail || null,
+      });
     }
 
     return NextResponse.json({
@@ -52,9 +55,9 @@ export async function GET(req) {
       skipped: refs.skipped || [],
     });
   } catch (error) {
-    return NextResponse.json(
-      { status: "error", error: error instanceof Error ? error.message : String(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({
+      status: "error",
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
