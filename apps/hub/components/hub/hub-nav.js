@@ -89,6 +89,16 @@ const PLANNING_TAIL = [
   { key: 'prj-rhythm', label: 'Rhythm', path: 'dashboard/work/rhythm' },
 ];
 
+// 브랜드 탭의 두 번째 레벨 — 목록(정체성·리듬)과 로그(발행 기록)는 별개 표면이라
+// 스코프 전환은 목록 쪽에만 의미가 있다(로그는 아직 workspace/scope 인지가 없다 —
+// 2026-09-01 브랜드 컨텐츠 로그 스펙). 로그 목적지는 세 스코프에서 동일하게 유지한다.
+const BRAND_LOG_CHILD = { key: 'brand-log', label: '컨텐츠 로그', path: 'dashboard/brands/log' };
+const BRAND_CHILDREN = {
+  all: [{ key: 'brand-list', label: '브랜드 목록', path: 'dashboard/brands' }, BRAND_LOG_CHILD],
+  classin: [{ key: 'brand-list', label: '브랜드 목록', path: 'dashboard/brands?scope=classin' }, BRAND_LOG_CHILD],
+  personal: [{ key: 'brand-list', label: '브랜드 목록', path: 'dashboard/brands?scope=personal' }, BRAND_LOG_CHILD],
+};
+
 const CONTENT_CHILDREN = [
   { key: 'ct-queue', label: 'Queue', path: 'dashboard/content/queue' },
   { key: 'ct-studio', label: 'Studio', path: 'dashboard/content/studio' },
@@ -239,6 +249,7 @@ export const SIDEBAR_PRIMARY = [
       classin: 'dashboard/brands?scope=classin',
       personal: 'dashboard/brands?scope=personal',
     },
+    children: BRAND_CHILDREN,
   },
   {
     key: 'content',

@@ -369,6 +369,9 @@ export function Brands() {
   const openQueue = React.useCallback((key) => {
     router.push(`/dashboard/content/queue?brand=${encodeURIComponent(key)}`);
   }, [router]);
+  const openContentLog = React.useCallback(() => {
+    router.push("/dashboard/brands/log");
+  }, [router]);
 
   const createBrand = React.useCallback(() => {
     setSaveNote(null);
@@ -459,6 +462,9 @@ export function Brands() {
             color: saveNote.tone === "ok" ? "var(--fg-muted)" : saveNote.tone === "err" ? "var(--danger)" : "var(--fg-dim)",
           }}>{saveNote.label}</span>
         )}
+        <Button variant="secondary" size="sm" onClick={openContentLog}>
+          컨텐츠 로그
+        </Button>
         <Button variant="primary" size="sm" icon="plus" onClick={createBrand}>
           브랜드 <Kbd>N</Kbd>
         </Button>

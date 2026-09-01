@@ -161,7 +161,7 @@ const EMPTY_CONTENT_LEDGER = {
 const CONTENT_CACHE_SERVABLE_MS = 5 * 60 * 1000;
 let contentLedgerCache = null; // { at, state }
 
-function useContentLedger() {
+export function useContentLedger() {
   const servable = contentLedgerCache
     && Date.now() - contentLedgerCache.at < CONTENT_CACHE_SERVABLE_MS;
   const [state, setState] = React.useState(servable ? contentLedgerCache.state : EMPTY_CONTENT_LEDGER);

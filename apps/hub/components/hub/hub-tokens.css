@@ -2058,3 +2058,53 @@
     transition: none !important;
   }
 }
+
+/* ── Brand content log (2026-09-01) ── */
+/* Card/chip hover — CSS only, no JS onMouseEnter/Leave handlers (§8.1). */
+.brand-log-card:hover { border-color: var(--line-strong); }
+.brand-log-chip:hover { border-color: var(--line-strong); }
+
+/* Mobile-only combined meta line (when · brand · channel · type · metric), nested inside
+   the title cell. Hidden by default; the ≤768px rule below swaps it in for the four
+   desktop meta cells it replaces — same collapse contract as .hub-lead-mobile-meta. */
+.brand-log-row .blr-mobile-meta { display: none; }
+
+@media (max-width: 900px) {
+  .brand-log-board {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .brand-log-row {
+    grid-template-columns: 1fr auto !important;
+    row-gap: 6px !important;
+  }
+
+  /* when/brand/channel·type/metric collapse into .blr-mobile-meta below the title —
+     four fixed-width columns next to a flexible title is what caused horizontal
+     overflow; showing the same information as one wrapped text line does not. */
+  .brand-log-row .blr-cell-meta {
+    display: none !important;
+  }
+
+  .brand-log-row .blr-cell-title {
+    grid-column: 1 / -1 !important;
+  }
+
+  .brand-log-row .blr-cell-status {
+    grid-column: 2 !important;
+  }
+
+  .brand-log-row .blr-mobile-meta {
+    display: block;
+    margin-top: 3px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--fg-faint);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    line-height: 1.35;
+  }
+}
