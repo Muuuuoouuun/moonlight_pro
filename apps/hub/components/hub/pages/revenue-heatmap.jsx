@@ -19,33 +19,6 @@ import {
   KOREA_PROVINCE_HEIGHT,
 } from "@/lib/korea-province-map";
 
-// ── 분류 휴리스틱 ────────────────────────────────────────────────────────────
-
-// 딜 제목의 HW/SW 마커 (운영 데이터 실제 표기: "[HW] …", "HW 75\"", "소프트웨어 …", "SW …")
-function dealItemType(name) {
-  const t = String(name || "").toUpperCase();
-  if (/\bHW\b|\[HW\]|하드웨어/.test(t)) return "hw";
-  if (/\bSW\b|\[SW\]|소프트웨어/i.test(String(name || ""))) return "sw";
-  return "other";
-}
-
-const REGION_ALIASES = [
-  ["서울", "서울"], ["인천", "인천"], ["경기", "경기"], ["강원", "강원"],
-  ["충북", "충북"], ["충청북", "충북"], ["충남", "충남"], ["충청남", "충남"],
-  ["세종", "세종"], ["대전", "대전"],
-  ["경북", "경북"], ["경상북", "경북"], ["대구", "대구"], ["울산", "울산"],
-  ["부산", "부산"], ["경남", "경남"], ["경상남", "경남"],
-  ["전북", "전북"], ["전라북", "전북"], ["광주", "광주"], ["전남", "전남"], ["전라남", "전남"],
-  ["제주", "제주"],
-];
-
-function canonicalRegion(region) {
-  const text = String(region || "").trim();
-  if (!text) return null;
-  const match = REGION_ALIASES.find(([needle]) => text.includes(needle));
-  return match ? match[1] : null;
-}
-
 // ── 지도 ─────────────────────────────────────────────────────────────────────
 
 
@@ -183,12 +156,41 @@ function CustomerRankRow({ customer, rank, max, metricKey, onSelect, onJump, onP
 // [heatmap-period-pure-start] revenue-heatmap.test.mjs가 이 블록을 소스에서 추출해
 // data: 모듈로 실행한다 — 블록 안에서는 JSX·파일 상단 import 참조 금지 (self-contained).
 
+// ── 분류 휴리스틱 ────────────────────────────────────────────────────────────
+
+// 딜 제목의 HW/SW 마커 (운영 데이터 실제 표기: "[HW] …", "HW 75\"", "소프트웨어 …", "SW …")
+export function dealItemType(name) {
+  const t = String(name || "").toUpperCase();
+  if (/\bHW\b|\[HW\]|하드웨어/.test(t)) return "hw";
+  if (/\bSW\b|\[SW\]|소프트웨어/i.test(String(name || ""))) return "sw";
+  return "other";
+}
+
+const REGION_ALIASES = [
+  ["서울", "서울"], ["인천", "인천"], ["경기", "경기"], ["강원", "강원"],
+  ["충북", "충북"], ["충청북", "충북"], ["충남", "충남"], ["충청남", "충남"],
+  ["세종", "세종"], ["대전", "대전"],
+  ["경북", "경북"], ["경상북", "경북"], ["대구", "대구"], ["울산", "울산"],
+  ["부산", "부산"], ["경남", "경남"], ["경상남", "경남"],
+  ["전북", "전북"], ["전라북", "전북"], ["광주", "광주"], ["전남", "전남"], ["전라남", "전남"],
+  ["제주", "제주"],
+];
+
+export function canonicalRegion(region) {
+  const text = String(region || "").trim();
+  if (!text) return null;
+  const match = REGION_ALIASES.find(([needle]) => text.includes(needle));
+  return match ? match[1] : null;
+}
+
 // 딜의 기준 시각: closeAt 우선, 없으면 activityAt. 둘 다 없거나 파싱 불가면 null.
 export function dealTimestamp(deal) {
-  const raw = deal?.closeAt || deal?.activityAt;
-  if (!raw) return null;
-  const at = new Date(raw).getTime();
-  return Number.isFinite(at) ? at : null;
+  for (const raw of [deal?.closeAt, deal?.activityAt]) {
+    if (!raw) continue;
+    const at = new Date(raw).getTime();
+    if (Number.isFinite(at)) return at;
+  }
+  return null;
 }
 
 export function monthKeyOf(ms) {
@@ -238,34 +240,10 @@ export function inPeriodRange(ms, range) {
   return !range || (ms >= range[0] && ms < range[1]);
 }
 
-// [heatmap-period-pure-end]
-
-// ── 집계 ─────────────────────────────────────────────────────────────────────
-
-const PERIOD_MODES = [
-  { key: "all", label: "전체" },
-  { key: "recent", label: "최근" },
-  { key: "month", label: "월별" },
-  { key: "quarter", label: "분기별" },
-];
-const RECENT_OPTIONS = [
-  { key: "90d", label: "90일", days: 90 },
-  { key: "30d", label: "30일", days: 30 },
-];
-const ITEM_FILTERS = [
-  { key: "all", label: "전체" },
-  { key: "hw", label: "HW" },
-  { key: "sw", label: "SW" },
-];
-// 세그먼트 라벨은 짧게, longLabel은 헤더 부제·지도 툴팁용.
-const METRICS = [
-  { key: "confirmed", label: "매출", longLabel: "확정 매출" },
-  { key: "pipeline", label: "파이프라인", longLabel: "파이프라인" },
-  { key: "expected", label: "예상", longLabel: "예상 매출" },
-];
-
 // cutoff: 최근 N일(ms 하한). range: 월/분기 [시작, 끝) ms 구간. 둘 다 null이면 전체.
-function aggregate(ledger, { item, cutoff = null, range = null }) {
+// provinceByLabel: canonical 지역 라벨 → 지도 shape({label,path,x,y}) 조회 맵(주입) —
+// 이 블록이 파일 상단 KOREA_PROVINCE_BY_LABEL을 직접 참조하지 않기 위한 파라미터화.
+export function aggregate(ledger, { item, cutoff = null, range = null }, provinceByLabel) {
   const leadById = new Map((ledger.leads || []).map(l => [l.id, l]));
   const companyName = new Map((ledger.companies || []).map(c => [c.id, c.name]));
   // 회사 → 지역: 리드의 region 태그(더 세밀, "경기-안양")가 우선,
@@ -347,7 +325,7 @@ function aggregate(ledger, { item, cutoff = null, range = null }) {
       ...r,
       customers: [...r.customers.values()].sort((a, b) => b.expected - a.expected),
     };
-    const shape = r.canonical ? KOREA_PROVINCE_BY_LABEL.get(r.canonical) : null;
+    const shape = r.canonical ? provinceByLabel.get(r.canonical) : null;
     if (shape) {
       mapRows.push({ ...finished, label: shape.label, path: shape.path, x: shape.x, y: shape.y, regions: [r.region] });
     } else {
@@ -376,6 +354,32 @@ function aggregate(ledger, { item, cutoff = null, range = null }) {
     matchedDeals,
   };
 }
+
+// [heatmap-period-pure-end]
+
+// ── 집계 ─────────────────────────────────────────────────────────────────────
+
+const PERIOD_MODES = [
+  { key: "all", label: "전체" },
+  { key: "recent", label: "최근" },
+  { key: "month", label: "월별" },
+  { key: "quarter", label: "분기별" },
+];
+const RECENT_OPTIONS = [
+  { key: "90d", label: "90일", days: 90 },
+  { key: "30d", label: "30일", days: 30 },
+];
+const ITEM_FILTERS = [
+  { key: "all", label: "전체" },
+  { key: "hw", label: "HW" },
+  { key: "sw", label: "SW" },
+];
+// 세그먼트 라벨은 짧게, longLabel은 헤더 부제·지도 툴팁용.
+const METRICS = [
+  { key: "confirmed", label: "매출", longLabel: "확정 매출" },
+  { key: "pipeline", label: "파이프라인", longLabel: "파이프라인" },
+  { key: "expected", label: "예상", longLabel: "예상 매출" },
+];
 
 // ── 페이지 ───────────────────────────────────────────────────────────────────
 
@@ -415,7 +419,7 @@ export function RevenueHeatmap({ onNavigate }) {
   }, [periodMode, recent.days, effectiveMonthKey, effectiveQuarterKey]);
 
   const { mapRows, otherRows, customers, matchedDeals } = React.useMemo(
-    () => aggregate(ledger, { item: itemKey, cutoff: periodFilter.cutoff, range: periodFilter.range }),
+    () => aggregate(ledger, { item: itemKey, cutoff: periodFilter.cutoff, range: periodFilter.range }, KOREA_PROVINCE_BY_LABEL),
     [ledger, itemKey, periodFilter],
   );
 

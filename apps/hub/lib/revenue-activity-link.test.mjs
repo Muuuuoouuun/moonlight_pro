@@ -5,6 +5,7 @@ import test from "node:test";
 const serverReadStub = `
 export function eqFilter(value) { return value; }
 export async function fetchSupabaseRows() { return []; }
+export async function fetchSupabaseRowsDetailed() { return { rows: [] }; }
 `;
 const serverWriteStub = `
 export function resolveDefaultWorkspaceId() { return null; }
