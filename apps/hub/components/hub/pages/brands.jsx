@@ -474,12 +474,34 @@ export function Brands() {
         </Button>
       </div>
 
-      {selectedKey && !selected && syncState !== "loading" && (
+      {/* "찾지 못함"은 라이브 원장을 실제로 읽었을 때만 말할 수 있다 — read 실패·미연결을
+          부재로 위장하면 딥링크가 멀쩡한 브랜드를 없다고 단정한다 (2609 감사 #3). */}
+      {selectedKey && !selected && (syncState === "live" || syncState === "partial") && (
         <Card>
           <EmptyState
             icon="brand"
             title="이 브랜드를 찾지 못했습니다"
             description={`'${selectedKey}'는 현재 스코프에 없거나 더 이상 존재하지 않습니다.`}
+            action={<Button variant="secondary" size="sm" onClick={() => setQuery(null)}>브랜드 목록으로</Button>}
+          />
+        </Card>
+      )}
+      {selectedKey && !selected && syncState === "error" && (
+        <Card>
+          <EmptyState
+            icon="brand"
+            title="브랜드를 읽지 못했습니다"
+            description={`콘텐츠 원장을 읽지 못해 '${selectedKey}'를 확인할 수 없습니다 — 없는 것이 아니라 읽기 실패입니다.`}
+            action={<Button variant="secondary" size="sm" onClick={reload}>다시 읽기</Button>}
+          />
+        </Card>
+      )}
+      {selectedKey && !selected && syncState === "preview" && (
+        <Card>
+          <EmptyState
+            icon="brand"
+            title="Preview · 연결 필요"
+            description={`Supabase 콘텐츠 원장이 연결되지 않아 '${selectedKey}'를 확인할 수 없습니다.`}
             action={<Button variant="secondary" size="sm" onClick={() => setQuery(null)}>브랜드 목록으로</Button>}
           />
         </Card>

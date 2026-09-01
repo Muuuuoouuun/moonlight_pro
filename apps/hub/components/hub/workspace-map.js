@@ -4,6 +4,8 @@
 //   1. classin (클래스인)  — company sales / pipeline / CRM lane
 //   2. brand   (브랜드)     — brand / content / publishing work
 //
+import { canonicalOrgScopeForKey } from "@/lib/brand-org-scope";
+
 // Membership resolution mirrors the backend's resolveBrandOrgScope
 // (lib/repositories/operating-ledger.js): a live brand object's `orgScope` wins;
 // unresolved records default to the personal lane.
@@ -80,7 +82,10 @@ function resolveOrgScopeForKey(key, brandObjects) {
     const hit = brandObjects.find((b) => b && b.key === key);
     if (hit && typeof hit.orgScope === 'string') return hit.orgScope;
   }
-  return 'personal';
+  // 라이브 객체가 없을 때의 문자열 키 폴백 — 정본 테이블(lib/brand-org-scope) 판정.
+  // 이전엔 무조건 'personal'이라 위 주석("else the static classin set")이 약속한 폴백이
+  // 실제로는 없었고, ClassIn 콘텐츠 큐가 상시 0건으로 걸러졌다 (2609 감사 #6).
+  return key ? canonicalOrgScopeForKey(key) : 'personal';
 }
 
 // classin ⇔ orgScope 'classin'; brand ⇔ anything else.

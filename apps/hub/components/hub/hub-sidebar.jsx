@@ -12,7 +12,9 @@ import {
   isSidebarAnchorActive,
   normalizeScope,
   ownerAnchorKey,
+  pathnameOf,
   resolveSidebarPath,
+  sidebarChildren,
   setElementInert,
   getMobileNavigationTabTarget,
 } from "./hub-nav";
@@ -142,7 +144,13 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeSc
     const owner = ownerAnchorKey(active);
     const anchor = [...SIDEBAR_PRIMARY, ...SIDEBAR_UTILITIES].find(a => a.key === owner);
     if (!anchor?.scopeAware) return;
-    const target = resolveSidebarPath(owner, value);
+    // 지금 서 있는 자식 탭이 새 스코프에도 같은 pathname으로 존재하면 그 자식으로
+    // 재진입한다 — 스코프 불변 표면(컨텐츠 로그 등)은 제자리, 스코프 소비 자식은
+    // 쿼리만 갱신된다. 앵커 루트로 강퇴하지 않는다 (2609 감사 #10).
+    const currentPathname = pathnameOf(active);
+    const sibling = sidebarChildren(owner, value)
+      .find(c => pathnameOf(c.path) === currentPathname);
+    const target = sibling ? sibling.path : resolveSidebarPath(owner, value);
     if (target) onNavigate(target);
   }, [active, onNavigate, setScope]);
 

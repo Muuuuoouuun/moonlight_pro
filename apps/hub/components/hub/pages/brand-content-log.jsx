@@ -93,7 +93,9 @@ export function BrandContentLog({ onNavigate }) {
 
   const createContent = React.useCallback(() => {
     const brandParam = brandFilter ? `&brand=${encodeURIComponent(brandFilter)}` : "";
-    onNavigate?.(`dashboard/content/studio?new=1${brandParam}`);
+    // `new=draft`가 전 생산자 공통 계약 — `new=1`은 shouldRestoreActiveStudioDraft를
+    // 통과해 마지막 편집 초안을 복원해 버린다 (2609 감사 #1).
+    onNavigate?.(`dashboard/content/studio?new=draft${brandParam}`);
   }, [brandFilter, onNavigate]);
   usePageCreateHotkey(createContent);
 

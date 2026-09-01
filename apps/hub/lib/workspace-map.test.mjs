@@ -56,3 +56,26 @@ test("lead and deal filters retain their existing type lanes", () => {
   assert.deepEqual(filterDealsByWorkspace([personalDeal], "brand"), [personalDeal]);
   assert.deepEqual(filterDealsByWorkspace([personalDeal], "classin"), []);
 });
+
+// ── 문자열 키 폴백 — 정본 org_scope 판정 (2609 감사 #6) ─────────────────────────
+// content item은 brand 객체가 아니라 문자열 태그만 갖는 경우가 대부분이다. 이전 구현은
+// 문자열 키를 무조건 personal로 판정해 ClassIn 콘텐츠 큐가 항상 0건이었다.
+
+test("filterContentByWorkspace keeps classin-tagged items in the classin lane", async () => {
+  const { filterContentByWorkspace } = await import("../components/hub/workspace-map.js");
+  const items = [
+    { id: "c1", brand: "classmoon", title: "ClassIn 카드뉴스" },
+    { id: "c2", brandKey: "gore", title: "고래 릴스" },
+    { id: "c3", workspace: "classin", title: "명시 태그" },
+  ];
+  assert.deepEqual(filterContentByWorkspace(items, "classin").map((c) => c.id), ["c1", "c3"]);
+  assert.deepEqual(filterContentByWorkspace(items, "brand").map((c) => c.id), ["c2"]);
+});
+
+test("brandInWorkspace resolves canonical classin keys without live brand objects", async () => {
+  const { brandInWorkspace } = await import("../components/hub/workspace-map.js");
+  assert.equal(brandInWorkspace("classmoon", "classin"), true);
+  assert.equal(brandInWorkspace("classmoon", "brand"), false);
+  assert.equal(brandInWorkspace("gore", "brand"), true);
+  assert.equal(brandInWorkspace("unknown-brand", "brand"), true); // 미지 키는 개인 레인
+});

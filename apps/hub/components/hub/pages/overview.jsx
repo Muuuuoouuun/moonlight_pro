@@ -762,7 +762,7 @@ export function Overview({ onNavigate }) {
           </PanelCard>
 
           <div style={{ gridColumn: '1 / -1' }}>
-            <PanelCard panel="brand" availability={brandPanel} onOpen={() => onNavigate?.('dashboard/work/projects')}>
+            <PanelCard panel="brand" availability={brandPanel} onOpen={() => onNavigate?.('dashboard/brands')}>
               <BrandActivityBars brands={brandActivity} />
             </PanelCard>
           </div>

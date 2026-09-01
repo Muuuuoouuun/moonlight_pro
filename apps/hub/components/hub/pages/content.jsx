@@ -250,6 +250,8 @@ export function Studio({ workspace }) {
   const [localSavedAt, setLocalSavedAt] = React.useState(null);
   const [dirty, setDirty] = React.useState(false);
   const loadedItemRef = React.useRef(null);
+  // ?item= 딥링크가 라이브 원장에서 해석되지 않았을 때의 1회성 안내 (2609 감사 #8).
+  const [missingItemId, setMissingItemId] = React.useState(null);
 
   const formatTime = (d) => {
     try {
@@ -308,7 +310,14 @@ export function Studio({ workspace }) {
     if (!itemParam || loadedItemRef.current === itemParam || ledger.source !== "supabase") return;
 
     const item = ledger.items.find((candidate) => candidate.id === itemParam);
-    if (!item) return;
+    if (!item) {
+      // 라이브 원장을 읽었는데도 없는 id — 조용히 빈 에디터를 주면 딥링크가 "열렸다"고
+      // 착각하게 된다. 한 번만 알리고 새 초안으로 시작한다 (2609 감사 #8).
+      loadedItemRef.current = itemParam;
+      setMissingItemId(itemParam);
+      return;
+    }
+    setMissingItemId(null);
 
     const variant = ledger.variants.find((candidate) => (
       candidate.id === item.variantId || candidate.contentId === item.id
@@ -597,6 +606,26 @@ export function Studio({ workspace }) {
   return (
     <div className="hub-studio-shell" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', height: '100%', overflow: 'hidden' }}>
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {missingItemId && (
+          <div role="status" style={{
+            padding: '8px 20px', borderBottom: '1px solid var(--line-soft)',
+            display: 'flex', alignItems: 'center', gap: 8,
+            fontSize: 12, color: 'var(--fg-muted)', background: 'var(--surface-2)', flexShrink: 0,
+          }}>
+            <Iconed name="search" size={13} style={{ color: 'var(--fg-dim)', flexShrink: 0 }} />
+            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              요청한 콘텐츠(<span className="mono">{missingItemId}</span>)를 원장에서 찾지 못했습니다 — 새 초안으로 시작합니다.
+            </span>
+            <button
+              type="button"
+              onClick={() => setMissingItemId(null)}
+              aria-label="안내 닫기"
+              style={{ marginLeft: 'auto', color: 'var(--fg-dim)', fontSize: 12, padding: '2px 6px', borderRadius: 4, flexShrink: 0 }}
+            >
+              닫기
+            </button>
+          </div>
+        )}
         <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           {/* 페이지 타이틀 계약(§11): 브레드크럼만으로 대체 금지 — 에디터라도 h2 하나는 가진다. */}
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500, whiteSpace: 'nowrap' }}>스튜디오</h2>

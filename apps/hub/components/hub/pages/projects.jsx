@@ -1417,8 +1417,16 @@ export function Projects({ workspace }) {
 
   React.useEffect(() => {
     const close = (e) => { if (brandMenuRef.current && !brandMenuRef.current.contains(e.target)) setBrandMenuOpen(false); };
-    if (brandMenuOpen) document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    // ESC 닫기 — 드롭다운이 기본 셀렉터가 된 이상 §8.1 3중 닫기 계약(ESC·바깥·버튼)을 지킨다.
+    const onEsc = (e) => { if (e.key === 'Escape') setBrandMenuOpen(false); };
+    if (brandMenuOpen) {
+      document.addEventListener('mousedown', close);
+      document.addEventListener('keydown', onEsc);
+    }
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', onEsc);
+    };
   }, [brandMenuOpen]);
 
   React.useEffect(() => {
@@ -1538,9 +1546,13 @@ export function Projects({ workspace }) {
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) setIdleOpen(parsed);
     } catch { /* defaults apply */ }
   }, []);
-  const toggleIdle = React.useCallback((id) => {
+  // currentOpened는 렌더가 기본값(showEmptyContainers·선택 브랜드)까지 해석한 표시 상태 —
+  // 저장 맵 기준으로만 반전하면 기본 펼침 상태의 첫 클릭이 "펼침 저장"이 되는 무반응
+  // 토글이 된다 (toggleFolder와 같은 클래스, 2609 감사 #5).
+  const toggleIdle = React.useCallback((id, currentOpened) => {
     setIdleOpen(prev => {
-      const map = { ...prev, [id]: !prev[id] };
+      const opened = typeof currentOpened === 'boolean' ? currentOpened : Boolean(prev[id]);
+      const map = { ...prev, [id]: !opened };
       try { localStorage.setItem(IDLE_OPEN_KEY, JSON.stringify(map)); } catch { /* ignore */ }
       return map;
     });
@@ -1803,9 +1815,16 @@ export function Projects({ workspace }) {
                 const fDragging = sidebarDrag?.type === 'folder' && sidebarDrag.key === folder.key;
                 const fDropTarget = sidebarDrag?.type === 'folder' && dragOverKey === folder.id && sidebarDrag.key !== folder.key;
                 const idleTail = folder.hasActive && folder.idleItems.length > 0;
-                // showEmptyContainers 동안 휴면 묶음도 펼친다 — 드러낸 빈 컨테이너가 그 안에 있다.
+                // showEmptyContainers 동안 휴면 묶음 *기본값*은 펼침 — 드러낸 빈 컨테이너가
+                // 그 안에 있다. 단, 명시적 토글은 항상 이긴다: 강제 고정이면 버튼이
+                // aria-expanded만 삼키는 무반응 토글이 된다 (2609 감사 #5).
+                const idleSaved = Object.prototype.hasOwnProperty.call(idleOpen, folder.id)
+                  ? Boolean(idleOpen[folder.id])
+                  : null;
                 const idleOpened = !idleTail ? false
-                  : (showEmptyContainers || folder.idleItems.some(x => x.key === brand) || Boolean(idleOpen[folder.id]));
+                  : (idleSaved !== null
+                    ? idleSaved
+                    : (showEmptyContainers || folder.idleItems.some(x => x.key === brand)));
                 return (
                   <div key={folder.id}>
                     <button
@@ -1840,7 +1859,7 @@ export function Projects({ workspace }) {
                               type="button"
                               className="hub-row"
                               aria-expanded={idleOpened}
-                              onClick={() => toggleIdle(folder.id)}
+                              onClick={() => toggleIdle(folder.id, idleOpened)}
                               style={{
                                 width: '100%', display: 'flex', alignItems: 'center', gap: 6,
                                 padding: '4px 8px', borderRadius: 'var(--r-sm)',
@@ -1892,7 +1911,7 @@ export function Projects({ workspace }) {
             <IconButton icon="chevronR" size={28} iconSize={14} onClick={() => setSidebarHidden(false)} tooltip="브랜드 사이드바 펼치기" />
           )}
           <div ref={brandMenuRef} style={{ position: 'relative' }}>
-            <button className="hub-project-brand-trigger" aria-label={`${currentBrand.name} 범위 선택`} onClick={() => setBrandMenuOpen(o => !o)} style={{
+            <button className="hub-project-brand-trigger" aria-label={`${currentBrand.name} 범위 선택`} aria-expanded={brandMenuOpen} onClick={() => setBrandMenuOpen(o => !o)} style={{
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '6px 10px 6px 8px',
               background: brandMenuOpen ? 'var(--surface-3)' : 'var(--surface-2)',
@@ -1981,6 +2000,55 @@ export function Projects({ workspace }) {
                     )}
                   </button>
                 )}
+                {/* 컨테이너 액션 — 사이드바가 기본 접힘이 된 뒤로 이 메뉴가 기본 셀렉터다.
+                    생성·편집·브랜드 탭 진입이 사이드바 헤더에만 있으면 기본 상태에서 도달
+                    불가가 된다 (2609 감사 #2). aside 헤더의 세 컨트롤과 같은 대상·같은 규칙. */}
+                <div style={{ borderTop: '1px solid var(--line-soft)', marginTop: 4, paddingTop: 4 }}>
+                  <button
+                    type="button"
+                    className="hub-row"
+                    onClick={() => { setBrandMenuOpen(false); createContainer(); }}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '7px 10px', borderRadius: 'var(--r-sm)',
+                      color: 'var(--fg-muted)', fontSize: 11, textAlign: 'left',
+                    }}
+                  >
+                    <Iconed name="plus" size={11} />
+                    <span>새 컨테이너 (KA·딜 · 일반)</span>
+                  </button>
+                  {currentBrand && currentBrand.key !== 'all' && currentBrand.id && (
+                    currentBrand.category === BRAND_OWNED_CATEGORY ? (
+                      <button
+                        type="button"
+                        className="hub-row"
+                        onClick={() => { setBrandMenuOpen(false); router.push(`/dashboard/brands?b=${encodeURIComponent(currentBrand.key)}`); }}
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+                          padding: '7px 10px', borderRadius: 'var(--r-sm)',
+                          color: 'var(--fg-muted)', fontSize: 11, textAlign: 'left',
+                        }}
+                      >
+                        <Iconed name="brand" size={11} />
+                        <span>{currentBrand.name} · 브랜드 탭에서 열기</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="hub-row"
+                        onClick={() => { setBrandMenuOpen(false); editContainer(currentBrand); }}
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+                          padding: '7px 10px', borderRadius: 'var(--r-sm)',
+                          color: 'var(--fg-muted)', fontSize: 11, textAlign: 'left',
+                        }}
+                      >
+                        <Iconed name="edit" size={11} />
+                        <span>{currentBrand.name} 컨테이너 편집</span>
+                      </button>
+                    )
+                  )}
+                </div>
                 <div style={{ borderTop: '1px solid var(--line-soft)', marginTop: 4, padding: '6px 10px', fontSize: 10.5, color: 'var(--fg-faint)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span>사이드바로 전환</span>
                   <div style={{ flex: 1 }} />

@@ -353,7 +353,11 @@ export function sidebarChildren(anchorKey, scope) {
 // Keeping this derivation beside the sidebar contract prevents the two shells
 // from inventing different labels, scope paths, or active-state rules.
 export function topNavigationForRoute(activePath, scope = DEFAULT_SCOPE, view) {
-  const anchorKey = ownerAnchorKey(activePath);
+  let anchorKey = ownerAnchorKey(activePath);
+  // Projects 표면의 To-dos 뷰는 사이드바 소유가 '내 작업'으로 넘어간다 — 탑바도 같은
+  // 앵커를 따라가야 한다. 경로 소유자(projects)로 두면 자식 활성 판정(view 인지)과
+  // 어긋나 탭 전부 비활성 + 브레드크럼 붕괴가 된다 (2609 감사 #4).
+  if (anchorKey === 'projects' && isTaskView(view)) anchorKey = 'tasks';
   const anchor = SIDEBAR_ANCHORS.find((item) => item.key === anchorKey) || null;
   if (!anchor) return { anchor: null, tabs: [], activeTab: null };
 
@@ -365,7 +369,7 @@ export function topNavigationForRoute(activePath, scope = DEFAULT_SCOPE, view) {
   return { anchor, tabs, activeTab };
 }
 
-function pathnameOf(path) {
+export function pathnameOf(path) {
   return String(path || '').split(/[?#]/)[0].replace(/^\/+|\/+$/g, '');
 }
 

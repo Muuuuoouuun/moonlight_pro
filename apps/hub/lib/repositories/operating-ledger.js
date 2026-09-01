@@ -6,6 +6,7 @@ import {
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
+import { canonicalOrgScopeForKey } from "../brand-org-scope.js";
 import { buildProjectProgress } from "../pms-ui.js";
 import {
   buildProjectCatalogFetchPlan,
@@ -45,17 +46,11 @@ function resolveBrandCategory(key, meta) {
   return CANONICAL_BRAND_CATEGORY[key] || "general";
 }
 
-// Which brands are ClassIn (company) work vs. personal brands. Defaults to
-// "personal" when a brand isn't listed here and has no meta.org_scope.
-const CANONICAL_BRAND_ORG_SCOPE = {
-  classmoon: "classin",
-  studyseagull: "classin",
-  classin_side: "classin",
-};
-
+// Which brands are ClassIn (company) work vs. personal brands — 정본 테이블은
+// lib/brand-org-scope.js 하나다 (content-ledger·workspace-map과 공유, 2609 감사 #12).
 function resolveBrandOrgScope(key, meta) {
   if (typeof meta?.org_scope === "string" && meta.org_scope.trim()) return meta.org_scope.trim();
-  return CANONICAL_BRAND_ORG_SCOPE[key] || "personal";
+  return canonicalOrgScopeForKey(key);
 }
 
 function normalizeProjectStatus(status) {

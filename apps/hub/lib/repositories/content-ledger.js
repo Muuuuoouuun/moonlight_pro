@@ -6,6 +6,7 @@ import {
   withWorkspaceFilter,
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
+import { canonicalOrgScopeForKey } from "@/lib/brand-org-scope";
 
 const ITEM_STATUSES = ["idea", "draft", "review", "scheduled", "published", "archived"];
 const VARIANT_STATUSES = ["draft", "ready", "published", "archived"];
@@ -250,7 +251,9 @@ function mapBrands(rows) {
       tone: resolveBrandTone(slug, kind, meta),
       colorHex: row.color_hex || "#5274a8",
       description: row.description || "",
-      orgScope: normalizeString(meta.org_scope, "personal"),
+      // meta.org_scope가 비면 정본 테이블 폴백 — PMS(operating-ledger)와 같은 판정이어야
+      // 브랜드 탭 스코프 필터와 PMS 그룹이 어긋나지 않는다 (2609 감사 #12).
+      orgScope: normalizeString(meta.org_scope, canonicalOrgScopeForKey(slug)),
       philosophy: normalizeString(meta.philosophy),
       direction: normalizeString(meta.direction),
       cadence: normalizeString(meta.cadence),
