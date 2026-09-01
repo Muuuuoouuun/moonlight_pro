@@ -10,6 +10,7 @@ import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
 import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
 import { DEAL_STAGES, STAGE_FILL, STAGE_LINE } from "@/lib/deal-stages";
 import { selectProjectAreaId } from "@/lib/pms-ui";
+import { PersonalRevenueRoadmap } from "./personal-revenue";
 
 // HW/SW 딜은 100만원 미만 건도 흔해서 M 고정 포맷은 "₩0.1M" 같은 값을 만든다.
 // revenue-ledger.js의 formatMoneyLabel과 같은 K/M 임계값으로 맞춘다.
@@ -261,7 +262,12 @@ function GuruCoachPanel({ onNavigate }) {
 
 export function RevenueOverview({ onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
+  const searchParams = useSearchParams();
+  const scope = searchParams?.get('scope');
   const [period, setPeriod] = React.useState('MTD');
+  if (scope === 'personal') {
+    return <PersonalRevenueRoadmap ledger={ledger} syncState={syncState} onNavigate={onNavigate} />;
+  }
   const LEADS = ledger.leads;
   const DEALS = ledger.deals;
   const DEAL_STAGES = ledger.stages;
@@ -958,6 +964,8 @@ function DealTaskPanel({ deal, onSaved }) {
 export function Deals({ workspace, onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
   const searchParams = useSearchParams();
+  const queryScope = searchParams?.get('scope');
+  const effectiveWorkspace = workspace || (queryScope === 'personal' ? 'brand' : queryScope === 'classin' ? 'classin' : undefined);
   const router = useRouter();
   const pathname = usePathname();
   const DEAL_STAGES = ledger.stages;
@@ -975,8 +983,8 @@ export function Deals({ workspace, onNavigate }) {
 
   // Scope BEFORE grouping by stage so the kanban columns only ever show in-workspace
   // deals (pass-through when unscoped). setDeals still holds the full ledger set.
-  const ws = getWorkspace(workspace);
-  const scopedDeals = filterDealsByWorkspace(deals, workspace);
+  const ws = getWorkspace(effectiveWorkspace);
+  const scopedDeals = filterDealsByWorkspace(deals, effectiveWorkspace);
   // 초기화(숨기기)된 딜은 기본적으로 파이프라인에서 빠진다 — 되돌릴 수 있는 정리이지
   // 삭제가 아니다. showHidden이 켜지면 다시 전부 보인다(카드는 흐리게 표시).
   const hiddenCount = scopedDeals.filter(d => d.hidden).length;
@@ -1047,7 +1055,7 @@ export function Deals({ workspace, onNavigate }) {
       closeAt: '', // the drawer's real, writable date field (see buildDealWrite)
       age: 0,
       // Tag in-workspace creates so the scoped pipeline doesn't silently drop them.
-      ...(ws ? { workspace } : {}),
+      ...(ws ? { workspace: effectiveWorkspace } : {}),
     }, ...prev]);
     setEditDealId(id); // open the editor immediately so the new deal can be filled in
   };
@@ -1086,9 +1094,14 @@ export function Deals({ workspace, onNavigate }) {
     if (deals.some(d => String(d.id) === String(dealParam))) {
       consumedDealRef.current = dealParam;
       setEditDealId(dealParam);
-      if (pathname) router.replace(pathname);
+      if (pathname) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete('deal');
+        const query = params.toString();
+        router.replace(query ? `${pathname}?${query}` : pathname);
+      }
     }
-  }, [dealParam, syncState, deals, pathname, router]);
+  }, [dealParam, syncState, deals, pathname, router, searchParams]);
 
   // Page-level `n` — quick-create a deal when no drawer is open and focus isn't in a field.
   React.useEffect(() => {
@@ -1103,7 +1116,7 @@ export function Deals({ workspace, onNavigate }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [editDealId, filter, ws, workspace]);
+  }, [editDealId, filter, ws, effectiveWorkspace]);
 
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)', height: '100%' }}>
