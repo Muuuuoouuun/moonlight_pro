@@ -351,6 +351,72 @@
 /* Text-field wrappers that suppress the inner input's own ring surface the focus on the wrapper (§11) */
 .hub-app .hub-field:focus-within { border-color: var(--moon-300); }
 
+/* ── Form controls (§8.1 primitives-first) ─────────────────────────────────────
+   Capture surfaces used to re-declare input chrome inline on every field, and every
+   one of those inline blocks carried `outline: none`. Inline styles beat the
+   stylesheet, so that single property silently removed the :focus-visible ring above
+   from every text field in the app — keyboard users got no focus indicator at all
+   (§11). `.hub-input` owns rest / hover / focus / invalid / disabled once, so no call
+   site has to reach for `outline: none` and the ring survives. */
+.hub-app .hub-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--fg);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-hover) ease, background var(--dur-hover) ease;
+}
+.hub-app textarea.hub-input { height: auto; min-height: 104px; padding: 11px 12px; resize: vertical; }
+.hub-app .hub-input::placeholder { color: var(--fg-faint); }
+.hub-app .hub-input:hover:not(:disabled) { border-color: var(--line-strong); }
+.hub-app .hub-input:focus { border-color: var(--moon-300); background: var(--surface-3); }
+.hub-app .hub-input[aria-invalid="true"] { border-color: var(--danger); }
+.hub-app .hub-input:disabled {
+  color: var(--fg-faint);
+  background: var(--surface);
+  border-color: var(--line-soft);
+  cursor: not-allowed;
+}
+@media (prefers-reduced-motion: reduce) { .hub-app .hub-input { transition: none; } }
+
+/* Native select chrome doesn't belong on the deck. Strip it and draw the caret as a
+   real icon inside the wrapper so a select reads like every other field. */
+.hub-app select.hub-input { appearance: none; -webkit-appearance: none; padding-right: 30px; cursor: pointer; }
+.hub-app .hub-select { position: relative; display: block; min-width: 0; }
+.hub-app .hub-select > svg {
+  position: absolute; right: 11px; top: 50%; transform: translateY(-50%);
+  pointer-events: none; color: var(--fg-faint);
+}
+
+/* Field label / message. `필수` is a separate span so it separates from the field name
+   by luminance alone — required-ness is not a semantic color (§5.2). */
+.hub-app .hub-label {
+  display: block; font-size: 11.5px; line-height: 1.3;
+  color: var(--fg-faint); margin-bottom: 7px;
+}
+.hub-app .hub-label__req { color: var(--fg-muted); }
+.hub-app .hub-field-msg { margin: 6px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--fg-faint); }
+.hub-app .hub-field-msg--error { color: var(--danger); }
+
+/* Checkbox with visible text: one element, one accessible name, one target. The old
+   pattern put the words in a sibling <span>, so tapping the text did nothing and a
+   screen reader announced the name twice. */
+.hub-app .hub-checkbox-row {
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 8px 10px 8px 8px; margin-left: -8px;
+  border-radius: var(--r-sm);
+  color: var(--fg-muted); font-size: 13px; line-height: 1;
+  transition: background var(--dur-hover) ease, color var(--dur-hover) ease;
+}
+.hub-app .hub-checkbox-row:hover:not(:disabled) { background: var(--surface-2); color: var(--fg); }
+.hub-app .hub-checkbox-row:disabled { color: var(--fg-faint); cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .hub-app .hub-checkbox-row { transition: none; } }
+
 @keyframes mlMoonPulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
 @keyframes mlFadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .hub-app .fade-up { animation: mlFadeUp var(--dur-enter) ease-out; }
@@ -792,11 +858,22 @@
     min-height: 0 !important;
   }
 
+  /* …but a checkbox that carries visible text is a row, not a bare box — it keeps the
+     touch floor so the words are part of the target. */
+  .hub-app button[role="checkbox"].hub-checkbox-row {
+    min-height: 44px !important;
+  }
+
   .hub-app input,
   .hub-app textarea,
   .hub-app select {
     min-height: 44px;
   }
+
+  /* 캡처 폼은 스캔용 테이블이 아니라 운영자가 직접 쓰는 드래프팅 표면이다(§4) —
+     터치 플로어보다 한 단계 더 여유를 줘서 한 손 입력이 편하게. */
+  .hub-app .hub-input { min-height: 48px; }
+  .hub-app textarea.hub-input { min-height: 112px; }
 }
 
 @media (max-width: 1200px) {

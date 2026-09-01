@@ -43,7 +43,32 @@ function heatHoverFill(value, max) {
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 4;
 const ZOOM_STEP = 1.4;
+const DRAG_THRESHOLD_MOUSE = 3; // px — 미만 이동은 클릭으로 취급 (지역 선택 보존)
+const DRAG_THRESHOLD_TOUCH = 9; // px — 손가락 탭 지터 허용치
 const RAMP_STEPS = [0, 0.2, 0.4, 0.6, 0.8, 1];
+
+// 뷰(줌·팬) 클램프 — 팬은 현재 줌에서 지도 밖이 드러나지 않는 한계까지만. 저장 값은 항상 이 함수를 통과한다.
+function clampView(v) {
+  const zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v.zoom));
+  const maxPanX = (KOREA_PROVINCE_WIDTH - KOREA_PROVINCE_WIDTH / zoom) / 2;
+  const maxPanY = (KOREA_PROVINCE_HEIGHT - KOREA_PROVINCE_HEIGHT / zoom) / 2;
+  return {
+    zoom,
+    panX: Math.max(-maxPanX, Math.min(maxPanX, v.panX)),
+    panY: Math.max(-maxPanY, Math.min(maxPanY, v.panY)),
+  };
+}
+
+// 앵커 줌 — fx·fy(0~1, 렌더 박스 기준) 아래의 지도 좌표가 줌 전후 같은 화면 위치에 남도록 팬을 보정
+function zoomViewAt(v, nextZoom, fx, fy) {
+  const zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, nextZoom));
+  const dw = KOREA_PROVINCE_WIDTH / v.zoom - KOREA_PROVINCE_WIDTH / zoom;
+  const dh = KOREA_PROVINCE_HEIGHT / v.zoom - KOREA_PROVINCE_HEIGHT / zoom;
+  return clampView({ zoom, panX: v.panX + (fx - 0.5) * dw, panY: v.panY + (fy - 0.5) * dh });
+}
+
+// 툴팁은 페인트 전 배치가 필요 — SSR 렌더에서는 useLayoutEffect 경고를 피해 useEffect로 대체
+const useIsoLayoutEffect = typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
 
 // 광역시 라벨 충돌 보정 (SVG 단위) — 데이터 유무와 무관하게 전체 라벨에 적용
 const LABEL_NUDGE = {

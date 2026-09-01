@@ -66,9 +66,10 @@ function parseAmount(v) {
 const LEAD_STAGE_ORDER = { New: 0, Contact: 1, Qualified: 2, Customer: 3, Lost: 4 };
 
 // Sort a lead list by the active column. Value sorts numerically (parsed), Stage by funnel
-// position, everything else case-insensitively. Returns the input untouched when no key is set.
+// position, everything else case-insensitively. With no active column (ledger/default order),
+// falls back to the recency cascade below instead of the raw fetch order.
 function sortLeads(list, sort) {
-  if (!sort.key) return list;
+  if (!sort.key) return defaultSortLeads(list);
   const dir = sort.dir === 'asc' ? 1 : -1;
   const keyOf = (l) => {
     if (sort.key === 'value') return parseAmount(l.value);
@@ -80,6 +81,21 @@ function sortLeads(list, sort) {
     const va = keyOf(a), vb = keyOf(b);
     return va < vb ? -dir : va > vb ? dir : 0;
   });
+}
+
+// Default order (no column header active): most recent contact -> most recently added ->
+// order count, each newest/highest first. Rows without a parsable timestamp (missing/malformed
+// data) sink to the bottom rather than breaking the sort.
+function defaultSortLeads(list) {
+  const timeOf = (v) => {
+    const t = v ? new Date(v).getTime() : NaN;
+    return Number.isFinite(t) ? t : -Infinity;
+  };
+  return [...list].sort((a, b) => (
+    timeOf(b.lastContactAt) - timeOf(a.lastContactAt)
+    || timeOf(b.createdAt) - timeOf(a.createdAt)
+    || (Number(b.orderCount) || 0) - (Number(a.orderCount) || 0)
+  ));
 }
 
 function formatPercentDelta(current, previous) {
@@ -591,6 +607,9 @@ export function Leads({ workspace }) {
   const [leadEdits, setLeadEdits] = React.useState({}); // { [id]: patch } — overlays any lead (local or ledger)
   const [deletedLeadIds, setDeletedLeadIds] = React.useState(() => new Set()); // hide removed ledger rows
   const [editLeadId, setEditLeadId] = React.useState(null);
+  // 기록 탭 배지 건수 — 패널이 원장을 읽고 올려준다. 리드가 바뀌면 다시 미확정(null).
+  const [leadActivityCount, setLeadActivityCount] = React.useState(null);
+  React.useEffect(() => { setLeadActivityCount(null); }, [editLeadId]);
   // 리드 삭제 지연-undo(7차 편의) — 창 종료 후 실제 DELETE, 실패 시 복원 알림.
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
   const [deleteNotice, setDeleteNotice] = React.useState(null); // { key, tone, label, undo }
@@ -669,6 +688,7 @@ export function Leads({ workspace }) {
   // shifts the header layout; active column brightens and shows the direction.
   const createLead = () => {
     const id = `local-lead-${Date.now()}`;
+    const now = new Date().toISOString();
     setLocalLeads(prev => [{
       id,
       name: '새 리드',
@@ -677,6 +697,11 @@ export function Leads({ workspace }) {
       stage: 'New',
       value: '₩0',
       last: '방금',
+      // Stamped so the default sort cascade (last contact -> added -> orders) still floats a
+      // brand-new row to the top instead of sinking it for lacking server timestamps.
+      lastContactAt: now,
+      createdAt: now,
+      orderCount: 0,
       owner: 'Me',
       // Tag in-workspace creates so the scoped view doesn't silently drop them.
       ...(ws ? { workspace } : {}),
@@ -993,8 +1018,16 @@ export function Leads({ workspace }) {
 
       <EditDrawer
         title={editingLead ? (editingLead.name || '리드 편집') : ''}
-        subtitle="리드 정보 편집"
+        subtitle="정보 편집 · 접촉 기록"
         record={editingLead}
+        width="min(460px, 96vw)"
+        infoLabel="정보"
+        panels={editingLead ? [{
+          key: 'activity',
+          label: '기록',
+          count: leadActivityCount,
+          content: <LeadActivityPanel lead={editingLead} onCountChange={setLeadActivityCount} />,
+        }] : undefined}
         fields={[
           { key: 'name', label: '이름' },
           // 타입+단계 — 이 리드를 어떻게 다룰지 정하는 두 값. 담당은 뺐다: 1인 운영
@@ -2275,20 +2308,208 @@ function LogComposer({ onLog, preset }) {
   );
 }
 
-function QuickActions({ onAction }) {
+// `primary`는 이 묶음에서 채워진 버튼을 하나만 고른다. 계정 상세 패널에서는 통화 기록이
+// 그 화면의 유일한 primary라 기본값이지만, 저장 버튼을 가진 드로어 안에서는 null을 넘겨
+// 전부 outline으로 낮춘다 — 한 화면에 지배적 primary는 하나뿐이다(§5.2).
+function QuickActions({ onAction, primary = 'call' }) {
   const acts = [
-    { k: 'call',    label: '통화 기록',        variant: 'primary',  icon: 'signal' },
-    { k: 'kakao',   label: '메시지 기록',      variant: 'outline',  icon: 'chat' },
-    { k: 'meeting', label: '일정 잡기',        variant: 'outline',  icon: 'calendar' },
-    { k: 'deal',    label: '딜 메모',           variant: 'outline',  icon: 'deals' },
-    { k: 'note',    label: '메모',              variant: 'outline',  icon: 'edit' },
+    { k: 'call',    label: '통화 기록',        icon: 'signal' },
+    { k: 'kakao',   label: '메시지 기록',      icon: 'chat' },
+    { k: 'meeting', label: '일정 잡기',        icon: 'calendar' },
+    { k: 'deal',    label: '딜 메모',           icon: 'deals' },
+    { k: 'note',    label: '메모',              icon: 'edit' },
   ];
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
       {acts.map(a => (
-        <Button key={a.k} variant={a.variant} size="xs" icon={a.icon} onClick={() => onAction(a.k)}>{a.label}</Button>
+        <Button key={a.k} variant={a.k === primary ? 'primary' : 'outline'} size="xs" icon={a.icon} onClick={() => onAction(a.k)}>{a.label}</Button>
       ))}
     </div>
+  );
+}
+
+// 리드 상세의 "기록" 탭 — Accounts DetailPanel과 같은 crm_activities 원장을 읽고 쓴다.
+// 리드 표면에는 편집 폼만 있었고 접촉 이력을 보려면 고객 DB/팔로업으로 나가야 했다.
+//
+// 조인 규칙은 Customer 360·팔로업 활동 패널과 동일하다: 라이브 crm_activities는 기록이
+// 회사 기준으로 쌓여 왔고(110행 중 company_id 109 · lead_id 1) 리드 id로만 걸면 사실상
+// 전 리드가 "기록 없음"으로 보인다. 회사가 붙은 리드는 companyId로 조회하고, 그 사실을
+// 화면에 명시한다(§5.3 source truth — 무엇을 보고 있는지 숨기지 않는다).
+// 쓰기는 leadId + companyId를 함께 실어 이후 회사 조회에도 걸리게 한다.
+function LeadActivityPanel({ lead, onCountChange }) {
+  const [activities, setActivities] = React.useState([]);
+  const [syncState, setSyncState] = React.useState('loading'); // loading | live | preview | error
+  const [error, setError] = React.useState(null); // { message, body? }
+  const [deleteNotice, setDeleteNotice] = React.useState(null); // { key, label, undo }
+  const [composerPreset, setComposerPreset] = React.useState({ type: 'note', text: '', seq: 0 });
+  const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
+
+  const leadId = lead?.id || null;
+  const companyId = lead?.companyId || null;
+  // 아직 저장 안 된 로컬 행 — 원장에 붙일 id가 없다.
+  const unsaved = !leadId || String(leadId).startsWith('local-lead-');
+
+  React.useEffect(() => {
+    if (unsaved) { setActivities([]); setSyncState('preview'); return undefined; }
+    let alive = true;
+    setSyncState('loading');
+    setError(null);
+    const qs = companyId
+      ? `companyId=${encodeURIComponent(companyId)}`
+      : `leadId=${encodeURIComponent(leadId)}`;
+    fetch(`/api/hub/revenue/activity?${qs}`, { cache: 'no-store' })
+      .then(r => {
+        // 5xx를 preview로 오독하면 "연락한 적 없음"으로 읽힌다 — 읽기 실패는 error(§5.3).
+        if (!r.ok) throw new Error(`activity ${r.status}`);
+        return r.json();
+      })
+      .then(d => {
+        if (!alive) return;
+        setActivities(Array.isArray(d.activities) ? d.activities : []);
+        setSyncState(d.status === 'live' ? 'live' : 'preview');
+      })
+      .catch(() => { if (alive) setSyncState('error'); });
+    return () => { alive = false; };
+  }, [leadId, companyId, unsaved]);
+
+  // 탭 배지 건수 — 읽기 전/실패는 null(0건이 사실인 것처럼 보이지 않게).
+  const countRef = React.useRef(onCountChange);
+  countRef.current = onCountChange;
+  React.useEffect(() => {
+    countRef.current?.(syncState === 'loading' || syncState === 'error' ? null : activities.length);
+  }, [activities.length, syncState]);
+
+  const logActivity = ({ type, msg }) => {
+    const body = String(msg || '').trim();
+    if (!body) return;
+    const tempId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setError(null);
+    setActivities(prev => [{ id: tempId, type, msg: body, at: '방금', who: 'Me' }, ...prev]);
+    if (unsaved) {
+      setError({ message: '리드를 먼저 저장해야 기록이 원장에 남습니다. 지금 기록은 이 화면에만 있습니다.' });
+      return;
+    }
+    saveRevenueRecord('activity', 'create', {
+      leadId,
+      ...(companyId ? { companyId } : {}),
+      type,
+      body,
+    }).then(r => {
+      if (r.ok && r.id) {
+        setActivities(prev => prev.map(a => (a.id === tempId ? { ...a, id: r.id } : a)));
+        return;
+      }
+      // 무언 소실 금지: 실패한 낙관 행을 걷어내고 입력을 에러에 실어 복원 가능하게 둔다.
+      setActivities(prev => prev.filter(a => a.id !== tempId));
+      setError({
+        body,
+        message: r.status === 'preview'
+          ? 'Supabase 미설정 — 기록이 저장되지 않았습니다.'
+          : '기록 저장에 실패했습니다. 다시 시도하세요.',
+      });
+    });
+  };
+
+  // 삭제는 Accounts와 같은 지연-undo 계약: 낙관 제거 → 되돌리기 창 → 창이 지나면 실제 DELETE.
+  const deleteActivity = (activity) => {
+    const match = row => (activity.id ? row.id === activity.id : row === activity);
+    const removed = activities.filter(match);
+    setActivities(prev => prev.filter(row => !match(row)));
+    if (!activity.id || String(activity.id).startsWith('local-')) return; // 미저장 행은 로컬 드롭으로 끝
+    const key = `lead-activity-delete-${activity.id}`;
+    const restore = () => setActivities(prev => [...removed, ...prev.filter(row => !match(row))]);
+    scheduleUndoable(key, () => {
+      setDeleteNotice(cur => (cur?.key === key ? null : cur));
+      saveRevenueRecord('activity', 'delete', { id: activity.id }).then(r => {
+        if (r.ok) return;
+        restore();
+        setError({ message: `기록 삭제 실패 (${r.status}) — 행을 복원했습니다.` });
+      });
+    });
+    setDeleteNotice({
+      key,
+      label: '기록 삭제됨',
+      undo: () => { if (cancelUndoable(key)) restore(); setDeleteNotice(null); },
+    });
+  };
+
+  const handleQuickAction = (kind) => {
+    const starters = { call: '통화: ', kakao: '카카오·문자: ', meeting: '미팅: ', deal: '', note: '' };
+    setComposerPreset(p => ({ type: kind, text: starters[kind] ?? '', seq: p.seq + 1 }));
+  };
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+        기록<SyncBadge state={syncState} />
+      </div>
+
+      {/* 회사 조인은 이 리드 한 건이 아니라 같은 회사의 접촉 이력 전체를 보여준다 — 명시한다. */}
+      {!unsaved && companyId && (
+        <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', lineHeight: 1.45 }}>
+          {lead?.companyName ? `${lead.companyName} 기준` : '회사 기준'}으로 묶인 기록입니다 — 같은 회사의 다른 접촉도 함께 보입니다.
+        </div>
+      )}
+      {unsaved && (
+        <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.45 }}>
+          아직 저장되지 않은 리드입니다. 먼저 저장하면 기록이 원장에 남습니다.
+        </div>
+      )}
+
+      {error && (
+        <div role="alert" style={{ fontSize: 11.5, color: 'var(--danger)', lineHeight: 1.5 }}>
+          {error.message}
+          {error.body && <span style={{ color: 'var(--fg-muted)' }}> · 입력: “{error.body}”</span>}
+        </div>
+      )}
+      {deleteNotice && (
+        <div role="status" aria-live="polite" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: 'var(--fg-muted)' }}>
+          <span>{deleteNotice.label}</span>
+          <Button variant="ghost" size="xs" onClick={deleteNotice.undo}>되돌리기</Button>
+        </div>
+      )}
+
+      <QuickActions onAction={handleQuickAction} primary={null} />
+      <LogComposer onLog={logActivity} preset={composerPreset} />
+
+      {syncState === 'loading' ? (
+        <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>불러오는 중…</div>
+      ) : syncState === 'error' ? (
+        <EmptyState
+          icon="clock"
+          title="활동 기록을 읽지 못했습니다"
+          description="원장 연결 상태를 확인한 뒤 드로어를 다시 열어 주세요. 기록이 없다는 뜻이 아닙니다."
+          style={{ minHeight: 140 }}
+        />
+      ) : activities.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--fg-faint)', padding: '12px 0' }}>아직 기록이 없습니다.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {activities.map((a, i) => (
+            <div key={a.id ?? i} style={{
+              display: 'grid', gridTemplateColumns: '18px 1fr auto auto',
+              gap: 10, padding: '10px 0',
+              borderBottom: i < activities.length - 1 ? '1px solid var(--line-soft)' : 'none',
+              alignItems: 'flex-start',
+            }}>
+              <span style={{ color: 'var(--fg-muted)', marginTop: 1 }}>
+                <Iconed name={ACT_ICON[a.type] || 'edit'} size={13} />
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{a.msg}</div>
+                <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Badge tone={ACT_TONE[a.type] || 'neutral'} size="xs" variant="outline">{ACT_LABEL[a.type] || a.type}</Badge>
+                  {a.reaction && <Badge tone={REACTION_TONE[a.reaction] || 'neutral'} size="xs" variant="outline">{REACTION_LABEL[a.reaction] || a.reaction}</Badge>}
+                  <span>{a.who}</span>
+                </div>
+              </div>
+              <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', marginTop: 1 }}>{a.at}</span>
+              <IconButton icon="x" size={20} iconSize={11} tooltip="기록 삭제" onClick={() => deleteActivity(a)} />
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 

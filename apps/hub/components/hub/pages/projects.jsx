@@ -3,7 +3,7 @@
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Checkbox, EmptyState, SyncBadge, SegmentedControl, EditDrawer, Kbd } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Checkbox, EmptyState, Input, SyncBadge, SegmentedControl, EditDrawer, Kbd } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import {
@@ -40,6 +40,7 @@ import {
   ProjectPortfolioSummary,
   ProjectProgressGauge,
 } from "./project-pms-components";
+import { classifyProjectPortfolio, portfolioWindow } from "./project-pms-metrics";
 import {
   getWorkspace,
   filterBrandsByWorkspace,
@@ -135,6 +136,47 @@ const LIST_STATUS_GROUPS = [
 // 사이드바 드래그 정렬 — 분류(폴더)와 컨테이너(브랜드) 순서. UI 전용, localStorage 영속.
 const FOLDER_ORDER_KEY = 'mlp.pms.folder-order';
 const BRAND_ORDER_KEY = 'mlp.pms.brand-order';
+
+// Q116 확정 — 기한 임박순 정렬. 무기한은 정렬에 섞지 않고 그룹 꼬리로 보낸다(Q120).
+// 무기한끼리는 원장 순서 유지 (Array.prototype.sort는 stable).
+function compareProjectsByDue(a, b) {
+  const ta = Date.parse(a?.dueAt || '');
+  const tb = Date.parse(b?.dueAt || '');
+  const va = Number.isFinite(ta);
+  const vb = Number.isFinite(tb);
+  if (va && vb) return ta - tb;
+  if (va) return -1;
+  if (vb) return 1;
+  return 0;
+}
+
+// To-dos 뷰 시간 구간 (monday My Work 문법 + Q120 무기한 분리, 2026-08-19 PMS 디벨롭).
+// 원장 bucket은 지남→오늘·무기한→다음주로 뭉개므로 UI에서 dueAt로 직접 나눈다.
+// 기준 TZ Asia/Seoul, calendar day (deep-design §10.1 시간 계약).
+const TODO_TIME_SECTIONS = ['기한 지남', '오늘', '내일', '이번 주', '이후', '기한 없음'];
+// 요약 4칸 클릭 필터의 표시 라벨 (project-pms-components의 PORTFOLIO_CELLS와 동일 문구).
+const SUMMARY_FILTER_LABELS = {
+  active: '진행 중',
+  blockedOrOverdue: '막힘 · 지연',
+  dueSoon: '7일 내 기한',
+  unmeasured: '진척 미측정',
+};
+function seoulDayKey(value) {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+}
+function todoTimeSection(todo, todayKey) {
+  const dueKey = todo?.dueAt ? seoulDayKey(todo.dueAt) : null;
+  if (!dueKey || !todayKey) return '기한 없음';
+  const diff = Math.round((Date.parse(dueKey) - Date.parse(todayKey)) / 86400000);
+  // 완료된 할 일은 손실 상태가 아니다 — 지난 기한이어도 "기한 지남"으로 올리지 않는다.
+  if (diff < 0) return todo.done ? '오늘' : '기한 지남';
+  if (diff === 0) return '오늘';
+  if (diff === 1) return '내일';
+  if (diff <= 7) return '이번 주';
+  return '이후';
+}
 const DETAIL_FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 // order(키 배열)에 없는 항목은 원래 순서를 유지하며 맨 뒤로 (stable sort).
@@ -367,7 +409,52 @@ export function Projects({ workspace }) {
     [scopedTodos, brand],
   );
   const currentBrand = brands.find(b => b.key === brand) || brands[0] || EMPTY_ALL_BRAND;
-  const visibleColumns = React.useMemo(() => buildTaskBoardColumns(brandTodos, allProjects), [brandTodos, allProjects]);
+
+  // 검색·요약 필터 (2026-08-19 PMS 디벨롭) — 세션 한정. 영속 선택(?view·?project)과 달리
+  // 순간 조회 조건이라 URL·localStorage에 싣지 않는다.
+  const [projectQuery, setProjectQuery] = React.useState('');
+  const [summaryFilter, setSummaryFilter] = React.useState(null); // portfolio cell key | null
+  const searchInputRef = React.useRef(null);
+  const normalizedQuery = projectQuery.trim().toLowerCase();
+
+  // 행 렌더마다 돌던 O(n·m) find/filter 제거용 인덱스.
+  const brandByKey = React.useMemo(() => new Map(brands.map(b => [b.key, b])), [brands]);
+  const projectById = React.useMemo(() => new Map(allProjects.map(p => [p.id, p])), [allProjects]);
+  const todosByProject = React.useMemo(() => {
+    const map = new Map();
+    for (const t of scopedTodos) {
+      const arr = map.get(t.project);
+      if (arr) arr.push(t); else map.set(t.project, [t]);
+    }
+    return map;
+  }, [scopedTodos]);
+
+  // 검색 대상: 프로젝트 이름 · 컨테이너 이름 · 다음 행동.
+  const queriedProjects = React.useMemo(() => {
+    if (!normalizedQuery) return projects;
+    return projects.filter(p => {
+      const b = brandByKey.get(p.brand);
+      return `${p.name} ${b?.name || ''} ${p.displayNextAction || p.projectNextAction || ''}`
+        .toLowerCase().includes(normalizedQuery);
+    });
+  }, [projects, normalizedQuery, brandByKey]);
+
+  // 요약 4칸 클릭 필터 — 숫자를 만든 classifyProjectPortfolio와 같은 술어만 쓴다
+  // (숫자 ≠ 행 수가 되는 순간 요약을 믿을 수 없다). 요약이 List에만 렌더되므로 List 전용.
+  const visibleProjects = React.useMemo(() => {
+    if (!summaryFilter) return queriedProjects;
+    const window = portfolioWindow();
+    return queriedProjects.filter(p => classifyProjectPortfolio(p, window)[summaryFilter]);
+  }, [queriedProjects, summaryFilter]);
+
+  const visibleColumns = React.useMemo(() => {
+    const cols = buildTaskBoardColumns(brandTodos, allProjects);
+    if (!normalizedQuery) return cols;
+    return cols.map(col => ({
+      ...col,
+      cards: col.cards.filter(c => `${c.title} ${c.project || ''}`.toLowerCase().includes(normalizedQuery)),
+    }));
+  }, [brandTodos, allProjects, normalizedQuery]);
   const openTodoCount = React.useMemo(() => brandTodos.filter(t => !t.done).length, [brandTodos]);
   const projectReadPartial = ledger.partialSources?.includes('projects') === true;
   const projectHeaderSummary = (() => {
@@ -1469,15 +1556,20 @@ export function Projects({ workspace }) {
 
   // 리스트(tree) 섹션을 훅 레벨로 — 렌더와 j/k 커서가 같은 가시 순서를 공유한다(23차,
   // Revenue 4표면과 같은 §8.1 키보드 문법의 마지막 공백이 PMS였다).
+  // 그룹 내부는 기한 임박순(Q116 확정) — .filter가 새 배열을 만들므로 in-place sort 안전.
   const listSections = React.useMemo(() => (
     brand === 'all'
       ? brands.filter(b => b.key !== 'all')
-          .map(b => ({ kind: 'brand', id: b.key, brand: b, items: projects.filter(p => p.brand === b.key) }))
+          .map(b => ({ kind: 'brand', id: b.key, brand: b, items: visibleProjects.filter(p => p.brand === b.key).sort(compareProjectsByDue) }))
           .filter(s => s.items.length > 0)
       : LIST_STATUS_GROUPS
-          .map(g => ({ kind: 'status', id: g.key, statusKey: g.key, label: g.label, tone: g.tone, items: projects.filter(p => p.status === g.key) }))
+          .map(g => ({ kind: 'status', id: g.key, statusKey: g.key, label: g.label, tone: g.tone, items: visibleProjects.filter(p => p.status === g.key).sort(compareProjectsByDue) }))
           .filter(s => s.items.length > 0)
-  ), [brand, brands, projects]);
+  ), [brand, brands, visibleProjects]);
+
+  // Timeline은 검색만 반영한다 (요약 필터는 요약이 렌더되는 List 전용). 렌더 본문에서
+  // 매번 호출하던 buildProjectTimeline을 memo로 이동.
+  const projectTimeline = React.useMemo(() => buildProjectTimeline(queriedProjects), [queriedProjects]);
 
   // j/k 순회 대상 — tree 뷰는 접힌 브랜드 섹션 제외 평탄화, board 뷰는 컬럼 순서 평탄화
   // (Deals 칸반과 동일 문법). 다른 뷰(todos·timeline)는 각자 문법이 있어 비활성.
@@ -1507,6 +1599,7 @@ export function Projects({ workspace }) {
     selection: kbSelection,
     // n은 위 뷰 인지 리스너가 소유(18차 회귀 이력) — 여기서는 바인딩하지 않는다.
     onEditSelected: openKbSelected,
+    onSearchFocus: () => searchInputRef.current?.focus(),
   });
   React.useEffect(() => {
     if (!kbSelection.selectedId) return;
@@ -1836,6 +1929,23 @@ export function Projects({ workspace }) {
             </div>
           </div>
           <div style={{ flex: 1 }} />
+          {/* 검색 — `/`로 포커스(useCrmKeyboard), ESC는 검색어가 있을 때만 지우고 소비. */}
+          <span
+            className="hub-project-search"
+            style={{ display: 'contents' }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' && projectQuery) { e.stopPropagation(); setProjectQuery(''); }
+            }}
+          >
+            <Input
+              ref={searchInputRef}
+              icon="search"
+              placeholder="검색"
+              value={projectQuery}
+              onChange={setProjectQuery}
+              style={{ flex: '0 1 180px', minWidth: 100 }}
+            />
+          </span>
           <SegmentedControl
             label="보기"
             options={PROJECT_VIEW_OPTIONS}
@@ -1878,7 +1988,29 @@ export function Projects({ workspace }) {
           >
             <div className="scroll-y" style={{ padding: 'var(--section-gap)' }}>
               <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
-                <ProjectPortfolioSummary projects={projects} sourceState={syncState} projectCorePartial={projectReadPartial} />
+                <ProjectPortfolioSummary
+                  projects={projects}
+                  sourceState={syncState}
+                  projectCorePartial={projectReadPartial}
+                  activeKey={summaryFilter}
+                  onSelectCell={setSummaryFilter}
+                />
+                {(summaryFilter || normalizedQuery) && (
+                  <div role="status" aria-live="polite" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--fg-muted)' }}>
+                    <span>
+                      필터 적용 중 — <span className="num">{visibleProjects.length}</span>개 표시
+                      {summaryFilter ? ` · ${SUMMARY_FILTER_LABELS[summaryFilter]}` : ''}
+                      {normalizedQuery ? ` · "${projectQuery.trim()}"` : ''}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { setProjectQuery(''); setSummaryFilter(null); }}
+                      style={{ fontSize: 11, color: 'var(--moon-300)', textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
+                    >
+                      해제
+                    </button>
+                  </div>
+                )}
                 {syncState === 'error' && (
                   <Card>
                     <EmptyState
@@ -1911,12 +2043,35 @@ export function Projects({ workspace }) {
                     />
                   </Card>
                 )}
+                {/* 검색·필터 0건 — §8.1: 빈 검색 결과에는 "지우기" CTA 필수. */}
+                {!['error', 'loading'].includes(syncState) && projects.length > 0
+                  && (summaryFilter || normalizedQuery) && visibleProjects.length === 0 && (
+                  <Card>
+                    <EmptyState
+                      icon="search"
+                      title="조건에 맞는 프로젝트가 없습니다"
+                      description="검색어나 요약 필터를 지우면 전체 목록이 돌아옵니다."
+                      action={
+                        <Button variant="outline" size="sm" onClick={() => { setProjectQuery(''); setSummaryFilter(null); }}>
+                          검색·필터 지우기
+                        </Button>
+                      }
+                    />
+                  </Card>
+                )}
                 {(() => {
                   // 전체 브랜드 뷰는 브랜드별 아코디언(목록 전체 접기), 특정 브랜드 뷰는 상태별 그룹.
                   // 섹션 계산은 훅 레벨 listSections — j/k 커서와 같은 가시 순서를 공유(23차).
                   return listSections.map(section => {
                     const items = section.items;
                     const collapsed = section.kind === 'brand' && Boolean(brandSectionsCollapsed[section.id]);
+                    // 그룹 헤더 롤업 (monday 문법) — 접힌 채로도 훑을 수 있게 진행·위험 수를
+                    // 상시 표기. 붉은 집계 카운트는 §5.3 red-budget이 허용하는 섹션 헤더 위치.
+                    const rollupWindow = section.kind === 'brand' ? portfolioWindow() : null;
+                    const rollupActive = rollupWindow
+                      ? items.filter(p => classifyProjectPortfolio(p, rollupWindow).active).length : 0;
+                    const rollupRisk = rollupWindow
+                      ? items.filter(p => classifyProjectPortfolio(p, rollupWindow).blockedOrOverdue).length : 0;
                     return (
                     <div key={section.id}>
                       {section.kind === 'brand' ? (
@@ -1934,6 +2089,12 @@ export function Projects({ workspace }) {
                         <Iconed name="chevronD" size={12} style={{ transform: collapsed ? 'rotate(-90deg)' : 'none', color: 'var(--fg-faint)' }} />
                         <BrandMark brand={section.brand} size={18} />
                         <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{section.brand.name}</span>
+                        {rollupActive > 0 && (
+                          <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>진행 {rollupActive}</span>
+                        )}
+                        {rollupRisk > 0 && (
+                          <span className="mono" style={{ fontSize: 10.5, color: 'var(--danger)' }}>막힘·지연 {rollupRisk}</span>
+                        )}
                         <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4 }}>{items.length}</span>
                       </button>
                       ) : (
@@ -1955,8 +2116,8 @@ export function Projects({ workspace }) {
                         </div>
                         {items.map((p, pi) => {
                           const isOpen = expanded.has(p.id);
-                          const pTodos = scopedTodos.filter(t => t.project === p.id);
-                          const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
+                          const pTodos = todosByProject.get(p.id) || [];
+                          const pBrand = brandByKey.get(p.brand) || brands[0] || EMPTY_ALL_BRAND;
                           const isSel = openDetail === p.id;
                           const dueTime = p.dueAt ? new Date(p.dueAt).getTime() : Number.NaN;
                           const terminal = isTerminalProject(p);
@@ -2117,7 +2278,7 @@ export function Projects({ workspace }) {
                     {showTerminal && (
                       <Card pad={false} className="hub-table-card">
                         {terminalProjects.map((p, pi) => {
-                          const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
+                          const pBrand = brandByKey.get(p.brand) || brands[0] || EMPTY_ALL_BRAND;
                           return (
                             <div
                               key={p.id}
@@ -2157,10 +2318,10 @@ export function Projects({ workspace }) {
             </div>
 
             {openDetail && (() => {
-              const p = allProjects.find(x => x.id === openDetail);
+              const p = projectById.get(openDetail);
               if (!p) return null;
-              const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
-              const pTodos = scopedTodos.filter(t => t.project === p.id);
+              const pBrand = brandByKey.get(p.brand) || brands[0] || EMPTY_ALL_BRAND;
+              const pTodos = todosByProject.get(p.id) || [];
               const pUpdates = (ledger.updates || []).filter(u => u.projectId === p.id).slice(0, 5);
               const pDecisions = (ledger.decisions || []).filter(d => d.projectId === p.id).slice(0, 4);
               const pNotes = (ledger.notes || []).filter(n => n.projectId === p.id).slice(0, 4);
@@ -2227,16 +2388,44 @@ export function Projects({ workspace }) {
                   />
                 </Card>
               )}
-              {['오늘','내일','이번주','다음주'].map(bucket => {
-                const items = brandTodos.filter(t => t.bucket === bucket || t.due === bucket || (bucket === '이번주' && ['이번주','4/20','4/21','4/22','4/23'].includes(t.due)));
+              {(() => {
+                // 시간 구간 재편 (2026-08-19, monday My Work 문법) — 기한 지남/오늘/내일/
+                // 이번 주/이후/기한 없음. 옛 4버킷은 지남을 '오늘'에, 무기한을 '다음주'에
+                // 뭉갰고 목업 리터럴 날짜('4/20'…)가 남아 있었다. 무기한 분리는 Q120 확정.
+                const todayKey = seoulDayKey(new Date());
+                const source = normalizedQuery
+                  ? brandTodos.filter(t => `${t.title || ''}`.toLowerCase().includes(normalizedQuery))
+                  : brandTodos;
+                if (source.length === 0 && normalizedQuery && brandTodos.length > 0) {
+                  return (
+                    <Card>
+                      <EmptyState
+                        icon="search"
+                        title="조건에 맞는 할 일이 없습니다"
+                        description="검색어를 지우면 전체 할 일이 돌아옵니다."
+                        action={<Button variant="outline" size="sm" onClick={() => setProjectQuery('')}>검색 지우기</Button>}
+                      />
+                    </Card>
+                  );
+                }
+                const bySection = new Map(TODO_TIME_SECTIONS.map(s => [s, []]));
+                for (const t of source) bySection.get(todoTimeSection(t, todayKey)).push(t);
+                return TODO_TIME_SECTIONS.map(bucket => {
+                const items = bySection.get(bucket);
                 if (!items.length) return null;
+                // 구간 안은 기한 임박순(Q116) — dueAt 필드가 같아 프로젝트 비교기를 재사용.
+                items.sort(compareProjectsByDue);
+                const overdueBucket = bucket === '기한 지남';
                 return (
                   <div key={bucket} style={{ marginBottom: 'var(--section-gap)' }}>
-                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 8 }}>{bucket} · {items.length}</div>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 8 }}>
+                      {/* 지남 카운트만 danger — §5.2 즉시 손실 상태의 집계 표기. */}
+                      {bucket} · <span className="num" style={overdueBucket ? { color: 'var(--danger)' } : undefined}>{items.length}</span>
+                    </div>
                     <Card pad={false}>
                       {items.map((t, i) => {
-                        const proj = allProjects.find(p => p.id === t.project);
-                        const pBrand = brands.find(b => b.key === t.brand) || brands[0] || EMPTY_ALL_BRAND;
+                        const proj = projectById.get(t.project);
+                        const pBrand = brandByKey.get(t.brand) || brands[0] || EMPTY_ALL_BRAND;
                         return (
                           <div key={t.id} className="hub-project-todo-row" data-done={t.done ? 'true' : 'false'} data-last={i === items.length - 1 ? 'true' : 'false'}>
                             <div className="hub-project-todo-check">
@@ -2273,7 +2462,8 @@ export function Projects({ workspace }) {
                     </Card>
                   </div>
                 );
-              })}
+                });
+              })()}
             </div>
           </div>
         )}
@@ -2378,7 +2568,7 @@ export function Projects({ workspace }) {
               </div>
             );
           }
-          const timeline = buildProjectTimeline(projects);
+          const timeline = projectTimeline;
           const timelineProjectHref = (projectId) => {
             const params = mergeTimelineProjectQuery(searchParams, projectId);
             const query = params.toString();
@@ -2428,7 +2618,7 @@ export function Projects({ workspace }) {
                         </div>
                         {timeline.items.map((item, i) => {
                           const p = item.project;
-                          const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
+                          const pBrand = brandByKey.get(p.brand) || brands[0] || EMPTY_ALL_BRAND;
                           const lineToken = item.overdue ? 'var(--danger-line)' : (STATUS_LINE_TOKEN[p.status] || 'var(--line-strong)');
                           return (
                             <div key={p.id} className="hub-row"
@@ -2491,7 +2681,7 @@ export function Projects({ workspace }) {
                     <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 8 }}>기한 미정 · {timeline.undated.length}</div>
                     <Card pad={false}>
                       {timeline.undated.map((p, i) => {
-                        const pBrand = brands.find(b => b.key === p.brand) || brands[0] || EMPTY_ALL_BRAND;
+                        const pBrand = brandByKey.get(p.brand) || brands[0] || EMPTY_ALL_BRAND;
                         return (
                           <a key={p.id} className="hub-row"
                             href={timelineProjectHref(p.id)}

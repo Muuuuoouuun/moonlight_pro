@@ -10,12 +10,14 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import {
   Badge, Card, Button, Avatar, Input, EmptyState, SyncBadge, Kbd, Drawer,
-  SegmentedControl, Divider, Checkbox, DateQuickPresets,
+  SegmentedControl, Divider, CheckboxRow, DateQuickPresets,
+  TextField, TextAreaField, SelectField,
 } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { useRevenueLedger, saveRevenueRecord, LeadEnrichmentPanel, SortHead } from "./revenue";
 import { DEAL_STAGES, STAGE_FILL } from "@/lib/deal-stages";
+import { UNREFERENCED_GUARD, describeReferences } from "@/lib/sales-os/customer-delete-contract";
 
 // "₩1.2M"/"₩900K"/"—" → 정렬용 숫자 (DESIGN.md §8.1: 금액은 표시 문자열을 파싱해 정렬)
 function parseMoney(value) {
@@ -191,6 +193,8 @@ function ActivityTimeline({ rows }) {
   );
 }
 
+const QUICKLOG_KINDS = ["call", "kakao", "meeting", "email", "visit", "quote", "note"];
+
 function QuickLog({ onSave }) {
   const [type, setType] = React.useState("call");
   const [text, setText] = React.useState("");
@@ -201,22 +205,24 @@ function QuickLog({ onSave }) {
     setText("");
   };
   return (
-    <div style={{ background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-      <textarea
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <TextAreaField
+        label="빠른 기록"
         value={text}
         onChange={e => setText(e.target.value)}
         placeholder="통화·미팅 메모를 입력하면 타임라인에 쌓여요"
-        rows={2}
-        style={{ width: "100%", resize: "vertical", background: "transparent", border: "none", outline: "none", color: "var(--fg)", fontSize: 12.5, fontFamily: "inherit", lineHeight: 1.5 }}
+        rows={4}
       />
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <select value={type} onChange={e => setType(e.target.value)} style={{ height: 30, padding: "0 8px", fontSize: 12.5, background: "var(--surface-3)", color: "var(--fg)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)", outline: "none" }}>
-          {["call", "kakao", "meeting", "email", "visit", "quote", "note"].map(k => (
-            <option key={k} value={k}>{ACT_LABEL[k]}</option>
-          ))}
-        </select>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+        <SelectField
+          label="유형"
+          value={type}
+          onChange={e => setType(e.target.value)}
+          options={QUICKLOG_KINDS.map(k => ({ value: k, label: ACT_LABEL[k] }))}
+          fieldStyle={{ flex: "0 1 150px" }}
+        />
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="xs" onClick={save}>기록 저장</Button>
+        <Button variant="primary" size="sm" onClick={save} disabled={!text.trim()}>기록 저장</Button>
       </div>
     </div>
   );
@@ -245,10 +251,17 @@ function ContactOutcomeSheet({ row, onSaved, onUndone }) {
   const [dormant, setDormant] = React.useState(false);
   const [state, setState] = React.useState("idle"); // idle | warn | saving | error
   const [errorMsg, setErrorMsg] = React.useState("");
+  // 저장을 눌러 보기 전에는 필수 표시를 붉히지 않는다 — 빈 폼을 열자마자 꾸짖는 건 잔소리다.
+  // 누른 뒤부터는 무엇이 비었는지 이름을 대고 그 필드로 포커스를 옮긴다. 이유를 말하지 않는
+  // 죽은 disabled 버튼이 이 폼에서 가장 자주 막히는 지점이었다.
+  const [attempted, setAttempted] = React.useState(false);
+  const titleId = React.useId();
+  const reactionRef = React.useRef(null);
+  const summaryRef = React.useRef(null);
 
   const reset = () => {
     setReaction(null); setSummary(""); setNextAction(""); setNextAt("");
-    setDormant(false); setState("idle"); setErrorMsg("");
+    setDormant(false); setState("idle"); setErrorMsg(""); setAttempted(false);
   };
   const [pendingUndo, setPendingUndo] = React.useState(null);
 
@@ -281,7 +294,12 @@ function ContactOutcomeSheet({ row, onSaved, onUndone }) {
   };
 
   const save = ({ ignoreWarning = false } = {}) => {
-    if (!summary.trim() || !reaction) return;
+    if (!summary.trim() || !reaction) {
+      setAttempted(true);
+      if (!reaction) reactionRef.current?.querySelector("button")?.focus();
+      else summaryRef.current?.focus();
+      return;
+    }
     // 다음 액션도 기약 없음도 없으면 저장 전 1회 경고 (열린 건을 공백으로 두지 않기)
     if (!dormant && !nextAction.trim() && !ignoreWarning) {
       setState("warn");
@@ -327,78 +345,103 @@ function ContactOutcomeSheet({ row, onSaved, onUndone }) {
     });
   };
 
-  const canSave = Boolean(summary.trim() && reaction) && state !== "saving";
+  // 빠진 항목은 그 필드 옆에서 말한다 — 푸터에 한 번 더 나열하면 같은 오류를 세 번
+  // 붉히게 되고 §5.3 red budget을 넘는다. 푸터는 왜 안 눌리는지만 중립으로 알린다.
+  const showMissing = attempted && (!reaction || !summary.trim());
 
   return (
-    <div style={{ border: "1px solid var(--line)", borderRadius: "var(--r-sm)", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 500 }}>컨택 완료 기록</span>
-        <select value={kind} onChange={e => setKind(e.target.value)} style={{ height: 30, padding: "0 8px", fontSize: 12.5, background: "var(--surface-3)", color: "var(--fg)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)", outline: "none" }}>
-          {OUTCOME_KINDS.map(k => <option key={k} value={k}>{ACT_LABEL[k]}</option>)}
-        </select>
+    <section
+      aria-labelledby={titleId}
+      style={{ border: "1px solid var(--line)", borderRadius: "var(--r-lg)", padding: 16, display: "flex", flexDirection: "column", gap: 16 }}
+    >
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+        <h3 id={titleId} style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>컨택 완료 기록</h3>
+        <span style={{ fontSize: 11.5, color: "var(--fg-faint)" }}>반응과 요약을 남기면 타임라인에 쌓입니다</span>
       </div>
 
-      <div>
-        <div style={{ fontSize: 10.5, color: "var(--fg-faint)", marginBottom: 5 }}>고객 반응 (필수)</div>
+      <SelectField
+        label="채널"
+        value={kind}
+        onChange={e => setKind(e.target.value)}
+        options={OUTCOME_KINDS.map(k => ({ value: k, label: ACT_LABEL[k] }))}
+        fieldStyle={{ maxWidth: 172 }}
+      />
+
+      <div ref={reactionRef}>
+        <span className="hub-label">고객 반응<span className="hub-label__req"> · 필수</span></span>
         <SegmentedControl
           label="고객 반응"
           options={REACTIONS.map(r => ({ key: r.key, label: r.label }))}
           value={reaction}
           onChange={setReaction}
-          style={{ flexWrap: "wrap", background: "none", border: "none", padding: 0 }}
+          size="md"
+          // borderColor 롱핸드를 SegmentedControl의 border 숏핸드 위에 얹으면 React가
+          // 나머지 롱핸드를 지워 보더가 currentColor로 떨어진다 — 숏핸드째 교체한다.
+          style={{ flexWrap: "wrap", ...(attempted && !reaction ? { border: "1px solid var(--danger)" } : {}) }}
         />
+        {attempted && !reaction && (
+          <p className="hub-field-msg hub-field-msg--error" role="alert">반응을 하나 고르세요.</p>
+        )}
       </div>
 
-      <div>
-        <div style={{ fontSize: 10.5, color: "var(--fg-faint)", marginBottom: 5 }}>1줄 요약 (필수)</div>
-        <input
-          value={summary}
-          onChange={e => setSummary(e.target.value)}
-          placeholder="예) 결정권자 참석 합의, 계약 조건 이견 없음"
-          style={{ width: "100%", height: 32, padding: "0 10px", fontSize: 12.5, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)", color: "var(--fg)", outline: "none" }}
-        />
-      </div>
+      <TextField
+        ref={summaryRef}
+        label="1줄 요약"
+        required
+        value={summary}
+        onChange={e => setSummary(e.target.value)}
+        placeholder="무슨 얘기가 오갔는지 한 줄"
+        maxLength={120}
+        hint="예) 결정권자 참석 합의, 계약 조건 이견 없음"
+        error={attempted && !summary.trim() ? "요약이 없으면 나중에 이 컨택을 읽을 수 없습니다." : null}
+      />
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.4fr) minmax(0,1fr) auto", gap: 6, alignItems: "end" }}>
-        <div>
-          <div style={{ fontSize: 10.5, color: "var(--fg-faint)", marginBottom: 5 }}>다음 액션</div>
-          <input
-            value={nextAction}
-            onChange={e => { setNextAction(e.target.value); if (state === "warn") setState("idle"); }}
-            placeholder="계약서 발송"
-            disabled={dormant}
-            style={{ width: "100%", height: 32, padding: "0 10px", fontSize: 12.5, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)", color: "var(--fg)", outline: "none", opacity: dormant ? 0.45 : 1 }}
-          />
-        </div>
-        <div>
-          <div style={{ fontSize: 10.5, color: "var(--fg-faint)", marginBottom: 5 }}>날짜</div>
-          <input
+      {/* 다음 단계는 한 묶음 — 액션·날짜·기약 없음이 서로를 끄고 켠다.
+          드로어 폭이 380px라 뷰포트 미디어쿼리로는 못 고친다: 항상 세로로 쌓아
+          날짜 입력과 프리셋이 서로를 잘라내지 않게 한다. */}
+      <div style={{ borderTop: "1px solid var(--line-soft)", paddingTop: 15, display: "flex", flexDirection: "column", gap: 13 }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--fg-dim)" }}>다음 단계</div>
+
+        <TextField
+          label="다음 액션"
+          value={nextAction}
+          onChange={e => { setNextAction(e.target.value); if (state === "warn") setState("idle"); }}
+          placeholder="계약서 발송"
+          disabled={dormant}
+        />
+
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "wrap" }}>
+          <TextField
+            label="날짜"
             type="date"
             value={nextAt}
             onChange={e => setNextAt(e.target.value)}
             disabled={dormant}
             className="mono"
-            style={{ width: "100%", height: 32, padding: "0 8px", fontSize: 12, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)", color: "var(--fg)", outline: "none", opacity: dormant ? 0.45 : 1 }}
+            fieldStyle={{ flex: "1 1 170px" }}
+            style={{ padding: "0 10px" }}
           />
           {/* date picker 반복 마찰 제거 — followups LogForm과 동일 프리셋(27차 편의성). */}
-          <DateQuickPresets disabled={dormant} onPick={setNextAt} style={{ marginTop: 4 }} />
+          <DateQuickPresets disabled={dormant} onPick={setNextAt} style={{ flexWrap: "wrap", gap: 4, paddingBottom: 1 }} />
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, height: 32 }}>
-          <Checkbox
-            checked={dormant}
-            onChange={(v) => { setDormant(v); if (state === "warn") setState("idle"); }}
-            label="기약 없음"
-          />
-          <span style={{ fontSize: 12, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>기약 없음</span>
-        </div>
+
+        <CheckboxRow
+          checked={dormant}
+          onChange={(v) => { setDormant(v); if (state === "warn") setState("idle"); }}
+          text="기약 없음 — 다음 약속 없이 닫기"
+        />
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <div style={{ flex: 1, minWidth: 0, fontSize: 11, lineHeight: 1.4 }}>
-          {state === "warn" && (
+      {/* 메시지 줄은 높이를 예약한다 — 경고가 나타날 때 저장 버튼이 튀어 오르면 오조작난다. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid var(--line-soft)", paddingTop: 15 }}>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 12, lineHeight: 1.45, minHeight: 18 }}>
+          {showMissing && (
+            <span role="alert" style={{ color: "var(--fg-muted)" }}>위 필수 항목을 채우면 저장됩니다.</span>
+          )}
+          {!showMissing && state === "warn" && (
             <span style={{ color: "var(--fg-muted)" }}>다음 액션이 비어 있습니다. 그래도 저장하려면 한 번 더 누르세요.</span>
           )}
-          {state === "error" && <span role="alert" style={{ color: "var(--danger)" }}>{errorMsg}</span>}
+          {!showMissing && state === "error" && <span role="alert" style={{ color: "var(--danger)" }}>{errorMsg}</span>}
           {pendingUndo && (
             <span role="status" aria-live="polite" style={{ color: "var(--fg-muted)", display: "inline-flex", alignItems: "center", gap: 6 }}>
               {pendingUndo.label}
@@ -406,16 +449,16 @@ function ContactOutcomeSheet({ row, onSaved, onUndone }) {
             </span>
           )}
         </div>
+        {/* 비활성 대신 항상 눌린다 — 왜 안 되는지 말하지 않는 죽은 버튼을 두지 않는다. */}
         <Button
           variant="primary"
-          size="xs"
-          disabled={!canSave}
+          size="sm"
           onClick={() => save({ ignoreWarning: state === "warn" })}
         >
           {state === "saving" ? "저장 중…" : "저장"}
         </Button>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -464,7 +507,109 @@ function DealPipelineSection({ deals }) {
   );
 }
 
-function Customer360Drawer({ row, onClose, onNavigate }) {
+// ── 고객 삭제 ───────────────────────────────────────────────────────────────
+// "잘못 만든 고객"만 지운다는 확정 정책(2026-08-19). 이력이 붙어 있으면 삭제 대신
+// 무엇이 붙어 있는지 보여주고 멈춘다 — FK가 전부 조용해서(set null / cascade) 그냥
+// 지우면 딜·프로젝트는 주인 없이 남고 활동 기록은 함께 사라진다.
+//
+// 순서: [삭제] → 서버에 참조 선조회 → 깨끗하면 확인 스트립 → [삭제] 확정 → 부모가
+// 행을 숨기고 3.5초 되돌리기 창을 연다. 선조회를 먼저 하는 이유는, 차단 사유를 지연
+// POST의 응답으로만 알리면 "삭제됨"을 3.5초 보여준 뒤에야 못 지운다고 말하게 되기 때문.
+function CustomerDeleteAction({ row, onConfirm }) {
+  const [phase, setPhase] = React.useState("idle"); // idle | checking | confirm | blocked | error
+  const [detail, setDetail] = React.useState("");
+  // 라이브 스키마에 없어 조사하지 못한 링크 — 그 참조는 존재할 수 없으니 판정은 유효하지만,
+  // "전부 확인했다"고 말하지는 않는다.
+  const [skipped, setSkipped] = React.useState([]);
+
+  const check = async () => {
+    setPhase("checking");
+    setDetail("");
+    setSkipped([]);
+    try {
+      const qs = new URLSearchParams({
+        kind: row.kind === "account" ? "account" : "lead",
+        id: String(row.id || ""),
+        ...(row.companyId ? { companyId: String(row.companyId) } : {}),
+      });
+      const resp = await fetch(`/api/hub/revenue/customer-references?${qs}`, { cache: "no-store" });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data.status === "error") {
+        // 못 셌으면 삭제로 넘어가지 않는다 — "참조 0"으로 가정하는 순간 이력이 사라진다.
+        setPhase("error");
+        setDetail(data.status === "preview"
+          ? "Supabase 미설정 — 무엇이 붙어 있는지 확인할 수 없어 삭제하지 않았습니다."
+          : "붙어 있는 기록을 확인하지 못했습니다 — 삭제하지 않았습니다. 다시 시도하세요.");
+        return;
+      }
+      setSkipped(Array.isArray(data.skipped) ? data.skipped : []);
+      if (!data.deletable) {
+        setPhase("blocked");
+        setDetail(describeReferences(data.references || {}));
+        return;
+      }
+      setPhase("confirm");
+    } catch {
+      setPhase("error");
+      setDetail("네트워크 오류로 확인하지 못했습니다 — 삭제하지 않았습니다.");
+    }
+  };
+
+  if (phase === "blocked") {
+    return (
+      <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 8, flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 11.5, lineHeight: 1.5, color: "var(--fg-muted)" }}>
+          <span style={{ color: "var(--danger)" }}>{detail}이 붙어 있어 삭제할 수 없습니다.</span>
+          <br />기록이 주인을 잃습니다. 잘못 만든 고객만 삭제할 수 있습니다.
+        </div>
+        <Button variant="ghost" size="sm" onClick={() => setPhase("idle")}>닫기</Button>
+      </div>
+    );
+  }
+
+  if (phase === "error") {
+    return (
+      <div role="alert" style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, lineHeight: 1.5, color: "var(--danger)" }}>{detail}</span>
+        <Button variant="ghost" size="sm" onClick={check}>다시 확인</Button>
+      </div>
+    );
+  }
+
+  if (phase === "confirm") {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, lineHeight: 1.5, color: "var(--fg-muted)" }}>
+          붙어 있는 기록이 없습니다. 삭제할까요? 되돌릴 수 없습니다.
+          {skipped.length > 0 && (
+            <>
+              <br />
+              <span style={{ color: "var(--fg-faint)" }}>
+                {skipped.join(", ")}는 이 DB에 없어 확인하지 못했습니다.
+              </span>
+            </>
+          )}
+        </span>
+        <Button variant="ghost" size="sm" onClick={() => setPhase("idle")}>취소</Button>
+        <Button variant="danger" size="sm" onClick={() => onConfirm(row)}>삭제</Button>
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={check}
+      disabled={phase === "checking" || !row.id}
+      style={{ color: "var(--danger)" }}
+    >
+      {phase === "checking" ? "확인 중…" : "삭제"}
+    </Button>
+  );
+}
+
+function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
   const [activities, setActivities] = React.useState([]);
   const [actSync, setActSync] = React.useState("loading");
   // 컨택 완료 시트 저장 직후 부모 원장 재조회 없이 최신 다음 액션을 반영
@@ -533,7 +678,13 @@ function Customer360Drawer({ row, onClose, onNavigate }) {
       subtitle={row.person ? `${row.name}${row.personTitle ? ` · ${row.personTitle}` : ""}` : (row.sub || null)}
       onClose={onClose}
       width="min(440px, 96vw)"
-      footer={editHref ? <Button variant="outline" size="sm" onClick={() => onNavigate?.(editHref)}>정식 편집 열기</Button> : undefined}
+      footer={(
+        <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minWidth: 0 }}>
+          {editHref && <Button variant="outline" size="sm" onClick={() => onNavigate?.(editHref)}>정식 편집 열기</Button>}
+          <div style={{ flex: 1 }} />
+          <CustomerDeleteAction row={row} onConfirm={onDelete} />
+        </div>
+      )}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {/* 헤더 요약 */}
@@ -651,8 +802,63 @@ export function Customers({ onNavigate }) {
   const [sort, setSort] = React.useState({ key: null, dir: "asc" });
   const [openKey, setOpenKey] = React.useState(null);
   const [createError, setCreateError] = React.useState(null);
+  // 삭제는 3.5초 뒤에야 POST된다 — 그동안 행은 목록에서 빠져 있고, 되돌리면 그대로 돌아온다.
+  const [deletedKeys, setDeletedKeys] = React.useState(() => new Set());
+  const [deleteNotice, setDeleteNotice] = React.useState(null);
+  const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
 
-  const allRows = React.useMemo(() => toRows(ledger), [ledger]);
+  const ledgerRows = React.useMemo(() => toRows(ledger), [ledger]);
+  // 낙관 삭제된 행은 원장이 다시 로드돼도 계속 숨긴다 — 되돌리기 창이 닫히기 전에
+  // 재조회가 끼어들면 지운 행이 깜빡이며 되살아난다.
+  const allRows = React.useMemo(
+    () => ledgerRows.filter(r => !deletedKeys.has(r.key)),
+    [ledgerRows, deletedKeys],
+  );
+
+  const restoreRow = React.useCallback((key) => {
+    setDeletedKeys(prev => { const next = new Set(prev); next.delete(key); return next; });
+  }, []);
+
+  // 확인까지 끝난 삭제 — 드로어를 닫고 행을 감춘 뒤 되돌리기 창을 연다. 창이 닫히면
+  // 그때 POST하고, 실패하면 행을 되살리고 원인을 이름으로 말한다(무언 소실 금지).
+  const deleteCustomer = React.useCallback((row) => {
+    const { key, name } = row;
+    setOpenKey(null);
+    setDeletedKeys(prev => new Set(prev).add(key));
+    const undoKey = `delete-customer-${key}`;
+    setDeleteNotice({
+      key: undoKey,
+      tone: "ok",
+      label: `${name} 삭제됨`,
+      undo: () => {
+        if (cancelUndoable(undoKey)) restoreRow(key);
+        setDeleteNotice(null);
+      },
+    });
+    scheduleUndoable(undoKey, () => {
+      setDeleteNotice(cur => (cur?.key === undoKey ? null : cur)); // 창 종료 시 소거
+      saveRevenueRecord(row.kind === "account" ? "account" : "lead", "delete", {
+        id: row.id,
+        companyId: row.companyId || null,
+        // 서버 가드 — 선조회 이후 이력이 생겼더라도 여기서 다시 막힌다.
+        guard: UNREFERENCED_GUARD,
+      }).then(r => {
+        if (r.ok) return;
+        restoreRow(key);
+        const refs = r.data?.status === "blocked" ? describeReferences(r.data.references || {}) : "";
+        setDeleteNotice({
+          key: `${undoKey}-fail`,
+          tone: "err",
+          label: refs
+            ? `${refs}이 생겨 삭제되지 않았습니다 — ${name}을(를) 되살렸습니다.`
+            : r.status === "preview"
+              ? `Supabase 미설정 — 삭제가 저장되지 않아 ${name}을(를) 되살렸습니다.`
+              : `삭제 실패 (${r.status}) — ${name}을(를) 되살렸습니다.`,
+          undo: null,
+        });
+      });
+    });
+  }, [scheduleUndoable, cancelUndoable, restoreRow]);
 
   // 딥링크: ?customer=<kind>:<id> — 원장 로드 후 1회만 열고 쿼리 소거 (DESIGN §8.1)
   const searchParams = useSearchParams();
@@ -747,6 +953,19 @@ export function Customers({ onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>고객 DB</h2>
           {createError && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{createError}</div>}
+          {deleteNotice && (
+            <div
+              role={deleteNotice.tone === "err" ? "alert" : "status"}
+              aria-live="polite"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 8, marginTop: 4,
+                fontSize: 12, color: deleteNotice.tone === "err" ? "var(--danger)" : "var(--fg-muted)",
+              }}
+            >
+              {deleteNotice.label}
+              {deleteNotice.undo && <Button variant="ghost" size="xs" onClick={deleteNotice.undo}>되돌리기</Button>}
+            </div>
+          )}
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             리드 {ledger.leads?.length || 0} · 계약 고객 {ledger.accounts?.length || 0}
             <SyncBadge state={syncState} />
@@ -848,7 +1067,14 @@ export function Customers({ onNavigate }) {
         ))}
       </Card>
 
-      {openRow && <Customer360Drawer row={openRow} onClose={() => setOpenKey(null)} onNavigate={onNavigate} />}
+      {openRow && (
+        <Customer360Drawer
+          row={openRow}
+          onClose={() => setOpenKey(null)}
+          onNavigate={onNavigate}
+          onDelete={deleteCustomer}
+        />
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@
 // close label) are intentionally left untouched — best-effort, never clobbered.
 
 import { eqFilter, fetchSupabaseRows } from "../server-read.js";
+import { UNREFERENCED_GUARD, countCustomerReferences, isCustomerTable } from "./customer-delete.js";
 import {
   deleteSupabaseRecord,
   insertSupabaseRecord,
@@ -308,6 +309,28 @@ export async function persistRevenueRecord({ table, op, id, payload, build }) {
   if (op === "delete") {
     if (!id) return { status: "error", reason: "missing-id" };
     if (!workspaceId) return { status: "preview", reason: "missing-workspace" };
+
+    // 고객 DB의 삭제는 `guard: "unreferenced"`를 실어 보낸다 — 이력이 붙은 고객은 지우지
+    // 않는다(customer-delete.js). 가드는 클라이언트가 빼먹어도 되는 UI 편의가 아니라
+    // 서버가 강제하는 규칙이다. Leads 화면의 기존 삭제는 guard를 보내지 않으므로 종전
+    // 동작 그대로다 — 정책을 그쪽까지 넓히는 건 별개 결정.
+    if (payload?.guard === UNREFERENCED_GUARD && isCustomerTable(table)) {
+      const refs = await countCustomerReferences({
+        table,
+        id,
+        companyId: payload.companyId || null,
+        workspaceId,
+      });
+      // 참조를 못 읽었으면 삭제하지 않는다 — 읽기 실패를 "참조 0"으로 뭉개는 순간
+      // 이력이 가득한 고객이 조용히 지워진다.
+      if (!refs.ok) {
+        return { status: "failed", reason: refs.reason, detail: `${refs.table} 참조를 읽지 못해 삭제를 중단했습니다.` };
+      }
+      if (refs.total > 0) {
+        return { status: "blocked", reason: "has-references", references: refs.counts, total: refs.total };
+      }
+    }
+
     const res = await deleteSupabaseRecord(table, [
       ["id", eqFilter(id)],
       ["workspace_id", eqFilter(workspaceId)],

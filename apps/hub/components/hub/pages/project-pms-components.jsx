@@ -94,7 +94,9 @@ const PORTFOLIO_CELLS = [
   { key: "unmeasured", label: "진척 미측정", description: "관찰 가능한 근거 없음" },
 ];
 
-export function ProjectPortfolioSummary({ projects = [], sourceState = "live", projectCorePartial = false }) {
+// onSelectCell이 있으면 각 칸이 원클릭 필터 토글이 된다 (Jira quick filter 문법,
+// 2026-08-19 PMS 디벨롭). 선택 표시는 Moonstone 외곽 outline — §5.3 선택 채널.
+export function ProjectPortfolioSummary({ projects = [], sourceState = "live", projectCorePartial = false, activeKey = null, onSelectCell = null }) {
   const metrics = buildProjectPortfolioMetrics(projects, { sourceState, projectCorePartial });
   const unavailableLabel = sourceState === "error"
     ? "프로젝트 원장을 읽지 못해 요약을 계산하지 않았습니다."
@@ -112,17 +114,39 @@ export function ProjectPortfolioSummary({ projects = [], sourceState = "live", p
 
   return (
     <section className="hub-pms-summary" aria-label="프로젝트 포트폴리오 요약">
-      {PORTFOLIO_CELLS.map((cell) => (
-        <div className="hub-pms-summary__cell" key={cell.key}>
-          <span className="hub-pms-summary__label">{cell.label}</span>
-          <strong className="hub-pms-summary__value stat">
-            {metrics.lowerBound ? `${metrics[cell.key]}+` : metrics[cell.key]}
-          </strong>
-          <span className="hub-pms-summary__description">
-            {cell.description}{metrics.lowerBound ? " · 일부 범위" : ""}
-          </span>
-        </div>
-      ))}
+      {PORTFOLIO_CELLS.map((cell) => {
+        const content = (
+          <>
+            <span className="hub-pms-summary__label">{cell.label}</span>
+            <strong className="hub-pms-summary__value stat">
+              {metrics.lowerBound ? `${metrics[cell.key]}+` : metrics[cell.key]}
+            </strong>
+            <span className="hub-pms-summary__description">
+              {cell.description}{metrics.lowerBound ? " · 일부 범위" : ""}
+            </span>
+          </>
+        );
+        if (!onSelectCell) {
+          return <div className="hub-pms-summary__cell" key={cell.key}>{content}</div>;
+        }
+        const selected = activeKey === cell.key;
+        return (
+          <button
+            type="button"
+            key={cell.key}
+            className="hub-pms-summary__cell hub-row"
+            aria-pressed={selected}
+            aria-label={`${cell.label} 필터${selected ? ' 해제' : ''}`}
+            onClick={() => onSelectCell(selected ? null : cell.key)}
+            style={{
+              textAlign: 'left', cursor: 'pointer',
+              ...(selected ? { outline: '1px solid var(--moon-300)', outlineOffset: -1 } : {}),
+            }}
+          >
+            {content}
+          </button>
+        );
+      })}
     </section>
   );
 }

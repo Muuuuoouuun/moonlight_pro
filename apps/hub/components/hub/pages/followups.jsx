@@ -3,7 +3,7 @@
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Button, Card, Checkbox, DateQuickPresets, Divider, Drawer, Dot, EmptyState, SegmentedControl, SyncBadge } from "../hub-primitives";
+import { Badge, Button, Card, CheckboxRow, DateQuickPresets, Divider, Drawer, Dot, EmptyState, SegmentedControl, SyncBadge, TextField } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { QUICK_LOG_ACTIONS as LOG_ACTIONS, REACTION_OPTIONS } from "@/lib/sales-os/outcome-attribution";
@@ -121,53 +121,77 @@ function LogForm({ item, action, label, onCancel, onSubmit, submitting, error, i
     Boolean(dormant || at) &&
     !submitting;
 
+  // 같은 최소 기록을 Customer 360 컨택 시트와 같은 껍데기·같은 필드 primitive로 —
+  // 두 진입점이 서로 다른 폼처럼 보이던 것이 §8.1이 경계하는 드리프트다.
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)" }}>
-      <div style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>{item.name} · <Badge tone={LANE_TONE[item.kind]} size="xs" variant="outline">{label}</Badge> 기록</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: 16, border: "1px solid var(--line)", borderRadius: "var(--r-lg)" }}>
+      <div style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>{item.name} · <Badge tone={LANE_TONE[item.kind]} size="xs" variant="outline">{label}</Badge> 기록</div>
 
-      <input
+      <TextField
+        label="대화 요약"
+        required
         value={summary}
         onChange={(e) => setSummary(e.target.value)}
-        placeholder="대화 요약 한 줄"
-        style={{ height: 32, padding: "0 10px", fontSize: 12.5, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)", outline: "none" }}
+        placeholder="무슨 얘기가 오갔는지 한 줄"
+        maxLength={120}
       />
 
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        {REACTION_OPTIONS.map((r) => (
-          <Button key={r.key} type="button" variant={reaction === r.key ? "secondary" : "outline"} size="xs" onClick={() => setReaction(r.key)}>
-            {r.label}
-          </Button>
-        ))}
-      </div>
+      {action !== "no_response" && (
+        <div>
+          <span className="hub-label">고객 반응<span className="hub-label__req"> · 필수</span></span>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {REACTION_OPTIONS.map((r) => (
+              <Button key={r.key} type="button" variant={reaction === r.key ? "secondary" : "outline"} size="sm" onClick={() => setReaction(r.key)}>
+                {r.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
 
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <input
+      {/* 다음 행동·날짜·기약 없음은 한 묶음 — 인라인 폼 폭이 좁아 한 줄로 늘어놓으면
+          날짜 입력과 프리셋이 서로를 잘라낸다. 세로로 쌓는다. */}
+      <div style={{ borderTop: "1px solid var(--line-soft)", paddingTop: 15, display: "flex", flexDirection: "column", gap: 13 }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--fg-dim)" }}>다음 단계</div>
+
+        <TextField
+          label="다음 행동"
           value={nextAction}
           onChange={(e) => setNextAction(e.target.value)}
-          placeholder="다음 행동"
-          style={{ flex: 1, minWidth: 120, height: 32, padding: "0 10px", fontSize: 12.5, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)", outline: "none" }}
+          placeholder="계약서 발송"
         />
-        <input
-          type="date"
-          value={at}
-          disabled={dormant}
-          onChange={(e) => setAt(e.target.value)}
-          style={{ height: 32, padding: "0 8px", fontSize: 12.5, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)", outline: "none", opacity: dormant ? 0.5 : 1 }}
+
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexWrap: "wrap" }}>
+          <TextField
+            label="날짜"
+            required={!dormant}
+            type="date"
+            value={at}
+            disabled={dormant}
+            onChange={(e) => setAt(e.target.value)}
+            className="mono"
+            fieldStyle={{ flex: "1 1 170px" }}
+            style={{ padding: "0 10px" }}
+          />
+          {/* 최고 빈도 액션의 date picker 반복 마찰 제거 — 프리셋 1클릭(27차 편의성). */}
+          <DateQuickPresets disabled={dormant} onPick={setAt} style={{ flexWrap: "wrap", gap: 4, paddingBottom: 1 }} />
+        </div>
+
+        <CheckboxRow
+          checked={dormant}
+          onChange={(v) => { setDormant(v); if (v) setAt(""); }}
+          text="기약 없음 — 다음 약속 없이 닫기"
         />
-        {/* 최고 빈도 액션의 date picker 반복 마찰 제거 — 프리셋 1클릭(27차 편의성). */}
-        <DateQuickPresets disabled={dormant} onPick={setAt} />
-        <Checkbox checked={dormant} onChange={(v) => { setDormant(v); if (v) setAt(""); }} label="기약 없음" />
-        <span style={{ fontSize: 11.5, color: "var(--fg-faint)" }}>기약 없음</span>
       </div>
 
       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
         {error && (
           <span role="alert" style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: "var(--danger)" }}>{error}</span>
         )}
-        <Button variant="ghost" size="xs" onClick={onCancel} disabled={submitting}>취소</Button>
+        <Button variant="ghost" size="sm" onClick={onCancel} disabled={submitting}>취소</Button>
         <Button
           variant="primary"
-          size="xs"
+          size="sm"
           disabled={!canSubmit}
           onClick={() => onSubmit({ summary, reaction, nextAction, at, dormant })}
         >

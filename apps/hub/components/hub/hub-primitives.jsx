@@ -327,6 +327,123 @@ export const Input = React.forwardRef(function Input({ placeholder, icon, value,
   );
 });
 
+// ── Labeled form fields ──────────────────────────────────────────────────────
+// Capture surfaces (contact outcome, follow-up log, quick log) each hand-rolled the
+// same input: a <div> pretending to be a label, inline chrome, and `outline: none`
+// — which beat the stylesheet and removed the :focus-visible ring (§11). These own
+// the label/control/message triple so a page declares meaning, not pixels:
+//   · the label is a real <label htmlFor>, so tapping the words focuses the field
+//   · `required` renders a visible `필수` and sets aria-required
+//   · `error` sets aria-invalid and is announced; `hint` is wired via aria-describedby
+//   · chrome comes from `.hub-input` in hub-tokens.css — never from a call site
+function FieldShell({ id, label, required, hint, error, children, style, className }) {
+  const message = error || hint;
+  return (
+    <div className={className} style={{ minWidth: 0, ...style }}>
+      {label && (
+        <label className="hub-label" htmlFor={id}>
+          {label}
+          {required && <span className="hub-label__req"> · 필수</span>}
+        </label>
+      )}
+      {children}
+      {message && (
+        <p
+          id={`${id}-msg`}
+          role={error ? 'alert' : undefined}
+          className={`hub-field-msg${error ? ' hub-field-msg--error' : ''}`}
+        >
+          {message}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function useFieldA11y({ id, required, hint, error }) {
+  const auto = React.useId();
+  const fid = id || auto;
+  return {
+    fid,
+    aria: {
+      id: fid,
+      'aria-required': required ? true : undefined,
+      'aria-invalid': error ? true : undefined,
+      'aria-describedby': (hint || error) ? `${fid}-msg` : undefined,
+    },
+  };
+}
+
+export const TextField = React.forwardRef(function TextField(
+  { id, label, required, hint, error, style, fieldStyle, fieldClassName, className, ...input }, ref,
+) {
+  const { fid, aria } = useFieldA11y({ id, required, hint, error });
+  return (
+    <FieldShell id={fid} label={label} required={required} hint={hint} error={error} style={fieldStyle} className={fieldClassName}>
+      <input ref={ref} {...aria} {...input} className={`hub-input${className ? ` ${className}` : ''}`} style={style} />
+    </FieldShell>
+  );
+});
+
+export const TextAreaField = React.forwardRef(function TextAreaField(
+  { id, label, required, hint, error, style, fieldStyle, fieldClassName, className, rows = 3, ...input }, ref,
+) {
+  const { fid, aria } = useFieldA11y({ id, required, hint, error });
+  return (
+    <FieldShell id={fid} label={label} required={required} hint={hint} error={error} style={fieldStyle} className={fieldClassName}>
+      <textarea ref={ref} rows={rows} {...aria} {...input} className={`hub-input${className ? ` ${className}` : ''}`} style={style} />
+    </FieldShell>
+  );
+});
+
+// `options`: [{ value, label }]. The caret is a drawn icon, not the OS widget — a raw
+// native select was the one control on the deck still rendering platform chrome.
+export const SelectField = React.forwardRef(function SelectField(
+  { id, label, required, hint, error, options = [], style, fieldStyle, fieldClassName, className, ...select }, ref,
+) {
+  const { fid, aria } = useFieldA11y({ id, required, hint, error });
+  return (
+    <FieldShell id={fid} label={label} required={required} hint={hint} error={error} style={fieldStyle} className={fieldClassName}>
+      <span className="hub-select">
+        <select ref={ref} {...aria} {...select} className={`hub-input${className ? ` ${className}` : ''}`} style={style}>
+          {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <Iconed name="chevronD" size={13} aria-hidden="true" />
+      </span>
+    </FieldShell>
+  );
+});
+
+// Checkbox + its words as ONE control. `<Checkbox label="x" />` beside a plain
+// <span>x</span> shipped a dead text target and a doubled accessible name; this is the
+// canonical form whenever the box has visible text next to it.
+export function CheckboxRow({ checked, onChange, text, disabled = false, size = 17, style }) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={Boolean(checked)}
+      aria-label={text}
+      disabled={disabled}
+      className="hub-checkbox-row"
+      onClick={(e) => { e.stopPropagation(); onChange?.(!checked); }}
+      style={style}
+    >
+      <span aria-hidden="true" style={{
+        width: size, height: size, borderRadius: 4,
+        border: `1px solid ${checked ? 'var(--moon-300)' : 'var(--line-strong)'}`,
+        background: checked ? 'var(--moon-300)' : 'transparent',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'background var(--dur-hover) ease, border-color var(--dur-hover) ease',
+        flexShrink: 0,
+      }}>
+        {checked && <Iconed name="check" size={size - 4} style={{ color: 'var(--bg)', strokeWidth: 3 }} />}
+      </span>
+      {text}
+    </button>
+  );
+}
+
 export function Placeholder({ label = 'image', w, h, style }) {
   return (
     <div style={{
@@ -535,8 +652,15 @@ export function SyncBadge({ state, reason, style }) {
 // dot?: tone string, count?: number }]. Call sites keep any bespoke onChange side effects
 // by handling that logic inside their onChange.
 // `label` names the group for screen readers; `fill` spreads the segments across the
-// available width (segments stay side-by-side on mobile — never stacked).
-export function SegmentedControl({ options, value, onChange, className, style, label, fill }) {
+// available width (segments stay side-by-side on mobile — never stacked). `size="md"` is
+// the lower-density scale for drafting surfaces (§4) — capture forms, not scan tables.
+const SEGMENT_SCALE = {
+  sm: { pad: '4px 10px', fs: 11.5, gap: 5, radius: 4 },
+  md: { pad: '9px 13px', fs: 12.5, gap: 6, radius: 5 },
+};
+
+export function SegmentedControl({ options, value, onChange, className, style, label, fill, size = 'sm' }) {
+  const scale = SEGMENT_SCALE[size] || SEGMENT_SCALE.sm;
   return (
     <div
       className={className}
@@ -548,10 +672,10 @@ export function SegmentedControl({ options, value, onChange, className, style, l
         const isActive = o.key === value;
         return (
           <button key={o.key} type="button" onClick={() => onChange?.(o.key)} aria-pressed={isActive} style={{
-            padding: '4px 10px', fontSize: 11.5, borderRadius: 4, whiteSpace: 'nowrap',
+            padding: scale.pad, fontSize: scale.fs, borderRadius: scale.radius, whiteSpace: 'nowrap',
             color: isActive ? 'var(--fg)' : 'var(--fg-faint)',
             background: isActive ? 'var(--surface-3)' : 'transparent',
-            display: 'inline-flex', alignItems: 'center', justifyContent: fill ? 'center' : undefined, gap: 5,
+            display: 'inline-flex', alignItems: 'center', justifyContent: fill ? 'center' : undefined, gap: scale.gap,
             flex: fill ? '1 1 0' : undefined, minWidth: fill ? 0 : undefined,
           }}>
             {o.dot && <Dot tone={o.dot} />}
@@ -680,19 +804,28 @@ function groupFieldRows(fields) {
   return rows;
 }
 
+const FIELD_PANEL_KEY = '__fields__';
+
 // Shared field-driven edit drawer. Revenue behavior is canonical for save feedback,
 // ESC close, and optimistic delete confirmation. Composes on top of Drawer for the shell.
 // Cmd/Ctrl+Enter mirrors the explicit save button. The initial signature is kept for the
 // lifetime of one opened record so ESC, the overlay, and the close button cannot silently
 // discard a changed draft.
-export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)', saveLabel = '변경사항 저장', children }) {
+//
+// `panels`는 필드 편집 옆에 붙는 상세 탭이다 — [{ key, label, count, content }]. 넘기지
+// 않으면 기존 call site와 픽셀 단위로 같은 단일 폼이 그려진다(계약 변경 없음). 탭이 있을
+// 때만 열림 포커스를 첫 필드로 고정한다: 그러지 않으면 Drawer의 "본문 첫 focusable"
+// 규칙이 탭 버튼을 집어 이름 입력이 포커스를 잃는다.
+export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)', saveLabel = '변경사항 저장', panels, infoLabel = '정보', children }) {
   const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | conflict | error
   const [saveFeedback, setSaveFeedback] = React.useState('');
   // 파괴 확인은 브라우저 confirm()이 아니라 푸터 인라인 2단계다 — OS 다이얼로그는 디자인
   // 시스템·ESC 레이어 밖이고(§8.1), 모바일에서 뷰포트를 가리며, 문구·버튼 위계를 못 가진다
   // (백로그 M: window.confirm 스타일드 플로). null | 'discard' | 'delete'.
   const [confirming, setConfirming] = React.useState(null);
+  const [panelKey, setPanelKey] = React.useState(FIELD_PANEL_KEY);
   const confirmCancelRef = React.useRef(null);
+  const firstFieldRef = React.useRef(null);
   const savingRef = React.useRef(false);
   const initialRecordSignatureRef = React.useRef(null);
   const recordIdentity = record?.id ?? record?.clientId ?? (record ? '__anonymous__' : null);
@@ -701,6 +834,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
     setSaveState('idle');
     setSaveFeedback('');
     setConfirming(null);
+    setPanelKey(FIELD_PANEL_KEY); // 레코드가 바뀌면 항상 편집 탭에서 시작
     initialRecordSignatureRef.current = record ? JSON.stringify(record) : null;
   }, [recordIdentity]);
 
@@ -787,12 +921,62 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
   }, [record?.id]);
 
   if (!record) return null;
+
+  const hasPanels = Array.isArray(panels) && panels.length > 0;
+  const fieldRows = groupFieldRows(fields);
+  const fieldsPanel = (
+    <>
+      {fieldRows.map((group, i) => (
+        <div key={group.row || `solo-${i}`} style={group.fields.length > 1 ? { display: 'flex', gap: 10 } : undefined}>
+          {group.fields.map((f, j) => {
+            // 탭 모드에서만 쓰이는 열림 포커스 앵커 — 탭이 없으면 Drawer 기본 규칙 그대로다.
+            const focusRef = hasPanels && i === 0 && j === 0 ? firstFieldRef : undefined;
+            return (
+            <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5, ...(group.fields.length > 1 ? { flex: 1, minWidth: 0 } : null) }}>
+              <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>{f.label}</span>
+              {f.type === 'select' ? (
+                <select ref={focusRef} value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
+                  {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              ) : f.type === 'textarea' ? (
+                <textarea
+                  ref={focusRef}
+                  value={record[f.key] ?? ''}
+                  placeholder={f.placeholder || ''}
+                  rows={f.rows || 5}
+                  onChange={e => onChange(f.key, e.target.value)}
+                  style={{ ...DRAWER_INPUT_STYLE, height: 'auto', minHeight: 112, padding: '9px 10px', lineHeight: 1.5, resize: 'vertical' }}
+                />
+              ) : (
+                <input
+                  ref={focusRef}
+                  type={f.inputType || 'text'}
+                  // <input type="date"> requires an exact YYYY-MM-DD value — a full ISO
+                  // timestamp ("2026-07-20T00:00:00+00:00", what every dueAt/closeAt read
+                  // path returns) fails the native format check and the browser silently
+                  // renders it blank instead of erroring, so this slice is load-bearing.
+                  value={f.inputType === 'date' ? String(record[f.key] ?? '').slice(0, 10) : (record[f.key] ?? '')}
+                  placeholder={f.placeholder || ''}
+                  onChange={e => onChange(f.key, f.inputType === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value)}
+                  style={DRAWER_INPUT_STYLE}
+                />
+              )}
+            </label>
+            );
+          })}
+        </div>
+      ))}
+      {children}
+    </>
+  );
+
   return (
     <Drawer
       title={title}
       subtitle={subtitle}
       onClose={requestClose}
       width={width}
+      initialFocusRef={hasPanels ? firstFieldRef : undefined}
       footer={
         confirming ? (
           <>
@@ -838,41 +1022,28 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
         )
       }
     >
-      {groupFieldRows(fields).map((group, i) => (
-        <div key={group.row || `solo-${i}`} style={group.fields.length > 1 ? { display: 'flex', gap: 10 } : undefined}>
-          {group.fields.map(f => (
-            <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5, ...(group.fields.length > 1 ? { flex: 1, minWidth: 0 } : null) }}>
-              <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>{f.label}</span>
-              {f.type === 'select' ? (
-                <select value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
-                  {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              ) : f.type === 'textarea' ? (
-                <textarea
-                  value={record[f.key] ?? ''}
-                  placeholder={f.placeholder || ''}
-                  rows={f.rows || 5}
-                  onChange={e => onChange(f.key, e.target.value)}
-                  style={{ ...DRAWER_INPUT_STYLE, height: 'auto', minHeight: 112, padding: '9px 10px', lineHeight: 1.5, resize: 'vertical' }}
-                />
-              ) : (
-                <input
-                  type={f.inputType || 'text'}
-                  // <input type="date"> requires an exact YYYY-MM-DD value — a full ISO
-                  // timestamp ("2026-07-20T00:00:00+00:00", what every dueAt/closeAt read
-                  // path returns) fails the native format check and the browser silently
-                  // renders it blank instead of erroring, so this slice is load-bearing.
-                  value={f.inputType === 'date' ? String(record[f.key] ?? '').slice(0, 10) : (record[f.key] ?? '')}
-                  placeholder={f.placeholder || ''}
-                  onChange={e => onChange(f.key, f.inputType === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value)}
-                  style={DRAWER_INPUT_STYLE}
-                />
-              )}
-            </label>
+      {!hasPanels ? fieldsPanel : (
+        <>
+          <Tabs
+            ariaLabel="상세 보기"
+            tabs={[{ key: FIELD_PANEL_KEY, label: infoLabel }, ...panels.map(p => ({ key: p.key, label: p.label, count: p.count }))]}
+            active={panelKey}
+            onChange={setPanelKey}
+            style={{ margin: '-16px -16px 0', padding: '0 16px' }}
+          />
+          {/* 비활성 탭은 언마운트하지 않고 감춘다 — 기록 탭이 열리기 전에도 원장을 읽어
+              탭 배지에 건수가 뜨고, 탭을 오가도 작성 중인 초안·스크롤이 살아 있다.
+              display:none 요소는 Drawer의 Tab 트랩(offsetParent 필터)에서도 빠진다. */}
+          <div role="tabpanel" aria-label={infoLabel} style={{ display: panelKey === FIELD_PANEL_KEY ? 'flex' : 'none', flexDirection: 'column', gap: 14 }}>
+            {fieldsPanel}
+          </div>
+          {panels.map(p => (
+            <div key={p.key} role="tabpanel" aria-label={p.label} style={{ display: panelKey === p.key ? 'flex' : 'none', flexDirection: 'column', gap: 12, minHeight: 0 }}>
+              {p.content}
+            </div>
           ))}
-        </div>
-      ))}
-      {children}
+        </>
+      )}
     </Drawer>
   );
 }

@@ -128,7 +128,7 @@ function resolveBrand(row) {
   return meta.brand || meta.brand_key || meta.brandKey || null;
 }
 
-function mapLead(row, companyById, contactById, trackingStartedAt = null) {
+function mapLead(row, companyById, contactById, trackingStartedAt = null, dealStatsByCompany = null) {
   const type = resolveType(row);
   const company = row.company_id ? companyById.get(row.company_id) : null;
   const contact = row.contact_id ? contactById.get(row.contact_id) : null;
@@ -179,6 +179,14 @@ function mapLead(row, companyById, contactById, trackingStartedAt = null) {
     contactPhone: contact?.phone || null,
     contactTitle: contact?.title || null,
     last: formatRelative(row.last_touch_at || row.updated_at || row.created_at),
+    // Raw ISO timestamps for the Leads table's default sort cascade — `last` above is a
+    // display string (e.g. "3일 전") and can't be re-parsed back into chronological order.
+    lastContactAt: row.last_touch_at || row.updated_at || row.created_at || null,
+    createdAt: row.created_at || null,
+    // Deals on this lead's account — same dealStatsByCompany map mapAccount() uses below.
+    // deals.lead_id is effectively unset on live rows (deal-creation ties to company_id, not
+    // the originating lead), so company_id is the join that actually yields a real count.
+    orderCount: (row.company_id && dealStatsByCompany?.get(row.company_id)?.deals) || 0,
     owner: enrichmentView.owner,
     priorityLane: enrichmentView.priorityLane,
     nextAction: enrichmentView.nextAction,
@@ -470,7 +478,7 @@ export async function getRevenueLedger() {
 
   const accountRaw = new Map(accountRows.map(a => [a.id, a]));
   const accounts = accountRows.map(row => mapAccount(row, dealStatsByCompany));
-  const leads = leadRows.map(row => mapLead(row, companyById, contactById, trackingStartedAt));
+  const leads = leadRows.map(row => mapLead(row, companyById, contactById, trackingStartedAt, dealStatsByCompany));
   const cases = caseRows.map(row => mapCase(row, accountRaw));
   const summary = buildSummary(leads, deals);
 

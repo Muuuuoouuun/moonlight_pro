@@ -963,6 +963,7 @@ button {
 }
 
 .hub-app .hub-project-page-header--detail .hub-project-header-context,
+.hub-app .hub-project-page-header--detail .hub-project-search,
 .hub-app .hub-project-page-header--detail .hub-project-brand-trigger__meta {
   display: none !important;
 }
