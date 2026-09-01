@@ -15,6 +15,7 @@ import { selectProjectAreaId } from "@/lib/pms-ui";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 import { readRevenueCache, writeRevenueCache, clearRevenueCache } from "../revenue-shared-cache";
 import { BulkBar } from "../crm-bulk-bar";
+import { PersonalRevenueRoadmap } from "./personal-revenue";
 
 // HW/SW 딜은 100만원 미만 건도 흔해서 M 고정 포맷은 "₩0.1M" 같은 값을 만든다.
 // revenue-ledger.js의 formatMoneyLabel과 같은 K/M 임계값으로 맞춘다.
@@ -360,6 +361,14 @@ function GuruCoachPanel({ onNavigate }) {
 
 export function RevenueOverview({ onNavigate }) {
   const { ledger, syncState } = useRevenueLedger();
+  const searchParams = useSearchParams();
+  const scope = searchParams?.get('scope');
+  // 개인 스코프의 Revenue 개요는 30일 캐시플로 로드맵이 본체다 (2026-08-31 계획).
+  // 이 지점 아래로 훅이 없어 조기 반환이 안전하다 — 훅을 추가하게 되면 이 분기를
+  // JSX 레벨로 내려야 한다.
+  if (scope === 'personal') {
+    return <PersonalRevenueRoadmap ledger={ledger} syncState={syncState} onNavigate={onNavigate} />;
+  }
   const LEADS = ledger.leads;
   const DEALS = ledger.deals;
   const DEAL_STAGES = ledger.stages;
@@ -1485,6 +1494,8 @@ function DealNextMeetingPanel({ deal, onNavigate }) {
 export function Deals({ workspace, onNavigate }) {
   const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
+  const queryScope = searchParams?.get('scope');
+  const effectiveWorkspace = workspace || (queryScope === 'personal' ? 'brand' : queryScope === 'classin' ? 'classin' : undefined);
   const router = useRouter();
   const pathname = usePathname();
   const DEAL_STAGES = ledger.stages;
@@ -1524,8 +1535,8 @@ export function Deals({ workspace, onNavigate }) {
 
   // Scope BEFORE grouping by stage so the kanban columns only ever show in-workspace
   // deals (pass-through when unscoped). setDeals still holds the full ledger set.
-  const ws = getWorkspace(workspace);
-  const scopedDeals = React.useMemo(() => filterDealsByWorkspace(deals, workspace), [deals, workspace]);
+  const ws = getWorkspace(effectiveWorkspace);
+  const scopedDeals = React.useMemo(() => filterDealsByWorkspace(deals, effectiveWorkspace), [deals, effectiveWorkspace]);
   // 초기화(숨기기)된 딜은 기본적으로 파이프라인에서 빠진다 — 되돌릴 수 있는 정리이지
   // 삭제가 아니다. showHidden이 켜지면 다시 전부 보인다(dashed 엣지 + 숨김 뱃지).
   const hiddenCount = React.useMemo(() => scopedDeals.filter(d => d.hidden).length, [scopedDeals]);
@@ -1637,7 +1648,7 @@ export function Deals({ workspace, onNavigate }) {
       closeAt: '', // the drawer's real, writable date field (see buildDealWrite)
       age: 0,
       // Tag in-workspace creates so the scoped pipeline doesn't silently drop them.
-      ...(ws ? { workspace } : {}),
+      ...(ws ? { workspace: effectiveWorkspace } : {}),
     }, ...prev]);
     setEditDealId(id); // open the editor immediately so the new deal can be filled in
   };
@@ -1696,9 +1707,14 @@ export function Deals({ workspace, onNavigate }) {
     if (deals.some(d => String(d.id) === String(dealParam))) {
       consumedDealRef.current = dealParam;
       setEditDealId(dealParam);
-      if (pathname) router.replace(pathname);
+      if (pathname) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete('deal');
+        const query = params.toString();
+        router.replace(query ? `${pathname}?${query}` : pathname);
+      }
     }
-  }, [dealParam, syncState, deals, pathname, router]);
+  }, [dealParam, syncState, deals, pathname, router, searchParams]);
 
   // 키보드 계층(2026-08-05 배선): j/k 카드 이동(컬럼 순서로 평탄화) · e 편집 · n 생성 ·
   // 1–5 선택 딜 스테이지 이동 · Esc 해제. 수제 n 리스너를 훅으로 흡수. 치트시트(?)의

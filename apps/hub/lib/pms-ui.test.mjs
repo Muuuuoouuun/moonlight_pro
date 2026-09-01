@@ -827,3 +827,134 @@ test("Roadmap milestone labels distinguish identical titles and dates by project
     pmsUi.buildRoadmapItemAriaLabel(beta),
   );
 });
+
+// ── PMS 컨테이너 트리 (2026-08-29 브랜드 탭 설계 §4 P0-1) ──────────────────────
+
+const CATEGORIES = [
+  { key: "sns-channel", label: "SNS 채널" },
+  { key: "ka-deal", label: "KA·딜" },
+  { key: "general", label: "일반" },
+];
+
+function container(key, extra = {}) {
+  return { key, name: key, orgScope: "personal", category: "sns-channel", projects: 0, open: 0, ...extra };
+}
+
+test("empty containers leave the tree and are reported as a count, not deleted", () => {
+  const tree = pmsUi.buildContainerTree(
+    [
+      { key: "all", name: "전체 브랜드" },
+      container("sinabro"),
+      container("gore"),
+      container("bridgemaker", { projects: 2 }),
+    ],
+    { categories: CATEGORIES },
+  );
+
+  const keys = tree.groups.flatMap((g) => g.folders.flatMap((f) => f.items.map((b) => b.key)));
+  assert.deepEqual(keys, ["bridgemaker"]);
+  assert.equal(tree.hiddenCount, 2);
+  assert.equal(tree.visibleCount, 1);
+});
+
+test("a container with only open tasks still counts as work", () => {
+  const tree = pmsUi.buildContainerTree([container("gore", { open: 3 })], { categories: CATEGORIES });
+
+  assert.equal(tree.visibleCount, 1);
+  assert.equal(tree.hiddenCount, 0);
+});
+
+test("the selected and the not-yet-saved container survive an empty tree", () => {
+  const brands = [
+    container("sinabro"),
+    container("gore"),
+    container("just-made", { preview: true }),
+  ];
+
+  const tree = pmsUi.buildContainerTree(brands, { categories: CATEGORIES, selectedKey: "sinabro" });
+  const keys = tree.groups.flatMap((g) => g.folders.flatMap((f) => f.items.map((b) => b.key)));
+
+  assert.deepEqual(keys.sort(), ["just-made", "sinabro"]);
+  assert.equal(tree.hiddenCount, 1);
+});
+
+test("showEmpty restores every hidden container without changing order", () => {
+  const brands = [container("sinabro"), container("gore", { projects: 1 }), container("22nomad")];
+
+  const shown = pmsUi.buildContainerTree(brands, { categories: CATEGORIES, showEmpty: true });
+  const keys = shown.groups.flatMap((g) => g.folders.flatMap((f) => f.items.map((b) => b.key)));
+
+  assert.deepEqual(keys, ["sinabro", "gore", "22nomad"]);
+  assert.equal(shown.hiddenCount, 0);
+});
+
+test("hiding a folder's last container removes the folder rather than leaving an empty one", () => {
+  const tree = pmsUi.buildContainerTree(
+    [container("sinabro"), container("우리학원", { category: "ka-deal", projects: 1 })],
+    { categories: CATEGORIES },
+  );
+
+  const personal = tree.groups.find((g) => g.key === "personal");
+  assert.deepEqual(personal.folders.map((f) => f.key), ["ka-deal"]);
+});
+
+test("containers split by org scope and keep their custom order", () => {
+  const brands = [
+    container("classmoon", { orgScope: "classin", projects: 1 }),
+    container("sinabro", { projects: 1 }),
+    container("gore", { projects: 1 }),
+  ];
+
+  const tree = pmsUi.buildContainerTree(brands, {
+    categories: CATEGORIES,
+    brandOrder: ["gore", "sinabro"],
+  });
+
+  const classin = tree.groups.find((g) => g.key === "classin");
+  const personal = tree.groups.find((g) => g.key === "personal");
+  assert.deepEqual(classin.folders[0].items.map((b) => b.key), ["classmoon"]);
+  assert.deepEqual(personal.folders[0].items.map((b) => b.key), ["gore", "sinabro"]);
+});
+
+// ── Roadmap 브랜드 렌즈 (§4 P0-4) ──────────────────────────────────────────────
+
+test("the roadmap brand lens keeps only that brand's projects and its milestones", () => {
+  const roadmap = {
+    projects: [
+      { id: "p1", name: "시집 출간", brandKey: "sinabro", dueAt: "2028-02-10" },
+      { id: "p2", name: "챌린지 100일", brandKey: "gore", dueAt: "2028-02-20" },
+    ],
+    milestones: [
+      { id: "m1", projectId: "p1", title: "원고 마감", targetAt: "2028-02-05" },
+      { id: "m2", projectId: "p2", title: "1주차", targetAt: "2028-02-15" },
+    ],
+  };
+
+  const all = pmsUi.buildRoadmapProjection(roadmap, { now: new Date(2028, 0, 15) });
+  const lens = pmsUi.buildRoadmapProjection(roadmap, { now: new Date(2028, 0, 15), brandKey: "sinabro" });
+
+  assert.deepEqual(all.items.map((i) => i.id).sort(), ["milestone:m1", "milestone:m2", "project:p1", "project:p2"]);
+  assert.deepEqual(lens.items.map((i) => i.id).sort(), ["milestone:m1", "project:p1"]);
+});
+
+test("a milestone whose project row is absent is dropped by the lens instead of guessed at", () => {
+  const projection = pmsUi.buildRoadmapProjection({
+    projects: [{ id: "p1", name: "시집 출간", brandKey: "sinabro", dueAt: "2028-02-10" }],
+    milestones: [{ id: "orphan", projectId: "missing", title: "출처 불명", targetAt: "2028-02-15" }],
+  }, { now: new Date(2028, 0, 15), brandKey: "sinabro" });
+
+  assert.deepEqual(projection.items.map((i) => i.id), ["project:p1"]);
+});
+
+test("roadmap items carry their brand so a row can name it without a second lookup", () => {
+  const projection = pmsUi.buildRoadmapProjection({
+    projects: [{
+      id: "p1", name: "시집 출간", brandKey: "sinabro", brandName: "시나브로",
+      startedAt: "2028-01-20", dueAt: "2028-02-10",
+    }],
+    milestones: [],
+  }, { now: new Date(2028, 0, 15) });
+
+  assert.equal(projection.items[0].brandKey, "sinabro");
+  assert.equal(projection.items[0].brandName, "시나브로");
+});

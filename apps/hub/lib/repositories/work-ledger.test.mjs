@@ -127,6 +127,9 @@ test("projects roadmap rows and milestone points preserve their durable relation
       priority: "critical",
       startedAt: "2026-07-01T00:00:00.000Z",
       dueAt: "2026-08-31T00:00:00.000Z",
+      brandId: null,
+      brandKey: null,
+      brandName: null,
     }],
     milestones: [{
       id: "milestone-1",
@@ -135,6 +138,7 @@ test("projects roadmap rows and milestone points preserve their durable relation
       status: "planned",
       targetAt: "2026-08-15",
     }],
+    brands: [],
   });
   for (const table of ["projects", "milestones"]) {
     const call = state.calls.find((entry) => entry.table === table);
@@ -238,6 +242,7 @@ test("an unconfigured workspace keeps roadmap in explicit preview", async () => 
     truncatedSources: [],
     projects: [],
     milestones: [],
+    brands: [],
   });
 });
 

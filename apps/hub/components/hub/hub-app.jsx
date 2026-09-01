@@ -65,6 +65,7 @@ const Roadmap = lazyPage(() => import("./pages/work").then(m => m.Roadmap));
 const Rhythm = lazyPage(() => import("./pages/work").then(m => m.Rhythm));
 const MyWork = lazyPage(() => import("./pages/my-work").then(m => m.MyWork));
 const Projects = lazyPage(() => import("./pages/projects").then(m => m.Projects));
+const Brands = lazyPage(() => import("./pages/brands").then(m => m.Brands));
 const Studio = lazyPage(() => import("./pages/content").then(m => m.Studio));
 const Queue = lazyPage(() => import("./pages/content").then(m => m.Queue));
 const Campaigns = lazyPage(() => import("./pages/content").then(m => m.Campaigns));
@@ -190,6 +191,7 @@ const PAGE_MAP = {
   'dashboard/work/decisions': () => <Decisions />,
   'dashboard/work/roadmap': (n) => <Roadmap onNavigate={n} />,
   'dashboard/work/rhythm': () => <Rhythm />,
+  'dashboard/brands': () => <Brands />,
   'dashboard/content/studio': () => <Studio />,
   'dashboard/content/queue': () => <Queue />,
   'dashboard/content/campaigns': () => <Campaigns />,

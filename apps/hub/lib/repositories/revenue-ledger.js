@@ -222,6 +222,7 @@ export function mapDeal(row, companyById, trackingStartedAt = null) {
     closeAt: row.expected_close_at || "",
     activityAt: row.last_activity_at || row.updated_at || row.created_at || "",
     age: ageDays(row.last_activity_at || row.updated_at || row.created_at),
+    nextAction: row.next_action || row.meta?.next_action || "",
     hidden: Boolean(row.hidden_at),
     hiddenAt: row.hidden_at || null,
     trackingEligible: isContactTrackingEligible(row, trackingStartedAt),

@@ -7,6 +7,7 @@ import { Badge, Dot, Card, IconButton, Button, Checkbox, EmptyState, Input, Sync
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import {
+  applyCustomOrder,
   buildProjectCreatePayload,
   buildProjectDraft,
   buildProjectEditDraft,
@@ -103,6 +104,15 @@ const PROJECT_CATEGORIES = [
   { key: 'ka-deal', label: 'KA·딜' },
   { key: 'general', label: '일반' },
 ];
+// 브랜드 탭이 소유하는 분류 (2026-08-29 브랜드 탭 설계 §3). PMS는 이 분류의
+// 컨테이너를 *렌더*는 하되 — 이미 프로젝트가 붙어 있을 수 있으므로 —
+// 새로 만들지는 않고, 폴더는 기본 접힘으로 연다 (§4 P0-2·P0-3).
+const BRAND_OWNED_CATEGORY = 'sns-channel';
+// 컨테이너 생성/편집 드로어에서 고를 수 있는 분류. 브랜드 소유 분류는 빠진다.
+// 이미 그 분류인 컨테이너를 편집할 때만 현재 값이 옵션으로 되살아난다.
+const CONTAINER_CATEGORY_OPTIONS = PROJECT_CATEGORIES
+  .filter(c => c.key !== BRAND_OWNED_CATEGORY)
+  .map(c => ({ value: c.key, label: c.label }));
 // 완료·보관된 프로젝트는 "터미널" — 기본 리스트에서 걷어내고 "완료·보관 항목 보기"
 // 토글로만 다시 노출한다. 삭제도 archived로의 같은 상태 전환이라 이 집합을 공유한다.
 const TERMINAL_PROJECT_STATUSES = new Set(['completed', 'archived', 'cancelled']);
@@ -136,6 +146,8 @@ const LIST_STATUS_GROUPS = [
 // 사이드바 드래그 정렬 — 분류(폴더)와 컨테이너(브랜드) 순서. UI 전용, localStorage 영속.
 const FOLDER_ORDER_KEY = 'mlp.pms.folder-order';
 const BRAND_ORDER_KEY = 'mlp.pms.brand-order';
+// 빈 컨테이너 노출 토글 (UI 전용, localStorage). 기본은 숨김.
+const EMPTY_CONTAINER_KEY = 'mlp.pms.show-empty-containers';
 
 // Q116 확정 — 기한 임박순 정렬. 무기한은 정렬에 섞지 않고 그룹 꼬리로 보낸다(Q120).
 // 무기한끼리는 원장 순서 유지 (Array.prototype.sort는 stable).
@@ -178,14 +190,6 @@ function todoTimeSection(todo, todayKey) {
   return '이후';
 }
 const DETAIL_FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
-
-// order(키 배열)에 없는 항목은 원래 순서를 유지하며 맨 뒤로 (stable sort).
-function applyCustomOrder(items, order, keyOf) {
-  if (!order || !order.length) return items;
-  const idx = new Map(order.map((k, i) => [k, i]));
-  const rank = (it) => (idx.has(keyOf(it)) ? idx.get(keyOf(it)) : Number.POSITIVE_INFINITY);
-  return [...items].sort((a, b) => rank(a) - rank(b));
-}
 
 // prevOrder를 현재 존재하는 키로 정규화한 뒤, movingKey를 targetKey '앞'으로 이동한 새 순서 배열.
 function computeMovedOrder(prevOrder, currentKeys, movingKey, targetKey) {
@@ -1105,6 +1109,11 @@ export function Projects({ workspace }) {
   // meta 통째-교체에서 유실되지 않도록 draft에 실어 보낸다.
   const editContainer = React.useCallback((container) => {
     if (!container?.id || container.key === 'all') return;
+    // 브랜드 소유 컨테이너는 PMS에서 편집하지 않는다. Engine의 update_brand가
+    // brands.meta를 {category, org_scope, source, glyph}로 통째 교체하므로, 여기서
+    // 저장하면 브랜드 탭이 읽는 철학·보이스·규칙·금지어가 지워진다. 편집은 브랜드 탭이
+    // meta 병합과 함께 가져간다 (2026-08-29 브랜드 탭 설계 §12 D1 후속).
+    if (container.category === BRAND_OWNED_CATEGORY) return;
     setContainerDraft({
       kind: 'container',
       isNew: false,
@@ -1476,33 +1485,67 @@ export function Projects({ workspace }) {
     } catch { /* defaults apply */ }
   }, []);
 
-  const brandGroups = React.useMemo(() => {
+  // 빈 컨테이너 노출 토글 — 기본은 숨김. containerTree memo가 읽으므로 먼저 선언한다.
+  const [showEmptyContainers, setShowEmptyContainers] = React.useState(false);
+  React.useEffect(() => {
+    try {
+      setShowEmptyContainers(localStorage.getItem(EMPTY_CONTAINER_KEY) === '1');
+    } catch { /* defaults apply */ }
+  }, []);
+  const toggleEmptyContainers = React.useCallback(() => {
+    setShowEmptyContainers(prev => {
+      const next = !prev;
+      try { localStorage.setItem(EMPTY_CONTAINER_KEY, next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  // 컨테이너 트리 — 두 계보의 합성 (2026-09-01 2609 병합):
+  //   ① 08-29 P0-1(win): 일 없는 컨테이너는 그리지 않는다. 숨김 판정은 pms-ui
+  //      buildContainerTree와 같은 보존 규칙(선택·preview 유지)을 따르되, 활동 술어는
+  //      mac 계보의 isBrandActive(changes 포함)를 쓴다 — 새 변동만 있는 브랜드가
+  //      토글 뒤로 사라지면 안 된다.
+  //   ② 08-19(mac): 보이는 컨테이너는 진행 신호 우선 정렬 + 폴더 하단 "진행 없음" 묶음.
+  //      숨김이 일 없는 집합을 흡수하므로 idle 묶음은 선택 중인 빈 컨테이너 정도만 남는다.
+  const containerTree = React.useMemo(() => {
     const real = brands.filter(b => b.key !== 'all');
+    const keep = (b) => showEmptyContainers || isBrandActive(b) || Boolean(b.preview) || b.key === brand;
     const scopes = [
       { key: 'classin', label: '업무 · 클래스인', items: real.filter(b => b.orgScope === 'classin') },
       { key: 'personal', label: '개인', items: real.filter(b => b.orgScope !== 'classin') },
     ];
     const orderedCategories = applyCustomOrder(PROJECT_CATEGORIES, folderOrder, c => c.key);
-    return scopes.map(g => ({
-      ...g,
-      folders: orderedCategories
-        .map(cat => {
-          const members = applyCustomOrder(g.items.filter(b => (b.category || 'general') === cat.key), brandOrder, b => b.key);
-          // 진행 신호가 있는 컨테이너가 항상 위 — 수동 드래그 순서는 각 구간 안에서만 유효.
-          const activeItems = members.filter(isBrandActive);
-          const idleItems = members.filter(b => !isBrandActive(b));
-          return {
-            ...cat,
-            id: `${g.key}:${cat.key}`,
-            items: [...activeItems, ...idleItems],
-            activeItems,
-            idleItems,
-            hasActive: activeItems.length > 0,
-          };
-        })
-        .filter(f => f.items.length > 0),
-    }));
-  }, [brands, folderOrder, brandOrder]);
+    const groups = scopes.map(g => {
+      const visibleItems = g.items.filter(keep);
+      return {
+        ...g,
+        items: visibleItems,
+        folders: orderedCategories
+          .map(cat => {
+            const members = applyCustomOrder(visibleItems.filter(b => (b.category || 'general') === cat.key), brandOrder, b => b.key);
+            // 진행 신호가 있는 컨테이너가 항상 위 — 수동 드래그 순서는 각 구간 안에서만 유효.
+            const activeItems = members.filter(isBrandActive);
+            const idleItems = members.filter(b => !isBrandActive(b));
+            return {
+              ...cat,
+              id: `${g.key}:${cat.key}`,
+              items: [...activeItems, ...idleItems],
+              activeItems,
+              idleItems,
+              hasActive: activeItems.length > 0,
+            };
+          })
+          .filter(f => f.items.length > 0),
+      };
+    });
+    return {
+      groups,
+      hiddenCount: real.filter(b => !keep(b)).length,
+      visibleCount: real.filter(keep).length,
+    };
+  }, [brands, folderOrder, brandOrder, brand, showEmptyContainers]);
+  const brandGroups = containerTree.groups;
+  const hiddenContainerCount = containerTree.hiddenCount;
 
   // Folder collapse — 저장값이 없으면 진행 신호로 기본값을 정한다: 진행 중인 컨테이너가
   // 하나도 없는 폴더는 접힘. 수동 토글은 localStorage에 영속되어 기본값을 이긴다.
@@ -1513,10 +1556,12 @@ export function Projects({ workspace }) {
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) setFoldersCollapsed(parsed);
     } catch { /* defaults apply */ }
   }, []);
-  // currentClosed는 렌더에서 기본값까지 해석한 현재 상태 — 저장 맵에는 다음 상태를 명시적으로 기록한다.
+  // currentClosed는 렌더에서 기본값까지 해석한 현재 상태 — 저장 맵에는 다음 상태를 명시적으로
+  // 기록한다. 인자가 빠진 호출은 저장 맵 기준으로 방어한다 (양 계보의 첫-클릭 버그 수정 합류).
   const toggleFolder = React.useCallback((id, currentClosed) => {
     setFoldersCollapsed(prev => {
-      const map = { ...prev, [id]: !currentClosed };
+      const closed = typeof currentClosed === 'boolean' ? currentClosed : Boolean(prev[id]);
+      const map = { ...prev, [id]: !closed };
       try { localStorage.setItem(FOLDER_STORAGE_KEY, JSON.stringify(map)); } catch { /* ignore */ }
       return map;
     });
@@ -1750,12 +1795,24 @@ export function Projects({ workspace }) {
         <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center' }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-faint)' }}>분류</div>
-            <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>프로젝트 컨테이너 · {Math.max(0, brands.length - 1)}개</div>
+            <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>
+              프로젝트 컨테이너 · {containerTree.visibleCount}개
+            </div>
           </div>
           {currentBrand && currentBrand.key !== 'all' && currentBrand.id && (
-            <IconButton icon="edit" size={24} iconSize={12} onClick={() => editContainer(currentBrand)} tooltip={`${currentBrand.name} 컨테이너 편집`} />
+            currentBrand.category === BRAND_OWNED_CATEGORY ? (
+              <IconButton
+                icon="brand"
+                size={24}
+                iconSize={12}
+                onClick={() => router.push(`/dashboard/brands?b=${encodeURIComponent(currentBrand.key)}`)}
+                tooltip={`${currentBrand.name} · 브랜드 탭에서 열기`}
+              />
+            ) : (
+              <IconButton icon="edit" size={24} iconSize={12} onClick={() => editContainer(currentBrand)} tooltip={`${currentBrand.name} 컨테이너 편집`} />
+            )
           )}
-          <IconButton icon="plus" size={24} iconSize={13} onClick={createContainer} tooltip="새 컨테이너 (KA·딜·일반)" />
+          <IconButton icon="plus" size={24} iconSize={13} onClick={createContainer} tooltip="새 컨테이너 (KA·딜 · 일반)" />
           <IconButton icon="chevronL" size={24} iconSize={13} onClick={() => setSidebarHidden(true)} tooltip="접기" />
         </div>
         <div className="scroll-y" style={{ flex: 1, padding: 6 }}>
@@ -1769,9 +1826,11 @@ export function Projects({ workspace }) {
                 // 현재 선택 브랜드를 품은 폴더는 저장값과 무관하게 항상 열린다 (자동 열림은
                 // 저장 상태를 덮어쓰지 않는다 — 07-15 스펙 §3.1의 앵커 계약과 같은 문법).
                 const containsCurrent = folder.items.some(x => x.key === brand);
+                // 저장값 없음 → 진행 컨테이너가 없으면 접힘. 브랜드 소유 분류(sns-channel)는
+                // 진행이 있어도 기본 접힘으로 시작한다 (08-29 §4 P0-3 — 관리는 브랜드 탭 몫).
                 const savedClosed = Object.prototype.hasOwnProperty.call(foldersCollapsed, folder.id)
                   ? Boolean(foldersCollapsed[folder.id])
-                  : !folder.hasActive; // 저장값 없음 → 진행 중인 컨테이너가 없으면 접힘
+                  : (folder.key === BRAND_OWNED_CATEGORY ? true : !folder.hasActive);
                 const closed = containsCurrent ? false : savedClosed;
                 const fDragging = sidebarDrag?.type === 'folder' && sidebarDrag.key === folder.key;
                 const fDropTarget = sidebarDrag?.type === 'folder' && dragOverKey === folder.id && sidebarDrag.key !== folder.key;
@@ -1833,6 +1892,27 @@ export function Projects({ workspace }) {
               })}
             </div>
           ))}
+          {(hiddenContainerCount > 0 || showEmptyContainers) && (
+            <button
+              type="button"
+              className="hub-row"
+              onClick={toggleEmptyContainers}
+              aria-expanded={showEmptyContainers}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+                marginTop: 6, padding: '7px 10px', borderRadius: 'var(--r-sm)',
+                color: 'var(--fg-faint)', fontSize: 11, textAlign: 'left',
+              }}
+            >
+              <Iconed name="chevronD" size={11} style={{ transform: showEmptyContainers ? 'none' : 'rotate(-90deg)' }} />
+              <span style={{ flex: 1 }}>
+                {showEmptyContainers ? '빈 컨테이너 숨기기' : '숨긴 컨테이너 보기'}
+              </span>
+              {!showEmptyContainers && (
+                <span className="mono" style={{ fontSize: 10.5 }}>{hiddenContainerCount}</span>
+              )}
+            </button>
+          )}
         </div>
       </aside>
       )}
@@ -1912,6 +1992,26 @@ export function Projects({ workspace }) {
                     ))}
                   </div>
                 ))}
+                {(hiddenContainerCount > 0 || showEmptyContainers) && (
+                  <button
+                    type="button"
+                    className="hub-row"
+                    onClick={toggleEmptyContainers}
+                    aria-expanded={showEmptyContainers}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '7px 10px', borderRadius: 'var(--r-sm)',
+                      color: 'var(--fg-faint)', fontSize: 11, textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ flex: 1 }}>
+                      {showEmptyContainers ? '빈 컨테이너 숨기기' : '숨긴 컨테이너 보기'}
+                    </span>
+                    {!showEmptyContainers && (
+                      <span className="mono" style={{ fontSize: 10.5 }}>{hiddenContainerCount}</span>
+                    )}
+                  </button>
+                )}
                 <div style={{ borderTop: '1px solid var(--line-soft)', marginTop: 4, padding: '6px 10px', fontSize: 10.5, color: 'var(--fg-faint)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span>사이드바로 전환</span>
                   <div style={{ flex: 1 }} />
@@ -2784,7 +2884,7 @@ export function Projects({ workspace }) {
 
       <EditDrawer
         title={containerDraft?.isNew === false ? '컨테이너 편집' : '새 컨테이너'}
-        subtitle={containerDraft?.isNew === false ? '이름·분류·소속을 변경한다 (key는 유지)' : '브랜드·KA·딜·일반을 분류와 함께 만든다'}
+        subtitle={containerDraft?.isNew === false ? '이름·분류·소속을 변경한다 (key는 유지)' : 'KA·딜 또는 일반 컨테이너를 분류와 함께 만든다 · 브랜드는 브랜드 탭에서'}
         record={containerDraft}
         fields={[
           { key: 'name', label: '이름', placeholder: '예: 우리학원 KA · 신규 브랜드' },
@@ -2793,11 +2893,11 @@ export function Projects({ workspace }) {
             row: 'container-class',
             label: '분류',
             type: 'select',
-            options: [
-              { value: 'sns-channel', label: 'SNS 채널' },
-              { value: 'ka-deal', label: 'KA·딜' },
-              { value: 'general', label: '일반' },
-            ],
+            // 브랜드 소유 분류는 새로 고를 수 없지만, 이미 그 분류인 컨테이너를
+            // 편집할 때 select가 값을 잃고 조용히 재분류하면 안 되므로 되살린다.
+            options: containerDraft?.category === BRAND_OWNED_CATEGORY
+              ? [{ value: BRAND_OWNED_CATEGORY, label: 'SNS 채널 (브랜드 탭)' }, ...CONTAINER_CATEGORY_OPTIONS]
+              : CONTAINER_CATEGORY_OPTIONS,
           },
           {
             key: 'orgScope',

@@ -21,6 +21,9 @@ export const NAV_TREE = [
   {
     key: 'brand', label: '브랜드', icon: 'brand', workspace: true,
     children: [
+      // 브랜드 탭 — 정체성·리듬·기록 (2026-08-29 브랜드 탭 설계). 아래 세 항목은
+      // 개인 스코프 별칭이며 브랜드 자체가 아니라 그 스코프의 프로젝트·콘텐츠다.
+      { key: 'brand-directory', label: '브랜드', icon: 'brand', path: 'dashboard/brands', keywords: ['brand', '브랜드', '정체성', '보이스', '리듬'] },
       { key: 'brand-projects', label: '브랜드·프로젝트', icon: 'projects', path: 'dashboard/brand/projects' },
       { key: 'brand-studio', label: '콘텐츠 스튜디오', icon: 'studio', path: 'dashboard/brand/studio' },
       { key: 'brand-queue', label: '발행 큐', icon: 'queue', path: 'dashboard/brand/queue' },

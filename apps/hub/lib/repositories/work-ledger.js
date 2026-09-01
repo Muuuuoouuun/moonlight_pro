@@ -254,18 +254,37 @@ function emptyRoadmap(source = "preview", state = "preview") {
     truncatedSources: [],
     projects: [],
     milestones: [],
+    brands: [],
   };
 }
 
-function mapRoadmapProjects(rows) {
+// Brand is a *lens* on the roadmap, not roadmap data: a failed brand read leaves
+// the timeline fully usable and just drops the filter, so it never enters
+// failedSources (2026-08-29 브랜드 탭 설계 §4 P0-4).
+function mapRoadmapBrands(rows) {
+  if (!Array.isArray(rows)) return [];
   return rows.map((row) => ({
     id: row.id,
+    key: row.slug || row.id,
     name: row.name,
-    status: row.status,
-    priority: row.priority,
-    startedAt: row.started_at ?? null,
-    dueAt: row.due_at ?? null,
   }));
+}
+
+function mapRoadmapProjects(rows, brandById = new Map()) {
+  return rows.map((row) => {
+    const brand = row.brand_id ? brandById.get(row.brand_id) : null;
+    return {
+      id: row.id,
+      name: row.name,
+      status: row.status,
+      priority: row.priority,
+      startedAt: row.started_at ?? null,
+      dueAt: row.due_at ?? null,
+      brandId: row.brand_id ?? null,
+      brandKey: brand?.key ?? null,
+      brandName: brand?.name ?? null,
+    };
+  });
 }
 
 function mapRoadmapMilestones(rows) {
@@ -278,7 +297,7 @@ function mapRoadmapMilestones(rows) {
   }));
 }
 
-function buildRoadmapState(projectRows, milestoneRows) {
+function buildRoadmapState(projectRows, milestoneRows, brandRows) {
   const projectsAvailable = Array.isArray(projectRows);
   const milestonesAvailable = Array.isArray(milestoneRows);
   const failedSources = [];
@@ -289,8 +308,11 @@ function buildRoadmapState(projectRows, milestoneRows) {
   if (projectsAvailable && projectRows.length > ROADMAP_ROW_LIMIT) truncatedSources.push("projects");
   if (milestonesAvailable && milestoneRows.length > ROADMAP_ROW_LIMIT) truncatedSources.push("milestones");
 
+  const brands = mapRoadmapBrands(brandRows);
+  const brandById = new Map(brands.map((brand) => [brand.id, brand]));
   const projects = mapRoadmapProjects(
     projectsAvailable ? projectRows.slice(0, ROADMAP_ROW_LIMIT) : [],
+    brandById,
   );
   const milestones = mapRoadmapMilestones(
     milestonesAvailable ? milestoneRows.slice(0, ROADMAP_ROW_LIMIT) : [],
@@ -319,6 +341,7 @@ function buildRoadmapState(projectRows, milestoneRows) {
     truncatedSources,
     projects,
     milestones,
+    brands,
   };
 }
 
@@ -364,7 +387,15 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
     };
   }
 
-  const [decisionRows, routineRows, profileRows, projectRows, milestoneRows, workspaceRows] = await Promise.all([
+  const [
+    decisionRows,
+    routineRows,
+    profileRows,
+    projectRows,
+    milestoneRows,
+    workspaceRows,
+    roadmapBrandRows,
+  ] = await Promise.all([
     fetchSupabaseRows("decisions", {
       limit: DECISION_ROW_LIMIT + 1,
       order: "decided_at.desc",
@@ -382,7 +413,7 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
       limit: 40,
     }),
     fetchSupabaseRows("projects", {
-      select: "id,name,status,priority,started_at,due_at",
+      select: "id,name,status,priority,started_at,due_at,brand_id",
       limit: selectedProjectId ? 2 : ROADMAP_ROW_LIMIT + 1,
       order: "due_at.asc",
       filters: withWorkspaceFilter(
@@ -402,13 +433,19 @@ export async function getWorkLedger({ projectId = null, now = new Date() } = {})
       limit: 1,
       filters: [["id", eqFilter(workspaceId)]],
     }),
+    fetchSupabaseRows("brands", {
+      select: "id,slug,name",
+      limit: 40,
+      order: "name.asc",
+      filters: withWorkspaceFilter([["status", eqFilter("active")]]),
+    }),
   ]);
 
   const workspaceTimeZoneAvailable = Array.isArray(workspaceRows) && workspaceRows.length === 1;
   const timeZone = resolveRhythmTimeZone(
     workspaceTimeZoneAvailable ? workspaceRows[0].timezone : null,
   );
-  const roadmap = buildRoadmapState(projectRows, milestoneRows);
+  const roadmap = buildRoadmapState(projectRows, milestoneRows, roadmapBrandRows);
   const profileById = new Map((profileRows || []).map((p) => [p.id, p]));
   const decisionsState = buildDecisionsState(decisionRows, profileRows);
   const decisions = Array.isArray(decisionRows)

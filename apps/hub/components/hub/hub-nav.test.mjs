@@ -36,13 +36,14 @@ function navTreePaths() {
 }
 
 // Overview joined 2026-07-15 by direct operator instruction (see hub-nav.js
-// header) — seven primary + two utility anchors.
-test("sidebar exposes exactly seven primary and two utility anchors", () => {
-  assert.equal(SIDEBAR_PRIMARY.length, 7);
+// header); brands joined 2026-08-29 (브랜드 탭 설계 §5.2 — 프로젝트 다음, 콘텐츠 앞)
+// — eight primary + two utility anchors.
+test("sidebar exposes exactly eight primary and two utility anchors", () => {
+  assert.equal(SIDEBAR_PRIMARY.length, 8);
   assert.equal(SIDEBAR_UTILITIES.length, 2);
   assert.deepEqual(
     SIDEBAR_PRIMARY.map((a) => a.key),
-    ["today", "overview", "tasks", "revenue", "followups", "projects", "content"],
+    ["today", "overview", "tasks", "revenue", "followups", "projects", "brands", "content"],
   );
 });
 
