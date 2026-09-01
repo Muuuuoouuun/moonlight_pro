@@ -41,10 +41,11 @@ const STATUS_FILTER_OPTIONS = [
 ];
 
 // 상태 필 — 리스트 뷰 전용. 색만으로 상태를 전달하지 않는다: 텍스트 라벨이 항상 함께
-// 있고, published만 moonstone(현재/완료의 명도 강조)을 쓰고 나머지는 중립이다(§5.3).
+// 있다. published는 디자인의 "채운 필"을 fg/bg 반전으로 옮긴다 — moon 램프 스텝을 직접
+// 쓰면 §5.2가 금지한 "상태 텍스트에 명도 강조"가 되므로 전경 토큰을 쓴다.
 function statusPillStyle(status) {
   if (status === "published") {
-    return { background: "var(--moon-200)", color: "var(--bg)", border: "1px solid transparent" };
+    return { background: "var(--fg)", color: "var(--bg)", border: "1px solid transparent" };
   }
   if (status === "making") {
     return { background: "var(--surface)", border: "1px solid var(--line)", color: "var(--fg-muted)" };
@@ -233,15 +234,18 @@ export function BrandContentLog({ onNavigate }) {
           icon="content"
           title={
             ledger.syncState === "error" ? "콘텐츠 로그를 불러오지 못했습니다"
-              : ledger.syncState === "live" ? "아직 기록된 콘텐츠가 없습니다"
-                : "콘텐츠 로그가 비어 있습니다"
+              : ledger.syncState === "preview" ? "Preview · 연결 필요"
+                : ledger.syncState === "live" ? "아직 기록된 콘텐츠가 없습니다"
+                  : "콘텐츠 로그가 비어 있습니다"
           }
           description={
             ledger.syncState === "error"
               ? "콘텐츠 원장을 읽지 못했습니다 — 비어 보여도 실제 기록이 있을 수 있습니다. 새로고침으로 재시도하세요."
-              : ledger.syncState === "live"
-                ? "Supabase content_items/content_variants 기록에 표시할 콘텐츠가 없습니다."
-                : "콘텐츠가 쌓이면 여기에 모입니다."
+              : ledger.syncState === "preview"
+                ? "Supabase가 연결되지 않아 라이브 기록을 읽을 수 없습니다 — 가짜 행은 만들지 않습니다."
+                : ledger.syncState === "live"
+                  ? "Supabase content_items/content_variants 기록에 표시할 콘텐츠가 없습니다."
+                  : "콘텐츠가 쌓이면 여기에 모입니다."
           }
           action={<Button variant="primary" size="sm" icon="plus" onClick={createContent}>새 콘텐츠 <Kbd>N</Kbd></Button>}
         />
@@ -281,7 +285,7 @@ export function BrandContentLog({ onNavigate }) {
                       }
                     }}
                     style={{
-                      background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 10,
+                      background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "var(--r)",
                       padding: "14px 16px", boxShadow: `inset 3px 0 0 ${e.color}`, cursor: "pointer",
                     }}
                   >
