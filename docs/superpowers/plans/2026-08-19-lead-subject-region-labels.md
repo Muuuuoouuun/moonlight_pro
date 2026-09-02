@@ -27,7 +27,7 @@
 - Create: `apps/hub/lib/sales-os/lead-labels.js`
 - Test: `apps/hub/lib/sales-os/lead-labels.test.mjs`
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 ```js
 // apps/hub/lib/sales-os/lead-labels.test.mjs
@@ -152,12 +152,12 @@ test("buildLabelProposal — 결측 필드만 제안, 기존 값·태그 폴백�
 });
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `node --import ./scripts/register-hub-alias.mjs --test apps/hub/lib/sales-os/lead-labels.test.mjs`
 Expected: FAIL — `Cannot find module ... lead-labels.js`
 
-- [ ] **Step 3: 모듈 구현**
+- [x] **Step 3: 모듈 구현**
 
 ```js
 // apps/hub/lib/sales-os/lead-labels.js
@@ -307,12 +307,12 @@ export function buildLabelProposal(row = {}) {
 }
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 Run: `node --import ./scripts/register-hub-alias.mjs --test apps/hub/lib/sales-os/lead-labels.test.mjs`
 Expected: PASS (8 tests)
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add apps/hub/lib/sales-os/lead-labels.js apps/hub/lib/sales-os/lead-labels.test.mjs
@@ -327,7 +327,7 @@ git commit -m "feat(hub): 리드 과목 라벨 정본 모듈 — 12키 어휘·�
 - Modify: `apps/hub/lib/repositories/revenue-ledger.js` (mapLead, ~131행)
 - Test: `apps/hub/lib/repositories/revenue-ledger.test.mjs` (기존 파일 확장)
 
-- [ ] **Step 1: 실패하는 테스트 추가** — 기존 테스트 파일에 append. `mapLead`는 현재 미export이므로 import 줄도 수정한다.
+- [x] **Step 1: 실패하는 테스트 추가** — 기존 테스트 파일에 append. `mapLead`는 현재 미export이므로 import 줄도 수정한다.
 
 ```js
 // import 줄 수정: import { mapDeal } from "./revenue-ledger.js";
@@ -365,12 +365,12 @@ test("mapLead: meta.subjects 우선, enrichment 태그 흡수 폴백, 출처 구
 });
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `node --import ./scripts/register-hub-alias.mjs --test apps/hub/lib/repositories/revenue-ledger.test.mjs`
 Expected: FAIL — `mapLead is not exported` (SyntaxError/undefined)
 
-- [ ] **Step 3: 구현** — `revenue-ledger.js`에 3개 편집:
+- [x] **Step 3: 구현** — `revenue-ledger.js`에 3개 편집:
 
 (a) import 추가 (기존 `resolveLeadEnrichmentView` import 근처):
 
@@ -404,12 +404,12 @@ import { SUBJECT_KEY_SET, absorbSubjectTags } from "../sales-os/lead-labels.js";
     labelSource,
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 Run: `node --import ./scripts/register-hub-alias.mjs --test apps/hub/lib/repositories/revenue-ledger.test.mjs`
 Expected: PASS (기존 mapDeal 테스트 포함 전부)
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add apps/hub/lib/repositories/revenue-ledger.js apps/hub/lib/repositories/revenue-ledger.test.mjs
@@ -424,7 +424,7 @@ git commit -m "feat(hub): mapLead에 과목·라벨 출처 노출 — meta.subje
 - Modify: `apps/hub/lib/sales-os/revenue-write.js` (buildLeadWrite, ~62행)
 - Test: `apps/hub/lib/sales-os/revenue-write.test.mjs` (기존 파일 확장)
 
-- [ ] **Step 1: 실패하는 테스트 추가**
+- [x] **Step 1: 실패하는 테스트 추가**
 
 ```js
 test("buildLeadWrite: subjects는 12키 검증(미등재 드랍)·dedupe, label_source는 유효값만", () => {
@@ -444,12 +444,12 @@ test("buildLeadWrite: subjects []는 명시적 비움, undefined는 미변경, �
 });
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `node --import ./scripts/register-hub-alias.mjs --test apps/hub/lib/sales-os/revenue-write.test.mjs`
 Expected: FAIL — `metaPatch.subjects` undefined
 
-- [ ] **Step 3: 구현** — `revenue-write.js`:
+- [x] **Step 3: 구현** — `revenue-write.js`:
 
 (a) import 추가:
 
@@ -476,12 +476,12 @@ import { SUBJECT_KEY_SET } from "./lead-labels.js";
   }
 ```
 
-- [ ] **Step 4: 통과 확인 + 전체 스위트**
+- [x] **Step 4: 통과 확인 + 전체 스위트**
 
 Run: `npm test`
 Expected: 전부 PASS (581 + 신규)
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add apps/hub/lib/sales-os/revenue-write.js apps/hub/lib/sales-os/revenue-write.test.mjs
@@ -497,7 +497,7 @@ git commit -m "feat(hub): buildLeadWrite에 과목·label_source 역매핑 — 1
 
 UI primitive라 유닛 테스트 없음(프로젝트에 DOM 테스트 인프라 없음) — Task 8 브라우저 검증이 담당. **이 파일은 다른 세션이 수정 중일 수 있다 — Read 후 현재 상태에 맞춰 적용.**
 
-- [ ] **Step 1: `ChipToggle` 추가** — `SegmentedControl` 함수 정의 위쪽에 삽입:
+- [x] **Step 1: `ChipToggle` 추가** — `SegmentedControl` 함수 정의 위쪽에 삽입:
 
 ```jsx
 // 다중 선택 칩 토글 — Leads 과목 필터 줄과 EditDrawer chips 필드가 공유한다(§8.1 primitives-first).
@@ -525,7 +525,7 @@ export function ChipToggle({ label, selected, onChange, style }) {
 }
 ```
 
-- [ ] **Step 2: EditDrawer 필드 라벨에 `labelBadge` 지원** — fieldsPanel 안 라벨 span 수정:
+- [x] **Step 2: EditDrawer 필드 라벨에 `labelBadge` 지원** — fieldsPanel 안 라벨 span 수정:
 
 기존:
 ```jsx
@@ -536,7 +536,7 @@ export function ChipToggle({ label, selected, onChange, style }) {
 <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>{f.label}{f.labelBadge || null}</span>
 ```
 
-- [ ] **Step 3: EditDrawer `chips` 필드 타입** — `f.type === 'select' ? (...)` 분기 바로 뒤에 추가 (`: f.type === 'textarea' ?` 앞):
+- [x] **Step 3: EditDrawer `chips` 필드 타입** — `f.type === 'select' ? (...)` 분기 바로 뒤에 추가 (`: f.type === 'textarea' ?` 앞):
 
 ```jsx
               ) : f.type === 'chips' ? (
@@ -556,12 +556,12 @@ export function ChipToggle({ label, selected, onChange, style }) {
                 </div>
 ```
 
-- [ ] **Step 4: 문법 확인**
+- [x] **Step 4: 문법 확인**
 
 Run: `npx next lint --dir components 2>/dev/null || node -e "require('@babel/parser')"` 대신 간단히: `npm test` (파서 에러는 다른 테스트가 revenue.jsx를 import하며 드러남) + Task 8 브라우저 로드가 최종 확인.
 Expected: 기존 테스트 전부 PASS
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add apps/hub/components/hub/hub-primitives.jsx
@@ -575,7 +575,7 @@ git commit -m "feat(hub): ChipToggle primitive + EditDrawer chips 필드·labelB
 **Files:**
 - Modify: `apps/hub/components/hub/pages/revenue.jsx` (Leads 컴포넌트)
 
-- [ ] **Step 1: import 추가** — 기존 hub-primitives import에 `CertaintyBadge` 추가(이미 있으면 스킵), 새 줄:
+- [x] **Step 1: import 추가** — 기존 hub-primitives import에 `CertaintyBadge` 추가(이미 있으면 스킵), 새 줄:
 
 ```jsx
 import { LEAD_SUBJECTS, SUBJECT_ORDER, subjectLabels } from "@/lib/sales-os/lead-labels";
@@ -583,7 +583,7 @@ import { LEAD_SUBJECTS, SUBJECT_ORDER, subjectLabels } from "@/lib/sales-os/lead
 
 (hub-primitives import 목록에 `ChipToggle`도 추가 — 필터 줄 Task 7에서 사용.)
 
-- [ ] **Step 2: 확정도 배지 헬퍼** — Leads 컴포넌트 안(`persistLead` 위쪽 아무 곳):
+- [x] **Step 2: 확정도 배지 헬퍼** — Leads 컴포넌트 안(`persistLead` 위쪽 아무 곳):
 
 ```jsx
   // 드로어 필드 라벨 옆 확정도 배지 (spec §4) — 값이 있고 출처가 알려진 경우만.
@@ -596,7 +596,7 @@ import { LEAD_SUBJECTS, SUBJECT_ORDER, subjectLabels } from "@/lib/sales-os/lead
   };
 ```
 
-- [ ] **Step 3: fields 배열 수정** — 기존 region 필드를 교체하고 과목 필드 추가:
+- [x] **Step 3: fields 배열 수정** — 기존 region 필드를 교체하고 과목 필드 추가:
 
 기존:
 ```jsx
@@ -613,7 +613,7 @@ import { LEAD_SUBJECTS, SUBJECT_ORDER, subjectLabels } from "@/lib/sales-os/lead
             options: LEAD_SUBJECTS.map(s => ({ value: s.key, label: s.label })) },
 ```
 
-- [ ] **Step 4: onChange 승격 배선** — 드로어 onChange 교체:
+- [x] **Step 4: onChange 승격 배선** — 드로어 onChange 교체:
 
 기존:
 ```jsx
@@ -631,7 +631,7 @@ import { LEAD_SUBJECTS, SUBJECT_ORDER, subjectLabels } from "@/lib/sales-os/lead
         })}
 ```
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add apps/hub/components/hub/pages/revenue.jsx
@@ -645,7 +645,7 @@ git commit -m "feat(hub): 리드 드로어 과목 chips·지역 확정도 배지
 **Files:**
 - Modify: `apps/hub/components/hub/pages/revenue.jsx`
 
-- [ ] **Step 1: `sortLeads` 확장** — 결측 말미 규칙과 새 키 2개:
+- [x] **Step 1: `sortLeads` 확장** — 결측 말미 규칙과 새 키 2개:
 
 기존 sortLeads의 `const keyOf = ...`/`return [...list].sort(...)` 부분 교체:
 
@@ -676,14 +676,14 @@ function sortLeads(list, sort) {
 }
 ```
 
-- [ ] **Step 2: `leadCols`에 무변별 자동 숨김 편입** — memo return에 추가:
+- [x] **Step 2: `leadCols`에 무변별 자동 숨김 편입** — memo return에 추가:
 
 ```jsx
       subjects: varied(l => (l.subjects || []).join(',')),
       region: varied(l => l.region || ''),
 ```
 
-- [ ] **Step 3: `leadsGrid` 컬럼 추가** — Source와 Stage 사이:
+- [x] **Step 3: `leadsGrid` 컬럼 추가** — Source와 Stage 사이:
 
 ```jsx
   const leadsGrid = React.useMemo(() => [
@@ -695,13 +695,13 @@ function sortLeads(list, sort) {
 ```
 (주의: `filter(Boolean)` — 오타 없이.)
 
-- [ ] **Step 4: 헤더 행** — Source SortHead와 Stage SortHead 사이에 삽입:
+- [x] **Step 4: 헤더 행** — Source SortHead와 Stage SortHead 사이에 삽입:
 
 ```jsx
 {leadCols.subjects && <SortHead k="subjects" sort={sort} onToggle={toggleSort} className="hub-lc-m">과목</SortHead>}{leadCols.region && <SortHead k="region" sort={sort} onToggle={toggleSort} className="hub-lc-m">지역</SortHead>}
 ```
 
-- [ ] **Step 5: 셀 컴포넌트 + 행 셀** — 파일 상단(모듈 스코프, `sortLeads` 아래)에 추가:
+- [x] **Step 5: 셀 컴포넌트 + 행 셀** — 파일 상단(모듈 스코프, `sortLeads` 아래)에 추가:
 
 ```jsx
 // 과목·지역 라벨 셀 — 권장(derived/searched) 값은 ◇ 마커 + 저명도, 확정/무출처는 plain.
@@ -734,7 +734,7 @@ function LeadLabelCell({ text, source, noun }) {
             )}
 ```
 
-- [ ] **Step 6: 모바일 메타 줄 확장** — `hub-lead-mobile-meta` span 내용 끝에 추가:
+- [x] **Step 6: 모바일 메타 줄 확장** — `hub-lead-mobile-meta` span 내용 끝에 추가:
 
 기존:
 ```jsx
@@ -745,7 +745,7 @@ function LeadLabelCell({ text, source, noun }) {
                 {l.type === 'personal' ? 'Personal' : 'Company'} · score {l.score ?? '—'}{l.priorityLane === 'customer_success' ? ' · CS' : ''}{(l.subjects || []).length ? ` · ${subjectLabels(l.subjects).join('·')}` : ''}{l.region ? ` · ${l.region}` : ''}
 ```
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add apps/hub/components/hub/pages/revenue.jsx
@@ -759,7 +759,7 @@ git commit -m "feat(hub): 리드 목록 과목·지역 컬럼 — 3단 정렬(�
 **Files:**
 - Modify: `apps/hub/components/hub/pages/revenue.jsx`
 
-- [ ] **Step 1: 필터 상태 + 파생** — `const [sort, setSort] = ...` 근처에 추가:
+- [x] **Step 1: 필터 상태 + 파생** — `const [sort, setSort] = ...` 근처에 추가:
 
 ```jsx
   // 과목·지역 필터 (spec §5.3) — 과목은 복수 OR, 지역은 시도 단위 단일, 둘 사이는 AND.
@@ -774,7 +774,7 @@ git commit -m "feat(hub): 리드 목록 과목·지역 컬럼 — 3단 정렬(�
   const clearLabelFilters = () => { setSubjectFilter(new Set()); setRegionSido('all'); };
 ```
 
-- [ ] **Step 2: `filtered` memo 확장** — return 식과 deps 교체:
+- [x] **Step 2: `filtered` memo 확장** — return 식과 deps 교체:
 
 ```jsx
   const filtered = React.useMemo(() => LEADS.filter(l => {
@@ -788,7 +788,7 @@ git commit -m "feat(hub): 리드 목록 과목·지역 컬럼 — 3단 정렬(�
   }), [LEADS, filter, term, subjectFilter, regionSido]);
 ```
 
-- [ ] **Step 3: 필터 줄 UI** — `{cardState && ...}` 블록 뒤, `{wsEmpty && ...}` 앞에 삽입:
+- [x] **Step 3: 필터 줄 UI** — `{cardState && ...}` 블록 뒤, `{wsEmpty && ...}` 앞에 삽입:
 
 ```jsx
       {!wsEmpty && (
@@ -823,7 +823,7 @@ git commit -m "feat(hub): 리드 목록 과목·지역 컬럼 — 3단 정렬(�
       )}
 ```
 
-- [ ] **Step 4: 0건 빈 상태에 필터 해제 추가** — 기존 0건 블록의 버튼 영역 교체:
+- [x] **Step 4: 0건 빈 상태에 필터 해제 추가** — 기존 0건 블록의 버튼 영역 교체:
 
 기존:
 ```jsx
@@ -843,7 +843,7 @@ git commit -m "feat(hub): 리드 목록 과목·지역 컬럼 — 3단 정렬(�
             </div>
 ```
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add apps/hub/components/hub/pages/revenue.jsx
@@ -856,16 +856,16 @@ git commit -m "feat(hub): 리드 과목 칩·지역 시도 필터 줄 — OR×AN
 
 **Files:** 없음 (검증 + 발견 결함 수정)
 
-- [ ] **Step 1:** `npm test` 전체 PASS 확인.
-- [ ] **Step 2:** preview로 `http://localhost:3000/dashboard/revenue/leads` 열기 (:3000에 next dev가 이미 떠 있으면 재사용). 콘솔 에러 0 확인.
-- [ ] **Step 3:** 확인 항목 — read_page/screenshot으로 각각 증빙:
+- [x] **Step 1:** `npm test` 전체 PASS 확인.
+- [x] **Step 2:** preview로 `http://localhost:3000/dashboard/revenue/leads` 열기 (:3000에 next dev가 이미 떠 있으면 재사용). 콘솔 에러 0 확인.
+- [x] **Step 3:** 확인 항목 — read_page/screenshot으로 각각 증빙:
   - 과목·지역 컬럼 표시(53·51건 값 보유), 태그 폴백 행은 ◇ + 저명도.
   - 과목 헤더 클릭 3단(어휘 순 asc → desc → 해제 시 기본 정렬 복귀), 결측 행이 asc·desc 모두 말미.
   - 필터: `수학` 칩 → 행 수 감소, `경기` 시도 선택 → AND 적용, `전체 해제` 동작, 0건 시 빈 상태에 `필터 해제`.
   - 드로어: 행 클릭 → 과목 chips 표시, 폴백 값에 `◇ 권장` 배지 → 칩 토글 → 배지가 `확정`으로 → 저장 → 새로고침 후에도 확정 유지(라이브 왕복).
   - 검색·스코프 토글·기본 정렬(최근 연락 캐스케이드) 회귀 없음.
-- [ ] **Step 4:** `resize_window` mobile(375) — 과목·지역 컬럼 숨김, 이름 밑 메타 줄에 과목·지역 병합, 필터 줄 가로 스크롤(ScrollShadowX) 확인. 확인 후 desktop 복귀.
-- [ ] **Step 5:** 발견 결함은 소스 수정 → Step 2부터 재확인 → 수정분은 해당 태스크 커밋에 `--amend` 하지 말고 별도 fix 커밋:
+- [x] **Step 4:** `resize_window` mobile(375) — 과목·지역 컬럼 숨김, 이름 밑 메타 줄에 과목·지역 병합, 필터 줄 가로 스크롤(ScrollShadowX) 확인. 확인 후 desktop 복귀.
+- [x] **Step 5:** 발견 결함은 소스 수정 → Step 2부터 재확인 → 수정분은 해당 태스크 커밋에 `--amend` 하지 말고 별도 fix 커밋:
 
 ```bash
 git add apps/hub/components/hub/pages/revenue.jsx apps/hub/components/hub/hub-primitives.jsx
@@ -882,7 +882,7 @@ git commit -m "fix(hub): 리드 라벨 UI 브라우저 검증 보정"
 
 제안 로직(`buildLabelProposal`)은 Task 1에서 이미 테스트됨 — 이 스크립트는 IO 셸이라 유닛 테스트 없음.
 
-- [ ] **Step 1: 스크립트 작성**
+- [x] **Step 1: 스크립트 작성**
 
 ```js
 #!/usr/bin/env node
@@ -947,7 +947,7 @@ main().catch((error) => { console.error(error); process.exitCode = 1; });
 Run: `node --env-file=.env.local scripts/propose-lead-labels.mjs --out <scratchpad>/lead-label-proposal.json`
 Expected: `total=117 inferred=~35+ searchSubjects=~25 searchRegion=~65` 수준의 요약 출력, JSON 생성.
 
-- [ ] **Step 3: 커밋** (JSON은 커밋하지 않는다 — scratchpad 산출물):
+- [x] **Step 3: 커밋** (JSON은 커밋하지 않는다 — scratchpad 산출물):
 
 ```bash
 git add scripts/propose-lead-labels.mjs
@@ -963,7 +963,7 @@ git commit -m "feat(scripts): 리드 라벨 백필 제안 스크립트 — 읽�
 - Create: `scripts/lead-label-apply-core.test.mjs`
 - Create: `scripts/apply-lead-labels.mjs`
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 ```js
 // scripts/lead-label-apply-core.test.mjs
@@ -1010,12 +1010,12 @@ test("이미 값이 있는 필드는 출처 무관 스킵, 적용할 것이 없�
 });
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `node --test scripts/lead-label-apply-core.test.mjs`
 Expected: FAIL — module not found
 
-- [ ] **Step 3: 코어 구현**
+- [x] **Step 3: 코어 구현**
 
 ```js
 // scripts/lead-label-apply-core.mjs
@@ -1052,12 +1052,12 @@ export function buildLabelApplyPatch(existingMeta, proposal = {}) {
 }
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 Run: `node --test scripts/lead-label-apply-core.test.mjs`
 Expected: PASS (3 tests). 이어서 `npm test` 전체 PASS.
 
-- [ ] **Step 5: CLI 작성**
+- [x] **Step 5: CLI 작성**
 
 ```js
 // scripts/apply-lead-labels.mjs
@@ -1129,7 +1129,7 @@ async function main() {
 main().catch((error) => { console.error(error); process.exitCode = 1; });
 ```
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add scripts/lead-label-apply-core.mjs scripts/lead-label-apply-core.test.mjs scripts/apply-lead-labels.mjs
