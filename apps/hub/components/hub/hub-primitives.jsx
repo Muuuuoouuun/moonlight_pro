@@ -659,6 +659,30 @@ const SEGMENT_SCALE = {
   md: { pad: '9px 13px', fs: 12.5, gap: 6, radius: 5 },
 };
 
+// 다중 선택 칩 토글 — Leads 과목 필터 줄과 EditDrawer chips 필드가 공유한다(§8.1 primitives-first).
+// 단일 선택 뷰 전환은 SegmentedControl, on/off 다중 선택은 이것. aria-pressed로 상태 전달.
+// 선택 표시는 §5.2대로 조용한 서피스 승격(surface-3 + line-strong) — 액센트/색상 분류 금지.
+export function ChipToggle({ label, selected, onChange, style }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={Boolean(selected)}
+      onClick={() => onChange?.(!selected)}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
+        border: `1px solid ${selected ? 'var(--line-strong)' : 'var(--line)'}`,
+        background: selected ? 'var(--surface-3)' : 'transparent',
+        color: selected ? 'var(--fg)' : 'var(--fg-muted)',
+        fontSize: 12, fontWeight: 500, lineHeight: 1.2, whiteSpace: 'nowrap',
+        ...style,
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 export function SegmentedControl({ options, value, onChange, className, style, label, fill, size = 'sm' }) {
   const scale = SEGMENT_SCALE[size] || SEGMENT_SCALE.sm;
   return (
@@ -933,11 +957,26 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
             const focusRef = hasPanels && i === 0 && j === 0 ? firstFieldRef : undefined;
             return (
             <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5, ...(group.fields.length > 1 ? { flex: 1, minWidth: 0 } : null) }}>
-              <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>{f.label}</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>{f.label}{f.labelBadge || null}</span>
               {f.type === 'select' ? (
                 <select ref={focusRef} value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
                   {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
+              ) : f.type === 'chips' ? (
+                <div role="group" aria-label={f.label} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '2px 0' }}>
+                  {f.options.map(o => {
+                    const current = Array.isArray(record[f.key]) ? record[f.key] : [];
+                    const selected = current.includes(o.value);
+                    return (
+                      <ChipToggle
+                        key={o.value}
+                        label={o.label}
+                        selected={selected}
+                        onChange={() => onChange(f.key, selected ? current.filter(v => v !== o.value) : [...current, o.value])}
+                      />
+                    );
+                  })}
+                </div>
               ) : f.type === 'textarea' ? (
                 <textarea
                   ref={focusRef}
