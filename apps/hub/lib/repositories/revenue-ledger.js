@@ -10,6 +10,7 @@ import {
   isContactTrackingEligible,
 } from "@/lib/sales-os/contact-tracking";
 import { resolveLeadEnrichmentView } from "../sales-os/lead-view.js";
+import { SUBJECT_KEY_SET, absorbSubjectTags } from "../sales-os/lead-labels.js";
 import { DEAL_STAGES, STAGE_ALIASES, LEGACY_DB_STAGE_VALUES } from "../deal-stages.js";
 
 const LEAD_STAGE_LABEL = {
@@ -128,7 +129,7 @@ function resolveBrand(row) {
   return meta.brand || meta.brand_key || meta.brandKey || null;
 }
 
-function mapLead(row, companyById, contactById, trackingStartedAt = null, dealStatsByCompany = null) {
+export function mapLead(row, companyById, contactById, trackingStartedAt = null, dealStatsByCompany = null) {
   const type = resolveType(row);
   const company = row.company_id ? companyById.get(row.company_id) : null;
   const contact = row.contact_id ? contactById.get(row.contact_id) : null;
@@ -145,6 +146,18 @@ function mapLead(row, companyById, contactById, trackingStartedAt = null, dealSt
   const enrichmentView = resolveLeadEnrichmentView(row);
   const value = enrichmentView.valueAmount || 0;
   const units = toNumber(meta.units ?? meta.unit_count, 0);
+  // 과목 라벨 (2026-08-19 spec §1) — meta.subjects(운영자 편집 정본)가 있으면 그것만,
+  // 없으면 enrichment의 subject:* 태그를 12키 어휘로 흡수해 폴백 표시. 폴백 출처는 derived.
+  // meta.enrichment는 파이프라인 소유라 여기서 절대 쓰지 않는다.
+  const subjects = Array.isArray(meta.subjects)
+    ? meta.subjects.map(String).filter((k) => SUBJECT_KEY_SET.has(k))
+    : absorbSubjectTags(enrichmentView.enrichmentTags);
+  const labelSourceMeta = meta.label_source && typeof meta.label_source === "object" ? meta.label_source : {};
+  const labelSource = {
+    subjects: labelSourceMeta.subjects
+      || (!Array.isArray(meta.subjects) && subjects.length ? "derived" : null),
+    region: labelSourceMeta.region || null,
+  };
 
   return {
     id: row.id,
@@ -170,6 +183,8 @@ function mapLead(row, companyById, contactById, trackingStartedAt = null, dealSt
     // Lightweight meta-backed tags — editable in the Leads EditDrawer, reversed by
     // buildLeadWrite. '' fallbacks keep the drawer inputs controlled.
     region: enrichmentView.region,
+    subjects,
+    labelSource,
     scale: meta.scale || "",
     situation: meta.situation || "",
     units: units > 0 ? units : "",
