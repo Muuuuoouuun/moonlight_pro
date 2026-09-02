@@ -688,13 +688,25 @@ export function Leads({ workspace }) {
     return <CertaintyBadge state={src === 'operator' ? 'confirmed' : 'recommended'} />;
   };
   const term = search.trim().toLowerCase();
+  // 과목·지역 필터 (spec §5.3) — 과목은 복수 OR, 지역은 시도 단위 단일, 둘 사이는 AND.
+  const [subjectFilter, setSubjectFilter] = React.useState(() => new Set());
+  const [regionSido, setRegionSido] = React.useState('all');
+  const sidoOptions = React.useMemo(() => {
+    const set = new Set();
+    LEADS.forEach(l => { const s = String(l.region || '').split('-')[0].trim(); if (s) set.add(s); });
+    return [...set].sort((a, b) => a.localeCompare(b, 'ko'));
+  }, [LEADS]);
+  const labelFiltersActive = subjectFilter.size > 0 || regionSido !== 'all';
+  const clearLabelFilters = () => { setSubjectFilter(new Set()); setRegionSido('all'); };
   const filtered = React.useMemo(() => LEADS.filter(l => {
     const searchText = [l.name, l.companyName, l.contactName, l.contactPhone, l.contactEmail, l.source, l.stage, l.region, l.nextAction, ...(l.enrichmentTags || [])]
       .filter(Boolean)
       .join(' ')
       .toLowerCase();
-    return (filter === 'all' || l.type === filter) && (!term || searchText.includes(term));
-  }), [LEADS, filter, term]);
+    const matchesSubject = subjectFilter.size === 0 || (l.subjects || []).some(k => subjectFilter.has(k));
+    const matchesRegion = regionSido === 'all' || String(l.region || '').split('-')[0] === regionSido;
+    return (filter === 'all' || l.type === filter) && (!term || searchText.includes(term)) && matchesSubject && matchesRegion;
+  }), [LEADS, filter, term, subjectFilter, regionSido]);
   // 무변별 컬럼 자동 숨김(28차 사용성) — 전 행이 같은 값인 컬럼은 신호가 0이라 표에서 뺀다.
   // eeocrm 이관 직후처럼 Type=Company·Source=eeocrm·Score=25가 117행 반복되던 화면이 대상.
   // 판정은 워크스페이스 전체 목록(LEADS) 기준 — 검색·필터로 시야가 좁아져도 컬럼이 출렁이지 않는다.
@@ -976,6 +988,37 @@ export function Leads({ workspace }) {
         );
       })()}
 
+      {!wsEmpty && (
+        <ScrollShadowX>
+          <div role="group" aria-label="과목·지역 필터" style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 2 }}>
+            {LEAD_SUBJECTS.map(s => (
+              <ChipToggle
+                key={s.key}
+                label={s.label}
+                selected={subjectFilter.has(s.key)}
+                onChange={() => setSubjectFilter(prev => {
+                  const next = new Set(prev);
+                  if (next.has(s.key)) next.delete(s.key); else next.add(s.key);
+                  return next;
+                })}
+              />
+            ))}
+            <select
+              aria-label="지역 필터 (시도)"
+              value={regionSido}
+              onChange={e => setRegionSido(e.target.value)}
+              style={{ height: 26, padding: '0 8px', borderRadius: 'var(--r-sm)', border: '1px solid var(--line)', background: 'var(--surface)', color: regionSido === 'all' ? 'var(--fg-muted)' : 'var(--fg)', fontSize: 12, flexShrink: 0 }}
+            >
+              <option value="all">전체 지역</option>
+              {sidoOptions.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            {labelFiltersActive && (
+              <Button variant="ghost" size="xs" onClick={clearLabelFilters} style={{ flexShrink: 0 }}>전체 해제</Button>
+            )}
+          </div>
+        </ScrollShadowX>
+      )}
+
       {wsEmpty && (
         syncState === 'error' ? (
           <LedgerReadError noun="리드 목록" onRetry={reloadLedger} />
@@ -1005,7 +1048,8 @@ export function Leads({ workspace }) {
             <div style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>
               {term ? <>"<span className="mono">{search}</span>" 검색 결과 0건 · 필터: {filter}</> : <>필터: {filter} · {LEADS.length}건 중 0건</>}
             </div>
-            <div style={{ marginTop: 6 }}>
+            <div style={{ marginTop: 6, display: 'flex', gap: 6, justifyContent: 'center' }}>
+              {labelFiltersActive && <Button variant="ghost" size="xs" onClick={clearLabelFilters}>필터 해제</Button>}
               {term
                 ? <Button variant="ghost" size="xs" onClick={() => setSearch('')}>검색 지우기</Button>
                 : <Button variant="secondary" size="xs" icon="plus" onClick={createLead}>리드 추가</Button>}
