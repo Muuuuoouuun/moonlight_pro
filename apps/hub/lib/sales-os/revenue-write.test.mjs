@@ -256,3 +256,19 @@ test("persistRevenueRecord returns preview when workspace is unset", async () =>
   assert.equal(result.status, "preview");
   assert.equal(calls.length, 0); // never hit the network
 });
+
+test("buildLeadWrite: subjects는 12키 검증(미등재 드랍)·dedupe, label_source는 유효값만", () => {
+  const { metaPatch } = buildLeadWrite({
+    subjects: ["math", "essay", "bogus", "math"],
+    labelSource: { subjects: "operator", region: "searched" },
+  });
+  assert.deepEqual(metaPatch.subjects, ["math", "essay"]);
+  assert.deepEqual(metaPatch.label_source, { subjects: "operator", region: "searched" });
+});
+
+test("buildLeadWrite: subjects []는 명시적 비움, undefined는 미변경, 무효 출처는 드랍", () => {
+  assert.deepEqual(buildLeadWrite({ subjects: [] }).metaPatch.subjects, []);
+  assert.equal("subjects" in buildLeadWrite({ name: "x" }).metaPatch, false);
+  assert.equal("label_source" in buildLeadWrite({ name: "x" }).metaPatch, false);
+  assert.deepEqual(buildLeadWrite({ labelSource: { subjects: "guessed" } }).metaPatch.label_source, {});
+});

@@ -8,6 +8,7 @@
 
 import { eqFilter, fetchSupabaseRows } from "../server-read.js";
 import { UNREFERENCED_GUARD, countCustomerReferences, isCustomerTable } from "./customer-delete.js";
+import { SUBJECT_KEY_SET } from "./lead-labels.js";
 import {
   deleteSupabaseRecord,
   insertSupabaseRecord,
@@ -94,6 +95,21 @@ export function buildLeadWrite(payload = {}) {
   if (payload.units !== undefined) {
     const n = Number(payload.units);
     metaPatch.units = Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+  }
+
+  // 과목·라벨 출처 (2026-08-19 spec §6) — subjects는 12키 고정 어휘만 통과(미등재 드랍),
+  // label_source는 필드별 operator|derived|searched만. undefined=미변경 스킵, []=명시적 비움.
+  if (payload.subjects !== undefined) {
+    const list = Array.isArray(payload.subjects) ? payload.subjects.map(String) : [];
+    metaPatch.subjects = [...new Set(list.filter((key) => SUBJECT_KEY_SET.has(key)))];
+  }
+  if (payload.labelSource !== undefined) {
+    const src = payload.labelSource && typeof payload.labelSource === "object" ? payload.labelSource : {};
+    const valid = new Set(["operator", "derived", "searched"]);
+    const next = {};
+    if (valid.has(src.subjects)) next.subjects = src.subjects;
+    if (valid.has(src.region)) next.region = src.region;
+    metaPatch.label_source = next;
   }
 
   // Follow-up fields — next_action is a real leads column; snooze_until lives in meta
