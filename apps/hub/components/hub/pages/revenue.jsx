@@ -3,11 +3,12 @@
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, Progress } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, Progress, CertaintyBadge, ChipToggle } from "../hub-primitives";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { useCrmKeyboard, useCrmSelection, usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
+import { LEAD_SUBJECTS, SUBJECT_ORDER, subjectLabels } from "@/lib/sales-os/lead-labels";
 import { buildAccountRelationshipDetail } from "@/lib/crm-account-detail";
 import { DEAL_STAGES, STAGE_FILL, STAGE_LINE } from "@/lib/deal-stages";
 import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
@@ -650,6 +651,14 @@ export function Leads({ workspace }) {
   const LEADS = React.useMemo(() => filterLeadsByWorkspace(mergedLeads, workspace), [mergedLeads, workspace]);
   const wsEmpty = Boolean(ws) && LEADS.length === 0;
   const editingLead = editLeadId ? mergedLeads.find(l => l.id === editLeadId) : null;
+  // 드로어 필드 라벨 옆 확정도 배지 (spec §4) — 값이 있고 출처가 알려진 경우만.
+  // operator=확정(실선), derived/searched=권장(파선 ◇). 출처 미상(기존 값)은 배지 없음.
+  const labelCertainty = (field) => {
+    const src = editingLead?.labelSource?.[field];
+    const has = field === 'subjects' ? (editingLead?.subjects || []).length > 0 : Boolean(editingLead?.region);
+    if (!has || !src) return null;
+    return <CertaintyBadge state={src === 'operator' ? 'confirmed' : 'recommended'} />;
+  };
   const term = search.trim().toLowerCase();
   const filtered = React.useMemo(() => LEADS.filter(l => {
     const searchText = [l.name, l.companyName, l.contactName, l.contactPhone, l.contactEmail, l.source, l.stage, l.region, l.nextAction, ...(l.enrichmentTags || [])]
@@ -1044,15 +1053,24 @@ export function Leads({ workspace }) {
           { key: 'type', row: 'r1', label: '타입', type: 'select', options: [{ value: 'company', label: 'Company' }, { value: 'personal', label: 'Personal' }] },
           { key: 'stage', row: 'r1', label: '단계', type: 'select', options: [{ value: 'New', label: 'New' }, { value: 'Contact', label: 'Contact' }, { value: 'Qualified', label: 'Qualified' }, { value: 'Customer', label: 'Customer' }, { value: 'Lost', label: 'Lost' }] },
           { key: 'source', row: 'r2', label: '유입경로', placeholder: 'Referral · Website · Meta…' },
-          { key: 'region', row: 'r2', label: '지역', placeholder: '서울 · 경기 · 부산…' },
+          { key: 'region', row: 'r2', label: '지역', placeholder: '경기-안양 · 서울-강남…', labelBadge: labelCertainty('region') },
           { key: 'scale', row: 'r3', label: '규모', placeholder: '학생수 · 직원수' },
           { key: 'units', row: 'r3', label: '도입 댓수', inputType: 'number', placeholder: '0' },
+          { key: 'subjects', label: '과목', type: 'chips', labelBadge: labelCertainty('subjects'),
+            options: LEAD_SUBJECTS.map(s => ({ value: s.key, label: s.label })) },
           { key: 'situation', label: '현재 상황', placeholder: '검토중 · 경쟁사 사용 · 예산확보…' },
           // 딜과 달리 텍스트 입력이 의도: 리드 value는 "₩1.2M" 표시 문자열로 읽혀 오고
           // parseMoneyLabel이 축약형(₩1.2M · 1.2M · 1200000)을 그대로 받는다.
           { key: 'value', label: '금액', placeholder: '₩1.2M · 1200000' },
         ]}
-        onChange={(key, val) => setLeadEdits(prev => ({ ...prev, [editLeadId]: { ...prev[editLeadId], [key]: val } }))}
+        onChange={(key, val) => setLeadEdits(prev => {
+          const patch = { ...prev[editLeadId], [key]: val };
+          // 과목·지역을 손대는 순간 그 필드만 확정(operator)으로 승격 — 안 건드린 필드 출처는 보존 (spec §4).
+          if (key === 'subjects' || key === 'region') {
+            patch.labelSource = { ...(editingLead?.labelSource || {}), ...prev[editLeadId]?.labelSource, [key]: 'operator' };
+          }
+          return { ...prev, [editLeadId]: patch };
+        })}
         onSave={persistLead}
         onDelete={deleteLead}
         onClose={() => setEditLeadId(null)}
