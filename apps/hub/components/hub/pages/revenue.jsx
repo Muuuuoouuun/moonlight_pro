@@ -73,13 +73,23 @@ const LEAD_STAGE_ORDER = { New: 0, Contact: 1, Qualified: 2, Customer: 3, Lost: 
 function sortLeads(list, sort) {
   if (!sort.key) return defaultSortLeads(list);
   const dir = sort.dir === 'asc' ? 1 : -1;
+  // 과목·지역 결측은 방향 무관 항상 말미 (spec §5.2 — 기본 정렬 타임스탬프 결측과 동일 계약)
+  const missingOf = (l) => (
+    sort.key === 'subjects' ? !(Array.isArray(l.subjects) && l.subjects.length)
+    : sort.key === 'region' ? !String(l.region || '').trim()
+    : false
+  );
   const keyOf = (l) => {
     if (sort.key === 'value') return parseAmount(l.value);
     if (sort.key === 'score') return Number(l.score) || 0;
     if (sort.key === 'stage') return LEAD_STAGE_ORDER[l.stage] ?? 99;
+    if (sort.key === 'subjects') return SUBJECT_ORDER[(l.subjects || [])[0]] ?? 99; // 첫 과목의 어휘 순서
+    if (sort.key === 'region') return String(l.region || '');
     return String(l[sort.key] || '').toLowerCase();
   };
   return [...list].sort((a, b) => {
+    const ma = missingOf(a), mb = missingOf(b);
+    if (ma !== mb) return ma ? 1 : -1;
     const va = keyOf(a), vb = keyOf(b);
     return va < vb ? -dir : va > vb ? dir : 0;
   });
@@ -98,6 +108,24 @@ function defaultSortLeads(list) {
     || timeOf(b.createdAt) - timeOf(a.createdAt)
     || (Number(b.orderCount) || 0) - (Number(a.orderCount) || 0)
   ));
+}
+
+// 과목·지역 라벨 셀 — 권장(derived/searched) 값은 ◇ 마커 + 저명도, 확정/무출처는 plain.
+// §11 직접 라벨 요건은 드로어의 CertaintyBadge가 담당하고, 밀도 표에서는 aria로 전달한다.
+function LeadLabelCell({ text, source, noun }) {
+  const recommended = source === 'derived' || source === 'searched';
+  return (
+    <span
+      className="hub-lc-m"
+      aria-label={text ? `${noun} ${text}${recommended ? ' (권장)' : ''}` : `${noun} 미입력`}
+      style={{
+        fontSize: 12, paddingRight: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        color: recommended ? 'var(--fg-dim)' : 'var(--fg-muted)',
+      }}
+    >
+      {text ? <>{recommended && <span aria-hidden>◇ </span>}{text}</> : <span style={{ color: 'var(--fg-dim)' }}>—</span>}
+    </span>
+  );
 }
 
 function formatPercentDelta(current, previous) {
@@ -689,12 +717,15 @@ export function Leads({ workspace }) {
       type: varied(l => l.type),
       source: varied(l => l.source),
       score: varied(l => l.score) || LEADS.some(l => l.priorityLane === 'customer_success'),
+      subjects: varied(l => (l.subjects || []).join(',')),
+      region: varied(l => l.region || ''),
       nextActionTemplate: LEADS.length > 3 && modalCount >= LEADS.length * 0.6 ? modal : null,
     };
   }, [LEADS]);
   const leadsGrid = React.useMemo(() => [
     '26px', 'minmax(0, 1fr)',
     leadCols.type && '112px', leadCols.source && '112px',
+    leadCols.subjects && '104px', leadCols.region && '96px',
     '124px', leadCols.score && '100px', '92px',
   ].filter(Boolean).join(' '), [leadCols]);
   const sortedLeads = React.useMemo(() => sortLeads(filtered, sort), [filtered, sort]);
@@ -965,7 +996,7 @@ export function Leads({ workspace }) {
       <Card pad={false} className="hub-table-card hub-leads-table">
         <div className="hub-leads-grid" style={{ display: 'grid', gridTemplateColumns: leadsGrid, gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
           {/* Owner 컬럼 없음 — 1인 운영이라 항상 Me이고 buildLeadWrite가 owner를 저장한 적이 없다(드로어와 동일 결정). */}
-          <span /><SortHead k="name" sort={sort} onToggle={toggleSort}>Name</SortHead>{leadCols.type && <span className="hub-lc-m">Type</span>}{leadCols.source && <SortHead k="source" sort={sort} onToggle={toggleSort} className="hub-lc-m">Source</SortHead>}<SortHead k="stage" sort={sort} onToggle={toggleSort}>Stage</SortHead>{leadCols.score && <SortHead k="score" sort={sort} onToggle={toggleSort} className="hub-lc-m">Score</SortHead>}<span className="hub-lc-m" style={{ textAlign: 'right' }}>Last</span>
+          <span /><SortHead k="name" sort={sort} onToggle={toggleSort}>Name</SortHead>{leadCols.type && <span className="hub-lc-m">Type</span>}{leadCols.source && <SortHead k="source" sort={sort} onToggle={toggleSort} className="hub-lc-m">Source</SortHead>}{leadCols.subjects && <SortHead k="subjects" sort={sort} onToggle={toggleSort} className="hub-lc-m">과목</SortHead>}{leadCols.region && <SortHead k="region" sort={sort} onToggle={toggleSort} className="hub-lc-m">지역</SortHead>}<SortHead k="stage" sort={sort} onToggle={toggleSort}>Stage</SortHead>{leadCols.score && <SortHead k="score" sort={sort} onToggle={toggleSort} className="hub-lc-m">Score</SortHead>}<span className="hub-lc-m" style={{ textAlign: 'right' }}>Last</span>
         </div>
         {sortedLeads.length === 0 && (
           <div style={{ padding: '36px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -1006,7 +1037,7 @@ export function Leads({ workspace }) {
               <span style={{ display: 'block', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</span>
               {l.nextAction && l.nextAction.trim() !== leadCols.nextActionTemplate && <span className="hub-lead-next-action" style={{ display: 'block', marginTop: 2, fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.nextAction}</span>}
               <span className="hub-lead-mobile-meta">
-                {l.type === 'personal' ? 'Personal' : 'Company'} · score {l.score ?? '—'}{l.priorityLane === 'customer_success' ? ' · CS' : ''}
+                {l.type === 'personal' ? 'Personal' : 'Company'} · score {l.score ?? '—'}{l.priorityLane === 'customer_success' ? ' · CS' : ''}{(l.subjects || []).length ? ` · ${subjectLabels(l.subjects).join('·')}` : ''}{l.region ? ` · ${l.region}` : ''}
               </span>
             </span>
             {leadCols.type && (
@@ -1018,6 +1049,12 @@ export function Leads({ workspace }) {
             </span>
             )}
             {leadCols.source && <span className="hub-lc-m" style={{ fontSize: 12, color: 'var(--fg-muted)', paddingRight: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.source}</span>}
+            {leadCols.subjects && (
+              <LeadLabelCell noun="과목" source={l.labelSource?.subjects} text={subjectLabels(l.subjects).join('·')} />
+            )}
+            {leadCols.region && (
+              <LeadLabelCell noun="지역" source={l.labelSource?.region} text={l.region || ''} />
+            )}
             <span style={{ paddingRight: 8, minWidth: 0 }}>
               <Badge tone="neutral" size="xs" variant="outline">{l.stage}</Badge>
             </span>
