@@ -10,15 +10,30 @@ function errorResult(message) {
   return { content: [{ type: "text", text: message }], isError: true };
 }
 
-// Every write tool refuses up front if COM_MOON_HUB_WRITE_SECRET isn't configured,
-// instead of letting the Hub route's 401/403 read like a broken tool.
-function requireWriteSecret() {
-  if (!hasWriteSecret()) {
-    throw new Error(
-      "COM_MOON_HUB_WRITE_SECRET is not set for this MCP server — write actions are disabled. " +
-        "Set it to the same value as apps/hub's COM_MOON_HUB_WRITE_SECRET to enable writes.",
-    );
+// Single exit point for every tool. `hubGet`/`hubPost` classify the outcome; this
+// turns a failure into a real MCP error instead of handing the caller a 401 body that
+// reads like data. A route's honest `preview` is never a failure and passes through.
+function toolResult(result) {
+  if (result.ok) {
+    return jsonResult(result.data);
   }
+
+  return errorResult(result.error);
+}
+
+// Every write tool refuses up front if COM_MOON_HUB_WRITE_SECRET isn't configured,
+// instead of letting the Hub route's 401/403 read like a broken tool. Returns a tool
+// result to hand back, or null when writes are allowed — the same guard shape as
+// apps/hub's own `assertHubWriteAllowed`.
+function requireWriteSecret() {
+  if (hasWriteSecret()) {
+    return null;
+  }
+
+  return errorResult(
+    "COM_MOON_HUB_WRITE_SECRET is not set for this MCP server — write actions are disabled. " +
+      "Set it to the same value as apps/hub's COM_MOON_HUB_WRITE_SECRET to enable writes.",
+  );
 }
 
 export function registerMoonlightTools(server) {
@@ -32,8 +47,8 @@ export function registerMoonlightTools(server) {
       inputSchema: {},
     },
     async () => {
-      const { data } = await hubGet("/api/hub/daily-brief");
-      return jsonResult(data);
+      const result = await hubGet("/api/hub/daily-brief");
+      return toolResult(result);
     },
   );
 
@@ -47,8 +62,8 @@ export function registerMoonlightTools(server) {
       inputSchema: {},
     },
     async () => {
-      const { data } = await hubGet("/api/hub/agents");
-      return jsonResult(data);
+      const result = await hubGet("/api/hub/agents");
+      return toolResult(result);
     },
   );
 
@@ -66,8 +81,8 @@ export function registerMoonlightTools(server) {
       },
     },
     async ({ status }) => {
-      const { data } = await hubGet("/api/hub/work-orders", { status });
-      return jsonResult(data);
+      const result = await hubGet("/api/hub/work-orders", { status });
+      return toolResult(result);
     },
   );
 
@@ -80,8 +95,8 @@ export function registerMoonlightTools(server) {
       inputSchema: {},
     },
     async () => {
-      const { data } = await hubGet("/api/hub/projects");
-      return jsonResult(data);
+      const result = await hubGet("/api/hub/projects");
+      return toolResult(result);
     },
   );
 
@@ -94,8 +109,8 @@ export function registerMoonlightTools(server) {
       inputSchema: {},
     },
     async () => {
-      const { data } = await hubGet("/api/hub/tasks");
-      return jsonResult(data);
+      const result = await hubGet("/api/hub/tasks");
+      return toolResult(result);
     },
   );
 
@@ -116,8 +131,10 @@ export function registerMoonlightTools(server) {
       },
     },
     async ({ title, projectId, areaId, status, priority, nextAction, dueAt }) => {
-      requireWriteSecret();
-      const { data } = await hubPost("/api/hub/tasks", {
+      const denied = requireWriteSecret();
+      if (denied) return denied;
+
+      const result = await hubPost("/api/hub/tasks", {
         title,
         projectId,
         areaId,
@@ -127,7 +144,7 @@ export function registerMoonlightTools(server) {
         dueAt,
         source: "mcp",
       });
-      return jsonResult(data);
+      return toolResult(result);
     },
   );
 
@@ -140,8 +157,8 @@ export function registerMoonlightTools(server) {
       inputSchema: {},
     },
     async () => {
-      const { data } = await hubGet("/api/hub/revenue");
-      return jsonResult(data);
+      const result = await hubGet("/api/hub/revenue");
+      return toolResult(result);
     },
   );
 
@@ -164,10 +181,12 @@ export function registerMoonlightTools(server) {
       },
     },
     async ({ id, status, outcomeAction, outcomeNote }) => {
-      requireWriteSecret();
+      const denied = requireWriteSecret();
+      if (denied) return denied;
+
       const outcome = outcomeAction ? { action: outcomeAction, note: outcomeNote || null } : undefined;
-      const { data } = await hubPost("/api/hub/work-orders", { id, status, outcome });
-      return jsonResult(data);
+      const result = await hubPost("/api/hub/work-orders", { id, status, outcome });
+      return toolResult(result);
     },
   );
 
@@ -186,8 +205,8 @@ export function registerMoonlightTools(server) {
     async ({ timeMin, timeMax }) => {
       const min = timeMin || new Date().toISOString();
       const max = timeMax || new Date(new Date(min).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
-      const { data } = await hubGet("/api/calendar/google/event", { timeMin: min, timeMax: max });
-      return jsonResult(data);
+      const result = await hubGet("/api/calendar/google/event", { timeMin: min, timeMax: max });
+      return toolResult(result);
     },
   );
 
@@ -208,9 +227,11 @@ export function registerMoonlightTools(server) {
       },
     },
     async ({ title, startAt, endAt, description, location, allDay }) => {
-      requireWriteSecret();
+      const denied = requireWriteSecret();
+      if (denied) return denied;
+
       const resolvedEnd = endAt || new Date(new Date(startAt).getTime() + 60 * 60 * 1000).toISOString();
-      const { data } = await hubPost("/api/calendar/google/event", {
+      const result = await hubPost("/api/calendar/google/event", {
         title,
         startAt,
         endAt: resolvedEnd,
@@ -218,7 +239,7 @@ export function registerMoonlightTools(server) {
         location,
         allDay,
       });
-      return jsonResult(data);
+      return toolResult(result);
     },
   );
 
@@ -231,8 +252,8 @@ export function registerMoonlightTools(server) {
       inputSchema: {},
     },
     async () => {
-      const { data } = await hubGet("/api/hub/content");
-      return jsonResult(data);
+      const result = await hubGet("/api/hub/content");
+      return toolResult(result);
     },
   );
 
@@ -245,8 +266,8 @@ export function registerMoonlightTools(server) {
       inputSchema: {},
     },
     async () => {
-      const { data } = await hubGet("/api/hub/content");
-      return jsonResult(data);
+      const result = await hubGet("/api/hub/content");
+      return toolResult(result);
     },
   );
 
@@ -267,8 +288,10 @@ export function registerMoonlightTools(server) {
       },
     },
     async ({ name, status, channels, goalLabel, goalTarget, endsLabel }) => {
-      requireWriteSecret();
-      const { data } = await hubPost("/api/hub/content", {
+      const denied = requireWriteSecret();
+      if (denied) return denied;
+
+      const result = await hubPost("/api/hub/content", {
         action: "campaign",
         name,
         status,
@@ -277,7 +300,7 @@ export function registerMoonlightTools(server) {
         goalTarget,
         endsLabel,
       });
-      return jsonResult(data);
+      return toolResult(result);
     },
   );
 }
