@@ -3,6 +3,13 @@ interface GeminiGenerateInput {
   systemInstruction?: string;
   maxOutputTokens?: number;
   model?: string;
+  // Structured-output knobs. Callers that need a machine-parseable answer (the Council
+  // content-draft / Guru followup-draft modes, card-news) ask for JSON at the API layer
+  // instead of trusting the prompt alone, and cap thinking so a runaway think cannot
+  // truncate the JSON mid-object. Matches CardNewsTextGenerator in
+  // packages/content-manager/card-news/generator.ts.
+  responseMimeType?: string;
+  thinkingBudget?: number;
 }
 
 function resolveGeminiApiKey() {
@@ -71,6 +78,17 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
       maxOutputTokens: input.maxOutputTokens || 8192,
     },
   };
+
+  const generationConfig = body.generationConfig as Record<string, unknown>;
+
+  if (input.responseMimeType) {
+    generationConfig.responseMimeType = input.responseMimeType;
+  }
+
+  // 0 is a meaningful budget (thinking off), so test for undefined rather than falsiness.
+  if (typeof input.thinkingBudget === "number") {
+    generationConfig.thinkingConfig = { thinkingBudget: input.thinkingBudget };
+  }
 
   if (input.systemInstruction) {
     body.system_instruction = {

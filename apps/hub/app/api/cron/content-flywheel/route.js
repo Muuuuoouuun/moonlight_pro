@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { assertHubWriteAllowed } from "@/lib/hub-write-guard";
 import { recordAgentRun } from "@/lib/sales-os/agent-runs";
 import { assembleBrandContext } from "@/lib/sales-os/brand-context";
+import { CONTENT_DRAFT_MODE, isContentDraftOk } from "@/lib/sales-os/draft-contract";
 import { createWorkOrder, getWorkOrders } from "@/lib/sales-os/work-orders";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
@@ -61,7 +62,7 @@ export async function GET(req) {
   const summary = { cadenceBehind: false, drafted: 0, skipped: 0, errored: 0, idea: null };
 
   try {
-    const context = await assembleBrandContext({ mode: "content-draft" });
+    const context = await assembleBrandContext({ mode: CONTENT_DRAFT_MODE });
     if (!context || context.source !== "supabase") {
       return NextResponse.json({ status: "skipped", reason: "missing-config-or-preview", ...summary });
     }
@@ -90,7 +91,7 @@ export async function GET(req) {
     const existing = await getWorkOrders({ workspaceId, status: "proposed", limit: 200 });
     const openDraftAssetIds = new Set(
       (existing.orders || [])
-        .filter((o) => o.kind === "content-draft" && o.status === "proposed")
+        .filter((o) => o.kind === CONTENT_DRAFT_MODE && o.status === "proposed")
         .map((o) => o.assetId),
     );
     const idea = pool.find((i) => !openDraftAssetIds.has(i.id));
@@ -112,19 +113,15 @@ export async function GET(req) {
     let ok = false;
     for (let attempt = 0; attempt < 2 && !ok; attempt += 1) {
       engine = await callEngineDraft({
-        mode: "content-draft",
+        mode: CONTENT_DRAFT_MODE,
         ref: idea.title,
         context: draftContext,
         maxOutputTokens: DRAFT_TOKENS,
       });
       data = engine.data;
-      ok =
-        engine.status >= 200 &&
-        engine.status < 300 &&
-        data &&
-        data.status === "generated" &&
-        typeof data.title === "string" &&
-        typeof data.body === "string";
+      // Shared predicate — apps/hub/lib/sales-os/draft-contract.js, asserted against the
+      // Engine's real response builder in draft-contract.test.mjs.
+      ok = isContentDraftOk(engine.status, data);
     }
 
     if (!ok) {
@@ -132,7 +129,7 @@ export async function GET(req) {
       await recordAgentRun({
         workspaceId,
         agent: "council",
-        mode: "content-draft",
+        mode: CONTENT_DRAFT_MODE,
         ref: idea.id,
         inputSummary: `engine ${engine?.status} · ${data?.reason || "no-draft"}`,
         result: "error",
@@ -144,7 +141,7 @@ export async function GET(req) {
     const run = await recordAgentRun({
       workspaceId,
       agent: "council",
-      mode: "content-draft",
+      mode: CONTENT_DRAFT_MODE,
       ref: idea.id,
       inputSummary: `content-draft · ${idea.brandKey || "brand"} · ${idea.title}`,
       recommendation: { title: data.title, body: String(data.body).slice(0, 800) },
@@ -155,7 +152,7 @@ export async function GET(req) {
     const created = await createWorkOrder({
       workspaceId,
       persona: "council",
-      kind: "content-draft",
+      kind: CONTENT_DRAFT_MODE,
       source: "team", // work_orders.source CHECK: team|inbox|guru|manual — 'council' is NOT valid
       assetId: idea.id, // content_items id (asset_id is plain text)
       title: String(data.title).slice(0, 200),
