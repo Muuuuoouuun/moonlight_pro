@@ -4,6 +4,7 @@ import { assertHubWriteAllowed } from "@/lib/hub-write-guard";
 import { getFollowups } from "@/lib/repositories/followups-ledger";
 import { recordAgentRun } from "@/lib/sales-os/agent-runs";
 import { assembleSalesContext } from "@/lib/sales-os/context-assembler";
+import { FOLLOWUP_DRAFT_MODE, isFollowupDraftOk } from "@/lib/sales-os/draft-contract";
 import { createWorkOrder, getWorkOrders } from "@/lib/sales-os/work-orders";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
@@ -66,7 +67,7 @@ async function callEngineDraft(body) {
 // already exists for it.
 function hasOpenDraft(openOrders, dealId) {
   return openOrders.some(
-    (o) => o.dealId === dealId && o.kind === "followup-draft" && o.status === "proposed",
+    (o) => o.dealId === dealId && o.kind === FOLLOWUP_DRAFT_MODE && o.status === "proposed",
   );
 }
 
@@ -104,7 +105,7 @@ export async function GET(req) {
           continue;
         }
 
-        const context = await assembleSalesContext({ mode: "followup-draft", ref: deal.id });
+        const context = await assembleSalesContext({ mode: FOLLOWUP_DRAFT_MODE, ref: deal.id });
 
         // Bounded thinking makes truncation rare, but the thinking model still malforms the
         // JSON ~5% of the time. One retry lifts per-deal reliability past 99% and gets the
@@ -114,19 +115,15 @@ export async function GET(req) {
         let ok = false;
         for (let attempt = 0; attempt < 2 && !ok; attempt += 1) {
           engine = await callEngineDraft({
-            mode: "followup-draft",
+            mode: FOLLOWUP_DRAFT_MODE,
             ref: deal.id,
             context,
             maxOutputTokens: DRAFT_TOKENS,
           });
           data = engine.data;
-          ok =
-            engine.status >= 200 &&
-            engine.status < 300 &&
-            data &&
-            data.status === "generated" &&
-            typeof data.subject === "string" &&
-            typeof data.body === "string";
+          // Shared predicate — apps/hub/lib/sales-os/draft-contract.js, asserted against the
+          // Engine's real response builder in draft-contract.test.mjs.
+          ok = isFollowupDraftOk(engine.status, data);
         }
 
         if (!ok) {
@@ -134,7 +131,7 @@ export async function GET(req) {
           await recordAgentRun({
             workspaceId,
             agent: "guru",
-            mode: "followup-draft",
+            mode: FOLLOWUP_DRAFT_MODE,
             ref: deal.id,
             inputSummary: `engine ${engine.status} · ${data?.reason || "no-draft"}`,
             result: "error",
@@ -147,7 +144,7 @@ export async function GET(req) {
         const run = await recordAgentRun({
           workspaceId,
           agent: "guru",
-          mode: "followup-draft",
+          mode: FOLLOWUP_DRAFT_MODE,
           ref: deal.id,
           inputSummary: `followup-draft · ${deal.name} · ${deal.why}`,
           recommendation: { subject: data.subject, body: String(data.body).slice(0, 800) },
@@ -158,7 +155,7 @@ export async function GET(req) {
         const created = await createWorkOrder({
           workspaceId,
           persona: "guru",
-          kind: "followup-draft",
+          kind: FOLLOWUP_DRAFT_MODE,
           source: "guru", // work_orders.source CHECK: team|inbox|guru|manual
           dealId: deal.id,
           companyId: null,

@@ -4,6 +4,14 @@ import { NextResponse } from "next/server";
 // so a hung upstream cannot pin a serverless invocation past a minute.
 export const maxDuration = 60;
 
+import {
+  CONTENT_DRAFT_MODE,
+  DRAFT_GENERATION_BOUNDS,
+  buildContentDraftPrompt,
+  buildDraftResponse,
+  draftHttpStatus,
+  parseContentDraft,
+} from "../../../../lib/ai-draft-modes";
 import { generateGeminiText, getGeminiIntegrationStatus } from "../../../../lib/gemini";
 import {
   insertIntegrationSyncRun,
@@ -78,9 +86,14 @@ async function readJson(req: Request) {
   return text ? JSON.parse(text) : {};
 }
 
-function normalizeMode(value: unknown): Mode {
+// Resolve an advisory lens, or null when the caller asked for something this route does not
+// implement. Deliberately NOT a silent fallback — see the sibling note in sales-mentor:
+// the content-flywheel cron shipped against a 'content-draft' mode that did not exist here and
+// the old fallback quietly answered with brand-strategy prose every single night.
+function resolveAdvisoryMode(value: unknown): Mode | null {
   const key = typeof value === "string" ? value.trim() : "";
-  return (key in MODES ? key : "brand-strategy") as Mode;
+  if (!key) return "brand-strategy";
+  return (key in MODES ? key : null) as Mode | null;
 }
 
 // Readable digest of the assembled brand context, so the model attends to the brand
@@ -166,6 +179,7 @@ export async function GET() {
     integration: "gemini",
     agent: "council",
     modes: Object.keys(MODES),
+    draftModes: [CONTENT_DRAFT_MODE],
     status: getGeminiIntegrationStatus(),
   });
 }
@@ -188,44 +202,97 @@ export async function POST(req: Request) {
     );
   }
 
-  const mode = normalizeMode(payload.mode);
+  const requestedMode = typeof payload.mode === "string" ? payload.mode.trim() : "";
+  const isDraftMode = requestedMode === CONTENT_DRAFT_MODE;
+  const advisoryMode = isDraftMode ? null : resolveAdvisoryMode(payload.mode);
+
+  if (!isDraftMode && !advisoryMode) {
+    return NextResponse.json(
+      {
+        status: "unknown-mode",
+        error: `Unsupported mode '${requestedMode}'.`,
+        modes: Object.keys(MODES),
+        draftModes: [CONTENT_DRAFT_MODE],
+      },
+      { status: 400 },
+    );
+  }
+
+  const mode = isDraftMode ? CONTENT_DRAFT_MODE : (advisoryMode as Mode);
   const ref = typeof payload.ref === "string" ? payload.ref.trim() || null : null;
   const draft = typeof payload.draft === "string" ? payload.draft : null;
   const context = payload.context ?? {};
   const workspaceId = resolveDefaultWorkspaceId();
+  const maxOutputTokens =
+    typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 8192;
 
   const startedAt = new Date().toISOString();
-  const result = await generateGeminiText({
-    systemInstruction: SYSTEM_INSTRUCTION,
-    prompt: buildPrompt(mode, context, draft),
-    maxOutputTokens: typeof payload.maxOutputTokens === "number" ? payload.maxOutputTokens : 8192,
-  });
+  // The draft mode asks for JSON at the API layer with a capped thinking budget; the advisory
+  // lenses stay free-form prose for the chat pane.
+  const result = await generateGeminiText(
+    isDraftMode
+      ? {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          prompt: buildContentDraftPrompt(context),
+          maxOutputTokens,
+          ...DRAFT_GENERATION_BOUNDS,
+        }
+      : {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          prompt: buildPrompt(mode as Mode, context, draft),
+          maxOutputTokens,
+        },
+  );
   const finishedAt = new Date().toISOString();
+
+  // Parse before the telemetry writes so a well-formed HTTP 200 carrying unparseable JSON is
+  // recorded as the failure it is, instead of showing the integration as healthy.
+  const parsedDraft = isDraftMode && result.ok ? parseContentDraft(result.text) : null;
+  const draftOk = isDraftMode ? Boolean(parsedDraft) : false;
+  const generationOk = isDraftMode ? draftOk : result.ok;
+  const failureReason =
+    isDraftMode && result.ok && !draftOk ? "invalid-draft-json" : result.reason;
 
   const connection = await upsertIntegrationConnection({
     provider: "council",
-    status: result.ok ? "connected" : "error",
+    status: generationOk ? "connected" : "error",
     config: {
       ...getGeminiIntegrationStatus(),
       agent: "council",
-      lastResult: { ok: result.ok, status: result.status, reason: result.reason, mode },
+      lastResult: { ok: generationOk, status: result.status, reason: failureReason, mode },
     },
-    lastSyncedAt: result.ok ? finishedAt : null,
+    lastSyncedAt: generationOk ? finishedAt : null,
   });
   const syncRun = await insertIntegrationSyncRun({
     provider: "council",
     connectionId: connection.connection?.id || null,
-    status: result.ok ? "success" : "failure",
+    status: generationOk ? "success" : "failure",
     payload: {
       startedAt,
       finishedAt,
       mode,
       ref,
       model: result.model,
-      usageMetadata: result.ok ? result.usageMetadata : null,
+      usageMetadata: generationOk ? result.usageMetadata : null,
     },
-    errorMessage: result.ok ? null : result.reason,
+    errorMessage: generationOk ? null : failureReason,
   });
+
+  if (isDraftMode) {
+    // No project_updates row for drafts: the artifact is the work_orders proposal the cron
+    // creates, and the cron logs its own agent_run.
+    return NextResponse.json(
+      buildDraftResponse({
+        mode,
+        ref,
+        model: result.model,
+        draft: parsedDraft,
+        reason: draftOk ? "ok" : failureReason,
+        persistence: { connection, syncRun, councilUpdate: null },
+      }),
+      { status: draftHttpStatus(parsedDraft) },
+    );
+  }
 
   let councilUpdate = null;
 
