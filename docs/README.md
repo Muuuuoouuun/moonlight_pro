@@ -89,6 +89,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 - [`superpowers/specs/2026-09-03-sales-content-marketing-to-branding-growth-plan.md`](superpowers/specs/2026-09-03-sales-content-marketing-to-branding-growth-plan.md) — **DRAFT · 권장안**. 세일즈·콘텐츠·마케팅 → 브랜딩 프레임으로 현재 시스템의 강점·약점·보완점·새 베팅을 정리. 초안 크론 2개 고장(W19)과 첫 빌드 후보("오늘 연락할 리드")를 포함. 운영자 확정 전까지 권장.
 - [`superpowers/specs/2026-09-04-mcp-server-audit-and-expansion-design.md`](superpowers/specs/2026-09-04-mcp-server-audit-and-expansion-design.md) — **DRAFT · 제안**. MCP 서버 실측 점검(§2만 사실)과 확충·보강 설계. read 라우트 응답 158KB·94KB·52KB 실측으로 "화면용 BFF 통과" 전제를 반증하고 MCP 전용 투영 계층을 제안. 위 성장 계획 F-14를 흡수·확장하며, `integration-control-plane-inheritance.md` §6 계약은 그대로 상속한다.
+- [`superpowers/plans/2026-09-04-post-2609-merge-design-agenda.md`](superpowers/plans/2026-09-04-post-2609-merge-design-agenda.md) — **DRAFT · 권장안**. 2609 병합 직후 실측 기준의 디자인 부채·아젠다. §1~§3은 사실(병합 안전성, 재감사 30차 정지 지점, 프리미티브 채택률·신규 문법 불일치), §4~§5는 권장 우선순위다. `system-eval-2026-08-05.md`를 이어받되 개별 주제의 확정 스펙을 대체하지 않는다.
 
 **재감사 기록 (2026-08~09)**
 
