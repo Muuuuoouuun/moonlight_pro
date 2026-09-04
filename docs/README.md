@@ -54,7 +54,7 @@
 
 Phase 0는 Content canonical contract, write 응답 분류, honest empty/error UI, 사용자 identity, Content 승인 원자화를 포함한다. 당시 검증 기준선은 Node test 50/50, contract check, typecheck, Hub/Engine build 통과다. 2026-07-15 현재 저장소 검증은 102/102이며 Phase 1A 완료를 뜻한다. Phase 1B·1C는 아직 남아 있으므로 Phase 1 전체 완료로 해석하지 않는다.
 
-2026-09-04 현재 루트 `npm test`는 379/379 통과다. 다만 루트 글롭 밖의 테스트 18파일(`apps/hub/components/hub/**`, `apps/engine/**`, `packages/mcp-server/src/`)은 CI에서 돌지 않고 그중 4건이 실패 상태다([`../TODOS.md`](../TODOS.md)). 사이드바 앵커 수는 현재 코드가 8 primary + 2 utility(`hub-nav.js`)인데 07-15 스펙(8앵커)·`hub-nav.js` 주석(9)·`hub-nav.test.mjs`(7+2)가 서로 다르다. 어느 것이 정본인지 **미정** — 확정 전까지 코드 현행을 사실로 본다.
+2026-09-04 현재 루트 `npm test`는 **692/692 통과**이며, 저장소의 `*.test.mjs` 82파일 **전부**가 루트 글롭에 포함된다. 2609 병합이 글롭을 `apps/hub/components/**`·`apps/engine/**`·`packages/**`로 확장하면서 이전에 CI 밖이던 20파일과 실패 4건이 함께 해소됐다. CI(`.github/workflows/ci.yml`)는 `npm test`에 위임하므로 범위가 어긋날 수 없다. 사이드바 앵커는 코드(`hub-nav.js` 8 primary + 2 utility)·`hub-nav.test.mjs`·07-15 스펙 §3.1이 모두 일치한다(2026-09-04 주석·스펙 갱신으로 해소).
 
 ## 4. 현재 문서
 
@@ -81,12 +81,18 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 **브랜드 · 개인 매출 (2026-08 이후 추가, 이 인덱스에 늦게 등재)**
 
 - [`superpowers/specs/2026-08-29-brand-tab-design.md`](superpowers/specs/2026-08-29-brand-tab-design.md) — **P0·P1 구현됨 / P2~P5 제안**. 브랜드를 콘텐츠 필터가 아닌 운영 대상으로 분리. `2026-07-15` PMS 분류 §4의 `sns-channel` 축을 부분 대체.
+- [`superpowers/specs/2026-09-01-brand-content-log.md`](superpowers/specs/2026-09-01-brand-content-log.md) — **확정**. 브랜드 컨텐츠 로그(`dashboard/brands/log`) 설계. 운영자 v5 첨부가 확정한 8색 브랜드 아이덴티티 팔레트와 3px 좌측 레일은 DESIGN.md §8.1·§8.2의 이 표면 한정 예외다(§15 2026-09-01 결정).
+- [`superpowers/specs/2026-08-19-lead-subject-region-labels-design.md`](superpowers/specs/2026-08-19-lead-subject-region-labels-design.md) — 리드 과목·지역 라벨 설계(12키 고정 어휘·`label_source` 확정도·백필 게이트). 구현 계획은 [`superpowers/plans/2026-08-19-lead-subject-region-labels.md`](superpowers/plans/2026-08-19-lead-subject-region-labels.md).
 - [`superpowers/plans/2026-08-31-personal-revenue-roadmap.md`](superpowers/plans/2026-08-31-personal-revenue-roadmap.md) — 개인 스코프 30일 현금흐름 로드맵 구현 계획(`68517ec`로 출시). 디자인 QA 결과는 루트 [`design-qa.md`](../design-qa.md)(플랜이 지정한 경로)이며 `final result: blocked`.
 
 **기획 초안 (미확정, 새 구현의 근거로 쓰지 않음)**
 
 - [`superpowers/specs/2026-09-03-sales-content-marketing-to-branding-growth-plan.md`](superpowers/specs/2026-09-03-sales-content-marketing-to-branding-growth-plan.md) — **DRAFT · 권장안**. 세일즈·콘텐츠·마케팅 → 브랜딩 프레임으로 현재 시스템의 강점·약점·보완점·새 베팅을 정리. 초안 크론 2개 고장(W19)과 첫 빌드 후보("오늘 연락할 리드")를 포함. 운영자 확정 전까지 권장.
 - [`superpowers/specs/2026-09-04-mcp-server-audit-and-expansion-design.md`](superpowers/specs/2026-09-04-mcp-server-audit-and-expansion-design.md) — **DRAFT · 제안**. MCP 서버 실측 점검(§2만 사실)과 확충·보강 설계. read 라우트 응답 158KB·94KB·52KB 실측으로 "화면용 BFF 통과" 전제를 반증하고 MCP 전용 투영 계층을 제안. 위 성장 계획 F-14를 흡수·확장하며, `integration-control-plane-inheritance.md` §6 계약은 그대로 상속한다.
+
+**재감사 기록 (2026-08~09)**
+
+- [`system-eval-2026-08-05.md`](system-eval-2026-08-05.md) — 재감사 1~30차 채점·조치 로그. 축별(안정성·속도·정체성·사용성·디자인·편의성·UIUX) 점수 추이와 각 차수의 지적·수리 내역. 기록 문서이므로 새 구현의 근거로는 §4의 최신 스펙을 우선한다.
 
 ### 아키텍처·데이터 정본
 

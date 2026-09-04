@@ -238,9 +238,10 @@ Moonstone `확정하기` action. It does not turn the entire recommendation red 
 
 Fallbacks: `'Inter Tight', ui-sans-serif, system-ui, sans-serif` for sans, `'Cascadia Code', 'Cascadia Mono', ui-monospace, 'SF Mono', Consolas, monospace` for mono (JetBrains Mono is now bundled and first in `--font-mono`).
 
-`MaruBuri` (serif, five weights) is still declared in `app/globals.css` and reaches `--font-display` through
-`@com-moon/ui`'s `--cm-font-serif`, but no hub surface uses it. Treat it as legacy: do not introduce serif
-display type; removal is tracked in `TODOS.md`.
+Hub fonts are exactly two: SUIT Variable and JetBrains Mono. The former `MaruBuri` serif (five weights) and the
+`--font-display` alias were removed from `app/globals.css` and `public/fonts/` in the 2609 merge. Only the family
+*name* survives inside `@com-moon/ui`'s `--cm-font-serif` stack with no matching `@font-face`, so it resolves to a
+system serif. Do not introduce serif display type.
 
 **Rules**
 - Hub defaults to sans at 14px / `font-feature-settings: 'cv11', 'ss01', 'ss03'`.
@@ -267,7 +268,7 @@ The hub ships one fixed density — no user-facing toggle. Values: `row-h: 36`, 
 ### Radius
 - Micro elements (chips, checkbox faces): `4px` (`--r-xs`)
 - Small controls: `6px` (`--r-sm`)
-- Inputs / medium controls: `10px` (`--r`)
+- Popover / menu containers: `10px` (`--r`) — text inputs use `--r-sm`
 - Standard cards: `14px` (`--r-lg`)
 - Feature panels: `20px` (`--r-xl`)
 - Floating pills / buttons: `999px`
@@ -283,6 +284,7 @@ truth. Do not recreate them ad-hoc inside pages.
 - `Card` (padded / unpadded), `SectionTitle`, `Tabs`
 - `Button` (primary · secondary · ghost · outline · danger), `IconButton`
 - `Input`, `Checkbox`, `Progress`, `Sparkline`, `Placeholder`
+- Form fields `TextField`, `TextAreaField`, `SelectField`, `CheckboxRow`, `DateQuickPresets` (contract in `form-fields.test.mjs`)
 - `SegmentedControl`, `EmptyState` (+ `action` CTA), `ScrollShadowX`
 - `Drawer`, `EditDrawer` — the only overlay / edit surfaces (§8.1)
 - State primitives `AttentionRail`, `CertaintyBadge`, `LifecycleBadge`, `TruthBadge` (§8.2). `SyncBadge`
@@ -326,7 +328,7 @@ truth. Do not recreate them ad-hoc inside pages.
 - 금액은 표시 문자열(`₩1.2M`/`₩900K`)을 숫자로 파싱해 정렬, 단계는 퍼널 순서로 정렬 (알파벳 금지).
 
 **상태 표시.**
-- 좌측 액센트 스트라이프는 `inset 1px 0 0` box-shadow — 토큰은 `--*-line`(저채도) 또는 위급 레일에 한해 본색 `--danger`를 쓴다(현행 코드·state-usage 테스트 기준). 배경 fill·두꺼운 보더 금지 (§5.2).
+- 좌측 액센트 스트라이프는 `inset 1px 0 0` box-shadow — 토큰은 `--*-line`(저채도) 또는 위급 레일에 한해 본색 `--danger`를 쓴다(현행 코드·state-usage 테스트 기준). 배경 fill·두꺼운 보더 금지 (§5.2). **유일한 예외**: 브랜드 컨텐츠 로그(`dashboard/brands/log`)가 `inset 3px 0 0` + 브랜드 아이덴티티 색을 쓴다 (§15 2026-09-01 운영자 확정). 다른 표면으로 확장 금지.
 - stalled 기준은 `STALLED_DAYS`(현재 14일) 상수 하나 — 페이지별 하드코딩 금지.
 
 **Hover.**
@@ -367,6 +369,8 @@ Implementation rules:
   when they carry state meaning.
 - Selection/focus stays outside these primitives so a selected urgent item can retain both meanings.
 - Page code must not pass raw hex/OKLCH values or choose `success`, `warning`, or `info` for a category.
+  The one sanctioned exception is the brand content log's 8-color identity palette (`lib/brand-content-log.js`),
+  confined to `dashboard/brands/log` and always paired with the brand name label (§15, 2026-09-01).
 
 ## 9. Motion
 
@@ -447,7 +451,7 @@ Do not ship:
 | Tokens                             | `apps/hub/components/hub/hub-tokens.css`                     |
 | Icons                              | `apps/hub/components/hub/hub-icons.jsx`                      |
 | Primitives                         | `apps/hub/components/hub/hub-primitives.jsx`                 |
-| ⌘K catalog (`NAV_TREE`, `LEGACY_TREE`) | `apps/hub/components/hub/hub-data.js`                 |
+| ⌘K catalog (`NAV_TREE`, `LEGACY_REDIRECTS`) | `apps/hub/components/hub/hub-data.js`                 |
 | Sidebar anchors (visible IA)       | `apps/hub/components/hub/hub-nav.js` + `hub-nav.test.mjs`    |
 | Workspace membership (`org_scope`) | `apps/hub/components/hub/workspace-map.js`                   |
 | Shell (sidebar / topbar / palette) | `apps/hub/components/hub/hub-{sidebar,topbar,command-palette}.jsx` |

@@ -1,16 +1,16 @@
 // Sidebar navigation contract — the *visible* information architecture.
 //
 // Deliberately separate from NAV_TREE in hub-data.js, which stays the full
-// 36-destination catalog behind ⌘K search. Adding a route there must not add a
+// 40-destination catalog behind ⌘K search. Adding a route there must not add a
 // sidebar row; the sidebar only grows when an anchor is added here. That split
 // is the whole point — the old accordion mixed two organizing principles
 // (workspace × function) and repeated Projects / Revenue / Follow-ups / Content
 // in both, so the operator had to answer "where does this live?" before
 // "what am I doing?".
 //
-// Nine stable anchors — Overview added 2026-07-15 per direct operator
-// instruction; the prior "eight anchors, fixed" reading of the 2026-07-15
-// sidebar spec is not final and may still change. Organizational context
+// Eight primary + two utility anchors (SIDEBAR_PRIMARY / SIDEBAR_UTILITIES;
+// hub-nav.test.mjs pins both counts). Overview was added 2026-07-15 per direct
+// operator instruction; the anchor set is not a fixed contract and may change. Organizational context
 // moves into one scope control.
 
 export const DEFAULT_SCOPE = 'all';

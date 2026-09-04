@@ -29,14 +29,14 @@
 - Hub → Engine 호출은 `COM_MOON_SHARED_WEBHOOK_SECRET`를 전달
 - Supabase 없는 환경은 명시적 `preview`/empty state로 표시하고 mock과 live 데이터를 섞지 않음
 - `apps/hub/components/hub/hub-app.jsx`의 `lazyPage`는 `ssr: false`가 필수 — 빼면 모든 대시보드 페이지가 "불러오는 중…"에서 멈춘다(콘솔 에러 없음)
-- 테스트: 루트 `npm test`(node `--test`, `*.test.mjs` 동거). 루트 글롭은 `scripts/`·`apps/hub/lib/`·`packages/*` 1단계만 포함하므로 `apps/hub/components/hub/**`, `apps/engine/**`, `packages/mcp-server/src/`의 테스트는 `node --import ./scripts/register-hub-alias.mjs --test <파일>`로 직접 돌린다. CI(`.github/workflows/ci.yml`)도 같은 글롭이다
+- 테스트: 루트 `npm test`(node `--test`, `*.test.mjs` 동거)가 `scripts/`·`apps/hub/lib/`·`apps/hub/components/**`·`apps/engine/**`·`packages/**`의 모든 `*.test.mjs`를 돈다 — 저장소 전체 82파일(2026-09 2609 병합에서 글롭 확장). CI(`.github/workflows/ci.yml`)는 `npm test`에 위임하므로 범위가 어긋날 수 없다. 단일 파일만 돌릴 땐 `node --import ./scripts/register-hub-alias.mjs --test <파일>`
 
 ## UI 작업 시 필수 체크
 - 색상: DESIGN.md 팔레트(토큰)만 사용 — 페이지 안 하드코딩 hex/rgba/oklch 금지, warm gold/그린/보라 금지. `--success`/`--warning`/`--info`로 카테고리나 일상 단계를 칠하지 않는다(DESIGN.md §5.2)
 - 보더: 항상 `1px` + `--line*` 토큰 — 절대 두껍게 하지 않음. 상태 강조는 `--*-line` 좌측 inset 스트라이프
 - 숫자: 큰 지표(≥18px)는 `.stat`(sans tabular), 계기 데이터(ID·타임스탬프·인라인 값)는 `.mono`, sans 소형 카운트는 `.num`
 - 크기 플로어: 데이터 값 ≥12px, 보조 메타 ≥10.5px, 10px 미만 금지
-- Primitives first: `SegmentedControl`·`EmptyState`·`Checkbox(label)`·`EditDrawer`·`Drawer`를 인라인 재구현 금지. 상태 표시는 `TruthBadge`·`AttentionRail`·`CertaintyBadge`·`LifecycleBadge`(DESIGN.md §8.2)로 선언하고, `SyncBadge`는 호환 래퍼이므로 새 호출처에서 쓰지 않는다
+- Primitives first: `SegmentedControl`·`EmptyState`·`Checkbox(label)`·`EditDrawer`·`Drawer`를 인라인 재구현 금지. 상태 표시는 `TruthBadge`·`CertaintyBadge`·`LifecycleBadge`(DESIGN.md §8.2)로 선언하고, `SyncBadge`는 호환 래퍼이므로 새 호출처에서 쓰지 않는다. `AttentionRail`은 페이지 호출처 0건으로 아직 미채택 — 레일은 §8.1 inset 1px 인라인이 현행이므로 새로 쓰기 전 DESIGN.md §15 2026-08-05 결정을 확인한다
 - 행 hover는 `.hub-row`, 카드형 클릭 타깃은 `.hub-card-link`, 칸반 카드는 `.hub-kanban-card` (JS onMouseEnter/Leave 신규 작성 금지)
 - 모션: `--dur-hover`/`--dur-enter`/`--dur-panel`/`--dur-overlay`·`--ease-hub`·`--stagger-step` 토큰과 `.fade-up`/`.stagger-up`만 사용 — 페이지 안 raw ms 리터럴 금지 (DESIGN.md §9)
 - 내비: 사이드바 앵커는 `hub-nav.js`(+ `hub-nav.test.mjs`), ⌘K 카탈로그는 `hub-data.js`의 `NAV_TREE`, 워크스페이스 소속은 `workspace-map.js` — `NAV_TREE`에 넣어도 사이드바 행은 생기지 않는다

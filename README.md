@@ -48,13 +48,11 @@ Health endpoints:
 
 `check:connections` expects local env files with Supabase and Engine URLs. A missing env failure is expected on a fresh checkout.
 
-`npm test` runs only the root glob (`scripts/`, `apps/hub/lib/`, one level under `packages/*`). Tests under `apps/hub/components/hub/**`, `apps/engine/**`, and `packages/mcp-server/src/` must be run directly:
+`npm test` covers every `*.test.mjs` in the repo — `scripts/`, `apps/hub/lib/`, `apps/hub/components/**`, `apps/engine/**`, and `packages/**`. CI delegates to the same command, so the two scopes cannot drift. To run one file:
 
 ```bash
-node --import ./scripts/register-hub-alias.mjs --test apps/hub/components/hub/*.test.mjs apps/hub/components/hub/pages/*.test.mjs apps/engine/lib/*.test.mjs apps/engine/app/api/*/command/*.test.mjs packages/mcp-server/src/*.test.mjs
+node --import ./scripts/register-hub-alias.mjs --test <file>
 ```
-
-Four of those currently fail; see `TODOS.md`.
 
 ## Security Notes
 

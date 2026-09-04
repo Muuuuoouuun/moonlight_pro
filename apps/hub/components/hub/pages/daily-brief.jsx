@@ -879,14 +879,18 @@ function ApprovalQueueCard({ onNavigate }) {
   React.useEffect(() => {
     let active = true;
     fetch('/api/hub/work-orders?status=proposed', { cache: 'no-store' })
-      .then((r) => {
-        // 승인 큐 read 실패를 empty로 뭉개면 "승인 대기 없음"으로 오독된다(re-audit S10).
-        if (!r.ok) throw new Error(`work-orders ${r.status}`);
-        return r.json();
-      })
-      .then((d) => {
+      .then(async (r) => ({ ok: r.ok, d: await r.json().catch(() => null) }))
+      .then(({ ok, d }) => {
         if (!active) return;
-        if (d && Array.isArray(d.orders)) {
+        // 승인 큐 read 실패를 empty로 뭉개면 "승인 대기 없음"으로 오독된다(re-audit S10).
+        // 라우트는 실패를 HTTP 200 + status:"error" 봉투로 알린다(2026-09-01 봉투 통일)
+        // — !ok만 보면 read 실패가 "대기 없음"으로 위장된다. agents.jsx와 같은 가드를 쓴다.
+        if (!ok || !d || d.status === 'error' || d.source === 'error') {
+          setOrders([]);
+          setState('error');
+          return;
+        }
+        if (Array.isArray(d.orders)) {
           setOrders(d.orders);
           setState(d.source === 'supabase' ? 'live' : 'empty');
         } else {
