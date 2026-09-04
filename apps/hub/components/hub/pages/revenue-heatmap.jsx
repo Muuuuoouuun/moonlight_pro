@@ -12,15 +12,8 @@ import { Badge, Card, Button, SyncBadge, SegmentedControl, EmptyState, IconButto
 import { Iconed } from "../hub-icons";
 import { KoreaHeatmap, fmtMoney, heatFill } from "../heatmap-map";
 import { useRevenueLedger } from "./revenue";
-import {
-  KOREA_PROVINCE_SHAPES,
-  KOREA_PROVINCE_BY_LABEL,
-  KOREA_PROVINCE_WIDTH,
-  KOREA_PROVINCE_HEIGHT,
-} from "@/lib/korea-province-map";
-
-// ── 지도 ─────────────────────────────────────────────────────────────────────
-
+// 지도 shape·뷰박스는 heatmap-map.jsx가 소유 — 페이지는 canonical 라벨 → shape 조회 맵만 집계에 주입한다.
+import { KOREA_PROVINCE_BY_LABEL } from "@/lib/korea-province-map";
 
 // ── 우측 레일 ────────────────────────────────────────────────────────────────
 
@@ -43,14 +36,15 @@ function RegionDetail({ row, offMap = false, onJump }) {
         </div>
         <span className="stat" style={{ fontSize: 18, color: "var(--moon-200)" }}>{fmtMoney(row.expected)}</span>
       </div>
-      {/* 확정 vs 파이프라인 구성 바 */}
+      {/* 확정 vs 파이프라인 구성 바 — 수치는 아래 그리드가 텍스트로 말하므로 바는 장식(aria-hidden).
+          total 0이면 트랙(--surface-3)만 남긴다: 파이프라인 톤이 빈 바를 채우면 "전부 파이프라인"으로 읽힌다. */}
       {(() => {
         const total = row.confirmed + row.pipeline;
-        const pct = total > 0 ? (row.confirmed / total) * 100 : 0;
+        const pct = total > 0 ? Math.min(100, Math.max(0, (row.confirmed / total) * 100)) : 0;
         return (
-          <div style={{ display: "flex", height: 5, borderRadius: 999, overflow: "hidden", margin: "10px 0 2px", background: "var(--surface-3)" }}>
-            <span style={{ width: `${pct}%`, background: "var(--moon-300)", transition: "width 240ms cubic-bezier(0.2, 0.7, 0.3, 1)" }} />
-            <span style={{ flex: 1, background: "color-mix(in oklch, var(--moon-500) 45%, transparent)" }} />
+          <div aria-hidden="true" style={{ display: "flex", height: 5, borderRadius: 999, overflow: "hidden", margin: "10px 0 2px", background: "var(--surface-3)" }}>
+            {total > 0 && <span style={{ width: `${pct}%`, background: "var(--moon-300)", transition: "width 240ms cubic-bezier(0.2, 0.7, 0.3, 1)" }} />}
+            {total > 0 && <span style={{ flex: 1, background: "color-mix(in oklch, var(--moon-500) 45%, transparent)" }} />}
           </div>
         );
       })()}
@@ -110,7 +104,11 @@ function RegionDetail({ row, offMap = false, onJump }) {
   );
 }
 
-function CustomerRankRow({ customer, rank, max, metricKey, onSelect, onJump, onPeek }) {
+// React.memo — 레일→지도 연동(linkedLabel)이 페이지 상태라 행 호버마다 페이지 전체가 리렌더된다.
+// 순위 행이 따라 그려지지 않으려면 props가 전부 안정적이어야 한다: 원시값, aggregate 메모의
+// customer 객체, useCallback/useMemo 핸들러. 호출부에서 행 단위 인라인 클로저·객체 생성 금지 —
+// 핸들러는 customer를 인자로 받는다(onSelect(customer), onJump(jumpKey), onPeek(canonical|null)).
+const CustomerRankRow = React.memo(function CustomerRankRow({ customer, rank, max, metricKey, onSelect, onJump, onPeek }) {
   const value = customer[metricKey] || 0;
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
@@ -118,8 +116,8 @@ function CustomerRankRow({ customer, rank, max, metricKey, onSelect, onJump, onP
       className="hub-row"
       role="button"
       tabIndex={0}
-      onClick={onSelect}
-      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
+      onClick={() => onSelect(customer)}
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(customer); } }}
       // 레일→지도 연동: 행에 머무는 동안 지도의 해당 지역이 켜진다 (행 배경은 hub-row가 담당)
       onMouseEnter={onPeek ? () => onPeek(customer.canonical || null) : undefined}
       onMouseLeave={onPeek ? () => onPeek(null) : undefined}
@@ -150,9 +148,9 @@ function CustomerRankRow({ customer, rank, max, metricKey, onSelect, onJump, onP
       ) : <span />}
     </div>
   );
-}
+});
 
-// ── 기간(월/분기) 순수 헬퍼 ──────────────────────────────────────────────────
+// ── 순수 헬퍼 (기간·분류·집계·본문 상태) ─────────────────────────────────────
 // [heatmap-period-pure-start] revenue-heatmap.test.mjs가 이 블록을 소스에서 추출해
 // data: 모듈로 실행한다 — 블록 안에서는 JSX·파일 상단 import 참조 금지 (self-contained).
 
@@ -183,7 +181,7 @@ export function canonicalRegion(region) {
   return match ? match[1] : null;
 }
 
-// 딜의 기준 시각: closeAt 우선, 없으면 activityAt. 둘 다 없거나 파싱 불가면 null.
+// 딜의 기준 시각: closeAt 우선 — 부재뿐 아니라 파싱 불가여도 activityAt으로 폴백. 둘 다 실패면 null.
 export function dealTimestamp(deal) {
   for (const raw of [deal?.closeAt, deal?.activityAt]) {
     if (!raw) continue;
@@ -355,9 +353,20 @@ export function aggregate(ledger, { item, cutoff = null, range = null }, provinc
   };
 }
 
+// 본문 상태 — 원장이 아직 도착하지 않았거나(loading) 읽기에 실패했을 때(error) 0건을 "딜 없음"으로
+// 위장하지 않는다(DESIGN §5.3 source truth). 캐시로 딜이 서빙되는 중이면 필터 결과가 곧 진실이므로
+// loading/error 분기는 원장 자체가 비었을 때만 탄다.
+export function heatmapBodyState({ syncState, ledgerDeals, matchedDeals }) {
+  if (matchedDeals > 0) return "data";
+  const ledgerEmpty = !ledgerDeals || ledgerDeals.length === 0;
+  if (ledgerEmpty && syncState === "loading") return "loading";
+  if (ledgerEmpty && syncState === "error") return "error";
+  return "empty";
+}
+
 // [heatmap-period-pure-end]
 
-// ── 집계 ─────────────────────────────────────────────────────────────────────
+// ── 뷰 상수 ──────────────────────────────────────────────────────────────────
 
 const PERIOD_MODES = [
   { key: "all", label: "전체" },
@@ -384,7 +393,7 @@ const METRICS = [
 // ── 페이지 ───────────────────────────────────────────────────────────────────
 
 export function RevenueHeatmap({ onNavigate }) {
-  const { ledger, syncState } = useRevenueLedger();
+  const { ledger, syncState, reload } = useRevenueLedger();
   const [periodMode, setPeriodMode] = React.useState("all");
   const [recentKey, setRecentKey] = React.useState("90d");
   const [monthKey, setMonthKey] = React.useState(null);
@@ -442,9 +451,19 @@ export function RevenueHeatmap({ onNavigate }) {
   const selectedOffMap = Boolean(selected && !selected.path);
   const totalValue = mapRows.reduce((s, r) => s + (r[metricKey] || 0), 0) +
     otherRows.reduce((s, r) => s + (r[metricKey] || 0), 0);
-  const jumpToCustomer = onNavigate
-    ? (key) => onNavigate(`dashboard/revenue/customers?customer=${encodeURIComponent(key)}`)
-    : null;
+  // 순위 행(React.memo)에 내려가는 핸들러는 identity가 안정적이어야 한다 — 렌더마다 새 클로저면 memo가 무효.
+  // onNavigate 부재 시 null 유지: RegionDetail·순위 행이 null로 "점프 불가"를 판단한다.
+  const jumpToCustomer = React.useMemo(
+    () => (onNavigate ? (key) => onNavigate(`dashboard/revenue/customers?customer=${encodeURIComponent(key)}`) : null),
+    [onNavigate],
+  );
+  const selectCustomerRegion = React.useCallback(
+    (c) => setSelectedLabel(c.canonical || c.region || "지역 미상"),
+    [],
+  );
+  const bodyState = heatmapBodyState({ syncState, ledgerDeals: ledger.deals, matchedDeals });
+  // 로딩·읽기 실패 중에는 헤더 계기도 0을 사실처럼 말하지 않는다
+  const ledgerUnsettled = bodyState === "loading" || bodyState === "error";
 
   return (
     <div className="hub-page" style={{ padding: "var(--section-gap)", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
@@ -452,14 +471,18 @@ export function RevenueHeatmap({ onNavigate }) {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>매출 히트맵</h2>
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
-            {periodLabel} · {metric.longLabel} · 딜 {matchedDeals}건 · 합계 <span className="num">{fmtMoney(totalValue)}</span>
+            {periodLabel} · {metric.longLabel} · 딜 {ledgerUnsettled ? "—" : `${matchedDeals}건`} · 합계 <span className="num">{ledgerUnsettled ? "—" : fmtMoney(totalValue)}</span>
             <SyncBadge state={syncState} />
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        <SegmentedControl className="hub-toolbar" label="기간" options={PERIOD_MODES} value={periodMode} onChange={setPeriodMode} />
-        <SegmentedControl className="hub-toolbar" label="품목" options={ITEM_FILTERS} value={itemKey} onChange={setItemKey} />
-        <SegmentedControl className="hub-toolbar" label="지표" options={METRICS} value={metricKey} onChange={setMetricKey} />
+        {/* 세 토글은 한 줄 가로 스크롤 툴바 — 좁은 화면에서 세로로 쌓이면 지도 위에 ~340px 크롬이 생긴다.
+            세그먼트는 모바일에서도 가로 유지(§8.1): 각 컨트롤은 flexShrink 0, 축소·스크롤은 래퍼가 맡는다. */}
+        <ScrollShadowX style={{ flex: "0 1 auto", minWidth: 0, maxWidth: "100%" }}>
+          <SegmentedControl className="hub-toolbar" label="기간" options={PERIOD_MODES} value={periodMode} onChange={setPeriodMode} style={{ flexShrink: 0, whiteSpace: "nowrap" }} />
+          <SegmentedControl className="hub-toolbar" label="품목" options={ITEM_FILTERS} value={itemKey} onChange={setItemKey} style={{ flexShrink: 0, whiteSpace: "nowrap" }} />
+          <SegmentedControl className="hub-toolbar" label="지표" options={METRICS} value={metricKey} onChange={setMetricKey} style={{ flexShrink: 0, whiteSpace: "nowrap" }} />
+        </ScrollShadowX>
       </div>
 
       {periodMode !== "all" && (
@@ -486,7 +509,26 @@ export function RevenueHeatmap({ onNavigate }) {
         </div>
       )}
 
-      {matchedDeals === 0 ? (
+      {bodyState === "loading" ? (
+        // 원장 첫 로드 — 0건 EmptyState 대신 중립 로딩 상태(§5.3: loading ≠ empty). 헤더 SyncBadge가 같은 상태를 말한다.
+        <Card>
+          <div role="status" aria-live="polite" style={{ minHeight: 220, padding: "32px 12px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, textAlign: "center" }}>
+            <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--fg)" }}>매출 원장 불러오는 중…</div>
+            <div style={{ fontSize: 12, color: "var(--fg-faint)" }}>딜이 도착하면 지도와 고객 순위가 채워집니다.</div>
+          </div>
+        </Card>
+      ) : bodyState === "error" ? (
+        // 읽기 실패 — "딜 없음"으로 위장 금지. 필터 초기화 CTA는 실패 화면에 무의미하므로 재시도만 둔다.
+        <Card>
+          <EmptyState
+            icon="x"
+            title="매출 원장을 읽지 못했습니다"
+            description="지금 화면은 비어 보여도 실제 딜이 있을 수 있습니다. 연결이 복구되면 다시 읽어 주세요."
+            action={reload ? <Button variant="secondary" size="sm" icon="runs" onClick={reload}>다시 읽기</Button> : undefined}
+            style={{ minHeight: 220, padding: "32px 12px" }}
+          />
+        </Card>
+      ) : bodyState === "empty" ? (
         <Card>
           <EmptyState
             icon="revenue"
@@ -526,7 +568,7 @@ export function RevenueHeatmap({ onNavigate }) {
                       rank={i + 1}
                       max={maxCustomer}
                       metricKey={metricKey}
-                      onSelect={() => setSelectedLabel(c.canonical || c.region || "지역 미상")}
+                      onSelect={selectCustomerRegion}
                       onJump={jumpToCustomer}
                       onPeek={setLinkedLabel}
                     />

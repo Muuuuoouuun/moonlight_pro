@@ -67,6 +67,16 @@ function zoomViewAt(v, nextZoom, fx, fy) {
   return clampView({ zoom, panX: v.panX + (fx - 0.5) * dw, panY: v.panY + (fy - 0.5) * dh });
 }
 
+// 값이 같으면 이전 객체를 돌려줘 재렌더를 막는다 — 경계에서 휠·핀치가 공회전할 때
+function sameOrNext(prev, next) {
+  return next.zoom === prev.zoom && next.panX === prev.panX && next.panY === prev.panY ? prev : next;
+}
+
+// 클라이언트 좌표 → 렌더 박스 내 비율(0~1). 호출 측이 rect.width/height > 0을 보장한다.
+function boxFraction(clientX, clientY, rect) {
+  return { fx: (clientX - rect.left) / rect.width, fy: (clientY - rect.top) / rect.height };
+}
+
 // 툴팁은 페인트 전 배치가 필요 — SSR 렌더에서는 useLayoutEffect 경고를 피해 useEffect로 대체
 const useIsoLayoutEffect = typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
 
@@ -87,9 +97,31 @@ const LABEL_NUDGE = {
 // 리프트·툴팁 없이 밝기/디밍만 따라간다.
 export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricLabel, linkedLabel = null }) {
   const [hovered, setHovered] = React.useState(null);
-  const [mousePos, setMousePos] = React.useState({ x: 0, y: 0 });
   const rowsByLabel = React.useMemo(() => new Map(rows.map(r => [r.label, r])), [rows]);
   const hoveredRow = hovered ? rowsByLabel.get(hovered) || null : null;
+  // 툴팁 위치는 명령형 — 포인터 이동은 React 상태를 건드리지 않고 rAF당 1회 DOM만 갱신한다.
+  // 상태가 바뀌는 순간은 hovered(어느 지역인지)가 바뀔 때뿐.
+  const mousePosRef = React.useRef({ x: 0, y: 0 });
+  const tooltipRef = React.useRef(null);
+  const tooltipRafRef = React.useRef(0);
+  const positionTooltip = () => {
+    const el = tooltipRef.current;
+    if (!el) return;
+    const { x, y } = mousePosRef.current;
+    el.style.left = `${x + 12}px`;
+    el.style.top = `${Math.max(4, y - 116)}px`;
+    // 우측 영역(x > 240)에선 왼쪽으로 플립
+    el.style.transform = x > 240 ? "translateX(calc(-100% - 24px))" : "";
+  };
+  const scheduleTooltip = () => {
+    if (!tooltipRef.current || tooltipRafRef.current) return;
+    tooltipRafRef.current = window.requestAnimationFrame(() => {
+      tooltipRafRef.current = 0;
+      positionTooltip();
+    });
+  };
+  // 마운트·지역 전환 시 페인트 전에 1회 배치 — 이후 추적은 rAF가 맡는다
+  useIsoLayoutEffect(positionTooltip, [hoveredRow]);
   // 하이라이트 기준: 지도 위 마우스가 우선, 없으면 레일에서 연동된 지역
   const activeLabel = hovered ?? (linkedLabel && rowsByLabel.has(linkedLabel) ? linkedLabel : null);
   const max = React.useMemo(() => Math.max(1, ...rows.map(r => r[metricKey] || 0)), [rows, metricKey]);
@@ -107,44 +139,137 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
       a.label === activeLabel ? 1 : b.label === activeLabel ? -1 : 0);
   }, [activeLabel]);
 
-  // 북→남 순차 리빌 (reduced-motion이면 즉시 표시)
+  // 북→남 순차 리빌 — 데이터가 처음 도착했을 때 1회만. 이후 rows 교체(기간·품목 필터)는 즉시 전체 표시해
+  // 값 전환이 fill 220ms 크로스페이드로만 보인다 (reduced-motion이면 항상 즉시).
   const revealOrder = React.useMemo(() => [...rows].sort((a, b) => a.y - b.y).map(r => r.label), [rows]);
   const [revealedCount, setRevealedCount] = React.useState(0);
+  const revealStartedRef = React.useRef(false);
   React.useEffect(() => {
-    if (reducedMotion) { setRevealedCount(revealOrder.length); return; }
-    setRevealedCount(0);
+    if (reducedMotion || revealStartedRef.current) { setRevealedCount(Infinity); return; }
+    if (revealOrder.length === 0) return; // 빈 rows는 1회 재생을 소모하지 않는다
+    revealStartedRef.current = true;
+    let finished = false;
     const timers = revealOrder.map((_, i) =>
       window.setTimeout(() => setRevealedCount(c => Math.max(c, i + 1)), i * 55));
-    return () => timers.forEach(t => window.clearTimeout(t));
+    // 스윕 완료 시 Infinity로 승격 — 이후 rows가 바뀌어도 slice(0, Infinity)가 새 라벨 전체를 덮는다
+    timers.push(window.setTimeout(() => { finished = true; setRevealedCount(Infinity); }, revealOrder.length * 55));
+    return () => {
+      timers.forEach(t => window.clearTimeout(t));
+      // 중단된 스윕(StrictMode 리마운트 포함)은 미소모 처리 — 다음 실행이 남은 구간부터 이어 그린다
+      if (!finished) revealStartedRef.current = false;
+    };
   }, [revealOrder, reducedMotion]);
   const revealedSet = React.useMemo(() => new Set(revealOrder.slice(0, revealedCount)), [revealOrder, revealedCount]);
   // 데이터 리빌 스윕이 끝난 뒤 섀시(무데이터 지역 라벨)가 뒤따라 점등한다
   const chassisShown = revealedCount >= revealOrder.length;
 
-  // 줌·팬
-  const [zoom, setZoom] = React.useState(1);
-  const [pan, setPan] = React.useState({ x: 0, y: 0 });
+  // 줌·팬 — 단일 view 상태, 저장 값은 항상 clampView를 거친다. 제스처는 rAF당 1회만 상태를 쓴다.
+  const [view, setView] = React.useState({ zoom: 1, panX: 0, panY: 0 });
+  const zoom = view.zoom;
   const visibleW = KOREA_PROVINCE_WIDTH / zoom;
   const visibleH = KOREA_PROVINCE_HEIGHT / zoom;
-  const maxPanX = (KOREA_PROVINCE_WIDTH - visibleW) / 2;
-  const maxPanY = (KOREA_PROVINCE_HEIGHT - visibleH) / 2;
-  const cp = {
-    x: Math.max(-maxPanX, Math.min(maxPanX, pan.x)),
-    y: Math.max(-maxPanY, Math.min(maxPanY, pan.y)),
-  };
+  const cp = { x: view.panX, y: view.panY };
   const viewBox = `${((KOREA_PROVINCE_WIDTH - visibleW) / 2 + cp.x).toFixed(2)} ${((KOREA_PROVINCE_HEIGHT - visibleH) / 2 + cp.y).toFixed(2)} ${visibleW.toFixed(2)} ${visibleH.toFixed(2)}`;
-  const dragRef = React.useRef(null);
+  const applyView = updater => setView(v => sameOrNext(v, updater(v)));
   const svgRef = React.useRef(null);
-  const pxToSvg = (dx) => {
+  const dragRef = React.useRef(null); // 단일 포인터 팬 { id, startX, startY, prevX, prevY, lastX, lastY, capturing }
+  const pinchRef = React.useRef(null); // 두 포인터 핀치 { dist, mid } — 직전 프레임 기준
+  const pointersRef = React.useRef(new Map()); // 활성 포인터 id → { x, y }
+  const gestureRafRef = React.useRef(0);
+  const touchTapAtRef = React.useRef(0); // 터치 탭 직후의 focus를 호버로 승격하지 않기 위한 타임스탬프
+  // 프레임당 1회: 핀치(중점 이동=팬, 거리 비=줌) 또는 드래그 팬을 증분으로 반영.
+  // 렌더 클로저 값은 쓰지 않는다(ref + 함수형 업데이트만) — rAF가 늦게 발화해도 stale 값이 없다.
+  const flushGesture = () => {
+    gestureRafRef.current = 0;
     const rect = svgRef.current?.getBoundingClientRect();
-    if (!rect || rect.width === 0) return 0;
-    return dx * (visibleW / rect.width);
+    if (!rect || rect.width === 0 || rect.height === 0) return;
+    const pts = [...pointersRef.current.values()];
+    if (pinchRef.current && pts.length >= 2) {
+      const [a, b] = pts;
+      const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const prev = pinchRef.current;
+      pinchRef.current = { dist, mid };
+      const { fx, fy } = boxFraction(mid.x, mid.y, rect);
+      const dmx = mid.x - prev.mid.x;
+      const dmy = mid.y - prev.mid.y;
+      const ratio = dist / prev.dist;
+      applyView(v => {
+        const panned = clampView({
+          zoom: v.zoom,
+          panX: v.panX - dmx * (KOREA_PROVINCE_WIDTH / v.zoom / rect.width),
+          panY: v.panY - dmy * (KOREA_PROVINCE_HEIGHT / v.zoom / rect.height),
+        });
+        return zoomViewAt(panned, panned.zoom * ratio, fx, fy);
+      });
+    } else if (dragRef.current) {
+      const d = dragRef.current;
+      const dx = d.lastX - d.prevX;
+      const dy = d.lastY - d.prevY;
+      d.prevX = d.lastX;
+      d.prevY = d.lastY;
+      if (dx === 0 && dy === 0) return;
+      applyView(v => clampView({
+        zoom: v.zoom,
+        panX: v.panX - dx * (KOREA_PROVINCE_WIDTH / v.zoom / rect.width),
+        panY: v.panY - dy * (KOREA_PROVINCE_HEIGHT / v.zoom / rect.height),
+      }));
+    }
   };
-  const applyZoom = (next) => {
-    const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
-    if (clamped === 1) setPan({ x: 0, y: 0 });
-    setZoom(clamped);
+  const scheduleGesture = () => {
+    if (gestureRafRef.current) return;
+    gestureRafRef.current = window.requestAnimationFrame(flushGesture);
   };
+  const capturePointer = id => {
+    try { svgRef.current?.setPointerCapture(id); } catch { /* 이미 뗀 포인터 — 무시 */ }
+  };
+  const releasePointer = e => {
+    pointersRef.current.delete(e.pointerId);
+    if (pinchRef.current && pointersRef.current.size < 2) {
+      pinchRef.current = null;
+      // 한 손가락만 남으면 팬으로 승계 (핀치 시작 때 이미 캡처된 포인터)
+      const rest = [...pointersRef.current.entries()][0];
+      if (rest) {
+        const [id, p] = rest;
+        dragRef.current = { id, startX: p.x, startY: p.y, prevX: p.x, prevY: p.y, lastX: p.x, lastY: p.y, capturing: true };
+      }
+    }
+    if (dragRef.current && dragRef.current.id === e.pointerId) dragRef.current = null;
+  };
+
+  // 트랙패드 핀치(ctrl+wheel)·⌘+휠 줌 — React onWheel은 passive라 preventDefault가 막힌다. 네이티브로 부착하고
+  // 수정키가 있을 때만 기본 동작을 막아 일반 휠은 페이지 스크롤로 남긴다.
+  React.useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const onWheel = e => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const rect = svg.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      const { fx, fy } = boxFraction(e.clientX, e.clientY, rect);
+      const dy = e.deltaMode === 1 ? e.deltaY * 20 : e.deltaY; // line 단위(Firefox 마우스 휠) 보정
+      setView(v => sameOrNext(v, zoomViewAt(v, v.zoom * Math.exp(-dy * 0.005), fx, fy)));
+    };
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onWheel);
+  }, []);
+  // 언마운트 시 미해소 rAF 정리
+  React.useEffect(() => () => {
+    window.cancelAnimationFrame(tooltipRafRef.current);
+    window.cancelAnimationFrame(gestureRafRef.current);
+  }, []);
+  // 터치/좁은 화면 판정 — hub-tokens의 44px 터치 플로어와 동일 쿼리. 그 환경에선 26px 줌 버튼이 44px로
+  // 커지므로 스택 배치만 바꾼다. 초기값 false는 SSR 마크업과 하이드레이션을 일치시키기 위함.
+  const [compactControls, setCompactControls] = React.useState(false);
+  React.useEffect(() => {
+    const mq = window.matchMedia?.("(pointer: coarse), (max-width: 720px)");
+    if (!mq) return;
+    const sync = () => setCompactControls(mq.matches);
+    sync();
+    mq.addEventListener?.("change", sync);
+    return () => mq.removeEventListener?.("change", sync);
+  }, []);
 
   return (
     <div
@@ -157,27 +282,78 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
       }}
       onMouseMove={e => {
         const rect = e.currentTarget.getBoundingClientRect();
-        setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+        mousePosRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        scheduleTooltip();
       }}
-      onMouseLeave={() => { setHovered(null); dragRef.current = null; }}
+      onMouseLeave={() => {
+        setHovered(null);
+        // 캡처 전 팬 후보만 폐기 — 캡처된 드래그는 pointerup/cancel이 정리한다
+        if (dragRef.current && !dragRef.current.capturing) dragRef.current = null;
+      }}
     >
       <svg
         ref={svgRef}
         viewBox={viewBox}
         preserveAspectRatio="xMidYMid meet"
-        style={{ display: "block", width: "100%", height: "auto", cursor: zoom > 1 ? "grab" : "default" }}
+        style={{
+          display: "block", width: "100%", height: "auto",
+          cursor: zoom > 1 ? "grab" : "default",
+          // 줌 1에선 세로 스크롤을 페이지에 넘기고, 줌인 뒤엔 제스처를 지도가 소유한다
+          touchAction: zoom > 1 ? "none" : "pan-y",
+        }}
         role="group"
         aria-label="대한민국 지역별 매출 히트맵"
-        onMouseDown={e => {
-          if (zoom <= 1) return;
-          dragRef.current = { startX: e.clientX, startY: e.clientY, panX: cp.x, panY: cp.y };
+        onPointerDown={e => {
+          if (e.pointerType === "mouse" && e.button !== 0) return;
+          if (e.pointerType === "touch") touchTapAtRef.current = Date.now();
+          pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          if (pointersRef.current.size === 2) {
+            // 두 번째 포인터 → 핀치 시작. 팬 후보는 폐기, 둘 다 캡처해 지도 밖 이동도 추적한다
+            dragRef.current = null;
+            const [a, b] = [...pointersRef.current.values()];
+            pinchRef.current = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
+            pointersRef.current.forEach((_, id) => capturePointer(id));
+          } else if (pointersRef.current.size === 1 && zoom > 1) {
+            // 팬 후보 — 이동 임계 전엔 캡처하지 않아 클릭/탭(지역 선택)이 그대로 살아있다
+            dragRef.current = {
+              id: e.pointerId, startX: e.clientX, startY: e.clientY,
+              prevX: e.clientX, prevY: e.clientY, lastX: e.clientX, lastY: e.clientY, capturing: false,
+            };
+          }
         }}
-        onMouseMoveCapture={e => {
+        onPointerMove={e => {
+          const p = pointersRef.current.get(e.pointerId);
+          if (p) { p.x = e.clientX; p.y = e.clientY; }
+          if (pinchRef.current) { if (p) scheduleGesture(); return; }
           const d = dragRef.current;
-          if (!d) return;
-          setPan({ x: d.panX - pxToSvg(e.clientX - d.startX), y: d.panY - pxToSvg(e.clientY - d.startY) });
+          if (!d || d.id !== e.pointerId) return;
+          if (e.pointerType === "mouse" && e.buttons === 0) { dragRef.current = null; return; } // svg 밖에서 버튼이 풀린 잔재
+          d.lastX = e.clientX;
+          d.lastY = e.clientY;
+          if (!d.capturing) {
+            const threshold = e.pointerType === "touch" ? DRAG_THRESHOLD_TOUCH : DRAG_THRESHOLD_MOUSE;
+            if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < threshold) return;
+            d.capturing = true;
+            capturePointer(e.pointerId);
+          }
+          scheduleGesture();
         }}
-        onMouseUp={() => { dragRef.current = null; }}
+        onPointerUp={releasePointer}
+        onPointerCancel={releasePointer}
+        onPointerLeave={e => {
+          // 캡처되지 않은 포인터가 svg를 벗어나면 등록 해제 — 고아 엔트리가 핀치 판정을 오염하지 않게
+          const d = dragRef.current;
+          if (pinchRef.current || (d && d.id === e.pointerId && d.capturing)) return;
+          pointersRef.current.delete(e.pointerId);
+          if (d && d.id === e.pointerId) dragRef.current = null;
+        }}
+        onDoubleClick={e => {
+          // 더블클릭·더블탭: 원래 크기 ↔ 한 단계 확대(클릭 지점 앵커)
+          const rect = svgRef.current?.getBoundingClientRect();
+          if (!rect || rect.width === 0 || rect.height === 0) return;
+          const { fx, fy } = boxFraction(e.clientX, e.clientY, rect);
+          applyView(v => (v.zoom > 1 ? { zoom: 1, panX: 0, panY: 0 } : zoomViewAt(v, ZOOM_STEP, fx, fy)));
+        }}
       >
         {/* 계기판 도트 그리드 — 미세 도트 + 성근 좌표 도트 2겹으로 계기 좌표감을 만든다 */}
         <defs>
@@ -244,10 +420,13 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
                 }}
                 role="button"
                 tabIndex={0}
+                aria-pressed={sel}
                 aria-label={`${row.label} ${metricLabel} ${fmtMoney(value)}`}
                 onClick={() => onSelect(row)}
-                onMouseEnter={() => setHovered(row.label)}
-                onFocus={() => setHovered(row.label)}
+                // 호버 카드·리프트는 마우스/펜 전용 — 터치는 탭→선택으로 우측 레일이 응답한다
+                onPointerEnter={e => { if (e.pointerType !== "touch") setHovered(row.label); }}
+                // 키보드 포커스는 호버와 동일하게 강조하되, 터치 탭이 만든 포커스는 제외(700ms 창)
+                onFocus={() => { if (Date.now() - touchTapAtRef.current < 700) return; setHovered(row.label); }}
                 onBlur={() => setHovered(null)}
                 onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(row); } }}
               >
@@ -345,11 +524,10 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
         return (
           <div
             key={hoveredRow.label}
+            ref={tooltipRef}
             style={{
+              // left/top/transform은 positionTooltip이 DOM에 직접 쓴다 — 여기 두면 재렌더가 되돌린다
               pointerEvents: "none", position: "absolute", zIndex: 30, width: 208,
-              left: mousePos.x + 12,
-              top: Math.max(4, mousePos.y - 116),
-              transform: mousePos.x > 240 ? "translateX(calc(-100% - 24px))" : undefined,
               background: "var(--elevated, var(--surface-3))",
               border: "1px solid var(--line)",
               borderRadius: "var(--r-sm)",
@@ -398,19 +576,23 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
         );
       })()}
 
-      {/* 줌 컨트롤 — 헤어라인 분할 계기 스택 */}
+      {/* 줌 컨트롤 — 헤어라인 분할 계기 스택. 데스크톱은 지도 위 우상단 오버레이(세로 3단).
+          터치/좁은 화면은 44px 플로어로 커진 버튼이 지도·범례를 가리지 않도록 지도 아래 플로우에
+          우측 정렬 가로 1열로 내려놓는다 — 범례 줄바꿈·지도 비율과 무관하게 겹침이 없다 */}
       <div style={{
-        position: "absolute", right: 8, top: 8, zIndex: 20,
-        display: "flex", flexDirection: "column",
+        ...(compactControls
+          ? { position: "static", width: "fit-content", marginLeft: "auto", marginTop: 8, flexDirection: "row" }
+          : { position: "absolute", right: 8, top: 8, zIndex: 20, flexDirection: "column" }),
+        display: "flex",
         background: "color-mix(in oklch, var(--surface-2) 92%, transparent)",
         backdropFilter: "blur(6px)",
         border: "1px solid var(--line)",
         borderRadius: "var(--r-sm)", padding: 2, overflow: "hidden",
       }}>
         {[
-          { label: "+", aria: "확대", onClick: () => applyZoom(zoom * ZOOM_STEP), disabled: zoom >= ZOOM_MAX },
-          { label: "−", aria: "축소", onClick: () => applyZoom(zoom / ZOOM_STEP), disabled: zoom <= ZOOM_MIN },
-          { label: "↺", aria: "원래 크기", onClick: () => { setZoom(1); setPan({ x: 0, y: 0 }); }, disabled: zoom === 1 && pan.x === 0 && pan.y === 0 },
+          { label: "+", aria: "확대", onClick: () => applyView(v => zoomViewAt(v, v.zoom * ZOOM_STEP, 0.5, 0.5)), disabled: zoom >= ZOOM_MAX },
+          { label: "−", aria: "축소", onClick: () => applyView(v => zoomViewAt(v, v.zoom / ZOOM_STEP, 0.5, 0.5)), disabled: zoom <= ZOOM_MIN },
+          { label: "↺", aria: "원래 크기", onClick: () => applyView(() => ({ zoom: 1, panX: 0, panY: 0 })), disabled: zoom === 1 && cp.x === 0 && cp.y === 0 },
         ].map((b, i) => (
           <button
             key={b.aria}
@@ -423,7 +605,9 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
             style={{
               width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center",
               background: "transparent", border: "none",
-              borderTop: i > 0 ? "1px solid var(--line-soft)" : "none",
+              // 분할 헤어라인: 세로 스택은 위쪽, 가로 스택은 왼쪽
+              borderTop: !compactControls && i > 0 ? "1px solid var(--line-soft)" : "none",
+              borderLeft: compactControls && i > 0 ? "1px solid var(--line-soft)" : "none",
               borderRadius: 0, cursor: b.disabled ? "default" : "pointer",
               color: b.disabled ? "var(--fg-faint)" : "var(--fg-muted)",
               fontSize: 12.5, opacity: b.disabled ? 0.45 : 1,
@@ -435,8 +619,9 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
         ))}
       </div>
 
-      {/* 램프 범례 — heatFill과 동일 공식의 이산 스텝 + 실측 최대값 + 커버리지 카운터 */}
-      <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, padding: "0 2px" }}>
+      {/* 램프 범례 — heatFill과 동일 공식의 이산 스텝 + 실측 최대값 + 커버리지 카운터.
+          좁은 폭에서는 항목 단위로 줄바꿈한다(단어 중간 개행 금지) — 카운터는 auto 마진으로 우측 유지 */}
+      <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, rowGap: 4, padding: "0 2px" }}>
         <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.02em", color: "var(--fg-dim)", whiteSpace: "nowrap" }}>
           {metricLabel}
         </span>

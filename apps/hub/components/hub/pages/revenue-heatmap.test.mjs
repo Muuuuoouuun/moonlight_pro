@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 // revenue-heatmap.jsx는 JSX라 node --test가 직접 import할 수 없다.
-// 대신 페이지 파일이 마커로 감싼 self-contained 순수 블록(월/분기 헬퍼)을
+// 대신 페이지 파일이 마커로 감싼 self-contained 순수 블록(기간·분류·집계·본문 상태 헬퍼)을
 // 소스에서 추출해 data: 모듈로 실행한다 — 블록이 JSX/외부 참조를 갖게 되면 여기서 깨진다.
 const source = await readFile(new URL("./revenue-heatmap.jsx", import.meta.url), "utf8");
 
@@ -232,4 +232,20 @@ test("aggregate: cutoff·range 필터는 dealTimestamp 기준으로 동작한다
   const ranged = period.aggregate(ledger, { item: "all", range }, PROV);
   assert.equal(ranged.matchedDeals, 1);
   assert.equal(ranged.otherRows[0]?.expected, 50);
+});
+
+test("heatmapBodyState: 원장 로딩·읽기 실패를 '딜 없음'으로 위장하지 않는다 (§5.3 truth)", () => {
+  const none = [];
+  assert.equal(period.heatmapBodyState({ syncState: "loading", ledgerDeals: none, matchedDeals: 0 }), "loading");
+  assert.equal(period.heatmapBodyState({ syncState: "error", ledgerDeals: none, matchedDeals: 0 }), "error");
+  // 정착 상태(live/partial/preview)의 0건은 진짜 빈 상태
+  for (const syncState of ["live", "partial", "preview"]) {
+    assert.equal(period.heatmapBodyState({ syncState, ledgerDeals: none, matchedDeals: 0 }), "empty");
+  }
+  // 캐시로 딜이 서빙되는 중이면 필터 결과가 진실 — 배경 재검증(loading)·실패(error)여도 empty
+  const some = [{ id: "d1" }];
+  assert.equal(period.heatmapBodyState({ syncState: "loading", ledgerDeals: some, matchedDeals: 0 }), "empty");
+  assert.equal(period.heatmapBodyState({ syncState: "error", ledgerDeals: some, matchedDeals: 0 }), "empty");
+  assert.equal(period.heatmapBodyState({ syncState: "loading", ledgerDeals: some, matchedDeals: 3 }), "data");
+  assert.equal(period.heatmapBodyState({ syncState: "live", ledgerDeals: undefined, matchedDeals: 0 }), "empty");
 });
