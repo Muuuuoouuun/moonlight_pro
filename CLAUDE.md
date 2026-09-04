@@ -24,6 +24,7 @@
 ## 코드 규칙
 - 컴포넌트: `components/` — 페이지 전용이 아닌 경우만 분리
 - Hub read API: `apps/hub/app/api/hub/` → `apps/hub/lib/repositories/` 사용
+- Hub read 실패 봉투: 허브 read 라우트는 Supabase 불가·read 실패를 5xx가 아니라 **HTTP 200 + `{ status: "error" }`**로 알린다(2026-09-01 통일). 따라서 소비자가 `!r.ok`만 검사하면 read 실패가 빈 상태("대기 없음")로 위장된다 — 반드시 봉투(`d.status === 'error'`, 필요하면 `d.source === 'error'`)를 읽어라. 정본 소비자 패턴은 `pages/agents.jsx`·`pages/daily-brief.jsx`이고, `components/hub/state-usage.test.mjs`가 이 계약을 고정한다. 라우트를 502로 되돌리는 것은 회귀다
 - Hub write/BFF API: `apps/hub/app/api/**`의 POST/PATCH 라우트는 `apps/hub/lib/hub-write-guard.js`를 거친다 — 브라우저는 same-origin 헤더, 서버 간 호출은 `COM_MOON_HUB_WRITE_SECRET`. 영속화는 `apps/hub/lib/server-write.js`가 `@com-moon/supabase-rest`에 위임한다
 - Engine write/intake API: `apps/engine/app/api/` — 공개 POST는 shared secret 또는 provider secret 검증
 - Hub → Engine 호출은 `COM_MOON_SHARED_WEBHOOK_SECRET`를 전달
