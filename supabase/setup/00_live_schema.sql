@@ -937,9 +937,12 @@ create index if not exists idx_project_updates_workspace_happened on public.proj
 create index if not exists idx_project_updates_project_happened on public.project_updates (workspace_id, project_id, happened_at desc);
 create index if not exists idx_project_updates_correlation on public.project_updates (workspace_id, correlation_id) where correlation_id is not null;
 create unique index if not exists routine_checks_workspace_idempotency_key_uidx on public.routine_checks (workspace_id, idempotency_key) where idempotency_key is not null;
+create index if not exists idx_routine_checks_workspace_checked on public.routine_checks (workspace_id, checked_at desc nulls last, created_at desc nulls last, id desc);
 create index if not exists idx_tasks_workspace_status on public.tasks (workspace_id, status);
+create index if not exists idx_tasks_workspace_updated on public.tasks (workspace_id, updated_at desc);
 create index if not exists idx_tasks_workspace_owner_status_due on public.tasks (workspace_id, owner_id, status, due_at);
 create index if not exists idx_tasks_workspace_project_status on public.tasks (workspace_id, project_id, status);
+create index if not exists idx_decisions_workspace_decided on public.decisions (workspace_id, decided_at desc);
 create index if not exists idx_workspace_memberships_user_status on public.workspace_memberships (user_id, status);
 create index if not exists idx_workspace_memberships_workspace_role on public.workspace_memberships (workspace_id, role, status);
 create index if not exists idx_brands_workspace_status on public.brands (workspace_id, status);
@@ -950,6 +953,7 @@ create unique index if not exists idx_content_items_workspace_slug on public.con
 create index if not exists idx_content_variants_content on public.content_variants (content_id, variant_type);
 create index if not exists idx_content_variants_public on public.content_variants (workspace_id, visibility, status, published_at desc);
 create unique index if not exists idx_content_variants_workspace_slug on public.content_variants (workspace_id, slug) where slug is not null;
+create index if not exists idx_publish_logs_workspace_created on public.publish_logs (workspace_id, created_at desc);
 create index if not exists idx_leads_workspace_status on public.leads (workspace_id, status);
 create index if not exists idx_leads_workspace_owner_touch on public.leads (workspace_id, owner_id, last_touch_at desc);
 create index if not exists idx_deals_workspace_stage_close on public.deals (workspace_id, stage, expected_close_at);
@@ -957,6 +961,7 @@ create index if not exists idx_operation_cases_workspace_status on public.operat
 create index if not exists idx_operation_cases_workspace_owner_status on public.operation_cases (workspace_id, owner_id, status);
 create index if not exists idx_customer_accounts_workspace_owner_status on public.customer_accounts (workspace_id, owner_id, status);
 create index if not exists idx_automation_runs_workspace_status on public.automation_runs (workspace_id, status);
+create index if not exists idx_automation_runs_workspace_created on public.automation_runs (workspace_id, created_at desc);
 create index if not exists idx_automation_runs_correlation on public.automation_runs (workspace_id, correlation_id) where correlation_id is not null;
 create index if not exists idx_sync_runs_workspace_status on public.sync_runs (workspace_id, status);
 create index if not exists idx_webhook_events_workspace_received on public.webhook_events (workspace_id, received_at desc);

@@ -507,12 +507,18 @@ create index idx_project_updates_workspace_happened on project_updates (workspac
 create unique index routine_checks_workspace_idempotency_key_uidx
   on routine_checks (workspace_id, idempotency_key)
   where idempotency_key is not null;
+create index idx_routine_checks_workspace_checked
+  on routine_checks (workspace_id, checked_at desc nulls last, created_at desc nulls last, id desc);
 create index idx_tasks_workspace_status on tasks (workspace_id, status);
+create index idx_tasks_workspace_updated on tasks (workspace_id, updated_at desc);
+create index idx_decisions_workspace_decided on decisions (workspace_id, decided_at desc);
 create index idx_content_items_workspace_status on content_items (workspace_id, status);
 create index idx_content_variants_content on content_variants (content_id, variant_type);
+create index idx_publish_logs_workspace_created on publish_logs (workspace_id, created_at desc);
 create index idx_leads_workspace_status on leads (workspace_id, status);
 create index idx_operation_cases_workspace_status on operation_cases (workspace_id, status);
 create index idx_automation_runs_workspace_status on automation_runs (workspace_id, status);
+create index idx_automation_runs_workspace_created on automation_runs (workspace_id, created_at desc);
 create index idx_sync_runs_workspace_status on sync_runs (workspace_id, status);
 create index idx_webhook_events_workspace_received on webhook_events (workspace_id, received_at desc);
 create unique index idx_webhook_events_provider_event

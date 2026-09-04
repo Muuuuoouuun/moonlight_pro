@@ -22,6 +22,20 @@ export async function ${exportName}() {
 }
 `;
 
+const overviewRepositoryStub = `
+export async function getOverviewLedger() {
+  const state = globalThis.__projectAggregateRouteState;
+  if (state.overviewError) throw state.overviewError;
+  return {
+    projects: state.projects,
+    content: state.content,
+    revenue: state.revenue,
+    automations: state.automations,
+    work: state.work,
+  };
+}
+`;
+
 const operatorHomeStub = `
 function state(ledger) {
   if (ledger?.source === "error") return "error";
@@ -79,6 +93,7 @@ registerHooks({
       // 쓴다 — 각자 독립 state 키로 스텁해 계약을 따로 검증한다.
       "@/lib/repositories/operating-ledger":
         repositoryStub("projects", "getProjectLedger") + repositoryStub("tasksLedger", "getTaskLedger"),
+      "@/lib/repositories/overview-ledger": overviewRepositoryStub,
       "@/lib/repositories/content-ledger": repositoryStub("content", "getContentLedger"),
       "@/lib/repositories/revenue-ledger": repositoryStub("revenue", "getRevenueLedger"),
       "@/lib/repositories/automations-ledger": repositoryStub("automations", "getAutomationsLedger"),
@@ -156,6 +171,7 @@ function liveTaskLedger(overrides = {}) {
 }
 
 function resetState() {
+  state.overviewError = null;
   state.projectsError = null;
   state.projects = liveProjectLedger();
   state.tasksLedgerError = null;

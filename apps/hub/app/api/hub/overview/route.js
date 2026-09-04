@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getAutomationsLedger } from "@/lib/repositories/automations-ledger";
-import { getContentLedger } from "@/lib/repositories/content-ledger";
-import { getProjectLedger } from "@/lib/repositories/operating-ledger";
-import { getRevenueLedger } from "@/lib/repositories/revenue-ledger";
-import { getWorkLedger } from "@/lib/repositories/work-ledger";
+import { getOverviewLedger } from "@/lib/repositories/overview-ledger";
 import { buildOperatorHomeSummary } from "@/lib/operator-home-summary";
 
 export const runtime = "nodejs";
@@ -230,13 +226,16 @@ function buildSources(results) {
 }
 
 export async function GET() {
-  const [projectsResult, contentResult, revenueResult, automationsResult, workResult] = await Promise.allSettled([
-    getProjectLedger(),
-    getContentLedger(),
-    getRevenueLedger(),
-    getAutomationsLedger(),
-    getWorkLedger(),
-  ]);
+  const overviewResult = await Promise.allSettled([getOverviewLedger()]);
+  const snapshot = overviewResult[0].status === "fulfilled" ? overviewResult[0].value : null;
+  const resultFor = (key) => snapshot
+    ? { status: "fulfilled", value: snapshot[key] }
+    : { status: "rejected", reason: overviewResult[0].reason };
+  const projectsResult = resultFor("projects");
+  const contentResult = resultFor("content");
+  const revenueResult = resultFor("revenue");
+  const automationsResult = resultFor("automations");
+  const workResult = resultFor("work");
 
   const results = {
     projects: projectsResult,

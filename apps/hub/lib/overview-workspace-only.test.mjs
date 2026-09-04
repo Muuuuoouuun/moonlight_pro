@@ -23,6 +23,10 @@ export async function fetchSupabaseRows(table, options = {}) {
   globalThis.__overviewWorkspaceOnlyState.calls.push({ kind: "fetch", table, options });
   return null;
 }
+export async function fetchSupabaseRowsDetailed(table, options = {}) {
+  globalThis.__overviewWorkspaceOnlyState.calls.push({ kind: "fetch-detailed", table, options });
+  return { rows: null, count: null, configured: true, error: { reason: "test" } };
+}
 export async function countSupabaseRows(table, filters = []) {
   globalThis.__overviewWorkspaceOnlyState.calls.push({ kind: "count", table, filters });
   return null;
@@ -40,6 +44,7 @@ const actualModules = new Map([
   ["@/lib/repositories/revenue-ledger", new URL("./repositories/revenue-ledger.js", import.meta.url).href],
   ["@/lib/repositories/automations-ledger", new URL("./repositories/automations-ledger.js", import.meta.url).href],
   ["@/lib/repositories/work-ledger", new URL("./repositories/work-ledger.js", import.meta.url).href],
+  ["@/lib/repositories/overview-ledger", new URL("./repositories/overview-ledger.js", import.meta.url).href],
   ["@/lib/operator-home-summary", new URL("./operator-home-summary.js", import.meta.url).href],
 ]);
 
