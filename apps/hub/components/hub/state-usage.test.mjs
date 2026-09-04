@@ -45,3 +45,31 @@ test('follow-up truth never turns a failed read into preview or a proven empty s
   assert.match(source, /state\.syncState === "error" \? \(\s*<EmptyState[\s\S]*?title="활동 기록을 읽지 못했습니다"/);
   assert.match(source, /stage && <Badge tone="neutral" size="xs" variant="outline">\{stage\.label\}<\/Badge>/);
 });
+
+// 2026-09-04 회귀 방어. `8a8bcbc`가 허브 read 라우트의 실패를 HTTP 200 + status:"error"
+// 봉투로 통일하면서, `!r.ok`만 보던 첫 화면 승인 큐가 read 실패를 "승인 대기 없음"으로
+// 위장하게 됐다(`d920e76`이 막으려던 오독의 재발). 봉투 방향은 프로젝트 계약이므로
+// 라우트를 502로 되돌리지 않고, 소비자 양쪽이 봉투를 읽는 것을 여기서 고정한다.
+const hubRoute = (path) => readFileSync(new URL(`../../app/api/hub/${path}`, import.meta.url), 'utf8');
+
+test('approval queue read failure is never rendered as an empty queue', () => {
+  // 라우트: 실패는 200 + status:"error"다. 502 회귀 금지.
+  const route = hubRoute('work-orders/route.js');
+  assert.match(route, /status: summary\.source === "error" \? "error" : "ok"/);
+  assert.match(route, /status: orders\.source === "error" \? "error" : "ok"/);
+  assert.doesNotMatch(route, /\{ status: 502 \}/);
+
+  // 소비자 양쪽: HTTP 상태가 아니라 봉투를 읽는다.
+  for (const name of ['daily-brief', 'agents']) {
+    const source = page(name);
+    assert.match(
+      source,
+      /\.then\(async \(r\) => \(\{ ok: r\.ok, d: await r\.json\(\)\.catch\(\(\) => null\) \}\)\)/,
+      `${name}: work-orders 응답을 봉투로 읽지 않는다`,
+    );
+    assert.match(source, /if \(!ok \|\| !d \|\| d\.status === 'error'/, `${name}: status 봉투 가드 없음`);
+  }
+
+  // 첫 화면: !r.ok 단독 감지기로 되돌아가지 않는다.
+  assert.doesNotMatch(page('daily-brief'), /if \(!r\.ok\) throw new Error\(`work-orders/);
+});
