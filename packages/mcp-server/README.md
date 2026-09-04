@@ -19,6 +19,22 @@ a bespoke webhook per feature.
   `status` field (`live` / `preview` / `saved` / `error` / ...) verbatim. It does not
   invent new status semantics or fabricate data when a route reports `preview`.
 
+## Error contract
+
+Tool failures are real MCP errors (`isError`), not data. Three outcomes are kept apart:
+
+| Outcome | Result | Example message |
+| --- | --- | --- |
+| Hub unreachable / timeout | `isError` | `Hub(http://localhost:3000)에 연결할 수 없습니다 (ECONNREFUSED) … npm run dev:hub로 먼저 띄우세요` |
+| HTTP 4xx/5xx | `isError` | `Hub 요청 실패 (HTTP 401) … 조치: COM_MOON_HUB_WRITE_SECRET이 Hub의 값과 같은지 확인하세요` |
+| 200 with `status: "error"` | `isError` | route error text, `retryable` preserved |
+| 200 with `status: "preview"` | **normal result** | an honest "not connected" answer is never an error |
+
+That last row is the contract that matters: this server never turns a route’s honest
+`preview` into a failure, and never lets a real failure pass as data.
+
+Requests time out after 60s (`COM_MOON_MCP_TIMEOUT_MS` to change).
+
 ## Setup
 
 1. `npm install` at the repo root (picks this package up via the `packages/*` workspace).
