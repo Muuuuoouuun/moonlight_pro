@@ -2,9 +2,8 @@
 
 > Current version — reflects the Moonlight Pro bundle now shipped in `apps/hub`.
 > Existing token names below match `apps/hub/components/hub/hub-tokens.css` verbatim.
-> Contracts marked **target** are approved design direction and remain implementation work until the
-> corresponding token or primitive is added to code.
-> Previous "Com_Moon / Moonstone Command Deck" naming is retired.
+> The old "Com_Moon" product name is retired from design copy. "Moonstone Command Deck" remains the working
+> visual direction (§4). Code namespaces (`COM_MOON_*` env vars, `@com-moon/*` packages) are unchanged.
 
 ## 1. Product Read
 
@@ -117,6 +116,17 @@ Defined in `apps/hub/components/hub/hub-tokens.css` and scoped under `.hub-app`.
 }
 ```
 
+Also defined in `hub-tokens.css` (names verbatim, both themes):
+
+- Accent variants: `--accent` (`#5274a8`, theme-stable), `--accent-soft`, `--accent-line`, `--pms-moonstone`, `--moon-bg`, `--moon-line`.
+- Semantic hairlines and low-alpha fills: `--success-line` / `--warning-line` / `--danger-line` / `--info-line` /
+  `--personal-line` / `--company-line` (left rails and chip outlines only) and the matching `--*-bg`
+  (compact banners only, never full cards or rows).
+- Layering: `--z-project-detail: 61`, `--z-drawer-overlay: 70`, `--z-drawer: 71`, `--z-palette: 1100`.
+- Shadows: `--shadow-soft`, `--shadow-card`, `--shadow-pop`.
+- Radius: `--r-xs: 4px`, `--r-sm: 6px`, `--r: 10px`, `--r-lg: 14px`, `--r-xl: 20px` (§7).
+- Motion: `--dur-hover`, `--dur-enter`, `--dur-panel`, `--dur-overlay`, `--ease-hub`, `--stagger-step` (§9).
+
 ### 5.2 Usage rules
 
 - **Accent anchor:** `--accent` is the theme-stable Moonstone `#5274a8` alias. Accent means current position, selection,
@@ -228,6 +238,10 @@ Moonstone `확정하기` action. It does not turn the entire recommendation red 
 
 Fallbacks: `'Inter Tight', ui-sans-serif, system-ui, sans-serif` for sans, `'Cascadia Code', 'Cascadia Mono', ui-monospace, 'SF Mono', Consolas, monospace` for mono (JetBrains Mono is now bundled and first in `--font-mono`).
 
+`MaruBuri` (serif, five weights) is still declared in `app/globals.css` and reaches `--font-display` through
+`@com-moon/ui`'s `--cm-font-serif`, but no hub surface uses it. Treat it as legacy: do not introduce serif
+display type; removal is tracked in `TODOS.md`.
+
 **Rules**
 - Hub defaults to sans at 14px / `font-feature-settings: 'cv11', 'ss01', 'ss03'`.
 - **Hybrid number rule.** Hero / display figures (KPI values, big metrics ≥ 18px) use `.stat` — SUIT **sans** with `tabular-nums lining-nums` and a touch of display tracking (`-0.015em`), for a premium, non-code read. Instrument data (IDs, timestamps, inline values, counts < 18px) uses `.mono` — bundled JetBrains Mono, `letter-spacing: 0`. Don't set large display numbers in mono; don't set IDs/timestamps in sans.
@@ -251,7 +265,9 @@ The hub ships one fixed density — no user-facing toggle. Values: `row-h: 36`, 
 `pad-x: 14`, `gap: 12`, `section-gap: 24`, `card-pad: 20`.
 
 ### Radius
+- Micro elements (chips, checkbox faces): `4px` (`--r-xs`)
 - Small controls: `6px` (`--r-sm`)
+- Inputs / medium controls: `10px` (`--r`)
 - Standard cards: `14px` (`--r-lg`)
 - Feature panels: `20px` (`--r-xl`)
 - Floating pills / buttons: `999px`
@@ -262,11 +278,15 @@ Primitives live in `apps/hub/components/hub/hub-primitives.jsx` and must be the 
 truth. Do not recreate them ad-hoc inside pages.
 
 **Available primitives**
-- `Badge` — soft / outline, 7 tones (neutral · moon · success · warning · danger · info · personal · company)
+- `Badge` — soft / outline, 8 tones (neutral · moon · success · warning · danger · info · personal · company)
 - `Dot`, `Kbd`, `Avatar`, `Divider`
 - `Card` (padded / unpadded), `SectionTitle`, `Tabs`
 - `Button` (primary · secondary · ghost · outline · danger), `IconButton`
 - `Input`, `Checkbox`, `Progress`, `Sparkline`, `Placeholder`
+- `SegmentedControl`, `EmptyState` (+ `action` CTA), `ScrollShadowX`
+- `Drawer`, `EditDrawer` — the only overlay / edit surfaces (§8.1)
+- State primitives `AttentionRail`, `CertaintyBadge`, `LifecycleBadge`, `TruthBadge` (§8.2). `SyncBadge`
+  survives only as a compatibility wrapper over `TruthBadge`; new call sites use `TruthBadge` directly.
 
 **Hub-specific composites** (page-level, see `components/hub/pages/*`)
 - Signal card (Daily Brief)
@@ -312,6 +332,8 @@ truth. Do not recreate them ad-hoc inside pages.
 **Hover.**
 - 인터랙티브 행은 `className="hub-row"` — `onMouseEnter/Leave` JS 핸들러를 새로 쓰지 않는다
   (reduced-motion 무시 + 드리프트 원인). 기존 JS hover는 해당 파일을 만질 때 옮긴다.
+- 카드형 클릭 타깃은 `.hub-card-link`(보더 강조 + 1px 상승), 칸반 카드는 `.hub-kanban-card`(`--surface-3`로 상승),
+  아이콘 버튼은 `.hub-iconbtn` — 전부 같은 no-JS 계약이며 휴지 서피스만 다르다.
 
 **텍스트 크기 플로어.**
 - 데이터 값 ≥ 12px · 보조 메타(ID·타임스탬프·마이크로 카운트·상태 플래그) ≥ 10.5px ·
@@ -348,19 +370,27 @@ Implementation rules:
 
 ## 9. Motion
 
-Deliberate, never playful.
+Deliberate, never playful. Since 2026-07-29 the only sanctioned durations and curve are the motion tokens in
+`hub-tokens.css`; raw `ms` literals inside pages are legacy debt to migrate whenever the file is touched.
 
-- Page reveal: `180–240ms`, via `.fade-up` (opacity + 4px translateY).
-- Card rise / fade stagger: `120ms`.
-- Dialog / sheet: `160–200ms`.
-- Drawer: 180ms slide-in (`hubDrawerIn`), overlay 160ms fade (`hubFadeIn`), reduced-motion respected.
+| Token | Value | Use |
+| --- | --- | --- |
+| `--dur-hover` | `120ms` | hover / press feedback: `.hub-row`, `.hub-card-link`, `.hub-iconbtn` |
+| `--dur-enter` | `200ms` | page reveal (`.fade-up`), card cascade (`.stagger-up`), list exits |
+| `--dur-panel` | `180ms` | drawer slide-in (`hubDrawerIn`), project detail panel |
+| `--dur-overlay` | `160ms` | overlay fade (`hubFadeIn`), ⌘K palette overlay |
+| `--ease-hub` | `cubic-bezier(0.2, 0.7, 0.3, 1)` | every entrance / exit curve |
+| `--stagger-step` | `45ms` | per-child delay in `.stagger-up`, capped after the seventh child |
+
+- Page reveal: `.fade-up` (opacity + 4px translateY). Card lists cascade with `.stagger-up`; do not hand-roll delays.
 - Hover travel: no more than `4px`.
-- Live indicators: `mlMoonPulse` at 1.2–1.5s.
+- Live indicators: `mlMoonPulse 1.4s ease-in-out infinite` — one duration everywhere.
 - Urgent/critical indicators do not loop, blink, or pulse. Red already carries sufficient emphasis.
-- Certainty changes may transition dashed → solid and marker → verified over `160–200ms`; do not add
-  a green celebration state.
+- Certainty changes may transition dashed → solid and marker → verified over `--dur-overlay`…`--dur-enter`;
+  do not add a green celebration state.
 
-Respect `prefers-reduced-motion`.
+Respect `prefers-reduced-motion`. The hub scope already disables every animation and transition under the
+media query as a safety net (`hub-tokens.css`); page code must not re-enable motion inside it.
 
 ## 10. Copy Tone
 
@@ -417,16 +447,20 @@ Do not ship:
 | Tokens                             | `apps/hub/components/hub/hub-tokens.css`                     |
 | Icons                              | `apps/hub/components/hub/hub-icons.jsx`                      |
 | Primitives                         | `apps/hub/components/hub/hub-primitives.jsx`                 |
-| Data model / nav tree              | `apps/hub/components/hub/hub-data.js`                        |
+| ⌘K catalog (`NAV_TREE`, `LEGACY_TREE`) | `apps/hub/components/hub/hub-data.js`                 |
+| Sidebar anchors (visible IA)       | `apps/hub/components/hub/hub-nav.js` + `hub-nav.test.mjs`    |
+| Workspace membership (`org_scope`) | `apps/hub/components/hub/workspace-map.js`                   |
 | Shell (sidebar / topbar / palette) | `apps/hub/components/hub/hub-{sidebar,topbar,command-palette}.jsx` |
-| Pages                              | `apps/hub/components/hub/pages/*.jsx`                        |
-| Route mount                        | `apps/hub/app/dashboard/[[...path]]/page.jsx`                |
+| Pages + `PAGE_MAP`                 | `apps/hub/components/hub/pages/*.jsx`, `hub-app.jsx`         |
+| Route mount                        | `apps/hub/app/dashboard/[[...path]]/page.jsx`; `app/dashboard/content/{studio,queue}/page.jsx` mount the same `HubApp`, `content/publish` redirects to `queue` |
 
 Build order when adding a new surface:
 1. Confirm tokens cover every color / size needed — do not hardcode hex values.
 2. Compose with existing primitives first; drop to raw `<div>` only when a primitive doesn't fit.
 3. Add the page component under `components/hub/pages/` and register in `hub-app.jsx` PAGE_MAP.
-4. If the page introduces a new top-level route, add it to `NAV_TREE` in `hub-data.js`.
+4. Register the route in `NAV_TREE` (`hub-data.js`) so ⌘K can reach it. That alone does not add a sidebar
+   row: to surface it in the sidebar, add or extend an anchor in `hub-nav.js` and update `hub-nav.test.mjs`.
+   Workspace-scoped pages resolve membership through `workspace-map.js`, never a hardcoded brand list.
 
 ## 15. Decisions Log
 
@@ -438,7 +472,10 @@ Build order when adding a new surface:
 | 2026-07-19 | Freeze new category use of success/warning/info and new colored Personal/Company labels | confirmed | Color remains rare and meaningful; existing usages can migrate incrementally |
 | 2026-07-19 | Add semantic state primitives before broad page migration | confirmed | Central ownership prevents each tab from inventing a different color grammar |
 | 2026-07-19 | Apply the first migration to Overview, My Work, Follow-ups, Decisions, Automations, Segments, and Settings | confirmed | Proves the grammar across urgency, certainty, lifecycle, truth, charts, and category labels |
+| 2026-07-21 | Ship one fixed hub density; remove the user-facing density toggle | confirmed | One calibrated scale keeps surfaces comparable; the toggle only produced drift |
+| 2026-07-29 | Motion tokens (`--dur-*`, `--ease-hub`, `--stagger-step`) are the only sanctioned durations; hub-scope reduced-motion safety net | confirmed | The 2026-07-29 design review found per-page ms drift and an inverted reduced-motion branch |
 | 2026-08-05 | 상태 primitive 채택 실측 보정: `TruthBadge`는 `SyncBadge` 래퍼로 전면 적용, `CertaintyBadge`·`LifecycleBadge`는 일부 표면, `AttentionRail`은 미채택(레일은 §8.1 inset 1px 규칙으로 인라인 구현이 현행) | confirmed | 2026-08-05 system-eval — 위 행의 "완료" 선언과 실제 코드가 달랐다. 계약(1px 레일·중립 lifecycle·truth 상태)은 전 표면 준수로 정리했고, primitive 껍데기 교체는 잔여 마이그레이션으로 남긴다 |
 | 2026-08-06 | 금액·수치 데이터 값의 `--moon-200` 착색은 accent 의미가 아니라 포그라운드 명도 램프 활용으로 명문화 (§5.2 "Value emphasis vs accent") | confirmed | 2026-08-06 7차 재감사 — 전 Revenue 표면이 일관되게 쓰는 기존 관행과 §5.2 "accent≠카테고리" 문면의 긴장을 해소. 스칼라 값 한정, 라벨·뱃지·상태 텍스트 금지 |
 | 2026-08-19 | 브랜드/컨테이너 아이덴티티 마크를 혼재 기하 글리프 렌더에서 모노그램 타일(`BrandMark`, 이름 첫 글자 + 중립 surface 토큰)로 교체. PMS 표면 적용 완료, Revenue·Content는 잔여 마이그레이션 | confirmed | 운영자 지시 "아이콘 변경" — 모양·무게가 제각각인 글리프(◐ ◇ □ …)가 목록 소음의 주범. `meta.glyph` 데이터는 보존(렌더 표현만 교체). 07-15 사이드바 스펙 §8에 상세 |
+| 2026-08-29 | Brands become an operating surface (Brand tab) and own the `sns-channel` category; PMS renders but never creates those containers | confirmed | Operator: "brand = content" was wrong; brand management must be separate and stricter |
 | 2026-09-01 | 브랜드 컨텐츠 로그(`dashboard/brands/log`)에 한해 브랜드별 아이덴티티 컬러 허용 — 운영자 v5 디자인 첨부가 8색 팔레트(점·카드 좌측 3px 레일)를 확정. 색은 언제나 브랜드 이름 라벨과 동반(색 단독 의미 금지), 페이지 크롬은 토큰만. 다른 표면으로의 확장은 별도 결정 필요 | confirmed | 운영자가 직접 5회 이터레이션한 첨부 디자인이 08-29 브랜드 탭 스펙 §11 "브랜드 식별에 색 금지"를 이 표면에서 대체. 3px 레일도 §8.1 1px 레일 규칙의 운영자 확정 예외. 상세·미정 슬러그 매핑은 `2026-09-01-brand-content-log.md` |

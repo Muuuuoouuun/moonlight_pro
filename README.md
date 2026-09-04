@@ -33,6 +33,7 @@ npm run check:contracts
 npm run typecheck
 npm run build
 npm run check:connections
+npm test
 ```
 
 Local dev ports are pinned:
@@ -46,6 +47,14 @@ Health endpoints:
 - Engine: `http://localhost:3001/api/health`
 
 `check:connections` expects local env files with Supabase and Engine URLs. A missing env failure is expected on a fresh checkout.
+
+`npm test` runs only the root glob (`scripts/`, `apps/hub/lib/`, one level under `packages/*`). Tests under `apps/hub/components/hub/**`, `apps/engine/**`, and `packages/mcp-server/src/` must be run directly:
+
+```bash
+node --import ./scripts/register-hub-alias.mjs --test apps/hub/components/hub/*.test.mjs apps/hub/components/hub/pages/*.test.mjs apps/engine/lib/*.test.mjs apps/engine/app/api/*/command/*.test.mjs packages/mcp-server/src/*.test.mjs
+```
+
+Four of those currently fail; see `TODOS.md`.
 
 ## Security Notes
 
@@ -64,7 +73,9 @@ CI currently blocks build/typecheck failures and high-or-higher production audit
 
 ## Branches
 
-- `main`: production branch
+- `main`: production branch. CI runs on pushes to `main` and `codex/**` only; every other branch needs a pull request to get CI.
 - `codex/*`: Codex implementation branches
+- `claude/*`: Claude Code worktree branches
+- `real_v*`: operator integration branches (UI / backend snapshots)
 
 Do not use a branch name as product truth. Check the current Git branch and [`docs/README.md`](docs/README.md) before starting work.
