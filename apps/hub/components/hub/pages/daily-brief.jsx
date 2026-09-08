@@ -1590,7 +1590,7 @@ function weeklyScopeToday() {
   return WEEKLY_SCOPE_BY_DAY[day] || null;
 }
 
-function WeeklyReportCard() {
+function WeeklyReportCard({ onNavigate }) {
   const scope = weeklyScopeToday();
   const [state, setState] = React.useState({ syncState: 'loading', report: null });
   React.useEffect(() => {
@@ -1611,6 +1611,8 @@ function WeeklyReportCard() {
   const title = scope === 'company' ? '회사 주간 리포트 · ClassIn' : '나의 주간 리포트';
   const { report, syncState } = state;
   const stats = report?.stats;
+  const scorecard = scope === 'personal' ? report?.scorecard : null;
+  const scorecardUnavailable = syncState === 'preview' || report?.failedSources?.includes('campaigns');
   const rows = !stats ? [] : scope === 'company'
     ? [
         { label: '연락', value: stats.contacts },
@@ -1634,22 +1636,55 @@ function WeeklyReportCard() {
       {syncState === 'error' ? (
         <div style={{ fontSize: 12.5, color: 'var(--fg-muted)' }}>주간 기록을 읽지 못했습니다 — 아래 수치 없이 넘어가지 말고 새로고침으로 다시 확인하세요.</div>
       ) : (
-        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-          {rows.map((r) => (
-            <div key={r.label} style={{ minWidth: 72 }}>
-              <div className="stat" style={{ fontSize: 22 }}>{syncState === 'loading' ? '—' : r.value}</div>
-              <div style={{ fontSize: 11, color: 'var(--fg-dim)', marginTop: 2 }}>{r.label}</div>
-            </div>
-          ))}
-          {report?.highlights?.length > 0 && (
-            <div style={{ flex: 1, minWidth: 180, fontSize: 12, color: 'var(--fg-muted)' }}>
-              {report.highlights.map((h, i) => (
-                <div key={i} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {h.kind === 'won' ? 'Won · ' : '완료 · '}{h.label}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {scope === 'personal' && syncState !== 'loading' && (
+            scorecard ? (
+              <div style={{ padding: 12, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 180 }}>
+                    <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginBottom: 4 }}>{scorecard.campaignName}</div>
+                    <div style={{ fontSize: 13, color: 'var(--fg)' }}>{scorecard.metric}</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span className="stat" style={{ fontSize: 24 }}>{scorecard.actual ?? '—'}</span>
+                    <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}> / {scorecard.target}</span>
+                    <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>
+                      {scorecard.actual === null ? 'actual 입력 필요' : scorecard.gap >= 0 ? `목표 +${scorecard.gap}` : `목표까지 ${Math.abs(scorecard.gap)}`}
+                    </div>
+                  </div>
                 </div>
-              ))}
-            </div>
+                <div style={{ marginTop: 10 }}><Progress value={scorecard.progress} tone="moon" /></div>
+              </div>
+            ) : scorecardUnavailable ? (
+              <div style={{ padding: '9px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', fontSize: 12, color: 'var(--fg-muted)' }}>
+                {syncState === 'preview'
+                  ? 'Supabase 미설정 — 활성 캠페인의 KPI를 판단할 수 없습니다.'
+                  : '캠페인 전략을 읽지 못해 이번 주 KPI를 판단할 수 없습니다.'}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', flexWrap: 'wrap' }}>
+                <span style={{ flex: 1, minWidth: 180, fontSize: 12, color: 'var(--fg-muted)' }}>활성 캠페인의 primary metric과 weekly target이 아직 없습니다.</span>
+                <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/content/campaigns')}>Strategy 열기</Button>
+              </div>
+            )
           )}
+          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+            {rows.map((r) => (
+              <div key={r.label} style={{ minWidth: 72 }}>
+                <div className="stat" style={{ fontSize: 22 }}>{syncState === 'loading' ? '—' : r.value}</div>
+                <div style={{ fontSize: 11, color: 'var(--fg-dim)', marginTop: 2 }}>{r.label}</div>
+              </div>
+            ))}
+            {report?.highlights?.length > 0 && (
+              <div style={{ flex: 1, minWidth: 180, fontSize: 12, color: 'var(--fg-muted)' }}>
+                {report.highlights.map((h, i) => (
+                  <div key={i} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {h.kind === 'won' ? 'Won · ' : '완료 · '}{h.label}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </Card>
@@ -1703,7 +1738,7 @@ export function DailyBrief({ onNavigate }) {
       <QuickTaskCapture onNavigate={onNavigate} onSaved={ledger.refreshTasks} />
 
       {/* Q118·Q119: 월(개인)·목(회사) 아침에만 뜨는 주간 정리 — 다른 요일은 null. */}
-      <WeeklyReportCard />
+      <WeeklyReportCard onNavigate={onNavigate} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
         {/* §7 확정 fold 순서: Capture → 긴급 KA·집중 고객·오늘 일정 → 신호. 명명된 슬롯이

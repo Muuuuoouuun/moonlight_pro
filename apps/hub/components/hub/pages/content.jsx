@@ -3,10 +3,15 @@
 import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, SectionTitle, EmptyState, Avatar, SyncBadge, SegmentedControl } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, SectionTitle, EmptyState, Avatar, SyncBadge, SegmentedControl, TextField, TextAreaField } from "../hub-primitives";
 import { usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
 import { shouldRestoreActiveStudioDraft } from "@/lib/content-studio-routing";
+import {
+  businessTruthCompleteness,
+  buildWeeklyScorecard,
+  normalizeCampaignBusinessTruth,
+} from "@/lib/campaign-business-truth";
 
 const STUDIO_DRAFT_DB = "moonlight-content-studio";
 const STUDIO_DRAFT_STORE = "drafts";
@@ -1284,55 +1289,142 @@ function CampaignLine({ label, value, tone = 'moon' }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '112px 1fr', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--line-soft)' }}>
       <span style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
-      <span style={{ fontSize: 13, color: tone === 'moon' ? 'var(--fg)' : 'var(--fg-muted)', lineHeight: 1.55 }}>{value}</span>
+      <span style={{ fontSize: 13, color: tone === 'moon' ? 'var(--fg)' : 'var(--fg-muted)', lineHeight: 1.55 }}>{value || '미설정'}</span>
     </div>
   );
 }
 
-function CampaignTabPanel({ tab, campaign, detail }) {
+function CampaignStrategyPanel({ campaign, detail, onSave }) {
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState(() => normalizeCampaignBusinessTruth(campaign.businessTruth || detail.strategy));
+  const [saveState, setSaveState] = React.useState('idle');
+  const [feedback, setFeedback] = React.useState('');
+
+  React.useEffect(() => {
+    setDraft(normalizeCampaignBusinessTruth(campaign.businessTruth || detail.strategy));
+    setEditing(false);
+    setSaveState('idle');
+    setFeedback('');
+  }, [campaign.id]);
+
+  const truth = normalizeCampaignBusinessTruth(campaign.businessTruth || detail.strategy);
+  const completeness = businessTruthCompleteness(truth);
+  const scorecard = buildWeeklyScorecard(truth);
+  const change = (key, value) => setDraft((current) => ({ ...current, [key]: value }));
+
+  const save = async (event) => {
+    event.preventDefault();
+    if (saveState === 'saving') return;
+    setSaveState('saving');
+    setFeedback('');
+    const result = await onSave?.(draft);
+    if (result?.ok) {
+      setSaveState('saved');
+      setFeedback('Business truth가 저장되었습니다.');
+      setEditing(false);
+      return;
+    }
+    setSaveState('error');
+    setFeedback(result?.message || '저장하지 못했습니다. 다시 시도하세요.');
+  };
+
+  if (editing) {
+    return (
+      <form onSubmit={save} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+        <Card>
+          <SectionTitle subtitle="고객·문제·제안을 먼저 고정합니다. 추상적인 브랜드 문장보다 실제 구매 판단에 쓰일 표현을 적으세요.">Customer and Offer Truth</SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 14 }}>
+            <TextAreaField required rows={3} label="ICP" value={draft.icp} onChange={(e) => change('icp', e.target.value)} placeholder="누가 가장 절박하게 이 문제를 겪고 있나요?" />
+            <TextAreaField required rows={3} label="Painful problem" value={draft.problem} onChange={(e) => change('problem', e.target.value)} placeholder="지금 어떤 손실·지연·불안을 겪고 있나요?" />
+            <TextAreaField required rows={3} label="Promise" value={draft.promise} onChange={(e) => change('promise', e.target.value)} placeholder="구매 후 어떤 측정 가능한 변화가 생기나요?" />
+            <TextAreaField required rows={3} label="Offer" value={draft.offer} onChange={(e) => change('offer', e.target.value)} placeholder="무엇을 어떤 범위로 제공하나요?" />
+          </div>
+        </Card>
+
+        <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(280px, 0.8fr)', gap: 'var(--gap)' }}>
+          <Card>
+            <SectionTitle subtitle="이번 주 의사결정은 하나의 선행 KPI로 닫습니다.">Weekly Scorecard</SectionTitle>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14 }}>
+              <TextField required label="Price" value={draft.priceLabel} onChange={(e) => change('priceLabel', e.target.value)} placeholder="예: 월 49만원" />
+              <TextField required label="Primary metric" value={draft.primaryMetric} onChange={(e) => change('primaryMetric', e.target.value)} placeholder="예: 유료 진단 예약" />
+              <TextField required type="number" min="0.01" step="any" label="Weekly target" value={draft.weeklyTarget ?? ''} onChange={(e) => change('weeklyTarget', e.target.value)} />
+              <TextField type="number" min="0" step="any" label="Weekly actual" hint="아직 집계 전이면 비워두세요. 0과 미기록을 구분합니다." value={draft.weeklyActual ?? ''} onChange={(e) => change('weeklyActual', e.target.value)} />
+            </div>
+          </Card>
+          <Card>
+            <SectionTitle subtitle="선택 이유를 짧게 유지합니다. 아직 모르면 비워도 됩니다.">Differentiation</SectionTitle>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <TextAreaField rows={3} label="Wedge" value={draft.wedge} onChange={(e) => change('wedge', e.target.value)} placeholder="왜 지금 당신에게서 사야 하나요?" />
+              <TextAreaField rows={3} label="Enemy" value={draft.enemy} onChange={(e) => change('enemy', e.target.value)} placeholder="고객이 버려야 할 기존 방식은 무엇인가요?" />
+            </div>
+          </Card>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {feedback && <span role={saveState === 'error' ? 'alert' : 'status'} style={{ marginRight: 'auto', fontSize: 12, color: saveState === 'error' ? 'var(--danger)' : 'var(--fg-muted)' }}>{feedback}</span>}
+          <Button type="button" variant="ghost" size="sm" onClick={() => { setEditing(false); setFeedback(''); }}>취소</Button>
+          <Button type="submit" variant="primary" size="sm" disabled={saveState === 'saving'}>{saveState === 'saving' ? '저장 중…' : 'Business truth 저장'}</Button>
+        </div>
+      </form>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+      <Card>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
+          <SectionTitle style={{ margin: 0, flex: 1 }} subtitle="사업의 고객·문제·약속·제안을 캠페인의 단일 정본으로 유지합니다.">Business Truth</SectionTitle>
+          <Button variant="outline" size="sm" icon="edit" onClick={() => { setDraft(truth); setEditing(true); setFeedback(''); }}>Edit</Button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <div style={{ flex: 1 }}><Progress value={completeness.percent} tone="moon" /></div>
+          <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{completeness.completed}/{completeness.total}</span>
+        </div>
+        <CampaignLine label="ICP" value={truth.icp} />
+        <CampaignLine label="Problem" value={truth.problem} />
+        <CampaignLine label="Promise" value={truth.promise} />
+        <CampaignLine label="Offer" value={truth.offer} />
+        <CampaignLine label="Price" value={truth.priceLabel} />
+      </Card>
+
+      <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(280px, 0.8fr)', gap: 'var(--gap)' }}>
+        <Card>
+          <SectionTitle subtitle="월요일 개인 주간 리포트도 이 수치를 그대로 사용합니다.">Target vs Actual</SectionTitle>
+          {scorecard ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+                <span className="stat" style={{ fontSize: 30 }}>{scorecard.actual ?? '—'}</span>
+                <span style={{ fontSize: 13, color: 'var(--fg-muted)', paddingBottom: 3 }}>/ {scorecard.target} · {scorecard.metric}</span>
+              </div>
+              <div style={{ marginTop: 12 }}><Progress value={scorecard.progress} tone="moon" /></div>
+              <div style={{ marginTop: 9, fontSize: 12, color: 'var(--fg-muted)' }}>
+                {scorecard.actual === null
+                  ? '이번 주 actual이 아직 기록되지 않았습니다.'
+                  : scorecard.gap >= 0 ? `목표보다 ${scorecard.gap} 앞서 있습니다.` : `목표까지 ${Math.abs(scorecard.gap)} 남았습니다.`}
+              </div>
+            </>
+          ) : (
+            <EmptyState icon="signal" title="주간 KPI가 없습니다" description="Primary metric과 weekly target을 입력하면 실행 점검이 시작됩니다." />
+          )}
+        </Card>
+        <Card>
+          <SectionTitle>Positioning Edge</SectionTitle>
+          <CampaignLine label="Wedge" value={truth.wedge} />
+          <CampaignLine label="Enemy" value={truth.enemy} />
+          {feedback && <div role="status" style={{ marginTop: 10, fontSize: 12, color: 'var(--fg-muted)' }}>{feedback}</div>}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function CampaignTabPanel({ tab, campaign, detail, onStrategySave }) {
   const router = useRouter();
   // 콘텐츠 lifecycle은 카테고리 — semantic 색 금지(§5.2/§5.3), 라벨이 상태를 전달한다.
   const sTone = { Active: 'neutral', Planning: 'neutral', Draft: 'neutral', Live: 'neutral', Scheduled: 'neutral', Review: 'neutral', Idea: 'neutral' };
 
   if (tab === 'strategy') {
-    return (
-      <div className="hub-grid--split" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(280px, 0.85fr)', gap: 'var(--gap)' }}>
-        <Card>
-          <SectionTitle subtitle="브랜드 주장, ICP, offer, proof를 캠페인 기준으로 고정합니다.">Positioning Stack</SectionTitle>
-          <CampaignLine label="ICP" value={detail.strategy.icp} />
-          <CampaignLine label="Promise" value={detail.strategy.promise} />
-          <CampaignLine label="Wedge" value={detail.strategy.wedge} />
-          <CampaignLine label="Enemy" value={detail.strategy.enemy} />
-        </Card>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-          <Card>
-            <SectionTitle>Proof Assets</SectionTitle>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {detail.strategy.proof.map((item) => (
-                <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
-                  <Iconed name="check" size={12} style={{ color: 'var(--moon-300)' }} />
-                  <span>{item}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-          <Card>
-            <SectionTitle subtitle="Master log는 Work > Decisions가 소유하고, 여기는 캠페인 관련 결정만 표시합니다.">Decision Bets</SectionTitle>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {detail.strategy.decisions.map((item, i) => (
-                <div key={item.label} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, padding: '10px 0', borderBottom: i < detail.strategy.decisions.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
-                  <div style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45 }}>{item.label}</div>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <Badge tone="neutral" size="xs">{item.status}</Badge>
-                    <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{item.owner}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-      </div>
-    );
+    return <CampaignStrategyPanel campaign={campaign} detail={detail} onSave={onStrategySave} />;
   }
 
   if (tab === 'surfaces') {
@@ -1527,17 +1619,35 @@ function CampaignTabPanel({ tab, campaign, detail }) {
 // larger data-model decision (see docs/personal-os audit, 2026-07-10). Rather
 // so a real campaign gets an honest placeholder until that model is built.
 function buildPreviewCampaignDetail(campaign) {
+  const strategy = normalizeCampaignBusinessTruth(campaign?.businessTruth);
+  const completeness = businessTruthCompleteness(strategy);
+  const scorecard = buildWeeklyScorecard(strategy);
+  const positioning = strategy.offer || strategy.promise || '아직 사업 핵심 전략이 작성되지 않았습니다.';
+  const nextMove = completeness.percent < 100
+    ? `Strategy 탭에서 business truth ${completeness.total - completeness.completed}개를 더 정의하세요.`
+    : scorecard?.actual === null
+      ? `이번 주 ${scorecard.metric} actual을 기록하세요.`
+      : scorecard?.gap < 0
+        ? `${scorecard.metric} 목표까지 ${Math.abs(scorecard.gap)} 남았습니다.`
+        : `${scorecard.metric} 주간 목표를 달성했습니다.`;
   return {
     pulse: {
-      positioning: '아직 전략이 작성되지 않았습니다.',
-      nextMove: 'Strategy 탭에서 ICP·promise·wedge를 정의하면 다음 행동이 표시됩니다.',
-      risk: '',
+      positioning,
+      nextMove,
+      risk: scorecard?.actual === null ? '주간 actual 미기록' : scorecard?.gap < 0 ? `목표 대비 ${scorecard.gap}` : '',
       ai: [],
       metrics: [
-        { label: 'Goal', value: `${campaign?.current ?? 0} / ${campaign?.goal || '—'}`, detail: campaign?.status || '', tone: 'neutral' },
+        {
+          label: 'Weekly KPI',
+          value: scorecard ? `${scorecard.actual ?? '—'} / ${scorecard.target}` : '미설정',
+          detail: scorecard?.metric || 'Primary metric과 target을 입력하세요',
+          tone: 'moon',
+        },
+        { label: 'Offer', value: strategy.priceLabel || '미설정', detail: strategy.offer || 'Offer를 입력하세요', tone: 'neutral' },
+        { label: 'Strategy', value: `${completeness.completed} / ${completeness.total}`, detail: 'Business truth completeness', tone: 'neutral' },
       ],
     },
-    strategy: { icp: '', promise: '', wedge: '', enemy: '', proof: [], decisions: [] },
+    strategy: { ...strategy, proof: [], decisions: [] },
     surfaces: [],
     content: [],
     audience: [],
@@ -1571,6 +1681,38 @@ export function Campaigns() {
     ? (CAMPAIGN_WAR_ROOMS[selected.id] || buildPreviewCampaignDetail(selected))
     : null;
   const activeTabLabel = CAMPAIGN_TABS.find(t => t.key === tab)?.label || 'Pulse';
+  const saveBusinessTruth = React.useCallback(async (businessTruth) => {
+    const campaignId = selected?.id;
+    if (!campaignId || campaignId.startsWith('local-campaign-')) {
+      return { ok: false, message: '캠페인 생성이 완료된 뒤 전략을 저장할 수 있습니다.' };
+    }
+
+    try {
+      const response = await fetch('/api/hub/campaigns', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ op: 'update', id: campaignId, businessTruth }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || data?.status !== 'saved') {
+        const reason = data?.status === 'preview'
+          ? 'Supabase 미설정 — 전략이 저장되지 않았습니다.'
+          : `전략 저장 실패 (${data?.status || response.status}) — 다시 시도하세요.`;
+        return { ok: false, message: reason };
+      }
+
+      const persistedTruth = normalizeCampaignBusinessTruth(data?.campaign?.businessTruth || businessTruth);
+      setCampaigns((current) => current.map((campaign) => (
+        campaign.id === campaignId
+          ? { ...campaign, businessTruth: persistedTruth, updatedAt: data?.campaign?.updatedAt || campaign.updatedAt }
+          : campaign
+      )));
+      return { ok: true };
+    } catch {
+      return { ok: false, message: '전략 저장 실패 — 네트워크를 확인하고 다시 시도하세요.' };
+    }
+  }, [selected?.id]);
+
   const createCampaign = async () => {
     if (creating) return;
     setCreating(true);
@@ -1590,15 +1732,15 @@ export function Campaigns() {
     setTab('pulse');
     setFocusMode(true);
     try {
-      const res = await fetch('/api/hub/content', {
+      const res = await fetch('/api/hub/campaigns', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'campaign', name: next.name }),
+        body: JSON.stringify({ op: 'create', name: next.name, channels: next.channels }),
       });
       const data = await res.json().catch(() => null);
       if (data?.status === 'saved' && data?.campaign?.id) {
         const savedId = data.campaign.id;
-        setCampaigns(prev => prev.map(c => (c.id === localId ? { ...c, id: savedId } : c)));
+        setCampaigns(prev => prev.map(c => (c.id === localId ? { ...c, ...data.campaign, id: savedId } : c)));
         setSelectedId(savedId);
       } else {
         setCampaigns(prev => prev.filter(c => c.id !== localId));
@@ -1684,6 +1826,7 @@ export function Campaigns() {
           {campaigns.map(c => {
             const active = c.id === selected.id;
             const cDetail = CAMPAIGN_WAR_ROOMS[c.id] || buildPreviewCampaignDetail(c);
+            const cScorecard = buildWeeklyScorecard(c.businessTruth);
             return (
               <div key={c.id} role="button" tabIndex={0} onClick={() => selectCampaign(c.id)} onDoubleClick={() => focusCampaign(c.id)} onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -1730,10 +1873,13 @@ export function Campaigns() {
                   </div>
                   <div style={{ marginTop: 14 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>Goal · {c.goal}</span>
-                      <span className="mono" style={{ fontSize: 11, color: 'var(--fg)' }}>{c.current} <span style={{ color: 'var(--fg-faint)' }}>/ {c.goal.match(/\d+/)?.[0] || '—'}</span></span>
+                      <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{cScorecard ? `Weekly · ${cScorecard.metric}` : `Goal · ${c.goal || '미설정'}`}</span>
+                      <span className="mono" style={{ fontSize: 11, color: 'var(--fg)' }}>
+                        {cScorecard ? (cScorecard.actual ?? '—') : c.current}
+                        <span style={{ color: 'var(--fg-faint)' }}> / {cScorecard?.target ?? String(c.goal || '').match(/\d+/)?.[0] ?? '—'}</span>
+                      </span>
                     </div>
-                    <Progress value={c.progress} tone="moon" />
+                    <Progress value={cScorecard?.progress ?? c.progress} tone="moon" />
                   </div>
                   <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--fg-muted)', lineHeight: 1.45 }}>
                     {cDetail.pulse.nextMove}
@@ -1817,7 +1963,7 @@ export function Campaigns() {
           </Card>
 
           <div className="campaign-tab-stage" data-focus={focusMode ? 'true' : 'false'} key={`${selected.id}-${tab}-${focusMode ? 'focus' : 'normal'}`}>
-            <CampaignTabPanel tab={tab} campaign={selected} detail={detail} />
+            <CampaignTabPanel tab={tab} campaign={selected} detail={detail} onStrategySave={saveBusinessTruth} />
           </div>
         </section>
       </div>

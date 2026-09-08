@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request) {
   try {
     if (!resolveSupabaseConfig()) {
-      return NextResponse.json({ status: "preview", source: "preview", configured: false, stats: null, highlights: [] });
+      return NextResponse.json({ status: "preview", source: "preview", configured: false, stats: null, scorecard: null, highlights: [] });
     }
     const url = new URL(request.url);
     const scope = url.searchParams.get("scope") === "company" ? "company" : "personal";

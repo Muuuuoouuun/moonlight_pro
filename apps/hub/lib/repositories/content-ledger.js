@@ -7,6 +7,7 @@ import {
 } from "@/lib/server-read";
 import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
 import { canonicalOrgScopeForKey } from "@/lib/brand-org-scope";
+import { normalizeCampaignBusinessTruth } from "@/lib/campaign-business-truth";
 
 const ITEM_STATUSES = ["idea", "draft", "review", "scheduled", "published", "archived"];
 const VARIANT_STATUSES = ["draft", "ready", "published", "archived"];
@@ -452,21 +453,28 @@ function mapCampaigns(rows, brandById) {
   return rows.map((row) => {
     const status = CAMPAIGN_STATUSES.includes(row.status) ? row.status : "draft";
     const brand = row.brand_id ? brandById.get(row.brand_id) : null;
+    const meta = row.meta && typeof row.meta === "object" && !Array.isArray(row.meta) ? row.meta : {};
+    const channels = normalizeArray(row.channels).length
+      ? normalizeArray(row.channels)
+      : normalizeArray(meta.channels, row.channel ? [row.channel] : []);
+    const progress = Number.isFinite(row.progress) ? row.progress : meta.progress;
+    const current = Number.isFinite(row.goal_current) ? row.goal_current : meta.current;
 
     return {
       id: row.id,
       name: row.name || "제목 없음",
       status: CAMPAIGN_STATUS_LABEL[status] || "Draft",
       statusKey: status,
-      channels: normalizeArray(row.channels),
-      progress: Number.isFinite(row.progress) ? Math.max(0, Math.min(100, row.progress)) : 0,
-      end: row.ends_label || "미정",
-      goal: row.goal_label || "",
-      current: Number.isFinite(row.goal_current) ? row.goal_current : 0,
+      channels,
+      progress: Number.isFinite(progress) ? Math.max(0, Math.min(100, progress)) : 0,
+      end: row.ends_label || row.end_date || "미정",
+      goal: row.goal_label || meta.goal || "",
+      current: Number.isFinite(current) ? current : 0,
       goalTarget: Number.isFinite(row.goal_target) ? row.goal_target : null,
       brandId: row.brand_id || null,
       brandKey: brand?.key || null,
       brandName: brand?.name || null,
+      businessTruth: normalizeCampaignBusinessTruth(meta),
       createdAt: row.created_at,
       updatedAt: row.updated_at || row.created_at,
     };

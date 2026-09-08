@@ -4,6 +4,7 @@
 // error/failedSources로 명명한다(§5.3 source truth — 코어 read 실패 계약).
 
 import { eqFilter, fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-read";
+import { buildWeeklyScorecard } from "@/lib/campaign-business-truth";
 
 const WINDOW_DAYS = 7;
 
@@ -20,7 +21,7 @@ function toNum(v, fallback = 0) {
 export async function getWeeklyReport({ scope = "personal", windowDays = WINDOW_DAYS } = {}) {
   const since = new Date(Date.now() - windowDays * 86400e3).toISOString();
 
-  const [taskRows, outcomeRows, dealRows, publishRows] = await Promise.all([
+  const [taskRows, outcomeRows, dealRows, publishRows, campaignRows] = await Promise.all([
     fetchSupabaseRows("tasks", {
       select: "id,title,status,updated_at",
       filters: withWorkspaceFilter([
@@ -45,6 +46,14 @@ export async function getWeeklyReport({ scope = "personal", windowDays = WINDOW_
       filters: withWorkspaceFilter([["created_at", `gte.${since}`]]),
       limit: 200,
     }),
+    scope === "personal"
+      ? fetchSupabaseRows("campaigns", {
+          select: "id,name,status,meta,updated_at",
+          filters: withWorkspaceFilter([["status", eqFilter("active")]]),
+          order: "updated_at.desc",
+          limit: 20,
+        })
+      : Promise.resolve([]),
   ]);
 
   const failedSources = [
@@ -52,9 +61,11 @@ export async function getWeeklyReport({ scope = "personal", windowDays = WINDOW_
     ...(outcomeRows === null ? ["outreach_outcomes"] : []),
     ...(dealRows === null ? ["deals"] : []),
     ...(publishRows === null ? ["publish_logs"] : []),
+    ...(scope === "personal" && campaignRows === null ? ["campaigns"] : []),
   ];
-  // 네 소스 전부 실패면 이 리포트에 사실이 하나도 없다 — partial 대신 error.
-  if (failedSources.length === 4) {
+  const sourceCount = scope === "personal" ? 5 : 4;
+  // 집계 소스가 전부 실패면 이 리포트에 사실이 하나도 없다 — partial 대신 error.
+  if (failedSources.length === sourceCount) {
     return {
       source: "error",
       error: "weekly-report-read-failed",
@@ -63,6 +74,7 @@ export async function getWeeklyReport({ scope = "personal", windowDays = WINDOW_
       windowDays,
       failedSources,
       stats: null,
+      scorecard: null,
       highlights: [],
     };
   }
@@ -71,6 +83,7 @@ export async function getWeeklyReport({ scope = "personal", windowDays = WINDOW_
   const outcomes = outcomeRows || [];
   const deals = dealRows || [];
   const publishes = publishRows || [];
+  const campaigns = campaignRows || [];
 
   // 회사 리포트는 company 타입 딜만, 개인 리포트는 personal 타입 딜만 본다.
   // (레거시 딜의 type: 'company' | 'personal' — workspace-map과 같은 어휘.)
@@ -101,6 +114,20 @@ export async function getWeeklyReport({ scope = "personal", windowDays = WINDOW_
         personalDeals: scopedDeals.length,
       };
 
+  let scorecard = null;
+  if (scope === "personal") {
+    for (const campaign of campaigns) {
+      const campaignScorecard = buildWeeklyScorecard(campaign.meta);
+      if (!campaignScorecard) continue;
+      scorecard = {
+        campaignId: campaign.id,
+        campaignName: campaign.name || "캠페인",
+        ...campaignScorecard,
+      };
+      break;
+    }
+  }
+
   // 하이라이트: 리포트가 숫자만 나열하지 않게 실제 제목을 몇 개 남긴다(§10 운영자 카피).
   const highlights = scope === "company"
     ? wonDeals.slice(0, 3).map((d) => ({ kind: "won", label: d.title || "딜" }))
@@ -115,6 +142,7 @@ export async function getWeeklyReport({ scope = "personal", windowDays = WINDOW_
     partial: failedSources.length > 0,
     failedSources,
     stats,
+    scorecard,
     highlights,
   };
 }

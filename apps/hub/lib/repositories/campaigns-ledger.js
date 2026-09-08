@@ -17,6 +17,10 @@ import {
   updateSupabaseRecord,
   deleteSupabaseRecord,
 } from "../server-write.js";
+import {
+  buildBusinessTruthMeta,
+  normalizeCampaignBusinessTruth,
+} from "../campaign-business-truth.js";
 
 export const CAMPAIGN_STATUSES = ["draft", "active", "paused", "completed"];
 
@@ -96,6 +100,9 @@ function normalizeChannels(meta, channelColumn) {
 function mapCampaign(row) {
   const meta = row.meta && typeof row.meta === "object" && !Array.isArray(row.meta) ? row.meta : {};
   const status = normalizeStatus(row.status);
+  const rowChannels = Array.isArray(row.channels) ? row.channels.filter(Boolean).map(String) : [];
+  const progressValue = Number.isFinite(row.progress) ? row.progress : meta.progress;
+  const currentValue = Number.isFinite(row.goal_current) ? row.goal_current : meta.current;
 
   return {
     id: row.id,
@@ -103,14 +110,16 @@ function mapCampaign(row) {
     status: statusLabel(status),
     statusKey: status,
     channel: row.channel || null,
-    channels: normalizeChannels(meta, row.channel),
-    progress: Number.isFinite(meta.progress) ? Math.max(0, Math.min(100, Math.round(meta.progress))) : 0,
-    goal: normalizeString(meta.goal, "목표 설정"),
-    current: Number.isFinite(meta.current) ? Math.round(meta.current) : 0,
+    channels: rowChannels.length ? rowChannels : normalizeChannels(meta, row.channel),
+    progress: Number.isFinite(progressValue) ? Math.max(0, Math.min(100, Math.round(progressValue))) : 0,
+    goal: normalizeString(row.goal_label ?? meta.goal, "목표 설정"),
+    current: Number.isFinite(currentValue) ? Math.round(currentValue) : 0,
+    goalTarget: Number.isFinite(row.goal_target) ? row.goal_target : null,
     startDate: row.start_date || null,
     endDate: row.end_date || null,
-    end: formatEnd(row.end_date),
+    end: normalizeString(row.ends_label) || formatEnd(row.end_date),
     at: formatRelative(row.updated_at || row.created_at),
+    businessTruth: normalizeCampaignBusinessTruth(meta),
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
   };
@@ -189,7 +198,11 @@ function buildCampaignWrite(payload = {}) {
     metaPatch.current = Number.isFinite(n) ? Math.round(n) : 0;
   }
 
-  return { columns, metaPatch };
+  return {
+    columns,
+    metaPatch,
+    businessTruth: payload.businessTruth === undefined ? undefined : payload.businessTruth,
+  };
 }
 
 async function readExistingMeta(id, workspaceId) {
@@ -222,8 +235,8 @@ export async function saveCampaign({ op = "create", id, payload = {} } = {}) {
         : { status: "failed", reason: res.reason, detail: res.detail }; // 라이브 거부는 preview가 아니다(Phase 0)
   }
 
-  const { columns, metaPatch } = buildCampaignWrite(payload);
-  const hasMeta = Object.keys(metaPatch).length > 0;
+  const { columns, metaPatch, businessTruth } = buildCampaignWrite(payload);
+  const hasMeta = Object.keys(metaPatch).length > 0 || businessTruth !== undefined;
 
   if (op === "create") {
     if (!workspaceId) return { status: "preview", reason: "missing-workspace" };
@@ -236,6 +249,7 @@ export async function saveCampaign({ op = "create", id, payload = {} } = {}) {
       end_date: payload.endDate || null,
       workspace_id: workspaceId,
       meta: {
+        origin: "hub-campaigns",
         channels: Array.isArray(payload.channels) ? payload.channels.filter(Boolean).map(String) : ["Email"],
         progress: Number.isFinite(Number(payload.progress)) ? Math.round(Number(payload.progress)) : 0,
         goal: normalizeString(payload.goal, "목표 설정"),
@@ -244,17 +258,25 @@ export async function saveCampaign({ op = "create", id, payload = {} } = {}) {
       updated_at: timestamp,
       ...columns,
     };
+    if (businessTruth !== undefined) {
+      record.meta = buildBusinessTruthMeta(record.meta, businessTruth, timestamp);
+    }
     const res = await insertSupabaseRecord("campaigns", record, { returnRepresentation: true, select: "*" });
     return res.persisted
       ? { status: "saved", id: res.id, campaign: res.record ? mapCampaign(res.record) : null }
-      : { status: "preview", reason: res.reason, detail: res.detail };
+      : res.reason === "missing-config"
+        ? { status: "preview", reason: res.reason, detail: res.detail }
+        : { status: "failed", reason: res.reason, detail: res.detail };
   }
 
   // update
   if (!id) return { status: "error", reason: "missing-id" };
   if (!workspaceId) return { status: "preview", reason: "missing-workspace" };
 
-  const mergedMeta = hasMeta ? { ...(await readExistingMeta(id, workspaceId)), ...metaPatch } : null;
+  let mergedMeta = hasMeta ? { ...(await readExistingMeta(id, workspaceId)), ...metaPatch } : null;
+  if (mergedMeta && businessTruth !== undefined) {
+    mergedMeta = buildBusinessTruthMeta(mergedMeta, businessTruth);
+  }
   const patch = {
     ...columns,
     ...(mergedMeta ? { meta: mergedMeta } : {}),
@@ -270,5 +292,7 @@ export async function saveCampaign({ op = "create", id, payload = {} } = {}) {
   );
   return res.persisted
     ? { status: "saved", id, campaign: res.record ? mapCampaign(res.record) : null }
-    : { status: "preview", reason: res.reason, detail: res.detail };
+    : res.reason === "missing-config"
+      ? { status: "preview", reason: res.reason, detail: res.detail }
+      : { status: "failed", reason: res.reason, detail: res.detail };
 }
