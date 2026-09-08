@@ -10,7 +10,6 @@
 import { getContentLedger } from "@/lib/repositories/content-ledger";
 import { getProjectLedger } from "@/lib/repositories/operating-ledger";
 import { getRecentAgentRuns } from "@/lib/sales-os/agent-runs";
-import { cadenceStatusString } from "@/lib/sales-os/context-schema";
 import { filterBrandsByWorkspace } from "@/components/hub/workspace-map";
 
 const COUNCIL_AGENT = "council";
@@ -52,7 +51,7 @@ function brandGuardrail(brand) {
 }
 
 // Pick the guardrail brand: prefer an explicit ref match, then an own-brand (브랜드 workspace),
-// then the first content brand. Keeps the Council anchored to the operator's own brand voice
+// then the first own brand. Keeps the Council anchored to the operator's own brand voice
 // instead of the ClassIn sales brand.
 function selectFocusBrand(brands, ownKeys, ref) {
   const list = Array.isArray(brands) ? brands : [];
@@ -64,7 +63,7 @@ function selectFocusBrand(brands, ownKeys, ref) {
     );
     if (byRef) return byRef;
   }
-  return list.find((b) => ownKeys.includes(b.key)) || list[0];
+  return list.find((b) => ownKeys.includes(b.key)) || null;
 }
 
 export async function assembleBrandContext({ mode = "brand-strategy", ref = null, draft = null, workspace = "brand" } = {}) {
@@ -82,6 +81,13 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
       failedSources: Array.isArray(content.failedSources) ? content.failedSources : [],
     });
     content = null;
+  }
+  if (content?.partial) {
+    missing.push({ source: "content-ledger", reason: "partial-read", failedSources: content.failedSources || [] });
+  }
+  if (runsRes?.source === "error" || runsRes?.source === "preview") {
+    missing.push({ source: "agent_runs", reason: runsRes.error || "memory-unavailable" });
+    runsRes = null;
   }
   if (projectLedger?.source === "error") {
     missing.push({
@@ -108,13 +114,12 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
 
   const brands = content?.brands || [];
   const ownKeys = brandKeysForWorkspace(brands, workspace);
-  const focusBrand = selectFocusBrand(brands, ownKeys, ref);
+  const scopedBrands = brands.filter((b) => ownKeys.includes(b.key));
 
-  // Scope projects to the 브랜드 workspace brands; if nothing matches yet, keep all so the
-  // advice is never silently empty (the prompt still ignores the ClassIn sales lane).
+  // An empty personal slice stays empty; never substitute company projects.
   const allProjects = Array.isArray(projectLedger?.projects) ? projectLedger.projects : [];
-  const scopedProjects = allProjects.filter((p) => ownKeys.includes(p.brand));
-  const projects = (scopedProjects.length ? scopedProjects : allProjects).map((p) => ({
+  const scopedProjects = allProjects.filter((p) => p.workspace ? p.workspace === workspace : ownKeys.includes(p.brand));
+  const projects = scopedProjects.map((p) => ({
     id: p.id,
     brand: p.brand,
     name: p.name,
@@ -129,18 +134,31 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
     summary: p.summary || "",
   }));
 
-  const ideaQueue = trim(content?.ideaQueue, 8);
+  // Keep only ideas backed by content rows from this scope.
+  const scopedItemIds = new Set((content?.items || []).filter((i) => ownKeys.includes(i.brandKey)).map((i) => i.id));
+  const ideaQueue = trim((content?.ideaQueue || []).filter((i) => scopedItemIds.has(i.id)), 8);
+  const scopedCampaigns = (content?.campaigns || []).filter((c) => ownKeys.includes(c.brandKey))
+    .map((c) => ({ id: c.id, name: c.name, status: c.status, brandKey: c.brandKey, businessTruth: c.businessTruth }));
+  const matchesRef = (row) => ref && (String(row.id).toLowerCase() === String(ref).toLowerCase()
+    || (row.name || row.title || "").toLowerCase().includes(String(ref).toLowerCase()));
+  const focusCampaign = scopedCampaigns.find(matchesRef);
+  const focusProject = projects.find(matchesRef);
+  const focusIdea = ideaQueue.find(matchesRef);
+  const focusBrand = selectFocusBrand(scopedBrands, ownKeys,
+    focusCampaign?.brandKey || focusProject?.brand || focusIdea?.brandKey || ref);
 
   const context = {
     source: missing.length ? "partial" : content?.source || projectLedger?.source || "preview",
     brand: brandGuardrail(focusBrand),
-    brands: brands.map((b) => ({ key: b.key, name: b.name, kind: b.kind, voice: b.voice })),
+    brands: scopedBrands.map((b) => ({ key: b.key, name: b.name, kind: b.kind, voice: b.voice })),
+    campaigns: trim(scopedCampaigns, 10),
     content: content
       ? {
-          cadence_status: cadenceStatusString(content.cadence),
-          cadence: content.cadence || null,
+          // Existing aggregates cover the whole workspace, including ClassIn.
+          cadence_status: "개인 범위 집계 미지원 — 발행 공백을 추정하지 마세요",
+          cadence: null,
           idea_queue_top: ideaQueue,
-          queue_counts: content.summary || null,
+          queue_counts: null,
         }
       : null,
     projects: trim(projects, 30),
@@ -150,14 +168,13 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
     missing,
   };
 
-  // Focus: when a ref is given (a project row or an idea), surface it so the advice is specific.
+  // Exact IDs are preferred; names remain a convenience for existing UI callers.
   if (ref) {
-    const needle = String(ref).toLowerCase();
-    const project = projects.find(
-      (p) => String(p.id).toLowerCase() === needle || (p.name || "").toLowerCase().includes(needle),
-    );
-    const idea = ideaQueue.find((i) => (i.title || "").toLowerCase().includes(needle));
-    if (project) {
+    const project = focusProject;
+    const idea = focusIdea;
+    if (focusCampaign) {
+      context.focus = { found: true, kind: "campaign", entity: focusCampaign };
+    } else if (project) {
       context.focus = {
         found: true,
         kind: "project",
@@ -175,8 +192,10 @@ export async function assembleBrandContext({ mode = "brand-strategy", ref = null
         kind: "idea",
         entity: { name: idea.title, status: "idea", nextAction: "" },
       };
+    } else if (scopedBrands.some((b) => b.key === ref || b.name === ref)) {
+      context.focus = { found: true, kind: "brand", entity: brandGuardrail(focusBrand) };
     } else {
-      context.focus = { found: false, missing: [{ source: "projects/content", reason: "focus ref 매칭 안 됨" }] };
+      context.focus = { found: false, missing: [{ source: "projects/content/campaigns", reason: "focus ref 매칭 안 됨" }] };
     }
   }
 

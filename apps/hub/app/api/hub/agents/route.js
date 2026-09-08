@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getPersonas } from "@/lib/sales-os/persona-registry";
 import { getQueueSummary } from "@/lib/sales-os/work-orders";
 import { fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-read";
-import { resolveDefaultWorkspaceId } from "@/lib/server-write";
+import { resolveDefaultWorkspaceId, resolveSupabaseConfig } from "@/lib/server-write";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,14 +12,14 @@ export const dynamic = "force-dynamic";
 // roster so Council can show real "last touched" instead of a fabricated quote.
 async function getLatestRunByAgent() {
   const workspaceId = resolveDefaultWorkspaceId();
-  if (!workspaceId) return new Map();
+  if (!workspaceId || !resolveSupabaseConfig()) return { source: "preview", byAgent: new Map() };
 
   const rows = await fetchSupabaseRows("agent_runs", {
     filters: withWorkspaceFilter(),
     order: "ran_at.desc",
     limit: 50,
   });
-  if (!Array.isArray(rows)) return new Map();
+  if (!Array.isArray(rows)) return { source: "error", byAgent: new Map() };
 
   const byAgent = new Map();
   for (const row of rows) {
@@ -31,12 +31,12 @@ async function getLatestRunByAgent() {
       });
     }
   }
-  return byAgent;
+  return { source: "supabase", byAgent };
 }
 
 // GET — the seeded 5-persona roster (live status) + the approval-queue summary.
 export async function GET() {
-  const [personas, queue, latestRunByAgent] = await Promise.all([
+  const [personas, queue, latestRuns] = await Promise.all([
     getPersonas({}),
     getQueueSummary({}),
     getLatestRunByAgent(),
@@ -44,11 +44,18 @@ export async function GET() {
 
   const personasWithRuns = personas.personas.map((p) => ({
     ...p,
-    lastRun: latestRunByAgent.get(p.id) || null,
+    lastRun: latestRuns.byAgent.get(p.id) || null,
   }));
 
+  const failedSources = [
+    ...(personas.source === "error" ? ["agents"] : []),
+    ...(queue.source === "error" ? ["work_orders"] : []),
+    ...(latestRuns.source === "error" ? ["agent_runs"] : []),
+  ];
+
   return NextResponse.json({
-    status: personas.source === "supabase" ? "live" : "preview",
+    status: personas.source === "error" ? "error" : failedSources.length ? "partial" : personas.source === "supabase" ? "live" : "preview",
+    failedSources,
     source: personas.source,
     personas: personasWithRuns,
     queue,

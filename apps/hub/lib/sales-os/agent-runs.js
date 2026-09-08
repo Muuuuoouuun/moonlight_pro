@@ -68,6 +68,15 @@ export async function setAgentRunOutcome({
   );
 }
 
+export async function setAgentRunEmittedCount({ runId, count, workspaceId = resolveDefaultWorkspaceId() } = {}) {
+  if (!workspaceId || !runId || !Number.isInteger(count) || count < 0) {
+    return { persisted: false, reason: "missing-fields" };
+  }
+  return updateSupabaseRecord("agent_runs",
+    [["id", eqFilter(runId)], ["workspace_id", eqFilter(workspaceId)]],
+    { emitted_count: count });
+}
+
 export async function getRecentAgentRuns({
   workspaceId = resolveDefaultWorkspaceId(),
   ref = null,
@@ -97,6 +106,8 @@ export async function getRecentAgentRuns({
       ref: r.ref,
       recommendation: r.recommendation,
       result: r.result,
+      emittedCount: r.emitted_count ?? 0,
+      outcomeId: r.outcome_id || null,
       ranAt: r.ran_at,
     })),
   };

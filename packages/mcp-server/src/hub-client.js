@@ -36,14 +36,20 @@ async function hubFetch(path, { method = "GET", body, query } = {}) {
     headers,
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",
+    signal: AbortSignal.timeout(90_000),
+    redirect: "error",
   });
 
   const text = await response.text();
   let data = null;
   try {
-    data = text ? JSON.parse(text) : null;
+    data = text ? JSON.parse(text) : { status: "error", error: "empty-response" };
   } catch {
-    data = { status: "error", error: `Non-JSON response (${response.status}): ${text.slice(0, 200)}` };
+    data = { status: "error", error: "non-json-response", httpStatus: response.status };
+  }
+
+  if (!response.ok) {
+    throw new Error(`Hub request failed (HTTP ${response.status}). Check the operation's ledger before retrying a write.`);
   }
 
   return { httpStatus: response.status, ok: response.ok, data };

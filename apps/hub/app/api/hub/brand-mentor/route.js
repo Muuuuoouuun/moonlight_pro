@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
-import { recordAgentRun } from "@/lib/sales-os/agent-runs";
+import { recordAgentRun, setAgentRunEmittedCount } from "@/lib/sales-os/agent-runs";
 import { assembleBrandContext } from "@/lib/sales-os/brand-context";
 import { createWorkOrder } from "@/lib/sales-os/work-orders";
+import { advisorRunResult } from "@/lib/sales-os/advisor-result";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,14 +42,16 @@ async function callEngine(body) {
       headers,
       body: JSON.stringify(body),
       cache: "no-store",
+      signal: AbortSignal.timeout(60_000),
+      redirect: "error",
     });
-  } catch (error) {
+  } catch {
     // Engine configured but unreachable (down / wrong URL): degrade to a clean error the
     // client normalizes, instead of throwing a 500. Honest preview/error states are part
     // of the design (never mix preview + live records).
     return {
       status: 502,
-      data: { status: "error", reason: `Engine 연결 실패: ${error instanceof Error ? error.message : String(error)}` },
+      data: { status: "error", reason: "engine-request-failed" },
     };
   }
   const text = await response.text();
@@ -83,12 +86,6 @@ function trimRecommendation(data) {
   }
 }
 
-function resultStateFromStatus(status) {
-  if (status >= 200 && status < 300) return "ok";
-  if (status === 202) return "needs_human"; // engine preview / not configured
-  return "error";
-}
-
 function modeLabel(mode) {
   return ({
     "content-critique": "콘텐츠 검토",
@@ -99,13 +96,14 @@ function modeLabel(mode) {
   })[mode] || mode;
 }
 
-async function createCouncilWorkOrder({ mode, ref, context, data }) {
+async function createCouncilWorkOrder({ mode, ref, context, data, runId }) {
   if (data?.status !== "generated" || !data?.text) {
     return { persisted: false, reason: "not-generated" };
   }
 
   return createWorkOrder({
     persona: "council",
+    runId,
     kind: "brand_next_action",
     title: `Council ${modeLabel(mode)} 승인 필요${ref ? ` · ${ref}` : ""}`,
     body: {
@@ -139,31 +137,52 @@ export async function POST(req) {
   }
 
   const input = parsed.data || {};
+  if (input.createWorkOrder !== undefined && typeof input.createWorkOrder !== "boolean") {
+    return NextResponse.json({ status: "error", error: "invalid-create-work-order" }, { status: 400 });
+  }
   const mode = typeof input.mode === "string" ? input.mode.trim() : "brand-strategy";
   const ref = typeof input.ref === "string" ? input.ref.trim() || null : null;
   const draft = typeof input.draft === "string" ? input.draft : null;
 
   const context = await assembleBrandContext({ mode, ref, draft });
   const result = await callEngine({ mode, ref, draft, context });
-  const workOrder = await createCouncilWorkOrder({ mode, ref, context, data: result.data });
-
   // Episodic memory: log what the Council recommended so the next call can remember it (best-effort).
+  let run = { persisted: false, id: null, reason: "agent-run-write-failed" };
   try {
-    await recordAgentRun({
+    run = await recordAgentRun({
       agent: "council",
       mode,
       ref,
       inputSummary: summarizeContext(context),
       recommendation: trimRecommendation(result.data),
-      emittedCount: workOrder?.persisted ? 1 : 0,
-      result: resultStateFromStatus(result.status),
+      result: advisorRunResult(result.status, result.data),
     });
   } catch {
     // logging is best-effort — never let it break the advisory response.
   }
 
+  let workOrder = { persisted: false, reason: "not-requested" };
+  // UI callers retain the existing proposal behavior; MCP advice-only calls opt out.
+  if (input.createWorkOrder !== false) {
+    if (advisorRunResult(result.status, result.data) !== "ok") {
+      workOrder = { persisted: false, reason: "not-generated" };
+    } else {
+      try {
+        workOrder = await createCouncilWorkOrder({ mode, ref, context, data: result.data, runId: run?.id || null });
+      } catch {
+        workOrder = { persisted: false, reason: "work-order-write-failed" };
+      }
+    }
+  }
+  let emissionRecorded = null;
+  if (workOrder?.persisted && run?.id) {
+    try {
+      emissionRecorded = Boolean((await setAgentRunEmittedCount({ runId: run.id, count: 1 }))?.persisted);
+    } catch { emissionRecorded = false; }
+  }
+
   const data = result.data && typeof result.data === "object"
-    ? { ...result.data, workOrder }
+    ? { ...result.data, workOrder, runId: run?.id || null, memory: { persisted: Boolean(run?.persisted), reason: run?.reason || null, emissionRecorded } }
     : result.data;
   return NextResponse.json(data, { status: result.status });
 }

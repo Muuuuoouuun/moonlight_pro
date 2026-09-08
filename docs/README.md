@@ -75,6 +75,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 ### 도메인 참고
 
+- Agent/Council API·MCP: [`agent-council-api-mcp-operating-plan-2026-09-09.md`](agent-council-api-mcp-operating-plan-2026-09-09.md) — 현재 연동 구현과 권장 운영법. 아래 보류된 전체 Agent UI·자율 실행 설계를 승인한 것은 아님
 - Sales OS: [`sales-os-direction.md`](sales-os-direction.md), [`sales-os/`](sales-os/), [`sales-daily-loop-playbook.md`](sales-daily-loop-playbook.md)
 - Content OS: [`content-os-deep-plan.md`](content-os-deep-plan.md)
 - Hub/Engine 경계: [`engine-os-separation-ui-plan.md`](engine-os-separation-ui-plan.md)

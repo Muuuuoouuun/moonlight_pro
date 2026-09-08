@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "MCP server exposing Moonlight Hub read/write actions as tools for MCP-compatible Claude clients (Claude Desktop, Claude Code, claude.ai custom connectors).",
+  "description": "Local stdio MCP server exposing Moonlight Hub reads, writes, and advisor requests to compatible clients.",
   "bin": {
     "moonlight-mcp": "./src/index.js"
   },

@@ -3,7 +3,14 @@ import { z } from "zod";
 import { hasWriteSecret, hubGet, hubPost } from "./hub-client.js";
 
 function jsonResult(payload) {
-  return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
+  const isError = ["error", "failed", "conflict", "forbidden", "unauthorized", "degraded"].includes(payload?.status)
+    || payload?.source === "error"
+    || payload?.persisted === false;
+  return {
+    content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+    ...(payload && typeof payload === "object" && !Array.isArray(payload) ? { structuredContent: payload } : {}),
+    ...(isError ? { isError: true } : {}),
+  };
 }
 
 function errorResult(message) {
@@ -21,7 +28,74 @@ function requireWriteSecret() {
   }
 }
 
-export function registerMoonlightTools(server) {
+export function registerMoonlightTools(targetServer) {
+  // All operations share the same error and discovery contract. Annotations are
+  // hints to the client; actual writes still require Hub authentication.
+  const server = {
+    registerTool(name, definition, handler) {
+      const readOnly = /^(get_|list_)/.test(name);
+      return targetServer.registerTool(name, {
+        ...definition,
+        annotations: {
+          readOnlyHint: readOnly,
+          destructiveHint: !readOnly,
+          idempotentHint: readOnly,
+          openWorldHint: true,
+          ...definition.annotations,
+        },
+      }, async (input) => {
+        try { return await handler(input); }
+        catch { return errorResult("Moonlight request failed. Check Hub connectivity and write credentials. A write may have reached the server; read its ledger before retrying."); }
+      });
+    },
+  };
+
+  for (const advisor of [
+    { name: "request_council", path: "/api/hub/brand-mentor", modes: ["content-critique", "brand-strategy", "audience-analysis", "meeting-synthesis", "flow-review"], defaultMode: "brand-strategy" },
+    { name: "request_sales_mentor", path: "/api/hub/sales-mentor", modes: ["pipeline-triage", "deal-review", "proposal-critique", "weekly-retro"], defaultMode: "pipeline-triage" },
+  ]) {
+    const council = advisor.name === "request_council";
+    server.registerTool(advisor.name, {
+      title: council ? "Request Council Advice" : "Request Sales Mentor Advice",
+      description: (council
+        ? "Request personal brand/project advice with Writer, Strategist or Analyst lenses in ONE model invocation, not independent agents."
+        : "Request Guru advice on the sales ledger.")
+        + " Calls the configured Engine/model provider and may incur API cost; records run history. Requires write credentials. Returns generated advice, not executed work. Do not auto-retry: inspect list_agent_runs first.",
+      annotations: { destructiveHint: false },
+      inputSchema: {
+        mode: z.enum(advisor.modes).default(advisor.defaultMode),
+        ref: z.string().trim().min(1).max(300).optional().describe("Existing focus ID or brand key; use a precise reference."),
+        draft: z.string().max(16000).optional().describe("Question, decision brief or draft to review. Send only context needed for this task."),
+        ...(council ? { createWorkOrder: z.boolean().default(false).describe("Also save an approval-queue proposal. False for advice-only; never approves or executes it.") } : {}),
+      },
+    }, async ({ mode = advisor.defaultMode, ref, draft, createWorkOrder = false }) => {
+      requireWriteSecret();
+      const { data } = await hubPost(advisor.path, { mode, ref, draft, ...(council ? { createWorkOrder } : {}) });
+      return jsonResult(data);
+    });
+  }
+
+  server.registerTool("list_agent_runs", {
+    title: "Read Agent Run History",
+    description: "Read recent recommendations and their run IDs before requesting more advice or retrying. Read-only; not a job polling endpoint.",
+    inputSchema: {
+      agent: z.enum(["council", "guru", "order", "sales", "content", "production", "review"]).optional(),
+      ref: z.string().trim().min(1).max(300).optional(),
+      limit: z.number().int().min(1).max(50).default(10),
+    },
+  }, async ({ agent, ref, limit = 10 }) => {
+    const { data } = await hubGet("/api/hub/agent-runs", { agent, ref, limit });
+    return jsonResult(data);
+  });
+
+  server.registerTool("get_weekly_report", {
+    title: "Read Weekly Review",
+    description: "Read personal or company activity and the personal campaign scorecard. KPI values are manually entered; no dated weekly history or cash accounting is implied.",
+    inputSchema: { scope: z.enum(["personal", "company"]).default("personal") },
+  }, async ({ scope = "personal" }) => {
+    const { data } = await hubGet("/api/hub/weekly-report", { scope });
+    return jsonResult(data);
+  });
   server.registerTool(
     "get_daily_brief",
     {
@@ -60,7 +134,7 @@ export function registerMoonlightTools(server) {
         "List work orders (persona-proposed actions) from the approval queue, optionally filtered by status. Read-only.",
       inputSchema: {
         status: z
-          .enum(["proposed", "approved", "executed", "dismissed"])
+          .enum(["proposed", "approved", "executing", "executed", "dismissed"])
           .optional()
           .describe("Filter by status. Omit to list all."),
       },
@@ -152,12 +226,12 @@ export function registerMoonlightTools(server) {
       description:
         "Approve, dismiss, or mark a work order executed — the same one-click decision the Orders " +
         "screen makes. WRITE: requires COM_MOON_HUB_WRITE_SECRET. When moving to 'executed' for an " +
-        "outreach-style order, pass outcome to close the learning loop.",
+        "outreach-style order, pass outcome to close the learning loop. Approval does not dispatch an executor. Mark executed only after the action actually happened; requires the operator's decision, not model self-approval.",
       inputSchema: {
         id: z.string().describe("Work order id."),
         status: z.enum(["approved", "dismissed", "executed"]),
         outcomeAction: z
-          .string()
+          .enum(["sent", "replied", "meeting", "proposal", "won", "lost", "no_response"])
           .optional()
           .describe("e.g. 'sent' | 'replied' | 'meeting' | 'no_response' — only used when status is 'executed'."),
         outcomeNote: z.string().optional(),

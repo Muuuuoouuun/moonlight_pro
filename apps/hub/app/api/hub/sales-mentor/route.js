@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { recordAgentRun } from "@/lib/sales-os/agent-runs";
 import { assembleSalesContext } from "@/lib/sales-os/context-assembler";
+import { advisorRunResult } from "@/lib/sales-os/advisor-result";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,6 +39,8 @@ async function callEngine(body) {
     headers,
     body: JSON.stringify(body),
     cache: "no-store",
+    signal: AbortSignal.timeout(60_000),
+    redirect: "error",
   });
   const text = await response.text();
   let data = null;
@@ -71,12 +74,6 @@ function trimRecommendation(data) {
   }
 }
 
-function resultStateFromStatus(status) {
-  if (status >= 200 && status < 300) return "ok";
-  if (status === 202) return "needs_human"; // engine preview / not configured
-  return "error";
-}
-
 export async function POST(req) {
   const guard = assertHubWriteAllowed(req);
   if (guard) {
@@ -94,7 +91,9 @@ export async function POST(req) {
   const draft = typeof input.draft === "string" ? input.draft : null;
 
   const context = await assembleSalesContext({ mode, ref });
-  const result = await callEngine({ mode, ref, draft, context });
+  let result;
+  try { result = await callEngine({ mode, ref, draft, context }); }
+  catch { result = { status: 502, data: { status: "error", reason: "engine-request-failed" } }; }
 
   // Episodic memory: log what Guru recommended so the next call can remember it (best-effort).
   let runId = null;
@@ -105,7 +104,7 @@ export async function POST(req) {
       ref,
       inputSummary: summarizeContext(context),
       recommendation: trimRecommendation(result.data),
-      result: resultStateFromStatus(result.status),
+      result: advisorRunResult(result.status, result.data),
     });
     runId = run?.id || null;
   } catch {
