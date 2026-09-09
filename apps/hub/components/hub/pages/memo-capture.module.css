@@ -1,0 +1,103 @@
+.capture {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--line-soft);
+  min-width: 0;
+}
+.heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.capture h3 {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0;
+}
+.capture p,
+.capture span {
+  color: var(--fg-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.capture p {
+  margin: 8px 0;
+}
+.form {
+  margin-top: 20px;
+  max-width: 960px;
+}
+.form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  margin: 12px 0;
+}
+.form input,
+.form select,
+.form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  color: var(--fg);
+  background: var(--surface-2);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 16px;
+}
+.form textarea {
+  resize: vertical;
+  line-height: 1.8;
+  min-height: 230px;
+}
+.form :is(input, select, textarea, button):focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+.form .file {
+  margin: 0;
+}
+.file input {
+  max-width: 100%;
+  font-size: 13px;
+}
+.tools,
+.actions {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0 20px;
+}
+.pending {
+  border: 1px dashed var(--line);
+  padding: 12px;
+  margin: 12px 0;
+}
+.feedback {
+  overflow-wrap: anywhere;
+}
+.feedback a {
+  color: var(--fg);
+  text-decoration: underline;
+  margin-left: 10px;
+}
+@media (min-width: 640px) {
+  .fields {
+    grid-template-columns: minmax(0, 1fr) 180px;
+  }
+}

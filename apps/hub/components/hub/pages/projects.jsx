@@ -3,7 +3,7 @@
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Checkbox, EmptyState, Input, SyncBadge, SegmentedControl, EditDrawer, Kbd } from "../hub-primitives";
+import { Badge, Dot, Card, IconButton, Button, Checkbox, EmptyState, Input, SyncBadge, SegmentedControl, EditDrawer, Drawer, Kbd } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import {
@@ -35,7 +35,10 @@ import {
   validateProjectDraft,
 } from "@/lib/pms-ui";
 import { ProjectCreateDrawer } from "./project-create-drawer";
+import { MemoWorkspace } from "./memo-workspace";
+import { ProjectDeliveryEditor } from "./project-delivery";
 import { ProjectDetailPanel } from "./project-detail-panel";
+import { ProjectPortfolioWorkspace } from "./project-portfolio-workspace";
 import {
   BrandMark,
   ProjectPortfolioSummary,
@@ -70,7 +73,9 @@ const EMPTY_ALL_BRAND = {
 
 const PROJECT_VIEW_OPTIONS = [
   { key: 'tree', label: 'List' },
+  { key: 'table', label: 'Table' },
   { key: 'board', label: 'Board' },
+  { key: 'memos', label: '메모' },
   { key: 'timeline', label: 'Timeline' },
   { key: 'todos', label: 'To-dos' },
 ];
@@ -253,6 +258,8 @@ export function Projects({ workspace }) {
   // don't need it in their dependency lists.
   const view = normalizeProjectView(searchParams.get('view'));
   const selectedProjectId = searchParams.get('project');
+  const [memoTaskId, setMemoTaskId] = React.useState(searchParams.get('task') || null);
+  const [memoTaskFallback, setMemoTaskFallback] = React.useState(null);
   const searchParamsRef = React.useRef(searchParams);
   searchParamsRef.current = searchParams;
   const setView = React.useCallback((next) => {
@@ -283,6 +290,7 @@ export function Projects({ workspace }) {
     taskAggregation: null,
   });
   const [todos, setTodos] = React.useState(cachedProjects ? cachedProjects.todos : []);
+  const memoTask = (todos.find(t => t.id === memoTaskId) || (memoTaskFallback?.id === memoTaskId ? memoTaskFallback : null));
   const [pendingTaskIds, setPendingTaskIds] = React.useState(() => new Set());
   const [contentItems, setContentItems] = React.useState([]);
   const [drag, setDrag] = React.useState(null);
@@ -291,8 +299,6 @@ export function Projects({ workspace }) {
   // Row-checkbox completion (my-work의 undo 계약과 동일): 체크 → 짧은 취소선
   // 플래시 → 리스트에서 낙관적으로 사라짐 → 3.5초 되돌리기 창이 닫힌 뒤에야
   // 실제 PATCH가 나간다. 실수 탭이 진짜 복구 가능해야 한다.
-  const [completingIds, setCompletingIds] = React.useState(() => new Set());
-  const [hiddenIds, setHiddenIds] = React.useState(() => new Set());
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
   const [openDetail, setOpenDetail] = React.useState(null);
   const [mobileDetail, setMobileDetail] = React.useState(false);
@@ -321,13 +327,14 @@ export function Projects({ workspace }) {
   const createdFromQueryRef = React.useRef(false);
   const [orderPending, setOrderPending] = React.useState(false);
   const [orderResult, setOrderResult] = React.useState(null); // { tone: 'ok'|'err', label }
+  const [deliveryProject, setDeliveryProject] = React.useState(null);
   const [projectDraft, setProjectDraft] = React.useState(null);
   const [projectEditSource, setProjectEditSource] = React.useState(null);
   const [taskDraft, setTaskDraft] = React.useState(null);
   const [taskEditSource, setTaskEditSource] = React.useState(null);
   const [containerDraft, setContainerDraft] = React.useState(null);
   const [localContainers, setLocalContainers] = React.useState([]);
-  const drawerOpen = Boolean(projectDraft || taskDraft || containerDraft);
+  const drawerOpen = Boolean(projectDraft || deliveryProject || taskDraft || containerDraft || memoTaskId);
 
   const formatTime = (d) => {
     try {
@@ -397,13 +404,12 @@ export function Projects({ workspace }) {
     [allProjects, brand],
   );
   // 완료·보관은 본 리스트에 섞지 않는다 — 활성 그룹들 아래의 접힌 아코디언 섹션이
-  // 유일한 표시 위치다(§8.1 상태 표시). hiddenIds는 완료 체크 후 되돌리기 창이
-  // 열려 있는 동안의 낙관적 숨김.
+  // 유일한 표시 위치다(§8.1 상태 표시). 검증과 실제 저장 뒤 이곳으로 이동한다.
   const terminalProjects = React.useMemo(() => brandProjects.filter(isTerminalProject), [brandProjects]);
   const terminalCount = terminalProjects.length;
   const projects = React.useMemo(
-    () => brandProjects.filter(p => !isTerminalProject(p) && !hiddenIds.has(p.id)),
-    [brandProjects, hiddenIds],
+    () => brandProjects.filter(p => !isTerminalProject(p)),
+    [brandProjects],
   );
   const brandTodos = React.useMemo(
     () => (brand === 'all' ? scopedTodos : scopedTodos.filter(t => t.brand === brand)),
@@ -453,7 +459,7 @@ export function Projects({ workspace }) {
     if (!normalizedQuery) return cols;
     return cols.map(col => ({
       ...col,
-      cards: col.cards.filter(c => `${c.title} ${c.project || ''}`.toLowerCase().includes(normalizedQuery)),
+      cards: col.cards.filter(c => `${c.title} ${c.project || ''} ${c.description} ${c.nextAction}`.toLowerCase().includes(normalizedQuery)),
     }));
   }, [brandTodos, allProjects, normalizedQuery]);
   const openTodoCount = React.useMemo(() => brandTodos.filter(t => !t.done).length, [brandTodos]);
@@ -632,7 +638,7 @@ export function Projects({ workspace }) {
   }, [brand, brands, wsDefaultBrand]);
 
   React.useEffect(() => {
-    if (view !== 'tree' || !selectedProjectId) {
+    if (!['tree', 'table'].includes(view) || !selectedProjectId) {
       setOpenDetail(null);
       return;
     }
@@ -851,46 +857,18 @@ export function Projects({ workspace }) {
   }, [loadLedger]);
 
   const completeProject = React.useCallback((project) => {
-    setProjectStatus(project, project.statusKey === 'completed' ? 'active' : 'completed');
+    if (project.statusKey === 'completed') setProjectStatus(project, 'active');
+    else setDeliveryProject(project);
   }, [setProjectStatus]);
 
   const archiveProject = React.useCallback((project) => {
     setProjectStatus(project, project.statusKey === 'archived' ? 'active' : 'archived');
   }, [setProjectStatus]);
 
-  const PROJECT_STRIKE_MS = 180; // DESIGN.md 모션 가이드(120–180ms)와 일치
-
-  const undoCompleteProject = React.useCallback((project) => {
-    if (!cancelUndoable(project.id)) {
-      setOrderResult((cur) => (cur?.key === `complete-${project.id}` ? null : cur));
-      return; // 창이 이미 닫혔으면 PATCH가 나갔다
-    }
-    setCompletingIds((s) => { const n = new Set(s); n.delete(project.id); return n; });
-    setHiddenIds((s) => { const n = new Set(s); n.delete(project.id); return n; });
-    setOrderResult({ tone: 'ok', label: '완료 취소됨' });
-  }, [cancelUndoable]);
-
-  // 행 체크박스의 완료: 취소선 플래시 → 낙관적 숨김 → 되돌리기 창이 닫힌 뒤에만
-  // 실제 PATCH. 디테일 패널이 열린 프로젝트를 완료하면 패널도 닫는다(사라진 행의
-  // 유령 패널 방지). 공유 훅이 언마운트 시 flush하므로 "완료됨" 영수증 후 페이지를
-  // 떠나도 쓰기가 증발하지 않는다.
+  // Completion opens acceptance review; a saved server response moves the row.
   const scheduleCompleteProject = React.useCallback((project) => {
-    const id = project.id;
-    setCompletingIds((s) => new Set(s).add(id));
-    setTimeout(() => {
-      setCompletingIds((s) => { const n = new Set(s); n.delete(id); return n; });
-      setHiddenIds((s) => new Set(s).add(id));
-    }, PROJECT_STRIKE_MS);
-    setOpenDetail((cur) => (cur === id ? null : cur));
-    setOrderResult({ key: `complete-${id}`, tone: 'ok', label: '프로젝트 완료됨', action: { label: '되돌리기', onClick: () => undoCompleteProject(project) } });
-    scheduleUndoable(id, async () => {
-      // 창이 닫히면 알림을 통째로 걷는다 — 라벨만 남기면 다음 액션까지 영구 표시된다
-      // (7차 UIUX — revenue·daily-brief의 전체 소거 패턴으로 통일).
-      setOrderResult((cur) => (cur?.key === `complete-${id}` ? null : cur));
-      await setProjectStatus(project, 'completed');
-      setHiddenIds((s) => { if (!s.has(id)) return s; const n = new Set(s); n.delete(id); return n; });
-    });
-  }, [setProjectStatus, undoCompleteProject, scheduleUndoable]);
+    setDeliveryProject(project);
+  }, []);
 
   const createTodo = React.useCallback((projectId = null, initialStatus = 'todo') => {
     setTaskEditSource(null);
@@ -1038,6 +1016,18 @@ export function Projects({ workspace }) {
     setOpenDetail(durableProjectId);
     return { ok: true, status: 'opened', durableProjectId };
   }, [loadLedger, pathname, router]);
+
+  const persistDelivery = React.useCallback(async (project, fields) => {
+    const response = await fetch('/api/hub/projects', {
+      method: 'PATCH', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: project.id, expectedUpdatedAt: project.updatedAt, ...fields }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.status !== 'saved') return { ok: false, ...data,
+      message: data.status === 'conflict' ? '다른 화면의 변경과 충돌했습니다. 입력은 유지했습니다.' : data.status === 'preview' ? 'Preview · 저장 연결이 필요합니다. 입력은 유지했습니다.' : data.error || '저장하지 못했습니다.' };
+    const reload = await loadLedger({ projectId: project.id });
+    return { ok: true, project: data.project, message: reload?.ok ? '계획과 실행 기록을 저장했습니다.' : '저장됐지만 목록을 다시 읽지 못했습니다. 새로고침해 확인하세요.' };
+  }, [loadLedger]);
 
   const persistProjectEdit = React.useCallback(async () => {
     if (!projectDraft?.title?.trim() || !projectEditSource) {
@@ -1469,7 +1459,7 @@ export function Projects({ workspace }) {
   // the project id stays in the URL so reloads and exact bounded reads remain open.
   React.useEffect(() => {
     if (!initialLoadDoneRef.current || syncState === 'loading') return;
-    if (!selectedProjectId || view === 'tree') return;
+    if (!selectedProjectId || view === 'tree' || view === 'memos') return;
     const params = mergeProjectDetailQuery(searchParams, selectedProjectId);
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
@@ -1595,6 +1585,9 @@ export function Projects({ workspace }) {
   // (Deals 칸반과 동일 문법). 다른 뷰(todos·timeline)는 각자 문법이 있어 비활성.
   const kbRows = React.useMemo(() => {
     if (view === 'tree') {
+      return visibleProjects.map(p => ({ id: p.id }));
+    }
+    if (view === 'table') {
       return listSections
         .filter(s => !(s.kind === 'brand' && brandSectionsCollapsed[s.id]))
         .flatMap(s => s.items.map(p => ({ id: p.id })));
@@ -1615,7 +1608,7 @@ export function Projects({ workspace }) {
     openProjectDetail(projectId);
   }, [view, todos, editTodo, openProjectDetail]);
   useCrmKeyboard({
-    enabled: (view === 'tree' || view === 'board') && !drawerOpen,
+    enabled: (view === 'tree' || view === 'table' || view === 'board') && !drawerOpen,
     selection: kbSelection,
     // n은 위 뷰 인지 리스너가 소유(18차 회귀 이력) — 여기서는 바인딩하지 않는다.
     onEditSelected: openKbSelected,
@@ -2067,7 +2060,7 @@ export function Projects({ workspace }) {
           </div>
           <div style={{ flex: 1 }} />
           {/* 검색 — `/`로 포커스(useCrmKeyboard), ESC는 검색어가 있을 때만 지우고 소비. */}
-          <span
+          {view !== 'tree' && view !== 'memos' && <span
             className="hub-project-search"
             style={{ display: 'contents' }}
             onKeyDown={(e) => {
@@ -2082,7 +2075,7 @@ export function Projects({ workspace }) {
               onChange={setProjectQuery}
               style={{ flex: '0 1 180px', minWidth: 100 }}
             />
-          </span>
+          </span>}
           <SegmentedControl
             label="보기"
             options={PROJECT_VIEW_OPTIONS}
@@ -2112,17 +2105,66 @@ export function Projects({ workspace }) {
           {view === 'todos' && (
             <Button variant="primary" size="sm" icon="plus" onClick={() => createTodo()}>To-do <Kbd>N</Kbd></Button>
           )}
-          <Button className="hub-project-primary-control" variant={view === 'todos' ? 'outline' : 'primary'} size="sm" icon="plus" onClick={openGlobalProjectCreate}>
+          <Button className="hub-project-primary-control" variant={view === 'todos' || view === 'tree' ? 'outline' : 'primary'} size="sm" icon="plus" onClick={openGlobalProjectCreate}>
             Project {view !== 'todos' && <Kbd>N</Kbd>}
           </Button>
         </div>
 
-        {view === 'tree' && (
+        {view === 'memos' && <MemoWorkspace
+          projects={projects}
+          initialProjectId={selectedProjectId || ''}
+          initialSource={searchParams.get('memo') || ''}
+          onSaved={() => loadLedger()}
+          onOpenTask={(id, raw) => { setMemoTaskFallback({ ...raw, project: raw.project_id || '', dueAt: raw.due_at || '', priorityRaw: raw.priority, updatedAt: raw.updated_at }); setMemoTaskId(id); }}
+        />}
+        {memoTaskId && <Drawer title={memoTask?.title || '업무 문맥'} onClose={() => setMemoTaskId(null)} width="min(480px, 96vw)">
+          {memoTask && <div style={{ padding: 20 }}>
+            <p style={{ whiteSpace: 'pre-wrap', color: 'var(--fg-muted)', fontSize: 13 }}>{memoTask?.nextAction || memoTask?.description || '다음 행동을 업무 설명에 기록하세요.'}</p>
+            <Button variant="outline" size="sm" onClick={() => { const task = memoTask; setMemoTaskId(null); if (task) editTodo(task); }}>업무 편집 · 상태 변경</Button>
+          </div>}
+          <MemoWorkspace key={memoTaskId} taskId={memoTaskId} onOpenTask={(id) => { const task = todos.find(t => t.id === id) || (memoTaskFallback?.id === id ? memoTaskFallback : null); if (task) {setMemoTaskId(null);editTodo(task);} }} />
+          <a href={`/dashboard/work/projects?view=memos`} style={{ display:'block', padding:20, color:'var(--fg-muted)' }}>메모 작업대에서 다른 기록 연결</a>
+        </Drawer>}
+
+        {(view === 'tree' || view === 'table') && (
           <div
             className="hub-projects-main-grid"
             data-detail-open={openDetail ? 'true' : 'false'}
             style={{ display: 'grid', gridTemplateColumns: openDetail ? 'minmax(0, 1fr) 360px' : 'minmax(0, 1fr)', flex: 1, overflow: 'hidden' }}
           >
+            {view === 'tree' && <ProjectPortfolioWorkspace
+              projects={visibleProjects}
+              portfolioProjects={projects}
+              terminalProjects={terminalProjects}
+              todosByProject={todosByProject}
+              brandByKey={brandByKey}
+              brands={brands}
+              selectedProjectId={selectedProjectId}
+              openDetailId={openDetail}
+              keyboardSelectedId={kbSelection.selectedId}
+              sourceState={syncState}
+              readError={readError}
+              failedSources={[...(ledger.failedSources || []), ...(ledger.partialSources || [])]}
+              projectCorePartial={projectReadPartial}
+              activeFilter={summaryFilter}
+              onFilterChange={setSummaryFilter}
+              query={projectQuery}
+              onQueryChange={setProjectQuery}
+              searchInputRef={searchInputRef}
+              onOpenProject={openProjectDetail}
+              onManageDelivery={setDeliveryProject}
+              onCreateProject={() => createProject()}
+              onCreateContent={createContentProject}
+              onCreateTodo={createTodo}
+              onEditTodo={editTodo}
+              onToggleTodo={toggleTodo}
+              pendingTodoIds={pendingTaskIds}
+              showTerminal={showTerminal}
+              onToggleTerminal={() => setShowTerminal(value => !value)}
+              onReopenProject={(project) => setProjectStatus(project, 'active')}
+              onReload={() => loadLedger({ initial: true })}
+            />}
+            {view === 'table' && (
             <div className="scroll-y" style={{ padding: 'var(--section-gap)' }}>
               <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
                 <ProjectPortfolioSummary
@@ -2261,13 +2303,11 @@ export function Projects({ workspace }) {
                           const overdue = !terminal && Number.isFinite(dueTime) && dueTime < new Date().setHours(0, 0, 0, 0);
                           const blocked = String(p.statusKey || '').toLowerCase() === 'blocked' || p.status === 'Blocked';
                           const nextAction = p.displayNextAction || p.projectNextAction || (p.updateEvidencePartial ? '업데이트 기록 미확인' : '다음 행동 미정');
-                          const completing = completingIds.has(p.id);
                           return (
                             <React.Fragment key={p.id}>
                               <div
                                 className="hub-project-row"
                                 data-selected={isSel ? 'true' : 'false'}
-                                data-completing={completing ? 'true' : 'false'}
                                 data-terminal={terminal ? 'true' : 'false'}
                                 data-kb-row={p.id}
                                 // j/k 키보드 커서 — §5.3 충돌 우선순위상 선택은 Moonstone 외곽 outline.
@@ -2283,11 +2323,9 @@ export function Projects({ workspace }) {
                                   >
                                   <span style={{ display: 'inline-block', transition: 'transform .15s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', fontSize: 10.5 }}>▶</span>
                                   </button>
-                                  {/* 하위 아이템 체크박스와 같은 의미(완료)로 통일 — 선택은 행
-                                      클릭이 담당한다. 체크 → 되돌리기 창과 함께 리스트에서 빠지고
-                                      아래 완료·보관 섹션으로 이동. */}
+                                  {/* 완료 조건과 결과물을 검증한 뒤 저장해야 완료·보관으로 이동한다. */}
                                   <Checkbox
-                                    checked={terminal || completing}
+                                    checked={terminal}
                                     onChange={() => terminal ? completeProject(p) : scheduleCompleteProject(p)}
                                     size={16}
                                     label={terminal ? `다시 열기: ${p.name}` : `완료: ${p.name}`}
@@ -2453,6 +2491,7 @@ export function Projects({ workspace }) {
                 )}
               </div>
             </div>
+            )}
 
             {openDetail && (() => {
               const p = projectById.get(openDetail);
@@ -2461,7 +2500,7 @@ export function Projects({ workspace }) {
               const pTodos = todosByProject.get(p.id) || [];
               const pUpdates = (ledger.updates || []).filter(u => u.projectId === p.id).slice(0, 5);
               const pDecisions = (ledger.decisions || []).filter(d => d.projectId === p.id).slice(0, 4);
-              const pNotes = (ledger.notes || []).filter(n => n.projectId === p.id).slice(0, 4);
+              const pNotes = (ledger.notes || []).filter(n => n.projectId === p.id);
               const pChecks = (ledger.checks || []).filter(c => c.projectId === p.id).slice(0, 4);
               const pContent = p.brandId ? contentItems.filter(c => c.brandId === p.brandId).slice(0, 5) : [];
               const detailFailedSources = ledger.selection?.projectId === p.id
@@ -2483,6 +2522,7 @@ export function Projects({ workspace }) {
                     updates={pUpdates}
                     decisions={pDecisions}
                     notes={pNotes}
+                    notesPartial={(ledger.selection?.projectId === p.id ? ledger.selection.partialSources : ledger.partialSources)?.includes('notes') === true}
                     checks={pChecks}
                     content={pContent}
                     syncState={syncState}
@@ -2503,6 +2543,7 @@ export function Projects({ workspace }) {
                       setView('tree');
                     }}
                     onSendOrder={sendProjectOrder}
+                    onManageDelivery={setDeliveryProject}
                     onComplete={completeProject}
                     onArchive={archiveProject}
                   />
@@ -2639,14 +2680,15 @@ export function Projects({ workspace }) {
                       onClick={() => {
                         if (String(c.id).startsWith('project-')) { openProjectDetail(String(c.id).slice('project-'.length)); return; }
                         const t = todos.find(x => x.id === c.id);
-                        if (t) editTodo(t);
+                        if (t) setMemoTaskId(t.id);
                       }}
                       onKeyDown={(e) => {
+                        if (e.target !== e.currentTarget) return;
                         if (e.key !== 'Enter' && e.key !== ' ') return;
                         e.preventDefault();
                         if (String(c.id).startsWith('project-')) { openProjectDetail(String(c.id).slice('project-'.length)); return; }
                         const t = todos.find(x => x.id === c.id);
-                        if (t) editTodo(t);
+                        if (t) setMemoTaskId(t.id);
                       }}
                       style={{
                         background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
@@ -2665,6 +2707,19 @@ export function Projects({ workspace }) {
                         {c.tag === 'company' && <Badge tone="company" size="xs">C</Badge>}
                       </div>
                       <div style={{ fontSize: 12.5, lineHeight: 1.4 }}>{c.title}</div>
+                      {(c.nextAction || c.description) && (
+                        <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', marginTop: 6, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflowWrap: 'anywhere' }}>
+                          {c.nextAction ? `다음 행동 · ${c.nextAction}` : c.description}
+                        </div>
+                      )}
+                      {c.projectId && (
+                        <a
+                          href={`/dashboard/work/projects?project=${encodeURIComponent(c.projectId)}`}
+                          onClick={(event) => event.stopPropagation()}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          style={{ display: 'flex', alignItems: 'center', minHeight: 44, fontSize: 11.5, color: 'var(--fg-muted)', textDecoration: 'underline' }}
+                        >프로젝트 · 연결 메모 보기</a>
+                      )}
                       {c.due && <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-muted)', marginTop: 6 }}>기한 · {c.due}</div>}
                       <select
                         className="hub-project-board-status"
@@ -2846,6 +2901,8 @@ export function Projects({ workspace }) {
         })()}
       </div>
 
+      {deliveryProject && <ProjectDeliveryEditor key={deliveryProject.id} project={deliveryProject} onClose={() => setDeliveryProject(null)} onSave={persistDelivery} />}
+
       {projectDraft?.isNew && !containerDraft && (
         <ProjectCreateDrawer
           draft={projectDraft}
@@ -2890,7 +2947,7 @@ export function Projects({ workspace }) {
                 { value: 'draft', label: '계획' },
                 { value: 'active', label: '진행' },
                 { value: 'blocked', label: '막힘' },
-                { value: 'completed', label: '완료' },
+                ...(projectDraft.status === 'completed' ? [{ value: 'completed', label: '완료' }] : []),
                 { value: 'archived', label: '보관' },
               ],
             },
@@ -2907,7 +2964,7 @@ export function Projects({ workspace }) {
               ],
             },
             { key: 'nextAction', label: '다음 행동', placeholder: '다음에 할 한 가지' },
-            { key: 'dueAt', label: '기한', inputType: 'date' },
+            ...(!projectEditSource?.delivery ? [{ key: 'dueAt', label: '기한', inputType: 'date' }] : []),
           ]}
           onChange={(key, value) => setProjectDraft(current => ({ ...current, [key]: value }))}
           onSave={persistProjectEdit}

@@ -66,6 +66,22 @@ beforeEach(() => {
   globalThis.__operatingLedgerTestState.rowQueues = {};
 });
 
+test("task reads retain stored description and next action for board context", async () => {
+  const state = globalThis.__operatingLedgerTestState;
+  state.calls = [];
+  state.workspaceId = "workspace-1";
+  state.config = { url: "https://supabase.example.com", apiKey: "test-key" };
+  state.counts = { tasks: 2 };
+  state.rows = { brands: [], projects: [], tasks: [
+    { id: "task-1", title: "자료", status: "todo", description: "상담 내용", next_action: "초안 공유" },
+    { id: "task-2", title: "확인", status: "inbox" },
+  ] };
+  const ledger = await operatingLedger.getTaskLedger();
+  assert.equal(ledger.todos[0].description, "상담 내용");
+  assert.equal(ledger.todos[0].nextAction, "초안 공유");
+  assert.equal(ledger.todos[1].nextAction, "");
+});
+
 test("keeps raw project source fields separate from latest-update display data", () => {
   const latestUpdate = {
     id: "update-1",

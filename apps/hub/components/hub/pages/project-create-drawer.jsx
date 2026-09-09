@@ -3,6 +3,7 @@
 import React from "react";
 import { projectCreateFeedback, validateProjectDraft } from "@/lib/pms-ui";
 import { Button, Drawer, Kbd } from "../hub-primitives";
+import { deliveryDraft, validateDelivery } from "../../../../../packages/project-delivery/index.ts";
 import { Iconed } from "../hub-icons";
 
 // DRAWER_INPUT_STYLE(hub-primitives)과 같은 32px/13px 밀도 — 모바일 44px 터치 플로어는
@@ -104,6 +105,8 @@ export function ProjectCreateDrawer({
         : "업무 분야 원장이 비어 있습니다. 원장을 다시 불러온 뒤 시도하세요.");
       return false;
     }
+    const deliveryIssue = candidate.delivery ? validateDelivery(candidate.delivery, candidate.dueAt) : null;
+    if (deliveryIssue) { setSaveState("invalid"); setFeedback(deliveryIssue); return false; }
     const nextErrors = validateProjectDraft(candidate);
     setErrors(nextErrors);
     if (!nextErrors.title && !nextErrors.areaId) return true;
@@ -266,6 +269,14 @@ export function ProjectCreateDrawer({
           />
         </label>
 
+        <fieldset style={{ border: "1px solid var(--line-soft)", borderRadius: 8, padding: 12, display: "grid", gap: 10, minWidth: 0 }}>
+          <legend style={{ fontSize: 12, color: "var(--fg-muted)" }}>완성까지의 일정</legend>
+          <label style={LABEL_STYLE}><span>최소 결과물</span><input style={CONTROL_STYLE} value={draft.delivery?.deliverable || ""} placeholder="이번 종료일까지 실제 사용할 결과물" onChange={(e) => update("delivery", { ...deliveryDraft(draft.delivery), deliverable: e.target.value })} /></label>
+          {[["plannedStart", "착수 예정일"], ["prototypeDate", "프로토타입 확인일"]].map(([key, label]) => <label key={key} style={LABEL_STYLE}><span>{label}</span><input type="date" style={CONTROL_STYLE} value={draft.delivery?.[key] || ""} onChange={(e) => update("delivery", { ...deliveryDraft(draft.delivery), [key]: e.target.value })} /></label>)}
+          <label style={LABEL_STYLE}><span>목표 종료일</span><input type="date" style={CONTROL_STYLE} value={draft.dueAt} onChange={(e) => update("dueAt", e.target.value)} /></label>
+          <span style={{ fontSize: 11, color: "var(--fg-muted)", lineHeight: 1.5 }}>기한이 없으면 비워두세요. 완료 조건과 실제 작동 검증은 생성 후 ‘계획·검증’에서 이어갑니다.</span>
+        </fieldset>
+
         <label style={LABEL_STYLE}>
           <span>업무 분야 *</span>
           <select
@@ -348,7 +359,6 @@ export function ProjectCreateDrawer({
                   <option value="draft">계획</option>
                   <option value="active">진행</option>
                   <option value="blocked">막힘</option>
-                  <option value="completed">완료</option>
                   <option value="archived">보관</option>
                 </select>
               </label>
@@ -361,10 +371,7 @@ export function ProjectCreateDrawer({
                   <option value="critical">긴급</option>
                 </select>
               </label>
-              <label style={{ ...LABEL_STYLE, gridColumn: "1 / -1" }}>
-                <span>기한</span>
-                <input type="date" value={draft.dueAt} onChange={(event) => update("dueAt", event.target.value)} style={CONTROL_STYLE} />
-              </label>
+
             </div>
           )}
         </div>

@@ -1,3 +1,5 @@
+import { deliveryDraft, validateDelivery, completionIssue, dayKey } from "../../../packages/project-delivery/index.ts";
+
 import { normalizePmsCommand } from "./pms-command.ts";
 
 type PersistenceResult = {
@@ -62,6 +64,7 @@ function canonicalCreatePayload(action: string, row: Record<string, unknown>) {
       progress: row.progress ?? 0,
       next_action: row.next_action ?? null,
       due_at: comparableTimestamp(row.due_at),
+      delivery: meta.delivery ?? null,
       org_scope: meta.org_scope ?? null,
       origin_deal_id: meta.origin_deal_id ?? null,
       source: meta.source ?? null,
@@ -233,6 +236,66 @@ export async function executePmsCommand(
   }
 
   if (command.filters && command.patch) {
+    // Read + compare-and-swap protects the metadata merge and schedule history.
+    if (command.table === "projects" && (command.patch.meta || "due_at" in command.patch || command.patch.status === "completed")) {
+      const identityFilters = command.filters.filter(([key]) => key === "id" || key === "workspace_id");
+      const rows = await dependencies.fetchRows("projects", { filters: identityFilters, limit: 1 });
+      if (rows === null) return { status: "error", error: "current-entity-read-failed" };
+      if (!rows[0]) return { status: "error", error: "not-found" };
+      const current = rows[0];
+      const expected = filterValue(command.filters, "updated_at");
+      if (expected && expected !== current.updated_at) return { status: "conflict", error: "stale-update", entity: current };
+      const meta = (current.meta || {}) as Record<string, any>;
+      const previous = meta.delivery;
+      const supplied = (command.patch.meta as Record<string, any> | undefined)?.delivery;
+      if (previous || supplied || input.deliveryEvent) {
+        if (!current.updated_at) return { status: "error", error: "missing-project-version" };
+        const plan = deliveryDraft(supplied || previous);
+        const dueAt = "due_at" in command.patch ? command.patch.due_at : current.due_at;
+        const issue = validateDelivery(plan, dueAt);
+        if (issue) return { status: "invalid-input", error: issue };
+        const now = String(command.patch.updated_at);
+        const delivery = { ...previous, ...plan, originalDueAt: previous?.originalDueAt ?? current.due_at ?? dueAt ?? null,
+          history: Array.isArray(previous?.history) ? [...previous.history] : [] };
+        if (dayKey(dueAt) !== dayKey(current.due_at)) {
+          const reason = typeof input.scheduleReason === "string" ? input.scheduleReason.trim().slice(0, 1000) : "";
+          if (current.due_at && !reason) return { status: "invalid-input", error: "목표 종료일 변경 이유를 남겨주세요." };
+          delivery.history.push({ at: now, from: current.due_at ?? null, to: dueAt ?? null, reason: reason || "첫 종료일 설정" });
+        }
+        if (input.deliveryEvent === "start") {
+          if (!plan.deliverable || !plan.criteria.length) return { status: "invalid-input", error: "결과물과 완료 조건을 먼저 정하세요." };
+          if (current.status === "completed" || current.status === "archived") return { status: "invalid-input", error: "프로젝트를 먼저 다시 열어주세요." };
+          command.patch.started_at = current.started_at || now;
+          command.patch.status = "active";
+        }
+        if (input.deliveryEvent === "prototype") {
+          if (current.status === "completed" || current.status === "archived") return { status: "invalid-input", error: "프로젝트를 먼저 다시 열어주세요." };
+          if (!current.started_at) return { status: "invalid-input", error: "실제 착수를 먼저 기록하세요." };
+          if (!plan.resultUrl) return { status: "invalid-input", error: "작동을 확인한 결과물 링크를 남겨주세요." };
+          delivery.prototypeVerifiedAt = previous?.prototypeVerifiedAt || now;
+        }
+        if (input.deliveryEvent === "pause" || input.deliveryEvent === "resume") {
+          if (current.status === "completed" || current.status === "archived") return { status: "invalid-input", error: "프로젝트를 먼저 다시 열어주세요." };
+          if (input.deliveryEvent === "pause" && !plan.blocker) return { status: "invalid-input", error: "병목에 보류 이유를 남겨주세요." };
+          if (input.deliveryEvent === "resume" && plan.blocker) return { status: "invalid-input", error: "병목을 해결하거나 다음 버전으로 옮긴 뒤 다시 진행하세요." };
+          delivery.pausedAt = input.deliveryEvent === "pause" ? now : null;
+          command.patch.status = input.deliveryEvent === "pause" ? "blocked" : current.started_at ? "active" : "draft";
+        }
+        // A changed artifact or acceptance contract needs a fresh verification.
+        if (previous && (plan.resultUrl !== previous.resultUrl || plan.deliverable !== previous.deliverable ||
+          JSON.stringify(plan.criteria.map(({ id, text }) => ({ id, text }))) !== JSON.stringify((previous.criteria || []).map(({ id, text }: any) => ({ id, text }))))) {
+          delivery.prototypeVerifiedAt = input.deliveryEvent === "prototype" ? now : null;
+        }
+        if (command.patch.status === "completed" || current.status === "completed") {
+          const issue = completionIssue(plan, delivery.prototypeVerifiedAt);
+          if (issue) return { status: "invalid-input", error: issue };
+          if (current.status === "completed") command.patch.completed_at = current.completed_at;
+        }
+        command.patch.meta = { ...meta, delivery };
+        if (supplied) command.patch.next_action = plan.nextAction || null;
+        if (!expected) command.filters.push(["updated_at", `eq.${current.updated_at}`]);
+      }
+    }
     const persistence = await dependencies.update(command.table, command.filters, command.patch);
     if (!persistence.persisted && persistence.reason !== "no-matching-row") {
       return {

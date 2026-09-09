@@ -1,3 +1,4 @@
+import { deliveryDraft } from "../../../packages/project-delivery/index.ts";
 const TASK_STATUS_BY_COLUMN = {
   backlog: "inbox",
   today: "todo",
@@ -155,6 +156,7 @@ export function buildProjectDraft({
     priority: "medium",
     nextAction: "",
     dueAt: "",
+    delivery: deliveryDraft(),
     orgScope,
   };
 }
@@ -177,6 +179,7 @@ export function buildProjectCreatePayload(draft = {}) {
     priority: draft.priority,
     nextAction: draft.nextAction,
     dueAt: draft.dueAt,
+    ...(draft.delivery ? { delivery: { ...draft.delivery, nextAction: draft.nextAction || "" } } : {}),
     orgScope: draft.orgScope,
     source: "hub-projects",
   };
@@ -531,7 +534,7 @@ function toDayStart(value) {
 }
 
 // Timeline layout for the Projects deadline view. A period exists only when the
-// operator supplied a valid startedAt <= dueAt pair. A deadline without that evidence
+// operator supplied a valid plannedStart (or actual startedAt) <= dueAt pair. A deadline without that evidence
 // is a point, never a period fabricated from createdAt.
 export function buildProjectTimeline(projects = [], {
   today = new Date(),
@@ -549,7 +552,7 @@ export function buildProjectTimeline(projects = [], {
       undated.push(project);
       return;
     }
-    const started = toDayStart(project.startedAt);
+    const started = toDayStart(project.delivery?.plannedStart || project.startedAt);
     const hasRange = Boolean(started && started.getTime() <= due.getTime());
     dated.push({
       project,
@@ -813,6 +816,9 @@ export function buildTaskBoardColumns(todos = [], projects = []) {
       tag: project?.tag || null,
       priority: todo.priority,
       project: project?.name || "미지정",
+      projectId: project?.id || null,
+      description: todo.description || "",
+      nextAction: todo.nextAction || "",
       due: todo.due,
     });
   });

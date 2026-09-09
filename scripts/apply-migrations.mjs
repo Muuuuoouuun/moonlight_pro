@@ -28,6 +28,7 @@ const DEFAULT_MIGRATIONS = [
   "20260719_0022_project_context_links.sql",
   "20260719_0023_deal_hidden_at.sql",
   "20260902_0024_overview_read_indexes.sql",
+  "20260909_0025_task_memo_links.sql",
 ];
 
 function parseEnvFile(filepath) {

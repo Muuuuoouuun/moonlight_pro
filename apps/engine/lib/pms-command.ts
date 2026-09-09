@@ -1,3 +1,5 @@
+import { parseDelivery, validateDelivery, completionIssue, validDay } from "../../../packages/project-delivery/index.ts";
+
 type CommandContext = {
   workspaceId?: string;
   ownerId?: string | null;
@@ -74,6 +76,7 @@ function projectEntityRef(value: unknown) {
 function dateTime(value: unknown) {
   const normalized = text(value, 100);
   if (!normalized) return { ok: true, value: null };
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized) && !validDay(normalized)) return { ok: false, value: null };
   const parsed = new Date(normalized);
   return Number.isNaN(parsed.getTime())
     ? { ok: false, value: null }
@@ -114,6 +117,13 @@ export function normalizePmsCommand(
     const status = text(input.status || "active", 30).toLowerCase();
     const priority = text(input.priority || "medium", 30).toLowerCase();
     const dueAt = dateTime(input.dueAt || input.due_at);
+    const delivery = has(input, "delivery") ? parseDelivery(input.delivery) : null;
+    if (has(input, "delivery") && !delivery) return { ok: false, reason: "invalid-delivery-plan" };
+    if (delivery) {
+      const issue = validateDelivery(delivery, dueAt.value);
+      if (issue) return { ok: false, reason: issue };
+      if (status === "completed") return { ok: false, reason: completionIssue(delivery) || "verify-prototype-first" };
+    }
     const hasInitialProgress = has(input, "progress");
     const initialProgress = hasInitialProgress ? progress(input.progress) : null;
 
@@ -155,6 +165,7 @@ export function normalizePmsCommand(
           source: text(input.source || "manual", 80),
           org_scope: orgScope,
           ...(dealId.value ? { origin_deal_id: dealId.value } : {}),
+          ...(delivery ? { delivery: { ...delivery, originalDueAt: dueAt.value, history: [] } } : {}),
         },
       },
     };
@@ -332,6 +343,18 @@ export function normalizePmsCommand(
       patch.due_at = dueAt.value;
     }
 
+    if (has(input, "delivery")) {
+      const delivery = parseDelivery(input.delivery);
+      if (!delivery) return { ok: false, reason: "invalid-delivery-plan" };
+      const issue = validateDelivery(delivery, patch.due_at);
+      if (issue) return { ok: false, reason: issue };
+      patch.meta = { delivery };
+    }
+    if (has(input, "deliveryEvent")) {
+      if (!["start", "prototype", "pause", "resume"].includes(String(input.deliveryEvent))) return { ok: false, reason: "invalid-delivery-event" };
+      // Server service resolves timestamps against the current row.
+      patch.meta = patch.meta || {};
+    }
     if (Object.keys(patch).length === 0) return { ok: false, reason: "empty-patch" };
     patch.last_activity_at = now.value;
     patch.updated_at = now.value;

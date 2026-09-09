@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Avatar, Badge, Button, Checkbox, IconButton } from "../hub-primitives";
+import { ProjectDeliverySummary } from "./project-delivery";
 import { BrandMark } from "./project-pms-components";
 
 function DetailSection({ title, count = 0, empty, children }) {
@@ -45,6 +46,58 @@ function progressLabel(project) {
   return `${progress.value === null ? "" : `${progress.value}% · `}${progress.label}${count}${evidenceNote}`;
 }
 
+function ProjectNotes({ notes, partial, failed }) {
+  const [query, setQuery] = React.useState("");
+  const [expanded, setExpanded] = React.useState(false);
+  const normalizedQuery = query.trim().toLowerCase();
+  const matching = notes.filter((note) => `${note.title} ${note.body}`.toLowerCase().includes(normalizedQuery));
+  const visible = expanded || normalizedQuery ? matching : matching.slice(0, 4);
+
+  return (
+    <section aria-label="연결 메모">
+      <div style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 8 }}>
+        연결 메모 · {notes.length}{partial ? "+" : ""}건
+      </div>
+      {(partial || failed) && (
+        <p role="status" style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>
+          {failed ? "메모 읽기에 실패했습니다. 현재 표시된 기록만 검색합니다. 새로고침해 다시 확인하세요." : "일부 메모만 불러왔습니다. 검색은 불러온 기록 안에서만 진행됩니다."}
+        </p>
+      )}
+      {notes.length > 0 && (
+        <input
+          type="search"
+          aria-label="연결 메모 제목·본문 검색"
+          placeholder="불러온 메모 제목·본문 검색"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          style={{ width: "100%", minHeight: 44, padding: "8px 10px", marginBottom: 8, background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", color: "var(--fg)", fontSize: 12 }}
+        />
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {visible.map((note) => (
+          <details key={note.id} style={{ padding: "9px 10px", background: "var(--surface-2)", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", overflowWrap: "anywhere" }}>
+            <summary style={{ cursor: "pointer", minHeight: 44, fontSize: 12, color: "var(--fg)" }}>
+              {note.title}
+              <span style={{ display: "block", color: "var(--fg-muted)", fontSize: 11, marginTop: 4 }}>{note.createdAtLabel}</span>
+            </summary>
+            <div style={{ whiteSpace: "pre-wrap", color: "var(--fg-muted)", fontSize: 12, lineHeight: 1.55 }}>{note.body || "본문 없음"}</div>
+          </details>
+        ))}
+        {visible.length === 0 && (
+          <div role="status" style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>
+            {normalizedQuery ? "불러온 메모에서 검색 결과가 없습니다." : failed ? "연결 메모를 확인할 수 없습니다." : "이 프로젝트에 연결된 메모가 없습니다."}
+          </div>
+        )}
+      </div>
+      {!normalizedQuery && notes.length > 4 && (
+        <button type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)} style={{ minHeight: 44, fontSize: 12, color: "var(--fg-muted)" }}>
+          {expanded ? "최근 4건만 보기" : `불러온 메모 ${notes.length}건 모두 보기`}
+        </button>
+      )}
+    </section>
+  );
+}
+
 export function ProjectDetailPanel({
   project,
   container,
@@ -53,6 +106,7 @@ export function ProjectDetailPanel({
   content = [],
   decisions = [],
   notes = [],
+  notesPartial = false,
   checks = [],
   syncState,
   failedSources = [],
@@ -70,6 +124,7 @@ export function ProjectDetailPanel({
   onOpen,
   onSendOrder,
   onComplete,
+  onManageDelivery,
   onArchive,
 }) {
   if (!project) return null;
@@ -97,6 +152,7 @@ export function ProjectDetailPanel({
             {project.tag === "personal" && <Badge tone="personal" size="xs">Personal</Badge>}
           </div>
         </div>
+        <ProjectDeliverySummary project={project} onManage={onManageDelivery} compact />
         {failedSources.length > 0 && (
           <div role="status" style={{ padding: "9px 10px", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", color: "var(--fg-muted)", fontSize: 11.5 }}>
             일부 기록을 읽지 못했습니다 · {failedSources.join(", ")}
@@ -170,9 +226,8 @@ export function ProjectDetailPanel({
         <DetailSection title="결정" count={decisions.length} empty={failedEmpty("decisions", "이 프로젝트에 연결된 결정 기록이 없습니다.")}>
           {decisions.map((decision) => <ActivityRow key={decision.id} title={decision.title} body={decision.summary} meta={decision.decidedAtLabel} badge="decision" tone="neutral" />)}
         </DetailSection>
-        <DetailSection title="노트" count={notes.length} empty={failedEmpty("notes", "이 프로젝트에 연결된 노트가 없습니다.")}>
-          {notes.map((note) => <ActivityRow key={note.id} title={note.title} body={note.body} meta={note.createdAtLabel} badge="note" />)}
-        </DetailSection>
+        <a href={`/dashboard/work/projects?view=memos&project=${encodeURIComponent(project.id)}`} style={{ minHeight:44, display:'flex', alignItems:'center', color:'var(--fg-muted)', fontSize:12 }}>메모 작업대 · 업무에 연결</a>
+        <ProjectNotes key={project.id} notes={notes} partial={notesPartial} failed={failed.has("notes")} />
         <DetailSection title="루틴 체크" count={checks.length} empty={failedEmpty("routine_checks", "이 프로젝트에 연결된 routine check가 없습니다.")}>
           {checks.map((check) => <ActivityRow key={check.id} title={check.checkType} body={check.note} meta={check.checkedAtLabel} badge={check.status} tone={checkTone[check.status] || "neutral"} />)}
         </DetailSection>

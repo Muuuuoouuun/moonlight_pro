@@ -192,20 +192,11 @@ test("project and task rows use native keyboard controls and named canonical che
   assert.doesNotMatch(projectsSource, /<input\s+type=["']checkbox["']/);
 });
 
-test("row completion is undoable and terminal projects live in a collapsed section", () => {
-  // 3.5s cancel window: the PATCH only fires after the undo window closes. The window
-  // lives in the shared useUndoableAction hook, whose unmount semantic is flush(즉시 실행)
-  // — 페이지 이탈로 "완료됨" 영수증이 증발하지 않는다(2026-08-05 system-eval).
-  assert.match(projectsSource, /import \{ useUndoableAction \} from ["']\.\.\/use-undoable-action["']/);
-  assert.match(projectsSource, /action: \{ label: '되돌리기', onClick: \(\) => undoCompleteProject\(project\) \}/);
-  assert.match(projectsSource, /scheduleUndoable\(id, async \(\) => \{/);
-  // 7차 재감사: 창 닫힘 시 알림 전체 소거(라벨만 남기면 영구 표시) — revenue·daily-brief와
-  // 통일된 계약을 cancel 실패 분기에서 잠근다.
-  assert.match(projectsSource, /if \(!cancelUndoable\(project\.id\)\) \{/);
-  assert.match(projectsSource, /cur\?\.key === `complete-\$\{project\.id\}` \? null : cur/);
-  // Terminal projects never mix into the active groups — they render only in
-  // the collapsed 완료·보관 accordion at the bottom (aria-expanded contract).
-  assert.match(projectsSource, /brandProjects\.filter\(p => !isTerminalProject\(p\) && !hiddenIds\.has\(p\.id\)\)/);
+test("row completion opens acceptance review and terminal projects stay collapsed", () => {
+  assert.match(projectsSource, /const scheduleCompleteProject[\s\S]{0,140}setDeliveryProject\(project\)/);
+  assert.match(projectsSource, /<ProjectDeliveryEditor/);
+  assert.doesNotMatch(projectsSource, /label: '프로젝트 완료됨'/);
+  assert.match(projectsSource, /brandProjects\.filter\(p => !isTerminalProject\(p\)\)/);
   assert.match(projectsSource, /aria-expanded=\{showTerminal\}/);
   assert.match(projectsSource, /label=\{`다시 열기: \$\{p\.name\}`\}/);
 });
@@ -320,7 +311,9 @@ test("project detail distinguishes failed optional ledgers from successful empty
   assert.match(detailPanelSource, /failedSources = \[\]/);
   assert.match(detailPanelSource, /failedEmpty\("project_updates"/);
   assert.match(detailPanelSource, /failedEmpty\("decisions"/);
-  assert.match(detailPanelSource, /failedEmpty\("notes"/);
+  assert.match(detailPanelSource, /<ProjectNotes[^\n]*failed=\{failed\.has\("notes"\)\}/);
+  assert.match(detailPanelSource, /연결 메모를 확인할 수 없습니다/);
+  assert.match(detailPanelSource, /검색은 불러온 기록 안에서만 진행됩니다/);
   assert.match(detailPanelSource, /failedEmpty\("routine_checks"/);
   assert.match(detailPanelSource, /\$\{source\} 원장을 읽지 못했습니다/);
   assert.match(detailPanelSource, /업데이트 기록 미확인/);

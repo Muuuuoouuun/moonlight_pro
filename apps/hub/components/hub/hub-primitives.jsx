@@ -279,6 +279,7 @@ export function Tabs({ tabs, active, onChange, style, ariaLabel, className }) {
 export function Checkbox({ checked, onChange, size = 14, label, disabled = false }) {
   return (
     <button
+      type="button"
       role="checkbox"
       aria-checked={Boolean(checked)}
       aria-label={label || '선택'}
@@ -789,7 +790,7 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, initialF
         className="hub-drawer"
         style={{
           position: 'fixed', top: 0, right: 0, bottom: 0, width, zIndex: 'var(--z-drawer)',
-          background: 'var(--surface)', borderLeft: `1px solid ${borderLeft}`,
+          background: 'var(--surface)', color: 'var(--fg)', borderLeft: `1px solid ${borderLeft}`,
           display: 'flex', flexDirection: 'column',
           boxShadow: '-8px 0 32px -12px oklch(0 0 0 / 0.5)',
         }}

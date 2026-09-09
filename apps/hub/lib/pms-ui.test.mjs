@@ -41,6 +41,7 @@ test("builds a project draft with an empty title and a stable client id", () => 
     priority: "medium",
     nextAction: "",
     dueAt: "",
+    delivery: { deliverable: "", plannedStart: "", prototypeDate: "", criteria: [], remainingHours: null, availableHours: null, blocker: "", nextAction: "", nextVersion: "", resultUrl: "" },
     orgScope: "classin",
   });
   assert.equal("progress" in draft, false, "create drafts must not invent manual progress");
@@ -557,6 +558,20 @@ test("builds a task-only board from the five durable task statuses", () => {
   ]);
   assert.equal(columns[0].cards[0].project, "운영 OS");
   assert.equal(columns[0].cards[0].tag, "personal");
+});
+
+test("board preserves task context without inventing a link for a missing project", () => {
+  const columns = pmsUi.buildTaskBoardColumns([
+    { id: "linked", status: "todo", project: "p1", title: "자료 제작", description: "회의 메모", nextAction: "초안 작성" },
+    { id: "missing", status: "todo", project: "not-loaded", title: "확인" },
+  ], [{ id: "p1", name: "고객 프로젝트" }]);
+  const [linked, missing] = columns.find((column) => column.key === "today").cards;
+  assert.equal(linked.projectId, "p1");
+  assert.equal(linked.description, "회의 메모");
+  assert.equal(linked.nextAction, "초안 작성");
+  assert.equal(missing.projectId, null);
+  assert.equal(missing.description, "");
+  assert.equal(missing.nextAction, "");
 });
 
 test("creates a valid client id even when browser crypto is unavailable", () => {

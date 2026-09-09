@@ -226,11 +226,12 @@ test("project create drawer explains an empty area ledger and offers an inline r
 });
 
 // 23차: Revenue 4표면과 같은 j/k 문법의 마지막 공백(PMS) — 렌더와 커서가 같은 가시 순서를
-// 공유해야 하고(listSections 훅 레벨), n은 뷰 인지 리스너 소유가 유지돼야 한다(18차 회귀).
-test("PMS list and board share the CRM j/k grammar without stealing the n key", () => {
+// 공유해야 한다. 새 포트폴리오 List와 보존된 Table 모두 같은 선택 문법을 쓰고,
+// n은 뷰 인지 리스너 소유가 유지돼야 한다(18차 회귀).
+test("PMS list, table, and board share the CRM j/k grammar without stealing the n key", () => {
   assert.match(projectsSource, /const listSections = React\.useMemo/);
   assert.match(projectsSource, /const kbSelection = useCrmSelection\(kbRows\)/);
-  assert.match(projectsSource, /enabled: \(view === 'tree' \|\| view === 'board'\) && !drawerOpen/);
+  assert.match(projectsSource, /enabled: \(view === 'tree' \|\| view === 'table' \|\| view === 'board'\) && !drawerOpen/);
   // n 미바인딩 — 뷰 인지 리스너(todos→할 일, 그 외→프로젝트)가 계속 소유한다.
   const kbBlock = projectsSource.match(/useCrmKeyboard\(\{[\s\S]*?\}\);/);
   assert.ok(kbBlock, "useCrmKeyboard 배선이 있어야 한다");
