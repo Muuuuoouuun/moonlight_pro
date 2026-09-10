@@ -44,7 +44,7 @@ async function loadRecordItems() {
 
 const RECORD_RESULT_CAP = 8;
 
-export function CommandPalette({ open, onClose, onNavigate }) {
+export function CommandPalette({ open, onClose, onNavigate, onQuickMemo }) {
   const [q, setQ] = React.useState('');
   const [idx, setIdx] = React.useState(0);
   const [records, setRecords] = React.useState([]);
@@ -59,7 +59,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
   }, [open]);
 
   const items = React.useMemo(() => {
-    const flat = [];
+    const flat = [{ kind: 'Action', label: '빠른 메모', action: 'quick-memo', icon: 'edit', keywords: ['메모', '생각', 'quick note', 'memo'] }];
     for (const n of NAV_TREE) {
       if (n.path) flat.push({ kind: 'Navigate', label: n.label, path: n.path, icon: n.icon, keywords: n.keywords });
       if (n.children) for (const c of n.children) flat.push({ kind: 'Navigate', label: `${n.label} › ${c.label}`, path: c.path, icon: c.icon, keywords: c.keywords });
@@ -107,15 +107,22 @@ export function CommandPalette({ open, onClose, onNavigate }) {
   if (!open) return null;
 
   const handleKey = (e) => {
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     if (e.key === 'Escape') { onClose(); return; }
     if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(filtered.length - 1, i + 1)); }
     if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(0, i - 1)); }
     if (e.key === 'Enter') {
       const it = filtered[idx];
-      if (it?.path) { onNavigate(it.path); onClose(); }
-      else onClose();
+      e.preventDefault();
+      activate(it);
     }
   };
+
+  function activate(item) {
+    onClose();
+    if (item?.action === 'quick-memo') onQuickMemo?.();
+    else if (item?.path) onNavigate(item.path);
+  }
 
   return (
     <div onClick={onClose} role="dialog" aria-modal="true" aria-label="명령 팔레트" style={{
@@ -151,7 +158,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
             </div>
           )}
           {filtered.map((it, i) => (
-            <button key={i} onClick={() => { if (it.path) onNavigate(it.path); onClose(); }} onMouseEnter={() => setIdx(i)} style={{
+            <button key={i} onClick={() => activate(it)} onMouseEnter={() => setIdx(i)} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10,
               padding: '9px 12px', borderRadius: 'var(--r-sm)',
               background: idx === i ? 'var(--surface-3)' : 'transparent',

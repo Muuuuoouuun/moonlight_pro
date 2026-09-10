@@ -1,4 +1,8 @@
 import { HubApp } from "@/components/hub/hub-app";
+import { createHash } from "node:crypto";
+import { cookies } from "next/headers";
+import { OPERATOR_SESSION_COOKIE, verifyOperatorSessionToken } from "@/lib/operator-session";
+import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
 export const dynamic = "force-dynamic";
 
@@ -8,10 +12,16 @@ export const dynamic = "force-dynamic";
 // 탭 한 번에 증발, storage 재복원에만 의존). 레이아웃은 자식 내비에서 인스턴스가
 // 보존된다. 페이지 콘텐츠의 경로별 리마운트 의미는 hub-app 내부의 key={path}
 // 래퍼가 그대로 유지한다. dashboard/* 의 page들은 null만 반환한다.
-export default function DashboardLayout({ children }) {
+export default async function DashboardLayout({ children }) {
+  const cookieStore = await cookies();
+  const identity = verifyOperatorSessionToken(cookieStore.get(OPERATOR_SESSION_COOKIE)?.value);
+  // Partition local drafts without exposing session tokens or workspace IDs.
+  const memoDraftContext = createHash("sha256").update(JSON.stringify([
+    resolveDefaultWorkspaceId() || "preview", identity.ok ? identity.session.sub : "local-preview",
+  ])).digest("hex").slice(0, 32);
   return (
     <>
-      <HubApp />
+      <HubApp memoDraftContext={memoDraftContext} />
       {children}
     </>
   );

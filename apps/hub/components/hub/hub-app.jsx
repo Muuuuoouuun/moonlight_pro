@@ -10,6 +10,7 @@ import { Button } from "./hub-primitives";
 import { Sidebar } from "./hub-sidebar";
 import { TopBar } from "./hub-topbar";
 import { CommandPalette } from "./hub-command-palette";
+import { QuickMemo } from "./quick-memo";
 import { ShortcutOverlay } from "./crm-shortcut-overlay";
 import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
 import {
@@ -243,7 +244,7 @@ const PARENT_JUMP = {
   'dashboard/brand': 'dashboard/brand/projects',
 };
 
-export function HubApp() {
+export function HubApp({ memoDraftContext = "preview" }) {
   useIdlePagePrefetch();
   const isMobileViewport = useMobileViewport();
   const router = useRouter();
@@ -269,6 +270,7 @@ export function HubApp() {
   const [theme, setTheme] = React.useState(DEFAULT_HUB_PREFERENCES.theme);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [helpOpen, setHelpOpen] = React.useState(false);
+  const [memoOpenRequest, setMemoOpenRequest] = React.useState(0);
   const rootRef = React.useRef(null);
   const menuButtonRef = React.useRef(null);
   const mobileCloseButtonRef = React.useRef(null);
@@ -493,7 +495,8 @@ export function HubApp() {
           </main>
         </div>
       </div>
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={navigate} />
+      <QuickMemo key={memoDraftContext} draftContext={memoDraftContext} route={`${pathname}?${searchParams}`} blocked={paletteOpen || helpOpen || mobileNavState.open} openRequest={memoOpenRequest} onNavigate={navigate} />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} />
       <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );

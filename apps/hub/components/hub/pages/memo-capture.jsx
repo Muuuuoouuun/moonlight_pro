@@ -10,6 +10,7 @@ import {
   restoreMemoDraft,
 } from "@/lib/memo-capture";
 import styles from "./memo-capture.module.css";
+import { saveMemoAndVerify } from "@/lib/memo-save";
 
 export function MemoCapture({ onSaved, fetchImpl = fetch }) {
   const [draft, setDraft] = React.useState(null);
@@ -118,39 +119,8 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
     setMessage("메모를 저장하고 있습니다.");
     persist();
     try {
-      const response = await fetchImpl("/api/hub/memo-capture", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(25000),
-      });
-      const result = await response.json();
-      if (result.status === "conflict" && result.id) setSavedId(result.id);
-      if (
-        !response.ok ||
-        !["saved", "duplicate"].includes(result.status) ||
-        !result.id
-      )
-        throw new Error(
-          result.status === "conflict"
-            ? "같은 메모가 다른 제목·라벨로 이미 저장되어 있습니다. 기존 메모를 확인하세요. 입력은 유지했습니다."
-            : "서버에 저장하지 못했습니다. 입력은 유지했습니다. 연결을 확인하고 다시 시도하세요.",
-        );
+      const result = await saveMemoAndVerify(payload, fetchImpl);
       setSavedId(result.id);
-      const check = await fetchImpl(
-        `/api/hub/memo-capture?id=${encodeURIComponent(result.id)}`,
-        { cache: "no-store", signal: AbortSignal.timeout(10000) },
-      );
-      const verified = await check.json();
-      if (
-        !check.ok ||
-        verified.status !== "live" ||
-        verified.memo?.id !== result.id ||
-        verified.memo?.body !== payload.body
-      )
-        throw new Error(
-          "저장 응답은 받았지만 본문 재확인이 필요합니다. 입력을 유지했으니 다시 저장해 확인하세요.",
-        );
       const empty = newMemoDraft();
       draftRef.current = empty;
       setDraft(empty);
@@ -164,8 +134,9 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
           ? "이미 저장된 동일 메모를 확인했습니다. 중복 추가하지 않았습니다."
           : "저장 후 원문을 다시 불러와 확인했습니다.",
       );
-      onSaved?.({ id: result.id, memo: verified.memo });
+      onSaved?.({ id: result.id, memo: result.memo });
     } catch (error) {
+      if (error.id) setSavedId(error.id);
       setMessage(
         error.name === "TimeoutError"
           ? "응답이 지연됐습니다. 입력을 바꾸지 않고 다시 저장하면 같은 메모를 확인합니다."
