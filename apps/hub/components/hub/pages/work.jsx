@@ -299,7 +299,8 @@ function mapGoogleEventsToGrid(events, days) {
       start: startHour,
       end: Math.max(startHour + 0.25, rawEndHour),
       title: e.title,
-      tone: 'moon',
+      tone: e.source === 'personal' ? 'personal' : e.source === 'company' ? 'company' : 'moon',
+      sourceLabel: e.source === 'personal' ? '개인' : e.source === 'company' ? '회사' : '',
     };
   }).filter(Boolean);
 }
@@ -525,7 +526,9 @@ export function Calendar({ onNavigate }) {
     }
   }
 
-  const gcalLabel = calendarData.source === 'ical' && isLive
+  const gcalLabel = calendarData.source === 'multi' && isLive
+    ? '● Personal + Company live · read only'
+    : calendarData.source === 'ical' && isLive
     ? '● iCal live · read only'
     : isLive
     ? '● Google Calendar live'
@@ -558,7 +561,7 @@ export function Calendar({ onNavigate }) {
     : [];
   const gridTasks = mapTasksToCalendar(taskData.tasks, visibleDays);
   const columnTemplate = `56px repeat(${visibleDays.length}, minmax(${viewMode === 'day' ? '320px' : '120px'}, 1fr))`;
-  const calBadge = calendarData.status === 'live'
+  const calBadge = calendarCapabilities.isLive
     ? { label: calendarCapabilities.badge, color: 'var(--fg-muted)' }
     : calendarData.status === 'loading'
     ? { label: 'syncing', color: 'var(--fg-muted)' }
@@ -729,6 +732,9 @@ export function Calendar({ onNavigate }) {
                       borderRadius: 6, padding: '6px 8px',
                       fontSize: 11, fontWeight: 500, overflow: 'hidden',
                     }}>
+                      {e.sourceLabel && (
+                        <span style={{ fontSize: 10.5, fontWeight: 600, opacity: 0.85, marginRight: 4 }}>[{e.sourceLabel}]</span>
+                      )}
                       {e.title}
                       <div className="mono" style={{ fontSize: 10.5, opacity: 0.7, marginTop: 3 }}>{formatHour(e.start)} – {formatHour(e.end)}</div>
                     </div>

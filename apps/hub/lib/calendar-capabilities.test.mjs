@@ -38,3 +38,27 @@ test("keeps OAuth live calendars writable", () => {
     },
   );
 });
+
+test("shows merged Personal+Company feeds as live read-only when both sources are up", () => {
+  assert.deepEqual(
+    resolveCalendarCapabilities({ status: "live", source: "multi", readOnly: true }),
+    {
+      isLive: true,
+      canCreate: false,
+      shouldShowEvents: true,
+      badge: "Personal + Company · read only",
+    },
+  );
+});
+
+test("still shows events when only one of Personal/Company is reachable", () => {
+  assert.deepEqual(
+    resolveCalendarCapabilities({ status: "partial", source: "multi", readOnly: true }),
+    {
+      isLive: true,
+      canCreate: false,
+      shouldShowEvents: true,
+      badge: "Personal/Company · 일부 연결",
+    },
+  );
+});

@@ -185,6 +185,89 @@ export async function listGoogleCalendarIcalEvents({
   }
 }
 
+// Personal + Company are two separate Google accounts (not the single OAuth-connected
+// calendar) — each publishes a per-owner "secret address in iCal format" feed, named here
+// by owner rather than a generic list so a third source is a one-line addition later.
+const CALENDAR_SOURCE_DEFINITIONS = [
+  { id: "personal", label: "Personal", envVar: "GOOGLE_CALENDAR_ICAL_ID_MOON" },
+  { id: "company", label: "Company", envVar: "GOOGLE_CALENDAR_ICAL_ID_CLE_MOON" },
+];
+
+export function resolveGoogleCalendarSources() {
+  return CALENDAR_SOURCE_DEFINITIONS.map(({ id, label, envVar }) => {
+    const raw = process.env[envVar]?.trim();
+    if (!raw) return null;
+    try {
+      return { id, label, icalUrl: validateGoogleCalendarIcalUrl(raw) };
+    } catch {
+      return null;
+    }
+  }).filter(Boolean);
+}
+
+function mergedItemSortKey(item) {
+  return item.start.dateTime || `${item.start.date}T00:00:00`;
+}
+
+export async function listMergedGoogleCalendarSourceEvents({
+  timeMin,
+  timeMax,
+  maxResults = 60,
+  sources = resolveGoogleCalendarSources(),
+  fetchImpl = fetch,
+}) {
+  if (!sources.length) {
+    return { ok: false, status: "preview", items: [], sources: [] };
+  }
+
+  const results = await Promise.all(
+    sources.map(async (source) => {
+      try {
+        const read = await listGoogleCalendarIcalEvents({
+          feedUrl: source.icalUrl,
+          timeMin,
+          timeMax,
+          maxResults,
+          fetchImpl,
+        });
+
+        return {
+          id: source.id,
+          label: source.label,
+          status: "live",
+          items: read.items.map((item) => ({ ...item, source: source.id, sourceLabel: source.label })),
+        };
+      } catch (error) {
+        return {
+          id: source.id,
+          label: source.label,
+          status: "error",
+          detail: error instanceof Error ? error.message : String(error),
+          items: [],
+        };
+      }
+    }),
+  );
+
+  const liveCount = results.filter((result) => result.status === "live").length;
+  const items = results
+    .flatMap((result) => result.items)
+    .sort((a, b) => mergedItemSortKey(a).localeCompare(mergedItemSortKey(b)) || a.id.localeCompare(b.id))
+    .slice(0, maxResults);
+
+  return {
+    ok: liveCount > 0,
+    status: liveCount === 0 ? "error" : liveCount === results.length ? "live" : "partial",
+    items,
+    sources: results.map(({ id, label, status, detail }) => ({
+      id,
+      label,
+      status,
+      ...(detail ? { detail } : {}),
+    })),
+  };
+}
+
 export async function readGoogleCalendarEventsWithIcalFallback({ readOAuth, readIcal }) {
   const oauthResult = await readOAuth();
 

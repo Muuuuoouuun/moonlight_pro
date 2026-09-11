@@ -5,6 +5,7 @@ import {
   listGoogleCalendarEvents,
   recordGoogleCalendarSync,
 } from "@/lib/google-calendar";
+import { listMergedGoogleCalendarSourceEvents } from "@/lib/google-calendar-ical";
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
@@ -40,6 +41,15 @@ function mapGoogleEvent(event) {
   };
 }
 
+// Personal/Company feed items already look like Google event JSON (see
+// google-calendar-ical.js#mapInstance) plus a `source` tag from the merge step.
+function mapCalendarSourceEvent(item) {
+  const mapped = mapGoogleEvent(item);
+  return mapped ? { ...mapped, source: item.source } : null;
+}
+
+const OAUTH_NOT_CONNECTED_REASONS = new Set(["missing-connection", "missing-access-token"]);
+
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const workspaceId = searchParams.get("workspaceId") || resolveDefaultWorkspaceId();
@@ -55,26 +65,57 @@ export async function GET(req) {
     });
   }
 
-  const result = await listGoogleCalendarEvents({ workspaceId, calendarId, timeMin, timeMax, maxResults: 60 });
+  const now = new Date();
+  const effectiveTimeMin = timeMin || now.toISOString();
+  const effectiveTimeMax = timeMax || new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  if (!result.ok) {
-    const status = result.reason === "missing-connection" || result.reason === "missing-access-token"
-      ? "preview"
-      : "error";
+  // Two independent read channels: the OAuth-connected calendar (also the only write
+  // target) and the Personal/Company public-secret iCal feeds. Neither blocks the other —
+  // an operator with no OAuth connection still sees both real feeds instead of "connect first".
+  const [oauthResult, mergedResult] = await Promise.all([
+    listGoogleCalendarEvents({ workspaceId, calendarId, timeMin, timeMax, maxResults: 60 }),
+    listMergedGoogleCalendarSourceEvents({
+      timeMin: effectiveTimeMin,
+      timeMax: effectiveTimeMax,
+      maxResults: 60,
+    }),
+  ]);
 
+  const events = [
+    ...(oauthResult.ok ? oauthResult.items.map(mapGoogleEvent).filter(Boolean) : []),
+    ...mergedResult.items.map(mapCalendarSourceEvent).filter(Boolean),
+  ].sort((a, b) => a.start.localeCompare(b.start));
+
+  if (oauthResult.ok) {
     return NextResponse.json({
-      status,
-      message: status === "preview" ? "Google Calendar가 연결되지 않았습니다." : result.reason,
-      events: [],
+      status: "live",
+      calendarId: oauthResult.calendarId,
+      source: oauthResult.source || "oauth",
+      readOnly: Boolean(oauthResult.readOnly),
+      sources: mergedResult.sources,
+      events,
     });
   }
 
+  if (mergedResult.ok) {
+    const failedSource = mergedResult.sources.find((source) => source.status !== "live");
+    return NextResponse.json({
+      status: mergedResult.status,
+      source: "multi",
+      readOnly: true,
+      message: failedSource ? `${failedSource.label} 캘린더를 읽지 못했습니다.` : "",
+      sources: mergedResult.sources,
+      events,
+    });
+  }
+
+  const status = OAUTH_NOT_CONNECTED_REASONS.has(oauthResult.reason) ? "preview" : "error";
+
   return NextResponse.json({
-    status: "live",
-    calendarId: result.calendarId,
-    source: result.source || "oauth",
-    readOnly: Boolean(result.readOnly),
-    events: result.items.map(mapGoogleEvent).filter(Boolean),
+    status,
+    message: status === "preview" ? "Google Calendar가 연결되지 않았습니다." : oauthResult.reason,
+    sources: mergedResult.sources,
+    events: [],
   });
 }
 

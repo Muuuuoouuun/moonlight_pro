@@ -1,5 +1,14 @@
 export function resolveCalendarCapabilities({ status, source, readOnly }) {
-  const isLive = status === "live";
+  const isLive = status === "live" || (status === "partial" && source === "multi");
+
+  if (isLive && source === "multi") {
+    return {
+      isLive: true,
+      canCreate: false,
+      shouldShowEvents: true,
+      badge: status === "partial" ? "Personal/Company · 일부 연결" : "Personal + Company · read only",
+    };
+  }
 
   if (isLive && source === "ical" && readOnly) {
     return {

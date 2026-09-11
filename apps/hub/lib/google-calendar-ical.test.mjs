@@ -3,8 +3,10 @@ import { test } from "node:test";
 
 import {
   listGoogleCalendarIcalEvents,
+  listMergedGoogleCalendarSourceEvents,
   parseGoogleCalendarIcal,
   readGoogleCalendarEventsWithIcalFallback,
+  resolveGoogleCalendarSources,
   validateGoogleCalendarIcalUrl,
 } from "./google-calendar-ical.js";
 
@@ -192,4 +194,124 @@ test("keeps OAuth API failures visible instead of masking them with iCal", async
   assert.equal(result.ok, false);
   assert.equal(result.reason, "Google API 503");
   assert.equal(iCalReads, 0);
+});
+
+test("resolveGoogleCalendarSources reads only configured, validated feed env vars", () => {
+  const original = {
+    personal: process.env.GOOGLE_CALENDAR_ICAL_ID_MOON,
+    company: process.env.GOOGLE_CALENDAR_ICAL_ID_CLE_MOON,
+  };
+
+  try {
+    process.env.GOOGLE_CALENDAR_ICAL_ID_MOON =
+      "https://calendar.google.com/calendar/ical/personal%40example.com/private-token/basic.ics";
+    delete process.env.GOOGLE_CALENDAR_ICAL_ID_CLE_MOON;
+
+    assert.deepEqual(resolveGoogleCalendarSources(), [
+      {
+        id: "personal",
+        label: "Personal",
+        icalUrl: "https://calendar.google.com/calendar/ical/personal%40example.com/private-token/basic.ics",
+      },
+    ]);
+
+    process.env.GOOGLE_CALENDAR_ICAL_ID_CLE_MOON = "not-a-valid-url";
+    assert.deepEqual(
+      resolveGoogleCalendarSources().map((source) => source.id),
+      ["personal"],
+    );
+  } finally {
+    if (original.personal === undefined) delete process.env.GOOGLE_CALENDAR_ICAL_ID_MOON;
+    else process.env.GOOGLE_CALENDAR_ICAL_ID_MOON = original.personal;
+    if (original.company === undefined) delete process.env.GOOGLE_CALENDAR_ICAL_ID_CLE_MOON;
+    else process.env.GOOGLE_CALENDAR_ICAL_ID_CLE_MOON = original.company;
+  }
+});
+
+function feedWithEvent({ uid, title, startAt, endAt }) {
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Moonlight Test//EN",
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    "DTSTAMP:20260713T000000Z",
+    `DTSTART:${startAt}`,
+    `DTEND:${endAt}`,
+    `SUMMARY:${title}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+}
+
+test("merges live personal and company sources, tagging each event with its source", async () => {
+  const sources = [
+    { id: "personal", label: "Personal", icalUrl: "https://calendar.google.com/calendar/ical/p%40example.com/private-a/basic.ics" },
+    { id: "company", label: "Company", icalUrl: "https://calendar.google.com/calendar/ical/c%40example.com/private-b/basic.ics" },
+  ];
+  const feeds = {
+    [sources[0].icalUrl]: feedWithEvent({ uid: "p1@example.com", title: "Dinner", startAt: "20260714T100000Z", endAt: "20260714T110000Z" }),
+    [sources[1].icalUrl]: feedWithEvent({ uid: "c1@example.com", title: "Standup", startAt: "20260714T010000Z", endAt: "20260714T013000Z" }),
+  };
+  const fetchImpl = async (url) =>
+    new Response(feeds[url], { status: 200, headers: { "content-type": "text/calendar" } });
+
+  const result = await listMergedGoogleCalendarSourceEvents({
+    timeMin: "2026-07-13T00:00:00Z",
+    timeMax: "2026-07-20T00:00:00Z",
+    sources,
+    fetchImpl,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.status, "live");
+  assert.deepEqual(
+    result.items.map((item) => ({ title: item.summary, source: item.source })),
+    [
+      { title: "Standup", source: "company" },
+      { title: "Dinner", source: "personal" },
+    ],
+  );
+  assert.deepEqual(result.sources, [
+    { id: "personal", label: "Personal", status: "live" },
+    { id: "company", label: "Company", status: "live" },
+  ]);
+});
+
+test("reports partial status when only one configured source is reachable", async () => {
+  const sources = [
+    { id: "personal", label: "Personal", icalUrl: "https://calendar.google.com/calendar/ical/p%40example.com/private-a/basic.ics" },
+    { id: "company", label: "Company", icalUrl: "https://calendar.google.com/calendar/ical/c%40example.com/private-b/basic.ics" },
+  ];
+  const fetchImpl = async (url) => {
+    if (url === sources[0].icalUrl) {
+      return new Response(
+        feedWithEvent({ uid: "p1@example.com", title: "Dinner", startAt: "20260714T100000Z", endAt: "20260714T110000Z" }),
+        { status: 200, headers: { "content-type": "text/calendar" } },
+      );
+    }
+    return new Response("", { status: 404 });
+  };
+
+  const result = await listMergedGoogleCalendarSourceEvents({
+    timeMin: "2026-07-13T00:00:00Z",
+    timeMax: "2026-07-20T00:00:00Z",
+    sources,
+    fetchImpl,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.status, "partial");
+  assert.equal(result.items.length, 1);
+  assert.equal(result.sources.find((s) => s.id === "company").status, "error");
+});
+
+test("returns preview status with no configured sources", async () => {
+  const result = await listMergedGoogleCalendarSourceEvents({
+    timeMin: "2026-07-13T00:00:00Z",
+    timeMax: "2026-07-20T00:00:00Z",
+    sources: [],
+  });
+
+  assert.deepEqual(result, { ok: false, status: "preview", items: [], sources: [] });
 });
