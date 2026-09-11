@@ -145,22 +145,15 @@ test("reports matching responsibility-specific secrets as coupled without exposi
   assert.equal(JSON.stringify(result).includes("same-secret"), false);
 });
 
-test("probes Engine and OpenClaw health instead of trusting URL presence", async () => {
+test("probes Engine health instead of trusting URL presence", async () => {
   const result = await readiness.resolveControlPlaneReadiness(
     {
       COM_MOON_ENGINE_URL: baseUrl,
-      OPENCLAW_LOCAL_URL: `${baseUrl}/webhook/moonlight`,
     },
     { timeoutMs: 500 },
   );
 
   assert.deepEqual(result.engine, {
-    configured: true,
-    reachable: true,
-    status: "live",
-    reason: "ok",
-  });
-  assert.deepEqual(result.openclawRelay, {
     configured: true,
     reachable: true,
     status: "live",
@@ -172,7 +165,6 @@ test("marks an unreachable configured endpoint as degraded", async () => {
   const result = await readiness.resolveControlPlaneReadiness(
     {
       COM_MOON_ENGINE_URL: "http://127.0.0.1:1",
-      OPENCLAW_LOCAL_URL: "http://127.0.0.1:1/webhook/moonlight",
     },
     { timeoutMs: 100 },
   );
@@ -180,5 +172,9 @@ test("marks an unreachable configured endpoint as degraded", async () => {
   assert.equal(result.engine.configured, true);
   assert.equal(result.engine.reachable, false);
   assert.equal(result.engine.status, "degraded");
-  assert.equal(result.openclawRelay.reachable, false);
+});
+
+test("control plane readiness no longer reports an OpenClaw relay", async () => {
+  const result = await readiness.resolveControlPlaneReadiness({ COM_MOON_ENGINE_URL: "" }, { timeoutMs: 200 });
+  assert.equal("openclawRelay" in result, false);
 });

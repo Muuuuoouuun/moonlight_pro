@@ -146,7 +146,6 @@ on conflict do nothing;
 insert into public.webhook_endpoints (workspace_id, name, provider, route_path, status)
 values
   ('11111111-1111-1111-1111-111111111111', 'Generic project webhook', 'generic', '/api/webhook/project', 'active'),
-  ('11111111-1111-1111-1111-111111111111', 'OpenClaw project webhook', 'openclaw', '/api/webhook/project/openclaw', 'active'),
   ('11111111-1111-1111-1111-111111111111', 'Moltbot project webhook', 'moltbot', '/api/webhook/project/moltbot', 'active')
 on conflict do nothing;
 

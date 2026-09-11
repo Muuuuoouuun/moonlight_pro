@@ -70,7 +70,6 @@ export async function GET() {
       sharedWebhookSecretConfigured: secrets.sharedWebhook.configured,
       oauthStateSecretConfigured: secrets.oauthState.configured,
       hubWriteSecretConfigured: secrets.hubWrite.configured,
-      openClawSyncSecretConfigured: secrets.openclawSync.configured,
       secretsSeparated: secrets.separated,
       googleOAuthConfigured: googleOAuth.calendar.configured,
       githubConfigured: Boolean(process.env.GITHUB_REPOSITORIES?.trim()),
@@ -81,7 +80,6 @@ export async function GET() {
     },
     integrations: {
       engine: controlPlane.engine,
-      openclawRelay: controlPlane.openclawRelay,
       googleOAuth,
       secrets,
     },
