@@ -15,7 +15,6 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@com-moon/content-manager": "*",
     "@com-moon/hub-gateway": "*",
     "@com-moon/supabase-rest": "*",
     "next": "^16.2.4",

@@ -231,65 +231,8 @@ values
   )
 on conflict do nothing;
 
-insert into automations (id, workspace_id, agent_id, name, status, last_run_at)
-values
-  (
-    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
-    '11111111-1111-1111-1111-111111111111',
-    '99999999-9999-9999-9999-999999999991',
-    'Telegram command intake',
-    'active',
-    now() - interval '30 minutes'
-  )
-on conflict do nothing;
-
-insert into automation_runs (
-  id,
-  workspace_id,
-  automation_id,
-  agent_id,
-  status,
-  input_payload,
-  output_payload,
-  created_at,
-  finished_at
-)
-values
-  (
-    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1',
-    '11111111-1111-1111-1111-111111111111',
-    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
-    '99999999-9999-9999-9999-999999999991',
-    'success',
-    '{"command":"cardnews","source":"seed"}'::jsonb,
-    '{"title":"Retention campaign draft","summary":"Structured card-news result ready for rendering."}'::jsonb,
-    now() - interval '45 minutes',
-    now() - interval '44 minutes'
-  ),
-  (
-    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2',
-    '11111111-1111-1111-1111-111111111111',
-    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
-    '99999999-9999-9999-9999-999999999991',
-    'ignored',
-    '{"command":"status","source":"seed"}'::jsonb,
-    '{"message":"Engine is alive."}'::jsonb,
-    now() - interval '20 minutes',
-    now() - interval '20 minutes'
-  )
-on conflict do nothing;
-
 insert into webhook_endpoints (id, workspace_id, name, provider, route_path, status, last_seen_at)
 values
-  (
-    'cccccccc-cccc-cccc-cccc-ccccccccccc1',
-    '11111111-1111-1111-1111-111111111111',
-    'Telegram Bot Intake',
-    'telegram',
-    '/api/webhook/telegram',
-    'active',
-    now() - interval '20 minutes'
-  ),
   (
     'cccccccc-cccc-cccc-cccc-ccccccccccc2',
     '11111111-1111-1111-1111-111111111111',
@@ -314,16 +257,6 @@ insert into webhook_events (workspace_id, endpoint_id, event_type, source, statu
 values
   (
     '11111111-1111-1111-1111-111111111111',
-    'cccccccc-cccc-cccc-cccc-ccccccccccc1',
-    'telegram.cardnews',
-    'telegram',
-    'processed',
-    '{"command":"cardnews"}'::jsonb,
-    now() - interval '45 minutes',
-    now() - interval '44 minutes'
-  ),
-  (
-    '11111111-1111-1111-1111-111111111111',
     'cccccccc-cccc-cccc-cccc-ccccccccccc2',
     'project.progress',
     'hub-smoke-test',
@@ -345,15 +278,5 @@ values
     'system',
     false,
     now() - interval '2 hours'
-  ),
-  (
-    '11111111-1111-1111-1111-111111111111',
-    'telegram-command',
-    '{"info":"Latest command flow completed successfully."}'::jsonb,
-    'telegram:seed',
-    'info',
-    'telegram',
-    false,
-    now() - interval '30 minutes'
   )
 on conflict do nothing;
