@@ -10,7 +10,7 @@ const revenueStub = `
 export async function getRevenueLedger() { return globalThis.__projectReadModelState.revenue; }
 `;
 const calendarStub = `
-export async function listGoogleCalendarEvents() { return globalThis.__projectReadModelState.calendar; }
+export async function readCombinedGoogleCalendarEvents() { return globalThis.__projectReadModelState.calendar; }
 `;
 const contentStub = `
 export async function getContentLedger() { return globalThis.__projectReadModelState.content; }

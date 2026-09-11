@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 
 import {
   createOrUpdateGoogleCalendarEvent,
-  listGoogleCalendarEvents,
+  readCombinedGoogleCalendarEvents,
   recordGoogleCalendarSync,
 } from "@/lib/google-calendar";
-import { listMergedGoogleCalendarSourceEvents } from "@/lib/google-calendar-ical";
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
 import { resolveDefaultWorkspaceId } from "@/lib/server-write";
 
@@ -65,56 +64,30 @@ export async function GET(req) {
     });
   }
 
-  const now = new Date();
-  const effectiveTimeMin = timeMin || now.toISOString();
-  const effectiveTimeMax = timeMax || new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const combined = await readCombinedGoogleCalendarEvents({ workspaceId, calendarId, timeMin, timeMax, maxResults: 60 });
+  const events = combined.items.map(mapCalendarSourceEvent).filter(Boolean);
 
-  // Two independent read channels: the OAuth-connected calendar (also the only write
-  // target) and the Personal/Company public-secret iCal feeds. Neither blocks the other —
-  // an operator with no OAuth connection still sees both real feeds instead of "connect first".
-  const [oauthResult, mergedResult] = await Promise.all([
-    listGoogleCalendarEvents({ workspaceId, calendarId, timeMin, timeMax, maxResults: 60 }),
-    listMergedGoogleCalendarSourceEvents({
-      timeMin: effectiveTimeMin,
-      timeMax: effectiveTimeMax,
-      maxResults: 60,
-    }),
-  ]);
+  if (combined.ok) {
+    const isPartial = combined.reason === "partial-source-failure";
+    const failedSource = isPartial ? combined.sources.find((source) => source.status !== "live") : null;
 
-  const events = [
-    ...(oauthResult.ok ? oauthResult.items.map(mapGoogleEvent).filter(Boolean) : []),
-    ...mergedResult.items.map(mapCalendarSourceEvent).filter(Boolean),
-  ].sort((a, b) => a.start.localeCompare(b.start));
-
-  if (oauthResult.ok) {
     return NextResponse.json({
-      status: "live",
-      calendarId: oauthResult.calendarId,
-      source: oauthResult.source || "oauth",
-      readOnly: Boolean(oauthResult.readOnly),
-      sources: mergedResult.sources,
-      events,
-    });
-  }
-
-  if (mergedResult.ok) {
-    const failedSource = mergedResult.sources.find((source) => source.status !== "live");
-    return NextResponse.json({
-      status: mergedResult.status,
-      source: "multi",
-      readOnly: true,
+      status: isPartial ? "partial" : "live",
+      calendarId: combined.calendarId,
+      source: combined.source,
+      readOnly: combined.readOnly,
       message: failedSource ? `${failedSource.label} 캘린더를 읽지 못했습니다.` : "",
-      sources: mergedResult.sources,
+      sources: combined.sources,
       events,
     });
   }
 
-  const status = OAUTH_NOT_CONNECTED_REASONS.has(oauthResult.reason) ? "preview" : "error";
+  const status = OAUTH_NOT_CONNECTED_REASONS.has(combined.reason) ? "preview" : "error";
 
   return NextResponse.json({
     status,
-    message: status === "preview" ? "Google Calendar가 연결되지 않았습니다." : oauthResult.reason,
-    sources: mergedResult.sources,
+    message: status === "preview" ? "Google Calendar가 연결되지 않았습니다." : combined.reason,
+    sources: combined.sources,
     events: [],
   });
 }

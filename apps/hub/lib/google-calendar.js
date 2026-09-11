@@ -7,6 +7,7 @@ import {
 } from "@/lib/server-write";
 import {
   listGoogleCalendarIcalEvents,
+  listMergedGoogleCalendarSourceEvents,
   readGoogleCalendarEventsWithIcalFallback,
 } from "@/lib/google-calendar-ical";
 import {
@@ -596,6 +597,71 @@ export async function createOrUpdateGoogleCalendarEvent({
     reason: isUpdate ? "updated" : "created",
     connection: access.connection,
     event,
+  };
+}
+
+function combinedCalendarItemSortKey(item) {
+  return item.start?.dateTime || (item.start?.date ? `${item.start.date}T00:00:00` : "");
+}
+
+// The one calendar read every consumer (Calendar tab, Daily Brief, Attention ledger)
+// should call — merges the OAuth-connected calendar (also the only write target) with
+// the Personal/Company public-secret iCal feeds, so a disconnected OAuth account still
+// surfaces real events instead of "connect first" (see GET /api/calendar/google/event).
+export async function readCombinedGoogleCalendarEvents({
+  workspaceId = resolveDefaultWorkspaceId(),
+  calendarId,
+  timeMin,
+  timeMax,
+  maxResults = 60,
+  readOauth = listGoogleCalendarEvents,
+  readMergedSources = listMergedGoogleCalendarSourceEvents,
+} = {}) {
+  const now = new Date();
+  const effectiveTimeMin = timeMin || now.toISOString();
+  const effectiveTimeMax = timeMax || new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [oauthResult, mergedResult] = await Promise.all([
+    readOauth({ workspaceId, calendarId, timeMin, timeMax, maxResults }),
+    readMergedSources({ timeMin: effectiveTimeMin, timeMax: effectiveTimeMax, maxResults }),
+  ]);
+
+  const items = [...(oauthResult.ok ? oauthResult.items : []), ...mergedResult.items].sort(
+    (a, b) => combinedCalendarItemSortKey(a).localeCompare(combinedCalendarItemSortKey(b)),
+  );
+
+  if (oauthResult.ok) {
+    return {
+      ok: true,
+      reason: "ok",
+      source: oauthResult.source || "oauth",
+      readOnly: Boolean(oauthResult.readOnly),
+      calendarId: oauthResult.calendarId,
+      items,
+      sources: mergedResult.sources,
+    };
+  }
+
+  if (mergedResult.ok) {
+    return {
+      ok: true,
+      reason: mergedResult.status === "partial" ? "partial-source-failure" : "ok",
+      source: "multi",
+      readOnly: true,
+      calendarId: oauthResult.calendarId,
+      items,
+      sources: mergedResult.sources,
+    };
+  }
+
+  return {
+    ok: false,
+    reason: oauthResult.reason,
+    source: null,
+    readOnly: false,
+    calendarId: oauthResult.calendarId,
+    items: [],
+    sources: mergedResult.sources,
   };
 }
 

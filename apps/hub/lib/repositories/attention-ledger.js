@@ -18,7 +18,7 @@
 // reload가 타는 핫패스다.
 import { getTaskLedger } from "./operating-ledger.js";
 import { getRevenueLedger } from "./revenue-ledger.js";
-import { listGoogleCalendarEvents } from "../google-calendar.js";
+import { readCombinedGoogleCalendarEvents } from "../google-calendar.js";
 
 const TIME_ZONE = "Asia/Seoul";
 const DAY_MS = 86400000;
@@ -233,7 +233,7 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
       leads: [],
       deals: [],
     })),
-    listGoogleCalendarEvents({ timeMin: startOfTodayIso, timeMax: weekEndIso, maxResults: 50 }).catch(
+    readCombinedGoogleCalendarEvents({ timeMin: startOfTodayIso, timeMax: weekEndIso, maxResults: 50 }).catch(
       () => ({ ok: false, reason: "calendar-read-failed", items: [] }),
     ),
   ]);
