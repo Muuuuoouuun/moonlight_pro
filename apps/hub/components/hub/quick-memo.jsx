@@ -25,6 +25,7 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
   const panel = React.useRef(null);
   const input = React.useRef(null);
   const opener = React.useRef(null);
+  const launchArea = React.useRef(null);
   const returnFocus = React.useRef(null);
   const current = React.useRef(null);
   const busyRef = React.useRef(false);
@@ -36,6 +37,41 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
   const unavailable = blocked || otherDialog;
   const shown = open && !unavailable;
   routeRef.current = route;
+
+  // Measure against a fixed anchor so expansion cannot chase the pointer.
+  // Proximity listens without adding an invisible hit area over the page.
+  React.useEffect(() => {
+    if (shown || unavailable) return;
+    const media = matchMedia("(hover: hover) and (pointer: fine)");
+    let frame = 0;
+    let pointer = null;
+    const update = () => {
+      frame = 0;
+      const anchor = launchArea.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const dx = pointer ? Math.max(rect.left - pointer.x, 0, pointer.x - rect.right) : Infinity;
+      const dy = pointer ? Math.max(rect.top - pointer.y, 0, pointer.y - rect.bottom) : Infinity;
+      const overButton = pointer && opener.current?.matches(":hover");
+      anchor.dataset.near = media.matches && (overButton || Math.hypot(dx, dy) <= 64) ? "true" : "false";
+    };
+    const move = event => {
+      pointer = event.pointerType === "mouse" ? { x: event.clientX, y: event.clientY } : null;
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    const reset = () => { cancelAnimationFrame(frame); pointer = null; update(); };
+    window.addEventListener("pointermove", move, { passive: true });
+    document.documentElement.addEventListener("pointerleave", reset);
+    window.addEventListener("blur", reset);
+    media.addEventListener("change", reset);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("pointermove", move);
+      document.documentElement.removeEventListener("pointerleave", reset);
+      window.removeEventListener("blur", reset);
+      media.removeEventListener("change", reset);
+    };
+  }, [shown, unavailable]);
 
   const persist = React.useCallback(() => {
     if (!current.current) return;
@@ -231,6 +267,7 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
     setToast(false);
     onNavigate(memoHref(receipt).slice(1));
   };
+  const launcherStatus = busy ? "저장 중" : error ? "저장 확인 필요" : draft?.body ? "작성 중" : "";
 
   return <div ref={root} className={styles.root} hidden={unavailable}>
     {shown && mobile ? <div className={styles.backdrop} onClick={() => close()} aria-hidden="true" /> : null}
@@ -249,10 +286,12 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
       {error ? <p className={styles.feedback} role="alert">{error} {receipt ? <a href={memoHref(receipt)} onClick={openSaved}>저장된 메모 확인</a> : null}</p> : null}
     </section> : null}
     {toast && receipt ? <div className={styles.toast} role="status">메모를 저장했어요 <a href={memoHref(receipt)} onClick={openSaved}>열기</a></div> : null}
-    {!shown ? <button ref={opener} type="button" className={styles.launcher} onClick={launch} disabled={!draft} aria-haspopup="dialog" aria-expanded={false}>
-      <Iconed name="edit" size={16} /><span>빠른 메모</span>
-      {busy || error || draft?.body ? <span className={styles.badge}>{busy ? "저장 중" : error ? "저장 확인 필요" : "작성 중"}</span> : null}
-    </button> : null}
+    {!shown ? <div ref={launchArea} className={styles.launchArea}>
+      <button ref={opener} type="button" className={styles.launcher} onClick={launch} disabled={!draft} aria-label={`빠른 메모${launcherStatus ? ` · ${launcherStatus}` : ""}`} aria-haspopup="dialog" aria-expanded={false}>
+        <span className={styles.launcherLabel} aria-hidden="true"><span>빠른 메모{launcherStatus ? <span className={styles.badge}>{launcherStatus}</span> : null}</span></span>
+        <span className={styles.launcherIcon} aria-hidden="true"><Iconed name="edit" size={20} />{launcherStatus ? <span className={styles.statusDot} data-attention={Boolean(error)} /> : null}</span>
+      </button>
+    </div> : null}
     <span className={styles.srOnly} role="status" aria-live="polite">{!shown && error ? error : ""}</span>
   </div>;
 }

@@ -15,7 +15,18 @@
   box-shadow: var(--shadow-pop);
 }
 :global(.hub-app[data-theme="light"]) :is(.launcher, .panel, .toast) { border-color: rgba(12,16,24,0.08); }
-.launcher { display: flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 14px; cursor: pointer; font-size: 13px; }
+.launchArea { position: relative; width: 48px; height: 48px; margin-left: auto; }
+.root .launcher { border: 1px solid rgba(255,255,255,0.07); position: absolute; right: 0; bottom: 0; width: max-content; display: flex; align-items: center; gap: 0; min-width: 48px; min-height: 48px; padding: 0; border-radius: 28px; cursor: pointer; font-size: 13px; transition: background 180ms ease, box-shadow 180ms ease; }
+.launcherIcon { position: relative; display: grid; place-items: center; flex: 0 0 46px; width: 46px; height: 46px; transition: width 180ms ease, height 180ms ease, flex-basis 180ms ease; }
+.launcherIcon svg { transition: transform 180ms ease; }
+.launcherLabel { display: block; width: 0; flex-shrink: 0; overflow: hidden; opacity: 0; transition: width 180ms ease, opacity 140ms ease; }
+.launcherLabel > span { display: block; width: 86px; white-space: nowrap; text-align: left; }
+.launcherLabel > span::before { content: ""; display: inline-block; width: 14px; }
+.launcherLabel .badge { display: block; padding-left: 14px; font-size: 10px; line-height: 1.4; }
+.statusDot { position: absolute; right: 9px; top: 9px; width: 5px; height: 5px; border-radius: 50%; background: var(--fg); box-shadow: 0 0 0 2px var(--bg); }
+.statusDot[data-attention="true"] { width: 7px; height: 7px; border-radius: 2px; }
+.launcher:focus-visible .launcherLabel { width: 86px; opacity: 1; }
+.launcher:focus-visible .launcherIcon { width: 52px; height: 52px; flex-basis: 52px; }
 .launcher:hover { background: var(--surface-3); }
 .launcher:focus-visible, .panel :is(button, textarea, select, a):focus-visible, .toast a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .badge { font-size: 11px; color: var(--fg-muted); }
@@ -38,4 +49,13 @@
 @media (min-width: 640px) {
   .root { right: 24px; bottom: calc(24px + var(--memo-footer-offset, 0px)); }
   .panel textarea { font-size: 14px; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .launchArea[data-near="true"] .launcherLabel, .launcher:hover .launcherLabel { width: 86px; opacity: 1; }
+  .launchArea[data-near="true"] .launcherIcon, .launcher:hover .launcherIcon { width: 52px; height: 52px; flex-basis: 52px; }
+  .launchArea[data-near="true"] .launcherIcon svg, .launcher:hover .launcherIcon svg { transform: scale(1.12); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .launcher, .launcherIcon, .launcherIcon svg, .launcherLabel { transition: none; }
+  .launchArea[data-near="true"] .launcherIcon svg, .launcher:hover .launcherIcon svg { transform: none; }
 }
