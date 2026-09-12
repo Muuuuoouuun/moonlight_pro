@@ -6,6 +6,7 @@
 // (재계약 임박 등 소스가 없는 것)는 만들지 않는다.
 
 import React from "react";
+import { MemoCaptureLink } from "../journal-links";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import {
@@ -680,6 +681,7 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
       width="min(440px, 96vw)"
       footer={(
         <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minWidth: 0 }}>
+          <MemoCaptureLink context={{ type: row.kind, id: row.id }} />
           {editHref && <Button variant="outline" size="sm" onClick={() => onNavigate?.(editHref)}>정식 편집 열기</Button>}
           <div style={{ flex: 1 }} />
           <CustomerDeleteAction row={row} onConfirm={onDelete} />

@@ -140,7 +140,7 @@ test("single-destination anchors render no sub-list", () => {
 
 test("daily review stays under my work and opens the same personal record in every scope", () => {
   for (const { key } of SIDEBAR_SCOPES) {
-    assert.deepEqual(sidebarChildren('tasks', key).map((child) => child.path), ['dashboard/work/my', 'dashboard/work/daily-review']);
+    assert.deepEqual(sidebarChildren('tasks', key).map((child) => child.path), ['dashboard/work/my', 'dashboard/work/memos', 'dashboard/work/daily-review']);
     assert.equal(ownerAnchorKey('dashboard/work/daily-review'), 'tasks');
   }
   assert.ok(NAV_TREE.some((node) => node.path === 'dashboard/work/daily-review'));
@@ -479,4 +479,9 @@ test("desktop handoff closes before focusing main so BODY is never the final tar
     focusTarget: { focus: () => order.push("focus-main") },
   });
   assert.deepEqual(order, ["close-commit", "focus-main"]);
+});
+
+test('memos has one my-work owner and is reachable in the navigation catalog', () => {
+  assert.equal(ownerAnchorKey('dashboard/work/memos'), 'tasks');
+  assert.ok(NAV_TREE.some(node => node.path === 'dashboard/work/memos'));
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { MemoCaptureLink } from "../journal-links";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Iconed } from "../hub-icons";
@@ -334,6 +335,7 @@ function BrandDetail({ brand, onBack, onOpenStudio, onOpenQueue }) {
           )}
           <div style={{ flex: 1 }} />
           <Button variant="secondary" size="sm" icon="queue" onClick={() => onOpenQueue(brand.key)}>큐에서 보기</Button>
+          <MemoCaptureLink context={{ type: "brand", id: brand.id }} />
           <Button variant="primary" size="sm" icon="plus" onClick={() => onOpenStudio(brand.key)}>이 브랜드로 새 콘텐츠</Button>
         </div>
       </Card>

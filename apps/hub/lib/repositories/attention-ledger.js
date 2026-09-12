@@ -94,6 +94,7 @@ function mapTaskItems(todos, projects, todayKey, weekEndKey) {
         // 내 작업의 할 일 편집 드로어가 설명을 보여주고 고칠 수 있도록 실어 보낸다 —
         // 없으면 드로어 저장이 기존 설명을 확인할 길 없이 진행된다.
         description: t.description || "",
+        sourceRefs: t.sourceRefs || [],
         bucket: bucketFor(t.dueAt, todayKey, weekEndKey),
         whenAt: t.dueAt || "",
         whenLabel: t.dueAt ? shortDate(t.dueAt) : "기한 없음",

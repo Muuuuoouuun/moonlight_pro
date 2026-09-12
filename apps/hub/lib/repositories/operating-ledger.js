@@ -305,6 +305,7 @@ function mapTodos(rows, projectById, brandById) {
       project: row.project_id || "",
       title: row.title,
       description: row.description || "",
+      sourceRefs: Array.isArray(row.meta?.source_refs) ? row.meta.source_refs : [],
       status: row.status || "inbox",
       due: formatShortDate(row.due_at),
       dueAt: row.due_at || "",

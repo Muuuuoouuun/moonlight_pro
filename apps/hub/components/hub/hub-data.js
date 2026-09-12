@@ -5,6 +5,7 @@ export const NAV_TREE = [
   { key: 'daily-brief', label: '오늘', icon: 'brief', path: 'dashboard/daily-brief', keywords: ['오늘', 'today', 'daily brief', '브리핑', '브리프'] },
   { key: 'overview', label: '현황', icon: 'signal', path: 'dashboard/overview', keywords: ['overview', '현황', '차트', '시각', '통계', 'chart', 'stats', '정리'] },
   { key: 'my-work', label: '내 작업', icon: 'inbox', path: 'dashboard/work/my', keywords: ['내 작업', 'my work', '내작업', 'tasks', '할 일', '할일', 'todo', 'deals', 'calendar', '일정', '실행'] },
+  { key: 'memos', label: '메모', icon: 'content', path: 'dashboard/work/memos', keywords: ['메모', '일지', 'note', 'memo', 'journal', '아이디어', '발췌'] },
   { key: 'daily-review', label: '하루 리뷰', icon: 'brief', path: 'dashboard/work/daily-review', keywords: ['하루', '리뷰', '회고', '일기', '에너지', 'daily review'] },
   {
     key: 'classin', label: '클래스인', icon: 'classin', workspace: true,
