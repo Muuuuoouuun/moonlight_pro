@@ -90,7 +90,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **기회 탐색 (2026-09-13)**
 
-- [`superpowers/specs/2026-09-13-opportunity-discovery-design.md`](superpowers/specs/2026-09-13-opportunity-discovery-design.md) — **1차 구현·로컬 검증 완료**. 독립 기회 탐색에서 포착·발굴·검증·실행 연결·보류·종료를 관리한다. 사이드바 primary 9개로 확장. 실제 업무 연결·revision/receipt·이력과 페이지네이션 포함. [실행 기록](superpowers/plans/2026-09-13-opportunity-discovery.md). 운영 DB 마이그레이션·배포와 AI 탐색은 아직 적용하지 않았다.
+- [`superpowers/specs/2026-09-13-opportunity-discovery-design.md`](superpowers/specs/2026-09-13-opportunity-discovery-design.md) — **1차 구현·로컬 검증 완료**. 독립 기회 탐색에서 포착·발굴·검증·실행 연결·보류·종료를 관리한다. 사이드바 primary 9개로 확장. 실제 업무 연결·revision/receipt·이력과 페이지네이션 포함. [실행 기록](superpowers/plans/2026-09-13-opportunity-discovery.md). 2026-09-13 운영 DB 적용·생성/재시도 검증 완료. Vercel 배포는 문의 동기화의 무료 요금제 주기 제한으로 대기 중이며, AI 탐색은 후속 범위다.
 
 **하루 리뷰 (R0)**
 

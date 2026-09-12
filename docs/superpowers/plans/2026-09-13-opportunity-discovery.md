@@ -71,3 +71,14 @@ node scripts/apply-migrations.mjs 20260913_0029_opportunity_discovery.sql
 - 현재 통합 브랜치에 병합하면서 메모 화면의 lazy import·PAGE_MAP 및 내비 테스트를 모두 보존했다.
 - 병합된 전체 코드 `npm test`: 1007 passed / 0 failed / 4 skipped (1011 tests).
 - 병합 결과 contract 검사와 Hub production build 통과.
+
+
+### 운영 적용 후속 (2026-09-13)
+
+- 사용자 “ㄱㄱ”에 따라 운영 적용 진행. 기존 migration runner는 401로 실패해 로그인된 Supabase SQL Editor에서 0029를 적용했다.
+- 운영 프로젝트 `rwqefdxalmbrkybxqwxj`: 테이블·RPC 존재, 3개 테이블 RLS, service_role SELECT/EXECUTE 허용 및 직접 INSERT/UPDATE/DELETE 금지 확인.
+- 운영 DB 트랜잭션에서 생성 `saved`와 동일 requestId 재시도 `duplicate`·동일 record를 검증하고 ROLLBACK했다. 검증 데이터는 남기지 않았다.
+- 검증된 통합 커밋 `f4a0f5f`에서 `codex/discovery-release`를 원격에 게시했다. 다른 세션의 이후 PMS 변경은 배포 후보에 포함하지 않았다.
+- 첫 CI에서 기존 반복 업무 테스트 2개가 UTC/KST 날짜 경계 때문에 실패했다. 고정 날짜와 명시적인 now를 사용해 수정했고 UTC 전체 테스트 1007 passed / 0 failed / 4 skipped를 확인했다.
+- Vercel은 기존 `/api/cron/inquiries-sync`의 `*/5 * * * *`를 Hobby 요금제에서 거부했다. 문의 동기화 주기 변경 여부를 운영자에게 질문했으며, 답변 전 설정을 변경하지 않는다. 운영 화면은 아직 배포하지 않았다.
+- 기존 의존성 보안 검사 실패를 호환 범위의 lockfile 업데이트로 해결했다(Next 16.2.7 → 16.3.5 포함). 업데이트 후 보안 경고 0건, typecheck·contracts·ClassIn 검사·전체 테스트·Hub/Engine build 통과. 새 production build의 기회 탐색 페이지와 생성 drawer도 브라우저에서 확인했다.
