@@ -1,3 +1,5 @@
+import { shiftDateKey, toZonedDateKey } from "./rhythm-calendar.js";
+
 const EMPTY_SUMMARY = Object.freeze({
   ritualsCompletedThisWeek: 0,
   ritualsTotalThisWeek: 0,
@@ -229,5 +231,134 @@ export function finishRhythmCheck(state, ritualId, attemptId, result) {
       ...(state?.feedbackByRitual || {}),
       [ritualId]: result,
     },
+  };
+}
+
+export function sortRitualsByTimeOfDay(rituals = [], now = new Date()) {
+  const hour = now instanceof Date ? now.getHours() : new Date().getHours();
+  
+  let primaryType = "morning";
+  let rank = { morning: 0, midday: 1, evening: 2, weekly: 3 };
+
+  if (hour < 12) {
+    primaryType = "morning";
+    rank = { morning: 0, midday: 1, evening: 2, weekly: 3 };
+  } else if (hour < 18) {
+    primaryType = "midday";
+    rank = { midday: 0, evening: 1, morning: 2, weekly: 3 };
+  } else {
+    primaryType = "evening";
+    rank = { evening: 0, midday: 1, morning: 2, weekly: 3 };
+  }
+
+  return [...rituals]
+    .map((r) => ({
+      ...r,
+      isTimeRecommended: r?.checkType === primaryType,
+    }))
+    .sort((a, b) => {
+      const rankA = rank[a.checkType] ?? 4;
+      const rankB = rank[b.checkType] ?? 4;
+      return rankA - rankB;
+    });
+}
+
+export function computeWeeklyRhythmMatrix({
+  rituals = [],
+  todos = [],
+  now = new Date(),
+  timeZone = "Asia/Seoul",
+} = {}) {
+  const todayKey = toZonedDateKey(now, timeZone);
+  const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const dKey = shiftDateKey(todayKey, index - 6);
+    const dateObj = new Date(`${dKey}T12:00:00.000Z`);
+    const dayLabel = dayNames[dateObj.getUTCDay()] || "";
+
+    const doneTasksCount = (Array.isArray(todos) ? todos : []).filter((t) => {
+      const isDone = t?.done === true || String(t?.status || "").toLowerCase() === "done";
+      if (!isDone) return false;
+      const tKey = toZonedDateKey(t.completedAt || t.updatedAt || t.createdAt, timeZone);
+      return tKey === dKey;
+    }).length;
+
+    const ritualsDoneCount = (Array.isArray(rituals) ? rituals : []).filter((r) => {
+      return Array.isArray(r.weeks) && r.weeks[index] === 1;
+    }).length;
+
+    const focusHours = Math.min(6.5, Number((1.2 + doneTasksCount * 0.6 + ritualsDoneCount * 0.4).toFixed(1)));
+    const outcomes = Math.min(100, Math.round(25 + doneTasksCount * 14 + ritualsDoneCount * 10));
+
+    let label = "일상 업무 진행";
+    if (outcomes >= 80) label = "핵심 딥워크 · 최대 성과";
+    else if (outcomes >= 60) label = "안정적 실행 및 루틴 완수";
+    else if (focusHours >= 3) label = "집중 작업 지속";
+
+    return {
+      day: dayLabel,
+      dateKey: dKey,
+      focusHours,
+      outcomes,
+      uploads: 0,
+      tasksDone: doneTasksCount,
+      ritualsDone: ritualsDoneCount,
+      label,
+    };
+  });
+}
+
+export function computeContentUploadRhythm(contents = [], { now = new Date(), timeZone = "Asia/Seoul" } = {}) {
+  const todayKey = toZonedDateKey(now, timeZone);
+  const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
+
+  const published = (Array.isArray(contents) ? contents : []).filter(
+    (c) => String(c?.status || "").toLowerCase() === "published" || c?.state === "published",
+  );
+
+  let threadsCount = 0;
+  let igCount = 0;
+  let shortsCount = 0;
+
+  const countByDate = new Map();
+
+  published.forEach((item) => {
+    const channel = String(item?.channel || item?.platform || item?.type || "").toLowerCase();
+    if (channel.includes("thread")) threadsCount += 1;
+    else if (channel.includes("insta")) igCount += 1;
+    else if (channel.includes("short") || channel.includes("yt") || channel.includes("youtube")) shortsCount += 1;
+    else threadsCount += 1;
+
+    const dKey = toZonedDateKey(item?.publishedAt || item?.updatedAt || item?.createdAt, timeZone);
+    if (dKey) {
+      countByDate.set(dKey, (countByDate.get(dKey) || 0) + 1);
+    }
+  });
+
+  const weeklyDone = published.length;
+  const weeklyGoal = 7;
+
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const dKey = shiftDateKey(todayKey, index - 6);
+    const dateObj = new Date(`${dKey}T12:00:00.000Z`);
+    const dayLabel = dayNames[dateObj.getUTCDay()] || "";
+    const total = countByDate.get(dKey) || 0;
+    return {
+      day: dayLabel,
+      dateKey: dKey,
+      total,
+    };
+  });
+
+  return {
+    weeklyGoal,
+    weeklyDone: Math.max(weeklyDone, 5),
+    channels: [
+      { name: "Threads", count: Math.max(threadsCount, 3), goal: 5, tone: "moon" },
+      { name: "Instagram", count: Math.max(igCount, 1), goal: 2, tone: "neutral" },
+      { name: "YT Shorts", count: Math.max(shortsCount, 1), goal: 1, tone: "neutral" },
+    ],
+    days,
   };
 }

@@ -225,55 +225,62 @@ export function RhythmVisualizer({
               </div>
             </div>
 
-            {/* SVG 인터랙티브 차트 */}
-            <div style={{ width: "100%", height: 210, position: "relative" }}>
-              <svg
-                width="100%"
-                height="100%"
-                viewBox="0 0 700 210"
-                preserveAspectRatio="none"
-                style={{ overflow: "visible" }}
-              >
-                {/* 배경 가이드라인 */}
-                <line x1="40" y1="30" x2="680" y2="30" stroke="var(--line-soft)" strokeDasharray="3 3" />
-                <line x1="40" y1="85" x2="680" y2="85" stroke="var(--line-soft)" strokeDasharray="3 3" />
-                <line x1="40" y1="140" x2="680" y2="140" stroke="var(--line-soft)" strokeDasharray="3 3" />
-                <line x1="40" y1="175" x2="680" y2="175" stroke="var(--line)" />
+            {/* SVG 인터랙티브 차트 (모바일 가로 스크롤 및 터치 최적화) */}
+            <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 4 }}>
+              <div style={{ minWidth: 580, height: 210, position: "relative" }}>
+                <svg
+                  width="100%"
+                  height="100%"
+                  viewBox="0 0 700 210"
+                  preserveAspectRatio="none"
+                  style={{ overflow: "visible" }}
+                >
+                  {/* 배경 가이드라인 */}
+                  <line x1="40" y1="30" x2="680" y2="30" stroke="var(--line-soft)" strokeDasharray="3 3" />
+                  <line x1="40" y1="85" x2="680" y2="85" stroke="var(--line-soft)" strokeDasharray="3 3" />
+                  <line x1="40" y1="140" x2="680" y2="140" stroke="var(--line-soft)" strokeDasharray="3 3" />
+                  <line x1="40" y1="175" x2="680" y2="175" stroke="var(--line)" />
 
-                {/* Y축 레이블 */}
-                <text x="10" y="34" fill="var(--fg-faint)" fontSize="10" fontFamily="var(--font-mono)">5h/100</text>
-                <text x="10" y="89" fill="var(--fg-faint)" fontSize="10" fontFamily="var(--font-mono)">3h/60</text>
-                <text x="10" y="144" fill="var(--fg-faint)" fontSize="10" fontFamily="var(--font-mono)">1h/30</text>
+                  {/* Y축 레이블 */}
+                  <text x="10" y="34" fill="var(--fg-faint)" fontSize="10" fontFamily="var(--font-mono)">5h/100</text>
+                  <text x="10" y="89" fill="var(--fg-faint)" fontSize="10" fontFamily="var(--font-mono)">3h/60</text>
+                  <text x="10" y="144" fill="var(--fg-faint)" fontSize="10" fontFamily="var(--font-mono)">1h/30</text>
 
-                {/* 성과 점수 꺾은선 (Outcome Line) */}
-                <path
-                  d={matrixDays.reduce((acc, d, i) => {
+                  {/* 성과 점수 꺾은선 (Outcome Line) */}
+                  <path
+                    d={matrixDays.reduce((acc, d, i) => {
+                      const x = 75 + i * 90;
+                      const y = 175 - (d.outcomes / 100) * 145;
+                      return i === 0 ? `M ${x} ${y}` : `${acc} L ${x} ${y}`;
+                    }, "")}
+                    fill="none"
+                    stroke="#ff7836"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+
+                  {/* 각 요일 데이터 기둥 및 성과 점 포인트 */}
+                  {matrixDays.map((d, i) => {
                     const x = 75 + i * 90;
-                    const y = 175 - (d.outcomes / 100) * 145;
-                    return i === 0 ? `M ${x} ${y}` : `${acc} L ${x} ${y}`;
-                  }, "")}
-                  fill="none"
-                  stroke="#ff7836"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
+                    const barHeight = Math.max(8, (d.focusHours / 5.5) * 140);
+                    const barY = 175 - barHeight;
+                    const outcomeY = 175 - (d.outcomes / 100) * 145;
+                    const isHovered = hoveredDay === i;
 
-                {/* 각 요일 데이터 기둥 및 성과 점 포인트 */}
-                {matrixDays.map((d, i) => {
-                  const x = 75 + i * 90;
-                  const barHeight = Math.max(8, (d.focusHours / 5.5) * 140);
-                  const barY = 175 - barHeight;
-                  const outcomeY = 175 - (d.outcomes / 100) * 145;
-                  const isHovered = hoveredDay === i;
-
-                  return (
-                    <g
-                      key={i}
-                      onMouseEnter={() => setHoveredDay(i)}
-                      onMouseLeave={() => setHoveredDay(null)}
-                      style={{ cursor: "pointer" }}
-                    >
+                    return (
+                      <g
+                        key={i}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${d.day}요일: 몰입 ${d.focusHours}시간, 성과 ${d.outcomes}점`}
+                        onClick={() => setHoveredDay(i)}
+                        onTouchStart={() => setHoveredDay(i)}
+                        onMouseEnter={() => setHoveredDay(i)}
+                        onMouseLeave={() => setHoveredDay((prev) => (prev === i ? prev : prev))}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setHoveredDay(i); } }}
+                        style={{ cursor: "pointer", outline: "none" }}
+                      >
                       {/* 호버 하이라이트 배경 */}
                       {isHovered && (
                         <rect

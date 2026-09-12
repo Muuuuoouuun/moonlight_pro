@@ -16,6 +16,7 @@ import {
   finishRhythmCheck,
   getRhythmProgressProps,
   resolveRhythmCheckResult,
+  sortRitualsByTimeOfDay,
 } from "@/lib/rhythm-ui";
 
 function formatBriefDate(date) {
@@ -302,8 +303,26 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
   const { schedule, cancel } = useUndoableAction();
   const items = allItems.filter((t) => !hiddenIds.has(t.id));
 
-  // 연속 버닝 스트릭 계산 및 낙관적 피드백
-  const streakInfo = taskToday?.streak || { streak: 0, todayDoneCount: 0, isBurning: false, recentDays: [0, 0, 0, 0, 0, 0, 0] };
+  // 연속 버닝 스트릭 계산 및 로컬스토리지 0ms 즉각 캐시
+  const [cachedStreak] = React.useState(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem('hub:task-streak');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  React.useEffect(() => {
+    if (taskToday?.streak) {
+      try {
+        localStorage.setItem('hub:task-streak', JSON.stringify(taskToday.streak));
+      } catch { /* storage 불가 환경 */ }
+    }
+  }, [taskToday?.streak]);
+
+  const streakInfo = taskToday?.streak || cachedStreak || { streak: 0, todayDoneCount: 0, isBurning: false, recentDays: [0, 0, 0, 0, 0, 0, 0] };
   const [optimisticDoneDelta, setOptimisticDoneDelta] = React.useState(0);
   const [isPopping, setIsPopping] = React.useState(false);
 
@@ -1389,6 +1408,7 @@ function RhythmPanel({ onNavigate }) {
   }, [load]);
 
   const rituals = ledger.rituals;
+  const sortedRituals = React.useMemo(() => sortRitualsByTimeOfDay(rituals), [rituals]);
   const summary = ledger.summary || { ritualsCompletedThisWeek: 0, ritualsTotalThisWeek: 0, longestStreak: 0, longestStreakRitual: '' };
   const completed = summary.ritualsCompletedThisWeek;
   const total = summary.ritualsTotalThisWeek;
@@ -1440,14 +1460,17 @@ function RhythmPanel({ onNavigate }) {
               <span style={{ color: 'var(--moon-300)', cursor: 'pointer' }} onClick={() => onNavigate?.('dashboard/work/rhythm')}>분석 ↗</span>
             </div>
             <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {rituals.map((r, i) => {
+              {sortedRituals.map((r, i) => {
                 const pending = Boolean(mutationState.pendingByRitual?.[r.id]);
                 const feedback = mutationState.feedbackByRitual?.[r.id];
                 const weeks = Array.isArray(r.weeks) ? r.weeks : [];
                 return (
-                  <div key={r.id} style={{ paddingBottom: 10, borderBottom: i < rituals.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+                  <div key={r.id} style={{ paddingBottom: 10, borderBottom: i < sortedRituals.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: 12, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+                      {r.isTimeRecommended && (
+                        <Badge tone="moon" size="xs">지금 시간대</Badge>
+                      )}
                       <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{r.streak || 0}d</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>

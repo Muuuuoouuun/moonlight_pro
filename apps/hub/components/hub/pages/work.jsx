@@ -19,6 +19,7 @@ import {
   buildRhythmDefinePayload,
   buildRhythmDeletePayload,
   buildRhythmEditPayload,
+  computeWeeklyRhythmMatrix,
   createRhythmCheckState,
   filterRhythmRows,
   finishRhythmCheck,
@@ -1517,6 +1518,7 @@ export function Rhythm() {
       <RhythmVisualizer
         rituals={mergedRituals}
         summary={summary}
+        focusData={{ matrix: computeWeeklyRhythmMatrix({ rituals: mergedRituals }) }}
         onNavigate={(path) => router.push(path)}
       />
 

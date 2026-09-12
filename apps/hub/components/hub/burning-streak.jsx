@@ -93,6 +93,16 @@ export function BurningStreakBadge({
   const activeStreak = Math.max(0, streak);
   const burning = isBurning || activeStreak >= 3 || (activeStreak > 0 && todayCompleted > 0);
 
+  // 마일스톤 레벨 판정
+  let milestone = null;
+  if (activeStreak >= 30) {
+    milestone = { label: "✦ 30일 레전드 완주", tone: "gold" };
+  } else if (activeStreak >= 14) {
+    milestone = { label: "✦ 2주 챔피언", tone: "sparkle" };
+  } else if (activeStreak >= 7) {
+    milestone = { label: "✦ 7일 완주 마스터", tone: "sparkle" };
+  }
+
   // 텍스트 카피 결정
   let streakText = "";
   if (activeStreak === 0) {
@@ -101,6 +111,8 @@ export function BurningStreakBadge({
     streakText = "할 일 완성 1일째! 🔥";
   } else if (activeStreak < 3) {
     streakText = `할 일 완성 ${activeStreak}일째! 🔥`;
+  } else if (milestone) {
+    streakText = `할 일 완성 ${activeStreak}일째! ${milestone.label} 🔥`;
   } else {
     streakText = `할 일 완성 ${activeStreak}일째! 연속 버닝 중 🔥`;
   }
@@ -129,8 +141,8 @@ export function BurningStreakBadge({
         <span className="mono" style={{ fontWeight: 600, color: burning ? "var(--fg)" : "var(--fg-dim)" }}>
           {activeStreak}일
         </span>
-        <span style={{ fontSize: 11, color: burning ? "var(--fg-muted)" : "var(--fg-faint)" }}>
-          {activeStreak >= 3 ? "연속 버닝" : activeStreak > 0 ? "완성 중" : "도전"}
+        <span style={{ fontSize: 11, color: milestone ? "#ffd166" : (burning ? "var(--fg-muted)" : "var(--fg-faint)"), fontWeight: milestone ? 600 : 400 }}>
+          {milestone ? milestone.label.replace("✦ ", "") : (activeStreak >= 3 ? "연속 버닝" : activeStreak > 0 ? "완성 중" : "도전")}
         </span>
       </div>
     );

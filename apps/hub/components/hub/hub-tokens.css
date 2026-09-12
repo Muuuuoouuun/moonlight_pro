@@ -461,10 +461,12 @@
 .hub-app .hub-streak-flame--burning {
   animation: mlFlameFlicker 1.8s ease-in-out infinite;
   transform-origin: center bottom;
+  will-change: transform, filter;
 }
 
 .hub-app .hub-streak-badge--burning {
   animation: mlBurnGlow 2.4s ease-in-out infinite;
+  will-change: border-color, box-shadow;
 }
 
 .hub-app .hub-streak-pop {
