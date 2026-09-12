@@ -1,7 +1,7 @@
 # Moonlight 문서 지도
 
 > 상태: ACTIVE DOCUMENTATION INDEX
-> 마지막 정리: 2026-09-04 (§3 상태·§4 인덱스·§5 기록 갱신. 직전 정리 2026-07-16)
+> 마지막 정리: 2026-09-12 (콘텐츠 Studio 1차 구현·검증 등재. 기존 실행 상태표 기준: 2026-09-04)
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -89,8 +89,14 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 - [`superpowers/specs/2026-09-12-daily-review-and-council-design.md`](superpowers/specs/2026-09-12-daily-review-and-council-design.md) — **R0 승인·구현 / 후속 단계 DRAFT**. 내 작업 → 하루 리뷰에서 에너지·당일 목표 진척·메모를 날짜별 저장·수정한다. 2026-09-13 운영 DB 적용 및 실제 API 연결 확인 완료. [구현·검증·적용 안내](superpowers/plans/2026-09-12-daily-review-r0.md). Council과 주간 리포트는 후속 제안이다.
 
+**콘텐츠 제작 (2026-09-12)**
+
+- [`superpowers/specs/2026-09-12-content-notes-drafts-ai-workflow-design.md`](superpowers/specs/2026-09-12-content-notes-drafts-ai-workflow-design.md) — **방향 승인 · Studio 1차 구현**. 원문·기획·채널별 초안·AI 후보 비교/적용·버전 복원을 연결. 구현·로컬 검증 범위는 문서 §0과 [실행 기록](superpowers/plans/2026-09-12-content-workflow.md)을 따른다. [후속 검증·운영 적용 준비](superpowers/plans/2026-09-12-content-release.md)에서 통합 테스트 오류를 해결했으며 운영 인증 갱신을 기다린다. 일지 신설·기간 회고·자동 콘텐츠 크론은 후속 범위이며 운영 DB 마이그레이션·배포 완료를 뜻하지 않는다.
+
 **기획 초안 (미확정, 새 구현의 근거로 쓰지 않음)**
 
+- [`superpowers/specs/2026-09-12-memo-writing-reuse-and-analysis-design.md`](superpowers/specs/2026-09-12-memo-writing-reuse-and-analysis-design.md) — **DRAFT · 권장안**. 빠른 메모·선택 보강 질문·문맥별 재발견·근거가 있는 묶음 분석·할 일/콘텐츠 적용·결과 피드백을 연결. 일반 메모와 하루 리뷰의 경계, 출처·중복·분석 범위와 단계별 완료 기준을 정리한다.
+- [`superpowers/specs/2026-09-12-unified-inquiries-email-webhook-design.md`](superpowers/specs/2026-09-12-unified-inquiries-email-webhook-design.md) — **DRAFT · 권장안**. 메일 속 문의 감지·향후 랜딩 페이지 웹훅·문의 내역·기존 알림 연결. 현행 Gmail 분류 누락 재현, 출처 간 중복·추가 회신·읽음·수집 복구 계약과 단계별 검수 기준을 정리한다.
 - [`superpowers/specs/2026-09-03-sales-content-marketing-to-branding-growth-plan.md`](superpowers/specs/2026-09-03-sales-content-marketing-to-branding-growth-plan.md) — **DRAFT · 권장안**. 세일즈·콘텐츠·마케팅 → 브랜딩 프레임으로 현재 시스템의 강점·약점·보완점·새 베팅을 정리. 초안 크론 2개 고장(W19)과 첫 빌드 후보("오늘 연락할 리드")를 포함. 운영자 확정 전까지 권장.
 - [`superpowers/specs/2026-09-04-mcp-server-audit-and-expansion-design.md`](superpowers/specs/2026-09-04-mcp-server-audit-and-expansion-design.md) — **DRAFT · 제안**. MCP 서버 실측 점검(§2만 사실)과 확충·보강 설계. read 라우트 응답 158KB·94KB·52KB 실측으로 "화면용 BFF 통과" 전제를 반증하고 MCP 전용 투영 계층을 제안. 위 성장 계획 F-14를 흡수·확장하며, `integration-control-plane-inheritance.md` §6 계약은 그대로 상속한다.
 - [`superpowers/specs/2026-09-05-journal-timeline-and-ai-digest.md`](superpowers/specs/2026-09-05-journal-timeline-and-ai-digest.md) — **DRAFT · 제안**. 일지를 `journal_entries` 단일 타임라인으로 신설하고 AI 정리를 2계층(Gemini 단건 요약·태그 / Claude Code 기간 회고)으로 분할. §3 범위 4건은 2026-09-05 운영자 확정, §2 실측은 사실, 나머지는 구현 전 제안이다. `daily-operating-note-todo.md`의 P1-5·P1-6·P2-8·P2-10을 흡수한다.
