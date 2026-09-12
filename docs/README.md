@@ -106,6 +106,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **기획 초안 (미확정, 새 구현의 근거로 쓰지 않음)**
 
+- [`superpowers/specs/2026-09-13-memo-discovery-and-analysis-design.md`](superpowers/specs/2026-09-13-memo-discovery-and-analysis-design.md) — **DRAFT · 메모 2차 권장안**. 2A 본문·기간·업무 검색과 관련 메모, 2B 선택 범위·근거 발췌가 있는 분석과 할 일/Studio 적용으로 분리한다. 1차 구현을 유지하며 세부 계약은 검토 전이다.
+
 - [`superpowers/specs/2026-09-12-unified-inquiries-email-webhook-design.md`](superpowers/specs/2026-09-12-unified-inquiries-email-webhook-design.md) — **APPROVED · 코드 구현(2026-09-13), 운영 연결 대기**. 메일·랜딩페이지 문의 원장, 감지·중복·읽음·처리 상태와 기존 알림 통합. [연결 가이드](inquiry-integration-setup.md), [Gmail 서명·수집](inquiry-gmail-setup.md), [구현·검증 기록](superpowers/plans/2026-09-13-unified-inquiries.md).
 - [`superpowers/specs/2026-09-03-sales-content-marketing-to-branding-growth-plan.md`](superpowers/specs/2026-09-03-sales-content-marketing-to-branding-growth-plan.md) — **DRAFT · 권장안**. 세일즈·콘텐츠·마케팅 → 브랜딩 프레임으로 현재 시스템의 강점·약점·보완점·새 베팅을 정리. 초안 크론 2개 고장(W19)과 첫 빌드 후보("오늘 연락할 리드")를 포함. 운영자 확정 전까지 권장.
 - [`superpowers/specs/2026-09-04-mcp-server-audit-and-expansion-design.md`](superpowers/specs/2026-09-04-mcp-server-audit-and-expansion-design.md) — **DRAFT · 제안**. MCP 서버 실측 점검(§2만 사실)과 확충·보강 설계. read 라우트 응답 158KB·94KB·52KB 실측으로 "화면용 BFF 통과" 전제를 반증하고 MCP 전용 투영 계층을 제안. 위 성장 계획 F-14를 흡수·확장하며, `integration-control-plane-inheritance.md` §6 계약은 그대로 상속한다.
