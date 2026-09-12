@@ -27,7 +27,7 @@
 - [x] 3. Gmail: tests first for personal-domain inquiries, support, body-only inquiry, forwarded form sender vs customer, spam/system signals, MIME handling, pagination, bounded runs, invalid history, retry and historical notification behavior. Implement `lib/inquiry-email.js`, `lib/gmail-inquiry-sync.js`; reuse existing token resolution and forward Engine commands. Wire the existing scan API and a CRON_SECRET-protected server route.
 - [x] 4. UI: build scoped inquiry list and detail/create drawers using existing primitives, durable read/status/edit/split, source/kind/status filters, safe plaintext messages, exact counts and pagination. Register route in hub-app, hub-nav, NAV_TREE and workspace-map. Make Gmail Connect usable and show sync state and retry. Add inquiry notification summary to Daily Brief and bell count without replacing existing actions.
 - [x] 5. Verification: run focused behavioral tests, full `npm test`, `npm run typecheck`, `npm run build`, contract checks and rendered desktop/mobile interaction checks. Test local migration/RPC transactions without touching production. Review spec coverage, then review code quality; fix material findings.
-- [ ] 6. Update design status/setup guide, commit only owned paths, inspect commit stat, integrate safely into original working branch if no conflicting active edits, and remove clean worktree after integration. Never stage other sessions' files.
+- [x] 6. Update design status/setup guide, commit only owned paths, inspect commit stat, integrate safely into original working branch if no conflicting active edits, and remove clean worktree after integration. Never stage other sessions' files.
 
 ## Commands and expected evidence
 
@@ -53,3 +53,5 @@ The first new tests must fail before their implementation. Later runs must pass 
 - Final feature verification before integration: `npm test` **851/851 passed, zero skips**, including real PostgreSQL inquiry transactions; `npm run build`, `npm run typecheck`, `npm run check:contracts`, and `git diff --check` passed. Independent review finished with no outstanding P0–P2 findings.
 
 - Integration verification against the current working branch: **909 passed, 0 failed, 3 skipped** of 912 Node tests. The three skipped tests belong to the separate content-workflow database suite and require its external test database; inquiry PostgreSQL tests ran. Hub/Engine production builds, typecheck and contract checks passed again. The only merge conflict was the earlier draft of this inquiry design; the approved implementation record replaces it.
+
+- Delivery: feature commit `4faff06`, integration commit `32ef918`. Integrated into the active local workspace without discarding concurrent work. The dedicated inquiry worktree and its local verification server were removed/stopped after integration. The 11 synthetic UI scenarios passed again against the integrated production build with zero page errors.
