@@ -100,9 +100,9 @@ UI 검증의 흐름은 내 작업 → 하루 리뷰 → 날짜 선택 → 한 �
 - API fixture 테스트는 운영 DB 저장 증명이 아니다. 별도로 임시 PostgreSQL에서 실제 SQL 쓰기와 동시성/권한 검증을 실행했다.
 - live read-only 조사: 실제 BFF도 HTTP 200 + status:error / configured:true로 안전하게 실패했다. Supabase REST 연결과 workspace 시간대(Asia/Seoul)는 확인했으나 `journal_entries`는 아직 없다(PGRST205). 관리 API는 기존 SUPABASE_ACCESS_TOKEN에 HTTP 401을 반환했다. live schema 변경과 실제 개인 기록 쓰기는 실행하지 않았다.
 
-실제 저장 활성화 순서:
+실제 저장 활성화·재적용 절차:
 
-1. `/Users/bigmac_moon/dev/moonlight_pro/apps/hub/.env.local`의 `SUPABASE_ACCESS_TOKEN`을 유효한 관리 토큰으로 갱신한다. 값은 채팅이나 문서에 기록하지 않는다.
+1. 관리 API로 실행할 때는 `/Users/bigmac_moon/dev/moonlight_pro/apps/hub/.env.local`의 `SUPABASE_ACCESS_TOKEN`에 유효한 관리 토큰이 필요하다. SQL Editor로 실행할 때는 로그인된 프로젝트 세션을 사용한다. 토큰 값은 채팅이나 문서에 기록하지 않는다.
 2. 저장소 루트에서 아래 한 파일을 적용한다. 기존 `db:migrate` 기본 목록과 `apply-pending.sql`에는 이 새 파일이 들어 있지 않으므로 파일명을 명시한다. Supabase SQL Editor에서 해당 SQL 파일 전체를 실행해도 같다.
 
 ```sh
@@ -121,4 +121,13 @@ node scripts/apply-migrations.mjs 20260912_0025_daily_review_journal.sql
 
 통합 상태 검증: build 통과. 전체 테스트는 751개 중 750개 통과, 기존 미커밋 `celebration-fx.test.mjs` 1개가 Node의 `.jsx` 직접 import 미지원(ERR_UNKNOWN_FILE_EXTENSION)으로 실패했다. 해당 파일은 이번 변경 전부터 있었고 내용을 변경하지 않았다. 하루 리뷰 전용 브랜치의 전체 749개는 모두 통과했으며 통합 후 대상 83개도 모두 통과했다. 이 별도 작업의 테스트 실패를 하루 리뷰 테스트 성공으로 감추지 않는다.
 
-운영 DB에는 마이그레이션을 적용하지 않았다. 관리 인증 갱신과 §4의 적용 절차가 남아 있다.
+최초 통합 시 운영 DB는 미적용이었다. 2026-09-13 후속 적용과 검증 결과는 §6을 따른다.
+
+## 6. 운영 저장소 활성화 (2026-09-13)
+
+- 운영자 로그인 후 `rwqefdxalmbrkybxqwxj` 프로젝트의 SQL Editor에서 `20260912_0025_daily_review_journal.sql` 전체를 실행했다. 편집기 내용이 프로젝트 파일과 일치함을 확인했고, 실행 결과는 `Success. No rows returned`였다. 기존 관리 토큰은 변경하지 않았다.
+- 실제 REST에서 journal·receipt 두 테이블의 읽기와 service_role RPC 호출이 HTTP 200을 반환했다. RLS 활성화 및 RPC의 service_role 전용 실행 권한을 확인했다.
+- 운영 DB의 롤백 트랜잭션에서 신규 저장, revision 수정, 진척 0 보존, 같은 요청 재시도의 최신 revision 반환, 오래된 revision 충돌을 검증했다. 롤백 뒤 검증 날짜의 journal·receipt가 모두 없는 것을 확인했다.
+- `GET /api/hub/daily-review`: HTTP 200, `status:live`, `configured:true`, `timezone:Asia/Seoul`, 2026-09 기록 0건. 실제 팝업에서 저장소 연결, 에너지 선택 시 저장 활성화, 선택 해제 시 빈 입력 상태 복귀를 확인했다. 개인 리뷰는 저장하지 않았다.
+- 연결 검증 중 대시보드 전체를 막던 `rhythm-visualizer.jsx`의 SVG 컨테이너 닫는 태그 한 줄 누락을 수정했다. 실제 페이지와 API의 500 오류가 해소됐다.
+- 하루 리뷰 관련 Node·임시 PostgreSQL 테스트 48개 통과(실패·skip 0). 실제 사용자 답변의 UI 저장·재열기는 첫 실사용 때 확인한다. 배포 작업은 수행하지 않았다.

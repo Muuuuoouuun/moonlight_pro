@@ -42,7 +42,7 @@
 - `scripts/qa-daily-review-popup.cjs`: 실제 페이지에 API fixture를 주입하여 입력·저장·수정·0/미설정·재시도·충돌의 두 선택·닫기 복구·날짜별 복구·지연 응답·모션·키보드·390/320px 화면을 검증했다. 운영 DB 쓰기는 하지 않는다.
 - 독립 코드 리뷰에서 저장 중, 로딩 중, 충돌 기록 사용, 재조회 시 포커스 이탈을 찾아 수정했다. 리뷰어가 네 경로의 Tab/Shift+Tab 유지 확인을 마쳤다.
 - 430px 높이에서 내부 스크롤과 저장 버튼을 확인했다. 실제 휴대폰 소프트웨어 키보드는 검증하지 않았다.
-- 운영 DB migration은 기존 관리 토큰 인증 문제로 아직 미적용이다. 이번 변경은 그 상태를 성공 저장으로 표시하지 않는다.
+- 최초 UI 검증 당시 운영 DB migration은 관리 토큰 인증 문제로 미적용이었다. 2026-09-13 로그인된 SQL Editor에서 후속 적용을 완료했다([운영 저장소 검증](2026-09-12-daily-review-r0.md#6-운영-저장소-활성화-2026-09-13)).
 
 재실행: Hub dev 서버를 시작하고 `PLAYWRIGHT_MODULE=<Playwright module path> HUB_QA_URL=http://localhost:<port>/dashboard/work/daily-review node scripts/qa-daily-review-popup.cjs`.
 
@@ -50,6 +50,6 @@
 
 - `2609_win`에 `28f0805`로 반영했다. 공유 primitive의 다른 세션 Progress·Checkbox 수정은 그대로 보존했다.
 - 통합 작업 폴더의 `npm test`: 820개 중 817 통과, 3 skip, 0 실패. 별도 build 경로로 Hub production build 통과.
-- 통합 화면의 전체 브라우저 fixture 회귀도 통과했다. 실제 API에서는 읽기 오류와 비활성 저장 버튼을 확인했으며 운영 DB에 쓰지 않았다.
+- 통합 화면의 전체 브라우저 fixture 회귀도 통과했다. 최초 통합 시 실제 API는 읽기 오류와 비활성 저장 버튼을 표시했다. 2026-09-13 DB 적용 후 `status:live`와 팝업 저장 활성화를 확인했다. 저장 함수 검증은 롤백했으며 개인 기록을 남기지 않았다.
 - 기본 side Drawer는 프로젝트의 새 컨테이너 화면에서 우측 380px·전체 높이·ESC 닫기를 확인했다.
 - 임시 preview 서버와 worktree를 정리했다. 작업 브랜치 `codex/daily-review-popup-20260912`는 보관하고, 실제 작업 폴더의 개발 서버는 localhost:3000에서 실행 중이다.
