@@ -202,6 +202,49 @@ test("PATCH requests a representation and returns the persisted project row", as
   }
 });
 
+test("created tasks return the persisted version for an immediate locked update", async (t) => {
+  const environment = {
+    COM_MOON_SHARED_WEBHOOK_SECRET: "pms-test-shared-secret",
+    COM_MOON_DEFAULT_WORKSPACE_ID: "33333333-3333-4333-8333-333333333333",
+    SUPABASE_URL: "https://supabase.test",
+    SUPABASE_SERVICE_ROLE_KEY: "service-role-test-key",
+  };
+  const previous = Object.fromEntries(Object.keys(environment).map(key => [key, process.env[key]]));
+  Object.assign(process.env, environment);
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  const id = "11111111-1111-4111-8111-111111111111";
+  const version = "2026-09-13T01:00:00.123456Z";
+  let lockedUpdate = false;
+  t.mock.method(globalThis, "fetch", async (url, init = {}) => {
+    const target = new URL(url);
+    if (target.pathname.endsWith("/workspaces")) return Response.json([{ owner_id: null }]);
+    assert.ok(target.pathname.endsWith("/tasks"));
+    assert.equal(init.headers.prefer, "return=representation");
+    if (init.method === "PATCH") {
+      assert.equal(target.searchParams.get("updated_at"), `eq.${version}`);
+      lockedUpdate = true;
+    }
+    return Response.json([{ ...JSON.parse(init.body), id, updated_at: version }]);
+  });
+  const request = body => new Request("http://engine.local/api/pms/command", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-com-moon-shared-secret": environment.COM_MOON_SHARED_WEBHOOK_SECRET },
+    body: JSON.stringify(body),
+  });
+  const created = await pmsRoute.POST(request({ action: "create_task", id, title: "바로 실행할 일" }));
+  assert.equal(created.status, 201);
+  const { entity } = await created.json();
+  assert.equal(entity.updated_at, version);
+  const changed = await pmsRoute.POST(request({ action: "update_task", id, status: "doing", expectedUpdatedAt: entity.updated_at }));
+  assert.equal(changed.status, 200);
+  assert.equal(lockedUpdate, true);
+});
+
 test("keeps missing Supabase configuration in the existing HTTP 202 taxonomy during relationship validation", async () => {
   const previous = {
     secret: process.env.COM_MOON_SHARED_WEBHOOK_SECRET,

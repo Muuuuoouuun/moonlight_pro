@@ -228,7 +228,7 @@ export async function executePmsCommand(
     return {
       status: "saved",
       action: command.action,
-      entity: command.record,
+      entity: persistence.record || command.record,
     };
   }
 

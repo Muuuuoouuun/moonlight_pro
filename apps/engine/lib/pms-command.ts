@@ -208,6 +208,14 @@ export function normalizePmsCommand(
     const id = uuid(input.id);
     if (!id) return { ok: false, reason: "invalid-id" };
 
+    const filters: Array<[string, string]> = [["id", `eq.${id}`], ["workspace_id", `eq.${workspaceId}`]];
+    if (has(input, "expectedUpdatedAt") || has(input, "expected_updated_at")) {
+      const expected = text(input.expectedUpdatedAt ?? input.expected_updated_at, 100);
+      if (!dateTime(expected).ok || !expected) return { ok: false, reason: "invalid-expected-updated-at" };
+      // Preserve PostgreSQL microseconds exactly, as in the project write contract.
+      filters.push(["updated_at", `eq.${expected}`]);
+    }
+
     // Partial patch (same has()-gated shape as update_project below) — the existing
     // status-only completion path (Today board, checkbox toggle) keeps sending just
     // {id, status} and gets exactly the same {status, completed_at, updated_at} patch as
@@ -242,6 +250,9 @@ export function normalizePmsCommand(
     if (has(input, "description")) {
       patch.description = nullableText(input.description, 4000);
     }
+    if (has(input, "nextAction") || has(input, "next_action")) {
+      patch.next_action = nullableText(input.nextAction ?? input.next_action, 1000);
+    }
 
     if (Object.keys(patch).length === 0) return { ok: false, reason: "empty-patch" };
     patch.updated_at = now.value;
@@ -250,10 +261,7 @@ export function normalizePmsCommand(
       ok: true,
       action,
       table: "tasks",
-      filters: [
-        ["id", `eq.${id}`],
-        ["workspace_id", `eq.${workspaceId}`],
-      ],
+      filters,
       patch,
     };
   }

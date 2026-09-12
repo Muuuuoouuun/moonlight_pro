@@ -63,9 +63,11 @@ export function ProjectDetailPanel({
   orderPending = false,
   orderResult = null,
   pendingTodoIds = new Set(),
+  taskPartial = false,
   onClose,
   onEdit,
   onToggleTodo,
+  onEditTodo,
   onCreateTodo,
   onOpen,
   onSendOrder,
@@ -142,7 +144,7 @@ export function ProjectDetailPanel({
         </div>
         <div>
           <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)", marginBottom: 8 }}>
-            체크리스트 · {doneCount}/{todos.length}
+            체크리스트 · {doneCount}/{todos.length}{taskPartial ? ' · 확인된 범위' : ''}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {todos.map((todo) => (
@@ -154,7 +156,10 @@ export function ProjectDetailPanel({
                   size={16}
                   label={`${todo.done ? "다시 열기" : "완료"}: ${todo.title}`}
                 />
-                <span style={{ flex: 1, fontSize: 12, textDecoration: todo.done ? "line-through" : "none", color: todo.done ? "var(--fg-faint)" : "var(--fg)" }}>{todo.title}</span>
+                <button className="hub-pms-task-main" style={{ flex: 1 }} onClick={() => onEditTodo?.(todo)}>
+                  <span style={{ fontSize: 12, textDecoration: todo.done ? "line-through" : "none", color: todo.done ? "var(--fg-faint)" : "var(--fg)" }}>{todo.title}</span>
+                  {todo.nextAction && <span className="hub-pms-task-next">{todo.nextAction}</span>}
+                </button>
                 <span className="mono" style={{ fontSize: 12, color: "var(--fg-muted)" }}>{todo.due}</span>
               </div>
             ))}
@@ -188,7 +193,7 @@ export function ProjectDetailPanel({
         </div>
         <div style={{ padding: 12, display: "flex", alignItems: "center", gap: 6 }}>
           <Button variant="outline" size="sm" onClick={() => onEdit?.(project)}>편집</Button>
-          <Button variant="primary" size="sm" icon="chat" style={{ flex: 1 }} onClick={() => onOpen?.(project)}>열기</Button>
+          <Button variant="primary" size="sm" icon="tasks" style={{ flex: 1 }} onClick={() => onOpen?.(project)}>작업 관리</Button>
           <Button variant="outline" size="sm" icon="orders" onClick={() => onSendOrder?.(project)}>{orderPending ? "Sending…" : "주문 보내기"}</Button>
           {orderResult && !orderPending && <span role={orderResult.tone === "ok" ? "status" : "alert"} className="mono" style={{ fontSize: 10.5, color: orderResult.tone === "ok" ? "var(--fg-muted)" : "var(--danger)", whiteSpace: "nowrap" }}>{orderResult.label}</span>}
         </div>

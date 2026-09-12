@@ -62,6 +62,19 @@ globalThis.__operatingLedgerTestState = {
 
 const operatingLedger = await import("./operating-ledger.js?operating-ledger-test");
 
+test('tasks expose next action and their brandless project workspace on read-back', async () => {
+  const state = globalThis.__operatingLedgerTestState;
+  state.rows = {
+    brands: [],
+    projects: [{ id: 'project-company', status: 'active', name: '도입', meta: { org_scope: 'classin' } }],
+    tasks: [{ id: 'task-company', project_id: 'project-company', title: '자료', status: 'blocked', next_action: '고객에게 확인', updated_at: '2026-09-13T01:00:00.123456Z' }],
+  };
+  state.counts.tasks = 1;
+  const result = await operatingLedger.getTaskLedger();
+  assert.equal(result.todos[0].workspace, 'classin');
+  assert.equal(result.todos[0].nextAction, '고객에게 확인');
+});
+
 beforeEach(() => {
   globalThis.__operatingLedgerTestState.rowQueues = {};
 });

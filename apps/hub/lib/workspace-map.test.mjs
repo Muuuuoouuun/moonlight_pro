@@ -5,11 +5,19 @@ import {
   filterDealsByWorkspace,
   filterLeadsByWorkspace,
   filterProjectsByWorkspace,
+  filterTodosByWorkspace,
 } from "../components/hub/workspace-map.js";
 
 const brands = [
   { key: "classmoon", orgScope: "classin" },
 ];
+
+test('task workspace inherited from a project is authoritative over brand and title', () => {
+  const companyTask = { id: 'task-company', workspace: 'classin', brand: 'all', title: '자료 정리' };
+  const personalTask = { id: 'task-personal', workspace: 'brand', brand: 'classmoon', title: 'ClassIn 광고 참고' };
+  assert.deepEqual(filterTodosByWorkspace([companyTask, personalTask], 'classin', brands), [companyTask]);
+  assert.deepEqual(filterTodosByWorkspace([companyTask, personalTask], 'brand', brands), [personalTask]);
+});
 
 test("explicit brand project workspace cannot leak into classin through brand or keyword fallback", () => {
   const project = {

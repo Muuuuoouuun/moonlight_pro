@@ -15,6 +15,7 @@ import {
   mapProjectAreas,
   mapProjectRows,
   mergeProjectRelationRows,
+  resolveProjectOrgScope,
 } from "./project-ledger-context.js";
 
 const BRAND_GLYPHS = ["◐", "◇", "✦", "◆", "●", "□", "△", "◎", "◌", "✧"];
@@ -298,13 +299,18 @@ function mapTodos(rows, projectById, brandById) {
   return rows.map((row) => {
     const project = row.project_id && projectById.get(row.project_id);
     const brand = project?.brand_id && brandById.get(project.brand_id);
+    const orgScope = project ? resolveProjectOrgScope(project, brand && {
+      orgScope: brand.orgScope || resolveBrandOrgScope(brand.slug || brand.id, brand.meta),
+    }) : null;
 
     return {
       id: row.id,
       brand: brand?.slug || "all",
       project: row.project_id || "",
+      ...(orgScope ? { workspace: orgScope === "classin" ? "classin" : "brand" } : {}),
       title: row.title,
       description: row.description || "",
+      nextAction: row.next_action || "",
       status: row.status || "inbox",
       due: formatShortDate(row.due_at),
       dueAt: row.due_at || "",

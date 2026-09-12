@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     : null;
   const ownerId = typeof ownerRows?.[0]?.owner_id === "string" ? ownerRows[0].owner_id : null;
   const result = await executePmsCommand(body, { workspaceId, ownerId }, {
-    insert: insertSupabaseRecord,
+    insert: (table, record) => insertSupabaseRecord(table, record, { returnRepresentation: true }),
     update: (table, filters, patch) => updateSupabaseRecord(
       table,
       filters,

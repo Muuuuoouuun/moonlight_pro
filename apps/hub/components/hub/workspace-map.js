@@ -155,12 +155,11 @@ export function filterProjectsByWorkspace(projects, ws, brands) {
 export function filterTodosByWorkspace(todos, ws, brands) {
   const w = getWorkspace(ws);
   if (!w || !Array.isArray(todos)) return todos || [];
-  return todos.filter(
-    (t) =>
-      t.workspace === ws ||
-      scopeMatchesWorkspace(resolveOrgScopeForKey(t.brand, brands), ws) ||
-      matchAccountKeyword(t.title || t.name, w.accountKeywords),
-  );
+  return todos.filter((t) => {
+    if (isWorkspace(t.workspace)) return t.workspace === ws;
+    return scopeMatchesWorkspace(resolveOrgScopeForKey(t.brand, brands), ws)
+      || matchAccountKeyword(t.title || t.name, w.accountKeywords);
+  });
 }
 
 export function filterDealsByWorkspace(deals, ws) {
