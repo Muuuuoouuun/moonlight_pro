@@ -250,8 +250,18 @@ export async function fetchSupabaseRowsDetailed(table, options = {}) {
     };
   }
 
+  const rows = parseRows(result.text);
+  if (options.strictRows && rows === null) {
+    return {
+      rows: null,
+      count: null,
+      configured: true,
+      error: { reason: "invalid-rows", status: result.status, detail: "Expected a JSON array." },
+    };
+  }
+
   return {
-    rows: parseRows(result.text) ?? [],
+    rows: rows ?? [],
     count: withCount ? extractCount(result.contentRange) : null,
     configured: true,
     error: null,
