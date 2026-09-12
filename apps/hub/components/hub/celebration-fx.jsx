@@ -24,9 +24,28 @@ const SPARKLE_COLORS = [
   "#ffffff",
 ];
 
+// Throttle timestamp for major celebration bursts
+let lastMajorCelebrationTime = 0;
+
 // Helper to trigger celebration globally from any event handler or async callback
 export function triggerCelebration({ mode = "confetti", origin, count } = {}) {
   if (typeof window === "undefined") return;
+  const now = Date.now();
+  // 600ms throttle for fireworks bursts
+  if (mode === "fireworks" && now - lastMajorCelebrationTime < 600) {
+    return;
+  }
+  if (mode === "fireworks") {
+    lastMajorCelebrationTime = now;
+  }
+
+  // Mobile haptic feedback
+  try {
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      navigator.vibrate([20, 40, 20]);
+    }
+  } catch (_) {}
+
   // If reduced motion is preferred, dispatch event with reduced flag
   const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   window.dispatchEvent(
@@ -41,6 +60,14 @@ export function triggerSparkleAt(x, y, count = 18) {
   if (typeof window === "undefined" || x == null || y == null) return;
   const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   if (reduced) return;
+
+  // Mobile haptic feedback for micro sparkle
+  try {
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      navigator.vibrate(12);
+    }
+  } catch (_) {}
+
   window.dispatchEvent(
     new CustomEvent("hub-celebrate", {
       detail: { mode: "sparkle", origin: { x, y, isPixel: true }, count },
@@ -54,9 +81,20 @@ export function useCelebration() {
   return { celebrate, sparkle };
 }
 
+// Maximum concurrent particles to ensure stable 60-120 FPS
+const MAX_PARTICLES = 200;
+
+// Particle object pools to prevent garbage collection pauses
+const confettiPool = [];
+const sparklePool = [];
+
 // Particle shape classes
 class ConfettiParticle {
-  constructor(x, y, vx, vy, color) {
+  constructor(x = 0, y = 0, vx = 0, vy = 0, color = "#8ca8d8") {
+    this.init(x, y, vx, vy, color);
+  }
+
+  init(x, y, vx, vy, color) {
     this.x = x;
     this.y = y;
     this.vx = vx;
@@ -74,9 +112,12 @@ class ConfettiParticle {
     this.opacity = 1;
     this.fade = Math.random() * 0.012 + 0.008;
     this.isStar = Math.random() < 0.25;
+    this.active = true;
+    return this;
   }
 
   update() {
+    if (!this.active) return false;
     this.vx *= this.drag;
     this.vy *= this.drag;
     this.vy += this.gravity;
@@ -85,11 +126,16 @@ class ConfettiParticle {
     this.rotation += this.rotationSpeed;
     this.wobble += this.wobbleSpeed;
     this.opacity -= this.fade;
-    return this.opacity > 0 && this.y < window.innerHeight + 50;
+    const boundary = typeof window !== "undefined" ? window.innerHeight + 50 : 1200;
+    if (this.opacity <= 0 || this.y >= boundary) {
+      this.active = false;
+      return false;
+    }
+    return true;
   }
 
   draw(ctx) {
-    if (this.opacity <= 0) return;
+    if (!this.active || this.opacity <= 0) return;
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate((this.rotation * Math.PI) / 180);
@@ -107,7 +153,11 @@ class ConfettiParticle {
 }
 
 class SparkleParticle {
-  constructor(x, y, vx, vy, color) {
+  constructor(x = 0, y = 0, vx = 0, vy = 0, color = "#ffd166") {
+    this.init(x, y, vx, vy, color);
+  }
+
+  init(x, y, vx, vy, color) {
     this.x = x;
     this.y = y;
     this.vx = vx;
@@ -121,9 +171,12 @@ class SparkleParticle {
     this.maxLife = Math.random() * 25 + 25; // 25-50 frames (~500-800ms)
     this.rotation = Math.random() * 360;
     this.rotSpeed = (Math.random() - 0.5) * 8;
+    this.active = true;
+    return this;
   }
 
   update() {
+    if (!this.active) return false;
     this.life += 1;
     this.x += this.vx;
     this.y += this.vy;
@@ -138,11 +191,15 @@ class SparkleParticle {
       this.currentSize = (1 - (progress - 0.3) / 0.7) * this.maxSize;
     }
     this.opacity = 1 - progress;
-    return progress < 1;
+    if (progress >= 1 || this.opacity <= 0) {
+      this.active = false;
+      return false;
+    }
+    return true;
   }
 
   draw(ctx) {
-    if (this.opacity <= 0 || this.currentSize <= 0) return;
+    if (!this.active || this.opacity <= 0 || this.currentSize <= 0) return;
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate((this.rotation * Math.PI) / 180);
@@ -155,10 +212,34 @@ class SparkleParticle {
   }
 }
 
+function acquireConfetti(x, y, vx, vy, color) {
+  const p = confettiPool.length > 0 ? confettiPool.pop() : new ConfettiParticle();
+  return p.init(x, y, vx, vy, color);
+}
+
+function releaseConfetti(p) {
+  p.active = false;
+  if (confettiPool.length < 150) {
+    confettiPool.push(p);
+  }
+}
+
+function acquireSparkle(x, y, vx, vy, color) {
+  const p = sparklePool.length > 0 ? sparklePool.pop() : new SparkleParticle();
+  return p.init(x, y, vx, vy, color);
+}
+
+function releaseSparkle(p) {
+  p.active = false;
+  if (sparklePool.length < 150) {
+    sparklePool.push(p);
+  }
+}
+
 class FireworkRocket {
   constructor(startX, targetY, color) {
     this.x = startX;
-    this.y = window.innerHeight;
+    this.y = typeof window !== "undefined" ? window.innerHeight : 800;
     this.targetY = targetY;
     this.vy = -(Math.random() * 4 + 11);
     this.vx = (Math.random() - 0.5) * 2.5;
@@ -224,6 +305,16 @@ export function CelebrationCanvas() {
   const particlesRef = React.useRef([]);
   const rocketsRef = React.useRef([]);
   const animFrameRef = React.useRef(null);
+  const [liveAnnouncement, setLiveAnnouncement] = React.useState("");
+
+  const addParticle = React.useCallback((p) => {
+    if (particlesRef.current.length >= MAX_PARTICLES) {
+      const oldest = particlesRef.current.shift();
+      if (oldest instanceof ConfettiParticle) releaseConfetti(oldest);
+      else if (oldest instanceof SparkleParticle) releaseSparkle(oldest);
+    }
+    particlesRef.current.push(p);
+  }, []);
 
   const startLoop = React.useCallback(() => {
     if (animFrameRef.current) return;
@@ -250,7 +341,7 @@ export function CelebrationCanvas() {
           survivingRockets.push(rocket);
         } else if (rocket.exploded) {
           // Explode rocket into sparkles and confetti
-          const count = Math.floor(Math.random() * 20 + 35);
+          const count = Math.floor(Math.random() * 16 + 24);
           for (let i = 0; i < count; i += 1) {
             const angle = Math.random() * Math.PI * 2;
             const speed = Math.random() * 5 + 1.5;
@@ -258,9 +349,9 @@ export function CelebrationCanvas() {
             const vy = Math.sin(angle) * speed;
             const color = CELEBRATION_COLORS[Math.floor(Math.random() * CELEBRATION_COLORS.length)];
             if (Math.random() < 0.5) {
-              particlesRef.current.push(new SparkleParticle(rocket.x, rocket.y, vx, vy, color));
+              addParticle(acquireSparkle(rocket.x, rocket.y, vx, vy, color));
             } else {
-              particlesRef.current.push(new ConfettiParticle(rocket.x, rocket.y, vx, vy, color));
+              addParticle(acquireConfetti(rocket.x, rocket.y, vx, vy, color));
             }
           }
         }
@@ -273,6 +364,9 @@ export function CelebrationCanvas() {
         if (p.update()) {
           p.draw(ctx);
           survivingParticles.push(p);
+        } else {
+          if (p instanceof ConfettiParticle) releaseConfetti(p);
+          else if (p instanceof SparkleParticle) releaseSparkle(p);
         }
       });
       particlesRef.current = survivingParticles;
@@ -287,11 +381,11 @@ export function CelebrationCanvas() {
     };
 
     animFrameRef.current = requestAnimationFrame(tick);
-  }, []);
+  }, [addParticle]);
 
   const spawnConfetti = React.useCallback((origin, count = 70) => {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+    const w = typeof window !== "undefined" ? window.innerWidth : 1200;
+    const h = typeof window !== "undefined" ? window.innerHeight : 800;
     const origins = origin
       ? [origin.isPixel ? origin : { x: origin.x * w, y: origin.y * h }]
       : [
@@ -309,16 +403,18 @@ export function CelebrationCanvas() {
         const vx = Math.cos(angle) * speed;
         const vy = Math.sin(angle) * speed;
         const color = CELEBRATION_COLORS[Math.floor(Math.random() * CELEBRATION_COLORS.length)];
-        particlesRef.current.push(new ConfettiParticle(org.x, org.y, vx, vy, color));
+        addParticle(acquireConfetti(org.x, org.y, vx, vy, color));
       }
     });
 
     startLoop();
-  }, [startLoop]);
+  }, [addParticle, startLoop]);
 
   const spawnSparkles = React.useCallback((origin, count = 18) => {
-    const ox = origin?.isPixel ? origin.x : (origin?.x || 0.5) * window.innerWidth;
-    const oy = origin?.isPixel ? origin.y : (origin?.y || 0.5) * window.innerHeight;
+    const w = typeof window !== "undefined" ? window.innerWidth : 1200;
+    const h = typeof window !== "undefined" ? window.innerHeight : 800;
+    const ox = origin?.isPixel ? origin.x : (origin?.x || 0.5) * w;
+    const oy = origin?.isPixel ? origin.y : (origin?.y || 0.5) * h;
 
     for (let i = 0; i < count; i += 1) {
       const angle = Math.random() * Math.PI * 2;
@@ -326,15 +422,15 @@ export function CelebrationCanvas() {
       const vx = Math.cos(angle) * speed;
       const vy = Math.sin(angle) * speed;
       const color = SPARKLE_COLORS[Math.floor(Math.random() * SPARKLE_COLORS.length)];
-      particlesRef.current.push(new SparkleParticle(ox, oy, vx, vy, color));
+      addParticle(acquireSparkle(ox, oy, vx, vy, color));
     }
 
     startLoop();
-  }, [startLoop]);
+  }, [addParticle, startLoop]);
 
   const spawnFireworks = React.useCallback((count = 4) => {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+    const w = typeof window !== "undefined" ? window.innerWidth : 1200;
+    const h = typeof window !== "undefined" ? window.innerHeight : 800;
     const numRockets = Math.min(6, Math.max(3, count));
 
     for (let i = 0; i < numRockets; i += 1) {
@@ -359,8 +455,10 @@ export function CelebrationCanvas() {
       } else if (mode === "fireworks") {
         spawnFireworks(count || 4);
         spawnConfetti(null, 40);
+        setLiveAnnouncement("축하합니다! 모든 목표와 작업이 완벽하게 완료되었습니다.");
       } else {
         spawnConfetti(origin, count || 70);
+        setLiveAnnouncement("축하합니다! 목표를 성공적으로 달성했습니다.");
       }
     };
 
@@ -370,6 +468,15 @@ export function CelebrationCanvas() {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
   }, [spawnConfetti, spawnSparkles, spawnFireworks]);
+
+  // Clear live announcement after 3 seconds
+  React.useEffect(() => {
+    if (!liveAnnouncement) return;
+    const timer = setTimeout(() => {
+      setLiveAnnouncement("");
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [liveAnnouncement]);
 
   // Setup canvas resolution on mount & resize
   React.useEffect(() => {
@@ -389,18 +496,38 @@ export function CelebrationCanvas() {
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="hub-celebration-canvas"
-      aria-hidden="true"
-      style={{
-        position: "fixed",
-        inset: 0,
-        width: "100%",
-        height: "100%",
-        pointerEvents: "none",
-        zIndex: 2000,
-      }}
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        className="hub-celebration-canvas"
+        aria-hidden="true"
+        style={{
+          position: "fixed",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          pointerEvents: "none",
+          zIndex: 2000,
+        }}
+      />
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+        style={{
+          position: "absolute",
+          width: 1,
+          height: 1,
+          padding: 0,
+          margin: -1,
+          overflow: "hidden",
+          clip: "rect(0, 0, 0, 0)",
+          whiteSpace: "nowrap",
+          border: 0,
+        }}
+      >
+        {liveAnnouncement}
+      </div>
+    </>
   );
 }

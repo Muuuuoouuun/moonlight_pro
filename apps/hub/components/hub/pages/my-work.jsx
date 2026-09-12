@@ -211,13 +211,56 @@ function useAttentionLedger() {
 // strikethrough flash before a task leaves the list (undo window handled by the caller).
 // `selected` marks the row whose detail panel is open. `hideProject` suppresses the
 // project label inside a project accordion (the header already names it).
-function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showReason, hideProject, justAdded }) {
+function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showReason, hideProject, justAdded, onDefer }) {
   // 우선순위 정렬일 때는 meta 자리에 정렬 근거(reason)를 보여준다 — 첫 화면 요구사항
   // "지금 해야 하는 이유"(profile §4)를 행 높이 증가 없이 전달.
   const projectLabel = !hideProject && item.lane === 'task' ? item.projectName || '' : '';
   const metaText = showReason && item.priorityReason
     ? item.priorityReason
     : [projectLabel, item.meta].filter(Boolean).join(' · ');
+
+  // Mobile swipe gesture: right > 55px to complete, left < -55px to defer
+  const touchStartRef = React.useRef({ x: 0, y: 0, time: 0 });
+  const [swipeOffset, setSwipeOffset] = React.useState(0);
+  const [swipeAction, setSwipeAction] = React.useState(null);
+
+  const handleTouchStart = (e) => {
+    if (item.lane !== 'task') return;
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now() };
+    setSwipeOffset(0);
+    setSwipeAction(null);
+  };
+
+  const handleTouchMove = (e) => {
+    if (item.lane !== 'task') return;
+    const t = e.touches[0];
+    const dx = t.clientX - touchStartRef.current.x;
+    const dy = t.clientY - touchStartRef.current.y;
+    // If vertical scrolling is dominant, ignore swipe
+    if (Math.abs(dy) > Math.abs(dx) && Math.abs(dx) < 24) return;
+
+    // Damped offset
+    const damped = Math.sign(dx) * Math.min(84, Math.abs(dx) * 0.7);
+    setSwipeOffset(damped);
+    if (dx > 55) setSwipeAction('complete');
+    else if (dx < -55 && onDefer) setSwipeAction('defer');
+    else setSwipeAction(null);
+  };
+
+  const handleTouchEnd = () => {
+    if (item.lane !== 'task') return;
+    const currentOffset = swipeOffset;
+    setSwipeOffset(0);
+    setSwipeAction(null);
+
+    if (currentOffset > 50) {
+      onComplete(item);
+    } else if (currentOffset < -50 && onDefer) {
+      onDefer(item);
+    }
+  };
+
   return (
     <div
       ref={rowRef}
@@ -227,18 +270,30 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
       tabIndex={0}
       onClick={() => onOpen(item)}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(item); } }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: 'var(--pad-y) var(--pad-x)', minHeight: 'var(--row-h)',
         borderBottom: '1px solid var(--line-soft)',
         cursor: 'pointer',
-        // 방금 추가 하이라이트는 selected보다 우선; overdue/stalled의 semantic 좌측 스트라이프는
-        // 유지하고 그 외엔 moon 스트라이프로 표시. justAdded 해제 시 600ms로 fade.
-        background: justAdded ? 'var(--surface-3)' : selected ? 'var(--surface-2)' : undefined,
+        position: 'relative',
+        touchAction: 'pan-y',
+        transform: swipeOffset ? `translateX(${swipeOffset}px)` : undefined,
+        background: swipeAction === 'complete'
+          ? 'rgba(56, 239, 125, 0.08)'
+          : swipeAction === 'defer'
+          ? 'rgba(140, 168, 216, 0.08)'
+          : justAdded
+          ? 'var(--surface-3)'
+          : selected
+          ? 'var(--surface-2)'
+          : undefined,
         boxShadow: item.bucket === 'overdue' ? 'inset 1px 0 0 var(--danger)'
           : item.stalled ? 'inset 1px 0 0 var(--line-strong)'
             : justAdded ? 'inset 1px 0 0 var(--accent)' : undefined,
-        transition: 'background var(--dur-enter) ease, box-shadow var(--dur-enter) ease',
+        transition: swipeOffset ? 'none' : 'transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), background var(--dur-enter) ease, box-shadow var(--dur-enter) ease',
       }}
     >
       {item.lane === 'task' ? (
@@ -254,7 +309,17 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
       }}>
         {item.title}
       </span>
-      {metaText && (
+      {swipeAction === 'complete' && (
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--success)' }}>
+          ✓ 완료
+        </span>
+      )}
+      {swipeAction === 'defer' && (
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--moon-300)' }}>
+          ⏰ 미루기
+        </span>
+      )}
+      {metaText && !swipeAction && (
         // 폭 상한 + 말줄임 — 좁은 화면에서 meta가 제목(identity)을 짓누르지 않게 한다
         // (2026-07 design-review FINDING-001의 모바일 identity-first 원칙). ≤560px에서는
         // hub-tokens.css가 통째로 숨긴다: "견적 · ₩10K…"처럼 잘린 meta는 정보가치가 없고
@@ -566,8 +631,17 @@ export function MyWork({ onNavigate }) {
   const scheduleComplete = (item, event) => {
     if (item.lane !== 'task') return;
     const id = item.id;
-    if (event?.clientX != null && event?.clientY != null) {
+    if (event?.clientX != null && event?.clientY != null && (event.clientX !== 0 || event.clientY !== 0)) {
       triggerSparkleAt(event.clientX, event.clientY);
+    } else if (event?.target?.getBoundingClientRect) {
+      const rect = event.target.getBoundingClientRect();
+      triggerSparkleAt(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    } else if (typeof document !== 'undefined') {
+      const el = document.getElementById(`mywork-row-${id}`);
+      if (el?.getBoundingClientRect) {
+        const rect = el.getBoundingClientRect();
+        triggerSparkleAt(rect.left + 24, rect.top + rect.height / 2);
+      }
     }
     setCompletingIds((s) => new Set(s).add(id));
     setTimeout(() => {
@@ -667,6 +741,9 @@ export function MyWork({ onNavigate }) {
     [detailId, items, hiddenIds],
   );
   const deferTarget = nextDeferTarget();
+  const handleItemDefer = React.useCallback((it) => {
+    rescheduleTask(it, deferTarget.dueAt, `${deferTarget.label}로 미룸`);
+  }, [deferTarget, rescheduleTask]);
 
   // 방금 추가한 할 일 하이라이트를 2.6초 뒤 해제(ItemRow가 fade 처리). 스크롤은 여기서
   // 하지 않는다 — reload의 setData와 setJustAddedId가 서로 다른 렌더로 커밋돼서, 패시브
@@ -1184,6 +1261,7 @@ export function MyWork({ onNavigate }) {
                         key={row.item.id}
                         item={row.item}
                         onComplete={scheduleComplete}
+                        onDefer={handleItemDefer}
                         onOpen={openItem}
                         completing={completingIds.has(row.item.id)}
                         selected={detailId === row.item.id}
@@ -1231,6 +1309,7 @@ export function MyWork({ onNavigate }) {
                                 key={item.id}
                                 item={item}
                                 onComplete={scheduleComplete}
+                                onDefer={handleItemDefer}
                                 onOpen={openItem}
                                 completing={completingIds.has(item.id)}
                                 selected={detailId === item.id}
@@ -1276,6 +1355,7 @@ export function MyWork({ onNavigate }) {
                               key={item.id}
                               item={item}
                               onComplete={scheduleComplete}
+                              onDefer={handleItemDefer}
                               onOpen={openItem}
                               completing={completingIds.has(item.id)}
                               selected={detailId === item.id}
@@ -1298,6 +1378,7 @@ export function MyWork({ onNavigate }) {
                 key={item.id}
                 item={item}
                 onComplete={scheduleComplete}
+                onDefer={handleItemDefer}
                 onOpen={openItem}
                 completing={completingIds.has(item.id)}
                 selected={detailId === item.id}

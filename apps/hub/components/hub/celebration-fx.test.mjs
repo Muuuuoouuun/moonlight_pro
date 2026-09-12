@@ -17,6 +17,10 @@ const primitivesSource = await readFile(new URL("./hub-primitives.jsx", import.m
 const pmsComponentsSource = await readFile(new URL("./pages/project-pms-components.jsx", import.meta.url), "utf8");
 const tokensCss = await readFile(new URL("./hub-tokens.css", import.meta.url), "utf8");
 
+const revenueSource = await readFile(new URL("./pages/revenue.jsx", import.meta.url), "utf8");
+const overviewSource = await readFile(new URL("./pages/overview.jsx", import.meta.url), "utf8");
+const heatmapSource = await readFile(new URL("./pages/revenue-heatmap.jsx", import.meta.url), "utf8");
+
 test("celebration-fx exposes canonical celebration functions and React component", () => {
   assert.equal(typeof CelebrationCanvas, "function");
   assert.equal(typeof triggerCelebration, "function");
@@ -36,11 +40,48 @@ test("celebration-fx supports fireworks, confetti, and sparkles modes with reduc
   assert.match(celebrationSource, /hub-celebrate/);
 });
 
+test("celebration-fx implements particle pooling, throttling, haptic feedback, and a11y live region", () => {
+  assert.match(celebrationSource, /MAX_PARTICLES = 200/);
+  assert.match(celebrationSource, /const confettiPool = \[\]/);
+  assert.match(celebrationSource, /const sparklePool = \[\]/);
+  assert.match(celebrationSource, /navigator\.vibrate/);
+  assert.match(celebrationSource, /lastMajorCelebrationTime/);
+  assert.match(celebrationSource, /aria-live=["']polite["']/);
+  assert.match(celebrationSource, /className=["']sr-only["']/);
+});
+
 test("my-work triggers celebration fireworks on completing all tasks and provides celebratory empty state", () => {
   assert.match(myWorkSource, /import \{[^}]*triggerCelebration[^}]*\} from ["']\.\.\/celebration-fx["']/);
   assert.match(myWorkSource, /triggerCelebration\(\{\s*mode:\s*['"]fireworks['"]\s*\}\)/);
   assert.match(myWorkSource, /오늘의 모든 할 일 완료!/);
   assert.match(myWorkSource, /폭죽 다시 터뜨리기/);
+});
+
+test("my-work supports mobile swipe gestures (right complete, left defer) and DOM/keyboard sparkle lookup", () => {
+  assert.match(myWorkSource, /onTouchStart=\{handleTouchStart\}/);
+  assert.match(myWorkSource, /onTouchMove=\{handleTouchMove\}/);
+  assert.match(myWorkSource, /onTouchEnd=\{handleTouchEnd\}/);
+  assert.match(myWorkSource, /mywork-row-/);
+  assert.match(myWorkSource, /getBoundingClientRect/);
+  assert.match(myWorkSource, /onDefer=\{handleItemDefer\}/);
+});
+
+test("revenue triggers confetti celebration on moving deal to closing (won) stage", () => {
+  assert.match(revenueSource, /import \{[^}]*triggerCelebration[^}]*\} from ["']\.\.\/celebration-fx["']/);
+  assert.match(revenueSource, /to === ['"]closing['"] && prevStage !== ['"]closing['"]/);
+  assert.match(revenueSource, /triggerCelebration\(\{\s*mode:\s*['"]confetti['"]\s*\}\)/);
+});
+
+test("overview DonutChart radiates golden celebration glow when 100% completed", () => {
+  assert.match(overviewSource, /isAllCompleted\s*=\s*total > 0 && completedValue === total/);
+  assert.match(overviewSource, /drop-shadow\(0 0 10px rgba\(255, 209, 102, 0\.45\)\)/);
+  assert.match(overviewSource, /✦/);
+});
+
+test("revenue-heatmap highlights rank 01 top customer with champagne gold badge", () => {
+  assert.match(heatmapSource, /const isTop = rank === 1 && value > 0/);
+  assert.match(heatmapSource, /✦ Top/);
+  assert.match(heatmapSource, /hub-revenue-top-row/);
 });
 
 test("projects triggers celebration fireworks on project completion and confetti on subtasks completion", () => {
@@ -49,11 +90,13 @@ test("projects triggers celebration fireworks on project completion and confetti
   assert.match(projectsSource, /triggerCelebration\(\{\s*mode:\s*['"]confetti['"]\s*\}\)/);
 });
 
-test("Progress primitive applies completed and overachieved classes for >= 100% values", () => {
+test("Progress primitive applies completed, overachieved classes, role=progressbar, and detailed tooltip", () => {
   assert.match(primitivesSource, /const isCompleted = numValue >= 100/);
   assert.match(primitivesSource, /const isOverachieved = numValue > 100/);
   assert.match(primitivesSource, /hub-progress--completed/);
   assert.match(primitivesSource, /hub-progress--overachieved/);
+  assert.match(primitivesSource, /role=["']progressbar["']/);
+  assert.match(primitivesSource, /title=\{computedTitle\}/);
 });
 
 test("ProjectProgressGauge indicates 100% completion with celebration class and sparkle mark", () => {

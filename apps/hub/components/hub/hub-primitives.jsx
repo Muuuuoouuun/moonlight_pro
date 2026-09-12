@@ -218,7 +218,7 @@ export function Avatar({ name, size = 24, tone = 'moon' }) {
   );
 }
 
-export function Progress({ value = 0, tone = 'moon', height = 4, className = '', style }) {
+export function Progress({ value = 0, tone = 'moon', height = 4, className = '', style, title }) {
   const map = { moon: 'var(--moon-300)', success: 'var(--success)', warning: 'var(--warning)', danger: 'var(--danger)' };
   const numValue = Number.isFinite(value) ? value : 0;
   const isCompleted = numValue >= 100;
@@ -227,8 +227,20 @@ export function Progress({ value = 0, tone = 'moon', height = 4, className = '',
   const completedCls = isCompleted ? ' hub-progress--completed' : '';
   const overachievedCls = isOverachieved ? ' hub-progress--overachieved' : '';
 
+  const defaultTitle = isOverachieved
+    ? `${numValue}% (+${Math.round(numValue - 100)}% 초과 달성 ✦)`
+    : isCompleted
+    ? `${numValue}% (목표 100% 달성 ✦)`
+    : `${numValue}%`;
+  const computedTitle = title !== undefined ? title : defaultTitle;
+
   return (
     <div
+      role="progressbar"
+      aria-valuenow={numValue}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      title={computedTitle}
       className={`hub-progress-track${completedCls}${overachievedCls}${className ? ` ${className}` : ''}`}
       style={{ height, background: 'var(--surface-3)', borderRadius: 999, overflow: 'hidden', ...style }}
     >
