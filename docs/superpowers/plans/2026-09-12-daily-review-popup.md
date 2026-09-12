@@ -29,7 +29,7 @@
 - [x] pages/daily-review-composer.jsx에서 에너지·메모 기본, 진척 disclosure, 실패·충돌 복구·닫힘 모션 연결.
 - [x] 날짜 이동 및 편집, 부분 저장/duplicate/실패/충돌, 닫기와 다시 열기, 키보드/포커스, desktop·390px·320px·reduced-motion 검증.
 - [x] 관련 Node 테스트, 전체 회귀, build. 실제 DB 미적용 상태와 UI fixture 검증을 구분.
-- [ ] 변경 파일만 커밋하고 다른 세션의 원본 변경을 보존해 반영, 임시 worktree 정리.
+- [x] 변경 파일만 커밋하고 다른 세션의 원본 변경을 보존해 반영, 임시 worktree 정리.
 
 ## 검증 흐름
 
@@ -45,3 +45,11 @@
 - 운영 DB migration은 기존 관리 토큰 인증 문제로 아직 미적용이다. 이번 변경은 그 상태를 성공 저장으로 표시하지 않는다.
 
 재실행: Hub dev 서버를 시작하고 `PLAYWRIGHT_MODULE=<Playwright module path> HUB_QA_URL=http://localhost:<port>/dashboard/work/daily-review node scripts/qa-daily-review-popup.cjs`.
+
+## 통합 확인
+
+- `2609_win`에 `28f0805`로 반영했다. 공유 primitive의 다른 세션 Progress·Checkbox 수정은 그대로 보존했다.
+- 통합 작업 폴더의 `npm test`: 820개 중 817 통과, 3 skip, 0 실패. 별도 build 경로로 Hub production build 통과.
+- 통합 화면의 전체 브라우저 fixture 회귀도 통과했다. 실제 API에서는 읽기 오류와 비활성 저장 버튼을 확인했으며 운영 DB에 쓰지 않았다.
+- 기본 side Drawer는 프로젝트의 새 컨테이너 화면에서 우측 380px·전체 높이·ESC 닫기를 확인했다.
+- 임시 preview 서버와 worktree를 정리했다. 작업 브랜치 `codex/daily-review-popup-20260912`는 보관하고, 실제 작업 폴더의 개발 서버는 localhost:3000에서 실행 중이다.
