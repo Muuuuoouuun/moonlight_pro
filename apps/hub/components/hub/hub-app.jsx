@@ -68,6 +68,7 @@ const Roadmap = lazyPage(() => import("./pages/work").then(m => m.Roadmap));
 const Rhythm = lazyPage(() => import("./pages/work").then(m => m.Rhythm));
 const MyWork = lazyPage(() => import("./pages/my-work").then(m => m.MyWork));
 const Memos = lazyPage(() => import("./pages/memos").then(m => m.Memos));
+const Discovery = lazyPage(() => import("./pages/discovery").then(m => m.Discovery));
 const DailyReview = lazyPage(() => import("./pages/daily-review").then(m => m.DailyReview));
 const Projects = lazyPage(() => import("./pages/projects").then(m => m.Projects));
 const Brands = lazyPage(() => import("./pages/brands").then(m => m.Brands));
@@ -194,6 +195,7 @@ const PAGE_MAP = {
   'dashboard/overview': (n) => <Overview onNavigate={n} />,
   'dashboard/work/my': (n) => <MyWork onNavigate={n} />,
   'dashboard/work/memos': () => <Memos />,
+  'dashboard/discovery': () => <Discovery />,
   'dashboard/work/daily-review': () => <DailyReview />,
   'dashboard/work/calendar': (n) => <Calendar onNavigate={n} />,
   'dashboard/work/projects': () => <Projects />,
@@ -405,6 +407,7 @@ export function HubApp() {
   // 쿼리 소거)로 직행하고, 생성 대상이 없는 표면에서만 팔레트로 폴백한다(§8.1 생성).
   const createTargetForPath = React.useCallback((currentPath) => {
     const p = String(currentPath || '');
+    if (p.startsWith('dashboard/discovery')) return `dashboard/discovery?new=discovery${queryScope ? `&scope=${encodeURIComponent(queryScope)}` : ''}`;
     if (p.startsWith('dashboard/revenue/inquiries')) return 'dashboard/revenue/inquiries?new=inquiry';
     if (p.startsWith('dashboard/revenue/leads') || p.startsWith('dashboard/revenue/customers')) return 'dashboard/revenue/leads?new=lead';
     if (p.startsWith('dashboard/revenue/deals')) return 'dashboard/revenue/deals?new=deal';
@@ -415,7 +418,7 @@ export function HubApp() {
     if (p.startsWith('dashboard/work/rhythm')) return 'dashboard/work/rhythm?new=rhythm';
     if (p.startsWith('dashboard/content')) return 'dashboard/content/studio?new=draft';
     return null;
-  }, []);
+  }, [queryScope]);
 
   const createOnCurrentSurface = React.useCallback(() => {
     const target = createTargetForPath(path);

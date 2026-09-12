@@ -8,7 +8,7 @@
 // in both, so the operator had to answer "where does this live?" before
 // "what am I doing?".
 //
-// Eight primary + two utility anchors (SIDEBAR_PRIMARY / SIDEBAR_UTILITIES;
+// Nine primary + two utility anchors (SIDEBAR_PRIMARY / SIDEBAR_UTILITIES;
 // hub-nav.test.mjs pins both counts). Overview was added 2026-07-15 per direct
 // operator instruction; the anchor set is not a fixed contract and may change. Organizational context
 // moves into one scope control.
@@ -222,6 +222,11 @@ export const SIDEBAR_PRIMARY = [
       classin: 'dashboard/revenue/followups',
       personal: 'dashboard/revenue/followups',
     },
+  },
+  {
+    key: 'discovery', label: '기회 탐색', icon: 'search', scopeAware: true,
+    owns: ['dashboard/discovery'],
+    paths: { all: 'dashboard/discovery', classin: 'dashboard/discovery?scope=classin', personal: 'dashboard/discovery?scope=personal' },
   },
   {
     key: 'projects',

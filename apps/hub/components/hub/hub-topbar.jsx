@@ -83,7 +83,7 @@ export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSideba
           <Iconed name={theme === 'dark' ? 'moon' : 'sun'} size={13} />
         </button>
         <InquiryBell className="hub-topbar__secondary" state={inquiryNotifications} onNavigate={onNavigate} />
-        <Button className="hub-topbar__primary-action" variant="primary" size="sm" icon="plus" onClick={onNew}>New</Button>
+        {!path.startsWith('dashboard/discovery') && <Button className="hub-topbar__primary-action" variant="primary" size="sm" icon="plus" onClick={onNew}>New</Button>}
       </div>
 
       {navigation.tabs.length > 0 && (
