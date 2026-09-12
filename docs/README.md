@@ -96,6 +96,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **기획 초안 (미확정, 새 구현의 근거로 쓰지 않음)**
 
+- [`superpowers/specs/2026-09-13-revenue-and-cashflow-design.md`](superpowers/specs/2026-09-13-revenue-and-cashflow-design.md) — **초기 기능 범위 확정 · 상세 설계 권장안**. 사업·개인 재정의 통합/분할 보기, 계좌·카드, 할부·대출·반복 지출, 직접 입력·엑셀/CSV 가져오기와 매출 수금 연결. 구현 전이며 기존 거래 기반 30일 전망과 실제 현금 흐름을 구분한다.
+
 - [`superpowers/specs/2026-09-12-memo-writing-reuse-and-analysis-design.md`](superpowers/specs/2026-09-12-memo-writing-reuse-and-analysis-design.md) — **DRAFT · 권장안**. 빠른 메모·선택 보강 질문·문맥별 재발견·근거가 있는 묶음 분석·할 일/콘텐츠 적용·결과 피드백을 연결. 일반 메모와 하루 리뷰의 경계, 출처·중복·분석 범위와 단계별 완료 기준을 정리한다.
 - [`superpowers/specs/2026-09-12-unified-inquiries-email-webhook-design.md`](superpowers/specs/2026-09-12-unified-inquiries-email-webhook-design.md) — **APPROVED · 코드 구현(2026-09-13), 운영 연결 대기**. 메일·랜딩페이지 문의 원장, 감지·중복·읽음·처리 상태와 기존 알림 통합. [연결 가이드](inquiry-integration-setup.md), [Gmail 서명·수집](inquiry-gmail-setup.md), [구현·검증 기록](superpowers/plans/2026-09-13-unified-inquiries.md).
 - [`superpowers/specs/2026-09-03-sales-content-marketing-to-branding-growth-plan.md`](superpowers/specs/2026-09-03-sales-content-marketing-to-branding-growth-plan.md) — **DRAFT · 권장안**. 세일즈·콘텐츠·마케팅 → 브랜딩 프레임으로 현재 시스템의 강점·약점·보완점·새 베팅을 정리. 초안 크론 2개 고장(W19)과 첫 빌드 후보("오늘 연락할 리드")를 포함. 운영자 확정 전까지 권장.
