@@ -85,6 +85,10 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - [`superpowers/specs/2026-08-19-lead-subject-region-labels-design.md`](superpowers/specs/2026-08-19-lead-subject-region-labels-design.md) — 리드 과목·지역 라벨 설계(12키 고정 어휘·`label_source` 확정도·백필 게이트). 구현 계획은 [`superpowers/plans/2026-08-19-lead-subject-region-labels.md`](superpowers/plans/2026-08-19-lead-subject-region-labels.md).
 - [`superpowers/plans/2026-08-31-personal-revenue-roadmap.md`](superpowers/plans/2026-08-31-personal-revenue-roadmap.md) — 개인 스코프 30일 현금흐름 로드맵 구현 계획(`68517ec`로 출시). 디자인 QA 결과는 루트 [`design-qa.md`](../design-qa.md)(플랜이 지정한 경로)이며 `final result: blocked`.
 
+**하루 리뷰 (R0)**
+
+- [`superpowers/specs/2026-09-12-daily-review-and-council-design.md`](superpowers/specs/2026-09-12-daily-review-and-council-design.md) — **R0 승인·구현 / 후속 단계 DRAFT**. 내 작업 → 하루 리뷰에서 에너지·당일 목표 진척·메모를 날짜별 저장·수정한다. 실제 저장소 활성화는 DB 적용 대기. [구현·검증·적용 안내](superpowers/plans/2026-09-12-daily-review-r0.md). Council과 주간 리포트는 후속 제안이다.
+
 **기획 초안 (미확정, 새 구현의 근거로 쓰지 않음)**
 
 - [`superpowers/specs/2026-09-03-sales-content-marketing-to-branding-growth-plan.md`](superpowers/specs/2026-09-03-sales-content-marketing-to-branding-growth-plan.md) — **DRAFT · 권장안**. 세일즈·콘텐츠·마케팅 → 브랜딩 프레임으로 현재 시스템의 강점·약점·보완점·새 베팅을 정리. 초안 크론 2개 고장(W19)과 첫 빌드 후보("오늘 연락할 리드")를 포함. 운영자 확정 전까지 권장.

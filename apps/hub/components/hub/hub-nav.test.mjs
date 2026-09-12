@@ -129,13 +129,22 @@ test("every child resolves and is owned by its parent anchor in every scope", ()
 
 test("single-destination anchors render no sub-list", () => {
   for (const scope of SIDEBAR_SCOPES) {
-    for (const key of ["today", "tasks", "followups"]) {
+    for (const key of ["today", "followups"]) {
       assert.deepEqual(sidebarChildren(key, scope.key), [], `${key} in ${scope.key}`);
     }
   }
   // ClassIn 콘텐츠 is one surface — the anchor is the destination.
   assert.deepEqual(sidebarChildren("content", "classin"), []);
   assert.ok(sidebarChildren("content", "all").length > 1);
+});
+
+test("daily review stays under my work and opens the same personal record in every scope", () => {
+  for (const { key } of SIDEBAR_SCOPES) {
+    assert.deepEqual(sidebarChildren('tasks', key).map((child) => child.path), ['dashboard/work/my', 'dashboard/work/daily-review']);
+    assert.equal(ownerAnchorKey('dashboard/work/daily-review'), 'tasks');
+  }
+  assert.ok(NAV_TREE.some((node) => node.path === 'dashboard/work/daily-review'));
+  assert.match(appSource, /'dashboard\/work\/daily-review':.*<DailyReview/);
 });
 
 test("at most one child lights up for any route in any scope", () => {

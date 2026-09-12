@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
+import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
 
 import { Button } from "./hub-primitives";
 import { Sidebar } from "./hub-sidebar";
@@ -64,6 +65,7 @@ const Decisions = lazyPage(() => import("./pages/work").then(m => m.Decisions));
 const Roadmap = lazyPage(() => import("./pages/work").then(m => m.Roadmap));
 const Rhythm = lazyPage(() => import("./pages/work").then(m => m.Rhythm));
 const MyWork = lazyPage(() => import("./pages/my-work").then(m => m.MyWork));
+const DailyReview = lazyPage(() => import("./pages/daily-review").then(m => m.DailyReview));
 const Projects = lazyPage(() => import("./pages/projects").then(m => m.Projects));
 const Brands = lazyPage(() => import("./pages/brands").then(m => m.Brands));
 const BrandContentLog = lazyPage(() => import("./pages/brand-content-log").then(m => m.BrandContentLog));
@@ -187,6 +189,7 @@ const PAGE_MAP = {
   'dashboard/daily-brief': (n) => <DailyBrief onNavigate={n} />,
   'dashboard/overview': (n) => <Overview onNavigate={n} />,
   'dashboard/work/my': (n) => <MyWork onNavigate={n} />,
+  'dashboard/work/daily-review': () => <DailyReview />,
   'dashboard/work/calendar': (n) => <Calendar onNavigate={n} />,
   'dashboard/work/projects': () => <Projects />,
   'dashboard/work/decisions': () => <Decisions />,
@@ -244,6 +247,7 @@ const PARENT_JUMP = {
 };
 
 export function HubApp() {
+  React.useEffect(() => { dailyReviewDraftStore.restore(); }, []);
   useIdlePagePrefetch();
   const isMobileViewport = useMobileViewport();
   const router = useRouter();

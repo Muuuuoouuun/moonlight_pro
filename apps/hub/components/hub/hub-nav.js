@@ -134,6 +134,11 @@ const SETTINGS_CHILDREN = [
   { key: 'sys-evolution', label: 'Evolution', path: 'dashboard/evolution', deferred: true },
 ];
 
+const MY_WORK_CHILDREN = [
+  { key: 'my-work-list', label: '실행 목록', path: 'dashboard/work/my' },
+  { key: 'daily-review', label: '하루 리뷰', path: 'dashboard/work/daily-review' },
+];
+
 export const SIDEBAR_PRIMARY = [
   {
     key: 'today',
@@ -167,7 +172,8 @@ export const SIDEBAR_PRIMARY = [
     label: '내 작업',
     icon: 'inbox',
     scopeAware: false,
-    owns: ['dashboard/work/my'],
+    owns: ['dashboard/work/my', 'dashboard/work/daily-review'],
+    children: { all: MY_WORK_CHILDREN, classin: MY_WORK_CHILDREN, personal: MY_WORK_CHILDREN },
     paths: {
       all: 'dashboard/work/my',
       classin: 'dashboard/work/my',
