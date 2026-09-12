@@ -343,6 +343,7 @@ export function RhythmVisualizer({
                   );
                 })}
               </svg>
+              </div>
             </div>
 
             {/* 선택/호버된 날짜의 상세 피드백 툴팁 바 */}

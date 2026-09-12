@@ -10,6 +10,7 @@ import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
 import { Button } from "./hub-primitives";
 import { Sidebar } from "./hub-sidebar";
 import { TopBar } from "./hub-topbar";
+import { useInquiryNotifications } from './inquiry-notifications';
 import { CommandPalette } from "./hub-command-palette";
 import { ShortcutOverlay } from "./crm-shortcut-overlay";
 import { CelebrationCanvas } from "./celebration-fx";
@@ -75,6 +76,7 @@ const Queue = lazyPage(() => import("./pages/content").then(m => m.Queue));
 const Campaigns = lazyPage(() => import("./pages/content").then(m => m.Campaigns));
 const RevenueOverview = lazyPage(() => import("./pages/revenue").then(m => m.RevenueOverview));
 const Leads = lazyPage(() => import("./pages/revenue").then(m => m.Leads));
+const Inquiries = lazyPage(() => import('./pages/inquiries').then(m => m.Inquiries));
 const Deals = lazyPage(() => import("./pages/revenue").then(m => m.Deals));
 const Cases = lazyPage(() => import("./pages/revenue").then(m => m.Cases));
 const Accounts = lazyPage(() => import("./pages/revenue").then(m => m.Accounts));
@@ -187,7 +189,7 @@ function LegacyPlaceholder({ path, onNavigate }) {
 }
 
 const PAGE_MAP = {
-  'dashboard/daily-brief': (n) => <DailyBrief onNavigate={n} />,
+  'dashboard/daily-brief': (n, inquiries) => <DailyBrief onNavigate={n} inquiryNotifications={inquiries} />,
   'dashboard/overview': (n) => <Overview onNavigate={n} />,
   'dashboard/work/my': (n) => <MyWork onNavigate={n} />,
   'dashboard/work/daily-review': () => <DailyReview />,
@@ -205,6 +207,7 @@ const PAGE_MAP = {
   'dashboard/revenue/customers': (n) => <Customers onNavigate={n} />,
   'dashboard/revenue/heatmap': (n) => <RevenueHeatmap onNavigate={n} />,
   'dashboard/revenue/leads': () => <Leads />,
+  'dashboard/revenue/inquiries': (n) => <Inquiries onNavigate={n} />,
   'dashboard/revenue/deals': (n) => <Deals onNavigate={n} />,
   'dashboard/revenue/cases': () => <Cases />,
   'dashboard/revenue/accounts': (n) => <Accounts onNavigate={n} />,
@@ -248,6 +251,7 @@ const PARENT_JUMP = {
 };
 
 export function HubApp() {
+  const inquiryNotifications = useInquiryNotifications();
   React.useEffect(() => { dailyReviewDraftStore.restore(); }, []);
   useIdlePagePrefetch();
   const isMobileViewport = useMobileViewport();
@@ -399,6 +403,7 @@ export function HubApp() {
   // 쿼리 소거)로 직행하고, 생성 대상이 없는 표면에서만 팔레트로 폴백한다(§8.1 생성).
   const createTargetForPath = React.useCallback((currentPath) => {
     const p = String(currentPath || '');
+    if (p.startsWith('dashboard/revenue/inquiries')) return 'dashboard/revenue/inquiries?new=inquiry';
     if (p.startsWith('dashboard/revenue/leads') || p.startsWith('dashboard/revenue/customers')) return 'dashboard/revenue/leads?new=lead';
     if (p.startsWith('dashboard/revenue/deals')) return 'dashboard/revenue/deals?new=deal';
     if (p.startsWith('dashboard/revenue/accounts')) return 'dashboard/revenue/accounts?new=account';
@@ -449,7 +454,7 @@ export function HubApp() {
   }, [paletteOpen]);
 
   const render = PAGE_MAP[path];
-  const page = render ? render(navigate) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
+  const page = render ? render(navigate, inquiryNotifications) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
   const sidebarCollapsed = collapsed && !navOpen;
 
   return (
@@ -461,6 +466,7 @@ export function HubApp() {
           onClick={closeMobileNavigation}
         />
         <Sidebar
+          inquiryNotifications={inquiryNotifications}
           className="hub-sidebar-root"
           active={path}
           view={view}
@@ -477,6 +483,7 @@ export function HubApp() {
         />
         <div className="hub-main">
           <TopBar
+            inquiryNotifications={inquiryNotifications}
             path={path}
             view={view}
             scope={routeScope || navScope}

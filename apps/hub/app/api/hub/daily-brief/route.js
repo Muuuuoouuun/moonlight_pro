@@ -486,6 +486,7 @@ export async function GET() {
     orders: visibleOrders.slice(0, 12),
   };
   const sources = buildSources(results);
+  sources.push({ key: 'inquiries', label: '문의', state: attention?.inquiries?.status || 'error', error: attention?.inquiries?.error || null });
   const liveCount = sources.filter((source) => source.state === "live").length;
   const errorCount = sources.filter((source) => source.state === "error").length;
   const partialCount = sources.filter((source) => source.state === "partial").length;
@@ -553,6 +554,7 @@ export async function GET() {
     operatorHome,
     taskToday,
     contentBrands,
+    inquiries: attention?.inquiries || { status: 'error', rows: [], unreadCount: null },
     signals,
     dailyFocus,
     queue,

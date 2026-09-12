@@ -52,6 +52,12 @@ export const WORKSPACES = {
 
 export const WORKSPACE_KEYS = Object.keys(WORKSPACES);
 
+// Inquiries must retain an explicit unknown lane; the brand personal fallback does not apply.
+export function inquiryScopeForWorkspace(workspace) {
+  if (workspace === 'brand') return 'personal';
+  return ['classin', 'personal', 'unclassified'].includes(workspace) ? workspace : 'all';
+}
+
 export function isWorkspace(ws) {
   return Boolean(ws) && Object.prototype.hasOwnProperty.call(WORKSPACES, ws);
 }

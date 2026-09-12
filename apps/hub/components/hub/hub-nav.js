@@ -47,7 +47,7 @@ export function normalizeScope(scope) {
 // ?scope=personal은 실제로 소비하는 표면(Leads/Deals/Accounts의 개인 필터 시드)에만
 // 붙인다 — 나머지는 전역 집계 뷰라 파라미터가 과약속이었다(5차 재감사 S).
 // rev-overview는 2609 병합으로 소비자가 생겼다 — scope=personal이 개인 캐시플로 로드맵을 연다.
-const SCOPE_CONSUMING_CHILD_KEYS = new Set(['rev-overview', 'rev-leads', 'rev-deals', 'rev-accounts']);
+const SCOPE_CONSUMING_CHILD_KEYS = new Set(['rev-overview', 'rev-inquiries', 'rev-leads', 'rev-deals', 'rev-accounts']);
 function personalScoped(children) {
   return children.map((c) => (
     SCOPE_CONSUMING_CHILD_KEYS.has(c.key) ? { ...c, path: `${c.path}?scope=personal` } : c
@@ -59,6 +59,7 @@ const REVENUE_CHILDREN = [
   // owns that name; the revenue child keeps a distinct label to avoid two
   // identical rows in one sidebar.
   { key: 'rev-overview', label: '개요', path: 'dashboard/revenue/overview' },
+  { key: 'rev-inquiries', label: '문의 내역', path: 'dashboard/revenue/inquiries' },
   // 고객 DB · 매출 히트맵 — implemented pages (PAGE_MAP + NAV_TREE search) that
   // had no sidebar row until 2026-07-17. Both are global aggregate views
   // (Customers/RevenueHeatmap take no workspace prop), so they live only here,
@@ -75,6 +76,7 @@ const REVENUE_CHILDREN = [
 // labels (파이프라인·결제·리드·고객·계정) renamed identical surfaces and were the
 // operator's top naming confusion (2026-07-15 naming decision).
 const REVENUE_CLASSIN_CHILDREN = [
+  { key: 'rev-ci-inquiries', label: '문의 내역', path: 'dashboard/revenue/inquiries?scope=classin' },
   { key: 'rev-ci-pipeline', label: 'Deals', path: 'dashboard/classin/pipeline' },
   { key: 'rev-ci-revenue', label: 'Leads', path: 'dashboard/classin/revenue' },
   { key: 'rev-ci-segments', label: '세그먼트', path: 'dashboard/classin/segments' },

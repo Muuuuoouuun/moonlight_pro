@@ -1,17 +1,17 @@
 import {
   insertSupabaseRecord,
-  makeSupabaseHeaders,
   resolveDefaultWorkspaceId,
   resolveSupabaseConfig,
   updateSupabaseRecord,
 } from "@/lib/server-write";
 import { assertOperatorEmail, resolveOperatorEmail } from "@/lib/sales-os/operator-scope";
 import { createHmac, timingSafeEqual } from "crypto";
+import { isGoogleOAuthProviderEnabled } from "./integration-readiness.js";
+import { fetchSupabaseRowsDetailed } from "./server-read.js";
 
 const GOOGLE_GMAIL_PROVIDER = "google_gmail";
 const GOOGLE_GMAIL_SYNC_SOURCE = "google_gmail";
-// gmail.readonly added for the Gmail -> lead_intake_raw scan pipeline
-// (apps/hub/lib/repositories/gmail-intake.js). Existing connections created
+// gmail.readonly supports the durable inquiry collector. Existing connections created
 // before this scope was added will need to reconnect (buildGoogleGmailAuthUrl
 // forces prompt=consent, so re-auth re-issues a refresh token with the wider
 // scope) — reading inbox messages is not possible with a send-only grant.
@@ -39,53 +39,11 @@ function resolveGoogleOAuthConfig() {
   };
 }
 
-function buildSupabaseReadUrl(table, { select = "*", filters = [], order, limit } = {}) {
-  const config = resolveSupabaseConfig();
-
-  if (!config) {
-    return null;
-  }
-
-  const params = new URLSearchParams();
-  params.set("select", select);
-
-  if (order) {
-    params.set("order", order);
-  }
-
-  if (typeof limit === "number") {
-    params.set("limit", String(limit));
-  }
-
-  filters.forEach(([key, value]) => {
-    params.append(key, value);
-  });
-
-  return `${config.url}/rest/v1/${table}?${params.toString()}`;
-}
-
 async function fetchSupabaseRows(table, options = {}) {
-  const config = resolveSupabaseConfig();
-  const url = buildSupabaseReadUrl(table, options);
-
-  if (!config || !url) {
-    return null;
-  }
-
-  try {
-    const response = await fetch(url, {
-      headers: makeSupabaseHeaders(config.apiKey),
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return await response.json();
-  } catch {
-    return null;
-  }
+  if (!resolveSupabaseConfig()) return null;
+  const result = await fetchSupabaseRowsDetailed(table, options);
+  if (!Array.isArray(result?.rows) && options.strict) throw new Error("gmail-connection-read-failed");
+  return result?.rows || null;
 }
 
 function resolveOAuthStateSecret() {
@@ -178,7 +136,7 @@ export function buildGoogleGmailAuthUrl({
 }) {
   const oauth = resolveGoogleOAuthConfig();
 
-  if (!oauth || !hasGoogleGmailOAuthStateSecret()) {
+  if (!oauth || !isGoogleOAuthProviderEnabled("gmail") || !hasGoogleGmailOAuthStateSecret()) {
     return null;
   }
 
@@ -220,11 +178,15 @@ async function exchangeGoogleToken(params) {
     },
     body: body.toString(),
     cache: "no-store",
+    signal: AbortSignal.timeout(10000),
   });
 
   if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(detail || `Google token exchange failed with ${response.status}`);
+    const detail = await response.json().catch(() => ({}));
+    const error = new Error(`gmail-token-${response.status}`);
+    error.status = response.status;
+    if (detail.error === "invalid_grant" || [401, 403].includes(response.status)) error.code = "gmail-reconnect-required";
+    throw error;
   }
 
   return await response.json();
@@ -247,6 +209,7 @@ export async function refreshGoogleGmailAccessToken(refreshToken) {
 
 export async function fetchLatestGoogleGmailConnection(
   workspaceId = resolveDefaultWorkspaceId(),
+  { strict = false } = {},
 ) {
   const filters = [["provider", `eq.${GOOGLE_GMAIL_PROVIDER}`]];
 
@@ -255,7 +218,7 @@ export async function fetchLatestGoogleGmailConnection(
   }
 
   const rows = await fetchSupabaseRows("integration_connections", {
-    filters,
+    strict, filters,
     order: "created_at.desc",
     limit: 1,
   });
@@ -372,7 +335,7 @@ export async function recordGoogleGmailSync({
 // shape so gmail-intake.js can follow the same connect -> refresh -> call flow.
 
 export async function resolveGmailConnection(workspaceId = resolveDefaultWorkspaceId()) {
-  const stored = await fetchLatestGoogleGmailConnection(workspaceId);
+  const stored = await fetchLatestGoogleGmailConnection(workspaceId, { strict: true });
   if (stored?.config?.refreshToken) {
     return {
       source: "connection",
@@ -441,21 +404,52 @@ export async function getValidGmailAccessToken(connection) {
   return accessToken;
 }
 
-async function gmailRequest(path, { accessToken, method = "GET" } = {}) {
-  const response = await fetch(`${GOOGLE_GMAIL_API_BASE}${path}`, {
+async function gmailJsonRequest(url, { accessToken, method = "GET", fetchImpl = fetch, timeoutMs = 10000 } = {}) {
+  const response = await fetchImpl(url, {
     method,
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-    },
+    headers: { authorization: `Bearer ${accessToken}` },
     cache: "no-store",
+    signal: AbortSignal.timeout(timeoutMs),
   });
-
   if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(detail || `Gmail API ${method} ${path} failed with ${response.status}`);
+    // Keep status for expired-history recovery; do not echo provider bodies or tokens.
+    const error = new Error(`gmail-api-${response.status}`);
+    error.status = response.status;
+    throw error;
   }
+  return response.json();
+}
 
-  return response.json().catch(() => ({}));
+async function gmailRequest(path, options = {}) {
+  return gmailJsonRequest(`${GOOGLE_GMAIL_API_BASE}${path}`, options);
+}
+
+export function hasGmailReadScope(scope) {
+  const granted = new Set(String(scope || "").split(/\s+/));
+  return ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.modify", "https://mail.google.com/"].some(value => granted.has(value));
+}
+
+// Inquiry collection reads full messages and all messageAdded history pages.
+// Existing callers of fetchRecentGmailMessages keep their compatibility behavior.
+export function createGmailInquiryClient({ accessToken, fetchImpl = fetch, timeoutMs = 10000 }) {
+  const options = { accessToken, fetchImpl, timeoutMs };
+  return {
+    getTokenInfo: () => gmailJsonRequest(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`, options),
+    getProfile: () => gmailRequest("/profile", options),
+    getMessage: id => gmailRequest(`/messages/${encodeURIComponent(id)}?format=full`, options),
+    getThread: id => gmailRequest(`/threads/${encodeURIComponent(id)}?format=full`, options),
+    listMessages: ({ after, before, pageToken, maxResults = 50 }) => {
+      const q = [`after:${Math.floor(Date.parse(after) / 1000)}`, `before:${Math.ceil(Date.parse(before) / 1000) + 1}`, "-in:sent", "-in:drafts", "-in:spam", "-in:trash"].join(" ");
+      const params = new URLSearchParams({ q, maxResults: String(Math.min(50, maxResults)), includeSpamTrash: "false" });
+      if (pageToken) params.set("pageToken", pageToken);
+      return gmailRequest(`/messages?${params}`, options);
+    },
+    listHistory: ({ startHistoryId, pageToken, maxResults = 50 }) => {
+      const params = new URLSearchParams({ startHistoryId, historyTypes: "messageAdded", maxResults: String(Math.min(50, maxResults)) });
+      if (pageToken) params.set("pageToken", pageToken);
+      return gmailRequest(`/history?${params}`, options);
+    },
+  };
 }
 
 function decodeHeaderValue(headers, name) {

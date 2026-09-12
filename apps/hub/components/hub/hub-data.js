@@ -54,6 +54,7 @@ export const NAV_TREE = [
     // 매일 보는 라벨(영업·매출, 고객 연락)로 검색했을 때 0건이 나오지 않아야 한다.
     key: 'revenue', label: 'Revenue', icon: 'revenue', secondary: true,
     children: [
+      { key: 'inquiries', label: '문의 내역', icon: 'inbox', path: 'dashboard/revenue/inquiries', keywords: ['문의', '메일', '랜딩페이지', 'inquiry', 'webhook', '지원', '제휴'] },
       { key: 'overview', label: '개요', icon: 'revenue', path: 'dashboard/revenue/overview', keywords: ['revenue overview', '매출 개요', '영업', '영업·매출'] },
       { key: 'customers', label: '고객 DB', icon: 'accounts', path: 'dashboard/revenue/customers', keywords: ['customers', '고객', 'crm', '통합'] },
       { key: 'heatmap', label: '매출 히트맵', icon: 'globe', path: 'dashboard/revenue/heatmap', keywords: ['heatmap', '히트맵', '지역', '지도', 'map'] },

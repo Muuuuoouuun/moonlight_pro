@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { InquirySummary } from '../inquiry-notifications';
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, Progress, Sparkline, SyncBadge, EmptyState } from "../hub-primitives";
 import { BurningStreakBadge, StreakFlame } from "../burning-streak";
@@ -502,6 +503,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
 }
 
 const EMPTY_DAILY_BRIEF_STATE = {
+  inquiries: { status: 'loading', rows: [], unreadCount: null },
   syncState: 'syncing',
   generatedAt: null,
   sources: [],
@@ -556,6 +558,7 @@ function useDailyBriefLedger(refreshKey) {
               : 'preview';
 
         const nextState = {
+          inquiries: data.inquiries || { status: 'error', rows: [], unreadCount: null },
           syncState: nextSyncState,
           generatedAt: data.generatedAt || null,
           sources: Array.isArray(data.sources) ? data.sources : [],
@@ -1746,11 +1749,15 @@ function WeeklyReportCard() {
   );
 }
 
-export function DailyBrief({ onNavigate }) {
+export function DailyBrief({ onNavigate, inquiryNotifications }) {
   const [refreshKey, setRefreshKey] = React.useState(0);
   const ledger = useDailyBriefLedger(refreshKey);
   const [queueExpanded, setQueueExpanded] = React.useState(false);
   const refreshLedger = React.useCallback(() => setRefreshKey((key) => key + 1), []);
+  React.useEffect(() => {
+    window.addEventListener('moonlight:inquiries-changed', refreshLedger);
+    return () => window.removeEventListener('moonlight:inquiries-changed', refreshLedger);
+  }, [refreshLedger]);
 
   const urgentCount = ledger.summary?.urgentCount ?? ledger.signals.filter(s => s.tone === 'danger').length;
   const todayCount = ledger.summary?.todayCount ?? ledger.signals.filter(s => s.tone === 'warning').length;
@@ -1802,6 +1809,8 @@ export function DailyBrief({ onNavigate }) {
         <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} />
 
         <BriefNavigation taskToday={ledger.taskToday} onNavigate={onNavigate} />
+
+        <InquirySummary state={inquiryNotifications && inquiryNotifications.status !== 'loading' ? inquiryNotifications : ledger.inquiries} onNavigate={onNavigate} />
 
         <div className="daily-brief__command-reveal">
           {command ? (

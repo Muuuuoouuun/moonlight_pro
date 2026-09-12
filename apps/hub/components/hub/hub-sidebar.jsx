@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { InquiryBell } from './inquiry-notifications';
 import { Iconed } from "./hub-icons";
 import { IconButton, Avatar, Kbd, SegmentedControl } from "./hub-primitives";
 import {
@@ -93,7 +94,7 @@ function CountBadge({ n }) {
   );
 }
 
-export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeScope, onScopeChange, onNavigate, collapsed, onToggleCollapse, openPalette, className, mobileHidden = false, mobileOpen = false, onMobileClose, mobileCloseButtonRef }, ref) {
+export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeScope, onScopeChange, onNavigate, collapsed, onToggleCollapse, openPalette, className, mobileHidden = false, mobileOpen = false, onMobileClose, mobileCloseButtonRef, inquiryNotifications }, ref) {
   const counts = useAnchorCounts();
   const sidebarRef = React.useRef(null);
   const setSidebarRef = React.useCallback((node) => {
@@ -312,7 +313,7 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeSc
           <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>문준혁</div>
           <div style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>Founder · Pro</div>
         </div>
-        <IconButton icon="bell" size={24} iconSize={13} tooltip="Open Daily Brief" onClick={() => onNavigate('dashboard/daily-brief')} />
+        <InquiryBell size={24} state={inquiryNotifications} onNavigate={onNavigate} />
       </div>
     </aside>
   );

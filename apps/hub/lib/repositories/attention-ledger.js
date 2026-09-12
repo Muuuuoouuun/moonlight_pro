@@ -1,3 +1,5 @@
+import { getInquiriesLedger } from './inquiries-ledger.js';
+
 // Cross-lane attention read model — the TODOS.md P1 "Today Actions" contract, assembled
 // per request from the existing ledgers (deep-design premise 3: no new universal table).
 //
@@ -219,7 +221,7 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
   const startOfTodayIso = new Date(`${todayKey}T00:00:00+09:00`).toISOString();
   const weekEndIso = new Date(now.getTime() + 7 * DAY_MS).toISOString();
 
-  const [projectLedger, revenueLedger, calendar] = await Promise.all([
+  const [projectLedger, revenueLedger, calendar, inquiries] = await Promise.all([
     getTaskLedger().catch(() => ({
       source: "error",
       error: "project-ledger-request-failed",
@@ -236,6 +238,7 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
     listGoogleCalendarEvents({ timeMin: startOfTodayIso, timeMax: weekEndIso, maxResults: 50 }).catch(
       () => ({ ok: false, reason: "calendar-read-failed", items: [] }),
     ),
+    getInquiriesLedger({ filter: 'unread', pageSize: 3 }).catch(() => ({ status: 'error', source: 'error', rows: [], unreadCount: null, error: 'inquiries-read-failed' })),
   ]);
 
   const taskAggregationPartial = projectLedger?.source === "supabase"
@@ -275,6 +278,7 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
     });
   }
   const sources = {
+    inquiries: inquiries.status,
     tasks: taskSourceState,
     deals: dealSourceState,
     calendar: calendar?.ok
@@ -283,6 +287,8 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
         ? "preview"
         : "error",
   };
+
+  if (inquiries.status === 'error') sourceFailures.push({ source: 'inquiries', error: inquiries.error, failedSources: ['inquiries'] });
 
   // Deal entityId → linked lead's follow-up score (0–100). Deals carry lead_id; leads carry
   // the recomputed momentum score — this join is the pipeline↔lead-score bridge.
@@ -315,6 +321,9 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
     sourceFailures,
     calendarReason: calendar?.ok ? "" : calendar?.reason || "",
     items,
+    // Separate summary keeps My Work's task/deal/event lane contract intact.
+    // The exact unread count is independent of the three-row preview.
+    inquiries,
     // My Work의 할 일 편집 드로어가 프로젝트 재배정 select를 채우는 용도 — id/name만
     // 필요하니 프로젝트 원장 전체를 다시 내려보내지 않는다.
     projects: taskLedgerReadable
