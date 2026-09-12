@@ -8,7 +8,7 @@
 // in both, so the operator had to answer "where does this live?" before
 // "what am I doing?".
 //
-// Eight primary + two utility anchors (SIDEBAR_PRIMARY / SIDEBAR_UTILITIES;
+// Nine primary + two utility anchors (SIDEBAR_PRIMARY / SIDEBAR_UTILITIES;
 // hub-nav.test.mjs pins both counts). Overview was added 2026-07-15 per direct
 // operator instruction; the anchor set is not a fixed contract and may change. Organizational context
 // moves into one scope control.
@@ -138,6 +138,7 @@ const SETTINGS_CHILDREN = [
 
 const MY_WORK_CHILDREN = [
   { key: 'my-work-list', label: '실행 목록', path: 'dashboard/work/my' },
+  { key: 'memos', label: '메모', path: 'dashboard/work/memos' },
   { key: 'daily-review', label: '하루 리뷰', path: 'dashboard/work/daily-review' },
 ];
 
@@ -174,7 +175,7 @@ export const SIDEBAR_PRIMARY = [
     label: '내 작업',
     icon: 'inbox',
     scopeAware: false,
-    owns: ['dashboard/work/my', 'dashboard/work/daily-review'],
+    owns: ['dashboard/work/my', 'dashboard/work/memos', 'dashboard/work/daily-review'],
     children: { all: MY_WORK_CHILDREN, classin: MY_WORK_CHILDREN, personal: MY_WORK_CHILDREN },
     paths: {
       all: 'dashboard/work/my',
@@ -221,6 +222,11 @@ export const SIDEBAR_PRIMARY = [
       classin: 'dashboard/revenue/followups',
       personal: 'dashboard/revenue/followups',
     },
+  },
+  {
+    key: 'discovery', label: '기회 탐색', icon: 'search', scopeAware: true,
+    owns: ['dashboard/discovery'],
+    paths: { all: 'dashboard/discovery', classin: 'dashboard/discovery?scope=classin', personal: 'dashboard/discovery?scope=personal' },
   },
   {
     key: 'projects',

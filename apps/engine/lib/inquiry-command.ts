@@ -17,7 +17,9 @@ export function inquiryRecord(value: unknown): JsonRecord | null {
 
 function string(value: unknown, max: number, required = false): string | null {
   if (value == null && !required) return '';
-  if (typeof value !== 'string' || value.includes('\0')) return null;
+  // In Unicode mode this range matches only lone surrogates, not valid emoji
+  // pairs. JSON permits them, but PostgreSQL UTF-8 cannot store them.
+  if (typeof value !== 'string' || value.includes('\0') || /[\uD800-\uDFFF]/u.test(value)) return null;
   const text = value.trim();
   return text.length > max || (required && !text) ? null : text;
 }

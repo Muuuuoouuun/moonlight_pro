@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { JournalSources } from "../journal-links";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, Button, Checkbox, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer } from "../hub-primitives";
@@ -389,6 +390,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
         <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.45, textDecoration: completing ? 'line-through' : 'none' }}>
           {item.title}
         </div>
+        <JournalSources refs={item.sourceRefs} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {rows.map((r) => (
             <div key={r.label} style={{ display: 'flex', gap: 8, fontSize: 12, alignItems: 'baseline' }}>
@@ -733,7 +735,7 @@ export function MyWork({ onNavigate }) {
     // _sourceDescription: 저장 시 "바뀌었을 때만" description을 PATCH에 싣기 위한 원본 스냅샷.
     // 라이브 DB에 0021(task description) 마이그레이션이 아직 없으면 이 키가 포함된 PATCH가
     // 통째로 실패하므로, 건드리지 않은 저장까지 막지 않게 한다.
-    setTaskDraft({ id: item.entityId, title: item.title, status: item.status, priority: item.priority || 'medium', dueAt: item.whenAt || '', description: item.description || '', projectId: item.projectId || '', _sourceDescription: item.description || '' });
+    setTaskDraft({ sourceRefs: item.sourceRefs || [], id: item.entityId, title: item.title, status: item.status, priority: item.priority || 'medium', dueAt: item.whenAt || '', description: item.description || '', projectId: item.projectId || '', _sourceDescription: item.description || '' });
   };
 
   const detailItem = React.useMemo(
@@ -1521,7 +1523,7 @@ export function MyWork({ onNavigate }) {
         onSave={persistTaskDetail}
         onDelete={deleteTaskDetail}
         onClose={() => setTaskDraft(null)}
-      />
+      ><JournalSources refs={taskDraft?.sourceRefs} /></EditDrawer>
     </div>
   );
 }

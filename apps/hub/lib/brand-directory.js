@@ -197,7 +197,7 @@ export function buildBrandDirectory(ledger = {}, { now = new Date(), scope = "al
 // 있으므로 실패를 조용히 흡수하지 않고 null을 돌려준다 — 호출부가 상태를 표시한다.
 export function selectBrand(directory, key) {
   if (!key) return null;
-  return (directory?.brands || []).find((brand) => brand.key === key) || null;
+  return (directory?.brands || []).find((brand) => brand.key === key || brand.id === key) || null;
 }
 
 // "12일 조용함" 같은 사람이 읽는 문구. 조용함은 손실이 아니므로 danger가 아니다.

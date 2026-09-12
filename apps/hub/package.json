@@ -12,6 +12,7 @@
     "@com-moon/supabase-rest": "*",
     "@com-moon/ui": "*",
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "iconv-lite": "^0.7.3",
     "next": "^16.2.4",
     "node-ical": "^0.26.1",
     "react": "^18",

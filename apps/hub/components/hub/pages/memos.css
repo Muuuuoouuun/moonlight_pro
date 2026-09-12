@@ -1,0 +1,49 @@
+.memos-page { max-width: 1080px; display: flex; flex-direction: column; gap: 24px; }
+.memos-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.memos-header h2 { margin: 0; font-size: 20px; font-weight: 500; }
+.memos-header p { margin: 8px 0 0; color: var(--fg-muted); line-height: 1.6; }
+.memos-state, .memo-actions, .memo-footer, .memo-row-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.memo-muted { color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
+.memo-stack { display: flex; flex-direction: column; gap: 16px; }
+.memo-composer { padding: 4px; min-width: 0; }
+.memo-composer fieldset { border: 0; padding: 0; margin: 16px 0 0; min-width: 0; }
+.memo-composer .hub-input { font-size: 14px; min-height: 40px; }
+.memo-composer textarea.hub-input { height: auto; line-height: 1.75; resize: vertical; }
+.memo-composer summary { cursor: pointer; min-height: 40px; display: list-item; align-content: center; color: var(--fg-muted); }
+.memo-composer details > .memo-stack { padding-top: 12px; }
+.memo-composer h3, .memo-recovery h3 { margin: 0; font-size: 14px; font-weight: 500; }
+.memo-composer p { margin: 0; line-height: 1.7; }
+.memo-section { border-top: 1px solid var(--line-soft); padding-top: 20px; display: flex; flex-direction: column; gap: 12px; }
+.memo-selection, .memo-composer blockquote { margin: 8px 0 0; padding: 12px 16px; border-left: 1px solid var(--line-strong); background: var(--surface-2); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow-y: auto; font-size: 14px; line-height: 1.7; }
+.memo-feedback { padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); display: flex; flex-direction: column; gap: 12px; }
+.memo-feedback[role="alert"] { box-shadow: inset 1px 0 0 var(--danger-line); }
+.memo-feedback p { margin: 0; }
+.memo-feedback pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.memo-footer { justify-content: space-between; }
+.memo-fields { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; }
+.memo-contexts, .memo-uses, .memo-list ol { list-style: none; margin: 0; padding: 0; }
+.memo-contexts li { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--line-soft); font-size: 12px; padding: 4px 0; }
+.memo-context-results { margin-top: 12px; display: flex; flex-direction: column; max-height: 240px; overflow-y: auto; gap: 4px; }
+.memo-context-results button { justify-content: flex-start; text-align: left; white-space: normal; }
+.memo-contexts span { overflow-wrap: anywhere; }
+.memo-uses li { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
+.memo-uses a, .memo-target-link { color: var(--fg); text-decoration: underline; text-underline-offset: 4px; padding: 8px 0; }
+.memo-list { overflow: hidden; }
+.memo-list li + li { border-top: 1px solid var(--line-soft); }
+.memo-list-row { width: 100%; padding: 20px 24px; display: flex; flex-direction: column; text-align: left; gap: 10px; }
+.memo-list-row .memo-row-top { justify-content: space-between; width: 100%; }
+.memo-list-row strong { font-weight: 500; font-size: 15px; }
+.memo-list-row p { margin: 0; font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.memo-row-open { color: var(--fg-muted); font-size: 12px; }
+.memo-more { padding: 16px; text-align: center; }
+.memo-recovery { padding: 16px; border: 1px dashed var(--line-strong); border-radius: var(--r); display: flex; flex-direction: column; gap: 12px; }
+.memo-recovery button { text-align: left; justify-content: flex-start; white-space: normal; }
+@media (max-width: 600px) {
+  .memos-header { align-items: flex-start; flex-direction: column; }
+  .memo-list-row { padding: 16px; }
+  .memo-composer .hub-input { font-size: 16px; min-height: 44px; }
+  .memo-fields { grid-template-columns: 1fr; }
+  .memo-composer summary { min-height: 44px; }
+  .memo-footer > button { min-height: 44px; }
+  .memo-context-results button, .memo-uses a, .memo-target-link { min-height: 44px; }
+}

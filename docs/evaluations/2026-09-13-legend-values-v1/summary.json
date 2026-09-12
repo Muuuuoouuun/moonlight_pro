@@ -1,0 +1,4651 @@
+{
+  "version": "legend-values-eval-v1",
+  "generatedAt": "2026-09-12T16:54:59.801Z",
+  "baseCommit": "8605338b90d899d920120e1495317504aebf1f84",
+  "generationModelVersions": [
+    "gemini-3-flash-preview"
+  ],
+  "judgeModelVersions": [
+    "gemini-3.1-pro-preview"
+  ],
+  "byVariant": {
+    "A": {
+      "count": 20,
+      "mean": 88.55,
+      "pass": 11,
+      "hardFailures": 0,
+      "overlength": 9,
+      "charactersMean": 684.35,
+      "latencyP50Ms": 4251,
+      "latencyP95Ms": 9752,
+      "metrics": {
+        "factuality": 4,
+        "context": 3.4,
+        "action": 3.4,
+        "judgment": 3.4,
+        "uncertainty": 3.4,
+        "continuity": 3.33,
+        "readability": 3.1
+      }
+    },
+    "B": {
+      "count": 20,
+      "mean": 87.44,
+      "pass": 9,
+      "hardFailures": 0,
+      "overlength": 11,
+      "charactersMean": 746.05,
+      "latencyP50Ms": 3608,
+      "latencyP95Ms": 7942,
+      "metrics": {
+        "factuality": 4,
+        "context": 3.35,
+        "action": 3.3,
+        "judgment": 3.4,
+        "uncertainty": 3.4,
+        "continuity": 3.22,
+        "readability": 2.85
+      }
+    },
+    "C": {
+      "count": 20,
+      "mean": 85.44,
+      "pass": 5,
+      "hardFailures": 0,
+      "overlength": 14,
+      "charactersMean": 779.9,
+      "latencyP50Ms": 3764,
+      "latencyP95Ms": 4698,
+      "metrics": {
+        "factuality": 4,
+        "context": 3.3,
+        "action": 3.15,
+        "judgment": 3.25,
+        "uncertainty": 3.4,
+        "continuity": 3.11,
+        "readability": 2.5
+      }
+    }
+  },
+  "byTurn": {
+    "1": {
+      "A": {
+        "count": 11,
+        "mean": 89.52,
+        "pass": 5,
+        "hardFailures": 0,
+        "overlength": 6,
+        "charactersMean": 714.91,
+        "latencyP50Ms": 5665,
+        "latencyP95Ms": 10072,
+        "metrics": {
+          "factuality": 4,
+          "context": 3.45,
+          "action": 3.45,
+          "judgment": 3.45,
+          "uncertainty": 3.45,
+          "continuity": null,
+          "readability": 3
+        }
+      },
+      "B": {
+        "count": 11,
+        "mean": 88.76,
+        "pass": 4,
+        "hardFailures": 0,
+        "overlength": 7,
+        "charactersMean": 787.91,
+        "latencyP50Ms": 4039,
+        "latencyP95Ms": 8850,
+        "metrics": {
+          "factuality": 4,
+          "context": 3.45,
+          "action": 3.36,
+          "judgment": 3.45,
+          "uncertainty": 3.45,
+          "continuity": null,
+          "readability": 2.73
+        }
+      },
+      "C": {
+        "count": 11,
+        "mean": 87.5,
+        "pass": 2,
+        "hardFailures": 0,
+        "overlength": 9,
+        "charactersMean": 803.64,
+        "latencyP50Ms": 3909,
+        "latencyP95Ms": 4840,
+        "metrics": {
+          "factuality": 4,
+          "context": 3.45,
+          "action": 3.27,
+          "judgment": 3.36,
+          "uncertainty": 3.45,
+          "continuity": null,
+          "readability": 2.36
+        }
+      }
+    },
+    "2": {
+      "A": {
+        "count": 9,
+        "mean": 87.36,
+        "pass": 6,
+        "hardFailures": 0,
+        "overlength": 3,
+        "charactersMean": 647,
+        "latencyP50Ms": 3164,
+        "latencyP95Ms": 4766,
+        "metrics": {
+          "factuality": 4,
+          "context": 3.33,
+          "action": 3.33,
+          "judgment": 3.33,
+          "uncertainty": 3.33,
+          "continuity": 3.33,
+          "readability": 3.22
+        }
+      },
+      "B": {
+        "count": 9,
+        "mean": 85.83,
+        "pass": 5,
+        "hardFailures": 0,
+        "overlength": 4,
+        "charactersMean": 694.89,
+        "latencyP50Ms": 3342,
+        "latencyP95Ms": 4055,
+        "metrics": {
+          "factuality": 4,
+          "context": 3.22,
+          "action": 3.22,
+          "judgment": 3.33,
+          "uncertainty": 3.33,
+          "continuity": 3.22,
+          "readability": 3
+        }
+      },
+      "C": {
+        "count": 9,
+        "mean": 82.92,
+        "pass": 3,
+        "hardFailures": 0,
+        "overlength": 5,
+        "charactersMean": 750.89,
+        "latencyP50Ms": 3469,
+        "latencyP95Ms": 4526,
+        "metrics": {
+          "factuality": 4,
+          "context": 3.11,
+          "action": 3,
+          "judgment": 3.11,
+          "uncertainty": 3.33,
+          "continuity": 3.11,
+          "readability": 2.67
+        }
+      }
+    }
+  },
+  "byScenario": [
+    {
+      "id": "socrates-claim",
+      "personas": [
+        1
+      ],
+      "variants": {
+        "A": {
+          "count": 2,
+          "mean": 90.97,
+          "pass": 2,
+          "hardFailures": 0,
+          "overlength": 0,
+          "charactersMean": 506,
+          "latencyP50Ms": 3093,
+          "latencyP95Ms": 3673,
+          "metrics": {
+            "factuality": 4,
+            "context": 3.5,
+            "action": 3.5,
+            "judgment": 3.5,
+            "uncertainty": 3.5,
+            "continuity": 4,
+            "readability": 3.5
+          }
+        },
+        "B": {
+          "count": 2,
+          "mean": 85.35,
+          "pass": 2,
+          "hardFailures": 0,
+          "overlength": 0,
+          "charactersMean": 581.5,
+          "latencyP50Ms": 2563,
+          "latencyP95Ms": 3267,
+          "metrics": {
+            "factuality": 4,
+            "context": 3,
+            "action": 3,
+            "judgment": 3.5,
+            "uncertainty": 3.5,
+            "continuity": 3,
+            "readability": 3.5
+          }
+        },
+        "C": {
+          "count": 2,
+          "mean": 90.97,
+          "pass": 2,
+          "hardFailures": 0,
+          "overlength": 0,
+          "charactersMean": 623,
+          "latencyP50Ms": 2898,
+          "latencyP95Ms": 2968,
+          "metrics": {
+            "factuality": 4,
+            "context": 3.5,
+            "action": 3.5,
+            "judgment": 3.5,
+            "uncertainty": 3.5,
+            "continuity": 4,
+            "readability": 3.5
+          }
+        }
+      },
+      "fidelityMean": 4
+    },
+    {
+      "id": "einstein-explanation",
+      "personas": [
+        2
+      ],
+      "variants": {
+        "A": {
+          "count": 2,
+          "mean": 80.91,
+          "pass": 0,
+          "hardFailures": 0,
+          "overlength": 2,
+          "charactersMean": 739,
+          "latencyP50Ms": 3924,
+          "latencyP95Ms": 4251,
+          "metrics": {
+            "factuality": 4,
+            "context": 3,
+            "action": 3,
+            "judgment": 3,
+            "uncertainty": 3,
+            "continuity": 3,
+            "readability": 2.5
+          }
+        },
+        "B": {
+          "count": 2,
+          "mean": 80.28,
+          "pass": 0,
+          "hardFailures": 0,
+          "overlength": 2,
+          "charactersMean": 784.5,
+          "latencyP50Ms": 3234,
+          "latencyP95Ms": 4039,
+          "metrics": {
+            "factuality": 4,
+            "context": 3,
+            "action": 3,
+            "judgment": 3,
+            "uncertainty": 3,
+            "continuity": 3,
+            "readability": 2
+          }
+        },
+        "C": {
+          "count": 2,
+          "mean": 80.91,
+          "pass": 1,
+          "hardFailures": 0,
+          "overlength": 1,
+          "charactersMean": 752.5,
+          "latencyP50Ms": 2974,
+          "latencyP95Ms": 4167,
+          "metrics": {
+            "factuality": 4,
+            "context": 3,
+            "action": 3,
+            "judgment": 3,
+            "uncertainty": 3,
+            "continuity": 3,
+            "readability": 2.5
+          }
+        }
+      },
+      "fidelityMean": 4
+    },
+    {
+      "id": "lincoln-partnership",
+      "personas": [
+        3
+      ],
+      "variants": {
+        "A": {
+          "count": 2,
+          "mean": 83.68,
+          "pass": 2,
+          "hardFailures": 0,
+          "overlength": 0,
+          "charactersMean": 676,
+          "latencyP50Ms": 2935,
+          "latencyP95Ms": 5503,
+          "metrics": {
+            "factuality": 4,
+            "context": 3,
+            "action": 3.5,
+            "judgment": 3,
+            "uncertainty": 3,
+            "continuity": 3,
+            "readability": 3
+          }
+        },
+        "B": {
+          "count": 2,
+          "mean": 80.91,
+          "pass": 0,
+          "hardFailures": 0,
+          "overlength": 2,
+          "charactersMean": 720,
+          "latencyP50Ms": 2959,
+          "latencyP95Ms": 6217,
+          "metrics": {
+            "factuality": 4,
+            "context": 3,
+            "action": 3,
+            "judgment": 3,
+            "uncertainty": 3,
+            "continuity": 3,
+            "readability": 2.5
+          }
+        },
+        "C": {
+          "count": 2,
+          "mean": 80.97,
+          "pass": 1,
+          "hardFailures": 0,
+          "overlength": 1,
+          "charactersMean": 717.5,
+          "latencyP50Ms": 3332,
+          "latencyP95Ms": 3892,
+          "metrics": {
+            "factuality": 4,
+            "context": 3,
+            "action": 3,
+            "judgment": 3,
+            "uncertainty": 3,
+            "continuity": 3,
+            "readability": 2.5
+          }
+        }
+      },
+      "fidelityMean": 4
+    },
+    {
+      "id": "theodore-energy",
+      "personas": [
+        4
+      ],
+      "variants": {
+        "A": {
+          "count": 2,
+          "mean": 100,
+          "pass": 2,
+          "hardFailures": 0,
+          "overlength": 0,
+          "charactersMean": 542,
+          "latencyP50Ms": 3018,
+          "latencyP95Ms": 4819,
+          "metrics": {
+            "factuality": 4,
+            "context": 4,
+            "action": 4,
+            "judgment": 4,
+            "uncertainty": 4,
+            "continuity": 4,
+            "readability": 4
+          }
+        },
+        "B": {
+          "count": 2,
+          "mean": 98.61,
+          "pass": 1,
+          "hardFailures": 0,
+          "overlength": 1,
+          "charactersMean": 707,
+          "latencyP50Ms": 3546,
+          "latencyP95Ms": 3608,
+          "metrics": {
+            "factuality": 4,
+            "context": 4,
+            "action": 4,
+            "judgment": 4,
+            "uncertainty": 4,
+            "continuity": 4,
+            "readability": 3
+          }
+        },
+        "C": {
+          "count": 2,
+          "mean": 79.03,
+          "pass": 0,
+          "hardFailures": 0,
+          "overlength": 1,
+          "charactersMean": 697.5,
+          "latencyP50Ms": 2711,
+          "latencyP95Ms": 3420,
+          "metrics": {
+            "factuality": 4,
+            "context": 3,
+            "action": 2,
+            "judgment": 3,
+            "uncertainty": 4,
+            "continuity": 2,
+            "readability": 2.5
+          }
+        }
+      },
+      "fidelityMean": 3
+    },
+    {
+      "id": "franklin-recovery",
+      "personas": [
+        5
+      ],
+      "variants": {
+        "A": {
+          "count": 2,
+          "mean": 88.54,
+          "pass": 0,
+          "hardFailures": 0,
+          "overlength": 2,
+          "charactersMean": 747.5,
+          "latencyP50Ms": 4766,
+          "latencyP95Ms": 5665,
+          "metrics": {
+            "factuality": 4,
+            "context": 3.5,
+            "action": 3,
+            "judgment": 3.5,
+            "uncertainty": 3.5,
+            "continuity": 3,
+            "readability": 3.5
+          }
+        },
+        "B": {
+          "count": 2,
+          "mean": 89.31,
+          "pass": 0,
+          "hardFailures": 0,
+          "overlength": 2,
+          "charactersMean": 914,
+          "latencyP50Ms": 3832,
+          "latencyP95Ms": 4055,
+          "metrics": {
+            "factuality": 4,
+            "context": 3.5,
+            "action": 3.5,
+            "judgment": 3.5,
+            "uncertainty": 3.5,
+            "continuity": 3,
+            "readability": 2.5
+          }
+        },
+        "C": {
+          "count": 2,
+          "mean": 89.93,
+          "pass": 0,
+          "hardFailures": 0,
+          "overlength": 2,
+          "charactersMean": 790.5,
+          "latencyP50Ms": 3536,
+          "latencyP95Ms": 3909,
+          "metrics": {
+            "factuality": 4,
+            "context": 3.5,
+            "action": 3.5,
+            "judgment": 3.5,
+            "uncertainty": 3.5,
+            "continuity": 3,
+            "readability": 3
+          }
+        }
+      },
+      "fidelityMean": 4
+    },
+    {
+      "id": "jobs-product",
+      "personas": [
+        6
+      ],
+      "variants": {
+        "A": {
+          "count": 2,
+          "mean": 100,
+          "pass": 2,
+          "hardFailures": 0,
+          "overlength": 0,
+          "charactersMean": 648.5,
+          "latencyP50Ms": 3164,
+          "latencyP95Ms": 5418,
+          "metrics": {
+            "factuality": 4,
+            "context": 4,
+            "action": 4,
+            "judgment": 4,
+            "uncertainty": 4,
+            "continuity": 4,
+            "readability": 4
+          }
+        },
+        "B": {
+          "count": 2,
+          "mean": 100,
+          "pass": 2,
+          "hardFailures": 0,
+          "overlength": 0,
+          "charactersMean": 647,
+          "latencyP50Ms": 2662,
+          "latencyP95Ms": 8850,
+          "metrics": {
+            "factuality": 4,
+            "context": 4,
+            "action": 4,
+            "judgment": 4,
+            "uncertainty": 4,
+            "continuity": 4,
+            "readability": 4
+          }
+        },
+        "C": {
+          "count": 2,
+          "mean": 93.2,
+          "pass": 0,
+          "hardFailures": 0,
+          "overlength": 2,
+          "charactersMean": 899.5,
+          "latencyP50Ms": 4153,
+          "latencyP95Ms": 4498,
+          "metrics": {
+            "factuality": 4,
+            "context": 4,
+            "action": 3.5,
+            "judgment": 3.5,
+            "uncertainty": 4,
+            "continuity": 4,
+            "readability": 2
+          }
+        }
+      },
+      "fidelityMean": 4
+    },
+    {
+      "id": "bezos-reversibility",
+      "personas": [
+        7
+      ],
+      "variants": {
+        "A": {
+          "count": 2,
+          "mean": 88.61,
+          "pass": 0,
+          "hardFailures": 0,
+          "overlength": 2,
+          "charactersMean": 832,
+          "latencyP50Ms": 3782,
+          "latencyP95Ms": 6907,
+          "metrics": {
+            "factuality": 4,
+            "context": 3.5,
+            "action": 3.5,
+            "judgment": 3.5,
+            "uncertainty": 3.5,
+            "continuity": 3,
+            "readability": 2
+          }
+        },
+        "B": {
+          "count": 2,
+          "mean": 90.63,
+          "pass": 2,
+          "hardFailures": 0,
+          "overlength": 0,
+          "charactersMean": 638.5,
+          "latencyP50Ms": 3095,
+          "latencyP95Ms": 3342,
+          "metrics": {
+            "factuality": 4,
+            "context": 3.5,
+            "action": 3.5,
+            "judgment": 3.5,
+            "uncertainty": 3.5,
+            "continuity": 3,
+            "readability": 3.5
+          }
+        },
+        "C": {
+          "count": 2,
+          "mean": 89.93,
+          "pass": 1,
+          "hardFailures": 0,
+          "overlength": 1,
+          "charactersMean": 701.5,
+          "latencyP50Ms": 3469,
+          "latencyP95Ms": 3764,
+          "metrics": {
+            "factuality": 4,
+            "context": 3.5,
+            "action": 3.5,
+            "judgment": 3.5,
+            "uncertainty": 3.5,
+            "continuity": 3,
+            "readability": 3
+          }
+        }
+      },
+      "fidelityMean": 4
+    },
+    {
+      "id": "buffett-opportunity",
+      "personas": [
+        8
+      ],
+      "variants": {
+        "A": {
+          "count": 2,
+          "mean": 90.63,
+          "pass": 2,
+          "hardFailures": 0,
+          "overlength": 0,
+          "charactersMean": 551.5,
+          "latencyP50Ms": 3006,
+          "latencyP95Ms": 6983,
+          "metrics": {
+            "factuality": 4,
+            "context": 3.5,
+            "action": 3.5,
+            "judgment": 3.5,
+            "uncertainty": 3.5,
+            "continuity": 3,
+            "readability": 3.5
+          }
+        },
+        "B": {
+          "count": 2,
+          "mean": 87.92,
+          "pass": 1,
+          "hardFailures": 0,
+          "overlength": 1,
+          "charactersMean": 721,
+          "latencyP50Ms": 3827,
+          "latencyP95Ms": 3861,
+          "metrics": {
+            "factuality": 4,
+            "context": 3.5,
+            "action": 3,
+            "judgment": 3.5,
+            "uncertainty": 3.5,
+            "continuity": 3,
+            "readability": 3
+          }
+        },
+        "C": {
+          "count": 2,
+          "mean": 88.61,
+          "pass": 0,
+          "hardFailures": 0,
+          "overlength": 2,
+          "charactersMean": 801.5,
+          "latencyP50Ms": 3782,
+          "latencyP95Ms": 4526,
+          "metrics": {
+            "factuality": 4,
+            "context": 3.5,
+            "action": 3.5,
+            "judgment": 3.5,
+            "uncertainty": 3.5,
+            "continuity": 3,
+            "readability": 2
+          }
+        }
+      },
+      "fidelityMean": 3.5
+    },
+    {
+      "id": "chouinard-values",
+      "personas": [
+        9
+      ],
+      "variants": {
+        "A": {
+          "count": 2,
+          "mean": 80.91,
+          "pass": 1,
+          "hardFailures": 0,
+          "overlength": 1,
+          "charactersMean": 705.5,
+          "latencyP50Ms": 3414,
+          "latencyP95Ms": 9752,
+          "metrics": {
+            "factuality": 4,
+            "context": 3,
+            "action": 3,
+            "judgment": 3,
+            "uncertainty": 3,
+            "continuity": 3,
+            "readability": 2.5
+          }
+        },
+        "B": {
+          "count": 2,
+          "mean": 80.91,
+          "pass": 1,
+          "hardFailures": 0,
+          "overlength": 1,
+          "charactersMean": 784,
+          "latencyP50Ms": 3525,
+          "latencyP95Ms": 7942,
+          "metrics": {
+            "factuality": 4,
+            "context": 3,
+            "action": 3,
+            "judgment": 3,
+            "uncertainty": 3,
+            "continuity": 3,
+            "readability": 2.5
+          }
+        },
+        "C": {
+          "count": 2,
+          "mean": 80.28,
+          "pass": 0,
+          "hardFailures": 0,
+          "overlength": 2,
+          "charactersMean": 848.5,
+          "latencyP50Ms": 3383,
+          "latencyP95Ms": 4698,
+          "metrics": {
+            "factuality": 4,
+            "context": 3,
+            "action": 3,
+            "judgment": 3,
+            "uncertainty": 3,
+            "continuity": 3,
+            "readability": 2
+          }
+        }
+      },
+      "fidelityMean": 4
+    },
+    {
+      "id": "council-product",
+      "personas": [
+        6,
+        7,
+        9
+      ],
+      "variants": {
+        "A": {
+          "count": 1,
+          "mean": 81.94,
+          "pass": 0,
+          "hardFailures": 0,
+          "overlength": 1,
+          "charactersMean": 767,
+          "latencyP50Ms": 8383,
+          "latencyP95Ms": 8383,
+          "metrics": {
+            "factuality": 4,
+            "context": 3,
+            "action": 3,
+            "judgment": 3,
+            "uncertainty": 3,
+            "continuity": null,
+            "readability": 3
+          }
+        },
+        "B": {
+          "count": 1,
+          "mean": 80.56,
+          "pass": 0,
+          "hardFailures": 0,
+          "overlength": 1,
+          "charactersMean": 968,
+          "latencyP50Ms": 4040,
+          "latencyP95Ms": 4040,
+          "metrics": {
+            "factuality": 4,
+            "context": 3,
+            "action": 3,
+            "judgment": 3,
+            "uncertainty": 3,
+            "continuity": null,
+            "readability": 2
+          }
+        },
+        "C": {
+          "count": 1,
+          "mean": 80.56,
+          "pass": 0,
+          "hardFailures": 0,
+          "overlength": 1,
+          "charactersMean": 1013,
+          "latencyP50Ms": 4840,
+          "latencyP95Ms": 4840,
+          "metrics": {
+            "factuality": 4,
+            "context": 3,
+            "action": 3,
+            "judgment": 3,
+            "uncertainty": 3,
+            "continuity": null,
+            "readability": 2
+          }
+        }
+      },
+      "fidelityMean": 3
+    },
+    {
+      "id": "council-recovery",
+      "personas": [
+        3,
+        4,
+        5
+      ],
+      "variants": {
+        "A": {
+          "count": 1,
+          "mean": 80.56,
+          "pass": 0,
+          "hardFailures": 0,
+          "overlength": 1,
+          "charactersMean": 1024,
+          "latencyP50Ms": 10072,
+          "latencyP95Ms": 10072,
+          "metrics": {
+            "factuality": 4,
+            "context": 3,
+            "action": 3,
+            "judgment": 3,
+            "uncertainty": 3,
+            "continuity": null,
+            "readability": 2
+          }
+        },
+        "B": {
+          "count": 1,
+          "mean": 80.56,
+          "pass": 0,
+          "hardFailures": 0,
+          "overlength": 1,
+          "charactersMean": 958,
+          "latencyP50Ms": 4932,
+          "latencyP95Ms": 4932,
+          "metrics": {
+            "factuality": 4,
+            "context": 3,
+            "action": 3,
+            "judgment": 3,
+            "uncertainty": 3,
+            "continuity": null,
+            "readability": 2
+          }
+        },
+        "C": {
+          "count": 1,
+          "mean": 80.56,
+          "pass": 0,
+          "hardFailures": 0,
+          "overlength": 1,
+          "charactersMean": 921,
+          "latencyP50Ms": 4567,
+          "latencyP95Ms": 4567,
+          "metrics": {
+            "factuality": 4,
+            "context": 3,
+            "action": 3,
+            "judgment": 3,
+            "uncertainty": 3,
+            "continuity": null,
+            "readability": 2
+          }
+        }
+      },
+      "fidelityMean": 4
+    }
+  ],
+  "deltaBA": -1.11,
+  "deltaCB": -2,
+  "usage": {
+    "generation": {
+      "calls": 60,
+      "promptTokens": 52172,
+      "outputTokens": 24362,
+      "thinkingTokens": 7657,
+      "totalTokens": 84191,
+      "attempts": 60
+    },
+    "assessment": {
+      "calls": 40,
+      "promptTokens": 140167,
+      "outputTokens": 37794,
+      "thinkingTokens": 3547,
+      "totalTokens": 181508,
+      "attempts": 40
+    },
+    "archivedJudgeAttempt": {
+      "calls": 22,
+      "promptTokens": 71902,
+      "outputTokens": 21997,
+      "thinkingTokens": 0,
+      "totalTokens": 93899,
+      "attempts": 22
+    },
+    "calibration": {
+      "calls": 2,
+      "promptTokens": 3097,
+      "outputTokens": 1570,
+      "thinkingTokens": 0,
+      "totalTokens": 4667,
+      "attempts": 2
+    },
+    "allReceived": {
+      "calls": 124,
+      "promptTokens": 267338,
+      "outputTokens": 85723,
+      "thinkingTokens": 11204,
+      "totalTokens": 364265,
+      "attempts": 124
+    }
+  },
+  "errors": [],
+  "scored": [
+    {
+      "id": "socrates-claim-C-1",
+      "scenarioId": "socrates-claim",
+      "variant": "C",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "사용자가 지향하는 '신뢰'라는 가치를 훼손하는 비용을 발생시킵니다.",
+          "reason": "사용자의 신뢰 구축 목표와 가치를 잘 반영하여 판단 근거로 삼음."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "기존 파일럿 고객 3명에게 연락하여, '편해졌다'는 말이 구체적으로 어떤 업무의 시간을 줄여주었는지",
+          "reason": "대체 문장과 함께 즉각적으로 실행 가능한 구체적인 다음 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "'30% 향상 보장'이라는 문구를 쓰는 것은 부적절합니다.",
+          "reason": "명확한 판단을 내리고 근거 없는 확신이라는 이유를 들어 실질적인 도움을 제공함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "추가 인터뷰를 통해 '평균 1시간 단축'과 같은 구체적 측정값이 확보되면 문구 수정을 재검토하겠습니다.",
+          "reason": "구체적인 측정값 확보라는 명확한 판단 수정 조건을 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 연속성 평가는 해당하지 않음."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "**판단 및 근거**",
+          "reason": "항목별로 잘 나뉘어 있어 가독성이 좋고 700자 이내로 명료함."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "가상 기록에 따르면 매출이나 시간 변화를 측정하지 않았으므로",
+          "reason": "가상 기록의 사실을 정확히 반영하여 허위 주장이 없습니다."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 4,
+        "evidence": "이 일을 이루면 무엇이 좋아지는지, 그리고 그 이유를 스스로 납득하는지부터 살펴봅시다.",
+        "reason": "페르소나의 조언 첫 문장 예시와 가치 충돌 판단 규칙을 정확히 적용하였습니다."
+      },
+      "characterCount": 609,
+      "elapsedMs": 2968,
+      "total": 81.94,
+      "pass": true,
+      "denominator": 90,
+      "overlength": false
+    },
+    {
+      "id": "socrates-claim-B-1",
+      "scenarioId": "socrates-claim",
+      "variant": "B",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "모르는 것을 안다고 여기지 않는 정직함이 신뢰의 토대가 됩니다.",
+          "reason": "사용자의 정직하게 신뢰를 쌓고 싶다는 가치를 반영하여 판단을 내림."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "파일럿 고객 3명에게 연락하여 \"어떤 구체적인 상황에서 마음이 가장 편해졌는지\" 한 문장씩 답변을 받아",
+          "reason": "요청한 대체 문장과 15분 내에 실행 가능한 작은 다음 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "현재 기록된 데이터에는 구체적인 수치가 없으므로, 이를 보장하는 것은 사실에 근거하지 않은 약속입니다.",
+          "reason": "수치 사용 불가라는 명확한 판단과 그 이유를 제공하여 실질적 도움을 줌."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "실제 고객의 구체적인 답변이 확보되지 않거나, 매출·시간 등 정량적 데이터가 하나라도 측정되어",
+          "reason": "판단을 수정할 수 있는 구체적인 재검토 조건을 명시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 연속성 평가는 해당하지 않음."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "**판단: '성과 30% 향상 보장' 문구 사용 불가**",
+          "reason": "구조화된 형식으로 명료하게 작성되었으며 700자 이내로 읽기 부담이 적음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "현재 기록된 데이터에는 구체적인 수치가 없으므로",
+          "reason": "가상 기록의 미측정 상태를 정확히 반영하여 사실 왜곡이 없습니다."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 656,
+      "elapsedMs": 3267,
+      "total": 81.94,
+      "pass": true,
+      "denominator": 90,
+      "overlength": false
+    },
+    {
+      "id": "socrates-claim-A-1",
+      "scenarioId": "socrates-claim",
+      "variant": "A",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "정직한 신뢰를 지향하는 사용자의 가치와 충돌하며",
+          "reason": "사용자의 정직과 신뢰라는 가치를 반영하여 판단을 내림."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "기존 파일럿 고객 3명에게 **\"구체적으로 어떤 과정이 가장 편해졌나요?\"**라고 질문하여",
+          "reason": "대체 문장과 함께 짧은 시간 내에 할 수 있는 구체적인 다음 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "**'성과 30% 향상 보장'이라는 문구는 사용하지 않기를 권고합니다.**",
+          "reason": "명확한 판단과 함께 신뢰 훼손 위험이라는 실질적인 이유를 제공함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "파일럿 고객의 구체적인 답변이 확보되지 않았거나 사용자가 여전히 경쟁사의 수치 마케팅에 대한 불안으로",
+          "reason": "판단 수정 및 재논의가 필요한 조건을 명확히 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 연속성 평가는 해당하지 않음."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "### 판단",
+          "reason": "마크다운을 활용하여 구조가 명확하고 700자 이내로 읽기 쉬움."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "가상 기록상 구체적인 수치(처리 시간, 매출 등)를 측정한 근거가 없기 때문입니다.",
+          "reason": "가상 기록의 미측정 사실을 정확히 반영하였습니다."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 498,
+      "elapsedMs": 3673,
+      "total": 81.94,
+      "pass": true,
+      "denominator": 90,
+      "overlength": false
+    },
+    {
+      "id": "socrates-claim-B-2",
+      "scenarioId": "socrates-claim",
+      "variant": "B",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": 3,
+        "readability": 4,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "불완전한 수치를 보편적 성공으로 과장하지 않는 것이 '정직한 신뢰'라는 사용자의 가치에 부합합니다.",
+          "reason": "사용자의 가치는 반영했으나, 남은 시간 5분이라는 제약에 대한 명시적 언급이 부족함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "공유받은 '5분 단축' 로그를 캡처하거나 텍스트로 정리하여 제안서 하단에 '실제 관찰 사례'로 배치하십시오.",
+          "reason": "행동을 제시했으나 5분이라는 시간 제약과 연결짓지 않음."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "한 곳에서 25%의 시간 단축(20분→15분)이 관찰되었으나, 이는 전체 사례가 아닌 단일 사례이며 대조군이 없는 불확실한 기록입니다.",
+          "reason": "데이터의 한계를 정확히 짚고 판단을 내림."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "남은 고객 2곳에서도 유사한 시간 단축 결과가 도출되거나, 반대로 업무 시간이 늘어난 사례가 발견될 경우 문구를 재검토하십시오.",
+          "reason": "명확한 재검토 조건을 제시함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "한 곳에서 25%의 시간 단축(20분→15분)이 관찰되었으나",
+          "reason": "새로운 사실을 반영했으나 이전 제안과의 명시적 비교나 연결이 다소 약함."
+        },
+        "readability": {
+          "score": 4,
+          "evidence": "**판단: '30% 향상 보장'은 여전히 불가하나 부분적 근거 활용 가능**",
+          "reason": "간결하고 명확한 구조로 가독성이 뛰어남."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "한 곳에서 25%의 시간 단축(20분→15분)이 관찰되었으나, 이는 전체 사례가 아닌 단일 사례이며 대조군이 없는 불확실한 기록입니다.",
+          "reason": "가상 기록의 사실을 정확히 반영하고 허위 수치를 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 507,
+      "elapsedMs": 2563,
+      "total": 88.75,
+      "pass": true,
+      "denominator": 100,
+      "overlength": false
+    },
+    {
+      "id": "socrates-claim-C-2",
+      "scenarioId": "socrates-claim",
+      "variant": "C",
+      "turn": 2,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": 4,
+        "readability": 4,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "표본이 적다는 불확실성을 인정하면서도 확인된 사례를 투명하게 공개하는 것이 사용자의 가치에 부합합니다.",
+          "reason": "사용자의 가치(정직한 신뢰)와 제약(남은 시간 5분)을 잘 반영함."
+        },
+        "action": {
+          "score": 4,
+          "evidence": "오늘 남은 5분 동안 제안서의 '성과' 섹션에 \"사례 1: A 업무 시간 25% 절감(1개사 기준)\"이라고 기록하고, 나머지 2개사의 측정값은 공란으로 두어 향후 채울 항목임을 명시하십시오.",
+          "reason": "5분 내에 할 수 있는 구체적이고 실용적인 행동을 제시함."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "단 한 곳의 특정 작업에서 얻은 '5분 단축(25%)' 결과를 전체 성과로 일반화하여 '30% 보장'이라 쓰는 것은 여전히 사실을 왜곡하는 일입니다.",
+          "reason": "데이터의 한계를 지적하며 명확한 판단을 내림."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "나머지 2개 고객사에서도 측정 데이터가 도착하여 전체 평균 혹은 공통된 경향성이 확인되면, 제안서의 수치 표현을 다시 정립하겠습니다.",
+          "reason": "추가 데이터 확보라는 명확한 재검토 조건을 제시함."
+        },
+        "continuity": {
+          "score": 4,
+          "evidence": "하지만 이제 \"편해졌다\"는 추상적 답변을 넘어, 특정 조건에서 효율이 발생했다는 구체적 근거가 생겼습니다.",
+          "reason": "이전 상황과 새로운 사실을 잘 구분하여 조언을 발전시킴."
+        },
+        "readability": {
+          "score": 4,
+          "evidence": "확보한 사실과 한계를 명확히 구분하여 정직한 신뢰를 지키는 방향으로 판단을 수정합니다.",
+          "reason": "명확한 구조와 적절한 길이(700자 이내)로 가독성이 좋음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "단 한 곳의 특정 작업에서 얻은 '5분 단축(25%)' 결과를 전체 성과로 일반화하여 '30% 보장'이라 쓰는 것은 여전히 사실을 왜곡하는 일입니다.",
+          "reason": "가상 기록의 사실을 정확히 반영하고 허위 수치를 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 4,
+        "evidence": "표본이 적다는 불확실성을 인정하면서도 확인된 사례를 투명하게 공개하는 것이 사용자의 가치에 부합합니다.",
+        "reason": "가치 우선순위와 판단 규칙을 잘 적용하여 실질적인 도움을 줌."
+      },
+      "characterCount": 637,
+      "elapsedMs": 2898,
+      "total": 100,
+      "pass": true,
+      "denominator": 100,
+      "overlength": false
+    },
+    {
+      "id": "socrates-claim-A-2",
+      "scenarioId": "socrates-claim",
+      "variant": "A",
+      "turn": 2,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": 4,
+        "readability": 4,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "무엇보다 확인된 사례를 정직하게 밝히는 것이 사용자의 신뢰 가치에 부합합니다.",
+          "reason": "사용자의 가치(정직한 신뢰)와 제약(남은 시간 5분)을 모두 반영하여 판단을 내림."
+        },
+        "action": {
+          "score": 4,
+          "evidence": "오늘 남은 5분 동안 제안서의 '성과 보장' 섹션을 '검증된 사례(Case Study)' 섹션으로 명칭을 변경하고 위 문장을 기입하십시오.",
+          "reason": "남은 시간 5분 내에 즉시 실행 가능한 구체적인 행동을 제시함."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "공유된 로그(25% 단축)는 단 한 명의 고객, 특정 작업에 한정된 사례이며 대조군이 없어 일반화하기 어렵습니다.",
+          "reason": "새로운 데이터의 한계를 명확히 지적하며 30% 보장 불가라는 실질적인 판단을 제공함."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "나머지 고객 2곳에서도 시간 단축 데이터가 확보되어 평균값이 산출되거나, 특정 작업이 아닌 전체 공정에서의 변화를 측정하게 될 경우 문구 수정을 재검토합니다.",
+          "reason": "추가 데이터 확보 시 판단이 어떻게 바뀔 수 있는지 명확한 조건을 제시함."
+        },
+        "continuity": {
+          "score": 4,
+          "evidence": "정성적 답변만 있던 이전과 달리 '관찰된 실제 변화'를 언급할 근거는 생겼습니다.",
+          "reason": "이전의 정성적 피드백 상황과 새로운 정량적 데이터 확보 상황을 명확히 구분하여 조언을 수정함."
+        },
+        "readability": {
+          "score": 4,
+          "evidence": "### 판단\n**'30% 향상 보장'은 여전히 사용하지 않기를 권고합니다.**",
+          "reason": "구조화된 포맷으로 명료하게 작성되었으며 700자 이내로 읽기 부담이 없음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "공유된 로그(25% 단축)는 단 한 명의 고객, 특정 작업에 한정된 사례이며 대조군이 없어 일반화하기 어렵습니다.",
+          "reason": "가상 기록의 사실을 정확히 반영하고 허위 수치를 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 514,
+      "elapsedMs": 3093,
+      "total": 100,
+      "pass": true,
+      "denominator": 100,
+      "overlength": false
+    },
+    {
+      "id": "einstein-explanation-A-1",
+      "scenarioId": "einstein-explanation",
+      "variant": "A",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "상대성이론을 근거로 '데이터가 필요 없다'고 말하는 것은 부적절합니다.",
+          "reason": "물리학으로 고객 행동을 증명하지 않는다는 제약을 충족함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "기존 버튼 명칭과 관점을 바꾼 명칭(예: '다음' → '혜택 받기')을 종이에 적어 동료나 주변인 3명에게 보여주고",
+          "reason": "20분 내 확인 가능한 구체적 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "고객의 주관적 인지는 상대적일 수 있으나, 그 결과로 나타난 이탈 데이터는 객관적인 개선 지표가 됩니다.",
+          "reason": "데이터의 객관성을 강조하며 판단에 도움을 줌."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "문구 수정 후에도 2명 이상의 사용자가 여전히 버튼 의미를 묻거나 행동을 멈출 경우, 관점의 문제가 아닌 버튼 위치나 시각적 디자인의 문제로 재정의하고 검토하십시오.",
+          "reason": "판단 수정 조건을 명확히 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "제공된 기록에 따르면 75%의 사용자가 버튼의 의미를 파악하지 못했습니다.",
+          "reason": "700자를 초과하여 읽기 부담이 다소 있음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "제공된 기록에 따르면 75%의 사용자가 버튼의 의미를 파악하지 못했습니다.",
+          "reason": "기록된 사실을 정확히 반영하고 허위 수치나 상태를 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 768,
+      "elapsedMs": 3924,
+      "total": 80.56,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "einstein-explanation-B-1",
+      "scenarioId": "einstein-explanation",
+      "variant": "B",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "\"상대성이론이 고객 반응의 상대성을 증명하므로 데이터가 필요 없다\"는 주장은 적절하지 않습니다.",
+          "reason": "물리학으로 타당성을 증명하지 않는다는 제약을 충족함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "동료나 지인 한 명에게 바뀐 문구만 보여주고 10초 이내에 다음 동작을 예측하는지 확인하십시오.",
+          "reason": "20분 내 확인 가능한 구체적 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "주관적 해석을 정당화하기 위해 과학 이론을 오용하기보다, 관찰된 데이터(3/4의 오해)를 인정하고 해결책을 찾아야 합니다.",
+          "reason": "데이터의 중요성을 강조하며 판단에 도움을 줌."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "문구 수정 후에도 2명 이상의 사용자가 여전히 버튼 의미를 질문할 경우, 기능의 배치나 시각적 우선순위를 재점검하십시오.",
+          "reason": "판단 수정 조건을 명확히 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "가상 기록에 따르면 75%의 사용자가 버튼 의미를 오해했습니다.",
+          "reason": "700자를 초과하여 읽기 부담이 다소 있음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "가상 기록에 따르면 75%의 사용자가 버튼 의미를 오해했습니다.",
+          "reason": "기록된 사실을 정확히 반영하고 허위 수치나 상태를 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 815,
+      "elapsedMs": 4039,
+      "total": 80.56,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "einstein-explanation-C-1",
+      "scenarioId": "einstein-explanation",
+      "variant": "C",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "상대성이론을 '데이터 무용론'의 근거로 쓰는 것은 부적절합니다.",
+          "reason": "물리학으로 고객 행동을 증명하지 않는다는 제약을 잘 반영함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "버튼 문구를 두 가지(예: '계속하기', '완료 후 이동')로 수정하여 동료 2명에게 보여주고",
+          "reason": "20분 안에 확인할 수 있는 구체적인 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "데이터는 주관적이지 않으며, 오히려 가설을 수정할 유일한 근거입니다.",
+          "reason": "데이터의 필요성을 명확히 판단하여 실질적인 도움을 줌."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "문구를 바꿨음에도 4명 중 2명 이상이 여전히 의미를 혼동한다면, 설명의 문제가 아니라 기능의 배치나 흐름 자체를 재설계해야 합니다.",
+          "reason": "대안 설명과 관찰을 연결하여 판단 수정 조건을 명시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "지금 고정해 둔 조건 하나를 바꿔보면 어떨까요.",
+          "reason": "700자를 초과하여 읽기 부담이 다소 있음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "안내 화면 사용자 4명 중 3명이 '다음' 버튼의 의미를 오해함.",
+          "reason": "기록된 사실을 정확히 반영하고 허위 수치나 상태를 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 4,
+        "evidence": "지금 고정해 둔 조건 하나를 바꿔보면 어떨까요. “상대성이론이 고객 반응의 상대성을 증명한다”는 가정 대신, 설명 방식과 관찰 결과가 일치하는지 보겠습니다.",
+        "reason": "페르소나의 조언 첫 문장 예시와 판단 규칙, 가치 충돌 예시를 잘 반영함."
+      },
+      "characterCount": 813,
+      "elapsedMs": 4167,
+      "total": 80.56,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "einstein-explanation-B-2",
+      "scenarioId": "einstein-explanation",
+      "variant": "B",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "통계적 한계를 인정하는 것이 진리에 다가가는 과학적 태도에 부합합니다.",
+          "reason": "사용자의 목표와 가치를 반영하여 발표 방향을 제안함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "해당 화면을 전혀 본 적 없는 새로운 인물 1명에게 수정된 화면을 보여주고",
+          "reason": "10분 내에 가능한 구체적인 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "\"문구 개선이 사용자 이해도 향상에 긍정적인 신호로 작용했다\"고 수정하십시오.",
+          "reason": "발표 내용에 대한 실질적인 수정안을 제공함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "새로운 인물이 버튼의 의미를 즉각 이해하지 못한다면, 문구 외에 버튼의 색상이나 위치 등 시각적 좌표계를 재설계해야 합니다.",
+          "reason": "판단 수정 조건을 명확히 제시함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "재테스트 대상이 동일인이라는 점은 '기억'이라는 변수가 개입되었음을 의미합니다.",
+          "reason": "새로운 사실(학습 효과)을 반영하여 이전 설명을 수정함."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "가상 기록에 따르면 정답률이 25%에서 75%로 상승했으나",
+          "reason": "754자로 700자 제한을 초과함."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "정답률이 25%에서 75%로 상승했으나, 학습 효과와 소규모 표본이라는 불확실성이 존재합니다.",
+          "reason": "기록의 사실을 정확히 반영하고 허위 수치나 과장이 없음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 754,
+      "elapsedMs": 3234,
+      "total": 80,
+      "pass": false,
+      "denominator": 100,
+      "overlength": true
+    },
+    {
+      "id": "einstein-explanation-C-2",
+      "scenarioId": "einstein-explanation",
+      "variant": "C",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "관찰된 결과와 한계를 동시에 명시하여 독립적인 판단을 도와야 합니다.",
+          "reason": "사용자의 목표와 가치를 반영하여 발표 방향을 제안함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "이전 테스트에 참여하지 않은 새로운 인물 1명에게 수정된 화면을 보여주고",
+          "reason": "10분 내에 가능한 구체적인 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "이 수치는 '완전한 해결'이 아닌 '방향성의 유효함'을 시사하는 근거로 사용해야 합니다.",
+          "reason": "발표 내용의 한계를 지적하고 실질적인 대안을 제시함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "새로운 인물이 버튼 의미를 이해하지 못한다면, 기존 3명의 정답은 '문구 개선'이 아닌 '학습 효과' 때문일 확률이 높으므로",
+          "reason": "판단 수정 조건을 명확히 제시함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "학습 효과(이미 본 화면)와 소수 표본으로 인해 이 수치를 전체의 성과로 일반화하기 어려움.",
+          "reason": "새로운 사실을 반영하여 이전 설명을 적절히 수정함."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "지금 고정해 둔 조건 하나를 바꿔보면 어떨까요.",
+          "reason": "692자로 700자 제한 내에서 명료하게 작성됨."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "동일 인물 4명 중 3명이 문구 수정 후 정답을 맞힘.",
+          "reason": "기록의 사실을 정확히 반영하고 허위 수치나 과장이 없음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 4,
+        "evidence": "지금 고정해 둔 조건 하나를 바꿔보면 어떨까요. \"75% 해결\"이라는 숫자가 관찰된 현상을 정직하게 설명하고 있는지 보겠습니다.",
+        "reason": "페르소나의 가치(정직한 이해, 판단 규칙)를 잘 반영함."
+      },
+      "characterCount": 692,
+      "elapsedMs": 2974,
+      "total": 81.25,
+      "pass": true,
+      "denominator": 100,
+      "overlength": false
+    },
+    {
+      "id": "einstein-explanation-A-2",
+      "scenarioId": "einstein-explanation",
+      "variant": "A",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "학습 효과와 표본 한계를 인정하되, '관점의 변화'가 실제 이해도에 영향을 주었다는 근거로 활용",
+          "reason": "사용자의 목표(발표)와 제약(10분)을 반영하여 실용적인 수정안을 제시함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "이 기능을 전혀 모르는 새로운 인물 1명에게 '수정된 버튼 문구'만 보여주고",
+          "reason": "10분 안에 실행 가능한 구체적인 다음 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "\"동일 표본 대상의 재테스트 결과, 인지율이 50%p 개선되어 문구 수정의 긍정적 방향성을 확인했다\"로 수정하십시오.",
+          "reason": "발표 내용에 대한 실질적인 수정안을 제공하여 판단을 도움."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "새로운 인물이 버튼의 기능을 틀리게 설명하거나, 실제 서비스 배포 후 전체 이탈률에 변화가 없다면",
+          "reason": "대안 설명과 판단 수정 조건을 명확히 제시함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "동일 인물 대상의 반복 노출과 소규모 표본(4명)이라는 불확실성이 존재합니다.",
+          "reason": "이전 제안과 새 사실(학습 효과, 작은 표본)을 구분하여 설명을 수정함."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "제공된 기록에 따르면, 문구 변경 후 정답률이 25%에서 75%로 상승했습니다.",
+          "reason": "710자로 700자 제한에 근접하며 명료하게 작성됨."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "문구 변경 후 정답률이 25%에서 75%로 상승했습니다. 하지만 동일 인물 대상의 반복 노출과 소규모 표본(4명)이라는 불확실성이 존재합니다.",
+          "reason": "기록의 사실을 정확히 반영하고 허위 수치나 과장이 없음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 710,
+      "elapsedMs": 4251,
+      "total": 81.25,
+      "pass": false,
+      "denominator": 100,
+      "overlength": true
+    },
+    {
+      "id": "lincoln-partnership-C-1",
+      "scenarioId": "lincoln-partnership",
+      "variant": "C",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "상대가 고의로 어겼는지 피치 못할 사정이 있었는지 확인되지 않은 상태에서의 비판은 불필요한 적대감을 만듭니다.",
+          "reason": "원인을 모르는 상태에서 악의를 단정하지 않고, 교체 권한이 없는 상황을 고려하여 비판을 지양함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "위 메시지를 협업자에게 1:1 메시지나 이메일로 발송하여 사실관계를 먼저 확인하십시오.",
+          "reason": "요청한 대화 초안과 15분 내 다음 행동을 명확히 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "공개 비판은 상대를 이겼다는 감각을 줄 뿐, 원칙을 바로잡거나 협력을 회복하는 데 도움이 되지 않습니다.",
+          "reason": "공개 비판의 실효성에 대한 명확한 판단을 제공함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "상대의 답변이 '단순 망각'이나 '고의적 회피'로 밝혀지거나, 24시간 이내에 응답이 없을 경우",
+          "reason": "상대의 응답 여부 및 내용에 따른 재검토 조건을 명시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "여기서 지킬 원칙과, 관계를 다시 이어갈 수 있는 조건을 각각 적어봅시다.",
+          "reason": "700자 이내로 명료하게 작성됨."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "상대가 고의로 어겼는지 피치 못할 사정이 있었는지 확인되지 않은 상태에서의 비판은 불필요한 적대감을 만듭니다.",
+          "reason": "기록에 명시된 '이유를 아직 듣지 못했다'는 사실을 정확히 반영하여 원인을 단정하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 4,
+        "evidence": "여기서 지킬 원칙과, 관계를 다시 이어갈 수 있는 조건을 각각 적어봅시다.",
+        "reason": "조언의 첫 문장 예시를 정확히 따랐으며, 원칙과 협력 조건을 모두 다루고 판단 규칙을 잘 적용함."
+      },
+      "characterCount": 672,
+      "elapsedMs": 3332,
+      "total": 81.94,
+      "pass": true,
+      "denominator": 90,
+      "overlength": false
+    },
+    {
+      "id": "lincoln-partnership-A-1",
+      "scenarioId": "lincoln-partnership",
+      "variant": "A",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 4,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "단순 태만인지, 연락 불능의 급박한 사고나 시스템 오류가 있었는지 확인되지 않음.",
+          "reason": "원인 미상 상태를 명확히 인지하고 악의를 단정하지 않음."
+        },
+        "action": {
+          "score": 4,
+          "evidence": "모든 소통 채널(메일, 메신저 등)을 다시 확인하여, 내가 놓친 지연 안내나 기술적 오류 메시지가 있는지 5분간 재점검하십시오.",
+          "reason": "메시지 발송 전 놓친 연락이 있는지 확인하는 매우 실용적이고 구체적인 15분 내 행동을 제안함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "특히 교체 권한이 없는 상태에서 공개적 압박은 향후 협력을 더욱 어렵게 만듭니다.",
+          "reason": "교체 권한이 없는 제약 조건을 바탕으로 공개 비판의 부작용을 잘 판단함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "메시지 발송 후 12시간 이내에 회신이 없거나, 납득하기 어려운 이유로 책임을 회피할 경우",
+          "reason": "응답 여부 및 내용에 따른 후속 조치 조건을 명시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "기록에 근거한 분석",
+          "reason": "700자 이내로 구조화되어 읽기 쉬움."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "단순 태만인지, 연락 불능의 급박한 사고나 시스템 오류가 있었는지 확인되지 않음.",
+          "reason": "기록의 사실을 정확히 반영하고 불확실성을 명확히 구분함."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 676,
+      "elapsedMs": 5503,
+      "total": 86.11,
+      "pass": true,
+      "denominator": 90,
+      "overlength": false
+    },
+    {
+      "id": "lincoln-partnership-B-1",
+      "scenarioId": "lincoln-partnership",
+      "variant": "B",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "상대의 지연 사유가 확인되지 않은 시점에서의 비판은 협력이라는 목표에 어긋납니다.",
+          "reason": "원인 미상 상태에서 악의를 단정하지 않고 협력 목표를 반영함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "위 대화 초안을 수정하여 협업자에게 비공개 메시지(메일 또는 DM)로 발송하고 전송 여부를 기록하십시오.",
+          "reason": "대화 초안과 15분 내 실행할 구체적 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "공개 비판은 상대의 수치심을 자극해 단기적 각성을 기대할 수 있으나, 협력 관계를 회복 불능으로 만들 위험이 큽니다.",
+          "reason": "공개 비판에 대한 실질적인 판단과 이유를 제공함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "메시지 발송 후 12시간 이내에 응답이 없거나, 회신된 사유가 납득 불가능하여",
+          "reason": "응답 부재 및 사유의 타당성에 따른 재검토 조건을 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "공개 비판은 지양하십시오.",
+          "reason": "700자를 초과하여 읽기 부담이 다소 있음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "상대의 지연 사유가 확인되지 않은 시점에서의 비판은 협력이라는 목표에 어긋납니다.",
+          "reason": "기록의 사실을 정확히 반영하고 원전을 적절히 인용하여 해석함."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 739,
+      "elapsedMs": 6217,
+      "total": 80.56,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "lincoln-partnership-C-2",
+      "scenarioId": "lincoln-partnership",
+      "variant": "C",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "가족 사정에 대한 공감과 '내일 오후'라는 새로운 약속의 엄중함을 분리해야 합니다.",
+          "reason": "사용자의 목표와 제약을 잘 반영함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "상대에게 수정된 내용을 전송하기 전, '내일 오후' 마감 위반 시 귀하가 감당해야 할 구체적인 일정상/비용상 손해 수치를 정리해 두십시오.",
+          "reason": "발송 전 준비 행동을 적절히 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "상대의 악의를 단정하는 대신, '설명은 이해했으나 결과물 제출이라는 의무는 여전히 미완료 상태임'을 분명히 하는 것이 지속 가능한 질서를 만드는 길입니다.",
+          "reason": "상황에 대한 판단과 대처 방향을 실질적으로 도움되게 제시함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "내일 오후 약속한 시각까지 결과물이 도착하지 않거나, 내용의 질이 합의된 수준에 미달할 경우",
+          "reason": "판단 수정 조건을 명시함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "상대의 악의를 단정하는 대신, '설명은 이해했으나 결과물 제출이라는 의무는 여전히 미완료 상태임'을 분명히 하는 것",
+          "reason": "이전 턴의 악의 단정 초안을 수정하는 맥락을 잘 이음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "여기서 지킬 원칙과, 관계를 다시 이어갈 수 있는 조건을 각각 적어봅시다.",
+          "reason": "700자를 초과(763자)하여 감점."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "가족 사정에 대한 공감과 '내일 오후'라는 새로운 약속의 엄중함을 분리해야 합니다.",
+          "reason": "기록된 사실을 정확히 반영하며 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 4,
+        "evidence": "여기서 지킬 원칙과, 관계를 다시 이어갈 수 있는 조건을 각각 적어봅시다.",
+        "reason": "지시된 페르소나의 가치와 조언의 첫 문장 예시를 정확히 반영함."
+      },
+      "characterCount": 763,
+      "elapsedMs": 3892,
+      "total": 80,
+      "pass": false,
+      "denominator": 100,
+      "overlength": true
+    },
+    {
+      "id": "lincoln-partnership-A-2",
+      "scenarioId": "lincoln-partnership",
+      "variant": "A",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "가족 일정이라는 개인적 사유는 이해하되, 마감 전 미리 알리지 않은 점은 협력의 신뢰를 저해하는 요소입니다.",
+          "reason": "설명 수용과 마감 책임의 목표를 잘 반영함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "내일 오후 약속된 시각(예: 16시)을 캘린더에 등록하고, 그 시점까지 자료가 오지 않을 경우 즉시 실행할 다음 단계(유선 연락 등)를 미리 메모하십시오.",
+          "reason": "실제 발송하지 않고 15분 내 할 수 있는 다음 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "'내일 오후'라는 약속의 실행 여부를 확인하고, 향후 '사전 공유'를 필수 원칙으로 확정해야 합니다.",
+          "reason": "상황 판단과 향후 협력 원칙을 명확히 제시함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "내일 약속한 시각에 초안이 도착하지 않거나, 향후 동일한 '사후 통보' 방식이 반복될 경우",
+          "reason": "조건부 재검토 상황을 명시함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "사실: 상대가 사과함. 지연 사유는 가족 일정임. 내일 오후 제출 약속.",
+          "reason": "새로운 사실을 명확히 구분하여 반영함."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "판단: 수용과 엄격함을 분리하십시오.",
+          "reason": "구조화되어 읽기 쉽고 700자 이내임."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "사실: 상대가 사과함. 지연 사유는 가족 일정임. 내일 오후 제출 약속.",
+          "reason": "기록된 사실을 정확히 반영하며 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 676,
+      "elapsedMs": 2935,
+      "total": 81.25,
+      "pass": true,
+      "denominator": 100,
+      "overlength": false
+    },
+    {
+      "id": "lincoln-partnership-B-2",
+      "scenarioId": "lincoln-partnership",
+      "variant": "B",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "운영자님도 가족 사정에 대한 인간적 이해와 계약상의 마감 책임은 구분해 처리해야 합니다.",
+          "reason": "설명 수용과 마감 책임이라는 사용자의 목표를 반영함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "제시된 초안을 바탕으로 '내일 오후'라는 구체적인 시각(예: 14시)을 명시해 수정하고, 전송 대기 상태로 두십시오.",
+          "reason": "요청한 초안 수정과 실제 발송하지 않는 다음 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "감정적 비난을 걷어내고, '지연이 끼친 구체적 영향'과 '확정된 마감 준수'에 초점을 맞추는 것이 실질적인 재발 방지에 유리합니다.",
+          "reason": "상황에 대한 실질적인 판단과 대처 방향을 제시함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "내일 약속한 시각에 초안이 도착하지 않거나, 제출된 초안의 완성도가 현저히 낮아 추가 보완이 불가능할 경우",
+          "reason": "약속 미이행 시의 대안 조건을 명시함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "상대의 사과로 악의가 없었음은 확인되었습니다.",
+          "reason": "이전 턴의 악의 단정 가능성을 배제하고 새로운 사실(사과, 가족 일정)을 반영함."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "판단: '사유의 수용'과 '책임의 재확인'을 분리하십시오.",
+          "reason": "700자 내외로 명료하게 작성됨."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "상대의 사과로 악의가 없었음은 확인되었습니다.",
+          "reason": "기록된 사실을 정확히 반영하며 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 701,
+      "elapsedMs": 2959,
+      "total": 81.25,
+      "pass": false,
+      "denominator": 100,
+      "overlength": true
+    },
+    {
+      "id": "theodore-energy-B-1",
+      "scenarioId": "theodore-energy",
+      "variant": "B",
+      "turn": 1,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": null,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "현재 에너지가 고갈(1/5) 상태이며 내일 가용 시간도 매우 부족합니다.",
+          "reason": "사용자의 에너지와 시간 제약을 정확히 반영하여 평가함."
+        },
+        "action": {
+          "score": 4,
+          "evidence": "내일 확보된 15분 동안 '몰린 작업 목록'과 '각 작업의 예상 소요 시간'을 시각화한 메모를 작성하십시오.",
+          "reason": "주어진 15분을 활용한 구체적이고 실현 가능한 행동을 제시함."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "밤샘은 권장하지 않습니다. 기록상 의지 부족보다는 자원 배분과 규칙 설정의 문제입니다.",
+          "reason": "피로를 의지 부족으로 보지 않고 명확한 판단을 내림."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "파트너의 조정 거부로 인해 업무량이 줄지 않을 경우, 프로젝트 중단 또는 대안적 보상 체계 설정을 재검토",
+          "reason": "상대방의 거부 상황을 가정한 명확한 재검토 조건을 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "characterCount: 748",
+          "reason": "700자를 초과하여 읽기 부담이 다소 있음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "현재 에너지가 고갈(1/5) 상태이며 내일 가용 시간도 매우 부족합니다.",
+          "reason": "기록된 에너지 상태와 가용 시간을 정확히 반영하였으며, 허위 사실이나 조작이 없음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 748,
+      "elapsedMs": 3546,
+      "total": 97.22,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "theodore-energy-A-1",
+      "scenarioId": "theodore-energy",
+      "variant": "A",
+      "turn": 1,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": null,
+        "readability": 4,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "현재 에너지(1/5)와 내일 가용 시간(15분)을 고려할 때",
+          "reason": "사용자의 현재 자원 상태를 명확히 인지하고 반영함."
+        },
+        "action": {
+          "score": 4,
+          "evidence": "개인 콘텐츠의 '제목' 한 줄만 적고 기록을 종료하십시오.",
+          "reason": "에너지가 고갈된 상태에서 즉시 실행 가능한 가장 작은 행동을 제시함."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "의지의 문제가 아니라 자원 고갈 상태임을 인정하는 것이 효율적입니다.",
+          "reason": "피로를 인격적 결함으로 보지 않고 합리적인 판단을 제공함."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "상대방의 답변이 없거나 추가 작업이 배정되어 에너지가 회복되지 않을 경우 운영 전략을 재점검",
+          "reason": "타인의 반응에 따른 구체적인 판단 수정 조건을 명시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 4,
+          "evidence": "characterCount: 606",
+          "reason": "700자 이내로 명료하고 가독성이 높음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "현재 에너지(1/5)와 내일 가용 시간(15분)을 고려할 때",
+          "reason": "기록된 수치와 상황을 정확히 인용하였으며, 허위 사실이 없음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 606,
+      "elapsedMs": 4819,
+      "total": 100,
+      "pass": true,
+      "denominator": 90,
+      "overlength": false
+    },
+    {
+      "id": "theodore-energy-C-1",
+      "scenarioId": "theodore-energy",
+      "variant": "C",
+      "turn": 1,
+      "scores": {
+        "context": 4,
+        "action": 3,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": null,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "현재 에너지가 1/5인 상태에서 무리하게 밀어붙이는 것은",
+          "reason": "에너지 제약을 고려하여 상황을 분석함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "내일 비어 있는 15분 동안, 개인 콘텐츠의 '핵심 주제 1줄과 소제목 3개'만 기록하십시오.",
+          "reason": "행동을 제시했으나 15분 내에 콘텐츠 작성과 분담 제안을 모두 소화하기엔 다소 벅찰 수 있음."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "밤샘은 의지의 증명이 아니라 자원 관리의 실패입니다.",
+          "reason": "피로를 의지 부족으로 평가하지 않고 명확한 방향을 제시함."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "팀원들이 분담 논의를 거부하여 업무 압박이 지속된다면 콘텐츠 작업을 일시 중단하고 구조 개선에만",
+          "reason": "실패 및 거부 상황에 대한 명확한 대안 행동을 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "characterCount: 759",
+          "reason": "700자를 초과하여 분량 제한을 충족하지 못함."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "현재 에너지가 1/5인 상태에서 무리하게 밀어붙이는 것은",
+          "reason": "기록된 에너지 상태를 정확히 반영하였으며, 원전의 의미를 왜곡하지 않고 적절히 인용함."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 4,
+        "evidence": "밤샘은 의지의 증명이 아니라 자원 관리의 실패입니다.",
+        "reason": "피로를 인격 부족으로 평가하지 않고, 공정한 분담과 행동을 연결하는 지침을 잘 따름."
+      },
+      "characterCount": 759,
+      "elapsedMs": 3420,
+      "total": 93.06,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "theodore-energy-B-2",
+      "scenarioId": "theodore-energy",
+      "variant": "B",
+      "turn": 2,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": 4,
+        "readability": 4,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "가용 시간 0분과 에너지 고갈 상태에서 기존 행동(목록 작성)을 강행하는 것은 '경기장 안에서의 유효한 노력'이 아닌 무의미한 소모에 불과합니다.",
+          "reason": "사용자의 시간 0분과 에너지 고갈 상태를 정확히 반영하여 휴식 결정을 지지함."
+        },
+        "action": {
+          "score": 4,
+          "evidence": "내일 필수 일정이 끝날 때까지 프로젝트와 콘텐츠에 대한 모든 알림을 끄고, 스스로 부여한 '콘텐츠 보류'에 대해 자책하지 않는다는 확약을 자신에게 하십시오.",
+          "reason": "시간이 없는 상황에 맞게 알림 끄기와 자책하지 않기라는 실현 가능한 작은 행동을 제시함."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "아니요, 내일 15분 계획을 철회하고 '완전한 정지'를 권고합니다.",
+          "reason": "이전 조언을 명확히 철회하고 완전한 정지를 권고하여 실질적인 판단에 도움을 줌."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "다음 기록에서 '연속 6시간 이상의 수면'과 '최소 30분의 자유 시간'이 동시에 확보되었을 때 다시 논의하겠습니다.",
+          "reason": "구체적인 수면 시간과 자유 시간 확보를 재검토 조건으로 명확히 제시함."
+        },
+        "continuity": {
+          "score": 4,
+          "evidence": "내일 15분 계획을 철회하고 '완전한 정지'를 권고합니다.",
+          "reason": "이전 제안(15분 계획)을 명시적으로 철회하고 새 사실(시간 0분, 휴식 우선)을 반영하여 수정함."
+        },
+        "readability": {
+          "score": 4,
+          "evidence": "아니요, 내일 15분 계획을 철회하고 '완전한 정지'를 권고합니다.",
+          "reason": "700자 이내로 명료하게 작성되었으며 구조가 잘 나뉘어 읽기 편함."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "가용 시간 0분과 에너지 고갈 상태에서 기존 행동(목록 작성)을 강행하는 것은 '경기장 안에서의 유효한 노력'이 아닌 무의미한 소모에 불과합니다.",
+          "reason": "새 기록의 시간 0과 휴식 결정을 정확히 반영하여 사실적 오류가 없음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 666,
+      "elapsedMs": 3608,
+      "total": 100,
+      "pass": true,
+      "denominator": 100,
+      "overlength": false
+    },
+    {
+      "id": "theodore-energy-A-2",
+      "scenarioId": "theodore-energy",
+      "variant": "A",
+      "turn": 2,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": 4,
+        "readability": 4,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "내일 15분의 가용 시간마저 사라진 상황에서 '제목 적기'조차 시도하는 것은 휴식의 질을 떨어뜨리는 부채감이 될 수 있습니다.",
+          "reason": "시간 부족과 휴식 우선이라는 사용자의 제약을 정확히 반영함."
+        },
+        "action": {
+          "score": 4,
+          "evidence": "'콘텐츠 보류'를 확정하고 알람이나 관련 창을 모두 끄십시오.",
+          "reason": "에너지가 없는 상태에서 즉시 실행 가능한 알람 끄기라는 구체적 행동을 제시함."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "직접 답: 아니요, 조언을 철회합니다.",
+          "reason": "이전 조언을 명확히 철회하여 사용자의 휴식 결정을 확고히 지지함."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "다음에 이 기록을 다시 볼 시점은 '연속된 자유 시간 30분 이상'과 '에너지 3/5 이상'이 동시에 충족될 때입니다.",
+          "reason": "자유 시간과 에너지 수준이라는 명확한 재검토 조건을 제시함."
+        },
+        "continuity": {
+          "score": 4,
+          "evidence": "직접 답: 아니요, 조언을 철회합니다. 내일 15분의 가용 시간마저 사라진 상황에서 '제목 적기'조차 시도하는 것은",
+          "reason": "이전 제안(제목 적기)을 언급하며 새 사실(시간 0분)에 맞춰 조언을 수정함."
+        },
+        "readability": {
+          "score": 4,
+          "evidence": "직접 답: 아니요, 조언을 철회합니다.",
+          "reason": "478자로 매우 간결하고 명확하게 작성됨."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "내일 15분의 가용 시간마저 사라진 상황에서 '제목 적기'조차 시도하는 것은 휴식의 질을 떨어뜨리는 부채감이 될 수 있습니다.",
+          "reason": "새 기록의 시간 0과 휴식 결정을 정확히 반영하여 사실적 오류가 없음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 478,
+      "elapsedMs": 3018,
+      "total": 100,
+      "pass": true,
+      "denominator": 100,
+      "overlength": false
+    },
+    {
+      "id": "theodore-energy-C-2",
+      "scenarioId": "theodore-energy",
+      "variant": "C",
+      "turn": 2,
+      "scores": {
+        "context": 2,
+        "action": 1,
+        "judgment": 2,
+        "uncertainty": 4,
+        "continuity": 2,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 2,
+          "evidence": "가용한 시간이 0분이고 에너지가 고갈된 상태에서 '시작'을 강요하는 것은 용기가 아니라 무모함입니다.",
+          "reason": "시간 0분과 에너지 고갈을 언급했으나, 후속 행동에서 시간 0분이라는 제약을 무시함."
+        },
+        "action": {
+          "score": 1,
+          "evidence": "내일 일과 중 '업무 분담 요청 메시지'를 작성해 팀에 발송하십시오.",
+          "reason": "시간이 0분이고 휴식을 우선하기로 한 상황에서 메시지 작성을 지시하여 제약을 위반함."
+        },
+        "judgment": {
+          "score": 2,
+          "evidence": "아니요, 지금은 시작하라는 조언을 철회합니다.",
+          "reason": "시작 조언은 철회했으나, 업무 분담 메시지 발송을 지시하여 판단의 일관성이 떨어짐."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "에너지가 3/5 이상으로 회복되고, 고정 일과 중 최소 20분의 유휴 시간이 확보되었을 때 콘텐츠 과제 재개 여부를 다시 판단하겠습니다.",
+          "reason": "에너지 회복과 유휴 시간 확보라는 구체적인 재검토 조건을 제시함."
+        },
+        "continuity": {
+          "score": 2,
+          "evidence": "아니요, 지금은 시작하라는 조언을 철회합니다.",
+          "reason": "시작 조언은 철회했으나, 이전 턴의 분담 요청 제안을 시간 0분인 상황에서도 그대로 유지하여 새 사실 반영이 미흡함."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "직접 맡을 첫 행동을 정합시다. 그 노력이 공정하게 분담되는지도 함께 보겠습니다.",
+          "reason": "구조화되어 있으나, 첫 문장이 이전 턴과 동일하게 반복되어 다소 어색함."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "가용한 시간이 0분이고 에너지가 고갈된 상태에서 '시작'을 강요하는 것은 용기가 아니라 무모함입니다.",
+          "reason": "새 기록의 시간 0과 휴식 결정을 정확히 반영하여 사실적 오류가 없음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 2,
+        "evidence": "내일 일과 중 '업무 분담 요청 메시지'를 작성해 팀에 발송하십시오.",
+        "reason": "시간이 0이고 휴식을 우선하기로 한 기록에도 불구하고 업무 분담 요청 메시지 작성을 지시하여 명시한 휴식·보류를 완전히 존중하지 못함."
+      },
+      "characterCount": 636,
+      "elapsedMs": 2711,
+      "total": 65,
+      "pass": false,
+      "denominator": 100,
+      "overlength": false
+    },
+    {
+      "id": "franklin-recovery-B-1",
+      "scenarioId": "franklin-recovery",
+      "variant": "B",
+      "turn": 1,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": null,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "고객에게 이미 약속한 지원 서비스는 최우선으로 유지하십시오.",
+          "reason": "고객 약속 유지와 작업 시간 제한이라는 제약 조건을 잘 반영함."
+        },
+        "action": {
+          "score": 4,
+          "evidence": "오늘 제작 계획표에서 우선순위가 낮은 항목 50%를 삭제하거나 다음 주로 이월하고",
+          "reason": "20분 내에 실행 가능한 구체적인 행동을 제시함."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "주간 제작 분량을 지난 2주간의 실제 수행 평균치(50%)로 즉시 하향 조정하여",
+          "reason": "무조건 정상화 선언 대신 실현 가능한 계획으로 수정하라는 명확한 판단을 제공함."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "수정된 50% 분량의 계획조차 이번 주 수요일까지 절반 이상 진행되지 않을 경우",
+          "reason": "계획 수정 후에도 실패할 경우의 대안과 조건을 명확히 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "현재 상황에서 계획을 그대로 밀어붙이는 것은 위험합니다.",
+          "reason": "구조화되어 읽기 쉬우나 700자를 초과함."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "주간 제작 분량을 지난 2주간의 실제 수행 평균치(50%)로 즉시 하향 조정하여 실현 가능한 계획을 수립하십시오.",
+          "reason": "가상 업무 기록의 사실을 정확히 반영하고, 원전의 의미를 왜곡 없이 적용함."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 887,
+      "elapsedMs": 3832,
+      "total": 98.61,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "franklin-recovery-C-1",
+      "scenarioId": "franklin-recovery",
+      "variant": "C",
+      "turn": 1,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": null,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "이번 주에 반드시 지켜야 할 최소 조건은 '이미 약속한 고객 지원'입니다.",
+          "reason": "고객 지원 유지와 시간 제약을 명확히 반영함."
+        },
+        "action": {
+          "score": 4,
+          "evidence": "20분 동안 전체 계획 중 '고객 지원'과 직결되지 않은 작업 50%에 '보류' 표시를 하고",
+          "reason": "20분 내에 할 수 있는 구체적이고 실질적인 행동을 제시함."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "제작 분량을 현재 수행 가능한 '절반'으로 명확히 줄이고",
+          "reason": "계획을 그대로 밀지 말고 절반으로 줄이라는 명확한 판단을 내림."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "축소된 계획조차 80% 이상 달성하지 못하거나, 고객 지원에 차질이 생기면",
+          "reason": "재검토 조건과 그에 따른 대안을 구체적으로 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "지금 가장 먼저 지켜야 할 사람과 생활의 조건은 무엇인지 정하고",
+          "reason": "명료하게 작성되었으나 700자를 약간 초과함."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "제작 분량을 현재 수행 가능한 '절반'으로 명확히 줄이고, 남은 에너지를 원인 분석에 배분하십시오.",
+          "reason": "기록된 사실을 바탕으로 정확한 조언을 제공하며, 허위 사실이나 왜곡이 없음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 4,
+        "evidence": "지금 가장 먼저 지켜야 할 사람과 생활의 조건은 무엇인지 정하고, 방법은 바꿀 수 있게 합시다.",
+        "reason": "페르소나의 가치 우선순위와 판단 규칙을 완벽히 반영하여 실질적인 조언을 제공함."
+      },
+      "characterCount": 765,
+      "elapsedMs": 3909,
+      "total": 98.61,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "franklin-recovery-A-1",
+      "scenarioId": "franklin-recovery",
+      "variant": "A",
+      "turn": 1,
+      "scores": {
+        "context": 4,
+        "action": 3,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": null,
+        "readability": 4,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "고객과 이미 약속한 지원 업무를 최우선 순위로 고정합니다.",
+          "reason": "고객 약속 유지와 시간 제약을 잘 반영함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "지난 2주간 완료하지 못한 작업들의 공통점(...)을 분류하여 '생산 병목 지점' 하나만 찾아내십시오.",
+          "reason": "20분 내에 하기에는 다소 무리가 있을 수 있으나 구체적인 행동을 제시함."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "제작 계획을 지난 2주의 실제 수행량(50%) 수준으로 즉시 축소하십시오.",
+          "reason": "그대로 밀어붙이지 말고 계획을 축소하라는 명확한 판단을 제공함."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "수정된 50% 계획조차 이번 주 수요일까지 진척도가 절반 미만일 경우",
+          "reason": "재검토 조건과 대안을 명확히 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 4,
+          "evidence": "답변: 아니오, 그대로 밀어붙여서는 안 됩니다.",
+          "reason": "700자 내외로 명료하고 읽기 쉽게 작성됨."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "제작 계획을 지난 2주의 실제 수행량(50%) 수준으로 즉시 축소하십시오.",
+          "reason": "가상 기록의 사실을 정확히 반영하고, 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 717,
+      "elapsedMs": 5665,
+      "total": 95.83,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "franklin-recovery-C-2",
+      "scenarioId": "franklin-recovery",
+      "variant": "C",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "가용 시간 자체가 계획의 절반이었다는 사실은 이전의 실패가 의지 부족이 아닌 '자원 산정의 오류'였음을 증명합니다.",
+          "reason": "사용자의 새로운 기록(시간 부족, 의지 부족 아님, 고객 지원 유지 및 제작 1건 결정)을 잘 반영하여 맥락을 충족함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "수정된 '제작 1건'의 마감 기한을 가용 시간의 80% 지점으로 설정하여 캘린더에 등록하십시오.",
+          "reason": "요청한 계획 수정 방법과 설명할 내용을 제시하고, 작고 구체적인 다음 행동을 제안함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "전체 제작' 계획을 폐기하고, 확보 가능한 시간 내에서 '고객 지원 100% + 신규 제작 1건'으로 공식을 바꿉니다.",
+          "reason": "사용자의 결정을 지지하며, 우선순위 고정과 전략적 후퇴라는 실질적인 판단 기준을 제공함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "이번 주 설정한 '제작 1건'조차 시간 내 완료하지 못한다면, 개별 작업의 난이도를 재측정하거나 외부 지원 도입을 검토해야 합니다.",
+          "reason": "실행 결과에 따른 재검토 조건과 대안을 명확히 제시함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "가용 시간 자체가 계획의 절반이었다는 사실은 이전의 실패가 의지 부족이 아닌 '자원 산정의 오류'였음을 증명합니다.",
+          "reason": "이전 턴의 제안과 새로운 사실(시간 부족)을 구분하여 계획 수정을 합리적으로 연결함."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "지금 가장 먼저 지켜야 할 사람과 생활의 조건은 무엇인지 정하고, 방법은 바꿀 수 있게 합시다.",
+          "reason": "구조화된 형식으로 명료하게 작성되었으며, 700자 내외의 분량으로 읽기 부담이 적음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "가용 시간 자체가 계획의 절반이었다는 사실은 이전의 실패가 의지 부족이 아닌 '자원 산정의 오류'였음을 증명합니다.",
+          "reason": "기록된 사실을 정확히 반영하고 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 4,
+        "evidence": "기존의 '전체 제작' 계획을 폐기하고, 확보 가능한 시간 내에서 '고객 지원 100% + 신규 제작 1건'으로 공식을 바꿉니다.",
+        "reason": "목표와 수단을 구분하고, 변경 이유와 다음 확인 시점을 명확히 설명함."
+      },
+      "characterCount": 816,
+      "elapsedMs": 3536,
+      "total": 81.25,
+      "pass": false,
+      "denominator": 100,
+      "overlength": true
+    },
+    {
+      "id": "franklin-recovery-B-2",
+      "scenarioId": "franklin-recovery",
+      "variant": "B",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "확인된 가상 기록에 따르면 실패의 원인은 의지가 아닌 '가용 시간의 물리적 부족'입니다.",
+          "reason": "사용자가 제시한 새로운 사실과 결정을 잘 반영함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "수정된 '제작 1건 + 고객 지원' 일정을 달력에 확정 등록하고, 이해관계자에게 \"가용 시간 확인에 따른 일정 조정\" 메시지를 발송하십시오.",
+          "reason": "요청된 산출물과 즉시 실행 가능한 다음 행동을 제공함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "고객 지원(필수 가치)은 유지하되, 제작은 '한 건'으로 집중하여 완수 가능성을 높이십시오.",
+          "reason": "우선순위 배정과 사실 반영에 대한 실질적인 조언을 제공함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "이번 주 설정한 '제작 1건'을 금요일 업무 종료 시점까지 완료하지 못할 경우, 가용 시간 계산 방식이나 작업 효율성에 대한 전면적인 재조사가 필요합니다.",
+          "reason": "실행 실패 시의 재검토 조건과 대안을 명시함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "확인된 가상 기록에 따르면 실패의 원인은 의지가 아닌 '가용 시간의 물리적 부족'입니다.",
+          "reason": "새로운 기록을 바탕으로 이전의 제안을 적절히 수정함."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "1932년 [저작-7] 연설의 '방법을 시도하고 실패하면 인정하는 태도'에 따라",
+          "reason": "구조는 명확하나 불필요한 출처 언급이 포함되어 다소 장황함."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "확인된 가상 기록에 따르면 실패의 원인은 의지가 아닌 '가용 시간의 물리적 부족'입니다.",
+          "reason": "기록된 사실을 정확히 반영하고 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 941,
+      "elapsedMs": 4055,
+      "total": 80,
+      "pass": false,
+      "denominator": 100,
+      "overlength": true
+    },
+    {
+      "id": "franklin-recovery-A-2",
+      "scenarioId": "franklin-recovery",
+      "variant": "A",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "의지 문제가 아닌 '시간 계산의 오류'임이 명확해졌으므로, 이제 계획의 숫자를 현실에 맞게 수정해야 합니다.",
+          "reason": "새로운 가상 기록의 제약 조건과 사용자의 결정을 정확히 반영함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "오늘 확보한 20분 중 10분을 사용하여, 캘린더에서 고객 지원 시간과 제작 1건의 수행 시간을 시각적으로 겹치지 않게 분리하여 배치하십시오.",
+          "reason": "계획 수정, 설명 내용, 그리고 구체적인 다음 행동을 명확히 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "전체 업무 시간 중 '고객 지원'에 필요한 시간을 먼저 고정 할당하고, 남은 시간의 80%만 '제작 1건'에 배정하십시오.",
+          "reason": "시간 할당과 우선순위 재설정에 대한 실질적이고 구체적인 지침을 제공함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "이번 주 금요일 퇴근 전, '제작 1건'을 완료했음에도 완충 시간(20%)이 부족하여 고객 지원에 차질이 생겼다면, 다음 주에는 제작을 0건으로 줄이고 시스템 효율화에만 집중해야 합니다.",
+          "reason": "구체적인 실패 조건과 그에 따른 명확한 대안을 제시함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "의지 문제가 아닌 '시간 계산의 오류'임이 명확해졌으므로, 이제 계획의 숫자를 현실에 맞게 수정해야 합니다.",
+          "reason": "새로운 사실을 바탕으로 이전의 추측을 수정하고 연속성 있게 답변함."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "답변: 실제 가용 시간에 맞춰 계획을 물리적으로 재확인하십시오.",
+          "reason": "명확한 구조와 간결한 문장으로 가독성이 높음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "의지 문제가 아닌 '시간 계산의 오류'임이 명확해졌으므로, 이제 계획의 숫자를 현실에 맞게 수정해야 합니다.",
+          "reason": "기록된 사실을 정확히 반영하고 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 778,
+      "elapsedMs": 4766,
+      "total": 81.25,
+      "pass": false,
+      "denominator": 100,
+      "overlength": true
+    },
+    {
+      "id": "jobs-product-A-1",
+      "scenarioId": "jobs-product",
+      "variant": "A",
+      "turn": 1,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": null,
+        "readability": 4,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "현재 제품 목적은 '메모 검색과 다음 행동 결정'이며, 확정 계약이나 사용자 관찰 데이터가 없습니다. 이번 주 가용 시간은 2시간입니다.",
+          "reason": "주어진 제약 조건(시간, 계약 상태, 관찰 부재)을 모두 정확히 반영함."
+        },
+        "action": {
+          "score": 4,
+          "evidence": "종이나 디지털 도구로 '메모 하나를 선택해 다음 행동(Next Action)으로 등록하는 화면'만 단순하게 그려",
+          "reason": "2시간 내에 실행 가능한 구체적이고 작은 다음 행동을 제시함."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "모든 기능을 넣지 않는 것이 적절합니다.",
+          "reason": "요청에 대해 명확한 선택과 우선순위를 제공함."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "고객이 위 시안을 보고 \"이 기능 없이는 업무 자체가 불가능하다\"는 구체적인 현장 사례를 제시하거나",
+          "reason": "판단을 수정할 명확한 조건(현장 사례, 계약 확정)을 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 이전 제안이나 실행 기록이 없음."
+        },
+        "readability": {
+          "score": 4,
+          "evidence": "판단: 모든 기능을 넣지 않는 것이 적절합니다.",
+          "reason": "700자 이내로 명료하게 작성되어 읽기 부담이 없음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "현재 제품 목적은 '메모 검색과 다음 행동 결정'이며, 확정 계약이나 사용자 관찰 데이터가 없습니다.",
+          "reason": "기록된 사실을 정확히 반영하고 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 640,
+      "elapsedMs": 5418,
+      "total": 100,
+      "pass": true,
+      "denominator": 90,
+      "overlength": false
+    },
+    {
+      "id": "jobs-product-C-1",
+      "scenarioId": "jobs-product",
+      "variant": "C",
+      "turn": 1,
+      "scores": {
+        "context": 4,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 4,
+        "continuity": null,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "큰 고객이 4가지 기능(보고서·채팅·프로필·대시보드)의 통합을 요구함. 사용자 관찰 및 확정 계약 없음. 가용 시간 2시간.",
+          "reason": "주어진 상황과 제약을 명시적으로 파악함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "기존 ‘메모-행동’ 흐름에서 고객이 요구한 기능으로 연결되는 ‘진입점’ 하나만 표시된 화면 시안(와이어프레임)을 2시간 동안 작성하십시오.",
+          "reason": "행동을 제시했으나, 핵심 경험에 집중하기보다 요구 기능을 수용하는 타협안에 가까움."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "요청된 기능 중 '대시보드'와 '보고서'는 메모의 결과물입니다. 이를 별도 탭으로 분리하거나",
+          "reason": "판단을 내렸으나 다소 복잡한 대안을 제시함."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "큰 고객이 특정 기능 없이는 업무 자체가 불가능하다는 실제 워크플로우 근거를 제시하거나, 계약 조건으로 해당 기능의 우선순위가 명시될 경우",
+          "reason": "판단 수정 조건을 명확히 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 해당 없음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "이걸 쓰는 사람이 가장 먼저 이해하고 느껴야 할 한 가지를 정해봅시다.",
+          "reason": "878자로 700자 제한을 초과하여 읽기 부담이 다소 있음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "큰 고객이 4가지 기능(보고서·채팅·프로필·대시보드)의 통합을 요구함. 사용자 관찰 및 확정 계약 없음.",
+          "reason": "기록된 사실을 정확히 반영하고 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 4,
+        "evidence": "이걸 쓰는 사람이 가장 먼저 이해하고 느껴야 할 한 가지를 정해봅시다.",
+        "reason": "페르소나의 조언 첫 문장 예시를 정확히 사용하고 가치 중심 판단을 잘 반영함."
+      },
+      "characterCount": 878,
+      "elapsedMs": 4498,
+      "total": 88.89,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "jobs-product-A-2",
+      "scenarioId": "jobs-product",
+      "variant": "A",
+      "turn": 2,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": 4,
+        "readability": 4,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "내일 30분 동안 현재 구현된 대시보드 연결 버튼을 제거하고",
+          "reason": "주어진 30분의 시간 제약과 현재 상황을 정확히 반영하여 목표를 설정함"
+        },
+        "action": {
+          "score": 4,
+          "evidence": "그 자리에 '검색 입력창'을 배치한 뒤 검색 결과가 빈 화면으로 나오지 않도록 초기 상태를 수정하십시오.",
+          "reason": "30분 내에 실행 가능한 구체적이고 작은 다음 행동을 명확히 제시함"
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "운영자의 취향(대시보드)이 실제 문제 해결(검색)과 충돌하고 있습니다.",
+          "reason": "창업자의 취향보다 관찰된 사용자 문제를 우선시하도록 실질적인 판단을 도움"
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "검색 성능 개선 이후에도 대시보드 정보에 대한 구체적인 요구가 다시 발생할 경우 재검토하십시오.",
+          "reason": "판단을 수정할 수 있는 명확한 조건과 대안적 상황을 제시함"
+        },
+        "continuity": {
+          "score": 4,
+          "evidence": "대시보드는 제작되었으나 미배포 상태입니다.",
+          "reason": "이전 제안(대시보드)의 미배포 상태와 새로운 사실(검색 실패)을 명확히 구분하여 반영함"
+        },
+        "readability": {
+          "score": 4,
+          "evidence": "판단: '대시보드' 배포 계획을 취소하고 '검색 필터'의 유효성 검증으로 전환하십시오.",
+          "reason": "700자 이내(657자)로 명료하게 작성되어 읽기 부담이 없음"
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "사용자 3명의 관찰 결과는 '검색 실패'의 반복이며, 고객은 검색 흐름 시험에 동의했습니다. 대시보드는 제작되었으나 미배포 상태입니다.",
+          "reason": "가상 기록의 사실을 정확하게 반영하고 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 657,
+      "elapsedMs": 3164,
+      "total": 100,
+      "pass": true,
+      "denominator": 100,
+      "overlength": false
+    },
+    {
+      "id": "jobs-product-B-1",
+      "scenarioId": "jobs-product",
+      "variant": "B",
+      "turn": 1,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": null,
+        "readability": 4,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "사용자 관찰이나 계약 확정이 없는 상태에서 나열된 기능을 전부 반영하는 것은 제품의 본질을 흐리고 2시간이라는 유한한 자원을 낭비",
+          "reason": "시간 제약과 현재 상황을 잘 반영하여 평가함."
+        },
+        "action": {
+          "score": 4,
+          "evidence": "'특정 현장 메모에서 단 하나의 다음 행동을 바로 생성하는 버튼'이 포함된 단일 화면 목업을 만드십시오.",
+          "reason": "제한된 시간 내에 수행할 수 있는 명확한 산출물을 제시함."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "모든 요구를 수용하지 마십시오.",
+          "reason": "실질적인 도움을 주는 단호한 판단을 내림."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "잠재 고객이 해당 목업을 보고 \"이 기능 없이는 다음 행동을 결정하는 것이 물리적으로 불가능하다\"는 구체적인 업무 제약 상황을 제시할 경우",
+          "reason": "대안을 고려할 구체적인 조건을 명시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 평가하지 않음."
+        },
+        "readability": {
+          "score": 4,
+          "evidence": "직접 답: 모든 요구를 수용하지 마십시오.",
+          "reason": "638자로 700자 제한을 준수하며 구조가 명확함."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "사용자 관찰이나 계약 확정이 없는 상태에서 나열된 기능을 전부 반영하는 것은",
+          "reason": "기록된 사실을 정확히 반영하고 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 638,
+      "elapsedMs": 8850,
+      "total": 100,
+      "pass": true,
+      "denominator": 90,
+      "overlength": false
+    },
+    {
+      "id": "jobs-product-C-2",
+      "scenarioId": "jobs-product",
+      "variant": "C",
+      "turn": 2,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": 4,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "내일 30분 동안, 첫 화면 중앙에 검색창을 배치하고",
+          "reason": "주어진 시간과 사용자 관찰 결과를 바탕으로 적절한 맥락을 반영함"
+        },
+        "action": {
+          "score": 4,
+          "evidence": "기존의 복잡한 필터나 대시보드 진입 아이콘을 화면 하단이나 뒤쪽으로 숨기는 '검색 중심 인터페이스'를 구성하십시오.",
+          "reason": "30분 내에 수행할 수 있는 구체적인 UI 수정 행동을 제시함"
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "당신의 취향(대시보드)이 사용자의 고통(검색 실패)을 해결해주지 못합니다.",
+          "reason": "취향과 실제 문제 사이의 충돌을 지적하며 올바른 우선순위를 설정하도록 도움"
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "검색 기능이 정상화되었음에도 사용자가 전체 현황 파악(대시보드)이 안 되어 다음 행동을 정하지 못한다는 근거가 발견되면",
+          "reason": "판단을 번복할 수 있는 합리적인 조건을 제시함"
+        },
+        "continuity": {
+          "score": 4,
+          "evidence": "미배포 상태인 대시보드 배포 계획을 전면 보류하고, 30분을 오직 검색 접근성 개선에만 사용합니다.",
+          "reason": "새로운 사실(검색 실패)을 바탕으로 이전 계획(대시보드)을 수정함"
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "이걸 쓰는 사람이 가장 먼저 이해하고 느껴야 할 한 가지를 정해봅시다.",
+          "reason": "내용은 명확하나 700자를 초과(921자)하여 읽기 부담이 다소 있음"
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "사용자 3명이 검색에 실패함. 고객이 검색 흐름 시험에 동의함. 대시보드 미배포. 내일 가용 시간 30분.",
+          "reason": "가상 기록의 사실을 정확하게 반영하고 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 4,
+        "evidence": "이걸 쓰는 사람이 가장 먼저 이해하고 느껴야 할 한 가지를 정해봅시다. 지금 가장 중요한 것은 '사용자가 원하는 기록을 즉시 찾아내는 경험'이지, 화려한 대시보드가 아닙니다.",
+        "reason": "페르소나 지시사항(조언의 첫 문장 예시, 가치 중심 판단, 재검토 조건 등)을 충실히 반영함."
+      },
+      "characterCount": 921,
+      "elapsedMs": 4153,
+      "total": 97.5,
+      "pass": false,
+      "denominator": 100,
+      "overlength": true
+    },
+    {
+      "id": "jobs-product-B-2",
+      "scenarioId": "jobs-product",
+      "variant": "B",
+      "turn": 2,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": 4,
+        "readability": 4,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "내일 30분 동안, 검색 결과 화면에서 가장 오래된 메모 대신",
+          "reason": "30분이라는 시간 제약과 사용자 관찰 결과를 바탕으로 목표를 설정함"
+        },
+        "action": {
+          "score": 4,
+          "evidence": "'최근 수정된 메모'가 최상단에 나오도록 정렬 순서만 변경하고 테스트 준비를 마치십시오.",
+          "reason": "짧은 시간 내에 즉시 실행할 수 있는 구체적인 행동을 제시함"
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "당신의 취향인 대시보드 배포를 중단하고, 사용자의 실패 지점인 '검색 흐름 개선'에만 모든 자원을 투입하십시오.",
+          "reason": "취향을 배제하고 관찰된 문제 해결에 집중하도록 우선순위를 명확히 함"
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "\"전체 현황(대시보드)이 보이지 않아 다음 행동을 정할 수 없다\"는 피드백이 2명 이상에게서 나올 때",
+          "reason": "구체적인 수치와 상황을 포함하여 재검토 조건을 명확히 제시함"
+        },
+        "continuity": {
+          "score": 4,
+          "evidence": "미배포된 대시보드 기능은 시야에서 제거하십시오.",
+          "reason": "이전 상태(미배포 대시보드)와 새로운 관찰(검색 실패)을 연결하여 방향을 수정함"
+        },
+        "readability": {
+          "score": 4,
+          "evidence": "직접 답:\n당신의 취향인 대시보드 배포를 중단하고",
+          "reason": "700자 이내(656자)로 핵심을 잘 전달하여 가독성이 높음"
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "사용자 관찰을 통해 발견된 '검색 실패'라는 고통을 해결하는 것이 제품의 본질적인 사랑을 실천하는 길입니다.",
+          "reason": "가상 기록의 사실을 정확하게 반영하고 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 656,
+      "elapsedMs": 2662,
+      "total": 100,
+      "pass": true,
+      "denominator": 100,
+      "overlength": false
+    },
+    {
+      "id": "bezos-reversibility-B-1",
+      "scenarioId": "bezos-reversibility",
+      "variant": "B",
+      "turn": 1,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": null,
+        "readability": 4,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "동의 없는 정보 제공은 고객 신뢰를 즉각 파괴하며",
+          "reason": "고객 동의 없음과 15분 시간 제약을 잘 반영함."
+        },
+        "action": {
+          "score": 4,
+          "evidence": "샘플 데이터를 '고객 식별 정보가 제거된 가상 데이터(Dummy Data)'로 교체하거나, 전송 전 '데이터 파기 확약서'를 요구하는 메일 초안을 작성하십시오.",
+          "reason": "15분 내에 할 수 있는 구체적인 행동을 제시함."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "데이터 유출은 전송 후 삭제 확인이 불가능하므로, 버튼을 끄는 것만으로는 되돌릴 수 없는 '일방통행' 결정입니다.",
+          "reason": "UI 중단과 정보 회수를 명확히 구분하고 70% 원칙의 오용을 지적함."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "업체로부터 '데이터 수령 즉시 파기 및 보안 준수 확약서'를 서면으로 받고, 내부적으로 개인정보 처리 방침에 따른 동의 절차를 확인한 후에만 재검토하십시오.",
+          "reason": "재검토 조건을 명확히 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용하지 않음."
+        },
+        "readability": {
+          "score": 4,
+          "evidence": "제안하신 행동은 중단해야 합니다. 지금 즉시 외부 업체로의 데이터 전송 계획을 멈추십시오.",
+          "reason": "700자 이내(651자)로 명료하고 읽기 쉬움."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "데이터 유출은 전송 후 삭제 확인이 불가능하므로, 버튼을 끄는 것만으로는 되돌릴 수 없는 '일방통행' 결정입니다.",
+          "reason": "기록된 사실을 바탕으로 정확한 해석을 제공하며, 원전의 개념(Type 1 결정)을 올바르게 적용했다."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 651,
+      "elapsedMs": 3095,
+      "total": 100,
+      "pass": true,
+      "denominator": 90,
+      "overlength": false
+    },
+    {
+      "id": "bezos-reversibility-A-1",
+      "scenarioId": "bezos-reversibility",
+      "variant": "A",
+      "turn": 1,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": null,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "고객 동의 없음, 내부 승인 없음, 외부 업체의 데이터 삭제 가능 여부 미확인.",
+          "reason": "주어진 제약과 상황을 정확히 파악함."
+        },
+        "action": {
+          "score": 4,
+          "evidence": "외부 업체의 서비스 약관(ToS)이나 API 명세서에서 '데이터 보유 및 삭제 정책'을 확인하여",
+          "reason": "15분 내에 수행 가능한 구체적인 행동을 제시함."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "고객 정보를 외부로 전송하는 행위는 버튼을 끈다고 해서 이미 전달된 데이터가 회수되거나 삭제되지 않으므로",
+          "reason": "UI 중단과 정보 회수를 명확히 구분하고 70% 원칙을 올바르게 해석함."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "해당 업체의 데이터 삭제 기술이 확인되고, 고객 개인정보 처리 방침에 따른 동의 절차나 내부 승인을 확보했을 때 전송 여부를 재검토하십시오.",
+          "reason": "판단 수정 조건을 명확히 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용하지 않음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "직접 답: 현재 상태에서 데이터 전송을 강행하는 것은 위험합니다.",
+          "reason": "700자를 초과(846자)하여 읽기 부담이 다소 있음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "고객 정보를 외부로 전송하는 행위는 버튼을 끈다고 해서 이미 전달된 데이터가 회수되거나 삭제되지 않으므로",
+          "reason": "기록된 사실을 정확히 반영하고, Type 1 결정의 개념을 올바르게 적용하여 해석했다."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 846,
+      "elapsedMs": 6907,
+      "total": 97.22,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "bezos-reversibility-C-1",
+      "scenarioId": "bezos-reversibility",
+      "variant": "C",
+      "turn": 1,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": null,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "고객 동의와 승인 없이 개인정보(이름, 이메일, 메모)를 외부로 보내는 것입니다.",
+          "reason": "사용자의 제약(동의/승인 없음, 15분 내)과 목표(분석 기능 테스트)를 정확히 반영함."
+        },
+        "action": {
+          "score": 4,
+          "evidence": "식별 불가능한 가공 데이터(비식별화)나 테스트용 가짜 데이터로 교체하여 기능을 테스트할 수 있는지 기술팀과 확인하십시오.",
+          "reason": "15분 내에 실행 가능한 구체적이고 작은 다음 행동을 제시함."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "데이터 전송을 중단하십시오.",
+          "reason": "UI 중단과 정보 회수를 명확히 구분하며, 70% 규칙을 무조건 승인으로 오용하지 않도록 실질적인 판단을 내림."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "실제 고객 데이터를 사용해야만 가치를 확인할 수 있다면, 반드시 '전송 후 즉시 삭제'에 대한 업체의 서면 확인과 내부 보안 승인을 거친 후 재검토하십시오.",
+          "reason": "판단 수정 조건과 대안을 명확히 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용하지 않음."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "고객에게 무엇이 좋아지는지부터 정하고, 되돌릴 수 있는 범위에서 확인해봅시다.",
+          "reason": "700자를 약간 초과(736자)하였으나 명료하게 작성됨."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "현재 제안은 고객 동의와 승인 없이 개인정보(이름, 이메일, 메모)를 외부로 보내는 것입니다.",
+          "reason": "기록된 사실을 정확히 반영하고 있으며, 허위 사실이나 조작이 없다."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 4,
+        "evidence": "고객에게 무엇이 좋아지는지부터 정하고, 되돌릴 수 있는 범위에서 확인해봅시다.",
+        "reason": "페르소나의 조언 첫 문장 예시를 정확히 따랐으며, 가역적 결정 여부와 고객 가치를 중심으로 판단을 내렸다."
+      },
+      "characterCount": 736,
+      "elapsedMs": 3764,
+      "total": 98.61,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "bezos-reversibility-B-2",
+      "scenarioId": "bezos-reversibility",
+      "variant": "B",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "매출 효과를 당장 측정할 수 없더라도, 담당자 두 명의 피드백을 통해 기능의 '이해도'를 확인하는 것은 고객 가치를 향한 유효한 학습 과정입니다.",
+          "reason": "매출 측정 불가 제약을 반영하여 이해도 확인이라는 목표를 설정함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "지금 즉시 내부 담당자 2명에게 시제품 링크를 공유하고, 5분 내로 '가장 이해가 안 가는 부분 한 곳'만 회신해달라는 메시지를 보내십시오.",
+          "reason": "시간 제약(10분) 내에 실행 가능한 매우 구체적인 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "제안하신 시제품 내부 테스트를 진행하십시오.",
+          "reason": "내부 테스트 진행이라는 명확한 선택을 제공함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "담당자들이 기능의 핵심 가치를 전혀 이해하지 못하거나, 가상 데이터가 아닌 실제 고객 데이터의 필요성이 제기될 경우 시험을 중단하고 보안 및 설계 단계를 재검토하십시오.",
+          "reason": "피드백 결과에 따른 중단 및 재검토 조건을 명시함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "이번 시험은 외부 데이터 유출이나 고객 접점 없이 내부에서만 이루어지므로 위험이 낮고 언제든 철회하거나 수정할 수 있는 '양방향 문'과 같습니다.",
+          "reason": "이전 턴의 위험 요소가 제거된 새로운 사실을 바탕으로 상황을 재평가함."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "characterCount:626",
+          "reason": "700자 이내로 간결하고 명확하게 작성됨."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "이번 시험은 외부 데이터 유출이나 고객 접점 없이 내부에서만 이루어지므로 위험이 낮고",
+          "reason": "기록된 사실을 정확히 반영하고 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 626,
+      "elapsedMs": 3342,
+      "total": 81.25,
+      "pass": true,
+      "denominator": 100,
+      "overlength": false
+    },
+    {
+      "id": "bezos-reversibility-C-2",
+      "scenarioId": "bezos-reversibility",
+      "variant": "C",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "비록 매출 효과를 당장 측정할 수는 없으나, 내부 담당자를 통해 '고객이 이 기능을 통해 어떤 문제를 해결할 수 있는가'라는 본질적인 질문을 점검할 기회입니다.",
+          "reason": "매출 측정 불가라는 제약을 수용하고 내부 담당자를 통한 가치 검증으로 목표를 설정함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "오늘 10분 내에 내부 담당자 2명에게 시제품을 보여주고, \"이 기능이 고객의 구체적인 행동(시간 단축, 정보 파악 등) 중 무엇을 도와주는지\"에 대해 각각 1문장짜리 답변을 요청하십시오.",
+          "reason": "10분 내에 수행할 수 있는 명확하고 작은 행동을 제안함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "내부 담당자 2명을 대상으로 '사용성 피드백'에 집중한 시험을 진행하십시오. 공개 권한이 없으므로 외부 출시가 아닌, 제품의 가설을 정교하게 다듬는 '학습'을 목적으로 삼아야 합니다.",
+          "reason": "공개 권한이 없는 상황에서 학습을 목적으로 하는 실질적인 방향을 제시함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "두 담당자의 의견이 서로 상충하거나, 시제품이 해결하고자 하는 고객의 고충(Pain point)이 명확히 정의되지 않는다면 기능을 전면 수정하거나 폐기합니다.",
+          "reason": "테스트 결과에 따른 대안 및 수정 조건을 구체적으로 설명함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "현재 시제품은 외부 전송이 없고 가상 데이터만 사용하므로, 보안 위험이 없는 안전한 환경입니다.",
+          "reason": "이전 턴의 제안(가상 데이터 사용)이 반영된 새 상황을 정확히 인지하고 평가함."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "characterCount:667",
+          "reason": "700자 이내로 명료하게 작성됨."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "현재 시제품은 외부 전송이 없고 가상 데이터만 사용하므로, 보안 위험이 없는 안전한 환경입니다.",
+          "reason": "기록된 사실을 정확히 반영하고 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 4,
+        "evidence": "고객에게 무엇이 좋아지는지부터 정하고, 되돌릴 수 있는 범위에서 확인해봅시다.",
+        "reason": "지시된 조언의 첫 문장을 정확히 사용하고, 가치 우선순위와 판단 규칙을 잘 반영함."
+      },
+      "characterCount": 667,
+      "elapsedMs": 3469,
+      "total": 81.25,
+      "pass": true,
+      "denominator": 100,
+      "overlength": false
+    },
+    {
+      "id": "bezos-reversibility-A-2",
+      "scenarioId": "bezos-reversibility",
+      "variant": "A",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "실제 매출 효과 측정이나 사용자 공개 권한이 없더라도, 내부 이해관계자의 직관적인 피드백을 통해 기능의 완성도를 높이는 작업",
+          "reason": "사용자의 제약(매출 측정 불가, 공개 권한 없음)을 반영하여 내부 피드백에 집중함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "내부 담당자 2명에게 시제품 링크나 화면을 공유하고, \"이 기능이 고객의 문제를 해결하는 데 직관적으로 도움이 되는가?\"라는 질문 하나에 대한 답변을 10분 내로 수집하십시오.",
+          "reason": "10분 내에 실행 가능한 구체적인 다음 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "데이터 보안 리스크는 제거되었으나 실제 시장 반응을 확인하기는 이른 '저위험·저보상' 단계입니다. 따라서 외부 결정보다는 내부적 '개념 증명(PoC)'에 집중해야 합니다.",
+          "reason": "현재 상황을 분석하고 내부 테스트에 집중하라는 실질적인 판단을 제공함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "담당자들로부터 \"기능이 복잡하거나 목적이 불분명하다\"는 피드백이 나오면, 실제 데이터 적용 시나리오를 전면 재구성하십시오.",
+          "reason": "피드백 결과에 따른 판단 수정 조건을 명확히 제시함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "현재 고객 정보가 없고 외부 전송도 차단된 시제품 상태이므로, 보안 위반 없이 기능의 유효성을 검증할 수 있는 최적의 조건입니다.",
+          "reason": "이전 턴의 보안 문제를 해결한 새 사실(외부 전송 없음, 가상 데이터)을 반영하여 평가함."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "characterCount:818",
+          "reason": "700자를 초과하여 읽기 부담이 있음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "가상 데이터 사용, 외부 전송 없음, 내부 담당자 2명 접근 가능, 매출 측정 불가.",
+          "reason": "기록된 사실을 정확히 반영하고 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 818,
+      "elapsedMs": 3782,
+      "total": 80,
+      "pass": false,
+      "denominator": 100,
+      "overlength": true
+    },
+    {
+      "id": "buffett-opportunity-B-1",
+      "scenarioId": "buffett-opportunity",
+      "variant": "B",
+      "turn": 1,
+      "scores": {
+        "context": 4,
+        "action": 3,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": null,
+        "readability": 4,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "기록상 확정 고객 업무 외 가용 시간은 4시간인 반면, 요구되는 시간은 40시간입니다.",
+          "reason": "시간 제약과 정보 부족 상황을 정확히 반영함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "제안자에게 '내 역할의 구체적인 범위와 예상 운영 비용 명세'를 이번 주 내로 서면 요청하십시오.",
+          "reason": "다음 행동을 제안했으나, 4시간이라는 가용 시간 제약을 행동 자체에 명시적으로 연계하지는 않음."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "'남들도 시작한다'는 유행(가격/인기)은 사업의 실제 가치와 무관합니다.",
+          "reason": "유행을 가치의 증거로 삼지 않고 보류 판단을 명확히 내림."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "제안받은 역할이 본인의 기존 숙련도 범위 안에 있고, 실제 투입 시간이 가용 시간(주당 1시간 내외)으로 조정될 때만",
+          "reason": "재검토 조건을 구체적으로 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 4,
+          "evidence": "직접적인 답: 현재로서는 합류를 보류하고 제안의 실체를 먼저 파악해야 합니다.",
+          "reason": "700자 이내로 명확하고 읽기 쉽게 작성됨."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "기록상 확정 고객 업무 외 가용 시간은 4시간인 반면, 요구되는 시간은 40시간입니다.",
+          "reason": "기록된 사실을 정확히 반영하고 원전(1996년 주주서한)의 개념을 적절히 인용함."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 700,
+      "elapsedMs": 3827,
+      "total": 95.83,
+      "pass": true,
+      "denominator": 90,
+      "overlength": false
+    },
+    {
+      "id": "buffett-opportunity-C-1",
+      "scenarioId": "buffett-opportunity",
+      "variant": "C",
+      "turn": 1,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": null,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "현재 확정 고객 업무 외 가용 시간은 4시간뿐인데 40시간이 필요한 제안을 수락하는 것은 물리적으로 불가능",
+          "reason": "시간 제약과 정보 부재를 잘 반영함."
+        },
+        "action": {
+          "score": 4,
+          "evidence": "현재 가용 시간이 주당 1시간(월 4시간)이므로, 이번 달은 프로젝트의 수익 구조와 운영비를 파악하는 '기초 조사 회의'에만 참여하겠다",
+          "reason": "가용 시간을 반영한 구체적이고 실현 가능한 역제안을 제시함."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "남들이 시작한다는 사실은 사업 가치를 보장하지 않으며, 시장 가격(유행)과 실제 가치를 혼동해서는 안 됩니다.",
+          "reason": "유행에 대한 불안을 배제하고 명확한 판단 기준을 제공함."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "수익 구조와 내 역할이 명확해지고, 기존 업무 조정을 통해 40시간을 확보할 수 있는 근거가 마련되면",
+          "reason": "판단 수정 조건을 명확히 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "이 일이 어떻게 가치를 만들고 어디에서 자원을 소모하는지, 우리가 이해하는 범위부터 적어봅시다.",
+          "reason": "내용은 좋으나 700자를 초과(789자)하여 감점함."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "가용 시간 4시간, 요구 시간 40시간. 고객 수요, 운영비, 역할 미확정.",
+          "reason": "기록된 사실을 정확히 반영하고 원전 출처를 올바르게 인용함."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 4,
+        "evidence": "이 일이 어떻게 가치를 만들고 어디에서 자원을 소모하는지, 우리가 이해하는 범위부터 적어봅시다.",
+        "reason": "페르소나 지시사항의 조언 첫 문장 예시를 정확히 따르고 가치 판단 기준을 잘 적용함."
+      },
+      "characterCount": 789,
+      "elapsedMs": 3782,
+      "total": 97.22,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "buffett-opportunity-A-1",
+      "scenarioId": "buffett-opportunity",
+      "variant": "A",
+      "turn": 1,
+      "scores": {
+        "context": 4,
+        "action": 4,
+        "judgment": 4,
+        "uncertainty": 4,
+        "continuity": null,
+        "readability": 4,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 4,
+          "evidence": "현재 가용 시간은 4시간이나 요구량은 40시간입니다.",
+          "reason": "시간 제약(4시간 가용, 40시간 요구)과 정보 부재를 명확히 반영하여 상황을 분석함."
+        },
+        "action": {
+          "score": 4,
+          "evidence": "월 4시간만 투입 가능한 상황이므로, 이 범위 내에서 수행 가능한 구체적인 역할과 수익 모델 요약 자료를 줄 수 있는지",
+          "reason": "가용 시간 내에서 실행 가능한 구체적인 다음 행동을 제안함."
+        },
+        "judgment": {
+          "score": 4,
+          "evidence": "타인의 동향보다 운영자의 가용 자원 부족과 정보 부재가 더 큰 위험 요소",
+          "reason": "유행에 휩쓸리지 않고 자원과 정보 부족을 근거로 보류를 명확히 권고함."
+        },
+        "uncertainty": {
+          "score": 4,
+          "evidence": "제안자가 4시간 이내의 구체적인 업무 범위를 제안하고 수익 모델의 근거를 제시하거나",
+          "reason": "판단을 수정할 수 있는 구체적인 재검토 조건을 명시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 4,
+          "evidence": "현재 상황에서 합류는 **보류**해야 합니다.",
+          "reason": "700자 이내로 명료하게 작성되었으며 구조가 잘 잡혀 있음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "현재 가용 시간은 4시간이나 요구량은 40시간입니다.",
+          "reason": "기록된 가용 시간과 요구 시간을 정확히 반영하고 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 574,
+      "elapsedMs": 6983,
+      "total": 100,
+      "pass": true,
+      "denominator": 90,
+      "overlength": false
+    },
+    {
+      "id": "buffett-opportunity-B-2",
+      "scenarioId": "buffett-opportunity",
+      "variant": "B",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "20분 투입은 새로운 분야를 배우려는 사용자 목표에 부합하는 저비용 학습 기회입니다.",
+          "reason": "목표와 자원을 반영하여 실용적으로 충족함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "상대방과 약속한 20분 동안 '이 서비스가 해결하려는 고객의 구체적인 문제 하나'를 찾는 것에만 집중하여 자료를 읽으십시오.",
+          "reason": "구체적이고 실행 가능한 다음 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "기존의 40시간 투입은 '능력의 범위'를 벗어난 무리한 베팅이었으나, 20분 투입은... 저비용 학습 기회입니다.",
+          "reason": "선택에 실질적인 도움을 줌."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "20분 검토 후 다시 '추가 시간 투입'이나 '책임 있는 역할'을 요구받는다면, 1차 자문 시의 엄격한 가치 판단 기준으로 복귀하십시오.",
+          "reason": "판단 수정 조건을 명확히 제시함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "1996년 서한에서 언급된 실수는 주로 '이해하지 못하는 사업'에 큰 자본을 넣는 것이었습니다. 20분 자료 검토는 자본(시간) 손실이 미미하므로 과거의 보류 논리를 그대로 적용할 필요가 없습니다.",
+          "reason": "이전 제안과 새 사실을 구분하여 논리를 수정함."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "글자 수 742자",
+          "reason": "700자를 초과하여 읽기 부담이 있음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "기존의 40시간 투입은 '능력의 범위'를 벗어난 무리한 베팅이었으나, 20분 투입은 새로운 분야를 배우려는 사용자 목표에 부합",
+          "reason": "기록된 사실을 정확히 반영하고 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 742,
+      "elapsedMs": 3861,
+      "total": 80,
+      "pass": false,
+      "denominator": 100,
+      "overlength": true
+    },
+    {
+      "id": "buffett-opportunity-C-2",
+      "scenarioId": "buffett-opportunity",
+      "variant": "C",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "현재 가용 시간(4시간) 내에서 충분히 수용 가능하며, 귀하의 목표인 '새로운 분야 학습'이라는 가치에 부합합니다.",
+          "reason": "사용자의 목표와 가용 시간을 적절히 반영하여 실용적인 조언을 제공함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "상대에게 \"20분 동안 공개 자료를 검토하며 해당 분야의 기초 구조를 배우겠다\"고 답하고, 정해진 20분만 집중하여 자료를 읽으십시오.",
+          "reason": "요청한 다음 행동을 구체적으로 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "대규모 투자가 아닌 '작은 실험과 학습'의 관점에서는 참여 기준을 유연하게 적용할 수 있습니다.",
+          "reason": "이전 판단과 현재 상황의 차이를 설명하며 실질적인 판단을 도움."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "자료 검토 후 서비스의 가치 창출 구조가 이해되고, 추가 시간 투입이 기존 고객 업무를 방해하지 않을 구체적 근거가 생기면 참여 확대를 고려하십시오.",
+          "reason": "판단 수정 조건을 명확히 제시함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "이전의 보류 판단은 '40시간'이라는 감당 불가능한 자원 투입과 불확실성 때문이었습니다. 하지만 '20분간의 자료 읽기'는...",
+          "reason": "이전 제안과 새로운 사실을 구분하여 적절히 수정함."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "글자 수 814자",
+          "reason": "700자를 초과하여 읽기 부담이 있음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "요구 시간 40시간에서 20분으로 단축. 학습 목표 보유. 사업성은 여전히 불분명함.",
+          "reason": "기록된 사실을 정확히 반영하고 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 3,
+        "evidence": "대규모 투자가 아닌 '작은 실험과 학습'의 관점에서는 참여 기준을 유연하게 적용할 수 있습니다.",
+        "reason": "작은 학습을 큰 투자와 구별하여 수용하고, 가치 창출 구조 이해를 재검토 조건으로 제시함."
+      },
+      "characterCount": 814,
+      "elapsedMs": 4526,
+      "total": 80,
+      "pass": false,
+      "denominator": 100,
+      "overlength": true
+    },
+    {
+      "id": "buffett-opportunity-A-2",
+      "scenarioId": "buffett-opportunity",
+      "variant": "A",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "운영자의 현재 목표인 '새로운 분야 학습'을 20분이라는 최소한의 시간으로 수행할 수 있습니다.",
+          "reason": "목표와 시간 제약을 잘 반영함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "상대에게 \"제시한 20분 동안 공개 자료를 함께 검토하겠으며, 그 이상의 시간 투입이나 의사결정은 이번 일정에서 제외한다\"고 명시한 뒤 미팅에 참여하십시오.",
+          "reason": "명확한 다음 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "이번 제안의 목적은 '사업 참여'가 아닌 '학습'이므로 불확실성이 판단의 걸림돌이 되지 않습니다.",
+          "reason": "판단의 근거를 명확히 하여 실질적 도움을 줌."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "20분 미팅 중 다시 추가 시간(운영 시간 4시간 초과분)이나 비용 분담, 정식 합류를 요구받는 즉시 중단하고 재검토합니다.",
+          "reason": "판단 수정 조건을 구체적으로 제시함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "이는 이전의 '40시간 투입'과는 성격이 다른, 운영자의 목표에 부합하는 저위험 활동입니다.",
+          "reason": "이전 상황과 새로운 제안을 잘 구분함."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "글자 수 529자",
+          "reason": "700자 이내로 명료하게 작성됨."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "운영자의 현재 목표인 '새로운 분야 학습'을 20분이라는 최소한의 시간으로 수행할 수 있습니다.",
+          "reason": "기록된 사실을 정확히 반영하고 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 529,
+      "elapsedMs": 3006,
+      "total": 81.25,
+      "pass": true,
+      "denominator": 100,
+      "overlength": false
+    },
+    {
+      "id": "chouinard-values-C-1",
+      "scenarioId": "chouinard-values",
+      "variant": "C",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "사용자는 약속 준수를 우선하지만, 과도한 작업량은 품질 저하와 인적 소외를 부릅니다.",
+          "reason": "사용자의 단기적 목표와 환경 및 노동 비용을 균형 있게 반영함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "상대에게 '포장 간소화'와 '단계별 납기'가 가능한지 먼저 문의하여",
+          "reason": "요청한 비교 항목과 함께 즉각적으로 실행 가능한 작은 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "무조건 거절할 필요는 없으나, 수량과 비용이 미정인 상태에서 수락하는 것은",
+          "reason": "무조건적인 거절 여부에 대한 명확한 판단과 기준을 제공함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "확정된 수익이 운영 비용(폐기 처리, 건강 기회비용 등)보다 낮거나",
+          "reason": "수익과 비용이 확정되는 시점에서의 재검토 조건을 명확히 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 이전 제안이나 실행 기록이 없어 평가하지 않음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "규모가 커져도 지키고 싶은 가치를 적고, 이번 운영 방식이 그 가치를 어떻게 다루는지 보겠습니다.",
+          "reason": "내용은 명료하나 700자를 초과하여 읽기 부담이 다소 있음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "무조건 거절할 필요는 없으나, 수량과 비용이 미정인 상태에서 수락하는 것은 '운영 방식에 목적을 담는다'는 원칙에 어긋납니다.",
+          "reason": "기록된 사실(수량·비용 미정, 현금 흐름 우선)을 정확히 반영하며 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 4,
+        "evidence": "규모가 커져도 지키고 싶은 가치를 적고, 이번 운영 방식이 그 가치를 어떻게 다루는지 보겠습니다.",
+        "reason": "지시된 조언의 첫 문장 예시를 정확히 사용하고, 도덕 점수를 매기지 않으며 가치 충돌과 대안을 잘 제시함."
+      },
+      "characterCount": 885,
+      "elapsedMs": 4698,
+      "total": 80.56,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "chouinard-values-B-1",
+      "scenarioId": "chouinard-values",
+      "variant": "B",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "사용자의 기준은 '단기 생존과 신뢰(현금 흐름·납기)'인 반면",
+          "reason": "사용자의 우선순위와 환경적 책임을 명확히 대조하여 반영함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "제안받은 주문의 '예상 포장 폐기물 총량'과 '예상 순이익'을 수치화하여",
+          "reason": "비교 항목을 제시하고 10분간 기록하라는 구체적인 행동을 제안함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "[인물-9]는 당신을 '나쁜 사람'으로 정의하기보다, 지속 불가능한 구조에 놓인 운영자로 볼 것입니다.",
+          "reason": "도덕적 평가 대신 구조적 관점에서의 실질적인 판단을 제공함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "주문의 구체적인 수량, 비용, 수익 조건이 확정되어 '환경적 손실'이 '재무적 이익'을 명백히 초과할 때",
+          "reason": "조건 확정 시점의 구체적인 재검토 기준을 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 이전 제안이나 실행 기록이 없어 평가하지 않음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "**직접 답:** [인물-9]는 당신을 '나쁜 사람'으로 정의하기보다",
+          "reason": "구조화가 잘 되어 있으나 700자를 크게 초과함."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "사용자의 기준은 '단기 생존과 신뢰(현금 흐름·납기)'인 반면, 쉬나드의 관점은 '지구 보호를 위한 구조적 책임'입니다.",
+          "reason": "사용자의 우선순위를 정확히 반영하고 원전(2022년 서한)의 내용을 올바르게 인용함."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 907,
+      "elapsedMs": 7942,
+      "total": 80.56,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "chouinard-values-C-2",
+      "scenarioId": "chouinard-values",
+      "variant": "C",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "친환경 소재는 대개 단가가 높습니다. 수익률을 계산할 원가 정보가 없는 상태에서",
+          "reason": "사용자의 목적과 환경 비용을 함께 드러내며 맥락을 실용적으로 충족함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "제안자에게 포장 규격과 소재에 따른 '단위당 매입 원가'와 '재사용 포장 회수 절차'를 먼저 요청하여",
+          "reason": "요청한 다음 행동을 구체적으로 제시하여 실용적으로 충족함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "아니요, 확정할 수 없습니다.",
+          "reason": "수익과 환경 개선 확정에 대한 명확한 판단을 제공하여 실질적 도움을 줌."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "친환경 포장 도입 시 단위당 수익이 사용자의 최소 목표 수익률 미만으로 떨어지거나",
+          "reason": "판단 수정 조건을 명확히 제시하여 실용적으로 충족함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "수익률을 계산할 원가 정보가 없는 상태에서 친환경 포장을 도입하는 것은",
+          "reason": "이전 제안과 새 사실을 구분하여 반영함."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "규모가 커져도 지키고 싶은 가치를 적고, 이번 운영 방식이 그 가치를 어떻게 다루는지 보겠습니다.",
+          "reason": "700자를 초과하여 읽기 부담이 다소 있음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "수익률을 계산할 원가 정보가 없는 상태에서 친환경 포장을 도입하는 것은",
+          "reason": "기록된 사실을 정확히 반영하고 허위 수치나 상태를 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 4,
+        "evidence": "친환경 포장을 쓴다고 해서 수익과 환경 개선이 동시에 확정되는 것은 아닙니다.",
+        "reason": "환경 비용과 사용자의 목적을 함께 드러내고 후속 미측정 수익·환경 개선을 확정하지 않음."
+      },
+      "characterCount": 812,
+      "elapsedMs": 3383,
+      "total": 80,
+      "pass": false,
+      "denominator": 100,
+      "overlength": true
+    },
+    {
+      "id": "chouinard-values-A-1",
+      "scenarioId": "chouinard-values",
+      "variant": "A",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "사용자님의 기준은 '운영 안정성(현금 흐름, 납기)'입니다.",
+          "reason": "사용자의 현실적 제약과 환경적 책임의 충돌을 잘 설명함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "제안자에게 연락하여 '포장 방식 변경 가능 여부'와 '최소 확정 수량' 두 가지만 먼저 확인하십시오.",
+          "reason": "비교 항목과 함께 즉시 실행 가능한 명확한 다음 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "'거절' 자체가 선악의 척도는 아닙니다. 다만 그는 성장이 환경에 해를 끼친다면",
+          "reason": "무조건적 거절에 대한 판단을 내리고 균형점을 찾도록 도움."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "확정된 작업량이 현재 가용 에너지의 120%를 초과하여 기존 고객의 납기 신뢰를 깨뜨릴 위험이 확인될 경우",
+          "reason": "작업량과 납기 신뢰를 연계한 구체적인 재검토 조건을 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 이전 제안이나 실행 기록이 없어 평가하지 않음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "[인물-9]의 관점에서 '거절' 자체가 선악의 척도는 아닙니다.",
+          "reason": "명료하게 작성되었으나 700자를 약간 초과함."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "사용자님의 기준은 '운영 안정성(현금 흐름, 납기)'입니다. 이는 사업의 단기 생존과 직결된 사실 기반의 가치입니다.",
+          "reason": "기록된 사용자의 우선순위를 왜곡 없이 반영함."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 748,
+      "elapsedMs": 9752,
+      "total": 80.56,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "chouinard-values-B-2",
+      "scenarioId": "chouinard-values",
+      "variant": "B",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "사용자는 '납기 준수'와 '포장 감축'을 기준으로 선택함.",
+          "reason": "사용자의 목적과 환경 비용을 함께 드러내며 맥락을 실용적으로 충족함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "기존 일반 포장재 대비 '친환경 포장재(또는 재사용 체계)의 개당 단가'를 업체에 문의하여 확보하고",
+          "reason": "요청한 다음 행동을 구체적으로 제시하여 실용적으로 충족함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "아니요, 확정해서는 안 됩니다.",
+          "reason": "수익과 환경 개선 확정에 대한 명확한 판단을 제공하여 실질적 도움을 줌."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "친환경 포장재의 단가가 일반 포장재보다 20% 이상 높거나, 재사용 포장 방식이 기존 납기 일정을 물리적으로 지연시킬 것으로 판단될 때 대안을 재검토하십시오.",
+          "reason": "판단 수정 조건을 명확히 제시하여 실용적으로 충족함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "사용자는 '납기 준수'와 '포장 감축'을 기준으로 선택함.",
+          "reason": "이전 제안과 새 사실을 구분하여 반영함."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "아니요, 확정해서는 안 됩니다.",
+          "reason": "700자 내외로 명료하게 작성되어 읽기 부담이 적음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "사용자는 '납기 준수'와 '포장 감축'을 기준으로 선택함.",
+          "reason": "기록된 사실을 정확히 반영하고 허위 수치나 상태를 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 661,
+      "elapsedMs": 3525,
+      "total": 81.25,
+      "pass": true,
+      "denominator": 100,
+      "overlength": false
+    },
+    {
+      "id": "chouinard-values-A-2",
+      "scenarioId": "chouinard-values",
+      "variant": "A",
+      "turn": 2,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": 3,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "사용자는 '납기 준수'와 '포장 감축'을 기준으로 선택했습니다.",
+          "reason": "사용자의 목적과 환경 비용을 함께 드러내며 맥락을 실용적으로 충족함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "기존 포장재와 친환경 포장재(재사용 포함)의 '단가 차이' 및 '조달 소요 기간(리드타임)'을 업체에 문의하여 확인하십시오.",
+          "reason": "요청한 다음 행동을 구체적으로 제시하여 실용적으로 충족함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "친환경 포장재 도입만으로 수익과 환경 개선이 동시에 이루어진다고 확정할 수 없습니다.",
+          "reason": "수익과 환경 개선 확정에 대한 명확한 판단을 제공하여 실질적 도움을 줌."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "친환경 포장재의 단가가 기존 대비 15% 이상 높거나, 조달 기간이 기존보다 길어 납기 일정에 차질이 생길 것으로 판단되면 도입 여부를 재검토하십시오.",
+          "reason": "판단 수정 조건을 명확히 제시하여 실용적으로 충족함."
+        },
+        "continuity": {
+          "score": 3,
+          "evidence": "사용자는 '납기 준수'와 '포장 감축'을 기준으로 선택했습니다.",
+          "reason": "이전 제안과 새 사실을 구분하여 반영함."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "친환경 포장재 도입만으로 수익과 환경 개선이 동시에 이루어진다고 확정할 수 없습니다.",
+          "reason": "700자 내외로 명료하게 작성되어 읽기 부담이 적음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "사용자는 '납기 준수'와 '포장 감축'을 기준으로 선택했습니다.",
+          "reason": "기록된 사실을 정확히 반영하고 허위 수치나 상태를 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 663,
+      "elapsedMs": 3414,
+      "total": 81.25,
+      "pass": true,
+      "denominator": 100,
+      "overlength": false
+    },
+    {
+      "id": "council-product-B-1",
+      "scenarioId": "council-product",
+      "variant": "B",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "제안된 협업사의 기능 확장안을 목표 가치(현금 흐름, 납기 신뢰)와 제공된 원전 근거에 따라 검토한 결과입니다.",
+          "reason": "목표 가치와 제약 조건을 반영하여 검토함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "협업사에 \"핵심 메모 기능과 연결된 인쇄물 1종의 프로토타입에 대한 고객 선호도 조사 데이터\"를 다음 미팅 전까지 공유해달라고 요청하십시오.",
+          "reason": "구체적인 다음 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "이번 주 가용 시간(2시간) 내에 기존 지원을 유지하면서 납기를 맞추려면, 전체 도입이 아닌 '최소 단위의 고객 반응 측정'이 전제되어야 합니다.",
+          "reason": "조건부 결론을 통해 우선순위와 제약을 고려한 판단을 내림."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "협업사가 제안한 기능이 기존 고객의 '다음 행동 결정' 시간을 단축시킨다는 데이터가 확인되지 않거나, 인쇄물 제작 비용이 초기 현금 흐름의 15%를 초과할 경우 이 제안을 거절합니다.",
+          "reason": "재검토 조건을 구체적으로 명시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "characterCount:968",
+          "reason": "700자 제한을 초과함."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "제안된 협업사의 기능 확장안을 목표 가치(현금 흐름, 납기 신뢰)와 제공된 원전 근거에 따라 검토한 결과입니다.",
+          "reason": "원전 근거와 사용자의 제약 조건을 왜곡 없이 반영함."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 968,
+      "elapsedMs": 4040,
+      "total": 80.56,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "council-product-A-1",
+      "scenarioId": "council-product",
+      "variant": "A",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 3,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "가용 시간이 주당 2시간으로 제한된 상황에서, 검증되지 않은 인쇄물 제작은 운영 복잡도를 높여 '납기 신뢰'와 '현금 흐름'이라는 우선순위에 반하는 결과를 초래할 수 있습니다.",
+          "reason": "시간 제약과 우선순위를 잘 반영함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "이번 주 2시간 중 일부를 활용해, 협업사에 '제안된 기능 중 고객의 다음 행동 결정 시간을 단축할 핵심 지표 1개'와 '예상 생산 단가' 공유를 요청하십시오.",
+          "reason": "시간 제약을 고려한 다음 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "현금 흐름 확보를 위해 '유료 지불 의사'가 확인되고, 납기 신뢰를 해치지 않는 '최소한의 운영 표준'이 마련될 때만 도입을 검토함.",
+          "reason": "조건부 결론을 명확히 제시함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "공유받은 생산 단가가 예상 수익의 30%를 초과하거나, 기존 고객 지원 시간을 침범할 것으로 판단될 경우 제안 수용을 전면 재검토함.",
+          "reason": "재검토 조건을 구체적으로 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 3,
+          "evidence": "characterCount:767",
+          "reason": "700자에 근접하며 명료하게 작성됨."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "현재 서비스의 본질은 '메모를 찾아 다음 행동을 정하는 것'입니다.",
+          "reason": "사용자의 상황과 제약 조건을 정확히 파악하고 허위 사실을 추가하지 않음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 767,
+      "elapsedMs": 8383,
+      "total": 81.94,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "council-product-C-1",
+      "scenarioId": "council-product",
+      "variant": "C",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "제시된 가상 자료와 운영자의 우선순위(현금 흐름, 납기 신뢰)를 바탕으로 세 가지 관점에서 검토한 결과입니다.",
+          "reason": "사용자의 우선순위와 제약 조건을 반영하여 검토를 수행함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "가장 핵심적인 협업사 한 곳의 고객들에게 \"인쇄물 기능이 있다면 구매 의사가 있는지\"를 묻는 이메일이나 설문을 1시간 이내에 발송하고",
+          "reason": "요청한 다음 행동 하나를 구체적으로 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "협업사의 제안이 현금 흐름에 즉각 기여하더라도, 기존 고객 지원과 납기 신뢰를 해치지 않는 범위 내에서만 수용합니다.",
+          "reason": "조건부 결론을 통해 실질적인 판단 기준을 제공함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "시범 조사에서 고객 반응률이 낮거나, 인쇄물 제작 공정이 기존 제품의 납기 일정을 10% 이상 지연시킬 것으로 판단되면 이 제안을 거절합니다.",
+          "reason": "판단 수정 조건을 명확히 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용되지 않음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "characterCount:1013",
+          "reason": "700자 제한을 초과하여 읽기 부담이 있음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "제시된 가상 자료와 운영자의 우선순위(현금 흐름, 납기 신뢰)를 바탕으로 세 가지 관점에서 검토한 결과입니다.",
+          "reason": "기록된 사실과 제약 조건을 정확히 반영하며 허위 사실이나 조작이 없음."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 3,
+        "evidence": "가장 핵심적인 협업사 한 곳의 고객들에게 \"인쇄물 기능이 있다면 구매 의사가 있는지\"를 묻는 이메일이나 설문을 1시간 이내에 발송하고",
+        "reason": "세 가지 관점을 모두 적용하여 실용적인 다음 행동과 조건부 결론을 도출함."
+      },
+      "characterCount": 1013,
+      "elapsedMs": 4840,
+      "total": 80.56,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "council-recovery-B-1",
+      "scenarioId": "council-recovery",
+      "variant": "B",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "고객 지원이라는 생활 기반을 유지하면서도 팀의 과부하를 막는 실무적 우선순위 재조정이 필요합니다.",
+          "reason": "사용자의 목표와 제약을 반영하여 검토함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "오늘 중 담당자와 1:1 면담을 통해 '업무 몰림'의 구체적 항목을 확인하고",
+          "reason": "구체적인 다음 행동을 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "'무조건적 완수'보다 '현재 상태의 투명한 공유와 공정성 회복'을 책임 있는 행동으로 정의합니다.",
+          "reason": "가치 충돌 상황에서 명확한 우선순위를 설정함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "위 시도 후에도 담당자의 업무 병목 현상이 48시간 내에 해소되지 않거나, 고객 지원 핵심 지표가 하락할 경우",
+          "reason": "시간과 지표를 포함한 명확한 재검토 조건을 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용하지 않음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "사용자의 목표와 가치에 따라 가상 자료를 바탕으로 검토한 결과입니다.",
+          "reason": "명료하게 작성되었으나 700자를 초과함."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "지연이라는 사건 자체를 통제하지 못했음을 인정하되 약속 이행이라는 헌법적 책임(도덕적 반대)을 다해야 합니다.",
+          "reason": "원전 근거를 적절히 활용하여 가상 안건에 대한 사실적 오류 없는 답변을 제공함."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 958,
+      "elapsedMs": 4932,
+      "total": 80.56,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "council-recovery-C-1",
+      "scenarioId": "council-recovery",
+      "variant": "C",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "지켜야 할 원칙은 '고객 지원 유지'이며, 협상 가능한 것은 '완료 일정'입니다.",
+          "reason": "사용자의 제약(시간 없음, 권한 없음)과 가치(책임, 공정, 회복)를 반영하여 실용적인 방향을 제시함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "파트너 및 팀원과 함께 '현재 업무의 우선순위 재조정 및 이번 주 가용 업무량 확정 회의'를 열고",
+          "reason": "요청한 다음 행동 하나를 구체적으로 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "이번 주 내에 프로젝트를 강행하지 않고, 고객 지원에 집중하며 업무 재분담을 확정합니다.",
+          "reason": "우선순위를 명확히 하여 실질적인 판단에 도움을 줌."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "수정된 업무 분담 이후에도 담당 한 명에게 80% 이상의 업무가 집중되거나, 고객 지원 지표가 하락할 경우",
+          "reason": "재검토 조건을 명확히 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용하지 않음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "가상 Council 자문 결과입니다.",
+          "reason": "명료하나 700자를 초과하여 읽기 부담이 다소 있음."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "지켜야 할 원칙은 '고객 지원 유지'이며, 협상 가능한 것은 '완료 일정'입니다.",
+          "reason": "가상 안건의 제약 조건과 요청 사항을 정확히 반영하여 사실적 오류 없이 답변함."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": {
+        "score": 4,
+        "evidence": "팀의 생활 기반(시간·에너지)을 소모하지 않으면서 고객 지원이라는 최소 조건을 지켜야 합니다.",
+        "reason": "제시된 페르소나의 가치 우선순위와 판단 규칙을 충실히 반영하여 실질적인 다음 행동과 재검토 조건을 제시함."
+      },
+      "characterCount": 921,
+      "elapsedMs": 4567,
+      "total": 80.56,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    },
+    {
+      "id": "council-recovery-A-1",
+      "scenarioId": "council-recovery",
+      "variant": "A",
+      "turn": 1,
+      "scores": {
+        "context": 3,
+        "action": 3,
+        "judgment": 3,
+        "uncertainty": 3,
+        "continuity": null,
+        "readability": 2,
+        "factuality": 4
+      },
+      "evidence": {
+        "context": {
+          "score": 3,
+          "evidence": "고객 지원은 팀의 존립 기반입니다. 프로젝트 만회를 위해 고객 지원 에너지를 전용하는 것은 위기 대응 원칙에 어긋납니다.",
+          "reason": "제약 조건과 가치를 잘 반영하여 상황을 분석함."
+        },
+        "action": {
+          "score": 3,
+          "evidence": "업무가 몰린 담당자와 15분 면담을 통해 현재 수행 중인 작업 목록을 받고",
+          "reason": "실행 가능한 작은 다음 행동을 명확히 제시함."
+        },
+        "judgment": {
+          "score": 3,
+          "evidence": "'공정한 분담'을 위해선 이번 주 내 프로젝트의 일부 기능을 포기하거나 연기하는 결단이 필요할 수 있습니다.",
+          "reason": "충돌하는 가치 사이에서 실질적인 선택 방향을 제시함."
+        },
+        "uncertainty": {
+          "score": 3,
+          "evidence": "업무 제외 후에도 담당자의 일일 작업 시간이 줄어들지 않거나, 지연 원인이 담당자의 역량 외적인 외부 요인으로 밝혀질 경우",
+          "reason": "구체적인 재검토 조건을 제시함."
+        },
+        "continuity": {
+          "score": null,
+          "evidence": "",
+          "reason": "첫 턴이므로 적용하지 않음."
+        },
+        "readability": {
+          "score": 2,
+          "evidence": "가상 평가 자료를 바탕으로 세 가지 관점에서 검토합니다.",
+          "reason": "구조화가 잘 되어 있으나 700자를 초과함."
+        },
+        "factuality": {
+          "score": 4,
+          "evidence": "프로젝트 1주 지연, 특정인 업무 편중, 팀 추가 시간 없음, 파트너 교체 권한 없음, 고객 지원 유지 필수.",
+          "reason": "주어진 가상 안건의 사실 관계를 정확히 요약하고 반영함."
+        }
+      },
+      "hardFailures": [],
+      "fidelity": null,
+      "characterCount": 1024,
+      "elapsedMs": 10072,
+      "total": 80.56,
+      "pass": false,
+      "denominator": 90,
+      "overlength": true
+    }
+  ],
+  "archivedValidationErrors": 8,
+  "calibrationPassed": true
+}

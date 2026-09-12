@@ -88,3 +88,38 @@ test('internal command handler requires shared credentials and selects trusted w
   const noConfig = await http.handleInquiryCommand(request(command), { ...options, sharedSecret: '' });
   assert.equal(noConfig.status, 503);
 });
+
+test('webhook preserves Korean, emoji and combining characters across UTF-8 stream boundaries', async () => {
+  const text = '한글 👩🏽‍💻 🇰🇷 · 가'.normalize('NFD') + ' · cafe\u0301';
+  const input = { ...body, subject: text, message: `${text}\n다음 줄`, contact: { name: text, email: 'buyer@example.com' } };
+  const stream = new ReadableStream({
+    start(controller) {
+      for (const byte of Buffer.from(JSON.stringify(input), 'utf8')) controller.enqueue(Uint8Array.of(byte));
+      controller.close();
+    },
+  });
+  const req = new Request(request().url, { method: 'POST', headers: request().headers, body: stream, duplex: 'half' });
+  const response = await http.handleInquiryIntake(req, {
+    sourceConfig: JSON.stringify(config), execute: async command => {
+      assert.equal(command.subject, input.subject);
+      assert.equal(command.body, input.message);
+      assert.deepEqual(command.contact, { ...input.contact, phone: '' });
+      return { status: 'saved', inquiry: { subject: command.subject, contact_name: command.contact.name } };
+    },
+  });
+  assert.equal(response.status, 201);
+  assert.deepEqual((await response.json()).inquiry, { subject: text, contact_name: text });
+});
+
+test('escaped lone surrogates are rejected before reaching PostgreSQL', async () => {
+  for (const invalid of ['\ud800', '\udfff']) {
+    for (const patch of [{ subject: invalid }, { message: invalid }, { contact: { name: invalid, email: 'buyer@example.com' } }]) {
+      let persisted = false;
+      const response = await http.handleInquiryIntake(request({ ...body, ...patch }), {
+        sourceConfig: JSON.stringify(config), execute: async () => { persisted = true; return { status: 'saved' }; },
+      });
+      assert.equal(response.status, 400);
+      assert.equal(persisted, false);
+    }
+  }
+});

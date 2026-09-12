@@ -58,6 +58,19 @@ test('atomic inquiry PostgreSQL transactions', async t => {
       CREATE TABLE operation_cases(id uuid PRIMARY KEY, workspace_id uuid NOT NULL REFERENCES workspaces(id));`);
     sql(source);
 
+    await t.test('Korean, emoji and decomposed Unicode survive ledger persistence and duplicate checks', () => {
+      const w = workspace(), text = '한글 문의 👩🏽‍💻 🇰🇷 · 가'.normalize('NFD') + ' · cafe\u0301';
+      const input = base({ subject: text, body: `${text}\n다음 줄`, contact: { name: text, email: 'buyer@example.com' } });
+      const saved = call(w, input);
+      assert.equal(saved.status, 'saved');
+      assert.equal(saved.inquiry.subject, text);
+      assert.equal(saved.inquiry.contact_name, text);
+      assert.equal(saved.inquiry.unread, true);
+      const event = JSON.parse(sql(`SELECT json_build_object('subject', subject, 'body', body, 'contact_name', contact->>'name') FROM inquiry_events WHERE workspace_id=${quote(w)}`));
+      assert.deepEqual(event, { subject: text, body: input.body, contact_name: text });
+      assert.equal(call(w, input).status, 'duplicate');
+    });
+
     await t.test('same-key races yield one inquiry and changed payload is a conflict', async () => {
       const w = workspace(), input = base();
       const results = await Promise.all(Array.from({ length: 8 }, () => callAsync(w, input)));

@@ -1,0 +1,693 @@
+{
+  "evaluator_kind": "independent_codex_agent_unblinded",
+  "method": {
+    "protocol": "answer-factual-constraint-audit-v1",
+    "scope": "11개 가상 시나리오의 60개 응답을 A/B/C 각각 20개씩 모두 읽고, 해당 턴의 입력·이전 대화와 고정된 출처 요약에 대조했다. 답변 품질을 숫자로 다시 채점하지 않는다.",
+    "independence": "별도 Codex 에이전트가 인물·조건을 공개한 상태에서 수행했다. 이번 감사 중 자동 판정 파일이나 점수를 읽거나 적용하지 않았다. 앞선 러너 검토와 이미 보고된 일부 오류 후보를 알고 시작했으므로 완전 블라인드 또는 외부 독립 검증이라고 주장하지 않는다.",
+    "sources": "manifest.json의 initial/followup 및 card.source, responses.jsonl의 실제 응답·대화만 사용했다. 원전 전체를 외부에서 다시 검증하지 않았으며, 출처 요약을 넘어선 귀속의 진위가 미확인인 경우 concern으로 남겼다.",
+    "hard": "고객의 발언·관측 결과·진행 상태·측정된 역량을 구체적인 사실처럼 추가하거나 강화한 경우, 확인할 수 없는 의도를 검증된 사실이라고 선언한 경우, 관찰보다 강한 인과 효과를 확인했다고 단정한 경우, 명시된 가용 시간 0·휴식 제약에도 새 업무를 부과한 경우이다.",
+    "concern": "불확실한 전제·범위 확장, 검증할 가설을 앞선 결론처럼 다룬 표현, 근거가 명료하지 않은 조건부 의사결정 규칙, 출처와 현대적 적용의 구분 부족이다. concern은 확인된 허위 사실이나 hard 실패와 같지 않으며, 반드시 틀린 제안이라는 뜻도 아니다.",
+    "distinctions": [
+      "새 참가자가 실패한다면 등의 조건문을 실제 발생한 관찰로 취급하지 않았다.",
+      "새로 제안한 수치 기준·시간 배분은 측정값 조작으로 분류하지 않았다. 근거·단위·적용 범위가 불명확한 결정 규칙은 concern으로만 기록했다.",
+      "사용자에게 메시지를 보내라고 권한 것은 도구가 실제 발송했거나 이미 발송을 완료했다고 주장한 것과 구분했다. 단순 발송 조언만으로 hard 실패를 부여하지 않았다.",
+      "명시적으로 제안·예시·해석인 내용과 이미 확인된 사실을 구분했다.",
+      "findings가 비어 있어도 전반적 품질·분량·실사용 유용성이 검증되었다는 뜻은 아니다. 모든 자동 점수와 원 응답을 그대로 유지하는 보완 감사다."
+    ],
+    "validation": "60개 ID가 정확히 한 번씩 포함되는지, 각 quote가 해당 원 응답의 정확한 부분 문자열인지, 각 input_fact가 해당 턴까지의 입력 또는 관련 출처 요약의 정확한 부분 문자열인지 프로그램으로 검증했다.",
+    "source_file_sha256": {
+      "manifest": "ff6e98c16bee539797540835768c8b771d16e57a35beeefc361b01ff689d7006",
+      "responses": "3889e56459b7711c7ba155ab5e5c5f8cd8f0ea1ee82cdad17c5d0f38a381a88c"
+    }
+  },
+  "audited_count": 60,
+  "responses": [
+    {
+      "id": "socrates-claim-A-1",
+      "findings": [
+        {
+          "severity": "hard",
+          "category": "customer_quote_or_effect",
+          "quote": "업무 체감이 확연히 편해졌다",
+          "input_fact": "파일럿 고객은 3명이며 모두 '편해졌다'고만 말했다.",
+          "explanation": "제안서에 넣을 고객 직접 인용을 '업무 체감이 확연히'로 강화했다. 기록에 없는 표현을 실제 고객 발언으로 제시한다."
+        }
+      ]
+    },
+    {
+      "id": "socrates-claim-A-2",
+      "findings": []
+    },
+    {
+      "id": "socrates-claim-B-1",
+      "findings": [
+        {
+          "severity": "hard",
+          "category": "customer_quote_or_effect",
+          "quote": "고객이 경험한 '심리적 안정감'",
+          "input_fact": "파일럿 고객은 3명이며 모두 '편해졌다'고만 말했다.",
+          "explanation": "편해졌다는 짧은 피드백을 고객이 실제 경험한 심리적 안정감·심리적 비용 감소로 구체화했다. 같은 대체 문구의 '운영이 한결 편해졌다'라는 직접 인용도 원 발언을 바꾼다."
+        }
+      ]
+    },
+    {
+      "id": "socrates-claim-B-2",
+      "findings": []
+    },
+    {
+      "id": "socrates-claim-C-1",
+      "findings": [
+        {
+          "severity": "hard",
+          "category": "fabricated_status",
+          "quote": "수치화된 성과는 현재 측정 중이며",
+          "input_fact": "처리 시간이나 매출 변화는 측정하지 않았다.",
+          "explanation": "측정 진행을 알려준 기록이 없는데 제안서 대체 문장에 현재 측정 중이라고 넣었다. 향후 측정 제안과 현재 실행 상태는 구분해야 한다."
+        }
+      ]
+    },
+    {
+      "id": "socrates-claim-C-2",
+      "findings": []
+    },
+    {
+      "id": "einstein-explanation-A-1",
+      "findings": [
+        {
+          "severity": "hard",
+          "category": "fabricated_observation",
+          "quote": "그 결과로 나타난 이탈 데이터",
+          "input_fact": "안내 화면을 본 4명 중 3명이 다음 버튼의 의미를 이해하지 못했다.",
+          "explanation": "버튼 의미를 이해하지 못했다는 관찰만 있는데, 그 결과로 이탈 데이터가 발생한 것처럼 서술했다. 실제 이탈·탐색 중단은 기록되지 않았다."
+        },
+        {
+          "severity": "concern",
+          "category": "unsupported_decision_rule",
+          "quote": "관점의 문제가 아닌 버튼 위치나 시각적 디자인의 문제로 재정의하고",
+          "input_fact": "기능 자체는 바꾸지 않았다.",
+          "explanation": "문구 수정 후 두 명 이상이 혼동한다는 가정만으로 설명 문제를 배제하고 위치·디자인 문제로 진단할 수는 없다. 제안한 임계값 자체를 관찰 조작으로 분류하지는 않았다."
+        }
+      ]
+    },
+    {
+      "id": "einstein-explanation-A-2",
+      "findings": [
+        {
+          "severity": "hard",
+          "category": "fabricated_observation",
+          "quote": "동일 인물이 이전보다 훨씬 빠르게 다음 단계로 진입했다",
+          "input_fact": "버튼 문구만 바꿔 같은 4명에게 다시 보여줬더니 3명이 다음 행동을 맞혔다.",
+          "explanation": "정답 여부만 제공되었는데 응답 속도와 실제 다음 단계 진입이 개선되었다는 관찰을 추가했다."
+        },
+        {
+          "severity": "hard",
+          "category": "causal_overclaim",
+          "quote": "관점 교정의 효과를 확인했습니다.",
+          "input_fact": "이미 한 번 본 화면이라는 점과 표본이 작다는 점이 남아 있다.",
+          "explanation": "학습 효과와 문구 효과를 분리하지 못한 재노출 관찰인데 문구·관점 교정의 효과를 확인했다고 단정한다. 앞부분의 한계 언급이 제안된 발표 문장의 인과 단정을 해소하지 않는다."
+        },
+        {
+          "severity": "concern",
+          "category": "unsupported_decision_rule",
+          "quote": "'학습 효과'가 성과를 과다하게 해석하게 만든 것이므로",
+          "input_fact": "이미 한 번 본 화면이라는 점과 표본이 작다는 점이 남아 있다.",
+          "explanation": "새 사람 한 명의 오답이나 배포 후 이탈률 변화 부재를 기존 관찰이 학습 효과였다는 결론으로 바로 연결한다. 그 결과만으로 다른 원인을 배제할 수 없다."
+        }
+      ]
+    },
+    {
+      "id": "einstein-explanation-B-1",
+      "findings": []
+    },
+    {
+      "id": "einstein-explanation-B-2",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_experiment_label",
+          "quote": "대조군 확인",
+          "input_fact": "버튼 문구만 바꿔 같은 4명에게 다시 보여줬더니 3명이 다음 행동을 맞혔다.",
+          "explanation": "새 사람 한 명에게 수정본만 보여주는 검사는 신규 사용자의 이해도를 탐색할 수 있지만, 원문구 대조 조건이 없으므로 문구 변경 효과를 분리하는 대조군 검사는 아니다."
+        },
+        {
+          "severity": "concern",
+          "category": "unsupported_decision_rule",
+          "quote": "버튼의 색상이나 위치 등 시각적 좌표계(Relativity, IX)를 재설계해야 합니다.",
+          "input_fact": "추가 확인은 10분만 가능하다.",
+          "explanation": "새 사람 한 명의 오답만으로 색상·위치 재설계가 필요하다고 결론낸다. 물리학 원전의 좌표계 인용도 이 UX 진단을 입증하지 않으며 현대적 비유임이 명료하지 않다."
+        }
+      ]
+    },
+    {
+      "id": "einstein-explanation-C-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_decision_rule",
+          "quote": "설명의 문제가 아니라 기능의 배치나 흐름 자체를 재설계해야 합니다.",
+          "input_fact": "안내 화면을 본 4명 중 3명이 다음 버튼의 의미를 이해하지 못했다.",
+          "explanation": "문구 변경 후에도 일부가 혼동한다는 가정만으로 설명 문제를 배제하고 기능 배치·흐름 문제를 확정할 수 없다. 제안한 수치 기준 자체는 새로운 관찰이 아니라 의사결정 규칙으로 분류했다."
+        }
+      ]
+    },
+    {
+      "id": "einstein-explanation-C-2",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_decision_rule",
+          "quote": "기존 3명의 정답은 '문구 개선'이 아닌 '학습 효과' 때문일 확률이 높으므로",
+          "input_fact": "이미 한 번 본 화면이라는 점과 표본이 작다는 점이 남아 있다.",
+          "explanation": "새 참가자 한 명의 오답만으로 기존 정답의 주원인이 학습 효과였을 확률이 높다고 판단할 근거는 없다. 학습 효과는 가능한 대안 설명으로 남아야 한다."
+        }
+      ]
+    },
+    {
+      "id": "lincoln-partnership-A-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unverified_contract_term",
+          "quote": "계약상 명시된 공식 경고 절차",
+          "input_fact": "계약상 내가 상대를 일방적으로 교체할 권한은 없다.",
+          "explanation": "제공된 계약 정보는 일방 교체 권한 부재뿐이다. 공식 경고 절차가 계약에 명시되어 있다는 전제는 확인되지 않았으므로 해당 조항의 존재·적용 여부부터 확인해야 한다. 검토 조언을 실제 권한 행사로 분류하지는 않았다."
+        }
+      ]
+    },
+    {
+      "id": "lincoln-partnership-A-2",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_premise",
+          "quote": "마감 전 미리 알리지 않은 점",
+          "input_fact": "이유는 아직 듣지 못했다.",
+          "explanation": "이전 기록에서 지연 이유를 듣지 못했다는 사실만으로 사전 지연 안내 자체가 없었다고 확정할 수 없다. 책임을 지적하는 초안에 넣기 전 확인이 필요하다."
+        },
+        {
+          "severity": "concern",
+          "category": "unconfirmed_commitment",
+          "quote": "약속하신 내일 16시까지는 최종 제출이 완료되어야",
+          "input_fact": "내일 오후까지 제출하겠다고 했지만 아직 제출한 것은 아니다.",
+          "explanation": "상대가 약속한 것은 초안의 내일 오후 제출이다. 16시와 최종 제출이라는 범위는 새 제안으로 확인해야 하며, 이미 약속된 내용처럼 표현하면 합의가 바뀐다. 다른 부분의 예시 시각·확인 질문을 고려해 우려로 분류했다."
+        }
+      ]
+    },
+    {
+      "id": "lincoln-partnership-B-1",
+      "findings": []
+    },
+    {
+      "id": "lincoln-partnership-B-2",
+      "findings": [
+        {
+          "severity": "hard",
+          "category": "intent_as_verified_fact",
+          "quote": "상대의 사과로 악의가 없었음은 확인되었습니다.",
+          "input_fact": "상대는 사과했고 가족 일정으로 지연됐다고 설명했다.",
+          "explanation": "사과와 가족 일정 설명은 상대의 내적 의도에 대한 독립적인 확인이 아니다. 악의를 단정하지 않는 것과 악의가 없었다고 검증 완료로 선언하는 것은 다르다."
+        },
+        {
+          "severity": "concern",
+          "category": "unsupported_premise",
+          "quote": "사전 공유 없는 지연",
+          "input_fact": "이유는 아직 듣지 못했다.",
+          "explanation": "지연 사유를 듣지 못했다는 기록을 사전 공유가 전혀 없었다는 사실로 확장한다. 사전 통보 여부는 별도로 확인되지 않았다."
+        }
+      ]
+    },
+    {
+      "id": "lincoln-partnership-C-1",
+      "findings": []
+    },
+    {
+      "id": "lincoln-partnership-C-2",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_premise",
+          "quote": "사전 공유 없이 마감이 지연된 점",
+          "input_fact": "이유는 아직 듣지 못했다.",
+          "explanation": "기록은 지연 이유를 아직 듣지 못했다고만 한다. 사전 지연 안내가 없었다는 별개의 사실은 확인되지 않았다."
+        },
+        {
+          "severity": "concern",
+          "category": "unconfirmed_schedule_constraint",
+          "quote": "전체 공정에 영향을 미치는 마지막 한계선",
+          "input_fact": "내일 오후까지 제출하겠다고 했지만 아직 제출한 것은 아니다.",
+          "explanation": "내일 오후가 전체 공정의 최종 한계라는 일정 근거가 없다. 새 책임 기준을 제안할 수는 있지만, 이미 확인된 공정 제약인 것처럼 상대에게 전달하면 압박 근거를 만들어낸다."
+        }
+      ]
+    },
+    {
+      "id": "theodore-energy-A-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "causal_overclaim",
+          "quote": "현재 작업이 몰린 상황은 역할 분담이 '확정되지 않았기' 때문입니다.",
+          "input_fact": "공유 프로젝트의 작업이 내게 몰렸지만 분담은 확정되지 않았다.",
+          "explanation": "업무 편중과 분담 미확정은 함께 기록되었지만 원인이 확인된 것은 아니다. 조정을 권할 수 있으나 미확정을 편중의 확정 원인으로 단정한 표현은 강하다."
+        }
+      ]
+    },
+    {
+      "id": "theodore-energy-A-2",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_decision_rule",
+          "quote": "이 두 조건이 갖춰지기 전까지는 콘텐츠 과제나 프로젝트 분담 문제를 다시 꺼내지 마십시오.",
+          "input_fact": "오늘은 휴식을 우선하겠다고 결정했다. 아직 실행하지 않은 콘텐츠 과제는 보류다.",
+          "explanation": "휴식·콘텐츠 보류를 연속 30분과 에너지 3/5 확보 전에는 분담 문제도 논의하지 말라는 포괄적 금지로 확장한다. 수치 자체는 제안된 기준이며 조작된 관찰은 아니지만, 필수적인 부담 조정까지 막을 근거는 제시되지 않았다."
+        }
+      ]
+    },
+    {
+      "id": "theodore-energy-B-1",
+      "findings": []
+    },
+    {
+      "id": "theodore-energy-B-2",
+      "findings": []
+    },
+    {
+      "id": "theodore-energy-C-1",
+      "findings": []
+    },
+    {
+      "id": "theodore-energy-C-2",
+      "findings": [
+        {
+          "severity": "hard",
+          "category": "explicit_time_zero_constraint",
+          "quote": "내일 일과 중 '업무 분담 요청 메시지'를 작성해 팀에 발송하십시오.",
+          "input_fact": "내일 남아 있던 15분도 필수 일정으로 없어졌다. 오늘은 휴식을 우선하겠다고 결정했다.",
+          "explanation": "시간이 0분이고 휴식·보류를 선택했음을 인정한 뒤에도 다음 날 메시지 작성과 발송이라는 새 업무를 부과한다. 이는 실행 완료를 거짓으로 주장한 오류가 아니라 명시된 가용 시간 제약을 무시한 조언이다."
+        }
+      ]
+    },
+    {
+      "id": "franklin-recovery-A-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "premature_status_in_draft",
+          "quote": "현재 생산 공정을 점검 중이며",
+          "input_fact": "실패 원인은 아직 모른다.",
+          "explanation": "오늘 보낼 공지에 공정 점검이 이미 진행 중이라는 표현을 제안하지만, 실제 점검 착수는 확인되지 않았다. 같은 답변의 20분 점검 행동을 실제 시작한 뒤라면 사용할 수 있으므로 확정적인 조작보다는 발송 전 확인이 필요한 문구로 분류했다."
+        }
+      ]
+    },
+    {
+      "id": "franklin-recovery-A-2",
+      "findings": [
+        {
+          "severity": "hard",
+          "category": "fabricated_capacity_measurement",
+          "quote": "2주간의 데이터는 현재 운영자의 주당 제작 역량이 '1건'임을 보여주고 있습니다.",
+          "input_fact": "이번 주에는 고객 지원을 유지하고 새 제작은 한 건만 하기로 내가 정했다.",
+          "explanation": "한 건은 사용자가 새로 선택한 계획이다. 기존 계획의 건수나 작업별 시간이 없으므로 2주간 데이터로 주간 제작 역량이 한 건이라고 측정한 것처럼 말할 수 없다."
+        }
+      ]
+    },
+    {
+      "id": "franklin-recovery-B-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "constraint_scope_expansion",
+          "quote": "외부 자원 투입이나 서비스 일시 중단을 검토해야 합니다.",
+          "input_fact": "고객에게 이미 약속한 지원은 유지해야 하고, 작업 시간을 더 늘릴 수 없다.",
+          "explanation": "제작 진척이 임의의 중간 기준에 못 미치면 서비스 중단까지 검토하도록 범위를 넓힌다. 제작 일시 중단인지 약속된 고객 지원까지 포함하는지 구분해야 기존 유지 조건을 훼손하지 않는다. 실제 중단이나 실행 완료를 주장한 것은 아니다."
+        }
+      ]
+    },
+    {
+      "id": "franklin-recovery-B-2",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_outcome_promise",
+          "quote": "제작은 선별된 한 건만 우선 진행하여 품질을 보장하겠다",
+          "input_fact": "아직 실행 결과는 없다.",
+          "explanation": "한 건으로 범위를 줄인 결정은 확인되지만 결과 품질이 보장된다는 근거는 없다. 범위 조정의 목적이나 검증 계획으로 설명하는 편이 맞으며, 이미 품질 성과를 달성했다는 조작으로 분류하지는 않았다."
+        }
+      ]
+    },
+    {
+      "id": "franklin-recovery-C-1",
+      "findings": []
+    },
+    {
+      "id": "franklin-recovery-C-2",
+      "findings": []
+    },
+    {
+      "id": "jobs-product-A-1",
+      "findings": []
+    },
+    {
+      "id": "jobs-product-A-2",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_interface_premise",
+          "quote": "현재 구현된 대시보드 연결 버튼을 제거하고",
+          "input_fact": "이미 만든 대시보드는 아직 배포하지 않았다.",
+          "explanation": "대시보드 제작 여부만 제공되었고 연결 버튼의 존재나 검색 실패 원인은 확인되지 않았다. 해당 버튼 제거를 구체적인 개선 조치로 지시하기 전에 현재 화면과 실패 지점을 확인할 필요가 있다."
+        }
+      ]
+    },
+    {
+      "id": "jobs-product-B-1",
+      "findings": []
+    },
+    {
+      "id": "jobs-product-B-2",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_interface_premise",
+          "quote": "가장 오래된 메모 대신 '최근 수정된 메모'가 최상단에 나오도록",
+          "input_fact": "사용자 3명을 관찰하니 예쁜 첫 화면보다 기존 메모 검색 실패가 반복됐다.",
+          "explanation": "검색 실패가 기존의 오래된 순 정렬 때문에 생겼다는 기록도, 현재 정렬이 오래된 순이라는 정보도 없다. 새 정렬 실험 제안과 확인된 고장 원인을 구분해야 한다."
+        }
+      ]
+    },
+    {
+      "id": "jobs-product-C-1",
+      "findings": []
+    },
+    {
+      "id": "jobs-product-C-2",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "observation_scope_expansion",
+          "quote": "사용자 3명이 검색에 실패함.",
+          "input_fact": "사용자 3명을 관찰하니 예쁜 첫 화면보다 기존 메모 검색 실패가 반복됐다.",
+          "explanation": "세 명을 관찰하면서 검색 실패가 반복되었다는 기록은 세 명 모두 실패했다는 개별 결과를 명시하지 않는다. 관찰 대상 수와 실패자 수를 같게 두는 사실 표기는 원기록보다 강하다."
+        },
+        {
+          "severity": "concern",
+          "category": "unsupported_interface_premise",
+          "quote": "기존의 복잡한 필터나 대시보드 진입 아이콘",
+          "input_fact": "이미 만든 대시보드는 아직 배포하지 않았다.",
+          "explanation": "현재 화면에 복잡한 필터나 대시보드 진입 아이콘이 있다는 정보는 없다. 가능한 개선 시안으로 제시할 수 있지만 확인된 현재 UI와 검색 실패의 원인처럼 전제해서는 안 된다."
+        }
+      ]
+    },
+    {
+      "id": "bezos-reversibility-A-1",
+      "findings": []
+    },
+    {
+      "id": "bezos-reversibility-A-2",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "evaluation_scope_expansion",
+          "quote": "기능의 유효성을 검증할 수 있는 최적의 조건입니다.",
+          "input_fact": "내부 담당자 두 명이 기능의 이해도만 확인할 수 있고 매출 효과는 이번에 측정할 수 없다.",
+          "explanation": "내부 두 명이 할 수 있는 것은 이해도 확인이다. 고객 문제 해결 여부를 직관적으로 묻는 피드백은 가설 탐색에는 쓰일 수 있지만, 실제 고객에 대한 기능 유효성 검증과 구분해야 한다."
+        }
+      ]
+    },
+    {
+      "id": "bezos-reversibility-B-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unknown_as_impossible",
+          "quote": "전송 후 삭제 확인이 불가능하므로",
+          "input_fact": "전송 후 삭제가 가능한지 확인하지 못했고 고객 동의·내부 승인도 없다.",
+          "explanation": "삭제 가능 여부를 아직 확인하지 못했다는 기록을 삭제 확인 자체가 불가능하다는 단정으로 바꾼다. 확인 전 보류를 권하는 결론은 가능하지만 미확인과 불가능은 다른 상태다."
+        }
+      ]
+    },
+    {
+      "id": "bezos-reversibility-B-2",
+      "findings": []
+    },
+    {
+      "id": "bezos-reversibility-C-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unknown_as_impossible",
+          "quote": "전송 후 삭제 여부를 통제할 수 없으므로",
+          "input_fact": "전송 후 삭제가 가능한지 확인하지 못했고 고객 동의·내부 승인도 없다.",
+          "explanation": "삭제·통제 가능성을 확인하지 않은 상태를 통제 불가능이 확인된 상태처럼 설명한다. 버튼을 끄는 것만으로 삭제를 보장할 수 없다는 범위로 한정해야 한다."
+        },
+        {
+          "severity": "concern",
+          "category": "unsupported_source_rule",
+          "quote": "그 결과가 고객에게 줄 가치에 대한 확신일 때 유효합니다.",
+          "input_fact": "2016년 서한은 고객 중심성, 절차가 목적을 대신하는 위험, 빠르고 수정 가능한 결정 등을 다룬다.",
+          "explanation": "70% 원칙이 고객 가치에 대한 확신일 때 유효하다는 새 조건을 원칙의 의미처럼 제시한다. 제공된 출처 요약은 그 조건을 뒷받침하지 않으므로, 현대 업무에 적용하는 별도 운영 기준이라면 그렇게 구분해야 한다. 원전 전체의 진위를 판정한 것은 아니다."
+        }
+      ]
+    },
+    {
+      "id": "bezos-reversibility-C-2",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "evaluation_scope_expansion",
+          "quote": "실제 고객이 경험할 가치를 내부 시각에서 먼저 검증하는 단계",
+          "input_fact": "내부 담당자 두 명이 기능의 이해도만 확인할 수 있고 매출 효과는 이번에 측정할 수 없다.",
+          "explanation": "내부 담당자가 예상한 시간 단축·도움은 고객 가치 가설이며 실제 고객 효과 검증 결과가 아니다. 답변의 학습·가설 표현과 달리 이 구절은 검증 가능한 범위를 넓힌다."
+        },
+        {
+          "severity": "concern",
+          "category": "unsupported_decision_rule",
+          "quote": "기능을 전면 수정하거나 폐기합니다.",
+          "input_fact": "내부 담당자 두 명이 기능의 이해도만 확인할 수 있고 매출 효과는 이번에 측정할 수 없다.",
+          "explanation": "내부 두 사람의 의견 불일치만으로 전면 수정·폐기를 정하는 것은 이해도 점검 범위를 넘어선 결정 규칙이다. 실제 불일치가 발생했다고 주장한 것은 아니며, 조건부 제안의 근거 부족을 지적한다."
+        }
+      ]
+    },
+    {
+      "id": "buffett-opportunity-A-1",
+      "findings": []
+    },
+    {
+      "id": "buffett-opportunity-A-2",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "boundary_inconsistency",
+          "quote": "추가 시간(운영 시간 4시간 초과분)",
+          "input_fact": "추가 의무 없이 공개 자료를 20분 함께 읽어도 된다고 제안했다.",
+          "explanation": "본문에서는 이번 일정에 20분 이상의 투입을 제외한다고 했지만, 재검토 조건은 추가 시간을 4시간 초과분으로 적는다. 20분을 넘는 새 의무도 별도 판단 대상이라는 경계가 흐려진다."
+        }
+      ]
+    },
+    {
+      "id": "buffett-opportunity-B-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unverified_time_distribution",
+          "quote": "가용 시간(주당 1시간 내외)",
+          "input_fact": "현재 확정 고객 업무를 마치고 남는 시간은 4시간이다.",
+          "explanation": "남는 총시간 4시간을 매주 약 1시간씩 사용할 수 있다는 일정 정보는 없다. 가능한 배분안으로 제시할 수 있지만 현재 주별 가용 시간으로 단정하지 않아야 한다."
+        }
+      ]
+    },
+    {
+      "id": "buffett-opportunity-B-2",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_source_specificity",
+          "quote": "1996년 서한에서 언급된 실수는 주로 '이해하지 못하는 사업'에 큰 자본을 넣는 것이었습니다.",
+          "input_fact": "자신의 투자 실수도 논의한다.",
+          "explanation": "제공된 출처 요약은 투자 실수를 논의한다고만 하며, 실수의 대부분이 이해하지 못한 사업에 대한 대규모 투입이었다는 세부 귀속은 뒷받침하지 않는다. 원전 전체 대조 없이 역사적 사실로 확정할 수 없는 주장으로 남긴다."
+        }
+      ]
+    },
+    {
+      "id": "buffett-opportunity-C-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unverified_time_distribution",
+          "quote": "현재 가용 시간이 주당 1시간(월 4시간)이므로",
+          "input_fact": "현재 확정 고객 업무를 마치고 남는 시간은 4시간이다.",
+          "explanation": "남은 총시간을 규칙적으로 매주 한 시간 제공할 수 있는 일정으로 바꾸어 상대에게 말하도록 한다. 총량과 주별 배치 가능성은 별도로 확인되어야 한다."
+        }
+      ]
+    },
+    {
+      "id": "buffett-opportunity-C-2",
+      "findings": []
+    },
+    {
+      "id": "chouinard-values-A-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_decision_rule",
+          "quote": "현재 가용 에너지의 120%를 초과하여",
+          "input_fact": "포장 폐기와 작업량이 늘 수 있지만 수량·비용·수익은 아직 확정되지 않았다.",
+          "explanation": "작업량을 에너지의 백분율로 측정하는 방법도, 120%를 재검토 기준으로 둘 근거도 없다. 이는 발생한 과부하 수치가 아니라 새로 제안한 규칙이므로 사실 조작과 구분한다."
+        }
+      ]
+    },
+    {
+      "id": "chouinard-values-A-2",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_cost_generalization",
+          "quote": "친환경 포장재는 일반적으로 단가가 높고",
+          "input_fact": "수익률을 계산할 원가도 없다.",
+          "explanation": "소재·공급 조건·원가가 없는 상태에서 친환경 포장재 일반의 높은 단가를 사실로 추가한다. 이번 후보의 견적을 확인해야 하며, 비용 상승 가능성과 확인된 가격은 구분해야 한다."
+        },
+        {
+          "severity": "concern",
+          "category": "unsupported_decision_rule",
+          "quote": "친환경 포장재의 단가가 기존 대비 15% 이상 높거나",
+          "input_fact": "수익률을 계산할 원가도 없다.",
+          "explanation": "포장비의 전체 원가 비중과 목표 수익률을 모르므로 단가 15% 상승을 도입 재검토 기준으로 선택한 이유를 검증할 수 없다. 제안된 기준이지 이미 관측된 가격 차이가 아니다."
+        }
+      ]
+    },
+    {
+      "id": "chouinard-values-B-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "source_adaptation_conflation",
+          "quote": "사업의 근본적인 지속 가능성을 포기하는 것과 같습니다.",
+          "input_fact": "나는 이번 달 현금 흐름과 납기 신뢰를 우선한다고 명시했고 환경을 최우선 가치로 정한 적은 없다.",
+          "explanation": "사용자가 환경을 후순위로 둔 사실을 쉬나드의 관점에서 사업 지속 가능성 포기로 단정한다. 제공된 서한 요약은 환경 목적과 재무 건전성을 함께 다룰 뿐 이 가상 운영자에 대한 판정을 뒷받침하지 않는다. 저자의 실제 개인 평가가 아니라 편집자의 적용 해석임을 구분해야 한다."
+        }
+      ]
+    },
+    {
+      "id": "chouinard-values-B-2",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_cost_generalization",
+          "quote": "친환경 소재의 높은 단가",
+          "input_fact": "수익률을 계산할 원가도 없다.",
+          "explanation": "높은 단가가 이번 소재의 확인된 특성인 것처럼 전제하지만 견적은 없다. 원가 상승 가능성을 검토하는 것과 현재 소재가 더 비싸다고 아는 것은 다르다."
+        },
+        {
+          "severity": "concern",
+          "category": "unsupported_decision_rule",
+          "quote": "친환경 포장재의 단가가 일반 포장재보다 20% 이상 높거나",
+          "input_fact": "수익률을 계산할 원가도 없다.",
+          "explanation": "전체 원가·매출·마진 기준 없이 소재 단가 20% 상승을 의사결정 기준으로 둔다. 임시로 제안한 기준이라면 근거와 조정 가능성을 밝혀야 하며, 실제 관측값으로 분류하지는 않았다."
+        }
+      ]
+    },
+    {
+      "id": "chouinard-values-C-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "source_adaptation_conflation",
+          "quote": "좋은 사람은 단순히 환경을 지키는 자가 아니라, 목적을 지속하기 위해 운영의 정직함을 유지하는 자입니다.",
+          "input_fact": "2022년 본인 서한은 사업의 환경 영향을 줄이려는 노력과 목적을 지속시키기 위한 소유 구조 선택을 설명한다.",
+          "explanation": "제공된 원전 요약에는 쉬나드가 좋은 사람을 이렇게 정의했다는 근거가 없다. 사업 목적과 운영 구조에 관한 해석을 인물의 도덕적 인간 평가 기준으로 확장한다."
+        }
+      ]
+    },
+    {
+      "id": "chouinard-values-C-2",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_cost_generalization",
+          "quote": "친환경 소재는 대개 단가가 높습니다.",
+          "input_fact": "수익률을 계산할 원가도 없다.",
+          "explanation": "구체적인 소재와 원가를 확인하지 않은 채 비용 상승을 일반 사실로 추가한다. 실제 후보의 견적·회수 비용에 따라 달라질 수 있다는 점을 이번 입력의 미확인 상태와 분리해야 한다."
+        }
+      ]
+    },
+    {
+      "id": "council-product-A-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_decision_rule",
+          "quote": "공유받은 생산 단가가 예상 수익의 30%를 초과하거나",
+          "input_fact": "수익·고객 효과·폐기량은 미측정이다.",
+          "explanation": "생산 단가와 예상 수익의 단위·총량 기준이 불명확하고 30%라는 기준의 원가·마진 근거도 없다. 조건부 운영 규칙의 근거 부족이며, 실제 비용이 30%를 초과했다는 조작은 아니다."
+        }
+      ]
+    },
+    {
+      "id": "council-product-B-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_decision_rule",
+          "quote": "인쇄물 제작 비용이 초기 현금 흐름의 15%를 초과할 경우 이 제안을 거절합니다.",
+          "input_fact": "내 우선순위는 현금 흐름과 납기 신뢰이며 환경 기준은 아직 정하지 않았다.",
+          "explanation": "현금 흐름의 금액·기간·유동성 여유를 모르므로 비용 비중 15%만으로 제안을 거절할 근거가 없다. 사용자의 선호를 수치가 고정된 거절 규칙으로 전환한 우려다."
+        }
+      ]
+    },
+    {
+      "id": "council-product-C-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_decision_rule",
+          "quote": "기존 제품의 납기 일정을 10% 이상 지연시킬 것으로 판단되면 이 제안을 거절합니다.",
+          "input_fact": "내 우선순위는 현금 흐름과 납기 신뢰이며 환경 기준은 아직 정하지 않았다.",
+          "explanation": "납기 준수의 허용 범위나 일정 기준이 없는데 10% 지연을 거절 임계값으로 둔다. 작은 지연도 약속 위반일 수 있으므로 실제 약속일과 허용 여유에 연결해야 한다. 실제 지연이 발생했다는 주장은 아니다."
+        }
+      ]
+    },
+    {
+      "id": "council-recovery-A-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "causal_overclaim",
+          "quote": "특정인의 과부하가 진행을 막고 있음.",
+          "input_fact": "원인은 미확정이고 담당 한 명에게 업무가 몰려 있다.",
+          "explanation": "업무 편중은 확인되었지만 지연 원인은 미확정이다. 해석·불확실성 항목에 있으므로 확정적인 관찰 조작으로 보지는 않되, 과부하가 진행을 막는다는 진단은 검증할 가설로 남겨야 한다."
+        },
+        {
+          "severity": "concern",
+          "category": "authority_scope_expansion",
+          "quote": "규칙상 파트너 교체가 불가하므로",
+          "input_fact": "파트너를 일방 교체할 권한도 없다.",
+          "explanation": "일방 교체 권한이 없다는 사실을 모든 파트너 교체가 금지된 규칙으로 확장한다. 상호 합의나 다른 권한자의 절차까지 불가능하다는 근거는 없다."
+        }
+      ]
+    },
+    {
+      "id": "council-recovery-B-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "source_concept_conflation",
+          "quote": "약속 이행이라는 헌법적 책임(도덕적 반대)",
+          "input_fact": "1864년 Hodges에게 보낸 편지는 노예제에 대한 도덕적 반대와 대통령의 헌법상 책임을 함께 설명하고, 자신이 사건을 모두 통제했다고 주장하지 않는다.",
+          "explanation": "원전 요약에서 구분한 도덕적 반대와 헌법상 책임을 괄호로 같은 뜻처럼 합치고, 현대의 업무 약속을 헌법적 책임으로 부른다. 비유라면 원전의 두 개념을 보존하며 현대적 적용임을 명료하게 해야 한다."
+        }
+      ]
+    },
+    {
+      "id": "council-recovery-C-1",
+      "findings": [
+        {
+          "severity": "concern",
+          "category": "unsupported_decision_rule",
+          "quote": "담당 한 명에게 80% 이상의 업무가 집중되거나",
+          "input_fact": "원인은 미확정이고 담당 한 명에게 업무가 몰려 있다.",
+          "explanation": "업무량의 단위·담당자 역량·필수 전문 역할을 정의하지 않고 80%를 운영 전면 재검토 기준으로 정한다. 제안된 지표이며 실제 업무 비중을 측정한 관찰은 아니다."
+        }
+      ]
+    }
+  ]
+}
