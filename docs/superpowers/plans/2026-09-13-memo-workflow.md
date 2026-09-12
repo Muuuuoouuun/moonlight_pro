@@ -1,6 +1,6 @@
 # 메모 1차 — 작성에서 실제 사용까지
 
-> 상태: 구현·로컬 검증 완료, 최종 코드 검수 승인·작업 공간 통합 중. 2026-09-13 운영자의 “이어서”로 앞서 제안한 첫 묶음을 진행한다.
+> 상태: 구현·로컬 검증·최종 코드 검수·작업 공간 통합 완료. 2026-09-13 운영자의 “이어서”로 앞서 제안한 첫 묶음을 진행한다.
 > 범위: 빠른 메모·선택 보강 질문·명시적 업무 연결·선택 발췌의 할 일/Studio 생성.
 > 후속 분석·추천·결과 피드백은 09-12 메모 설계의 DRAFT를 유지한다. 운영 DB 적용·배포는 이 실행 기록의 로컬 완료와 별개다.
 
@@ -71,7 +71,7 @@
 - [x] **2. 입력·복구 화면** — `journal-client.js`, `journal-browser-store.js`, `use-memos.js`, `memos.jsx`, `memo-composer.jsx`, `memo-use-composer.jsx`, `memos.css`. stable draft UUID와 동기 sessionStorage 복구 저장(탭 복제 후에도 입력·receipt가 서로 덮어쓰지 않음, 같은 탭 새로고침/내비게이션 복구), 전송 전 receipt 저장, 불확실 요청은 확정 전 해당 메모 편집·추가 활용을 막고 같은 요청으로 확인(다른 독립 메모의 입력은 허용). 문서 epoch로 늦은 응답 격리. 실패·충돌 비교·재시도 확인.
 - [x] **3. 기존 업무 연결** — hub-nav/catalog/PAGE_MAP 등록. 업무 객체의 메모 진입, task의 description/source 참조, Studio의 journal 출처 표시. 단축키·딥링크·모바일 확인.
 - [x] **4. 검수** — spec reviewer 후 quality reviewer. 실제 Hub→RPC→DB 흐름으로 신규/수정/보강/발췌/재시도/새로고침/두 창 충돌/원문 수정/읽기 실패/390px 검증. 관련 테스트와 full suite, typecheck, contracts, Hub/Engine builds.
-- [ ] **5. 통합** — 소유 파일만 commit 후 stat 확인. 메인 작업 공간의 동시 변경을 보존하며 메모 변경만 통합. docs 실제 범위 기록, worktree 제거. 운영 배포 완료로 표현하지 않는다.
+- [x] **5. 통합** — 소유 파일만 commit 후 stat 확인. 메인 작업 공간의 동시 변경을 보존하며 메모 변경만 통합. docs 실제 범위 기록, worktree 제거. 운영 배포 완료로 표현하지 않는다.
 
 ### 복구 보관 범위
 
@@ -92,3 +92,10 @@
 기존 task description(`0021`), `0025_daily_review_journal`, `0026_content_workflow`의 적용 상태를 먼저 확인하고 `20260913_0027_journal_notes.sql`을 적용해야 한다. 이 작업은 임시 DB에만 적용했다. 0027은 note 메타·revision, 출처/사용 연결, 중복 확인 영수증, 업무 검색과 원자 저장 RPC를 추가한다. 기존 일별 리뷰 데이터·review revision은 유지한다.
 
 운영 활성화 검수는 메모 API의 실제 저장소 상태, 새 메모 저장·재조회, 선택 발췌의 할 일/콘텐츠 생성과 양방향 출처, 같은 requestId 재확인으로 한다. 운영 배포·DB 적용 완료 여부는 별도 실행 기록으로 남긴다.
+
+## 최종 통합 기록 (2026-09-13)
+
+- 메모 구현 커밋 `ebd9a2f`를 기존 작업 공간의 최신 커밋 위에 메모 변경만 반영한 `b7b886a`로 통합했다. 기존 콘텐츠·하루 리뷰·통합 문의·화면 개선을 보존하고 문서의 메모 DRAFT 중복 등재를 정리했다.
+- 통합 코드 기준 `npm test`: 960개 중 956개 통과, 실패 0, PostgreSQL 선택 실행 4개 제외. typecheck·contracts·Hub/Engine production build 통과.
+- 통합 커밋을 환경 파일 없는 전용 worktree에서 빌드·실행했다. 실제 Hub→임시 DB로 저장·보강·할 일·Studio 생성·원문 복귀·응답 유실 재시도·390px 표시를 다시 확인했고 브라우저 pageerror는 0이었다.
+- 임시 Hub/REST/DB 프로세스를 종료하고 임시 DB와 전용 worktree를 제거했다. 작업 브랜치의 구현 이력은 남겼다. 운영 메모 DB 적용·배포는 수행하지 않았다.
