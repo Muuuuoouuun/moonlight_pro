@@ -200,3 +200,8 @@ test("a deep link to a brand outside the current scope resolves to null, not a w
   assert.equal(selectBrand(directory, "classmoon"), null);
   assert.equal(selectBrand(directory, null), null);
 });
+
+test('journal context opens a brand by its durable id while preserving slug bookmarks', () => {
+  const directory = buildBrandDirectory(liveLedger({ brands: [brand('sinabro')] }), { now: NOW });
+  assert.equal(selectBrand(directory, 'sinabro-id'), selectBrand(directory, 'sinabro'));
+});

@@ -67,6 +67,7 @@ const Decisions = lazyPage(() => import("./pages/work").then(m => m.Decisions));
 const Roadmap = lazyPage(() => import("./pages/work").then(m => m.Roadmap));
 const Rhythm = lazyPage(() => import("./pages/work").then(m => m.Rhythm));
 const MyWork = lazyPage(() => import("./pages/my-work").then(m => m.MyWork));
+const Memos = lazyPage(() => import("./pages/memos").then(m => m.Memos));
 const DailyReview = lazyPage(() => import("./pages/daily-review").then(m => m.DailyReview));
 const Projects = lazyPage(() => import("./pages/projects").then(m => m.Projects));
 const Brands = lazyPage(() => import("./pages/brands").then(m => m.Brands));
@@ -192,6 +193,7 @@ const PAGE_MAP = {
   'dashboard/daily-brief': (n, inquiries) => <DailyBrief onNavigate={n} inquiryNotifications={inquiries} />,
   'dashboard/overview': (n) => <Overview onNavigate={n} />,
   'dashboard/work/my': (n) => <MyWork onNavigate={n} />,
+  'dashboard/work/memos': () => <Memos />,
   'dashboard/work/daily-review': () => <DailyReview />,
   'dashboard/work/calendar': (n) => <Calendar onNavigate={n} />,
   'dashboard/work/projects': () => <Projects />,

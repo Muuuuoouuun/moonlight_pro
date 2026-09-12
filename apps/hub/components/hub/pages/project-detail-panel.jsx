@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { MemoCaptureLink } from "../journal-links";
 import { Avatar, Badge, Button, Checkbox, IconButton } from "../hub-primitives";
 import { BrandMark } from "./project-pms-components";
 
@@ -173,6 +174,7 @@ export function ProjectDetailPanel({
         <DetailSection title="노트" count={notes.length} empty={failedEmpty("notes", "이 프로젝트에 연결된 노트가 없습니다.")}>
           {notes.map((note) => <ActivityRow key={note.id} title={note.title} body={note.body} meta={note.createdAtLabel} badge="note" />)}
         </DetailSection>
+        <MemoCaptureLink context={{ type: "project", id: project.id }} label="이 프로젝트에 메모 남기기" />
         <DetailSection title="루틴 체크" count={checks.length} empty={failedEmpty("routine_checks", "이 프로젝트에 연결된 routine check가 없습니다.")}>
           {checks.map((check) => <ActivityRow key={check.id} title={check.checkType} body={check.note} meta={check.checkedAtLabel} badge={check.status} tone={checkTone[check.status] || "neutral"} />)}
         </DetailSection>

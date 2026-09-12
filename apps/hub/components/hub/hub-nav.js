@@ -138,6 +138,7 @@ const SETTINGS_CHILDREN = [
 
 const MY_WORK_CHILDREN = [
   { key: 'my-work-list', label: '실행 목록', path: 'dashboard/work/my' },
+  { key: 'memos', label: '메모', path: 'dashboard/work/memos' },
   { key: 'daily-review', label: '하루 리뷰', path: 'dashboard/work/daily-review' },
 ];
 
@@ -174,7 +175,7 @@ export const SIDEBAR_PRIMARY = [
     label: '내 작업',
     icon: 'inbox',
     scopeAware: false,
-    owns: ['dashboard/work/my', 'dashboard/work/daily-review'],
+    owns: ['dashboard/work/my', 'dashboard/work/memos', 'dashboard/work/daily-review'],
     children: { all: MY_WORK_CHILDREN, classin: MY_WORK_CHILDREN, personal: MY_WORK_CHILDREN },
     paths: {
       all: 'dashboard/work/my',
