@@ -3,7 +3,19 @@
 > 상태: **DRAFT · 권장안(운영자 확정 전)**. 2026-09-03 office-hours 세션 산출물.
 > 상위 정본: `docs/README.md` 우선순위 → `docs/operator-workflow-profile.md` → `2026-07-13-moonlight-personal-operator-os-deep-design.md` → 주제별 최신 스펙(`2026-08-29-brand-tab-design.md`, `plans/2026-08-31-personal-revenue-roadmap.md`).
 > 관계: 이 문서는 기존 확정 결정을 바꾸지 않는다. Phase 1B·1C 완료를 전제로 **다음 사이클의 후보**를 정리한다. 본문의 `확정`은 기존 문서에서 이미 확정된 사실만 가리키고, 이 문서가 새로 제안하는 것은 전부 `권장`이다. 운영자 인터뷰는 중단 상태이므로 여기서 질문을 던지지 않고 §12에 모아 둔다.
-> 검토: 독립 2차 의견 1회(§11), 적대적 리뷰 1회(사실 오류 4건·불일치 8건 반영, 2026-09-03). 코드 인용은 리뷰 시점 라인 번호다.
+> 검토: 독립 2차 의견 1회(§11), 적대적 리뷰 1회(사실 오류 4건·불일치 8건 반영, 2026-09-03), CEO 리뷰 1회(HOLD SCOPE, 2026-09-04 — §15).
+
+> **2026-09-04 정정 — 이 문서의 기준선이 하루 만에 바뀌었다.**
+> 작성 시점에는 `docs/README.md` §3이 Phase 1B·1C를 "부분 작동"으로 적고 있었다. 2026-09-04 갱신된 README와 코드 확인 결과는 다음과 같다.
+>
+> | 이 문서가 깔았던 전제 | 2026-09-04 사실 | 근거 |
+> |---|---|---|
+> | Phase 1B 부분 작동 | **작동** | `daily-brief/route.js` A-1 attention 어댑터 컷오버(2026-08-09) |
+> | Phase 1C 부분 작동, 컨택 결과 경로 2개 | **작동, 원자 RPC 단일 경로** | `followups.jsx`의 결과 기록이 `/api/hub/revenue/contact-outcome` 호출 |
+> | 테스트 379/379, 글롭 밖 18파일 | **692/692, 82파일 전부 글롭 안** | README §3, `package.json` test 글롭 |
+>
+> 따라서 **§6 N0(1B·1C 마감)은 이미 끝난 일**이고, N0 뒤로 미뤄 둔 항목(B-8, 성과 API)의 게이트는 열려 있다. `docs/README.md` §3이 여전히 유지하는 하드 게이트는 ClassIn 전체 동기화·음성 AI·직접 소셜 발행 셋뿐이다.
+> W5·F-2·§12 Q7은 이 정정으로 **소멸**했다(아래 각 항목에 표기). 본문의 코드 라인 번호는 병렬 세션 커밋으로 빠르게 낡는다 — 라인 번호가 아니라 파일·심볼로 읽을 것.
 
 ---
 
@@ -11,7 +23,7 @@
 
 **프레임.** 세일즈·콘텐츠·마케팅은 세 개의 입력 엔진이고, 브랜딩은 그 셋이 쌓이는 **복리 자산**이다. 루프가 닫히면 브랜드가 다음 문의의 획득 비용을 낮춘다. 이 프레임을 지금 시스템에 대면 결론은 네 줄이다.
 
-1. **세일즈 엔진은 깊고 진짜다.** 리드·딜·고객DB·팔로업·원자 컨택 결과 RPC·Guru 코칭·승인 큐·시트 인테이크까지 있다. 다만 Phase 1B·1C가 부분 작동이고 아직 매일 쓰지 않는다(2026-07-29 확인). 모든 학습 루프가 데이터 기아 상태다.
+1. **세일즈 엔진은 깊고 진짜다.** 리드·딜·고객DB·팔로업·원자 컨택 결과 RPC·Guru 코칭·승인 큐·시트 인테이크까지 있다. Phase 1B·1C도 2026-09-04 기준 작동한다. 남은 문제는 기능이 아니라 **아직 매일 쓰지 않는다**는 것이다(2026-07-29 확인). 모든 학습 루프가 데이터 기아 상태다.
 2. **콘텐츠 엔진은 원장은 완비, 신호는 0.** `content_items`·`variants`·`publish_logs`·브랜드 정체성·케이던스·아이디어 큐·플라이휠 크론이 있지만, 발행은 수동 마킹이고 조회·공유·문의 신호는 하나도 안 들어온다. 제작 화면(blog·카드뉴스)이 실제 채널(Threads·IG·Shorts)과 어긋난다.
 3. **마케팅 엔진은 사실상 없다.** 주인 문서도 주인 화면도 없다. 캠페인 워룸은 7탭 중 6탭이 빈 경로, 세그먼트는 ClassIn 읽기 전용, 리드의 95%가 오는 Meta 시트의 검토 행을 보여줄 `IntakeInbox`는 만들어졌지만 라우팅이 안 돼 있다.
 4. **브랜딩은 이제 막 "운영 대상"이 됐다.** 브랜드 탭 P1이 8/29에 나왔다. 그러나 9+1개 브랜드가 역할 구분 없이 같은 무게이고, 브랜드→매출 연결(`byBrand`)은 죽은 스텁이며, 증거(실사용 레퍼런스·후기·사례)를 모으는 곳이 없다.
@@ -20,7 +32,7 @@
 - 성장 수식(`계약 = 문의 × 유효리드율 × 클로징률`, 60건 = 문의 600개)에서 운영자가 **통제하는** 레버는 둘뿐이다. 문의의 95%는 회사 Meta 예산이 정하므로 그의 변수가 아니다. 그가 쥔 것은 (a) 리드에 얼마나 빨리·몇 번 닿는가(유효리드율 20%를 40%로 올리면 필요 문의 수가 절반), (b) 브랜드가 만드는 문의(적지만 결제율 10%로 진하다). 시스템의 근육은 (a)의 뒤쪽(팔로업·CRM)에 있고, (a)의 앞쪽(도착 → 첫 접촉 속도)과 (b)에는 계측이 없다. 세 엔진 사이에 **다리가 하나도 없다**: 고객 반론이 콘텐츠 아이디어가 되지 않고, 콘텐츠가 리드에 귀속되지 않으며, 성사된 거래가 브랜드 증거가 되지 않는다.
 - **초안을 만드는 크론 2개가 지금 실패 중이다.** `followup-autopilot`과 `content-flywheel`은 Engine이 돌려주는 `{text}`가 아니라 `subject/body`·`title/body`를 요구하고, 요청하는 모드(`followup-draft`·`content-draft`)가 Engine에 없어 조용히 다른 모드로 떨어진다. 결과: 승인 큐에 초안이 한 번도 들어간 적이 없다. "AI 자율 워커 + 발송만 승인" 로드맵은 배관은 있는데 물이 안 흐른다(§5.6 W19, §7 F-0).
 
-**권장.** 새 최상위 탭을 만들지 않는다(추가 서피스는 기존 페이지 안 섹션이나 하위 라우트로, 마운트 위치는 §7에 명시). (1) 1B·1C를 닫고 매일 쓰는 의식을 시작하되, 그 의식이 열리는 화면을 **"오늘 연락할 리드"**(기존 고객 연락 화면 + 소스 배지 + 도착 후 경과 + SLA 정렬)로 정한다. (2) 기존 원장에 **다리 3개 + 계측 필드 2개**(`first_touch_at` 파생, `content_ref`)를 놓는다. 시트 리드의 소스·캠페인·폼·도착 시각 필드는 이미 있다. (3) 30일 동안 **주간 성장 리뷰**로 세 엔진을 한 화면에서 읽는다. 큰 것(설명회 퍼널·캠페인 워룸·브랜드 편집장 AI·성과 API)은 그 30일이 신호를 보여줄 때 졸업시킨다. 상세는 §9 접근안 A+C, 2차 의견 반영은 §11.
+**권장.** 새 최상위 탭을 만들지 않는다(추가 서피스는 기존 페이지 안 섹션이나 하위 라우트로, 마운트 위치는 §7에 명시). (1) 1B·1C는 이미 닫혔으니 곧바로 매일 쓰는 의식을 시작하되, 그 의식이 열리는 화면을 **"오늘 연락할 리드"**(기존 고객 연락 화면 + 소스 배지 + 도착 후 경과 + SLA 정렬)로 정한다. (2) 기존 원장에 **다리 3개 + 계측 필드 2개**(`first_touch_at` 파생, `content_ref`)를 놓는다. 시트 리드의 소스·캠페인·폼·도착 시각 필드는 이미 있다. (3) 30일 동안 **주간 성장 리뷰**로 세 엔진을 한 화면에서 읽는다. 큰 것(설명회 퍼널·캠페인 워룸·브랜드 편집장 AI·성과 API)은 그 30일이 신호를 보여줄 때 졸업시킨다. 상세는 §9 접근안 A+C, 2차 의견 반영은 §11.
 
 ---
 
@@ -64,7 +76,7 @@
 |---|---|---|
 | Moonlight 목적 | 인지 에너지 1/3, 누락 0건. 본인만 쓰는 개인 OS, SaaS 아님 | 프로필 §2 확정 |
 | 실사용 | 2026-07-29 기준 "아직 매일 안 씀, 간단 테스트만" | 메모리 `phase1-usage-and-priorities` |
-| 구현 단계 | Phase 0·1A 완료, 1B·1C 부분 작동, 컨택 결과 정본 화면 미정 | `docs/README.md` §3 |
+| 구현 단계 | Phase 0·1A·1B·1C 작동(2026-09-04). 컨택 결과는 원자 RPC 단일 경로 | `docs/README.md` §3 |
 | ClassIn 기준값 | 월 6건 계약 ≈ 100,000 CNY. HW 20,000 · SW 첫 충전 10,000 CNY | 성장 계획 §1 |
 | 목표 게이트 | Gate 1 월 300,000 CNY → Gate 2 월 60건/HW 60대 → Gate 3 월 1,000,000 CNY+ | 성장 계획 §2 |
 | 퍼널 상수(Threads 최고 성과 콘텐츠 기준) | 30 문의 → 6 유효(20%) → 3 결제(50%). 60건 = 문의 600개. **Meta 시트 리드의 기준선은 문서에 없다** — §13 과제 1이 잰다 | 성장 계획 §2 |
@@ -139,7 +151,7 @@
 | `brands.meta`(philosophy · direction · voice · cadence · keywords · rules · forbidden · channels) | live | 9+1 브랜드 시드. AI 프롬프트(`brand-context.js`)가 읽음 |
 | 정체성 편집 | **미구현 + 위험** | Engine `update_brand`가 `meta`를 통째로 교체(D6). P2 전 병합으로 수정 필수 |
 | 브랜드별 주간 목표 `meta.weekly_goal` | 미확정 | 전역 `goal = 5`. 브랜드 탭은 권장값으로만 표시 |
-| 브랜드 → 매출 | **stub** | `RevenueOverview.byBrand = []`(`revenue.jsx:290`) |
+| 브랜드 → 매출 | **stub** | `RevenueOverview`의 `byBrand = []`(`revenue.jsx`, 2026-09-04 기준 391행 — 라인은 이동함) |
 | 브랜드 → 프로젝트 · 콘텐츠 | live(조회) | `projects.brand_id`, `content_items.brand_id` |
 | 증거 원장(레퍼런스 · 후기 · 사례) | **없음** | `notes`는 `project_id`만, `brand_id` 없음(P4 마이그레이션 1줄 예정) |
 | 포지셔닝 한 줄 · 브랜드 역할 | **없음** | `marketing-branding-gurus.md`는 지식 참고일 뿐 제품에 미반영 |
@@ -174,14 +186,14 @@
 
 ### 5.1 가로지르는 약점 (가장 무겁다)
 
-- **W1 · 중력 부재.** 매일 안 쓴다. 1B·1C가 부분 작동이라 "오늘 뭐부터"가 아직 5초 안에 안 나온다. outcome → triage, 성과 → 랭킹 같은 모든 학습 루프가 데이터 기아. 이 약점이 해결되기 전의 모든 계측은 빈 표다.
+- **W1 · 중력 부재.** 매일 안 쓴다. **2026-09-04 정정 이후 이 약점은 더 날카로워졌다** — 1B·1C가 끝났는데도 매일 열지 않는다면 원인은 기능 부족이 아니다. outcome → triage, 성과 → 랭킹 같은 모든 학습 루프가 데이터 기아. 이 약점이 해결되기 전의 모든 계측은 빈 표다.
 - **W2 · 다리 0개.** §3.5. 세 엔진이 각자 원장을 갖고 서로 모른다. 운영자가 머릿속에서 잇고 있다 = 인지 에너지 1/3 목표의 정반대.
 - **W3 · 마케팅 필러 부재.** 주인 문서·주인 화면이 없다. 시트 경로의 소스 필드는 정규화돼 있지만 그것을 읽는 화면(소스별 전환·첫 접촉)이 없고, 리드의 95%가 오는 통로의 검토 행을 보여줄 화면이 orphan 상태다.
 - **W4 · 계측 0.** 문의 수(월), 소스별 전환, 콘텐츠별 문의, 브랜드별 발행 대비 목표. 성장 계획 §9 P0 "lead source별 전환 대시보드"가 아직 없다.
 
 ### 5.2 세일즈
 
-- **W5** 컨택 결과 기록 경로 2개 공존(원자 RPC vs 단건 insert), 정본 화면 미정 → 학습 sink 품질 저하.
+- ~~**W5** 컨택 결과 기록 경로 2개 공존, 정본 화면 미정~~ → **소멸(2026-09-04).** `followups.jsx`의 결과 기록이 원자 RPC `/api/hub/revenue/contact-outcome`을 호출한다. 비원자 `/api/integrations/outcomes/record`는 UI 소비자 0(외부·cron 대비로만 유지). 학습 sink는 단일 경로다.
 - **W6** owner scope 검증(20샘플) 미완 → 집중 고객 자동 추천 게이트 잠김.
 - **W7** Next Action Ledger·넛지(열린 딜 다음 행동 90%) 미구현. 팔로업은 있으나 "다음 행동 없음" 자체를 잡는 넛지가 없다(nudge layer §3.3).
 
@@ -206,7 +218,7 @@
 
 ### 5.6 문서·운영·배관
 
-- **W18** `docs/README.md` 인덱스가 2026-09-03까지 8/29 브랜드 탭·8/31 매출 로드맵을 안 담고 있었다(이 세션에서 등재, 미커밋). 개인 매출 로드맵 `design-qa.md`는 `final result: blocked`.
+- ~~**W18** README 인덱스가 8/29·8/31 문서를 안 담는다~~ → **해소(2026-09-04, `9bc956f`).** README §3 상태표·§4 인덱스가 갱신됐고 이 문서도 등재됐다. 남은 것은 개인 매출 로드맵 `design-qa.md`의 `final result: blocked` 하나다.
 - **W19 · 초안 크론 2개 고장.** `apps/hub/app/api/cron/followup-autopilot/route.js:128-129`는 `data.subject/body`를, `content-flywheel/route.js:126-127`은 `data.title/body`를 요구하지만 Engine `ai/sales-mentor`·`ai/brand-mentor`는 `{status, mode, ref, model, text, reason, persistence}`를 돌려준다. 요청 모드 `followup-draft`·`content-draft`는 두 Engine `MODES`에 없어 `normalizeMode`가 `pipeline-triage`·`brand-strategy`로 조용히 바꾼다. 매일 아침 `agent_runs(result='error')`만 쌓이고 `work_orders`는 0건. 승인된 3-lane 로드맵 중 생성 lane 둘이 실제로는 한 번도 작동한 적이 없다.
 - **W20 · 쓰는 사람 없는 원장.** `automations · triggers · automation_runs`는 Automations·Overview가 읽지만 Hub 어디서도 쓰지 않는다(유일한 writer는 Telegram). Automations 대시보드는 구조적으로 비어 있다. `classin_crm_snapshot`은 `crm-pipeline.js:24`가 조회하지만 어떤 마이그레이션에도 없다.
 - **W21 · 읽기 라우트 무인증(확인 필요).** Hub `GET /api/hub/{revenue, daily-brief, content, agents, …}`는 쓰기 가드만 있고 읽기 인증이 없다. Vercel 크론이 있으니 배포돼 있다는 뜻인데, 배포 앞단에 접근 제한(Vercel Authentication 등)이 있는지 확인이 필요하다. 이 기획 범위 밖이지만 고객 데이터라 적어 둔다.
@@ -218,7 +230,7 @@
 
 | # | 필요한 것 | 왜 지금 | 무엇을 하지 않는가 |
 |---|---|---|---|
-| N0 | **1B·1C 마감** (컨택 결과 정본 화면 결정, Attention adapter, Calendar agenda, timeout/partial 계약) | 현 로드맵 그대로. 이 문서가 대체하지 않음 | 새 탭 |
+| ~~N0~~ | ~~**1B·1C 마감**~~ → **완료(2026-09-04).** 게이트가 열렸으므로 아래 항목은 대기 없이 착수 가능 | — | — |
 | N1 | **매일 쓰는 의식 3개**: 아침 Daily Brief 3분 → 마감 outcome 10분 → 주 1회 성장 리뷰 30분 | W1. 계측은 사용 뒤에만 의미 | 자동 발송, 푸시 |
 | N2 | **"오늘 연락할 리드" 화면 하나**: 기존 고객 연락(Followups)에 소스 배지 · 도착 후 경과 · SLA 정렬(구매 신호 → 미접촉 → 오늘 due) + 상단 소스별 `유입 / 24h 내 접촉률 / 미팅 수락 / 결제` 스트립. 뒤에서 `IntakeInbox` 라우팅과 계측 필드 2개(`first_touch_at` 파생, 비시트 경로 `source` 통일)가 받친다. 시트 리드의 소스·캠페인·폼·도착 시각(`meta.created_time`)은 이미 있다. 정렬 규칙은 B-5의 것 하나만 쓴다 | W1·W3·W4. 리드 95%가 오는 Google Sheet를 대체하는 유일한 화면이라 의지가 아니라 필요로 매일 열린다(§11 2차 의견) | 새 최상위 탭, 광고 집행 연동 |
 | N2-1 | **초안 크론 2개 수리**(F-0) | W19. 고치기 전까지 "AI 자율 워커"는 문서에만 존재 | 자동 발송 |
@@ -235,19 +247,19 @@
 
 | # | 보완 | 파일·원장 | 크기 | 푸는 약점 |
 |---|---|---|---|---|
-| **F-0** | **초안 크론 수리.** Engine `sales-mentor`·`brand-mentor`에 `followup-draft`·`content-draft` 모드를 실제로 추가하고 응답에 구조화 초안(`subject/body` 또는 `title/body`)을 포함하거나, 크론이 `text`를 파싱하도록 맞춘다. 수리 후 `agent_runs(result='error')`가 멈추고 `work_orders(proposed)`가 생기는지 회귀 테스트 1건. 출시된 크론의 수리이지 Council·Guru 설계 확장이 아니므로 README의 보류 목록과 충돌하지 않는다 | `apps/hub/app/api/cron/followup-autopilot/route.js:128-129`, `content-flywheel/route.js:126-127`, `apps/engine/app/api/ai/{sales,brand}-mentor/route.ts` MODES | S~M | W19 |
+| **F-0** | **초안 크론 수리 + 가시성.** (운영자 확정 2026-09-04: 계약만이 아니라 가시성까지 F-0의 범위다.)<br>**(1) 계약** — Engine `sales-mentor`·`brand-mentor`에 `followup-draft`·`content-draft` 모드를 실제로 추가하고 응답에 구조화 초안(`subject/body` 또는 `title/body`)을 포함하거나, 크론이 `text`를 파싱하도록 맞춘다. 회귀 테스트 1건: 수리 후 `agent_runs(result='error')`가 멈추고 `work_orders(proposed)`가 생기는지.<br>**(2) 가시성** — 크론 실행 결과를 `automation_runs`에 기록하고, 연속 실패 시 Daily Brief 승인 카드에 한 줄 표시한다(`오늘 초안 생성 실패 2건 · 마지막 성공 N일 전`). 지금 크론은 `automation_runs`에 쓰지 않고 `agent_runs(result='error')`만 남기며, 그것을 띄우는 화면이 없다 — 그래서 몇 주간 매일 실패한 것을 아무도 몰랐다. 크론이 `automation_runs`의 첫 writer가 되면 W20(쓰는 사람 없는 원장)도 함께 줄어든다.<br>출시된 크론의 수리이지 Council·Guru 설계 확장이 아니므로 README의 보류 목록과 충돌하지 않는다 | `apps/hub/app/api/cron/{followup-autopilot,content-flywheel}/route.js`, `apps/engine/app/api/ai/{sales,brand}-mentor/route.ts` MODES, `automations-ledger.js`, `daily-brief.jsx` 승인 카드 | M | W19·W20 |
 | F-1 | `IntakeInbox`를 `PAGE_MAP`·`hub-nav.js`에 등록. 경로 `dashboard/revenue/intake`(영업·매출 하위 "유입 검토"); ClassIn 스코프 `dashboard/classin/intake`를 쓰려면 `hub-data.js:112`의 alias(`→ classin/revenue`)를 먼저 제거 | `hub-app.jsx`, `hub-nav.js`, `hub-data.js`, `pages/intake-inbox.jsx` | S | W3 |
-| F-2 | 컨택 결과 정본 화면은 **운영자 결정**(README §3 미정, §12 Q7). 확정되면 `followups.jsx` 인라인 폼을 `record_contact_outcome_v1`로 통일. 확정 전에는 두 경로를 그대로 두고 B-5의 결과 기록 버튼은 기존 경로를 쓴다 | `followups.jsx`, `/api/hub/revenue/contact-outcome` | 결정 + M | W5 |
+| ~~F-2~~ | ~~컨택 결과 정본 화면 결정~~ → **완료(2026-09-04).** `followups.jsx`가 이미 원자 RPC를 쓴다. B-5의 결과 기록 버튼은 그 경로를 그대로 쓴다. **다른 세션의 MCP 확충 설계 §6 E2가 아직 "두 경로 공존·정본 미정"으로 이 문서를 인용하고 있다 — 그 주석도 함께 정정해야 한다** | `followups.jsx`, `2026-09-04-mcp-server-audit-and-expansion-design.md` §6 E2 | S(문서) | W5 |
 | F-3 | 리드 계측: (1) 비시트 경로(DM·명함·Gmail·수동)의 `leads.source`를 시트 경로 어휘(`meta_ads · threads · existing · referral · event · manual`)로 통일. (2) `arrived_at`은 `meta.created_time`, 없으면 intake 행 `created_at`으로 fallback하고 `meta.arrived_at_source='import'` 표시. (3) `first_touch_at`은 컬럼이 아니라 read model 파생: 그 리드의 최초 `crm_activities`·`outreach_outcomes` 시각(`last_touch_at`은 승격 시 `now`로 덮이므로 쓰지 않는다). (4) 같은 사람이 시트와 DM 양쪽에서 오면 먼저 도착한 소스가 `source`, 나중 것은 활동으로 기록. **전제: 시트 import가 수동이라 도착 시각 정밀도는 import 주기에 묶인다** — 필요하면 import 크론(`vercel.json`) 1개를 선행 | `sheets-normalize.js`, `followups-ledger.js`, `leads.meta` | M | W3·W4 |
 | F-3a | 고객 연락 화면에 소스 배지 · 도착 후 경과(24h 초과만 danger 레일) · B-5 정렬 규칙 + 상단 소스별 `.stat` 스트립(repository 쿼리, 새 테이블 없음) = 성장 계획 §9 P0 "lead source별 전환 대시보드" | `followups.jsx`, `followups-ledger.js` | M | W1·W4 |
 | F-4 | Engine `update_brand` meta 병합. `pms-command.ts`는 REST PATCH 디스크립터를 반환하는 구조라 SQL식 `meta \|\| patch`는 불가 → Engine에서 read-merge-write 하거나 병합 RPC 1개 | `apps/engine/lib/pms-command.ts:473` | S | W16 |
 | F-5 | 브랜드 `meta.weekly_goal` + 정체성 편집(P2) | `brands.jsx`, `brand-directory.js` | M | W14 |
 | F-6 | 아이디어 입력 단일화: `quick_capture(idea)`가 만든 `work_orders(kind idea)`를 `content_items(status idea)`로 승격하는 경로 확정(둘 중 하나가 정본) | `20260715_0014`, `apps/hub/lib/sales-os/work-orders.js`, `content-ledger.js` | M | W10 |
 | F-7 | variant 타입에 `threads_post` · `shorts_script` 1급 추가(기존 `x_thread`·`reels_script` 별칭 유지), Studio에 Threads 텍스트 모드. `content_variants_variant_type_check`(`20260602_0004`) 재생성 마이그레이션 1개 필요 | `content_variants` 계약, `content.jsx` Studio | M | W8 |
-| F-8 | `RevenueOverview.byBrand` 스텁 제거 또는 귀속 필드 기반으로 실계산 | `revenue.jsx:290`, `revenue-ledger.js` | S | W14 |
+| F-8 | `RevenueOverview`의 `byBrand` 스텁 제거 또는 귀속 필드 기반으로 실계산 | `revenue.jsx`(심볼 `byBrand`), `revenue-ledger.js` | S | W14 |
 | F-9 | `campaigns`에 `source_kind`·`goal_kind`만 추가(`brand_id·goal_target·channels·meta`는 이미 있음; 처음엔 `meta` 키로 시작해도 된다) 후 Pulse·Attribution 2탭만 실데이터 | `campaigns`, `content.jsx:1200-1495` | M | W13 |
 | F-10 | `notes.brand_id` 마이그레이션(P4 D5) — 증거 원장의 저장소로 겸용 | `schema.sql:75` | S | W15 |
-| F-11 | `docs/README.md` §4 등재분(이 세션) 커밋, 개인 매출 로드맵 design-qa 재실행 | `docs/README.md`, `design-qa.md` | S | W18 |
+| F-11 | ~~README 등재~~ 완료(`9bc956f`). 남은 것은 개인 매출 로드맵 design-qa 재실행 | `design-qa.md` | S | W18 |
 | F-12 | Next Action Ledger P1: 열린 딜 `next_action`(실제 컬럼) 커버리지 계산 + "다음 행동 없음" 넛지를 Daily Brief·딜 보드에 | `deals.next_action`, `daily-brief.jsx` | M | W7 |
 | F-13 | Segments를 개인 스코프에도 노출(유입경로 축은 F-3 뒤에 의미가 생김) | `hub-nav.js` | S | W3 |
 | F-14 | MCP에 `record_contact_outcome` · `tag_lead_source` · `create_content_idea` 도구 추가(에이전트가 다리를 건널 수 있게). 셋 다 사람의 행동·데이터를 **기록**하는 쓰기라 심화 설계 §18 기준으로 자동 허용, `source='mcp'` 표기. 외부 발송·발행은 여전히 `work_orders(proposed)`만 만든다 | `packages/mcp-server/src/tools.js` | M | W2 |
@@ -271,7 +283,7 @@
 - **무엇**: 컨택 결과 시트(요약·반응·다음 행동)에 `고객 질문/반론` 칩을 추가. 선택하면 `content_items(status idea, brand classmoon, source_type meeting, meta.angle)`가 자동 생성된다.
 - **왜**: 콘텐츠 병목은 소재·꾸준함(`sales-os-direction.md` §4). 상위 반론("Zoom이랑 뭐가 달라", "전자칠판 있는데 왜")이 곧 큐 신호(§5). 지금은 운영자 머릿속에서만 이어진다.
 - **어떻게**: `record_contact_outcome_v1` payload에 `objection_tags[]` → 트리거 또는 Hub BFF에서 idea insert. 콘텐츠 페르소나(`02-content.md`)가 이미 "반론 깨는 1장 자료"를 생산하도록 설계돼 있다.
-- **게이트**: F-2(정본 화면) 뒤.
+- **게이트**: 없음(F-2가 2026-09-04에 소멸). 컨택 결과 시트가 이미 단일 원자 경로이므로 `objection_tags[]`를 그 payload에 얹으면 된다.
 
 ### B-3 증거 원장 (Proof Ledger)
 - **무엇**: `won` 딜과 긍정 `고객 반응`, 방문·데모에서 찍은 실사용 장면을 "증거 후보"로 모은다. 후기·사례·레퍼런스 영상 소재의 단일 출처.
@@ -292,7 +304,7 @@
 - **왜**: 성장 계획 §9 **P0**. "10분 안에 첫 접촉"(§3 `lead`)을 시스템이 재야 한다. 리드 95%의 통로에 계기가 없다. 그리고 이것이 Google Sheet를 대체하는 유일한 화면이라 **매일 열린다**(W1을 푸는 가장 짧은 길, §11).
 - **정렬 규칙(하나만)**: 1순위 구매 신호(설명회 신청·데모 요청) → 2순위 미접촉(도착 후 경과 긴 순, 24h 초과만 danger 레일: DESIGN §5.2 "즉시 손실") → 3순위 오늘 due. 같은 순위 안에서만 소스 우선순위(설명회 › Threads › Meta › 기존 고객)로 가른다. N2와 F-3a는 이 규칙을 참조한다.
 - **어떻게**: F-1 + F-3 + F-3a. 새 테이블 없음.
-- **게이트**: 없음. 0~30일의 첫 빌드. 결과 기록 버튼은 F-2가 운영자 결정으로 확정될 때까지 기존 경로를 쓴다. §13 과제 1은 이 빌드의 게이트가 아니라 SLA 부분의 비중을 정하는 보정이다.
+- **게이트**: 없음. 0~30일의 첫 빌드. 결과 기록 버튼은 `followups.jsx`가 이미 쓰는 원자 RPC 경로를 그대로 쓴다. §13 과제 1은 이 빌드의 게이트가 아니라 SLA 부분의 비중을 정하는 보정이다.
 
 ### B-6 설명회 퍼널 + 허락 자산 1개
 - **무엇**: 행사 참석자 붙여넣기 → 전화번호·기관·이름 매칭 → 미매칭은 검토 → 참석을 활동으로 누적 → 반복 참석 = 집중 신호(프로필 §10 권장 그대로). 그리고 허락 자산을 **하나만** 정한다: 설명회 참석자 리스트 또는 카카오톡 채널 또는 Threads 팔로워 중 하나, 매달 크기를 센다.
@@ -309,7 +321,7 @@
 ### B-8 브랜드 편집장 AI (Brand Editor)
 - **무엇**: content-flywheel 크론을 확장한다. 브랜드 정체성 + 실험 원장(B-1) + 증거 원장(B-3)을 읽고 브랜드별 다음 주 계획(글 3개, 각 가설 포함)을 `work_orders(proposed)`로 낸다. 발행은 사람.
 - **왜**: 승인된 Advisory → Autonomous 3-lane 중 Content Flywheel lane의 다음 단계. "AI가 보는 것 = 내가 보는 것"이 데이터로 성립하는 첫 순간.
-- **게이트**: N0(1B·1C 완료 — README는 Council·Guru 확장을 그 뒤로 둔다) + B-1 4주치 데이터 + B-4. 그 전에는 추측을 더 그럴듯하게 만들 뿐이다.
+- **게이트**: N0는 2026-09-04에 충족됐다. 남은 게이트는 B-1 4주치 데이터 + B-4(브랜드 역할 결정)뿐이다. 그 전에는 추측을 더 그럴듯하게 만들 뿐이다. 직접 발행은 여전히 하드 게이트 안이므로 이 베팅은 초안까지만 만든다.
 
 ### B-9 개인 오퍼 한 줄 (미정, 시스템은 자리만)
 - **무엇**: 개인 lane이 파는 것(코칭 · 자문 · 툴킷)을 한 문장으로. 시스템은 `deals.meta.offer_key`와 브랜드 `revenue` 역할로 자리만 둔다.
@@ -334,9 +346,9 @@
 ### 9.2 접근안
 
 **A · 최소 계측 (리드 필드 4 + 화면 확장 1 + 다리 3 + 크론 수리)**
-- 범위: F-0·F-1·F-3·F-3a·F-4·F-10, N3의 다리 3개, `growth-ledger.js`(주간 리뷰용 read model). F-2는 운영자 결정 뒤.
+- 범위: F-0·F-1·F-3·F-3a·F-4·F-10, N3의 다리 3개, `growth-ledger.js`(주간 리뷰용 read model). F-2는 소멸했으므로 범위에서 뺀다.
 - 크기 S~M · 위험 낮음 · 완성도 6/10.
-- 장점: 새 테이블 0, 1B·1C와 충돌 없음(오히려 1C 정본 화면 결정을 강제), 2주 안에 소스별 표가 채워지기 시작, 매일 열리는 화면이 생김.
+- 장점: 새 테이블 0, 1B·1C가 이미 끝나 충돌 없음, 2주 안에 소스별 표가 채워지기 시작, 매일 열리는 화면이 생김.
 - 단점: 콘텐츠 성과는 DM 귀속 수기. 설명회·캠페인은 그대로 비어 있음.
 - 재사용: `leads.meta`, `followups.jsx`, `record_contact_outcome_v1`, `notes`, `decisions`, `brands.meta`.
 
@@ -344,7 +356,7 @@
 - 범위: `growth_events`(source·campaign·content·brand·lead·deal·revenue 차원) 테이블 + 캠페인 워룸 7탭 실데이터 + 설명회 퍼널 + 브랜드 편집장 + IG/Threads/YouTube 성과 수집.
 - 크기 L~XL · 위험 중~높음 · 완성도 9/10(완성 시).
 - 장점: 세 엔진이 한 원장에서 만난다. 브랜드 편집장이 진짜 데이터로 일한다.
-- 단점: 1B·1C가 부분 작동인 상태에서 또 하나의 큰 스파인. 직접 발행 하드 게이트, 그리고 브랜드 탭 스펙이 1B·1C 뒤로 둔 성과 API 수집과 닿는다. 데이터 기아 상태에서 만들면 빈 워룸이 하나 더 생긴다.
+- 단점: 또 하나의 큰 스파인이고, 직접 발행 하드 게이트와 닿는다. 데이터 기아 상태에서 만들면 빈 워룸이 하나 더 생긴다. (1B·1C 미완이라는 원래 반대 근거는 2026-09-04에 사라졌다.)
 - 재사용: A의 전부 + 캠페인 페이지 셸 + OAuth 라우트.
 
 **C · 의식 우선 (Ritual-first)**
@@ -361,22 +373,22 @@
 
 ## 10. 실행 순서 (30 · 60 · 90)
 
-전부 N0(1B·1C 마감)과 병렬 가능하되, N0가 먼저 끝나야 하는 항목은 표시했다.
+N0(1B·1C 마감)은 2026-09-04에 완료됐다. 아래 표에서 N0 대기 표기는 전부 해제된 상태로 읽는다.
 
 | 기간 | 할 일 | 종류 |
 |---|---|---|
 | **0~30일** | §13 증명 실험(최근 90일 시트 리드의 도착 → 첫 접촉 시간·접촉 횟수) + 글 10개 수기 표 | 의식(30분 + 30분) |
 | | 브랜드 역할·포지셔닝 한 줄 결정(B-4, 코드 0) · B-7 주간 성장 리뷰를 `decisions`에 손으로 시작 | 결정·의식 |
-| | **첫 빌드 = B-5**: F-3 계측(`first_touch_at` 파생, 비시트 `source` 통일) → F-3a 고객 연락 화면 확장 → F-1 IntakeInbox 라우팅. F-2(정본 화면)는 운영자 확정 요청만(§12 Q7, N0 항목) | M |
+| | **첫 빌드 = B-5**: F-3 계측(`first_touch_at` 파생, 비시트 `source` 통일) → F-3a 고객 연락 화면 확장 → F-1 IntakeInbox 라우팅 | M |
 | | F-0 초안 크론 수리 · F-4 D6 수정 · F-11 README · F-15 읽기 인증 확인 | S |
 | **31~60일** | N3 다리 3개 필드 + `growth-ledger.js` + B-7 화면(Phase 2) | M |
-| | B-1 최소판(`source_ref` 입력 칸) · B-2 반론 브릿지(F-2 뒤) | S·M |
+| | B-1 최소판(`content_ref` 입력 칸) · B-2 반론 브릿지 | S·M |
 | | F-5 브랜드 정체성 편집·주간 목표(P2) · B-4 역할·포지셔닝 4필드 | M |
 | | F-7 Threads/Shorts 1급 variant · F-6 아이디어 입력 단일화 | M |
 | **61~90일** | F-12 Next Action 넛지 · F-8 byBrand 실계산 · F-16 dead 테이블 결정 | M |
 | | B-3 증거 원장(F-10) · B-6 설명회 퍼널 + 허락 자산 1개 | M·L |
-| | F-9 캠페인 Pulse·Attribution 2탭 · B-8 브랜드 편집장(N0 + 4주 데이터 뒤) | M·L |
-| | IG/Threads 성과 수집(P5)은 1B·1C 완료 + 게이트 재확인 뒤 | L |
+| | F-9 캠페인 Pulse·Attribution 2탭 · B-8 브랜드 편집장(4주 데이터 + B-4 뒤) | M·L |
+| | IG/Threads 성과 수집(P5) — 1B·1C 게이트는 열렸다. 착수 전 하드 게이트(직접 발행) 경계만 재확인 | L |
 
 ### KPI (문서에 이미 있는 숫자만, 신규 2개)
 
@@ -413,7 +425,7 @@
 | 지적 | 판단 | 반영 |
 |---|---|---|
 | 전제 2(병목 = 문의 수)가 틀렸다 | **동의.** 95%가 그의 변수가 아니라는 점, 20% 유효율에 "늦게 닿은 리드"가 섞였을 가능성은 문서에서 확인되지 않은 채 초안이 넘어갔다 | §9.1 전제 2 수정. §13에 증명 실험 추가 |
-| 첫 빌드는 Sheet를 대체하는 리드 작업면 하나 | **동의.** W1(중력 부재)을 푸는 가장 짧은 길이 "매일 열릴 수밖에 없는 화면"이라는 논리가 초안의 "의식(C)"보다 강하다. 다만 1C 정본 화면을 "프로토타입에서 그냥 결정"하자는 부분은 채택하지 않는다 — README §3이 운영자 확인 미정으로 둔 결정이라 §12 Q7로 돌린다 | B-5를 0~30일 첫 빌드로 승격, N2 재정의, F-3·F-3a 추가. 제안된 4필드 중 시트 리드의 소스·캠페인·도착 시각은 이미 있어 실제 신규는 `first_touch_at` 파생 하나 |
+| 첫 빌드는 Sheet를 대체하는 리드 작업면 하나 | **동의.** W1(중력 부재)을 푸는 가장 짧은 길이 "매일 열릴 수밖에 없는 화면"이라는 논리가 초안의 "의식(C)"보다 강하다. 다만 1C 정본 화면을 "프로토타입에서 그냥 결정"하자는 부분은 채택하지 않았다 — 그리고 **2026-09-04 확인 결과 그 결정은 이미 코드에서 내려져 있었다**. 2차 의견과 내 초안 둘 다 낡은 README를 믿었다 | B-5를 0~30일 첫 빌드로 승격, N2 재정의, F-3·F-3a 추가. 제안된 4필드 중 시트 리드의 소스·캠페인·도착 시각은 이미 있어 실제 신규는 `first_touch_at` 파생 하나 |
 | 콘텐츠 실험 원장을 잘라라 | **대체로 동의.** n이 작다. 다만 `source_ref` 한 칸은 남긴다(그가 통제하는 유일한 문의 소스가 브랜드이므로) | B-1을 최소판으로 축소, 가설 태그는 월 30건 뒤로 |
 | 브랜드 역할은 빌드가 아니라 결정 | **동의.** | B-4를 결정 항목으로 재표기, 화면은 기존 P2에 얹음 |
 | 스틸맨 "한 번 기록 → 세 번 재사용" | **동의, 그리고 이것이 §1 프레임의 더 정확한 표현이다.** 인지 에너지 1/3 목표와 세 엔진이 충돌하지 않는 유일한 구조 | §1 프레임 그대로 유지, §14에 반영 |
@@ -429,7 +441,7 @@
 4. 허락 자산으로 무엇을 택할 것인가: 설명회 참석자 리스트 · 카카오톡 채널 · Threads 팔로워?
 5. 성장 계획 §8 Q1: 월 60건과 월 300,000 CNY 중 상위 기준은?
 6. Q116~Q120(콘텐츠 입력·상태·파생·발행) — 기존 큐 그대로. B-1·F-6·F-7이 이 답에 의존한다.
-7. 컨택 결과 정본 화면은 어느 쪽인가: 고객 연락(Followups) 인라인 폼 vs 고객 DB 컨택 시트? (README §3, 2026-07-29 미정.) F-2·B-5의 결과 기록 버튼이 이 답에 의존한다.
+7. ~~컨택 결과 정본 화면은 어느 쪽인가~~ → **소멸(2026-09-04).** 두 화면 모두 원자 RPC를 쓰므로 물을 것이 없다.
 
 ---
 
@@ -447,5 +459,141 @@
 
 - 운영자는 브랜드를 "콘텐츠가 되는 게 이상하다"고 했고(8/29), 그 말이 정확했다. 이 문서의 프레임은 그 지적을 세 엔진 전체로 확장한 것이다: 브랜드는 콘텐츠의 태그가 아니라 세 엔진이 쌓이는 곳이다.
 - "10배 속도는 내가 10배 더 열심히 연락한다가 아니다"(성장 계획 §5). 2차 의견이 이걸 한 번 더 밀었다: 10배 계약은 "유통 중인 증거 자산 10배"다. 한 번의 영업 기록이 콘텐츠 원료·마케팅 소재·브랜드 증거로 세 번 쓰이는 구조만이 인지 에너지 1/3과 세 엔진을 동시에 만족시킨다. 그래서 첫 베팅이 편집기가 아니라 리드 한 줄의 필드 넷이다.
-- 브랜드 탭(8/29)과 현금흐름 로드맵(8/31)이 1B·1C보다 먼저 나왔다. 둘 다 좋은 화면이지만, 매일 열리는 화면은 아직 없다. 이 문서가 새 최상위 탭을 하나도 제안하지 않은 이유다.
+- 브랜드 탭(8/29)과 현금흐름 로드맵(8/31)이 나왔고, 1B·1C도 닫혔다. 그런데 매일 열리는 화면은 아직 없다. **기능이 문제가 아니라는 증거가 하루 만에 더 강해졌다.** 이 문서가 새 최상위 탭을 하나도 제안하지 않은 이유다.
+- 이 문서 자체가 하루 만에 낡았다. 병렬 세션이 같은 워크트리에서 일하는 동안 문서의 사실은 시간당으로 상한다. 다음 기획서는 라인 번호 대신 파일·심볼을 인용하고, 상태 주장은 `docs/README.md` §3을 그때 읽어 확인하는 편이 낫다.
 - 문서 규율(확정/권장/미정)이 이 기획을 가능하게 했다. 이 문서도 같은 규율을 따랐고, 새로 제안한 것은 전부 권장이다.
+
+---
+
+## 15. CEO 리뷰 (2026-09-04, HOLD SCOPE)
+
+운영자가 범위 확장 대신 **사실 정정 + 기존 순서 유지**를 선택했다(§0 정정 블록이 그 결과다). 아래는 그 위에서 돌린 11개 섹션 리뷰의 발견이다. **F-0을 뺀 나머지는 문서 기록이며, 기획서의 범위를 바꾸지 않는다.**
+
+### 15.1 발견 9건
+
+| # | 섹션 | 발견 | 등급 | 처리 |
+|---|---|---|---|---|
+| R-1 | 아키텍처 | F-3a가 추가하는 상단 통계 스트립에 **실패 봉투 계약이 없다.** `followups-ledger.js`는 이미 `partial` + `failedSources` 패턴을 갖고 있고, 2026-09-04 커밋이 허브 read 실패 봉투를 코드 규칙으로 못박았다 | WARNING | F-3a 구현 시 그 계약 상속 |
+| R-2 | 오류·관측 | **크론 2개가 몇 주간 매일 실패했는데 시스템 어디에도 표시되지 않았다.** `automation_runs`에 쓰지 않고 `agent_runs(result='error')`만 남으며 그것을 띄우는 화면이 없다 | **CRITICAL GAP** | **F-0 범위 확장(운영자 확정)** |
+| R-3 | 보안 | W21(허브 read 라우트 무인증)을 "범위 밖" 각주로 처리했는데, 그 라우트는 리드 117건·연락처 121건과 전화번호를 반환하고 배포돼 있으며 read 가드는 0개다 | **HIGH** | P1로 격상, 미착수 |
+| R-4 | 데이터 흐름 | `vercel.json`에 크론 4개가 있지만 **시트 import 크론이 없다.** 전부 수동이다. 주 1회 import면 "24h 내 첫 접촉률"은 측정이 아니라 거짓말이 된다 | WARNING | F-3 선행 조건으로 표기 |
+| R-5 | 코드 품질 | `growth-ledger.js`는 11번째 원장이 된다(현재 10개). 기존 원장을 **조합**하는지 Supabase를 다시 쿼리하는지 문서가 말하지 않는다 | WARNING | 조합 방식으로 명시 |
+| R-6 | 테스트 | 첫 빌드의 대부분(`first_touch_at` 파생, 소스 어휘 정규화, SLA 정렬)이 순수 함수인데 명시된 테스트는 F-0 회귀 1건뿐이다. 이 저장소는 692/692에 82파일 전부 CI 안이다 | WARNING | 순수 로직 3종 테스트 스펙 필요 |
+| R-7 | 성능 | SLA 스트립이 리드 전체를 훑는다. 지금 117건은 괜찮지만 `get_revenue` 응답의 leads 배열 하나가 이미 102KB다. 다른 세션의 MCP 투영 계층(R1)이 같은 문제를 푼다 | WARNING | 투영 공유 |
+| R-8 | 배포 | 마이그레이션 2건(F-7·F-10)이 31~60일인데 번호 규칙(F-16)은 61~90일이다. **번호 충돌이 이미 있는 상태에서 새 마이그레이션을 먼저 넣는 순서다** | WARNING | F-16을 F-7·F-10 앞으로 |
+| R-9 | 장기 궤적 | 라인 번호 인용이 몇 시간 만에 낡았다(290 → 391) | OK | 정정 완료(파일·심볼 인용으로 교체) |
+
+### 15.2 오류·복구 등기 (Error & Rescue Registry)
+
+| 코드경로 | 무엇이 잘못되나 | 지금 상태 | 복구 동작 | 운영자가 보는 것 |
+|---|---|---|---|---|
+| `followup-autopilot` cron | Engine이 `subject/body` 없이 `{text}` 반환 | 감지됨(`ok=false`) | 1회 재시도 후 `agent_runs(result='error')` | **없음 ← GAP** |
+| `content-flywheel` cron | `title/body` 없음 | 감지됨 | 502 `draft-failed` | **없음 ← GAP** |
+| 두 크론 공통 | Gemini 거부·malformed JSON·타임아웃 | 감지됨 | 같음 | **없음 ← GAP** |
+| `growth-ledger` read | 원장 하나 실패 | 미설계 | 미설계 | **미정 ← GAP** |
+| `first_touch_at` 파생 | 활동 0건인 리드 | 미설계 | nil → "미접촉" 버킷 | 정상 |
+| F-3a 통계 스트립 | 소스 부분 실패 | 미설계 | 미설계 | **미정 ← GAP** |
+
+GAP 5건 중 3건은 F-0(가시성)이 닫고, 2건은 F-3a 구현 시 `followups-ledger` 봉투 계약을 상속해 닫는다.
+
+### 15.3 실패 모드 등기
+
+| 코드경로 | 실패 모드 | 복구? | 테스트? | 운영자가 보나? | 로그? |
+|---|---|---|---|---|---|
+| 초안 크론 ×2 | 계약 불일치 | Y | **N** | **침묵** | `agent_runs`만 |
+| 초안 크론 ×2 | 모델 거부·타임아웃 | Y | N | **침묵** | `agent_runs`만 |
+| 시트 import | 수동 미실행 | 해당 없음 | N | 간접(리드 없음) | N |
+| 허브 read 라우트 | 인증 없음 | **N** | N | 해당 없음 | N |
+
+**CRITICAL GAP 1건**(침묵하는 크론 실패). F-0으로 닫는다.
+
+### 15.4 다이어그램
+
+**오류 흐름 — F-0 전후**
+
+```
+  [수리 전]
+  cron ──▶ Engine ──▶ {text}  ──╳ subject/body 없음
+                                 │
+                                 ▼
+                        agent_runs(result:'error')
+                                 │
+                                 ╳  (아무 화면도 안 읽음)  ← 침묵
+
+  [수리 후 · F-0]
+  cron ──▶ Engine ──▶ {subject, body} ──▶ work_orders(proposed) ──▶ 승인 카드
+             │
+             ╳ 실패 시
+             ▼
+     automation_runs(status:'failed') ──▶ Daily Brief 한 줄
+     "오늘 초안 생성 실패 2건 · 마지막 성공 N일 전"
+```
+
+**데이터 흐름 — `first_touch_at` (그림자 경로 포함)**
+
+```
+  시트 행 ──▶ 수동 import ──▶ promote ──▶ leads
+     │             │                        │
+  [행 시각 없음?]  [크론 없음 ← R-4]    [meta.created_time]
+     │                                      │
+     ▼                                      ▼
+  intake created_at으로            crm_activities / outreach_outcomes
+  fallback + arrived_at_source            최초 시각
+  ='import' 표기                            │
+                                            ▼
+                                   first_touch_at (파생, 컬럼 아님)
+                                            │
+                            [활동 0건?] ──▶ nil ──▶ "미접촉" 버킷
+                            [원장 실패?] ──▶ partial 봉투 ← R-1
+```
+
+### 15.5 범위 밖 (NOT in scope)
+
+| 항목 | 왜 뺐나 |
+|---|---|
+| 에이전트(MCP) 표면 우선 재구성 | 운영자가 2026-09-04에 명시적으로 반려. 대신 다른 세션의 MCP 확충 설계가 F-14를 흡수 |
+| 콘텐츠 실험 원장(가설 태그) | n이 작아 신호가 안 나온다(§8 B-1) |
+| 캠페인 워룸 딥 탭 5종 | 데이터 모델 결정이 선행(마이그레이션 헤더가 스스로 명시) |
+| ClassIn 전체 동기화·음성 AI·직접 소셜 발행 | `docs/README.md` §3 하드 게이트 유지 |
+| W21 read 인증 실제 수정 | P1로 격상만 하고 이 기획 범위에서는 미착수(R-3) |
+
+### 15.6 이미 있는 것 (What already exists)
+
+기획서가 새로 짓겠다고 한 것 중 이미 있는 것들이다. 이번 리뷰에서 확인했다.
+
+- 시트 리드 소스 정규화 — `sheets-sync.js`의 `buildLeadRecord`가 `source`·`meta.{campaign, ad_name, form_name, created_time, intent}`를 이미 쓴다.
+- 컨택 결과 원자 경로 — `followups.jsx`와 고객 DB 양쪽이 `record_contact_outcome_v1`을 쓴다.
+- 실패 봉투 패턴 — `followups-ledger.js`의 `partial` + `failedSources`.
+- 우선순위 척추 — `attention-ledger`가 `STALLED_DAYS` 단일 기준을 소유하고 Daily Brief가 그것을 읽는다.
+- 승인 스파인 — `work_orders(proposed → approved → executing → executed)` + 외부 실행 3종 제한.
+
+### 15.7 이상향과의 거리 (Dream state delta)
+
+12개월 이상향은 "기록 1회가 세 번 재사용되고 에이전트가 그 루프를 대신 돈다"이다. 이 기획을 다 해도 **앞의 절반만 닿는다.** 뒤의 절반(에이전트가 루프를 돈다)은 운영자가 2026-09-04에 이번 범위에서 뺐고, 다른 세션의 MCP 확충 설계가 그 자리를 맡는다. 두 문서가 만나는 지점이 F-14이며, 그 소유권은 MCP 문서에 있다.
+
+### 15.8 구현 태스크
+
+이 리뷰의 발견에서만 뽑았다. 각 항목은 §15.1의 특정 발견에서 나온다.
+
+- [ ] **T1 (P1, human ~1일 / CC ~40분)** — cron — 초안 크론 계약 수리 + `automation_runs` 기록 + Daily Brief 실패 한 줄
+  - 출처: R-2 CRITICAL GAP
+  - 파일: `cron/{followup-autopilot,content-flywheel}/route.js`, `ai/{sales,brand}-mentor/route.ts`, `daily-brief.jsx`
+  - 검증: 수리 후 `work_orders(proposed)` 생성 회귀 테스트 1건, 실패 주입 시 Daily Brief 한 줄 노출
+- [ ] **T2 (P1, human ~2시간 / CC ~20분)** — security — 배포된 Hub read 라우트 접근 제한 확인
+  - 출처: R-3 HIGH
+  - 검증: 인증 없는 요청이 리드·연락처를 반환하지 않는지 실제 배포 URL로 확인
+- [ ] **T3 (P1, human ~30분 / CC ~10분)** — migrations — 마이그레이션 번호 규칙 명시(F-7·F-10보다 먼저)
+  - 출처: R-8
+  - 파일: `docs/supabase-db-strategy.md`
+- [ ] **T4 (P2, human ~15분 / CC ~5분)** — docs — MCP 확충 설계 §6 E2의 낡은 컨택 결과 주석 정정
+  - 출처: 낡은 F-2 주장이 다른 문서로 전파됨
+- [ ] **T5 (P2, human ~4시간 / CC ~30분)** — hub — F-3a 스트립에 `partial`/`failedSources` 봉투 계약 상속
+  - 출처: R-1
+- [ ] **T6 (P2, human ~2시간 / CC ~20분)** — tests — 순수 로직 3종 테스트(`first_touch_at` 파생·소스 어휘·SLA 정렬)
+  - 출처: R-6
+- [ ] **T7 (P2, human ~1시간 / CC ~10분)** — hub — 시트 import 크론 추가 또는 SLA 지표에 import 주기 한계 라벨
+  - 출처: R-4
+- [ ] **T8 (P3, human ~1시간 / CC ~10분)** — hub — `growth-ledger`를 기존 원장 조합으로 구현한다고 명시
+  - 출처: R-5
+
+JSONL 산출물: `~/.gstack/projects/Muuuuoouuun-moonlight_pro/tasks-ceo-review-20260905-000354.jsonl`

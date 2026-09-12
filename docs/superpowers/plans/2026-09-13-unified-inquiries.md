@@ -51,3 +51,5 @@ The first new tests must fail before their implementation. Later runs must pass 
 - Actual Gmail login, provider API traffic, production migration and landing registration were not performed. Activation steps and public payload contract are in `docs/inquiry-integration-setup.md` and `docs/inquiry-gmail-setup.md`.
 
 - Final feature verification before integration: `npm test` **851/851 passed, zero skips**, including real PostgreSQL inquiry transactions; `npm run build`, `npm run typecheck`, `npm run check:contracts`, and `git diff --check` passed. Independent review finished with no outstanding P0–P2 findings.
+
+- Integration verification against the current working branch: **909 passed, 0 failed, 3 skipped** of 912 Node tests. The three skipped tests belong to the separate content-workflow database suite and require its external test database; inquiry PostgreSQL tests ran. Hub/Engine production builds, typecheck and contract checks passed again. The only merge conflict was the earlier draft of this inquiry design; the approved implementation record replaces it.

@@ -1,6 +1,6 @@
 # Moonlight MCP 서버 점검·확충 설계 — 통과 어댑터에서 투영 계층으로
 
-> 상태: **제안(DRAFT)**. §2 "확인 결과"만 2026-09-04 로컬 실측이고, §4~§6은 구현 전 제안이다.
+> 상태: **제안(DRAFT) · R2만 구현됨**. §2 "확인 결과"는 2026-09-04 로컬 실측, §5 R2는 구현·병합 완료(`d7642fa`), 나머지 §4~§6은 구현 전 제안이다.
 > 작성일: 2026-09-04 (Asia/Seoul)
 > 상위 정본: `docs/integration-control-plane-inheritance.md` §6·§7, `docs/superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md` §18
 > 관계:
@@ -174,7 +174,7 @@ C9·C10은 `integration-control-plane-inheritance.md` §8이 OpenClaw gateway에
 
 **검증:** 각 read 도구의 기본 응답 바이트 상한을 테스트로 고정한다(회귀 방지).
 
-### R2. 오류 계약 — C1·C2 해소
+### R2. 오류 계약 — C1·C2 해소 ✅ 구현됨 (2026-09-04, `d7642fa`)
 
 `hub-client.js`에 결과 분류를 넣고 모든 도구가 그것을 쓴다.
 
@@ -295,7 +295,7 @@ C9·C10은 `integration-control-plane-inheritance.md` §8이 OpenClaw gateway에
 
 | 단계 | 범위 | 크기 | 선행 |
 |---|---|---|---|
-| **1. 기반** | R2(오류 계약) · R3(메타데이터·중복 제거) · R4(PATCH/DELETE) · R6 일부(`get_hub_health`, 버전) | S~M | 없음 |
+| **1. 기반** | ~~R2(오류 계약)~~ **완료** · R3(메타데이터·중복 제거) · R4(PATCH/DELETE) · R6 일부(`get_hub_health`, 버전) | S~M | 없음 |
 | **2. 투영** | R1 전면 적용 + 도구별 바이트 상한 회귀 테스트 | **M~L (핵심)** | 1 |
 | **3. 루프 완결** | E1 · E2 | M | 1·2 |
 | **4. 어휘·확충** | R5(Resources) · E3 · E4 | M | 2·3 |
