@@ -1,10 +1,13 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import iconv from 'iconv-lite';
 
 export const INQUIRY_EMAIL_BODY_BYTES = 12000;
 const EXCLUDED_LABELS = new Set(['SENT', 'DRAFT', 'SPAM', 'TRASH']);
 const SOURCE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const EVENT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,299}$/;
 const EMAIL = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+const GRAPHEMES = new Intl.Segmenter('ko', { granularity: 'grapheme' });
+const KOREAN_CHARSETS = new Set(['euckr', 'cp949', 'ms949', 'windows949', 'cseuckr', 'csksc56011987', 'isoir149', 'korean', 'ksc56011987', 'ksc56011989', 'ksc5601']);
 
 function headersObject(headers = {}) {
   if (!Array.isArray(headers)) return Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), String(value)]));
@@ -16,22 +19,69 @@ function headersObject(headers = {}) {
   }, {});
 }
 
-const field = (value, max) => String(value || '').replace(/\u0000/g, '').slice(0, max).replace(/[\uD800-\uDBFF]$/, '');
-
-function senderContact(from = '') {
-  const text = String(from).trim();
-  const match = text.match(/^(.*?)<([^<>]+)>$/);
-  const email = (match?.[2] || text).trim().toLowerCase();
-  return { name: field(match?.[1]?.trim().replace(/^"|"$/g, ''), 200), email: email.length <= 320 && EMAIL.test(email) ? email : '', phone: '' };
+function decodeCharset(bytes, charset) {
+  const label = charset.trim().toLowerCase();
+  if (KOREAN_CHARSETS.has(label.replace(/[-_]/g, ''))) {
+    // ICU's EUC-KR decoder can silently misread CP949 extension syllables.
+    // Use the complete Korean mapping, rejecting its invalid-byte sentinel.
+    const text = iconv.decode(bytes, 'cp949');
+    if (text.includes('\uFFFD')) throw new Error('invalid-korean-text');
+    return text;
+  }
+  return new TextDecoder(label, { fatal: true }).decode(bytes);
 }
 
-function limitText(text, maxBytes) {
-  if (Buffer.byteLength(text, 'utf8') <= maxBytes) return { text, truncated: false };
+function decodeHeader(value = '') {
+  const input = String(value).replace(/\r?\n[ \t]+/g, ' ');
+  let text = '', end = 0, previousDecoded = false, incomplete = false;
+  // Decode once, keeping undecodable words available for inspection (RFC 2047).
+  for (const match of input.matchAll(/=\?([^?\s]+)\?([^?\s]+)\?([^?\s]+)\?=/g)) {
+    const start = match.index, next = start + match[0].length;
+    if ((start && !/[ \t]/.test(input[start - 1])) || (next < input.length && !/[ \t]/.test(input[next]))) continue;
+    const between = input.slice(end, start);
+    let decoded;
+    try {
+      const encoded = match[3];
+      let bytes;
+      if (match[2].toLowerCase() === 'b') {
+        if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) throw new Error('invalid-base64');
+        bytes = Buffer.from(encoded, 'base64');
+      } else if (match[2].toLowerCase() === 'q') {
+        if (/[^\x21-\x7e]|=(?![\da-f]{2})/i.test(encoded)) throw new Error('invalid-quoted-printable');
+        bytes = Buffer.from(encoded.replace(/_/g, ' ').replace(/=([\da-f]{2})/gi, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16))), 'latin1');
+      } else throw new Error('unsupported-header-encoding');
+      decoded = decodeCharset(bytes, match[1]);
+      if (/[\u0000-\u001f\u007f]/.test(decoded)) throw new Error('invalid-header-control');
+    } catch { decoded = undefined; incomplete = true; }
+    text += (previousDecoded && decoded !== undefined && /^[ \t]+$/.test(between) ? '' : between) + (decoded ?? match[0]);
+    previousDecoded = decoded !== undefined;
+    end = next;
+  }
+  return { text: text + input.slice(end), incomplete };
+}
+
+const field = (value, max) => limitText(String(value || '').replace(/\u0000/g, ''), max, text => text.length).text;
+
+function senderDetails(from = '') {
+  const text = String(from).replace(/\r?\n[ \t]+/g, ' ').trim();
+  const match = text.match(/^(.*?)<([^<>]+)>$/);
+  const email = (match?.[2] || text).trim().toLowerCase();
+  // Parse the address before decoding display text: encoded angle brackets
+  // must never replace the actual sender used to authenticate signed forms.
+  const name = decodeHeader(match?.[1]?.trim().replace(/^"|"$/g, ''));
+  return { contact: { name: field(name.text, 200), email: email.length <= 320 && EMAIL.test(email) ? email : '', phone: '' },
+    incomplete: name.incomplete || name.text.length > 200 };
+}
+
+const senderContact = from => senderDetails(from).contact;
+
+function limitText(text, max, sizeOf = value => Buffer.byteLength(value, 'utf8')) {
+  if (sizeOf(text) <= max) return { text, truncated: false };
   let length = 0, result = '';
-  for (const char of text) {
-    length += Buffer.byteLength(char, 'utf8');
-    if (length > maxBytes) break;
-    result += char;
+  for (const { segment } of GRAPHEMES.segment(text)) {
+    length += sizeOf(segment);
+    if (length > max) break;
+    result += segment;
   }
   return { text: result, truncated: true };
 }
@@ -44,7 +94,7 @@ function htmlToText(html) {
     .replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (whole, key) => {
       if (key[0] !== '#') return entities[key.toLowerCase()] || whole;
       const point = key[1].toLowerCase() === 'x' ? Number.parseInt(key.slice(2), 16) : Number(key.slice(1));
-      return point > 0 && point <= 0x10ffff ? String.fromCodePoint(point) : '';
+      return point > 0 && point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff) ? String.fromCodePoint(point) : whole;
     }).replace(/\n[ \t]+/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -61,16 +111,22 @@ function mimeText(part) {
   if (!['text/plain', 'text/html'].includes(part.mimeType)) return { text: '', incomplete: false, available: false };
   if (typeof part.body?.data !== 'string') return { text: '', incomplete: true, available: true };
   const bytes = Buffer.from(part.body.data, 'base64url');
-  const charset = headersObject(part.headers)['content-type']?.match(/charset=["']?([^\s;"']+)/i)?.[1] || 'utf-8';
+  const charset = headersObject(part.headers)['content-type']?.match(/(?:^|;)\s*charset\s*=\s*["']?([^\s;"']+)/i)?.[1] || 'utf-8';
   let text, incomplete = false;
-  try { text = new TextDecoder(charset, { fatal: true }).decode(bytes); }
-  catch { text = bytes.toString('utf8'); incomplete = true; }
+  try { text = decodeCharset(bytes, charset); }
+  catch {
+    incomplete = true;
+    // A bad charset declaration may accompany valid UTF-8. Only accept a
+    // lossless fallback; otherwise use Gmail's snippet and require review.
+    try { text = decodeCharset(bytes, 'utf-8'); } catch { text = ''; }
+  }
   if (part.body.size > bytes.length) incomplete = true;
   return { text: part.mimeType === 'text/html' ? htmlToText(text) : text, incomplete, available: true };
 }
 
 export function decodeGmailMessage(raw, { maxBodyBytes = INQUIRY_EMAIL_BODY_BYTES } = {}) {
   const headers = headersObject(raw?.payload?.headers);
+  const subject = decodeHeader(headers.subject), sender = senderDetails(headers.from);
   const decoded = mimeText(raw?.payload);
   const original = (decoded.text || raw?.snippet || '').replace(/\r\n?/g, '\n').replace(/\u0000/g, '');
   const bounded = limitText(original, maxBodyBytes);
@@ -78,19 +134,19 @@ export function decodeGmailMessage(raw, { maxBodyBytes = INQUIRY_EMAIL_BODY_BYTE
   const validDate = Number.isFinite(internalDate) && internalDate > 0 && !Number.isNaN(new Date(internalDate).getTime());
   return {
     id: raw?.id || '', threadId: raw?.threadId || null, headers,
-    from: headers.from || '', subject: field(headers.subject, 500), contact: senderContact(headers.from),
+    from: headers.from || '', subject: field(subject.text, 500), contact: sender.contact,
     labelIds: Array.isArray(raw?.labelIds) ? raw.labelIds : [], body: bounded.text,
     // Verify a complete signed envelope before applying the smaller display cap.
     formPayloadText: decoded.available && !decoded.incomplete && Buffer.byteLength(original, 'utf8') <= 64 * 1024 ? original : null,
     internalDate: validDate ? internalDate : null, receivedAt: validDate ? new Date(internalDate).toISOString() : null,
-    incomplete: !decoded.available || decoded.incomplete || bounded.truncated || !validDate || (headers.subject || '').length > 500
-      || (String(headers.from || '').match(/^(.*?)</)?.[1]?.trim().replace(/^"|"$/g, '').length || 0) > 200,
+    incomplete: !decoded.available || decoded.incomplete || bounded.truncated || !validDate || subject.incomplete || subject.text.length > 500 || sender.incomplete,
   };
 }
 
 function freshText(body) {
   const result = [];
-  for (const line of String(body || '').split('\n')) {
+  // Normalize only the matching copy, including quote/signature boundaries.
+  for (const line of String(body || '').normalize('NFC').split('\n')) {
     if (/^\s*(--\s*$|On .{1,400}wrote:|-----\s*(Original|Forwarded)|Sent from my |보낸 사람\s*:|발신\s*:|_{5,}|본 메일은)/i.test(line)) break;
     if (/^\s*>/.test(line)) continue;
     if (/^\s*(견적\s*)?(문의|상담|contact|support|sales)\s*[:：]\s*(?:[\w.+-]+@[^\s]+|[+()\d -]{7,})\s*$/i.test(line)) continue;
@@ -145,7 +201,7 @@ export function classifyInquiryEmail(message, { knownThread = false, trustedForm
   }
   if (message.incomplete) return { ...base, classification: 'review', reason: '본문 또는 수신 시각을 완전히 확인하지 못함' };
   const headers = headersObject(message.headers);
-  const text = `${message.subject || ''}\n${freshText(message.body)}`;
+  const text = `${message.subject || ''}\n${freshText(message.body)}`.normalize('NFC');
   const auto = /(^|[._-])(no-?reply|noreply|do-?not-?reply)([._@-]|$)/i.test(contact.email || '')
     || (headers['auto-submitted'] && headers['auto-submitted'].toLowerCase() !== 'no') || /^(bulk|list|junk)$/i.test(headers.precedence || '') || Boolean(headers['list-id']);
   const formNotice = /form|submission|제출|폼\s*(접수|문의)|고객 이메일/i.test(text);
