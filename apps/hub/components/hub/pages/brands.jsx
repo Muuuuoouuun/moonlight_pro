@@ -98,6 +98,9 @@ function RhythmLine({ brand }) {
       {goal.certainty === "unknown" && (
         <CertaintyBadge state="unknown" label="목표 미정" />
       )}
+      {goal.value != null && brand.publishedThisWeek >= goal.value && (
+        <span className="hub-celebration-badge hub-celebration-badge--sparkle">✦ 달성</span>
+      )}
     </span>
   );
 }

@@ -63,9 +63,11 @@ export function ProjectProgressGauge({ progress, compact = false, ariaLabel = "�
   const value = Math.max(0, Math.min(100, Math.round(progress.value)));
   const valueText = `${value}% · ${sourceLabel}${countLabel ? ` · ${countLabel} 완료` : ""}`;
 
+  const isCompleted = value >= 100;
+
   return (
     <div
-      className={`hub-pms-progress${compact ? " hub-pms-progress--compact" : ""}`}
+      className={`hub-pms-progress${compact ? " hub-pms-progress--compact" : ""}${isCompleted ? " hub-pms-progress--completed" : ""}`}
       data-progress-source={progress.source || "reported"}
       role="progressbar"
       aria-label={ariaLabel}
@@ -75,7 +77,9 @@ export function ProjectProgressGauge({ progress, compact = false, ariaLabel = "�
       aria-valuetext={valueText}
     >
       <div className="hub-pms-progress__reading">
-        <span className="hub-pms-progress__value mono">{value}%</span>
+        <span className={`hub-pms-progress__value mono${isCompleted ? " hub-pms-progress__value--100" : ""}`}>
+          {value}%{isCompleted && <span className="hub-pms-sparkle-mark" aria-hidden="true">✦</span>}
+        </span>
         <span className="hub-pms-progress__evidence">
           {sourceLabel}{countLabel ? ` · ${countLabel}` : ""}
         </span>

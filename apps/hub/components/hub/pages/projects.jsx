@@ -6,6 +6,7 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Checkbox, EmptyState, Input, SyncBadge, SegmentedControl, EditDrawer, Kbd } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
+import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
 import {
   buildContainerTree,
   buildProjectCreatePayload,
@@ -876,6 +877,7 @@ export function Projects({ workspace }) {
   // 떠나도 쓰기가 증발하지 않는다.
   const scheduleCompleteProject = React.useCallback((project) => {
     const id = project.id;
+    triggerCelebration({ mode: 'fireworks' });
     setCompletingIds((s) => new Set(s).add(id));
     setTimeout(() => {
       setCompletingIds((s) => { const n = new Set(s); n.delete(id); return n; });
@@ -1382,6 +1384,14 @@ export function Projects({ workspace }) {
   const toggleTodo = React.useCallback(async (id) => {
     const todo = todos.find(item => item.id === id);
     if (!todo) return;
+    const willBeDone = todo.status !== 'done';
+    if (willBeDone) {
+      // 해당 프로젝트 내 모든 하위 할 일이 완료되었는지 확인
+      const pTasks = todos.filter(t => t.project === todo.project);
+      if (pTasks.length > 0 && pTasks.every(t => t.id === id || t.status === 'done' || t.done)) {
+        triggerCelebration({ mode: 'confetti' });
+      }
+    }
     try {
       const updated = await updateTaskStatus(id, todo.status === 'done' ? 'todo' : 'done');
       if (!updated) return;

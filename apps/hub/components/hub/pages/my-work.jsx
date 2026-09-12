@@ -5,6 +5,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, Button, Checkbox, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer } from "../hub-primitives";
 import { UNDO_WINDOW_MS, useUndoableAction } from "../use-undoable-action";
+import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from "@/lib/pms-ui";
 
 // 내 작업 — one personal operating surface, three lenses over the cross-lane attention
@@ -241,7 +242,7 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
       }}
     >
       {item.lane === 'task' ? (
-        <Checkbox checked={completing} onChange={() => onComplete(item)} label={`${item.title} 완료`} />
+        <Checkbox checked={completing} onChange={(_next, e) => onComplete(item, e)} label={`${item.title} 완료`} />
       ) : (
         <Badge tone={LANE_TONE[item.lane]} size="xs" variant="outline">{LANE_LABEL[item.lane]}</Badge>
       )}
@@ -562,14 +563,23 @@ export function MyWork({ onNavigate }) {
   // Checkbox click: flash strikethrough, drop out of view, then give a real 되돌리기 window
   // before the PATCH actually fires — an accidental tap is recoverable, not just visually
   // undoable-in-appearance.
-  const scheduleComplete = (item) => {
+  const scheduleComplete = (item, event) => {
     if (item.lane !== 'task') return;
     const id = item.id;
+    if (event?.clientX != null && event?.clientY != null) {
+      triggerSparkleAt(event.clientX, event.clientY);
+    }
     setCompletingIds((s) => new Set(s).add(id));
     setTimeout(() => {
       setCompletingIds((s) => { const n = new Set(s); n.delete(id); return n; });
       setHiddenIds((s) => new Set(s).add(id));
     }, STRIKE_MS);
+
+    // 모든 할 일이 완료되었는지 확인 → 축하 불꽃놀이/폭죽 발사
+    const remainingTasks = visible.filter((i) => i.lane === 'task' && !hiddenIds.has(i.id) && !completingIds.has(i.id) && i.id !== id);
+    if (remainingTasks.length === 0) {
+      triggerCelebration({ mode: 'fireworks' });
+    }
 
     setNotice({ key: `complete-${id}`, tone: 'ok', label: '할 일 완료됨', action: { label: '되돌리기', onClick: () => undoComplete(item) } });
 
@@ -1092,25 +1102,68 @@ export function MyWork({ onNavigate }) {
       {['ready', 'stale'].includes(state) && lens === 'list' && (
         <Card pad={false} style={{ overflow: 'hidden' }}>
           {visible.length === 0 ? (
-            <EmptyState
-              icon="check"
-              title={search.trim() ? `"${search.trim()}" 검색 결과가 없습니다` : '표시할 항목이 없습니다'}
-              description={
-                search.trim()
-                  ? '다른 검색어를 시도하거나 검색을 지워보세요.'
-                  : lane === 'all' && bucketFilter === 'all'
-                    ? '할 일을 추가하거나 딜·일정이 생기면 여기에 모입니다.'
-                    : `${lane !== 'all' ? LANE_LABEL[lane] : ''}${lane !== 'all' && bucketFilter !== 'all' ? ' · ' : ''}${bucketFilter !== 'all' ? BUCKETS.find((b) => b.key === bucketFilter)?.label : ''} 조건에 항목이 없습니다.`
-              }
-              action={
-                search.trim()
-                  ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
-                  : (lane !== 'all' || bucketFilter !== 'all')
-                    ? <Button variant="outline" size="sm" onClick={() => { setLane('all'); setBucketFilter('all'); }}>필터 초기화</Button>
-                    : undefined
-              }
-              style={{ minHeight: 180, padding: '28px 12px' }}
-            />
+            !search.trim() && (lane === 'all' || lane === 'task') && bucketCounts.today === 0 && bucketCounts.overdue === 0 ? (
+              <div
+                className="hub-celebration-card"
+                style={{
+                  padding: '36px 20px', textAlign: 'center',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+                  background: 'var(--surface)',
+                }}
+              >
+                <div style={{
+                  width: 44, height: 44, borderRadius: 999,
+                  background: 'var(--surface-2)', border: '1px solid var(--accent-line)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 0 14px -2px rgba(82, 116, 168, 0.4)',
+                  fontSize: 20, color: 'var(--moon-100)',
+                }}>
+                  ✦
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--moon-100)' }}>
+                    오늘의 모든 할 일 완료!
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', maxWidth: 360, lineHeight: 1.5 }}>
+                    계획된 모든 작업을 완수했습니다. 남은 시간을 여유롭게 보내거나 새로운 할 일을 계획해 보세요.
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => triggerCelebration({ mode: 'fireworks' })}
+                  >
+                    폭죽 다시 터뜨리기 ✦
+                  </Button>
+                  {(lane !== 'all' || bucketFilter !== 'all') && (
+                    <Button variant="ghost" size="sm" onClick={() => { setLane('all'); setBucketFilter('all'); }}>
+                      필터 초기화
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <EmptyState
+                icon="check"
+                title={search.trim() ? `"${search.trim()}" 검색 결과가 없습니다` : '표시할 항목이 없습니다'}
+                description={
+                  search.trim()
+                    ? '다른 검색어를 시도하거나 검색을 지워보세요.'
+                    : lane === 'all' && bucketFilter === 'all'
+                      ? '할 일을 추가하거나 딜·일정이 생기면 여기에 모입니다.'
+                      : `${lane !== 'all' ? LANE_LABEL[lane] : ''}${lane !== 'all' && bucketFilter !== 'all' ? ' · ' : ''}${bucketFilter !== 'all' ? BUCKETS.find((b) => b.key === bucketFilter)?.label : ''} 조건에 항목이 없습니다.`
+                }
+                action={
+                  search.trim()
+                    ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
+                    : (lane !== 'all' || bucketFilter !== 'all')
+                      ? <Button variant="outline" size="sm" onClick={() => { setLane('all'); setBucketFilter('all'); }}>필터 초기화</Button>
+                      : undefined
+                }
+                style={{ minHeight: 180, padding: '28px 12px' }}
+              />
+            )
           ) : listSections ? (
             // 전체 기한 보기: 긴급도 그룹 헤더가 스캔 축 — 빈 그룹은 그리지 않는다.
             listSections.map((section) => (

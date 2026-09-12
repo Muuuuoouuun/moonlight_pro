@@ -488,6 +488,11 @@ function RhythmCard({ rhythm, state, onNavigate }) {
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
         <span className="stat" style={{ fontSize: 24, fontWeight: 600 }}>{completedAvailable ? completed : '—'}/{total}</span>
         <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>이번 주 완료</span>
+        {percent !== null && percent >= 100 && (
+          <span className="hub-celebration-badge hub-celebration-badge--sparkle" style={{ marginLeft: 'auto' }}>
+            ✦ 완벽 달성
+          </span>
+        )}
       </div>
       {percent !== null && <div style={{ marginTop: 10 }}><Progress value={percent} /></div>}
       <div style={{ marginTop: 10, fontSize: 11, color: 'var(--fg-muted)' }}>

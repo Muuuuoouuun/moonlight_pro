@@ -218,11 +218,30 @@ export function Avatar({ name, size = 24, tone = 'moon' }) {
   );
 }
 
-export function Progress({ value = 0, tone = 'moon', height = 4 }) {
+export function Progress({ value = 0, tone = 'moon', height = 4, className = '', style }) {
   const map = { moon: 'var(--moon-300)', success: 'var(--success)', warning: 'var(--warning)', danger: 'var(--danger)' };
+  const numValue = Number.isFinite(value) ? value : 0;
+  const isCompleted = numValue >= 100;
+  const isOverachieved = numValue > 100;
+  const widthPercent = Math.min(100, Math.max(0, numValue));
+  const completedCls = isCompleted ? ' hub-progress--completed' : '';
+  const overachievedCls = isOverachieved ? ' hub-progress--overachieved' : '';
+
   return (
-    <div style={{ height, background: 'var(--surface-3)', borderRadius: 999, overflow: 'hidden' }}>
-      <div style={{ width: `${value}%`, height: '100%', background: map[tone], borderRadius: 999, transition: 'width var(--dur-enter) var(--ease-hub)' }} />
+    <div
+      className={`hub-progress-track${completedCls}${overachievedCls}${className ? ` ${className}` : ''}`}
+      style={{ height, background: 'var(--surface-3)', borderRadius: 999, overflow: 'hidden', ...style }}
+    >
+      <div
+        className="hub-progress-bar"
+        style={{
+          width: `${widthPercent}%`,
+          height: '100%',
+          background: map[tone] || map.moon,
+          borderRadius: 999,
+          transition: 'width var(--dur-enter) var(--ease-hub)',
+        }}
+      />
     </div>
   );
 }
@@ -286,7 +305,7 @@ export function Checkbox({ checked, onChange, size = 14, label, disabled = false
       aria-busy={disabled ? 'true' : undefined}
       disabled={disabled}
       className="hub-checkbox"
-      onClick={(e) => { e.stopPropagation(); onChange?.(!checked); }} style={{
+      onClick={(e) => { e.stopPropagation(); onChange?.(!checked, e); }} style={{
       position: 'relative',
       width: size, height: size, borderRadius: 4,
       border: `1px solid ${checked ? 'var(--moon-300)' : 'var(--line-strong)'}`,

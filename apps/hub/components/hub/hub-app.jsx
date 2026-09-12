@@ -12,6 +12,7 @@ import { Sidebar } from "./hub-sidebar";
 import { TopBar } from "./hub-topbar";
 import { CommandPalette } from "./hub-command-palette";
 import { ShortcutOverlay } from "./crm-shortcut-overlay";
+import { CelebrationCanvas } from "./celebration-fx";
 import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
 import {
   beginMobileNavigationRoute,
@@ -499,6 +500,7 @@ export function HubApp() {
       </div>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={navigate} />
       <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <CelebrationCanvas />
     </div>
   );
 }
