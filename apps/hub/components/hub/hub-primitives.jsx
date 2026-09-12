@@ -3,6 +3,7 @@
 import React from "react";
 import { Iconed } from "./hub-icons";
 import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
+import './hub-compact-drawer.css';
 
 export function Badge({ children, tone = 'neutral', variant = 'soft', size = 'sm', numeric = false, style }) {
   const tones = {
@@ -703,13 +704,14 @@ const DRAWER_INPUT_STYLE = {
 // Elements the drawer's focus manager treats as tab stops.
 const DRAWER_FOCUSABLE = 'input, select, textarea, button, a[href], [tabindex]:not([tabindex="-1"])';
 
-// Shared right-side drawer shell: overlay + aside + header (title/subtitle/close) +
+// Shared drawer shell (side by default, optional compact capture): overlay + aside + header +
 // scrollable body + optional footer bar. Owns ESC-to-close, focus-in-on-mount +
 // focus-restore-on-unmount, and a light Tab focus trap — not field rendering or
 // save/delete semantics. EditDrawer and the Guru diagnosis drawer compose on top.
-export function Drawer({ title, subtitle, onClose, footer, footerStyle, initialFocusRef, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', children }) {
+export function Drawer({ title, subtitle, onClose, footer, footerStyle, initialFocusRef, width = 'min(380px, 92vw)', borderLeft = 'var(--line)', presentation = 'side', exiting = false, children }) {
   const asideRef = React.useRef(null);
   const bodyRef = React.useRef(null);
+  const compact = presentation === 'compact';
 
   // ESC는 이 드로어가 최상위 레이어일 때만 닫는다 — 드로어 위에 ⌘K 팔레트가 열려 있으면
   // 팔레트가 먼저 닫혀야 한다(esc-layers.js). onClose는 ref로 읽어 부모 리렌더가 레이어
@@ -745,17 +747,20 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, initialF
     if (e.key !== 'Tab') return;
     const root = asideRef.current;
     if (!root) return;
-    const nodes = Array.from(root.querySelectorAll(DRAWER_FOCUSABLE)).filter(el => !el.disabled && el.offsetParent !== null);
+    const nodes = Array.from(root.querySelectorAll(DRAWER_FOCUSABLE)).filter(el =>
+      !el.matches(':disabled') && !el.closest('[inert]') && el.offsetParent !== null && getComputedStyle(el).visibility !== 'hidden');
     if (nodes.length === 0) return;
     const first = nodes[0];
     const last = nodes[nodes.length - 1];
+    // A loading/disabled form may retain programmatic focus with only Close tabbable.
+    if (nodes.length === 1) { e.preventDefault(); first.focus(); return; }
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   };
 
   return (
     <>
-      <div className="hub-drawer-overlay" aria-hidden="true" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / 0.4)', zIndex: 'var(--z-drawer-overlay)' }} />
+      <div className="hub-drawer-overlay" data-presentation={presentation} data-exiting={exiting} aria-hidden="true" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / 0.4)', zIndex: 'var(--z-drawer-overlay)' }} />
       <aside
         ref={asideRef}
         role="dialog"
@@ -763,25 +768,29 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, initialF
         aria-label={typeof title === 'string' ? title : undefined}
         onKeyDown={handleKeyDown}
         className="hub-drawer"
+        data-presentation={presentation}
+        data-exiting={exiting}
         style={{
-          position: 'fixed', top: 0, right: 0, bottom: 0, width, zIndex: 'var(--z-drawer)',
-          background: 'var(--surface)', borderLeft: `1px solid ${borderLeft}`,
+          position: 'fixed', zIndex: 'var(--z-drawer)', background: 'var(--surface)',
           display: 'flex', flexDirection: 'column',
-          boxShadow: '-8px 0 32px -12px oklch(0 0 0 / 0.5)',
+          ...(compact ? { '--hub-compact-width': width } : {
+            top: 0, right: 0, bottom: 0, width, borderLeft: `1px solid ${borderLeft}`,
+            boxShadow: '-8px 0 32px -12px oklch(0 0 0 / 0.5)',
+          }),
         }}
       >
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="hub-drawer__header" style={{ padding: compact ? undefined : '14px 16px', borderBottom: compact ? undefined : '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 500 }}>{title}</div>
             {subtitle && <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 2 }}>{subtitle}</div>}
           </div>
           <IconButton icon="x" size={44} iconSize={13} tooltip="닫기" onClick={onClose} style={{ margin: -10 }} />
         </div>
-        <div ref={bodyRef} className="scroll-y" style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div ref={bodyRef} className="hub-drawer__body scroll-y" style={{ flex: 1, padding: compact ? undefined : 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
           {children}
         </div>
         {footer && (
-          <div style={{ padding: 12, borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, ...footerStyle }}>
+          <div className="hub-drawer__footer" style={{ padding: compact ? undefined : 12, borderTop: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, ...footerStyle }}>
             {footer}
           </div>
         )}

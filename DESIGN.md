@@ -287,6 +287,7 @@ truth. Do not recreate them ad-hoc inside pages.
 - Form fields `TextField`, `TextAreaField`, `SelectField`, `CheckboxRow`, `DateQuickPresets` (contract in `form-fields.test.mjs`)
 - `SegmentedControl`, `EmptyState` (+ `action` CTA), `ScrollShadowX`
 - `Drawer`, `EditDrawer` — the only overlay / edit surfaces (§8.1)
+  - `Drawer presentation="compact"` is the short capture variant: centered on desktop, bottom sheet at ≤600px, with the same ESC and focus handling. Default `side` remains the edit drawer. Callers preserve drafts and guard dismissal while saving.
 - State primitives `AttentionRail`, `CertaintyBadge`, `LifecycleBadge`, `TruthBadge` (§8.2). `SyncBadge`
   survives only as a compatibility wrapper over `TruthBadge`; new call sites use `TruthBadge` directly.
 
@@ -388,6 +389,7 @@ Deliberate, never playful. Since 2026-07-29 the only sanctioned durations and cu
 
 - Page reveal: `.fade-up` (opacity + 4px translateY). Card lists cascade with `.stagger-up`; do not hand-roll delays.
 - Hover travel: no more than `4px`.
+- Compact capture: enter/exit and disclosure use `--dur-panel`, backdrop enters with `--dur-overlay`. A successful save closes only after the server acknowledgement; reduced-motion skips the exit delay.
 - Live indicators: `mlMoonPulse 1.4s ease-in-out infinite` — one duration everywhere.
 - Urgent/critical indicators do not loop, blink, or pulse. Red already carries sufficient emphasis.
 - Certainty changes may transition dashed → solid and marker → verified over `--dur-overlay`…`--dur-enter`;
