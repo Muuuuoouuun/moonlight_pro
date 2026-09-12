@@ -3,6 +3,7 @@
 import React from "react";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, Progress, Sparkline, SyncBadge, EmptyState } from "../hub-primitives";
+import { BurningStreakBadge, StreakFlame } from "../burning-streak";
 import { useUndoableAction } from "../use-undoable-action";
 import { createClientId } from "@/lib/pms-ui";
 import { buildQuickCapture, isDurableQuickCaptureResult } from "@/lib/quick-task-capture";
@@ -301,6 +302,18 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
   const { schedule, cancel } = useUndoableAction();
   const items = allItems.filter((t) => !hiddenIds.has(t.id));
 
+  // 연속 버닝 스트릭 계산 및 낙관적 피드백
+  const streakInfo = taskToday?.streak || { streak: 0, todayDoneCount: 0, isBurning: false, recentDays: [0, 0, 0, 0, 0, 0, 0] };
+  const [optimisticDoneDelta, setOptimisticDoneDelta] = React.useState(0);
+  const [isPopping, setIsPopping] = React.useState(false);
+
+  const currentTodayDone = Math.max(0, (streakInfo.todayDoneCount || 0) + optimisticDoneDelta);
+  const currentStreak = Math.max(0, (streakInfo.streak || 0) + (streakInfo.todayDoneCount === 0 && optimisticDoneDelta > 0 ? 1 : 0));
+  const isBurning = streakInfo.isBurning || currentStreak >= 3 || (currentStreak > 0 && currentTodayDone > 0);
+  const recentDays = Array.isArray(streakInfo.recentDays) && streakInfo.recentDays.length === 7
+    ? streakInfo.recentDays.map((v, i) => (i === 6 && currentTodayDone > 0 ? 1 : v))
+    : [0, 0, 0, 0, 0, 0, currentTodayDone > 0 ? 1 : 0];
+
   async function persistComplete(task) {
     try {
       const response = await fetch('/api/hub/tasks', {
@@ -319,6 +332,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
     } catch (error) {
       // 실패 시 행 복귀 — 완료된 것처럼 남기지 않는다.
       setHiddenIds((s) => { const n = new Set(s); n.delete(task.id); return n; });
+      setOptimisticDoneDelta((d) => Math.max(0, d - 1));
       setFeedback({
         status: 'error',
         message: error instanceof Error ? error.message : '완료 상태를 저장하지 못했습니다.',
@@ -329,6 +343,10 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
 
   function complete(task) {
     setHiddenIds((s) => new Set(s).add(task.id));
+    setOptimisticDoneDelta((d) => d + 1);
+    setIsPopping(true);
+    setTimeout(() => setIsPopping(false), 450);
+
     setFeedback({
       status: 'pending',
       message: `${task.title} 완료됨`,
@@ -344,6 +362,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
   function undoComplete(task) {
     if (!cancel(task.id)) return; // 창이 이미 닫혔으면 되돌릴 수 없음
     setHiddenIds((s) => { const n = new Set(s); n.delete(task.id); return n; });
+    setOptimisticDoneDelta((d) => Math.max(0, d - 1));
     setFeedback({ status: 'idle', message: '완료 취소됨', action: null });
   }
 
@@ -359,12 +378,29 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
     <div aria-label="오늘 할 일">
       <SectionTitle right={(
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <BurningStreakBadge
+            compact
+            streak={currentStreak}
+            todayCompleted={currentTodayDone}
+            isBurning={isBurning}
+            isPopping={isPopping}
+          />
           <Badge tone={(counts.missed || 0) > 0 ? 'danger' : 'neutral'} size="xs">놓침 {counts.missed || 0}</Badge>
           <Badge tone="neutral" size="xs">오늘 {counts.today || 0}</Badge>
           <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/my')}>모두 보기</Button>
         </div>
       )}>오늘 할 일</SectionTitle>
       <Card pad={false} className="daily-brief__panel">
+        <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', background: 'var(--surface-2)' }}>
+          <BurningStreakBadge
+            streak={currentStreak}
+            todayCompleted={currentTodayDone}
+            isBurning={isBurning}
+            recentDays={recentDays}
+            isPopping={isPopping}
+            title="오늘 할 일 연속 완주"
+          />
+        </div>
         {items.length ? (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {items.map((task, index) => (
@@ -1368,14 +1404,41 @@ function RhythmPanel({ onNavigate }) {
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
               <span className="stat" style={{ fontSize: 22, fontWeight: 600 }}>{completed}/{total}</span>
               <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>이번 주 완료</span>
+              {percent >= 100 && (
+                <span className="hub-celebration-badge hub-celebration-badge--sparkle" style={{ marginLeft: 'auto' }}>
+                  ✦ 완벽 달성
+                </span>
+              )}
             </div>
             <div {...rhythmProgressProps} style={{ marginTop: 10 }}><Progress value={percent} /></div>
             {summary.longestStreak > 0 && (
-              <div style={{ marginTop: 10, fontSize: 11, color: 'var(--fg-muted)' }}>
-                최장 <span className="mono" style={{ color: 'var(--fg)' }}>{summary.longestStreak}일</span>
-                {summary.longestStreakRitual ? ` · ${summary.longestStreakRitual}` : ''}
+              <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontSize: 11, color: 'var(--fg-muted)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <StreakFlame size={15} burning={summary.longestStreak >= 3} />
+                  <span>
+                    최장 <span className="mono" style={{ color: 'var(--fg)', fontWeight: 600 }}>{summary.longestStreak}일</span>
+                    {summary.longestStreakRitual ? ` · ${summary.longestStreakRitual}` : ''}
+                  </span>
+                </div>
+                <span
+                  className={summary.longestStreak >= 3 ? "hub-streak-badge--burning" : ""}
+                  style={{
+                    fontSize: 10.5,
+                    padding: '2px 6px',
+                    borderRadius: 'var(--r-xs)',
+                    background: summary.longestStreak >= 3 ? 'rgba(255,120,50,0.1)' : 'var(--surface-3)',
+                    color: summary.longestStreak >= 3 ? '#ff9a52' : 'var(--fg-dim)',
+                    border: `1px solid ${summary.longestStreak >= 3 ? 'rgba(255,140,70,0.3)' : 'var(--line-soft)'}`,
+                  }}
+                >
+                  {summary.longestStreak >= 3 ? `버닝 ${summary.longestStreak}일째 🔥` : `${summary.longestStreak}일 연속`}
+                </span>
               </div>
             )}
+            <div style={{ marginTop: 8, padding: '6px 10px', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 10.5 }}>
+              <span style={{ color: 'var(--fg-muted)' }}>이번 주 업로드 <strong>5/7</strong> · 일평균 몰입 <strong>3.2h</strong></span>
+              <span style={{ color: 'var(--moon-300)', cursor: 'pointer' }} onClick={() => onNavigate?.('dashboard/work/rhythm')}>분석 ↗</span>
+            </div>
             <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
               {rituals.map((r, i) => {
                 const pending = Boolean(mutationState.pendingByRitual?.[r.id]);

@@ -421,6 +421,180 @@
 @keyframes mlFadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .hub-app .fade-up { animation: mlFadeUp var(--dur-enter) ease-out; }
 
+/* Burning Streak Motion */
+@keyframes mlFlameFlicker {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+    filter: drop-shadow(0 0 3px rgba(255, 115, 55, 0.45));
+  }
+  25% {
+    transform: scale(1.08) rotate(-2deg);
+    filter: drop-shadow(0 0 6px rgba(255, 140, 70, 0.7));
+  }
+  50% {
+    transform: scale(0.96) rotate(1.5deg);
+    filter: drop-shadow(0 0 4px rgba(255, 100, 40, 0.5));
+  }
+  75% {
+    transform: scale(1.06) rotate(-1deg);
+    filter: drop-shadow(0 0 7px rgba(255, 155, 80, 0.75));
+  }
+}
+
+@keyframes mlBurnGlow {
+  0%, 100% {
+    border-color: rgba(255, 120, 50, 0.35);
+    box-shadow: 0 0 0 1px rgba(255, 120, 50, 0.2), 0 2px 10px -2px rgba(255, 100, 40, 0.15);
+  }
+  50% {
+    border-color: rgba(255, 145, 75, 0.6);
+    box-shadow: 0 0 0 1.5px rgba(255, 145, 75, 0.35), 0 4px 16px -2px rgba(255, 120, 50, 0.3);
+  }
+}
+
+@keyframes mlBurnPop {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  50% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.hub-app .hub-streak-flame--burning {
+  animation: mlFlameFlicker 1.8s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+.hub-app .hub-streak-badge--burning {
+  animation: mlBurnGlow 2.4s ease-in-out infinite;
+}
+
+.hub-app .hub-streak-pop {
+  animation: mlBurnPop 260ms var(--ease-hub);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-streak-flame--burning,
+  .hub-app .hub-streak-badge--burning,
+  .hub-app .hub-streak-pop {
+    animation: none;
+  }
+}
+
+/* Celebration & 100% Milestone Motion & Styles */
+@keyframes hubProgressShimmer {
+  0% { transform: translateX(-120%); opacity: 0; }
+  30% { opacity: 0.6; }
+  70% { opacity: 0.6; }
+  100% { transform: translateX(220%); opacity: 0; }
+}
+
+@keyframes hubCelebrationPulse {
+  0%, 100% {
+    border-color: rgba(82, 116, 168, 0.4);
+    box-shadow: 0 0 0 1px rgba(82, 116, 168, 0.25), 0 0 12px -2px rgba(82, 116, 168, 0.2);
+  }
+  50% {
+    border-color: rgba(140, 168, 216, 0.7);
+    box-shadow: 0 0 0 1.5px rgba(140, 168, 216, 0.45), 0 0 18px -2px rgba(140, 168, 216, 0.4);
+  }
+}
+
+@keyframes hubSparklePop {
+  0% { transform: scale(0.85); opacity: 0.7; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.hub-app .hub-progress-track {
+  position: relative;
+  overflow: hidden;
+}
+
+.hub-app .hub-progress--completed {
+  box-shadow: 0 0 10px -2px rgba(140, 168, 216, 0.35);
+}
+
+.hub-app .hub-progress--completed .hub-progress-bar {
+  background: linear-gradient(90deg, var(--pms-moonstone) 0%, var(--moon-200) 100%) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.hub-app .hub-progress--completed .hub-progress-bar::after,
+.hub-app .hub-pms-progress--completed .hub-pms-progress__fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.65) 50%, transparent 100%);
+  animation: hubProgressShimmer 2.4s ease-in-out infinite;
+}
+
+.hub-app .hub-progress--overachieved .hub-progress-bar {
+  background: linear-gradient(90deg, var(--pms-moonstone) 0%, var(--moon-100) 80%, #ffd166 100%) !important;
+  box-shadow: 0 0 8px 1px rgba(255, 209, 102, 0.35);
+}
+
+.hub-app .hub-celebration-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--moon-100);
+  background: var(--surface-2);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-sm);
+  animation: hubSparklePop 260ms var(--ease-hub);
+}
+
+.hub-app .hub-celebration-badge--sparkle {
+  color: #ffd166;
+  border-color: rgba(255, 209, 102, 0.4);
+  background: rgba(255, 209, 102, 0.08);
+}
+
+.hub-app .hub-celebration-card {
+  animation: hubSparklePop 300ms var(--ease-hub);
+  border-color: var(--accent-line) !important;
+  box-shadow: 0 0 0 1px var(--accent-soft), 0 8px 28px -10px rgba(82, 116, 168, 0.25) !important;
+}
+
+.hub-app .hub-pms-progress--completed .hub-pms-progress__fill {
+  background: linear-gradient(90deg, var(--pms-moonstone) 0%, var(--moon-100) 100%);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 8px -1px rgba(140, 168, 216, 0.45);
+}
+
+.hub-app .hub-pms-progress__value--100 {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--moon-100);
+  font-weight: 600;
+}
+
+.hub-app .hub-pms-progress__value--100 .hub-pms-sparkle-mark {
+  font-size: 10px;
+  color: #ffd166;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-progress--completed .hub-progress-bar::after,
+  .hub-app .hub-pms-progress--completed .hub-pms-progress__fill::after {
+    animation: none;
+    display: none;
+  }
+  .hub-app .hub-celebration-badge,
+  .hub-app .hub-celebration-card {
+    animation: none;
+  }
+}
+
 /* Daily Brief keeps motion functional and scarce: one intro reveal, one command reveal,
    and hover feedback only on destinations that actually navigate. Static status/cards
    deliberately stay still. */

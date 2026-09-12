@@ -4,6 +4,8 @@ import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, IconButton, Button, Progress, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge } from "../hub-primitives";
+import { RhythmVisualizer } from "../rhythm-visualizer";
+import { StreakFlame } from "../burning-streak";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 import { mapTasksToCalendar } from "@/lib/calendar-task-view";
 import {
@@ -1511,9 +1513,23 @@ export function Rhythm() {
         </div>
       )}
 
+      {/* 리듬 3대 축: 업로드 리듬 · 성과 반응 · 몰입도×성과 상관 매트릭스 시각화 */}
+      <RhythmVisualizer
+        rituals={mergedRituals}
+        summary={summary}
+        onNavigate={(path) => router.push(path)}
+      />
+
       <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
-          <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>This week</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>This week</div>
+            {!rhythmPartial && percent >= 100 && (
+              <span className="hub-celebration-badge hub-celebration-badge--sparkle">
+                ✦ 100% 달성
+              </span>
+            )}
+          </div>
           <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="stat">{completed} / {total}</div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{rhythmPartial ? '관측된 완료 · 일부 기록' : 'rituals completed'}</div>
           {rhythmPartial ? (
@@ -1525,8 +1541,18 @@ export function Rhythm() {
           )}
         </Card>
         <Card>
-          <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Longest streak</div>
-          <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10 }} className="stat">{longestStreak} <span style={{ fontSize: 14, color: 'var(--fg-faint)' }}>days</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Longest streak</div>
+            {longestStreak >= 3 && (
+              <span className="hub-streak-badge--burning" style={{ fontSize: 10.5, padding: '2px 6px', borderRadius: 'var(--r-xs)', background: 'rgba(255,120,50,0.1)', color: '#ff9a52', border: '1px solid rgba(255,140,70,0.3)' }}>
+                버닝 발동 🔥
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: 30, fontWeight: 500, marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }} className="stat">
+            <StreakFlame size={24} burning={longestStreak >= 3} />
+            <span>{longestStreak} <span style={{ fontSize: 14, color: 'var(--fg-faint)' }}>days</span></span>
+          </div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{longestStreakRitual || '루틴 체크인 기록 없음'}{rhythmPartial ? ' · 관측값' : ''}</div>
         </Card>
       </div>
@@ -1554,6 +1580,7 @@ export function Rhythm() {
                 const pending = Boolean(mutationState.pendingByRitual[r.id]);
                 const feedback = mutationState.feedbackByRitual[r.id];
                 const bitmapText = weeks.map((value, index) => `${index === 6 ? '오늘' : `${6 - index}일 전`} ${value ? '완료' : '미완료'}`).join(', ');
+                const isRowBurning = (r.streak || 0) >= 3;
                 return (
                   <div
                     key={r.id}
@@ -1580,12 +1607,17 @@ export function Rhythm() {
                       {weeks.map((value, index) => (
                         <span key={index} aria-hidden="true" style={{
                           width: 18, height: 18, borderRadius: 4,
-                          background: value ? 'var(--moon-500)' : 'var(--surface-3)',
+                          background: value ? (isRowBurning ? '#ff7836' : 'var(--moon-500)') : 'var(--surface-3)',
                           border: '1px solid var(--line-soft)',
                         }} />
                       ))}
                     </div>
-                    <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{r.streak || 0}d</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {isRowBurning && <StreakFlame size={14} burning={true} />}
+                      <span className="mono" style={{ fontSize: 12, color: isRowBurning ? '#ff9a52' : 'var(--fg-muted)', fontWeight: isRowBurning ? 600 : 400 }}>
+                        {r.streak || 0}d
+                      </span>
+                    </div>
                     <div style={{ textAlign: 'right' }}>
                       <Button
                         variant="secondary"
