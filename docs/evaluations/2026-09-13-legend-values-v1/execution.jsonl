@@ -1,0 +1,5 @@
+{"command":"judge","startedAt":"2026-09-12T16:41:48.637Z","runnerHash":"0a79680bf0dae849082ed07123c59c402bfd0221357f023b6a5088ccec131ad1","manifestHash":"28b9face73a14d13a021ad1b68b716546acdba4376fdfa57e8712dc5df73aaf2"}
+{"command":"calibrate","startedAt":"2026-09-12T16:45:29.309Z","runnerHash":"51ddb6124a1c892eea028574247720716f14ad2de30d56fececb84fd13fb87f2","manifestHash":"28b9face73a14d13a021ad1b68b716546acdba4376fdfa57e8712dc5df73aaf2"}
+{"command":"judge","startedAt":"2026-09-12T16:46:14.759Z","runnerHash":"51ddb6124a1c892eea028574247720716f14ad2de30d56fececb84fd13fb87f2","manifestHash":"28b9face73a14d13a021ad1b68b716546acdba4376fdfa57e8712dc5df73aaf2"}
+{"command":"report","startedAt":"2026-09-12T16:49:51.215Z","runnerHash":"1a8cd86e9b494a905ef6785ca07e9f37e07ad11a93d7cdcc6ff919f8d1a4032e","manifestHash":"28b9face73a14d13a021ad1b68b716546acdba4376fdfa57e8712dc5df73aaf2"}
+{"command":"report","startedAt":"2026-09-12T16:54:59.780Z","runnerHash":"344240ea1ff4f96f6a08b1f9bda2046a3cc35aa867c84304042078998ef71ad0","manifestHash":"28b9face73a14d13a021ad1b68b716546acdba4376fdfa57e8712dc5df73aaf2"}

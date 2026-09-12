@@ -2,7 +2,8 @@
 
 > 상태: **DRAFT · 평가 및 적용 권장안**
 > 작성: 2026-09-12
-> 범위: 현재 코드·지침의 구조 평가, 페르소나 평가법, 적용 규칙, 분야·인물 확장안. 실제 모델 답변의 품질 점수는 미측정.
+> 범위: 현재 코드·지침의 구조 평가, 페르소나 평가법, 적용 규칙, 분야·인물 확장안. 작성 당시 실제 모델 답변의 품질 점수는 미측정.
+> 후속 측정(2026-09-13): [새 Legend 9인·Council 2조합의 60개 답변 파일럿](../../evaluations/2026-09-13-legend-values-v1/README.md). 자동 평가의 사실 오류 누락과 분량 초과를 확인했으며, [개선 권장안](../../evaluations/2026-09-13-legend-values-v1/findings.md)을 별도로 남겼다. 현행 Mentor·실행 페르소나 전체의 실사용 검증을 뜻하지 않는다.
 > 상위 정본: [운영자 프로필](../../operator-workflow-profile.md), [제품 구조](2026-07-13-moonlight-personal-operator-os-deep-design.md), [문서 지도](../../README.md).
 > 관계: [하루 리뷰와 Council 초안](2026-09-12-daily-review-and-council-design.md)의 행동·피드백 연결을 공유한다. 이 문서의 새 제안은 확정 스펙을 대체하지 않는다.
 
