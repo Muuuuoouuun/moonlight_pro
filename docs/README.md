@@ -1,7 +1,7 @@
 # Moonlight 문서 지도
 
 > 상태: ACTIVE DOCUMENTATION INDEX
-> 마지막 정리: 2026-09-13 (메모 작성·활용 1차 등재. 기존 실행 상태표 기준: 2026-09-04)
+> 마지막 정리: 2026-09-13 (프로젝트 실행 백로그·메모 작성·활용 1차 등재. 기존 실행 상태표 기준: 2026-09-04)
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -48,6 +48,7 @@
 | Phase 1C Contact Outcome Loop | 작동 | `record_contact_outcome_v1` 원자 RPC(마이그레이션 `20260716_0018`) — 고객 DB 컨택 시트와 고객 연락(followups) 인라인 폼 **양쪽 모두** 이 경로로 이관 완료(2026-08-05). followups 기록에는 3.5초 되돌리기 포함. 비원자 `/api/integrations/outcomes/record`는 UI 소비자 0 (외부/cron 대비 유지, 실패 시 502) |
 | ClassIn 전체 동기화·음성 AI·콘텐츠 직접 발행 | 보류 | 별도 하드 게이트 필요 |
 | 프로젝트 빠른 생성 드로어(1-1) · PMS 커맨드 센터 | 구현됨 | 스펙 `2026-07-17-project-create-drawer-design.md`, 플랜 `2026-07-17-*` 2건. `codex/project-fast-create-1-1` 병합 완료(2026-07 브랜치 정리). 잔여 범위는 플랜 문서 기준 |
+| 프로젝트 실행 백로그 | 구현·로컬 검증 완료 | 프로젝트·우선순위·기한 필터, 보드/할 일 연결, 선택 작업의 상태·기한 일괄 변경, 다음 행동 편집, 충돌·부분 실패 처리. [구현·검증 기록](superpowers/plans/2026-09-13-pms-execution.md). 운영 배포는 별도 |
 | 백엔드 통합 | 완료 | `0c5e522` real_v1.3(bm) UI + real_v1.4 백엔드 병합, `adcf619` `@com-moon/supabase-rest` 단일 클라이언트 추출 |
 | 브랜드 탭 | P0·P1 구현, P2~P5 제안 | `2026-08-29-brand-tab-design.md`, `3627eef` |
 | 개인 매출 30일 로드맵 | 출시, 디자인 QA `blocked` | `2026-08-31-personal-revenue-roadmap.md`, `68517ec`, 루트 `design-qa.md` |
@@ -73,8 +74,9 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - [`superpowers/specs/2026-07-15-personal-os-surface-restoration-design.md`](superpowers/specs/2026-07-15-personal-os-surface-restoration-design.md) — §3~4(5앵커+More 내비게이션 안)은 위 문서로 대체되어 **채택하지 않음**. §5(Personal 스코프 데이터 계약)·§6(구조적 화면 복구)는 별도로 유효.
 - [`superpowers/specs/2026-07-14-sidebar-consolidation-design.md`](superpowers/specs/2026-07-14-sidebar-consolidation-design.md) — 8앵커 압축 + 스코프 셸. 하위 레벨이 통째로 사라진 부분은 위 07-15 분류 스펙 문서가 보완.
 
-**프로젝트 · PMS (2026-07-17)**
+**프로젝트 · PMS (2026-09-13 실행 백로그 보강)**
 
+- [`superpowers/plans/2026-09-13-pms-execution.md`](superpowers/plans/2026-09-13-pms-execution.md) — **구현·로컬 검증 완료**. 기존 tasks 원장의 실행 백로그, 공통 필터, 일괄 변경, 다음 행동, 정확한 버전 비교와 회사/개인 범위 구분. 새 스키마 없이 개인 운영 방향을 유지한다.
 - [`superpowers/specs/2026-07-17-project-create-drawer-design.md`](superpowers/specs/2026-07-17-project-create-drawer-design.md) — **APPROVED**. 프로젝트 탭 3단계 × 3요소 중 `1-1 · 빠른 생성 드로어`. 브랜드 소유 분류(`sns-channel`) 처리는 아래 08-29 브랜드 탭 스펙이 이어받는다.
 - [`superpowers/plans/2026-07-17-project-fast-create-1-1.md`](superpowers/plans/2026-07-17-project-fast-create-1-1.md) — 위 스펙의 구현 계획(병합 완료).
 - [`superpowers/plans/2026-07-17-pms-command-center.md`](superpowers/plans/2026-07-17-pms-command-center.md) — Projects·Timeline·Roadmap·Rhythm을 하나의 PMS 커맨드 센터로 묶는 구현 계획.
