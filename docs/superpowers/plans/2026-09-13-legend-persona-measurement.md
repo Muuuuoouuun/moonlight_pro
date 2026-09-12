@@ -50,7 +50,7 @@ Files: `scripts/fixtures/legend-persona-eval.json`, `scripts/evaluate-legend-per
 - [x] `node scripts/evaluate-legend-personas.mjs report --out docs/evaluations/2026-09-13-legend-values-v1`로 평균·조건별 통과·인물별 차이·토큰·지연을 계산했다. 자동 평균 A 88.55, B 87.44, C 85.44. 자동 평가자가 모든 답변에 사실성 4/4를 주면서 오류를 놓친 한계를 별도로 기록했다.
 - [x] 자동 점수와 별도로 60개 답변을 입력에 대조했다. 별도 Codex 검토에서 8개 답변에 hard 9건, concern 46건을 남겼고 모든 인용·입력 근거를 확인했다. 자동 점수는 덮어쓰지 않았다. [원문 대조와 인물별 개선점](../../evaluations/2026-09-13-legend-values-v1/findings.md)에 한계와 권장 개발 순서를 남겼다.
 - [x] 평가 회귀 테스트 10개와 기존 persona registry 검사를 통과했다. 원 응답 60개·판정 40개, 요청 해시 100개, 고정 소스 해시 2개, 후속 턴의 이전 답변 보존, 점수·통과·분량 집계의 독립 재계산을 확인했다. 내용 평가에서 출처 요약이 제외됐고, 저장된 결과에서 자격 증명 패턴을 찾지 못했다.
-- [ ] 실행 파일·입력·결과·보고서만 커밋하고 원 작업 브랜치로 병합한다. `git show --stat`으로 범위를 확인한 뒤 전용 worktree를 제거한다.
+- [x] 실행 파일·입력·결과·보고서를 `64c651a`(17파일 +7,151/−1줄)로 커밋하고 현재 작업 checkout에 `cde819e`로 병합했다. `git show --stat`과 병합 전후 파일 일치를 확인했고, 병합 후 평가 테스트 10개·persona registry 검사도 통과했다. 전용 worktree를 제거했다.
 
 ## 완료 의미
 
