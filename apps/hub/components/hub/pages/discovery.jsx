@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button, EditDrawer, EmptyState, Kbd, LifecycleBadge, SegmentedControl, SelectField, TextAreaField, TextField, TruthBadge } from '../hub-primitives';
 import { Iconed } from '../hub-icons';
 import { DISCOVERY_LABELS, DISCOVERY_LIFECYCLES, DISCOVERY_TARGETS, DISCOVERY_CREATE_PATHS, DISCOVERY_VIEWS, DISCOVERY_VIEW_COPY, discoveryListUrl, discoveryReviewReason, optionsForDiscovery, newDiscovery, discoveryReadState, prepareDiscoveryRequest, writeDiscovery } from '@/lib/discovery-client';
+import { DiscoveryNudge } from '../discovery-nudge';
 import './discovery.css';
 
 const SCOPES = [{ key: 'all', label: '전체' }, { key: 'classin', label: '회사' }, { key: 'personal', label: '개인' }];
@@ -96,15 +97,20 @@ function DiscoveryHistory({ id }) {
   </section>;
 }
 
-function DiscoveryEditor({ initial, source, today, onClose, onSaved }) {
+function DiscoveryEditor({ initial, source, today, onClose, onSaved, onReload }) {
   const [draft, setDraft] = React.useState(initial);
   const [readOnly, setReadOnly] = React.useState(initial.revision > 0);
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState('');
   const [conflict, setConflict] = React.useState(null);
   const pending = React.useRef(null);
-  const titleRef = React.useRef(null);
-  React.useEffect(() => { if (!readOnly) titleRef.current?.focus(); }, [readOnly]);
+  const fieldRefs = React.useRef({});
+  const nudgeWriting = React.useRef(false);
+  const [nudgeBusy, setNudgeBusy] = React.useState(false);
+  const [focusedField, setFocusedField] = React.useState(null);
+  React.useEffect(() => { if (!readOnly) fieldRefs.current[focusedField || 'title']?.focus(); }, [readOnly, focusedField]);
+  const openField = key => { setFocusedField(key); setReadOnly(false); };
+  const nudgeBusyChanged = value => { nudgeWriting.current = value; setNudgeBusy(value); };
   const isNew = initial.revision === 0;
   const dirty = JSON.stringify(initial) !== JSON.stringify(draft);
   React.useEffect(() => {
@@ -125,28 +131,34 @@ function DiscoveryEditor({ initial, source, today, onClose, onSaved }) {
     if (result.ok) onSaved(result.record);
     return result;
   };
-  const field = key => ({ value: draft[key] || '', onChange: e => edit(key, e.target.value) });
-  return <EditDrawer title={isNew ? '새로운 기회' : '기회 탐색'} subtitle={isNew ? '가능성 한 줄이면 충분해요.' : '확인한 사실과 다음 작은 행동을 이어가세요.'} record={draft} fields={[]} onChange={edit} onSave={readOnly ? undefined : save} onClose={onClose} width="min(640px, 96vw)" saveLabel={readOnly ? '닫기' : isNew ? '기회 남기기' : '변경사항 저장'}>
+  const field = key => ({ ref: node => { fieldRefs.current[key] = node; }, value: draft[key] || '', onChange: e => edit(key, e.target.value) });
+  const textField = ([key,label,placeholder]) => <TextAreaField key={key} label={label} placeholder={placeholder} maxLength={4000} rows={focusedField === key ? 5 : 3} {...field(key)} />;
+  const identityFields = <>
+    <TextField label="가능성 한 줄" required maxLength={300} placeholder="어떤 새로운 가능성이 보이나요?" {...field('title')} />
+    <div className="discovery-two-col"><SelectField label="업무 구분" options={optionsForDiscovery({personal:'개인',classin:'회사'})} {...field('orgScope')} /><SelectField label="발견 방식" options={optionsForDiscovery({capture:'일상에서 포착',research:'직접 찾아 발굴'})} {...field('discoveryMode')} /></div>
+  </>;
+  const decisionFields = <div className="discovery-two-col"><SelectField label="진행 단계" options={optionsForDiscovery(DISCOVERY_LABELS)} {...field('status')} /><TextField label="다시 볼 날짜" type="date" {...field('reviewDate')} onChange={e => edit('reviewDate',e.target.value || null)} /></div>;
+  const focusingDecision = ['status','reviewDate'].includes(focusedField);
+  const otherFields = <>{identityFields}{!focusingDecision && decisionFields}{TEXT_FIELDS.filter(([key]) => key !== focusedField).map(textField)}<DiscoveryLinks links={draft.links} onChange={value => edit('links',value)} disabled={busy} /></>;
+  return <EditDrawer title={isNew ? '새로운 기회' : '기회 탐색'} subtitle={isNew ? '가능성 한 줄이면 충분해요.' : '확인한 사실과 다음 작은 행동을 이어가세요.'} record={draft} fields={[]} onChange={edit} onSave={readOnly ? undefined : save} onClose={() => { if (!nudgeWriting.current) onClose(); }} width="min(640px, 96vw)" saveLabel={readOnly ? '닫기' : isNew ? '기회 남기기' : '변경사항 저장'}>
     <div className="discovery-editor">
       {readOnly ? <>
-        <div className="discovery-summary-head"><LifecycleBadge state={DISCOVERY_LIFECYCLES[draft.status]} label={DISCOVERY_LABELS[draft.status]} /><Button variant="outline" onClick={() => setReadOnly(false)}>내용 편집</Button></div>
+        <div className="discovery-summary-head"><LifecycleBadge state={DISCOVERY_LIFECYCLES[draft.status]} label={DISCOVERY_LABELS[draft.status]} /><Button variant="ghost" disabled={nudgeBusy} onClick={() => openField(null)}>내용 편집</Button></div>
         <h3 className="discovery-summary-title">{draft.title}</h3>
         <p className="discovery-hint">{draft.orgScope === 'classin' ? '회사' : '개인'} · {draft.discoveryMode === 'research' ? '직접 발굴' : '일상에서 포착'} · {discoveryReviewReason(draft,today)}</p>
-        <div className="discovery-summary-sections">{TEXT_FIELDS.map(([key,label]) => <section className="discovery-section" key={key}><h3>{label}</h3><p className="discovery-summary-body">{draft[key] || ({evidence:'어떤 장면에서 발견했는지 아직 남기지 않았어요.',hypothesis:'누구의 어떤 문제를 풀 수 있을지 정리해 보세요.',experiment:'다음에 확인할 질문과 행동을 정해 보세요.',findings:'확인한 반응과 배운 점을 이곳에 남겨요.'})[key]}</p></section>)}</div>
+        <DiscoveryNudge record={draft} onAction={openField} onBusyChange={nudgeBusyChanged} onReload={onReload} />
+        <div className="discovery-summary-sections">{TEXT_FIELDS.filter(([key]) => draft[key]?.trim()).map(([key,label]) => <section className="discovery-section" key={key}><h3>{label}</h3><p className="discovery-summary-body">{draft[key]}</p></section>)}</div>
         {(draft.decisionReason || draft.resumeCondition) && <section className="discovery-section"><h3>판단과 재개 조건</h3>{draft.decisionReason && <p className="discovery-summary-body">{draft.decisionReason}</p>}{draft.resumeCondition && <p className="discovery-summary-body">재개 조건 · {draft.resumeCondition}</p>}</section>}
         <section className="discovery-section"><h3>이어진 실제 일</h3>{draft.links.length ? <ul className="discovery-links">{draft.links.map(link => <li key={`${link.type}:${link.id}`}><span>{DISCOVERY_TARGETS[link.type]}</span><a href={link.href} target="_blank" rel="noreferrer">{link.title} ↗</a></li>)}</ul> : <p>연결한 일이 없어요. 내용 편집에서 기존 할 일·리드·거래·프로젝트를 연결할 수 있어요.</p>}</section>
       </> : <fieldset disabled={busy}>
-        <TextField ref={titleRef} label="가능성 한 줄" required maxLength={300} placeholder="어떤 새로운 가능성이 보이나요?" {...field('title')} />
-        <div className="discovery-two-col">
-          <SelectField label="업무 구분" options={optionsForDiscovery({personal:'개인',classin:'회사'})} {...field('orgScope')} />
-          <SelectField label="발견 방식" options={optionsForDiscovery({capture:'일상에서 포착',research:'직접 찾아 발굴'})} {...field('discoveryMode')} />
-        </div>
-        {isNew ? <details className="discovery-section"><summary>근거와 생각 더 남기기 <span>선택</span></summary>{TEXT_FIELDS.slice(0,3).map(([key,label,placeholder]) => <TextAreaField key={key} label={label} placeholder={placeholder} maxLength={4000} rows={3} {...field(key)} />)}</details> : <>
-          <div className="discovery-two-col"><SelectField label="진행 단계" options={optionsForDiscovery(DISCOVERY_LABELS)} {...field('status')} /><TextField label="다시 볼 날짜" type="date" value={draft.reviewDate || ''} onChange={e => edit('reviewDate',e.target.value || null)} /></div>
-          {TEXT_FIELDS.map(([key,label,placeholder]) => <TextAreaField key={key} label={label} placeholder={placeholder} maxLength={4000} rows={3} {...field(key)} />)}
+        {isNew ? <>{identityFields}<details className="discovery-section"><summary>근거와 생각 더 남기기 <span>선택</span></summary>{TEXT_FIELDS.slice(0,3).map(textField)}</details></> : <>
+          {focusedField ? <>
+            <div className="discovery-focused-heading"><span className="discovery-eyebrow">지금 이어갈 행동</span><h3>{draft.title}</h3><p>지금 확인할 내용부터 남겨보세요. 다른 기록은 아래에서 펼칠 수 있어요.</p></div>
+            {focusingDecision ? decisionFields : TEXT_FIELDS.filter(([key]) => key === focusedField).map(textField)}
+            <details className="discovery-section discovery-other-fields"><summary>다른 기록도 편집</summary><div>{otherFields}</div></details>
+          </> : otherFields}
           {draft.status === 'paused' && <TextAreaField label="다시 시작할 조건" placeholder="날짜를 정하기 어렵다면 어떤 변화가 생길 때 다시 볼까요?" maxLength={4000} rows={2} {...field('resumeCondition')} />}
           {['paused','closed'].includes(draft.status) && <TextAreaField label="판단 이유" placeholder="보류하거나 마무리한 이유를 남겨주세요." maxLength={4000} rows={2} required={draft.status === 'closed'} {...field('decisionReason')} />}
-          <DiscoveryLinks links={draft.links} onChange={value => edit('links',value)} disabled={busy} />
         </>}
       </fieldset>}
       {source !== 'live' && <div className="discovery-feedback"><TruthBadge state={source} /><p>저장소 연결을 확인한 뒤 저장할 수 있어요. 입력은 그대로 유지됩니다.</p></div>}
@@ -229,6 +241,11 @@ export function Discovery() {
     } catch { if (!controller.signal.aborted) setNotice('이전 기회를 불러오지 못했어요. 다시 시도해 주세요.'); }
     finally { if (!controller.signal.aborted) setLoadingMore(false); }
   };
+  const reloadEditing = async () => {
+    const d = await readDiscovery(`/api/hub/discovery?id=${encodeURIComponent(editing.id)}`);
+    if (d.status !== 'live' || !d.records[0]) return false;
+    setEditing(d.records[0]); refresh(); return true;
+  };
   const saved = record => {
     setState(s => ({ ...s, status:'live', records:[record,...s.records.filter(r=>r.id!==record.id)] }));
     setNotice('기회를 저장했어요.'); refresh();
@@ -237,7 +254,7 @@ export function Discovery() {
     <header className="discovery-header"><div><span className="discovery-eyebrow">다음 가능성을 만드는 곳</span><h2>기회 탐색</h2><p>발견한 가능성을 작은 검증과 실제 일로 이어가세요.</p></div><Button variant="primary" icon="plus" size="md" onClick={()=>openNew()}>기회 남기기 <Kbd>N</Kbd></Button></header>
     <div className="discovery-workflow"><div className="discovery-filter-scroll"><SegmentedControl label="기회 탐색 작업" options={DISCOVERY_VIEWS} value={view} onChange={changeView} /></div><p>{DISCOVERY_VIEW_COPY[view]}</p></div>
     {view === 'discover' && <section className="discovery-entry"><div><h3>어디에서 시작할까요?</h3><p>발견한 장면을 남기거나, 알아보고 싶은 질문 하나를 정해 보세요.</p></div><Button variant="outline" onClick={()=>openNew('research')}>관심 질문으로 시작</Button></section>}
-    {!search && due.status==='live' && due.records.length>0 && <section className="discovery-review-strip" aria-label="다시 보기로 한 기회"><h3>다시 보기로 한 기회</h3><p>직접 정한 검토 날짜가 된 기록입니다.</p><div>{due.records.slice(0,3).map(record=><button type="button" className="hub-row" key={record.id} onClick={()=>setEditing(record)}><span>{record.title}</span><time className="mono">{record.reviewDate}</time></button>)}</div></section>}
+    {!editing && !search && due.status==='live' && due.records.length>0 && <section className="discovery-review-strip" aria-label="다시 보기로 한 기회">{due.records.slice(0,3).map(record=><DiscoveryNudge key={record.id} record={record} compact onOpen={()=>setEditing(record)} />)}</section>}
     {due.status==='error' && <div className="discovery-feedback"><TruthBadge state="error" /><span>다시 볼 기회를 확인하지 못했어요.</span><Button variant="ghost" onClick={refresh}>다시 확인</Button></div>}
     <form className="discovery-toolbar" onSubmit={e=>{e.preventDefault();setSearch(query.trim());}}><SegmentedControl label="기회 업무 구분" options={SCOPES} value={scope} onChange={changeScope} /><div className="discovery-search"><TextField label="전체 기록 검색" value={query} maxLength={300} placeholder="가능성·근거·검증 내용" onChange={e=>setQuery(e.target.value)} /><Button type="submit" variant="outline">검색</Button></div></form>
     <div className="discovery-list-heading"><SelectField label="진행 상태" options={[{value:'all',label:'모든 상태'},...optionsForDiscovery(DISCOVERY_LABELS)]} value={status} onChange={e=>setStatus(e.target.value)} /><Button variant="ghost" onClick={refresh} disabled={state.status==='loading'}>다시 불러오기</Button></div>
@@ -245,6 +262,6 @@ export function Discovery() {
     <div className="discovery-feedback" role="status"><TruthBadge state={state.status} /><span>{notice}</span></div>
     {state.status==='loading' ? <div className="discovery-loading" role="status">기회를 불러오고 있어요…</div> : state.status !== 'live' ? <EmptyState icon="search" title={state.status==='preview' ? '저장소 연결이 필요해요' : '기회를 불러오지 못했어요'} description={state.message || '연결을 확인한 뒤 다시 불러와 주세요.'} action={<Button variant="outline" onClick={refresh}>다시 불러오기</Button>} /> : records.length === 0 ? <EmptyState icon="search" title="조건에 맞는 기회가 없어요" description="선택한 작업·업무 구분·진행 상태와 검색어에 맞는 기록이 없어요. 전체 기록을 보거나 새로운 가능성을 남겨보세요." action={<><Button variant="outline" onClick={clearFilters}>전체 기록 보기</Button><Button variant="ghost" onClick={()=>openNew()}>기회 남기기</Button></>} /> : <ul className="discovery-list">{records.map(r=><li key={r.id}><button type="button" className="hub-row" onClick={()=>setEditing(r)}><div className="discovery-row-main"><div className="discovery-row-title"><strong>{r.title}</strong><LifecycleBadge state={DISCOVERY_LIFECYCLES[r.status]} label={DISCOVERY_LABELS[r.status]} /></div><p><span>근거</span> {r.evidence || '아직 남긴 근거가 없어요'}</p><p><span>다음 행동</span> {r.experiment || '다음에 확인할 질문을 정해 보세요'}</p><div className="discovery-meta"><span>{r.orgScope==='classin'?'회사':'개인'}</span><span>{r.discoveryMode==='research'?'직접 발굴':'일상에서 포착'}</span>{r.links.length>0 && <span>연결 <span className="num">{r.links.length}</span>건</span>}</div></div><div className="discovery-row-end"><span>{discoveryReviewReason(r,today)}</span><Iconed name="chevronR" size={14}/></div></button></li>)}</ul>}
     {state.hasMore && <Button variant="outline" disabled={loadingMore} onClick={loadMore}>{loadingMore ? '이전 기회를 불러오는 중…' : '검색 결과 더 보기'}</Button>}
-    {editing && <DiscoveryEditor key={editing.id} initial={editing} source={state.status} today={today} onClose={()=>setEditing(null)} onSaved={saved}/>}
+    {editing && <DiscoveryEditor key={`${editing.id}:${editing.revision}`} initial={editing} source={state.status} today={today} onClose={()=>setEditing(null)} onSaved={saved} onReload={reloadEditing}/>}
   </div>;
 }
