@@ -162,7 +162,7 @@ const EMPTY_REVENUE_LEDGER = {
 export function useRevenueLedger() {
   const servableCache = readRevenueCache();
   const [ledger, setLedger] = React.useState(servableCache ? servableCache.ledger : EMPTY_REVENUE_LEDGER);
-  const [syncState, setSyncState] = React.useState(servableCache ? servableCache.syncState : 'preview');
+  const [syncState, setSyncState] = React.useState(servableCache ? servableCache.syncState : 'loading');
   const [refreshKey, setRefreshKey] = React.useState(0);
 
   React.useEffect(() => {

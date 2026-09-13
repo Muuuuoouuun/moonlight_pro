@@ -8,16 +8,21 @@ import { NOTE_QUESTIONS } from '@/lib/journal-client';
 import { MemoComposer, memoTime } from './memo-composer';
 import { MemoUseComposer } from './memo-use-composer';
 import { useMemoDocument } from './use-memos';
+import { useMemoSearch } from './use-memo-search';
+import { MemoSearchControls } from './memo-search-controls';
+import { filtersFromParams, memoSearchParams, memoListHref, memoDocumentHref, memoMatchSegments, MEMO_CHANGED_EVENT } from '@/lib/journal-search-client';
 import './memos.css';
 
 function MemoDocument({ onClose, onReload, ...props }) {
   const model = useMemoDocument(props);
   return model.reuseDraft ? <MemoUseComposer model={model} onReload={onReload} /> : <MemoComposer model={model} isNew={props.isNew} onClose={onClose} onReload={onReload} />;
 }
-const summary = (entry) => ({ id: entry.id, title: entry.title, excerpt: entry.body.slice(0,180), occurredAt: entry.occurredAt, noteMeta: { kind: entry.noteMeta?.kind }, revision: entry.revision });
+function MatchText({ text, query }) { return memoMatchSegments(text, query).map((part, index) => part.match ? <mark key={index}>{part.text}</mark> : <React.Fragment key={index}>{part.text}</React.Fragment>); }
 const initial = { status: 'loading', workspaceId: null, entries: [], entry: null, nextCursor: null, workspaceConfirmed: false };
 export function Memos() {
   const router = useRouter(), pathname = usePathname(), params = useSearchParams();
+  const filters = filtersFromParams(params), searchQuery = memoSearchParams(filters).toString();
+  const search = useMemoSearch(searchQuery);
   const noteId = params.get('note'), isNew = params.get('new') === 'note', draftId = params.get('draft');
   const id = isNew ? draftId : noteId;
   const requestKey = `${isNew ? 'new' : 'note'}:${id || ''}`;
@@ -25,7 +30,7 @@ export function Memos() {
   const contextType = params.get('contextType'), contextId = params.get('contextId');
   const context = React.useMemo(() => contextId ? { type: contextType, id: contextId } : null, [contextType, contextId]);
   const [ledger, setLedger] = React.useState(() => ({ ...initial, workspaceId: lastJournalWorkspace() })), [reload, setReload] = React.useState(0), [error, setError] = React.useState('');
-  const [moreBusy, setMoreBusy] = React.useState(false), [recoveries, setRecoveries] = React.useState([]), [localError, setLocalError] = React.useState(false);
+  const [recoveries, setRecoveries] = React.useState([]), [localError, setLocalError] = React.useState(false);
   const generation = React.useRef(0), currentLedger = React.useRef(ledger); currentLedger.current = ledger;
 
   React.useEffect(() => {
@@ -36,7 +41,7 @@ export function Memos() {
 
   React.useEffect(() => {
     const ticket = ++generation.current; let active = true;
-    setLedger((previous) => ({ ...previous, status: 'loading', entry: null })); setError(''); setMoreBusy(false);
+    setLedger((previous) => ({ ...previous, status: 'loading', entry: null })); setError('');
     const query = noteId && !isNew ? '?note=' + encodeURIComponent(noteId) : '';
     async function load() {
       try {
@@ -70,7 +75,7 @@ export function Memos() {
   React.useEffect(() => { if (ledger.status !== 'loading') readRecoveries(); }, [ledger.workspaceId, ledger.status, id, reload]);
   function create() {
     if (id || ledger.status === 'loading') return;
-    router.push(`${pathname}?new=note&draft=${crypto.randomUUID()}`, { scroll: false });
+    router.push(memoDocumentHref(params, { new: 'note', draft: crypto.randomUUID() }), { scroll: false });
   }
   React.useEffect(() => {
     function keydown(event) {
@@ -81,44 +86,43 @@ export function Memos() {
     }
     window.addEventListener('keydown', keydown); return () => window.removeEventListener('keydown', keydown);
   });
-  function close() { readRecoveries(); router.replace(pathname, { scroll: false }); }
-  function saved(entry) {
-    setLedger((prior) => ({ ...prior, entry, entries: [summary(entry), ...prior.entries.filter((row) => row.id !== entry.id)]
-      .sort((a,b) => b.occurredAt.localeCompare(a.occurredAt) || b.id.localeCompare(a.id)) }));
-    if (isNew) router.replace(`${pathname}?note=${entry.id}`, { scroll: false });
-    readRecoveries();
+  function close() { readRecoveries(); router.replace(memoListHref(params), { scroll: false }); }
+  function applyFilters(nextFilters) {
+    const next = memoSearchParams(nextFilters);
+    for (const key of ['note', 'new', 'draft', 'from']) if (params.get(key)) next.set(key, params.get(key));
+    router.replace(`${pathname}${next.size ? '?' + next : ''}`, { scroll: false });
   }
-  async function more() {
-    if (moreBusy || !ledger.nextCursor) return;
-    const ticket = generation.current, cursor = ledger.nextCursor; setMoreBusy(true); setError('');
-    try {
-      const response = await fetch(`/api/hub/journal?before=${encodeURIComponent(cursor.before)}&beforeId=${encodeURIComponent(cursor.beforeId)}`, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
-      const data = await response.json();
-      if (!response.ok || data.status !== 'live') throw Error('read-failed');
-      if (generation.current !== ticket) return;
-      setLedger((prior) => ({ ...prior, nextCursor: data.nextCursor, entries: [...prior.entries, ...data.entries.filter((row) => !prior.entries.some((old) => old.id === row.id))] }));
-    } catch { if (generation.current === ticket) setError('이전 메모를 더 불러오지 못했어요. 다시 시도해 주세요.'); }
-    finally { if (generation.current === ticket) setMoreBusy(false); }
+  function saved(entry) {
+    setLedger((prior) => ({ ...prior, entry }));
+    window.dispatchEvent(new Event(MEMO_CHANGED_EVENT));
+    if (isNew) router.replace(memoDocumentHref(params, { note: entry.id }), { scroll: false });
+    readRecoveries();
   }
   const validId = isCanonicalUuid(id);
   return <div className="hub-page memos-page fade-up">
     <header className="memos-header"><div><h2>메모</h2><p>남긴 생각을 다음 할 일과 콘텐츠에 이어 쓰세요.</p></div>
       <Button variant="primary" icon="plus" onClick={create} disabled={Boolean(id) || ledger.status === 'loading'}>메모 남기기 <Kbd>N</Kbd></Button>
     </header>
-    <div className="memos-state"><TruthBadge state={ledger.status} /><span className="memo-muted">하루 리뷰와 함께 보관하는 개인 기록</span></div>
-    {recoveries.length > 0 && <section className="memo-recovery" aria-label="작성 중인 메모"><h3>이어서 쓸 메모</h3>{recoveries.map((doc) => <Button key={doc.draft.id} className="hub-row" onClick={() => router.push(doc.draft.expectedRevision ? `${pathname}?note=${doc.draft.id}` : `${pathname}?new=note&draft=${doc.draft.id}${doc.fromPreview ? '&from=preview' : ''}`)}>
+    <div className="memos-state"><TruthBadge state={search.status} /><span className="memo-muted">하루 리뷰와 함께 보관하는 개인 기록</span></div>
+    <MemoSearchControls filters={filters} context={search.context} onApply={applyFilters} />
+    {recoveries.length > 0 && <section className="memo-recovery" aria-label="작성 중인 메모"><h3>이어서 쓸 메모</h3>{recoveries.map((doc) => <Button key={doc.draft.id} className="hub-row" onClick={() => router.push(memoDocumentHref(params, doc.draft.expectedRevision ? { note: doc.draft.id } : { new: 'note', draft: doc.draft.id, from: doc.fromPreview ? 'preview' : '' }), { scroll: false })}>
       {doc.draft.title || doc.draft.body.slice(0,60) || '작성 중인 메모'} · {doc.pending ? '이전 요청 확인' : doc.fromPreview ? '연결 전 초안 이어쓰기' : '이어서 쓰기'}
     </Button>)}</section>}
     {localError && <p role="alert" className="memo-feedback">브라우저에 보관된 메모를 확인하지 못했어요. 열려 있는 입력은 복사해 보관해 주세요.</p>}
     {error && <div className="memo-feedback" role="alert"><p>{error}</p><Button onClick={() => setReload((n) => n + 1)}>다시 불러오기</Button></div>}
-    {ledger.status === 'loading' ? <p role="status" className="memo-muted">메모를 불러오고 있어요…</p> : ledger.status === 'preview' ? <EmptyState icon="content" title="메모 저장소 연결이 필요해요" description="작성한 내용은 현재 탭에 임시 보관합니다. 탭을 닫기 전 연결해 저장하거나 입력을 복사해 주세요." action={<Button onClick={create} disabled={Boolean(id)}>메모 남기기</Button>} />
-      : ledger.status === 'live' && (ledger.entries.length === 0 ? <EmptyState icon="content" title="기억하고 싶은 일부터 한 줄" description="제목이나 분류 없이 바로 남겨보세요. 필요할 때 보강하고 활용할 수 있어요." action={<Button onClick={create} disabled={Boolean(id)}>첫 메모 남기기</Button>} />
-        : <Card pad={false} className="memo-list"><ol>{ledger.entries.map((row) => <li key={row.id}>
-          <button className="hub-row memo-list-row" onClick={() => router.push(`${pathname}?note=${row.id}`, { scroll: false })}>
-            <div className="memo-row-top"><span className="mono memo-muted">{memoTime(row.occurredAt)}</span><span className="memo-muted">{NOTE_QUESTIONS.find((item) => item.value === row.noteMeta?.kind)?.label || '메모'}</span></div>
-            {row.title && <strong>{row.title}</strong>}<p>{row.excerpt}</p><span className="memo-row-open">열어서 보강·활용 →</span>
+    {search.error && <div className="memo-feedback" role="alert"><p>{search.error}</p><Button onClick={search.refresh}>다시 찾기</Button></div>}
+    {search.status === 'live' && search.entries.length > 0 && <p className="memo-muted" role="status">불러온 메모 <span className="num">{search.entries.length}</span>개{search.nextCursor ? ' · 더 볼 수 있어요' : ''}</p>}
+    {search.status === 'loading' ? <p role="status" className="memo-muted">메모를 찾고 있어요…</p> : search.status === 'preview' ? <EmptyState icon="content" title="메모 저장소 연결이 필요해요" description="작성한 내용은 현재 탭에 임시 보관합니다. 탭을 닫기 전 연결해 저장하거나 입력을 복사해 주세요." action={<Button onClick={create} disabled={Boolean(id)}>메모 남기기</Button>} />
+      : search.status === 'live' && (search.entries.length === 0 ? <EmptyState icon="content" title={searchQuery ? '조건에 맞는 메모가 없어요' : '기억하고 싶은 일부터 한 줄'} description={searchQuery ? '검색어를 짧게 바꾸거나 조건을 해제해 보세요.' : '제목이나 분류 없이 바로 남겨보세요. 필요할 때 보강하고 활용할 수 있어요.'} action={searchQuery ? <Button onClick={() => applyFilters({})}>조건 모두 해제</Button> : <Button onClick={create} disabled={Boolean(id)}>첫 메모 남기기</Button>} />
+        : <Card pad={false} className="memo-list"><ol>{search.entries.map((row) => <li key={row.id}>
+          <button className="hub-row memo-list-row" onClick={() => router.push(memoDocumentHref(params, { note: row.id }), { scroll: false })}>
+            <div className="memo-row-top"><span className="mono memo-muted">{memoTime(row.occurredAt)}</span><span className="memo-muted">{NOTE_QUESTIONS.find((item) => item.value === row.noteMeta?.kind)?.label || '메모'}{row.used ? ' · 활용함' : ''}</span></div>
+            <strong><MatchText text={row.title || row.excerpt.split('\n')[0]} query={filters.q} /></strong><p><MatchText text={row.match?.text || row.excerpt} query={row.match ? Array.from(filters.q.trim()).slice(0, 180).join('') : filters.q} /></p>
+            {row.match && <span className="memo-muted">{({ title: '제목', body: '본문', enhancement: '보강 내용' })[row.match.field]}에서 찾음</span>}
+            {search.context && <span className="memo-muted">{search.context.label}에 연결됨</span>}
+            <span className="memo-row-open">열어서 보강·활용 →</span>
           </button>
-        </li>)}</ol>{ledger.nextCursor && <div className="memo-more"><Button variant="outline" onClick={more} disabled={moreBusy}>{moreBusy ? '불러오는 중…' : '이전 메모 더 보기'}</Button></div>}</Card>)}
+        </li>)}</ol>{search.nextCursor && <div className="memo-more"><Button variant="outline" onClick={search.more} disabled={search.moreBusy || search.refreshing}>{search.moreBusy ? '불러오는 중…' : '메모 더 보기'}</Button></div>}</Card>)}
     {id && !validId && <p role="alert">메모 주소가 올바르지 않아요. <Button onClick={close}>목록으로</Button></p>}
     {validId && <MemoDocument key={id} id={id} isNew={isNew} workspaceId={ledger.workspaceId} workspaceConfirmed={ledger.workspaceConfirmed} source={ledger.requestKey === requestKey ? ledger.status : 'loading'} entry={ledger.entry?.id === id ? ledger.entry : null} context={context} fromPreview={fromPreview} onSaved={saved} onClose={close} onReload={() => setReload((n) => n + 1)} />}
   </div>;
