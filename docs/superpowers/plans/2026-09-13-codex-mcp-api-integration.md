@@ -61,7 +61,7 @@
 - [x] Review implementation with a bounded code-review agent while root checks docs/configuration and existing tests.
 - [x] Fix significant findings and repeat only affected checks.
 - [x] Update spec/index/README with implemented and optional scope, configuration and migration instructions.
-- [ ] Commit explicit changed paths; integrate into the user checkout without overwriting existing changes, verify integration and remove the worktree.
+- [x] Commit explicit changed paths; integrate into the user checkout without overwriting existing changes, verify integration and remove the worktree.
 
 ## Verification record
 
@@ -81,3 +81,12 @@
 - Supabase Management API returned 401 for the configured management token; no hosted schema or business data was written. A private token refresh is requested before migration activation.
 - Worker preflight succeeds with a dedicated persistent home. Provider authentication and a real model job have not been run; startup remains explicit.
 - Remote MCP hosting and remote browser authentication remain outside local P0–P2 scope.
+
+## Final integration evidence
+
+- Integrated implementation `ba63f6e` and the concurrent discovery work via `d770983` into the existing `09.bigmac1` checkout without conflicts.
+- Final main-checkout run: `CODEX_JOBS_POSTGRES_TEST=1 npm test` — **1,216 tests, 1,211 passed, 5 existing skips, 0 failures**. This includes actual disposable PostgreSQL command/worker tests.
+- Merged Hub production build, Engine build, typecheck, contracts and both browser QA flows passed. Final MCP doctor again discovered 8 tools and read live Supabase data.
+- Removed the temporary implementation worktree and its merged feature branch. Kept `/Users/bigmac_moon/dev/moonlight_pro-codex-worker` on `codex/worker-runtime-20260913` as the deliberately separate, clean execution worktree; installed its dependencies and registered read/draft/apply modes.
+- `npm run codex:check` passes. Bundled CLI auth status is `Not logged in`; no model was invoked. Root `codex:check` and `codex:worker` commands load `.env.codex-worker.local` automatically.
+- Local Hub is available at `http://127.0.0.1:3000/dashboard/agents/council`. Management-token refresh, migrations 0032/0033, dedicated worker login and explicit worker startup remain the activation steps. Existing Engine next-env modification remains uncommitted.
