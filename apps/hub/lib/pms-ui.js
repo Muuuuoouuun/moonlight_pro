@@ -1,3 +1,5 @@
+import { readTaskChecklist } from './task-checklist.js';
+
 const TASK_STATUS_BY_COLUMN = {
   backlog: "inbox",
   today: "todo",
@@ -490,6 +492,7 @@ export function buildTaskDraft({ projectId = null, initialStatus = "todo" } = {}
     dueAt: "",
     description: "",
     nextAction: "",
+    checklist: [],
   };
 }
 
@@ -507,6 +510,7 @@ export function buildTaskEditDraft(todo = {}) {
     dueAt: dateInputValue(todo.dueAt),
     description: todo.description || "",
     nextAction: todo.nextAction || "",
+    checklist: readTaskChecklist(todo),
   };
 }
 
@@ -519,6 +523,9 @@ export function buildTaskPatch(source = {}, draft = {}) {
     const next = field === "dueAt" ? dateInputValue(draft[field]) : (draft[field] ?? "");
     if (next !== original[field]) patch[field] = next;
   });
+  if (Array.isArray(draft.checklist) && JSON.stringify(draft.checklist) !== JSON.stringify(original.checklist)) {
+    patch.checklist = draft.checklist;
+  }
   if (Object.keys(patch).length > 1 && source.updatedAt) patch.expectedUpdatedAt = source.updatedAt;
   return patch;
 }
@@ -814,6 +821,7 @@ export function buildTaskBoardColumns(todos = [], projects = []) {
       id: todo.id,
       title: todo.title,
       nextAction: todo.nextAction || '',
+      checklist: readTaskChecklist(todo),
       tag: project?.tag || null,
       priority: todo.priority,
       project: project?.name || "미지정",

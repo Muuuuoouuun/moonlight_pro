@@ -4,6 +4,7 @@ import React from "react";
 import { MemoCaptureLink } from "../journal-links";
 import { Avatar, Badge, Button, Checkbox, IconButton } from "../hub-primitives";
 import { BrandMark } from "./project-pms-components";
+import { TaskChecklistGauge } from './project-task-checklist';
 
 function DetailSection({ title, count = 0, empty, children }) {
   return (
@@ -157,10 +158,13 @@ export function ProjectDetailPanel({
                   size={16}
                   label={`${todo.done ? "다시 열기" : "완료"}: ${todo.title}`}
                 />
-                <button className="hub-pms-task-main" style={{ flex: 1 }} onClick={() => onEditTodo?.(todo)}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                <button className="hub-pms-task-main" onClick={() => onEditTodo?.(todo)}>
                   <span style={{ fontSize: 12, textDecoration: todo.done ? "line-through" : "none", color: todo.done ? "var(--fg-faint)" : "var(--fg)" }}>{todo.title}</span>
                   {todo.nextAction && <span className="hub-pms-task-next">{todo.nextAction}</span>}
                 </button>
+                <TaskChecklistGauge task={todo} />
+                </div>
                 <span className="mono" style={{ fontSize: 12, color: "var(--fg-muted)" }}>{todo.due}</span>
               </div>
             ))}

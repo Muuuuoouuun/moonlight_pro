@@ -24,6 +24,7 @@
 .hub-pms-backlog-row:last-child { border-bottom: 0; }
 .hub-pms-backlog-row[data-selected="true"] { box-shadow: inset 1px 0 0 var(--moon-300); background: var(--surface-2); }
 .hub-pms-task-main { min-width: 0; text-align: left; display: flex; flex-direction: column; gap: 4px; border: none; background: transparent; color: var(--fg); cursor: pointer; padding: 0; }
+.hub-pms-task-cell { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .hub-pms-task-context { color: var(--fg-dim); font-size: 10.5px; overflow-wrap: anywhere; }
 .hub-pms-task-title { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .hub-pms-backlog-row[data-done="true"] .hub-pms-task-title { text-decoration: line-through; color: var(--fg-muted); }
@@ -40,9 +41,40 @@
   .hub-project-task-create, .hub-project-primary-control { order: 2; }
   .hub-project-page-header > [role="status"], .hub-project-page-header > [role="alert"] { order: 3; flex-basis: 100%; white-space: normal !important; }
   .hub-pms-backlog-row { grid-template-columns: 20px minmax(0, 1fr) 88px; gap: 8px; }
-  .hub-pms-task-main { grid-column: 2 / -1; }
+  .hub-pms-task-cell { grid-column: 2 / -1; }
   .hub-pms-backlog-row > select:first-of-type { grid-column: 2; max-width: 140px; }
   .hub-pms-task-due { grid-column: 2 / -1; text-align: left; }
+}
+
+.hub-task-checklist-empty { color: var(--fg-faint); font-size: 10.5px; }
+.hub-task-checklist-open { border: 0; padding: 6px; background: transparent; text-align: left; min-width: 0; cursor: pointer; border-radius: var(--r-sm); }
+.hub-app .hub-project-subtask { grid-template-columns: 18px minmax(0, 1fr) minmax(120px, 160px) 60px 90px; }
+.hub-task-checklist-editor { display: flex; flex-direction: column; gap: 14px; }
+.hub-task-checklist-summary p, .hub-task-checklist-conflict p { margin: 8px 0 0; color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
+.hub-task-checklist-items { display: flex; flex-direction: column; gap: 10px; }
+.hub-task-checklist-item { padding: 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); display: flex; flex-direction: column; gap: 8px; }
+.hub-task-checklist-item-main { display: flex; align-items: end; gap: 10px; }
+.hub-task-checklist-item-main > [role="checkbox"] { margin-bottom: 12px; flex-shrink: 0; }
+.hub-task-checklist-item-main > div { flex: 1; min-width: 0; }
+.hub-task-checklist-item-actions { display: flex; align-items: center; justify-content: end; gap: 4px; }
+.hub-task-checklist-item-actions > button:first-child { margin-right: auto; }
+.hub-task-checklist-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hub-task-checklist-actions > span { font-size: 12px; color: var(--fg-muted); margin-left: auto; }
+.hub-task-checklist-error { color: var(--danger); font-size: 12px; line-height: 1.6; margin: 0; }
+.hub-task-checklist-conflict { padding: 12px; border: 1px solid var(--danger-line); border-radius: var(--r-sm); font-size: 12px; line-height: 1.6; }
+.hub-task-checklist-conflict details { margin: 10px 0; }
+.hub-task-checklist-conflict summary { cursor: pointer; }
+.hub-task-checklist-conflict li { overflow-wrap: anywhere; }
+.hub-pms-task-cell .hub-pms-progress, .hub-kanban-card .hub-pms-progress, .hub-project-todo-main .hub-pms-progress { max-width: 200px; margin-top: 4px; }
+@media (max-width: 900px) {
+  .hub-app .hub-project-subtask { grid-template-columns: 18px minmax(0, 1fr) 130px; }
+  .hub-app .hub-project-subtask__assignee { display: none; }
+  .hub-app .hub-project-subtask__due { grid-column: 2 / -1; }
+}
+@media (max-width: 600px) {
+  .hub-app .hub-project-subtasks { padding-left: 12px; }
+  .hub-app .hub-project-subtask { grid-template-columns: 18px minmax(0, 1fr); }
+  .hub-task-checklist-open { grid-column: 2; max-width: 220px; }
 }
 @media (max-width: 600px) {
   .hub-pms-task-filters, .hub-pms-backlog { padding: 12px; }

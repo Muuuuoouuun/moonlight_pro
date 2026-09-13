@@ -29,7 +29,8 @@ export async function getTaskLedger() {
 
 const writeGuardStub = `
 export function assertHubWriteAllowed() { return null; }
-export async function readHubWriteJson() {
+export async function readHubWriteJson(req, options) {
+  if (globalThis.__projectsRouteTestState.readJson) return globalThis.__projectsRouteTestState.readJson(req, options);
   return { data: globalThis.__projectsRouteTestState.payload || {} };
 }
 `;
@@ -79,10 +80,12 @@ const projectRoute = await import("../app/api/hub/projects/route.js?project-read
 const taskRoute = await import("../app/api/hub/tasks/route.js?task-write-workspace-route-test");
 const brandRoute = await import("../app/api/hub/brands/route.js?brand-write-workspace-route-test");
 const { GET } = projectRoute;
+const { readHubWriteJson } = await import('./hub-write-guard.js');
 
 beforeEach(() => {
   globalThis.__projectsRouteTestState.throwError = null;
   globalThis.__projectsRouteTestState.payload = {};
+  globalThis.__projectsRouteTestState.readJson = null;
   globalThis.__projectsRouteTestState.forwarded = [];
   globalThis.__projectsRouteTestState.ledgerArgs = [];
   globalThis.__projectsRouteTestState.ledger = {
@@ -220,4 +223,25 @@ test("guarded PMS writes discard client workspace ids before forwarding to Engin
     assert.equal(forwarded.action, action);
     assert.equal(forwarded.workspaceId, "workspace-1");
   }
+});
+
+test('task writes accept the full checklist bounds and still reject oversized UTF-8 payloads', async () => {
+  const state = globalThis.__projectsRouteTestState;
+  state.readJson = readHubWriteJson;
+  for (const character of ['한', '\u0000']) {
+    const checklist = Array.from({ length: 50 }, (_, index) => ({ id: `22222222-2222-4222-8222-${String(index).padStart(12, '0')}`, title: character.repeat(200), done: false, note: character.repeat(500) }));
+    const body = JSON.stringify({ title: character.repeat(500), description: character.repeat(4000), nextAction: character.repeat(500), checklist });
+    assert.ok(Buffer.byteLength(body, 'utf8') > 64 * 1024);
+    for (const method of ['POST', 'PATCH']) {
+      const response = await taskRoute[method](new Request('http://hub.local/api/hub/tasks', { method, body }));
+      assert.equal(response.status, 200);
+      assert.deepEqual(state.forwarded.at(-1).checklist, checklist);
+    }
+  }
+  const before = state.forwarded.length;
+  for (const method of ['POST', 'PATCH']) {
+    const response = await taskRoute[method](new Request('http://hub.local/api/hub/tasks', { method, body: JSON.stringify({ title: '한'.repeat(100000) }) }));
+    assert.equal(response.status, 413);
+  }
+  assert.equal(state.forwarded.length, before);
 });

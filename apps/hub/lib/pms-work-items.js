@@ -1,4 +1,5 @@
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from './pms-ui.js';
+import { readTaskChecklist } from './task-checklist.js';
 
 export const TASK_EXECUTION_LENSES = [
   { key: 'open', label: '미완료' },
@@ -90,6 +91,7 @@ export function buildTaskExecutionModel(tasks = [], projects = [], { projectId =
 // background ledger read so a project move cannot remain in the old checklist.
 export function mergeSavedTask(previous = {}, saved = {}, projects = []) {
   const result = { ...previous, id: saved.id || previous.id };
+  if ('meta' in saved || 'checklist' in saved) result.checklist = readTaskChecklist(saved);
   for (const field of ['title', 'description', 'status']) if (field in saved) result[field] = saved[field] ?? '';
   if ('status' in saved) result.done = saved.status === 'done';
   if ('priority' in saved) {

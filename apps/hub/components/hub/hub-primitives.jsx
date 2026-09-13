@@ -975,12 +975,13 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
             <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5, ...(group.fields.length > 1 ? { flex: 1, minWidth: 0 } : null) }}>
               <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>{f.label}</span>
               {f.type === 'select' ? (
-                <select ref={focusRef} value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
+                <select ref={focusRef} disabled={saveState === 'saving'} value={record[f.key] ?? ''} onChange={e => onChange(f.key, e.target.value)} style={DRAWER_INPUT_STYLE}>
                   {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               ) : f.type === 'textarea' ? (
                 <textarea
                   ref={focusRef}
+                  disabled={saveState === 'saving'}
                   value={record[f.key] ?? ''}
                   placeholder={f.placeholder || ''}
                   rows={f.rows || 5}
@@ -990,6 +991,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
               ) : (
                 <input
                   ref={focusRef}
+                  disabled={saveState === 'saving'}
                   type={f.inputType || 'text'}
                   // <input type="date"> requires an exact YYYY-MM-DD value — a full ISO
                   // timestamp ("2026-07-20T00:00:00+00:00", what every dueAt/closeAt read

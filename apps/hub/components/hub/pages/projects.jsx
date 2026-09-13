@@ -30,13 +30,14 @@ import {
   resolveProjectDraftOrgScope,
   selectProjectAreaId,
   shouldOpenGlobalProjectCreate,
-  TASK_PRIORITY_OPTIONS,
-  TASK_STATUS_OPTIONS,
   taskStatusForBoardColumn,
   validateProjectDraft,
 } from "@/lib/pms-ui";
 import { ProjectCreateDrawer } from "./project-create-drawer";
 import { ProjectDetailPanel } from "./project-detail-panel";
+import { ProjectTaskDetailDrawer } from './project-task-detail-drawer';
+import { TaskChecklistGauge } from './project-task-checklist';
+import { hasChecklistConflict, readTaskChecklist, validateTaskChecklist } from '@/lib/task-checklist';
 import { ProjectExecutionBacklog, ProjectTaskFilters } from './project-execution-backlog';
 import { buildTaskExecutionModel, mergeSavedTask, readTaskFilters, saveTaskChanges, writeTaskFilters } from '@/lib/pms-work-items';
 import { isCanonicalUuid } from '@/lib/uuid';
@@ -338,6 +339,7 @@ export function Projects({ workspace }) {
   const [projectEditSource, setProjectEditSource] = React.useState(null);
   const [taskDraft, setTaskDraft] = React.useState(null);
   const [taskEditSource, setTaskEditSource] = React.useState(null);
+  const [taskChecklistConflict, setTaskChecklistConflict] = React.useState(null);
   const [containerDraft, setContainerDraft] = React.useState(null);
   const [localContainers, setLocalContainers] = React.useState([]);
   const drawerOpen = Boolean(projectDraft || taskDraft || containerDraft);
@@ -916,6 +918,7 @@ export function Projects({ workspace }) {
   const createTodo = React.useCallback((projectId = null, initialStatus = 'todo') => {
     const contextualProjectId = projectId || (taskView && taskFilters.projectId !== 'none' ? taskFilters.projectId : null);
     setTaskEditSource(null);
+    setTaskChecklistConflict(null);
     setTaskDraft({
       ...buildTaskDraft({ projectId: contextualProjectId || null, initialStatus }),
       title: '',
@@ -930,6 +933,7 @@ export function Projects({ workspace }) {
   const editTodo = React.useCallback((todo) => {
     const source = 'project_id' in todo || 'updated_at' in todo ? mergeSavedTask({}, todo, allProjects) : todo;
     setTaskEditSource(source);
+    setTaskChecklistConflict(null);
     setTaskDraft(buildTaskEditDraft(source));
   }, [allProjects]);
 
@@ -1230,6 +1234,8 @@ export function Projects({ workspace }) {
 
   const persistTask = React.useCallback(async () => {
     if (!taskDraft?.title?.trim()) return { ok: false, status: 'invalid-input' };
+    if (validateTaskChecklist(taskDraft.checklist || [])) return { ok: false, status: 'invalid-input' };
+    if (taskChecklistConflict) return { ok: false, status: 'conflict', message: '체크리스트 탭에서 사용할 항목을 선택한 뒤 저장하세요.' };
     if (!canWriteTasks || taskStatusPendingRef.current.size > 0) return { ok: false, status: 'error' };
 
     if (taskEditSource) {
@@ -1248,11 +1254,15 @@ export function Projects({ workspace }) {
         if (!response.ok || data.status !== 'saved') {
           if (data.status === 'conflict' && data.task) {
             const current = mergeSavedTask(taskEditSource, data.task, allProjects);
+            const checklistClash = hasChecklistConflict(taskEditSource, taskDraft, current);
+            setTaskChecklistConflict(checklistClash ? readTaskChecklist(current) : null);
             const { id, expectedUpdatedAt, ...changes } = patch;
             setTaskEditSource(current);
             setTaskDraft({ ...buildTaskEditDraft(current), ...changes });
             setTodos(ts => ts.map(t => t.id === current.id ? current : t));
-            return { ok: false, status: 'conflict', message: '다른 변경을 불러왔습니다. 입력한 변경을 유지했으니 확인 후 다시 저장하세요.' };
+            return { ok: false, status: 'conflict', message: checklistClash
+              ? '체크리스트가 다른 창에서도 변경됐습니다. 체크리스트 탭에서 사용할 항목을 선택하세요.'
+              : '다른 변경을 불러왔습니다. 입력한 변경을 유지했으니 확인 후 다시 저장하세요.' };
           }
           setOrderResult({ tone: 'err', label: data.status === 'preview' ? '저장소 연결이 필요합니다.' : '할 일을 저장하지 못했습니다.' });
           return { ok: false, status: data.status || 'error' };
@@ -1284,6 +1294,7 @@ export function Projects({ workspace }) {
           dueAt: taskDraft.dueAt,
           description: taskDraft.description || '',
           nextAction: taskDraft.nextAction || '',
+          checklist: taskDraft.checklist || [],
           source: 'hub-projects',
         }),
       });
@@ -1305,7 +1316,7 @@ export function Projects({ workspace }) {
       setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
       return { ok: false, status: 'error' };
     }
-  }, [allProjects, canWriteTasks, loadLedger, taskDraft, taskEditSource]);
+  }, [allProjects, canWriteTasks, loadLedger, taskDraft, taskEditSource, taskChecklistConflict]);
 
   // 기존 할 일 삭제 — hub-direct DELETE (엔진 파이프라인엔 삭제 액션이 없다, tasks route 참고).
   // 낙관 제거 → 3.5초 되돌리기 창 → 창이 닫힌 뒤에만 실제 DELETE(7차 편의 — hard delete의
@@ -2404,6 +2415,9 @@ export function Projects({ workspace }) {
                                         </span>
                                         <span>{t.title}</span>
                                       </div>
+                                      <button className="hub-task-checklist-open hub-row" aria-label={`${t.title} 체크리스트 편집`} onClick={() => editTodo(t)} disabled={pendingTaskIds.has(t.id)}>
+                                        <TaskChecklistGauge task={t} emptyLabel="체크리스트 추가" />
+                                      </button>
                                       <span className="hub-project-subtask__assignee">{t.assignee}</span>
                                       <span className="mono hub-project-subtask__due">{t.due || '기한 없음'}</span>
                                     </div>
@@ -2626,6 +2640,7 @@ export function Projects({ workspace }) {
                               <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3 }}>
                                 {pBrand.name} · {proj?.name}
                               </div>
+                              <TaskChecklistGauge task={t} />
                             </div>
                             <span className="hub-project-todo-assignee">{t.assignee}</span>
                             <span className="hub-project-todo-priority">
@@ -2706,6 +2721,7 @@ export function Projects({ workspace }) {
                       </div>
                       <div style={{ fontSize: 12.5, lineHeight: 1.4 }}>{c.title}</div>
                       {c.nextAction && <div className="hub-pms-task-next" style={{ marginTop: 6 }}>다음 · {c.nextAction}</div>}
+                      <TaskChecklistGauge task={c} />
                       {c.due && <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-muted)', marginTop: 6 }}>기한 · {c.due}</div>}
                       <select
                         className="hub-project-board-status"
@@ -2994,37 +3010,14 @@ export function Projects({ workspace }) {
         onClose={() => setContainerDraft(null)}
       />
 
-      <EditDrawer
-        title={taskEditSource ? '할 일 편집' : '할 일 만들기'}
-        subtitle="프로젝트 실행 항목"
-        record={taskDraft}
-        fields={[
-          { key: 'title', label: '할 일', placeholder: '실행할 작업' },
-          {
-            key: 'projectId',
-            label: '프로젝트',
-            type: 'select',
-            options: [
-              { value: '', label: '미지정' },
-              ...allProjects.map(item => ({ value: item.id, label: item.name })),
-            ],
-          },
-          { key: 'status', row: 'task-state', label: '상태', type: 'select', options: TASK_STATUS_OPTIONS },
-          { key: 'priority', row: 'task-state', label: '우선순위', type: 'select', options: TASK_PRIORITY_OPTIONS },
-          { key: 'dueAt', label: '기한', inputType: 'date' },
-          { key: 'nextAction', label: '다음 행동', placeholder: '막힘을 풀거나 완료하기 위해 할 한 가지' },
-          {
-            key: 'description',
-            label: '설명 · 참고 자료',
-            type: 'textarea',
-            placeholder: '상세 내용, 참고 링크, 메모를 적어두세요.',
-          },
-        ]}
+      <ProjectTaskDetailDrawer
+        draft={taskDraft} editing={Boolean(taskEditSource)} projects={allProjects}
         onChange={(key, value) => setTaskDraft(current => ({ ...current, [key]: value }))}
-        onSave={persistTask}
-        onDelete={taskEditSource ? deleteTask : undefined}
-        saveLabel={taskEditSource ? '변경사항 저장' : '할 일 만들기'}
-        onClose={() => { setTaskDraft(null); setTaskEditSource(null); }}
+        onSave={persistTask} onDelete={taskEditSource ? deleteTask : undefined}
+        onClose={() => { setTaskDraft(null); setTaskEditSource(null); setTaskChecklistConflict(null); }}
+        checklistConflict={taskChecklistConflict}
+        onUseCurrentChecklist={() => { setTaskDraft(current => ({ ...current, checklist: taskChecklistConflict })); setTaskChecklistConflict(null); }}
+        onKeepDraftChecklist={() => setTaskChecklistConflict(null)}
       />
     </div>
   );

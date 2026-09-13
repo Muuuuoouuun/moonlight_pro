@@ -219,14 +219,18 @@ test("created tasks return the persisted version for an immediate locked update"
   });
   const id = "11111111-1111-4111-8111-111111111111";
   const version = "2026-09-13T01:00:00.123456Z";
+  const checklist = [{ id: '22222222-2222-4222-8222-222222222222', title: '요청 확인', done: false, note: '' }];
   let lockedUpdate = false;
   t.mock.method(globalThis, "fetch", async (url, init = {}) => {
     const target = new URL(url);
     if (target.pathname.endsWith("/workspaces")) return Response.json([{ owner_id: null }]);
     assert.ok(target.pathname.endsWith("/tasks"));
+    if (!init.method || init.method === 'GET') return Response.json([{ id, meta: { source: 'journal', checklist, source_refs: [{ id: 'memo1' }] } }]);
     assert.equal(init.headers.prefer, "return=representation");
     if (init.method === "PATCH") {
       assert.equal(target.searchParams.get("updated_at"), `eq.${version}`);
+      assert.deepEqual(JSON.parse(init.body).meta.source_refs, [{ id: 'memo1' }]);
+      assert.deepEqual(JSON.parse(init.body).meta.checklist, []);
       lockedUpdate = true;
     }
     return Response.json([{ ...JSON.parse(init.body), id, updated_at: version }]);
@@ -236,11 +240,12 @@ test("created tasks return the persisted version for an immediate locked update"
     headers: { "content-type": "application/json", "x-com-moon-shared-secret": environment.COM_MOON_SHARED_WEBHOOK_SECRET },
     body: JSON.stringify(body),
   });
-  const created = await pmsRoute.POST(request({ action: "create_task", id, title: "바로 실행할 일" }));
+  const created = await pmsRoute.POST(request({ action: "create_task", id, title: "바로 실행할 일", checklist }));
   assert.equal(created.status, 201);
   const { entity } = await created.json();
   assert.equal(entity.updated_at, version);
-  const changed = await pmsRoute.POST(request({ action: "update_task", id, status: "doing", expectedUpdatedAt: entity.updated_at }));
+  assert.deepEqual(entity.meta.checklist, checklist);
+  const changed = await pmsRoute.POST(request({ action: "update_task", id, status: "doing", checklist: [], expectedUpdatedAt: entity.updated_at }));
   assert.equal(changed.status, 200);
   assert.equal(lockedUpdate, true);
 });
@@ -290,4 +295,48 @@ test("keeps missing Supabase configuration in the existing HTTP 202 taxonomy dur
     if (previous.anonKey === undefined) delete process.env.SUPABASE_ANON_KEY;
     else process.env.SUPABASE_ANON_KEY = previous.anonKey;
   }
+});
+
+test('PMS commands accept maximum checklist content and bound the actual UTF-8 bytes', async (t) => {
+  const environment = {
+    COM_MOON_SHARED_WEBHOOK_SECRET: 'pms-test-shared-secret',
+    COM_MOON_DEFAULT_WORKSPACE_ID: '33333333-3333-4333-8333-333333333333',
+    SUPABASE_URL: 'https://supabase.test',
+    SUPABASE_SERVICE_ROLE_KEY: 'service-role-test-key',
+  };
+  const previous = Object.fromEntries(Object.keys(environment).map(key => [key, process.env[key]]));
+  Object.assign(process.env, environment);
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async (url, init = {}) => {
+    calls += 1;
+    if (String(url).includes('/workspaces')) return Response.json([{ owner_id: null }]);
+    assert.equal(init.method, 'POST');
+    return Response.json([{ ...JSON.parse(init.body), updated_at: '2026-09-13T01:00:00.123456Z' }]);
+  });
+  const request = (body, declareLength = false) => new Request('http://engine.local/api/pms/command', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-com-moon-shared-secret': environment.COM_MOON_SHARED_WEBHOOK_SECRET, ...(declareLength ? { 'content-length': String(Buffer.byteLength(body, 'utf8')) } : {}) },
+    body,
+  });
+  for (const character of ['한', '\u0000']) {
+    const checklist = Array.from({ length: 50 }, (_, index) => ({ id: `22222222-2222-4222-8222-${String(index).padStart(12, '0')}`, title: character.repeat(200), done: false, note: character.repeat(500) }));
+    const body = JSON.stringify({ action: 'create_task', id: '11111111-1111-4111-8111-111111111111', title: character.repeat(500), description: character.repeat(4000), nextAction: character.repeat(500), checklist });
+    for (const declared of [true, false]) {
+      const response = await pmsRoute.POST(request(body, declared));
+      assert.equal(response.status, 201);
+      assert.deepEqual((await response.json()).entity.meta.checklist, checklist);
+    }
+  }
+  const before = calls;
+  for (const declared of [true, false]) {
+    const response = await pmsRoute.POST(request(JSON.stringify({ action: 'create_task', title: '한'.repeat(100000) }), declared));
+    assert.equal(response.status, 400);
+  }
+  assert.equal(calls, before);
 });

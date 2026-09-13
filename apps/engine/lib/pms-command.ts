@@ -89,6 +89,25 @@ function progress(value: unknown) {
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : null;
 }
 
+type ChecklistItem = { id: string; title: string; done: boolean; note: string };
+function taskChecklist(value: unknown): { ok: true; items: ChecklistItem[] } | { ok: false; reason: string } {
+  if (!Array.isArray(value) || value.length > 50) return { ok: false, reason: "invalid-checklist" };
+  const ids = new Set<string>();
+  const items: ChecklistItem[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return { ok: false, reason: "invalid-checklist-item" };
+    const id = uuid(item.id);
+    if (!id || ids.has(id) || typeof item.title !== "string" || !item.title.trim()
+      || item.title.length > 200 || typeof item.done !== "boolean"
+      || (item.note !== undefined && (typeof item.note !== "string" || item.note.length > 500))) {
+      return { ok: false, reason: "invalid-checklist-item" };
+    }
+    ids.add(id);
+    items.push({ id, title: item.title.trim(), done: item.done, note: (item.note || "").trim() });
+  }
+  return { ok: true, items };
+}
+
 export function normalizePmsCommand(
   input: Record<string, unknown> = {},
   context: CommandContext = {},
@@ -171,6 +190,7 @@ export function normalizePmsCommand(
     const status = text(input.status || "todo", 30).toLowerCase();
     const priority = text(input.priority || "medium", 30).toLowerCase();
     const dueAt = dateTime(input.dueAt || input.due_at);
+    const checklist = has(input, "checklist") ? taskChecklist(input.checklist) : null;
 
     if (!id) return { ok: false, reason: "invalid-id" };
     if (!title) return { ok: false, reason: "missing-title" };
@@ -179,6 +199,7 @@ export function normalizePmsCommand(
     if (!TASK_STATUSES.has(status)) return { ok: false, reason: "invalid-status" };
     if (!PRIORITIES.has(priority)) return { ok: false, reason: "invalid-priority" };
     if (!dueAt.ok) return { ok: false, reason: "invalid-due-at" };
+    if (checklist && !checklist.ok) return { ok: false, reason: checklist.reason };
 
     return {
       ok: true,
@@ -199,6 +220,7 @@ export function normalizePmsCommand(
         meta: {
           source: text(input.source || "manual", 80),
           ...(dealId.value ? { deal_id: dealId.value } : {}),
+          ...(checklist?.ok ? { checklist: checklist.items } : {}),
         },
       },
     };
@@ -252,6 +274,13 @@ export function normalizePmsCommand(
     }
     if (has(input, "nextAction") || has(input, "next_action")) {
       patch.next_action = nullableText(input.nextAction ?? input.next_action, 1000);
+    }
+    if (has(input, "checklist")) {
+      if (!filters.some(([key]) => key === "updated_at")) return { ok: false, reason: "missing-expected-updated-at" };
+      const checklist = taskChecklist(input.checklist);
+      if (!checklist.ok) return { ok: false, reason: checklist.reason };
+      // The service merges this one owned key with the persisted metadata under the same version guard.
+      patch.meta = { checklist: checklist.items };
     }
 
     if (Object.keys(patch).length === 0) return { ok: false, reason: "empty-patch" };

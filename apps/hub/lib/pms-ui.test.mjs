@@ -436,6 +436,7 @@ test("builds a minimal task draft from the current project context", () => {
       dueAt: "",
       description: "",
       nextAction: "",
+      checklist: [],
     },
   );
 });
@@ -463,6 +464,7 @@ test("builds a task edit draft from an existing todo, preferring the unlossy pri
       dueAt: "2026-07-20",
       description: "Pull last week's numbers first.",
       nextAction: "",
+      checklist: [],
     },
   );
 });

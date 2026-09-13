@@ -4,6 +4,7 @@ import React from 'react';
 import { Button, Checkbox, EmptyState, SegmentedControl, SelectField, TextField, TruthBadge } from '../hub-primitives';
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from '@/lib/pms-ui';
 import { TASK_EXECUTION_LENSES, taskDay, taskProjectId } from '@/lib/pms-work-items';
+import { TaskChecklistGauge } from './project-task-checklist';
 
 const executionStatusOptions = TASK_STATUS_OPTIONS.map(option => option.value === 'blocked' ? { ...option, label: '막힘' } : option);
 const groupDescriptions = {
@@ -146,11 +147,14 @@ export function ProjectExecutionBacklog({ model, projects, sourceState, partial 
                 <div key={task.id} role="listitem" className="hub-pms-backlog-row hub-row" data-selected={selected.has(task.id)} data-done={task.status === 'done'}>
                   <Checkbox size={17} checked={selected.has(task.id)} disabled={disabled} label={`${task.title} 선택`}
                     onChange={checked => setSelected(previous => { const next = new Set(previous); if (checked) next.add(task.id); else next.delete(task.id); return next; })} />
+                  <div className="hub-pms-task-cell">
                   <button className="hub-pms-task-main" onClick={() => onEdit(task)} disabled={busy}>
                     <span className="hub-pms-task-context"><span className="mono">{String(task.id).slice(0, 8)}</span> · {projectById.get(taskProjectId(task))?.name || '프로젝트 미지정'}</span>
                     <span className="hub-pms-task-title">{task.title}</span>
                     <span className="hub-pms-task-next" data-blocked={task.status === 'blocked'}>{task.status === 'blocked' ? '막힘 · ' : ''}{task.nextAction || (task.status === 'done' ? '완료한 작업' : '다음 행동을 기록하세요')}</span>
                   </button>
+                  <TaskChecklistGauge task={task} />
+                  </div>
                   <select className="hub-pms-inline-select" aria-label={`${task.title} 상태 변경`} value={task.status} disabled={disabled} onChange={event => apply([task], { status: event.target.value })}>
                     {executionStatusOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>

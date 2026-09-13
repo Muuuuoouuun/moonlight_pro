@@ -13,7 +13,9 @@ import {
 export const runtime = "nodejs";
 
 
-const MAX_COMMAND_BODY_BYTES = 64 * 1024;
+// 50 checklist items (200-char titles + 500-char notes), including JSON escapes.
+// Keep aligned with the Hub tasks POST/PATCH limit.
+const MAX_COMMAND_BODY_BYTES = 256 * 1024;
 
 async function readJsonBounded(req: Request): Promise<Record<string, unknown> | null> {
   // content-length가 있으면 먼저 확인, 없으면 텍스트 길이로 — 인증된 호출자라도
@@ -21,7 +23,7 @@ async function readJsonBounded(req: Request): Promise<Record<string, unknown> | 
   const declared = Number(req.headers.get("content-length") || "");
   if (Number.isFinite(declared) && declared > MAX_COMMAND_BODY_BYTES) return null;
   const text = await req.text();
-  if (text.length > MAX_COMMAND_BODY_BYTES) return null;
+  if (Buffer.byteLength(text, "utf8") > MAX_COMMAND_BODY_BYTES) return null;
   try {
     const parsed = JSON.parse(text);
     return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
@@ -42,7 +44,7 @@ export async function POST(req: Request) {
   const body = await readJsonBounded(req);
   if (!body) {
     return NextResponse.json(
-      { status: "invalid-json", error: "request-body-must-be-json-under-64kb" },
+      { status: "invalid-json", error: "request-body-must-be-json-under-256kb" },
       { status: 400 },
     );
   }

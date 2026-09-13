@@ -74,6 +74,12 @@ function canonicalCreatePayload(action: string, row: Record<string, unknown>) {
       workspace_id: row.workspace_id,
       project_id: row.project_id ?? null,
       deal_id: meta.deal_id ?? null,
+      // JSONB can reorder object keys; item order itself remains meaningful.
+      checklist: Array.isArray(meta.checklist)
+        ? meta.checklist.map((item) => item && typeof item === "object"
+          ? { id: item.id, title: item.title, done: item.done, note: item.note ?? "" }
+          : item)
+        : meta.checklist ?? [],
       title: row.title,
       status: row.status,
       priority: row.priority,
@@ -233,6 +239,24 @@ export async function executePmsCommand(
   }
 
   if (command.filters && command.patch) {
+    if (command.table === "tasks" && command.patch.meta) {
+      const options = {
+        filters: command.filters.filter(([key]) => key === "id" || key === "workspace_id"),
+        limit: 1,
+      };
+      const detailed = dependencies.fetchRowsDetailed
+        ? await dependencies.fetchRowsDetailed("tasks", options)
+        : null;
+      if (detailed && !detailed.ok) {
+        return { status: "error", error: detailed.reason === "missing-config" ? "missing-config" : "task-metadata-read-failed" };
+      }
+      const rows = detailed?.ok ? detailed.rows : await dependencies.fetchRows("tasks", options);
+      if (rows === null) return { status: "error", error: "task-metadata-read-failed" };
+      if (!rows[0]) return { status: "error", error: "not-found" };
+      const meta = rows[0].meta ?? {};
+      if (typeof meta !== "object" || Array.isArray(meta)) return { status: "error", error: "invalid-task-metadata" };
+      command.patch.meta = { ...meta, ...command.patch.meta as Record<string, unknown> };
+    }
     const persistence = await dependencies.update(command.table, command.filters, command.patch);
     if (!persistence.persisted && persistence.reason !== "no-matching-row") {
       return {
