@@ -39,3 +39,21 @@ export async function writeDiscovery(payload, fetcher = fetch) {
     return { ...data, ok, message: data.message || (ok ? '기회를 저장했어요.' : '저장을 확인하지 못했어요. 입력을 유지했으니 다시 시도해 주세요.') };
   } catch { return { ok: false, status: 'error', message: '저장을 확인하지 못했어요. 입력을 유지했으니 다시 시도해 주세요.' }; }
 }
+
+export const DISCOVERY_VIEWS = [{key:'discover',label:'발견하기'}, {key:'grow',label:'키워보기'}, {key:'revisit',label:'다시 보기'}, {key:'all',label:'전체'}];
+export const DISCOVERY_VIEW_COPY = {
+  discover: '새로운 가능성을 포착하거나, 직접 확인하고 싶은 질문에서 시작하세요.',
+  grow: '확인한 근거와 다음 작은 검증을 이어가세요.',
+  revisit: '다시 볼 날짜가 된 기회와 보류·종료한 판단을 살펴보세요.',
+  all: '모든 기회를 검색하고 진행 상태를 살펴보세요.',
+};
+export function discoveryListUrl({scope='all',view='all',status='all',q='',offset=0}={}) {
+  const params = new URLSearchParams({scope,view,status,q,offset:String(offset)});
+  return `/api/hub/discovery?${params}`;
+}
+export function discoveryReviewReason(record,today) {
+  if(record.status==='closed') return '종료한 기회';
+  if(record.reviewDate && today && record.reviewDate<=today) return '다시 보기로 한 날짜가 됐어요';
+  if(record.status==='paused' && record.resumeCondition) return `재개 조건 · ${record.resumeCondition}`;
+  return record.reviewDate ? `검토 예정 · ${record.reviewDate}` : '검토 날짜 미정';
+}

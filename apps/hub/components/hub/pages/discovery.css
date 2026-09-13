@@ -3,12 +3,6 @@
 .discovery-eyebrow { font-size: 11px; color: var(--fg-muted); letter-spacing: .06em; }
 .discovery-header h2 { margin: 8px 0; font-size: 26px; font-weight: 600; letter-spacing: -.03em; }
 .discovery-header p { margin: 0; font-size: 13px; color: var(--fg-muted); line-height: 1.6; }
-.discovery-overview { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin-bottom: 28px; }
-.discovery-overview button { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 20px; text-align: left; color: var(--fg); display: flex; flex-direction: column; gap: 12px; cursor: pointer; font: inherit; }
-.discovery-overview button[aria-pressed="true"] { border-color: var(--moon-500); }
-.discovery-overview span { font-size: 12px; }
-.discovery-overview strong { font-size: 28px; font-weight: 500; }
-.discovery-overview small { font-size: 11px; color: var(--fg-muted); line-height: 1.5; }
 .discovery-toolbar, .discovery-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .discovery-toolbar > label { flex: 0 1 320px; }
 .discovery-filter-scroll { overflow-x: auto; min-width: 0; padding: 2px; }
@@ -61,10 +55,6 @@
   .discovery-header { align-items: flex-start; flex-direction: column; gap: 16px; margin-bottom: 24px; }
   .discovery-header h2 { font-size: 24px; }
   .discovery-header > button { min-height: 44px; }
-  .discovery-overview { gap: 8px; margin-bottom: 24px; }
-  .discovery-overview button { padding: 14px 10px; gap: 10px; }
-  .discovery-overview strong { font-size: 24px; }
-  .discovery-overview small { display: none; }
   .discovery-toolbar { align-items: stretch; flex-direction: column; gap: 16px; }
   .discovery-toolbar > label { flex: none; }
   .discovery-list-heading { flex-direction: column; align-items: stretch; gap: 8px; }
@@ -76,4 +66,36 @@
   .discovery-editor button, .discovery-editor a, .discovery-editor summary { min-height: 44px; }
   .discovery-link-search { grid-template-columns: 1fr 1fr; }
   .discovery-link-search > button { grid-column: 1 / -1; }
+}
+
+/* Work-oriented discovery: one navigation, concise evidence and next action. */
+.discovery-header h2 { font-size: 20px; font-weight: 500; }
+.discovery-workflow { margin-bottom: 24px; }
+.discovery-workflow p, .discovery-entry p, .discovery-review-strip > p { color: var(--fg-muted); font-size: 12px; line-height: 1.7; margin: 12px 0 0; }
+.discovery-entry { display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid var(--line); border-radius: var(--r-lg); padding: 20px; margin-bottom: 24px; background: var(--surface); }
+.discovery-entry h3, .discovery-review-strip h3 { margin: 0; font-size: 14px; font-weight: 550; }
+.discovery-entry > button { flex-shrink: 0; }
+.discovery-review-strip { margin-bottom: 24px; }
+.discovery-review-strip > div { margin-top: 12px; border-top: 1px solid var(--line); }
+.discovery-review-strip button { display: flex; width: 100%; justify-content: space-between; gap: 16px; text-align: left; padding: 12px; min-height: 44px; background: transparent; color: var(--fg); border: 0; border-bottom: 1px solid var(--line-soft); font: inherit; font-size: 12px; cursor: pointer; }
+.discovery-review-strip button span { overflow-wrap: anywhere; }
+.discovery-review-strip time { color: var(--fg-muted); flex-shrink: 0; }
+.discovery-search { display: flex; align-items: flex-end; gap: 8px; flex: 0 1 430px; min-width: 0; }
+.discovery-search > label { flex: 1; min-width: 0; }
+.discovery-search button { min-height: 36px; }
+.discovery-list-heading > label { min-width: 160px; }
+.discovery-row-main p > span { color: var(--fg-dim); margin-right: 8px; }
+.discovery-row-end { max-width: 180px; text-align: right; line-height: 1.6; overflow-wrap: anywhere; }
+.discovery-summary-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.discovery-summary-title { margin: 0; font-size: 20px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
+.discovery-summary-sections { display: grid; gap: 24px; }
+.discovery-section .discovery-summary-body { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--fg); font-size: 13px; line-height: 1.85; }
+@media (max-width: 600px) {
+  .discovery-header h2 { font-size: 20px; }
+  .discovery-entry { flex-direction: column; align-items: flex-start; padding: 16px; }
+  .discovery-search { flex: auto; width: 100%; }
+  .discovery-search button { min-height: 44px; }
+  .discovery-list li > button { flex-direction: column; align-items: stretch; }
+  .discovery-row-end { max-width: none; flex-direction: row; justify-content: space-between; text-align: left; }
+  .discovery-row-main p { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 }
