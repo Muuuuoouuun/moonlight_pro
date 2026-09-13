@@ -1,7 +1,7 @@
 # 메모 2A 검색·재발견 실행 계획
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. 단계별 spec 검수 뒤 code quality 검수를 진행한다.
-> 상태: 구현·검수 완료, 로컬 통합 진행 중. 운영자의 “고고 무엇보다 편의성에 중점”(2026-09-13)으로 2A 승인. 2B 선택 AI 분석은 별도 후속 범위다.
+> 상태: 구현·검수·로컬 통합 완료. 운영자의 “고고 무엇보다 편의성에 중점”(2026-09-13)으로 2A 승인. 2B 선택 AI 분석은 별도 후속 범위다.
 
 **Goal:** 검색 한 칸으로 오래된 메모까지 찾고, 프로젝트·고객·브랜드에서 연결된 메모를 바로 다시 읽고 활용한다.
 
@@ -76,7 +76,7 @@ Files: 새 `components/hub/related-memos.jsx`; 수정 `pages/project-detail-pane
 - [x] backend spec review → backend quality review, UI/전체 spec review → 전체 quality review. 실제 결과로 발견한 회귀는 테스트로 고정한다.
 - [x] 브라우저 실제 Hub→임시 RPC/DB: 최신40개 밖 검색, 특수문자/보강, preset/조건 해제, 원문 열고 닫아 조건·스크롤 유지, 새로고침, 입력 중 늦은검색응답, context모두보기/원문복귀, 사용이력필터, 읽기오류, 두탭복구, 390px.
 - [x] `npm test`, `npm run typecheck`, `npm run check:contracts`, Hub/Engine build. 실DB 테스트는 임시 클러스터에서만 실행한다.
-- [ ] 스펙/README 상태를 2A 구현·2B DRAFT로 정리한다. 소유 파일만 commit하고 stat 확인. 현재 main 작업 공간의 동시 변경을 보존해 통합하고 통합 code 기준 필요한 검증을 실행한다. 자기 임시 서비스와 worktree를 정리하고 branch 이력은 남긴다.
+- [x] 스펙/README 상태를 2A 구현·2B DRAFT로 정리한다. 소유 파일만 commit하고 stat 확인. 현재 main 작업 공간의 동시 변경을 보존해 통합하고 통합 code 기준 필요한 검증을 실행한다. 자기 임시 서비스와 worktree를 정리하고 branch 이력은 남긴다.
 
 ## 검증 기록
 
@@ -89,4 +89,6 @@ Files: 새 `components/hub/related-memos.jsx`; 수정 `pages/project-detail-pane
 - 검수: backend spec 승인 → quality 지적의 긴 검색어 문맥 수정 → UI spec 3개 보완 → 전체 quality 승인. 저장 중 목록 축소와 cold 고객 딥링크 문제는 회귀 테스트로 고정했다.
 - 운영 DB 적용·배포는 이 로컬 기능 구현에 포함하지 않는다. 운영에서는 기존 메모 0027 의존 스키마 뒤 20260913_0030_journal_search.sql을 적용해야 검색 RPC가 동작한다. 운영 자격 증명은 읽거나 복사하지 않았다.
 
-통합·최종 build 및 임시 서비스 정리 결과는 아래에 덧붙인다.
+- 기능 커밋 `b03abc3`, 로컬 통합 커밋 `795d9a4`. 통합 직후 기능 브랜치와 통합 커밋의 tracked tree 차이가 없어 검증한 코드와 통합 코드가 동일함을 확인했다.
+- 메인 작업 공간에 이미 있던 `apps/engine/next-env.d.ts` 변경은 SHA-1 `b23d2b0e9411866941f1dd73e7477766d205cb8e` 그대로 보존했다.
+- 전용 worktree와 자기 Hub dev/production 서버·REST bridge·임시 PostgreSQL 클러스터를 정리했다. `codex/memo-discovery-20260913` 브랜치는 이력으로 보존했다. 다른 작업 공간·서비스는 건드리지 않았다.
