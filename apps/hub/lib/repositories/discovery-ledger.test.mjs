@@ -42,3 +42,61 @@ test('fallback labels offered by target search survive save and reread',async()=
   state.rows=[linkedRow];const read=await ledger.getDiscoveryLedger();assert.equal(read.status,'live');assert.deepEqual(read.records[0],saved.record);
  }
 });
+
+test('list filters scope, stage, exact status and text before forty-row pagination',async()=>{
+ await ledger.getDiscoveryLedger({scope:'classin',view:'grow',status:'validating',q:'실험',offset:40});
+ const params=state.calls.find(c=>c.table==='discovery_records').url.searchParams;
+ assert.equal(params.get('snapshot->>orgScope'),'eq.classin');
+ assert.deepEqual(params.getAll('snapshot->>status'),['in.(exploring,validating,connected)','eq.validating']);
+ assert.equal(params.get('or'),'(snapshot->>title.imatch."실험",snapshot->>evidence.imatch."실험",snapshot->>hypothesis.imatch."실험",snapshot->>experiment.imatch."실험",snapshot->>findings.imatch."실험")');
+ assert.equal(params.get('offset'),'40');assert.equal(params.get('limit'),'41');assert.equal(params.get('order'),'updated_at.desc,id.desc');
+});
+test('search literal survives regex and PostgREST quoted grammar serialization',async()=>{
+ const q='a\\%_*"),status.eq.closed,(x.[a]+?^$|{}';
+ await ledger.getDiscoveryLedger({q});
+ const filter=state.calls.find(c=>c.table==='discovery_records').url.searchParams.get('or');
+ const fields=[...filter.matchAll(/snapshot->>(\w+)\.imatch\."((?:\\.|[^"\\])*)"/g)];
+ assert.equal(fields.length,5);
+ for(const [,field,encoded] of fields){
+  const pattern=encoded.replace(/\\(.)/gs,'$1');
+  const re=new RegExp(pattern,'i');
+  assert.ok(re.test(`prefix ${q} suffix`),field);assert.ok(!re.test('anything status closed'));
+ }
+ assert.equal(filter,'('+fields.map(match=>match[0]).join(',')+')');
+});
+test('server Korea day controls revisit and due views including UTC date boundary',async(t)=>{
+ t.mock.timers.enable({apis:['Date'],now:new Date('2026-09-13T16:00:00Z')});
+ for(const [view,expected] of [['revisit','(snapshot->>status.in.(paused,closed),and(snapshot->>reviewDate.lte.2026-09-14,snapshot->>status.neq.closed))'],['due',null]]){
+  state.calls=[];const result=await ledger.getDiscoveryLedger({view,today:'1900-01-01'});
+  assert.equal(result.today,'2026-09-14');const params=state.calls.find(c=>c.table==='discovery_records').url.searchParams;
+  assert.equal(params.get('or'),expected);
+  if(view==='due'){assert.equal(params.get('snapshot->>reviewDate'),'lte.2026-09-14');assert.equal(params.get('snapshot->>status'),'neq.closed');}
+ }
+});
+test('discover selects captured; all adds no stage condition; detail ignores every list criterion',async()=>{
+ await ledger.getDiscoveryLedger({view:'discover'});assert.equal(state.calls.at(-1).url.searchParams.get('snapshot->>status'),'eq.captured');
+ state.calls=[];await ledger.getDiscoveryLedger();assert.equal(state.calls.at(-1).url.searchParams.has('snapshot->>status'),false);
+ state.calls=[];const detail=await ledger.getDiscoveryLedger({id:ID,q:null,scope:'invalid',view:'invalid',status:'invalid',offset:-1});
+ assert.equal(detail.status,'live');const params=state.calls.at(-1).url.searchParams;assert.equal(params.get('id'),`eq.${ID}`);assert.equal(params.get('offset'),'0');assert.equal(params.get('or'),null);
+});
+test('invalid list criteria and ids fail before any database access',async()=>{
+ for(const options of [{q:'x'.repeat(301)},{q:null},{scope:'foreign'},{view:'constructor'},{status:'invalid'},{id:''}]){
+  state.calls=[];assert.equal((await ledger.getDiscoveryLedger(options)).status,'error');assert.equal(state.calls.length,0);
+ }
+});
+test('forty-row page derives hasMore from one extra validated row',async()=>{
+ state.rows=Array.from({length:41},(_,i)=>({...row,id:`33333333-3333-4333-8333-${String(i).padStart(12,'0')}`}));
+ const first=await ledger.getDiscoveryLedger();assert.equal(first.records.length,40);assert.equal(first.hasMore,true);
+ state.rows=state.rows.slice(0,40);assert.equal((await ledger.getDiscoveryLedger({offset:40})).hasMore,false);
+ state.rows.push({...row,snapshot:{...snapshot,title:''}});assert.equal((await ledger.getDiscoveryLedger()).status,'error');
+});
+
+test('revisit and text retain both OR groups as conjunctive filters',async()=>{
+ await ledger.getDiscoveryLedger({view:'revisit',q:'검증',scope:'personal',status:'paused',offset:80});
+ const params=state.calls.at(-1).url.searchParams;
+ const groups=params.getAll('or');assert.equal(groups.length,2);
+ assert.match(groups[0],/^\(snapshot->>status.in.\(paused,closed\),and\(/);
+ assert.match(groups[1],/^\(snapshot->>title.imatch."검증",/);
+ assert.equal(params.get('snapshot->>orgScope'),'eq.personal');
+ assert.equal(params.get('snapshot->>status'),'eq.paused');assert.equal(params.get('offset'),'80');
+});

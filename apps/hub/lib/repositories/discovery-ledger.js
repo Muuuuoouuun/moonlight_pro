@@ -1,6 +1,6 @@
 import { eqFilter, fetchSupabaseRows } from '../server-read.js';
 import { invokeSupabaseRpc, resolveDefaultWorkspaceId, resolveSupabaseConfig } from '../server-write.js';
-import { validateDiscoveryInput } from '../discovery.js';
+import { DISCOVERY_STATUSES, validateDiscoveryInput } from '../discovery.js';
 import { isCanonicalUuid } from '../uuid.js';
 
 const TARGETS = {
@@ -34,16 +34,40 @@ function recordFromRow(row,workspaceId) {
   return {...value,links:row.snapshot.links.map(({type,id,title,href})=>({type,id,title,href})),revision:row.revision,updatedAt:row.updated_at};
 }
 
-export async function getDiscoveryLedger({id=null,offset=0}={}) {
+const PAGE_SIZE = 40;
+const SEARCH_FIELDS = ['title','evidence','hypothesis','experiment','findings'];
+
+function literalSearchPattern(value) {
+  // imatch avoids PostgREST's ilike '*' -> '%' alias, so literal stars survive.
+  // First escape regex syntax; then escape the quoted PostgREST grammar value.
+  // Percent/underscore are ordinary characters in regex, unlike LIKE patterns.
+  const pattern=value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return `"${pattern.replace(/[\\"]/g,'\\$&')}"`;
+}
+
+export async function getDiscoveryLedger({id=null,offset=0,q='',scope='all',view='all',status='all'}={}) {
   try {
-    if ((id!==null&&!isCanonicalUuid(id)) || !Number.isSafeInteger(offset) || offset<0 || offset>1000000) return readError('records');
+    if (id!==null&&!isCanonicalUuid(id)) return readError('records');
+    if (id===null && (!Number.isSafeInteger(offset) || offset<0 || offset>1000000
+      || typeof q!=='string' || q.length>300 || !['all','personal','classin'].includes(scope)
+      || !['all','discover','grow','revisit','due'].includes(view) || !['all',...DISCOVERY_STATUSES].includes(status))) return readError('records');
     const ctx=await context();if(ctx.status!=='live')return envelope('records',ctx.status);
+    const today=new Date(Date.now()+9*60*60*1000).toISOString().slice(0,10);
     const filters=[['workspace_id',eqFilter(ctx.workspaceId)],['offset',String(id?0:offset)]];if(id)filters.push(['id',eqFilter(id.toLowerCase())]);
-    const rows=await fetchSupabaseRows('discovery_records',{strictRows:true,select:'id,workspace_id,snapshot,revision,updated_at',filters,order:'updated_at.desc,id.desc',limit:id?2:201});
+    if (!id) {
+      if(scope!=='all')filters.push(['snapshot->>orgScope',eqFilter(scope)]);
+      if(view==='discover')filters.push(['snapshot->>status','eq.captured']);
+      if(view==='grow')filters.push(['snapshot->>status','in.(exploring,validating,connected)']);
+      if(view==='revisit')filters.push(['or',`(snapshot->>status.in.(paused,closed),and(snapshot->>reviewDate.lte.${today},snapshot->>status.neq.closed))`]);
+      if(view==='due')filters.push(['snapshot->>reviewDate',`lte.${today}`],['snapshot->>status','neq.closed']);
+      if(status!=='all')filters.push(['snapshot->>status',eqFilter(status)]);
+      if(q.trim())filters.push(['or',`(${SEARCH_FIELDS.map(field=>`snapshot->>${field}.imatch.${literalSearchPattern(q.trim())}`).join(',')})`]);
+    }
+    const rows=await fetchSupabaseRows('discovery_records',{strictRows:true,select:'id,workspace_id,snapshot,revision,updated_at',filters,order:'updated_at.desc,id.desc',limit:id?2:PAGE_SIZE+1});
     if(!Array.isArray(rows)||(id&&rows.length>1))return readError('records');
     const records=rows.map(row=>recordFromRow(row,ctx.workspaceId));
     if(records.some(record=>!record||(id&&record.id!==id.toLowerCase()))||new Set(records.map(r=>r.id)).size!==records.length)return readError('records');
-    return {...envelope('records','live'),records:records.slice(0,200),hasMore:records.length>200};
+    return {...envelope('records','live'),records:records.slice(0,PAGE_SIZE),hasMore:records.length>PAGE_SIZE,today};
   }catch{return readError('records');}
 }
 

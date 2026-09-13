@@ -67,7 +67,7 @@ test("GET dispatches scoped list, target search and revision history without cal
     const response=await route.GET(new Request(`${endpoint}?id=abc&workspaceId=foreign`));
     assert.equal(response.status,200);assert.deepEqual(await response.json(),state.readResult);
   }
-  assert.deepEqual(state.reads[0],{id:'abc',offset:0});
+  assert.deepEqual(state.reads[0],{id:'abc',offset:0,q:'',scope:'all',view:'all',status:'all'});
   await route.GET(new Request(`${endpoint}?targets=1&type=project&q=pilot`));assert.deepEqual(state.reads.at(-1),{type:'project',q:'pilot'});
   await route.GET(new Request(`${endpoint}?history=abc`));assert.deepEqual(state.reads.at(-1),{history:'abc',offset:0});
 });
@@ -119,4 +119,12 @@ test('POST accepts the full allowed Korean snapshot within its explicit body lim
   assert.equal(response.status,200);assert.equal(state.writes[0].findings.length,4000);
 });
 
-test('GET forwards bounded list and history offset',async()=>{await route.GET(new Request(`${endpoint}?offset=200`));assert.deepEqual(state.reads.at(-1),{id:null,offset:200});await route.GET(new Request(`${endpoint}?history=abc&offset=100`));assert.deepEqual(state.reads.at(-1),{history:'abc',offset:100});});
+test('GET forwards bounded list and history offset',async()=>{await route.GET(new Request(`${endpoint}?offset=200`));assert.deepEqual(state.reads.at(-1),{id:null,offset:200,q:'',scope:'all',view:'all',status:'all'});await route.GET(new Request(`${endpoint}?history=abc&offset=100`));assert.deepEqual(state.reads.at(-1),{history:'abc',offset:100});});
+
+
+test('GET forwards complete list criteria without browser-controlled day or workspace',async()=>{
+ const params=new URLSearchParams({q:'a_%,()',scope:'classin',view:'revisit',status:'paused',offset:'40',today:'1900-01-01',workspaceId:'foreign'});
+ const response=await route.GET(new Request(`${endpoint}?${params}`));
+ assert.equal(response.status,200);
+ assert.deepEqual(state.reads.at(-1),{id:null,offset:40,q:'a_%,()',scope:'classin',view:'revisit',status:'paused'});
+});

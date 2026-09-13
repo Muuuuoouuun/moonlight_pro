@@ -31,3 +31,20 @@ test('save distinguishes durable duplicate, conflict and HTTP 200 error', async 
   assert.equal((await call({status:'conflict',record:{id:'a'}},false)).status,'conflict');
   assert.equal((await call({status:'error'})).ok,false);
 });
+
+test('server query encodes literal search and keeps detail IDs independent', async () => {
+  const { discoveryListUrl } = await import('./discovery-client.js');
+  const url = new URL(discoveryListUrl({scope:'personal',view:'grow',status:'validating',q:'한글 %_," & 🚀',offset:40}), 'https://hub.test');
+  assert.equal(url.searchParams.get('q'),'한글 %_," & 🚀');
+  assert.equal(url.searchParams.get('scope'),'personal');
+  assert.equal(url.searchParams.get('view'),'grow');
+  assert.equal(url.searchParams.get('status'),'validating');
+  assert.equal(url.searchParams.get('offset'),'40');
+});
+test('review reasons distinguish user dates, pause conditions and closed records', async () => {
+  const { discoveryReviewReason } = await import('./discovery-client.js');
+  assert.equal(discoveryReviewReason({status:'closed',reviewDate:'2026-01-01'},'2026-09-13'),'종료한 기회');
+  assert.equal(discoveryReviewReason({status:'paused',reviewDate:'2026-09-13'},'2026-09-13'),'다시 보기로 한 날짜가 됐어요');
+  assert.equal(discoveryReviewReason({status:'paused',resumeCondition:'예산 확보'},'2026-09-13'),'재개 조건 · 예산 확보');
+  assert.equal(discoveryReviewReason({status:'exploring'},'2026-09-13'),'검토 날짜 미정');
+});

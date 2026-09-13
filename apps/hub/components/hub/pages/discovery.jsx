@@ -4,7 +4,7 @@ import React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button, EditDrawer, EmptyState, Kbd, LifecycleBadge, SegmentedControl, SelectField, TextAreaField, TextField, TruthBadge } from '../hub-primitives';
 import { Iconed } from '../hub-icons';
-import { DISCOVERY_LABELS, DISCOVERY_LIFECYCLES, DISCOVERY_TARGETS, DISCOVERY_CREATE_PATHS, DISCOVERY_FILTERS, optionsForDiscovery, newDiscovery, discoveryReadState, discoveryBucket, filterDiscoveries, prepareDiscoveryRequest, writeDiscovery } from '@/lib/discovery-client';
+import { DISCOVERY_LABELS, DISCOVERY_LIFECYCLES, DISCOVERY_TARGETS, DISCOVERY_CREATE_PATHS, DISCOVERY_VIEWS, DISCOVERY_VIEW_COPY, discoveryListUrl, discoveryReviewReason, optionsForDiscovery, newDiscovery, discoveryReadState, prepareDiscoveryRequest, writeDiscovery } from '@/lib/discovery-client';
 import './discovery.css';
 
 const SCOPES = [{ key: 'all', label: '전체' }, { key: 'classin', label: '회사' }, { key: 'personal', label: '개인' }];
@@ -96,12 +96,15 @@ function DiscoveryHistory({ id }) {
   </section>;
 }
 
-function DiscoveryEditor({ initial, source, onClose, onSaved }) {
+function DiscoveryEditor({ initial, source, today, onClose, onSaved }) {
   const [draft, setDraft] = React.useState(initial);
+  const [readOnly, setReadOnly] = React.useState(initial.revision > 0);
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState('');
   const [conflict, setConflict] = React.useState(null);
   const pending = React.useRef(null);
+  const titleRef = React.useRef(null);
+  React.useEffect(() => { if (!readOnly) titleRef.current?.focus(); }, [readOnly]);
   const isNew = initial.revision === 0;
   const dirty = JSON.stringify(initial) !== JSON.stringify(draft);
   React.useEffect(() => {
@@ -123,10 +126,17 @@ function DiscoveryEditor({ initial, source, onClose, onSaved }) {
     return result;
   };
   const field = key => ({ value: draft[key] || '', onChange: e => edit(key, e.target.value) });
-  return <EditDrawer title={isNew ? '새로운 기회' : '기회 탐색'} subtitle={isNew ? '가능성 한 줄이면 충분해요.' : '확인한 사실과 다음 작은 행동을 이어가세요.'} record={draft} fields={[]} onChange={edit} onSave={save} onClose={onClose} width="min(640px, 96vw)" saveLabel={isNew ? '기회 남기기' : '변경사항 저장'}>
+  return <EditDrawer title={isNew ? '새로운 기회' : '기회 탐색'} subtitle={isNew ? '가능성 한 줄이면 충분해요.' : '확인한 사실과 다음 작은 행동을 이어가세요.'} record={draft} fields={[]} onChange={edit} onSave={readOnly ? undefined : save} onClose={onClose} width="min(640px, 96vw)" saveLabel={readOnly ? '닫기' : isNew ? '기회 남기기' : '변경사항 저장'}>
     <div className="discovery-editor">
-      <fieldset disabled={busy}>
-        <TextField label="가능성 한 줄" required maxLength={300} placeholder="어떤 새로운 가능성이 보이나요?" {...field('title')} />
+      {readOnly ? <>
+        <div className="discovery-summary-head"><LifecycleBadge state={DISCOVERY_LIFECYCLES[draft.status]} label={DISCOVERY_LABELS[draft.status]} /><Button variant="outline" onClick={() => setReadOnly(false)}>내용 편집</Button></div>
+        <h3 className="discovery-summary-title">{draft.title}</h3>
+        <p className="discovery-hint">{draft.orgScope === 'classin' ? '회사' : '개인'} · {draft.discoveryMode === 'research' ? '직접 발굴' : '일상에서 포착'} · {discoveryReviewReason(draft,today)}</p>
+        <div className="discovery-summary-sections">{TEXT_FIELDS.map(([key,label]) => <section className="discovery-section" key={key}><h3>{label}</h3><p className="discovery-summary-body">{draft[key] || ({evidence:'어떤 장면에서 발견했는지 아직 남기지 않았어요.',hypothesis:'누구의 어떤 문제를 풀 수 있을지 정리해 보세요.',experiment:'다음에 확인할 질문과 행동을 정해 보세요.',findings:'확인한 반응과 배운 점을 이곳에 남겨요.'})[key]}</p></section>)}</div>
+        {(draft.decisionReason || draft.resumeCondition) && <section className="discovery-section"><h3>판단과 재개 조건</h3>{draft.decisionReason && <p className="discovery-summary-body">{draft.decisionReason}</p>}{draft.resumeCondition && <p className="discovery-summary-body">재개 조건 · {draft.resumeCondition}</p>}</section>}
+        <section className="discovery-section"><h3>이어진 실제 일</h3>{draft.links.length ? <ul className="discovery-links">{draft.links.map(link => <li key={`${link.type}:${link.id}`}><span>{DISCOVERY_TARGETS[link.type]}</span><a href={link.href} target="_blank" rel="noreferrer">{link.title} ↗</a></li>)}</ul> : <p>연결한 일이 없어요. 내용 편집에서 기존 할 일·리드·거래·프로젝트를 연결할 수 있어요.</p>}</section>
+      </> : <fieldset disabled={busy}>
+        <TextField ref={titleRef} label="가능성 한 줄" required maxLength={300} placeholder="어떤 새로운 가능성이 보이나요?" {...field('title')} />
         <div className="discovery-two-col">
           <SelectField label="업무 구분" options={optionsForDiscovery({personal:'개인',classin:'회사'})} {...field('orgScope')} />
           <SelectField label="발견 방식" options={optionsForDiscovery({capture:'일상에서 포착',research:'직접 찾아 발굴'})} {...field('discoveryMode')} />
@@ -138,7 +148,7 @@ function DiscoveryEditor({ initial, source, onClose, onSaved }) {
           {['paused','closed'].includes(draft.status) && <TextAreaField label="판단 이유" placeholder="보류하거나 마무리한 이유를 남겨주세요." maxLength={4000} rows={2} required={draft.status === 'closed'} {...field('decisionReason')} />}
           <DiscoveryLinks links={draft.links} onChange={value => edit('links',value)} disabled={busy} />
         </>}
-      </fieldset>
+      </fieldset>}
       {source !== 'live' && <div className="discovery-feedback"><TruthBadge state={source} /><p>저장소 연결을 확인한 뒤 저장할 수 있어요. 입력은 그대로 유지됩니다.</p></div>}
       {message && <p className="discovery-error" role="alert">{message}</p>}
       {conflict && <section className="discovery-conflict" aria-label="다른 저장 내용 확인"><h3>다른 변경이 먼저 저장됐어요</h3><p>현재 기록을 확인해 주세요. 내 입력 전체를 유지하면 아래 저장된 내용도 내 입력으로 교체됩니다.</p><details><summary>현재 저장된 내용</summary><strong>{conflict.title}</strong><p>{DISCOVERY_LABELS[conflict.status]}</p>{TEXT_FIELDS.map(([key,label]) => <p key={key}><b>{label}</b><br />{conflict[key] || '미입력'}</p>)}{[['orgScope','업무 구분'],['discoveryMode','발견 방식'],['reviewDate','다시 볼 날짜'],['resumeCondition','재개 조건'],['decisionReason','판단 이유']].map(([key,label]) => <p key={key}><b>{label}</b><br />{({personal:'개인',classin:'회사',capture:'일상에서 포착',research:'직접 발굴'})[conflict[key]] || conflict[key] || '미입력'}</p>)}<p><b>실행 연결</b><br />{conflict.links.length ? conflict.links.map(link => `${DISCOVERY_TARGETS[link.type]} · ${link.title}`).join('\n') : '연결 없음'}</p></details><div className="discovery-actions"><Button disabled={busy} onClick={() => { setDraft(conflict); setConflict(null); pending.current = null; setMessage('현재 저장된 기록을 불러왔어요.'); }}>저장된 기록 사용</Button><Button disabled={busy} onClick={() => { edit('revision',conflict.revision); setConflict(null); pending.current = null; setMessage('내 입력을 유지했어요. 저장 버튼으로 반영하세요.'); }}>내 입력 전체 유지</Button></div></section>}
@@ -153,21 +163,33 @@ export function Discovery() {
   const [state, setState] = React.useState({ status: 'loading', records: [] });
   const [version, refresh] = React.useReducer(v => v + 1, 0);
   const [query, setQuery] = React.useState('');
-  const [filter, setFilter] = React.useState('active');
+  const [view, setView] = React.useState('discover');
+  const [status, setStatus] = React.useState('all');
+  const [search, setSearch] = React.useState('');
+  const [due, setDue] = React.useState({status:'loading',records:[]});
   const [editing, setEditing] = React.useState(null);
   const [notice, setNotice] = React.useState('');
   const [loadingMore, setLoadingMore] = React.useState(false);
   const moreController = React.useRef(null);
-  const today = todayKey();
-  const openNew = React.useCallback(() => setEditing(newDiscovery(crypto.randomUUID(),scope)), [scope]);
+  const today = state.today || todayKey();
+  const listUrl = discoveryListUrl({scope,view,status,q:search});
+  const openNew = React.useCallback((mode='capture') => setEditing({...newDiscovery(crypto.randomUUID(),scope),discoveryMode:mode}), [scope]);
   React.useEffect(() => {
     const controller = new AbortController();
     moreController.current?.abort(); setLoadingMore(false);
     setState({ status: 'loading', records: [] });
-    readDiscovery('/api/hub/discovery',controller.signal).then(d => { if (!controller.signal.aborted) setState({ ...d, nextOffset: d.records.length }); })
+    readDiscovery(listUrl,controller.signal).then(d => { if (!controller.signal.aborted) setState({ ...d, nextOffset: d.records.length }); })
       .catch(() => { if (!controller.signal.aborted) setState(discoveryReadState(null)); });
     return () => { controller.abort(); moreController.current?.abort(); };
-  }, [version]);
+  }, [version,listUrl]);
+  React.useEffect(() => {
+    const controller = new AbortController();
+    setDue({status:'loading',records:[]});
+    readDiscovery(discoveryListUrl({scope,view:'due'}),controller.signal)
+      .then(d => { if(!controller.signal.aborted) setDue(d); })
+      .catch(() => { if(!controller.signal.aborted) setDue(discoveryReadState(null)); });
+    return () => controller.abort();
+  }, [scope,version]);
   const newRequested = params.get('new') === 'discovery', deepId = params.get('discovery');
   React.useEffect(() => {
     if ((!newRequested && !deepId) || state.status === 'loading' || editing) return;
@@ -193,13 +215,14 @@ export function Discovery() {
     window.addEventListener('keydown',listener); return () => window.removeEventListener('keydown',listener);
   }, [editing,openNew]);
   const changeScope = value => { const next = new URLSearchParams(params.toString()); next.delete('scope'); if(value !== 'all') next.set('scope',value); router.replace(`${pathname}${next.size ? `?${next}` : ''}`,{scroll:false}); };
-  const records = filterDiscoveries(state.records,{scope,query,filter,today});
-  const scoped = filterDiscoveries(state.records,{scope});
+  const records = state.records;
+  const changeView = value => { setView(value); setStatus('all'); };
+  const clearFilters = () => { setQuery(''); setSearch(''); setStatus('all'); setView('all'); };
   const loadMore = async () => {
     if (loadingMore) return;
     const controller = new AbortController(); moreController.current = controller; setLoadingMore(true);
     try {
-      const d = await readDiscovery(`/api/hub/discovery?offset=${state.nextOffset}`, controller.signal);
+      const d = await readDiscovery(discoveryListUrl({scope,view,status,q:search,offset:state.nextOffset}), controller.signal);
       if (controller.signal.aborted) return;
       if (d.status !== 'live') setNotice('이전 기회를 불러오지 못했어요. 다시 시도해 주세요.');
       else setState(s => ({ ...s, hasMore: d.hasMore, nextOffset: s.nextOffset + d.records.length, records: [...s.records, ...d.records.filter(r => !s.records.some(old => old.id === r.id))] }));
@@ -211,14 +234,17 @@ export function Discovery() {
     setNotice('기회를 저장했어요.'); refresh();
   };
   return <div className="discovery-page fade-up">
-    <header className="discovery-header"><div><span className="discovery-eyebrow">다음 가능성을 만드는 곳</span><h2>기회 탐색</h2><p>작은 신호를 발견하고, 확인하고, 실제 일로 이어가세요.</p></div><Button variant="primary" icon="plus" size="md" onClick={openNew}>기회 남기기 <Kbd>N</Kbd></Button></header>
-    {state.hasMore && <p className="discovery-hint">불러온 기록 기준 현황입니다. 이전 기회 더 보기로 검색 범위를 넓힐 수 있어요.</p>}
-    <div className="discovery-overview" aria-label="기회 현황">{[['new','새로 포착','아직 판단하지 않은 가능성'],['active','진행 중','다음 작은 행동으로 확인하기'],['review','다시 볼 기회','검토 날짜가 된 기록']].map(([key,label,desc]) => <button className="hub-card-link" type="button" key={key} onClick={()=>setFilter(key)} aria-pressed={filter===key}><span>{label}</span><strong className="stat">{state.status === 'live' ? filterDiscoveries(scoped,{filter:key,today}).length : '—'}</strong><small>{desc}</small></button>)}</div>
-    <div className="discovery-toolbar"><SegmentedControl label="기회 업무 구분" options={SCOPES} value={scope} onChange={changeScope} /><TextField label="기회 검색" value={query} placeholder="가능성·근거·검증 내용 검색" onChange={e=>setQuery(e.target.value)} /></div>
-    <div className="discovery-list-heading"><div className="discovery-filter-scroll"><SegmentedControl label="기회 목록 필터" options={DISCOVERY_FILTERS} value={filter} onChange={setFilter} /></div><Button variant="ghost" onClick={refresh} disabled={state.status==='loading'}>다시 불러오기</Button></div>
+    <header className="discovery-header"><div><span className="discovery-eyebrow">다음 가능성을 만드는 곳</span><h2>기회 탐색</h2><p>발견한 가능성을 작은 검증과 실제 일로 이어가세요.</p></div><Button variant="primary" icon="plus" size="md" onClick={()=>openNew()}>기회 남기기 <Kbd>N</Kbd></Button></header>
+    <div className="discovery-workflow"><div className="discovery-filter-scroll"><SegmentedControl label="기회 탐색 작업" options={DISCOVERY_VIEWS} value={view} onChange={changeView} /></div><p>{DISCOVERY_VIEW_COPY[view]}</p></div>
+    {view === 'discover' && <section className="discovery-entry"><div><h3>어디에서 시작할까요?</h3><p>발견한 장면을 남기거나, 알아보고 싶은 질문 하나를 정해 보세요.</p></div><Button variant="outline" onClick={()=>openNew('research')}>관심 질문으로 시작</Button></section>}
+    {!search && due.status==='live' && due.records.length>0 && <section className="discovery-review-strip" aria-label="다시 보기로 한 기회"><h3>다시 보기로 한 기회</h3><p>직접 정한 검토 날짜가 된 기록입니다.</p><div>{due.records.slice(0,3).map(record=><button type="button" className="hub-row" key={record.id} onClick={()=>setEditing(record)}><span>{record.title}</span><time className="mono">{record.reviewDate}</time></button>)}</div></section>}
+    {due.status==='error' && <div className="discovery-feedback"><TruthBadge state="error" /><span>다시 볼 기회를 확인하지 못했어요.</span><Button variant="ghost" onClick={refresh}>다시 확인</Button></div>}
+    <form className="discovery-toolbar" onSubmit={e=>{e.preventDefault();setSearch(query.trim());}}><SegmentedControl label="기회 업무 구분" options={SCOPES} value={scope} onChange={changeScope} /><div className="discovery-search"><TextField label="전체 기록 검색" value={query} maxLength={300} placeholder="가능성·근거·검증 내용" onChange={e=>setQuery(e.target.value)} /><Button type="submit" variant="outline">검색</Button></div></form>
+    <div className="discovery-list-heading"><SelectField label="진행 상태" options={[{value:'all',label:'모든 상태'},...optionsForDiscovery(DISCOVERY_LABELS)]} value={status} onChange={e=>setStatus(e.target.value)} /><Button variant="ghost" onClick={refresh} disabled={state.status==='loading'}>다시 불러오기</Button></div>
+    {search && <div className="discovery-feedback"><span>전체 기록에서 “{search}” 검색 · 선택한 작업/업무/상태 조건 적용</span><Button variant="ghost" onClick={()=>{setQuery('');setSearch('');}}>검색 지우기</Button></div>}
     <div className="discovery-feedback" role="status"><TruthBadge state={state.status} /><span>{notice}</span></div>
-    {state.status==='loading' ? <div className="discovery-loading" role="status">기회를 불러오고 있어요…</div> : state.status !== 'live' ? <EmptyState icon="search" title={state.status==='preview' ? '저장소 연결이 필요해요' : '기회를 불러오지 못했어요'} description={state.message || '연결을 확인한 뒤 다시 불러와 주세요.'} action={<Button variant="outline" onClick={refresh}>다시 불러오기</Button>} /> : records.length === 0 ? <EmptyState icon="search" title={scoped.length ? '조건에 맞는 기회가 없어요' : '아직 이름 없는 가능성부터'} description={scoped.length ? '검색이나 필터를 바꿔 다른 기회를 살펴보세요.' : '대화에서 발견한 문제, 새로 해보고 싶은 일, 직접 찾아볼 분야를 남겨보세요.'} action={<Button variant="outline" onClick={scoped.length ? ()=>{setQuery('');setFilter('all');} : openNew}>{scoped.length ? '검색·필터 지우기' : '첫 기회 남기기'}</Button>} /> : <ul className="discovery-list">{records.map(r=><li key={r.id}><button type="button" className="hub-row" onClick={()=>setEditing(r)}><div className="discovery-row-main"><div className="discovery-row-title"><strong>{r.title}</strong><LifecycleBadge state={DISCOVERY_LIFECYCLES[r.status]} label={DISCOVERY_LABELS[r.status]} /></div><p>{r.experiment || r.hypothesis || r.evidence || '다음에 확인할 질문을 남겨보세요.'}</p><div className="discovery-meta"><span>{r.orgScope==='classin'?'회사':'개인'}</span><span>{r.discoveryMode==='research'?'직접 발굴':'일상에서 포착'}</span>{r.links.length>0 && <span>연결 <span className="num">{r.links.length}</span>건</span>}</div></div><div className="discovery-row-end">{r.reviewDate && <><span>{r.reviewDate<=today && r.status!=='closed'?'다시 볼 시점':'검토 예정'}</span><time className="mono">{r.reviewDate}</time></>}<Iconed name="chevronR" size={14}/></div></button></li>)}</ul>}
-    {state.hasMore && <Button variant="outline" disabled={loadingMore} onClick={loadMore}>{loadingMore ? '이전 기회를 불러오는 중…' : '이전 기회 더 보기'}</Button>}
-    {editing && <DiscoveryEditor key={editing.id} initial={editing} source={state.status} onClose={()=>setEditing(null)} onSaved={saved}/>}
+    {state.status==='loading' ? <div className="discovery-loading" role="status">기회를 불러오고 있어요…</div> : state.status !== 'live' ? <EmptyState icon="search" title={state.status==='preview' ? '저장소 연결이 필요해요' : '기회를 불러오지 못했어요'} description={state.message || '연결을 확인한 뒤 다시 불러와 주세요.'} action={<Button variant="outline" onClick={refresh}>다시 불러오기</Button>} /> : records.length === 0 ? <EmptyState icon="search" title="조건에 맞는 기회가 없어요" description="선택한 작업·업무 구분·진행 상태와 검색어에 맞는 기록이 없어요. 전체 기록을 보거나 새로운 가능성을 남겨보세요." action={<><Button variant="outline" onClick={clearFilters}>전체 기록 보기</Button><Button variant="ghost" onClick={()=>openNew()}>기회 남기기</Button></>} /> : <ul className="discovery-list">{records.map(r=><li key={r.id}><button type="button" className="hub-row" onClick={()=>setEditing(r)}><div className="discovery-row-main"><div className="discovery-row-title"><strong>{r.title}</strong><LifecycleBadge state={DISCOVERY_LIFECYCLES[r.status]} label={DISCOVERY_LABELS[r.status]} /></div><p><span>근거</span> {r.evidence || '아직 남긴 근거가 없어요'}</p><p><span>다음 행동</span> {r.experiment || '다음에 확인할 질문을 정해 보세요'}</p><div className="discovery-meta"><span>{r.orgScope==='classin'?'회사':'개인'}</span><span>{r.discoveryMode==='research'?'직접 발굴':'일상에서 포착'}</span>{r.links.length>0 && <span>연결 <span className="num">{r.links.length}</span>건</span>}</div></div><div className="discovery-row-end"><span>{discoveryReviewReason(r,today)}</span><Iconed name="chevronR" size={14}/></div></button></li>)}</ul>}
+    {state.hasMore && <Button variant="outline" disabled={loadingMore} onClick={loadMore}>{loadingMore ? '이전 기회를 불러오는 중…' : '검색 결과 더 보기'}</Button>}
+    {editing && <DiscoveryEditor key={editing.id} initial={editing} source={state.status} today={today} onClose={()=>setEditing(null)} onSaved={saved}/>}
   </div>;
 }

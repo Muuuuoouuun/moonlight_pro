@@ -18,7 +18,11 @@ export async function GET(req) {
       key='history';
       return NextResponse.json(await getDiscoveryHistory(params.get('history'),{offset:Number(params.get('offset')??0)}));
     }
-    return NextResponse.json(await getDiscoveryLedger({id:params.get('id'),offset:Number(params.get('offset')??0)}));
+    return NextResponse.json(await getDiscoveryLedger({
+      id:params.get('id'),offset:Number(params.get('offset')??0),
+      q:params.get('q')??'',scope:params.get('scope')??'all',
+      view:params.get('view')??'all',status:params.get('status')??'all',
+    }));
   }catch{
     return NextResponse.json({status:'error',configured:Boolean(resolveSupabaseConfig()&&resolveDefaultWorkspaceId()),[key]:[],message:'기회 탐색 기록을 불러오지 못했어요. 다시 시도해 주세요.'});
   }
