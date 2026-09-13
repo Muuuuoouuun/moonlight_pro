@@ -38,8 +38,22 @@
 .memo-more { padding: 16px; text-align: center; }
 .memo-recovery { padding: 16px; border: 1px dashed var(--line-strong); border-radius: var(--r); display: flex; flex-direction: column; gap: 12px; }
 .memo-recovery button { text-align: left; justify-content: flex-start; white-space: normal; }
+.memo-search { display: flex; flex-direction: column; gap: 12px; }
+.memo-search-bar { display: flex; align-items: flex-end; gap: 8px; }
+.memo-search-bar > :first-child { flex: 1; min-width: 0; }
+.memo-search button { min-height: 44px; }
+.memo-search .hub-input { min-height: 44px; }
+.memo-search-details { margin-top: 16px; display: flex; flex-direction: column; gap: 16px; padding: 16px; border: 1px solid var(--line); border-radius: var(--r); }
+.memo-search-details fieldset { border: 0; padding: 0; margin: 12px 0; min-width: 0; }
+.memo-search-details summary { min-height: 44px; align-content: center; cursor: pointer; color: var(--fg-muted); }
+.memo-search-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.memo-search-chips button { white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.memo-list mark { background: var(--surface-3); color: var(--fg); text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 600px) {
   .memos-header { align-items: flex-start; flex-direction: column; }
+  .memo-search .hub-input { font-size: 16px; }
+  .memo-search-bar { flex-wrap: wrap; }
+  .memo-search-bar > :first-child { flex-basis: 100%; }
   .memo-list-row { padding: 16px; }
   .memo-composer .hub-input { font-size: 16px; min-height: 44px; }
   .memo-fields { grid-template-columns: 1fr; }

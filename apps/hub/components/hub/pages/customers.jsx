@@ -6,6 +6,7 @@
 // (재계약 임박 등 소스가 없는 것)는 만들지 않는다.
 
 import React from "react";
+import { RelatedMemos } from '../related-memos';
 import { MemoCaptureLink } from "../journal-links";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
@@ -703,6 +704,8 @@ function Customer360Drawer({ row, onClose, onNavigate, onDelete }) {
           <div style={{ flex: 1 }} />
           <span className="mono" style={{ fontSize: 15 }}>{fmtMoney(row.valueNum)}</span>
         </div>
+
+        <RelatedMemos type={row.kind} id={row.id} />
 
         {/* 연락처 */}
         {(row.phone || row.email) && (
