@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { RelatedMemos } from '../related-memos';
 import { MemoCaptureLink } from "../journal-links";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -339,6 +340,8 @@ function BrandDetail({ brand, onBack, onOpenStudio, onOpenQueue }) {
           <Button variant="primary" size="sm" icon="plus" onClick={() => onOpenStudio(brand.key)}>이 브랜드로 새 콘텐츠</Button>
         </div>
       </Card>
+
+      <Card><RelatedMemos type="brand" id={brand.id} /></Card>
 
       <div>
         <Button variant="ghost" size="sm" icon="chevronL" onClick={onBack}>브랜드 목록</Button>
