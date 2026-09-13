@@ -1,0 +1,9 @@
+{
+  "name": "@com-moon/codex-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node cli.mjs", "check": "node cli.mjs --check" },
+  "dependencies": { "@openai/codex-sdk": "0.154.0" },
+  "engines": { "node": ">=22" }
+}

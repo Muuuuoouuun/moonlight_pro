@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { CodexJobsPanel } from "./codex-jobs";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd, EmptyState } from "../hub-primitives";
 import { requestGuruCoaching, GURU_MODE_LABEL, GURU_PREVIEW_NOTE } from "../guru-client";
@@ -376,6 +377,7 @@ export function AgentsCouncil({ onNavigate }) {
         <Button variant="primary" size="sm" icon="sparkle" onClick={() => onNavigate?.('dashboard/agents/chat?prompt=council')}>Convene</Button>
       </div>
 
+      <CodexJobsPanel />
       <CouncilCoachPanel onNavigate={onNavigate} />
       {roster.status === 'loading' && (
         <div style={{ fontSize: 12.5, color: 'var(--fg-muted)' }}>페르소나 로스터 불러오는 중…</div>

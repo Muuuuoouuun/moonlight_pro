@@ -1,11 +1,11 @@
 # Moonlight × Codex — MCP·API 연결과 업무 실행 설계
 
-> 상태: **DRAFT · 설계 제안 / 구현·배포 전**
+> 상태: **구현됨 · 로컬 P0–P2 / 운영 저장소·worker 활성화 별도 확인**
 > 작성일: 2026-09-13 (Asia/Seoul)
 > 요청: MCP·API로 Codex를 연결하고 작업할 수 있도록, 더 빠르고 쾌적하고 토큰 효율적으로 설계.
-> 범위: 양방향 연결 구조. 우선순위 답변이 아직 없어 **Codex → Moonlight 업무 실행을 1차 권장안**으로 둔다.
+> 범위: 사용자의 “진행” 지시에 따라 로컬 MCP·공통 API·선택적 SDK worker(P0–P2)를 구현했다. 원격 MCP 호스팅(P3)은 후속 범위다.
 > 상위 정본: [운영자 프로필](../../operator-workflow-profile.md), [제품 심화 설계](2026-07-13-moonlight-personal-operator-os-deep-design.md) §4·§18, [연결 제어 계층](../../integration-control-plane-inheritance.md) §5·§6.
-> 관계: [9월 4일 MCP 설계](2026-09-04-mcp-server-audit-and-expansion-design.md)의 미구현 R1·R3~R6 및 E1·E2를 구체화한다. R2 오류 계약은 유지한다. 기존 stdio 운영 계약을 변경하지 않으며, 원격 MCP와 Codex 실행기는 후속 제안이다. 이 문서의 목표 수치는 운영자 확정값이나 실측 성능이 아니다.
+> 관계: [9월 4일 MCP 설계](2026-09-04-mcp-server-audit-and-expansion-design.md)의 미구현 R1·R3~R6 및 E1·E2를 구체화한다. R2 오류 계약은 유지한다. 기존 stdio 운영 계약을 변경하지 않으며, 원격 MCP 호스팅은 후속 범위이고 Codex 실행기는 별도 패키지로 구현했다. 이 문서의 목표 수치는 운영자 확정값이나 실측 성능이 아니다.
 
 ## 1. 권장 구조
 
@@ -111,7 +111,7 @@ Responses API 호출과 Codex SDK 실행은 서로 다른 통합 방식이다. R
 
 ### 4.1 Codex → Moonlight
 
-현재 등록을 읽어 필요한 부분만 갱신하는 연결 진단 절차를 제공한다. Codex는 `config.toml`, Claude의 프로젝트 등록은 `.mcp.json`이므로 클라이언트별 안내를 구분한다. 이번 작업은 실제 설정을 변경하지 않았다.
+현재 등록을 읽어 필요한 부분만 갱신하는 연결 진단 절차를 제공한다. Codex는 `config.toml`, Claude의 프로젝트 등록은 `.mcp.json`이므로 클라이언트별 안내를 구분한다. 로컬 Codex 등록의 오래된 경로를 현재 체크아웃으로 수정하고, Agent 토큰·프로필은 private env에서 불러오도록 연결했다.
 
 진단은 `설정 확인 → stdio initialize → tools/list → 작은 read → 결과 상태 확인` 순서다. 쓰기 권한 검증은 비변경 capability 검사와, 실제 사용자가 요청한 첫 쓰기의 receipt로 확인한다. 조회 성공을 쓰기 성공으로 표시하지 않는다.
 
@@ -211,4 +211,13 @@ P1 확장 시 revenue/content는 9월 4일 스펙의 전체 응답 축소를 이
 - [Responses API의 MCP](https://developers.openai.com/api/docs/guides/tools-connectors-mcp): 원격 MCP transport와 `allowed_tools`. API가 로컬 stdio 서버에 직접 연결된다고 가정하지 않는다.
 - [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching): prefix·cache 경계·모델별 조건·usage 측정. 절감률을 사전 보장하지 않는다.
 
-이번 산출물은 코드 근거가 있는 설계 문서와 문서 지도 등재다. 런타임 코드·자격증명·MCP 설정·서비스 기동·외부 배포·실데이터 쓰기는 수행하지 않았다. 구현 제안과 이미 작동하는 기능을 위 표에서 구분했다.
+구현·설정은 [MCP/API 안내](../../../packages/mcp-server/README.md), [worker 안내](../../../packages/codex-worker/README.md), [실행 계획](../plans/2026-09-13-codex-mcp-api-integration.md)을 따른다. 코드와 운영 활성화 상태는 아래에 구분한다.
+
+## 8. 구현과 검증 상태
+
+- P0: 실제 stdio initialize/list/call을 사용하는 doctor, core 8개 도구, Codex config 경로 복구를 구현했다.
+- P1: 인증·스코프, 좁은 조회, 정확한 버전 비교, 원자 명령·receipt, 작은 MCP 응답을 구현했다. DB migration을 적용해야 명령을 저장할 수 있다.
+- P2: 영속 jobs/events, lease/fencing, SDK 0.154.0 worker, Council 작업 화면, 진행·중단·재개를 구현했다. worker는 전용 로그인과 명시적 실행이 필요하다. 기존 데스크톱 대화는 자동 공유하지 않는다.
+- 실측: 고정 한글 fixture의 응답 4,288,900 → 15,782 bytes(99.63% 감소). 모델 토큰·운영 p95 목표는 아직 검증하지 않았다.
+- 제약: followups는 후보 페이지 기준이고 전역 우선순위·총건수가 아니다. 상세 본문 페이지는 버전 검증을 위해 선택 본문을 다시 읽는다. legacy 투영은 DB 전량 조회 비용을 없애지 않는다.
+- 운영: 현재 Supabase 관리 토큰은 401로 거부되어 migration 적용을 대기 중이다. worker의 별도 인증과 모델 실행은 수행하지 않았다. 원격 공개 배포도 수행하지 않았다.

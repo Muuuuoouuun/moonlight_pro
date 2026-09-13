@@ -26,7 +26,10 @@
     "inventory:project-connections": "node ./scripts/inventory-project-connections.mjs",
     "test": "node --import ./scripts/register-hub-alias.mjs --test scripts/*.test.mjs apps/hub/lib/*.test.mjs apps/hub/lib/**/*.test.mjs \"apps/hub/components/**/*.test.mjs\" \"apps/engine/**/*.test.mjs\" \"packages/**/*.test.mjs\"",
     "lint": "turbo run lint",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "mcp:doctor": "node --env-file-if-exists=apps/hub/.env.local packages/mcp-server/src/doctor.js",
+    "codex:worker": "node --env-file-if-exists=.env.codex-worker.local packages/codex-worker/cli.mjs",
+    "codex:check": "node --env-file-if-exists=.env.codex-worker.local packages/codex-worker/cli.mjs --check"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",

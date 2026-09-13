@@ -20,6 +20,7 @@
     "@com-moon/supabase-rest": "*",
     "next": "^16.2.4",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "@com-moon/agent-contracts": "*"
   }
 }
