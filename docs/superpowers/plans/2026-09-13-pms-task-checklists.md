@@ -23,11 +23,11 @@
 - [x] `project-task-checklist.jsx`, `project-task-detail-drawer.jsx`, `project-execution.css`: 체크리스트 편집기와 공통 게이지, 기존 EditDrawer의 탭을 사용한 상세.
 - [x] `projects.jsx`, `project-detail-panel.jsx`, `project-execution-backlog.jsx`: 모든 작업 표면에서 상세와 진척 연결, 충돌 시 목록 선택.
 - [x] 전체 테스트·계약·타입·Hub/Engine 빌드. Playwright로 추가 → 체크 → 저장 → 새로고침, 정렬·삭제·충돌·실패·모바일·키보드 경로 확인.
-- [ ] 현재 통합 브랜치에 병합하고 독립 worktree와 임시 서버 정리. 기존 사용자 변경 보존.
+- [x] 현재 통합 브랜치에 로컬 병합 완료. 독립 worktree·브랜치·임시 서버 정리 완료. 기존 사용자 `apps/engine/next-env.d.ts` 변경 보존.
 
 ## 검증 기록 · 2026-09-13
 
-- `npm test`: 1,040개 중 1,036개 통과, 환경 의존 4개 skip, 실패 0개. `npm run check:contracts`, `npm run typecheck`, `npm run build` 통과(Hub·Engine).
+- `npm test`: 최신 메모 기능과 통합 후 1,061개 중 1,056개 통과, 환경 의존 5개 skip, 실패 0개. `npm run check:contracts`, `npm run typecheck`, `npm run build` 통과(Hub·Engine). 통합 후 프로덕션 빌드에서도 아래 브라우저 15개 흐름 재통과.
 - Playwright 15개 흐름 통과: 실제 상세 화면에서 추가·메모·완료·순서 변경·삭제 되돌리기·저장 후 재조회, 모든 작업 화면의 같은 진척, 두 가지 충돌 선택, 실패 후 초안 보존, ESC 변경 확인, 390px 모바일 스크롤, 전체 비우기, 체크리스트를 포함한 하위 아이템 생성. 콘솔·런타임 오류 없음. 데스크톱·모바일 캡처도 시각 확인했다.
 - 브라우저 검증은 가로챈 API fixture를 사용했다. Engine 라우트 테스트는 Supabase REST 응답을 대체하여 메타 보존·정확한 버전 필터·응답 재조회 경로를 검증했다. 운영 데이터 쓰기나 배포는 수행하지 않았다.
 - 코드 리뷰 지적 2건 수정 후 23개 관련 테스트 재통과: JSONB 객체 키 순서에 독립적인 생성 재시도 비교, 최대 한글·이스케이프 입력과 실제 UTF-8 용량 제한. 재검토에서 추가 차단 사항 없음.
