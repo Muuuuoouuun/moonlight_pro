@@ -113,7 +113,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **기획 초안 (미확정, 새 구현의 근거로 쓰지 않음)**
 
-- [`superpowers/specs/2026-09-13-crm-recording-and-lead-scoring-guidelines-design.md`](superpowers/specs/2026-09-13-crm-recording-and-lead-scoring-guidelines-design.md) — **DRAFT · 운영 지침 제안**. 원문 메모/연락 결과 분리, 빠른 버튼·템플릿·내 패턴, 근거 기반 적합도·고객 주도 관심·도입 준비도, 약속 우선 정렬과 문맥 넛지. 현행 점수 writer/consumer 차이와 그림자 평가·인수 기준을 포함한다. 앱 구현·라이브 재채점·기존 확정 규칙 변경은 하지 않음.
+- [`superpowers/specs/2026-09-13-crm-recording-and-lead-scoring-guidelines-design.md`](superpowers/specs/2026-09-13-crm-recording-and-lead-scoring-guidelines-design.md) — **디자인·UI/UX 우선 확정(09-14) / 세부 설계 DRAFT v0.2**. 고객 목록·상세·빠른 기록의 UX 시나리오 → 화면 구조 → 시각·인터랙션 확인 → 실제 기록 연결 → 근거 평가·제한 추천 순서. 메모/연락 결과·버튼·템플릿·내 패턴·리드 스코어링·넛지를 함께 설계하며 실패/복구 상태와 디자인 게이트를 포함한다. 시안 제작·UX 검증·앱 구현·라이브 재채점은 아직 하지 않음.
 
 - [`superpowers/specs/2026-09-13-memo-discovery-and-analysis-design.md`](superpowers/specs/2026-09-13-memo-discovery-and-analysis-design.md) — **2A 승인·구현 / 2B DRAFT**. 한 검색창에서 제목·원문·보강 문장을 찾고, 선택 기간·종류·업무·활용 여부로 좁힌다. 편집 중 입력·펼친 목록·위치를 보존하며 프로젝트·고객·브랜드에서 최근 연결 메모 3개와 전체 보기를 제공한다. [구현·검증 기록](superpowers/plans/2026-09-13-memo-discovery.md). 0030 운영 DB 적용·배포와 선택 AI 분석은 별도다.
 
