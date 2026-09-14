@@ -17,7 +17,7 @@ const EMPTY_AUTOMATION_SUMMARY = {
 const AUTOMATIONS_CACHE_SERVABLE_MS = 5 * 60 * 1000;
 let automationsLedgerCache = null; // { at, state }
 
-function useAutomationsLedger() {
+function useAutomationsLedger({ autoRefresh = false, refreshIntervalMs = 6000 } = {}) {
   const servable = automationsLedgerCache
     && Date.now() - automationsLedgerCache.at < AUTOMATIONS_CACHE_SERVABLE_MS;
   const [state, setState] = React.useState(servable ? automationsLedgerCache.state : {
@@ -31,71 +31,136 @@ function useAutomationsLedger() {
     summary: EMPTY_AUTOMATION_SUMMARY,
   });
 
-  React.useEffect(() => {
-    let active = true;
+  const load = React.useCallback(async (silent = false) => {
     const hasServableCache = Boolean(
       automationsLedgerCache && Date.now() - automationsLedgerCache.at < AUTOMATIONS_CACHE_SERVABLE_MS
     );
-    async function load() {
-      if (!hasServableCache) setState(s => ({ ...s, syncState: 'loading' })); // 캐시 서빙 중엔 조용히 재검증
-      try {
-        const response = await fetch('/api/hub/automations', { cache: 'no-store' });
-        const data = await response.json().catch(() => null);
-        if (!active || !response.ok || !data || data.status === 'error') {
-          // 라이브 read 실패는 error — preview("미구성")로 뭉개면 실행 로그가
-          // "기록이 없습니다"로 위장된다(4차 재감사 M — Engine 실행 피드백은 §1 코어).
-          if (active) setState(s => ({ ...s, syncState: hasServableCache ? 'partial' : 'error' }));
-          return;
-        }
-        if (data.source === 'supabase') {
-          const nextState = {
-            source: 'supabase',
-            syncState: 'live',
-            automations: Array.isArray(data.automations) ? data.automations : [],
-            runs: Array.isArray(data.runs) ? data.runs : [],
-            webhookEvents: Array.isArray(data.webhookEvents) ? data.webhookEvents : [],
-            errors: Array.isArray(data.errors) ? data.errors : [],
-            integrations: Array.isArray(data.integrations) ? data.integrations : [],
-            summary: { ...EMPTY_AUTOMATION_SUMMARY, ...(data.summary || {}) },
-          };
-          automationsLedgerCache = { at: Date.now(), state: nextState };
-          setState(nextState);
-        } else {
-          setState(s => ({ ...s, source: 'preview', syncState: 'preview', automations: [], runs: [], webhookEvents: [], summary: EMPTY_AUTOMATION_SUMMARY }));
-        }
-      } catch {
-        if (active) setState(s => ({ ...s, syncState: hasServableCache ? 'partial' : 'error' }));
+    if (!silent && !hasServableCache) setState(s => ({ ...s, syncState: 'loading' }));
+    try {
+      const response = await fetch('/api/hub/automations', { cache: 'no-store' });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data || data.status === 'error') {
+        setState(s => ({ ...s, syncState: hasServableCache ? 'partial' : 'error' }));
+        return;
       }
+      if (data.source === 'supabase') {
+        const nextState = {
+          source: 'supabase',
+          syncState: 'live',
+          automations: Array.isArray(data.automations) ? data.automations : [],
+          runs: Array.isArray(data.runs) ? data.runs : [],
+          webhookEvents: Array.isArray(data.webhookEvents) ? data.webhookEvents : [],
+          errors: Array.isArray(data.errors) ? data.errors : [],
+          integrations: Array.isArray(data.integrations) ? data.integrations : [],
+          summary: { ...EMPTY_AUTOMATION_SUMMARY, ...(data.summary || {}) },
+        };
+        automationsLedgerCache = { at: Date.now(), state: nextState };
+        setState(nextState);
+      } else {
+        setState(s => ({ ...s, source: 'preview', syncState: 'preview', automations: [], runs: [], webhookEvents: [], summary: EMPTY_AUTOMATION_SUMMARY }));
+      }
+    } catch {
+      setState(s => ({ ...s, syncState: hasServableCache ? 'partial' : 'error' }));
     }
-    load();
-    return () => { active = false; };
   }, []);
 
-  return state;
+  React.useEffect(() => {
+    load();
+  }, [load]);
+
+  React.useEffect(() => {
+    if (!autoRefresh) return;
+    const timer = setInterval(() => {
+      load(true);
+    }, refreshIntervalMs);
+    return () => clearInterval(timer);
+  }, [autoRefresh, refreshIntervalMs, load]);
+
+  return { ...state, reload: () => load(false) };
 }
 
 export function AutomationsIndex({ onNavigate }) {
   const automationLifecycle = (status) => ({ Active: 'active', Paused: 'waiting', Error: 'blocked' }[status] || 'queued');
-  const { automations, summary, syncState } = useAutomationsLedger();
+  const { automations, summary, syncState, reload } = useAutomationsLedger();
   const rows = automations;
   const activeCount = rows.filter(a => a.status === 'Active').length || summary?.activeAutomations || 0;
   const runsTodayCount = summary?.runsToday ?? 0;
+  const failuresTodayCount = summary?.failuresToday ?? 0;
+  const webhooksTodayCount = summary?.webhookEventsToday ?? 0;
+
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Automations</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            {activeCount} active flows · {runsTodayCount} runs in last 24h
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>{activeCount} active flows · {runsTodayCount} runs in last 24h</span>
             <SyncBadge state={syncState} />
           </div>
         </div>
-        <div style={{ flex: 1 }} />
-        <Button variant="secondary" size="sm" icon="runs" onClick={() => onNavigate('dashboard/automations/runs')}>Run log</Button>
-        <div style={{ width: 8 }} />
-        {/* Flow 생성 경로는 미구현 — ?new=flow는 아무도 소비하지 않는 죽은 약속이었다.
-            생성을 약속하지 않는 정직한 내비게이션으로 교체(추가 기능이 아니라 정합). */}
-        <Button variant="secondary" size="sm" icon="zap" onClick={() => onNavigate('dashboard/automations/flows')}>Flow 캔버스</Button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Button variant="ghost" size="sm" icon="refresh" onClick={() => reload()}>새로고침</Button>
+          <Button variant="secondary" size="sm" icon="runs" onClick={() => onNavigate('dashboard/automations/runs')}>Run log</Button>
+          <Button variant="secondary" size="sm" icon="zap" onClick={() => onNavigate('dashboard/automations/flows')}>Flow 캔버스</Button>
+        </div>
+      </div>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        gap: 'var(--gap)',
+      }}>
+        <Card pad style={{ padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>활성 자동화 Flow</div>
+          <div className="mono" style={{ fontSize: 22, fontWeight: 600, color: 'var(--fg)', marginTop: 4 }}>
+            {activeCount}
+            <span style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 6, fontWeight: 400 }}>개</span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>
+            총 {rows.length}개 정의됨
+          </div>
+        </Card>
+
+        <Card pad style={{ padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>오늘 총 실행</div>
+          <div className="mono" style={{ fontSize: 22, fontWeight: 600, color: 'var(--fg)', marginTop: 4 }}>
+            {runsTodayCount}
+            <span style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 6, fontWeight: 400 }}>건</span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>
+            24시간 기준 집계
+          </div>
+        </Card>
+
+        <Card pad style={{
+          padding: '12px 16px',
+          borderLeft: failuresTodayCount > 0 ? '2px solid var(--danger)' : undefined,
+        }}>
+          <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>실행 실패 / 오류</div>
+          <div className="mono" style={{
+            fontSize: 22,
+            fontWeight: 600,
+            color: failuresTodayCount > 0 ? 'var(--danger)' : 'var(--fg)',
+            marginTop: 4,
+          }}>
+            {failuresTodayCount}
+            <span style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 6, fontWeight: 400 }}>건</span>
+          </div>
+          <div style={{ fontSize: 11, color: failuresTodayCount > 0 ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 4 }}>
+            {failuresTodayCount > 0 ? 'Runs 탭에서 오류 확인' : '정상 작동 중'}
+          </div>
+        </Card>
+
+        <Card pad style={{ padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>웹훅 이벤트</div>
+          <div className="mono" style={{ fontSize: 22, fontWeight: 600, color: 'var(--moon-200)', marginTop: 4 }}>
+            {webhooksTodayCount}
+            <span style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 6, fontWeight: 400 }}>건</span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>
+            인바운드 웹훅 수신
+          </div>
+        </Card>
       </div>
 
       <Card pad={false} className="hub-table-card">
@@ -413,7 +478,9 @@ function isHeartbeatRun(r) {
 
 export function Runs({ onNavigate } = {}) {
   const sIcon = { ok: { c: 'var(--fg-muted)', t: '●' }, warn: { c: 'var(--fg)', t: '▲' }, err: { c: 'var(--danger)', t: '✕' } };
-  const { runs, summary, syncState } = useAutomationsLedger();
+  const [autoRefresh, setAutoRefresh] = React.useState(false);
+  const [copiedId, setCopiedId] = React.useState(null);
+  const { runs, summary, syncState, reload } = useAutomationsLedger({ autoRefresh, refreshIntervalMs: 5000 });
   const rows = Array.isArray(runs) ? runs : [];
 
   const [filter, setFilter] = React.useState('events');
@@ -443,9 +510,26 @@ export function Runs({ onNavigate } = {}) {
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>Real-time automation execution log</span>
             <SyncBadge state={syncState} />
+            {autoRefresh && (
+              <span className="mono" style={{ fontSize: 10.5, color: 'var(--moon-300)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Dot tone="moon" size={5} /> 5초 폴링 중
+              </span>
+            )}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Button
+            variant={autoRefresh ? 'secondary' : 'ghost'}
+            size="sm"
+            icon="zap"
+            onClick={() => setAutoRefresh(v => !v)}
+            title="5초마다 자동 갱신"
+          >
+            실시간 {autoRefresh ? 'ON' : 'OFF'}
+          </Button>
+          <Button variant="ghost" size="sm" icon="refresh" onClick={() => reload()} title="원장 재조회">
+            새로고침
+          </Button>
           {onNavigate && (
             <>
               <Button variant="secondary" size="sm" icon="zap" onClick={() => onNavigate('dashboard/automations')}>자동화 개요</Button>
@@ -632,7 +716,7 @@ export function Runs({ onNavigate } = {}) {
                 </div>
                 {isSelected && (
                   <div style={{
-                    padding: '10px 14px',
+                    padding: '12px 14px',
                     margin: '2px 8px 8px',
                     background: 'var(--surface)',
                     border: '1px solid var(--line-soft)',
@@ -640,13 +724,43 @@ export function Runs({ onNavigate } = {}) {
                     fontSize: 11.5,
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 6,
+                    gap: 8,
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', color: 'var(--fg-faint)' }}>
-                      <span>Run ID: <code className="mono" style={{ color: 'var(--fg)' }}>{r.id}</code></span>
-                      {r.correlationId && <span>Correlation: <code className="mono" style={{ color: 'var(--fg)' }}>{r.correlationId}</code></span>}
-                      {r.providerEventId && <span>Event ID: <code className="mono" style={{ color: 'var(--fg)' }}>{r.providerEventId}</code></span>}
-                      <span>소요시간: <span className="mono" style={{ color: 'var(--fg)' }}>{r.ms}ms</span></span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', color: 'var(--fg-faint)' }}>
+                        <span>Run ID: <code className="mono" style={{ color: 'var(--fg)' }}>{r.id}</code></span>
+                        {r.correlationId && <span>Correlation: <code className="mono" style={{ color: 'var(--fg)' }}>{r.correlationId}</code></span>}
+                        {r.providerEventId && <span>Event ID: <code className="mono" style={{ color: 'var(--fg)' }}>{r.providerEventId}</code></span>}
+                        <span>소요시간: <span className="mono" style={{ color: 'var(--fg)' }}>{r.ms}ms</span></span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          icon={copiedId === r.id ? 'check' : 'copy'}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard?.writeText(JSON.stringify(r, null, 2));
+                            setCopiedId(r.id);
+                            setTimeout(() => setCopiedId(null), 1500);
+                          }}
+                        >
+                          {copiedId === r.id ? '복사됨' : 'JSON 복사'}
+                        </Button>
+                        {r.status === 'err' && onNavigate && (
+                          <Button
+                            variant="secondary"
+                            size="xs"
+                            icon="bolt"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onNavigate('dashboard/automations/webhooks');
+                            }}
+                          >
+                            Webhooks 엔드포인트 점검
+                          </Button>
+                        )}
+                      </div>
                     </div>
                     <div style={{ color: r.status === 'err' ? 'var(--danger)' : 'var(--fg)', wordBreak: 'break-all', lineHeight: 1.5 }}>
                       <strong>상세 내용:</strong> {r.detail}

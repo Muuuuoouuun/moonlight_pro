@@ -5,6 +5,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, Progress, CertaintyBadge, ChipToggle } from "../hub-primitives";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
+import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { useCrmKeyboard, useCrmSelection, usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterLeadsByWorkspace, filterDealsByWorkspace, filterAccountsByWorkspace } from "../workspace-map";
 import { buildLeadTagSummary } from "@/lib/sales-os/lead-view";
@@ -1617,6 +1618,7 @@ export function Deals({ workspace, onNavigate }) {
   const [filter, setFilter] = useScopeFilter(searchParams);
   const [showHidden, setShowHidden] = React.useState(false);
   const [editDealId, setEditDealId] = React.useState(null);
+  const [guruDeal, setGuruDeal] = React.useState(null);
   const [boardNotice, setBoardNotice] = React.useState(null); // { key?, tone, label, undo? } — 이동 되돌리기·저장 실패 안내
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
   React.useEffect(() => {
@@ -1988,7 +1990,7 @@ export function Deals({ workspace, onNavigate }) {
                         size={20}
                         iconSize={12}
                         tooltip="Guru에게 진단 요청"
-                        onClick={(e) => { e.stopPropagation(); onNavigate?.(guruChatPath({ mode: 'deal-review', ref: d.id })); }}
+                        onClick={(e) => { e.stopPropagation(); setGuruDeal(d); }}
                       />
                       {d.hidden && <Badge tone="neutral" size="xs" variant="outline">숨김</Badge>}
                       <Badge tone={d.type === 'personal' ? 'personal' : 'company'} size="xs">
@@ -2065,6 +2067,23 @@ export function Deals({ workspace, onNavigate }) {
         <DealNextMeetingPanel deal={editingDeal} onNavigate={onNavigate} />
         <DealLinkedProjectsPanel deal={editingDeal} onNavigate={onNavigate} />
       </EditDrawer>
+
+      <FloatingMentorWidget
+        isOpen={Boolean(guruDeal)}
+        onClose={() => setGuruDeal(null)}
+        agent="guru"
+        contextType="deal"
+        contextTitle={guruDeal?.name || guruDeal?.account || "영업 딜"}
+        contextData={{
+          id: guruDeal?.id,
+          name: guruDeal?.name,
+          company: guruDeal?.account,
+          stage: guruDeal?.stage,
+          amount: guruDeal?.value ? fmt(guruDeal.value) : "",
+          nextAction: guruDeal?.nextAction,
+          notes: guruDeal?.notes,
+        }}
+      />
     </div>
   );
 }

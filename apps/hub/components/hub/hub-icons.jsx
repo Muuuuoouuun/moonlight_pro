@@ -74,6 +74,7 @@ const I = {
   zap:       (<><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></>),
   git:       (<><circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="6" r="2"/><path d="M6 8v8M18 8a6 6 0 0 1-6 6h-6"/></>),
   archive:   (<><rect x="3" y="3" width="18" height="5" rx="1"/><rect x="4" y="8" width="16" height="13" rx="1"/><path d="M10 12h4"/></>),
+  refresh:   (<><path d="M21 12a9 9 0 0 1-15.55 6.36L3 16M3 21v-5h5M3 12a9 9 0 0 1 15.55-6.36L21 8M21 3v5h-5"/></>),
 };
 
 export function Iconed({ name, size = 16, stroke = 1.5, style }) {

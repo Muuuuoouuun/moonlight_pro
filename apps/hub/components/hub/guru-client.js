@@ -8,6 +8,7 @@ export const GURU_MODE_LABEL = {
   "deal-review": "딜 진단",
   "proposal-critique": "제안 검토",
   "weekly-retro": "주간 회고",
+  "sparring": "3자 토론",
 };
 
 // Build the canonical Guru chat deep-link. Every entry point funnels into the

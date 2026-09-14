@@ -42,6 +42,12 @@ const MODES = {
     frames:
       "Girard 팔로업·고객 파일, Lemkin churn·expansion, Hill 목표 재정렬.",
   },
+  "sparring": {
+    question:
+      "이 딜 또는 영업 상황에 대해 3자 균형 토론(스파링)을 진행하라. 칭찬 없이, [Closer 추진 논거] vs [Devil's Advocate 맹점·거절 이유·리스크] vs [Operator 1단계 가역적 다음 한 수]로 격돌하라.",
+    frames:
+      "Cardone 10X Contact & Belfort 확신도 vs Voss 협상 저항 & Ziglar 5장애물(No need/money/hurry/desire/trust) vs Keenan 3단계 영향 질문 & 의사결정 7스타일 번역.",
+  },
 } as const;
 
 type Mode = keyof typeof MODES;
@@ -134,14 +140,23 @@ function buildPrompt(mode: Mode, context: unknown, draft?: string | null) {
     config.question,
     "",
     `참고 프레임: ${config.frames}`,
-    "",
-    "다음 형식의 한국어로 답하라:",
-    mode === "deal-review" ? "0. 구매자 스타일 (추정/미확인 표기)" : null,
-    "1. 진단 (지금 무엇이 보이는가)",
-    "2. 리스크 (놓치면 잃는 것)",
-    "3. 다음 액션 (구체적 1~3개, 담당/기한 포함)",
-    "4. 승인 큐 후보 (work_order로 올릴 제목 1개와 gate/human approval 표기)",
-  ].filter(Boolean);
+    ...(mode === "sparring"
+      ? [
+          "다음 형식의 한국어로 날카롭게 답하라 (인사말·잡담·에코챔버 절대 금지):",
+          "0. 구매자 스타일 (추정/미확인 표기)",
+          "1. 🟢 [Closer 추진 논거] (왜 밀어붙여야 하는가, 클로징 명분, Cardone 10X / Belfort 확신도)",
+          "2. 🔴 [Devil's Advocate 맹점과 거절 이유] (고객이 숨긴 거절 이유, Ziglar 5대 장애물, 놓치면 잃는 리스크)",
+          "3. 🟡 [Operator 1단계 다음 한 수] (상대방 스타일 언어로 번역된 첫 질문 1개와 팔로업 일정)",
+        ]
+      : [
+          "다음 형식의 한국어로 답하라:",
+          mode === "deal-review" ? "0. 구매자 스타일 (추정/미확인 표기)" : null,
+          "1. 진단 (지금 무엇이 보이는가)",
+          "2. 리스크 (놓치면 잃는 것)",
+          "3. 다음 액션 (구체적 1~3개, 담당/기한 포함)",
+          "4. 승인 큐 후보 (work_order로 올릴 제목 1개와 gate/human approval 표기)",
+        ].filter(Boolean)),
+  ];
 
   if (draft && draft.trim()) {
     lines.push("", "검토할 초안:", draft.trim());

@@ -5,16 +5,19 @@ import { Badge, Button, IconButton, Dot } from "./hub-primitives";
 import { Iconed } from "./hub-icons";
 import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
 import { requestCouncilAdvice } from "./council-client";
+import { requestGuruCoaching } from "./guru-client";
 
 export function FloatingMentorWidget({
   isOpen = false,
   onClose,
-  contextType = "content", // 'content' | 'project' | 'general'
+  agent, // 'council' | 'guru' (optional, auto-inferred if omitted)
+  contextType = "content", // 'content' | 'project' | 'deal' | 'customer' | 'sales' | 'general'
   contextTitle = "",
   contextData = {},
   onApplyText,
   onCreateTask,
 }) {
+  const isGuru = agent === "guru" || contextType === "deal" || contextType === "customer" || contextType === "sales";
   const [minimized, setMinimized] = useState(false);
   const [activeTab, setActiveTab] = useState("quick"); // 'quick' | 'sparring' | 'chat'
   const [loading, setLoading] = useState(false);
@@ -47,7 +50,20 @@ export function FloatingMentorWidget({
   // Context summary text for prompts
   const buildContextPrompt = (userPrompt = "") => {
     const parts = [];
-    if (contextType === "content") {
+    if (isGuru) {
+      parts.push(`[현재 딜 / 영업 맥락]`);
+      if (contextData?.name || contextData?.title || contextTitle) {
+        parts.push(`딜/고객: ${contextData?.name || contextData?.title || contextTitle}`);
+      }
+      if (contextData?.company) parts.push(`회사/소속: ${contextData.company}`);
+      if (contextData?.stage || contextData?.amount) {
+        parts.push(`단계/규모: ${contextData.stage || ""} ${contextData.amount ? `· ${contextData.amount}` : ""}`);
+      }
+      if (contextData?.nextAction) parts.push(`다음 행동: ${contextData.nextAction}`);
+      if (contextData?.reason) parts.push(`판단 사유: ${contextData.reason}`);
+      if (contextData?.lastTouch) parts.push(`최근 접촉: ${contextData.lastTouch}`);
+      if (contextData?.notes) parts.push(`관련 메모:\n${contextData.notes}`);
+    } else if (contextType === "content") {
       parts.push(`[현재 컨텐츠 초안]`);
       if (contextData?.title) parts.push(`제목: ${contextData.title}`);
       if (contextData?.brand) parts.push(`브랜드: ${contextData.brand}`);
@@ -76,18 +92,19 @@ export function FloatingMentorWidget({
     setStatusNote("");
     setTaskSaved(false);
     const draft = buildContextPrompt(customDraft);
-    const res = await requestCouncilAdvice({
-      mode,
-      draft,
-      ref: contextData?.id || contextData?.title || null,
-    });
+    const ref = contextData?.id || contextData?.ref || contextData?.title || contextData?.name || null;
+
+    const res = isGuru
+      ? await requestGuruCoaching({ mode, draft, ref })
+      : await requestCouncilAdvice({ mode, draft, ref });
+
     setLoading(false);
     if (res.state === "done") {
       setResultText(res.text);
     } else if (res.state === "preview") {
       setStatusNote(res.note || "Engine이 연결되지 않은 preview 상태입니다.");
     } else {
-      setStatusNote(res.note || "자문을 불러오지 못했습니다.");
+      setStatusNote(res.note || "조언을 불러오지 못했습니다.");
     }
   };
 
@@ -104,20 +121,28 @@ export function FloatingMentorWidget({
     setStatusNote("");
 
     const draft = buildContextPrompt(
-      `이전 대화:\n${chatThread.map(m => `${m.role === 'user' ? '운영자' : 'Council'}: ${m.text}`).join('\n')}\n\n새 질문:\n${text}`
+      `이전 대화:\n${chatThread.map(m => `${m.role === 'user' ? '운영자' : isGuru ? 'Guru' : 'Council'}: ${m.text}`).join('\n')}\n\n새 질문:\n${text}`
     );
+    const ref = contextData?.id || contextData?.ref || contextData?.title || contextData?.name || null;
 
-    const res = await requestCouncilAdvice({
-      mode: activeTab === "sparring" ? "sparring" : "brand-strategy",
-      draft,
-      ref: contextData?.id || contextData?.title || null,
-    });
+    const res = isGuru
+      ? await requestGuruCoaching({
+          mode: activeTab === "sparring" ? "sparring" : "deal-review",
+          draft,
+          ref,
+        })
+      : await requestCouncilAdvice({
+          mode: activeTab === "sparring" ? "sparring" : "brand-strategy",
+          draft,
+          ref,
+        });
+
     setLoading(false);
 
     if (res.state === "done") {
-      setChatThread([...newThread, { role: "council", text: res.text }]);
+      setChatThread([...newThread, { role: isGuru ? "guru" : "council", text: res.text }]);
     } else {
-      setChatThread([...newThread, { role: "council", text: res.note || "응답을 생성하지 못했습니다." }]);
+      setChatThread([...newThread, { role: isGuru ? "guru" : "council", text: res.note || "응답을 생성하지 못했습니다." }]);
     }
   };
 
@@ -134,7 +159,7 @@ export function FloatingMentorWidget({
   const handleCreateTask = async (taskText) => {
     if (!taskText) return;
     const firstLine = taskText.split("\n")[0].replace(/^[0-9\.\-\*\s🟢🔴🟡]+/, "").trim().slice(0, 80);
-    const title = firstLine || "Council 조언 실행";
+    const title = firstLine || (isGuru ? "Guru 코칭 실행" : "Council 조언 실행");
 
     if (onCreateTask) {
       onCreateTask(title);
@@ -165,7 +190,7 @@ export function FloatingMentorWidget({
   if (minimized) {
     return (
       <aside
-        aria-label="Council Co-Pilot 최소화 위젯"
+        aria-label={`${isGuru ? "Guru" : "Council"} 최소화 위젯`}
         style={{
           position: "fixed",
           bottom: 20,
@@ -183,15 +208,23 @@ export function FloatingMentorWidget({
         }}
         onClick={() => setMinimized(false)}
       >
-        <Iconed name="council" size={16} style={{ color: "var(--moon-300)" }} />
-        <span style={{ fontSize: 12, fontWeight: 500, color: "var(--fg)" }}>Council Co-Pilot</span>
+        <Iconed name={isGuru ? "deals" : "council"} size={16} style={{ color: "var(--moon-300)" }} />
+        <span style={{ fontSize: 12, fontWeight: 500, color: "var(--fg)" }}>
+          {isGuru ? "Sales Guru" : "Council Co-Pilot"}
+        </span>
         <Badge tone="moon" size="xs">{contextTitle || contextType}</Badge>
         <IconButton name="plus" size={14} label="열기" onClick={(e) => { e.stopPropagation(); setMinimized(false); }} />
       </aside>
     );
   }
 
-  const quickOptions = contextType === "content"
+  const quickOptions = isGuru
+    ? [
+        { label: "딜 진단 (Keenan 4층)", mode: "deal-review" },
+        { label: "파이프라인 우선순위", mode: "pipeline-triage" },
+        { label: "제안 검토", mode: "proposal-critique" },
+      ]
+    : contextType === "content"
     ? [
         { label: "카피 진단 (Ogilvy)", mode: "content-critique" },
         { label: "오디언스 가설", mode: "audience-analysis" },
@@ -203,11 +236,18 @@ export function FloatingMentorWidget({
         { label: "회의/메모 정리", mode: "meeting-synthesis" },
       ];
 
+  const widgetTitle = isGuru ? "Sales Guru" : "Council Co-Pilot";
+  const contextPrefix = isGuru
+    ? "영업/딜: "
+    : contextType === "content"
+    ? "컨텐츠: "
+    : "프로젝트: ";
+
   return (
     <aside
       role="dialog"
       aria-modal="false"
-      aria-label="Council Co-Pilot 위젯"
+      aria-label={`${widgetTitle} 위젯`}
       style={{
         position: "fixed",
         bottom: 20,
@@ -238,9 +278,9 @@ export function FloatingMentorWidget({
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <Iconed name="council" size={15} style={{ color: "var(--moon-300)" }} />
+          <Iconed name={isGuru ? "deals" : "council"} size={15} style={{ color: "var(--moon-300)" }} />
           <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--fg)", whiteSpace: "nowrap" }}>
-            Council Co-Pilot
+            {widgetTitle}
           </span>
           <span
             style={{
@@ -256,7 +296,7 @@ export function FloatingMentorWidget({
             }}
             title={contextTitle}
           >
-            {contextType === "content" ? "컨텐츠: " : "프로젝트: "}
+            {contextPrefix}
             {contextTitle || "작업 중"}
           </span>
         </div>
@@ -345,7 +385,9 @@ export function FloatingMentorWidget({
           }}
         >
           <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>
-            찬성(추진) vs 비판(Devil's Advocate) vs 실행안
+            {isGuru
+              ? "추진 논거(Cardone/Belfort) vs 거절 맹점(Voss/Ziglar) vs 다음 한 수"
+              : "찬성(추진) vs 비판(Devil's Advocate) vs 실행안"}
           </div>
           <Button
             variant="primary"
@@ -376,7 +418,7 @@ export function FloatingMentorWidget({
             {chatThread.length === 0 ? (
               <div style={{ padding: "30px 10px", textAlign: "center", color: "var(--fg-faint)", fontSize: 12 }}>
                 현재 화면의 맥락을 알고 있습니다.<br />
-                궁금한 점이나 수정을 요청하세요.
+                궁금한 점이나 질문을 남기세요.
               </div>
             ) : (
               chatThread.map((msg, i) => (
@@ -395,7 +437,7 @@ export function FloatingMentorWidget({
                   }}
                 >
                   <div style={{ fontSize: 10, color: "var(--fg-faint)", marginBottom: 3 }}>
-                    {msg.role === "user" ? "운영자" : "Council"}
+                    {msg.role === "user" ? "운영자" : isGuru ? "Guru" : "Council"}
                   </div>
                   {msg.text}
                 </div>
@@ -404,7 +446,7 @@ export function FloatingMentorWidget({
             {loading && (
               <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--fg-muted)", fontSize: 11 }}>
                 <Dot tone="moon" size={6} />
-                Council이 맥락을 분석하고 있습니다…
+                {isGuru ? "Guru가 영업 데이터를 분석하고 있습니다…" : "Council이 맥락을 분석하고 있습니다…"}
               </div>
             )}
           </div>
@@ -414,7 +456,7 @@ export function FloatingMentorWidget({
               <div style={{ padding: "40px 10px", textAlign: "center", color: "var(--fg-muted)" }}>
                 <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12 }}>
                   <Dot tone="moon" size={8} />
-                  Council 조언을 생성하는 중입니다…
+                  {isGuru ? "Guru 코칭을 생성하는 중입니다…" : "Council 조언을 생성하는 중입니다…"}
                 </div>
               </div>
             ) : resultText ? (
@@ -502,7 +544,7 @@ export function FloatingMentorWidget({
             type="text"
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
-            placeholder="맥락 바탕으로 질문 또는 수정 요청…"
+            placeholder={isGuru ? "딜/고객 관련 질문 또는 반론 다듬기 요청…" : "맥락 바탕으로 질문 또는 수정 요청…"}
             disabled={loading}
             style={{
               flex: 1,
