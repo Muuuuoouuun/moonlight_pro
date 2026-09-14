@@ -4,6 +4,7 @@ import React from "react";
 import { Iconed } from "./hub-icons";
 import { IconButton, Button } from "./hub-primitives";
 import { topNavigationForRoute } from "./hub-nav";
+import { InquiryBell } from './inquiry-notifications';
 
 const LABELS = {
   'dashboard': 'Moonlight',
@@ -21,7 +22,7 @@ const LABELS = {
   'integrations': 'Integrations', 'activity': 'Activity', 'issues': 'Issues',
 };
 
-export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSidebarOpen, onNew, navOpen, menuButtonRef }) {
+export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSidebarOpen, onNew, navOpen, menuButtonRef, inquiryNotifications }) {
   const [deferredMenuOpen, setDeferredMenuOpen] = React.useState(false);
   const deferredMenuRef = React.useRef(null);
   const segments = path.split('/').filter(Boolean);
@@ -111,8 +112,8 @@ export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSideba
           }}>
           <Iconed name={theme === 'dark' ? 'moon' : 'sun'} size={13} />
         </button>
-        <IconButton className="hub-topbar__secondary" icon="bell" tooltip="Open Daily Brief" onClick={() => onNavigate('dashboard/daily-brief')} />
-        <Button className="hub-topbar__primary-action" variant="primary" size="sm" icon="plus" onClick={onNew}>New</Button>
+        <InquiryBell className="hub-topbar__secondary" state={inquiryNotifications} onNavigate={onNavigate} />
+        {!path.startsWith('dashboard/discovery') && <Button className="hub-topbar__primary-action" variant="primary" size="sm" icon="plus" onClick={onNew}>New</Button>}
       </div>
 
       {navigation.tabs.length > 0 && (

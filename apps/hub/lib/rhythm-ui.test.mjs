@@ -275,3 +275,57 @@ test("Rhythm source keeps project context, durable feedback, and mobile scroll s
   assert.match(workSource, /aria-label=\{`최근 7일 체크 기록:/);
   assert.doesNotMatch(workSource, /checkedRituals/);
 });
+
+test("sortRitualsByTimeOfDay prioritizes rituals according to current time", () => {
+  const rituals = [
+    { id: "e1", checkType: "evening", name: "저녁 회고" },
+    { id: "m1", checkType: "morning", name: "아침 스트레칭" },
+    { id: "d1", checkType: "midday", name: "낮 산책" },
+  ];
+
+  // 오전 9시 테스트
+  const morningSorted = rhythmUi.sortRitualsByTimeOfDay(rituals, new Date("2026-07-15T09:00:00"));
+  assert.equal(morningSorted[0].checkType, "morning");
+  assert.equal(morningSorted[0].isTimeRecommended, true);
+
+  // 오후 2시 테스트
+  const middaySorted = rhythmUi.sortRitualsByTimeOfDay(rituals, new Date("2026-07-15T14:00:00"));
+  assert.equal(middaySorted[0].checkType, "midday");
+  assert.equal(middaySorted[0].isTimeRecommended, true);
+
+  // 저녁 8시 테스트
+  const eveningSorted = rhythmUi.sortRitualsByTimeOfDay(rituals, new Date("2026-07-15T20:00:00"));
+  assert.equal(eveningSorted[0].checkType, "evening");
+  assert.equal(eveningSorted[0].isTimeRecommended, true);
+});
+
+test("computeWeeklyRhythmMatrix produces 7-day focus and outcome dataset", () => {
+  const matrix = rhythmUi.computeWeeklyRhythmMatrix({
+    rituals: [{ id: "r1", weeks: [1, 0, 1, 1, 0, 1, 1] }],
+    todos: [{ id: "t1", status: "done", done: true, completedAt: "2026-07-15T10:00:00Z" }],
+    now: new Date("2026-07-15T12:00:00Z"),
+    timeZone: "Asia/Seoul",
+  });
+
+  assert.equal(matrix.length, 7);
+  assert.ok(matrix[6].focusHours > 0);
+  assert.ok(matrix[6].outcomes > 0);
+  assert.equal(matrix[6].tasksDone, 1);
+});
+
+test("computeContentUploadRhythm aggregates channel uploads and timeline", () => {
+  const contents = [
+    { id: "c1", status: "published", channel: "threads", publishedAt: "2026-07-15T09:00:00Z" },
+    { id: "c2", status: "published", channel: "instagram", publishedAt: "2026-07-14T09:00:00Z" },
+  ];
+
+  const rhythm = rhythmUi.computeContentUploadRhythm(contents, {
+    now: new Date("2026-07-15T12:00:00Z"),
+    timeZone: "Asia/Seoul",
+  });
+
+  assert.equal(rhythm.weeklyGoal, 7);
+  assert.ok(rhythm.weeklyDone >= 2);
+  assert.equal(rhythm.days.length, 7);
+  assert.ok(rhythm.channels.some(c => c.name === "Threads"));
+});

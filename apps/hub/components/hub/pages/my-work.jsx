@@ -1,10 +1,12 @@
 "use client";
 
 import React from "react";
+import { JournalSources } from "../journal-links";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, Button, Checkbox, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer } from "../hub-primitives";
 import { UNDO_WINDOW_MS, useUndoableAction } from "../use-undoable-action";
+import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from "@/lib/pms-ui";
 
 // 내 작업 — one personal operating surface, three lenses over the cross-lane attention
@@ -210,13 +212,56 @@ function useAttentionLedger() {
 // strikethrough flash before a task leaves the list (undo window handled by the caller).
 // `selected` marks the row whose detail panel is open. `hideProject` suppresses the
 // project label inside a project accordion (the header already names it).
-function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showReason, hideProject, justAdded }) {
+function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showReason, hideProject, justAdded, onDefer }) {
   // 우선순위 정렬일 때는 meta 자리에 정렬 근거(reason)를 보여준다 — 첫 화면 요구사항
   // "지금 해야 하는 이유"(profile §4)를 행 높이 증가 없이 전달.
   const projectLabel = !hideProject && item.lane === 'task' ? item.projectName || '' : '';
   const metaText = showReason && item.priorityReason
     ? item.priorityReason
     : [projectLabel, item.meta].filter(Boolean).join(' · ');
+
+  // Mobile swipe gesture: right > 55px to complete, left < -55px to defer
+  const touchStartRef = React.useRef({ x: 0, y: 0, time: 0 });
+  const [swipeOffset, setSwipeOffset] = React.useState(0);
+  const [swipeAction, setSwipeAction] = React.useState(null);
+
+  const handleTouchStart = (e) => {
+    if (item.lane !== 'task') return;
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now() };
+    setSwipeOffset(0);
+    setSwipeAction(null);
+  };
+
+  const handleTouchMove = (e) => {
+    if (item.lane !== 'task') return;
+    const t = e.touches[0];
+    const dx = t.clientX - touchStartRef.current.x;
+    const dy = t.clientY - touchStartRef.current.y;
+    // If vertical scrolling is dominant, ignore swipe
+    if (Math.abs(dy) > Math.abs(dx) && Math.abs(dx) < 24) return;
+
+    // Damped offset
+    const damped = Math.sign(dx) * Math.min(84, Math.abs(dx) * 0.7);
+    setSwipeOffset(damped);
+    if (dx > 55) setSwipeAction('complete');
+    else if (dx < -55 && onDefer) setSwipeAction('defer');
+    else setSwipeAction(null);
+  };
+
+  const handleTouchEnd = () => {
+    if (item.lane !== 'task') return;
+    const currentOffset = swipeOffset;
+    setSwipeOffset(0);
+    setSwipeAction(null);
+
+    if (currentOffset > 50) {
+      onComplete(item);
+    } else if (currentOffset < -50 && onDefer) {
+      onDefer(item);
+    }
+  };
+
   return (
     <div
       ref={rowRef}
@@ -226,22 +271,34 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
       tabIndex={0}
       onClick={() => onOpen(item)}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(item); } }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: 'var(--pad-y) var(--pad-x)', minHeight: 'var(--row-h)',
         borderBottom: '1px solid var(--line-soft)',
         cursor: 'pointer',
-        // 방금 추가 하이라이트는 selected보다 우선; overdue/stalled의 semantic 좌측 스트라이프는
-        // 유지하고 그 외엔 moon 스트라이프로 표시. justAdded 해제 시 600ms로 fade.
-        background: justAdded ? 'var(--surface-3)' : selected ? 'var(--surface-2)' : undefined,
+        position: 'relative',
+        touchAction: 'pan-y',
+        transform: swipeOffset ? `translateX(${swipeOffset}px)` : undefined,
+        background: swipeAction === 'complete'
+          ? 'rgba(56, 239, 125, 0.08)'
+          : swipeAction === 'defer'
+          ? 'rgba(140, 168, 216, 0.08)'
+          : justAdded
+          ? 'var(--surface-3)'
+          : selected
+          ? 'var(--surface-2)'
+          : undefined,
         boxShadow: item.bucket === 'overdue' ? 'inset 1px 0 0 var(--danger)'
           : item.stalled ? 'inset 1px 0 0 var(--line-strong)'
             : justAdded ? 'inset 1px 0 0 var(--accent)' : undefined,
-        transition: 'background var(--dur-enter) ease, box-shadow var(--dur-enter) ease',
+        transition: swipeOffset ? 'none' : 'transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), background var(--dur-enter) ease, box-shadow var(--dur-enter) ease',
       }}
     >
       {item.lane === 'task' ? (
-        <Checkbox checked={completing} onChange={() => onComplete(item)} label={`${item.title} 완료`} />
+        <Checkbox checked={completing} onChange={(_next, e) => onComplete(item, e)} label={`${item.title} 완료`} />
       ) : (
         <Badge tone={LANE_TONE[item.lane]} size="xs" variant="outline">{LANE_LABEL[item.lane]}</Badge>
       )}
@@ -253,7 +310,17 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
       }}>
         {item.title}
       </span>
-      {metaText && (
+      {swipeAction === 'complete' && (
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--success)' }}>
+          ✓ 완료
+        </span>
+      )}
+      {swipeAction === 'defer' && (
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--moon-300)' }}>
+          ⏰ 미루기
+        </span>
+      )}
+      {metaText && !swipeAction && (
         // 폭 상한 + 말줄임 — 좁은 화면에서 meta가 제목(identity)을 짓누르지 않게 한다
         // (2026-07 design-review FINDING-001의 모바일 identity-first 원칙). ≤560px에서는
         // hub-tokens.css가 통째로 숨긴다: "견적 · ₩10K…"처럼 잘린 meta는 정보가치가 없고
@@ -323,6 +390,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
         <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.45, textDecoration: completing ? 'line-through' : 'none' }}>
           {item.title}
         </div>
+        <JournalSources refs={item.sourceRefs} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {rows.map((r) => (
             <div key={r.label} style={{ display: 'flex', gap: 8, fontSize: 12, alignItems: 'baseline' }}>
@@ -562,14 +630,32 @@ export function MyWork({ onNavigate }) {
   // Checkbox click: flash strikethrough, drop out of view, then give a real 되돌리기 window
   // before the PATCH actually fires — an accidental tap is recoverable, not just visually
   // undoable-in-appearance.
-  const scheduleComplete = (item) => {
+  const scheduleComplete = (item, event) => {
     if (item.lane !== 'task') return;
     const id = item.id;
+    if (event?.clientX != null && event?.clientY != null && (event.clientX !== 0 || event.clientY !== 0)) {
+      triggerSparkleAt(event.clientX, event.clientY);
+    } else if (event?.target?.getBoundingClientRect) {
+      const rect = event.target.getBoundingClientRect();
+      triggerSparkleAt(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    } else if (typeof document !== 'undefined') {
+      const el = document.getElementById(`mywork-row-${id}`);
+      if (el?.getBoundingClientRect) {
+        const rect = el.getBoundingClientRect();
+        triggerSparkleAt(rect.left + 24, rect.top + rect.height / 2);
+      }
+    }
     setCompletingIds((s) => new Set(s).add(id));
     setTimeout(() => {
       setCompletingIds((s) => { const n = new Set(s); n.delete(id); return n; });
       setHiddenIds((s) => new Set(s).add(id));
     }, STRIKE_MS);
+
+    // 모든 할 일이 완료되었는지 확인 → 축하 불꽃놀이/폭죽 발사
+    const remainingTasks = visible.filter((i) => i.lane === 'task' && !hiddenIds.has(i.id) && !completingIds.has(i.id) && i.id !== id);
+    if (remainingTasks.length === 0) {
+      triggerCelebration({ mode: 'fireworks' });
+    }
 
     setNotice({ key: `complete-${id}`, tone: 'ok', label: '할 일 완료됨', action: { label: '되돌리기', onClick: () => undoComplete(item) } });
 
@@ -649,7 +735,7 @@ export function MyWork({ onNavigate }) {
     // _sourceDescription: 저장 시 "바뀌었을 때만" description을 PATCH에 싣기 위한 원본 스냅샷.
     // 라이브 DB에 0021(task description) 마이그레이션이 아직 없으면 이 키가 포함된 PATCH가
     // 통째로 실패하므로, 건드리지 않은 저장까지 막지 않게 한다.
-    setTaskDraft({ id: item.entityId, title: item.title, status: item.status, priority: item.priority || 'medium', dueAt: item.whenAt || '', description: item.description || '', projectId: item.projectId || '', _sourceDescription: item.description || '' });
+    setTaskDraft({ sourceRefs: item.sourceRefs || [], id: item.entityId, title: item.title, status: item.status, priority: item.priority || 'medium', dueAt: item.whenAt || '', description: item.description || '', projectId: item.projectId || '', _sourceDescription: item.description || '' });
   };
 
   const detailItem = React.useMemo(
@@ -657,6 +743,9 @@ export function MyWork({ onNavigate }) {
     [detailId, items, hiddenIds],
   );
   const deferTarget = nextDeferTarget();
+  const handleItemDefer = React.useCallback((it) => {
+    rescheduleTask(it, deferTarget.dueAt, `${deferTarget.label}로 미룸`);
+  }, [deferTarget, rescheduleTask]);
 
   // 방금 추가한 할 일 하이라이트를 2.6초 뒤 해제(ItemRow가 fade 처리). 스크롤은 여기서
   // 하지 않는다 — reload의 setData와 setJustAddedId가 서로 다른 렌더로 커밋돼서, 패시브
@@ -1092,25 +1181,68 @@ export function MyWork({ onNavigate }) {
       {['ready', 'stale'].includes(state) && lens === 'list' && (
         <Card pad={false} style={{ overflow: 'hidden' }}>
           {visible.length === 0 ? (
-            <EmptyState
-              icon="check"
-              title={search.trim() ? `"${search.trim()}" 검색 결과가 없습니다` : '표시할 항목이 없습니다'}
-              description={
-                search.trim()
-                  ? '다른 검색어를 시도하거나 검색을 지워보세요.'
-                  : lane === 'all' && bucketFilter === 'all'
-                    ? '할 일을 추가하거나 딜·일정이 생기면 여기에 모입니다.'
-                    : `${lane !== 'all' ? LANE_LABEL[lane] : ''}${lane !== 'all' && bucketFilter !== 'all' ? ' · ' : ''}${bucketFilter !== 'all' ? BUCKETS.find((b) => b.key === bucketFilter)?.label : ''} 조건에 항목이 없습니다.`
-              }
-              action={
-                search.trim()
-                  ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
-                  : (lane !== 'all' || bucketFilter !== 'all')
-                    ? <Button variant="outline" size="sm" onClick={() => { setLane('all'); setBucketFilter('all'); }}>필터 초기화</Button>
-                    : undefined
-              }
-              style={{ minHeight: 180, padding: '28px 12px' }}
-            />
+            !search.trim() && (lane === 'all' || lane === 'task') && bucketCounts.today === 0 && bucketCounts.overdue === 0 ? (
+              <div
+                className="hub-celebration-card"
+                style={{
+                  padding: '36px 20px', textAlign: 'center',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+                  background: 'var(--surface)',
+                }}
+              >
+                <div style={{
+                  width: 44, height: 44, borderRadius: 999,
+                  background: 'var(--surface-2)', border: '1px solid var(--accent-line)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 0 14px -2px rgba(82, 116, 168, 0.4)',
+                  fontSize: 20, color: 'var(--moon-100)',
+                }}>
+                  ✦
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--moon-100)' }}>
+                    오늘의 모든 할 일 완료!
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', maxWidth: 360, lineHeight: 1.5 }}>
+                    계획된 모든 작업을 완수했습니다. 남은 시간을 여유롭게 보내거나 새로운 할 일을 계획해 보세요.
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => triggerCelebration({ mode: 'fireworks' })}
+                  >
+                    폭죽 다시 터뜨리기 ✦
+                  </Button>
+                  {(lane !== 'all' || bucketFilter !== 'all') && (
+                    <Button variant="ghost" size="sm" onClick={() => { setLane('all'); setBucketFilter('all'); }}>
+                      필터 초기화
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <EmptyState
+                icon="check"
+                title={search.trim() ? `"${search.trim()}" 검색 결과가 없습니다` : '표시할 항목이 없습니다'}
+                description={
+                  search.trim()
+                    ? '다른 검색어를 시도하거나 검색을 지워보세요.'
+                    : lane === 'all' && bucketFilter === 'all'
+                      ? '할 일을 추가하거나 딜·일정이 생기면 여기에 모입니다.'
+                      : `${lane !== 'all' ? LANE_LABEL[lane] : ''}${lane !== 'all' && bucketFilter !== 'all' ? ' · ' : ''}${bucketFilter !== 'all' ? BUCKETS.find((b) => b.key === bucketFilter)?.label : ''} 조건에 항목이 없습니다.`
+                }
+                action={
+                  search.trim()
+                    ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
+                    : (lane !== 'all' || bucketFilter !== 'all')
+                      ? <Button variant="outline" size="sm" onClick={() => { setLane('all'); setBucketFilter('all'); }}>필터 초기화</Button>
+                      : undefined
+                }
+                style={{ minHeight: 180, padding: '28px 12px' }}
+              />
+            )
           ) : listSections ? (
             // 전체 기한 보기: 긴급도 그룹 헤더가 스캔 축 — 빈 그룹은 그리지 않는다.
             listSections.map((section) => (
@@ -1131,6 +1263,7 @@ export function MyWork({ onNavigate }) {
                         key={row.item.id}
                         item={row.item}
                         onComplete={scheduleComplete}
+                        onDefer={handleItemDefer}
                         onOpen={openItem}
                         completing={completingIds.has(row.item.id)}
                         selected={detailId === row.item.id}
@@ -1178,6 +1311,7 @@ export function MyWork({ onNavigate }) {
                                 key={item.id}
                                 item={item}
                                 onComplete={scheduleComplete}
+                                onDefer={handleItemDefer}
                                 onOpen={openItem}
                                 completing={completingIds.has(item.id)}
                                 selected={detailId === item.id}
@@ -1223,6 +1357,7 @@ export function MyWork({ onNavigate }) {
                               key={item.id}
                               item={item}
                               onComplete={scheduleComplete}
+                              onDefer={handleItemDefer}
                               onOpen={openItem}
                               completing={completingIds.has(item.id)}
                               selected={detailId === item.id}
@@ -1245,6 +1380,7 @@ export function MyWork({ onNavigate }) {
                 key={item.id}
                 item={item}
                 onComplete={scheduleComplete}
+                onDefer={handleItemDefer}
                 onOpen={openItem}
                 completing={completingIds.has(item.id)}
                 selected={detailId === item.id}
@@ -1387,7 +1523,7 @@ export function MyWork({ onNavigate }) {
         onSave={persistTaskDetail}
         onDelete={deleteTaskDetail}
         onClose={() => setTaskDraft(null)}
-      />
+      ><JournalSources refs={taskDraft?.sourceRefs} /></EditDrawer>
     </div>
   );
 }

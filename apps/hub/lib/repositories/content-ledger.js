@@ -62,6 +62,14 @@ const VARIANT_CHANNEL_LABEL = {
   reels_script: "Reels",
   landing_copy: "Web",
 };
+const CHANNEL_LABEL = {
+  threads: "Threads", x: "X", instagram: "Instagram", youtube_shorts: "YouTube Shorts",
+  reels: "Reels", blog: "Web", email: "Email",
+};
+
+function variantChannel(row) {
+  return row?.channel ? CHANNEL_LABEL[row.channel] || row.channel : VARIANT_CHANNEL_LABEL[row?.variant_type] || "Web";
+}
 const CANONICAL_BRAND_ORDER = {
   sinabro: 10,
   gore: 20,
@@ -322,6 +330,7 @@ function mapItems(rows, variants, brandById) {
   // First variant per content item, matching the previous `.find()` semantics —
   // but built once instead of re-scanning the variants array 1-3× per item.
   const firstVariantByContentId = new Map();
+  const variantById = new Map(variants.map((variant) => [variant.id, variant]));
   for (const variant of variants) {
     if (!firstVariantByContentId.has(variant.content_id)) {
       firstVariantByContentId.set(variant.content_id, variant);
@@ -331,19 +340,26 @@ function mapItems(rows, variants, brandById) {
   return rows.map((row) => {
     const status = ITEM_STATUSES.includes(row.status) ? row.status : "draft";
     const whenSource = row.scheduled_at || row.published_at || row.updated_at || row.created_at;
-    const variant = firstVariantByContentId.get(row.id) || null;
+    const meta = row.meta && typeof row.meta === "object" && !Array.isArray(row.meta) ? row.meta : {};
+    const primary = variantById.get(meta.primary_variant_id);
+    const variant = primary?.content_id === row.id ? primary : firstVariantByContentId.get(row.id) || null;
     const brand = row.brand_id ? brandById.get(row.brand_id) : null;
 
     return {
       id: row.id,
       variantId: variant?.id || null,
+      primaryVariantId: variant?.id || null,
       title: titleFromItem(row),
       summary: row.summary || row.source_idea || "",
+      sourceIdea: row.source_idea ?? "",
+      brief: meta.brief && typeof meta.brief === "object" && !Array.isArray(meta.brief) ? meta.brief : {},
+      blocker: typeof meta.blocker === "string" ? meta.blocker : "",
+      sourceRefs: Array.isArray(meta.source_refs) ? meta.source_refs : [],
       slug: row.slug || null,
       status,
       statusLabel: ITEM_STATUS_LABEL[status] || "Draft",
       kind: (variant?.variant_type && VARIANT_KIND_LABEL[variant.variant_type]) || "Blog",
-      channel: (variant?.variant_type && VARIANT_CHANNEL_LABEL[variant.variant_type]) || "Web",
+      channel: variantChannel(variant),
       when: formatShortDate(whenSource),
       author: row.owner_id ? "Me" : "Team",
       nextAction: row.next_action || "",
@@ -371,7 +387,7 @@ function mapVariants(rows) {
       contentId: row.content_id,
       type: row.variant_type,
       kind: VARIANT_KIND_LABEL[row.variant_type] || "Blog",
-      channel: VARIANT_CHANNEL_LABEL[row.variant_type] || "Web",
+      channel: variantChannel(row),
       title: row.title || "",
       body: row.body || "",
       excerpt: row.excerpt || "",

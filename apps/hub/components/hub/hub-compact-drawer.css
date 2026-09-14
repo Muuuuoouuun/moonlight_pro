@@ -1,0 +1,52 @@
+/* Optional compact capture surface; the default side drawer keeps its geometry. */
+.hub-app .hub-drawer[data-presentation="compact"] {
+  top: 50%;
+  left: 50%;
+  width: min(var(--hub-compact-width), calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+  animation: hubCompactIn var(--dur-panel) var(--ease-hub) both;
+}
+.hub-drawer[data-presentation="compact"] .hub-drawer__header { flex-shrink: 0; padding: 24px 24px 20px; }
+.hub-drawer[data-presentation="compact"] .hub-drawer__body { min-height: 0; padding: 0 24px 24px; overscroll-behavior: contain; }
+.hub-drawer[data-presentation="compact"] .hub-drawer__footer { flex-shrink: 0; padding: 16px 24px; }
+.hub-app .hub-drawer[data-presentation="compact"][data-exiting="true"] { animation: hubCompactOut var(--dur-panel) var(--ease-hub) both; pointer-events: none; }
+.hub-app .hub-drawer-overlay[data-presentation="compact"] { animation: hubCompactBackdropIn var(--dur-overlay) var(--ease-hub) both; }
+.hub-app .hub-drawer-overlay[data-presentation="compact"][data-exiting="true"] { animation: hubCompactBackdropOut var(--dur-panel) var(--ease-hub) both; }
+@keyframes hubCompactIn {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) scale(.985); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes hubCompactOut {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, calc(-50% + 6px)) scale(.985); }
+}
+@keyframes hubCompactBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hubCompactBackdropOut { from { opacity: 1; } to { opacity: 0; } }
+@media (max-width: 600px) {
+  .hub-app .hub-drawer[data-presentation="compact"] {
+    top: auto;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    max-height: calc(100dvh - 16px);
+    transform: none;
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    border-bottom: 0;
+    animation-name: hubCompactSheetIn;
+  }
+  .hub-app .hub-drawer[data-presentation="compact"][data-exiting="true"] { animation-name: hubCompactSheetOut; }
+  .hub-drawer[data-presentation="compact"] .hub-drawer__header { padding: 22px 20px 18px; }
+  .hub-drawer[data-presentation="compact"] .hub-drawer__body { padding: 0 20px 20px; }
+  .hub-drawer[data-presentation="compact"] .hub-drawer__footer { padding: 14px 20px max(14px, env(safe-area-inset-bottom)); }
+}
+@keyframes hubCompactSheetIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes hubCompactSheetOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(16px); } }
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-drawer[data-presentation="compact"],
+  .hub-app .hub-drawer-overlay[data-presentation="compact"] { animation: none; }
+}

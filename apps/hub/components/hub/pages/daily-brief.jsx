@@ -1,12 +1,14 @@
 "use client";
 
 import React from "react";
+import { InquirySummary } from '../inquiry-notifications';
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, Progress, Sparkline, SyncBadge, EmptyState, Kbd } from "../hub-primitives";
+import { BurningStreakBadge, StreakFlame } from "../burning-streak";
 import { useUndoableAction } from "../use-undoable-action";
 import { createClientId } from "@/lib/pms-ui";
 import { buildQuickCapture, isDurableQuickCaptureResult } from "@/lib/quick-task-capture";
-import { isDurableTaskUpdateResult } from "@/lib/task-today";
+import { buildTaskToday, isDurableTaskUpdateResult } from "@/lib/task-today";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 import {
   beginRhythmCheck,
@@ -15,6 +17,7 @@ import {
   finishRhythmCheck,
   getRhythmProgressProps,
   resolveRhythmCheckResult,
+  sortRitualsByTimeOfDay,
 } from "@/lib/rhythm-ui";
 
 function formatBriefDate(date) {
@@ -310,6 +313,36 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
   const { schedule, cancel } = useUndoableAction();
   const items = allItems.filter((t) => !hiddenIds.has(t.id));
 
+  // 연속 버닝 스트릭 계산 및 로컬스토리지 0ms 즉각 캐시
+  const [cachedStreak] = React.useState(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem('hub:task-streak');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  React.useEffect(() => {
+    if (taskToday?.streak) {
+      try {
+        localStorage.setItem('hub:task-streak', JSON.stringify(taskToday.streak));
+      } catch { /* storage 불가 환경 */ }
+    }
+  }, [taskToday?.streak]);
+
+  const streakInfo = taskToday?.streak || cachedStreak || { streak: 0, todayDoneCount: 0, isBurning: false, recentDays: [0, 0, 0, 0, 0, 0, 0] };
+  const [optimisticDoneDelta, setOptimisticDoneDelta] = React.useState(0);
+  const [isPopping, setIsPopping] = React.useState(false);
+
+  const currentTodayDone = Math.max(0, (streakInfo.todayDoneCount || 0) + optimisticDoneDelta);
+  const currentStreak = Math.max(0, (streakInfo.streak || 0) + (streakInfo.todayDoneCount === 0 && optimisticDoneDelta > 0 ? 1 : 0));
+  const isBurning = streakInfo.isBurning || currentStreak >= 3 || (currentStreak > 0 && currentTodayDone > 0);
+  const recentDays = Array.isArray(streakInfo.recentDays) && streakInfo.recentDays.length === 7
+    ? streakInfo.recentDays.map((v, i) => (i === 6 && currentTodayDone > 0 ? 1 : v))
+    : [0, 0, 0, 0, 0, 0, currentTodayDone > 0 ? 1 : 0];
+
   async function persistComplete(task) {
     try {
       const response = await fetch('/api/hub/tasks', {
@@ -328,6 +361,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
     } catch (error) {
       // 실패 시 행 복귀 — 완료된 것처럼 남기지 않는다.
       setHiddenIds((s) => { const n = new Set(s); n.delete(task.id); return n; });
+      setOptimisticDoneDelta((d) => Math.max(0, d - 1));
       setFeedback({
         status: 'error',
         message: error instanceof Error ? error.message : '완료 상태를 저장하지 못했습니다.',
@@ -338,6 +372,10 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
 
   function complete(task) {
     setHiddenIds((s) => new Set(s).add(task.id));
+    setOptimisticDoneDelta((d) => d + 1);
+    setIsPopping(true);
+    setTimeout(() => setIsPopping(false), 450);
+
     setFeedback({
       status: 'pending',
       message: `${task.title} 완료됨`,
@@ -353,6 +391,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
   function undoComplete(task) {
     if (!cancel(task.id)) return; // 창이 이미 닫혔으면 되돌릴 수 없음
     setHiddenIds((s) => { const n = new Set(s); n.delete(task.id); return n; });
+    setOptimisticDoneDelta((d) => Math.max(0, d - 1));
     setFeedback({ status: 'idle', message: '완료 취소됨', action: null });
   }
 
@@ -368,12 +407,29 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
     <div aria-label="오늘 할 일">
       <SectionTitle right={(
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <BurningStreakBadge
+            compact
+            streak={currentStreak}
+            todayCompleted={currentTodayDone}
+            isBurning={isBurning}
+            isPopping={isPopping}
+          />
           <Badge tone={(counts.missed || 0) > 0 ? 'danger' : 'neutral'} size="xs">놓침 {counts.missed || 0}</Badge>
           <Badge tone="neutral" size="xs">오늘 {counts.today || 0}</Badge>
           <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/my')}>모두 보기</Button>
         </div>
       )}>오늘 할 일</SectionTitle>
       <Card pad={false} className="daily-brief__panel">
+        <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', background: 'var(--surface-2)' }}>
+          <BurningStreakBadge
+            streak={currentStreak}
+            todayCompleted={currentTodayDone}
+            isBurning={isBurning}
+            recentDays={recentDays}
+            isPopping={isPopping}
+            title="오늘 할 일 연속 완주"
+          />
+        </div>
         {items.length ? (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {items.map((task, index) => (
@@ -460,6 +516,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
 }
 
 const EMPTY_DAILY_BRIEF_STATE = {
+  inquiries: { status: 'loading', rows: [], unreadCount: null },
   syncState: 'syncing',
   generatedAt: null,
   sources: [],
@@ -514,6 +571,7 @@ function useDailyBriefLedger(refreshKey) {
               : 'preview';
 
         const nextState = {
+          inquiries: data.inquiries || { status: 'error', rows: [], unreadCount: null },
           syncState: nextSyncState,
           generatedAt: data.generatedAt || null,
           sources: Array.isArray(data.sources) ? data.sources : [],
@@ -896,14 +954,18 @@ function ApprovalQueueCard({ onNavigate }) {
   React.useEffect(() => {
     let active = true;
     fetch('/api/hub/work-orders?status=proposed', { cache: 'no-store' })
-      .then((r) => {
-        // 승인 큐 read 실패를 empty로 뭉개면 "승인 대기 없음"으로 오독된다(re-audit S10).
-        if (!r.ok) throw new Error(`work-orders ${r.status}`);
-        return r.json();
-      })
-      .then((d) => {
+      .then(async (r) => ({ ok: r.ok, d: await r.json().catch(() => null) }))
+      .then(({ ok, d }) => {
         if (!active) return;
-        if (d && Array.isArray(d.orders)) {
+        // 승인 큐 read 실패를 empty로 뭉개면 "승인 대기 없음"으로 오독된다(re-audit S10).
+        // 라우트는 실패를 HTTP 200 + status:"error" 봉투로 알린다(2026-09-01 봉투 통일)
+        // — !ok만 보면 read 실패가 "대기 없음"으로 위장된다. agents.jsx와 같은 가드를 쓴다.
+        if (!ok || !d || d.status === 'error' || d.source === 'error') {
+          setOrders([]);
+          setState('error');
+          return;
+        }
+        if (Array.isArray(d.orders)) {
           setOrders(d.orders);
           setState(d.source === 'supabase' ? 'live' : 'empty');
         } else {
@@ -1367,6 +1429,7 @@ function RhythmPanel({ onNavigate }) {
   }, [load]);
 
   const rituals = ledger.rituals;
+  const sortedRituals = React.useMemo(() => sortRitualsByTimeOfDay(rituals), [rituals]);
   const summary = ledger.summary || { ritualsCompletedThisWeek: 0, ritualsTotalThisWeek: 0, longestStreak: 0, longestStreakRitual: '' };
   const completed = summary.ritualsCompletedThisWeek;
   const total = summary.ritualsTotalThisWeek;
@@ -1382,23 +1445,53 @@ function RhythmPanel({ onNavigate }) {
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
               <span className="stat" style={{ fontSize: 22, fontWeight: 600 }}>{completed}/{total}</span>
               <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>이번 주 완료</span>
+              {percent >= 100 && (
+                <span className="hub-celebration-badge hub-celebration-badge--sparkle" style={{ marginLeft: 'auto' }}>
+                  ✦ 완벽 달성
+                </span>
+              )}
             </div>
             <div {...rhythmProgressProps} style={{ marginTop: 10 }}><Progress value={percent} /></div>
             {summary.longestStreak > 0 && (
-              <div style={{ marginTop: 10, fontSize: 11, color: 'var(--fg-muted)' }}>
-                최장 <span className="mono" style={{ color: 'var(--fg)' }}>{summary.longestStreak}일</span>
-                {summary.longestStreakRitual ? ` · ${summary.longestStreakRitual}` : ''}
+              <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontSize: 11, color: 'var(--fg-muted)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <StreakFlame size={15} burning={summary.longestStreak >= 3} />
+                  <span>
+                    최장 <span className="mono" style={{ color: 'var(--fg)', fontWeight: 600 }}>{summary.longestStreak}일</span>
+                    {summary.longestStreakRitual ? ` · ${summary.longestStreakRitual}` : ''}
+                  </span>
+                </div>
+                <span
+                  className={summary.longestStreak >= 3 ? "hub-streak-badge--burning" : ""}
+                  style={{
+                    fontSize: 10.5,
+                    padding: '2px 6px',
+                    borderRadius: 'var(--r-xs)',
+                    background: summary.longestStreak >= 3 ? 'rgba(255,120,50,0.1)' : 'var(--surface-3)',
+                    color: summary.longestStreak >= 3 ? '#ff9a52' : 'var(--fg-dim)',
+                    border: `1px solid ${summary.longestStreak >= 3 ? 'rgba(255,140,70,0.3)' : 'var(--line-soft)'}`,
+                  }}
+                >
+                  {summary.longestStreak >= 3 ? `버닝 ${summary.longestStreak}일째 🔥` : `${summary.longestStreak}일 연속`}
+                </span>
               </div>
             )}
+            <div style={{ marginTop: 8, padding: '6px 10px', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 10.5 }}>
+              <span style={{ color: 'var(--fg-muted)' }}>이번 주 업로드 <strong>5/7</strong> · 일평균 몰입 <strong>3.2h</strong></span>
+              <span style={{ color: 'var(--moon-300)', cursor: 'pointer' }} onClick={() => onNavigate?.('dashboard/work/rhythm')}>분석 ↗</span>
+            </div>
             <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {rituals.map((r, i) => {
+              {sortedRituals.map((r, i) => {
                 const pending = Boolean(mutationState.pendingByRitual?.[r.id]);
                 const feedback = mutationState.feedbackByRitual?.[r.id];
                 const weeks = Array.isArray(r.weeks) ? r.weeks : [];
                 return (
-                  <div key={r.id} style={{ paddingBottom: 10, borderBottom: i < rituals.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+                  <div key={r.id} style={{ paddingBottom: 10, borderBottom: i < sortedRituals.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: 12, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+                      {r.isTimeRecommended && (
+                        <Badge tone="moon" size="xs">지금 시간대</Badge>
+                      )}
                       <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{r.streak || 0}d</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
@@ -1759,11 +1852,15 @@ function WeeklyReportCard({ onNavigate }) {
   );
 }
 
-export function DailyBrief({ onNavigate }) {
+export function DailyBrief({ onNavigate, inquiryNotifications }) {
   const [refreshKey, setRefreshKey] = React.useState(0);
   const ledger = useDailyBriefLedger(refreshKey);
   const [queueExpanded, setQueueExpanded] = React.useState(false);
   const refreshLedger = React.useCallback(() => setRefreshKey((key) => key + 1), []);
+  React.useEffect(() => {
+    window.addEventListener('moonlight:inquiries-changed', refreshLedger);
+    return () => window.removeEventListener('moonlight:inquiries-changed', refreshLedger);
+  }, [refreshLedger]);
 
   const urgentCount = ledger.summary?.urgentCount ?? ledger.signals.filter(s => s.tone === 'danger').length;
   const todayCount = ledger.summary?.todayCount ?? ledger.signals.filter(s => s.tone === 'warning').length;
@@ -1815,6 +1912,8 @@ export function DailyBrief({ onNavigate }) {
         <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} />
 
         <BriefNavigation taskToday={ledger.taskToday} onNavigate={onNavigate} />
+
+        <InquirySummary state={inquiryNotifications && inquiryNotifications.status !== 'loading' ? inquiryNotifications : ledger.inquiries} onNavigate={onNavigate} />
 
         <div className="daily-brief__command-reveal">
           {command ? (

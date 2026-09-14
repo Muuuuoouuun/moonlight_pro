@@ -81,6 +81,7 @@ test("builds provider status from the allowlist instead of generic client or led
       callbackPath: "/api/email/gmail/callback",
       scopes: [
         "https://www.googleapis.com/auth/gmail.send",
+        "https://www.googleapis.com/auth/gmail.readonly",
         "https://www.googleapis.com/auth/userinfo.email",
       ],
     },
@@ -181,4 +182,8 @@ test("marks an unreachable configured endpoint as degraded", async () => {
   assert.equal(result.engine.reachable, false);
   assert.equal(result.engine.status, "degraded");
   assert.equal(result.openclawRelay.reachable, false);
+});
+
+test("Gmail readiness lists the actual readonly consent requirement", () => {
+  assert.ok(readiness.resolveGoogleOAuthProviderReadiness({}).gmail.scopes.includes("https://www.googleapis.com/auth/gmail.readonly"));
 });

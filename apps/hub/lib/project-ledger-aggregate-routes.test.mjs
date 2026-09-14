@@ -107,6 +107,7 @@ export async function getAttentionLedger() {
   return s.attention || {
     source: "supabase",
     items: [],
+    inquiries: s.inquiries,
     raw: {
       projectLedger: s.tasksLedger,
       revenue: s.revenue,
@@ -172,6 +173,8 @@ function liveTaskLedger(overrides = {}) {
 
 function resetState() {
   state.overviewError = null;
+  state.attention = null;
+  state.inquiries = { status: 'live', source: 'supabase', rows: [], unreadCount: 0 };
   state.projectsError = null;
   state.projects = liveProjectLedger();
   state.tasksLedgerError = null;
@@ -185,6 +188,24 @@ function resetState() {
 }
 
 beforeEach(resetState);
+
+test('daily brief retains exact inquiry count independently of preview rows and signal cap', async () => {
+  state.inquiries = { status: 'live', source: 'supabase', rows: [{ id: 'one' }], unreadCount: 109 };
+  const body = await (await dailyBriefRoute.GET()).json();
+  assert.equal(body.inquiries.unreadCount, 109);
+  assert.equal(body.inquiries.rows.length, 1);
+  assert.ok(body.signals.length <= 7);
+});
+
+test('inquiry read failure does not erase readable task data', async () => {
+  state.inquiries = { status: 'error', source: 'error', rows: [], unreadCount: null, error: 'inquiries-read-failed' };
+  const body = await (await dailyBriefRoute.GET()).json();
+  assert.equal(body.inquiries.status, 'error');
+  assert.equal(body.inquiries.unreadCount, null);
+  assert.deepEqual(body.failedSources, ['inquiries']);
+  assert.equal(body.taskToday.state, 'live');
+  assert.equal(body.taskToday.items.length, 1);
+});
 
 test("tasks API returns 502 instead of flattening a configured task read error", async () => {
   state.tasksLedger = {
@@ -536,6 +557,7 @@ test("overview and daily brief never call a partial-only aggregate preview", asy
   state.work = { source: "preview", decisions: [], rituals: [], summary: {} };
   state.orders = { source: "preview", orders: [] };
   state.brief = { source: "preview", brief: null }; // brief도 sources에 편입(7차) — 시나리오 전제(전 소스 비-live)에 맞춘다
+  state.inquiries = { status: 'preview', source: 'preview', rows: [], unreadCount: null };
 
   const overview = await (await overviewRoute.GET()).json();
   const daily = await (await dailyBriefRoute.GET()).json();

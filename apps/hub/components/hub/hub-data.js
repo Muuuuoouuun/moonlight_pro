@@ -2,9 +2,12 @@
 // ledger is unavailable the Hub renders an explicit preview/empty state.
 
 export const NAV_TREE = [
+  { key: 'discovery', label: '기회 탐색', icon: 'search', path: 'dashboard/discovery', keywords: ['기회', '탐색', '신규 사업', '발굴', '검증', '아이디어'] },
   { key: 'daily-brief', label: '오늘', icon: 'brief', path: 'dashboard/daily-brief', keywords: ['오늘', 'today', 'daily brief', '브리핑', '브리프'] },
   { key: 'overview', label: '현황', icon: 'signal', path: 'dashboard/overview', keywords: ['overview', '현황', '차트', '시각', '통계', 'chart', 'stats', '정리'] },
   { key: 'my-work', label: '내 작업', icon: 'inbox', path: 'dashboard/work/my', keywords: ['내 작업', 'my work', '내작업', 'tasks', '할 일', '할일', 'todo', 'deals', 'calendar', '일정', '실행'] },
+  { key: 'memos', label: '메모', icon: 'content', path: 'dashboard/work/memos', keywords: ['메모', '일지', 'note', 'memo', 'journal', '아이디어', '발췌'] },
+  { key: 'daily-review', label: '하루 리뷰', icon: 'brief', path: 'dashboard/work/daily-review', keywords: ['하루', '리뷰', '회고', '일기', '에너지', 'daily review'] },
   {
     key: 'classin', label: '클래스인', icon: 'classin', workspace: true,
     children: [
@@ -53,6 +56,7 @@ export const NAV_TREE = [
     // 매일 보는 라벨(영업·매출, 고객 연락)로 검색했을 때 0건이 나오지 않아야 한다.
     key: 'revenue', label: 'Revenue', icon: 'revenue', secondary: true,
     children: [
+      { key: 'inquiries', label: '문의 내역', icon: 'inbox', path: 'dashboard/revenue/inquiries', keywords: ['문의', '메일', '랜딩페이지', 'inquiry', 'webhook', '지원', '제휴'] },
       { key: 'overview', label: '개요', icon: 'revenue', path: 'dashboard/revenue/overview', keywords: ['revenue overview', '매출 개요', '영업', '영업·매출'] },
       { key: 'customers', label: '고객 DB', icon: 'accounts', path: 'dashboard/revenue/customers', keywords: ['customers', '고객', 'crm', '통합'] },
       { key: 'heatmap', label: '매출 히트맵', icon: 'globe', path: 'dashboard/revenue/heatmap', keywords: ['heatmap', '히트맵', '지역', '지도', 'map'] },

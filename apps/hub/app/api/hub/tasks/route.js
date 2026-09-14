@@ -15,6 +15,9 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Matches Engine PMS: full 50-item checklist bounds, task fields and JSON escapes.
+const MAX_TASK_BODY_BYTES = 256 * 1024;
+
 export async function GET(req) {
   try {
     // lean read (tasks·projects·brands 3콜) — 전체 프로젝트 원장 11+콜을 태우던 핫패스였다.
@@ -78,7 +81,7 @@ export async function POST(req) {
     return guard;
   }
 
-  const parsed = await readHubWriteJson(req);
+  const parsed = await readHubWriteJson(req, { maxBytes: MAX_TASK_BODY_BYTES });
 
   if (parsed.error) {
     return parsed.error;
@@ -100,7 +103,7 @@ export async function PATCH(req) {
   const guard = assertHubWriteAllowed(req);
   if (guard) return guard;
 
-  const parsed = await readHubWriteJson(req);
+  const parsed = await readHubWriteJson(req, { maxBytes: MAX_TASK_BODY_BYTES });
   if (parsed.error) return parsed.error;
 
   const result = await forwardPmsCommand({

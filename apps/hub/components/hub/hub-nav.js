@@ -1,16 +1,16 @@
 // Sidebar navigation contract — the *visible* information architecture.
 //
 // Deliberately separate from NAV_TREE in hub-data.js, which stays the full
-// 36-destination catalog behind ⌘K search. Adding a route there must not add a
+// 40-destination catalog behind ⌘K search. Adding a route there must not add a
 // sidebar row; the sidebar only grows when an anchor is added here. That split
 // is the whole point — the old accordion mixed two organizing principles
 // (workspace × function) and repeated Projects / Revenue / Follow-ups / Content
 // in both, so the operator had to answer "where does this live?" before
 // "what am I doing?".
 //
-// Nine stable anchors — Overview added 2026-07-15 per direct operator
-// instruction; the prior "eight anchors, fixed" reading of the 2026-07-15
-// sidebar spec is not final and may still change. Organizational context
+// Nine primary + two utility anchors (SIDEBAR_PRIMARY / SIDEBAR_UTILITIES;
+// hub-nav.test.mjs pins both counts). Overview was added 2026-07-15 per direct
+// operator instruction; the anchor set is not a fixed contract and may change. Organizational context
 // moves into one scope control.
 
 export const DEFAULT_SCOPE = 'all';
@@ -47,7 +47,7 @@ export function normalizeScope(scope) {
 // ?scope=personal은 실제로 소비하는 표면(Leads/Deals/Accounts의 개인 필터 시드)에만
 // 붙인다 — 나머지는 전역 집계 뷰라 파라미터가 과약속이었다(5차 재감사 S).
 // rev-overview는 2609 병합으로 소비자가 생겼다 — scope=personal이 개인 캐시플로 로드맵을 연다.
-const SCOPE_CONSUMING_CHILD_KEYS = new Set(['rev-overview', 'rev-leads', 'rev-deals', 'rev-accounts']);
+const SCOPE_CONSUMING_CHILD_KEYS = new Set(['rev-overview', 'rev-inquiries', 'rev-leads', 'rev-deals', 'rev-accounts']);
 function personalScoped(children) {
   return children.map((c) => (
     SCOPE_CONSUMING_CHILD_KEYS.has(c.key) ? { ...c, path: `${c.path}?scope=personal` } : c
@@ -59,6 +59,7 @@ const REVENUE_CHILDREN = [
   // owns that name; the revenue child keeps a distinct label to avoid two
   // identical rows in one sidebar.
   { key: 'rev-overview', label: '개요', path: 'dashboard/revenue/overview' },
+  { key: 'rev-inquiries', label: '문의 내역', path: 'dashboard/revenue/inquiries' },
   // 고객 DB · 매출 히트맵 — implemented pages (PAGE_MAP + NAV_TREE search) that
   // had no sidebar row until 2026-07-17. Both are global aggregate views
   // (Customers/RevenueHeatmap take no workspace prop), so they live only here,
@@ -75,6 +76,7 @@ const REVENUE_CHILDREN = [
 // labels (파이프라인·결제·리드·고객·계정) renamed identical surfaces and were the
 // operator's top naming confusion (2026-07-15 naming decision).
 const REVENUE_CLASSIN_CHILDREN = [
+  { key: 'rev-ci-inquiries', label: '문의 내역', path: 'dashboard/revenue/inquiries?scope=classin' },
   { key: 'rev-ci-pipeline', label: 'Deals', path: 'dashboard/classin/pipeline' },
   { key: 'rev-ci-revenue', label: 'Leads', path: 'dashboard/classin/revenue' },
   { key: 'rev-ci-segments', label: '세그먼트', path: 'dashboard/classin/segments' },
@@ -134,6 +136,12 @@ const SETTINGS_CHILDREN = [
   { key: 'sys-evolution', label: 'Evolution', path: 'dashboard/evolution', deferred: true },
 ];
 
+const MY_WORK_CHILDREN = [
+  { key: 'my-work-list', label: '실행 목록', path: 'dashboard/work/my' },
+  { key: 'memos', label: '메모', path: 'dashboard/work/memos' },
+  { key: 'daily-review', label: '하루 리뷰', path: 'dashboard/work/daily-review' },
+];
+
 export const SIDEBAR_PRIMARY = [
   {
     key: 'today',
@@ -167,7 +175,8 @@ export const SIDEBAR_PRIMARY = [
     label: '내 작업',
     icon: 'inbox',
     scopeAware: false,
-    owns: ['dashboard/work/my'],
+    owns: ['dashboard/work/my', 'dashboard/work/memos', 'dashboard/work/daily-review'],
+    children: { all: MY_WORK_CHILDREN, classin: MY_WORK_CHILDREN, personal: MY_WORK_CHILDREN },
     paths: {
       all: 'dashboard/work/my',
       classin: 'dashboard/work/my',
@@ -213,6 +222,11 @@ export const SIDEBAR_PRIMARY = [
       classin: 'dashboard/revenue/followups',
       personal: 'dashboard/revenue/followups',
     },
+  },
+  {
+    key: 'discovery', label: '기회 탐색', icon: 'search', scopeAware: true,
+    owns: ['dashboard/discovery'],
+    paths: { all: 'dashboard/discovery', classin: 'dashboard/discovery?scope=classin', personal: 'dashboard/discovery?scope=personal' },
   },
   {
     key: 'projects',

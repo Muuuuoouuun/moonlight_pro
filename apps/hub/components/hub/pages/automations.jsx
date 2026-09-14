@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { InquiryConnection } from '../inquiry-connection';
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Progress, SectionTitle, Kbd, EmptyState, SyncBadge, LifecycleBadge } from "../hub-primitives";
 
@@ -260,6 +261,8 @@ export function EmailAutomation({ onNavigate }) {
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Email automations</h2>
         <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>Gmail OAuth · Resend 발송</div>
       </div>
+      <InquiryConnection />
+      <Button onClick={() => onNavigate?.('dashboard/revenue/inquiries')}>문의 내역 열기 →</Button>
       <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -275,13 +278,13 @@ export function EmailAutomation({ onNavigate }) {
             <Badge tone={gmailBadge.tone} size="xs">{gmailBadge.label}</Badge>
           </div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.6 }}>
-            현재 범위는 Gmail 발송 OAuth 준비 단계입니다. Inbox 읽기·자동 태깅은 별도 scope 검증 전까지 비활성입니다.
+            메일 읽기 권한이 확인되면 수신 문의를 감지합니다. 연결이 만료되면 설정에서 Gmail을 다시 연결해 주세요.
           </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
             {gmailBadge.label === 'Not connected' || gmailBadge.label === 'OAuth ready' ? (
-              <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/settings')}>Connect</Button>
+              <Button variant="outline" size="xs" onClick={() => window.location.assign('/api/email/gmail/connect?returnPath=%2Fdashboard%2Fautomations%2Femail')}>Gmail 연결</Button>
             ) : (
-              <Button variant="outline" size="xs" onClick={() => onNavigate?.('dashboard/automations/flows')}>Rules</Button>
+              <Button variant="outline" size="xs" onClick={() => window.location.assign('/api/email/gmail/connect?returnPath=%2Fdashboard%2Fautomations%2Femail')}>Gmail 재연결</Button>
             )}
             <Button variant="ghost" size="xs" onClick={() => onNavigate?.('dashboard/automations/runs')}>Logs</Button>
           </div>

@@ -1,0 +1,18 @@
+.inquiries-page { padding: var(--section-gap); max-width: 1120px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: var(--gap); }
+.inquiry-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.inquiry-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.inquiry-list { border: 1px solid var(--line-soft); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; }
+.hub-app .inquiry-row { display: grid; grid-template-columns: minmax(0, 1fr) 130px 110px; gap: 16px; width: 100%; padding: 16px; text-align: left; border-bottom: 1px solid var(--line-soft); align-items: center; }
+.hub-app .inquiry-row:last-child { border-bottom: 0; }
+.inquiry-row[data-unread="true"] { box-shadow: inset 1px 0 0 var(--moon-300); }
+.inquiry-subject { font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.inquiry-meta { font-size: 11px; color: var(--fg-muted); margin-top: 4px; display: flex; flex-wrap: wrap; gap: 8px; overflow-wrap: anywhere; }
+.inquiry-form { display: flex; flex-direction: column; gap: 14px; }
+.inquiry-event { border-top: 1px solid var(--line); padding: 16px 0; }
+.inquiry-event pre { font-family: inherit; font-size: 13px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
+.inquiry-notice { font-size: 12px; line-height: 1.6; color: var(--fg-muted); }
+.inquiry-error { font-size: 12px; line-height: 1.6; color: var(--danger); }
+@media (max-width: 600px) {
+  .hub-app .inquiry-row { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 14px; }
+  .inquiry-filters { grid-template-columns: minmax(0, 1fr); }
+}

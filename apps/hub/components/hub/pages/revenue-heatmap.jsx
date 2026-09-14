@@ -111,9 +111,10 @@ function RegionDetail({ row, offMap = false, onJump }) {
 const CustomerRankRow = React.memo(function CustomerRankRow({ customer, rank, max, metricKey, onSelect, onJump, onPeek }) {
   const value = customer[metricKey] || 0;
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  const isTop = rank === 1 && value > 0;
   return (
     <div
-      className="hub-row"
+      className={`hub-row${isTop ? " hub-revenue-top-row" : ""}`}
       role="button"
       tabIndex={0}
       onClick={() => onSelect(customer)}
@@ -126,17 +127,47 @@ const CustomerRankRow = React.memo(function CustomerRankRow({ customer, rank, ma
       style={{
         display: "grid", gridTemplateColumns: "18px minmax(0,1.2fr) minmax(0,1fr) 62px 26px",
         gap: 8, alignItems: "center", padding: "6px 6px", borderRadius: 4, cursor: "pointer",
+        ...(isTop ? { borderLeft: "2px solid #ffd166", paddingLeft: 4, background: "rgba(255, 209, 102, 0.04)" } : {}),
       }}
     >
-      <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>{String(rank).padStart(2, "0")}</span>
+      <span className="mono" style={{ fontSize: 10.5, color: isTop ? "#ffd166" : "var(--fg-faint)", fontWeight: isTop ? 700 : 400 }}>
+        {String(rank).padStart(2, "0")}
+      </span>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{customer.name}</div>
+        <div style={{ fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 5 }}>
+          <span>{customer.name}</span>
+          {isTop && (
+            <span
+              style={{
+                fontSize: 9.5,
+                fontWeight: 700,
+                padding: "0 4px",
+                borderRadius: 3,
+                background: "rgba(255, 209, 102, 0.15)",
+                color: "#ffd166",
+                border: "1px solid rgba(255, 209, 102, 0.35)",
+                lineHeight: "14px",
+                flexShrink: 0,
+              }}
+            >
+              ✦ Top
+            </span>
+          )}
+        </div>
         <div style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>{customer.region || "지역 미상"}</div>
       </div>
       <div style={{ height: 4, background: "var(--surface-3)", borderRadius: 999, overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${pct}%`, background: heatFill(value, max), borderRadius: 999, transition: "width 240ms cubic-bezier(0.2, 0.7, 0.3, 1)" }} />
+        <div
+          style={{
+            height: "100%",
+            width: `${pct}%`,
+            background: isTop ? "linear-gradient(90deg, var(--moon-300), #ffd166)" : heatFill(value, max),
+            borderRadius: 999,
+            transition: "width 240ms cubic-bezier(0.2, 0.7, 0.3, 1)",
+          }}
+        />
       </div>
-      <span className="num" style={{ fontSize: 11, fontWeight: 600, textAlign: "right", color: "var(--moon-200)", fontVariantNumeric: "tabular-nums" }}>
+      <span className="num" style={{ fontSize: 11, fontWeight: 600, textAlign: "right", color: isTop ? "#ffd166" : "var(--moon-200)", fontVariantNumeric: "tabular-nums" }}>
         {fmtMoney(value)}
       </span>
       {customer.jumpKey && onJump ? (

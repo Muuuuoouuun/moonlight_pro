@@ -1,0 +1,10 @@
+export const UUID: RegExp;
+export function record(value: unknown): value is Record<string, any>;
+export function bytes(value: unknown): number;
+export function boundedText(value: unknown, maxBytes: number): string;
+export function strictKeys(value: unknown, keys: string[]): void;
+export type Project = { label?: string; path: string; applyPath?: string; modes: ('read' | 'draft' | 'apply')[]; contextRefs?: Record<string,string> };
+export function readProjects(raw?: string): Record<string, Project>;
+export function publicProjects(projects: Record<string, Project>): { id: string; label: string; modes: string[]; contextRefs: string[] }[];
+export function normalizeJobInput(action: string, input: Record<string,unknown>, projects?: Record<string, Project>): Record<string,unknown>;
+export function jobHttpStatus(data: Record<string, any>): number;

@@ -436,6 +436,8 @@ test("builds a minimal task draft from the current project context", () => {
       priority: "medium",
       dueAt: "",
       description: "",
+      nextAction: "",
+      checklist: [],
     },
   );
 });
@@ -462,6 +464,8 @@ test("builds a task edit draft from an existing todo, preferring the unlossy pri
       priority: "critical",
       dueAt: "2026-07-20",
       description: "Pull last week's numbers first.",
+      nextAction: "",
+      checklist: [],
     },
   );
 });
@@ -546,7 +550,7 @@ test("builds a task-only board from the five durable task statuses", () => {
     { key: "backlog", label: "수집" },
     { key: "today", label: "계획" },
     { key: "doing", label: "진행" },
-    { key: "blocked", label: "대기" },
+    { key: "blocked", label: "막힘" },
     { key: "done", label: "완료" },
   ]);
   assert.deepEqual(columns.map((column) => column.cards.map((card) => card.id)), [

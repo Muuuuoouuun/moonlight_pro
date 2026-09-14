@@ -1,3 +1,5 @@
+import { shiftDateKey } from "./rhythm-calendar.js";
+
 const LANE_RANK = {
   missed: 0,
   today: 1,
@@ -55,6 +57,58 @@ function descendingTime(value) {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
+export function computeTaskStreak(todos = [], { now = new Date(), timeZone = "Asia/Seoul" } = {}) {
+  const todayKey = dateKey(now, timeZone);
+  if (!todayKey) {
+    return { streak: 0, todayDoneCount: 0, isBurning: false, recentDays: [0, 0, 0, 0, 0, 0, 0] };
+  }
+
+  const doneDateKeys = new Set();
+  let todayDoneCount = 0;
+
+  (Array.isArray(todos) ? todos : []).forEach((task) => {
+    const isDone = task?.done === true || String(task?.status || "").toLowerCase() === "done";
+    if (!isDone) return;
+
+    const completionTimestamp = task?.completedAt || task?.updatedAt || task?.createdAt;
+    const taskDateKey = dateKey(completionTimestamp, timeZone);
+    if (taskDateKey) {
+      doneDateKeys.add(taskDateKey);
+      if (taskDateKey === todayKey) {
+        todayDoneCount += 1;
+      }
+    }
+  });
+
+  let streak = 0;
+  let cursor = todayKey;
+
+  // 오늘 완료가 아직 없다면 어제부터 연속 streak 확인
+  if (!doneDateKeys.has(cursor)) {
+    const yesterday = shiftDateKey(cursor, -1);
+    if (doneDateKeys.has(yesterday)) {
+      cursor = yesterday;
+    }
+  }
+
+  while (doneDateKeys.has(cursor)) {
+    streak += 1;
+    cursor = shiftDateKey(cursor, -1);
+  }
+
+  const recentDays = Array.from({ length: 7 }, (_, index) => {
+    const dKey = shiftDateKey(todayKey, index - 6);
+    return doneDateKeys.has(dKey) ? 1 : 0;
+  });
+
+  return {
+    streak,
+    todayDoneCount,
+    isBurning: streak >= 3 || (streak > 0 && todayDoneCount > 0),
+    recentDays,
+  };
+}
+
 export function buildTaskToday(
   todos = [],
   { now = new Date(), timeZone = "Asia/Seoul", limit = 5 } = {},
@@ -96,10 +150,13 @@ export function buildTaskToday(
     inbox: candidates.filter((task) => task.lane === "inbox").length,
   };
 
+  const streak = computeTaskStreak(todos, { now, timeZone });
+
   return {
     items: candidates.slice(0, counts.shown),
     counts,
     hiddenCount: counts.total - counts.shown,
+    streak,
   };
 }
 

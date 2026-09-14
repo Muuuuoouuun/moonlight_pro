@@ -217,7 +217,7 @@ export async function fetchProjectReferenceRows(rows = [], {
   return result;
 }
 
-function resolveOrgScope(row, brand) {
+export function resolveProjectOrgScope(row, brand) {
   const rowScope = typeof row?.meta?.org_scope === "string"
     ? row.meta.org_scope.trim()
     : "";
@@ -263,7 +263,7 @@ export function mapProjectRows(rows = [], {
       ? updates.latest.progress
       : null;
     const projectProgress = clampProgress(row.progress);
-    const orgScope = resolveOrgScope(row, brand);
+    const orgScope = resolveProjectOrgScope(row, brand);
     const entity = resolveEntity(row, leadById, accountById);
     const lastActivityAt = updates.latest?.happenedAt
       || row.last_activity_at

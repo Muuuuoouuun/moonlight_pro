@@ -1,6 +1,14 @@
 # Daily Operating Note Todo
 
 > 상태: DEFERRED FEATURE BACKLOG — 별도 Daily Note 홈과 Obsidian 양방향 sync는 현재 범위가 아니다. 일정·할 일은 Phase 1 Action Desk에 먼저 통합한다.
+>
+> 2026-09-05 갱신 — **부분 대체됨(PARTIALLY SUPERSEDED)**. P1-5 Evening Review · P1-6 Insight tagging ·
+> P2-8 Weekly pattern · P2-10 selective import는 `superpowers/specs/2026-09-05-journal-timeline-and-ai-digest.md`가
+> 흡수했다(그 문서는 아직 DRAFT). 그 스펙이 이 문서의 Open Questions 중 두 건에 답한다 —
+> "`notes`와 `memos`를 통합할지" → **둘 다 아니고 신규 `journal_entries`**, "저녁 회고를 rule-based로 시작할지
+> AI draft로 갈지" → **하이브리드(단건은 Gemini, 기간은 Claude Code)**. P0-2 Quick Capture는 구현 완료다
+> (`daily-brief.jsx` → `/api/hub/inbox`). 이 문서의 남은 고유 범위는 P1-7 Obsidian export(역방향)와
+> P0-1·3·4(Daily Note 화면 · 캘린더 horizon · Morning Brief)다.
 
 이 문서는 `캘린더 + 일정 + 데일리 인사이트 + 메모 + Obsidian 연결`을
 Com_Moon Hub 안에서 실제 구현 순서로 내리기 위한 실행용 체크리스트다.

@@ -1,4 +1,6 @@
 import { deliveryDraft } from "../../../packages/project-delivery/index.ts";
+import { readTaskChecklist } from './task-checklist.js';
+
 const TASK_STATUS_BY_COLUMN = {
   backlog: "inbox",
   today: "todo",
@@ -27,7 +29,7 @@ const TASK_BOARD_COLUMNS = [
   { key: "backlog", label: "수집" },
   { key: "today", label: "계획" },
   { key: "doing", label: "진행" },
-  { key: "blocked", label: "대기" },
+  { key: "blocked", label: "막힘" },
   { key: "done", label: "완료" },
 ];
 const CONTENT_PIPELINE_STAGES = ["기획", "초안", "검토", "업로드"];
@@ -206,7 +208,7 @@ export const TASK_STATUS_OPTIONS = [
   { value: "inbox", label: "수집" },
   { value: "todo", label: "계획" },
   { value: "doing", label: "진행" },
-  { value: "blocked", label: "대기" },
+  { value: "blocked", label: "막힘" },
   { value: "done", label: "완료" },
 ];
 
@@ -507,6 +509,8 @@ export function buildTaskDraft({ projectId = null, initialStatus = "todo" } = {}
     priority: "medium",
     dueAt: "",
     description: "",
+    nextAction: "",
+    checklist: [],
   };
 }
 
@@ -518,11 +522,13 @@ export function buildTaskEditDraft(todo = {}) {
     title: todo.title || "",
     // todo.priority is lossily collapsed for the compact board dot (critical->high,
     // medium->med) — priorityRaw is the unlossy value the drawer must round-trip.
-    projectId: todo.project || "",
+    projectId: todo.project ?? todo.projectId ?? "",
     status: TASK_STATUSES.has(todo.status) ? todo.status : "todo",
     priority: todo.priorityRaw || todo.priority || "medium",
     dueAt: dateInputValue(todo.dueAt),
     description: todo.description || "",
+    nextAction: todo.nextAction || "",
+    checklist: readTaskChecklist(todo),
   };
 }
 
@@ -530,11 +536,15 @@ export function buildTaskPatch(source = {}, draft = {}) {
   const original = buildTaskEditDraft(source);
   const patch = { id: source.id };
 
-  const fields = ["title", "projectId", "status", "priority", "dueAt", "description"];
+  const fields = ["title", "projectId", "status", "priority", "dueAt", "description", "nextAction"];
   fields.forEach((field) => {
     const next = field === "dueAt" ? dateInputValue(draft[field]) : (draft[field] ?? "");
     if (next !== original[field]) patch[field] = next;
   });
+  if (Array.isArray(draft.checklist) && JSON.stringify(draft.checklist) !== JSON.stringify(original.checklist)) {
+    patch.checklist = draft.checklist;
+  }
+  if (Object.keys(patch).length > 1 && source.updatedAt) patch.expectedUpdatedAt = source.updatedAt;
   return patch;
 }
 
@@ -828,6 +838,8 @@ export function buildTaskBoardColumns(todos = [], projects = []) {
     column.cards.push({
       id: todo.id,
       title: todo.title,
+      nextAction: todo.nextAction || '',
+      checklist: readTaskChecklist(todo),
       tag: project?.tag || null,
       priority: todo.priority,
       project: project?.name || "미지정",

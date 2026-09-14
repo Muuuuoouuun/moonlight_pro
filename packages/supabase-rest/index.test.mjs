@@ -287,3 +287,17 @@ test("timeouts surface as reason timeout instead of hanging", async () => {
     clearTimeout(keepAlive);
   }
 });
+
+test('opt-in strict rows distinguish malformed HTTP 200 payloads from an empty array', async () => {
+  for (const body of ['', 'not JSON', '{}', 'null', '{"error":"private detail"}']) {
+    globalThis.fetch = async () => new Response(body, { status: 200 });
+    const result = await fetchSupabaseRowsDetailed('discovery_records', { strictRows: true });
+    assert.equal(result.rows, null, body);
+    assert.equal(result.error?.reason, 'invalid-rows');
+    assert.equal(result.error?.detail, 'Expected a JSON array.');
+    assert.equal(await fetchSupabaseRows('discovery_records', { strictRows: true }), null);
+    assert.deepEqual(await fetchSupabaseRows('legacy_records'), []);
+  }
+  globalThis.fetch = async () => jsonResponse([]);
+  assert.deepEqual(await fetchSupabaseRows('discovery_records', { strictRows: true }), []);
+});

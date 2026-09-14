@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { RelatedMemos } from '../related-memos';
+import { MemoCaptureLink } from "../journal-links";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Iconed } from "../hub-icons";
@@ -97,6 +99,9 @@ function RhythmLine({ brand }) {
       )}
       {goal.certainty === "unknown" && (
         <CertaintyBadge state="unknown" label="목표 미정" />
+      )}
+      {goal.value != null && brand.publishedThisWeek >= goal.value && (
+        <span className="hub-celebration-badge hub-celebration-badge--sparkle">✦ 달성</span>
       )}
     </span>
   );
@@ -331,9 +336,12 @@ function BrandDetail({ brand, onBack, onOpenStudio, onOpenQueue }) {
           )}
           <div style={{ flex: 1 }} />
           <Button variant="secondary" size="sm" icon="queue" onClick={() => onOpenQueue(brand.key)}>큐에서 보기</Button>
+          <MemoCaptureLink context={{ type: "brand", id: brand.id }} />
           <Button variant="primary" size="sm" icon="plus" onClick={() => onOpenStudio(brand.key)}>이 브랜드로 새 콘텐츠</Button>
         </div>
       </Card>
+
+      <Card><RelatedMemos type="brand" id={brand.id} /></Card>
 
       <div>
         <Button variant="ghost" size="sm" icon="chevronL" onClick={onBack}>브랜드 목록</Button>

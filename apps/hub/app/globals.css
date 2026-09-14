@@ -853,6 +853,10 @@ button {
   transition: width 180ms ease;
 }
 
+.hub-app .hub-pms-progress--completed .hub-pms-progress__track {
+  box-shadow: 0 0 8px -1px rgba(140, 168, 216, 0.35);
+}
+
 .hub-app .hub-pms-progress--empty {
   gap: 2px;
 }

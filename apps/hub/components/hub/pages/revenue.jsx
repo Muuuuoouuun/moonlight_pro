@@ -4,6 +4,7 @@ import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, Progress, CertaintyBadge, ChipToggle } from "../hub-primitives";
+import { triggerCelebration } from "../celebration-fx";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { useCrmKeyboard, useCrmSelection, usePageCreateHotkey } from "../use-crm-keyboard";
@@ -210,7 +211,7 @@ const EMPTY_REVENUE_LEDGER = {
 export function useRevenueLedger() {
   const servableCache = readRevenueCache();
   const [ledger, setLedger] = React.useState(servableCache ? servableCache.ledger : EMPTY_REVENUE_LEDGER);
-  const [syncState, setSyncState] = React.useState(servableCache ? servableCache.syncState : 'preview');
+  const [syncState, setSyncState] = React.useState(servableCache ? servableCache.syncState : 'loading');
   const [refreshKey, setRefreshKey] = React.useState(0);
 
   React.useEffect(() => {
@@ -1694,6 +1695,9 @@ export function Deals({ workspace, onNavigate }) {
     const prevStage = deals.find(d => d.id === id)?.stage;
     if (!prevStage || prevStage === to) return;
     setDeals(ds => ds.map(d => d.id === id ? { ...d, stage: to } : d));
+    if (to === 'closing' && prevStage !== 'closing') {
+      triggerCelebration({ mode: 'confetti' });
+    }
     if (String(id).toLowerCase().startsWith('local-')) return;
     const key = `deal-stage-${id}`;
     const undoBase = pendingStageRef.current.get(key) ?? prevStage;
@@ -1774,6 +1778,10 @@ export function Deals({ workspace, onNavigate }) {
       // 저장 성공 시점에 드래프트를 보드에 커밋 — 타이핑 중에는 보드가 재계산되지 않는다.
       const draft = dealDrafts[editDealId];
       const realId = isNew && r.id ? r.id : editDealId;
+      const prevDeal = deals.find(d => d.id === editDealId);
+      if (editingDeal.stage === 'closing' && prevDeal?.stage !== 'closing') {
+        triggerCelebration({ mode: 'confetti' });
+      }
       setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, ...(draft || {}), id: realId } : d)));
       setDealDrafts(prev => { if (!prev[editDealId]) return prev; const next = { ...prev }; delete next[editDealId]; return next; });
       if (isNew && r.id) setEditDealId(realId);

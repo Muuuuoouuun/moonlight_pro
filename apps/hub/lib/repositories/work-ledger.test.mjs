@@ -323,8 +323,7 @@ test("selected Roadmap project is queried exactly even when outside the global c
 
 test("rituals keep project identity when two projects share the same ritual key", async () => {
   const state = globalThis.__workLedgerTestState;
-  const today = new Date();
-  today.setHours(9, 0, 0, 0);
+  const today = new Date("2026-09-13T09:00:00+09:00");
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
 
@@ -373,7 +372,7 @@ test("rituals keep project identity when two projects share the same ritual key"
     },
   ];
 
-  const ledger = await workLedger.getWorkLedger();
+  const ledger = await workLedger.getWorkLedger({ now: today });
 
   assert.equal(ledger.rituals.length, 3);
   assert.equal(new Set(ledger.rituals.map((ritual) => ritual.id)).size, 3);
@@ -437,12 +436,8 @@ test("ritual reading survives a failed project-name lookup without losing projec
 
 test("weekly bitmap honors persisted local_date before the server timestamp date", async () => {
   const state = globalThis.__workLedgerTestState;
-  const today = new Date();
-  const localDate = [
-    today.getFullYear(),
-    String(today.getMonth() + 1).padStart(2, "0"),
-    String(today.getDate()).padStart(2, "0"),
-  ].join("-");
+  const today = new Date("2026-09-13T00:30:00+09:00");
+  const localDate = "2026-09-13";
   const previousUtcDate = new Date(`${localDate}T00:30:00.000Z`);
   previousUtcDate.setUTCDate(previousUtcDate.getUTCDate() - 1);
   state.rows.routine_checks = [{
@@ -458,7 +453,7 @@ test("weekly bitmap honors persisted local_date before the server timestamp date
     },
   }];
 
-  const ledger = await workLedger.getWorkLedger();
+  const ledger = await workLedger.getWorkLedger({ now: today });
 
   assert.equal(ledger.rituals[0].weeks.at(-1), 1);
 });

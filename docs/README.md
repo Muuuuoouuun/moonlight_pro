@@ -1,7 +1,7 @@
 # Moonlight 문서 지도
 
 > 상태: ACTIVE DOCUMENTATION INDEX
-> 마지막 정리: 2026-07-16 (Phase 1C 상태 행만 2026-07-29 갱신)
+> 마지막 정리: 2026-09-13 (프로젝트 실행 백로그·메모 작성·활용 1차 등재. 기존 실행 상태표 기준: 2026-09-04)
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -10,14 +10,14 @@
 
 1. [`operator-workflow-profile.md`](operator-workflow-profile.md) — 운영자 인터뷰 Q1~Q115의 사실·권장·미정
 2. [`2026-07-13-moonlight-personal-operator-os-deep-design.md`](superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md) — 현재 제품 구조와 Phase 0~1C 설계
-3. **주제별 최신 확정 스펙** — §4 "제품·운영 정본"의 스펙 목록에서 해당 주제의 가장 최근 문서를 확인한다(예: 사이드바·PMS는 `2026-07-15-sidebar-second-level-and-pms-taxonomy.md`). 스펙 상단의 "상위 정본"·"관계" 헤더가 이전 스펙 중 어떤 절이 대체됐는지 명시하므로 함께 읽는다.
+3. **주제별 최신 확정 스펙** — §4 "제품·운영 정본"의 스펙 목록에서 해당 주제의 가장 최근 문서를 확인한다(예: 사이드바 아코디언은 `2026-07-15-sidebar-second-level-and-pms-taxonomy.md`, 그중 PMS 분류 §4의 `sns-channel` 축은 `2026-08-29-brand-tab-design.md`가 부분 대체). 스펙 상단의 "상위 정본"·"관계" 헤더가 이전 스펙 중 어떤 절이 대체됐는지 명시하므로 함께 읽는다.
 4. [`../DESIGN.md`](../DESIGN.md) — UI 토큰·컴포넌트·인터랙션 계약
 5. [`master-directive.md`](master-directive.md) — 바뀌지 않는 제품 경계와 원칙
 6. [`master-roadmap.md`](master-roadmap.md) — 현재 단계와 다음 구현 순서
 7. 도메인별 문서 — 위 문서와 충돌하지 않는 범위에서 참고
 8. `HISTORICAL` 또는 `SUPERSEDED` 문서 — 결정 배경만 참고하고 새 구현의 근거로 사용하지 않음
 
-코드 작업 지침은 루트의 [`AGENTS.md`](../AGENTS.md)와 [`CLAUDE.md`](../CLAUDE.md)를 따른다. 브랜치명이나 특정 커밋은 제품 정본이 아니며, 작업 시점의 Git 상태를 직접 확인한다.
+코드 작업 지침은 루트의 [`CLAUDE.md`](../CLAUDE.md)가 정본이고 [`AGENTS.md`](../AGENTS.md)는 그 Codex용 사본이다(둘은 같은 커밋에서 함께 갱신한다). 브랜치명이나 특정 커밋은 제품 정본이 아니며, 작업 시점의 Git 상태를 직접 확인한다.
 
 ## 2. 2026-07-13 통합 결정
 
@@ -47,8 +47,17 @@
 | Phase 1B Action Desk | 작동 | Daily Brief 확정 슬롯(긴급 KA ≤1 · 집중 고객 ≤5 · 오늘 일정) live(2026-08-05) + 첫 화면 신호 엔진의 정식 Attention adapter 통합(2026-08-09, A-1): daily-brief가 tasks·revenue·calendar를 `getAttentionLedger({ includeRaw })` 하나로 소비하고, 정체 딜 신호 판정을 attention 원장(§4 공식·STALLED_DAYS 단일 기준)에서 받는다 — 첫 화면과 내 작업이 같은 우선순위 척추를 본다 |
 | Phase 1C Contact Outcome Loop | 작동 | `record_contact_outcome_v1` 원자 RPC(마이그레이션 `20260716_0018`) — 고객 DB 컨택 시트와 고객 연락(followups) 인라인 폼 **양쪽 모두** 이 경로로 이관 완료(2026-08-05). followups 기록에는 3.5초 되돌리기 포함. 비원자 `/api/integrations/outcomes/record`는 UI 소비자 0 (외부/cron 대비 유지, 실패 시 502) |
 | ClassIn 전체 동기화·음성 AI·콘텐츠 직접 발행 | 보류 | 별도 하드 게이트 필요 |
+| 프로젝트 빠른 생성 드로어(1-1) · PMS 커맨드 센터 | 구현됨 | 스펙 `2026-07-17-project-create-drawer-design.md`, 플랜 `2026-07-17-*` 2건. `codex/project-fast-create-1-1` 병합 완료(2026-07 브랜치 정리). 잔여 범위는 플랜 문서 기준 |
+| 프로젝트 실행 백로그 | 구현·로컬 검증 완료 | 프로젝트·우선순위·기한 필터, 보드/할 일 연결, 선택 작업의 상태·기한 일괄 변경, 다음 행동 편집, 충돌·부분 실패 처리. [구현·검증 기록](superpowers/plans/2026-09-13-pms-execution.md). 운영 배포는 별도 |
+| 하위 아이템 체크리스트 | 구현·로컬 검증 완료 | 항목별 진행 게이지, 클릭 상세·체크리스트 탭, 세부 메모·순서 변경·삭제 되돌리기, 저장·재조회 및 동시 수정 선택. [구현·검증 기록](superpowers/plans/2026-09-13-pms-task-checklists.md). 운영 배포는 별도 |
+| 백엔드 통합 | 완료 | `0c5e522` real_v1.3(bm) UI + real_v1.4 백엔드 병합, `adcf619` `@com-moon/supabase-rest` 단일 클라이언트 추출 |
+| 브랜드 탭 | P0·P1 구현, P2~P5 제안 | `2026-08-29-brand-tab-design.md`, `3627eef` |
+| 개인 매출 30일 로드맵 | 출시, 디자인 QA `blocked` | `2026-08-31-personal-revenue-roadmap.md`, `68517ec`, 루트 `design-qa.md` |
+| 문의 수집·알림 | 코드 구현, 운영 연결 대기 | Gmail 감지·안전한 웹훅·문의 내역·미확인 알림. [설정](inquiry-integration-setup.md), [검증](superpowers/plans/2026-09-13-unified-inquiries.md) |
 
 Phase 0는 Content canonical contract, write 응답 분류, honest empty/error UI, 사용자 identity, Content 승인 원자화를 포함한다. 당시 검증 기준선은 Node test 50/50, contract check, typecheck, Hub/Engine build 통과다. 2026-07-15 현재 저장소 검증은 102/102이며 Phase 1A 완료를 뜻한다. Phase 1B·1C는 아직 남아 있으므로 Phase 1 전체 완료로 해석하지 않는다.
+
+2026-09-04 현재 루트 `npm test`는 **692/692 통과**이며, 저장소의 `*.test.mjs` 82파일 **전부**가 루트 글롭에 포함된다. 2609 병합이 글롭을 `apps/hub/components/**`·`apps/engine/**`·`packages/**`로 확장하면서 이전에 CI 밖이던 20파일과 실패 4건이 함께 해소됐다. CI(`.github/workflows/ci.yml`)는 `npm test`에 위임하므로 범위가 어긋날 수 없다. 사이드바 앵커는 코드(`hub-nav.js` 8 primary + 2 utility)·`hub-nav.test.mjs`·07-15 스펙 §3.1이 모두 일치한다(2026-09-04 주석·스펙 갱신으로 해소).
 
 ## 4. 현재 문서
 
@@ -67,6 +76,59 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - [`superpowers/specs/2026-07-15-sidebar-second-level-and-pms-taxonomy.md`](superpowers/specs/2026-07-15-sidebar-second-level-and-pms-taxonomy.md) — **확정(2026-07-15)**. 사이드바 2레벨 아코디언 + PMS 분류 체계 정본. `2026-07-14` 8앵커 IA는 유지하되 하위 레벨 노출 방식을 이 문서가 규정한다.
 - [`superpowers/specs/2026-07-15-personal-os-surface-restoration-design.md`](superpowers/specs/2026-07-15-personal-os-surface-restoration-design.md) — §3~4(5앵커+More 내비게이션 안)은 위 문서로 대체되어 **채택하지 않음**. §5(Personal 스코프 데이터 계약)·§6(구조적 화면 복구)는 별도로 유효.
 - [`superpowers/specs/2026-07-14-sidebar-consolidation-design.md`](superpowers/specs/2026-07-14-sidebar-consolidation-design.md) — 8앵커 압축 + 스코프 셸. 하위 레벨이 통째로 사라진 부분은 위 07-15 분류 스펙 문서가 보완.
+
+**프로젝트 · PMS (2026-09-13 실행 백로그·하위 아이템 보강)**
+
+- [`superpowers/plans/2026-09-13-pms-task-checklists.md`](superpowers/plans/2026-09-13-pms-task-checklists.md) — **구현·로컬 검증 완료**. 하위 아이템 상세와 체크리스트 기반 진척, 항목별 메모·정렬·저장·충돌 선택. `tasks.meta.checklist`를 사용하며 작업 상태와 체크리스트 완료율은 별도로 유지한다.
+
+- [`superpowers/plans/2026-09-13-pms-execution.md`](superpowers/plans/2026-09-13-pms-execution.md) — **구현·로컬 검증 완료**. 기존 tasks 원장의 실행 백로그, 공통 필터, 일괄 변경, 다음 행동, 정확한 버전 비교와 회사/개인 범위 구분. 새 스키마 없이 개인 운영 방향을 유지한다.
+- [`superpowers/specs/2026-07-17-project-create-drawer-design.md`](superpowers/specs/2026-07-17-project-create-drawer-design.md) — **APPROVED**. 프로젝트 탭 3단계 × 3요소 중 `1-1 · 빠른 생성 드로어`. 브랜드 소유 분류(`sns-channel`) 처리는 아래 08-29 브랜드 탭 스펙이 이어받는다.
+- [`superpowers/plans/2026-07-17-project-fast-create-1-1.md`](superpowers/plans/2026-07-17-project-fast-create-1-1.md) — 위 스펙의 구현 계획(병합 완료).
+- [`superpowers/plans/2026-07-17-pms-command-center.md`](superpowers/plans/2026-07-17-pms-command-center.md) — Projects·Timeline·Roadmap·Rhythm을 하나의 PMS 커맨드 센터로 묶는 구현 계획.
+
+**브랜드 · 개인 매출 (2026-08 이후 추가, 이 인덱스에 늦게 등재)**
+
+- [`superpowers/specs/2026-08-29-brand-tab-design.md`](superpowers/specs/2026-08-29-brand-tab-design.md) — **P0·P1 구현됨 / P2~P5 제안**. 브랜드를 콘텐츠 필터가 아닌 운영 대상으로 분리. `2026-07-15` PMS 분류 §4의 `sns-channel` 축을 부분 대체.
+- [`superpowers/specs/2026-09-01-brand-content-log.md`](superpowers/specs/2026-09-01-brand-content-log.md) — **확정**. 브랜드 컨텐츠 로그(`dashboard/brands/log`) 설계. 운영자 v5 첨부가 확정한 8색 브랜드 아이덴티티 팔레트와 3px 좌측 레일은 DESIGN.md §8.1·§8.2의 이 표면 한정 예외다(§15 2026-09-01 결정).
+- [`superpowers/specs/2026-08-19-lead-subject-region-labels-design.md`](superpowers/specs/2026-08-19-lead-subject-region-labels-design.md) — 리드 과목·지역 라벨 설계(12키 고정 어휘·`label_source` 확정도·백필 게이트). 구현 계획은 [`superpowers/plans/2026-08-19-lead-subject-region-labels.md`](superpowers/plans/2026-08-19-lead-subject-region-labels.md).
+- [`superpowers/plans/2026-08-31-personal-revenue-roadmap.md`](superpowers/plans/2026-08-31-personal-revenue-roadmap.md) — 개인 스코프 30일 현금흐름 로드맵 구현 계획(`68517ec`로 출시). 디자인 QA 결과는 루트 [`design-qa.md`](../design-qa.md)(플랜이 지정한 경로)이며 `final result: blocked`.
+
+**기회 탐색 (2026-09-13)**
+
+- [`superpowers/specs/2026-09-13-discovery-contact-signals-design.md`](superpowers/specs/2026-09-13-discovery-contact-signals-design.md) — **신호 목록 입력됨 / 동작 설계 제안 / 구현 전**. 대면 미팅·연락 2회 또는 장시간 통화·선제적인 결제 일정 발언. 자동 판정의 기간·시간 기준은 확인 중이다.
+
+- [`superpowers/specs/2026-09-13-discovery-nudge-design.md`](superpowers/specs/2026-09-13-discovery-nudge-design.md) — **문맥별 넛지 구현·로컬 검증 완료**. 상세의 주요 행동·직접 입력 포커스·단계적 펼침, 날짜 미루기·계기별 숨김·해제, 목록/상세/다른 창 상태 공유. [실행 기록](superpowers/plans/2026-09-13-discovery-nudge.md). 0031 운영 DB 적용·배포는 별도.
+
+- [`superpowers/specs/2026-09-13-opportunity-discovery-v2-design.md`](superpowers/specs/2026-09-13-opportunity-discovery-v2-design.md) — **2A 구현·로컬 검증 완료**. 작업 중심 전환·전체 서버 검색·읽기 중심 상세·관심 질문 시작·검토일 도래 표시. [실행 기록](superpowers/plans/2026-09-13-opportunity-discovery-v2.md). 2B·2C 및 운영 배포는 후속.
+
+- [`superpowers/specs/2026-09-13-opportunity-discovery-design.md`](superpowers/specs/2026-09-13-opportunity-discovery-design.md) — **1차 구현·로컬 검증 완료**. 독립 기회 탐색에서 포착·발굴·검증·실행 연결·보류·종료를 관리한다. 사이드바 primary 9개로 확장. 실제 업무 연결·revision/receipt·이력과 페이지네이션 포함. [실행 기록](superpowers/plans/2026-09-13-opportunity-discovery.md). 2026-09-13 운영 DB 적용·생성/재시도 검증 완료. Vercel 배포는 문의 동기화의 무료 요금제 주기 제한으로 대기 중이며, AI 탐색은 후속 범위다.
+
+**하루 리뷰 (R0)**
+
+- [`superpowers/specs/2026-09-12-daily-review-and-council-design.md`](superpowers/specs/2026-09-12-daily-review-and-council-design.md) — **R0 승인·구현 / 후속 단계 DRAFT**. 내 작업 → 하루 리뷰에서 에너지·당일 목표 진척·메모를 날짜별 저장·수정한다. 2026-09-13 운영 DB 적용 및 실제 API 연결 확인 완료. [구현·검증·적용 안내](superpowers/plans/2026-09-12-daily-review-r0.md). Council과 주간 리포트는 후속 제안이다.
+
+**콘텐츠 제작 (2026-09-12)**
+
+- [`superpowers/specs/2026-09-12-content-notes-drafts-ai-workflow-design.md`](superpowers/specs/2026-09-12-content-notes-drafts-ai-workflow-design.md) — **방향 승인 · Studio 1차 구현**. 원문·기획·채널별 초안·AI 후보 비교/적용·버전 복원을 연결. 구현·로컬 검증 범위는 문서 §0과 [실행 기록](superpowers/plans/2026-09-12-content-workflow.md)을 따른다. [후속 검증·운영 적용 준비](superpowers/plans/2026-09-12-content-release.md)에서 통합 테스트 오류를 해결했으며 운영 인증 갱신을 기다린다. 일지 신설·기간 회고·자동 콘텐츠 크론은 후속 범위이며 운영 DB 마이그레이션·배포 완료를 뜻하지 않는다.
+
+**메모 작성·활용 (2026-09-13)**
+
+- [`superpowers/specs/2026-09-12-memo-writing-reuse-and-analysis-design.md`](superpowers/specs/2026-09-12-memo-writing-reuse-and-analysis-design.md) — **1차 승인·구현 / 후속 분석·추천 DRAFT**. 내 작업 → 메모에서 제목 없는 빠른 기록·선택 보강·업무 연결·발췌의 할 일/Studio 생성과 원문 복귀를 연결한다. 같은 탭 새로고침 복구·충돌 비교·중복 방지 포함. [구현·검증·운영 적용 전제](superpowers/plans/2026-09-13-memo-workflow.md). 메모의 운영 DB 적용·배포는 별도다.
+
+**기획 초안 (미확정, 새 구현의 근거로 쓰지 않음)**
+
+- [`superpowers/specs/2026-09-13-memo-discovery-and-analysis-design.md`](superpowers/specs/2026-09-13-memo-discovery-and-analysis-design.md) — **2A 승인·구현 / 2B DRAFT**. 한 검색창에서 제목·원문·보강 문장을 찾고, 선택 기간·종류·업무·활용 여부로 좁힌다. 편집 중 입력·펼친 목록·위치를 보존하며 프로젝트·고객·브랜드에서 최근 연결 메모 3개와 전체 보기를 제공한다. [구현·검증 기록](superpowers/plans/2026-09-13-memo-discovery.md). 0030 운영 DB 적용·배포와 선택 AI 분석은 별도다.
+
+- [`superpowers/specs/2026-09-12-unified-inquiries-email-webhook-design.md`](superpowers/specs/2026-09-12-unified-inquiries-email-webhook-design.md) — **APPROVED · 코드 구현(2026-09-13), 운영 연결 대기**. 메일·랜딩페이지 문의 원장, 감지·중복·읽음·처리 상태와 기존 알림 통합. [연결 가이드](inquiry-integration-setup.md), [Gmail 서명·수집](inquiry-gmail-setup.md), [구현·검증 기록](superpowers/plans/2026-09-13-unified-inquiries.md).
+- [`superpowers/specs/2026-09-03-sales-content-marketing-to-branding-growth-plan.md`](superpowers/specs/2026-09-03-sales-content-marketing-to-branding-growth-plan.md) — **DRAFT · 권장안**. 세일즈·콘텐츠·마케팅 → 브랜딩 프레임으로 현재 시스템의 강점·약점·보완점·새 베팅을 정리. 초안 크론 2개 고장(W19)과 첫 빌드 후보("오늘 연락할 리드")를 포함. 운영자 확정 전까지 권장.
+- [`superpowers/specs/2026-09-04-mcp-server-audit-and-expansion-design.md`](superpowers/specs/2026-09-04-mcp-server-audit-and-expansion-design.md) — **DRAFT · 제안**. MCP 서버 실측 점검(§2만 사실)과 확충·보강 설계. read 라우트 응답 158KB·94KB·52KB 실측으로 "화면용 BFF 통과" 전제를 반증하고 MCP 전용 투영 계층을 제안. 위 성장 계획 F-14를 흡수·확장하며, `integration-control-plane-inheritance.md` §6 계약은 그대로 상속한다.
+- [`superpowers/specs/2026-09-13-codex-mcp-api-integration-design.md`](superpowers/specs/2026-09-13-codex-mcp-api-integration-design.md) — **로컬 P0–P2 구현**. 인증된 공통 Agent API, 작은 MCP 조회, 멱등 명령·receipt, SDK worker와 Council 작업 화면을 구현했다. 운영 migration·worker 로그인은 별도 활성화가 필요하고 원격 MCP(P3)는 후속 범위다. 설정은 [`MCP/API 안내`](../packages/mcp-server/README.md)·[`worker 안내`](../packages/codex-worker/README.md)를 따른다.
+- [`superpowers/specs/2026-09-05-journal-timeline-and-ai-digest.md`](superpowers/specs/2026-09-05-journal-timeline-and-ai-digest.md) — **DRAFT · 제안**. 일지를 `journal_entries` 단일 타임라인으로 신설하고 AI 정리를 2계층(Gemini 단건 요약·태그 / Claude Code 기간 회고)으로 분할. §3 범위 4건은 2026-09-05 운영자 확정, §2 실측은 사실, 나머지는 구현 전 제안이다. `daily-operating-note-todo.md`의 P1-5·P1-6·P2-8·P2-10을 흡수한다.
+- [`superpowers/plans/2026-09-04-post-2609-merge-design-agenda.md`](superpowers/plans/2026-09-04-post-2609-merge-design-agenda.md) — **DRAFT · 권장안**. 2609 병합 직후 실측 기준의 디자인 부채·아젠다. §1~§3은 사실(병합 안전성, 재감사 30차 정지 지점, 프리미티브 채택률·신규 문법 불일치), §4~§5는 권장 우선순위다. `system-eval-2026-08-05.md`를 이어받되 개별 주제의 확정 스펙을 대체하지 않는다.
+
+**재감사 기록 (2026-08~09)**
+
+- [`system-eval-2026-08-05.md`](system-eval-2026-08-05.md) — 재감사 1~30차 채점·조치 로그. 축별(안정성·속도·정체성·사용성·디자인·편의성·UIUX) 점수 추이와 각 차수의 지적·수리 내역. 기록 문서이므로 새 구현의 근거로는 §4의 최신 스펙을 우선한다.
 
 ### 아키텍처·데이터 정본
 
@@ -88,7 +150,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 ### 보류된 기능 설계
 
 - Agent/Council: [`agent-tab-mvp-ui-spec.md`](agent-tab-mvp-ui-spec.md)
-- Daily note/Obsidian: [`daily-operating-note-todo.md`](daily-operating-note-todo.md)
+- Daily note/Obsidian: [`daily-operating-note-todo.md`](daily-operating-note-todo.md) — P1-5·P1-6·P2-8·P2-10은 [`superpowers/specs/2026-09-05-journal-timeline-and-ai-digest.md`](superpowers/specs/2026-09-05-journal-timeline-and-ai-digest.md)가 흡수했다(그 문서도 아직 DRAFT). P0-2 Quick Capture는 구현 완료. 남은 고유 범위는 P1-7 Obsidian export(역방향)다
 - GitHub Work OS: [`github-workos-mvp-mockup.md`](github-workos-mvp-mockup.md)
 - Sales Guru: [`sales-guru-mentor-agent-plan.md`](sales-guru-mentor-agent-plan.md)
 - ClassIn CRM 결합: [`sales-os-crm-integration-plan.md`](sales-os-crm-integration-plan.md) — 문서 자체가 보류 상태이며 새 정본 경계를 먼저 적용
@@ -105,6 +167,11 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 ## 5. 구현 기록
 
 - `5c9ccc2` — Phase 0 신뢰 기준선 구현·검증·푸시
+- `0c5e522` — real_v1.3(bm) UI를 real_v1.4 백엔드에 병합
+- `adcf619` — `@com-moon/supabase-rest` 단일 클라이언트 패키지 추출
+- `5a3d506` — 내비게이션 단순화 + 캘린더·할 일 연결
+- `3627eef` — 브랜드 운영 표면(브랜드 탭 P0·P1)
+- `68517ec` — 개인 현금흐름 30일 로드맵
 - `docs/superpowers/plans/2026-07-13-phase0-trust-repair.md` — Phase 0 구현 체크리스트(`codex/moonlight-phase0-trust` 브랜치에 존재)
 - [`superpowers/plans/`](superpowers/plans/) — 특정 기능의 실행 기록
 - [`superpowers/specs/`](superpowers/specs/) — 승인 당시의 상세 설계와 결정 배경

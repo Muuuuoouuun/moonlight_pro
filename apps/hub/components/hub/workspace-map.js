@@ -52,6 +52,12 @@ export const WORKSPACES = {
 
 export const WORKSPACE_KEYS = Object.keys(WORKSPACES);
 
+// Inquiries must retain an explicit unknown lane; the brand personal fallback does not apply.
+export function inquiryScopeForWorkspace(workspace) {
+  if (workspace === 'brand') return 'personal';
+  return ['classin', 'personal', 'unclassified'].includes(workspace) ? workspace : 'all';
+}
+
 export function isWorkspace(ws) {
   return Boolean(ws) && Object.prototype.hasOwnProperty.call(WORKSPACES, ws);
 }
@@ -149,12 +155,11 @@ export function filterProjectsByWorkspace(projects, ws, brands) {
 export function filterTodosByWorkspace(todos, ws, brands) {
   const w = getWorkspace(ws);
   if (!w || !Array.isArray(todos)) return todos || [];
-  return todos.filter(
-    (t) =>
-      t.workspace === ws ||
-      scopeMatchesWorkspace(resolveOrgScopeForKey(t.brand, brands), ws) ||
-      matchAccountKeyword(t.title || t.name, w.accountKeywords),
-  );
+  return todos.filter((t) => {
+    if (isWorkspace(t.workspace)) return t.workspace === ws;
+    return scopeMatchesWorkspace(resolveOrgScopeForKey(t.brand, brands), ws)
+      || matchAccountKeyword(t.title || t.name, w.accountKeywords);
+  });
 }
 
 export function filterDealsByWorkspace(deals, ws) {

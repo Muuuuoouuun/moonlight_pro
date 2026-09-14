@@ -1,9 +1,12 @@
 "use client";
 
 import React from "react";
+import { RelatedMemos } from '../related-memos';
+import { MemoCaptureLink } from "../journal-links";
 import { Avatar, Badge, Button, Checkbox, IconButton } from "../hub-primitives";
 import { ProjectDeliverySummary } from "./project-delivery";
 import { BrandMark } from "./project-pms-components";
+import { TaskChecklistGauge } from './project-task-checklist';
 
 function DetailSection({ title, count = 0, empty, children }) {
   return (
@@ -117,9 +120,11 @@ export function ProjectDetailPanel({
   orderPending = false,
   orderResult = null,
   pendingTodoIds = new Set(),
+  taskPartial = false,
   onClose,
   onEdit,
   onToggleTodo,
+  onEditTodo,
   onCreateTodo,
   onOpen,
   onSendOrder,
@@ -199,7 +204,7 @@ export function ProjectDetailPanel({
         </div>
         <div>
           <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)", marginBottom: 8 }}>
-            체크리스트 · {doneCount}/{todos.length}
+            체크리스트 · {doneCount}/{todos.length}{taskPartial ? ' · 확인된 범위' : ''}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {todos.map((todo) => (
@@ -211,7 +216,13 @@ export function ProjectDetailPanel({
                   size={16}
                   label={`${todo.done ? "다시 열기" : "완료"}: ${todo.title}`}
                 />
-                <span style={{ flex: 1, fontSize: 12, textDecoration: todo.done ? "line-through" : "none", color: todo.done ? "var(--fg-faint)" : "var(--fg)" }}>{todo.title}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                <button className="hub-pms-task-main" onClick={() => onEditTodo?.(todo)}>
+                  <span style={{ fontSize: 12, textDecoration: todo.done ? "line-through" : "none", color: todo.done ? "var(--fg-faint)" : "var(--fg)" }}>{todo.title}</span>
+                  {todo.nextAction && <span className="hub-pms-task-next">{todo.nextAction}</span>}
+                </button>
+                <TaskChecklistGauge task={todo} />
+                </div>
                 <span className="mono" style={{ fontSize: 12, color: "var(--fg-muted)" }}>{todo.due}</span>
               </div>
             ))}
@@ -229,6 +240,8 @@ export function ProjectDetailPanel({
         </DetailSection>
         <a href={`/dashboard/work/projects?view=memos&project=${encodeURIComponent(project.id)}`} style={{ minHeight:44, display:'flex', alignItems:'center', color:'var(--fg-muted)', fontSize:12 }}>메모 작업대 · 업무에 연결</a>
         <ProjectNotes key={project.id} notes={notes} partial={notesPartial} failed={failed.has("notes")} />
+        <RelatedMemos type="project" id={project.id} />
+        <MemoCaptureLink context={{ type: "project", id: project.id }} label="이 프로젝트에 메모 남기기" />
         <DetailSection title="루틴 체크" count={checks.length} empty={failedEmpty("routine_checks", "이 프로젝트에 연결된 routine check가 없습니다.")}>
           {checks.map((check) => <ActivityRow key={check.id} title={check.checkType} body={check.note} meta={check.checkedAtLabel} badge={check.status} tone={checkTone[check.status] || "neutral"} />)}
         </DetailSection>
@@ -244,7 +257,7 @@ export function ProjectDetailPanel({
         </div>
         <div style={{ padding: 12, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <Button variant="outline" size="sm" onClick={() => onEdit?.(project)}>편집</Button>
-          <Button variant="primary" size="sm" icon="chat" style={{ flex: 1 }} onClick={() => onOpen?.(project)}>열기</Button>
+          <Button variant="primary" size="sm" icon="tasks" style={{ flex: 1 }} onClick={() => onOpen?.(project)}>작업 관리</Button>
           <Button variant="outline" size="sm" icon="sparkle" onClick={() => onConsultCouncil?.(project)}>Council 조언</Button>
           <Button variant="outline" size="sm" icon="orders" onClick={() => onSendOrder?.(project)}>{orderPending ? "Sending…" : "주문 보내기"}</Button>
           {orderResult && !orderPending && <span role={orderResult.tone === "ok" ? "status" : "alert"} className="mono" style={{ fontSize: 10.5, color: orderResult.tone === "ok" ? "var(--fg-muted)" : "var(--danger)", whiteSpace: "nowrap" }}>{orderResult.label}</span>}

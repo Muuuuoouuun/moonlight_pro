@@ -214,16 +214,16 @@ test("board cards expose a labelled non-drag status control", () => {
   assert.match(projectsSource, /visibleColumns\.map\(option/);
 });
 
-test("task status controls lock the same item until its durable reload finishes", () => {
-  const updateStart = projectsSource.indexOf("const updateTaskStatus");
+test("task writes lock selected items until their durable writes finish", () => {
+  const updateStart = projectsSource.indexOf("const applyTaskChanges");
   const updateEnd = projectsSource.indexOf("const toggleTodo", updateStart);
   const updateBlock = projectsSource.slice(updateStart, updateEnd);
 
   assert.match(projectsSource.slice(0, updateStart), /const taskStatusPendingRef = React\.useRef\(new Set\(\)\)/);
   assert.match(projectsSource.slice(0, updateStart), /const \[pendingTaskIds, setPendingTaskIds\] = React\.useState/);
-  assert.match(updateBlock, /if \(taskStatusPendingRef\.current\.has\(id\)\) return false/);
-  assert.match(updateBlock, /taskStatusPendingRef\.current\.add\(id\)/);
-  assert.match(updateBlock, /finally[\s\S]{0,220}taskStatusPendingRef\.current\.delete\(id\)/);
+  assert.match(updateBlock, /taskStatusPendingRef\.current\.size > 0/);
+  assert.match(updateBlock, /taskStatusPendingRef\.current\.add\(task\.id\)/);
+  assert.match(updateBlock, /finally[\s\S]{0,220}taskStatusPendingRef\.current\.delete\(task\.id\)/);
   assert.match(projectsSource, /disabled=\{pendingTaskIds\.has\(t\.id\)\}/);
   assert.match(projectsSource, /pendingTodoIds=\{pendingTaskIds\}/);
   assert.match(detailPanelSource, /disabled=\{pendingTodoIds\.has\(todo\.id\)\}/);
@@ -253,9 +253,9 @@ test("canonical project selection is forwarded to the Projects API before the bo
   assert.match(loadBlock, /projectId\s*=\s*selectedProjectIdRef\.current/);
   assert.match(loadBlock, /\/api\/hub\/projects\?project=\$\{encodeURIComponent\(exactProjectId\)\}/);
   assert.match(loadBlock, /fetch\(endpoint, \{ cache: ['"]no-store['"], signal: controller\.signal \}\)/);
-  // 열기 시 exact read를 수행하는 선택 이펙트 — 닫기(null)는 재조회하지 않는다.
-  assert.match(projectsSource, /if \(!selectedProjectId \|\| !initialLoadDoneRef\.current\) return;/);
-  assert.match(projectsSource, /loadLedger\(\{ projectId: selectedProjectId \}\)/);
+  // 상세 또는 작업 필터의 프로젝트를 정확히 읽는다. 둘 다 닫으면 재조회하지 않는다.
+  assert.match(projectsSource, /if \(\(!selectedProjectId && !taskProjectSelection\) \|\| !initialLoadDoneRef\.current\) return;/);
+  assert.match(projectsSource, /loadLedger\(\{ projectId: selectedProjectId \|\| taskProjectSelection \}\)/);
   assert.match(projectsSource, /ledger\.selection\?\.projectId === p\.id/);
   assert.match(projectsSource, /failedSources=\{detailFailedSources\}/);
 });

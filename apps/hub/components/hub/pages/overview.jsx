@@ -387,13 +387,24 @@ function ActivityChart({ series, days, sources, status }) {
 // upright without any counter-rotation math.
 function DonutChart({ series = [], size = 128, strokeWidth = 16, centerLabel }) {
   const total = series.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
+  const completedValue = Number(series.find((s) => s.key === 'completed' || s.key === 'done')?.value) || 0;
+  const isAllCompleted = total > 0 && completedValue === total;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   let cumulative = 0;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-      <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <div
+        style={{
+          position: 'relative',
+          width: size,
+          height: size,
+          flexShrink: 0,
+          filter: isAllCompleted ? 'drop-shadow(0 0 10px rgba(255, 209, 102, 0.45))' : undefined,
+          transition: 'filter var(--dur-panel) var(--ease-hub)',
+        }}
+      >
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
           <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--surface-3)" strokeWidth={strokeWidth} />
           {total > 0 && series.map((item) => {
@@ -420,8 +431,33 @@ function DonutChart({ series = [], size = 128, strokeWidth = 16, centerLabel }) 
           })}
         </svg>
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="stat" style={{ fontSize: 22, fontWeight: 600, lineHeight: 1 }}>{total}</div>
-          {centerLabel && <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 4 }}>{centerLabel}</div>}
+          <div
+            className="stat"
+            style={{
+              fontSize: 22,
+              fontWeight: 600,
+              lineHeight: 1,
+              color: isAllCompleted ? '#ffd166' : 'inherit',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 3,
+            }}
+          >
+            {isAllCompleted && <span style={{ fontSize: 13, color: '#ffd166', animation: 'hubSparklePop 0.8s ease' }}>✦</span>}
+            <span>{total}</span>
+          </div>
+          {centerLabel && (
+            <div
+              style={{
+                fontSize: 10.5,
+                color: isAllCompleted ? '#ffeaa7' : 'var(--fg-faint)',
+                marginTop: 4,
+                fontWeight: isAllCompleted ? 600 : 400,
+              }}
+            >
+              {isAllCompleted ? `${centerLabel} 완료` : centerLabel}
+            </div>
+          )}
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7, flex: 1, minWidth: 0 }}>
@@ -488,6 +524,11 @@ function RhythmCard({ rhythm, state, onNavigate }) {
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
         <span className="stat" style={{ fontSize: 24, fontWeight: 600 }}>{completedAvailable ? completed : '—'}/{total}</span>
         <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>이번 주 완료</span>
+        {percent !== null && percent >= 100 && (
+          <span className="hub-celebration-badge hub-celebration-badge--sparkle" style={{ marginLeft: 'auto' }}>
+            ✦ 완벽 달성
+          </span>
+        )}
       </div>
       {percent !== null && <div style={{ marginTop: 10 }}><Progress value={percent} /></div>}
       <div style={{ marginTop: 10, fontSize: 11, color: 'var(--fg-muted)' }}>

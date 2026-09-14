@@ -37,13 +37,13 @@ function navTreePaths() {
 
 // Overview joined 2026-07-15 by direct operator instruction (see hub-nav.js
 // header); brands joined 2026-08-29 (브랜드 탭 설계 §5.2 — 프로젝트 다음, 콘텐츠 앞)
-// — eight primary + two utility anchors.
-test("sidebar exposes exactly eight primary and two utility anchors", () => {
-  assert.equal(SIDEBAR_PRIMARY.length, 8);
+// — nine primary + two utility anchors.
+test("sidebar exposes exactly nine primary and two utility anchors", () => {
+  assert.equal(SIDEBAR_PRIMARY.length, 9);
   assert.equal(SIDEBAR_UTILITIES.length, 2);
   assert.deepEqual(
     SIDEBAR_PRIMARY.map((a) => a.key),
-    ["today", "overview", "tasks", "revenue", "followups", "projects", "brands", "content"],
+    ["today", "overview", "tasks", "revenue", "followups", "discovery", "projects", "brands", "content"],
   );
 });
 
@@ -129,13 +129,22 @@ test("every child resolves and is owned by its parent anchor in every scope", ()
 
 test("single-destination anchors render no sub-list", () => {
   for (const scope of SIDEBAR_SCOPES) {
-    for (const key of ["today", "tasks", "followups"]) {
+    for (const key of ["today", "followups"]) {
       assert.deepEqual(sidebarChildren(key, scope.key), [], `${key} in ${scope.key}`);
     }
   }
   // ClassIn 콘텐츠 is one surface — the anchor is the destination.
   assert.deepEqual(sidebarChildren("content", "classin"), []);
   assert.ok(sidebarChildren("content", "all").length > 1);
+});
+
+test("daily review stays under my work and opens the same personal record in every scope", () => {
+  for (const { key } of SIDEBAR_SCOPES) {
+    assert.deepEqual(sidebarChildren('tasks', key).map((child) => child.path), ['dashboard/work/my', 'dashboard/work/memos', 'dashboard/work/daily-review']);
+    assert.equal(ownerAnchorKey('dashboard/work/daily-review'), 'tasks');
+  }
+  assert.ok(NAV_TREE.some((node) => node.path === 'dashboard/work/daily-review'));
+  assert.match(appSource, /'dashboard\/work\/daily-review':.*<DailyReview/);
 });
 
 test("at most one child lights up for any route in any scope", () => {
@@ -470,4 +479,16 @@ test("desktop handoff closes before focusing main so BODY is never the final tar
     focusTarget: { focus: () => order.push("focus-main") },
   });
   assert.deepEqual(order, ["close-commit", "focus-main"]);
+});
+
+test('memos has one my-work owner and is reachable in the navigation catalog', () => {
+  assert.equal(ownerAnchorKey('dashboard/work/memos'), 'tasks');
+  assert.ok(NAV_TREE.some(node => node.path === 'dashboard/work/memos'));
+});
+
+ test("discovery owns its independent route and consumes company/personal scopes", () => {
+  assert.equal(ownerAnchorKey("dashboard/discovery"), "discovery");
+  assert.equal(resolveSidebarPath("discovery", "classin"), "dashboard/discovery?scope=classin");
+  assert.equal(resolveSidebarPath("discovery", "personal"), "dashboard/discovery?scope=personal");
+  assert.ok(navTreePaths().includes("dashboard/discovery"));
 });
