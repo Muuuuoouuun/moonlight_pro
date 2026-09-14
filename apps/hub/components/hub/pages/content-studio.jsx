@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { JournalSources } from '../journal-links';
-import { Badge, Button, Card, Drawer, TextField, TextAreaField, SelectField, TruthBadge } from '../hub-primitives';
+import { Badge, Button, Card, Drawer, TextField, TextAreaField, SelectField, TruthBadge, useToast } from '../hub-primitives';
 import { filterBrandsByWorkspace } from '../workspace-map';
 import { usePageCreateHotkey } from '../use-crm-keyboard';
 import { BRIEF_FIELDS, STUDIO_CHANNELS, channelLabel, channelForType, formatForChannel, exportStudioVariant, studioTextForCopy } from '@/lib/content-workflow-client';
@@ -23,6 +23,7 @@ const dateLabel = (value) => value ? new Date(value).toLocaleString('ko-KR', { m
 
 export function ContentStudio({ workspace, ledger }) {
   const studio = useContentStudio(workspace), { draft } = studio;
+  const toast = useToast();
   const [selection, setSelection] = React.useState(null), [drawer, setDrawer] = React.useState(null);
   const [sourceOpen, setSourceOpen] = React.useState(true);
   const [mentorOpen, setMentorOpen] = React.useState(false);
@@ -39,8 +40,8 @@ export function ContentStudio({ workspace, ledger }) {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(studioTextForCopy(draft));
-      setNotice('결과물을 복사했습니다. 원하는 채널에 붙여넣을 수 있습니다.');
-    } catch { setNotice('복사하지 못했습니다. 내보내기로 파일을 받거나 본문을 직접 선택해주세요.'); }
+      toast.success('결과물을 복사했습니다. 원하는 채널에 붙여넣을 수 있습니다.');
+    } catch { toast.error('복사하지 못했습니다. 내보내기로 파일을 받거나 본문을 직접 선택해주세요.'); }
   };
   const download = () => {
     try {
@@ -49,15 +50,19 @@ export function ContentStudio({ workspace, ledger }) {
       const anchor = document.createElement('a'); anchor.href = url; anchor.download = exported.filename;
       document.body.appendChild(anchor); anchor.click(); anchor.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setNotice('결과물 파일을 내보냈습니다.');
-    } catch (error) { setNotice(error.message); }
+      toast.success('결과물 파일을 내보냈습니다.');
+    } catch (error) { toast.error(error.message); }
   };
   const openHistory = async () => { setDrawer('history'); await studio.refreshHistory(); };
   const createVariant = async () => {
     const type = formatForChannel(newChannel);
     const body = type === 'card_news' ? '{"slides":[]}' : type === 'reels_script' ? '{"scenes":[]}' : '';
     const result = await studio.mutate({ action: 'create_variant', variant: { title: draft.variantTitle || draft.title, body, variantType: type, channel: newChannel } });
-    if (result) { setDrawer(null); setSelection(null); }
+    if (result) {
+      setDrawer(null);
+      setSelection(null);
+      toast.success('새 채널 결과물을 추가했습니다.');
+    }
   };
   const saveTruth = studio.loadError ? 'error' : !studio.ready ? 'syncing' : ['error', 'conflict'].includes(studio.saveState) ? 'error' : studio.saveState === 'saving' ? 'syncing' : studio.saveState === 'saved' ? 'live' : 'preview';
   return <div className="hub-page content-studio">
@@ -146,7 +151,7 @@ export function ContentStudio({ workspace, ledger }) {
           </aside>
         </div>
       </>}
-    {drawer === 'variant' && <Drawer title="채널 결과물 추가" subtitle="같은 원문·기획에서 채널별로 별도의 초안을 만듭니다." onClose={() => setDrawer(null)} footer={<Button variant="primary" onClick={createVariant} disabled={studio.busy}>빈 결과물 추가</Button>}>
+    {drawer === 'variant' && <Drawer title="채널 결과물 추가" subtitle="같은 원문·기획에서 채널별로 별도의 초안을 만듭니다." presentation="compact" width="420px" onClose={() => setDrawer(null)} footer={<Button variant="primary" onClick={createVariant} disabled={studio.busy}>빈 결과물 추가</Button>}>
       <div className="studio-stack"><SelectField label="추가할 채널" options={STUDIO_CHANNELS.map(({ key, label }) => ({ value: key, label }))} value={newChannel} onChange={(event) => setNewChannel(event.target.value)} />
       <p className="studio-muted">현재 글을 AI로 변형하려면 AI 작업에서 ‘다른 채널로 변형’을 선택하세요.</p></div>
     </Drawer>}

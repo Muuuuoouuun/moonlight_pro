@@ -4,7 +4,7 @@ import React from "react";
 import { JournalSources } from "../journal-links";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Card, Button, Checkbox, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer } from "../hub-primitives";
+import { Badge, Card, Button, Checkbox, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer, useToast } from "../hub-primitives";
 import { UNDO_WINDOW_MS, useUndoableAction } from "../use-undoable-action";
 import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from "@/lib/pms-ui";
@@ -497,6 +497,7 @@ export function MyWork({ onNavigate }) {
   // 방금 추가한 할 일의 attention item.id — 저장 직후 그 행으로 스크롤 + 잠깐 하이라이트해서
   // "나중"(기한 없음) 버킷 맨 아래로 들어가도 추가된 걸 바로 확인하게 한다. 몇 초 뒤 해제.
   const [justAddedId, setJustAddedId] = React.useState(null);
+  const toast = useToast();
   // 우측 상세 패널이 보고 있는 item.id — 파생 조회라서 reload 후 항목이 사라지면
   // (완료·삭제) 패널도 같이 닫힌다.
   const [detailId, setDetailId] = React.useState(null);
@@ -587,18 +588,24 @@ export function MyWork({ onNavigate }) {
           setJustAddedId(created.id);
           scrollToRow(created.id);
         }
+        const label = created?.bucket === 'later' ? '할 일 저장됨 · "나중"에 추가' : '할 일 저장됨';
         setNotice({
           tone: 'ok',
-          label: created?.bucket === 'later' ? '할 일 저장됨 · "나중"에 추가' : '할 일 저장됨',
+          label,
           action: created
             ? { label: '보기', onClick: () => { setJustAddedId(created.id); scrollToRow(created.id); } }
             : undefined,
         });
+        toast.success(label);
       } else {
-        setNotice({ tone: 'err', label: data.error || `저장 실패 (${data.status || res.status})` });
+        const errMsg = data.error || `저장 실패 (${data.status || res.status})`;
+        setNotice({ tone: 'err', label: errMsg });
+        toast.error(errMsg);
       }
     } catch (error) {
-      setNotice({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+      const errMsg = error instanceof Error ? error.message : String(error);
+      setNotice({ tone: 'err', label: errMsg });
+      toast.error(errMsg);
     } finally {
       setSaving(false);
     }
@@ -658,6 +665,7 @@ export function MyWork({ onNavigate }) {
     }
 
     setNotice({ key: `complete-${id}`, tone: 'ok', label: '할 일 완료됨', action: { label: '되돌리기', onClick: () => undoComplete(item) } });
+    toast.success('할 일을 완료했습니다.', { action: { label: '되돌리기', onClick: () => undoComplete(item) } });
 
     scheduleUndoable(id, () => {
       // 창이 닫히면 알림을 통째로 걷는다 — 버튼만 지우면 "완료됨" 라벨이 다음 액션까지
@@ -673,6 +681,7 @@ export function MyWork({ onNavigate }) {
     setCompletingIds((s) => { const n = new Set(s); n.delete(id); return n; });
     setHiddenIds((s) => { const n = new Set(s); n.delete(id); return n; });
     setNotice({ tone: 'ok', label: '완료 취소됨' });
+    toast.info('완료를 취소했습니다.');
   };
 
   // Board-lens drag-to-reschedule + 패널 미루기 (tasks only — deals/events have no working
@@ -698,6 +707,7 @@ export function MyWork({ onNavigate }) {
     });
     setItemPatches((p) => ({ ...p, [item.id]: { bucket, whenAt: dueAt || null } }));
     setNotice({ tone: 'ok', label: noticeLabel });
+    toast.info(noticeLabel);
     try {
       const res = await fetch('/api/hub/tasks', {
         method: 'PATCH',
@@ -888,6 +898,18 @@ export function MyWork({ onNavigate }) {
           if (!cancelUndoable(key)) return; // 창이 닫혔으면 DELETE가 나갔다
           setHiddenIds((prev) => { const next = new Set(prev); next.delete(rowId); return next; });
           setNotice({ tone: 'ok', label: '삭제 취소됨' });
+          toast.info('삭제를 취소했습니다.');
+        },
+      },
+    });
+    toast.info('할 일을 삭제했습니다.', {
+      action: {
+        label: '되돌리기',
+        onClick: () => {
+          if (!cancelUndoable(key)) return;
+          setHiddenIds((prev) => { const next = new Set(prev); next.delete(rowId); return next; });
+          setNotice({ tone: 'ok', label: '삭제 취소됨' });
+          toast.info('삭제를 취소했습니다.');
         },
       },
     });

@@ -10,6 +10,7 @@ import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
 import { Button } from "./hub-primitives";
 import { Sidebar } from "./hub-sidebar";
 import { TopBar } from "./hub-topbar";
+import { ToastProvider } from "./hub-toast";
 import { useInquiryNotifications } from './inquiry-notifications';
 import { CommandPalette } from "./hub-command-palette";
 import { ShortcutOverlay } from "./crm-shortcut-overlay";
@@ -464,55 +465,57 @@ export function HubApp() {
 
   return (
     <div ref={rootRef} className="hub-app" data-theme={theme}>
-      <div className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'}>
-        <div
-          className="hub-mobile-backdrop"
-          aria-hidden="true"
-          onClick={closeMobileNavigation}
-        />
-        <Sidebar
-          inquiryNotifications={inquiryNotifications}
-          className="hub-sidebar-root"
-          active={path}
-          view={view}
-          routeScope={routeScope}
-          onScopeChange={setNavScope}
-          onNavigate={navigateFromSidebar}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setCollapsed(c => !c)}
-          openPalette={openCommandPalette}
-          mobileHidden={mobileNavState.navHidden}
-          mobileOpen={mobileNavState.open}
-          onMobileClose={closeMobileNavigation}
-          mobileCloseButtonRef={mobileCloseButtonRef}
-        />
-        <div className="hub-main">
-          <TopBar
-            inquiryNotifications={inquiryNotifications}
-            path={path}
-            view={view}
-            scope={routeScope || navScope}
-            onNavigate={navigate}
-            onNew={createOnCurrentSurface}
-            onSidebarOpen={openMobileNavigation}
-            navOpen={mobileNavState.open}
-            menuButtonRef={menuButtonRef}
-            theme={theme}
-            onTheme={updateTheme}
+      <ToastProvider>
+        <div className="hub-shell" data-nav-open={navOpen ? 'true' : 'false'}>
+          <div
+            className="hub-mobile-backdrop"
+            aria-hidden="true"
+            onClick={closeMobileNavigation}
           />
-          <main
-            ref={mainRef}
-            tabIndex={-1}
-            aria-hidden={mobileNavState.mainHidden ? 'true' : undefined}
-            className="hub-content scroll-y"
-          >
-            <div key={path} className="fade-up">{page}</div>
-          </main>
+          <Sidebar
+            inquiryNotifications={inquiryNotifications}
+            className="hub-sidebar-root"
+            active={path}
+            view={view}
+            routeScope={routeScope}
+            onScopeChange={setNavScope}
+            onNavigate={navigateFromSidebar}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={() => setCollapsed(c => !c)}
+            openPalette={openCommandPalette}
+            mobileHidden={mobileNavState.navHidden}
+            mobileOpen={mobileNavState.open}
+            onMobileClose={closeMobileNavigation}
+            mobileCloseButtonRef={mobileCloseButtonRef}
+          />
+          <div className="hub-main">
+            <TopBar
+              inquiryNotifications={inquiryNotifications}
+              path={path}
+              view={view}
+              scope={routeScope || navScope}
+              onNavigate={navigate}
+              onNew={createOnCurrentSurface}
+              onSidebarOpen={openMobileNavigation}
+              navOpen={mobileNavState.open}
+              menuButtonRef={menuButtonRef}
+              theme={theme}
+              onTheme={updateTheme}
+            />
+            <main
+              ref={mainRef}
+              tabIndex={-1}
+              aria-hidden={mobileNavState.mainHidden ? 'true' : undefined}
+              className="hub-content scroll-y"
+            >
+              <div key={path} className="fade-up">{page}</div>
+            </main>
+          </div>
         </div>
-      </div>
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={navigate} />
-      <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
-      <CelebrationCanvas />
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={navigate} />
+        <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
+        <CelebrationCanvas />
+      </ToastProvider>
     </div>
   );
 }

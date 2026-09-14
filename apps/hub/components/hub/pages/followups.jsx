@@ -3,7 +3,7 @@
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Button, Card, CheckboxRow, DateQuickPresets, Divider, Drawer, Dot, EmptyState, SegmentedControl, SyncBadge, TextField } from "../hub-primitives";
+import { Badge, Button, Card, CheckboxRow, DateQuickPresets, Divider, Drawer, Dot, EmptyState, SegmentedControl, SyncBadge, TextField, useToast } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { QUICK_LOG_ACTIONS as LOG_ACTIONS, REACTION_OPTIONS } from "@/lib/sales-os/outcome-attribution";
@@ -367,6 +367,7 @@ function FollowupRow({ item, onNavigate, onOpenPanel, logDraft, onOpenLog, onClo
 }
 
 export function Followups({ onNavigate }) {
+  const toast = useToast();
   const { syncState, items, summary, reload } = useFollowups();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -457,6 +458,7 @@ export function Followups({ onNavigate }) {
         throw new Error(`contact-outcome ${reason}`);
       }
       await reload();
+      toast.success(`연락 기록을 저장했습니다 · ${item.name}`);
     } catch (err) {
       // 늦은 실패: 기록됨 표시를 걷어내고 폼을 입력 그대로 되살린다(무언 소실 금지).
       setLogged((m) => { const n = { ...m }; delete n[item.id]; return n; });
@@ -467,6 +469,7 @@ export function Followups({ onNavigate }) {
           : "기록 저장에 실패했습니다. 다시 시도하세요.",
       );
       setNotice({ tone: "err", label: "기록 저장 실패 — 입력을 복원했습니다." });
+      toast.error("기록 저장 실패 — 입력을 복원했습니다.");
     }
   };
 
@@ -478,6 +481,7 @@ export function Followups({ onNavigate }) {
     setLogged((m) => ({ ...m, [item.id]: label }));
     setLogDraft(null);
     setNotice({ key, tone: "ok", label: `기록됨 · ${item.name}`, action: { label: "되돌리기", onClick: () => undoLog(item) } });
+    toast.success(`기록됨 · ${item.name}`, { action: { label: "되돌리기", onClick: () => undoLog(item) } });
     scheduleUndoable(key, () => {
       // 창이 닫히면 알림을 통째로 걷는다 — 라벨만 남기면 "기록됨"이 다음 액션까지
       // 영구 표시된다(7차 UIUX — revenue·daily-brief의 전체 소거 패턴으로 통일).
@@ -494,6 +498,7 @@ export function Followups({ onNavigate }) {
     }
     setLogged((m) => { const n = { ...m }; delete n[item.id]; return n; });
     setNotice({ tone: "ok", label: "기록 취소됨" });
+    toast.info("기록 취소됨");
   };
 
   return (

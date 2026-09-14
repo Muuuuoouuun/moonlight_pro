@@ -882,7 +882,18 @@
 @keyframes hubDrawerIn { from { transform: translateX(14px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes hubFadeIn { from { opacity: 0; } to { opacity: 1; } }
 .hub-app .hub-drawer { animation: hubDrawerIn var(--dur-panel) var(--ease-hub); }
-.hub-app .hub-drawer-overlay { animation: hubFadeIn var(--dur-overlay) ease-out; }
+.hub-app .hub-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: oklch(0.12 0.005 250 / 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: var(--z-drawer-overlay);
+  animation: hubFadeIn var(--dur-overlay) ease-out;
+}
+.hub-app[data-theme="light"] .hub-drawer-overlay {
+  background: oklch(0.20 0.008 250 / 0.35);
+}
 
 /* Hub-owned reduced-motion catch-all — globals.css has one too, but the hub must not
    depend on a marketing stylesheet for its a11y floor (inline JSX transitions included). */

@@ -3,7 +3,7 @@
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, Progress, CertaintyBadge, ChipToggle } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Avatar, Input, Tabs, IconButton, Divider, EmptyState, SyncBadge, Kbd, EditDrawer, SegmentedControl, ScrollShadowX, Checkbox, Progress, CertaintyBadge, ChipToggle, useToast } from "../hub-primitives";
 import { triggerCelebration } from "../celebration-fx";
 import { requestGuruCoaching, guruChatPath } from "../guru-client";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
@@ -658,6 +658,7 @@ export function LeadEnrichmentPanel({ lead }) {
 }
 
 export function Leads({ workspace }) {
+  const toast = useToast();
   const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -805,16 +806,21 @@ export function Leads({ workspace }) {
     if (!editingLead) return { ok: false, status: 'error' };
     const isNew = String(editLeadId).startsWith('local-lead-');
     const r = await saveRevenueRecord('lead', isNew ? 'create' : 'update', editingLead);
-    if (r.ok && isNew && r.id) {
-      const realId = r.id;
-      setLocalLeads(prev => prev.map(l => (l.id === editLeadId ? { ...l, id: realId } : l)));
-      setLeadEdits(prev => {
-        if (!prev[editLeadId]) return prev;
-        const next = { ...prev, [realId]: prev[editLeadId] };
-        delete next[editLeadId];
-        return next;
-      });
-      setEditLeadId(realId);
+    if (r.ok) {
+      if (isNew && r.id) {
+        const realId = r.id;
+        setLocalLeads(prev => prev.map(l => (l.id === editLeadId ? { ...l, id: realId } : l)));
+        setLeadEdits(prev => {
+          if (!prev[editLeadId]) return prev;
+          const next = { ...prev, [realId]: prev[editLeadId] };
+          delete next[editLeadId];
+          return next;
+        });
+        setEditLeadId(realId);
+      }
+      toast.success(isNew ? '새 리드를 저장했습니다.' : '리드 정보를 저장했습니다.');
+    } else {
+      toast.error(r.status === 'preview' ? 'Supabase 미연결 — 미리보기 상태에서는 저장되지 않습니다.' : '리드 저장에 실패했습니다.');
     }
     return r;
   };
@@ -828,17 +834,23 @@ export function Leads({ workspace }) {
     const isLocal = String(id).startsWith('local-lead-');
     setLocalLeads(prev => prev.filter(l => l.id !== id));
     setDeletedLeadIds(prev => new Set(prev).add(id));
-    if (isLocal) return { ok: true, status: 'local' };
+    if (isLocal) {
+      toast.info('미저장 리드를 삭제했습니다.');
+      return { ok: true, status: 'local' };
+    }
     const key = `delete-lead-${id}`;
+    const undoDelete = () => {
+      if (cancelUndoable(key)) setDeletedLeadIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+      setDeleteNotice(null);
+      toast.info('리드 삭제를 취소했습니다.');
+    };
     setDeleteNotice({
       key,
       tone: 'ok',
       label: '리드 삭제됨',
-      undo: () => {
-        if (cancelUndoable(key)) setDeletedLeadIds(prev => { const n = new Set(prev); n.delete(id); return n; });
-        setDeleteNotice(null);
-      },
+      undo: undoDelete,
     });
+    toast.info('리드를 삭제했습니다.', { action: { label: '되돌리기', onClick: undoDelete } });
     scheduleUndoable(key, () => {
       setDeleteNotice(cur => (cur?.key === key ? null : cur)); // 창 종료 시 전체 소거(7차 UIUX 통일)
       saveRevenueRecord('lead', 'delete', { id }).then(r => {
@@ -853,6 +865,7 @@ export function Leads({ workspace }) {
               : `삭제 실패 (${r.status}) — 리드를 되살렸습니다.`,
             undo: null,
           });
+          toast.error(r.status === 'preview' ? 'Supabase 미설정 — 리드를 되살렸습니다.' : '삭제 실패 — 리드를 되살렸습니다.');
         }
       });
     });
@@ -1607,6 +1620,7 @@ function DealNextMeetingPanel({ deal, onNavigate }) {
 }
 
 export function Deals({ workspace, onNavigate }) {
+  const toast = useToast();
   const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
   const queryScope = searchParams?.get('scope');
@@ -1703,6 +1717,14 @@ export function Deals({ workspace, onNavigate }) {
     const undoBase = pendingStageRef.current.get(key) ?? prevStage;
     pendingStageRef.current.set(key, undoBase);
     const stageLabel = DEAL_STAGES.find(s => s.key === to)?.label || to;
+    const undoStageMove = () => {
+      if (cancelUndoable(key)) {
+        pendingStageRef.current.delete(key);
+        setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: undoBase } : d)));
+      }
+      setBoardNotice(null);
+      toast.info('단계 이동을 취소했습니다.');
+    };
     scheduleUndoable(key, () => {
       pendingStageRef.current.delete(key);
       setBoardNotice(cur => (cur?.key === key ? null : cur)); // 창 종료 시 알림 소거(19차 수명 계약)
@@ -1710,20 +1732,16 @@ export function Deals({ workspace, onNavigate }) {
         if (r.ok) return;
         setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: undoBase } : d)));
         setBoardNotice({ tone: 'err', label: `스테이지 이동 저장 실패 (${r.status}) — 원위치로 되돌렸습니다` });
+        toast.error('스테이지 이동 저장 실패 — 원위치로 되돌렸습니다');
       });
     });
     setBoardNotice({
       key,
       tone: 'ok',
       label: `${stageLabel}(으)로 이동됨`,
-      undo: () => {
-        if (cancelUndoable(key)) {
-          pendingStageRef.current.delete(key);
-          setDeals(ds => ds.map(d => (d.id === id ? { ...d, stage: undoBase } : d)));
-        }
-        setBoardNotice(null);
-      },
+      undo: undoStageMove,
     });
+    toast.success(`${stageLabel}(으)로 이동됨`, { action: { label: '되돌리기', onClick: undoStageMove } });
   };
   // 딜별 체크리스트 카운트 (공유 실행 척추의 보드 표면) — tasks 원장에서 meta.deal_id로
   // 연결된 하위 항목을 집계해 카드에 ✓n/m으로 얹는다. 드로어가 닫힐 때 재집계해서
@@ -1785,6 +1803,9 @@ export function Deals({ workspace, onNavigate }) {
       setDeals(ds => ds.map(d => (d.id === editDealId ? { ...d, ...(draft || {}), id: realId } : d)));
       setDealDrafts(prev => { if (!prev[editDealId]) return prev; const next = { ...prev }; delete next[editDealId]; return next; });
       if (isNew && r.id) setEditDealId(realId);
+      toast.success(isNew ? '새 딜을 저장했습니다.' : '딜 정보를 저장했습니다.');
+    } else {
+      toast.error(r.status === 'preview' ? 'Supabase 미연결 — 미리보기 상태에서는 저장되지 않습니다.' : '딜 저장에 실패했습니다.');
     }
     return r;
   };
@@ -1796,10 +1817,16 @@ export function Deals({ workspace, onNavigate }) {
     const removed = deals.find(d => d.id === id) || null;
     const isLocal = String(id).toLowerCase().startsWith('local-');
     setDeals(ds => ds.filter(d => d.id !== id));
-    if (isLocal) return { ok: true, status: 'local' };
+    if (isLocal) {
+      toast.info('미저장 딜을 삭제했습니다.');
+      return { ok: true, status: 'local' };
+    }
     const r = await saveRevenueRecord('deal', 'delete', { id });
     if (!r.ok && removed) {
       setDeals(ds => (ds.some(d => d.id === id) ? ds : [removed, ...ds])); // preview 포함 복원(7차)
+      toast.error('딜 삭제에 실패하여 복원했습니다.');
+    } else {
+      toast.info('딜을 삭제했습니다.');
     }
     return r;
   };
@@ -2118,6 +2145,7 @@ function sortCases(rows, sort) {
 }
 
 export function Cases() {
+  const toast = useToast();
   const { ledger, syncState } = useRevenueLedger();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -2187,16 +2215,21 @@ export function Cases() {
     if (!editingCase) return { ok: false, status: 'error' };
     const isNew = String(editCaseId).startsWith('CASE-');
     const r = await saveRevenueRecord('case', isNew ? 'create' : 'update', editingCase);
-    if (r.ok && isNew && r.id) {
-      const realId = r.id;
-      setLocalCases(prev => prev.map(c => (c.id === editCaseId ? { ...c, id: realId } : c)));
-      setCaseEdits(prev => {
-        if (!prev[editCaseId]) return prev;
-        const next = { ...prev, [realId]: prev[editCaseId] };
-        delete next[editCaseId];
-        return next;
-      });
-      setEditCaseId(realId);
+    if (r.ok) {
+      if (isNew && r.id) {
+        const realId = r.id;
+        setLocalCases(prev => prev.map(c => (c.id === editCaseId ? { ...c, id: realId } : c)));
+        setCaseEdits(prev => {
+          if (!prev[editCaseId]) return prev;
+          const next = { ...prev, [realId]: prev[editCaseId] };
+          delete next[editCaseId];
+          return next;
+        });
+        setEditCaseId(realId);
+      }
+      toast.success(isNew ? '새 케이스를 저장했습니다.' : '케이스 정보를 저장했습니다.');
+    } else {
+      toast.error(r.status === 'preview' ? 'Supabase 미연결 — 미리보기 상태에서는 저장되지 않습니다.' : '케이스 저장에 실패했습니다.');
     }
     return r;
   };
@@ -2208,10 +2241,16 @@ export function Cases() {
     const isLocal = String(id).startsWith('CASE-');
     setLocalCases(prev => prev.filter(c => c.id !== id));
     setDeletedCaseIds(prev => new Set(prev).add(id));
-    if (isLocal) return { ok: true, status: 'local' };
+    if (isLocal) {
+      toast.info('미저장 케이스를 삭제했습니다.');
+      return { ok: true, status: 'local' };
+    }
     const r = await saveRevenueRecord('case', 'delete', { id });
     if (!r.ok) {
       setDeletedCaseIds(prev => { const n = new Set(prev); n.delete(id); return n; }); // 실패·preview 복원(7차)
+      toast.error('케이스 삭제에 실패하여 복원했습니다.');
+    } else {
+      toast.info('케이스를 삭제했습니다.');
     }
     return r;
   };
@@ -2966,6 +3005,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
 }
 
 export function Accounts({ workspace, onNavigate }) {
+  const toast = useToast();
   const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
   const searchParams = useSearchParams();
   const [localAccounts, setLocalAccounts] = React.useState([]);
@@ -3151,7 +3191,13 @@ export function Accounts({ workspace, onNavigate }) {
         setActivityError({ name, message: `기록 삭제 실패 (${r.status}) — 행을 복원했습니다.` });
       });
     });
-    setDeleteNotice({ key, name, label: '기록 삭제됨', undo: () => { if (cancelUndoable(key)) restoreRows(); setDeleteNotice(null); } });
+    const undoDelete = () => {
+      if (cancelUndoable(key)) restoreRows();
+      setDeleteNotice(null);
+      toast.info('기록 삭제를 취소했습니다.');
+    };
+    setDeleteNotice({ key, name, label: '기록 삭제됨', undo: undoDelete });
+    toast.info('기록을 삭제했습니다.', { action: { label: '되돌리기', onClick: undoDelete } });
   };
 
   const handlePinNote = (name) => (note) => {
@@ -3285,6 +3331,7 @@ export function Accounts({ workspace, onNavigate }) {
     const r = await saveRevenueRecord('account', 'create', { name, type, ...(ws ? { workspace } : {}) });
     if (r.ok && r.id) {
       setLocalAccounts(prev => prev.map(a => (a.name === name ? { ...a, id: r.id } : a)));
+      toast.success('새 계정을 생성했습니다.');
     } else if (r.status !== 'preview') {
       // 라이브 백엔드 거부 — 팬텀을 남기지 않고 제거 + 명명 (preview=미구성만 로컬 유지 정당).
       // activityError는 detail 패널 전용이라 목록 복귀 후엔 보이지 않는다 — 페이지 알림 사용
@@ -3292,6 +3339,7 @@ export function Accounts({ workspace, onNavigate }) {
       setLocalAccounts(prev => prev.filter(a => a.name !== name));
       setView('list');
       setAccountsNotice(`계정 생성 실패 (${r.status}) — 다시 시도하세요.`);
+      toast.error(`계정 생성 실패 (${r.status}) — 다시 시도하세요.`);
     }
   };
 

@@ -15,6 +15,7 @@ import {
   Kbd,
   SectionTitle,
   SyncBadge,
+  useToast,
 } from "../hub-primitives";
 import {
   buildBrandDirectory,
@@ -357,6 +358,7 @@ export function Brands() {
   const scope = searchParams.get("scope") || "all";
   const selectedKey = searchParams.get("b");
   const { ledger, reload } = useContentLedgerForBrands();
+  const toast = useToast();
   const [draft, setDraft] = React.useState(null);
   const [saveNote, setSaveNote] = React.useState(null);
 
@@ -437,6 +439,7 @@ export function Brands() {
         await reload();
         setQuery(slug);
         setSaveNote({ tone: "ok", label: "브랜드 저장됨" });
+        toast.success(`새 브랜드 ‘${name}’을 만들었습니다.`);
         return { ok: true, status: data.status };
       }
       if (data.status === "preview") {
@@ -603,6 +606,8 @@ export function Brands() {
         <EditDrawer
           title="새 브랜드"
           subtitle="정체성은 만든 뒤 이 탭에서 채운다"
+          presentation="compact"
+          width="440px"
           record={draft}
           fields={[
             { key: "name", label: "이름", placeholder: "예: 시나브로 · Go;Re" },

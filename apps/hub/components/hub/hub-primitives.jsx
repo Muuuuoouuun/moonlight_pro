@@ -4,6 +4,7 @@ import React from "react";
 import { Iconed } from "./hub-icons";
 import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
 import './hub-compact-drawer.css';
+export { useToast, ToastProvider } from './hub-toast';
 
 export function Badge({ children, tone = 'neutral', variant = 'soft', size = 'sm', numeric = false, style }) {
   const tones = {
@@ -816,7 +817,7 @@ export function Drawer({ title, subtitle, onClose, footer, footerStyle, initialF
 
   return (
     <>
-      <div className="hub-drawer-overlay" data-presentation={presentation} data-exiting={exiting} aria-hidden="true" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / 0.4)', zIndex: 'var(--z-drawer-overlay)' }} />
+      <div className="hub-drawer-overlay" data-presentation={presentation} data-exiting={exiting} aria-hidden="true" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-drawer-overlay)' }} />
       <aside
         ref={asideRef}
         role="dialog"
@@ -881,7 +882,7 @@ const FIELD_PANEL_KEY = '__fields__';
 // 않으면 기존 call site와 픽셀 단위로 같은 단일 폼이 그려진다(계약 변경 없음). 탭이 있을
 // 때만 열림 포커스를 첫 필드로 고정한다: 그러지 않으면 Drawer의 "본문 첫 focusable"
 // 규칙이 탭 버튼을 집어 이름 입력이 포커스를 잃는다.
-export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, width = 'min(380px, 92vw)', saveLabel = '변경사항 저장', panels, infoLabel = '정보', children }) {
+export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, presentation = 'side', width = 'min(380px, 92vw)', saveLabel = '변경사항 저장', panels, infoLabel = '정보', children }) {
   const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | conflict | error
   const [saveFeedback, setSaveFeedback] = React.useState('');
   // 파괴 확인은 브라우저 confirm()이 아니라 푸터 인라인 2단계다 — OS 다이얼로그는 디자인
@@ -1058,6 +1059,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
       subtitle={subtitle}
       onClose={requestClose}
       width={width}
+      presentation={presentation}
       initialFocusRef={hasPanels ? firstFieldRef : undefined}
       footer={
         confirming ? (

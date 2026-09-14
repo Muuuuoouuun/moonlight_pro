@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Button, Drawer, SegmentedControl, TextAreaField, TextField, TruthBadge } from '../hub-primitives';
+import { Button, Drawer, SegmentedControl, TextAreaField, TextField, TruthBadge, useToast } from '../hub-primitives';
 import { Iconed } from '../hub-icons';
 
 const ENERGY = [1, 2, 3, 4, 5].map((key) => ({ key, label: String(key) }));
@@ -23,6 +23,7 @@ function ReviewSummary({ review }) {
 
 export function DailyReviewComposer({ model, onClose }) {
   const { date, draft, review, source, saveState, busy, dirty, conflict, edit } = model;
+  const toast = useToast();
   const [expanded, setExpanded] = React.useState(() => source !== 'loading' && hasProgress(draft));
   const [exiting, setExiting] = React.useState(false);
   const formRef = React.useRef(null);
@@ -59,7 +60,10 @@ export function DailyReviewComposer({ model, onClose }) {
     formRef.current?.focus();
     try {
       const result = await model.save(nextDraft);
-      if (result?.state === 'saved') setExiting(true);
+      if (result?.state === 'saved') {
+        setExiting(true);
+        toast.success('오늘의 하루 리뷰를 저장했습니다.');
+      }
       else if (typeof nextDraft.progress === 'number' && !nextDraft.focus.trim()) setExpanded(true);
     } finally { submittingRef.current = false; }
   }

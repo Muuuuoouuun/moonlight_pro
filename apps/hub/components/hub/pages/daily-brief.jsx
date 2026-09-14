@@ -3,7 +3,8 @@
 import React from "react";
 import { InquirySummary } from '../inquiry-notifications';
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, SectionTitle, Button, Progress, Sparkline, SyncBadge, EmptyState, Kbd } from "../hub-primitives";
+import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, EmptyState, Kbd } from "../hub-primitives";
+import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { BurningStreakBadge, StreakFlame } from "../burning-streak";
 import { useUndoableAction } from "../use-undoable-action";
 import { createClientId } from "@/lib/pms-ui";
@@ -1542,6 +1543,7 @@ function RhythmPanel({ onNavigate }) {
 // 자기 소스의 truth 상태를 따로 표시한다 — 캘린더 미연결이 매출 슬롯을 오염시키지 않는다.
 function FocusSlots({ dailyFocus, onNavigate }) {
   if (!dailyFocus) return null;
+  const [guruFocusItem, setGuruFocusItem] = React.useState(null);
   const ka = dailyFocus.urgentKa || {};
   const focus = dailyFocus.focusCustomers || {};
   const agenda = dailyFocus.todayAgenda || {};
@@ -1597,6 +1599,25 @@ function FocusSlots({ dailyFocus, onNavigate }) {
                   {ka.item.reason && <span style={{ color: 'var(--fg-faint)' }}> · {ka.item.reason}</span>}
                 </div>
               </div>
+              <IconButton
+                icon="sparkle"
+                label="Guru 세일즈 코칭"
+                size="sm"
+                tone="moon"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setGuruFocusItem({
+                    id: ka.item.id || 'urgent-ka',
+                    name: ka.item.name,
+                    company: ka.item.company,
+                    stage: '긴급 KA',
+                    nextAction: ka.item.nextAction,
+                    reason: ka.item.reason,
+                    notes: `긴급 KA: ${ka.item.name} (${ka.item.company || ''}) - ${ka.item.reason || ''}. 다음 행동: ${ka.item.nextAction || ''}`
+                  });
+                }}
+                style={{ color: 'var(--moon-300)', flexShrink: 0 }}
+              />
               <Iconed name="chevronR" size={13} className="daily-brief__row-arrow" />
             </div>
           </div>
@@ -1653,6 +1674,27 @@ function FocusSlots({ dailyFocus, onNavigate }) {
                     {item.lastTouch && <span> · 최근 {item.lastTouch}</span>}
                   </div>
                 </div>
+                <IconButton
+                  icon="sparkle"
+                  label="Guru 세일즈 코칭"
+                  size="sm"
+                  tone="moon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setGuruFocusItem({
+                      id: item.id,
+                      name: item.name,
+                      company: item.company,
+                      stage: '집중 고객',
+                      nextAction: item.nextAction,
+                      reason: item.reason,
+                      dueLabel: item.dueLabel,
+                      lastTouch: item.lastTouch,
+                      notes: `집중 고객 #${i + 1}: ${item.name} (${item.company || ''}). 이유: ${item.reason || ''}. 다음 행동: ${item.nextAction || ''}. 기한: ${item.dueLabel || ''}`
+                    });
+                  }}
+                  style={{ color: 'var(--moon-300)', flexShrink: 0 }}
+                />
                 <Iconed name="chevronR" size={12} className="daily-brief__row-arrow" />
               </div>
             ))}
@@ -1698,6 +1740,23 @@ function FocusSlots({ dailyFocus, onNavigate }) {
           </Button>
         </div>
       </Card>
+
+      <FloatingMentorWidget
+        isOpen={Boolean(guruFocusItem)}
+        onClose={() => setGuruFocusItem(null)}
+        agent="guru"
+        contextType="customer"
+        contextTitle={guruFocusItem?.name || guruFocusItem?.company || "고객 코칭"}
+        contextData={{
+          name: guruFocusItem?.name,
+          company: guruFocusItem?.company,
+          stage: guruFocusItem?.stage,
+          nextAction: guruFocusItem?.nextAction,
+          reason: guruFocusItem?.reason,
+          lastTouch: guruFocusItem?.lastTouch,
+          notes: guruFocusItem?.notes,
+        }}
+      />
     </div>
   );
 }
