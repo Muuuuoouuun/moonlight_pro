@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, SectionTitle, Button, Progress, Sparkline, SyncBadge, EmptyState } from "../hub-primitives";
+import { Badge, Dot, Card, SectionTitle, Button, Progress, Sparkline, SyncBadge, EmptyState, Kbd } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { createClientId } from "@/lib/pms-ui";
 import { buildQuickCapture, isDurableQuickCaptureResult } from "@/lib/quick-task-capture";
@@ -18,20 +18,23 @@ import {
 } from "@/lib/rhythm-ui";
 
 function formatBriefDate(date) {
-  return new Intl.DateTimeFormat('en-US', {
-    weekday: 'long',
+  const parts = new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
     month: 'long',
     day: 'numeric',
-    year: 'numeric',
-  }).format(date).replace(',', ' ·').replace(',', ' ·');
+    weekday: 'long',
+  }).format(date);
+  return `${parts} · KST`;
 }
 
 function greetingFor(date) {
   const hour = date.getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
+  if (hour < 12) return '좋은 아침입니다';
+  if (hour < 18) return '좋은 오후입니다';
+  return '좋은 저녁입니다';
 }
+
 
 // Matches the daily-brief API's money formatter so the KPI cards and the pipeline card
 // read in the same ₩M/₩K units — no drift between server-formatted and client-formatted money.
@@ -245,11 +248,16 @@ function QuickTaskCapture({ onNavigate, onSaved }) {
   }
 
   return (
-    <Card className="daily-brief__capture daily-brief__panel" style={{ padding: '14px 16px' }}>
-      <form aria-label="빠른 입력" onSubmit={submit} className="hub-stackable-row" style={{ display: 'flex', alignItems: 'end', gap: 10 }}>
-        <div style={{ display: 'flex', flex: '1 1 360px', minWidth: 0, flexDirection: 'column', gap: 7 }}>
+    <Card className="daily-brief__capture daily-brief__panel" style={{ padding: '16px 18px' }}>
+      <form aria-label="빠른 입력" onSubmit={submit} className="hub-stackable-row" style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+        <div style={{ display: 'flex', flex: '1 1 360px', minWidth: 0, flexDirection: 'column', gap: 8 }}>
           <div className="hub-stackable-row" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <label htmlFor="daily-brief-quick-task" className="mono" style={{ flex: 1, fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Quick Capture</label>
+            <label htmlFor="daily-brief-quick-task" className="mono" style={{ flex: 1, fontSize: 10.5, color: 'var(--fg-dim)', letterSpacing: '0.1em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>Quick Capture</span>
+              <span style={{ fontSize: 9.5, color: 'var(--fg-faint)', textTransform: 'none', letterSpacing: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                (Enter로 저장 <Kbd style={{ fontSize: 9, minWidth: 14, height: 16, padding: '0 4px', lineHeight: '14px' }}>↵</Kbd>)
+              </span>
+            </label>
             <div role="group" aria-label="저장 위치" style={{ display: 'flex', gap: 4 }}>
               <Button type="button" variant={hint === 'task' ? 'secondary' : 'ghost'} size="xs" aria-pressed={hint === 'task'} disabled={saving} onClick={() => changeHint('task')}>할 일</Button>
               <Button type="button" variant={hint === 'inbox' ? 'secondary' : 'ghost'} size="xs" aria-pressed={hint === 'inbox'} disabled={saving} onClick={() => changeHint('inbox')}>정리 전</Button>
@@ -267,19 +275,20 @@ function QuickTaskCapture({ onNavigate, onSaved }) {
             autoComplete="off"
             maxLength={4000}
             disabled={saving}
+            className="daily-brief__quick-input"
             style={{
-              width: '100%', padding: '8px 11px', fontSize: 16, lineHeight: 1.4,
+              width: '100%', padding: '9px 12px', fontSize: 14.5, lineHeight: 1.4,
               color: 'var(--fg)', background: 'var(--surface-2)',
               border: `1px solid ${state.status === 'error' ? 'var(--danger-line)' : 'var(--line-soft)'}`,
               borderRadius: 'var(--r-sm)',
             }}
           />
         </div>
-        <Button type="submit" variant="primary" size="md" icon="plus" disabled={saving || !raw.trim()}>
+        <Button type="submit" variant="primary" size="md" icon="plus" disabled={saving || !raw.trim()} style={{ height: 42, alignSelf: 'flex-end', flexShrink: 0 }}>
           {saving ? '저장 중' : hint === 'task' ? '할 일 저장' : '정리 전 저장'}
         </Button>
       </form>
-      <div style={{ marginTop: 4, minHeight: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ marginTop: 6, minHeight: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
         <span role={state.status === 'error' ? 'alert' : 'status'} aria-live="polite" style={{ flex: 1, fontSize: 11.5, color: stateColor }}>
           {state.message}
         </span>
@@ -370,21 +379,25 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
             {items.map((task, index) => (
               <div
                 key={task.id}
-                className="hub-stackable-row"
+                className="hub-row hub-stackable-row"
                 style={{
                   minHeight: 'calc(var(--row-h) + 20px)',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 10,
-                  padding: 'var(--pad-y) var(--pad-x)',
+                  gap: 12,
+                  padding: '11px 16px',
                   borderBottom: index < items.length - 1 ? '1px solid var(--line-soft)' : 'none',
                 }}
               >
                 <Badge tone={laneTone[task.lane] || 'neutral'} size="xs">{task.laneLabel}</Badge>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</div>
-                  <div className="mono" style={{ marginTop: 3, fontSize: 10.5, color: 'var(--fg-faint)' }}>
-                    {task.due && task.due !== '미정' ? `due ${task.due} · ` : ''}{task.priority || 'med'}
+                  <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</div>
+                  <div className="mono" style={{ marginTop: 2, fontSize: 11, color: 'var(--fg-faint)' }}>
+                    {task.due && task.due !== '미정' ? (
+                      <span style={{ color: task.lane === 'missed' ? 'var(--danger)' : 'inherit', fontWeight: task.lane === 'missed' ? 600 : 400 }}>
+                        {`due ${task.due}`} ·{' '}
+                      </span>
+                    ) : ''}{task.priority || 'med'}
                   </div>
                 </div>
                 <Button
@@ -393,7 +406,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
                   icon="check"
                   aria-label={`완료: ${task.title}`}
                   onClick={() => complete(task)}
-                  style={{ minHeight: 44 }}
+                  style={{ minHeight: 44, padding: '0 14px', flexShrink: 0 }}
                 >
                   완료
                 </Button>
@@ -403,7 +416,7 @@ function TaskToday({ taskToday, onNavigate, onChanged }) {
               <button
                 type="button"
                 onClick={() => onNavigate?.('dashboard/work/my')}
-                style={{ border: 0, borderTop: '1px solid var(--line-soft)', background: 'var(--surface-2)', color: 'var(--fg-muted)', fontSize: 11.5 }}
+                style={{ width: '100%', border: 0, borderTop: '1px solid var(--line-soft)', background: 'var(--surface-2)', color: 'var(--fg-muted)', fontSize: 11.5, padding: '9px 14px', cursor: 'pointer', textAlign: 'center' }}
               >
                 할 일 {taskToday.hiddenCount}건 더 보기
               </button>
@@ -584,9 +597,9 @@ function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
         aria-expanded={expanded}
         onClick={() => setExpanded(e => !e)}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(v => !v); } }}
-        style={{ padding: 'var(--card-pad)', cursor: 'pointer', display: 'flex', gap: 14 }}
+        style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', gap: 12, alignItems: 'flex-start' }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 2 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 3 }}>
           <Dot tone={s.tone === 'danger' ? 'danger' : 'neutral'} size={8} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -596,23 +609,23 @@ function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
             <div style={{ flex: 1 }} />
             <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>from {s.source.from} · <span className="mono">{s.source.ref}</span></span>
           </div>
-          <div style={{ fontSize: 15, fontWeight: 500, color: decided ? 'var(--fg-muted)' : 'var(--fg)', marginBottom: 4, letterSpacing: '-0.01em' }}>
+          <div style={{ fontSize: 14.5, fontWeight: 600, color: decided ? 'var(--fg-muted)' : 'var(--fg)', marginBottom: 4, letterSpacing: '-0.01em' }}>
             {s.title}
           </div>
-          <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.55, maxWidth: '70ch' }}>{s.summary}</div>
+          <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.5, maxWidth: '70ch' }}>{s.summary}</div>
           {decided && (
             // done은 중립 체크 + 낮은 강조 텍스트 — 녹색 완료 금지(§5.3 lifecycle).
-            <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--fg-muted)' }}>
+            <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--fg-muted)' }}>
               <Iconed name="check" size={12} />
               <span>오늘 처리함 · {decided}</span>
               <Button variant="ghost" size="xs" onClick={(e) => { e.stopPropagation(); setDecided(null); }}>되돌리기</Button>
             </div>
           )}
         </div>
-        <Iconed name="chevronD" size={14} style={{ color: 'var(--fg-faint)', transform: expanded ? '' : 'rotate(-90deg)', transition: 'transform .15s' }} />
+        <Iconed name="chevronD" size={14} style={{ color: 'var(--fg-faint)', transform: expanded ? '' : 'rotate(-90deg)', transition: 'transform .15s', flexShrink: 0, marginTop: 3 }} />
       </div>
       {expanded && !decided && (
-        <div style={{ padding: '0 var(--card-pad) var(--card-pad)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ padding: '0 16px 14px', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {s.decisions.map((d, i) => (
             <Button key={i} variant={d.primary ? 'primary' : 'secondary'} size="sm" icon={d.primary ? 'bolt' : null}
               onClick={() => {
@@ -640,29 +653,33 @@ function MetricCard({ m, onNavigate, compact }) {
       tabIndex={clickable ? 0 : undefined}
       onClick={clickable ? () => onNavigate(target) : undefined}
       onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(target); } } : undefined}
-      className="hub-metric-card"
+      className="hub-metric-card daily-brief__metric-card"
       style={{
         background: 'var(--surface)',
         border: '1px solid var(--line-soft)',
         borderRadius: 'var(--r-lg)',
-        padding: compact ? '10px 13px' : 'var(--card-pad)',
+        padding: compact ? '12px 14px' : 'var(--card-pad)',
         boxShadow: compact ? 'none' : 'var(--shadow-soft)',
         cursor: clickable ? 'pointer' : 'default',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        minHeight: compact ? 92 : 110,
       }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <div style={{ fontSize: compact ? 10.5 : 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 500 }}>{m.label}</div>
+        <div style={{ fontSize: compact ? 10.5 : 11, color: 'var(--fg-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>{m.label}</div>
         {clickable && <Iconed name="chevronR" size={compact ? 11 : 12} style={{ color: 'var(--fg-faint)', marginLeft: 'auto' }} />}
       </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: compact ? 4 : 10 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: compact ? 6 : 10 }}>
         {/* ≥18px → .stat (sans tabular), never mono — DESIGN.md §6 hybrid number rule. */}
-        <div className="stat" style={{ fontSize: compact ? 18 : 30, fontWeight: 600 }}>{m.value}</div>
+        <div className="stat" style={{ fontSize: compact ? 22 : 30, fontWeight: 600, letterSpacing: '-0.02em', color: m.value === '—' ? 'var(--fg-faint)' : 'var(--fg)' }}>{m.value}</div>
         <div style={{ flex: 1 }} />
         {/* 실측 시계열이 있을 때만 — 합성 스파크는 지어낸 추세를 실데이터처럼 보이게 한다. */}
         {Array.isArray(m.spark) && m.spark.length > 1 && (
           <Sparkline values={m.spark} tone="moon" width={compact ? 48 : 70} height={compact ? 16 : 22} />
         )}
       </div>
-      <div style={{ marginTop: compact ? 3 : 6, fontSize: compact ? 10.5 : 11.5, color: m.tone ? 'var(--fg-muted)' : 'var(--fg-faint)' }}>{m.delta}</div>
+      <div style={{ marginTop: compact ? 4 : 6, fontSize: compact ? 11 : 11.5, color: m.tone ? 'var(--fg-muted)' : 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.delta}</div>
     </div>
   );
 }
@@ -1109,13 +1126,14 @@ function StatusLine({ state, onRetry }) {
           aria-expanded={open}
           aria-controls="daily-brief-ledger-statuses"
           onClick={() => setOpen((o) => !o)}
-          style={{ color: 'var(--fg-faint)', fontSize: 11, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
+          className="daily-brief__status-toggle"
         >
-          {open ? '기록 숨기기' : `기록 ${sourceCount}`}
+          <span>{open ? '기록 숨기기' : `기록 ${sourceCount}`}</span>
+          <Iconed name="chevronD" size={10} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
         </button>
       )}
       {open && (
-        <div id="daily-brief-ledger-statuses" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', width: '100%', marginTop: 6 }}>
+        <div id="daily-brief-ledger-statuses" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', width: '100%', marginTop: 8, padding: '8px 12px', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)' }}>
           {state.sources.map((source) => (
             <Badge key={source.key} tone={syncTone(source.state)} variant="outline" size="xs">
               {source.label} · {sourceLabel(source.state)}
@@ -1185,19 +1203,19 @@ function CommandCard({ s, remaining, onNavigate }) {
       background: 'var(--surface)',
       border: '1px solid var(--line-soft)',
       borderRadius: 'var(--r-lg)',
-      padding: 16,
+      padding: '18px 20px',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 9, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         {/* §9: urgent 인디케이터는 루프 금지 — red+glow가 이미 충분한 강조 */}
         <span style={{ width: 7, height: 7, borderRadius: 999, background: accent, flexShrink: 0 }} />
-        <span className="mono" style={{ fontSize: 10.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--fg-dim)' }}>지금 가장 급한 결정</span>
+        <span className="mono" style={{ fontSize: 10.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-dim)', fontWeight: 600 }}>지금 가장 급한 결정</span>
         <Badge tone="neutral" size="xs">{s.kind}</Badge>
         <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{s.meta}</span>
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>from {s.source?.from} · <span className="mono">{s.source?.ref}</span></span>
       </div>
-      <div style={{ fontSize: 21, fontWeight: 650, letterSpacing: '-0.025em', color: 'var(--fg)', marginBottom: 6, lineHeight: 1.22 }}>{s.title}</div>
-      <div style={{ fontSize: 13, color: 'var(--fg-muted)', lineHeight: 1.5, maxWidth: '76ch' }}>{s.summary}</div>
+      <div style={{ fontSize: 'clamp(18px, 2.2vw, 22px)', fontWeight: 650, letterSpacing: '-0.025em', color: 'var(--fg)', marginBottom: 8, lineHeight: 1.25 }}>{s.title}</div>
+      <div style={{ fontSize: 13, color: 'var(--fg-muted)', lineHeight: 1.55, maxWidth: '76ch' }}>{s.summary}</div>
       {decided ? (
         // done은 중립 체크 + 낮은 강조 텍스트 — 녹색 완료 금지(§5.3 lifecycle).
         <div style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-muted)' }}>
@@ -1206,7 +1224,7 @@ function CommandCard({ s, remaining, onNavigate }) {
           <Button variant="ghost" size="sm" onClick={() => setDecided(null)}>되돌리기</Button>
         </div>
       ) : (
-        <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {s.decisions.map((d, i) => (
             <Button key={i} variant={d.primary ? 'primary' : 'secondary'} size="md" icon={d.primary ? 'bolt' : null}
               onClick={() => {
@@ -1219,7 +1237,7 @@ function CommandCard({ s, remaining, onNavigate }) {
           ))}
           {hasRecord && <Button variant="outline" size="md" iconRight="arrowRight" onClick={openRecord}>레코드 열기</Button>}
           <div style={{ flex: 1 }} />
-          {remaining > 0 && <span style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>대기 결정 {remaining}건 ↓</span>}
+          {remaining > 0 && <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>대기 결정 {remaining}건 ↓</span>}
         </div>
       )}
     </div>
@@ -1230,15 +1248,15 @@ function CommandCard({ s, remaining, onNavigate }) {
 function CommandClear({ signalCount }) {
   return (
     <div className="daily-brief__panel" style={{
-      background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-xl)',
-      padding: '13px 16px', display: 'flex', alignItems: 'center', gap: 12,
+      background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-lg)',
+      padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14,
     }}>
       {/* all-clear도 중립 체크 — 녹색 완료 상태 금지(§5.3 done = neutral, not green). */}
-      <span style={{ width: 34, height: 34, borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-muted)', flexShrink: 0 }}>
-        <Iconed name="check" size={17} />
+      <span style={{ width: 36, height: 36, borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-muted)', flexShrink: 0 }}>
+        <Iconed name="check" size={18} />
       </span>
       <div>
-        <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--fg)' }}>지금 급한 결정은 없습니다</div>
+        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--fg)' }}>지금 급한 결정은 없습니다</div>
         <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', marginTop: 3 }}>
           {signalCount > 0 ? `${signalCount}개 신호는 아래 큐에서 여유 있게 처리하세요.` : '새 신호가 들어오면 여기 가장 먼저 올라옵니다.'}
         </div>
@@ -1440,22 +1458,23 @@ function FocusSlots({ dailyFocus, onNavigate }) {
   const revenuePreview = focus.state === 'preview';
 
   const eyebrow = (label, right = null) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px 6px', fontSize: 11, color: 'var(--fg-dim)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-      {label}
-      <div style={{ flex: 1 }} />
+    <div className="daily-brief__card-head" style={{ borderBottom: '1px solid var(--line-soft)' }}>
+      <span style={{ flex: 1 }}>{label}</span>
       {right}
     </div>
   );
 
   return (
-    <div className="hub-grid--two daily-brief__focus" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.05fr) minmax(300px, .95fr)', gap: 16, alignItems: 'start' }}>
-      <Card pad={false} className="daily-brief__panel" aria-label="긴급 KA와 집중 고객">
+    <div className="hub-grid--two daily-brief__focus" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.05fr) minmax(300px, .95fr)', gap: 16, alignItems: 'stretch' }}>
+      <Card pad={false} className="daily-brief__panel" aria-label="긴급 KA와 집중 고객" style={{ display: 'flex', flexDirection: 'column' }}>
         {/* 긴급 KA — §5.2 허용 red: urgent KA (최대 1건). live인데 후보가 없으면 침묵하지
             않고 부재와 지정 경로(Sales Ledger 시트의 companies.meta.ka)를 고지한다 —
             존재하지 않는 기능이 존재하는 척하지 않기(2026-08-05 re-audit #1). */}
         {ka.state === 'live' && !ka.item && (
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11.5, color: 'var(--fg-faint)' }}>
-            긴급 KA 없음 — KA 지정은 Sales Ledger 시트(companies.meta.ka)에서 관리됩니다.
+          <div style={{ padding: '9px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11.5, color: 'var(--fg-faint)', display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-2)' }}>
+            <Iconed name="check" size={12} style={{ color: 'var(--fg-muted)' }} />
+            <span>긴급 KA 없음</span>
+            <span style={{ color: 'var(--fg-dim)' }}>· KA 지정은 Sales Ledger 시트에서 관리</span>
           </div>
         )}
         {ka.state === 'error' && (
@@ -1464,96 +1483,127 @@ function FocusSlots({ dailyFocus, onNavigate }) {
           </div>
         )}
         {ka.item && (
-          <div style={{ boxShadow: 'inset 1px 0 0 var(--danger-line)', borderBottom: '1px solid var(--line-soft)' }}>
-            {eyebrow('긴급 KA')}
+          <div style={{ boxShadow: 'inset 1px 0 0 var(--danger-line)', borderBottom: '1px solid var(--line-soft)', background: 'rgba(224, 86, 74, 0.03)' }}>
+            {eyebrow('긴급 KA', <Badge tone="danger" size="xs">즉시 대응</Badge>)}
             <div
-              className="hub-row"
+              className="hub-row daily-brief__customer-row"
               role="button"
               tabIndex={0}
               onClick={() => onNavigate?.(ka.item.href)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.(ka.item.href); } }}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 16px 12px', cursor: 'pointer' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px 14px', cursor: 'pointer' }}
             >
-              <Iconed name="bell" size={14} style={{ color: 'var(--danger)', flexShrink: 0 }} />
+              <Iconed name="bell" size={15} style={{ color: 'var(--danger)', flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {ka.item.name}
                   {ka.item.company && ka.item.company !== ka.item.name && <span style={{ color: 'var(--fg-faint)', fontWeight: 400 }}> · {ka.item.company}</span>}
                 </div>
-                <div style={{ marginTop: 2, fontSize: 11.5, color: 'var(--fg-muted)' }}>
-                  {ka.item.reason}{ka.item.nextAction ? ` → ${ka.item.nextAction}` : ''}
+                <div style={{ marginTop: 3, fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.4 }}>
+                  <span style={{ color: 'var(--moon-300)', fontWeight: 500 }}>{ka.item.nextAction ? `→ ${ka.item.nextAction}` : ''}</span>
+                  {ka.item.reason && <span style={{ color: 'var(--fg-faint)' }}> · {ka.item.reason}</span>}
                 </div>
               </div>
-              <Iconed name="chevronR" size={12} style={{ color: 'var(--fg-faint)' }} />
+              <Iconed name="chevronR" size={13} className="daily-brief__row-arrow" />
             </div>
           </div>
         )}
 
-        {eyebrow(`집중 고객 ${focusItems.length ? focusItems.length : ''}`.trim(), revenueError ? <SyncBadge state="error" /> : revenuePreview ? <SyncBadge state="preview" /> : null)}
+        {eyebrow(
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>집중 고객</span>
+            {focusItems.length > 0 && <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-muted)' }}>{focusItems.length}</span>}
+          </div>,
+          revenueError ? <SyncBadge state="error" /> : revenuePreview ? <SyncBadge state="preview" /> : null
+        )}
         {revenueError ? (
-          <div role="alert" style={{ padding: '2px 16px 14px', fontSize: 12, color: 'var(--danger)' }}>매출 원장을 읽지 못했습니다 — 상단 상태줄의 다시 읽기로 재시도하세요.</div>
+          <div role="alert" style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--danger)' }}>매출 원장을 읽지 못했습니다 — 상단 상태줄의 다시 읽기로 재시도하세요.</div>
         ) : revenuePreview ? (
-          <div style={{ padding: '2px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>매출 원장이 연결되면 집중 고객 3~5건이 여기에 표시됩니다.</div>
+          <div style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>매출 원장이 연결되면 집중 고객 3~5건이 여기에 표시됩니다.</div>
         ) : focusItems.length === 0 ? (
-          <div style={{ padding: '2px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>집중 고객 없음 — CS 레인에 다음 행동이 있는 리드가 없습니다.</div>
+          <div style={{ padding: '12px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>집중 고객 없음 — CS 레인에 다음 행동이 있는 리드가 없습니다.</div>
         ) : (
-          focusItems.map((item, i) => (
-            <div
-              key={item.id}
-              className="hub-row"
-              role="button"
-              tabIndex={0}
-              onClick={() => onNavigate?.(item.href)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.(item.href); } }}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', cursor: 'pointer', borderBottom: i < focusItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}
-            >
-              <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', width: 14, flexShrink: 0 }}>{i + 1}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {item.name}
-                  {item.company && item.company !== item.name && <span style={{ color: 'var(--fg-faint)' }}> · {item.company}</span>}
-                </div>
-                {item.nextAction && <div style={{ marginTop: 1, fontSize: 11, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>→ {item.nextAction}</div>}
-                {/* deep-design §7 행동 행 최소 정보: 이유 · 기한(기약 없음 포함) · 최근 활동 */}
-                <div style={{ marginTop: 1, fontSize: 10.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {item.reason}
-                  {item.dueLabel && (
-                    <span style={{ color: item.dueOverdue ? 'var(--danger)' : 'var(--fg-faint)' }}> · {item.dueLabel}</span>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            {focusItems.map((item, i) => (
+              <div
+                key={item.id}
+                className="hub-row daily-brief__customer-row"
+                role="button"
+                tabIndex={0}
+                onClick={() => onNavigate?.(item.href)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate?.(item.href); } }}
+                style={{ borderBottom: i < focusItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}
+              >
+                <span className="mono" style={{ width: 20, height: 20, borderRadius: 'var(--r-xs)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', color: 'var(--moon-300)', fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {item.name}
+                    </span>
+                    {item.company && item.company !== item.name && (
+                      <span style={{ fontSize: 11.5, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {item.company}
+                      </span>
+                    )}
+                  </div>
+                  {item.nextAction && (
+                    <div style={{ marginTop: 2, fontSize: 11.5, color: 'var(--moon-200)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      → {item.nextAction}
+                    </div>
                   )}
-                  {item.lastTouch && <span> · 최근 {item.lastTouch}</span>}
+                  {/* deep-design §7 행동 행 최소 정보: 이유 · 기한(기약 없음 포함) · 최근 활동 */}
+                  <div style={{ marginTop: 2, fontSize: 11, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {item.reason}
+                    {item.dueLabel && (
+                      <span style={{ color: item.dueOverdue ? 'var(--danger)' : 'var(--fg-faint)', fontWeight: item.dueOverdue ? 600 : 400 }}> · {item.dueLabel}</span>
+                    )}
+                    {item.lastTouch && <span> · 최근 {item.lastTouch}</span>}
+                  </div>
                 </div>
+                <Iconed name="chevronR" size={12} className="daily-brief__row-arrow" />
               </div>
-              {/* §7 확정: 숫자 점수를 첫 화면에 노출하지 않는다 — 순서(1~5)가 이미 우선순위를 전달. */}
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </Card>
 
-      <Card pad={false} className="daily-brief__panel" aria-label="오늘 일정">
+      <Card pad={false} className="daily-brief__panel" aria-label="오늘 일정" style={{ display: 'flex', flexDirection: 'column' }}>
         {eyebrow('오늘 일정', agenda.state !== 'live' ? <SyncBadge state={agenda.state} /> : null)}
         {/* 카드당 CTA 1개(§3) — 상태별 인라인 버튼과 푸터 버튼이 같은 목적지로 2개 렌더되던
             것을 푸터 하나로 통합하고, 라벨만 상태를 따라간다(사용성 재감사 F). */}
-        {agenda.state === 'error' ? (
-          <div role="alert" style={{ padding: '2px 16px 14px', fontSize: 12, color: 'var(--danger)' }}>
-            캘린더를 읽지 못했습니다 — 일정이 있어도 표시되지 않습니다.
-          </div>
-        ) : agenda.state !== 'live' ? (
-          <div style={{ padding: '2px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>
-            Google Calendar 미연결 — 오늘 일정을 표시하려면 연결하세요.
-          </div>
-        ) : agendaItems.length === 0 ? (
-          <div style={{ padding: '2px 16px 14px', fontSize: 12, color: 'var(--fg-muted)' }}>오늘 일정 없음.</div>
-        ) : (
-          agendaItems.map((event, i) => (
-            <div key={event.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderBottom: i < agendaItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
-              <span className="mono" style={{ fontSize: 11.5, color: event.allDay ? 'var(--fg-faint)' : 'var(--fg-muted)', width: 42, flexShrink: 0 }}>{event.whenLabel}</span>
-              <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title}</span>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          {agenda.state === 'error' ? (
+            <div role="alert" style={{ padding: '16px', fontSize: 12, color: 'var(--danger)' }}>
+              캘린더를 읽지 못했습니다 — 일정이 있어도 표시되지 않습니다.
             </div>
-          ))
-        )}
-        <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/calendar')} style={{ margin: '4px 10px 10px' }}>
-          {agenda.state === 'live' || agenda.state === 'error' ? '캘린더 열기' : 'Google Calendar 연결'}
-        </Button>
+          ) : agenda.state !== 'live' ? (
+            <div style={{ padding: '24px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 6 }}>
+              <Iconed name="calendar" size={20} style={{ color: 'var(--fg-faint)' }} />
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg-muted)' }}>Google Calendar 미연결</div>
+              <div style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>오늘 일정을 표시하려면 연결하세요.</div>
+            </div>
+          ) : agendaItems.length === 0 ? (
+            <div style={{ padding: '24px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 6 }}>
+              <Iconed name="calendar" size={20} style={{ color: 'var(--fg-faint)' }} />
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg-muted)' }}>오늘 일정 없음</div>
+              <div style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>오늘 하루 예정된 캘린더 일정이 없습니다.</div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {agendaItems.map((event, i) => (
+                <div key={event.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: i < agendaItems.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+                  <span className="mono" style={{ fontSize: 11, fontWeight: 500, color: event.allDay ? 'var(--fg-faint)' : 'var(--moon-300)', background: 'var(--surface-2)', border: '1px solid var(--line-soft)', padding: '2px 7px', borderRadius: 'var(--r-xs)', flexShrink: 0 }}>{event.whenLabel}</span>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{ padding: '8px 12px', borderTop: '1px solid var(--line-soft)', background: 'var(--surface-2)', borderBottomLeftRadius: 'var(--r-lg)', borderBottomRightRadius: 'var(--r-lg)', marginTop: 'auto' }}>
+          <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/calendar')} style={{ width: '100%', justifyContent: 'center' }}>
+            {agenda.state === 'live' || agenda.state === 'error' ? '캘린더 열기' : 'Google Calendar 연결'}
+          </Button>
+        </div>
       </Card>
     </div>
   );
@@ -1572,10 +1622,28 @@ function BriefClock({ signalCount, urgentCount, todayCount }) {
   }, []);
   return (
     <>
-      <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 5 }}>{formatBriefDate(now)}</div>
-      <h2 style={{ margin: 0, fontSize: 'clamp(27px, 3vw, 32px)', fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.08 }}>오늘의 실행</h2>
-      <div style={{ marginTop: 6, fontSize: 13, color: 'var(--fg-muted)', maxWidth: '62ch', lineHeight: 1.45 }}>
-        {greetingFor(now)}, 준혁 · <span style={{ color: 'var(--fg)' }}>신호 {signalCount}</span> · <span style={{ color: urgentCount > 0 ? 'var(--danger)' : 'inherit' }}>즉시 {urgentCount}</span> · 오늘 {todayCount}
+      <div className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--moon-300)', display: 'inline-block' }} />
+        <span>{formatBriefDate(now)}</span>
+      </div>
+      <h2 style={{ margin: 0, fontSize: 'clamp(26px, 3.2vw, 32px)', fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.1 }}>오늘의 실행</h2>
+      <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 13, color: 'var(--fg-muted)' }}>
+        <span>{greetingFor(now)}, 준혁</span>
+        <span style={{ color: 'var(--line-strong)', opacity: 0.6 }}>·</span>
+        <div className="daily-brief__intro-stats">
+          <span className="daily-brief__stat-chip">
+            <span>신호</span>
+            <strong>{signalCount}</strong>
+          </span>
+          <span className={`daily-brief__stat-chip${urgentCount > 0 ? ' daily-brief__stat-chip--danger' : ''}`}>
+            <span>즉시</span>
+            <strong>{urgentCount}</strong>
+          </span>
+          <span className="daily-brief__stat-chip">
+            <span>오늘</span>
+            <strong>{todayCount}</strong>
+          </span>
+        </div>
       </div>
     </>
   );
@@ -1719,7 +1787,7 @@ export function DailyBrief({ onNavigate }) {
   const queue = queueExpanded ? waiting : waiting.slice(0, QUEUE_LIMIT);
   const queueOverflow = waiting.length - queue.length;
   return (
-    <div className="hub-page daily-brief" style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 'var(--section-gap)', maxWidth: 1040, margin: '0 auto', width: '100%' }}>
+    <div className="hub-page daily-brief" style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: 'var(--section-gap)', maxWidth: 1160, margin: '0 auto', width: '100%' }}>
       <div className="hub-page-header daily-brief__intro fade-up" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20 }}>
         <div>
           <BriefClock signalCount={signalCount} urgentCount={screenUrgentCount} todayCount={todayCount} />
@@ -1740,7 +1808,7 @@ export function DailyBrief({ onNavigate }) {
       {/* Q118·Q119: 월(개인)·목(회사) 아침에만 뜨는 주간 정리 — 다른 요일은 null. */}
       <WeeklyReportCard onNavigate={onNavigate} />
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
         {/* §7 확정 fold 순서: Capture → 긴급 KA·집중 고객·오늘 일정 → 신호. 명명된 슬롯이
             tone 정렬 신호(자동화 실패 등)보다 위 — 고객이 히어로 자리를 갖는다.
             모바일 점프 칩은 확정 슬롯 아래로 — fold 순서에 끼어들지 않는다. */}

@@ -56,6 +56,13 @@ const MODES = {
     frames:
       "Goldratt 제약 이론(병목이 처리량을 결정), Reinertsen 큐 길이·배치 축소, Kim 흐름의 원칙(작은 배치·빠른 피드백), Lean 핸드오프 낭비 제거.",
   },
+  "sparring": {
+    lens: "Debate",
+    question:
+      "제공된 초안 또는 프로젝트/오퍼에 대해 3자 균형 토론(스파링)을 진행하라. 칭찬이나 에코챔버 없이, [Strategist 추진 논거] vs [Devil's Advocate 맹점·비판·실패 리스크] vs [Operator 1단계 검증 행동]으로 날카롭게 격돌하라.",
+    frames:
+      "Godin SVM(가장 작은 실행 가능한 시장) & Collins 고슴도치 vs Voss 협상 저항 & Ziglar 5장애물 & Goldratt 병목 vs Grove OKR & Bezos 가역적 결정.",
+  },
 } as const;
 
 type Mode = keyof typeof MODES;
@@ -139,11 +146,20 @@ function buildPrompt(mode: Mode, context: unknown, draft?: string | null) {
     `자문 렌즈: ${config.lens}`,
     `참고 프레임: ${config.frames}`,
     "",
-    "다음 형식의 한국어로 답하라:",
-    "1. 진단 (지금 무엇이 보이는가)",
-    "2. 리스크 (놓치면 잃는 것)",
-    "3. 다음 액션 (구체적 1~3개, 담당/기한 포함)",
-    "4. 승인 큐 후보 (work_order로 올릴 제목 1개와 gate/human approval 표기)",
+    ...(mode === "sparring"
+      ? [
+          "다음 형식의 한국어로 날카롭게 답하라 (인사말·잡담·에코챔버 절대 금지):",
+          "1. 🟢 [Strategist 추진 논거] (왜 이 방향이 유효한가, 타겟 가치, 기회)",
+          "2. 🔴 [Devil's Advocate 맹점과 비판] (고객이 거절할 진짜 이유, 왜 실패할 것인가, 치명적 리스크와 병목)",
+          "3. 🟡 [Operator 1단계 가역적 검증 행동] (위험을 줄이며 이번 주 안에 테스트할 구체적 행동 1개와 검증 질문)",
+        ]
+      : [
+          "다음 형식의 한국어로 답하라:",
+          "1. 진단 (지금 무엇이 보이는가)",
+          "2. 리스크 (놓치면 잃는 것)",
+          "3. 다음 액션 (구체적 1~3개, 담당/기한 포함)",
+          "4. 승인 큐 후보 (work_order로 올릴 제목 1개와 gate/human approval 표기)",
+        ]),
   ];
 
   if (draft && draft.trim()) {

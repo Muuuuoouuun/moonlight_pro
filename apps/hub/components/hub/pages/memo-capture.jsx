@@ -180,10 +180,7 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
     <section className={styles.capture} aria-label="메모 작성">
       <div className={styles.heading}>
         <div>
-          <h3>생각을 먼저 남기세요</h3>
-          <p>
-            짧은 생각부터 긴 기록까지. 라벨은 나중에 다시 찾는 단서가 됩니다.
-          </p>
+          <h3>기록하기</h3>
         </div>
         <Button
           ref={opener}
@@ -192,7 +189,7 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
           aria-expanded={open}
           disabled={busy}
         >
-          {open ? "작성창 접기" : "새 메모 · 파일 가져오기"}
+          {open ? "작성창 접기" : "새 메모"}
         </Button>
       </div>
       {open && draft ? (
@@ -218,58 +215,13 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
           }}
         >
           <fieldset disabled={busy}>
-            <div className={styles.tools}>
-              <label className={styles.file}>
-                TXT · Markdown 가져오기
-                <input
-                  aria-label="메모 파일 가져오기"
-                  type="file"
-                  accept=".txt,.md,text/plain,text/markdown"
-                  onChange={chooseFile}
-                />
-              </label>
-              <span>UTF-8 · 파일 256KB 이하 · 본문 최대 100,000자</span>
-            </div>
-            {pendingFile ? (
-              <div className={styles.pending} role="status">
-                <p>
-                  작성 중인 내용을 파일 내용으로 바꿀까요? 아직 서버에 저장하지
-                  않았습니다.
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    update(pendingFile);
-                    setPendingFile(null);
-                  }}
-                >
-                  파일 내용으로 바꾸기
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setPendingFile(null)}
-                >
-                  기존 작성 유지
-                </Button>
-              </div>
-            ) : null}
-            <label>
-              제목 <span>선택 · 비우면 첫 문장을 사용합니다</span>
-              <input
-                maxLength={300}
-                value={draft.title}
-                onChange={(e) => update({ title: e.target.value })}
-              />
-            </label>
             <label>
               메모 본문
               <textarea
                 ref={textarea}
                 required
                 maxLength={MAX_MEMO_CHARS}
-                rows={10}
+                rows={5}
                 value={draft.body}
                 onChange={(e) => update({ body: e.target.value })}
                 placeholder="생각나는 대로 적거나 원문을 붙여넣으세요. Enter는 줄바꿈입니다."
@@ -281,31 +233,75 @@ export function MemoCapture({ onSaved, fetchImpl = fetch }) {
                 보존합니다.
               </p>
             ) : null}
-            <div className={styles.fields}>
+            <details className={styles.options}>
+              <summary>제목 · 라벨 · 파일 가져오기</summary>
+              <div className={styles.tools}>
+                <label className={styles.file}>
+                  TXT · Markdown 가져오기
+                  <input
+                    aria-label="메모 파일 가져오기"
+                    type="file"
+                    accept=".txt,.md,text/plain,text/markdown"
+                    onChange={chooseFile}
+                  />
+                </label>
+                <span>UTF-8 · 파일 256KB 이하 · 본문 최대 100,000자</span>
+              </div>
+              {pendingFile ? (
+                <div className={styles.pending} role="status">
+                  <p>
+                    작성 중인 내용을 파일 내용으로 바꿀까요? 아직 서버에
+                    저장하지 않았습니다.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      update(pendingFile);
+                      setPendingFile(null);
+                    }}
+                  >
+                    파일 내용으로 바꾸기
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setPendingFile(null)}
+                  >
+                    기존 작성 유지
+                  </Button>
+                </div>
+              ) : null}
               <label>
-                라벨 <span>선택 · 쉼표로 구분</span>
+                제목 <span>선택 · 비우면 첫 문장을 사용합니다</span>
                 <input
-                  value={draft.labels}
-                  maxLength={500}
-                  placeholder="고객질문, 콘텐츠소재, 사업아이디어"
-                  onChange={(e) => update({ labels: e.target.value })}
+                  maxLength={300}
+                  value={draft.title}
+                  onChange={(e) => update({ title: e.target.value })}
                 />
               </label>
-              <label>
-                기록 범위
-                <select
-                  value={draft.scope}
-                  onChange={(e) => update({ scope: e.target.value })}
-                >
-                  <option value="personal">개인</option>
-                  <option value="company">회사 업무</option>
-                </select>
-              </label>
-            </div>
-            <p>
-              Moonlight에 저장합니다. 자동 AI 분석·업무 생성·고객 발송 없음.
-              프로젝트와 할 일은 저장 후 연결합니다.
-            </p>
+              <div className={styles.fields}>
+                <label>
+                  라벨 <span>선택 · 쉼표로 구분</span>
+                  <input
+                    value={draft.labels}
+                    maxLength={500}
+                    placeholder="고객질문, 콘텐츠소재, 사업아이디어"
+                    onChange={(e) => update({ labels: e.target.value })}
+                  />
+                </label>
+              </div>
+            </details>
+            <label>
+              기록 범위
+              <select
+                value={draft.scope}
+                onChange={(e) => update({ scope: e.target.value })}
+              >
+                <option value="personal">개인</option>
+                <option value="company">회사 업무</option>
+              </select>
+            </label>
             <div className={styles.actions}>
               <Button
                 type="submit"

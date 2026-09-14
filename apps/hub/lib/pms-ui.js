@@ -110,6 +110,21 @@ export function buildContainerTree(brands = [], {
   };
 }
 
+// 컨테이너 트리 → 한 줄 태그 필터용 평탄화. 분류(폴더)는 텍스트 헤더 대신 칩 순서로만
+// 남기므로(2026-09-11 운영자 지시 "범례를 태그처럼 넣고 필터형으로") 폴더 경계는 사라지고
+// 폴더 라벨은 각 칩의 접근 가능한 이름·툴팁으로 이동한다. 스코프(업무·개인) 경계만 남는다.
+export function flattenContainerChips(tree) {
+  return (tree?.groups || [])
+    .map((group) => ({
+      key: group.key,
+      label: group.label,
+      items: (group.folders || []).flatMap((folder) =>
+        (folder.items || []).map((container) => ({ ...container, folderLabel: folder.label })),
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
+}
+
 export function taskStatusForBoardColumn(column) {
   return TASK_STATUS_BY_COLUMN[column] || null;
 }

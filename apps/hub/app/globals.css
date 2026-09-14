@@ -962,19 +962,138 @@ button {
   text-align: right;
 }
 
-.hub-app .hub-project-page-header--detail .hub-project-header-context,
-.hub-app .hub-project-page-header--detail .hub-project-search,
-.hub-app .hub-project-page-header--detail .hub-project-brand-trigger__meta {
-  display: none !important;
+/* 컨테이너 태그 필터 바 — 헤더 드롭다운 대체(2026-09-11). 한 줄 가로 스크롤이고
+   모바일에서도 wrap하지 않는다(§CLAUDE.md 반응형: 세그먼트는 가로 유지). */
+.hub-app .hub-pms-filterbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line-soft);
 }
 
-.hub-app .hub-project-page-header--detail .hub-project-brand-trigger {
-  flex: 0 0 36px;
-  width: 36px;
-  min-width: 36px;
-  justify-content: center;
-  gap: 0 !important;
-  padding-inline: 8px !important;
+.hub-app .hub-pms-filterbar__track {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.hub-app .hub-pms-filterbar__track::-webkit-scrollbar {
+  display: none;
+}
+
+/* 스코프(업무 · 개인) 경계 — 텍스트 헤더를 지운 자리를 1px hairline 하나가 대신한다.
+   분류(폴더) 경계는 칩 순서로만 남고 선은 긋지 않는다. */
+.hub-app .hub-pms-filterbar__sep {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--line-soft);
+}
+
+.hub-app .hub-pms-filterbar__tail {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--line-soft);
+}
+
+.hub-app .hub-pms-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.hub-app .hub-pms-chip:hover {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+
+/* 선택 = 현재 위치 (§5.3 상호작용 채널). 배경은 surface-3 한 단계만 올리고
+   hover가 선택을 어둡게 되돌리지 않도록 선택 상태의 hover를 따로 고정한다. */
+.hub-app .hub-pms-chip[aria-pressed="true"] {
+  background: var(--surface-3);
+  border-color: var(--line);
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.hub-app .hub-pms-chip[aria-pressed="true"]:hover {
+  background: var(--elevated);
+}
+
+.hub-app .hub-pms-chip:focus-visible {
+  outline: 1px solid var(--moon-300);
+  outline-offset: 2px;
+}
+
+.hub-app .hub-pms-chip__mark {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+/* 새 변동 — 손실 상태가 아니므로 중립 문스톤 점 하나 (§5.2). 개수는 aria-label·title. */
+.hub-app .hub-pms-chip__dot {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--moon-400);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.hub-app .hub-pms-chip__count {
+  font-size: 10.5px;
+  color: var(--fg-faint);
+  letter-spacing: -0.02em;
+}
+
+.hub-app .hub-pms-chip--ghost {
+  color: var(--fg-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-pms-chip { transition: none; }
+}
+
+/* 디테일 패널이 열리면 헤더처럼 필터 바도 압축 — 이름은 유지하고(유일한 컨테이너
+   전환 수단이다) 개수·관리 꼬리만 접는다. */
+.hub-app .hub-project-page-header--detail + .hub-pms-filterbar {
+  padding: 6px 14px;
+}
+
+.hub-app .hub-project-page-header--detail + .hub-pms-filterbar .hub-pms-chip__count,
+.hub-app .hub-project-page-header--detail + .hub-pms-filterbar .hub-pms-filterbar__tail {
+  display: none;
+}
+
+.hub-app .hub-project-page-header--detail .hub-project-header-context,
+.hub-app .hub-project-page-header--detail .hub-project-search {
+  display: none !important;
 }
 
 .hub-app .hub-project-detail-sheet {
@@ -1332,6 +1451,336 @@ button {
   gap: 20px;
   margin: 0 auto;
   padding: 28px 30px 34px;
+}
+
+/* Project creation uses the List workspace itself instead of stacking another
+ * overlay. Only the name is visible first; optional context expands in place. */
+.hub-app .hub-project-portfolio-stage__create {
+  display: flex;
+  min-height: 100%;
+}
+
+.hub-app .project-create-inline {
+  display: flex;
+  width: min(100%, 1040px);
+  min-height: 100%;
+  flex-direction: column;
+  margin: 0 auto;
+  padding: clamp(32px, 6vw, 76px) clamp(24px, 5vw, 64px) 36px;
+}
+
+.hub-app .project-create-inline__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: clamp(44px, 8vh, 86px);
+}
+
+.hub-app .project-create-inline__header > div {
+  max-width: 660px;
+}
+
+.hub-app .project-create-inline__header > div > span {
+  color: var(--moon-300);
+  font-size: 10.5px;
+  letter-spacing: 0.13em;
+}
+
+.hub-app .project-create-inline__header h1 {
+  margin: 12px 0 0;
+  color: var(--fg);
+  font-size: clamp(34px, 4.5vw, 54px);
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 1.03;
+}
+
+.hub-app .project-create-inline__header p {
+  max-width: 560px;
+  margin: 16px 0 0;
+  color: var(--fg-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.hub-app .project-create-inline__body {
+  width: min(100%, 820px);
+}
+
+.hub-app .project-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.hub-app .project-create-title-field > span:first-child {
+  color: var(--fg-muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hub-app .project-create-inline .project-create-title-field input {
+  padding-inline: 18px !important;
+  border-color: var(--line-strong) !important;
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+  color: var(--fg) !important;
+  font-size: clamp(17px, 2vw, 21px) !important;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+
+.hub-app .project-create-inline .project-create-title-field input:focus {
+  border-color: var(--moon-400) !important;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  outline: 0;
+}
+
+.hub-app .project-create-defaults {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.hub-app .project-create-defaults > span {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: var(--fg-faint);
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 10.5px;
+}
+
+.hub-app .project-create-quick-area {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  align-items: center;
+  gap: 12px !important;
+  padding: 12px 14px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.025);
+  letter-spacing: 0 !important;
+}
+
+.hub-app .project-create-quick-area > span:first-child {
+  color: var(--fg-faint);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.hub-app .project-create-quick-area > span:first-child strong {
+  display: block;
+  color: var(--fg-muted);
+  font-weight: 550;
+}
+
+.hub-app .project-create-quick-area > .project-create-field-error {
+  grid-column: 1 / -1;
+}
+
+.hub-app .project-create-source-warning {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-soft);
+  border-left-color: var(--danger);
+  border-radius: var(--r-sm);
+  color: var(--fg-muted);
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.hub-app .project-create-source-warning > svg,
+.hub-app .project-create-field-error {
+  color: var(--danger);
+}
+
+.hub-app .project-create-disclosure {
+  margin-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.hub-app .project-create-disclosure__trigger {
+  display: grid;
+  width: 100%;
+  min-height: 62px;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  color: var(--fg-muted);
+  text-align: left;
+}
+
+.hub-app .project-create-disclosure__trigger:hover {
+  color: var(--fg);
+}
+
+.hub-app .project-create-disclosure__trigger > svg {
+  transition: transform 160ms ease;
+}
+
+.hub-app .project-create-disclosure__trigger[aria-expanded="true"] > svg {
+  transform: rotate(90deg);
+}
+
+.hub-app .project-create-disclosure__trigger > span:nth-child(2) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.hub-app .project-create-disclosure__trigger strong {
+  color: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+}
+
+.hub-app .project-create-disclosure__trigger small,
+.hub-app .project-create-disclosure__trigger > span:last-child {
+  color: var(--fg-faint);
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+.hub-app .project-create-advanced-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 0 4px;
+}
+
+.hub-app .project-create-inline .project-create-advanced-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.hub-app .project-create-field-group {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.hub-app .project-create-inline .project-create-field-group--schedule {
+  grid-column: 1 / -1;
+}
+
+.hub-app .project-create-field-group > header {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+  padding-bottom: 2px;
+}
+
+.hub-app .project-create-field-group > header > span {
+  padding-top: 2px;
+  color: var(--moon-400);
+  font-size: 10.5px;
+}
+
+.hub-app .project-create-field-group h3,
+.hub-app .project-create-field-group p {
+  margin: 0;
+}
+
+.hub-app .project-create-field-group h3 {
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.hub-app .project-create-field-group header p {
+  margin-top: 4px;
+  color: var(--fg-faint);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.hub-app .project-create-group-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--fg-faint);
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+
+.hub-app .project-create-group-note > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.hub-app .project-create-two-columns,
+.hub-app .project-create-date-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.hub-app .project-create-inline .project-create-date-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hub-app .project-create-actions {
+  display: flex;
+  width: min(100%, 820px);
+  min-height: 72px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 32px;
+  padding: 20px 0 4px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--bg);
+}
+
+.hub-app .project-create-feedback {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--fg-faint);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.hub-app .project-create-feedback[data-error="true"] {
+  color: var(--danger);
+}
+
+.hub-app .project-create-feedback > span {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.hub-app .project-create-discard-copy {
+  flex: 1 1 auto;
+  min-width: 220px;
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.hub-app .project-create-conflict-actions {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .hub-app .hub-project-portfolio-stage__header {
@@ -1914,6 +2363,10 @@ button {
     display: none;
   }
 
+  .hub-app .hub-project-portfolio-workspace[data-create-open="true"] .hub-project-portfolio-index {
+    display: none;
+  }
+
   .hub-app .hub-project-portfolio-index {
     max-height: 360px;
     border-right: 0;
@@ -1935,6 +2388,14 @@ button {
 
   .hub-app .hub-project-portfolio-stage__inner {
     padding: 24px 16px 30px;
+  }
+
+  .hub-app .project-create-inline {
+    padding: 32px 20px 28px;
+  }
+
+  .hub-app .project-create-inline__header {
+    margin-bottom: 48px;
   }
 
   .hub-app .hub-project-portfolio-stage__header {
@@ -1973,6 +2434,56 @@ button {
 @media (max-width: 620px) {
   .hub-app .hub-project-portfolio-stage__inner {
     gap: 14px;
+  }
+
+  .hub-app .project-create-inline {
+    padding: 28px 14px 22px;
+  }
+
+  .hub-app .project-create-inline__header {
+    margin-bottom: 38px;
+  }
+
+  .hub-app .project-create-inline__header h1 {
+    font-size: 34px;
+  }
+
+  .hub-app .project-create-inline__header > button {
+    min-width: 44px;
+    padding-inline: 10px !important;
+  }
+
+  .hub-app .project-create-inline .project-create-advanced-grid,
+  .hub-app .project-create-inline .project-create-date-grid,
+  .hub-app .project-create-two-columns,
+  .hub-app .project-create-date-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hub-app .project-create-field-group {
+    padding: 16px;
+  }
+
+  .hub-app .project-create-source-warning {
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+
+  .hub-app .project-create-quick-area {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hub-app .project-create-source-warning > button {
+    grid-column: 1 / -1;
+  }
+
+  .hub-app .project-create-actions {
+    flex-wrap: wrap;
+    padding-left: 56px;
+  }
+
+  .hub-app .project-create-actions > .project-create-feedback {
+    order: -1;
+    flex-basis: 100%;
   }
 
   .hub-app .hub-project-portfolio-metric {
@@ -2046,7 +2557,8 @@ button {
   .hub-app .hub-project-row,
   .hub-app .hub-pms-progress__fill,
   .hub-app .hub-project-portfolio-index-row,
-  .hub-app .hub-project-portfolio-accordion__trigger > svg:first-child {
+  .hub-app .hub-project-portfolio-accordion__trigger > svg:first-child,
+  .hub-app .project-create-disclosure__trigger > svg {
     transition: none;
   }
 }

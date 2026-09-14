@@ -93,6 +93,7 @@ function modeLabel(mode) {
     "audience-analysis": "오디언스 분석",
     "meeting-synthesis": "회의록 정리",
     "flow-review": "플로우 점검",
+    "sparring": "3자 토론",
   })[mode] || mode;
 }
 

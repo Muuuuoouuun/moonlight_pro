@@ -465,10 +465,52 @@ test("desktop project detail owns a viewport-bounded scroller and persistent act
   assert.match(detailPanelSource, /className=["']hub-project-detail-panel["']/);
   assert.match(detailPanelSource, /className=["']hub-project-detail-actions["']/);
   assert.match(projectsSource, /hub-project-page-header--detail/);
-  assert.match(projectsSource, /className=["']hub-project-brand-trigger["']/);
   assert.match(globalCss, /\.hub-app \.hub-project-detail-sheet\s*\{[\s\S]*?max-height:\s*calc\(100dvh - 126px\)/);
   assert.match(globalCss, /\.hub-project-page-header--detail \.hub-project-header-context[\s\S]*?display:\s*none/);
-  assert.match(globalCss, /\.hub-project-page-header--detail \.hub-project-brand-trigger__meta[\s\S]*?display:\s*none/);
+  // 컨테이너 전환 수단은 디테일이 열려도 남고(칩 이름 유지) 개수·관리 꼬리만 접힌다.
+  assert.match(globalCss, /\.hub-project-page-header--detail \+ \.hub-pms-filterbar \.hub-pms-chip__count,[\s\S]*?display:\s*none/);
   assert.match(globalCss, /\.hub-app \.hub-project-detail-actions\s*\{[\s\S]*?flex:\s*0 0 auto/);
   assert.match(globalCss, /\.hub-app \.hub-project-detail-panel\s*\{[\s\S]*?min-height:\s*0/);
+});
+
+test("the container selector is a one-line tag filter, not a stacked dropdown", () => {
+  // 드롭다운(2줄 행 + 그룹/폴더 2단 헤더)은 제거됐다 — 잔재가 남으면 셀렉터가 두 벌이 된다.
+  assert.doesNotMatch(projectsSource, /brandMenuOpen|renderBrandMenuRow|hub-project-brand-trigger/);
+  assert.match(pmsComponentsSource, /export function ContainerFilterBar/);
+  assert.match(projectsSource, /<ContainerFilterBar/);
+  // 사이드바가 펴져 있으면 같은 목록이 두 벌이므로 필터 바는 접힘 상태에서만 뜬다.
+  assert.match(projectsSource, /\{sidebarHidden && \(\s*<ContainerFilterBar/);
+
+  // 선택은 단일 — 다중 선택 배열 계약이 끼어들지 않았는지 (brand state 무변경).
+  assert.match(pmsComponentsSource, /selectedKey = "all"/);
+  assert.match(pmsComponentsSource, /aria-pressed=\{selected\}/);
+
+  // 분류는 텍스트 헤더 없이 칩 순서 + 스코프 경계 hairline 하나로만 읽는다.
+  assert.match(pmsComponentsSource, /className="hub-pms-filterbar__sep"/);
+  assert.match(globalCss, /\.hub-app \.hub-pms-filterbar__sep\s*\{[\s\S]*?width:\s*1px/);
+
+  // 드롭다운 2번째 줄(설명 · 변동 수)과 7p\/7t 칼럼은 접근 가능한 이름으로 보존한다.
+  assert.match(pmsComponentsSource, /aria-label=\{`\$\{name\} · \$\{detail\}`\}/);
+  assert.match(pmsComponentsSource, /새 변동 \$\{changes\}개/);
+
+  // 드롭다운에만 있던 관리 액션이 도달 불가가 되지 않도록 tail로 따라온다.
+  assert.match(projectsSource, /tail=\{\(/);
+  assert.match(projectsSource, /onToggleEmpty=\{toggleEmptyContainers\}/);
+});
+
+test("the container filter bar stays one horizontally scrolling line and keeps a touch-target floor", () => {
+  const bar = globalCss.slice(globalCss.indexOf(".hub-app .hub-pms-filterbar {"));
+  assert.match(bar, /\.hub-app \.hub-pms-filterbar__track\s*\{[\s\S]*?overflow-x:\s*auto/);
+  // wrap 금지 — 모바일에서도 한 줄 가로 유지가 이 바의 계약이다.
+  assert.doesNotMatch(bar.slice(0, bar.indexOf(".hub-app .hub-pms-chip__mark")), /flex-wrap:\s*wrap/);
+  assert.match(bar, /\.hub-app \.hub-pms-chip\s*\{[\s\S]*?white-space:\s*nowrap/);
+  // 선택 = 현재 위치. hover가 선택을 되돌리지 않도록 선택 hover를 따로 고정한다.
+  assert.match(bar, /\.hub-app \.hub-pms-chip\[aria-pressed="true"\]\s*\{[\s\S]*?background:\s*var\(--surface-3\)/);
+  assert.match(bar, /\.hub-app \.hub-pms-chip\[aria-pressed="true"\]:hover\s*\{/);
+  assert.match(bar, /\.hub-app \.hub-pms-chip:focus-visible\s*\{[\s\S]*?outline:\s*1px solid var\(--moon-300\)/);
+  // 데이터 값 크기 플로어 (§6): 개수는 10.5px 이상.
+  assert.match(bar, /\.hub-app \.hub-pms-chip__count\s*\{[\s\S]*?font-size:\s*10\.5px/);
+
+  const coarse = responsiveCss.slice(responsiveCss.indexOf("PMS 컨테이너 태그 필터 바"));
+  assert.match(coarse, /@media \(pointer: coarse\)\s*\{[\s\S]*?\.hub-app \.hub-pms-chip\s*\{[\s\S]*?min-height:\s*44px/);
 });

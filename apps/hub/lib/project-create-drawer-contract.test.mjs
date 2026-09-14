@@ -16,11 +16,17 @@ const primitivesSource = await readFile(
   new URL("../components/hub/hub-primitives.jsx", import.meta.url),
   "utf8",
 );
+const globalStylesSource = await readFile(
+  new URL("../app/globals.css", import.meta.url),
+  "utf8",
+);
 
-test("project create drawer composes the shared shell around the approved core fields", () => {
+test("project create surface composes inline and drawer presentations around one form", () => {
   assert.match(drawerSource, /import\s*\{[^}]*Drawer[^}]*\}\s*from\s*["']\.\.\/hub-primitives["']/);
   assert.match(drawerSource, /<Drawer[\s\S]*title=["']프로젝트 만들기["']/);
-  assert.match(drawerSource, /큰 결과와 첫 행동부터 기록하세요\./);
+  assert.match(drawerSource, /export function ProjectCreateInline/);
+  assert.match(drawerSource, /className=["']project-create-inline["']/);
+  assert.match(drawerSource, /이름 하나면 충분합니다\./);
   assert.match(drawerSource, /프로젝트명\s*\*/);
   assert.match(drawerSource, /예: 갈무리 첫결제 SW/);
   assert.match(drawerSource, /목표 결과/);
@@ -31,21 +37,24 @@ test("project create drawer composes the shared shell around the approved core f
   assert.doesNotMatch(drawerSource, /진행률/);
 });
 
-test("project create drawer keeps optional context in an accessible collapsed section", () => {
-  assert.match(drawerSource, /상세 설정/);
+test("project create surface keeps details, child-work guidance, and settings collapsed", () => {
+  assert.match(drawerSource, /세부 설정/);
   assert.match(drawerSource, /aria-expanded=\{advancedOpen\}/);
+  assert.match(drawerSource, /하위 아이템과 체크리스트는 만든 뒤/);
   assert.match(drawerSource, /브랜드/);
   assert.match(drawerSource, /관련 리드\/고객/);
   assert.match(drawerSource, /상태/);
   assert.match(drawerSource, /우선순위/);
-  assert.match(drawerSource, /기한/);
+  assert.match(drawerSource, /목표 종료일/);
   assert.match(drawerSource, /entities\.map/);
 });
 
-test("project create drawer keeps the approved responsive width and touch targets", () => {
+test("project create surface keeps responsive whitespace and touch targets", () => {
   assert.match(drawerSource, /width=["']min\(420px,\s*100vw\)["']/);
   assert.match(drawerSource, /className=["']project-create-advanced-grid["']/);
-  assert.match(drawerSource, /@media\s*\(min-width:\s*640px\)[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(globalStylesSource, /\.project-create-inline\s*\{[\s\S]*padding:\s*clamp\(/);
+  assert.match(globalStylesSource, /\.project-create-inline \.project-create-advanced-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(globalStylesSource, /@media\s*\(max-width:\s*620px\)[\s\S]*\.project-create-inline \.project-create-advanced-grid/);
   assert.ok(
     (drawerSource.match(/<Button[\s\S]{0,220}style=\{\{\s*minHeight:\s*44\s*\}\}/g) || []).length >= 4,
     "every create footer and conflict action must keep a 44px touch target",
@@ -74,9 +83,11 @@ test("project create drawer validates inline, announces state, and gates duplica
   assert.doesNotMatch(drawerSource, />›</);
 });
 
-test("projects page separates create and edit drawers and hands durable success to detail", () => {
-  assert.match(projectsSource, /import\s+\{\s*ProjectCreateDrawer\s*\}\s+from\s+["']\.\/project-create-drawer["']/);
+test("projects page uses inline creation in List, drawer fallback elsewhere, and durable detail handoff", () => {
+  assert.match(projectsSource, /import\s+\{\s*ProjectCreateDrawer,\s*ProjectCreateInline\s*\}\s+from\s+["']\.\/project-create-drawer["']/);
+  assert.match(projectsSource, /createSurface=\{projectDraft\?\.isNew[\s\S]*<ProjectCreateInline/);
   assert.match(projectsSource, /<ProjectCreateDrawer/);
+  assert.match(projectsSource, /projectDraft\?\.isNew && !containerDraft && view !== ['"]tree['"]/);
   assert.match(projectsSource, /draft=\{projectDraft\}/);
   assert.match(projectsSource, /projectDraft\s*&&\s*!projectDraft\.isNew\s*&&\s*\(\s*<EditDrawer/);
   assert.match(projectsSource, /buildProjectCreatePayload\(draft\)/);
@@ -113,8 +124,9 @@ test("project detail query remains canonical selection and conflict open exact-r
   assert.match(conflictBlock, /projectReloadContains\(reloadResult,\s*durableProjectId\)/);
 });
 
-test("only the visible create drawer owns the create shortcut submit path", () => {
+test("only the mounted create surface owns the create shortcut submit path", () => {
   assert.match(primitivesSource, /React\.useEffect\(\(\) => \{\s*if \(!record\) return undefined;[\s\S]*metaKey[\s\S]*handleDoneRef/);
+  assert.match(drawerSource, /if \(!draft\) return undefined;[\s\S]*event\.metaKey[\s\S]*requestSubmit/);
   assert.match(projectsSource, /projectDraft\s*&&\s*!projectDraft\.isNew\s*&&\s*\(\s*<EditDrawer/);
 });
 

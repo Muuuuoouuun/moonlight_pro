@@ -210,11 +210,6 @@ export function MemoWorkspace({
       <header className={styles.header}>
         <div>
           <h2>{taskId ? "원본 메모" : "메모 · 받은함"}</h2>
-          <p>
-            {taskId
-              ? "이 업무의 근거가 된 기록"
-              : "기록을 읽고 다음 행동으로 연결하세요."}
-          </p>
         </div>
         <Button variant="ghost" size="sm" onClick={load} disabled={busy}>
           새로고침
@@ -272,9 +267,9 @@ export function MemoWorkspace({
               <div className={styles.filters}>
                 {[
                   ["all", "전체"],
-                  ["linked", "업무에 연결됨"],
+                  ["linked", "연결됨"],
                   ["unlinked", "연결 없음"],
-                  ["older", "저장 후 30일 이상"],
+                  ["older", "30일 이상"],
                 ].map(([key, label]) => (
                   <button
                     key={key}
@@ -302,14 +297,13 @@ export function MemoWorkspace({
               <span>
                 {item.kind === "note" ? "메모" : "빠른 입력"} ·{" "}
                 {dateLabel(item.createdAt)}
-              </span>
-              <small>
+                {" · "}
                 {linksForMemo(item, data.links).length
                   ? "업무에 연결됨"
                   : data.linksComplete
                     ? "연결 없음"
                     : "연결 여부 미확인"}
-              </small>
+              </span>
             </button>
           ))}
           {!visible.length && data.status !== "loading" && (
@@ -322,7 +316,7 @@ export function MemoWorkspace({
                   ? "업무 연결 정보를 불러오지 못했습니다. 연결 기능을 사용할 수 없습니다."
                   : taskId
                     ? "확인된 연결 메모가 없습니다."
-                    : "표시할 메모가 없습니다. 위의 ‘새 메모 · 파일 가져오기’에서 기록을 남겨보세요."}
+                    : "표시할 메모가 없습니다. ‘새 메모’로 기록을 남겨보세요."}
             </p>
           )}
           <p className={styles.notice}>
@@ -353,7 +347,7 @@ export function MemoWorkspace({
               </details>
             )}
             <section className={styles.section}>
-              <h4>이 메모를 사용하는 업무</h4>
+              <h4>연결된 업무</h4>
               {links.map((link) => {
                 const task = data.tasks.find((t) => t.id === link.task_id);
                 return task ? (
@@ -383,52 +377,61 @@ export function MemoWorkspace({
             </section>
             {!taskId && (
               <fieldset disabled={busy || !canWrite} className={styles.form}>
-                <legend>다음 행동으로 연결</legend>
-                <label>
-                  할 일 제목
-                  <input
-                    maxLength={300}
-                    value={draft.title}
-                    onChange={(event) =>
-                      setDraft({ ...draft, title: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  프로젝트
-                  <select
-                    value={draft.projectId}
-                    onChange={(event) =>
-                      setDraft({ ...draft, projectId: event.target.value })
-                    }
-                  >
-                    <option value="">프로젝트 선택</option>
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  마감일
-                  <input
-                    type="date"
-                    value={draft.dueAt}
-                    onChange={(event) =>
-                      setDraft({ ...draft, dueAt: event.target.value })
-                    }
-                  />
-                </label>
-                <p>계획 상태로 생성됩니다. 원본 메모는 연결된 채로 남습니다.</p>
-                <Button
-                  variant="primary"
-                  onClick={() => save("create")}
-                  disabled={busy || !canWrite}
+                <legend className={styles.srOnly}>다음 행동으로 연결</legend>
+                <details
+                  key={`${selectedKey}:create`}
+                  className={styles.action}
                 >
-                  {busy ? "저장 중…" : "할 일로 만들기"}
-                </Button>
-                <div className={styles.existing}>
+                  <summary>할 일로 만들기</summary>
+                  <label>
+                    할 일 제목
+                    <input
+                      maxLength={300}
+                      value={draft.title}
+                      onChange={(event) =>
+                        setDraft({ ...draft, title: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    프로젝트
+                    <select
+                      value={draft.projectId}
+                      onChange={(event) =>
+                        setDraft({ ...draft, projectId: event.target.value })
+                      }
+                    >
+                      <option value="">프로젝트 선택</option>
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    마감일
+                    <input
+                      type="date"
+                      value={draft.dueAt}
+                      onChange={(event) =>
+                        setDraft({ ...draft, dueAt: event.target.value })
+                      }
+                    />
+                  </label>
+                  <p>
+                    계획 상태로 생성됩니다. 원본 메모는 연결된 채로 남습니다.
+                  </p>
+                  <Button
+                    variant="primary"
+                    onClick={() => save("create")}
+                    disabled={busy || !canWrite}
+                  >
+                    {busy ? "저장 중…" : "할 일로 만들기"}
+                  </Button>
+                </details>
+                <details key={`${selectedKey}:link`} className={styles.action}>
+                  <summary>기존 업무에 연결</summary>
                   <label>
                     기존 업무에 연결
                     <select
@@ -452,10 +455,10 @@ export function MemoWorkspace({
                   >
                     선택한 업무에 연결
                   </Button>
-                </div>
+                </details>
               </fieldset>
             )}
-            <p role="status" aria-live="polite" className={styles.notice}>
+            <p role="status" aria-live="polite" className={styles.feedback}>
               {feedback}
             </p>
           </article>

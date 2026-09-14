@@ -123,6 +123,7 @@ export function ProjectDetailPanel({
   onCreateTodo,
   onOpen,
   onSendOrder,
+  onConsultCouncil,
   onComplete,
   onManageDelivery,
   onArchive,
@@ -241,9 +242,10 @@ export function ProjectDetailPanel({
             {project.statusKey === "archived" ? "보관 해제" : "보관"}
           </Button>
         </div>
-        <div style={{ padding: 12, display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ padding: 12, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <Button variant="outline" size="sm" onClick={() => onEdit?.(project)}>편집</Button>
           <Button variant="primary" size="sm" icon="chat" style={{ flex: 1 }} onClick={() => onOpen?.(project)}>열기</Button>
+          <Button variant="outline" size="sm" icon="sparkle" onClick={() => onConsultCouncil?.(project)}>Council 조언</Button>
           <Button variant="outline" size="sm" icon="orders" onClick={() => onSendOrder?.(project)}>{orderPending ? "Sending…" : "주문 보내기"}</Button>
           {orderResult && !orderPending && <span role={orderResult.tone === "ok" ? "status" : "alert"} className="mono" style={{ fontSize: 10.5, color: orderResult.tone === "ok" ? "var(--fg-muted)" : "var(--danger)", whiteSpace: "nowrap" }}>{orderResult.label}</span>}
         </div>

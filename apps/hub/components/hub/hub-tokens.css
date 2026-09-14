@@ -560,6 +560,135 @@
 }
 .hub-app .daily-brief__jump:active { transform: translateY(0); }
 
+/* Daily Brief layout and component enhancements */
+.hub-app .daily-brief__intro-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.hub-app .daily-brief__stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  line-height: 1.35;
+}
+
+.hub-app .daily-brief__stat-chip--danger {
+  border-color: var(--danger-line);
+  color: var(--danger);
+  background: rgba(224, 86, 74, 0.08);
+}
+
+.hub-app .daily-brief__stat-chip strong {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.hub-app .daily-brief__stat-chip--danger strong {
+  color: var(--danger);
+}
+
+.hub-app .daily-brief__card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px 8px;
+  font-size: 11px;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+}
+
+.hub-app .daily-brief__customer-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .daily-brief__customer-row:hover {
+  background: var(--surface-2);
+}
+
+.hub-app .daily-brief__customer-row:hover .daily-brief__row-arrow {
+  transform: translateX(2px);
+  color: var(--moon-300);
+}
+
+.hub-app .daily-brief__row-arrow {
+  transition: transform var(--dur-hover) var(--ease-hub), color var(--dur-hover) var(--ease-hub);
+  color: var(--fg-faint);
+  flex-shrink: 0;
+}
+
+.hub-app .daily-brief__quick-input {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 14.5px;
+  line-height: 1.4;
+  color: var(--fg);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub), background var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .daily-brief__quick-input:focus {
+  outline: 1px solid var(--moon-300);
+  outline-offset: 1px;
+  border-color: var(--moon-300);
+  background: var(--surface);
+}
+
+.hub-app .daily-brief__status-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  color: var(--fg-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub), color var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .daily-brief__status-toggle:hover {
+  color: var(--fg);
+  border-color: var(--line);
+  background: var(--surface-3);
+}
+
+.hub-app .daily-brief__metric-card {
+  transition: transform var(--dur-hover) var(--ease-hub), border-color var(--dur-hover) var(--ease-hub), box-shadow var(--dur-hover) var(--ease-hub);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hub-app .daily-brief__metric-card:hover {
+    transform: translateY(-1px);
+    border-color: var(--line);
+    box-shadow: var(--shadow-md);
+  }
+}
+
+.hub-app .daily-brief__focus {
+  align-items: stretch;
+}
+
+
 /* §9 card cascade — put on a container whose direct children rise in sequence
    (KPI strips, card grids, section stacks). Not for data rows: row lists stay instant.
    `both` keeps late children invisible until their delay; cap at child 8 so long
@@ -2108,5 +2237,36 @@
     font-family: var(--font-mono);
     font-size: 10.5px;
     line-height: 1.35;
+  }
+}
+
+/* ── PMS 컨테이너 태그 필터 바 (2026-09-11) ── */
+/* 좁은 폭에서는 헤더 좌우 패딩에 맞춰 줄이고, 개수 칩을 지워 이름이 먼저 잘리지 않게 한다.
+   wrap은 하지 않는다 — 한 줄 가로 스크롤이 이 바의 계약이다. */
+@media (max-width: 900px) {
+  .hub-app .hub-pms-filterbar {
+    padding: 7px 14px;
+  }
+
+  .hub-app .hub-pms-chip {
+    max-width: 44vw;
+  }
+
+  .hub-app .hub-pms-chip__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* 터치 타깃 플로어(§11) — 데스크톱 밀도(30px)는 그대로 두고 coarse 포인터에서만 44px. */
+@media (pointer: coarse) {
+  .hub-app .hub-pms-chip {
+    min-height: 44px;
+    border-radius: 22px;
+  }
+
+  .hub-app .hub-pms-filterbar__tail button {
+    min-height: 44px;
+    min-width: 44px;
   }
 }

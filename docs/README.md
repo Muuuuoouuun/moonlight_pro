@@ -62,6 +62,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **사이드바 IA · PMS 분류 (최신순, 확정 스펙만 정본)**
 
+- [`superpowers/specs/2026-09-11-scope-as-global-filter.md`](superpowers/specs/2026-09-11-scope-as-global-filter.md) — **결정됨(2026-09-11)**. 스코프(전체·ClassIn·개인)의 의미와 적용 범위 정본. `2026-07-14` 스펙의 "스코프 = 목적지 전환" 해석을 폐기하고 전역 필터로 바꾼다. 앵커·2레벨 구조 자체는 아래 `2026-07-15` 스펙이 계속 정본이다. 구현은 단계별.
 - [`superpowers/specs/2026-09-09-project-delivery-lifecycle.md`](superpowers/specs/2026-09-09-project-delivery-lifecycle.md) — 시작·검증·종료 일정, 최소 결과물, 완료 조건, 마무리 가능성 및 완료 검증 UI. 운영자 구현 요청 반영, 로컬 검증·운영 배포 별도.
 - [`superpowers/specs/2026-07-15-sidebar-second-level-and-pms-taxonomy.md`](superpowers/specs/2026-07-15-sidebar-second-level-and-pms-taxonomy.md) — **확정(2026-07-15)**. 사이드바 2레벨 아코디언 + PMS 분류 체계 정본. `2026-07-14` 8앵커 IA는 유지하되 하위 레벨 노출 방식을 이 문서가 규정한다.
 - [`superpowers/specs/2026-07-15-personal-os-surface-restoration-design.md`](superpowers/specs/2026-07-15-personal-os-surface-restoration-design.md) — §3~4(5앵커+More 내비게이션 안)은 위 문서로 대체되어 **채택하지 않음**. §5(Personal 스코프 데이터 계약)·§6(구조적 화면 복구)는 별도로 유효.

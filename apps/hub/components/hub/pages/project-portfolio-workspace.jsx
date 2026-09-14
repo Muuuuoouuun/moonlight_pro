@@ -191,6 +191,7 @@ export function ProjectPortfolioWorkspace({
   onToggleTerminal,
   onReopenProject,
   onReload,
+  createSurface = null,
 }) {
   const [focusProjectId, setFocusProjectId] = React.useState(null);
   const [openSection, setOpenSection] = React.useState(null);
@@ -237,7 +238,11 @@ export function ProjectPortfolioWorkspace({
   const lowerBound = Boolean(projectCorePartial || sourceState === "partial");
 
   return (
-    <div className="hub-project-portfolio-workspace" data-detail-open={openDetailId ? "true" : "false"}>
+    <div
+      className="hub-project-portfolio-workspace"
+      data-detail-open={openDetailId ? "true" : "false"}
+      data-create-open={createSurface ? "true" : "false"}
+    >
       <aside className="hub-project-portfolio-index" aria-label="프로젝트 인덱스">
         <div className="hub-project-portfolio-index__header">
           <div>
@@ -309,7 +314,10 @@ export function ProjectPortfolioWorkspace({
       </aside>
 
       <main className="hub-project-portfolio-stage scroll-y">
-        <div className={`hub-project-portfolio-stage__inner ${deliveryStyles.portfolio}`}>
+        {createSurface ? (
+          <div className="hub-project-portfolio-stage__create">{createSurface}</div>
+        ) : (
+          <div className={`hub-project-portfolio-stage__inner ${deliveryStyles.portfolio}`}>
           <header className="hub-project-portfolio-stage__header">
             <div>
               <span className={deliveryStyles.eyebrow}>{brand?.name || "프로젝트"}</span>
@@ -492,7 +500,8 @@ export function ProjectPortfolioWorkspace({
               )}
             </div>
           )}
-        </div>
+          </div>
+        )}
       </main>
     </div>
   );

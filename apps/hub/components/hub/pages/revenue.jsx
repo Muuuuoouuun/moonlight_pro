@@ -15,6 +15,7 @@ import { useUndoableAction, UNDO_WINDOW_MS } from "../use-undoable-action";
 import { selectProjectAreaId } from "@/lib/pms-ui";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
 import { readRevenueCache, writeRevenueCache, clearRevenueCache } from "../revenue-shared-cache";
+import { resolveScopeFilter, scopeFilterForQuery } from "@/lib/revenue-scope-filter";
 import { BulkBar } from "../crm-bulk-bar";
 import { PersonalRevenueRoadmap } from "./personal-revenue";
 
@@ -51,6 +52,24 @@ const SCOPE_OPTIONS = [
   { key: 'personal', label: 'Personal', dot: 'personal' },
   { key: 'company', label: 'Company', dot: 'company' },
 ];
+
+// 사이드바 스코프는 `?scope=`로만 도착하고 pathname은 그대로다 — hub-app이 pathname으로
+// 페이지를 키잉하므로 리마운트가 없다. 마운트 1회 초기화로는 스코프 전환이 목록에
+// 반영되지 않았다(2026-09-11). 쿼리를 구독해 "바뀐 순간에만" 툴바 필터를 다시 맞추고,
+// 그 사이 운영자가 직접 고른 값(Company 등)은 유지한다. 규칙 본체는
+// lib/revenue-scope-filter.js 소유 — 세 표면이 같은 계약을 공유한다.
+function useScopeFilter(searchParams) {
+  const queryScope = searchParams?.get('scope') || null;
+  const [filter, setFilter] = React.useState(() => scopeFilterForQuery(queryScope));
+  const lastScopeRef = React.useRef(queryScope);
+  React.useEffect(() => {
+    const previousQueryScope = lastScopeRef.current;
+    if (previousQueryScope === queryScope) return;
+    lastScopeRef.current = queryScope;
+    setFilter((current) => resolveScopeFilter({ queryScope, previousQueryScope, current }));
+  }, [queryScope]);
+  return [filter, setFilter];
+}
 
 // Parse a display amount ("₩1.2M", "₩900K", "₩0", or a raw number) to a comparable number,
 // so the Leads table can sort by value even though the display model stores a string.
@@ -660,12 +679,7 @@ export function Leads({ workspace }) {
   // The ledger hook only exposes API-backed rows — scoping never mixes sources. Drawer
   // edits overlay onto whichever row (local or ledger) they key to; deletes drop the row.
   const ws = getWorkspace(workspace);
-  const [filter, setFilter] = React.useState(() => {
-    // 사이드바 personal 스코프 경로(?scope=personal)를 실소비 — 착지 시 개인 필터로 시작
-    // (기존: 스코프 토글이 데이터에 아무 영향 없는 과약속, 4차 재감사 M).
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('scope') === 'personal') return 'personal';
-    return 'all';
-  });
+  const [filter, setFilter] = useScopeFilter(searchParams);
   const [search, setSearch] = React.useState('');
   const [sort, setSort] = React.useState({ key: null, dir: 'asc' });
   // 파생 목록 memo(re-audit 속도 #4) — 이전에는 드로어·검색 키스트로크마다 120행
@@ -1600,12 +1614,7 @@ export function Deals({ workspace, onNavigate }) {
   const DEAL_STAGES = ledger.stages;
   const [deals, setDeals] = React.useState(ledger.deals);
   const [drag, setDrag] = React.useState(null);
-  const [filter, setFilter] = React.useState(() => {
-    // 사이드바 personal 스코프 경로(?scope=personal)를 실소비 — 착지 시 개인 필터로 시작
-    // (기존: 스코프 토글이 데이터에 아무 영향 없는 과약속, 4차 재감사 M).
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('scope') === 'personal') return 'personal';
-    return 'all';
-  });
+  const [filter, setFilter] = useScopeFilter(searchParams);
   const [showHidden, setShowHidden] = React.useState(false);
   const [editDealId, setEditDealId] = React.useState(null);
   const [boardNotice, setBoardNotice] = React.useState(null); // { key?, tone, label, undo? } — 이동 되돌리기·저장 실패 안내
@@ -2931,6 +2940,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
 
 export function Accounts({ workspace, onNavigate }) {
   const { ledger, syncState, reload: reloadLedger } = useRevenueLedger();
+  const searchParams = useSearchParams();
   const [localAccounts, setLocalAccounts] = React.useState([]);
   const ledgerAccounts = Array.isArray(ledger.accounts) ? ledger.accounts : [];
   // Scope the merged ledger to the active workspace (pass-through when unscoped). The
@@ -2940,12 +2950,7 @@ export function Accounts({ workspace, onNavigate }) {
   const wsEmpty = Boolean(ws) && ACCOUNTS.length === 0;
   const [view, setView] = React.useState('cards'); // cards | list | detail
   const [search, setSearch] = React.useState('');
-  const [filter, setFilter] = React.useState(() => {
-    // 사이드바 personal 스코프 경로(?scope=personal)를 실소비 — 착지 시 개인 필터로 시작
-    // (기존: 스코프 토글이 데이터에 아무 영향 없는 과약속, 4차 재감사 M).
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('scope') === 'personal') return 'personal';
-    return 'all';
-  });
+  const [filter, setFilter] = useScopeFilter(searchParams);
   const [selected, setSelected] = React.useState(null);
   const [details, setDetails] = React.useState({});
   const [sort, setSort] = React.useState({ key: null, dir: 'asc' });
@@ -2986,6 +2991,16 @@ export function Accounts({ workspace, onNavigate }) {
       return xv < yv ? -dir : xv > yv ? dir : 0;
     });
   }, [searched, sort]);
+  // 스코프/타입 필터로 0건인 것과 원장 자체가 비어 0건인 것은 다른 사실이다. 사이드바
+  // 스코프를 개인으로 바꾸면 여기가 비는데, 그때 "원장이 비어 있다"고 말하면 데이터가
+  // 없는 것처럼 읽힌다 — Leads의 "필터: x · N건 중 0건" 문구와 같은 계약으로 맞춘다.
+  const scopeFilteredEmpty = filter !== 'all' && ACCOUNTS.length > 0;
+  const emptyTitle = scopeFilteredEmpty ? '해당 범위에 계정이 없습니다' : '계정이 없습니다';
+  const emptyDescription = (liveCopy) => (
+    scopeFilteredEmpty ? `필터: ${filter} · ${ACCOUNTS.length}건 중 0건`
+      : syncState === 'live' ? liveCopy
+      : '필터를 조정하거나 첫 계정을 등록하세요.'
+  );
   const toggleSort = (key) => setSort(s =>
     s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: null, dir: 'asc' }
   );
@@ -3398,8 +3413,8 @@ export function Accounts({ workspace, onNavigate }) {
             <Card style={{ gridColumn: '1 / -1' }}>
               <EmptyState
                 icon="accounts"
-                title={search.trim() ? '검색 결과가 없습니다' : '계정이 없습니다'}
-                description={search.trim() ? '다른 검색어를 시도하거나 검색을 지우세요.' : syncState === 'live' ? 'Supabase customer_accounts 기록에 표시할 계정이 없습니다.' : '필터를 조정하거나 첫 계정을 등록하세요.'}
+                title={search.trim() ? '검색 결과가 없습니다' : emptyTitle}
+                description={search.trim() ? '다른 검색어를 시도하거나 검색을 지우세요.' : emptyDescription('Supabase customer_accounts 기록에 표시할 계정이 없습니다.')}
                 action={search.trim()
                   ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
                   : <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>}
@@ -3467,8 +3482,8 @@ export function Accounts({ workspace, onNavigate }) {
           {filtered.length === 0 && (
             <EmptyState
               icon="accounts"
-              title={search.trim() ? '검색 결과가 없습니다' : '계정이 없습니다'}
-              description={search.trim() ? '다른 검색어를 시도하거나 검색을 지우세요.' : syncState === 'live' ? 'Supabase customer_accounts 기록이 비어 있습니다.' : '필터를 조정하거나 첫 계정을 등록하세요.'}
+              title={search.trim() ? '검색 결과가 없습니다' : emptyTitle}
+              description={search.trim() ? '다른 검색어를 시도하거나 검색을 지우세요.' : emptyDescription('Supabase customer_accounts 기록이 비어 있습니다.')}
               action={search.trim()
                 ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
                 : <Button variant="primary" size="sm" icon="plus" onClick={createAccount}>Account</Button>}

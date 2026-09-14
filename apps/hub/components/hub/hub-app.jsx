@@ -209,7 +209,7 @@ const PAGE_MAP = {
   'dashboard/automations/flows': (n) => <Flows onNavigate={n} />,
   'dashboard/automations/email': (n) => <EmailAutomation onNavigate={n} />,
   'dashboard/automations/webhooks': (n) => <Webhooks onNavigate={n} />,
-  'dashboard/automations/runs': () => <Runs />,
+  'dashboard/automations/runs': (n) => <Runs onNavigate={n} />,
   'dashboard/automations/sheets': () => <SheetsSync />,
   'dashboard/agents/chat': (n) => <AgentsChat onNavigate={n} />,
   'dashboard/agents/council': (n) => <AgentsCouncil onNavigate={n} />,

@@ -401,48 +401,261 @@ export function Webhooks({ onNavigate }) {
   );
 }
 
-export function Runs() {
+function isHeartbeatRun(r) {
+  const detail = String(r?.detail || '');
+  return r?.flow === 'System' && (
+    detail.includes('Engine is alive') ||
+    detail.includes('Webhook surface is ready') ||
+    detail.startsWith('openTasks:') ||
+    detail.startsWith('Engine alive')
+  );
+}
+
+export function Runs({ onNavigate } = {}) {
   const sIcon = { ok: { c: 'var(--fg-muted)', t: '●' }, warn: { c: 'var(--fg)', t: '▲' }, err: { c: 'var(--danger)', t: '✕' } };
-  const { runs, syncState } = useAutomationsLedger();
+  const { runs, summary, syncState } = useAutomationsLedger();
   const rows = Array.isArray(runs) ? runs : [];
+
+  const [filter, setFilter] = React.useState('events');
+  const [selectedRunId, setSelectedRunId] = React.useState(null);
+
+  const heartbeatRuns = rows.filter(isHeartbeatRun);
+  const businessRuns = rows.filter((r) => !isHeartbeatRun(r));
+  const failureRuns = rows.filter((r) => r.status === 'err' || r.statusKey === 'failure');
+
+  const latestHeartbeat = heartbeatRuns[0] || null;
+  const avgLatency = rows.length > 0
+    ? Math.round(rows.reduce((sum, r) => sum + (Number(r.ms) || 0), 0) / rows.length)
+    : 0;
+
+  let displayRows = rows;
+  if (filter === 'events') {
+    displayRows = businessRuns;
+  } else if (filter === 'errors') {
+    displayRows = failureRuns;
+  }
+
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center' }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Run log</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            Real-time automation execution log
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>Real-time automation execution log</span>
             <SyncBadge state={syncState} />
           </div>
         </div>
-        <div style={{ flex: 1 }} />
-        {/* 인라인 live 라벨 제거 — SyncBadge가 canonical(§8.1 중복 금지). */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {onNavigate && (
+            <>
+              <Button variant="secondary" size="sm" icon="zap" onClick={() => onNavigate('dashboard/automations')}>자동화 개요</Button>
+              <Button variant="secondary" size="sm" icon="bolt" onClick={() => onNavigate('dashboard/automations/webhooks')}>Webhooks 관리</Button>
+            </>
+          )}
+        </div>
       </div>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        gap: 'var(--gap)',
+      }}>
+        <Card pad style={{ padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>오늘 실행</div>
+          <div className="mono" style={{ fontSize: 22, fontWeight: 600, color: 'var(--fg)', marginTop: 4 }}>
+            {summary?.runsToday ?? rows.length}
+            <span style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 6, fontWeight: 400 }}>건</span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>
+            비즈니스 {businessRuns.length}건 · 핑 {heartbeatRuns.length}건
+          </div>
+        </Card>
+
+        <Card pad style={{
+          padding: '12px 16px',
+          borderLeft: failureRuns.length > 0 ? '2px solid var(--danger)' : undefined,
+        }}>
+          <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>오류 / 실패</div>
+          <div className="mono" style={{
+            fontSize: 22,
+            fontWeight: 600,
+            color: failureRuns.length > 0 ? 'var(--danger)' : 'var(--fg)',
+            marginTop: 4,
+          }}>
+            {summary?.failuresToday ?? failureRuns.length}
+            <span style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 6, fontWeight: 400 }}>건</span>
+          </div>
+          <div style={{ fontSize: 11, color: failureRuns.length > 0 ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 4 }}>
+            {failureRuns.length > 0 ? '실패 원인 확인 필요' : '모든 프로세스 정상'}
+          </div>
+        </Card>
+
+        <Card pad style={{ padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>엔진 헬스 상태</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+            <Dot tone={syncState === 'error' ? 'danger' : 'neutral'} />
+            <span className="mono" style={{ fontSize: 15, fontWeight: 500, color: 'var(--fg)' }}>
+              {syncState === 'error' ? 'Degraded' : 'Live'}
+            </span>
+            {latestHeartbeat && (
+              <Badge tone="neutral" size="xs" numeric>{latestHeartbeat.ms}ms</Badge>
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>
+            {latestHeartbeat ? `최근 핑: ${latestHeartbeat.at}` : '헬스체크 대기 중'}
+          </div>
+        </Card>
+
+        <Card pad style={{ padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, color: 'var(--fg-muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>평균 응답 속도</div>
+          <div className="mono" style={{ fontSize: 22, fontWeight: 600, color: 'var(--moon-200)', marginTop: 4 }}>
+            {avgLatency}
+            <span style={{ fontSize: 11, color: 'var(--fg-faint)', marginLeft: 4, fontWeight: 400 }}>ms</span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--fg-faint)', marginTop: 4 }}>
+            최근 실행 지연시간 평균
+          </div>
+        </Card>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Button
+            size="xs"
+            variant={filter === 'events' ? 'secondary' : 'ghost'}
+            onClick={() => setFilter('events')}
+          >
+            비즈니스 이벤트 ({businessRuns.length})
+          </Button>
+          <Button
+            size="xs"
+            variant={filter === 'errors' ? (failureRuns.length > 0 ? 'danger' : 'secondary') : 'ghost'}
+            onClick={() => setFilter('errors')}
+          >
+            오류만 ({failureRuns.length})
+          </Button>
+          <Button
+            size="xs"
+            variant={filter === 'all' ? 'secondary' : 'ghost'}
+            onClick={() => setFilter('all')}
+          >
+            전체 로그 (핑 포함 {rows.length})
+          </Button>
+        </div>
+
+        {filter === 'events' && heartbeatRuns.length > 0 && (
+          <div style={{ fontSize: 11, color: 'var(--fg-faint)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>단순 시스템 핑 {heartbeatRuns.length}건 숨김</span>
+            <button
+              type="button"
+              onClick={() => setFilter('all')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--moon-300)',
+                cursor: 'pointer',
+                fontSize: 11,
+                padding: 0,
+                textDecoration: 'underline',
+              }}
+            >
+              로그 보기
+            </button>
+          </div>
+        )}
+      </div>
+
       <Card pad={false} className="hub-table-card" style={{ background: 'var(--bg)' }}>
         <div className="mono" style={{ padding: '12px 14px', fontSize: 12 }}>
-          {rows.length === 0 && (
+          {displayRows.length === 0 && (
             <EmptyState
-              icon="runs"
-              title={syncState === 'error' ? '실행 로그를 읽지 못했습니다' : '실행 로그가 없습니다'}
-              description={syncState === 'error'
-                ? '지금 화면은 비어 보여도 실제 실행 기록이 있을 수 있습니다. 새로고침으로 재시도하세요.'
-                : 'Engine이 automation_runs에 기록을 남기면 이 로그가 채워집니다.'}
-              style={{ minHeight: 220 }}
+              icon={filter === 'errors' ? 'shield' : 'runs'}
+              title={
+                filter === 'errors'
+                  ? '발생한 실행 오류가 없습니다'
+                  : filter === 'events' && heartbeatRuns.length > 0
+                    ? '기록된 비즈니스 실행 이벤트가 없습니다'
+                    : syncState === 'error'
+                      ? '실행 로그를 읽지 못했습니다'
+                      : '실행 로그가 없습니다'
+              }
+              description={
+                filter === 'errors'
+                  ? '모든 자동화 및 엔진 프로세스가 정상 작동하고 있습니다.'
+                  : filter === 'events' && heartbeatRuns.length > 0
+                    ? `엔진 헬스체크는 정상 작동 중입니다 (최근 핑: ${latestHeartbeat?.at || '방금'} · ${latestHeartbeat?.ms || 0}ms). 고객 연동이나 웹훅이 실행되면 여기에 나타납니다.`
+                    : syncState === 'error'
+                      ? '화면을 새로고침하여 원장 연결을 다시 시도하세요.'
+                      : 'Engine이 automation_runs에 기록을 남기면 이 로그가 채워집니다.'
+              }
+              action={
+                filter === 'events' && heartbeatRuns.length > 0 ? (
+                  <Button variant="secondary" size="sm" onClick={() => setFilter('all')}>
+                    전체 시스템 핑 로그 확인 ({rows.length}건)
+                  </Button>
+                ) : undefined
+              }
+              style={{ minHeight: 180 }}
             />
           )}
-          {rows.map((r, i) => (
-            <div key={r.id} style={{
-              display: 'grid', gridTemplateColumns: '90px 24px 180px 70px 1fr',
-              padding: '5px 0', borderBottom: i < rows.length - 1 ? '1px dashed var(--line-soft)' : 'none',
-              alignItems: 'center', gap: 10,
-            }}>
-              <span style={{ color: 'var(--fg-faint)' }}>{r.at}</span>
-              <span style={{ color: sIcon[r.status].c, textAlign: 'center' }}>{sIcon[r.status].t}</span>
-              <span style={{ color: 'var(--fg)' }}>{r.flow}</span>
-              <span style={{ color: 'var(--fg-faint)', textAlign: 'right' }}>{r.ms}ms</span>
-              <span style={{ color: 'var(--fg-muted)' }}>{r.detail}</span>
-            </div>
-          ))}
+          {displayRows.map((r, i) => {
+            const isSelected = selectedRunId === r.id;
+            return (
+              <React.Fragment key={r.id}>
+                <div
+                  onClick={() => setSelectedRunId(isSelected ? null : r.id)}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '90px 24px 170px 65px 1fr 20px',
+                    padding: '6px 8px',
+                    borderRadius: 'var(--r-sm)',
+                    borderBottom: i < displayRows.length - 1 && !isSelected ? '1px dashed var(--line-soft)' : 'none',
+                    alignItems: 'center',
+                    gap: 10,
+                    cursor: 'pointer',
+                    background: isSelected ? 'var(--surface-2)' : 'transparent',
+                    transition: 'background var(--dur-hover) ease',
+                  }}
+                  onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--surface)'; }}
+                  onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <span style={{ color: 'var(--fg-faint)' }}>{r.at}</span>
+                  <span style={{ color: sIcon[r.status].c, textAlign: 'center' }}>{sIcon[r.status].t}</span>
+                  <span style={{ color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.flow}</span>
+                  <span style={{ color: 'var(--fg-faint)', textAlign: 'right' }}>{r.ms}ms</span>
+                  <span style={{ color: r.status === 'err' ? 'var(--danger)' : 'var(--fg-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {r.detail}
+                  </span>
+                  <span style={{ color: 'var(--fg-faint)', textAlign: 'center', fontSize: 10 }}>
+                    <Iconed name={isSelected ? 'chevronD' : 'chevronR'} size={11} />
+                  </span>
+                </div>
+                {isSelected && (
+                  <div style={{
+                    padding: '10px 14px',
+                    margin: '2px 8px 8px',
+                    background: 'var(--surface)',
+                    border: '1px solid var(--line-soft)',
+                    borderRadius: 'var(--r-sm)',
+                    fontSize: 11.5,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', color: 'var(--fg-faint)' }}>
+                      <span>Run ID: <code className="mono" style={{ color: 'var(--fg)' }}>{r.id}</code></span>
+                      {r.correlationId && <span>Correlation: <code className="mono" style={{ color: 'var(--fg)' }}>{r.correlationId}</code></span>}
+                      {r.providerEventId && <span>Event ID: <code className="mono" style={{ color: 'var(--fg)' }}>{r.providerEventId}</code></span>}
+                      <span>소요시간: <span className="mono" style={{ color: 'var(--fg)' }}>{r.ms}ms</span></span>
+                    </div>
+                    <div style={{ color: r.status === 'err' ? 'var(--danger)' : 'var(--fg)', wordBreak: 'break-all', lineHeight: 1.5 }}>
+                      <strong>상세 내용:</strong> {r.detail}
+                    </div>
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })}
         </div>
       </Card>
     </div>

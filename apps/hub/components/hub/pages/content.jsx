@@ -6,6 +6,7 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, SectionTitle, EmptyState, Avatar, SyncBadge, SegmentedControl, TextField, TextAreaField } from "../hub-primitives";
 import { usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
+import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { shouldRestoreActiveStudioDraft } from "@/lib/content-studio-routing";
 import {
   businessTruthCompleteness,
@@ -254,6 +255,7 @@ export function Studio({ workspace }) {
   const [lastSavedAt, setLastSavedAt] = React.useState(null);
   const [localSavedAt, setLocalSavedAt] = React.useState(null);
   const [dirty, setDirty] = React.useState(false);
+  const [mentorOpen, setMentorOpen] = React.useState(false);
   const loadedItemRef = React.useRef(null);
   // ?item= 딥링크가 라이브 원장에서 해석되지 않았을 때의 1회성 안내 (2609 감사 #8).
   const [missingItemId, setMissingItemId] = React.useState(null);
@@ -586,7 +588,7 @@ export function Studio({ workspace }) {
   const applyToolbarAction = (tool) => {
     if (!tool) return;
     if (tool === 'ai') {
-      setExtraSuggestions(s => [{ tone: 'neutral', text: 'AI 제안 생성은 아직 실행 경로에 연결되지 않았습니다.' }, ...s]);
+      setMentorOpen(true);
       return;
     }
     const snippets = {
@@ -695,6 +697,14 @@ export function Studio({ workspace }) {
             onClick={() => saveDraft("manual")}
             style={{ color: saveState === 'error' ? 'var(--danger)' : 'var(--fg-muted)' }}
           />
+          <Button
+            variant="outline"
+            size="sm"
+            icon="sparkle"
+            onClick={() => setMentorOpen(true)}
+          >
+            Council 조언
+          </Button>
           <Button
             variant="secondary"
             size="sm"
@@ -1046,6 +1056,22 @@ export function Studio({ workspace }) {
         {/* "Ask Writer/Studio" 입력은 핸들러가 전혀 없는 死 어포던스였다(⏎ 힌트까지 걸고
             무반응) — AI 배선이 생기기 전까지 렌더하지 않는다(7차 사용성, §13). */}
       </aside>
+      <FloatingMentorWidget
+        isOpen={mentorOpen}
+        onClose={() => setMentorOpen(false)}
+        contextType="content"
+        contextTitle={title || "새 초안"}
+        contextData={{
+          title,
+          body: mode === 'carousel' ? JSON.stringify(slides) : body,
+          brand: selectedBrand?.name || selectedBrand?.key || "",
+          mode,
+        }}
+        onApplyText={(text) => {
+          setBody((prev) => (prev ? `${prev}\n\n${text}` : text));
+          setDirty(true);
+        }}
+      />
     </div>
   );
 }

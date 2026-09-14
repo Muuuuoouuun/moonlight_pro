@@ -8,6 +8,7 @@ import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import {
   buildContainerTree,
+  flattenContainerChips,
   buildProjectCreatePayload,
   buildProjectDraft,
   buildProjectEditDraft,
@@ -34,13 +35,15 @@ import {
   taskStatusForBoardColumn,
   validateProjectDraft,
 } from "@/lib/pms-ui";
-import { ProjectCreateDrawer } from "./project-create-drawer";
+import { ProjectCreateDrawer, ProjectCreateInline } from "./project-create-drawer";
 import { MemoWorkspace } from "./memo-workspace";
 import { ProjectDeliveryEditor } from "./project-delivery";
 import { ProjectDetailPanel } from "./project-detail-panel";
+import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { ProjectPortfolioWorkspace } from "./project-portfolio-workspace";
 import {
   BrandMark,
+  ContainerFilterBar,
   ProjectPortfolioSummary,
   ProjectProgressGauge,
 } from "./project-pms-components";
@@ -251,6 +254,7 @@ export function Projects({ workspace }) {
   const pathname = usePathname();
   const ws = getWorkspace(workspace);
   const [brand, setBrand] = React.useState('all');
+  const [councilWidgetProject, setCouncilWidgetProject] = React.useState(null);
 
   // The open view lives in the URL, not in state: the sidebar tells 할 일 from
   // 프로젝트·기획 by `?view`, and it makes the view bookmarkable. The ref keeps
@@ -302,7 +306,6 @@ export function Projects({ workspace }) {
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
   const [openDetail, setOpenDetail] = React.useState(null);
   const [mobileDetail, setMobileDetail] = React.useState(false);
-  const [brandMenuOpen, setBrandMenuOpen] = React.useState(false);
   // 기본 접힘 — 저장된 사용자 토글이 있으면 그 값을 따른다 (SSR 안전하게 마운트 후 로드).
   const [sidebarHidden, setSidebarHiddenState] = React.useState(true);
   React.useEffect(() => {
@@ -320,7 +323,6 @@ export function Projects({ workspace }) {
   const ledgerReadRef = React.useRef({ requestId: 0, controller: null });
   const taskStatusPendingRef = React.useRef(new Set());
   const contentLoadedRef = React.useRef(false);
-  const brandMenuRef = React.useRef(null);
   const detailSheetRef = React.useRef(null);
   const detailReturnFocusRef = React.useRef(null);
   const detailAutofocusPresentationRef = React.useRef(null);
@@ -762,12 +764,21 @@ export function Projects({ workspace }) {
   }, [orderResult]);
 
   const toggleExpand = (id) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const prepareProjectCreate = React.useCallback(() => {
+    // List의 생성은 기존 상세를 밀어내고 같은 작업면을 사용한다. 별도 오버레이를 겹치지
+    // 않으며, URL의 이전 선택도 함께 비워 새 프로젝트 저장 후 정확한 ID로 다시 연다.
+    if (!openDetail) return;
+    detailReturnFocusRef.current = null;
+    closeProjectDetail();
+  }, [closeProjectDetail, openDetail]);
+
   const createProject = React.useCallback((initialStatus = 'Planning', brandKeyOverride = null) => {
     // Contextual entry points (brand sections and status lanes) may seed location.
     const contextBrand = brandKeyOverride
       ? (brands.find(item => item.key === brandKeyOverride) || null)
       : (brand === 'all' ? null : currentBrand);
     const areaId = selectProjectAreaId(ledger.areas) || '';
+    prepareProjectCreate();
     setOrderResult(null);
     setProjectEditSource(null);
     setProjectDraft(buildProjectDraft({
@@ -777,10 +788,11 @@ export function Projects({ workspace }) {
       orgScope: resolveProjectDraftOrgScope({ workspace }),
     }));
     return true;
-  }, [brand, brands, currentBrand, ledger.areas, workspace]);
+  }, [brand, brands, currentBrand, ledger.areas, prepareProjectCreate, workspace]);
 
   const openGlobalProjectCreate = React.useCallback(() => {
     const areaId = selectProjectAreaId(ledger.areas) || '';
+    prepareProjectCreate();
     setOrderResult(null);
     setProjectEditSource(null);
     setProjectDraft(buildProjectDraft({
@@ -788,7 +800,7 @@ export function Projects({ workspace }) {
       orgScope: resolveProjectDraftOrgScope({ workspace }),
     }));
     return true;
-  }, [ledger.areas, workspace]);
+  }, [ledger.areas, prepareProjectCreate, workspace]);
 
   // 콘텐츠 프로젝트: 브랜드 시드 + contentPipeline 플래그. 저장이 성공하면 persistProject가
   // CONTENT_STAGES(기획→초안→검토→업로드)를 하위 아이템으로 시드한다.
@@ -800,6 +812,7 @@ export function Projects({ workspace }) {
       setOrderResult({ tone: 'err', label: '콘텐츠를 연결할 브랜드가 없습니다' });
       return false;
     }
+    prepareProjectCreate();
     const areaId = selectProjectAreaId(ledger.areas, 'content') || selectProjectAreaId(ledger.areas) || '';
     setOrderResult(null);
     setProjectEditSource(null);
@@ -818,7 +831,7 @@ export function Projects({ workspace }) {
       contentPipeline: true,
     });
     return true;
-  }, [brand, brands, currentBrand, ledger.areas, workspace]);
+  }, [brand, brands, currentBrand, ledger.areas, prepareProjectCreate, workspace]);
 
   const editProject = React.useCallback((project) => {
     setProjectEditSource(project);
@@ -1406,20 +1419,6 @@ export function Projects({ workspace }) {
   const contentTone = { idea: 'neutral', draft: 'neutral', review: 'neutral', scheduled: 'neutral', published: 'neutral', archived: 'neutral' };
 
   React.useEffect(() => {
-    const close = (e) => { if (brandMenuRef.current && !brandMenuRef.current.contains(e.target)) setBrandMenuOpen(false); };
-    // ESC 닫기 — 드롭다운이 기본 셀렉터가 된 이상 §8.1 3중 닫기 계약(ESC·바깥·버튼)을 지킨다.
-    const onEsc = (e) => { if (e.key === 'Escape') setBrandMenuOpen(false); };
-    if (brandMenuOpen) {
-      document.addEventListener('mousedown', close);
-      document.addEventListener('keydown', onEsc);
-    }
-    return () => {
-      document.removeEventListener('mousedown', close);
-      document.removeEventListener('keydown', onEsc);
-    };
-  }, [brandMenuOpen]);
-
-  React.useEffect(() => {
     if (searchParams.get('new') !== 'project') {
       createdFromQueryRef.current = false;
       return;
@@ -1507,6 +1506,9 @@ export function Projects({ workspace }) {
   }), [brands, folderOrder, brandOrder, brand, showEmptyContainers]);
   const brandGroups = containerTree.groups;
   const hiddenContainerCount = containerTree.hiddenCount;
+  // 헤더 태그 필터용 평탄화 — 사이드바는 3단 트리를 그대로 쓰고, 필터 바만 분류 헤더 없이
+  // 스코프 2묶음으로 읽는다 (2026-09-11 운영자 지시).
+  const containerChipGroups = React.useMemo(() => flattenContainerChips(containerTree), [containerTree]);
 
   // Folder collapse — 저장값이 없으면 진행 신호로 기본값을 정한다: 진행 중인 컨테이너가
   // 하나도 없는 폴더는 접힘. 수동 토글은 localStorage에 영속되어 기본값을 이긴다.
@@ -1704,58 +1706,6 @@ export function Projects({ workspace }) {
     );
   };
 
-  const renderBrandMenuRow = (b) => {
-    const active = brand === b.key;
-    const count = b.key === 'all' ? allProjects.length : (b.projects || 0);
-    const bTodos = scopedTodos.filter(t => b.key === 'all' || t.brand === b.key).filter(t => !t.done).length;
-    const changes = b.key === 'all'
-      ? brands.filter(x => x.key !== 'all').reduce((s, x) => s + (x.changes || 0), 0)
-      : (b.changes || 0);
-    return (
-      <button key={b.key} onClick={() => { setBrand(b.key); setBrandMenuOpen(false); }} style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '8px 10px', borderRadius: 'var(--r-sm)',
-        background: active ? 'var(--surface-3)' : 'transparent',
-        textAlign: 'left', color: active ? 'var(--fg)' : 'var(--fg-muted)',
-        cursor: 'pointer', position: 'relative',
-      }}>
-        <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
-          <BrandMark brand={b} size={20} active={active} />
-          {changes > 0 && (
-            <span style={{
-              position: 'absolute', top: -3, right: -2,
-              width: 8, height: 8, borderRadius: 999,
-              background: 'var(--moon-400)',
-              boxShadow: '0 0 0 2px var(--surface)',
-            }} />
-          )}
-        </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 12.5, fontWeight: active ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</span>
-            {changes > 0 && (
-              <span style={{
-                fontSize: 10.5, fontWeight: 600, fontFamily: 'var(--font-mono)',
-                minWidth: 16, height: 14, padding: '0 5px',
-                borderRadius: 999, background: 'var(--surface-3)', color: 'var(--fg-muted)',
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                letterSpacing: '-0.02em',
-              }}>{changes > 99 ? '99+' : changes}</span>
-            )}
-          </div>
-          <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {changes > 0 ? `${changes}개 새 변동 · ${b.desc || '전체 브랜드 포맷'}` : (b.desc || '전체 브랜드 포맷')}
-          </div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-          <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{count}p</span>
-          <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{bTodos}t</span>
-        </div>
-        {active && <span style={{ fontSize: 11, color: 'var(--moon-300)' }}>✓</span>}
-      </button>
-    );
-  };
-
   return (
     <div className="hub-workspace-shell" style={{ display: 'grid', gridTemplateColumns: sidebarHidden ? '1fr' : '240px 1fr', height: '100%', overflow: 'hidden' }}>
       {!sidebarHidden && (
@@ -1903,154 +1853,6 @@ export function Projects({ workspace }) {
           {sidebarHidden && (
             <IconButton icon="chevronR" size={28} iconSize={14} onClick={() => setSidebarHidden(false)} tooltip="브랜드 사이드바 펼치기" />
           )}
-          <div ref={brandMenuRef} style={{ position: 'relative' }}>
-            <button className="hub-project-brand-trigger" aria-label={`${currentBrand.name} 범위 선택`} aria-expanded={brandMenuOpen} onClick={() => setBrandMenuOpen(o => !o)} style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '6px 10px 6px 8px',
-              background: brandMenuOpen ? 'var(--surface-3)' : 'var(--surface-2)',
-              border: '1px solid var(--line)', borderRadius: 'var(--r-sm)',
-              color: 'var(--fg)', cursor: 'pointer', position: 'relative',
-            }}>
-              <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
-                <BrandMark brand={currentBrand} size={20} />
-                {(() => {
-                  const totalChanges = brands.filter(b => b.key !== 'all').reduce((s, b) => s + (b.changes || 0), 0);
-                  // 새 변동 카운트 — 손실 신호가 아니므로 중립 칩 (§5.2), 글자는 10.5px 플로어.
-                  if (brand === 'all' && totalChanges > 0) {
-                    return (
-                      <span style={{
-                        position: 'absolute', top: -5, right: -7,
-                        minWidth: 15, height: 15, padding: '0 4px',
-                        borderRadius: 999, background: 'var(--surface-3)', color: 'var(--fg-muted)',
-                        fontSize: 10.5, fontWeight: 600, fontFamily: 'var(--font-mono)',
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: '0 0 0 2px var(--surface-2)',
-                      }}>{totalChanges}</span>
-                    );
-                  }
-                  if (brand !== 'all' && currentBrand.changes > 0) {
-                    return (
-                      <span style={{
-                        position: 'absolute', top: -5, right: -7,
-                        minWidth: 15, height: 15, padding: '0 4px',
-                        borderRadius: 999, background: 'var(--surface-3)', color: 'var(--fg-muted)',
-                        fontSize: 10.5, fontWeight: 600, fontFamily: 'var(--font-mono)',
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: '0 0 0 2px var(--surface-2)',
-                      }}>{currentBrand.changes}</span>
-                    );
-                  }
-                  return null;
-                })()}
-              </span>
-              <span className="hub-project-brand-trigger__meta" style={{ display: 'contents' }}>
-                <span style={{ fontSize: 13, fontWeight: 500, letterSpacing: '-0.005em', whiteSpace: 'nowrap' }}>{currentBrand.name}</span>
-                <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface)', padding: '1px 5px', borderRadius: 4, border: '1px solid var(--line-soft)' }}>
-                  {brand === 'all' ? allProjects.length : (currentBrand.projects || 0)}
-                </span>
-                <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginLeft: 2, transform: brandMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>▼</span>
-              </span>
-            </button>
-            {brandMenuOpen && (
-              <div style={{
-                position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 50,
-                minWidth: 260,
-                background: 'var(--surface)', border: '1px solid var(--line)',
-                borderRadius: 'var(--r)', boxShadow: '0 12px 40px -12px oklch(0 0 0 / 0.5)',
-                padding: 4, display: 'flex', flexDirection: 'column',
-              }}>
-                {brands.filter(b => b.key === 'all').map(renderBrandMenuRow)}
-                {brandGroups.map(group => group.items.length === 0 ? null : (
-                  <div key={group.key}>
-                    <div style={{ padding: '6px 10px 4px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>
-                      {group.label}
-                    </div>
-                    {group.folders.map(folder => (
-                      <div key={folder.id}>
-                        <div style={{ padding: '4px 10px 2px', fontSize: 10.5, color: 'var(--fg-faint)' }}>{folder.label}</div>
-                        {folder.items.map(renderBrandMenuRow)}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-                {(hiddenContainerCount > 0 || showEmptyContainers) && (
-                  <button
-                    type="button"
-                    className="hub-row"
-                    onClick={toggleEmptyContainers}
-                    aria-expanded={showEmptyContainers}
-                    style={{
-                      width: '100%', display: 'flex', alignItems: 'center', gap: 6,
-                      padding: '7px 10px', borderRadius: 'var(--r-sm)',
-                      color: 'var(--fg-faint)', fontSize: 11, textAlign: 'left',
-                    }}
-                  >
-                    <span style={{ flex: 1 }}>
-                      {showEmptyContainers ? '빈 컨테이너 숨기기' : '숨긴 컨테이너 보기'}
-                    </span>
-                    {!showEmptyContainers && (
-                      <span className="mono" style={{ fontSize: 10.5 }}>{hiddenContainerCount}</span>
-                    )}
-                  </button>
-                )}
-                {/* 컨테이너 액션 — 사이드바가 기본 접힘이 된 뒤로 이 메뉴가 기본 셀렉터다.
-                    생성·편집·브랜드 탭 진입이 사이드바 헤더에만 있으면 기본 상태에서 도달
-                    불가가 된다 (2609 감사 #2). aside 헤더의 세 컨트롤과 같은 대상·같은 규칙. */}
-                <div style={{ borderTop: '1px solid var(--line-soft)', marginTop: 4, paddingTop: 4 }}>
-                  <button
-                    type="button"
-                    className="hub-row"
-                    onClick={() => { setBrandMenuOpen(false); createContainer(); }}
-                    style={{
-                      width: '100%', display: 'flex', alignItems: 'center', gap: 6,
-                      padding: '7px 10px', borderRadius: 'var(--r-sm)',
-                      color: 'var(--fg-muted)', fontSize: 11, textAlign: 'left',
-                    }}
-                  >
-                    <Iconed name="plus" size={11} />
-                    <span>새 컨테이너 (KA·딜 · 일반)</span>
-                  </button>
-                  {currentBrand && currentBrand.key !== 'all' && currentBrand.id && (
-                    currentBrand.category === BRAND_OWNED_CATEGORY ? (
-                      <button
-                        type="button"
-                        className="hub-row"
-                        onClick={() => { setBrandMenuOpen(false); router.push(`/dashboard/brands?b=${encodeURIComponent(currentBrand.key)}`); }}
-                        style={{
-                          width: '100%', display: 'flex', alignItems: 'center', gap: 6,
-                          padding: '7px 10px', borderRadius: 'var(--r-sm)',
-                          color: 'var(--fg-muted)', fontSize: 11, textAlign: 'left',
-                        }}
-                      >
-                        <Iconed name="brand" size={11} />
-                        <span>{currentBrand.name} · 브랜드 탭에서 열기</span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="hub-row"
-                        onClick={() => { setBrandMenuOpen(false); editContainer(currentBrand); }}
-                        style={{
-                          width: '100%', display: 'flex', alignItems: 'center', gap: 6,
-                          padding: '7px 10px', borderRadius: 'var(--r-sm)',
-                          color: 'var(--fg-muted)', fontSize: 11, textAlign: 'left',
-                        }}
-                      >
-                        <Iconed name="edit" size={11} />
-                        <span>{currentBrand.name} 컨테이너 편집</span>
-                      </button>
-                    )
-                  )}
-                </div>
-                <div style={{ borderTop: '1px solid var(--line-soft)', marginTop: 4, padding: '6px 10px', fontSize: 10.5, color: 'var(--fg-faint)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span>사이드바로 전환</span>
-                  <div style={{ flex: 1 }} />
-                  <button onClick={() => { setSidebarHidden(false); setBrandMenuOpen(false); }}
-                    style={{ fontSize: 10.5, color: 'var(--moon-300)', padding: '2px 6px', borderRadius: 4 }}>펼치기</button>
-                </div>
-              </div>
-            )}
-          </div>
           <div className="hub-project-header-context">
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Projects</h2>
             <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
@@ -2110,6 +1912,41 @@ export function Projects({ workspace }) {
           </Button>
         </div>
 
+        {/* 컨테이너 태그 필터 — 사이드바가 접혀 있을 때의 기본 셀렉터다. 사이드바를 펴면
+            같은 목록이 두 벌 보이므로 감춘다(선택 소유권은 한 곳). 드롭다운에만 있던
+            생성·편집·숨긴 컨테이너 액션은 tail로 따라온다 (2609 감사 #2 재발 방지). */}
+        {sidebarHidden && (
+          <ContainerFilterBar
+            allContainer={brands.find(b => b.key === 'all') || EMPTY_ALL_BRAND}
+            allCount={allProjects.length}
+            groups={containerChipGroups}
+            countOf={(c) => c.projects || 0}
+            selectedKey={brand}
+            onSelect={setBrand}
+            hiddenCount={hiddenContainerCount}
+            showEmpty={showEmptyContainers}
+            onToggleEmpty={toggleEmptyContainers}
+            tail={(
+              <>
+                {currentBrand && currentBrand.key !== 'all' && currentBrand.id && (
+                  currentBrand.category === BRAND_OWNED_CATEGORY ? (
+                    <IconButton
+                      icon="brand"
+                      size={26}
+                      iconSize={12}
+                      onClick={() => router.push(`/dashboard/brands?b=${encodeURIComponent(currentBrand.key)}`)}
+                      tooltip={`${currentBrand.name} · 브랜드 탭에서 열기`}
+                    />
+                  ) : (
+                    <IconButton icon="edit" size={26} iconSize={12} onClick={() => editContainer(currentBrand)} tooltip={`${currentBrand.name} 컨테이너 편집`} />
+                  )
+                )}
+                <IconButton icon="plus" size={26} iconSize={13} onClick={createContainer} tooltip="새 컨테이너 (KA·딜 · 일반)" />
+              </>
+            )}
+          />
+        )}
+
         {view === 'memos' && <MemoWorkspace
           projects={projects}
           initialProjectId={selectedProjectId || ''}
@@ -2117,13 +1954,13 @@ export function Projects({ workspace }) {
           onSaved={() => loadLedger()}
           onOpenTask={(id, raw) => { setMemoTaskFallback({ ...raw, project: raw.project_id || '', dueAt: raw.due_at || '', priorityRaw: raw.priority, updatedAt: raw.updated_at }); setMemoTaskId(id); }}
         />}
-        {memoTaskId && <Drawer title={memoTask?.title || '업무 문맥'} onClose={() => setMemoTaskId(null)} width="min(480px, 96vw)">
-          {memoTask && <div style={{ padding: 20 }}>
+        {memoTaskId && <Drawer title={memoTask?.title || '업무 문맥'} onClose={() => setMemoTaskId(null)} width="min(420px, 96vw)">
+          {memoTask && <div style={{ padding: 14 }}>
             <p style={{ whiteSpace: 'pre-wrap', color: 'var(--fg-muted)', fontSize: 13 }}>{memoTask?.nextAction || memoTask?.description || '다음 행동을 업무 설명에 기록하세요.'}</p>
             <Button variant="outline" size="sm" onClick={() => { const task = memoTask; setMemoTaskId(null); if (task) editTodo(task); }}>업무 편집 · 상태 변경</Button>
           </div>}
           <MemoWorkspace key={memoTaskId} taskId={memoTaskId} onOpenTask={(id) => { const task = todos.find(t => t.id === id) || (memoTaskFallback?.id === id ? memoTaskFallback : null); if (task) {setMemoTaskId(null);editTodo(task);} }} />
-          <a href={`/dashboard/work/projects?view=memos`} style={{ display:'block', padding:20, color:'var(--fg-muted)' }}>메모 작업대에서 다른 기록 연결</a>
+          <a href={`/dashboard/work/projects?view=memos`} style={{ display:'block', padding:14, color:'var(--fg-muted)', fontSize:12 }}>메모 작업대 열기</a>
         </Drawer>}
 
         {(view === 'tree' || view === 'table') && (
@@ -2163,6 +2000,21 @@ export function Projects({ workspace }) {
               onToggleTerminal={() => setShowTerminal(value => !value)}
               onReopenProject={(project) => setProjectStatus(project, 'active')}
               onReload={() => loadLedger({ initial: true })}
+              createSurface={projectDraft?.isNew ? (
+                <ProjectCreateInline
+                  draft={projectDraft}
+                  areas={ledger.areas}
+                  brands={brands}
+                  entities={ledger.projectEntities}
+                  failedSources={ledger.failedSources}
+                  onChange={(key, value) => setProjectDraft(current => ({ ...current, [key]: value }))}
+                  onSave={persistProjectCreate}
+                  onRetryWithNewClientId={retryProjectCreateWithNewId}
+                  onOpenConflictProject={openConflictProject}
+                  onRetryAreas={() => loadLedger({ initial: true })}
+                  onClose={() => setProjectDraft(null)}
+                />
+              ) : null}
             />}
             {view === 'table' && (
             <div className="scroll-y" style={{ padding: 'var(--section-gap)' }}>
@@ -2543,6 +2395,7 @@ export function Projects({ workspace }) {
                       setView('tree');
                     }}
                     onSendOrder={sendProjectOrder}
+                    onConsultCouncil={(project) => setCouncilWidgetProject(project)}
                     onManageDelivery={setDeliveryProject}
                     onComplete={completeProject}
                     onArchive={archiveProject}
@@ -2903,7 +2756,7 @@ export function Projects({ workspace }) {
 
       {deliveryProject && <ProjectDeliveryEditor key={deliveryProject.id} project={deliveryProject} onClose={() => setDeliveryProject(null)} onSave={persistDelivery} />}
 
-      {projectDraft?.isNew && !containerDraft && (
+      {projectDraft?.isNew && !containerDraft && view !== 'tree' && (
         <ProjectCreateDrawer
           draft={projectDraft}
           areas={ledger.areas}
@@ -3040,6 +2893,26 @@ export function Projects({ workspace }) {
         onDelete={taskEditSource ? deleteTask : undefined}
         saveLabel={taskEditSource ? '변경사항 저장' : '할 일 만들기'}
         onClose={() => { setTaskDraft(null); setTaskEditSource(null); }}
+      />
+
+      <FloatingMentorWidget
+        isOpen={Boolean(councilWidgetProject)}
+        onClose={() => setCouncilWidgetProject(null)}
+        contextType="project"
+        contextTitle={councilWidgetProject?.name || councilWidgetProject?.title || "프로젝트"}
+        contextData={{
+          id: councilWidgetProject?.id,
+          title: councilWidgetProject?.name || councilWidgetProject?.title,
+          status: councilWidgetProject?.status,
+          desc: councilWidgetProject?.displaySummary || councilWidgetProject?.summary || councilWidgetProject?.desc,
+          todos: councilWidgetProject ? (ledger.todos || []).filter(t => t.projectId === councilWidgetProject.id) : [],
+          updates: councilWidgetProject ? (ledger.updates || []).filter(u => u.projectId === councilWidgetProject.id) : [],
+        }}
+        onCreateTask={(title) => {
+          if (createTodo && councilWidgetProject?.id) {
+            createTodo(councilWidgetProject.id, title);
+          }
+        }}
       />
     </div>
   );

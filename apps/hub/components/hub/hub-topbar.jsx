@@ -22,6 +22,8 @@ const LABELS = {
 };
 
 export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSidebarOpen, onNew, navOpen, menuButtonRef }) {
+  const [deferredMenuOpen, setDeferredMenuOpen] = React.useState(false);
+  const deferredMenuRef = React.useRef(null);
   const segments = path.split('/').filter(Boolean);
   const navigation = topNavigationForRoute(path, scope, view);
   const pageLabel = navigation.activeTab?.label
@@ -34,6 +36,34 @@ export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSideba
   const m = now.getMonth() + 1, d = now.getDate();
   const hh = String(now.getHours()).padStart(2, '0');
   const mm = String(now.getMinutes()).padStart(2, '0');
+
+  React.useEffect(() => {
+    if (!deferredMenuOpen) return;
+    function onDocClick(e) {
+      if (deferredMenuRef.current && !deferredMenuRef.current.contains(e.target)) {
+        setDeferredMenuOpen(false);
+      }
+    }
+    function onKeyDown(e) {
+      if (e.key === 'Escape') setDeferredMenuOpen(false);
+    }
+    document.addEventListener('pointerdown', onDocClick);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onDocClick);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [deferredMenuOpen]);
+
+  // AI·자동화 등 보류 탭이 많은 앵커는 활성 코어 탭 위주로 노출하고,
+  // 보류 탭은 드롭다운으로 접어 상단 탭의 과밀과 '준비 중' 도배를 제거한다.
+  const isAiAnchor = navigation.anchor?.key === 'ai';
+  const visibleTabs = isAiAnchor
+    ? navigation.tabs.filter((tab) => !tab.deferred || tab.key === navigation.activeTab?.key)
+    : navigation.tabs;
+  const hiddenDeferredTabs = isAiAnchor
+    ? navigation.tabs.filter((tab) => tab.deferred && tab.key !== navigation.activeTab?.key)
+    : [];
 
   return (
     <header className="hub-topbar" style={{
@@ -87,7 +117,7 @@ export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSideba
 
       {navigation.tabs.length > 0 && (
         <nav className="hub-topbar__tabs" aria-label={`${navigation.anchor.label} 하위 메뉴`}>
-          {navigation.tabs.map((tab) => {
+          {visibleTabs.map((tab) => {
             const selected = navigation.activeTab?.key === tab.key;
             return (
               <button
@@ -106,6 +136,87 @@ export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSideba
               </button>
             );
           })}
+          {hiddenDeferredTabs.length > 0 && (
+            <div ref={deferredMenuRef} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="hub-topbar__deferred-toggle"
+                onClick={() => setDeferredMenuOpen((v) => !v)}
+                aria-expanded={deferredMenuOpen}
+                aria-haspopup="true"
+                title="보류된 기능 목록"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '0 8px',
+                  height: 26,
+                  fontSize: 11,
+                  color: 'var(--fg-faint)',
+                  background: deferredMenuOpen ? 'var(--surface-2)' : 'transparent',
+                  border: '1px dashed var(--line-soft)',
+                  borderRadius: 'var(--r-sm)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  marginLeft: 4,
+                }}
+              >
+                <span>보류 ({hiddenDeferredTabs.length})</span>
+                <span style={{ transform: deferredMenuOpen ? 'rotate(180deg)' : 'none', display: 'inline-flex', transition: 'transform 0.15s ease' }}>
+                  <Iconed name="chevronD" size={10} />
+                </span>
+              </button>
+              {deferredMenuOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 4px)',
+                  left: 4,
+                  background: 'var(--surface)',
+                  border: '1px solid var(--line)',
+                  borderRadius: 'var(--r-md)',
+                  boxShadow: '0 8px 24px -4px rgba(0,0,0,0.5)',
+                  padding: '4px',
+                  minWidth: 150,
+                  zIndex: 90,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 1,
+                }}>
+                  <div style={{ padding: '4px 8px', fontSize: 10.5, color: 'var(--fg-faint)', fontWeight: 500 }}>
+                    보류된 기능 (준비 중)
+                  </div>
+                  {hiddenDeferredTabs.map((dt) => (
+                    <button
+                      key={dt.key}
+                      type="button"
+                      onClick={() => {
+                        setDeferredMenuOpen(false);
+                        onNavigate(dt.path);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '6px 8px',
+                        fontSize: 12,
+                        color: 'var(--fg-muted)',
+                        background: 'transparent',
+                        border: 'none',
+                        borderRadius: 'var(--r-sm)',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.color = 'var(--fg)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fg-muted)'; }}
+                    >
+                      <span>{dt.label}</span>
+                      <span style={{ fontSize: 10, color: 'var(--fg-faint)' }}>준비 중</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </nav>
       )}
     </header>

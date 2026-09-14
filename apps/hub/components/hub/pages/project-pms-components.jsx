@@ -32,6 +32,106 @@ export function BrandMark({ brand, size = 18, active = false, style }) {
   );
 }
 
+// 컨테이너 칩 — 이전 드롭다운 행은 2줄(이름 + "N개 새 변동 · 설명")에 우측 `7p/7t`
+// 칼럼까지 달려 4개만 떠도 세로가 과했다. 칩은 한 줄(마크 · 이름 · 프로젝트 수)로 줄이고
+// 나머지는 접근 가능한 이름과 툴팁으로 보존한다. 새 변동은 숫자 칩 대신 중립 문스톤 점
+// 하나 — 손실 신호가 아니다(DESIGN §5.2 no-warning-by-default).
+function ContainerChip({ container, count, selected, folderLabel, onSelect }) {
+  const changes = container?.changes || 0;
+  const name = container?.name || "컨테이너";
+  const detail = [
+    `프로젝트 ${count}개`,
+    changes > 0 ? `새 변동 ${changes}개` : null,
+    folderLabel || null,
+    container?.desc || null,
+  ].filter(Boolean).join(" · ");
+
+  return (
+    <button
+      type="button"
+      className="hub-pms-chip"
+      aria-pressed={selected}
+      aria-label={`${name} · ${detail}`}
+      title={`${name} · ${detail}`}
+      data-container-chip={container?.key || "all"}
+      onClick={() => onSelect(container?.key)}
+    >
+      <span className="hub-pms-chip__mark">
+        <BrandMark brand={container} size={14} active={selected} />
+        {changes > 0 && <span className="hub-pms-chip__dot" aria-hidden="true" />}
+      </span>
+      <span className="hub-pms-chip__name">{name}</span>
+      <span className="hub-pms-chip__count mono">{count}</span>
+    </button>
+  );
+}
+
+// PMS 컨테이너 선택 바 — 헤더 드롭다운을 상시 한 줄 태그 필터로 대체한다
+// (2026-09-11 운영자 지시). 선택은 단일(brand state 계약 무변경)이고, 분류 텍스트 헤더
+// 없이 칩 순서 + 스코프 경계 1px hairline만으로 묶음을 읽게 한다. 드롭다운 안에만 있던
+// 관리 액션(생성·편집·숨긴 컨테이너)은 `tail`로 받아 도달 불가가 되지 않게 한다.
+export function ContainerFilterBar({
+  allContainer,
+  allCount = 0,
+  groups = [],
+  countOf = () => 0,
+  selectedKey = "all",
+  onSelect,
+  hiddenCount = 0,
+  showEmpty = false,
+  onToggleEmpty,
+  tail = null,
+}) {
+  const trackRef = React.useRef(null);
+
+  // 선택 칩이 가로 스크롤 밖에 있으면 스스로 보이는 자리로 — 딥링크·사이드바 선택으로
+  // 브랜드가 바뀌었을 때 활성 칩이 화면 밖에 남으면 "선택이 없는 것"처럼 읽힌다.
+  React.useEffect(() => {
+    const node = trackRef.current?.querySelector(`[data-container-chip="${CSS.escape(String(selectedKey))}"]`);
+    node?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [selectedKey]);
+
+  return (
+    <nav className="hub-pms-filterbar" aria-label="프로젝트 컨테이너 필터">
+      <div className="hub-pms-filterbar__track" ref={trackRef}>
+        <ContainerChip
+          container={allContainer}
+          count={allCount}
+          selected={selectedKey === "all"}
+          onSelect={onSelect}
+        />
+        {groups.map((group) => (
+          <React.Fragment key={group.key}>
+            <span className="hub-pms-filterbar__sep" role="separator" aria-orientation="vertical" aria-label={group.label} />
+            {group.items.map((container) => (
+              <ContainerChip
+                key={container.key}
+                container={container}
+                count={countOf(container)}
+                folderLabel={container.folderLabel}
+                selected={selectedKey === container.key}
+                onSelect={onSelect}
+              />
+            ))}
+          </React.Fragment>
+        ))}
+        {(hiddenCount > 0 || showEmpty) && (
+          <button
+            type="button"
+            className="hub-pms-chip hub-pms-chip--ghost"
+            aria-pressed={showEmpty}
+            onClick={onToggleEmpty}
+          >
+            <span className="hub-pms-chip__name">{showEmpty ? "빈 컨테이너 숨기기" : "숨긴 컨테이너"}</span>
+            {!showEmpty && <span className="hub-pms-chip__count mono">{hiddenCount}</span>}
+          </button>
+        )}
+      </div>
+      {tail && <div className="hub-pms-filterbar__tail">{tail}</div>}
+    </nav>
+  );
+}
+
 function evidenceCount(progress) {
   if (!Number.isFinite(progress?.done) || !Number.isFinite(progress?.total)) return "";
   return `${progress.done}/${progress.total}`;

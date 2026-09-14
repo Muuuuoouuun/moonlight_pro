@@ -50,6 +50,13 @@ test('advice-only records a run without creating an approval backlog', async () 
   assert.equal(state.order, undefined);
   assert.equal(data.workOrder.reason, 'not-requested');
 });
+test('sparring mode successfully invokes brand-mentor and records run', async () => {
+  const res = await POST(request({ mode: 'sparring', draft: '신규 오퍼 검토', createWorkOrder: false }));
+  const data = await res.json();
+  assert.equal(data.runId, 'run-1');
+  assert.equal(state.run.mode, 'sparring');
+  assert.equal(state.run.result, 'ok');
+});
 test('explicit proposal links the exact run and records its emitted count', async () => {
   const data = await (await POST(request({ createWorkOrder: true }))).json();
   assert.equal(state.order.runId, data.runId);

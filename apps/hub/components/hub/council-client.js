@@ -9,6 +9,7 @@ export const COUNCIL_MODE_LABEL = {
   "audience-analysis": "오디언스 분석",
   "meeting-synthesis": "회의록 정리",
   "flow-review": "플로우 점검",
+  "sparring": "3자 토론",
 };
 
 // One mentor thread for the Council, like Guru. The mode switches the advisory lens

@@ -893,6 +893,36 @@ test("the selected and the not-yet-saved container survive an empty tree", () =>
   assert.equal(tree.hiddenCount, 1);
 });
 
+test("chip flattening keeps scope groups, drops folder boundaries, and carries the folder label", () => {
+  const tree = pmsUi.buildContainerTree(
+    [
+      container("classmoon", { orgScope: "classin", category: "sns-channel", projects: 3 }),
+      container("test-ka", { orgScope: "classin", category: "ka-deal", projects: 1 }),
+      container("bridgemaker", { orgScope: "personal", category: "sns-channel", projects: 1 }),
+    ],
+    { categories: CATEGORIES },
+  );
+
+  const chips = pmsUi.flattenContainerChips(tree);
+
+  // 스코프는 2묶음으로 남고(업무 · 개인) 분류 폴더는 칩 순서로만 녹는다.
+  assert.deepEqual(chips.map((g) => g.key), ["classin", "personal"]);
+  assert.deepEqual(chips[0].items.map((c) => c.key), ["classmoon", "test-ka"]);
+  assert.deepEqual(chips[1].items.map((c) => c.key), ["bridgemaker"]);
+  // 지워진 폴더 헤더의 정보는 칩마다 folderLabel로 따라간다 (접근 가능한 이름 · 툴팁).
+  assert.deepEqual(chips[0].items.map((c) => c.folderLabel), ["SNS 채널", "KA·딜"]);
+});
+
+test("chip flattening drops empty scope groups instead of rendering a bare separator", () => {
+  const tree = pmsUi.buildContainerTree(
+    [container("bridgemaker", { orgScope: "personal", projects: 1 })],
+    { categories: CATEGORIES },
+  );
+
+  assert.deepEqual(pmsUi.flattenContainerChips(tree).map((g) => g.key), ["personal"]);
+  assert.deepEqual(pmsUi.flattenContainerChips(null), []);
+});
+
 test("showEmpty restores every hidden container into the idle segment", () => {
   const brands = [container("sinabro"), container("gore", { projects: 1 }), container("22nomad")];
 

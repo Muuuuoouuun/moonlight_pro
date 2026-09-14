@@ -17,19 +17,27 @@ const rootPackage = JSON.parse(await readFile(
   "utf8",
 ));
 
-test("quick create is a dedicated canonical Drawer with the approved primary fields", () => {
+test("quick create is title-first with an inline workspace and a drawer fallback", () => {
+  assert.match(createDrawerSource, /export function ProjectCreateInline/);
   assert.match(createDrawerSource, /export function ProjectCreateDrawer/);
   assert.match(createDrawerSource, /<Drawer\b/);
+  assert.match(createDrawerSource, /className="project-create-inline"/);
   assert.match(createDrawerSource, /프로젝트명 \*/);
   assert.match(createDrawerSource, /목표 결과/);
   assert.match(createDrawerSource, /<textarea[\s\S]*완료됐을 때 어떤 상태가 되어야 하나요\?/);
   assert.match(createDrawerSource, /다음 행동/);
+  const disclosureStart = createDrawerSource.indexOf("{advancedOpen && (");
+  const summaryStart = createDrawerSource.indexOf("목표 결과");
+  assert.ok(disclosureStart >= 0 && summaryStart > disclosureStart, "optional details must stay behind disclosure");
   assert.doesNotMatch(createDrawerSource, /name=["']progress["']/);
   assert.doesNotMatch(createDrawerSource, /진행률 \(%\)/);
 });
 
-test("quick create explicitly focuses the empty project title on open", () => {
+test("quick create explicitly focuses the empty project title in both presentations", () => {
   assert.match(createDrawerSource, /initialFocusRef=\{titleRef\}/);
+  assert.match(createDrawerSource, /closest\(["']\.hub-project-portfolio-stage["']\)/);
+  assert.match(createDrawerSource, /closest\(["']\.hub-content["']\)/);
+  assert.match(createDrawerSource, /focus\(\{ preventScroll: true \}\)/);
   assert.match(primitivesSource, /initialFocusRef\?\.current/);
 });
 
@@ -38,7 +46,7 @@ test("advanced project settings start collapsed and expose their state accessibl
   assert.match(createDrawerSource, /aria-expanded=\{advancedOpen\}/);
   assert.match(createDrawerSource, /상태/);
   assert.match(createDrawerSource, /우선순위/);
-  assert.match(createDrawerSource, /기한/);
+  assert.match(createDrawerSource, /목표 종료일/);
 });
 
 test("global project entry requires a flat Area while keeping Brand optional", () => {
@@ -217,7 +225,7 @@ test("project creation opens a recoverable draft even when no canonical area is 
   assert.match(projectsSource, /onRetryAreas=\{\(\) => loadLedger\(\{ initial: true \}\)\}/);
 });
 
-test("project create drawer explains an empty area ledger and offers an inline retry", () => {
+test("project create surface explains an empty area ledger and offers an inline retry", () => {
   assert.match(createDrawerSource, /const areaEmpty = !areaUnavailable && areas\.length === 0/);
   assert.match(createDrawerSource, /업무 분야 원장이 비어 있습니다/);
   assert.match(createDrawerSource, /onRetryAreas/);
@@ -248,7 +256,7 @@ test("shared CRM keyboard hook yields the n key when no onNew handler is bound",
   assert.match(crmHookSource, /else if \(k === "n" && onNew\) \{ e\.preventDefault\(\); onNew\(\); \}/);
 });
 
-test("project create drawer also protects a changed draft from accidental close", () => {
+test("project create surface protects a changed draft without another popup", () => {
   assert.match(createDrawerSource, /const initialDraftSignatureRef = React\.useRef/);
   // 22차: EditDrawer와 같은 인라인 2단계 — OS confirm 금지, ESC는 스트립 해제.
   assert.doesNotMatch(createDrawerSource, /window\.confirm\(/);
