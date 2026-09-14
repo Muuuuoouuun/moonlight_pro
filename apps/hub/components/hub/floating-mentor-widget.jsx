@@ -6,12 +6,13 @@ import { Iconed } from "./hub-icons";
 import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
 import { requestCouncilAdvice } from "./council-client";
 import { requestGuruCoaching } from "./guru-client";
+import { requestPersonaChat, LEGEND_LENS_MAP } from "./persona-client";
 
 export function FloatingMentorWidget({
   isOpen = false,
   onClose,
   agent, // 'council' | 'guru' (optional, auto-inferred if omitted)
-  contextType = "content", // 'content' | 'project' | 'deal' | 'customer' | 'sales' | 'general'
+  contextType = "content", // 'content' | 'project' | 'deal' | 'customer' | 'sales' | 'weekly' | 'general'
   contextTitle = "",
   contextData = {},
   onApplyText,
@@ -19,7 +20,8 @@ export function FloatingMentorWidget({
 }) {
   const isGuru = agent === "guru" || contextType === "deal" || contextType === "customer" || contextType === "sales";
   const [minimized, setMinimized] = useState(false);
-  const [activeTab, setActiveTab] = useState("quick"); // 'quick' | 'sparring' | 'chat'
+  const [activeTab, setActiveTab] = useState("quick"); // 'quick' | 'critique' | 'sparring' | 'chat'
+  const [selectedLens, setSelectedLens] = useState(null);
   const [loading, setLoading] = useState(false);
   const [resultText, setResultText] = useState("");
   const [statusNote, setStatusNote] = useState("");
@@ -63,6 +65,10 @@ export function FloatingMentorWidget({
       if (contextData?.reason) parts.push(`판단 사유: ${contextData.reason}`);
       if (contextData?.lastTouch) parts.push(`최근 접촉: ${contextData.lastTouch}`);
       if (contextData?.notes) parts.push(`관련 메모:\n${contextData.notes}`);
+    } else if (contextType === "weekly") {
+      parts.push(`[한 주 정리 및 회고 맥락]`);
+      parts.push(`주간 타이틀: ${contextTitle || "이번 주 운영 회고"}`);
+      if (contextData?.summary) parts.push(`주간 요약:\n${contextData.summary}`);
     } else if (contextType === "content") {
       parts.push(`[현재 컨텐츠 초안]`);
       if (contextData?.title) parts.push(`제목: ${contextData.title}`);
@@ -80,13 +86,16 @@ export function FloatingMentorWidget({
         parts.push(`최근 업데이트: ${contextData.updates.slice(0, 3).map(u => u.title).join(' / ')}`);
       }
     }
+    if (selectedLens && LEGEND_LENS_MAP[selectedLens]) {
+      parts.push(`[적용 렌즈: ${LEGEND_LENS_MAP[selectedLens].name} 관점 적용]`);
+    }
     if (userPrompt) {
       parts.push(`\n[운영자 요청/질문]:\n${userPrompt}`);
     }
     return parts.join("\n\n");
   };
 
-  // Run advice or sparring
+  // Run advice, critique, sparring, or weekly-review
   const handleRequest = async (mode, customDraft = "") => {
     setLoading(true);
     setStatusNote("");
@@ -94,9 +103,22 @@ export function FloatingMentorWidget({
     const draft = buildContextPrompt(customDraft);
     const ref = contextData?.id || contextData?.ref || contextData?.title || contextData?.name || null;
 
-    const res = isGuru
-      ? await requestGuruCoaching({ mode, draft, ref })
-      : await requestCouncilAdvice({ mode, draft, ref });
+    // Use persona-chat when lens is selected or in critique / weekly-review mode
+    let res;
+    if (selectedLens || mode === "critique" || mode === "weekly-review") {
+      res = await requestPersonaChat({
+        personaId: isGuru ? "sales" : contextType === "content" ? "content" : "council",
+        mode,
+        lens: selectedLens,
+        draft,
+        message: customDraft || null,
+        context: contextData,
+      });
+    } else {
+      res = isGuru
+        ? await requestGuruCoaching({ mode, draft, ref })
+        : await requestCouncilAdvice({ mode, draft, ref });
+    }
 
     setLoading(false);
     if (res.state === "done") {
@@ -125,17 +147,29 @@ export function FloatingMentorWidget({
     );
     const ref = contextData?.id || contextData?.ref || contextData?.title || contextData?.name || null;
 
-    const res = isGuru
-      ? await requestGuruCoaching({
-          mode: activeTab === "sparring" ? "sparring" : "deal-review",
-          draft,
-          ref,
-        })
-      : await requestCouncilAdvice({
-          mode: activeTab === "sparring" ? "sparring" : "brand-strategy",
-          draft,
-          ref,
-        });
+    const chatMode = activeTab === "critique" ? "critique" : activeTab === "sparring" ? "sparring" : "chat";
+    let res;
+    if (selectedLens) {
+      res = await requestPersonaChat({
+        personaId: isGuru ? "sales" : "council",
+        mode: chatMode,
+        lens: selectedLens,
+        draft,
+        message: text,
+      });
+    } else {
+      res = isGuru
+        ? await requestGuruCoaching({
+            mode: activeTab === "sparring" ? "sparring" : "deal-review",
+            draft,
+            ref,
+          })
+        : await requestCouncilAdvice({
+            mode: activeTab === "sparring" ? "sparring" : "brand-strategy",
+            draft,
+            ref,
+          });
+    }
 
     setLoading(false);
 
@@ -224,6 +258,11 @@ export function FloatingMentorWidget({
         { label: "파이프라인 우선순위", mode: "pipeline-triage" },
         { label: "제안 검토", mode: "proposal-critique" },
       ]
+    : contextType === "weekly"
+    ? [
+        { label: "한 주 사실 요약", mode: "weekly-review" },
+        { label: "병목 타파 진단", mode: "flow-review" },
+      ]
     : contextType === "content"
     ? [
         { label: "카피 진단 (Ogilvy)", mode: "content-critique" },
@@ -233,35 +272,28 @@ export function FloatingMentorWidget({
     : [
         { label: "병목 타파 진단 (Goldratt)", mode: "flow-review" },
         { label: "우선순위 전략", mode: "brand-strategy" },
-        { label: "회의/메모 정리", mode: "meeting-synthesis" },
+        { label: "메모/회의 정리", mode: "meeting-synthesis" },
       ];
 
-  const widgetTitle = isGuru ? "Sales Guru" : "Council Co-Pilot";
-  const contextPrefix = isGuru
-    ? "영업/딜: "
-    : contextType === "content"
-    ? "컨텐츠: "
-    : "프로젝트: ";
+  const widgetTitle = isGuru ? "Guru 세일즈 코칭" : contextType === "weekly" ? "주간 정리 & Council" : "Council 자문단";
+  const contextPrefix = isGuru ? "고객/딜: " : contextType === "weekly" ? "주간: " : contextType === "project" ? "프로젝트: " : "콘텐츠: ";
 
   return (
     <aside
-      role="dialog"
-      aria-modal="false"
-      aria-label={`${widgetTitle} 위젯`}
+      aria-label={`${widgetTitle} 코파일럿 팝업`}
       style={{
         position: "fixed",
         bottom: 20,
         right: 20,
-        width: "min(440px, calc(100vw - 32px))",
-        height: "min(580px, calc(100vh - 40px))",
-        zIndex: "var(--z-drawer, 90)",
+        width: 440,
+        maxHeight: "82vh",
         display: "flex",
         flexDirection: "column",
         background: "var(--surface)",
         border: "1px solid var(--line-strong)",
         borderRadius: "var(--r-lg)",
-        boxShadow: "0 16px 40px oklch(0 0 0 / 0.5), 0 2px 8px oklch(0 0 0 / 0.3)",
-        backdropFilter: "blur(16px)",
+        boxShadow: "0 12px 32px oklch(0 0 0 / 0.5), 0 0 0 1px var(--line-soft)",
+        zIndex: "var(--z-drawer, 90)",
         overflow: "hidden",
       }}
     >
@@ -269,11 +301,11 @@ export function FloatingMentorWidget({
       <div
         style={{
           padding: "10px 14px",
-          borderBottom: "1px solid var(--line)",
-          background: "var(--surface-2)",
+          borderBottom: "1px solid var(--line-soft)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          background: "var(--surface-2)",
           flexShrink: 0,
         }}
       >
@@ -310,7 +342,7 @@ export function FloatingMentorWidget({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr",
+          gridTemplateColumns: "repeat(4, 1fr)",
           background: "var(--surface)",
           borderBottom: "1px solid var(--line-soft)",
           padding: "4px 8px",
@@ -319,18 +351,26 @@ export function FloatingMentorWidget({
         }}
       >
         {[
-          { key: "quick", label: "⚡ 빠른 조언" },
-          { key: "sparring", label: "⚖️ 3자 토론" },
+          { key: "quick", label: "⚡ 조언" },
+          { key: "critique", label: "🔍 평가" },
+          { key: "sparring", label: "⚖️ 토의" },
           { key: "chat", label: "💬 대화" },
         ].map((tab) => {
           const active = activeTab === tab.key;
           return (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => {
+                setActiveTab(tab.key);
+                if (tab.key === "critique" && !resultText) {
+                  handleRequest("critique");
+                } else if (tab.key === "sparring" && !resultText) {
+                  handleRequest("sparring");
+                }
+              }}
               style={{
                 height: 28,
-                fontSize: 11.5,
+                fontSize: 11,
                 fontWeight: active ? 600 : 500,
                 color: active ? "var(--moon-100)" : "var(--fg-muted)",
                 background: active ? "var(--surface-3)" : "transparent",
@@ -346,7 +386,89 @@ export function FloatingMentorWidget({
         })}
       </div>
 
+      {/* 2.5 Legend Lens Switcher Bar */}
+      <div
+        style={{
+          padding: "4px 10px",
+          background: "var(--surface-2)",
+          borderBottom: "1px solid var(--line-soft)",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          overflowX: "auto",
+          fontSize: 10.5,
+          color: "var(--fg-faint)",
+          flexShrink: 0,
+        }}
+      >
+        <span style={{ whiteSpace: "nowrap" }}>관점:</span>
+        <button
+          onClick={() => setSelectedLens(null)}
+          style={{
+            padding: "2px 6px",
+            borderRadius: "var(--r-xs)",
+            border: selectedLens === null ? "1px solid var(--line-strong)" : "1px solid transparent",
+            background: selectedLens === null ? "var(--surface-3)" : "transparent",
+            color: selectedLens === null ? "var(--fg)" : "var(--fg-muted)",
+            fontSize: 10.5,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          기본
+        </button>
+        {["jobs", "bezos", "chouinard", "voss", "ogilvy"].map((lid) => {
+          const l = LEGEND_LENS_MAP[lid];
+          const active = selectedLens === lid;
+          return (
+            <button
+              key={lid}
+              onClick={() => setSelectedLens(active ? null : lid)}
+              style={{
+                padding: "2px 6px",
+                borderRadius: "var(--r-xs)",
+                border: active ? "1px solid var(--moon-line)" : "1px solid transparent",
+                background: active ? "var(--surface-3)" : "transparent",
+                color: active ? "var(--moon-200)" : "var(--fg-muted)",
+                fontSize: 10.5,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+              title={l.label}
+            >
+              {l.name}
+            </button>
+          );
+        })}
+      </div>
+
       {/* 3. Sub-Action / Presets */}
+      {activeTab === "critique" && (
+        <div
+          style={{
+            padding: "6px 12px",
+            borderBottom: "1px solid var(--line-soft)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexShrink: 0,
+            background: "rgba(224, 86, 74, 0.02)",
+          }}
+        >
+          <span style={{ fontSize: 11, color: "var(--fg-muted)" }}>
+            맹점, 비약, 고객 거절 리스크를 냉철하게 점검합니다.
+          </span>
+          <Button
+            variant="outline"
+            size="xs"
+            icon="sparkle"
+            disabled={loading}
+            onClick={() => handleRequest("critique")}
+          >
+            {loading ? "평가 중…" : "냉철 평가 재실행"}
+          </Button>
+        </div>
+      )}
       {activeTab === "quick" && (
         <div
           style={{

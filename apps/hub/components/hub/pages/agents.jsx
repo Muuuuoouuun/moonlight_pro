@@ -6,51 +6,59 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Avatar, Kbd, EmptyState } from "../hub-primitives";
 import { requestGuruCoaching, GURU_MODE_LABEL, GURU_PREVIEW_NOTE } from "../guru-client";
 import { requestCouncilAdvice, councilChatPath } from "../council-client";
+import { requestPersonaChat, PERSONA_MODE_LABEL, LEGEND_LENS_MAP } from "../persona-client";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 import { PERSONA_CONTRACT } from "@/lib/sales-os/persona-contract";
 
 const DEFAULT_PERSONA_KEY = PERSONA_CONTRACT[0]?.id || 'order';
 
-// Persona-registry's 5 configured personas don't yet have individual chat endpoints.
-// Their roster is real configuration; chat stays explicitly unavailable until an
-// execution route exists. Guru is the only live coaching endpoint here.
+const PERSONA_INTROS = {
+  order: '오더(Dispatch)입니다. 운영 신호(딜·콘텐츠·고객·마일스톤)를 분석해 작업지시서와 우선순위를 조립합니다. 무엇을 우선순위화할까요?',
+  sales: '세일즈 페르소나입니다. 딜 파이프라인 정체를 진단하고 고객 반론 대응 및 다음 행동을 설계합니다.',
+  content: '콘텐츠 페르소나입니다. 독자 가치 중심의 앵글 기획과 발행 케이던스를 관리합니다.',
+  production: '제작 페르소나입니다. 승인된 앵글을 채널별 포맷(카드뉴스 슬라이드, 스레드 분할, 숏폼 구조) 골격으로 조립합니다.',
+  review: '검수 페르소나입니다. 사실 근거, 브랜드 가드레일, 상투적 과장 문구를 필터링하고 게이트 판정을 내립니다.',
+};
+
 const CHAT_PERSONAS = Object.fromEntries(PERSONA_CONTRACT.map((p) => [p.id, {
   name: p.nameKo,
   role: p.role,
   title: `${p.nameKo} · ${p.nameEn}`,
-  model: 'Haiku 4.5',
+  model: 'Gemini 3.5 Flash',
+  intro: [
+    { role: 'agent', name: p.nameKo, text: PERSONA_INTROS[p.id] || `${p.nameKo} 업무 세션입니다.` },
+  ],
 }]));
 
 CHAT_PERSONAS.guru = {
     name: 'Guru',
     role: '영업 멘토 · 딜 코칭',
     title: '영업 멘토 세션',
-    model: 'Opus 4.8',
+    model: 'Gemini 3.1 Pro (Thinking)',
     intro: [
       { role: 'agent', name: 'Guru', text: '영업 멘토입니다. Revenue 기록(딜·리드·계정)을 근거로 "지금 무엇을 놓치고 있고, 다음 한 수가 무엇인지"를 코칭합니다.\n\n무엇을 볼까요?\n· 이번 주 파이프라인 분류\n· 특정 딜 진단 (어느 단계에서 막혔는지)\n· 제안서/이메일/반론 대응 다듬기' },
     ],
 };
 
-// Pseudo-persona for "Convene" — not a 6th chat target with its own replies, just the
-// identity the header/composer show while the intro synthesizes real /api/hub/agents
-// data (roster status + last run per persona). No new AI generation involved.
 CHAT_PERSONAS.council = {
   name: 'Council',
-  role: '5개 페르소나 현황 종합',
-  title: 'Council session',
-  model: 'Synthesis',
+  role: 'Writer · Strategist · Analyst 종합 합의',
+  title: 'Council Session',
+  model: 'Gemini 3.1 Pro (Thinking)',
 };
 
 export function AgentsChat({ onNavigate }) {
   const [input, setInput] = React.useState('');
   const [agentKey, setAgentKey] = React.useState(DEFAULT_PERSONA_KEY);
+  const [activeMode, setActiveMode] = React.useState('advice'); // 'advice' | 'critique' | 'sparring' | 'weekly-review'
+  const [activeLens, setActiveLens] = React.useState(null);
   const [thread, setThread] = React.useState([]);
   const [conversations, setConversations] = React.useState([]);
   const [busy, setBusy] = React.useState(false);
   const busyRef = React.useRef(false);
   const persona = CHAT_PERSONAS[agentKey] || CHAT_PERSONAS[DEFAULT_PERSONA_KEY];
 
-  // Run a real coaching pass against the Engine and stream it into the thread.
+  // Run a real coaching pass against Guru
   const runGuru = React.useCallback(async (mode, { ref = null, draft = null, label } = {}) => {
     if (busyRef.current) return;
     busyRef.current = true;
@@ -85,9 +93,49 @@ export function AgentsChat({ onNavigate }) {
     setBusy(false);
   }, []);
 
+  // Run a real execution or advice pass against Persona / Council
+  const runPersona = React.useCallback(async (personaId, mode, userText, { lens = null, draft = null } = {}) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    const agentName = CHAT_PERSONAS[personaId]?.name || personaId;
+    setThread(prev => [
+      ...prev,
+      { role: 'user', text: userText },
+      { role: 'agent', name: agentName, pending: true },
+    ]);
+    const r = await requestPersonaChat({
+      personaId,
+      mode,
+      lens,
+      message: userText,
+      draft,
+    });
+    setThread(prev => {
+      const next = prev.slice();
+      for (let i = next.length - 1; i >= 0; i--) {
+        if (next[i].pending) {
+          next[i] = {
+            role: 'agent',
+            name: agentName,
+            text:
+              r.state === 'done'
+                ? r.text
+                : r.state === 'preview'
+                ? (r.note || 'Engine이 연결되지 않아 preview 상태입니다.')
+                : `응답을 생성하지 못했어요: ${r.note || ''}`,
+          };
+          break;
+        }
+      }
+      return next;
+    });
+    busyRef.current = false;
+    setBusy(false);
+  }, []);
+
   // Persona is selected via ?agent=<key>; ?mode=&ref= auto-runs live coaching.
-  // ?prompt=council (the Council page's "Convene" button) synthesizes real roster
-  // status into an intro instead of just silently landing on the default persona.
+  // ?prompt=council runs real Council convene synthesis.
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     const q = new URLSearchParams(window.location.search);
@@ -96,29 +144,27 @@ export function AgentsChat({ onNavigate }) {
 
     if (prompt === 'council') {
       setAgentKey('council');
+      setActiveMode('sparring');
       setThread([{ role: 'agent', name: 'Council', pending: true }]);
       setConversations(prev => [
-        { name: 'Council session', agent: 'Council', time: '지금', active: true },
+        { name: 'Council Convene 회의', agent: 'Council', time: '지금', active: true },
         ...prev.map(c => ({ ...c, active: false })),
       ]);
-      fetch('/api/hub/agents', { cache: 'no-store' })
-        .then((r) => r.json().catch(() => null))
-        .then((d) => {
-          const personas = Array.isArray(d?.personas) ? d.personas : [];
-          const lines = personas.map((p) => {
-            const last = p.lastRun
-              ? `${shortWhen(p.lastRun.ranAt)} · ${p.lastRun.summary || `${p.emits} 산출`}`
-              : '아직 실행 기록 없음';
-            return `· ${p.nameKo}(${p.nameEn}) — ${p.status === 'idle' ? '대기' : '활성'} · ${last}`;
-          }).join('\n');
-          const header = d?.status === 'live' ? '5개 페르소나 현황을 기록에서 모았습니다.' : '기록이 아직 연결되지 않았습니다. 실행 기록 없는 페르소나 정의만 표시합니다.';
-          setThread([
-            { role: 'agent', name: 'Council', text: `${header}\n\n${lines || '로스터를 불러오지 못했습니다.'}\n\n무엇을 우선 볼까요?` },
-          ]);
-        })
-        .catch(() => {
-          setThread([{ role: 'agent', name: 'Council', text: '페르소나 현황을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.' }]);
-        });
+      requestPersonaChat({
+        personaId: 'council',
+        mode: 'sparring',
+        message: '현재 5대 페르소나 현황 및 비즈니스 원장을 종합 진단하고 전략적 합의를 도출하라.',
+      }).then(r => {
+        setThread([
+          {
+            role: 'agent',
+            name: 'Council',
+            text: r.state === 'done'
+              ? `【Council 종합 회의 (Convene)】\n5개 실행 페르소나 및 원장 상황을 종합 검토했습니다.\n\n${r.text}`
+              : `【Council 종합 회의】\n${r.note || '자문을 생성하지 못했습니다.'}`,
+          },
+        ]);
+      });
       return;
     }
 
@@ -141,26 +187,21 @@ export function AgentsChat({ onNavigate }) {
 
   const send = () => {
     const text = input.trim();
-    if (!text) return;
+    if (!text || busy) return;
+    setInput('');
     if (agentKey === 'guru') {
-      // A typed message to the mentor is treated as a draft to critique.
-      setInput('');
-      runGuru('proposal-critique', { draft: text, label: text });
+      runGuru(activeMode === 'sparring' ? 'sparring' : 'proposal-critique', { draft: text, label: text });
       return;
     }
-    setThread(prev => [
-      ...prev,
-      { role: 'user', text },
-      { role: 'agent', name: persona.name, text: '이 페르소나는 아직 채팅 실행에 연결되지 않았습니다.' },
-    ]);
-    setInput('');
+    runPersona(agentKey, activeMode, text, { lens: activeLens });
   };
+
   const startConversation = () => {
     setConversations(prev => [
-      { name: '새 대화', agent: 'Council', time: '지금', active: true },
+      { name: '새 대화', agent: persona.name, time: '지금', active: true },
       ...prev.map(c => ({ ...c, active: false })),
     ]);
-    setThread([]);
+    setThread(persona.intro || []);
   };
   return (
     <div className="hub-chat-shell" style={{ display: 'grid', gridTemplateColumns: '240px 1fr', height: '100%', overflow: 'hidden' }}>
@@ -230,15 +271,127 @@ export function AgentsChat({ onNavigate }) {
           </div>
         </div>
 
-        <div style={{ padding: '12px 20px 16px', borderTop: '1px solid var(--line-soft)' }}>
-          {agentKey === 'guru' && (
-            <div style={{ maxWidth: 720, margin: '0 auto 8px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {[['pipeline-triage', '파이프라인 분류'], ['weekly-retro', '주간 회고']].map(([m, l]) => (
-                <Button key={m} variant="outline" size="xs" icon="sparkle" disabled={busy} onClick={() => runGuru(m, {})}>{l}</Button>
+        <div style={{ padding: '12px 20px 16px', borderTop: '1px solid var(--line-soft)', background: 'var(--surface)' }}>
+          {/* Mode & Lens Toolbar */}
+          <div style={{ maxWidth: 720, margin: '0 auto 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            {/* Modes: Advice / Critique / Sparring / Weekly */}
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <span style={{ fontSize: 11, color: 'var(--fg-faint)', marginRight: 2 }}>모드:</span>
+              {[
+                ['advice', '💡 조언'],
+                ['critique', '🔍 평가'],
+                ['sparring', '⚖️ 토의'],
+                ['weekly-review', '📊 주간정리'],
+              ].map(([m, l]) => (
+                <button
+                  key={m}
+                  onClick={() => setActiveMode(m)}
+                  style={{
+                    padding: '3px 7px',
+                    fontSize: 11,
+                    borderRadius: 'var(--r-xs)',
+                    border: activeMode === m ? '1px solid var(--moon-line)' : '1px solid transparent',
+                    background: activeMode === m ? 'var(--surface-3)' : 'transparent',
+                    color: activeMode === m ? 'var(--moon-200)' : 'var(--fg-muted)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {l}
+                </button>
               ))}
-              <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', alignSelf: 'center' }}>· 메시지를 보내면 제안/이메일 초안으로 보고 검토합니다</span>
             </div>
-          )}
+
+            {/* Lens Switcher */}
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center', overflowX: 'auto' }}>
+              <span style={{ fontSize: 11, color: 'var(--fg-faint)', marginRight: 2 }}>렌즈:</span>
+              <button
+                onClick={() => setActiveLens(null)}
+                style={{
+                  padding: '3px 6px',
+                  fontSize: 10.5,
+                  borderRadius: 'var(--r-xs)',
+                  border: activeLens === null ? '1px solid var(--line-strong)' : '1px solid transparent',
+                  background: activeLens === null ? 'var(--surface-3)' : 'transparent',
+                  color: activeLens === null ? 'var(--fg)' : 'var(--fg-muted)',
+                  cursor: 'pointer',
+                }}
+              >
+                기본
+              </button>
+              {['jobs', 'bezos', 'chouinard', 'voss', 'ogilvy'].map((lid) => {
+                const l = LEGEND_LENS_MAP[lid];
+                const active = activeLens === lid;
+                return (
+                  <button
+                    key={lid}
+                    onClick={() => setActiveLens(active ? null : lid)}
+                    style={{
+                      padding: '3px 6px',
+                      fontSize: 10.5,
+                      borderRadius: 'var(--r-xs)',
+                      border: active ? '1px solid var(--moon-line)' : '1px solid transparent',
+                      background: active ? 'var(--surface-3)' : 'transparent',
+                      color: active ? 'var(--moon-200)' : 'var(--fg-muted)',
+                      cursor: 'pointer',
+                    }}
+                    title={l.label}
+                  >
+                    {l.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Quick Action Chips per Persona */}
+          <div style={{ maxWidth: 720, margin: '0 auto 8px', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            {agentKey === 'order' && (
+              <>
+                <Button variant="outline" size="xs" icon="sparkle" disabled={busy} onClick={() => runPersona('order', activeMode, '오늘 긴급 및 중요 신호를 분석해 작업지시서(work_order) 우선순위를 조립해줘.', { lens: activeLens })}>우선순위 지시서 조립</Button>
+                <Button variant="outline" size="xs" icon="sparkle" disabled={busy} onClick={() => runPersona('order', activeMode, '현재 지연된 파이프라인과 오늘 활성화할 최소 페르소나 집합을 진단해줘.', { lens: activeLens })}>병목 신호 진단</Button>
+              </>
+            )}
+            {agentKey === 'sales' && (
+              <>
+                <Button variant="outline" size="xs" icon="sparkle" disabled={busy} onClick={() => runPersona('sales', activeMode, '고객의 도입 지연 및 가격 저항에 대응하는 맞춤 스크립트를 제안해줘.', { lens: activeLens })}>반론 대응 스크립트</Button>
+                <Button variant="outline" size="xs" icon="sparkle" disabled={busy} onClick={() => runPersona('sales', activeMode, '현재 딜 파이프라인에서 즉시 실행할 다음 한 수와 후속 일정을 설계해줘.', { lens: activeLens })}>다음 행동 설계</Button>
+              </>
+            )}
+            {agentKey === 'content' && (
+              <>
+                <Button variant="outline" size="xs" icon="sparkle" disabled={busy} onClick={() => runPersona('content', activeMode, '독자 가치 중심의 신규 콘텐츠 앵글과 훅 가설 3가지를 기획해줘.', { lens: activeLens })}>아이디어 앵글 기획</Button>
+                <Button variant="outline" size="xs" icon="sparkle" disabled={busy} onClick={() => runPersona('content', activeMode, '현재 발행 큐와 케이던스 공백을 점검하고 보강안을 제시해줘.', { lens: activeLens })}>발행 케이던스 점검</Button>
+              </>
+            )}
+            {agentKey === 'production' && (
+              <>
+                <Button variant="outline" size="xs" icon="sparkle" disabled={busy} onClick={() => runPersona('production', activeMode, '승인된 핵심 메시지를 카드뉴스 5장 슬라이드 포맷 골격으로 변환해줘.', { lens: activeLens })}>카드뉴스 5장 골격</Button>
+                <Button variant="outline" size="xs" icon="sparkle" disabled={busy} onClick={() => runPersona('production', activeMode, '긴 글을 3~5단락 스레드 포맷으로 분할 구조화해줘.', { lens: activeLens })}>스레드 분할 골격</Button>
+              </>
+            )}
+            {agentKey === 'review' && (
+              <>
+                <Button variant="outline" size="xs" icon="sparkle" disabled={busy} onClick={() => runPersona('review', 'critique', '작성된 초안의 사실 근거, 브랜드 가드레일 준수 여부를 검수하고 과장 표현을 걸러줘.', { lens: activeLens })}>사실/가드레일 검수</Button>
+                <Button variant="outline" size="xs" icon="sparkle" disabled={busy} onClick={() => runPersona('review', 'critique', '현재 산출물에 대해 PASS / REVISE / NEEDS_HUMAN 게이트 판정과 수정안을 내려줘.', { lens: activeLens })}>게이트 판정</Button>
+              </>
+            )}
+            {agentKey === 'council' && (
+              <>
+                <Button variant="outline" size="xs" icon="sparkle" disabled={busy} onClick={() => runPersona('council', 'sparring', '현재 비즈니스 전략에 대해 추진 논거 vs 맹점 비판 vs 1단계 검증 행동으로 3자 격돌해줘.', { lens: activeLens })}>3자 스파링 토론</Button>
+                <Button variant="outline" size="xs" icon="sparkle" disabled={busy} onClick={() => runPersona('council', 'weekly-review', '이번 주 실행 팩트 요약, 병목 진단, 다음 주 실험 1가지를 사실 기반으로 평가해줘.', { lens: activeLens })}>한 주 정리 & 사실 평가</Button>
+              </>
+            )}
+            {agentKey === 'guru' && (
+              <>
+                {[['pipeline-triage', '파이프라인 분류'], ['weekly-retro', '주간 회고']].map(([m, l]) => (
+                  <Button key={m} variant="outline" size="xs" icon="sparkle" disabled={busy} onClick={() => runGuru(m, {})}>{l}</Button>
+                ))}
+              </>
+            )}
+            <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginLeft: 'auto' }}>
+              {activeMode === 'critique' ? '· 맹점과 리스크를 엄격히 검수합니다' : activeMode === 'sparring' ? '· 3단 구조로 찬반 토론합니다' : activeMode === 'weekly-review' ? '· 한 주 원장 팩트를 분석합니다' : '· 실천 가능한 조언을 제공합니다'}
+            </span>
+          </div>
           <div style={{ maxWidth: 720, margin: '0 auto', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-lg)', padding: 10 }}>
             <textarea value={input} onChange={e => setInput(e.target.value)} placeholder={`Message ${persona.name}…`} style={{
               width: '100%', minHeight: 52, resize: 'none',
@@ -293,11 +446,14 @@ function CouncilCoachPanel({ onNavigate }) {
   const [text, setText] = React.useState('');
   const [note, setNote] = React.useState('');
 
-  const run = async () => {
+  const [currentMode, setCurrentMode] = React.useState('brand-strategy');
+
+  const runMode = async (mode = 'brand-strategy') => {
+    setCurrentMode(mode);
     setState('loading');
     setText('');
     setNote('');
-    const r = await requestCouncilAdvice({ mode: 'brand-strategy' });
+    const r = await requestCouncilAdvice({ mode });
     if (r.state === 'done') {
       setText(r.text);
       setState('done');
@@ -309,18 +465,25 @@ function CouncilCoachPanel({ onNavigate }) {
 
   return (
     <Card>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>Council 자문</div>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>Council 자문 & 토의</div>
             <Badge tone="neutral" size="xs">브랜드 카운슬</Badge>
           </div>
-          <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', marginTop: 2 }}>이번 주 브랜드 전략 — 무엇부터 손댈지</div>
+          <div style={{ fontSize: 11.5, color: 'var(--fg-faint)', marginTop: 2 }}>
+            {currentMode === 'sparring' ? '3자 스파링 — 추진 논거 vs 맹점 비판 vs 검증 행동' : currentMode === 'weekly-review' ? '한 주 정리 — 사실 기반 패턴 진단 및 다음 주 실험' : '이번 주 브랜드 전략 — 무엇부터 손댈지'}
+          </div>
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="sparkle" onClick={run} disabled={state === 'loading'}>
-          {state === 'loading' ? '분석 중…' : state === 'done' ? '다시 자문' : '브랜드 전략 자문'}
-        </Button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <Button variant="outline" size="xs" icon="sparkle" onClick={() => runMode('sparring')} disabled={state === 'loading'}>
+            3자 토의
+          </Button>
+          <Button variant="primary" size="xs" icon="sparkle" onClick={() => runMode('brand-strategy')} disabled={state === 'loading'}>
+            {state === 'loading' ? '분석 중…' : '전략 자문'}
+          </Button>
+        </div>
       </div>
 
       {state === 'idle' && (

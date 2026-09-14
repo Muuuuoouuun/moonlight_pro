@@ -4,6 +4,7 @@ import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
 import { Badge, Card, IconButton, Button, Progress, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge } from "../hub-primitives";
+import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { RhythmVisualizer } from "../rhythm-visualizer";
 import { StreakFlame } from "../burning-streak";
 import { resolveCalendarCapabilities } from "@/lib/calendar-capabilities";
@@ -1213,6 +1214,7 @@ export function Rhythm() {
   const router = useRouter();
   const pathname = usePathname();
   const selectedProjectId = searchParams.get('project')?.trim() || null;
+  const [weeklyReviewOpen, setWeeklyReviewOpen] = React.useState(false);
   const {
     rituals: liveRituals,
     rhythmState,
@@ -1501,7 +1503,12 @@ export function Rhythm() {
           )}
         </div>
         <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createRitual}>새 루틴 <Kbd>N</Kbd></Button>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <Button variant="outline" size="sm" icon="sparkle" onClick={() => setWeeklyReviewOpen(true)}>
+            한 주 정리 & Council 평가
+          </Button>
+          <Button variant="primary" size="sm" icon="plus" onClick={createRitual}>새 루틴 <Kbd>N</Kbd></Button>
+        </div>
       </div>
 
       {rhythmState === 'error' && (
@@ -1660,6 +1667,19 @@ export function Rhythm() {
           onClose={() => setEditRitualId(null)}
           onSave={persistRitual}
           onDelete={deleteRitual}
+        />
+      )}
+
+      {weeklyReviewOpen && (
+        <FloatingMentorWidget
+          isOpen={weeklyReviewOpen}
+          onClose={() => setWeeklyReviewOpen(false)}
+          agent="council"
+          contextType="weekly"
+          contextTitle="이번 주 리듬 및 운영 회고"
+          contextData={{
+            summary: `이번 주 루틴 총 ${rituals.length}개 · 완료율 ${(completed / (total || 1) * 100).toFixed(0)}% · 최장 연속 ${longestStreak}일(${longestStreakRitual || '-'})`,
+          }}
         />
       )}
     </div>

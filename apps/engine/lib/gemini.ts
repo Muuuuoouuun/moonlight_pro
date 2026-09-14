@@ -2,6 +2,7 @@ interface GeminiGenerateInput {
   prompt: string;
   systemInstruction?: string;
   maxOutputTokens?: number;
+  model?: string;
 }
 
 function resolveGeminiApiKey() {
@@ -43,6 +44,7 @@ function extractGeminiText(data: any) {
 export async function generateGeminiText(input: GeminiGenerateInput) {
   const apiKey = resolveGeminiApiKey();
   const status = getGeminiIntegrationStatus();
+  const targetModel = input.model?.trim() || status.model;
 
   if (!apiKey) {
     return {
@@ -50,7 +52,7 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
       status: null,
       reason: "missing-api-key",
       text: "",
-      model: status.model,
+      model: targetModel,
     };
   }
 
@@ -78,7 +80,7 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
 
   try {
     const response = await fetch(
-      `${status.apiBaseUrl.replace(/\/$/, "")}/models/${status.model}:generateContent`,
+      `${status.apiBaseUrl.replace(/\/$/, "")}/models/${targetModel}:generateContent`,
       {
         method: "POST",
         headers: {

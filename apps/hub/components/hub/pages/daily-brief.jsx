@@ -1374,6 +1374,7 @@ function RhythmPanel({ onNavigate }) {
   const [ledger, setLedger] = React.useState({ rituals: [], summary: null });
   const [syncState, setSyncState] = React.useState('preview');
   const [mutationState, setMutationState] = React.useState(() => createRhythmCheckState());
+  const [weeklyReviewOpen, setWeeklyReviewOpen] = React.useState(false);
   const attemptSequenceRef = React.useRef(0);
   const latestAttemptRef = React.useRef(new Map());
 
@@ -1530,10 +1531,40 @@ function RhythmPanel({ onNavigate }) {
             style={{ minHeight: 140 }}
           />
         )}
-        <Button variant="ghost" size="sm" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/rhythm')} style={{ marginTop: 12, width: '100%' }}>
-          Rhythm 전체 보기
-        </Button>
+        <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+          <Button
+            variant="outline"
+            size="xs"
+            icon="sparkle"
+            onClick={() => setWeeklyReviewOpen(true)}
+            style={{ flex: 1.2, justifyContent: 'center' }}
+          >
+            한 주 정리 & Council 평가
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
+            iconRight="arrowRight"
+            onClick={() => onNavigate?.('dashboard/work/rhythm')}
+            style={{ flex: 0.8, justifyContent: 'center' }}
+          >
+            Rhythm 전체
+          </Button>
+        </div>
       </Card>
+
+      {weeklyReviewOpen && (
+        <FloatingMentorWidget
+          isOpen={weeklyReviewOpen}
+          onClose={() => setWeeklyReviewOpen(false)}
+          agent="council"
+          contextType="weekly"
+          contextTitle="이번 주 운영 원장 회고"
+          contextData={{
+            summary: `이번 주 루틴 달성: ${completed}/${total} (${percent}%) · 연속 달성: ${summary.longestStreak}일`,
+          }}
+        />
+      )}
     </div>
   );
 }
