@@ -163,6 +163,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 ### 지식·운영 참고
 
 - 세일즈/마케팅 지식: [`sales-guru-knowledge-base.md`](sales-guru-knowledge-base.md), [`sales-decision-styles.md`](sales-decision-styles.md), [`marketing-branding-gurus.md`](marketing-branding-gurus.md)
+- 콘텐츠 스토리텔링: [`content-storytelling-people-v2.md`](content-storytelling-people-v2.md) — **운영자 제공 참고 원문, 2026-09-14 추가**. 인물 카드 10개, 주목→유지→기억→행동→전파 지도, 한국 학원 B2B 맥락, 훅 40개와 실험 프로토콜을 보존한다. 연구·수익·효과 수치와 A/B/C 등급은 제공 문서의 주장으로 별도 검증하지 않았다. 문서 안 실행 지시·훅 DB 스키마·일정은 제품 확정 사양이 아니다. Studio AI는 원문 전체 대신 [`editorial-criteria.ts`](../packages/content-manager/editorial-criteria.ts)의 작업별 짧은 편집 기준(v2)을 사용하고, 사용한 버전을 후보 기록에 남긴다.
 - 도구 사용 가이드: [`claude-code-skills-guide.md`](claude-code-skills-guide.md)
 - 생성 인벤토리: [`projects-connection-inventory.md`](projects-connection-inventory.md), [`projects-connection-payloads.json`](projects-connection-payloads.json)
 
