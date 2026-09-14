@@ -6,6 +6,14 @@
 > 상위 정본: `docs/operator-workflow-profile.md`, `docs/superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`, `DESIGN.md`
 > 구현 표면: Projects Hub UI, PMS read adapter, Hub→Engine project command, Supabase project relation migration
 
+## 2026-09-09 운영자 재결정 — 이름으로 먼저 생성
+
+아래 §1·§4의 초기 입력 구성은 이번 결정으로 대체한다. 초기 생성은 프로젝트명만 입력한다. 목표·다음 행동·브랜드·고객 연결·상태·우선순위는 생성 후 `편집`, 일정·결과물·완료 조건은 `계획·검증`에서 설정한다. 저장·재조회·멱등성·실패 시 입력 보존 계약은 유지한다.
+
+업무 분류는 기존 Area 관계를 유지하며 기본값을 요약하고 `분류 변경`으로 필요할 때만 펼친다. 기본값은 canonical `personal-projects`, 기존 `Founder Desk`, 첫 canonical Area, 유일한 Area 순서다. 명시적으로 선호 분류를 지정한 진입점은 이를 우선한다. 알 수 없는 복수 Area를 임의로 선택하지 않고 선택 UI를 표시한다. 목록이 없거나 읽기에 실패하면 입력을 보존하고 저장을 막는다.
+
+기존 시드 이름은 화면에서만 `Client Ops → 고객 업무`, `Founder Desk → 기획·운영`, `Growth Engine → 마케팅·성장`으로 표시한다. 사용자 정의 이름과 원장 ID·이름은 변경하지 않는다. 생성 후 편집에서도 동일한 이름으로 분류와 고객 연결을 바꿀 수 있으며, 동시 수정 충돌 시 사용자의 수정값을 유지한다.
+
 ## 1. 목표
 
 프로젝트를 콘텐츠 브랜드의 하위 레코드가 아니라 여러 실행 항목을 묶는 큰 업무 문맥으로 생성한다. 생성 순간에는 결과와 첫 행동에 집중하고, 업무 분야·브랜드·고객 문맥을 필요한 만큼만 연결한다.

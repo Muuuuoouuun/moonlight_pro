@@ -17,12 +17,14 @@ const rootPackage = JSON.parse(await readFile(
   "utf8",
 ));
 
-test("quick create is a dedicated canonical Drawer with the approved primary fields", () => {
+test("quick create asks only for the title and explains where to configure the rest", () => {
   assert.match(createDrawerSource, /export function ProjectCreateDrawer/);
   assert.match(createDrawerSource, /<Drawer\b/);
   assert.match(createDrawerSource, /프로젝트명 \*/);
-  assert.match(createDrawerSource, /목표 결과/);
-  assert.match(createDrawerSource, /<textarea[\s\S]*완료됐을 때 어떤 상태가 되어야 하나요\?/);
+  assert.doesNotMatch(createDrawerSource, /<textarea/);
+  assert.doesNotMatch(createDrawerSource, /type="date"/);
+  assert.match(createDrawerSource, /이름만 정하고 시작하세요/);
+  assert.match(createDrawerSource, /계획·검증/);
   assert.match(createDrawerSource, /다음 행동/);
   assert.doesNotMatch(createDrawerSource, /name=["']progress["']/);
   assert.doesNotMatch(createDrawerSource, /진행률 \(%\)/);
@@ -33,19 +35,19 @@ test("quick create explicitly focuses the empty project title on open", () => {
   assert.match(primitivesSource, /initialFocusRef\?\.current/);
 });
 
-test("advanced project settings start collapsed and expose their state accessibly", () => {
+test("classification override starts collapsed and exposes its state accessibly", () => {
   assert.match(createDrawerSource, /useState\(false\)/);
-  assert.match(createDrawerSource, /aria-expanded=\{advancedOpen\}/);
-  assert.match(createDrawerSource, /상태/);
-  assert.match(createDrawerSource, /우선순위/);
-  assert.match(createDrawerSource, /기한/);
+  assert.match(createDrawerSource, /aria-expanded=\{classificationOpen\}/);
+  assert.match(createDrawerSource, /분류 변경/);
+  assert.match(createDrawerSource, /projectAreaLabel\(selectedArea\)/);
+  assert.match(projectsSource, /key: 'areaId', label: '업무 분류'/);
 });
 
-test("global project entry requires a flat Area while keeping Brand optional", () => {
-  assert.match(createDrawerSource, /업무 분야 \*/);
-  assert.match(createDrawerSource, /업무 분야 선택/);
+test("global project entry preserves a real Area and shows an optional contextual Brand", () => {
+  assert.match(createDrawerSource, /업무 분류/);
+  assert.match(createDrawerSource, /분류 선택/);
   assert.match(createDrawerSource, /name=["']areaId["']/);
-  assert.match(createDrawerSource, /<span>브랜드<\/span>/);
+  assert.match(createDrawerSource, /selectedBrand.name/);
   assert.doesNotMatch(createDrawerSource, /onCreateContainer/);
   assert.match(createDrawerSource, /aria-describedby/);
 });

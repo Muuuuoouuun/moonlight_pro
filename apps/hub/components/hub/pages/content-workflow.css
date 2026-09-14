@@ -1,0 +1,17 @@
+.hub-studio-shell { grid-template-columns: minmax(0, 1fr) 280px !important; }
+.hub-studio-main { min-width: 0; }
+.hub-studio-toolbar { flex-wrap: wrap; }
+.hub-studio-toolbar .hub-segmented { max-width: 100%; }
+.hub-studio-context { min-width: 0; }
+.hub-content-queue-row { grid-template-columns: minmax(0, 1fr) 110px 120px 100px; }
+@media (max-width: 1279px) {
+  .hub-studio-shell { grid-template-columns: minmax(0, 1fr) !important; height: auto !important; min-height: 100%; overflow: visible !important; }
+  .hub-studio-main { overflow: visible !important; }
+  .hub-studio-context { border-left: 0 !important; border-top: 1px solid var(--line-soft); }
+  .hub-studio-context > .scroll-y { overflow: visible; }
+}
+@media (max-width: 639px) {
+  .hub-studio-toolbar { padding: 12px !important; gap: 8px !important; }
+  .hub-content-queue-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 8px; }
+  .hub-content-queue-row > :first-child { grid-column: 1 / -1; }
+}

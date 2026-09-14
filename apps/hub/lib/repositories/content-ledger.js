@@ -30,6 +30,7 @@ const VARIANT_TYPES = [
   "x_thread",
   "reels_script",
   "landing_copy",
+  "threads_post",
 ];
 
 const ITEM_STATUS_LABEL = {
@@ -48,6 +49,7 @@ const VARIANT_KIND_LABEL = {
   newsletter: "Newsletter",
   social_post: "Thread",
   x_thread: "Thread",
+  threads_post: "Threads",
   reels_script: "Reels",
   landing_copy: "Blog",
 };
@@ -59,6 +61,7 @@ const VARIANT_CHANNEL_LABEL = {
   newsletter: "Email",
   social_post: "X",
   x_thread: "X",
+  threads_post: "Threads",
   reels_script: "Reels",
   landing_copy: "Web",
 };
@@ -168,10 +171,13 @@ function buildContentMeta(payload, action) {
   return {
     origin: "hub-studio",
     action,
-    local_mirror: Boolean(payload.localMirror),
-    template_id: normalizeNullableString(payload.templateId),
-    brand_key: normalizeNullableString(payload.brandKey),
-    automation_recipe_id: normalizeNullableString(payload.automationRecipeId),
+    ...(payload.localMirror !== undefined ? { local_mirror: Boolean(payload.localMirror) } : {}),
+    ...(payload.templateId !== undefined ? { template_id: normalizeNullableString(payload.templateId) } : {}),
+    ...(payload.brandKey !== undefined ? { brand_key: normalizeNullableString(payload.brandKey) } : {}),
+    ...(payload.automationRecipeId !== undefined ? { automation_recipe_id: normalizeNullableString(payload.automationRecipeId) } : {}),
+    ...(payload.sourceUrl !== undefined ? { source_url: normalizeNullableString(payload.sourceUrl) } : {}),
+    ...(payload.sourceNoteId !== undefined ? { source_note_id: normalizeNullableString(payload.sourceNoteId) } : {}),
+    ...(payload.orgScope !== undefined ? { org_scope: payload.orgScope === "company" ? "company" : "personal" } : {}),
   };
 }
 
@@ -258,14 +264,18 @@ function mapBrands(rows) {
       philosophy: normalizeString(meta.philosophy),
       direction: normalizeString(meta.direction),
       cadence: normalizeString(meta.cadence),
-      voice: normalizeString(meta.voice, kind === "content" ? "long-form, reflective, precise" : "operator-first, concrete, calm"),
+      voice: normalizeString(meta.voice),
+      audience: normalizeString(meta.audience),
+      promise: normalizeString(meta.promise),
+      offer: normalizeString(meta.offer),
+      currentFocus: normalizeString(meta.current_focus),
+      operatingState: normalizeString(meta.operating_state),
+      isFocused: meta.is_focused === true,
+      identityConfirmedAt: normalizeNullableString(meta.identity_confirmed_at),
+      voiceExamples: normalizeString(meta.voice_examples),
       keywords: normalizeArray(meta.keywords),
       channels: normalizeArray(meta.channels),
-      rules: normalizeArray(meta.content_rules, [
-        "Make the next action explicit.",
-        "Keep proof close to the claim.",
-        "Avoid decorative copy without an operator signal.",
-      ]),
+      rules: normalizeArray(meta.content_rules),
       forbidden: normalizeArray(meta.forbidden_terms),
       sourceLinks: normalizeArray(meta.source_links),
       // 주당 발행 목표는 운영자가 명시적으로 넣기 전까지 없다 — 브랜드 탭이
@@ -339,6 +349,10 @@ function mapItems(rows, variants, brandById) {
       variantId: variant?.id || null,
       title: titleFromItem(row),
       summary: row.summary || row.source_idea || "",
+      sourceIdea: row.source_idea || "",
+      sourceUrl: row.meta?.source_url || null,
+      sourceNoteId: row.meta?.source_note_id || null,
+      orgScope: row.meta?.org_scope || brand?.orgScope || null,
       slug: row.slug || null,
       status,
       statusLabel: ITEM_STATUS_LABEL[status] || "Draft",
@@ -401,6 +415,7 @@ function mapPublishLogs(rows, variantById) {
       channel: row.channel || variant?.channel || "Web",
       status,
       event,
+      provenance: normalizeNullableString(payload.provenance),
       action: normalizeString(payload.action),
       title: normalizeString(payload.title, variant?.title || ""),
       brandId: normalizeNullableString(payload.brand_id),
@@ -662,7 +677,7 @@ export function buildContentDraftRecords(payload = {}) {
   const variantType = normalizeVariantType(payload.variantType);
   const title = normalizeString(payload.title, "Untitled content draft");
   const summary = normalizeNullableString(payload.summary);
-  const sourceIdea = normalizeString(payload.sourceIdea) || title;
+  const sourceIdea = typeof payload.sourceIdea === "string" && payload.sourceIdea.trim() ? payload.sourceIdea : title;
   const visibility = normalizeVisibility(payload.visibility);
 
   const itemRecord = {
@@ -726,7 +741,8 @@ export function buildContentDraftUpdateRecords(payload = {}) {
 
   const itemPatch = {
     title,
-    source_idea: normalizeString(payload.sourceIdea) || title,
+    ...(payload.sourceIdea !== undefined ? { source_idea: normalizeBody(payload.sourceIdea) } : {}),
+    ...(payload.brandId !== undefined ? { brand_id: normalizeNullableString(payload.brandId) } : {}),
     status: normalizeItemStatus(payload.status),
     summary,
     next_action: normalizeNullableString(payload.nextAction),
@@ -761,6 +777,47 @@ export function buildContentDraftUpdateRecords(payload = {}) {
     itemPatch,
     variantPatch,
   };
+}
+
+export function buildContentIdeaRecords(payload = {}) {
+  const body = normalizeBody(payload.body);
+  const sourceUrl = normalizeNullableString(payload.sourceUrl);
+  if (!body.trim() && !sourceUrl) throw new TypeError("소재 본문이나 참고 링크를 입력해 주세요.");
+  if (sourceUrl && !isPublicHttpUrl(sourceUrl)) throw new TypeError("참고 링크는 http 또는 https URL이어야 합니다.");
+  if (!["personal", "company"].includes(payload.orgScope)) throw new TypeError("소재의 개인/회사 범위를 선택해 주세요.");
+  return buildContentDraftRecords({
+    ...payload,
+    title: normalizeString(payload.title) || (body.trim() || sourceUrl).split(/\r?\n/)[0].slice(0, 100),
+    sourceIdea: body.trim() ? body : sourceUrl,
+    body: body.trim() ? body : sourceUrl,
+    sourceUrl,
+    status: "idea",
+    variantStatus: "draft",
+    variantType: "threads_post",
+    ideaSource: payload.sourceNoteId ? "quick-memo" : "content-inbox",
+    visibility: "private",
+  });
+}
+
+function isPublicHttpUrl(value) {
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password;
+  } catch { return false; }
+}
+
+export function buildContentPublicationRecord(payload = {}) {
+  if (!isPublicHttpUrl(payload.targetUrl)) throw new TypeError("발행한 게시물의 http 또는 https URL을 입력해 주세요.");
+  const publishedAt = new Date(payload.publishedAt);
+  if (!payload.publishedAt || Number.isNaN(publishedAt.getTime()) || publishedAt.getTime() > Date.now() + 60000) {
+    throw new TypeError("유효한 과거 발행 일시를 입력해 주세요.");
+  }
+  const handoff = buildContentHandoffRecord({
+    ...payload, event: "operator_published", status: "published", provider: "manual",
+    publishedAt: publishedAt.toISOString(),
+    payload: { provenance: "operator_confirmed", external_verified: false },
+  });
+  return { ...handoff, action: "record_publication" };
 }
 
 export function buildContentHandoffRecord(payload = {}) {

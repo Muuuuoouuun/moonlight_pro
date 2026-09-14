@@ -20,7 +20,7 @@ import {
   sortContentLogEntries,
 } from "@/lib/brand-content-log";
 
-import { useContentLedger } from "./content";
+import { useContentLedger } from "../use-content-ledger";
 
 const VIEW_OPTIONS = [
   { key: "board", label: "보드" },
@@ -30,7 +30,6 @@ const VIEW_OPTIONS = [
 const SORT_OPTIONS = [
   { key: "latest", label: "최신순" },
   { key: "oldest", label: "오래된순" },
-  { key: "metrics", label: "성과순" },
 ];
 
 const STATUS_FILTER_OPTIONS = [

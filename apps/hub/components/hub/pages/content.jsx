@@ -6,6 +6,10 @@ import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, IconButton, Button, Progress, Tabs, Kbd, SectionTitle, EmptyState, Avatar, SyncBadge, SegmentedControl, TextField, TextAreaField } from "../hub-primitives";
 import { usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
+import { useContentLedger, refreshContentLedger, readContentLedger } from "../use-content-ledger";
+import { ContentIdeaCapture } from "./content-idea-capture";
+import { contentQueueScope, contentQueueTabs, studioVariantMode, manualPublicationFields, publicationIsVerified } from "@/lib/content-workflow";
+import "./content-workflow.css";
 import { shouldRestoreActiveStudioDraft } from "@/lib/content-studio-routing";
 import {
   businessTruthCompleteness,
@@ -123,15 +127,11 @@ function chooseDefaultBrand(brands = [], preferred) {
     const byPreferred = brands.find((brand) => brand.id === preferred || brand.key === preferred);
     if (byPreferred) return byPreferred;
   }
-  return (
-    brands.find((brand) => brand.kind === "content") ||
-    brands.find((brand) => brand.key === "classmoon") ||
-    brands.find((brand) => brand.key === "moonpm") ||
-    brands[0]
-  );
+  return null;
 }
 
 function handoffEventLabel(event, status) {
+  if (event === "operator_published") return "운영자 발행 확인";
   if (event === "manual_exported") return "Manual export";
   if (event === "asset_exported") return "Asset export";
   if (status === "failed") return "Failed";
@@ -144,87 +144,6 @@ function handoffTone(status) {
   return status === "failed" ? "danger" : "neutral";
 }
 
-const EMPTY_CONTENT_LEDGER = {
-  source: "preview",
-  syncState: "preview",
-  brands: [],
-  items: [],
-  variants: [],
-  assets: [],
-  publishLogs: [],
-  campaigns: [],
-  queue: [],
-  pipeline: [],
-  attention: [],
-  summary: null,
-  ideaQueue: [],
-  cadence: null,
-};
-
-// 모듈 스코프 stale-while-revalidate — Studio↔Queue↔Campaigns 탭 전환마다 원장을 다시
-// 기다리며 스켈레톤을 보이던 것을 제거(8차 잔여 M). 재검증 실패는 partial(위장 금지).
-const CONTENT_CACHE_SERVABLE_MS = 5 * 60 * 1000;
-let contentLedgerCache = null; // { at, state }
-
-export function useContentLedger() {
-  const servable = contentLedgerCache
-    && Date.now() - contentLedgerCache.at < CONTENT_CACHE_SERVABLE_MS;
-  const [state, setState] = React.useState(servable ? contentLedgerCache.state : EMPTY_CONTENT_LEDGER);
-
-  React.useEffect(() => {
-    let active = true;
-    const hasServableCache = Boolean(
-      contentLedgerCache && Date.now() - contentLedgerCache.at < CONTENT_CACHE_SERVABLE_MS
-    );
-
-    async function loadLedger() {
-      if (!hasServableCache) setState((s) => ({ ...s, syncState: "loading" })); // 캐시 서빙 중엔 조용히 재검증
-      try {
-        const response = await fetch("/api/hub/content", { cache: "no-store" });
-        const data = await response.json().catch(() => null);
-
-        if (!active || !response.ok || !data || data.status === "error") {
-          // 라이브 read 실패는 error — preview("미구성")로 뭉개면 큐가 0건이 사실처럼 보인다.
-          if (active) setState((s) => ({ ...s, syncState: hasServableCache ? "partial" : "error" }));
-          return;
-        }
-
-        if (data.source === "supabase") {
-          const nextState = {
-            source: data.source,
-            syncState: data.status === "partial" ? "partial" : "live",
-            brands: Array.isArray(data.brands) ? data.brands : [],
-            items: Array.isArray(data.items) ? data.items : [],
-            variants: Array.isArray(data.variants) ? data.variants : [],
-            assets: Array.isArray(data.assets) ? data.assets : [],
-            publishLogs: Array.isArray(data.publishLogs) ? data.publishLogs : [],
-            campaigns: Array.isArray(data.campaigns) ? data.campaigns : [],
-            queue: Array.isArray(data.queue) ? data.queue : [],
-            pipeline: Array.isArray(data.pipeline) ? data.pipeline : [],
-            attention: Array.isArray(data.attention) ? data.attention : [],
-            summary: data.summary || null,
-            ideaQueue: Array.isArray(data.ideaQueue) ? data.ideaQueue : [],
-            cadence: data.cadence || null,
-          };
-          contentLedgerCache = { at: Date.now(), state: nextState };
-          setState(nextState);
-        } else {
-          setState((s) => ({ ...s, source: "preview", syncState: "preview", campaigns: [], queue: [] }));
-        }
-      } catch {
-        if (active) setState((s) => ({ ...s, syncState: hasServableCache ? "partial" : "error" }));
-      }
-    }
-
-    loadLedger();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  return state;
-}
-
 export function Studio({ workspace }) {
   const ws = getWorkspace(workspace);
   const searchParams = useSearchParams();
@@ -232,7 +151,27 @@ export function Studio({ workspace }) {
   const newParam = searchParams.get("new");
   const brandParam = searchParams.get("brand");
   const ledger = useContentLedger();
-  const [mode, setMode] = React.useState('blog');
+  const [resolvedItemParam, setResolvedItemParam] = React.useState(null);
+  React.useEffect(() => {
+    let active = true;
+    if (itemParam) readContentLedger().then(() => { if (active) setResolvedItemParam(itemParam); });
+    return () => { active = false; };
+  }, [itemParam]);
+  const [mode, setMode] = React.useState('threads');
+  const [loadedVariantType, setLoadedVariantType] = React.useState(null);
+  const [itemStatus, setItemStatus] = React.useState('draft');
+  const [variantStatus, setVariantStatus] = React.useState('draft');
+  const [visibility, setVisibility] = React.useState('private');
+  const [publicationOpen, setPublicationOpen] = React.useState(false);
+  const [publicationUrl, setPublicationUrl] = React.useState('');
+  const [publicationDate, setPublicationDate] = React.useState('');
+  const [publicationMessage, setPublicationMessage] = React.useState('');
+  const publicationAttempt = React.useRef(null);
+  const savePromiseRef = React.useRef(null);
+  const saveAttempt = React.useRef(null);
+  const editRevision = React.useRef(0);
+  const [sourceIdea, setSourceIdea] = React.useState('');
+  const [sourceUrl, setSourceUrl] = React.useState('');
   const [selectedBrandId, setSelectedBrandId] = React.useState("");
   const [contentId, setContentId] = React.useState(null);
   const [variantId, setVariantId] = React.useState(null);
@@ -246,15 +185,16 @@ export function Studio({ workspace }) {
   const [extraSuggestions, setExtraSuggestions] = React.useState([]);
   const [dismissedSuggestionKeys, setDismissedSuggestionKeys] = React.useState(() => new Set());
   const [pendingSend, setPendingSend] = React.useState(null); // 'publish' | 'schedule' | null
-  const [lastSentAt, setLastSentAt] = React.useState(null);
-  const [localHandoffLogs, setLocalHandoffLogs] = React.useState([]);
-  const [autoSave, setAutoSave] = React.useState(true);
-  const [localMirror, setLocalMirror] = React.useState(true);
+  const [lastSentAt] = React.useState(null);
+  const [localHandoffLogs] = React.useState([]);
+  const [autoSave] = React.useState(true);
+  const [localMirror] = React.useState(true);
   const [saveState, setSaveState] = React.useState('idle');
   const [lastSavedAt, setLastSavedAt] = React.useState(null);
   const [localSavedAt, setLocalSavedAt] = React.useState(null);
   const [dirty, setDirty] = React.useState(false);
   const loadedItemRef = React.useRef(null);
+  const preferredBrandAppliedRef = React.useRef(false);
   // ?item= 딥링크가 라이브 원장에서 해석되지 않았을 때의 1회성 안내 (2609 감사 #8).
   const [missingItemId, setMissingItemId] = React.useState(null);
 
@@ -267,9 +207,13 @@ export function Studio({ workspace }) {
   };
 
   // Scope the brand picker to this workspace's brands (브랜드 part shouldn't offer ClassIn/회사 brands).
-  const brands = ws ? filterBrandsByWorkspace(ledger.brands || [], workspace) : (ledger.brands || []);
-  const selectedBrand = brands.find((brand) => brand.id === selectedBrandId) || chooseDefaultBrand(brands, brandParam);
-  const variantType = mode === 'carousel' ? 'card_news' : 'blog';
+  const availableBrands = ws ? filterBrandsByWorkspace(ledger.brands || [], workspace) : (ledger.brands || []);
+  const capturedScope = ledger.items.find((item) => item.id === (itemParam || contentId))?.orgScope;
+  const brands = capturedScope ? availableBrands.filter((brand) => ['company', 'classin'].includes(capturedScope) === ['company', 'classin'].includes(brand.orgScope)) : availableBrands;
+  const selectedBrand = brands.find((brand) => brand.id === selectedBrandId) || null;
+  const variantType = loadedVariantType || (mode === 'carousel' ? 'card_news' : mode === 'threads' ? 'threads_post' : 'blog');
+  const unsupportedType = loadedVariantType && !studioVariantMode(loadedVariantType);
+  const markDirty = () => { editRevision.current += 1; setDirty(true); };
   const currentBodyPayload = React.useMemo(() => (
     mode === 'carousel'
       ? { slides, format: 'instagram-carousel', export: { target: 'google_drive' } }
@@ -280,8 +224,12 @@ export function Studio({ workspace }) {
     if (!draft) return;
     if (draft.contentId) setContentId(draft.contentId);
     if (draft.variantId) setVariantId(draft.variantId);
+    if (draft.variantType) setLoadedVariantType(draft.variantType);
+    if (draft.itemStatus) setItemStatus(draft.itemStatus);
+    if (draft.variantStatus) setVariantStatus(draft.variantStatus);
+    if (draft.visibility) setVisibility(draft.visibility);
     if (draft.brandId) setSelectedBrandId(draft.brandId);
-    if (draft.mode === 'carousel' || draft.mode === 'blog') setMode(draft.mode);
+    if (draft.mode === 'carousel' || draft.mode === 'blog' || draft.mode === 'threads') setMode(draft.mode);
     if (typeof draft.title === 'string') setTitle(draft.title);
     if (typeof draft.body === 'string') setBody(draft.body);
     if (Array.isArray(draft.slides) && draft.slides.length) setSlides(draft.slides);
@@ -306,16 +254,18 @@ export function Studio({ workspace }) {
 
   React.useEffect(() => {
     const nextBrand = chooseDefaultBrand(brands, brandParam);
-    if (!selectedBrandId && nextBrand?.id) {
+    if (!itemParam && !preferredBrandAppliedRef.current && !selectedBrandId && nextBrand?.id) {
+      preferredBrandAppliedRef.current = true;
       setSelectedBrandId(nextBrand.id);
     }
-  }, [brandParam, brands, selectedBrandId]);
+  }, [brandParam, brands, selectedBrandId, itemParam]);
 
   React.useEffect(() => {
     if (!itemParam || loadedItemRef.current === itemParam || ledger.source !== "supabase") return;
 
     const item = ledger.items.find((candidate) => candidate.id === itemParam);
     if (!item) {
+      if (resolvedItemParam !== itemParam || ledger.syncState !== "live") return;
       // 라이브 원장을 읽었는데도 없는 id — 조용히 빈 에디터를 주면 딥링크가 "열렸다"고
       // 착각하게 된다. 한 번만 알리고 새 초안으로 시작한다 (2609 감사 #8).
       loadedItemRef.current = itemParam;
@@ -327,18 +277,24 @@ export function Studio({ workspace }) {
     const variant = ledger.variants.find((candidate) => (
       candidate.id === item.variantId || candidate.contentId === item.id
     ));
-    const nextMode = variant?.type === "card_news" ? "carousel" : "blog";
+    const nextMode = studioVariantMode(variant?.type) || "blog";
     const nextSlides = variant?.type === "card_news" ? parseVariantSlides(variant.body) : null;
-    const isUnsupportedType = Boolean(variant?.type) && !["blog", "blog_insight", "card_news"].includes(variant.type);
+    const isUnsupportedType = Boolean(variant?.type) && !studioVariantMode(variant.type);
 
     setContentId(item.id);
+    setItemStatus(item.status);
+    setVariantStatus(variant?.status || "draft");
+    setVisibility(variant?.visibility || item.visibility || "private");
+    setLoadedVariantType(variant?.type || null);
+    setSourceIdea(item.sourceIdea || "");
+    setSourceUrl(item.sourceUrl || "");
     setVariantId(variant?.id || item.variantId || null);
     setSelectedBrandId(item.brandId || "");
     setMode(nextMode);
     setTitle(variant?.title || item.title);
     if (nextMode === "carousel" && nextSlides) {
       setSlides(nextSlides);
-    } else if (variant?.body && nextMode === "blog") {
+    } else if (variant?.body && nextMode !== "carousel") {
       setBody(variant.body);
     }
     setLastSavedAt(variant?.updatedAt || item.updatedAt || null);
@@ -347,11 +303,21 @@ export function Studio({ workspace }) {
     if (isUnsupportedType) {
       setExtraSuggestions(s => [{
         tone: 'neutral',
-        text: `Studio는 아직 "${variant.type}" 타입 편집을 지원하지 않습니다 — Blog 모드로 임시 표시 중입니다.`,
+        text: `Studio는 아직 "${variant.type}" 타입 편집을 지원하지 않습니다 — 원문을 읽기 전용으로 표시합니다.`,
       }, ...s]);
     }
     loadedItemRef.current = itemParam;
-  }, [itemParam, ledger]);
+  }, [itemParam, ledger, resolvedItemParam]);
+
+  React.useEffect(() => {
+    if (itemParam || !contentId || !variantId || ledger.source !== "supabase") return;
+    const item = ledger.items.find((candidate) => candidate.id === contentId);
+    const variant = ledger.variants.find((candidate) => candidate.id === variantId);
+    if (!item || !variant) return;
+    setLoadedVariantType(variant.type);
+    setItemStatus(item.status); setVariantStatus(variant.status); setVisibility(variant.visibility || item.visibility || "private");
+    setSourceIdea(item.sourceIdea || ""); setSourceUrl(item.sourceUrl || "");
+  }, [contentId, variantId, itemParam, ledger]);
 
   React.useEffect(() => {
     if (!localMirror) return undefined;
@@ -361,7 +327,7 @@ export function Studio({ workspace }) {
       contentId,
       variantId,
       brandId: selectedBrand?.id || selectedBrandId || null,
-      mode,
+      mode, variantType, itemStatus, variantStatus, visibility,
       title,
       body,
       slides,
@@ -373,164 +339,113 @@ export function Studio({ workspace }) {
     }, 450);
 
     return () => window.clearTimeout(timer);
-  }, [body, contentId, localMirror, mode, selectedBrand, selectedBrandId, slides, title, variantId]);
+  }, [body, contentId, localMirror, mode, selectedBrand, selectedBrandId, slides, title, variantId, variantType, itemStatus, variantStatus, visibility]);
 
-  const saveDraft = React.useCallback(async (reason = "manual") => {
-    if (!autoSave && reason === "autosave") return;
-
-    const method = contentId && variantId ? "PATCH" : "POST";
-    setSaveState("saving");
-
-    try {
-      const response = await fetch("/api/hub/content", {
-        method,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          contentId,
-          variantId,
-          brandId: selectedBrand?.id || null,
-          brandKey: selectedBrand?.key || null,
-          title,
+  const saveDraft = React.useCallback((reason = "manual") => {
+    if (unsupportedType || (itemParam && loadedItemRef.current !== itemParam) || missingItemId || (!autoSave && reason === "autosave")) return Promise.resolve(null);
+    if (savePromiseRef.current) return savePromiseRef.current;
+    if (reason === "autosave" && !title.trim() && (mode === "carousel" ? !slides.some((slide) => slide.title || slide.sub) : !body.trim())) return Promise.resolve(null);
+    const revision = editRevision.current;
+    if (!saveAttempt.current) {
+      saveAttempt.current = {
+        method: contentId && variantId ? "PATCH" : "POST",
+        revision,
+        payload: {
+          contentId: contentId || crypto.randomUUID(), variantId: variantId || crypto.randomUUID(),
+          brandId: selectedBrandId || null, brandKey: selectedBrand?.key || null,
+          title: title.trim() || bodySummary(body).slice(0, 80) || "제목 없음",
           body: currentBodyPayload,
-          sourceIdea: title,
-          sourceType: "idea",
+          ...(!contentId ? { sourceIdea: title || bodySummary(body), sourceType: "idea" } : {}),
           summary: mode === "carousel" ? `${slides.length} card news slides` : bodySummary(body),
           excerpt: mode === "carousel" ? slides[0]?.sub || slides[0]?.title || "" : bodySummary(body),
-          status: "draft",
-          variantStatus: "draft",
-          variantType,
-          visibility: "private",
-          previewKind: mode === "blog" ? "web_article" : "card_news",
-          localMirror,
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok && data.status !== "preview" && data.status !== "saved") {
-        throw new Error(data.error || data.message || `HTTP ${response.status}`);
-      }
-
-      if (data.contentId) setContentId(data.contentId);
-      if (data.variantId) setVariantId(data.variantId);
-      setLastSavedAt(new Date().toISOString());
-      setSaveState(data.status === "preview" ? "preview" : "saved");
-      setDirty(false);
-      return data;
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      setSaveState("error");
-      setExtraSuggestions(s => [{ tone: 'danger', text: `저장 실패 — ${msg}` }, ...s]);
-      return null;
+          status: itemStatus === "idea" ? "draft" : itemStatus,
+          variantStatus, variantType, visibility,
+          previewKind: mode === "blog" ? "web_article" : mode === "threads" ? "threads_post" : "card_news", localMirror,
+        },
+      };
     }
-  }, [autoSave, body, contentId, currentBodyPayload, localMirror, mode, selectedBrand, slides, title, variantId, variantType]);
+    const command = saveAttempt.current;
+    setSaveState("saving");
+    savePromiseRef.current = (async () => {
+      try {
+        const response = await fetch("/api/hub/content", {
+          method: command.method, headers: { "content-type": "application/json" }, body: JSON.stringify(command.payload),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !["saved", "updated", "duplicate"].includes(data.status)) {
+          if (response.status === 400) saveAttempt.current = null;
+          throw new Error(data.status === "preview" ? "저장소가 연결되지 않아 서버에 저장하지 않았습니다." : data.error || data.message || `HTTP ${response.status}`);
+        }
+        const nextContentId = data.contentId || command.payload.contentId;
+        const nextVariantId = data.variantId || command.payload.variantId;
+        const refreshed = await refreshContentLedger();
+        const storedVariant = refreshed.variants.find((candidate) => candidate.id === nextVariantId);
+        const expectedBody = typeof command.payload.body === "string" ? command.payload.body : JSON.stringify(command.payload.body);
+        if (refreshed.source !== "supabase" || !refreshed.items.some((candidate) => candidate.id === nextContentId) || !storedVariant || storedVariant.body !== expectedBody) {
+          throw new Error("저장 응답 후 원고를 다시 확인하지 못했습니다. 같은 원고로 재시도해 주세요.");
+        }
+        setContentId(nextContentId); setVariantId(nextVariantId);
+        setLoadedVariantType(command.payload.variantType); setItemStatus(command.payload.status);
+        setLastSavedAt(storedVariant.updatedAt || new Date().toISOString()); setSaveState("saved");
+        if (editRevision.current === command.revision) setDirty(false);
+        saveAttempt.current = null;
+        return { ...data, contentId: nextContentId, variantId: nextVariantId, savedRevision: command.revision };
+      } catch (error) {
+        setSaveState("error");
+        setExtraSuggestions((previous) => [{ tone: 'danger', text: `저장 실패 — ${error.message}` }, ...previous]);
+        return null;
+      } finally { savePromiseRef.current = null; }
+    })();
+    return savePromiseRef.current;
+  }, [autoSave, body, contentId, currentBodyPayload, itemParam, itemStatus, localMirror, missingItemId, mode, selectedBrand, selectedBrandId, slides, title, unsupportedType, variantId, variantStatus, variantType, visibility]);
 
   React.useEffect(() => {
-    if (!autoSave || !dirty) return undefined;
+    if (!autoSave || !dirty || saveState === "error" || saveState === "saving" || unsupportedType) return undefined;
 
     const timer = window.setTimeout(() => {
       saveDraft("autosave");
     }, 1200);
 
     return () => window.clearTimeout(timer);
-  }, [autoSave, dirty, saveDraft]);
+  }, [autoSave, dirty, saveDraft, saveState, unsupportedType]);
 
-  async function recordHandoff(action) {
-    setPendingSend(action);
-    const startedAt = Date.now();
-    const isSchedule = action === 'schedule';
-    const channel = mode === 'blog' ? 'Web' : 'Instagram';
-    const exportProfile = mode === 'blog' ? 'web-article-handoff' : 'google-drive-carousel';
-
+  async function copyDraft() {
     try {
-      const needsSave = dirty || !contentId || !variantId;
-      const saved = needsSave ? await saveDraft("handoff") : null;
-      if (needsSave && !saved) {
-        throw new Error("초안 저장이 완료되지 않아 handoff를 중단했습니다.");
+      const text = mode === "carousel" ? slides.map((slide) => [slide.title, slide.sub].filter(Boolean).join("\n")).join("\n\n") : body;
+      await navigator.clipboard.writeText(text);
+      setPublicationMessage("원고를 복사했습니다. 외부 채널에 게시한 다음 발행 URL을 기록하세요.");
+    } catch { setPublicationMessage("복사하지 못했습니다. 본문을 선택해 직접 복사해 주세요."); }
+  }
+
+  async function recordPublication(event) {
+    event.preventDefault();
+    if (pendingSend || unsupportedType) return;
+    setPendingSend("publication");
+    setPublicationMessage("발행 기록을 확인하고 있습니다…");
+    try {
+      const publicationFields = publicationAttempt.current || manualPublicationFields(publicationUrl, publicationDate);
+      const saved = dirty || !contentId || !variantId ? await saveDraft("publication") : { contentId, variantId };
+      if (!saved) throw new Error("원고 저장이 완료되지 않아 발행 기록을 만들지 않았습니다.");
+      if (saved.savedRevision !== undefined && saved.savedRevision !== editRevision.current) throw new Error("이전 저장 요청을 확인했습니다. 최신 변경을 먼저 저장한 다음 발행 기록을 남겨 주세요.");
+      publicationAttempt.current ||= {
+        action: "record_publication", contentId: saved.contentId, variantId: saved.variantId,
+        logId: crypto.randomUUID(), targetUrl: publicationFields.targetUrl, publishedAt: publicationFields.publishedAt,
+        channel: mode === "threads" ? "Threads" : mode === "blog" ? "Web" : "Instagram",
+      };
+      const response = await fetch("/api/hub/content", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(publicationAttempt.current) });
+      const data = await response.json();
+      if (!response.ok || !["saved", "duplicate"].includes(data.status)) {
+        if (response.status === 400) publicationAttempt.current = null;
+        throw new Error(data.error || "발행 기록을 저장하지 못했습니다.");
       }
-
-      const nextContentId = saved?.contentId || contentId;
-      const nextVariantId = saved?.variantId || variantId;
-      const serializedBody = typeof currentBodyPayload === "string"
-        ? currentBodyPayload
-        : JSON.stringify(currentBodyPayload);
-      const encodedSize = typeof TextEncoder !== "undefined"
-        ? new TextEncoder().encode(serializedBody).length
-        : serializedBody.length;
-
-      if (!nextContentId || !nextVariantId) {
-        throw new Error("초안을 먼저 저장해야 handoff를 기록할 수 있습니다.");
-      }
-
-      const response = await fetch('/api/hub/content', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          action: isSchedule ? 'handoff' : 'export',
-          handoffAction: action,
-          event: isSchedule ? 'handoff_requested' : 'manual_exported',
-          status: isSchedule ? 'queued' : 'published',
-          provider: isSchedule ? 'n8n' : 'manual',
-          contentId: nextContentId,
-          variantId: nextVariantId,
-          brandId: selectedBrand?.id || null,
-          brandKey: selectedBrand?.key || null,
-          title,
-          channel,
-          targetChannel: mode === 'blog' ? 'MoonPM Web' : 'Instagram carousel',
-          variantType,
-          exportProfile,
-          recordAsset: !isSchedule,
-          assetType: mode === 'blog' ? 'html' : 'source',
-          mimeType: mode === 'blog' ? 'text/html' : 'application/json',
-          sizeBytes: encodedSize,
-          note: isSchedule
-            ? 'Studio toolbar handoff request. External delivery is handled by automation.'
-            : 'Studio toolbar manual export log. No external delivery was sent from the Hub.',
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-      const elapsed = Date.now() - startedAt;
-      if (elapsed < 100) await new Promise(r => setTimeout(r, 100 - elapsed));
-
-      if (!response.ok && data.status !== 'preview' && data.status !== 'logged') {
-        const msg = data.error || data.message || `HTTP ${response.status}`;
-        setExtraSuggestions(s => [{ tone: 'danger', text: `handoff 실패 — ${msg}` }, ...s]);
-        return;
-      }
-
-      if (data.status === 'preview') {
-        setExtraSuggestions(s => [{ tone: 'neutral', text: '기록이 연결되지 않아 handoff 기록을 만들지 않았습니다.' }, ...s]);
-        return;
-      }
-
-      const now = new Date();
-      setLastSentAt(now);
-      setLocalHandoffLogs(s => [{
-        id: data.logId || `local-${Date.now()}`,
-        variantId: nextVariantId,
-        contentId: nextContentId,
-        channel,
-        status: isSchedule ? 'queued' : 'published',
-        event: isSchedule ? 'handoff_requested' : 'manual_exported',
-        provider: isSchedule ? 'n8n' : 'manual',
-        targetChannel: mode === 'blog' ? 'MoonPM Web' : 'Instagram carousel',
-        exportProfile,
-        when: formatTime(now),
-        createdAt: now.toISOString(),
-      }, ...s]);
-      const detail = data.assetId ? ` · asset ${String(data.assetId).slice(0, 8)}` : '';
-      setExtraSuggestions(s => [{
-        tone: 'neutral',
-        text: isSchedule
-          ? `handoff queued · ${String(data.logId || 'preview').slice(0, 8)}`
-          : `manual export logged · ${String(data.logId || 'preview').slice(0, 8)}${detail}`,
-      }, ...s]);
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      setExtraSuggestions(s => [{ tone: 'danger', text: `handoff 실패 — ${msg}` }, ...s]);
-    } finally {
-      setPendingSend(null);
-    }
+      const refreshed = await refreshContentLedger();
+      if (!publicationIsVerified(refreshed, publicationAttempt.current)) throw new Error("발행 기록을 다시 확인하지 못했습니다. 같은 기록으로 재시도해 주세요.");
+      setItemStatus("published"); setVariantStatus("published");
+      publicationAttempt.current = null;
+      setPublicationOpen(false);
+      setPublicationMessage("운영자 확인으로 발행을 기록했습니다.");
+    } catch (error) { setPublicationMessage(error.message); }
+    finally { setPendingSend(null); }
   }
 
   const handoffLogs = React.useMemo(() => {
@@ -554,14 +469,14 @@ export function Studio({ workspace }) {
   const wordCount = body.split(/\s+/).filter(Boolean).length;
   const readingTime = Math.max(1, Math.round(wordCount / 180));
   const saveLabel = saveState === "saving"
-    ? "saving…"
+    ? "저장 중…"
     : saveState === "error"
-    ? (localSavedAt ? `local saved · ${formatTime(new Date(localSavedAt))}` : "save failed")
+    ? "서버 저장 실패 · 입력 유지됨"
     : lastSavedAt
-    ? `cloud saved · ${formatTime(new Date(lastSavedAt))}`
+    ? `저장됨 · ${formatTime(new Date(lastSavedAt))}`
     : localSavedAt
-    ? `local mirror · ${formatTime(new Date(localSavedAt))}`
-    : mode === 'blog'
+    ? `브라우저 임시 보관 · ${formatTime(new Date(localSavedAt))}`
+    : mode !== 'carousel'
     ? `${wordCount} words · ${readingTime}min read`
     : `${slides.length} slides · Google Drive export`;
 
@@ -569,22 +484,24 @@ export function Studio({ workspace }) {
     if (from === to) return;
     setSlides(s => { const n = s.slice(); const [m] = n.splice(from, 1); n.splice(to, 0, m); return n; });
     setActiveSlide(to);
-    setDirty(true);
+    markDirty();
   };
   const addSlide = () => {
     setSlides(s => [...s, { id: 'new-' + Date.now(), bg: SLIDE_PALETTE.seed, title: 'New slide', sub: '' }]);
-    setDirty(true);
+    markDirty();
   };
   const updateSlide = (i, patch) => {
     setSlides(s => s.map((x, j) => j === i ? { ...x, ...patch } : x));
-    setDirty(true);
+    markDirty();
   };
   const removeSlide = (i) => {
+    if (slides.length < 2) return;
     setSlides(s => s.filter((_, j) => j !== i));
-    setDirty(true);
+    setActiveSlide((current) => Math.min(current, slides.length - 2));
+    markDirty();
   };
   const applyToolbarAction = (tool) => {
-    if (!tool) return;
+    if (!tool || unsupportedType || pendingSend) return;
     if (tool === 'ai') {
       setExtraSuggestions(s => [{ tone: 'neutral', text: 'AI 제안 생성은 아직 실행 경로에 연결되지 않았습니다.' }, ...s]);
       return;
@@ -598,7 +515,7 @@ export function Studio({ workspace }) {
       image: '\n![설명](image-url)\n',
     };
     setBody(prev => `${prev}${snippets[tool] || ''}`);
-    setDirty(true);
+    markDirty();
   };
 
   const cur = slides[activeSlide] || slides[0];
@@ -610,7 +527,7 @@ export function Studio({ workspace }) {
 
   return (
     <div className="hub-studio-shell" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', height: '100%', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="hub-studio-main" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {missingItemId && (
           <div role="status" style={{
             padding: '8px 20px', borderBottom: '1px solid var(--line-soft)',
@@ -619,7 +536,7 @@ export function Studio({ workspace }) {
           }}>
             <Iconed name="search" size={13} style={{ color: 'var(--fg-dim)', flexShrink: 0 }} />
             <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              요청한 콘텐츠(<span className="mono">{missingItemId}</span>)를 원장에서 찾지 못했습니다 — 새 초안으로 시작합니다.
+              요청한 콘텐츠(<span className="mono">{missingItemId}</span>)를 원장에서 찾지 못했습니다. 목록에서 다시 열어 주세요.
             </span>
             <button
               type="button"
@@ -631,16 +548,16 @@ export function Studio({ workspace }) {
             </button>
           </div>
         )}
-        <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <div className="hub-studio-toolbar" style={{ padding: '10px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           {/* 페이지 타이틀 계약(§11): 브레드크럼만으로 대체 금지 — 에디터라도 h2 하나는 가진다. */}
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500, whiteSpace: 'nowrap' }}>스튜디오</h2>
           <SegmentedControl
-            options={[{ key: 'blog', label: 'Blog / Insight' }, { key: 'carousel', label: 'Card News' }]}
+            options={(loadedVariantType || saveState === "saving" || saveAttempt.current) ? [{ key: mode, label: unsupportedType ? `${loadedVariantType} · 읽기 전용` : mode === 'threads' ? 'Threads' : mode === 'blog' ? 'Blog / Insight' : 'Card News' }] : [{ key: 'threads', label: 'Threads' }, { key: 'blog', label: 'Blog / Insight' }, { key: 'carousel', label: 'Card News' }]}
             value={mode}
-            onChange={(k) => { setMode(k); setDirty(true); }}
+            onChange={(k) => { setMode(k); markDirty(); }}
           />
           {/* Draft는 라이프사이클 단계 — 경고색이 아니라 중립 (§5.2). */}
-          <Badge tone="neutral" size="xs">Draft</Badge>
+          <Badge tone="neutral" size="xs">{itemStatus === "published" ? "발행 기록 있음" : "원고"}</Badge>
           {ws && (
             <span
               title={`${ws.label} 워크스페이스 스코프`}
@@ -662,56 +579,33 @@ export function Studio({ workspace }) {
               {ws.label}
             </span>
           )}
-          <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
-            {mode === 'blog' ? <>Web article · <span className="mono">{contentId ? contentId.slice(0, 8) : 'LOCAL'}</span></> : <>Card News · <span className="mono">{variantId ? variantId.slice(0, 8) : 'LOCAL'}</span> · {slides.length} slides</>}
-          </span>
+
           <div style={{ flex: 1 }} />
           <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>
             {lastSentAt
               ? `handoff · ${formatTime(lastSentAt)}`
               : saveLabel}
           </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            <IconButton
-              icon="upload"
-              tooltip={autoSave ? "Supabase autosave on" : "Supabase autosave off — 클릭해서 켜기"}
-              onClick={() => setAutoSave(v => !v)}
-              style={{ color: autoSave ? 'var(--moon-200)' : 'var(--fg-faint)' }}
-            />
-            {!autoSave && <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-muted)' }}>OFF</span>}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            <IconButton
-              icon="folder"
-              tooltip={localMirror ? "Browser mirror on" : "Browser mirror off — 클릭해서 켜기"}
-              onClick={() => setLocalMirror(v => !v)}
-              style={{ color: localMirror ? 'var(--moon-200)' : 'var(--fg-faint)' }}
-            />
-            {!localMirror && <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-muted)' }}>OFF</span>}
-          </div>
-          <IconButton
-            icon="check"
-            tooltip="Save now"
-            onClick={() => saveDraft("manual")}
-            style={{ color: saveState === 'error' ? 'var(--danger)' : 'var(--fg-muted)' }}
-          />
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => recordHandoff('schedule')}
-          >
-            {pendingSend === 'schedule' ? 'Queuing…' : 'Schedule'}
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            icon="send"
-            onClick={() => recordHandoff('publish')}
-          >
-            {pendingSend === 'publish' ? 'Logging…' : 'Publish'}
-          </Button>
+          <Button variant="outline" size="sm" disabled={Boolean(unsupportedType) || saveState === "saving" || Boolean(missingItemId)} onClick={() => saveDraft("manual")}>{saveState === "saving" ? "저장 중…" : "원고 저장"}</Button>
+          <Button variant="secondary" size="sm" onClick={copyDraft}>원고 복사</Button>
+          <Button variant="primary" size="sm" disabled={Boolean(unsupportedType) || Boolean(missingItemId) || saveState === "saving"} onClick={() => setPublicationOpen((open) => !open)}>발행 기록</Button>
         </div>
 
+        {publicationMessage && <div role="status" style={{ padding: '10px 20px', fontSize: 12, color: 'var(--fg-muted)' }}>{publicationMessage}</div>}
+        {publicationOpen && <form onSubmit={recordPublication} style={{ padding: 20, display: 'grid', gap: 12, borderBottom: '1px solid var(--line-soft)' }}>
+          <div style={{ fontSize: 13 }}>외부 채널에 직접 게시한 글의 주소와 발행일을 남깁니다.</div>
+          <TextField label="발행 URL" type="url" required value={publicationUrl} onChange={(event) => setPublicationUrl(event.target.value)} disabled={Boolean(pendingSend) || Boolean(publicationAttempt.current)} placeholder="https://" />
+          <TextField label="발행 일시" type="datetime-local" required value={publicationDate} onChange={(event) => setPublicationDate(event.target.value)} disabled={Boolean(pendingSend) || Boolean(publicationAttempt.current)} />
+          <Button type="submit" variant="primary" disabled={Boolean(pendingSend)}>{pendingSend ? "기록 중…" : publicationAttempt.current ? "같은 기록으로 재시도" : "직접 발행했음을 확인하고 기록"}</Button>
+        </form>}
+        {(sourceIdea || sourceUrl) && <details style={{ padding: '10px 20px', fontSize: 12, color: 'var(--fg-muted)' }}><summary>원본 소재 보기</summary><p style={{ whiteSpace: 'pre-wrap' }}>{sourceIdea}</p>{sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">참고 링크 열기</a>}</details>}
+        {mode === 'threads' && <div className="scroll-y" style={{ flex: 1, padding: '28px 20px' }}>
+          <div style={{ maxWidth: 680, margin: '0 auto', display: 'grid', gap: 18 }}>
+            <TextField label="제목 (내부 정리용)" disabled={Boolean(pendingSend)} value={title} onChange={(event) => { setTitle(event.target.value); markDirty(); }} placeholder="이번에 말할 한 가지" />
+            <TextAreaField label="Threads 원고" disabled={Boolean(pendingSend)} value={body} onChange={(event) => { setBody(event.target.value); markDirty(); }} rows={15} placeholder="첫 문장부터 적어보세요." style={{ fontSize: 16, lineHeight: 1.75, minHeight: 300 }} />
+            <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{body.length}자 · 원고를 복사해 게시한 후 발행 기록을 남기세요.</div>
+          </div>
+        </div>}
         {mode === 'blog' && (
           <>
             <div style={{ padding: '8px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', gap: 4, flexShrink: 0 }}>
@@ -719,7 +613,7 @@ export function Studio({ workspace }) {
                 { i: 'sparkle', t: 'AI', action: 'ai' }, { t: '|' }, { l: 'H1', action: 'h1' }, { l: 'H2', action: 'h2' }, { l: 'B', action: 'bold', style: { fontWeight: 700 } },
                 { l: 'i', action: 'italic', style: { fontStyle: 'italic' } }, { t: '|' }, { i: 'link', action: 'link' }, { i: 'upload', t: 'Image', action: 'image' },
               ].map((b, i) => b.t === '|' ? <div key={i} style={{ width: 1, background: 'var(--line-soft)', margin: '0 2px' }} /> : (
-                <button key={i} onClick={() => applyToolbarAction(b.action)} style={{ height: 26, padding: '0 9px', borderRadius: 4, fontSize: 11.5, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 5, ...(b.style || {}) }}>
+                <button key={i} disabled={Boolean(unsupportedType) || Boolean(pendingSend)} onClick={() => applyToolbarAction(b.action)} style={{ height: 26, padding: '0 9px', borderRadius: 4, fontSize: 11.5, color: 'var(--fg-muted)', display: 'inline-flex', alignItems: 'center', gap: 5, ...(b.style || {}) }}>
                   {b.i && <Iconed name={b.i} size={12} />}
                   {b.l && <span>{b.l}</span>}
                   {b.t && <span>{b.t}</span>}
@@ -729,12 +623,12 @@ export function Studio({ workspace }) {
             <div className="scroll-y" style={{ flex: 1, padding: '40px 20px' }}>
               <div style={{ maxWidth: 680, margin: '0 auto' }}>
                 {/* 에디터 캔버스 예외: 타이틀·본문은 캐럿이 포커스 표식 (my-work.jsx:842 패턴) — outline 제거 유지 */}
-                <input value={title} onChange={e => { setTitle(e.target.value); setDirty(true); }} style={{
+                <input aria-label="원고 제목" readOnly={Boolean(unsupportedType) || Boolean(pendingSend)} value={title} onChange={e => { setTitle(e.target.value); markDirty(); }} style={{
                   width: '100%', background: 'transparent', border: 'none', outline: 'none',
                   color: 'var(--fg)', fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 4,
                 }} />
-                <div style={{ fontSize: 13, color: 'var(--fg-faint)', marginBottom: 28 }}>By 문준혁 · Web article preview 우선 · n8n handoff 대기</div>
-                <textarea value={body} onChange={e => { setBody(e.target.value); setDirty(true); }} style={{
+                <div style={{ fontSize: 13, color: 'var(--fg-faint)', marginBottom: 28 }}>웹 원고 · 저장 후 복사해 직접 게시할 수 있습니다</div>
+                <textarea aria-label="원고 본문" readOnly={Boolean(unsupportedType) || Boolean(pendingSend)} value={body} onChange={e => { setBody(e.target.value); markDirty(); }} style={{
                   width: '100%', minHeight: 420, background: 'transparent', border: 'none', outline: 'none', resize: 'none',
                   color: 'var(--fg)', fontSize: 15, lineHeight: 1.7, fontFamily: 'var(--font-sans)', letterSpacing: '-0.005em',
                 }} />
@@ -862,13 +756,13 @@ export function Studio({ workspace }) {
         )}
       </div>
 
-      <aside style={{ borderLeft: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <aside className="hub-studio-context" style={{ borderLeft: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <Iconed name="sparkle" size={14} style={{ color: 'var(--moon-300)' }} />
-          <div style={{ fontSize: 12.5, fontWeight: 500, flex: 1 }}>Writer · Studio Agent</div>
+          <div style={{ fontSize: 12.5, fontWeight: 500, flex: 1 }}>브랜드 기준 · 기록</div>
         </div>
         <div className="scroll-y" style={{ flex: 1, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em' }}>Brand</div>
+          <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em' }}>브랜드 기준</div>
           <div style={{
             padding: 10,
             background: 'var(--surface-2)',
@@ -882,14 +776,15 @@ export function Studio({ workspace }) {
               {brands.length === 0 && (
                 <Badge tone="neutral" variant="outline" size="xs">Workspace default</Badge>
               )}
-              {brands.map((brand) => {
-                const active = selectedBrand?.id === brand.id;
+              {[{ id: "", name: "미지정", glyph: "—" }, ...brands].map((brand) => {
+                const active = selectedBrandId === brand.id;
                 return (
                   <button
                     key={brand.id}
+                    disabled={Boolean(unsupportedType) || Boolean(pendingSend)}
                     onClick={() => {
                       setSelectedBrandId(brand.id);
-                      setDirty(true);
+                      markDirty();
                     }}
                     style={{
                       minHeight: 28,
@@ -948,7 +843,7 @@ export function Studio({ workspace }) {
             )}
           </div>
 
-          <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em' }}>Suggestions</div>
+          <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em' }}>저장·작업 안내</div>
           {suggestions.map((s, i) => (
             <div key={i} style={{
               padding: '10px 11px', background: 'var(--surface-2)',
@@ -958,25 +853,6 @@ export function Studio({ workspace }) {
               <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}><Dot tone={s.tone} /></div>
               {s.text}
               <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={() => {
-                    if (mode === 'blog') {
-                      setBody(prev => `${prev}\n\n> 적용한 제안: ${s.text}`);
-                    } else {
-                      updateSlide(activeSlide, { sub: s.text.slice(0, 64) });
-                    }
-                    setDirty(true);
-                    if (typeof s.extraIndex === 'number') {
-                      setExtraSuggestions(prev => prev.filter((_, idx) => idx !== s.extraIndex));
-                    } else {
-                      setDismissedSuggestionKeys(prev => new Set([...prev, s.key]));
-                    }
-                  }}
-                >
-                  Apply
-                </Button>
                 <Button
                   variant="ghost"
                   size="xs"
@@ -988,12 +864,12 @@ export function Studio({ workspace }) {
                     }
                   }}
                 >
-                  Skip
+                  닫기
                 </Button>
               </div>
             </div>
           ))}
-          <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em', marginTop: 8 }}>Handoff history</div>
+          <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em', marginTop: 8 }}>발행·전달 기록</div>
           <div style={{
             padding: 10,
             background: 'var(--surface-2)',
@@ -1005,7 +881,7 @@ export function Studio({ workspace }) {
           }}>
             {handoffLogs.length === 0 && (
               <div style={{ fontSize: 12, color: 'var(--fg-faint)', lineHeight: 1.45 }}>
-                Schedule 또는 Publish를 누르면 Supabase publish_logs에 기록됩니다.
+                외부 게시를 마친 뒤 발행 URL을 기록하면 여기에 표시됩니다.
               </div>
             )}
             {handoffLogs.map((log) => (
@@ -1018,7 +894,7 @@ export function Studio({ workspace }) {
                     </span>
                   </div>
                   <div style={{ marginTop: 3, fontSize: 11.5, color: 'var(--fg-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {log.exportProfile || log.targetChannel || 'content handoff'}
+                    {log.targetUrl ? <a href={log.targetUrl} target="_blank" rel="noreferrer">게시물 열기</a> : log.exportProfile || log.targetChannel || '전달 기록'}
                   </div>
                 </div>
                 <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{log.when}</span>
@@ -1028,7 +904,7 @@ export function Studio({ workspace }) {
           <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--fg-faint)', letterSpacing: '0.1em', marginTop: 8 }}>Settings</div>
           <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line-soft)' }}>
-              <span>Channel</span><span style={{ color: 'var(--fg)' }}>{mode === 'blog' ? 'Web handoff' : 'Instagram handoff'}</span>
+              <span>Channel</span><span style={{ color: 'var(--fg)' }}>{mode === 'threads' ? 'Threads · 수동 발행' : mode === 'blog' ? 'Web · 수동 발행' : 'Instagram · 수동 발행'}</span>
             </div>
             {/* Audience·Schedule은 아직 어느 원장에도 배선돼 있지 않다 — 지어낸 값("2,143
                 subscribers"·"오늘 18:00")을 라이브 Brand 옆에 실데이터처럼 두지 않는다(7차 정체성). */}
@@ -1057,198 +933,50 @@ export function Queue({ workspace }) {
   const [tab, setTab] = React.useState('all');
   const [brandFilter, setBrandFilter] = React.useState(() => searchParams.get('brand') || 'all');
   const ledger = useContentLedger();
-  // Scope the brand filter pills + queue items to this workspace (pass-through when unscoped).
   const brands = ws ? filterBrandsByWorkspace(ledger.brands || [], workspace) : (ledger.brands || []);
-  const queueSource = Array.isArray(ledger.queue) ? ledger.queue : [];
-  const queue = filterContentByWorkspace(queueSource, workspace);
-  // 큐 lifecycle은 카테고리 — semantic 색 금지(§5.2/§5.3). 현재 단계(Ready/Review)만
-  // Moonstone으로 살짝 밝히고 나머지는 라벨이 전달한다.
-  const statusTone = {
-    Inbox: 'neutral',
-    Drafting: 'neutral',
-    Ready: 'moon',
-    'Handed off': 'neutral',
-    Watch: 'neutral',
-    Archived: 'neutral',
-    Draft: 'neutral',
-    Scheduled: 'neutral',
-    Review: 'neutral',
-    Idea: 'neutral',
-    Outline: 'neutral',
-    Published: 'neutral',
-  };
-  const tabs = [
-    { key: 'all', label: 'All', count: queue.length },
-    { key: 'idea', label: 'Inbox', count: queue.filter(c => statusKeyOf(c) === 'idea').length },
-    { key: 'draft', label: 'Drafting', count: queue.filter(c => statusKeyOf(c) === 'draft').length },
-    { key: 'review', label: 'Ready', count: queue.filter(c => statusKeyOf(c) === 'review').length },
-    { key: 'scheduled', label: 'Handed off', count: queue.filter(c => statusKeyOf(c) === 'scheduled').length },
-    { key: 'published', label: 'Watch', count: queue.filter(c => statusKeyOf(c) === 'published').length },
-  ];
-  const filteredByBrand = brandFilter === 'all'
-    ? queue
-    : queue.filter(c => c.brandId === brandFilter || c.brandKey === brandFilter);
-  const cadence = ledger.cadence;
-  const visibleQueueBase = tab === 'all'
-    ? filteredByBrand
-    : filteredByBrand.filter(c => statusKeyOf(c) === tab);
-  const visibleQueue = tab === 'idea'
-    ? [...visibleQueueBase].sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0))
-    : visibleQueueBase;
-  const activeLabel = tabs.find(t => t.key === tab)?.label || 'All';
+  const queue = filterContentByWorkspace(ledger.queue || [], workspace);
+  const filteredByBrand = contentQueueScope(queue, brandFilter);
+  const tabs = contentQueueTabs(filteredByBrand);
+  const visibleQueue = tab === 'all' ? filteredByBrand : filteredByBrand.filter((item) => statusKeyOf(item) === tab);
+  const activeLabel = tabs.find((entry) => entry.key === tab)?.label || '전체';
+  const selectedBrand = brands.find((brand) => brand.id === brandFilter || brand.key === brandFilter);
   const openStudio = React.useCallback((id) => {
     const brandParam = brandFilter !== 'all' ? `&brand=${encodeURIComponent(brandFilter)}` : '';
     router.push(`/dashboard/content/studio${id ? `?item=${encodeURIComponent(id)}` : '?new=draft'}${id ? '' : brandParam}`);
   }, [brandFilter, router]);
   const createDraft = React.useCallback(() => openStudio(), [openStudio]);
   usePageCreateHotkey(createDraft);
+  React.useEffect(() => { setBrandFilter(searchParams.get('brand') || 'all'); }, [searchParams]);
   return (
     <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Publishing queue</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            {visibleQueue.length}{tab !== 'all' ? ` of ${queue.length}` : ''} items in pipeline
-            <SyncBadge state={ledger.syncState} />
-          </div>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>콘텐츠</h2>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>소재를 담고, 원고를 이어 쓰고, 발행 기록을 남깁니다. <SyncBadge state={ledger.syncState} /></div>
         </div>
         <div style={{ flex: 1 }} />
-        <Tabs className="hub-toolbar" tabs={tabs} active={tab} onChange={setTab} ariaLabel="Publishing queue filters" style={{ borderBottom: 'none' }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createDraft}>Draft <Kbd>N</Kbd></Button>
+        <Button variant="outline" size="sm" icon="plus" onClick={createDraft}>바로 원고 쓰기 <Kbd>N</Kbd></Button>
       </div>
-
-      {cadence && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
-          padding: '12px 16px', border: '1px solid var(--line-soft)',
-          borderRadius: 'var(--r-lg)', background: 'var(--surface)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>이번 주 발행</span>
-            <span className="stat" style={{ fontSize: 20, fontWeight: 600, color: 'var(--fg)' }}>
-              {cadence.published}<span style={{ color: 'var(--fg-faint)', fontWeight: 400 }}>/{cadence.goal}</span>
-            </span>
-            <Badge tone="neutral" size="xs">
-              {cadence.behind ? `${cadence.remaining}건 남음` : '목표 달성'}
-            </Badge>
-          </div>
-          <div style={{ width: 1, height: 24, background: 'var(--line-soft)' }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>아이디어 큐</span>
-            <span className="mono" style={{ fontSize: 15, color: 'var(--fg)' }}>{cadence.queueDepth}</span>
-            {cadence.queueDepth < 10 && <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>· 10개 이상 권장</span>}
-          </div>
-          <div style={{ flex: 1 }} />
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 28 }} aria-hidden="true">
-            {(cadence.recentWeeks || []).map((w) => (
-              <div
-                key={w.week}
-                title={`${w.week} · ${w.count}건`}
-                style={{
-                  width: 18,
-                  height: Math.max(3, Math.min(28, (w.count / Math.max(cadence.goal, 1)) * 28)),
-                  borderRadius: 3,
-                  background: w.current ? 'var(--moon-300)' : 'var(--surface-3)',
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {brands.length > 0 && (
-        <div className="hub-toolbar" style={{ display: 'flex', gap: 6, alignItems: 'center', overflowX: 'auto', paddingBottom: 2 }}>
-          {[{ id: 'all', key: 'all', name: 'All brands', glyph: '◐', tone: 'moon' }, ...brands].map((brand) => {
-            const active = brandFilter === brand.id || brandFilter === brand.key;
-            const count = brand.id === 'all'
-              ? queue.length
-              : queue.filter((item) => item.brandId === brand.id || item.brandKey === brand.key).length;
-            return (
-              <button
-                key={brand.id}
-                onClick={() => setBrandFilter(brand.id)}
-                style={{
-                  height: 32,
-                  padding: '0 10px',
-                  borderRadius: 'var(--r-sm)',
-                  border: active ? '1px solid var(--line-strong)' : '1px solid var(--line-soft)',
-                  background: active ? 'var(--surface-3)' : 'var(--surface)',
-                  color: active ? 'var(--fg)' : 'var(--fg-muted)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 7,
-                  fontSize: 12,
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                }}
-              >
-                <span className="mono" style={{ color: active ? 'var(--moon-200)' : 'var(--fg-faint)' }}>{brand.glyph}</span>
-                {brand.name}
-                <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{count}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      <Card pad={false} className="hub-table-card">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 110px 100px 120px 130px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          <span>Title</span><span>Kind</span><span>Channel</span><span>Brand</span><span>Lane</span><span>When</span><span style={{ textAlign: 'right' }}>Author</span>
-        </div>
-        {visibleQueue.length === 0 && ws && (
-          <EmptyState
-            icon="queue"
-            title={`${ws.label} — 아직 연결된 콘텐츠가 없습니다.`}
-            description="콘텐츠에 워크스페이스 태그가 붙으면 여기에 모입니다."
-            action={<Button variant="primary" size="sm" icon="plus" onClick={createDraft}>Draft <Kbd>N</Kbd></Button>}
-          />
-        )}
-        {visibleQueue.length === 0 && !ws && (
-          <EmptyState
-            icon="queue"
-            title={tab === 'all' ? '발행 큐가 비어 있습니다' : `${activeLabel} 항목이 없습니다`}
-            description={tab === 'all'
-              ? (ledger.syncState === 'error'
-                  ? '콘텐츠 원장을 읽지 못했습니다 — 비어 보여도 실제 콘텐츠가 있을 수 있습니다. 새로고침으로 재시도하세요.'
-                  : ledger.syncState === 'live' ? 'Supabase content_items/content_variants 기록에 표시할 콘텐츠가 없습니다.' : '초안을 만들면 큐와 파이프라인에 표시됩니다.')
-              : `${activeLabel} 상태의 콘텐츠가 생기면 이 필터에 표시됩니다.`}
-            action={<Button variant="primary" size="sm" icon="plus" onClick={createDraft}>Draft <Kbd>N</Kbd></Button>}
-          />
-        )}
-        {visibleQueue.map((c, i) => (
-          <div key={c.id} className="hub-row" style={{
-            display: 'grid', gridTemplateColumns: '1fr 110px 110px 100px 120px 130px 80px',
-            padding: '12px 16px', alignItems: 'center',
-            borderBottom: i < visibleQueue.length - 1 ? '1px solid var(--line-soft)' : 'none',
-            cursor: 'pointer',
-          }}
-            role="button"
-            tabIndex={0}
-            onClick={() => openStudio(c.id)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                openStudio(c.id);
-              }
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-              <Iconed name={c.kind === 'Newsletter' ? 'email' : c.kind === 'Blog' ? 'content' : c.kind === 'Reel' ? 'play' : 'send'} size={13} style={{ color: 'var(--fg-faint)' }} />
-              {c.rank != null && (
-                <span className="mono" title="아이디어 랭크" style={{ fontSize: 10.5, color: 'var(--moon-300)', flexShrink: 0 }}>{Math.round(c.rank)}</span>
-              )}
-              <span style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.title}</span>
-            </div>
-            <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{c.kind}</span>
-            <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{c.channel}</span>
-            <span>
-              <Badge tone={c.brandTone || 'neutral'} variant="outline" size="xs">{c.brandGlyph || '•'} {c.brandName || '—'}</Badge>
-            </span>
-            <span><Badge tone={statusTone[c.statusLabel || c.status] || 'neutral'} size="xs">{c.statusLabel || c.status}</Badge></span>
-            <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{c.when}</span>
-            <span style={{ textAlign: 'right', fontSize: 12, color: 'var(--fg-muted)' }}>{c.author}</span>
-          </div>
-        ))}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-muted)' }}>
+          브랜드
+          <select aria-label="콘텐츠 브랜드 필터" value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)} style={{ minHeight: 40, maxWidth: '100%', background: 'var(--surface-2)', color: 'var(--fg)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: '6px 10px' }}>
+            <option value="all">전체 브랜드 · 미지정 포함</option>
+            {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
+          </select>
+        </label>
+        <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{selectedBrand?.name || '현재 범위'} · {filteredByBrand.length}건 중 {visibleQueue.length}건</span>
+      </div>
+      <Tabs className="hub-toolbar" tabs={tabs} active={tab} onChange={setTab} ariaLabel="콘텐츠 단계" />
+      {(tab === 'all' || tab === 'idea') && <ContentIdeaCapture brands={brands} initialBrand={selectedBrand?.id || ''} orgScope={workspace === 'classin' ? 'company' : 'personal'} fixedScope={Boolean(ws)} onSaved={() => setTab('idea')} />}
+      <Card pad={false}>
+        {visibleQueue.length === 0 && <EmptyState icon="queue" title={`${activeLabel}에 표시할 콘텐츠가 없습니다`} description={ledger.syncState === 'error' || ledger.syncState === 'partial' ? '원장 읽기가 완료되지 않았습니다. 실제 콘텐츠가 비어 있다는 뜻은 아닙니다.' : ledger.syncState === 'preview' ? '저장소가 연결되면 저장한 소재와 원고가 여기에 표시됩니다.' : '떠오른 문장이나 링크를 소재함에 담아보세요.'} />}
+        {visibleQueue.map((item, index) => <div key={item.id} className="hub-row hub-content-queue-row" role="button" tabIndex={0} onClick={() => openStudio(item.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openStudio(item.id); } }} style={{ display: 'grid', padding: '16px', alignItems: 'center', gap: 12, cursor: 'pointer', borderBottom: index < visibleQueue.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+          <div style={{ minWidth: 0 }}><div style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div><div style={{ marginTop: 5, fontSize: 12, color: 'var(--fg-muted)' }}>{item.channel} · {item.brandName === 'No brand' ? '브랜드 미지정' : item.brandName || '브랜드 미지정'}</div></div>
+          <Badge tone="neutral" size="xs">{tabs.find((entry) => entry.key === statusKeyOf(item))?.label || item.status}</Badge>
+          <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{item.when}</span>
+          <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{statusKeyOf(item) === 'idea' ? '원고 시작 →' : '열기 →'}</span>
+        </div>)}
       </Card>
     </div>
   );

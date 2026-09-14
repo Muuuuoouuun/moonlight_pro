@@ -20,43 +20,34 @@ const primitivesSource = await readFile(
 test("project create drawer composes the shared shell around the approved core fields", () => {
   assert.match(drawerSource, /import\s*\{[^}]*Drawer[^}]*\}\s*from\s*["']\.\.\/hub-primitives["']/);
   assert.match(drawerSource, /<Drawer[\s\S]*title=["']프로젝트 만들기["']/);
-  assert.match(drawerSource, /큰 결과와 첫 행동부터 기록하세요\./);
+  assert.match(drawerSource, /이름만 정하고 시작하세요\./);
   assert.match(drawerSource, /프로젝트명\s*\*/);
   assert.match(drawerSource, /예: 갈무리 첫결제 SW/);
-  assert.match(drawerSource, /목표 결과/);
-  assert.match(drawerSource, /완료됐을 때 어떤 상태가 되어야 하나요\?/);
   assert.match(drawerSource, /다음 행동/);
-  assert.match(drawerSource, /가장 먼저 할 한 가지/);
-  assert.match(drawerSource, /업무 분야\s*\*/);
-  assert.doesNotMatch(drawerSource, /진행률/);
+  assert.doesNotMatch(drawerSource, /진행률|<textarea|type="date"/);
 });
 
-test("project create drawer keeps optional context in an accessible collapsed section", () => {
-  assert.match(drawerSource, /상세 설정/);
-  assert.match(drawerSource, /aria-expanded=\{advancedOpen\}/);
-  assert.match(drawerSource, /브랜드/);
-  assert.match(drawerSource, /관련 리드\/고객/);
-  assert.match(drawerSource, /상태/);
-  assert.match(drawerSource, /우선순위/);
-  assert.match(drawerSource, /기한/);
-  assert.match(drawerSource, /entities\.map/);
+test("project create drawer summarizes classification while later settings stay editable", () => {
+  assert.match(drawerSource, /분류 변경/);
+  assert.match(drawerSource, /aria-expanded=\{classificationOpen\}/);
+  assert.match(drawerSource, /계획·검증/);
+  assert.match(projectsSource, /key: 'areaId'/);
+  assert.match(projectsSource, /key: 'entityKey'/);
+  assert.match(projectsSource, /key: 'summary'/);
 });
 
 test("project create drawer keeps the approved responsive width and touch targets", () => {
   assert.match(drawerSource, /width=["']min\(420px,\s*100vw\)["']/);
-  assert.match(drawerSource, /className=["']project-create-advanced-grid["']/);
-  assert.match(drawerSource, /@media\s*\(min-width:\s*640px\)[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
   assert.ok(
     (drawerSource.match(/<Button[\s\S]{0,220}style=\{\{\s*minHeight:\s*44\s*\}\}/g) || []).length >= 4,
     "every create footer and conflict action must keep a 44px touch target",
   );
 });
 
-test("project create drawer discloses unavailable Area and entity catalogs", () => {
+test("project create drawer discloses unavailable Area catalogs", () => {
   assert.match(drawerSource, /failedSources\s*=\s*\[\]/);
   assert.match(drawerSource, /failedSources\.includes\(["']areas["']\)/);
   assert.match(drawerSource, /업무 분야 목록을 불러오지 못했습니다\. 새 프로젝트 만들기를 잠시 사용할 수 없습니다\./);
-  assert.match(drawerSource, /리드·고객 목록 일부를 불러오지 못했습니다\./);
   assert.match(projectsSource, /failedSources=\{ledger\.failedSources\}/);
 });
 
@@ -70,7 +61,6 @@ test("project create drawer validates inline, announces state, and gates duplica
   assert.match(drawerSource, /프로젝트 만들기/);
   assert.match(drawerSource, /projectCreateFeedback/);
   assert.match(drawerSource, /["']degraded["']/);
-  assert.match(drawerSource, /<Iconed\s+name=["']chevronR["']/);
   assert.doesNotMatch(drawerSource, />›</);
 });
 

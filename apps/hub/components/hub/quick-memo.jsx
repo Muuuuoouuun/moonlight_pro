@@ -7,6 +7,8 @@ import { pushEscLayer, popEscLayer, isTopEscLayer } from "./esc-layers";
 import { MAX_MEMO_CHARS, memoCapturePayload, newMemoDraft } from "@/lib/memo-capture";
 import { quickMemoDraftKey, readQuickMemoDraft, writeQuickMemoDraft } from "@/lib/quick-memo";
 import { MEMO_SAVED_EVENT, memoHref, saveMemoAndVerify } from "@/lib/memo-save";
+import { contentIdeaHref, prepareMemoIdea, saveMemoAsIdeaAndVerify } from "@/lib/quick-memo-content";
+import { notifyContentLedgerChanged } from "@/lib/content-ledger-cache";
 import styles from "./quick-memo.module.css";
 
 const FOCUSABLE = 'button:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href]';
@@ -18,6 +20,7 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
   const [error, setError] = React.useState("");
   const [storageError, setStorageError] = React.useState("");
   const [receipt, setReceipt] = React.useState(null);
+  const [ideaReceipt, setIdeaReceipt] = React.useState(null);
   const [toast, setToast] = React.useState(false);
   const [mobile, setMobile] = React.useState(false);
   const [otherDialog, setOtherDialog] = React.useState(false);
@@ -207,34 +210,43 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
       return;
     }
     const hadUncertainSave = Boolean(error);
-    current.current = { ...current.current, ...patch, id: crypto.randomUUID() };
+    current.current = { ...current.current, ...patch, id: crypto.randomUUID(), destination: undefined, ideaContentId: undefined, ideaVariantId: undefined };
     setDraft(current.current);
     setReceipt(null);
+    setIdeaReceipt(null);
     setError(hadUncertainSave ? "내용을 바꾸면 새 메모로 저장합니다. 이전 저장이 완료됐을 수 있으니 메모 목록을 확인하세요." : "");
     persist();
   }
 
-  async function save(event) {
+  async function save(event, destination = current.current?.destination) {
     event?.preventDefault();
     if (busyRef.current) return;
     let payload;
     try { payload = memoCapturePayload(current.current); }
     catch (failure) { setError(failure.message); return; }
+    if (destination === "idea") {
+      current.current = prepareMemoIdea(current.current);
+      setDraft(current.current);
+    }
     busyRef.current = true;
     setBusy(true);
     setError("");
     persist();
     const submittedRoute = routeRef.current;
     try {
-      const result = await saveMemoAndVerify(payload, fetchImpl);
+      const result = destination === "idea"
+        ? await saveMemoAsIdeaAndVerify(current.current, fetchImpl)
+        : await saveMemoAndVerify(payload, fetchImpl);
       if (!alive.current) return;
       current.current = newMemoDraft();
       setDraft(current.current);
       setReceipt(result.id);
+      setIdeaReceipt(result.contentId || null);
       setToast(true);
       // Only return focus if the user is still working in this panel.
       closeRef.current(submittedRoute === routeRef.current && panel.current?.contains(document.activeElement));
       window.dispatchEvent(new CustomEvent(MEMO_SAVED_EVENT, { detail: { id: result.id } }));
+      if (result.contentId) notifyContentLedgerChanged();
     } catch (failure) {
       if (alive.current) {
         setError(failure.message);
@@ -267,6 +279,12 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
     setToast(false);
     onNavigate(memoHref(receipt).slice(1));
   };
+  const openIdea = event => {
+    if (!onNavigate || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    setToast(false);
+    onNavigate(contentIdeaHref(ideaReceipt).slice(1));
+  };
   const launcherStatus = busy ? "저장 중" : error ? "저장 확인 필요" : draft?.body ? "작성 중" : "";
 
   return <div ref={root} className={styles.root} hidden={unavailable}>
@@ -278,14 +296,16 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
         <textarea ref={input} id="quick-memo-body" rows={5} value={draft.body} disabled={busy} onChange={event => update({ body: event.target.value })} placeholder="생각나는 대로 적어두세요." aria-describedby="quick-memo-status" />
         <div className={styles.actions}>
           <label><span className={styles.srOnly}>기록 범위</span><select aria-label="빠른 메모 기록 범위" value={draft.scope} disabled={busy} onChange={event => update({ scope: event.target.value })}><option value="personal">개인</option><option value="company">회사 업무</option></select></label>
-          <Button type="submit" variant="primary" disabled={busy || !draft.body.trim()}>{busy ? "저장 확인 중…" : "저장"}</Button>
+          <Button type="submit" variant="primary" disabled={busy || !draft.body.trim()}>{busy ? "저장 확인 중…" : draft.destination === "idea" ? "소재 보내기 재시도" : "저장"}</Button>
         </div>
+        {draft.destination !== "idea" ? <Button type="button" className={styles.sendIdea} disabled={busy || !draft.body.trim()} onClick={event => save(event, "idea")}>콘텐츠 소재로 보내기</Button> : null}
       </form>
+      <p className={styles.hint}>소재로 보내면 원문 메모를 저장하고 콘텐츠에 연결해요.</p>
       <p className={styles.hint}>Ctrl/⌘ + Enter로 저장 · Enter는 줄바꿈</p>
       <p id="quick-memo-status" className={styles.hint}>{storageError || "이 탭에 임시 보관 · 탭을 닫기 전에 저장하세요."}</p>
       {error ? <p className={styles.feedback} role="alert">{error} {receipt ? <a href={memoHref(receipt)} onClick={openSaved}>저장된 메모 확인</a> : null}</p> : null}
     </section> : null}
-    {toast && receipt ? <div className={styles.toast} role="status">메모를 저장했어요 <a href={memoHref(receipt)} onClick={openSaved}>열기</a></div> : null}
+    {toast && receipt ? <div className={styles.toast} role="status">{ideaReceipt ? "소재함에 연결했어요" : "메모를 저장했어요"} <a href={ideaReceipt ? contentIdeaHref(ideaReceipt) : memoHref(receipt)} onClick={ideaReceipt ? openIdea : openSaved}>열기</a></div> : null}
     {!shown ? <div ref={launchArea} className={styles.launchArea}>
       <button ref={opener} type="button" className={styles.launcher} onClick={launch} disabled={!draft} aria-label={`빠른 메모${launcherStatus ? ` · ${launcherStatus}` : ""}`} aria-haspopup="dialog" aria-expanded={false}>
         <span className={styles.launcherLabel} aria-hidden="true"><span>빠른 메모{launcherStatus ? <span className={styles.badge}>{launcherStatus}</span> : null}</span></span>

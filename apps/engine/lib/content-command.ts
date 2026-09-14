@@ -25,7 +25,7 @@ export type NormalizedContentCommand =
     }
   | {
       ok: true;
-      action: "handoff";
+      action: "handoff" | "record_publication";
       workspaceId: string;
       contentId: string | null;
       variantId: string;
@@ -45,6 +45,7 @@ export type NormalizedContentCommand =
   | { ok: false; reason: string };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const VARIANT_TYPES = new Set(["newsletter", "blog", "blog_insight", "card_news", "social_post", "x_thread", "reels_script", "landing_copy", "threads_post"]);
 
 function text(value: unknown, maxLength = 500) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
@@ -85,6 +86,9 @@ export function normalizeContentCommand(
     if (!validateWorkspaceRecord(itemRecord, workspaceId)) return { ok: false, reason: "item-workspace-mismatch" };
     if (!validateWorkspaceRecord(variantRecord, workspaceId)) return { ok: false, reason: "variant-workspace-mismatch" };
     if (uuid(variantRecord.content_id) !== contentId) return { ok: false, reason: "variant-content-mismatch" };
+    if (variantRecord.variant_type != null && !VARIANT_TYPES.has(String(variantRecord.variant_type))) return { ok: false, reason: "invalid-variant-type" };
+    const meta = record(itemRecord.meta);
+    if (meta?.source_note_id != null && !uuid(meta.source_note_id)) return { ok: false, reason: "invalid-source-note-id" };
 
     return { ok: true, action, workspaceId, contentId, variantId, itemRecord, variantRecord };
   }
@@ -98,11 +102,16 @@ export function normalizeContentCommand(
     if (!variantId) return { ok: false, reason: "invalid-variant-id" };
     if (!itemPatch) return { ok: false, reason: "missing-item-patch" };
     if (!variantPatch) return { ok: false, reason: "missing-variant-patch" };
+    if (variantPatch.variant_type != null && !VARIANT_TYPES.has(String(variantPatch.variant_type))) return { ok: false, reason: "invalid-variant-type" };
+    // IDs and workspace ownership cannot be moved by an edit.
+    if (["id", "workspace_id"].some((key) => key in itemPatch) || ["id", "workspace_id", "content_id"].some((key) => key in variantPatch)) {
+      return { ok: false, reason: "immutable-record-field" };
+    }
 
     return { ok: true, action, workspaceId, contentId, variantId, itemPatch, variantPatch };
   }
 
-  if (action === "handoff") {
+  if (action === "handoff" || action === "record_publication") {
     const logRecord = record(input.logRecord);
     if (!logRecord) return { ok: false, reason: "missing-log-record" };
     const assetRecord = input.assetRecord == null ? null : record(input.assetRecord);
@@ -114,6 +123,15 @@ export function normalizeContentCommand(
     if (!variantId) return { ok: false, reason: "invalid-variant-id" };
     if (!logId) return { ok: false, reason: "invalid-log-id" };
     if (!validateWorkspaceRecord(logRecord, workspaceId)) return { ok: false, reason: "log-workspace-mismatch" };
+    if (action === "record_publication") {
+      const payload = record(logRecord.payload);
+      let validUrl = false;
+      try { const url = new URL(String(logRecord.target_url)); validUrl = ["https:", "http:"].includes(url.protocol) && !url.username && !url.password; } catch { /* invalid URL */ }
+      const publishedAt = typeof logRecord.published_at === "string" ? Date.parse(logRecord.published_at) : NaN;
+      if (!contentId || !validUrl || !Number.isFinite(publishedAt) || publishedAt > Date.now() + 60000) return { ok: false, reason: "invalid-publication-record" };
+      if (logRecord.status !== "published" || logRecord.provider !== "manual" || payload?.event !== "operator_published" || payload?.provenance !== "operator_confirmed" || payload?.external_verified !== false) return { ok: false, reason: "invalid-publication-provenance" };
+      if (assetRecord) return { ok: false, reason: "publication-asset-not-supported" };
+    }
     if (assetRecord) {
       if (!assetId) return { ok: false, reason: "invalid-asset-id" };
       if (!validateWorkspaceRecord(assetRecord, workspaceId)) return { ok: false, reason: "asset-workspace-mismatch" };

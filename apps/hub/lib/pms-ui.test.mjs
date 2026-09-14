@@ -97,7 +97,7 @@ test("builds a typed project create payload without inventing progress", () => {
   assert.equal("progress" in payload, false);
 });
 
-test("selects only canonical project areas and resolves the immutable creation scope", () => {
+test("selects canonical project areas and resolves the immutable creation scope", () => {
   const areas = [
     { id: "legacy", slug: "legacy", canonical: false },
     { id: "sales", slug: "sales", canonical: true },
@@ -112,6 +112,42 @@ test("selects only canonical project areas and resolves the immutable creation s
     brandOrgScope: "classin",
     preferBrandScope: true,
   }), "classin");
+});
+
+test("name-only creation uses the general legacy area without inventing or changing ids", () => {
+  const areas = [
+    { id: "client", name: "Client Ops", canonical: false },
+    { id: "founder", name: "Founder Desk", canonical: false },
+    { id: "growth", name: "Growth Engine", canonical: false },
+  ];
+  const areaId = pmsUi.selectProjectAreaId(areas);
+  const draft = { ...pmsUi.buildProjectDraft({ areaId }), title: "새 프로젝트" };
+  assert.equal(areaId, "founder");
+  assert.deepEqual(pmsUi.validateProjectDraft(draft), {});
+  assert.equal(pmsUi.buildProjectCreatePayload(draft).areaId, "founder");
+  assert.deepEqual(areas.map(pmsUi.projectAreaLabel), ["고객 업무", "기획·운영", "마케팅·성장"]);
+  assert.equal(pmsUi.projectAreaLabel({ name: "사용자 분류" }), "사용자 분류");
+  assert.equal(pmsUi.selectProjectAreaId([]), null);
+  assert.equal(pmsUi.selectProjectAreaId([{ id: "a" }, { id: "b" }]), null);
+  assert.equal(pmsUi.selectProjectAreaId([...areas, { id: "personal", slug: "personal-projects", canonical: true }]), "personal");
+});
+
+test("post-create classification and customer settings survive a stale edit rebase", () => {
+  const source = { id: "project", name: "새 프로젝트", areaId: "founder", updatedAt: "old" };
+  const draft = { ...pmsUi.buildProjectEditDraft(source), areaId: "client", entityKey: "lead:lead-1" };
+  assert.deepEqual(pmsUi.buildProjectPatch(source, draft), {
+    id: "project", expectedUpdatedAt: "old", areaId: "client", entityRef: { type: "lead", id: "lead-1" },
+  });
+  const rebased = pmsUi.rebaseProjectEditState(source, draft, {
+    id: "project", area_id: "growth", lead_id: "lead-2", updated_at: "new",
+  });
+  assert.equal(rebased.source.areaId, "growth");
+  assert.equal(rebased.draft.areaId, "client");
+  assert.equal(rebased.draft.entityKey, "lead:lead-1");
+  assert.deepEqual(pmsUi.buildProjectPatch(rebased.source, rebased.draft), {
+    id: "project", expectedUpdatedAt: "new", areaId: "client", entityRef: { type: "lead", id: "lead-1" },
+  });
+  assert.equal(pmsUi.buildProjectPatch(rebased.source, { ...rebased.draft, entityKey: "" }).entityRef, null);
 });
 
 test("builds an edit draft from raw project fields and preserves its concurrency token", () => {

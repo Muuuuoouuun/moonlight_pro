@@ -8,6 +8,8 @@ export function quickMemoDraftKey(context) {
 export function readQuickMemoDraft(storage, key) {
   if (key === MEMO_DRAFT_KEY) return null;
   const draft = restoreMemoDraft(storage.getItem(key));
+  if (draft?.destination === "idea" &&
+    (!isCanonicalUuid(draft.ideaContentId) || !isCanonicalUuid(draft.ideaVariantId))) return null;
   return draft && isCanonicalUuid(draft.id) && draft.source.type === "manual" &&
     !draft.title && !draft.labels && !draft.body.includes("\0") ? draft : null;
 }

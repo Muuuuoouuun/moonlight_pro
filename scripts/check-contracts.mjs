@@ -255,17 +255,12 @@ assert(
 const contentLedger = readText("apps/hub/lib/repositories/content-ledger.js");
 const schema = readText("supabase/schema.sql");
 const contentVariantMigrationPath =
-  "supabase/migrations/20260602_0003_content_variant_type_contract.sql";
+  "supabase/migrations/20260914_0001_content_threads_post.sql";
 const contentVariantMigration = existsSync(path.join(root, contentVariantMigrationPath))
   ? readText(contentVariantMigrationPath)
   : "";
 const liveSetupSchema = existsSync(path.join(root, "supabase/setup/00_live_schema.sql"))
   ? readText("supabase/setup/00_live_schema.sql")
-  : "";
-const liveSetupMigration = existsSync(
-  path.join(root, "supabase/migrations/20260602_0004_live_setup_contracts.sql"),
-)
-  ? readText("supabase/migrations/20260602_0004_live_setup_contracts.sql")
   : "";
 const repositoryVariantTypes = extractJsStringArray(contentLedger, "VARIANT_TYPES");
 const schemaVariantTypes = extractSchemaVariantTypes(schema);
@@ -273,7 +268,8 @@ const contentVariantContractSources = [
   ["schema", schemaVariantTypes],
   ["migration", extractContentVariantConstraintTypes(contentVariantMigration)],
   ["live-setup", extractContentVariantConstraintTypes(liveSetupSchema)],
-  ["live-migration", extractContentVariantConstraintTypes(liveSetupMigration)],
+  // Historical setup migrations retain their original contract; the additive
+  // latest migration above supplies the currently deployable constraint.
 ];
 const variantContractMismatch = contentVariantContractSources.filter(
   ([, values]) => !valuesEqual(repositoryVariantTypes, values),

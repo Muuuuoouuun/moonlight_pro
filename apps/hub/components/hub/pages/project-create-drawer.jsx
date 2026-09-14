@@ -1,10 +1,9 @@
 "use client";
 
 import React from "react";
-import { projectCreateFeedback, validateProjectDraft } from "@/lib/pms-ui";
+import { projectAreaLabel, projectCreateFeedback, validateProjectDraft } from "@/lib/pms-ui";
 import { Button, Drawer, Kbd } from "../hub-primitives";
-import { deliveryDraft, validateDelivery } from "../../../../../packages/project-delivery/index.ts";
-import { Iconed } from "../hub-icons";
+import { validateDelivery } from "../../../../../packages/project-delivery/index.ts";
 
 // DRAWER_INPUT_STYLE(hub-primitives)과 같은 32px/13px 밀도 — 모바일 44px 터치 플로어는
 // hub-tokens.css의 coarse-pointer 미디어쿼리가 input/textarea/select 전체에 이미 강제한다.
@@ -34,7 +33,6 @@ export function ProjectCreateDrawer({
   draft,
   areas = [],
   brands = [],
-  entities = [],
   failedSources = [],
   onChange,
   onClose,
@@ -56,8 +54,8 @@ export function ProjectCreateDrawer({
   const formId = React.useId();
   const areaUnavailable = failedSources.includes("areas");
   const areaEmpty = !areaUnavailable && areas.length === 0;
-  const entityCatalogUnavailable = failedSources.includes("leads")
-    || failedSources.includes("customer_accounts");
+  const selectedArea = areas.find((area) => area.id === draft?.areaId);
+  const selectedBrand = brands.find((brand) => brand.id === draft?.brandId);
 
   React.useEffect(() => {
     if (retryingClientIdRef.current === draft?.clientId) {
@@ -112,6 +110,7 @@ export function ProjectCreateDrawer({
     if (!nextErrors.title && !nextErrors.areaId) return true;
 
     setSaveState("invalid");
+    if (nextErrors.areaId) setAdvancedOpen(true);
     setFeedback("필수 입력을 확인하세요.");
     requestAnimationFrame(() => {
       if (nextErrors.title) titleRef.current?.focus();
@@ -196,10 +195,11 @@ export function ProjectCreateDrawer({
 
   if (!draft) return null;
   const saving = saveState === "saving";
+  const classificationOpen = advancedOpen || !draft.areaId || areaUnavailable || areaEmpty;
   return (
     <Drawer
       title="프로젝트 만들기"
-      subtitle="큰 결과와 첫 행동부터 기록하세요."
+      subtitle="이름만 정하고 시작하세요."
       onClose={requestClose}
       initialFocusRef={titleRef}
       width="min(420px, 100vw)"
@@ -236,6 +236,7 @@ export function ProjectCreateDrawer({
           <input
             ref={titleRef}
             name="title"
+            disabled={saving}
             value={draft.title}
             onChange={(event) => update("title", event.target.value)}
             placeholder="예: 갈무리 첫결제 SW"
@@ -246,149 +247,61 @@ export function ProjectCreateDrawer({
           {errors.title && <span id="project-title-error" role="alert" style={{ color: "var(--danger)", letterSpacing: 0 }}>{errors.title}</span>}
         </label>
 
-        <label style={LABEL_STYLE}>
-          <span>목표 결과</span>
-          <textarea
-            name="summary"
-            value={draft.summary}
-            onChange={(event) => update("summary", event.target.value)}
-            placeholder="완료됐을 때 어떤 상태가 되어야 하나요?"
-            rows={4}
-            style={{ ...CONTROL_STYLE, minHeight: 104, padding: "10px 11px", resize: "vertical" }}
-          />
-        </label>
-
-        <label style={LABEL_STYLE}>
-          <span>다음 행동</span>
-          <input
-            name="nextAction"
-            value={draft.nextAction}
-            onChange={(event) => update("nextAction", event.target.value)}
-            placeholder="가장 먼저 할 한 가지"
-            style={CONTROL_STYLE}
-          />
-        </label>
-
-        <fieldset style={{ border: "1px solid var(--line-soft)", borderRadius: 8, padding: 12, display: "grid", gap: 10, minWidth: 0 }}>
-          <legend style={{ fontSize: 12, color: "var(--fg-muted)" }}>완성까지의 일정</legend>
-          <label style={LABEL_STYLE}><span>최소 결과물</span><input style={CONTROL_STYLE} value={draft.delivery?.deliverable || ""} placeholder="이번 종료일까지 실제 사용할 결과물" onChange={(e) => update("delivery", { ...deliveryDraft(draft.delivery), deliverable: e.target.value })} /></label>
-          {[["plannedStart", "착수 예정일"], ["prototypeDate", "프로토타입 확인일"]].map(([key, label]) => <label key={key} style={LABEL_STYLE}><span>{label}</span><input type="date" style={CONTROL_STYLE} value={draft.delivery?.[key] || ""} onChange={(e) => update("delivery", { ...deliveryDraft(draft.delivery), [key]: e.target.value })} /></label>)}
-          <label style={LABEL_STYLE}><span>목표 종료일</span><input type="date" style={CONTROL_STYLE} value={draft.dueAt} onChange={(e) => update("dueAt", e.target.value)} /></label>
-          <span style={{ fontSize: 11, color: "var(--fg-muted)", lineHeight: 1.5 }}>기한이 없으면 비워두세요. 완료 조건과 실제 작동 검증은 생성 후 ‘계획·검증’에서 이어갑니다.</span>
-        </fieldset>
-
-        <label style={LABEL_STYLE}>
-          <span>업무 분야 *</span>
-          <select
-            ref={areaRef}
-            name="areaId"
-            value={draft.areaId || ""}
-            onChange={(event) => update("areaId", event.target.value)}
-            aria-invalid={Boolean(errors.areaId)}
-            aria-describedby={[
-              errors.areaId ? "project-area-error" : null,
-              areaUnavailable ? "project-area-unavailable" : null,
-              areaEmpty ? "project-area-empty" : null,
-            ].filter(Boolean).join(" ") || undefined}
-            style={CONTROL_STYLE}
-          >
-            <option value="">업무 분야 선택</option>
-            {areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
-          </select>
-          {errors.areaId && <span id="project-area-error" role="alert" style={{ color: "var(--danger)", letterSpacing: 0 }}>{errors.areaId}</span>}
-          {areaUnavailable && (
-            <span id="project-area-unavailable" role="status" style={{ color: "var(--danger)", letterSpacing: 0 }}>
-              업무 분야 목록을 불러오지 못했습니다. 새 프로젝트 만들기를 잠시 사용할 수 없습니다.
-            </span>
-          )}
-          {areaEmpty && (
-            <div id="project-area-empty" role="status" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", letterSpacing: 0 }}>
-              <span style={{ flex: 1, minWidth: 180, color: "var(--danger)" }}>
-                업무 분야 원장이 비어 있습니다. 운영 원장을 적용한 뒤 다시 불러오세요.
-              </span>
-              <Button variant="outline" size="sm" onClick={onRetryAreas} style={{ minHeight: 44 }}>원장 다시 불러오기</Button>
-            </div>
-          )}
-        </label>
-
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: "var(--fg-muted)" }}>
+          목표·다음 행동은 만든 뒤 <strong style={{ color: "var(--fg-dim)", fontWeight: 500 }}>편집</strong>에서,
+          일정·완료 조건은 <strong style={{ color: "var(--fg-dim)", fontWeight: 500 }}>계획·검증</strong>에서 설정하세요.
+        </p>
         <div style={{ borderTop: "1px solid var(--line-soft)", paddingTop: 10 }}>
-          <button
-            type="button"
-            aria-expanded={advancedOpen}
-            aria-controls="project-create-advanced"
-            onClick={() => setAdvancedOpen((open) => !open)}
-            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, color: "var(--fg-muted)", fontSize: 12.5, textAlign: "left" }}
-          >
-            <Iconed name="chevronR" size={14} style={{ transform: advancedOpen ? "rotate(90deg)" : "none", transition: "transform 160ms ease" }} />
-            <span style={{ flex: 1 }}>상세 설정</span>
-            <span style={{ fontSize: 10.5, color: "var(--fg-faint)" }}>브랜드 · 고객 · 상태</span>
-          </button>
-          {advancedOpen && (
-            <div id="project-create-advanced" className="project-create-advanced-grid">
-              <label style={{ ...LABEL_STYLE, gridColumn: "1 / -1" }}>
-                <span>브랜드</span>
-                <select value={draft.brandId || ""} onChange={(event) => update("brandId", event.target.value || null)} style={CONTROL_STYLE}>
-                  <option value="">브랜드 없음</option>
-                  {brands.filter((brand) => brand.id !== "all").map((brand) => (
-                    <option key={brand.id} value={brand.id}>{brand.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label style={{ ...LABEL_STYLE, gridColumn: "1 / -1" }}>
-                <span>관련 리드/고객</span>
-                <select
-                  value={draft.entityKey || ""}
-                  onChange={(event) => update("entityKey", event.target.value)}
-                  aria-describedby={entityCatalogUnavailable ? "project-entity-catalog-unavailable" : undefined}
-                  style={CONTROL_STYLE}
-                >
-                  <option value="">연결 없음</option>
-                  {entities.map((entity) => (
-                    <option key={entity.key} value={entity.key}>{entity.label}</option>
-                  ))}
-                </select>
-                {entityCatalogUnavailable && (
-                  <span id="project-entity-catalog-unavailable" role="status" style={{ color: "var(--danger)", letterSpacing: 0 }}>
-                    리드·고객 목록 일부를 불러오지 못했습니다.
-                  </span>
-                )}
-              </label>
-              <label style={LABEL_STYLE}>
-                <span>상태</span>
-                <select value={draft.status} onChange={(event) => update("status", event.target.value)} style={CONTROL_STYLE}>
-                  <option value="draft">계획</option>
-                  <option value="active">진행</option>
-                  <option value="blocked">막힘</option>
-                  <option value="archived">보관</option>
-                </select>
-              </label>
-              <label style={LABEL_STYLE}>
-                <span>우선순위</span>
-                <select value={draft.priority} onChange={(event) => update("priority", event.target.value)} style={CONTROL_STYLE}>
-                  <option value="low">낮음</option>
-                  <option value="medium">보통</option>
-                  <option value="high">높음</option>
-                  <option value="critical">긴급</option>
-                </select>
-              </label>
-
-            </div>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: "var(--fg-muted)" }}>
+              업무 분류 · {selectedArea ? projectAreaLabel(selectedArea) : "선택 필요"}
+            </span>
+            <Button variant="ghost" size="sm" disabled={saving} aria-expanded={classificationOpen} aria-controls="project-create-classification" onClick={() => setAdvancedOpen((open) => !open)} style={{ minHeight: 44 }}>
+              {classificationOpen ? "접기" : "분류 변경"}
+            </Button>
+          </div>
+          {selectedBrand && <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--fg-muted)" }}>연결 · {selectedBrand.name}</p>}
+          <p style={{ margin: "4px 0 0", fontSize: 11, lineHeight: 1.5, color: "var(--fg-muted)" }}>비슷한 프로젝트를 구분하는 분류입니다. 만든 뒤에도 바꿀 수 있어요.</p>
         </div>
+        {classificationOpen && (
+          <div id="project-create-classification">
+            <label style={LABEL_STYLE}>
+              <span>업무 분류</span>
+              <select
+                ref={areaRef}
+                name="areaId"
+                disabled={saving}
+                value={draft.areaId || ""}
+                onChange={(event) => update("areaId", event.target.value)}
+                aria-invalid={Boolean(errors.areaId)}
+                aria-describedby={[
+                  errors.areaId ? "project-area-error" : null,
+                  areaUnavailable ? "project-area-unavailable" : null,
+                  areaEmpty ? "project-area-empty" : null,
+                ].filter(Boolean).join(" ") || undefined}
+                style={CONTROL_STYLE}
+              >
+                <option value="">분류 선택</option>
+                {areas.map((area) => <option key={area.id} value={area.id}>{projectAreaLabel(area)}</option>)}
+              </select>
+              {errors.areaId && <span id="project-area-error" role="alert" style={{ color: "var(--danger)", letterSpacing: 0 }}>{errors.areaId}</span>}
+              {areaUnavailable && (
+                <span id="project-area-unavailable" role="status" style={{ color: "var(--danger)", letterSpacing: 0 }}>
+                  업무 분야 목록을 불러오지 못했습니다. 새 프로젝트 만들기를 잠시 사용할 수 없습니다.
+                </span>
+              )}
+            </label>
+            {areaEmpty && (
+              <div id="project-area-empty" role="status" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", letterSpacing: 0 }}>
+                <span style={{ flex: 1, minWidth: 180, color: "var(--danger)", fontSize: 11 }}>
+                  업무 분야 원장이 비어 있습니다. 운영 원장을 적용한 뒤 다시 불러오세요.
+                </span>
+                <Button variant="outline" size="sm" onClick={onRetryAreas} style={{ minHeight: 44 }}>원장 다시 불러오기</Button>
+              </div>
+            )}
+          </div>
+        )}
       </form>
-      <style jsx>{`
-        .project-create-advanced-grid {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr);
-          gap: 10px;
-          padding-top: 10px;
-        }
-        @media (min-width: 640px) {
-          .project-create-advanced-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-        }
-      `}</style>
     </Drawer>
   );
 }

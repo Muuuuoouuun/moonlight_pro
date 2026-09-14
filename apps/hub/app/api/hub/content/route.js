@@ -6,6 +6,8 @@ import {
   buildContentDraftRecords,
   buildContentDraftUpdateRecords,
   buildContentHandoffRecord,
+  buildContentIdeaRecords,
+  buildContentPublicationRecord,
   getContentLedger,
 } from "@/lib/repositories/content-ledger";
 import { assertHubWriteAllowed, readHubWriteJson } from "@/lib/hub-write-guard";
@@ -57,6 +59,16 @@ export async function POST(req) {
     const action = typeof parsed.data?.action === "string"
       ? parsed.data.action.trim().toLowerCase()
       : "";
+
+    if (action === "record_publication") {
+      const publication = buildContentPublicationRecord(parsed.data);
+      if (!publication.contentId || !publication.variantId) {
+        return NextResponse.json({ status: "invalid-input", error: "contentId and variantId are required." }, { status: 400 });
+      }
+      if (!publication.workspaceId) return NextResponse.json({ status: "preview", error: "missing-workspace" }, { status: 202 });
+      const result = await forwardContentCommand(publication);
+      return NextResponse.json(result.data, { status: result.httpStatus });
+    }
 
     if (action === "handoff" || action === "export") {
       const handoff = buildContentHandoffRecord(parsed.data);
@@ -126,7 +138,7 @@ export async function POST(req) {
       return NextResponse.json(result.data, { status: result.httpStatus });
     }
 
-    const draft = buildContentDraftRecords(parsed.data);
+    const draft = action === "idea" ? buildContentIdeaRecords(parsed.data) : buildContentDraftRecords(parsed.data);
 
     if (!draft.workspaceId) {
       return NextResponse.json(
@@ -150,7 +162,7 @@ export async function POST(req) {
         status: "error",
         error: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 },
+      { status: error instanceof TypeError ? 400 : 500 },
     );
   }
 }
