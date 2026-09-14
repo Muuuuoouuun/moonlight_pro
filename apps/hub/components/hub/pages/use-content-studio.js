@@ -28,6 +28,7 @@ const copyAsNew = (draft) => ({
   ...draft, contentId: null, variantId: null, itemUpdatedAt: null, variantUpdatedAt: null, status: 'draft', sourceRefs: [],
 });
 const routeIdentity = (scope, item, variant, fresh, draft) => [scope, item || '', variant || '', fresh || '', draft || ''].join('|');
+const emptyHistory = () => ({ revisions: [], nextCursor: null, loading: false, error: '' });
 const busyState = { busy: false, pendingSave: null, pendingMutation: null };
 
 export function useContentStudio(workspace) {
@@ -36,9 +37,10 @@ export function useContentStudio(workspace) {
   const itemParam = params.get('item'), variantParam = params.get('variant'), newParam = params.get('new'), brandParam = params.get('brand'), draftParam = params.get('draft');
   const [state, setState] = React.useState(() => ({
     draft: emptyStudioDraft(), dirty: false, ready: false, loadError: '', saveState: 'idle', saveMessage: '',
-    localState: 'idle', localSavedAt: null, recovery: null, detail: null, editTick: 0, ...busyState,
+    localState: 'idle', localSavedAt: null, recovery: null, detail: null, history: emptyHistory(), editTick: 0, ...busyState,
   }));
   const stateRef = React.useRef(state), epoch = React.useRef(0), queueRef = React.useRef(null);
+  const historyRequest = React.useRef(0);
   const draftKey = React.useRef(null), loadedRoute = React.useRef(null);
   const update = React.useCallback((patch) => {
     const next = typeof patch === 'function' ? patch(stateRef.current) : { ...stateRef.current, ...patch };
@@ -98,7 +100,7 @@ export function useContentStudio(workspace) {
     draftKey.current = draftParam || crypto.randomUUID();
     const current = () => epoch.current === documentEpoch;
     update({ draft: emptyStudioDraft(brandParam || ''), ready: false, loadError: '', recovery: null, detail: null, dirty: false,
-      saveState: 'idle', saveMessage: '', localState: 'idle', localSavedAt: null, ...busyState });
+      saveState: 'idle', saveMessage: '', history: emptyHistory(), localState: 'idle', localSavedAt: null, ...busyState });
     // A bare new=draft is intentional creation. Give it a stable address before
     // any typing, persistence or reload can happen.
     if (!itemParam && newParam && !draftParam) writeUrl(emptyStudioDraft(brandParam || ''));
@@ -206,7 +208,7 @@ export function useContentStudio(workspace) {
     epoch.current += 1;
     if (newIdentity) draftKey.current = crypto.randomUUID();
     update({ draft, detail, dirty, recovery: null, ready: true, loadError: '', saveState: dirty ? 'editing' : draft.variantId ? 'saved' : 'idle',
-      saveMessage: '', ...busyState, editTick: stateRef.current.editTick + 1 });
+      saveMessage: '', history: emptyHistory(), ...busyState, editTick: stateRef.current.editTick + 1 });
     resetQueue(); writeUrl(draft);
     if (!persisted) mirror(draft, dirty, { pendingSave: null, pendingMutation: null }).catch(() => {});
   }, [mirror, resetQueue, update, writeUrl]);
@@ -226,7 +228,7 @@ export function useContentStudio(workspace) {
   };
   const newDraft = async () => {
     const state = stateRef.current;
-    if (!state.ready || state.busy || state.recovery || state.pendingMutation) return;
+    if ((!state.ready && !state.loadError) || state.busy || state.recovery || state.pendingMutation) return;
     const documentEpoch = epoch.current, brand = state.draft.brandId;
     update({ busy: true });
     try {
@@ -235,13 +237,23 @@ export function useContentStudio(workspace) {
       adopt(emptyStudioDraft(brand), null, false, { newIdentity: true });
     } finally { if (epoch.current === documentEpoch) update({ busy: false }); }
   };
-  const refreshHistory = async () => {
-    const id = stateRef.current.draft.contentId, documentEpoch = epoch.current;
-    if (!id) return;
+  const refreshHistory = async (more = false) => {
+    const { contentId, variantId } = stateRef.current.draft, documentEpoch = epoch.current;
+    const previous = stateRef.current.history;
+    if (!contentId || !variantId || (more && (previous.loading || !previous.nextCursor))) return;
+    const request = ++historyRequest.current;
+    const params = new URLSearchParams({ item: contentId, variant: variantId });
+    if (more) for (const [key, value] of Object.entries(previous.nextCursor)) params.set(key, value);
+    update({ history: { ...(more ? previous : emptyHistory()), loading: true } });
+    const current = () => epoch.current === documentEpoch && historyRequest.current === request && stateRef.current.draft.variantId === variantId;
     try {
-      const detail = await getDetail(id);
-      if (epoch.current === documentEpoch) update({ detail });
-    } catch (error) { if (epoch.current === documentEpoch) update({ saveMessage: error.message }); }
+      const response = await fetch('/api/hub/content/history?' + params, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+      const result = await response.json();
+      if (!current()) return;
+      if (!response.ok || result.status !== 'live') throw Error('버전 기록을 불러오지 못했습니다. 다시 시도해주세요.');
+      const revisions = [...(more ? previous.revisions : []), ...result.revisions];
+      update({ history: { revisions: [...new Map(revisions.map(row => [row.id, row])).values()], nextCursor: result.nextCursor, loading: false, error: '' } });
+    } catch (error) { if (current()) update({ history: { ...stateRef.current.history, loading: false, error: error.message } }); }
   };
   const compareLatest = async () => {
     const before = stateRef.current, documentEpoch = epoch.current;

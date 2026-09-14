@@ -48,6 +48,10 @@ Health endpoints:
 
 `check:connections` expects local env files with Supabase and Engine URLs. A missing env failure is expected on a fresh checkout.
 
+Run `npm run db:check` before enabling the content, journal, inquiry, discovery-nudge, or agent workflows. It reads the configured database catalog through the Supabase Management API and checks their required tables, RLS, and service-only RPC permissions. It requires `SUPABASE_ACCESS_TOKEN` in the local environment and does not change data. Missing objects or permissions cause a nonzero exit.
+
+Apply a reviewed migration explicitly with `npm run db:migrate -- <filename.sql>`, then rerun `npm run db:check`. The migration command's legacy default list stops at 0025; it does not apply all later migrations or track which ones already ran. Do not rerun a migration solely because its file exists.
+
 `npm test` covers every `*.test.mjs` in the repo — `scripts/`, `apps/hub/lib/`, `apps/hub/components/**`, `apps/engine/**`, and `packages/**`. CI delegates to the same command, so the two scopes cannot drift. To run one file:
 
 ```bash

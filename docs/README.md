@@ -1,7 +1,7 @@
 # Moonlight 문서 지도
 
 > 상태: ACTIVE DOCUMENTATION INDEX
-> 마지막 정리: 2026-09-13 (프로젝트 실행 백로그·메모 작성·활용 1차 등재. 기존 실행 상태표 기준: 2026-09-04)
+> 마지막 정리: 2026-09-14 (콘텐츠·메모·문의·Agent DB 준비 상태 갱신. 기존 실행 상태표 기준: 2026-09-04)
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -37,6 +37,8 @@
 상세 답변과 예외는 요약문에 재복제하지 않고 [`operator-workflow-profile.md`](operator-workflow-profile.md)를 단일 원본으로 유지한다.
 
 ## 3. 현재 실행 상태
+
+2026-09-14 DB 준비 상태: 누락된 0026·0027·0028·0030·0031·0032·0033을 운영 Supabase에 적용했고, `npm run db:check`로 테이블·RLS·서비스 전용 RPC 권한을 확인했다. 이미 적용된 0029는 재실행하지 않았다. Hub/Engine 코드 배포, 문의 외부 수집 연결, worker 활성화는 별도다.
 
 | 단계 | 상태 | 근거 |
 |---|---|---|
@@ -97,7 +99,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 - [`superpowers/specs/2026-09-13-discovery-contact-signals-design.md`](superpowers/specs/2026-09-13-discovery-contact-signals-design.md) — **신호 목록 입력됨 / 동작 설계 제안 / 구현 전**. 대면 미팅·연락 2회 또는 장시간 통화·선제적인 결제 일정 발언. 자동 판정의 기간·시간 기준은 확인 중이다.
 
-- [`superpowers/specs/2026-09-13-discovery-nudge-design.md`](superpowers/specs/2026-09-13-discovery-nudge-design.md) — **문맥별 넛지 구현·로컬 검증 완료**. 상세의 주요 행동·직접 입력 포커스·단계적 펼침, 날짜 미루기·계기별 숨김·해제, 목록/상세/다른 창 상태 공유. [실행 기록](superpowers/plans/2026-09-13-discovery-nudge.md). 0031 운영 DB 적용·배포는 별도.
+- [`superpowers/specs/2026-09-13-discovery-nudge-design.md`](superpowers/specs/2026-09-13-discovery-nudge-design.md) — **문맥별 넛지 구현·로컬 검증 완료**. 상세의 주요 행동·직접 입력 포커스·단계적 펼침, 날짜 미루기·계기별 숨김·해제, 목록/상세/다른 창 상태 공유. [실행 기록](superpowers/plans/2026-09-13-discovery-nudge.md). 0031 운영 DB는 2026-09-14 적용 완료. 코드 배포는 별도.
 
 - [`superpowers/specs/2026-09-13-opportunity-discovery-v2-design.md`](superpowers/specs/2026-09-13-opportunity-discovery-v2-design.md) — **2A 구현·로컬 검증 완료**. 작업 중심 전환·전체 서버 검색·읽기 중심 상세·관심 질문 시작·검토일 도래 표시. [실행 기록](superpowers/plans/2026-09-13-opportunity-discovery-v2.md). 2B·2C 및 운영 배포는 후속.
 
@@ -109,20 +111,20 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **콘텐츠 제작 (2026-09-12)**
 
-- [`superpowers/specs/2026-09-12-content-notes-drafts-ai-workflow-design.md`](superpowers/specs/2026-09-12-content-notes-drafts-ai-workflow-design.md) — **방향 승인 · Studio 1차 구현**. 원문·기획·채널별 초안·AI 후보 비교/적용·버전 복원을 연결. 구현·로컬 검증 범위는 문서 §0과 [실행 기록](superpowers/plans/2026-09-12-content-workflow.md)을 따른다. [후속 검증·운영 적용 준비](superpowers/plans/2026-09-12-content-release.md)에서 통합 테스트 오류를 해결했으며 운영 인증 갱신을 기다린다. 일지 신설·기간 회고·자동 콘텐츠 크론은 후속 범위이며 운영 DB 마이그레이션·배포 완료를 뜻하지 않는다.
+- [`superpowers/specs/2026-09-12-content-notes-drafts-ai-workflow-design.md`](superpowers/specs/2026-09-12-content-notes-drafts-ai-workflow-design.md) — **방향 승인 · Studio 1차 구현**. 원문·기획·채널별 초안·AI 후보 비교/적용·버전 복원을 연결. 구현·로컬 검증 범위는 문서 §0과 [실행 기록](superpowers/plans/2026-09-12-content-workflow.md)을 따른다. [후속 검증·운영 적용 준비](superpowers/plans/2026-09-12-content-release.md)에서 통합 테스트 오류를 해결했다. 2026-09-14 인증 갱신 및 0026 운영 DB 적용 완료. 일지 신설·기간 회고·자동 콘텐츠 크론과 코드 배포는 후속 범위다.
 
 **메모 작성·활용 (2026-09-13)**
 
-- [`superpowers/specs/2026-09-12-memo-writing-reuse-and-analysis-design.md`](superpowers/specs/2026-09-12-memo-writing-reuse-and-analysis-design.md) — **1차 승인·구현 / 후속 분석·추천 DRAFT**. 내 작업 → 메모에서 제목 없는 빠른 기록·선택 보강·업무 연결·발췌의 할 일/Studio 생성과 원문 복귀를 연결한다. 같은 탭 새로고침 복구·충돌 비교·중복 방지 포함. [구현·검증·운영 적용 전제](superpowers/plans/2026-09-13-memo-workflow.md). 메모의 운영 DB 적용·배포는 별도다.
+- [`superpowers/specs/2026-09-12-memo-writing-reuse-and-analysis-design.md`](superpowers/specs/2026-09-12-memo-writing-reuse-and-analysis-design.md) — **1차 승인·구현 / 후속 분석·추천 DRAFT**. 내 작업 → 메모에서 제목 없는 빠른 기록·선택 보강·업무 연결·발췌의 할 일/Studio 생성과 원문 복귀를 연결한다. 같은 탭 새로고침 복구·충돌 비교·중복 방지 포함. [구현·검증·운영 적용 전제](superpowers/plans/2026-09-13-memo-workflow.md). 0027 운영 DB는 2026-09-14 적용 완료. 코드 배포는 별도다.
 
 **기획 초안 (미확정, 새 구현의 근거로 쓰지 않음)**
 
-- [`superpowers/specs/2026-09-13-memo-discovery-and-analysis-design.md`](superpowers/specs/2026-09-13-memo-discovery-and-analysis-design.md) — **2A 승인·구현 / 2B DRAFT**. 한 검색창에서 제목·원문·보강 문장을 찾고, 선택 기간·종류·업무·활용 여부로 좁힌다. 편집 중 입력·펼친 목록·위치를 보존하며 프로젝트·고객·브랜드에서 최근 연결 메모 3개와 전체 보기를 제공한다. [구현·검증 기록](superpowers/plans/2026-09-13-memo-discovery.md). 0030 운영 DB 적용·배포와 선택 AI 분석은 별도다.
+- [`superpowers/specs/2026-09-13-memo-discovery-and-analysis-design.md`](superpowers/specs/2026-09-13-memo-discovery-and-analysis-design.md) — **2A 승인·구현 / 2B DRAFT**. 한 검색창에서 제목·원문·보강 문장을 찾고, 선택 기간·종류·업무·활용 여부로 좁힌다. 편집 중 입력·펼친 목록·위치를 보존하며 프로젝트·고객·브랜드에서 최근 연결 메모 3개와 전체 보기를 제공한다. [구현·검증 기록](superpowers/plans/2026-09-13-memo-discovery.md). 0030 운영 DB는 2026-09-14 적용 완료. 코드 배포와 선택 AI 분석은 별도다.
 
 - [`superpowers/specs/2026-09-12-unified-inquiries-email-webhook-design.md`](superpowers/specs/2026-09-12-unified-inquiries-email-webhook-design.md) — **APPROVED · 코드 구현(2026-09-13), 운영 연결 대기**. 메일·랜딩페이지 문의 원장, 감지·중복·읽음·처리 상태와 기존 알림 통합. [연결 가이드](inquiry-integration-setup.md), [Gmail 서명·수집](inquiry-gmail-setup.md), [구현·검증 기록](superpowers/plans/2026-09-13-unified-inquiries.md).
 - [`superpowers/specs/2026-09-03-sales-content-marketing-to-branding-growth-plan.md`](superpowers/specs/2026-09-03-sales-content-marketing-to-branding-growth-plan.md) — **DRAFT · 권장안**. 세일즈·콘텐츠·마케팅 → 브랜딩 프레임으로 현재 시스템의 강점·약점·보완점·새 베팅을 정리. 초안 크론 2개 고장(W19)과 첫 빌드 후보("오늘 연락할 리드")를 포함. 운영자 확정 전까지 권장.
 - [`superpowers/specs/2026-09-04-mcp-server-audit-and-expansion-design.md`](superpowers/specs/2026-09-04-mcp-server-audit-and-expansion-design.md) — **DRAFT · 제안**. MCP 서버 실측 점검(§2만 사실)과 확충·보강 설계. read 라우트 응답 158KB·94KB·52KB 실측으로 "화면용 BFF 통과" 전제를 반증하고 MCP 전용 투영 계층을 제안. 위 성장 계획 F-14를 흡수·확장하며, `integration-control-plane-inheritance.md` §6 계약은 그대로 상속한다.
-- [`superpowers/specs/2026-09-13-codex-mcp-api-integration-design.md`](superpowers/specs/2026-09-13-codex-mcp-api-integration-design.md) — **로컬 P0–P2 구현**. 인증된 공통 Agent API, 작은 MCP 조회, 멱등 명령·receipt, SDK worker와 Council 작업 화면을 구현했다. 운영 migration·worker 로그인은 별도 활성화가 필요하고 원격 MCP(P3)는 후속 범위다. 설정은 [`MCP/API 안내`](../packages/mcp-server/README.md)·[`worker 안내`](../packages/codex-worker/README.md)를 따른다.
+- [`superpowers/specs/2026-09-13-codex-mcp-api-integration-design.md`](superpowers/specs/2026-09-13-codex-mcp-api-integration-design.md) — **로컬 P0–P2 구현**. 인증된 공통 Agent API, 작은 MCP 조회, 멱등 명령·receipt, SDK worker와 Council 작업 화면을 구현했다. 0032·0033 운영 DB는 2026-09-14 적용 완료. 코드 배포·worker 로그인은 별도 활성화가 필요하고 원격 MCP(P3)는 후속 범위다. 설정은 [`MCP/API 안내`](../packages/mcp-server/README.md)·[`worker 안내`](../packages/codex-worker/README.md)를 따른다.
 - [`superpowers/specs/2026-09-05-journal-timeline-and-ai-digest.md`](superpowers/specs/2026-09-05-journal-timeline-and-ai-digest.md) — **DRAFT · 제안**. 일지를 `journal_entries` 단일 타임라인으로 신설하고 AI 정리를 2계층(Gemini 단건 요약·태그 / Claude Code 기간 회고)으로 분할. §3 범위 4건은 2026-09-05 운영자 확정, §2 실측은 사실, 나머지는 구현 전 제안이다. `daily-operating-note-todo.md`의 P1-5·P1-6·P2-8·P2-10을 흡수한다.
 - [`superpowers/plans/2026-09-04-post-2609-merge-design-agenda.md`](superpowers/plans/2026-09-04-post-2609-merge-design-agenda.md) — **DRAFT · 권장안**. 2609 병합 직후 실측 기준의 디자인 부채·아젠다. §1~§3은 사실(병합 안전성, 재감사 30차 정지 지점, 프리미티브 채택률·신규 문법 불일치), §4~§5는 권장 우선순위다. `system-eval-2026-08-05.md`를 이어받되 개별 주제의 확정 스펙을 대체하지 않는다.
 

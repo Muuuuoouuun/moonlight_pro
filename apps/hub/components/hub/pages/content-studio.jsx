@@ -5,7 +5,7 @@ import { JournalSources } from '../journal-links';
 import { Badge, Button, Card, Drawer, TextField, TextAreaField, SelectField, TruthBadge } from '../hub-primitives';
 import { filterBrandsByWorkspace } from '../workspace-map';
 import { usePageCreateHotkey } from '../use-crm-keyboard';
-import { BRIEF_FIELDS, STUDIO_CHANNELS, channelLabel, formatForChannel, exportStudioVariant, studioTextForCopy } from '@/lib/content-workflow-client';
+import { BRIEF_FIELDS, STUDIO_CHANNELS, channelLabel, channelForType, formatForChannel, exportStudioVariant, studioTextForCopy } from '@/lib/content-workflow-client';
 import { useContentStudio } from './use-content-studio';
 import { DraftEditor } from './content-studio-editors';
 import { StudioAI } from './content-studio-ai';
@@ -33,7 +33,7 @@ export function ContentStudio({ workspace, ledger }) {
   const brandOptions = [{ value: '', label: '브랜드 선택' }, ...brands.map((brand) => ({ value: brand.id, label: brand.name || brand.label || brand.key }))];
   if (draft.brandId && !brandOptions.some((brand) => brand.value === draft.brandId)) brandOptions.push({ value: draft.brandId, label: selectedBrand?.name || '저장된 브랜드' });
   const disabled = !studio.ready || studio.busy || !!studio.recovery || !!studio.pendingMutation;
-  const revisions = (studio.detail?.revisions || []).filter((revision) => revision.variant_id === draft.variantId);
+  const revisions = studio.history?.revisions || [];
   const variants = studio.detail?.variants || [];
   usePageCreateHotkey(studio.newDraft);
   const copy = async () => {
@@ -59,20 +59,20 @@ export function ContentStudio({ workspace, ledger }) {
     const result = await studio.mutate({ action: 'create_variant', variant: { title: draft.variantTitle || draft.title, body, variantType: type, channel: newChannel } });
     if (result) { setDrawer(null); setSelection(null); }
   };
-  const saveTruth = ['error', 'conflict'].includes(studio.saveState) ? 'error' : studio.saveState === 'saving' ? 'syncing' : studio.saveState === 'saved' ? 'live' : 'preview';
+  const saveTruth = studio.loadError ? 'error' : !studio.ready ? 'syncing' : ['error', 'conflict'].includes(studio.saveState) ? 'error' : studio.saveState === 'saving' ? 'syncing' : studio.saveState === 'saved' ? 'live' : 'preview';
   return <div className="hub-page content-studio">
     <header className="studio-page-header">
       <div><h2>콘텐츠 스튜디오</h2><p>메모를 기획으로, 초안을 채널별 콘텐츠로.</p></div>
       <div className="studio-actions">
-        <Button variant="outline" icon="sparkle" onClick={() => setMentorOpen(true)} disabled={disabled}>Council 조언</Button>
-        <Button variant="outline" onClick={studio.newDraft} disabled={studio.busy || !!studio.recovery || !!studio.pendingMutation} icon="plus">새 콘텐츠</Button>
+        <Button variant="outline" icon="sparkle" onClick={() => setMentorOpen(true)} disabled={disabled}>방향 검토</Button>
+        <Button variant="outline" onClick={studio.newDraft} disabled={(!studio.ready && !studio.loadError) || studio.busy || !!studio.recovery || !!studio.pendingMutation} icon="plus">새 콘텐츠</Button>
         <Button onClick={openHistory} disabled={!draft.variantId || studio.busy}>버전 기록</Button>
         <Button variant="primary" onClick={() => studio.save(true)} disabled={disabled || studio.saveState === 'saving'}>버전 저장</Button>
       </div>
     </header>
     <div className="studio-status-bar" aria-live="polite">
-      <TruthBadge state={saveTruth} label={SAVE_LABELS[studio.saveState]} />
-      <span className="studio-small studio-muted">{studio.localState === 'error' ? '브라우저 복구 사본 저장 불가 · 파일로 내보내기를 권장합니다.' : studio.localSavedAt ? '브라우저 복구 사본 ' + dateLabel(studio.localSavedAt) : '입력한 내용은 자동 저장됩니다.'}</span>
+      <TruthBadge state={saveTruth} label={studio.loadError ? '불러오기 실패' : !studio.ready ? '불러오는 중' : SAVE_LABELS[studio.saveState]} />
+      <span className="studio-small studio-muted">{studio.loadError ? '원문을 확인한 뒤 편집을 이어갈 수 있습니다.' : !studio.ready ? '저장된 콘텐츠를 확인하고 있습니다.' : studio.localState === 'error' ? '브라우저 복구 사본 저장 불가 · 파일로 내보내기를 권장합니다.' : studio.localSavedAt ? '브라우저 복구 사본 ' + dateLabel(studio.localSavedAt) : '입력하면 복구 사본을 보관하고 서버 저장 상태를 확인합니다.'}</span>
       {studio.dirty && studio.saveState !== 'saving' && <Button size="xs" onClick={() => studio.save()} disabled={disabled}>서버 저장 재시도</Button>}
     </div>
     {studio.saveMessage && <div className="studio-feedback" role="status">
@@ -104,8 +104,9 @@ export function ContentStudio({ workspace, ledger }) {
                 <div className="studio-stack studio-source-fields">
                   <div className="studio-fields-two">
                     <TextField label="콘텐츠 기획 제목" value={draft.title} onChange={(event) => studio.edit({ title: event.target.value })} disabled={disabled} placeholder="이 콘텐츠를 구분할 이름" />
-                    <SelectField label="브랜드" value={draft.brandId} options={brandOptions} onChange={(event) => studio.edit({ brandId: event.target.value })} disabled={disabled} />
+                    <SelectField label="브랜드" value={draft.brandId} options={brandOptions} onChange={(event) => studio.edit({ brandId: event.target.value })} disabled={disabled || ['loading', 'error'].includes(ledger.syncState)} />
                   </div>
+                  {['error', 'partial'].includes(ledger.syncState) && <p role="status" className="studio-muted studio-small">브랜드 목록을 모두 확인하지 못했습니다. 저장된 브랜드를 유지하며 편집할 수 있습니다.</p>}
                   <TextAreaField label="원문 메모" hint="처음 떠올린 생각과 맥락을 보관합니다. 복사·내보내기에는 포함하지 않습니다." placeholder="관찰한 것, 경험, 대화에서 떠오른 생각을 자유롭게 적어주세요." value={draft.sourceIdea} onChange={(event) => studio.edit({ sourceIdea: event.target.value })} rows={5} disabled={disabled} />
                   <details className="studio-brief-details"><summary>기획 구체화 <span className="studio-summary-count">{BRIEF_FIELDS.filter(({ key }) => draft.brief[key]?.trim()).length} / 6 항목</span></summary>
                   <div className="studio-fields-two studio-source-fields">
@@ -117,7 +118,7 @@ export function ContentStudio({ workspace, ledger }) {
             <Card className="studio-editor-card">
               <div className="studio-stack">
                 <div className="studio-variant-bar">
-                  {variants.length > 0 ? <SelectField label="채널별 결과물" value={draft.variantId || ''} options={variants.map((variant) => ({ value: variant.id, label: channelLabel(variant.channel) + ' · ' + (variant.title || '제목 없음') }))} onChange={(event) => studio.switchVariant(event.target.value)} disabled={disabled} /> :
+                  {variants.length > 0 ? <SelectField label="채널별 결과물" value={draft.variantId || ''} options={variants.map((variant) => ({ value: variant.id, label: channelLabel(variant.channel || channelForType(variant.variant_type)) + ' · ' + (variant.title || '제목 없음') }))} onChange={(event) => studio.switchVariant(event.target.value)} disabled={disabled} /> :
                     <SelectField label="첫 결과물 채널" value={draft.channel} options={STUDIO_CHANNELS.map(({ key, label }) => ({ value: key, label }))} disabled={disabled || Boolean(draft.body)} onChange={(event) => studio.edit({ channel: event.target.value, variantType: formatForChannel(event.target.value) })} />}
                   <Button variant="outline" onClick={() => setDrawer('variant')} disabled={disabled} icon="plus">채널 추가</Button>
                 </div>
@@ -141,7 +142,7 @@ export function ContentStudio({ workspace, ledger }) {
                 {draft.sourceRefs[0]?.variant_id && <Button variant="outline" disabled={disabled} onClick={() => studio.switchVariant(draft.sourceRefs[0].variant_id)}>원본 결과물 열기</Button>}
               </div>}
             </div></Card>
-            <StudioAI studio={studio} selection={selection} />
+            <StudioAI studio={studio} selection={selection} onOpenHistory={openHistory} />
           </aside>
         </div>
       </>}
@@ -152,7 +153,9 @@ export function ContentStudio({ workspace, ledger }) {
     {drawer === 'history' && <Drawer title="버전 기록" subtitle={channelLabel(draft.channel) + ' · ' + (draft.variantTitle || '제목 없음')} width="min(540px, 94vw)" onClose={() => setDrawer(null)}>
       <div className="studio-stack">
         <p className="studio-muted studio-small">직접 저장하거나 AI 후보를 적용할 때 버전을 남깁니다. 복원하면 선택한 결과물의 내용과 상태가 돌아갑니다.</p>
-        {revisions.length === 0 && <p className="studio-empty">아직 기록된 버전이 없습니다. ‘버전 저장’을 눌러 현재 내용을 남겨주세요.</p>}
+        {studio.history?.loading && <p role="status" className="studio-muted">버전 기록을 불러오는 중입니다…</p>}
+        {studio.history?.error && <div role="alert"><p>{studio.history.error}</p><Button onClick={() => studio.refreshHistory()}>기록 다시 불러오기</Button></div>}
+        {!studio.history?.loading && !studio.history?.error && revisions.length === 0 && <p className="studio-empty">아직 기록된 버전이 없습니다. ‘버전 저장’을 눌러 현재 내용을 남겨주세요.</p>}
         {revisions.map((revision) => <article key={revision.id} className="studio-revision">
           <div className="studio-row"><strong>{REASONS[revision.reason] || (revision.reason.startsWith('restored:') ? '복원한 버전' : '저장 버전')}</strong><span className="studio-muted studio-small">{dateLabel(revision.created_at)}</span></div>
           <p className="studio-small">{revision.snapshot?.title || '제목 없음'}</p><pre>{revision.snapshot?.body || '(빈 본문)'}</pre>
@@ -160,7 +163,7 @@ export function ContentStudio({ workspace, ledger }) {
             if (await studio.mutate({ action: 'restore_revision', revisionId: revision.id })) { await studio.refreshHistory(); setNotice('선택한 버전으로 복원했습니다.'); }
           }}>이 버전 복원</Button>
         </article>)}
-        {studio.detail?.historyHasMore && <p className="studio-muted studio-small">콘텐츠의 최근 50개 기록 중 이 결과물의 버전을 표시하고 있습니다.</p>}
+        {studio.history?.nextCursor && <Button disabled={studio.history.loading} onClick={() => studio.refreshHistory(true)}>이전 기록 더 보기</Button>}
       </div>
     </Drawer>}
     <FloatingMentorWidget

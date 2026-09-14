@@ -16,6 +16,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 const root = process.cwd();
 
@@ -50,7 +51,7 @@ function parseEnvFile(filepath) {
   return out;
 }
 
-function loadEnv() {
+export function loadEnv() {
   return {
     ...parseEnvFile(path.join(root, ".env")),
     ...parseEnvFile(path.join(root, ".env.local")),
@@ -59,18 +60,19 @@ function loadEnv() {
   };
 }
 
-function deriveProjectRef(env) {
+export function deriveProjectRef(env) {
   if (env.SUPABASE_PROJECT_REF) return env.SUPABASE_PROJECT_REF.trim();
   const url = (env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
   const m = url.match(/^https?:\/\/([a-z0-9]+)\.supabase\.co/i);
   return m ? m[1] : null;
 }
 
-async function runSql(ref, token, sql) {
+export async function runSql(ref, token, sql) {
   const response = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify({ query: sql }),
+    signal: AbortSignal.timeout(30000),
   });
   const text = await response.text();
   return { ok: response.ok, status: response.status, body: text };
@@ -106,7 +108,8 @@ async function main() {
     }
     const sql = readFileSync(full, "utf8");
     process.stdout.write(`[..] ${file} ... `);
-    const result = await runSql(ref, token, sql);
+    // Files without their own transaction must still apply atomically.
+    const result = await runSql(ref, token, /^\s*begin;/mi.test(sql) ? sql : `begin;\n${sql}\ncommit;`);
     if (result.ok) {
       console.log("OK");
     } else {
@@ -124,4 +127,4 @@ async function main() {
   console.log("[PASS] All migrations applied.");
 }
 
-await main();
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) await main();

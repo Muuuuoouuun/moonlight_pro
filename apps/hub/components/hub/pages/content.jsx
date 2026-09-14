@@ -3,7 +3,7 @@
 import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, Button, Progress, Tabs, Kbd, SectionTitle, EmptyState, Avatar, SyncBadge, TextField, TextAreaField } from "../hub-primitives";
+import { Badge, Dot, Card, Button, Progress, Tabs, Kbd, SectionTitle, EmptyState, Avatar, SyncBadge, TextField, TextAreaField, SelectField } from "../hub-primitives";
 import { usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
 import { ContentStudio } from "./content-studio";
@@ -34,26 +34,32 @@ const EMPTY_CONTENT_LEDGER = {
 // 모듈 스코프 stale-while-revalidate — Studio↔Queue↔Campaigns 탭 전환마다 원장을 다시
 // 기다리며 스켈레톤을 보이던 것을 제거(8차 잔여 M). 재검증 실패는 partial(위장 금지).
 const CONTENT_CACHE_SERVABLE_MS = 5 * 60 * 1000;
+let catalogCache = null;
 let contentLedgerCache = null; // { at, state }
 
-export function useContentLedger() {
-  const servable = contentLedgerCache
-    && Date.now() - contentLedgerCache.at < CONTENT_CACHE_SERVABLE_MS;
-  const [state, setState] = React.useState(servable ? contentLedgerCache.state : EMPTY_CONTENT_LEDGER);
+export function useContentLedger({ catalogOnly = false } = {}) {
+  const cache = catalogOnly ? catalogCache : contentLedgerCache;
+  const servable = cache && Date.now() - cache.at < CONTENT_CACHE_SERVABLE_MS;
+  const [state, setState] = React.useState(servable ? cache.state : EMPTY_CONTENT_LEDGER);
 
   React.useEffect(() => {
-    let active = true;
+    let active = true, sequence = 0, controller;
+    const existing = catalogOnly ? catalogCache : contentLedgerCache;
     const hasServableCache = Boolean(
-      contentLedgerCache && Date.now() - contentLedgerCache.at < CONTENT_CACHE_SERVABLE_MS
+      existing && Date.now() - existing.at < CONTENT_CACHE_SERVABLE_MS
     );
 
     async function loadLedger() {
+      const request = ++sequence;
+      controller?.abort();
+      controller = new AbortController();
       if (!hasServableCache) setState((s) => ({ ...s, syncState: "loading" })); // 캐시 서빙 중엔 조용히 재검증
       try {
-        const response = await fetch("/api/hub/content", { cache: "no-store" });
+        const response = await fetch(catalogOnly ? "/api/hub/content/catalog" : "/api/hub/content", { cache: "no-store", signal: controller.signal });
         const data = await response.json().catch(() => null);
 
-        if (!active || !response.ok || !data || data.status === "error") {
+        if (!active || request !== sequence) return;
+        if (!response.ok || !data || data.status === "error") {
           // 라이브 read 실패는 error — preview("미구성")로 뭉개면 큐가 0건이 사실처럼 보인다.
           if (active) setState((s) => ({ ...s, syncState: hasServableCache ? "partial" : "error" }));
           return;
@@ -76,30 +82,31 @@ export function useContentLedger() {
             ideaQueue: Array.isArray(data.ideaQueue) ? data.ideaQueue : [],
             cadence: data.cadence || null,
           };
-          contentLedgerCache = { at: Date.now(), state: nextState };
+          if (catalogOnly) catalogCache = { at: Date.now(), state: nextState };
+          else contentLedgerCache = { at: Date.now(), state: nextState };
           setState(nextState);
         } else {
           setState((s) => ({ ...s, source: "preview", syncState: "preview", campaigns: [], queue: [] }));
         }
       } catch {
-        if (active) setState((s) => ({ ...s, syncState: hasServableCache ? "partial" : "error" }));
+        if (active && request === sequence) setState((s) => ({ ...s, syncState: hasServableCache ? "partial" : "error" }));
       }
     }
 
     loadLedger();
-    const invalidate = () => { contentLedgerCache = null; loadLedger(); };
+    const invalidate = () => { contentLedgerCache = null; if (!catalogOnly) loadLedger(); };
     window.addEventListener("moonlight:content-saved", invalidate);
     return () => {
-      active = false;
+      active = false; controller?.abort();
       window.removeEventListener("moonlight:content-saved", invalidate);
     };
-  }, []);
+  }, [catalogOnly]);
 
   return state;
 }
 
 export function Studio({ workspace }) {
-  const ledger = useContentLedger();
+  const ledger = useContentLedger({ catalogOnly: true });
   return <ContentStudio workspace={workspace} ledger={ledger} />;
 }
 
@@ -156,7 +163,7 @@ export function Queue({ workspace }) {
   const createDraft = React.useCallback(() => openStudio(), [openStudio]);
   usePageCreateHotkey(createDraft);
   return (
-    <div className="hub-page" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
+    <div className="hub-page content-queue" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Publishing queue</h2>
@@ -215,43 +222,16 @@ export function Queue({ workspace }) {
         </div>
       )}
 
-      {brands.length > 0 && (
-        <div className="hub-toolbar" style={{ display: 'flex', gap: 6, alignItems: 'center', overflowX: 'auto', paddingBottom: 2 }}>
-          {[{ id: 'all', key: 'all', name: 'All brands', glyph: '◐', tone: 'moon' }, ...brands].map((brand) => {
-            const active = brandFilter === brand.id || brandFilter === brand.key;
-            const count = brand.id === 'all'
-              ? queue.length
-              : queue.filter((item) => item.brandId === brand.id || item.brandKey === brand.key).length;
-            return (
-              <button
-                key={brand.id}
-                onClick={() => setBrandFilter(brand.id)}
-                style={{
-                  height: 32,
-                  padding: '0 10px',
-                  borderRadius: 'var(--r-sm)',
-                  border: active ? '1px solid var(--line-strong)' : '1px solid var(--line-soft)',
-                  background: active ? 'var(--surface-3)' : 'var(--surface)',
-                  color: active ? 'var(--fg)' : 'var(--fg-muted)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 7,
-                  fontSize: 12,
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                }}
-              >
-                <span className="mono" style={{ color: active ? 'var(--moon-200)' : 'var(--fg-faint)' }}>{brand.glyph}</span>
-                {brand.name}
-                <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{count}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {brands.length > 0 && <div className="queue-brand-filter">
+        <SelectField label="브랜드 필터" value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)}
+          options={[{ value: 'all', label: '전체 브랜드 · ' + queue.length }, ...brands.map(brand => ({
+            value: brandFilter === brand.key ? brand.key : brand.id,
+            label: brand.name + ' · ' + queue.filter(item => item.brandId === brand.id || item.brandKey === brand.key).length,
+          }))]} />
+      </div>}
 
-      <Card pad={false} className="hub-table-card">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 110px 100px 120px 130px 80px', padding: '10px 16px', borderBottom: '1px solid var(--line-soft)', fontSize: 11, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+      <Card pad={false} className="hub-table-card queue-list">
+        <div className="queue-table-heading" aria-hidden="true">
           <span>Title</span><span>Kind</span><span>Channel</span><span>Brand</span><span>Lane</span><span>When</span><span style={{ textAlign: 'right' }}>Author</span>
         </div>
         {visibleQueue.length === 0 && ws && (
@@ -275,8 +255,7 @@ export function Queue({ workspace }) {
           />
         )}
         {visibleQueue.map((c, i) => (
-          <div key={c.id} className="hub-row" style={{
-            display: 'grid', gridTemplateColumns: '1fr 110px 110px 100px 120px 130px 80px',
+          <div key={c.id} className="hub-row queue-row" style={{
             padding: '12px 16px', alignItems: 'center',
             borderBottom: i < visibleQueue.length - 1 ? '1px solid var(--line-soft)' : 'none',
             cursor: 'pointer',
@@ -291,21 +270,21 @@ export function Queue({ workspace }) {
               }
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <div className="queue-title" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
               <Iconed name={c.kind === 'Newsletter' ? 'email' : c.kind === 'Blog' ? 'content' : c.kind === 'Reel' ? 'play' : 'send'} size={13} style={{ color: 'var(--fg-faint)' }} />
               {c.rank != null && (
                 <span className="mono" title="아이디어 랭크" style={{ fontSize: 10.5, color: 'var(--moon-300)', flexShrink: 0 }}>{Math.round(c.rank)}</span>
               )}
-              <span style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.title}</span>
+              <span className="queue-title-text">{c.title}</span>
             </div>
-            <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{c.kind}</span>
-            <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{c.channel}</span>
-            <span>
+            <span className="queue-kind">{c.kind}</span>
+            <span className="queue-channel">{c.channel}</span>
+            <span className="queue-brand">
               <Badge tone={c.brandTone || 'neutral'} variant="outline" size="xs">{c.brandGlyph || '•'} {c.brandName || '—'}</Badge>
             </span>
-            <span><Badge tone={statusTone[c.statusLabel || c.status] || 'neutral'} size="xs">{c.statusLabel || c.status}</Badge></span>
-            <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{c.when}</span>
-            <span style={{ textAlign: 'right', fontSize: 12, color: 'var(--fg-muted)' }}>{c.author}</span>
+            <span className="queue-status"><Badge tone={statusTone[c.statusLabel || c.status] || 'neutral'} size="xs">{c.statusLabel || c.status}</Badge></span>
+            <span className="mono queue-when" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{c.when}</span>
+            <span className="queue-author">{c.author}</span>
           </div>
         ))}
       </Card>

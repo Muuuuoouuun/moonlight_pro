@@ -20,6 +20,7 @@
     "check:classin": "npm run check:sheets && npm run check:context && npm run check:scoring && npm run check:inbox && npm run check:personas",
     "crm:fill": "node ./scripts/fill-crm-intake.mjs",
     "db:migrate": "node ./scripts/apply-migrations.mjs",
+    "db:check": "node ./scripts/check-database-readiness.mjs",
     "dev": "turbo run dev",
     "dev:hub": "npm --workspace @com-moon/hub run dev",
     "dev:engine": "npm --workspace @com-moon/engine run dev",

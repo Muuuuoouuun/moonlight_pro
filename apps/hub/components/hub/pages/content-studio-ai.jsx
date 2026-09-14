@@ -7,6 +7,8 @@ import {
 } from '@/lib/content-workflow-client';
 import { postStudio } from './use-content-studio';
 import { ResultPreview } from './content-studio-editors';
+import { getEditorialGuidance } from '@com-moon/content-manager/editorial-criteria';
+import { contentChangePreview } from '@/lib/content-change-preview';
 
 const OPERATIONS = [
   { value: 'draft', label: '원문·기획에서 초안 작성' },
@@ -17,7 +19,19 @@ const OPERATIONS = [
 ];
 const TONES = [{ value: 'brand', label: '브랜드 말투' }, { value: 'plain', label: '담백하게' }, { value: 'direct', label: '명확하게' }, { value: 'formal', label: '정중하게' }];
 
-export function StudioAI({ studio, selection }) {
+function ChangePreview({ before, after }) {
+  const comparison = React.useMemo(() => contentChangePreview(before, after), [before, after]);
+  if (comparison.unchanged) return <p className="studio-muted studio-small">본문 변경 없음</p>;
+  return <div className="studio-change-preview">
+    <p className="studio-muted studio-small">처음부터 마지막 변경까지 표시합니다.</p>
+    <div className="studio-change-grid">
+      <section aria-label="변경 전"><strong>변경 전</strong><pre>{comparison.before.prefix}<del>{comparison.before.changed}</del>{comparison.before.suffix}</pre></section>
+      <section aria-label="변경 후"><strong>변경 후</strong><pre>{comparison.after.prefix}<ins>{comparison.after.changed}</ins>{comparison.after.suffix}</pre></section>
+    </div>
+  </div>;
+}
+
+export function StudioAI({ studio, selection, onOpenHistory }) {
   const { draft, save, mutate, busy, recovery } = studio;
   const [operation, setOperation] = React.useState('draft'), [tone, setTone] = React.useState('brand');
   const [targetChannel, setTargetChannel] = React.useState('instagram');
@@ -44,6 +58,8 @@ export function StudioAI({ studio, selection }) {
   const candidates = state.run?.result?.candidates || [];
   const selectedText = activeSelection ? draft.body.slice(activeSelection.start, activeSelection.end) : '';
   const source = state.run?.source_snapshot;
+  const guidance = getEditorialGuidance(operation);
+  const resultGuidance = source?.editorialGuidance;
   const dispatch = async (request) => {
     setState((current) => ({ ...current, phase: 'generating', message: '' }));
     try {
@@ -93,6 +109,10 @@ export function StudioAI({ studio, selection }) {
       <div className="studio-row"><h3 className="studio-section-title">AI 작업</h3><Badge tone="neutral" size="xs">비교 후 적용</Badge></div>
       <SelectField label="무엇을 만들까요?" options={OPERATIONS.filter((entry) => !structured || !['hooks', 'shorten'].includes(entry.value))} value={operation} disabled={generating || busy} onChange={(event) => setOperation(event.target.value)} />
       <SelectField label="말투" options={TONES} value={tone} disabled={generating || busy} onChange={(event) => setTone(event.target.value)} />
+      <details className="studio-criteria" open>
+        <summary>적용 기준 · {guidance.criteria.map(rule => rule.label).join(' / ')}</summary>
+        <ul>{guidance.criteria.map(rule => <li key={rule.id} title={rule.source}>{rule.criterion}</li>)}</ul>
+      </details>
       {operation === 'repurpose' && <SelectField label="변형할 채널" options={STUDIO_CHANNELS.map(({ key, label }) => ({ value: key, label }))} value={targetChannel} onChange={(event) => setTargetChannel(event.target.value)} disabled={generating || busy} />}
       <div className="studio-ai-context">
         <span className="studio-eyebrow">{operation === 'draft' ? '원문 + 기획 카드' : operation === 'repurpose' ? '현재 결과물 전체' : activeSelection ? '선택한 부분' : operation === 'hooks' ? '첫 문단' : '현재 결과물 전체'}</span>
@@ -104,6 +124,7 @@ export function StudioAI({ studio, selection }) {
       {!draft.sourceIdea && !draft.brief.message && operation === 'draft' && <p className="studio-muted studio-small">먼저 원문 메모나 핵심 메시지를 적어주세요.</p>}
       {generating && <p role="status" className="studio-muted studio-small">작업 중에도 글을 쓸 수 있습니다. 본문이 바뀌면 새 내용으로 다시 생성해야 합니다.</p>}
       {state.message && <p role="status" className={['error', 'unknown'].includes(state.phase) ? 'studio-error' : 'studio-muted'}>{state.message}</p>}
+      {state.phase === 'applied' && onOpenHistory && <Button variant="outline" onClick={onOpenHistory}>이전 버전 확인·복원</Button>}
       {['running', 'unknown', 'error'].includes(state.phase) && requestRef.current && <Button variant="outline" onClick={() => dispatch(requestRef.current)} disabled={generating}>같은 요청 상태 확인</Button>}
       {state.recoveryToken && !state.persisted && <Button variant="outline" onClick={persist} disabled={generating}>생성 없이 후보 저장 재시도</Button>}
       {['running', 'unknown'].includes(state.phase) && !candidates.length && <Button onClick={() => {
@@ -113,12 +134,13 @@ export function StudioAI({ studio, selection }) {
       {stale && <p className="studio-error" role="status">후보를 만든 뒤 본문이나 버전이 바뀌었습니다. 현재 내용으로 새 후보를 만들어주세요.</p>}
       {candidates.length > 0 && <div className="studio-candidates">
         <div className="studio-row"><h3 className="studio-section-title">변경 비교</h3><Button size="xs" disabled={generating} onClick={() => setState({ phase: 'idle', message: '', run: null, persisted: false, recoveryToken: null })}>후보 닫기</Button></div>
-        <details className="studio-source-compare"><summary>변경 전 보기</summary><pre>{source?.selectionText || source?.body || draft.sourceIdea}</pre></details>
+        {resultGuidance && <details className="studio-criteria"><summary>이 후보에 사용한 기준 · {resultGuidance.version}</summary><ul>{resultGuidance.criteria.map(rule => <li key={rule.id} title={rule.source}>{rule.criterion}</li>)}</ul></details>}
+        {(structured || state.run.operation === 'repurpose') && <details className="studio-source-compare"><summary>변경 전 보기</summary><pre>{source?.selectionText || source?.body || draft.sourceIdea}</pre></details>}
         {candidates.map((candidate, index) => <article key={candidate.id} className="studio-candidate">
           <div className="studio-row"><strong>{candidates.length > 1 ? '후보 ' + (index + 1) : '제안된 결과'}</strong><Badge size="xs" tone="neutral">{state.persisted ? '후보 저장됨' : '저장 대기'}</Badge></div>
           {candidate.title && <p>{candidate.title}</p>}
           {candidate.summary && <p className="studio-muted studio-small">{candidate.summary}</p>}
-          <ResultPreview body={candidate.body} type={candidate.variantType} />
+          {!structured && state.run.operation !== 'repurpose' ? <ChangePreview before={source?.selectionText || source?.body || draft.sourceIdea} after={candidate.body} /> : <ResultPreview body={candidate.body} type={candidate.variantType} />}
           {candidate.missing?.length > 0 && <div className="studio-missing"><strong>확인이 필요한 내용</strong><ul>{candidate.missing.map((missing, i) => <li key={i}>{missing}</li>)}</ul></div>}
           <div className="studio-actions">
             {state.run.operation !== 'repurpose' && <Button variant="primary" disabled={!state.persisted || stale || busy || generating || !!recovery} onClick={() => apply(candidate, 'replace')}>이 후보 적용</Button>}

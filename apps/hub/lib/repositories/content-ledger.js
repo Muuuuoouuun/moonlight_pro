@@ -245,7 +245,7 @@ function resolveBrandOrder(slug, meta, index) {
   return CANONICAL_BRAND_ORDER[slug] ?? 1000 + index;
 }
 
-function mapBrands(rows) {
+export function mapBrands(rows) {
   return rows.map((row, index) => {
     const meta = row.meta && typeof row.meta === "object" ? row.meta : {};
     const slug = normalizeString(row.slug, row.id);
