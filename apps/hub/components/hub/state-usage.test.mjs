@@ -159,13 +159,18 @@ test('PMS project status is declared by lifecycle enum, never by a page-level to
 // overdue일 때만 danger로 간다 — 6개 상태를 통째로 빨갛게 칠하는 primitive 교체는
 // §5.3 red-budget 위반이므로 여기서 막는다.
 test('PMS timeline keeps the inline 1px status stripe instead of adopting AttentionRail', () => {
+  // 타임라인 렌더러는 project-timeline-view.jsx로 분리됐다 — 레일 계약은 그 파일이 진다.
+  const timeline = page('project-timeline-view');
   const projects = page('projects');
+  assert.match(projects, /\{view === 'timeline' && \(\s*<ProjectTimelineView/);
   assert.match(
-    projects,
+    timeline,
     /const lineToken = item\.overdue \? 'var\(--danger-line\)' : \(STATUS_LINE_TOKEN\[p\.status\] \|\| 'var\(--line-strong\)'\)/,
   );
-  assert.match(projects, /boxShadow: `inset 1px 0 0 \$\{lineToken\}`/);
+  assert.match(timeline, /boxShadow: `inset 1px 0 0 \$\{lineToken\}`/);
+  assert.doesNotMatch(timeline, /inset (?:2|3)px 0 0/);
   assert.doesNotMatch(projects, /inset (?:2|3)px 0 0/);
+  assert.doesNotMatch(timeline, /<AttentionRail/);
   assert.doesNotMatch(projects, /<AttentionRail/);
   // 중립 상태가 danger 토큰으로 새지 않는다. 토큰 맵은 project-view-constants.js가
   // 소유한다 — 뷰 분할에서 순수 상수·헬퍼가 그 모듈로 나갔다.

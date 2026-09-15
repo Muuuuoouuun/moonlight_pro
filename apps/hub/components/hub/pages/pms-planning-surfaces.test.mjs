@@ -3,21 +3,23 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 const projectsSource = await readFile(new URL("./projects.jsx", import.meta.url), "utf8");
+const timelineSource = await readFile(new URL("./project-timeline-view.jsx", import.meta.url), "utf8");
 const workSource = await readFile(new URL("./work.jsx", import.meta.url), "utf8");
 const pmsUiSource = await readFile(new URL("../../../lib/pms-ui.js", import.meta.url), "utf8");
 
 test("Timeline uses exact native project links and never opens the edit drawer", () => {
-  const start = projectsSource.indexOf("{view === 'timeline'");
-  const end = projectsSource.indexOf("{projectDraft?.isNew", start);
-  const block = projectsSource.slice(start, end);
+  // 타임라인 렌더러는 project-timeline-view.jsx로 분리됐다. 마운트 배선은 projects.jsx가
+  // 계속 소유하므로 두 파일을 함께 고정한다(계약 축소 아님 — 마운트 단언이 추가됐다).
+  const block = timelineSource;
 
-  assert.ok(start >= 0 && end > start);
-  assert.match(projectsSource, /mergeTimelineProjectQuery/);
+  assert.match(projectsSource, /\{view === 'timeline' && \(\s*<ProjectTimelineView/);
+  assert.match(projectsSource, /timeline=\{projectTimeline\}/);
+  assert.match(timelineSource, /mergeTimelineProjectQuery/);
   assert.match(block, /<a[\s\S]*?href=\{timelineProjectHref/);
   assert.match(block, /aria-current=\{selectedProjectId === p\.id \? ['"]page['"] : undefined\}/);
   assert.match(block, /data-kind=\{item\.kind\}/);
   assert.match(block, /item\.kind === ['"]range['"]/);
-  assert.match(projectsSource, /buildTimelineItemAriaLabel/);
+  assert.match(timelineSource, /buildTimelineItemAriaLabel/);
   assert.match(block, /aria-label=\{buildTimelineItemAriaLabel\(item\)\}/);
   assert.match(block, /minHeight:\s*44/);
   assert.match(block, /ProjectProgressGauge/);
