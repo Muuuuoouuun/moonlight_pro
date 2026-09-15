@@ -1,0 +1,40 @@
+.page { padding:24px; color:var(--fg); max-width:1200px; margin:0 auto; }
+.header { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:24px; }
+.header h2 { font-size:20px; font-weight:500; margin:8px 0; }
+.header p,.intro p { color:var(--fg-muted); font-size:13px; line-height:1.7; margin:8px 0 0; }
+.eyebrow { color:var(--fg-dim); font-size:11px; letter-spacing:.1em; }
+.scope { font-size:12px; white-space:nowrap; border:1px solid var(--line); border-radius:var(--r-sm); padding:8px 12px; }
+.layout { display:grid; grid-template-columns:220px minmax(0,1fr); gap:24px; align-items:start; }
+.roster { display:grid; gap:4px; padding:8px; background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); }
+.member { display:flex; align-items:center; gap:12px; text-align:left; padding:12px; border:1px solid transparent; border-radius:var(--r-sm); background:transparent; color:var(--fg-muted); cursor:pointer; }
+.member[aria-pressed="true"] { background:var(--surface-3); border-color:var(--line-strong); color:var(--fg); }
+.member strong { display:block; font-size:14px; font-weight:500; }
+.member small { display:block; margin-top:4px; font-size:12px; color:var(--fg-muted); }
+.monogram { display:grid; place-items:center; width:32px; height:32px; flex-shrink:0; background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-sm); font-size:13px; }
+.rosterNote { font-size:12px; color:var(--fg-muted); line-height:1.7; margin:12px; }
+.main { min-width:0; border:1px solid var(--line); border-radius:var(--r-lg); background:var(--surface); overflow:hidden; }
+.intro { padding:24px; border-bottom:1px solid var(--line-soft); }
+.intro h3 { margin:8px 0; font-size:18px; font-weight:500; }
+.intro h3 span { display:inline-block; margin-left:12px; font-size:12px; color:var(--fg-muted); font-weight:400; }
+.controls { margin:0; padding:16px 24px; border:0; min-width:0; }
+.meeting { margin-top:16px; }
+.meeting p { font-size:13px; line-height:1.6; }
+.views { display:flex; flex-wrap:wrap; gap:16px; }
+.thread { padding:0 24px; }
+.turn { padding:16px 0; border-top:1px solid var(--line-soft); }
+.userMessage { margin:0 0 20px; padding:12px 16px; background:var(--surface-2); border-radius:var(--r-sm); white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; line-height:1.7; }
+.answerHeader { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:12px; color:var(--fg-muted); margin-bottom:12px; }
+.answerHeader strong { color:var(--fg); font-size:14px; }
+.answer { white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; line-height:1.85; }
+.decision,.next { margin-top:16px; padding:16px; background:var(--surface-2); border:1px solid var(--line-soft); border-radius:var(--r-sm); font-size:13px; line-height:1.7; overflow-wrap:anywhere; }
+.decision p,.next p { margin:8px 0 0; white-space:pre-wrap; }
+.receipt { display:flex; gap:12px; flex-wrap:wrap; margin-top:12px; font-size:12px; color:var(--fg-muted); }
+.composer { border-top:1px solid var(--line); padding:24px; display:grid; gap:12px; }
+.note { font-size:12px; color:var(--fg-muted); line-height:1.6; margin:0; }
+.actions { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; }
+.actions span { font-size:12px; color:var(--fg-muted); }
+.notice { padding:12px; border:1px solid var(--line); border-radius:var(--r-sm); font-size:13px; }
+.notice p { margin:8px 0 0; }
+.error { box-shadow:inset 1px 0 0 var(--danger-line); }
+.page button:focus-visible { outline:1px solid var(--moon-300); outline-offset:2px; }
+@media(max-width:760px) { .page {padding:16px;} .layout {grid-template-columns:minmax(0,1fr);gap:16px;} .roster {grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;} .member {padding:8px;gap:6px;} .member small {font-size:10.5px;} .monogram {display:none;} .rosterNote {grid-column:1/-1;margin:8px;font-size:12px;} .rosterNote br {display:none;} .intro,.composer {padding:16px;} .controls {padding:16px;} .thread {padding:0 16px;} .header {align-items:flex-start;} .intro h3 span {display:block;margin:8px 0 0;} }
