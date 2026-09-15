@@ -128,6 +128,14 @@ export function EmptyState({ icon = 'inbox', title, description, action, style }
   );
 }
 
+// Button hover is CSS-owned (DESIGN.md §8.1 "Hover" — no JS onMouseEnter/Leave, no
+// per-page re-implementation). That forces the resting variant chrome into the
+// stylesheet as well: an inline `background` / `border` / `color` outranks every class
+// rule, so `.hub-btn--primary:hover { … }` could never win while the resting value sat
+// on the element — which is exactly why the transition declared here since 2026-07
+// never fired. Same lesson `Card` already records above for `.hub-card-link`.
+// `.hub-btn` + `.hub-btn--<variant>` (hub-tokens.css) own colour, border, radius and
+// motion; only size/layout, the caller's own `style`, and the disabled state stay inline.
 export const Button = React.forwardRef(function Button({ children, variant = 'ghost', size = 'sm', icon, iconRight, style, onClick, active, type = 'button', className, disabled = false, ...props }, ref) {
   const sizes = {
     xs: { h: 24, px: 8, fs: 12, gap: 5 },
@@ -135,42 +143,15 @@ export const Button = React.forwardRef(function Button({ children, variant = 'gh
     md: { h: 34, px: 14, fs: 13, gap: 7 },
   };
   const s = sizes[size];
-  const variants = {
-    primary: {
-      color: 'var(--bg)',
-      background: 'var(--moon-200)',
-      border: '1px solid var(--moon-100)',
-      boxShadow: '0 1px 0 0 oklch(1 0 0 / 0.2) inset, 0 2px 8px -2px oklch(0 0 0 / 0.3)',
-    },
-    secondary: {
-      color: 'var(--fg)',
-      background: 'var(--surface-3)',
-      border: '1px solid var(--line)',
-    },
-    ghost: {
-      color: 'var(--fg-muted)',
-      background: active ? 'var(--surface-2)' : 'transparent',
-      border: `1px solid ${active ? 'var(--line)' : 'transparent'}`,
-    },
-    outline: {
-      color: 'var(--fg)',
-      background: 'transparent',
-      border: '1px solid var(--line)',
-    },
-    danger: {
-      color: 'var(--danger)',
-      background: 'var(--danger-bg)',
-      border: '1px solid var(--danger-line)',
-    },
-  };
-  const v = variants[variant];
+  // 호출처 className은 합성한다 — 덮어쓰면 .hub-row·.hub-topbar__primary-action 같은
+  // 레이아웃 클래스가 조용히 사라진다.
+  const cls = ['hub-btn', `hub-btn--${variant}`, className].filter(Boolean).join(' ');
   return (
-    <button {...props} ref={ref} type={type} className={className} onClick={onClick} disabled={disabled} style={{
+    <button {...props} ref={ref} type={type} className={cls} data-active={active ? 'true' : undefined} onClick={onClick} disabled={disabled} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: s.gap,
       height: s.h, padding: `0 ${s.px}px`, fontSize: s.fs, fontWeight: 500,
-      borderRadius: 'var(--r-sm)', whiteSpace: 'nowrap',
-      transition: 'background var(--dur-hover) ease, border-color var(--dur-hover) ease, color var(--dur-hover) ease, opacity var(--dur-hover) ease',
-      ...v, ...style,
+      whiteSpace: 'nowrap',
+      ...style,
       ...(disabled && { opacity: 0.45, cursor: 'not-allowed', pointerEvents: 'none' }),
     }}>
       {icon && <Iconed name={icon} size={14} />}

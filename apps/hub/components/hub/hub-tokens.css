@@ -257,6 +257,93 @@
   .hub-app .hub-iconbtn { transition: none; }
 }
 
+/* Button hover — CSS-owned per §8.1 (no JS onMouseEnter/Leave, no per-page copies), same
+   contract as .hub-iconbtn above. The resting variant chrome lives here too, not inline on
+   the element: an inline background/border/colour outranks every stylesheet rule, so a
+   hover rule can only win once the resting value is a class rule as well. That is why the
+   primitive declared a --dur-hover transition for months with nothing to transition to.
+   Hover stays neutral (§5.2 — Moonstone means current/selected/primary, never "the pointer
+   is here"): one step of surface luminance, or one step of hairline emphasis, nothing more.
+   Every step is theme-symmetric — it moves away from the surface in dark *and* light.
+   :not(:disabled) keeps a disabled button from lighting up. */
+.hub-app .hub-btn {
+  border-radius: var(--r-sm);
+  transition: background var(--dur-hover) ease, border-color var(--dur-hover) ease, color var(--dur-hover) ease, opacity var(--dur-hover) ease;
+}
+
+/* Primary CTA — --moon-200 fill on a --moon-100 rim (§5.2). Hover lifts one rung further
+   along the ramp: brighter in dark, darker in light, more contrast against the surface
+   either way. The inset/drop shadow is carried over verbatim from the old inline style. */
+.hub-app .hub-btn--primary {
+  color: var(--bg);
+  background: var(--moon-200);
+  border: 1px solid var(--moon-100);
+  box-shadow: 0 1px 0 0 oklch(1 0 0 / 0.2) inset, 0 2px 8px -2px oklch(0 0 0 / 0.3);
+}
+.hub-app .hub-btn--primary:hover:not(:disabled) {
+  background: var(--moon-100);
+  border-color: var(--moon-50);
+}
+
+/* Secondary rests filled at --surface-3, and no surface step from there is symmetric across
+   themes (--elevated is lighter than --surface-3 in dark but equal to --surface in light).
+   So it takes the hairline-emphasis grammar instead — the same move .hub-card-link and
+   .hub-input make, and --line-strong is exactly the "emphasised state" role in §5.2. */
+.hub-app .hub-btn--secondary {
+  color: var(--fg);
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+}
+.hub-app .hub-btn--secondary:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+
+.hub-app .hub-btn--ghost {
+  color: var(--fg-muted);
+  background: transparent;
+  border: 1px solid transparent;
+}
+.hub-app .hub-btn--ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+/* Pressed / selected ghost (the `active` prop, now a data attribute). Resting state only —
+   it lands on the same surface as hover plus a visible hairline, so "on" reads without
+   motion and without borrowing the accent. Colour deliberately stays --fg-muted, matching
+   the pre-migration inline behaviour. */
+.hub-app .hub-btn--ghost[data-active="true"] {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+
+.hub-app .hub-btn--outline {
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid var(--line);
+}
+.hub-app .hub-btn--outline:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+}
+
+/* Danger keeps its colour through hover for the same reason .hub-iconbtn--danger does:
+   destructive intent must not read as neutral mid-interaction. The hairline carries the
+   feedback and the fill never grows — §5.2 red budget, no full-card semantic fills.
+   The --danger-bg rest fill is moved verbatim from the old inline variant, not introduced. */
+.hub-app .hub-btn--danger {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-line);
+}
+.hub-app .hub-btn--danger:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-btn { transition: none; }
+}
+
 /* Sidebar anchor row — same contract as .hub-row (CSS hover, no JS handlers),
    sized for the consolidated eight-anchor nav: one tap target, no accordion. */
 .hub-app .hub-nav-item {

@@ -336,7 +336,10 @@ truth. Do not recreate them ad-hoc inside pages.
 - 인터랙티브 행은 `className="hub-row"` — `onMouseEnter/Leave` JS 핸들러를 새로 쓰지 않는다
   (reduced-motion 무시 + 드리프트 원인). 기존 JS hover는 해당 파일을 만질 때 옮긴다.
 - 카드형 클릭 타깃은 `.hub-card-link`(보더 강조 + 1px 상승), 칸반 카드는 `.hub-kanban-card`(`--surface-3`로 상승),
-  아이콘 버튼은 `.hub-iconbtn` — 전부 같은 no-JS 계약이며 휴지 서피스만 다르다.
+  아이콘 버튼은 `.hub-iconbtn`, `Button` primitive는 `.hub-btn` + `.hub-btn--<variant>` — 전부 같은 no-JS 계약이며
+  휴지 서피스만 다르다.
+- `Button`의 휴지 variant chrome(색·배경·보더·radius)도 `hub-tokens.css`가 소유한다. 인라인 스타일은 모든 클래스
+  규칙을 이기므로, 휴지 값이 인라인에 남아 있으면 `:hover` 규칙은 절대 발동하지 않는다 (§15 2026-09-15).
 
 **텍스트 크기 플로어.**
 - 데이터 값 ≥ 12px · 보조 메타(ID·타임스탬프·마이크로 카운트·상태 플래그) ≥ 10.5px ·
@@ -487,3 +490,4 @@ Build order when adding a new surface:
 | 2026-09-01 | 브랜드 컨텐츠 로그(`dashboard/brands/log`)에 한해 브랜드별 아이덴티티 컬러 허용 — 운영자 v5 디자인 첨부가 8색 팔레트(점·카드 좌측 3px 레일)를 확정. 색은 언제나 브랜드 이름 라벨과 동반(색 단독 의미 금지), 페이지 크롬은 토큰만. 다른 표면으로의 확장은 별도 결정 필요 | confirmed | 운영자가 직접 5회 이터레이션한 첨부 디자인이 08-29 브랜드 탭 스펙 §11 "브랜드 식별에 색 금지"를 이 표면에서 대체. 3px 레일도 §8.1 1px 레일 규칙의 운영자 확정 예외. 상세·미정 슬러그 매핑은 `2026-09-01-brand-content-log.md` |
 | 2026-09-15 | 개인 매출 로드맵의 확실성 채널은 §5.3의 3값 enum(`confirmed`·`recommended`·`unknown`)만 쓴다. 라이프사이클 값 `waiting`("입금 대기")은 확실성에서 분리해 `closing`(deal-stages.js의 won) 단계의 `LifecycleBadge`로 옮기고, `final`(negotiation)은 "가능성 높음"으로, `contact`·`potential`은 §5.3이 지정한 unknown 어휘 "확인 필요"로 읽는다 | confirmed | 페이지 전용 4키 어휘가 §5.3 첫 문장(채널 겸직 금지)을 어겼고, `[data-certainty="waiting"]` 규칙이 없어 대기 이벤트가 `confirmed`와 같은 solid 기하로 렌더됐다. "입금 대기"가 negotiation 단계에 붙어 있던 것도 오기였다. 확실성 라벨로 쓰이던 "진행 중"은 `LifecycleBadge`의 `active` 라벨이라 재사용하면 채널이 다시 겹친다 |
 | 2026-09-15 | `overflow: hidden` 컨테이너 안의 full-bleed 행은 §11 포커스 링을 `outline: 1px solid var(--moon-300)` + `outline-offset: -2px`로 안쪽에 그린다 (`.hub-row` 선례) | confirmed | 양수 offset은 컨테이너에 잘려 부분 링이 된다 — §11이 막으려는 "링이 보이지 않는" 상태가 된다. §11은 링 **굵기**를 1px로 고정하고, 2px offset은 자립형 컨트롤의 기본값(`.hub-app :focus-visible`)이다 |
+| 2026-09-15 | `Button` primitive의 hover를 CSS가 소유한다 — `.hub-btn` + `.hub-btn--<variant>`가 휴지 chrome·radius·모션을 `hub-tokens.css`에서 가지고, `active` prop은 `data-active` DOM 속성으로 노출해 pressed 상태도 스타일시트가 소유한다. 2026-07-29 design-review의 "Button primitive에 variant별 hover 상태 없음" 항목을 닫는다 | confirmed | 인라인 `background`/`border`/`color`가 모든 클래스 규칙을 이겨서, primitive가 2026-07부터 선언해 둔 `--dur-hover` 전이가 한 번도 발동하지 못했다. `.hub-iconbtn`(§8.1)이 이미 쓰는 계약을 그대로 적용한 것이며, hover는 §5.2대로 accent가 아니라 surface 한 단계 또는 hairline 한 단계 강조로만 표현한다 |
