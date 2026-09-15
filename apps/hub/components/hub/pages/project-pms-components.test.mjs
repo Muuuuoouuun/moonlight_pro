@@ -15,6 +15,7 @@ const projectsSource = await readFile(new URL("./projects.jsx", import.meta.url)
 const detailPanelSource = await readFile(new URL("./project-detail-panel.jsx", import.meta.url), "utf8");
 const responsiveCss = await readFile(new URL("../hub-tokens.css", import.meta.url), "utf8");
 const globalCss = await readFile(new URL("../../../app/globals.css", import.meta.url), "utf8");
+const todosViewSource = await readFile(new URL("./project-todos-view.jsx", import.meta.url), "utf8");
 
 test("project progress exposes evidence and only uses progressbar metadata when determinate", () => {
   assert.match(pmsComponentsSource, /export function ProjectProgressGauge/);
@@ -447,11 +448,13 @@ test("desktop detail-open rows fit the standard sidebar-constrained width withou
 });
 
 test("mobile project todos collapse to a readable two-column card instead of squeezing desktop tracks", () => {
-  assert.match(projectsSource, /className=["']hub-project-todo-row["']/);
-  assert.match(projectsSource, /className=["']hub-project-todo-check["']/);
-  assert.match(projectsSource, /className=["']hub-project-todo-main hub-row["']/);
-  assert.match(projectsSource, /className=["']hub-project-todo-priority["']/);
-  assert.match(projectsSource, /className=["']mono hub-project-todo-due["']/);
+  // To-dos 렌더러는 project-todos-view.jsx로 분리됐다 — 마운트 배선은 projects.jsx가 소유한다.
+  assert.match(projectsSource, /\{view === 'todos' && canWriteTasks && \(\s*<ProjectTodosView/);
+  assert.match(todosViewSource, /className=["']hub-project-todo-row["']/);
+  assert.match(todosViewSource, /className=["']hub-project-todo-check["']/);
+  assert.match(todosViewSource, /className=["']hub-project-todo-main hub-row["']/);
+  assert.match(todosViewSource, /className=["']hub-project-todo-priority["']/);
+  assert.match(todosViewSource, /className=["']mono hub-project-todo-due["']/);
 
   const mobileStart = responsiveCss.indexOf("@media (max-width: 900px)");
   const mobileCss = responsiveCss.slice(mobileStart);
