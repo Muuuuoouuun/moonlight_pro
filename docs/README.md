@@ -119,6 +119,10 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **기획 초안 (미확정, 새 구현의 근거로 쓰지 않음)**
 
+- [`superpowers/specs/2026-09-13-revenue-and-cashflow-design.md`](superpowers/specs/2026-09-13-revenue-and-cashflow-design.md) — **초기 기능 범위 확정 · 상세 설계 권장안**. 사업·개인 재정의 통합/분할 보기, 계좌·카드, 할부·대출·반복 지출, 직접 입력·엑셀/CSV 가져오기와 매출 수금 연결. 구현 전이며 기존 거래 기반 30일 전망과 실제 현금 흐름을 구분한다.
+
+- [`superpowers/specs/2026-09-13-crm-recording-and-lead-scoring-guidelines-design.md`](superpowers/specs/2026-09-13-crm-recording-and-lead-scoring-guidelines-design.md) — **디자인·UI/UX 우선 확정(09-14) / 세부 설계 DRAFT v0.2**. 고객 목록·상세·빠른 기록의 UX 시나리오 → 화면 구조 → 시각·인터랙션 확인 → 실제 기록 연결 → 근거 평가·제한 추천 순서. 메모/연락 결과·버튼·템플릿·내 패턴·리드 스코어링·넛지를 함께 설계하며 실패/복구 상태와 디자인 게이트를 포함한다. 시안 제작·UX 검증·앱 구현·라이브 재채점은 아직 하지 않음.
+
 - [`superpowers/specs/2026-09-13-memo-discovery-and-analysis-design.md`](superpowers/specs/2026-09-13-memo-discovery-and-analysis-design.md) — **2A 승인·구현 / 2B DRAFT**. 한 검색창에서 제목·원문·보강 문장을 찾고, 선택 기간·종류·업무·활용 여부로 좁힌다. 편집 중 입력·펼친 목록·위치를 보존하며 프로젝트·고객·브랜드에서 최근 연결 메모 3개와 전체 보기를 제공한다. [구현·검증 기록](superpowers/plans/2026-09-13-memo-discovery.md). 0030 운영 DB는 2026-09-14 적용 완료. 코드 배포와 선택 AI 분석은 별도다.
 
 - [`superpowers/specs/2026-09-12-unified-inquiries-email-webhook-design.md`](superpowers/specs/2026-09-12-unified-inquiries-email-webhook-design.md) — **APPROVED · 코드 구현(2026-09-13), 운영 연결 대기**. 메일·랜딩페이지 문의 원장, 감지·중복·읽음·처리 상태와 기존 알림 통합. [연결 가이드](inquiry-integration-setup.md), [Gmail 서명·수집](inquiry-gmail-setup.md), [구현·검증 기록](superpowers/plans/2026-09-13-unified-inquiries.md).
