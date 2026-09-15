@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const page = (name) => readFileSync(new URL(`./pages/${name}.jsx`, import.meta.url), 'utf8');
@@ -72,4 +72,106 @@ test('approval queue read failure is never rendered as an empty queue', () => {
 
   // 첫 화면: !r.ok 단독 감지기로 되돌아가지 않는다.
   assert.doesNotMatch(page('daily-brief'), /if \(!r\.ok\) throw new Error\(`work-orders/);
+});
+
+// 2026-09-15. PMS 프로젝트 상태 칩이 페이지 지역 `statusTone`(색 이름 맵) + Badge에서
+// ProjectStatusBadge → LifecycleBadge(의미 열거값)로 넘어갔다. 방어 대상 셋:
+// (1) 색 이름 맵의 부활, (2) 페이지별 한국어 라벨 드리프트, (3) Blocked 외 상태의
+// danger 상속. DESIGN.md §5.3 lifecycle · §8.2 state primitives.
+// 호출처 개수는 파일 단위가 아니라 pages/ 전체 합으로 센다 — 뷰 분할 리팩터가
+// projects.jsx에서 코드를 옮겨도 계약이 살아남아야 한다.
+const pagesDir = new URL('./pages/', import.meta.url);
+const allPageSources = readdirSync(pagesDir)
+  .filter((name) => name.endsWith('.jsx'))
+  .map((name) => readFileSync(new URL(name, pagesDir), 'utf8'))
+  .join('\n');
+
+test('PMS project status is declared by lifecycle enum, never by a page-level tone map', () => {
+  const pms = page('project-pms-components');
+  const projects = page('projects');
+  const detail = page('project-detail-panel');
+
+  // 어댑터가 정본이고 primitive를 감싼다 — 페이지는 의미만 선언한다(§8.2).
+  assert.match(pms, /import \{ LifecycleBadge \} from "\.\.\/hub-primitives"/);
+  assert.match(pms, /export function ProjectStatusBadge/);
+  assert.match(
+    pms,
+    /<LifecycleBadge\s+state=\{projectLifecycleState\(status\)\}\s+label=\{projectStatusLabel\(status\)\}/,
+    'ProjectStatusBadge는 LifecycleBadge에 열거값과 한국어 라벨을 함께 넘긴다',
+  );
+
+  // 6개 상태 전부가 열거값으로 선언되고, danger를 상속하는 건 Blocked 하나뿐이다(§5.3).
+  const lifecycleMap = pms.slice(
+    pms.indexOf('PROJECT_LIFECYCLE_STATE = {'),
+    pms.indexOf('};', pms.indexOf('PROJECT_LIFECYCLE_STATE = {')),
+  );
+  assert.ok(lifecycleMap.length > 0);
+  for (const entry of [
+    /'In progress': 'active'/,
+    /Review: 'active'/,
+    /Planning: 'queued'/,
+    /Backlog: 'queued'/,
+    /Blocked: 'blocked'/,
+    /Done: 'done'/,
+  ]) {
+    assert.match(lifecycleMap, entry);
+  }
+  assert.equal(
+    (lifecycleMap.match(/'blocked'/g) || []).length,
+    1,
+    'danger를 상속하는 상태는 Blocked 하나뿐이다(§5.3 red-budget)',
+  );
+  assert.doesNotMatch(
+    lifecycleMap,
+    /'(?:danger|success|warning|info|neutral|moon|personal|company)'/,
+    '열거값 자리에 Badge tone 색 이름이 들어오면 안 된다(§8.2 "semantic enums, not color names")',
+  );
+
+  // 눈에 보이는 한국어 라벨은 어댑터 한 곳에만 산다(§8.2 · §10 운영자 어휘).
+  // LifecycleBadge가 같은 문구로 aria-label을 짜므로 접근성 이름도 여기 고정된다.
+  for (const label of ['작업 중', '검토', '계획', '막힘', '완료', '백로그']) {
+    assert.match(pms, new RegExp(label), `상태 라벨 누락: ${label}`);
+  }
+
+  // 페이지에는 상태→tone 맵도, 로컬 라벨 사전도, 프롭 배선도 남지 않는다.
+  assert.doesNotMatch(projects, /const statusTone = /);
+  assert.doesNotMatch(projects, /const STATUS_LABEL_KO = \{/);
+  assert.doesNotMatch(projects, /statusTone=\{/);
+  assert.doesNotMatch(detail, /statusTone/);
+
+  // 네 호출처 전부 어댑터를 쓴다: List 행 · 완료/보관 · Timeline 기한미정 · 상세 패널.
+  assert.equal(
+    (allPageSources.match(/<ProjectStatusBadge status=\{p\.status\} \/>/g) || []).length,
+    3,
+    'PMS 목록형 상태 칩 3곳이 모두 어댑터를 거쳐야 한다',
+  );
+  assert.equal(
+    (allPageSources.match(/<ProjectStatusBadge status=\{project\.status\} \/>/g) || []).length,
+    1,
+    '상세 패널 상태 칩도 어댑터를 거쳐야 한다',
+  );
+  // 상세 패널이 영문 원시 상태로 되돌아가지 않는다 — 옆 행은 한국어다.
+  assert.doesNotMatch(detail, /size="xs">\{project\.status\}<\/Badge>/);
+});
+
+// DESIGN.md §15 2026-08-05(확정): AttentionRail은 미채택이고, 레일은 §8.1의
+// inset 1px 인라인이 현행이다. Timeline 막대의 상태 스트라이프는 그 규칙을 따르고
+// overdue일 때만 danger로 간다 — 6개 상태를 통째로 빨갛게 칠하는 primitive 교체는
+// §5.3 red-budget 위반이므로 여기서 막는다.
+test('PMS timeline keeps the inline 1px status stripe instead of adopting AttentionRail', () => {
+  const projects = page('projects');
+  assert.match(
+    projects,
+    /const lineToken = item\.overdue \? 'var\(--danger-line\)' : \(STATUS_LINE_TOKEN\[p\.status\] \|\| 'var\(--line-strong\)'\)/,
+  );
+  assert.match(projects, /boxShadow: `inset 1px 0 0 \$\{lineToken\}`/);
+  assert.doesNotMatch(projects, /inset (?:2|3)px 0 0/);
+  assert.doesNotMatch(projects, /<AttentionRail/);
+  // 중립 상태가 danger 토큰으로 새지 않는다.
+  const stripeMap = projects.slice(
+    projects.indexOf('const STATUS_LINE_TOKEN = {'),
+    projects.indexOf('};', projects.indexOf('const STATUS_LINE_TOKEN = {')),
+  );
+  assert.ok(stripeMap.length > 0);
+  assert.equal((stripeMap.match(/var\(--danger/g) || []).length, 1, 'Blocked 하나만 danger 스트라이프다');
 });

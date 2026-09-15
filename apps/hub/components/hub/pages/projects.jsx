@@ -53,6 +53,7 @@ import {
   ContainerFilterBar,
   ProjectPortfolioSummary,
   ProjectProgressGauge,
+  ProjectStatusBadge,
 } from "./project-pms-components";
 import { classifyProjectPortfolio, portfolioWindow } from "./project-pms-metrics";
 import {
@@ -93,7 +94,8 @@ const PROJECT_VIEW_OPTIONS = [
 const PROJECT_VIEWS = new Set(PROJECT_VIEW_OPTIONS.map(v => v.key));
 
 // Timeline view: status → left-stripe token (§5.2 — status color lives on stripes/chips,
-// never as a full bar fill) and the same Korean status labels the List view row uses.
+// never as a full bar fill). §15 2026-08-05: 레일은 §8.1 inset 1px 인라인이 현행이고
+// AttentionRail은 미채택이므로 이 토큰 맵과 아래 timeline 스트라이프는 그대로 둔다.
 const STATUS_LINE_TOKEN = {
   // lifecycle 스트라이프는 중립 — Moonstone은 current/selected 전용(§5.3, 5차 재감사 S).
   'In progress': 'var(--line-strong)',
@@ -103,14 +105,8 @@ const STATUS_LINE_TOKEN = {
   Blocked: 'var(--danger-line)',
   Done: 'var(--line-strong)',
 };
-const STATUS_LABEL_KO = {
-  'In progress': '작업 중',
-  Review: '검토',
-  Planning: '계획',
-  Blocked: '막힘',
-  Done: '완료',
-  Backlog: '백로그',
-};
+// 상태 라벨과 lifecycle 열거값의 정본은 ./project-pms-components 의
+// PROJECT_STATUS_LABEL_KO / PROJECT_LIFECYCLE_STATE 다 — 상세 패널과 공유한다(§8.2).
 
 // Container category folders (2026-07-15 spec §4.2). The ledger resolves
 // `category` (meta.category → canonical map → 'general'); empty folders are
@@ -1449,8 +1445,8 @@ export function Projects({ workspace }) {
     createTodo(null, taskStatusForBoardColumn(column) || 'todo');
   }, [createTodo]);
 
-  // lifecycle은 중립 — moon은 current/selected 전용(§5.3). Blocked만 danger.
-  const statusTone = { 'In progress': 'neutral', Review: 'neutral', Planning: 'neutral', Backlog: 'neutral', Blocked: 'danger', Done: 'neutral' };
+  // 프로젝트 상태 칩은 ProjectStatusBadge(→ LifecycleBadge) 하나가 소유한다(§8.2).
+  // 색 이름 맵을 여기에 되살리지 않는다 — state-usage.test.mjs가 고정한다.
   const prioTone = { critical: 'danger', high: 'danger', med: 'neutral', medium: 'neutral', low: 'neutral' };
   const updateTone = { reported: 'neutral', active: 'neutral', blocked: 'danger', done: 'neutral' };
   const checkTone = { pending: 'neutral', done: 'neutral', skipped: 'neutral', blocked: 'danger' };
@@ -2274,7 +2270,7 @@ export function Projects({ workspace }) {
                                   ariaLabel={`${p.name} 진척`}
                                 />
                                 <div className="hub-project-secondary-state">
-                                  <Badge tone={statusTone[p.status]} size="xs">{STATUS_LABEL_KO[p.status] || p.status}</Badge>
+                                  <ProjectStatusBadge status={p.status} />
                                   <span><Dot tone={prioTone[p.priority]} size={5} />{p.priority || 'medium'}</span>
                                 </div>
                               </div>
@@ -2397,7 +2393,7 @@ export function Projects({ workspace }) {
                                 <span style={{ fontSize: 13, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
                                 <span style={{ fontSize: 11, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{pBrand.name}</span>
                               </button>
-                              <Badge tone="neutral" size="xs">{STATUS_LABEL_KO[p.status] || p.status}</Badge>
+                              <ProjectStatusBadge status={p.status} />
                               <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', flexShrink: 0 }}>{p.due || ''}</span>
                             </div>
                           );
@@ -2444,7 +2440,6 @@ export function Projects({ workspace }) {
                     content={pContent}
                     syncState={syncState}
                     failedSources={detailFailedSources}
-                    statusTone={statusTone}
                     updateTone={updateTone}
                     checkTone={checkTone}
                     contentTone={contentTone}
@@ -2799,7 +2794,7 @@ export function Projects({ workspace }) {
                           >
                             <BrandMark brand={pBrand} size={16} />
                             <span style={{ flex: 1, fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
-                            <Badge tone={statusTone[p.status]} size="xs">{STATUS_LABEL_KO[p.status] || p.status}</Badge>
+                            <ProjectStatusBadge status={p.status} />
                           </a>
                         );
                       })}

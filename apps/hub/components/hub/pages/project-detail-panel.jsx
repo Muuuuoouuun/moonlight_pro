@@ -5,7 +5,7 @@ import { RelatedMemos } from '../related-memos';
 import { MemoCaptureLink } from "../journal-links";
 import { Avatar, Badge, Button, Checkbox, IconButton } from "../hub-primitives";
 import { ProjectDeliverySummary } from "./project-delivery";
-import { BrandMark } from "./project-pms-components";
+import { BrandMark, ProjectStatusBadge } from "./project-pms-components";
 import { TaskChecklistGauge } from './project-task-checklist';
 
 function DetailSection({ title, count = 0, empty, children }) {
@@ -113,7 +113,6 @@ export function ProjectDetailPanel({
   checks = [],
   syncState,
   failedSources = [],
-  statusTone = {},
   updateTone = {},
   checkTone = {},
   contentTone = {},
@@ -153,7 +152,7 @@ export function ProjectDetailPanel({
         <div>
           <div style={{ fontSize: 16, fontWeight: 500, letterSpacing: "-0.01em" }}>{project.name}</div>
           <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-            <Badge tone={statusTone[project.status]} size="xs">{project.status}</Badge>
+            <ProjectStatusBadge status={project.status} />
             {project.tag === "company" && <Badge tone="company" size="xs">Company</Badge>}
             {project.tag === "personal" && <Badge tone="personal" size="xs">Personal</Badge>}
           </div>
