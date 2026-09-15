@@ -185,7 +185,7 @@ button {
 .studio-toggle:focus-visible,
 .studio-chip-toggle:focus-visible,
 .editor-input:focus-visible {
-  outline: 2px solid rgba(82, 116, 168, 0.30);
+  outline: 1px solid rgba(82, 116, 168, 0.30);
   outline-offset: 2px;
 }
 
@@ -356,7 +356,7 @@ button {
 
 .field-input:focus,
 .field-textarea:focus {
-  outline: 2px solid rgba(82, 116, 168, 0.20);
+  outline: 1px solid rgba(82, 116, 168, 0.20);
   outline-offset: 2px;
 }
 

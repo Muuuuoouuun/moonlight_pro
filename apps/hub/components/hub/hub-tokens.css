@@ -2292,6 +2292,11 @@
 
 .personal-revenue-drawer-meta {
   justify-content: flex-start;
+  /* closing 딜은 확실성("확정")과 라이프사이클("입금 대기") 배지를 함께 단다.
+     둘 다 white-space: nowrap이라 360px 드로어에서 가로로 넘칠 수 있다 —
+     자르지 말고 접는다 (§11 텍스트는 언제나 읽을 수 있어야 한다). */
+  flex-wrap: wrap;
+  row-gap: 6px;
   margin-top: 15px;
   padding-bottom: 22px;
   color: var(--fg-faint);

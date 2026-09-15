@@ -124,11 +124,18 @@ test("focus rings are 1px var(--moon-300) everywhere under apps/hub (DESIGN.md 1
   const sources = await collectStyleSources(new URL("../../../", import.meta.url));
   assert.ok(sources.length > 50, `sweep must actually reach the tree, saw ${sources.length} files`);
 
+  // 토큰이 아니라 폭을 검사한다. --moon-300만 보면 `outline: 2px solid var(--accent)`
+  // (quick-memo.module.css가 그랬다)나 하드코딩 rgba 링을 그대로 통과시킨다.
+  // 색 토큰은 현재 --moon-300 / --accent / 하드코딩 rgba가 섞여 있고, 통일은
+  // 7개 파일에 걸친 별도 관례 결정이라 여기서 강제하지 않는다 (TODOS.md 참조).
   const offenders = [];
   for (const [path, source] of sources) {
-    for (const m of source.matchAll(/outline:\s*(\d+)px solid var\(--moon-300\)/g)) {
+    for (const m of source.matchAll(/outline:\s*(\d+)px\s+solid/g)) {
       if (m[1] !== "1") offenders.push(`${path.replace(/.*\/apps\/hub\//, "apps/hub/")}: ${m[0]}`);
     }
   }
-  assert.deepEqual(offenders, [], "focus ring must be 1px (DESIGN.md 11)");
+  assert.deepEqual(offenders, [], "focus ring must be 1px wide (DESIGN.md 11)");
+  // 안티-공회전: 검사가 실제로 링을 찾고 있는지 확인한다.
+  const rings = sources.reduce((n, [, src]) => n + (src.match(/outline:\s*\d+px\s+solid/g) || []).length, 0);
+  assert.ok(rings >= 8, `포커스 링 추출 실패 — saw ${rings}`);
 });

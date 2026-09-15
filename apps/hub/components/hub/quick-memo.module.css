@@ -28,7 +28,7 @@
 .launcher:focus-visible .launcherLabel { width: 86px; opacity: 1; }
 .launcher:focus-visible .launcherIcon { width: 52px; height: 52px; flex-basis: 52px; }
 .launcher:hover { background: var(--surface-3); }
-.launcher:focus-visible, .panel :is(button, textarea, select, a):focus-visible, .toast a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.launcher:focus-visible, .panel :is(button, textarea, select, a):focus-visible, .toast a:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 .badge { font-size: 11px; color: var(--fg-muted); }
 .panel { position: relative; width: min(360px, calc(100vw - 32px)); max-height: calc(var(--memo-viewport, 100dvh) - 32px - var(--memo-footer-offset, 0px)); overflow-y: auto; padding: 16px; }
 .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
