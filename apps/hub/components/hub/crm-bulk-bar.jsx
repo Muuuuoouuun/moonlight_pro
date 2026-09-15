@@ -11,7 +11,7 @@ import { Badge, Button } from "./hub-primitives";
 export function BulkBar({ count, onClear, children }) {
   if (!count) return null;
   return (
-    <div style={{
+    <div data-hub-bottom-actions="true" style={{
       position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)", zIndex: 50,
       display: "flex", alignItems: "center", gap: 10, padding: "8px 12px",
       background: "var(--surface-3)", border: "1px solid var(--line)",

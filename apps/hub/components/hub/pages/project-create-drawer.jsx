@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { projectCreateFeedback, validateProjectDraft } from "@/lib/pms-ui";
+import { projectAreaLabel, projectCreateFeedback, validateProjectDraft } from "@/lib/pms-ui";
 import { Button, Drawer, Kbd } from "../hub-primitives";
 import { deliveryDraft, validateDelivery } from "../../../../../packages/project-delivery/index.ts";
 import { Iconed } from "../hub-icons";
@@ -224,7 +224,7 @@ function ProjectCreateSurface({
   if (!draft) return null;
   const saving = saveState === "saving";
   const feedbackIsError = ["error", "conflict", "invalid", "degraded"].includes(saveState);
-  const areaStatus = selectedArea?.name || "업무 분야 확인 필요";
+  const areaStatus = (selectedArea && projectAreaLabel(selectedArea)) || "업무 분야 확인 필요";
   const scopeStatus = draft.orgScope === "classin" ? "회사 업무" : "개인 업무";
   const minimalCreateCopy = draft.areaId
     ? "이름 하나면 충분합니다. 세부 내용과 하위 아이템은 지금 또는 만든 뒤에 이어서 정리할 수 있어요."
@@ -292,7 +292,7 @@ function ProjectCreateSurface({
             style={CONTROL_STYLE}
           >
             <option value="">업무 분야 선택</option>
-            {areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
+            {areas.map((area) => <option key={area.id} value={area.id}>{projectAreaLabel(area)}</option>)}
           </select>
           {errors.areaId && <span id="project-area-error" role="alert" className="project-create-field-error">{errors.areaId}</span>}
         </label>
@@ -369,7 +369,7 @@ function ProjectCreateSurface({
                   style={CONTROL_STYLE}
                 >
                   <option value="">업무 분야 선택</option>
-                  {areas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
+                  {areas.map((area) => <option key={area.id} value={area.id}>{projectAreaLabel(area)}</option>)}
                 </select>
                 {errors.areaId && <span id="project-area-error" role="alert" className="project-create-field-error">{errors.areaId}</span>}
               </label>

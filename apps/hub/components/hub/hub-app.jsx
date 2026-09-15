@@ -13,6 +13,7 @@ import { TopBar } from "./hub-topbar";
 import { ToastProvider } from "./hub-toast";
 import { useInquiryNotifications } from './inquiry-notifications';
 import { CommandPalette } from "./hub-command-palette";
+import { QuickMemo } from "./quick-memo";
 import { ShortcutOverlay } from "./crm-shortcut-overlay";
 import { CelebrationCanvas } from "./celebration-fx";
 import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
@@ -255,7 +256,7 @@ const PARENT_JUMP = {
   'dashboard/brand': 'dashboard/brand/projects',
 };
 
-export function HubApp() {
+export function HubApp({ memoDraftContext = "preview" }) {
   const inquiryNotifications = useInquiryNotifications();
   React.useEffect(() => { dailyReviewDraftStore.restore(); }, []);
   useIdlePagePrefetch();
@@ -283,6 +284,7 @@ export function HubApp() {
   const [theme, setTheme] = React.useState(DEFAULT_HUB_PREFERENCES.theme);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [helpOpen, setHelpOpen] = React.useState(false);
+  const [memoOpenRequest, setMemoOpenRequest] = React.useState(0);
   const rootRef = React.useRef(null);
   const menuButtonRef = React.useRef(null);
   const mobileCloseButtonRef = React.useRef(null);
@@ -512,8 +514,9 @@ export function HubApp() {
             </main>
           </div>
         </div>
-        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={navigate} />
-        <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <QuickMemo key={memoDraftContext} draftContext={memoDraftContext} route={`${pathname}?${searchParams}`} blocked={paletteOpen || helpOpen || mobileNavState.open} openRequest={memoOpenRequest} onNavigate={navigate} />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} />
+      <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
         <CelebrationCanvas />
       </ToastProvider>
     </div>

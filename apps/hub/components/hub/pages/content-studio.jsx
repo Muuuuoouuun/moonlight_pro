@@ -26,6 +26,8 @@ export function ContentStudio({ workspace, ledger }) {
   const toast = useToast();
   const [selection, setSelection] = React.useState(null), [drawer, setDrawer] = React.useState(null);
   const [sourceOpen, setSourceOpen] = React.useState(true);
+  const [publicationUrl, setPublicationUrl] = React.useState('');
+  const [publicationDate, setPublicationDate] = React.useState('');
   const [mentorOpen, setMentorOpen] = React.useState(false);
   const [newChannel, setNewChannel] = React.useState('instagram'), [notice, setNotice] = React.useState('');
   const brands = filterBrandsByWorkspace(ledger.brands || [], workspace).filter((brand) => brand.id && brand.key !== 'all');
@@ -131,7 +133,7 @@ export function ContentStudio({ workspace, ledger }) {
                 <DraftEditor draft={draft} edit={studio.edit} disabled={disabled} onSelect={setSelection} />
                 <div className="studio-export-bar">
                   <p className="studio-muted studio-small">선택한 결과물만 복사·내보내기합니다.</p>
-                  <div className="studio-actions"><Button variant="outline" icon="copy" onClick={copy} disabled={!draft.body.trim()}>복사</Button><Button variant="outline" icon="download" onClick={download} disabled={!draft.body.trim()}>내보내기</Button></div>
+                  <div className="studio-actions"><Button variant="outline" icon="copy" onClick={copy} disabled={!draft.body.trim()}>복사</Button><Button variant="outline" icon="download" onClick={download} disabled={!draft.body.trim()}>내보내기</Button><Button variant="outline" onClick={() => setDrawer('publication')} disabled={disabled || !draft.body.trim()}>발행 기록</Button></div>
                 </div>
               </div>
             </Card>
@@ -151,7 +153,16 @@ export function ContentStudio({ workspace, ledger }) {
           </aside>
         </div>
       </>}
-    {drawer === 'variant' && <Drawer title="채널 결과물 추가" subtitle="같은 원문·기획에서 채널별로 별도의 초안을 만듭니다." presentation="compact" width="420px" onClose={() => setDrawer(null)} footer={<Button variant="primary" onClick={createVariant} disabled={studio.busy}>빈 결과물 추가</Button>}>
+    {drawer === 'publication' && <Drawer title="발행 기록" subtitle="외부 채널에 게시한 URL과 시각을 기록합니다. 운영자 확인이며 외부 게시 여부를 자동 검증하지 않습니다." presentation="compact" onClose={() => { if (!studio.busy) setDrawer(null); }} footer={<Button variant="primary" disabled={disabled} onClick={async () => {
+      if (await studio.recordPublication(publicationUrl, publicationDate)) { setDrawer(null); setNotice('운영자 확인으로 발행을 기록했습니다.'); }
+    }}>{studio.busy ? '확인 중…' : '발행 기록 저장'}</Button>}>
+      <div className="studio-stack">
+        <TextField label="발행 URL" value={publicationUrl} onChange={event => setPublicationUrl(event.target.value)} disabled={studio.busy} />
+        <TextField label="발행 일시" type="datetime-local" value={publicationDate} onChange={event => setPublicationDate(event.target.value)} disabled={studio.busy} />
+        {studio.saveMessage && <p role="status">{studio.saveMessage}</p>}
+      </div>
+    </Drawer>}
+    {drawer === 'variant'  && <Drawer title="채널 결과물 추가" subtitle="같은 원문·기획에서 채널별로 별도의 초안을 만듭니다." presentation="compact" width="420px" onClose={() => setDrawer(null)} footer={<Button variant="primary" onClick={createVariant} disabled={studio.busy}>빈 결과물 추가</Button>}>
       <div className="studio-stack"><SelectField label="추가할 채널" options={STUDIO_CHANNELS.map(({ key, label }) => ({ value: key, label }))} value={newChannel} onChange={(event) => setNewChannel(event.target.value)} />
       <p className="studio-muted">현재 글을 AI로 변형하려면 AI 작업에서 ‘다른 채널로 변형’을 선택하세요.</p></div>
     </Drawer>}

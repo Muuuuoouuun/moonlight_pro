@@ -53,9 +53,13 @@ export function identityCompleteness(brand) {
   if (!String(brand?.philosophy || "").trim()) missing.push("철학");
   if (!String(brand?.voice || "").trim()) missing.push("보이스");
   if (!(Array.isArray(brand?.rules) && brand.rules.length)) missing.push("콘텐츠 규칙");
+  const hasWrittenCriteria = ["philosophy", "voice", "audience", "promise", "direction", "offer", "voiceExamples"]
+    .some((key) => String(brand?.[key] || "").trim())
+    || ["rules", "keywords", "forbidden"].some((key) => Array.isArray(brand?.[key]) && brand[key].length > 0);
   return {
     missing,
-    state: missing.length === 0 ? "confirmed" : missing.length === 3 ? "unknown" : "recommended",
+    state: brand?.identityConfirmedAt ? "confirmed" : hasWrittenCriteria ? "recommended" : "unknown",
+    complete: missing.length === 0,
   };
 }
 
@@ -105,9 +109,11 @@ function countsFor(items) {
 // 정렬 = "지금 손이 필요한 순". 목표 대비 얼마나 밀렸는지를 먼저 보고,
 // 목표를 모르는 브랜드는 조용한 날수로 뒤따른다. 이름은 마지막 안정 정렬 키다.
 function attentionRank(entry) {
-  const goal = entry.weeklyGoal.value;
+  if (entry.isFocused) return -10;
+  if (entry.operatingState === "resting") return 10;
+  const goal = entry.weeklyGoal.certainty === "confirmed" ? entry.weeklyGoal.value : null;
   const behind = goal ? Math.max(0, goal - entry.publishedThisWeek) / goal : 0;
-  const quiet = entry.quietDays == null ? 1 : Math.min(1, entry.quietDays / 30);
+  const quiet = entry.quietDays == null ? 0 : Math.min(1, entry.quietDays / 30);
   return -(behind * 2 + quiet);
 }
 
@@ -162,8 +168,8 @@ export function buildBrandDirectory(ledger = {}, { now = new Date(), scope = "al
       cadenceLabel: cadenceLabel(brand.cadence),
       weeklyGoal: resolveWeeklyGoal(brand),
       identity: identityCompleteness(brand),
-      counts: countsFor(brandItems),
-      publishedThisWeek: published.filter((date) => date >= weekStart).length,
+      counts: ledger.metricsAvailable === false ? null : countsFor(brandItems),
+      publishedThisWeek: ledger.metricsAvailable === false ? null : published.filter((date) => date >= weekStart && date <= now).length,
       lastPublishedAt: lastPublished ? lastPublished.toISOString() : null,
       quietDays: lastPublished ? Math.max(0, calendarDaysBetween(lastPublished, now)) : null,
       // 발행 실패는 브랜드 탭에서 danger를 쓰는 두 경우 중 하나다 (§6 상태 문법).
@@ -184,9 +190,12 @@ export function buildBrandDirectory(ledger = {}, { now = new Date(), scope = "al
     brands: ranked,
     totals: {
       brands: ranked.length,
-      quiet: ranked.filter((brand) => brand.quietDays == null || brand.quietDays >= 14).length,
+      focused: ranked.filter((brand) => brand.isFocused).length,
+      confirmed: ranked.filter((brand) => brand.identity.state === "confirmed").length,
+      resting: ranked.filter((brand) => brand.operatingState === "resting").length,
+      quiet: ranked.filter((brand) => brand.operatingState !== "resting" && brand.quietDays != null && brand.quietDays >= 14).length,
       behind: ranked.filter((brand) => (
-        brand.weeklyGoal.value != null && brand.publishedThisWeek < brand.weeklyGoal.value
+        brand.operatingState !== "resting" && brand.weeklyGoal.certainty === "confirmed" && brand.publishedThisWeek != null && brand.publishedThisWeek < brand.weeklyGoal.value
       )).length,
       failedPublishes: ranked.reduce((sum, brand) => sum + brand.failedPublishes, 0),
     },

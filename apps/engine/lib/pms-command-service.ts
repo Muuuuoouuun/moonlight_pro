@@ -242,6 +242,22 @@ export async function executePmsCommand(
   }
 
   if (command.filters && command.patch) {
+    if (command.table === "brands" && command.patch.meta) {
+      const identityFilters = command.filters.filter(([key]) => key === "id" || key === "workspace_id");
+      const rows = await dependencies.fetchRows("brands", { filters: identityFilters, limit: 1 });
+      if (rows === null) return { status: "error", error: "current-entity-read-failed" };
+      if (!rows[0]) return { status: "error", error: "not-found" };
+      const current = rows[0];
+      if (!current.updated_at) return { status: "error", error: "missing-brand-version" };
+      const expected = filterValue(command.filters, "updated_at");
+      if (expected && comparableTimestamp(expected) !== comparableTimestamp(current.updated_at)) {
+        return { status: "conflict", error: "stale-update", entity: current };
+      }
+      const meta = current.meta && typeof current.meta === "object" ? current.meta as Record<string, unknown> : {};
+      command.patch.meta = { ...meta, ...command.patch.meta as Record<string, unknown> };
+      command.patch.updated_at ||= context.now || new Date().toISOString();
+      if (!expected) command.filters.push(["updated_at", `eq.${current.updated_at}`]);
+    }
     // Read + compare-and-swap protects the metadata merge and schedule history.
     if (command.table === "projects" && (command.patch.meta || "due_at" in command.patch || command.patch.status === "completed")) {
       const identityFilters = command.filters.filter(([key]) => key === "id" || key === "workspace_id");

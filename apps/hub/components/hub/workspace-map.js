@@ -207,6 +207,9 @@ export function filterContentByWorkspace(items, ws) {
   const w = getWorkspace(ws);
   if (!w || !Array.isArray(items)) return items || [];
   return items.filter((c) => {
+    if (["personal", "company", "classin"].includes(c.orgScope)) {
+      return ws === "classin" ? ["company", "classin"].includes(c.orgScope) : c.orgScope === "personal";
+    }
     if (c.workspace === ws) return true;
     const tag = c.brand || c.brandKey || c.brandId || c.program;
     return brandInWorkspace(tag, ws) || tag === ws;

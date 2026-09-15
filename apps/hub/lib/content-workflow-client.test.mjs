@@ -80,5 +80,14 @@ test('invalid structured content is flagged instead of silently replacing existi
   assert.throws(()=>c.parseStudioStructure('broken','card_news'), /구조/);
   assert.equal(c.parseStudioStructure('{"scenes":[{"id":"1","spoken":"대사"}]}','reels_script').scenes[0].spoken,'대사');
   assert.equal(c.formatForChannel('youtube_shorts'),'reels_script');
-  assert.equal(c.formatForChannel('threads'),'x_thread');
+  assert.equal(c.formatForChannel('threads'),'threads_post');
+});
+
+test('opens a captured Threads idea and retains its distinct type on save', () => {
+  const c = api();
+  const capture = { id: 'capture', content_id: item.id, variant_type: 'threads_post', channel: null, body: '원문 소재', updated_at: '2026-09-14T00:00:00Z' };
+  const draft = c.draftFromDetail({ item, variants: [capture] }, capture.id);
+  assert.equal(draft.channel, 'threads');
+  assert.equal(c.buildStudioSave(draft, 'save-capture').variant.variantType, 'threads_post');
+  assert.equal(c.emptyStudioDraft().variantType, 'threads_post');
 });

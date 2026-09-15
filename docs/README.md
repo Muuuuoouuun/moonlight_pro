@@ -74,6 +74,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 **사이드바 IA · PMS 분류 (최신순, 확정 스펙만 정본)**
 
 - [`superpowers/specs/2026-09-11-scope-as-global-filter.md`](superpowers/specs/2026-09-11-scope-as-global-filter.md) — **결정됨(2026-09-11)**. 스코프(전체·ClassIn·개인)의 의미와 적용 범위 정본. `2026-07-14` 스펙의 "스코프 = 목적지 전환" 해석을 폐기하고 전역 필터로 바꾼다. 앵커·2레벨 구조 자체는 아래 `2026-07-15` 스펙이 계속 정본이다. 구현은 단계별.
+- [`2026-09-11-brand-content-refocus-proposal.md`](superpowers/specs/2026-09-11-brand-content-refocus-proposal.md) — 9월 14일 첫 구현 지시 반영: 브랜드 기준 편집·독립 조회, 소재함·Threads 원고·수동 발행 기록·빠른 메모 연결. §10이 실제 구현 범위이며 나머지는 후속 권장안. 운영 DB 타입 확장은 인증 실패로 미적용.
+
 - [`superpowers/specs/2026-09-09-project-delivery-lifecycle.md`](superpowers/specs/2026-09-09-project-delivery-lifecycle.md) — 시작·검증·종료 일정, 최소 결과물, 완료 조건, 마무리 가능성 및 완료 검증 UI. 운영자 구현 요청 반영, 로컬 검증·운영 배포 별도.
 - [`superpowers/specs/2026-07-15-sidebar-second-level-and-pms-taxonomy.md`](superpowers/specs/2026-07-15-sidebar-second-level-and-pms-taxonomy.md) — **확정(2026-07-15)**. 사이드바 2레벨 아코디언 + PMS 분류 체계 정본. `2026-07-14` 8앵커 IA는 유지하되 하위 레벨 노출 방식을 이 문서가 규정한다.
 - [`superpowers/specs/2026-07-15-personal-os-surface-restoration-design.md`](superpowers/specs/2026-07-15-personal-os-surface-restoration-design.md) — §3~4(5앵커+More 내비게이션 안)은 위 문서로 대체되어 **채택하지 않음**. §5(Personal 스코프 데이터 계약)·§6(구조적 화면 복구)는 별도로 유효.
@@ -145,6 +147,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 ### 도메인 참고
 
+- 빠른 메모: [`quick-memo-plan-2026-09-09.md`](quick-memo-plan-2026-09-09.md) — 공통 우측 하단 입력창·초안 복원·기존 메모 저장 경로 재사용. **2026-09-10 로컬 구현·검증 완료, 운영 배포 별도**
 - Agent/Council API·MCP: [`agent-council-api-mcp-operating-plan-2026-09-09.md`](agent-council-api-mcp-operating-plan-2026-09-09.md) — 현재 연동 구현과 권장 운영법. 아래 보류된 전체 Agent UI·자율 실행 설계를 승인한 것은 아님
 - Sales OS: [`sales-os-direction.md`](sales-os-direction.md), [`sales-os/`](sales-os/), [`sales-daily-loop-playbook.md`](sales-daily-loop-playbook.md)
 - Content OS: [`content-os-deep-plan.md`](content-os-deep-plan.md)

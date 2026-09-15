@@ -8,6 +8,9 @@ import { usePageCreateHotkey } from "../use-crm-keyboard";
 import { getWorkspace, filterContentByWorkspace, filterBrandsByWorkspace } from "../workspace-map";
 import { ContentStudio } from "./content-studio";
 import { businessTruthCompleteness, buildWeeklyScorecard, normalizeCampaignBusinessTruth } from "@/lib/campaign-business-truth";
+import { ContentIdeaCapture } from "./content-idea-capture";
+import { contentQueueScope, contentQueueTabs } from "@/lib/content-workflow";
+import "./content-workflow.css";
 
 function statusKeyOf(item) {
   if (item?.statusKey) return item.statusKey;
@@ -95,10 +98,11 @@ export function useContentLedger({ catalogOnly = false } = {}) {
 
     loadLedger();
     const invalidate = () => { contentLedgerCache = null; if (!catalogOnly) loadLedger(); };
-    window.addEventListener("moonlight:content-saved", invalidate);
+    const events = ["moonlight:content-saved", "moonlight:content-ledger-changed", "hub:brand-updated"];
+    events.forEach(name => window.addEventListener(name, invalidate));
     return () => {
       active = false; controller?.abort();
-      window.removeEventListener("moonlight:content-saved", invalidate);
+      events.forEach(name => window.removeEventListener(name, invalidate));
     };
   }, [catalogOnly]);
 
@@ -117,176 +121,50 @@ export function Queue({ workspace }) {
   const [tab, setTab] = React.useState('all');
   const [brandFilter, setBrandFilter] = React.useState(() => searchParams.get('brand') || 'all');
   const ledger = useContentLedger();
-  // Scope the brand filter pills + queue items to this workspace (pass-through when unscoped).
   const brands = ws ? filterBrandsByWorkspace(ledger.brands || [], workspace) : (ledger.brands || []);
-  const queueSource = Array.isArray(ledger.queue) ? ledger.queue : [];
-  const queue = filterContentByWorkspace(queueSource, workspace);
-  // 큐 lifecycle은 카테고리 — semantic 색 금지(§5.2/§5.3). 현재 단계(Ready/Review)만
-  // Moonstone으로 살짝 밝히고 나머지는 라벨이 전달한다.
-  const statusTone = {
-    Inbox: 'neutral',
-    Drafting: 'neutral',
-    Ready: 'moon',
-    'Handed off': 'neutral',
-    Watch: 'neutral',
-    Archived: 'neutral',
-    Draft: 'neutral',
-    Scheduled: 'neutral',
-    Review: 'neutral',
-    Idea: 'neutral',
-    Outline: 'neutral',
-    Published: 'neutral',
-  };
-  const tabs = [
-    { key: 'all', label: 'All', count: queue.length },
-    { key: 'idea', label: 'Inbox', count: queue.filter(c => statusKeyOf(c) === 'idea').length },
-    { key: 'draft', label: 'Drafting', count: queue.filter(c => statusKeyOf(c) === 'draft').length },
-    { key: 'review', label: 'Ready', count: queue.filter(c => statusKeyOf(c) === 'review').length },
-    { key: 'scheduled', label: 'Handed off', count: queue.filter(c => statusKeyOf(c) === 'scheduled').length },
-    { key: 'published', label: 'Watch', count: queue.filter(c => statusKeyOf(c) === 'published').length },
-  ];
-  const filteredByBrand = brandFilter === 'all'
-    ? queue
-    : queue.filter(c => c.brandId === brandFilter || c.brandKey === brandFilter);
-  const cadence = ledger.cadence;
-  const visibleQueueBase = tab === 'all'
-    ? filteredByBrand
-    : filteredByBrand.filter(c => statusKeyOf(c) === tab);
-  const visibleQueue = tab === 'idea'
-    ? [...visibleQueueBase].sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0))
-    : visibleQueueBase;
-  const activeLabel = tabs.find(t => t.key === tab)?.label || 'All';
+  const queue = filterContentByWorkspace(ledger.queue || [], workspace);
+  const filteredByBrand = contentQueueScope(queue, brandFilter);
+  const tabs = contentQueueTabs(filteredByBrand);
+  const visibleQueue = tab === 'all' ? filteredByBrand : filteredByBrand.filter((item) => statusKeyOf(item) === tab);
+  const activeLabel = tabs.find((entry) => entry.key === tab)?.label || '전체';
+  const selectedBrand = brands.find((brand) => brand.id === brandFilter || brand.key === brandFilter);
   const openStudio = React.useCallback((id) => {
     const brandParam = brandFilter !== 'all' ? `&brand=${encodeURIComponent(brandFilter)}` : '';
     router.push(`/dashboard/content/studio${id ? `?item=${encodeURIComponent(id)}` : '?new=draft'}${id ? '' : brandParam}`);
   }, [brandFilter, router]);
   const createDraft = React.useCallback(() => openStudio(), [openStudio]);
   usePageCreateHotkey(createDraft);
+  React.useEffect(() => { setBrandFilter(searchParams.get('brand') || 'all'); }, [searchParams]);
   return (
     <div className="hub-page content-queue" style={{ padding: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
-      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: "wrap" }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Publishing queue</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
-            {visibleQueue.length}{tab !== 'all' ? ` of ${queue.length}` : ''} items in pipeline
-            <SyncBadge state={ledger.syncState} />
-          </div>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>콘텐츠</h2>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>소재를 담고, 원고를 이어 쓰고, 발행 기록을 남깁니다. <SyncBadge state={ledger.syncState} /></div>
         </div>
         <div style={{ flex: 1 }} />
-        <Tabs className="hub-toolbar" tabs={tabs} active={tab} onChange={setTab} ariaLabel="Publishing queue filters" style={{ borderBottom: 'none' }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createDraft}>Draft <Kbd>N</Kbd></Button>
+        <Button variant="outline" size="sm" icon="plus" onClick={createDraft}>바로 원고 쓰기 <Kbd>N</Kbd></Button>
       </div>
-
-      {cadence && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
-          padding: '12px 16px', border: '1px solid var(--line-soft)',
-          borderRadius: 'var(--r-lg)', background: 'var(--surface)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>이번 주 발행</span>
-            <span className="stat" style={{ fontSize: 20, fontWeight: 600, color: 'var(--fg)' }}>
-              {cadence.published}<span style={{ color: 'var(--fg-faint)', fontWeight: 400 }}>/{cadence.goal}</span>
-            </span>
-            {!cadence.behind && cadence.goal > 0 ? (
-              <span className="hub-celebration-badge hub-celebration-badge--sparkle">
-                ✦ 목표 달성
-              </span>
-            ) : (
-              <Badge tone="neutral" size="xs">
-                {cadence.behind ? `${cadence.remaining}건 남음` : '목표 달성'}
-              </Badge>
-            )}
-          </div>
-          <div style={{ width: 1, height: 24, background: 'var(--line-soft)' }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)' }}>아이디어 큐</span>
-            <span className="mono" style={{ fontSize: 15, color: 'var(--fg)' }}>{cadence.queueDepth}</span>
-            {cadence.queueDepth < 10 && <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>· 10개 이상 권장</span>}
-          </div>
-          <div style={{ flex: 1 }} />
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 28 }} aria-hidden="true">
-            {(cadence.recentWeeks || []).map((w) => (
-              <div
-                key={w.week}
-                title={`${w.week} · ${w.count}건`}
-                style={{
-                  width: 18,
-                  height: Math.max(3, Math.min(28, (w.count / Math.max(cadence.goal, 1)) * 28)),
-                  borderRadius: 3,
-                  background: w.current ? 'var(--moon-300)' : 'var(--surface-3)',
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {brands.length > 0 && <div className="queue-brand-filter">
-        <SelectField label="브랜드 필터" value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)}
-          options={[{ value: 'all', label: '전체 브랜드 · ' + queue.length }, ...brands.map(brand => ({
-            value: brandFilter === brand.key ? brand.key : brand.id,
-            label: brand.name + ' · ' + queue.filter(item => item.brandId === brand.id || item.brandKey === brand.key).length,
-          }))]} />
-      </div>}
-
-      <Card pad={false} className="hub-table-card queue-list">
-        <div className="queue-table-heading" aria-hidden="true">
-          <span>Title</span><span>Kind</span><span>Channel</span><span>Brand</span><span>Lane</span><span>When</span><span style={{ textAlign: 'right' }}>Author</span>
-        </div>
-        {visibleQueue.length === 0 && ws && (
-          <EmptyState
-            icon="queue"
-            title={`${ws.label} — 아직 연결된 콘텐츠가 없습니다.`}
-            description="콘텐츠에 워크스페이스 태그가 붙으면 여기에 모입니다."
-            action={<Button variant="primary" size="sm" icon="plus" onClick={createDraft}>Draft <Kbd>N</Kbd></Button>}
-          />
-        )}
-        {visibleQueue.length === 0 && !ws && (
-          <EmptyState
-            icon="queue"
-            title={tab === 'all' ? '발행 큐가 비어 있습니다' : `${activeLabel} 항목이 없습니다`}
-            description={tab === 'all'
-              ? (ledger.syncState === 'error'
-                  ? '콘텐츠 원장을 읽지 못했습니다 — 비어 보여도 실제 콘텐츠가 있을 수 있습니다. 새로고침으로 재시도하세요.'
-                  : ledger.syncState === 'live' ? 'Supabase content_items/content_variants 기록에 표시할 콘텐츠가 없습니다.' : '초안을 만들면 큐와 파이프라인에 표시됩니다.')
-              : `${activeLabel} 상태의 콘텐츠가 생기면 이 필터에 표시됩니다.`}
-            action={<Button variant="primary" size="sm" icon="plus" onClick={createDraft}>Draft <Kbd>N</Kbd></Button>}
-          />
-        )}
-        {visibleQueue.map((c, i) => (
-          <div key={c.id} className="hub-row queue-row" style={{
-            padding: '12px 16px', alignItems: 'center',
-            borderBottom: i < visibleQueue.length - 1 ? '1px solid var(--line-soft)' : 'none',
-            cursor: 'pointer',
-          }}
-            role="button"
-            tabIndex={0}
-            onClick={() => openStudio(c.id)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                openStudio(c.id);
-              }
-            }}
-          >
-            <div className="queue-title" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-              <Iconed name={c.kind === 'Newsletter' ? 'email' : c.kind === 'Blog' ? 'content' : c.kind === 'Reel' ? 'play' : 'send'} size={13} style={{ color: 'var(--fg-faint)' }} />
-              {c.rank != null && (
-                <span className="mono" title="아이디어 랭크" style={{ fontSize: 10.5, color: 'var(--moon-300)', flexShrink: 0 }}>{Math.round(c.rank)}</span>
-              )}
-              <span className="queue-title-text">{c.title}</span>
-            </div>
-            <span className="queue-kind">{c.kind}</span>
-            <span className="queue-channel">{c.channel}</span>
-            <span className="queue-brand">
-              <Badge tone={c.brandTone || 'neutral'} variant="outline" size="xs">{c.brandGlyph || '•'} {c.brandName || '—'}</Badge>
-            </span>
-            <span className="queue-status"><Badge tone={statusTone[c.statusLabel || c.status] || 'neutral'} size="xs">{c.statusLabel || c.status}</Badge></span>
-            <span className="mono queue-when" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{c.when}</span>
-            <span className="queue-author">{c.author}</span>
-          </div>
-        ))}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-muted)' }}>
+          브랜드
+          <select aria-label="콘텐츠 브랜드 필터" value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)} style={{ minHeight: 40, maxWidth: '100%', background: 'var(--surface-2)', color: 'var(--fg)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: '6px 10px' }}>
+            <option value="all">전체 브랜드 · 미지정 포함</option>
+            {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
+          </select>
+        </label>
+        <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{selectedBrand?.name || '현재 범위'} · {filteredByBrand.length}건 중 {visibleQueue.length}건</span>
+      </div>
+      <Tabs className="hub-toolbar" tabs={tabs} active={tab} onChange={setTab} ariaLabel="콘텐츠 단계" />
+      {(tab === 'all' || tab === 'idea') && <ContentIdeaCapture brands={brands} initialBrand={selectedBrand?.id || ''} orgScope={workspace === 'classin' ? 'company' : 'personal'} fixedScope={Boolean(ws)} onSaved={() => setTab('idea')} />}
+      <Card pad={false}>
+        {visibleQueue.length === 0 && <EmptyState icon="queue" title={`${activeLabel}에 표시할 콘텐츠가 없습니다`} description={ledger.syncState === 'error' || ledger.syncState === 'partial' ? '원장 읽기가 완료되지 않았습니다. 실제 콘텐츠가 비어 있다는 뜻은 아닙니다.' : ledger.syncState === 'preview' ? '저장소가 연결되면 저장한 소재와 원고가 여기에 표시됩니다.' : '떠오른 문장이나 링크를 소재함에 담아보세요.'} />}
+        {visibleQueue.map((item, index) => <div key={item.id} className="hub-row hub-content-queue-row" role="button" tabIndex={0} onClick={() => openStudio(item.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openStudio(item.id); } }} style={{ display: 'grid', padding: '16px', alignItems: 'center', gap: 12, cursor: 'pointer', borderBottom: index < visibleQueue.length - 1 ? '1px solid var(--line-soft)' : 'none' }}>
+          <div style={{ minWidth: 0 }}><div style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div><div style={{ marginTop: 5, fontSize: 12, color: 'var(--fg-muted)' }}>{item.channel} · {item.brandName === 'No brand' ? '브랜드 미지정' : item.brandName || '브랜드 미지정'}</div></div>
+          <Badge tone="neutral" size="xs">{tabs.find((entry) => entry.key === statusKeyOf(item))?.label || item.status}</Badge>
+          <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{item.when}</span>
+          <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{statusKeyOf(item) === 'idea' ? '원고 시작 →' : '열기 →'}</span>
+        </div>)}
       </Card>
     </div>
   );

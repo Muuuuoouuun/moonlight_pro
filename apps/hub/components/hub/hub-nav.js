@@ -103,8 +103,8 @@ const BRAND_CHILDREN = {
 };
 
 const CONTENT_CHILDREN = [
-  { key: 'ct-queue', label: 'Queue', path: 'dashboard/content/queue' },
-  { key: 'ct-studio', label: 'Studio', path: 'dashboard/content/studio' },
+  { key: 'ct-queue', label: '소재·제작', path: 'dashboard/content/queue' },
+  { key: 'ct-studio', label: '원고 작성', path: 'dashboard/content/studio' },
   { key: 'ct-campaigns', label: 'Campaigns', path: 'dashboard/content/campaigns' },
 ];
 
@@ -289,8 +289,8 @@ export const SIDEBAR_PRIMARY = [
       // ClassIn 콘텐츠 is a single surface — the anchor is the destination.
       classin: [],
       personal: [
-        { key: 'ct-queue', label: 'Queue', path: 'dashboard/brand/queue' },
-        { key: 'ct-studio', label: 'Studio', path: 'dashboard/brand/studio' },
+        { key: 'ct-queue', label: '소재·제작', path: 'dashboard/brand/queue' },
+        { key: 'ct-studio', label: '원고 작성', path: 'dashboard/brand/studio' },
       ],
     },
   },

@@ -508,6 +508,35 @@ export function normalizePmsCommand(
     };
   }
 
+  if (action === "update_brand_identity") {
+    const id = uuid(input.id);
+    const expected = dateTime(input.expectedUpdatedAt);
+    if (!id) return { ok: false, reason: "invalid-id" };
+    if (!expected.ok || !expected.value) return { ok: false, reason: "missing-brand-version" };
+    if (!input.identity || typeof input.identity !== "object" || Array.isArray(input.identity)) return { ok: false, reason: "invalid-identity" };
+    const identity = input.identity as Record<string, unknown>;
+    const meta: Record<string, unknown> = {};
+    const textFields: Record<string, string> = { audience: "audience", promise: "promise", philosophy: "philosophy", direction: "direction", offer: "offer", voice: "voice", voiceExamples: "voice_examples", currentFocus: "current_focus" };
+    for (const [key, column] of Object.entries(textFields)) {
+      if (typeof identity[key] !== "string" || String(identity[key]).length > 4000) return { ok: false, reason: `invalid-identity-${key}` };
+      meta[column] = text(identity[key], 4000);
+    }
+    for (const [key, column] of Object.entries({ keywords: "keywords", rules: "content_rules", forbidden: "forbidden_terms" })) {
+      const value = identity[key];
+      if (!Array.isArray(value) || value.length > 50 || value.some((entry) => typeof entry !== "string" || entry.length > 1000)) return { ok: false, reason: `invalid-identity-${key}` };
+      meta[column] = value.map((entry) => entry.trim()).filter(Boolean);
+    }
+    if (!["", "active", "experimenting", "resting"].includes(String(input.operatingState))) return { ok: false, reason: "invalid-operating-state" };
+    if (typeof input.isFocused !== "boolean" || typeof input.confirmIdentity !== "boolean") return { ok: false, reason: "invalid-identity-confirmation" };
+    meta.operating_state = input.operatingState;
+    meta.is_focused = input.isFocused;
+    // Editing always needs a fresh, explicit operator confirmation.
+    meta.identity_confirmed_at = input.confirmIdentity ? now.value : null;
+    return { ok: true, action, table: "brands",
+      filters: [["id", `eq.${id}`], ["workspace_id", `eq.${workspaceId}`], ["updated_at", `eq.${text(input.expectedUpdatedAt, 100)}`]],
+      patch: { meta, updated_at: now.value } };
+  }
+
   if (action === "update_brand") {
     const id = uuid(input.id);
     const name = text(input.name || input.title, 200);
@@ -529,7 +558,7 @@ export function normalizePmsCommand(
         ["workspace_id", `eq.${workspaceId}`],
       ],
       // slug은 받지 않는다 — 브랜드 key(필터·폴더 그룹 식별자)라 편집으로 바뀌면 안 된다.
-      // meta는 통째로 교체되므로 호출자는 category·org_scope와 유지할 glyph를 함께 보낸다.
+      // 서비스가 현재 meta와 병합하고 버전을 비교하므로 브랜드 기준은 보존된다.
       patch: {
         name,
         meta: {

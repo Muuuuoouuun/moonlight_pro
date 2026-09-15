@@ -219,13 +219,29 @@ export const TASK_PRIORITY_OPTIONS = [
   { value: "critical", label: "긴급" },
 ];
 
+export function projectAreaLabel(area = {}) {
+  const legacyLabels = {
+    "client ops": "고객 업무",
+    "founder desk": "기획·운영",
+    "growth engine": "마케팅·성장",
+  };
+  return legacyLabels[String(area.name || "").trim().toLowerCase()]
+    || area.name || "분류 미정";
+}
+
 export function selectProjectAreaId(areas = [], preferredSlug = null) {
   const canonicalAreas = areas.filter((area) => area?.canonical && area?.id);
   if (preferredSlug) {
     const preferred = canonicalAreas.find((area) => area.slug === preferredSlug);
     if (preferred) return preferred.id;
   }
-  return canonicalAreas[0]?.id || null;
+  const generalArea = canonicalAreas.find((area) => area.slug === "personal-projects")
+    || areas.find((area) => area?.id && (
+      area.slug === "founder-desk"
+      || String(area.name || "").trim().toLowerCase() === "founder desk"
+    ));
+  return generalArea?.id || canonicalAreas[0]?.id
+    || (areas.length === 1 ? areas[0]?.id : null) || null;
 }
 
 export function resolveProjectDraftOrgScope({
@@ -388,6 +404,11 @@ export function rebaseProjectEditSource(source = {}, current = {}) {
     name: currentProjectValue(current, ["name", "title"], source.name),
     brand: currentProjectValue(current, ["brand"], source.brand),
     brandId: currentProjectValue(current, ["brandId", "brand_id"], source.brandId),
+    areaId: currentProjectValue(current, ["areaId", "area_id"], source.areaId),
+    entityRef: currentProjectValue(current, ["entityRef", "entity_ref"],
+      current.lead_id ? { type: "lead", id: current.lead_id }
+        : current.customer_account_id ? { type: "customer_account", id: current.customer_account_id }
+          : ("lead_id" in current || "customer_account_id" in current) ? null : source.entityRef),
     projectSummary: currentProjectValue(
       current,
       ["projectSummary", "summary"],
@@ -410,11 +431,15 @@ export function buildProjectPatch(source = {}, draft = {}) {
   const patch = { id: source.id };
   if (source.updatedAt) patch.expectedUpdatedAt = source.updatedAt;
 
-  const fields = ["title", "brandId", "summary", "status", "priority", "nextAction", "dueAt"];
+  const fields = ["title", "areaId", "brandId", "summary", "status", "priority", "nextAction", "dueAt"];
   fields.forEach((field) => {
+    if (field === "areaId" && !draft.areaId) return;
     const next = field === "dueAt" ? dateInputValue(draft[field]) : (draft[field] ?? "");
     if (next !== original[field]) patch[field] = next;
   });
+  if (draft.entityKey !== undefined && draft.entityKey !== original.entityKey) {
+    patch.entityRef = parseProjectEntityKey(draft.entityKey);
+  }
   return patch;
 }
 
@@ -427,7 +452,8 @@ export function rebaseProjectEditState(source = {}, draft = {}, current = {}) {
   const nextDraft = buildProjectEditDraft(nextSource);
 
   dirtyKeys.forEach((key) => {
-    nextDraft[key] = draft[key];
+    const draftKey = key === "entityRef" ? "entityKey" : key;
+    nextDraft[draftKey] = draft[draftKey];
   });
 
   return { source: nextSource, draft: nextDraft };

@@ -1,5 +1,5 @@
 export const STUDIO_CHANNELS = [
-  { key: 'threads', label: 'Threads', type: 'x_thread' },
+  { key: 'threads', label: 'Threads', type: 'threads_post' },
   { key: 'instagram', label: 'Instagram · 카드뉴스', type: 'card_news' },
   { key: 'youtube_shorts', label: 'YouTube Shorts', type: 'reels_script' },
   { key: 'blog', label: '블로그', type: 'blog_insight' },
@@ -20,12 +20,12 @@ export function emptyStudioDraft(brandId = '') {
     contentId: null, variantId: null, workspaceId: null, itemUpdatedAt: null, variantUpdatedAt: null,
     title: '', variantTitle: '', sourceIdea: '', brandId,
     brief: Object.fromEntries(BRIEF_FIELDS.map(({ key }) => [key, ''])),
-    nextAction: '', blocker: '', body: '', variantType: 'x_thread', channel: 'threads', status: 'draft', sourceRefs: [],
+    nextAction: '', blocker: '', body: '', variantType: 'threads_post', channel: 'threads', status: 'draft', sourceRefs: [],
   };
 }
 export const formatForChannel = (channel) => STUDIO_CHANNELS.find((v) => v.key === channel)?.type || 'x_thread';
 export const channelLabel = (channel) => STUDIO_CHANNELS.find((v) => v.key === channel)?.label || channel;
-export const channelForType = (type) => ({ card_news: 'instagram', reels_script: 'reels', blog: 'blog', blog_insight: 'blog', landing_copy: 'blog', newsletter: 'email' })[type] || 'x';
+export const channelForType = (type) => ({ threads_post: 'threads', card_news: 'instagram', reels_script: 'reels', blog: 'blog', blog_insight: 'blog', landing_copy: 'blog', newsletter: 'email' })[type] || 'x';
 export function draftFromDetail({ item, variants }, variantId) {
   if (!item?.id) throw new Error('콘텐츠를 찾을 수 없습니다.');
   const candidates = (variants || []).filter((variant) => variant.content_id === item.id);
@@ -33,7 +33,7 @@ export function draftFromDetail({ item, variants }, variantId) {
   const variant = targetId ? candidates.find((row) => row.id === targetId) :
     [...candidates].sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)) || a.id.localeCompare(b.id))[0];
   if (!variant && (variantId || candidates.length)) throw new Error('선택한 결과물을 찾을 수 없습니다. 콘텐츠 큐에서 다시 열어주세요.');
-  const selected = variant || { id: null, variant_type: 'x_thread', channel: 'threads' };
+  const selected = variant || { id: null, variant_type: 'threads_post', channel: 'threads' };
   return {
     ...emptyStudioDraft(), contentId: item.id, workspaceId: item.workspace_id, variantId: selected.id,
     itemUpdatedAt: item.updated_at, variantUpdatedAt: selected.updated_at || null,

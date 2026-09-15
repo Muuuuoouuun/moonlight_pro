@@ -9,6 +9,7 @@ import {
 } from "@/lib/memo-view";
 import styles from "./memo-workspace.module.css";
 import { MemoCapture } from "./memo-capture";
+import { MEMO_SAVED_EVENT } from "@/lib/memo-save";
 const EMPTY = {
   memos: [],
   links: [],
@@ -109,6 +110,11 @@ export function MemoWorkspace({
     return () => {
       requestRef.current++;
     };
+  }, [load]);
+  React.useEffect(() => {
+    const refresh = (event) => load(event.detail?.id);
+    window.addEventListener(MEMO_SAVED_EVENT, refresh);
+    return () => window.removeEventListener(MEMO_SAVED_EVENT, refresh);
   }, [load]);
   const visible = selectMemos(data, {
     query,

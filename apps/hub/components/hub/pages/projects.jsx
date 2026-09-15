@@ -26,6 +26,7 @@ import {
   mergeProjectDetailQuery,
   mergeTimelineProjectQuery,
   projectReloadContains,
+  projectAreaLabel,
   rebaseProjectEditState,
   rotateProjectClientId,
   resolveProjectDraftOrgScope,
@@ -2818,7 +2819,6 @@ export function Projects({ workspace }) {
           draft={projectDraft}
           areas={ledger.areas}
           brands={brands}
-          entities={ledger.projectEntities}
           failedSources={ledger.failedSources}
           onChange={(key, value) => setProjectDraft(current => ({ ...current, [key]: value }))}
           onSave={persistProjectCreate}
@@ -2834,20 +2834,36 @@ export function Projects({ workspace }) {
       {projectDraft && !projectDraft.isNew && (
         <EditDrawer
           title="프로젝트 편집"
-          subtitle="원본 프로젝트 필드만 변경합니다"
+          subtitle="목표·분류·연결을 설정하세요. 일정은 계획·검증에서 관리합니다."
           record={projectDraft}
           fields={[
             { key: 'title', label: '프로젝트명', placeholder: '프로젝트 이름' },
             {
+              key: 'areaId', label: '업무 분류', type: 'select',
+              options: [
+                ...(!ledger.areas.some(area => area.id === projectDraft.areaId) ? [{ value: projectDraft.areaId || '', label: '현재 분류 유지' }] : []),
+                ...ledger.areas.map(area => ({ value: area.id, label: projectAreaLabel(area) })),
+              ],
+            },
+            {
               key: 'brandId',
-              label: '저장 위치',
+              label: '브랜드·컨테이너',
               type: 'select',
               options: [
-                { value: '', label: '컨테이너 선택' },
+                { value: '', label: '연결 없음' },
                 ...brands.filter(item => item.key !== 'all').map(item => ({ value: item.id, label: item.name })),
               ],
             },
             { key: 'summary', label: '목표 결과', type: 'textarea', placeholder: '완료됐을 때 어떤 상태가 되어야 하나요?' },
+            {
+              key: 'entityKey', label: '관련 리드·고객', type: 'select',
+              options: [
+                { value: '', label: '연결 없음' },
+                ...(projectDraft.entityKey && !ledger.projectEntities.some(entity => entity.key === projectDraft.entityKey)
+                  ? [{ value: projectDraft.entityKey, label: '현재 연결 유지' }] : []),
+                ...ledger.projectEntities.map(entity => ({ value: entity.key, label: entity.label })),
+              ],
+            },
             {
               key: 'status',
               label: '상태',

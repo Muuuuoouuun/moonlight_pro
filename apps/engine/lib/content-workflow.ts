@@ -7,6 +7,7 @@ type Dependencies = { rpc: (name: string, params: JsonRecord) => Promise<RpcResu
 
 export const MAX_CONTENT_WORKFLOW_BYTES = 256 * 1024;
 export const CONTENT_WORKFLOW_CHANNELS: Record<string, readonly string[]> = {
+  threads_post: ["threads"],
   x_thread: ["threads", "x"], social_post: ["threads", "x"],
   blog_insight: ["blog"], blog: ["blog"], landing_copy: ["blog"],
   card_news: ["instagram"], reels_script: ["reels", "instagram", "youtube_shorts"],

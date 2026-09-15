@@ -54,15 +54,15 @@ test("an unknown cadence keeps its raw string rather than inventing a label", ()
 test("identity completeness names what is missing instead of a bare boolean", () => {
   assert.deepEqual(
     identityCompleteness(brand("sinabro")),
-    { missing: [], state: "confirmed" },
+    { missing: [], state: "recommended", complete: true },
   );
   assert.deepEqual(
     identityCompleteness({ key: "gore", philosophy: "…" }),
-    { missing: ["보이스", "콘텐츠 규칙"], state: "recommended" },
+    { missing: ["보이스", "콘텐츠 규칙"], state: "recommended", complete: false },
   );
   assert.deepEqual(
     identityCompleteness({ key: "empty" }),
-    { missing: ["철학", "보이스", "콘텐츠 규칙"], state: "unknown" },
+    { missing: ["철학", "보이스", "콘텐츠 규칙"], state: "unknown", complete: false },
   );
 });
 
@@ -92,7 +92,7 @@ test("a preview ledger lists brands but refuses to publish measured numbers", ()
   assert.equal(directory.brands[0].publishedThisWeek, null);
   assert.equal(directory.brands[0].quietDays, null);
   // 정체성은 원장이 없어도 읽을 수 있다 — 브랜드 행 자체에서 온다.
-  assert.equal(directory.brands[0].identity.state, "confirmed");
+  assert.equal(directory.brands[0].identity.state, "recommended");
 });
 
 test("an errored ledger is reported as error rather than a quiet preview", () => {
@@ -161,8 +161,8 @@ test("failed publishes are counted per brand so danger stays on real loss", () =
 test("brands are ordered by how far behind their own goal they are, not alphabetically", () => {
   const directory = buildBrandDirectory(liveLedger({
     brands: [
-      brand("onTrack", { cadence: "low_frequency_high_quality" }),
-      brand("behind", { cadence: "high_frequency_viral" }),
+      brand("onTrack", { weeklyGoal: 1, cadence: "low_frequency_high_quality" }),
+      brand("behind", { weeklyGoal: 5, cadence: "high_frequency_viral" }),
     ],
     items: [
       { brandKey: "onTrack", status: "published", publishedAt: "2026-08-28T00:00:00.000Z" },
@@ -177,7 +177,7 @@ test("brands are ordered by how far behind their own goal they are, not alphabet
 test("totals separate quiet brands from brands merely behind this week", () => {
   const directory = buildBrandDirectory(liveLedger({
     brands: [
-      brand("quiet", { cadence: "low_frequency_high_quality" }),
+      brand("quiet", { weeklyGoal: 1, cadence: "low_frequency_high_quality" }),
       brand("fresh", { cadence: "low_frequency_high_quality" }),
     ],
     items: [
@@ -204,4 +204,25 @@ test("a deep link to a brand outside the current scope resolves to null, not a w
 test('journal context opens a brand by its durable id while preserving slug bookmarks', () => {
   const directory = buildBrandDirectory(liveLedger({ brands: [brand('sinabro')] }), { now: NOW });
   assert.equal(selectBrand(directory, 'sinabro-id'), selectBrand(directory, 'sinabro'));
+});
+
+test("unrecorded, recommended and resting brands do not imply publication debt", () => {
+  const directory = buildBrandDirectory(liveLedger({ brands: [
+    brand("unrecorded", { cadence: "high_frequency_viral" }),
+    brand("resting", { weeklyGoal: 5, operatingState: "resting" }),
+    brand("focus", { isFocused: true }),
+  ] }), { now: NOW });
+  assert.equal(directory.totals.quiet, 0);
+  assert.equal(directory.totals.behind, 0);
+  assert.equal(directory.brands[0].key, "focus");
+});
+
+test("explicit confirmation is independent from filled fields and identity-only reads have no content numbers", () => {
+  assert.equal(identityCompleteness({ promise: "A useful promise" }).state, "recommended");
+  const directory = buildBrandDirectory({ source: "supabase", metricsAvailable: false,
+    brands: [brand("empty", { philosophy: "", voice: "", rules: [], identityConfirmedAt: NOW.toISOString() })] }, { now: NOW });
+  assert.equal(directory.brands[0].identity.state, "confirmed");
+  assert.equal(directory.brands[0].identity.complete, false);
+  assert.equal(directory.brands[0].counts, null);
+  assert.equal(directory.brands[0].publishedThisWeek, null);
 });

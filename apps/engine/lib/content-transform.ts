@@ -156,7 +156,7 @@ async function assembleContext(command: GenerateCommand, dependencies: Dependenc
   if (!isTimestamp(item.updated_at) || !isText(variant.body)) return { failure: response("invalid-input", "invalid-saved-content") };
   const body: string = variant.body;
   if (command.selection.end > body.length) return { failure: response("invalid-input", "invalid-selection") };
-  const savedChannel = variant.channel ?? (["x_thread", "social_post"].includes(variant.variant_type) ? "x"
+  const savedChannel = variant.channel ?? (variant.variant_type === "threads_post" ? "threads" : ["x_thread", "social_post"].includes(variant.variant_type) ? "x"
     : variant.variant_type === "card_news" ? "instagram" : variant.variant_type === "reels_script" ? "reels"
       : variant.variant_type === "newsletter" ? "email" : "blog");
   if (command.operation !== "repurpose" && (command.target.variantType !== variant.variant_type || command.target.channel !== savedChannel)) return { failure: response("invalid-input", "target-requires-repurpose") };
@@ -200,7 +200,7 @@ function generationInput(command: GenerateCommand, sourceData: Row) {
       `Return exactly ${count} candidate${count === 1 ? "" : "s"}. Every candidate must use variantType=${command.target.variantType} and channel=${command.target.channel}.`,
       "polish preserves meaning and improves wording; shorten condenses without inventing or changing facts; hooks produces question, scene, and assertion opening alternatives for the selected section; draft creates a complete draft from the notes and brief; repurpose creates a complete independent channel variant from the whole saved body.",
       "For polish, shorten, or hooks, body contains only the replacement for selectionText; do not repeat text outside the selection. draft and repurpose return a complete body. summary explains the change and any omitted meaning.",
-      "For x_thread/social_post/blog_insight/blog/landing_copy/newsletter, body is plain text. Blank lines separate thread blocks. Do not assume platform character limits.",
+      "For threads_post/x_thread/social_post/blog_insight/blog/landing_copy/newsletter, body is plain text. Blank lines separate thread blocks. Do not assume platform character limits.",
       "For card_news, body is a JSON-encoded string of {\"slides\":[{\"id\":\"slide-1\",\"title\":\"...\",\"sub\":\"...\"}]}. For reels_script, body is a JSON-encoded string of {\"scenes\":[{\"id\":\"scene-1\",\"visual\":\"...\",\"spoken\":\"...\",\"subtitle\":\"...\",\"duration\":10,\"notes\":\"\"}]}. No extra keys; 1–30 slides/scenes, unique IDs, finite positive duration in seconds (at most 600). Default 6 cards or an estimated 60-second script when repurposing, as writing presets only.",
       "tone brand follows the selected brand voice; plain is unembellished; direct is concise and clear; formal uses courteous professional wording. Keep the source's language unless the saved brief specifies otherwise.",
     ].join("\n"),

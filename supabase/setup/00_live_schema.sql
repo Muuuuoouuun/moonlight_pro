@@ -821,7 +821,8 @@ alter table if exists public.content_variants
     'social_post',
     'x_thread',
     'reels_script',
-    'landing_copy'
+    'landing_copy',
+    'threads_post'
   ));
 
 do $$

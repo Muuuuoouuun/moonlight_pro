@@ -77,7 +77,7 @@ export function ResultPreview({ body, type }) {
 export function DraftEditor({ draft, edit, disabled, onSelect }) {
   const [view, setView] = React.useState('edit');
   const structured = ['card_news', 'reels_script'].includes(draft.variantType);
-  const supported = ['x_thread', 'social_post', 'blog', 'blog_insight', 'landing_copy', 'newsletter', 'card_news', 'reels_script'].includes(draft.variantType);
+  const supported = ['threads_post', 'x_thread', 'social_post', 'blog', 'blog_insight', 'landing_copy', 'newsletter', 'card_news', 'reels_script'].includes(draft.variantType);
   const chars = [...draft.body].length;
   return <div className="studio-stack">
     <div className="studio-row">

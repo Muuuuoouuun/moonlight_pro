@@ -98,3 +98,10 @@ test("allows an existing idea with no variant to create its first draft with onl
   assert.equal(result.command.expectedItemUpdatedAt, timestamp);
   assert.equal(normalize(create({ contentId, variantId: null })).ok, false);
 });
+
+// Captures from the Windows branch must remain editable in the versioned Studio.
+test("Threads captures use the Threads channel without changing legacy X variants", () => {
+  assert.equal(normalize(create({ variant: { body: "captured idea", variantType: "threads_post", channel: "threads" } })).ok, true);
+  assert.equal(normalize(create({ variant: { body: "captured idea", variantType: "threads_post", channel: "x" } })).ok, false);
+  assert.equal(normalize(create({ variant: { body: "legacy", variantType: "x_thread", channel: "x" } })).ok, true);
+});

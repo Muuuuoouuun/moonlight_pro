@@ -76,3 +76,9 @@ Com_Moon Hub OS의 현재 로컬 스키마와 시드 데이터를 정리한 안�
 - Hub/Engine 서버 쓰기는 `SUPABASE_SERVICE_ROLE_KEY` 기준으로 운용합니다.
 - 브라우저 직접 접근은 Supabase Auth + `workspace_memberships` + RLS 기준으로 운용합니다.
 - 현재 연결이 안 된다면 SQL보다 먼저 `SUPABASE_URL` DNS resolve, service role key, `COM_MOON_DEFAULT_WORKSPACE_ID`가 실제 `workspaces.id`와 일치하는지 확인합니다.
+
+### 2026-09-15 로컬 통합: Threads → Studio
+
+`20260914_0001_content_threads_post.sql`(타입 확장) 다음에
+`20260915_0034_threads_studio_compat.sql`(Studio 채널 검증·기존 Threads 채널 보완)을 적용한다.
+후자는 `20260912_0026_content_workflow.sql`에도 의존한다. 로컬 통합 작업에서는 운영 DB에 적용하지 않았다.

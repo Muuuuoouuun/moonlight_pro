@@ -19,14 +19,13 @@ import {
 } from "../hub-primitives";
 import {
   buildBrandDirectory,
-  quietLabel,
   selectBrand,
 } from "@/lib/brand-directory";
 import { createClientId } from "@/lib/pms-ui";
+import { BRAND_IDENTITY_FIELDS, BRAND_OPERATING_STATES, brandIdentityDraft, brandIdentityPayload } from "@/lib/brand-identity";
 
 // 브랜드 탭 — 브랜드를 콘텐츠 필터가 아니라 운영 대상으로 다루는 표면
-// (2026-08-29 브랜드 탭 설계). P1 범위는 목록 + 정체성(읽기)이며,
-// 스케줄·기록·성과 탭은 P3~P5에서 붙는다. 없는 탭을 빈 껍데기로 미리 그리지 않는다.
+// 방향과 표현 기준은 brands.meta에 저장하고 콘텐츠 작업은 공통 보기로 연결한다.
 //
 // 목록 ⇄ 상세는 같은 라우트의 두 상태다 (`?b=<slug>`). aside 레일을 쓰지 않는 이유는
 // 모바일에서 `.hub-workspace-shell > aside`가 통째로 숨겨져 브랜드를 바꿀 방법이
@@ -41,13 +40,13 @@ function slugifyBrand(name, id) {
   return base || `b-${String(id || "").slice(0, 8)}`;
 }
 
-function useContentLedgerForBrands() {
+function useBrandLedger() {
   const [state, setState] = React.useState({ source: "loading", brands: [], items: [], publishLogs: [] });
 
   const load = React.useCallback(async () => {
     setState((prev) => ({ ...prev, source: "loading" }));
     try {
-      const response = await fetch("/api/hub/content", { cache: "no-store" });
+      const response = await fetch("/api/hub/brands", { cache: "no-store" });
       const data = await response.json().catch(() => null);
       if (!response.ok || !data || data.status === "error") {
         setState({ source: "error", brands: [], items: [], publishLogs: [] });
@@ -55,14 +54,14 @@ function useContentLedgerForBrands() {
       }
       setState({
         source: data.source === "supabase" ? "supabase" : "preview",
-        // content route는 보조 소스(brands 포함) 일부가 죽으면 200 + status:"partial"을
-        // 준다 — 이를 live로 뭉개면 read 실패가 "브랜드 없음"으로 위장된다 (content.jsx와
-        // 같은 계약, 2609 병합 리뷰 #2).
+        // Truncated reads remain partial rather than implying the directory is complete.
         partial: data.source === "supabase" && data.status === "partial",
         brands: Array.isArray(data.brands) ? data.brands : [],
         items: Array.isArray(data.items) ? data.items : [],
         publishLogs: Array.isArray(data.publishLogs) ? data.publishLogs : [],
+        metricsAvailable: data.metricsAvailable,
       });
+      return data;
     } catch {
       setState({ source: "error", brands: [], items: [], publishLogs: [] });
     }
@@ -80,38 +79,10 @@ function syncStateOf(source, partial = false) {
   return "preview";
 }
 
-// 발행 리듬 한 줄. "2/3"는 이번 주 발행 / 주당 목표이며, 목표가 cadence에서 유도된
-// 권장값이면 CertaintyBadge가 그 사실을 라벨로 말한다 (DESIGN §5.3 — 색이 아니라 라벨).
-function RhythmLine({ brand }) {
-  const goal = brand.weeklyGoal;
-  if (brand.publishedThisWeek == null) {
-    return <span style={{ fontSize: 12, color: "var(--fg-faint)" }}>연결 후 표시</span>;
-  }
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-      <span className="stat" style={{ fontSize: 18, fontWeight: 600, color: "var(--fg)" }}>
-        {brand.publishedThisWeek}
-        <span style={{ color: "var(--fg-faint)", fontWeight: 400 }}>
-          /{goal.value ?? "–"}
-        </span>
-      </span>
-      {goal.certainty === "recommended" && (
-        <CertaintyBadge state="recommended" label="권장 목표" />
-      )}
-      {goal.certainty === "unknown" && (
-        <CertaintyBadge state="unknown" label="목표 미정" />
-      )}
-      {goal.value != null && brand.publishedThisWeek >= goal.value && (
-        <span className="hub-celebration-badge hub-celebration-badge--sparkle">✦ 달성</span>
-      )}
-    </span>
-  );
-}
-
 // 행 안의 짧은 정체성 라벨. 무엇이 비었는지 전체 목록은 상세에서 읽는다 —
 // 행에 "정체성 철학·보이스·콘텐츠 규칙 없음"을 그대로 쓰면 상태 칼럼이 터진다.
 function identityRowLabel(identity) {
-  return identity.state === "unknown" ? "정체성 미입력" : "정체성 일부";
+  return identity.state === "confirmed" ? "기준 확인됨" : identity.complete ? "작성됨 · 미확인" : identity.state === "unknown" ? "기준 미입력" : "일부 작성됨";
 }
 
 function BrandRow({ brand, onOpen }) {
@@ -140,26 +111,15 @@ function BrandRow({ brand, onOpen }) {
           {brand.name}
         </span>
         <span style={{ display: "block", marginTop: 2, fontSize: 12, color: "var(--fg-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {brand.description || brand.cadenceLabel}
+          {brand.promise || brand.description || "핵심 약속을 정해보세요"}
         </span>
       </span>
 
-      <span className="hub-brand-row__rhythm" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)" }}>
-          이번 주
-        </span>
-        <RhythmLine brand={brand} />
+      <span className="hub-brand-row__rhythm" style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+        {brand.isFocused ? "집중 브랜드 · " : ""}{BRAND_OPERATING_STATES.find((s) => s.value === brand.operatingState)?.label || "운영 상태 미정"}
       </span>
-
-      <span className="hub-brand-row__quiet" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
-        <span style={{ fontSize: 12, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>
-          {brand.publishedThisWeek == null ? "—" : quietLabel(brand.quietDays)}
-        </span>
-        {brand.counts && (
-          <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-faint)", whiteSpace: "nowrap" }}>
-            아이디어 {brand.counts.ideas} · 초안 {brand.counts.drafts} · 예약 {brand.counts.scheduled}
-          </span>
-        )}
+      <span className="hub-brand-row__quiet" style={{ fontSize: 12, color: "var(--fg-muted)", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {brand.currentFocus || "현재 집중점을 정해보세요"}
       </span>
 
       <span className="hub-brand-row__state" style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
@@ -169,9 +129,7 @@ function BrandRow({ brand, onOpen }) {
             발행 실패 {brand.failedPublishes}건
           </span>
         )}
-        {brand.identity.state !== "confirmed" && (
-          <CertaintyBadge state={brand.identity.state} label={identityRowLabel(brand.identity)} />
-        )}
+        <CertaintyBadge state={brand.identity.state} label={identityRowLabel(brand.identity)} />
       </span>
     </div>
   );
@@ -240,7 +198,7 @@ function ChipBlock({ label, items, placeholder }) {
   );
 }
 
-function BrandDetail({ brand, onBack, onOpenStudio, onOpenQueue }) {
+function BrandDetail({ brand, onBack, onOpenStudio, onOpenQueue, onEdit }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <Card>
@@ -252,14 +210,8 @@ function BrandDetail({ brand, onBack, onOpenStudio, onOpenQueue }) {
               {brand.description || "설명 없음"}
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)" }}>
-              이번 주 발행
-            </span>
-            <RhythmLine brand={brand} />
-            <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>
-              {brand.publishedThisWeek == null ? "" : quietLabel(brand.quietDays)}
-            </span>
+          <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+            {brand.isFocused ? "집중 브랜드 · " : ""}{BRAND_OPERATING_STATES.find((s) => s.value === brand.operatingState)?.label || "운영 상태 미정"}
           </div>
         </div>
         {brand.failedPublishes > 0 && (
@@ -279,15 +231,20 @@ function BrandDetail({ brand, onBack, onOpenStudio, onOpenQueue }) {
       </Card>
 
       <Card>
+        <TextBlock label="현재 집중점" value={brand.currentFocus} placeholder="이번에 쌓거나 검증할 한 가지를 정해보세요." />
+      </Card>
+      <Card>
         <SectionTitle
-          subtitle="AI 브랜드 멘토가 읽는 것과 같은 원본이다. 편집은 다음 단계에서 열린다."
-          right={brand.identity.state !== "confirmed"
-            ? <CertaintyBadge state={brand.identity.state} label={`${brand.identity.missing.join("·")} 없음`} />
-            : <CertaintyBadge state="confirmed" label="정체성 확정" />}
+          subtitle="무엇을 만들지 판단할 때 함께 읽는 브랜드 기준입니다. 빈칸이 있어도 저장할 수 있습니다."
+          right={<Button variant="secondary" size="sm" onClick={onEdit}>브랜드 기준 편집</Button>}
         >
-          정체성
+          방향과 표현 기준
         </SectionTitle>
+        <CertaintyBadge state={brand.identity.state} label={identityRowLabel(brand.identity)} />
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--section-gap)", marginTop: 14 }}>
+          <TextBlock label="대상" value={brand.audience} placeholder="누구의 어떤 문제와 욕구를 다룰지" />
+          <TextBlock label="핵심 약속" value={brand.promise} placeholder="이 브랜드를 만나고 무엇이 달라질지" />
+          <TextBlock label="제공하는 가치" value={brand.offer} placeholder="상품·서비스·작품·경험" />
           <TextBlock label="철학" value={brand.philosophy} placeholder="아직 비어 있습니다 · 이 브랜드가 왜 존재하는지" />
           <TextBlock label="방향" value={brand.direction} placeholder="아직 비어 있습니다 · 어떤 형태로 쌓아갈지" />
           <TextBlock label="보이스" value={brand.voice} placeholder="아직 비어 있습니다 · 어떤 언어로 말할지" />
@@ -305,7 +262,8 @@ function BrandDetail({ brand, onBack, onOpenStudio, onOpenQueue }) {
               )}
             </span>
           </div>
-          <ChipBlock label="키워드" items={brand.keywords} placeholder="키워드가 없습니다" />
+          <TextBlock label="좋은 표현 예시" value={brand.voiceExamples} placeholder="이 브랜드다운 실제 문장" />
+          <ChipBlock label="핵심 주제" items={brand.keywords} placeholder="키워드가 없습니다" />
           <ListBlock label="콘텐츠 규칙" items={brand.rules} placeholder="규칙이 없습니다 · 이 브랜드에서 반드시 지킬 것" />
           <ListBlock label="금지어 · 하지 않을 것" items={brand.forbidden} placeholder="금지 목록이 없습니다" />
           <ChipBlock label="채널" items={brand.channels} placeholder="연결된 채널이 없습니다" />
@@ -314,7 +272,7 @@ function BrandDetail({ brand, onBack, onOpenStudio, onOpenQueue }) {
       </Card>
 
       <Card>
-        <SectionTitle subtitle="이 브랜드의 콘텐츠는 제작소가 정본이다.">콘텐츠</SectionTitle>
+        <SectionTitle subtitle="소재 선택과 이어쓰기는 이 브랜드로 필터한 콘텐츠 보기에서 이어갑니다.">콘텐츠</SectionTitle>
         <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap", marginTop: 12 }}>
           {brand.counts ? (
             <>
@@ -332,11 +290,11 @@ function BrandDetail({ brand, onBack, onOpenStudio, onOpenQueue }) {
             </>
           ) : (
             <span style={{ fontSize: 12.5, color: "var(--fg-dim)" }}>
-              콘텐츠 원장이 연결되면 이 브랜드의 아이디어·초안·예약·발행 수가 표시됩니다.
+              소재와 초안, 발행 기록을 함께 확인하세요.
             </span>
           )}
           <div style={{ flex: 1 }} />
-          <Button variant="secondary" size="sm" icon="queue" onClick={() => onOpenQueue(brand.key)}>큐에서 보기</Button>
+          <Button variant="secondary" size="sm" icon="queue" onClick={() => onOpenQueue(brand.key)}>소재·원고 보기</Button>
           <MemoCaptureLink context={{ type: "brand", id: brand.id }} />
           <Button variant="primary" size="sm" icon="plus" onClick={() => onOpenStudio(brand.key)}>이 브랜드로 새 콘텐츠</Button>
         </div>
@@ -357,10 +315,11 @@ export function Brands() {
   const searchParams = useSearchParams();
   const scope = searchParams.get("scope") || "all";
   const selectedKey = searchParams.get("b");
-  const { ledger, reload } = useContentLedgerForBrands();
+  const { ledger, reload } = useBrandLedger();
   const toast = useToast();
   const [draft, setDraft] = React.useState(null);
   const [saveNote, setSaveNote] = React.useState(null);
+  const [identityDraft, setIdentityDraft] = React.useState(null);
 
   const directory = React.useMemo(
     () => buildBrandDirectory(ledger, { scope }),
@@ -402,7 +361,7 @@ export function Brands() {
   // 페이지 레벨 N — 드로어가 닫혀 있고 포커스가 입력 밖일 때만 (DESIGN §8.1).
   React.useEffect(() => {
     const onKey = (event) => {
-      if (draft) return;
+      if (draft || identityDraft) return;
       if (event.key !== "n" && event.key !== "N") return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const el = document.activeElement;
@@ -413,7 +372,7 @@ export function Brands() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [createBrand, draft]);
+  }, [createBrand, draft, identityDraft]);
 
   const persistBrand = React.useCallback(async () => {
     const name = draft?.name?.trim();
@@ -455,6 +414,36 @@ export function Brands() {
     }
   }, [draft, reload, setQuery]);
 
+  const persistIdentity = async () => {
+    const payload = brandIdentityPayload(identityDraft);
+    try {
+      const response = await fetch("/api/hub/brands", {
+        method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok || data.status !== "saved") {
+        setSaveNote({ tone: "err", label: data.status === "conflict" ? "다른 변경이 먼저 저장되었습니다. 입력을 보관하고 브랜드를 다시 열어주세요." : data.status === "preview" ? "저장 연결이 없어 입력을 유지했습니다." : data.error || "브랜드 기준 저장 실패" });
+        return { ok: false, status: data.status || "error" };
+      }
+      if (data.brand?.updated_at) setIdentityDraft((current) => ({ ...current, expectedUpdatedAt: data.brand.updated_at }));
+      const latest = await reload();
+      const saved = latest?.brands?.find((brand) => brand.id === payload.id);
+      const matches = saved && Object.entries(payload.identity).every(([key, value]) => JSON.stringify(saved[key]) === JSON.stringify(value))
+        && saved.operatingState === payload.operatingState && saved.isFocused === payload.isFocused
+        && Boolean(saved.identityConfirmedAt) === payload.confirmIdentity;
+      if (!matches) {
+        setSaveNote({ tone: "err", label: "저장 응답을 받았지만 재조회 확인에 실패했습니다. 입력을 유지합니다." });
+        return { ok: false, status: "error" };
+      }
+      window.dispatchEvent(new Event("hub:brand-updated"));
+      setSaveNote({ tone: "ok", label: "브랜드 기준 저장 · 재조회 확인됨" });
+      return { ok: true, status: "saved" };
+    } catch {
+      setSaveNote({ tone: "err", label: "브랜드 기준을 저장하지 못했습니다. 입력을 유지합니다." });
+      return { ok: false, status: "error" };
+    }
+  };
+
   const scopeSuffix = SCOPE_LABEL[scope] ? ` · ${SCOPE_LABEL[scope]}` : "";
   const totals = directory.totals;
 
@@ -466,7 +455,7 @@ export function Brands() {
           <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
             {selected
               ? `${selected.name} · 정체성`
-              : `${directory.brands.length}개${scopeSuffix} · 정체성 · 리듬 · 기록`}
+              : `${directory.brands.length}개${scopeSuffix} · 방향 · 집중점 · 자산`}
             <SyncBadge state={syncState} />
           </div>
         </div>
@@ -502,7 +491,7 @@ export function Brands() {
           <EmptyState
             icon="brand"
             title="브랜드를 읽지 못했습니다"
-            description={`콘텐츠 원장을 읽지 못해 '${selectedKey}'를 확인할 수 없습니다 — 없는 것이 아니라 읽기 실패입니다.`}
+            description={`브랜드 원장을 읽지 못해 '${selectedKey}'를 확인할 수 없습니다 — 없는 것이 아니라 읽기 실패입니다.`}
             action={<Button variant="secondary" size="sm" onClick={reload}>다시 읽기</Button>}
           />
         </Card>
@@ -512,7 +501,7 @@ export function Brands() {
           <EmptyState
             icon="brand"
             title="Preview · 연결 필요"
-            description={`Supabase 콘텐츠 원장이 연결되지 않아 '${selectedKey}'를 확인할 수 없습니다.`}
+            description={`Supabase 브랜드 원장이 연결되지 않아 '${selectedKey}'를 확인할 수 없습니다.`}
             action={<Button variant="secondary" size="sm" onClick={() => setQuery(null)}>브랜드 목록으로</Button>}
           />
         </Card>
@@ -524,6 +513,7 @@ export function Brands() {
           onBack={() => setQuery(null)}
           onOpenStudio={openStudio}
           onOpenQueue={openQueue}
+          onEdit={() => { setSaveNote(null); setIdentityDraft(brandIdentityDraft(selected)); }}
         />
       )}
 
@@ -537,8 +527,9 @@ export function Brands() {
             }}>
               {[
                 ["브랜드", totals.brands],
-                ["목표 미달", totals.behind],
-                ["2주 이상 조용", totals.quiet],
+                ["집중 브랜드", totals.focused],
+                ["기준 확인됨", totals.confirmed],
+                ["휴식중", totals.resting],
               ].map(([label, value]) => (
                 <span key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)" }}>{label}</span>
@@ -559,21 +550,21 @@ export function Brands() {
               <div className="hub-brand-row hub-brand-row--head" style={{ padding: "8px 16px", borderBottom: "1px solid var(--line-soft)" }}>
                 <span aria-hidden="true" />
                 <span style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)" }}>브랜드</span>
-                <span className="hub-brand-row__rhythm" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)" }}>발행 / 목표</span>
+                <span className="hub-brand-row__rhythm" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)" }}>운영 상태</span>
                 <span className="hub-brand-row__quiet" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)", textAlign: "right" }}>
-                  마지막 발행 · 대기
+                  현재 집중점
                 </span>
                 <span className="hub-brand-row__state" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-faint)", textAlign: "right" }}>상태</span>
               </div>
             )}
             {syncState === "loading" && (
-              <EmptyState icon="brand" title="브랜드를 읽는 중입니다" description="콘텐츠 원장에서 브랜드 정체성과 발행 기록을 확인하고 있습니다." style={{ minHeight: 200 }} />
+              <EmptyState icon="brand" title="브랜드를 읽는 중입니다" description="브랜드 원장에서 브랜드 정체성과 발행 기록을 확인하고 있습니다." style={{ minHeight: 200 }} />
             )}
             {syncState === "error" && (
               <EmptyState
                 icon="brand"
                 title="브랜드를 읽지 못했습니다"
-                description="콘텐츠 원장을 다시 확인해 주세요."
+                description="브랜드 원장을 다시 확인해 주세요."
                 action={<Button variant="secondary" size="sm" onClick={reload}>다시 읽기</Button>}
                 style={{ minHeight: 200 }}
               />
@@ -582,7 +573,7 @@ export function Brands() {
               <EmptyState
                 icon="brand"
                 title="Preview · 연결 필요"
-                description="Supabase 콘텐츠 원장을 연결하면 실제 브랜드와 발행 기록만 표시됩니다."
+                description="Supabase 브랜드 원장을 연결하면 실제 브랜드와 발행 기록만 표시됩니다."
                 style={{ minHeight: 200 }}
               />
             )}
@@ -602,6 +593,19 @@ export function Brands() {
         </>
       )}
 
+      {identityDraft && (
+        <EditDrawer title="브랜드 기준 편집" subtitle="빈칸은 나중에 채워도 됩니다. 저장할 때 확인 여부를 직접 선택하세요."
+          width="min(560px, 96vw)" record={identityDraft}
+          fields={[
+            { key: "operatingState", label: "운영 상태", type: "select", options: BRAND_OPERATING_STATES },
+            { key: "isFocused", label: "집중 브랜드로 고정", type: "select", options: [{ value: "no", label: "일반" }, { value: "yes", label: "집중 브랜드" }] },
+            ...BRAND_IDENTITY_FIELDS.map(([key, label, placeholder]) => ({ key, label, placeholder, type: "textarea" })),
+            { key: "confirmation", label: "현재 기준 확인", type: "select", options: [{ value: "unconfirmed", label: "작성만 저장 · 미확인" }, { value: "confirmed", label: "이 내용을 브랜드 기준으로 확인함" }] },
+          ]}
+          onChange={(key, value) => setIdentityDraft((current) => ({ ...current, [key]: value }))}
+          onSave={persistIdentity} saveLabel="브랜드 기준 저장" onClose={() => setIdentityDraft(null)}
+        />
+      )}
       {draft && (
         <EditDrawer
           title="새 브랜드"

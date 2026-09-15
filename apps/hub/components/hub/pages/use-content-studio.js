@@ -6,6 +6,8 @@ import {
   emptyStudioDraft, draftFromDetail, studioFingerprint, studioMirrorKey,
   studioErrorMessage, isDurableStudioSave,
 } from '@/lib/content-workflow-client';
+import { manualPublicationFields, publicationIsVerified } from '@/lib/content-workflow';
+import { refreshContentLedger } from '../use-content-ledger';
 import { createStudioSaveQueue, isDefinitiveStudioRejection } from '@/lib/content-studio-save-queue';
 import { readStudioMirror, readStudioDocumentMirror, writeStudioMirror } from '@/lib/content-studio-storage';
 
@@ -41,6 +43,7 @@ export function useContentStudio(workspace) {
   }));
   const stateRef = React.useRef(state), epoch = React.useRef(0), queueRef = React.useRef(null);
   const historyRequest = React.useRef(0);
+  const publicationAttempt = React.useRef(null);
   const draftKey = React.useRef(null), loadedRoute = React.useRef(null);
   const update = React.useCallback((patch) => {
     const next = typeof patch === 'function' ? patch(stateRef.current) : { ...stateRef.current, ...patch };
@@ -323,6 +326,48 @@ export function useContentStudio(workspace) {
     } catch { if (current()) update({ saveMessage: '처리 결과를 확인하지 못했습니다. 이전 작업 상태 확인으로 같은 요청을 재개해주세요.', saveState: 'error' }); return null; }
     finally { if (current()) update({ busy: false }); }
   };
-  return { ...state, edit, save, switchVariant, newDraft, refreshHistory, compareLatest, recover, mutate, retryLoad,
+  const recordPublication = async (url, date) => {
+    if (!stateRef.current.ready || stateRef.current.busy || stateRef.current.recovery || stateRef.current.pendingMutation) return false;
+    const documentEpoch = epoch.current;
+    const current = () => documentEpoch === epoch.current;
+    update({ busy: true });
+    try {
+      if (publicationAttempt.current && (publicationAttempt.current.contentId !== stateRef.current.draft.contentId || publicationAttempt.current.variantId !== stateRef.current.draft.variantId)) publicationAttempt.current = null;
+      let command = publicationAttempt.current;
+      if (!command) {
+        const fields = manualPublicationFields(url, date);
+        const saved = await save();
+        if (!current() || !saved?.variantId) return false;
+        command = { action: 'record_publication', contentId: saved.contentId, variantId: saved.variantId,
+          logId: crypto.randomUUID(), channel: saved.channel, ...fields };
+        publicationAttempt.current = command;
+      }
+      const response = await fetch('/api/hub/content', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(command), signal: AbortSignal.timeout(20000) });
+      const result = await response.json();
+      if (!current()) return false;
+      if (!response.ok || !['saved', 'duplicate'].includes(result.status)) {
+        if (response.status === 400) publicationAttempt.current = null;
+        throw new Error(result.error || '발행 기록을 저장하지 못했습니다. 같은 기록으로 다시 확인해주세요.');
+      }
+      const ledger = await refreshContentLedger();
+      if (!current()) return false;
+      if (!publicationIsVerified(ledger, command)) throw new Error('발행 기록을 다시 확인하지 못했습니다. 같은 기록으로 재시도해주세요.');
+      const detail = await getDetail(command.contentId);
+      if (!current()) return false;
+      // Refresh exact versions after publication so the next edit does not use stale timestamps.
+      const latest = draftFromDetail(detail, command.variantId);
+      const dirty = stateRef.current.dirty;
+      const draft = dirty ? { ...stateRef.current.draft, itemUpdatedAt: latest.itemUpdatedAt,
+        variantUpdatedAt: latest.variantUpdatedAt, status: latest.status } : latest;
+      adopt(draft, detail, dirty);
+      publicationAttempt.current = null;
+      window.dispatchEvent(new Event('moonlight:content-saved'));
+      return true;
+    } catch (error) {
+      if (current()) update({ saveMessage: error.message });
+      return false;
+    } finally { if (current()) update({ busy: false }); }
+  };
+  return { ...state, edit, save, recordPublication, switchVariant, newDraft, refreshHistory, compareLatest, recover, mutate, retryLoad,
     retryMutation: () => stateRef.current.pendingMutation && mutate(stateRef.current.pendingMutation.command), getDraft: () => stateRef.current.draft };
 }
