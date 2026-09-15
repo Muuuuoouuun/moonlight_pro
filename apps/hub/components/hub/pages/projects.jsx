@@ -55,6 +55,33 @@ import {
   ProjectProgressGauge,
   ProjectStatusBadge,
 } from "./project-pms-components";
+import {
+  BRAND_ORDER_KEY,
+  BRAND_OWNED_CATEGORY,
+  BRAND_SECTION_KEY,
+  CONTAINER_CATEGORY_OPTIONS,
+  DETAIL_FOCUSABLE,
+  EMPTY_ALL_BRAND,
+  EMPTY_CONTAINER_KEY,
+  FOLDER_ORDER_KEY,
+  FOLDER_STORAGE_KEY,
+  IDLE_OPEN_KEY,
+  LIST_STATUS_GROUPS,
+  PROJECT_CATEGORIES,
+  PROJECT_VIEW_OPTIONS,
+  SIDEBAR_HIDDEN_KEY,
+  STATUS_LINE_TOKEN,
+  SUMMARY_FILTER_LABELS,
+  TODO_TIME_SECTIONS,
+  buildLocalContainer,
+  compareProjectsByDue,
+  computeMovedOrder,
+  isTerminalProject,
+  normalizeProjectView,
+  seoulDayKey,
+  slugifyContainer,
+  todoTimeSection,
+} from "./project-view-constants";
 import { classifyProjectPortfolio, portfolioWindow } from "./project-pms-metrics";
 import {
   getWorkspace,
@@ -67,190 +94,6 @@ import {
 // 비던 것을 제거(4차 재감사 속도 M). 캐시 즉시 서빙 + 마운트마다 배경 재검증.
 const PROJECTS_CACHE_SERVABLE_MS = 5 * 60 * 1000;
 let projectsLedgerCache = null; // { at, ledger, todos, syncState }
-
-const EMPTY_ALL_BRAND = {
-  key: 'all',
-  id: 'all',
-  name: '전체 브랜드',
-  glyph: '◐',
-  tone: 'moon',
-  kind: 'index',
-  desc: '모든 프로젝트',
-  projects: 0,
-  tasks: 0,
-  open: 0,
-  changes: 0,
-};
-
-const PROJECT_VIEW_OPTIONS = [
-  { key: 'tree', label: 'List' },
-  { key: 'table', label: 'Table' },
-  { key: 'backlog', label: '백로그' },
-  { key: 'board', label: 'Board' },
-  { key: 'memos', label: '메모' },
-  { key: 'timeline', label: 'Timeline' },
-  { key: 'todos', label: 'To-dos' },
-];
-const PROJECT_VIEWS = new Set(PROJECT_VIEW_OPTIONS.map(v => v.key));
-
-// Timeline view: status → left-stripe token (§5.2 — status color lives on stripes/chips,
-// never as a full bar fill). §15 2026-08-05: 레일은 §8.1 inset 1px 인라인이 현행이고
-// AttentionRail은 미채택이므로 이 토큰 맵과 아래 timeline 스트라이프는 그대로 둔다.
-const STATUS_LINE_TOKEN = {
-  // lifecycle 스트라이프는 중립 — Moonstone은 current/selected 전용(§5.3, 5차 재감사 S).
-  'In progress': 'var(--line-strong)',
-  Review: 'var(--line-strong)',
-  Planning: 'var(--line-strong)',
-  Backlog: 'var(--line-soft)',
-  Blocked: 'var(--danger-line)',
-  Done: 'var(--line-strong)',
-};
-// 상태 라벨과 lifecycle 열거값의 정본은 ./project-pms-components 의
-// PROJECT_STATUS_LABEL_KO / PROJECT_LIFECYCLE_STATE 다 — 상세 패널과 공유한다(§8.2).
-
-// Container category folders (2026-07-15 spec §4.2). The ledger resolves
-// `category` (meta.category → canonical map → 'general'); empty folders are
-// never rendered. Collapse state is UI-only.
-const PROJECT_CATEGORIES = [
-  { key: 'sns-channel', label: 'SNS 채널' },
-  { key: 'ka-deal', label: 'KA·딜' },
-  { key: 'general', label: '일반' },
-];
-// 브랜드 탭이 소유하는 분류 (2026-08-29 브랜드 탭 설계 §3). PMS는 이 분류의
-// 컨테이너를 *렌더*는 하되 — 이미 프로젝트가 붙어 있을 수 있으므로 —
-// 새로 만들지는 않고, 폴더는 기본 접힘으로 연다 (§4 P0-2·P0-3).
-const BRAND_OWNED_CATEGORY = 'sns-channel';
-// 컨테이너 생성/편집 드로어에서 고를 수 있는 분류. 브랜드 소유 분류는 빠진다.
-// 이미 그 분류인 컨테이너를 편집할 때만 현재 값이 옵션으로 되살아난다.
-const CONTAINER_CATEGORY_OPTIONS = PROJECT_CATEGORIES
-  .filter(c => c.key !== BRAND_OWNED_CATEGORY)
-  .map(c => ({ value: c.key, label: c.label }));
-// 완료·보관된 프로젝트는 "터미널" — 기본 리스트에서 걷어내고 "완료·보관 항목 보기"
-// 토글로만 다시 노출한다. 삭제도 archived로의 같은 상태 전환이라 이 집합을 공유한다.
-const TERMINAL_PROJECT_STATUSES = new Set(['completed', 'archived', 'cancelled']);
-function isTerminalProject(p) {
-  return TERMINAL_PROJECT_STATUSES.has(String(p?.statusKey || '').toLowerCase());
-}
-const FOLDER_STORAGE_KEY = 'mlp.pms.folders';
-// 사이드바 폴더 안 "진행 없음" 묶음의 펼침 상태. UI 전용, 기본 접힘.
-const IDLE_OPEN_KEY = 'mlp.pms.idle-open';
-// 브랜드 사이드바 전체의 표시 상태 — 기본 접힘(2026-08-19 운영자 지시), 헤더의
-// 브랜드 트리거 메뉴가 기본 셀렉터다. 수동 토글은 영속.
-const SIDEBAR_HIDDEN_KEY = 'mlp.pms.sidebar-hidden';
-// List 뷰의 브랜드 섹션 접기 상태 (전체 브랜드 볼 때만). UI 전용, 브랜드 slug로 영속.
-const BRAND_SECTION_KEY = 'mlp.pms.brand-sections';
-
-// 진행/휴면·숨김 판정은 pms-ui의 containerHasWork가 단일 정본이다 — changes는
-// 프로젝트를 경유해서만 집계되므로(changes>0 ⇒ projects>0) 별도 항이 아니다
-// (2026-09-01 2609 병합 리뷰에서 페이지 지역 술어 isBrandActive를 흡수).
-// 리스트(tree) 뷰 상태 그룹 — 렌더와 j/k 평탄화(23차)가 같은 순서를 공유한다.
-const LIST_STATUS_GROUPS = [
-  { key: 'In progress', label: '진행중', tone: 'var(--line-strong)' },
-  { key: 'Blocked',     label: '막힘',   tone: 'var(--danger)' },
-  { key: 'Review',      label: '검토',   tone: 'var(--line-strong)' },
-  { key: 'Planning',    label: '계획',   tone: 'var(--line-strong)' },
-  { key: 'Done',        label: '완료',   tone: 'var(--fg-dim)' },
-  { key: 'Backlog',     label: '백로그', tone: 'var(--fg-faint)' },
-];
-// 사이드바 드래그 정렬 — 분류(폴더)와 컨테이너(브랜드) 순서. UI 전용, localStorage 영속.
-const FOLDER_ORDER_KEY = 'mlp.pms.folder-order';
-const BRAND_ORDER_KEY = 'mlp.pms.brand-order';
-// 빈 컨테이너 노출 토글 (UI 전용, localStorage). 기본은 숨김.
-const EMPTY_CONTAINER_KEY = 'mlp.pms.show-empty-containers';
-
-// Q116 확정 — 기한 임박순 정렬. 무기한은 정렬에 섞지 않고 그룹 꼬리로 보낸다(Q120).
-// 무기한끼리는 원장 순서 유지 (Array.prototype.sort는 stable).
-function compareProjectsByDue(a, b) {
-  const ta = Date.parse(a?.dueAt || '');
-  const tb = Date.parse(b?.dueAt || '');
-  const va = Number.isFinite(ta);
-  const vb = Number.isFinite(tb);
-  if (va && vb) return ta - tb;
-  if (va) return -1;
-  if (vb) return 1;
-  return 0;
-}
-
-// To-dos 뷰 시간 구간 (monday My Work 문법 + Q120 무기한 분리, 2026-08-19 PMS 디벨롭).
-// 원장 bucket은 지남→오늘·무기한→다음주로 뭉개므로 UI에서 dueAt로 직접 나눈다.
-// 기준 TZ Asia/Seoul, calendar day (deep-design §10.1 시간 계약).
-const TODO_TIME_SECTIONS = ['기한 지남', '오늘', '내일', '이번 주', '이후', '기한 없음'];
-// 요약 4칸 클릭 필터의 표시 라벨 (project-pms-components의 PORTFOLIO_CELLS와 동일 문구).
-const SUMMARY_FILTER_LABELS = {
-  active: '진행 중',
-  blockedOrOverdue: '막힘 · 지연',
-  dueSoon: '7일 내 기한',
-  unmeasured: '진척 미측정',
-};
-function seoulDayKey(value) {
-  const d = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
-}
-function todoTimeSection(todo, todayKey) {
-  const dueKey = todo?.dueAt ? seoulDayKey(todo.dueAt) : null;
-  if (!dueKey || !todayKey) return '기한 없음';
-  const diff = Math.round((Date.parse(dueKey) - Date.parse(todayKey)) / 86400000);
-  // 완료된 할 일은 손실 상태가 아니다 — 지난 기한이어도 "기한 지남"으로 올리지 않는다.
-  if (diff < 0) return todo.done ? '오늘' : '기한 지남';
-  if (diff === 0) return '오늘';
-  if (diff === 1) return '내일';
-  if (diff <= 7) return '이번 주';
-  return '이후';
-}
-const DETAIL_FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
-
-// prevOrder를 현재 존재하는 키로 정규화한 뒤, movingKey를 targetKey '앞'으로 이동한 새 순서 배열.
-function computeMovedOrder(prevOrder, currentKeys, movingKey, targetKey) {
-  const present = new Set(currentKeys);
-  const base = prevOrder.filter((k) => present.has(k));
-  for (const k of currentKeys) if (!base.includes(k)) base.push(k);
-  if (movingKey === targetKey) return base; // 자기 자신에 드롭 → 정규화만
-  const from = base.indexOf(movingKey);
-  if (from === -1) return base;
-  base.splice(from, 1);
-  const to = base.indexOf(targetKey);
-  if (to === -1) base.push(movingKey);
-  else base.splice(to, 0, movingKey);
-  return base;
-}
-
-// Container (brand) create helpers. brands.slug must be unique per workspace and
-// is required by the table; Korean names collapse to an id-based fallback.
-function slugifyContainer(name, id) {
-  const base = String(name || '').toLowerCase().normalize('NFKD')
-    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  return base || `c-${String(id || '').slice(0, 8)}`;
-}
-
-// Optimistic row for preview mode (Engine not configured) — shaped like a ledger
-// brand so brandGroups places it in the right category folder immediately.
-function buildLocalContainer(draft, slug) {
-  return {
-    key: slug,
-    id: draft.id,
-    name: String(draft.name || '').trim(),
-    glyph: '○',
-    tone: 'moon',
-    kind: 'brand',
-    orgScope: draft.orgScope,
-    category: draft.category,
-    desc: '새 컨테이너 · 저장 대기',
-    preview: true,
-    projects: 0,
-    tasks: 0,
-    open: 0,
-    changes: 0,
-  };
-}
-
-// `?view=tasks` is the sidebar spec's wording for the same view the page calls
-// 'todos' — accept both so old and new links resolve.
-function normalizeProjectView(raw) {
-  const v = String(raw || '');
-  if (v === 'tasks') return 'todos';
-  return PROJECT_VIEWS.has(v) ? v : 'tree';
-}
 
 export function Projects({ workspace }) {
   const searchParams = useSearchParams();

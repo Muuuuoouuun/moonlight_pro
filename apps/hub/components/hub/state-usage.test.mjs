@@ -167,10 +167,12 @@ test('PMS timeline keeps the inline 1px status stripe instead of adopting Attent
   assert.match(projects, /boxShadow: `inset 1px 0 0 \$\{lineToken\}`/);
   assert.doesNotMatch(projects, /inset (?:2|3)px 0 0/);
   assert.doesNotMatch(projects, /<AttentionRail/);
-  // 중립 상태가 danger 토큰으로 새지 않는다.
-  const stripeMap = projects.slice(
-    projects.indexOf('const STATUS_LINE_TOKEN = {'),
-    projects.indexOf('};', projects.indexOf('const STATUS_LINE_TOKEN = {')),
+  // 중립 상태가 danger 토큰으로 새지 않는다. 토큰 맵은 project-view-constants.js가
+  // 소유한다 — 뷰 분할에서 순수 상수·헬퍼가 그 모듈로 나갔다.
+  const constants = readFileSync(new URL('./pages/project-view-constants.js', import.meta.url), 'utf8');
+  const stripeMap = constants.slice(
+    constants.indexOf('STATUS_LINE_TOKEN = {'),
+    constants.indexOf('};', constants.indexOf('STATUS_LINE_TOKEN = {')),
   );
   assert.ok(stripeMap.length > 0);
   assert.equal((stripeMap.match(/var\(--danger/g) || []).length, 1, 'Blocked 하나만 danger 스트라이프다');
