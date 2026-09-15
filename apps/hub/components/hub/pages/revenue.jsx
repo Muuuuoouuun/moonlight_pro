@@ -2047,8 +2047,25 @@ export function Deals({ workspace, onNavigate }) {
                       <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{d.close}</span>
                     </div>
                     {stalled && (
-                      <div style={{ marginTop: 6, fontSize: 10.5, color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <Iconed name="clock" size={10} /> {d.age}일 정체
+                      <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                        <span style={{ fontSize: 10.5, color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <Iconed name="clock" size={10} /> {d.age}일 정체
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setGuruDeal(d); }}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                            fontSize: 10, padding: '2px 6px',
+                            borderRadius: 'var(--r-xs)',
+                            border: '1px solid var(--moon-line)',
+                            background: 'var(--surface-3)',
+                            color: 'var(--moon-200)',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Iconed name="sparkle" size={10} /> 반론 점검
+                        </button>
                       </div>
                     )}
                   </div>
@@ -2098,6 +2115,42 @@ export function Deals({ workspace, onNavigate }) {
           setEditDealId(null);
         }}
       >
+        {editingDeal && (
+          <div style={{
+            padding: '12px 14px',
+            background: 'var(--surface-2)',
+            border: '1px solid var(--line-soft)',
+            borderRadius: 'var(--r-md)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Iconed name="sparkle" size={14} style={{ color: 'var(--moon-300)' }} />
+                <span style={{ fontSize: 12, fontWeight: 600 }}>Guru 세일즈 코칭 & 다음 수</span>
+              </div>
+              <Button
+                variant="outline"
+                size="xs"
+                icon="sparkle"
+                onClick={() => setGuruDeal(editingDeal)}
+              >
+                1:1 코칭 열기
+              </Button>
+            </div>
+            {(!editingDeal.nextAction || editingDeal.age > 7) && (
+              <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ color: 'var(--warning, #f59e0b)' }}>⚠️</span>
+                <span>
+                  {!editingDeal.nextAction
+                    ? '현재 등록된 다음 행동이 없습니다. Guru에게 다음 액션 추천을 받아보세요.'
+                    : `${editingDeal.age}일간 정체되었습니다. 고객 저항 반론 점검을 추천합니다.`}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
         <DealTaskPanel deal={editingDeal} onSaved={loadDealTaskStats} />
         <DealNextMeetingPanel deal={editingDeal} onNavigate={onNavigate} />
         <DealLinkedProjectsPanel deal={editingDeal} onNavigate={onNavigate} />
@@ -2117,6 +2170,14 @@ export function Deals({ workspace, onNavigate }) {
           amount: guruDeal?.value ? fmt(guruDeal.value) : "",
           nextAction: guruDeal?.nextAction,
           notes: guruDeal?.notes,
+        }}
+        onApplyText={(text) => {
+          if (editDealId && guruDeal?.id === editDealId) {
+            setDealDrafts(prev => ({
+              ...prev,
+              [editDealId]: { ...prev[editDealId], nextAction: text.slice(0, 100) },
+            }));
+          }
         }}
       />
     </div>

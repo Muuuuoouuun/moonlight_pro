@@ -29,6 +29,7 @@ export function ContentStudio({ workspace, ledger }) {
   const [publicationUrl, setPublicationUrl] = React.useState('');
   const [publicationDate, setPublicationDate] = React.useState('');
   const [mentorOpen, setMentorOpen] = React.useState(false);
+  const [mentorMode, setMentorMode] = React.useState('advice');
   const [newChannel, setNewChannel] = React.useState('instagram'), [notice, setNotice] = React.useState('');
   const brands = filterBrandsByWorkspace(ledger.brands || [], workspace).filter((brand) => brand.id && brand.key !== 'all');
   const allBrands = ledger.brands || [];
@@ -71,7 +72,8 @@ export function ContentStudio({ workspace, ledger }) {
     <header className="studio-page-header">
       <div><h2>콘텐츠 스튜디오</h2><p>메모를 기획으로, 초안을 채널별 콘텐츠로.</p></div>
       <div className="studio-actions">
-        <Button variant="outline" icon="sparkle" onClick={() => setMentorOpen(true)} disabled={disabled}>방향 검토</Button>
+        <Button variant="outline" icon="sparkle" onClick={() => { setMentorMode('advice'); setMentorOpen(true); }} disabled={disabled}>방향 검토</Button>
+        <Button variant="outline" icon="sparkle" onClick={() => { setMentorMode('critique'); setMentorOpen(true); }} disabled={disabled}>검수 게이트 판정</Button>
         <Button variant="outline" onClick={studio.newDraft} disabled={(!studio.ready && !studio.loadError) || studio.busy || !!studio.recovery || !!studio.pendingMutation} icon="plus">새 콘텐츠</Button>
         <Button onClick={openHistory} disabled={!draft.variantId || studio.busy}>버전 기록</Button>
         <Button variant="primary" onClick={() => studio.save(true)} disabled={disabled || studio.saveState === 'saving'}>버전 저장</Button>
@@ -183,17 +185,18 @@ export function ContentStudio({ workspace, ledger }) {
       </div>
     </Drawer>}
     <FloatingMentorWidget
-      key={`${draft.contentId || 'new'}:${draft.variantId || 'new'}`}
+      key={`${draft.contentId || 'new'}:${draft.variantId || 'new'}:${mentorMode}`}
       isOpen={mentorOpen}
       onClose={() => setMentorOpen(false)}
       contextType="content"
       contextTitle={draft.variantTitle || draft.title || '새 초안'}
+      initialTab={mentorMode === 'critique' ? 'critique' : 'quick'}
       contextData={{
         id: draft.contentId,
         title: draft.variantTitle || draft.title,
         body: draft.body || draft.sourceIdea,
         brand: selectedBrand?.name || selectedBrand?.key || '',
-        mode: draft.variantType,
+        mode: mentorMode || draft.variantType,
       }}
       onApplyText={disabled || ['card_news', 'reels_script'].includes(draft.variantType) ? undefined : (text) => {
         studio.edit({ body: draft.body ? `${draft.body}\n\n${text}` : text });

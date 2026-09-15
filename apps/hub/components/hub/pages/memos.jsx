@@ -11,6 +11,7 @@ import { useMemoDocument } from './use-memos';
 import { useMemoSearch } from './use-memo-search';
 import { MemoSearchControls } from './memo-search-controls';
 import { filtersFromParams, memoSearchParams, memoListHref, memoDocumentHref, memoMatchSegments, MEMO_CHANGED_EVENT } from '@/lib/journal-search-client';
+import { MemoPatternPanel } from './memo-pattern-panel';
 import './memos.css';
 
 function MemoDocument({ onClose, onReload, ...props }) {
@@ -31,7 +32,41 @@ export function Memos() {
   const context = React.useMemo(() => contextId ? { type: contextType, id: contextId } : null, [contextType, contextId]);
   const [ledger, setLedger] = React.useState(() => ({ ...initial, workspaceId: lastJournalWorkspace() })), [reload, setReload] = React.useState(0), [error, setError] = React.useState('');
   const [recoveries, setRecoveries] = React.useState([]), [localError, setLocalError] = React.useState(false);
+  const [selectedIds, setSelectedIds] = React.useState([]);
+  const [patternGoal, setPatternGoal] = React.useState('sales_insight');
+  const [patternState, setPatternState] = React.useState({ show: false, loading: false, patterns: [], error: null });
   const generation = React.useRef(0), currentLedger = React.useRef(ledger); currentLedger.current = ledger;
+
+  const toggleSelect = React.useCallback((memoId, e) => {
+    e.stopPropagation();
+    setSelectedIds((prev) =>
+      prev.includes(memoId) ? prev.filter((x) => x !== memoId) : prev.length < 10 ? [...prev, memoId] : prev
+    );
+  }, []);
+
+  const runPatternAnalysis = React.useCallback(async () => {
+    if (selectedIds.length === 0) return;
+    setPatternState({ show: true, loading: true, patterns: [], error: null });
+    try {
+      const res = await fetch('/api/hub/journal/analyze', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          requestId: crypto.randomUUID(),
+          goal: patternGoal,
+          noteIds: selectedIds,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.status === 'failed') {
+        setPatternState({ show: true, loading: false, patterns: [], error: data.error || '분석에 실패했습니다.' });
+      } else {
+        setPatternState({ show: true, loading: false, patterns: data.patterns || [], error: null });
+      }
+    } catch (err) {
+      setPatternState({ show: true, loading: false, patterns: [], error: err.message });
+    }
+  }, [selectedIds, patternGoal]);
 
   React.useEffect(() => {
     if (!isNew || draftId) return;
@@ -105,6 +140,42 @@ export function Memos() {
     </header>
     <div className="memos-state"><TruthBadge state={search.status} /><span className="memo-muted">하루 리뷰와 함께 보관하는 개인 기록</span></div>
     <MemoSearchControls filters={filters} context={search.context} onApply={applyFilters} />
+    {selectedIds.length > 0 && (
+      <div style={{ padding: '12px 16px', background: 'var(--surface-2)', border: '1px solid var(--line-strong)', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <strong style={{ fontSize: 13 }}>선택한 메모 {selectedIds.length}개</strong>
+          <select
+            value={patternGoal}
+            onChange={(e) => setPatternGoal(e.target.value)}
+            className="hub-input"
+            style={{ height: 32, fontSize: 12, padding: '0 8px' }}
+          >
+            <option value="sales_insight">영업 인사이트 도출</option>
+            <option value="content_hook">콘텐츠 훅 도출</option>
+            <option value="operational_rule">운영 체크리스트 도출</option>
+            <option value="decision_rationale">의사결정 배경 분석</option>
+            <option value="general">종합 패턴 분석</option>
+          </select>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Button variant="primary" size="xs" icon="sparkle" onClick={runPatternAnalysis} disabled={patternState.loading}>
+            {patternState.loading ? '분석 중…' : '패턴 분석 실행'}
+          </Button>
+          <Button variant="ghost" size="xs" onClick={() => setSelectedIds([])}>
+            선택 취소
+          </Button>
+        </div>
+      </div>
+    )}
+    {patternState.show && (
+      <MemoPatternPanel
+        loading={patternState.loading}
+        error={patternState.error}
+        patterns={patternState.patterns}
+        onClose={() => setPatternState((prev) => ({ ...prev, show: false }))}
+        onNavigate={(path) => router.push(`/${path}`)}
+      />
+    )}
     {recoveries.length > 0 && <section className="memo-recovery" aria-label="작성 중인 메모"><h3>이어서 쓸 메모</h3>{recoveries.map((doc) => <Button key={doc.draft.id} className="hub-row" onClick={() => router.push(memoDocumentHref(params, doc.draft.expectedRevision ? { note: doc.draft.id } : { new: 'note', draft: doc.draft.id, from: doc.fromPreview ? 'preview' : '' }), { scroll: false })}>
       {doc.draft.title || doc.draft.body.slice(0,60) || '작성 중인 메모'} · {doc.pending ? '이전 요청 확인' : doc.fromPreview ? '연결 전 초안 이어쓰기' : '이어서 쓰기'}
     </Button>)}</section>}
@@ -114,8 +185,17 @@ export function Memos() {
     {search.status === 'live' && search.entries.length > 0 && <p className="memo-muted" role="status">불러온 메모 <span className="num">{search.entries.length}</span>개{search.nextCursor ? ' · 더 볼 수 있어요' : ''}</p>}
     {search.status === 'loading' ? <p role="status" className="memo-muted">메모를 찾고 있어요…</p> : search.status === 'preview' ? <EmptyState icon="content" title="메모 저장소 연결이 필요해요" description="작성한 내용은 현재 탭에 임시 보관합니다. 탭을 닫기 전 연결해 저장하거나 입력을 복사해 주세요." action={<Button onClick={create} disabled={Boolean(id)}>메모 남기기</Button>} />
       : search.status === 'live' && (search.entries.length === 0 ? <EmptyState icon="content" title={searchQuery ? '조건에 맞는 메모가 없어요' : '기억하고 싶은 일부터 한 줄'} description={searchQuery ? '검색어를 짧게 바꾸거나 조건을 해제해 보세요.' : '제목이나 분류 없이 바로 남겨보세요. 필요할 때 보강하고 활용할 수 있어요.'} action={searchQuery ? <Button onClick={() => applyFilters({})}>조건 모두 해제</Button> : <Button onClick={create} disabled={Boolean(id)}>첫 메모 남기기</Button>} />
-        : <Card pad={false} className="memo-list"><ol>{search.entries.map((row) => <li key={row.id}>
-          <button className="hub-row memo-list-row" onClick={() => router.push(memoDocumentHref(params, { note: row.id }), { scroll: false })}>
+        : <Card pad={false} className="memo-list"><ol>{search.entries.map((row) => <li key={row.id} style={{ display: 'flex', alignItems: 'flex-start' }}>
+          <div style={{ padding: '24px 0 0 16px', display: 'flex', alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              checked={selectedIds.includes(row.id)}
+              onChange={(e) => toggleSelect(row.id, e)}
+              aria-label="메모 선택"
+              style={{ cursor: 'pointer', width: 16, height: 16 }}
+            />
+          </div>
+          <button className="hub-row memo-list-row" style={{ flex: 1 }} onClick={() => router.push(memoDocumentHref(params, { note: row.id }), { scroll: false })}>
             <div className="memo-row-top"><span className="mono memo-muted">{memoTime(row.occurredAt)}</span><span className="memo-muted">{NOTE_QUESTIONS.find((item) => item.value === row.noteMeta?.kind)?.label || '메모'}{row.used ? ' · 활용함' : ''}</span></div>
             <strong><MatchText text={row.title || row.excerpt.split('\n')[0]} query={filters.q} /></strong><p><MatchText text={row.match?.text || row.excerpt} query={row.match ? Array.from(filters.q.trim()).slice(0, 180).join('') : filters.q} /></p>
             {row.match && <span className="memo-muted">{({ title: '제목', body: '본문', enhancement: '보강 내용' })[row.match.field]}에서 찾음</span>}

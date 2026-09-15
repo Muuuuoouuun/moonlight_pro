@@ -15,12 +15,14 @@ export function FloatingMentorWidget({
   contextType = "content", // 'content' | 'project' | 'deal' | 'customer' | 'sales' | 'weekly' | 'general'
   contextTitle = "",
   contextData = {},
+  initialTab = "quick",
   onApplyText,
   onCreateTask,
 }) {
   const isGuru = agent === "guru" || contextType === "deal" || contextType === "customer" || contextType === "sales";
   const [minimized, setMinimized] = useState(false);
-  const [activeTab, setActiveTab] = useState("quick"); // 'quick' | 'critique' | 'sparring' | 'chat'
+  const defaultTab = initialTab || (contextData?.mode === "critique" ? "critique" : "quick");
+  const [activeTab, setActiveTab] = useState(defaultTab);
   const [selectedLens, setSelectedLens] = useState(null);
   const [loading, setLoading] = useState(false);
   const [resultText, setResultText] = useState("");
@@ -28,6 +30,7 @@ export function FloatingMentorWidget({
   const [chatThread, setChatThread] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [taskSaved, setTaskSaved] = useState(false);
+  const [dealSaved, setDealSaved] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // Esc key layer registration
@@ -190,14 +193,28 @@ export function FloatingMentorWidget({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const extractTaskTitle = (taskText) => {
+    if (!taskText) return "";
+    const expMatch = taskText.match(/📌\s*다음\s*주\s*단\s*1가지\s*실험:\s*([^\n\r]+)/);
+    if (expMatch && expMatch[1]?.trim()) {
+      return "다음 주 실험: " + expMatch[1].trim().replace(/^\[|\]$/g, "");
+    }
+    const taskMatch = taskText.match(/📌\s*추천\s*태스크:\s*([^\n\r]+)/);
+    if (taskMatch && taskMatch[1]?.trim()) {
+      return taskMatch[1].trim().replace(/^\[|\]$/g, "");
+    }
+    const firstLine = taskText.split("\n")[0].replace(/^[0-9\.\-\*\s🟢🔴🟡💡🎯📋#]+/, "").trim().slice(0, 80);
+    return firstLine || (isGuru ? "Guru 코칭 실행" : contextType === "weekly" ? "다음 주 운영 실험" : "Council 조언 실행");
+  };
+
   const handleCreateTask = async (taskText) => {
     if (!taskText) return;
-    const firstLine = taskText.split("\n")[0].replace(/^[0-9\.\-\*\s🟢🔴🟡]+/, "").trim().slice(0, 80);
-    const title = firstLine || (isGuru ? "Guru 코칭 실행" : "Council 조언 실행");
+    const title = extractTaskTitle(taskText);
 
     if (onCreateTask) {
       onCreateTask(title);
       setTaskSaved(true);
+      setTimeout(() => setTaskSaved(false), 3000);
       return;
     }
 
@@ -212,9 +229,32 @@ export function FloatingMentorWidget({
       });
       if (res.ok) {
         setTaskSaved(true);
+        setTimeout(() => setTaskSaved(false), 3000);
       }
     } catch (e) {
       console.error("Failed to create task", e);
+    }
+  };
+
+  const handleUpdateDealNextAction = async (taskText) => {
+    if (!contextData?.id || !taskText) return;
+    const nextAction = extractTaskTitle(taskText);
+    try {
+      const res = await fetch("/api/hub/revenue/deal", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          op: "update",
+          id: contextData.id,
+          nextAction,
+        }),
+      });
+      if (res.ok) {
+        setDealSaved(true);
+        setTimeout(() => setDealSaved(false), 3000);
+      }
+    } catch (e) {
+      console.error("Failed to update deal next action", e);
     }
   };
 
@@ -276,7 +316,15 @@ export function FloatingMentorWidget({
       ];
 
   const widgetTitle = isGuru ? "Guru 세일즈 코칭" : contextType === "weekly" ? "주간 정리 & Council" : "Council 자문단";
-  const contextPrefix = isGuru ? "고객/딜: " : contextType === "weekly" ? "주간: " : contextType === "project" ? "프로젝트: " : "콘텐츠: ";
+  const contextPrefix = isGuru
+    ? "고객/딜: "
+    : contextType === "weekly"
+    ? "주간: "
+    : contextType === "project"
+    ? "프로젝트: "
+    : contextType === "content"
+    ? "콘텐츠: "
+    : "맥락: ";
 
   return (
     <aside
@@ -640,11 +688,27 @@ export function FloatingMentorWidget({
                 handleCreateTask(txt);
               }}
             >
-              {taskSaved ? "할 일 등록됨" : "할 일로 등록"}
+              {taskSaved ? "태스크 등록됨 ✓" : contextType === "weekly" ? "📌 실험 태스크 등록" : "할 일로 등록"}
             </Button>
+            {contextType === "deal" && contextData?.id && (
+              <Button
+                variant="outline"
+                size="xs"
+                icon={dealSaved ? "check" : "deals"}
+                disabled={dealSaved}
+                onClick={() => {
+                  const txt = activeTab === "chat"
+                    ? chatThread.slice(-1)[0]?.text || ""
+                    : resultText;
+                  handleUpdateDealNextAction(txt);
+                }}
+              >
+                {dealSaved ? "다음 행동 저장됨 ✓" : "딜 다음 행동 반영"}
+              </Button>
+            )}
           </div>
           <Button variant="ghost" size="xs" icon={copied ? "check" : "copy"} onClick={handleCopy}>
-            {copied ? "복사됨" : "복사"}
+            {copied ? "복사됨 ✓" : "복사"}
           </Button>
         </div>
       )}

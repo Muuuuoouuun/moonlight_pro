@@ -47,6 +47,26 @@ CHAT_PERSONAS.council = {
   model: 'Gemini 3.1 Pro (Thinking)',
 };
 
+function extractTaskTitleFromText(text) {
+  if (!text) return 'AI 추천 실행 태스크';
+  const expMatch = text.match(/📌\s*다음\s*주\s*단\s*1가지\s*실험:\s*([^\n\r]+)/);
+  if (expMatch && expMatch[1]?.trim()) {
+    return '다음 주 실험: ' + expMatch[1].trim().replace(/^\[|\]$/g, '');
+  }
+  const taskMatch = text.match(/📌\s*추천\s*태스크:\s*([^\n\r]+)/);
+  if (taskMatch && taskMatch[1]?.trim()) {
+    return taskMatch[1].trim().replace(/^\[|\]$/g, '');
+  }
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  for (const line of lines) {
+    if (/^[0-9\.\-\*\s🟢🔴🟡💡🎯📋#]+/.test(line)) {
+      const cleaned = line.replace(/^[0-9\.\-\*\s🟢🔴🟡💡🎯📋#]+/, '').trim();
+      if (cleaned.length >= 4 && cleaned.length <= 80) return cleaned;
+    }
+  }
+  return (lines[0] || 'AI 추천 실행 태스크').slice(0, 60);
+}
+
 export function AgentsChat({ onNavigate }) {
   const [input, setInput] = React.useState('');
   const [agentKey, setAgentKey] = React.useState(DEFAULT_PERSONA_KEY);
@@ -55,6 +75,8 @@ export function AgentsChat({ onNavigate }) {
   const [thread, setThread] = React.useState([]);
   const [conversations, setConversations] = React.useState([]);
   const [busy, setBusy] = React.useState(false);
+  const [taskSavedMap, setTaskSavedMap] = React.useState({});
+  const [copiedMap, setCopiedMap] = React.useState({});
   const busyRef = React.useRef(false);
   const persona = CHAT_PERSONAS[agentKey] || CHAT_PERSONAS[DEFAULT_PERSONA_KEY];
 
@@ -134,6 +156,40 @@ export function AgentsChat({ onNavigate }) {
     setBusy(false);
   }, []);
 
+  const handleSaveTask = React.useCallback(async (text, index) => {
+    const title = extractTaskTitleFromText(text);
+    try {
+      const res = await fetch('/api/hub/tasks', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      if (res.ok) {
+        setTaskSavedMap(prev => ({ ...prev, [index]: true }));
+        setTimeout(() => {
+          setTaskSavedMap(prev => ({ ...prev, [index]: false }));
+        }, 3000);
+      }
+    } catch (e) {
+      console.error('Failed to create task', e);
+    }
+  }, []);
+
+  const handleCopyMessage = React.useCallback((text, index) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedMap(prev => ({ ...prev, [index]: true }));
+    setTimeout(() => {
+      setCopiedMap(prev => ({ ...prev, [index]: false }));
+    }, 2000);
+  }, []);
+
+  const handleHandoff = React.useCallback((targetAgentKey, targetMode, handoffPrompt) => {
+    setAgentKey(targetAgentKey);
+    setActiveMode(targetMode);
+    runPersona(targetAgentKey, targetMode, handoffPrompt);
+  }, [runPersona]);
+
   // Persona is selected via ?agent=<key>; ?mode=&ref= auto-runs live coaching.
   // ?prompt=council runs real Council convene synthesis.
   React.useEffect(() => {
@@ -178,12 +234,19 @@ export function AgentsChat({ onNavigate }) {
       ]);
       const mode = q.get('mode');
       const ref = q.get('ref');
+      if (mode) setActiveMode(mode);
       if (a === 'guru' && mode && GURU_MODE_LABEL[mode]) {
         const label = ref ? `${GURU_MODE_LABEL[mode]}: ${ref}` : GURU_MODE_LABEL[mode];
         runGuru(mode, { ref, label });
+      } else if (a === 'council' && mode === 'sparring') {
+        runPersona('council', 'sparring', '비즈니스 전략 및 브랜드에 대해 추진 논거 vs 맹점 비판 vs 1단계 검증 행동으로 3자 격돌해줘.');
+      } else if (a === 'council' && mode === 'weekly-review') {
+        runPersona('council', 'weekly-review', '이번 주 실행 팩트 요약, 병목 진단, 다음 주 실험 1가지를 사실 기반으로 평가해줘.');
+      } else if (a === 'order' && mode === 'dispatch') {
+        runPersona('order', 'advice', '오늘 긴급 및 중요 신호를 분석해 작업지시서(work_order) 우선순위를 조립해줘.');
       }
     }
-  }, [runGuru]);
+  }, [runGuru, runPersona]);
 
   const send = () => {
     const text = input.trim();
@@ -265,6 +328,84 @@ export function AgentsChat({ onNavigate }) {
                       </span>
                     ) : m.text}
                   </div>
+                  {m.role === 'agent' && !m.pending && m.text && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        icon={copiedMap[i] ? "check" : "copy"}
+                        onClick={() => handleCopyMessage(m.text, i)}
+                      >
+                        {copiedMap[i] ? "복사됨 ✓" : "복사"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        icon={taskSavedMap[i] ? "check" : "plus"}
+                        onClick={() => handleSaveTask(m.text, i)}
+                      >
+                        {taskSavedMap[i] ? "태스크 등록됨 ✓" : agentKey === 'council' && activeMode === 'weekly-review' ? "실험 태스크로 등록" : "태스크로 등록"}
+                      </Button>
+
+                      {agentKey === 'order' && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="xs"
+                            icon="sparkle"
+                            disabled={busy}
+                            onClick={() => handleHandoff('sales', 'advice', `오더 지시서에 따라 딜 다음 행동 및 반론 대응을 설계해줘:\n\n[오더 내용]:\n${m.text.slice(0, 600)}`)}
+                          >
+                            👉 세일즈로 전달
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="xs"
+                            icon="sparkle"
+                            disabled={busy}
+                            onClick={() => handleHandoff('content', 'advice', `오더 지시서에 따라 신규 앵글 및 발행 케이던스를 기획해줘:\n\n[오더 내용]:\n${m.text.slice(0, 600)}`)}
+                          >
+                            👉 콘텐츠로 전달
+                          </Button>
+                        </>
+                      )}
+
+                      {agentKey === 'content' && (
+                        <Button
+                          variant="outline"
+                          size="xs"
+                          icon="sparkle"
+                          disabled={busy}
+                          onClick={() => handleHandoff('production', 'advice', `기획된 앵글을 채널별 포맷 골격(카드뉴스 5장 또는 스레드)으로 변환해줘:\n\n[기획 내용]:\n${m.text.slice(0, 600)}`)}
+                        >
+                          👉 제작으로 골격화 요청
+                        </Button>
+                      )}
+
+                      {agentKey === 'production' && (
+                        <Button
+                          variant="outline"
+                          size="xs"
+                          icon="sparkle"
+                          disabled={busy}
+                          onClick={() => handleHandoff('review', 'critique', `제작된 초안에 대해 사실 근거 검수 및 브랜드 가드레일 판정(PASS/REVISE/NEEDS_HUMAN)을 내려줘:\n\n[초안 내용]:\n${m.text.slice(0, 600)}`)}
+                        >
+                          👉 검수로 게이트 판정 요청
+                        </Button>
+                      )}
+
+                      {agentKey === 'review' && (
+                        <Button
+                          variant="outline"
+                          size="xs"
+                          icon="check"
+                          onClick={() => handleSaveTask(`검수 승인 완료: ${m.text.slice(0, 100)}`, i)}
+                        >
+                          승인 결과 태스크 저장
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

@@ -9,6 +9,7 @@ import { isTopEscLayer, popEscLayer, pushEscLayer } from "./esc-layers";
 
 const SHORTCUTS = [
   { keys: ["⌘", "K"], label: "명령 팔레트 (이동)" },
+  { keys: ["⌘", "J"], label: "AI 어드바이저 코파일럿" },
   { keys: ["J", "K"], label: "위/아래 선택 이동 (목록)" },
   { keys: ["E"], label: "선택 항목 편집" },
   { keys: ["N"], label: "새 항목 생성" },
