@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Button, Checkbox, Input } from "../hub-primitives";
+import { Badge, Button, Checkbox, Input } from "../hub-primitives";
 import { Iconed } from "../hub-icons";
 import deliveryStyles from "./project-delivery.module.css";
 import { ProjectDeliverySummary } from "./project-delivery";
@@ -102,9 +102,24 @@ function PortfolioMetric({ metric, count, active, lowerBound, onSelect }) {
   );
 }
 
+function computeDDay(dueAt) {
+  if (!dueAt) return null;
+  const d = new Date(dueAt);
+  if (Number.isNaN(d.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  d.setHours(0, 0, 0, 0);
+  const diff = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+  if (diff < 0) return { text: `D+${Math.abs(diff)} 지연`, tone: "danger" };
+  if (diff === 0) return { text: "D-Day", tone: "moon" };
+  if (diff <= 7) return { text: `D-${diff}`, tone: "moon" };
+  return { text: `D-${diff}`, tone: "neutral" };
+}
+
 function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, onSelect }) {
   const progress = progressValue(project);
   const risk = projectRisk(project, window);
+  const dday = computeDDay(project.dueAt);
   return (
     <button
       type="button"
@@ -126,6 +141,7 @@ function ProjectIndexRow({ project, brand, selected, keyboardSelected, window, o
       </span>
       <span className="hub-project-portfolio-index-row__meta">
         <span><Iconed name="calendar" size={12} />{formatLongDate(project.dueAt)}</span>
+        {dday && <span className={`hub-project-dday-badge hub-project-dday-badge--${dday.tone}`}>{dday.text}</span>}
         <span className={risk.risky ? "is-risk" : ""}>
           <Iconed name={risk.risky ? "flag" : "check"} size={12} />{risk.label}
         </span>
@@ -191,10 +207,18 @@ export function ProjectPortfolioWorkspace({
   onToggleTerminal,
   onReopenProject,
   onReload,
+  onSwitchView,
+  updates = [],
   createSurface = null,
 }) {
   const [focusProjectId, setFocusProjectId] = React.useState(null);
-  const [openSection, setOpenSection] = React.useState(null);
+  const [showDeliveryPlan, setShowDeliveryPlan] = React.useState(false);
+  const [showFilterPicker, setShowFilterPicker] = React.useState(false);
+  const [openSections, setOpenSections] = React.useState({
+    items: true,
+    checklist: true,
+    schedule: true,
+  });
   const window = React.useMemo(() => portfolioWindow(), []);
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const locallyFocused = projects.find((project) => project.id === focusProjectId);
@@ -214,10 +238,16 @@ export function ProjectPortfolioWorkspace({
   const progress = progressValue(project);
   const risk = project ? projectRisk(project, window) : { risky: false, label: "위험 없음" };
   const dueDays = project ? daysUntil(project.dueAt) : null;
+  const dday = project ? computeDDay(project.dueAt) : null;
   const brand = project
     ? (brandByKey.get(project.brand) || brands[0] || null)
     : null;
   const taskStatuses = taskStatusCounts(projectTasks);
+  const totalTasks = projectTasks.length;
+  const doneTasksCount = doneTasks.length;
+  const doingTasksCount = projectTasks.filter((t) => (String(t.status || "").toLowerCase() === "doing" || t.status === "In progress")).length;
+  const blockedTasksCount = projectTasks.filter((t) => (String(t.status || "").toLowerCase() === "blocked" || t.status === "Blocked")).length;
+  const todoTasksCount = Math.max(0, totalTasks - doneTasksCount - doingTasksCount - blockedTasksCount);
   const metrics = React.useMemo(() => {
     const counts = { active: 0, blockedOrOverdue: 0, dueSoon: 0, unmeasured: 0 };
     portfolioProjects.forEach((item) => {
@@ -229,9 +259,8 @@ export function ProjectPortfolioWorkspace({
 
   const selectProject = (projectId) => {
     setFocusProjectId(projectId);
-    setOpenSection(null);
   };
-  const toggleSection = (section) => setOpenSection((current) => current === section ? null : section);
+  const toggleSection = (section) => setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
   const nextAction = project?.displayNextAction || project?.projectNextAction || nextTask?.title || "다음 행동 미정";
   const nextActionDescription = project?.displaySummary
     || (nextTask ? `${formatScheduleDate(nextTask.dueAt)}까지 처리할 가장 가까운 할 일입니다.` : "상세에서 다음 행동과 실행 근거를 정리하세요.");
@@ -319,21 +348,64 @@ export function ProjectPortfolioWorkspace({
         ) : (
           <div className={`hub-project-portfolio-stage__inner ${deliveryStyles.portfolio}`}>
           <header className="hub-project-portfolio-stage__header">
-            <div>
-              <span className={deliveryStyles.eyebrow}>{brand?.name || "프로젝트"}</span>
-              <h1>{project?.name || "프로젝트"}</h1>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", width: "100%", gap: 16 }}>
+              <div>
+                <span className={deliveryStyles.eyebrow}>{brand?.name || "프로젝트"}</span>
+                <h1>{project?.name || "프로젝트"}</h1>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {onSwitchView && (
+                  <Button variant="outline" size="sm" onClick={() => onSwitchView("table")}>
+                    목록(Table)으로 보기 →
+                  </Button>
+                )}
+              </div>
             </div>
-            <div className="hub-project-portfolio-metrics" aria-label="포트폴리오 요약">
-              {METRIC_FILTERS.map((metric) => (
-                <PortfolioMetric
-                  key={metric.key}
-                  metric={metric}
-                  count={metrics[metric.key]}
-                  active={activeFilter === metric.key}
-                  lowerBound={lowerBound}
-                  onSelect={onFilterChange}
-                />
-              ))}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+              {activeFilter ? (
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "3px 10px", borderRadius: "var(--r-sm)",
+                  background: "var(--surface-3)", border: "1px solid var(--moon-300)",
+                  fontSize: 11, color: "var(--fg)",
+                }}>
+                  <span style={{ color: "var(--fg-faint)" }}>필터:</span>
+                  <strong>{METRIC_FILTERS.find(m => m.key === activeFilter)?.label || activeFilter}</strong>
+                  <span className="mono" style={{ color: "var(--moon-300)" }}>{metrics[activeFilter]}</span>
+                  <button
+                    type="button"
+                    onClick={() => onFilterChange(null)}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-faint)", padding: "0 2px", fontSize: 12 }}
+                    aria-label="필터 해제"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : null}
+              <Button
+                variant={showFilterPicker ? "outline" : "ghost"}
+                size="xs"
+                onClick={() => setShowFilterPicker(v => !v)}
+              >
+                <Iconed name="search" size={12} /> {showFilterPicker ? "필터 닫기" : "필터"}
+              </Button>
+              {showFilterPicker && (
+                <div className="hub-project-portfolio-metrics" aria-label="포트폴리오 요약" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  {METRIC_FILTERS.map((metric) => (
+                    <PortfolioMetric
+                      key={metric.key}
+                      metric={metric}
+                      count={metrics[metric.key]}
+                      active={activeFilter === metric.key}
+                      lowerBound={lowerBound}
+                      onSelect={(key) => {
+                        onFilterChange(key);
+                        setShowFilterPicker(false);
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </header>
 
@@ -354,32 +426,62 @@ export function ProjectPortfolioWorkspace({
 
           {project ? (
             <>
-              <ProjectDeliverySummary project={project} onManage={onManageDelivery} />
-              <section className="hub-project-portfolio-hero">
+              <div className="hub-project-delivery-compact-bar" style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "8px 14px", background: "var(--surface-2)", border: "1px solid var(--line-soft)",
+                borderRadius: "var(--r-sm)", fontSize: 12, gap: 12, marginBottom: 12,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  <Iconed name="flag" size={14} style={{ color: "var(--moon-300)", flexShrink: 0 }} />
+                  <span style={{ color: "var(--fg-faint)", flexShrink: 0 }}>결과물 계획</span>
+                  <strong style={{ fontWeight: 500, color: "var(--fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {project.delivery?.deliverable || "최소 결과물 미정"}
+                  </strong>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  <Button variant="ghost" size="xs" onClick={() => setShowDeliveryPlan(v => !v)}>
+                    {showDeliveryPlan ? "계획 접기 ▲" : "계획 상세 ▼"}
+                  </Button>
+                  <Button variant="outline" size="xs" onClick={() => onManageDelivery?.(project)}>
+                    계획·검증
+                  </Button>
+                </div>
+              </div>
+              {showDeliveryPlan && (
+                <div style={{ marginBottom: 12 }}>
+                  <ProjectDeliverySummary project={project} onManage={onManageDelivery} compact />
+                </div>
+              )}
+
+              <section className="hub-project-portfolio-hero" style={{ padding: "14px 18px", marginBottom: 16 }}>
                 <div className="hub-project-portfolio-hero__project">
-                  <div className="hub-project-portfolio-hero__value stat">
+                  <div className="hub-project-portfolio-hero__value stat" style={{ fontSize: 32 }}>
                     {progress === null ? <span className="is-empty">—</span> : <>{progress}<small>%</small></>}
                   </div>
                   <div className="hub-project-portfolio-hero__identity">
                     <span>{brand?.name || "프로젝트"}</span>
                     <h2>작업 진척</h2>
                     <p>{project.displaySummary || project.projectSummary || "프로젝트의 목표 결과와 실행 근거를 상세에서 정리할 수 있습니다."}</p>
-                    <span className="hub-project-portfolio-hero__due"><Iconed name="calendar" size={14} />{formatLongDate(project.dueAt)}</span>
+                    <span className="hub-project-portfolio-hero__due">
+                      <Iconed name="calendar" size={14} />{formatLongDate(project.dueAt)}
+                      {dday && <Badge tone={dday.tone} size="xs">{dday.text}</Badge>}
+                    </span>
                   </div>
                 </div>
 
                 <div className="hub-project-portfolio-hero__action">
                   <span>다음 행동</span>
-                  <h3>{nextAction}</h3>
-                  <p>{nextActionDescription}</p>
-                  <Button variant="primary" size="md" onClick={() => onOpenProject(project.id)}>
-                    프로젝트 열기 <Iconed name="arrowRight" size={16} />
-                  </Button>
+                  <h3 style={{ fontSize: 15, margin: "4px 0 6px" }}>{nextAction}</h3>
+                  <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                    <Button variant="primary" size="sm" onClick={() => onOpenProject(project.id)}>
+                      프로젝트 열기 <Iconed name="arrowRight" size={14} />
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="hub-project-portfolio-ruler">
+                <div className="hub-project-portfolio-ruler" style={{ marginTop: 12 }}>
                   <div className="hub-project-portfolio-ruler__labels">
-                    <span>프로젝트 진척</span>
+                    <span>프로젝트 진척 · {doneTasksCount}/{totalTasks} 완료</span>
                     <span>{dueDays === null ? "기한 미정" : dueDays < 0 ? `${Math.abs(dueDays)}일 지남` : dueDays === 0 ? "오늘 마감" : `마감 ${dueDays}일`}</span>
                     <span className={risk.risky ? "is-risk" : ""}><Iconed name={risk.risky ? "flag" : "check"} size={12} />{risk.label}</span>
                   </div>
@@ -388,6 +490,17 @@ export function ProjectPortfolioWorkspace({
                     <span style={{ width: `${progress ?? 0}%` }} />
                     {progress !== null && <b style={{ left: `${progress}%` }} />}
                   </div>
+
+                  {totalTasks > 0 && (
+                    <div className="hub-project-status-bar" style={{ marginTop: 8 }}>
+                      <div className="hub-project-status-bar__track">
+                        {doneTasksCount > 0 && <span style={{ width: `${(doneTasksCount / totalTasks) * 100}%` }} data-status="done" title={`완료 ${doneTasksCount}개`} />}
+                        {doingTasksCount > 0 && <span style={{ width: `${(doingTasksCount / totalTasks) * 100}%` }} data-status="doing" title={`진행 ${doingTasksCount}개`} />}
+                        {todoTasksCount > 0 && <span style={{ width: `${(todoTasksCount / totalTasks) * 100}%` }} data-status="todo" title={`대기 ${todoTasksCount}개`} />}
+                        {blockedTasksCount > 0 && <span style={{ width: `${(blockedTasksCount / totalTasks) * 100}%` }} data-status="blocked" title={`막힘 ${blockedTasksCount}개`} />}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </section>
 
@@ -407,7 +520,7 @@ export function ProjectPortfolioWorkspace({
                       <em>{taskStatuses.length ? taskStatuses.map((entry) => `${STATUS_COPY[entry.status] || entry.status} ${entry.count}`).join(" · ") : "등록된 항목 없음"}</em>
                     </span>
                   )}
-                  open={openSection === "items"}
+                  open={Boolean(openSections.items)}
                   onToggle={() => toggleSection("items")}
                 >
                   {taskStatuses.length ? (
@@ -433,7 +546,7 @@ export function ProjectPortfolioWorkspace({
                       <em>{nextTask ? `다음 · ${nextTask.title}` : projectTasks.length ? "모든 항목 완료" : "체크리스트 비어 있음"}</em>
                     </span>
                   )}
-                  open={openSection === "checklist"}
+                  open={Boolean(openSections.checklist)}
                   onToggle={() => toggleSection("checklist")}
                 >
                   {projectTasks.length ? (
@@ -471,7 +584,7 @@ export function ProjectPortfolioWorkspace({
                       <em>{datedTasks[0] ? `${formatScheduleDate(datedTasks[0].dueAt)} · ${datedTasks[0].title}` : formatLongDate(project.dueAt)}</em>
                     </span>
                   )}
-                  open={openSection === "schedule"}
+                  open={Boolean(openSections.schedule)}
                   onToggle={() => toggleSection("schedule")}
                 >
                   <div className="hub-project-portfolio-schedule-list">
@@ -485,6 +598,20 @@ export function ProjectPortfolioWorkspace({
                     ))}
                     {!project.dueAt && datedTasks.length === 0 && <span className="hub-project-portfolio-panel-empty">기한이 지정된 일정이 없습니다.</span>}
                   </div>
+                  {updates && updates.filter((u) => u.projectId === project.id).length > 0 && (
+                    <div style={{ marginTop: 14, borderTop: "1px solid var(--line-soft)", paddingTop: 10 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--fg-muted)", marginBottom: 8 }}>최근 업데이트 기록</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {updates.filter((u) => u.projectId === project.id).slice(0, 4).map((u) => (
+                          <div key={u.id} style={{ fontSize: 11.5, color: "var(--fg-faint)", display: "flex", alignItems: "center", gap: 8 }}>
+                            <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-muted)" }}>{u.happenedAtLabel || "최근"}</span>
+                            <span style={{ color: "var(--fg)" }}>{u.title}</span>
+                            {u.summary && <span style={{ color: "var(--fg-muted)" }}>· {u.summary}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </PortfolioAccordion>
               </div>
             </>

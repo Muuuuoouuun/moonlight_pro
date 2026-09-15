@@ -82,8 +82,8 @@ const EMPTY_ALL_BRAND = {
 };
 
 const PROJECT_VIEW_OPTIONS = [
-  { key: 'tree', label: 'List' },
-  { key: 'table', label: 'Table' },
+  { key: 'tree', label: '홈' },
+  { key: 'table', label: '목록' },
   { key: 'backlog', label: '백로그' },
   { key: 'board', label: 'Board' },
   { key: 'memos', label: '메모' },
@@ -248,11 +248,28 @@ function buildLocalContainer(draft, slug) {
   };
 }
 
+function computeDDay(dueAt) {
+  if (!dueAt) return null;
+  const target = new Date(dueAt);
+  if (Number.isNaN(target.getTime())) return null;
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfTarget = new Date(target.getFullYear(), target.getMonth(), target.getDate()).getTime();
+  const diffDays = Math.round((startOfTarget - startOfToday) / (24 * 60 * 60 * 1000));
+
+  if (diffDays < 0) return { text: `D+${Math.abs(diffDays)}`, tone: 'danger', diffDays };
+  if (diffDays === 0) return { text: 'D-Day', tone: 'danger', diffDays: 0 };
+  if (diffDays <= 3) return { text: `D-${diffDays}`, tone: 'moon', diffDays };
+  return { text: `D-${diffDays}`, tone: 'neutral', diffDays };
+}
+
 // `?view=tasks` is the sidebar spec's wording for the same view the page calls
 // 'todos' — accept both so old and new links resolve.
 function normalizeProjectView(raw) {
   const v = String(raw || '');
   if (v === 'tasks') return 'todos';
+  if (v === 'home' || v === 'overview') return 'tree';
+  if (v === 'list') return 'table';
   return PROJECT_VIEWS.has(v) ? v : 'tree';
 }
 
@@ -439,6 +456,10 @@ export function Projects({ workspace }) {
   // 순간 조회 조건이라 URL·localStorage에 싣지 않는다.
   const [projectQuery, setProjectQuery] = React.useState('');
   const [summaryFilter, setSummaryFilter] = React.useState(null); // portfolio cell key | null
+  const [showSummaryTable, setShowSummaryTable] = React.useState(false);
+  const [inlineAddingProjectId, setInlineAddingProjectId] = React.useState(null);
+  const [inlineTaskTitle, setInlineTaskTitle] = React.useState('');
+  const [inlineSubmitting, setInlineSubmitting] = React.useState(false);
   const searchInputRef = React.useRef(null);
   const normalizedQuery = projectQuery.trim().toLowerCase();
   const resetTaskFilters = () => {
@@ -916,6 +937,53 @@ export function Projects({ workspace }) {
       id: createClientId(),
     });
   }, [taskFilters.projectId, taskView]);
+
+  const handleQuickAddSubtask = React.useCallback(async (projectId) => {
+    const title = inlineTaskTitle.trim();
+    if (!title) return;
+    setInlineSubmitting(true);
+    try {
+      const newId = createClientId();
+      const payload = {
+        id: newId,
+        title,
+        projectId: projectId || null,
+        status: 'todo',
+        priority: 'medium',
+        dueAt: null,
+        description: '',
+        nextAction: '',
+        checklist: [],
+      };
+      const response = await fetch('/api/hub/tasks', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && ['saved', 'created'].includes(data.status)) {
+        const created = data.task || {
+          ...payload,
+          project: projectId,
+          project_id: projectId,
+          done: false,
+          due: null,
+          assignee: '나',
+        };
+        setTodos(ts => [...ts, created]);
+        projectsLedgerCache = null;
+        loadLedger();
+        setInlineTaskTitle('');
+        setOrderResult({ tone: 'ok', label: '하위 아이템 추가됨' });
+      } else {
+        setOrderResult({ tone: 'err', label: data.error || '하위 아이템 저장 실패' });
+      }
+    } catch (err) {
+      setOrderResult({ tone: 'err', label: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setInlineSubmitting(false);
+    }
+  }, [inlineTaskTitle, loadLedger]);
 
   // 페이지 레벨 N은 아래 뷰 인지 리스너 한 곳이 소유한다(todos → 할 일, 그 외 → 프로젝트).
   // 18차에 추가했던 무조건 usePageCreateHotkey는 preventDefault로 그 리스너를 영구
@@ -1718,18 +1786,16 @@ export function Projects({ workspace }) {
         opacity: dragging ? 0.4 : 1,
         boxShadow: dropTarget ? 'inset 0 1px 0 0 var(--moon-300)' : undefined,
       }}>
-        <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
-          <BrandMark brand={b} size={18} active={active} />
-          {changes > 0 && (
-            <span style={{
-              position: 'absolute', top: -3, right: -3,
-              width: 7, height: 7, borderRadius: 999,
-              // 새 변동은 손실 상태가 아니다 (§5.2 no-warning-by-default) — 조용한 문스톤 점.
-              background: 'var(--moon-400)',
-              boxShadow: '0 0 0 2px ' + (active ? 'var(--surface-3)' : 'var(--surface)'),
-            }} />
-          )}
-        </span>
+        {/* 모노그램 마크 제거 — 이름 첫 글자를 그대로 타일에 새기는 구조라 바로 옆
+            이름과 글자가 겹쳐 보였다 (2026-09-15 운영자 지시). 변동 표시는 절대 배치
+            오버레이 대신 이름 앞 인라인 점으로 옮긴다. */}
+        {changes > 0 && (
+          <span style={{
+            flexShrink: 0, width: 6, height: 6, borderRadius: 999,
+            // 새 변동은 손실 상태가 아니다 (§5.2 no-warning-by-default) — 조용한 문스톤 점.
+            background: 'var(--moon-400)',
+          }} />
+        )}
         <span style={{ flex: 1, fontSize: 12.5, fontWeight: active ? 500 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</span>
         {changes > 0 && (
           <span style={{
@@ -2062,6 +2128,8 @@ export function Projects({ workspace }) {
               onToggleTerminal={() => setShowTerminal(value => !value)}
               onReopenProject={(project) => setProjectStatus(project, 'active')}
               onReload={() => loadLedger({ initial: true })}
+              onSwitchView={setView}
+              updates={ledger.updates || []}
               createSurface={projectDraft?.isNew ? (
                 <ProjectCreateInline
                   draft={projectDraft}
@@ -2081,28 +2149,73 @@ export function Projects({ workspace }) {
             {view === 'table' && (
             <div className="scroll-y" style={{ padding: 'var(--section-gap)' }}>
               <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
-                <ProjectPortfolioSummary
-                  projects={projects}
-                  sourceState={syncState}
-                  projectCorePartial={projectReadPartial}
-                  activeKey={summaryFilter}
-                  onSelectCell={setSummaryFilter}
-                />
-                {(summaryFilter || normalizedQuery) && (
-                  <div role="status" aria-live="polite" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--fg-muted)' }}>
-                    <span>
-                      필터 적용 중 — <span className="num">{visibleProjects.length}</span>개 표시
-                      {summaryFilter ? ` · ${SUMMARY_FILTER_LABELS[summaryFilter]}` : ''}
-                      {normalizedQuery ? ` · "${projectQuery.trim()}"` : ''}
-                    </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    {summaryFilter ? (
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '3px 10px', borderRadius: 'var(--r-sm)',
+                        background: 'var(--surface-3)', border: '1px solid var(--moon-300)',
+                        fontSize: 11.5, color: 'var(--fg)',
+                      }}>
+                        <span style={{ color: 'var(--fg-faint)' }}>필터:</span>
+                        <strong>{SUMMARY_FILTER_LABELS[summaryFilter] || summaryFilter}</strong>
+                        <span className="mono" style={{ color: 'var(--moon-300)' }}>{visibleProjects.length}개</span>
+                        <button
+                          type="button"
+                          onClick={() => setSummaryFilter(null)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-faint)', padding: '0 2px', fontSize: 13 }}
+                          aria-label="필터 해제"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : null}
+                    {normalizedQuery ? (
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '3px 10px', borderRadius: 'var(--r-sm)',
+                        background: 'var(--surface-3)', border: '1px solid var(--line-strong)',
+                        fontSize: 11.5, color: 'var(--fg)',
+                      }}>
+                        <span style={{ color: 'var(--fg-faint)' }}>검색:</span>
+                        <span>"{projectQuery.trim()}"</span>
+                        <button
+                          type="button"
+                          onClick={() => setProjectQuery('')}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-faint)', padding: '0 2px', fontSize: 13 }}
+                          aria-label="검색어 지우기"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : null}
+                    <Button
+                      variant={showSummaryTable ? "outline" : "ghost"}
+                      size="xs"
+                      onClick={() => setShowSummaryTable(v => !v)}
+                    >
+                      <Iconed name="search" size={12} /> {showSummaryTable ? "요약 지표 닫기" : "요약 필터 지표"}
+                    </Button>
+                  </div>
+                  {(summaryFilter || normalizedQuery) && (
                     <button
                       type="button"
                       onClick={() => { setProjectQuery(''); setSummaryFilter(null); }}
-                      style={{ fontSize: 11, color: 'var(--moon-300)', textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
+                      style={{ fontSize: 11.5, color: 'var(--moon-300)', textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
                     >
-                      해제
+                      전체 필터 초기화
                     </button>
-                  </div>
+                  )}
+                </div>
+                {showSummaryTable && (
+                  <ProjectPortfolioSummary
+                    projects={projects}
+                    sourceState={syncState}
+                    projectCorePartial={projectReadPartial}
+                    activeKey={summaryFilter}
+                    onSelectCell={setSummaryFilter}
+                  />
                 )}
                 {syncState === 'error' && (
                   <Card>
@@ -2213,6 +2326,7 @@ export function Projects({ workspace }) {
                           const pBrand = brandByKey.get(p.brand) || brands[0] || EMPTY_ALL_BRAND;
                           const isSel = openDetail === p.id;
                           const dueTime = p.dueAt ? new Date(p.dueAt).getTime() : Number.NaN;
+                          const pDDay = computeDDay(p.dueAt);
                           const terminal = isTerminalProject(p);
                           const overdue = !terminal && Number.isFinite(dueTime) && dueTime < new Date().setHours(0, 0, 0, 0);
                           const blocked = String(p.statusKey || '').toLowerCase() === 'blocked' || p.status === 'Blocked';
@@ -2263,7 +2377,14 @@ export function Projects({ workspace }) {
                                     <strong>{nextAction}</strong>
                                   </div>
                                   <div className="hub-project-due-risk">
-                                    <span className="mono">{p.due || '기한 없음'}</span>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                      <span className="mono">{p.due || '기한 없음'}</span>
+                                      {pDDay && (
+                                        <span className={`hub-project-dday-badge hub-project-dday-badge--${pDDay.tone}`}>
+                                          {pDDay.text}
+                                        </span>
+                                      )}
+                                    </div>
                                     {(blocked || overdue) && <span className="hub-project-risk-label">{blocked ? '막힘' : '기한 지남'}</span>}
                                     {!blocked && !overdue && <span>위험 신호 없음</span>}
                                   </div>
@@ -2315,7 +2436,112 @@ export function Projects({ workspace }) {
                                       <span className="mono hub-project-subtask__due">{t.due || '기한 없음'}</span>
                                     </div>
                                   ))}
-                                  <button className="hub-project-subtasks__add" onClick={() => createTodo(p.id)}>＋ 하위 아이템 추가</button>
+                                  {inlineAddingProjectId === p.id ? (
+                                    <div
+                                      className="hub-project-subtask-inline-add"
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 8,
+                                        padding: '8px 12px',
+                                        background: 'var(--surface-2)',
+                                        borderTop: '1px solid var(--line-soft)',
+                                      }}
+                                    >
+                                      <span style={{ fontSize: 13, color: 'var(--fg-faint)', marginLeft: 4 }}>↳</span>
+                                      <input
+                                        type="text"
+                                        autoFocus
+                                        placeholder="하위 아이템 제목 입력 후 Enter..."
+                                        value={inlineTaskTitle}
+                                        onChange={(e) => setInlineTaskTitle(e.target.value)}
+                                        onKeyDown={async (e) => {
+                                          if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            await handleQuickAddSubtask(p.id);
+                                          } else if (e.key === 'Escape') {
+                                            setInlineAddingProjectId(null);
+                                            setInlineTaskTitle('');
+                                          }
+                                        }}
+                                        style={{
+                                          flex: 1,
+                                          minWidth: 0,
+                                          padding: '5px 8px',
+                                          fontSize: 12.5,
+                                          background: 'var(--surface)',
+                                          border: '1px solid var(--line-soft)',
+                                          borderRadius: 'var(--r-sm)',
+                                          color: 'var(--fg)',
+                                          outline: 'none',
+                                        }}
+                                      />
+                                      <Button
+                                        variant="primary"
+                                        size="xs"
+                                        disabled={inlineSubmitting || !inlineTaskTitle.trim()}
+                                        onClick={() => handleQuickAddSubtask(p.id)}
+                                      >
+                                        {inlineSubmitting ? '추가 중…' : '추가'}
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="xs"
+                                        onClick={() => {
+                                          const currentTitle = inlineTaskTitle;
+                                          setInlineAddingProjectId(null);
+                                          setInlineTaskTitle('');
+                                          createTodo(p.id);
+                                          if (currentTitle.trim()) {
+                                            setTaskDraft(prev => prev ? { ...prev, title: currentTitle.trim() } : prev);
+                                          }
+                                        }}
+                                        title="기한, 우선순위, 담당자, 체크리스트 상세 설정"
+                                      >
+                                        상세 입력
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="xs"
+                                        onClick={() => {
+                                          setInlineAddingProjectId(null);
+                                          setInlineTaskTitle('');
+                                        }}
+                                      >
+                                        취소
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 10px' }}>
+                                      <button
+                                        type="button"
+                                        className="hub-project-subtasks__add"
+                                        onClick={() => {
+                                          setInlineAddingProjectId(p.id);
+                                          setInlineTaskTitle('');
+                                        }}
+                                      >
+                                        ＋ 하위 아이템 바로 추가
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => createTodo(p.id)}
+                                        style={{
+                                          fontSize: 11.5,
+                                          color: 'var(--fg-faint)',
+                                          background: 'none',
+                                          border: 'none',
+                                          cursor: 'pointer',
+                                          padding: '4px 6px',
+                                          borderRadius: 'var(--r-sm)',
+                                        }}
+                                        className="hub-row"
+                                        title="우측 패널에서 상세 옵션과 함께 하위 아이템 추가"
+                                      >
+                                        상세 추가(사이드 탭) ↗
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </React.Fragment>

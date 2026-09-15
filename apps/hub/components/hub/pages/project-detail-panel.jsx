@@ -5,7 +5,7 @@ import { RelatedMemos } from '../related-memos';
 import { MemoCaptureLink } from "../journal-links";
 import { Avatar, Badge, Button, Checkbox, IconButton } from "../hub-primitives";
 import { ProjectDeliverySummary } from "./project-delivery";
-import { BrandMark } from "./project-pms-components";
+import { BrandMark, ProjectProgressGauge } from "./project-pms-components";
 import { TaskChecklistGauge } from './project-task-checklist';
 
 function DetailSection({ title, count = 0, empty, children }) {
@@ -101,6 +101,20 @@ function ProjectNotes({ notes, partial, failed }) {
   );
 }
 
+function computeDDay(dueAt) {
+  if (!dueAt) return null;
+  const d = new Date(dueAt);
+  if (Number.isNaN(d.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  d.setHours(0, 0, 0, 0);
+  const diff = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+  if (diff < 0) return { text: `D+${Math.abs(diff)} 지연`, tone: "danger" };
+  if (diff === 0) return { text: "D-Day", tone: "moon" };
+  if (diff <= 7) return { text: `D-${diff}`, tone: "moon" };
+  return { text: `D-${diff}`, tone: "neutral" };
+}
+
 export function ProjectDetailPanel({
   project,
   container,
@@ -138,6 +152,7 @@ export function ProjectDetailPanel({
   const failed = new Set(failedSources);
   const displaySummary = project.displaySummary || project.summary || "";
   const displayNextAction = project.displayNextAction || project.nextAction || "";
+  const dday = computeDDay(project.dueAt);
   const failedEmpty = (source, empty) => failed.has(source)
     ? `${source} 원장을 읽지 못했습니다. 다시 시도하세요.`
     : empty;
@@ -159,6 +174,41 @@ export function ProjectDetailPanel({
           </div>
         </div>
         <ProjectDeliverySummary project={project} onManage={onManageDelivery} compact />
+        <div style={{
+          padding: "12px 14px",
+          background: "var(--surface-2)",
+          border: "1px solid var(--line-soft)",
+          borderRadius: "var(--r-md)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 9,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 10.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--fg-faint)" }}>
+              진척도
+            </span>
+            <span className="mono" style={{ fontSize: 11, color: "var(--fg-muted)" }}>
+              {doneCount}/{todos.length} 완료
+            </span>
+          </div>
+          <ProjectProgressGauge progress={project.displayProgress} ariaLabel={`${project.name} 진척`} />
+        </div>
+        {displayNextAction && (
+          <div style={{
+            padding: "10px 12px",
+            background: "rgba(255, 255, 255, 0.03)",
+            border: "1px solid var(--line-soft)",
+            borderLeft: "2px solid var(--moon-300)",
+            borderRadius: "var(--r-sm)",
+          }}>
+            <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--moon-300)", marginBottom: 4 }}>
+              다음 행동
+            </div>
+            <div style={{ fontSize: 12.5, fontWeight: 500, color: "var(--fg)" }}>
+              {displayNextAction}
+            </div>
+          </div>
+        )}
         {failedSources.length > 0 && (
           <div role="status" style={{ padding: "9px 10px", border: "1px solid var(--line-soft)", borderRadius: "var(--r-sm)", color: "var(--fg-muted)", fontSize: 11.5 }}>
             일부 기록을 읽지 못했습니다 · {failedSources.join(", ")}
@@ -171,7 +221,10 @@ export function ProjectDetailPanel({
             {project.owner}
           </span>
           <span style={{ color: "var(--fg-faint)" }}>기한</span>
-          <span className="mono" style={{ color: "var(--fg)" }}>{project.due}</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span className="mono" style={{ color: "var(--fg)" }}>{project.due || "기한 없음"}</span>
+            {dday && <Badge tone={dday.tone} size="xs">{dday.text}</Badge>}
+          </span>
           <span style={{ color: "var(--fg-faint)" }}>진행률</span>
           <span style={{ color: "var(--fg-muted)" }}>{progressLabel(project)}</span>
           <span style={{ color: "var(--fg-faint)" }}>최근 활동</span>
