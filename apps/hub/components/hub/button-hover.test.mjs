@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 // 2026-09-15 회귀 방어. Button은 2026-07-29 design-review 이후로
@@ -33,7 +33,7 @@ test("Button keeps no resting variant chrome inline — inline styles outrank ev
   for (const prop of ["background", "border", "boxShadow", "color"]) {
     assert.doesNotMatch(
       buttonSource,
-      new RegExp(`\\n\\s*${prop}:`),
+      new RegExp(`(?<![A-Za-z])${prop}:`),
       `${prop} must live in hub-tokens.css .hub-btn--*, not inline on <button> — inline wins the cascade and kills :hover`,
     );
   }
@@ -111,13 +111,29 @@ test("Button motion uses the shared tokens and stays reduced-motion safe (DESIGN
   const base = buttonRules.find((r) => r.selector === ".hub-app .hub-btn");
   assert.ok(base, ".hub-app .hub-btn base rule must exist");
   assert.match(base.body, /transition:[^;]*var\(--dur-hover\)/);
-  assert.match(base.body, /border-radius:\s*var\(--r-sm\)/);
   for (const { selector, body } of buttonRules) {
     assert.doesNotMatch(body, /\d+ms/, `${selector}: raw ms literals are forbidden, use --dur-* (DESIGN.md 9)`);
   }
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.hub-app \.hub-btn \{ transition: none; \}\s*\}/);
   // 허브 전역 안전망이 여전히 !important로 인라인까지 덮는지 확인.
   assert.match(css, /\.hub-app \*, \.hub-app \*::before, \.hub-app \*::after \{[\s\S]*?transition: none !important/);
+});
+
+test("Button radius stays inline so :focus-visible cannot square its corners (DESIGN.md 7, 11)", () => {
+  // `.hub-app :focus-visible`\uac00 `border-radius: 2px`\ub97c \uac19\uc740 \ud2b9\uc774\ub3c4(0,2,0)\ub85c, \uadf8\ub9ac\uace0 \ub354 \ub4a4\uc5d0\uc11c
+  // \uc120\uc5b8\ud55c\ub2e4. `.hub-app .hub-btn`\uc774 radius\ub97c \uc18c\uc720\ud558\uba74 source order\ub85c \uc9c0\uae30 \ub54c\ubb38\uc5d0
+  // \ud0a4\ubcf4\ub4dc \ud3ec\ucee4\uc2a4 \uc21c\uac04\uc5d0\ub9cc \ubaa8\uc11c\ub9ac\uac00 6px\u21922px\ub85c \ud280\ub2e4. radius\ub294 hover \uc804\uc774 \ub300\uc0c1\uc774
+  // \uc544\ub2c8\ubbc0\ub85c CSS \uc18c\uc720\ud560 \uc774\uc720\uac00 \uc5c6\uace0, IconButton\ub3c4 \uac19\uc740 \uc774\uc720\ub85c \uc778\ub77c\uc778\uc744 \uc720\uc9c0\ud55c\ub2e4.
+  assert.match(buttonSource, /borderRadius:\s*'var\(--r-sm\)'/);
+  for (const { selector, body } of buttonRules) {
+    assert.doesNotMatch(
+      body,
+      /border-radius:/,
+      `${selector}: radius must stay inline — .hub-app :focus-visible (0,2,0, declared later) would win`,
+    );
+  }
+  // \uc804\uc81c\uac00 \uc0b4\uc544 \uc788\ub294\uc9c0 \ud655\uc778 — \uc774 \uaddc\uce59\uc774 \uc0ac\ub77c\uc9c0\uba74 \uc704 \uc81c\uc57d\ub3c4 \uc758\ubbf8\uac00 \uc5c6\ub2e4.
+  assert.match(css, /\.hub-app :focus-visible \{[^}]*border-radius:\s*2px/);
 });
 
 test("Button never suppresses the keyboard focus ring (DESIGN.md 11)", () => {
@@ -164,20 +180,84 @@ test("the bespoke button:hover rules left in place target raw <button>, not the 
   assert.doesNotMatch(tabs, /<Button/);
 });
 
-// 2026-09-15 확장 검증: apps/hub 전체 CSS 15개 파일을 대상으로, 새 클래스 규칙
-// (0,2,0)을 넘어서면서 색을 세팅하는 descendant `button` 규칙들이 전부 raw
-// <button>만 겨냥하는지 고정한다. critique 감사에서 두 스타일시트만 훑은 원래
-// 계획으로는 아래 네 규칙을 놓쳤다.
-test("higher-specificity descendant button rules outside hub-tokens.css still target raw <button>", async () => {
-  const read = (p) => readFile(new URL(p, import.meta.url), "utf8");
-  const dailyReview = await read("./pages/daily-review.jsx");
-  const discovery = await read("./pages/discovery.jsx");
-  const memoWorkspace = await read("./pages/memo-workspace.jsx");
+// `.hub-app .hub-btn--<variant>`는 특이도 (0,2,0)이다. 클래스를 2개 이상 쓰면서
+// bare `button` 엘리먼트를 겨냥하는 descendant 규칙은 이를 이기므로, 그런 컨테이너에
+// <Button> 프리미티브를 넣는 순간 variant chrome이 조용히 덮인다 — 인라인이던
+// 시절에는 불가능했던 회귀다. 그래서 목록을 손으로 들고 있지 않고 실제로 훑는다.
+// 새 규칙이 생기면 이 테스트가 실패해서 사람이 한 번 보게 만드는 게 목적이다.
+const CHROME = /(?:^|[;{\s])(?:background|color|border)(?:-[a-z]+)?\s*:/;
 
-  // daily-review.css:25-26 `.daily-review-history li button{,[aria-current]}`
-  assert.match(dailyReview, /<li key=\{entry\.reviewDate\}><button className="hub-row" type="button"/);
-  // discovery.css:13 `.discovery-list li > button`
-  assert.match(discovery, /<ul className="discovery-list">[\s\S]{0,120}?<button type="button" className="hub-row"/);
-  // memo-workspace.module.css:71 `.workspace .filters button[aria-pressed="true"]`
-  assert.match(memoWorkspace, /className=\{styles\.filters\}>[\s\S]{0,400}?<button\n/);
+function qualifyingButtonRules(css) {
+  const found = [];
+  const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  for (const m of stripped.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    const selectorList = m[1].trim();
+    const body = m[2];
+    if (!CHROME.test(body)) continue;
+    for (const selector of selectorList.split(",").map(s => s.trim())) {
+      // 주체(맨 마지막 compound)가 button인 규칙만 센다. `.x button span`처럼 button
+      // 내부 엘리먼트를 겨냥하는 규칙은 button 자신의 chrome을 덮지 못한다.
+      const subject = selector.split(/[\s>+~]+/).filter(Boolean).pop() || "";
+      if (!/^button(?:[:[.]|$)/.test(subject)) continue;
+      const classes = (selector.match(/\.[A-Za-z_-][\w-]*/g) || []).length
+        + (selector.match(/\[[^\]]+\]/g) || []).length
+        + (selector.match(/:(?!:)(?!hover\b|focus-visible\b|disabled\b)[a-z-]+/g) || []).length;
+      if (classes >= 2) found.push(selector);
+    }
+  }
+  return found;
+}
+
+// 검증 완료(2026-09-15): 아래 셀렉터의 컨테이너는 전부 raw <button>만 렌더한다.
+// 새 항목을 추가하려면 해당 JSX를 직접 읽고 <Button> 프리미티브가 없는지 확인할 것.
+const AUDITED_RAW_BUTTON_CONTAINERS = [
+  // project-portfolio-workspace.jsx — index 필터/푸터, terminal 행 2개 모두 raw <button>
+  ".hub-app .hub-project-portfolio-index__filters button",
+  '.hub-app .hub-project-portfolio-index__filters button[data-active="true"]',
+  ".hub-app .hub-project-portfolio-index__filters button:hover",
+  ".hub-app .hub-project-portfolio-index__footer button",
+  ".hub-app .hub-project-portfolio-index__footer button:hover",
+  ".hub-app .hub-project-portfolio-schedule-list > button",
+  ".hub-app .hub-project-portfolio-terminal > button",
+  ".hub-app .hub-project-portfolio-terminal__row > button:first-child",
+  ".hub-app .hub-project-portfolio-terminal__row > button:last-child",
+  ".hub-app .hub-project-portfolio-terminal__row > button:last-child:hover",
+  // hub-topbar.jsx — 탭은 raw <button>, 유일한 <Button>은 nav 밖의 primary action이다
+  ".hub-app .hub-topbar__tabs button",
+  '.hub-topbar__tabs button[aria-current="page"]',
+  '.hub-topbar__tabs button[aria-current="page"]::after',
+  '.hub-app .hub-topbar__tabs button[aria-selected="true"]',
+  // daily-review.jsx / discovery.jsx — 둘 다 <button className="hub-row">
+  ".hub-app .daily-review-history li button",
+  '.daily-review-history li button[aria-current="date"]',
+  ".hub-app .discovery-list li > button",
+  // memo-workspace.jsx (CSS module) — 필터는 raw <button aria-pressed>
+  ".workspace .filters button",
+  '.workspace .filters button[aria-pressed="true"]',
+];
+
+test("every high-specificity descendant button rule under apps/hub is audited (DESIGN.md 8.1)", async () => {
+  const dir = new URL("../../", import.meta.url);
+  const files = [];
+  const walk = async (d) => {
+    for (const e of await readdir(d, { withFileTypes: true })) {
+      if (e.name === "node_modules" || e.name === ".next") continue;
+      const child = new URL(`${e.name}${e.isDirectory() ? "/" : ""}`, d);
+      if (e.isDirectory()) await walk(child);
+      else if (e.name.endsWith(".css")) files.push(child);
+    }
+  };
+  await walk(dir);
+  assert.ok(files.length >= 10, `CSS 스윕이 트리에 닿아야 한다, saw ${files.length}`);
+
+  const seen = new Set();
+  for (const f of files) {
+    for (const sel of qualifyingButtonRules(await readFile(f, "utf8"))) seen.add(sel);
+  }
+  const unaudited = [...seen].filter(s => !AUDITED_RAW_BUTTON_CONTAINERS.includes(s)).sort();
+  assert.deepEqual(
+    unaudited,
+    [],
+    "새 고특이도 descendant button 규칙이다 — 컨테이너 JSX를 읽고 <Button> 프리미티브가 없는지 확인한 뒤 AUDITED_RAW_BUTTON_CONTAINERS에 추가하라",
+  );
 });

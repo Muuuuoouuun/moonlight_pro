@@ -22,30 +22,63 @@ const VIEW_FILES = [
 // 규칙을 실제로 검사할 수 있다 — 값 문자 클래스에서 따옴표를 제외하면 매치가
 // `border: `에서 끊겨 테스트가 준수 코드에서 실패한다.
 function cssValues(source, property) {
-  const re = new RegExp(`\\b${property}:\\s*(['"\`])([^'"\`]*)\\1`, "g");
-  return [...source.matchAll(re)].map(m => ({ decl: m[0], value: m[2] }));
+  // 선언 하나가 리터럴을 여러 개 가질 수 있다 — `borderBottom: cond ? 'a' : 'none'`.
+  // 따옴표가 `prop:` 바로 뒤에 온다고 가정하면 삼항 값이 통째로 검사에서 빠진다
+  // (project-timeline-view.jsx가 실제로 그 모양이다). 선언 span을 먼저 잘라낸 뒤
+  // 그 안의 모든 리터럴을 값으로 돌려준다.
+  const out = [];
+  for (const m of source.matchAll(new RegExp(`\\b${property}:`, "g"))) {
+    let depth = 0;
+    let quote = null;
+    let span = "";
+    for (let i = m.index + m[0].length; i < source.length; i += 1) {
+      const ch = source[i];
+      if (quote) {
+        if (ch === "\\") { span += ch + source[i + 1]; i += 1; continue; }
+        if (ch === quote) quote = null;
+        span += ch;
+        continue;
+      }
+      if (ch === "'" || ch === '"' || ch === "`") { quote = ch; span += ch; continue; }
+      if ("([{".includes(ch)) depth += 1;
+      else if (")]}".includes(ch)) { if (depth === 0) break; depth -= 1; }
+      else if (ch === "," && depth === 0) break;
+      span += ch;
+    }
+    for (const lit of span.matchAll(/(['"`])([^'"`]*)\1/g)) {
+      out.push({ decl: `${m[0]} ${span.trim()}`, value: lit[2] });
+    }
+  }
+  return out;
 }
 
-test("projects.jsx mounts each extracted leaf view with its full prop surface", () => {
-  const mounts = [
-    ["ProjectTimelineView", /\{view === 'timeline' && \(\s*<ProjectTimelineView([\s\S]*?)\/>/, [
+// 마운트가 넘기는 prop — 아래 두 test가 같은 목록을 본다. test 사이 상태를 넘기지
+// 않도록 모듈 스코프에 둔다 (test 실행 순서에 의존하면 조용히 통과할 수 있다).
+const MOUNTS = [
+    ["ProjectTimelineView", "project-timeline-view.jsx", /\{view === 'timeline' && \(\s*<ProjectTimelineView([\s\S]*?)\/>/, [
       "projects={projects}", "timeline={projectTimeline}", "searchParams={searchParams}",
       "pathname={pathname}", "selectedProjectId={selectedProjectId}", "brands={brands}",
       "brandByKey={brandByKey}", "onCreateProject={() => createProject()}",
     ]],
-    ["ProjectTodosView", /\{view === 'todos' && canWriteTasks && \(\s*<ProjectTodosView([\s\S]*?)\/>/, [
+    ["ProjectTodosView", "project-todos-view.jsx", /\{view === 'todos' && canWriteTasks && \(\s*<ProjectTodosView([\s\S]*?)\/>/, [
       "items={taskExecution.items}", "projectById={projectById}", "brands={brands}",
       "brandByKey={brandByKey}", "pendingTaskIds={pendingTaskIds}", "prioTone={prioTone}",
       "onToggleTodo={toggleTodo}", "onEditTodo={editTodo}", "onResetFilters={resetTaskFilters}",
     ]],
-    ["ProjectBoardView", /\{view === 'board' && canWriteTasks && \(\s*<ProjectBoardView([\s\S]*?)\/>/, [
+    ["ProjectBoardView", "project-board-view.jsx", /\{view === 'board' && canWriteTasks && \(\s*<ProjectBoardView([\s\S]*?)\/>/, [
       "visibleColumns={visibleColumns}", "todos={todos}", "drag={drag}",
       "pendingTaskIds={pendingTaskIds}", "selectedId={kbSelection.selectedId}", "prioTone={prioTone}",
       "onDragChange={setDrag}", "onMoveCard={moveCard}", "onCreateCard={createBoardCard}",
       "onOpenTask={setMemoTaskId}", "onOpenProject={openProjectDetail}",
     ]],
-  ];
-  for (const [name, mountRe, props] of mounts) {
+];
+
+const MOUNT_PROP_NAMES = new Map(
+  MOUNTS.map(([, file, , props]) => [file, props.map(p => p.slice(0, p.indexOf("=")))]),
+);
+
+test("projects.jsx mounts each extracted leaf view with its full prop surface", () => {
+  for (const [name, , mountRe, props] of MOUNTS) {
     assert.match(projectsSource, new RegExp(`import \\{ ${name} \\} from`));
     const mount = projectsSource.match(mountRe);
     assert.ok(mount, `${name} 마운트 배선이 있어야 한다`);
@@ -60,6 +93,15 @@ test("each extracted view declares exactly the props its mount site passes", () 
     const signature = source.match(/export function Project\w+\(\{([\s\S]*?)\}\)/);
     assert.ok(signature, `${name}: 구조분해 prop 시그니처가 있어야 한다`);
     const declared = signature[1].split(",").map(s => s.trim()).filter(Boolean);
+    // 이름값을 실제로 한다: 선언한 prop 집합과 마운트가 넘기는 집합이 정확히 같아야 한다.
+    // 한쪽만 이름을 바꾸면 조용히 undefined가 흘러 CTA가 no-op이 된다.
+    const mount = MOUNT_PROP_NAMES.get(name);
+    assert.ok(mount, `${name}: 마운트 prop 목록이 등록돼야 한다`);
+    assert.deepEqual(
+      [...declared].sort(),
+      [...mount].sort(),
+      `${name}: 선언 prop과 마운트 prop이 어긋났다 — 한쪽만 rename하면 조용히 undefined가 흐른다`,
+    );
     // 지역 관례(디자인 시스템 규칙 아님): prop 12개를 넘으면 잘못된 seam의 신호다.
     // table 뷰(37개 바인딩)를 이 파일들로 끌어오지 말 것 — 진짜 상태 리팩터가 필요하다.
     assert.ok(declared.length <= 12, `${name}: prop ${declared.length}개 — seam을 다시 보라`);

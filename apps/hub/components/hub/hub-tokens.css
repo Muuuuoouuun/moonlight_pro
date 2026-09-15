@@ -267,7 +267,6 @@
    Every step is theme-symmetric — it moves away from the surface in dark *and* light.
    :not(:disabled) keeps a disabled button from lighting up. */
 .hub-app .hub-btn {
-  border-radius: var(--r-sm);
   transition: background var(--dur-hover) ease, border-color var(--dur-hover) ease, color var(--dur-hover) ease, opacity var(--dur-hover) ease;
 }
 

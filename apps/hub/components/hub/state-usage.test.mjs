@@ -129,8 +129,22 @@ test('PMS project status is declared by lifecycle enum, never by a page-level to
 
   // 눈에 보이는 한국어 라벨은 어댑터 한 곳에만 산다(§8.2 · §10 운영자 어휘).
   // LifecycleBadge가 같은 문구로 aria-label을 짜므로 접근성 이름도 여기 고정된다.
-  for (const label of ['작업 중', '검토', '계획', '막힘', '완료', '백로그']) {
-    assert.match(pms, new RegExp(label), `상태 라벨 누락: ${label}`);
+  // 반드시 라벨 사전 slice 안에서 검사한다 — 파일 전체를 스캔하면 '완료'·'검토'·'막힘'·
+  // '백로그'가 같은 파일의 주석·다른 라벨에도 있어서 사전에서 지워도 통과한다(공회전).
+  const labelMap = pms.slice(
+    pms.indexOf('PROJECT_STATUS_LABEL_KO = {'),
+    pms.indexOf('};', pms.indexOf('PROJECT_STATUS_LABEL_KO = {')),
+  );
+  assert.ok(labelMap.length > 0, 'PROJECT_STATUS_LABEL_KO 사전을 찾지 못했다');
+  for (const [status, label] of [
+    ['In progress', '작업 중'], ['Review', '검토'], ['Planning', '계획'],
+    ['Blocked', '막힘'], ['Done', '완료'], ['Backlog', '백로그'],
+  ]) {
+    assert.match(
+      labelMap,
+      new RegExp(`['"]?${status}['"]?:\\s*['"]${label}['"]`),
+      `상태 라벨 누락: ${status} → ${label} (영문 원본이 한글 옆에 그대로 렌더된다)`,
+    );
   }
 
   // 페이지에는 상태→tone 맵도, 로컬 라벨 사전도, 프롭 배선도 남지 않는다.
