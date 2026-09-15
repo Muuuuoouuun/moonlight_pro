@@ -16,6 +16,7 @@ const detailPanelSource = await readFile(new URL("./project-detail-panel.jsx", i
 const responsiveCss = await readFile(new URL("../hub-tokens.css", import.meta.url), "utf8");
 const globalCss = await readFile(new URL("../../../app/globals.css", import.meta.url), "utf8");
 const todosViewSource = await readFile(new URL("./project-todos-view.jsx", import.meta.url), "utf8");
+const boardViewSource = await readFile(new URL("./project-board-view.jsx", import.meta.url), "utf8");
 
 test("project progress exposes evidence and only uses progressbar metadata when determinate", () => {
   assert.match(pmsComponentsSource, /export function ProjectProgressGauge/);
@@ -209,10 +210,13 @@ test("project detail checklist also uses the labelled canonical Checkbox", () =>
 });
 
 test("board cards expose a labelled non-drag status control", () => {
-  assert.match(projectsSource, /className=["']hub-project-board-status["']/);
-  assert.match(projectsSource, /aria-label=\{`\$\{c\.title\} 상태 변경`\}/);
-  assert.match(projectsSource, /onChange=\{\(event\) => moveCard\(c\.id, event\.target\.value\)\}/);
-  assert.match(projectsSource, /visibleColumns\.map\(option/);
+  // 보드 렌더러는 project-board-view.jsx로 분리됐다 — 마운트 배선은 projects.jsx가 소유한다.
+  assert.match(projectsSource, /\{view === 'board' && canWriteTasks && \(\s*<ProjectBoardView/);
+  assert.match(boardViewSource, /className=["']hub-project-board-status["']/);
+  assert.match(boardViewSource, /aria-label=\{`\$\{c\.title\} 상태 변경`\}/);
+  assert.match(boardViewSource, /onChange=\{\(event\) => onMoveCard\(c\.id, event\.target\.value\)\}/);
+  assert.match(projectsSource, /onMoveCard=\{moveCard\}/);
+  assert.match(boardViewSource, /visibleColumns\.map\(option/);
 });
 
 test("task writes lock selected items until their durable writes finish", () => {
