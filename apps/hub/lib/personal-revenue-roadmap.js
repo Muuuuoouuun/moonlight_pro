@@ -1,13 +1,29 @@
 const DAY_MS = 86_400_000;
 
-const CERTAINTY_BY_STAGE = {
+// DESIGN.md §5.3 — 확실성 채널의 값은 confirmed | recommended | unknown 셋뿐이고,
+// 기하(solid/dashed/dotted)는 `CertaintyBadge`(§8.2)가 소유한다. 이전 4키 어휘는
+// lifecycle 값 `waiting`을 확실성에 실어 §5.3 첫 문장(채널 겸직 금지)을 어겼고,
+// `waiting`에 CSS 규칙이 없어 기본 solid = `confirmed`의 모양으로 렌더됐다.
+//
+// `closing`은 deal-stages.js의 won 단계다 — 금액은 확정이지만 현금은 아직 안 들어왔다.
+// 그래서 확실성(confirmed)과 라이프사이클(waiting · "입금 대기")을 두 채널로 쪼갠다.
+// `final`은 negotiation 별칭일 뿐 입금 단계가 아니어서 "입금 대기" 라벨이 애초에 오기였다.
+export const CERTAINTY_BY_STAGE = Object.freeze({
   closing: { key: "confirmed", label: "확정" },
-  final: { key: "waiting", label: "입금 대기" },
-  quote: { key: "likely", label: "가능성 높음" },
-  consult: { key: "likely", label: "가능성 높음" },
-  contact: { key: "possible", label: "진행 중" },
-  potential: { key: "possible", label: "진행 중" },
-};
+  final: { key: "recommended", label: "가능성 높음" },
+  quote: { key: "recommended", label: "가능성 높음" },
+  consult: { key: "recommended", label: "가능성 높음" },
+  // "진행 중"은 LifecycleBadge의 `active` 라벨이다(hub-primitives.jsx). 확실성 라벨로
+  // 재사용하면 방금 분리한 채널이 다시 겹치므로 §5.3이 지정한 unknown 어휘를 쓴다.
+  contact: { key: "unknown", label: "확인 필요" },
+  potential: { key: "unknown", label: "확인 필요" },
+});
+
+// DESIGN.md §5.3 lifecycle — 값이 실제로 있는 단계만 배지를 만든다. 희소한 것이 의도다:
+// 단계 자체(견적·상담)는 카테고리이지 라이프사이클이 아니므로 `stageLabel`이 계속 담당한다.
+export const LIFECYCLE_BY_STAGE = Object.freeze({
+  closing: { key: "waiting", label: "입금 대기" },
+});
 
 const STAGE_LABELS = {
   potential: "잠재 리드",
@@ -63,6 +79,10 @@ function certaintyForStage(stage) {
   return CERTAINTY_BY_STAGE[stage] || CERTAINTY_BY_STAGE.potential;
 }
 
+function lifecycleForStage(stage) {
+  return LIFECYCLE_BY_STAGE[stage] || null;
+}
+
 export function recommendDealAction(stage) {
   return RECOMMENDED_ACTION_BY_STAGE[stage] || "다음 행동을 직접 지정";
 }
@@ -108,6 +128,7 @@ export function buildPersonalRevenueRoadmap(deals, options = {}) {
       const dayOffset = dateSerial(closeDate) - startSerial;
       if (dayOffset < 0 || dayOffset > days) return [];
       const certainty = certaintyForStage(deal.stage);
+      const lifecycle = lifecycleForStage(deal.stage);
       return [{
         ...deal,
         value: normalizedValue(deal.value),
@@ -118,6 +139,7 @@ export function buildPersonalRevenueRoadmap(deals, options = {}) {
         position: (dayOffset / days) * 100,
         stageLabel: STAGE_LABELS[deal.stage] || "단계 미정",
         certainty,
+        lifecycle,
         action: actionForDeal(deal),
       }];
     })
@@ -136,9 +158,8 @@ export function buildPersonalRevenueRoadmap(deals, options = {}) {
   }, {
     expectedInflow: 0,
     confirmed: 0,
-    waiting: 0,
-    likely: 0,
-    possible: 0,
+    recommended: 0,
+    unknown: 0,
     missingNextAction: 0,
     scheduledDeals: 0,
   });

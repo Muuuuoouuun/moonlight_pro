@@ -3,11 +3,12 @@
 import React from "react";
 import { Iconed } from "../hub-icons";
 import {
-  Badge,
   Button,
   Card,
+  CertaintyBadge,
   EmptyState,
   IconButton,
+  LifecycleBadge,
   SyncBadge,
 } from "../hub-primitives";
 import { filterDealsByWorkspace } from "../workspace-map";
@@ -15,11 +16,12 @@ import { buildPersonalRevenueRoadmap } from "@/lib/personal-revenue-roadmap";
 
 const DRAWER_ID = "personal-revenue-deal-drawer";
 
+// 타임라인 축 위의 마커 원이 쓰는 글리프. 테두리 기하(solid/dashed/dotted)는
+// hub-tokens.css의 `[data-certainty]` 규칙이, 라벨은 CertaintyBadge가 담당한다 (§5.3).
 const CERTAINTY_ICON = {
   confirmed: "check",
-  waiting: "clock",
-  likely: "sparkle",
-  possible: "signal",
+  recommended: "sparkle",
+  unknown: "signal",
 };
 
 function formatMoney(value) {
@@ -40,30 +42,30 @@ function formatFullDate(value) {
   }).format(date);
 }
 
+// 범례는 프리미티브를 그대로 보여준다 — 아이콘만 있던 기존 범례는 §5.3이 확실성의 1차
+// 채널로 지정한 테두리 기하(solid/dashed/dotted)를 전혀 설명하지 못했다.
 function TimelineLegend() {
   return (
     <div className="personal-revenue-legend" aria-label="매출 확실성 범례">
       {[
         ["confirmed", "확정"],
-        ["waiting", "입금 대기"],
-        ["likely", "가능성 높음"],
-        ["possible", "진행 중"],
-      ].map(([key, label]) => (
-        <span key={key} className={`personal-revenue-legend-item is-${key}`}>
-          <Iconed name={CERTAINTY_ICON[key]} size={13} />
-          {label}
-        </span>
+        ["recommended", "가능성 높음"],
+        ["unknown", "확인 필요"],
+      ].map(([state, label]) => (
+        <CertaintyBadge key={state} state={state} label={label} />
       ))}
     </div>
   );
 }
 
 function RevenueSummary({ summary }) {
+  // 세 확실성 버킷의 합이 예상 유입과 정확히 일치한다 — 기존 4키 구성은 `possible`
+  // 버킷을 표에서 통째로 빠뜨려 합이 맞지 않았다.
   const metrics = [
     { label: "30일 예상 유입", value: formatMoney(summary.expectedInflow), primary: true },
     { label: "확정", value: formatMoney(summary.confirmed) },
-    { label: "입금 대기", value: formatMoney(summary.waiting) },
-    { label: "가능성 높음", value: formatMoney(summary.likely) },
+    { label: "가능성 높음", value: formatMoney(summary.recommended) },
+    { label: "확인 필요", value: formatMoney(summary.unknown) },
     { label: "다음 행동 없음", value: `${summary.missingNextAction}건` },
   ];
 
@@ -122,7 +124,7 @@ function RevenueTimeline({ model, selectedDealId, selectDeal, triggerRefs }) {
               onClick={() => selectDeal(event.id)}
               aria-expanded={selectedDealId === event.id}
               aria-controls={selectedDealId === event.id ? DRAWER_ID : undefined}
-              aria-label={`${event.name}, ${formatMoney(event.value)}, ${event.closeLabel}, ${event.certainty.label}`}
+              aria-label={`${event.name}, ${formatMoney(event.value)}, ${event.closeLabel}, ${event.certainty.label}${event.lifecycle ? `, ${event.lifecycle.label}` : ""}`}
             >
               <span className="personal-revenue-event-marker" aria-hidden="true">
                 <Iconed name={CERTAINTY_ICON[event.certainty.key]} size={14} />
@@ -130,7 +132,12 @@ function RevenueTimeline({ model, selectedDealId, selectDeal, triggerRefs }) {
               <span className="personal-revenue-event-date mono">{event.closeLabel}</span>
               <strong>{event.name}</strong>
               <span className="stat">{formatMoney(event.value)}</span>
-              <span className="personal-revenue-event-certainty">{event.certainty.label}</span>
+              <span className="personal-revenue-event-states">
+                <CertaintyBadge state={event.certainty.key} label={event.certainty.label} />
+                {event.lifecycle ? (
+                  <LifecycleBadge state={event.lifecycle.key} label={event.lifecycle.label} />
+                ) : null}
+              </span>
             </button>
           ))}
         </div>
@@ -164,7 +171,9 @@ function RevenueActions({ model, selectDeal }) {
               <small>{event.name} · {event.closeLabel}</small>
             </span>
             <span className="personal-revenue-action-value stat">{formatMoney(event.value)}</span>
-            <span className={`personal-revenue-action-source is-${event.action.source}`}>{event.action.label}</span>
+            <span className="personal-revenue-action-state">
+              <CertaintyBadge state={event.action.source} />
+            </span>
             <Iconed name="chevronR" size={15} />
           </button>
         ))}
@@ -203,7 +212,12 @@ function DealDrawer({ deal, closeDrawer, closeButtonRef, onNavigate }) {
 
       <div className="personal-revenue-drawer-value stat">{formatMoney(deal.value)}</div>
       <div className="personal-revenue-drawer-meta">
-        <Badge tone="neutral" variant="outline">{deal.certainty.label}</Badge>
+        <span className="personal-revenue-drawer-state">
+          <CertaintyBadge state={deal.certainty.key} label={deal.certainty.label} />
+          {deal.lifecycle ? (
+            <LifecycleBadge state={deal.lifecycle.key} label={deal.lifecycle.label} />
+          ) : null}
+        </span>
         <span>{deal.stageLabel}</span>
         <span>예정 {deal.closeLabel}</span>
       </div>
@@ -226,7 +240,7 @@ function DealDrawer({ deal, closeDrawer, closeButtonRef, onNavigate }) {
       <div className={`personal-revenue-next-action is-${deal.action.source}`}>
         <div>
           <span>다음 행동</span>
-          <Badge tone="neutral" variant="outline" size="xs">{deal.action.label}</Badge>
+          <CertaintyBadge state={deal.action.source} />
         </div>
         <strong>{deal.action.text}</strong>
         {deal.action.source === "recommended" ? (
