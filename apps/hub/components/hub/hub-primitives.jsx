@@ -705,20 +705,20 @@ export function ChipToggle({ label, selected, onChange, style }) {
 
 export function SegmentedControl({ options, value, onChange, className, style, label, fill, size = 'sm' }) {
   const scale = SEGMENT_SCALE[size] || SEGMENT_SCALE.sm;
+  // 색·배경·보더는 hub-tokens.css의 .hub-seg / .hub-seg__btn이 소유한다 — 인라인이면 어떤
+  // :hover/전이도 붙지 않는다(§15 2026-09-15 Button과 같은 cascade). 크기 스케일만 인라인.
   return (
     <div
-      className={className}
+      className={['hub-seg', className].filter(Boolean).join(' ')}
       role="group"
       aria-label={label}
-      style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, ...style }}
+      style={{ display: 'flex', gap: 2, borderRadius: 'var(--r-sm)', padding: 2, ...style }}
     >
       {options.map(o => {
         const isActive = o.key === value;
         return (
-          <button key={o.key} type="button" onClick={() => onChange?.(o.key)} aria-pressed={isActive} style={{
+          <button key={o.key} type="button" className="hub-seg__btn" onClick={() => onChange?.(o.key)} aria-pressed={isActive} style={{
             padding: scale.pad, fontSize: scale.fs, borderRadius: scale.radius, whiteSpace: 'nowrap',
-            color: isActive ? 'var(--fg)' : 'var(--fg-faint)',
-            background: isActive ? 'var(--surface-3)' : 'transparent',
             display: 'inline-flex', alignItems: 'center', justifyContent: fill ? 'center' : undefined, gap: scale.gap,
             flex: fill ? '1 1 0' : undefined, minWidth: fill ? 0 : undefined,
           }}>

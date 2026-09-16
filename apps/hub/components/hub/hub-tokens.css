@@ -510,6 +510,25 @@
 .hub-app .hub-checkbox-row:disabled { color: var(--fg-faint); cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) { .hub-app .hub-checkbox-row { transition: none; } }
 
+/* SegmentedControl — 필터/뷰 토글의 canonical(§8.1). Button(§15 2026-09-15)과 같은 이유로
+   휴지 chrome을 여기서 소유한다: 인라인 색은 :hover와 전이를 죽인다. 활성 = aria-pressed 하나가
+   정본이라 CSS가 그 속성을 그대로 읽는다. hover는 §5.2대로 중립 한 단계(글자만 한 칸 밝게). */
+.hub-app .hub-seg {
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+}
+.hub-app .hub-seg__btn {
+  color: var(--fg-faint);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: color var(--dur-hover) ease, background var(--dur-hover) ease;
+}
+.hub-app .hub-seg__btn:hover:not([aria-pressed="true"]) { color: var(--fg-muted); }
+.hub-app .hub-seg__btn[aria-pressed="true"] {
+  color: var(--fg);
+  background: var(--surface-3);
+}
+
 @keyframes mlMoonPulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
 @keyframes mlFadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .hub-app .fade-up { animation: mlFadeUp var(--dur-enter) var(--ease-hub); }
