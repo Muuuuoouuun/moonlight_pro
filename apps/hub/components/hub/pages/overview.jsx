@@ -330,14 +330,14 @@ function ActivityChart({ series, days, sources, status }) {
                   style={{ flex: 1, minWidth: 3, height: CHART_HEIGHT, position: 'relative', cursor: 'default' }}
                 >
                   {/* Hover crosshair — a soft column highlight behind the bar. */}
-                  <div style={{ position: 'absolute', inset: '0 -2px', borderRadius: 3, background: active ? 'var(--surface-2)' : 'transparent', transition: 'background 160ms ease' }} />
+                  <div style={{ position: 'absolute', inset: '0 -2px', borderRadius: 3, background: active ? 'var(--surface-2)' : 'transparent', transition: 'background var(--dur-hover) ease' }} />
                   <div
                     style={{
                       position: 'absolute', inset: 0,
                       display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 1.5,
                       opacity: dimmed ? 0.45 : 1,
                       transform: active ? 'translateY(-2px)' : 'none',
-                      transition: 'opacity 180ms ease, transform 180ms ease',
+                      transition: 'opacity var(--dur-hover) ease, transform var(--dur-hover) ease',
                     }}
                   >
                     {total > 0 ? (
@@ -355,7 +355,7 @@ function ActivityChart({ series, days, sources, status }) {
                               background: seg.color,
                               borderRadius: isTop ? '3px 3px 1.5px 1.5px' : 1.5,
                               boxShadow: isTop ? 'inset 0 1px 0 0 oklch(1 0 0 / 0.18)' : undefined,
-                              transition: 'height 260ms ease',
+                              transition: 'height var(--dur-enter) var(--ease-hub)',
                             }}
                           />
                         );
@@ -372,7 +372,7 @@ function ActivityChart({ series, days, sources, status }) {
 
         <div style={{ display: 'flex', gap, marginTop: 7 }}>
           {data.map((d, i) => (
-            <div key={d.date} className="mono" style={{ flex: 1, minWidth: 3, textAlign: 'center', fontSize: 10.5, color: hoverIndex === i ? 'var(--fg-muted)' : 'var(--fg-faint)', transition: 'color 180ms ease' }}>
+            <div key={d.date} className="mono" style={{ flex: 1, minWidth: 3, textAlign: 'center', fontSize: 10.5, color: hoverIndex === i ? 'var(--fg-muted)' : 'var(--fg-faint)', transition: 'color var(--dur-hover) ease' }}>
               {i % tickEvery === 0 || hoverIndex === i ? dayLabel(d.date) : ''}
             </div>
           ))}
@@ -425,7 +425,7 @@ function DonutChart({ series = [], size = 128, strokeWidth = 16, centerLabel }) 
                 strokeDasharray={`${length} ${circumference - length}`}
                 strokeDashoffset={dashoffset}
                 strokeLinecap="butt"
-                style={{ transition: 'stroke-dasharray 260ms ease, stroke-dashoffset 260ms ease' }}
+                style={{ transition: 'stroke-dasharray var(--dur-enter) var(--ease-hub), stroke-dashoffset var(--dur-enter) var(--ease-hub)' }}
               />
             );
           })}
@@ -489,7 +489,7 @@ function BrandActivityBars({ brands = [] }) {
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 11.5, marginBottom: 4, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.label}</div>
             <div style={{ height: 5, background: 'var(--surface-3)', borderRadius: 999, overflow: 'hidden' }}>
-              <div style={{ width: `${Math.max(6, Math.round((b.count / max) * 100))}%`, height: '100%', background: 'var(--moon-500)', transition: 'width 260ms ease' }} />
+              <div style={{ width: `${Math.max(6, Math.round((b.count / max) * 100))}%`, height: '100%', background: 'var(--moon-500)', transition: 'width var(--dur-enter) var(--ease-hub)' }} />
             </div>
           </div>
           <span className="mono" style={{ fontSize: 11, color: 'var(--fg-muted)', textAlign: 'right' }}>{b.count}</span>
@@ -571,7 +571,7 @@ function SeriesRows({ series = [], label }) {
           <div key={item.key} style={{ display: 'grid', gridTemplateColumns: `56px minmax(0, 1fr) ${hasMeta ? 'auto' : '26px'}`, gap: 8, alignItems: 'center' }}>
             <span style={{ fontSize: 11, color: 'var(--fg-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>
             <span style={{ height: 6, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }}>
-              <span style={{ display: 'block', height: '100%', width: `${Math.max(value ? 6 : 0, Math.round(((value || 0) / max) * 100))}%`, borderRadius: 999, background: item.key === 'blocked' ? 'var(--danger)' : 'var(--moon-500)', transition: 'width 260ms ease' }} />
+              <span style={{ display: 'block', height: '100%', width: `${Math.max(value ? 6 : 0, Math.round(((value || 0) / max) * 100))}%`, borderRadius: 999, background: item.key === 'blocked' ? 'var(--danger)' : 'var(--moon-500)', transition: 'width var(--dur-enter) var(--ease-hub)' }} />
             </span>
             <span className="mono" style={{ fontSize: 11, textAlign: 'right', whiteSpace: 'nowrap' }}>
               <span style={{ color: value ? 'var(--fg)' : 'var(--fg-faint)' }}>{available ? value : '—'}</span>

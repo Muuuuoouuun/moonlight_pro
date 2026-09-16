@@ -414,9 +414,9 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
                       : "none",
                   transition: reducedMotion
                     ? "none"
-                    : "opacity 240ms ease-out, fill 220ms var(--ease-hub), stroke 220ms var(--ease-hub), transform 200ms var(--ease-hub), filter 200ms ease-out",
+                    : "opacity var(--dur-enter) var(--ease-hub), fill var(--dur-enter) var(--ease-hub), stroke var(--dur-enter) var(--ease-hub), transform var(--dur-enter) var(--ease-hub), filter var(--dur-enter) var(--ease-hub)",
                   // 하이라이트가 먼저 켜지고 이웃이 반 박자 늦게 물러난다
-                  transitionDelay: !reducedMotion && otherHovered ? "50ms" : "0ms",
+                  transitionDelay: !reducedMotion && otherHovered ? "var(--stagger-step)" : "0s",
                 }}
                 role="button"
                 tabIndex={0}
@@ -477,7 +477,7 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
                     stroke: "var(--bg)",
                     strokeWidth: 0.24,
                     opacity: chassisShown ? (dimmed ? 0.3 : 0.8) : 0,
-                    transition: "opacity 280ms ease-out",
+                    transition: "opacity var(--dur-enter) var(--ease-hub)",
                   }}
                 >
                   {s.label}
@@ -501,8 +501,8 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
                   opacity: revealedSet.has(row.label) ? (hov ? 1 : otherHovered ? 0.4 : 0.95) : 0,
                   transition: reducedMotion
                     ? "none"
-                    : "opacity 240ms ease-out, fill 220ms var(--ease-hub)",
-                  transitionDelay: !reducedMotion && otherHovered ? "50ms" : "0ms",
+                    : "opacity var(--dur-enter) var(--ease-hub), fill var(--dur-enter) var(--ease-hub)",
+                  transitionDelay: !reducedMotion && otherHovered ? "var(--stagger-step)" : "0s",
                 }}
               >
                 {row.label}
@@ -611,7 +611,7 @@ export function KoreaHeatmap({ rows, selectedLabel, onSelect, metricKey, metricL
               borderRadius: 0, cursor: b.disabled ? "default" : "pointer",
               color: b.disabled ? "var(--fg-faint)" : "var(--fg-muted)",
               fontSize: 12.5, opacity: b.disabled ? 0.45 : 1,
-              transition: reducedMotion ? "none" : "color 120ms ease, opacity 120ms ease",
+              transition: reducedMotion ? "none" : "color var(--dur-hover) ease, opacity var(--dur-hover) ease",
             }}
           >
             {b.label}

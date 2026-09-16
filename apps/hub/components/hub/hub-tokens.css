@@ -198,7 +198,7 @@
 
 /* Interactive row hover — use this class instead of onMouseEnter/Leave JS handlers.
    Themable, respects reduced-motion, and can't drift per call site. */
-.hub-app .hub-row { background: transparent; transition: background 120ms ease; }
+.hub-app .hub-row { background: transparent; transition: background var(--dur-hover) ease; }
 .hub-app .hub-row:hover { background: var(--surface-2); }
 /* Keyboard-only focus ring (§11: never rely on browser defaults) — :focus-visible so a mouse
    click doesn't leave a ring, only Tab/roving-arrow-key navigation does. */
@@ -220,7 +220,7 @@
 
 /* Kanban card hover (rests at --surface-2, one step lighter than .hub-row's --surface/--bg
    rest state) — same "no JS hover handler" contract, different resting surface. */
-.hub-app .hub-kanban-card { transition: background 120ms ease, box-shadow 120ms ease; }
+.hub-app .hub-kanban-card { transition: background var(--dur-hover) ease, box-shadow var(--dur-hover) ease; }
 .hub-app .hub-kanban-card:hover { background: var(--surface-3); }
 @media (prefers-reduced-motion: reduce) {
   .hub-app .hub-kanban-card { transition: none; }
@@ -231,7 +231,7 @@
   color: var(--fg-faint);
   border: 1px dashed var(--line-soft);
   background: transparent;
-  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+  transition: color var(--dur-hover) ease, border-color var(--dur-hover) ease, background var(--dur-hover) ease;
 }
 .hub-app .hub-kanban-add:hover {
   color: var(--fg-muted);
@@ -360,10 +360,10 @@
   border-radius: var(--r-sm);
   border-left: 1px solid transparent;
   text-align: left;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background var(--dur-hover) ease, color var(--dur-hover) ease;
 }
 /* Clickable KPI card — border lifts on hover. CSS, not onMouseEnter handlers. */
-.hub-app .hub-metric-card { transition: border-color 120ms ease; }
+.hub-app .hub-metric-card { transition: border-color var(--dur-hover) ease; }
 .hub-app .hub-metric-card[role="button"]:hover { border-color: var(--line-strong); }
 @media (prefers-reduced-motion: reduce) {
   .hub-app .hub-metric-card { transition: none; }
@@ -403,9 +403,9 @@
   background: transparent;
 }
 .hub-app .hub-nav-caret:hover { background: var(--surface-2); color: var(--fg); }
-.hub-app .hub-nav-caret svg { transition: transform 160ms ease; }
+.hub-app .hub-nav-caret svg { transition: transform var(--dur-panel) ease; }
 .hub-app .hub-nav-caret[aria-expanded="false"] svg { transform: rotate(-90deg); }
-.hub-app .hub-nav-sublist { margin: -1px 0 4px; animation: mlFadeUp 180ms ease both; }
+.hub-app .hub-nav-sublist { margin: -1px 0 4px; animation: mlFadeUp var(--dur-panel) var(--ease-hub) both; }
 .hub-app .hub-nav-sub {
   width: 100%;
   display: flex;
@@ -419,7 +419,7 @@
   background: transparent;
   border-radius: var(--r-sm);
   text-align: left;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background var(--dur-hover) ease, color var(--dur-hover) ease;
 }
 .hub-app .hub-nav-sub:hover { background: var(--surface-2); color: var(--fg); }
 .hub-app .hub-nav-sub[aria-current="page"] { color: var(--fg); background: var(--surface-3); }
@@ -512,7 +512,7 @@
 
 @keyframes mlMoonPulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
 @keyframes mlFadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-.hub-app .fade-up { animation: mlFadeUp var(--dur-enter) ease-out; }
+.hub-app .fade-up { animation: mlFadeUp var(--dur-enter) var(--ease-hub); }
 
 /* Burning Streak Motion */
 @keyframes mlFlameFlicker {
@@ -563,7 +563,7 @@
 }
 
 .hub-app .hub-streak-pop {
-  animation: mlBurnPop 260ms var(--ease-hub);
+  animation: mlBurnPop var(--dur-enter) var(--ease-hub);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -642,7 +642,7 @@
   background: var(--surface-2);
   border: 1px solid var(--accent-line);
   border-radius: var(--r-sm);
-  animation: hubSparklePop 260ms var(--ease-hub);
+  animation: hubSparklePop var(--dur-enter) var(--ease-hub);
 }
 
 .hub-app .hub-celebration-badge--sparkle {
@@ -652,7 +652,7 @@
 }
 
 .hub-app .hub-celebration-card {
-  animation: hubSparklePop 300ms var(--ease-hub);
+  animation: hubSparklePop var(--dur-enter) var(--ease-hub);
   border-color: var(--accent-line) !important;
   box-shadow: 0 0 0 1px var(--accent-soft), 0 8px 28px -10px rgba(82, 116, 168, 0.25) !important;
 }
@@ -1092,7 +1092,7 @@
   font-size: 12.5px;
   font-weight: 450;
   white-space: nowrap;
-  transition: color 140ms ease, background 140ms ease;
+  transition: color var(--dur-hover) ease, background var(--dur-hover) ease;
 }
 
 .hub-topbar__tabs button:hover {
@@ -1167,7 +1167,7 @@
   align-items: center;
   pointer-events: none;
   color: var(--fg-faint);
-  transition: opacity 150ms ease;
+  transition: opacity var(--dur-overlay) ease;
 }
 .hub-app .hub-scroll-edge--left {
   left: 0;
@@ -1189,17 +1189,17 @@
 }
 
 .campaign-war-room {
-  transition: grid-template-columns 220ms ease;
+  transition: grid-template-columns var(--dur-panel) var(--ease-hub);
 }
 
 .campaign-war-room__list,
 .campaign-war-room__detail,
 .campaign-detail-frame {
   transition:
-    opacity 180ms ease,
-    transform 220ms ease,
-    border-color 180ms ease,
-    box-shadow 220ms ease;
+    opacity var(--dur-panel) var(--ease-hub),
+    transform var(--dur-panel) var(--ease-hub),
+    border-color var(--dur-panel) var(--ease-hub),
+    box-shadow var(--dur-panel) var(--ease-hub);
 }
 
 .campaign-war-room__list {
@@ -1227,7 +1227,7 @@
 }
 
 .campaign-tab-stage[data-focus="true"] {
-  animation: mlCampaignFocusIn 180ms ease-out;
+  animation: mlCampaignFocusIn var(--dur-panel) var(--ease-hub);
 }
 
 @keyframes mlCampaignFocusIn {

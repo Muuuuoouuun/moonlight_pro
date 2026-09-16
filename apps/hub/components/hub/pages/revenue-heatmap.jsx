@@ -43,7 +43,7 @@ function RegionDetail({ row, offMap = false, onJump }) {
         const pct = total > 0 ? Math.min(100, Math.max(0, (row.confirmed / total) * 100)) : 0;
         return (
           <div aria-hidden="true" style={{ display: "flex", height: 5, borderRadius: 999, overflow: "hidden", margin: "10px 0 2px", background: "var(--surface-3)" }}>
-            {total > 0 && <span style={{ width: `${pct}%`, background: "var(--moon-300)", transition: "width 240ms cubic-bezier(0.2, 0.7, 0.3, 1)" }} />}
+            {total > 0 && <span style={{ width: `${pct}%`, background: "var(--moon-300)", transition: "width var(--dur-enter) var(--ease-hub)" }} />}
             {total > 0 && <span style={{ flex: 1, background: "color-mix(in oklch, var(--moon-500) 45%, transparent)" }} />}
           </div>
         );
@@ -163,7 +163,7 @@ const CustomerRankRow = React.memo(function CustomerRankRow({ customer, rank, ma
             width: `${pct}%`,
             background: isTop ? "linear-gradient(90deg, var(--moon-300), #ffd166)" : heatFill(value, max),
             borderRadius: 999,
-            transition: "width 240ms cubic-bezier(0.2, 0.7, 0.3, 1)",
+            transition: "width var(--dur-enter) var(--ease-hub)",
           }}
         />
       </div>
