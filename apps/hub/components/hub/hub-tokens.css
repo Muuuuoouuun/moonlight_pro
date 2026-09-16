@@ -1119,6 +1119,17 @@
   min-width: 0;
 }
 
+/* 프로젝트 헤더 — 920~1100px(인라인 사이드바 232px + 검색·뷰 토글·버튼)에서 primary CTA
+   "+ Project"가 뷰포트 밖으로 밀려 잘리던 것(2026-09-16 실측)을 wrap으로 푼다. §8.1 "헤더에
+   primary 생성 버튼"과 §5.2 "하나의 지배적 primary CTA"는 CTA가 보일 때만 성립한다.
+   spacer의 flex-basis가 0이라 줄바꿈 판단은 내용 폭으로만 이뤄지고, 넓은 화면은 한 줄 그대로.
+   ≤900px는 아래 모바일 규칙이 column으로 세운다. */
+.hub-app .hub-project-page-header {
+  flex-wrap: wrap;
+  justify-content: flex-end; /* 줄바꿈된 툴바·CTA는 1행 툴바와 같은 오른쪽 끝에 붙는다 */
+  row-gap: 10px;
+}
+
 .hub-page-actions,
 .hub-toolbar {
   min-width: 0;
