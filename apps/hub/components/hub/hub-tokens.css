@@ -436,7 +436,11 @@
   .hub-app .hub-nav-sub { transition: none; }
 }
 
-.hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; border-radius: 2px; }
+/* §11은 링(outline 1px·offset 2px)만 규정한다. 여기서 border-radius를 덮으면 단일 클래스(0,1,0)로
+   radius를 갖는 모든 요소 — 사이드바 nav(6px)·PMS 칩(999px)·포트폴리오 메트릭·타임라인 카드 — 가
+   키보드 포커스 순간에만 2px로 튄다 (2026-09-16 브라우저 실측, 페이지당 11~17곳). outline은
+   요소 자신의 radius를 따라가므로 여기서 radius를 건드릴 이유가 없다. */
+.hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; }
 /* Text-field wrappers that suppress the inner input's own ring surface the focus on the wrapper (§11) */
 .hub-app .hub-field:focus-within { border-color: var(--moon-300); }
 

@@ -119,21 +119,13 @@ test("Button motion uses the shared tokens and stays reduced-motion safe (DESIGN
   assert.match(css, /\.hub-app \*, \.hub-app \*::before, \.hub-app \*::after \{[\s\S]*?transition: none !important/);
 });
 
-test("Button radius stays inline so :focus-visible cannot square its corners (DESIGN.md 7, 11)", () => {
-  // `.hub-app :focus-visible`\uac00 `border-radius: 2px`\ub97c \uac19\uc740 \ud2b9\uc774\ub3c4(0,2,0)\ub85c, \uadf8\ub9ac\uace0 \ub354 \ub4a4\uc5d0\uc11c
-  // \uc120\uc5b8\ud55c\ub2e4. `.hub-app .hub-btn`\uc774 radius\ub97c \uc18c\uc720\ud558\uba74 source order\ub85c \uc9c0\uae30 \ub54c\ubb38\uc5d0
-  // \ud0a4\ubcf4\ub4dc \ud3ec\ucee4\uc2a4 \uc21c\uac04\uc5d0\ub9cc \ubaa8\uc11c\ub9ac\uac00 6px\u21922px\ub85c \ud280\ub2e4. radius\ub294 hover \uc804\uc774 \ub300\uc0c1\uc774
-  // \uc544\ub2c8\ubbc0\ub85c CSS \uc18c\uc720\ud560 \uc774\uc720\uac00 \uc5c6\uace0, IconButton\ub3c4 \uac19\uc740 \uc774\uc720\ub85c \uc778\ub77c\uc778\uc744 \uc720\uc9c0\ud55c\ub2e4.
+test("Button radius stays inline (IconButton parity) and no .hub-btn rule owns it (DESIGN.md 7)", () => {
+  // radius는 hover 전이 대상이 아니므로 CSS 소유일 이유가 없다. IconButton과 같은 방식.
+  // 전역 `:focus-visible`이 border-radius를 덮던 문제는 focus-ring.test.mjs가 별도로 막는다.
   assert.match(buttonSource, /borderRadius:\s*'var\(--r-sm\)'/);
   for (const { selector, body } of buttonRules) {
-    assert.doesNotMatch(
-      body,
-      /border-radius:/,
-      `${selector}: radius must stay inline — .hub-app :focus-visible (0,2,0, declared later) would win`,
-    );
+    assert.doesNotMatch(body, /border-radius:/, `${selector}: radius stays inline like IconButton`);
   }
-  // \uc804\uc81c\uac00 \uc0b4\uc544 \uc788\ub294\uc9c0 \ud655\uc778 — \uc774 \uaddc\uce59\uc774 \uc0ac\ub77c\uc9c0\uba74 \uc704 \uc81c\uc57d\ub3c4 \uc758\ubbf8\uac00 \uc5c6\ub2e4.
-  assert.match(css, /\.hub-app :focus-visible \{[^}]*border-radius:\s*2px/);
 });
 
 test("Button never suppresses the keyboard focus ring (DESIGN.md 11)", () => {

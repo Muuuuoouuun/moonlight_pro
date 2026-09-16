@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 import {
@@ -90,8 +90,7 @@ test("personal-revenue 포커스/선택 링은 §11의 1px를 지킨다", () => 
   // 스크롤 컨테이너(overflow:hidden) 안의 전폭 행은 `.hub-row`와 같은 음수 오프셋을 쓴다.
   assert.match(block, /\.personal-revenue-action-row:focus-visible \{\s*outline: 1px solid var\(--moon-300\);\s*outline-offset: -2px;/);
   // hub-tokens.css 안에서 2px moon-300 링이 남지 않는다 (§11).
-  // 저장소 전역 검사는 아래 별도 test가 실제로 파일을 훑어서 한다 — 이 한 줄이
-  // "전역"을 주장하면 content-studio.css 같은 다른 파일의 위반을 놓친다.
+  // 저장소 전역 검사는 components/hub/focus-ring.test.mjs가 실제로 파일을 훑어서 한다.
   assert.doesNotMatch(tokensSource, /outline:\s*2px solid var\(--moon-300\)/);
 
   // 죽은 4키 확실성 CSS와 그 훅이 남지 않는다.
@@ -103,39 +102,4 @@ test("personal-revenue 포커스/선택 링은 §11의 1px를 지킨다", () => 
   assert.doesNotMatch(tokensSource, /personal-revenue-legend-item/);
   // 모바일 3열 붕괴 훅이 새 래퍼를 가리킨다.
   assert.match(block, /\.personal-revenue-action-value,\s*\.personal-revenue-action-state \{\s*display: none;/);
-});
-
-// DESIGN.md §11: "Focus uses `outline: 1px solid var(--moon-300)` with 2px offset".
-// 이 검사는 apps/hub 아래 모든 스타일시트와 JSX를 실제로 훑는다. 한 파일만 읽고
-// "전역"이라고 적으면 다음 위반을 그대로 통과시킨다 (실제로 content-studio.css가 그랬다).
-async function collectStyleSources(dir, acc = []) {
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    if (entry.name === "node_modules" || entry.name === ".next") continue;
-    const child = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, dir);
-    if (entry.isDirectory()) await collectStyleSources(child, acc);
-    else if (/\.(css|jsx|js)$/.test(entry.name) && !/\.test\.mjs$/.test(entry.name)) {
-      acc.push([child.pathname, await readFile(child, "utf8")]);
-    }
-  }
-  return acc;
-}
-
-test("focus rings are 1px var(--moon-300) everywhere under apps/hub (DESIGN.md 11)", async () => {
-  const sources = await collectStyleSources(new URL("../../../", import.meta.url));
-  assert.ok(sources.length > 50, `sweep must actually reach the tree, saw ${sources.length} files`);
-
-  // 토큰이 아니라 폭을 검사한다. --moon-300만 보면 `outline: 2px solid var(--accent)`
-  // (quick-memo.module.css가 그랬다)나 하드코딩 rgba 링을 그대로 통과시킨다.
-  // 색 토큰은 현재 --moon-300 / --accent / 하드코딩 rgba가 섞여 있고, 통일은
-  // 7개 파일에 걸친 별도 관례 결정이라 여기서 강제하지 않는다 (TODOS.md 참조).
-  const offenders = [];
-  for (const [path, source] of sources) {
-    for (const m of source.matchAll(/outline:\s*(\d+)px\s+solid/g)) {
-      if (m[1] !== "1") offenders.push(`${path.replace(/.*\/apps\/hub\//, "apps/hub/")}: ${m[0]}`);
-    }
-  }
-  assert.deepEqual(offenders, [], "focus ring must be 1px wide (DESIGN.md 11)");
-  // 안티-공회전: 검사가 실제로 링을 찾고 있는지 확인한다.
-  const rings = sources.reduce((n, [, src]) => n + (src.match(/outline:\s*\d+px\s+solid/g) || []).length, 0);
-  assert.ok(rings >= 8, `포커스 링 추출 실패 — saw ${rings}`);
 });

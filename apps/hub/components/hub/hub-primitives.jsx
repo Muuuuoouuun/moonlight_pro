@@ -151,10 +151,10 @@ export const Button = React.forwardRef(function Button({ children, variant = 'gh
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: s.gap,
       height: s.h, padding: `0 ${s.px}px`, fontSize: s.fs, fontWeight: 500,
       whiteSpace: 'nowrap',
-      // radius는 인라인으로 남긴다 — `.hub-app :focus-visible`(hub-tokens.css)이 같은
-      // 특이도(0,2,0)로 `border-radius: 2px`를 뒤에서 선언해 `.hub-app .hub-btn`을 이긴다.
-      // CSS로 옮기면 키보드 포커스 순간에만 모서리가 6px→2px로 튄다 (§7 Radius·§11).
-      // hover 전이 대상이 아니므로 CSS 소유일 필요도 없고, IconButton과도 이 방식이 같다.
+      // radius는 인라인으로 남긴다 — hover 전이 대상이 아니라 CSS 소유일 이유가 없고,
+      // IconButton과 같은 방식이다. (한때 `.hub-app :focus-visible`이 border-radius를 덮어
+      // CSS 소유 radius가 포커스 순간 2px로 튀었다 — 그 전역 덮어쓰기는 2026-09-16에 제거됐고
+      // focus-ring.test.mjs가 재발을 막는다.)
       borderRadius: 'var(--r-sm)',
       ...style,
       ...(disabled && { opacity: 0.45, cursor: 'not-allowed', pointerEvents: 'none' }),
