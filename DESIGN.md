@@ -283,7 +283,7 @@ truth. Do not recreate them ad-hoc inside pages.
 - `Dot`, `Kbd`, `Avatar`, `Divider`
 - `Card` (padded / unpadded), `SectionTitle`, `Tabs`
 - `Button` (primary · secondary · ghost · outline · danger), `IconButton`
-- `Input`, `Checkbox`, `Progress`, `Sparkline`, `Placeholder`
+- `Input`, `Checkbox`, `Progress`, `Sparkline`, `Placeholder`, `Skeleton` (loading placeholder — `role="status"`, pulses with `mlMoonPulse 1.4s`; never rendered for `preview`/`error`)
 - Form fields `TextField`, `TextAreaField`, `SelectField`, `CheckboxRow`, `DateQuickPresets` (contract in `form-fields.test.mjs`)
 - `SegmentedControl`, `EmptyState` (+ `action` CTA), `ScrollShadowX`
 - `Drawer`, `EditDrawer` — the only overlay / edit surfaces (§8.1)
@@ -393,7 +393,8 @@ Deliberate, never playful. Since 2026-07-29 the only sanctioned durations and cu
 - Page reveal: `.fade-up` (opacity + 4px translateY). Card lists cascade with `.stagger-up`; do not hand-roll delays.
 - Hover travel: no more than `4px`.
 - Compact capture: enter/exit and disclosure use `--dur-panel`, backdrop enters with `--dur-overlay`. A successful save closes only after the server acknowledgement; reduced-motion skips the exit delay.
-- Live indicators: `mlMoonPulse 1.4s ease-in-out infinite` — one duration everywhere.
+- Live indicators: `mlMoonPulse 1.4s ease-in-out infinite` — one duration everywhere. Loading skeletons (`Skeleton`) reuse it as-is, with no per-line phase offset (a wave reads as playful).
+- `motion.test.mjs` sweeps every hub stylesheet and page for raw `ms` literals and inline `cubic-bezier(` inside transition/animation values — the §9 token rule is enforced, not advisory (2026-09-16).
 - Urgent/critical indicators do not loop, blink, or pulse. Red already carries sufficient emphasis.
 - Certainty changes may transition dashed → solid and marker → verified over `--dur-overlay`…`--dur-enter`;
   do not add a green celebration state.
@@ -414,7 +415,7 @@ Bad: `혁신적인 솔루션` · `최적화된 시너지` · `AI 기반 차세�
 - Text contrast: WCAG AA minimum.
 - Keyboard navigation works for all core flows (⌘K palette is the fast path).
 - Focus uses `outline: 1px solid var(--moon-300)` with 2px offset — never relies on browser defaults. A focus rule changes only the outline; it never sets `border-radius` (the ring follows the element's own radius — see §15 2026-09-16).
-- Loading / empty / success / error states are part of the design, not afterthoughts.
+- Loading / empty / success / error states are part of the design, not afterthoughts. Where the layout is known, loading renders `Skeleton` — not a bare `불러오는 중…` line and never an `EmptyState` (that copy means "nothing here", which is a different truth state).
 - Color never carries state alone. Every urgent, certainty, lifecycle, and truth state includes visible
   text plus an icon, marker, edge pattern, or shape that survives grayscale and color-vision differences.
 - Dashed and dotted certainty states require direct labels (`권장`, `미정`, `확인 필요`); pattern alone
@@ -492,3 +493,6 @@ Build order when adding a new surface:
 | 2026-09-15 | `overflow: hidden` 컨테이너 안의 full-bleed 행은 §11 포커스 링을 `outline: 1px solid var(--moon-300)` + `outline-offset: -2px`로 안쪽에 그린다 (`.hub-row` 선례) | confirmed | 양수 offset은 컨테이너에 잘려 부분 링이 된다 — §11이 막으려는 "링이 보이지 않는" 상태가 된다. §11은 링 **굵기**를 1px로 고정하고, 2px offset은 자립형 컨트롤의 기본값(`.hub-app :focus-visible`)이다 |
 | 2026-09-15 | `Button` primitive의 hover를 CSS가 소유한다 — `.hub-btn` + `.hub-btn--<variant>`가 휴지 chrome과 모션을 `hub-tokens.css`에서 가지고, radius는 hover 전이 대상이 아니라 `IconButton`과 같이 인라인에 남긴다. (한때 전역 `:focus-visible`이 `border-radius: 2px`를 덮어 CSS 소유 radius가 포커스 순간 튀었다 — 그 덮어쓰기는 2026-09-16 행에서 제거됐다.) `active` prop은 `data-active` DOM 속성으로 노출해 pressed 상태도 스타일시트가 소유한다. 2026-07-29 design-review의 "Button primitive에 variant별 hover 상태 없음" 항목을 닫는다 | confirmed | 인라인 `background`/`border`/`color`가 모든 클래스 규칙을 이겨서, primitive가 2026-07부터 선언해 둔 `--dur-hover` 전이가 한 번도 발동하지 못했다. `.hub-iconbtn`(§8.1)이 이미 쓰는 계약을 그대로 적용한 것이며, hover는 §5.2대로 accent가 아니라 surface 한 단계 또는 hairline 한 단계 강조로만 표현한다 |
 | 2026-09-16 | `:focus-visible` 규칙은 outline만 바꾸고 `border-radius`를 절대 설정하지 않는다. 전역 `.hub-app :focus-visible`의 `border-radius: 2px`와 `content-studio summary:focus-visible`의 radius를 제거 | confirmed | 브라우저 실측(Playwright, 1440·390) — 전역 규칙이 (0,2,0)이라 단일 클래스(0,1,0)로 radius를 갖는 모든 포커스 가능 요소를 키보드 포커스 순간에만 2px로 튀게 했다: 사이드바 nav 11곳(6→2px, 모든 페이지), PMS 칩(999→2px), 포트폴리오 메트릭 4곳(6→2px), 개인 매출 타임라인 스크롤(14→2px)·이벤트 카드(6→2px). Button에서 먼저 잡은 cascade 버그의 근본 원인이며, `focus-ring.test.mjs`가 저장소 전체를 훑어 재발을 막는다 |
+| 2026-09-16 | 허브 raw `ms` 리터럴 45건을 §9 토큰으로 전환(용도 기준: hover→--dur-hover, 진입/값 변화→--dur-enter+--ease-hub, 패널/디스클로저→--dur-panel, 오버레이→--dur-overlay, 지연→--stagger-step). celebration pop 260/300ms는 --dur-enter(200)로 스냅. `motion.test.mjs`가 저장소 전체를 훑어 재발을 막는다 | confirmed | 2026-09-04 아젠다가 실측한 23곳은 실제 45곳이었고 값 위반(240ms 초과)이 7곳. 규칙은 2026-07-29부터 있었으나 강제 장치가 없어 병합마다 늘었다. 축하 연출을 더 길게 원하면 임의 리터럴이 아니라 --dur-celebrate 토큰을 이 표에 추가하는 것이 맞다 |
+| 2026-09-16 | `SegmentedControl`의 휴지 chrome(색·배경)을 `.hub-seg`/`.hub-seg__btn`으로 이관하고 hover·활성 전이를 --dur-hover로 부여. 활성 정본은 aria-pressed 하나 | confirmed | Button(2026-09-15)과 같은 cascade — 인라인 색은 :hover와 전이를 죽인다. hover는 §5.2대로 글자 한 단계(--fg-faint→--fg-muted)만, 배경·accent 없음 |
+| 2026-09-16 | `Skeleton` primitive 신설 — 로딩은 `불러오는 중…` 한 줄이 아니라 레이아웃을 예고하는 스켈레톤으로. 라우트 청크 폴백(모든 페이지)·브랜드 목록·첫 화면 승인 큐·개인 지표 타일·프로젝트 table 본문에 채택. preview/error에는 쓰지 않는다 | confirmed | §11 "loading states are part of the design"인데 스켈레톤이 0개였다(2026-09-04 B2, 모바일 성능 체감 60점의 명명된 원인). 펄스는 §9의 라이브 인디케이터 단일 duration(mlMoonPulse 1.4s)을 그대로 써 새 duration을 만들지 않는다. 브랜드 로딩이 `EmptyState`("비어 있음" 의미)로 그려지던 것은 §5.3 truth 오용이라 함께 교정 |

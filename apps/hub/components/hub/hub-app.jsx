@@ -7,7 +7,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
 import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
 
-import { Button } from "./hub-primitives";
+import { Button, Skeleton } from "./hub-primitives";
 import { Sidebar } from "./hub-sidebar";
 import { TopBar } from "./hub-topbar";
 import { ToastProvider } from "./hub-toast";
@@ -41,8 +41,9 @@ import {
 // only covers the (brief) JS fetch. Keep it calm: no spinner, dim mono text.
 function PageChunkFallback() {
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', justifyContent: 'center' }}>
-      <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>불러오는 중…</span>
+    // 라우트 청크 로드 중 — 텍스트 한 줄 대신 레이아웃을 예고하는 스켈레톤(§11). 모든 페이지가 공유한다.
+    <div style={{ padding: 'var(--section-gap)' }}>
+      <Skeleton lines={4} height={14} width={['38%', '100%', '92%', '64%']} label="화면 불러오는 중" />
     </div>
   );
 }

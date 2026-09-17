@@ -3,7 +3,7 @@
 import React from "react";
 import { InquirySummary } from '../inquiry-notifications';
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, EmptyState, Kbd } from "../hub-primitives";
+import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, EmptyState, Kbd, Skeleton } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { BurningStreakBadge, StreakFlame } from "../burning-streak";
 import { useUndoableAction } from "../use-undoable-action";
@@ -1055,7 +1055,7 @@ function ApprovalQueueCard({ onNavigate }) {
         {orders.length === 0 ? (
           <div role={state === 'error' ? 'alert' : undefined} style={{ padding: 14, fontSize: 12.5, color: state === 'error' ? 'var(--danger)' : 'var(--fg-muted)', lineHeight: 1.5 }}>
             {state === 'loading'
-              ? '큐 확인 중…'
+              ? <Skeleton lines={2} label="승인 큐 확인 중" />
               : state === 'error'
               ? '승인 큐를 읽지 못했습니다 — 대기 제안이 있을 수 있습니다. 새로고침해 주세요.'
               : '승인 대기 중인 제안이 없습니다. /inbox·/team이 제안을 올리면 여기서 1클릭으로 처리합니다.'}
@@ -1922,7 +1922,7 @@ function WeeklyReportCard({ onNavigate }) {
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
             {rows.map((r) => (
               <div key={r.label} style={{ minWidth: 72 }}>
-                <div className="stat" style={{ fontSize: 22 }}>{syncState === 'loading' ? '—' : r.value}</div>
+                <div className="stat" style={{ fontSize: 22 }}>{syncState === 'loading' ? <Skeleton lines={1} height={22} width="56%" label="지표 확인 중" /> : r.value}</div>
                 <div style={{ fontSize: 11, color: 'var(--fg-dim)', marginTop: 2 }}>{r.label}</div>
               </div>
             ))}

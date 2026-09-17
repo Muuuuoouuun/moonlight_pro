@@ -532,6 +532,14 @@
 @keyframes mlMoonPulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
 @keyframes mlFadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .hub-app .fade-up { animation: mlFadeUp var(--dur-enter) var(--ease-hub); }
+/* Skeleton — §11 로딩 상태. 펄스는 라이브 인디케이터와 같은 mlMoonPulse 1.4s 하나(§9 "one duration
+   everywhere"), 줄마다 위상 지연 없음(물결은 playful). 전역 reduced-motion 안전망이 자동 적용. */
+.hub-app .hub-skeleton__line {
+  display: block;
+  border-radius: var(--r-xs);
+  background: var(--surface-3);
+  animation: mlMoonPulse 1.4s ease-in-out infinite;
+}
 
 /* Burning Streak Motion */
 @keyframes mlFlameFlicker {

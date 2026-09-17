@@ -37,9 +37,9 @@
 - 보더: 항상 `1px` + `--line*` 토큰 — 절대 두껍게 하지 않음. 상태 강조는 `--*-line` 좌측 inset 스트라이프
 - 숫자: 큰 지표(≥18px)는 `.stat`(sans tabular), 계기 데이터(ID·타임스탬프·인라인 값)는 `.mono`, sans 소형 카운트는 `.num`
 - 크기 플로어: 데이터 값 ≥12px, 보조 메타 ≥10.5px, 10px 미만 금지
-- Primitives first: `SegmentedControl`·`EmptyState`·`Checkbox(label)`·`EditDrawer`·`Drawer`를 인라인 재구현 금지. 상태 표시는 `TruthBadge`·`CertaintyBadge`·`LifecycleBadge`(DESIGN.md §8.2)로 선언하고, `SyncBadge`는 호환 래퍼이므로 새 호출처에서 쓰지 않는다. `AttentionRail`은 페이지 호출처 0건으로 아직 미채택 — 레일은 §8.1 inset 1px 인라인이 현행이므로 새로 쓰기 전 DESIGN.md §15 2026-08-05 결정을 확인한다
+- Primitives first: `SegmentedControl`·`EmptyState`·`Checkbox(label)`·`EditDrawer`·`Drawer`·`Skeleton`(로딩 자리 — preview/error엔 금지, `EmptyState`로 로딩을 그리지 않는다)를 인라인 재구현 금지. 상태 표시는 `TruthBadge`·`CertaintyBadge`·`LifecycleBadge`(DESIGN.md §8.2)로 선언하고, `SyncBadge`는 호환 래퍼이므로 새 호출처에서 쓰지 않는다. `AttentionRail`은 페이지 호출처 0건으로 아직 미채택 — 레일은 §8.1 inset 1px 인라인이 현행이므로 새로 쓰기 전 DESIGN.md §15 2026-08-05 결정을 확인한다
 - 행 hover는 `.hub-row`, 카드형 클릭 타깃은 `.hub-card-link`, 칸반 카드는 `.hub-kanban-card`, `Button`은 `.hub-btn`+`.hub-btn--<variant>`, `IconButton`은 `.hub-iconbtn` (JS onMouseEnter/Leave 신규 작성 금지). `Button`/`IconButton`의 휴지 색을 인라인으로 되돌리면 인라인이 클래스 규칙을 이겨 hover가 다시 죽는다
-- 모션: `--dur-hover`/`--dur-enter`/`--dur-panel`/`--dur-overlay`·`--ease-hub`·`--stagger-step` 토큰과 `.fade-up`/`.stagger-up`만 사용 — 페이지 안 raw ms 리터럴 금지 (DESIGN.md §9)
+- 모션: `--dur-hover`/`--dur-enter`/`--dur-panel`/`--dur-overlay`·`--ease-hub`·`--stagger-step` 토큰과 `.fade-up`/`.stagger-up`만 사용 — 페이지 안 raw ms 리터럴·인라인 `cubic-bezier(` 금지 (DESIGN.md §9). `components/hub/motion.test.mjs`가 저장소 전체를 훑어 CI에서 막는다
 - 내비: 사이드바 앵커는 `hub-nav.js`(+ `hub-nav.test.mjs`), ⌘K 카탈로그는 `hub-data.js`의 `NAV_TREE`, 워크스페이스 소속은 `workspace-map.js` — `NAV_TREE`에 넣어도 사이드바 행은 생기지 않는다
 - 인터랙션 계약(생성 N 단축키·ESC/오버레이 닫기·딥링크·정렬 3단 토글)은 DESIGN.md §8.1 준수
 - 반응형: 모바일 우선. 허브에는 Tailwind가 없다 — 브레이크포인트는 `hub-tokens.css`/`globals.css`의 미디어쿼리와 인라인 스타일로 처리한다. 세그먼트 토글은 모바일에서도 가로 유지 (flex-basis:100% 자식 강제 금지)

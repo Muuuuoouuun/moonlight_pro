@@ -480,6 +480,22 @@ export function Placeholder({ label = 'image', w, h, style }) {
   );
 }
 
+// 로딩 스켈레톤 — §11 "loading states are part of the design". "불러오는 중…" 한 줄은 레이아웃을
+// 예고하지 못해 첫 페인트가 비어 보였다(2026-09-04 아젠다 B2: 스켈레톤 0개). 펄스는 §9의
+// 라이브 인디케이터 단일 duration(mlMoonPulse 1.4s)을 hub-tokens.css에서 그대로 쓴다.
+// preview/error에는 쓰지 않는다 — 스켈레톤은 "곧 채워진다"는 약속이라 §5.3 source truth를 속인다.
+// `width`는 문자열 하나(전 줄 공통) 또는 줄별 배열. 기본은 마지막 줄만 짧게.
+export function Skeleton({ lines = 3, height = 12, width, gap = 8, style, label = '불러오는 중' }) {
+  const widths = Array.isArray(width)
+    ? width
+    : Array.from({ length: lines }, (_, i) => width || (lines > 1 && i === lines - 1 ? '62%' : '100%'));
+  return (
+    <div role="status" aria-busy="true" aria-label={label} className="hub-skeleton" style={{ display: 'grid', gap, ...style }}>
+      {widths.map((w, i) => <span key={i} className="hub-skeleton__line" style={{ height, width: w }} />)}
+    </div>
+  );
+}
+
 const CERTAINTY_STATES = {
   confirmed:   { label: '확정', borderStyle: 'solid',  marker: 'filled' },
   recommended: { label: '권장', borderStyle: 'dashed', marker: 'diamond' },

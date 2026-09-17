@@ -16,6 +16,7 @@ import {
   SectionTitle,
   SyncBadge,
   useToast,
+  Skeleton,
 } from "../hub-primitives";
 import {
   buildBrandDirectory,
@@ -558,7 +559,7 @@ export function Brands() {
               </div>
             )}
             {syncState === "loading" && (
-              <EmptyState icon="brand" title="브랜드를 읽는 중입니다" description="브랜드 원장에서 브랜드 정체성과 발행 기록을 확인하고 있습니다." style={{ minHeight: 200 }} />
+              <Skeleton lines={4} height={44} gap={10} label="브랜드를 읽는 중" style={{ padding: "12px 16px" }} />
             )}
             {syncState === "error" && (
               <EmptyState

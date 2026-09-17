@@ -3,7 +3,7 @@
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Dot, Card, IconButton, Button, Checkbox, EmptyState, Input, SyncBadge, SegmentedControl, EditDrawer, Drawer, Kbd } from "../hub-primitives";
+import { Dot, Card, IconButton, Button, Checkbox, EmptyState, Input, SyncBadge, SegmentedControl, EditDrawer, Drawer, Kbd, Skeleton } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
@@ -1939,6 +1939,10 @@ export function Projects({ workspace }) {
                       해제
                     </button>
                   </div>
+                )}
+                {/* 로딩 중 본문이 비어 있던 자리 — 행 높이(68px)로 레이아웃을 예고한다(§11). preview/error엔 안 쓴다. */}
+                {syncState === 'loading' && projects.length === 0 && (
+                  <div style={{ padding: '12px 20px' }}><Skeleton lines={4} height={56} gap={12} label="프로젝트 원장 확인 중" /></div>
                 )}
                 {syncState === 'error' && (
                   <Card>
