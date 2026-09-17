@@ -41,14 +41,14 @@
 
 /* Keep completion planning above the fold; activity is supporting evidence. */
 .portfolio :global(.hub-project-portfolio-hero) { grid-template-rows: auto auto; grid-template-columns: minmax(0, 1fr); }
-.portfolio :global(.hub-project-portfolio-hero__project), .portfolio :global(.hub-project-portfolio-hero__action) { padding: 20px; }
-.portfolio :global(.hub-project-portfolio-hero__value) { font-size: 40px; letter-spacing: -.025em; line-height: 1.1; }
-.portfolio :global(.hub-project-portfolio-hero__identity) { margin-top: 8px; }
-.portfolio :global(.hub-project-portfolio-hero__identity h2) { font-size: 16px; margin-top: 4px; }
+.portfolio :global(.hub-project-portfolio-hero__project), .portfolio :global(.hub-project-portfolio-hero__action) { padding: 12px 16px; }
+.portfolio :global(.hub-project-portfolio-hero__value) { font-size: 32px; letter-spacing: -.025em; line-height: 1.1; }
+.portfolio :global(.hub-project-portfolio-hero__identity) { margin-top: 4px; }
+.portfolio :global(.hub-project-portfolio-hero__identity h2) { font-size: 15px; margin-top: 2px; }
 .portfolio :global(.hub-project-portfolio-hero__identity p), .portfolio :global(.hub-project-portfolio-hero__identity > span), .portfolio :global(.hub-project-portfolio-hero__action p) { display: none; }
-.portfolio :global(.hub-project-portfolio-hero__action h3) { font-size: 18px; line-height: 1.45; margin: 8px 0 12px; }
-.portfolio :global(.hub-project-portfolio-stage__header) { min-height: 70px; }
-.portfolio :global(.hub-project-portfolio-stage__header h1) { font-size: clamp(24px, 2.4vw, 32px); line-height: 1.2; margin-top: 8px; }
+.portfolio :global(.hub-project-portfolio-hero__action h3) { font-size: 15px; line-height: 1.4; margin: 4px 0 8px; }
+.portfolio :global(.hub-project-portfolio-stage__header) { min-height: 48px; }
+.portfolio :global(.hub-project-portfolio-stage__header h1) { font-size: clamp(20px, 2vw, 24px); line-height: 1.2; margin-top: 4px; }
 @media (min-width: 1024px) { .portfolio :global(.hub-project-portfolio-hero) { grid-template-columns: minmax(0, .65fr) minmax(0, 1fr); } }
 
 .fields { display: contents; border: 0; padding: 0; margin: 0; min-width: 0; }

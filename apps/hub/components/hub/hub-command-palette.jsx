@@ -74,7 +74,12 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo }) {
     flat.push({ kind: 'Action', label: 'New Account', path: 'dashboard/revenue/accounts?new=account', icon: 'accounts', keywords: ['계정'] });
     flat.push({ kind: 'Action', label: 'New Case', path: 'dashboard/revenue/cases?new=case', icon: 'cases', keywords: ['케이스', '이슈'] });
     flat.push({ kind: 'Action', label: 'Start 15m focus timer', path: 'dashboard/work/calendar?focus=15', icon: 'clock' });
-    // 'Ask Council — next week plan' 제거(4차 재감사 S): prompt=next-week-plan 소비자가 없어 보류 표면의 빈 채팅에 착지했다.
+    // AI Council & Persona Actions
+    flat.push({ kind: 'Action', label: 'AI Council: 3자 토의 & 주간 회고', path: 'dashboard/system/agents?agent=council&mode=sparring', icon: 'sparkle', keywords: ['council', '카운슬', '자문', '토의', '스파링', 'ai', '회고'] });
+    flat.push({ kind: 'Action', label: 'AI Guru: 세일즈 딜 코칭', path: 'dashboard/system/agents?agent=guru&mode=pipeline-triage', icon: 'sparkle', keywords: ['guru', '구루', '영업', '세일즈', '딜 코칭', 'ai'] });
+    flat.push({ kind: 'Action', label: 'AI 00 오더: 지시서 조립', path: 'dashboard/system/agents?agent=order&mode=dispatch', icon: 'sparkle', keywords: ['오더', '지시서', 'dispatch', '우선순위', 'ai'] });
+    flat.push({ kind: 'Action', label: 'AI 02 콘텐츠: 앵글 기획', path: 'dashboard/system/agents?agent=content', icon: 'sparkle', keywords: ['콘텐츠', '앵글', '아이디어', '발행', 'ai'] });
+    flat.push({ kind: 'Action', label: 'AI 04 검수: 게이트 판정', path: 'dashboard/system/agents?agent=review', icon: 'sparkle', keywords: ['검수', '게이트', '판정', '가드레일', 'ai'] });
     return flat;
   }, []);
 

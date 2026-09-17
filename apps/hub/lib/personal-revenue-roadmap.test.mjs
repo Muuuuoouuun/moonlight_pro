@@ -70,22 +70,33 @@ test("builds an inclusive today-to-day-30 roadmap from actual close dates", () =
 test("aggregates expected inflow by explicit certainty labels", () => {
   const model = buildPersonalRevenueRoadmap(deals, { now: referenceDate, days: 30 });
 
+  // DESIGN.md §5.3 — 세 버킷이 확실성 채널의 전부이고, 합은 예상 유입과 같다.
   assert.deepEqual(model.summary, {
     expectedInflow: 14_200_000,
     confirmed: 6_800_000,
-    waiting: 4_200_000,
-    likely: 3_200_000,
-    possible: 0,
+    recommended: 7_400_000,
+    unknown: 0,
     missingNextAction: 1,
     scheduledDeals: 3,
   });
+  assert.equal(
+    model.summary.confirmed + model.summary.recommended + model.summary.unknown,
+    model.summary.expectedInflow,
+  );
   assert.deepEqual(
     model.events.map(({ id, certainty }) => [id, certainty.key, certainty.label]),
     [
       ["confirmed", "confirmed", "확정"],
-      ["waiting", "waiting", "입금 대기"],
-      ["likely", "likely", "가능성 높음"],
+      // 픽스처 id는 예전 어휘에서 왔다. stage `final`은 negotiation이므로 "입금 대기"가
+      // 아니라 "가능성 높음"이 맞다.
+      ["waiting", "recommended", "가능성 높음"],
+      ["likely", "recommended", "가능성 높음"],
     ],
+  );
+  // "입금 대기"는 확실성이 아니라 라이프사이클 채널에 산다 (§5.3).
+  assert.deepEqual(
+    model.events.map(({ id, lifecycle }) => [id, lifecycle ? lifecycle.key : null]),
+    [["confirmed", "waiting"], ["waiting", null], ["likely", null]],
   );
 });
 

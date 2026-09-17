@@ -7,7 +7,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
 import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
 
-import { Button } from "./hub-primitives";
+import { Button, Skeleton } from "./hub-primitives";
 import { Sidebar } from "./hub-sidebar";
 import { TopBar } from "./hub-topbar";
 import { ToastProvider } from "./hub-toast";
@@ -15,6 +15,7 @@ import { useInquiryNotifications } from './inquiry-notifications';
 import { CommandPalette } from "./hub-command-palette";
 import { QuickMemo } from "./quick-memo";
 import { ShortcutOverlay } from "./crm-shortcut-overlay";
+import { FloatingMentorWidget } from "./floating-mentor-widget";
 import { CelebrationCanvas } from "./celebration-fx";
 import { LEGACY_TREE, LEGACY_REDIRECTS } from "./hub-data";
 import {
@@ -41,8 +42,9 @@ import {
 // only covers the (brief) JS fetch. Keep it calm: no spinner, dim mono text.
 function PageChunkFallback() {
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', justifyContent: 'center' }}>
-      <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>불러오는 중…</span>
+    // 라우트 청크 로드 중 — 텍스트 한 줄 대신 레이아웃을 예고하는 스켈레톤(§11). 모든 페이지가 공유한다.
+    <div style={{ padding: 'var(--section-gap)' }}>
+      <Skeleton lines={4} height={14} width={['38%', '100%', '92%', '64%']} label="화면 불러오는 중" />
     </div>
   );
 }
@@ -284,6 +286,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const [theme, setTheme] = React.useState(DEFAULT_HUB_PREFERENCES.theme);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [helpOpen, setHelpOpen] = React.useState(false);
+  const [globalAdvisorOpen, setGlobalAdvisorOpen] = React.useState(false);
   const [memoOpenRequest, setMemoOpenRequest] = React.useState(0);
   const rootRef = React.useRef(null);
   const menuButtonRef = React.useRef(null);
@@ -461,6 +464,68 @@ export function HubApp({ memoDraftContext = "preview" }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [paletteOpen]);
 
+  // `⌘J` → 전역 AI 어드바이저 코파일럿 호출
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setGlobalAdvisorOpen((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const advisorContext = React.useMemo(() => {
+    const p = String(path || '');
+    if (p.startsWith('dashboard/revenue') || p.startsWith('dashboard/classin/pipeline') || p.startsWith('dashboard/classin/revenue')) {
+      return {
+        agent: 'guru',
+        contextType: 'deal',
+        contextTitle: '영업·파이프라인 코칭',
+        contextData: { path: p, scope: routeScope || navScope },
+      };
+    }
+    if (p.startsWith('dashboard/content') || p.startsWith('dashboard/brand/studio') || p.startsWith('dashboard/brand/queue')) {
+      return {
+        agent: 'council',
+        contextType: 'content',
+        contextTitle: '컨텐츠 기획·검수 코파일럿',
+        contextData: { path: p, scope: routeScope || navScope },
+      };
+    }
+    if (p.startsWith('dashboard/work/decisions')) {
+      return {
+        agent: 'council',
+        contextType: 'project',
+        contextTitle: '의사결정 및 전략 검증',
+        contextData: { path: p, scope: routeScope || navScope },
+      };
+    }
+    if (p.startsWith('dashboard/work') || p.startsWith('dashboard/classin/projects') || p.startsWith('dashboard/brand/projects')) {
+      return {
+        agent: 'council',
+        contextType: 'project',
+        contextTitle: '프로젝트 실행 전략',
+        contextData: { path: p, scope: routeScope || navScope },
+      };
+    }
+    if (p.startsWith('dashboard/daily-brief')) {
+      return {
+        agent: 'council',
+        contextType: 'weekly',
+        contextTitle: '우선순위 브리프 및 리듬 코칭',
+        contextData: { path: p, scope: routeScope || navScope },
+      };
+    }
+    return {
+      agent: 'council',
+      contextType: 'general',
+      contextTitle: 'Moonlight 운영 코파일럿',
+      contextData: { path: p, scope: routeScope || navScope },
+    };
+  }, [path, routeScope, navScope]);
+
   const render = PAGE_MAP[path];
   const page = render ? render(navigate, inquiryNotifications) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
   const sidebarCollapsed = collapsed && !navOpen;
@@ -499,6 +564,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
               onNavigate={navigate}
               onNew={createOnCurrentSurface}
               onSidebarOpen={openMobileNavigation}
+              onAdvisorOpen={() => setGlobalAdvisorOpen((v) => !v)}
               navOpen={mobileNavState.open}
               menuButtonRef={menuButtonRef}
               theme={theme}
@@ -517,6 +583,15 @@ export function HubApp({ memoDraftContext = "preview" }) {
       <QuickMemo key={memoDraftContext} draftContext={memoDraftContext} route={`${pathname}?${searchParams}`} blocked={paletteOpen || helpOpen || mobileNavState.open} openRequest={memoOpenRequest} onNavigate={navigate} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} />
       <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <FloatingMentorWidget
+        key={`global-advisor:${path}`}
+        isOpen={globalAdvisorOpen}
+        onClose={() => setGlobalAdvisorOpen(false)}
+        agent={advisorContext.agent}
+        contextType={advisorContext.contextType}
+        contextTitle={advisorContext.contextTitle}
+        contextData={advisorContext.contextData}
+      />
         <CelebrationCanvas />
       </ToastProvider>
     </div>

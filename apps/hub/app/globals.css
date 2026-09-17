@@ -185,7 +185,7 @@ button {
 .studio-toggle:focus-visible,
 .studio-chip-toggle:focus-visible,
 .editor-input:focus-visible {
-  outline: 2px solid rgba(82, 116, 168, 0.30);
+  outline: 1px solid rgba(82, 116, 168, 0.30);
   outline-offset: 2px;
 }
 
@@ -356,7 +356,7 @@ button {
 
 .field-input:focus,
 .field-textarea:focus {
-  outline: 2px solid rgba(82, 116, 168, 0.20);
+  outline: 1px solid rgba(82, 116, 168, 0.20);
   outline-offset: 2px;
 }
 
@@ -636,7 +636,7 @@ button {
   padding: 0 14px;
   border-bottom: 1px solid var(--line-soft);
   background: transparent;
-  transition: background 150ms ease, box-shadow 150ms ease;
+  transition: background var(--dur-hover) ease, box-shadow var(--dur-hover) ease;
 }
 
 /* §5.3 채널 분리: hover는 중립(액센트는 current/selected 전용), 좌측 1px 레일은
@@ -747,7 +747,7 @@ button {
 .hub-app .hub-project-row[data-completing="true"] .hub-project-identity__copy strong {
   color: var(--fg-faint);
   text-decoration: line-through;
-  transition: color 180ms ease;
+  transition: color var(--dur-panel) ease;
 }
 
 /* Terminal rows (완료·보관 섹션에서 재사용될 때): lower contrast layer. */
@@ -850,7 +850,7 @@ button {
   height: 100%;
   border-radius: inherit;
   background: var(--pms-moonstone);
-  transition: width 180ms ease;
+  transition: width var(--dur-enter) var(--ease-hub);
 }
 
 .hub-app .hub-pms-progress--completed .hub-pms-progress__track {
@@ -1026,7 +1026,7 @@ button {
   font-size: 12.5px;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition: background var(--dur-hover) ease, border-color var(--dur-hover) ease;
 }
 
 .hub-app .hub-pms-chip:hover {
@@ -1052,22 +1052,15 @@ button {
   outline-offset: 2px;
 }
 
-.hub-app .hub-pms-chip__mark {
-  position: relative;
-  display: inline-flex;
-  flex-shrink: 0;
-}
-
-/* 새 변동 — 손실 상태가 아니므로 중립 문스톤 점 하나 (§5.2). 개수는 aria-label·title. */
+/* 새 변동 — 손실 상태가 아니므로 중립 문스톤 점 하나 (§5.2). 개수는 aria-label·title.
+   모노그램 마크가 빠지면서(2026-09-15) 절대 배치 오버레이가 아니라 이름 앞의 인라인
+   점이 됐다 — 자리 잡을 타일이 더 이상 없다. */
 .hub-app .hub-pms-chip__dot {
-  position: absolute;
-  top: -2px;
-  right: -3px;
+  flex-shrink: 0;
   width: 6px;
   height: 6px;
   border-radius: 999px;
   background: var(--moon-400);
-  box-shadow: 0 0 0 2px var(--surface);
 }
 
 .hub-app .hub-pms-chip__count {
@@ -1230,7 +1223,7 @@ button {
   border-radius: 5px;
   color: var(--fg-faint);
   font-size: 11px;
-  transition: color 150ms ease, background 150ms ease;
+  transition: color var(--dur-hover) ease, background var(--dur-hover) ease;
 }
 
 .hub-app .hub-project-portfolio-index__filters button:hover {
@@ -1262,7 +1255,7 @@ button {
   border-bottom: 1px solid var(--line-soft);
   color: var(--fg-muted);
   text-align: left;
-  transition: background 150ms ease, box-shadow 150ms ease;
+  transition: background var(--dur-hover) ease, box-shadow var(--dur-hover) ease;
 }
 
 .hub-app .hub-project-portfolio-index-row:hover {
@@ -1632,7 +1625,7 @@ button {
 }
 
 .hub-app .project-create-disclosure__trigger > svg {
-  transition: transform 160ms ease;
+  transition: transform var(--dur-hover) ease;
 }
 
 .hub-app .project-create-disclosure__trigger[aria-expanded="true"] > svg {
@@ -2097,7 +2090,7 @@ button {
 .hub-app .hub-project-portfolio-accordion__trigger > svg:first-child {
   color: var(--fg-faint);
   transform: rotate(-90deg);
-  transition: transform 150ms ease;
+  transition: transform var(--dur-panel) ease;
 }
 
 .hub-app .hub-project-portfolio-accordion[data-open="true"] .hub-project-portfolio-accordion__trigger > svg:first-child {
@@ -2555,6 +2548,114 @@ button {
   .hub-app .hub-project-portfolio-task-list > div {
     grid-template-columns: 20px minmax(0, 1fr);
   }
+}
+
+.hub-app .hub-project-dday-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: var(--r-xs);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.hub-app .hub-project-dday-badge--danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+  border: 1px solid var(--danger-line);
+}
+
+.hub-app .hub-project-dday-badge--moon {
+  background: var(--accent-soft);
+  color: var(--moon-200);
+  border: 1px solid var(--accent-line);
+}
+
+.hub-app .hub-project-dday-badge--neutral {
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  border: 1px solid var(--line-soft);
+}
+
+.hub-app .hub-project-status-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.hub-app .hub-project-status-bar__track {
+  display: flex;
+  height: 6px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  gap: 2px;
+}
+
+.hub-app .hub-project-status-bar__track > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  transition: width var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .hub-project-status-bar__track > span[data-status="done"] {
+  background: var(--moon-400);
+}
+
+.hub-app .hub-project-status-bar__track > span[data-status="doing"] {
+  background: var(--moon-200);
+}
+
+.hub-app .hub-project-status-bar__track > span[data-status="todo"] {
+  background: var(--line-strong);
+}
+
+.hub-app .hub-project-status-bar__track > span[data-status="blocked"] {
+  background: var(--danger);
+}
+
+.hub-app .hub-project-status-bar__legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.hub-app .hub-project-status-bar__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: var(--fg-faint);
+}
+
+.hub-app .hub-project-status-bar__pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+}
+
+.hub-app .hub-project-status-bar__pill[data-status="done"]::before {
+  background: var(--moon-400);
+}
+
+.hub-app .hub-project-status-bar__pill[data-status="doing"]::before {
+  background: var(--moon-200);
+}
+
+.hub-app .hub-project-status-bar__pill[data-status="todo"]::before {
+  background: var(--line-strong);
+}
+
+.hub-app .hub-project-status-bar__pill[data-status="blocked"]::before {
+  background: var(--danger);
 }
 
 @media (prefers-reduced-motion: reduce) {

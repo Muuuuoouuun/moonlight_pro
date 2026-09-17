@@ -15,6 +15,8 @@ const projectsSource = await readFile(new URL("./projects.jsx", import.meta.url)
 const detailPanelSource = await readFile(new URL("./project-detail-panel.jsx", import.meta.url), "utf8");
 const responsiveCss = await readFile(new URL("../hub-tokens.css", import.meta.url), "utf8");
 const globalCss = await readFile(new URL("../../../app/globals.css", import.meta.url), "utf8");
+const todosViewSource = await readFile(new URL("./project-todos-view.jsx", import.meta.url), "utf8");
+const boardViewSource = await readFile(new URL("./project-board-view.jsx", import.meta.url), "utf8");
 
 test("project progress exposes evidence and only uses progressbar metadata when determinate", () => {
   assert.match(pmsComponentsSource, /export function ProjectProgressGauge/);
@@ -208,10 +210,13 @@ test("project detail checklist also uses the labelled canonical Checkbox", () =>
 });
 
 test("board cards expose a labelled non-drag status control", () => {
-  assert.match(projectsSource, /className=["']hub-project-board-status["']/);
-  assert.match(projectsSource, /aria-label=\{`\$\{c\.title\} 상태 변경`\}/);
-  assert.match(projectsSource, /onChange=\{\(event\) => moveCard\(c\.id, event\.target\.value\)\}/);
-  assert.match(projectsSource, /visibleColumns\.map\(option/);
+  // 보드 렌더러는 project-board-view.jsx로 분리됐다 — 마운트 배선은 projects.jsx가 소유한다.
+  assert.match(projectsSource, /\{view === 'board' && canWriteTasks && \(\s*<ProjectBoardView/);
+  assert.match(boardViewSource, /className=["']hub-project-board-status["']/);
+  assert.match(boardViewSource, /aria-label=\{`\$\{c\.title\} 상태 변경`\}/);
+  assert.match(boardViewSource, /onChange=\{\(event\) => onMoveCard\(c\.id, event\.target\.value\)\}/);
+  assert.match(projectsSource, /onMoveCard=\{moveCard\}/);
+  assert.match(boardViewSource, /visibleColumns\.map\(option/);
 });
 
 test("task writes lock selected items until their durable writes finish", () => {
@@ -447,11 +452,13 @@ test("desktop detail-open rows fit the standard sidebar-constrained width withou
 });
 
 test("mobile project todos collapse to a readable two-column card instead of squeezing desktop tracks", () => {
-  assert.match(projectsSource, /className=["']hub-project-todo-row["']/);
-  assert.match(projectsSource, /className=["']hub-project-todo-check["']/);
-  assert.match(projectsSource, /className=["']hub-project-todo-main hub-row["']/);
-  assert.match(projectsSource, /className=["']hub-project-todo-priority["']/);
-  assert.match(projectsSource, /className=["']mono hub-project-todo-due["']/);
+  // To-dos 렌더러는 project-todos-view.jsx로 분리됐다 — 마운트 배선은 projects.jsx가 소유한다.
+  assert.match(projectsSource, /\{view === 'todos' && canWriteTasks && \(\s*<ProjectTodosView/);
+  assert.match(todosViewSource, /className=["']hub-project-todo-row["']/);
+  assert.match(todosViewSource, /className=["']hub-project-todo-check["']/);
+  assert.match(todosViewSource, /className=["']hub-project-todo-main hub-row["']/);
+  assert.match(todosViewSource, /className=["']hub-project-todo-priority["']/);
+  assert.match(todosViewSource, /className=["']mono hub-project-todo-due["']/);
 
   const mobileStart = responsiveCss.indexOf("@media (max-width: 900px)");
   const mobileCss = responsiveCss.slice(mobileStart);
@@ -498,11 +505,36 @@ test("the container selector is a one-line tag filter, not a stacked dropdown", 
   assert.match(projectsSource, /onToggleEmpty=\{toggleEmptyContainers\}/);
 });
 
+test("sidebar rows and filter chips drop the monogram mark instead of repeating the name's first letter", () => {
+  // BrandMark(모노그램)는 이름 첫 글자를 그대로 타일에 새기는 구조라, 바로 옆 이름과
+  // 글자가 겹쳐 보였다 (2026-09-15 운영자 지시 "사이드바랑 칩 이름 앞 글자 중복되는 거
+  // 빼줘"). 프로젝트 행 등 브랜드명과 다른 텍스트 옆의 BrandMark(브랜드 소속 표시)는
+  // 그대로 둔다 — 지운 것은 사이드바 컨테이너 행과 필터 칩뿐이다.
+  const chipFn = pmsComponentsSource.slice(
+    pmsComponentsSource.indexOf("function ContainerChip("),
+    pmsComponentsSource.indexOf("// PMS 컨테이너 선택 바"),
+  );
+  assert.doesNotMatch(chipFn, /BrandMark/);
+  assert.match(chipFn, /className="hub-pms-chip__dot"/);
+
+  const sidebarRowFn = projectsSource.slice(
+    projectsSource.indexOf("const renderBrandSidebarRow = "),
+    projectsSource.indexOf("return (\n    <div className=\"hub-workspace-shell\""),
+  );
+  assert.doesNotMatch(sidebarRowFn, /BrandMark/);
+
+  // 절대 배치 오버레이가 아니라 이름 앞 인라인 점 — 자리 잡을 타일이 더는 없다.
+  assert.doesNotMatch(globalCss, /\.hub-app \.hub-pms-chip__mark\s*\{/);
+  const dotStart = globalCss.indexOf(".hub-app .hub-pms-chip__dot {");
+  const dotRule = globalCss.slice(dotStart, globalCss.indexOf("}", dotStart));
+  assert.doesNotMatch(dotRule, /position:\s*absolute/);
+});
+
 test("the container filter bar stays one horizontally scrolling line and keeps a touch-target floor", () => {
   const bar = globalCss.slice(globalCss.indexOf(".hub-app .hub-pms-filterbar {"));
   assert.match(bar, /\.hub-app \.hub-pms-filterbar__track\s*\{[\s\S]*?overflow-x:\s*auto/);
   // wrap 금지 — 모바일에서도 한 줄 가로 유지가 이 바의 계약이다.
-  assert.doesNotMatch(bar.slice(0, bar.indexOf(".hub-app .hub-pms-chip__mark")), /flex-wrap:\s*wrap/);
+  assert.doesNotMatch(bar.slice(0, bar.indexOf(".hub-app .hub-pms-chip__dot")), /flex-wrap:\s*wrap/);
   assert.match(bar, /\.hub-app \.hub-pms-chip\s*\{[\s\S]*?white-space:\s*nowrap/);
   // 선택 = 현재 위치. hover가 선택을 되돌리지 않도록 선택 hover를 따로 고정한다.
   assert.match(bar, /\.hub-app \.hub-pms-chip\[aria-pressed="true"\]\s*\{[\s\S]*?background:\s*var\(--surface-3\)/);

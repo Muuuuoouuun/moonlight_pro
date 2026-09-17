@@ -2,7 +2,68 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
+import { LifecycleBadge } from "../hub-primitives";
 import { buildProjectPortfolioMetrics } from "./project-pms-metrics";
+
+// ── PMS 프로젝트 상태 → DESIGN.md §8.2 lifecycle 열거값 ──────────────────────
+// §8.2: props는 색 이름이 아니라 의미 열거값이고, 표현은 primitive가 소유한다.
+// §5.3 lifecycle 행: 아이콘 + 직접 텍스트, blocked만 danger를 상속한다.
+// 원장 정규화가 내보내는 라벨은 Planning · Blocked · Done · Backlog ·
+// 'In progress' 다섯 개이고, Review는 operator-home-summary가 아직 세는 유산 상태다.
+//
+//   In progress → active   착수해서 굴러가는 작업.
+//   Review      → active   검토도 진행 중인 작업이다. 'waiting'은 §5.3이
+//                          "pause glyph + named dependency"를 요구하는데
+//                          프로젝트 레코드에 의존 대상 필드가 없다 —
+//                          없는 의존을 지어내느니 active로 둔다.
+//   Planning    → queued   착수 전.
+//   Backlog     → queued   원장 'archived'(보류)의 표시 라벨. 'cancelled'는
+//                          "취소"를 뜻해 오독이고, 이 행에는 되살리는
+//                          "다시 열기" 체크박스가 붙어 있다. queued가
+//                          덜 정확할 뿐 틀리지는 않고, 보이는 라벨 '백로그'가
+//                          실제 단계를 말한다.
+//   Blocked     → blocked  이 표면의 유일한 danger.
+//   Done        → done
+export const PROJECT_LIFECYCLE_STATE = {
+  'In progress': 'active',
+  Review: 'active',
+  Planning: 'queued',
+  Backlog: 'queued',
+  Blocked: 'blocked',
+  Done: 'done',
+};
+
+// §8.2 "visible Korean labels and an equivalent accessible name" — LifecycleBadge가
+// 같은 문구로 aria-label('진행 상태: …')을 짜므로 라벨 정본은 여기 하나다.
+export const PROJECT_STATUS_LABEL_KO = {
+  'In progress': '작업 중',
+  Review: '검토',
+  Planning: '계획',
+  Blocked: '막힘',
+  Done: '완료',
+  Backlog: '백로그',
+};
+
+export function projectLifecycleState(status) {
+  return PROJECT_LIFECYCLE_STATE[status] || 'queued';
+}
+
+export function projectStatusLabel(status) {
+  return PROJECT_STATUS_LABEL_KO[status] || status || '상태 미정';
+}
+
+// PMS의 모든 프로젝트 상태 칩은 이 어댑터 하나를 거친다(§8.1 primitives-first):
+// List 행 · 완료/보관 목록 · Timeline 기한미정 · 상세 패널이 같은 라벨,
+// 같은 접근성 이름, 같은 기하를 쓴다.
+export function ProjectStatusBadge({ status, style }) {
+  return (
+    <LifecycleBadge
+      state={projectLifecycleState(status)}
+      label={projectStatusLabel(status)}
+      style={style}
+    />
+  );
+}
 
 // 컨테이너 모노그램 마크 — 모양·무게가 제각각인 기하 글리프(◐ ◇ □ △ …)를 렌더에서
 // 대체한다(2026-08-19 운영자 지시 "아이콘 변경"). 이름 첫 글자를 고정 타일에 새겨
@@ -33,9 +94,11 @@ export function BrandMark({ brand, size = 18, active = false, style }) {
 }
 
 // 컨테이너 칩 — 이전 드롭다운 행은 2줄(이름 + "N개 새 변동 · 설명")에 우측 `7p/7t`
-// 칼럼까지 달려 4개만 떠도 세로가 과했다. 칩은 한 줄(마크 · 이름 · 프로젝트 수)로 줄이고
-// 나머지는 접근 가능한 이름과 툴팁으로 보존한다. 새 변동은 숫자 칩 대신 중립 문스톤 점
-// 하나 — 손실 신호가 아니다(DESIGN §5.2 no-warning-by-default).
+// 칼럼까지 달려 4개만 떠도 세로가 과했다. 칩은 한 줄(이름 · 프로젝트 수)로 줄이고
+// 나머지는 접근 가능한 이름과 툴팁으로 보존한다. 모노그램 마크는 뺐다 — 이름 앞 첫
+// 글자를 그대로 타일에 새기는 구조라 바로 옆 이름과 글자가 겹쳐 보였다(2026-09-15
+// 운영자 지시). 새 변동은 숫자 칩 대신 중립 문스톤 점 하나 — 손실 신호가 아니다
+// (DESIGN §5.2 no-warning-by-default).
 function ContainerChip({ container, count, selected, folderLabel, onSelect }) {
   const changes = container?.changes || 0;
   const name = container?.name || "컨테이너";
@@ -56,10 +119,7 @@ function ContainerChip({ container, count, selected, folderLabel, onSelect }) {
       data-container-chip={container?.key || "all"}
       onClick={() => onSelect(container?.key)}
     >
-      <span className="hub-pms-chip__mark">
-        <BrandMark brand={container} size={14} active={selected} />
-        {changes > 0 && <span className="hub-pms-chip__dot" aria-hidden="true" />}
-      </span>
+      {changes > 0 && <span className="hub-pms-chip__dot" aria-hidden="true" />}
       <span className="hub-pms-chip__name">{name}</span>
       <span className="hub-pms-chip__count mono">{count}</span>
     </button>

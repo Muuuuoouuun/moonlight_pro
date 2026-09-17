@@ -102,3 +102,20 @@ test('core profile is small and all profile retains legacy aliases',()=>{
   for(const name of ['get_content','get_content_queue','create_calendar_event'])assert.ok(all.has(name));
   assert.throws(()=>registry({profile:'misspelled'}),/profile/i);
 });
+
+test('search_knowledge queries the Agent API search endpoint with query and limit', async t => {
+  let sent;
+  setup(t, async (url, init) => {
+    sent = { url: String(url), ...init };
+    return response({ status: 'live', query: '세팅', items: [{ id: 'k1', title: '세팅 메모', snippet: '…세팅 부족…' }] });
+  });
+  const tool = registry().get('search_knowledge');
+  assert.ok(tool, 'search_knowledge tool must exist');
+  const result = await tool.handler({ query: '세팅', limit: 3 });
+  assert.equal(sent.url, 'http://localhost:3000/api/agent/v1/search');
+  assert.equal(sent.headers.authorization, 'Bearer agent-test-token');
+  assert.deepEqual(JSON.parse(sent.body), { query: '세팅', limit: 3 });
+  assert.equal(result.structuredContent.status, 'live');
+  assert.equal(result.structuredContent.items.length, 1);
+});
+

@@ -11,6 +11,7 @@ const detailPanelSource = await readFile(
   "utf8",
 ).catch(() => "");
 const projectsSource = await readFile(new URL("./projects.jsx", import.meta.url), "utf8");
+const boardViewSource = await readFile(new URL("./project-board-view.jsx", import.meta.url), "utf8");
 const taskDrawerSource = await readFile(new URL("./project-task-detail-drawer.jsx", import.meta.url), "utf8");
 const primitivesSource = await readFile(new URL("../hub-primitives.jsx", import.meta.url), "utf8");
 const rootPackage = JSON.parse(await readFile(
@@ -248,7 +249,8 @@ test("PMS list, table, and board share the CRM j/k grammar without stealing the 
   assert.doesNotMatch(kbBlock[0], /onNew/);
   // 커서 가시화 + 스크롤 추적 — 목록 행과 보드 카드 둘 다.
   assert.match(projectsSource, /data-kb-row=\{p\.id\}/);
-  assert.match(projectsSource, /data-kb-row=\{c\.id\}/);
+  assert.match(boardViewSource, /data-kb-row=\{c\.id\}/); // 보드 카드는 project-board-view.jsx로 이동
+  assert.match(projectsSource, /selectedId=\{kbSelection\.selectedId\}/);
   assert.match(projectsSource, /data-kb-row="\$\{CSS\.escape\(String\(kbSelection\.selectedId\)\)\}"/);
 });
 

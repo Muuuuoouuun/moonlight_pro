@@ -128,6 +128,14 @@ export function EmptyState({ icon = 'inbox', title, description, action, style }
   );
 }
 
+// Button hover is CSS-owned (DESIGN.md §8.1 "Hover" — no JS onMouseEnter/Leave, no
+// per-page re-implementation). That forces the resting variant chrome into the
+// stylesheet as well: an inline `background` / `border` / `color` outranks every class
+// rule, so `.hub-btn--primary:hover { … }` could never win while the resting value sat
+// on the element — which is exactly why the transition declared here since 2026-07
+// never fired. Same lesson `Card` already records above for `.hub-card-link`.
+// `.hub-btn` + `.hub-btn--<variant>` (hub-tokens.css) own colour, border, radius and
+// motion; only size/layout, the caller's own `style`, and the disabled state stay inline.
 export const Button = React.forwardRef(function Button({ children, variant = 'ghost', size = 'sm', icon, iconRight, style, onClick, active, type = 'button', className, disabled = false, ...props }, ref) {
   const sizes = {
     xs: { h: 24, px: 8, fs: 12, gap: 5 },
@@ -135,42 +143,20 @@ export const Button = React.forwardRef(function Button({ children, variant = 'gh
     md: { h: 34, px: 14, fs: 13, gap: 7 },
   };
   const s = sizes[size];
-  const variants = {
-    primary: {
-      color: 'var(--bg)',
-      background: 'var(--moon-200)',
-      border: '1px solid var(--moon-100)',
-      boxShadow: '0 1px 0 0 oklch(1 0 0 / 0.2) inset, 0 2px 8px -2px oklch(0 0 0 / 0.3)',
-    },
-    secondary: {
-      color: 'var(--fg)',
-      background: 'var(--surface-3)',
-      border: '1px solid var(--line)',
-    },
-    ghost: {
-      color: 'var(--fg-muted)',
-      background: active ? 'var(--surface-2)' : 'transparent',
-      border: `1px solid ${active ? 'var(--line)' : 'transparent'}`,
-    },
-    outline: {
-      color: 'var(--fg)',
-      background: 'transparent',
-      border: '1px solid var(--line)',
-    },
-    danger: {
-      color: 'var(--danger)',
-      background: 'var(--danger-bg)',
-      border: '1px solid var(--danger-line)',
-    },
-  };
-  const v = variants[variant];
+  // 호출처 className은 합성한다 — 덮어쓰면 .hub-row·.hub-topbar__primary-action 같은
+  // 레이아웃 클래스가 조용히 사라진다.
+  const cls = ['hub-btn', `hub-btn--${variant}`, className].filter(Boolean).join(' ');
   return (
-    <button {...props} ref={ref} type={type} className={className} onClick={onClick} disabled={disabled} style={{
+    <button {...props} ref={ref} type={type} className={cls} data-active={active ? 'true' : undefined} onClick={onClick} disabled={disabled} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: s.gap,
       height: s.h, padding: `0 ${s.px}px`, fontSize: s.fs, fontWeight: 500,
-      borderRadius: 'var(--r-sm)', whiteSpace: 'nowrap',
-      transition: 'background var(--dur-hover) ease, border-color var(--dur-hover) ease, color var(--dur-hover) ease, opacity var(--dur-hover) ease',
-      ...v, ...style,
+      whiteSpace: 'nowrap',
+      // radius는 인라인으로 남긴다 — hover 전이 대상이 아니라 CSS 소유일 이유가 없고,
+      // IconButton과 같은 방식이다. (한때 `.hub-app :focus-visible`이 border-radius를 덮어
+      // CSS 소유 radius가 포커스 순간 2px로 튀었다 — 그 전역 덮어쓰기는 2026-09-16에 제거됐고
+      // focus-ring.test.mjs가 재발을 막는다.)
+      borderRadius: 'var(--r-sm)',
+      ...style,
       ...(disabled && { opacity: 0.45, cursor: 'not-allowed', pointerEvents: 'none' }),
     }}>
       {icon && <Iconed name={icon} size={14} />}
@@ -494,6 +480,22 @@ export function Placeholder({ label = 'image', w, h, style }) {
   );
 }
 
+// 로딩 스켈레톤 — §11 "loading states are part of the design". "불러오는 중…" 한 줄은 레이아웃을
+// 예고하지 못해 첫 페인트가 비어 보였다(2026-09-04 아젠다 B2: 스켈레톤 0개). 펄스는 §9의
+// 라이브 인디케이터 단일 duration(mlMoonPulse 1.4s)을 hub-tokens.css에서 그대로 쓴다.
+// preview/error에는 쓰지 않는다 — 스켈레톤은 "곧 채워진다"는 약속이라 §5.3 source truth를 속인다.
+// `width`는 문자열 하나(전 줄 공통) 또는 줄별 배열. 기본은 마지막 줄만 짧게.
+export function Skeleton({ lines = 3, height = 12, width, gap = 8, style, label = '불러오는 중' }) {
+  const widths = Array.isArray(width)
+    ? width
+    : Array.from({ length: lines }, (_, i) => width || (lines > 1 && i === lines - 1 ? '62%' : '100%'));
+  return (
+    <div role="status" aria-busy="true" aria-label={label} className="hub-skeleton" style={{ display: 'grid', gap, ...style }}>
+      {widths.map((w, i) => <span key={i} className="hub-skeleton__line" style={{ height, width: w }} />)}
+    </div>
+  );
+}
+
 const CERTAINTY_STATES = {
   confirmed:   { label: '확정', borderStyle: 'solid',  marker: 'filled' },
   recommended: { label: '권장', borderStyle: 'dashed', marker: 'diamond' },
@@ -719,20 +721,20 @@ export function ChipToggle({ label, selected, onChange, style }) {
 
 export function SegmentedControl({ options, value, onChange, className, style, label, fill, size = 'sm' }) {
   const scale = SEGMENT_SCALE[size] || SEGMENT_SCALE.sm;
+  // 색·배경·보더는 hub-tokens.css의 .hub-seg / .hub-seg__btn이 소유한다 — 인라인이면 어떤
+  // :hover/전이도 붙지 않는다(§15 2026-09-15 Button과 같은 cascade). 크기 스케일만 인라인.
   return (
     <div
-      className={className}
+      className={['hub-seg', className].filter(Boolean).join(' ')}
       role="group"
       aria-label={label}
-      style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, ...style }}
+      style={{ display: 'flex', gap: 2, borderRadius: 'var(--r-sm)', padding: 2, ...style }}
     >
       {options.map(o => {
         const isActive = o.key === value;
         return (
-          <button key={o.key} type="button" onClick={() => onChange?.(o.key)} aria-pressed={isActive} style={{
+          <button key={o.key} type="button" className="hub-seg__btn" onClick={() => onChange?.(o.key)} aria-pressed={isActive} style={{
             padding: scale.pad, fontSize: scale.fs, borderRadius: scale.radius, whiteSpace: 'nowrap',
-            color: isActive ? 'var(--fg)' : 'var(--fg-faint)',
-            background: isActive ? 'var(--surface-3)' : 'transparent',
             display: 'inline-flex', alignItems: 'center', justifyContent: fill ? 'center' : undefined, gap: scale.gap,
             flex: fill ? '1 1 0' : undefined, minWidth: fill ? 0 : undefined,
           }}>

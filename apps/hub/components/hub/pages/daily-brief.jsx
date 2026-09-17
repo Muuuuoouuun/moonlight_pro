@@ -3,7 +3,7 @@
 import React from "react";
 import { InquirySummary } from '../inquiry-notifications';
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, EmptyState, Kbd } from "../hub-primitives";
+import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, EmptyState, Kbd, Skeleton } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { BurningStreakBadge, StreakFlame } from "../burning-streak";
 import { useUndoableAction } from "../use-undoable-action";
@@ -634,7 +634,7 @@ function useDailyBriefLedger(refreshKey) {
   return { ...state, refreshTasks };
 }
 
-function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
+function SignalCard({ s, index = 0, defaultExpanded, onNavigate, onAdvisorOpen }) {
   // Surface the highest-priority signal first-open (§3.1: <5s).
   const [expanded, setExpanded] = React.useState(defaultExpanded != null ? defaultExpanded : (index === 0 || s.tone === 'danger'));
   const [decided, setDecided] = useBriefDecision(signalDecisionKey(s));
@@ -695,6 +695,16 @@ function SignalCard({ s, index = 0, defaultExpanded, onNavigate }) {
               {d.label}
             </Button>
           ))}
+          {onAdvisorOpen && (
+            <Button
+              variant="outline"
+              size="sm"
+              icon="sparkle"
+              onClick={() => onAdvisorOpen(s)}
+            >
+              조언 구하기
+            </Button>
+          )}
           <div style={{ flex: 1 }} />
           <Button variant="ghost" size="sm" icon="moreV" onClick={openContext}>More context</Button>
         </div>
@@ -1055,7 +1065,7 @@ function ApprovalQueueCard({ onNavigate }) {
         {orders.length === 0 ? (
           <div role={state === 'error' ? 'alert' : undefined} style={{ padding: 14, fontSize: 12.5, color: state === 'error' ? 'var(--danger)' : 'var(--fg-muted)', lineHeight: 1.5 }}>
             {state === 'loading'
-              ? '큐 확인 중…'
+              ? <Skeleton lines={2} label="승인 큐 확인 중" />
               : state === 'error'
               ? '승인 큐를 읽지 못했습니다 — 대기 제안이 있을 수 있습니다. 새로고침해 주세요.'
               : '승인 대기 중인 제안이 없습니다. /inbox·/team이 제안을 올리면 여기서 1클릭으로 처리합니다.'}
@@ -1252,7 +1262,7 @@ function BriefNavigation({ taskToday, onNavigate }) {
 
 // The command — the single highest-priority signal, rendered full-width with its decisions
 // already exposed. This is the "<5s, what's my next move?" surface (DESIGN.md §3.1).
-function CommandCard({ s, remaining, onNavigate }) {
+function CommandCard({ s, remaining, onNavigate, onAdvisorOpen }) {
   const [decided, setDecided] = useBriefDecision(signalDecisionKey(s));
   // §5.2 red-budget: only true urgency colors the command ring. Everything else reads
   // as the top item by position and size alone — warning/info/success rims were reading
@@ -1298,6 +1308,16 @@ function CommandCard({ s, remaining, onNavigate }) {
               {d.label}
             </Button>
           ))}
+          {onAdvisorOpen && (
+            <Button
+              variant="outline"
+              size="md"
+              icon="sparkle"
+              onClick={() => onAdvisorOpen(s)}
+            >
+              조언 구하기
+            </Button>
+          )}
           {hasRecord && <Button variant="outline" size="md" iconRight="arrowRight" onClick={openRecord}>레코드 열기</Button>}
           <div style={{ flex: 1 }} />
           {remaining > 0 && <span className="mono" style={{ fontSize: 11.5, color: 'var(--fg-faint)' }}>대기 결정 {remaining}건 ↓</span>}
@@ -1922,7 +1942,7 @@ function WeeklyReportCard({ onNavigate }) {
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
             {rows.map((r) => (
               <div key={r.label} style={{ minWidth: 72 }}>
-                <div className="stat" style={{ fontSize: 22 }}>{syncState === 'loading' ? '—' : r.value}</div>
+                <div className="stat" style={{ fontSize: 22 }}>{syncState === 'loading' ? <Skeleton lines={1} height={22} width="56%" label="지표 확인 중" /> : r.value}</div>
                 <div style={{ fontSize: 11, color: 'var(--fg-dim)', marginTop: 2 }}>{r.label}</div>
               </div>
             ))}
@@ -1944,6 +1964,7 @@ function WeeklyReportCard({ onNavigate }) {
 
 export function DailyBrief({ onNavigate, inquiryNotifications }) {
   const [refreshKey, setRefreshKey] = React.useState(0);
+  const [advisorSignal, setAdvisorSignal] = React.useState(null);
   const ledger = useDailyBriefLedger(refreshKey);
   const [queueExpanded, setQueueExpanded] = React.useState(false);
   const refreshLedger = React.useCallback(() => setRefreshKey((key) => key + 1), []);
@@ -2007,7 +2028,7 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
 
         <div className="daily-brief__command-reveal">
           {command ? (
-            <CommandCard s={command} remaining={waiting.length} onNavigate={onNavigate} />
+            <CommandCard s={command} remaining={waiting.length} onNavigate={onNavigate} onAdvisorOpen={setAdvisorSignal} />
           ) : (
             <CommandClear signalCount={signalCount} />
           )}
@@ -2025,7 +2046,15 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
             </SectionTitle>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {queue.length ? (
-                queue.map((s) => <SignalCard key={s.id} s={s} defaultExpanded={s.tone === 'danger'} onNavigate={onNavigate} />)
+                queue.map((s) => (
+                  <SignalCard
+                    key={s.id}
+                    s={s}
+                    defaultExpanded={s.tone === 'danger'}
+                    onNavigate={onNavigate}
+                    onAdvisorOpen={setAdvisorSignal}
+                  />
+                ))
               ) : (
                 <Card className="daily-brief__panel">
                   <EmptyState icon="check" title={command ? '큐가 비었습니다' : '오늘 신호 없음'} description={command ? '가장 급한 하나만 위에 남았어요. 처리하면 브리핑이 정리됩니다.' : '새 신호가 들어오면 명령 카드로 가장 먼저 올라옵니다.'} />
@@ -2056,6 +2085,23 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
           <ApprovalQueueCard onNavigate={onNavigate} />
         </MoreDetail>
       </div>
+
+      {advisorSignal && (
+        <FloatingMentorWidget
+          isOpen={Boolean(advisorSignal)}
+          onClose={() => setAdvisorSignal(null)}
+          agent={advisorSignal.kind === 'deals' || advisorSignal.kind === 'leads' ? 'guru' : 'council'}
+          contextType={advisorSignal.kind === 'deals' ? 'deal' : advisorSignal.kind === 'content' ? 'content' : 'general'}
+          contextTitle={advisorSignal.title}
+          contextData={{
+            summary: advisorSignal.summary,
+            ref: advisorSignal.source?.ref,
+            from: advisorSignal.source?.from,
+            kind: advisorSignal.kind,
+            meta: advisorSignal.meta,
+          }}
+        />
+      )}
     </div>
   );
 }

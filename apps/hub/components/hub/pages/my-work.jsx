@@ -294,7 +294,7 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
         boxShadow: item.bucket === 'overdue' ? 'inset 1px 0 0 var(--danger)'
           : item.stalled ? 'inset 1px 0 0 var(--line-strong)'
             : justAdded ? 'inset 1px 0 0 var(--accent)' : undefined,
-        transition: swipeOffset ? 'none' : 'transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), background var(--dur-enter) ease, box-shadow var(--dur-enter) ease',
+        transition: swipeOffset ? 'none' : 'transform var(--dur-enter) var(--ease-hub), background var(--dur-enter) ease, box-shadow var(--dur-enter) ease',
       }}
     >
       {item.lane === 'task' ? (
@@ -306,7 +306,7 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
         fontSize: 13, color: completing ? 'var(--fg-faint)' : 'var(--fg)', flex: 1, minWidth: '35%',
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         textDecoration: completing ? 'line-through' : 'none',
-        transition: 'color 180ms ease',
+        transition: 'color var(--dur-panel) ease',
       }}>
         {item.title}
       </span>
@@ -1069,7 +1069,7 @@ export function MyWork({ onNavigate }) {
                 border: `1px solid ${active ? 'var(--line-strong)' : 'var(--line-soft)'}`,
                 borderRadius: 'var(--r-lg)',
                 boxShadow: count > 0 && t.stripe ? `inset 1px 0 0 ${t.stripe}` : undefined,
-                transition: 'background 120ms ease, border-color 120ms ease',
+                transition: 'background var(--dur-hover) ease, border-color var(--dur-hover) ease',
               }}
             >
               <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-dim)' }}>{t.label}</div>
@@ -1315,7 +1315,7 @@ export function MyWork({ onNavigate }) {
                             borderBottom: '1px solid var(--line-soft)', cursor: 'pointer',
                           }}
                         >
-                          <Iconed name="chevronD" size={12} style={{ transform: eventsOpen ? 'none' : 'rotate(-90deg)', transition: 'transform 120ms ease', color: 'var(--fg-faint)' }} />
+                          <Iconed name="chevronD" size={12} style={{ transform: eventsOpen ? 'none' : 'rotate(-90deg)', transition: 'transform var(--dur-hover) ease', color: 'var(--fg-faint)' }} />
                           <Iconed name="calendar" size={13} style={{ color: 'var(--fg-dim)' }} />
                           <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--fg-muted)' }}>일정</span>
                           <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4 }}>{row.items.length}</span>
@@ -1364,7 +1364,7 @@ export function MyWork({ onNavigate }) {
                           borderBottom: '1px solid var(--line-soft)', cursor: 'pointer',
                         }}
                       >
-                        <Iconed name="chevronD" size={12} style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 120ms ease', color: 'var(--fg-faint)' }} />
+                        <Iconed name="chevronD" size={12} style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform var(--dur-hover) ease', color: 'var(--fg-faint)' }} />
                         <Iconed name="projects" size={13} style={{ color: 'var(--fg-dim)' }} />
                         <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {row.projectName}
@@ -1429,7 +1429,7 @@ export function MyWork({ onNavigate }) {
                 border: dropTarget ? '1px dashed var(--moon-300)' : '1px solid var(--line-soft)',
                 borderRadius: 'var(--r-lg)',
                 display: 'flex', flexDirection: 'column',
-                transition: 'border-color 120ms ease',
+                transition: 'border-color var(--dur-hover) ease',
               }}>
                 <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 600 }}>{b.label}</span>

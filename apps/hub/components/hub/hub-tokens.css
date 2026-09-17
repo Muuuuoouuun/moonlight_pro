@@ -198,7 +198,7 @@
 
 /* Interactive row hover — use this class instead of onMouseEnter/Leave JS handlers.
    Themable, respects reduced-motion, and can't drift per call site. */
-.hub-app .hub-row { background: transparent; transition: background 120ms ease; }
+.hub-app .hub-row { background: transparent; transition: background var(--dur-hover) ease; }
 .hub-app .hub-row:hover { background: var(--surface-2); }
 /* Keyboard-only focus ring (§11: never rely on browser defaults) — :focus-visible so a mouse
    click doesn't leave a ring, only Tab/roving-arrow-key navigation does. */
@@ -220,7 +220,7 @@
 
 /* Kanban card hover (rests at --surface-2, one step lighter than .hub-row's --surface/--bg
    rest state) — same "no JS hover handler" contract, different resting surface. */
-.hub-app .hub-kanban-card { transition: background 120ms ease, box-shadow 120ms ease; }
+.hub-app .hub-kanban-card { transition: background var(--dur-hover) ease, box-shadow var(--dur-hover) ease; }
 .hub-app .hub-kanban-card:hover { background: var(--surface-3); }
 @media (prefers-reduced-motion: reduce) {
   .hub-app .hub-kanban-card { transition: none; }
@@ -231,7 +231,7 @@
   color: var(--fg-faint);
   border: 1px dashed var(--line-soft);
   background: transparent;
-  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+  transition: color var(--dur-hover) ease, border-color var(--dur-hover) ease, background var(--dur-hover) ease;
 }
 .hub-app .hub-kanban-add:hover {
   color: var(--fg-muted);
@@ -257,6 +257,92 @@
   .hub-app .hub-iconbtn { transition: none; }
 }
 
+/* Button hover — CSS-owned per §8.1 (no JS onMouseEnter/Leave, no per-page copies), same
+   contract as .hub-iconbtn above. The resting variant chrome lives here too, not inline on
+   the element: an inline background/border/colour outranks every stylesheet rule, so a
+   hover rule can only win once the resting value is a class rule as well. That is why the
+   primitive declared a --dur-hover transition for months with nothing to transition to.
+   Hover stays neutral (§5.2 — Moonstone means current/selected/primary, never "the pointer
+   is here"): one step of surface luminance, or one step of hairline emphasis, nothing more.
+   Every step is theme-symmetric — it moves away from the surface in dark *and* light.
+   :not(:disabled) keeps a disabled button from lighting up. */
+.hub-app .hub-btn {
+  transition: background var(--dur-hover) ease, border-color var(--dur-hover) ease, color var(--dur-hover) ease, opacity var(--dur-hover) ease;
+}
+
+/* Primary CTA — --moon-200 fill on a --moon-100 rim (§5.2). Hover lifts one rung further
+   along the ramp: brighter in dark, darker in light, more contrast against the surface
+   either way. The inset/drop shadow is carried over verbatim from the old inline style. */
+.hub-app .hub-btn--primary {
+  color: var(--bg);
+  background: var(--moon-200);
+  border: 1px solid var(--moon-100);
+  box-shadow: 0 1px 0 0 oklch(1 0 0 / 0.2) inset, 0 2px 8px -2px oklch(0 0 0 / 0.3);
+}
+.hub-app .hub-btn--primary:hover:not(:disabled) {
+  background: var(--moon-100);
+  border-color: var(--moon-50);
+}
+
+/* Secondary rests filled at --surface-3, and no surface step from there is symmetric across
+   themes (--elevated is lighter than --surface-3 in dark but equal to --surface in light).
+   So it takes the hairline-emphasis grammar instead — the same move .hub-card-link and
+   .hub-input make, and --line-strong is exactly the "emphasised state" role in §5.2. */
+.hub-app .hub-btn--secondary {
+  color: var(--fg);
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+}
+.hub-app .hub-btn--secondary:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+
+.hub-app .hub-btn--ghost {
+  color: var(--fg-muted);
+  background: transparent;
+  border: 1px solid transparent;
+}
+.hub-app .hub-btn--ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+/* Pressed / selected ghost (the `active` prop, now a data attribute). Resting state only —
+   it lands on the same surface as hover plus a visible hairline, so "on" reads without
+   motion and without borrowing the accent. Colour deliberately stays --fg-muted, matching
+   the pre-migration inline behaviour. */
+.hub-app .hub-btn--ghost[data-active="true"] {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+
+.hub-app .hub-btn--outline {
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid var(--line);
+}
+.hub-app .hub-btn--outline:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+}
+
+/* Danger keeps its colour through hover for the same reason .hub-iconbtn--danger does:
+   destructive intent must not read as neutral mid-interaction. The hairline carries the
+   feedback and the fill never grows — §5.2 red budget, no full-card semantic fills.
+   The --danger-bg rest fill is moved verbatim from the old inline variant, not introduced. */
+.hub-app .hub-btn--danger {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-line);
+}
+.hub-app .hub-btn--danger:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-app .hub-btn { transition: none; }
+}
+
 /* Sidebar anchor row — same contract as .hub-row (CSS hover, no JS handlers),
    sized for the consolidated eight-anchor nav: one tap target, no accordion. */
 .hub-app .hub-nav-item {
@@ -274,10 +360,10 @@
   border-radius: var(--r-sm);
   border-left: 1px solid transparent;
   text-align: left;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background var(--dur-hover) ease, color var(--dur-hover) ease;
 }
 /* Clickable KPI card — border lifts on hover. CSS, not onMouseEnter handlers. */
-.hub-app .hub-metric-card { transition: border-color 120ms ease; }
+.hub-app .hub-metric-card { transition: border-color var(--dur-hover) ease; }
 .hub-app .hub-metric-card[role="button"]:hover { border-color: var(--line-strong); }
 @media (prefers-reduced-motion: reduce) {
   .hub-app .hub-metric-card { transition: none; }
@@ -317,9 +403,9 @@
   background: transparent;
 }
 .hub-app .hub-nav-caret:hover { background: var(--surface-2); color: var(--fg); }
-.hub-app .hub-nav-caret svg { transition: transform 160ms ease; }
+.hub-app .hub-nav-caret svg { transition: transform var(--dur-panel) ease; }
 .hub-app .hub-nav-caret[aria-expanded="false"] svg { transform: rotate(-90deg); }
-.hub-app .hub-nav-sublist { margin: -1px 0 4px; animation: mlFadeUp 180ms ease both; }
+.hub-app .hub-nav-sublist { margin: -1px 0 4px; animation: mlFadeUp var(--dur-panel) var(--ease-hub) both; }
 .hub-app .hub-nav-sub {
   width: 100%;
   display: flex;
@@ -333,7 +419,7 @@
   background: transparent;
   border-radius: var(--r-sm);
   text-align: left;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background var(--dur-hover) ease, color var(--dur-hover) ease;
 }
 .hub-app .hub-nav-sub:hover { background: var(--surface-2); color: var(--fg); }
 .hub-app .hub-nav-sub[aria-current="page"] { color: var(--fg); background: var(--surface-3); }
@@ -350,7 +436,11 @@
   .hub-app .hub-nav-sub { transition: none; }
 }
 
-.hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; border-radius: 2px; }
+/* §11은 링(outline 1px·offset 2px)만 규정한다. 여기서 border-radius를 덮으면 단일 클래스(0,1,0)로
+   radius를 갖는 모든 요소 — 사이드바 nav(6px)·PMS 칩(999px)·포트폴리오 메트릭·타임라인 카드 — 가
+   키보드 포커스 순간에만 2px로 튄다 (2026-09-16 브라우저 실측, 페이지당 11~17곳). outline은
+   요소 자신의 radius를 따라가므로 여기서 radius를 건드릴 이유가 없다. */
+.hub-app :focus-visible { outline: 1px solid var(--moon-300); outline-offset: 2px; }
 /* Text-field wrappers that suppress the inner input's own ring surface the focus on the wrapper (§11) */
 .hub-app .hub-field:focus-within { border-color: var(--moon-300); }
 
@@ -420,9 +510,36 @@
 .hub-app .hub-checkbox-row:disabled { color: var(--fg-faint); cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) { .hub-app .hub-checkbox-row { transition: none; } }
 
+/* SegmentedControl — 필터/뷰 토글의 canonical(§8.1). Button(§15 2026-09-15)과 같은 이유로
+   휴지 chrome을 여기서 소유한다: 인라인 색은 :hover와 전이를 죽인다. 활성 = aria-pressed 하나가
+   정본이라 CSS가 그 속성을 그대로 읽는다. hover는 §5.2대로 중립 한 단계(글자만 한 칸 밝게). */
+.hub-app .hub-seg {
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+}
+.hub-app .hub-seg__btn {
+  color: var(--fg-faint);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: color var(--dur-hover) ease, background var(--dur-hover) ease;
+}
+.hub-app .hub-seg__btn:hover:not([aria-pressed="true"]) { color: var(--fg-muted); }
+.hub-app .hub-seg__btn[aria-pressed="true"] {
+  color: var(--fg);
+  background: var(--surface-3);
+}
+
 @keyframes mlMoonPulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
 @keyframes mlFadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-.hub-app .fade-up { animation: mlFadeUp var(--dur-enter) ease-out; }
+.hub-app .fade-up { animation: mlFadeUp var(--dur-enter) var(--ease-hub); }
+/* Skeleton — §11 로딩 상태. 펄스는 라이브 인디케이터와 같은 mlMoonPulse 1.4s 하나(§9 "one duration
+   everywhere"), 줄마다 위상 지연 없음(물결은 playful). 전역 reduced-motion 안전망이 자동 적용. */
+.hub-app .hub-skeleton__line {
+  display: block;
+  border-radius: var(--r-xs);
+  background: var(--surface-3);
+  animation: mlMoonPulse 1.4s ease-in-out infinite;
+}
 
 /* Burning Streak Motion */
 @keyframes mlFlameFlicker {
@@ -473,7 +590,7 @@
 }
 
 .hub-app .hub-streak-pop {
-  animation: mlBurnPop 260ms var(--ease-hub);
+  animation: mlBurnPop var(--dur-enter) var(--ease-hub);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -552,7 +669,7 @@
   background: var(--surface-2);
   border: 1px solid var(--accent-line);
   border-radius: var(--r-sm);
-  animation: hubSparklePop 260ms var(--ease-hub);
+  animation: hubSparklePop var(--dur-enter) var(--ease-hub);
 }
 
 .hub-app .hub-celebration-badge--sparkle {
@@ -562,7 +679,7 @@
 }
 
 .hub-app .hub-celebration-card {
-  animation: hubSparklePop 300ms var(--ease-hub);
+  animation: hubSparklePop var(--dur-enter) var(--ease-hub);
   border-color: var(--accent-line) !important;
   box-shadow: 0 0 0 1px var(--accent-soft), 0 8px 28px -10px rgba(82, 116, 168, 0.25) !important;
 }
@@ -1002,7 +1119,7 @@
   font-size: 12.5px;
   font-weight: 450;
   white-space: nowrap;
-  transition: color 140ms ease, background 140ms ease;
+  transition: color var(--dur-hover) ease, background var(--dur-hover) ease;
 }
 
 .hub-topbar__tabs button:hover {
@@ -1027,6 +1144,17 @@
 
 .hub-page-header {
   min-width: 0;
+}
+
+/* 프로젝트 헤더 — 920~1100px(인라인 사이드바 232px + 검색·뷰 토글·버튼)에서 primary CTA
+   "+ Project"가 뷰포트 밖으로 밀려 잘리던 것(2026-09-16 실측)을 wrap으로 푼다. §8.1 "헤더에
+   primary 생성 버튼"과 §5.2 "하나의 지배적 primary CTA"는 CTA가 보일 때만 성립한다.
+   spacer의 flex-basis가 0이라 줄바꿈 판단은 내용 폭으로만 이뤄지고, 넓은 화면은 한 줄 그대로.
+   ≤900px는 아래 모바일 규칙이 column으로 세운다. */
+.hub-app .hub-project-page-header {
+  flex-wrap: wrap;
+  justify-content: flex-end; /* 줄바꿈된 툴바·CTA는 1행 툴바와 같은 오른쪽 끝에 붙는다 */
+  row-gap: 10px;
 }
 
 .hub-page-actions,
@@ -1077,7 +1205,7 @@
   align-items: center;
   pointer-events: none;
   color: var(--fg-faint);
-  transition: opacity 150ms ease;
+  transition: opacity var(--dur-overlay) ease;
 }
 .hub-app .hub-scroll-edge--left {
   left: 0;
@@ -1099,17 +1227,17 @@
 }
 
 .campaign-war-room {
-  transition: grid-template-columns 220ms ease;
+  transition: grid-template-columns var(--dur-panel) var(--ease-hub);
 }
 
 .campaign-war-room__list,
 .campaign-war-room__detail,
 .campaign-detail-frame {
   transition:
-    opacity 180ms ease,
-    transform 220ms ease,
-    border-color 180ms ease,
-    box-shadow 220ms ease;
+    opacity var(--dur-panel) var(--ease-hub),
+    transform var(--dur-panel) var(--ease-hub),
+    border-color var(--dur-panel) var(--ease-hub),
+    box-shadow var(--dur-panel) var(--ease-hub);
 }
 
 .campaign-war-room__list {
@@ -1137,7 +1265,7 @@
 }
 
 .campaign-tab-stage[data-focus="true"] {
-  animation: mlCampaignFocusIn 180ms ease-out;
+  animation: mlCampaignFocusIn var(--dur-panel) var(--ease-hub);
 }
 
 @keyframes mlCampaignFocusIn {
@@ -1934,19 +2062,6 @@
   flex-wrap: wrap;
 }
 
-.personal-revenue-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--fg-faint);
-  font-size: 10.5px;
-  white-space: nowrap;
-}
-
-.personal-revenue-legend-item.is-confirmed {
-  color: var(--moon-200);
-}
-
 .personal-revenue-timeline-scroll {
   margin-top: 18px;
   overflow-x: auto;
@@ -1957,7 +2072,7 @@
 }
 
 .personal-revenue-timeline-scroll:focus-visible {
-  outline: 2px solid var(--moon-300);
+  outline: 1px solid var(--moon-300);
   outline-offset: 2px;
 }
 
@@ -2028,7 +2143,7 @@
   color: var(--fg);
   background: var(--surface-2);
   border-color: var(--moon-300);
-  outline: 2px solid var(--moon-300);
+  outline: 1px solid var(--moon-300);
   outline-offset: 2px;
 }
 
@@ -2054,11 +2169,11 @@
   border-color: var(--moon-100);
 }
 
-.personal-revenue-event[data-certainty="likely"] .personal-revenue-event-marker {
+.personal-revenue-event[data-certainty="recommended"] .personal-revenue-event-marker {
   border-style: dashed;
 }
 
-.personal-revenue-event[data-certainty="possible"] .personal-revenue-event-marker {
+.personal-revenue-event[data-certainty="unknown"] .personal-revenue-event-marker {
   border-style: dotted;
 }
 
@@ -2082,18 +2197,20 @@
   font-size: 16px;
 }
 
-.personal-revenue-event-certainty,
-.personal-revenue-action-source {
+/* 상태 배지 그룹의 레이아웃 훅뿐이다 — 색·테두리·라벨은 CertaintyBadge / LifecycleBadge가
+   소유한다 (§8.2). `CertaintyBadge`는 className prop이 없어서 래퍼로 감싼다. */
+.personal-revenue-event-states,
+.personal-revenue-action-state,
+.personal-revenue-drawer-state {
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.personal-revenue-event-states {
   margin-top: 9px;
-  padding: 0 7px;
-  color: var(--fg-faint);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: 10.5px;
-  white-space: nowrap;
 }
 
 .personal-revenue-actions-title-row > strong {
@@ -2137,7 +2254,7 @@
 }
 
 .personal-revenue-action-row:focus-visible {
-  outline: 2px solid var(--moon-300);
+  outline: 1px solid var(--moon-300);
   outline-offset: -2px;
 }
 
@@ -2181,11 +2298,8 @@
   font-size: 12px;
 }
 
-.personal-revenue-action-source {
-  margin-top: 0;
-}
-
-.personal-revenue-action-source.is-recommended,
+/* 권장 다음 행동 컨테이너는 §5.3 recommended 기하(dashed)를 유지한다. 행 안의 배지는
+   이제 CertaintyBadge가 같은 기하를 스스로 그린다. */
 .personal-revenue-next-action.is-recommended {
   border-style: dashed;
 }
@@ -2220,6 +2334,11 @@
 
 .personal-revenue-drawer-meta {
   justify-content: flex-start;
+  /* closing 딜은 확실성("확정")과 라이프사이클("입금 대기") 배지를 함께 단다.
+     둘 다 white-space: nowrap이라 360px 드로어에서 가로로 넘칠 수 있다 —
+     자르지 말고 접는다 (§11 텍스트는 언제나 읽을 수 있어야 한다). */
+  flex-wrap: wrap;
+  row-gap: 6px;
   margin-top: 15px;
   padding-bottom: 22px;
   color: var(--fg-faint);
@@ -2355,7 +2474,7 @@
   }
 
   .personal-revenue-action-value,
-  .personal-revenue-action-source {
+  .personal-revenue-action-state {
     display: none;
   }
 

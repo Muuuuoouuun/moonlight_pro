@@ -22,7 +22,7 @@ const LABELS = {
   'integrations': 'Integrations', 'activity': 'Activity', 'issues': 'Issues',
 };
 
-export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSidebarOpen, onNew, navOpen, menuButtonRef, inquiryNotifications }) {
+export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSidebarOpen, onNew, navOpen, menuButtonRef, inquiryNotifications, onAdvisorOpen }) {
   const [deferredMenuOpen, setDeferredMenuOpen] = React.useState(false);
   const deferredMenuRef = React.useRef(null);
   const segments = path.split('/').filter(Boolean);
@@ -99,6 +99,8 @@ export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSideba
           <span className="mono" style={{ color: 'var(--fg)' }}>{weekday} · {m}/{d} · {hh}:{mm}</span>
         </div>
 
+        {/* AI 어드바이저 코파일럿 (⌘J) */}
+        <IconButton className="hub-topbar__secondary" icon="sparkle" tooltip="AI 어드바이저 (⌘J)" onClick={onAdvisorOpen} />
         {/* 보류 스코프(Agents) 상시 버튼 제거 — 코어 루프(고객 연락)가 그 자리를 갖는다. */}
         <IconButton className="hub-topbar__secondary" icon="signal" tooltip="고객 연락 열기" onClick={() => onNavigate('dashboard/revenue/followups')} />
         <button onClick={() => onTheme(theme === 'dark' ? 'light' : 'dark')}
