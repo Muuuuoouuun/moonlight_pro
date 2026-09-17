@@ -94,9 +94,11 @@ export function BrandMark({ brand, size = 18, active = false, style }) {
 }
 
 // 컨테이너 칩 — 이전 드롭다운 행은 2줄(이름 + "N개 새 변동 · 설명")에 우측 `7p/7t`
-// 칼럼까지 달려 4개만 떠도 세로가 과했다. 칩은 한 줄(마크 · 이름 · 프로젝트 수)로 줄이고
-// 나머지는 접근 가능한 이름과 툴팁으로 보존한다. 새 변동은 숫자 칩 대신 중립 문스톤 점
-// 하나 — 손실 신호가 아니다(DESIGN §5.2 no-warning-by-default).
+// 칼럼까지 달려 4개만 떠도 세로가 과했다. 칩은 한 줄(이름 · 프로젝트 수)로 줄이고
+// 나머지는 접근 가능한 이름과 툴팁으로 보존한다. 모노그램 마크는 뺐다 — 이름 앞 첫
+// 글자를 그대로 타일에 새기는 구조라 바로 옆 이름과 글자가 겹쳐 보였다(2026-09-15
+// 운영자 지시). 새 변동은 숫자 칩 대신 중립 문스톤 점 하나 — 손실 신호가 아니다
+// (DESIGN §5.2 no-warning-by-default).
 function ContainerChip({ container, count, selected, folderLabel, onSelect }) {
   const changes = container?.changes || 0;
   const name = container?.name || "컨테이너";
@@ -117,10 +119,7 @@ function ContainerChip({ container, count, selected, folderLabel, onSelect }) {
       data-container-chip={container?.key || "all"}
       onClick={() => onSelect(container?.key)}
     >
-      <span className="hub-pms-chip__mark">
-        <BrandMark brand={container} size={14} active={selected} />
-        {changes > 0 && <span className="hub-pms-chip__dot" aria-hidden="true" />}
-      </span>
+      {changes > 0 && <span className="hub-pms-chip__dot" aria-hidden="true" />}
       <span className="hub-pms-chip__name">{name}</span>
       <span className="hub-pms-chip__count mono">{count}</span>
     </button>

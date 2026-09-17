@@ -18,8 +18,8 @@ export const EMPTY_ALL_BRAND = {
 };
 
 export const PROJECT_VIEW_OPTIONS = [
-  { key: 'tree', label: 'List' },
-  { key: 'table', label: 'Table' },
+  { key: 'tree', label: '홈' },
+  { key: 'table', label: '목록' },
   { key: 'backlog', label: '백로그' },
   { key: 'board', label: 'Board' },
   { key: 'memos', label: '메모' },
@@ -184,5 +184,26 @@ export function buildLocalContainer(draft, slug) {
 export function normalizeProjectView(raw) {
   const v = String(raw || '');
   if (v === 'tasks') return 'todos';
+  // 2026-09-15 09-mac1: 홈/개요·목록 별칭도 받는다 (뷰 라벨 한글화와 함께).
+  if (v === 'home' || v === 'overview') return 'tree';
+  if (v === 'list') return 'table';
   return PROJECT_VIEWS.has(v) ? v : 'tree';
+}
+
+// D-Day 칩 — 09-mac1(2026-09-15)에서 옮겨옴. 톤은 DESIGN.md §5.2를 따른다: danger는 기한을
+// 넘긴 즉시-손실 상태에만, "오늘·임박"은 빨갛지 않고(no-warning-by-default) Moonstone은
+// current/selected 전용이라 카테고리(임박)에 쓰지 않는다. 강조가 필요하면 diffDays로
+// 굵기·순서를 조절한다.
+export function computeDDay(dueAt) {
+  if (!dueAt) return null;
+  const target = new Date(dueAt);
+  if (Number.isNaN(target.getTime())) return null;
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfTarget = new Date(target.getFullYear(), target.getMonth(), target.getDate()).getTime();
+  const diffDays = Math.round((startOfTarget - startOfToday) / (24 * 60 * 60 * 1000));
+
+  if (diffDays < 0) return { text: `D+${Math.abs(diffDays)}`, tone: 'danger', diffDays };
+  if (diffDays === 0) return { text: 'D-Day', tone: 'neutral', diffDays: 0 };
+  return { text: `D-${diffDays}`, tone: 'neutral', diffDays };
 }
