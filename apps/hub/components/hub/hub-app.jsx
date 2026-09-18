@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
+import "./hub-futura.css";
 import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
 
 import { Button, Skeleton } from "./hub-primitives";
@@ -64,6 +65,7 @@ function PageChunkFallback() {
 // from SSRing these pages, and every page carries its own loading/empty state.
 const lazyPage = (loader) => dynamic(loader, { loading: PageChunkFallback, ssr: false });
 
+const Home = lazyPage(() => import("./pages/home").then(m => m.Home));
 const DailyBrief = lazyPage(() => import("./pages/daily-brief").then(m => m.DailyBrief));
 const Overview = lazyPage(() => import("./pages/overview").then(m => m.Overview));
 const Calendar = lazyPage(() => import("./pages/work").then(m => m.Calendar));
@@ -195,6 +197,7 @@ function LegacyPlaceholder({ path, onNavigate }) {
 }
 
 const PAGE_MAP = {
+  'dashboard/home': (n) => <Home onNavigate={n} />,
   'dashboard/daily-brief': (n, inquiries) => <DailyBrief onNavigate={n} inquiryNotifications={inquiries} />,
   'dashboard/overview': (n) => <Overview onNavigate={n} />,
   'dashboard/work/my': (n) => <MyWork onNavigate={n} />,

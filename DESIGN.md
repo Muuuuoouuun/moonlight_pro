@@ -455,6 +455,7 @@ Do not ship:
 | Concern                            | Source of truth                                              |
 | ---------------------------------- | ------------------------------------------------------------ |
 | Tokens                             | `apps/hub/components/hub/hub-tokens.css`                     |
+| Futura 텍스처 레이어 (Home 전용)   | `apps/hub/components/hub/hub-futura.css`                     |
 | Icons                              | `apps/hub/components/hub/hub-icons.jsx`                      |
 | Primitives                         | `apps/hub/components/hub/hub-primitives.jsx`                 |
 | ⌘K catalog (`NAV_TREE`, `LEGACY_REDIRECTS`) | `apps/hub/components/hub/hub-data.js`                 |
@@ -496,3 +497,4 @@ Build order when adding a new surface:
 | 2026-09-16 | 허브 raw `ms` 리터럴 45건을 §9 토큰으로 전환(용도 기준: hover→--dur-hover, 진입/값 변화→--dur-enter+--ease-hub, 패널/디스클로저→--dur-panel, 오버레이→--dur-overlay, 지연→--stagger-step). celebration pop 260/300ms는 --dur-enter(200)로 스냅. `motion.test.mjs`가 저장소 전체를 훑어 재발을 막는다 | confirmed | 2026-09-04 아젠다가 실측한 23곳은 실제 45곳이었고 값 위반(240ms 초과)이 7곳. 규칙은 2026-07-29부터 있었으나 강제 장치가 없어 병합마다 늘었다. 축하 연출을 더 길게 원하면 임의 리터럴이 아니라 --dur-celebrate 토큰을 이 표에 추가하는 것이 맞다 |
 | 2026-09-16 | `SegmentedControl`의 휴지 chrome(색·배경)을 `.hub-seg`/`.hub-seg__btn`으로 이관하고 hover·활성 전이를 --dur-hover로 부여. 활성 정본은 aria-pressed 하나 | confirmed | Button(2026-09-15)과 같은 cascade — 인라인 색은 :hover와 전이를 죽인다. hover는 §5.2대로 글자 한 단계(--fg-faint→--fg-muted)만, 배경·accent 없음 |
 | 2026-09-16 | `Skeleton` primitive 신설 — 로딩은 `불러오는 중…` 한 줄이 아니라 레이아웃을 예고하는 스켈레톤으로. 라우트 청크 폴백(모든 페이지)·브랜드 목록·첫 화면 승인 큐·개인 지표 타일·프로젝트 table 본문에 채택. preview/error에는 쓰지 않는다 | confirmed | §11 "loading states are part of the design"인데 스켈레톤이 0개였다(2026-09-04 B2, 모바일 성능 체감 60점의 명명된 원인). 펄스는 §9의 라이브 인디케이터 단일 duration(mlMoonPulse 1.4s)을 그대로 써 새 duration을 만들지 않는다. 브랜드 로딩이 `EmptyState`("비어 있음" 의미)로 그려지던 것은 §5.3 truth 오용이라 함께 교정 |
+| 2026-09-18 | Futura 텍스처 레이어(`hub-futura.css`)와 `dashboard/home` 서피스 신설. 라이트 테마 기준의 2단 그림자·pill·넓은 여백·대형 라이트 디스플레이 제목을 `.hub-futura` 스코프 안에서만 쓴다. 기존 40여 페이지와 §7 고정 밀도·§8.1 1px 하이라인 계약은 그대로 둔다 | confirmed | 운영자가 Claude Design에서 5회 이터레이션해 `Moonlight Home.html`로 확정한 방향(Home A 트리아지 + 오늘의 시간표). 전면 전환이 아니라 레이어로 들인 이유: 텍스처가 §7 밀도(44/26px은 4·8·12·16·24·32·48 스케일 밖), §11 h2 20px(히어로 44px), §8.1 보더 대신 그림자 — 세 개의 기존 확정 결정과 부딪힌다. 한 화면에서 먼저 살아본 뒤 확장 여부를 정하는 편이 40개 페이지를 되돌리는 것보다 싸다. 카테고리 색은 도입하지 않았다 — 원안의 붉은 `REVENUE` 라벨은 §5.3대로 tone=danger(긴급)에만 `--danger`를 붙였다. Tweaks 밀도 토글은 §15 2026-07-21 결정(고정 밀도)을 뒤집으므로 이식하지 않았다 |

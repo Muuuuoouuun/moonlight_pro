@@ -37,13 +37,13 @@ function navTreePaths() {
 
 // Overview joined 2026-07-15 by direct operator instruction (see hub-nav.js
 // header); brands joined 2026-08-29 (브랜드 탭 설계 §5.2 — 프로젝트 다음, 콘텐츠 앞)
-// — nine primary + two utility anchors.
-test("sidebar exposes exactly nine primary and two utility anchors", () => {
-  assert.equal(SIDEBAR_PRIMARY.length, 9);
+// — ten primary + two utility anchors (home 추가, 2026-09-18).
+test("sidebar exposes exactly ten primary and two utility anchors", () => {
+  assert.equal(SIDEBAR_PRIMARY.length, 10);
   assert.equal(SIDEBAR_UTILITIES.length, 2);
   assert.deepEqual(
     SIDEBAR_PRIMARY.map((a) => a.key),
-    ["today", "overview", "tasks", "revenue", "followups", "discovery", "projects", "brands", "content"],
+    ["home", "today", "overview", "tasks", "revenue", "followups", "discovery", "projects", "brands", "content"],
   );
 });
 
