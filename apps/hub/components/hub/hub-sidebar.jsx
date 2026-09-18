@@ -11,7 +11,6 @@ import {
   DEFAULT_SCOPE,
   deriveSidebarScope,
   isSidebarAnchorActive,
-  isSidebarChildActive,
   normalizeScope,
   ownerAnchorKey,
   pathnameOf,
@@ -162,42 +161,22 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeSc
     'aria-current': isSidebarAnchorActive(a.key, active, view) ? 'page' : undefined,
   });
 
-  // 텍스트 전용 내비 — 아이콘·색점은 §15 2026-09-19에 제거됐다(목록 소음).
-  // 현재 섹션만 하위 목적지를 펼친다. 옛 아코디언의 부활이 아니다: 그건 workspace ×
-  // function 두 축을 섞어 같은 표면을 두 번 보여준 게 문제였고, 여기는 기능 축 하나만
-  // 펼치며 caret 토글도 없다(현재 위치가 곧 펼침 상태).
+  // Sidebar stays one level deep. Contextual destinations are rendered as
+  // horizontal top tabs by TopBar, so the operator never has to expand a tree.
+  // 2026-09-19 Futura 패스는 *외형만* 바꿨다 — 아이콘·색점을 빼고 현재 항목을
+  // pill로 띄웠을 뿐, 깊이와 이동 동작은 그대로다(운영자: "기능은 유지").
   const renderAnchor = (a, small) => {
-    const anchorActive = isSidebarAnchorActive(a.key, active, view);
-    const children = anchorActive && !small ? sidebarChildren(a.key, scope) : [];
-    // 탑바와 같은 가시성 규칙 — deferred 목적지는 그 위에 서 있을 때만 보인다.
-    const visible = children.filter(c => !c.deferred || isSidebarChildActive(a.key, c.path, active, view));
     return (
-      <React.Fragment key={a.key}>
-        <button
-          type="button"
-          className={small ? 'hub-nav-item hub-nav-item--sm' : 'hub-nav-item'}
-          aria-current={anchorActive ? 'page' : undefined}
-          onClick={() => go(a.key)}
-        >
-          <span style={{ flex: 1 }}>{a.label}</span>
-          <CountBadge n={counts[a.key]} />
-        </button>
-        {visible.length > 0 && (
-          <div className="fx-nav-children">
-            {visible.map(c => (
-              <button
-                key={c.key}
-                type="button"
-                className="fx-nav-child"
-                aria-current={isSidebarChildActive(a.key, c.path, active, view) ? 'page' : undefined}
-                onClick={() => onNavigate(c.path)}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </React.Fragment>
+      <button
+        key={a.key}
+        type="button"
+        className={small ? 'hub-nav-item hub-nav-item--sm' : 'hub-nav-item'}
+        aria-current={isSidebarAnchorActive(a.key, active, view) ? 'page' : undefined}
+        onClick={() => go(a.key)}
+      >
+        <span style={{ flex: 1 }}>{a.label}</span>
+        <CountBadge n={counts[a.key]} />
+      </button>
     );
   };
 

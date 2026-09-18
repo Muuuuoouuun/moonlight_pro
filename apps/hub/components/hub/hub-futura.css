@@ -497,40 +497,6 @@
   box-shadow: var(--fx-shadow);
 }
 
-/* 현재 섹션의 하위 목적지. 옛 아코디언(workspace × function 혼재)의 부활이 아니라
-   기능 축 하나만 펼친다 — 그래서 caret 토글도, 워크스페이스 반복도 없다(§15 2026-09-19). */
-.hub-app .fx-nav-children {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  margin: 2px 0 6px;
-}
-
-.hub-app .fx-nav-child {
-  width: 100%;
-  display: block;
-  text-align: left;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  font-size: 12.5px;
-  color: var(--fg-dim);
-  padding: 7px 10px 7px 22px;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  transition:
-    color var(--dur-hover) var(--ease-hub),
-    background-color var(--dur-hover) var(--ease-hub),
-    box-shadow var(--dur-hover) var(--ease-hub);
-}
-
-.hub-app .fx-nav-child:hover { color: var(--fg); }
-
-.hub-app .fx-nav-child[aria-current="page"] {
-  color: var(--fg);
-  background: var(--surface);
-  box-shadow: var(--fx-shadow);
-}
 
 /* 검색 · 사용자 카드 — 같은 "떠 있는 흰 면" 어휘 */
 .hub-app .fx-shell-card {
@@ -569,9 +535,3 @@
 .hub-app .hub-seg { border-radius: var(--fx-pill); }
 .hub-app .hub-seg__btn { border-radius: var(--fx-pill); }
 
-/* 탑바 탭 줄 — 데스크톱에선 사이드바가 현재 섹션의 하위 목적지를 이미 펼치므로
- * 같은 목록이 두 줄이 된다. 900px 이하에선 사이드바가 오버레이로 접히니 탑바가
- * 유일한 2차 내비라 그대로 둔다(§15 2026-09-19). */
-@media (min-width: 901px) {
-  .hub-app .hub-topbar__tabs { display: none; }
-}
