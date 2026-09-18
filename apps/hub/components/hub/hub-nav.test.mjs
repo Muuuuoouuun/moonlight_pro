@@ -7,6 +7,7 @@ import {
   DEFAULT_EXPANDED_ANCHORS,
   DEFAULT_SCOPE,
   SIDEBAR_ANCHORS,
+  PAGE_OWNS_TABS,
   SIDEBAR_PRIMARY,
   SIDEBAR_SCOPES,
   SIDEBAR_UTILITIES,
@@ -211,11 +212,32 @@ test("second-level destinations resolve into the top bar with one active tab", (
   assert.equal(today.activeTab, null);
 });
 
-test("sidebar is one level deep and the top bar owns contextual tabs", () => {
+// 2026-09-19: 사이드바는 "한 단계"에서 "현재 섹션만 펼침"으로 바뀌었다(운영자 확정).
+// 옛 아코디언의 부활이 아니다 — 금지 대상은 여전히 caret 토글이다. 펼침 여부는
+// 사용자가 여는 게 아니라 현재 위치가 결정하므로 "어디에 사는가"를 먼저 묻게 되지 않는다.
+test("sidebar expands only the current section, with no caret toggle", () => {
   assert.doesNotMatch(sidebarSource, /hub-nav-caret|hub-nav-sublist|hub-nav-subgroup/);
+  // 펼침은 현재 앵커일 때만 — 전역 펼침이나 수동 토글 상태가 없어야 한다.
+  assert.match(sidebarSource, /const children = anchorActive && !small \? sidebarChildren\(a\.key, scope\) : \[\]/);
+  assert.match(sidebarSource, /className="fx-nav-child"/);
+  assert.match(sidebarSource, /isSidebarChildActive\(a\.key, c\.path, active, view\)/);
+  // 내비 행은 텍스트 전용 — 확장 사이드바에 아이콘 글리프가 남지 않는다.
+  assert.doesNotMatch(
+    sidebarSource.slice(sidebarSource.indexOf("const renderAnchor"), sidebarSource.indexOf("if (collapsed)")),
+    /<Iconed/,
+  );
+});
+
+test("the top bar owns contextual tabs except where a page draws its own", () => {
   assert.match(topbarSource, /topNavigationForRoute\(path, scope, view\)/);
   assert.match(topbarSource, /className="hub-topbar__tabs"/);
   assert.match(topbarSource, /aria-current=\{selected \? 'page' : undefined\}/);
+  // Futura 라우트는 페이지 헤더가 pill 탭을 그리므로 탑바는 같은 줄을 또 그리지 않는다.
+  assert.match(topbarSource, /!pageOwnsTabs\(path\)/);
+  assert.ok(PAGE_OWNS_TABS.has("dashboard/work/decisions"));
+  for (const route of PAGE_OWNS_TABS) {
+    assert.ok(topNavigationForRoute(route, "all").tabs.length > 0, `${route} must still resolve tabs`);
+  }
 });
 
 // ── Mobile navigation accessibility contract ─────────────────────────────

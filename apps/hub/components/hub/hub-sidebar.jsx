@@ -11,6 +11,7 @@ import {
   DEFAULT_SCOPE,
   deriveSidebarScope,
   isSidebarAnchorActive,
+  isSidebarChildActive,
   normalizeScope,
   ownerAnchorKey,
   pathnameOf,
@@ -161,21 +162,42 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeSc
     'aria-current': isSidebarAnchorActive(a.key, active, view) ? 'page' : undefined,
   });
 
-  // Sidebar stays one level deep. Contextual destinations are rendered as
-  // horizontal top tabs by TopBar, so the operator never has to expand a tree.
+  // 텍스트 전용 내비 — 아이콘·색점은 §15 2026-09-19에 제거됐다(목록 소음).
+  // 현재 섹션만 하위 목적지를 펼친다. 옛 아코디언의 부활이 아니다: 그건 workspace ×
+  // function 두 축을 섞어 같은 표면을 두 번 보여준 게 문제였고, 여기는 기능 축 하나만
+  // 펼치며 caret 토글도 없다(현재 위치가 곧 펼침 상태).
   const renderAnchor = (a, small) => {
+    const anchorActive = isSidebarAnchorActive(a.key, active, view);
+    const children = anchorActive && !small ? sidebarChildren(a.key, scope) : [];
+    // 탑바와 같은 가시성 규칙 — deferred 목적지는 그 위에 서 있을 때만 보인다.
+    const visible = children.filter(c => !c.deferred || isSidebarChildActive(a.key, c.path, active, view));
     return (
-      <button
-        key={a.key}
-        type="button"
-        className={small ? 'hub-nav-item hub-nav-item--sm' : 'hub-nav-item'}
-        aria-current={isSidebarAnchorActive(a.key, active, view) ? 'page' : undefined}
-        onClick={() => go(a.key)}
-      >
-        <Iconed name={a.icon} size={small ? 14 : 15} />
-        <span style={{ flex: 1 }}>{a.label}</span>
-        <CountBadge n={counts[a.key]} />
-      </button>
+      <React.Fragment key={a.key}>
+        <button
+          type="button"
+          className={small ? 'hub-nav-item hub-nav-item--sm' : 'hub-nav-item'}
+          aria-current={anchorActive ? 'page' : undefined}
+          onClick={() => go(a.key)}
+        >
+          <span style={{ flex: 1 }}>{a.label}</span>
+          <CountBadge n={counts[a.key]} />
+        </button>
+        {visible.length > 0 && (
+          <div className="fx-nav-children">
+            {visible.map(c => (
+              <button
+                key={c.key}
+                type="button"
+                className="fx-nav-child"
+                aria-current={isSidebarChildActive(a.key, c.path, active, view) ? 'page' : undefined}
+                onClick={() => onNavigate(c.path)}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </React.Fragment>
     );
   };
 
@@ -238,9 +260,8 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeSc
   }
 
   return (
-    <aside {...sidebarA11yProps} ref={setSidebarRef} onKeyDown={handleMobileKeyDown} className={className} aria-label="주요 메뉴" style={{
+    <aside {...sidebarA11yProps} ref={setSidebarRef} onKeyDown={handleMobileKeyDown} className={`hub-sidebar-futura${className ? ` ${className}` : ''}`} aria-label="주요 메뉴" style={{
       width: 232, flexShrink: 0,
-      background: 'var(--surface)',
       borderRight: '1px solid var(--line-soft)',
       display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
@@ -248,10 +269,11 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeSc
       <div style={{ padding: '14px 14px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
           <div style={{
-            width: 22, height: 22, borderRadius: 999,
-            background: 'radial-gradient(circle at 35% 30%, var(--moon-100), var(--moon-400) 60%, var(--moon-700))',
-            boxShadow: '0 0 12px color-mix(in oklch, var(--moon-300) 30%, transparent), inset 0 -1px 2px oklch(0 0 0 / 0.5)',
-          }} />
+            width: 24, height: 24, borderRadius: 'var(--r-sm)',
+            background: 'var(--fg)', color: 'var(--bg)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 12, fontWeight: 600, letterSpacing: '-0.02em',
+          }} aria-hidden="true">M</div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em' }}>Moonlight</div>
             <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.05em', marginTop: -1 }}>HUB · PRO</div>
@@ -270,12 +292,10 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeSc
       </div>
 
       <div style={{ padding: '4px 12px 8px' }}>
-        <button onClick={openPalette} style={{
+        <button onClick={openPalette} className="fx-shell-card" style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-          height: 30, padding: '0 10px',
-          background: 'var(--surface-2)',
-          border: '1px solid var(--line-soft)',
-          borderRadius: 'var(--r-sm)',
+          height: 34, padding: '0 12px',
+          border: 0,
           color: 'var(--fg-faint)', fontSize: 12,
         }}>
           <Iconed name="search" size={13} />
@@ -304,8 +324,8 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeSc
         {SIDEBAR_UTILITIES.map(a => renderAnchor(a, true))}
       </div>
 
-      <div style={{
-        padding: '10px 12px', borderTop: '1px solid var(--line-soft)',
+      <div className="fx-shell-card" style={{
+        margin: '8px 12px 12px', padding: '9px 11px',
         display: 'flex', alignItems: 'center', gap: 9,
       }}>
         <Avatar name="문준혁" size={26} />

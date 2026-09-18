@@ -206,7 +206,7 @@ const PAGE_MAP = {
   'dashboard/work/daily-review': () => <DailyReview />,
   'dashboard/work/calendar': (n) => <Calendar onNavigate={n} />,
   'dashboard/work/projects': () => <Projects />,
-  'dashboard/work/decisions': () => <Decisions />,
+  'dashboard/work/decisions': (n, _inquiries, scope) => <Decisions onNavigate={n} scope={scope} />,
   'dashboard/work/roadmap': (n) => <Roadmap onNavigate={n} />,
   'dashboard/work/rhythm': () => <Rhythm />,
   'dashboard/brands': () => <Brands />,
@@ -530,7 +530,8 @@ export function HubApp({ memoDraftContext = "preview" }) {
   }, [path, routeScope, navScope]);
 
   const render = PAGE_MAP[path];
-  const page = render ? render(navigate, inquiryNotifications) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
+  // 3번째 인자(scope)는 뒤늦게 붙었다 — 기존 항목은 추가 인자를 무시하므로 하위 호환된다.
+  const page = render ? render(navigate, inquiryNotifications, routeScope || navScope) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
   const sidebarCollapsed = collapsed && !navOpen;
 
   return (

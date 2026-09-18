@@ -10,7 +10,7 @@
  *   헤더 34~52px 라이트 디스플레이 제목 + 대문자 트래킹 라벨, 지표 숫자 38px
  *   페이지 패딩 48px, 섹션 간격 44px, 카드 패딩 26px
  */
-.hub-app .hub-futura {
+.hub-app {
   /* 여백 — Futura 스케일. §7 스케일(4·8·12·16·24·32·48·64·96)에 없는 44/26은
      이 레이어 전용 토큰으로만 존재하고 페이지에 raw 값으로 흩어지지 않는다. */
   --fx-page-pad: 48px;
@@ -33,7 +33,7 @@
   --fx-shadow-lift: 0 2px 6px oklch(0 0 0 / 0.07), 0 20px 40px -16px oklch(0 0 0 / 0.22);
 }
 
-.hub-app[data-theme="dark"] .hub-futura {
+.hub-app[data-theme="dark"] {
   --fx-shadow: 0 1px 2px oklch(0 0 0 / 0.5), 0 10px 28px -14px oklch(0 0 0 / 0.7);
   --fx-shadow-lift: 0 2px 6px oklch(0 0 0 / 0.55), 0 20px 40px -16px oklch(0 0 0 / 0.8);
 }
@@ -310,4 +310,268 @@
   .hub-app .hub-futura { padding: 24px 16px; gap: 32px; }
   .hub-app .fx-split { grid-template-columns: 1fr; gap: 20px; }
   .hub-app .hub-futura { --fx-hero: 30px; --fx-title: 21px; --fx-card-pad: 18px; }
+}
+
+/* ── 페이지 헤더 (섹션 eyebrow + 대형 제목 + 부제) ──────────────
+ * 셀렉터는 전부 `.hub-app`으로 스코프를 올린다 — `.hub-app button`(0,1,1) 리셋이
+ * `.fx-*`(0,1,0)를 이기기 때문(§15 2026-09-15의 cascade 함정).
+ */
+.hub-app .fx-page-title {
+  font-size: var(--fx-hero);
+  font-weight: var(--fx-hero-weight);
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  color: var(--fg);
+  margin: 14px 0 0;
+}
+
+.hub-app .fx-page-sub {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  margin: 14px 0 0;
+  max-width: 60ch;
+  line-height: 1.6;
+}
+
+/* ── 인페이지 pill 탭 ─────────────────────────────────────────── */
+.hub-app .fx-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 28px;
+}
+
+.hub-app .fx-tab {
+  border: 0;
+  background: transparent;
+  border-radius: var(--fx-pill);
+  padding: 8px 18px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-hover) var(--ease-hub),
+    box-shadow var(--dur-hover) var(--ease-hub),
+    color var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .fx-tab:hover { color: var(--fg); }
+
+.hub-app .fx-tab[aria-current="page"] {
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: var(--fx-shadow);
+}
+
+/* ── 섹션 도입부 ──────────────────────────────────────────────── */
+.hub-app .fx-section-title {
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+  margin: 0;
+}
+
+.hub-app .fx-section-desc {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  line-height: 1.6;
+  margin: 6px 0 0;
+  max-width: 62ch;
+}
+
+/* ── 결정 타임라인 ────────────────────────────────────────────── */
+.hub-app .fx-timeline-rail { position: relative; padding-left: 34px; }
+
+.hub-app .fx-timeline-rail::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 12px;
+  bottom: 12px;
+  width: 1px;
+  background: var(--line-soft);
+}
+
+.hub-app .fx-tl-item { position: relative; margin-bottom: var(--fx-gap); }
+
+/* §8.1 자매 마커(로드맵 노드)와 같은 1px 링 관례를 유지한다. */
+.hub-app .fx-tl-dot {
+  position: absolute;
+  left: -34px;
+  top: 22px;
+  width: 11px;
+  height: 11px;
+  border-radius: var(--fx-pill);
+  background: var(--bg);
+  border: 1px solid var(--moon-400);
+}
+
+.hub-app .fx-tl-card {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  display: block;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  padding: var(--fx-card-pad);
+  box-shadow: var(--fx-shadow);
+  transition: box-shadow var(--dur-hover) var(--ease-hub), transform var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .fx-tl-card:hover { box-shadow: var(--fx-shadow-lift); transform: translateY(-2px); }
+
+.hub-app .fx-tl-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.hub-app .fx-tl-date {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.hub-app .fx-tl-by { font-size: 11px; color: var(--fg-faint); }
+
+.hub-app .fx-tl-title {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+  margin-bottom: 7px;
+}
+
+.hub-app .fx-tl-reason {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  line-height: 1.6;
+}
+
+
+@media (max-width: 900px) {
+  .hub-app .fx-timeline-rail { padding-left: 24px; }
+  .hub-app .fx-tl-dot { left: -24px; }
+  .hub-app .fx-tabs { margin-top: 20px; }
+}
+
+/* ═══ 셸 질감 (사이드바 · 검색 · 사용자 카드) ═══════════════════
+ * hub-app.jsx가 hub-tokens.css 다음에 이 파일을 import하므로, 같은 특이도(0,2,0)
+ * 규칙은 여기 것이 이긴다. 인라인 스타일만 이기지 못한다(§15 2026-09-15).
+ */
+
+/* 사이드바 면 — 흰 pill이 떠 보이려면 바닥이 한 단계 내려가야 한다. */
+.hub-app .hub-sidebar-futura {
+  background: var(--surface-2);
+  border-right-color: var(--line-soft);
+}
+
+/* 내비 행 — 아이콘·점 없이 텍스트만. 현재 항목만 흰 pill + 그림자로 뜬다. */
+.hub-app .hub-nav-item {
+  height: 34px;
+  font-size: 13px;
+  font-weight: 400;
+  border-left: 0;
+  border-radius: var(--r-sm);
+  transition:
+    background-color var(--dur-hover) var(--ease-hub),
+    color var(--dur-hover) var(--ease-hub),
+    box-shadow var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .hub-nav-item:hover { background: transparent; color: var(--fg); }
+
+.hub-app .hub-nav-item[aria-current="page"] {
+  color: var(--fg);
+  font-weight: 500;
+  background: var(--surface);
+  border-left-color: transparent;
+  box-shadow: var(--fx-shadow);
+}
+
+/* 현재 섹션의 하위 목적지. 옛 아코디언(workspace × function 혼재)의 부활이 아니라
+   기능 축 하나만 펼친다 — 그래서 caret 토글도, 워크스페이스 반복도 없다(§15 2026-09-19). */
+.hub-app .fx-nav-children {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 2px 0 6px;
+}
+
+.hub-app .fx-nav-child {
+  width: 100%;
+  display: block;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--fg-dim);
+  padding: 7px 10px 7px 22px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition:
+    color var(--dur-hover) var(--ease-hub),
+    background-color var(--dur-hover) var(--ease-hub),
+    box-shadow var(--dur-hover) var(--ease-hub);
+}
+
+.hub-app .fx-nav-child:hover { color: var(--fg); }
+
+.hub-app .fx-nav-child[aria-current="page"] {
+  color: var(--fg);
+  background: var(--surface);
+  box-shadow: var(--fx-shadow);
+}
+
+/* 검색 · 사용자 카드 — 같은 "떠 있는 흰 면" 어휘 */
+.hub-app .fx-shell-card {
+  background: var(--surface);
+  border-radius: var(--r);
+  box-shadow: var(--fx-shadow);
+}
+
+/* ═══ 컴포넌트 질감 ═════════════════════════════════════════════
+ * Button/IconButton/Input은 §15 2026-09-15 이후 chrome을 CSS가 소유한다.
+ * 여기서 radius와 그림자만 Futura 어휘로 덮는다 — 색은 §5.2 그대로 둔다.
+ */
+.hub-app .hub-btn {
+  border-radius: var(--fx-pill);
+  box-shadow: var(--fx-shadow);
+}
+
+.hub-app .hub-btn:hover { box-shadow: var(--fx-shadow-lift); }
+
+.hub-app .hub-btn--ghost { box-shadow: none; }
+.hub-app .hub-btn--ghost:hover { box-shadow: none; }
+
+.hub-app .hub-iconbtn { border-radius: var(--fx-pill); }
+
+.hub-app .hub-input { border-radius: var(--fx-pill); }
+
+/* 카드 — 보더 대신 그림자가 면을 분리한다 */
+.hub-app .hub-card {
+  border-color: transparent;
+  box-shadow: var(--fx-shadow);
+}
+
+.hub-app .hub-card-link:hover { box-shadow: var(--fx-shadow-lift); }
+
+/* 세그먼트 컨트롤 — pill */
+.hub-app .hub-seg { border-radius: var(--fx-pill); }
+.hub-app .hub-seg__btn { border-radius: var(--fx-pill); }
+
+/* 탑바 탭 줄 — 데스크톱에선 사이드바가 현재 섹션의 하위 목적지를 이미 펼치므로
+ * 같은 목록이 두 줄이 된다. 900px 이하에선 사이드바가 오버레이로 접히니 탑바가
+ * 유일한 2차 내비라 그대로 둔다(§15 2026-09-19). */
+@media (min-width: 901px) {
+  .hub-app .hub-topbar__tabs { display: none; }
 }

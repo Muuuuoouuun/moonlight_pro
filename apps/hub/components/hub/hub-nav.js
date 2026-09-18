@@ -15,6 +15,17 @@
 
 export const DEFAULT_SCOPE = 'all';
 
+// Futura 텍스처 라우트는 페이지 헤더 안에 pill 탭을 직접 그린다(§15 2026-09-18).
+// 탑바가 같은 탭을 또 그리면 한 화면에 탭 줄이 두 개가 된다. 목록은 여기 한 곳이
+// 정본이고, 탭 데이터 자체(topNavigationForRoute)는 그대로 — 위치만 페이지로 옮긴다.
+export const PAGE_OWNS_TABS = new Set([
+  'dashboard/work/decisions',
+]);
+
+export function pageOwnsTabs(activePath) {
+  return PAGE_OWNS_TABS.has(pathnameOf(activePath));
+}
+
 export const SIDEBAR_SCOPES = [
   { key: 'all', label: '전체' },
   { key: 'classin', label: 'ClassIn' },
