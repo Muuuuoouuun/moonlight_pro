@@ -81,4 +81,5 @@ node scripts/apply-migrations.mjs 20260913_0029_opportunity_discovery.sql
 - 검증된 통합 커밋 `f4a0f5f`에서 `codex/discovery-release`를 원격에 게시했다. 다른 세션의 이후 PMS 변경은 배포 후보에 포함하지 않았다.
 - 첫 CI에서 기존 반복 업무 테스트 2개가 UTC/KST 날짜 경계 때문에 실패했다. 고정 날짜와 명시적인 now를 사용해 수정했고 UTC 전체 테스트 1007 passed / 0 failed / 4 skipped를 확인했다.
 - Vercel은 기존 `/api/cron/inquiries-sync`의 `*/5 * * * *`를 Hobby 요금제에서 거부했다. 문의 동기화 주기 변경 여부를 운영자에게 질문했으며, 답변 전 설정을 변경하지 않는다. 운영 화면은 아직 배포하지 않았다.
+- 2026-09-17 운영자가 문의 동기화 주기를 일 1회로 확정했다. `apps/hub/vercel.json`의 `/api/cron/inquiries-sync`를 `0 21 * * *`(KST 06:00, 아침 크론 체인 앞)로 바꿔 별도 PR(브랜치 `claude/nice-hawking-8b04jt-vercel-cron-daily`)로 처리했다. PR #3 프리뷰 배포가 일간 크론 5개 등록 상태로 성공해, 문서상 Hobby 크론 2개 제한은 배포를 막지 않았다.
 - 기존 의존성 보안 검사 실패를 호환 범위의 lockfile 업데이트로 해결했다(Next 16.2.7 → 16.3.5 포함). 업데이트 후 보안 경고 0건, typecheck·contracts·ClassIn 검사·전체 테스트·Hub/Engine build 통과. 새 production build의 기회 탐색 페이지와 생성 drawer도 브라우저에서 확인했다.
