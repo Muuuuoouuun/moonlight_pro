@@ -57,9 +57,36 @@ test("호스팅 환경에서는 loopback 우회가 아예 꺼진다", () => {
   assert.equal(resolveRouteAccess({ ...onVercel, host: "localhost", hasSession: true }).action, "allow");
 });
 
-test("미들웨어가 호스팅 환경에서 loopback 우회를 끈다", async () => {
+test("미들웨어가 프로덕션 런타임에서 loopback 우회를 끈다", async () => {
   const source = await readFile(new URL("../middleware.js", import.meta.url), "utf8");
-  assert.match(source, /allowLoopback:\s*!process\.env\.VERCEL/, "VERCEL 에서 loopback 우회를 끄는 배선이 없다");
+  // `!process.env.VERCEL` 은 축이 틀렸다 — 자체 호스팅·터널 뒤에서 우회가 다시 켜진다.
+  assert.doesNotMatch(source, /allowLoopback:\s*!process\.env\.VERCEL/, "VERCEL 축은 자체 호스팅에서 뚫린다");
+  assert.match(source, /allowLoopback:\s*process\.env\.NODE_ENV !== "production"/, "프로덕션 런타임에서 loopback 우회를 끄는 배선이 없다");
+});
+
+test("matcher 가 확장자 캐치올로 게이트를 끄지 않는다", async () => {
+  // `.*\.(png|svg|…)$` 대안은 정적 디렉터리 한정이 아니라 경로 어디든 그 확장자로 끝나면
+  // 미들웨어를 통째로 끈다. 실측(2026-09-20): `/api/hub/inquiries/x.png` 가 200 으로 통과했다.
+  const source = await readFile(new URL("../middleware.js", import.meta.url), "utf8");
+  const matcher = /matcher:\s*\[([^\]]*)\]/.exec(source);
+  assert.ok(matcher, "matcher 를 찾지 못했다");
+  assert.doesNotMatch(matcher[1], /\.\*\\\\\./, "확장자 캐치올(.*\\.) 이 남아 있다");
+
+  // 실제 정규식으로 허브 API 가 걸러지지 않는지 확인한다.
+  const pattern = new RegExp(`^${JSON.parse(matcher[1].trim().replace(/,$/, ""))}$`);
+  for (const path of ["/api/hub/revenue", "/api/hub/inquiries/x.png", "/dashboard/revenue.png", "/dashboard"]) {
+    assert.ok(pattern.test(path), `${path} 가 미들웨어 대상에서 빠졌다`);
+  }
+  for (const path of ["/_next/static/chunk.js", "/fonts/SUIT-Variable.woff2", "/favicon.ico", "/manifest.json"]) {
+    assert.ok(!pattern.test(path), `${path} 는 정적 자산이라 통과해야 한다`);
+  }
+});
+
+test("dev 서버가 loopback 에만 바인딩된다", async () => {
+  // `next dev` 기본값은 0.0.0.0 이라 같은 네트워크의 아무 기기나 닿는다. 그 상태에서
+  // Host: localhost 를 위조하면 loopback 분기가 열려 원장이 통째로 나갔다(2026-09-20 실측: 183KB).
+  const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.match(pkg.scripts.dev, /-H 127\.0\.0\.1/, "dev 서버가 LAN 에 노출된다");
 });
 
 test("배포 도메인이 loopback 으로 오인되지 않는다", () => {
