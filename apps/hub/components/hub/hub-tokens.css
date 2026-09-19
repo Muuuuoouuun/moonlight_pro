@@ -203,6 +203,25 @@
 /* Keyboard-only focus ring (§11: never rely on browser defaults) — :focus-visible so a mouse
    click doesn't leave a ring, only Tab/roving-arrow-key navigation does. */
 .hub-app .hub-row:focus-visible { outline: 1px solid var(--moon-300); outline-offset: -2px; }
+/* 행 보조 액션(내 작업의 숨기기) — 휴지 상태에서는 제목·기한의 위계를 건드리지 않고,
+   hover/키보드 포커스에서만 드러난다. hover가 없는 터치 기기에서는 아예 렌더 공간을
+   차지하지 않게 감춘다(보이지 않는 탭 타깃 금지) — 그쪽에서는 행을 눌러 여는 상세
+   패널의 "숨기기" 액션이 같은 일을 한다. */
+.hub-app .hub-row-action {
+  display: inline-flex; align-items: center; flex-shrink: 0;
+  /* 휴지 상태는 보이지도, 눌리지도 않는다 — opacity만 0으로 두면 투명한 탭 타깃이 남아
+     행을 열려던 클릭을 가로챈다. */
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--dur-hover) ease;
+}
+.hub-app .hub-row:hover .hub-row-action,
+.hub-app .hub-row:focus-within .hub-row-action,
+.hub-app .hub-row-action[data-open="true"] { opacity: 1; pointer-events: auto; }
+/* 래퍼에 클래스를 거는 이유: IconButton은 display를 인라인으로 쓰기 때문에 버튼 자신에
+   건 display 규칙은 절대 이기지 못한다(§15 2026-09-15의 인라인-이 클래스를-이긴다와 같은 함정). */
+@media (hover: none) { .hub-app .hub-row-action { display: none; } }
+@media (prefers-reduced-motion: reduce) { .hub-app .hub-row-action { transition: none; } }
+
 /* Interactive card (border emphasis instead of bg fill) — same no-JS-hover contract as .hub-row
    for card-shaped click targets like quick-command tiles. */
 .hub-app .hub-card-link { border: 1px solid var(--line-soft); transition: border-color var(--dur-hover) ease, transform var(--dur-hover) ease; }
