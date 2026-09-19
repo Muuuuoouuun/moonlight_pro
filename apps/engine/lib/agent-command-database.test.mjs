@@ -1,3 +1,7 @@
+// macOS: LC_ALL 이 없으면 postmaster 가 기동 중 multithreaded 로 판정되어
+// `FATAL: postmaster became multithreaded during startup` 으로 죽는다 (2026-09-19).
+// DB 로케일은 initdb --no-locale 로 이미 C 이므로 동작은 바뀌지 않고,
+// 서버 메시지가 영어가 되어 Linux CI 와 같아진다.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -27,7 +31,7 @@ test('agent command PostgreSQL transaction contract', async t => {
   const root = await mkdtemp(join(tmpdir(), 'moon-agent-commands-'));
   const data = join(root, 'data'); let running = false;
   const run = (name, args, input) => {
-    const result = spawnSync(join(bin, name), args, { encoding: 'utf8', input, timeout: 30000 });
+    const result = spawnSync(join(bin, name), args, { encoding: 'utf8', input, timeout: 30000, env: { ...process.env, LC_ALL: process.env.LC_ALL || 'C' } });
     assert.equal(result.status, 0, `${name}: ${result.stderr || result.error || result.stdout}`);
     return result.stdout.trim();
   };

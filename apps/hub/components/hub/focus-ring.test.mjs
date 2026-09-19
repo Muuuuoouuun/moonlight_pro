@@ -7,7 +7,7 @@ import { test } from "node:test";
 // 한 파일만 읽고 "전역"이라고 적으면 다음 위반을 그대로 통과시킨다 (content-studio.css가 그랬다).
 async function collectStyleSources(dir, acc = []) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
-    if (entry.name === "node_modules" || entry.name === ".next") continue;
+    if (entry.name === "node_modules" || entry.name.startsWith(".next")) continue;
     const child = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, dir);
     if (entry.isDirectory()) await collectStyleSources(child, acc);
     else if (/\.(css|jsx|js)$/.test(entry.name) && !/\.test\.mjs$/.test(entry.name)) {

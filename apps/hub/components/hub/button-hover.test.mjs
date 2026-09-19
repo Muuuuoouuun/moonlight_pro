@@ -233,7 +233,7 @@ test("every high-specificity descendant button rule under apps/hub is audited (D
   const files = [];
   const walk = async (d) => {
     for (const e of await readdir(d, { withFileTypes: true })) {
-      if (e.name === "node_modules" || e.name === ".next") continue;
+      if (e.name === "node_modules" || e.name.startsWith(".next")) continue;
       const child = new URL(`${e.name}${e.isDirectory() ? "/" : ""}`, d);
       if (e.isDirectory()) await walk(child);
       else if (e.name.endsWith(".css")) files.push(child);

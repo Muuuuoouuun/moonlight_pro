@@ -13,7 +13,7 @@ import { test } from "node:test";
 // - JS 숫자 상수(STRIKE_MS = 180)와 주석은 선언 값이 아니라 대상이 아니다.
 async function collect(dir, acc = []) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
-    if (entry.name === "node_modules" || entry.name === ".next") continue;
+    if (entry.name === "node_modules" || entry.name.startsWith(".next")) continue;
     const child = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, dir);
     if (entry.isDirectory()) await collect(child, acc);
     else if (/\.(css|jsx|js)$/.test(entry.name) && !/\.test\.mjs$/.test(entry.name)) {

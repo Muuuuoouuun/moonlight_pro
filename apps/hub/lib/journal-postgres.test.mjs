@@ -1,3 +1,6 @@
+// macOS: LC_ALL 이 없으면 postmaster 가 기동 중 multithreaded 로 판정되어
+// `FATAL: postmaster became multithreaded during startup` 으로 죽는다 (2026-09-19).
+// DB 로케일은 initdb --no-locale 로 이미 C 이므로 동작은 바뀌지 않는다.
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -31,8 +34,8 @@ test('journal PostgreSQL atomic persistence, reuse, isolation and permissions', 
   const run = async (source) => JSON.parse((await promisify(execFile)('psql', [...args, '-c', source])).stdout.trim());
   let started = false;
   try {
-    execFileSync('initdb', ['-D', data, '-U', 'journal_test', '-A', 'trust', '--no-locale', '--encoding=UTF8'], { stdio: 'pipe' });
-    execFileSync('pg_ctl', ['-D', data, '-l', join(directory, 'postgres.log'), '-o', `-F -k ${directory} -p 55493 -c listen_addresses=''`, '-w', 'start'], { stdio: 'pipe' });
+    execFileSync('initdb', ['-D', data, '-U', 'journal_test', '-A', 'trust', '--no-locale', '--encoding=UTF8'], { stdio: 'pipe', env: { ...process.env, LC_ALL: process.env.LC_ALL || 'C' } });
+    execFileSync('pg_ctl', ['-D', data, '-l', join(directory, 'postgres.log'), '-o', `-F -k ${directory} -p 55493 -c listen_addresses=''`, '-w', 'start'], { stdio: 'pipe', env: { ...process.env, LC_ALL: process.env.LC_ALL || 'C' } });
     started = true;
     sql(`create role anon; create role authenticated; create role service_role bypassrls;
       create schema auth; create function auth.uid() returns uuid language sql as $$ select null::uuid $$;`);
@@ -225,7 +228,7 @@ test('journal PostgreSQL atomic persistence, reuse, isolation and permissions', 
       assert.equal(json(command(note({ entryId: id(2) }), 2)).status, 'duplicate');
     });
   } finally {
-    if (started) execFileSync('pg_ctl', ['-D', data, '-m', 'fast', '-w', 'stop'], { stdio: 'pipe' });
+    if (started) execFileSync('pg_ctl', ['-D', data, '-m', 'fast', '-w', 'stop'], { stdio: 'pipe', env: { ...process.env, LC_ALL: process.env.LC_ALL || 'C' } });
     rmSync(directory, { recursive: true, force: true });
   }
 });

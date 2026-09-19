@@ -1,3 +1,6 @@
+// macOS: LC_ALL 이 없으면 postmaster 가 기동 중 multithreaded 로 판정되어
+// `FATAL: postmaster became multithreaded during startup` 으로 죽는다 (2026-09-19).
+// DB 로케일은 initdb --no-locale 로 이미 C 이므로 동작은 바뀌지 않는다.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -24,8 +27,8 @@ test('journal search PostgreSQL literal filters, paging, boundaries, isolation a
   const insert=(n,{workspace=W,title='',body='원문',enhancement='',kind='note',at='2026-09-13T01:00:00Z'}={})=>sql(`insert into public.journal_entries(id,workspace_id,entry_kind,title,body,note_meta,occurred_at) values('${id(n)}','${workspace}','note',${literal(title)},${literal(body)},${literal(JSON.stringify({kind,enhancement}))}::jsonb,${literal(at)});`);
   let started=false;
   try{
-    execFileSync('initdb',['-D',data,'-U','journal_search_test','-A','trust','--no-locale','--encoding=UTF8'],{stdio:'pipe'});
-    execFileSync('pg_ctl',['-D',data,'-l',join(directory,'postgres.log'),'-o',`-F -k ${directory} -p 55494 -c listen_addresses=''`,'-w','start'],{stdio:'pipe'});started=true;
+    execFileSync('initdb',['-D',data,'-U','journal_search_test','-A','trust','--no-locale','--encoding=UTF8'],{ stdio: 'pipe', env: { ...process.env, LC_ALL: process.env.LC_ALL || 'C' } });
+    execFileSync('pg_ctl',['-D',data,'-l',join(directory,'postgres.log'),'-o',`-F -k ${directory} -p 55494 -c listen_addresses=''`,'-w','start'],{ stdio: 'pipe', env: { ...process.env, LC_ALL: process.env.LC_ALL || 'C' } });started=true;
     sql(`create role anon; create role authenticated; create role service_role bypassrls; create schema auth; create function auth.uid() returns uuid language sql as $$ select null::uuid $$;`);
     for(const file of ['supabase/setup/00_live_schema.sql','supabase/migrations/20260617_0007_content_idea_cadence.sql','supabase/migrations/20260718_0021_task_description.sql','supabase/migrations/20260912_0025_daily_review_journal.sql','supabase/migrations/20260912_0026_content_workflow.sql','supabase/migrations/20260913_0027_journal_notes.sql'])sql(readFileSync(new URL(file,root),'utf8'));
     sql(readFileSync(migration,'utf8'));
@@ -101,5 +104,5 @@ test('journal search PostgreSQL literal filters, paging, boundaries, isolation a
       const before=sql('select count(*) from public.journal_entries');sql(readFileSync(migration,'utf8'));assert.equal(sql('select count(*) from public.journal_entries'),before);
       const service=JSON.parse(sql(`set role service_role; select public.journal_search_v1('${W}','linked');`));assert.equal(service.status,'live');
     });
-  }finally{if(started)execFileSync('pg_ctl',['-D',data,'-m','fast','-w','stop'],{stdio:'pipe'});rmSync(directory,{recursive:true,force:true});}
+  }finally{if(started)execFileSync('pg_ctl',['-D',data,'-m','fast','-w','stop'],{ stdio: 'pipe', env: { ...process.env, LC_ALL: process.env.LC_ALL || 'C' } });rmSync(directory,{recursive:true,force:true});}
 });
