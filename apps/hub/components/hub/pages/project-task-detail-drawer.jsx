@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { EditDrawer } from '../hub-primitives';
+import { DateQuickPresets, EditDrawer } from '../hub-primitives';
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from '@/lib/pms-ui';
 import { validateTaskChecklist } from '@/lib/task-checklist';
 import { TaskChecklistEditor, TaskChecklistGauge } from './project-task-checklist';
@@ -17,7 +17,11 @@ export function ProjectTaskDetailDrawer({ draft, editing, projects, onChange, on
         { key: 'projectId', label: '프로젝트', type: 'select', options: [{ value: '', label: '미지정' }, ...projects.map(item => ({ value: item.id, label: item.name }))] },
         { key: 'status', row: 'task-state', label: '상태', type: 'select', options: TASK_STATUS_OPTIONS },
         { key: 'priority', row: 'task-state', label: '우선순위', type: 'select', options: TASK_PRIORITY_OPTIONS },
-        { key: 'dueAt', label: '기한', inputType: 'date' },
+        // 기한은 지금까지 date picker 수동 조작만 가능했다 — 할 일 입력에서 가장 잦은
+        // 반복 조작이라 followups·고객 컨택 시트가 쓰는 DateQuickPresets를 같이 건다
+        // (§8.1 primitives-first). labelBadge는 라벨 줄에 렌더되고, 버튼은 interactive
+        // content라 label의 클릭 위임 대상에서 제외된다.
+        { key: 'dueAt', label: '기한', inputType: 'date', labelBadge: <DateQuickPresets disabled={saving} onPick={value => onChange('dueAt', value)} /> },
         { key: 'nextAction', label: '다음 행동', placeholder: '막힘을 풀거나 완료하기 위해 할 한 가지' },
         { key: 'description', label: '설명 · 참고 자료', type: 'textarea', placeholder: '상세 내용, 참고 링크, 메모를 적어두세요.' },
       ]}

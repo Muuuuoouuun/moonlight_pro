@@ -63,7 +63,8 @@ const MOUNTS = [
     ["ProjectTodosView", "project-todos-view.jsx", /\{view === 'todos' && canWriteTasks && \(\s*<ProjectTodosView([\s\S]*?)\/>/, [
       "items={taskExecution.items}", "projectById={projectById}", "brands={brands}",
       "brandByKey={brandByKey}", "pendingTaskIds={pendingTaskIds}", "prioTone={prioTone}",
-      "onToggleTodo={toggleTodo}", "onEditTodo={editTodo}", "onResetFilters={resetTaskFilters}",
+      "onToggleTodo={toggleTodo}", "onEditTodo={editTodo}", "onCreateTodo={createTodoForSection}",
+      "onResetFilters={resetTaskFilters}",
     ]],
     ["ProjectBoardView", "project-board-view.jsx", /\{view === 'board' && canWriteTasks && \(\s*<ProjectBoardView([\s\S]*?)\/>/, [
       "visibleColumns={visibleColumns}", "todos={todos}", "drag={drag}",
@@ -210,7 +211,8 @@ test("extracted views compose primitives instead of re-implementing them", () =>
   for (const [name, source] of [["project-timeline-view.jsx", timelineSource],
                                 ["project-todos-view.jsx", todosSource]]) {
     assert.match(source, /<EmptyState/, `${name}`);
-    assert.match(source, /action=\{<Button/, `${name}: 빈 상태에 CTA 필수`);
+    // CTA가 둘 이상이면 fragment로 감싼다(백로그 뷰 선례: 필터 초기화 + 작업 추가).
+    assert.match(source, /action=\{(?:<>\s*)?<Button/, `${name}: 빈 상태에 CTA 필수`);
   }
   assert.match(todosSource, /<Checkbox[\s\S]{0,320}label=\{/, "to-dos 체크박스는 label prop 필수 (§11)");
   // §8.1 클릭 가능한 div 3종 세트.
@@ -222,4 +224,30 @@ test("extracted views compose primitives instead of re-implementing them", () =>
   }
   // §5.3 lifecycle — 상태 칩은 어댑터를 거친다. 페이지가 tone 색 이름을 고르지 않는다.
   assert.match(timelineSource, /<ProjectStatusBadge status=\{p\.status\} \/>/);
+});
+
+// 2026-09-20 입력 동선 — 할 일 생성이 드로어에서 같은 값을 다시 입력하게 만들던 왕복을
+// 없앤 계약. 시드 경로가 사라지면 구간 CTA가 다시 "기한 없음"만 만들고, Council 제안
+// 제목은 다시 조용히 버려진다.
+test("to-dos 구간 헤더 생성은 그 구간의 기한을 초안에 시드한다", () => {
+  assert.match(todosSource, /const TODO_SECTION_SEED = \{/);
+  for (const [section, days] of [["오늘", "0"], ["내일", "1"], ["이번 주", "7"]]) {
+    assert.match(
+      todosSource,
+      new RegExp(`'${section}': \\{ days: ${days},`),
+      `${section} 구간 기한 시드 누락`,
+    );
+  }
+  assert.match(todosSource, /'기한 없음': \{ days: null,/);
+  // 지난 날짜를 새로 만드는 동선은 없다 — '기한 지남'·'이후'는 시드 대상이 아니다.
+  assert.doesNotMatch(todosSource, /'기한 지남': \{ days:/);
+  assert.match(projectsSource, /const createTodoForSection = React\.useCallback\(\(dueAt\)/);
+  assert.match(projectsSource, /createTodo\(null, 'todo', \{ dueAt: dueAt \|\| '' \}\)/);
+});
+
+test("createTodo는 호출처가 넘긴 seed를 초안에 반영한다", () => {
+  assert.match(projectsSource, /createTodo = React\.useCallback\(\(projectId = null, initialStatus = 'todo', seed = null\)/);
+  assert.match(projectsSource, /\.\.\.\(seed && typeof seed === 'object' \? seed : null\)/);
+  // Council 위젯은 제목을 넘긴다 — 2번째 인자(initialStatus)에 실으면 조용히 버려진다.
+  assert.match(projectsSource, /createTodo\(councilWidgetProject\.id, 'todo', \{ title: String\(title \|\| ''\)\.trim\(\) \}\)/);
 });

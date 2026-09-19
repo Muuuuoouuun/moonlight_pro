@@ -4,7 +4,7 @@ import React from "react";
 import { JournalSources } from "../journal-links";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Card, Button, Checkbox, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer, useToast } from "../hub-primitives";
+import { Badge, Card, Button, Checkbox, DateQuickPresets, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer, useToast } from "../hub-primitives";
 import { UNDO_WINDOW_MS, useUndoableAction } from "../use-undoable-action";
 import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from "@/lib/pms-ui";
@@ -649,6 +649,9 @@ export function MyWork({ onNavigate }) {
           setJustAddedId(created.id);
           scrollToRow(created.id);
         }
+        // 연속 입력이 기본값이다 — 버튼 클릭으로 저장하면 포커스가 버튼에 남아 다음
+        // 한 줄을 바로 못 친다(Enter 저장 경로만 우연히 동작했다). 입력창으로 되돌린다.
+        quickRef.current?.focus();
         const label = created?.bucket === 'later' ? '할 일 저장됨 · "나중"에 추가' : '할 일 저장됨';
         setNotice({
           tone: 'ok',
@@ -1228,6 +1231,9 @@ export function MyWork({ onNavigate }) {
             >
               {TASK_PRIORITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
+            {/* 기한은 date picker 수동 조작만 가능했다 — followups·고객 컨택 시트가 쓰는
+                DateQuickPresets를 같이 건다(§8.1 primitives-first). 클릭 한 번으로 채운다. */}
+            <DateQuickPresets disabled={saving} onPick={setQuickDue} />
             <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>비워두면 기한 없음·보통 우선순위로 저장</span>
           </div>
         )}

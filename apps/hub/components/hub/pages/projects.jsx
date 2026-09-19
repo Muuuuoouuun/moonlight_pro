@@ -747,7 +747,10 @@ export function Projects({ workspace }) {
     setDeliveryProject(project);
   }, []);
 
-  const createTodo = React.useCallback((projectId = null, initialStatus = 'todo') => {
+  // seed: 호출처가 미리 채워 주는 초안 필드({ title } · { dueAt } …). 드로어를 연 뒤
+  // 같은 값을 손으로 다시 입력하는 왕복을 없앤다 — To-dos 구간 헤더의 기한 시드와
+  // Council 위젯이 건네는 제목이 이 경로를 쓴다.
+  const createTodo = React.useCallback((projectId = null, initialStatus = 'todo', seed = null) => {
     const contextualProjectId = projectId || (taskView && taskFilters.projectId !== 'none' ? taskFilters.projectId : null);
     setTaskEditSource(null);
     setTaskChecklistConflict(null);
@@ -755,8 +758,15 @@ export function Projects({ workspace }) {
       ...buildTaskDraft({ projectId: contextualProjectId || null, initialStatus }),
       title: '',
       id: createClientId(),
+      ...(seed && typeof seed === 'object' ? seed : null),
     });
   }, [taskFilters.projectId, taskView]);
+
+  // To-dos 뷰의 시간 구간(오늘·내일·이번 주·기한 없음) 생성 — 그 구간의 기한으로 시드해
+  // 드로어에서 달력을 다시 열 필요가 없게 한다. 빈 문자열은 "기한 없음"이다.
+  const createTodoForSection = React.useCallback((dueAt) => {
+    createTodo(null, 'todo', { dueAt: dueAt || '' });
+  }, [createTodo]);
 
   const handleQuickAddSubtask = React.useCallback(async (projectId) => {
     const title = inlineTaskTitle.trim();
@@ -2535,6 +2545,7 @@ export function Projects({ workspace }) {
             prioTone={prioTone}
             onToggleTodo={toggleTodo}
             onEditTodo={editTodo}
+            onCreateTodo={createTodoForSection}
             onResetFilters={resetTaskFilters}
           />
         )}
@@ -2716,9 +2727,12 @@ export function Projects({ workspace }) {
           todos: councilWidgetProject ? (ledger.todos || []).filter(t => t.projectId === councilWidgetProject.id) : [],
           updates: councilWidgetProject ? (ledger.updates || []).filter(u => u.projectId === councilWidgetProject.id) : [],
         }}
+        // 위젯이 건네는 건 제목이다 — 2번째 인자는 initialStatus라, 제목을 거기에 넣으면
+        // TASK_STATUSES에 없어 'todo'로 떨어지고 제목은 조용히 버려졌다(드로어가 빈 제목으로
+        // 열림). seed로 넘겨 AI가 제안한 문장을 그대로 초안에 채운다.
         onCreateTask={(title) => {
-          if (createTodo && councilWidgetProject?.id) {
-            createTodo(councilWidgetProject.id, title);
+          if (councilWidgetProject?.id) {
+            createTodo(councilWidgetProject.id, 'todo', { title: String(title || '').trim() });
           }
         }}
       />
