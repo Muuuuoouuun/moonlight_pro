@@ -21,6 +21,7 @@
     "crm:fill": "node ./scripts/fill-crm-intake.mjs",
     "db:migrate": "node ./scripts/apply-migrations.mjs",
     "db:check": "node ./scripts/check-database-readiness.mjs",
+    "db:move-region": "node ./scripts/migrate-supabase-region.mjs",
     "dev": "turbo run dev",
     "dev:hub": "npm --workspace @com-moon/hub run dev",
     "dev:engine": "npm --workspace @com-moon/engine run dev",
