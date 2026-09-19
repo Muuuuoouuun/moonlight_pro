@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { JournalSources } from '../journal-links';
-import { Badge, Button, Card, Drawer, TextField, TextAreaField, SelectField, TruthBadge, useToast } from '../hub-primitives';
+import { Badge, Button, Card, Drawer, Skeleton, TextField, TextAreaField, SelectField, TruthBadge, useToast } from '../hub-primitives';
 import { filterBrandsByWorkspace } from '../workspace-map';
 import { usePageCreateHotkey } from '../use-crm-keyboard';
 import { BRIEF_FIELDS, STUDIO_CHANNELS, channelLabel, channelForType, formatForChannel, exportStudioVariant, studioTextForCopy } from '@/lib/content-workflow-client';
@@ -91,7 +91,8 @@ export function ContentStudio({ workspace, ledger }) {
     </div>}
     {notice && <div className="studio-feedback" role="status"><p>{notice}</p><Button size="xs" onClick={() => setNotice('')}>닫기</Button></div>}
     {studio.loadError ? <Card className="studio-stack"><p role="alert">{studio.loadError}</p><Button variant="outline" onClick={studio.retryLoad}>다시 불러오기</Button></Card> :
-      !studio.ready ? <Card><p role="status" className="studio-muted">원문과 결과물을 불러오는 중입니다…</p></Card> :
+      /* 로딩은 들어올 레이아웃(원문·기획 카드 + 초안 편집기)을 예고한다 — DESIGN §11. */
+      !studio.ready ? <Card className="studio-stack"><Skeleton lines={3} height={16} width={['34%', '100%', '78%']} gap={10} label="원문 불러오는 중" /><Skeleton lines={4} height={18} width={['100%', '100%', '100%', '62%']} gap={10} label="결과물 불러오는 중" /></Card> :
       <>
         {studio.recovery && <Card className="studio-recovery">
           <h3>브라우저에 남은 작업이 있습니다</h3>
