@@ -3,6 +3,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Button, Drawer, Kbd, SelectField, Skeleton, TextAreaField, TextField, TruthBadge } from '../hub-primitives';
 import { NOTE_QUESTIONS, selectedNoteExcerpt } from '@/lib/journal-client';
+import { JOURNAL_TAG_LIMIT, JOURNAL_TAG_LENGTH, normalizeJournalTags } from '@/lib/journal-tags';
 import { MemoContextPicker } from './memo-context-picker';
 
 const localTime = (value) => { const date = new Date(value); return Number.isNaN(date.getTime()) ? '' : new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0,16); };
@@ -12,6 +13,7 @@ export function MemoComposer({ model, isNew, onClose, onReload }) {
   const { draft, entry, ready, locked, busy, dirty, pending, conflict, source, edit } = model;
   const [selection, setSelection] = React.useState(null), [helper, setHelper] = React.useState(Boolean(draft?.noteMeta.enhancement));
   const bodyRef = React.useRef(null);
+  React.useEffect(() => { if (ready) bodyRef.current?.focus(); }, [ready]);
   React.useEffect(() => { setSelection(null); }, [draft?.body]);
   React.useEffect(() => { if (ready && draft?.noteMeta.enhancement) setHelper(true); }, [ready]);
   const question = NOTE_QUESTIONS.find((item) => item.value === draft?.noteMeta.kind) || NOTE_QUESTIONS[0];
@@ -20,7 +22,9 @@ export function MemoComposer({ model, isNew, onClose, onReload }) {
   // 3,500자를 넘거나 공백뿐이면 null이 돌아오고, 그때만 직접 선택이 필요하다.
   const wholeMemo = React.useMemo(() => selectedNoteExcerpt(draft?.body || '', 0, (draft?.body || '').length), [draft?.body]);
   const useExcerpt = selection || wholeMemo;
-  const canSave = Boolean(ready && draft && dirty && !locked && !conflict && source === 'live');
+  const normalizedTags = normalizeJournalTags(draft?.noteMeta.tags);
+  const invalidTags = normalizedTags === null;
+  const canSave = Boolean(!invalidTags && ready && draft && dirty && !locked && !conflict && source === 'live');
   const canUse = Boolean(entry && !dirty && !locked && source === 'live' && useExcerpt);
   const truth = busy ? 'syncing' : model.saveState === 'error' || conflict ? 'error' : model.saveState === 'saved' || (entry && !dirty && !pending) ? 'live' : 'preview';
   const truthLabel = busy ? '저장 중' : pending ? '저장 결과 확인 필요' : conflict ? '원문 변경 확인' : dirty ? '작성 중 · 서버 미저장' : entry ? '저장된 메모' : '아직 저장되지 않음';
@@ -48,14 +52,23 @@ export function MemoComposer({ model, isNew, onClose, onReload }) {
         <div aria-live="polite"><TruthBadge state={truth} label={truthLabel} /></div>
         {source !== 'live' && <div className="memo-feedback"><TruthBadge state={source} /><p>저장소를 확인한 뒤 서버에 저장할 수 있어요.</p><Button onClick={onReload} disabled={busy}>연결 다시 확인</Button><Button onClick={copy}>입력 복사</Button></div>}
         {model.localError && <div className="memo-feedback" role="alert"><p>이 탭의 복구 사본을 저장하지 못했어요. 입력을 복사해 보관해 주세요.</p><Button onClick={copy}>입력 복사</Button></div>}
-        <TextAreaField ref={bodyRef} label="원문 메모" placeholder="기억하고 싶은 일이나 떠오른 생각을 한 줄로…" value={draft.body} rows={isNew && !entry ? 5 : 9} maxLength={20000} disabled={locked}
+        <TextAreaField ref={bodyRef} label="원문 메모" placeholder="기억하고 싶은 일이나 떠오른 생각을 한 줄로…" value={draft.body} rows={isNew && !entry ? 3 : 9} style={isNew && !entry ? { minHeight: 80 } : undefined} maxLength={20000} disabled={locked}
           onChange={(event) => edit({ body: event.target.value })} onSelect={selectionChanged} hint={entry ? '일부만 쓰려면 문장을 선택하세요. 선택하지 않으면 메모 전체(3,500자까지)를 보냅니다.' : '제목이나 분류 없이 바로 저장할 수 있어요.'} />
-        <details className="memo-details"><summary>제목·시각·업무 연결 <span className="memo-muted">선택</span></summary><div className="memo-stack">
+        <div className="memo-metadata">
+          <TextField label="태그 · 선택" placeholder="쉼표로 구분해 입력" value={(draft.noteMeta.tags || []).join(',')} disabled={locked}
+            hint={`최대 ${JOURNAL_TAG_LIMIT}개 · 태그당 ${JOURNAL_TAG_LENGTH}자 · 검색으로 다시 찾을 수 있어요.`}
+            error={invalidTags ? `태그는 ${JOURNAL_TAG_LIMIT}개까지, 각 ${JOURNAL_TAG_LENGTH}자 이내로 입력해 주세요.` : undefined}
+            onChange={(event) => edit({ noteMeta: { ...draft.noteMeta, tags: event.target.value.split(',') } })} />
+          {normalizedTags?.length > 0 && <ul className="memo-tag-chips" aria-label="입력한 태그">{normalizedTags.map(tag => <li key={tag}>
+            <span>#{tag}</span><Button size="xs" disabled={locked} aria-label={`${tag} 태그 삭제`}
+              onClick={() => edit({ noteMeta: { ...draft.noteMeta, tags: normalizedTags.filter(value => value !== tag) } })}>×</Button>
+          </li>)}</ul>}
+          <MemoContextPicker selected={draft.contexts} onChange={(contexts) => edit({ contexts })} disabled={locked} label="프로젝트·고객·브랜드 연결" />
+        </div>
+        <details className="memo-details"><summary>제목·시각 <span className="memo-muted">선택</span></summary><div className="memo-stack">
           <TextField label="제목" value={draft.title} maxLength={200} disabled={locked} onChange={(event) => edit({ title: event.target.value })} />
           <TextField label="기록 시각" type="datetime-local" value={localTime(draft.occurredAt)} disabled={locked} onChange={(event) => { const date = new Date(event.target.value); if (!Number.isNaN(date.getTime())) edit({ occurredAt: date.toISOString() }); }} />
-          <MemoContextPicker selected={draft.contexts} onChange={(contexts) => edit({ contexts })} disabled={locked} />
         </div></details>
-        {draft.contexts.length > 0 && <div className="memo-muted">연결된 업무 · {draft.contexts.map((context) => context.label || '저장된 업무').join(', ')}</div>}
         {entry && <section className="memo-section">
           <Button variant="outline" aria-expanded={helper} onClick={() => setHelper(!helper)}>한 줄 보강하기 <span className="memo-muted">선택</span></Button>
           {helper && <div className="memo-stack">
@@ -64,7 +77,7 @@ export function MemoComposer({ model, isNew, onClose, onReload }) {
           </div>}
         </section>}
         {conflict && <section className="memo-feedback" aria-label="메모 변경 비교"><p>다른 창에서 이 메모를 수정했어요. 내 입력은 위에 남아 있어요.</p>
-          <details><summary>현재 저장본 보기</summary><pre>{conflict.body}</pre>{conflict.noteMeta?.enhancement && <p>{conflict.noteMeta.enhancement}</p>}</details>
+          <details><summary>현재 저장본 보기</summary><pre>{conflict.body}</pre>{conflict.noteMeta?.enhancement && <p>{conflict.noteMeta.enhancement}</p>}{conflict.noteMeta?.tags?.length > 0 && <p>태그 · {conflict.noteMeta.tags.join(', ')}</p>}</details>
           <div className="memo-actions"><Button disabled={locked} onClick={() => model.chooseConflict(false)}>현재 저장본 사용</Button><Button variant="outline" disabled={locked} onClick={() => model.chooseConflict(true)}>내 입력 이어서 수정</Button></div>
         </section>}
         {model.message && <div className="memo-feedback" role={model.saveState === 'error' ? 'alert' : 'status'}><p>{model.message}</p>

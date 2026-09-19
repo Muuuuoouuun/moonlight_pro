@@ -12,6 +12,10 @@ import { Button, Card, Input } from "../../components/hub/hub-primitives";
 export const dynamic = "force-dynamic";
 
 export default function LoginPage() {
+  return <React.Suspense fallback={null}><LoginForm /></React.Suspense>;
+}
+
+function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const next = params.get("next") || "/dashboard";

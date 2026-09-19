@@ -50,3 +50,18 @@
   .hub-app .hub-drawer[data-presentation="compact"],
   .hub-app .hub-drawer-overlay[data-presentation="compact"] { animation: none; }
 }
+
+.hub-app .hub-drawer-overlay[data-presentation="compact"] { -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.hub-edit-optional > summary { cursor: pointer; font-size: 12px; color: var(--fg-muted); padding: 8px 0; }
+.hub-edit-optional > summary > span { color: var(--fg-dim); margin-left: 6px; font-size: 10.5px; }
+.hub-edit-optional > div { display: flex; flex-direction: column; gap: 12px; padding-top: 8px; }
+.hub-task-date-presets { display: flex; align-items: center; gap: 8px; color: var(--fg-muted); font-size: 12px; }
+@media (max-width: 600px) {
+  .hub-edit-field-row { flex-wrap: wrap; }
+  .hub-edit-field-row > label { min-width: 90px !important; }
+  .hub-drawer[data-presentation="compact"] .hub-drawer__footer { flex-wrap: wrap; }
+}
+
+@media (max-width: 600px) {
+  .hub-drawer[data-presentation="compact"] .hub-drawer__footer > [aria-live]:not(:empty) { flex: 1 0 100% !important; }
+}

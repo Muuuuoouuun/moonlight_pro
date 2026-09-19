@@ -1,4 +1,5 @@
 import { isCanonicalUuid } from './uuid.js';
+import { normalizeJournalTags } from './journal-tags.js';
 
 export const NOTE_QUESTIONS = [
   { value: 'note', label: '자유 메모', question: '어떤 일을 할 때 다시 꺼내보면 좋을까요?' },
@@ -15,13 +16,15 @@ export const CONTEXT_TYPES = [
 export function noteToDraft(entry) {
   return {
     id: entry.id, body: entry.body || '', title: entry.title || '', occurredAt: entry.occurredAt,
-    noteMeta: { kind: entry.noteMeta?.kind || 'note', enhancement: entry.noteMeta?.enhancement || '' },
+    noteMeta: { kind: entry.noteMeta?.kind || 'note', enhancement: entry.noteMeta?.enhancement || '',
+      ...(entry.noteMeta?.tags === undefined ? {} : { tags: [...entry.noteMeta.tags] }) },
     contexts: entry.contexts || [], expectedRevision: entry.revision || 0,
   };
 }
 export function buildNoteSave(draft, requestId) {
+  const tags = normalizeJournalTags(draft.noteMeta.tags);
   return { action: 'save', requestId, entryId: draft.id, expectedRevision: draft.expectedRevision,
-    body: draft.body, title: draft.title, occurredAt: draft.occurredAt, noteMeta: draft.noteMeta,
+    body: draft.body, title: draft.title, occurredAt: draft.occurredAt, noteMeta: { ...draft.noteMeta, ...(tags === undefined ? {} : { tags: tags ?? draft.noteMeta.tags }) },
     contexts: draft.contexts.map(({ type, id }) => ({ type, id })) };
 }
 export function noteFingerprint(draft) {

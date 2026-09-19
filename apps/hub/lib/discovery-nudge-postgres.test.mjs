@@ -170,7 +170,9 @@ test('discovery nudges in real PostgreSQL', { skip: available ? false : 'Postgre
     await t.test('concurrent distinct edits serialize, same request replays a single receipt', async () => {
       seed(11); seed(12);
       const run = async payload => JSON.parse((await promisify(execFile)('psql', [...args, '-c', saveSql(payload)])).stdout.trim());
-      const results = await Promise.all([run(input(11)), run(input(11))]); assert.deepEqual(results.map(value => value.status).sort(), ['conflict', 'saved']);
+      // Capture both revisions before either write can commit.
+      const first = input(11), second = input(11);
+      const results = await Promise.all([run(first), run(second)]); assert.deepEqual(results.map(value => value.status).sort(), ['conflict', 'saved']);
       const payload = input(12); const retries = await Promise.all([run(payload), run(payload), run(payload)]);
       assert.deepEqual(retries.map(value => value.status).sort(), ['duplicate', 'duplicate', 'saved']);
       assert.equal(sql(`select revision from public.discovery_nudge_states where record_id='${uuid(12)}';`), '1');

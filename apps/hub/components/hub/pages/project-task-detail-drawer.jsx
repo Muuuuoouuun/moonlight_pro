@@ -3,29 +3,26 @@
 import React from 'react';
 import { DateQuickPresets, EditDrawer } from '../hub-primitives';
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from '@/lib/pms-ui';
+import { checklistForSave } from '@/lib/task-checklist-input';
 import { validateTaskChecklist } from '@/lib/task-checklist';
 import { TaskChecklistEditor, TaskChecklistGauge } from './project-task-checklist';
 
-export function ProjectTaskDetailDrawer({ draft, editing, projects, onChange, onSave, onDelete, onClose, checklistConflict, onUseCurrentChecklist, onKeepDraftChecklist }) {
+export function ProjectTaskDetailDrawer({ draft, editing, projects, onChange, onSave, onContinue, onDelete, onClose, checklistConflict, onUseCurrentChecklist, onKeepDraftChecklist }) {
   const [saving, setSaving] = React.useState(false);
-  const error = draft ? validateTaskChecklist(draft.checklist || []) : '';
+  const error = draft ? validateTaskChecklist(checklistForSave(draft.checklist || [])) : '';
   return (
     <EditDrawer title={editing ? '할 일 편집' : '할 일 만들기'} subtitle="프로젝트 실행 항목 · 상세 내용과 세부 체크리스트"
-      width="min(520px, 94vw)" record={draft} infoLabel="상세 내용"
+      presentation={editing ? 'side' : 'compact'} width="min(560px, 94vw)" record={draft} infoLabel="상세 내용"
       fields={[
         { key: 'title', label: '할 일', placeholder: '실행할 작업' },
-        { key: 'projectId', label: '프로젝트', type: 'select', options: [{ value: '', label: '미지정' }, ...projects.map(item => ({ value: item.id, label: item.name }))] },
+        { key: 'projectId', label: '프로젝트', type: 'select', options: [{ value: '', label: '미지정' }, ...projects.map(item => ({ value: item.id, label: [item.brandName || item.brandLabel, item.name].filter(Boolean).join(' / ') }))] },
         { key: 'status', row: 'task-state', label: '상태', type: 'select', options: TASK_STATUS_OPTIONS },
         { key: 'priority', row: 'task-state', label: '우선순위', type: 'select', options: TASK_PRIORITY_OPTIONS },
-        // 기한은 지금까지 date picker 수동 조작만 가능했다 — 할 일 입력에서 가장 잦은
-        // 반복 조작이라 followups·고객 컨택 시트가 쓰는 DateQuickPresets를 같이 건다
-        // (§8.1 primitives-first). labelBadge는 라벨 줄에 렌더되고, 버튼은 interactive
-        // content라 label의 클릭 위임 대상에서 제외된다.
-        { key: 'dueAt', label: '기한', inputType: 'date', labelBadge: <DateQuickPresets disabled={saving} onPick={value => onChange('dueAt', value)} /> },
-        { key: 'nextAction', label: '다음 행동', placeholder: '막힘을 풀거나 완료하기 위해 할 한 가지' },
-        { key: 'description', label: '설명 · 참고 자료', type: 'textarea', placeholder: '상세 내용, 참고 링크, 메모를 적어두세요.' },
+        { key: 'dueAt', row: 'task-state', label: '기한', inputType: 'date' },
+        { key: 'nextAction', optional: true, label: '다음 행동', placeholder: '막힘을 풀거나 완료하기 위해 할 한 가지' },
+        { key: 'description', optional: true, rows: 2, label: '설명 · 참고 자료', type: 'textarea', placeholder: '상세 내용, 참고 링크, 메모를 적어두세요.' },
       ]}
-      onChange={onChange} onClose={onClose} onDelete={onDelete}
+      onChange={onChange} onClose={onClose} onDelete={onDelete} onContinue={editing ? undefined : onContinue}
       onSave={async () => { setSaving(true); try { return await onSave(); } finally { setSaving(false); } }}
       saveLabel={editing ? '변경사항 저장' : '할 일 만들기'}
       panels={[{ key: 'checklist', label: '체크리스트', count: draft?.checklist?.length || 0, content:
@@ -33,7 +30,8 @@ export function ProjectTaskDetailDrawer({ draft, editing, projects, onChange, on
           conflict={checklistConflict} onUseCurrent={onUseCurrentChecklist} onKeepDraft={onKeepDraftChecklist} />,
       }]}
     >
-      {draft && <TaskChecklistGauge task={draft} />}
+      <div className="hub-task-date-presets"><span>기한</span><DateQuickPresets disabled={saving} onPick={value => onChange('dueAt', value)} /></div>
+      {draft && draft.checklist?.length > 0 && <TaskChecklistGauge task={{ ...draft, checklist: checklistForSave(draft.checklist) }} />}
       {error && <p className="hub-task-checklist-error" role="status">체크리스트 탭 · {error}</p>}
       {checklistConflict && <p className="hub-task-checklist-error" role="alert">체크리스트 탭에서 변경 내용을 확인하고 사용할 항목을 선택하세요.</p>}
     </EditDrawer>

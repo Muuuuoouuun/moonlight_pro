@@ -896,7 +896,7 @@ const FIELD_PANEL_KEY = '__fields__';
 // 않으면 기존 call site와 픽셀 단위로 같은 단일 폼이 그려진다(계약 변경 없음). 탭이 있을
 // 때만 열림 포커스를 첫 필드로 고정한다: 그러지 않으면 Drawer의 "본문 첫 focusable"
 // 규칙이 탭 버튼을 집어 이름 입력이 포커스를 잃는다.
-export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, presentation = 'side', width = 'min(380px, 92vw)', saveLabel = '변경사항 저장', panels, infoLabel = '정보', children }) {
+export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, presentation = 'side', width = 'min(380px, 92vw)', saveLabel = '변경사항 저장', onContinue, panels, infoLabel = '정보', children }) {
   const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | conflict | error
   const [saveFeedback, setSaveFeedback] = React.useState('');
   // 파괴 확인은 브라우저 confirm()이 아니라 푸터 인라인 2단계다 — OS 다이얼로그는 디자인
@@ -904,6 +904,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
   // (백로그 M: window.confirm 스타일드 플로). null | 'discard' | 'delete'.
   const [confirming, setConfirming] = React.useState(null);
   const [panelKey, setPanelKey] = React.useState(FIELD_PANEL_KEY);
+  const [optionalOpen, setOptionalOpen] = React.useState(false);
   const confirmCancelRef = React.useRef(null);
   const firstFieldRef = React.useRef(null);
   const savingRef = React.useRef(false);
@@ -914,8 +915,11 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
     setSaveState('idle');
     setSaveFeedback('');
     setConfirming(null);
+    setOptionalOpen(fields.some(field => field.optional && Boolean(record?.[field.key])));
     setPanelKey(FIELD_PANEL_KEY); // 레코드가 바뀌면 항상 편집 탭에서 시작
     initialRecordSignatureRef.current = record ? JSON.stringify(record) : null;
+    const frame = requestAnimationFrame(() => firstFieldRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
   }, [recordIdentity]);
 
   // 확인 스트립이 뜨면 포커스를 취소 버튼으로 — ESC·Enter가 파괴 쪽에 얹히지 않게.
@@ -934,7 +938,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
     onClose?.();
   }, [confirming, dirty, onClose]);
 
-  const handleDone = async () => {
+  const handleDone = async (continueCreating = false) => {
     if (savingRef.current) return;
     if (!onSave) { onClose(); return; }
     savingRef.current = true;
@@ -942,13 +946,24 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
     setSaveFeedback('');
     try {
       const r = await onSave();
-      if (r?.ok) { setSaveState('idle'); onClose(); }
+      if (continueCreating && onContinue && r?.ok && !['saved', 'duplicate'].includes(r.status)) {
+        setSaveState(r.status === 'preview' ? 'preview' : 'error');
+        return;
+      }
+      if (r?.ok) {
+        setSaveState('idle');
+        if (continueCreating && onContinue && ['saved', 'duplicate'].includes(r.status)) onContinue();
+        else onClose();
+      }
       else if (r?.status === 'preview') setSaveState('preview');
       else if (r?.status === 'conflict') {
         setSaveFeedback(r?.message || '다른 변경이 먼저 저장되었습니다. 입력을 유지했으니 원장을 확인한 뒤 다시 시도하세요.');
         setSaveState('conflict');
       }
-      else setSaveState('error');
+      else { setSaveFeedback(r?.message || ''); setSaveState('error'); }
+    } catch {
+      setSaveFeedback('저장하지 못했습니다. 입력은 유지했으니 다시 시도하세요.');
+      setSaveState('error');
     } finally {
       savingRef.current = false;
     }
@@ -994,7 +1009,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
   React.useEffect(() => {
     if (!record) return undefined;
     const onKey = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleDoneRef.current?.(); }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); handleDoneRef.current?.(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -1003,14 +1018,11 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
   if (!record) return null;
 
   const hasPanels = Array.isArray(panels) && panels.length > 0;
-  const fieldRows = groupFieldRows(fields);
-  const fieldsPanel = (
-    <>
-      {fieldRows.map((group, i) => (
-        <div key={group.row || `solo-${i}`} style={group.fields.length > 1 ? { display: 'flex', gap: 10 } : undefined}>
+  const renderFieldRows = (list, primary = true) => groupFieldRows(list).map((group, i) => (
+        <div key={group.row || `solo-${i}`} className={group.fields.length > 1 ? "hub-edit-field-row" : undefined} style={group.fields.length > 1 ? { display: 'flex', gap: 10 } : undefined}>
           {group.fields.map((f, j) => {
             // 탭 모드에서만 쓰이는 열림 포커스 앵커 — 탭이 없으면 Drawer 기본 규칙 그대로다.
-            const focusRef = hasPanels && i === 0 && j === 0 ? firstFieldRef : undefined;
+            const focusRef = primary && hasPanels && i === 0 && j === 0 ? firstFieldRef : undefined;
             return (
             <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5, ...(group.fields.length > 1 ? { flex: 1, minWidth: 0 } : null) }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>{f.label}{f.labelBadge || null}</span>
@@ -1041,7 +1053,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
                   placeholder={f.placeholder || ''}
                   rows={f.rows || 5}
                   onChange={e => onChange(f.key, e.target.value)}
-                  style={{ ...DRAWER_INPUT_STYLE, height: 'auto', minHeight: 112, padding: '9px 10px', lineHeight: 1.5, resize: 'vertical' }}
+                  style={{ ...DRAWER_INPUT_STYLE, height: 'auto', minHeight: f.rows ? undefined : 112, padding: '9px 10px', lineHeight: 1.5, resize: 'vertical' }}
                 />
               ) : (
                 <input
@@ -1062,7 +1074,15 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
             );
           })}
         </div>
-      ))}
+      ));
+  const optionalFields = fields.filter(field => field.optional);
+  const fieldsPanel = (
+    <>
+      {renderFieldRows(fields.filter(field => !field.optional))}
+      {optionalFields.length > 0 && <details className="hub-edit-optional" key={recordIdentity} open={optionalOpen} onToggle={event => setOptionalOpen(event.currentTarget.open)}>
+        <summary>설명·다음 행동 <span>선택</span></summary>
+        <div>{renderFieldRows(optionalFields, false)}</div>
+      </details>}
       {children}
     </>
   );
@@ -1113,7 +1133,8 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
           {(saveState === 'preview' || saveState === 'conflict' || saveState === 'error') && (
             <Button variant="ghost" size="sm" onClick={requestClose}>닫기</Button>
           )}
-          <Button variant="primary" size="sm" onClick={handleDone} disabled={saveState === 'saving'}>
+          {onContinue && <Button variant="outline" size="sm" onClick={() => handleDone(true)} disabled={saveState === 'saving'}>저장 후 계속</Button>}
+          <Button variant="primary" size="sm" onClick={() => handleDone()} disabled={saveState === 'saving'}>
             {saveState === 'saving' ? '저장 중…' : saveLabel}
           </Button>
         </>
@@ -1127,7 +1148,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
             tabs={[{ key: FIELD_PANEL_KEY, label: infoLabel }, ...panels.map(p => ({ key: p.key, label: p.label, count: p.count }))]}
             active={panelKey}
             onChange={setPanelKey}
-            style={{ margin: '-16px -16px 0', padding: '0 16px' }}
+            style={presentation === 'compact' ? { margin: 0, padding: 0 } : { margin: '-16px -16px 0', padding: '0 16px' }}
           />
           {/* 비활성 탭은 언마운트하지 않고 감춘다 — 기록 탭이 열리기 전에도 원장을 읽어
               탭 배지에 건수가 뜨고, 탭을 오가도 작성 중인 초안·스크롤이 살아 있다.

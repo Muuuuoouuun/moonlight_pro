@@ -5,6 +5,7 @@
 .memos-state, .memo-actions, .memo-footer, .memo-row-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .memo-muted { color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
 .memo-stack { display: flex; flex-direction: column; gap: 16px; }
+.memo-metadata { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .memo-composer { padding: 4px; min-width: 0; }
 .memo-composer fieldset { border: 0; padding: 0; margin: 16px 0 0; min-width: 0; }
 .memo-composer .hub-input { font-size: 14px; min-height: 40px; }
@@ -61,3 +62,7 @@
   .memo-footer > button { min-height: 44px; }
   .memo-context-results button, .memo-uses a, .memo-target-link { min-height: 44px; }
 }
+
+.memo-tag-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0; list-style: none; }
+.memo-tag-chips > li { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); color: var(--fg-muted); font-size: 12px; }
+.memo-tag-chips > li > span { overflow-wrap: anywhere; }

@@ -1,4 +1,5 @@
 "use client";
+import { checklistForSave } from '@/lib/task-checklist-input';
 
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -158,18 +159,8 @@ export function Projects({ workspace }) {
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
   const [openDetail, setOpenDetail] = React.useState(null);
   const [mobileDetail, setMobileDetail] = React.useState(false);
-  // 기본 접힘 — 저장된 사용자 토글이 있으면 그 값을 따른다 (SSR 안전하게 마운트 후 로드).
-  const [sidebarHidden, setSidebarHiddenState] = React.useState(true);
-  React.useEffect(() => {
-    try {
-      const saved = localStorage.getItem(SIDEBAR_HIDDEN_KEY);
-      if (saved === '0') setSidebarHiddenState(false);
-    } catch { /* default applies */ }
-  }, []);
-  const setSidebarHidden = React.useCallback((v) => {
-    setSidebarHiddenState(v);
-    try { localStorage.setItem(SIDEBAR_HIDDEN_KEY, v ? '1' : '0'); } catch { /* ignore */ }
-  }, []);
+  const [sidebarHidden, setSidebarHidden] = React.useState(true);
+  const [containerPickerOpen, setContainerPickerOpen] = React.useState(false);
   const [syncState, setSyncState] = React.useState(cachedProjects ? cachedProjects.syncState : 'preview');
   const [readError, setReadError] = React.useState(null);
   const ledgerReadRef = React.useRef({ requestId: 0, controller: null });
@@ -189,7 +180,7 @@ export function Projects({ workspace }) {
   const [taskChecklistConflict, setTaskChecklistConflict] = React.useState(null);
   const [containerDraft, setContainerDraft] = React.useState(null);
   const [localContainers, setLocalContainers] = React.useState([]);
-  const drawerOpen = Boolean(projectDraft || deliveryProject || taskDraft || containerDraft || memoTaskId);
+  const drawerOpen = Boolean(projectDraft || deliveryProject || taskDraft || containerDraft || memoTaskId || !sidebarHidden || containerPickerOpen);
 
   const formatTime = (d) => {
     try {
@@ -1137,13 +1128,14 @@ export function Projects({ workspace }) {
   }, [containerDraft, loadLedger]);
 
   const persistTask = React.useCallback(async () => {
-    if (!taskDraft?.title?.trim()) return { ok: false, status: 'invalid-input' };
-    if (validateTaskChecklist(taskDraft.checklist || [])) return { ok: false, status: 'invalid-input' };
+    if (!taskDraft?.title?.trim()) return { ok: false, status: 'invalid-input', message: '할 일 제목을 입력하세요.' };
+    const checklistError = validateTaskChecklist(checklistForSave(taskDraft.checklist || []));
+    if (checklistError) return { ok: false, status: 'invalid-input', message: checklistError };
     if (taskChecklistConflict) return { ok: false, status: 'conflict', message: '체크리스트 탭에서 사용할 항목을 선택한 뒤 저장하세요.' };
     if (!canWriteTasks || taskStatusPendingRef.current.size > 0) return { ok: false, status: 'error' };
 
     if (taskEditSource) {
-      const patch = buildTaskPatch(taskEditSource, taskDraft);
+      const patch = buildTaskPatch(taskEditSource, { ...taskDraft, checklist: checklistForSave(taskDraft.checklist || []) });
       if (Object.keys(patch).length <= 1) {
         // Nothing changed — treat the save as a no-op success instead of an empty-patch error.
         return { ok: true, status: 'saved' };
@@ -1198,7 +1190,7 @@ export function Projects({ workspace }) {
           dueAt: taskDraft.dueAt,
           description: taskDraft.description || '',
           nextAction: taskDraft.nextAction || '',
-          checklist: taskDraft.checklist || [],
+          checklist: checklistForSave(taskDraft.checklist || []),
           source: 'hub-projects',
         }),
       });
@@ -1642,9 +1634,9 @@ export function Projects({ workspace }) {
   };
 
   return (
-    <div className="hub-workspace-shell" style={{ display: 'grid', gridTemplateColumns: sidebarHidden ? '1fr' : '240px 1fr', height: '100%', overflow: 'hidden' }}>
+    <div className="hub-workspace-shell" style={{ display: 'grid', gridTemplateColumns: '1fr', height: '100%', overflow: 'hidden' }}>
       {!sidebarHidden && (
-      <aside style={{ borderRight: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <Drawer title="소속 관리" onClose={() => setSidebarHidden(true)} width="min(360px, 94vw)">
         <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center' }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-faint)' }}>분류</div>
@@ -1780,14 +1772,11 @@ export function Projects({ workspace }) {
             </button>
           )}
         </div>
-      </aside>
+      </Drawer>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className={`hub-page-header hub-project-page-header${openDetail ? ' hub-project-page-header--detail' : ''}`} style={{ padding: '14px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 12 }}>
-          {sidebarHidden && (
-            <IconButton icon="chevronR" size={28} iconSize={14} onClick={() => setSidebarHidden(false)} tooltip="브랜드 사이드바 펼치기" />
-          )}
           <div className="hub-project-header-context">
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Projects</h2>
             <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
@@ -1859,11 +1848,13 @@ export function Projects({ workspace }) {
             countOf={(c) => c.projects || 0}
             selectedKey={brand}
             onSelect={setBrand}
+            onOpenChange={setContainerPickerOpen}
             hiddenCount={hiddenContainerCount}
             showEmpty={showEmptyContainers}
             onToggleEmpty={toggleEmptyContainers}
             tail={(
               <>
+                <IconButton icon="settings" size={28} onClick={() => setSidebarHidden(false)} tooltip="소속 관리·순서 변경" />
                 {currentBrand && currentBrand.key !== 'all' && currentBrand.id && (
                   currentBrand.category === BRAND_OWNED_CATEGORY ? (
                     <IconButton
@@ -2707,7 +2698,7 @@ export function Projects({ workspace }) {
       <ProjectTaskDetailDrawer
         draft={taskDraft} editing={Boolean(taskEditSource)} projects={allProjects}
         onChange={(key, value) => setTaskDraft(current => ({ ...current, [key]: value }))}
-        onSave={persistTask} onDelete={taskEditSource ? deleteTask : undefined}
+        onSave={persistTask} onContinue={() => createTodo(null, 'todo', { projectId: taskDraft?.projectId || '' })} onDelete={taskEditSource ? deleteTask : undefined}
         onClose={() => { setTaskDraft(null); setTaskEditSource(null); setTaskChecklistConflict(null); }}
         checklistConflict={taskChecklistConflict}
         onUseCurrentChecklist={() => { setTaskDraft(current => ({ ...current, checklist: taskChecklistConflict })); setTaskChecklistConflict(null); }}

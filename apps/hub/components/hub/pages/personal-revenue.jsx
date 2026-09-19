@@ -42,22 +42,6 @@ function formatFullDate(value) {
   }).format(date);
 }
 
-// 범례는 프리미티브를 그대로 보여준다 — 아이콘만 있던 기존 범례는 §5.3이 확실성의 1차
-// 채널로 지정한 테두리 기하(solid/dashed/dotted)를 전혀 설명하지 못했다.
-function TimelineLegend() {
-  return (
-    <div className="personal-revenue-legend" aria-label="매출 확실성 범례">
-      {[
-        ["confirmed", "확정"],
-        ["recommended", "가능성 높음"],
-        ["unknown", "확인 필요"],
-      ].map(([state, label]) => (
-        <CertaintyBadge key={state} state={state} label={label} />
-      ))}
-    </div>
-  );
-}
-
 function RevenueSummary({ summary }) {
   // 세 확실성 버킷의 합이 예상 유입과 정확히 일치한다 — 기존 4키 구성은 `possible`
   // 버킷을 표에서 통째로 빠뜨려 합이 맞지 않았다.
@@ -89,7 +73,6 @@ function RevenueTimeline({ model, selectedDealId, selectDeal, triggerRefs }) {
           <h3 id="personal-revenue-timeline-title">다가오는 매출 이벤트</h3>
           <p>{model.window.startLabel}부터 {model.window.endLabel}까지 · 예정일 기준</p>
         </div>
-        <TimelineLegend />
       </div>
 
       <div className="personal-revenue-timeline-scroll" tabIndex="0" aria-label="30일 매출 타임라인">

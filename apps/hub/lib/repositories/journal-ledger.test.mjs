@@ -137,3 +137,17 @@ test('invalid input, persistence errors and malformed successes never report sav
     assert.equal(result.status, 'error'); assert.equal(result.httpStatus, 502); assert.equal(JSON.stringify(result).includes('private'), false);
   }
 });
+
+
+test('tags persist through the write command, acknowledgement and a later detail read', async () => {
+  const noteMeta = { ...input.noteMeta, tags: ['고객 이해', '후속'] };
+  state.rpc.entry = row({ note_meta: noteMeta, contexts: [], links: [] });
+  const result = await ledger.writeJournal({ ...input, noteMeta: { ...noteMeta, tags: [' #고객 이해 ', '후속', '후속'] } });
+  assert.equal(result.status, 'saved');
+  assert.deepEqual(result.entry.noteMeta, noteMeta);
+  assert.deepEqual(state.calls.find(c => c.table === 'journal_workflow_v1').body.p_command.noteMeta, noteMeta);
+  state.rows = [row({ note_meta: noteMeta })];
+  const reload = await ledger.getJournalLedger({ note: id(1) });
+  assert.equal(reload.status, 'live');
+  assert.deepEqual(reload.entry.noteMeta, noteMeta);
+});

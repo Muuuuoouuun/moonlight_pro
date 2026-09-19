@@ -287,7 +287,7 @@ truth. Do not recreate them ad-hoc inside pages.
 - Form fields `TextField`, `TextAreaField`, `SelectField`, `CheckboxRow`, `DateQuickPresets` (contract in `form-fields.test.mjs`)
 - `SegmentedControl`, `EmptyState` (+ `action` CTA), `ScrollShadowX`
 - `Drawer`, `EditDrawer` — the only overlay / edit surfaces (§8.1)
-  - `Drawer presentation="compact"` is the short capture variant: centered on desktop, bottom sheet at ≤600px, with the same ESC and focus handling. Default `side` remains the edit drawer. Callers preserve drafts and guard dismissal while saving.
+  - `Drawer presentation="compact"` is the short capture variant: centered on desktop, bottom sheet at ≤600px, with the same ESC and focus handling. Default `side` remains the edit drawer. New task capture uses `compact`; optional description/next-action fields are disclosed on demand. Compact capture uses a 6px backdrop blur. Callers preserve drafts and guard dismissal while saving.
 - State primitives `AttentionRail`, `CertaintyBadge`, `LifecycleBadge`, `TruthBadge` (§8.2). `SyncBadge`
   survives only as a compatibility wrapper over `TruthBadge`; new call sites use `TruthBadge` directly.
 
@@ -496,3 +496,4 @@ Build order when adding a new surface:
 | 2026-09-16 | 허브 raw `ms` 리터럴 45건을 §9 토큰으로 전환(용도 기준: hover→--dur-hover, 진입/값 변화→--dur-enter+--ease-hub, 패널/디스클로저→--dur-panel, 오버레이→--dur-overlay, 지연→--stagger-step). celebration pop 260/300ms는 --dur-enter(200)로 스냅. `motion.test.mjs`가 저장소 전체를 훑어 재발을 막는다 | confirmed | 2026-09-04 아젠다가 실측한 23곳은 실제 45곳이었고 값 위반(240ms 초과)이 7곳. 규칙은 2026-07-29부터 있었으나 강제 장치가 없어 병합마다 늘었다. 축하 연출을 더 길게 원하면 임의 리터럴이 아니라 --dur-celebrate 토큰을 이 표에 추가하는 것이 맞다 |
 | 2026-09-16 | `SegmentedControl`의 휴지 chrome(색·배경)을 `.hub-seg`/`.hub-seg__btn`으로 이관하고 hover·활성 전이를 --dur-hover로 부여. 활성 정본은 aria-pressed 하나 | confirmed | Button(2026-09-15)과 같은 cascade — 인라인 색은 :hover와 전이를 죽인다. hover는 §5.2대로 글자 한 단계(--fg-faint→--fg-muted)만, 배경·accent 없음 |
 | 2026-09-16 | `Skeleton` primitive 신설 — 로딩은 `불러오는 중…` 한 줄이 아니라 레이아웃을 예고하는 스켈레톤으로. 라우트 청크 폴백(모든 페이지)·브랜드 목록·첫 화면 승인 큐·개인 지표 타일·프로젝트 table 본문에 채택. preview/error에는 쓰지 않는다 | confirmed | §11 "loading states are part of the design"인데 스켈레톤이 0개였다(2026-09-04 B2, 모바일 성능 체감 60점의 명명된 원인). 펄스는 §9의 라이브 인디케이터 단일 duration(mlMoonPulse 1.4s)을 그대로 써 새 duration을 만들지 않는다. 브랜드 로딩이 `EmptyState`("비어 있음" 의미)로 그려지던 것은 §5.3 truth 오용이라 함께 교정 |
+| 2026-09-20 | 새 할 일 중앙 팝업·선택 필드 펼침·한 줄 체크리스트·Enter 연속 입력. PMS 분류 상시 패널은 소속 선택 버튼과 필요 시 관리 드로어로 전환. 반복 매출 확실성 범례는 제거하고 이벤트의 직접 라벨 유지 | confirmed | 운영자 실사용 입력 개선 승인. 기존 저장·포커스·충돌 계약 유지 |

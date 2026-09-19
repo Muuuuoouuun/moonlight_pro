@@ -61,3 +61,11 @@ test('malformed, foreign, duplicated and oversized results fail closed without p
   for(const data of [null,{status:'error',error:'private credentials'},{status:'live',workspaceId:O,context:null,entries:[]}]) {state.data=data;const result=await getJournalSearch();assert.equal(result.status,'error');assert.equal(JSON.stringify(result).includes('private'),false);}
   state.failure=true;assert.equal((await getJournalSearch()).status,'error');
 });
+
+
+test('tag-only matches pass the summary boundary with an explicit match field', async () => {
+  state.data.entries = [row(1, { match: { field: 'tags', text: '고객 이해' } })];
+  const result = await getJournalSearch({ q: '고객' });
+  assert.equal(result.status, 'live');
+  assert.deepEqual(result.entries[0].match, { field: 'tags', text: '고객 이해' });
+});

@@ -1,4 +1,5 @@
 import { isCanonicalUuid } from './uuid.js';
+import { normalizeJournalTags } from './journal-tags.js';
 
 export const JOURNAL_NOTE_KINDS = Object.freeze(['note', 'conversation', 'idea', 'learning', 'blocked', 'decision']);
 export const JOURNAL_CONTEXT_TYPES = Object.freeze(['project', 'lead', 'account', 'brand']);
@@ -40,9 +41,11 @@ export function validateJournalInput(payload) {
       || !object(noteMeta) || !JOURNAL_NOTE_KINDS.includes(noteMeta.kind) || !text(noteMeta.enhancement, 4000)
       || !Array.isArray(contexts) || contexts.length > 20
       || contexts.some((context) => !object(context) || !JOURNAL_CONTEXT_TYPES.includes(context.type) || !isCanonicalUuid(context.id))) return invalid();
+    const tags = normalizeJournalTags(noteMeta.tags);
+    if (tags === null) return invalid();
     const normalized = contexts.map(({ type, id }) => ({ type, id: id.toLowerCase() }));
     if (new Set(normalized.map(({ type, id }) => `${type}:${id}`)).size !== normalized.length) return invalid();
-    return { ok: true, value: { ...common, body, title, occurredAt, noteMeta: { kind: noteMeta.kind, enhancement: noteMeta.enhancement }, contexts: normalized } };
+    return { ok: true, value: { ...common, body, title, occurredAt, noteMeta: { kind: noteMeta.kind, enhancement: noteMeta.enhancement, ...(tags === undefined ? {} : { tags }) }, contexts: normalized } };
   }
   const { selection, target } = payload;
   if (payload.expectedRevision < 1 || !object(selection) || !text(selection.prefix, 20000)

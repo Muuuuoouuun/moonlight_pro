@@ -4,12 +4,13 @@ import { Button, SelectField, TextField, TruthBadge } from '../hub-primitives';
 import { CONTEXT_TYPES } from '@/lib/journal-client';
 import { fetchJournal } from './use-memos';
 
-export function MemoContextPicker({ selected = [], onChange, disabled = false, types = CONTEXT_TYPES, single = false }) {
+export function MemoContextPicker({ selected = [], onChange, disabled = false, types = CONTEXT_TYPES, single = false, label }) {
   const [type, setType] = React.useState(types[0].value), [query, setQuery] = React.useState('');
   const [result, setResult] = React.useState(null), [busy, setBusy] = React.useState(false), [error, setError] = React.useState('');
   const request = React.useRef(0);
   React.useEffect(() => () => { request.current++; }, []);
   async function search() {
+    if (disabled || busy) return;
     const ticket = ++request.current;
     setBusy(true); setError('');
     try {
@@ -28,10 +29,13 @@ export function MemoContextPicker({ selected = [], onChange, disabled = false, t
       <span>{CONTEXT_TYPES.find((item) => item.value === context.type)?.label} · {context.label || '연결된 업무'}</span>
       <Button size="xs" disabled={disabled} aria-label={`${context.label || '업무'} 연결 해제`} onClick={() => onChange(selected.filter((row) => row !== context))}>해제</Button>
     </li>)}</ul>}
-    <details><summary>{selected.length ? '연결 바꾸기' : '업무 연결하기'} <span className="memo-muted">선택</span></summary>
+    <details><summary>{label || (selected.length ? '연결 바꾸기' : '업무 연결하기')} <span className="memo-muted">선택</span></summary>
       <fieldset disabled={disabled || busy} className="memo-stack">
         <div className="memo-fields"><SelectField label="업무 종류" value={type} options={types} onChange={(event) => { setType(event.target.value); setResult(null); }} />
-          <TextField label="이름으로 찾기" value={query} maxLength={100} placeholder="연결할 업무 이름" onChange={(event) => { setQuery(event.target.value); setResult(null); }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); search(); } }} /></div>
+          <TextField label="이름으로 찾기" value={query} maxLength={100} placeholder="연결할 업무 이름" onChange={(event) => { setQuery(event.target.value); setResult(null); }} onKeyDown={(event) => {
+            if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.keyCode === 229 || event.metaKey || event.ctrlKey) return;
+            event.preventDefault(); event.stopPropagation(); search();
+          }} /></div>
         <Button variant="outline" onClick={search}>{busy ? '찾는 중…' : '업무 찾기'}</Button>
       </fieldset>
       {error && <p role="alert">{error}</p>}

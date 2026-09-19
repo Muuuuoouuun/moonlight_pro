@@ -74,6 +74,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 ### 제품·운영 정본
 
+- [실사용 입력 개선](superpowers/specs/2026-09-20-input-usability-design.md) — **승인·구현(2026-09-20)**. 체크리스트 한 줄·Enter 연속 입력, 새 할 일 중앙 팝업·저장 후 계속, 메모 태그·업무 연결, PMS 소속 선택 및 반복 범례 축소. [검증 기록](superpowers/plans/2026-09-20-input-usability.md). 태그 검색 0035는 서울 DB 적용 완료.
+
 - [`operator-workflow-profile.md`](operator-workflow-profile.md) — 운영자 업무 사실과 인터뷰 원본
 - [`superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`](superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md) — 활성 제품 설계
 - [`master-directive.md`](master-directive.md) — 제품 불변식

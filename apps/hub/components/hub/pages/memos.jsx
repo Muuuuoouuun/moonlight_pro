@@ -198,7 +198,7 @@ export function Memos() {
           <button className="hub-row memo-list-row" style={{ flex: 1 }} onClick={() => router.push(memoDocumentHref(params, { note: row.id }), { scroll: false })}>
             <div className="memo-row-top"><span className="mono memo-muted">{memoTime(row.occurredAt)}</span><span className="memo-muted">{NOTE_QUESTIONS.find((item) => item.value === row.noteMeta?.kind)?.label || '메모'}{row.used ? ' · 활용함' : ''}</span></div>
             <strong><MatchText text={row.title || row.excerpt.split('\n')[0]} query={filters.q} /></strong><p><MatchText text={row.match?.text || row.excerpt} query={row.match ? Array.from(filters.q.trim()).slice(0, 180).join('') : filters.q} /></p>
-            {row.match && <span className="memo-muted">{({ title: '제목', body: '본문', enhancement: '보강 내용' })[row.match.field]}에서 찾음</span>}
+            {row.match && <span className="memo-muted">{({ title: '제목', body: '본문', enhancement: '보강 내용', tags: '태그' })[row.match.field]}에서 찾음</span>}
             {search.context && <span className="memo-muted">{search.context.label}에 연결됨</span>}
             <span className="memo-row-open">열어서 보강·활용 →</span>
           </button>

@@ -480,7 +480,7 @@ test("desktop project detail owns a viewport-bounded scroller and persistent act
   assert.match(globalCss, /\.hub-app \.hub-project-detail-panel\s*\{[\s\S]*?min-height:\s*0/);
 });
 
-test("the container selector is a one-line tag filter, not a stacked dropdown", () => {
+test("the container selector opens a searchable compact picker and preserves management", () => {
   // 드롭다운(2줄 행 + 그룹/폴더 2단 헤더)은 제거됐다 — 잔재가 남으면 셀렉터가 두 벌이 된다.
   assert.doesNotMatch(projectsSource, /brandMenuOpen|renderBrandMenuRow|hub-project-brand-trigger/);
   assert.match(pmsComponentsSource, /export function ContainerFilterBar/);
@@ -493,7 +493,9 @@ test("the container selector is a one-line tag filter, not a stacked dropdown", 
   assert.match(pmsComponentsSource, /aria-pressed=\{selected\}/);
 
   // 분류는 텍스트 헤더 없이 칩 순서 + 스코프 경계 hairline 하나로만 읽는다.
-  assert.match(pmsComponentsSource, /className="hub-pms-filterbar__sep"/);
+  assert.match(pmsComponentsSource, /title="소속 선택" presentation="compact"/);
+  assert.match(pmsComponentsSource, /label="소속 찾기"/);
+  assert.match(projectsSource, /<Drawer title="소속 관리"/);
   assert.match(globalCss, /\.hub-app \.hub-pms-filterbar__sep\s*\{[\s\S]*?width:\s*1px/);
 
   // 드롭다운 2번째 줄(설명 · 변동 수)과 7p\/7t 칼럼은 접근 가능한 이름으로 보존한다.
@@ -545,4 +547,12 @@ test("the container filter bar stays one horizontally scrolling line and keeps a
 
   const coarse = responsiveCss.slice(responsiveCss.indexOf("PMS 컨테이너 태그 필터 바"));
   assert.match(coarse, /@media \(pointer: coarse\)\s*\{[\s\S]*?\.hub-app \.hub-pms-chip\s*\{[\s\S]*?min-height:\s*44px/);
+});
+
+test("container selection and management dialogs suspend background page shortcuts", () => {
+  const gate = projectsSource.slice(projectsSource.indexOf('const drawerOpen ='), projectsSource.indexOf('const drawerOpen =') + 220);
+  assert.match(gate, /!sidebarHidden/);
+  assert.match(gate, /containerPickerOpen/);
+  assert.match(projectsSource, /onOpenChange=\{setContainerPickerOpen\}/);
+  assert.match(pmsComponentsSource, /onOpenChange\?\.\(open\)/);
 });

@@ -37,7 +37,7 @@ function summary(row, workspaceId, filters) {
     || !JOURNAL_NOTE_KINDS.includes(row.noteMeta?.kind) || !Number.isSafeInteger(row.revision) || row.revision < 1 || typeof row.used !== 'boolean') return null;
   if ((filters.kind && row.noteMeta.kind !== filters.kind) || (filters.used === 'used' && !row.used) || (filters.used === 'unused' && row.used)) return null;
   const match = row.match;
-  if (!filters.q ? match !== null : !match || !['title', 'body', 'enhancement'].includes(match.field) || typeof match.text !== 'string' || !match.text || [...match.text].length > 180) return null;
+  if (!filters.q ? match !== null : !match || !['title', 'body', 'enhancement', 'tags'].includes(match.field) || typeof match.text !== 'string' || !match.text || [...match.text].length > 180) return null;
   return { id: row.id, title: row.title, excerpt: row.excerpt, occurredAt: row.occurredAt, updatedAt: row.updatedAt,
     noteMeta: { kind: row.noteMeta.kind }, revision: row.revision, match: match ? { field: match.field, text: match.text } : null, used: row.used };
 }
