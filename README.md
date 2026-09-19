@@ -63,7 +63,9 @@ node --import ./scripts/register-hub-alias.mjs --test <file>
 Public Engine write routes should be protected before deployment:
 
 - `COM_MOON_SHARED_WEBHOOK_SECRET` for Hub-to-Engine and project webhook writes
-- `COM_MOON_HUB_WRITE_SECRET` for server-to-server Hub writes; browser writes still require same-origin headers
+- `COM_MOON_HUB_WRITE_SECRET` for server-to-server Hub writes. Browser writes are allowed only
+  same-origin **and** either in a development runtime or on a loopback origin — a remote production
+  deployment refuses every browser write, because the Hub has no login layer of its own
 - `TELEGRAM_WEBHOOK_SECRET` for Telegram `secret_token`
 - `COM_MOON_OAUTH_STATE_SECRET` for Google OAuth state signing, falling back to the shared webhook secret. Google OAuth connect routes refuse unsigned state.
 - `COM_MOON_ALLOW_OPEN_WEBHOOKS=true` is only for unauthenticated local smoke tests. Keep it unset/false outside local dev.
