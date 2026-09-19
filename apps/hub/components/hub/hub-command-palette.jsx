@@ -44,7 +44,7 @@ async function loadRecordItems() {
 
 const RECORD_RESULT_CAP = 8;
 
-export function CommandPalette({ open, onClose, onNavigate, onQuickMemo }) {
+export function CommandPalette({ open, onClose, onNavigate, onQuickMemo, onQuickCapture }) {
   const [q, setQ] = React.useState('');
   const [idx, setIdx] = React.useState(0);
   const [records, setRecords] = React.useState([]);
@@ -59,7 +59,11 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo }) {
   }, [open]);
 
   const items = React.useMemo(() => {
-    const flat = [{ kind: 'Action', label: '빠른 메모', action: 'quick-memo', icon: 'edit', keywords: ['메모', '생각', 'quick note', 'memo'] }];
+    // 생성 액션은 팔레트의 발견 경로다 — 단축키(C·⌘K)를 모르는 상태에서도 도달해야 한다.
+    const flat = [
+      { kind: 'Action', label: '빠른 입력 — 할 일·정리 전', action: 'quick-capture', icon: 'plus', keywords: ['할 일', '할일', '태스크', '작업', '추가', '생성', '캡처', 'task', 'todo', 'capture', 'add', 'new'] },
+      { kind: 'Action', label: '빠른 메모', action: 'quick-memo', icon: 'edit', keywords: ['메모', '생각', '아이디어', '기록', 'quick note', 'memo', 'idea'] },
+    ];
     for (const n of NAV_TREE) {
       if (n.path) flat.push({ kind: 'Navigate', label: n.label, path: n.path, icon: n.icon, keywords: n.keywords });
       if (n.children) for (const c of n.children) flat.push({ kind: 'Navigate', label: `${n.label} › ${c.label}`, path: c.path, icon: c.icon, keywords: c.keywords });
@@ -126,6 +130,7 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickMemo }) {
   function activate(item) {
     onClose();
     if (item?.action === 'quick-memo') onQuickMemo?.();
+    else if (item?.action === 'quick-capture') onQuickCapture?.();
     else if (item?.path) onNavigate(item.path);
   }
 
