@@ -22,6 +22,8 @@
     "db:migrate": "node ./scripts/apply-migrations.mjs",
     "db:check": "node ./scripts/check-database-readiness.mjs",
     "db:move-region": "node ./scripts/migrate-supabase-region.mjs",
+    "dev:sandbox": "cd apps/hub && set -a && . ./.env.sandbox.local && set +a && NEXT_DIST_DIR=.next.sandbox npx next dev -p 3020",
+    "db:seed-dev": "set -a && . ./.env.migration.local && set +a && psql --dbname \"$MOONLIGHT_DEV_DB_URL\" -X -q --set ON_ERROR_STOP=1 -f supabase/seed.dev.sql",
     "dev": "turbo run dev",
     "dev:hub": "npm --workspace @com-moon/hub run dev",
     "dev:engine": "npm --workspace @com-moon/engine run dev",
