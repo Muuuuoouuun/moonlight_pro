@@ -43,3 +43,30 @@ test("forwards quick capture to Engine with only the shared server secret", asyn
     data: { status: "saved", destinationType: "task" },
   });
 });
+
+test("logs the Engine rejection server-side for quick capture", async () => {
+  const logs = [];
+  const result = await captureClient.forwardCaptureCommand(
+    { raw: "추석전 광고 스케줄 정리", hint: "task", idempotencyKey: "k" },
+    {
+      env: {
+        COM_MOON_ENGINE_URL: "http://127.0.0.1:3001",
+        COM_MOON_SHARED_WEBHOOK_SECRET: "shared-secret",
+      },
+      logger: (...args) => logs.push(args),
+      fetchImpl: async () => new Response(JSON.stringify({
+        status: "error",
+        error: "http-400",
+        detail: "column tasks.description does not exist",
+      }), {
+        status: 502,
+        headers: { "content-type": "application/json" },
+      }),
+    },
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0][0], "[hub/capture] engine rejected command");
+  assert.equal(logs[0][1].detail, "column tasks.description does not exist");
+});
