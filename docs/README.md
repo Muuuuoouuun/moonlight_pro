@@ -1,7 +1,7 @@
 # Moonlight 문서 지도
 
 > 상태: ACTIVE DOCUMENTATION INDEX
-> 마지막 정리: 2026-09-14 (콘텐츠·메모·문의·Agent DB 준비 상태 갱신. 기존 실행 상태표 기준: 2026-09-04)
+> 마지막 정리: 2026-09-20 (Supabase 서울 리전 이관, 테스트 기준선, 빠른 입력 전역화, 목업 가드레일 반영. 이전 정리: 2026-09-14 콘텐츠·메모·문의·Agent DB 준비 상태)
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -38,6 +38,8 @@
 
 ## 3. 현재 실행 상태
 
+2026-09-20 DB 위치: 운영 Supabase를 싱가포르에서 **서울 리전으로 이관 완료**했다. 아래 DB 준비 상태 기록은 그대로 유효하되, 대상 프로젝트가 바뀌었다는 점을 함께 읽는다. 상세는 [`supabase-korea-region-migration.md`](supabase-korea-region-migration.md).
+
 2026-09-14 DB 준비 상태: 누락된 0026·0027·0028·0030·0031·0032·0033을 운영 Supabase에 적용했고, `npm run db:check`로 테이블·RLS·서비스 전용 RPC 권한을 확인했다. 이미 적용된 0029는 재실행하지 않았다. Hub/Engine 코드 배포, 문의 외부 수집 연결, worker 활성화는 별도다.
 
 | 단계 | 상태 | 근거 |
@@ -56,10 +58,17 @@
 | 브랜드 탭 | P0·P1 구현, P2~P5 제안 | `2026-08-29-brand-tab-design.md`, `3627eef` |
 | 개인 매출 30일 로드맵 | 출시, 디자인 QA `blocked` | `2026-08-31-personal-revenue-roadmap.md`, `68517ec`, 루트 `design-qa.md` |
 | 문의 수집·알림 | 코드 구현, 운영 연결 대기 | Gmail 감지·안전한 웹훅·문의 내역·미확인 알림. [설정](inquiry-integration-setup.md), [검증](superpowers/plans/2026-09-13-unified-inquiries.md) |
+| Supabase 서울 리전 이관 | 이관 완료(2026-09-20) · Vercel 환경 변수 교체 대기 | `rwqefdxalmbrkybxqwxj`(싱가포르 `ap-southeast-1`) → `ncgpnqfulnlshegalmbd`(서울 `ap-northeast-2`). 테이블 71·1368행 **전부 행 수 일치**, `npm run db:check` 7/7 PASS, 앱 읽기(`status: live`)·쓰기 왕복 확인, REST 지연 150ms→57ms. 구 싱가포르 프로젝트는 롤백 경로로 **삭제하지 않고 보존**. 툴킷은 `npm run db:move-region`, 런북·함정(함수 실행 권한 회귀 등)은 [`supabase-korea-region-migration.md`](supabase-korea-region-migration.md), 커밋 `fa1757e`. **Vercel 환경 변수는 아직 구 싱가포르 값이므로 배포 전 교체가 필요하다** |
+| 빠른 입력 전역화 | 구현 완료(2026-09-20) | 캡처 폼을 `daily-brief.jsx` 내부에서 `apps/hub/components/hub/quick-capture.jsx`로 분리해 단일 정본화(`layout="inline"`/`"compact"`). 전역 `C` 단축키(입력 요소 안·팔레트 열림이면 무시)와 ⌘K 팔레트의 `빠른 입력` 액션, 치트시트 등록까지 포함 — DESIGN.md §8.1 생성 단축키 계약을 따른다. 커밋 `6423822` |
+| 목업 데이터 가드레일 | 구현 완료(2026-09-20) | `scripts/no-mock-data.test.mjs`가 저장소 전체에서 목업 식별자(`MOCK_`·`DEMO_`·`SAMPLE_`·`DUMMY_`·`FAKE_`·fixtures 계열) 선언과 업무 레코드형 하드코딩 배열을 막는다. 감사 시점의 저장소에는 가짜 업무 데이터가 0건이었고 없던 것은 강제 장치였다. 운영자 확정: 더미 데이터는 **로컬 전용 Supabase 프로젝트에만** 두고 코드에는 넣지 않는다 — 그 프로젝트는 free 플랜 활성 2개 상한 때문에 아직 미생성이다. 커밋 `4516e49` |
 
 Phase 0는 Content canonical contract, write 응답 분류, honest empty/error UI, 사용자 identity, Content 승인 원자화를 포함한다. 당시 검증 기준선은 Node test 50/50, contract check, typecheck, Hub/Engine build 통과다. 2026-07-15 현재 저장소 검증은 102/102이며 Phase 1A 완료를 뜻한다. Phase 1B·1C는 아직 남아 있으므로 Phase 1 전체 완료로 해석하지 않는다.
 
-2026-09-04 현재 루트 `npm test`는 **692/692 통과**이며, 저장소의 `*.test.mjs` 82파일 **전부**가 루트 글롭에 포함된다. 2609 병합이 글롭을 `apps/hub/components/**`·`apps/engine/**`·`packages/**`로 확장하면서 이전에 CI 밖이던 20파일과 실패 4건이 함께 해소됐다. CI(`.github/workflows/ci.yml`)는 `npm test`에 위임하므로 범위가 어긋날 수 없다. 사이드바 앵커는 코드(`hub-nav.js` 8 primary + 2 utility)·`hub-nav.test.mjs`·07-15 스펙 §3.1이 모두 일치한다(2026-09-04 주석·스펙 갱신으로 해소).
+2026-09-20 현재 루트 `npm test`는 **1433 tests · 실패 0**이다. 이전 기록의 "692/692 통과, 82파일"은 낡았으므로 이 줄을 기준선으로 쓴다. 2026-09-20에 **아예 돌지 않던 테스트 55건을 복구**해 1378 → 1433이 됐고, 원인 두 가지 모두 소스와 무관했다. (1) postgres를 띄우는 8파일이 macOS에서 `LC_ALL` 없이 기동을 거부해 discovery·daily review·inquiry·agent command의 **원자 RPC 검증이 통째로 미실행**이었다. (2) 스윕 테스트 3개(`motion`·`focus-ring`·`button-hover`)가 `.next` 정확일치로만 걸러 `.next.qa`·`.next.ship-*` 같은 빌드 잔재 디렉터리의 미니파이 CSS를 새 위반으로 오인했다. 커밋 `0cc7f18`.
+
+파일 범위(2026-09-20 실측): 저장소의 `*.test.mjs` 203파일 중 **201파일**이 루트 글롭에 포함되고, `apps/hub/app/api/hub/content/transform/route.test.mjs`·`.../workflow/route.test.mjs` **2파일은 글롭 밖**이다(루트 글롭에 `apps/hub/app/**` 패턴이 없다). 2609 병합이 글롭을 `apps/hub/components/**`·`apps/engine/**`·`packages/**`로 확장하면서 이전에 CI 밖이던 20파일과 실패 4건이 해소된 것은 사실이나, "전부 포함"은 더 이상 맞지 않다. CI(`.github/workflows/ci.yml`)는 `npm test`에 위임하므로 CI와 로컬의 범위는 어긋나지 않는다 — 다만 두 파일은 양쪽 모두에서 돌지 않는다.
+
+사이드바 앵커는 코드(`hub-nav.js` 8 primary + 2 utility)·`hub-nav.test.mjs`·07-15 스펙 §3.1이 모두 일치한다(2026-09-04 주석·스펙 갱신으로 해소).
 
 ## 4. 현재 문서
 
@@ -142,6 +151,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 - [`supabase-first-operating-ledger.md`](supabase-first-operating-ledger.md)
 - [`supabase-db-strategy.md`](supabase-db-strategy.md)
+- [`supabase-korea-region-migration.md`](supabase-korea-region-migration.md) — **완료(2026-09-20) 실행 기록과 런북**. 싱가포르 → 서울 리전 이관의 결과 수치, 마이그레이션 재생 대신 덤프 복제를 택한 이유, 연결 문자열(Session pooler) 주의, 실행 중 부딪힌 4가지, 그리고 가장 위험했던 **함수 실행 권한 회귀**(복원된 RPC 29개 중 25개가 anon 실행 가능으로 태어남 → `reconcile-privileges`가 자동 교정). 이관 후 남은 일(Vercel 환경 변수 교체, 로컬 전용 개발 DB 분리, 덤프 정리)도 이 문서가 정본이다. 명령은 `npm run db:move-region`
 - [`integration-inventory.md`](integration-inventory.md)
 - [`projects-connection-inventory.md`](projects-connection-inventory.md)
 
@@ -183,6 +193,10 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - `5a3d506` — 내비게이션 단순화 + 캘린더·할 일 연결
 - `3627eef` — 브랜드 운영 표면(브랜드 탭 P0·P1)
 - `68517ec` — 개인 현금흐름 30일 로드맵
+- `0cc7f18` — 죽어 있던 테스트 복구(빌드 잔재 스윕 오염 + macOS 로케일), 1378 → 1433
+- `6423822` — 빠른 입력 전역화(`quick-capture.jsx` 정본, 전역 `C`, ⌘K 액션)
+- `fa1757e` — Supabase 리전 이전 툴킷과 싱가포르 → 서울 이관 완료
+- `4516e49` — 목업 데이터 재발 방지 가드레일
 - `docs/superpowers/plans/2026-07-13-phase0-trust-repair.md` — Phase 0 구현 체크리스트(`codex/moonlight-phase0-trust` 브랜치에 존재)
 - [`superpowers/plans/`](superpowers/plans/) — 특정 기능의 실행 기록
 - [`superpowers/specs/`](superpowers/specs/) — 승인 당시의 상세 설계와 결정 배경
