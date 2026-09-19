@@ -318,7 +318,9 @@ export function Checkbox({ checked, onChange, size = 14, label, disabled = false
   );
 }
 
-export const Input = React.forwardRef(function Input({ placeholder, icon, value, onChange, style, size = 'sm', className }, ref) {
+export const Input = React.forwardRef(function Input({ placeholder, icon, value, onChange, style, size = 'sm', className,
+  // 통과 속성: 로그인(비밀번호)·폼 접근성에 필요하다. 기존 호출처는 전부 기본값을 쓰므로 동작이 바뀌지 않는다.
+  type = 'text', id, name, disabled, autoComplete, inputMode, maxLength, readOnly, required, ariaLabel }, ref) {
   const sizes = { sm: { h: 30, fs: 12.5 }, md: { h: 34, fs: 13 } };
   const s = sizes[size];
   return (
@@ -334,6 +336,16 @@ export const Input = React.forwardRef(function Input({ placeholder, icon, value,
       {icon && <Iconed name={icon} size={13} style={{ color: 'var(--fg-faint)' }} />}
       <input
         ref={ref}
+        type={type}
+        id={id}
+        name={name}
+        disabled={disabled}
+        autoComplete={autoComplete}
+        inputMode={inputMode}
+        maxLength={maxLength}
+        readOnly={readOnly}
+        required={required}
+        aria-label={ariaLabel}
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
         placeholder={placeholder}
