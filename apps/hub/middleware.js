@@ -17,6 +17,8 @@ export function middleware(request) {
     host: request.headers.get("host"),
     hasSession: verifyOperatorSessionRequest(request).ok,
     secretConfigured: hasOperatorSessionSecret(),
+    // 호스팅 환경에서는 loopback 우회를 아예 끈다 — Host 헤더는 클라이언트가 보낸다.
+    allowLoopback: !process.env.VERCEL,
   });
 
   if (access.action === "allow") return NextResponse.next();

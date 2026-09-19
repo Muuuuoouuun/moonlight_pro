@@ -50,9 +50,12 @@ export function isLoopbackHost(host) {
  *   login           화면 — /login 으로 이동
  *   not-configured  세션 비밀키가 없어 로그인 자체가 불가능 — 닫아 둔다
  */
-export function resolveRouteAccess({ pathname, host, hasSession, secretConfigured } = {}) {
+export function resolveRouteAccess({ pathname, host, hasSession, secretConfigured, allowLoopback = true } = {}) {
   if (isOpenPath(pathname)) return { action: "allow", reason: "open-path" };
-  if (isLoopbackHost(host)) return { action: "allow", reason: "loopback" };
+  // Host 는 클라이언트가 보내는 값이다. 실측(2026-09-20)으로 Vercel 은 위조된 Host 를
+  // 앱에 도달시키지 않고 404 DEPLOYMENT_NOT_FOUND 로 끊지만, 그 플랫폼 동작 하나에
+  // 기대지 않는다. 호스팅 환경에서는 loopback 우회 자체를 끈다(미들웨어가 VERCEL 로 판단).
+  if (allowLoopback && isLoopbackHost(host)) return { action: "allow", reason: "loopback" };
   if (hasSession) return { action: "allow", reason: "session" };
 
   const isApi = String(pathname || "").startsWith("/api/");

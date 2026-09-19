@@ -45,6 +45,23 @@ test("로컬(loopback)은 세션 없이 통과한다", () => {
   }
 });
 
+test("호스팅 환경에서는 loopback 우회가 아예 꺼진다", () => {
+  // Host 는 클라이언트가 보내는 값이다. Vercel 이 위조 Host 를 404 로 끊는 것을 실측했지만
+  // (2026-09-20) 그 플랫폼 동작 하나에 기대지 않는다 — 미들웨어가 VERCEL 일 때 이 값을 false 로 준다.
+  const onVercel = { pathname: "/api/hub/revenue", secretConfigured: true, hasSession: false, allowLoopback: false };
+  for (const host of ["localhost:3000", "127.0.0.1", "[::1]:3000"]) {
+    assert.equal(resolveRouteAccess({ ...onVercel, host }).action, "unauthorized", host);
+  }
+  // 자체 인증 경로와 유효 세션은 그래도 통과한다.
+  assert.equal(resolveRouteAccess({ ...onVercel, host: "localhost", pathname: "/api/cron/inquiries-sync" }).action, "allow");
+  assert.equal(resolveRouteAccess({ ...onVercel, host: "localhost", hasSession: true }).action, "allow");
+});
+
+test("미들웨어가 호스팅 환경에서 loopback 우회를 끈다", async () => {
+  const source = await readFile(new URL("../middleware.js", import.meta.url), "utf8");
+  assert.match(source, /allowLoopback:\s*!process\.env\.VERCEL/, "VERCEL 에서 loopback 우회를 끄는 배선이 없다");
+});
+
 test("배포 도메인이 loopback 으로 오인되지 않는다", () => {
   for (const host of ["moonlight-pro-hub.vercel.app", "localhost.attacker.com", "127.0.0.1.attacker.com", ""]) {
     assert.equal(isLoopbackHost(host), false, host);
