@@ -1,0 +1,457 @@
+{
+  "schema_version": 1,
+  "audit_date_local": "2026-09-20",
+  "timezone": "Asia/Seoul",
+  "method": "Authorized read-only browser UI audit via mcp__cua_repl. Rendered DOM/AX and selected screenshots only. No hidden state, endpoints, scraping APIs, or external AI uploads.",
+  "thread": {
+    "scope": "One user-designated conversation; identity and private URL omitted from repository copy."
+  },
+  "coverage": {
+    "type": "non-exhaustive sample",
+    "unique_reference_records": 20,
+    "instagram_posts_opened": 18,
+    "external_share_links_recorded_without_opening": 2,
+    "unavailable_message_occurrences": 1,
+    "full_history_start_verified": false,
+    "full_history_count_known": false,
+    "continuity_guaranteed": false
+  },
+  "sidebar": {
+    "scope": "Initially visible sidebar only; other conversations were not opened.",
+    "visible_conversation_rows": 7,
+    "request_count_displayed": 4
+  },
+  "limitations": [
+    "Non-exhaustive sample; the complete conversation and continuity were not verified.",
+    "Private conversation identities, URLs and share timestamps remain only in the local audit.",
+    "Reel captions and selected frames were inspected; no complete audio transcription or full video analysis.",
+    "Claims, prices and performance statements in posts were not fact-checked.",
+    "Not every carousel slide was reviewed.",
+    "Facebook and YouTube destinations were not opened; links and visible previews only.",
+    "Unavailable content could not be reconstructed from the UI."
+  ],
+  "unavailable": [
+    {
+      "ui_label": "이용할 수 없는 메시지",
+      "ui_explanation": "이 콘텐츠는 콘텐츠 소유자가 삭제했거나 공개 범위 설정에 의해 숨겨졌을 수 있습니다.",
+      "source_url": null,
+      "reason_confirmed": false
+    }
+  ],
+  "category_counts_interpretive": {
+    "AI 업무 자동화": 4,
+    "앱·제품 제작": 4,
+    "웹 디자인·브랜딩": 2,
+    "영상 제작·편집": 3,
+    "사업·조직 운영": 3,
+    "음악·인터랙션": 2,
+    "주제 미확인 외부 링크": 2
+  },
+  "records": [
+    {
+      "id": "dm-001",
+      "platform": "Instagram",
+      "author": "ai_bombb",
+      "observed_url": "https://www.instagram.com/p/DdU6kL8tvdQ/",
+      "observed_author_permalink": "https://www.instagram.com/ai_bombb/reel/DdU6kL8tvdQ/",
+      "post_date_displayed": "3일 전",
+      "post_datetime_dom": "2026-09-15T23:41:56.000Z",
+      "caption_excerpt": "해커톤 우승자가 쓰던 Claude Code 세팅, 통째로 받을 수 있어요",
+      "content_summary": "ECC라는 Claude Code 설정·스킬 묶음을 소개하며 계획, 테스트, 재검토, 기억, 재사용 워크플로를 설명한다.",
+      "additional_observed_urls": [
+        "https://github.com/affaan-m/ECC"
+      ],
+      "additional_url_evidence": "Visible caption text; not opened or installed.",
+      "category_interpretation": "AI 업무 자동화",
+      "tags_interpretation": [
+        "Claude Code",
+        "ECC",
+        "스킬"
+      ],
+      "evidence": "post modal caption + dated link",
+      "availability": "opened",
+      "caption_source": "original_post_modal"
+    },
+    {
+      "id": "dm-002",
+      "platform": "Facebook",
+      "author": "Mumu's garden (preview label)",
+      "observed_url": "https://www.facebook.com/share/r/1a1amaNbUA/",
+      "post_date_displayed": null,
+      "caption_excerpt": null,
+      "preview_text": "조회 1.1만회 | Reel by Mumu's garden",
+      "content_summary": "Facebook 릴스 공유 링크. DM 썸네일에서 기하 도형 장면이 보였으나 주제는 확정하지 않았다.",
+      "category_interpretation": "주제 미확인 외부 링크",
+      "tags_interpretation": [],
+      "evidence": "DM visible link and preview; destination not opened",
+      "availability": "preview_only",
+      "caption_source": null,
+      "post_datetime_dom": null
+    },
+    {
+      "id": "dm-003",
+      "platform": "Instagram",
+      "author": "bizucafe",
+      "collaborators_observed": [
+        "dy1.mag"
+      ],
+      "observed_url": "https://www.instagram.com/p/Dc9xsH7CkD8/",
+      "observed_author_permalink": "https://www.instagram.com/bizucafe/reel/Dc9xsH7CkD8/",
+      "post_date_displayed": "9월 7일",
+      "caption_excerpt": "아하! 모멘트",
+      "content_summary": "‘아하! 모멘트’라는 인터뷰형 릴스. 확인한 프레임에는 질문을 잘하게 된다는 한국어 자막이 보였다.",
+      "category_interpretation": "사업·조직 운영",
+      "tags_interpretation": [
+        "인사이트",
+        "질문"
+      ],
+      "category_confidence": "low",
+      "evidence": "post caption + selected frame",
+      "availability": "opened",
+      "caption_source": "original_post_modal",
+      "post_datetime_dom": null
+    },
+    {
+      "id": "dm-004",
+      "platform": "Instagram",
+      "author": "credit.seoul",
+      "collaborators_observed": [
+        "vibers.ai"
+      ],
+      "observed_url": "https://www.instagram.com/p/Db-s7brMFiV/",
+      "observed_author_permalink": "https://www.instagram.com/credit.seoul/reel/Db-s7brMFiV/",
+      "post_date_displayed": "8월 13일",
+      "caption_excerpt": "브랜딩 양치기 vs 장인정신, 여러분의 선택은?",
+      "content_summary": "브랜딩에서 제작량과 장인정신을 대비하는 릴스.",
+      "category_interpretation": "웹 디자인·브랜딩",
+      "tags_interpretation": [
+        "브랜딩",
+        "제작 철학"
+      ],
+      "evidence": "post caption; DM thumbnail 'WHAT IS BRANDING?'",
+      "availability": "opened",
+      "caption_source": "original_post_modal",
+      "post_datetime_dom": null
+    },
+    {
+      "id": "dm-005",
+      "platform": "Instagram",
+      "author": "seanaiux",
+      "observed_url": "https://www.instagram.com/p/DbtVpzdKqcT/",
+      "observed_author_permalink": "https://www.instagram.com/seanaiux/reel/DbtVpzdKqcT/",
+      "post_date_displayed": "8월 7일",
+      "post_datetime_dom": "2026-08-06T18:20:53.000Z",
+      "caption_excerpt": "there’s no way Claude is designing this site.",
+      "content_summary": "철학자 소재 웹 디자인을 제시하고 Claude의 디자인 능력에 도발적인 질문을 던지는 게시물.",
+      "category_interpretation": "웹 디자인·브랜딩",
+      "tags_interpretation": [
+        "웹 디자인",
+        "UI",
+        "Claude"
+      ],
+      "evidence": "post caption and hashtags",
+      "availability": "opened",
+      "caption_source": "original_post_modal"
+    },
+    {
+      "id": "dm-006",
+      "platform": "Instagram",
+      "author": "codefactory_jc",
+      "observed_url": "https://www.instagram.com/p/DZhNw0FvOAX/",
+      "observed_author_permalink": "https://www.instagram.com/codefactory_jc/reel/DZhNw0FvOAX/",
+      "post_date_displayed": "6월 13일",
+      "post_datetime_dom": "2026-06-13T08:31:02.000Z",
+      "caption_excerpt": "#바이브코딩 #마케팅 월 2억 버는 앱 4개 운영하는 언니의 노하우",
+      "content_summary": "앱 여러 개를 운영하는 제작자의 수익·마케팅 노하우를 소개한다. 수익 주장은 검증하지 않았다.",
+      "category_interpretation": "앱·제품 제작",
+      "tags_interpretation": [
+        "바이브 코딩",
+        "앱 수익화",
+        "마케팅"
+      ],
+      "evidence": "post caption",
+      "availability": "opened",
+      "caption_source": "original_post_modal"
+    },
+    {
+      "id": "dm-007",
+      "platform": "Instagram",
+      "author": "raffertycoope",
+      "observed_url": "https://www.instagram.com/p/DbPCjivqf07/",
+      "observed_author_permalink": "https://www.instagram.com/raffertycoope/reel/DbPCjivqf07/",
+      "post_date_displayed": "7월 28일",
+      "post_datetime_dom": "2026-07-28T13:06:21.000Z",
+      "caption_excerpt": "Let It Be (The Beatles) on a gesture synth.",
+      "content_summary": "제스처 신시사이저로 음악을 연주하는 사례. 캡션에 바이브 코딩과 제스처 제어 태그가 있다.",
+      "category_interpretation": "음악·인터랙션",
+      "tags_interpretation": [
+        "제스처",
+        "신시사이저",
+        "바이브 코딩"
+      ],
+      "date_caveat": "Displayed share date precedes displayed post date; not reconciled.",
+      "evidence": "post caption",
+      "availability": "opened",
+      "caption_source": "original_post_modal"
+    },
+    {
+      "id": "dm-008",
+      "platform": "Instagram",
+      "author": "pptpro_official",
+      "observed_url": "https://www.instagram.com/p/DbKvv6YBMCu/",
+      "observed_author_permalink": "https://www.instagram.com/pptpro_official/reel/DbKvv6YBMCu/",
+      "post_date_displayed": "7월 24일",
+      "post_datetime_dom": "2026-07-24T07:52:44.000Z",
+      "caption_excerpt": "사용해 보실분?",
+      "visible_frame_text": "누구나 무료로 영상 자동화 하기",
+      "content_summary": "Remotion 저장소 URL이 보이는 영상 자동화 소개 화면.",
+      "additional_observed_urls": [
+        "https://github.com/remotion-dev/remotion"
+      ],
+      "additional_url_evidence": "Visible video frame; not opened.",
+      "category_interpretation": "영상 제작·편집",
+      "tags_interpretation": [
+        "Remotion",
+        "영상 자동화"
+      ],
+      "evidence": "caption + selected video frame",
+      "availability": "opened",
+      "caption_source": "original_post_modal"
+    },
+    {
+      "id": "dm-009",
+      "platform": "Instagram",
+      "author": "aikhanjum",
+      "observed_url": "https://www.instagram.com/p/DZViwCHPFas/",
+      "observed_author_permalink": "https://www.instagram.com/aikhanjum/reel/DZViwCHPFas/",
+      "post_date_displayed": "6월 9일",
+      "post_datetime_dom": "2026-06-08T19:27:48.000Z",
+      "caption_excerpt": "the full stack to run a startup: ~$21/mo.",
+      "content_summary": "Claude, Supabase, Vercel, Stripe, Clerk를 스타트업 제작 스택으로 제시한다. 가격·무료 범위는 미검증.",
+      "category_interpretation": "앱·제품 제작",
+      "tags_interpretation": [
+        "SaaS",
+        "개발 스택",
+        "스타트업"
+      ],
+      "evidence": "post caption",
+      "availability": "opened",
+      "caption_source": "original_post_modal"
+    },
+    {
+      "id": "dm-010",
+      "platform": "Instagram",
+      "author": "ddangjihae",
+      "observed_url": "https://www.instagram.com/p/DYFIEY_v0OG/",
+      "observed_author_permalink": "https://www.instagram.com/ddangjihae/reel/DYFIEY_v0OG/",
+      "post_date_displayed": "5월 8일",
+      "post_datetime_dom": "2026-05-08T13:58:29.000Z",
+      "caption_excerpt": "노라보자 드디어 어플 출시",
+      "content_summary": "‘노라보자’ iOS·Android 앱 출시를 알리는 개발 기록.",
+      "category_interpretation": "앱·제품 제작",
+      "tags_interpretation": [
+        "앱 출시",
+        "개발 기록"
+      ],
+      "evidence": "post caption; DM has no separate timestamp between this and preceding card",
+      "availability": "opened",
+      "caption_source": "original_post_modal"
+    },
+    {
+      "id": "dm-011",
+      "platform": "Instagram",
+      "author": "gojaehyun.go",
+      "observed_url": "https://www.instagram.com/p/DaclFDTPKLL/",
+      "observed_author_permalink": "https://www.instagram.com/gojaehyun.go/reel/DaclFDTPKLL/",
+      "post_date_displayed": "7월 6일",
+      "post_datetime_dom": "2026-07-06T09:37:30.000Z",
+      "caption_excerpt": "아이폰 스탠바이용 앱으로 직접 만들었습니다",
+      "content_summary": "소설 문장으로 시간을 표시하는 Author Clock에서 영감을 받아 만든 한국어 iPhone StandBy 앱 사례.",
+      "category_interpretation": "앱·제품 제작",
+      "tags_interpretation": [
+        "제품 아이디어",
+        "StandBy",
+        "문학 시계"
+      ],
+      "evidence": "post caption",
+      "availability": "opened",
+      "caption_source": "original_post_modal"
+    },
+    {
+      "id": "dm-012",
+      "platform": "YouTube",
+      "author": "BZCF | 비즈까페 (preview label)",
+      "observed_url": "http://youtube.com/post/UgkxPa1-IwmCI4SUKKp8krkwt57nYXP8OPTn",
+      "post_date_displayed": null,
+      "caption_excerpt": null,
+      "preview_text": "Post from BZCF | 비즈까페",
+      "content_summary": "YouTube 커뮤니티 게시물 공유 링크. 본문은 DM 미리보기에 노출되지 않았다.",
+      "category_interpretation": "주제 미확인 외부 링크",
+      "tags_interpretation": [],
+      "evidence": "DM link and preview; destination not opened",
+      "availability": "preview_only",
+      "caption_source": null,
+      "post_datetime_dom": null
+    },
+    {
+      "id": "dm-013",
+      "platform": "Instagram",
+      "author": "hongik.man",
+      "observed_url": "https://www.instagram.com/p/Da-CVQjD5Zr/",
+      "post_date_displayed": null,
+      "caption_excerpt": "클로드 하나로 회사 전체를 돌린다면?",
+      "content_summary": "개발·디자인·마케팅·콘텐츠·재무·운영·법무를 나눈 Claude 업무 스킬 소개. 댓글을 요구하는 자료 안내는 실행하지 않았다.",
+      "category_interpretation": "AI 업무 자동화",
+      "tags_interpretation": [
+        "Claude",
+        "부서별 스킬",
+        "운영"
+      ],
+      "evidence": "DM carousel preview + post caption",
+      "availability": "opened",
+      "caption_source": "original_post_modal",
+      "post_datetime_dom": null
+    },
+    {
+      "id": "dm-014",
+      "platform": "Instagram",
+      "author": "atlas.bennet",
+      "observed_url": "https://www.instagram.com/p/Dabwfm3h2Vo/",
+      "observed_author_permalink": "https://www.instagram.com/atlas.bennet/reel/Dabwfm3h2Vo/",
+      "post_date_displayed": "7월 6일",
+      "post_datetime_dom": "2026-07-06T01:55:44.000Z",
+      "caption_excerpt": "addictive",
+      "visible_frame_text": "clipzi.app wow",
+      "content_summary": "clipzi.app 이름과 자동 자막 편집 화면이 보이는 영상.",
+      "visible_domain_text": "clipzi.app",
+      "category_interpretation": "영상 제작·편집",
+      "tags_interpretation": [
+        "자동 자막",
+        "클립 편집",
+        "clipzi.app"
+      ],
+      "evidence": "caption + selected frame; tool not independently tested",
+      "availability": "opened",
+      "caption_source": "original_post_modal"
+    },
+    {
+      "id": "dm-015",
+      "platform": "Instagram",
+      "author": "jaeovr",
+      "observed_url": "https://www.instagram.com/p/Da2qHwwhWcY/",
+      "observed_author_permalink": "https://www.instagram.com/jaeovr/reel/Da2qHwwhWcY/",
+      "post_date_displayed": "7월 16일",
+      "post_datetime_dom": "2026-07-16T12:39:50.000Z",
+      "caption_excerpt": "Not me waiting for Christmas already",
+      "content_summary": "크리스마스 음악 커버를 소개하는 릴스.",
+      "category_interpretation": "음악·인터랙션",
+      "tags_interpretation": [
+        "음악 커버",
+        "크리스마스"
+      ],
+      "evidence": "post caption and hashtags",
+      "availability": "opened",
+      "caption_source": "original_post_modal"
+    },
+    {
+      "id": "dm-016",
+      "platform": "Instagram",
+      "author": "atlas.bennet",
+      "observed_url": "https://www.instagram.com/p/Da0k2PkPzYm/",
+      "observed_author_permalink": "https://www.instagram.com/atlas.bennet/reel/Da0k2PkPzYm/",
+      "post_date_displayed": "7월 16일",
+      "post_datetime_dom": "2026-07-15T17:14:19.000Z",
+      "caption_excerpt": "been clipping like this ever since",
+      "visible_frame_text": "THE BEST TOOL I’VE EVER TRIED",
+      "content_summary": "가로 대담 영상을 세로 클립으로 편집하는 화면. 이 게시물에서 도구명은 명확히 확인하지 못했다.",
+      "category_interpretation": "영상 제작·편집",
+      "tags_interpretation": [
+        "숏폼",
+        "세로 리프레임",
+        "클립 편집"
+      ],
+      "evidence": "caption + selected video frame",
+      "availability": "opened",
+      "caption_source": "original_post_modal"
+    },
+    {
+      "id": "dm-017",
+      "platform": "Instagram",
+      "author": "leadgenman",
+      "observed_url": "https://www.instagram.com/p/Da0i1JcjXRr/",
+      "post_date_displayed": null,
+      "caption_excerpt": "Stopped treating Claude Code like one assistant and started running it like a company.",
+      "content_summary": "42개 스킬을 7개 조직으로 나눠 Claude Code를 운영한다는 자료. Norbert Bezzina의 LinkedIn 게시물을 출처로 언급하나 원출처는 열지 않았다.",
+      "category_interpretation": "AI 업무 자동화",
+      "tags_interpretation": [
+        "Claude Code",
+        "스킬",
+        "조직형 운영"
+      ],
+      "evidence": "DM carousel preview + post caption",
+      "availability": "opened",
+      "caption_source": "original_post_modal",
+      "post_datetime_dom": null
+    },
+    {
+      "id": "dm-018",
+      "platform": "Instagram",
+      "author": "moodmode.ai",
+      "observed_url": "https://www.instagram.com/p/DaxEFgUESSY/",
+      "post_date_displayed": null,
+      "caption_excerpt": "클로드 스킬 안 쓰면, 50%만 쓰는 겁니다.",
+      "content_summary": "Remotion, Claude Mem, UI/UX Pro Max, Marketing Skills, Superpowers를 소개한다. 설치·성과·인기도 주장은 검증하지 않았다.",
+      "category_interpretation": "AI 업무 자동화",
+      "tags_interpretation": [
+        "Claude",
+        "스킬 모음",
+        "Remotion",
+        "UI/UX Pro Max",
+        "Superpowers"
+      ],
+      "evidence": "DM carousel preview + post caption",
+      "availability": "opened",
+      "caption_source": "original_post_modal",
+      "post_datetime_dom": null
+    },
+    {
+      "id": "dm-019",
+      "platform": "Instagram",
+      "author": "thewellpediaproject",
+      "observed_url": "https://www.instagram.com/p/DaxJ28wBPCM/",
+      "observed_author_permalink": "https://www.instagram.com/thewellpediaproject/reel/DaxJ28wBPCM/",
+      "post_date_displayed": "7월 14일",
+      "post_datetime_dom": "2026-07-14T09:20:57.000Z",
+      "caption_excerpt": "제품은 좋은데, 왜 안 될까? Innovation happens at the speed of trust.",
+      "content_summary": "Jon Stein 인터뷰를 통해 혁신과 기술 확산에서 사람 사이 신뢰의 역할을 설명한다.",
+      "category_interpretation": "사업·조직 운영",
+      "tags_interpretation": [
+        "혁신",
+        "신뢰",
+        "인터뷰"
+      ],
+      "evidence": "post caption",
+      "availability": "opened",
+      "caption_source": "original_post_modal"
+    },
+    {
+      "id": "dm-020",
+      "platform": "Instagram",
+      "author": "ianpark.vc",
+      "observed_url": "https://www.instagram.com/p/DaKYBO-lJ7p/",
+      "post_date_displayed": null,
+      "caption_excerpt": "결국 AX는 권력의 게임이다.",
+      "content_summary": "기업 AI 전환의 병목을 기술만이 아니라 조직·정치·신뢰의 문제로 보는 의견. 인용 통계와 연구 출처는 독립 검증하지 않았다.",
+      "category_interpretation": "사업·조직 운영",
+      "tags_interpretation": [
+        "AX",
+        "조직 변화",
+        "컨설팅"
+      ],
+      "evidence": "DM carousel preview + post caption",
+      "availability": "opened",
+      "caption_source": "original_post_modal",
+      "post_datetime_dom": null
+    }
+  ]
+}

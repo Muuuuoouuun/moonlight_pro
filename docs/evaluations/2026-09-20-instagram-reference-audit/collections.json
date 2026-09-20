@@ -1,0 +1,74 @@
+[
+  {
+    "name": "모든 게시물",
+    "scope": "system",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "오디오",
+    "scope": "system",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "성장, 반복, 인생, 태도",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "아기",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "돌",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "아티스크리에이트",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "비즈니스",
+    "scope": "user_collection",
+    "coverage": "visible_grid_end_reached_85_unique_items",
+    "count": 85
+  },
+  {
+    "name": "몽글몽글",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "Fun.",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "영상기술.언젠가",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "챌린지",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "책",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  }
+]
