@@ -1,0 +1,86 @@
+[
+  {
+    "name": "모든 게시물",
+    "url": "https://www.instagram.com/junheokmun/saved/all-posts/",
+    "scope": "system",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "오디오",
+    "url": "https://www.instagram.com/junheokmun/saved/audio/",
+    "scope": "system",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "성장, 반복, 인생, 태도",
+    "url": "https://www.instagram.com/junheokmun/saved/_/18008603435247672/",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "아기",
+    "url": "https://www.instagram.com/junheokmun/saved/_/18026629181470507/",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "돌",
+    "url": "https://www.instagram.com/junheokmun/saved/_/18281571070154960/",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "아티스크리에이트",
+    "url": "https://www.instagram.com/junheokmun/saved/_/17954863352764879/",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "비즈니스",
+    "url": "https://www.instagram.com/junheokmun/saved/_/18028448504536117/",
+    "scope": "user_collection",
+    "coverage": "visible_grid_end_reached_85_unique_items",
+    "count": 85
+  },
+  {
+    "name": "몽글몽글",
+    "url": "https://www.instagram.com/junheokmun/saved/_/18134167927404473/",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "Fun.",
+    "url": "https://www.instagram.com/junheokmun/saved/fun/17885006558820781/",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "영상기술.언젠가",
+    "url": "https://www.instagram.com/junheokmun/saved/_/17918954105853227/",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "챌린지",
+    "url": "https://www.instagram.com/junheokmun/saved/_/1580795340391740/",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  },
+  {
+    "name": "책",
+    "url": "https://www.instagram.com/junheokmun/saved/_/17981111537627066/",
+    "scope": "user_collection",
+    "coverage": "collection_name_only",
+    "count": null
+  }
+]

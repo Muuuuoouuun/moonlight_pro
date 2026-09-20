@@ -1,0 +1,264 @@
+{
+  "review_date": "2026-09-20",
+  "note": "최초 선별 검토 당시 임시 대조 파일의 위치·크기·해시 기록이다. 해당 원문 파일은 이 아카이브에 복사하지 않았으며 재생성·검증에 필요하지 않다. 현재 파일 존재나 원문 해시 재검증을 주장하지 않는다. source ID·공개 URL·시점으로 원문을 다시 확인한다.",
+  "records": [
+    {
+      "source_id": "I5oTw7AJ1Rk",
+      "source_url": "https://www.youtube.com/watch?v=I5oTw7AJ1Rk",
+      "locator": [
+        {
+          "start_seconds": 51,
+          "end_seconds": 155,
+          "label": "0:51–2:35: 문제 선택 → 관련 읽기 → 모순 정리 → 논증 구성"
+        },
+        {
+          "start_seconds": 265,
+          "end_seconds": 319,
+          "label": "4:25–5:19: 남이 원하는 답에 맞추는 것과 자신의 목소리"
+        }
+      ],
+      "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+      "sha256": "7ba062f94f34ae565155da9c235ea08de0fe9d7b1543b25be915d5590d9621e4",
+      "bytes": 12974,
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-one/transcripts/I5oTw7AJ1Rk.json"
+    },
+    {
+      "source_id": "Ml6nXM6dt7I",
+      "source_url": "https://www.youtube.com/watch?v=Ml6nXM6dt7I",
+      "locator": [
+        {
+          "start_seconds": 501,
+          "label": "8:21: 잠정적 독자 설정 — 이전 영상 분석 모델이 제시한 시점"
+        },
+        {
+          "start_seconds": 874,
+          "label": "14:34: 소리 내어 읽는 퇴고 — 이전 영상 분석 모델이 제시한 시점"
+        }
+      ],
+      "evidence_level": "B — 이전 영상 분석 응답 확인; 자막·직접 시청 대조 없음",
+      "sha256": "b2b7bf0da1d74036a49a8131320c7a927c0e9ed48d2e606bd0dc7c8293988f24",
+      "bytes": 2051,
+      "original_location_at_review": "/tmp/moonlight-youtube-research/video-summaries/Ml6nXM6dt7I.json"
+    },
+    {
+      "source_id": "qrpyswoATQ8",
+      "source_url": "https://www.youtube.com/watch?v=qrpyswoATQ8",
+      "locator": [
+        {
+          "start_seconds": 162,
+          "end_seconds": 281,
+          "label": "2:42–4:41: 설명 작성 → 빈틈 찾기 → 재조사 → 재작성"
+        },
+        {
+          "start_seconds": 299,
+          "end_seconds": 401,
+          "label": "4:59–6:41: 블록체인 설명을 다시 쓰는 예"
+        }
+      ],
+      "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+      "sha256": "172f5a47bb3015efc3b11a2ac6c075a6690b9175eeb4d4f5bf94cec5b999b112",
+      "bytes": 22566,
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-two/internal-transcripts/qrpyswoATQ8.json"
+    },
+    {
+      "source_id": "Vl7K_kqvFiU",
+      "source_url": "https://www.youtube.com/watch?v=Vl7K_kqvFiU",
+      "locator": [
+        {
+          "start_seconds": 82,
+          "end_seconds": 145,
+          "label": "1:22–2:25: 배운 것을 바로 사용하기와 약한 구간 따로 연습하기"
+        },
+        {
+          "start_seconds": 197,
+          "end_seconds": 222,
+          "label": "3:17–3:42: 실전 중 막히면 이전 개념으로 돌아가기"
+        }
+      ],
+      "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+      "sha256": "493ec2fb57a2ccccf06e5efc7cdcb24cda7a1549ef652cb4263a28b584cca22b",
+      "bytes": 17913,
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-two/internal-transcripts/Vl7K_kqvFiU.json"
+    },
+    {
+      "source_id": "MhjuZRr5vBY",
+      "source_url": "https://www.youtube.com/watch?v=MhjuZRr5vBY",
+      "locator": [
+        {
+          "start_seconds": 138,
+          "end_seconds": 284,
+          "label": "2:18–4:44: 당면 문제에 맞춰 책을 고르기; 실용 독서로 범위 한정"
+        },
+        {
+          "start_seconds": 420,
+          "end_seconds": 449,
+          "label": "7:00–7:29: 책마다 한 가지를 정해 실천하기"
+        }
+      ],
+      "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+      "sha256": "64262d37af6779e1ea23394942b6f89a829892c46cfa8c0802f2d45a97ed7650",
+      "bytes": 24252,
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-one/transcripts/MhjuZRr5vBY.json"
+    },
+    {
+      "source_id": "Hq8wPiPiOx8",
+      "source_url": "https://www.youtube.com/watch?v=Hq8wPiPiOx8",
+      "locator": [
+        {
+          "start_seconds": 148,
+          "end_seconds": 214,
+          "label": "2:28–3:34: 인출 연습, 익숙함과 배움의 구분"
+        }
+      ],
+      "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+      "sha256": "33b43e49ff33ac38c296e9988f58c53ac0d04d976ca1ad5552cf0d7e528a1303",
+      "bytes": 21989,
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-two/internal-transcripts/Hq8wPiPiOx8.json"
+    },
+    {
+      "source_id": "snAcqJmDwss",
+      "source_url": "https://www.youtube.com/watch?v=snAcqJmDwss",
+      "locator": [
+        {
+          "start_seconds": 760,
+          "end_seconds": 780,
+          "label": "12:40–13:00: 날짜·시간이 정해진 이벤트와 업무 분리"
+        },
+        {
+          "start_seconds": 895,
+          "end_seconds": 1010,
+          "label": "14:55–16:50: 주간 계획, 실행 역할, 역량 실험, 버퍼"
+        }
+      ],
+      "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+      "sha256": "37ab67704383b6385f0ac0e240d668591a39b008eb872c20677f1b700cbb4b41",
+      "bytes": 53134,
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-one/transcripts/snAcqJmDwss.json"
+    },
+    {
+      "source_id": "b7vxBoXds2U",
+      "source_url": "https://www.youtube.com/watch?v=b7vxBoXds2U",
+      "locator": [
+        {
+          "start_seconds": 390,
+          "end_seconds": 466,
+          "label": "6:30–7:46: 현재 행동 기록과 언제·어디서·무엇을 할지 지정"
+        },
+        {
+          "start_seconds": 742,
+          "end_seconds": 779,
+          "label": "12:22–12:59: 유혹을 덜 만나는 동선과 환경"
+        }
+      ],
+      "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+      "sha256": "26d170347d7a725b1749075d397c71c91b999373c90f020d9e47a7f653940486",
+      "bytes": 35015,
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-one/transcripts/b7vxBoXds2U.json"
+    },
+    {
+      "source_id": "5Gty04W5lPg",
+      "source_url": "https://www.youtube.com/watch?v=5Gty04W5lPg",
+      "locator": [
+        {
+          "start_seconds": 128,
+          "end_seconds": 178,
+          "label": "2:08–2:58: 아침 10분과 하루 주요 프로젝트 기록"
+        }
+      ],
+      "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+      "sha256": "052994ac64179e6daab65c5b9a7517daffd43a052983d00ea5194acb1664462d",
+      "bytes": 41232,
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-one/transcripts/5Gty04W5lPg.json"
+    },
+    {
+      "source_id": "2gFLaGislp4",
+      "source_url": "https://www.youtube.com/watch?v=2gFLaGislp4",
+      "locator": [
+        {
+          "start_seconds": 494,
+          "label": "8:14: 일정은 자신과의 협상이라는 설명 — 이전 영상 분석 모델이 제시한 시점"
+        }
+      ],
+      "evidence_level": "B — 이전 영상 분석 응답 확인; 자막·직접 시청 대조 없음",
+      "sha256": "b71acd46cd278da8e26366fe9570a866562dc611ae2cbda9137ef173fc8dda76",
+      "bytes": 1885,
+      "original_location_at_review": "/tmp/moonlight-youtube-research/video-summaries/2gFLaGislp4.json"
+    },
+    {
+      "source_id": "fXyRprdoEoE",
+      "source_url": "https://www.youtube.com/watch?v=fXyRprdoEoE",
+      "locator": [
+        {
+          "start_seconds": 75,
+          "label": "1:15: 의지·동기 의존도를 낮추는 시스템 — 이전 영상 분석 모델 시점"
+        },
+        {
+          "start_seconds": 665,
+          "label": "11:05: 임시방편과 근본 원인 — 이전 영상 분석 모델 시점"
+        }
+      ],
+      "evidence_level": "B — 이전 영상 분석 응답 확인; 자막·직접 시청 대조 없음",
+      "sha256": "61434238d797c6ee0d7a7d2d30b038656c8faca0ff5395c0244d3f61996c13a9",
+      "bytes": 2115,
+      "original_location_at_review": "/tmp/moonlight-youtube-research/video-summaries/fXyRprdoEoE.json"
+    },
+    {
+      "source_id": "r4v4oinvmng",
+      "source_url": "https://www.youtube.com/watch?v=r4v4oinvmng",
+      "locator": [
+        {
+          "start_seconds": 3,
+          "end_seconds": 42,
+          "label": "0:03–0:42: 좌석·직원·메뉴 관찰과 매출 추정; 0:22 오류 가능성 인정"
+        },
+        {
+          "start_seconds": 42,
+          "end_seconds": 60,
+          "label": "0:42–1:00: 기록 루틴과 업종 학습"
+        }
+      ],
+      "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+      "sha256": "b44f5735ea3e63ce5153933efa16b6bf92e62936e49143e0babdfd60276d21c0",
+      "bytes": 2773,
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-one/transcripts/r4v4oinvmng.json"
+    },
+    {
+      "source_id": "xMHi0yBNr6k",
+      "source_url": "https://www.youtube.com/watch?v=xMHi0yBNr6k",
+      "locator": [
+        {
+          "start_seconds": 0,
+          "label": "0:00: 나쁜 소식을 먼저 듣는다는 설명 — 이전 영상 분석 모델 시점"
+        },
+        {
+          "start_seconds": 21,
+          "label": "0:21: 장애물을 알아야 도울 수 있음 — 이전 영상 분석 모델 시점"
+        }
+      ],
+      "evidence_level": "B — 이전 영상 분석 응답 확인; 자막·직접 시청 대조 없음",
+      "sha256": "10bbd3c9c477a7e79925423e7c364a7ae38d6908c6593348544addb811477895",
+      "bytes": 1967,
+      "original_location_at_review": "/tmp/moonlight-youtube-research/video-summaries/xMHi0yBNr6k.json"
+    },
+    {
+      "source_id": "pwKuAkgUWnc",
+      "source_url": "https://www.youtube.com/watch?v=pwKuAkgUWnc",
+      "locator": [
+        {
+          "start_seconds": 90,
+          "end_seconds": 193,
+          "label": "1:30–3:13: 작심삼일·가치·아침 예배라는 개인 경험"
+        },
+        {
+          "start_seconds": 608,
+          "end_seconds": 666,
+          "label": "10:08–11:06: 의미를 찾은 일과 요리 유학 사례"
+        }
+      ],
+      "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+      "sha256": "27254b9aa1ce6922b443997cc1e30a96a1d11452c11559017029c61ab670247b",
+      "bytes": 24769,
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-one/transcripts/pwKuAkgUWnc.json"
+    }
+  ]
+}

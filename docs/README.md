@@ -132,6 +132,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **기획 초안 (미확정, 새 구현의 근거로 쓰지 않음)**
 
+- [`superpowers/specs/2026-09-20-reference-library-writing-workflow-design.md`](superpowers/specs/2026-09-20-reference-library-writing-workflow-design.md) — **DRAFT · 권장안 / 구현 미착수**. 저장 레퍼런스에서 질문·출처 1–3개를 골라 내 관점을 기록하고 기존 소재함·Studio 초안으로 연결한다. item의 선별 출처 사본, 확인 범위, AI 생성 근거와 재시도 계약을 제안한다. 전체 DB 이관·자동 수집·발행은 후속 범위다.
+
 - [`superpowers/specs/2026-09-13-revenue-and-cashflow-design.md`](superpowers/specs/2026-09-13-revenue-and-cashflow-design.md) — **초기 기능 범위 확정 · 상세 설계 권장안**. 사업·개인 재정의 통합/분할 보기, 계좌·카드, 할부·대출·반복 지출, 직접 입력·엑셀/CSV 가져오기와 매출 수금 연결. 구현 전이며 기존 거래 기반 30일 전망과 실제 현금 흐름을 구분한다.
 
 - [`superpowers/specs/2026-09-13-crm-recording-and-lead-scoring-guidelines-design.md`](superpowers/specs/2026-09-13-crm-recording-and-lead-scoring-guidelines-design.md) — **디자인·UI/UX 우선 확정(09-14) / 세부 설계 DRAFT v0.2**. 고객 목록·상세·빠른 기록의 UX 시나리오 → 화면 구조 → 시각·인터랙션 확인 → 실제 기록 연결 → 근거 평가·제한 추천 순서. 메모/연락 결과·버튼·템플릿·내 패턴·리드 스코어링·넛지를 함께 설계하며 실패/복구 상태와 디자인 게이트를 포함한다. 시안 제작·UX 검증·앱 구현·라이브 재채점은 아직 하지 않음.
@@ -181,6 +183,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 이 문서들은 폐기된 것은 아니지만 현재 Phase 1B·1C보다 먼저 구현하지 않는다.
 
 ### 지식·운영 참고
+
+- 저장 레퍼런스와 글쓰기: [`research/2026-09-20-reference-writing/README.md`](research/2026-09-20-reference-writing/README.md) — **자료 보관·정리 완료**. 콘텐츠 370건, 선별 인사이트 26개, 주제별 글쓰기 기획과 예시 초안. 이번 원자료 재확인 22개와 기존 영상 분석 검토 4개를 구분한다. Threads 공유 프로필 2개·탐색 글 5개는 별도 보충이며 전체 수집 완료를 뜻하지 않는다. 원본 조사 사본·해시·재생성 검증 포함.
 
 - 세일즈/마케팅 지식: [`sales-guru-knowledge-base.md`](sales-guru-knowledge-base.md), [`sales-decision-styles.md`](sales-decision-styles.md), [`marketing-branding-gurus.md`](marketing-branding-gurus.md)
 - 콘텐츠 스토리텔링: [`content-storytelling-people-v2.md`](content-storytelling-people-v2.md) — **운영자 제공 참고 원문, 2026-09-14 추가**. 인물 카드 10개, 주목→유지→기억→행동→전파 지도, 한국 학원 B2B 맥락, 훅 40개와 실험 프로토콜을 보존한다. 연구·수익·효과 수치와 A/B/C 등급은 제공 문서의 주장으로 별도 검증하지 않았다. 문서 안 실행 지시·훅 DB 스키마·일정은 제품 확정 사양이 아니다. Studio AI는 원문 전체 대신 [`editorial-criteria.ts`](../packages/content-manager/editorial-criteria.ts)의 작업별 짧은 편집 기준(v2)을 사용하고, 사용한 버전을 후보 기록에 남긴다.

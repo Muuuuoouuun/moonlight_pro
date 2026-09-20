@@ -1,0 +1,5813 @@
+{
+  "checked_at": "2026-09-19T17:09:06.942404+00:00",
+  "records": [
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 1,
+      "video_id": "5Gty04W5lPg",
+      "title": "당신의 경쟁자가 *절대* 보게 두면 안되는 영상 | 타이 로페즈",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=5Gty04W5lPg",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#5Gty04W5lPg"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 2,
+      "video_id": "TQsrWa_mGCE",
+      "title": "하버드 학생들에게 해주고 싶은 이야기 | 조던 피터슨 (한글자막)",
+      "channel": "비버처럼앞니쏙",
+      "url": "https://www.youtube.com/watch?v=TQsrWa_mGCE",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "소통·관계",
+        "신앙·가치"
+      ],
+      "detail_file": "01-growth.md#TQsrWa_mGCE"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 3,
+      "video_id": "oYXHmzMvS4E",
+      "title": "앉아있으면 머리가 나빠져요. 뇌를 제대로 알려드릴게요.",
+      "channel": "돈공-돈버는공식",
+      "url": "https://www.youtube.com/watch?v=oYXHmzMvS4E",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "건강",
+        "회복·감정"
+      ],
+      "detail_file": "01-growth.md#oYXHmzMvS4E"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 4,
+      "video_id": "Kc_cvAXCs4Y",
+      "title": "고생하면 머리가 좋아져요. 뇌를 제대로 알려드릴게요 (2)",
+      "channel": "돈공-돈버는공식",
+      "url": "https://www.youtube.com/watch?v=Kc_cvAXCs4Y",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "소통·관계",
+        "건강"
+      ],
+      "detail_file": "01-growth.md#Kc_cvAXCs4Y"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 5,
+      "video_id": "wGvlcUqhdZU",
+      "title": "시크릿 주인공 중 한 명이 직접 한 말..*충격 주의* | 동기부여 | 존아사라프",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=wGvlcUqhdZU",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "회복·감정"
+      ],
+      "detail_file": "01-growth.md#wGvlcUqhdZU"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 6,
+      "video_id": "b7vxBoXds2U",
+      "title": "내 인생을 원자 단위로 쪼개 변화시키는 방법",
+      "channel": "돈공-돈버는공식",
+      "url": "https://www.youtube.com/watch?v=b7vxBoXds2U",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#b7vxBoXds2U"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 7,
+      "video_id": "Q7OStpDzvYM",
+      "title": "내 인생을 원자 단위로 쪼개 변화시키는 방법 (2)",
+      "channel": "돈공-돈버는공식",
+      "url": "https://www.youtube.com/watch?v=Q7OStpDzvYM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#Q7OStpDzvYM"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 8,
+      "video_id": "ikto49_6Cqk",
+      "title": "단순하고 멋진 삶은 지금 바로 시작할 수 있습니다",
+      "channel": "돈공-돈버는공식",
+      "url": "https://www.youtube.com/watch?v=ikto49_6Cqk",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#ikto49_6Cqk"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 9,
+      "video_id": "c0Wl9K2gBIo",
+      "title": "베푸는사람 vs 뺏는사람 vs 기브앤테이크(feat. 코난 오브라이언, 버락 오바마)",
+      "channel": "Success Code, 데일리 동기부여 채널",
+      "url": "https://www.youtube.com/watch?v=c0Wl9K2gBIo",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "실행·습관",
+        "신앙·가치"
+      ],
+      "detail_file": "01-growth.md#c0Wl9K2gBIo"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 10,
+      "video_id": "tupPml1hQjQ",
+      "title": "전설의 나폴레온 힐 연설 영상",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=tupPml1hQjQ",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "신앙·가치",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#tupPml1hQjQ"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 11,
+      "video_id": "eAIqY3BNUwc",
+      "title": "많은 영재들도 결국 \"다 망하더군\" | 트럼프",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=eAIqY3BNUwc",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "신앙·가치"
+      ],
+      "detail_file": "01-growth.md#eAIqY3BNUwc"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 12,
+      "video_id": "gmrs8UxAZwo",
+      "title": "성공한 엘리트 중 상위 10%는 '이것'이 달랐다",
+      "channel": "작심만일 : 성공 마인드 동반자",
+      "url": "https://www.youtube.com/watch?v=gmrs8UxAZwo",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "도구·AI"
+      ],
+      "detail_file": "01-growth.md#gmrs8UxAZwo"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 13,
+      "video_id": "I5oTw7AJ1Rk",
+      "title": "당신을 엘리트로 만들 단 한 가지의 '성공' 습관",
+      "channel": "작심만일 : 성공 마인드 동반자",
+      "url": "https://www.youtube.com/watch?v=I5oTw7AJ1Rk",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#I5oTw7AJ1Rk"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 14,
+      "video_id": "z7r0DIjRGd4",
+      "title": "[밥 로스] 듣고 있으면 절로 힐링되는 밥 아저씨의 인생 명언들 (한영 자막)",
+      "channel": "Project스노우볼",
+      "url": "https://www.youtube.com/watch?v=z7r0DIjRGd4",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#z7r0DIjRGd4"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 15,
+      "video_id": "Zixr-ttMfRc",
+      "title": "성공하는 사람은 반드시 이 원칙을 지키며 말한다 (원본 조회수: 1520만회)",
+      "channel": "작심만일 : 성공 마인드 동반자",
+      "url": "https://www.youtube.com/watch?v=Zixr-ttMfRc",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#Zixr-ttMfRc"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 16,
+      "video_id": "BSGNPHxonKI",
+      "title": "인생을 바꾸는 아침습관ㅣ동기부여ㅣ한영 자막",
+      "channel": "잭스파이어 Jackspire",
+      "url": "https://www.youtube.com/watch?v=BSGNPHxonKI",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정"
+      ],
+      "detail_file": "01-growth.md#BSGNPHxonKI"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 17,
+      "video_id": "J9bpQxB4iOE",
+      "title": "데드라인이 없어서 일을 미루기만 하는 당신이 지금 봐야하는 영상",
+      "channel": "돈공-돈버는공식",
+      "url": "https://www.youtube.com/watch?v=J9bpQxB4iOE",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "소통·관계",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#J9bpQxB4iOE"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 18,
+      "video_id": "bkJcRq1Pfys",
+      "title": "우리 모두가 갖고 있는 행복 치트키 - 게리 바이너척",
+      "channel": "게리 바이너척 Gary Vaynerchuk Korean",
+      "url": "https://www.youtube.com/watch?v=bkJcRq1Pfys",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "회복·감정",
+        "실행·습관",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#bkJcRq1Pfys"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 19,
+      "video_id": "Uuq4OME-7-M",
+      "title": "인생을 성공으로 이끄는 ‘5초 법칙’ㅣ멜 로빈스 동기부여ㅣ한영 자막",
+      "channel": "잭스파이어 Jackspire",
+      "url": "https://www.youtube.com/watch?v=Uuq4OME-7-M",
+      "status": "영상 직접 분석",
+      "transcript_collected": true,
+      "transcript_language": "vi",
+      "auto_generated": true,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#Uuq4OME-7-M"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 20,
+      "video_id": "3EtsD-ZMtOw",
+      "title": "50조 부자의 인터뷰 - 성공적인 인생과 비즈니스를 위한 5가지 조언 | 동기부여학과",
+      "channel": "동기부여학과",
+      "url": "https://www.youtube.com/watch?v=3EtsD-ZMtOw",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#3EtsD-ZMtOw"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 21,
+      "video_id": "nFBoJ5SKe2s",
+      "title": "두려움에서 나오세요 - 당신을 다시 깨우는 영상 | 댄 페냐 | 한영자막",
+      "channel": "제임스비디오 James video",
+      "url": "https://www.youtube.com/watch?v=nFBoJ5SKe2s",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#nFBoJ5SKe2s"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 22,
+      "video_id": "7X-BOvSaQBw",
+      "title": "당신의 인생을 180도 바꿀 수 있는 30분 마인드셋 | 동기부여학과",
+      "channel": "동기부여학과",
+      "url": "https://www.youtube.com/watch?v=7X-BOvSaQBw",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "기타",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#7X-BOvSaQBw"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 23,
+      "video_id": "dGJya2dpjko",
+      "title": "[닐 디그래스 타이슨] 아는 것과 생각해 내는 힘의 차이 (한영 자막)",
+      "channel": "Project스노우볼",
+      "url": "https://www.youtube.com/watch?v=dGJya2dpjko",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#dGJya2dpjko"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 24,
+      "video_id": "NyA5y_0RDeU",
+      "title": "모든 남자들을 위한 41가지 신조",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=NyA5y_0RDeU",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "신앙·가치",
+        "소통·관계",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#NyA5y_0RDeU"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 25,
+      "video_id": "v14CZir0ufs",
+      "title": "2,400만 유튜버가 말하는 꿈처럼 사는 법",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=v14CZir0ufs",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#v14CZir0ufs"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 26,
+      "video_id": "Z4pXqX5Dsrc",
+      "title": "당신이 원하는 것은 다 얻을 수 있다. 하지만..?",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=Z4pXqX5Dsrc",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#Z4pXqX5Dsrc"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 27,
+      "video_id": "C87fr5Q12aY",
+      "title": "4000만 열광한 공부법 “적게 공부하고, 영리하게 공부하라“",
+      "channel": "잭스파이어 Jackspire",
+      "url": "https://www.youtube.com/watch?v=C87fr5Q12aY",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "건강"
+      ],
+      "detail_file": "01-growth.md#C87fr5Q12aY"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 28,
+      "video_id": "iB2AFvw8sBw",
+      "title": "드디어 공개, 조던피터슨 공부법",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=iB2AFvw8sBw",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#iB2AFvw8sBw"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 29,
+      "video_id": "rKhI2xoQH8U",
+      "title": "부자들만 아는 당신도 모르게 노예가 된 이유 | 동기부여",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=rKhI2xoQH8U",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "사업·브랜딩",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#rKhI2xoQH8U"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 30,
+      "video_id": "ph4wfrlhwlQ",
+      "title": "성공을 위해 반드시 마스터해야 할 7가지 요소 l 브라이언 트레이시 Brian Tracy",
+      "channel": "동기부여학과",
+      "url": "https://www.youtube.com/watch?v=ph4wfrlhwlQ",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "사업·브랜딩"
+      ],
+      "detail_file": "01-growth.md#ph4wfrlhwlQ"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 31,
+      "video_id": "RKdLHF9sj3w",
+      "title": "종이 한 장으로 400억 부자가 되는 법 | 브라이언 트레이시",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=RKdLHF9sj3w",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "사업·브랜딩"
+      ],
+      "detail_file": "01-growth.md#RKdLHF9sj3w"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 32,
+      "video_id": "hehPTOmn6vE",
+      "title": "해외에서 난리난 공부법 (드디어 번역)",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=hehPTOmn6vE",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#hehPTOmn6vE"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 33,
+      "video_id": "Ki5IMN632KU",
+      "title": "가난의 자장을 만드는 '이것'부터 비우면 인생이 확실히 달라집니다.",
+      "channel": "KELLY CHOI",
+      "url": "https://www.youtube.com/watch?v=Ki5IMN632KU",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정"
+      ],
+      "detail_file": "01-growth.md#Ki5IMN632KU"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 34,
+      "video_id": "zqonx8Ea-S4",
+      "title": "꼭 알아야 할 긍정보다 70배 강력한 힘 | 트레버 모아와드",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=zqonx8Ea-S4",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#zqonx8Ea-S4"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 35,
+      "video_id": "sfxHiQebtH4",
+      "title": "\"뇌가 싹 맑아집니다.\" 스웨덴인이 유독 똑똑한 이유 (김익한 교수 3부)",
+      "channel": "지식인사이드",
+      "url": "https://www.youtube.com/watch?v=sfxHiQebtH4",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#sfxHiQebtH4"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 36,
+      "video_id": "1mSTAGRCtXE",
+      "title": "젠틀몬스터 김한국 대표 강연",
+      "channel": "opencore AI",
+      "url": "https://www.youtube.com/watch?v=1mSTAGRCtXE",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "신앙·가치"
+      ],
+      "detail_file": "01-growth.md#1mSTAGRCtXE"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 37,
+      "video_id": "RnrZJOHY9tY",
+      "title": "시대가 변해도 절대 바뀌지 않는 5가지 핵심능력  | 동기부여학과",
+      "channel": "동기부여학과",
+      "url": "https://www.youtube.com/watch?v=RnrZJOHY9tY",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "도구·AI"
+      ],
+      "detail_file": "01-growth.md#RnrZJOHY9tY"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 38,
+      "video_id": "HqvqIknMFKI",
+      "title": "90년간의 깨달음, 성공비밀 5가지 - 경영의신 이나모리 가즈오, 왜 리더인가? [도서 협찬] | 동기부여학과",
+      "channel": "동기부여학과",
+      "url": "https://www.youtube.com/watch?v=HqvqIknMFKI",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#HqvqIknMFKI"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 39,
+      "video_id": "UblIF5Utawg",
+      "title": "백수에서 월 1억을 벌기까지 (29살)",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=UblIF5Utawg",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관",
+        "회복·감정"
+      ],
+      "detail_file": "01-growth.md#UblIF5Utawg"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 40,
+      "video_id": "7WwS0OET-HQ",
+      "title": "게리 바이너척, \"개소리를 다 무시하는 것이 최고의 성공 요인\" |  7가지 성공비밀",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=7WwS0OET-HQ",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "소통·관계",
+        "회복·감정"
+      ],
+      "detail_file": "01-growth.md#7WwS0OET-HQ"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 41,
+      "video_id": "VK9WKcoqMyY",
+      "title": "백만장자들의 효율성 증가 4가지 방법",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=VK9WKcoqMyY",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#VK9WKcoqMyY"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 42,
+      "video_id": "tGXQ5b5yRaM",
+      "title": "조던 피터슨 | 당신이 먹을 독을 선택하세요",
+      "channel": "조던 피터슨 한국 공식 채널",
+      "url": "https://www.youtube.com/watch?v=tGXQ5b5yRaM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#tGXQ5b5yRaM"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 43,
+      "video_id": "qO1tof4ORs0",
+      "title": "저는 부자들의 \"이것\"을 보고 돈을 더 벌기 시작했습니다(前신사임당 주언규)",
+      "channel": "꿈나무의 100억 부자 챌린지",
+      "url": "https://www.youtube.com/watch?v=qO1tof4ORs0",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#qO1tof4ORs0"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 44,
+      "video_id": "9d5GWZyTtXE",
+      "title": "\"경이롭다\" 무료 AI 웹사이트 BEST 5",
+      "channel": "페이퍼로지",
+      "url": "https://www.youtube.com/watch?v=9d5GWZyTtXE",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "도구·AI",
+        "사업·브랜딩",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#9d5GWZyTtXE"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 45,
+      "video_id": "tkHvxLwLx3M",
+      "title": "[스티브 잡스] A급 인재와 B급, C급 직원의 차이 (한영 자막)",
+      "channel": "Project스노우볼",
+      "url": "https://www.youtube.com/watch?v=tkHvxLwLx3M",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "소통·관계",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#tkHvxLwLx3M"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 46,
+      "video_id": "eZF3GwAArC0",
+      "title": "자수성가한 해외 억만장자 12인에게 직접 듣는 성공의 비결 (한영 자막)",
+      "channel": "Project스노우볼",
+      "url": "https://www.youtube.com/watch?v=eZF3GwAArC0",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#eZF3GwAArC0"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 47,
+      "video_id": "oYEvR8OUX28",
+      "title": "우리가 몰랐던 트럼프의 따뜻한 성공조언",
+      "channel": "오너의 그릇",
+      "url": "https://www.youtube.com/watch?v=oYEvR8OUX28",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩"
+      ],
+      "detail_file": "01-growth.md#oYEvR8OUX28"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 48,
+      "video_id": "BPAT2nq3_lQ",
+      "title": "뇌를 어떻게 성공 머신으로 만들까?",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=BPAT2nq3_lQ",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#BPAT2nq3_lQ"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 49,
+      "video_id": "MhjuZRr5vBY",
+      "title": "책 읽으면 성공한다는 말만 믿고 1년 동안 자기계발서 143권을 읽었더니...",
+      "channel": "타임프리",
+      "url": "https://www.youtube.com/watch?v=MhjuZRr5vBY",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#MhjuZRr5vBY"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 50,
+      "video_id": "uPJiDgcjLd4",
+      "title": "내일부터는 없다. 지금 당장 절실하게 시작하라 | 동기부여 영상",
+      "channel": "커넥트더닷 : Connect the Dots",
+      "url": "https://www.youtube.com/watch?v=uPJiDgcjLd4",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "신앙·가치"
+      ],
+      "detail_file": "01-growth.md#uPJiDgcjLd4"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 51,
+      "video_id": "c2nFwHDJVio",
+      "title": "지금 당장 갖다 버려야 할 미국 하위 50%의 가난한 12가지 생활 습관ㅣ알렉스 홀모지ㅣ동기부여학과",
+      "channel": "동기부여학과",
+      "url": "https://www.youtube.com/watch?v=c2nFwHDJVio",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩"
+      ],
+      "detail_file": "01-growth.md#c2nFwHDJVio"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 52,
+      "video_id": "8XN63NlWwUA",
+      "title": "하루의 시작을 완전히 바꿔 줄 초대형 억만장자 부자 3명에게 듣는 고밀도 인생조언 7가지ㅣ폴 오팔라ㅣ브라이언 스미스ㅣ앤드류 비터비 | 동기부여학과",
+      "channel": "동기부여학과",
+      "url": "https://www.youtube.com/watch?v=8XN63NlWwUA",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#8XN63NlWwUA"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 53,
+      "video_id": "S8255fBMrCQ",
+      "title": "알아두면 무조건 성공하는 7가지 부자의 기술ㅣ패드릭 뱃 데이비드(Patrick Bet-David)ㅣ동기부여학과ㅣ부자 마인드 습관 성공 조언",
+      "channel": "동기부여학과",
+      "url": "https://www.youtube.com/watch?v=S8255fBMrCQ",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#S8255fBMrCQ"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 54,
+      "video_id": "5BX7dfoQY1k",
+      "title": "무의식을 활용해 호감 사는 법",
+      "channel": "EBS",
+      "url": "https://www.youtube.com/watch?v=5BX7dfoQY1k",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#5BX7dfoQY1k"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 55,
+      "video_id": "JhUbuiPzyTw",
+      "title": "1000억대 부자가 가난을 벗어나기위해 포기해야 했던 루틴 3가지 - 알렉스 홀모지(Alex Hormizi )| 동기부여학과",
+      "channel": "동기부여학과",
+      "url": "https://www.youtube.com/watch?v=JhUbuiPzyTw",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩"
+      ],
+      "detail_file": "01-growth.md#JhUbuiPzyTw"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 56,
+      "video_id": "m_Z-ATOg7eM",
+      "title": "\"혼자 뿌듯해해요.\" 일 못하는 사람들의 '치명적인' 착각 3가지 (드로우앤드류 1부)",
+      "channel": "지식인사이드",
+      "url": "https://www.youtube.com/watch?v=m_Z-ATOg7eM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#m_Z-ATOg7eM"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 57,
+      "video_id": "ewlbNkd2ZoE",
+      "title": "그동안 제 영상봐주셔서 감사합니다. (S1 E8)",
+      "channel": "드로우앤드류",
+      "url": "https://www.youtube.com/watch?v=ewlbNkd2ZoE",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관",
+        "회복·감정"
+      ],
+      "detail_file": "01-growth.md#ewlbNkd2ZoE"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 58,
+      "video_id": "vtyeVfUojz8",
+      "title": "가장 빠르게 부의 추월차선으로 올라타는 3가지 습관",
+      "channel": "드로우앤드류",
+      "url": "https://www.youtube.com/watch?v=vtyeVfUojz8",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩"
+      ],
+      "detail_file": "01-growth.md#vtyeVfUojz8"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 59,
+      "video_id": "1WpafI-HmY4",
+      "title": "워렌버핏과의 식사를 대체하는 영상 | 동기부여",
+      "channel": "성공비밀 by 민팍",
+      "url": "https://www.youtube.com/watch?v=1WpafI-HmY4",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#1WpafI-HmY4"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 60,
+      "video_id": "OpxGLFOzBRE",
+      "title": "평범한 사람이 12개월 안에 99%보다 앞서 나가는 3 단계",
+      "channel": "성공한스푼",
+      "url": "https://www.youtube.com/watch?v=OpxGLFOzBRE",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#OpxGLFOzBRE"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 61,
+      "video_id": "yCxpn6_z3Xk",
+      "title": "[*100% 실화] 누구도 믿지 않았던 '흙수저' 출신인 내가 목표를 다 이뤄낸 이유...",
+      "channel": "터닝포인트 - 위대한 성공의 시작점",
+      "url": "https://www.youtube.com/watch?v=yCxpn6_z3Xk",
+      "status": "내용 미확보",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": null,
+      "tags": [],
+      "detail_file": "01-growth.md#yCxpn6_z3Xk"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 62,
+      "video_id": "FN27nl62SVU",
+      "title": "부자가 될 20대들이 알아야하는 3가지",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=FN27nl62SVU",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩"
+      ],
+      "detail_file": "01-growth.md#FN27nl62SVU"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 63,
+      "video_id": "AADTDGBpkGo",
+      "title": "월 수익 0원 되고 보니 가장 후회되는 것",
+      "channel": "주언규 joo earn gyu",
+      "url": "https://www.youtube.com/watch?v=AADTDGBpkGo",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "회복·감정"
+      ],
+      "detail_file": "01-growth.md#AADTDGBpkGo"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 64,
+      "video_id": "osllx6FCe6k",
+      "title": "용기있게 도전하는 어른이 되는 법",
+      "channel": "드로우앤드류",
+      "url": "https://www.youtube.com/watch?v=osllx6FCe6k",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#osllx6FCe6k"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 65,
+      "video_id": "V-LDoWiUvoM",
+      "title": "'50만'명 지휘하고 깨달은 상위 '0.1%'들의 결정적인 차이 (고성균 장군 1부)",
+      "channel": "지식인사이드",
+      "url": "https://www.youtube.com/watch?v=V-LDoWiUvoM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#V-LDoWiUvoM"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 66,
+      "video_id": "kICh_d6tHQk",
+      "title": "1 년 넘게 하루에 12 시간 공부 한 방법",
+      "channel": "James Scholz",
+      "url": "https://www.youtube.com/watch?v=kICh_d6tHQk",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "건강"
+      ],
+      "detail_file": "01-growth.md#kICh_d6tHQk"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 67,
+      "video_id": "jS-Jk9fT7uQ",
+      "title": "레전드 인공지능 과학자가 별세하기전에 남긴 MIT 최고의 강의 \"말을 하는 법\"",
+      "channel": "JASON MEDIA",
+      "url": "https://www.youtube.com/watch?v=jS-Jk9fT7uQ",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#jS-Jk9fT7uQ"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 68,
+      "video_id": "3r6hUpSKdHI",
+      "title": "누구든 1000% 바꿀 뇌 개조법 공유 금지 | 존 아사라프",
+      "channel": "성공비밀 by 민팍",
+      "url": "https://www.youtube.com/watch?v=3r6hUpSKdHI",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "회복·감정"
+      ],
+      "detail_file": "01-growth.md#3r6hUpSKdHI"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 69,
+      "video_id": "yA8PsufH-C8",
+      "title": "대중을 매료시키는 화법의 비밀 | 말을 제대로 잘하는 방법",
+      "channel": "돈공-돈버는공식",
+      "url": "https://www.youtube.com/watch?v=yA8PsufH-C8",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#yA8PsufH-C8"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 70,
+      "video_id": "zH4E-NWJVPo",
+      "title": "소심한 사람의 인생이 망가지는 과정",
+      "channel": "주언규 joo earn gyu",
+      "url": "https://www.youtube.com/watch?v=zH4E-NWJVPo",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#zH4E-NWJVPo"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 71,
+      "video_id": "0wgJxFiJL2c",
+      "title": "이것만 하지 않아도 성공했을텐데...",
+      "channel": "주언규 joo earn gyu",
+      "url": "https://www.youtube.com/watch?v=0wgJxFiJL2c",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#0wgJxFiJL2c"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 72,
+      "video_id": "y00tvum7g1I",
+      "title": "인생을 바꾸는 법 - 한 걸음씩 나아가기",
+      "channel": "한눈에 보는 세상 – Kurzgesagt",
+      "url": "https://www.youtube.com/watch?v=y00tvum7g1I",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "건강"
+      ],
+      "detail_file": "01-growth.md#y00tvum7g1I"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 73,
+      "video_id": "XqMvQSr7Px8",
+      "title": "대부분의 사람들이 이걸 몰라서 부자가 되지 못해요 | 되더라 - 현우진 | 공부자극 | 동기부여",
+      "channel": "오늘의글",
+      "url": "https://www.youtube.com/watch?v=XqMvQSr7Px8",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#XqMvQSr7Px8"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 74,
+      "video_id": "720t8HBjWns",
+      "title": "한계에 부딪쳤을 때 당신에게 필요한 동기부여 영상 | 한영 자막",
+      "channel": "제임스비디오 James video",
+      "url": "https://www.youtube.com/watch?v=720t8HBjWns",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "신앙·가치",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#720t8HBjWns"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 75,
+      "video_id": "MazwNckdQ-8",
+      "title": "매출 720억을 만들어준, 일반인을 억대 연봉으로 만들어준 독서법 비밀 최종 공개, 독서법종결, 한번만 따라하면 평생 써먹습니다 [노아AI현대표]",
+      "channel": "자본운동가",
+      "url": "https://www.youtube.com/watch?v=MazwNckdQ-8",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#MazwNckdQ-8"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 76,
+      "video_id": "b8b2bUnH_NI",
+      "title": "재능없이 평범한 사람이 성공하는 5단계 전략",
+      "channel": "드로우앤드류",
+      "url": "https://www.youtube.com/watch?v=b8b2bUnH_NI",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#b8b2bUnH_NI"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 77,
+      "video_id": "bbOsoEEQMsM",
+      "title": "세계 최고 두뇌 과학자가 찾은 90%가 성공하는 목표설정법",
+      "channel": "터닝포인트 - 위대한 성공의 시작점",
+      "url": "https://www.youtube.com/watch?v=bbOsoEEQMsM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "건강"
+      ],
+      "detail_file": "01-growth.md#bbOsoEEQMsM"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 78,
+      "video_id": "0S3IUndOqT4",
+      "title": "미국 네이비 씰도 배우는 스트레스 관리법 (지나영 교수 3부)",
+      "channel": "지식인사이드",
+      "url": "https://www.youtube.com/watch?v=0S3IUndOqT4",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "회복·감정",
+        "건강"
+      ],
+      "detail_file": "01-growth.md#0S3IUndOqT4"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 79,
+      "video_id": "-tqTeTa5XS8",
+      "title": "왜 우리는 큰 꿈을 꾸지 않을까? 못하는 걸까?",
+      "channel": "드로우앤드류",
+      "url": "https://www.youtube.com/watch?v=-tqTeTa5XS8",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#-tqTeTa5XS8"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 80,
+      "video_id": "IsgbHSYRYts",
+      "title": "인간의 어리석음에 대한 학습 by 버핏 & 멍거 (12 버크셔)",
+      "channel": "몽뮤",
+      "url": "https://www.youtube.com/watch?v=IsgbHSYRYts",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#IsgbHSYRYts"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 81,
+      "video_id": "8eGDJNBzysM",
+      "title": "[원본풀영상] 책에 차마 쓰지 못한 사장학개론 | 김승호의 북콘서트",
+      "channel": "스노우폭스북스",
+      "url": "https://www.youtube.com/watch?v=8eGDJNBzysM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#8eGDJNBzysM"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 82,
+      "video_id": "BXHUJExC_eM",
+      "title": "할수록 가난해지는 최악의 독서 습관 5",
+      "channel": "주언규 joo earn gyu",
+      "url": "https://www.youtube.com/watch?v=BXHUJExC_eM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#BXHUJExC_eM"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 83,
+      "video_id": "6x3b_70jBvk",
+      "title": "???: 찬물 샤워를 해보세요",
+      "channel": "너덜트",
+      "url": "https://www.youtube.com/watch?v=6x3b_70jBvk",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#6x3b_70jBvk"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 84,
+      "video_id": "qL_p0xm0Qt8",
+      "title": "우리가 살면서 문학작품을 꼭 읽어야 하는 이유",
+      "channel": "한국사장학교 TV",
+      "url": "https://www.youtube.com/watch?v=qL_p0xm0Qt8",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "사업·브랜딩",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#qL_p0xm0Qt8"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 85,
+      "video_id": "qY1P_CmL8aQ",
+      "title": "인생 노트앱...드디어 찾았습니다..!",
+      "channel": "노마드 코더 Nomad Coders",
+      "url": "https://www.youtube.com/watch?v=qY1P_CmL8aQ",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "도구·AI",
+        "학습·기록",
+        "사업·브랜딩"
+      ],
+      "detail_file": "01-growth.md#qY1P_CmL8aQ"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 86,
+      "video_id": "9T5DukkikAg",
+      "title": "나와 함께 오래갈 사람",
+      "channel": "한국사장학교 TV",
+      "url": "https://www.youtube.com/watch?v=9T5DukkikAg",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#9T5DukkikAg"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 87,
+      "video_id": "Zh9fVMzLUlk",
+      "title": "성공포르노 성수기, 새해다짐 시즌에 속지 않는법",
+      "channel": "동기부여 뒤집기",
+      "url": "https://www.youtube.com/watch?v=Zh9fVMzLUlk",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "회복·감정"
+      ],
+      "detail_file": "01-growth.md#Zh9fVMzLUlk"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 88,
+      "video_id": "pwKuAkgUWnc",
+      "title": "내가 끊임없이 실패하는 이유, 의지력이 부족해서가 아닙니다! ㅣ 베이직교회 조정민 목사 ㅣ 잘잘법 174회",
+      "channel": "잘잘법 :잘 믿고 잘 사는 법",
+      "url": "https://www.youtube.com/watch?v=pwKuAkgUWnc",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "신앙·가치",
+        "회복·감정"
+      ],
+      "detail_file": "01-growth.md#pwKuAkgUWnc"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 89,
+      "video_id": "b1d3yB7Vv7c",
+      "title": "피가 되고 살이 되는 쓴소리 ft.백종원",
+      "channel": "잘될거야",
+      "url": "https://www.youtube.com/watch?v=b1d3yB7Vv7c",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "소통·관계",
+        "동기부여"
+      ],
+      "detail_file": "01-growth.md#b1d3yB7Vv7c"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 90,
+      "video_id": "Wrma9n0ibcg",
+      "title": "레이달리오의 성공법칙",
+      "channel": "코인 데이터",
+      "url": "https://www.youtube.com/watch?v=Wrma9n0ibcg",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩"
+      ],
+      "detail_file": "01-growth.md#Wrma9n0ibcg"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 91,
+      "video_id": "Erx28AkkU6w",
+      "title": "\"모든 학생에 전액 장학금을\" 1조 3천억 원 기부 / SBS / #D리포트",
+      "channel": "SBS 뉴스",
+      "url": "https://www.youtube.com/watch?v=Erx28AkkU6w",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "신앙·가치",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#Erx28AkkU6w"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 92,
+      "video_id": "ECh25K1_6SI",
+      "title": "하고 싶은 일, 해야 하는 일ㅣ동기부여 영상 모음",
+      "channel": "자기객관화",
+      "url": "https://www.youtube.com/watch?v=ECh25K1_6SI",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#ECh25K1_6SI"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 93,
+      "video_id": "8onUlhw_qtQ",
+      "title": "진짜 내 꿈을 찾는 법!! 방황하고 있는 그대에게✨",
+      "channel": "CosmoJina 코스모지나",
+      "url": "https://www.youtube.com/watch?v=8onUlhw_qtQ",
+      "status": "영상 직접 분석",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": false,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "회복·감정"
+      ],
+      "detail_file": "01-growth.md#8onUlhw_qtQ"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 94,
+      "video_id": "_h3ecO9v6Tc",
+      "title": "도덕적으로 미덕있는 척 하는 사람은 저급한 사람이다 | 조던 피터슨",
+      "channel": "바른말오른말",
+      "url": "https://www.youtube.com/watch?v=_h3ecO9v6Tc",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "회복·감정"
+      ],
+      "detail_file": "01-growth.md#_h3ecO9v6Tc"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 95,
+      "video_id": "1x6v-bDJ1jQ",
+      "title": "포기 안 하는 방법",
+      "channel": "주언규 joo earn gyu",
+      "url": "https://www.youtube.com/watch?v=1x6v-bDJ1jQ",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#1x6v-bDJ1jQ"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 96,
+      "video_id": "zfx3k7NB1G8",
+      "title": "우리나라가 인터넷 최강국이 된 이유",
+      "channel": "또치킨",
+      "url": "https://www.youtube.com/watch?v=zfx3k7NB1G8",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "도구·AI",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#zfx3k7NB1G8"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 97,
+      "video_id": "QrshuvMBOC4",
+      "title": "아무리 해도 인생이 안 풀릴 때",
+      "channel": "주언규 joo earn gyu",
+      "url": "https://www.youtube.com/watch?v=QrshuvMBOC4",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#QrshuvMBOC4"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 98,
+      "video_id": "snAcqJmDwss",
+      "title": "결국 해내는 사람들은 계획부터 다르다 \"계획대로 안되도 흔들리지 않아요\"",
+      "channel": "드로우앤드류",
+      "url": "https://www.youtube.com/watch?v=snAcqJmDwss",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#snAcqJmDwss"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 99,
+      "video_id": "0ytXUIWS4P4",
+      "title": "대부분의 사람들이 이걸 몰라서 부자가 되지 못해요 | 되더라 - 현우진 | 공부자극 | 동기부여 | bgm 제거 버전",
+      "channel": "오늘의글",
+      "url": "https://www.youtube.com/watch?v=0ytXUIWS4P4",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "동기부여"
+      ],
+      "detail_file": "01-growth.md#0ytXUIWS4P4"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 100,
+      "video_id": "9BnSk8UuOyc",
+      "title": "우리의 인생에는 세 단계가 있다.",
+      "channel": "Intelligence",
+      "url": "https://www.youtube.com/watch?v=9BnSk8UuOyc",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "신앙·가치"
+      ],
+      "detail_file": "01-growth.md#9BnSk8UuOyc"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 101,
+      "video_id": "A_9ecbVNH4U",
+      "title": "워렌버핏의 평생 파트너, 최고 자산가 찰리멍거의 10가지 교훈, 부자의 습관ㅣ동기부여학과",
+      "channel": "동기부여학과",
+      "url": "https://www.youtube.com/watch?v=A_9ecbVNH4U",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "신앙·가치"
+      ],
+      "detail_file": "01-growth.md#A_9ecbVNH4U"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 102,
+      "video_id": "h26vRWbx6nU",
+      "title": "성공한 사람들의 한 가지 비밀 | 마크 주커버크",
+      "channel": "NOMATTER 노메럴",
+      "url": "https://www.youtube.com/watch?v=h26vRWbx6nU",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩"
+      ],
+      "detail_file": "01-growth.md#h26vRWbx6nU"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 103,
+      "video_id": "uzLrRi6zWaA",
+      "title": "사실상 끝난 상황에서, 어떻게든 방법을 찾아 보는데..",
+      "channel": "MG세대",
+      "url": "https://www.youtube.com/watch?v=uzLrRi6zWaA",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정"
+      ],
+      "detail_file": "01-growth.md#uzLrRi6zWaA"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 104,
+      "video_id": "9TBJHgUCNuk",
+      "title": "당신에게 불안이 찾아왔다면 | 로버트 그린",
+      "channel": "NOMATTER 노메럴",
+      "url": "https://www.youtube.com/watch?v=9TBJHgUCNuk",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "회복·감정",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#9TBJHgUCNuk"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 105,
+      "video_id": "1eqTEQvzc1E",
+      "title": "배우는 속도가 느린 것 같다면 '이걸' 해 보세요 | 빠른 학습을 가능하게 하는 3가지 도구",
+      "channel": "알리고올리GO - 교육정보 전문 채널",
+      "url": "https://www.youtube.com/watch?v=1eqTEQvzc1E",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관",
+        "건강"
+      ],
+      "detail_file": "01-growth.md#1eqTEQvzc1E"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 106,
+      "video_id": "wnYdyYdJOBY",
+      "title": "게으르고 야망이 큰 사람이 위험한 이유 | 패트릭 벳 데이비드",
+      "channel": "NOMATTER 노메럴",
+      "url": "https://www.youtube.com/watch?v=wnYdyYdJOBY",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "사업·브랜딩"
+      ],
+      "detail_file": "01-growth.md#wnYdyYdJOBY"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 107,
+      "video_id": "F42oxFb9gfc",
+      "title": "실리콘밸리가 사용하는 일하는 프로세스",
+      "channel": "퇴사한 이형",
+      "url": "https://www.youtube.com/watch?v=F42oxFb9gfc",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "소통·관계",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#F42oxFb9gfc"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 108,
+      "video_id": "fx-6os408VE",
+      "title": "진상 처리에 도가 튼 알바생",
+      "channel": "숏! 무비중심",
+      "url": "https://www.youtube.com/watch?v=fx-6os408VE",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "사업·브랜딩"
+      ],
+      "detail_file": "01-growth.md#fx-6os408VE"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 109,
+      "video_id": "r4v4oinvmng",
+      "title": "성공한 사업가는 다 한다는 '이 루틴'",
+      "channel": "큰손 노희영",
+      "url": "https://www.youtube.com/watch?v=r4v4oinvmng",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "학습·기록",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#r4v4oinvmng"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 110,
+      "video_id": "Ri0boleSuDc",
+      "title": "레스 브라운 역대급 동기부여 영상 -",
+      "channel": "성공한스푼",
+      "url": "https://www.youtube.com/watch?v=Ri0boleSuDc",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "회복·감정",
+        "실행·습관",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#Ri0boleSuDc"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 111,
+      "video_id": "ORUfaD_jjfE",
+      "title": "신발 끈 꽉 매고 그냥 밀어붙여.",
+      "channel": "Intelligence",
+      "url": "https://www.youtube.com/watch?v=ORUfaD_jjfE",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#ORUfaD_jjfE"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 112,
+      "video_id": "LwnsHp5b-rU",
+      "title": "냉소적인 사람과 낙관적인 사람의 차이 | 알렉스 홀모지",
+      "channel": "NOMATTER 노메럴",
+      "url": "https://www.youtube.com/watch?v=LwnsHp5b-rU",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#LwnsHp5b-rU"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 113,
+      "video_id": "cOINKq-rzVE",
+      "title": "“나도 기술적 분석 다 해봤지” #워런버핏",
+      "channel": "메이킹알파",
+      "url": "https://www.youtube.com/watch?v=cOINKq-rzVE",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#cOINKq-rzVE"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 114,
+      "video_id": "KNC7UWvn4W4",
+      "title": "비범함을 위해선 그래야만 한다.",
+      "channel": "Intelligence",
+      "url": "https://www.youtube.com/watch?v=KNC7UWvn4W4",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩"
+      ],
+      "detail_file": "01-growth.md#KNC7UWvn4W4"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 115,
+      "video_id": "8eI3v-A4g-g",
+      "title": "나는 해낸다 안 되면 죽는다.",
+      "channel": "Intelligence",
+      "url": "https://www.youtube.com/watch?v=8eI3v-A4g-g",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "성공",
+        "동기부여",
+        "짐론"
+      ],
+      "detail_file": "01-growth.md#8eI3v-A4g-g"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 116,
+      "video_id": "4z4Gj2BXQKw",
+      "title": "자신감 있는 척? 현실에선 안 통한다🙅‍♂️",
+      "channel": "미엠지 Me:MZ",
+      "url": "https://www.youtube.com/watch?v=4z4Gj2BXQKw",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정"
+      ],
+      "detail_file": "01-growth.md#4z4Gj2BXQKw"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 117,
+      "video_id": "R5lyFHQ27UU",
+      "title": "남의 시선 자꾸 신경 쓰는 게 위험한 이유",
+      "channel": "오현호의 행동력 수업 ",
+      "url": "https://www.youtube.com/watch?v=R5lyFHQ27UU",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "회복·감정",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#R5lyFHQ27UU"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 118,
+      "video_id": "Bg-qpNbs9Yo",
+      "title": "진짜 가족을 위해 살고 있긴 해?",
+      "channel": "Intelligence",
+      "url": "https://www.youtube.com/watch?v=Bg-qpNbs9Yo",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#Bg-qpNbs9Yo"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 119,
+      "video_id": "g8kEEE4_uRM",
+      "title": "무례한 농담 대처법",
+      "channel": "One Step, Big Change | 작은 한걸음, 큰 변화",
+      "url": "https://www.youtube.com/watch?v=g8kEEE4_uRM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "심리"
+      ],
+      "detail_file": "01-growth.md#g8kEEE4_uRM"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 120,
+      "video_id": "572Tq1DZbsY",
+      "title": "”세상은 소심한 남자에게 잔인하고 용기있는 자에게 보상을 준다“",
+      "channel": "미엠지 Me:MZ",
+      "url": "https://www.youtube.com/watch?v=572Tq1DZbsY",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#572Tq1DZbsY"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 121,
+      "video_id": "CdPkWCOj4ho",
+      "title": "하는 일이 적성에 안맞을 때",
+      "channel": "큰손 노희영",
+      "url": "https://www.youtube.com/watch?v=CdPkWCOj4ho",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#CdPkWCOj4ho"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 122,
+      "video_id": "Vkmn9Q7zZBY",
+      "title": "개그맨에서 연봉 10억 작가로 변신한 고명환의 비법은 '이것'⁉️ 정해진 틀을 깨고 사고방식을 바꾸는 가장 효과적인 법✅ #어쩌다어른10주년",
+      "channel": "tvN STORY 티비엔 스토리",
+      "url": "https://www.youtube.com/watch?v=Vkmn9Q7zZBY",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "사업·브랜딩"
+      ],
+      "detail_file": "01-growth.md#Vkmn9Q7zZBY"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 123,
+      "video_id": "fOQ7U2xL3sw",
+      "title": "4000억 엑싯한 맥킨지 출신 창업가의 초합리적 결정법(+경제학)ㅣ스킨1004 이소형",
+      "channel": "EO Korea",
+      "url": "https://www.youtube.com/watch?v=fOQ7U2xL3sw",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#fOQ7U2xL3sw"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 124,
+      "video_id": "c0tpnShGv4U",
+      "title": "최선을 다했는데 인정받지 못하는 마음이 든다면 #악마는프라다",
+      "channel": "비오케이 BeOk",
+      "url": "https://www.youtube.com/watch?v=c0tpnShGv4U",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#c0tpnShGv4U"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 125,
+      "video_id": "VCzjbSr00VM",
+      "title": "일을 '진짜' 잘하는 사람들 특징",
+      "channel": "하꼰대 Ha kkondae",
+      "url": "https://www.youtube.com/watch?v=VCzjbSr00VM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#VCzjbSr00VM"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 126,
+      "video_id": "G1WOyfYeQZQ",
+      "title": "무려 5년 동안 매일 훈련했다는 마이클 펠프스",
+      "channel": "애슬레틱 라이프 Athletic Life",
+      "url": "https://www.youtube.com/watch?v=G1WOyfYeQZQ",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#G1WOyfYeQZQ"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 127,
+      "video_id": "MUXL_JmgnXA",
+      "title": "사고를 바꾸는 방법, 학생뿐만 아니라 일반인들이 사고를 바꾸려면 꼭 봐야할 영상│현우진 동기부여 영상│삶의 자세│공부 자극",
+      "channel": "인간관계와 현생",
+      "url": "https://www.youtube.com/watch?v=MUXL_JmgnXA",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#MUXL_JmgnXA"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 128,
+      "video_id": "NNSyrIlzwwM",
+      "title": "[메가스터디] 바른공부설명회 현우진 \"교과서 학습을 통한 사고력 향상 학습법\"",
+      "channel": "theMEGASTUDY",
+      "url": "https://www.youtube.com/watch?v=NNSyrIlzwwM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#NNSyrIlzwwM"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 129,
+      "video_id": "EECgJPb6CMM",
+      "title": "완벽을 버려야 성공한다? | Scale AI 알렉산더 왕의 완벽주의 탈출기",
+      "channel": "밸리걸",
+      "url": "https://www.youtube.com/watch?v=EECgJPb6CMM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "button \"한국어로 번역\"",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩"
+      ],
+      "detail_file": "01-growth.md#EECgJPb6CMM"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 130,
+      "video_id": "TLZIMMnEUfQ",
+      "title": "지금 차기 미국 대통령 후보까지 거론되는 중… #영어인터뷰 #영어공부",
+      "channel": "Bagel English",
+      "url": "https://www.youtube.com/watch?v=TLZIMMnEUfQ",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#TLZIMMnEUfQ"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 131,
+      "video_id": "4SszTTMGbyk",
+      "title": "20대에게 주는 조언 (팔란티어 CEO 알렉스 카프)",
+      "channel": "인간지능 | Human Intelligence",
+      "url": "https://www.youtube.com/watch?v=4SszTTMGbyk",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#4SszTTMGbyk"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 132,
+      "video_id": "NS7mpvJwEv8",
+      "title": "인생에서 가장 중요한 능력은..",
+      "channel": "미엠지 Me:MZ",
+      "url": "https://www.youtube.com/watch?v=NS7mpvJwEv8",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "소통·관계",
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#NS7mpvJwEv8"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 133,
+      "video_id": "1zBpozANCR0",
+      "title": "누구든 1000% 바꿀 뇌 개조법 (공유 금지) | 존 아사라프",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=1zBpozANCR0",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#1zBpozANCR0"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 134,
+      "video_id": "ccyjOcYcmqQ",
+      "title": "왜 빨리 배우는 것이 당신을 더 성공적으로 만드는가 (나를 따라해 보세요)",
+      "channel": "Dan Martell",
+      "url": "https://www.youtube.com/watch?v=ccyjOcYcmqQ",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "button \"한국어로 번역\"",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관",
+        "사업·브랜딩"
+      ],
+      "detail_file": "01-growth.md#ccyjOcYcmqQ"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 135,
+      "video_id": "_1XhDHwRg0I",
+      "title": "이 13권의 책 덕분에 저는 수백만장자 CEO가 되었습니다.",
+      "channel": "Dan Martell",
+      "url": "https://www.youtube.com/watch?v=_1XhDHwRg0I",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#_1XhDHwRg0I"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 136,
+      "video_id": "jffXuIy-iVs",
+      "title": "성공하기 위해 꼭 갖춰야 할 6가지 기술",
+      "channel": "Dan Martell",
+      "url": "https://www.youtube.com/watch?v=jffXuIy-iVs",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "소통·관계",
+        "사업·브랜딩"
+      ],
+      "detail_file": "01-growth.md#jffXuIy-iVs"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 137,
+      "video_id": "G5Nqcu9tyqQ",
+      "title": "빚300억에서 자산7조를 만든 ‘한마디’ 💵",
+      "channel": "1%의성장",
+      "url": "https://www.youtube.com/watch?v=G5Nqcu9tyqQ",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#G5Nqcu9tyqQ"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 138,
+      "video_id": "8lakAE_AZM0",
+      "title": "꿈의 사업을 만드는 방법 (feat. Gary Vee & Patrick Bet-David)",
+      "channel": "Dan Martell",
+      "url": "https://www.youtube.com/watch?v=8lakAE_AZM0",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#8lakAE_AZM0"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 139,
+      "video_id": "teugguggmuc",
+      "title": "Scale AI 창업자 알렉산더 왕",
+      "channel": "BZCF | 비즈까페",
+      "url": "https://www.youtube.com/watch?v=teugguggmuc",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#teugguggmuc"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 140,
+      "video_id": "fXyRprdoEoE",
+      "title": "목표를 실제로 달성하기 위한 시스템을 구축하는 방법",
+      "channel": "Justin Sung",
+      "url": "https://www.youtube.com/watch?v=fXyRprdoEoE",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "자기계발"
+      ],
+      "detail_file": "01-growth.md#fXyRprdoEoE"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 141,
+      "video_id": "MD46WoafgSw",
+      "title": "사자처럼 일하라",
+      "channel": "성공한스푼",
+      "url": "https://www.youtube.com/watch?v=MD46WoafgSw",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "button \"한국어로 번역\"",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#MD46WoafgSw"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 142,
+      "video_id": "U4PsIm9dDvs",
+      "title": "넌 똑똑한 아이였어. 그런데 왜 지금은 이렇게 길을 잃은 기분이 드는 거야?",
+      "channel": "Let's Talk Psychology Podcast",
+      "url": "https://www.youtube.com/watch?v=U4PsIm9dDvs",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "회복·감정",
+        "소통·관계",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#U4PsIm9dDvs"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 143,
+      "video_id": "dCHGoXBlReM",
+      "title": "성공하려면 바꿔라 🤫",
+      "channel": "1%의성장",
+      "url": "https://www.youtube.com/watch?v=dCHGoXBlReM",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "소통·관계",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#dCHGoXBlReM"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 144,
+      "video_id": "2mFfSRq3ao8",
+      "title": "내가 노력을 안 했던 이유",
+      "channel": "주언규 joo earn gyu",
+      "url": "https://www.youtube.com/watch?v=2mFfSRq3ao8",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#2mFfSRq3ao8"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 145,
+      "video_id": "XtQEoXJW9bw",
+      "title": "날 우울하게 만드는 것들",
+      "channel": "주언규 joo earn gyu",
+      "url": "https://www.youtube.com/watch?v=XtQEoXJW9bw",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "회복·감정",
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#XtQEoXJW9bw"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 146,
+      "video_id": "kWY9mNMz4iI",
+      "title": "워런 버핏이 말하는 '진정한 성공'",
+      "channel": "내일은 투자왕 - 김단테",
+      "url": "https://www.youtube.com/watch?v=kWY9mNMz4iI",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "소통·관계",
+        "학습·기록"
+      ],
+      "detail_file": "01-growth.md#kWY9mNMz4iI"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 147,
+      "video_id": "X_fZwFso2JE",
+      "title": "박진영이 말하는 재능있는사람 이기는 방법",
+      "channel": "꿀딸기",
+      "url": "https://www.youtube.com/watch?v=X_fZwFso2JE",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#X_fZwFso2JE"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 148,
+      "video_id": "gdpjWRd3-T8",
+      "title": "헬창들이 주 1회는 꼭 해야 되는 동작",
+      "channel": "짐토크 GYM TALK",
+      "url": "https://www.youtube.com/watch?v=gdpjWRd3-T8",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "건강",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#gdpjWRd3-T8"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 149,
+      "video_id": "xMHi0yBNr6k",
+      "title": "해결해야 할 문제에 집중하기",
+      "channel": "코워크시티",
+      "url": "https://www.youtube.com/watch?v=xMHi0yBNr6k",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "소통·관계",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#xMHi0yBNr6k"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 150,
+      "video_id": "cxIwfWqSFMM",
+      "title": "실행하는 사람의 중요성 | 스티브 잡스",
+      "channel": "코워크시티",
+      "url": "https://www.youtube.com/watch?v=cxIwfWqSFMM",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#cxIwfWqSFMM"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 151,
+      "video_id": "-J67gSxjY2M",
+      "title": "고통 스러운 일들 (손주은)",
+      "channel": "BZCF | 비즈까페",
+      "url": "https://www.youtube.com/watch?v=-J67gSxjY2M",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "신앙·가치"
+      ],
+      "detail_file": "01-growth.md#-J67gSxjY2M"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 152,
+      "video_id": "lifH81bxQSs",
+      "title": "“여행 말고 유학을 가세요” 이건희 회장에게 배운 이 시대에 필요한 새로운 학습법 (feat. 상하이)",
+      "channel": "소울정",
+      "url": "https://www.youtube.com/watch?v=lifH81bxQSs",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "이건희",
+        "유학법"
+      ],
+      "detail_file": "01-growth.md#lifH81bxQSs"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 153,
+      "video_id": "wNn-pdrW2AY",
+      "title": "기독교 생산성이란 무엇인가?",
+      "channel": "Redeeming Productivity",
+      "url": "https://www.youtube.com/watch?v=wNn-pdrW2AY",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "button \"한국어로 번역\"",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "신앙·가치",
+        "실행·습관"
+      ],
+      "detail_file": "01-growth.md#wNn-pdrW2AY"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 154,
+      "video_id": "TtS8DE8NA4A",
+      "title": "모두가 알지만 불편한 진실.",
+      "channel": "Intelligence",
+      "url": "https://www.youtube.com/watch?v=TtS8DE8NA4A",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "소통·관계",
+        "사업·브랜딩",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#TtS8DE8NA4A"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 155,
+      "video_id": "5iAhGG1-0_o",
+      "title": "일주일만 이렇게 사세요! 인생이 달라집니다 (디쉐어 현승원 의장)",
+      "channel": "주언규 joo earn gyu",
+      "url": "https://www.youtube.com/watch?v=5iAhGG1-0_o",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "신앙·가치"
+      ],
+      "detail_file": "01-growth.md#5iAhGG1-0_o"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 156,
+      "video_id": "MwA1kdhgpfM",
+      "title": "일론 머스크가 길을 잃은 사람들에게…",
+      "channel": "미엠지 Me:MZ",
+      "url": "https://www.youtube.com/watch?v=MwA1kdhgpfM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "신앙·가치",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#MwA1kdhgpfM"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 157,
+      "video_id": "RpU-T6LdKac",
+      "title": "인생은 기준 싸움이다",
+      "channel": "주언규 joo earn gyu",
+      "url": "https://www.youtube.com/watch?v=RpU-T6LdKac",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#RpU-T6LdKac"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 158,
+      "video_id": "YbLuN90buZs",
+      "title": "인생이 공평하길 기대하지 마라.",
+      "channel": "Intelligence",
+      "url": "https://www.youtube.com/watch?v=YbLuN90buZs",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "button \"한국어로 번역\"",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "신앙·가치"
+      ],
+      "detail_file": "01-growth.md#YbLuN90buZs"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 159,
+      "video_id": "pW2UVmksoxU",
+      "title": "사람의 말보다 반응이 더 정확한 이유🤫",
+      "channel": "미엠지 Me:MZ",
+      "url": "https://www.youtube.com/watch?v=pW2UVmksoxU",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "소통·관계",
+        "심리",
+        "연애",
+        "태도"
+      ],
+      "detail_file": "01-growth.md#pW2UVmksoxU"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 160,
+      "video_id": "MqXwnT9hNy4",
+      "title": "가치있는 걸 얻고 싶다면 어려움과 친해져라",
+      "channel": "성공한스푼",
+      "url": "https://www.youtube.com/watch?v=MqXwnT9hNy4",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "회복·감정"
+      ],
+      "detail_file": "01-growth.md#MqXwnT9hNy4"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 161,
+      "video_id": "6EOvYoa8SnA",
+      "title": "상위 1%만 아는 종이 한 장의 기적.",
+      "channel": "Intelligence",
+      "url": "https://www.youtube.com/watch?v=6EOvYoa8SnA",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "자기계발"
+      ],
+      "detail_file": "01-growth.md#6EOvYoa8SnA"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 162,
+      "video_id": "c0Ez9Uvt7gg",
+      "title": "트럼프 까는 노잼 코미디언 디스",
+      "channel": "Mic On Korea",
+      "url": "https://www.youtube.com/watch?v=c0Ez9Uvt7gg",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#c0Ez9Uvt7gg"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 163,
+      "video_id": "T-UKgR8nZjU",
+      "title": "고석현의 마인드셋부터 잡아주는 전챔피언 타이론 우들리ㄷㄷ👑😲 #ufc #mma",
+      "channel": " 빌랜드",
+      "url": "https://www.youtube.com/watch?v=T-UKgR8nZjU",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "소통·관계"
+      ],
+      "detail_file": "01-growth.md#T-UKgR8nZjU"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 164,
+      "video_id": "Ez_CK2k18_A",
+      "title": "우들리가 고석현에게 진심이었던 이유🙏 #ufc #mma",
+      "channel": " 빌랜드",
+      "url": "https://www.youtube.com/watch?v=Ez_CK2k18_A",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "신앙·가치",
+        "기타"
+      ],
+      "detail_file": "01-growth.md#Ez_CK2k18_A"
+    },
+    {
+      "playlist": "성장을 위한",
+      "playlist_id": "PLRlrdw8wIzABllw-_dM1DbOpBumIsLPc0",
+      "order": 165,
+      "video_id": "2Em0AhYDFcM",
+      "title": "맷 데이먼이 더 이상 남의 시선을 신경 쓰지 않는 이유..ㄷㄷ #오디세이 #영어회화",
+      "channel": "잉글리시엉클",
+      "url": "https://www.youtube.com/watch?v=2Em0AhYDFcM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "회복·감정"
+      ],
+      "detail_file": "01-growth.md#2Em0AhYDFcM"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 1,
+      "video_id": "sQYQgiHVyAM",
+      "title": "뭐든 제대로 이해하는 방법",
+      "channel": "돈공-돈버는공식",
+      "url": "https://www.youtube.com/watch?v=sQYQgiHVyAM",
+      "status": "자막 기반 요약·품질 주의",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관",
+        "소통·관계"
+      ],
+      "detail_file": "02-learning.md#sQYQgiHVyAM"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 2,
+      "video_id": "Vl7K_kqvFiU",
+      "title": "배우는 즉시 내 것으로 만드는 3가지 방법",
+      "channel": "돈공-돈버는공식",
+      "url": "https://www.youtube.com/watch?v=Vl7K_kqvFiU",
+      "status": "자막 기반 요약·품질 주의",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관"
+      ],
+      "detail_file": "02-learning.md#Vl7K_kqvFiU"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 3,
+      "video_id": "vNO7YfQF8-o",
+      "title": "나이 들수록 뇌를 더 빠르게 쓸 수 있는 방법",
+      "channel": "돈공-돈버는공식",
+      "url": "https://www.youtube.com/watch?v=vNO7YfQF8-o",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "학습·기록",
+        "건강",
+        "실행·습관"
+      ],
+      "detail_file": "02-learning.md#vNO7YfQF8-o"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 4,
+      "video_id": "hehPTOmn6vE",
+      "title": "해외에서 난리난 공부법 (드디어 번역)",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=hehPTOmn6vE",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관"
+      ],
+      "detail_file": "02-learning.md#hehPTOmn6vE"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 5,
+      "video_id": "Hq8wPiPiOx8",
+      "title": "노력한 만큼 결과가 안나온다면, 당장 이 영상을 보셔야 합니다. | 학습법 | 자기계발 | 공부",
+      "channel": "북토크",
+      "url": "https://www.youtube.com/watch?v=Hq8wPiPiOx8",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관"
+      ],
+      "detail_file": "02-learning.md#Hq8wPiPiOx8"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 6,
+      "video_id": "C87fr5Q12aY",
+      "title": "4000만 열광한 공부법 “적게 공부하고, 영리하게 공부하라“",
+      "channel": "잭스파이어 Jackspire",
+      "url": "https://www.youtube.com/watch?v=C87fr5Q12aY",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "건강"
+      ],
+      "detail_file": "02-learning.md#C87fr5Q12aY"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 7,
+      "video_id": "ZcFY-7UYuEA",
+      "title": "단기간에 암기를 잘하는 법 | 7개월만에 의대 합격한 비법 (feat. 장기기억 강화)",
+      "channel": "닥터시바하우스 / Dr. shiba house",
+      "url": "https://www.youtube.com/watch?v=ZcFY-7UYuEA",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관"
+      ],
+      "detail_file": "02-learning.md#ZcFY-7UYuEA"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 8,
+      "video_id": "pEs-XsVUGKM",
+      "title": "[#유퀴즈온더블럭] 서울대 교수님이 직접 알려주는 서울대생 공부법📚 교수님의 팩폭으로 얼떨결에 과거 사찰당한 유재석X조세호ㅋㅋ😂 | #Diggle #갓구운클립",
+      "channel": "tvN D ENT",
+      "url": "https://www.youtube.com/watch?v=pEs-XsVUGKM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "회복·감정",
+        "기타"
+      ],
+      "detail_file": "02-learning.md#pEs-XsVUGKM"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 9,
+      "video_id": "vnDaHldRKu4",
+      "title": "이 3가지만 기억하세요. 지금보다 무조건 똑똑해질 수 있습니다 (박문호 뇌과학자)",
+      "channel": "스터디언",
+      "url": "https://www.youtube.com/watch?v=vnDaHldRKu4",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "02-learning.md#vnDaHldRKu4"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 10,
+      "video_id": "o8x6ulAe6Xg",
+      "title": "책이 통째로 외워지는 공부법. 9개월 만에 사법고시 합격한 이윤규 변호사의 공부 비법 대공개!",
+      "channel": "김교수의 세 가지",
+      "url": "https://www.youtube.com/watch?v=o8x6ulAe6Xg",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관"
+      ],
+      "detail_file": "02-learning.md#o8x6ulAe6Xg"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 11,
+      "video_id": "wxbsWdGudcY",
+      "title": "이 2가지를 깨닫기 전까진, 절대 포기하면 안됩니다.",
+      "channel": "범작가",
+      "url": "https://www.youtube.com/watch?v=wxbsWdGudcY",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록"
+      ],
+      "detail_file": "02-learning.md#wxbsWdGudcY"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 12,
+      "video_id": "FN27nl62SVU",
+      "title": "부자가 될 20대들이 알아야하는 3가지",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=FN27nl62SVU",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩"
+      ],
+      "detail_file": "02-learning.md#FN27nl62SVU"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 13,
+      "video_id": "fMyHGqQd804",
+      "title": "저는 이 공부법으로 의사가 되었습니다. 딱 2주만 따라하시면 됩니다.",
+      "channel": "이상욱의 진료실 밖 처방전",
+      "url": "https://www.youtube.com/watch?v=fMyHGqQd804",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관"
+      ],
+      "detail_file": "02-learning.md#fMyHGqQd804"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 14,
+      "video_id": "qrpyswoATQ8",
+      "title": "천재들이 어려운 개념을 빠르게 배우는 학습법",
+      "channel": "노마드 코더 Nomad Coders",
+      "url": "https://www.youtube.com/watch?v=qrpyswoATQ8",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관"
+      ],
+      "detail_file": "02-learning.md#qrpyswoATQ8"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 15,
+      "video_id": "bbOsoEEQMsM",
+      "title": "세계 최고 두뇌 과학자가 찾은 90%가 성공하는 목표설정법",
+      "channel": "터닝포인트 - 위대한 성공의 시작점",
+      "url": "https://www.youtube.com/watch?v=bbOsoEEQMsM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "건강"
+      ],
+      "detail_file": "02-learning.md#bbOsoEEQMsM"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 16,
+      "video_id": "CNrzvdcU9SE",
+      "title": "한국에서 발견된 특이한 공부 습관? 서울대가 이 상태라면 더 이상 천재는 없다│해외 한국 교육 반응│다큐프라임│#골라듄다큐",
+      "channel": "EBSDocumentary (EBS 다큐)",
+      "url": "https://www.youtube.com/watch?v=CNrzvdcU9SE",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "02-learning.md#CNrzvdcU9SE"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 17,
+      "video_id": "7ZZdqdlkvik",
+      "title": "당신의 인생을 바꿔 줄 충격적인 역발상 공부법 (공부법, 암기법, 자격증시험)",
+      "channel": "곽상빈의 천재혁명",
+      "url": "https://www.youtube.com/watch?v=7ZZdqdlkvik",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관"
+      ],
+      "detail_file": "02-learning.md#7ZZdqdlkvik"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 18,
+      "video_id": "BXHUJExC_eM",
+      "title": "할수록 가난해지는 최악의 독서 습관 5",
+      "channel": "주언규 joo earn gyu",
+      "url": "https://www.youtube.com/watch?v=BXHUJExC_eM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록"
+      ],
+      "detail_file": "02-learning.md#BXHUJExC_eM"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 19,
+      "video_id": "1msHbPWJpic",
+      "title": "언어를 습득하는 유일한 방법",
+      "channel": "러닝그라운드",
+      "url": "https://www.youtube.com/watch?v=1msHbPWJpic",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "소통·관계",
+        "기타"
+      ],
+      "detail_file": "02-learning.md#1msHbPWJpic"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 20,
+      "video_id": "H9xM1VxFiAM",
+      "title": "대원외고, 서울대 로스쿨 졸업한 변호사가 말하는 '사소하지만 강력한 인생 꿀팁' (임현서 변호사)",
+      "channel": "스터디언",
+      "url": "https://www.youtube.com/watch?v=H9xM1VxFiAM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "회복·감정"
+      ],
+      "detail_file": "02-learning.md#H9xM1VxFiAM"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 21,
+      "video_id": "kbkB2aJ0qgY",
+      "title": "\"인생 날로 먹지 마\" 대원외고, 서울대 경영, 서울대 로스쿨, 변호사 겸 스타트업 대표 임현서쌤 #찍먹과외 | 연고티비",
+      "channel": "연고티비",
+      "url": "https://www.youtube.com/watch?v=kbkB2aJ0qgY",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": null,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "사업·브랜딩"
+      ],
+      "detail_file": "02-learning.md#kbkB2aJ0qgY"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 22,
+      "video_id": "MNnTEHv9jgw",
+      "title": "뇌과학이 말하는 「빨리 배우는 가장 게으른 방법」",
+      "channel": "심리학 고양이",
+      "url": "https://www.youtube.com/watch?v=MNnTEHv9jgw",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "건강",
+        "기타"
+      ],
+      "detail_file": "02-learning.md#MNnTEHv9jgw"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 23,
+      "video_id": "3NSkk31vFbU",
+      "title": "Why I'm able to study 4 hours with NO breaks (how to stay productive)",
+      "channel": "Kharma Medic",
+      "url": "https://www.youtube.com/watch?v=3NSkk31vFbU",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록"
+      ],
+      "detail_file": "02-learning.md#3NSkk31vFbU"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 24,
+      "video_id": "IDB_3S1ezsc",
+      "title": "My Biggest Studying Mistake - The Feynman Technique",
+      "channel": "Zach Highley",
+      "url": "https://www.youtube.com/watch?v=IDB_3S1ezsc",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록"
+      ],
+      "detail_file": "02-learning.md#IDB_3S1ezsc"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 25,
+      "video_id": "WrEoKuNRgLU",
+      "title": "억대 연봉 구글 임원이 말하는, 1살이라도 어릴 때 알아야.. 앞서가는 것들 (MZ 직장인, 프리랜서 꼭 보세요)",
+      "channel": "커밍쏜",
+      "url": "https://www.youtube.com/watch?v=WrEoKuNRgLU",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "소통·관계"
+      ],
+      "detail_file": "02-learning.md#WrEoKuNRgLU"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 26,
+      "video_id": "ny9tWhuTRoM",
+      "title": "2백만 달러 짜리 발상전환🤑",
+      "channel": "미엠지 Me:MZ",
+      "url": "https://www.youtube.com/watch?v=ny9tWhuTRoM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": null,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "기타"
+      ],
+      "detail_file": "02-learning.md#ny9tWhuTRoM"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 27,
+      "video_id": "0ytXUIWS4P4",
+      "title": "대부분의 사람들이 이걸 몰라서 부자가 되지 못해요 | 되더라 - 현우진 | 공부자극 | 동기부여 | bgm 제거 버전",
+      "channel": "오늘의글",
+      "url": "https://www.youtube.com/watch?v=0ytXUIWS4P4",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "동기부여"
+      ],
+      "detail_file": "02-learning.md#0ytXUIWS4P4"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 28,
+      "video_id": "HTLJg2Bk_BA",
+      "title": "한국사 일타강사 최태성 마인드",
+      "channel": "아는형님 Knowingbros",
+      "url": "https://www.youtube.com/watch?v=HTLJg2Bk_BA",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": null,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "소통·관계"
+      ],
+      "detail_file": "02-learning.md#HTLJg2Bk_BA"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 29,
+      "video_id": "zf1QQRU_4FA",
+      "title": "The BEST Study Routine for Students (Improve Focus)",
+      "channel": "The Weekly Growth",
+      "url": "https://www.youtube.com/watch?v=zf1QQRU_4FA",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "건강"
+      ],
+      "detail_file": "02-learning.md#zf1QQRU_4FA"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 30,
+      "video_id": "Wh1YReojzlk",
+      "title": "서울대 뚫어버리는 공부법 1가지",
+      "channel": "전교 1등 재헌이",
+      "url": "https://www.youtube.com/watch?v=Wh1YReojzlk",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": null,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "공부법"
+      ],
+      "detail_file": "02-learning.md#Wh1YReojzlk"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 31,
+      "video_id": "ccyjOcYcmqQ",
+      "title": "Why Learning FAST Makes You More Successful (just copy me)",
+      "channel": "Dan Martell",
+      "url": "https://www.youtube.com/watch?v=ccyjOcYcmqQ",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "button \"한국어로 번역\"",
+      "auto_generated": false,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관",
+        "사업·브랜딩"
+      ],
+      "detail_file": "02-learning.md#ccyjOcYcmqQ"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 32,
+      "video_id": "hSGt_rhu49U",
+      "title": "How to Be So Productive it Feels ILLEGAL",
+      "channel": "Dan Martell",
+      "url": "https://www.youtube.com/watch?v=hSGt_rhu49U",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "기타"
+      ],
+      "detail_file": "02-learning.md#hSGt_rhu49U"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 33,
+      "video_id": "Xsxb7IK5lDA",
+      "title": "진짜 똑똑한 사람은 이렇게 공부합니다",
+      "channel": "졸라멘탈",
+      "url": "https://www.youtube.com/watch?v=Xsxb7IK5lDA",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "자기계발"
+      ],
+      "detail_file": "02-learning.md#Xsxb7IK5lDA"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 34,
+      "video_id": "C5OJJD3Eytk",
+      "title": "becoming smart is easy, actually",
+      "channel": "easy, actually",
+      "url": "https://www.youtube.com/watch?v=C5OJJD3Eytk",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": null,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "소통·관계",
+        "실행·습관"
+      ],
+      "detail_file": "02-learning.md#C5OJJD3Eytk"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 35,
+      "video_id": "JpYA7WXkHyI",
+      "title": "How to be a creative thinker | Carnegie Mellon University Po-Shen Loh",
+      "channel": "EO",
+      "url": "https://www.youtube.com/watch?v=JpYA7WXkHyI",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "학습·기록",
+        "사업·브랜딩",
+        "도구·AI"
+      ],
+      "detail_file": "02-learning.md#JpYA7WXkHyI"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 36,
+      "video_id": "1xqerXscTsE",
+      "title": "6 Levels of Thinking Every Student MUST Master",
+      "channel": "Justin Sung",
+      "url": "https://www.youtube.com/watch?v=1xqerXscTsE",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관"
+      ],
+      "detail_file": "02-learning.md#1xqerXscTsE"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 37,
+      "video_id": "dBubRcgQOM8",
+      "title": "읽은 모든 것을 기억하는 단 2단계 공식",
+      "channel": "닥터가드너",
+      "url": "https://www.youtube.com/watch?v=dBubRcgQOM8",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관",
+        "도구·AI"
+      ],
+      "detail_file": "02-learning.md#dBubRcgQOM8"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 38,
+      "video_id": "32z8Ax1j-Q4",
+      "title": "The smartest people have mastered these 6 core skills | Michael Watkins for Big Think+",
+      "channel": "Big Think 및 Leadership Lessons | Big Think+",
+      "url": "https://www.youtube.com/watch?v=32z8Ax1j-Q4",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "사업·브랜딩",
+        "소통·관계"
+      ],
+      "detail_file": "02-learning.md#32z8Ax1j-Q4"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 39,
+      "video_id": "xV6CxfX04yo",
+      "title": "CIA 스파이처럼 학습 속도 10배 올리는 뇌 훈련법 (쉽고 간단해요) [실제 사용된 방법]",
+      "channel": "일상 속 스파크",
+      "url": "https://www.youtube.com/watch?v=xV6CxfX04yo",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관",
+        "기타"
+      ],
+      "detail_file": "02-learning.md#xV6CxfX04yo"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 40,
+      "video_id": "ntGRhqkXVA0",
+      "title": "세계 최고의 뇌과학자가 말하는 20배 더 빨리 배우는 법 (앤드류 휴버맨)",
+      "channel": "성공한스푼",
+      "url": "https://www.youtube.com/watch?v=ntGRhqkXVA0",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "학습·기록",
+        "건강",
+        "기타"
+      ],
+      "detail_file": "02-learning.md#ntGRhqkXVA0"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 41,
+      "video_id": "jgzreTGEb4M",
+      "title": "The 9 Powerful Mental Models Used By History's Greatest Minds",
+      "channel": "Dante Borgese",
+      "url": "https://www.youtube.com/watch?v=jgzreTGEb4M",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관",
+        "기타"
+      ],
+      "detail_file": "02-learning.md#jgzreTGEb4M"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 42,
+      "video_id": "OQdkjUM3yks",
+      "title": "How To Learn Any Skill So Fast It Feels Illegal 🚀",
+      "channel": "Jim Kwik",
+      "url": "https://www.youtube.com/watch?v=OQdkjUM3yks",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관",
+        "자기계발"
+      ],
+      "detail_file": "02-learning.md#OQdkjUM3yks"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 43,
+      "video_id": "hM2K1Ai3fj4",
+      "title": "현실을 레벨업하는 5가지 방법 (게임 심리 실전 적용법)",
+      "channel": "졸라멘탈",
+      "url": "https://www.youtube.com/watch?v=hM2K1Ai3fj4",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "심리",
+        "기타"
+      ],
+      "detail_file": "02-learning.md#hM2K1Ai3fj4"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 44,
+      "video_id": "kWY9mNMz4iI",
+      "title": "워런 버핏이 말하는 '진정한 성공'",
+      "channel": "내일은 투자왕 - 김단테",
+      "url": "https://www.youtube.com/watch?v=kWY9mNMz4iI",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "소통·관계",
+        "학습·기록"
+      ],
+      "detail_file": "02-learning.md#kWY9mNMz4iI"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 45,
+      "video_id": "Ml6nXM6dt7I",
+      "title": "글 잘 쓰는 이들의 공통점은? 대가의 쉽게 읽히고 쉽게 쓰는 글쓰기 방법 총정리!",
+      "channel": "셜록현준",
+      "url": "https://www.youtube.com/watch?v=Ml6nXM6dt7I",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "학습·기록",
+        "소통·관계",
+        "기타"
+      ],
+      "detail_file": "02-learning.md#Ml6nXM6dt7I"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 46,
+      "video_id": "KbleIwApqu4",
+      "title": "[EBS] 적는 자가 살아남는다 | 천재들의 노트 습관 | #지식채널e",
+      "channel": "EBS 지식채널e",
+      "url": "https://www.youtube.com/watch?v=KbleIwApqu4",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관",
+        "기타"
+      ],
+      "detail_file": "02-learning.md#KbleIwApqu4"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 47,
+      "video_id": "cHCfhY_o8WM",
+      "title": "샤워하면서도 공부를?",
+      "channel": "play 채널A",
+      "url": "https://www.youtube.com/watch?v=cHCfhY_o8WM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": null,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관"
+      ],
+      "detail_file": "02-learning.md#cHCfhY_o8WM"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 48,
+      "video_id": "lnZ4ZY_024Y",
+      "title": "하루 15시간 공부? 이렇게 하면 가능합니다",
+      "channel": "뇌과학 쓸래요?",
+      "url": "https://www.youtube.com/watch?v=lnZ4ZY_024Y",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "학습·기록",
+        "건강",
+        "실행·습관"
+      ],
+      "detail_file": "02-learning.md#lnZ4ZY_024Y"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 49,
+      "video_id": "qFROrjHyK94",
+      "title": "The Bible Taught Me How to Manage My Time Better Than Any Self-Help Book",
+      "channel": "Lauren Mefford, PhD",
+      "url": "https://www.youtube.com/watch?v=qFROrjHyK94",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": null,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "신앙·가치",
+        "실행·습관"
+      ],
+      "detail_file": "02-learning.md#qFROrjHyK94"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 50,
+      "video_id": "X9Ek3gRp-Fw",
+      "title": "[Full] [특별기획] 다시, 읽기로 - 1부 읽기 도파민",
+      "channel": "EBSDocumentary (EBS 다큐)",
+      "url": "https://www.youtube.com/watch?v=X9Ek3gRp-Fw",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": null,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "학습·기록"
+      ],
+      "detail_file": "02-learning.md#X9Ek3gRp-Fw"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 51,
+      "video_id": "HytLB3-orIY",
+      "title": "해외 유학 없이 영어를 유창하게 하는 방법 (CIA가 받는 언어교육법)",
+      "channel": "원빅월드쇼 | One Big World Show | 1BWS",
+      "url": "https://www.youtube.com/watch?v=HytLB3-orIY",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "소통·관계"
+      ],
+      "detail_file": "02-learning.md#HytLB3-orIY"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 52,
+      "video_id": "pwy8npJHPEo",
+      "title": "언어 천재 트레버의 언어 공부 비법",
+      "channel": "톡팁",
+      "url": "https://www.youtube.com/watch?v=pwy8npJHPEo",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "학습·기록",
+        "소통·관계",
+        "기타"
+      ],
+      "detail_file": "02-learning.md#pwy8npJHPEo"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 53,
+      "video_id": "Gtr2NYR6F4A",
+      "title": "뇌세포 를 자라게 하는 3가지 충격? #shorts",
+      "channel": "OXVALOR",
+      "url": "https://www.youtube.com/watch?v=Gtr2NYR6F4A",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": null,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "건강",
+        "실행·습관"
+      ],
+      "detail_file": "02-learning.md#Gtr2NYR6F4A"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 54,
+      "video_id": "Kf1dYpnH-N4",
+      "title": "6년 걸릴 공부를 3일로 끝내는 법 — OpenAI 연구원이 인터뷰에서 직접 밝혔습니다",
+      "channel": "AgentOS",
+      "url": "https://www.youtube.com/watch?v=Kf1dYpnH-N4",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "도구·AI"
+      ],
+      "detail_file": "02-learning.md#Kf1dYpnH-N4"
+    },
+    {
+      "playlist": "학습, 배움",
+      "playlist_id": "PLRlrdw8wIzADW-wJ5ysSNYEfuU2j0prFU",
+      "order": 55,
+      "video_id": "lF8_DX2NxjI",
+      "title": "[한글자막] AI로 혼자서도 압도적인 실력을 쌓는 독학 방법",
+      "channel": "Tech Bridge",
+      "url": "https://www.youtube.com/watch?v=lF8_DX2NxjI",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": null,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "도구·AI"
+      ],
+      "detail_file": "02-learning.md#lF8_DX2NxjI"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 1,
+      "video_id": "2gFLaGislp4",
+      "title": "이 강의를 본 순간 당신의 인생이 통째로 바뀔 겁니다 ㅣ 1일 1 피터슨 ㅣ Day 22 l 조던 피터슨 ㅣ 한영 자막",
+      "channel": "조던 피터슨의 일기장",
+      "url": "https://www.youtube.com/watch?v=2gFLaGislp4",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "03-life.md#2gFLaGislp4"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 2,
+      "video_id": "8V081wPlCbM",
+      "title": "왜 우리는 집중력이 없는가(ft 무의식)ㅣ 조던 피터슨 ㅣ 한영자막",
+      "channel": "조던 피터슨의 일기장",
+      "url": "https://www.youtube.com/watch?v=8V081wPlCbM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정"
+      ],
+      "detail_file": "03-life.md#8V081wPlCbM"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 3,
+      "video_id": "Q0VWQFUVT_k",
+      "title": "조던 피터슨 발상의 원전: 포스트 모더니즘과 막시즘 문화의 오류 (1편)",
+      "channel": "뱃툽",
+      "url": "https://www.youtube.com/watch?v=Q0VWQFUVT_k",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "신앙·가치",
+        "소통·관계",
+        "기타"
+      ],
+      "detail_file": "03-life.md#Q0VWQFUVT_k"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 4,
+      "video_id": "o73pqQ9Gzt4",
+      "title": "자신을 바로잡으세요",
+      "channel": "PragerU",
+      "url": "https://www.youtube.com/watch?v=o73pqQ9Gzt4",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정",
+        "소통·관계"
+      ],
+      "detail_file": "03-life.md#o73pqQ9Gzt4"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 5,
+      "video_id": "klTXqkEGSME",
+      "title": "동기부여를 원한다면 꼭 봐야할 영상ㅣ레스브라운ㅣ한영자막",
+      "channel": "잭스파이어 Jackspire",
+      "url": "https://www.youtube.com/watch?v=klTXqkEGSME",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정",
+        "신앙·가치"
+      ],
+      "detail_file": "03-life.md#klTXqkEGSME"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 6,
+      "video_id": "Ow0CML2K2VY",
+      "title": "부자아빠의 자본주의 생존 공략ㅣ로버트 기요사키 재테크 강의",
+      "channel": "잭스파이어 Jackspire",
+      "url": "https://www.youtube.com/watch?v=Ow0CML2K2VY",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "학습·기록"
+      ],
+      "detail_file": "03-life.md#Ow0CML2K2VY"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 7,
+      "video_id": "LquIQisaZFU",
+      "title": "위험한 좌파들이 여러분의 자녀를 교육하고 있습니다",
+      "channel": "PragerU",
+      "url": "https://www.youtube.com/watch?v=LquIQisaZFU",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "신앙·가치",
+        "소통·관계",
+        "기타"
+      ],
+      "detail_file": "03-life.md#LquIQisaZFU"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 8,
+      "video_id": "5mqnksEC-44",
+      "title": "한살이라도 더 어릴 때 깨달았으면 좋았을 것들 35가지ㅣ자본주의 공략법 (1~10)",
+      "channel": "리섭 LeeSeob",
+      "url": "https://www.youtube.com/watch?v=5mqnksEC-44",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "학습·기록",
+        "소통·관계"
+      ],
+      "detail_file": "03-life.md#5mqnksEC-44"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 9,
+      "video_id": "tySAnIgEI2k",
+      "title": "한살이라도 더 어릴 때 깨달았으면 좋았을 것들 - 2부ㅣ자본주의 공략법 (11~15)",
+      "channel": "리섭 LeeSeob",
+      "url": "https://www.youtube.com/watch?v=tySAnIgEI2k",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "기타"
+      ],
+      "detail_file": "03-life.md#tySAnIgEI2k"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 10,
+      "video_id": "suQrnhHKGsY",
+      "title": "당신의 성공이 '생각보다' 쉬운 이유 | 얼 나이팅게일",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=suQrnhHKGsY",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "03-life.md#suQrnhHKGsY"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 11,
+      "video_id": "BWxYWnwi08o",
+      "title": "[일론 머스크] 제1원리 사고법: 추정이 아닌 근본적인 문제로의 접근 (한영 자막)",
+      "channel": "Project스노우볼",
+      "url": "https://www.youtube.com/watch?v=BWxYWnwi08o",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "사업·브랜딩"
+      ],
+      "detail_file": "03-life.md#BWxYWnwi08o"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 12,
+      "video_id": "5Gty04W5lPg",
+      "title": "당신의 경쟁자가 *절대* 보게 두면 안되는 영상 | 타이 로페즈",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=5Gty04W5lPg",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "학습·기록"
+      ],
+      "detail_file": "03-life.md#5Gty04W5lPg"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 13,
+      "video_id": "b2kBZLYfG8s",
+      "title": "1개월 안에 다른 사람이 되는 법",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=b2kBZLYfG8s",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "회복·감정"
+      ],
+      "detail_file": "03-life.md#b2kBZLYfG8s"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 14,
+      "video_id": "4gxScmhsCf8",
+      "title": "유튜브편집자가 유튜버 700명 편집해보고 느낀점",
+      "channel": "진용진",
+      "url": "https://www.youtube.com/watch?v=4gxScmhsCf8",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "기타"
+      ],
+      "detail_file": "03-life.md#4gxScmhsCf8"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 15,
+      "video_id": "7W4CA_ErATc",
+      "title": "수퍼 재벌이 560억 짜리 전용기를 산 이유 | 그랜트 칼돈",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=7W4CA_ErATc",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관",
+        "기타"
+      ],
+      "detail_file": "03-life.md#7W4CA_ErATc"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 16,
+      "video_id": "TQsrWa_mGCE",
+      "title": "하버드 학생들에게 해주고 싶은 이야기 | 조던 피터슨 (한글자막)",
+      "channel": "비버처럼앞니쏙",
+      "url": "https://www.youtube.com/watch?v=TQsrWa_mGCE",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "소통·관계",
+        "신앙·가치"
+      ],
+      "detail_file": "03-life.md#TQsrWa_mGCE"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 17,
+      "video_id": "X6ier_V2x_g",
+      "title": "조던 피터슨 | 창의적인 사람들에게 필요한 조언",
+      "channel": "조던 피터슨 한국 공식 채널",
+      "url": "https://www.youtube.com/watch?v=X6ier_V2x_g",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "소통·관계",
+        "기타"
+      ],
+      "detail_file": "03-life.md#X6ier_V2x_g"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 18,
+      "video_id": "O6-cyHp9tRQ",
+      "title": "2조 원의 그릇을 보여주는 역대 베스트 인터뷰  | 그랜트 칼돈",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=O6-cyHp9tRQ",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관",
+        "기타"
+      ],
+      "detail_file": "03-life.md#O6-cyHp9tRQ"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 19,
+      "video_id": "GHBKDnZvMHA",
+      "title": "음악이 재미없고 삶이 피폐할 때 봐야할 영상",
+      "channel": "재즈 에비뉴 - Jazz Avenue",
+      "url": "https://www.youtube.com/watch?v=GHBKDnZvMHA",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정",
+        "신앙·가치"
+      ],
+      "detail_file": "03-life.md#GHBKDnZvMHA"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 20,
+      "video_id": "3smc7jbUPiE",
+      "title": "[리처드 파인만] “왜 자석은 서로 밀어내는가?”에 대한 답변 (한영 자막)",
+      "channel": "Project스노우볼",
+      "url": "https://www.youtube.com/watch?v=3smc7jbUPiE",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "학습·기록",
+        "과학적 사고",
+        "기타"
+      ],
+      "detail_file": "03-life.md#3smc7jbUPiE"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 21,
+      "video_id": "Hak30f2N6m0",
+      "title": "음악하는 사람이 공부도 해야하는 이유",
+      "channel": "재즈 에비뉴 - Jazz Avenue",
+      "url": "https://www.youtube.com/watch?v=Hak30f2N6m0",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "학습·기록",
+        "소통·관계",
+        "기타"
+      ],
+      "detail_file": "03-life.md#Hak30f2N6m0"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 22,
+      "video_id": "WWiDlFbvBFE",
+      "title": "옥한흠 목사의 명설교 더울림│복을 받는 방법편",
+      "channel": "CBSJOY",
+      "url": "https://www.youtube.com/watch?v=WWiDlFbvBFE",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "신앙·가치",
+        "실행·습관",
+        "회복·감정"
+      ],
+      "detail_file": "03-life.md#WWiDlFbvBFE"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 23,
+      "video_id": "myfd8DqLDsw",
+      "title": "성공하는 사람은 결국 이 3가지 원칙으로 독서합니다",
+      "channel": "작심만일 : 성공 마인드 동반자",
+      "url": "https://www.youtube.com/watch?v=myfd8DqLDsw",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관"
+      ],
+      "detail_file": "03-life.md#myfd8DqLDsw"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 24,
+      "video_id": "VnJe5uusDr8",
+      "title": "아무리 해도 난 이 사회의 부품 같아(feat. 절대 사육 당하지 않는 법)",
+      "channel": "돈공-돈버는공식",
+      "url": "https://www.youtube.com/watch?v=VnJe5uusDr8",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정",
+        "기타",
+        "학습·기록"
+      ],
+      "detail_file": "03-life.md#VnJe5uusDr8"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 25,
+      "video_id": "hTcnLFfSu4A",
+      "title": "30명의 노인들이 후회하고 느낀 인생 조언..",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=hTcnLFfSu4A",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "소통·관계",
+        "회복·감정"
+      ],
+      "detail_file": "03-life.md#hTcnLFfSu4A"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 26,
+      "video_id": "0lwhrpvUj8g",
+      "title": "부정적 생각을 효과적으로 극복하는 법",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=0lwhrpvUj8g",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "회복·감정",
+        "신앙·가치"
+      ],
+      "detail_file": "03-life.md#0lwhrpvUj8g"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 27,
+      "video_id": "tupPml1hQjQ",
+      "title": "전설의 나폴레온 힐 연설 영상",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=tupPml1hQjQ",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "신앙·가치",
+        "기타"
+      ],
+      "detail_file": "03-life.md#tupPml1hQjQ"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 28,
+      "video_id": "NiJQahJ4wT4",
+      "title": "DNA를 뛰어넘게 해줄 크래빙 이론",
+      "channel": "돈공-돈버는공식",
+      "url": "https://www.youtube.com/watch?v=NiJQahJ4wT4",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "신앙·가치",
+        "실행·습관",
+        "회복·감정"
+      ],
+      "detail_file": "03-life.md#NiJQahJ4wT4"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 29,
+      "video_id": "z-5W6T5FFdQ",
+      "title": "삶의 방향이 안보여서 답답한 20대들에게 | 게리 바이너척 | 에릭남 감수",
+      "channel": "천그루숲",
+      "url": "https://www.youtube.com/watch?v=z-5W6T5FFdQ",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩"
+      ],
+      "detail_file": "03-life.md#z-5W6T5FFdQ"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 30,
+      "video_id": "E6T-WNv8_TI",
+      "title": "이 4가지에 돈 아끼면 지능 낮은 겁니다.",
+      "channel": "리섭 LeeSeob",
+      "url": "https://www.youtube.com/watch?v=E6T-WNv8_TI",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "03-life.md#E6T-WNv8_TI"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 31,
+      "video_id": "bkJcRq1Pfys",
+      "title": "우리 모두가 갖고 있는 행복 치트키 - 게리 바이너척",
+      "channel": "게리 바이너척 Gary Vaynerchuk Korean",
+      "url": "https://www.youtube.com/watch?v=bkJcRq1Pfys",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "회복·감정",
+        "실행·습관",
+        "소통·관계"
+      ],
+      "detail_file": "03-life.md#bkJcRq1Pfys"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 32,
+      "video_id": "4CjRWX-RdeM",
+      "title": "천 년 뒤 후손들에게 전해주고 싶은 메시지 (한영 자막)",
+      "channel": "Project스노우볼",
+      "url": "https://www.youtube.com/watch?v=4CjRWX-RdeM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "신앙·가치",
+        "학습·기록"
+      ],
+      "detail_file": "03-life.md#4CjRWX-RdeM"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 33,
+      "video_id": "hehPTOmn6vE",
+      "title": "해외에서 난리난 공부법 (드디어 번역)",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=hehPTOmn6vE",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "학습·기록",
+        "실행·습관"
+      ],
+      "detail_file": "03-life.md#hehPTOmn6vE"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 34,
+      "video_id": "RnrZJOHY9tY",
+      "title": "시대가 변해도 절대 바뀌지 않는 5가지 핵심능력  | 동기부여학과",
+      "channel": "동기부여학과",
+      "url": "https://www.youtube.com/watch?v=RnrZJOHY9tY",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "도구·AI"
+      ],
+      "detail_file": "03-life.md#RnrZJOHY9tY"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 35,
+      "video_id": "UblIF5Utawg",
+      "title": "백수에서 월 1억을 벌기까지 (29살)",
+      "channel": "민팍의 마음너머",
+      "url": "https://www.youtube.com/watch?v=UblIF5Utawg",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관",
+        "회복·감정"
+      ],
+      "detail_file": "03-life.md#UblIF5Utawg"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 36,
+      "video_id": "tGXQ5b5yRaM",
+      "title": "조던 피터슨 | 당신이 먹을 독을 선택하세요",
+      "channel": "조던 피터슨 한국 공식 채널",
+      "url": "https://www.youtube.com/watch?v=tGXQ5b5yRaM",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정",
+        "기타"
+      ],
+      "detail_file": "03-life.md#tGXQ5b5yRaM"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 37,
+      "video_id": "d8Uhboe6ufw",
+      "title": "꿈도 없고 재능도 없는 평범한 사람은 어떻게 살아야 할까?",
+      "channel": "리섭 LeeSeob",
+      "url": "https://www.youtube.com/watch?v=d8Uhboe6ufw",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "사업·브랜딩",
+        "실행·습관",
+        "기타"
+      ],
+      "detail_file": "03-life.md#d8Uhboe6ufw"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 38,
+      "video_id": "oBmmJB4V5CI",
+      "title": "Gnarls Barkley(날스 바클리) - Crazy 가사 한글 자막 해석 번역",
+      "channel": "ppark _",
+      "url": "https://www.youtube.com/watch?v=oBmmJB4V5CI",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "기타",
+        "회복·감정",
+        "소통·관계"
+      ],
+      "detail_file": "03-life.md#oBmmJB4V5CI"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 39,
+      "video_id": "oYEvR8OUX28",
+      "title": "우리가 몰랐던 트럼프의 따뜻한 성공조언",
+      "channel": "오너의 그릇",
+      "url": "https://www.youtube.com/watch?v=oYEvR8OUX28",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩"
+      ],
+      "detail_file": "03-life.md#oYEvR8OUX28"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 40,
+      "video_id": "SQUuLO-bn2M",
+      "title": "중고차 딜러 VS 라이프 해킹",
+      "channel": "내셔널지오그래픽 - National Geographic Korea",
+      "url": "https://www.youtube.com/watch?v=SQUuLO-bn2M",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "기타",
+        "실행·습관"
+      ],
+      "detail_file": "03-life.md#SQUuLO-bn2M"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 41,
+      "video_id": "bHRhuzNA6OI",
+      "title": "당당하게 연봉 인상 요구하는 법",
+      "channel": "내셔널지오그래픽 - National Geographic Korea",
+      "url": "https://www.youtube.com/watch?v=bHRhuzNA6OI",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "소통·관계",
+        "연봉협상",
+        "비즈니스",
+        "자기계발"
+      ],
+      "detail_file": "03-life.md#bHRhuzNA6OI"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 42,
+      "video_id": "Rcn_vD9RdEw",
+      "title": "취업 면접에서 '질문 있으세요?' 시간에 꼭 물어봐야 할 질문은?",
+      "channel": "내셔널지오그래픽 - National Geographic Korea",
+      "url": "https://www.youtube.com/watch?v=Rcn_vD9RdEw",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "소통·관계",
+        "실행·습관",
+        "기타"
+      ],
+      "detail_file": "03-life.md#Rcn_vD9RdEw"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 43,
+      "video_id": "720t8HBjWns",
+      "title": "한계에 부딪쳤을 때 당신에게 필요한 동기부여 영상 | 한영 자막",
+      "channel": "제임스비디오 James video",
+      "url": "https://www.youtube.com/watch?v=720t8HBjWns",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "신앙·가치",
+        "기타"
+      ],
+      "detail_file": "03-life.md#720t8HBjWns"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 44,
+      "video_id": "390aHPDjv7w",
+      "title": "사람은 결코 변하지 않는다 | 타인의 이해를 바라지 마라 | 쇼펜하우어 처세술 | 인간관계 지혜 | 인생 명언 | 인생 조언 | 오디오북",
+      "channel": "지혜의 숲",
+      "url": "https://www.youtube.com/watch?v=390aHPDjv7w",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "소통·관계",
+        "회복·감정",
+        "기타"
+      ],
+      "detail_file": "03-life.md#390aHPDjv7w"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 45,
+      "video_id": "Erx28AkkU6w",
+      "title": "모든 학생에 전액 장학금을 1조 3천억 원 기부 / SBS / #D리포트",
+      "channel": "SBS 뉴스",
+      "url": "https://www.youtube.com/watch?v=Erx28AkkU6w",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "신앙·가치",
+        "기타"
+      ],
+      "detail_file": "03-life.md#Erx28AkkU6w"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 46,
+      "video_id": "rWyIE9WwP4Q",
+      "title": "어떤 사람으로 살 것인가를 고민해야 합니다 오박사가 알려주는 재능 많은 자식을 둔 부모의 역할은? | 오은영의 금쪽 상담소 36 회",
+      "channel": "play 채널A",
+      "url": "https://www.youtube.com/watch?v=rWyIE9WwP4Q",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "회복·감정",
+        "기타"
+      ],
+      "detail_file": "03-life.md#rWyIE9WwP4Q"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 47,
+      "video_id": "1x6v-bDJ1jQ",
+      "title": "포기 안 하는 방법",
+      "channel": "주언규 joo earn gyu",
+      "url": "https://www.youtube.com/watch?v=1x6v-bDJ1jQ",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "기타"
+      ],
+      "detail_file": "03-life.md#1x6v-bDJ1jQ"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 48,
+      "video_id": "a6g8SYeP2OA",
+      "title": "주님이 오늘도 함께하신다 #아침기도 #기도습관 #하나님의인도하심 #주님의선하심",
+      "channel": "크리스천인사이트",
+      "url": "https://www.youtube.com/watch?v=a6g8SYeP2OA",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "신앙·가치",
+        "실행·습관"
+      ],
+      "detail_file": "03-life.md#a6g8SYeP2OA"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 49,
+      "video_id": "P8VyvMpANdY",
+      "title": "하나님께 집중해야 합니다 #사단의전략 #광명의천사 #고린도후서11장 #사단의유혹 #하나님의뜻",
+      "channel": "크리스천인사이트",
+      "url": "https://www.youtube.com/watch?v=P8VyvMpANdY",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "신앙·가치",
+        "회복·감정"
+      ],
+      "detail_file": "03-life.md#P8VyvMpANdY"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 50,
+      "video_id": "9BnSk8UuOyc",
+      "title": "우리의 인생에는 세 단계가 있다.",
+      "channel": "Intelligence",
+      "url": "https://www.youtube.com/watch?v=9BnSk8UuOyc",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "신앙·가치"
+      ],
+      "detail_file": "03-life.md#9BnSk8UuOyc"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 51,
+      "video_id": "HTLJg2Bk_BA",
+      "title": "한국사 일타강사 최태성 마인드",
+      "channel": "아는형님 Knowingbros",
+      "url": "https://www.youtube.com/watch?v=HTLJg2Bk_BA",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": null,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "소통·관계"
+      ],
+      "detail_file": "03-life.md#HTLJg2Bk_BA"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 52,
+      "video_id": "uzLrRi6zWaA",
+      "title": "사실상 끝난 상황에서, 어떻게든 방법을 찾아 보는데..",
+      "channel": "MG세대",
+      "url": "https://www.youtube.com/watch?v=uzLrRi6zWaA",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정"
+      ],
+      "detail_file": "03-life.md#uzLrRi6zWaA"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 53,
+      "video_id": "IUDbatY3Hno",
+      "title": "8000억 자산가가 노숙자에게 건넨 조언",
+      "channel": "돌숏밥",
+      "url": "https://www.youtube.com/watch?v=IUDbatY3Hno",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "사업·브랜딩"
+      ],
+      "detail_file": "03-life.md#IUDbatY3Hno"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 54,
+      "video_id": "fKA51CrFcWg",
+      "title": "삶이 멈춘 것 같을때 빠져나오는 방법 | 루이스 호위스",
+      "channel": "NOMATTER 노메럴",
+      "url": "https://www.youtube.com/watch?v=fKA51CrFcWg",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "회복·감정",
+        "소통·관계",
+        "기타"
+      ],
+      "detail_file": "03-life.md#fKA51CrFcWg"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 55,
+      "video_id": "wnYdyYdJOBY",
+      "title": "게으르고 야망이 큰 사람이 위험한 이유 | 패트릭 벳 데이비드",
+      "channel": "NOMATTER 노메럴",
+      "url": "https://www.youtube.com/watch?v=wnYdyYdJOBY",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "en",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "사업·브랜딩"
+      ],
+      "detail_file": "03-life.md#wnYdyYdJOBY"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 56,
+      "video_id": "OYGr3ZiqR6Y",
+      "title": "망설이지 말고 한살이라도 어릴 때 빨리 시작하세요 #shorts #인생조언 #메가스터디 (쇼츠 손주은)",
+      "channel": "월급쟁이부자들TV",
+      "url": "https://www.youtube.com/watch?v=OYGr3ZiqR6Y",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정",
+        "기타"
+      ],
+      "detail_file": "03-life.md#OYGr3ZiqR6Y"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 57,
+      "video_id": "6G4jD0KvSzk",
+      "title": "3가지 능력으로 내 인생을 바꾸는 법 #조승연",
+      "channel": "마이크임팩트",
+      "url": "https://www.youtube.com/watch?v=6G4jD0KvSzk",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정"
+      ],
+      "detail_file": "03-life.md#6G4jD0KvSzk"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 58,
+      "video_id": "EX3hpEhUOSs",
+      "title": "매일 주어지는 두 가지를 잊지마세요 | 제이 프린스",
+      "channel": "NOMATTER 노메럴",
+      "url": "https://www.youtube.com/watch?v=EX3hpEhUOSs",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "신앙·가치"
+      ],
+      "detail_file": "03-life.md#EX3hpEhUOSs"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 59,
+      "video_id": "cew7jwiu7mY",
+      "title": "악마가 당신을 무시하는 이유.",
+      "channel": "Intelligence",
+      "url": "https://www.youtube.com/watch?v=cew7jwiu7mY",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "신앙·가치",
+        "회복·감정"
+      ],
+      "detail_file": "03-life.md#cew7jwiu7mY"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 60,
+      "video_id": "cOINKq-rzVE",
+      "title": "“나도 기술적 분석 다 해봤지” #워런버핏",
+      "channel": "메이킹알파",
+      "url": "https://www.youtube.com/watch?v=cOINKq-rzVE",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "03-life.md#cOINKq-rzVE"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 61,
+      "video_id": "JWe8hWQN8cU",
+      "title": "🗣️\"광야의 길, 하나님의 관점\" - 피아워십 목요예배 이동선 목사 설교中",
+      "channel": "F.I.A",
+      "url": "https://www.youtube.com/watch?v=JWe8hWQN8cU",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "신앙·가치",
+        "회복·감정"
+      ],
+      "detail_file": "03-life.md#JWe8hWQN8cU"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 62,
+      "video_id": "DbG3MkOHiYE",
+      "title": "냉소주의는 가난을 부르고 낙관주의는 부를 만든다",
+      "channel": "성공한스푼",
+      "url": "https://www.youtube.com/watch?v=DbG3MkOHiYE",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "회복·감정",
+        "기타"
+      ],
+      "detail_file": "03-life.md#DbG3MkOHiYE"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 63,
+      "video_id": "hMD-IqQV8fU",
+      "title": "내면의 악마와 싸우는 최고의 방법.",
+      "channel": "Intelligence",
+      "url": "https://www.youtube.com/watch?v=hMD-IqQV8fU",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "회복·감정",
+        "실행·습관",
+        "기타"
+      ],
+      "detail_file": "03-life.md#hMD-IqQV8fU"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 64,
+      "video_id": "8eI3v-A4g-g",
+      "title": "나는 해낸다 안 되면 죽는다.",
+      "channel": "Intelligence",
+      "url": "https://www.youtube.com/watch?v=8eI3v-A4g-g",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "성공",
+        "동기부여",
+        "짐론"
+      ],
+      "detail_file": "03-life.md#8eI3v-A4g-g"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 65,
+      "video_id": "Bg-qpNbs9Yo",
+      "title": "진짜 가족을 위해 살고 있긴 해?",
+      "channel": "Intelligence",
+      "url": "https://www.youtube.com/watch?v=Bg-qpNbs9Yo",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "소통·관계"
+      ],
+      "detail_file": "03-life.md#Bg-qpNbs9Yo"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 66,
+      "video_id": "ysLziGJ6Rmg",
+      "title": "일론 머스크는 하루를 5분 단위로 쪼갠다. 즉흥형 천재 아니라 계획형 괴물이다.",
+      "channel": "성공한스푼",
+      "url": "https://www.youtube.com/watch?v=ysLziGJ6Rmg",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록"
+      ],
+      "detail_file": "03-life.md#ysLziGJ6Rmg"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 67,
+      "video_id": "CdPkWCOj4ho",
+      "title": "하는 일이 적성에 안맞을 때",
+      "channel": "큰손 노희영",
+      "url": "https://www.youtube.com/watch?v=CdPkWCOj4ho",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "ko",
+      "auto_generated": true,
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "소통·관계"
+      ],
+      "detail_file": "03-life.md#CdPkWCOj4ho"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 68,
+      "video_id": "XoKLx9haF3c",
+      "title": "답이 안보일 땐, 이렇게 해보세요!",
+      "channel": "성공한스푼",
+      "url": "https://www.youtube.com/watch?v=XoKLx9haF3c",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "회복·감정",
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "03-life.md#XoKLx9haF3c"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 69,
+      "video_id": "hSGt_rhu49U",
+      "title": "How to Be So Productive it Feels ILLEGAL",
+      "channel": "Dan Martell",
+      "url": "https://www.youtube.com/watch?v=hSGt_rhu49U",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "기타"
+      ],
+      "detail_file": "03-life.md#hSGt_rhu49U"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 70,
+      "video_id": "xCCeGBW2G4w",
+      "title": "그린베레 vs 네이비 씰",
+      "channel": "오호라",
+      "url": "https://www.youtube.com/watch?v=xCCeGBW2G4w",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "기타"
+      ],
+      "detail_file": "03-life.md#xCCeGBW2G4w"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 71,
+      "video_id": "2mFfSRq3ao8",
+      "title": "내가 노력을 안 했던 이유",
+      "channel": "주언규 joo earn gyu",
+      "url": "https://www.youtube.com/watch?v=2mFfSRq3ao8",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "실행·습관",
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "03-life.md#2mFfSRq3ao8"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 72,
+      "video_id": "XtQEoXJW9bw",
+      "title": "날 우울하게 만드는 것들",
+      "channel": "주언규 joo earn gyu",
+      "url": "https://www.youtube.com/watch?v=XtQEoXJW9bw",
+      "status": "영상 직접 분석",
+      "transcript_collected": false,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": null,
+      "analysis_basis": "video_analysis_not_transcript",
+      "tags": [
+        "회복·감정",
+        "학습·기록",
+        "기타"
+      ],
+      "detail_file": "03-life.md#XtQEoXJW9bw"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 73,
+      "video_id": "BQiDqU34eAI",
+      "title": "스파이가 말하는 사회를 전복시키는법 ㄷㄷ 와우",
+      "channel": "우셔우셔",
+      "url": "https://www.youtube.com/watch?v=BQiDqU34eAI",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "소통·관계",
+        "기타"
+      ],
+      "detail_file": "03-life.md#BQiDqU34eAI"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 74,
+      "video_id": "0lms-eusg58",
+      "title": "두려워하지 말라",
+      "channel": "한국사장학교 TV",
+      "url": "https://www.youtube.com/watch?v=0lms-eusg58",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "신앙·가치",
+        "회복·감정"
+      ],
+      "detail_file": "03-life.md#0lms-eusg58"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 75,
+      "video_id": "hoERAs0erOU",
+      "title": "전쟁 빼고는 다 쉬운 일 (정주영 회장)",
+      "channel": "BZCF | 비즈까페",
+      "url": "https://www.youtube.com/watch?v=hoERAs0erOU",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "사업·브랜딩",
+        "회복·감정"
+      ],
+      "detail_file": "03-life.md#hoERAs0erOU"
+    },
+    {
+      "playlist": "인생수업, 위기의 때",
+      "playlist_id": "PLRlrdw8wIzABl9syKiU1BRRIGuwBSjNPb",
+      "order": 76,
+      "video_id": "Tf0N6HOdd5A",
+      "title": "억만장자들보다 더 값졌다고 한 인터뷰",
+      "channel": "미엠지 Me:MZ",
+      "url": "https://www.youtube.com/watch?v=Tf0N6HOdd5A",
+      "status": "자막 기반 요약",
+      "transcript_collected": true,
+      "transcript_language": "확인 안 됨",
+      "auto_generated": "unknown",
+      "analysis_basis": "retrieved_transcript",
+      "tags": [
+        "실행·습관",
+        "신앙·가치",
+        "소통·관계"
+      ],
+      "detail_file": "03-life.md#Tf0N6HOdd5A"
+    }
+  ]
+}

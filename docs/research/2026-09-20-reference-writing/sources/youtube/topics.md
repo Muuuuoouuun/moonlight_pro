@@ -1,0 +1,707 @@
+# 주제별 찾아보기
+
+[전체 보고서](README.md) · [전체 목록 CSV](inventory.csv)
+
+한 영상에 여러 분류가 붙을 수 있다. 분류는 내용을 다시 찾기 위한 AI 초안이다.
+
+## 실행·습관 · 193편
+
+- [당신의 경쟁자가 *절대* 보게 두면 안되는 영상 | 타이 로페즈](01-growth.md#5Gty04W5lPg) — 자막 기반 요약
+- [시크릿 주인공 중 한 명이 직접 한 말..*충격 주의* | 동기부여 | 존아사라프](01-growth.md#wGvlcUqhdZU) — 자막 기반 요약
+- [내 인생을 원자 단위로 쪼개 변화시키는 방법](01-growth.md#b7vxBoXds2U) — 자막 기반 요약
+- [내 인생을 원자 단위로 쪼개 변화시키는 방법 (2)](01-growth.md#Q7OStpDzvYM) — 자막 기반 요약
+- [단순하고 멋진 삶은 지금 바로 시작할 수 있습니다](01-growth.md#ikto49_6Cqk) — 자막 기반 요약
+- [베푸는사람 vs 뺏는사람 vs 기브앤테이크(feat. 코난 오브라이언, 버락 오바마)](01-growth.md#c0Wl9K2gBIo) — 자막 기반 요약
+- [전설의 나폴레온 힐 연설 영상](01-growth.md#tupPml1hQjQ) — 자막 기반 요약
+- [많은 영재들도 결국 "다 망하더군" | 트럼프](01-growth.md#eAIqY3BNUwc) — 자막 기반 요약
+- [성공한 엘리트 중 상위 10%는 '이것'이 달랐다](01-growth.md#gmrs8UxAZwo) — 자막 기반 요약
+- [당신을 엘리트로 만들 단 한 가지의 '성공' 습관](01-growth.md#I5oTw7AJ1Rk) — 자막 기반 요약
+- [[밥 로스] 듣고 있으면 절로 힐링되는 밥 아저씨의 인생 명언들 (한영 자막)](01-growth.md#z7r0DIjRGd4) — 자막 기반 요약
+- [인생을 바꾸는 아침습관ㅣ동기부여ㅣ한영 자막](01-growth.md#BSGNPHxonKI) — 자막 기반 요약
+- [데드라인이 없어서 일을 미루기만 하는 당신이 지금 봐야하는 영상](01-growth.md#J9bpQxB4iOE) — 자막 기반 요약
+- [우리 모두가 갖고 있는 행복 치트키 - 게리 바이너척](01-growth.md#bkJcRq1Pfys) — 자막 기반 요약
+- [인생을 성공으로 이끄는 ‘5초 법칙’ㅣ멜 로빈스 동기부여ㅣ한영 자막](01-growth.md#Uuq4OME-7-M) — 영상 직접 분석
+- [50조 부자의 인터뷰 - 성공적인 인생과 비즈니스를 위한 5가지 조언 | 동기부여학과](01-growth.md#3EtsD-ZMtOw) — 자막 기반 요약
+- [두려움에서 나오세요 - 당신을 다시 깨우는 영상 | 댄 페냐 | 한영자막](01-growth.md#nFBoJ5SKe2s) — 자막 기반 요약
+- [당신의 인생을 180도 바꿀 수 있는 30분 마인드셋 | 동기부여학과](01-growth.md#7X-BOvSaQBw) — 자막 기반 요약
+- [모든 남자들을 위한 41가지 신조](01-growth.md#NyA5y_0RDeU) — 자막 기반 요약
+- [2,400만 유튜버가 말하는 꿈처럼 사는 법](01-growth.md#v14CZir0ufs) — 자막 기반 요약
+- [당신이 원하는 것은 다 얻을 수 있다. 하지만..?](01-growth.md#Z4pXqX5Dsrc) — 자막 기반 요약
+- [드디어 공개, 조던피터슨 공부법](01-growth.md#iB2AFvw8sBw) — 자막 기반 요약
+- [성공을 위해 반드시 마스터해야 할 7가지 요소 l 브라이언 트레이시 Brian Tracy](01-growth.md#ph4wfrlhwlQ) — 자막 기반 요약
+- [종이 한 장으로 400억 부자가 되는 법 | 브라이언 트레이시](01-growth.md#RKdLHF9sj3w) — 자막 기반 요약
+- [해외에서 난리난 공부법 (드디어 번역)](01-growth.md#hehPTOmn6vE) — 자막 기반 요약
+- [가난의 자장을 만드는 '이것'부터 비우면 인생이 확실히 달라집니다.](01-growth.md#Ki5IMN632KU) — 자막 기반 요약
+- [꼭 알아야 할 긍정보다 70배 강력한 힘 | 트레버 모아와드](01-growth.md#zqonx8Ea-S4) — 영상 직접 분석
+- ["뇌가 싹 맑아집니다." 스웨덴인이 유독 똑똑한 이유 (김익한 교수 3부)](01-growth.md#sfxHiQebtH4) — 자막 기반 요약
+- [젠틀몬스터 김한국 대표 강연](01-growth.md#1mSTAGRCtXE) — 자막 기반 요약
+- [시대가 변해도 절대 바뀌지 않는 5가지 핵심능력  | 동기부여학과](01-growth.md#RnrZJOHY9tY) — 자막 기반 요약
+- [90년간의 깨달음, 성공비밀 5가지 - 경영의신 이나모리 가즈오, 왜 리더인가? [도서 협찬] | 동기부여학과](01-growth.md#HqvqIknMFKI) — 자막 기반 요약
+- [백수에서 월 1억을 벌기까지 (29살)](01-growth.md#UblIF5Utawg) — 자막 기반 요약
+- [게리 바이너척, "개소리를 다 무시하는 것이 최고의 성공 요인" |  7가지 성공비밀](01-growth.md#7WwS0OET-HQ) — 자막 기반 요약
+- [백만장자들의 효율성 증가 4가지 방법](01-growth.md#VK9WKcoqMyY) — 자막 기반 요약
+- [조던 피터슨 | 당신이 먹을 독을 선택하세요](01-growth.md#tGXQ5b5yRaM) — 자막 기반 요약
+- [저는 부자들의 "이것"을 보고 돈을 더 벌기 시작했습니다(前신사임당 주언규)](01-growth.md#qO1tof4ORs0) — 자막 기반 요약
+- [[스티브 잡스] A급 인재와 B급, C급 직원의 차이 (한영 자막)](01-growth.md#tkHvxLwLx3M) — 자막 기반 요약
+- [자수성가한 해외 억만장자 12인에게 직접 듣는 성공의 비결 (한영 자막)](01-growth.md#eZF3GwAArC0) — 자막 기반 요약
+- [우리가 몰랐던 트럼프의 따뜻한 성공조언](01-growth.md#oYEvR8OUX28) — 자막 기반 요약
+- [뇌를 어떻게 성공 머신으로 만들까?](01-growth.md#BPAT2nq3_lQ) — 자막 기반 요약
+- [책 읽으면 성공한다는 말만 믿고 1년 동안 자기계발서 143권을 읽었더니...](01-growth.md#MhjuZRr5vBY) — 자막 기반 요약
+- [내일부터는 없다. 지금 당장 절실하게 시작하라 | 동기부여 영상](01-growth.md#uPJiDgcjLd4) — 자막 기반 요약
+- [지금 당장 갖다 버려야 할 미국 하위 50%의 가난한 12가지 생활 습관ㅣ알렉스 홀모지ㅣ동기부여학과](01-growth.md#c2nFwHDJVio) — 자막 기반 요약
+- [하루의 시작을 완전히 바꿔 줄 초대형 억만장자 부자 3명에게 듣는 고밀도 인생조언 7가지ㅣ폴 오팔라ㅣ브라이언 스미스ㅣ앤드류 비터비 | 동기부여학과](01-growth.md#8XN63NlWwUA) — 자막 기반 요약
+- [알아두면 무조건 성공하는 7가지 부자의 기술ㅣ패드릭 뱃 데이비드(Patrick Bet-David)ㅣ동기부여학과ㅣ부자 마인드 습관 성공 조언](01-growth.md#S8255fBMrCQ) — 자막 기반 요약
+- [무의식을 활용해 호감 사는 법](01-growth.md#5BX7dfoQY1k) — 자막 기반 요약
+- [1000억대 부자가 가난을 벗어나기위해 포기해야 했던 루틴 3가지 - 알렉스 홀모지(Alex Hormizi )| 동기부여학과](01-growth.md#JhUbuiPzyTw) — 자막 기반 요약
+- ["혼자 뿌듯해해요." 일 못하는 사람들의 '치명적인' 착각 3가지 (드로우앤드류 1부)](01-growth.md#m_Z-ATOg7eM) — 자막 기반 요약
+- [그동안 제 영상봐주셔서 감사합니다. (S1 E8)](01-growth.md#ewlbNkd2ZoE) — 자막 기반 요약
+- [가장 빠르게 부의 추월차선으로 올라타는 3가지 습관](01-growth.md#vtyeVfUojz8) — 자막 기반 요약
+- [워렌버핏과의 식사를 대체하는 영상 | 동기부여](01-growth.md#1WpafI-HmY4) — 자막 기반 요약
+- [평범한 사람이 12개월 안에 99%보다 앞서 나가는 3 단계](01-growth.md#OpxGLFOzBRE) — 자막 기반 요약
+- [부자가 될 20대들이 알아야하는 3가지](01-growth.md#FN27nl62SVU) — 자막 기반 요약
+- [월 수익 0원 되고 보니 가장 후회되는 것](01-growth.md#AADTDGBpkGo) — 자막 기반 요약
+- [용기있게 도전하는 어른이 되는 법](01-growth.md#osllx6FCe6k) — 자막 기반 요약
+- ['50만'명 지휘하고 깨달은 상위 '0.1%'들의 결정적인 차이 (고성균 장군 1부)](01-growth.md#V-LDoWiUvoM) — 자막 기반 요약
+- [1 년 넘게 하루에 12 시간 공부 한 방법](01-growth.md#kICh_d6tHQk) — 자막 기반 요약
+- [누구든 1000% 바꿀 뇌 개조법 공유 금지 | 존 아사라프](01-growth.md#3r6hUpSKdHI) — 자막 기반 요약
+- [소심한 사람의 인생이 망가지는 과정](01-growth.md#zH4E-NWJVPo) — 영상 직접 분석
+- [이것만 하지 않아도 성공했을텐데...](01-growth.md#0wgJxFiJL2c) — 자막 기반 요약
+- [인생을 바꾸는 법 - 한 걸음씩 나아가기](01-growth.md#y00tvum7g1I) — 자막 기반 요약
+- [대부분의 사람들이 이걸 몰라서 부자가 되지 못해요 | 되더라 - 현우진 | 공부자극 | 동기부여](01-growth.md#XqMvQSr7Px8) — 자막 기반 요약
+- [한계에 부딪쳤을 때 당신에게 필요한 동기부여 영상 | 한영 자막](01-growth.md#720t8HBjWns) — 자막 기반 요약
+- [매출 720억을 만들어준, 일반인을 억대 연봉으로 만들어준 독서법 비밀 최종 공개, 독서법종결, 한번만 따라하면 평생 써먹습니다 [노아AI현대표]](01-growth.md#MazwNckdQ-8) — 자막 기반 요약
+- [재능없이 평범한 사람이 성공하는 5단계 전략](01-growth.md#b8b2bUnH_NI) — 자막 기반 요약
+- [세계 최고 두뇌 과학자가 찾은 90%가 성공하는 목표설정법](01-growth.md#bbOsoEEQMsM) — 자막 기반 요약
+- [왜 우리는 큰 꿈을 꾸지 않을까? 못하는 걸까?](01-growth.md#-tqTeTa5XS8) — 자막 기반 요약
+- [[원본풀영상] 책에 차마 쓰지 못한 사장학개론 | 김승호의 북콘서트](01-growth.md#8eGDJNBzysM) — 자막 기반 요약
+- [할수록 가난해지는 최악의 독서 습관 5](01-growth.md#BXHUJExC_eM) — 자막 기반 요약
+- [???: 찬물 샤워를 해보세요](01-growth.md#6x3b_70jBvk) — 자막 기반 요약
+- [성공포르노 성수기, 새해다짐 시즌에 속지 않는법](01-growth.md#Zh9fVMzLUlk) — 자막 기반 요약
+- [내가 끊임없이 실패하는 이유, 의지력이 부족해서가 아닙니다! ㅣ 베이직교회 조정민 목사 ㅣ 잘잘법 174회](01-growth.md#pwKuAkgUWnc) — 자막 기반 요약
+- [피가 되고 살이 되는 쓴소리 ft.백종원](01-growth.md#b1d3yB7Vv7c) — 자막 기반 요약
+- [레이달리오의 성공법칙](01-growth.md#Wrma9n0ibcg) — 자막 기반 요약
+- [하고 싶은 일, 해야 하는 일ㅣ동기부여 영상 모음](01-growth.md#ECh25K1_6SI) — 자막 기반 요약
+- [진짜 내 꿈을 찾는 법!! 방황하고 있는 그대에게✨](01-growth.md#8onUlhw_qtQ) — 영상 직접 분석
+- [포기 안 하는 방법](01-growth.md#1x6v-bDJ1jQ) — 자막 기반 요약
+- [아무리 해도 인생이 안 풀릴 때](01-growth.md#QrshuvMBOC4) — 자막 기반 요약
+- [결국 해내는 사람들은 계획부터 다르다 "계획대로 안되도 흔들리지 않아요"](01-growth.md#snAcqJmDwss) — 자막 기반 요약
+- [대부분의 사람들이 이걸 몰라서 부자가 되지 못해요 | 되더라 - 현우진 | 공부자극 | 동기부여 | bgm 제거 버전](01-growth.md#0ytXUIWS4P4) — 자막 기반 요약
+- [우리의 인생에는 세 단계가 있다.](01-growth.md#9BnSk8UuOyc) — 자막 기반 요약
+- [워렌버핏의 평생 파트너, 최고 자산가 찰리멍거의 10가지 교훈, 부자의 습관ㅣ동기부여학과](01-growth.md#A_9ecbVNH4U) — 자막 기반 요약
+- [성공한 사람들의 한 가지 비밀 | 마크 주커버크](01-growth.md#h26vRWbx6nU) — 자막 기반 요약
+- [사실상 끝난 상황에서, 어떻게든 방법을 찾아 보는데..](01-growth.md#uzLrRi6zWaA) — 자막 기반 요약
+- [당신에게 불안이 찾아왔다면 | 로버트 그린](01-growth.md#9TBJHgUCNuk) — 자막 기반 요약
+- [배우는 속도가 느린 것 같다면 '이걸' 해 보세요 | 빠른 학습을 가능하게 하는 3가지 도구](01-growth.md#1eqTEQvzc1E) — 자막 기반 요약
+- [성공한 사업가는 다 한다는 '이 루틴'](01-growth.md#r4v4oinvmng) — 자막 기반 요약
+- [레스 브라운 역대급 동기부여 영상 -](01-growth.md#Ri0boleSuDc) — 영상 직접 분석
+- [신발 끈 꽉 매고 그냥 밀어붙여.](01-growth.md#ORUfaD_jjfE) — 자막 기반 요약
+- [냉소적인 사람과 낙관적인 사람의 차이 | 알렉스 홀모지](01-growth.md#LwnsHp5b-rU) — 자막 기반 요약
+- [“나도 기술적 분석 다 해봤지” #워런버핏](01-growth.md#cOINKq-rzVE) — 자막 기반 요약
+- [비범함을 위해선 그래야만 한다.](01-growth.md#KNC7UWvn4W4) — 자막 기반 요약
+- [나는 해낸다 안 되면 죽는다.](01-growth.md#8eI3v-A4g-g) — 영상 직접 분석
+- [자신감 있는 척? 현실에선 안 통한다🙅‍♂️](01-growth.md#4z4Gj2BXQKw) — 자막 기반 요약
+- [진짜 가족을 위해 살고 있긴 해?](01-growth.md#Bg-qpNbs9Yo) — 자막 기반 요약
+- [”세상은 소심한 남자에게 잔인하고 용기있는 자에게 보상을 준다“](01-growth.md#572Tq1DZbsY) — 자막 기반 요약
+- [하는 일이 적성에 안맞을 때](01-growth.md#CdPkWCOj4ho) — 자막 기반 요약
+- [개그맨에서 연봉 10억 작가로 변신한 고명환의 비법은 '이것'⁉️ 정해진 틀을 깨고 사고방식을 바꾸는 가장 효과적인 법✅ #어쩌다어른10주년](01-growth.md#Vkmn9Q7zZBY) — 자막 기반 요약
+- [4000억 엑싯한 맥킨지 출신 창업가의 초합리적 결정법(+경제학)ㅣ스킨1004 이소형](01-growth.md#fOQ7U2xL3sw) — 자막 기반 요약
+- [최선을 다했는데 인정받지 못하는 마음이 든다면 #악마는프라다](01-growth.md#c0tpnShGv4U) — 자막 기반 요약
+- [일을 '진짜' 잘하는 사람들 특징](01-growth.md#VCzjbSr00VM) — 자막 기반 요약
+- [무려 5년 동안 매일 훈련했다는 마이클 펠프스](01-growth.md#G1WOyfYeQZQ) — 자막 기반 요약
+- [사고를 바꾸는 방법, 학생뿐만 아니라 일반인들이 사고를 바꾸려면 꼭 봐야할 영상│현우진 동기부여 영상│삶의 자세│공부 자극](01-growth.md#MUXL_JmgnXA) — 자막 기반 요약
+- [[메가스터디] 바른공부설명회 현우진 "교과서 학습을 통한 사고력 향상 학습법"](01-growth.md#NNSyrIlzwwM) — 자막 기반 요약
+- [완벽을 버려야 성공한다? | Scale AI 알렉산더 왕의 완벽주의 탈출기](01-growth.md#EECgJPb6CMM) — 자막 기반 요약
+- [지금 차기 미국 대통령 후보까지 거론되는 중… #영어인터뷰 #영어공부](01-growth.md#TLZIMMnEUfQ) — 자막 기반 요약
+- [누구든 1000% 바꿀 뇌 개조법 (공유 금지) | 존 아사라프](01-growth.md#1zBpozANCR0) — 영상 직접 분석
+- [Why Learning FAST Makes You More Successful (just copy me)](01-growth.md#ccyjOcYcmqQ) — 자막 기반 요약
+- [이 13권의 책 덕분에 저는 수백만장자 CEO가 되었습니다.](01-growth.md#_1XhDHwRg0I) — 영상 직접 분석
+- [성공하기 위해 꼭 갖춰야 할 6가지 기술](01-growth.md#jffXuIy-iVs) — 영상 직접 분석
+- [꿈의 사업을 만드는 방법 (feat. Gary Vee & Patrick Bet-David)](01-growth.md#8lakAE_AZM0) — 영상 직접 분석
+- [Scale AI 창업자 알렉산더 왕](01-growth.md#teugguggmuc) — 자막 기반 요약
+- [목표를 실제로 달성하기 위한 시스템을 구축하는 방법](01-growth.md#fXyRprdoEoE) — 영상 직접 분석
+- [사자처럼 일하라](01-growth.md#MD46WoafgSw) — 자막 기반 요약
+- [성공하려면 바꿔라 🤫](01-growth.md#dCHGoXBlReM) — 영상 직접 분석
+- [내가 노력을 안 했던 이유](01-growth.md#2mFfSRq3ao8) — 영상 직접 분석
+- [박진영이 말하는 재능있는사람 이기는 방법](01-growth.md#X_fZwFso2JE) — 영상 직접 분석
+- [해결해야 할 문제에 집중하기](01-growth.md#xMHi0yBNr6k) — 영상 직접 분석
+- [실행하는 사람의 중요성 | 스티브 잡스](01-growth.md#cxIwfWqSFMM) — 영상 직접 분석
+- [고통 스러운 일들 (손주은)](01-growth.md#-J67gSxjY2M) — 자막 기반 요약
+- [“여행 말고 유학을 가세요” 이건희 회장에게 배운 이 시대에 필요한 새로운 학습법 (feat. 상하이)](01-growth.md#lifH81bxQSs) — 영상 직접 분석
+- [기독교 생산성이란 무엇인가?](01-growth.md#wNn-pdrW2AY) — 자막 기반 요약
+- [일주일만 이렇게 사세요! 인생이 달라집니다 (디쉐어 현승원 의장)](01-growth.md#5iAhGG1-0_o) — 자막 기반 요약
+- [인생은 기준 싸움이다](01-growth.md#RpU-T6LdKac) — 자막 기반 요약
+- [가치있는 걸 얻고 싶다면 어려움과 친해져라](01-growth.md#MqXwnT9hNy4) — 영상 직접 분석
+- [상위 1%만 아는 종이 한 장의 기적.](01-growth.md#6EOvYoa8SnA) — 영상 직접 분석
+- [고석현의 마인드셋부터 잡아주는 전챔피언 타이론 우들리ㄷㄷ👑😲 #ufc #mma](01-growth.md#T-UKgR8nZjU) — 자막 기반 요약
+- [뭐든 제대로 이해하는 방법](02-learning.md#sQYQgiHVyAM) — 자막 기반 요약·품질 주의
+- [배우는 즉시 내 것으로 만드는 3가지 방법](02-learning.md#Vl7K_kqvFiU) — 자막 기반 요약·품질 주의
+- [나이 들수록 뇌를 더 빠르게 쓸 수 있는 방법](02-learning.md#vNO7YfQF8-o) — 영상 직접 분석
+- [노력한 만큼 결과가 안나온다면, 당장 이 영상을 보셔야 합니다. | 학습법 | 자기계발 | 공부](02-learning.md#Hq8wPiPiOx8) — 자막 기반 요약
+- [단기간에 암기를 잘하는 법 | 7개월만에 의대 합격한 비법 (feat. 장기기억 강화)](02-learning.md#ZcFY-7UYuEA) — 자막 기반 요약
+- [책이 통째로 외워지는 공부법. 9개월 만에 사법고시 합격한 이윤규 변호사의 공부 비법 대공개!](02-learning.md#o8x6ulAe6Xg) — 자막 기반 요약
+- [이 2가지를 깨닫기 전까진, 절대 포기하면 안됩니다.](02-learning.md#wxbsWdGudcY) — 자막 기반 요약
+- [저는 이 공부법으로 의사가 되었습니다. 딱 2주만 따라하시면 됩니다.](02-learning.md#fMyHGqQd804) — 자막 기반 요약
+- [천재들이 어려운 개념을 빠르게 배우는 학습법](02-learning.md#qrpyswoATQ8) — 자막 기반 요약
+- [당신의 인생을 바꿔 줄 충격적인 역발상 공부법 (공부법, 암기법, 자격증시험)](02-learning.md#7ZZdqdlkvik) — 영상 직접 분석
+- [대원외고, 서울대 로스쿨 졸업한 변호사가 말하는 '사소하지만 강력한 인생 꿀팁' (임현서 변호사)](02-learning.md#H9xM1VxFiAM) — 자막 기반 요약
+- ["인생 날로 먹지 마" 대원외고, 서울대 경영, 서울대 로스쿨, 변호사 겸 스타트업 대표 임현서쌤 #찍먹과외 | 연고티비](02-learning.md#kbkB2aJ0qgY) — 자막 기반 요약
+- [Why I'm able to study 4 hours with NO breaks (how to stay productive)](02-learning.md#3NSkk31vFbU) — 자막 기반 요약
+- [My Biggest Studying Mistake - The Feynman Technique](02-learning.md#IDB_3S1ezsc) — 자막 기반 요약
+- [억대 연봉 구글 임원이 말하는, 1살이라도 어릴 때 알아야.. 앞서가는 것들 (MZ 직장인, 프리랜서 꼭 보세요)](02-learning.md#WrEoKuNRgLU) — 자막 기반 요약
+- [한국사 일타강사 최태성 마인드](02-learning.md#HTLJg2Bk_BA) — 자막 기반 요약
+- [The BEST Study Routine for Students (Improve Focus)](02-learning.md#zf1QQRU_4FA) — 영상 직접 분석
+- [How to Be So Productive it Feels ILLEGAL](02-learning.md#hSGt_rhu49U) — 영상 직접 분석
+- [진짜 똑똑한 사람은 이렇게 공부합니다](02-learning.md#Xsxb7IK5lDA) — 영상 직접 분석
+- [becoming smart is easy, actually](02-learning.md#C5OJJD3Eytk) — 자막 기반 요약
+- [6 Levels of Thinking Every Student MUST Master](02-learning.md#1xqerXscTsE) — 영상 직접 분석
+- [읽은 모든 것을 기억하는 단 2단계 공식](02-learning.md#dBubRcgQOM8) — 영상 직접 분석
+- [The smartest people have mastered these 6 core skills | Michael Watkins for Big Think+](02-learning.md#32z8Ax1j-Q4) — 영상 직접 분석
+- [CIA 스파이처럼 학습 속도 10배 올리는 뇌 훈련법 (쉽고 간단해요) [실제 사용된 방법]](02-learning.md#xV6CxfX04yo) — 영상 직접 분석
+- [The 9 Powerful Mental Models Used By History's Greatest Minds](02-learning.md#jgzreTGEb4M) — 영상 직접 분석
+- [How To Learn Any Skill So Fast It Feels Illegal 🚀](02-learning.md#OQdkjUM3yks) — 영상 직접 분석
+- [현실을 레벨업하는 5가지 방법 (게임 심리 실전 적용법)](02-learning.md#hM2K1Ai3fj4) — 영상 직접 분석
+- [[EBS] 적는 자가 살아남는다 | 천재들의 노트 습관 | #지식채널e](02-learning.md#KbleIwApqu4) — 영상 직접 분석
+- [샤워하면서도 공부를?](02-learning.md#cHCfhY_o8WM) — 자막 기반 요약
+- [하루 15시간 공부? 이렇게 하면 가능합니다](02-learning.md#lnZ4ZY_024Y) — 영상 직접 분석
+- [The Bible Taught Me How to Manage My Time Better Than Any Self-Help Book](02-learning.md#qFROrjHyK94) — 자막 기반 요약
+- [해외 유학 없이 영어를 유창하게 하는 방법 (CIA가 받는 언어교육법)](02-learning.md#HytLB3-orIY) — 영상 직접 분석
+- [뇌세포 를 자라게 하는 3가지 충격? #shorts](02-learning.md#Gtr2NYR6F4A) — 자막 기반 요약
+- [6년 걸릴 공부를 3일로 끝내는 법 — OpenAI 연구원이 인터뷰에서 직접 밝혔습니다](02-learning.md#Kf1dYpnH-N4) — 영상 직접 분석
+- [[한글자막] AI로 혼자서도 압도적인 실력을 쌓는 독학 방법](02-learning.md#lF8_DX2NxjI) — 자막 기반 요약
+- [이 강의를 본 순간 당신의 인생이 통째로 바뀔 겁니다 ㅣ 1일 1 피터슨 ㅣ Day 22 l 조던 피터슨 ㅣ 한영 자막](03-life.md#2gFLaGislp4) — 영상 직접 분석
+- [왜 우리는 집중력이 없는가(ft 무의식)ㅣ 조던 피터슨 ㅣ 한영자막](03-life.md#8V081wPlCbM) — 자막 기반 요약
+- [자신을 바로잡으세요](03-life.md#o73pqQ9Gzt4) — 영상 직접 분석
+- [동기부여를 원한다면 꼭 봐야할 영상ㅣ레스브라운ㅣ한영자막](03-life.md#klTXqkEGSME) — 자막 기반 요약
+- [부자아빠의 자본주의 생존 공략ㅣ로버트 기요사키 재테크 강의](03-life.md#Ow0CML2K2VY) — 자막 기반 요약
+- [한살이라도 더 어릴 때 깨달았으면 좋았을 것들 - 2부ㅣ자본주의 공략법 (11~15)](03-life.md#tySAnIgEI2k) — 영상 직접 분석
+- [당신의 성공이 '생각보다' 쉬운 이유 | 얼 나이팅게일](03-life.md#suQrnhHKGsY) — 영상 직접 분석
+- [[일론 머스크] 제1원리 사고법: 추정이 아닌 근본적인 문제로의 접근 (한영 자막)](03-life.md#BWxYWnwi08o) — 영상 직접 분석
+- [1개월 안에 다른 사람이 되는 법](03-life.md#b2kBZLYfG8s) — 자막 기반 요약
+- [유튜브편집자가 유튜버 700명 편집해보고 느낀점](03-life.md#4gxScmhsCf8) — 자막 기반 요약
+- [수퍼 재벌이 560억 짜리 전용기를 산 이유 | 그랜트 칼돈](03-life.md#7W4CA_ErATc) — 자막 기반 요약
+- [2조 원의 그릇을 보여주는 역대 베스트 인터뷰  | 그랜트 칼돈](03-life.md#O6-cyHp9tRQ) — 영상 직접 분석
+- [음악이 재미없고 삶이 피폐할 때 봐야할 영상](03-life.md#GHBKDnZvMHA) — 자막 기반 요약
+- [옥한흠 목사의 명설교 더울림│복을 받는 방법편](03-life.md#WWiDlFbvBFE) — 자막 기반 요약
+- [성공하는 사람은 결국 이 3가지 원칙으로 독서합니다](03-life.md#myfd8DqLDsw) — 자막 기반 요약
+- [아무리 해도 난 이 사회의 부품 같아(feat. 절대 사육 당하지 않는 법)](03-life.md#VnJe5uusDr8) — 영상 직접 분석
+- [30명의 노인들이 후회하고 느낀 인생 조언..](03-life.md#hTcnLFfSu4A) — 자막 기반 요약
+- [DNA를 뛰어넘게 해줄 크래빙 이론](03-life.md#NiJQahJ4wT4) — 영상 직접 분석
+- [삶의 방향이 안보여서 답답한 20대들에게 | 게리 바이너척 | 에릭남 감수](03-life.md#z-5W6T5FFdQ) — 자막 기반 요약
+- [꿈도 없고 재능도 없는 평범한 사람은 어떻게 살아야 할까?](03-life.md#d8Uhboe6ufw) — 영상 직접 분석
+- [중고차 딜러 VS 라이프 해킹](03-life.md#SQUuLO-bn2M) — 자막 기반 요약
+- [취업 면접에서 '질문 있으세요?' 시간에 꼭 물어봐야 할 질문은?](03-life.md#Rcn_vD9RdEw) — 영상 직접 분석
+- [주님이 오늘도 함께하신다 #아침기도 #기도습관 #하나님의인도하심 #주님의선하심](03-life.md#a6g8SYeP2OA) — 자막 기반 요약
+- [망설이지 말고 한살이라도 어릴 때 빨리 시작하세요 #shorts #인생조언 #메가스터디 (쇼츠 손주은)](03-life.md#OYGr3ZiqR6Y) — 영상 직접 분석
+- [3가지 능력으로 내 인생을 바꾸는 법 #조승연](03-life.md#6G4jD0KvSzk) — 자막 기반 요약
+- [매일 주어지는 두 가지를 잊지마세요 | 제이 프린스](03-life.md#EX3hpEhUOSs) — 자막 기반 요약
+- [냉소주의는 가난을 부르고 낙관주의는 부를 만든다](03-life.md#DbG3MkOHiYE) — 영상 직접 분석
+- [내면의 악마와 싸우는 최고의 방법.](03-life.md#hMD-IqQV8fU) — 영상 직접 분석
+- [일론 머스크는 하루를 5분 단위로 쪼갠다. 즉흥형 천재 아니라 계획형 괴물이다.](03-life.md#ysLziGJ6Rmg) — 자막 기반 요약
+- [전쟁 빼고는 다 쉬운 일 (정주영 회장)](03-life.md#hoERAs0erOU) — 자막 기반 요약
+- [억만장자들보다 더 값졌다고 한 인터뷰](03-life.md#Tf0N6HOdd5A) — 자막 기반 요약
+
+## 학습·기록 · 114편
+
+- [당신의 경쟁자가 *절대* 보게 두면 안되는 영상 | 타이 로페즈](01-growth.md#5Gty04W5lPg) — 자막 기반 요약
+- [하버드 학생들에게 해주고 싶은 이야기 | 조던 피터슨 (한글자막)](01-growth.md#TQsrWa_mGCE) — 자막 기반 요약
+- [앉아있으면 머리가 나빠져요. 뇌를 제대로 알려드릴게요.](01-growth.md#oYXHmzMvS4E) — 자막 기반 요약
+- [고생하면 머리가 좋아져요. 뇌를 제대로 알려드릴게요 (2)](01-growth.md#Kc_cvAXCs4Y) — 자막 기반 요약
+- [시크릿 주인공 중 한 명이 직접 한 말..*충격 주의* | 동기부여 | 존아사라프](01-growth.md#wGvlcUqhdZU) — 자막 기반 요약
+- [내 인생을 원자 단위로 쪼개 변화시키는 방법](01-growth.md#b7vxBoXds2U) — 자막 기반 요약
+- [성공한 엘리트 중 상위 10%는 '이것'이 달랐다](01-growth.md#gmrs8UxAZwo) — 자막 기반 요약
+- [당신을 엘리트로 만들 단 한 가지의 '성공' 습관](01-growth.md#I5oTw7AJ1Rk) — 자막 기반 요약
+- [인생을 성공으로 이끄는 ‘5초 법칙’ㅣ멜 로빈스 동기부여ㅣ한영 자막](01-growth.md#Uuq4OME-7-M) — 영상 직접 분석
+- [당신의 인생을 180도 바꿀 수 있는 30분 마인드셋 | 동기부여학과](01-growth.md#7X-BOvSaQBw) — 자막 기반 요약
+- [[닐 디그래스 타이슨] 아는 것과 생각해 내는 힘의 차이 (한영 자막)](01-growth.md#dGJya2dpjko) — 자막 기반 요약
+- [2,400만 유튜버가 말하는 꿈처럼 사는 법](01-growth.md#v14CZir0ufs) — 자막 기반 요약
+- [당신이 원하는 것은 다 얻을 수 있다. 하지만..?](01-growth.md#Z4pXqX5Dsrc) — 자막 기반 요약
+- [4000만 열광한 공부법 “적게 공부하고, 영리하게 공부하라“](01-growth.md#C87fr5Q12aY) — 자막 기반 요약
+- [드디어 공개, 조던피터슨 공부법](01-growth.md#iB2AFvw8sBw) — 자막 기반 요약
+- [부자들만 아는 당신도 모르게 노예가 된 이유 | 동기부여](01-growth.md#rKhI2xoQH8U) — 자막 기반 요약
+- [성공을 위해 반드시 마스터해야 할 7가지 요소 l 브라이언 트레이시 Brian Tracy](01-growth.md#ph4wfrlhwlQ) — 자막 기반 요약
+- [종이 한 장으로 400억 부자가 되는 법 | 브라이언 트레이시](01-growth.md#RKdLHF9sj3w) — 자막 기반 요약
+- [해외에서 난리난 공부법 (드디어 번역)](01-growth.md#hehPTOmn6vE) — 자막 기반 요약
+- ["뇌가 싹 맑아집니다." 스웨덴인이 유독 똑똑한 이유 (김익한 교수 3부)](01-growth.md#sfxHiQebtH4) — 자막 기반 요약
+- [시대가 변해도 절대 바뀌지 않는 5가지 핵심능력  | 동기부여학과](01-growth.md#RnrZJOHY9tY) — 자막 기반 요약
+- [저는 부자들의 "이것"을 보고 돈을 더 벌기 시작했습니다(前신사임당 주언규)](01-growth.md#qO1tof4ORs0) — 자막 기반 요약
+- [자수성가한 해외 억만장자 12인에게 직접 듣는 성공의 비결 (한영 자막)](01-growth.md#eZF3GwAArC0) — 자막 기반 요약
+- [뇌를 어떻게 성공 머신으로 만들까?](01-growth.md#BPAT2nq3_lQ) — 자막 기반 요약
+- [책 읽으면 성공한다는 말만 믿고 1년 동안 자기계발서 143권을 읽었더니...](01-growth.md#MhjuZRr5vBY) — 자막 기반 요약
+- [평범한 사람이 12개월 안에 99%보다 앞서 나가는 3 단계](01-growth.md#OpxGLFOzBRE) — 자막 기반 요약
+- [1 년 넘게 하루에 12 시간 공부 한 방법](01-growth.md#kICh_d6tHQk) — 자막 기반 요약
+- [레전드 인공지능 과학자가 별세하기전에 남긴 MIT 최고의 강의 "말을 하는 법"](01-growth.md#jS-Jk9fT7uQ) — 자막 기반 요약
+- [누구든 1000% 바꿀 뇌 개조법 공유 금지 | 존 아사라프](01-growth.md#3r6hUpSKdHI) — 자막 기반 요약
+- [대중을 매료시키는 화법의 비밀 | 말을 제대로 잘하는 방법](01-growth.md#yA8PsufH-C8) — 자막 기반 요약
+- [인생을 바꾸는 법 - 한 걸음씩 나아가기](01-growth.md#y00tvum7g1I) — 자막 기반 요약
+- [대부분의 사람들이 이걸 몰라서 부자가 되지 못해요 | 되더라 - 현우진 | 공부자극 | 동기부여](01-growth.md#XqMvQSr7Px8) — 자막 기반 요약
+- [매출 720억을 만들어준, 일반인을 억대 연봉으로 만들어준 독서법 비밀 최종 공개, 독서법종결, 한번만 따라하면 평생 써먹습니다 [노아AI현대표]](01-growth.md#MazwNckdQ-8) — 자막 기반 요약
+- [세계 최고 두뇌 과학자가 찾은 90%가 성공하는 목표설정법](01-growth.md#bbOsoEEQMsM) — 자막 기반 요약
+- [인간의 어리석음에 대한 학습 by 버핏 & 멍거 (12 버크셔)](01-growth.md#IsgbHSYRYts) — 자막 기반 요약
+- [할수록 가난해지는 최악의 독서 습관 5](01-growth.md#BXHUJExC_eM) — 자막 기반 요약
+- [우리가 살면서 문학작품을 꼭 읽어야 하는 이유](01-growth.md#qL_p0xm0Qt8) — 자막 기반 요약
+- [인생 노트앱...드디어 찾았습니다..!](01-growth.md#qY1P_CmL8aQ) — 자막 기반 요약
+- [진짜 내 꿈을 찾는 법!! 방황하고 있는 그대에게✨](01-growth.md#8onUlhw_qtQ) — 영상 직접 분석
+- [결국 해내는 사람들은 계획부터 다르다 "계획대로 안되도 흔들리지 않아요"](01-growth.md#snAcqJmDwss) — 자막 기반 요약
+- [대부분의 사람들이 이걸 몰라서 부자가 되지 못해요 | 되더라 - 현우진 | 공부자극 | 동기부여 | bgm 제거 버전](01-growth.md#0ytXUIWS4P4) — 자막 기반 요약
+- [배우는 속도가 느린 것 같다면 '이걸' 해 보세요 | 빠른 학습을 가능하게 하는 3가지 도구](01-growth.md#1eqTEQvzc1E) — 자막 기반 요약
+- [성공한 사업가는 다 한다는 '이 루틴'](01-growth.md#r4v4oinvmng) — 자막 기반 요약
+- [“나도 기술적 분석 다 해봤지” #워런버핏](01-growth.md#cOINKq-rzVE) — 자막 기반 요약
+- [개그맨에서 연봉 10억 작가로 변신한 고명환의 비법은 '이것'⁉️ 정해진 틀을 깨고 사고방식을 바꾸는 가장 효과적인 법✅ #어쩌다어른10주년](01-growth.md#Vkmn9Q7zZBY) — 자막 기반 요약
+- [사고를 바꾸는 방법, 학생뿐만 아니라 일반인들이 사고를 바꾸려면 꼭 봐야할 영상│현우진 동기부여 영상│삶의 자세│공부 자극](01-growth.md#MUXL_JmgnXA) — 자막 기반 요약
+- [[메가스터디] 바른공부설명회 현우진 "교과서 학습을 통한 사고력 향상 학습법"](01-growth.md#NNSyrIlzwwM) — 자막 기반 요약
+- [20대에게 주는 조언 (팔란티어 CEO 알렉스 카프)](01-growth.md#4SszTTMGbyk) — 영상 직접 분석
+- [인생에서 가장 중요한 능력은..](01-growth.md#NS7mpvJwEv8) — 영상 직접 분석
+- [누구든 1000% 바꿀 뇌 개조법 (공유 금지) | 존 아사라프](01-growth.md#1zBpozANCR0) — 영상 직접 분석
+- [Why Learning FAST Makes You More Successful (just copy me)](01-growth.md#ccyjOcYcmqQ) — 자막 기반 요약
+- [이 13권의 책 덕분에 저는 수백만장자 CEO가 되었습니다.](01-growth.md#_1XhDHwRg0I) — 영상 직접 분석
+- [목표를 실제로 달성하기 위한 시스템을 구축하는 방법](01-growth.md#fXyRprdoEoE) — 영상 직접 분석
+- [넌 똑똑한 아이였어. 그런데 왜 지금은 이렇게 길을 잃은 기분이 드는 거야?](01-growth.md#U4PsIm9dDvs) — 영상 직접 분석
+- [내가 노력을 안 했던 이유](01-growth.md#2mFfSRq3ao8) — 영상 직접 분석
+- [날 우울하게 만드는 것들](01-growth.md#XtQEoXJW9bw) — 영상 직접 분석
+- [워런 버핏이 말하는 '진정한 성공'](01-growth.md#kWY9mNMz4iI) — 영상 직접 분석
+- [“여행 말고 유학을 가세요” 이건희 회장에게 배운 이 시대에 필요한 새로운 학습법 (feat. 상하이)](01-growth.md#lifH81bxQSs) — 영상 직접 분석
+- [상위 1%만 아는 종이 한 장의 기적.](01-growth.md#6EOvYoa8SnA) — 영상 직접 분석
+- [뭐든 제대로 이해하는 방법](02-learning.md#sQYQgiHVyAM) — 자막 기반 요약·품질 주의
+- [배우는 즉시 내 것으로 만드는 3가지 방법](02-learning.md#Vl7K_kqvFiU) — 자막 기반 요약·품질 주의
+- [나이 들수록 뇌를 더 빠르게 쓸 수 있는 방법](02-learning.md#vNO7YfQF8-o) — 영상 직접 분석
+- [노력한 만큼 결과가 안나온다면, 당장 이 영상을 보셔야 합니다. | 학습법 | 자기계발 | 공부](02-learning.md#Hq8wPiPiOx8) — 자막 기반 요약
+- [단기간에 암기를 잘하는 법 | 7개월만에 의대 합격한 비법 (feat. 장기기억 강화)](02-learning.md#ZcFY-7UYuEA) — 자막 기반 요약
+- [[#유퀴즈온더블럭] 서울대 교수님이 직접 알려주는 서울대생 공부법📚 교수님의 팩폭으로 얼떨결에 과거 사찰당한 유재석X조세호ㅋㅋ😂 | #Diggle #갓구운클립](02-learning.md#pEs-XsVUGKM) — 자막 기반 요약
+- [이 3가지만 기억하세요. 지금보다 무조건 똑똑해질 수 있습니다 (박문호 뇌과학자)](02-learning.md#vnDaHldRKu4) — 자막 기반 요약
+- [책이 통째로 외워지는 공부법. 9개월 만에 사법고시 합격한 이윤규 변호사의 공부 비법 대공개!](02-learning.md#o8x6ulAe6Xg) — 자막 기반 요약
+- [이 2가지를 깨닫기 전까진, 절대 포기하면 안됩니다.](02-learning.md#wxbsWdGudcY) — 자막 기반 요약
+- [저는 이 공부법으로 의사가 되었습니다. 딱 2주만 따라하시면 됩니다.](02-learning.md#fMyHGqQd804) — 자막 기반 요약
+- [천재들이 어려운 개념을 빠르게 배우는 학습법](02-learning.md#qrpyswoATQ8) — 자막 기반 요약
+- [한국에서 발견된 특이한 공부 습관? 서울대가 이 상태라면 더 이상 천재는 없다│해외 한국 교육 반응│다큐프라임│#골라듄다큐](02-learning.md#CNrzvdcU9SE) — 자막 기반 요약
+- [당신의 인생을 바꿔 줄 충격적인 역발상 공부법 (공부법, 암기법, 자격증시험)](02-learning.md#7ZZdqdlkvik) — 영상 직접 분석
+- [언어를 습득하는 유일한 방법](02-learning.md#1msHbPWJpic) — 자막 기반 요약
+- [대원외고, 서울대 로스쿨 졸업한 변호사가 말하는 '사소하지만 강력한 인생 꿀팁' (임현서 변호사)](02-learning.md#H9xM1VxFiAM) — 자막 기반 요약
+- ["인생 날로 먹지 마" 대원외고, 서울대 경영, 서울대 로스쿨, 변호사 겸 스타트업 대표 임현서쌤 #찍먹과외 | 연고티비](02-learning.md#kbkB2aJ0qgY) — 자막 기반 요약
+- [뇌과학이 말하는 「빨리 배우는 가장 게으른 방법」](02-learning.md#MNnTEHv9jgw) — 자막 기반 요약
+- [Why I'm able to study 4 hours with NO breaks (how to stay productive)](02-learning.md#3NSkk31vFbU) — 자막 기반 요약
+- [My Biggest Studying Mistake - The Feynman Technique](02-learning.md#IDB_3S1ezsc) — 자막 기반 요약
+- [The BEST Study Routine for Students (Improve Focus)](02-learning.md#zf1QQRU_4FA) — 영상 직접 분석
+- [서울대 뚫어버리는 공부법 1가지](02-learning.md#Wh1YReojzlk) — 자막 기반 요약
+- [진짜 똑똑한 사람은 이렇게 공부합니다](02-learning.md#Xsxb7IK5lDA) — 영상 직접 분석
+- [becoming smart is easy, actually](02-learning.md#C5OJJD3Eytk) — 자막 기반 요약
+- [How to be a creative thinker | Carnegie Mellon University Po-Shen Loh](02-learning.md#JpYA7WXkHyI) — 영상 직접 분석
+- [6 Levels of Thinking Every Student MUST Master](02-learning.md#1xqerXscTsE) — 영상 직접 분석
+- [읽은 모든 것을 기억하는 단 2단계 공식](02-learning.md#dBubRcgQOM8) — 영상 직접 분석
+- [The smartest people have mastered these 6 core skills | Michael Watkins for Big Think+](02-learning.md#32z8Ax1j-Q4) — 영상 직접 분석
+- [CIA 스파이처럼 학습 속도 10배 올리는 뇌 훈련법 (쉽고 간단해요) [실제 사용된 방법]](02-learning.md#xV6CxfX04yo) — 영상 직접 분석
+- [세계 최고의 뇌과학자가 말하는 20배 더 빨리 배우는 법 (앤드류 휴버맨)](02-learning.md#ntGRhqkXVA0) — 영상 직접 분석
+- [The 9 Powerful Mental Models Used By History's Greatest Minds](02-learning.md#jgzreTGEb4M) — 영상 직접 분석
+- [How To Learn Any Skill So Fast It Feels Illegal 🚀](02-learning.md#OQdkjUM3yks) — 영상 직접 분석
+- [현실을 레벨업하는 5가지 방법 (게임 심리 실전 적용법)](02-learning.md#hM2K1Ai3fj4) — 영상 직접 분석
+- [글 잘 쓰는 이들의 공통점은? 대가의 쉽게 읽히고 쉽게 쓰는 글쓰기 방법 총정리!](02-learning.md#Ml6nXM6dt7I) — 영상 직접 분석
+- [[EBS] 적는 자가 살아남는다 | 천재들의 노트 습관 | #지식채널e](02-learning.md#KbleIwApqu4) — 영상 직접 분석
+- [샤워하면서도 공부를?](02-learning.md#cHCfhY_o8WM) — 자막 기반 요약
+- [하루 15시간 공부? 이렇게 하면 가능합니다](02-learning.md#lnZ4ZY_024Y) — 영상 직접 분석
+- [[Full] [특별기획] 다시, 읽기로 - 1부 읽기 도파민](02-learning.md#X9Ek3gRp-Fw) — 자막 기반 요약
+- [해외 유학 없이 영어를 유창하게 하는 방법 (CIA가 받는 언어교육법)](02-learning.md#HytLB3-orIY) — 영상 직접 분석
+- [언어 천재 트레버의 언어 공부 비법](02-learning.md#pwy8npJHPEo) — 영상 직접 분석
+- [6년 걸릴 공부를 3일로 끝내는 법 — OpenAI 연구원이 인터뷰에서 직접 밝혔습니다](02-learning.md#Kf1dYpnH-N4) — 영상 직접 분석
+- [[한글자막] AI로 혼자서도 압도적인 실력을 쌓는 독학 방법](02-learning.md#lF8_DX2NxjI) — 자막 기반 요약
+- [이 강의를 본 순간 당신의 인생이 통째로 바뀔 겁니다 ㅣ 1일 1 피터슨 ㅣ Day 22 l 조던 피터슨 ㅣ 한영 자막](03-life.md#2gFLaGislp4) — 영상 직접 분석
+- [부자아빠의 자본주의 생존 공략ㅣ로버트 기요사키 재테크 강의](03-life.md#Ow0CML2K2VY) — 자막 기반 요약
+- [한살이라도 더 어릴 때 깨달았으면 좋았을 것들 35가지ㅣ자본주의 공략법 (1~10)](03-life.md#5mqnksEC-44) — 자막 기반 요약
+- [당신의 성공이 '생각보다' 쉬운 이유 | 얼 나이팅게일](03-life.md#suQrnhHKGsY) — 영상 직접 분석
+- [[일론 머스크] 제1원리 사고법: 추정이 아닌 근본적인 문제로의 접근 (한영 자막)](03-life.md#BWxYWnwi08o) — 영상 직접 분석
+- [1개월 안에 다른 사람이 되는 법](03-life.md#b2kBZLYfG8s) — 자막 기반 요약
+- [[리처드 파인만] “왜 자석은 서로 밀어내는가?”에 대한 답변 (한영 자막)](03-life.md#3smc7jbUPiE) — 영상 직접 분석
+- [음악하는 사람이 공부도 해야하는 이유](03-life.md#Hak30f2N6m0) — 영상 직접 분석
+- [성공하는 사람은 결국 이 3가지 원칙으로 독서합니다](03-life.md#myfd8DqLDsw) — 자막 기반 요약
+- [아무리 해도 난 이 사회의 부품 같아(feat. 절대 사육 당하지 않는 법)](03-life.md#VnJe5uusDr8) — 영상 직접 분석
+- [이 4가지에 돈 아끼면 지능 낮은 겁니다.](03-life.md#E6T-WNv8_TI) — 영상 직접 분석
+- [천 년 뒤 후손들에게 전해주고 싶은 메시지 (한영 자막)](03-life.md#4CjRWX-RdeM) — 자막 기반 요약
+- [일론 머스크는 하루를 5분 단위로 쪼갠다. 즉흥형 천재 아니라 계획형 괴물이다.](03-life.md#ysLziGJ6Rmg) — 자막 기반 요약
+- [답이 안보일 땐, 이렇게 해보세요!](03-life.md#XoKLx9haF3c) — 영상 직접 분석
+
+## 사업·브랜딩 · 85편
+
+- [당신의 경쟁자가 *절대* 보게 두면 안되는 영상 | 타이 로페즈](01-growth.md#5Gty04W5lPg) — 자막 기반 요약
+- [성공하는 사람은 반드시 이 원칙을 지키며 말한다 (원본 조회수: 1520만회)](01-growth.md#Zixr-ttMfRc) — 자막 기반 요약
+- [50조 부자의 인터뷰 - 성공적인 인생과 비즈니스를 위한 5가지 조언 | 동기부여학과](01-growth.md#3EtsD-ZMtOw) — 자막 기반 요약
+- [두려움에서 나오세요 - 당신을 다시 깨우는 영상 | 댄 페냐 | 한영자막](01-growth.md#nFBoJ5SKe2s) — 자막 기반 요약
+- [당신이 원하는 것은 다 얻을 수 있다. 하지만..?](01-growth.md#Z4pXqX5Dsrc) — 자막 기반 요약
+- [부자들만 아는 당신도 모르게 노예가 된 이유 | 동기부여](01-growth.md#rKhI2xoQH8U) — 자막 기반 요약
+- [성공을 위해 반드시 마스터해야 할 7가지 요소 l 브라이언 트레이시 Brian Tracy](01-growth.md#ph4wfrlhwlQ) — 자막 기반 요약
+- [종이 한 장으로 400억 부자가 되는 법 | 브라이언 트레이시](01-growth.md#RKdLHF9sj3w) — 자막 기반 요약
+- [젠틀몬스터 김한국 대표 강연](01-growth.md#1mSTAGRCtXE) — 자막 기반 요약
+- [90년간의 깨달음, 성공비밀 5가지 - 경영의신 이나모리 가즈오, 왜 리더인가? [도서 협찬] | 동기부여학과](01-growth.md#HqvqIknMFKI) — 자막 기반 요약
+- [백수에서 월 1억을 벌기까지 (29살)](01-growth.md#UblIF5Utawg) — 자막 기반 요약
+- [게리 바이너척, "개소리를 다 무시하는 것이 최고의 성공 요인" |  7가지 성공비밀](01-growth.md#7WwS0OET-HQ) — 자막 기반 요약
+- [백만장자들의 효율성 증가 4가지 방법](01-growth.md#VK9WKcoqMyY) — 자막 기반 요약
+- [저는 부자들의 "이것"을 보고 돈을 더 벌기 시작했습니다(前신사임당 주언규)](01-growth.md#qO1tof4ORs0) — 자막 기반 요약
+- ["경이롭다" 무료 AI 웹사이트 BEST 5](01-growth.md#9d5GWZyTtXE) — 자막 기반 요약
+- [[스티브 잡스] A급 인재와 B급, C급 직원의 차이 (한영 자막)](01-growth.md#tkHvxLwLx3M) — 자막 기반 요약
+- [자수성가한 해외 억만장자 12인에게 직접 듣는 성공의 비결 (한영 자막)](01-growth.md#eZF3GwAArC0) — 자막 기반 요약
+- [우리가 몰랐던 트럼프의 따뜻한 성공조언](01-growth.md#oYEvR8OUX28) — 자막 기반 요약
+- [지금 당장 갖다 버려야 할 미국 하위 50%의 가난한 12가지 생활 습관ㅣ알렉스 홀모지ㅣ동기부여학과](01-growth.md#c2nFwHDJVio) — 자막 기반 요약
+- [하루의 시작을 완전히 바꿔 줄 초대형 억만장자 부자 3명에게 듣는 고밀도 인생조언 7가지ㅣ폴 오팔라ㅣ브라이언 스미스ㅣ앤드류 비터비 | 동기부여학과](01-growth.md#8XN63NlWwUA) — 자막 기반 요약
+- [알아두면 무조건 성공하는 7가지 부자의 기술ㅣ패드릭 뱃 데이비드(Patrick Bet-David)ㅣ동기부여학과ㅣ부자 마인드 습관 성공 조언](01-growth.md#S8255fBMrCQ) — 자막 기반 요약
+- [1000억대 부자가 가난을 벗어나기위해 포기해야 했던 루틴 3가지 - 알렉스 홀모지(Alex Hormizi )| 동기부여학과](01-growth.md#JhUbuiPzyTw) — 자막 기반 요약
+- ["혼자 뿌듯해해요." 일 못하는 사람들의 '치명적인' 착각 3가지 (드로우앤드류 1부)](01-growth.md#m_Z-ATOg7eM) — 자막 기반 요약
+- [그동안 제 영상봐주셔서 감사합니다. (S1 E8)](01-growth.md#ewlbNkd2ZoE) — 자막 기반 요약
+- [가장 빠르게 부의 추월차선으로 올라타는 3가지 습관](01-growth.md#vtyeVfUojz8) — 자막 기반 요약
+- [워렌버핏과의 식사를 대체하는 영상 | 동기부여](01-growth.md#1WpafI-HmY4) — 자막 기반 요약
+- [부자가 될 20대들이 알아야하는 3가지](01-growth.md#FN27nl62SVU) — 자막 기반 요약
+- [월 수익 0원 되고 보니 가장 후회되는 것](01-growth.md#AADTDGBpkGo) — 자막 기반 요약
+- [소심한 사람의 인생이 망가지는 과정](01-growth.md#zH4E-NWJVPo) — 영상 직접 분석
+- [이것만 하지 않아도 성공했을텐데...](01-growth.md#0wgJxFiJL2c) — 자막 기반 요약
+- [재능없이 평범한 사람이 성공하는 5단계 전략](01-growth.md#b8b2bUnH_NI) — 자막 기반 요약
+- [인간의 어리석음에 대한 학습 by 버핏 & 멍거 (12 버크셔)](01-growth.md#IsgbHSYRYts) — 자막 기반 요약
+- [[원본풀영상] 책에 차마 쓰지 못한 사장학개론 | 김승호의 북콘서트](01-growth.md#8eGDJNBzysM) — 자막 기반 요약
+- [우리가 살면서 문학작품을 꼭 읽어야 하는 이유](01-growth.md#qL_p0xm0Qt8) — 자막 기반 요약
+- [인생 노트앱...드디어 찾았습니다..!](01-growth.md#qY1P_CmL8aQ) — 자막 기반 요약
+- [나와 함께 오래갈 사람](01-growth.md#9T5DukkikAg) — 자막 기반 요약
+- [성공포르노 성수기, 새해다짐 시즌에 속지 않는법](01-growth.md#Zh9fVMzLUlk) — 자막 기반 요약
+- [레이달리오의 성공법칙](01-growth.md#Wrma9n0ibcg) — 자막 기반 요약
+- [워렌버핏의 평생 파트너, 최고 자산가 찰리멍거의 10가지 교훈, 부자의 습관ㅣ동기부여학과](01-growth.md#A_9ecbVNH4U) — 자막 기반 요약
+- [성공한 사람들의 한 가지 비밀 | 마크 주커버크](01-growth.md#h26vRWbx6nU) — 자막 기반 요약
+- [게으르고 야망이 큰 사람이 위험한 이유 | 패트릭 벳 데이비드](01-growth.md#wnYdyYdJOBY) — 자막 기반 요약
+- [실리콘밸리가 사용하는 일하는 프로세스](01-growth.md#F42oxFb9gfc) — 자막 기반 요약
+- [진상 처리에 도가 튼 알바생](01-growth.md#fx-6os408VE) — 자막 기반 요약
+- [성공한 사업가는 다 한다는 '이 루틴'](01-growth.md#r4v4oinvmng) — 자막 기반 요약
+- [신발 끈 꽉 매고 그냥 밀어붙여.](01-growth.md#ORUfaD_jjfE) — 자막 기반 요약
+- [냉소적인 사람과 낙관적인 사람의 차이 | 알렉스 홀모지](01-growth.md#LwnsHp5b-rU) — 자막 기반 요약
+- [비범함을 위해선 그래야만 한다.](01-growth.md#KNC7UWvn4W4) — 자막 기반 요약
+- [”세상은 소심한 남자에게 잔인하고 용기있는 자에게 보상을 준다“](01-growth.md#572Tq1DZbsY) — 자막 기반 요약
+- [개그맨에서 연봉 10억 작가로 변신한 고명환의 비법은 '이것'⁉️ 정해진 틀을 깨고 사고방식을 바꾸는 가장 효과적인 법✅ #어쩌다어른10주년](01-growth.md#Vkmn9Q7zZBY) — 자막 기반 요약
+- [4000억 엑싯한 맥킨지 출신 창업가의 초합리적 결정법(+경제학)ㅣ스킨1004 이소형](01-growth.md#fOQ7U2xL3sw) — 자막 기반 요약
+- [완벽을 버려야 성공한다? | Scale AI 알렉산더 왕의 완벽주의 탈출기](01-growth.md#EECgJPb6CMM) — 자막 기반 요약
+- [20대에게 주는 조언 (팔란티어 CEO 알렉스 카프)](01-growth.md#4SszTTMGbyk) — 영상 직접 분석
+- [Why Learning FAST Makes You More Successful (just copy me)](01-growth.md#ccyjOcYcmqQ) — 자막 기반 요약
+- [이 13권의 책 덕분에 저는 수백만장자 CEO가 되었습니다.](01-growth.md#_1XhDHwRg0I) — 영상 직접 분석
+- [성공하기 위해 꼭 갖춰야 할 6가지 기술](01-growth.md#jffXuIy-iVs) — 영상 직접 분석
+- [빚300억에서 자산7조를 만든 ‘한마디’ 💵](01-growth.md#G5Nqcu9tyqQ) — 자막 기반 요약
+- [꿈의 사업을 만드는 방법 (feat. Gary Vee & Patrick Bet-David)](01-growth.md#8lakAE_AZM0) — 영상 직접 분석
+- [Scale AI 창업자 알렉산더 왕](01-growth.md#teugguggmuc) — 자막 기반 요약
+- [성공하려면 바꿔라 🤫](01-growth.md#dCHGoXBlReM) — 영상 직접 분석
+- [워런 버핏이 말하는 '진정한 성공'](01-growth.md#kWY9mNMz4iI) — 영상 직접 분석
+- [해결해야 할 문제에 집중하기](01-growth.md#xMHi0yBNr6k) — 영상 직접 분석
+- [실행하는 사람의 중요성 | 스티브 잡스](01-growth.md#cxIwfWqSFMM) — 영상 직접 분석
+- [모두가 알지만 불편한 진실.](01-growth.md#TtS8DE8NA4A) — 영상 직접 분석
+- [일주일만 이렇게 사세요! 인생이 달라집니다 (디쉐어 현승원 의장)](01-growth.md#5iAhGG1-0_o) — 자막 기반 요약
+- [가치있는 걸 얻고 싶다면 어려움과 친해져라](01-growth.md#MqXwnT9hNy4) — 영상 직접 분석
+- ["인생 날로 먹지 마" 대원외고, 서울대 경영, 서울대 로스쿨, 변호사 겸 스타트업 대표 임현서쌤 #찍먹과외 | 연고티비](02-learning.md#kbkB2aJ0qgY) — 자막 기반 요약
+- [억대 연봉 구글 임원이 말하는, 1살이라도 어릴 때 알아야.. 앞서가는 것들 (MZ 직장인, 프리랜서 꼭 보세요)](02-learning.md#WrEoKuNRgLU) — 자막 기반 요약
+- [2백만 달러 짜리 발상전환🤑](02-learning.md#ny9tWhuTRoM) — 자막 기반 요약
+- [한국사 일타강사 최태성 마인드](02-learning.md#HTLJg2Bk_BA) — 자막 기반 요약
+- [How to Be So Productive it Feels ILLEGAL](02-learning.md#hSGt_rhu49U) — 영상 직접 분석
+- [How to be a creative thinker | Carnegie Mellon University Po-Shen Loh](02-learning.md#JpYA7WXkHyI) — 영상 직접 분석
+- [The smartest people have mastered these 6 core skills | Michael Watkins for Big Think+](02-learning.md#32z8Ax1j-Q4) — 영상 직접 분석
+- [부자아빠의 자본주의 생존 공략ㅣ로버트 기요사키 재테크 강의](03-life.md#Ow0CML2K2VY) — 자막 기반 요약
+- [한살이라도 더 어릴 때 깨달았으면 좋았을 것들 35가지ㅣ자본주의 공략법 (1~10)](03-life.md#5mqnksEC-44) — 자막 기반 요약
+- [한살이라도 더 어릴 때 깨달았으면 좋았을 것들 - 2부ㅣ자본주의 공략법 (11~15)](03-life.md#tySAnIgEI2k) — 영상 직접 분석
+- [[일론 머스크] 제1원리 사고법: 추정이 아닌 근본적인 문제로의 접근 (한영 자막)](03-life.md#BWxYWnwi08o) — 영상 직접 분석
+- [유튜브편집자가 유튜버 700명 편집해보고 느낀점](03-life.md#4gxScmhsCf8) — 자막 기반 요약
+- [수퍼 재벌이 560억 짜리 전용기를 산 이유 | 그랜트 칼돈](03-life.md#7W4CA_ErATc) — 자막 기반 요약
+- [조던 피터슨 | 창의적인 사람들에게 필요한 조언](03-life.md#X6ier_V2x_g) — 영상 직접 분석
+- [2조 원의 그릇을 보여주는 역대 베스트 인터뷰  | 그랜트 칼돈](03-life.md#O6-cyHp9tRQ) — 영상 직접 분석
+- [삶의 방향이 안보여서 답답한 20대들에게 | 게리 바이너척 | 에릭남 감수](03-life.md#z-5W6T5FFdQ) — 자막 기반 요약
+- [이 4가지에 돈 아끼면 지능 낮은 겁니다.](03-life.md#E6T-WNv8_TI) — 영상 직접 분석
+- [꿈도 없고 재능도 없는 평범한 사람은 어떻게 살아야 할까?](03-life.md#d8Uhboe6ufw) — 영상 직접 분석
+- [8000억 자산가가 노숙자에게 건넨 조언](03-life.md#IUDbatY3Hno) — 자막 기반 요약
+- [전쟁 빼고는 다 쉬운 일 (정주영 회장)](03-life.md#hoERAs0erOU) — 자막 기반 요약
+
+## 소통·관계 · 85편
+
+- [하버드 학생들에게 해주고 싶은 이야기 | 조던 피터슨 (한글자막)](01-growth.md#TQsrWa_mGCE) — 자막 기반 요약
+- [고생하면 머리가 좋아져요. 뇌를 제대로 알려드릴게요 (2)](01-growth.md#Kc_cvAXCs4Y) — 자막 기반 요약
+- [내 인생을 원자 단위로 쪼개 변화시키는 방법 (2)](01-growth.md#Q7OStpDzvYM) — 자막 기반 요약
+- [단순하고 멋진 삶은 지금 바로 시작할 수 있습니다](01-growth.md#ikto49_6Cqk) — 자막 기반 요약
+- [베푸는사람 vs 뺏는사람 vs 기브앤테이크(feat. 코난 오브라이언, 버락 오바마)](01-growth.md#c0Wl9K2gBIo) — 자막 기반 요약
+- [당신을 엘리트로 만들 단 한 가지의 '성공' 습관](01-growth.md#I5oTw7AJ1Rk) — 자막 기반 요약
+- [성공하는 사람은 반드시 이 원칙을 지키며 말한다 (원본 조회수: 1520만회)](01-growth.md#Zixr-ttMfRc) — 자막 기반 요약
+- [데드라인이 없어서 일을 미루기만 하는 당신이 지금 봐야하는 영상](01-growth.md#J9bpQxB4iOE) — 자막 기반 요약
+- [우리 모두가 갖고 있는 행복 치트키 - 게리 바이너척](01-growth.md#bkJcRq1Pfys) — 자막 기반 요약
+- [50조 부자의 인터뷰 - 성공적인 인생과 비즈니스를 위한 5가지 조언 | 동기부여학과](01-growth.md#3EtsD-ZMtOw) — 자막 기반 요약
+- [모든 남자들을 위한 41가지 신조](01-growth.md#NyA5y_0RDeU) — 자막 기반 요약
+- [꼭 알아야 할 긍정보다 70배 강력한 힘 | 트레버 모아와드](01-growth.md#zqonx8Ea-S4) — 영상 직접 분석
+- [90년간의 깨달음, 성공비밀 5가지 - 경영의신 이나모리 가즈오, 왜 리더인가? [도서 협찬] | 동기부여학과](01-growth.md#HqvqIknMFKI) — 자막 기반 요약
+- [게리 바이너척, "개소리를 다 무시하는 것이 최고의 성공 요인" |  7가지 성공비밀](01-growth.md#7WwS0OET-HQ) — 자막 기반 요약
+- [백만장자들의 효율성 증가 4가지 방법](01-growth.md#VK9WKcoqMyY) — 자막 기반 요약
+- [[스티브 잡스] A급 인재와 B급, C급 직원의 차이 (한영 자막)](01-growth.md#tkHvxLwLx3M) — 자막 기반 요약
+- [하루의 시작을 완전히 바꿔 줄 초대형 억만장자 부자 3명에게 듣는 고밀도 인생조언 7가지ㅣ폴 오팔라ㅣ브라이언 스미스ㅣ앤드류 비터비 | 동기부여학과](01-growth.md#8XN63NlWwUA) — 자막 기반 요약
+- [알아두면 무조건 성공하는 7가지 부자의 기술ㅣ패드릭 뱃 데이비드(Patrick Bet-David)ㅣ동기부여학과ㅣ부자 마인드 습관 성공 조언](01-growth.md#S8255fBMrCQ) — 자막 기반 요약
+- [무의식을 활용해 호감 사는 법](01-growth.md#5BX7dfoQY1k) — 자막 기반 요약
+- ["혼자 뿌듯해해요." 일 못하는 사람들의 '치명적인' 착각 3가지 (드로우앤드류 1부)](01-growth.md#m_Z-ATOg7eM) — 자막 기반 요약
+- [워렌버핏과의 식사를 대체하는 영상 | 동기부여](01-growth.md#1WpafI-HmY4) — 자막 기반 요약
+- [용기있게 도전하는 어른이 되는 법](01-growth.md#osllx6FCe6k) — 자막 기반 요약
+- ['50만'명 지휘하고 깨달은 상위 '0.1%'들의 결정적인 차이 (고성균 장군 1부)](01-growth.md#V-LDoWiUvoM) — 자막 기반 요약
+- [레전드 인공지능 과학자가 별세하기전에 남긴 MIT 최고의 강의 "말을 하는 법"](01-growth.md#jS-Jk9fT7uQ) — 자막 기반 요약
+- [대중을 매료시키는 화법의 비밀 | 말을 제대로 잘하는 방법](01-growth.md#yA8PsufH-C8) — 자막 기반 요약
+- [소심한 사람의 인생이 망가지는 과정](01-growth.md#zH4E-NWJVPo) — 영상 직접 분석
+- [왜 우리는 큰 꿈을 꾸지 않을까? 못하는 걸까?](01-growth.md#-tqTeTa5XS8) — 자막 기반 요약
+- [나와 함께 오래갈 사람](01-growth.md#9T5DukkikAg) — 자막 기반 요약
+- [피가 되고 살이 되는 쓴소리 ft.백종원](01-growth.md#b1d3yB7Vv7c) — 자막 기반 요약
+- [도덕적으로 미덕있는 척 하는 사람은 저급한 사람이다 | 조던 피터슨](01-growth.md#_h3ecO9v6Tc) — 자막 기반 요약
+- [아무리 해도 인생이 안 풀릴 때](01-growth.md#QrshuvMBOC4) — 자막 기반 요약
+- [게으르고 야망이 큰 사람이 위험한 이유 | 패트릭 벳 데이비드](01-growth.md#wnYdyYdJOBY) — 자막 기반 요약
+- [실리콘밸리가 사용하는 일하는 프로세스](01-growth.md#F42oxFb9gfc) — 자막 기반 요약
+- [진상 처리에 도가 튼 알바생](01-growth.md#fx-6os408VE) — 자막 기반 요약
+- [남의 시선 자꾸 신경 쓰는 게 위험한 이유](01-growth.md#R5lyFHQ27UU) — 자막 기반 요약
+- [진짜 가족을 위해 살고 있긴 해?](01-growth.md#Bg-qpNbs9Yo) — 자막 기반 요약
+- [무례한 농담 대처법](01-growth.md#g8kEEE4_uRM) — 자막 기반 요약
+- [”세상은 소심한 남자에게 잔인하고 용기있는 자에게 보상을 준다“](01-growth.md#572Tq1DZbsY) — 자막 기반 요약
+- [하는 일이 적성에 안맞을 때](01-growth.md#CdPkWCOj4ho) — 자막 기반 요약
+- [4000억 엑싯한 맥킨지 출신 창업가의 초합리적 결정법(+경제학)ㅣ스킨1004 이소형](01-growth.md#fOQ7U2xL3sw) — 자막 기반 요약
+- [최선을 다했는데 인정받지 못하는 마음이 든다면 #악마는프라다](01-growth.md#c0tpnShGv4U) — 자막 기반 요약
+- [일을 '진짜' 잘하는 사람들 특징](01-growth.md#VCzjbSr00VM) — 자막 기반 요약
+- [인생에서 가장 중요한 능력은..](01-growth.md#NS7mpvJwEv8) — 영상 직접 분석
+- [성공하기 위해 꼭 갖춰야 할 6가지 기술](01-growth.md#jffXuIy-iVs) — 영상 직접 분석
+- [빚300억에서 자산7조를 만든 ‘한마디’ 💵](01-growth.md#G5Nqcu9tyqQ) — 자막 기반 요약
+- [꿈의 사업을 만드는 방법 (feat. Gary Vee & Patrick Bet-David)](01-growth.md#8lakAE_AZM0) — 영상 직접 분석
+- [넌 똑똑한 아이였어. 그런데 왜 지금은 이렇게 길을 잃은 기분이 드는 거야?](01-growth.md#U4PsIm9dDvs) — 영상 직접 분석
+- [성공하려면 바꿔라 🤫](01-growth.md#dCHGoXBlReM) — 영상 직접 분석
+- [워런 버핏이 말하는 '진정한 성공'](01-growth.md#kWY9mNMz4iI) — 영상 직접 분석
+- [해결해야 할 문제에 집중하기](01-growth.md#xMHi0yBNr6k) — 영상 직접 분석
+- [모두가 알지만 불편한 진실.](01-growth.md#TtS8DE8NA4A) — 영상 직접 분석
+- [인생은 기준 싸움이다](01-growth.md#RpU-T6LdKac) — 자막 기반 요약
+- [인생이 공평하길 기대하지 마라.](01-growth.md#YbLuN90buZs) — 자막 기반 요약
+- [사람의 말보다 반응이 더 정확한 이유🤫](01-growth.md#pW2UVmksoxU) — 영상 직접 분석
+- [트럼프 까는 노잼 코미디언 디스](01-growth.md#c0Ez9Uvt7gg) — 자막 기반 요약
+- [고석현의 마인드셋부터 잡아주는 전챔피언 타이론 우들리ㄷㄷ👑😲 #ufc #mma](01-growth.md#T-UKgR8nZjU) — 자막 기반 요약
+- [맷 데이먼이 더 이상 남의 시선을 신경 쓰지 않는 이유..ㄷㄷ #오디세이 #영어회화](01-growth.md#2Em0AhYDFcM) — 자막 기반 요약
+- [뭐든 제대로 이해하는 방법](02-learning.md#sQYQgiHVyAM) — 자막 기반 요약·품질 주의
+- [언어를 습득하는 유일한 방법](02-learning.md#1msHbPWJpic) — 자막 기반 요약
+- [억대 연봉 구글 임원이 말하는, 1살이라도 어릴 때 알아야.. 앞서가는 것들 (MZ 직장인, 프리랜서 꼭 보세요)](02-learning.md#WrEoKuNRgLU) — 자막 기반 요약
+- [한국사 일타강사 최태성 마인드](02-learning.md#HTLJg2Bk_BA) — 자막 기반 요약
+- [becoming smart is easy, actually](02-learning.md#C5OJJD3Eytk) — 자막 기반 요약
+- [The smartest people have mastered these 6 core skills | Michael Watkins for Big Think+](02-learning.md#32z8Ax1j-Q4) — 영상 직접 분석
+- [글 잘 쓰는 이들의 공통점은? 대가의 쉽게 읽히고 쉽게 쓰는 글쓰기 방법 총정리!](02-learning.md#Ml6nXM6dt7I) — 영상 직접 분석
+- [[Full] [특별기획] 다시, 읽기로 - 1부 읽기 도파민](02-learning.md#X9Ek3gRp-Fw) — 자막 기반 요약
+- [해외 유학 없이 영어를 유창하게 하는 방법 (CIA가 받는 언어교육법)](02-learning.md#HytLB3-orIY) — 영상 직접 분석
+- [언어 천재 트레버의 언어 공부 비법](02-learning.md#pwy8npJHPEo) — 영상 직접 분석
+- [조던 피터슨 발상의 원전: 포스트 모더니즘과 막시즘 문화의 오류 (1편)](03-life.md#Q0VWQFUVT_k) — 자막 기반 요약
+- [자신을 바로잡으세요](03-life.md#o73pqQ9Gzt4) — 영상 직접 분석
+- [위험한 좌파들이 여러분의 자녀를 교육하고 있습니다](03-life.md#LquIQisaZFU) — 자막 기반 요약
+- [한살이라도 더 어릴 때 깨달았으면 좋았을 것들 35가지ㅣ자본주의 공략법 (1~10)](03-life.md#5mqnksEC-44) — 자막 기반 요약
+- [조던 피터슨 | 창의적인 사람들에게 필요한 조언](03-life.md#X6ier_V2x_g) — 영상 직접 분석
+- [음악하는 사람이 공부도 해야하는 이유](03-life.md#Hak30f2N6m0) — 영상 직접 분석
+- [30명의 노인들이 후회하고 느낀 인생 조언..](03-life.md#hTcnLFfSu4A) — 자막 기반 요약
+- [Gnarls Barkley(날스 바클리) - Crazy 가사 한글 자막 해석 번역](03-life.md#oBmmJB4V5CI) — 영상 직접 분석
+- [중고차 딜러 VS 라이프 해킹](03-life.md#SQUuLO-bn2M) — 자막 기반 요약
+- [당당하게 연봉 인상 요구하는 법](03-life.md#bHRhuzNA6OI) — 영상 직접 분석
+- [취업 면접에서 '질문 있으세요?' 시간에 꼭 물어봐야 할 질문은?](03-life.md#Rcn_vD9RdEw) — 영상 직접 분석
+- [사람은 결코 변하지 않는다 | 타인의 이해를 바라지 마라 | 쇼펜하우어 처세술 | 인간관계 지혜 | 인생 명언 | 인생 조언 | 오디오북](03-life.md#390aHPDjv7w) — 영상 직접 분석
+- [어떤 사람으로 살 것인가를 고민해야 합니다 오박사가 알려주는 재능 많은 자식을 둔 부모의 역할은? | 오은영의 금쪽 상담소 36 회](03-life.md#rWyIE9WwP4Q) — 자막 기반 요약
+- [8000억 자산가가 노숙자에게 건넨 조언](03-life.md#IUDbatY3Hno) — 자막 기반 요약
+- [삶이 멈춘 것 같을때 빠져나오는 방법 | 루이스 호위스](03-life.md#fKA51CrFcWg) — 영상 직접 분석
+- [그린베레 vs 네이비 씰](03-life.md#xCCeGBW2G4w) — 자막 기반 요약
+- [스파이가 말하는 사회를 전복시키는법 ㄷㄷ 와우](03-life.md#BQiDqU34eAI) — 자막 기반 요약
+- [억만장자들보다 더 값졌다고 한 인터뷰](03-life.md#Tf0N6HOdd5A) — 자막 기반 요약
+
+## 회복·감정 · 60편
+
+- [앉아있으면 머리가 나빠져요. 뇌를 제대로 알려드릴게요.](01-growth.md#oYXHmzMvS4E) — 자막 기반 요약
+- [시크릿 주인공 중 한 명이 직접 한 말..*충격 주의* | 동기부여 | 존아사라프](01-growth.md#wGvlcUqhdZU) — 자막 기반 요약
+- [단순하고 멋진 삶은 지금 바로 시작할 수 있습니다](01-growth.md#ikto49_6Cqk) — 자막 기반 요약
+- [[밥 로스] 듣고 있으면 절로 힐링되는 밥 아저씨의 인생 명언들 (한영 자막)](01-growth.md#z7r0DIjRGd4) — 자막 기반 요약
+- [인생을 바꾸는 아침습관ㅣ동기부여ㅣ한영 자막](01-growth.md#BSGNPHxonKI) — 자막 기반 요약
+- [우리 모두가 갖고 있는 행복 치트키 - 게리 바이너척](01-growth.md#bkJcRq1Pfys) — 자막 기반 요약
+- [가난의 자장을 만드는 '이것'부터 비우면 인생이 확실히 달라집니다.](01-growth.md#Ki5IMN632KU) — 자막 기반 요약
+- [꼭 알아야 할 긍정보다 70배 강력한 힘 | 트레버 모아와드](01-growth.md#zqonx8Ea-S4) — 영상 직접 분석
+- [백수에서 월 1억을 벌기까지 (29살)](01-growth.md#UblIF5Utawg) — 자막 기반 요약
+- [게리 바이너척, "개소리를 다 무시하는 것이 최고의 성공 요인" |  7가지 성공비밀](01-growth.md#7WwS0OET-HQ) — 자막 기반 요약
+- [조던 피터슨 | 당신이 먹을 독을 선택하세요](01-growth.md#tGXQ5b5yRaM) — 자막 기반 요약
+- [그동안 제 영상봐주셔서 감사합니다. (S1 E8)](01-growth.md#ewlbNkd2ZoE) — 자막 기반 요약
+- [월 수익 0원 되고 보니 가장 후회되는 것](01-growth.md#AADTDGBpkGo) — 자막 기반 요약
+- [용기있게 도전하는 어른이 되는 법](01-growth.md#osllx6FCe6k) — 자막 기반 요약
+- [누구든 1000% 바꿀 뇌 개조법 공유 금지 | 존 아사라프](01-growth.md#3r6hUpSKdHI) — 자막 기반 요약
+- [미국 네이비 씰도 배우는 스트레스 관리법 (지나영 교수 3부)](01-growth.md#0S3IUndOqT4) — 자막 기반 요약
+- [왜 우리는 큰 꿈을 꾸지 않을까? 못하는 걸까?](01-growth.md#-tqTeTa5XS8) — 자막 기반 요약
+- [???: 찬물 샤워를 해보세요](01-growth.md#6x3b_70jBvk) — 자막 기반 요약
+- [성공포르노 성수기, 새해다짐 시즌에 속지 않는법](01-growth.md#Zh9fVMzLUlk) — 자막 기반 요약
+- [내가 끊임없이 실패하는 이유, 의지력이 부족해서가 아닙니다! ㅣ 베이직교회 조정민 목사 ㅣ 잘잘법 174회](01-growth.md#pwKuAkgUWnc) — 자막 기반 요약
+- [하고 싶은 일, 해야 하는 일ㅣ동기부여 영상 모음](01-growth.md#ECh25K1_6SI) — 자막 기반 요약
+- [진짜 내 꿈을 찾는 법!! 방황하고 있는 그대에게✨](01-growth.md#8onUlhw_qtQ) — 영상 직접 분석
+- [도덕적으로 미덕있는 척 하는 사람은 저급한 사람이다 | 조던 피터슨](01-growth.md#_h3ecO9v6Tc) — 자막 기반 요약
+- [사실상 끝난 상황에서, 어떻게든 방법을 찾아 보는데..](01-growth.md#uzLrRi6zWaA) — 자막 기반 요약
+- [당신에게 불안이 찾아왔다면 | 로버트 그린](01-growth.md#9TBJHgUCNuk) — 자막 기반 요약
+- [레스 브라운 역대급 동기부여 영상 -](01-growth.md#Ri0boleSuDc) — 영상 직접 분석
+- [자신감 있는 척? 현실에선 안 통한다🙅‍♂️](01-growth.md#4z4Gj2BXQKw) — 자막 기반 요약
+- [남의 시선 자꾸 신경 쓰는 게 위험한 이유](01-growth.md#R5lyFHQ27UU) — 자막 기반 요약
+- [지금 차기 미국 대통령 후보까지 거론되는 중… #영어인터뷰 #영어공부](01-growth.md#TLZIMMnEUfQ) — 자막 기반 요약
+- [사자처럼 일하라](01-growth.md#MD46WoafgSw) — 자막 기반 요약
+- [넌 똑똑한 아이였어. 그런데 왜 지금은 이렇게 길을 잃은 기분이 드는 거야?](01-growth.md#U4PsIm9dDvs) — 영상 직접 분석
+- [날 우울하게 만드는 것들](01-growth.md#XtQEoXJW9bw) — 영상 직접 분석
+- [가치있는 걸 얻고 싶다면 어려움과 친해져라](01-growth.md#MqXwnT9hNy4) — 영상 직접 분석
+- [맷 데이먼이 더 이상 남의 시선을 신경 쓰지 않는 이유..ㄷㄷ #오디세이 #영어회화](01-growth.md#2Em0AhYDFcM) — 자막 기반 요약
+- [[#유퀴즈온더블럭] 서울대 교수님이 직접 알려주는 서울대생 공부법📚 교수님의 팩폭으로 얼떨결에 과거 사찰당한 유재석X조세호ㅋㅋ😂 | #Diggle #갓구운클립](02-learning.md#pEs-XsVUGKM) — 자막 기반 요약
+- [대원외고, 서울대 로스쿨 졸업한 변호사가 말하는 '사소하지만 강력한 인생 꿀팁' (임현서 변호사)](02-learning.md#H9xM1VxFiAM) — 자막 기반 요약
+- [왜 우리는 집중력이 없는가(ft 무의식)ㅣ 조던 피터슨 ㅣ 한영자막](03-life.md#8V081wPlCbM) — 자막 기반 요약
+- [자신을 바로잡으세요](03-life.md#o73pqQ9Gzt4) — 영상 직접 분석
+- [동기부여를 원한다면 꼭 봐야할 영상ㅣ레스브라운ㅣ한영자막](03-life.md#klTXqkEGSME) — 자막 기반 요약
+- [1개월 안에 다른 사람이 되는 법](03-life.md#b2kBZLYfG8s) — 자막 기반 요약
+- [음악이 재미없고 삶이 피폐할 때 봐야할 영상](03-life.md#GHBKDnZvMHA) — 자막 기반 요약
+- [옥한흠 목사의 명설교 더울림│복을 받는 방법편](03-life.md#WWiDlFbvBFE) — 자막 기반 요약
+- [아무리 해도 난 이 사회의 부품 같아(feat. 절대 사육 당하지 않는 법)](03-life.md#VnJe5uusDr8) — 영상 직접 분석
+- [30명의 노인들이 후회하고 느낀 인생 조언..](03-life.md#hTcnLFfSu4A) — 자막 기반 요약
+- [부정적 생각을 효과적으로 극복하는 법](03-life.md#0lwhrpvUj8g) — 자막 기반 요약
+- [DNA를 뛰어넘게 해줄 크래빙 이론](03-life.md#NiJQahJ4wT4) — 영상 직접 분석
+- [Gnarls Barkley(날스 바클리) - Crazy 가사 한글 자막 해석 번역](03-life.md#oBmmJB4V5CI) — 영상 직접 분석
+- [사람은 결코 변하지 않는다 | 타인의 이해를 바라지 마라 | 쇼펜하우어 처세술 | 인간관계 지혜 | 인생 명언 | 인생 조언 | 오디오북](03-life.md#390aHPDjv7w) — 영상 직접 분석
+- [어떤 사람으로 살 것인가를 고민해야 합니다 오박사가 알려주는 재능 많은 자식을 둔 부모의 역할은? | 오은영의 금쪽 상담소 36 회](03-life.md#rWyIE9WwP4Q) — 자막 기반 요약
+- [하나님께 집중해야 합니다 #사단의전략 #광명의천사 #고린도후서11장 #사단의유혹 #하나님의뜻](03-life.md#P8VyvMpANdY) — 자막 기반 요약
+- [삶이 멈춘 것 같을때 빠져나오는 방법 | 루이스 호위스](03-life.md#fKA51CrFcWg) — 영상 직접 분석
+- [망설이지 말고 한살이라도 어릴 때 빨리 시작하세요 #shorts #인생조언 #메가스터디 (쇼츠 손주은)](03-life.md#OYGr3ZiqR6Y) — 영상 직접 분석
+- [3가지 능력으로 내 인생을 바꾸는 법 #조승연](03-life.md#6G4jD0KvSzk) — 자막 기반 요약
+- [악마가 당신을 무시하는 이유.](03-life.md#cew7jwiu7mY) — 영상 직접 분석
+- [🗣️"광야의 길, 하나님의 관점" - 피아워십 목요예배 이동선 목사 설교中](03-life.md#JWe8hWQN8cU) — 자막 기반 요약
+- [냉소주의는 가난을 부르고 낙관주의는 부를 만든다](03-life.md#DbG3MkOHiYE) — 영상 직접 분석
+- [내면의 악마와 싸우는 최고의 방법.](03-life.md#hMD-IqQV8fU) — 영상 직접 분석
+- [답이 안보일 땐, 이렇게 해보세요!](03-life.md#XoKLx9haF3c) — 영상 직접 분석
+- [두려워하지 말라](03-life.md#0lms-eusg58) — 자막 기반 요약
+- [전쟁 빼고는 다 쉬운 일 (정주영 회장)](03-life.md#hoERAs0erOU) — 자막 기반 요약
+
+## 신앙·가치 · 34편
+
+- [하버드 학생들에게 해주고 싶은 이야기 | 조던 피터슨 (한글자막)](01-growth.md#TQsrWa_mGCE) — 자막 기반 요약
+- [베푸는사람 vs 뺏는사람 vs 기브앤테이크(feat. 코난 오브라이언, 버락 오바마)](01-growth.md#c0Wl9K2gBIo) — 자막 기반 요약
+- [전설의 나폴레온 힐 연설 영상](01-growth.md#tupPml1hQjQ) — 자막 기반 요약
+- [많은 영재들도 결국 "다 망하더군" | 트럼프](01-growth.md#eAIqY3BNUwc) — 자막 기반 요약
+- [모든 남자들을 위한 41가지 신조](01-growth.md#NyA5y_0RDeU) — 자막 기반 요약
+- [젠틀몬스터 김한국 대표 강연](01-growth.md#1mSTAGRCtXE) — 자막 기반 요약
+- [내일부터는 없다. 지금 당장 절실하게 시작하라 | 동기부여 영상](01-growth.md#uPJiDgcjLd4) — 자막 기반 요약
+- [한계에 부딪쳤을 때 당신에게 필요한 동기부여 영상 | 한영 자막](01-growth.md#720t8HBjWns) — 자막 기반 요약
+- [내가 끊임없이 실패하는 이유, 의지력이 부족해서가 아닙니다! ㅣ 베이직교회 조정민 목사 ㅣ 잘잘법 174회](01-growth.md#pwKuAkgUWnc) — 자막 기반 요약
+- [모든 학생에 전액 장학금을 1조 3천억 원 기부 / SBS / #D리포트](01-growth.md#Erx28AkkU6w) — 자막 기반 요약
+- [우리의 인생에는 세 단계가 있다.](01-growth.md#9BnSk8UuOyc) — 자막 기반 요약
+- [워렌버핏의 평생 파트너, 최고 자산가 찰리멍거의 10가지 교훈, 부자의 습관ㅣ동기부여학과](01-growth.md#A_9ecbVNH4U) — 자막 기반 요약
+- [고통 스러운 일들 (손주은)](01-growth.md#-J67gSxjY2M) — 자막 기반 요약
+- [기독교 생산성이란 무엇인가?](01-growth.md#wNn-pdrW2AY) — 자막 기반 요약
+- [일주일만 이렇게 사세요! 인생이 달라집니다 (디쉐어 현승원 의장)](01-growth.md#5iAhGG1-0_o) — 자막 기반 요약
+- [일론 머스크가 길을 잃은 사람들에게…](01-growth.md#MwA1kdhgpfM) — 자막 기반 요약
+- [인생이 공평하길 기대하지 마라.](01-growth.md#YbLuN90buZs) — 자막 기반 요약
+- [우들리가 고석현에게 진심이었던 이유🙏 #ufc #mma](01-growth.md#Ez_CK2k18_A) — 자막 기반 요약
+- [The Bible Taught Me How to Manage My Time Better Than Any Self-Help Book](02-learning.md#qFROrjHyK94) — 자막 기반 요약
+- [조던 피터슨 발상의 원전: 포스트 모더니즘과 막시즘 문화의 오류 (1편)](03-life.md#Q0VWQFUVT_k) — 자막 기반 요약
+- [동기부여를 원한다면 꼭 봐야할 영상ㅣ레스브라운ㅣ한영자막](03-life.md#klTXqkEGSME) — 자막 기반 요약
+- [위험한 좌파들이 여러분의 자녀를 교육하고 있습니다](03-life.md#LquIQisaZFU) — 자막 기반 요약
+- [음악이 재미없고 삶이 피폐할 때 봐야할 영상](03-life.md#GHBKDnZvMHA) — 자막 기반 요약
+- [옥한흠 목사의 명설교 더울림│복을 받는 방법편](03-life.md#WWiDlFbvBFE) — 자막 기반 요약
+- [부정적 생각을 효과적으로 극복하는 법](03-life.md#0lwhrpvUj8g) — 자막 기반 요약
+- [DNA를 뛰어넘게 해줄 크래빙 이론](03-life.md#NiJQahJ4wT4) — 영상 직접 분석
+- [천 년 뒤 후손들에게 전해주고 싶은 메시지 (한영 자막)](03-life.md#4CjRWX-RdeM) — 자막 기반 요약
+- [주님이 오늘도 함께하신다 #아침기도 #기도습관 #하나님의인도하심 #주님의선하심](03-life.md#a6g8SYeP2OA) — 자막 기반 요약
+- [하나님께 집중해야 합니다 #사단의전략 #광명의천사 #고린도후서11장 #사단의유혹 #하나님의뜻](03-life.md#P8VyvMpANdY) — 자막 기반 요약
+- [매일 주어지는 두 가지를 잊지마세요 | 제이 프린스](03-life.md#EX3hpEhUOSs) — 자막 기반 요약
+- [악마가 당신을 무시하는 이유.](03-life.md#cew7jwiu7mY) — 영상 직접 분석
+- [🗣️"광야의 길, 하나님의 관점" - 피아워십 목요예배 이동선 목사 설교中](03-life.md#JWe8hWQN8cU) — 자막 기반 요약
+- [두려워하지 말라](03-life.md#0lms-eusg58) — 자막 기반 요약
+- [억만장자들보다 더 값졌다고 한 인터뷰](03-life.md#Tf0N6HOdd5A) — 자막 기반 요약
+
+## 도구·AI · 9편
+
+- [성공한 엘리트 중 상위 10%는 '이것'이 달랐다](01-growth.md#gmrs8UxAZwo) — 자막 기반 요약
+- [시대가 변해도 절대 바뀌지 않는 5가지 핵심능력  | 동기부여학과](01-growth.md#RnrZJOHY9tY) — 자막 기반 요약
+- ["경이롭다" 무료 AI 웹사이트 BEST 5](01-growth.md#9d5GWZyTtXE) — 자막 기반 요약
+- [인생 노트앱...드디어 찾았습니다..!](01-growth.md#qY1P_CmL8aQ) — 자막 기반 요약
+- [우리나라가 인터넷 최강국이 된 이유](01-growth.md#zfx3k7NB1G8) — 자막 기반 요약
+- [How to be a creative thinker | Carnegie Mellon University Po-Shen Loh](02-learning.md#JpYA7WXkHyI) — 영상 직접 분석
+- [읽은 모든 것을 기억하는 단 2단계 공식](02-learning.md#dBubRcgQOM8) — 영상 직접 분석
+- [6년 걸릴 공부를 3일로 끝내는 법 — OpenAI 연구원이 인터뷰에서 직접 밝혔습니다](02-learning.md#Kf1dYpnH-N4) — 영상 직접 분석
+- [[한글자막] AI로 혼자서도 압도적인 실력을 쌓는 독학 방법](02-learning.md#lF8_DX2NxjI) — 자막 기반 요약
+
+## 건강 · 15편
+
+- [앉아있으면 머리가 나빠져요. 뇌를 제대로 알려드릴게요.](01-growth.md#oYXHmzMvS4E) — 자막 기반 요약
+- [고생하면 머리가 좋아져요. 뇌를 제대로 알려드릴게요 (2)](01-growth.md#Kc_cvAXCs4Y) — 자막 기반 요약
+- [4000만 열광한 공부법 “적게 공부하고, 영리하게 공부하라“](01-growth.md#C87fr5Q12aY) — 자막 기반 요약
+- [1 년 넘게 하루에 12 시간 공부 한 방법](01-growth.md#kICh_d6tHQk) — 자막 기반 요약
+- [인생을 바꾸는 법 - 한 걸음씩 나아가기](01-growth.md#y00tvum7g1I) — 자막 기반 요약
+- [세계 최고 두뇌 과학자가 찾은 90%가 성공하는 목표설정법](01-growth.md#bbOsoEEQMsM) — 자막 기반 요약
+- [미국 네이비 씰도 배우는 스트레스 관리법 (지나영 교수 3부)](01-growth.md#0S3IUndOqT4) — 자막 기반 요약
+- [배우는 속도가 느린 것 같다면 '이걸' 해 보세요 | 빠른 학습을 가능하게 하는 3가지 도구](01-growth.md#1eqTEQvzc1E) — 자막 기반 요약
+- [헬창들이 주 1회는 꼭 해야 되는 동작](01-growth.md#gdpjWRd3-T8) — 영상 직접 분석
+- [나이 들수록 뇌를 더 빠르게 쓸 수 있는 방법](02-learning.md#vNO7YfQF8-o) — 영상 직접 분석
+- [뇌과학이 말하는 「빨리 배우는 가장 게으른 방법」](02-learning.md#MNnTEHv9jgw) — 자막 기반 요약
+- [The BEST Study Routine for Students (Improve Focus)](02-learning.md#zf1QQRU_4FA) — 영상 직접 분석
+- [세계 최고의 뇌과학자가 말하는 20배 더 빨리 배우는 법 (앤드류 휴버맨)](02-learning.md#ntGRhqkXVA0) — 영상 직접 분석
+- [하루 15시간 공부? 이렇게 하면 가능합니다](02-learning.md#lnZ4ZY_024Y) — 영상 직접 분석
+- [뇌세포 를 자라게 하는 3가지 충격? #shorts](02-learning.md#Gtr2NYR6F4A) — 자막 기반 요약
+
+## 기타 · 80편
+
+- [전설의 나폴레온 힐 연설 영상](01-growth.md#tupPml1hQjQ) — 자막 기반 요약
+- [[밥 로스] 듣고 있으면 절로 힐링되는 밥 아저씨의 인생 명언들 (한영 자막)](01-growth.md#z7r0DIjRGd4) — 자막 기반 요약
+- [데드라인이 없어서 일을 미루기만 하는 당신이 지금 봐야하는 영상](01-growth.md#J9bpQxB4iOE) — 자막 기반 요약
+- [인생을 성공으로 이끄는 ‘5초 법칙’ㅣ멜 로빈스 동기부여ㅣ한영 자막](01-growth.md#Uuq4OME-7-M) — 영상 직접 분석
+- [두려움에서 나오세요 - 당신을 다시 깨우는 영상 | 댄 페냐 | 한영자막](01-growth.md#nFBoJ5SKe2s) — 자막 기반 요약
+- [당신의 인생을 180도 바꿀 수 있는 30분 마인드셋 | 동기부여학과](01-growth.md#7X-BOvSaQBw) — 자막 기반 요약
+- [[닐 디그래스 타이슨] 아는 것과 생각해 내는 힘의 차이 (한영 자막)](01-growth.md#dGJya2dpjko) — 자막 기반 요약
+- [2,400만 유튜버가 말하는 꿈처럼 사는 법](01-growth.md#v14CZir0ufs) — 자막 기반 요약
+- [부자들만 아는 당신도 모르게 노예가 된 이유 | 동기부여](01-growth.md#rKhI2xoQH8U) — 자막 기반 요약
+- [조던 피터슨 | 당신이 먹을 독을 선택하세요](01-growth.md#tGXQ5b5yRaM) — 자막 기반 요약
+- ["경이롭다" 무료 AI 웹사이트 BEST 5](01-growth.md#9d5GWZyTtXE) — 자막 기반 요약
+- [한계에 부딪쳤을 때 당신에게 필요한 동기부여 영상 | 한영 자막](01-growth.md#720t8HBjWns) — 자막 기반 요약
+- [재능없이 평범한 사람이 성공하는 5단계 전략](01-growth.md#b8b2bUnH_NI) — 자막 기반 요약
+- [인간의 어리석음에 대한 학습 by 버핏 & 멍거 (12 버크셔)](01-growth.md#IsgbHSYRYts) — 자막 기반 요약
+- [???: 찬물 샤워를 해보세요](01-growth.md#6x3b_70jBvk) — 자막 기반 요약
+- [우리가 살면서 문학작품을 꼭 읽어야 하는 이유](01-growth.md#qL_p0xm0Qt8) — 자막 기반 요약
+- [모든 학생에 전액 장학금을 1조 3천억 원 기부 / SBS / #D리포트](01-growth.md#Erx28AkkU6w) — 자막 기반 요약
+- [하고 싶은 일, 해야 하는 일ㅣ동기부여 영상 모음](01-growth.md#ECh25K1_6SI) — 자막 기반 요약
+- [포기 안 하는 방법](01-growth.md#1x6v-bDJ1jQ) — 자막 기반 요약
+- [우리나라가 인터넷 최강국이 된 이유](01-growth.md#zfx3k7NB1G8) — 자막 기반 요약
+- [결국 해내는 사람들은 계획부터 다르다 "계획대로 안되도 흔들리지 않아요"](01-growth.md#snAcqJmDwss) — 자막 기반 요약
+- [실리콘밸리가 사용하는 일하는 프로세스](01-growth.md#F42oxFb9gfc) — 자막 기반 요약
+- [레스 브라운 역대급 동기부여 영상 -](01-growth.md#Ri0boleSuDc) — 영상 직접 분석
+- [“나도 기술적 분석 다 해봤지” #워런버핏](01-growth.md#cOINKq-rzVE) — 자막 기반 요약
+- [남의 시선 자꾸 신경 쓰는 게 위험한 이유](01-growth.md#R5lyFHQ27UU) — 자막 기반 요약
+- [무려 5년 동안 매일 훈련했다는 마이클 펠프스](01-growth.md#G1WOyfYeQZQ) — 자막 기반 요약
+- [지금 차기 미국 대통령 후보까지 거론되는 중… #영어인터뷰 #영어공부](01-growth.md#TLZIMMnEUfQ) — 자막 기반 요약
+- [20대에게 주는 조언 (팔란티어 CEO 알렉스 카프)](01-growth.md#4SszTTMGbyk) — 영상 직접 분석
+- [인생에서 가장 중요한 능력은..](01-growth.md#NS7mpvJwEv8) — 영상 직접 분석
+- [누구든 1000% 바꿀 뇌 개조법 (공유 금지) | 존 아사라프](01-growth.md#1zBpozANCR0) — 영상 직접 분석
+- [사자처럼 일하라](01-growth.md#MD46WoafgSw) — 자막 기반 요약
+- [내가 노력을 안 했던 이유](01-growth.md#2mFfSRq3ao8) — 영상 직접 분석
+- [날 우울하게 만드는 것들](01-growth.md#XtQEoXJW9bw) — 영상 직접 분석
+- [박진영이 말하는 재능있는사람 이기는 방법](01-growth.md#X_fZwFso2JE) — 영상 직접 분석
+- [헬창들이 주 1회는 꼭 해야 되는 동작](01-growth.md#gdpjWRd3-T8) — 영상 직접 분석
+- [실행하는 사람의 중요성 | 스티브 잡스](01-growth.md#cxIwfWqSFMM) — 영상 직접 분석
+- [모두가 알지만 불편한 진실.](01-growth.md#TtS8DE8NA4A) — 영상 직접 분석
+- [일론 머스크가 길을 잃은 사람들에게…](01-growth.md#MwA1kdhgpfM) — 자막 기반 요약
+- [트럼프 까는 노잼 코미디언 디스](01-growth.md#c0Ez9Uvt7gg) — 자막 기반 요약
+- [우들리가 고석현에게 진심이었던 이유🙏 #ufc #mma](01-growth.md#Ez_CK2k18_A) — 자막 기반 요약
+- [[#유퀴즈온더블럭] 서울대 교수님이 직접 알려주는 서울대생 공부법📚 교수님의 팩폭으로 얼떨결에 과거 사찰당한 유재석X조세호ㅋㅋ😂 | #Diggle #갓구운클립](02-learning.md#pEs-XsVUGKM) — 자막 기반 요약
+- [이 3가지만 기억하세요. 지금보다 무조건 똑똑해질 수 있습니다 (박문호 뇌과학자)](02-learning.md#vnDaHldRKu4) — 자막 기반 요약
+- [한국에서 발견된 특이한 공부 습관? 서울대가 이 상태라면 더 이상 천재는 없다│해외 한국 교육 반응│다큐프라임│#골라듄다큐](02-learning.md#CNrzvdcU9SE) — 자막 기반 요약
+- [언어를 습득하는 유일한 방법](02-learning.md#1msHbPWJpic) — 자막 기반 요약
+- [뇌과학이 말하는 「빨리 배우는 가장 게으른 방법」](02-learning.md#MNnTEHv9jgw) — 자막 기반 요약
+- [2백만 달러 짜리 발상전환🤑](02-learning.md#ny9tWhuTRoM) — 자막 기반 요약
+- [How to Be So Productive it Feels ILLEGAL](02-learning.md#hSGt_rhu49U) — 영상 직접 분석
+- [CIA 스파이처럼 학습 속도 10배 올리는 뇌 훈련법 (쉽고 간단해요) [실제 사용된 방법]](02-learning.md#xV6CxfX04yo) — 영상 직접 분석
+- [세계 최고의 뇌과학자가 말하는 20배 더 빨리 배우는 법 (앤드류 휴버맨)](02-learning.md#ntGRhqkXVA0) — 영상 직접 분석
+- [The 9 Powerful Mental Models Used By History's Greatest Minds](02-learning.md#jgzreTGEb4M) — 영상 직접 분석
+- [현실을 레벨업하는 5가지 방법 (게임 심리 실전 적용법)](02-learning.md#hM2K1Ai3fj4) — 영상 직접 분석
+- [글 잘 쓰는 이들의 공통점은? 대가의 쉽게 읽히고 쉽게 쓰는 글쓰기 방법 총정리!](02-learning.md#Ml6nXM6dt7I) — 영상 직접 분석
+- [[EBS] 적는 자가 살아남는다 | 천재들의 노트 습관 | #지식채널e](02-learning.md#KbleIwApqu4) — 영상 직접 분석
+- [언어 천재 트레버의 언어 공부 비법](02-learning.md#pwy8npJHPEo) — 영상 직접 분석
+- [이 강의를 본 순간 당신의 인생이 통째로 바뀔 겁니다 ㅣ 1일 1 피터슨 ㅣ Day 22 l 조던 피터슨 ㅣ 한영 자막](03-life.md#2gFLaGislp4) — 영상 직접 분석
+- [조던 피터슨 발상의 원전: 포스트 모더니즘과 막시즘 문화의 오류 (1편)](03-life.md#Q0VWQFUVT_k) — 자막 기반 요약
+- [위험한 좌파들이 여러분의 자녀를 교육하고 있습니다](03-life.md#LquIQisaZFU) — 자막 기반 요약
+- [한살이라도 더 어릴 때 깨달았으면 좋았을 것들 - 2부ㅣ자본주의 공략법 (11~15)](03-life.md#tySAnIgEI2k) — 영상 직접 분석
+- [당신의 성공이 '생각보다' 쉬운 이유 | 얼 나이팅게일](03-life.md#suQrnhHKGsY) — 영상 직접 분석
+- [유튜브편집자가 유튜버 700명 편집해보고 느낀점](03-life.md#4gxScmhsCf8) — 자막 기반 요약
+- [수퍼 재벌이 560억 짜리 전용기를 산 이유 | 그랜트 칼돈](03-life.md#7W4CA_ErATc) — 자막 기반 요약
+- [조던 피터슨 | 창의적인 사람들에게 필요한 조언](03-life.md#X6ier_V2x_g) — 영상 직접 분석
+- [2조 원의 그릇을 보여주는 역대 베스트 인터뷰  | 그랜트 칼돈](03-life.md#O6-cyHp9tRQ) — 영상 직접 분석
+- [[리처드 파인만] “왜 자석은 서로 밀어내는가?”에 대한 답변 (한영 자막)](03-life.md#3smc7jbUPiE) — 영상 직접 분석
+- [음악하는 사람이 공부도 해야하는 이유](03-life.md#Hak30f2N6m0) — 영상 직접 분석
+- [아무리 해도 난 이 사회의 부품 같아(feat. 절대 사육 당하지 않는 법)](03-life.md#VnJe5uusDr8) — 영상 직접 분석
+- [이 4가지에 돈 아끼면 지능 낮은 겁니다.](03-life.md#E6T-WNv8_TI) — 영상 직접 분석
+- [꿈도 없고 재능도 없는 평범한 사람은 어떻게 살아야 할까?](03-life.md#d8Uhboe6ufw) — 영상 직접 분석
+- [Gnarls Barkley(날스 바클리) - Crazy 가사 한글 자막 해석 번역](03-life.md#oBmmJB4V5CI) — 영상 직접 분석
+- [중고차 딜러 VS 라이프 해킹](03-life.md#SQUuLO-bn2M) — 자막 기반 요약
+- [취업 면접에서 '질문 있으세요?' 시간에 꼭 물어봐야 할 질문은?](03-life.md#Rcn_vD9RdEw) — 영상 직접 분석
+- [사람은 결코 변하지 않는다 | 타인의 이해를 바라지 마라 | 쇼펜하우어 처세술 | 인간관계 지혜 | 인생 명언 | 인생 조언 | 오디오북](03-life.md#390aHPDjv7w) — 영상 직접 분석
+- [어떤 사람으로 살 것인가를 고민해야 합니다 오박사가 알려주는 재능 많은 자식을 둔 부모의 역할은? | 오은영의 금쪽 상담소 36 회](03-life.md#rWyIE9WwP4Q) — 자막 기반 요약
+- [삶이 멈춘 것 같을때 빠져나오는 방법 | 루이스 호위스](03-life.md#fKA51CrFcWg) — 영상 직접 분석
+- [망설이지 말고 한살이라도 어릴 때 빨리 시작하세요 #shorts #인생조언 #메가스터디 (쇼츠 손주은)](03-life.md#OYGr3ZiqR6Y) — 영상 직접 분석
+- [냉소주의는 가난을 부르고 낙관주의는 부를 만든다](03-life.md#DbG3MkOHiYE) — 영상 직접 분석
+- [내면의 악마와 싸우는 최고의 방법.](03-life.md#hMD-IqQV8fU) — 영상 직접 분석
+- [답이 안보일 땐, 이렇게 해보세요!](03-life.md#XoKLx9haF3c) — 영상 직접 분석
+- [그린베레 vs 네이비 씰](03-life.md#xCCeGBW2G4w) — 자막 기반 요약
+- [스파이가 말하는 사회를 전복시키는법 ㄷㄷ 와우](03-life.md#BQiDqU34eAI) — 자막 기반 요약
