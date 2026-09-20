@@ -2,6 +2,7 @@
 
 import React from "react";
 import { RelatedMemos } from '../related-memos';
+import { GoalLinks } from '../goal-links';
 import { MemoCaptureLink } from "../journal-links";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -302,6 +303,7 @@ function BrandDetail({ brand, onBack, onOpenStudio, onOpenQueue, onEdit }) {
       </Card>
 
       <Card><RelatedMemos type="brand" id={brand.id} /></Card>
+      <Card><GoalLinks entityType="brands" entityId={brand.id} scope={brand.orgScope} /></Card>
 
       <div>
         <Button variant="ghost" size="sm" icon="chevronL" onClick={onBack}>브랜드 목록</Button>

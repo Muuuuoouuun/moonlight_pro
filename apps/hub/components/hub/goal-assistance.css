@@ -1,0 +1,13 @@
+.goal-assistance { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px; font-size: 12px; }
+.assist-editor { display: grid; gap: 12px; margin-top: 12px; min-width: 0; }
+.assist-heading, .assist-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.assist-heading { justify-content: space-between; }
+.assist-heading h4, .assist-editor p { margin: 0; }
+.assist-heading h4 { font-size: 13px; font-weight: 500; }
+.assist-muted { color: var(--fg-muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.assist-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 10px; }
+.assist-source, .assist-candidate, .assist-external { border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
+.assist-source summary { cursor: pointer; min-height: 32px; }
+.assist-source pre, .assist-candidate pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; font-size: 12px; line-height: 1.75; max-height: 360px; overflow-y: auto; }
+.assist-review, .assist-external { display: grid; gap: 10px; margin-top: 10px; }
+.assist-message { color: var(--fg); padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; line-height: 1.6; }

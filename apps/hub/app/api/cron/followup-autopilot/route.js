@@ -50,6 +50,8 @@ async function callEngineDraft(body) {
     headers,
     body: JSON.stringify(body),
     cache: "no-store",
+    redirect: "error",
+    signal: AbortSignal.timeout(60000),
   });
   const text = await response.text();
   let data = null;
@@ -106,13 +108,11 @@ export async function GET(req) {
 
         const context = await assembleSalesContext({ mode: "followup-draft", ref: deal.id });
 
-        // Bounded thinking makes truncation rare, but the thinking model still malforms the
-        // JSON ~5% of the time. One retry lifts per-deal reliability past 99% and gets the
-        // draft out tonight instead of deferring to the next schedule.
+        // A paid generation is never retried automatically after an ambiguous result.
         let engine = null;
         let data = null;
         let ok = false;
-        for (let attempt = 0; attempt < 2 && !ok; attempt += 1) {
+        {
           engine = await callEngineDraft({
             mode: "followup-draft",
             ref: deal.id,

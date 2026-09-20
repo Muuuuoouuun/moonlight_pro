@@ -150,10 +150,10 @@ export const Sidebar = React.forwardRef(function Sidebar({ active, view, routeSc
     // 쿼리만 갱신된다. 앵커 루트로 강퇴하지 않는다 (2609 감사 #10).
     const currentPathname = pathnameOf(active);
     const sibling = sidebarChildren(owner, value)
-      .find(c => pathnameOf(c.path) === currentPathname);
+      .find(c => pathnameOf(c.path) === currentPathname && (owner !== 'overview' || (new URLSearchParams(c.path.split('?')[1] || '').get('view') === 'goals') === (view === 'goals')));
     const target = sibling ? sibling.path : resolveSidebarPath(owner, value);
     if (target) onNavigate(target);
-  }, [active, onNavigate, setScope]);
+  }, [active, view, onNavigate, setScope]);
 
   const anchorProps = (a) => ({
     type: 'button',

@@ -1,5 +1,6 @@
 "use client";
 import React from 'react';
+import { GoalLinks } from '../goal-links';
 import Link from 'next/link';
 import { Button, Drawer, Kbd, SelectField, Skeleton, TextAreaField, TextField, TruthBadge } from '../hub-primitives';
 import { NOTE_QUESTIONS, selectedNoteExcerpt } from '@/lib/journal-client';
@@ -84,6 +85,7 @@ export function MemoComposer({ model, isNew, onClose, onReload }) {
           {pending && <Button variant="outline" disabled={busy || !model.workspaceConfirmed || model.source === 'loading'} onClick={model.retry}>이전 요청 결과 확인</Button>}
           {model.target && <Link className="memo-target-link hub-row" href={model.target.href}>{model.target.type === 'task' ? '만든 할 일 열기' : '콘텐츠 스튜디오 열기'} →</Link>}
         </div>}
+        {entry && <GoalLinks entityType="journal_entries" entityId={entry.id} />}
         {entry && <section className="memo-section"><h3>다음 행동으로 잇기</h3>
           <p className="memo-muted">{dirty ? '변경 내용을 저장한 뒤 이어서 쓸 수 있어요.'
             : selection ? '선택한 발췌와 원문 링크만 전달됩니다.'

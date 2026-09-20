@@ -1,4 +1,5 @@
 "use client";
+import { GoalLinks } from '../goal-links';
 
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
@@ -1186,6 +1187,7 @@ export function Leads({ workspace }) {
         onClose={() => setEditLeadId(null)}
       >
         <LeadEnrichmentPanel lead={editingLead} />
+        <GoalLinks entityType="leads" entityId={editingLead?.id} scope={editingLead?.type} />
       </EditDrawer>
 
       {/* 벌크 바 — x로 담은 선택이 있을 때만 뜨는 하단 플로팅 바(§2.8 첫 실채택). */}
@@ -2154,6 +2156,7 @@ export function Deals({ workspace, onNavigate }) {
         <DealTaskPanel deal={editingDeal} onSaved={loadDealTaskStats} />
         <DealNextMeetingPanel deal={editingDeal} onNavigate={onNavigate} />
         <DealLinkedProjectsPanel deal={editingDeal} onNavigate={onNavigate} />
+        <GoalLinks entityType="deals" entityId={editingDeal?.id} scope={editingDeal?.type} />
       </EditDrawer>
 
       <FloatingMentorWidget
@@ -2894,6 +2897,7 @@ function DetailPanel({ account, detail, onLog, onDeleteActivity, onPinNote, onAd
 
       {/* Body */}
       <div className="scroll-y" style={{ flex: 1, minHeight: 0, padding: 'var(--card-pad)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <GoalLinks entityType="customer_accounts" entityId={account.id} scope={account.type} />
         {tab === 'activity' && (
           <>
             {activityError && (

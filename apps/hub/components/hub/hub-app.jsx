@@ -415,6 +415,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   // 쿼리 소거)로 직행하고, 생성 대상이 없는 표면에서만 팔레트로 폴백한다(§8.1 생성).
   const createTargetForPath = React.useCallback((currentPath) => {
     const p = String(currentPath || '');
+    if (p.startsWith('dashboard/overview') && searchParams.get('view') === 'goals') return `dashboard/overview?view=goals&new=goal&scope=${encodeURIComponent(queryScope || 'all')}`;
     if (p.startsWith('dashboard/discovery')) return `dashboard/discovery?new=discovery${queryScope ? `&scope=${encodeURIComponent(queryScope)}` : ''}`;
     if (p.startsWith('dashboard/revenue/inquiries')) return 'dashboard/revenue/inquiries?new=inquiry';
     if (p.startsWith('dashboard/revenue/leads') || p.startsWith('dashboard/revenue/customers')) return 'dashboard/revenue/leads?new=lead';
@@ -426,7 +427,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
     if (p.startsWith('dashboard/work/rhythm')) return 'dashboard/work/rhythm?new=rhythm';
     if (p.startsWith('dashboard/content')) return 'dashboard/content/studio?new=draft';
     return null;
-  }, [queryScope]);
+  }, [queryScope, searchParams]);
 
   const createOnCurrentSurface = React.useCallback(() => {
     const target = createTargetForPath(path);

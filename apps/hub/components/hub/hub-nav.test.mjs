@@ -47,6 +47,16 @@ test("sidebar exposes exactly nine primary and two utility anchors", () => {
   );
 });
 
+test('overview goals subview has one active child and carries organizational scope', () => {
+  const tabs = sidebarChildren('overview', 'classin');
+  const goals = tabs.find(tab => tab.key === 'overview-goals');
+  assert.ok(goals, 'goals belongs under the existing overview anchor');
+  assert.equal(goals.path, 'dashboard/overview?view=goals&scope=classin');
+  assert.equal(isSidebarChildActive('overview', 'dashboard/overview', 'dashboard/overview', 'goals'), false);
+  assert.equal(isSidebarChildActive('overview', goals.path, 'dashboard/overview', 'goals'), true);
+  assert.equal(topNavigationForRoute('dashboard/overview', 'classin', 'goals').activeTab?.key, 'overview-goals');
+});
+
 test("every anchor resolves a path in every scope", () => {
   for (const anchor of SIDEBAR_ANCHORS) {
     for (const scope of SIDEBAR_SCOPES) {
