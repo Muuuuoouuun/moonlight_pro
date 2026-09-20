@@ -1892,8 +1892,14 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
 
       <StatusLine state={ledger} onRetry={refreshLedger} />
 
-      {/* §7 슬롯 순서: Quick Capture가 첫 fold 1순위 — 내비 칩보다 위. */}
+      {/* 슬롯 순서: Quick Capture → 오늘 할 일 → 긴급 KA·집중 고객·일정 → 신호.
+          입력과 결과를 붙인다 — 할 일을 여기서 적는데 목록은 9번째 슬롯(신호 아래)에 있어서
+          방금 적은 것이 보이지 않았다. docs/README.md 의 운영자 확정 "첫 화면은 **할 일**,
+          매출, 메시지, 기획, 콘텐츠 순서의 판단을 돕는다"도 할 일을 1순위로 적고 있다
+          (2026-09-20 운영자 재확정). 긴급 KA·집중 고객 ≤5 제한은 그대로다. */}
       <QuickCaptureForm layout="inline" inputId="daily-brief-quick-task" inputClassName="daily-brief__quick-input" onNavigate={onNavigate} onSaved={ledger.refreshTasks} />
+
+      <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
 
       {/* Q118·Q119: 월(개인)·목(회사) 아침에만 뜨는 주간 정리 — 다른 요일은 null. */}
       <WeeklyReportCard onNavigate={onNavigate} />
@@ -1916,9 +1922,8 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
           )}
         </div>
 
-        <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.05fr) minmax(300px, .95fr)', gap: 16, alignItems: 'start' }}>
-          <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
-
+        {/* 오늘 할 일이 캡처 바로 아래로 올라가면서 왼쪽 칸이 비었다 — 신호 섹션이 전폭을 쓴다. */}
+        <div>
           <div>
             <SectionTitle right={<div style={{ display: 'flex', gap: 6 }}>
               <Badge tone={urgentCount > 0 ? 'danger' : 'neutral'} size="xs">{urgentCount} urgent</Badge>
