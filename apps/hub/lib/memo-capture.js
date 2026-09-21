@@ -1,5 +1,8 @@
 export const MEMO_DRAFT_KEY = "moonlight:memo-draft:v1";
-export const MAX_MEMO_CHARS = 100000;
+// journal_entries 의 본문 한계가 20,000자다(`lib/journal.js` validateJournalInput).
+// 빠른 메모가 journal 로 통합되면서 100,000 → 20,000 으로 맞춘다. 더 긴 글은
+// 메모가 아니라 Studio 원고의 자리다.
+export const MAX_MEMO_CHARS = 20000;
 export const MAX_MEMO_FILE_BYTES = 256 * 1024;
 export const newMemoDraft = () => ({
   id: crypto.randomUUID(),
@@ -23,7 +26,7 @@ export function memoCapturePayload(draft) {
     draft.body.length > MAX_MEMO_CHARS ||
     draft.body.includes("\0")
   )
-    throw new Error("본문은 1~100,000자의 텍스트로 입력하세요.");
+    throw new Error("본문은 1~20,000자의 텍스트로 입력하세요.");
   if (labels.length > 12 || labels.some((s) => s.length > 40))
     throw new Error("라벨은 12개까지, 하나당 40자 이내로 입력하세요.");
   return {
