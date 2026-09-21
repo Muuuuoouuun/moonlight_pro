@@ -1,13 +1,13 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {parseOfficeRequest} from '@com-moon/agent-contracts/office';
+import {parseOfficeRequest,OFFICE_VERSION} from '@com-moon/agent-contracts/office';
 import {readOfficeContext} from '../repositories/office-context.js';
 import {callOfficeEngine} from './engine-client.js';
 import {createOfficeHubHandler} from './http.js';
 const input={ownerId:'flareon',message:'제안서',scope:'personal'};
 const request=parseOfficeRequest(input);
 const context={source:'provided',scope:'personal',projects:[],note:'입력만 참고'};
-const generated={status:'generated',ownerId:'flareon',mode:'chat',scope:'personal',participants:[],lens:null,simulation:false,answer:'초안',nextAction:'검토',context,model:'test'};
+const generated={status:'generated',version:OFFICE_VERSION,ownerId:'flareon',mode:'chat',scope:'personal',participants:[],lens:null,simulation:false,answer:'초안',nextAction:'검토',context,model:'test'};
 const req=body=>new Request('http://localhost:3100/api/hub/office/chat',{method:'POST',headers:{origin:'http://localhost:3100'},body:JSON.stringify(body)});
 test('project reads use server workspace and scope filters; reject mixed returned records',async()=>{
  const result=await readOfficeContext({...request,includeProjects:true},{workspaceId:'server-workspace',read:async(table,opts)=>{
@@ -34,6 +34,14 @@ test('Hub guard runs before generation; browser cannot inject workspace/context/
  const denied=await handler(new Request('http://localhost:3100/api/hub/office/chat',{method:'POST',body:JSON.stringify(input)}));assert.ok([401,403].includes(denied.status));
  for(const change of [{workspaceId:'other'},{context:{projects:[]}},{ownerId:'council'},{lens:'jobs'}])assert.equal((await handler(req({...input,...change}))).status,400);
  assert.equal(calls,0);
+});
+test('Hub rejects missing or stale Engine policy versions instead of relabeling them',async()=>{
+ for(const version of [undefined,'2026-09-15.v1']) {
+  let writes=0;
+  const handler=createOfficeHubHandler({readContext:async()=>context,callEngine:(request,context)=>callOfficeEngine(request,context,{engineUrl:'http://engine.test',secret:'test',fetcher:async()=>Response.json({...generated,version})}),recordRun:async()=>{writes++;return {persisted:true};}});
+  const response=await handler(req(input));
+  assert.equal(response.status,502);assert.equal((await response.json()).status,'error');assert.equal(writes,0);
+ }
 });
 test('generated answer survives failed run logging; no business writes and no legacy agent key',async()=>{
  let seen;const handler=createOfficeHubHandler({readContext:async()=>context,callEngine:async()=>generated,recordRun:async value=>{seen=value;throw new Error('db failed');}});

@@ -1,5 +1,5 @@
 // Browser-safe Office contract. Legacy persona/Guru/Council IDs remain independent.
-export const OFFICE_VERSION = '2026-09-15.v1';
+export const OFFICE_VERSION = '2026-09-21.v2';
 export const OFFICE_ROSTER = Object.freeze([
   {
     "id": "eevee",

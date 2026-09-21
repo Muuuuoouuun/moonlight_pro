@@ -3,6 +3,9 @@ interface GeminiGenerateInput {
   systemInstruction?: string;
   maxOutputTokens?: number;
   model?: string;
+  signal?: AbortSignal;
+  responseJsonSchema?: Record<string, unknown>;
+  thinkingLevel?: 'high';
 }
 
 function resolveGeminiApiKey() {
@@ -69,6 +72,13 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
       // thinking + a full answer. maxOutputTokens is a cap, not a charge — billing is per
       // actual token — so a generous default is safe.
       maxOutputTokens: input.maxOutputTokens || 8192,
+      ...(input.responseJsonSchema ? {
+        responseMimeType: "application/json", responseJsonSchema: input.responseJsonSchema,
+      } : {}),
+      // Gemini 2.5 uses thinkingBudget; do not send an incompatible 3-series option.
+      ...(input.thinkingLevel && /^gemini-3[.-]/.test(targetModel) ? {
+        thinkingConfig: { thinkingLevel: input.thinkingLevel },
+      } : {}),
     },
   };
 
@@ -89,7 +99,7 @@ export async function generateGeminiText(input: GeminiGenerateInput) {
         },
         body: JSON.stringify(body),
         cache: "no-store",
-        signal: AbortSignal.timeout(45_000),
+        signal: input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(45_000)]) : AbortSignal.timeout(45_000),
       },
     );
     const text = await response.text();
