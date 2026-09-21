@@ -74,18 +74,21 @@ export function ResultPreview({ body, type }) {
   })}</article>;
 }
 
-export function DraftEditor({ draft, edit, disabled, onSelect }) {
+export function DraftEditor({ draft, edit, disabled, onSelect, writingFocus, onToggleFocus }) {
   const [view, setView] = React.useState('edit');
   const structured = ['card_news', 'reels_script'].includes(draft.variantType);
   const supported = ['threads_post', 'x_thread', 'social_post', 'blog', 'blog_insight', 'landing_copy', 'newsletter', 'card_news', 'reels_script'].includes(draft.variantType);
   const chars = [...draft.body].length;
   return <div className="studio-stack">
-    <div className="studio-row">
-      <h3 className="studio-section-title">결과물</h3>
-      <SegmentedControl label="결과물 보기" value={view} onChange={setView} options={[{ key: 'edit', label: '편집' }, { key: 'preview', label: '미리보기' }]} />
+    <div className="studio-row studio-editor-heading">
+      <h3 className="studio-section-title">원고 작성</h3>
+      <div className="studio-actions">
+        <SegmentedControl label="결과물 보기" value={view} onChange={setView} options={[{ key: 'edit', label: '편집' }, { key: 'preview', label: '미리보기' }]} />
+        <Button variant="outline" active={writingFocus} aria-pressed={writingFocus} onClick={onToggleFocus}>{writingFocus ? '전체 작업 보기' : '글쓰기 집중'}</Button>
+      </div>
     </div>
     {!supported && <p className="studio-error" role="alert">이전 형식의 결과물입니다. 원본을 복사·내보내기한 뒤 지원하는 채널의 새 결과물을 만들어주세요.</p>}
-    <TextField label="결과물 제목" placeholder="이 채널에 맞는 제목" value={draft.variantTitle} onChange={(event) => edit({ variantTitle: event.target.value })} disabled={disabled || !supported} />
+    <TextField label="결과물 제목" className="studio-title-input" placeholder="이 채널에 맞는 제목" value={draft.variantTitle} onChange={(event) => edit({ variantTitle: event.target.value })} disabled={disabled || !supported} />
     {view === 'preview' ? <ResultPreview body={draft.body} type={draft.variantType} /> : structured
       ? <StructuredEditor draft={draft} disabled={disabled} onChange={(body) => edit({ body })} />
       : <TextAreaField label="결과물 본문" placeholder={draft.channel === 'threads' ? '생각을 짧은 글로 시작해보세요.\n\n빈 줄로 연결할 글을 나눌 수 있습니다.' : '초안을 직접 작성하거나 원문·기획에서 AI로 시작해보세요.'}
@@ -94,7 +97,7 @@ export function DraftEditor({ draft, edit, disabled, onSelect }) {
           onSelect={(event) => onSelect({ start: event.target.selectionStart, end: event.target.selectionEnd, body: draft.body })} />}
     <div className="studio-row studio-muted studio-small">
       <span>{structured ? '구조를 유지해 저장합니다.' : '문장을 선택하면 그 부분만 AI로 다듬을 수 있습니다.'}</span>
-      {!structured && <span>{chars.toLocaleString()}자</span>}
+      {!structured && <span className="mono">{chars.toLocaleString()}자</span>}
     </div>
   </div>;
 }

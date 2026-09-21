@@ -26,7 +26,8 @@ export function ContentStudio({ workspace, ledger }) {
   const studio = useContentStudio(workspace), { draft } = studio;
   const toast = useToast();
   const [selection, setSelection] = React.useState(null), [drawer, setDrawer] = React.useState(null);
-  const [sourceOpen, setSourceOpen] = React.useState(true);
+  const [sourceOpen, setSourceOpen] = React.useState(false);
+  const [writingFocus, setWritingFocus] = React.useState(false);
   const [publicationUrl, setPublicationUrl] = React.useState('');
   const [publicationDate, setPublicationDate] = React.useState('');
   const [mentorOpen, setMentorOpen] = React.useState(false);
@@ -40,6 +41,7 @@ export function ContentStudio({ workspace, ledger }) {
   const disabled = !studio.ready || studio.busy || !!studio.recovery || !!studio.pendingMutation;
   const revisions = studio.history?.revisions || [];
   const variants = studio.detail?.variants || [];
+  const briefCount = BRIEF_FIELDS.filter(({ key }) => draft.brief[key]?.trim()).length;
   usePageCreateHotkey(studio.newDraft);
   const copy = async () => {
     try {
@@ -69,12 +71,10 @@ export function ContentStudio({ workspace, ledger }) {
     }
   };
   const saveTruth = studio.loadError ? 'error' : !studio.ready ? 'syncing' : ['error', 'conflict'].includes(studio.saveState) ? 'error' : studio.saveState === 'saving' ? 'syncing' : studio.saveState === 'saved' ? 'live' : 'preview';
-  return <div className="hub-page content-studio">
+  return <div className={'hub-page content-studio' + (writingFocus ? ' studio-writing-focus' : '')}>
     <header className="studio-page-header">
       <div><h2>콘텐츠 스튜디오</h2><p>메모를 기획으로, 초안을 채널별 콘텐츠로.</p></div>
       <div className="studio-actions">
-        <Button variant="outline" icon="sparkle" onClick={() => { setMentorMode('advice'); setMentorOpen(true); }} disabled={disabled}>방향 검토</Button>
-        <Button variant="outline" icon="sparkle" onClick={() => { setMentorMode('critique'); setMentorOpen(true); }} disabled={disabled}>검수 게이트 판정</Button>
         <Button variant="outline" onClick={studio.newDraft} disabled={(!studio.ready && !studio.loadError) || studio.busy || !!studio.recovery || !!studio.pendingMutation} icon="plus">새 콘텐츠</Button>
         <Button onClick={openHistory} disabled={!draft.variantId || studio.busy}>버전 기록</Button>
         <Button variant="primary" onClick={() => studio.save(true)} disabled={disabled || studio.saveState === 'saving'}>버전 저장</Button>
@@ -110,21 +110,24 @@ export function ContentStudio({ workspace, ledger }) {
         <div className="studio-layout">
           <section className="studio-main" aria-label="원문과 결과물 편집">
             <Card className="studio-source-card">
-              <details open={sourceOpen} onToggle={(event) => setSourceOpen(event.currentTarget.open)}>
-                <summary><span>원문 · 기획 카드</span><span className="studio-summary-count">{BRIEF_FIELDS.filter(({ key }) => draft.brief[key]?.trim()).length} / 6 항목</span></summary>
-                <div className="studio-stack studio-source-fields">
-                  <div className="studio-fields-two">
-                    <TextField label="콘텐츠 기획 제목" value={draft.title} onChange={(event) => studio.edit({ title: event.target.value })} disabled={disabled} placeholder="이 콘텐츠를 구분할 이름" />
-                    <SelectField label="브랜드" value={draft.brandId} options={brandOptions} onChange={(event) => studio.edit({ brandId: event.target.value })} disabled={disabled || ['loading', 'error'].includes(ledger.syncState)} />
-                  </div>
-                  {['error', 'partial'].includes(ledger.syncState) && <p role="status" className="studio-muted studio-small">브랜드 목록을 모두 확인하지 못했습니다. 저장된 브랜드를 유지하며 편집할 수 있습니다.</p>}
-                  <TextAreaField label="원문 메모" hint="처음 떠올린 생각과 맥락을 보관합니다. 복사·내보내기에는 포함하지 않습니다." placeholder="관찰한 것, 경험, 대화에서 떠오른 생각을 자유롭게 적어주세요." value={draft.sourceIdea} onChange={(event) => studio.edit({ sourceIdea: event.target.value })} rows={5} disabled={disabled} />
-                  <details className="studio-brief-details"><summary>기획 구체화 <span className="studio-summary-count">{BRIEF_FIELDS.filter(({ key }) => draft.brief[key]?.trim()).length} / 6 항목</span></summary>
-                  <div className="studio-fields-two studio-source-fields">
-                    {BRIEF_FIELDS.map((field) => <TextAreaField key={field.key} label={field.label} placeholder={field.placeholder} value={draft.brief[field.key]} onChange={(event) => studio.edit({ brief: { ...draft.brief, [field.key]: event.target.value } })} rows={2} disabled={disabled} />)}
-                  </div></details>
+              <div className="studio-stack">
+                <div className="studio-fields-two studio-content-context">
+                  <TextField label="콘텐츠 기획 제목" value={draft.title} onChange={(event) => studio.edit({ title: event.target.value })} disabled={disabled} placeholder="이 콘텐츠를 구분할 이름" />
+                  <SelectField label="브랜드" value={draft.brandId} options={brandOptions} onChange={(event) => studio.edit({ brandId: event.target.value })} disabled={disabled || ['loading', 'error'].includes(ledger.syncState)} />
                 </div>
-              </details>
+                {['error', 'partial'].includes(ledger.syncState) && <p role="status" className="studio-muted studio-small">브랜드 목록을 모두 확인하지 못했습니다. 저장된 브랜드를 유지하며 편집할 수 있습니다.</p>}
+                <details className="studio-source-disclosure" open={sourceOpen} onToggle={(event) => setSourceOpen(event.currentTarget.open)}>
+                  <summary><span>원문 · 기획</span><span className="studio-summary-count">{draft.sourceIdea?.trim() ? '원문 있음' : '원문 없음'} · 기획 <span className="num">{briefCount}/6</span></span></summary>
+                  <div className="studio-stack studio-source-fields">
+                    <TextAreaField label="원문 메모" hint="처음 떠올린 생각과 맥락을 보관합니다. 복사·내보내기에는 포함하지 않습니다." placeholder="관찰한 것, 경험, 대화에서 떠오른 생각을 자유롭게 적어주세요." value={draft.sourceIdea} onChange={(event) => studio.edit({ sourceIdea: event.target.value })} rows={5} disabled={disabled} />
+                    <details className="studio-brief-details"><summary>기획 구체화 <span className="studio-summary-count"><span className="num">{briefCount} / 6</span> 항목</span></summary>
+                      <div className="studio-fields-two studio-source-fields">
+                        {BRIEF_FIELDS.map((field) => <TextAreaField key={field.key} label={field.label} placeholder={field.placeholder} value={draft.brief[field.key]} onChange={(event) => studio.edit({ brief: { ...draft.brief, [field.key]: event.target.value } })} rows={2} disabled={disabled} />)}
+                      </div>
+                    </details>
+                  </div>
+                </details>
+              </div>
             </Card>
             <Card className="studio-editor-card">
               <div className="studio-stack">
@@ -134,7 +137,7 @@ export function ContentStudio({ workspace, ledger }) {
                   <Button variant="outline" onClick={() => setDrawer('variant')} disabled={disabled} icon="plus">채널 추가</Button>
                 </div>
                 {studio.detail?.variantsHasMore && <p className="studio-muted studio-small">결과물이 많아 처음 250개를 표시하고 있습니다.</p>}
-                <DraftEditor draft={draft} edit={studio.edit} disabled={disabled} onSelect={setSelection} />
+                <DraftEditor draft={draft} edit={studio.edit} disabled={disabled} onSelect={setSelection} writingFocus={writingFocus} onToggleFocus={() => setWritingFocus((value) => !value)} />
                 <div className="studio-export-bar">
                   <p className="studio-muted studio-small">선택한 결과물만 복사·내보내기합니다.</p>
                   <div className="studio-actions"><Button variant="outline" icon="copy" onClick={copy} disabled={!draft.body.trim()}>복사</Button><Button variant="outline" icon="download" onClick={download} disabled={!draft.body.trim()}>내보내기</Button><Button variant="outline" onClick={() => setDrawer('publication')} disabled={disabled || !draft.body.trim()}>발행 기록</Button></div>
@@ -153,6 +156,13 @@ export function ContentStudio({ workspace, ledger }) {
                 <p className="studio-muted studio-small">다른 결과물에서 파생되었습니다. 원본 버전과의 연결이 저장되어 있습니다.</p>
                 {draft.sourceRefs[0]?.variant_id && <Button variant="outline" disabled={disabled} onClick={() => studio.switchVariant(draft.sourceRefs[0].variant_id)}>원본 결과물 열기</Button>}
               </div>}
+              <div className="studio-review-tools">
+                <span className="studio-muted studio-small">추가 검토</span>
+                <div className="studio-actions">
+                  <Button variant="outline" icon="sparkle" onClick={() => { setMentorMode('advice'); setMentorOpen(true); }} disabled={disabled}>방향 검토</Button>
+                  <Button variant="outline" icon="sparkle" onClick={() => { setMentorMode('critique'); setMentorOpen(true); }} disabled={disabled}>검수 게이트 판정</Button>
+                </div>
+              </div>
             </div></Card>
             <StudioAI studio={studio} selection={selection} onOpenHistory={openHistory} />
           </aside>
