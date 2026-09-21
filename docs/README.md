@@ -1,7 +1,7 @@
 # Moonlight 문서 지도
 
 > 상태: ACTIVE DOCUMENTATION INDEX
-> 마지막 정리: 2026-09-20 (Supabase 서울 리전 이관, 테스트 기준선, 빠른 입력 전역화, 목업 가드레일 반영. 이전 정리: 2026-09-14 콘텐츠·메모·문의·Agent DB 준비 상태)
+> 마지막 정리: 2026-09-21 (Eevee Office E0~E4 로컬 구현 상태 추가. 이전 정리: Supabase 서울 리전 이관·빠른 입력·목업 가드레일)
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -58,6 +58,7 @@
 | 브랜드 탭 | P0·P1 구현, P2~P5 제안 | `2026-08-29-brand-tab-design.md`, `3627eef` |
 | 개인 매출 30일 로드맵 | 출시, 디자인 QA `blocked` | `2026-08-31-personal-revenue-roadmap.md`, `68517ec`, 루트 `design-qa.md` |
 | 문의 수집·알림 | 코드 구현, 운영 연결 대기 | Gmail 감지·안전한 웹훅·문의 내역·미확인 알림. [설정](inquiry-integration-setup.md), [검증](superpowers/plans/2026-09-13-unified-inquiries.md) |
+| 업무 안의 Eevee Office E0~E4 | 구현·로컬 검증 / 운영 적용 대기 | 요청 중심 Office·입력 보존, 주간 정리·고객 답장, Threads 님피아 지침, 요청 보관·복구, 같은 범위 프로젝트의 할 일 연결, 작업·실행 보기. [구현 기록](superpowers/plans/2026-09-21-eevee-office-embedded-workflow.md). 신규 0038은 임시 PostgreSQL 검증만 완료했으며 운영 DB에는 미적용. 새 실제 모델 평가·배포·보관 정리 예약도 미실행 |
 | Supabase 서울 리전 이관 | 이관 완료(2026-09-20) · Vercel 환경 변수 교체 대기 | `rwqefdxalmbrkybxqwxj`(싱가포르 `ap-southeast-1`) → `ncgpnqfulnlshegalmbd`(서울 `ap-northeast-2`). 테이블 71·1368행 **전부 행 수 일치**, `npm run db:check` 7/7 PASS, 앱 읽기(`status: live`)·쓰기 왕복 확인, REST 지연 150ms→57ms. 구 싱가포르 프로젝트는 롤백 경로로 **삭제하지 않고 보존**. 툴킷은 `npm run db:move-region`, 런북·함정(함수 실행 권한 회귀 등)은 [`supabase-korea-region-migration.md`](supabase-korea-region-migration.md), 커밋 `fa1757e`. **Vercel 환경 변수는 아직 구 싱가포르 값이므로 배포 전 교체가 필요하다** |
 | 빠른 입력 전역화 | 구현 완료(2026-09-20) | 캡처 폼을 `daily-brief.jsx` 내부에서 `apps/hub/components/hub/quick-capture.jsx`로 분리해 단일 정본화(`layout="inline"`/`"compact"`). 전역 `C` 단축키(입력 요소 안·팔레트 열림이면 무시)와 ⌘K 팔레트의 `빠른 입력` 액션, 치트시트 등록까지 포함 — DESIGN.md §8.1 생성 단축키 계약을 따른다. 커밋 `6423822` |
 | 목업 데이터 가드레일 | 구현 완료(2026-09-20) | `scripts/no-mock-data.test.mjs`가 저장소 전체에서 목업 식별자(`MOCK_`·`DEMO_`·`SAMPLE_`·`DUMMY_`·`FAKE_`·fixtures 계열) 선언과 업무 레코드형 하드코딩 배열을 막는다. 감사 시점의 저장소에는 가짜 업무 데이터가 0건이었고 없던 것은 강제 장치였다. 운영자 확정: 더미 데이터는 **로컬 전용 Supabase 프로젝트에만** 두고 코드에는 넣지 않는다 — 그 프로젝트는 free 플랜 활성 2개 상한 때문에 아직 미생성이다. 커밋 `4516e49` |
@@ -73,6 +74,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 ## 4. 현재 문서
 
 ### 제품·운영 정본
+
+- [업무 안의 Eevee Office — C레벨 심화 설계](superpowers/specs/2026-09-21-eevee-office-embedded-workflow-deep-design.md) — **구현 승인 · E0~E4 로컬 구현(2026-09-21)**. [통합 검토](2026-09-21-agent-office-consolidated-review.md)의 B 방향을 주간·고객·Threads Studio에 연결했다. Office/작업·실행/코칭·대화/브랜드 자문으로 기존 목적지를 정리하고, 요청 보관·복구와 기존 command를 통한 task 연결을 구현했다. 대체 조항은 §2, 실제 범위·검증·운영 적용 전제는 [단계별 구현 기록](superpowers/plans/2026-09-21-eevee-office-embedded-workflow.md) §9를 따른다. 다른 표면·장기 기억·자동 발송은 후속 제안이다.
 
 - [실사용 입력 개선](superpowers/specs/2026-09-20-input-usability-design.md) — **승인·구현(2026-09-20)**. 체크리스트 한 줄·Enter 연속 입력, 새 할 일 중앙 팝업·저장 후 계속, 메모 태그·업무 연결, PMS 소속 선택 및 반복 범례 축소. [검증 기록](superpowers/plans/2026-09-20-input-usability.md). 태그 검색 0035는 서울 DB 적용 완료.
 
