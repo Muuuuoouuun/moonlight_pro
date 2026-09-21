@@ -1,6 +1,6 @@
 # CRM 탭 디벨롭 기획 — 연락 · 미팅 내용 · 기록 · 매출 · 니즈 · 위기
 
-> 상태: **DRAFT v0.2 · 권장안(운영자 확정 전) · 적용 준비**. v0.1(2026-09-21 오전)을 운영자 지시 "더 디벨롭해서 적용하자"에 따라 같은 날 2차로 다시 썼다. v0.1의 진단·방향은 유지하되 (1) 코드를 함수 단위로 다시 읽어 **틀렸던 사실 2건을 정정**하고 **새로 확인한 결함 5건을 추가**했으며, (2) 화면·데이터·정렬을 구현 가능한 계약(필드·함수 시그니처·상태별 화면·카피)까지 내렸고, (3) 미정이던 질문 전부에 **권장 기본값**을 달아 "반대 없으면 이걸로 진행"할 수 있게 했다. 0·1단계의 파일 단위 실행 계획은 [`plans/2026-09-21-crm-tab-develop-phase0-1.md`](../plans/2026-09-21-crm-tab-develop-phase0-1.md)에 분리했다.
+> 상태: **DRAFT v0.2 · 권장안(운영자 확정 전) · 적용 준비**. **2026-09-21 오후 추가: §0.5 최소 접근** — 운영자의 "기본만" 질문에 대한 답. §4~§5의 큰 설계는 보류 목록이고, 지금 실행 범위는 §0.5의 최소 세트다. v0.1(2026-09-21 오전)을 운영자 지시 "더 디벨롭해서 적용하자"에 따라 같은 날 2차로 다시 썼다. v0.1의 진단·방향은 유지하되 (1) 코드를 함수 단위로 다시 읽어 **틀렸던 사실 2건을 정정**하고 **새로 확인한 결함 5건을 추가**했으며, (2) 화면·데이터·정렬을 구현 가능한 계약(필드·함수 시그니처·상태별 화면·카피)까지 내렸고, (3) 미정이던 질문 전부에 **권장 기본값**을 달아 "반대 없으면 이걸로 진행"할 수 있게 했다. 0·1단계의 파일 단위 실행 계획은 [`plans/2026-09-21-crm-tab-develop-phase0-1.md`](../plans/2026-09-21-crm-tab-develop-phase0-1.md)에 분리했다.
 > 작성일: 2026-09-21 (Asia/Seoul) · 브랜치 `09.bigmac1.02` · HEAD `d8e2abe`
 > 상위 정본: [`docs/README.md`](../../README.md) 우선순위 → [운영자 프로필](../../operator-workflow-profile.md) → [개인 운영 OS 심화 설계](2026-07-13-moonlight-personal-operator-os-deep-design.md) → 주제별 최신 스펙.
 > 관계:
@@ -22,7 +22,7 @@
 
 | 축 | 현재 | v0.2에서 확인한 근거 |
 |---|---|---|
-| 연락 | **있다·정렬 반대·행 절반 죽음.** 원자 저장·되돌리기·프리셋은 완성. 정렬은 무접촉 우선. 행 컴포넌트가 다른 원장의 아이템 모양을 기대해 **버킷 필터·지남 레일·행 클릭·최근 반응 줄이 렌더되지 않는다** | `followups.jsx` `FollowupRow`가 `item.bucket/href/lastNote/lastReaction`을 읽는데 `getFollowups`(`followups-ledger.js`)는 그 필드를 만들지 않는다. 그 필드를 만드는 곳은 `attention-ledger.js`뿐 |
+| 연락 | **있다·정렬 반대·행 절반 죽음.** 원자 저장·되돌리기·프리셋은 완성. 정렬은 무접촉 우선. 행 컴포넌트가 다른 데이터 소스의 아이템 모양을 기대해 **버킷 필터·지남 레일·행 클릭·최근 반응 줄이 렌더되지 않는다** | `followups.jsx` `FollowupRow`가 `item.bucket/href/lastNote/lastReaction`을 읽는데 `getFollowups`(`followups-ledger.js`)는 그 필드를 만들지 않는다. 그 필드를 만드는 곳은 `attention-ledger.js`뿐 |
 | 미팅 내용 | **부분.** 종류는 있고 내용 자리가 없다 | `record_contact_outcome_v1`: `summary`(1줄)·`reaction`·`next_action`만. 프로필 §11의 결정사항·우려·관심 신호 자리 없음 |
 | 기록 | **분열.** UI는 `crm_activities`, 주간 리포트·큐 점수는 `outreach_outcomes` | 심화 설계 §10은 Phase 1C를 `outreach_outcomes`+멱등키+할 일 완료/생성으로 정의했는데, 실제 0018 RPC는 `crm_activities`만 쓰고 멱등키·할 일이 없다. **설계와 구현이 갈라진 지점이 분열의 뿌리**다 |
 | 매출 내용 | **금액 한 숫자.** | `deals`: `amount`·`stage`·`expected_close_at`·`meta.stage_detail`. 프로필 §6의 HW/SW·수량·결제·종료 결과·재문의 없음 |
@@ -35,7 +35,7 @@
 2. **첫 화면 집중 고객은 기존 고객(`won`)만 뽑는다.** `selectOperatorFocusLeads`(`operator-revenue-scope.js`)가 `priorityLane === 'customer_success'`만 통과시키고, 그 lane은 `lead-enrichment.js` `resolvePipelineLane`에서 `status === 'won'`일 때만 붙는다. 진행 중인 리드(new/qualified/nurturing)는 **구조적으로 집중 고객이 될 수 없다.** 프로필 §8 정의("전환 가능성이 높아 지금 연락해야 하는 고객 수")와 반대다. 첫 화면 스펙 D3(5행 전부 필러)의 원인이 이것이다.
 3. **이관 스크립트가 `leads.next_action`을 템플릿으로 채우고, 재실행 시 운영자가 고친 값을 되돌린다.** `buildJunhyukLeadEnrichment`의 `patch.next_action = resolveNextAction(...)`(템플릿 5종)이고, `scripts/enrich-eeocrm-leads.mjs`는 `lead.next_action !== built.patch.next_action`이면 `changed`로 판정해 덮어쓴다. "다음 행동"이 운영자 약속이 아니라 필러인 행이 다수 존재할 수 있다.
 4. **위험 라벨의 유일한 원천이 점수 밴드다.** 고객 DB `SEGMENTS.risk` = `scoreBand(score) === 'risk'`(<40), Accounts `resolveHealth` = `health_score < 40 → risk`, 둘 다 danger 톤. 사건(거절·우려·약속 파기)이 아니라 숫자가 빨강을 결정한다.
-5. **심화 설계 §10의 투영 규칙이 위기 신호를 지운다.** §10은 `positive/neutral/concern/rejected → replied`로 접어 `outreach_outcomes.action`에 넣도록 했다. 그 규칙대로면 `concern`·`rejected`가 `replied`로 뭉개져 **위기 축을 만들 원재료가 사라진다.** 따라서 학습 원장을 `outreach_outcomes`로 되돌리는 길은 닫고, `crm_activities`를 단일 정본으로 확정하는 것을 권장한다(§9 Q144).
+5. **심화 설계 §10의 투영 규칙이 위기 신호를 지운다.** §10은 `positive/neutral/concern/rejected → replied`로 접어 `outreach_outcomes.action`에 넣도록 했다. 그 규칙대로면 `concern`·`rejected`가 `replied`로 뭉개져 **위기 축을 만들 원재료가 사라진다.** 따라서 학습 데이터을 `outreach_outcomes`로 되돌리는 길은 닫고, `crm_activities`를 단일 정본으로 확정하는 것을 권장한다(§9 Q144).
 
 ### v0.1 정정 2건
 
@@ -52,6 +52,69 @@
 **마이그레이션**: 테이블·컬럼 변경 **0**. 새 RPC 함수 1개(`record_contact_outcome_v2`, §5.3) = 마이그레이션 파일 1개. 그 외는 전부 `meta`와 코드다.
 
 ---
+
+## 0.5 최소 접근 — "기본만 해도 된다"에 대한 답 (2026-09-21 오후 · 권장)
+
+운영자 질문: *말이 CRM이지 아주 기본만 해도 큰 문제 없어 보이는데, 어떻게 접근해서 핵심에 집중하고 편리하게·유실 없이·빠르게 관리할 수 있나.*
+
+**답: CRM을 만들지 않는다. "약속 기록"을 지킨다.** 운영자에게 매일 필요한 것은 세 가지뿐이다 — 오늘 누구에게 연락하나 · 연락 뒤 30초 기록 · 놓친 약속이 몇 건인가. 나머지(점수·세그먼트·계정·케이스·히트맵·니즈 칩·위기 엔진·돈 필드)는 필요할 때 찾아보는 참고 데이터다. §4의 큰 설계는 그 참고 데이터를 위한 것이고, **지금은 안 만들어도 된다.**
+
+### 원칙 4개
+
+1. **정본은 하나 — 약속.** `next_action`(무엇) + `meta.next_action_at`(언제) + `dormant`(기약 없음). 이미 원자 RPC가 쓴다. 고객 프로필·점수는 이 약속의 부속 정보다.
+2. **입력은 사건 직후 한 번, 같은 폼.** 기존 `ContactOutcomeSheet`(요약·반응·다음 행동 프리셋·기약 없음·되돌리기)가 이미 최소 기록의 90%다. 새 기록창을 만들지 않고 이 시트를 **어디서든**(큐 행·목록 행·첫 화면 행·폰) 같은 compact Drawer로 연다.
+3. **화면은 하나 — 오늘 연락.** 위 = 놓친 약속, 그 아래 = 오늘 약속, 나머지는 접힘. 다른 고객은 검색으로 찾는다.
+4. **유실 방지는 UI가 아니라 계약.** 원자 저장·입력 복원·빈 다음 행동 경고는 이미 있다. 빠진 것은 "놓친 약속이 사건으로 보이는 것"과 "원문을 잃지 않는 붙여넣기 칸" 둘이다.
+
+### 최소 세트 — 2~3일
+
+| 순서 | 무엇 | 왜 | 규모 | 실행 계획 대응 |
+|---|---|---|---|---|
+| 1 | 기록 저장소 통일 + 반응 표시 | 남긴 기록이 주간 숫자·큐에 0으로 나오는 것부터 끝낸다 | 반나절 | PR-0a |
+| 2 | 오늘 연락 행 살리기 + **2단 정렬**(놓친 약속 → 오늘 약속 → 나머지 접힘) | 죽은 필터·레일·클릭을 살리고, Q117·Q120·Q121을 화면 하나로 | 1일 | PR-0b(+2a의 0·1층만) |
+| 3 | 컨택 시트 전역화 | 시트를 compact Drawer로 감싸 큐·목록·첫 화면·폰(바텀 시트)에서 같은 폼. 통화·미팅만 반응 필수, 카톡·메모는 원문만. 선택 `원문 붙여넣기` 칸(요약 120자 → 500자, 원문은 `note` 활동으로 같이 저장 — 비원자이지만 실패 시 텍스트 보존·재시도) | 1일 | PR-1b의 1/5 |
+| 4 | 첫 화면 집중 고객 조건 교정 + 이관 가드 | 진행 중 리드가 집중 고객이 되게, 템플릿이 약속인 척 못 하게 | 반나절 | PR-0c |
+
+**만들지 않는 것(지금은).** 고객 상세 7섹션(§4.2) · 니즈·막힌 조건 칩(§4.4) · 위기 엔진 5사건(§4.4 — 놓친 약속 1사건만 2번에 포함) · 돈 필드(§4.5) · IA 재배치·기록 렌즈(§4.1·§4.7) · RPC v2(§5.3) · 붙여넣기 캡처(4단계). 전부 §4·§5에 남겨 두고, **5영업일 실사용 뒤** 아래 판단 기준에서 필요가 증명된 것만 꺼낸다.
+
+### 넛지로 유도·연결 — 운영자 2차 지시(2026-09-21 오후, "넛지 시스템") · 권장
+
+지시: *넛지 시스템을 통해 — 최근·이번 주에 연락한 것이 요약 표시되고, 메모를 AI로 정리하고, 캘린더와 연결해 입력을 잊었을 때 체크되게. 행동(액션) 위주로 요약 탭이나 정리에 표시. 최대한 유도하고 연결 짓는 것이 포인트.*
+
+**답: CRM 화면을 더 만드는 대신, 기회 탐색에 이미 있는 넛지 계약을 고객 기록에 그대로 적용한다.** 넛지 하나 = `계기 → 한 줄 이유 → 연결 행동 1개(미리 채워진 시트) → 탈출구(미루기·숨기기)`. 새 입력은 없고, 있는 연결(캘린더·메모·내 기록·Engine AI)이 계기를 만든다.
+
+**재사용하는 부품(전부 코드에 있음).**
+
+| 부품 | 어디 | CRM에서 쓰는 방식 |
+|---|---|---|
+| 넛지 규칙 계약 `ruleId · triggerKey(내용 지문, 제목 무관) · 한 개만 제안 · 우선순위 뒤 억제` | `2026-09-13-discovery-nudge-design.md`, `read_discovery_nudge_v1` | 규칙은 **JS 순수 함수**로(SQL 엔진은 기회 탐색 전용 컬럼에 묶여 있음), 계약은 동일 |
+| 억제 UI `미루기(명시 날짜) · 이 제안 숨기기 · 해제 · 다른 탭 동기화 · 충돌 시 최신 제안` | `discovery-nudge.jsx` | 컴포넌트를 고객 기록용으로 일반화(`record` → `subject`) |
+| 억제 저장 | `discovery_nudge_states`(기회 전용 RPC) | **마이그레이션 0**: 고객·딜은 `meta.nudges[triggerKey] = {snoozedUntil, dismissed, at}` — `persistRevenueRecord`가 기존 meta를 읽고 병합하므로 안전. 고객 매칭이 안 된 캘린더 일정의 "고객 아님"만 브라우저 저장(`my-work-mute.js`와 같은 계층) |
+| 첫 화면 신호 카드 `{id, subject, tone, kind, title, summary, meta, source, decisions[]}` | `daily-brief/route.js` `build*Signals`, `withoutFocusDuplicates` | CRM 넛지를 같은 피드의 항목으로 넣는다(`kind:'CRM'`). 확정 슬롯이 이미 보여준 고객은 자동 제외 |
+| 캘린더 읽기 + 고객 매칭 + 제목 분류 | `readCombinedGoogleCalendarEvents`, `scripts/enrich-eeocrm-leads.mjs`의 `aggregateActivity`·`classifyCalendarTitle` | 매칭 규칙(정규화 고객명 ≥3자가 제목+장소에 포함, `next_meeting.eventId`면 확정)을 `calendar-touchpoints.js`로 옮김 |
+| 메모 AI 전송 경로 | `journal/analyze → Engine pattern-analyze`(requestId·goal·≤10건·Gemini·usageMetadata) | goal `contact-record` 분기 하나 |
+| 컨택 시트 | `ContactOutcomeSheet` | 모든 넛지의 **연결 행동**이 이 시트를 미리 채워 연다 |
+
+**계기 목록(v1 · 고객당 1개, 위가 우선).** 표시 위치: `행동`은 오늘 연락 상단·첫 화면 신호, `정리`는 하루 리뷰(저녁)·오늘 연락 접힌 섹션.
+
+| ruleId | 계기(무엇을 봤나) | 한 줄 이유(운영자 목소리) | 연결 행동(미리 채움) | 탈출구 | 종류 |
+|---|---|---|---|---|---|
+| `meeting_unrecorded` | 캘린더 일정이 고객과 매칭되는데 `[시작−2h, 종료+24h]`에 기록 없음 | `어제 한빛학원 미팅 — 기록이 없어요` | [기록 남기기] 시트 `미팅·시각·고객` | [취소·노쇼] `meta.calendar_outcomes[eventId]` · [고객 아님] | 행동 |
+| `promise_missed` | `next_action_at < 오늘` ∧ 그 뒤 기록 없음 | `금요일에 견적서 보내기로 했어요 · 2일 지남` | [기록 남기기] / [날짜 다시] 프리셋 | 미루기(명시 날짜) | 행동 |
+| `promise_due` | `next_action_at ≤ 오늘` | `오늘 연락하기로 한 고객` | [연락하기] 시트 채널 프리필 | 미루기 | 행동 |
+| `reaction_open` | 최근 기록 반응 `우려/거절` 뒤 후속 없음 | `"가격 부담" 말한 뒤 정리 안 됨` | [후속 정하기] | 숨기기(triggerKey) | 행동 |
+| `no_next_action` | 열린 딜·트래킹 고객이 마지막 기록 뒤 다음 행동 없음 | `다음 행동이 비어 있어요` | [정하기] `내일·3일·다음 주·기약 없음` | 숨기기 | 정리 |
+| `memo_unlinked` | 메모 본문에 고객명(≥3자)이 있는데 고객 연결·기록 없음 | `이 메모, 한빛학원 이야기 같아요` | [기록으로 정리] AI 후보 → 시트 프리필 / [연결만] `journal_links` | [아님] | 정리 |
+| `dormant_recheck` | 기약 없음 30일 경과 | `한 달 지났어요 — 다시 볼까요?` | [시점 정하기] | 미루기 | 정리 |
+| `weekly_recap` | 월·목 아침 | `이번 주 연락 12건 · 고객 7명 · 기록 안 남긴 미팅 2` | [미기록부터 정리] | — | 요약 |
+
+**규칙.** 고객당 넛지 1개(최고 우선순위 계산 뒤 억제 — 숨긴 직후 낮은 것이 대신 튀지 않음) · 첫 화면 최대 3개, 나머지는 오늘 연락·하루 리뷰 · 같은 사건·같은 누락은 세션 1회(CRM 지침 §9) · 미루기는 활동 기한을 몰래 바꾸지 않음 · 버튼 열기만으로 해소 처리하지 않음 · 저장은 항상 시트(서버 확인 뒤 저장됨) · 자동 발송·자동 완료 없음 · AI는 버튼·배치, 후보는 확인 뒤 저장, 사용량 표시.
+
+**정직한 한계.** 카톡·전화는 API가 없어 계기가 안 생긴다(메모·시트가 안전망). 캘린더 제목에 고객명이 없으면 매칭 실패 — (a) 고객·할 일에서 일정 만들 때 `[조직명] 고객명 · 목적` 자동 제목(`createOrUpdateGoogleCalendarEvent` 있음), (b) 매칭 안 된 일정에 [고객 연결] 한 번 → `eventId→customer` 저장.
+
+### 5일 실험과 판단 기준
+
+최소 세트로 월~금을 굴리고 세 숫자를 본다 — 놓친 약속 건수(목표 0) · 하루 기록 건수(연락 수와 같아야 함) · 기록 1건 소요(30초 이내). 셋이 맞으면 CRM은 끝난 것이다. 안 맞는 항목이 §4의 어느 설계로 풀리는지 그때 고른다. 09-03 기획서가 진단한 최상위 약점이 기능 부족이 아니라 **사용 부재**이므로, 기능을 더 얹기 전에 이 5일이 먼저다.
 
 ## 1. 여섯 축 — 코드 지도 (v0.2)
 
@@ -116,11 +179,11 @@
 | # | 문제 | 증거 | 이 문서의 답 |
 |---|---|---|---|
 | P1 | 한 사람이 5표면에 흩어짐(Leads·고객 DB·Accounts·문의·연락). 고객 DB와 Leads는 같은 `useRevenueLedger`의 두 렌즈 | `customers.jsx` import | §4.1 IA, §4.2 상세 정본 |
-| P2 | 기록 원장 분열 → 주간 "연락" 0, 큐 boost 0 | §1.3 | 0단계 집계 원천 통일, Q144 |
+| P2 | 기록 저장소 분열 → 주간 "연락" 0, 큐 boost 0 | §1.3 | 0단계 집계 원천 통일, Q144 |
 | P3 | 필수 입력 `reaction`이 어디에도 안 나옴 | `ActivityTimeline`은 `msg·type·at`만 | 0단계 표시, §4.4 위기 판정 |
 | P4 | 큐 정렬이 Q117과 반대 | `priorityFor` | §4.6 계층 정렬 |
 | P5 | 매출·니즈·위기가 자유 텍스트이거나 없음 | §1.4~1.6 | §4.4·§4.5·§5 |
-| **P6** | 고객 연락 행 컴포넌트가 다른 원장의 아이템 모양을 기대 → 필터·레일·클릭·반응 줄 전부 죽음 | §0 결함 1 | 0단계 아이템 모양 통일(§4.6.3) |
+| **P6** | 고객 연락 행 컴포넌트가 다른 데이터 소스의 아이템 모양을 기대 → 필터·레일·클릭·반응 줄 전부 죽음 | §0 결함 1 | 0단계 아이템 모양 통일(§4.6.3) |
 | **P7** | 집중 고객 = `won`만 + `next_action`이 이관 템플릿 | §0 결함 2·3 | §4.8, Q145·Q146 |
 | **P8** | 위험 = 점수 밴드, 사건이 아님 | §0 결함 4 | §4.4 위기는 사건에서만, 점수 밴드는 위험 라벨에서 제거 |
 
@@ -191,7 +254,7 @@ apps/hub/components/hub/customer-detail/
 
 | 순서 | 섹션 | 보여주는 것 | 비었을 때 | 데이터 |
 |---|---|---|---|---|
-| 0 | 헤더 | `한빛학원 · 김OO 원장` / `상담 · 개인` / **[기록 남기기]**(유일한 primary) | — | 리드·계정·회사·연락처 |
+| 0 | 헤더 | `한빛학원 · 김OO 데이터` / `상담 · 개인` / **[기록 남기기]**(유일한 primary) | — | 리드·계정·회사·연락처 |
 | 1 | ①니즈 | `중요하게 보는 것` 칩 ≤5 · `막힌 조건` 칩 ≤3 · 각 칩 hover/롱프레스에 출처(기록 날짜) | `아직 남긴 니즈가 없어요 — 다음 기록에서 한 줄만` | `meta.needs[]` `meta.blockers[]` |
 | 2 | ②위기 | 1px danger 레일 + 사건 라벨 + 근거 1줄 + 다음 행동 제안 1개 | **섹션 없음** | §4.4 `deriveCustomerRisk` |
 | 3 | ③약속 | `다음: 3/14(금) 견적서 발송 [완료][변경]` / `최근: 3/7 통화 · 우려 · "수량 20대면 단가?"` | `다음 행동이 없어요 — 정할까요? [내일][3일][다음 주][기약 없음]` | `next_action`·`meta.next_action_at`·최근 활동 1건 |
@@ -230,7 +293,7 @@ apps/hub/components/hub/customer-detail/
   "summary": "수량 20대 기준 단가 조정 가능한지 문의",
   "body": "…원문 전체(붙여넣기 포함)…",
   "reaction": "concern",
-  "decision": "다음 주 원장 참석 미팅에서 최종 확인",
+  "decision": "다음 주 데이터 참석 미팅에서 최종 확인",
   "needs": ["교사 교육 부담", "학부모 리포트"],
   "blockers": ["예산 승인 3월"],
   "followup": { "type": "dated", "text": "견적서 발송", "at": "2026-09-26" },
@@ -325,6 +388,8 @@ apps/hub/components/hub/customer-detail/
 
 행 내용(Q135 답, 첫 화면 스펙과 동일): `이름 · 소속 / 마지막 접점(종류·N일 전·반응) · 다음 연락일 · 다음 행동`. 템플릿 문구는 화면에 내지 않는다.
 
+**구현 결과(2026-09-21 `d4b57b5`).** 날짜 조건은 **필수가 아니라 정렬 축**으로 넣었다 — 날짜 도래(+3일)·raise를 필수로 두면 약속 날짜가 드문 현재 상태에서 첫 화면이 빈 채로 시작한다. 실제 조건은 `실제 약속(템플릿 아님) · lower 아님 · Lost 아님 · 휴면 아님`이고, 정렬이 `raise → 임박·지남 → 점수 → id`다. `rejected_open` 제외는 위기 판정이 생기는 1a로 미뤘다. §8.3의 엄격한 자동 후보 조건은 실사용 뒤 다시 본다.
+
 **이관 템플릿 구분(Q146).** `scripts/enrich-eeocrm-leads.mjs`가 쓰는 `next_action`에는 `meta.next_action_source='import-template'`을 함께 쓰고, 운영자가 기록창/RPC로 저장하면 `'operator'`로 바뀐다. 스크립트는 `next_action_source==='operator'`인 행의 `next_action`을 **패치하지 않는다**.
 
 ---
@@ -363,7 +428,7 @@ create or replace function public.record_contact_outcome_v2(
 ) returns jsonb
 ```
 
-동작: ① `meta->>'request_id'`가 같은 활동이 있으면 그 결과를 반환(멱등). ② `crm_activities` insert(`reaction`·`meta` 포함). ③ 대상 원장 `next_action`·`meta.{next_action_at,dormant,dormant_since,last_reaction,next_action_source='operator'}` 갱신(v1 계약 유지) + `meta.needs/blockers` 병합(`text` 중복은 기존 유지). ④ `p_quote`가 있고 `deal`이면 `amount`·`meta.items` 갱신. ⑤ 대상 행 0건이면 전체 롤백(v1과 동일). ⑥ 반환 `{status:'saved', activityId, warning}`. v1은 남겨 두고 UI만 v2로 옮긴다(롤백 경로).
+동작: ① `meta->>'request_id'`가 같은 활동이 있으면 그 결과를 반환(멱등). ② `crm_activities` insert(`reaction`·`meta` 포함). ③ 대상 레코드 `next_action`·`meta.{next_action_at,dormant,dormant_since,last_reaction,next_action_source='operator'}` 갱신(v1 계약 유지) + `meta.needs/blockers` 병합(`text` 중복은 기존 유지). ④ `p_quote`가 있고 `deal`이면 `amount`·`meta.items` 갱신. ⑤ 대상 행 0건이면 전체 롤백(v1과 동일). ⑥ 반환 `{status:'saved', activityId, warning}`. v1은 남겨 두고 UI만 v2로 옮긴다(롤백 경로).
 
 ---
 
@@ -378,7 +443,7 @@ create or replace function public.record_contact_outcome_v2(
 | D1 | CRM 표면 `Skeleton` 0건, `불러오는 중…` 리터럴 4곳 | `followups.jsx` `ActivityPanel`, `revenue.jsx` `DealTaskPanel`·`DealLinkedProjectsPanel`·`LeadActivityPanel` | 레이아웃 고정 목록·타임라인에 `Skeleton`; preview/error엔 금지 |
 | D2 | `SyncBadge` 13곳 / `TruthBadge` 0곳 (revenue 7 · customers 3 · followups 3) | 세 페이지 | 이번 작업에서 전부 `TruthBadge` |
 | D3 | 하드코딩 그림자 `oklch(0 0 0 / 0.5)` | `revenue.jsx` `ContactMenu` 드롭다운 | `var(--shadow-pop)` |
-| D4 | 필수 입력 `반응` 표시 0 | `ActivityTimeline` | 0단계에서 타임라인·③약속·큐 행에 표시 |
+| D4 | 필수 입력 `반응`이 고객 DB 타임라인에 표시 0 (고객 연락의 활동 패널만 `CRM_REACTION_LABEL`로 표시 — v0.2 정정) | `customers.jsx` `ActivityTimeline` | 0단계에서 타임라인·③약속·큐 행에 표시 |
 | D5 | 에러 보더 인라인 shorthand 우회 | `customers.jsx` 컨택 시트 `SegmentedControl` | `data-invalid` + `.hub-seg[data-invalid]`를 `hub-tokens.css`가 소유 |
 | D6 | 고객 상세 3종 분열 | `Customer360Drawer`·`DetailPanel`·리드 `EditDrawer` | §4.2 섹션 세트 공유 |
 | **D7** | 죽은 컨트롤: 버킷 필터 3개(항상 0)·지남 레일·행 클릭·최근 반응 줄 | `followups.jsx` vs `followups-ledger.js` | §4.6.3 아이템 모양 통일 — DESIGN §11 "동작하지 않는 컨트롤을 두지 않는다"의 실체 |
@@ -389,7 +454,7 @@ create or replace function public.record_contact_outcome_v2(
 
 | 화면 | loading | live·0건 | live·N건 | partial | preview | error |
 |---|---|---|---|---|---|---|
-| 오늘 연락 | 행 `Skeleton` 5줄 | `EmptyState`: "오늘 연락하기로 한 고객이 없어요 — 지켜보는 고객 N명은 아래에" + [고객 목록] | 계층 섹션. 4층 접힘 `오래 조용한 고객 N ▸` | `TruthBadge partial` + 실패 소스명 | `TruthBadge preview` | `EmptyState`: "연락 원장을 읽지 못했어요 — 화면은 비어 보여도 실제 항목이 있을 수 있어요" + [다시 시도] |
+| 오늘 연락 | 행 `Skeleton` 5줄 | `EmptyState`: "오늘 연락하기로 한 고객이 없어요 — 지켜보는 고객 N명은 아래에" + [고객 목록] | 계층 섹션. 4층 접힘 `오래 조용한 고객 N ▸` | `TruthBadge partial` + 실패 소스명 | `TruthBadge preview` | `EmptyState`: "연락 데이터을 읽지 못했어요 — 화면은 비어 보여도 실제 항목이 있을 수 있어요" + [다시 시도] |
 | 고객 목록 | 행 `Skeleton` | 세그먼트별 카피(`위기 0`: "지금 위기 신호가 없어요") | 행 = 이름·소속 / 최근 대화 1줄 / 다음 행동·날짜 / (위기 글리프) | 배지 | 배지 | 분리 |
 | 고객 상세 | 섹션별 `Skeleton`(①③④ 각 2줄) | 섹션별 빈 카피(§4.2 표) | §4.2 | 섹션별 배지(활동만 실패해도 ①③④는 산다) | 배지 | 섹션별 오류 + 재시도 |
 | 기록창 | — | — | 작성 중 / 저장 중(낙관 카드 `저장 중`) / 저장됨(3.5초 되돌리기) / 실패(원문 유지·재시도·복사) / 초안 복구(같은 탭) / 충돌(두 내용 보존) | — | `preview`: 저장 불가 명시, 입력은 복사 가능 | 동일 |
@@ -444,7 +509,7 @@ create or replace function public.record_contact_outcome_v2(
 
 ## 8. 지금 하지 않는 것
 
-음성·전사·상시 AI 분석(§15-5) · F/I/R 실적용·백필 · ClassIn 양방향 동기화 · 외부 발송 · 새 원장·대규모 스키마 · 건강도 단일 점수·색 코딩·팀 레이어·지도 · Cases 재설계 · 큰 매출 카드·차트 벽 · **`recomputeLeadScores` 재실행**(원천이 바뀐 뒤 값이 흔들리므로 그림자 평가가 생길 때까지) · **이관 스크립트 `--apply` 재실행**(Q146 가드 전까지).
+음성·전사·상시 AI 분석(§15-5) · F/I/R 실적용·백필 · ClassIn 양방향 동기화 · 외부 발송 · 새 저장소·대규모 스키마 · 건강도 단일 점수·색 코딩·팀 레이어·지도 · Cases 재설계 · 큰 매출 카드·차트 벽 · **`recomputeLeadScores` 재실행**(원천이 바뀐 뒤 값이 흔들리므로 그림자 평가가 생길 때까지) · **이관 스크립트 `--apply` 재실행**(Q146 가드 전까지).
 
 ---
 
