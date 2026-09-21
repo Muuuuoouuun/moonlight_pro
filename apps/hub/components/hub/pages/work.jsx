@@ -3,6 +3,7 @@
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
+import { topNavigationForRoute } from "../hub-nav";
 import { Badge, Card, IconButton, Button, Progress, EmptyState, EditDrawer, Kbd, SegmentedControl, CertaintyBadge, SyncBadge } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { RhythmVisualizer } from "../rhythm-visualizer";
@@ -784,7 +785,11 @@ function buildRhythmDraft(defaultProjectId) {
   };
 }
 
-export function Decisions() {
+// Futura 표면의 배지 크롬. CertaintyBadge는 chrome을 전부 인라인으로 쓰므로 CSS 클래스가
+// 이기지 못한다(§15 2026-09-15) — primitive가 열어 둔 style passthrough가 유일한 경로다.
+const FX_CERTAINTY_CHROME = { fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', padding: '3px 10px' };
+
+export function Decisions({ onNavigate, scope }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -909,43 +914,67 @@ export function Decisions() {
   const list = mergedDecisions;
   const projectOptions = [{ value: '', label: '연결 안 함' }, ...(Array.isArray(linkableProjects) ? linkableProjects : []).map(p => ({ value: p.id, label: p.name }))];
 
+  // 탭은 hub-nav의 SSOT에서 가져온다 — 페이지가 자체 목록을 들면 사이드바·탑바와 갈라진다.
+  const navigation = topNavigationForRoute('dashboard/work/decisions', scope);
+
   return (
-    <div className="hub-page" style={{ padding: 'var(--section-gap)', maxWidth: 1000, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
-      <div className="hub-page-header" style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Decisions</h2>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, maxWidth: '60ch', lineHeight: 1.5 }}>
-            실행의 근거가 되는 결정들의 타임라인. 각 결정에는 맥락·선택·근거를 남깁니다.
-            <span className="mono" style={{ marginLeft: 8, color: decisionColor }}>
-              {decisionLabel}
-            </span>
+    <div className="hub-futura hub-page fade-up">
+      <header>
+        <div className="fx-eyebrow">{navigation.anchor?.label || 'Work'}</div>
+        <h2 className="fx-page-title">Decisions</h2>
+        <p className="fx-page-sub">일정 · 프로젝트 · 결정</p>
+        {navigation.tabs.length > 0 && (
+          <nav className="fx-tabs" aria-label={`${navigation.anchor.label} 하위 메뉴`}>
+            {navigation.tabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                className="fx-tab"
+                aria-current={tab.key === navigation.activeTab?.key ? 'page' : undefined}
+                onClick={() => onNavigate?.(tab.path)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        )}
+      </header>
+
+      <section>
+        <div className="fx-section-head">
+          <div>
+            <h3 className="fx-section-title">
+              Decisions
+              <span className="mono" style={{ marginLeft: 10, fontSize: 11, fontWeight: 400, color: decisionColor }}>{decisionLabel}</span>
+            </h3>
+            <p className="fx-section-desc">
+              실행의 근거가 되는 결정들의 타임라인. 각 결정에는 맥락·선택·근거를 남깁니다.
+            </p>
           </div>
+          <Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision <Kbd>N</Kbd></Button>
         </div>
-        <div style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" icon="plus" onClick={createDecision}>Record decision <Kbd>N</Kbd></Button>
-      </div>
-      {!decisionComplete && decisionSyncState !== 'loading' && (
-        <Card>
-          <EmptyState
-            icon="decisions"
-            title={decisionSyncState === 'error'
-              ? '결정 원장 읽기 실패'
-              : decisionSyncState === 'partial'
-                ? '결정 원장 부분 데이터'
-                : '결정 원장 미연결'}
-            description={decisionSyncState === 'error'
-              ? decisionsState?.error?.message || '결정 기록을 다시 읽은 뒤 빈 상태를 확인합니다.'
-              : decisionSyncState === 'partial'
-                ? '읽힌 결정만 표시하며, 기록이 없다고 확정하지 않습니다.'
-                : 'Supabase decisions 원장을 연결하면 결정 타임라인이 표시됩니다.'}
-            action={(decisionSyncState === 'error' || decisionSyncState === 'partial')
-              ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
-              : undefined}
-          />
-        </Card>
-      )}
-      <div style={{ position: 'relative', paddingLeft: 28 }}>
-        <div style={{ position: 'absolute', left: 11, top: 6, bottom: 6, width: 1, background: 'var(--line-soft)' }} />
+
+        {!decisionComplete && decisionSyncState !== 'loading' && (
+          <Card>
+            <EmptyState
+              icon="decisions"
+              title={decisionSyncState === 'error'
+                ? '결정 원장 읽기 실패'
+                : decisionSyncState === 'partial'
+                  ? '결정 원장 부분 데이터'
+                  : '결정 원장 미연결'}
+              description={decisionSyncState === 'error'
+                ? decisionsState?.error?.message || '결정 기록을 다시 읽은 뒤 빈 상태를 확인합니다.'
+                : decisionSyncState === 'partial'
+                  ? '읽힌 결정만 표시하며, 기록이 없다고 확정하지 않습니다.'
+                  : 'Supabase decisions 원장을 연결하면 결정 타임라인이 표시됩니다.'}
+              action={(decisionSyncState === 'error' || decisionSyncState === 'partial')
+                ? <Button variant="secondary" size="sm" onClick={retry}>다시 읽기</Button>
+                : undefined}
+            />
+          </Card>
+        )}
+
         {list.length === 0 && decisionComplete && (
           <Card>
             <EmptyState
@@ -956,42 +985,48 @@ export function Decisions() {
             />
           </Card>
         )}
-        {list.map(d => (
-          <div key={d.id} style={{ position: 'relative', marginBottom: 18 }}>
-            {/* §5.2 1px 보더 — 자매 마커(로드맵 노드)와 같은 1px + inset 링 관례. */}
-            <div style={{ position: 'absolute', left: -21, top: 14, width: 10, height: 10, borderRadius: 999, background: 'var(--bg)', border: '1px solid var(--moon-400)', boxShadow: 'inset 0 0 0 1px var(--moon-400)' }} />
-            <Card
-              interactive
-              role="button"
-              tabIndex={0}
-              onClick={() => setEditDecisionId(d.id)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditDecisionId(d.id); } }}
-            >
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
-                <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>{d.date}</span>
-                <CertaintyBadge
-                  state={d.status === 'Committed' ? 'confirmed' : 'unknown'}
-                  label={d.status === 'Committed' ? '확정' : '미정 · Draft'}
-                />
-                <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>by {d.by}</span>
-                <div style={{ flex: 1 }} />
-                <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <Iconed name="link" size={11} /> {d.links}
-                </span>
-                <IconButton
-                  icon="sparkle"
-                  size={20}
-                  iconSize={12}
-                  tooltip="Council 결정 검증"
-                  onClick={(e) => { e.stopPropagation(); setCouncilDecision(d); }}
-                />
-              </div>
-              <div style={{ fontSize: 14.5, fontWeight: 500, marginBottom: 6, letterSpacing: '-0.01em' }}>{d.title}</div>
-              <div style={{ fontSize: 12.5, color: 'var(--fg-muted)', lineHeight: 1.55 }}>{d.reason || '근거가 아직 없습니다.'}</div>
-            </Card>
+
+        {list.length > 0 && (
+          <div className="fx-timeline-rail">
+            {list.map(d => (
+                <div key={d.id} className="fx-tl-item">
+                  <div className="fx-tl-dot" aria-hidden="true" />
+                  <div
+                    className="fx-tl-card"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setEditDecisionId(d.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditDecisionId(d.id); } }}
+                  >
+                    <div className="fx-tl-head">
+                      <span className="fx-tl-date">{d.date}</span>
+                      <CertaintyBadge
+                        state={d.status === 'Committed' ? 'confirmed' : 'unknown'}
+                        label={d.status === 'Committed' ? '확정' : '미정 · Draft'}
+                        style={FX_CERTAINTY_CHROME}
+                      />
+                      <span className="fx-tl-by">by {d.by}</span>
+                      <div style={{ flex: 1 }} />
+                      <span style={{ fontSize: 10.5, color: 'var(--fg-faint)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <Iconed name="link" size={11} /> {d.links}
+                      </span>
+                      <IconButton
+                        icon="sparkle"
+                        size={20}
+                        iconSize={12}
+                        tooltip="Council 결정 검증"
+                        onClick={(e) => { e.stopPropagation(); setCouncilDecision(d); }}
+                      />
+                    </div>
+                    <div className="fx-tl-title">{d.title}</div>
+                    <div className="fx-tl-reason">{d.reason || '근거가 아직 없습니다.'}</div>
+                  </div>
+                </div>
+            ))}
           </div>
-        ))}
-      </div>
+        )}
+      </section>
+
 
       {editingDecision && (
         <EditDrawer

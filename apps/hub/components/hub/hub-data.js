@@ -12,6 +12,7 @@ export function navPathForScope(item, scope) {
 
 export const NAV_TREE = [
   { key: 'discovery', label: '기회 탐색', icon: 'search', path: 'dashboard/discovery', keywords: ['기회', '탐색', '신규 사업', '발굴', '검증', '아이디어'] },
+  { key: 'home', label: '홈', icon: 'moon', path: 'dashboard/home', keywords: ['홈', 'home', '첫 화면', '트리아지', 'triage', '시간표'] },
   { key: 'daily-brief', label: '오늘', icon: 'brief', path: 'dashboard/daily-brief', keywords: ['오늘', 'today', 'daily brief', '브리핑', '브리프'] },
   { key: 'overview', label: '현황', icon: 'signal', path: 'dashboard/overview', keywords: ['overview', '현황', '차트', '시각', '통계', 'chart', 'stats', '정리'] },
   { key: 'goals', label: '목표·성과', icon: 'signal', scopeAware: true, path: 'dashboard/overview?view=goals&scope=all', keywords: ['목표', '성과', 'OKR', 'KPI', '지표', '측정', '핵심 결과'] },

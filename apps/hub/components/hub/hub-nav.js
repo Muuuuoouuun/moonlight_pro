@@ -15,6 +15,17 @@
 
 export const DEFAULT_SCOPE = 'all';
 
+// Futura 텍스처 라우트는 페이지 헤더 안에 pill 탭을 직접 그린다(§15 2026-09-18).
+// 탑바가 같은 탭을 또 그리면 한 화면에 탭 줄이 두 개가 된다. 목록은 여기 한 곳이
+// 정본이고, 탭 데이터 자체(topNavigationForRoute)는 그대로 — 위치만 페이지로 옮긴다.
+export const PAGE_OWNS_TABS = new Set([
+  'dashboard/work/decisions',
+]);
+
+export function pageOwnsTabs(activePath) {
+  return PAGE_OWNS_TABS.has(pathnameOf(activePath));
+}
+
 export const SIDEBAR_SCOPES = [
   { key: 'all', label: '전체' },
   { key: 'classin', label: 'ClassIn' },
@@ -148,6 +159,20 @@ const OVERVIEW_CHILDREN = Object.fromEntries(SIDEBAR_SCOPES.map(({ key }) => [ke
 ]]));
 
 export const SIDEBAR_PRIMARY = [
+  {
+    // Home — Futura 텍스처의 첫 화면(§15 2026-09-18). 같은 daily-brief 원장을 다른
+    // 렌즈로 본다. 기본 착지(dashboard → daily-brief)는 아직 바꾸지 않았다.
+    key: 'home',
+    label: '홈',
+    icon: 'moon',
+    scopeAware: false,
+    owns: ['dashboard/home'],
+    paths: {
+      all: 'dashboard/home',
+      classin: 'dashboard/home',
+      personal: 'dashboard/home',
+    },
+  },
   {
     key: 'today',
     label: '오늘',

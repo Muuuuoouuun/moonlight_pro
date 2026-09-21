@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
+import "./hub-futura.css";
 import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
 import { goalHref } from "@/lib/goal-client";
 
@@ -66,6 +67,7 @@ function PageChunkFallback() {
 // from SSRing these pages, and every page carries its own loading/empty state.
 const lazyPage = (loader) => dynamic(loader, { loading: PageChunkFallback, ssr: false });
 
+const Home = lazyPage(() => import("./pages/home").then(m => m.Home));
 const DailyBrief = lazyPage(() => import("./pages/daily-brief").then(m => m.DailyBrief));
 const Overview = lazyPage(() => import("./pages/overview").then(m => m.Overview));
 const Calendar = lazyPage(() => import("./pages/work").then(m => m.Calendar));
@@ -197,6 +199,7 @@ function LegacyPlaceholder({ path, onNavigate }) {
 }
 
 const PAGE_MAP = {
+  'dashboard/home': (n) => <Home onNavigate={n} />,
   'dashboard/daily-brief': (n, inquiries) => <DailyBrief onNavigate={n} inquiryNotifications={inquiries} />,
   'dashboard/overview': (n) => <Overview onNavigate={n} />,
   'dashboard/work/my': (n) => <MyWork onNavigate={n} />,
@@ -205,7 +208,7 @@ const PAGE_MAP = {
   'dashboard/work/daily-review': () => <DailyReview />,
   'dashboard/work/calendar': (n) => <Calendar onNavigate={n} />,
   'dashboard/work/projects': () => <Projects />,
-  'dashboard/work/decisions': () => <Decisions />,
+  'dashboard/work/decisions': (n, _inquiries, scope) => <Decisions onNavigate={n} scope={scope} />,
   'dashboard/work/roadmap': (n) => <Roadmap onNavigate={n} />,
   'dashboard/work/rhythm': () => <Rhythm />,
   'dashboard/brands': () => <Brands />,
@@ -548,7 +551,8 @@ export function HubApp({ memoDraftContext = "preview" }) {
   }, [path, routeScope, navScope]);
 
   const render = PAGE_MAP[path];
-  const page = render ? render(navigate, inquiryNotifications) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
+  // 3번째 인자(scope)는 뒤늦게 붙었다 — 기존 항목은 추가 인자를 무시하므로 하위 호환된다.
+  const page = render ? render(navigate, inquiryNotifications, routeScope || navScope) : <LegacyPlaceholder path={path} onNavigate={navigate} />;
   const sidebarCollapsed = collapsed && !navOpen;
 
   return (

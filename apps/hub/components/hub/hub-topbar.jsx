@@ -3,7 +3,7 @@
 import React from "react";
 import { Iconed } from "./hub-icons";
 import { IconButton, Button } from "./hub-primitives";
-import { topNavigationForRoute } from "./hub-nav";
+import { pageOwnsTabs, topNavigationForRoute } from "./hub-nav";
 import { InquiryBell } from './inquiry-notifications';
 
 const LABELS = {
@@ -119,7 +119,7 @@ export function TopBar({ path, view, scope, onNavigate, theme, onTheme, onSideba
         {!path.startsWith('dashboard/discovery') && <Button className="hub-topbar__primary-action" variant="primary" size="sm" icon="plus" onClick={onNew}>New</Button>}
       </div>
 
-      {navigation.tabs.length > 0 && (
+      {navigation.tabs.length > 0 && !pageOwnsTabs(path) && (
         <nav className="hub-topbar__tabs" aria-label={`${navigation.anchor.label} 하위 메뉴`}>
           {visibleTabs.map((tab) => {
             const selected = navigation.activeTab?.key === tab.key;
