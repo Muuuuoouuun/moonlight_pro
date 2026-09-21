@@ -1,0 +1,107 @@
+{
+  "note": "최초 수집 산출물 17개를 sources/에 바이트 그대로 보존. original_location_at_review는 검토 당시 위치 기록이며 재생성·검증에서 접근하지 않는다. preserved_path와 sha256으로 내부 스냅샷만 검증한다. 영상·자막·캡션 전문 전체의 보관을 의미하지 않는다.",
+  "files": [
+    {
+      "preserved_path": "sources/youtube/README.md",
+      "bytes": 7337,
+      "sha256": "a6ef6c62b43e8fe9b50c595b48ad4a368348a023c8200b0a0184307d4a3de6de",
+      "original_location_at_review": "/Users/bigmac_moon/dev/moonlight_pro/docs/research/2026-09-20-youtube-reference/README.md"
+    },
+    {
+      "preserved_path": "sources/youtube/inventory.csv",
+      "bytes": 129397,
+      "sha256": "15b63950188203b8d22c89b6b5d9a206d2730d1ca3e1341c825586cc7781a994",
+      "original_location_at_review": "/Users/bigmac_moon/dev/moonlight_pro/docs/research/2026-09-20-youtube-reference/inventory.csv"
+    },
+    {
+      "preserved_path": "sources/youtube/coverage.json",
+      "bytes": 205348,
+      "sha256": "fda659405bb523f653011bb2ad45c3e0324222114cf59972d207051f7948952a",
+      "original_location_at_review": "/Users/bigmac_moon/dev/moonlight_pro/docs/research/2026-09-20-youtube-reference/coverage.json"
+    },
+    {
+      "preserved_path": "sources/youtube/01-growth.md",
+      "bytes": 233313,
+      "sha256": "99db2ee946e9af93090f6048ff3818330c6de77b79817ab95179a2ac4575a659",
+      "original_location_at_review": "/Users/bigmac_moon/dev/moonlight_pro/docs/research/2026-09-20-youtube-reference/01-growth.md"
+    },
+    {
+      "preserved_path": "sources/youtube/02-learning.md",
+      "bytes": 71672,
+      "sha256": "654206ce5dcdc7dcb5cf1f236f83992e186aae58f21b4f38fbf8d2f48f15f9a6",
+      "original_location_at_review": "/Users/bigmac_moon/dev/moonlight_pro/docs/research/2026-09-20-youtube-reference/02-learning.md"
+    },
+    {
+      "preserved_path": "sources/youtube/03-life.md",
+      "bytes": 82138,
+      "sha256": "44bcfbb3c6cfcf00fdb6bfb55a9de63fb737defe6bf408e7156fc6469118b11a",
+      "original_location_at_review": "/Users/bigmac_moon/dev/moonlight_pro/docs/research/2026-09-20-youtube-reference/03-life.md"
+    },
+    {
+      "preserved_path": "sources/youtube/topics.md",
+      "bytes": 89432,
+      "sha256": "bef3635df6bc3b5e29dcf8455a6f90c16be6b7c5f1c70862581630fba08ccc49",
+      "original_location_at_review": "/Users/bigmac_moon/dev/moonlight_pro/docs/research/2026-09-20-youtube-reference/topics.md"
+    },
+    {
+      "preserved_path": "sources/instagram/README.md",
+      "bytes": 8637,
+      "sha256": "2b81089ae7024bd364beaafb1899052ffbf759f2b27b66d862fc6922dc7d4fa2",
+      "original_location_at_review": "/Users/bigmac_moon/.codex/visualizations/2026/09/19/01a0ba78-7f96-7990-809b-f3f1a127337c/instagram-reference-audit/README.md"
+    },
+    {
+      "preserved_path": "sources/instagram/saved-records.json",
+      "bytes": 63614,
+      "sha256": "11209d54ee5aa64d137754c2dd2874f2e11eea772a6732225ff71213b2a56adc",
+      "original_location_at_review": "/Users/bigmac_moon/.codex/visualizations/2026/09/19/01a0ba78-7f96-7990-809b-f3f1a127337c/instagram-reference-audit/saved-records.json"
+    },
+    {
+      "preserved_path": "sources/instagram/dm-records.json",
+      "bytes": 26988,
+      "sha256": "ab45ed4be1bec641d702aefdadbe48b6e600c4bdf677222e8ca5c2b02a36d244",
+      "original_location_at_review": "/Users/bigmac_moon/.codex/visualizations/2026/09/19/01a0ba78-7f96-7990-809b-f3f1a127337c/instagram-reference-audit/dm-records.json"
+    },
+    {
+      "preserved_path": "sources/instagram/saved-index.md",
+      "bytes": 15306,
+      "sha256": "37280594deaf048b6d84718e58ba51819bbae76ec1b3fc9e3751bfe4d5cc1df6",
+      "original_location_at_review": "/Users/bigmac_moon/.codex/visualizations/2026/09/19/01a0ba78-7f96-7990-809b-f3f1a127337c/instagram-reference-audit/saved-index.md"
+    },
+    {
+      "preserved_path": "sources/instagram/dm-audit.md",
+      "bytes": 8629,
+      "sha256": "ef6d9f73fdd6d65390c1cee4caf983134aca350c4bed2d1ffb2e1cf6dffd175f",
+      "original_location_at_review": "/Users/bigmac_moon/.codex/visualizations/2026/09/19/01a0ba78-7f96-7990-809b-f3f1a127337c/instagram-reference-audit/dm-audit.md"
+    },
+    {
+      "preserved_path": "sources/instagram/reusable-actions.md",
+      "bytes": 6710,
+      "sha256": "ec486318d2a9d734b8347c7efe1071acbf09ab1378faa0250df6a8fe881c1d12",
+      "original_location_at_review": "/Users/bigmac_moon/.codex/visualizations/2026/09/19/01a0ba78-7f96-7990-809b-f3f1a127337c/instagram-reference-audit/reusable-actions.md"
+    },
+    {
+      "preserved_path": "sources/instagram/collections.json",
+      "bytes": 2445,
+      "sha256": "378394be394cea755a0b292b862ecb7e19473fec1aecac1ead623370c72e4b5e",
+      "original_location_at_review": "/Users/bigmac_moon/.codex/visualizations/2026/09/19/01a0ba78-7f96-7990-809b-f3f1a127337c/instagram-reference-audit/collections.json"
+    },
+    {
+      "preserved_path": "sources/instagram/B001-post-image.jpg",
+      "bytes": 179137,
+      "sha256": "b18ba4025440978b3dbb7b131a5d74ec0a42e6df7dcf7d940964ad09f1f5aa5e",
+      "original_location_at_review": "/Users/bigmac_moon/.codex/visualizations/2026/09/19/01a0ba78-7f96-7990-809b-f3f1a127337c/instagram-reference-audit/B001-post-image.jpg"
+    },
+    {
+      "preserved_path": "sources/instagram/threads-dm-addendum.md",
+      "bytes": 7481,
+      "sha256": "999f45d49deed41fb035a579ccc5ebba2e51ddba4422146f9e7d1e7a7e8e7ad5",
+      "original_location_at_review": "/Users/bigmac_moon/dev/moonlight_pro/docs/evaluations/2026-09-20-instagram-reference-audit/threads-dm-addendum.md"
+    },
+    {
+      "preserved_path": "sources/instagram/threads-dm-records.json",
+      "bytes": 5383,
+      "sha256": "efaaabca9a25e428b138edd952eff3432ae48a7aea1e8048bd238dc17e5db2a8",
+      "original_location_at_review": "/Users/bigmac_moon/dev/moonlight_pro/docs/evaluations/2026-09-20-instagram-reference-audit/threads-dm-records.json"
+    }
+  ]
+}

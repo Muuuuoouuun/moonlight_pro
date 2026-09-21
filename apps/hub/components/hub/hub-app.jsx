@@ -7,13 +7,14 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import "./hub-tokens.css";
 import { dailyReviewDraftStore } from "@/lib/daily-review-browser-store";
 
-import { Button } from "./hub-primitives";
+import { Button, Skeleton } from "./hub-primitives";
 import { Sidebar } from "./hub-sidebar";
 import { TopBar } from "./hub-topbar";
 import { ToastProvider } from "./hub-toast";
 import { useInquiryNotifications } from './inquiry-notifications';
 import { CommandPalette } from "./hub-command-palette";
 import { QuickMemo } from "./quick-memo";
+import { GlobalQuickCapture } from "./quick-capture";
 import { ShortcutOverlay } from "./crm-shortcut-overlay";
 import { FloatingMentorWidget } from "./floating-mentor-widget";
 import { CelebrationCanvas } from "./celebration-fx";
@@ -42,8 +43,9 @@ import {
 // only covers the (brief) JS fetch. Keep it calm: no spinner, dim mono text.
 function PageChunkFallback() {
   return (
-    <div style={{ padding: 'var(--section-gap)', display: 'flex', justifyContent: 'center' }}>
-      <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)' }}>불러오는 중…</span>
+    // 라우트 청크 로드 중 — 텍스트 한 줄 대신 레이아웃을 예고하는 스켈레톤(§11). 모든 페이지가 공유한다.
+    <div style={{ padding: 'var(--section-gap)' }}>
+      <Skeleton lines={4} height={14} width={['38%', '100%', '92%', '64%']} label="화면 불러오는 중" />
     </div>
   );
 }
@@ -287,6 +289,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
   const [helpOpen, setHelpOpen] = React.useState(false);
   const [globalAdvisorOpen, setGlobalAdvisorOpen] = React.useState(false);
   const [memoOpenRequest, setMemoOpenRequest] = React.useState(0);
+  const [captureOpenRequest, setCaptureOpenRequest] = React.useState(0);
   const rootRef = React.useRef(null);
   const menuButtonRef = React.useRef(null);
   const mobileCloseButtonRef = React.useRef(null);
@@ -463,6 +466,23 @@ export function HubApp({ memoDraftContext = "preview" }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [paletteOpen]);
 
+  // `C` → 어디서든 빠른 입력. 2026-09-19 이전에는 캡처 폼이 첫 화면에만 있어서
+  // 다른 탭에서 떠오른 할 일을 적으려면 첫 화면으로 돌아가야 했다.
+  // `?` 핸들러와 같은 가드: 입력 요소 안이거나 팔레트가 열려 있으면 무시한다.
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'c' && e.key !== 'C') return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (paletteOpen || helpOpen) return;
+      e.preventDefault();
+      setCaptureOpenRequest((value) => value + 1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [paletteOpen, helpOpen]);
+
   // `⌘J` → 전역 AI 어드바이저 코파일럿 호출
   React.useEffect(() => {
     const onKey = (e) => {
@@ -579,8 +599,9 @@ export function HubApp({ memoDraftContext = "preview" }) {
             </main>
           </div>
         </div>
+      <GlobalQuickCapture openRequest={captureOpenRequest} onNavigate={navigate} />
       <QuickMemo key={memoDraftContext} draftContext={memoDraftContext} route={`${pathname}?${searchParams}`} blocked={paletteOpen || helpOpen || mobileNavState.open} openRequest={memoOpenRequest} onNavigate={navigate} />
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={navigate} onQuickMemo={() => setMemoOpenRequest(value => value + 1)} onQuickCapture={() => setCaptureOpenRequest(value => value + 1)} />
       <ShortcutOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
       <FloatingMentorWidget
         key={`global-advisor:${path}`}

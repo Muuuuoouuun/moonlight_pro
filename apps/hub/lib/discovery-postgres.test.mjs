@@ -1,3 +1,6 @@
+// macOS: LC_ALL 이 없으면 postmaster 가 기동 중 multithreaded 로 판정되어
+// `FATAL: postmaster became multithreaded during startup` 으로 죽는다 (2026-09-19).
+// DB 로케일은 initdb --no-locale 로 이미 C 이므로 동작은 바뀌지 않는다.
 import assert from 'node:assert/strict';
 import { execFileSync, execFile, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -19,8 +22,8 @@ test('discovery atomic PostgreSQL saves, target checks, audit and permissions',{
  const sql=source=>execFileSync('psql',args,{input:source,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim();
  const json=source=>JSON.parse(sql(source));let started=false;
  try{
-  execFileSync('initdb',['-D',data,'-U','discovery_test','-A','trust','--no-locale','--encoding=UTF8'],{stdio:'pipe'});
-  execFileSync('pg_ctl',['-D',data,'-l',join(directory,'postgres.log'),'-o',`-F -k ${directory} -p 55494 -c listen_addresses=''`,'-w','start'],{stdio:'pipe'});started=true;
+  execFileSync('initdb',['-D',data,'-U','discovery_test','-A','trust','--no-locale','--encoding=UTF8'],{ stdio: 'pipe', env: { ...process.env, LC_ALL: process.env.LC_ALL || 'C' } });
+  execFileSync('pg_ctl',['-D',data,'-l',join(directory,'postgres.log'),'-o',`-F -k ${directory} -p 55494 -c listen_addresses=''`,'-w','start'],{ stdio: 'pipe', env: { ...process.env, LC_ALL: process.env.LC_ALL || 'C' } });started=true;
   sql(`create role anon;create role authenticated;create role service_role bypassrls;create role stranger;alter default privileges in schema public grant all on tables to service_role;alter default privileges in schema public grant execute on functions to service_role;
   create table public.workspaces(id uuid primary key);insert into public.workspaces values('${W}'),('${O}');
   create table public.tasks(id uuid primary key,workspace_id uuid,title text);
@@ -92,5 +95,5 @@ test('discovery atomic PostgreSQL saves, target checks, audit and permissions',{
    assert.equal(json(`set role service_role;${save()}`).status,'duplicate');
    sql(source);assert.equal(json(save()).record.revision,3);
   });
- }finally{if(started)execFileSync('pg_ctl',['-D',data,'-m','fast','-w','stop'],{stdio:'pipe'});rmSync(directory,{recursive:true,force:true});}
+ }finally{if(started)execFileSync('pg_ctl',['-D',data,'-m','fast','-w','stop'],{ stdio: 'pipe', env: { ...process.env, LC_ALL: process.env.LC_ALL || 'C' } });rmSync(directory,{recursive:true,force:true});}
 });

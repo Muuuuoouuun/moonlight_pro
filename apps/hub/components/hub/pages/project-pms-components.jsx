@@ -2,7 +2,69 @@
 
 import React from "react";
 import { Iconed } from "../hub-icons";
+import { LifecycleBadge } from "../hub-primitives";
+import { Button, Drawer, TextField } from "../hub-primitives";
 import { buildProjectPortfolioMetrics } from "./project-pms-metrics";
+
+// ── PMS 프로젝트 상태 → DESIGN.md §8.2 lifecycle 열거값 ──────────────────────
+// §8.2: props는 색 이름이 아니라 의미 열거값이고, 표현은 primitive가 소유한다.
+// §5.3 lifecycle 행: 아이콘 + 직접 텍스트, blocked만 danger를 상속한다.
+// 원장 정규화가 내보내는 라벨은 Planning · Blocked · Done · Backlog ·
+// 'In progress' 다섯 개이고, Review는 operator-home-summary가 아직 세는 유산 상태다.
+//
+//   In progress → active   착수해서 굴러가는 작업.
+//   Review      → active   검토도 진행 중인 작업이다. 'waiting'은 §5.3이
+//                          "pause glyph + named dependency"를 요구하는데
+//                          프로젝트 레코드에 의존 대상 필드가 없다 —
+//                          없는 의존을 지어내느니 active로 둔다.
+//   Planning    → queued   착수 전.
+//   Backlog     → queued   원장 'archived'(보류)의 표시 라벨. 'cancelled'는
+//                          "취소"를 뜻해 오독이고, 이 행에는 되살리는
+//                          "다시 열기" 체크박스가 붙어 있다. queued가
+//                          덜 정확할 뿐 틀리지는 않고, 보이는 라벨 '백로그'가
+//                          실제 단계를 말한다.
+//   Blocked     → blocked  이 표면의 유일한 danger.
+//   Done        → done
+export const PROJECT_LIFECYCLE_STATE = {
+  'In progress': 'active',
+  Review: 'active',
+  Planning: 'queued',
+  Backlog: 'queued',
+  Blocked: 'blocked',
+  Done: 'done',
+};
+
+// §8.2 "visible Korean labels and an equivalent accessible name" — LifecycleBadge가
+// 같은 문구로 aria-label('진행 상태: …')을 짜므로 라벨 정본은 여기 하나다.
+export const PROJECT_STATUS_LABEL_KO = {
+  'In progress': '작업 중',
+  Review: '검토',
+  Planning: '계획',
+  Blocked: '막힘',
+  Done: '완료',
+  Backlog: '백로그',
+};
+
+export function projectLifecycleState(status) {
+  return PROJECT_LIFECYCLE_STATE[status] || 'queued';
+}
+
+export function projectStatusLabel(status) {
+  return PROJECT_STATUS_LABEL_KO[status] || status || '상태 미정';
+}
+
+// PMS의 모든 프로젝트 상태 칩은 이 어댑터 하나를 거친다(§8.1 primitives-first):
+// List 행 · 완료/보관 목록 · Timeline 기한미정 · 상세 패널이 같은 라벨,
+// 같은 접근성 이름, 같은 기하를 쓴다.
+export function ProjectStatusBadge({ status, style }) {
+  return (
+    <LifecycleBadge
+      state={projectLifecycleState(status)}
+      label={projectStatusLabel(status)}
+      style={style}
+    />
+  );
+}
 
 // 컨테이너 모노그램 마크 — 모양·무게가 제각각인 기하 글리프(◐ ◇ □ △ …)를 렌더에서
 // 대체한다(2026-08-19 운영자 지시 "아이콘 변경"). 이름 첫 글자를 고정 타일에 새겨
@@ -65,10 +127,8 @@ function ContainerChip({ container, count, selected, folderLabel, onSelect }) {
   );
 }
 
-// PMS 컨테이너 선택 바 — 헤더 드롭다운을 상시 한 줄 태그 필터로 대체한다
-// (2026-09-11 운영자 지시). 선택은 단일(brand state 계약 무변경)이고, 분류 텍스트 헤더
-// 없이 칩 순서 + 스코프 경계 1px hairline만으로 묶음을 읽게 한다. 드롭다운 안에만 있던
-// 관리 액션(생성·편집·숨긴 컨테이너)은 `tail`로 받아 도달 불가가 되지 않게 한다.
+// PMS 컨테이너 선택 바 — 기본 화면에는 현재 소속 하나만 남긴다.
+// 검색/선택은 compact Drawer를 재사용하고 관리 액션은 tail에서 접근한다.
 export function ContainerFilterBar({
   allContainer,
   allCount = 0,
@@ -76,57 +136,44 @@ export function ContainerFilterBar({
   countOf = () => 0,
   selectedKey = "all",
   onSelect,
+  onOpenChange,
   hiddenCount = 0,
   showEmpty = false,
   onToggleEmpty,
   tail = null,
 }) {
-  const trackRef = React.useRef(null);
-
-  // 선택 칩이 가로 스크롤 밖에 있으면 스스로 보이는 자리로 — 딥링크·사이드바 선택으로
-  // 브랜드가 바뀌었을 때 활성 칩이 화면 밖에 남으면 "선택이 없는 것"처럼 읽힌다.
+  const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState('');
   React.useEffect(() => {
-    const node = trackRef.current?.querySelector(`[data-container-chip="${CSS.escape(String(selectedKey))}"]`);
-    node?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [selectedKey]);
-
+    onOpenChange?.(open);
+    return () => onOpenChange?.(false);
+  }, [open, onOpenChange]);
+  const selected = groups.flatMap(group => group.items).find(item => item.key === selectedKey) || allContainer;
+  const needle = query.trim().toLocaleLowerCase();
+  const visibleGroups = groups.map(group => ({ ...group, items: group.items.filter(item =>
+    `${group.label} ${item.folderLabel || ''} ${item.name}`.toLocaleLowerCase().includes(needle)) })).filter(group => group.items.length);
+  const choose = key => { onSelect(key); setOpen(false); setQuery(''); };
   return (
     <nav className="hub-pms-filterbar" aria-label="프로젝트 컨테이너 필터">
-      <div className="hub-pms-filterbar__track" ref={trackRef}>
-        <ContainerChip
-          container={allContainer}
-          count={allCount}
-          selected={selectedKey === "all"}
-          onSelect={onSelect}
-        />
-        {groups.map((group) => (
-          <React.Fragment key={group.key}>
-            <span className="hub-pms-filterbar__sep" role="separator" aria-orientation="vertical" aria-label={group.label} />
-            {group.items.map((container) => (
-              <ContainerChip
-                key={container.key}
-                container={container}
-                count={countOf(container)}
-                folderLabel={container.folderLabel}
-                selected={selectedKey === container.key}
-                onSelect={onSelect}
-              />
-            ))}
-          </React.Fragment>
-        ))}
-        {(hiddenCount > 0 || showEmpty) && (
-          <button
-            type="button"
-            className="hub-pms-chip hub-pms-chip--ghost"
-            aria-pressed={showEmpty}
-            onClick={onToggleEmpty}
-          >
-            <span className="hub-pms-chip__name">{showEmpty ? "빈 컨테이너 숨기기" : "숨긴 컨테이너"}</span>
-            {!showEmpty && <span className="hub-pms-chip__count mono">{hiddenCount}</span>}
-          </button>
-        )}
-      </div>
+      <Button variant="outline" size="sm" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
+        소속 · {selected?.name || '전체'} <Iconed name="chevronD" size={12} />
+      </Button>
       {tail && <div className="hub-pms-filterbar__tail">{tail}</div>}
+      {open && <Drawer title="소속 선택" presentation="compact" width="min(400px, 94vw)" onClose={() => { setOpen(false); setQuery(''); }}>
+        <TextField label="소속 찾기" placeholder="브랜드·컨테이너 이름" value={query} onChange={event => setQuery(event.target.value)} />
+        <div className="hub-container-options">
+          <ContainerChip container={allContainer} count={allCount} selected={selectedKey === "all"} onSelect={choose} />
+          {visibleGroups.map(group => <div key={group.key} className="hub-container-options__group">
+            <span className="hub-container-options__scope">{group.label}</span>
+            {group.items.map(container => <ContainerChip key={container.key} container={container} count={countOf(container)}
+              folderLabel={container.folderLabel} selected={selectedKey === container.key} onSelect={choose} />)}
+          </div>)}
+          {needle && !visibleGroups.length && <p role="status">일치하는 소속이 없습니다.</p>}
+          {(hiddenCount > 0 || showEmpty) && <Button variant="ghost" size="sm" aria-pressed={showEmpty} onClick={onToggleEmpty}>
+            {showEmpty ? '빈 컨테이너 숨기기' : `숨긴 컨테이너 ${hiddenCount}개 보기`}
+          </Button>}
+        </div>
+      </Drawer>}
     </nav>
   );
 }

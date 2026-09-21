@@ -185,7 +185,7 @@ button {
 .studio-toggle:focus-visible,
 .studio-chip-toggle:focus-visible,
 .editor-input:focus-visible {
-  outline: 2px solid rgba(82, 116, 168, 0.30);
+  outline: 1px solid rgba(82, 116, 168, 0.30);
   outline-offset: 2px;
 }
 
@@ -356,7 +356,7 @@ button {
 
 .field-input:focus,
 .field-textarea:focus {
-  outline: 2px solid rgba(82, 116, 168, 0.20);
+  outline: 1px solid rgba(82, 116, 168, 0.20);
   outline-offset: 2px;
 }
 
@@ -636,7 +636,7 @@ button {
   padding: 0 14px;
   border-bottom: 1px solid var(--line-soft);
   background: transparent;
-  transition: background 150ms ease, box-shadow 150ms ease;
+  transition: background var(--dur-hover) ease, box-shadow var(--dur-hover) ease;
 }
 
 /* §5.3 채널 분리: hover는 중립(액센트는 current/selected 전용), 좌측 1px 레일은
@@ -747,7 +747,7 @@ button {
 .hub-app .hub-project-row[data-completing="true"] .hub-project-identity__copy strong {
   color: var(--fg-faint);
   text-decoration: line-through;
-  transition: color 180ms ease;
+  transition: color var(--dur-panel) ease;
 }
 
 /* Terminal rows (완료·보관 섹션에서 재사용될 때): lower contrast layer. */
@@ -850,7 +850,7 @@ button {
   height: 100%;
   border-radius: inherit;
   background: var(--pms-moonstone);
-  transition: width 180ms ease;
+  transition: width var(--dur-enter) var(--ease-hub);
 }
 
 .hub-app .hub-pms-progress--completed .hub-pms-progress__track {
@@ -1026,7 +1026,7 @@ button {
   font-size: 12.5px;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition: background var(--dur-hover) ease, border-color var(--dur-hover) ease;
 }
 
 .hub-app .hub-pms-chip:hover {
@@ -1223,7 +1223,7 @@ button {
   border-radius: 5px;
   color: var(--fg-faint);
   font-size: 11px;
-  transition: color 150ms ease, background 150ms ease;
+  transition: color var(--dur-hover) ease, background var(--dur-hover) ease;
 }
 
 .hub-app .hub-project-portfolio-index__filters button:hover {
@@ -1255,7 +1255,7 @@ button {
   border-bottom: 1px solid var(--line-soft);
   color: var(--fg-muted);
   text-align: left;
-  transition: background 150ms ease, box-shadow 150ms ease;
+  transition: background var(--dur-hover) ease, box-shadow var(--dur-hover) ease;
 }
 
 .hub-app .hub-project-portfolio-index-row:hover {
@@ -1625,7 +1625,7 @@ button {
 }
 
 .hub-app .project-create-disclosure__trigger > svg {
-  transition: transform 160ms ease;
+  transition: transform var(--dur-hover) ease;
 }
 
 .hub-app .project-create-disclosure__trigger[aria-expanded="true"] > svg {
@@ -2090,7 +2090,7 @@ button {
 .hub-app .hub-project-portfolio-accordion__trigger > svg:first-child {
   color: var(--fg-faint);
   transform: rotate(-90deg);
-  transition: transform 150ms ease;
+  transition: transform var(--dur-panel) ease;
 }
 
 .hub-app .hub-project-portfolio-accordion[data-open="true"] .hub-project-portfolio-accordion__trigger > svg:first-child {

@@ -1,0 +1,414 @@
+[
+  {
+    "source_id": "I5oTw7AJ1Rk",
+    "title": "당신을 엘리트로 만들 단 한 가지의 '성공' 습관",
+    "url": "https://www.youtube.com/watch?v=I5oTw7AJ1Rk",
+    "locator": [
+      {
+        "start_seconds": 51,
+        "end_seconds": 155,
+        "label": "0:51–2:35: 문제 선택 → 관련 읽기 → 모순 정리 → 논증 구성"
+      },
+      {
+        "start_seconds": 265,
+        "end_seconds": 319,
+        "label": "4:25–5:19: 남이 원하는 답에 맞추는 것과 자신의 목소리"
+      }
+    ],
+    "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+    "observed_claim": "피터슨은 글쓰기를 형식화된 사고로 설명하며, 관심을 끄는 문제를 정하고 관련 자료를 읽은 뒤 자료 사이의 모순을 정리해 논증을 구성하라고 권한다. 후반에는 평가자가 원하는 답에 맞추느라 자기 생각을 왜곡하지 말라고 말한다.",
+    "insight": "저장 영상들을 같은 주제별로 나열하는 데서 한 걸음 더 나아가, 지금 실제로 답이 필요한 질문 하나에 서로 다른 자료를 배치하면 자신의 글이 시작된다. 초안은 자료의 핵심 세 가지보다 ‘나는 무엇이 궁금하며 무엇을 잠정적으로 믿는가’를 먼저 적는다. 적용 예: 영상 수집이 많아졌는데 왜 다음 행동은 정해지지 않는가.",
+    "conditions": "이는 화자의 글쓰기 철학이다. 모든 글이 문제 해결형일 필요는 없다. 시·기행·관찰 에세이까지 논증 양식으로 강제하지 않는다. 수십 번 고쳐 쓰거나 하루 몇 시간을 써야 성공한다는 처방으로 일반화하지 않는다.",
+    "writing_prompt": "내가 이 레퍼런스를 저장하게 만든 질문은 무엇이었고, 지금까지 읽은 자료 중 서로 말이 맞지 않는 두 조언은 무엇인가?",
+    "verification": {
+      "checked_at": "2026-09-20",
+      "original_collection_status": "자막 기반 요약",
+      "method": "이전 작업에서 확보한 자막 JSON을 직접 읽고 시점·발언 맥락 대조",
+      "caveats": "영어 자동 자막의 0:51–2:35와 4:25–5:19를 직접 대조. 영상 전체를 새로 시청하지 않았고, 개인의 집필 경험·성공 연관 주장은 검증하지 않음.",
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-one/transcripts/I5oTw7AJ1Rk.json"
+    },
+    "insight_heading": "1. 글쓰기를 시작할 단위는 주제가 아니라 풀고 싶은 문제다",
+    "category": "글쓰기"
+  },
+  {
+    "source_id": "Ml6nXM6dt7I",
+    "title": "글 잘 쓰는 이들의 공통점은? 대가의 쉽게 읽히고 쉽게 쓰는 글쓰기 방법 총정리!",
+    "url": "https://www.youtube.com/watch?v=Ml6nXM6dt7I",
+    "locator": [
+      {
+        "start_seconds": 501,
+        "label": "8:21: 잠정적 독자 설정 — 이전 영상 분석 모델이 제시한 시점"
+      },
+      {
+        "start_seconds": 874,
+        "label": "14:34: 소리 내어 읽는 퇴고 — 이전 영상 분석 모델이 제시한 시점"
+      }
+    ],
+    "evidence_level": "B — 이전 영상 분석 응답 확인; 자막·직접 시청 대조 없음",
+    "observed_claim": "이전 영상 분석 응답은 유홍준의 조언을 ‘잠정적 독자를 상정하고, 글을 소리 내어 읽으며 흐름을 점검한다’고 정리했다. 이번에는 해당 발언을 자막이나 직접 시청으로 재확인하지 못했다.",
+    "insight": "생각을 자유롭게 쏟는 초안과 독자의 이해를 돕는 퇴고를 다른 작업으로 두면, 자신의 목소리와 독자 배려를 함께 다룰 수 있다. 자신의 초안에서 독자가 모를 배경·대명사·생략된 인과를 표시해 설명을 보충하는 편집 실험으로 쓸 수 있다.",
+    "conditions": "화자의 문장 규칙을 모든 장르의 금과옥조로 삼지 않는다. 특히 기존 요약의 접속사·조사 관련 세부 처방은 원영상 재확인 전 인용하지 않는다. 직접 인용하거나 유홍준의 확정 발언으로 발표할 때는 아래 두 시점을 먼저 확인한다.",
+    "writing_prompt": "내가 당연히 알아들을 것이라 생각했지만 독자는 모르는 배경이 이 글에 얼마나 들어 있는가?",
+    "verification": {
+      "checked_at": "2026-09-20",
+      "original_collection_status": "영상 직접 분석",
+      "method": "Gemini VIDEO 입력 처리 기록과 원 분석 응답 확인",
+      "caveats": "Gemini 응답의 VIDEO 입력 99,461 tokens 기록 확인. 이는 영상이 입력됐다는 근거이며 발언 해석·시점 정확성의 보증은 아님. 자막 없음. 이번 작성자는 해당 구간을 직접 시청하지 않음.",
+      "original_location_at_review": "/tmp/moonlight-youtube-research/video-summaries/Ml6nXM6dt7I.json"
+    },
+    "insight_heading": "2. 생각을 발견하는 초안과 독자가 이해하는 원고를 나누자",
+    "category": "글쓰기"
+  },
+  {
+    "source_id": "qrpyswoATQ8",
+    "title": "천재들이 어려운 개념을 빠르게 배우는 학습법",
+    "url": "https://www.youtube.com/watch?v=qrpyswoATQ8",
+    "locator": [
+      {
+        "start_seconds": 162,
+        "end_seconds": 281,
+        "label": "2:42–4:41: 설명 작성 → 빈틈 찾기 → 재조사 → 재작성"
+      },
+      {
+        "start_seconds": 299,
+        "end_seconds": 401,
+        "label": "4:59–6:41: 블록체인 설명을 다시 쓰는 예"
+      }
+    ],
+    "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+    "observed_claim": "노마드 코더는 개념을 조사한 뒤 어린 독자에게 설명하듯 쓰고, 어려운 말에 의존한 부분과 답하지 못한 ‘왜’를 찾아 다시 조사하라고 설명한다. 자막에는 설명을 다시 쓰는 반복 과정과 블록체인 비유 예시가 있다.",
+    "insight": "배운 것을 바로 완성된 교육 콘텐츠로 내기보다 ‘설명 초안 → 내가 막힌 말 → 확인한 근거 → 고친 설명’의 전후 차이를 남기면 학습 기록 자체가 글감이 된다. 가르치는 사람이 처음부터 다 알았다는 연출보다, 자신이 어디서 잘못 이해했는지를 보여 주는 구조다.",
+    "conditions": "쉬운 비유가 정확한 이해의 충분조건은 아니다. 비유가 빠뜨린 조건을 한 줄 덧붙이고, 전문 개념은 공식 문서나 원자료로 점검한다. 영상에서 파인만에게 귀속한 문구의 역사적 원출처까지 확인한 것은 아니다.",
+    "writing_prompt": "나는 이 개념을 설명할 때 어떤 전문 용어 하나에 기대어 이해한 척했는가? 그 말을 빼고 다시 쓰면 어디서 막히는가?",
+    "verification": {
+      "checked_at": "2026-09-20",
+      "original_collection_status": "자막 기반 요약",
+      "method": "이전 작업에서 확보한 자막 JSON을 직접 읽고 시점·발언 맥락 대조",
+      "caveats": "영어 자막 2:42–4:41과 4:59–6:41 직접 대조. 인명·삽입 인용에는 ASR 오류 가능성이 있어 정확한 명언 인용에는 쓰지 않음.",
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-two/internal-transcripts/qrpyswoATQ8.json"
+    },
+    "insight_heading": "3. 쉬운 설명은 이해의 빈틈을 드러내는 초안이다",
+    "category": "학습과 설명"
+  },
+  {
+    "source_id": "Vl7K_kqvFiU",
+    "title": "배우는 즉시 내 것으로 만드는 3가지 방법",
+    "url": "https://www.youtube.com/watch?v=Vl7K_kqvFiU",
+    "locator": [
+      {
+        "start_seconds": 82,
+        "end_seconds": 145,
+        "label": "1:22–2:25: 배운 것을 바로 사용하기와 약한 구간 따로 연습하기"
+      },
+      {
+        "start_seconds": 197,
+        "end_seconds": 222,
+        "label": "3:17–3:42: 실전 중 막히면 이전 개념으로 돌아가기"
+      }
+    ],
+    "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+    "observed_claim": "한국어 해설은 언어·프로그래밍·글쓰기를 배운 즉시 써보는 피드백 루프와 약한 부분을 떼어 연습하는 방법을 권한다. 모든 것을 미리 준비하기보다 실전에서 부족함을 발견해 돌아가 학습하는 사례를 제시한다.",
+    "insight": "레퍼런스 열 편을 정리한 뒤 쓰려고 기다리는 대신, 한 편을 읽은 뒤 설명 한 문단을 써보고 가장 막힌 지점 하나를 다음 읽기의 질문으로 정할 수 있다. 글쓰기에서 약점은 ‘잘 못 쓴다’가 아니라 도입·예시·근거·마무리 중 특정 부분으로 좁혀 본다.",
+    "conditions": "오류 비용이 낮은 연습·초안에 먼저 적용한다. 고객에게 보내는 사실 설명이나 전문 조언을 미검증 상태로 공개하는 근거로 쓰지 않는다. 실전 우선이 기본기나 필요한 안전 지식을 생략하라는 뜻은 아니다.",
+    "writing_prompt": "지난번 글 한 편에서 가장 오래 멈춘 곳은 어느 문단이었는가? 그 부분만 연습하려면 어떤 작은 과제를 만들 수 있는가?",
+    "verification": {
+      "checked_at": "2026-09-20",
+      "original_collection_status": "자막 기반 요약·품질 주의",
+      "method": "이전 작업에서 확보한 자막 JSON을 직접 읽고 시점·발언 맥락 대조",
+      "caveats": "한국어 자막 1:22–2:25, 3:17–3:42 직접 대조. 삽입된 영어 인터뷰는 한국어 ASR로 심하게 깨져 있어 근거에서 제외. 한국어 해설의 식별 가능한 내용만 사용.",
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-two/internal-transcripts/Vl7K_kqvFiU.json"
+    },
+    "insight_heading": "4. 학습은 완독보다 작은 사용과 막힘 기록으로 이어질 수 있다",
+    "category": "학습과 설명"
+  },
+  {
+    "source_id": "MhjuZRr5vBY",
+    "title": "책 읽으면 성공한다는 말만 믿고 1년 동안 자기계발서 143권을 읽었더니...",
+    "url": "https://www.youtube.com/watch?v=MhjuZRr5vBY",
+    "locator": [
+      {
+        "start_seconds": 138,
+        "end_seconds": 284,
+        "label": "2:18–4:44: 당면 문제에 맞춰 책을 고르기; 실용 독서로 범위 한정"
+      },
+      {
+        "start_seconds": 420,
+        "end_seconds": 449,
+        "label": "7:00–7:29: 책마다 한 가지를 정해 실천하기"
+      }
+    ],
+    "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+    "observed_claim": "타임프리는 143권을 읽은 개인 경험을 돌아보며 당면 문제에 맞는 책을 먼저 고르고 한 권에서 한 가지를 실천하는 방식을 제안한다. 4:30–4:44에는 당장 쓸모없는 책은 필요 없다는 뜻이 아니며, 당장의 변화를 원할 때 우선순위를 말하는 것이라고 직접 한정한다.",
+    "insight": "현재 자료함은 읽을거리가 풍부하다는 의미가 있지만 활용 성과까지 말해 주지는 않는다. ‘저장/읽음’과 별도로 ‘시험해 봄/글에 사용함/관점이 바뀜’을 기록하면 자료의 효용을 자신의 경험으로 평가할 수 있다. 모든 자료에 행동을 붙일 필요는 없고 실용 목적의 자료부터 시작한다.",
+    "conditions": "교양·즐거움·장기 탐구용 독서는 즉시 행동으로 환산하지 않아도 된다. 저자의 실패·성공 자기보고를 일반적인 인과 증명으로 쓰지 않는다. 143이라는 숫자는 화자가 보고한 독서량이다.",
+    "writing_prompt": "최근 저장한 열 개 중 내 행동이나 문장을 바꾼 자료는 어느 것이며, 나머지는 언제 다시 필요할까?",
+    "verification": {
+      "checked_at": "2026-09-20",
+      "original_collection_status": "자막 기반 요약",
+      "method": "이전 작업에서 확보한 자막 JSON을 직접 읽고 시점·발언 맥락 대조",
+      "caveats": "한국어 자막 2:18–4:44와 7:00–7:29 직접 대조. 저장 자막에는 약 4:59–5:59 구간의 공백이 있으므로 그 구간 내용은 사용하지 않음. 영상의 한정 문구를 기존 요약보다 명시적으로 보존.",
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-one/transcripts/MhjuZRr5vBY.json"
+    },
+    "insight_heading": "5. 자료의 양과 내가 해결한 문제의 수를 따로 보자",
+    "category": "학습과 설명"
+  },
+  {
+    "source_id": "Hq8wPiPiOx8",
+    "title": "노력한 만큼 결과가 안나온다면, 당장 이 영상을 보셔야 합니다. | 학습법 | 자기계발 | 공부",
+    "url": "https://www.youtube.com/watch?v=Hq8wPiPiOx8",
+    "locator": [
+      {
+        "start_seconds": 148,
+        "end_seconds": 214,
+        "label": "2:28–3:34: 인출 연습, 익숙함과 배움의 구분"
+      }
+    ],
+    "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+    "observed_claim": "영상 한국어 해설은 읽고 듣기만 반복하면 안다고 느끼기 쉽지만, 자료를 보지 않고 설명하거나 써 보면 실제로 꺼낼 수 있는 내용이 드러난다고 말한다. 시험 보기를 인출 연습의 한 방식으로 소개한다.",
+    "insight": "초안을 쓰기 전 원문을 잠시 닫고 핵심 주장·근거·의문을 세 줄로 써 보면 자신에게 남은 것이 보인다. 그 뒤 원문을 다시 열어 틀린 부분을 수정한다. 이를 자기 말로 소화하는 단계로 쓰면 요약문의 표현을 그대로 좇는 일을 줄일 수 있다.",
+    "conditions": "기억만으로 출처나 정확한 수치를 복원하지 않는다. 최초의 기억 초안은 가설이며, 게시 전 원문 대조가 뒤따라야 한다. 시간 간격·포모도로·뇌 기전에 관한 효과 주장은 이번 인사이트에서 확인하지 않았다.",
+    "writing_prompt": "원문을 닫고 쓴 세 줄과 원문을 다시 보고 고친 세 줄은 어떻게 달랐는가?",
+    "verification": {
+      "checked_at": "2026-09-20",
+      "original_collection_status": "자막 기반 요약",
+      "method": "이전 작업에서 확보한 자막 JSON을 직접 읽고 시점·발언 맥락 대조",
+      "caveats": "한국어 자막 2:28–3:34 직접 대조. 뒤의 영어 인용 구간에 심한 ASR 오류가 있어 제외. 학습 효과를 뒷받침하는 연구의 독립 검증은 하지 않음.",
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-two/internal-transcripts/Hq8wPiPiOx8.json"
+    },
+    "insight_heading": "6. 다시 보면 익숙한 것과 스스로 설명할 수 있는 것을 분리하자",
+    "category": "학습과 설명"
+  },
+  {
+    "source_id": "snAcqJmDwss",
+    "title": "결국 해내는 사람들은 계획부터 다르다 \"계획대로 안되도 흔들리지 않아요\"",
+    "url": "https://www.youtube.com/watch?v=snAcqJmDwss",
+    "locator": [
+      {
+        "start_seconds": 760,
+        "end_seconds": 780,
+        "label": "12:40–13:00: 날짜·시간이 정해진 이벤트와 업무 분리"
+      },
+      {
+        "start_seconds": 895,
+        "end_seconds": 1010,
+        "label": "14:55–16:50: 주간 계획, 실행 역할, 역량 실험, 버퍼"
+      }
+    ],
+    "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+    "observed_claim": "드로우앤드류는 이벤트와 업무를 구분하고, 일요일에 주간 배분을 한 뒤 평일에는 당일 일에 집중하는 방식을 설명한다. 계획을 못 지키는 경우 자신의 처리 역량을 몰랐을 수 있으니 반복하며 실험하고, 예상치 못한 일을 위한 버퍼를 둔다고 말한다.",
+    "insight": "할 일 미완료를 매번 성실성의 문제로만 읽기보다 계획량·실제 소요시간·외부 변수의 차이로 분해할 수 있다. 일주일 계획에서 하나를 미룬 이유를 기록하면 다음 계획의 분량을 현실에 맞추는 자료가 된다. 글감은 완벽한 플래너 공개보다 ‘내 예상이 어떻게 틀렸고 다음 주에 무엇을 줄였는가’다.",
+    "conditions": "주간 계획을 고정하는 방식은 외부 변수가 적을 때 유리하다. 고객 요청이나 돌발 대응이 많은 날은 매일 짧은 재배분이 필요할 수 있다. 토요일을 반드시 보충 노동일로 삼으라는 보편 처방으로 옮기지 않는다.",
+    "writing_prompt": "내가 실패한 계획 하나를 의지·분량·예상 시간·돌발 변수로 나눠 보면, 다음번 바꿀 것은 무엇인가?",
+    "verification": {
+      "checked_at": "2026-09-20",
+      "original_collection_status": "자막 기반 요약",
+      "method": "이전 작업에서 확보한 자막 JSON을 직접 읽고 시점·발언 맥락 대조",
+      "caveats": "한국어 자막 12:40–13:00, 14:55–16:50 직접 대조. ASR 오타가 있으나 역할 분리·역량 실험·버퍼 맥락 식별 가능. 일요일 30분은 기존 보고서의 적용 제안이지 이 구간의 확정 발언이 아님.",
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-one/transcripts/snAcqJmDwss.json"
+    },
+    "insight_heading": "7. 계획표는 의지 점검표보다 실제 역량을 알아가는 기록이 될 수 있다",
+    "category": "지속 가능한 실행"
+  },
+  {
+    "source_id": "b7vxBoXds2U",
+    "title": "내 인생을 원자 단위로 쪼개 변화시키는 방법",
+    "url": "https://www.youtube.com/watch?v=b7vxBoXds2U",
+    "locator": [
+      {
+        "start_seconds": 390,
+        "end_seconds": 466,
+        "label": "6:30–7:46: 현재 행동 기록과 언제·어디서·무엇을 할지 지정"
+      },
+      {
+        "start_seconds": 742,
+        "end_seconds": 779,
+        "label": "12:22–12:59: 유혹을 덜 만나는 동선과 환경"
+      }
+    ],
+    "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+    "observed_claim": "제임스 클리어의 책을 소개하는 해설은 매일 하는 행동을 적고, 시간·장소·행동을 구체화하라고 제안한다. 후반에는 강한 자제력을 계속 쓰기보다 방해 신호와 거리를 두는 환경을 설명한다.",
+    "insight": "‘나는 꾸준하지 못하다’는 평가를 하기 전에, 쓰려던 순간 무엇이 보였고 어떤 준비가 필요했는지 관찰할 수 있다. 글쓰기 시작 시 문서 찾기·제목 정하기·자료 찾기에서 멈춘다면, 다음 번 첫 문장이나 질문 하나를 미리 남기는 정도의 작은 실험이 가능하다.",
+    "conditions": "환경만으로 모든 실행 문제가 해결되는 것은 아니다. 외부 책임·건강·자원 제약도 확인해야 한다. 습관 책의 1%→37배 비유나 중독·건강 사례를 검증된 인간 성과 공식으로 사용하지 않는다.",
+    "writing_prompt": "나는 매번 어느 지점에서 글을 쓰기 전에 다른 일을 시작하는가? 다음번에는 무엇 하나를 미리 준비하거나 치워 볼 수 있는가?",
+    "verification": {
+      "checked_at": "2026-09-20",
+      "original_collection_status": "자막 기반 요약",
+      "method": "이전 작업에서 확보한 자막 JSON을 직접 읽고 시점·발언 맥락 대조",
+      "caveats": "한국어 자막 6:30–7:46와 12:22–12:59 직접 대조. 저서의 내용을 전달하는 2차 해설이며 책 자체의 문장이나 연구는 대조하지 않음. 과학·성과 수치는 근거에서 제외.",
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-one/transcripts/b7vxBoXds2U.json"
+    },
+    "insight_heading": "8. 의지 평가 전에 행동이 시작되는 환경을 보자",
+    "category": "지속 가능한 실행"
+  },
+  {
+    "source_id": "5Gty04W5lPg",
+    "title": "당신의 경쟁자가 *절대* 보게 두면 안되는 영상 | 타이 로페즈",
+    "url": "https://www.youtube.com/watch?v=5Gty04W5lPg",
+    "locator": [
+      {
+        "start_seconds": 128,
+        "end_seconds": 178,
+        "label": "2:08–2:58: 아침 10분과 하루 주요 프로젝트 기록"
+      }
+    ],
+    "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+    "observed_claim": "타이 로페즈는 아침에 10분 정도 메모하며 하루 주요 프로젝트를 적는 자신의 습관을 제안한다. 해당 구간 끝에서 적게는 세 개의 주요 프로젝트를 쓸 수 있다고 말한다.",
+    "insight": "하루를 시작할 때 오늘 다룰 문제와 끝났다고 볼 조건을 짧게 정리하는 소재로 사용할 수 있다. 세 개는 고정 규칙이 아니라 화자의 예시다. 자신의 날에 맞게 한 개를 택하고 저녁에 실제 결과와 비교해 보는 글이 더 구체적이다.",
+    "conditions": "영상 앞부분의 주의집중 시간·성격 특성과 사업 성공·노력의 비중, 같은 구간의 빌 게이츠 일화는 이번에 검증하지 않았다. 유명인의 성공으로 계획 습관의 효과를 증명하거나 사업 성과를 보장한다고 쓰지 않는다.",
+    "writing_prompt": "오늘 꼭 다룰 문제를 한 문장으로 적었을 때, 이전의 할 일 목록과 실제 선택이 달라졌는가?",
+    "verification": {
+      "checked_at": "2026-09-20",
+      "original_collection_status": "자막 기반 요약",
+      "method": "이전 작업에서 확보한 자막 JSON을 직접 읽고 시점·발언 맥락 대조",
+      "caveats": "영어 자막 2:08–2:58 직접 대조. 앞뒤의 유명인 사례와 수치·인과 주장은 채택하지 않음. 기존 보고서의 ‘완료해야 할 3가지’와 자막의 ‘주요 프로젝트를 적게는 3개’는 뉘앙스가 달라 정정.",
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-one/transcripts/5Gty04W5lPg.json"
+    },
+    "insight_heading": "9. 하루를 정리하는 짧은 계획은 쓰되 성공 공식은 가져오지 말자",
+    "category": "지속 가능한 실행"
+  },
+  {
+    "source_id": "2gFLaGislp4",
+    "title": "이 강의를 본 순간 당신의 인생이 통째로 바뀔 겁니다 ㅣ 1일 1 피터슨 ㅣ Day 22 l 조던 피터슨 ㅣ 한영 자막",
+    "url": "https://www.youtube.com/watch?v=2gFLaGislp4",
+    "locator": [
+      {
+        "start_seconds": 494,
+        "label": "8:14: 일정은 자신과의 협상이라는 설명 — 이전 영상 분석 모델이 제시한 시점"
+      }
+    ],
+    "evidence_level": "B — 이전 영상 분석 응답 확인; 자막·직접 시청 대조 없음",
+    "observed_claim": "이전 영상 분석 응답은 피터슨이 일정을 자신을 억압하는 도구보다 원하는 하루를 설계하는 협상으로 설명한다고 정리했다. 이번 작성자는 8:14 발언을 직접 확인하지 않았다.",
+    "insight": "빽빽한 시간표를 공개하기보다 ‘책임을 지키면서도 내일 다시 할 의향이 있는 하루인가’를 회고 질문으로 삼을 수 있다. 한 주의 계획에서 회복·여유·완료의 기준을 어떻게 함께 넣는지 자신의 선택을 설명하는 글감이다.",
+    "conditions": "협상이 하기 싫은 책임을 전부 없애는 의미는 아니다. 직무상 의무·다른 사람과 한 약속·불가피한 일정이 있는 조건을 함께 적는다. 정신건강이나 동기 문제를 이 질문 하나로 해결한다고 쓰지 않는다.",
+    "writing_prompt": "내가 세운 일정표를 다른 사람이 나에게 줬다면 어떤 항목을 바꿔 달라고 말했을까?",
+    "verification": {
+      "checked_at": "2026-09-20",
+      "original_collection_status": "영상 직접 분석",
+      "method": "Gemini VIDEO 입력 처리 기록과 원 분석 응답 확인",
+      "caveats": "Gemini 원 응답과 VIDEO 입력 71,613 tokens 기록 확인. 자막 없음·이번 직접 시청 없음. 8:14는 모델이 추출한 미검증 위치이며 공개 인용 전 확인이 필요.",
+      "original_location_at_review": "/tmp/moonlight-youtube-research/video-summaries/2gFLaGislp4.json"
+    },
+    "insight_heading": "10. 지속 가능한 일정은 내가 동의할 수 있는 하루를 묻는다",
+    "category": "지속 가능한 실행"
+  },
+  {
+    "source_id": "fXyRprdoEoE",
+    "title": "목표를 실제로 달성하기 위한 시스템을 구축하는 방법",
+    "url": "https://www.youtube.com/watch?v=fXyRprdoEoE",
+    "locator": [
+      {
+        "start_seconds": 75,
+        "label": "1:15: 의지·동기 의존도를 낮추는 시스템 — 이전 영상 분석 모델 시점"
+      },
+      {
+        "start_seconds": 665,
+        "label": "11:05: 임시방편과 근본 원인 — 이전 영상 분석 모델 시점"
+      }
+    ],
+    "evidence_level": "B — 이전 영상 분석 응답 확인; 자막·직접 시청 대조 없음",
+    "observed_claim": "이전 영상 분석 응답은 Justin Sung이 의지력 의존을 줄이는 과정, 반복 가능성, 임시방편 대신 근본 원인을 다루는 방식을 강조한다고 정리했다. 이번에는 원 분석 응답의 VIDEO 입력 기록만 확인했다.",
+    "insight": "레퍼런스 운영을 거창한 자동화부터 시작하지 않고 ‘한 편 선택 → 내 질문 한 줄 → 근거 위치 한 개 → 내 사례 또는 빈칸’ 정도의 최소 반복으로 시험할 수 있다. 도구를 늘려도 이 한 번의 전환이 안 되면 병목은 도구 밖에 있을 수 있다는 가설을 세운다.",
+    "conditions": "최소 행동의 크기와 루틴은 개인·시기별로 달라진다. 시스템 구축 자체가 또 다른 준비 작업이 되지 않게 실제 글 한 편에 연결해 본다. 위의 네 단계는 화자가 제시한 절차가 아니라 이 문서의 적용 제안이다.",
+    "writing_prompt": "내가 가장 바쁜 날에도 남길 수 있는 글감의 최소 단위는 무엇이며, 그 단위를 막는 실제 장애물은 무엇인가?",
+    "verification": {
+      "checked_at": "2026-09-20",
+      "original_collection_status": "영상 직접 분석",
+      "method": "Gemini VIDEO 입력 처리 기록과 원 분석 응답 확인",
+      "caveats": "Gemini 원 응답과 VIDEO 입력 77,890 tokens 확인. 자막·이번 직접 시청 없음. ‘최악의 날에도’ 관련 세부 표현은 모델 요약에만 있어 직접 인용하지 않음.",
+      "original_location_at_review": "/tmp/moonlight-youtube-research/video-summaries/fXyRprdoEoE.json"
+    },
+    "insight_heading": "11. 좋은 날의 최대치보다 반복해서 가능한 최소 행동을 설계한다",
+    "category": "지속 가능한 실행"
+  },
+  {
+    "source_id": "r4v4oinvmng",
+    "title": "성공한 사업가는 다 한다는 '이 루틴'",
+    "url": "https://www.youtube.com/watch?v=r4v4oinvmng",
+    "locator": [
+      {
+        "start_seconds": 3,
+        "end_seconds": 42,
+        "label": "0:03–0:42: 좌석·직원·메뉴 관찰과 매출 추정; 0:22 오류 가능성 인정"
+      },
+      {
+        "start_seconds": 42,
+        "end_seconds": 60,
+        "label": "0:42–1:00: 기록 루틴과 업종 학습"
+      }
+    ],
+    "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+    "observed_claim": "노희영은 식당의 좌석·직원·메뉴 등을 보고 매출과 비용을 추정해 기록하는 루틴을 권한다. 자막 0:22에는 추정이 틀릴 수 있다는 단서가 명시돼 있다.",
+    "insight": "이 자료에서 옮길 만한 것은 손익을 맞히는 공식보다 ‘현장에 질문을 갖고 들어가 관찰하고 가설을 기록하는 습관’이다. 교육·업무 현장에서는 누가 어느 단계에서 멈췄는지, 반복 질문은 무엇인지, 어떤 우회 행동을 했는지 기록할 수 있다. 사실·내 해석·확인할 질문을 세 칸으로 나누는 방식은 이 문서의 제안이다.",
+    "conditions": "한 번 방문해 본 좌석 수로 실제 매출·순이익을 알 수는 없다. 시간대·회전율·배달·비용 구조 등 보이지 않는 변수가 있다. 이 적용을 사업 판단이나 재무 조언이 아닌 관찰 훈련으로 한정한다. 타인을 식별하는 정보는 글에 넣기 전 정리한다.",
+    "writing_prompt": "최근 현장에서 직접 본 사실 한 가지와, 그 사실을 보고 내가 너무 빨리 붙인 설명은 무엇인가?",
+    "verification": {
+      "checked_at": "2026-09-20",
+      "original_collection_status": "자막 기반 요약",
+      "method": "이전 작업에서 확보한 자막 JSON을 직접 읽고 시점·발언 맥락 대조",
+      "caveats": "약 68초 분량의 저장 한국어 자막 전체를 읽어 맥락 확인. 0:22의 오류 가능성 단서를 반영해 기존 보고서의 ‘실제 수익 분석’을 ‘가설과 추정 기록’으로 좁힘.",
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-one/transcripts/r4v4oinvmng.json"
+    },
+    "insight_heading": "12. 현장을 보는 법은 관찰과 추정을 분리해 기록하는 데서 시작된다",
+    "category": "현장 문제 관찰"
+  },
+  {
+    "source_id": "xMHi0yBNr6k",
+    "title": "해결해야 할 문제에 집중하기",
+    "url": "https://www.youtube.com/watch?v=xMHi0yBNr6k",
+    "locator": [
+      {
+        "start_seconds": 0,
+        "label": "0:00: 나쁜 소식을 먼저 듣는다는 설명 — 이전 영상 분석 모델 시점"
+      },
+      {
+        "start_seconds": 21,
+        "label": "0:21: 장애물을 알아야 도울 수 있음 — 이전 영상 분석 모델 시점"
+      }
+    ],
+    "evidence_level": "B — 이전 영상 분석 응답 확인; 자막·직접 시청 대조 없음",
+    "observed_claim": "이전 영상 분석 응답은 마크 큐반이 좋은 소식보다 나쁜 소식을 먼저 듣고 장애물을 알아야 실질적으로 도울 수 있다고 말한다고 정리했다. 이번에는 해당 짧은 영상의 원 분석 응답을 확인했으며 실제 발언은 재시청하지 않았다.",
+    "insight": "후기나 업무 글을 ‘무엇을 달성했다’에서만 시작하지 않고 ‘어디서 막혔고, 무슨 정보나 도움이 부족했는가’에서 시작하면 독자가 자신의 문제와 연결하기 쉽다. 막힘 → 시도 → 결과 → 남은 질문의 흐름은 현장 사례를 쓰는 편집 제안이다.",
+    "conditions": "나쁜 소식을 들었을 때 비난하는 환경에서는 솔직한 보고를 요구하는 것만으로 작동하지 않는다. 좋은 결과가 생긴 조건도 학습 자료다. 고객·팀의 실제 사례가 없으면 경험담을 만들어 쓰지 말고 질문형 글로 남긴다.",
+    "writing_prompt": "최근 순조롭게 보이던 일에서 실제로 가장 막혔던 단계는 무엇이며, 그때 필요한 도움을 한 문장으로 말할 수 있는가?",
+    "verification": {
+      "checked_at": "2026-09-20",
+      "original_collection_status": "영상 직접 분석",
+      "method": "Gemini VIDEO 입력 처리 기록과 원 분석 응답 확인",
+      "caveats": "Gemini 원 응답과 VIDEO 입력 3,559 tokens 기록 확인. 자막·이번 직접 시청 없음. 0:00/0:21은 모델 시점이며 직접 인용 전 원영상 확인 필요.",
+      "original_location_at_review": "/tmp/moonlight-youtube-research/video-summaries/xMHi0yBNr6k.json"
+    },
+    "insight_heading": "13. 현장 글감은 성과 숫자뿐 아니라 막힌 지점에서 나온다",
+    "category": "현장 문제 관찰"
+  },
+  {
+    "source_id": "pwKuAkgUWnc",
+    "title": "내가 끊임없이 실패하는 이유, 의지력이 부족해서가 아닙니다! ㅣ 베이직교회 조정민 목사 ㅣ 잘잘법 174회",
+    "url": "https://www.youtube.com/watch?v=pwKuAkgUWnc",
+    "locator": [
+      {
+        "start_seconds": 90,
+        "end_seconds": 193,
+        "label": "1:30–3:13: 작심삼일·가치·아침 예배라는 개인 경험"
+      },
+      {
+        "start_seconds": 608,
+        "end_seconds": 666,
+        "label": "10:08–11:06: 의미를 찾은 일과 요리 유학 사례"
+      }
+    ],
+    "evidence_level": "A — 저장 자막의 해당 구간 직접 대조; 발언의 진위·효과 검증은 아님",
+    "observed_claim": "조정민은 작심삼일을 의지 부족으로 비난하기보다 일에 두는 가치와 중요성을 살펴보자고 말하며, 자신의 예배 지속과 요리에 의미를 찾은 사람의 사례를 든다. 기독교적 소명에 뿌리를 둔 해석이다.",
+    "insight": "루틴을 어떻게 유지할지 묻는 것과 함께 왜 이 일을 계속하고 싶은지 적으면, 관성으로 늘린 계획을 재검토할 수 있다. 외부 성과가 줄어도 남기고 싶은 작업과 현재 책임 때문에 해야 하는 일을 구분해 생각하는 성찰 글로 사용할 수 있다.",
+    "conditions": "오래 지속하지 못했다는 이유로 가치나 신앙이 부족하다고 판단하지 않는다. 의미 있는 일도 체력·시간·자원 때문에 멈출 수 있다. 개인의 신앙적 증언을 보편 심리 법칙·업무 성과 공식으로 합치지 않는다.",
+    "writing_prompt": "아무도 칭찬하지 않아도 계속하고 싶은 일은 무엇인가? 그 일을 지속하기 위해 의미 외에 필요한 현실 조건은 무엇인가?",
+    "verification": {
+      "checked_at": "2026-09-20",
+      "original_collection_status": "자막 기반 요약",
+      "method": "이전 작업에서 확보한 자막 JSON을 직접 읽고 시점·발언 맥락 대조",
+      "caveats": "한국어 자막 1:30–3:13과 10:08–11:06 직접 대조. 목회자의 신앙적 관점과 사례임을 보존. 저자의 인과 해석을 검증된 사실로 쓰지 않음.",
+      "original_location_at_review": "/tmp/moonlight-youtube-research/playlist-one/transcripts/pwKuAkgUWnc.json"
+    },
+    "insight_heading": "14. 지속할 이유와 지속하기 쉬운 조건을 함께 묻는다",
+    "category": "가치와 지속"
+  }
+]

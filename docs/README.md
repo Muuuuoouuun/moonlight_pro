@@ -1,7 +1,7 @@
 # Moonlight 문서 지도
 
 > 상태: ACTIVE DOCUMENTATION INDEX
-> 마지막 정리: 2026-09-14 (콘텐츠·메모·문의·Agent DB 준비 상태 갱신. 기존 실행 상태표 기준: 2026-09-04)
+> 마지막 정리: 2026-09-20 (Supabase 서울 리전 이관, 테스트 기준선, 빠른 입력 전역화, 목업 가드레일 반영. 이전 정리: 2026-09-14 콘텐츠·메모·문의·Agent DB 준비 상태)
 > 목적: 같은 주제의 문서가 충돌할 때 무엇을 먼저 믿을지 고정한다.
 
 ## 1. 읽는 순서와 우선순위
@@ -38,6 +38,8 @@
 
 ## 3. 현재 실행 상태
 
+2026-09-20 DB 위치: 운영 Supabase를 싱가포르에서 **서울 리전으로 이관 완료**했다. 아래 DB 준비 상태 기록은 그대로 유효하되, 대상 프로젝트가 바뀌었다는 점을 함께 읽는다. 상세는 [`supabase-korea-region-migration.md`](supabase-korea-region-migration.md).
+
 2026-09-14 DB 준비 상태: 누락된 0026·0027·0028·0030·0031·0032·0033을 운영 Supabase에 적용했고, `npm run db:check`로 테이블·RLS·서비스 전용 RPC 권한을 확인했다. 이미 적용된 0029는 재실행하지 않았다. Hub/Engine 코드 배포, 문의 외부 수집 연결, worker 활성화는 별도다.
 
 | 단계 | 상태 | 근거 |
@@ -56,14 +58,27 @@
 | 브랜드 탭 | P0·P1 구현, P2~P5 제안 | `2026-08-29-brand-tab-design.md`, `3627eef` |
 | 개인 매출 30일 로드맵 | 출시, 디자인 QA `blocked` | `2026-08-31-personal-revenue-roadmap.md`, `68517ec`, 루트 `design-qa.md` |
 | 문의 수집·알림 | 코드 구현, 운영 연결 대기 | Gmail 감지·안전한 웹훅·문의 내역·미확인 알림. [설정](inquiry-integration-setup.md), [검증](superpowers/plans/2026-09-13-unified-inquiries.md) |
+| Supabase 서울 리전 이관 | 이관 완료(2026-09-20) · Vercel 환경 변수 교체 대기 | `rwqefdxalmbrkybxqwxj`(싱가포르 `ap-southeast-1`) → `ncgpnqfulnlshegalmbd`(서울 `ap-northeast-2`). 테이블 71·1368행 **전부 행 수 일치**, `npm run db:check` 7/7 PASS, 앱 읽기(`status: live`)·쓰기 왕복 확인, REST 지연 150ms→57ms. 구 싱가포르 프로젝트는 롤백 경로로 **삭제하지 않고 보존**. 툴킷은 `npm run db:move-region`, 런북·함정(함수 실행 권한 회귀 등)은 [`supabase-korea-region-migration.md`](supabase-korea-region-migration.md), 커밋 `fa1757e`. **Vercel 환경 변수는 아직 구 싱가포르 값이므로 배포 전 교체가 필요하다** |
+| 빠른 입력 전역화 | 구현 완료(2026-09-20) | 캡처 폼을 `daily-brief.jsx` 내부에서 `apps/hub/components/hub/quick-capture.jsx`로 분리해 단일 정본화(`layout="inline"`/`"compact"`). 전역 `C` 단축키(입력 요소 안·팔레트 열림이면 무시)와 ⌘K 팔레트의 `빠른 입력` 액션, 치트시트 등록까지 포함 — DESIGN.md §8.1 생성 단축키 계약을 따른다. 커밋 `6423822` |
+| 목업 데이터 가드레일 | 구현 완료(2026-09-20) | `scripts/no-mock-data.test.mjs`가 저장소 전체에서 목업 식별자(`MOCK_`·`DEMO_`·`SAMPLE_`·`DUMMY_`·`FAKE_`·fixtures 계열) 선언과 업무 레코드형 하드코딩 배열을 막는다. 감사 시점의 저장소에는 가짜 업무 데이터가 0건이었고 없던 것은 강제 장치였다. 운영자 확정: 더미 데이터는 **로컬 전용 Supabase 프로젝트에만** 두고 코드에는 넣지 않는다 — 그 프로젝트는 free 플랜 활성 2개 상한 때문에 아직 미생성이다. 커밋 `4516e49` |
 
 Phase 0는 Content canonical contract, write 응답 분류, honest empty/error UI, 사용자 identity, Content 승인 원자화를 포함한다. 당시 검증 기준선은 Node test 50/50, contract check, typecheck, Hub/Engine build 통과다. 2026-07-15 현재 저장소 검증은 102/102이며 Phase 1A 완료를 뜻한다. Phase 1B·1C는 아직 남아 있으므로 Phase 1 전체 완료로 해석하지 않는다.
 
-2026-09-04 현재 루트 `npm test`는 **692/692 통과**이며, 저장소의 `*.test.mjs` 82파일 **전부**가 루트 글롭에 포함된다. 2609 병합이 글롭을 `apps/hub/components/**`·`apps/engine/**`·`packages/**`로 확장하면서 이전에 CI 밖이던 20파일과 실패 4건이 함께 해소됐다. CI(`.github/workflows/ci.yml`)는 `npm test`에 위임하므로 범위가 어긋날 수 없다. 사이드바 앵커는 코드(`hub-nav.js` 8 primary + 2 utility)·`hub-nav.test.mjs`·07-15 스펙 §3.1이 모두 일치한다(2026-09-04 주석·스펙 갱신으로 해소).
+2026-09-20 현재 루트 `npm test`는 **1433 tests · 실패 0**이다. 이전 기록의 "692/692 통과, 82파일"은 낡았으므로 이 줄을 기준선으로 쓴다. 2026-09-20에 **아예 돌지 않던 테스트 55건을 복구**해 1378 → 1433이 됐고, 원인 두 가지 모두 소스와 무관했다. (1) postgres를 띄우는 8파일이 macOS에서 `LC_ALL` 없이 기동을 거부해 discovery·daily review·inquiry·agent command의 **원자 RPC 검증이 통째로 미실행**이었다. (2) 스윕 테스트 3개(`motion`·`focus-ring`·`button-hover`)가 `.next` 정확일치로만 걸러 `.next.qa`·`.next.ship-*` 같은 빌드 잔재 디렉터리의 미니파이 CSS를 새 위반으로 오인했다. 커밋 `0cc7f18`.
+
+파일 범위(2026-09-20 실측): 저장소의 `*.test.mjs` 203파일 중 **201파일**이 루트 글롭에 포함되고, `apps/hub/app/api/hub/content/transform/route.test.mjs`·`.../workflow/route.test.mjs` **2파일은 글롭 밖**이다(루트 글롭에 `apps/hub/app/**` 패턴이 없다). 2609 병합이 글롭을 `apps/hub/components/**`·`apps/engine/**`·`packages/**`로 확장하면서 이전에 CI 밖이던 20파일과 실패 4건이 해소된 것은 사실이나, "전부 포함"은 더 이상 맞지 않다. CI(`.github/workflows/ci.yml`)는 `npm test`에 위임하므로 CI와 로컬의 범위는 어긋나지 않는다 — 다만 두 파일은 양쪽 모두에서 돌지 않는다.
+
+사이드바 앵커는 코드(`hub-nav.js` 8 primary + 2 utility)·`hub-nav.test.mjs`·07-15 스펙 §3.1이 모두 일치한다(2026-09-04 주석·스펙 갱신으로 해소).
 
 ## 4. 현재 문서
 
 ### 제품·운영 정본
+
+- [실사용 입력 개선](superpowers/specs/2026-09-20-input-usability-design.md) — **승인·구현(2026-09-20)**. 체크리스트 한 줄·Enter 연속 입력, 새 할 일 중앙 팝업·저장 후 계속, 메모 태그·업무 연결, PMS 소속 선택 및 반복 범례 축소. [검증 기록](superpowers/plans/2026-09-20-input-usability.md). 태그 검색 0035는 서울 DB 적용 완료.
+
+- [첫 화면 디자인 디벨롭](superpowers/specs/2026-09-21-home-screen-design-development.md) — **DRAFT · 권장(2026-09-21)**. 첫 화면이 두 개라는 사실(`dashboard` Daily Brief 12슬롯 vs 운영자 확정 Futura 트리아지 `dashboard/home` — DESIGN.md §15 2026-09-18·19 `confirmed`인데 `09.bigmac1.02`에 **미병합**)을 정리하고, 12슬롯·3.34폴드(모바일 4.22)를 6슬롯·2폴드로 줄이는 권장안. 실측·진단 6건(팔레트 원색 13건과 가드 공백 포함)·구현 순서 4주·미정 Q132~Q137. 데이터 쪽은 [세 축·Action KPI 기획](superpowers/specs/2026-09-20-personal-workflow-os-three-axes-and-action-kpi-design.md) §6.2가 짝이다.
+
+- [CRM 탭 디벨롭 기획](superpowers/specs/2026-09-21-crm-tab-develop-design.md) — **DRAFT v0.2 · 권장 · 적용 준비(2026-09-21)**. 운영자가 지정한 여섯 축(연락·미팅 내용·기록·매출 내용·니즈·위기)을 코드에 대입한 지도와 CRM 탭 재구성 권장안(정본 1 + 렌즈 3, 통합 기록창, 니즈·위기 사건 판정, Q117 계층 정렬, 매출 필드). 검증된 구조 문제 8건 — 기록 원장 2분열, `reaction` 소비자 0, 큐 정렬이 Q117과 반대, **고객 연락 행의 버킷 필터·레일·클릭·반응 줄이 다른 원장 모양을 기대해 전부 죽음**, **첫 화면 집중 고객이 `won`만 뽑고 `next_action`은 이관 템플릿**(첫 화면 스펙 D3의 원인), 위험 라벨이 점수 밴드. 디자인 부채 9건. `classinkr-web` `home_v4.2`에서 가져올 7가지·버릴 5가지. 테이블·컬럼 변경 0(RPC v2 함수 1개). 미정 Q138~Q146에 **권장 기본값**을 달아 반대 없으면 진행. 0·1단계 파일 단위 실행 계획은 [`plans/2026-09-21-crm-tab-develop-phase0-1.md`](superpowers/plans/2026-09-21-crm-tab-develop-phase0-1.md).
 
 - [`operator-workflow-profile.md`](operator-workflow-profile.md) — 운영자 업무 사실과 인터뷰 원본
 - [`superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md`](superpowers/specs/2026-07-13-moonlight-personal-operator-os-deep-design.md) — 활성 제품 설계
@@ -105,7 +120,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 - [`superpowers/specs/2026-09-13-opportunity-discovery-v2-design.md`](superpowers/specs/2026-09-13-opportunity-discovery-v2-design.md) — **2A 구현·로컬 검증 완료**. 작업 중심 전환·전체 서버 검색·읽기 중심 상세·관심 질문 시작·검토일 도래 표시. [실행 기록](superpowers/plans/2026-09-13-opportunity-discovery-v2.md). 2B·2C 및 운영 배포는 후속.
 
-- [`superpowers/specs/2026-09-13-opportunity-discovery-design.md`](superpowers/specs/2026-09-13-opportunity-discovery-design.md) — **1차 구현·로컬 검증 완료**. 독립 기회 탐색에서 포착·발굴·검증·실행 연결·보류·종료를 관리한다. 사이드바 primary 9개로 확장. 실제 업무 연결·revision/receipt·이력과 페이지네이션 포함. [실행 기록](superpowers/plans/2026-09-13-opportunity-discovery.md). 2026-09-13 운영 DB 적용·생성/재시도 검증 완료. Vercel 배포는 문의 동기화의 무료 요금제 주기 제한으로 대기 중이며, AI 탐색은 후속 범위다.
+- [`superpowers/specs/2026-09-13-opportunity-discovery-design.md`](superpowers/specs/2026-09-13-opportunity-discovery-design.md) — **1차 구현·로컬 검증 완료**. 독립 기회 탐색에서 포착·발굴·검증·실행 연결·보류·종료를 관리한다. 사이드바 primary 9개로 확장. 실제 업무 연결·revision/receipt·이력과 페이지네이션 포함. [실행 기록](superpowers/plans/2026-09-13-opportunity-discovery.md). 2026-09-13 운영 DB 적용·생성/재시도 검증 완료. Vercel 배포를 막던 문의 동기화 크론 주기는 2026-09-17 운영자 확정으로 일 1회(`0 21 * * *`)로 낮췄다([설정 문서](inquiry-gmail-setup.md)). 일간 크론 5개 등록 상태의 프리뷰 배포가 성공해 개수 제한은 배포를 막지 않았다(PR #3). AI 탐색은 후속 범위다.
 
 **하루 리뷰 (R0)**
 
@@ -121,6 +136,11 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 **기획 초안 (미확정, 새 구현의 근거로 쓰지 않음)**
 
+- [`superpowers/specs/2026-09-21-reference-capture-and-browse-usability-design.md`](superpowers/specs/2026-09-21-reference-capture-and-browse-usability-design.md) — **입력·모아보기 우선순위 운영자 확정 / 상세 동작 권장안 / 구현 전**. 한 칸에 링크·생각 입력, 저장 후 연속 입력, 전체 검색·상세·수정·즐겨찾기·복귀, 기존 자료 이관을 첫 출시로 제안한다. 09-20 기획의 Studio 우선 순서를 대체하며 AI 초안 연결은 후속이다.
+
+- [`superpowers/specs/2026-09-20-reference-library-writing-workflow-design.md`](superpowers/specs/2026-09-20-reference-library-writing-workflow-design.md) — **DRAFT · 권장안 / 구현 미착수**. 저장 레퍼런스에서 질문·출처 1–3개를 골라 내 관점을 기록하고 기존 소재함·Studio 초안으로 연결한다. item의 선별 출처 사본, 확인 범위, AI 생성 근거와 재시도 계약을 제안한다. 전체 DB 이관·자동 수집·발행은 후속 범위다.
+
+- [`superpowers/specs/2026-09-20-personal-workflow-os-three-axes-and-action-kpi-design.md`](superpowers/specs/2026-09-20-personal-workflow-os-three-axes-and-action-kpi-design.md) — **DRAFT · 권장안**. 운영자의 외부 브레인스토밍(워크플로우 OS 4계층·4모듈·"일단 세 가지"·Action KPI/OKR)을 현재 코드에 대입한 지도(있음·부분·없음·충돌)와 "루프 닫기" 묶음(오늘 Top 3 `tasks.meta.focus_dates`, 주간 집계 원천 교정, 딜 단계 이동 기록, 메모 3분할 통합, 텔레그램 평문 캡처). 새 테이블·마이그레이션 0. 09-03 성장 기획서의 F-0→F-1→F-3 순서를 유지하며 그 옆에서 병행. 초안 크론 수리 커밋 `34bb180`이 이 브랜치에 미병합임을 확인. 운영자 확정 전까지 권장.
 - [`superpowers/specs/2026-09-13-revenue-and-cashflow-design.md`](superpowers/specs/2026-09-13-revenue-and-cashflow-design.md) — **초기 기능 범위 확정 · 상세 설계 권장안**. 사업·개인 재정의 통합/분할 보기, 계좌·카드, 할부·대출·반복 지출, 직접 입력·엑셀/CSV 가져오기와 매출 수금 연결. 구현 전이며 기존 거래 기반 30일 전망과 실제 현금 흐름을 구분한다.
 
 - [`superpowers/specs/2026-09-13-crm-recording-and-lead-scoring-guidelines-design.md`](superpowers/specs/2026-09-13-crm-recording-and-lead-scoring-guidelines-design.md) — **디자인·UI/UX 우선 확정(09-14) / 세부 설계 DRAFT v0.2**. 고객 목록·상세·빠른 기록의 UX 시나리오 → 화면 구조 → 시각·인터랙션 확인 → 실제 기록 연결 → 근거 평가·제한 추천 순서. 메모/연락 결과·버튼·템플릿·내 패턴·리드 스코어링·넛지를 함께 설계하며 실패/복구 상태와 디자인 게이트를 포함한다. 시안 제작·UX 검증·앱 구현·라이브 재채점은 아직 하지 않음.
@@ -142,6 +162,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 - [`supabase-first-operating-ledger.md`](supabase-first-operating-ledger.md)
 - [`supabase-db-strategy.md`](supabase-db-strategy.md)
+- [`supabase-korea-region-migration.md`](supabase-korea-region-migration.md) — **완료(2026-09-20) 실행 기록과 런북**. 싱가포르 → 서울 리전 이관의 결과 수치, 마이그레이션 재생 대신 덤프 복제를 택한 이유, 연결 문자열(Session pooler) 주의, 실행 중 부딪힌 4가지, 그리고 가장 위험했던 **함수 실행 권한 회귀**(복원된 RPC 29개 중 25개가 anon 실행 가능으로 태어남 → `reconcile-privileges`가 자동 교정). 이관 후 남은 일(Vercel 환경 변수 교체, 로컬 전용 개발 DB 분리, 덤프 정리)도 이 문서가 정본이다. 명령은 `npm run db:move-region`
 - [`integration-inventory.md`](integration-inventory.md)
 - [`projects-connection-inventory.md`](projects-connection-inventory.md)
 
@@ -170,6 +191,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 ### 지식·운영 참고
 
+- 저장 레퍼런스와 글쓰기: [`research/2026-09-20-reference-writing/README.md`](research/2026-09-20-reference-writing/README.md) — **자료 보관·정리 완료**. 콘텐츠 370건, 선별 인사이트 26개, 주제별 글쓰기 기획과 예시 초안. 이번 원자료 재확인 22개와 기존 영상 분석 검토 4개를 구분한다. Threads 공유 프로필 2개·탐색 글 5개는 별도 보충이며 전체 수집 완료를 뜻하지 않는다. 원본 조사 사본·해시·재생성 검증 포함.
+
 - 세일즈/마케팅 지식: [`sales-guru-knowledge-base.md`](sales-guru-knowledge-base.md), [`sales-decision-styles.md`](sales-decision-styles.md), [`marketing-branding-gurus.md`](marketing-branding-gurus.md)
 - 콘텐츠 스토리텔링: [`content-storytelling-people-v2.md`](content-storytelling-people-v2.md) — **운영자 제공 참고 원문, 2026-09-14 추가**. 인물 카드 10개, 주목→유지→기억→행동→전파 지도, 한국 학원 B2B 맥락, 훅 40개와 실험 프로토콜을 보존한다. 연구·수익·효과 수치와 A/B/C 등급은 제공 문서의 주장으로 별도 검증하지 않았다. 문서 안 실행 지시·훅 DB 스키마·일정은 제품 확정 사양이 아니다. Studio AI는 원문 전체 대신 [`editorial-criteria.ts`](../packages/content-manager/editorial-criteria.ts)의 작업별 짧은 편집 기준(v2)을 사용하고, 사용한 버전을 후보 기록에 남긴다.
 - 도구 사용 가이드: [`claude-code-skills-guide.md`](claude-code-skills-guide.md)
@@ -183,6 +206,10 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - `5a3d506` — 내비게이션 단순화 + 캘린더·할 일 연결
 - `3627eef` — 브랜드 운영 표면(브랜드 탭 P0·P1)
 - `68517ec` — 개인 현금흐름 30일 로드맵
+- `0cc7f18` — 죽어 있던 테스트 복구(빌드 잔재 스윕 오염 + macOS 로케일), 1378 → 1433
+- `6423822` — 빠른 입력 전역화(`quick-capture.jsx` 정본, 전역 `C`, ⌘K 액션)
+- `fa1757e` — Supabase 리전 이전 툴킷과 싱가포르 → 서울 이관 완료
+- `4516e49` — 목업 데이터 재발 방지 가드레일
 - `docs/superpowers/plans/2026-07-13-phase0-trust-repair.md` — Phase 0 구현 체크리스트(`codex/moonlight-phase0-trust` 브랜치에 존재)
 - [`superpowers/plans/`](superpowers/plans/) — 특정 기능의 실행 기록
 - [`superpowers/specs/`](superpowers/specs/) — 승인 당시의 상세 설계와 결정 배경

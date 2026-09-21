@@ -51,13 +51,13 @@
 .hub-app .hub-project-subtask { grid-template-columns: 18px minmax(0, 1fr) minmax(120px, 160px) 60px 90px; }
 .hub-task-checklist-editor { display: flex; flex-direction: column; gap: 14px; }
 .hub-task-checklist-summary p, .hub-task-checklist-conflict p { margin: 8px 0 0; color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
-.hub-task-checklist-items { display: flex; flex-direction: column; gap: 10px; }
-.hub-task-checklist-item { padding: 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); display: flex; flex-direction: column; gap: 8px; }
-.hub-task-checklist-item-main { display: flex; align-items: end; gap: 10px; }
-.hub-task-checklist-item-main > [role="checkbox"] { margin-bottom: 12px; flex-shrink: 0; }
+.hub-task-checklist-items { display: flex; flex-direction: column; gap: 4px; }
+.hub-task-checklist-item { padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); display: flex; flex-direction: column; gap: 8px; }
+.hub-task-checklist-item-main { display: flex; align-items: center; gap: 10px; }
+.hub-task-checklist-item-main > [role="checkbox"] { flex-shrink: 0; }
 .hub-task-checklist-item-main > div { flex: 1; min-width: 0; }
 .hub-task-checklist-item-actions { display: flex; align-items: center; justify-content: end; gap: 4px; }
-.hub-task-checklist-item-actions > button:first-child { margin-right: auto; }
+.hub-task-checklist-item-actions > span { margin-right: auto; font-size: 12px; color: var(--fg-muted); }
 .hub-task-checklist-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .hub-task-checklist-actions > span { font-size: 12px; color: var(--fg-muted); margin-left: auto; }
 .hub-task-checklist-error { color: var(--danger); font-size: 12px; line-height: 1.6; margin: 0; }
@@ -85,3 +85,13 @@
   .hub-pms-backlog-group-head, .hub-pms-backlog-row { padding: 12px; }
   .hub-pms-bulk-bar > div:has(select), .hub-pms-bulk-bar > div:has(input) { flex: 1 1 140px; }
 }
+
+.hub-task-checklist-item-main .hub-input { background: transparent; border-color: transparent; }
+.hub-task-checklist-item > .hub-field { padding-bottom: 4px; }
+
+.hub-container-options { display: flex; flex-direction: column; gap: 8px; }
+.hub-container-options__group { display: flex; flex-direction: column; gap: 4px; }
+.hub-container-options__scope { color: var(--fg-dim); font-size: 10.5px; padding: 8px 8px 4px; }
+.hub-app .hub-container-options .hub-pms-chip { width: 100%; border-radius: var(--r-sm); justify-content: flex-start; }
+.hub-app .hub-container-options .hub-pms-chip__name { flex: 1; max-width: none; text-align: left; }
+.hub-container-options p { color: var(--fg-muted); font-size: 12px; }

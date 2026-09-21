@@ -2141,7 +2141,7 @@ export function Deals({ workspace, onNavigate }) {
             </div>
             {(!editingDeal.nextAction || editingDeal.age > 7) && (
               <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ color: 'var(--warning, #f59e0b)' }}>⚠️</span>
+                <Iconed name="clock" size={12} aria-hidden="true" />
                 <span>
                   {!editingDeal.nextAction
                     ? '현재 등록된 다음 행동이 없습니다. Guru에게 다음 액션 추천을 받아보세요.'

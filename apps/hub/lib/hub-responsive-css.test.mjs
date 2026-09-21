@@ -14,6 +14,12 @@ const dailyBriefSource = await readFile(
   new URL("../components/hub/pages/daily-brief.jsx", import.meta.url),
   "utf8",
 );
+// 빠른 입력 폼은 2026-09-19에 daily-brief.jsx에서 quick-capture.jsx로 빠져나갔다
+// (전역 C 단축키·⌘K 액션과 첫 화면이 같은 폼을 쓴다). 접근성 계약은 그대로 여기서 지킨다.
+const quickCaptureSource = await readFile(
+  new URL("../components/hub/quick-capture.jsx", import.meta.url),
+  "utf8",
+);
 const primitivesSource = await readFile(
   new URL("../components/hub/hub-primitives.jsx", import.meta.url),
   "utf8",
@@ -77,13 +83,16 @@ test("Daily Brief ledger toggle exposes an accessible 44px mobile target", () =>
 });
 
 test("Daily Brief quick capture has a real label and announced save state", () => {
-  assert.match(dailyBriefSource, /<form[^>]+aria-label="빠른 입력"/);
-  assert.match(dailyBriefSource, /<label[^>]+htmlFor="daily-brief-quick-task"/);
-  assert.match(dailyBriefSource, /<input[^>]+id="daily-brief-quick-task"/);
-  assert.match(dailyBriefSource, /aria-live="polite"/);
-  assert.match(dailyBriefSource, /aria-pressed=\{hint === 'task'\}/);
-  assert.match(dailyBriefSource, /aria-pressed=\{hint === 'inbox'\}/);
-  assert.match(dailyBriefSource, /fetch\('\/api\/hub\/inbox'/);
+  assert.match(quickCaptureSource, /<form[\s\S]*?aria-label="빠른 입력"/);
+  assert.match(quickCaptureSource, /<label[\s\S]*?htmlFor=\{inputId\}/);
+  assert.match(quickCaptureSource, /<input[\s\S]*?id=\{inputId\}/);
+  assert.match(quickCaptureSource, /aria-live="polite"/);
+  assert.match(quickCaptureSource, /aria-pressed=\{hint === "task"\}/);
+  assert.match(quickCaptureSource, /aria-pressed=\{hint === "inbox"\}/);
+  assert.match(quickCaptureSource, /fetch\("\/api\/hub\/inbox"/);
+  // 첫 화면은 기존 id·클래스를 그대로 넘겨 라벨 연결과 CSS 훅을 유지한다.
+  assert.match(dailyBriefSource, /inputId="daily-brief-quick-task"/);
+  assert.match(dailyBriefSource, /inputClassName="daily-brief__quick-input"/);
 });
 
 test("Daily Brief quick navigation activates the core operating tabs", () => {
@@ -113,7 +122,7 @@ test("Daily Brief panels share a subtle one-pixel accent and low elevation", () 
   assert.match(css, /--brief-panel-shadow:[\s\S]*?0 10px 26px -22px rgba\(0, 0, 0, 0\.9\)/);
   assert.match(css, /\.hub-app \.daily-brief__panel\s*\{[\s\S]*?border-left-color:\s*var\(--brief-panel-line\)[\s\S]*?box-shadow:\s*var\(--brief-panel-shadow\)/);
   assert.match(css, /\.hub-app \.daily-brief__jump\s*\{[\s\S]*?border:\s*1px solid var\(--line-soft\)[\s\S]*?border-left-color:\s*var\(--brief-panel-line\)/);
-  assert.match(dailyBriefSource, /daily-brief__capture daily-brief__panel/);
+  assert.match(quickCaptureSource, /daily-brief__capture daily-brief__panel/);
   assert.match(dailyBriefSource, /<Card pad=\{false\} className="daily-brief__panel">/);
   assert.match(dailyBriefSource, /daily-brief__panel--danger/);
 });

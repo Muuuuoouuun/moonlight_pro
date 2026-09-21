@@ -3,13 +3,13 @@
 import React from "react";
 import { InquirySummary } from '../inquiry-notifications';
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, EmptyState, Kbd } from "../hub-primitives";
+import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, EmptyState, Kbd, Skeleton } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
 import { requestPersonaChat } from "../persona-client";
 import { BurningStreakBadge, StreakFlame } from "../burning-streak";
 import { useUndoableAction } from "../use-undoable-action";
 import { createClientId } from "@/lib/pms-ui";
-import { buildQuickCapture, isDurableQuickCaptureResult } from "@/lib/quick-task-capture";
+import { QuickCaptureForm } from "../quick-capture";
 import { buildTaskToday, isDurableTaskUpdateResult } from "@/lib/task-today";
 import { QUICK_LOG_ACTIONS as WO_EXECUTE_ACTIONS } from "@/lib/sales-os/outcome-attribution";
 import {
@@ -185,124 +185,6 @@ function sourceLabel(state) {
   if (state === 'syncing') return '동기화 중';
   if (state === 'mixed') return '혼합';
   return '연결 필요';
-}
-
-function QuickTaskCapture({ onNavigate, onSaved }) {
-  const [raw, setRaw] = React.useState('');
-  const [hint, setHint] = React.useState('task');
-  const [state, setState] = React.useState({ status: 'idle', message: 'Enter로 할 일 저장' });
-  const requestIdRef = React.useRef(null);
-
-  if (!requestIdRef.current) requestIdRef.current = createClientId();
-
-  async function submit(event) {
-    event.preventDefault();
-    const capture = buildQuickCapture({ id: requestIdRef.current, raw, hint });
-
-    if (!capture.ok) {
-      setState({ status: 'error', message: '할 일을 한 줄로 입력하세요.' });
-      return;
-    }
-
-    setState({ status: 'saving', message: '저장 중…' });
-    try {
-      const response = await fetch('/api/hub/inbox', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(capture.payload),
-      });
-      const data = await response.json().catch(() => ({}));
-
-      if (response.ok && isDurableQuickCaptureResult(data)) {
-        setRaw('');
-        requestIdRef.current = createClientId();
-        const message = data.status === 'duplicate'
-          ? '이미 저장된 입력입니다.'
-          : data.destinationType === 'work_order'
-            ? '정리 전에 보관했습니다.'
-            : '할 일로 저장했습니다.';
-        setState({ status: 'saved', message, destinationType: data.destinationType });
-        onSaved?.();
-        return;
-      }
-
-      setState({
-        status: 'error',
-        message: data.error || data.status || `저장 실패 (${response.status})`,
-      });
-    } catch (error) {
-      setState({
-        status: 'error',
-        message: error instanceof Error ? error.message : '저장에 실패했습니다. 같은 입력으로 다시 시도하세요.',
-      });
-    }
-  }
-
-  const saving = state.status === 'saving';
-  const stateColor = state.status === 'error'
-    ? 'var(--danger)'
-    : state.status === 'saved'
-      ? 'var(--fg-muted)'
-      : 'var(--fg-faint)';
-
-  function changeHint(nextHint) {
-    if (saving || nextHint === hint) return;
-    if (state.status === 'error') requestIdRef.current = createClientId();
-    setHint(nextHint);
-    setState({ status: 'idle', message: nextHint === 'task' ? 'Enter로 할 일 저장' : 'Enter로 정리 전에 보관' });
-  }
-
-  return (
-    <Card className="daily-brief__capture daily-brief__panel" style={{ padding: '16px 18px' }}>
-      <form aria-label="빠른 입력" onSubmit={submit} className="hub-stackable-row" style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
-        <div style={{ display: 'flex', flex: '1 1 360px', minWidth: 0, flexDirection: 'column', gap: 8 }}>
-          <div className="hub-stackable-row" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <label htmlFor="daily-brief-quick-task" className="mono" style={{ flex: 1, fontSize: 10.5, color: 'var(--fg-dim)', letterSpacing: '0.1em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span>Quick Capture</span>
-              <span style={{ fontSize: 9.5, color: 'var(--fg-faint)', textTransform: 'none', letterSpacing: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                (Enter로 저장 <Kbd style={{ fontSize: 9, minWidth: 14, height: 16, padding: '0 4px', lineHeight: '14px' }}>↵</Kbd>)
-              </span>
-            </label>
-            <div role="group" aria-label="저장 위치" style={{ display: 'flex', gap: 4 }}>
-              <Button type="button" variant={hint === 'task' ? 'secondary' : 'ghost'} size="xs" aria-pressed={hint === 'task'} disabled={saving} onClick={() => changeHint('task')}>할 일</Button>
-              <Button type="button" variant={hint === 'inbox' ? 'secondary' : 'ghost'} size="xs" aria-pressed={hint === 'inbox'} disabled={saving} onClick={() => changeHint('inbox')}>정리 전</Button>
-            </div>
-          </div>
-          <input
-            id="daily-brief-quick-task"
-            value={raw}
-            onChange={(event) => {
-              setRaw(event.target.value);
-              if (state.status === 'error') requestIdRef.current = createClientId();
-              if (state.status !== 'idle') setState({ status: 'idle', message: hint === 'task' ? 'Enter로 할 일 저장' : 'Enter로 정리 전에 보관' });
-            }}
-            placeholder={hint === 'task' ? '지금 놓치면 안 되는 할 일을 한 줄로 입력' : '아직 분류하지 않을 메모·아이디어를 한 줄로 입력'}
-            autoComplete="off"
-            maxLength={4000}
-            disabled={saving}
-            className="daily-brief__quick-input"
-            style={{
-              width: '100%', padding: '9px 12px', fontSize: 14.5, lineHeight: 1.4,
-              color: 'var(--fg)', background: 'var(--surface-2)',
-              border: `1px solid ${state.status === 'error' ? 'var(--danger-line)' : 'var(--line-soft)'}`,
-              borderRadius: 'var(--r-sm)',
-            }}
-          />
-        </div>
-        <Button type="submit" variant="primary" size="md" icon="plus" disabled={saving || !raw.trim()} style={{ height: 42, alignSelf: 'flex-end', flexShrink: 0 }}>
-          {saving ? '저장 중' : hint === 'task' ? '할 일 저장' : '정리 전 저장'}
-        </Button>
-      </form>
-      <div style={{ marginTop: 6, minHeight: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span role={state.status === 'error' ? 'alert' : 'status'} aria-live="polite" style={{ flex: 1, fontSize: 11.5, color: stateColor }}>
-          {state.message}
-        </span>
-        {state.status === 'saved' && state.destinationType === 'task' && (
-          <Button variant="ghost" size="xs" iconRight="arrowRight" onClick={() => onNavigate?.('dashboard/work/my')}>할 일 보기</Button>
-        )}
-      </div>
-    </Card>
-  );
 }
 
 function TaskToday({ taskToday, onNavigate, onChanged }) {
@@ -1066,7 +948,7 @@ function ApprovalQueueCard({ onNavigate }) {
         {orders.length === 0 ? (
           <div role={state === 'error' ? 'alert' : undefined} style={{ padding: 14, fontSize: 12.5, color: state === 'error' ? 'var(--danger)' : 'var(--fg-muted)', lineHeight: 1.5 }}>
             {state === 'loading'
-              ? '큐 확인 중…'
+              ? <Skeleton lines={2} label="승인 큐 확인 중" />
               : state === 'error'
               ? '승인 큐를 읽지 못했습니다 — 대기 제안이 있을 수 있습니다. 새로고침해 주세요.'
               : '승인 대기 중인 제안이 없습니다. /inbox·/team이 제안을 올리면 여기서 1클릭으로 처리합니다.'}
@@ -2091,7 +1973,7 @@ function WeeklyReportCard({ onNavigate }) {
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
             {rows.map((r) => (
               <div key={r.label} style={{ minWidth: 72 }}>
-                <div className="stat" style={{ fontSize: 22 }}>{syncState === 'loading' ? '—' : r.value}</div>
+                <div className="stat" style={{ fontSize: 22 }}>{syncState === 'loading' ? <Skeleton lines={1} height={22} width="56%" label="지표 확인 중" /> : r.value}</div>
                 <div style={{ fontSize: 11, color: 'var(--fg-dim)', marginTop: 2 }}>{r.label}</div>
               </div>
             ))}
@@ -2159,8 +2041,14 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
 
       <StatusLine state={ledger} onRetry={refreshLedger} />
 
-      {/* §7 슬롯 순서: Quick Capture가 첫 fold 1순위 — 내비 칩보다 위. */}
-      <QuickTaskCapture onNavigate={onNavigate} onSaved={ledger.refreshTasks} />
+      {/* 슬롯 순서: Quick Capture → 오늘 할 일 → 긴급 KA·집중 고객·일정 → 신호.
+          입력과 결과를 붙인다 — 할 일을 여기서 적는데 목록은 9번째 슬롯(신호 아래)에 있어서
+          방금 적은 것이 보이지 않았다. docs/README.md 의 운영자 확정 "첫 화면은 **할 일**,
+          매출, 메시지, 기획, 콘텐츠 순서의 판단을 돕는다"도 할 일을 1순위로 적고 있다
+          (2026-09-20 운영자 재확정). 긴급 KA·집중 고객 ≤5 제한은 그대로다. */}
+      <QuickCaptureForm layout="inline" inputId="daily-brief-quick-task" inputClassName="daily-brief__quick-input" onNavigate={onNavigate} onSaved={ledger.refreshTasks} />
+
+      <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
 
       {/* Q118·Q119: 월(개인)·목(회사) 아침에만 뜨는 주간 정리 — 다른 요일은 null. */}
       <WeeklyReportCard onNavigate={onNavigate} />
@@ -2186,9 +2074,8 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
           )}
         </div>
 
-        <div className="hub-grid--two" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.05fr) minmax(300px, .95fr)', gap: 16, alignItems: 'start' }}>
-          <TaskToday taskToday={ledger.taskToday} onNavigate={onNavigate} onChanged={ledger.refreshTasks} />
-
+        {/* 오늘 할 일이 캡처 바로 아래로 올라가면서 왼쪽 칸이 비었다 — 신호 섹션이 전폭을 쓴다. */}
+        <div>
           <div>
             <SectionTitle right={<div style={{ display: 'flex', gap: 6 }}>
               <Badge tone={urgentCount > 0 ? 'danger' : 'neutral'} size="xs">{urgentCount} urgent</Badge>

@@ -86,10 +86,10 @@ export function MemoPatternPanel({
               >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <Badge tone="moon">{GOAL_LABELS[p.kind] || "패턴"}</Badge>
+                    <Badge tone="neutral">{GOAL_LABELS[p.kind] || "패턴"}</Badge>
                     <strong style={{ fontSize: 14 }}>{p.title}</strong>
                   </div>
-                  <Badge tone={p.suggestedTarget === "content" ? "company" : "personal"}>
+                  <Badge tone="neutral">
                     {p.suggestedTarget === "content" ? "콘텐츠 추천" : "태스크 추천"}
                   </Badge>
                 </div>

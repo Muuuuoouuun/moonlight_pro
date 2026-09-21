@@ -4,10 +4,11 @@ import React from "react";
 import { JournalSources } from "../journal-links";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Card, Button, Checkbox, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer, useToast } from "../hub-primitives";
+import { Badge, Card, Button, Checkbox, DateQuickPresets, EmptyState, SyncBadge, Kbd, SegmentedControl, ScrollShadowX, Input, IconButton, EditDrawer, useToast } from "../hub-primitives";
 import { UNDO_WINDOW_MS, useUndoableAction } from "../use-undoable-action";
 import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
 import { TASK_PRIORITY_OPTIONS, TASK_STATUS_OPTIONS } from "@/lib/pms-ui";
+import { applyMute, clearMute, mutedIdSet, readMuteStore, seoulDayKey, writeMuteStore } from "./my-work-mute.js";
 
 // 내 작업 — one personal operating surface, three lenses over the cross-lane attention
 // read model (tasks + open deals + calendar week). Design contract from the operator:
@@ -212,7 +213,7 @@ function useAttentionLedger() {
 // strikethrough flash before a task leaves the list (undo window handled by the caller).
 // `selected` marks the row whose detail panel is open. `hideProject` suppresses the
 // project label inside a project accordion (the header already names it).
-function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showReason, hideProject, justAdded, onDefer }) {
+function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showReason, hideProject, justAdded, onDefer, mutedEntry, onMute, onUnmute }) {
   // 우선순위 정렬일 때는 meta 자리에 정렬 근거(reason)를 보여준다 — 첫 화면 요구사항
   // "지금 해야 하는 이유"(profile §4)를 행 높이 증가 없이 전달.
   const projectLabel = !hideProject && item.lane === 'task' ? item.projectName || '' : '';
@@ -294,7 +295,7 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
         boxShadow: item.bucket === 'overdue' ? 'inset 1px 0 0 var(--danger)'
           : item.stalled ? 'inset 1px 0 0 var(--line-strong)'
             : justAdded ? 'inset 1px 0 0 var(--accent)' : undefined,
-        transition: swipeOffset ? 'none' : 'transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), background var(--dur-enter) ease, box-shadow var(--dur-enter) ease',
+        transition: swipeOffset ? 'none' : 'transform var(--dur-enter) var(--ease-hub), background var(--dur-enter) ease, box-shadow var(--dur-enter) ease',
       }}
     >
       {item.lane === 'task' ? (
@@ -306,7 +307,7 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
         fontSize: 13, color: completing ? 'var(--fg-faint)' : 'var(--fg)', flex: 1, minWidth: '35%',
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         textDecoration: completing ? 'line-through' : 'none',
-        transition: 'color 180ms ease',
+        transition: 'color var(--dur-panel) ease',
       }}>
         {item.title}
       </span>
@@ -332,12 +333,44 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>{metaText}</span>
       )}
+      {/* 숨김 상태는 색이 아니라 라벨로 말한다(§5.3) — '숨김 N' 토글을 켰을 때만 보이는 행. */}
+      {mutedEntry && (
+        <Badge tone="neutral" size="xs" variant="outline">{mutedEntry.until ? '오늘 숨김' : '숨김'}</Badge>
+      )}
       <span className="mono" style={{
         fontSize: 11, flexShrink: 0, minWidth: 64, textAlign: 'right',
         color: item.bucket === 'overdue' ? 'var(--danger)' : item.bucket === 'today' ? 'var(--fg-muted)' : 'var(--fg-faint)',
       }}>
         {item.whenLabel}
       </span>
+      {/* 행 보조 액션 — hover/포커스에서만 드러나는 한 번 클릭 정리(.hub-row-action).
+          여기 있는 건 되돌리기 쉬운 '오늘 안 보기' 하나뿐이고, '아예 안 보기'는 행을 열어
+          상세 패널에서 고른다(무기한 숨김은 의도적으로 한 단계 더 깊게 둔다). */}
+      {onMute && !swipeAction && (
+        // 래퍼가 .hub-row-action을 갖는다 — IconButton은 display를 인라인으로 쓰기 때문에
+        // 버튼 자체에 건 display 규칙(터치 기기에서 숨김)은 이기지 못한다.
+        <span className="hub-row-action" data-open={mutedEntry ? 'true' : undefined}>
+          {mutedEntry ? (
+            <IconButton
+              icon="eye"
+              size={24}
+              iconSize={13}
+              tooltip="목록에 다시 표시"
+              onClick={(e) => { e.stopPropagation(); onUnmute(item); }}
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <IconButton
+              icon="eyeOff"
+              size={24}
+              iconSize={13}
+              tooltip="오늘 안 보기 — 내일 다시 표시"
+              onClick={(e) => { e.stopPropagation(); onMute(item, 'today'); }}
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+          )}
+        </span>
+      )}
     </div>
   );
 }
@@ -345,7 +378,7 @@ function ItemRow({ item, onComplete, onOpen, completing, selected, rowRef, showR
 // 우측 상세 패널 — 행 클릭 시 열리는 간단 요약 + 다음 행동. 딥워크는 각 레인의 네이티브
 // 서피스(할 일 EditDrawer · Deals 드로어 · 프로젝트 · Google Calendar)로 넘긴다.
 // ESC/닫기 버튼으로 접힌다 (§8.1 닫기 계약의 패널 버전).
-function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDefer, onEdit, onNavigate }) {
+function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDefer, onEdit, onNavigate, mutedEntry, onMute, onUnmute }) {
   const bucketMeta = BUCKET_HEADER[normalizeBucket(item)];
   // mono는 계기 데이터(기한·단계·금액)만 — 상태/프로젝트명/근거 같은 '단어' 값을 mono로
   // 두면 이름이 ID처럼 읽힌다 (DESIGN §6 하이브리드 숫자 규칙).
@@ -445,6 +478,19 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
             </Button>
           </>
         )}
+        {/* 숨기기 — 원장은 그대로 두고 이 목록에서만 걷어낸다. 딜을 파이프라인에서까지
+            치우는 건 Revenue 보드의 '파이프라인에서 숨기기'(deals.hidden_at)가 따로 한다.
+            되돌리기: 오늘 숨김은 내일 자동 복귀, 무기한 숨김은 툴바의 '숨김 N' 토글. */}
+        <div style={{ borderTop: '1px solid var(--line-soft)', marginTop: 2, paddingTop: 8, display: 'flex', gap: 6 }}>
+          {mutedEntry ? (
+            <Button variant="outline" size="sm" icon="eye" onClick={onUnmute} style={{ flex: 1 }}>목록에 다시 표시</Button>
+          ) : (
+            <>
+              <Button variant="ghost" size="sm" icon="clock" onClick={() => onMute('today')} style={{ flex: 1 }}>오늘 안 보기</Button>
+              <Button variant="ghost" size="sm" icon="eyeOff" onClick={() => onMute('forever')} style={{ flex: 1 }}>아예 안 보기</Button>
+            </>
+          )}
+        </div>
       </div>
     </Card>
   );
@@ -485,6 +531,19 @@ export function MyWork({ onNavigate }) {
   const setLane = (v) => { setLaneState(v); writeStoredOption('mlp.mywork.lane', v); };
   const setBucketFilter = (v) => { setBucketFilterState(v); writeStoredOption('mlp.mywork.bucket', v); };
   const setSort = (v) => { setSortState(v); writeStoredOption('mlp.mywork.sort', v); };
+
+  // 숨김(뮤트) — '오늘 안 보기'(내일 자동 복귀)와 '아예 안 보기'(무기한). 원장 사실이
+  // 아니라 이 표면의 보기 설정이라 lane/bucket/sort와 같은 localStorage 계층에 둔다
+  // (근거는 my-work-mute.js 머리주석). 읽기도 같은 이유로 마운트 후 이펙트에서 —
+  // useState 초기화에서 읽으면 SSR HTML과 첫 렌더가 갈려 하이드레이션 불일치가 난다.
+  const [muted, setMuted] = React.useState(() => ({}));
+  const [showMuted, setShowMuted] = React.useState(false);
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setMuted(readMuteStore(window.localStorage));
+  }, []);
+  const todayKey = seoulDayKey();
+  const mutedIds = React.useMemo(() => mutedIdSet(muted, todayKey), [muted, todayKey]);
 
   const [search, setSearch] = React.useState('');
   const [quickTitle, setQuickTitle] = React.useState('');
@@ -529,6 +588,8 @@ export function MyWork({ onNavigate }) {
       : items;
     let filtered = lane === 'all' ? patched : patched.filter((i) => i.lane === lane);
     filtered = filtered.filter((i) => !hiddenIds.has(i.id));
+    // 숨긴 항목은 '숨김 N' 토글을 켰을 때만 (뱃지 + 다시 표시 버튼과 함께) 돌아온다.
+    if (!showMuted) filtered = filtered.filter((i) => !mutedIds.has(i.id));
     // Bucket filter is a 리스트-only control (board already shows every bucket as its own
     // column; week already shows every day) — applying it there too would silently empty
     // most columns/days without any visible chip explaining why.
@@ -546,7 +607,7 @@ export function MyWork({ onNavigate }) {
     else if (sort === 'priority') sorted.sort((a, b) => (priorityValue(b) - priorityValue(a)) || (recencyValue(b) - recencyValue(a)));
     else sorted.sort((a, b) => dueValue(a) - dueValue(b));
     return sorted;
-  }, [items, lane, bucketFilter, search, sort, hiddenIds, lens, itemPatches, justAddedId]);
+  }, [items, lane, bucketFilter, search, sort, hiddenIds, lens, itemPatches, justAddedId, mutedIds, showMuted]);
 
   // Durable quick-add task: POST /api/hub/tasks (Phase 1A write path). 상세 토글을 열면
   // 기한·우선순위도 한 번에 저장 — 기본은 제목만(빠른 경로) 그대로 유지.
@@ -588,6 +649,9 @@ export function MyWork({ onNavigate }) {
           setJustAddedId(created.id);
           scrollToRow(created.id);
         }
+        // 연속 입력이 기본값이다 — 버튼 클릭으로 저장하면 포커스가 버튼에 남아 다음
+        // 한 줄을 바로 못 친다(Enter 저장 경로만 우연히 동작했다). 입력창으로 되돌린다.
+        quickRef.current?.focus();
         const label = created?.bucket === 'later' ? '할 일 저장됨 · "나중"에 추가' : '할 일 저장됨';
         setNotice({
           tone: 'ok',
@@ -738,6 +802,33 @@ export function MyWork({ onNavigate }) {
   // 행 클릭 → 우측 상세 패널 토글 (모든 레인). 할 일 편집(EditDrawer)·Deals 이동·
   // 프로젝트 이동·Calendar 열기는 패널 안의 액션 버튼이 담당한다.
   const openItem = (item) => setDetailId((cur) => (cur === item.id ? null : item.id));
+
+  // 숨기기/다시 표시 — 원장에 쓰지 않고 브라우저 보기 설정만 바꾼다. 완료·삭제와 달리
+  // 지연 커밋 undo가 필요 없다(서버 호출이 없어 '되돌리기'가 즉시 원상복구다).
+  const persistMuted = (next) => {
+    setMuted(next);
+    if (typeof window !== 'undefined') writeMuteStore(window.localStorage, next);
+  };
+
+  const unmuteItem = (item) => {
+    const id = typeof item === 'string' ? item : item?.id;
+    if (!id) return;
+    persistMuted(clearMute(muted, id));
+    setNotice({ tone: 'ok', label: '목록에 다시 표시됨' });
+    toast.info('다시 표시합니다.');
+  };
+
+  const muteItem = (item, mode) => {
+    persistMuted(applyMute(muted, item, mode, new Date()));
+    if (detailId === item.id) setDetailId(null);
+    const label = mode === 'forever' ? '목록에서 숨김' : '오늘 숨김 · 내일 다시 표시';
+    const undo = () => unmuteItem(item.id);
+    setNotice({ key: `mute-${item.id}`, tone: 'ok', label, action: { label: '되돌리기', onClick: undo } });
+    toast.info(
+      mode === 'forever' ? '내 작업 목록에서 숨겼습니다.' : '오늘은 이 항목을 숨깁니다.',
+      { action: { label: '되돌리기', onClick: undo } },
+    );
+  };
 
   // Task edit drawer — 패널의 "상세 편집" 버튼에서 연다. Edits title/status/priority/due
   // through the extended PATCH /api/hub/tasks contract (update_task accepts a partial patch).
@@ -1000,10 +1091,20 @@ export function MyWork({ onNavigate }) {
   };
 
   const laneCounts = React.useMemo(() => {
-    const counts = { all: items.length, task: 0, deal: 0, event: 0 };
-    items.forEach((i) => { counts[i.lane] += 1; });
+    const counts = { all: 0, task: 0, deal: 0, event: 0 };
+    items.forEach((i) => {
+      if (!showMuted && mutedIds.has(i.id)) return; // 숨긴 항목은 세그먼트 숫자에서도 빠진다
+      counts.all += 1;
+      if (counts[i.lane] != null) counts[i.lane] += 1;
+    });
     return counts;
-  }, [items]);
+  }, [items, mutedIds, showMuted]);
+
+  // 현재 원장에서 숨겨둔 항목 수 — 툴바 토글과 빈 상태 안내가 같은 숫자를 쓴다.
+  const mutedCount = React.useMemo(
+    () => items.filter((i) => mutedIds.has(i.id) && !hiddenIds.has(i.id)).length,
+    [items, mutedIds, hiddenIds],
+  );
 
   // 현재 레인 기준 기한 버킷 카운트 — 시그널 스트립과 기한 세그먼트가 같은 숫자를 쓴다
   // (타일 클릭 결과로 보이는 행 수와 일치해야 신뢰할 수 있는 계기가 된다).
@@ -1011,11 +1112,12 @@ export function MyWork({ onNavigate }) {
     const counts = { overdue: 0, today: 0, week: 0, later: 0 };
     items.forEach((i) => {
       if (hiddenIds.has(i.id)) return;
+      if (!showMuted && mutedIds.has(i.id)) return;
       if (lane !== 'all' && i.lane !== lane) return;
       counts[normalizeBucket(i)] += 1;
     });
     return counts;
-  }, [items, hiddenIds, lane]);
+  }, [items, hiddenIds, lane, mutedIds, showMuted]);
 
   // 리스트 렌즈 그룹 섹션 — 전체 기한 보기일 때만. rows는 프로젝트·일정 아코디언까지
   // 반영된 렌더 구조 (item 행 + project 그룹 행 + events 그룹 행).
@@ -1069,7 +1171,7 @@ export function MyWork({ onNavigate }) {
                 border: `1px solid ${active ? 'var(--line-strong)' : 'var(--line-soft)'}`,
                 borderRadius: 'var(--r-lg)',
                 boxShadow: count > 0 && t.stripe ? `inset 1px 0 0 ${t.stripe}` : undefined,
-                transition: 'background 120ms ease, border-color 120ms ease',
+                transition: 'background var(--dur-hover) ease, border-color var(--dur-hover) ease',
               }}
             >
               <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-dim)' }}>{t.label}</div>
@@ -1129,6 +1231,9 @@ export function MyWork({ onNavigate }) {
             >
               {TASK_PRIORITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
+            {/* 기한은 date picker 수동 조작만 가능했다 — followups·고객 컨택 시트가 쓰는
+                DateQuickPresets를 같이 건다(§8.1 primitives-first). 클릭 한 번으로 채운다. */}
+            <DateQuickPresets disabled={saving} onPick={setQuickDue} />
             <span style={{ fontSize: 11, color: 'var(--fg-faint)' }}>비워두면 기한 없음·보통 우선순위로 저장</span>
           </div>
         )}
@@ -1151,6 +1256,20 @@ export function MyWork({ onNavigate }) {
           />
         )}
         {lens !== 'week' && <SegmentedControl label="정렬" options={SORT_OPTIONS} value={sort} onChange={setSort} />}
+        {/* 숨긴 항목은 사라진 게 아니라 접힌 것 — 개수를 항상 보여주고 한 번에 되돌릴 수
+            있게 한다(§5.3: 필터가 '비어 있음'으로 위장하지 않는다). */}
+        {(mutedCount > 0 || showMuted) && (
+          <Button
+            variant={showMuted ? 'secondary' : 'ghost'}
+            size="sm"
+            icon={showMuted ? 'eye' : 'eyeOff'}
+            active={showMuted}
+            aria-pressed={showMuted}
+            onClick={() => setShowMuted((v) => !v)}
+          >
+            숨김 <span className="num">{mutedCount}</span>
+          </Button>
+        )}
         {notice && (
           // live region 필수(§11): 되돌리기 창이 열렸다는 사실을 스크린리더도 알아야 한다.
           // 완료는 중립(§5.3 done ≠ green) — 에러만 danger.
@@ -1203,7 +1322,7 @@ export function MyWork({ onNavigate }) {
       {['ready', 'stale'].includes(state) && lens === 'list' && (
         <Card pad={false} style={{ overflow: 'hidden' }}>
           {visible.length === 0 ? (
-            !search.trim() && (lane === 'all' || lane === 'task') && bucketCounts.today === 0 && bucketCounts.overdue === 0 ? (
+            !search.trim() && (lane === 'all' || lane === 'task') && bucketCounts.today === 0 && bucketCounts.overdue === 0 && mutedCount === 0 ? (
               <div
                 className="hub-celebration-card"
                 style={{
@@ -1251,16 +1370,20 @@ export function MyWork({ onNavigate }) {
                 description={
                   search.trim()
                     ? '다른 검색어를 시도하거나 검색을 지워보세요.'
-                    : lane === 'all' && bucketFilter === 'all'
-                      ? '할 일을 추가하거나 딜·일정이 생기면 여기에 모입니다.'
-                      : `${lane !== 'all' ? LANE_LABEL[lane] : ''}${lane !== 'all' && bucketFilter !== 'all' ? ' · ' : ''}${bucketFilter !== 'all' ? BUCKETS.find((b) => b.key === bucketFilter)?.label : ''} 조건에 항목이 없습니다.`
+                    : (lane !== 'all' || bucketFilter !== 'all')
+                      ? `${lane !== 'all' ? LANE_LABEL[lane] : ''}${lane !== 'all' && bucketFilter !== 'all' ? ' · ' : ''}${bucketFilter !== 'all' ? BUCKETS.find((b) => b.key === bucketFilter)?.label : ''} 조건에 항목이 없습니다.`
+                      : mutedCount > 0 && !showMuted
+                        ? `숨긴 항목 ${mutedCount}건이 있습니다 — 언제든 다시 표시할 수 있습니다.`
+                        : '할 일을 추가하거나 딜·일정이 생기면 여기에 모입니다.'
                 }
                 action={
                   search.trim()
                     ? <Button variant="outline" size="sm" onClick={() => setSearch('')}>검색 지우기</Button>
                     : (lane !== 'all' || bucketFilter !== 'all')
                       ? <Button variant="outline" size="sm" onClick={() => { setLane('all'); setBucketFilter('all'); }}>필터 초기화</Button>
-                      : undefined
+                      : mutedCount > 0 && !showMuted
+                        ? <Button variant="outline" size="sm" icon="eye" onClick={() => setShowMuted(true)}>숨김 {mutedCount}건 보기</Button>
+                        : undefined
                 }
                 style={{ minHeight: 180, padding: '28px 12px' }}
               />
@@ -1291,6 +1414,9 @@ export function MyWork({ onNavigate }) {
                         selected={detailId === row.item.id}
                         justAdded={justAddedId === row.item.id}
                         showReason={sort === 'priority'}
+                        mutedEntry={mutedIds.has(row.item.id) ? muted[row.item.id] : null}
+                        onMute={muteItem}
+                        onUnmute={unmuteItem}
                         rowRef={nextRowRef()}
                       />
                     );
@@ -1315,7 +1441,7 @@ export function MyWork({ onNavigate }) {
                             borderBottom: '1px solid var(--line-soft)', cursor: 'pointer',
                           }}
                         >
-                          <Iconed name="chevronD" size={12} style={{ transform: eventsOpen ? 'none' : 'rotate(-90deg)', transition: 'transform 120ms ease', color: 'var(--fg-faint)' }} />
+                          <Iconed name="chevronD" size={12} style={{ transform: eventsOpen ? 'none' : 'rotate(-90deg)', transition: 'transform var(--dur-hover) ease', color: 'var(--fg-faint)' }} />
                           <Iconed name="calendar" size={13} style={{ color: 'var(--fg-dim)' }} />
                           <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--fg-muted)' }}>일정</span>
                           <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4 }}>{row.items.length}</span>
@@ -1338,6 +1464,9 @@ export function MyWork({ onNavigate }) {
                                 completing={completingIds.has(item.id)}
                                 selected={detailId === item.id}
                                 showReason={sort === 'priority'}
+                                mutedEntry={mutedIds.has(item.id) ? muted[item.id] : null}
+                                onMute={muteItem}
+                                onUnmute={unmuteItem}
                                 rowRef={nextRowRef()}
                               />
                             ))}
@@ -1364,7 +1493,7 @@ export function MyWork({ onNavigate }) {
                           borderBottom: '1px solid var(--line-soft)', cursor: 'pointer',
                         }}
                       >
-                        <Iconed name="chevronD" size={12} style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 120ms ease', color: 'var(--fg-faint)' }} />
+                        <Iconed name="chevronD" size={12} style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'none', transition: 'transform var(--dur-hover) ease', color: 'var(--fg-faint)' }} />
                         <Iconed name="projects" size={13} style={{ color: 'var(--fg-dim)' }} />
                         <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {row.projectName}
@@ -1385,6 +1514,9 @@ export function MyWork({ onNavigate }) {
                               selected={detailId === item.id}
                               justAdded={justAddedId === item.id}
                               showReason={sort === 'priority'}
+                              mutedEntry={mutedIds.has(item.id) ? muted[item.id] : null}
+                              onMute={muteItem}
+                              onUnmute={unmuteItem}
                               hideProject
                               rowRef={nextRowRef()}
                             />
@@ -1408,6 +1540,9 @@ export function MyWork({ onNavigate }) {
                 selected={detailId === item.id}
                 justAdded={justAddedId === item.id}
                 showReason={sort === 'priority'}
+                mutedEntry={mutedIds.has(item.id) ? muted[item.id] : null}
+                onMute={muteItem}
+                onUnmute={unmuteItem}
                 rowRef={nextRowRef()}
               />
             ))
@@ -1429,7 +1564,7 @@ export function MyWork({ onNavigate }) {
                 border: dropTarget ? '1px dashed var(--moon-300)' : '1px solid var(--line-soft)',
                 borderRadius: 'var(--r-lg)',
                 display: 'flex', flexDirection: 'column',
-                transition: 'border-color 120ms ease',
+                transition: 'border-color var(--dur-hover) ease',
               }}>
                 <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 600 }}>{b.label}</span>
@@ -1517,6 +1652,9 @@ export function MyWork({ onNavigate }) {
           onDefer={() => rescheduleTask(detailItem, deferTarget.dueAt, `${deferTarget.label}로 미룸`)}
           onEdit={() => openTaskDraft(detailItem)}
           onNavigate={onNavigate}
+          mutedEntry={mutedIds.has(detailItem.id) ? muted[detailItem.id] : null}
+          onMute={(mode) => muteItem(detailItem, mode)}
+          onUnmute={() => unmuteItem(detailItem)}
         />
       )}
       </div>

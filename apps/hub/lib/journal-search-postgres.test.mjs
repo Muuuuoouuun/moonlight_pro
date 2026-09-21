@@ -1,3 +1,6 @@
+// macOS: LC_ALL 이 없으면 postmaster 가 기동 중 multithreaded 로 판정되어
+// `FATAL: postmaster became multithreaded during startup` 으로 죽는다 (2026-09-19).
+// DB 로케일은 initdb --no-locale 로 이미 C 이므로 동작은 바뀌지 않는다.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -8,7 +11,7 @@ import { test } from 'node:test';
 // Opt-in disposable socket-only cluster. Never loads .env or an existing DB.
 const enabled = process.env.JOURNAL_POSTGRES_TEST === '1';
 const root = new URL('../../../', import.meta.url);
-const migration = new URL('supabase/migrations/20260913_0030_journal_search.sql', root);
+const migration = new URL('supabase/migrations/20260920_0035_journal_tags_search.sql', root);
 const W='11111111-1111-4111-8111-111111111111', O='22222222-2222-4222-8222-222222222222';
 const id=n=>`33333333-3333-4333-8333-${String(n).padStart(12,'0')}`;
 const literal=value=>value===null?'null':`'${String(value).replaceAll("'","''")}'`;
@@ -24,10 +27,10 @@ test('journal search PostgreSQL literal filters, paging, boundaries, isolation a
   const insert=(n,{workspace=W,title='',body='원문',enhancement='',kind='note',at='2026-09-13T01:00:00Z'}={})=>sql(`insert into public.journal_entries(id,workspace_id,entry_kind,title,body,note_meta,occurred_at) values('${id(n)}','${workspace}','note',${literal(title)},${literal(body)},${literal(JSON.stringify({kind,enhancement}))}::jsonb,${literal(at)});`);
   let started=false;
   try{
-    execFileSync('initdb',['-D',data,'-U','journal_search_test','-A','trust','--no-locale','--encoding=UTF8'],{stdio:'pipe'});
-    execFileSync('pg_ctl',['-D',data,'-l',join(directory,'postgres.log'),'-o',`-F -k ${directory} -p 55494 -c listen_addresses=''`,'-w','start'],{stdio:'pipe'});started=true;
+    execFileSync('initdb',['-D',data,'-U','journal_search_test','-A','trust','--no-locale','--encoding=UTF8'],{ stdio: 'pipe', env: { ...process.env, LC_ALL: process.env.LC_ALL || 'C' } });
+    execFileSync('pg_ctl',['-D',data,'-l',join(directory,'postgres.log'),'-o',`-F -k ${directory} -p 55494 -c listen_addresses=''`,'-w','start'],{ stdio: 'pipe', env: { ...process.env, LC_ALL: process.env.LC_ALL || 'C' } });started=true;
     sql(`create role anon; create role authenticated; create role service_role bypassrls; create schema auth; create function auth.uid() returns uuid language sql as $$ select null::uuid $$;`);
-    for(const file of ['supabase/setup/00_live_schema.sql','supabase/migrations/20260617_0007_content_idea_cadence.sql','supabase/migrations/20260718_0021_task_description.sql','supabase/migrations/20260912_0025_daily_review_journal.sql','supabase/migrations/20260912_0026_content_workflow.sql','supabase/migrations/20260913_0027_journal_notes.sql'])sql(readFileSync(new URL(file,root),'utf8'));
+    for(const file of ['supabase/setup/00_live_schema.sql','supabase/migrations/20260617_0007_content_idea_cadence.sql','supabase/migrations/20260718_0021_task_description.sql','supabase/migrations/20260912_0025_daily_review_journal.sql','supabase/migrations/20260912_0026_content_workflow.sql','supabase/migrations/20260913_0027_journal_notes.sql','supabase/migrations/20260913_0030_journal_search.sql'])sql(readFileSync(new URL(file,root),'utf8'));
     sql(readFileSync(migration,'utf8'));
     sql(`insert into public.workspaces(id,name,slug) values('${W}','Search','search'),('${O}','Other','other');
       insert into public.projects(id,workspace_id,name) values('${id(1000)}','${W}','프로젝트'),('${id(1001)}','${O}','외부 프로젝트');
@@ -46,6 +49,27 @@ test('journal search PostgreSQL literal filters, paging, boundaries, isolation a
       const found=search({q:'token'});assert.deepEqual(found.entries.map(r=>r.match.field),['enhancement','body','title']);
       for(const entry of found.entries){assert.ok(entry.match.text.toLowerCase().includes('token'));assert.ok([...entry.match.text].length<=180);assert.ok([...entry.excerpt].length<=180);}
       assert.deepEqual(search({q:'🌓 한글'}).entries.map(r=>r.id),[id(53)]);
+    });
+    await t.test('tag saves roundtrip through revisions, idempotency and literal search', () => {
+      const command = { action: 'save', entryId: id(900), expectedRevision: 0, body: '태그 없는 본문', title: '', occurredAt: '2026-09-13T01:00:00Z', noteMeta: { kind: 'idea', enhancement: '', tags: ['후속 연락', 'a%_\\*', 'Token'] }, contexts: [] };
+      const save = (value, requestId) => JSON.parse(sql(`select public.journal_workflow_v1('${W}','${id(requestId)}',${literal(JSON.stringify(value))}::jsonb)`));
+      const saved = save(command, 901);
+      assert.equal(saved.status, 'saved');
+      assert.deepEqual(saved.entry.note_meta, command.noteMeta);
+      assert.equal(save(command, 901).status, 'duplicate');
+      for (const q of ['후속', 'a%_\\*']) {
+        const found = search({ q });
+        assert.equal(found.status, 'live');
+        assert.deepEqual(found.entries.map(row => row.id), [id(900)]);
+        assert.equal(found.entries[0].match.field, 'tags');
+        assert.ok(found.entries[0].match.text.includes(q));
+      }
+      assert.equal(search({ q: 'token' }).entries.find(row => row.id === id(900)).match.field, 'tags');
+      const updated = { ...command, expectedRevision: 1, noteMeta: { ...command.noteMeta, tags: [] } };
+      assert.equal(save(updated, 902).entry.note_revision, 2);
+      assert.equal(search({ q: '후속' }).entries.length, 0);
+      assert.deepEqual(JSON.parse(sql(`select snapshot->'note_meta'->'tags' from public.journal_note_revisions where journal_id='${id(900)}' and revision=1`)), command.noteMeta.tags);
+      assert.equal(save({ ...updated, expectedRevision: 1 }, 903).status, 'conflict');
     });
     await t.test('long literal matches reserve snippet space before adding leading context',()=>{
       for(const length of [150,180,200]) {
@@ -101,5 +125,5 @@ test('journal search PostgreSQL literal filters, paging, boundaries, isolation a
       const before=sql('select count(*) from public.journal_entries');sql(readFileSync(migration,'utf8'));assert.equal(sql('select count(*) from public.journal_entries'),before);
       const service=JSON.parse(sql(`set role service_role; select public.journal_search_v1('${W}','linked');`));assert.equal(service.status,'live');
     });
-  }finally{if(started)execFileSync('pg_ctl',['-D',data,'-m','fast','-w','stop'],{stdio:'pipe'});rmSync(directory,{recursive:true,force:true});}
+  }finally{if(started)execFileSync('pg_ctl',['-D',data,'-m','fast','-w','stop'],{ stdio: 'pipe', env: { ...process.env, LC_ALL: process.env.LC_ALL || 'C' } });rmSync(directory,{recursive:true,force:true});}
 });

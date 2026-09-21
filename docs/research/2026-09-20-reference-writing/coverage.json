@@ -1,0 +1,46 @@
+{
+  "unique_records": 370,
+  "original_membership_rows": 401,
+  "duplicate_membership_rows": 31,
+  "platforms": {
+    "YouTube 영상": 265,
+    "Instagram": 103,
+    "Facebook": 1,
+    "YouTube 커뮤니티": 1
+  },
+  "previous_evidence_levels": {
+    "자막 기반 요약": 192,
+    "영상 직접 분석": 70,
+    "내용 미확보": 1,
+    "자막 기반 요약·품질 주의": 2,
+    "이전 캡션·이미지 1장 확인": 1,
+    "이전 캡션·일부 슬라이드 확인": 1,
+    "이전 캡션·일부 영상 화면 확인": 1,
+    "이전 캡션·썸네일 확인": 1,
+    "이전 캡션 분류": 81,
+    "이전 게시물 캡션 확인": 18,
+    "공유 미리보기·본문 미확보": 2
+  },
+  "themes_multi_label": {
+    "학습·생각·글쓰기": 114,
+    "고객·설득·브랜드": 121,
+    "실행·지속·회복": 226,
+    "가치·관계·삶": 112,
+    "별도 확인·배경": 33,
+    "제품·창업·AI": 28,
+    "협업·리더십": 15,
+    "제작 방식·영감": 5
+  },
+  "curated_source_count": 26,
+  "primary_content_rechecked": 22,
+  "prior_analysis_reviewed_only": 4,
+  "saved_instagram_low_confidence": 29,
+  "supplementary_profile_references": 2,
+  "supplementary_profile_discovery_posts": 5,
+  "coverage_gaps": [
+    "YouTube 숨겨진 목록행 38개는 미확보(고유영상수 아님)",
+    "YouTube 회원전용 1편 내용 미확보",
+    "지정 DM 표본·추가 저장폴더 9개 미수집",
+    "DM 접근불가 공유 1건은 URL이 없어 통합목록에서 제외"
+  ]
+}

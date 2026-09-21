@@ -128,6 +128,14 @@ export function EmptyState({ icon = 'inbox', title, description, action, style }
   );
 }
 
+// Button hover is CSS-owned (DESIGN.md §8.1 "Hover" — no JS onMouseEnter/Leave, no
+// per-page re-implementation). That forces the resting variant chrome into the
+// stylesheet as well: an inline `background` / `border` / `color` outranks every class
+// rule, so `.hub-btn--primary:hover { … }` could never win while the resting value sat
+// on the element — which is exactly why the transition declared here since 2026-07
+// never fired. Same lesson `Card` already records above for `.hub-card-link`.
+// `.hub-btn` + `.hub-btn--<variant>` (hub-tokens.css) own colour, border, radius and
+// motion; only size/layout, the caller's own `style`, and the disabled state stay inline.
 export const Button = React.forwardRef(function Button({ children, variant = 'ghost', size = 'sm', icon, iconRight, style, onClick, active, type = 'button', className, disabled = false, ...props }, ref) {
   const sizes = {
     xs: { h: 24, px: 8, fs: 12, gap: 5 },
@@ -135,42 +143,20 @@ export const Button = React.forwardRef(function Button({ children, variant = 'gh
     md: { h: 34, px: 14, fs: 13, gap: 7 },
   };
   const s = sizes[size];
-  const variants = {
-    primary: {
-      color: 'var(--bg)',
-      background: 'var(--moon-200)',
-      border: '1px solid var(--moon-100)',
-      boxShadow: '0 1px 0 0 oklch(1 0 0 / 0.2) inset, 0 2px 8px -2px oklch(0 0 0 / 0.3)',
-    },
-    secondary: {
-      color: 'var(--fg)',
-      background: 'var(--surface-3)',
-      border: '1px solid var(--line)',
-    },
-    ghost: {
-      color: 'var(--fg-muted)',
-      background: active ? 'var(--surface-2)' : 'transparent',
-      border: `1px solid ${active ? 'var(--line)' : 'transparent'}`,
-    },
-    outline: {
-      color: 'var(--fg)',
-      background: 'transparent',
-      border: '1px solid var(--line)',
-    },
-    danger: {
-      color: 'var(--danger)',
-      background: 'var(--danger-bg)',
-      border: '1px solid var(--danger-line)',
-    },
-  };
-  const v = variants[variant];
+  // 호출처 className은 합성한다 — 덮어쓰면 .hub-row·.hub-topbar__primary-action 같은
+  // 레이아웃 클래스가 조용히 사라진다.
+  const cls = ['hub-btn', `hub-btn--${variant}`, className].filter(Boolean).join(' ');
   return (
-    <button {...props} ref={ref} type={type} className={className} onClick={onClick} disabled={disabled} style={{
+    <button {...props} ref={ref} type={type} className={cls} data-active={active ? 'true' : undefined} onClick={onClick} disabled={disabled} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: s.gap,
       height: s.h, padding: `0 ${s.px}px`, fontSize: s.fs, fontWeight: 500,
-      borderRadius: 'var(--r-sm)', whiteSpace: 'nowrap',
-      transition: 'background var(--dur-hover) ease, border-color var(--dur-hover) ease, color var(--dur-hover) ease, opacity var(--dur-hover) ease',
-      ...v, ...style,
+      whiteSpace: 'nowrap',
+      // radius는 인라인으로 남긴다 — hover 전이 대상이 아니라 CSS 소유일 이유가 없고,
+      // IconButton과 같은 방식이다. (한때 `.hub-app :focus-visible`이 border-radius를 덮어
+      // CSS 소유 radius가 포커스 순간 2px로 튀었다 — 그 전역 덮어쓰기는 2026-09-16에 제거됐고
+      // focus-ring.test.mjs가 재발을 막는다.)
+      borderRadius: 'var(--r-sm)',
+      ...style,
       ...(disabled && { opacity: 0.45, cursor: 'not-allowed', pointerEvents: 'none' }),
     }}>
       {icon && <Iconed name={icon} size={14} />}
@@ -332,7 +318,9 @@ export function Checkbox({ checked, onChange, size = 14, label, disabled = false
   );
 }
 
-export const Input = React.forwardRef(function Input({ placeholder, icon, value, onChange, style, size = 'sm', className }, ref) {
+export const Input = React.forwardRef(function Input({ placeholder, icon, value, onChange, style, size = 'sm', className,
+  // 통과 속성: 로그인(비밀번호)·폼 접근성에 필요하다. 기존 호출처는 전부 기본값을 쓰므로 동작이 바뀌지 않는다.
+  type = 'text', id, name, disabled, autoComplete, inputMode, maxLength, readOnly, required, ariaLabel }, ref) {
   const sizes = { sm: { h: 30, fs: 12.5 }, md: { h: 34, fs: 13 } };
   const s = sizes[size];
   return (
@@ -348,6 +336,16 @@ export const Input = React.forwardRef(function Input({ placeholder, icon, value,
       {icon && <Iconed name={icon} size={13} style={{ color: 'var(--fg-faint)' }} />}
       <input
         ref={ref}
+        type={type}
+        id={id}
+        name={name}
+        disabled={disabled}
+        autoComplete={autoComplete}
+        inputMode={inputMode}
+        maxLength={maxLength}
+        readOnly={readOnly}
+        required={required}
+        aria-label={ariaLabel}
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
         placeholder={placeholder}
@@ -490,6 +488,22 @@ export function Placeholder({ label = 'image', w, h, style }) {
       ...style,
     }}>
       <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-faint)', letterSpacing: '0.04em' }}>{label}</span>
+    </div>
+  );
+}
+
+// 로딩 스켈레톤 — §11 "loading states are part of the design". "불러오는 중…" 한 줄은 레이아웃을
+// 예고하지 못해 첫 페인트가 비어 보였다(2026-09-04 아젠다 B2: 스켈레톤 0개). 펄스는 §9의
+// 라이브 인디케이터 단일 duration(mlMoonPulse 1.4s)을 hub-tokens.css에서 그대로 쓴다.
+// preview/error에는 쓰지 않는다 — 스켈레톤은 "곧 채워진다"는 약속이라 §5.3 source truth를 속인다.
+// `width`는 문자열 하나(전 줄 공통) 또는 줄별 배열. 기본은 마지막 줄만 짧게.
+export function Skeleton({ lines = 3, height = 12, width, gap = 8, style, label = '불러오는 중' }) {
+  const widths = Array.isArray(width)
+    ? width
+    : Array.from({ length: lines }, (_, i) => width || (lines > 1 && i === lines - 1 ? '62%' : '100%'));
+  return (
+    <div role="status" aria-busy="true" aria-label={label} className="hub-skeleton" style={{ display: 'grid', gap, ...style }}>
+      {widths.map((w, i) => <span key={i} className="hub-skeleton__line" style={{ height, width: w }} />)}
     </div>
   );
 }
@@ -719,20 +733,20 @@ export function ChipToggle({ label, selected, onChange, style }) {
 
 export function SegmentedControl({ options, value, onChange, className, style, label, fill, size = 'sm' }) {
   const scale = SEGMENT_SCALE[size] || SEGMENT_SCALE.sm;
+  // 색·배경·보더는 hub-tokens.css의 .hub-seg / .hub-seg__btn이 소유한다 — 인라인이면 어떤
+  // :hover/전이도 붙지 않는다(§15 2026-09-15 Button과 같은 cascade). 크기 스케일만 인라인.
   return (
     <div
-      className={className}
+      className={['hub-seg', className].filter(Boolean).join(' ')}
       role="group"
       aria-label={label}
-      style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--r-sm)', padding: 2, ...style }}
+      style={{ display: 'flex', gap: 2, borderRadius: 'var(--r-sm)', padding: 2, ...style }}
     >
       {options.map(o => {
         const isActive = o.key === value;
         return (
-          <button key={o.key} type="button" onClick={() => onChange?.(o.key)} aria-pressed={isActive} style={{
+          <button key={o.key} type="button" className="hub-seg__btn" onClick={() => onChange?.(o.key)} aria-pressed={isActive} style={{
             padding: scale.pad, fontSize: scale.fs, borderRadius: scale.radius, whiteSpace: 'nowrap',
-            color: isActive ? 'var(--fg)' : 'var(--fg-faint)',
-            background: isActive ? 'var(--surface-3)' : 'transparent',
             display: 'inline-flex', alignItems: 'center', justifyContent: fill ? 'center' : undefined, gap: scale.gap,
             flex: fill ? '1 1 0' : undefined, minWidth: fill ? 0 : undefined,
           }}>
@@ -882,7 +896,7 @@ const FIELD_PANEL_KEY = '__fields__';
 // 않으면 기존 call site와 픽셀 단위로 같은 단일 폼이 그려진다(계약 변경 없음). 탭이 있을
 // 때만 열림 포커스를 첫 필드로 고정한다: 그러지 않으면 Drawer의 "본문 첫 focusable"
 // 규칙이 탭 버튼을 집어 이름 입력이 포커스를 잃는다.
-export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, presentation = 'side', width = 'min(380px, 92vw)', saveLabel = '변경사항 저장', panels, infoLabel = '정보', children }) {
+export function EditDrawer({ title, subtitle, record, fields, onChange, onClose, onSave, onDelete, presentation = 'side', width = 'min(380px, 92vw)', saveLabel = '변경사항 저장', onContinue, panels, infoLabel = '정보', children }) {
   const [saveState, setSaveState] = React.useState('idle'); // idle | saving | preview | conflict | error
   const [saveFeedback, setSaveFeedback] = React.useState('');
   // 파괴 확인은 브라우저 confirm()이 아니라 푸터 인라인 2단계다 — OS 다이얼로그는 디자인
@@ -890,6 +904,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
   // (백로그 M: window.confirm 스타일드 플로). null | 'discard' | 'delete'.
   const [confirming, setConfirming] = React.useState(null);
   const [panelKey, setPanelKey] = React.useState(FIELD_PANEL_KEY);
+  const [optionalOpen, setOptionalOpen] = React.useState(false);
   const confirmCancelRef = React.useRef(null);
   const firstFieldRef = React.useRef(null);
   const savingRef = React.useRef(false);
@@ -900,8 +915,11 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
     setSaveState('idle');
     setSaveFeedback('');
     setConfirming(null);
+    setOptionalOpen(fields.some(field => field.optional && Boolean(record?.[field.key])));
     setPanelKey(FIELD_PANEL_KEY); // 레코드가 바뀌면 항상 편집 탭에서 시작
     initialRecordSignatureRef.current = record ? JSON.stringify(record) : null;
+    const frame = requestAnimationFrame(() => firstFieldRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
   }, [recordIdentity]);
 
   // 확인 스트립이 뜨면 포커스를 취소 버튼으로 — ESC·Enter가 파괴 쪽에 얹히지 않게.
@@ -920,7 +938,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
     onClose?.();
   }, [confirming, dirty, onClose]);
 
-  const handleDone = async () => {
+  const handleDone = async (continueCreating = false) => {
     if (savingRef.current) return;
     if (!onSave) { onClose(); return; }
     savingRef.current = true;
@@ -928,13 +946,24 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
     setSaveFeedback('');
     try {
       const r = await onSave();
-      if (r?.ok) { setSaveState('idle'); onClose(); }
+      if (continueCreating && onContinue && r?.ok && !['saved', 'duplicate'].includes(r.status)) {
+        setSaveState(r.status === 'preview' ? 'preview' : 'error');
+        return;
+      }
+      if (r?.ok) {
+        setSaveState('idle');
+        if (continueCreating && onContinue && ['saved', 'duplicate'].includes(r.status)) onContinue();
+        else onClose();
+      }
       else if (r?.status === 'preview') setSaveState('preview');
       else if (r?.status === 'conflict') {
         setSaveFeedback(r?.message || '다른 변경이 먼저 저장되었습니다. 입력을 유지했으니 원장을 확인한 뒤 다시 시도하세요.');
         setSaveState('conflict');
       }
-      else setSaveState('error');
+      else { setSaveFeedback(r?.message || ''); setSaveState('error'); }
+    } catch {
+      setSaveFeedback('저장하지 못했습니다. 입력은 유지했으니 다시 시도하세요.');
+      setSaveState('error');
     } finally {
       savingRef.current = false;
     }
@@ -980,7 +1009,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
   React.useEffect(() => {
     if (!record) return undefined;
     const onKey = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleDoneRef.current?.(); }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); handleDoneRef.current?.(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -989,14 +1018,11 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
   if (!record) return null;
 
   const hasPanels = Array.isArray(panels) && panels.length > 0;
-  const fieldRows = groupFieldRows(fields);
-  const fieldsPanel = (
-    <>
-      {fieldRows.map((group, i) => (
-        <div key={group.row || `solo-${i}`} style={group.fields.length > 1 ? { display: 'flex', gap: 10 } : undefined}>
+  const renderFieldRows = (list, primary = true) => groupFieldRows(list).map((group, i) => (
+        <div key={group.row || `solo-${i}`} className={group.fields.length > 1 ? "hub-edit-field-row" : undefined} style={group.fields.length > 1 ? { display: 'flex', gap: 10 } : undefined}>
           {group.fields.map((f, j) => {
             // 탭 모드에서만 쓰이는 열림 포커스 앵커 — 탭이 없으면 Drawer 기본 규칙 그대로다.
-            const focusRef = hasPanels && i === 0 && j === 0 ? firstFieldRef : undefined;
+            const focusRef = primary && hasPanels && i === 0 && j === 0 ? firstFieldRef : undefined;
             return (
             <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5, ...(group.fields.length > 1 ? { flex: 1, minWidth: 0 } : null) }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-dim)' }}>{f.label}{f.labelBadge || null}</span>
@@ -1027,7 +1053,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
                   placeholder={f.placeholder || ''}
                   rows={f.rows || 5}
                   onChange={e => onChange(f.key, e.target.value)}
-                  style={{ ...DRAWER_INPUT_STYLE, height: 'auto', minHeight: 112, padding: '9px 10px', lineHeight: 1.5, resize: 'vertical' }}
+                  style={{ ...DRAWER_INPUT_STYLE, height: 'auto', minHeight: f.rows ? undefined : 112, padding: '9px 10px', lineHeight: 1.5, resize: 'vertical' }}
                 />
               ) : (
                 <input
@@ -1048,7 +1074,15 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
             );
           })}
         </div>
-      ))}
+      ));
+  const optionalFields = fields.filter(field => field.optional);
+  const fieldsPanel = (
+    <>
+      {renderFieldRows(fields.filter(field => !field.optional))}
+      {optionalFields.length > 0 && <details className="hub-edit-optional" key={recordIdentity} open={optionalOpen} onToggle={event => setOptionalOpen(event.currentTarget.open)}>
+        <summary>설명·다음 행동 <span>선택</span></summary>
+        <div>{renderFieldRows(optionalFields, false)}</div>
+      </details>}
       {children}
     </>
   );
@@ -1099,7 +1133,8 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
           {(saveState === 'preview' || saveState === 'conflict' || saveState === 'error') && (
             <Button variant="ghost" size="sm" onClick={requestClose}>닫기</Button>
           )}
-          <Button variant="primary" size="sm" onClick={handleDone} disabled={saveState === 'saving'}>
+          {onContinue && <Button variant="outline" size="sm" onClick={() => handleDone(true)} disabled={saveState === 'saving'}>저장 후 계속</Button>}
+          <Button variant="primary" size="sm" onClick={() => handleDone()} disabled={saveState === 'saving'}>
             {saveState === 'saving' ? '저장 중…' : saveLabel}
           </Button>
         </>
@@ -1113,7 +1148,7 @@ export function EditDrawer({ title, subtitle, record, fields, onChange, onClose,
             tabs={[{ key: FIELD_PANEL_KEY, label: infoLabel }, ...panels.map(p => ({ key: p.key, label: p.label, count: p.count }))]}
             active={panelKey}
             onChange={setPanelKey}
-            style={{ margin: '-16px -16px 0', padding: '0 16px' }}
+            style={presentation === 'compact' ? { margin: 0, padding: 0 } : { margin: '-16px -16px 0', padding: '0 16px' }}
           />
           {/* 비활성 탭은 언마운트하지 않고 감춘다 — 기록 탭이 열리기 전에도 원장을 읽어
               탭 배지에 건수가 뜨고, 탭을 오가도 작성 중인 초안·스크롤이 살아 있다.

@@ -187,6 +187,24 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
     return () => cancelAnimationFrame(frame);
   }, [openRequest, blocked]);
 
+  // `M` → 어디서든 빠른 메모. 지금까지 키보드 경로는 ⌘K 팔레트뿐이라 떠오른 생각을
+  // 적는 데 항상 두 단계가 필요했다. hub-app 의 `C`(빠른 입력)와 같은 가드를 쓴다:
+  // 입력 요소 안이거나, 팔레트·다른 대화상자가 떠 있으면(unavailable) 양보한다.
+  React.useEffect(() => {
+    if (shown || unavailable) return;
+    const onKey = event => {
+      if (event.key !== "m" && event.key !== "M") return;
+      if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
+      if (event.isComposing || event.keyCode === 229 || event.defaultPrevented) return;
+      const target = event.target;
+      if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.tagName === "SELECT" || target?.isContentEditable) return;
+      event.preventDefault();
+      launch();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   React.useEffect(() => {
     if (!shown) return;
     const layer = pushEscLayer();
@@ -425,7 +443,7 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
     </section> : null}
     {toast && receipt ? <div className={styles.toast} role="status">{ideaReceipt ? "소재함에 연결했어요" : "메모를 저장했어요"} <a href={ideaReceipt ? contentIdeaHref(ideaReceipt) : memoHref(receipt)} onClick={ideaReceipt ? openIdea : openSaved}>열기</a></div> : null}
     {!shown ? <div ref={launchArea} className={styles.launchArea}>
-      <button ref={opener} type="button" className={styles.launcher} onClick={launch} disabled={!draft} aria-label={`빠른 메모${launcherStatus ? ` · ${launcherStatus}` : ""}`} aria-haspopup="dialog" aria-expanded={false}>
+      <button ref={opener} type="button" className={styles.launcher} onClick={launch} disabled={!draft} title="빠른 메모 · M" aria-label={`빠른 메모 · 단축키 M${launcherStatus ? ` · ${launcherStatus}` : ""}`} aria-haspopup="dialog" aria-expanded={false}>
         <span className={styles.launcherLabel} aria-hidden="true"><span>빠른 메모{launcherStatus ? <span className={styles.badge}>{launcherStatus}</span> : null}</span></span>
         <span className={styles.launcherIcon} aria-hidden="true"><Iconed name="edit" size={20} />{launcherStatus ? <span className={styles.statusDot} data-attention={Boolean(error)} /> : null}</span>
       </button>

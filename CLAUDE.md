@@ -26,20 +26,23 @@
 - Hub read API: `apps/hub/app/api/hub/` → `apps/hub/lib/repositories/` 사용
 - Hub read 실패 봉투: 허브 read 라우트는 Supabase 불가·read 실패를 5xx가 아니라 **HTTP 200 + `{ status: "error" }`**로 알린다(2026-09-01 통일). 따라서 소비자가 `!r.ok`만 검사하면 read 실패가 빈 상태("대기 없음")로 위장된다 — 반드시 봉투(`d.status === 'error'`, 필요하면 `d.source === 'error'`)를 읽어라. 정본 소비자 패턴은 `pages/agents.jsx`·`pages/daily-brief.jsx`이고, `components/hub/state-usage.test.mjs`가 이 계약을 고정한다. 라우트를 502로 되돌리는 것은 회귀다
 - Hub write/BFF API: `apps/hub/app/api/**`의 POST/PATCH 라우트는 `apps/hub/lib/hub-write-guard.js`를 거친다 — 브라우저는 same-origin 헤더, 서버 간 호출은 `COM_MOON_HUB_WRITE_SECRET`. 영속화는 `apps/hub/lib/server-write.js`가 `@com-moon/supabase-rest`에 위임한다
+- Hub 인증 게이트: `apps/hub/middleware.js`가 모든 요청을 거른다 — 판정은 `apps/hub/lib/route-access.js`의 `resolveRouteAccess`(순수 함수, `route-access.test.mjs`가 고정). **허브 read 라우트 51개에는 자체 인증이 없으므로 이 미들웨어가 유일한 방어선이다.** 새 API를 추가하면 기본이 "막힘"이다. 자체 인증을 가진 경로만 `OPEN_PREFIXES`/`OPEN_EXACT`에 올린다(cron=CRON_SECRET, webhook=provider secret, agent/v1=`authorizeAgentRequest`, OAuth 콜백은 접미사가 아니라 **명시 목록**). loopback은 통과하지만 `process.env.VERCEL`이 있으면 그 분기도 꺼진다. 세션 비밀키(`COM_MOON_OPERATOR_SESSION_SECRET` 또는 `COM_MOON_HUB_WRITE_SECRET`)가 없으면 통과가 아니라 503으로 닫는다
 - Engine write/intake API: `apps/engine/app/api/` — 공개 POST는 shared secret 또는 provider secret 검증
 - Hub → Engine 호출은 `COM_MOON_SHARED_WEBHOOK_SECRET`를 전달
-- Supabase 없는 환경은 명시적 `preview`/empty state로 표시하고 mock과 live 데이터를 섞지 않음
+- Supabase 없는 환경은 명시적 `preview`/empty state로 표시하고 mock과 live 데이터를 섞지 않음. 목업·더미 데이터는 **코드에 넣지 않는다** — 로컬 전용 Supabase 프로젝트에만 둔다(2026-09-20 운영자 확정). `scripts/no-mock-data.test.mjs`가 목업 식별자 선언(`MOCK_`·`DEMO_`·`SAMPLE_`·`DUMMY_`·`FAKE_`·fixtures 계열)과 업무 레코드형 하드코딩 배열을 저장소 전체에서 막는다 — 필터·탭 같은 UI 옵션 목록은 잡지 않는다
+- DB: 운영 Supabase는 2026-09-20부터 **서울 리전**(`ncgpnqfulnlshegalmbd` · `ap-northeast-2`)이다. 구 싱가포르 프로젝트는 롤백 경로로 보존 중이고 **Vercel 배포에는 환경 변수가 하나도 없다**(Project·Shared 탭 모두 0개, 2026-09-20 확인) — 배포를 쓰려면 처음부터 구성해야 한다. 준비 상태 점검 `npm run db:check`, 마이그레이션 적용 `npm run db:migrate`, 리전 이전 툴킷 `npm run db:move-region <preflight|dump|restore|verify|all>` — 실행 기록과 함정(복원 시 함수 실행 권한 회귀 등)은 `docs/supabase-korea-region-migration.md`
 - `apps/hub/components/hub/hub-app.jsx`의 `lazyPage`는 `ssr: false`가 필수 — 빼면 모든 대시보드 페이지가 "불러오는 중…"에서 멈춘다(콘솔 에러 없음)
-- 테스트: 루트 `npm test`(node `--test`, `*.test.mjs` 동거)가 `scripts/`·`apps/hub/lib/`·`apps/hub/components/**`·`apps/engine/**`·`packages/**`의 모든 `*.test.mjs`를 돈다 — 저장소 전체 82파일(2026-09 2609 병합에서 글롭 확장). CI(`.github/workflows/ci.yml`)는 `npm test`에 위임하므로 범위가 어긋날 수 없다. 단일 파일만 돌릴 땐 `node --import ./scripts/register-hub-alias.mjs --test <파일>`
+- 테스트: 루트 `npm test`(node `--test`, `*.test.mjs` 동거)가 `scripts/`·`apps/hub/lib/`·`apps/hub/components/**`·`apps/engine/**`·`packages/**`의 모든 `*.test.mjs`를 돈다 — 2026-09-20 기준 **1475 tests · 실패 0**, 저장소 203파일 중 201파일. `apps/hub/app/**`도 2026-09-20에 글롭에 넣어(`cc1b5c9`) 이전에 로컬·CI 양쪽에서 돌지 않던 content transform·workflow 라우트 테스트 2파일이 포함됐다. CI(`.github/workflows/ci.yml`)는 `npm test`에 위임하므로 CI와 로컬 범위는 어긋나지 않는다. 단일 파일만 돌릴 땐 `node --import ./scripts/register-hub-alias.mjs --test <파일>`
+- 테스트 함정 2가지(2026-09-20에 55건이 아예 안 돌고 있던 원인): 저장소를 훑는 스윕 테스트는 `.next` 정확일치가 아니라 `.next*` 접두사로 걸러야 한다 — `.next.qa`·`.next.ship-*` 같은 대체 dist 디렉터리를 훑으면 미니파이 CSS를 소스 위반으로 오인한다(`.gitignore`가 이미 `**/.next.*`). postgres를 띄우는 테스트는 macOS에서 initdb/pg_ctl의 spawn env에 `LC_ALL`을 넣어야 기동한다 — 없으면 `pg_ctl`이 원인을 숨기고 진짜 메시지는 postgres.log의 `FATAL: postmaster became multithreaded during startup`에만 남는다. 프로세스 전역으로 두지 않는다(한국어 전문검색 collation 영향)
 
 ## UI 작업 시 필수 체크
 - 색상: DESIGN.md 팔레트(토큰)만 사용 — 페이지 안 하드코딩 hex/rgba/oklch 금지, warm gold/그린/보라 금지. `--success`/`--warning`/`--info`로 카테고리나 일상 단계를 칠하지 않는다(DESIGN.md §5.2)
 - 보더: 항상 `1px` + `--line*` 토큰 — 절대 두껍게 하지 않음. 상태 강조는 `--*-line` 좌측 inset 스트라이프
 - 숫자: 큰 지표(≥18px)는 `.stat`(sans tabular), 계기 데이터(ID·타임스탬프·인라인 값)는 `.mono`, sans 소형 카운트는 `.num`
 - 크기 플로어: 데이터 값 ≥12px, 보조 메타 ≥10.5px, 10px 미만 금지
-- Primitives first: `SegmentedControl`·`EmptyState`·`Checkbox(label)`·`EditDrawer`·`Drawer`를 인라인 재구현 금지. 상태 표시는 `TruthBadge`·`CertaintyBadge`·`LifecycleBadge`(DESIGN.md §8.2)로 선언하고, `SyncBadge`는 호환 래퍼이므로 새 호출처에서 쓰지 않는다. `AttentionRail`은 페이지 호출처 0건으로 아직 미채택 — 레일은 §8.1 inset 1px 인라인이 현행이므로 새로 쓰기 전 DESIGN.md §15 2026-08-05 결정을 확인한다
-- 행 hover는 `.hub-row`, 카드형 클릭 타깃은 `.hub-card-link`, 칸반 카드는 `.hub-kanban-card` (JS onMouseEnter/Leave 신규 작성 금지)
-- 모션: `--dur-hover`/`--dur-enter`/`--dur-panel`/`--dur-overlay`·`--ease-hub`·`--stagger-step` 토큰과 `.fade-up`/`.stagger-up`만 사용 — 페이지 안 raw ms 리터럴 금지 (DESIGN.md §9)
+- Primitives first: `SegmentedControl`·`EmptyState`·`Checkbox(label)`·`EditDrawer`·`Drawer`·`Skeleton`(로딩 자리 — preview/error엔 금지, `EmptyState`로 로딩을 그리지 않는다)를 인라인 재구현 금지. 상태 표시는 `TruthBadge`·`CertaintyBadge`·`LifecycleBadge`(DESIGN.md §8.2)로 선언하고, `SyncBadge`는 호환 래퍼이므로 새 호출처에서 쓰지 않는다. `AttentionRail`은 페이지 호출처 0건으로 아직 미채택 — 레일은 §8.1 inset 1px 인라인이 현행이므로 새로 쓰기 전 DESIGN.md §15 2026-08-05 결정을 확인한다
+- 행 hover는 `.hub-row`, 카드형 클릭 타깃은 `.hub-card-link`, 칸반 카드는 `.hub-kanban-card`, `Button`은 `.hub-btn`+`.hub-btn--<variant>`, `IconButton`은 `.hub-iconbtn` (JS onMouseEnter/Leave 신규 작성 금지). `Button`/`IconButton`의 휴지 색을 인라인으로 되돌리면 인라인이 클래스 규칙을 이겨 hover가 다시 죽는다
+- 모션: `--dur-hover`/`--dur-enter`/`--dur-panel`/`--dur-overlay`·`--ease-hub`·`--stagger-step` 토큰과 `.fade-up`/`.stagger-up`만 사용 — 페이지 안 raw ms 리터럴·인라인 `cubic-bezier(` 금지 (DESIGN.md §9). `components/hub/motion.test.mjs`가 저장소 전체를 훑어 CI에서 막는다
 - 내비: 사이드바 앵커는 `hub-nav.js`(+ `hub-nav.test.mjs`), ⌘K 카탈로그는 `hub-data.js`의 `NAV_TREE`, 워크스페이스 소속은 `workspace-map.js` — `NAV_TREE`에 넣어도 사이드바 행은 생기지 않는다
 - 인터랙션 계약(생성 N 단축키·ESC/오버레이 닫기·딥링크·정렬 3단 토글)은 DESIGN.md §8.1 준수
 - 반응형: 모바일 우선. 세그먼트 토글은 모바일에서도 가로 유지 (flex-basis:100% 자식 강제 금지)

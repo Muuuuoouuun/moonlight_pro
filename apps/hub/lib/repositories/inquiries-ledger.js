@@ -46,7 +46,7 @@ export async function getInquiryDetail(id, options = {}, deps = dependencies) {
     if (!Array.isArray(parent?.rows)) return { ...empty('error', 'inquiry-read-failed'), inquiry: null, events: [] };
     if (!parent.rows[0]) return { ...empty('not-found'), inquiry: null, events: [] };
     const eventPage = clamp(options.eventPage, 1, 100000);
-    const referenceTypes = [['lead_id', 'leads', 'name', '리드', 'lead'], ['deal_id', 'deals', 'name', '거래', 'deal'], ['case_id', 'operation_cases', 'title', '지원 건', 'case']];
+    const referenceTypes = [['lead_id', 'leads', 'name', '리드', 'lead'], ['deal_id', 'deals', 'title', '거래', 'deal'], ['case_id', 'operation_cases', 'title', '지원 건', 'case']];
     const [events, links] = await Promise.all([
       deps.read('inquiry_events', { filters: [['workspace_id', eqFilter(workspaceId)], ['inquiry_id', eqFilter(id)], ['offset', String((eventPage - 1) * 25)]], order: 'received_at.desc,inbound_seq.desc,id.desc', limit: 25, count: 'exact' }),
       Promise.all(referenceTypes.filter(([field]) => parent.rows[0][field]).map(async ([field, table, label, typeLabel, type]) => {
@@ -78,7 +78,7 @@ export async function getInquiryReferences({ workspaceId = resolveDefaultWorkspa
   // Quoted PostgREST operands prevent punctuation from becoming query syntax.
   const term = String(query).trim().slice(0, 100).replace(/[\\%_*]/g, '');
   try {
-    const results = await Promise.all([['leads', 'name'], ['deals', 'name'], ['operation_cases', 'title']].map(([table, label]) => deps.read(table, {
+    const results = await Promise.all([['leads', 'name'], ['deals', 'title'], ['operation_cases', 'title']].map(([table, label]) => deps.read(table, {
       select: `id,${label}`, filters: [['workspace_id', eqFilter(workspaceId)], ...(term ? [[label, `ilike.${JSON.stringify(`*${term}*`)}`]] : [])],
       order: `${label}.asc.nullslast,id.asc`, limit: 51,
     })));

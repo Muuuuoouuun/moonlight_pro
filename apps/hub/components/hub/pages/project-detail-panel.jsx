@@ -5,7 +5,7 @@ import { RelatedMemos } from '../related-memos';
 import { MemoCaptureLink } from "../journal-links";
 import { Avatar, Badge, Button, Checkbox, IconButton } from "../hub-primitives";
 import { ProjectDeliverySummary } from "./project-delivery";
-import { BrandMark, ProjectProgressGauge } from "./project-pms-components";
+import { BrandMark, ProjectProgressGauge, ProjectStatusBadge } from "./project-pms-components";
 import { TaskChecklistGauge } from './project-task-checklist';
 
 function DetailSection({ title, count = 0, empty, children }) {
@@ -127,7 +127,6 @@ export function ProjectDetailPanel({
   checks = [],
   syncState,
   failedSources = [],
-  statusTone = {},
   updateTone = {},
   checkTone = {},
   contentTone = {},
@@ -168,7 +167,7 @@ export function ProjectDetailPanel({
         <div>
           <div style={{ fontSize: 16, fontWeight: 500, letterSpacing: "-0.01em" }}>{project.name}</div>
           <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-            <Badge tone={statusTone[project.status]} size="xs">{project.status}</Badge>
+            <ProjectStatusBadge status={project.status} />
             {project.tag === "company" && <Badge tone="company" size="xs">Company</Badge>}
             {project.tag === "personal" && <Badge tone="personal" size="xs">Personal</Badge>}
           </div>
@@ -196,9 +195,9 @@ export function ProjectDetailPanel({
         {displayNextAction && (
           <div style={{
             padding: "10px 12px",
-            background: "rgba(255, 255, 255, 0.03)",
+            background: "var(--surface-2)",
             border: "1px solid var(--line-soft)",
-            borderLeft: "2px solid var(--moon-300)",
+            boxShadow: "inset 1px 0 0 var(--line-strong)", // §8.1 1px 중립 레일 — 2px moon 보더는 §5.2 위반
             borderRadius: "var(--r-sm)",
           }}>
             <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--moon-300)", marginBottom: 4 }}>

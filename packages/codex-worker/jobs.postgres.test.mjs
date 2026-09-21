@@ -1,3 +1,7 @@
+// macOS: LC_ALL 이 없으면 postmaster 가 기동 중 multithreaded 로 판정되어
+// `FATAL: postmaster became multithreaded during startup` 으로 죽는다 (2026-09-19).
+// DB 로케일은 initdb --no-locale 로 이미 C 이므로 동작은 바뀌지 않고,
+// 서버 메시지가 영어가 되어 Linux CI 와 같아진다.
 import assert from 'node:assert/strict';
 import { before, after, test } from 'node:test';
 import { randomUUID } from 'node:crypto';
@@ -6,7 +10,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-const exec = promisify(execFile);
+const execRaw = promisify(execFile);
+const exec = (cmd, args) => execRaw(cmd, args, { env: { ...process.env, LC_ALL: process.env.LC_ALL || 'C' } });
 const enabled = process.env.CODEX_JOBS_POSTGRES_TEST === '1';
 const migration = new URL('../../supabase/migrations/20260913_0033_agent_jobs.sql', import.meta.url);
 let directory;

@@ -55,6 +55,7 @@ test("preserves conflict taxonomy when Engine returns HTTP 409 without a JSON en
         COM_MOON_SHARED_WEBHOOK_SECRET: "shared-secret",
       },
       fetchImpl: async () => new Response("upstream proxy response", { status: 409 }),
+      logger: () => {},
     },
   );
 
@@ -81,6 +82,7 @@ test("drops private persistence detail from Engine error envelopes", async () =>
         status: 502,
         headers: { "content-type": "application/json" },
       }),
+      logger: () => {},
     },
   );
 
@@ -102,6 +104,7 @@ test("uses a stable public code for Engine transport failures", async () => {
       fetchImpl: async () => {
         throw new Error("private-host-token=do-not-leak");
       },
+      logger: () => {},
     },
   );
 
@@ -110,4 +113,57 @@ test("uses a stable public code for Engine transport failures", async () => {
     httpStatus: 502,
     data: { status: "error", error: "engine-unreachable", retryable: true },
   });
+});
+
+test("logs the private Engine detail server-side so a 400 is diagnosable", async () => {
+  const logs = [];
+  const result = await pmsClient.forwardPmsCommand(
+    { action: "create_task", id: "task-id", title: "Scoped" },
+    {
+      env: {
+        COM_MOON_ENGINE_URL: "http://127.0.0.1:3001",
+        COM_MOON_SHARED_WEBHOOK_SECRET: "shared-secret",
+      },
+      logger: (...args) => logs.push(args),
+      fetchImpl: async () => new Response(JSON.stringify({
+        status: "error",
+        error: "http-400",
+        detail: "column tasks.description does not exist",
+      }), {
+        status: 502,
+        headers: { "content-type": "application/json" },
+      }),
+    },
+  );
+
+  // 브라우저 응답에서는 여전히 detail이 빠진다 — 서버 로그에만 남는다.
+  assert.deepEqual(result.data, { status: "error", error: "http-400" });
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0][0], "[hub/pms] engine rejected command");
+  assert.deepEqual(logs[0][1], {
+    action: "create_task",
+    status: 502,
+    error: "http-400",
+    detail: "column tasks.description does not exist",
+  });
+});
+
+test("does not log when Engine accepts the command", async () => {
+  const logs = [];
+  await pmsClient.forwardPmsCommand(
+    { action: "create_task", id: "task-id", title: "Fine" },
+    {
+      env: {
+        COM_MOON_ENGINE_URL: "http://127.0.0.1:3001",
+        COM_MOON_SHARED_WEBHOOK_SECRET: "shared-secret",
+      },
+      logger: (...args) => logs.push(args),
+      fetchImpl: async () => new Response(JSON.stringify({ status: "saved" }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }),
+    },
+  );
+
+  assert.equal(logs.length, 0);
 });

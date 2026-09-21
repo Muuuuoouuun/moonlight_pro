@@ -59,3 +59,21 @@ test('timestamps require real ISO dates with timezone and generated links are in
   assert.equal(journalContextHref('project', ID), `/dashboard/work/projects?project=${ID}`);
   assert.equal(journalContextHref('lead', 'invalid'), null);
 });
+
+
+test('optional tags normalize Unicode, whitespace and duplicate names without changing note text', () => {
+  const input = save({ noteMeta: { kind: 'idea', enhancement: '  보강  ', tags: [' #학습 ', '학습', ' follow   up ', 'FOLLOW UP', 'e\u0301', '', '   '] } });
+  const result = validateJournalInput(input);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value.noteMeta, { kind: 'idea', enhancement: '  보강  ', tags: ['학습', 'follow up', 'é'] });
+  assert.equal(result.value.body, input.body);
+  assert.equal(Object.hasOwn(validateJournalInput(save()).value.noteMeta, 'tags'), false);
+  assert.deepEqual(validateJournalInput(save({ noteMeta: { kind: 'note', enhancement: '', tags: [] } })).value.noteMeta.tags, []);
+});
+
+test('tags reject invalid types and excessive counts or lengths without truncating', () => {
+  for (const tags of [null, 'one', {}, [1], ['x'.repeat(33)], Array.from({ length: 9 }, (_, i) => `tag ${i}`)]) {
+    assert.equal(validateJournalInput(save({ noteMeta: { kind: 'note', enhancement: '', tags } })).ok, false, JSON.stringify(tags));
+  }
+  assert.equal(validateJournalInput(save({ noteMeta: { kind: 'note', enhancement: '', tags: ['🌓'.repeat(32)] } })).ok, true);
+});

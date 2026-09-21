@@ -61,3 +61,19 @@ test('double submit shares one in-flight promise and stale navigation never muta
   current=false;release({status:'saved',entry:{...entry,revision:4}});await first;
   assert.equal(h.get().draft.expectedRevision,3);assert.equal(persisted.length,1);
 });
+
+
+test('saved tags survive draft reload, subsequent text edits and immutable retry receipts', async () => {
+  const tagged = { ...entry, noteMeta: { ...entry.noteMeta, tags: ['학습', 'follow up'] } };
+  const draft = noteToDraft(tagged);
+  assert.deepEqual(draft.noteMeta.tags, tagged.noteMeta.tags);
+  const request = buildNoteSave({ ...draft, body: '수정한 원문' }, requestId);
+  assert.deepEqual(request.noteMeta.tags, tagged.noteMeta.tags);
+  assert.notEqual(noteFingerprint(draft), noteFingerprint({ ...draft, noteMeta: { ...draft.noteMeta, tags: [] } }));
+  const raw = { ...draft, noteMeta: { ...draft.noteMeta, tags: [' #학습 ', 'follow   up', '학습'] } };
+  assert.deepEqual(buildNoteSave(raw, requestId).noteMeta.tags, tagged.noteMeta.tags);
+  assert.deepEqual(raw.noteMeta.tags, [' #학습 ', 'follow   up', '학습']);
+  const h = harness({ send: async () => ({ status: 'duplicate', entry: tagged }) });
+  await h.writer.run(request);
+  assert.deepEqual(h.get().draft.noteMeta.tags, tagged.noteMeta.tags);
+});

@@ -1,9 +1,10 @@
 "use client";
+import { checklistForSave } from '@/lib/task-checklist-input';
 
 import React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Dot, Card, IconButton, Button, Checkbox, EmptyState, Input, SyncBadge, SegmentedControl, EditDrawer, Drawer, Kbd } from "../hub-primitives";
+import { Dot, Card, IconButton, Button, Checkbox, EmptyState, Input, SyncBadge, SegmentedControl, EditDrawer, Drawer, Kbd, Skeleton } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { triggerCelebration, triggerSparkleAt } from "../celebration-fx";
@@ -15,7 +16,6 @@ import {
   buildProjectEditDraft,
   buildProjectPatch,
   buildProjectTimeline,
-  buildTimelineItemAriaLabel,
   buildContentPipelineTaskSeeds,
   buildTaskBoardColumns,
   buildTaskDraft,
@@ -24,7 +24,6 @@ import {
   contentPipelineReloadContains,
   createClientId,
   mergeProjectDetailQuery,
-  mergeTimelineProjectQuery,
   projectReloadContains,
   projectAreaLabel,
   rebaseProjectEditState,
@@ -53,7 +52,35 @@ import {
   ContainerFilterBar,
   ProjectPortfolioSummary,
   ProjectProgressGauge,
+  ProjectStatusBadge,
 } from "./project-pms-components";
+import {
+  BRAND_ORDER_KEY,
+  BRAND_OWNED_CATEGORY,
+  BRAND_SECTION_KEY,
+  CONTAINER_CATEGORY_OPTIONS,
+  DETAIL_FOCUSABLE,
+  EMPTY_ALL_BRAND,
+  EMPTY_CONTAINER_KEY,
+  FOLDER_ORDER_KEY,
+  FOLDER_STORAGE_KEY,
+  IDLE_OPEN_KEY,
+  LIST_STATUS_GROUPS,
+  PROJECT_CATEGORIES,
+  PROJECT_VIEW_OPTIONS,
+  SIDEBAR_HIDDEN_KEY,
+  SUMMARY_FILTER_LABELS,
+  buildLocalContainer,
+  compareProjectsByDue,
+  computeMovedOrder,
+  isTerminalProject,
+  normalizeProjectView,
+  slugifyContainer,
+  computeDDay,
+} from "./project-view-constants";
+import { ProjectTimelineView } from "./project-timeline-view";
+import { ProjectTodosView } from "./project-todos-view";
+import { ProjectBoardView } from "./project-board-view";
 import { classifyProjectPortfolio, portfolioWindow } from "./project-pms-metrics";
 import {
   getWorkspace,
@@ -66,212 +93,6 @@ import {
 // 비던 것을 제거(4차 재감사 속도 M). 캐시 즉시 서빙 + 마운트마다 배경 재검증.
 const PROJECTS_CACHE_SERVABLE_MS = 5 * 60 * 1000;
 let projectsLedgerCache = null; // { at, ledger, todos, syncState }
-
-const EMPTY_ALL_BRAND = {
-  key: 'all',
-  id: 'all',
-  name: '전체 브랜드',
-  glyph: '◐',
-  tone: 'moon',
-  kind: 'index',
-  desc: '모든 프로젝트',
-  projects: 0,
-  tasks: 0,
-  open: 0,
-  changes: 0,
-};
-
-const PROJECT_VIEW_OPTIONS = [
-  { key: 'tree', label: '홈' },
-  { key: 'table', label: '목록' },
-  { key: 'backlog', label: '백로그' },
-  { key: 'board', label: 'Board' },
-  { key: 'memos', label: '메모' },
-  { key: 'timeline', label: 'Timeline' },
-  { key: 'todos', label: 'To-dos' },
-];
-const PROJECT_VIEWS = new Set(PROJECT_VIEW_OPTIONS.map(v => v.key));
-
-// Timeline view: status → left-stripe token (§5.2 — status color lives on stripes/chips,
-// never as a full bar fill) and the same Korean status labels the List view row uses.
-const STATUS_LINE_TOKEN = {
-  // lifecycle 스트라이프는 중립 — Moonstone은 current/selected 전용(§5.3, 5차 재감사 S).
-  'In progress': 'var(--line-strong)',
-  Review: 'var(--line-strong)',
-  Planning: 'var(--line-strong)',
-  Backlog: 'var(--line-soft)',
-  Blocked: 'var(--danger-line)',
-  Done: 'var(--line-strong)',
-};
-const STATUS_LABEL_KO = {
-  'In progress': '작업 중',
-  Review: '검토',
-  Planning: '계획',
-  Blocked: '막힘',
-  Done: '완료',
-  Backlog: '백로그',
-};
-
-// Container category folders (2026-07-15 spec §4.2). The ledger resolves
-// `category` (meta.category → canonical map → 'general'); empty folders are
-// never rendered. Collapse state is UI-only.
-const PROJECT_CATEGORIES = [
-  { key: 'sns-channel', label: 'SNS 채널' },
-  { key: 'ka-deal', label: 'KA·딜' },
-  { key: 'general', label: '일반' },
-];
-// 브랜드 탭이 소유하는 분류 (2026-08-29 브랜드 탭 설계 §3). PMS는 이 분류의
-// 컨테이너를 *렌더*는 하되 — 이미 프로젝트가 붙어 있을 수 있으므로 —
-// 새로 만들지는 않고, 폴더는 기본 접힘으로 연다 (§4 P0-2·P0-3).
-const BRAND_OWNED_CATEGORY = 'sns-channel';
-// 컨테이너 생성/편집 드로어에서 고를 수 있는 분류. 브랜드 소유 분류는 빠진다.
-// 이미 그 분류인 컨테이너를 편집할 때만 현재 값이 옵션으로 되살아난다.
-const CONTAINER_CATEGORY_OPTIONS = PROJECT_CATEGORIES
-  .filter(c => c.key !== BRAND_OWNED_CATEGORY)
-  .map(c => ({ value: c.key, label: c.label }));
-// 완료·보관된 프로젝트는 "터미널" — 기본 리스트에서 걷어내고 "완료·보관 항목 보기"
-// 토글로만 다시 노출한다. 삭제도 archived로의 같은 상태 전환이라 이 집합을 공유한다.
-const TERMINAL_PROJECT_STATUSES = new Set(['completed', 'archived', 'cancelled']);
-function isTerminalProject(p) {
-  return TERMINAL_PROJECT_STATUSES.has(String(p?.statusKey || '').toLowerCase());
-}
-const FOLDER_STORAGE_KEY = 'mlp.pms.folders';
-// 사이드바 폴더 안 "진행 없음" 묶음의 펼침 상태. UI 전용, 기본 접힘.
-const IDLE_OPEN_KEY = 'mlp.pms.idle-open';
-// 브랜드 사이드바 전체의 표시 상태 — 기본 접힘(2026-08-19 운영자 지시), 헤더의
-// 브랜드 트리거 메뉴가 기본 셀렉터다. 수동 토글은 영속.
-const SIDEBAR_HIDDEN_KEY = 'mlp.pms.sidebar-hidden';
-// List 뷰의 브랜드 섹션 접기 상태 (전체 브랜드 볼 때만). UI 전용, 브랜드 slug로 영속.
-const BRAND_SECTION_KEY = 'mlp.pms.brand-sections';
-
-// 진행/휴면·숨김 판정은 pms-ui의 containerHasWork가 단일 정본이다 — changes는
-// 프로젝트를 경유해서만 집계되므로(changes>0 ⇒ projects>0) 별도 항이 아니다
-// (2026-09-01 2609 병합 리뷰에서 페이지 지역 술어 isBrandActive를 흡수).
-// 리스트(tree) 뷰 상태 그룹 — 렌더와 j/k 평탄화(23차)가 같은 순서를 공유한다.
-const LIST_STATUS_GROUPS = [
-  { key: 'In progress', label: '진행중', tone: 'var(--line-strong)' },
-  { key: 'Blocked',     label: '막힘',   tone: 'var(--danger)' },
-  { key: 'Review',      label: '검토',   tone: 'var(--line-strong)' },
-  { key: 'Planning',    label: '계획',   tone: 'var(--line-strong)' },
-  { key: 'Done',        label: '완료',   tone: 'var(--fg-dim)' },
-  { key: 'Backlog',     label: '백로그', tone: 'var(--fg-faint)' },
-];
-// 사이드바 드래그 정렬 — 분류(폴더)와 컨테이너(브랜드) 순서. UI 전용, localStorage 영속.
-const FOLDER_ORDER_KEY = 'mlp.pms.folder-order';
-const BRAND_ORDER_KEY = 'mlp.pms.brand-order';
-// 빈 컨테이너 노출 토글 (UI 전용, localStorage). 기본은 숨김.
-const EMPTY_CONTAINER_KEY = 'mlp.pms.show-empty-containers';
-
-// Q116 확정 — 기한 임박순 정렬. 무기한은 정렬에 섞지 않고 그룹 꼬리로 보낸다(Q120).
-// 무기한끼리는 원장 순서 유지 (Array.prototype.sort는 stable).
-function compareProjectsByDue(a, b) {
-  const ta = Date.parse(a?.dueAt || '');
-  const tb = Date.parse(b?.dueAt || '');
-  const va = Number.isFinite(ta);
-  const vb = Number.isFinite(tb);
-  if (va && vb) return ta - tb;
-  if (va) return -1;
-  if (vb) return 1;
-  return 0;
-}
-
-// To-dos 뷰 시간 구간 (monday My Work 문법 + Q120 무기한 분리, 2026-08-19 PMS 디벨롭).
-// 원장 bucket은 지남→오늘·무기한→다음주로 뭉개므로 UI에서 dueAt로 직접 나눈다.
-// 기준 TZ Asia/Seoul, calendar day (deep-design §10.1 시간 계약).
-const TODO_TIME_SECTIONS = ['기한 지남', '오늘', '내일', '이번 주', '이후', '기한 없음'];
-// 요약 4칸 클릭 필터의 표시 라벨 (project-pms-components의 PORTFOLIO_CELLS와 동일 문구).
-const SUMMARY_FILTER_LABELS = {
-  active: '진행 중',
-  blockedOrOverdue: '막힘 · 지연',
-  dueSoon: '7일 내 기한',
-  unmeasured: '진척 미측정',
-};
-function seoulDayKey(value) {
-  const d = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
-}
-function todoTimeSection(todo, todayKey) {
-  const dueKey = todo?.dueAt ? seoulDayKey(todo.dueAt) : null;
-  if (!dueKey || !todayKey) return '기한 없음';
-  const diff = Math.round((Date.parse(dueKey) - Date.parse(todayKey)) / 86400000);
-  // 완료된 할 일은 손실 상태가 아니다 — 지난 기한이어도 "기한 지남"으로 올리지 않는다.
-  if (diff < 0) return todo.done ? '오늘' : '기한 지남';
-  if (diff === 0) return '오늘';
-  if (diff === 1) return '내일';
-  if (diff <= 7) return '이번 주';
-  return '이후';
-}
-const DETAIL_FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
-
-// prevOrder를 현재 존재하는 키로 정규화한 뒤, movingKey를 targetKey '앞'으로 이동한 새 순서 배열.
-function computeMovedOrder(prevOrder, currentKeys, movingKey, targetKey) {
-  const present = new Set(currentKeys);
-  const base = prevOrder.filter((k) => present.has(k));
-  for (const k of currentKeys) if (!base.includes(k)) base.push(k);
-  if (movingKey === targetKey) return base; // 자기 자신에 드롭 → 정규화만
-  const from = base.indexOf(movingKey);
-  if (from === -1) return base;
-  base.splice(from, 1);
-  const to = base.indexOf(targetKey);
-  if (to === -1) base.push(movingKey);
-  else base.splice(to, 0, movingKey);
-  return base;
-}
-
-// Container (brand) create helpers. brands.slug must be unique per workspace and
-// is required by the table; Korean names collapse to an id-based fallback.
-function slugifyContainer(name, id) {
-  const base = String(name || '').toLowerCase().normalize('NFKD')
-    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  return base || `c-${String(id || '').slice(0, 8)}`;
-}
-
-// Optimistic row for preview mode (Engine not configured) — shaped like a ledger
-// brand so brandGroups places it in the right category folder immediately.
-function buildLocalContainer(draft, slug) {
-  return {
-    key: slug,
-    id: draft.id,
-    name: String(draft.name || '').trim(),
-    glyph: '○',
-    tone: 'moon',
-    kind: 'brand',
-    orgScope: draft.orgScope,
-    category: draft.category,
-    desc: '새 컨테이너 · 저장 대기',
-    preview: true,
-    projects: 0,
-    tasks: 0,
-    open: 0,
-    changes: 0,
-  };
-}
-
-function computeDDay(dueAt) {
-  if (!dueAt) return null;
-  const target = new Date(dueAt);
-  if (Number.isNaN(target.getTime())) return null;
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const startOfTarget = new Date(target.getFullYear(), target.getMonth(), target.getDate()).getTime();
-  const diffDays = Math.round((startOfTarget - startOfToday) / (24 * 60 * 60 * 1000));
-
-  if (diffDays < 0) return { text: `D+${Math.abs(diffDays)}`, tone: 'danger', diffDays };
-  if (diffDays === 0) return { text: 'D-Day', tone: 'danger', diffDays: 0 };
-  if (diffDays <= 3) return { text: `D-${diffDays}`, tone: 'moon', diffDays };
-  return { text: `D-${diffDays}`, tone: 'neutral', diffDays };
-}
-
-// `?view=tasks` is the sidebar spec's wording for the same view the page calls
-// 'todos' — accept both so old and new links resolve.
-function normalizeProjectView(raw) {
-  const v = String(raw || '');
-  if (v === 'tasks') return 'todos';
-  if (v === 'home' || v === 'overview') return 'tree';
-  if (v === 'list') return 'table';
-  return PROJECT_VIEWS.has(v) ? v : 'tree';
-}
 
 export function Projects({ workspace }) {
   const searchParams = useSearchParams();
@@ -338,18 +159,8 @@ export function Projects({ workspace }) {
   const { schedule: scheduleUndoable, cancel: cancelUndoable } = useUndoableAction();
   const [openDetail, setOpenDetail] = React.useState(null);
   const [mobileDetail, setMobileDetail] = React.useState(false);
-  // 기본 접힘 — 저장된 사용자 토글이 있으면 그 값을 따른다 (SSR 안전하게 마운트 후 로드).
-  const [sidebarHidden, setSidebarHiddenState] = React.useState(true);
-  React.useEffect(() => {
-    try {
-      const saved = localStorage.getItem(SIDEBAR_HIDDEN_KEY);
-      if (saved === '0') setSidebarHiddenState(false);
-    } catch { /* default applies */ }
-  }, []);
-  const setSidebarHidden = React.useCallback((v) => {
-    setSidebarHiddenState(v);
-    try { localStorage.setItem(SIDEBAR_HIDDEN_KEY, v ? '1' : '0'); } catch { /* ignore */ }
-  }, []);
+  const [sidebarHidden, setSidebarHidden] = React.useState(true);
+  const [containerPickerOpen, setContainerPickerOpen] = React.useState(false);
   const [syncState, setSyncState] = React.useState(cachedProjects ? cachedProjects.syncState : 'preview');
   const [readError, setReadError] = React.useState(null);
   const ledgerReadRef = React.useRef({ requestId: 0, controller: null });
@@ -369,7 +180,7 @@ export function Projects({ workspace }) {
   const [taskChecklistConflict, setTaskChecklistConflict] = React.useState(null);
   const [containerDraft, setContainerDraft] = React.useState(null);
   const [localContainers, setLocalContainers] = React.useState([]);
-  const drawerOpen = Boolean(projectDraft || deliveryProject || taskDraft || containerDraft || memoTaskId);
+  const drawerOpen = Boolean(projectDraft || deliveryProject || taskDraft || containerDraft || memoTaskId || !sidebarHidden || containerPickerOpen);
 
   const formatTime = (d) => {
     try {
@@ -927,7 +738,10 @@ export function Projects({ workspace }) {
     setDeliveryProject(project);
   }, []);
 
-  const createTodo = React.useCallback((projectId = null, initialStatus = 'todo') => {
+  // seed: 호출처가 미리 채워 주는 초안 필드({ title } · { dueAt } …). 드로어를 연 뒤
+  // 같은 값을 손으로 다시 입력하는 왕복을 없앤다 — To-dos 구간 헤더의 기한 시드와
+  // Council 위젯이 건네는 제목이 이 경로를 쓴다.
+  const createTodo = React.useCallback((projectId = null, initialStatus = 'todo', seed = null) => {
     const contextualProjectId = projectId || (taskView && taskFilters.projectId !== 'none' ? taskFilters.projectId : null);
     setTaskEditSource(null);
     setTaskChecklistConflict(null);
@@ -935,8 +749,15 @@ export function Projects({ workspace }) {
       ...buildTaskDraft({ projectId: contextualProjectId || null, initialStatus }),
       title: '',
       id: createClientId(),
+      ...(seed && typeof seed === 'object' ? seed : null),
     });
   }, [taskFilters.projectId, taskView]);
+
+  // To-dos 뷰의 시간 구간(오늘·내일·이번 주·기한 없음) 생성 — 그 구간의 기한으로 시드해
+  // 드로어에서 달력을 다시 열 필요가 없게 한다. 빈 문자열은 "기한 없음"이다.
+  const createTodoForSection = React.useCallback((dueAt) => {
+    createTodo(null, 'todo', { dueAt: dueAt || '' });
+  }, [createTodo]);
 
   const handleQuickAddSubtask = React.useCallback(async (projectId) => {
     const title = inlineTaskTitle.trim();
@@ -1307,13 +1128,14 @@ export function Projects({ workspace }) {
   }, [containerDraft, loadLedger]);
 
   const persistTask = React.useCallback(async () => {
-    if (!taskDraft?.title?.trim()) return { ok: false, status: 'invalid-input' };
-    if (validateTaskChecklist(taskDraft.checklist || [])) return { ok: false, status: 'invalid-input' };
+    if (!taskDraft?.title?.trim()) return { ok: false, status: 'invalid-input', message: '할 일 제목을 입력하세요.' };
+    const checklistError = validateTaskChecklist(checklistForSave(taskDraft.checklist || []));
+    if (checklistError) return { ok: false, status: 'invalid-input', message: checklistError };
     if (taskChecklistConflict) return { ok: false, status: 'conflict', message: '체크리스트 탭에서 사용할 항목을 선택한 뒤 저장하세요.' };
     if (!canWriteTasks || taskStatusPendingRef.current.size > 0) return { ok: false, status: 'error' };
 
     if (taskEditSource) {
-      const patch = buildTaskPatch(taskEditSource, taskDraft);
+      const patch = buildTaskPatch(taskEditSource, { ...taskDraft, checklist: checklistForSave(taskDraft.checklist || []) });
       if (Object.keys(patch).length <= 1) {
         // Nothing changed — treat the save as a no-op success instead of an empty-patch error.
         return { ok: true, status: 'saved' };
@@ -1368,7 +1190,7 @@ export function Projects({ workspace }) {
           dueAt: taskDraft.dueAt,
           description: taskDraft.description || '',
           nextAction: taskDraft.nextAction || '',
-          checklist: taskDraft.checklist || [],
+          checklist: checklistForSave(taskDraft.checklist || []),
           source: 'hub-projects',
         }),
       });
@@ -1517,8 +1339,8 @@ export function Projects({ workspace }) {
     createTodo(null, taskStatusForBoardColumn(column) || 'todo');
   }, [createTodo]);
 
-  // lifecycle은 중립 — moon은 current/selected 전용(§5.3). Blocked만 danger.
-  const statusTone = { 'In progress': 'neutral', Review: 'neutral', Planning: 'neutral', Backlog: 'neutral', Blocked: 'danger', Done: 'neutral' };
+  // 프로젝트 상태 칩은 ProjectStatusBadge(→ LifecycleBadge) 하나가 소유한다(§8.2).
+  // 색 이름 맵을 여기에 되살리지 않는다 — state-usage.test.mjs가 고정한다.
   const prioTone = { critical: 'danger', high: 'danger', med: 'neutral', medium: 'neutral', low: 'neutral' };
   const updateTone = { reported: 'neutral', active: 'neutral', blocked: 'danger', done: 'neutral' };
   const checkTone = { pending: 'neutral', done: 'neutral', skipped: 'neutral', blocked: 'danger' };
@@ -1812,9 +1634,9 @@ export function Projects({ workspace }) {
   };
 
   return (
-    <div className="hub-workspace-shell" style={{ display: 'grid', gridTemplateColumns: sidebarHidden ? '1fr' : '240px 1fr', height: '100%', overflow: 'hidden' }}>
+    <div className="hub-workspace-shell" style={{ display: 'grid', gridTemplateColumns: '1fr', height: '100%', overflow: 'hidden' }}>
       {!sidebarHidden && (
-      <aside style={{ borderRight: '1px solid var(--line-soft)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <Drawer title="소속 관리" onClose={() => setSidebarHidden(true)} width="min(360px, 94vw)">
         <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center' }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--fg-faint)' }}>분류</div>
@@ -1950,14 +1772,11 @@ export function Projects({ workspace }) {
             </button>
           )}
         </div>
-      </aside>
+      </Drawer>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className={`hub-page-header hub-project-page-header${openDetail ? ' hub-project-page-header--detail' : ''}`} style={{ padding: '14px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 12 }}>
-          {sidebarHidden && (
-            <IconButton icon="chevronR" size={28} iconSize={14} onClick={() => setSidebarHidden(false)} tooltip="브랜드 사이드바 펼치기" />
-          )}
           <div className="hub-project-header-context">
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 500 }}>Projects</h2>
             <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>
@@ -2029,11 +1848,13 @@ export function Projects({ workspace }) {
             countOf={(c) => c.projects || 0}
             selectedKey={brand}
             onSelect={setBrand}
+            onOpenChange={setContainerPickerOpen}
             hiddenCount={hiddenContainerCount}
             showEmpty={showEmptyContainers}
             onToggleEmpty={toggleEmptyContainers}
             tail={(
               <>
+                <IconButton icon="settings" size={28} onClick={() => setSidebarHidden(false)} tooltip="소속 관리·순서 변경" />
                 {currentBrand && currentBrand.key !== 'all' && currentBrand.id && (
                   currentBrand.category === BRAND_OWNED_CATEGORY ? (
                     <IconButton
@@ -2217,6 +2038,10 @@ export function Projects({ workspace }) {
                     onSelectCell={setSummaryFilter}
                   />
                 )}
+                {/* 로딩 중 본문이 비어 있던 자리 — 행 높이(68px)로 레이아웃을 예고한다(§11). preview/error엔 안 쓴다. */}
+                {syncState === 'loading' && projects.length === 0 && (
+                  <div style={{ padding: '12px 20px' }}><Skeleton lines={4} height={56} gap={12} label="프로젝트 원장 확인 중" /></div>
+                )}
                 {syncState === 'error' && (
                   <Card>
                     <EmptyState
@@ -2395,7 +2220,7 @@ export function Projects({ workspace }) {
                                   ariaLabel={`${p.name} 진척`}
                                 />
                                 <div className="hub-project-secondary-state">
-                                  <Badge tone={statusTone[p.status]} size="xs">{STATUS_LABEL_KO[p.status] || p.status}</Badge>
+                                  <ProjectStatusBadge status={p.status} />
                                   <span><Dot tone={prioTone[p.priority]} size={5} />{p.priority || 'medium'}</span>
                                 </div>
                               </div>
@@ -2623,7 +2448,7 @@ export function Projects({ workspace }) {
                                 <span style={{ fontSize: 13, color: 'var(--fg-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
                                 <span style={{ fontSize: 11, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{pBrand.name}</span>
                               </button>
-                              <Badge tone="neutral" size="xs">{STATUS_LABEL_KO[p.status] || p.status}</Badge>
+                              <ProjectStatusBadge status={p.status} />
                               <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', flexShrink: 0 }}>{p.due || ''}</span>
                             </div>
                           );
@@ -2670,7 +2495,6 @@ export function Projects({ workspace }) {
                     content={pContent}
                     syncState={syncState}
                     failedSources={detailFailedSources}
-                    statusTone={statusTone}
                     updateTone={updateTone}
                     checkTone={checkTone}
                     contentTone={contentTone}
@@ -2703,339 +2527,48 @@ export function Projects({ workspace }) {
         )}
 
         {view === 'todos' && canWriteTasks && (
-          <div className="scroll-y" style={{ flex: 1, padding: 'var(--section-gap)' }}>
-            <div style={{ maxWidth: 880, margin: '0 auto' }}>
-              {taskExecution.items.length === 0 && (
-                <Card>
-                  <EmptyState
-                    icon="orders"
-                    title="이 조건의 할 일이 없습니다"
-                    description="필터를 초기화하거나 새 작업을 추가하세요."
-                    action={<Button variant="outline" size="sm" onClick={resetTaskFilters}>필터 초기화</Button>}
-                  />
-                </Card>
-              )}
-              {(() => {
-                // 시간 구간 재편 (2026-08-19, monday My Work 문법) — 기한 지남/오늘/내일/
-                // 이번 주/이후/기한 없음. 옛 4버킷은 지남을 '오늘'에, 무기한을 '다음주'에
-                // 뭉갰고 목업 리터럴 날짜('4/20'…)가 남아 있었다. 무기한 분리는 Q120 확정.
-                const todayKey = seoulDayKey(new Date());
-                const source = taskExecution.items;
-                if (source.length === 0) return null;
-                const bySection = new Map(TODO_TIME_SECTIONS.map(s => [s, []]));
-                for (const t of source) bySection.get(todoTimeSection(t, todayKey)).push(t);
-                return TODO_TIME_SECTIONS.map(bucket => {
-                const items = bySection.get(bucket);
-                if (!items.length) return null;
-                // 구간 안에서도 공통 실행 모델의 선택 정렬을 유지한다.
-                const overdueBucket = bucket === '기한 지남';
-                return (
-                  <div key={bucket} style={{ marginBottom: 'var(--section-gap)' }}>
-                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 8 }}>
-                      {/* 지남 카운트만 danger — §5.2 즉시 손실 상태의 집계 표기. */}
-                      {bucket} · <span className="num" style={overdueBucket ? { color: 'var(--danger)' } : undefined}>{items.length}</span>
-                    </div>
-                    <Card pad={false}>
-                      {items.map((t, i) => {
-                        const proj = projectById.get(t.project);
-                        const pBrand = brandByKey.get(t.brand) || brands[0] || EMPTY_ALL_BRAND;
-                        return (
-                          <div key={t.id} className="hub-project-todo-row" data-done={t.done ? 'true' : 'false'} data-last={i === items.length - 1 ? 'true' : 'false'}>
-                            <div className="hub-project-todo-check">
-                              <Checkbox
-                                checked={t.done}
-                                onChange={() => toggleTodo(t.id)}
-                                disabled={pendingTaskIds.has(t.id)}
-                                size={16}
-                                label={`${t.done ? '다시 열기' : '완료'}: ${t.title}`}
-                              />
-                            </div>
-                            <div
-                              className="hub-project-todo-main hub-row"
-                              role="button"
-                              tabIndex={0}
-                              aria-label={`${t.title} 편집`}
-                              onClick={() => editTodo(t)}
-                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); editTodo(t); } }}
-                              style={{ minWidth: 0, borderRadius: 'var(--r-sm)', padding: '2px 6px', margin: '-2px -6px' }}
-                            >
-                              <div style={{ fontSize: 13, textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</div>
-                              <div style={{ fontSize: 10.5, color: 'var(--fg-faint)', marginTop: 3 }}>
-                                {pBrand.name} · {proj?.name}
-                              </div>
-                              <TaskChecklistGauge task={t} />
-                            </div>
-                            <span className="hub-project-todo-assignee">{t.assignee}</span>
-                            <span className="hub-project-todo-priority">
-                              <Dot tone={prioTone[t.priority]} />{t.priority}
-                            </span>
-                            <span className="mono hub-project-todo-due">{t.due}</span>
-                          </div>
-                        );
-                      })}
-                    </Card>
-                  </div>
-                );
-                });
-              })()}
-            </div>
-          </div>
+          <ProjectTodosView
+            items={taskExecution.items}
+            projectById={projectById}
+            brands={brands}
+            brandByKey={brandByKey}
+            pendingTaskIds={pendingTaskIds}
+            prioTone={prioTone}
+            onToggleTodo={toggleTodo}
+            onEditTodo={editTodo}
+            onCreateTodo={createTodoForSection}
+            onResetFilters={resetTaskFilters}
+          />
         )}
 
         {view === 'board' && canWriteTasks && (
-            <div className="hub-scroll-x" style={{ display: 'flex', gap: 'var(--gap)', overflowX: 'auto', flex: 1, padding: 'var(--section-gap)' }}>
-            {visibleColumns.map(col => (
-              <div key={col.key}
-                onDragOver={e => e.preventDefault()}
-                onDrop={() => drag && moveCard(drag, col.key)}
-                style={{
-                  width: 280, flexShrink: 0,
-                  background: 'var(--surface)', border: '1px solid var(--line-soft)',
-                  borderRadius: 'var(--r-lg)',
-                  display: 'flex', flexDirection: 'column', overflow: 'hidden',
-                }}>
-                <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--line-soft)' }}>
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>{col.label}</span>
-                  <span className="mono" style={{ fontSize: 12, color: 'var(--fg-muted)', padding: '1px 6px', background: 'var(--surface-3)', borderRadius: 4 }}>{col.cards.length}</span>
-                  <div style={{ flex: 1 }} />
-                  <IconButton icon="plus" size={22} iconSize={12} tooltip="Add card" onClick={() => createBoardCard(col.key)} />
-                </div>
-                <div className="scroll-y" style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {col.cards.length === 0 && (
-                    <div style={{ padding: '18px 8px', fontSize: 11.5, color: 'var(--fg-faint)', textAlign: 'center' }}>카드 없음</div>
-                  )}
-                  {col.cards.map(c => (
-                    <div key={c.id} className="hub-kanban-card" draggable={!pendingTaskIds.has(c.id)} onDragStart={() => setDrag(c.id)} onDragEnd={() => setDrag(null)}
-                      // 보드 카드도 열 수 있어야 한다(§8.1 edit 계약) — 이전에는 이동만 가능하고
-                      // 마우스로도 키보드로도 편집을 열 방법이 없었다. 클릭/Enter → 태스크 드로어,
-                      // project-* 카드는 프로젝트 상세로.
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`${c.title} 열기`}
-                      data-kb-row={c.id}
-                      onClick={() => {
-                        if (String(c.id).startsWith('project-')) { openProjectDetail(String(c.id).slice('project-'.length)); return; }
-                        const t = todos.find(x => x.id === c.id);
-                        if (t) setMemoTaskId(t.id);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.target !== e.currentTarget) return;
-                        if (e.key !== 'Enter' && e.key !== ' ') return;
-                        e.preventDefault();
-                        if (String(c.id).startsWith('project-')) { openProjectDetail(String(c.id).slice('project-'.length)); return; }
-                        const t = todos.find(x => x.id === c.id);
-                        if (t) setMemoTaskId(t.id);
-                      }}
-                      style={{
-                        background: 'var(--surface-2)', border: '1px solid var(--line-soft)',
-                        borderRadius: 'var(--r-sm)', padding: 'var(--pad-y) var(--pad-x)', cursor: 'grab',
-                        opacity: drag === c.id ? 0.4 : 1,
-                        // j/k 키보드 커서 — Deals 칸반과 동일 문법(23차).
-                        ...(kbSelection.selectedId === c.id ? { outline: '1px solid var(--moon-300)', outlineOffset: -1 } : {}),
-                      }}>
-                      <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 6 }}>
-                        <span title={`우선순위 ${c.priority || 'medium'}`} style={{ display: 'inline-flex' }}>
-                          <Dot tone={prioTone[c.priority]} size={5} />
-                        </span>
-                        <span style={{ fontSize: 10.5, color: 'var(--fg-faint)' }}>{c.project}</span>
-                        <div style={{ flex: 1 }} />
-                        {c.tag === 'personal' && <Badge tone="personal" size="xs">P</Badge>}
-                        {c.tag === 'company' && <Badge tone="company" size="xs">C</Badge>}
-                      </div>
-                      <div style={{ fontSize: 12.5, lineHeight: 1.4 }}>{c.title}</div>
-                      {(c.nextAction || c.description) && (
-                        <div style={{ fontSize: 11.5, color: 'var(--fg-muted)', marginTop: 6, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflowWrap: 'anywhere' }}>
-                          {c.nextAction ? `다음 행동 · ${c.nextAction}` : c.description}
-                        </div>
-                      )}
-                      {c.projectId && (
-                        <a
-                          href={`/dashboard/work/projects?project=${encodeURIComponent(c.projectId)}`}
-                          onClick={(event) => event.stopPropagation()}
-                          onPointerDown={(event) => event.stopPropagation()}
-                          style={{ display: 'flex', alignItems: 'center', minHeight: 44, fontSize: 11.5, color: 'var(--fg-muted)', textDecoration: 'underline' }}
-                        >프로젝트 · 연결 메모 보기</a>
-                      )}
-                      <TaskChecklistGauge task={c} />
-                      {c.due && <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-muted)', marginTop: 6 }}>기한 · {c.due}</div>}
-                      <select
-                        className="hub-project-board-status"
-                        aria-label={`${c.title} 상태 변경`}
-                        aria-busy={pendingTaskIds.has(c.id) ? 'true' : undefined}
-                        disabled={pendingTaskIds.size > 0}
-                        value={col.key}
-                        onClick={(event) => event.stopPropagation()}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onChange={(event) => moveCard(c.id, event.target.value)}
-                      >
-                        {visibleColumns.map(option => (
-                          <option key={option.key} value={option.key}>{option.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+          <ProjectBoardView
+            visibleColumns={visibleColumns}
+            todos={todos}
+            drag={drag}
+            pendingTaskIds={pendingTaskIds}
+            selectedId={kbSelection.selectedId}
+            prioTone={prioTone}
+            onDragChange={setDrag}
+            onMoveCard={moveCard}
+            onCreateCard={createBoardCard}
+            onOpenTask={setMemoTaskId}
+            onOpenProject={openProjectDetail}
+          />
         )}
 
-        {view === 'timeline' && (() => {
-          if (projects.length === 0) {
-            return (
-              <div className="scroll-y" style={{ flex: 1, padding: 'var(--section-gap)' }}>
-                <div style={{ maxWidth: 880, margin: '0 auto' }}>
-                  <Card>
-                    <EmptyState
-                      icon="projects"
-                      title="타임라인에 표시할 프로젝트가 없습니다"
-                      description="실제 시작일이 있는 프로젝트는 기간으로, 마감일만 있으면 마감 지점으로 표시됩니다."
-                      action={<Button variant="primary" size="sm" icon="plus" onClick={() => createProject()}>Project</Button>}
-                    />
-                  </Card>
-                </div>
-              </div>
-            );
-          }
-          const timeline = projectTimeline;
-          const timelineProjectHref = (projectId) => {
-            const params = mergeTimelineProjectQuery(searchParams, projectId);
-            const query = params.toString();
-            return query ? `${pathname}?${query}` : pathname;
-          };
-          const weekTicks = [];
-          for (let d = 0; timeline.totalDays > 0 && d <= timeline.totalDays; d += 7) {
-            const tickDate = new Date(timeline.windowStart.getTime() + d * 86_400_000);
-            weekTicks.push({
-              offsetPct: (d / timeline.totalDays) * 100,
-              label: new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric' }).format(tickDate),
-            });
-          }
-          return (
-            <div className="scroll-y" style={{ flex: 1, padding: 'var(--section-gap)' }}>
-              <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
-                {selectedProjectId && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44 }}>
-                    <a
-                      href={`/dashboard/work/projects?project=${encodeURIComponent(selectedProjectId)}`}
-                      style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', color: 'var(--moon-300)', fontSize: 12.5, textUnderlineOffset: 3 }}
-                    >
-                      프로젝트 상세로 돌아가기
-                    </a>
-                    <span className="mono" style={{ color: 'var(--fg-faint)', fontSize: 10.5 }}>
-                      {projects.find(project => project.id === selectedProjectId)?.name || '선택한 프로젝트'}
-                    </span>
-                  </div>
-                )}
-                <Card pad={false} className="hub-table-card">
-                  {timeline.items.length === 0 ? (
-                    <div style={{ padding: '18px 14px', fontSize: 11.5, color: 'var(--fg-faint)' }}>기한이 지정된 프로젝트가 없습니다. 프로젝트를 편집해 기한을 지정하면 여기 축 위에 표시됩니다.</div>
-                  ) : (
-                    // Fixed inner min-width + horizontal scroll (same pattern as the board
-                    // view's hub-scroll-x) so the ruler and bars never get squeezed unreadable
-                    // on narrow viewports — the label column alone would eat a phone's width.
-                    <div className="hub-scroll-x" style={{ overflowX: 'auto' }}>
-                      <div style={{ minWidth: 640 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', borderBottom: '1px solid var(--line-soft)' }}>
-                          <div style={{ padding: '8px 14px', fontSize: 10.5, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>프로젝트</div>
-                          <div style={{ position: 'relative', padding: '8px 0', background: 'var(--surface-2)' }}>
-                            {weekTicks.map((tick, i) => (
-                              <span key={i} className="mono" style={{ position: 'absolute', left: `${tick.offsetPct}%`, fontSize: 10.5, color: 'var(--fg-faint)', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>{tick.label}</span>
-                            ))}
-                            <span className="mono" style={{ position: 'absolute', left: `${timeline.todayPct}%`, top: 0, fontSize: 10.5, color: 'var(--moon-300)', transform: 'translateX(-50%)', fontWeight: 600, whiteSpace: 'nowrap' }}>오늘</span>
-                          </div>
-                        </div>
-                        {timeline.items.map((item, i) => {
-                          const p = item.project;
-                          const pBrand = brandByKey.get(p.brand) || brands[0] || EMPTY_ALL_BRAND;
-                          const lineToken = item.overdue ? 'var(--danger-line)' : (STATUS_LINE_TOKEN[p.status] || 'var(--line-strong)');
-                          return (
-                            <div key={p.id} className="hub-row"
-                              data-selected={selectedProjectId === p.id ? 'true' : 'false'}
-                              data-kind={item.kind}
-                              style={{
-                                display: 'grid', gridTemplateColumns: '260px 1fr', alignItems: 'center', minHeight: 44,
-                                borderBottom: i < timeline.items.length - 1 ? '1px solid var(--line-soft)' : 'none',
-                                background: selectedProjectId === p.id ? 'var(--surface-2)' : 'transparent',
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 14px', minWidth: 0 }}>
-                                <BrandMark brand={pBrand} size={16} style={{ marginTop: 2 }} />
-                                <div style={{ minWidth: 0, flex: 1 }}>
-                                  <a
-                                    href={timelineProjectHref(p.id)}
-                                    aria-current={selectedProjectId === p.id ? 'page' : undefined}
-                                    aria-label={buildTimelineItemAriaLabel(item)}
-                                    style={{ minHeight: 44, display: 'flex', flexDirection: 'column', justifyContent: 'center', color: 'inherit', textDecoration: 'none' }}
-                                  >
-                                    <span style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
-                                    <span className="mono" style={{ fontSize: 10.5, color: item.overdue ? 'var(--danger)' : 'var(--fg-faint)', marginTop: 2 }}>{p.due}{item.overdue ? ' · 지남' : ''}</span>
-                                  </a>
-                                  <div style={{ marginTop: 7 }}>
-                                    <ProjectProgressGauge progress={p.displayProgress} compact ariaLabel={`${p.name} 진척`} />
-                                  </div>
-                                </div>
-                              </div>
-                              <div style={{ position: 'relative', minHeight: 54 }}>
-                                {item.kind === 'range' ? (
-                                  <div style={{
-                                    position: 'absolute', left: `${item.startPct}%`, width: `${item.widthPct}%`,
-                                    top: 18, height: 18, borderRadius: 999,
-                                    background: 'var(--surface-3)', border: '1px solid var(--line)',
-                                    boxShadow: `inset 1px 0 0 ${lineToken}`,
-                                  }} />
-                                ) : (
-                                  <span
-                                    aria-hidden="true"
-                                    style={{
-                                      position: 'absolute', left: `${item.markerPct}%`, top: 18,
-                                      width: 16, height: 16, borderRadius: 999,
-                                      background: 'var(--surface-3)', border: `1px solid ${lineToken}`,
-                                      boxShadow: `inset 0 0 0 3px var(--surface-3), inset 0 0 0 8px ${lineToken}`,
-                                      transform: 'translateX(-50%)',
-                                    }}
-                                  />
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </Card>
-
-                {timeline.undated.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-faint)', marginBottom: 8 }}>기한 미정 · {timeline.undated.length}</div>
-                    <Card pad={false}>
-                      {timeline.undated.map((p, i) => {
-                        const pBrand = brandByKey.get(p.brand) || brands[0] || EMPTY_ALL_BRAND;
-                        return (
-                          <a key={p.id} className="hub-row"
-                            href={timelineProjectHref(p.id)}
-                            aria-current={selectedProjectId === p.id ? 'page' : undefined}
-                            data-selected={selectedProjectId === p.id ? 'true' : 'false'}
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', minHeight: 44,
-                              borderBottom: i < timeline.undated.length - 1 ? '1px solid var(--line-soft)' : 'none',
-                              color: 'inherit', textDecoration: 'none',
-                              background: selectedProjectId === p.id ? 'var(--surface-2)' : 'transparent',
-                            }}
-                          >
-                            <BrandMark brand={pBrand} size={16} />
-                            <span style={{ flex: 1, fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
-                            <Badge tone={statusTone[p.status]} size="xs">{STATUS_LABEL_KO[p.status] || p.status}</Badge>
-                          </a>
-                        );
-                      })}
-                    </Card>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })()}
+        {view === 'timeline' && (
+          <ProjectTimelineView
+            projects={projects}
+            timeline={projectTimeline}
+            searchParams={searchParams}
+            pathname={pathname}
+            selectedProjectId={selectedProjectId}
+            brands={brands}
+            brandByKey={brandByKey}
+            onCreateProject={() => createProject()}
+          />
+        )}
       </div>
 
       {deliveryProject && <ProjectDeliveryEditor key={deliveryProject.id} project={deliveryProject} onClose={() => setDeliveryProject(null)} onSave={persistDelivery} />}
@@ -3165,7 +2698,7 @@ export function Projects({ workspace }) {
       <ProjectTaskDetailDrawer
         draft={taskDraft} editing={Boolean(taskEditSource)} projects={allProjects}
         onChange={(key, value) => setTaskDraft(current => ({ ...current, [key]: value }))}
-        onSave={persistTask} onDelete={taskEditSource ? deleteTask : undefined}
+        onSave={persistTask} onContinue={() => createTodo(null, 'todo', { projectId: taskDraft?.projectId || '' })} onDelete={taskEditSource ? deleteTask : undefined}
         onClose={() => { setTaskDraft(null); setTaskEditSource(null); setTaskChecklistConflict(null); }}
         checklistConflict={taskChecklistConflict}
         onUseCurrentChecklist={() => { setTaskDraft(current => ({ ...current, checklist: taskChecklistConflict })); setTaskChecklistConflict(null); }}
@@ -3185,9 +2718,12 @@ export function Projects({ workspace }) {
           todos: councilWidgetProject ? (ledger.todos || []).filter(t => t.projectId === councilWidgetProject.id) : [],
           updates: councilWidgetProject ? (ledger.updates || []).filter(u => u.projectId === councilWidgetProject.id) : [],
         }}
+        // 위젯이 건네는 건 제목이다 — 2번째 인자는 initialStatus라, 제목을 거기에 넣으면
+        // TASK_STATUSES에 없어 'todo'로 떨어지고 제목은 조용히 버려졌다(드로어가 빈 제목으로
+        // 열림). seed로 넘겨 AI가 제안한 문장을 그대로 초안에 채운다.
         onCreateTask={(title) => {
-          if (createTodo && councilWidgetProject?.id) {
-            createTodo(councilWidgetProject.id, title);
+          if (councilWidgetProject?.id) {
+            createTodo(councilWidgetProject.id, 'todo', { title: String(title || '').trim() });
           }
         }}
       />

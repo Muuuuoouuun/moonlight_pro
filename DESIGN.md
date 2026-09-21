@@ -283,11 +283,11 @@ truth. Do not recreate them ad-hoc inside pages.
 - `Dot`, `Kbd`, `Avatar`, `Divider`
 - `Card` (padded / unpadded), `SectionTitle`, `Tabs`
 - `Button` (primary · secondary · ghost · outline · danger), `IconButton`
-- `Input`, `Checkbox`, `Progress`, `Sparkline`, `Placeholder`
+- `Input`, `Checkbox`, `Progress`, `Sparkline`, `Placeholder`, `Skeleton` (loading placeholder — `role="status"`, pulses with `mlMoonPulse 1.4s`; never rendered for `preview`/`error`)
 - Form fields `TextField`, `TextAreaField`, `SelectField`, `CheckboxRow`, `DateQuickPresets` (contract in `form-fields.test.mjs`)
 - `SegmentedControl`, `EmptyState` (+ `action` CTA), `ScrollShadowX`
 - `Drawer`, `EditDrawer` — the only overlay / edit surfaces (§8.1)
-  - `Drawer presentation="compact"` is the short capture variant: centered on desktop, bottom sheet at ≤600px, with the same ESC and focus handling. Default `side` remains the edit drawer. Callers preserve drafts and guard dismissal while saving.
+  - `Drawer presentation="compact"` is the short capture variant: centered on desktop, bottom sheet at ≤600px, with the same ESC and focus handling. Default `side` remains the edit drawer. New task capture uses `compact`; optional description/next-action fields are disclosed on demand. Compact capture uses a 6px backdrop blur. Callers preserve drafts and guard dismissal while saving.
 - State primitives `AttentionRail`, `CertaintyBadge`, `LifecycleBadge`, `TruthBadge` (§8.2). `SyncBadge`
   survives only as a compatibility wrapper over `TruthBadge`; new call sites use `TruthBadge` directly.
 
@@ -336,7 +336,10 @@ truth. Do not recreate them ad-hoc inside pages.
 - 인터랙티브 행은 `className="hub-row"` — `onMouseEnter/Leave` JS 핸들러를 새로 쓰지 않는다
   (reduced-motion 무시 + 드리프트 원인). 기존 JS hover는 해당 파일을 만질 때 옮긴다.
 - 카드형 클릭 타깃은 `.hub-card-link`(보더 강조 + 1px 상승), 칸반 카드는 `.hub-kanban-card`(`--surface-3`로 상승),
-  아이콘 버튼은 `.hub-iconbtn` — 전부 같은 no-JS 계약이며 휴지 서피스만 다르다.
+  아이콘 버튼은 `.hub-iconbtn`, `Button` primitive는 `.hub-btn` + `.hub-btn--<variant>` — 전부 같은 no-JS 계약이며
+  휴지 서피스만 다르다.
+- `Button`의 휴지 variant chrome(색·배경·보더·radius)도 `hub-tokens.css`가 소유한다. 인라인 스타일은 모든 클래스
+  규칙을 이기므로, 휴지 값이 인라인에 남아 있으면 `:hover` 규칙은 절대 발동하지 않는다 (§15 2026-09-15).
 
 **텍스트 크기 플로어.**
 - 데이터 값 ≥ 12px · 보조 메타(ID·타임스탬프·마이크로 카운트·상태 플래그) ≥ 10.5px ·
@@ -390,7 +393,8 @@ Deliberate, never playful. Since 2026-07-29 the only sanctioned durations and cu
 - Page reveal: `.fade-up` (opacity + 4px translateY). Card lists cascade with `.stagger-up`; do not hand-roll delays.
 - Hover travel: no more than `4px`.
 - Compact capture: enter/exit and disclosure use `--dur-panel`, backdrop enters with `--dur-overlay`. A successful save closes only after the server acknowledgement; reduced-motion skips the exit delay.
-- Live indicators: `mlMoonPulse 1.4s ease-in-out infinite` — one duration everywhere.
+- Live indicators: `mlMoonPulse 1.4s ease-in-out infinite` — one duration everywhere. Loading skeletons (`Skeleton`) reuse it as-is, with no per-line phase offset (a wave reads as playful).
+- `motion.test.mjs` sweeps every hub stylesheet and page for raw `ms` literals and inline `cubic-bezier(` inside transition/animation values — the §9 token rule is enforced, not advisory (2026-09-16).
 - Urgent/critical indicators do not loop, blink, or pulse. Red already carries sufficient emphasis.
 - Certainty changes may transition dashed → solid and marker → verified over `--dur-overlay`…`--dur-enter`;
   do not add a green celebration state.
@@ -410,8 +414,8 @@ Bad: `혁신적인 솔루션` · `최적화된 시너지` · `AI 기반 차세�
 - Touch targets: minimum 44px (모바일 미디어쿼리가 button에 44px 플로어를 강제 — 예외는 `role="checkbox"`뿐).
 - Text contrast: WCAG AA minimum.
 - Keyboard navigation works for all core flows (⌘K palette is the fast path).
-- Focus uses `outline: 1px solid var(--moon-300)` with 2px offset — never relies on browser defaults.
-- Loading / empty / success / error states are part of the design, not afterthoughts.
+- Focus uses `outline: 1px solid var(--moon-300)` with 2px offset — never relies on browser defaults. A focus rule changes only the outline; it never sets `border-radius` (the ring follows the element's own radius — see §15 2026-09-16).
+- Loading / empty / success / error states are part of the design, not afterthoughts. Where the layout is known, loading renders `Skeleton` — not a bare `불러오는 중…` line and never an `EmptyState` (that copy means "nothing here", which is a different truth state).
 - Color never carries state alone. Every urgent, certainty, lifecycle, and truth state includes visible
   text plus an icon, marker, edge pattern, or shape that survives grayscale and color-vision differences.
 - Dashed and dotted certainty states require direct labels (`권장`, `미정`, `확인 필요`); pattern alone
@@ -485,3 +489,11 @@ Build order when adding a new surface:
 | 2026-08-19 | 브랜드/컨테이너 아이덴티티 마크를 혼재 기하 글리프 렌더에서 모노그램 타일(`BrandMark`, 이름 첫 글자 + 중립 surface 토큰)로 교체. PMS 표면 적용 완료, Revenue·Content는 잔여 마이그레이션 | confirmed | 운영자 지시 "아이콘 변경" — 모양·무게가 제각각인 글리프(◐ ◇ □ …)가 목록 소음의 주범. `meta.glyph` 데이터는 보존(렌더 표현만 교체). 07-15 사이드바 스펙 §8에 상세 |
 | 2026-08-29 | Brands become an operating surface (Brand tab) and own the `sns-channel` category; PMS renders but never creates those containers | confirmed | Operator: "brand = content" was wrong; brand management must be separate and stricter |
 | 2026-09-01 | 브랜드 컨텐츠 로그(`dashboard/brands/log`)에 한해 브랜드별 아이덴티티 컬러 허용 — 운영자 v5 디자인 첨부가 8색 팔레트(점·카드 좌측 3px 레일)를 확정. 색은 언제나 브랜드 이름 라벨과 동반(색 단독 의미 금지), 페이지 크롬은 토큰만. 다른 표면으로의 확장은 별도 결정 필요 | confirmed | 운영자가 직접 5회 이터레이션한 첨부 디자인이 08-29 브랜드 탭 스펙 §11 "브랜드 식별에 색 금지"를 이 표면에서 대체. 3px 레일도 §8.1 1px 레일 규칙의 운영자 확정 예외. 상세·미정 슬러그 매핑은 `2026-09-01-brand-content-log.md` |
+| 2026-09-15 | 개인 매출 로드맵의 확실성 채널은 §5.3의 3값 enum(`confirmed`·`recommended`·`unknown`)만 쓴다. 라이프사이클 값 `waiting`("입금 대기")은 확실성에서 분리해 `closing`(deal-stages.js의 won) 단계의 `LifecycleBadge`로 옮기고, `final`(negotiation)은 "가능성 높음"으로, `contact`·`potential`은 §5.3이 지정한 unknown 어휘 "확인 필요"로 읽는다 | confirmed | 페이지 전용 4키 어휘가 §5.3 첫 문장(채널 겸직 금지)을 어겼고, `[data-certainty="waiting"]` 규칙이 없어 대기 이벤트가 `confirmed`와 같은 solid 기하로 렌더됐다. "입금 대기"가 negotiation 단계에 붙어 있던 것도 오기였다. 확실성 라벨로 쓰이던 "진행 중"은 `LifecycleBadge`의 `active` 라벨이라 재사용하면 채널이 다시 겹친다. 운영자가 볼 라벨을 바꾸는 두 건("확인 필요" 채택, "입금 대기"의 단계 이동)은 2026-09-15 운영자가 직접 확정했다 |
+| 2026-09-15 | `overflow: hidden` 컨테이너 안의 full-bleed 행은 §11 포커스 링을 `outline: 1px solid var(--moon-300)` + `outline-offset: -2px`로 안쪽에 그린다 (`.hub-row` 선례) | confirmed | 양수 offset은 컨테이너에 잘려 부분 링이 된다 — §11이 막으려는 "링이 보이지 않는" 상태가 된다. §11은 링 **굵기**를 1px로 고정하고, 2px offset은 자립형 컨트롤의 기본값(`.hub-app :focus-visible`)이다 |
+| 2026-09-15 | `Button` primitive의 hover를 CSS가 소유한다 — `.hub-btn` + `.hub-btn--<variant>`가 휴지 chrome과 모션을 `hub-tokens.css`에서 가지고, radius는 hover 전이 대상이 아니라 `IconButton`과 같이 인라인에 남긴다. (한때 전역 `:focus-visible`이 `border-radius: 2px`를 덮어 CSS 소유 radius가 포커스 순간 튀었다 — 그 덮어쓰기는 2026-09-16 행에서 제거됐다.) `active` prop은 `data-active` DOM 속성으로 노출해 pressed 상태도 스타일시트가 소유한다. 2026-07-29 design-review의 "Button primitive에 variant별 hover 상태 없음" 항목을 닫는다 | confirmed | 인라인 `background`/`border`/`color`가 모든 클래스 규칙을 이겨서, primitive가 2026-07부터 선언해 둔 `--dur-hover` 전이가 한 번도 발동하지 못했다. `.hub-iconbtn`(§8.1)이 이미 쓰는 계약을 그대로 적용한 것이며, hover는 §5.2대로 accent가 아니라 surface 한 단계 또는 hairline 한 단계 강조로만 표현한다 |
+| 2026-09-16 | `:focus-visible` 규칙은 outline만 바꾸고 `border-radius`를 절대 설정하지 않는다. 전역 `.hub-app :focus-visible`의 `border-radius: 2px`와 `content-studio summary:focus-visible`의 radius를 제거 | confirmed | 브라우저 실측(Playwright, 1440·390) — 전역 규칙이 (0,2,0)이라 단일 클래스(0,1,0)로 radius를 갖는 모든 포커스 가능 요소를 키보드 포커스 순간에만 2px로 튀게 했다: 사이드바 nav 11곳(6→2px, 모든 페이지), PMS 칩(999→2px), 포트폴리오 메트릭 4곳(6→2px), 개인 매출 타임라인 스크롤(14→2px)·이벤트 카드(6→2px). Button에서 먼저 잡은 cascade 버그의 근본 원인이며, `focus-ring.test.mjs`가 저장소 전체를 훑어 재발을 막는다 |
+| 2026-09-16 | 허브 raw `ms` 리터럴 45건을 §9 토큰으로 전환(용도 기준: hover→--dur-hover, 진입/값 변화→--dur-enter+--ease-hub, 패널/디스클로저→--dur-panel, 오버레이→--dur-overlay, 지연→--stagger-step). celebration pop 260/300ms는 --dur-enter(200)로 스냅. `motion.test.mjs`가 저장소 전체를 훑어 재발을 막는다 | confirmed | 2026-09-04 아젠다가 실측한 23곳은 실제 45곳이었고 값 위반(240ms 초과)이 7곳. 규칙은 2026-07-29부터 있었으나 강제 장치가 없어 병합마다 늘었다. 축하 연출을 더 길게 원하면 임의 리터럴이 아니라 --dur-celebrate 토큰을 이 표에 추가하는 것이 맞다 |
+| 2026-09-16 | `SegmentedControl`의 휴지 chrome(색·배경)을 `.hub-seg`/`.hub-seg__btn`으로 이관하고 hover·활성 전이를 --dur-hover로 부여. 활성 정본은 aria-pressed 하나 | confirmed | Button(2026-09-15)과 같은 cascade — 인라인 색은 :hover와 전이를 죽인다. hover는 §5.2대로 글자 한 단계(--fg-faint→--fg-muted)만, 배경·accent 없음 |
+| 2026-09-16 | `Skeleton` primitive 신설 — 로딩은 `불러오는 중…` 한 줄이 아니라 레이아웃을 예고하는 스켈레톤으로. 라우트 청크 폴백(모든 페이지)·브랜드 목록·첫 화면 승인 큐·개인 지표 타일·프로젝트 table 본문에 채택. preview/error에는 쓰지 않는다 | confirmed | §11 "loading states are part of the design"인데 스켈레톤이 0개였다(2026-09-04 B2, 모바일 성능 체감 60점의 명명된 원인). 펄스는 §9의 라이브 인디케이터 단일 duration(mlMoonPulse 1.4s)을 그대로 써 새 duration을 만들지 않는다. 브랜드 로딩이 `EmptyState`("비어 있음" 의미)로 그려지던 것은 §5.3 truth 오용이라 함께 교정 |
+| 2026-09-20 | 새 할 일 중앙 팝업·선택 필드 펼침·한 줄 체크리스트·Enter 연속 입력. PMS 분류 상시 패널은 소속 선택 버튼과 필요 시 관리 드로어로 전환. 반복 매출 확실성 범례는 제거하고 이벤트의 직접 라벨 유지 | confirmed | 운영자 실사용 입력 개선 승인. 기존 저장·포커스·충돌 계약 유지 |

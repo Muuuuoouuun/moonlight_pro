@@ -9,9 +9,9 @@ const input = () => prepareMemoIdea({ ...newMemoDraft(), body: "  메모 원문\
 
 function server(draft, overrides = {}) {
   return async (url, options) => {
-    if (url.startsWith("/api/hub/memo-capture")) {
-      if (options.method === "POST") return overrides.memo?.() || json({ status: "saved", id: draft.id });
-      return json({ status: "live", memo: { id: draft.id, body: draft.body } });
+    if (url.startsWith("/api/hub/journal")) {
+      if (options.method === "POST") return overrides.memo?.() || json({ status: "saved", entry: { id: draft.id, body: draft.body } });
+      return json({ status: "live", entry: { id: draft.id, body: draft.body } });
     }
     if (options.method === "POST") {
       overrides.onIdea?.(JSON.parse(options.body));
