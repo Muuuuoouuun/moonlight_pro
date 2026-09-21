@@ -34,6 +34,29 @@ import { BRAND_IDENTITY_FIELDS, BRAND_OPERATING_STATES, brandIdentityDraft, bran
 // 사라지기 때문이다 — PMS는 헤더 드롭다운으로 보완하지만 여기서는 상태 전환이 더 맞다.
 
 const SCOPE_LABEL = { classin: "ClassIn", personal: "개인" };
+const IDENTITY_GROUPS = [
+  { key: "value", label: "대상과 가치", icon: "user", fields: ["audience", "promise", "offer"], description: "누구에게 어떤 변화를 줄 브랜드인지 정해보세요." },
+  { key: "direction", label: "방향과 주제", icon: "flag", fields: ["philosophy", "direction", "keywords"], description: "반복해서 전할 관점과 쌓아갈 주제를 적어보세요." },
+  { key: "voice", label: "표현 기준", icon: "edit", fields: ["voice", "voiceExamples", "rules", "forbidden"], description: "브랜드다운 문장과 지켜야 할 표현 규칙을 남겨보세요." },
+];
+const IDENTITY_FIELD_LABELS = Object.fromEntries(BRAND_IDENTITY_FIELDS.map(([key, label]) => [key, label]));
+const hasIdentityValue = (value) => Array.isArray(value)
+  ? value.some((entry) => String(entry).trim())
+  : Boolean(String(value || "").trim());
+
+function identityEditorFields(section) {
+  const group = IDENTITY_GROUPS.find(({ key }) => key === section);
+  const visibleKeys = group?.fields || (section === "focus" ? ["currentFocus"] : null);
+  return [
+    ...BRAND_IDENTITY_FIELDS.filter(([key]) => !visibleKeys || visibleKeys.includes(key))
+      .map(([key, label, placeholder]) => ({ key, label, placeholder, type: "textarea", rows: key === "voiceExamples" ? 4 : 3 })),
+    ...(!group ? [
+      { key: "operatingState", label: "운영 상태", type: "select", options: BRAND_OPERATING_STATES, row: "operation" },
+      { key: "isFocused", label: "집중 브랜드로 고정", type: "select", options: [{ value: "no", label: "일반" }, { value: "yes", label: "집중 브랜드" }], row: "operation" },
+    ] : []),
+    { key: "confirmation", label: "브랜드 기준 전체 확인", type: "select", options: [{ value: "unconfirmed", label: "작성만 저장 · 미확인" }, { value: "confirmed", label: "브랜드 기준 전체를 확인함" }] },
+  ];
+}
 
 // 컨테이너 slug 규칙은 PMS와 같아야 한다 — 같은 brands 테이블의 unique(workspace, slug)다.
 function slugifyBrand(name, id) {
@@ -147,14 +170,14 @@ function TextBlock({ label, value, placeholder }) {
   );
 }
 
-function ListBlock({ label, items, placeholder, mono = false }) {
+function ListBlock({ label, items, placeholder }) {
   const list = Array.isArray(items) ? items.filter(Boolean) : [];
   return (
     <div className="brand-fact">
       <span className="brand-fact-label">{label}</span>
       {list.length === 0 ? <p className="brand-fact-empty">{placeholder}</p> : (
         <ul className="brand-fact-list">
-          {list.map((entry, index) => <li key={`${entry}-${index}`} className={mono ? "mono" : undefined}>{entry}</li>)}
+          {list.map((entry, index) => <li key={`${entry}-${index}`}>{entry}</li>)}
         </ul>
       )}
     </div>
@@ -175,12 +198,61 @@ function ChipBlock({ label, items, placeholder }) {
   );
 }
 
+function BrandSourceLinks({ items }) {
+  return (
+    <div className="brand-fact">
+      <span className="brand-fact-label">링크</span>
+      <div className="brand-source-links">
+        {items.map((entry, index) => {
+          let url;
+          try { url = new URL(entry); } catch { /* 이전 기록의 일반 텍스트도 보존한다. */ }
+          if (!url || !["http:", "https:"].includes(url.protocol)) return <span key={index}>{entry}</span>;
+          const label = `${url.hostname.replace(/^www\./, "")}${url.pathname.replace(/\/$/, "")}`;
+          return <a key={index} href={url.href} target="_blank" rel="noopener noreferrer" title={url.href} aria-label={`${label} (새 탭)`}><Iconed name="link" size={13} /><span>{label}</span></a>;
+        })}
+      </div>
+    </div>
+  );
+}
+
+function IdentityGroup({ group, brand, onEdit }) {
+  const filledKeys = group.fields.filter((key) => hasIdentityValue(brand[key]));
+  const missingKeys = group.fields.filter((key) => !hasIdentityValue(brand[key]));
+  const title = <h4 id={`brand-group-${group.key}`}>{group.label}</h4>;
+  const action = <Button variant="ghost" size="sm" icon={filledKeys.length ? "edit" : "plus"} aria-label={`${group.label} ${filledKeys.length ? "편집" : "작성"}`} onClick={() => onEdit(group.key)}>{filledKeys.length ? "편집" : "작성"}</Button>;
+  return (
+    <section className="brand-criteria-group" aria-labelledby={`brand-group-${group.key}`}>
+      {filledKeys.length === 0 ? (
+        <div className="brand-criteria-empty">
+          <EmptyState icon={group.icon} title={title} description={group.description} action={action}
+            style={{ minHeight: 0, padding: 0, display: "grid", gridTemplateColumns: "34px minmax(0, 1fr) auto", gap: "4px 12px", textAlign: "left", alignItems: "center" }} />
+        </div>
+      ) : (
+        <>
+          <div className="brand-group-heading">{title}{action}</div>
+          <div className="brand-identity-grid">
+            {filledKeys.map((key) => key === "keywords"
+              ? <ChipBlock key={key} label={IDENTITY_FIELD_LABELS[key]} items={brand[key]} />
+              : ["rules", "forbidden"].includes(key)
+                ? <ListBlock key={key} label={IDENTITY_FIELD_LABELS[key]} items={brand[key]} />
+                : <TextBlock key={key} label={IDENTITY_FIELD_LABELS[key]} value={brand[key]} />)}
+          </div>
+          {missingKeys.length > 0 && <p className="brand-missing-fields">미작성 · {missingKeys.map((key) => IDENTITY_FIELD_LABELS[key]).join(" · ")}</p>}
+        </>
+      )}
+    </section>
+  );
+}
+
 function BrandDetail({ brand, onOpenStudio, onOpenQueue, onEdit }) {
+  const hasPublishingInfo = hasIdentityValue(brand.cadence) || brand.weeklyGoal.value != null || hasIdentityValue(brand.channels) || hasIdentityValue(brand.sourceLinks);
   return (
     <div className="brand-detail">
       {brand.description && <p className="brand-description">{brand.description}</p>}
       <div className="brand-focus-bar">
-        <TextBlock label="현재 집중점" value={brand.currentFocus} placeholder="이번에 쌓거나 검증할 한 가지를 정해보세요." />
+        <div className="brand-focus-main">
+          <TextBlock label={<><span>현재 집중점</span><Button variant="ghost" size="xs" icon="edit" aria-label="현재 집중점과 운영 상태 편집" onClick={() => onEdit("focus")}>{brand.currentFocus ? "수정" : "설정"}</Button></>} value={brand.currentFocus} placeholder="이번에 쌓거나 검증할 한 가지를 정해보세요." />
+        </div>
         <div className="brand-detail-actions">
           <MemoCaptureLink context={{ type: "brand", id: brand.id }} />
           <Button variant="secondary" size="sm" icon="queue" onClick={() => onOpenQueue(brand.key)}>소재·원고 보기</Button>
@@ -202,20 +274,15 @@ function BrandDetail({ brand, onOpenStudio, onOpenQueue, onEdit }) {
               <h3>방향과 표현 기준</h3>
               <CertaintyBadge state={brand.identity.state} label={identityRowLabel(brand.identity)} />
             </div>
-            <Button variant="secondary" size="sm" onClick={onEdit}>브랜드 기준 편집</Button>
+            <Button variant="secondary" size="sm" aria-label="브랜드 기준 전체 편집" onClick={() => onEdit("all")}>전체 편집</Button>
           </div>
-          <div className="brand-identity-grid">
-            <TextBlock label="대상" value={brand.audience} placeholder="누구의 어떤 문제와 욕구를 다룰지" />
-            <TextBlock label="핵심 약속" value={brand.promise} placeholder="이 브랜드를 만나고 무엇이 달라질지" />
-            <TextBlock label="제공하는 가치" value={brand.offer} placeholder="상품·서비스·작품·경험" />
-            <TextBlock label="철학" value={brand.philosophy} placeholder="이 브랜드가 왜 존재하는지" />
-            <TextBlock label="방향" value={brand.direction} placeholder="어떤 형태로 쌓아갈지" />
-            <TextBlock label="보이스" value={brand.voice} placeholder="어떤 언어로 말할지" />
-            <TextBlock label="좋은 표현 예시" value={brand.voiceExamples} placeholder="이 브랜드다운 실제 문장" />
-            <ChipBlock label="핵심 주제" items={brand.keywords} placeholder="키워드가 없습니다" />
-            <ListBlock label="콘텐츠 규칙" items={brand.rules} placeholder="이 브랜드에서 반드시 지킬 것" />
-            <ListBlock label="금지어 · 하지 않을 것" items={brand.forbidden} placeholder="금지 목록이 없습니다" />
-            <div className="brand-fact">
+          {IDENTITY_GROUPS.map((group) => <IdentityGroup key={group.key} group={group} brand={brand} onEdit={onEdit} />)}
+        </Card>
+
+        <Card style={{ padding: 16 }} className="brand-context-panel">
+          <section className="brand-publishing-info" aria-label="발행 정보">
+            <h3>발행 정보</h3>
+            {(hasIdentityValue(brand.cadence) || brand.weeklyGoal.value != null) && <div className="brand-fact">
               <span className="brand-fact-label">발행 리듬</span>
               <p className="brand-fact-value">
                 {brand.cadenceLabel}
@@ -226,16 +293,13 @@ function BrandDetail({ brand, onOpenStudio, onOpenQueue, onEdit }) {
                   </span>
                 )}
               </p>
-            </div>
-            <ChipBlock label="채널" items={brand.channels} placeholder="연결된 채널이 없습니다" />
-            <ListBlock label="링크" items={brand.sourceLinks} placeholder="등록된 링크가 없습니다" mono />
-          </div>
-        </Card>
-
-        <Card style={{ padding: 16 }} className="brand-context-panel">
-          <section aria-label="콘텐츠 현황">
+            </div>}
+            {hasIdentityValue(brand.channels) && <ChipBlock label="채널" items={brand.channels} />}
+            {hasIdentityValue(brand.sourceLinks) && <BrandSourceLinks items={brand.sourceLinks} />}
+            {!hasPublishingInfo && <p className="brand-content-note">등록된 발행 리듬·채널·링크가 없습니다.</p>}
+          </section>
+          {brand.counts && <section aria-label="콘텐츠 현황">
             <h3>콘텐츠 현황</h3>
-            {brand.counts ? (
               <dl className="brand-content-counts">
                 {[
                   ["아이디어", brand.counts.ideas],
@@ -246,8 +310,7 @@ function BrandDetail({ brand, onOpenStudio, onOpenQueue, onEdit }) {
                   <div key={label}><dt>{label}</dt><dd className="stat">{value}</dd></div>
                 ))}
               </dl>
-            ) : <p className="brand-content-note">소재와 초안, 발행 기록은 소재·원고 보기에서 확인하세요.</p>}
-          </section>
+          </section>}
           <RelatedMemos type="brand" id={brand.id} />
           <GoalLinks entityType="brands" entityId={brand.id} scope={brand.orgScope} />
         </Card>
@@ -267,6 +330,7 @@ export function Brands() {
   const [draft, setDraft] = React.useState(null);
   const [saveNote, setSaveNote] = React.useState(null);
   const [identityDraft, setIdentityDraft] = React.useState(null);
+  const [identitySection, setIdentitySection] = React.useState("all");
 
   const directory = React.useMemo(
     () => buildBrandDirectory(ledger, { scope }),
@@ -369,8 +433,11 @@ export function Brands() {
       });
       const data = await response.json();
       if (!response.ok || data.status !== "saved") {
-        setSaveNote({ tone: "err", label: data.status === "conflict" ? "다른 변경이 먼저 저장되었습니다. 입력을 보관하고 브랜드를 다시 열어주세요." : data.status === "preview" ? "저장 연결이 없어 입력을 유지했습니다." : data.error || "브랜드 기준 저장 실패" });
-        return { ok: false, status: data.status || "error" };
+        const message = data.status === "conflict" ? "다른 변경이 먼저 저장되었습니다. 입력을 보관하고 브랜드를 다시 열어주세요." : data.status === "preview" ? "저장 연결이 없어 입력을 유지했습니다. 브랜드 기준은 저장되지 않았습니다." : data.error || "브랜드 기준을 저장하지 못했습니다. 입력을 유지합니다.";
+        setSaveNote({ tone: "err", label: message });
+        // 이 편집기는 preview를 로컬 원장에 반영하지 않는다. 드로어 내부에서도
+        // 실제 실패 원인을 보여주고, 재시도할 수 있도록 입력을 유지한다.
+        return { ok: false, status: data.status === "conflict" ? "conflict" : "error", message };
       }
       if (data.brand?.updated_at) setIdentityDraft((current) => ({ ...current, expectedUpdatedAt: data.brand.updated_at }));
       const latest = await reload();
@@ -379,15 +446,17 @@ export function Brands() {
         && saved.operatingState === payload.operatingState && saved.isFocused === payload.isFocused
         && Boolean(saved.identityConfirmedAt) === payload.confirmIdentity;
       if (!matches) {
-        setSaveNote({ tone: "err", label: "저장 응답을 받았지만 재조회 확인에 실패했습니다. 입력을 유지합니다." });
-        return { ok: false, status: "error" };
+        const message = "저장 응답을 받았지만 재조회 확인에 실패했습니다. 입력을 유지합니다.";
+        setSaveNote({ tone: "err", label: message });
+        return { ok: false, status: "error", message };
       }
       window.dispatchEvent(new Event("hub:brand-updated"));
       setSaveNote({ tone: "ok", label: "브랜드 기준 저장 · 재조회 확인됨" });
       return { ok: true, status: "saved" };
     } catch {
-      setSaveNote({ tone: "err", label: "브랜드 기준을 저장하지 못했습니다. 입력을 유지합니다." });
-      return { ok: false, status: "error" };
+      const message = "브랜드 기준을 저장하지 못했습니다. 입력을 유지합니다.";
+      setSaveNote({ tone: "err", label: message });
+      return { ok: false, status: "error", message };
     }
   };
 
@@ -407,20 +476,18 @@ export function Brands() {
             <SyncBadge state={syncState} />
           </div>
         </div>
-        <div className="brand-page-tools">
+        {(saveNote || !selected) && <div className="brand-page-tools">
           {saveNote && (
             <span className="mono" style={{
-              fontSize: 10.5, whiteSpace: "nowrap",
+              fontSize: 10.5, maxWidth: "100%", overflowWrap: "anywhere", lineHeight: 1.6,
               color: saveNote.tone === "ok" ? "var(--fg-muted)" : saveNote.tone === "err" ? "var(--danger)" : "var(--fg-dim)",
             }}>{saveNote.label}</span>
           )}
-          <Button variant="secondary" size="sm" onClick={openContentLog}>
-            컨텐츠 로그
-          </Button>
-          <Button variant={selected ? "secondary" : "primary"} size="sm" icon="plus" onClick={createBrand}>
-            브랜드 <Kbd>N</Kbd>
-          </Button>
-        </div>
+          {!selected && <>
+            <Button variant="secondary" size="sm" onClick={openContentLog}>컨텐츠 로그</Button>
+            <Button variant="primary" size="sm" icon="plus" onClick={createBrand}>브랜드 <Kbd>N</Kbd></Button>
+          </>}
+        </div>}
       </div>
 
       {/* "찾지 못함"은 라이브 원장을 실제로 읽었을 때만 말할 수 있다 — read 실패·미연결을
@@ -461,7 +528,13 @@ export function Brands() {
           brand={selected}
           onOpenStudio={openStudio}
           onOpenQueue={openQueue}
-          onEdit={() => { setSaveNote(null); setIdentityDraft(brandIdentityDraft(selected)); }}
+          onEdit={(section) => {
+            setSaveNote(null);
+            setIdentitySection(section);
+            // 섹션은 보이는 필드만 좁힌다. 전체 draft와 원장 revision을 유지해야
+            // 부분 편집을 저장해도 다른 섹션의 기준이 지워지지 않는다.
+            setIdentityDraft(brandIdentityDraft(selected));
+          }}
         />
       )}
 
@@ -542,14 +615,10 @@ export function Brands() {
       )}
 
       {identityDraft && (
-        <EditDrawer title="브랜드 기준 편집" subtitle="빈칸은 나중에 채워도 됩니다. 저장할 때 확인 여부를 직접 선택하세요."
+        <EditDrawer title={identitySection === "all" ? "브랜드 기준 편집" : identitySection === "focus" ? "집중점과 운영 상태" : `${IDENTITY_GROUPS.find(({ key }) => key === identitySection)?.label} 편집`}
+          subtitle="빈칸은 나중에 채워도 됩니다. 확인 여부는 브랜드 기준 전체에 적용됩니다."
           width="min(560px, 96vw)" record={identityDraft}
-          fields={[
-            { key: "operatingState", label: "운영 상태", type: "select", options: BRAND_OPERATING_STATES },
-            { key: "isFocused", label: "집중 브랜드로 고정", type: "select", options: [{ value: "no", label: "일반" }, { value: "yes", label: "집중 브랜드" }] },
-            ...BRAND_IDENTITY_FIELDS.map(([key, label, placeholder]) => ({ key, label, placeholder, type: "textarea" })),
-            { key: "confirmation", label: "현재 기준 확인", type: "select", options: [{ value: "unconfirmed", label: "작성만 저장 · 미확인" }, { value: "confirmed", label: "이 내용을 브랜드 기준으로 확인함" }] },
-          ]}
+          fields={identityEditorFields(identitySection)}
           onChange={(key, value) => setIdentityDraft((current) => ({ ...current, [key]: value }))}
           onSave={persistIdentity} saveLabel="브랜드 기준 저장" onClose={() => setIdentityDraft(null)}
         />
