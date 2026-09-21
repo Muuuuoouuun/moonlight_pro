@@ -1,6 +1,7 @@
 # Eevee Office — 운영자 맞춤 판단·산출물 기준 v2
 
 > 상태: v2 로컬 구현·코드 검증 완료 / 의미 품질 18개 중 11개 기준 확인·7개 보완 필요. 운영 배포·실제 업무 실행 활성화와 별개.
+> 상세 기획: [9명 상세 설정·운영 기획](2026-09-21-eevee-office-detailed-configuration.md)은 역할별 설정과 이 문서 §7의 보완 7건을 구체화한 DRAFT 권장안이다. 실제 구현·검증 결과는 본 문서를 유지한다.
 > 근거: 운영자의 “이어서 상위 1% 능력치와 정말 내 상황에 필요한 접근으로” 요청.
 > 상위 정본: [운영자 프로필](../../operator-workflow-profile.md), [문서 지도](../../README.md).
 > 관계: [Office v1](2026-09-15-eevee-office-council-personas.md)의 9명 직책·성격·말투와 Guru/Mentor/Legend 경계를 유지한다. v1 §3·§17의 답변 품질 기준을 구체화하며, 런타임 지침 버전은 `2026-09-21.v2`다. A+B 다음의 품질 보강이며 C(command/receipt)·D(worker) 구현 완료를 뜻하지 않는다.

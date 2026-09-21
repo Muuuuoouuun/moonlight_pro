@@ -147,7 +147,7 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 ### 도메인 참고
 
-- Office Council: [`운영자 맞춤 판단·산출물 v2`](superpowers/specs/2026-09-21-eevee-office-operating-quality.md) — 운영자 확정 규칙·9명 실무 절차·초안/검수. 코드 36개 통과, 실제 응답 18개 생성·내용 기준 11개 확인/7개 보완 필요. [`역할·성격·경계 v1`](superpowers/specs/2026-09-15-eevee-office-council-personas.md)의 A+B 전용 API·화면·기억 분리를 유지한다. 로컬 구현이며 운영 배포·업무 쓰기·Legend 카드·worker 연결은 별도. 최신 검증은 v2 §7.
+- Office Council: [`9명 상세 설정·운영 기획`](superpowers/specs/2026-09-21-eevee-office-detailed-configuration.md) — **DRAFT 권장안**. 역할별 성격·상황별 말투·판단 절차·산출물·경계·기억 후보·단계별 통과 기준. 현재 런타임과 후속 기능을 구분한다. 구현·검증의 정본은 [`운영자 맞춤 판단·산출물 v2`](superpowers/specs/2026-09-21-eevee-office-operating-quality.md) §7: 코드 36개 통과, 실제 응답 18개 생성·내용 기준 11개 확인/7개 보완 필요. [`역할·성격·경계 v1`](superpowers/specs/2026-09-15-eevee-office-council-personas.md)의 A+B 전용 API·화면·기억 분리를 유지한다. 로컬 구현이며 운영 배포·업무 쓰기·Legend 카드·worker 연결은 별도.
 
 - 빠른 메모: [`quick-memo-plan-2026-09-09.md`](quick-memo-plan-2026-09-09.md) — 공통 우측 하단 입력창·초안 복원·기존 메모 저장 경로 재사용. **2026-09-10 로컬 구현·검증 완료, 운영 배포 별도**
 - Agent/Council API·MCP: [`agent-council-api-mcp-operating-plan-2026-09-09.md`](agent-council-api-mcp-operating-plan-2026-09-09.md) — 현재 연동 구현과 권장 운영법. 아래 보류된 전체 Agent UI·자율 실행 설계를 승인한 것은 아님
