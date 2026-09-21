@@ -5,6 +5,7 @@ import { InquirySummary } from '../inquiry-notifications';
 import { Iconed } from "../hub-icons";
 import { Badge, Dot, Card, SectionTitle, Button, IconButton, Progress, Sparkline, SyncBadge, EmptyState, Kbd } from "../hub-primitives";
 import { FloatingMentorWidget } from "../floating-mentor-widget";
+import { requestPersonaChat } from "../persona-client";
 import { BurningStreakBadge, StreakFlame } from "../burning-streak";
 import { useUndoableAction } from "../use-undoable-action";
 import { createClientId } from "@/lib/pms-ui";
@@ -1589,6 +1590,154 @@ function RhythmPanel({ onNavigate }) {
   );
 }
 
+function DailyDispatchCard({ dailyFocus, taskToday, signals = [], onNavigate }) {
+  const [dispatch, setDispatch] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [errorNote, setErrorNote] = React.useState(null);
+  const [copied, setCopied] = React.useState(false);
+
+  const currentHour = new Date().getHours();
+  const isEvening = currentHour >= 17;
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setErrorNote(null);
+
+    const parts = [];
+    parts.push(`[현재 시각]: ${currentHour}시 (${isEvening ? "퇴근 전 저녁" : "업무 시작 아침"})`);
+
+    if (dailyFocus?.urgentKa?.item) {
+      parts.push(`[긴급 KA]: ${dailyFocus.urgentKa.item.name || dailyFocus.urgentKa.item.title} (사유: ${dailyFocus.urgentKa.item.reason || dailyFocus.urgentKa.item.status || "즉시 조치 필요"})`);
+    }
+
+    if (Array.isArray(dailyFocus?.focusCustomers?.items) && dailyFocus.focusCustomers.items.length) {
+      parts.push(`[집중 관리 고객]: ${dailyFocus.focusCustomers.items.map((c) => `${c.name || c.title} (${c.stage || c.amount || ""})`).join(", ")}`);
+    }
+
+    const tasks = Array.isArray(taskToday?.items) ? taskToday.items : [];
+    if (tasks.length) {
+      parts.push(`[오늘 태스크 목록 (${tasks.length}건)]:\n${tasks.slice(0, 8).map((t) => `- [${t.done ? "완료" : "미완료"}] ${t.title || ""}`).join("\n")}`);
+    }
+
+    if (Array.isArray(signals) && signals.length) {
+      parts.push(`[오늘 발생 신호 (${signals.length}건)]:\n${signals.slice(0, 5).map((s) => `- [${s.tone || "알림"}] ${s.title}: ${s.why || ""}`).join("\n")}`);
+    }
+
+    const draft = parts.join("\n\n");
+
+    try {
+      const res = await requestPersonaChat({
+        personaId: "order",
+        mode: "daily-dispatch",
+        draft,
+        context: { isEvening, hour: currentHour },
+      });
+
+      setLoading(false);
+      if (res.state === "done") {
+        setDispatch(res.text);
+      } else {
+        setErrorNote(res.note || "브리핑을 생성하지 못했습니다.");
+      }
+    } catch (e) {
+      setLoading(false);
+      setErrorNote(e.message || "오류가 발생했습니다.");
+    }
+  };
+
+  const handleCopy = () => {
+    if (!dispatch) return;
+    navigator.clipboard.writeText(dispatch);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <Card
+      className="daily-brief__panel"
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--line-strong)",
+        borderRadius: "var(--r-md)",
+        padding: "14px 16px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Iconed name={isEvening ? "clock" : "sparkle"} size={16} style={{ color: "var(--moon-300)" }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>
+            {isEvening ? "🌙 퇴근 전 정돈 & 내일 첫 발자국" : "⚡ 30초 AI 실행 오더"}
+          </span>
+          <Badge tone="moon" size="xs">
+            {isEvening ? "Evening Wind-Down" : "Morning Dispatch"}
+          </Badge>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {dispatch && (
+            <Button variant="ghost" size="xs" icon={copied ? "check" : "copy"} onClick={handleCopy}>
+              {copied ? "복사됨 ✓" : "복사"}
+            </Button>
+          )}
+          <Button
+            variant={dispatch ? "outline" : "primary"}
+            size="xs"
+            icon="sparkle"
+            disabled={loading}
+            onClick={handleGenerate}
+          >
+            {loading ? "작성 중…" : dispatch ? "다시 받기" : isEvening ? "퇴근 전 정돈 받기" : "30초 브리핑 받기"}
+          </Button>
+        </div>
+      </div>
+
+      {dispatch ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div
+            style={{
+              fontSize: 12.5,
+              lineHeight: 1.65,
+              color: "var(--fg)",
+              background: "var(--surface-2)",
+              padding: "12px 14px",
+              borderRadius: "var(--r-sm)",
+              border: "1px solid var(--line-soft)",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {dispatch}
+          </div>
+          {onNavigate && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", paddingTop: 2 }}>
+              <Button variant="ghost" size="xs" icon="bell" onClick={() => onNavigate("dashboard/revenue/followups")}>
+                고객 연락 바로가기
+              </Button>
+              <Button variant="ghost" size="xs" icon="inbox" onClick={() => onNavigate("dashboard/work/my")}>
+                내 작업 바로가기
+              </Button>
+              <Button variant="ghost" size="xs" icon="calendar" onClick={() => onNavigate("dashboard/work/calendar")}>
+                캘린더 바로가기
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: "var(--fg-muted)", lineHeight: 1.5 }}>
+          {errorNote ? (
+            <span style={{ color: "var(--warning)" }}>{errorNote}</span>
+          ) : (
+            isEvening
+              ? "오늘 완료된 성과와 미완료 항목을 정리하고, 내일 출근 직후 가장 먼저 열어야 할 1가지를 도출합니다."
+              : "오늘 원장 데이터(긴급 고객, 태스크, 신호)를 기반으로 지금 당장 처리할 우선순위와 시간 배분을 제안합니다."
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // §2 확정 슬롯 — 긴급 KA(최대 1) · 집중 고객(3~5) · 오늘 일정. tone 정렬 신호 큐에 섞여
 // 소실되던 풀을 명명된 자리로 분리한 첫 화면의 핵심 계약(2026-08-05 컷오버). 각 슬롯은
 // 자기 소스의 truth 상태를 따로 표시한다 — 캘린더 미연결이 매출 슬롯을 오염시키지 않는다.
@@ -2017,9 +2166,12 @@ export function DailyBrief({ onNavigate, inquiryNotifications }) {
       <WeeklyReportCard onNavigate={onNavigate} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
-        {/* §7 확정 fold 순서: Capture → 긴급 KA·집중 고객·오늘 일정 → 신호. 명명된 슬롯이
-            tone 정렬 신호(자동화 실패 등)보다 위 — 고객이 히어로 자리를 갖는다.
-            모바일 점프 칩은 확정 슬롯 아래로 — fold 순서에 끼어들지 않는다. */}
+        <DailyDispatchCard
+          dailyFocus={ledger.dailyFocus}
+          taskToday={ledger.taskToday}
+          signals={ledger.signals}
+          onNavigate={onNavigate}
+        />
         <FocusSlots dailyFocus={ledger.dailyFocus} onNavigate={onNavigate} />
 
         <BriefNavigation taskToday={ledger.taskToday} onNavigate={onNavigate} />

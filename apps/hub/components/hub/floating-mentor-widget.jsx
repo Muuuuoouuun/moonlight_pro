@@ -29,6 +29,8 @@ export function FloatingMentorWidget({
   const [statusNote, setStatusNote] = useState("");
   const [chatThread, setChatThread] = useState([]);
   const [chatInput, setChatInput] = useState("");
+  const [adviceHistory, setAdviceHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
   const [taskSaved, setTaskSaved] = useState(false);
   const [dealSaved, setDealSaved] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -106,11 +108,11 @@ export function FloatingMentorWidget({
     const draft = buildContextPrompt(customDraft);
     const ref = contextData?.id || contextData?.ref || contextData?.title || contextData?.name || null;
 
-    // Use persona-chat when lens is selected or in critique / weekly-review mode
+    // Use persona-chat when lens is selected or in critique / weekly-review / outreach / extract-actions mode
     let res;
-    if (selectedLens || mode === "critique" || mode === "weekly-review") {
+    if (selectedLens || mode === "critique" || mode === "weekly-review" || mode === "outreach-draft" || mode === "extract-actions" || mode === "daily-dispatch") {
       res = await requestPersonaChat({
-        personaId: isGuru ? "sales" : contextType === "content" ? "content" : "council",
+        personaId: isGuru ? "sales" : contextType === "content" ? "content" : mode === "extract-actions" ? "order" : "council",
         mode,
         lens: selectedLens,
         draft,
@@ -126,6 +128,16 @@ export function FloatingMentorWidget({
     setLoading(false);
     if (res.state === "done") {
       setResultText(res.text);
+      setAdviceHistory((prev) => [
+        {
+          id: Date.now(),
+          at: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }),
+          title: contextTitle || mode,
+          text: res.text,
+          mode,
+        },
+        ...prev.slice(0, 4),
+      ]);
     } else if (res.state === "preview") {
       setStatusNote(res.note || "Engine이 연결되지 않은 preview 상태입니다.");
     } else {
@@ -292,8 +304,37 @@ export function FloatingMentorWidget({
     );
   }
 
+  const getPromptPresets = () => {
+    if (isGuru) {
+      return [
+        "부담 없는 안부 카톡 초안 써줘",
+        "고객 거절을 어떻게 돌파할까?",
+        "이 딜의 치명적 맹점 1가지는?",
+      ];
+    }
+    if (contextType === "weekly") {
+      return [
+        "이번 주 가장 아쉬운 점과 극복책은?",
+        "다음 주 최우선 집중 과제 1개는?",
+      ];
+    }
+    if (contextType === "content") {
+      return [
+        "첫 문장을 더 후킹하게 고쳐줘",
+        "고객 입장에서 지루한 부분은?",
+        "간결하게 3줄 요약해줘",
+      ];
+    }
+    return [
+      "지금 당장 실행할 1가지 행동은?",
+      "놓치고 있는 리스크는 무엇인가?",
+      "핵심 액션 아이템만 3개 추려줘",
+    ];
+  };
+
   const quickOptions = isGuru
     ? [
+        { label: "카톡/문자 연락 초안", mode: "outreach-draft" },
         { label: "딜 진단 (Keenan 4층)", mode: "deal-review" },
         { label: "파이프라인 우선순위", mode: "pipeline-triage" },
         { label: "제안 검토", mode: "proposal-critique" },
@@ -309,9 +350,16 @@ export function FloatingMentorWidget({
         { label: "오디언스 가설", mode: "audience-analysis" },
         { label: "플로우 점검", mode: "flow-review" },
       ]
+    : contextType === "project"
+    ? [
+        { label: "액션 아이템 추출", mode: "extract-actions" },
+        { label: "병목 타파 진단 (Goldratt)", mode: "flow-review" },
+        { label: "우선순위 전략", mode: "brand-strategy" },
+      ]
     : [
         { label: "병목 타파 진단 (Goldratt)", mode: "flow-review" },
         { label: "우선순위 전략", mode: "brand-strategy" },
+        { label: "액션 아이템 추출", mode: "extract-actions" },
         { label: "메모/회의 정리", mode: "meeting-synthesis" },
       ];
 
@@ -381,10 +429,72 @@ export function FloatingMentorWidget({
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {adviceHistory.length > 0 && (
+            <IconButton
+              name="clock"
+              size={13}
+              label="최근 조언 기록"
+              onClick={() => setShowHistory((prev) => !prev)}
+            />
+          )}
           <IconButton name="arrowDown" size={13} label="최소화" onClick={() => setMinimized(true)} />
           <IconButton name="x" size={13} label="닫기" onClick={onClose} />
         </div>
       </div>
+
+      {/* 1.5 Recent Advice History Dropdown */}
+      {showHistory && adviceHistory.length > 0 && (
+        <div
+          style={{
+            padding: "8px 12px",
+            background: "var(--surface-3)",
+            borderBottom: "1px solid var(--line)",
+            maxHeight: 140,
+            overflowY: "auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            fontSize: 11,
+            flexShrink: 0,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", color: "var(--fg-faint)", fontSize: 10 }}>
+            <span>최근 조언 내역 ({adviceHistory.length}건)</span>
+            <button
+              onClick={() => setShowHistory(false)}
+              style={{ background: "none", border: "none", color: "var(--fg-muted)", cursor: "pointer", fontSize: 10 }}
+            >
+              닫기
+            </button>
+          </div>
+          {adviceHistory.map((item) => (
+            <div
+              key={item.id}
+              onClick={() => {
+                setResultText(item.text);
+                setShowHistory(false);
+                if (activeTab === "chat") setActiveTab("quick");
+              }}
+              style={{
+                padding: "4px 8px",
+                background: "var(--surface-2)",
+                border: "1px solid var(--line-soft)",
+                borderRadius: "var(--r-xs)",
+                cursor: "pointer",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--fg)", flex: 1 }}>
+                {item.title || item.mode}
+              </span>
+              <span style={{ fontSize: 9.5, color: "var(--fg-faint)", flexShrink: 0 }}>{item.at}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* 2. Mode Selector Bar */}
       <div
@@ -710,6 +820,47 @@ export function FloatingMentorWidget({
           <Button variant="ghost" size="xs" icon={copied ? "check" : "copy"} onClick={handleCopy}>
             {copied ? "복사됨 ✓" : "복사"}
           </Button>
+        </div>
+      )}
+
+      {/* 5.5 Chat Prompt Presets */}
+      {activeTab === "chat" && (
+        <div
+          style={{
+            padding: "4px 10px",
+            background: "var(--surface-2)",
+            borderTop: "1px solid var(--line-soft)",
+            display: "flex",
+            gap: 6,
+            overflowX: "auto",
+            flexShrink: 0,
+          }}
+        >
+          {getPromptPresets().map((preset, idx) => (
+            <button
+              key={idx}
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                setChatInput(preset);
+              }}
+              style={{
+                padding: "2px 8px",
+                borderRadius: 999,
+                border: "1px solid var(--line)",
+                background: "var(--surface-3)",
+                color: "var(--fg-muted)",
+                fontSize: 10.5,
+                whiteSpace: "nowrap",
+                cursor: "pointer",
+                transition: "color 0.15s ease",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--fg)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--fg-muted)"; }}
+            >
+              {preset}
+            </button>
+          ))}
         </div>
       )}
 

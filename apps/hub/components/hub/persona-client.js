@@ -6,6 +6,9 @@ export const PERSONA_MODE_LABEL = {
   critique: "평가/진단",
   sparring: "3자 토론",
   "weekly-review": "한 주 정리",
+  "outreach-draft": "연락 초안",
+  "extract-actions": "액션 추출",
+  "daily-dispatch": "오더 브리핑",
   chat: "대화",
 };
 

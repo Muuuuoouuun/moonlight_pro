@@ -9,15 +9,37 @@ import { quickMemoDraftKey, readQuickMemoDraft, writeQuickMemoDraft } from "@/li
 import { MEMO_SAVED_EVENT, memoHref, saveMemoAndVerify } from "@/lib/memo-save";
 import { contentIdeaHref, prepareMemoIdea, saveMemoAsIdeaAndVerify } from "@/lib/quick-memo-content";
 import { notifyContentLedgerChanged } from "@/lib/content-ledger-cache";
+import { requestPersonaChat } from "./persona-client";
 import styles from "./quick-memo.module.css";
 
 const FOCUSABLE = 'button:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href]';
+
+function parseExtractedActions(text) {
+  if (!text) return null;
+  const summaryMatch = text.match(/📌\s*\[?1줄\s*핵심\s*요약\]?:\s*([^\n\r]+)/);
+  const summary = summaryMatch ? summaryMatch[1].trim() : "";
+
+  const actionLines = [];
+  const lines = text.split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.includes("🎯") || trimmed.includes("📌 추천") || (trimmed.startsWith("- [") && trimmed.includes("]"))) {
+      const cleaned = trimmed.replace(/^[-*•\s🟢🟡🔴💡🎯📌]+/, "").trim();
+      if (cleaned.length >= 3 && !cleaned.includes("1줄 핵심 요약")) {
+        actionLines.push({ title: cleaned, saved: false });
+      }
+    }
+  }
+  return { summary, actions: actionLines };
+}
 
 export function QuickMemo({ draftContext, openRequest = 0, blocked = false, route, onNavigate, fetchImpl = fetch }) {
   const [draft, setDraft] = React.useState(null);
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [aiAnalyzing, setAiAnalyzing] = React.useState(false);
+  const [extractedActions, setExtractedActions] = React.useState(null);
   const [storageError, setStorageError] = React.useState("");
   const [receipt, setReceipt] = React.useState(null);
   const [ideaReceipt, setIdeaReceipt] = React.useState(null);
@@ -258,6 +280,49 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
     }
   }
 
+  const handleExtractActions = async () => {
+    if (!draft?.body?.trim() || busyRef.current || aiAnalyzing) return;
+    setAiAnalyzing(true);
+    setError("");
+    try {
+      const res = await requestPersonaChat({
+        personaId: "order",
+        mode: "extract-actions",
+        message: draft.body,
+      });
+      if (res.state === "done") {
+        const parsed = parseExtractedActions(res.text);
+        setExtractedActions(parsed);
+      } else {
+        setError(res.note || "액션 추출에 실패했습니다.");
+      }
+    } catch {
+      setError("AI 액션 추출 중 오류가 발생했습니다.");
+    } finally {
+      setAiAnalyzing(false);
+    }
+  };
+
+  const handleSaveExtractedTask = async (index, actionTitle) => {
+    try {
+      const res = await fetch("/api/hub/tasks", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: actionTitle }),
+      });
+      if (res.ok) {
+        setExtractedActions((prev) => {
+          if (!prev) return prev;
+          const next = [...prev.actions];
+          next[index] = { ...next[index], saved: true };
+          return { ...prev, actions: next };
+        });
+      }
+    } catch (e) {
+      console.error("Failed to save extracted task", e);
+    }
+  };
+
   function keyDown(event) {
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
@@ -298,8 +363,61 @@ export function QuickMemo({ draftContext, openRequest = 0, blocked = false, rout
           <label><span className={styles.srOnly}>기록 범위</span><select aria-label="빠른 메모 기록 범위" value={draft.scope} disabled={busy} onChange={event => update({ scope: event.target.value })}><option value="personal">개인</option><option value="company">회사 업무</option></select></label>
           <Button type="submit" variant="primary" disabled={busy || !draft.body.trim()}>{busy ? "저장 확인 중…" : draft.destination === "idea" ? "소재 보내기 재시도" : "저장"}</Button>
         </div>
-        {draft.destination !== "idea" ? <Button type="button" className={styles.sendIdea} disabled={busy || !draft.body.trim()} onClick={event => save(event, "idea")}>콘텐츠 소재로 보내기</Button> : null}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+          {draft.destination !== "idea" ? <Button type="button" className={styles.sendIdea} disabled={busy || !draft.body.trim()} onClick={event => save(event, "idea")}>콘텐츠 소재로 보내기</Button> : null}
+          <Button
+            type="button"
+            className={styles.sendIdea}
+            disabled={busy || !draft.body.trim() || aiAnalyzing}
+            onClick={handleExtractActions}
+          >
+            {aiAnalyzing ? "추출 중…" : "✨ AI 액션 추출"}
+          </Button>
+        </div>
       </form>
+      {extractedActions && (
+        <div style={{
+          marginTop: 10,
+          padding: "10px 12px",
+          background: "var(--surface-2)",
+          border: "1px solid var(--line)",
+          borderRadius: "var(--r-md)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}>
+          {extractedActions.summary && (
+            <div style={{ fontSize: 12, color: "var(--fg)", fontWeight: 500 }}>
+              📌 {extractedActions.summary}
+            </div>
+          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {extractedActions.actions.map((act, idx) => (
+              <div key={idx} style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 12,
+                color: "var(--fg-muted)",
+                padding: "4px 0",
+                borderBottom: idx < extractedActions.actions.length - 1 ? "1px solid var(--line-soft)" : "none",
+              }}>
+                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{act.title}</span>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant={act.saved ? "ghost" : "outline"}
+                  disabled={act.saved}
+                  onClick={() => handleSaveExtractedTask(idx, act.title)}
+                >
+                  {act.saved ? "✓ 등록됨" : "+ 할 일 등록"}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <p className={styles.hint}>소재로 보내면 원문 메모를 저장하고 콘텐츠에 연결해요.</p>
       <p className={styles.hint}>Ctrl/⌘ + Enter로 저장 · Enter는 줄바꿈</p>
       <p id="quick-memo-status" className={styles.hint}>{storageError || "이 탭에 임시 보관 · 탭을 닫기 전에 저장하세요."}</p>
