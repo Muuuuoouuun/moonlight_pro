@@ -38,6 +38,7 @@ import {
   DEFAULT_HUB_PREFERENCES,
   persistHubPreference,
   readHubPreferences,
+  watchHubTheme,
 } from "@/lib/hub-preferences";
 
 const FloatingMentorWidget = dynamic(
@@ -294,7 +295,8 @@ export function HubApp({ memoDraftContext = "preview" }) {
   // SSR and the first client render must use the same values. Persisted browser
   // preferences are restored only after hydration, then written synchronously
   // from user actions so StrictMode cannot clobber them with the defaults.
-  const [theme, setTheme] = React.useState(DEFAULT_HUB_PREFERENCES.theme);
+  const [themePreference, setThemePreference] = React.useState(DEFAULT_HUB_PREFERENCES.theme);
+  const [theme, setTheme] = React.useState("light");
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [helpOpen, setHelpOpen] = React.useState(false);
   const [globalAdvisorOpen, setGlobalAdvisorOpen] = React.useState(false);
@@ -316,11 +318,13 @@ export function HubApp({ memoDraftContext = "preview" }) {
     let storage = null;
     try { storage = window.localStorage; } catch { /* storage can be blocked */ }
     const stored = readHubPreferences(storage);
-    setTheme(stored.theme);
+    setThemePreference(stored.theme);
   }, []);
 
+  React.useEffect(() => watchHubTheme(themePreference, setTheme), [themePreference]);
+
   const updateTheme = React.useCallback((nextTheme) => {
-    setTheme(nextTheme);
+    setThemePreference(nextTheme);
     let storage = null;
     try { storage = window.localStorage; } catch { /* storage can be blocked */ }
     persistHubPreference(storage, 'theme', nextTheme);
@@ -606,6 +610,7 @@ export function HubApp({ memoDraftContext = "preview" }) {
               navOpen={mobileNavState.open}
               menuButtonRef={menuButtonRef}
               theme={theme}
+              themePreference={themePreference}
               onTheme={updateTheme}
             />
             <main

@@ -55,8 +55,10 @@ Bloomberg (command-deck rhythm: status / count / next action).
 
 ## 5. Color System
 
-The palette has **two theme modes** (dark is the hub default, light is available) sharing one
-cool moonstone accent stack. Color does not classify product domains or ordinary workflow
+The palette has **two theme modes** (automatic is the hub default: light from 07:00 to 18:00, dark overnight, using the device local clock) sharing one
+cool moonstone accent stack. The initial server render is light; after hydration the local clock
+resolves automatic mode. The top-bar theme control cycles automatic → light → dark → automatic;
+existing saved light/dark choices remain explicit overrides. Color does not classify product domains or ordinary workflow
 stages. It communicates only interaction emphasis and true urgency; certainty and lifecycle
 use line style, shape, icon, label, and luminance instead.
 
