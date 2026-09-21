@@ -21,6 +21,53 @@ test("POST /api/hub/intake/multimodal write guard blocks untrusted cross-origin 
   }
 });
 
+function requestFor(body, headers = {}) {
+  return new Request("http://localhost:3000/api/hub/intake/multimodal", {
+    method: "POST",
+    headers: { origin: "http://localhost:3000", "content-type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  });
+}
+
+test("multimodal returns a JSON error envelope for malformed inputs", async () => {
+  for (const body of [null, [], { text: 12 }, { text: [] }, { text: {} }, { text: "memo", instruction: [] }, { mediaBase64: "?", mimeType: "image/jpeg" }]) {
+    const response = await POST(requestFor(body));
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).status, "error");
+  }
+  const malformed = await POST(new Request("http://localhost:3000/api/hub/intake/multimodal", {
+    method: "POST", headers: { origin: "http://localhost:3000" }, body: "{",
+  }));
+  assert.equal(malformed.status, 400);
+  assert.equal((await malformed.json()).status, "error");
+  const aborted = requestFor({ text: "메모" });
+  aborted.text = async () => { throw new Error("stream aborted"); };
+  const readFailure = await POST(aborted);
+  assert.equal(readFailure.status, 400);
+  assert.equal((await readFailure.json()).status, "error");
+});
+
+test("multimodal accepts 14 MiB plus base64 overhead and rejects larger media", async () => {
+  const original = process.env.GEMINI_API_KEY;
+  delete process.env.GEMINI_API_KEY;
+  try {
+    const accepted = await POST(requestFor({ mediaBase64: Buffer.alloc(14 * 1024 * 1024).toString("base64"), mimeType: "audio/mpeg" }));
+    assert.equal(accepted.status, 200);
+    assert.equal((await accepted.json()).status, "preview");
+    const rejected = await POST(requestFor({ mediaBase64: Buffer.alloc(14 * 1024 * 1024 + 1).toString("base64"), mimeType: "audio/mpeg" }));
+    assert.equal(rejected.status, 413);
+    const envelope = await rejected.json();
+    assert.equal(envelope.status, "error");
+    assert.match(envelope.error, /14MB/);
+    const oversized = await POST(requestFor({}, { "content-length": "20000001" }));
+    assert.equal(oversized.status, 413);
+    assert.equal((await oversized.json()).status, "error");
+  } finally {
+    if (original === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = original;
+  }
+});
+
 test("POST /api/hub/intake/multimodal rejects empty input over loopback", async () => {
   const req = new Request("http://localhost:3000/api/hub/intake/multimodal", {
     method: "POST",

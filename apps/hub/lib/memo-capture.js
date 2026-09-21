@@ -1,5 +1,6 @@
 import { isJournalTimestamp } from "./journal.js";
 import { JOURNAL_TAG_LENGTH, JOURNAL_TAG_LIMIT, normalizeJournalTags } from "./journal-tags.js";
+import { createMemoIntake, restoreMemoIntake } from "./memo-intake-tasks.js";
 
 export const MEMO_DRAFT_KEY = "moonlight:memo-draft:v1";
 // journal_entries 의 본문 한계가 20,000자다(`lib/journal.js` validateJournalInput).
@@ -8,7 +9,7 @@ export const MEMO_DRAFT_KEY = "moonlight:memo-draft:v1";
 export const MAX_MEMO_CHARS = 20000;
 export const MAX_MEMO_TITLE_CHARS = 200;
 export const MAX_MEMO_FILE_BYTES = 256 * 1024;
-export const MAX_MEDIA_FILE_BYTES = 20 * 1024 * 1024;
+export const MAX_MEDIA_FILE_BYTES = 14 * 1024 * 1024;
 
 export function isMediaFile(file) {
   if (!file) return false;
@@ -23,7 +24,7 @@ export function isMediaFile(file) {
 
 export async function readMediaFileBase64(file) {
   if (file.size > MAX_MEDIA_FILE_BYTES) {
-    throw new Error("사진 및 오디오 파일은 20MB 이하로 업로드할 수 있습니다.");
+    throw new Error("사진 및 오디오 파일은 14MB 이하로 업로드할 수 있습니다.");
   }
   if (typeof FileReader === "undefined") {
     // Node.js environment fallback for testing
@@ -63,6 +64,27 @@ export const newMemoDraft = () => ({
   scope: "personal",
   source: { type: "manual" },
 });
+
+export function appendMemoIntake(draft, data, fileName) {
+  const parts = [];
+  if (data.summary) parts.push(`[핵심 요약]\n${data.summary}`);
+  if (data.transcription) parts.push(`[전사/원문 내용]\n${data.transcription}`);
+  if (data.keyDecisions?.length) parts.push(`[결정사항]\n${data.keyDecisions.map((item) => `- ${item}`).join("\n")}`);
+  const body = [draft.body, parts.join("\n\n")].filter(Boolean).join("\n\n");
+  // Check before changing either the original body or its recoverable snapshot.
+  if (body.length > MAX_MEMO_CHARS) {
+    throw new Error(`분석 결과를 합치면 ${MAX_MEMO_CHARS.toLocaleString()}자를 넘습니다. 기존 입력은 그대로 유지했습니다. 원문을 줄이거나 다른 메모에서 분석하세요.`);
+  }
+  return {
+    ...draft,
+    id: crypto.randomUUID(),
+    title: draft.title || data.title || "",
+    body,
+    labels: draft.labels || (data.suggestedTags || []).join(", "),
+    source: { type: "file", name: fileName },
+    intake: createMemoIntake(data),
+  };
+}
 export function memoCapturePayload(draft) {
   const labels = normalizeJournalTags(draft.labels.split(/[,，\n]/));
   if (
@@ -138,7 +160,11 @@ export function restoreMemoDraft(raw) {
     if (draft.occurredAt !== undefined && !isJournalTimestamp(draft.occurredAt)) return null;
     // Older tab drafts have no journal timestamp. Upgrade once on restore; both
     // entry points persist this draft before sending the first save request.
-    return { ...draft, occurredAt: draft.occurredAt ?? new Date().toISOString() };
+    return {
+      ...draft,
+      occurredAt: draft.occurredAt ?? new Date().toISOString(),
+      ...(draft.intake ? { intake: restoreMemoIntake(draft.intake) } : {}),
+    };
   } catch {
     return null;
   }

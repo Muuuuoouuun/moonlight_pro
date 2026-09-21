@@ -126,7 +126,7 @@
 
 .aiCard {
   border: 1px solid var(--line-strong, var(--line));
-  background: var(--surface-1);
+  background: var(--surface);
   border-radius: var(--r-sm);
   padding: 14px 16px;
   margin: 14px 0;
@@ -178,16 +178,17 @@
   border: 1px solid var(--line-soft);
   font-size: 13px;
 }
-.aiActionRow input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  min-height: 16px;
-  cursor: pointer;
-}
 .aiActionText {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
   color: var(--fg);
+  overflow-wrap: anywhere;
 }
+.aiActionText p { flex-basis: 100%; margin: 0; }
 .aiActionDue {
   font-size: 11px;
   color: var(--fg-muted);
@@ -199,7 +200,7 @@
   padding: 6px 12px;
   border-radius: var(--r-sm);
   border: 1px solid var(--line);
-  background: var(--surface-1);
+  background: var(--surface);
   color: var(--fg);
   font-size: 12px;
   cursor: pointer;
@@ -209,5 +210,5 @@
   background: var(--surface-2);
 }
 .mediaInput {
-  display: none;
+  max-width: 100%;
 }
