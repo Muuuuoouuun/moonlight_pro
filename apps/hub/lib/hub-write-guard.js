@@ -108,6 +108,12 @@ function isHubWriteAllowedBySecret(req, expectedSecret) {
   return Boolean(candidate) && safeEquals(expectedSecret, candidate);
 }
 
+// Server callers use the same credential at the route gate and the write guard.
+// This deliberately excludes the browser Origin/Referer fallback.
+export function hasHubServerCredential(req) {
+  return isHubWriteAllowedBySecret(req, resolveHubWriteSecret());
+}
+
 export function assertHubWriteAllowed(req) {
   const expectedSecret = resolveHubWriteSecret();
 

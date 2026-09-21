@@ -4,8 +4,9 @@
 // (Edge 기본 런타임에서는 동작하지 않는다). Next 16 은 이를 지원한다.
 export const runtime = "nodejs";
 
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
 
+import { hasHubServerCredential } from "@/lib/hub-write-guard";
 import { hasOperatorSessionSecret, verifyOperatorSessionRequest } from "@/lib/operator-session";
 import { resolveRouteAccess } from "@/lib/route-access";
 
@@ -16,6 +17,7 @@ export function middleware(request) {
     pathname,
     host: request.headers.get("host"),
     hasSession: verifyOperatorSessionRequest(request).ok,
+    hasServerCredential: hasHubServerCredential(request),
     secretConfigured: hasOperatorSessionSecret(),
     // Host 헤더는 클라이언트가 보내는 값이므로 loopback 분기는 개발 런타임에서만 연다.
     // `!process.env.VERCEL` 은 축이 틀렸다 — `next start` 자체 호스팅·vercel dev·ngrok

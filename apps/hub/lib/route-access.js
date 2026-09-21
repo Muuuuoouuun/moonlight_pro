@@ -50,15 +50,16 @@ export function isLoopbackHost(host) {
  *   login           화면 — /login 으로 이동
  *   not-configured  세션 비밀키가 없어 로그인 자체가 불가능 — 닫아 둔다
  */
-export function resolveRouteAccess({ pathname, host, hasSession, secretConfigured, allowLoopback = true } = {}) {
+export function resolveRouteAccess({ pathname, host, hasSession, hasServerCredential = false, secretConfigured, allowLoopback = true } = {}) {
   if (isOpenPath(pathname)) return { action: "allow", reason: "open-path" };
   // Host 는 클라이언트가 보내는 값이다. 실측(2026-09-20)으로 Vercel 은 위조된 Host 를
   // 앱에 도달시키지 않고 404 DEPLOYMENT_NOT_FOUND 로 끊지만, 그 플랫폼 동작 하나에
-  // 기대지 않는다. 호스팅 환경에서는 loopback 우회 자체를 끈다(미들웨어가 VERCEL 로 판단).
+  // 기대지 않는다. 프로덕션 런타임에서는 loopback 우회 자체를 끈다.
   if (allowLoopback && isLoopbackHost(host)) return { action: "allow", reason: "loopback" };
   if (hasSession) return { action: "allow", reason: "session" };
 
   const isApi = String(pathname || "").startsWith("/api/");
+  if (isApi && hasServerCredential) return { action: "allow", reason: "server-credential" };
   // 비밀키가 없으면 아무도 세션을 만들 수 없다. 통과시키면 지금의 무방비 상태가
   // 그대로 배포되므로 닫는다 — 잘못된 설정은 조용히 열리는 대신 시끄럽게 막힌다.
   if (!secretConfigured) return { action: "not-configured", reason: isApi ? "api" : "page" };
