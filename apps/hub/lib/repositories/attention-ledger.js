@@ -23,7 +23,7 @@ import { getInquiriesLedger } from './inquiries-ledger.js';
 import { getTaskLedger } from "./operating-ledger.js";
 import { getRevenueLedger } from "./revenue-ledger.js";
 import { readCombinedGoogleCalendarEvents } from "../google-calendar.js";
-import { isFocusedOn } from "../task-today.js";
+import { isFocusedOn, summarizeFocusDay } from "../task-today.js";
 
 const TIME_ZONE = "Asia/Seoul";
 const DAY_MS = 86400000;
@@ -328,9 +328,16 @@ export async function getAttentionLedger({ includeRaw = false } = {}) {
     ...mapEventItems(calendar?.items, todayKey, weekEndKey),
   ].map((item) => ({ ...item, ...assignPriority(item, leadScoreByDealEntityId) }));
 
+  // 오늘 3개 요약(선택 수·완료 수) — 완료된 선택은 items에서 빠지므로 목록만 세면 3건 상한을
+  // 잘못 읽는다. 원장 전체(todos, 완료 포함)에서 세어 내 작업 타일·토글 비활성이 서버 판정과 같게.
+  const focusToday = taskLedgerReadable
+    ? summarizeFocusDay(projectLedger?.todos || [], { now })
+    : null;
+
   return {
     todayKey,
     sources,
+    focusToday,
     failedSources: sourceFailures.map((failure) => failure.source),
     sourceFailures,
     calendarReason: calendar?.ok ? "" : calendar?.reason || "",

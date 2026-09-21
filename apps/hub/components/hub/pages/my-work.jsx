@@ -172,7 +172,7 @@ function useAttentionLedger() {
     && Date.now() - attentionLedgerCache.at < ATTENTION_CACHE_SERVABLE_MS
     ? attentionLedgerCache
     : null;
-  const [data, setData] = React.useState(cachedAttention ? cachedAttention.data : { items: [], sources: {}, calendarReason: '', projects: [] });
+  const [data, setData] = React.useState(cachedAttention ? cachedAttention.data : { items: [], sources: {}, calendarReason: '', projects: [], focusToday: null });
   const [state, setState] = React.useState(cachedAttention ? cachedAttention.state : 'loading');
   // 완료/미루기 뒤 reload가 겹치면 늦은 이전 응답이 최신 목록을 덮는다 — 최신 요청만 반영.
   const requestRef = React.useRef(0);
@@ -194,7 +194,7 @@ function useAttentionLedger() {
         setState(servingCache ? 'stale' : 'error');
         return null;
       }
-      const nextData = { items: json.items || [], sources: json.sources || {}, calendarReason: json.calendarReason || '', projects: json.projects || [] };
+      const nextData = { items: json.items || [], sources: json.sources || {}, calendarReason: json.calendarReason || '', projects: json.projects || [], focusToday: json.focusToday || null };
       attentionLedgerCache = { at: Date.now(), data: nextData, state: 'ready' };
       setData(nextData);
       setState('ready');
@@ -534,7 +534,7 @@ function DetailPanel({ item, completing, deferTarget, onClose, onComplete, onDef
 }
 
 export function MyWork({ onNavigate }) {
-  const { items, sources, calendarReason, projects, state, reload } = useAttentionLedger();
+  const { items, sources, calendarReason, projects, focusToday, state, reload } = useAttentionLedger();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -646,12 +646,22 @@ export function MyWork({ onNavigate }) {
     return sorted;
   }, [items, lane, bucketFilter, search, sort, hiddenIds, lens, itemPatches, justAddedId, mutedIds, showMuted]);
 
-  // 오늘 3개 선택 수 — 낙관 패치를 반영해 4번째 토글을 화면에서 먼저 막는다. 완료돼 목록에서
-  // 사라진 선택은 여기서 못 세므로 서버의 409 focus-limit가 최종 판정이다.
-  const focusPickedCount = React.useMemo(() => items.reduce((n, i) => {
-    const patched = itemPatches[i.id] ? { ...i, ...itemPatches[i.id] } : i;
-    return n + (patched.lane === 'task' && patched.focusToday ? 1 : 0);
-  }, 0), [items, itemPatches]);
+  // 오늘 3개 선택 수 — 서버 요약(focusToday.picked, 완료된 선택 포함)을 기준으로 하고, 낙관 패치로
+  // 아직 서버에 안 간 토글만 더한다. 이 값이 서버의 409 focus-limit 판정과 같은 분모다.
+  const focusPickedCount = React.useMemo(() => {
+    const serverPicked = Number.isFinite(focusToday?.picked) ? focusToday.picked : null;
+    const listed = items.reduce((n, i) => {
+      const patched = itemPatches[i.id] ? { ...i, ...itemPatches[i.id] } : i;
+      return n + (patched.lane === 'task' && patched.focusToday ? 1 : 0);
+    }, 0);
+    if (serverPicked === null) return listed;
+    const pending = items.reduce((n, i) => {
+      const patch = itemPatches[i.id];
+      if (!patch || typeof patch.focusToday !== 'boolean' || patch.focusToday === i.focusToday) return n;
+      return n + (patch.focusToday ? 1 : -1);
+    }, 0);
+    return Math.max(listed, serverPicked + pending);
+  }, [items, itemPatches, focusToday]);
   const focusFull = focusPickedCount >= MAX_FOCUS_PER_DAY;
 
   // Durable quick-add task: POST /api/hub/tasks (Phase 1A write path). 상세 토글을 열면
@@ -1264,7 +1274,7 @@ export function MyWork({ onNavigate }) {
               <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-dim)' }}>{t.label}</div>
               {/* 시그널 스트립은 이 페이지의 hero 지표 — Rhythm 카드(30px)와 같은 급의
                   .stat 크기로 "signal first"를 시각적으로도 주장한다. */}
-              <div className="stat" style={{ fontSize: 26, fontWeight: 500, marginTop: 4, color: count > 0 ? t.color : 'var(--fg-faint)' }}>{t.key === 'focus' ? `${count}/${MAX_FOCUS_PER_DAY}` : count}</div>
+              <div className="stat" style={{ fontSize: 26, fontWeight: 500, marginTop: 4, color: count > 0 ? t.color : 'var(--fg-faint)' }}>{t.key === 'focus' ? `${focusPickedCount}/${MAX_FOCUS_PER_DAY}` : count}</div>
             </button>
           );
         })}

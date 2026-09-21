@@ -29,7 +29,7 @@
 ## 계약 요약
 
 - `PATCH /api/hub/tasks { id, focus: true|false | { on, date? } }` → Engine `update_task`. 날짜를 생략하면 KST 오늘. 같은 날 4번째는 `409 { error: "focus-limit", limit: 3, date }`. MCP `update_task`는 `agent_command_v1`이 meta를 거부하므로 설정 불가(설계대로).
-- 할 일 원장(`getTaskLedger` todos)에 `focusDates`·`completedAt`, attention 아이템에 `bucket:'focus'`·`dueBucket`·`focusToday`.
+- 할 일 원장(`getTaskLedger` todos)에 `focusDates`·`completedAt`, attention 아이템에 `bucket:'focus'`·`dueBucket`·`focusToday`. attention 응답의 `focusToday{picked,done}`는 완료된 선택까지 센 서버 요약 — 내 작업 타일(n/3)과 4번째 토글 비활성이 서버 409 판정과 같은 분모를 쓴다.
 - `buildTaskToday()`가 `focus` 레인(최상단)과 `focus{date,picked,done,limit,remaining}`를 돌려준다.
 - `getWeeklyReport()` 개인 stats: `doneTasks`(completed_at) · `contacts`(crm_activities 접촉 kind) · `focusPicked/focusDone/focusRate/focusDays` · `memos` · `reviewDays`; 회사 stats `movedDeals` = `kind='deal'` 이동 행 수. 소스 8개(개인)/4개(회사) 중 하나라도 실패하면 `partial`+`failedSources`.
 - `getDailyReviewLedger()` live 응답에 `today{date,focusPicked,focusDone,focusLimit,contacts}` — 팝업 부제 "오늘 3개 k/n · 연락 N건". 못 읽으면 `null`(줄 숨김).
