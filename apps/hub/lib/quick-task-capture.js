@@ -46,6 +46,7 @@ export function shouldSubmitQuickTask(event, saving = false) {
 // personal capture text in browser storage or changing the existing API.
 export function createQuickCaptureSession({ initialHint = 'task', createId } = {}) {
   let state = { raw: '', hint: QUICK_CAPTURE_HINTS.has(initialHint) ? initialHint : 'task', requestId: createId(), status: 'idle', error: null, destinationType: null, duplicate: false };
+  let lastAttempt = null;
   const listeners = new Set();
   const publish = patch => { state = { ...state, ...patch }; for (const listener of listeners) listener(); };
   return {
@@ -54,22 +55,30 @@ export function createQuickCaptureSession({ initialHint = 'task', createId } = {
     canClose: () => state.status !== 'saving',
     setRaw(raw) {
       if (state.status === 'saving' || raw === state.raw) return;
-      publish({ raw, status: 'idle', error: null, ...(state.status === 'error' ? { requestId: createId() } : {}) });
+      publish({ raw, status: 'idle', error: null });
     },
     setHint(hint) {
       if (state.status === 'saving' || hint === state.hint || !QUICK_CAPTURE_HINTS.has(hint)) return;
-      publish({ hint, status: 'idle', error: null, ...(state.status === 'error' ? { requestId: createId() } : {}) });
+      publish({ hint, status: 'idle', error: null });
     },
     begin() {
       if (state.status === 'saving') return { ok: false, reason: 'saving' };
       const capture = buildQuickCapture({ id: state.requestId, raw: state.raw, hint: state.hint });
       if (!capture.ok) { publish({ status: 'error', error: '할 일을 한 줄로 입력하세요.' }); return capture; }
-      publish({ status: 'saving', error: null });
+      // Edits may return to the same normalized payload after a lost response.
+      // Rotate its receipt key only when actually submitting a different payload.
+      if (lastAttempt) {
+        capture.payload.idempotencyKey = capture.payload.raw === lastAttempt.raw && capture.payload.hint === lastAttempt.hint
+          ? lastAttempt.idempotencyKey : createId();
+      }
+      lastAttempt = { ...capture.payload };
+      publish({ status: 'saving', error: null, requestId: capture.payload.idempotencyKey });
       return capture;
     },
     settle({ ok, data, error }) {
       if (state.status !== 'saving') return false;
       if (ok && isDurableQuickCaptureResult(data)) {
+        lastAttempt = null;
         publish({ raw: '', requestId: createId(), status: 'saved', error: null, destinationType: data.destinationType, duplicate: data.status === 'duplicate' });
         return true;
       }

@@ -62,15 +62,16 @@ export function QuickCaptureForm({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(capture.payload),
+        signal: AbortSignal.timeout(20000),
       });
-      const data = await response.json().catch(() => ({}));
+      const data = await response.json().catch(error => { if (error?.name === 'TimeoutError' || error?.name === 'AbortError') throw error; return {}; });
 
       if (session.settle({ ok: response.ok, data, error: !response.ok && !data.error && !data.status ? `저장 실패 (${response.status})` : null })) {
         onSaved?.();
         // 연속 입력이 기본값이다 — 저장 후 닫지 않고 포커스를 유지한다.
       }
     } catch (error) {
-      session.settle({ ok: false, error: error instanceof Error ? error.message : null });
+      session.settle({ ok: false, error: error?.name === 'TimeoutError' || error?.name === 'AbortError' ? '저장 응답을 확인하지 못했습니다. 입력을 보관했으니 같은 요청으로 다시 시도하세요.' : error instanceof Error ? error.message : null });
     }
   }
 

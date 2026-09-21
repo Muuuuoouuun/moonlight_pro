@@ -85,8 +85,45 @@ test("changing failed input starts a distinct capture while same-input retry sta
   const unsubscribe = session.subscribe(() => { notifications++; });
   session.setRaw('기존 입력'); session.begin(); session.settle({ ok: false, error: 'rejected' });
   session.setRaw('수정 입력');
+  assert.equal(sequence, 1, 'editing alone must not discard the previous request identity');
   assert.equal(session.begin().payload.idempotencyKey, 'request-2');
-  assert.equal(notifications, 5); unsubscribe();
+  session.settle({ ok: false, error: 'connection-lost' });
+  assert.equal(session.begin().payload.idempotencyKey, 'request-2');
+  assert.equal(notifications, 7); unsubscribe();
+});
+
+test("ambiguous capture retries keep the last attempt identity after normalized text and destination round trips", () => {
+  const edits = [
+    session => session.setRaw('  응답 확인  '),
+    session => { session.setRaw('수정 중인 내용'); session.setRaw('응답 확인'); },
+    session => { session.setHint('inbox'); session.setHint('task'); },
+    session => { session.setRaw(''); assert.equal(session.begin().ok, false); session.setRaw('응답 확인'); },
+    session => { session.setRaw('수정 중인 내용'); session.setHint('inbox'); session.setRaw(' 응답 확인 '); session.setHint('task'); },
+  ];
+  for (const edit of edits) {
+    let sequence = 0;
+    const session = quickCapture.createQuickCaptureSession({ createId: () => `request-${++sequence}` });
+    session.setRaw('응답 확인');
+    const original = session.begin();
+    session.settle({ ok: false, error: 'connection-lost' });
+    edit(session);
+    assert.deepEqual(session.begin().payload, original.payload);
+    assert.equal(sequence, 1, 'an unacknowledged equivalent payload must use its original receipt key');
+  }
+});
+
+test("a changed destination gets a new identity only at submission and a durable receipt resets the attempt", () => {
+  let sequence = 0;
+  const session = quickCapture.createQuickCaptureSession({ createId: () => `request-${++sequence}` });
+  session.setRaw('후속 확인');
+  session.begin(); session.settle({ ok: false, error: 'connection-lost' });
+  session.setHint('inbox');
+  assert.equal(sequence, 1);
+  assert.deepEqual(session.begin().payload, { raw: '후속 확인', hint: 'inbox', idempotencyKey: 'request-2' });
+  session.settle({ ok: true, data: { status: 'saved', destinationType: 'work_order' } });
+  assert.equal(sequence, 3);
+  session.setRaw('후속 확인');
+  assert.equal(session.begin().payload.idempotencyKey, 'request-3', 'the same text after confirmed success is a new capture');
 });
 
 test("a late task save clears only the exact submitted draft, preserving subsequent typing", () => {
