@@ -205,20 +205,21 @@ export function MemoComposer({ model, isNew, onClose, onReload, focused = false 
           </li>)}</ul>}
   </> : null;
   return <Drawer title={isNew && !entry ? '메모 남기기' : '메모'} subtitle="짧게 남기고, 필요한 순간 꺼내 쓰세요." presentation={isNew && !entry ? 'compact' : 'side'} width="min(620px, 96vw)" initialFocusRef={bodyRef} onClose={() => { if (!busy) onClose(); }}
-    footer={<div className="memo-footer">
+    footer={<div className={`memo-footer${focused ? ' memo-footer--focused' : ''}`}>
       {/* 단축키는 §8.1대로 실행 버튼 옆 Kbd 한 칸으로 알린다 — 모바일에서 안내문을 한 줄 더 늘리지 않는다. */}
       <Button variant="primary" disabled={!canSave} onClick={model.save}>{busy ? '저장 중…' : entry ? '수정 저장' : '메모 저장'} <Kbd>⌘↵</Kbd></Button>
-      <span className="memo-muted">{pending ? '이전 요청을 먼저 확인해 주세요' : '이 탭에서 다시 열거나 새로고침해도 이어 쓸 수 있어요'}</span>
+      <span className="memo-muted">{pending ? '이전 요청을 먼저 확인해 주세요' : focused ? '이 탭에서 다시 열어 이어 쓸 수 있어요.' : '이 탭에서 다시 열거나 새로고침해도 이어 쓸 수 있어요'}</span>
     </div>}>
-    <div className="memo-composer memo-stack" onKeyDown={saveShortcut}>
+    <div className="memo-composer memo-stack" onKeyDown={saveShortcut} data-focused={focused}>
       {/* 로딩은 한 줄 문구가 아니라 들어올 레이아웃(본문 · 보조 줄)을 예고한다 — DESIGN §11. */}
       {!ready ? <Skeleton lines={4} height={16} width={['32%', '100%', '100%', '58%']} gap={10} label="메모 불러오는 중" /> : !draft ? <div role="alert"><p>{model.loadError}</p><Button onClick={onReload}>다시 불러오기</Button></div> : <>
         <div aria-live="polite"><TruthBadge state={truth} label={truthLabel} /></div>
         {source !== 'live' && <div className="memo-feedback"><TruthBadge state={source} /><p>저장소를 확인한 뒤 서버에 저장할 수 있어요.</p><Button onClick={onReload} disabled={busy}>연결 다시 확인</Button><Button onClick={copy}>입력 복사</Button></div>}
         {model.localError && <div className="memo-feedback" role="alert"><p>이 탭의 복구 사본을 저장하지 못했어요. 입력을 복사해 보관해 주세요.</p><Button onClick={copy}>입력 복사</Button></div>}
-        <TextAreaField ref={bodyRef} label="원문 메모" placeholder="기억하고 싶은 일이나 떠오른 생각을 한 줄로…" value={draft.body} rows={isNew && !entry ? 3 : 9} style={isNew && !entry ? { minHeight: 80 } : undefined} maxLength={20000} disabled={locked}
+        <TextAreaField ref={bodyRef} label="원문 메모" placeholder="기억하고 싶은 일이나 떠오른 생각을 한 줄로…" value={draft.body} rows={isNew && !entry ? focused ? 5 : 3 : 9} style={isNew && !entry ? { minHeight: focused ? 160 : 80 } : undefined} maxLength={20000} disabled={locked}
           onChange={(event) => edit({ body: event.target.value })} onSelect={selectionChanged} hint={entry ? '일부만 쓰려면 문장을 선택하세요. 선택하지 않으면 메모 전체(3,500자까지)를 보냅니다.' : '제목이나 분류 없이 바로 저장할 수 있어요.'} />
         {!focused && <MemoActionExtractor text={draft.body} contexts={draft.contexts} />}
+        <div className={focused ? 'memo-options' : 'memo-stack'}>
         <div className="memo-metadata">
           <MemoContextPicker selected={draft.contexts} onChange={(contexts) => edit({ contexts })} disabled={locked} label="프로젝트·고객·브랜드 연결" />
           {focused ? <details className="memo-details"><summary>분류 태그 <span className="memo-muted">선택</span></summary>{tagFields}</details> : tagFields}
@@ -227,6 +228,7 @@ export function MemoComposer({ model, isNew, onClose, onReload, focused = false 
           <TextField label="제목" value={draft.title} maxLength={200} disabled={locked} onChange={(event) => edit({ title: event.target.value })} />
           <TextField label="기록 시각" type="datetime-local" value={localTime(draft.occurredAt)} disabled={locked} onChange={(event) => { const date = new Date(event.target.value); if (!Number.isNaN(date.getTime())) edit({ occurredAt: date.toISOString() }); }} />
         </div></details>
+        </div>
         {entry && <section className="memo-section">
           <Button variant="outline" aria-expanded={helper} onClick={() => setHelper(!helper)}>한 줄 보강하기 <span className="memo-muted">선택</span></Button>
           {helper && <div className="memo-stack">

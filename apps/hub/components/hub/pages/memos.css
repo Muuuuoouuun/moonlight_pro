@@ -66,3 +66,18 @@
 .memo-tag-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0; list-style: none; }
 .memo-tag-chips > li { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); color: var(--fg-muted); font-size: 12px; }
 .memo-tag-chips > li > span { overflow-wrap: anywhere; }
+
+/* 프로젝트·고객에서 여는 집중 입력에만 적용한다. 저장된 메모 편집의 행 수는 유지한다. */
+.memo-composer[data-focused="true"] { padding: 0; gap: 16px; }
+.memo-composer[data-focused="true"] .memo-options { display: flex; flex-direction: column; gap: 0; padding-top: 8px; border-top: 1px solid var(--line-soft); }
+.memo-composer[data-focused="true"] .memo-metadata { gap: 0; }
+.memo-composer[data-focused="true"] .memo-contexts { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 4px; }
+.memo-composer[data-focused="true"] .memo-contexts li { width: 100%; padding: 4px 8px 4px 12px; border: 1px solid var(--line-soft); border-radius: var(--r-sm); background: var(--surface-2); }
+.memo-composer[data-focused="true"] summary { font-size: 12px; }
+.memo-composer[data-focused="true"] .memo-details[open] { padding-bottom: 12px; }
+.memo-footer--focused { width: 100%; justify-content: flex-start; gap: 8px 16px; }
+@media (max-width: 600px) {
+  .memo-composer[data-focused="true"] .memo-contexts button { min-height: 44px; }
+  .memo-footer--focused { flex-direction: column; align-items: stretch; }
+  .memo-footer--focused > .memo-muted { text-align: center; }
+}
