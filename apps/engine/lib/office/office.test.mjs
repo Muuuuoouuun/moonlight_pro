@@ -12,9 +12,9 @@ test('all nine personas have real character instructions; only selected views en
  for(const id of OFFICE_IDS){const {systemInstruction}=buildOfficePrompt({...request,ownerId:id},context);assert.ok(systemInstruction.includes(OFFICE_PERSONAS[id]));assert.match(OFFICE_PERSONAS[id],/말투/);assert.match(OFFICE_PERSONAS[id],/실패|자료가 없/);}
  const prompt=buildOfficePrompt(request,context);assert.ok(!prompt.systemInstruction.includes(OFFICE_PERSONAS.sylveon));assert.match(prompt.systemInstruction,/도구가 없다/);
 });
-test('model generation uses one call and preserves owner; no tools or writes are exposed',async()=>{
+test('generation and review preserve owner with one shared deadline; no tools or writes are exposed',async()=>{
  let calls=0;const result=await generateOfficeResponse(request,context,async input=>{calls++;assert.equal(input.model,undefined);assert.equal(input.tools,undefined);return {ok:true,text:'```json\n{"answer":"초안입니다","nextAction":"검토하자"}\n```',model:'test-provider'};});
- assert.equal(calls,1);assert.equal(result.status,'generated');assert.equal(result.ownerId,'flareon');assert.equal(result.simulation,false);
+ assert.equal(calls,2);assert.equal(result.status,'generated');assert.equal(result.ownerId,'flareon');assert.equal(result.simulation,false);
 });
 test('council is explicitly a single-model simulation with validated output',async()=>{
  const council={...request,mode:'council',participants:['flareon','umbreon']};

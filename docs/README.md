@@ -174,7 +174,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 
 ### 도메인 참고
 
-- Office Council: [`superpowers/specs/2026-09-15-eevee-office-council-personas.md`](superpowers/specs/2026-09-15-eevee-office-council-personas.md) — **첫 단계 A+B 로컬 구현·검증 / 운영 미배포**. 9명 역할·성격·말투, 기존 Guru·Mentor·Legend 경계, 전용 API·화면·기억 분리. 성격·말투·인지 프레임워크 심화 정본은 [`superpowers/specs/2026-09-21-eevee-office-voice-and-personality-deep-design.md`](superpowers/specs/2026-09-21-eevee-office-voice-and-personality-deep-design.md)(기본 존댓말, 포켓몬 공식 생태 모티프, 3단계 반응 수위, Few-shot). 실제 업무 쓰기·Legend 카드·worker 연결은 후속. 현재 상태는 §25.
+- Office Council: [`상위 1% C-Suite 워크플로우 OS 초고도화 명세`](superpowers/specs/2026-09-21-eevee-office-c-suite-operating-system.md) — **초고도화 운영 정본**. 인지 부하 1/3 감소, 후속 누락 0건, 9인 정밀 인지 엔진(Falsification Trigger·4-Axis DoD·Net Time Equation), 4대 고정 챔버 및 비대칭 린터 파이프라인. [`탭·기능·시나리오별 역할 배치`](superpowers/specs/2026-09-21-eevee-office-surface-role-map.md), [`9명 상세 설정`](superpowers/specs/2026-09-21-eevee-office-detailed-configuration.md), [`성격·말투 심화 설계`](superpowers/specs/2026-09-21-eevee-office-voice-and-personality-deep-design.md)를 포괄한다. 구현·검증의 기준선은 [`운영자 맞춤 판단·산출물 v2`](superpowers/specs/2026-09-21-eevee-office-operating-quality.md) §7과 [`역할·성격·경계 v1`](superpowers/specs/2026-09-15-eevee-office-council-personas.md)의 A+B 전용 API·화면·기억 분리를 유지한다. 로컬 구현이며 운영 배포·업무 쓰기·Legend 카드·worker 연결은 별도.
+
 
 - 빠른 메모: [`quick-memo-plan-2026-09-09.md`](quick-memo-plan-2026-09-09.md) — 공통 우측 하단 입력창·초안 복원·기존 메모 저장 경로 재사용. **2026-09-10 로컬 구현·검증 완료, 운영 배포 별도**
 - Agent/Council API·MCP: [`agent-council-api-mcp-operating-plan-2026-09-09.md`](agent-council-api-mcp-operating-plan-2026-09-09.md) — 현재 연동 구현과 권장 운영법. 아래 보류된 전체 Agent UI·자율 실행 설계를 승인한 것은 아님
