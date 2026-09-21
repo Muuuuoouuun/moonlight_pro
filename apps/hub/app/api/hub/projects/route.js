@@ -33,7 +33,7 @@ export async function GET(req) {
           status: "error",
           ...ledger,
         },
-        { status: 502 },
+        { status: 200 },
       );
     }
 
@@ -51,7 +51,7 @@ export async function GET(req) {
         error: "project-ledger-request-failed",
         retryable: true,
       },
-      { status: 500 },
+      { status: 200 },
     );
   }
 }

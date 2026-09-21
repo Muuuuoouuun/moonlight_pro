@@ -5,6 +5,7 @@ export const metadata = {
   description: "Moonlight Hub — 1인·소규모 창업자용 운영 OS.",
   manifest: "/manifest.json",
   applicationName: "Moonlight",
+  icons: { icon: { url: "/icon.svg", type: "image/svg+xml" } },
 };
 
 export const viewport = {
@@ -18,22 +19,6 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="ko">
-      <head>
-        <link
-          rel="preload"
-          href="/fonts/SUIT-Variable.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
-        <link
-          rel="preload"
-          href="/fonts/JetBrainsMono-Variable.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
-      </head>
       <body className="app-body">{children}</body>
     </html>
   );

@@ -28,6 +28,7 @@ async function checkSupabaseRest() {
     const response = await fetch(`${config.url}/rest/v1/projects?select=id&limit=1`, {
       headers: makeSupabaseHeaders(config.apiKey),
       cache: "no-store",
+      signal: AbortSignal.timeout(5000),
     });
 
     return {
@@ -38,7 +39,7 @@ async function checkSupabaseRest() {
   } catch (error) {
     return {
       ok: false,
-      reason: "request-failed",
+      reason: error?.name === "TimeoutError" || error?.name === "AbortError" ? "timeout" : "request-failed",
       detail: error instanceof Error ? error.message : String(error),
     };
   }
