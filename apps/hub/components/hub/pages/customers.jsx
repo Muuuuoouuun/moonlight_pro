@@ -168,6 +168,8 @@ function segmentFilter(row, seg) {
 
 const ACT_ICON = { email: "email", meeting: "calendar", call: "signal", note: "edit", deal: "deals", kakao: "chat", quote: "orders", ai: "sparkle", info_session: "brief", demo: "play", visit: "building", update: "rhythm" };
 const ACT_LABEL = { email: "이메일", meeting: "미팅", call: "통화", note: "노트", deal: "딜", kakao: "카카오", quote: "견적", ai: "AI", info_session: "설명회", demo: "데모", visit: "방문", update: "업데이트" };
+// crm_activities.reaction 어휘(0016 CHECK). 컨택 시트가 필수로 받는 반응이 타임라인에 되돌아온다(0a).
+const REACTION_LABEL = { positive: "긍정", neutral: "중립", concern: "우려", rejected: "거절", no_response: "무응답" };
 
 function ActivityTimeline({ rows }) {
   if (!rows.length) {
@@ -186,7 +188,11 @@ function ActivityTimeline({ rows }) {
           </span>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 12.5, color: "var(--fg)", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{a.msg}</div>
-            <div style={{ fontSize: 10.5, color: "var(--fg-faint)", marginTop: 2 }}>{ACT_LABEL[a.type] || a.type}</div>
+            <div style={{ fontSize: 10.5, color: "var(--fg-faint)", marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span>{ACT_LABEL[a.type] || a.type}</span>
+              {/* 반응은 중립 뱃지 — 우려·거절도 여기서는 사실 표시일 뿐, 위기 표현은 별도 채널(§5.3). */}
+              {a.reaction && <Badge tone="neutral" size="xs" variant="outline">{REACTION_LABEL[a.reaction] || a.reaction}</Badge>}
+            </div>
           </div>
           <span className="mono" style={{ fontSize: 10.5, color: "var(--fg-faint)", whiteSpace: "nowrap" }}>{a.at}</span>
         </div>

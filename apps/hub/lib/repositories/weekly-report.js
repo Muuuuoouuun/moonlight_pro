@@ -5,6 +5,7 @@
 
 import { eqFilter, fetchSupabaseRows, withWorkspaceFilter } from "@/lib/server-read";
 import { buildWeeklyScorecard } from "@/lib/campaign-business-truth";
+import { CONTACT_KINDS } from "@/lib/sales-os/followup-scoring";
 
 const WINDOW_DAYS = 7;
 
@@ -22,16 +23,20 @@ export async function getWeeklyReport({ scope = "personal", windowDays = WINDOW_
   const since = new Date(Date.now() - windowDays * 86400e3).toISOString();
 
   const [taskRows, outcomeRows, dealRows, publishRows, campaignRows] = await Promise.all([
+    // 완료 시각은 completed_at이 정본 — updated_at은 완료 뒤 편집에도 움직여 주간 수를 부풀렸다
+    // (09-20 세 축 기획 §6.4 교정).
     fetchSupabaseRows("tasks", {
-      select: "id,title,status,updated_at",
+      select: "id,title,status,completed_at",
       filters: withWorkspaceFilter([
         ["status", eqFilter("done")],
-        ["updated_at", `gte.${since}`],
+        ["completed_at", `gte.${since}`],
       ]),
       limit: 300,
     }),
-    fetchSupabaseRows("outreach_outcomes", {
-      select: "id,action,occurred_at,lead_id,company_id",
+    // 연락 기록의 단일 원천은 crm_activities(0a). 이전의 outreach_outcomes는 UI writer가 0이라
+    // 앱에서 남긴 기록이 이 숫자에 한 번도 잡히지 않았다.
+    fetchSupabaseRows("crm_activities", {
+      select: "id,kind,occurred_at,lead_id,company_id",
       filters: withWorkspaceFilter([["occurred_at", `gte.${since}`]]),
       limit: 300,
     }),
@@ -58,7 +63,7 @@ export async function getWeeklyReport({ scope = "personal", windowDays = WINDOW_
 
   const failedSources = [
     ...(taskRows === null ? ["tasks"] : []),
-    ...(outcomeRows === null ? ["outreach_outcomes"] : []),
+    ...(outcomeRows === null ? ["crm_activities"] : []),
     ...(dealRows === null ? ["deals"] : []),
     ...(publishRows === null ? ["publish_logs"] : []),
     ...(scope === "personal" && campaignRows === null ? ["campaigns"] : []),
@@ -80,7 +85,8 @@ export async function getWeeklyReport({ scope = "personal", windowDays = WINDOW_
   }
 
   const tasks = taskRows || [];
-  const outcomes = outcomeRows || [];
+  // 대화가 아닌 기록(note/update/deal/ai)은 "연락"에 세지 않는다.
+  const outcomes = (outcomeRows || []).filter((row) => CONTACT_KINDS.has(String(row.kind || "").toLowerCase()));
   const deals = dealRows || [];
   const publishes = publishRows || [];
   const campaigns = campaignRows || [];

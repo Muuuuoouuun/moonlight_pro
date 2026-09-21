@@ -3,7 +3,7 @@
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Iconed } from "../hub-icons";
-import { Badge, Button, Card, CheckboxRow, DateQuickPresets, Divider, Drawer, Dot, EmptyState, SegmentedControl, SyncBadge, TextField, useToast } from "../hub-primitives";
+import { Badge, Button, Card, CheckboxRow, DateQuickPresets, Divider, Drawer, Dot, EmptyState, SegmentedControl, Skeleton, SyncBadge, TextField, useToast } from "../hub-primitives";
 import { useUndoableAction } from "../use-undoable-action";
 import { useCrmKeyboard, useCrmSelection } from "../use-crm-keyboard";
 import { QUICK_LOG_ACTIONS as LOG_ACTIONS, REACTION_OPTIONS } from "@/lib/sales-os/outcome-attribution";
@@ -253,7 +253,8 @@ function ActivityPanel({ item, onClose, onNavigate }) {
         최근 기록<SyncBadge state={state.syncState} />
       </div>
       {state.syncState === "loading" ? (
-        <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>불러오는 중…</div>
+        // 레이아웃이 정해진 타임라인의 로딩은 스켈레톤(DESIGN §11) — preview/error에는 쓰지 않는다.
+        <Skeleton lines={3} label="최근 기록 불러오는 중" />
       ) : state.syncState === "error" ? (
         <EmptyState icon="clock" title="활동 기록을 읽지 못했습니다" description="원장 연결 상태를 확인한 뒤 다시 열어 주세요." style={{ minHeight: 140 }} />
       ) : state.activities.length === 0 ? (
