@@ -613,7 +613,7 @@ button {
 
 .hub-app .hub-project-list-head {
   display: grid;
-  grid-template-columns: 52px minmax(190px, 1.3fr) minmax(140px, 1fr) 100px 160px 120px;
+  grid-template-columns: 52px minmax(150px, 1.3fr) minmax(100px, 1fr) 100px 130px 110px 64px;
   gap: 10px;
   align-items: center;
   min-width: 0 !important;
@@ -628,7 +628,7 @@ button {
 
 .hub-app .hub-project-row {
   display: grid;
-  grid-template-columns: 52px minmax(190px, 1.3fr) minmax(140px, 1fr) 100px 160px 120px;
+  grid-template-columns: 52px minmax(150px, 1.3fr) minmax(100px, 1fr) 100px 130px 110px 64px;
   grid-template-rows: minmax(68px, auto);
   gap: 10px;
   align-items: center;
@@ -684,18 +684,18 @@ button {
 }
 
 .hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-list-head {
-  grid-template-columns: 44px minmax(120px, 1.2fr) minmax(100px, 0.8fr) 76px 110px;
+  grid-template-columns: 44px minmax(110px, 1.2fr) minmax(90px, 0.8fr) 76px 90px 64px;
   gap: 8px;
   padding: 8px 10px;
 }
 
 .hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-row {
-  grid-template-columns: 44px minmax(120px, 1.2fr) minmax(100px, 0.8fr) 76px 110px;
+  grid-template-columns: 44px minmax(110px, 1.2fr) minmax(90px, 0.8fr) 76px 90px 64px;
   gap: 8px;
   padding: 0 10px;
 }
 
-.hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-list-head > :last-child,
+.hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-list-head > :nth-child(6),
 .hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-secondary-state {
   display: none;
 }
@@ -2665,5 +2665,23 @@ button {
   .hub-app .hub-project-portfolio-accordion__trigger > svg:first-child,
   .hub-app .project-create-disclosure__trigger > svg {
     transition: none;
+  }
+}
+
+.hub-app .hub-project-row-actions {
+  grid-column: 7;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hub-app .hub-projects-main-grid[data-detail-open="true"] .hub-project-row-actions {
+  grid-column: 6;
+}
+@media (max-width: 768px) {
+  .hub-app .hub-project-row .hub-project-row-actions {
+    grid-column: 2;
+    grid-row: auto;
+    padding: 0 12px 12px;
   }
 }

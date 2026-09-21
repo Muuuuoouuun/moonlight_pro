@@ -172,6 +172,10 @@ export function Projects({ workspace }) {
   const createdFromQueryRef = React.useRef(false);
   const [orderPending, setOrderPending] = React.useState(false);
   const [orderResult, setOrderResult] = React.useState(null); // { tone: 'ok'|'err', label }
+  const [deleteProjectTarget, setDeleteProjectTarget] = React.useState(null);
+  const [deleteProjectPending, setDeleteProjectPending] = React.useState(false);
+  const [deleteProjectError, setDeleteProjectError] = React.useState(null);
+  const projectStatusPendingRef = React.useRef(new Set());
   const [deliveryProject, setDeliveryProject] = React.useState(null);
   const [projectDraft, setProjectDraft] = React.useState(null);
   const [projectEditSource, setProjectEditSource] = React.useState(null);
@@ -180,7 +184,7 @@ export function Projects({ workspace }) {
   const [taskChecklistConflict, setTaskChecklistConflict] = React.useState(null);
   const [containerDraft, setContainerDraft] = React.useState(null);
   const [localContainers, setLocalContainers] = React.useState([]);
-  const drawerOpen = Boolean(projectDraft || deliveryProject || taskDraft || containerDraft || memoTaskId || !sidebarHidden || containerPickerOpen);
+  const drawerOpen = Boolean(deleteProjectTarget || projectDraft || deliveryProject || taskDraft || containerDraft || memoTaskId || !sidebarHidden || containerPickerOpen);
 
   const formatTime = (d) => {
     try {
@@ -696,6 +700,8 @@ export function Projects({ workspace }) {
   // 완료·보관 둘 다 상태 전환 하나로 — "숨기기"와 "삭제(소프트)"가 같은 archived
   // 전환을 쓰기로 한 결정과 일치한다. 원자료(할 일·업데이트·결정)는 그대로 남는다.
   const setProjectStatus = React.useCallback(async (project, status) => {
+    if (projectStatusPendingRef.current.has(project.id)) return { ok: false, message: '변경사항을 저장 중입니다.' };
+    projectStatusPendingRef.current.add(project.id);
     try {
       // 낙관적 동시성 체크(expectedUpdatedAt) 유지 — "미세 오차로 409" 문제는
       // 엔진의 마이크로초 절삭 버그였고 a780c98에서 근본 수정됐다. 이제 409는
@@ -711,18 +717,48 @@ export function Projects({ workspace }) {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.status !== 'saved') {
-        setOrderResult({ tone: 'err', label: data.error || `저장 실패 ${response.status}` });
-        return;
+        const message = data.status === 'conflict'
+          ? '다른 화면에서 프로젝트가 변경됐습니다. 창을 닫고 최신 내용을 확인한 뒤 다시 시도하세요.'
+          : data.status === 'preview' ? '저장 연결이 필요합니다. 프로젝트는 그대로 유지됩니다.'
+          : data.error || `저장 실패 ${response.status}`;
+        setOrderResult({ tone: 'err', label: message });
+        if (data.status === 'conflict') await loadLedger({ projectId: project.id });
+        return { ok: false, message };
       }
-      await loadLedger();
+      projectsLedgerCache = null;
+      const reload = await loadLedger({ projectId: project.id });
       setOrderResult({
         tone: 'ok',
-        label: status === 'completed' ? '완료 처리됨' : status === 'archived' ? '보관됨' : '다시 열림',
+        label: !reload.ok ? '변경은 저장됐지만 목록을 다시 읽지 못했습니다. 새로고침해 확인하세요.' : status === 'completed' ? '완료 처리됨' : status === 'archived' ? '보관됨' : '다시 열림',
       });
+      return { ok: true, reloaded: reload.ok };
     } catch (error) {
-      setOrderResult({ tone: 'err', label: error instanceof Error ? error.message : String(error) });
+      const message = error instanceof Error ? error.message : String(error);
+      setOrderResult({ tone: 'err', label: message });
+      return { ok: false, message };
+    } finally {
+      projectStatusPendingRef.current.delete(project.id);
     }
   }, [loadLedger]);
+
+  const requestProjectDelete = (project) => {
+    setDeleteProjectError(null);
+    setDeleteProjectTarget(project);
+  };
+
+  const confirmProjectDelete = async () => {
+    if (!deleteProjectTarget || deleteProjectPending) return;
+    setDeleteProjectPending(true);
+    setDeleteProjectError(null);
+    const result = await setProjectStatus(deleteProjectTarget, 'archived');
+    setDeleteProjectPending(false);
+    if (!result.ok) {
+      setDeleteProjectError(result.message);
+      return;
+    }
+    setDeleteProjectTarget(null);
+    if (result.reloaded) setOrderResult({ tone: 'ok', label: '프로젝트 삭제됨 · 완료·보관에서 다시 열 수 있습니다.' });
+  };
 
   const completeProject = React.useCallback((project) => {
     if (project.statusKey === 'completed') setProjectStatus(project, 'active');
@@ -2144,6 +2180,7 @@ export function Projects({ workspace }) {
                           <span>기한 · 위험</span>
                           <span>근거 진척</span>
                           <span>상태 · 우선순위</span>
+                          <span>관리</span>
                         </div>
                         {items.map((p, pi) => {
                           const isOpen = expanded.has(p.id);
@@ -2222,6 +2259,10 @@ export function Projects({ workspace }) {
                                 <div className="hub-project-secondary-state">
                                   <ProjectStatusBadge status={p.status} />
                                   <span><Dot tone={prioTone[p.priority]} size={5} />{p.priority || 'medium'}</span>
+                                </div>
+                                <div className="hub-project-row-actions" aria-label={`${p.name} 관리`}>
+                                  <IconButton icon="edit" size={28} tooltip={`${p.name} 편집`} onClick={() => editProject(p)} />
+                                  <IconButton icon="trash" size={28} tooltip={`${p.name} 삭제`} onClick={() => requestProjectDelete(p)} />
                                 </div>
                               </div>
 
@@ -2449,6 +2490,8 @@ export function Projects({ workspace }) {
                                 <span style={{ fontSize: 11, color: 'var(--fg-faint)', whiteSpace: 'nowrap' }}>{pBrand.name}</span>
                               </button>
                               <ProjectStatusBadge status={p.status} />
+                              <IconButton icon="edit" size={28} tooltip={`${p.name} 편집`} onClick={() => editProject(p)} />
+                              <Button variant="ghost" size="sm" onClick={() => setProjectStatus(p, 'active')}>다시 열기</Button>
                               <span className="mono" style={{ fontSize: 11, color: 'var(--fg-faint)', flexShrink: 0 }}>{p.due || ''}</span>
                             </div>
                           );
@@ -2588,6 +2631,24 @@ export function Projects({ workspace }) {
           // 드로어를 닫을 때마다 ReferenceError를 던졌다(23차 브라우저 실측에서 발견).
           onClose={() => setProjectDraft(null)}
         />
+      )}
+
+      {deleteProjectTarget && (
+        <Drawer
+          title="프로젝트 삭제"
+          presentation="compact"
+          onClose={() => { if (!deleteProjectPending) setDeleteProjectTarget(null); }}
+          footer={(
+            <>
+              <Button autoFocus variant="ghost" size="sm" disabled={deleteProjectPending} onClick={() => setDeleteProjectTarget(null)}>취소</Button>
+              <Button variant="danger" size="sm" disabled={deleteProjectPending} onClick={confirmProjectDelete}>{deleteProjectPending ? '삭제 중…' : '삭제'}</Button>
+            </>
+          )}
+        >
+          <p style={{ fontSize: 14, overflowWrap: 'anywhere' }}><strong>{deleteProjectTarget.name}</strong> 프로젝트를 목록에서 삭제할까요?</p>
+          <p style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.6 }}>프로젝트는 보관 처리됩니다. 연결된 할 일·메모·기록은 유지되며, 목록 아래 ‘완료·보관’에서 다시 열 수 있습니다.</p>
+          {deleteProjectError && <p role="alert" style={{ fontSize: 12, color: 'var(--danger)' }}>{deleteProjectError}</p>}
+        </Drawer>
       )}
 
       {projectDraft && !projectDraft.isNew && (
