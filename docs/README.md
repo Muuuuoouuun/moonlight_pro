@@ -86,6 +86,8 @@ Phase 0는 Content canonical contract, write 응답 분류, honest empty/error U
 - [`master-roadmap.md`](master-roadmap.md) — 단계와 다음 순서
 - [`../TODOS.md`](../TODOS.md) — 아직 하지 않을 일과 남은 기술 부채
 
+- [`superpowers/specs/2026-09-21-personal-business-track-and-scope-boundary.md`](superpowers/specs/2026-09-21-personal-business-track-and-scope-boundary.md) — **APPROVED(2026-09-22)**. 개인 사업 트랙(판매 정의 → 오퍼 → 고객 → 외출)과 회사/개인 경계. 핵심: `workspace-map.js`의 `revenueTypes` OR가 고객 유형과 사업 트랙을 융합하고 있어 `org_scope` 선언만으로는 분리가 안 된다. 2026-09-11 스코프 스펙 D10 1단계와 같은 작업이며, D5(미분류 칸 불채택)와의 충돌 1건은 Open Question으로 운영자 결정 대기.
+
 **사이드바 IA · PMS 분류 (최신순, 확정 스펙만 정본)**
 
 - [`superpowers/specs/2026-09-11-scope-as-global-filter.md`](superpowers/specs/2026-09-11-scope-as-global-filter.md) — **결정됨(2026-09-11)**. 스코프(전체·ClassIn·개인)의 의미와 적용 범위 정본. `2026-07-14` 스펙의 "스코프 = 목적지 전환" 해석을 폐기하고 전역 필터로 바꾼다. 앵커·2레벨 구조 자체는 아래 `2026-07-15` 스펙이 계속 정본이다. 구현은 단계별.
